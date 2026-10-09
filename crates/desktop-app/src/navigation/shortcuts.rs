@@ -4,8 +4,9 @@
 //! which moves by words with them. The rest of the design's table (`docs/design/orchester-workspace.md`,
 //! "Tabs" › "Keyboard") is not built yet.
 //!
-//! A shortcut is the key as typed: on AZERTY, Ctrl+Z (typed at the place of QWERTY's W) is not Ctrl+W.
-//! Only where the layout types no Latin letter (Cyrillic, Greek…) the key's place stands in for it.
+//! A shortcut is the key as typed: on AZERTY, Ctrl+Z (typed at the place of QWERTY's W) is not Ctrl+W,
+//! and on Dvorak Ctrl+, (typed there too) is not either. Only where the layout types no ASCII character
+//! (Cyrillic, Greek…) the key's place stands in for it.
 
 use lurq::app::events::KeyboardEvent;
 
@@ -47,14 +48,10 @@ impl<'a> Keys<'a> {
     }
   }
 
-  /// Whether this is the key `key` as typed; or, when the layout types no Latin letter here, the key at
-  /// `code`.
+  /// Whether this is the key `key` as typed; or, when the layout types no ASCII character here, the key
+  /// at `code`.
   fn is(self, key: &str, code: &str) -> bool {
-    if self.key.eq_ignore_ascii_case(key) {
-      return true;
-    }
-    let typed_latin_letter = self.key.len() == 1 && self.key.bytes().all(|byte| byte.is_ascii_alphabetic());
-    !typed_latin_letter && self.code == code
+    self.key.eq_ignore_ascii_case(key) || (!self.key.is_ascii() && self.code == code)
   }
 
   /// Only `ctrl` of the modifiers other than Shift.

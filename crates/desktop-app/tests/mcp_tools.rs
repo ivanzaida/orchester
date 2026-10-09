@@ -4,6 +4,8 @@
 
 mod support;
 
+use std::sync::{Arc, OnceLock};
+
 use lurq::{app::theme::PaletteColor, mcp::Scope, node::color::Color};
 use orchester_app::{
   appearance::{Appearance, ThemeSetting},
@@ -45,8 +47,9 @@ fn window_control_is_on_in_debug_builds_only_unless_the_environment_says_otherwi
 #[test]
 fn app_state_reports_route_tabs_theme_and_window_size() {
   let mut window = Window::open();
-  let appearance = Appearance::new(ThemeSetting::Dark, None, None);
-  let state = app_state(&window.navigation(), &appearance, &mut window.tree);
+  let appearance = Appearance::new(ThemeSetting::Dark, Arc::default(), None);
+  let settings = McpSettings::with_window_control(false).with_stored(Some(true));
+  let state = app_state(&window.navigation(), &appearance, settings, &mut window.tree);
   assert_eq!(
     state,
     json!({
@@ -54,6 +57,7 @@ fn app_state_reports_route_tabs_theme_and_window_size() {
       "history": { "can_back": false, "can_forward": false },
       "tabs": [{ "id": 1, "active": true, "route": { "name": "all_projects", "path": "/", "params": {} } }],
       "theme": { "setting": "dark", "mode": "dark" },
+      "mcp": { "window_control": true, "source": "stored" },
       "window": { "width": 1440.0, "height": 900.0, "scale_factor": 1.0 },
     })
   );
@@ -76,12 +80,13 @@ fn navigate_takes_the_active_tab_to_a_named_route() {
   assert_eq!(answer, json!({ "route": route }));
   window.pass();
   assert_eq!(
-    window.texts("screen-placeholder").map(|texts| texts[0].clone()),
+    window.texts("screen-task").map(|texts| texts[0].clone()),
     Some("KON-12 · Summary".to_owned())
   );
   let state = app_state(
     &navigation,
-    &Appearance::new(ThemeSetting::Dark, None, None),
+    &Appearance::new(ThemeSetting::Dark, Arc::default(), None),
+    McpSettings::of_build(),
     &mut window.tree,
   );
   assert_eq!(state["route"], route);
@@ -94,6 +99,56 @@ fn navigate_takes_the_active_tab_to_a_named_route() {
   assert_eq!(
     navigation.route_now().path(),
     "/project/0f1e2d3c-4b5a-4968-8776-655443322110"
+  );
+}
+
+#[test]
+fn navigate_takes_the_parameters_each_screen_has_and_answers_them_back() {
+  let mut window = Window::open();
+  let navigation = window.navigation();
+  let root = format!("/project/{PROJECT}");
+  let cases = [
+    (
+      json!({ "route": "overview", "project": PROJECT, "tab": "needs_you" }),
+      format!("{root}?tab=needs_you"),
+      json!({ "project": PROJECT, "tab": "needs_you" }),
+    ),
+    (
+      json!({ "route": "tasks", "project": PROJECT, "tab": "in_review", "q": "retry & jitter", "highlight": "KON-13" }),
+      format!("{root}/tasks?tab=in_review&q=retry%20%26%20jitter&highlight=KON-13"),
+      json!({ "project": PROJECT, "tab": "in_review", "q": "retry & jitter", "highlight": "KON-13" }),
+    ),
+    (
+      json!({ "route": "new_task", "project": PROJECT }),
+      format!("{root}/tasks/new"),
+      json!({ "project": PROJECT }),
+    ),
+    (
+      json!({ "route": "edit_task", "project": PROJECT, "key": "KON-7" }),
+      format!("{root}/tasks/KON-7/edit"),
+      json!({ "project": PROJECT, "key": "KON-7" }),
+    ),
+    (
+      json!({ "route": "task", "project": PROJECT, "key": "KON-12", "file": "src/a b.rs", "from": "worktree" }),
+      format!("{root}/tasks/KON-12/changes?file=src/a%20b.rs&from=worktree"),
+      json!({ "project": PROJECT, "key": "KON-12", "tab": "changes", "file": "src/a b.rs", "from": "worktree" }),
+    ),
+  ];
+  for (args, path, params) in cases {
+    let answer = navigate(&navigation, &args).expect("a valid route");
+    assert_eq!(answer["route"]["path"], json!(path), "{args}");
+    assert_eq!(answer["route"]["params"], params, "{args}");
+    let mut again = params.as_object().expect("params are an object").clone();
+    again.insert("route".to_owned(), args["route"].clone());
+    let repeated = navigate(&navigation, &json!(again)).expect("its params name the same route");
+    assert_eq!(repeated["route"]["path"], json!(path), "{args}");
+    window.pass();
+    let screen = format!("screen-{}", args["route"].as_str().expect("a route name"));
+    assert!(window.texts(&screen).is_some(), "{screen} is shown for {args}");
+  }
+  assert!(
+    window.texts("screen-edit_task").is_none(),
+    "only the active route's screen is shown"
   );
 }
 
@@ -112,6 +167,44 @@ fn navigate_refuses_what_names_no_route_with_a_stable_code() {
       json!({ "route": "task", "project": PROJECT, "key": "KON-1", "tab": "files" }),
       "unknown_tab",
     ),
+    (
+      json!({ "route": "overview", "project": PROJECT, "tab": "all" }),
+      "unknown_tab",
+    ),
+    (
+      json!({ "route": "tasks", "project": PROJECT, "tab": "running" }),
+      "unknown_tab",
+    ),
+    (
+      json!({ "route": "tasks", "project": PROJECT, "highlight": "kon-1" }),
+      "invalid_param",
+    ),
+    (json!({ "route": "tasks", "project": PROJECT, "q": 7 }), "not_a_string"),
+    (
+      json!({ "route": "new_task", "project": PROJECT, "key": "KON-1" }),
+      "unexpected_param",
+    ),
+    (json!({ "route": "edit_task", "project": PROJECT }), "missing_param"),
+    (
+      json!({ "route": "edit_task", "project": PROJECT, "key": "KON" }),
+      "invalid_param",
+    ),
+    (
+      json!({ "route": "task", "project": PROJECT, "key": "KON-1", "tab": "summary", "file": "a.rs" }),
+      "invalid_param",
+    ),
+    (
+      json!({ "route": "task", "project": PROJECT, "key": "KON-1", "from": "worktree" }),
+      "invalid_param",
+    ),
+    (
+      json!({ "route": "task", "project": PROJECT, "key": "KON-1", "file": "a.rs", "from": "disk" }),
+      "invalid_param",
+    ),
+    (
+      json!({ "route": "task", "project": PROJECT, "key": "KON-1", "file": "" }),
+      "invalid_param",
+    ),
     (json!({ "route": 7 }), "not_a_string"),
     (json!(["overview"]), "not_an_object"),
   ];
@@ -120,6 +213,13 @@ fn navigate_refuses_what_names_no_route_with_a_stable_code() {
     assert_eq!(error.code(), code, "{args}");
     assert_eq!(error.to_json()["code"], code);
   }
+  assert_eq!(navigation.route_now().path(), "/", "a refusal goes nowhere");
+}
+
+#[test]
+fn navigate_refusals_list_the_known_names_and_word_each_parameter() {
+  let window = Window::open();
+  let navigation = window.navigation();
   let unknown = navigate(&navigation, &json!({ "route": "dashboard" })).expect_err("a refusal");
   let known = &unknown.to_json()["known"];
   assert!(
@@ -127,7 +227,25 @@ fn navigate_refuses_what_names_no_route_with_a_stable_code() {
       .as_array()
       .is_some_and(|names| names.contains(&json!("pull_requests")))
   );
-  assert_eq!(navigation.route_now().path(), "/", "a refusal goes nowhere");
+  let tab = navigate(
+    &navigation,
+    &json!({ "route": "overview", "project": PROJECT, "tab": "all" }),
+  )
+  .expect_err("a refusal");
+  assert_eq!(
+    tab.to_json()["known"],
+    json!(["running", "needs_you", "queued", "failed"]),
+    "the screen's own tabs"
+  );
+  let message = |args: Value| navigate(&navigation, &args).expect_err("a refusal").to_string();
+  assert!(
+    message(json!({ "route": "overview", "project": "a/b" })).starts_with("`project`: `a/b` is not a project id"),
+    "invalid values are worded per parameter"
+  );
+  assert_eq!(
+    message(json!({ "route": "task", "project": PROJECT, "key": "KON-1", "file": "" })),
+    "`file`: the path is empty"
+  );
 }
 
 #[test]
@@ -135,7 +253,11 @@ fn set_theme_switches_the_colors_and_keeps_the_choice() {
   let window = Window::open();
   let dir = tempfile::tempdir().expect("a temporary folder");
   let settings = AppSettings::open(&dir.path().join("orchester.db")).expect("the settings open");
-  let appearance = Appearance::new(ThemeSetting::Dark, Some(Mode::Dark), Some(settings.clone()));
+  let appearance = Appearance::new(
+    ThemeSetting::Dark,
+    Arc::new(OnceLock::from(Mode::Dark)),
+    Some(settings.clone()),
+  );
   let theme = window.app.theme();
   let answer = set_theme(&appearance, theme, &json!({ "theme": "light" })).expect("a known theme");
   assert_eq!(answer, json!({ "setting": "light", "mode": "light" }));
@@ -148,7 +270,7 @@ fn set_theme_switches_the_colors_and_keeps_the_choice() {
   assert_eq!(error.code(), "unknown_theme");
   assert_eq!(error.to_json()["known"], json!(["dark", "light", "system"]));
   assert_eq!(appearance.setting(), ThemeSetting::Light, "a refusal keeps the theme");
-  let unsaved = Appearance::new(ThemeSetting::Dark, None, None);
+  let unsaved = Appearance::new(ThemeSetting::Dark, Arc::default(), None);
   let error = set_theme(&unsaved, theme, &json!({ "theme": "dark" })).expect_err("nowhere to keep it");
   assert_eq!(error.code(), "not_saved");
   assert_eq!(

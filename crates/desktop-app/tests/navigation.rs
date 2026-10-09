@@ -4,13 +4,13 @@
 
 mod support;
 
-use lurq::app::events::MouseButton;
+use lurq::app::events::{MouseButton, ScrollPhase};
 use orchester_app::{
   navigation::{
     shortcuts::{Keys, Shortcut, shortcut},
     tabs::{HISTORY_LIMIT, TabSet},
   },
-  routes::{ProjectPage, Route, TaskTab},
+  routes::{OverviewTab, ProjectPage, Route, TaskList, TaskTab, TaskView},
 };
 use support::Window;
 
@@ -21,7 +21,10 @@ fn project(page: ProjectPage) -> Route {
 }
 
 fn task(tab: TaskTab) -> Route {
-  project(ProjectPage::Task("KON-12".parse().expect("a task key"), tab))
+  project(ProjectPage::Task(
+    "KON-12".parse().expect("a task key"),
+    TaskView::of(tab),
+  ))
 }
 
 #[test]
@@ -38,11 +41,17 @@ fn a_new_window_has_one_tab_at_all_projects_that_cannot_close() {
 #[test]
 fn going_somewhere_is_history_that_back_and_forward_walk() {
   let mut tabs = TabSet::default();
-  assert!(tabs.go(project(ProjectPage::Overview)));
-  assert!(tabs.go(project(ProjectPage::Tasks)));
-  assert!(!tabs.go(project(ProjectPage::Tasks)), "the tab is there already");
+  assert!(tabs.go(project(ProjectPage::Overview(OverviewTab::Running))));
+  assert!(tabs.go(project(ProjectPage::Tasks(TaskList::default()))));
+  assert!(
+    !tabs.go(project(ProjectPage::Tasks(TaskList::default()))),
+    "the tab is there already"
+  );
   assert!(tabs.back());
-  assert_eq!(*tabs.active().route(), project(ProjectPage::Overview));
+  assert_eq!(
+    *tabs.active().route(),
+    project(ProjectPage::Overview(OverviewTab::Running))
+  );
   assert!(tabs.back());
   assert_eq!(*tabs.active().route(), Route::AllProjects);
   assert!(!tabs.back());
@@ -50,7 +59,54 @@ fn going_somewhere_is_history_that_back_and_forward_walk() {
   assert!(tabs.go(Route::Settings), "going from the middle drops what was ahead");
   assert!(!tabs.active().can_forward());
   assert!(tabs.back());
-  assert_eq!(*tabs.active().route(), project(ProjectPage::Overview));
+  assert_eq!(
+    *tabs.active().route(),
+    project(ProjectPage::Overview(OverviewTab::Running))
+  );
+}
+
+fn searched(text: &str) -> Route {
+  project(ProjectPage::Tasks(TaskList::default().with_search(text)))
+}
+
+#[test]
+fn replacing_takes_the_current_place_without_a_history_entry_and_keeps_the_places_ahead() {
+  let mut tabs = TabSet::default();
+  tabs.go(project(ProjectPage::Overview(OverviewTab::Running)));
+  tabs.go(searched("r"));
+  tabs.go(project(ProjectPage::Usage));
+  assert!(tabs.back());
+  assert!(tabs.replace(searched("re")));
+  assert!(tabs.replace(searched("retry")));
+  assert!(!tabs.replace(searched("retry")), "the tab is there already");
+  assert_eq!(*tabs.active().route(), searched("retry"));
+  assert!(tabs.forward(), "the places ahead stay");
+  assert_eq!(*tabs.active().route(), project(ProjectPage::Usage));
+  assert!(tabs.back());
+  assert!(tabs.back());
+  assert_eq!(
+    *tabs.active().route(),
+    project(ProjectPage::Overview(OverviewTab::Running)),
+    "the replaced places left no entries"
+  );
+}
+
+#[test]
+fn the_window_shows_a_replaced_route_and_back_leaves_the_screen() {
+  let mut window = Window::open();
+  let navigation = window.navigation();
+  navigation.go(project(ProjectPage::Tasks(TaskList::default())));
+  navigation.replace(searched("retry jitter"));
+  window.pass();
+  assert!(window.texts("screen-tasks").is_some());
+  assert_eq!(
+    navigation.route_now().path(),
+    format!("/project/{PROJECT}/tasks?q=retry%20jitter")
+  );
+  navigation.back();
+  window.pass();
+  assert_eq!(navigation.route_now(), Route::AllProjects);
+  assert!(window.texts("screen-all_projects").is_some());
 }
 
 #[test]
@@ -126,7 +182,7 @@ fn the_window_shows_the_active_tabs_route() {
   let mut window = Window::open();
   let navigation = window.navigation();
   assert_eq!(
-    window.texts("screen-placeholder"),
+    window.texts("screen-all_projects"),
     Some(vec![
       "All projects".to_owned(),
       "This screen isn't built yet.".to_owned()
@@ -136,19 +192,23 @@ fn the_window_shows_the_active_tabs_route() {
   navigation.go(task(TaskTab::Changes));
   window.pass();
   assert_eq!(
-    window.texts("screen-placeholder"),
+    window.texts("screen-task"),
     Some(vec![
       "KON-12 · Changes".to_owned(),
       "This screen isn't built yet.".to_owned()
     ])
   );
-  assert_eq!(window.texts("tab-1"), Some(vec![format!("{PROJECT} · KON-12")]));
-  assert_eq!(window.texts("project-switcher"), Some(vec![PROJECT.to_owned()]));
+  assert_eq!(window.texts("tab-1"), Some(vec!["KON-12".to_owned()]));
+  assert_eq!(
+    window.texts("project-switcher"),
+    Some(vec!["Project".to_owned()]),
+    "a project's id is never shown"
+  );
   assert_eq!(window.texts("nav-tasks"), Some(vec!["Tasks".to_owned()]));
   navigation.open_tab();
   window.pass();
   assert_eq!(
-    window.texts("screen-placeholder").map(|texts| texts[0].clone()),
+    window.texts("screen-all_projects").map(|texts| texts[0].clone()),
     Some("All projects".to_owned())
   );
   navigation.cycle(-1);
@@ -158,7 +218,7 @@ fn the_window_shows_the_active_tabs_route() {
   navigation.forward();
   window.pass();
   assert_eq!(navigation.route_now(), task(TaskTab::Changes));
-  assert_eq!(window.texts("tab-1"), Some(vec![format!("{PROJECT} · KON-12")]));
+  assert_eq!(window.texts("tab-1"), Some(vec!["KON-12".to_owned()]));
 }
 
 /// Presses and releases `button` over the middle of the element `id`.
@@ -219,7 +279,6 @@ fn shortcuts_ask_for_history_and_tab_moves() {
   assert_eq!(shortcut(keys("t", "KeyT")), None, "a plain key is typing");
   let ctrl_z_on_azerty = Keys {
     ctrl: true,
-    meta: true,
     ..keys("z", "KeyW")
   };
   assert_eq!(
@@ -243,6 +302,8 @@ fn platform_shortcuts(keys: impl Fn(&'static str, &'static str) -> Keys<'static>
   assert_eq!(shortcut(ctrl("t", "KeyT")), Some(Shortcut::NewTab));
   assert_eq!(shortcut(ctrl("w", "KeyW")), Some(Shortcut::CloseTab));
   assert_eq!(shortcut(ctrl("z", "KeyW")), None, "Ctrl+Z on AZERTY is not Ctrl+W");
+  assert_eq!(shortcut(ctrl(",", "KeyW")), None, "Ctrl+, on Dvorak is not Ctrl+W");
+  assert_eq!(shortcut(alt("[", "ArrowLeft")), None, "a typed ASCII key decides");
   assert_eq!(
     shortcut(ctrl("ц", "KeyW")),
     Some(Shortcut::CloseTab),
@@ -266,6 +327,12 @@ fn platform_shortcuts(keys: impl Fn(&'static str, &'static str) -> Keys<'static>
   assert_eq!(shortcut(cmd("t", "KeyT")), Some(Shortcut::NewTab));
   assert_eq!(shortcut(cmd("w", "KeyW")), Some(Shortcut::CloseTab));
   assert_eq!(shortcut(cmd("z", "KeyW")), None, "Cmd+Z on AZERTY is not Cmd+W");
+  assert_eq!(shortcut(cmd(",", "KeyW")), None, "Cmd+, on Dvorak is not Cmd+W");
+  assert_eq!(
+    shortcut(cmd("/", "BracketLeft")),
+    None,
+    "Cmd+/ on Dvorak does not go back"
+  );
   assert_eq!(shortcut(cmd("[", "BracketLeft")), Some(Shortcut::Back));
   assert_eq!(shortcut(cmd("]", "BracketRight")), Some(Shortcut::Forward));
 }
@@ -291,7 +358,7 @@ fn a_tab_remembers_its_last_places_only() {
 fn task_number(number: usize) -> Route {
   project(ProjectPage::Task(
     format!("KON-{number}").parse().expect("a task key"),
-    TaskTab::Conversation,
+    TaskView::Conversation,
   ))
 }
 
@@ -304,14 +371,14 @@ fn bounds(window: &mut Window, id: &str) -> lurq::core::ElementRect {
     .unwrap_or_else(|| panic!("{id} is laid out"))
 }
 
-#[test]
-fn many_tabs_leave_new_tab_and_drag_area_before_the_window_controls() {
+/// A window 960 wide with 12 labelled tabs after the first, at All projects: more than fit.
+fn crowded_window() -> (Window, orchester_app::navigation::Navigation) {
   let mut window = Window::open();
   window.tree.resize(960, 640);
   let navigation = window.navigation();
   for screen in [
-    ProjectPage::Overview,
-    ProjectPage::Tasks,
+    ProjectPage::Overview(OverviewTab::Running),
+    ProjectPage::Tasks(TaskList::default()),
     ProjectPage::Pipelines,
     ProjectPage::Secrets,
   ] {
@@ -325,17 +392,160 @@ fn many_tabs_leave_new_tab_and_drag_area_before_the_window_controls() {
     }
   }
   window.pass();
+  window.pass();
+  (window, navigation)
+}
+
+/// Where the window controls begin: the laid-out minimize control on Windows. lurq's macOS traffic
+/// lights carry no ids; there they take the row's last 8 and three 20.
+fn controls_left(window: &mut Window) -> f32 {
+  if cfg!(target_os = "macos") {
+    960.0 - 68.0
+  } else {
+    bounds(window, "window-minimize").x
+  }
+}
+
+#[test]
+fn many_tabs_leave_new_tab_and_drag_area_before_the_window_controls() {
+  let (mut window, _navigation) = crowded_window();
   let (new_tab, drag) = (bounds(&mut window, "new-tab"), bounds(&mut window, "title-bar-drag"));
-  // The Windows controls take 3 × 46 at the right edge.
+  let controls = controls_left(&mut window);
   assert!(drag.width >= 48.0 - 0.5, "the drag area keeps 48: {drag:?}");
   assert!(
-    drag.x + drag.width <= 960.0 - 138.0 + 0.5,
-    "the controls stay in the window: {drag:?}"
+    drag.x + drag.width <= controls + 0.5,
+    "the drag area ends before the controls at {controls}: {drag:?}"
   );
   assert!(
     new_tab.x + new_tab.width <= drag.x + 0.5,
     "New tab stays visible: {new_tab:?}"
   );
+}
+
+/// Whether the tab `id` shows whole in the strip's visible part.
+fn in_view(window: &mut Window, id: &str) -> bool {
+  let (tab, strip) = (bounds(window, id), bounds(window, "tab-scroll"));
+  tab.x >= strip.x - 0.5 && tab.x + tab.width <= strip.x + strip.width + 0.5
+}
+
+fn active_id(navigation: &orchester_app::navigation::Navigation) -> String {
+  format!("tab-{}", navigation.tabs_now().active().id())
+}
+
+/// Turns the mouse wheel over the strip: up (`delta` above 0) scrolls it toward its start.
+fn wheel(window: &mut Window, delta: f32) {
+  let strip = bounds(window, "tab-scroll");
+  let (x, y) = (strip.x + strip.width / 2.0, strip.y + strip.height / 2.0);
+  window.tree.mouse_move(x, y);
+  window.tree.scroll(x, y, 0.0, delta, ScrollPhase::Scroll);
+  window.pass();
+  window.pass();
+}
+
+fn settle(window: &mut Window) {
+  window.pass();
+  window.pass();
+}
+
+#[test]
+fn the_active_tab_is_scrolled_into_view() {
+  let (mut window, navigation) = crowded_window();
+  let last = active_id(&navigation);
+  assert!(in_view(&mut window, &last), "the newest tab shows");
+  navigation.cycle(1);
+  settle(&mut window);
+  assert!(
+    in_view(&mut window, "tab-1"),
+    "going round to the first tab scrolls back to it"
+  );
+  navigation.cycle(-1);
+  settle(&mut window);
+  assert!(in_view(&mut window, &last), "and to the last again");
+}
+
+/// The ids of the open tabs, in order.
+fn tab_ids(navigation: &orchester_app::navigation::Navigation) -> Vec<String> {
+  navigation
+    .tabs_now()
+    .tabs()
+    .iter()
+    .map(|tab| format!("tab-{}", tab.id()))
+    .collect()
+}
+
+#[test]
+fn a_new_tab_at_the_right_edge_that_grows_stays_in_view() {
+  let (mut window, navigation) = crowded_window();
+  wheel(&mut window, 5000.0);
+  let strip = bounds(&mut window, "tab-scroll");
+  let rightmost = tab_ids(&navigation)
+    .into_iter()
+    .filter(|id| {
+      let tab = bounds(&mut window, id);
+      tab.x + tab.width <= strip.x + strip.width + 0.5
+    })
+    .last()
+    .expect("a tab shows at the strip's start");
+  press(&mut window, &rightmost, MouseButton::Left);
+  settle(&mut window);
+  navigation.open_tab();
+  settle(&mut window);
+  assert!(
+    in_view(&mut window, &active_id(&navigation)),
+    "the new All projects tab shows at the right edge"
+  );
+  navigation.go(project(ProjectPage::Instructions));
+  settle(&mut window);
+  assert!(
+    in_view(&mut window, &active_id(&navigation)),
+    "and still shows once it is a labelled tab"
+  );
+}
+
+#[test]
+fn moving_in_a_tab_the_wheel_scrolled_away_brings_it_back() {
+  let (mut window, navigation) = crowded_window();
+  let active = active_id(&navigation);
+  wheel(&mut window, 5000.0);
+  assert!(!in_view(&mut window, &active), "the wheel scrolled the active tab away");
+  navigation.go(project(ProjectPage::Skills));
+  settle(&mut window);
+  assert!(in_view(&mut window, &active), "going somewhere in it brings it back");
+  wheel(&mut window, 5000.0);
+  navigation.back();
+  settle(&mut window);
+  assert!(in_view(&mut window, &active), "so does going back");
+}
+
+#[test]
+fn a_new_tab_shows_when_the_strip_was_scrolled_to_its_end() {
+  let (mut window, navigation) = crowded_window();
+  // One more All projects tab at the end leaves the tab cut off on the left at the strip's end with
+  // less showing than a new tab is wide, as people see it.
+  navigation.open_tab();
+  settle(&mut window);
+  wheel(&mut window, -5000.0);
+  let strip = bounds(&mut window, "tab-scroll");
+  let cut = tab_ids(&navigation)
+    .into_iter()
+    .find(|id| {
+      let tab = bounds(&mut window, id);
+      tab.x < strip.x && tab.x + tab.width > strip.x
+    })
+    .expect("a tab is cut off on the left at the strip's end");
+  navigation.cycle(-1);
+  while active_id(&navigation) != cut {
+    navigation.cycle(-1);
+  }
+  settle(&mut window);
+  wheel(&mut window, -5000.0);
+  assert!(
+    bounds(&mut window, &cut).x < strip.x,
+    "the active tab is cut off on the left"
+  );
+  navigation.open_tab();
+  settle(&mut window);
+  assert!(in_view(&mut window, &active_id(&navigation)), "the new tab shows whole");
 }
 
 #[test]

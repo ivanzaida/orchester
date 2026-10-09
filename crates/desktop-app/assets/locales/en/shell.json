@@ -1,0 +1,67 @@
+{
+  "shell": {
+    "app": {
+      "name": "Orchester",
+      "windowTitle": "{{tab}} — Orchester"
+    },
+    "window": {
+      "minimize": "Minimize",
+      "maximize": "Maximize",
+      "restore": "Restore",
+      "close": "Close"
+    },
+    "menu": {
+      "quit": "Quit Orchester",
+      "label": "Orchester menu"
+    },
+    "tabs": {
+      "close": "Close tab"
+    },
+    "sidebar": {
+      "project": "Project",
+      "noProject": "No project open",
+      "chooseProject": "Choose one in All projects"
+    },
+    "nav": {
+      "configure": "Configure"
+    },
+    "screens": {
+      "allProjects": "All projects",
+      "settings": "Settings",
+      "overview": "Overview",
+      "tasks": "Tasks",
+      "newTask": "New task",
+      "editTask": "Edit task",
+      "editTaskOf": "Edit {{key}}",
+      "task": "Task",
+      "taskTab": "{{key}} · {{tab}}",
+      "pullRequests": "Pull requests",
+      "usage": "Usage",
+      "pipelines": "Pipelines",
+      "agents": "Agents",
+      "instructions": "Instructions",
+      "skills": "Skills",
+      "tools": "Tools",
+      "secrets": "Secrets",
+      "connections": "Connections",
+      "projectSettings": "Project settings"
+    },
+    "placeholder": {
+      "notBuilt": "This screen isn't built yet."
+    },
+    "notFound": {
+      "title": "Nothing here",
+      "noScreen": "No screen has the address {{path}}.",
+      "projectId": "{{value}} in {{path}} is not a project id.",
+      "taskKey": "{{value}} in {{path}} is not a task key.",
+      "unexpectedParam": "The screen at {{path}} does not take {{param}} as given.",
+      "invalidParam": "{{value}} is not a value of {{param}} in {{path}}."
+    },
+    "status": {
+      "mcpListening": "MCP on :{{port}}",
+      "mcpUnavailable": "MCP unavailable",
+      "version": "v{{version}}",
+      "windowControl": "Agents can control this window"
+    }
+  }
+}

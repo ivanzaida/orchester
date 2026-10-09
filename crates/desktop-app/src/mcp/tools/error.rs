@@ -1,9 +1,6 @@
 use serde_json::{Value, json};
 
-use crate::{
-  appearance::ThemeSetting,
-  routes::{Screen, TaskTab},
-};
+use crate::{appearance::ThemeSetting, routes::Screen};
 
 /// Why an app tool refused. Agents read it as JSON with a stable `code` ([`ToolError::to_json`]).
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
@@ -20,10 +17,10 @@ pub enum ToolError {
   UnknownRoute { name: String },
   #[error("`{of}` takes no `{param}`")]
   UnexpectedParam { of: &'static str, param: String },
-  #[error("`{param}` names no {param}: {reason}")]
+  #[error("`{param}`: {reason}")]
   InvalidParam { param: &'static str, reason: String },
-  #[error("unknown task tab `{name}`")]
-  UnknownTab { name: String },
+  #[error("unknown tab `{name}`")]
+  UnknownTab { name: String, known: Vec<&'static str> },
   #[error("unknown theme `{name}`")]
   UnknownTheme { name: String },
   #[error("{reason}")]
@@ -50,7 +47,7 @@ impl ToolError {
   pub fn to_json(&self) -> Value {
     let known: Option<Vec<&str>> = match self {
       Self::UnknownRoute { .. } => Some(Screen::ALL.into_iter().map(Screen::name).collect()),
-      Self::UnknownTab { .. } => Some(TaskTab::ALL.into_iter().map(TaskTab::name).collect()),
+      Self::UnknownTab { known, .. } => Some(known.clone()),
       Self::UnknownTheme { .. } => Some(ThemeSetting::ALL.into_iter().map(ThemeSetting::name).collect()),
       _ => None,
     };
