@@ -121,13 +121,13 @@ fn tokens(ctx: &Ctx, run: &RunView) -> Arc<str> {
   )
 }
 
-/// The agents of the run's steps that ran, each once, in pipeline order.
+/// The agents of the run's agent steps that ran, each once, in pipeline order.
 fn agents(ctx: &Ctx, run: &RunView) -> Option<Arc<str>> {
   let mut names: Vec<&str> = Vec::new();
   for agent in run
     .steps
     .iter()
-    .filter(|step| step.execution.is_some())
+    .filter(|step| step.execution.is_some() && !step.tool_step)
     .filter_map(|step| step.agent.as_deref())
   {
     if !names.contains(&agent) {

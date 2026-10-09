@@ -111,23 +111,26 @@ pub fn merged(ctx: &Ctx, task: &TaskContext, merge: &RunMerge) -> Element {
   .into()
 }
 
-/// What is left of the run after its merge: nothing, worktrees kept for their uncommitted changes, or
-/// branches whose commits are not merged.
+/// What is left of the run after its merge: nothing, worktrees kept for their uncommitted changes,
+/// branches whose commits are not merged, or merged branches that are still there.
 fn left_behind(ctx: &Ctx, left: &Leftovers) -> Arc<str> {
-  let kept: Vec<&str> = left
-    .branches
-    .iter()
-    .filter(|branch| !branch.merged)
-    .map(|branch| branch.name.as_str())
-    .collect();
-  match (left.worktrees.len(), kept.as_slice()) {
-    (0, []) => ctx.t("decisions.ready.left.nothing"),
-    (0, branches) => ctx.t_args(
-      "decisions.ready.left.branches",
-      [("branches", branches.join(&ctx.t("task.listSeparator")))],
-    ),
-    (1, _) => ctx.t("decisions.ready.left.worktreeOne"),
-    (count, _) => ctx.t_args("decisions.ready.left.worktreeOther", [("count", count.to_string())]),
+  let separator = ctx.t("task.listSeparator");
+  let names = |merged: bool| {
+    left
+      .branches
+      .iter()
+      .filter(|branch| branch.merged == merged)
+      .map(|branch| branch.name.as_str())
+      .collect::<Vec<_>>()
+      .join(&separator)
+  };
+  let (unmerged, merged) = (names(false), names(true));
+  match left.worktrees.len() {
+    1 => ctx.t("decisions.ready.left.worktreeOne"),
+    count if count > 1 => ctx.t_args("decisions.ready.left.worktreeOther", [("count", count.to_string())]),
+    _ if !unmerged.is_empty() => ctx.t_args("decisions.ready.left.branches", [("branches", unmerged)]),
+    _ if !merged.is_empty() => ctx.t_args("decisions.ready.left.mergedBranches", [("branches", merged)]),
+    _ => ctx.t("decisions.ready.left.nothing"),
   }
 }
 

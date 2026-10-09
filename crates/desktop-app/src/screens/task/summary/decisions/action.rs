@@ -3,7 +3,10 @@
 //! its request is under way the decision's buttons wait; the runner's refusal is said where the person
 //! decided. A runner that is not connected refuses too, in so many words.
 
-use lurq::app::ctx::{Ctx, FutureAction};
+use lurq::app::{
+  component::DevtoolsInspectable,
+  ctx::{Ctx, FutureAction},
+};
 use orchester_ipc::Command;
 use orchester_workspace::{messages::Message, tasks::run::control_message, workspace::OpenProject};
 
@@ -15,7 +18,7 @@ pub type DecisionAction<T> = FutureAction<(T, Command), T, Message>;
 /// Sends a decision's command to the runner of `project`.
 pub fn decision_action<T>(ctx: &mut Ctx, project: OpenProject) -> DecisionAction<T>
 where
-  T: Clone + PartialEq + Send + Sync + 'static,
+  T: Clone + PartialEq + Send + Sync + DevtoolsInspectable + 'static,
 {
   let runners = Services::of(ctx).runners;
   ctx.future_action(move |(choice, command): (T, Command)| {
@@ -34,7 +37,7 @@ where
 }
 
 /// The decision under way, if any, and why the last one was refused.
-pub fn state<T: Clone + PartialEq + Send + Sync + 'static>(
+pub fn state<T: Clone + PartialEq + Send + Sync + DevtoolsInspectable + 'static>(
   action: &DecisionAction<T>,
   asked: Option<T>,
 ) -> (Option<T>, Option<Message>) {

@@ -30,8 +30,8 @@ use crate::{
   },
 };
 
-/// The version choice's width (`rMaOi`, room for "v12 · changes requested").
-const VERSION_WIDTH: f32 = 200.0;
+/// The version choice's width (`rMaOi` is 107; room for "v1 · changes requested").
+const VERSION_WIDTH: f32 = 170.0;
 /// The width of a criterion's number (`N2M6U`).
 const NUMBER_WIDTH: f32 = 14.0;
 

@@ -24,7 +24,10 @@ const CRITERIA: [&str; 2] = ["The change is covered by tests.", "Nothing changes
 const SEND_LINE: &str = "    let response = self.client.post(&endpoint.url).body(body).send().await?;\n";
 const TIMEOUT_LINE: &str = "  pub timeout_secs: u64,\n";
 /// What Review reported when it failed the work for the last time (`RuLVp` in `DVuXu`).
-const REVIEW_REPORT: &str = "Criterion 2 is still not met: when Retry-After is an HTTP date, the sender reads it as seconds                              and waits 0 s. Same finding as the attempt before.";
+const REVIEW_REPORT: &str = concat!(
+  "Criterion 2 is still not met: when Retry-After is an HTTP date, the sender reads it as seconds and waits 0 s. ",
+  "Same finding as the attempt before."
+);
 
 /// How a ready run was made.
 #[derive(Clone, Copy, PartialEq, Eq)]

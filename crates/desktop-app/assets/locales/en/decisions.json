@@ -106,6 +106,7 @@
       "left": {
         "nothing": "Its worktrees and merged branches were removed.",
         "branches": "Its branches {{branches}} stay: their commits are not merged.",
+      "mergedBranches": "Its worktrees were removed; {{branches}} is still there, its commits merged.",
         "worktreeOne": "Its worktree stays: it has changes that are not committed.",
         "worktreeOther": "{{count}} of its worktrees stay: they have changes that are not committed."
       },
