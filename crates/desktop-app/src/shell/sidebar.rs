@@ -42,7 +42,8 @@ impl Component for Sidebar {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let route = Route::parse(&ctx.route_path());
+    // A path that names no route selects nothing; the screen says why it names none.
+    let route = Route::parse(&ctx.route_path()).ok();
     let navigation = Navigation::of(ctx);
     let selected = route.as_ref().map(Route::nav_screen);
     let project = route.as_ref().and_then(Route::project);
@@ -68,7 +69,7 @@ impl Component for Sidebar {
         // `Gap` (`Eo8Zf`): 8 between the switcher and the screens, with the sidebar's gap on each side.
         .child(Column::new().padding(Padding::new().top(SpacingSize::Sm)))
         .child(items.group(ctx, &Screen::PROJECT_MAIN))
-        .child(section_label(&ctx.t("nav.configure")))
+        .child(section_label(&ctx.t("shell.nav.configure")))
         .child(items.group(ctx, &Screen::CONFIGURE));
       bottom.push(Screen::ProjectSettings);
     }
@@ -146,10 +147,10 @@ fn section_label(label: &str) -> Row {
 /// tile come with reading projects; its id is never shown.
 fn switcher(ctx: &mut Ctx, project: Option<ProjectId>, navigation: &Navigation) -> Element {
   let (name, detail) = match project {
-    Some(_) => (ctx.t("sidebar.project").to_string(), None),
+    Some(_) => (ctx.t("shell.sidebar.project").to_string(), None),
     None => (
-      ctx.t("sidebar.noProject").to_string(),
-      Some(ctx.t("sidebar.chooseProject")),
+      ctx.t("shell.sidebar.noProject").to_string(),
+      Some(ctx.t("shell.sidebar.chooseProject")),
     ),
   };
   let tile = glyph_tile(icon(Icon::Folders, IconSize::Base, PaletteColor::TextSecondary).into());

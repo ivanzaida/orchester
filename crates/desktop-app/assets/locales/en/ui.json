@@ -1,0 +1,46 @@
+{
+  "ui": {
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Couldn't copy",
+    "tryAgain": "Try again",
+    "tabCount": "{{label}} {{count}}",
+    "status": {
+      "withDetail": "{{status}} · {{detail}}",
+      "draft": "Draft",
+      "queued": "Queued",
+      "running": "Running",
+      "needsInput": "Needs input",
+      "paused": "Paused",
+      "stoppedAtLimit": "Stopped at limit",
+      "interrupted": "Interrupted",
+      "completed": "Completed",
+      "merged": "Merged",
+      "failed": "Failed",
+      "canceled": "Canceled",
+      "unreadable": "Unreadable",
+      "waiting": "Waiting",
+      "working": "Working",
+      "complete": "Complete",
+      "skipped": "Skipped",
+      "notStarted": "Not started",
+      "cantContinue": "Interrupted · can't continue",
+      "blocked": "Blocked"
+    },
+    "priority": {
+      "urgent": "Urgent",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "none": "No priority"
+    },
+    "workflow": {
+      "backlog": "Backlog",
+      "todo": "Todo",
+      "inProgress": "In progress",
+      "inReview": "In review",
+      "done": "Done",
+      "canceled": "Canceled"
+    }
+  }
+}
