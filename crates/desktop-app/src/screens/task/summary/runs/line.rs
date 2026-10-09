@@ -115,7 +115,7 @@ fn present(ctx: &Ctx, run: &Run, left: &Leftovers) -> Line {
 
 /// Local date and time of `at`, e.g. "Oct 3, 16:08".
 pub fn day_and_clock(ctx: &Ctx, at: Timestamp) -> Arc<str> {
-  let (month, day) = display::month_and_day(at);
+  let (month, day) = display::month_day(at);
   let month = ctx.t_ns(NAMESPACE, MONTH_KEYS[month]);
   ctx.t_args(
     "summary.runs.when",

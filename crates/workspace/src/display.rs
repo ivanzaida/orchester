@@ -131,9 +131,8 @@ pub fn weekday(at: Timestamp) -> usize {
   local.weekday().num_days_from_monday() as usize
 }
 
-/// [`MONTH_KEYS`] index of the local month of `at`, and its local day of the month, for a date read as
-/// "Oct 3".
-pub fn month_and_day(at: Timestamp) -> (usize, u32) {
+/// The local month of `at`, as a [`MONTH_KEYS`] index, and its day of the month.
+pub fn month_day(at: Timestamp) -> (usize, u32) {
   use chrono::Datelike;
   // As in `clock`: stored times are after 1970.
   let millis = u64::try_from(at.unix_millis()).unwrap_or_default();
