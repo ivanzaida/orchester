@@ -30,6 +30,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{id::ProjectId, project::TaskKey};
+use orchester_workspace::tasks::data::ProjectTasks;
 
 use self::{
   form::{FormProps, TaskForm},
@@ -39,7 +40,7 @@ use super::placeholder::centered;
 use crate::{
   navigation::Navigation,
   project::{ShownProject, TasksState},
-  routes::{ProjectPage, Route, TaskList, TaskView},
+  routes::{ProjectPage, Route, Screen, TaskList, TaskView},
   ui::{
     icon::Icon,
     message::message_text,
@@ -51,35 +52,27 @@ use crate::{
 const FORM_WIDTH: f32 = 720.0;
 
 pub fn new_task(ctx: &mut Ctx, project: &ShownProject) -> Element {
-  let pipelines = project.feed.tasks.get().ready().map(|tasks| tasks.pipelines.clone());
+  let tasks = match read_tasks(ctx, project, Screen::NewTask) {
+    Ok(tasks) => tasks,
+    Err(waiting) => return waiting,
+  };
   let props = FormProps {
     project: project.clone(),
     subject: Subject::New,
-    pipelines,
+    pipelines: Some(tasks.pipelines),
   };
   ctx.mount_keyed::<TaskForm>(&format!("task-form-new-{}", project.open.project.id()), props)
 }
 
 pub fn edit_task(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Element {
-  let tasks = match project.feed.tasks.get() {
-    TasksState::Ready(tasks) => tasks,
-    TasksState::Loading => return screen(loading("task-form-loading", &ctx.t("task_form.load.reading")).into()),
-    TasksState::Failed(error) => {
-      let feed = project.feed.clone();
-      let body = message_text(ctx, &error);
-      let title = ctx.t("task_form.load.failed");
-      return screen(load_error(ctx, "task-form-load-error", (&title, &body), move || {
-        feed.saved()
-      }));
-    }
+  let tasks = match read_tasks(ctx, project, Screen::EditTask) {
+    Ok(tasks) => tasks,
+    Err(waiting) => return waiting,
   };
   let Some(task) = tasks.tasks.iter().find(|task| task.key() == key) else {
     let title = ctx.t_args("task_form.load.notFound", [("key", key.to_string())]);
-    return screen(
-      centered(Icon::SearchX, &title, &ctx.t("task_form.load.notFoundBody"))
-        .id("task-form-not-found")
-        .into(),
-    );
+    let missing = centered(Icon::SearchX, &title, &ctx.t("task_form.load.notFoundBody")).id("task-form-not-found");
+    return screen(Screen::EditTask, missing.into());
   };
   let task = Arc::new(task.clone());
   let subject = if tasks.phases.contains_key(&task.id()) {
@@ -95,10 +88,29 @@ pub fn edit_task(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Elemen
   ctx.mount_keyed::<TaskForm>(&format!("task-form-{}-{key}", project.open.project.id()), props)
 }
 
-/// `content` as Edit task's screen while the task is not there to edit.
-fn screen(content: Element) -> Element {
+/// The project's tasks and pipelines, which the form starts from; until they are read, `form`'s screen
+/// says they are being read, or why they cannot be.
+fn read_tasks(ctx: &mut Ctx, project: &ShownProject, form: Screen) -> Result<ProjectTasks, Element> {
+  match project.feed.tasks.get() {
+    TasksState::Ready(tasks) => Ok(tasks),
+    TasksState::Loading => Err(screen(
+      form,
+      loading("task-form-loading", &ctx.t("task_form.load.reading")).into(),
+    )),
+    TasksState::Failed(error) => {
+      let feed = project.feed.clone();
+      let body = message_text(ctx, &error);
+      let title = ctx.t("task_form.load.failed");
+      let failed = load_error(ctx, "task-form-load-error", (&title, &body), move || feed.saved());
+      Err(screen(form, failed))
+    }
+  }
+}
+
+/// `content` as the form's screen while there is no form to show.
+fn screen(form: Screen, content: Element) -> Element {
   Column::new()
-    .id("screen-edit-task")
+    .id(format!("screen-{}", form.name()))
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
     .child(content)

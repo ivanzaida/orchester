@@ -29,7 +29,7 @@ use super::{
   bar::action_bar,
   brief::{BriefFields, brief},
   criteria::{Criterion, texts},
-  head::head,
+  head::{head, no_run_notice},
   kept::{Kept, KeptEdits},
   limits::{LimitFields, limits_section},
   plan::{Pick, pipeline_section},
@@ -137,8 +137,19 @@ pub struct TaskForm {
   pub(super) batch: IdempotencyKey,
   pub(super) nav: Nav,
   pub(super) kept: KeptEdits,
-  /// What the kept edits hold, as this form last wrote them.
-  pub(super) written: Arc<Mutex<Option<Values>>>,
+  /// What this form last wrote to the kept edits.
+  pub(super) written: Arc<Mutex<Written>>,
+}
+
+/// What a form last wrote to its kept edits.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum Written {
+  /// The values kept, or that none are.
+  #[default]
+  Nothing,
+  Values(Values),
+  /// The form created its task or started its run and leaves: nothing is kept again.
+  Finished,
 }
 
 impl Component for TaskForm {
@@ -250,6 +261,7 @@ impl TaskForm {
       .width(Dimension::Px(FORM_WIDTH))
       .spacing(SpacingSize::Section)
       .child(head(ctx, view, &self.nav))
+      .with_children(no_run_notice(ctx, view))
       .child(brief(ctx, view, &props.project.open, &brief_fields))
       .child(context_section(ctx))
       .child(pipeline_section(ctx, view, &self.fields.pipeline, &self.nav))
@@ -309,7 +321,7 @@ impl TaskForm {
         Some(kept) => {
           self.fields.fill(&kept.values);
           self.kept_at.set(Some(KeptAt(kept.at)));
-          *self.written.lock() = Some(kept.values);
+          *self.written.lock() = Written::Values(kept.values);
         }
         None => self.fields.fill(&stored),
       },
@@ -339,20 +351,27 @@ impl TaskForm {
     if view.queued() {
       return;
     }
-    let wanted = view.changed.then(|| view.values.clone());
+    let wanted = if view.changed {
+      Written::Values(view.values.clone())
+    } else {
+      Written::Nothing
+    };
     let mut written = self.written.lock();
-    if *written != wanted {
-      self
-        .kept
-        .write(wanted.as_ref().map(|values| (values, Timestamp::now())));
-      *written = wanted;
+    if *written == Written::Finished || *written == wanted {
+      return;
     }
+    let values = match &wanted {
+      Written::Values(values) => Some((values, Timestamp::now())),
+      Written::Nothing | Written::Finished => None,
+    };
+    self.kept.write(values);
+    *written = wanted;
   }
 
-  /// Clears the kept edits, e.g. once they are saved.
-  pub(super) fn forget_kept(kept: &KeptEdits, written: &Mutex<Option<Values>>) {
+  /// Clears the kept edits once the form created its task or queued it: they are stored now.
+  pub(super) fn forget_kept(kept: &KeptEdits, written: &Mutex<Written>) {
     kept.write(None);
-    *written.lock() = None;
+    *written.lock() = Written::Finished;
   }
 
   fn view(&self, props: &FormProps, actions: (&SaveAction, &RunAction), separator: &str) -> View {

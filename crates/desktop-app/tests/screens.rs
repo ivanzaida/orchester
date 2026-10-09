@@ -1,8 +1,8 @@
 //! Every route's path shows its screen's own element, `screen-<name>`: an honest placeholder until the
-//! screen is built. A path that names nothing shows `screen-not-found`, which says why. The paths go
-//! straight to the router, as a tab's history would hand them over, so a path no route prints is shown
-//! too. The project the paths name is known to be open; what the window does until a project opens,
-//! and for one that cannot, is `tests/projects.rs`.
+//! screen is built; New task and Edit task first read the project's tasks. A path that names nothing shows
+//! `screen-not-found`, which says why. The paths go straight to the router, as a tab's history would hand them over, so
+//! a path no route prints is shown too. The project the paths name is known to be open; what the window does until a
+//! project opens, and for one that cannot, is `tests/projects.rs`.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -37,6 +37,8 @@ use parking_lot::Mutex;
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const NOT_BUILT: &str = "This screen isn't built yet.";
+/// Built screens, which say they read the project's tasks first: here nothing reads them.
+const READING_TASKS: &str = "Reading the project's tasks…";
 
 /// Where the test root leaves its router.
 #[derive(Clone, Default)]
@@ -156,8 +158,8 @@ fn every_screen() -> Vec<(Route, &'static str)> {
       )),
       "Tasks",
     ),
-    (at(ProjectPage::NewTask), "New task"),
-    (at(ProjectPage::EditTask(key("KON-7"))), "Edit KON-7"),
+    (at(ProjectPage::NewTask), READING_TASKS),
+    (at(ProjectPage::EditTask(key("KON-7"))), READING_TASKS),
     (
       at(ProjectPage::Task(key("KON-12"), TaskView::of(TaskTab::Summary))),
       "KON-12 · Summary",
@@ -192,7 +194,11 @@ fn screens_each_route_mounts_its_own_placeholder() {
     let texts = screens
       .show(&route.path(), &id)
       .unwrap_or_else(|| panic!("{} shows {id}", route.path()));
-    assert_eq!(texts, [title, NOT_BUILT], "{}", route.path());
+    if title == READING_TASKS {
+      assert_eq!(texts, [title], "{}", route.path());
+    } else {
+      assert_eq!(texts, [title, NOT_BUILT], "{}", route.path());
+    }
     assert!(
       screens.tree.get_element_by_id("screen-not-found").is_none(),
       "{}",

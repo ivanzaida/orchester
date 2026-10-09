@@ -35,7 +35,11 @@
       "unconfirmedDescription": "Saved as {{key}}. The runner did not say whether its run started; Retry run never creates a second run.",
       "lockedMeta": "Locked while queued",
       "retryNote": "Retry run starts the run that is already queued. It never creates a second run.",
-      "retry": "Retry run"
+      "retry": "Retry run",
+      "noRun": {
+        "title": "No run is recorded for this task",
+        "body": "{{key}} was saved and queued, but the runner never started its run. Retry run starts it; it never creates a second run."
+      }
     },
     "progress": {
       "creatingForRun": "Saving the task. Its run is queued right after.",
@@ -78,7 +82,7 @@
         "description": "Runs the task step by step. Only published pipelines are listed.",
         "placeholder": "Choose a pipeline",
         "none": "No published pipelines in this project",
-        "open": "Open Pipelines"
+        "open": "Open Pipelines ↗"
       },
       "budget": {
         "label": "Run budget",
@@ -120,7 +124,7 @@
       },
       "optionGates": "Published {{version}} · {{steps}} · approval at {{gates}}",
       "optionNoGates": "Published {{version}} · {{steps}} · no approval gates",
-      "view": "View pipeline",
+      "view": "View pipeline ↗",
       "gate": "waits for approval",
       "gateSeparator": ", ",
       "approval": "Approval is required for {{steps}}.",
@@ -162,8 +166,8 @@
       "consequenceRan": "The task stays as it was last saved."
     },
     "load": {
-      "reading": "Reading the task…",
-      "failed": "The task cannot be read",
+      "reading": "Reading the project's tasks…",
+      "failed": "The project's tasks cannot be read",
       "notFound": "No task {{key}} in this project",
       "notFoundBody": "It may have been removed, or its key changed when the project was shared."
     }

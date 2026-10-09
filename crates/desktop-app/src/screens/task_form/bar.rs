@@ -61,39 +61,39 @@ pub fn action_bar(ctx: &Ctx, view: &View, confirming_discard: bool, on: &Handler
     ),
     _ => (note(ctx, view), actions(ctx, view, on), reasons(ctx, view)),
   };
+  let top = Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Lg)
+    .align_items(Alignment::Start)
+    .child(Column::new().flex(1.0).with_children(note.map(|note| {
+      Text::new(&note)
+        .id("task-form-bar-note")
+        .variant(ExtraTypography::Prose.role())
+        .color(PaletteColor::TextMuted)
+    })))
+    .child(
+      Row::new()
+        .id("task-form-actions")
+        .flex_shrink(0.0)
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .with_children(actions),
+    );
   frame()
     .id("task-form-bar")
     .child(
-      Row::new()
+      Column::new()
         .width(Dimension::Px(FORM_WIDTH))
-        .spacing(SpacingSize::Lg)
-        .align_items(Alignment::Start)
-        .child(Column::new().flex(1.0).with_children(note.map(|note| {
-          Text::new(&note)
-            .id("task-form-bar-note")
-            .variant(ExtraTypography::Prose.role())
-            .color(PaletteColor::TextMuted)
-        })))
-        .child(
+        .spacing(SpacingSize::Sm)
+        .child(top)
+        .with_children((!reasons.is_empty()).then(|| {
           Column::new()
-            .max_width(Dimension::Px(FORM_WIDTH))
-            .spacing(SpacingSize::Sm)
+            .id("task-form-reasons")
+            .width(Dimension::Pct(100.0))
+            .spacing(SpacingSize::Xs)
             .align_items(Alignment::End)
-            .child(
-              Row::new()
-                .id("task-form-actions")
-                .spacing(SpacingSize::Sm)
-                .align_items(Alignment::Center)
-                .with_children(actions),
-            )
-            .with_children((!reasons.is_empty()).then(|| {
-              Column::new()
-                .id("task-form-reasons")
-                .spacing(SpacingSize::Xs)
-                .align_items(Alignment::End)
-                .with_children(reasons)
-            })),
-        ),
+            .with_children(reasons)
+        })),
     )
     .into()
 }
@@ -256,6 +256,7 @@ fn lock_line(id: &str, text: &str) -> Element {
     .id(id.to_owned())
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
+    .max_width(Dimension::Pct(100.0))
     .describe("role", "unavailable-reason")
     .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted))
     .child(
@@ -273,6 +274,7 @@ fn problem_line(text: &str) -> Element {
   Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
+    .max_width(Dimension::Pct(100.0))
     .describe("role", "problem")
     .child(icon(Icon::CircleAlert, IconSize::Base, PaletteColor::Warning))
     .child(Text::new(text).variant(TypographyStyle::Description).flex_shrink(1.0))

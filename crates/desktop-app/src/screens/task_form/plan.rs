@@ -91,7 +91,6 @@ fn control(ctx: &mut Ctx, view: &View, pick: &Signal<Pick>, nav: &Nav) -> Elemen
       ButtonKind::Ghost,
       ctx.t("task_form.fields.pipeline.open"),
     )
-    .icon(Icon::ArrowUpRight)
     .on_click(move || nav.pipelines());
     return Column::new()
       .width(Dimension::Px(SELECT_WIDTH))

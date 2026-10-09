@@ -26,6 +26,7 @@ use crate::{
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     icon::{Icon, icon},
+    notice::{Notice, NoticeTone},
   },
 };
 
@@ -108,6 +109,24 @@ fn texts(ctx: &Ctx, view: &View) -> (Arc<str>, Arc<str>) {
       ctx.t_args("task_form.edit.descriptionRan", [("key", task.key().to_string())]),
     ),
   }
+}
+
+/// A queued task opened again without a run (`Reopened later` in `t0fDw`): no run is recorded, and
+/// Retry run starts it.
+pub fn no_run_notice(ctx: &Ctx, view: &View) -> Option<Element> {
+  let Phase::NotStarted { queued, problems } = &view.phase else {
+    return None;
+  };
+  (view.subject.awaits_first_run() && problems.is_empty()).then(|| {
+    Notice::new(
+      "task-form-no-run",
+      NoticeTone::Info,
+      ctx.t("task_form.queued.noRun.title"),
+    )
+    .icon(Icon::CirclePause)
+    .body(ctx.t_args("task_form.queued.noRun.body", [("key", queued.key.to_string())]))
+    .into()
+  })
 }
 
 /// What the form holds and does, at the head's end (`Top status` `TwmHc`).
