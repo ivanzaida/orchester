@@ -9,6 +9,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, Interval},
+    theme::TypographyStyle,
   },
   components::Text,
   core::Signal,
@@ -91,7 +92,7 @@ fn retry(ctx: &Ctx, attempt: u32, limit: u32, next: Option<Instant>) -> String {
 
 impl DevtoolsInspectable for Clock {}
 
-/// `clock` in Geist Mono 11 `text_muted` (`QDtA3`), with the element id `id`.
+/// `clock` in 11 `text_muted`, with the element id `id`.
 pub fn clock(ctx: &mut Ctx, id: &str, clock: Clock) -> Element {
   ctx.mount_keyed::<Ticking>(
     &format!("clock-{id}"),
@@ -134,9 +135,11 @@ impl Component for Ticking {
     } else {
       self.interval.stop();
     }
-    Text::new(&clock.text(ctx))
-      .id(id)
-      .variant(ExtraTypography::MonoNote.role())
-      .nowrap()
+    // An agent's time in the Running list is Geist Mono (`QDtA3`); the status bar's times are its labels'.
+    let style = match clock {
+      Clock::Active(_) => ExtraTypography::MonoNote.role(),
+      Clock::Since(_) | Clock::Retry { .. } => TypographyStyle::Caption,
+    };
+    Text::new(&clock.text(ctx)).id(id).variant(style).nowrap()
   }
 }

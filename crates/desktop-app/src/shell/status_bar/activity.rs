@@ -11,11 +11,11 @@
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, RadiusSize},
+    theme::{PaletteColor, RadiusSize, SpacingSize},
   },
   components::Row,
   layout::{Alignment, layout_kind::ShrinkLimit},
-  node::Element,
+  node::{Element, padding::Padding},
 };
 use orchester_core::project::TaskKey;
 use orchester_workspace::{
@@ -68,6 +68,7 @@ fn failure(ctx: &mut Ctx, event: &Event, project: Option<&ProjectFacts>, dispatc
   };
   let text = event_text(ctx, event, project);
   let row = raised("status-activity", state)
+    .padding(before_time())
     .child(glyph(glyph_icon, PaletteColor::TextPrimary))
     .child(cut(ctx, "status-activity-text", &text, PaletteColor::TextPrimary));
   let mut items = vec![row.into(), time(event)];
@@ -141,6 +142,7 @@ fn running(ctx: &mut Ctx, newest: &Operation, project: Option<&ProjectFacts>) ->
   let text = ctx.t_args("shell.status.activity.running", [("title", title.to_string())]);
   let text = in_project(ctx, &text, newest.project(), project);
   let row = item("status-activity")
+    .padding(before_time())
     .describe("state", "running")
     .flex_shrink(1.0)
     .shrink_order(give_way::ACTIVITY)
@@ -170,6 +172,7 @@ fn latest(ctx: &mut Ctx, event: &Event, project: Option<&ProjectFacts>, dispatch
     Some(open) => {
       let dispatch = dispatch.clone();
       pressed("status-activity", move || dispatch(open.clone()))
+        .padding(before_time())
         .describe("state", "latest")
         .flex_shrink(1.0)
         .shrink_order(give_way::ACTIVITY)
@@ -178,6 +181,7 @@ fn latest(ctx: &mut Ctx, event: &Event, project: Option<&ProjectFacts>, dispatch
         .into()
     }
     None => item("status-activity")
+      .padding(before_time())
       .describe("state", "latest")
       .flex_shrink(1.0)
       .shrink_order(give_way::ACTIVITY)
@@ -186,6 +190,11 @@ fn latest(ctx: &mut Ctx, event: &Event, project: Option<&ProjectFacts>, dispatch
       .into(),
   };
   vec![row, time(event)]
+}
+
+/// An item's padding when its time follows it: one space before the time's *·*.
+fn before_time() -> Padding {
+  Padding::horizontal(SpacingSize::Sm).right(ExtraSpacing::Fine.role())
 }
 
 /// When the event happened, *· 14:32*; it drops out with the bar's times.

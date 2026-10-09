@@ -6,9 +6,13 @@
 //! *Open runner log* follow it; while runs lost their agents, how many follows too.
 
 use lurq::{
-  app::{ctx::Ctx, theme::PaletteColor},
-  layout::layout_kind::ShrinkLimit,
-  node::Element,
+  app::{
+    ctx::Ctx,
+    theme::{PaletteColor, SpacingSize},
+  },
+  components::Row,
+  layout::{Alignment, layout_kind::ShrinkLimit},
+  node::{Element, padding::Padding},
 };
 use orchester_workspace::{
   display,
@@ -21,6 +25,7 @@ use super::{
 };
 use crate::{
   shell::clock::{Clock, clock},
+  theme::ExtraSpacing,
   ui::icon::Icon,
 };
 
@@ -28,13 +33,19 @@ use crate::{
 pub fn runner(ctx: &mut Ctx, runner: &RunnerFacts, dispatch: &Dispatch) -> Vec<Element> {
   let (color, key, state) = look(&runner.state);
   let open = dispatch.clone();
+  // The words and what follows them (*· another Orchester app…*, the countdown) are one space apart.
+  let mut words = Row::new()
+    .flex_shrink(1.0)
+    .shrink_limit(ShrinkLimit::Content)
+    .spacing(ExtraSpacing::Fine.role())
+    .align_items(Alignment::Center)
+    .child(dropping(&ctx.t(key), PaletteColor::TextMuted));
   let mut row = pressed("status-runner", move || open(BarAction::OpenRunnerLog))
     .describe("state", state)
     .flex_shrink(1.0)
     .shrink_order(give_way::RUNNER_WORDS)
     .shrink_limit(ShrinkLimit::Content)
-    .child(dot(color))
-    .child(dropping(&ctx.t(key), PaletteColor::TextMuted));
+    .child(dot(color));
   let mut retry = None;
   match &runner.state {
     RunnerState::Reconnecting { attempt, .. } => {
@@ -44,6 +55,7 @@ pub fn runner(ctx: &mut Ctx, runner: &RunnerFacts, dispatch: &Dispatch) -> Vec<E
         next: runner.next_attempt,
       };
       // The countdown is one of the bar's times: it drops out with them.
+      row = row.padding(Padding::horizontal(SpacingSize::Sm).right(ExtraSpacing::Fine.role()));
       retry = Some(time_part(
         "status-runner-retry",
         clock(ctx, "status-runner-retry-text", next),
@@ -51,13 +63,12 @@ pub fn runner(ctx: &mut Ctx, runner: &RunnerFacts, dispatch: &Dispatch) -> Vec<E
     }
     RunnerState::Failed { cause, attempts } => {
       let detail = offline_detail(ctx, cause, *attempts, runner);
-      row = row
-        .describe("cause", cause_name(cause))
-        .child(dropping(&detail, PaletteColor::TextMuted).id("status-runner-detail"));
+      row = row.describe("cause", cause_name(cause));
+      words = words.child(dropping(&detail, PaletteColor::TextMuted).id("status-runner-detail"));
     }
     _ => {}
   }
-  let mut items = vec![row.into()];
+  let mut items = vec![row.child(words).into()];
   items.extend(retry);
   items.extend(interrupted(ctx, runner));
   if runner.state.can_restart() {

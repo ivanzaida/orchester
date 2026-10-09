@@ -15,7 +15,7 @@ use lurq::{
   },
   components::{Row, Text},
   layout::Alignment,
-  node::{CursorIcon, Element, padding::Padding},
+  node::{CursorIcon, Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{id::ProjectId, name::Name};
 use orchester_workspace::{runner::state::RunnerState, tasks::data::ProjectTasks};
@@ -32,6 +32,9 @@ use crate::{
     tooltip::Tooltip,
   },
 };
+
+/// `Needs you` (`O3eKK`) height.
+const PILL_HEIGHT: f32 = 26.0;
 
 /// How many things wait for the person in one project the tabs show.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -136,6 +139,7 @@ impl Component for NeedsYouPill {
       .describe("count", total.to_string())
       .describe("a11y_name", count_words(ctx, total))
       .cursor(CursorIcon::Pointer)
+      .height(Dimension::Px(PILL_HEIGHT))
       .padding(Padding::horizontal(SpacingSize::Sm))
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)

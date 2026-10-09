@@ -88,6 +88,12 @@ fn tab_labels_pill_stays_at_zero_and_opens_the_overviews_needs_you() {
     window.texts("needs-you-pill").is_some()
   });
   assert_eq!(window.texts("needs-you-pill"), Some(vec!["0 need you".to_owned()]));
+  let pill = window
+    .tree
+    .get_element_by_id_mut("needs-you-pill")
+    .and_then(|element| element.bounds())
+    .expect("the pill is laid out");
+  assert_eq!(pill.height, 26.0, "as tall as the design's pill (`O3eKK`)");
   window.until("the runner to give up", |window| {
     window.texts("tab-1-attention").is_some()
   });
