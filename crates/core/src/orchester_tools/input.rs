@@ -176,9 +176,6 @@ impl ToolCall {
 
 /// `arguments` read as `tool`'s input, or why they are not.
 fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
-  if let Some(file) = FileCall::read(tool, &arguments) {
-    return file.map(|call| ToolCall::File(Box::new(call)));
-  }
   let invalid = |error: serde_json::Error| error.to_string();
   Ok(match tool {
     OrchesterTool::FindSymbol => {
@@ -233,7 +230,11 @@ fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
     | OrchesterTool::EditFile
     | OrchesterTool::CreateFile
     | OrchesterTool::DeleteFile
-    | OrchesterTool::MoveFile => unreachable!("the file tools are read by FileCall::read"),
+    | OrchesterTool::MoveFile => {
+      let file = FileCall::read(tool, &arguments)
+        .unwrap_or_else(|| Err(format!("{} has no file input Orchester reads", tool.as_str())))?;
+      ToolCall::File(Box::new(file))
+    }
   })
 }
 

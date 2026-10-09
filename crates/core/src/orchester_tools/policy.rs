@@ -1,13 +1,13 @@
 //! Which tools a step is offered and whether a call asks (`docs/interactive-tool-approvals.md`, "Orchester's
 //! tools"):
 //!
-//! | Access class | Step that may write | Read-only step |
+//! | Access class (tools) | Step that may write the worktree | Read-only step |
 //! | --- | --- | --- |
 //! | read-only (`read_file`, `list_files`, `search_file`, `find_references`, `get_task`, `find_symbol` with the code index, `list_skills` and `read_skill` with skills) | runs | runs |
 //! | writes the worktree (`edit_file`, `create_file`, `delete_file`, `move_file`) | runs | not offered |
 //! | records with the run or the project (`save_memory`, `report_progress`) | runs | runs |
-//! | outside the worktree (`search_external_file`, `read_external_file`) | asks, runs in the run's sources | asks, runs in the run's sources |
-//! | the checks offered to the step (`run_check`), network on | asks, but a check whose access rules ask never runs | as a writing step |
+//! | outside the worktree (`search_external_file`, `read_external_file`) | asks; runs without asking in the run's sources | asks; runs without asking in the run's sources |
+//! | the checks offered to the step (`run_check`), network on | runs a check whose access rules approve no call; asks for any other, once per run or at every call as they say | runs a check whose access rules approve no call; asks for any other, once per run or at every call as they say |
 //! | the checks, network off | not offered | not offered |
 //!
 //! A call that asks reaches a person as any request outside the step's permissions does, and Orchester's
