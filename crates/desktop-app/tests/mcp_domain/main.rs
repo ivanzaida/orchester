@@ -4,6 +4,7 @@
 //! each with a stable code. `live` sets a project up end to end through the tools alone and works a
 //! task with the real runner and the fake Codex. Needs `git`.
 
+mod gates;
 #[path = "../mcp_server/http.rs"]
 mod http;
 #[path = "../../examples/seed/kontur/mod.rs"]
@@ -13,6 +14,7 @@ mod http;
 )]
 mod kontur;
 mod live;
+mod merge;
 
 use std::{
   path::{Path, PathBuf},
@@ -405,11 +407,6 @@ fn domain_setup_tools_check_their_input_as_the_forms_do() {
     &json!({ "name": "Plain", "folder": not_a_repository.display().to_string() }),
   );
   assert_eq!(plain["code"], "not_a_git_repository");
-  let missing = served.refused(
-    "add_cli_connection",
-    &json!({ "project": "Kontur", "kind": "codex", "name": "Codex", "program": served.folder.path().join("no-codex").display().to_string() }),
-  );
-  assert_eq!(missing["code"], "not_verified", "{missing}");
   let unknown = served.refused(
     "save_profile_draft",
     &json!({ "project": "Kontur", "role": "Builder", "connection": "nowhere", "model": "gpt-5.5" }),

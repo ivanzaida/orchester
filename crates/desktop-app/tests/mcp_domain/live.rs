@@ -8,10 +8,21 @@ use std::{
   env, fs,
   path::{Path, PathBuf},
   process::Command,
-  sync::OnceLock,
+  sync::{Arc, OnceLock},
 };
 
-use orchester_workspace::app_paths::runner_beside;
+use orchester_core::{
+  command::{CommandError, CommandOutput, CommandRunner},
+  store::{RunStore, TaskStore},
+};
+use orchester_exec::programs::Programs;
+use orchester_store::ProjectDb;
+use orchester_workspace::{
+  app_paths::runner_beside,
+  tasks::integration_jobs::{MergeArgs, RunJobs},
+  workspace::OpenProject,
+};
+use parking_lot::{Condvar, Mutex};
 use serde_json::{Value, json};
 
 use super::Served;
@@ -89,10 +100,16 @@ fn set_up(served: &mut Served, repo: &Path, fake: &Path) {
     &json!({ "name": "Kontur", "folder": repo.display().to_string() }),
   );
   assert_eq!(added["project"]["key"], "KON");
-  let connection = served.ok(
-    "add_cli_connection",
-    &json!({ "project": "Kontur", "kind": "codex", "name": "Codex · Kontur", "program": fake.display().to_string() }),
+  let fake_codex =
+    json!({ "project": "Kontur", "kind": "codex", "name": "Codex · Kontur", "program": fake.display().to_string() });
+  let refused = served.refused("add_cli_connection", &fake_codex);
+  assert_eq!(
+    refused["code"], "person_only",
+    "a program not on the search path is a person's choice"
   );
+  // A person lets automation set the project up, the fake CLI and write access included.
+  served.let_automation_widen(true);
+  let connection = served.ok("add_cli_connection", &fake_codex);
   assert_eq!(connection["check"]["verified"], true, "{connection}");
   assert_eq!(connection["connection"]["status"], "connected");
   let models = served.ok(
@@ -180,6 +197,8 @@ fn domain_a_project_set_up_through_the_tools_runs_answers_and_merges() {
   set_up(&mut served, &repo, &fake);
   let key = run(&mut served, "Escalate `git status`.");
   let approval = waiting_approval(&mut served);
+  let early = served.refused("merge_run", &json!({ "project": "Kontur", "run": "1" }));
+  assert_eq!(early["code"], "run_not_ready");
   let id = approval["id"].as_str().expect("an id").to_owned();
   let decide = json!({ "project": "Kontur", "approval": id, "decision": "approve_once" });
   assert_eq!(
@@ -195,7 +214,21 @@ fn domain_a_project_set_up_through_the_tools_runs_answers_and_merges() {
   let changes = served.ok("get_changes", &json!({ "project": "Kontur", "run": "1" }));
   assert_eq!(changes["checkpointed"]["state"], "read", "{changes}");
   assert_eq!(changes["checkpointed"]["diff"]["files"][0]["path"], "README.md");
-  let merged = served.ok("merge_run", &json!({ "project": "Kontur", "run": "1" }));
+  let run_one = json!({ "project": "Kontur", "run": "1" });
+  let held = hold_merge(&served, &repo);
+  assert_eq!(served.refused("merge_run", &run_one)["code"], "merge_running");
+  release(&mut served, &held);
+  fs::write(
+    repo.join("README.md"),
+    "hi
+changed by hand
+",
+  )
+  .expect("an uncommitted change");
+  let dirty = served.refused("merge_run", &run_one);
+  assert_eq!(dirty["code"], "merge_failed", "{dirty}");
+  git(&repo, &["checkout", "--", "README.md"]);
+  let merged = served.ok("merge_run", &run_one);
   assert_eq!(merged["merge"]["into"], "main", "{merged}");
   assert_eq!(merged["merge"]["kind"], "fast_forward");
   let readme = git(&repo, &["show", "main:README.md"]);
@@ -226,4 +259,65 @@ fn domain_automation_cannot_approve_a_network_request() {
     "decide_approval",
     &json!({ "project": "Kontur", "approval": id, "decision": "deny" }),
   );
+}
+
+/// Git work that waits until the test lets it go, then fails.
+struct Held(Arc<(Mutex<bool>, Condvar)>);
+
+impl CommandRunner for Held {
+  fn run(&self, _: &orchester_core::command::Command) -> Result<CommandOutput, CommandError> {
+    let (released, wake) = &*self.0;
+    let mut released = released.lock();
+    while !*released {
+      wake.wait(&mut released);
+    }
+    Err(CommandError::TimedOut)
+  }
+}
+
+/// A merge that holds its run while git works, and what lets it go.
+struct HeldMerge {
+  gate: Arc<(Mutex<bool>, Condvar)>,
+  job: RunJobs,
+}
+
+/// A merge of KON-1's run #1 that holds the run until [`release`], as a person's merge on the task page
+/// would while git works.
+fn hold_merge(served: &Served, repo: &Path) -> HeldMerge {
+  let gate = Arc::new((Mutex::new(false), Condvar::new()));
+  let db = ProjectDb::open(repo).expect("the project's data");
+  let task = db.tasks().expect("tasks").remove(0);
+  let run = db
+    .runs_of_task(task.id())
+    .expect("runs")
+    .into_iter()
+    .find_map(Result::ok)
+    .expect("run #1");
+  let services = served.services();
+  let open = OpenProject {
+    project: db.project().clone(),
+    repo_root: repo.to_path_buf(),
+  };
+  let job = services.jobs.of(open.project.id()).of(run.id());
+  let started = job.start_merge(MergeArgs {
+    task: task.id(),
+    key: task.key().to_string(),
+    number: run.number().get(),
+    branch: "main".to_owned(),
+    run: run.id(),
+    programs: Programs::with_runner(Arc::new(Held(Arc::clone(&gate)))),
+    activity: services.activity.clone(),
+    separator: ", ".into(),
+    changed: Arc::new(|| {}),
+    open,
+  });
+  assert!(started, "the held merge began");
+  HeldMerge { gate, job }
+}
+
+/// Lets the held merge go, and waits until it ended.
+fn release(served: &mut Served, held: &HeldMerge) {
+  *held.gate.0.lock() = true;
+  held.gate.1.notify_all();
+  served.until("the held merge to end", |_| !held.job.busy());
 }
