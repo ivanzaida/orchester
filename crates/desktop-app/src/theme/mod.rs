@@ -9,6 +9,7 @@
 //! selection, scrim, conversation, code and diff colors, `display` type, `radius_full`): the screens
 //! that need them come next and must find them here rather than add near-duplicates.
 
+mod composer;
 mod conversation;
 mod fonts;
 mod form;
@@ -28,6 +29,7 @@ use lurq::{
 };
 
 pub use self::{
+  composer::{ComposerColor, ComposerRadius, ComposerText},
   conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   palette::{ExtraColor, Mode},
@@ -53,6 +55,7 @@ pub fn install(app: &mut App, mode: Mode) {
   metrics::install(theme);
   startup::install(theme);
   conversation::install(theme);
+  composer::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }
