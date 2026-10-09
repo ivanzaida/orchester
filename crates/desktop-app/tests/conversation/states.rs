@@ -75,16 +75,7 @@ fn timeline_a_transcript_that_cannot_be_read_offers_try_again() {
   let key = key_of(&seeded, "Paginate the events API");
   let database = seeded.repo.join(".orchester").join("orchester.db");
   let damaged = Connection::open(&database).expect("the database file opens");
-  // Damage from outside Orchester, which its append-only triggers do not stop.
-  let triggers: Vec<String> = damaged
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'agent_events'")
-    .and_then(|mut statement| statement.query_map([], |row| row.get(0))?.collect())
-    .expect("the triggers are listed");
-  for trigger in triggers {
-    damaged
-      .execute(&format!("DROP TRIGGER \"{trigger}\""), [])
-      .expect("the trigger is dropped");
-  }
+  drop_append_only(&damaged);
   damaged
     .execute("UPDATE agent_events SET payload = '{'", [])
     .expect("the events are damaged");
@@ -125,4 +116,50 @@ fn timeline_a_tool_steps_result_card_names_the_tool_step() {
   });
   let text = all_text(&mut window);
   assert!(text.contains("04 Run checks · Tool"), "{text}");
+}
+
+#[test]
+fn timeline_a_transcript_that_cannot_be_read_again_shows_as_last_read() {
+  let (mut window, seeded) = seeded("task-states");
+  let key = key_of(&seeded, "Paginate the events API");
+  open(&mut window, &seeded, &key, "conversation-chat");
+  let damaged = Connection::open(seeded.repo.join(".orchester").join("orchester.db")).expect("the database file opens");
+  drop_append_only(&damaged);
+  damaged
+    .execute("UPDATE agent_events SET payload = '{'", [])
+    .expect("the events are damaged");
+  // A change of the run reads the transcript again.
+  window
+    .projects()
+    .feed(seeded.project)
+    .changes
+    .update(|count| *count += 1);
+  window.until("the notice", |window| {
+    window.tree.get_element_by_id("conversation-stale").is_some()
+  });
+  assert!(
+    window.tree.get_element_by_id("conversation-chat").is_some(),
+    "the chat shows as last read"
+  );
+  assert!(all_text(&mut window).contains("Conversation shown as last read"));
+  damaged
+    .execute("DELETE FROM agent_events", [])
+    .expect("the damaged events are removed");
+  click(&mut window, "conversation-stale-retry");
+  window.until("the notice gone", |window| {
+    window.tree.get_element_by_id("conversation-stale").is_none()
+  });
+}
+
+/// Lets the transcript be damaged from outside Orchester, which its append-only triggers do not stop.
+fn drop_append_only(database: &Connection) {
+  let triggers: Vec<String> = database
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'agent_events'")
+    .and_then(|mut statement| statement.query_map([], |row| row.get(0))?.collect())
+    .expect("the triggers are listed");
+  for trigger in triggers {
+    database
+      .execute(&format!("DROP TRIGGER \"{trigger}\""), [])
+      .expect("the trigger is dropped");
+  }
 }
