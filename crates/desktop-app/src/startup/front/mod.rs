@@ -6,6 +6,8 @@
 #[cfg(target_os = "windows")]
 mod windows;
 
+use orchester_store::location::LockHolder;
+
 /// What asking another app's window to come to the front did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Front {
@@ -18,14 +20,16 @@ pub enum Front {
 /// Whether this platform can bring another app's window to the front.
 pub const SUPPORTED: bool = cfg!(target_os = "windows");
 
-/// Brings the window of the process `pid` to the front, restoring it when it is minimized.
+/// Brings the main window of the app `holder` names to the front, restoring it when it is minimized,
+/// once its process is known to be that Orchester app: an Orchester program created before its session
+/// started, so a process id reused since is never brought forward. lurq's DevTools window is passed over.
 #[cfg(target_os = "windows")]
-pub fn bring_to_front(pid: u32) -> Front {
-  windows::bring_to_front(pid)
+pub fn bring_to_front(holder: LockHolder) -> Front {
+  windows::bring_to_front(holder.pid, holder.started_at)
 }
 
 /// Not offered where [`SUPPORTED`] is false; asking anyway gets no answer.
 #[cfg(not(target_os = "windows"))]
-pub fn bring_to_front(_pid: u32) -> Front {
+pub fn bring_to_front(_holder: LockHolder) -> Front {
   Front::NoAnswer
 }

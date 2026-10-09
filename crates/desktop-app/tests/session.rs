@@ -9,7 +9,10 @@ use std::fs;
 
 use orchester_app::{
   root::Start,
-  startup::{Failure, Problem, StartupProblem},
+  startup::{
+    Failure, Problem, StartupProblem,
+    front::{self, Front},
+  },
 };
 use orchester_core::time::Timestamp;
 use orchester_ipc::SessionEnd as AttachEnd;
@@ -225,5 +228,21 @@ fn session_newer_data_says_both_versions() {
       "It has data version 999; this build reads up to version {supported}. Nothing was changed."
     )),
     "{texts:?}"
+  );
+}
+
+#[test]
+fn session_switch_never_brings_a_process_that_is_not_the_holder() {
+  let reused = LockHolder::running(std::process::id(), Timestamp::from_unix_millis(1_000));
+  assert_eq!(
+    front::bring_to_front(reused),
+    Front::NoAnswer,
+    "a process created after the holder's session started is another program"
+  );
+  let now = LockHolder::running(std::process::id(), Timestamp::now());
+  assert_eq!(
+    front::bring_to_front(now),
+    Front::NoAnswer,
+    "the test program is not an Orchester program"
   );
 }

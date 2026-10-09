@@ -155,7 +155,7 @@ fn switch(ctx: &mut Ctx, holder: Option<LockHolder>, no_answer: &Signal<bool>) -
     ctx.t("startup.alreadyOpen.switch"),
   )
   .icon(Icon::AppWindow)
-  .on_click(move || match front::bring_to_front(holder.pid) {
+  .on_click(move || match front::bring_to_front(holder) {
     Front::Brought => window.request_close(),
     Front::NoAnswer => no_answer.set(true),
   });
