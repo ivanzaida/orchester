@@ -76,30 +76,34 @@ pub(super) fn create_private_file(path: &Path) -> io::Result<File> {
 }
 
 /// `icacls <path> /inheritance:r /grant:r <user>:F`: the user, and nobody else, may use `path`. icacls
-/// ships with Windows; the user is named as `%USERDOMAIN%\%USERNAME%`.
+/// ships with Windows and runs as `%SystemRoot%\System32\icacls.exe`, through `orchester-exec`, which
+/// hides its console; the user is named as `%USERDOMAIN%\%USERNAME%`.
 #[cfg(windows)]
 fn admit_only_the_user(path: &Path) -> io::Result<()> {
-  use std::os::windows::process::CommandExt;
+  use orchester_core::command::{Command, CommandRunner};
 
-  /// No console window opens for the program (`CREATE_NO_WINDOW`).
-  const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+  /// How long icacls may take.
+  const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
   let user = std::env::var("USERNAME").map_err(|_| io::Error::other("USERNAME is not set"))?;
   let user = match std::env::var("USERDOMAIN") {
     Ok(domain) if !domain.is_empty() => format!(r"{domain}\{user}"),
     _ => user,
   };
-  let output = std::process::Command::new("icacls")
-    .arg(path)
-    .args(["/inheritance:r", "/grant:r"])
-    .arg(format!("{user}:F"))
-    .creation_flags(CREATE_NO_WINDOW)
-    .output()?;
-  if output.status.success() {
+  let system_root = std::env::var_os("SystemRoot").ok_or_else(|| io::Error::other("SystemRoot is not set"))?;
+  let icacls = PathBuf::from(system_root).join("System32").join("icacls.exe");
+  let file = path
+    .to_str()
+    .ok_or_else(|| io::Error::other("the discovery file's path is not Unicode"))?;
+  let command = Command::new(&icacls, [file, "/inheritance:r", "/grant:r", &format!("{user}:F")]);
+  let output = orchester_exec::ProcessRunner::new(TIMEOUT)
+    .run(&command)
+    .map_err(io::Error::other)?;
+  if output.success() {
     return Ok(());
   }
   Err(io::Error::other(format!(
     "icacls could not limit the discovery file to {user}: {}",
-    String::from_utf8_lossy(&output.stderr).trim()
+    output.stderr.trim()
   )))
 }
 

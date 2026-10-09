@@ -128,7 +128,12 @@ fn remove_stale(folder: &Path) {
   };
   let own = std::process::id();
   let pids = entries
-    .filter_map(Result::ok)
+    .filter_map(|entry| {
+      // An entry that cannot be read is left alone, like a file not named after a pid.
+      entry
+        .inspect_err(|error| tracing::warn!(%error, folder = %folder.display(), "cannot read an MCP discovery entry"))
+        .ok()
+    })
     .filter_map(|entry| named_pid(&entry.path()))
     .filter(|pid| *pid != own);
   for pid in pids {
