@@ -13,13 +13,13 @@ use std::{
 
 use orchester_core::{
   id::{ProjectId, RunId},
-  integration::Leftovers,
+  integration::{Leftovers, MergeError},
 };
 use orchester_exec::programs::Programs;
 use parking_lot::Mutex;
 use tokio::sync::watch;
 
-use super::integration::{merge_in, remove_in};
+use super::integration::{IntegrationProblem, merge_in, remove_in};
 use crate::{
   activity::{Activity, operations},
   messages::{self, Message},
@@ -48,6 +48,9 @@ pub struct RunJobState {
   active: Active,
   pub merge: JobState,
   pub remove: JobState,
+  /// The files the last merge conflicted in, for the task page to list; empty unless it stopped at a
+  /// conflict.
+  pub conflicts: Vec<String>,
 }
 
 impl Default for RunJobState {
@@ -56,6 +59,7 @@ impl Default for RunJobState {
       active: Active::Idle,
       merge: JobState::Idle,
       remove: JobState::Idle,
+      conflicts: Vec::new(),
     }
   }
 }
@@ -195,7 +199,10 @@ impl RunJobs {
     if !self.begin(Active::Merge) {
       return;
     }
-    self.update(|state| state.merge = JobState::Running);
+    self.update(|state| {
+      state.merge = JobState::Running;
+      state.conflicts.clear();
+    });
     let job = self.clone();
     if let Err(error) = thread::Builder::new()
       .name("run-merge".into())
@@ -225,6 +232,7 @@ impl RunJobs {
       .with("task", key)
       .with("run", number.to_string());
     let result = catch_unwind(AssertUnwindSafe(|| merge_in(&open.repo_root, &programs, run)));
+    let mut conflicts = Vec::new();
     let merged = match result {
       Ok(Ok(_)) => {
         running.finish();
@@ -232,6 +240,9 @@ impl RunJobs {
       }
       Ok(Err(problem)) => {
         let message = problem.message(&separator);
+        if let IntegrationProblem::Merge(MergeError::Conflict { files }) = &problem {
+          conflicts.clone_from(files);
+        }
         problem.end(running, not_done);
         JobState::Failed(message)
       }
@@ -241,7 +252,10 @@ impl RunJobs {
         JobState::Failed(messages::interrupted())
       }
     };
-    self.update(|state| state.merge = merged);
+    self.update(|state| {
+      state.merge = merged;
+      state.conflicts = conflicts;
+    });
     self.finish();
     changed();
   }
