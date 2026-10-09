@@ -12,13 +12,13 @@ use lurq::{
   components::Column,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::diff::{Changes, MAX_DIFF_FILES, MAX_DIFF_LINES};
-use orchester_workspace::messages::Message;
+use orchester_core::{
+  command::CommandError,
+  diff::{Changes, MAX_DIFF_FILES, MAX_DIFF_LINES, git::GitDiffError},
+};
+use orchester_workspace::{messages::Message, tasks::changes::ChangesError};
 
 use super::grouped;
-
-/// The key of the message that git was not found (`ChangesError::message`).
-const GIT_MISSING: &str = "runs.changes.failure.gitMissing";
 use crate::ui::{
   button::{ActionButton, ButtonKind},
   icon::Icon,
@@ -125,7 +125,8 @@ pub fn worktree_failed(ctx: &Ctx, error: &Message, retry: impl Fn() + Send + Syn
   )
   .icon(Icon::RotateCcw)
   .on_click(retry);
-  let body = if error.key == GIT_MISSING {
+  let git_missing = ChangesError::Git(GitDiffError::Run(CommandError::NotFound)).message();
+  let body = if *error == git_missing {
     message_text(ctx, error)
   } else {
     ctx.t("changes.worktreeFailed.detail")
