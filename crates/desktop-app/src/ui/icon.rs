@@ -42,6 +42,7 @@ icons! {
   ListPlus => '\u{e23f}',
   LogOut => '\u{e10e}',
   Minus => '\u{e11c}',
+  MousePointerClick => '\u{e120}',
   Pencil => '\u{e1f9}',
   Plug => '\u{e37f}',
   Plus => '\u{e13d}',

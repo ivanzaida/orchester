@@ -261,10 +261,8 @@ fn every_key_scan_reads_code_literals_and_flags_a_missing_area() {
 fn locales_fill_their_placeholders() {
   let app = App::new();
   i18n::install(&app).expect("bundled locales load");
-  let label = app
-    .i18n()
-    .t_args("shell.tabs.projectScreen", [("project", "kontur"), ("screen", "Tasks")]);
-  assert_eq!(&*label, "kontur · Tasks");
+  let title = app.i18n().t_args("shell.app.windowTitle", [("tab", "Tasks")]);
+  assert_eq!(&*title, "Tasks — Orchester");
   assert_eq!(
     &*app.i18n().t_args("shell.status.mcpListening", [("port", 52341)]),
     "MCP on :52341"

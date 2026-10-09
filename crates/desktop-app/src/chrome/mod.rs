@@ -3,8 +3,11 @@
 //! not shown; the empty parts of the title bar drag the window and maximize it on a double-click.
 
 mod app_menu;
+mod tab_fit;
 mod tab_strip;
 mod title_bar;
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -13,15 +16,16 @@ use lurq::{
     theme::{BorderSize, PaletteColor},
   },
   components::{
-    ChromeBorderPolicy, ChromeTitleBar, Row, WindowChrome, WindowChromeMode, WindowChromeProps, WindowControlContent,
-    WindowControlKind, WindowControls,
+    ChromeBorderPolicy, ChromeTitleBar, Row, Text, WindowChrome, WindowChromeMode, WindowChromeProps,
+    WindowControlContent, WindowControlKind, WindowControls,
   },
-  node::{Element, HitTestBehavior, dimension::Dimension},
+  layout::{Alignment, layout_kind::Justify},
+  node::{Element, HitTestBehavior, TextColor, dimension::Dimension},
 };
 
 use crate::{
   theme::{ExtraColor, ExtraRadius, IconSize},
-  ui::icon::{Icon, glyph},
+  ui::icon::{Icon, glyph as icon_glyph},
 };
 
 /// `Title bar` height, on Windows and macOS alike.
@@ -32,7 +36,7 @@ pub fn chrome(ctx: &mut Ctx, screen: Element) -> Element {
   let bar = ChromeTitleBar::new()
     .background(PaletteColor::SurfaceBase)
     .border_bottom(None)
-    .controls(controls());
+    .controls(controls(ctx));
   let outline = ctx.mount_keyed::<WindowOutline>("window-outline", ());
   WindowChrome::new()
     .props(
@@ -77,15 +81,60 @@ impl Component for WindowOutline {
 
 /// The Windows controls (`Window controls` `i3Ckir`): lucide glyphs in `text_secondary`, the `hover` and
 /// `pressed` overlays. The design gives the close control no color of its own, so it hovers like the
-/// others. macOS keeps lurq's traffic lights.
-fn controls() -> WindowControls {
-  let control = |icon, size: IconSize| WindowControlContent::glyph(glyph(icon), size.role());
-  WindowControls::new()
-    .content(WindowControlKind::Minimize, control(Icon::Minus, IconSize::Md))
-    .content(WindowControlKind::Maximize, control(Icon::Square, IconSize::Sm))
-    .content(WindowControlKind::Restore, control(Icon::Copy, IconSize::Sm))
-    .content(WindowControlKind::Close, control(Icon::X, IconSize::Md))
+/// others. Each control's content fills it and carries an id and a name for agents. macOS keeps lurq's
+/// traffic lights, which take neither.
+fn controls(ctx: &mut Ctx) -> WindowControls {
+  let mut controls = WindowControls::new()
     .foreground(PaletteColor::TextSecondary)
     .hover_background(ExtraColor::Hover.role())
-    .active_background(ExtraColor::Pressed.role())
+    .active_background(ExtraColor::Pressed.role());
+  for (kind, id, name_key, glyph, size) in [
+    (
+      WindowControlKind::Minimize,
+      "window-minimize",
+      "shell.window.minimize",
+      Icon::Minus,
+      IconSize::Md,
+    ),
+    (
+      WindowControlKind::Maximize,
+      "window-maximize",
+      "shell.window.maximize",
+      Icon::Square,
+      IconSize::Sm,
+    ),
+    (
+      WindowControlKind::Restore,
+      "window-restore",
+      "shell.window.restore",
+      Icon::Copy,
+      IconSize::Sm,
+    ),
+    (
+      WindowControlKind::Close,
+      "window-close",
+      "shell.window.close",
+      Icon::X,
+      IconSize::Md,
+    ),
+  ] {
+    let name = ctx.t(name_key);
+    controls = controls.content(kind, control(id, name, glyph, size));
+  }
+  controls
+}
+
+fn control(id: &'static str, name: Arc<str>, glyph: Icon, size: IconSize) -> WindowControlContent {
+  let glyph = icon_glyph(glyph);
+  WindowControlContent::element(move |color: TextColor| {
+    Row::new()
+      .id(id)
+      .describe("a11y_name", name.clone())
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Pct(100.0))
+      .align_items(Alignment::Center)
+      .justify(Justify::Center)
+      .child(Text::new(&glyph).variant(size.role()).color(color))
+      .into()
+  })
 }

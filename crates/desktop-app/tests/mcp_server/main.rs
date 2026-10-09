@@ -6,7 +6,7 @@
 
 mod http;
 
-use std::{fs, path::Path, thread, time::Duration};
+use std::{fs, path::Path, sync::Arc, thread, time::Duration};
 
 use lurq::app::{App, Tree};
 use orchester_app::{
@@ -40,7 +40,7 @@ impl Served {
 
   fn start_in(folder: TempDir, window_control: bool) -> Self {
     let runtime = Runtime::new().expect("a runtime");
-    let appearance = Appearance::new(ThemeSetting::Dark, None, None);
+    let appearance = Appearance::new(ThemeSetting::Dark, Arc::default(), None);
     let mut app = App::new();
     theme::install(&mut app, Mode::Dark);
     i18n::install(&app).expect("bundled locales load");
@@ -56,7 +56,7 @@ impl Served {
       .expect("the file holds the token")
       .to_owned();
     let port = server.port().get();
-    let mcp = McpStatus::of(Some(&server));
+    let mcp = McpStatus::of(Some(&server), McpSettings::with_window_control(window_control));
     tree.mount_root::<Root>(&mut app, RootProps { link, mcp });
     tree.pass_headless(&mut app);
     Self {
@@ -242,7 +242,7 @@ fn tools_answer_from_the_window_without_revealing_the_token() {
   let (error, failed) = tool_value(&served.call(&session, "navigate", &json!({ "route": "nowhere" })));
   assert!(failed);
   assert_eq!(error["code"], "unknown_route");
-  let status = McpStatus::of(served.server.as_ref());
+  let status = McpStatus::of(served.server.as_ref(), McpSettings::with_window_control(true));
   let status_bar = served.tree.get_element_by_id("status-mcp").map(|item| {
     item
       .children()
@@ -263,4 +263,8 @@ fn tools_answer_from_the_window_without_revealing_the_token() {
   }
   assert_eq!(format!("{:?}", BearerToken::generate()), "BearerToken(<redacted>)");
   assert_eq!(status_bar, Some(vec![format!("MCP on :{}", served.port)]));
+  assert!(
+    served.tree.get_element_by_id("status-window-control").is_some(),
+    "the status bar says agents can control the window"
+  );
 }

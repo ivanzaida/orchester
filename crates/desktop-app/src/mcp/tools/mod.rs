@@ -11,16 +11,16 @@ use lurq::mcp::McpTool;
 use serde_json::{Map, Value, json};
 
 pub use self::{app_state::app_state, error::ToolError, navigate::navigate, set_theme::set_theme};
-use super::WindowLink;
+use super::{McpSettings, WindowLink};
 use crate::{
   appearance::Appearance,
   routes::{ProjectPage, Route},
 };
 
 /// Every app tool, for lurq's MCP configuration.
-pub fn all(link: &WindowLink, appearance: &Appearance) -> [McpTool; 3] {
+pub fn all(link: &WindowLink, appearance: &Appearance, settings: McpSettings) -> [McpTool; 3] {
   [
-    app_state::tool(link.clone(), appearance.clone()),
+    app_state::tool(link.clone(), appearance.clone(), settings),
     navigate::tool(link.clone()),
     set_theme::tool(appearance.clone()),
   ]

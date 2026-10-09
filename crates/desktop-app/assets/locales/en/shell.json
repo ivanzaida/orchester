@@ -4,13 +4,21 @@
       "name": "Orchester",
       "windowTitle": "{{tab}} — Orchester"
     },
+    "window": {
+      "minimize": "Minimize",
+      "maximize": "Maximize",
+      "restore": "Restore",
+      "close": "Close"
+    },
     "menu": {
-      "quit": "Quit Orchester"
+      "quit": "Quit Orchester",
+      "label": "Orchester menu"
     },
     "tabs": {
-      "projectScreen": "{{project}} · {{screen}}"
+      "close": "Close tab"
     },
     "sidebar": {
+      "project": "Project",
       "noProject": "No project open",
       "chooseProject": "Choose one in All projects"
     },
@@ -52,7 +60,8 @@
     "status": {
       "mcpListening": "MCP on :{{port}}",
       "mcpUnavailable": "MCP unavailable",
-      "version": "v{{version}}"
+      "version": "v{{version}}",
+      "windowControl": "Agents can control this window"
     }
   }
 }

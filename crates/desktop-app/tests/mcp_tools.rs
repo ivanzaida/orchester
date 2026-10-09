@@ -4,6 +4,8 @@
 
 mod support;
 
+use std::sync::{Arc, OnceLock};
+
 use lurq::{app::theme::PaletteColor, mcp::Scope, node::color::Color};
 use orchester_app::{
   appearance::{Appearance, ThemeSetting},
@@ -45,8 +47,9 @@ fn window_control_is_on_in_debug_builds_only_unless_the_environment_says_otherwi
 #[test]
 fn app_state_reports_route_tabs_theme_and_window_size() {
   let mut window = Window::open();
-  let appearance = Appearance::new(ThemeSetting::Dark, None, None);
-  let state = app_state(&window.navigation(), &appearance, &mut window.tree);
+  let appearance = Appearance::new(ThemeSetting::Dark, Arc::default(), None);
+  let settings = McpSettings::with_window_control(false).with_stored(Some(true));
+  let state = app_state(&window.navigation(), &appearance, settings, &mut window.tree);
   assert_eq!(
     state,
     json!({
@@ -54,6 +57,7 @@ fn app_state_reports_route_tabs_theme_and_window_size() {
       "history": { "can_back": false, "can_forward": false },
       "tabs": [{ "id": 1, "active": true, "route": { "name": "all_projects", "path": "/", "params": {} } }],
       "theme": { "setting": "dark", "mode": "dark" },
+      "mcp": { "window_control": true, "source": "stored" },
       "window": { "width": 1440.0, "height": 900.0, "scale_factor": 1.0 },
     })
   );
@@ -81,7 +85,8 @@ fn navigate_takes_the_active_tab_to_a_named_route() {
   );
   let state = app_state(
     &navigation,
-    &Appearance::new(ThemeSetting::Dark, None, None),
+    &Appearance::new(ThemeSetting::Dark, Arc::default(), None),
+    McpSettings::of_build(),
     &mut window.tree,
   );
   assert_eq!(state["route"], route);
@@ -248,7 +253,11 @@ fn set_theme_switches_the_colors_and_keeps_the_choice() {
   let window = Window::open();
   let dir = tempfile::tempdir().expect("a temporary folder");
   let settings = AppSettings::open(&dir.path().join("orchester.db")).expect("the settings open");
-  let appearance = Appearance::new(ThemeSetting::Dark, Some(Mode::Dark), Some(settings.clone()));
+  let appearance = Appearance::new(
+    ThemeSetting::Dark,
+    Arc::new(OnceLock::from(Mode::Dark)),
+    Some(settings.clone()),
+  );
   let theme = window.app.theme();
   let answer = set_theme(&appearance, theme, &json!({ "theme": "light" })).expect("a known theme");
   assert_eq!(answer, json!({ "setting": "light", "mode": "light" }));
@@ -261,7 +270,7 @@ fn set_theme_switches_the_colors_and_keeps_the_choice() {
   assert_eq!(error.code(), "unknown_theme");
   assert_eq!(error.to_json()["known"], json!(["dark", "light", "system"]));
   assert_eq!(appearance.setting(), ThemeSetting::Light, "a refusal keeps the theme");
-  let unsaved = Appearance::new(ThemeSetting::Dark, None, None);
+  let unsaved = Appearance::new(ThemeSetting::Dark, Arc::default(), None);
   let error = set_theme(&unsaved, theme, &json!({ "theme": "dark" })).expect_err("nowhere to keep it");
   assert_eq!(error.code(), "not_saved");
   assert_eq!(

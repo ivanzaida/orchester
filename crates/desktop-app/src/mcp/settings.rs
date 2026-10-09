@@ -13,27 +13,55 @@ use lurq::mcp::Scope;
 /// The environment variable that turns window control on or off for one run.
 pub const WINDOW_CONTROL_VARIABLE: &str = "ORCHESTER_APP_MCP_WINDOW_CONTROL";
 
+/// What decided whether agents may control the window.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WindowControlSource {
+  /// The build: on in debug builds, off in release builds.
+  Build,
+  /// The app's settings in `orchester.db`.
+  Stored,
+  /// [`WINDOW_CONTROL_VARIABLE`], for this run.
+  Environment,
+}
+
+impl WindowControlSource {
+  /// The name `app_state` and the log use.
+  pub const fn name(self) -> &'static str {
+    match self {
+      Self::Build => "build",
+      Self::Stored => "stored",
+      Self::Environment => "environment",
+    }
+  }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct McpSettings {
   window_control: bool,
+  source: WindowControlSource,
 }
 
 impl McpSettings {
   /// Window control in debug builds only.
   pub const fn of_build() -> Self {
-    Self {
-      window_control: cfg!(debug_assertions),
-    }
+    Self::with_window_control(cfg!(debug_assertions))
   }
 
+  /// Window control as given, as if the build decided it.
   pub const fn with_window_control(window_control: bool) -> Self {
-    Self { window_control }
+    Self {
+      window_control,
+      source: WindowControlSource::Build,
+    }
   }
 
   /// These settings with the stored value, when the app's settings hold one.
   pub const fn with_stored(self, stored: Option<bool>) -> Self {
     match stored {
-      Some(window_control) => Self::with_window_control(window_control),
+      Some(window_control) => Self {
+        window_control,
+        source: WindowControlSource::Stored,
+      },
       None => self,
     }
   }
@@ -57,9 +85,16 @@ impl McpSettings {
     let Some(value) = variable(WINDOW_CONTROL_VARIABLE) else {
       return self;
     };
+    let source = WindowControlSource::Environment;
     match value.as_str() {
-      "on" | "1" | "true" => Self::with_window_control(true),
-      "off" | "0" | "false" => Self::with_window_control(false),
+      "on" | "1" | "true" => Self {
+        window_control: true,
+        source,
+      },
+      "off" | "0" | "false" => Self {
+        window_control: false,
+        source,
+      },
       _ => {
         tracing::warn!(variable = WINDOW_CONTROL_VARIABLE, %value, "not on or off; window control stays as built");
         self
@@ -69,6 +104,10 @@ impl McpSettings {
 
   pub const fn window_control(self) -> bool {
     self.window_control
+  }
+
+  pub const fn source(self) -> WindowControlSource {
+    self.source
   }
 
   /// lurq's scopes for these settings; the app's tools use the same two.
