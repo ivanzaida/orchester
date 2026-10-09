@@ -1,10 +1,11 @@
 //! The session's start, before the window opens, and its quiet end once the window closed.
 
 use std::{
-  env,
+  env, fs,
   path::{Path, PathBuf},
 };
 
+use orchester_store::SessionEnd;
 use orchester_workspace::{
   app_paths,
   close::{CloseKind, session_end},
@@ -32,20 +33,28 @@ pub struct Launch {
 struct Running {
   session: AppSession,
   services: Services,
-  _background: Background,
+  background: Background,
 }
 
 impl Launch {
   /// Starts the session of this build's data folder, with the runner program beside this one, on
   /// `runtime`. `log` is the app's log file, which a startup screen offers.
   pub fn begin(runtime: &Handle, log: Option<PathBuf>) -> Self {
-    let located = app_paths::app_database_path()
-      .and_then(|database| Ok((database, app_paths::runner_path()?)))
-      .map_err(StartupError::ExecutableLocation);
-    match located {
-      Ok((database, runner)) => Self::begin_at(&database, runner, runtime, log),
-      Err(error) => Self::problem(&error, log),
+    let located =
+      app_paths::app_data_location().and_then(|location| Ok((location.database, app_paths::runner_path()?)));
+    let (database, runner) = match located {
+      Ok(located) => located,
+      Err(error) => return Self::problem(&StartupError::ExecutableLocation(error), log),
+    };
+    // The folder of a first start (the Library folder of a macOS app bundle) is made here; one that
+    // cannot be made is a folder that cannot be written, not a program that cannot find itself.
+    if let Some(folder) = database.parent()
+      && let Err(source) = fs::create_dir_all(folder)
+    {
+      let folder = folder.to_path_buf();
+      return Self::problem(&StartupError::DataFolder { folder, source }, log);
     }
+    Self::begin_at(&database, runner, runtime, log)
   }
 
   /// Starts the session of the application database `database`, whose projects' runners are the
@@ -58,6 +67,10 @@ impl Launch {
     let landing = match project::landing(session.workspace()) {
       Ok(landing) => landing,
       Err(source) => {
+        // The session was recorded; it ends here, so the next start does not take it for a crash.
+        if let Err(error) = session.end(SessionEnd::Clean) {
+          tracing::error!(%error, "cannot record the end of a session that could not open");
+        }
         let error = StartupError::Database {
           path: database.to_path_buf(),
           source,
@@ -75,13 +88,18 @@ impl Launch {
       running: Some(Running {
         session,
         services,
-        _background: background,
+        background,
       }),
     }
   }
 
   fn problem(error: &StartupError, log: Option<PathBuf>) -> Self {
-    tracing::error!(%error, "cannot start the session");
+    match error {
+      StartupError::InUse { .. } => tracing::warn!(%error, "another app has the data folder open"),
+      error => tracing::error!(%error, "cannot start the session"),
+    }
+    // The program's folder only picks the not-writable screen's words (data beside the program or in a
+    // folder elsewhere); without it the screen words it as a folder elsewhere.
     let program = env::current_exe().ok();
     let program_folder = program.as_deref().and_then(Path::parent);
     Self {
@@ -115,20 +133,24 @@ impl Launch {
     self.running.as_ref().map(|running| &running.services)
   }
 
-  /// Ends the session quietly once the window closed: every runner is asked to stop at a checkpoint,
-  /// waiting at most [`QUIET_STOP_TIMEOUT`] for each, and how the session ended is recorded. Without a
-  /// session there is nothing to end.
+  /// Ends the session quietly once the window closed. Its lock says it is closing; the shared servers'
+  /// monitor and sync stop; every runner is asked to stop at a checkpoint, waiting at most
+  /// [`QUIET_STOP_TIMEOUT`] for each; the services go; and how the session ended is recorded, which
+  /// lets go of the data folder last. Without a session there is nothing to end.
   pub fn end(self) {
     let Some(Running {
-      mut session, services, ..
+      mut session,
+      services,
+      background,
     }) = self.running
     else {
       return;
     };
     session.mark_closing();
-    let outcome = services
-      .runtime
-      .block_on(services.runners.shutdown(Some(QUIET_STOP_TIMEOUT)));
+    drop(background);
+    let runtime = services.runtime.clone();
+    let outcome = runtime.block_on(services.runners.shutdown(Some(QUIET_STOP_TIMEOUT)));
+    drop(services);
     let end = session_end(CloseKind::Quiet, outcome);
     tracing::info!(?outcome, ?end, "the session ends");
     if let Err(error) = session.end(end) {

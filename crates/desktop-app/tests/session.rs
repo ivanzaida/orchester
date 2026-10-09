@@ -145,6 +145,34 @@ fn session_other_app_from_another_day_says_the_day() {
 }
 
 #[test]
+fn session_that_cannot_land_ends_cleanly() {
+  let data = Data::new();
+  data.launch().end();
+  {
+    let connection = rusqlite::Connection::open(data.database()).expect("the database opens");
+    connection
+      .execute(
+        "INSERT INTO projects (id, name, repo_root, added_at, last_opened_at) VALUES ('not an id', '', 'x', 1, 1)",
+        [],
+      )
+      .expect("a project the list cannot read");
+  }
+  let launch = data.launch();
+  assert!(
+    matches!(
+      problem(launch.start()),
+      StartupProblem::Failed(Failure::Unreadable { .. })
+    ),
+    "the list of projects cannot be read"
+  );
+  assert_eq!(
+    last_session(&data),
+    PreviousSession::Ended(SessionEnd::Clean),
+    "the session that could not open ended cleanly, not as a crash"
+  );
+}
+
+#[test]
 fn session_unended_previous_is_crashed() {
   let data = Data::new();
   drop(data.launch());
