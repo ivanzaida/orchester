@@ -100,16 +100,15 @@ fn same(current: &[&str], expected: &str) -> bool {
 }
 
 /// The lines of a call's text: one line ending at its end is no line of its own, CRLF counts as LF, and an empty text
-/// has no line.
+/// has no line; a text that is only a line ending is one blank line.
 fn content_lines(text: &str) -> Vec<&str> {
-  let text = text
-    .strip_suffix("\r\n")
-    .or_else(|| text.strip_suffix('\n'))
-    .unwrap_or(text);
   if text.is_empty() {
     return Vec::new();
   }
   text
+    .strip_suffix("\r\n")
+    .or_else(|| text.strip_suffix('\n'))
+    .unwrap_or(text)
     .split('\n')
     .map(|line| line.strip_suffix('\r').unwrap_or(line))
     .collect()

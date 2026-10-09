@@ -36,6 +36,11 @@ fn orchester_tools_edit_replaces_exactly_the_expected_lines() {
   assert_eq!(applied(text, &edit(1, 0, "", "zero")), "zero\none\ntwo\nthree\nfour\n");
   assert_eq!(applied(text, &edit(5, 4, "", "five")), "one\ntwo\nthree\nfour\nfive\n");
   assert_eq!(applied("", &edit(1, 0, "", "first")), "first\n");
+  // A text that is only a line ending is one blank line: it can be expected, replaced and inserted.
+  let blank = "one\n\nthree\n";
+  assert_eq!(applied(blank, &edit(2, 2, "\n", "two\n")), "one\ntwo\nthree\n");
+  assert_eq!(applied(blank, &edit(2, 2, "\r\n", "")), "one\nthree\n");
+  assert_eq!(applied(text, &edit(2, 1, "", "\n")), "one\n\ntwo\nthree\nfour\n");
 }
 
 /// A stale `expected` changes nothing: the answer names the range and what it holds now.
