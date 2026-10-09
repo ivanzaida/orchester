@@ -169,8 +169,41 @@ fn highlight_hunk(syntaxes: &SyntaxSet, syntax: &SyntaxReference, hunk: &Hunk) -
     .collect()
 }
 
-/// Appends `text` as `kind`, merged into the previous token when that is of the same kind.
+/// Words the bundled grammars leave unscoped that read as keywords: Rust's grammar predates `async` and
+/// `await`, and leaves `self` plain in a parameter list.
+const BARE_KEYWORDS: [&str; 3] = ["async", "await", "self"];
+
+/// Appends `text` as `kind`; in plain text the [`BARE_KEYWORDS`] become keywords.
 fn push(tokens: &mut Vec<Token>, kind: TokenKind, text: &str, column: &mut usize) {
+  if kind != TokenKind::Plain {
+    append(tokens, kind, text, column);
+    return;
+  }
+  let mut rest = text;
+  while !rest.is_empty() {
+    let word = rest.find(is_word).unwrap_or(rest.len());
+    append(tokens, TokenKind::Plain, &rest[..word], column);
+    rest = &rest[word..];
+    let end = rest.find(|character| !is_word(character)).unwrap_or(rest.len());
+    let kind = if BARE_KEYWORDS.contains(&&rest[..end]) {
+      TokenKind::Keyword
+    } else {
+      TokenKind::Plain
+    };
+    append(tokens, kind, &rest[..end], column);
+    rest = &rest[end..];
+  }
+}
+
+fn is_word(character: char) -> bool {
+  character.is_alphanumeric() || character == '_'
+}
+
+/// Appends `text` as `kind`, merged into the previous token when that is of the same kind.
+fn append(tokens: &mut Vec<Token>, kind: TokenKind, text: &str, column: &mut usize) {
+  if text.is_empty() {
+    return;
+  }
   let text = display(text, column);
   match tokens.last_mut() {
     Some(last) if last.kind == kind => last.text = format!("{}{text}", last.text).into(),
@@ -212,7 +245,8 @@ fn kind(scopes: &ScopeStack) -> TokenKind {
 
 /// Scope prefixes to kinds, most specific first, following GitHub Dark (`primer/github-vscode-
 /// theme`): parameters and plain variables read as text, other variables and declared names as
-/// `code-variable`, built-ins and tags as `code-constant`.
+/// `code-variable`, built-ins and tags as `code-constant`; as the Kontur design colors code, operators
+/// read as text and `self` or `this` as keywords.
 fn rules() -> &'static [(Scope, TokenKind)] {
   static RULES: OnceLock<Vec<(Scope, TokenKind)>> = OnceLock::new();
   RULES.get_or_init(|| {
@@ -220,7 +254,7 @@ fn rules() -> &'static [(Scope, TokenKind)] {
       ("comment", TokenKind::Comment),
       ("string", TokenKind::String),
       ("constant", TokenKind::Constant),
-      ("variable.language", TokenKind::Constant),
+      ("variable.language", TokenKind::Keyword),
       ("variable.function", TokenKind::Function),
       ("variable.parameter", TokenKind::Plain),
       ("variable.other", TokenKind::Plain),
@@ -231,6 +265,7 @@ fn rules() -> &'static [(Scope, TokenKind)] {
       ("entity.name", TokenKind::Variable),
       ("entity.other.inherited-class", TokenKind::Variable),
       ("support", TokenKind::Constant),
+      ("keyword.operator", TokenKind::Plain),
       ("keyword", TokenKind::Keyword),
       ("storage", TokenKind::Keyword),
     ]

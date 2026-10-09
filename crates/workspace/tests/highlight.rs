@@ -83,3 +83,44 @@ fn highlight_after_a_cut_line_continues_from_the_other_side() {
   assert_eq!(kind_of(&tokens[0][5], "push"), Some(TokenKind::Function));
   assert_eq!(kind_of(&tokens[0][5], "localize"), Some(TokenKind::Function));
 }
+
+#[test]
+fn highlight_reads_operators_as_text_and_self_async_and_await_as_keywords() {
+  let diff = file_diff(
+    "src/sender.rs",
+    &[
+      "+    pub async fn send(&self) -> Result<Delivery> {",
+      "+        let response = self.client.post(&self.url).send().await?;",
+      "+        attempt += 1;",
+      "+        Ok(r) if a < b && c || d <= e * 2 => return Ok(r),",
+    ],
+  );
+  let tokens = highlight(&diff.files()[0]).expect("Rust has a grammar");
+  let lines = &tokens[0];
+  assert_eq!(kind_of(&lines[0], "async"), Some(TokenKind::Keyword));
+  assert_eq!(
+    kind_of(&lines[0], "self"),
+    Some(TokenKind::Keyword),
+    "self as a parameter"
+  );
+  assert_eq!(kind_of(&lines[1], "self"), Some(TokenKind::Keyword));
+  assert_eq!(kind_of(&lines[1], "await"), Some(TokenKind::Keyword));
+  assert_eq!(kind_of(&lines[2], "1"), Some(TokenKind::Constant));
+  for (line, operators) in [
+    (1, ["=", "&", "?"].as_slice()),
+    (2, &["+="]),
+    (3, &["<", "&&", "||", "<=", "*", "=>"]),
+  ] {
+    for token in lines[line]
+      .iter()
+      .filter(|token| operators.iter().any(|operator| token.text.contains(operator)))
+    {
+      assert_eq!(token.kind, TokenKind::Plain, "{:?} on line {line}", token.text);
+    }
+  }
+  let spelled: String = lines[1].iter().map(|token| &*token.text).collect();
+  assert_eq!(
+    spelled,
+    "        let response = self.client.post(&self.url).send().await?;"
+  );
+}
