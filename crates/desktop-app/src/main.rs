@@ -7,10 +7,11 @@ use orchester_app::{
   app_log,
   appearance::{Appearance, ThemeSetting},
   brand, i18n,
-  mcp::{self, McpSettings, WindowLink},
+  mcp::{self, AppMcp, DiscoveryFolder, McpSettings, McpStatus, WindowLink},
   root::{Root, RootProps},
   theme,
 };
+use tokio::runtime::Runtime;
 
 /// For agents that drive the app over MCP while the person works in other windows: `1` opens the
 /// window without taking the focus.
@@ -19,6 +20,7 @@ const START_WITHOUT_FOCUS_VARIABLE: &str = "ORCHESTER_APP_MCP_START_WITHOUT_FOCU
 fn main() {
   app_log::install();
 
+  let runtime = Runtime::new().expect("the OS provides threads for the background runtime");
   let appearance = Appearance::new(ThemeSetting::Dark);
   let mut app = App::new();
   theme::install(&mut app, appearance.mode());
@@ -28,7 +30,9 @@ fn main() {
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
   let link = WindowLink::default();
   // Started before the root mounts, so the status bar shows its port from the first frame.
-  let mcp = mcp::start(&mut tree, McpSettings::from_environment(), &link, &appearance);
+  let config = mcp::config(McpSettings::from_environment(), &link, &appearance);
+  let server = AppMcp::start(&mut tree, runtime.handle(), &DiscoveryFolder::User, config);
+  let mcp = McpStatus::of(server.as_ref());
   tree.mount_root::<Root>(&mut app, RootProps { link, mcp });
 
   #[cfg(feature = "devtools")]
@@ -51,4 +55,7 @@ fn main() {
     .with_decorations(false)
     .with_corner_radius(WindowCornerRadius::Rounded)
     .run();
+
+  // `run` returns once the window has closed: the server stops and its discovery file goes.
+  drop(server);
 }

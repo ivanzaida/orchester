@@ -2746,16 +2746,21 @@ dependencies = [
 name = "orchester-app"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "chrono",
  "embed-resource",
+ "hyper",
+ "hyper-util",
  "image",
  "lurq",
  "parking_lot",
  "serde_json",
  "tempfile",
  "thiserror 2.0.20",
+ "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

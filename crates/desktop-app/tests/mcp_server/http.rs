@@ -16,19 +16,17 @@ pub struct Response {
   pub text: String,
 }
 
-/// Posts `body` to `/mcp` on `port`, with the bearer `token` and the MCP session `session` when given.
-pub fn post(port: u16, token: Option<&str>, session: Option<&str>, body: &Value) -> Response {
+/// Posts `body` to `/mcp` on `port` with the extra `headers` (`Authorization`, `Mcp-Session-Id`,
+/// `Origin`).
+pub fn post(port: u16, headers: &[(&str, &str)], body: &Value) -> Response {
   let body = body.to_string();
   let mut request = format!(
     "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\nAccept: application/json, \
      text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n",
     body.len()
   );
-  if let Some(token) = token {
-    request.push_str(&format!("Authorization: Bearer {token}\r\n"));
-  }
-  if let Some(session) = session {
-    request.push_str(&format!("Mcp-Session-Id: {session}\r\n"));
+  for (name, value) in headers {
+    request.push_str(&format!("{name}: {value}\r\n"));
   }
   request.push_str("\r\n");
   request.push_str(&body);
