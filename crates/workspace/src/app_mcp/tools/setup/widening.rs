@@ -7,7 +7,7 @@ use orchester_core::{
   connection::{AgentProvider, invocation::Platform},
   id::ResourceId,
   permission::{AgentPermissions, widening::Widening},
-  resource::AgentProfile,
+  resource::{AgentProfile, Pipeline, StepKey, Weaker, weaker_than},
   store::ResourceStore,
 };
 use orchester_store::ProjectDb;
@@ -70,6 +70,33 @@ pub(super) fn check_profile(
     ));
   }
   Ok(())
+}
+
+/// Refused unless a person lets automation publish `new`, or it is provably no weaker than `latest`, the
+/// pipeline's latest published version ([`weaker_than`]). A pipeline's first version has nothing to be
+/// compared with, so it always needs a person. Every version automation publishes is thus one a person
+/// published, allowed, or could not object to, so a task may run any published version.
+pub(in crate::app_mcp::tools) fn check_pipeline(
+  services: &Services,
+  latest: Option<&Pipeline>,
+  new: &Pipeline,
+) -> Result<(), ToolError> {
+  let step_name = |key: &StepKey| {
+    new
+      .step(key)
+      .map_or_else(|| key.as_str().to_owned(), |step| step.name.as_str().to_owned())
+  };
+  let reasons = match latest {
+    None => vec![Message::new("appMcp.widens.firstPipelineVersion")],
+    Some(latest) => weaker_than(latest, new)
+      .into_iter()
+      .map(|weaker| match weaker {
+        Weaker::Steps => Message::new("appMcp.widens.pipelineSteps"),
+        Weaker::Step(key) => Message::new("appMcp.widens.pipelineStep").with("step", step_name(&key)),
+      })
+      .collect(),
+  };
+  allowed(services, reasons)
 }
 
 fn message(widening: Widening) -> Message {

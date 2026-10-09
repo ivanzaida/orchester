@@ -916,7 +916,10 @@
       "program": "{{program}} is not a copy of the CLI found on the search path.",
       "variable": "{{name}} would change: a variable can change what programs load, where they connect, what they trust or where tools keep their configuration.",
       "approvalGate": "Step {{step}} would no longer wait for a person's approval.",
-      "stepToolCalls": "Step {{step}} would no longer ask a person about its tool calls."
+      "stepToolCalls": "Step {{step}} would no longer ask a person about its tool calls.",
+      "firstPipelineVersion": "A pipeline's first version has nothing to be compared with, so a person publishes it.",
+      "pipelineSteps": "The steps differ from the latest published version: some were added or removed.",
+      "pipelineStep": "Step {{step}} is not provably as strict as in the latest published version: same wiring, profile or tool, approvals and narrowing, or stricter."
     }
   },
   "statusBar": {

@@ -215,8 +215,56 @@ fn domain_pipeline_tools_tell_the_feed() {
     &json!({ "project": "Kontur", "pipeline": "Told", "steps": [{ "key": "fix", "name": "Fix", "profile": "Builder" }] }),
   );
   assert_eq!(counted(&project), before + 2, "save_pipeline_draft");
+  served.let_automation_widen(true);
   served.ok("publish_pipeline", &json!({ "project": "Kontur", "pipeline": "Told" }));
   assert_eq!(counted(&project), before + 3, "publish_pipeline");
+}
+
+#[test]
+fn domain_automation_publishes_only_a_pipeline_no_weaker_than_the_last() {
+  let mut served = served();
+  served.ok(
+    "create_pipeline",
+    &json!({ "project": "Kontur", "name": "Strict", "from": "empty" }),
+  );
+  let steps = |plan_gate: bool, ask: bool, after_plan: bool| {
+    json!({ "project": "Kontur", "pipeline": "Strict", "steps": [
+      { "key": "plan", "name": "Plan", "profile": "Planner", "approval_gate": plan_gate },
+      {
+        "key": "build",
+        "name": "Build",
+        "profile": "Builder",
+        "runs_after": if after_plan { json!(["plan"]) } else { json!([]) },
+        "narrow": { "ask_before_tool_calls": ask },
+      },
+    ] })
+  };
+  let publish = json!({ "project": "Kontur", "pipeline": "Strict" });
+  served.ok("save_pipeline_draft", &steps(true, true, true));
+  assert_person_only(&served.refused("publish_pipeline", &publish));
+  served.let_automation_widen(true);
+  served.ok("publish_pipeline", &publish);
+  served.let_automation_widen(false);
+  let mut renamed = steps(true, true, true);
+  renamed["steps"][1]["name"] = json!("Build it");
+  served.ok("save_pipeline_draft", &renamed);
+  served.ok("publish_pipeline", &publish);
+  served.let_automation_widen(true);
+  served.ok("save_pipeline_draft", &steps(true, true, false));
+  served.let_automation_widen(false);
+  assert_person_only(&served.refused("publish_pipeline", &publish));
+  served.let_automation_widen(true);
+  served.ok("save_pipeline_draft", &steps(true, false, true));
+  served.let_automation_widen(false);
+  assert_person_only(&served.refused("publish_pipeline", &publish));
+  served.let_automation_widen(true);
+  served.ok("save_pipeline_draft", &steps(true, true, true));
+  served.let_automation_widen(false);
+  let copy = json!({ "project": "Kontur", "pipeline": "Strict", "name": "Strict copy" });
+  served.ok("duplicate_pipeline", &copy);
+  let mut swapped = json!({ "project": "Kontur", "pipeline": "Strict", "name": "Swapped" });
+  swapped["step_profiles"] = json!({ "build": "Planner" });
+  assert_person_only(&served.refused("duplicate_pipeline", &swapped));
 }
 
 #[test]

@@ -491,11 +491,16 @@ fn domain_pipelines_are_made_saved_and_refused_as_the_editor_does() {
   );
   assert_eq!(saved["pipeline"]["steps"][0]["budget"], 50000);
   assert_eq!(saved["pipeline"]["description"], "Small fixes");
-  let unassigned = served.refused(
-    "publish_pipeline",
-    &json!({ "project": "Kontur", "pipeline": "Hotfix" }),
+  let first = json!({ "project": "Kontur", "pipeline": "Hotfix" });
+  assert_eq!(
+    served.refused("publish_pipeline", &first)["code"],
+    "person_only",
+    "a pipeline's first version is a person's"
   );
+  served.let_automation_widen(true);
+  let unassigned = served.refused("publish_pipeline", &first);
   assert_eq!(unassigned["code"], "not_publishable");
+  served.let_automation_widen(false);
   let write = served.refused(
     "save_pipeline_draft",
     &json!({ "project": "Kontur", "pipeline": "Hotfix", "steps": [

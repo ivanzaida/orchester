@@ -200,7 +200,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "duplicate_pipeline",
-    description: "Copies a pipeline's latest published version into a new pipeline under a new name, optionally giving agent steps other published profiles, and publishes it as v1. Refusals name why.",
+    description: "Copies a pipeline's latest published version into a new pipeline under a new name, optionally giving agent steps other published profiles, and publishes it as v1. A copy that is not the same as its source (other profiles included) is refused as person_only unless a person turned on Let automation change agent permissions. Refusals name why.",
     schema: schema_for_type::<pipeline_copy::DuplicatePipeline>,
     read_only: false,
   },

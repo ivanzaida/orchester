@@ -63,7 +63,8 @@ pub async fn duplicate_pipeline(
     let open = services.project(&args.project)?;
     let root = open.repo_root;
     let mut db = ProjectDb::open(&root)?;
-    let body = copied(&db, &args, &then)?;
+    let (source, body) = copied(&db, &args, &then)?;
+    super::setup::widening::check_pipeline(&services, Some(&source), &body)?;
     let name =
       Name::new(&args.name).map_err(|error| ToolError::refused("invalid_name", vec![messages::name_error(&error)]))?;
     let id = create_with(&mut db, name, &body, Timestamp::now()).map_err(|error| create_error(&error))?;
@@ -83,7 +84,8 @@ pub async fn duplicate_pipeline(
 
 /// The steps of the copy: the source's latest published version with the profiles given, refused
 /// as the editor refuses publishing while it has problems.
-fn copied(db: &ProjectDb, args: &DuplicatePipeline, then: &str) -> Result<Pipeline, ToolError> {
+/// The source's latest published version, and the copy made of it.
+fn copied(db: &ProjectDb, args: &DuplicatePipeline, then: &str) -> Result<(Pipeline, Pipeline), ToolError> {
   let published = published_pipelines(db)?;
   let source = pipeline_named(&published, &args.pipeline)?;
   let version = db
@@ -112,9 +114,10 @@ fn copied(db: &ProjectDb, args: &DuplicatePipeline, then: &str) -> Result<Pipeli
       .collect();
     return Err(ToolError::refused("not_publishable", reasons));
   }
-  edit
+  let copy = edit
     .validate()
-    .map_err(|error| ToolError::refused("not_publishable", vec![rule_message(&edit, &error)]))
+    .map_err(|error| ToolError::refused("not_publishable", vec![rule_message(&edit, &error)]))?;
+  Ok((version.body().clone(), copy))
 }
 
 /// The step of `edit` named by its key, its name (ignoring case) or its number from 1.

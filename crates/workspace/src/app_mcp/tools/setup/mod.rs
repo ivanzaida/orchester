@@ -12,7 +12,7 @@ mod pipelines;
 mod profile_input;
 mod profiles;
 mod project;
-mod widening;
+pub(super) mod widening;
 
 use rmcp::{
   handler::server::common::schema_for_type,
@@ -185,7 +185,12 @@ const SPECS: &[Spec] = &[
     name: "publish_pipeline",
     description: "Publishes a pipeline's draft as its next version, as Publish does, so tasks can run it. Refused \
                   while it has no steps or a step has no profile or tool, or when the draft was started from an older \
-                  version than the latest.",
+                  version than the latest. Unless a person turned on Let automation change agent permissions, only a \
+                  draft provably no weaker than the latest published version is published (the same steps, wiring, \
+                  failure routes, profiles and tools, each step's approval, asking about tool calls, write access, \
+                  commands and network the same or stricter); a pipeline's first version, and anything else, is \
+                  refused as person_only. So every version a task can run is one a person published, allowed, or \
+                  could not object to.",
     schema: schema_for_type::<pipelines::InPipeline>,
     read_only: false,
   },

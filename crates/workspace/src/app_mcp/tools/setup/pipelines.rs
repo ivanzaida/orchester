@@ -6,7 +6,8 @@ use orchester_core::{
   id::ResourceId,
   name::Name,
   permission::{StepCommands, StepNetwork},
-  resource::{PipelineEdit, PromptText, PublishError, StarterStep, StarterStepText, Step, StepKind},
+  resource::{Pipeline, PipelineEdit, PromptText, PublishError, StarterStep, StarterStepText, Step, StepKind, Version},
+  store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -14,7 +15,10 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::super::{Translate, pipeline_copy::create_error};
+use super::{
+  super::{Translate, pipeline_copy::create_error},
+  widening,
+};
 use crate::{
   app_mcp::{
     error::{Missing, ToolError},
@@ -22,7 +26,7 @@ use crate::{
   },
   messages::{self, Message},
   pipelines::{
-    data::{Assignables, OpenError, OpenedPipeline, publish_in},
+    data::{Assignables, OpenError, OpenedPipeline},
     library::{self, NewPipeline, StartFrom, StarterText, create_with},
     problems::{problem_view, publish_error},
   },
@@ -128,8 +132,15 @@ pub async fn publish_pipeline(
   let services = services.clone();
   let opened = blocking(move || {
     let open = services.project(&args.project)?;
-    let id = pipeline_named(&ProjectDb::open(&open.repo_root)?, &args.pipeline)?;
-    publish_in(&open.repo_root, id).map_err(|error| refused(publish_code(&error), publish_error(&error)))?;
+    let mut db = ProjectDb::open(&open.repo_root)?;
+    let id = pipeline_named(&db, &args.pipeline)?;
+    let draft = db.draft::<Pipeline>(id)?.ok_or(StoreError::NoDraft(id));
+    let draft = draft.map_err(|error| refused(publish_code(&error), publish_error(&error)))?;
+    let latest = db.latest_version::<Pipeline>(id)?;
+    widening::check_pipeline(&services, latest.as_ref().map(Version::body), draft.body())?;
+    // Published only while the draft is the one just checked.
+    db.publish_draft_matching(id, draft.body(), Timestamp::now())
+      .map_err(|error| refused(publish_code(&error), publish_error(&error)))?;
     // The library lists the version, and the task form offers it.
     services.changes.record(open.project.id(), Outside::Pipelines);
     services.changes.record(open.project.id(), Outside::Tasks);
@@ -305,6 +316,7 @@ fn publish_code(error: &StoreError) -> &'static str {
   match error {
     StoreError::NoDraft(_) => "no_draft",
     StoreError::Publish(PublishError::StaleDraft { .. }) => "stale_draft",
+    StoreError::DraftChanged(_) => "draft_changed",
     StoreError::Publish(PublishError::NoSteps | PublishError::UnassignedSteps(_)) => "not_publishable",
     StoreError::Publish(PublishError::VersionLimit) => "version_limit",
     _ => "project_data",
