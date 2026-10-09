@@ -95,20 +95,28 @@ impl lurq::app::component::DevtoolsInspectable for OpenRows {}
 
 /// Open or folded per row key, where a person changed how the row starts.
 #[derive(Clone)]
-pub(super) struct Toggles(Signal<OpenRows>);
+pub(super) struct Toggles {
+  rows: Signal<OpenRows>,
+  /// A row the person opens or folds stays where it is: the chat stops following.
+  follow: Follow,
+}
 
 impl Toggles {
-  pub(super) fn new(ctx: &mut Ctx) -> Self {
-    Self(ctx.signal(OpenRows::default()))
+  pub(super) fn new(ctx: &mut Ctx, follow: Follow) -> Self {
+    Self {
+      rows: ctx.signal(OpenRows::default()),
+      follow,
+    }
   }
 
   pub(super) fn is_open(&self, key: &str, default: bool) -> bool {
-    self.0.get().0.get(key).copied().unwrap_or(default)
+    self.rows.get().0.get(key).copied().unwrap_or(default)
   }
 
   /// Opens every row of `keys`, as *Show them* does for the steps of a fold.
   fn open_all(&self, keys: Vec<Arc<str>>) {
-    self.0.update(move |rows| {
+    self.follow.hold_in_place();
+    self.rows.update(move |rows| {
       for key in keys {
         rows.0.insert(key, true);
       }
@@ -116,8 +124,9 @@ impl Toggles {
   }
 
   fn flip(&self, key: &Arc<str>, default: bool) {
+    self.follow.hold_in_place();
     let key = key.clone();
-    self.0.update(move |rows| {
+    self.rows.update(move |rows| {
       let open = rows.0.get(&key).copied().unwrap_or(default);
       rows.0.insert(key, !open);
     });

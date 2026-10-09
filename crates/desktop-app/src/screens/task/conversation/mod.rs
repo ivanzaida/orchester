@@ -32,10 +32,11 @@ use orchester_workspace::{
     conversation::{Conversation, PanelState},
     detail::RunView,
     timeline::{
-      self as items, Sources,
+      self as items, Item, ItemKind, Sources,
       load::Loaded,
       view::{self, Choice},
     },
+    transcript::{Entry, EntryKind},
   },
 };
 
@@ -74,9 +75,10 @@ impl Component for ConversationTab {
   type Props = TaskContext;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let follow = Follow::new(ctx);
     Self {
-      follow: Follow::new(ctx),
-      toggles: Toggles::new(ctx),
+      toggles: Toggles::new(ctx, follow.clone()),
+      follow,
       retry: ctx.signal(0),
       transcript: TranscriptRead::default(),
     }
@@ -162,7 +164,7 @@ impl ConversationTab {
       agent: run.current_step().and_then(|step| step.agent.clone()),
       last: loaded.entries.last().map(|entry| entry.at),
     });
-    let arrived = loaded.entries.len() + conversation.entries.len();
+    let arrived = arrivals(&items, &loaded.entries);
     let chat = timeline::chat(ctx, &self.follow, (&shown, &items), (working, arrived));
     (chat, Some(state))
   }
@@ -190,6 +192,23 @@ impl ConversationTab {
       (None, error) => Err(error),
     }
   }
+}
+
+/// What the person can see arrive, counted: the transcript's entries but usage reports, which the chat leaves
+/// out, and the timeline's own items (steps, returns, messages, cards, results, the run's end). Anything new at
+/// the end moves a following chat, and *N new* counts it.
+fn arrivals(items: &[Item], entries: &[Entry]) -> usize {
+  let from_transcript = |item: &&Item| {
+    matches!(
+      item.kind,
+      ItemKind::AgentMessage { .. } | ItemKind::Tools(_) | ItemKind::Problem(_)
+    )
+  };
+  let visible = entries
+    .iter()
+    .filter(|entry| !matches!(entry.kind, EntryKind::Usage(_)))
+    .count();
+  visible + items.iter().filter(|item| !from_transcript(item)).count()
 }
 
 /// The invocations of `run` whose agent works now; none while no agent works (`live` false).
