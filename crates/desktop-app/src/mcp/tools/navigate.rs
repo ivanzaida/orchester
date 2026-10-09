@@ -87,11 +87,25 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
   let page = match screen {
     Screen::AllProjects => return Ok(Route::AllProjects),
     Screen::Settings => return Ok(Route::Settings),
-    Screen::Overview => ProjectPage::Overview(tab(args, &OverviewTab::ALL, OverviewTab::name)?),
+    Screen::Overview => ProjectPage::Overview(tab(
+      args,
+      OverviewTab::from_name,
+      &OverviewTab::ALL.map(OverviewTab::name),
+    )?),
     Screen::Tasks => ProjectPage::Tasks(task_list(args)?),
+    Screen::NewTask => ProjectPage::NewTask,
     Screen::EditTask => ProjectPage::EditTask(key(args, "key")?),
     Screen::Task => ProjectPage::Task(key(args, "key")?, task_view(args)?),
-    screen => ProjectPage::of(screen).expect("every other screen names nothing but its project"),
+    Screen::PullRequests => ProjectPage::PullRequests,
+    Screen::Usage => ProjectPage::Usage,
+    Screen::Pipelines => ProjectPage::Pipelines,
+    Screen::Agents => ProjectPage::Agents,
+    Screen::Instructions => ProjectPage::Instructions,
+    Screen::Skills => ProjectPage::Skills,
+    Screen::Tools => ProjectPage::Tools,
+    Screen::Secrets => ProjectPage::Secrets,
+    Screen::Connections => ProjectPage::Connections,
+    Screen::ProjectSettings => ProjectPage::Settings,
   };
   Ok(Route::Project(project(args)?, page))
 }
@@ -104,7 +118,17 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Tasks => &["project", "tab", "q", "highlight"],
     Screen::EditTask => &["project", "key"],
     Screen::Task => &["project", "key", "tab", "file", "from"],
-    _ => &["project"],
+    Screen::NewTask
+    | Screen::PullRequests
+    | Screen::Usage
+    | Screen::Pipelines
+    | Screen::Agents
+    | Screen::Instructions
+    | Screen::Skills
+    | Screen::Tools
+    | Screen::Secrets
+    | Screen::Connections
+    | Screen::ProjectSettings => &["project"],
   }
 }
 
@@ -112,7 +136,7 @@ fn project(args: &Map<String, Value>) -> Result<ProjectId, ToolError> {
   let value = string(args, "project")?.ok_or(ToolError::Missing { param: "project" })?;
   value.parse().map_err(|error: uuid::Error| ToolError::InvalidParam {
     param: "project",
-    reason: error.to_string(),
+    reason: format!("`{value}` is not a project id ({error})"),
   })
 }
 
@@ -125,23 +149,25 @@ fn key(args: &Map<String, Value>, param: &'static str) -> Result<TaskKey, ToolEr
   })
 }
 
-/// The tab of `all` that `tab` names by its `name`, or the one the screen opens on when it names none.
-fn tab<T: Copy + Default>(args: &Map<String, Value>, all: &[T], name: fn(T) -> &'static str) -> Result<T, ToolError> {
+/// The tab `tab` names, read by `from_name`, or the one the screen opens on when it names none; a
+/// refusal lists the screen's tabs, `known`.
+fn tab<T: Default>(
+  args: &Map<String, Value>,
+  from_name: fn(&str) -> Option<T>,
+  known: &[&'static str],
+) -> Result<T, ToolError> {
   let Some(given) = string(args, "tab")? else {
     return Ok(T::default());
   };
-  all
-    .iter()
-    .copied()
-    .find(|tab| name(*tab) == given)
-    .ok_or_else(|| ToolError::UnknownTab {
-      name: given.to_owned(),
-      known: all.iter().copied().map(name).collect(),
-    })
+  from_name(given).ok_or_else(|| ToolError::UnknownTab {
+    name: given.to_owned(),
+    known: known.to_vec(),
+  })
 }
 
 fn task_list(args: &Map<String, Value>) -> Result<TaskList, ToolError> {
-  let mut list = TaskList::new(tab(args, &TaskListTab::ALL, TaskListTab::name)?);
+  let tab = tab(args, TaskListTab::from_name, &TaskListTab::ALL.map(TaskListTab::name))?;
+  let mut list = TaskList::new(tab);
   if let Some(text) = string(args, "q")? {
     list = list.with_search(text);
   }
@@ -154,19 +180,20 @@ fn task_list(args: &Map<String, Value>) -> Result<TaskList, ToolError> {
 /// The task's tab, and on Changes the file `file` and `from` name; a file alone opens Changes.
 fn task_view(args: &Map<String, Value>) -> Result<TaskView, ToolError> {
   let (file, from) = (string(args, "file")?, string(args, "from")?);
+  let tab = tab(args, TaskTab::from_name, &TaskTab::ALL.map(TaskTab::name))?;
   let Some(path) = file else {
     if from.is_some() {
       return Err(ToolError::InvalidParam {
         param: "from",
-        reason: "it says where the change of `file` is read from; give `file` too".to_owned(),
+        reason: "it goes with `file` and says where that file's change is read from".to_owned(),
       });
     }
-    return Ok(TaskView::of(tab(args, &TaskTab::ALL, TaskTab::name)?));
+    return Ok(TaskView::of(tab));
   };
-  if string(args, "tab")?.is_some() && tab(args, &TaskTab::ALL, TaskTab::name)? != TaskTab::Changes {
+  if args.contains_key("tab") && tab != TaskTab::Changes {
     return Err(ToolError::InvalidParam {
       param: "file",
-      reason: "a file is shown on the changes tab".to_owned(),
+      reason: "a file is shown on the changes tab only".to_owned(),
     });
   }
   let source = match from {
@@ -179,9 +206,9 @@ fn task_view(args: &Map<String, Value>) -> Result<TaskView, ToolError> {
       ),
     })?,
   };
-  let file = ChangedFile::new(path, source).map_err(|error| ToolError::InvalidParam {
+  let file = ChangedFile::new(path, source).map_err(|_| ToolError::InvalidParam {
     param: "file",
-    reason: error.to_string(),
+    reason: "the path is empty".to_owned(),
   })?;
   Ok(TaskView::Changes(Some(file)))
 }

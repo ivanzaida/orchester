@@ -17,7 +17,7 @@ pub enum ToolError {
   UnknownRoute { name: String },
   #[error("`{of}` takes no `{param}`")]
   UnexpectedParam { of: &'static str, param: String },
-  #[error("`{param}` names no {param}: {reason}")]
+  #[error("`{param}`: {reason}")]
   InvalidParam { param: &'static str, reason: String },
   #[error("unknown tab `{name}`")]
   UnknownTab { name: String, known: Vec<&'static str> },

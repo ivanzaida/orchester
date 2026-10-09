@@ -208,6 +208,13 @@ fn navigate_refuses_what_names_no_route_with_a_stable_code() {
     assert_eq!(error.code(), code, "{args}");
     assert_eq!(error.to_json()["code"], code);
   }
+  assert_eq!(navigation.route_now().path(), "/", "a refusal goes nowhere");
+}
+
+#[test]
+fn navigate_refusals_list_the_known_names_and_word_each_parameter() {
+  let window = Window::open();
+  let navigation = window.navigation();
   let unknown = navigate(&navigation, &json!({ "route": "dashboard" })).expect_err("a refusal");
   let known = &unknown.to_json()["known"];
   assert!(
@@ -225,7 +232,15 @@ fn navigate_refuses_what_names_no_route_with_a_stable_code() {
     json!(["running", "needs_you", "queued", "failed"]),
     "the screen's own tabs"
   );
-  assert_eq!(navigation.route_now().path(), "/", "a refusal goes nowhere");
+  let message = |args: Value| navigate(&navigation, &args).expect_err("a refusal").to_string();
+  assert!(
+    message(json!({ "route": "overview", "project": "a/b" })).starts_with("`project`: `a/b` is not a project id"),
+    "invalid values are worded per parameter"
+  );
+  assert_eq!(
+    message(json!({ "route": "task", "project": PROJECT, "key": "KON-1", "file": "" })),
+    "`file`: the path is empty"
+  );
 }
 
 #[test]
