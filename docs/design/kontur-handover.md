@@ -255,14 +255,15 @@ reason; "planned" means not built: draw it only where noted, and label it as pla
     each step with its executor (*Explorer · Claude / Opus*, *Tool · Run tests*, *· waits for approval*), *View
     pipeline ↗*, and the approval note (*Approval is required for Plan.* / *This pipeline has no approval gates.*).
   - **Limits:** *Run budget* (whole number with a *tokens* unit, grouped while typing, read-back *= 1.4M tokens ·
-    input + output · max 10M per run*), *Time limit* (*30 minutes*, read-back *active agent time*).
+    input + output*), *Time limit* (*30 minutes*, read-back *active agent time*). Both are optional with no maximum:
+    empty reads back *No limit* (user decision 2026-10-09).
   - Footer: *Project, agent and pipeline instructions are included automatically.* with *Preview* (unavailable).
   - Actions: primary **Create & run**, and a quiet **Create** (saves a draft and returns to Tasks with the new row
     highlighted). Unavailable reasons appear under the actions (no title, invalid limits, blocked by unfinished tasks:
     *Run unavailable*).
   - **Top status:** *Not saved yet*, *Creating the task…*, *Task queued*, *Starting the run…*.
-  - **Validation:** *Enter a token budget.*, *Use digits only, for example 1,400,000.*, *Enter a budget above 0
-    tokens.*, *A run budget can be at most 10M tokens (project setting).*
+  - **Validation:** *Use digits only, for example 1,400,000.*, *Enter a budget above 0 tokens.*, *This number is too
+    large for a token budget.*; an empty budget or time limit is no limit, not an error.
 - **Queued, run not started:** when the runner refuses to start the run, the form stays: *Queued · run not
   started*, fields locked, the runner's reason under the action (*The repository has no commit to start the run
   from.*), primary **Retry run** (never creates a second run); while retrying *Starting the run…*; if the runner stops
@@ -773,8 +774,9 @@ Tabs, each saving on change (*All changes saved* / *Saving…* / failure):
   - **Auto mode:** *New runs use auto mode* (On / Off) and *Reviewer*: connection select (*Default · Claude · Kontur*),
     model select, effort select, *Reviewed by Haiku 4.5 on Claude · Kontur*, or a lock line saying why no connection can
     review.
-- **Limits** (*New runs*): *Maximum run budget* (10M), *Default run budget* (1.4M), *Daily project budget* (20M),
-  *Default time limit* (select: 15, 30, 45, 60, 90, 120, 180, 240 minutes); notice *Changes apply to new runs*.
+- **Limits** (*New runs*): *Default run budget* (empty: no limit), *Daily project budget* (20M), *Default time limit*
+  (select: *No limit*, the default, then 15, 30, 45, 60, 90, 120, 180, 240 minutes); no maximum run budget (user
+  decision 2026-10-09); notice *Changes apply to new runs*.
   Out-of-range errors name the value still saved.
 - **Environment:** *Variables · NAME=value per line* in a monospace area; *Stored and shown in plain text, so never
   put secrets here.*; *Changes apply to the next agent or command that starts*; invalid line error.
