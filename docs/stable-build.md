@@ -222,7 +222,11 @@ Pipelines follow the same rule. With the setting off, `publish_pipeline` and `du
 only a version provably no weaker than the pipeline's latest published one: the same steps, wiring,
 failure routes, profiles and tools, and each step's approval gate, asking about tool calls, write access,
 commands and network the same or stricter. A pipeline's first version and anything else need a person, so
-every version a task can run is one a person published, allowed, or could not object to.
+every version a task can run is one a person published, allowed, or could not object to. A version is
+weaker also when a step gets more retries, a larger step budget or none, other instructions or another model;
+the pipeline's description may change. Automation may create a task on any published pipeline, but moving
+an existing task to another pipeline (`update_task`) is a person's decision, refused as `person_only` while
+the setting is off; a task without a pipeline may get any published one.
 `duplicate_pipeline` is shared with the deprecated desktop's server, which follows the rule too.
 
 What this protects against: an MCP client that holds the server's token and nothing else. Any program that

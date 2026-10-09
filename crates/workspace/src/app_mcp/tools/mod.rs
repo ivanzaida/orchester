@@ -83,7 +83,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "update_task",
-    description: "Changes a task's details or organization; fields left out stay as they are.",
+    description: "Changes a task's details or organization; fields left out stay as they are. Changing a task's pipeline to another pipeline is a person's decision: refused as person_only unless a person turned on Let automation change agent permissions (a task without a pipeline may get any published one).",
     schema: schema_for_type::<task_write::UpdateTask>,
     read_only: false,
   },

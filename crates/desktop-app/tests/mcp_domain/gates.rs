@@ -298,3 +298,33 @@ fn domain_dropping_a_steps_approval_needs_a_person() {
   served.let_automation_widen(true);
   served.ok("save_pipeline_draft", &steps(false, false, true));
 }
+
+#[test]
+fn domain_a_person_changes_a_tasks_pipeline() {
+  let mut served = served();
+  let created = served.ok(
+    "create_task",
+    &json!({ "project": "Kontur", "title": "Retry with jitter", "pipeline": "Quick fix" }),
+  );
+  let key = created["task"]["key"].as_str().expect("a key").to_owned();
+  let update = |pipeline: &str| json!({ "project": "Kontur", "key": key, "pipeline": pipeline });
+  served.ok("update_task", &update("Quick fix"));
+  let refused = served.refused("update_task", &update("Feature delivery"));
+  assert_person_only(&refused);
+  assert!(
+    refused["message"]
+      .as_str()
+      .is_some_and(|text| text.contains("A person changes a task's pipeline"))
+  );
+  let free = served.ok(
+    "create_task",
+    &json!({ "project": "Kontur", "title": "Without a pipeline" }),
+  );
+  let free = free["task"]["key"].as_str().expect("a key").to_owned();
+  served.ok(
+    "update_task",
+    &json!({ "project": "Kontur", "key": free, "pipeline": "Feature delivery" }),
+  );
+  served.let_automation_widen(true);
+  served.ok("update_task", &update("Feature delivery"));
+}

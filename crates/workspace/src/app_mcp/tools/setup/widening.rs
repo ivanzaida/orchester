@@ -18,7 +18,7 @@ use crate::{
 };
 
 /// Refused unless nothing widens or a person lets automation widen; `reasons` say what would widen.
-pub(super) fn allowed(services: &Services, mut reasons: Vec<Message>) -> Result<(), ToolError> {
+pub(in crate::app_mcp::tools) fn allowed(services: &Services, mut reasons: Vec<Message>) -> Result<(), ToolError> {
   if reasons.is_empty() || services.workspace.automation_changes_permissions()? {
     return Ok(());
   }
