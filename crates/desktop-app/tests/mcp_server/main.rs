@@ -56,12 +56,12 @@ impl Served {
     let mut tree = Tree::new();
     tree.resize(1440, 900);
     let link = WindowLink::default();
-    let hold = launch.services().map(|services| services.hold.clone());
     let config = mcp::config(
       McpSettings::with_window_control(window_control),
       &link,
       &appearance,
-      hold,
+      launch.services(),
+      app.i18n(),
     );
     let at = DiscoveryFolder::At(folder.path().to_path_buf());
     let server = AppMcp::start(&mut tree, runtime, &at, config).expect("the server listens");

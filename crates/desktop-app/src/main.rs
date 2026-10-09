@@ -49,8 +49,7 @@ fn main() {
     "agents' control of the window"
   );
   // Started before the root mounts, so the status bar shows its port from the first frame.
-  let hold = launch.services().map(|services| services.hold.clone());
-  let config = mcp::config(mcp_settings, &link, &appearance, hold);
+  let config = mcp::config(mcp_settings, &link, &appearance, launch.services(), app.i18n());
   let server = AppMcp::start(&mut tree, runtime.handle(), &DiscoveryFolder::User, config);
   let mcp = McpStatus::of(server.as_ref(), mcp_settings);
   let start = launch.start();
