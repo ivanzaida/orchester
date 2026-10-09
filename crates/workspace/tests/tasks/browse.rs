@@ -136,7 +136,7 @@ fn task_rows_say_what_their_readiness_is_about_wherever_its_words_are_chosen() {
   let held = ProjectTasks {
     group_holds: Arc::new(BTreeMap::from([(queued, GroupHold::FailedTask)])),
     blocking: Arc::new(HashMap::from([(incomplete, vec![queued])])),
-    ..data.clone()
+    ..data
   };
   assert_eq!(
     kinds(&held),
