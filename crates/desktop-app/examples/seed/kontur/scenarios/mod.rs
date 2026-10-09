@@ -7,6 +7,7 @@ mod interrupted;
 mod live;
 mod task_states;
 mod tasks;
+mod tasks_unreadable;
 mod unreadable_db;
 
 use super::{Kontur, SeedError};
@@ -52,7 +53,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 8] = [
+pub const ALL: [Scenario; 9] = [
   Scenario::of("empty", empty::seed),
   Scenario::of("tasks", tasks::seed),
   Scenario::of("task-states", task_states::seed),
@@ -60,6 +61,7 @@ pub const ALL: [Scenario; 8] = [
   Scenario::of("changes", changes::seed),
   Scenario::of("interrupted", interrupted::seed),
   Scenario::of("unreadable-db", unreadable_db::seed),
+  Scenario::of("tasks-unreadable", tasks_unreadable::seed),
   Scenario::with_fake_codex("live", live::seed),
 ];
 

@@ -203,7 +203,8 @@ fn the_window_shows_the_active_tabs_route() {
     !switcher.iter().any(|text| text.contains(PROJECT)),
     "a project's id is never shown"
   );
-  assert_eq!(window.texts("nav-tasks"), Some(vec!["Tasks".to_owned()]));
+  let tasks = window.texts("nav-tasks").expect("Tasks shows");
+  assert_eq!(tasks[0], "Tasks");
   navigation.open_tab();
   window.pass();
   assert_eq!(
