@@ -62,7 +62,12 @@ fn blocked(ctx: &Ctx, detail: &TaskDetail) -> Option<Element> {
     reason.unwrap_or_default().to_owned()
   } else {
     let tasks = detail.blocked_by.join(&ctx.t("task.listSeparator"));
-    let waiting = ctx.t_args("task.notices.blockedBy", [("tasks", tasks.as_str())]);
+    let key = if detail.blocked_by.len() == 1 {
+      "task.notices.blockedBy.one"
+    } else {
+      "task.notices.blockedBy.other"
+    };
+    let waiting = ctx.t_args(key, [("tasks", tasks.as_str())]);
     match reason {
       Some(reason) => ctx
         .t_args(

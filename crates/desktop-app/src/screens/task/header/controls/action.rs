@@ -3,10 +3,13 @@
 //! runner of the project the page shows, whichever tab is active. Work on a shared task goes on only
 //! under the person's claim; Pause and Cancel need none.
 
+use std::sync::Arc;
+
 use lurq::app::ctx::{Ctx, FutureAction};
 use orchester_core::{
-  id::{RunId, TaskId},
-  store::TaskStore,
+  id::{ResourceId, RunId, TaskId},
+  resource::Pipeline,
+  store::{ResourceStore, TaskStore},
   task::{MissingDetail, QueueError},
 };
 use orchester_ipc::Command;
@@ -88,7 +91,7 @@ pub fn control_action(
 async fn queue(project: &OpenProject, servers: &Servers, task: TaskId) -> Result<WorkClaim, Message> {
   let (root, servers) = (project.repo_root.clone(), servers.clone());
   background::run(move || {
-    let (details, revision, version) = {
+    let (details, revision, version, steps) = {
       let db = ProjectDb::open(&root).map_err(|error| messages::store_error(&error))?;
       let draft = db
         .task(task)
@@ -99,7 +102,8 @@ async fn queue(project: &OpenProject, servers: &Servers, task: TaskId) -> Result
         .into_iter()
         .find(|pipeline| Some(pipeline.id) == draft.details().pipeline)
         .map(|pipeline| pipeline.version);
-      (draft.details().clone(), draft.revision(), version)
+      let steps = pipeline_steps(&db, draft.details().pipeline).map_err(|error| messages::store_error(&error))?;
+      (draft.details().clone(), draft.revision(), version, steps)
     };
     let Some(version) = version else {
       let unpublished = QueueFailure::Queue(QueueError::Incomplete(vec![MissingDetail::Pipeline]));
@@ -107,9 +111,25 @@ async fn queue(project: &OpenProject, servers: &Servers, task: TaskId) -> Result
     };
     queue_in(&root, &servers, SaveTarget::Task(task, revision), details, version)
       .map(|queued| queued.claim)
-      .map_err(|failure| first(&failure))
+      .map_err(|failure| named_steps(first(&failure), &steps))
   })
   .await?
+}
+
+/// A pipeline step's key and its name.
+pub type StepName = (Arc<str>, Arc<str>);
+
+/// `message` with the step it names by key named by its name, of `steps`.
+pub fn named_steps(mut message: Message, steps: &[StepName]) -> Message {
+  for (name, value) in &mut message.args {
+    if *name != "step" {
+      continue;
+    }
+    if let Some((_, step)) = steps.iter().find(|(key, _)| **key == **value) {
+      *value = step.to_string();
+    }
+  }
+  message
 }
 
 /// What a person reads first of why the task was not queued.
@@ -119,6 +139,26 @@ fn first(failure: &QueueFailure) -> Message {
     .into_iter()
     .next()
     .unwrap_or_else(messages::interrupted)
+}
+
+/// The steps of `pipeline`'s latest published version, by key and name, so a refusal names a step as
+/// people read it.
+fn pipeline_steps(db: &ProjectDb, pipeline: Option<ResourceId>) -> Result<Vec<StepName>, StoreError> {
+  let Some(version) = pipeline
+    .map(|pipeline| db.latest_version::<Pipeline>(pipeline))
+    .transpose()?
+    .flatten()
+  else {
+    return Ok(Vec::new());
+  };
+  Ok(
+    version
+      .body()
+      .steps()
+      .iter()
+      .map(|step| (Arc::from(step.key.as_str()), Arc::from(step.name.as_str())))
+      .collect(),
+  )
 }
 
 async fn carry_out(

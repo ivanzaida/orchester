@@ -19,7 +19,7 @@ use orchester_core::{
 };
 use orchester_workspace::tasks::detail::{RunView, TaskDetail};
 
-pub use self::action::{ControlAction, RunControl, control_action};
+pub use self::action::{ControlAction, RunControl, control_action, named_steps};
 use crate::ui::{
   button::{ActionButton, ButtonKind},
   icon::Icon,
@@ -57,6 +57,8 @@ pub struct Controls<'a> {
   pub pending: Option<RunControl>,
   /// Where a press records its control, for the frame's notice when the runner refuses it.
   pub requested: &'a Signal<Option<Requested>>,
+  /// A tool request of the run waits for the person: nothing works, so nothing pauses.
+  pub approval_waits: bool,
 }
 
 /// The controls that apply to the task now, in order.
@@ -139,9 +141,14 @@ impl Shown {
     let blocked = &controls.detail.blocked_by;
     if gate == Gate::Work && !blocked.is_empty() {
       let tasks = blocked.join(&ctx.t("task.listSeparator"));
+      let full = if blocked.len() == 1 {
+        "task.controls.blocked.one"
+      } else {
+        "task.controls.blocked.other"
+      };
       let reason = Reason {
         short: ctx.t_args("task.reasons.blocked", [("tasks", tasks.as_str())]),
-        full: ctx.t_args("task.controls.blocked", [("tasks", tasks.as_str())]),
+        full: ctx.t_args(full, [("tasks", tasks.as_str())]),
       };
       self.unavailable(button, reason);
       return;
@@ -195,8 +202,18 @@ fn primary(ctx: &Ctx, controls: &Controls, run: &RunView) -> Option<(ActionButto
       );
       Some((pausing.loading(), RunControl::Pause(id), Gate::Runner))
     }
+    // A run recorded as running without a runner is interrupted: it continues once one is back.
+    RunStatus::Running if controls.detail.lost_its_runner(controls.online) => Some((
+      make(
+        "task-continue-run",
+        ButtonKind::Primary,
+        ("task.controls.continue", Icon::Play),
+      ),
+      RunControl::Continue(id),
+      Gate::Work,
+    )),
     // Nothing works while the run only waits for a person: there is nothing to pause.
-    RunStatus::Running if run.run.waits_for_a_person() && !controls.detail.lost_its_runner(controls.online) => None,
+    RunStatus::Running if run.run.waits_for_a_person() || controls.approval_waits => None,
     RunStatus::Running => Some((
       make(
         "task-pause-run",

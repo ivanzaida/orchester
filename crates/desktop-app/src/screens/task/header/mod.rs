@@ -104,6 +104,7 @@ impl Component for TaskHeader {
         action: &action,
         pending,
         requested: &self.requested,
+        approval_waits: props.task.waiting_approval().is_some(),
       },
     );
     let latest_busy = detail
@@ -114,7 +115,7 @@ impl Component for TaskHeader {
       ctx,
       check.as_ref(),
       (&self.confirming, &self.remove),
-      latest_busy,
+      (latest_busy, props.task.online),
     ));
     let title_row = actions::title_row(ctx, &props, shown);
     let confirmation = check
@@ -133,7 +134,7 @@ impl Component for TaskHeader {
       .spacing(SpacingSize::Sm)
       .child(crumbs(ctx, &props))
       .child(title_row)
-      .child(run_line::status_row(ctx, &detail, props.task.lost()))
+      .child(run_line::status_row(ctx, &props.task))
       .with_children(notices::notices(ctx, &detail, props.stale.as_ref(), refused))
       .with_children(confirmation)
       .with_children(removal(ctx, &props))

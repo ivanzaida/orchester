@@ -40,7 +40,7 @@ use orchester_workspace::{
   workspace::OpenProject,
 };
 
-use super::controls::{Control, Reason};
+use super::controls::{Control, Reason, named_steps};
 use crate::{
   project::ProjectFeed,
   theme::{ExtraTypography, TaskText},
@@ -122,19 +122,6 @@ pub struct Request {
   steps: Arc<[(Arc<str>, Arc<str>)]>,
 }
 
-/// `message` with the step it names by key named by its name.
-fn named_steps(mut message: Message, steps: &[(Arc<str>, Arc<str>)]) -> Message {
-  for (name, value) in &mut message.args {
-    if *name != "step" {
-      continue;
-    }
-    if let Some((_, step)) = steps.iter().find(|(key, _)| **key == **value) {
-      *value = step.to_string();
-    }
-  }
-  message
-}
-
 /// Why the runner did not start the run the confirmation with `key` asked for.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Refused {
@@ -201,13 +188,14 @@ pub fn start_action(
   })
 }
 
-/// The Run again button, unavailable with why when the task cannot run again; nothing until the check
-/// was read. `busy`: git removes or merges the latest run's worktrees, which must end first.
+/// The Run again button, unavailable with why when the task cannot run again or no runner is connected
+/// to start it; nothing until the check was read. `busy`: git removes or merges the latest run's worktrees, which must
+/// end first.
 pub fn button(
   ctx: &Ctx,
   check: Option<&Result<RunAgainCheck, Message>>,
   (open, remove): (&Signal<Confirming>, &Signal<bool>),
-  busy: bool,
+  (busy, online): (bool, bool),
 ) -> Option<Control> {
   let button =
     ActionButton::new("task-run-again", ButtonKind::Secondary, ctx.t("task.runAgain.action")).icon(Icon::RotateCcw);
@@ -220,6 +208,10 @@ pub fn button(
       Err(block) => Reason {
         short: short_block(ctx, *block, &check.pipeline),
         full: message_text(ctx, &block_message(*block, &check.pipeline)),
+      },
+      Ok(_) if !online => Reason {
+        short: ctx.t("task.reasons.offline"),
+        full: ctx.t("task.controls.offline"),
       },
       Ok(_) if busy || open.get().0.is_some() => {
         return Some(Control {
@@ -375,7 +367,11 @@ fn properties(ctx: &Ctx, confirm: &Confirmation) -> Element {
       "task-run-again-starts",
       &ctx.t("task.runAgain.startsFrom"),
       &ctx.t_args(
-        "task.runAgain.startsFromValue",
+        if next.steps == 1 {
+          "task.runAgain.startsFromValue.one"
+        } else {
+          "task.runAgain.startsFromValue.other"
+        },
         [("step", &*next.first_step), ("count", steps.as_str())],
       ),
       DetailValue::Text,
