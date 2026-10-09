@@ -1,10 +1,14 @@
 //! The Summary tab (`Body` `ZhoTU` in `lUXff`): in its column, where the task stands (`notice`), the
-//! decision the run waits for (P2's panels mount at [`decisions`]), the run's steps (`steps`), the brief
-//! and the acceptance criteria (`brief`) and *Runs of this task* (`runs`); beside it *This run*
-//! (`this_run`). A task whose latest run cannot be read shows why, that the run's actions are
-//! unavailable, and its runs. The organization history comes later (agreed deviation D4).
+//! run's steps (`steps`), the brief and the acceptance criteria (`brief`) and *Runs of this task*
+//! (`runs`); beside it *This run* (`this_run`). While the run waits for a decision (its plan, a raised
+//! limit, how it goes on after its retries, its merge), the Summary is that decision's ([`decisions`]):
+//! those designs draw the run's stages in place of its steps, leave the brief out, pin a decision bar
+//! or put the decision above *This run*. A task whose latest run cannot be read shows why, that the
+//! run's actions are unavailable, and its runs. The organization history comes later (agreed deviation
+//! D4).
 
 mod brief;
+mod decisions;
 mod live;
 mod notice;
 pub(super) mod runs;
@@ -23,12 +27,10 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{
-  run::{PauseReason, RunLimit, RunStatus},
-  time::Timestamp,
-};
+use orchester_core::time::Timestamp;
 use orchester_workspace::tasks::{approvals::ShownApproval, detail::TaskDetail};
 
+pub use self::decisions::decisions;
 use self::runs::Runs;
 use super::{PageState, TaskContext};
 use crate::{
@@ -64,6 +66,9 @@ impl Component for TaskSummary {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<SummaryProps>().clone();
+    if let Some(decision) = decisions(ctx, &props.task) {
+      return decision;
+    }
     let detail = &props.task.detail;
     let removal = PageState::of(ctx).removal.get();
     let runs = runs::section(
@@ -91,7 +96,7 @@ impl Component for TaskSummary {
     let parts = self.parts(ctx, &props, runs);
     let root = props.task.project.open.repo_root.clone();
     let panel = match &detail.run {
-      Some(run) => this_run::this_run(ctx, run, &root, props.task.lost()),
+      Some(run) => this_run::this_run(ctx, run, &root, props.task.lost(), None),
       None => {
         let pipelines = match props.task.project.feed.tasks.get() {
           crate::project::TasksState::Ready(tasks) => tasks.pipelines.to_vec(),
@@ -135,28 +140,11 @@ impl TaskSummary {
       .as_ref()
       .map(|run| steps::section(ctx, run, lost, &waiting, now));
     std::iter::once(notice.into())
-      .chain(decisions(ctx, &props.task))
       .chain(steps)
       .chain(brief::sections(ctx, details))
       .chain(runs)
       .collect()
   }
-}
-
-/// Where the decisions the run waits for mount (P2: plan review, raise the limit, the decision after
-/// retries, Ready for review with its merge). Until they are built, a run that waits for one says the
-/// decision is not built in this app yet.
-pub fn decisions(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
-  let detail = &task.detail;
-  let run = detail.run.as_ref()?;
-  let waits = match run.run.status() {
-    RunStatus::Running => !run.run.awaiting_plan().is_empty(),
-    RunStatus::Paused(PauseReason::LimitReached(limit)) => *limit != RunLimit::DailyBudget,
-    RunStatus::WaitingForPerson(_) => true,
-    RunStatus::Succeeded => detail.merge.is_none(),
-    _ => false,
-  };
-  waits.then(|| reason_line("task-decision-unavailable", &ctx.t("summary.decisionNotBuilt")).into())
 }
 
 /// A tool request of the task's run that waits for the person, the oldest first.

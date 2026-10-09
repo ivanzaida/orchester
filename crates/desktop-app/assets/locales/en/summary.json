@@ -1,7 +1,6 @@
 {
   "summary": {
     "openConversation": "Open conversation",
-    "decisionNotBuilt": "Deciding here isn't built in this app yet; the run waits for the decision.",
     "brief": "Brief",
     "criteria": "Acceptance criteria",
     "notice": {
