@@ -193,7 +193,7 @@ impl Worker {
         let scope = RuleScope::AlwaysCommand { prefix: prefix.clone() };
         watch.db.add_approval_rule(approval.run, &scope, Timestamp::now())?;
       }
-      (ApprovalSubject::McpTool { server, tool }, None, _) => {
+      (ApprovalSubject::McpTool { server, tool, .. }, None, _) => {
         let mut servers = watch.db.mcp_servers()?;
         let Some(stored) = servers.iter_mut().find(|stored| stored.name().as_str() == server) else {
           return Ok(Err(unavailable("Always allow")));

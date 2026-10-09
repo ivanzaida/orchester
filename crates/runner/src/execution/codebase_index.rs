@@ -324,7 +324,8 @@ pub(super) enum IndexTold {
 impl IndexTold {
   /// For an agent that gets `index`, with the `orchester-codebase-index` skill placed at `skill` when it gets
   /// the index.
-  /// Claude Code (`provider`) has a search tool of its own: it is not steered to `git grep`.
+  /// Claude Code (`provider`) searches with Orchester's `search_file`, which walks the files when ripgrep is missing:
+  /// it is not steered to `git grep`.
   pub(super) fn new(index: &AgentIndex, skill: Option<&Path>, provider: AgentProvider) -> Self {
     let codex_without_ripgrep = index.tools.is_none() && provider == AgentProvider::CodexCli;
     match (&index.used, &index.folder, skill) {

@@ -103,7 +103,7 @@ fn orchester_tools_find_symbol_ranks_as_the_index_splits_its_tables() {
 
 #[test]
 fn orchester_tools_file_tools_follow_the_step() {
-  for name in ["read_file", "list_files", "search", "edit_file", "write_file"] {
+  for name in ["read_file", "list_files", "search_file", "edit_file", "create_file"] {
     assert!(
       writing()
         .policy(OrchesterTool::from_name(name).expect("a tool"))
@@ -111,17 +111,17 @@ fn orchester_tools_file_tools_follow_the_step() {
       "{name}"
     );
   }
-  let read = parse("read_file", &json!({"path": "src/lib.rs"})).expect("valid");
+  let read = parse("read_file", &json!({"filename": "src/lib.rs"})).expect("valid");
   assert_eq!(read.tool(), OrchesterTool::ReadFile);
   assert!(matches!(
-    parse("read_file", &json!({"path": "src/lib.rs", "lines": 3})),
+    parse("read_file", &json!({"filename": "src/lib.rs", "lines": 3})),
     Err(ToolCallError::Invalid { .. })
   ));
-  for name in ["edit_file", "write_file"] {
+  for name in ["edit_file", "create_file"] {
     let tool = OrchesterTool::from_name(name).expect("a tool");
     assert_eq!(reading().policy(tool), None, "{name}");
     assert_eq!(
-      orchester_core::orchester_tools::ToolCall::parse(name, &json!({"path": "x", "content": "y"}), &reading()),
+      orchester_core::orchester_tools::ToolCall::parse(name, &json!({"filename": "x", "content": "y"}), &reading()),
       Err(ToolCallError::NotOffered(tool))
     );
   }
@@ -135,9 +135,9 @@ fn orchester_tools_file_tools_follow_the_step() {
   assert_eq!(
     indexed.prompt_paragraph(true).lines().last(),
     Some(
-      "Use the shell only for builds and tests. For git and for files outside the worktree, use the tools of the \
-       Orchester MCP server first: mcp__Orchester__find_symbol, mcp__Orchester__git_status, mcp__Orchester__git_diff, \
-       mcp__Orchester__git_log, mcp__Orchester__git_show, mcp__Orchester__read_outside_file."
+      "Use the shell for builds, tests and git, not to read or search files. Read and search files outside the \
+       worktree with mcp__Orchester__read_external_file and mcp__Orchester__search_external_file of the Orchester \
+       MCP server; a person may be asked first. The server also has mcp__Orchester__find_symbol."
     )
   );
   let listed = StepTools::for_step(
@@ -146,7 +146,10 @@ fn orchester_tools_file_tools_follow_the_step() {
   )
   .mcp_tools();
   let edit = listed.iter().find(|tool| tool["name"] == "edit_file").expect("listed");
-  assert_eq!(edit["inputSchema"]["required"], json!(["path", "edits"]));
+  assert_eq!(
+    edit["inputSchema"]["required"],
+    json!(["filename", "start_line", "end_line", "expected", "content"])
+  );
 }
 
 /// Paths from the index are plain relative paths or nothing: a symbol or file entry that leaves the index or
@@ -217,7 +220,7 @@ fn orchester_tools_answers_stay_within_the_mcp_limit() {
   let text = answer["content"][0]["text"].as_str().expect("text");
   assert!(text.len() <= MAX_ANSWER_BYTES, "{}", text.len());
   assert!(
-    text.ends_with("narrow the call with offset and limit, a path or a glob]"),
+    text.ends_with("narrow the call with start_line and length, limit_files, a longer term or a path]"),
     "{}",
     &text[text.len() - 120..]
   );

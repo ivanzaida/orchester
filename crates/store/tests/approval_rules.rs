@@ -22,6 +22,7 @@ fn mcp_rule(tool: &str) -> RuleScope {
   RuleScope::SimilarMcpTool {
     server: "pencil".to_owned(),
     tool: tool.to_owned(),
+    folder: None,
   }
 }
 

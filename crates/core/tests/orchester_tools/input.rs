@@ -1,35 +1,79 @@
-//! Strict input, and the git program of each call with every value one argument of its own.
+//! Strict input: each tool's call is read into its type, unknown fields and bad values refused; the removed tools are
+//! unknown; and how a call of a worktree file tool reads in the transcript.
 
-use std::{path::Path, time::Duration};
-
-use orchester_core::orchester_tools::{GitCall, OrchesterTool, ToolCall, ToolCallError};
+use orchester_core::{
+  connection::stream::FileChangeKind,
+  native::tools::ToolName,
+  orchester_tools::{FileCall, OrchesterTool, ToolCall, ToolCallError},
+};
 use serde_json::{Value, json};
 
-use crate::{Folders, context, parse, program_of, reading};
+use crate::{parse, reading};
+
+fn edit(start: u32, end: u32, expected: &str, content: &str) -> Value {
+  json!({"filename": "src/main.rs", "start_line": start, "end_line": end, "expected": expected, "content": content})
+}
 
 #[test]
 fn orchester_tools_read_their_input_strictly() {
+  let read = parse(
+    "read_file",
+    &json!({"filename": "src/main.rs", "start_line": 3, "length": null}),
+  )
+  .expect("valid");
+  let ToolCall::File(file) = &read else {
+    panic!("a file call");
+  };
+  let FileCall::Read(lines) = file.as_ref() else {
+    panic!("a read");
+  };
   assert_eq!(
-    parse("git_diff", &json!({"path": "src/main.rs", "staged": true})).map(|call| call.tool()),
-    Ok(OrchesterTool::GitDiff)
-  );
-  assert_eq!(
-    parse("git_status", &Value::Null).map(|call| call.tool()),
-    Ok(OrchesterTool::GitStatus)
-  );
-  assert_eq!(
-    parse("git_log", &json!({"path": null, "count": null})),
-    Ok(ToolCall::Git(GitCall::Log { path: None, count: 20 }))
+    (lines.filename(), lines.start_line(), lines.length()),
+    ("src/main.rs", 3, 2000)
   );
   for (name, arguments) in [
-    ("git_status", json!({"verbose": true})),
-    ("git_diff", json!({"path": 3})),
-    ("git_log", json!({"count": 0})),
-    ("git_log", json!({"count": 201})),
-    ("git_show", json!({})),
-    ("git_add", json!({"paths": []})),
-    ("git_commit", json!({"message": "  "})),
-    ("read_outside_file", json!({"path": "/x", "limit": 10_001})),
+    ("search_file", json!({"term": "parse_config"})),
+    ("search_file", json!({"term": "x", "limit_files": 200})),
+    (
+      "edit_file",
+      edit(1, 1, "fn main() {", "fn main() -> Result<(), Error> {"),
+    ),
+    ("edit_file", edit(4, 3, "", "// added")),
+    ("create_file", json!({"filename": "notes/new.md", "content": ""})),
+    ("list_files", json!({"pattern": null, "path": null})),
+    ("read_external_file", json!({"filename": "/deps/lib.rs"})),
+    ("search_external_file", json!({"base_directory": "/deps", "term": "fn"})),
+  ] {
+    assert_eq!(
+      parse(name, &arguments).map(|call| call.tool().as_str()),
+      Ok(name),
+      "{arguments}"
+    );
+  }
+  for (name, arguments) in [
+    ("read_file", json!({"filename": "  "})),
+    ("read_file", json!({"path": "src/main.rs"})),
+    ("read_file", json!({"filename": "a", "length": 10_001})),
+    ("read_file", json!({"filename": "a", "start_line": 0})),
+    ("search_file", json!({"term": ""})),
+    ("search_file", json!({"term": "a\nb"})),
+    ("search_file", json!({"term": "x", "limit_files": 201})),
+    ("search_file", json!({"pattern": "x"})),
+    (
+      "edit_file",
+      json!({"filename": "a", "start_line": 1, "end_line": 1, "content": "x"}),
+    ),
+    ("edit_file", edit(3, 1, "", "x")),
+    ("edit_file", edit(3, 2, "not empty", "x")),
+    ("edit_file", edit(1, 1, "same", "same")),
+    (
+      "edit_file",
+      json!({"path": "a", "edits": [{"old": "a", "new": "b", "replace_all": null}]}),
+    ),
+    ("create_file", json!({"filename": "", "content": "x"})),
+    ("create_file", json!({"filename": "a"})),
+    ("read_external_file", json!({"path": "/deps/lib.rs"})),
+    ("search_external_file", json!({"base_directory": "/deps", "term": " "})),
   ] {
     assert!(
       matches!(parse(name, &arguments), Err(ToolCallError::Invalid { .. })),
@@ -37,145 +81,83 @@ fn orchester_tools_read_their_input_strictly() {
     );
   }
   assert_eq!(
-    parse("rm", &json!({})),
-    Err(ToolCallError::UnknownTool("rm".to_owned()))
+    ToolCall::parse("edit_file", &edit(1, 1, "a", "b"), &reading()),
+    Err(ToolCallError::NotOffered(OrchesterTool::EditFile))
   );
   assert_eq!(
-    ToolCall::parse("git_commit", &json!({"message": "x"}), &reading()),
-    Err(ToolCallError::NotOffered(OrchesterTool::GitCommit))
+    ToolCall::parse("create_file", &json!({"filename": "a", "content": ""}), &reading()),
+    Err(ToolCallError::NotOffered(OrchesterTool::CreateFile))
   );
   assert_eq!(
     parse("run_project_tool", &json!({"name": "Run tests"})),
     Err(ToolCallError::NotOffered(OrchesterTool::RunProjectTool))
   );
 }
-/// Paths stay in the worktree and revisions are no options; everything else an agent writes is one
-/// argument of its own, after the end of the options, and a commit message never is one at all.
+
+/// Orchester's git tools, `write_file`, `read_outside_file` and the old `search` are gone: agents use git through their
+/// shell, change files with `edit_file` and `create_file`, and read outside with `read_external_file`.
 #[test]
-fn orchester_tools_keep_every_value_one_argument() {
-  for path in ["../outside", "/etc/passwd", r"C:\Windows", "a/../../b", ":(top)x", ""] {
-    assert!(parse("git_diff", &json!({ "path": path })).is_err(), "{path}");
-  }
-  for revision in ["--output=/tmp/x", "-p", "HEAD; rm -rf /", "HEAD rm", "HEAD:secret", ""] {
-    assert!(
-      parse("git_show", &json!({ "revision": revision })).is_err(),
-      "{revision}"
+fn orchester_tools_removed_tools_are_unknown() {
+  for gone in [
+    "git_status",
+    "git_diff",
+    "git_log",
+    "git_show",
+    "git_add",
+    "git_commit",
+    "write_file",
+    "read_outside_file",
+    "search",
+  ] {
+    assert_eq!(
+      parse(gone, &json!({})),
+      Err(ToolCallError::UnknownTool(gone.to_owned())),
+      "{gone}"
     );
   }
-  let folders = Folders::new();
-  let reads = folders.reads();
-  let context = context(&folders.worktree, &reads, &[]);
-  let attempts = [
-    "; rm -rf /",
-    "$(whoami)",
-    "`id`",
-    "a \"quoted\" 'name'",
-    "-rf",
-    "--output=x",
-  ];
-  for attempt in attempts {
-    let call = parse("git_diff", &json!({ "path": attempt })).expect("a relative path");
-    let program = program_of(&call, &context);
-    let args = program.command().args();
-    assert_eq!(args.last().map(String::as_str), Some(attempt), "{args:?}");
-    assert_eq!(args[args.len() - 2], "--", "{args:?}");
-    assert!(args.contains(&"--literal-pathspecs".to_owned()));
-  }
-  let call = parse("git_add", &json!({"paths": attempts})).expect("relative paths");
-  let program = program_of(&call, &context);
-  let args = program.command().args();
-  let end = args.iter().position(|arg| arg == "--").expect("the end of the options");
-  assert_eq!(&args[end + 1..], attempts);
-  let call = parse("git_show", &json!({"revision": "$(whoami)", "path": "src/a b.rs"})).expect("a revision");
-  let args = program_of(&call, &context).command().args().to_vec();
-  assert_eq!(args[args.len() - 2..], ["--end-of-options", "$(whoami):src/a b.rs"]);
-  let message = "Fix; rm -rf / $(whoami) \"quoted\"\n\nBody";
-  let call = parse("git_commit", &json!({ "message": message })).expect("a message");
-  let program = program_of(&call, &context);
-  assert_eq!(program.command().stdin(), Some(message));
-  assert!(!program.command().args().iter().any(|arg| arg.contains("rm -rf")));
-  // Hooks come from an absolute, empty folder the runner owns, never a folder relative to the worktree.
-  let hooks = format!("core.hooksPath={}", Path::new("/orchester-private/no-hooks").display());
-  assert!(
-    program
-      .command()
-      .args()
-      .windows(2)
-      .any(|pair| pair == ["-c", hooks.as_str()])
-  );
-  assert!(
-    program
-      .command()
-      .args()
-      .ends_with(&["commit", "--no-verify", "-F", "-"].map(str::to_owned))
-  );
-}
-#[test]
-fn orchester_tools_git_runs_hardened_in_the_worktree_without_a_shell() {
-  let folders = Folders::new();
-  let reads = folders.reads();
-  let context = context(&folders.worktree, &reads, &[]);
-  let program = program_of(&parse("git_status", &json!({})).expect("valid"), &context);
-  let command = program.command();
-  assert_eq!(command.program(), Path::new("git"));
-  assert_eq!(command.current_dir(), Some(folders.worktree.as_path()));
-  assert_eq!(
-    command.args(),
-    [
-      "-c",
-      "core.fsmonitor=false",
-      "-c",
-      "safe.bareRepository=explicit",
-      "--no-pager",
-      "--no-optional-locks",
-      &format!("--git-dir={}", Path::new("/repo/.git/worktrees/run").display()),
-      &format!("--work-tree={}", folders.worktree.display()),
-      "-c",
-      &format!("core.hooksPath={}", Path::new("/orchester-private/no-hooks").display()),
-      "-c",
-      "log.showSignature=false",
-      "-c",
-      "submodule.recurse=false",
-      "-c",
-      "diff.ignoreSubmodules=all",
-      "-c",
-      "status.submoduleSummary=false",
-      "status",
-      "--short",
-      "--branch",
-      "--ignore-submodules=all"
-    ]
-  );
-  assert!(!command.inherits_env());
-  assert!(
-    command
-      .env()
-      .iter()
-      .any(|(name, value)| name == "GIT_TERMINAL_PROMPT" && value == "0")
-  );
-  assert_eq!(program.timeout(), Duration::from_secs(60));
 }
 
-/// `git_add` stages named files only, none inside a repository of its own.
+/// A CLI's call of `edit_file` reads as the native agent's edit, its expected lines replaced by its content, and
+/// changes the file it names; `create_file` reads as a write and adds its file; a refused input shows no call.
 #[test]
-fn orchester_tools_git_add_refuses_nested_repositories() {
-  let folders = Folders::new();
-  std::fs::create_dir_all(folders.worktree.join("vendor").join("lib").join(".git")).expect("a nested repository");
-  std::fs::write(folders.worktree.join("vendor").join("lib").join("a.txt"), "a").expect("a file");
-  let reads = folders.reads();
-  let context = context(&folders.worktree, &reads, &[]);
-  let call = parse("git_add", &json!({"paths": ["vendor/lib/a.txt"]})).expect("valid");
+fn orchester_tools_file_calls_read_as_native_rows() {
+  let edited = OrchesterTool::EditFile
+    .shown_call(&edit(2, 2, "old line", "new line"))
+    .expect("an edit");
+  assert_eq!(edited.tool, ToolName::EditFile);
+  assert_eq!(edited.input.as_ref().map(|input| input.target()), Some("src/main.rs"));
+  let change = OrchesterTool::EditFile
+    .changed_file(&edit(2, 2, "old line", "new line"))
+    .expect("a change");
   assert_eq!(
-    call.work(&context),
-    Err(ToolCallError::NestedRepository("vendor/lib/a.txt".to_owned()))
+    (change.path.as_str(), change.kind),
+    ("src/main.rs", FileChangeKind::Modified)
   );
-  // A folder is never staged: it could hold a nested repository at any depth.
-  for path in [".", "vendor", "vendor/lib"] {
-    let call = parse("git_add", &json!({ "paths": [path] })).expect("valid");
-    assert_eq!(call.work(&context), Err(ToolCallError::Folder(path.to_owned())));
-  }
-  let call = parse("git_add", &json!({"paths": ["vendor/other.txt"]})).expect("valid");
-  assert!(call.work(&context).is_ok());
+  let created = json!({"filename": "notes/new.md", "content": "hello\n"});
+  assert_eq!(
+    OrchesterTool::CreateFile.shown_call(&created).map(|call| call.tool),
+    Some(ToolName::WriteFile)
+  );
+  assert_eq!(
+    OrchesterTool::CreateFile
+      .changed_file(&created)
+      .map(|change| change.kind),
+    Some(FileChangeKind::Added)
+  );
+  let searched = OrchesterTool::SearchFile
+    .shown_call(&json!({"term": "parse_config"}))
+    .expect("a search");
+  assert_eq!(searched.tool, ToolName::Search);
+  assert_eq!(
+    searched.input.as_ref().map(|input| input.target()),
+    Some("parse_config")
+  );
+  assert!(OrchesterTool::EditFile.shown_call(&edit(3, 1, "", "x")).is_none());
+  assert!(
+    OrchesterTool::ReadExternalFile
+      .shown_call(&json!({"filename": "/deps/lib.rs"}))
+      .is_none()
+  );
 }
 
 /// A link to `target` folder at `link`: a junction on Windows, which needs no privilege, a symbolic link on macOS.
@@ -194,36 +176,4 @@ pub(crate) fn link_folder(target: &std::path::Path, link: &std::path::Path) {
   }
   #[cfg(not(windows))]
   std::os::unix::fs::symlink(target, link).expect("a link");
-}
-
-/// `git_add` never passes through a link: a junction or symbolic link to a folder holding a nested repository,
-/// as the leaf or a middle component, and a link to a file are refused.
-#[test]
-fn orchester_tools_git_add_refuses_links() {
-  let folders = Folders::new();
-  let holder = folders.worktree.join("holder");
-  std::fs::create_dir_all(holder.join("lib").join(".git")).expect("a nested repository");
-  std::fs::write(holder.join("notes.md"), "notes").expect("a file");
-  link_folder(&holder, &folders.worktree.join("jholder"));
-  let reads = folders.reads();
-  let context = context(&folders.worktree, &reads, &[]);
-  for path in ["jholder", "jholder/notes.md", "jholder/lib/a.txt"] {
-    let call = parse("git_add", &json!({ "paths": [path] })).expect("valid");
-    assert_eq!(call.work(&context), Err(ToolCallError::Link(path.to_owned())), "{path}");
-  }
-  let call = parse("git_add", &json!({"paths": ["holder/notes.md"]})).expect("valid");
-  assert!(call.work(&context).is_ok());
-  // Windows makes a file symbolic link only with Developer Mode or the privilege to: without them the case
-  // cannot be made here, and junctions cover folders.
-  #[cfg(windows)]
-  let file_link = std::os::windows::fs::symlink_file(holder.join("notes.md"), folders.worktree.join("link.md")).is_ok();
-  #[cfg(not(windows))]
-  let file_link = {
-    std::os::unix::fs::symlink(holder.join("notes.md"), folders.worktree.join("link.md")).expect("a link");
-    true
-  };
-  if file_link {
-    let call = parse("git_add", &json!({"paths": ["link.md"]})).expect("valid");
-    assert_eq!(call.work(&context), Err(ToolCallError::Link("link.md".to_owned())));
-  }
 }

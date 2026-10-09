@@ -1,7 +1,7 @@
 //! What running a call takes, the executor contract: a program with its arguments, environment, time
 //! limit and how much of its output the agent gets ([`ToolProgram`]), which the caller runs with its own
-//! process runner and hands back to [`ToolProgram::finished`]; or a result already known, such as a read
-//! outside the worktree, which happens here.
+//! process runner and hands back to [`ToolProgram::finished`]; work the caller's file tools do; or a result already
+//! known, such as a read outside the worktree, which happens here.
 
 use std::{
   ffi::OsString,
@@ -9,11 +9,13 @@ use std::{
   time::Duration,
 };
 
-use super::{FindSymbol, OutputKept, OutsideReads, ProgramOutput, SkillCall, ToolCall, ToolCallError, ToolResult, git};
+use super::{
+  FileCall, FindSymbol, OutputKept, OutsideReadError, OutsideReads, ProgramOutput, SkillCall, ToolCall, ToolCallError,
+  ToolResult,
+};
 use crate::{
   command::{Command, CommandError},
   connection::invocation::{Platform, agent_environment},
-  native::tools::ToolInput,
   resource::{CommandAction, CommandEnvironment, ExitCodes},
 };
 
@@ -55,8 +57,8 @@ pub struct ToolContext<'a> {
   pub outside: &'a OutsideReads,
   pub project_tools: &'a [ProjectTool],
   pub platform: Platform,
-  /// The worktree's own git folder, which git is pinned to: a `.git` file the agent rewrote cannot send git
-  /// to a folder with a configuration of its making.
+  /// The worktree's own git folder, which git is pinned to when it lists the files changed since the code index:
+  /// a `.git` file the agent rewrote cannot send git to a folder with a configuration of its making.
   pub git_dir: &'a Path,
   /// An empty folder the runner owns, which git takes as its hooks folder, so no hook runs.
   pub hooks: &'a Path,
@@ -126,8 +128,11 @@ pub enum ToolWork {
   Run(Box<ToolProgram>),
   /// The answer, already known.
   Done(ToolResult),
-  /// A call of a file tool, which the caller's file tools run, with their read stamps of the invocation.
-  Files(Box<ToolInput>),
+  /// A call of a worktree file tool, which the caller's file tools run, with their read stamps of the invocation.
+  Files(Box<FileCall>),
+  /// `search_external_file` in `folder`, checked and resolved: the caller searches it for `term` and keeps only the
+  /// files [`OutsideReads::check`] lets through.
+  SearchExternal { folder: PathBuf, term: String },
   /// A lookup in the code index, which the caller makes knowing the files changed since the index.
   Symbols(FindSymbol),
   /// A call of `list_skills` or `read_skill`, which the caller answers from the skills it offers
@@ -140,18 +145,38 @@ impl ToolCall {
   /// happens here; it blocks on the file system.
   pub fn work(&self, context: &ToolContext<'_>) -> Result<ToolWork, ToolCallError> {
     match self {
-      Self::ReadOutsideFile { path, offset, limit } => {
-        let text = context.outside.read(path, *offset, *limit)?;
+      Self::ReadExternal {
+        filename,
+        start_line,
+        length,
+      } => {
+        let text = context.outside.read(filename, *start_line, *length)?;
         Ok(ToolWork::Done(ToolResult::shown(text)))
       }
+      Self::SearchExternal { base_directory, term } => Ok(ToolWork::SearchExternal {
+        folder: context.outside.check_folder(base_directory)?,
+        term: term.clone(),
+      }),
       Self::RunProjectTool { name } => Ok(ToolWork::Run(Box::new(project_program(name, context)?))),
-      Self::File(input) => Ok(ToolWork::Files(input.clone())),
+      Self::File(call) => Ok(ToolWork::Files(call.clone())),
       Self::FindSymbol(query) => Ok(ToolWork::Symbols(query.clone())),
       Self::Skill(call) => Ok(ToolWork::Skill(call.clone())),
-      Self::Git(call) => {
-        git::refuse_nested(call, context)?;
-        Ok(ToolWork::Run(Box::new(git::program(call, context))))
-      }
+    }
+  }
+}
+
+impl ToolCall {
+  /// The folder a call outside the worktree reads in, resolved: the folder of the file it reads, or the folder it
+  /// searches; `None` for any other call. A path the call may not reach is the error the call would end with.
+  pub fn external_folder(&self, outside: &OutsideReads) -> Option<Result<PathBuf, OutsideReadError>> {
+    match self {
+      Self::ReadExternal { filename, .. } => Some(
+        outside
+          .check(filename)
+          .map(|file| file.parent().map_or_else(|| file.clone(), Path::to_path_buf)),
+      ),
+      Self::SearchExternal { base_directory, .. } => Some(outside.check_folder(base_directory)),
+      _ => None,
     }
   }
 }

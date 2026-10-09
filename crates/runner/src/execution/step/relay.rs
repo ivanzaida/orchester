@@ -361,19 +361,37 @@ impl Relay {
     let tool = (request.server() == SERVER)
       .then(|| OrchesterTool::from_name(request.action()))
       .flatten();
+    let input = arguments.get("input").unwrap_or(&Value::Null);
+    let request = match tool.map(|tool| self.prompt_folder(tool, input)) {
+      Some(Ok(Some(folder))) => request.with_target(folder),
+      // The call would be refused: it is denied with why, and nobody is asked.
+      Some(Err(refused)) => return Some(PromptAnswer::Deny(refused).result()),
+      Some(Ok(None)) | None => request,
+    };
     let answer = self.ask(request, AskedBy::Prompt, lines).await?;
     if let (Some(tool), PromptAnswer::Allow) = (tool, &answer) {
-      self
-        .served
-        .tools
-        .grant(tool, arguments.get("input").unwrap_or(&Value::Null));
+      self.served.tools.grant(tool, input);
     }
     Some(answer.result())
   }
 
-  /// The answer to a call of Orchester's tool `name`: refused when it is not valid or not offered, asked
-  /// about first when it needs an approval and has none; `None` when the relay closed its connection while
-  /// the call waited.
+  /// The folder a permission prompt call of Orchester's `tool` with `input` reads in, for a tool that reads outside
+  /// the worktree; why the call would be refused, when its input or its path is.
+  fn prompt_folder(&self, tool: OrchesterTool, input: &Value) -> Result<Option<String>, String> {
+    if !tool.reads_outside() {
+      return Ok(None);
+    }
+    let tools = &self.served.tools;
+    let call = tools.parse(tool.as_str(), input).map_err(|error| error.to_string())?;
+    tools
+      .external_folder(&call)
+      .transpose()
+      .map_err(|error| error.to_string())
+  }
+
+  /// The answer to a call of Orchester's tool `name`: refused when it is not valid, not offered or reaches where it
+  /// may not, asked about first when it needs an approval and has none (a call outside the worktree showing the folder
+  /// it reads in); `None` when the relay closed its connection while the call waited.
   async fn call(
     &self,
     name: &str,
@@ -385,10 +403,19 @@ impl Relay {
       Ok(call) => call,
       Err(error) => return Some(ToolResult::refused(&error)),
     };
+    let folder = match tools.external_folder(&call).transpose() {
+      Ok(folder) => folder,
+      // A path the call may not reach is refused before anybody is asked.
+      Err(error) => return Some(ToolResult::refused(&error)),
+    };
     if tools.asks(call.tool()) && !tools.take_grant(call.tool(), arguments) {
       let number = self.asked.fetch_add(1, Ordering::Relaxed);
       let request =
         ClaudeApprovalRequest::tool_call(format!("orchester-call-{number}"), name, arguments, tools.secrets());
+      let request = match folder {
+        Some(folder) => request.with_target(folder),
+        None => request,
+      };
       match self.ask(request, AskedBy::ToolCall, lines).await? {
         PromptAnswer::Allow => {}
         PromptAnswer::Deny(told) => return Some(ToolResult::unavailable(&told)),

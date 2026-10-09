@@ -3,9 +3,9 @@
 //!
 //! | Access class | Step that may write | Read-only step |
 //! | --- | --- | --- |
-//! | read-only (`read_file`, `list_files`, `search`, `find_symbol` with the code index, `git_status`, `git_diff`, `git_log`, `git_show`, `list_skills` and `read_skill` with skills) | runs | runs |
-//! | writes the worktree (`edit_file`, `write_file`, `git_add`, `git_commit`) | runs | not offered |
-//! | outside the worktree (`read_outside_file`) | asks | asks |
+//! | read-only (`read_file`, `list_files`, `search_file`, `find_symbol` with the code index, `list_skills` and `read_skill` with skills) | runs | runs |
+//! | writes the worktree (`edit_file`, `create_file`) | runs | not offered |
+//! | outside the worktree (`search_external_file`, `read_external_file`) | asks | asks |
 //! | the project's programs (`run_project_tool`), network on | asks | asks |
 //! | the project's programs, network off | not offered | not offered |
 //!
@@ -93,7 +93,7 @@ impl StepTools {
     let at = self
       .offered
       .iter()
-      .position(|(tool, _)| tool.file_tool().is_none())
+      .position(|(tool, _)| !tool.is_file_tool())
       .unwrap_or(self.offered.len());
     self.offered.insert(at, (OrchesterTool::FindSymbol, ToolPolicy::Runs));
     self
@@ -169,29 +169,32 @@ impl StepTools {
       .collect()
   }
 
-  /// The paragraph of the prompt that points the agent at the tools besides the file tools, which its *Files
-  /// and commands* part names: each by the name its CLI sees ([`OrchesterTool::called`]), and how to read skills when
-  /// it has any.
+  /// The paragraph of the prompt that points the agent at the tools besides the worktree's file tools, which its
+  /// *Files and commands* part names: each by the name its CLI sees ([`OrchesterTool::called`]), what reaches outside
+  /// the worktree, and how to read skills when it has any.
   pub fn prompt_paragraph(&self, claude: bool) -> String {
-    let names: Vec<String> = self
+    let others: Vec<String> = self
       .offered
       .iter()
-      .filter(|(tool, _)| tool.file_tool().is_none())
+      .filter(|(tool, _)| !tool.is_file_tool() && !tool.reads_outside())
       .map(|(tool, _)| tool.called(claude))
       .collect();
-    let skills = if self.policy(OrchesterTool::ReadSkill).is_some() {
-      format!(
+    let mut text = format!(
+      "# Orchester tools\n\nUse the shell for builds, tests and git, not to read or search files. Read and search \
+       files outside the worktree with {} and {} of the {SERVER} MCP server; a person may be asked first.",
+      OrchesterTool::ReadExternalFile.called(claude),
+      OrchesterTool::SearchExternalFile.called(claude)
+    );
+    if !others.is_empty() {
+      text.push_str(&format!(" The server also has {}.", others.join(", ")));
+    }
+    if self.policy(OrchesterTool::ReadSkill).is_some() {
+      text.push_str(&format!(
         " Read your skills with {} by name, never by path; {} lists them.",
         OrchesterTool::ReadSkill.called(claude),
         OrchesterTool::ListSkills.called(claude)
-      )
-    } else {
-      String::new()
-    };
-    format!(
-      "# Orchester tools\n\nUse the shell only for builds and tests. For git and for files outside the worktree, \
-       use the tools of the {SERVER} MCP server first: {}.{skills}",
-      names.join(", ")
-    )
+      ));
+    }
+    text
   }
 }

@@ -1,7 +1,9 @@
 //! The executors of the native file and search tools (`docs/architecture/native-agent.md` §4.1–§4.5,
 //! §5.1, §6.4): `read_file`, `list_files`, `search`, `edit_file` and `write_file`, confined to the
-//! step's [`FileScope`]. A failure is an error result the model can recover from, never a failed
-//! loop. Results are plain text within the tool's limits, with a note when they were cut.
+//! step's [`FileScope`]; and of Orchester's file tools for agent CLIs, which read the same way and edit by line range
+//! ([`lines`]), search for literal text file by file ([`term`]), also in a folder outside the worktree. A failure is
+//! an error result the model can recover from, never a failed loop. Results are plain text within the tool's limits,
+//! with a note when they were cut.
 //!
 //! Reads record a read stamp (length, modified time, content hash) per file; an edit, or a write that
 //! replaces a file, needs a stamp that still matches the file, so that the agent never changes a file
@@ -12,11 +14,13 @@
 
 mod glob;
 mod limits;
+mod lines;
 mod listing;
 mod read;
 mod ripgrep;
 mod search;
 mod stamp;
+mod term;
 mod walk;
 mod write;
 
@@ -33,6 +37,7 @@ use orchester_core::{
     scope::{FileScope, ScopeError},
     session::ToolOutcome,
   },
+  orchester_tools::LineEditError,
 };
 use thiserror::Error;
 
@@ -45,6 +50,8 @@ pub(crate) enum FileError {
   Scope(#[from] ScopeError),
   #[error(transparent)]
   Edit(#[from] EditError),
+  #[error(transparent)]
+  Lines(#[from] LineEditError),
   #[error("{path} cannot be {action}: {kind}")]
   Io {
     path: String,
@@ -63,6 +70,14 @@ pub(crate) enum FileError {
   NotRead(String),
   #[error("{0} changed since you read it; read it again")]
   Stale(String),
+  #[error(
+    "{path} changed since you read it; nothing was changed. The lines you named are now:\n{now}Read it again before you edit it"
+  )]
+  ChangedSinceRead { path: String, now: String },
+  #[error("{0} does not exist; make a new file with create_file")]
+  NoFileToEdit(String),
+  #[error("{0} already exists; change it with edit_file after read_file")]
+  Exists(String),
   #[error("{0} changed while it was being written; read it again")]
   Moved(String),
   #[error("the glob cannot be used: {0}")]

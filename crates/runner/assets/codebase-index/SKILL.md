@@ -13,9 +13,10 @@ that matter first, then read only the lines you need.
 
 - `find_symbol {name, kind?, include_tests?, include_consts?}`: where an item is defined, with its signature,
   best matches first.
-- `search {pattern, path?, glob?}`: a name's definitions from the index first, then the matching lines.
+- `search_file {term, limit_files?}`: a name's definitions from the index first, then the files that hold the
+  text with their matching lines.
 - `list_files {path?, pattern?}`: the files of the index and those changed since, by glob.
-- `read_file {path, offset?, limit?}`: the lines you need.
+- `read_file {filename, start_line?, length?}`: the lines you need.
 
 Results in files changed since the base revision are marked: read those files again before you rely on a
 line number. The rest of this skill is for when the tools are not offered.

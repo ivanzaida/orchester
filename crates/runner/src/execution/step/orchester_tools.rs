@@ -1,8 +1,8 @@
 //! The step's Orchester tools (`orchester_core::orchester_tools`), served over the invocation's relay
-//! ([`super::relay`]) and run by the runner: the native agent's file tools ([`super::tool_files`]), git in
-//! the worktree, pinned to its own git folder, a read outside it, and the step's skills ([`StepSkills`]). A call runs
-//! off the async workers, in the worktree, with the environment the agent's own programs get; its output is read as it
-//! comes and kept within its cap, and its answer has the invocation's secret values removed.
+//! ([`super::relay`]) and run by the runner: the worktree's file tools ([`super::tool_files`]), a read or a search
+//! outside it, and the step's skills ([`StepSkills`]). A call runs off the async workers, in the worktree, with the
+//! environment the agent's own programs get; its output is read as it comes and kept within its cap, and its answer has
+//! the invocation's secret values removed.
 //!
 //! A call of a tool that asks runs only once approved, which the runner holds itself: an approval given
 //! through Claude Code's permission prompt leaves a grant for one call of that tool with exactly the
@@ -51,7 +51,7 @@ use crate::{approval_relay::TOOLS_FLAG, git::Git, private_file};
 #[derive(Clone, Copy)]
 pub(in super::super) struct ToolFolders<'a> {
   pub(in super::super) worktree: &'a Path,
-  /// The extra writable folders the step is granted.
+  /// The extra writable folders the step is granted, which `edit_file` and `create_file` may change.
   pub(in super::super) writable: &'a [ResolvedFolder],
   /// The code index of the run's base revision, read-only, when the agent gets it.
   pub(in super::super) code_index: Option<&'a Path>,
@@ -74,7 +74,7 @@ impl<'a> ToolFolders<'a> {
   }
 }
 
-/// The hooks folder git gets, empty, among the project's private files.
+/// The hooks folder git gets when it lists the worktree's changes, empty, among the project's private files.
 const NO_HOOKS: &str = "no-hooks";
 
 /// What the calls of one step run with.
@@ -127,6 +127,17 @@ impl ToolHost {
     self.tools.asks(tool.as_str())
   }
 
+  /// The folder `call` reads in outside the worktree, resolved, as its approval shows it; `None` for any other call.
+  /// A path the call may not reach is the call's refusal.
+  pub(super) fn external_folder(&self, call: &ToolCall) -> Option<Result<String, ToolCallError>> {
+    let folder = call.external_folder(&self.outside)?;
+    Some(
+      folder
+        .map(|folder| folder.display().to_string())
+        .map_err(ToolCallError::from),
+    )
+  }
+
   /// One approved call of `tool` with `arguments`, given through the CLI's own prompt.
   pub(super) fn grant(&self, tool: OrchesterTool, arguments: &Value) {
     self.grants.lock().push((tool, called_with(arguments)));
@@ -172,7 +183,8 @@ impl ToolHost {
     };
     match call.work(&context) {
       Ok(ToolWork::Done(result)) => result,
-      Ok(ToolWork::Files(input)) => self.files.run(&input, &context),
+      Ok(ToolWork::Files(call)) => self.files.run(&call, &context),
+      Ok(ToolWork::SearchExternal { folder, term }) => self.files.search_external(&folder, &term, &self.outside),
       Ok(ToolWork::Symbols(query)) => self.files.symbols(&query, &context),
       Ok(ToolWork::Skill(call)) => self.skills.run(&call),
       Ok(ToolWork::Run(program)) => program.finished(run_capped(program.command(), program.timeout(), program.cap())),

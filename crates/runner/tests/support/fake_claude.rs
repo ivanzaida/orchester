@@ -91,6 +91,8 @@ mod fake_mcp;
 mod fake_permission_prompt;
 #[path = "fake_skill_calls.rs"]
 mod fake_skill_calls;
+#[path = "fake_tool_calls.rs"]
+mod fake_tool_calls;
 
 const NOT_SIGNED_IN: &str = include_str!("../../../core/tests/fixtures/claude/not-signed-in-clean-env.jsonl");
 /// Counted: 12 + 9,700 (cache writes) + 27 = 9,739; the 2,432 cache reads do not count.

@@ -135,7 +135,7 @@ pub fn unread_parts(subject: &ApprovalSubject) -> usize {
 /// The hard rule for a call of an MCP tool: Orchester's `run_project_tool` never goes to the reviewer.
 fn tool_hold(subject: &ApprovalSubject, permissions: Option<&AgentPermissions>) -> Option<ReviewHold> {
   match subject {
-    ApprovalSubject::McpTool { server, tool } if !auto_approvable(server, tool) => Some(ReviewHold::ProjectProgram),
+    ApprovalSubject::McpTool { server, tool, .. } if !auto_approvable(server, tool) => Some(ReviewHold::ProjectProgram),
     _ => permissions.is_none().then_some(ReviewHold::PermissionsUnknown),
   }
 }

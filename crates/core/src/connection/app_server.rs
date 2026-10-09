@@ -164,7 +164,7 @@ struct ToolContext {
   target: Option<String>,
   /// Codex asked for approval of the call.
   asked: bool,
-  /// The file the call changes when it succeeds: a call of Orchester's `edit_file` or `write_file`.
+  /// The file the call changes when it succeeds: a call of Orchester's `edit_file` or `create_file`.
   changes: Option<FileChange>,
   /// What a call of one of Orchester's file tools asked, for its row.
   call: Option<NativeCall>,

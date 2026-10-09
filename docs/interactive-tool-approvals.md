@@ -149,91 +149,101 @@ approvals in 1.5 hours of Orchester developing itself). One set of typed tools i
 its approval policy and its execution, and served to both CLIs by the relay Orchester already runs for each
 invocation; a native agent can later declare the same schemas in its own request and run the same calls (P1d).
 
+Second version (M12, the user's decision of 2026-10-09, branch `claude/agent-tools`): no tool takes a project or a
+run (the relay belongs to one invocation, worktree paths are relative to its worktree); Orchester's git tools,
+`write_file`, `read_outside_file` and the old `search`/`edit_file` schemas are gone (agents use git through their
+shell); the worktree is read, searched, edited by line range and created in; files outside it are read and searched
+by `read_external_file` and `search_external_file`.
+
 | Tool | Input | Access class | Writing step | Read-only step |
 | --- | --- | --- | --- | --- |
-| `read_file`, `list_files`, `search` | the native agent's | read-only | runs | runs |
-| `edit_file`, `write_file` | the native agent's | writes the worktree | runs | not offered |
+| `read_file` | `filename`, `start_line?`, `length?` (≤ 10 000, 2000) | read-only | runs | runs |
+| `list_files` | the native agent's (`pattern?`, `path?`) | read-only | runs | runs |
+| `search_file` | `term` (literal, one line, ≤ 1000 characters), `limit_files?` (≤ 200, 20) | read-only | runs | runs |
+| `edit_file` | `filename`, `start_line`, `end_line`, `expected`, `content` | writes the worktree | runs | not offered |
+| `create_file` | `filename`, `content` | writes the worktree | runs | not offered |
 | `find_symbol` (with the code index) | `name`, `kind?`, `include_tests?`, `include_consts?` | read-only | runs | runs |
-| `git_status` | none | read-only | runs | runs |
-| `git_diff` | `path?`, `staged?` | read-only | runs | runs |
-| `git_log` | `path?`, `count?` (1–200, 20) | read-only | runs | runs |
-| `git_show` | `revision`, `path?` | read-only | runs | runs |
-| `git_add` | `paths` (1–100 plain files, no folders or links) | writes the worktree | runs | not offered |
-| `git_commit` | `message` | writes the worktree | runs | not offered |
-| `read_outside_file` | `path` (absolute), `offset?`, `limit?` (≤ 10 000, 2000) | outside | asks | asks |
+| `search_external_file` | `base_directory` (absolute), `term` | outside | asks | asks |
+| `read_external_file` | `filename` (absolute), `start_line?`, `length?` | outside | asks | asks |
 | `run_project_tool` | `name` | outside, network | asks (network on only) | asks (network on only) |
 | `list_skills` (with skills) | none | read-only | runs | runs |
 | `read_skill` (with skills) | `name`, `file?` (a skill file path; none or `SKILL.md` for the skill's own), `offset?`, `limit?` (≤ 10 000, 2000) | read-only | runs | runs |
 
 - **Schemas** are strict (`additionalProperties: false`, each property typed and bounded); a call is read into its
   type with unknown fields refused, and an invalid call is answered with an error result that says why.
+- **Worktree files** (`orchester_agent::FileTools`, confined to the step's `FileScope` as before: the worktree, the
+  extra writable folders writable by `edit_file` and `create_file`, the code index and skills read-only; `.git`,
+  `.orchester` and links that lead out refused). `read_file` reads numbered lines from disk (the code index holds no
+  file contents) and records a read stamp. `edit_file` replaces lines `start_line..=end_line` with `content` only when
+  the file was read in this invocation, has not changed since (the stamp: length, modified time, hash) and those lines
+  are exactly `expected` now (compared without line endings); otherwise nothing is written and the answer shows what
+  the lines hold now. `end_line = start_line - 1` inserts without replacing. The file's CRLF, byte order mark and a last
+  line without an ending are kept; the write is atomic and stamps the result, so the next edit needs no new read.
+  `create_file` refuses a file that exists and makes missing folders. `search_file` searches for literal text (a term
+  in lower case matches any case) with ripgrep (`--fixed-strings --smart-case --sort path`, `.gitignore` respected,
+  hidden entries skipped; without ripgrep a folder walk), lists each file with up to 30 matching lines, at most
+  `limit_files` files, and says when it was cut; with the code index, a name's definitions come first.
+- **Outside the worktree.** `read_external_file` and `search_external_file` reach the whole disk but a deny list,
+  rather than an allow list of dependency folders: where toolchains keep sources differs by toolchain and machine, and
+  Orchester names no toolchain's folders. Refused are the shared credential rule's locations
+  (`CommandScope::holds_credentials`; published sources such as a package registry's `src` are not credentials),
+  anything in a `.git` folder, and Orchester's own state wherever it lies: the whole `<temp>/orchester-mcp` tree
+  (every project's private files with MCP secrets and tokens), any `.orchester` folder but the run's worktree, any
+  `orchester.db*` or `orchester-server.db*` file and the folder of Orchester's programs; device, stream, verbatim,
+  drive-relative and network paths; a folder or pipe; a file with a NUL anywhere up to the last line read. A read is
+  numbered lines, each cut to 16 KiB, at most 56 KiB, with where to read on (`start_line`). A search runs ripgrep in
+  the checked folder and keeps only the files a read would reach (each checked again; the ones left out are counted,
+  never named), at most 20 files. A path the tools never reach is refused before anybody is asked. Known limits: a
+  path is checked, then opened, so a link swapped in between by another program could lead elsewhere (what is opened
+  must still be a file); a mapped network drive (`Z:\`) or a mounted share (`/Volumes/…`) reads as a local folder,
+  also in a step without network.
 - **Approval, held by the runner.** A call of a tool that asks runs only once approved, whatever the CLI does: an
   approval through Claude Code's permission prompt leaves a grant for one call of that tool with exactly the
-  arguments the person saw, and a call that arrives
-  without one is asked about by the runner itself before it runs (`orchester-call-<n>` requests). Codex is told to
-  run every tool (`approval_mode = "approve"`, an override of its process), so the runner asks for each call that
-  asks; whether Codex 0.159.2 would send its own request for a `prompt` tool while `mcp_elicitations` is off is not
-  relied on. A call that asks reaches a person whether or not the step asks before MCP actions; rules of the run and
-  auto-approval answer it as they answer an MCP call, but auto-approval never runs a project's program. *Approve
-  similar* covers the tool for the run, whatever its arguments, as for every MCP tool and as its tile says (one
-  approved read covers later reads); no offered tool has fixed arguments a rule could name instead; *Always allow*
-  is unavailable (*Orchester's own tools have no list of tools that run without asking yet*).
-- **Execution.** The runner runs every call off its async workers: a program and its arguments, never a shell line,
-  in the run's worktree with the environment the agent's own programs get (no secret). Each value is one argument of
-  its own after the options (`--literal-pathspecs`, `--` before paths, `--end-of-options` before a revision, which
-  may not start with `-` or hold whitespace or `:`; paths are relative, without `..` or `:`); a commit message goes
-  to git's standard input (`-F -`). Git is pinned to the worktree and its own git folder (`--git-dir`, read from the
-  repository, `--work-tree`), so a rewritten `.git` file cannot lead it to a configuration of the agent's making;
-  the repository's own configuration applies, filters included (as for the runner's checkpoint commits). Git never
-  enters a nested repository, whose own configuration (a filter program) it would honour: recursion is off
-  (`submodule.recurse=false`, `diff.ignoreSubmodules=all`, `status.submoduleSummary=false`,
-  `--ignore-submodules=all`), so a gitlink is only a commit id, and `git_add` stages named plain files only, none in a
-  repository of its own and none reached through a link or junction (any reparse point on Windows): adding a folder stages each nested repository in it as a gitlink, and a later add of a folder
-  runs a staged one's filters whatever the settings say (git 2.46; checked with fresh, staged and submodule nested
-  repositories). Git also
-  gets the native agent's hardening, no diff or textconv program, an absolute empty hooks folder the runner owns
-  (`<temp>/orchester-mcp/<project>/no-hooks`) with `--no-verify`, no signing and no signature checks. Output is read
-  as it comes and kept within the cap: the first 128 KiB for git (60 seconds), the end of a project tool's output
-  within its own limits; the answer starts with the exit code and has the invocation's MCP secrets removed.
-- **`read_outside_file`** reads the whole disk but a deny list, rather than an allow list of dependency folders:
-  where toolchains keep sources differs by toolchain and machine, and Orchester names no toolchain's folders. Refused
-  are the shared credential rule's locations (`CommandScope::holds_credentials`; published sources such as a package
-  registry's `src` are not credentials), anything in a `.git` folder, and Orchester's own state wherever it lies: the
-  whole `<temp>/orchester-mcp` tree (every project's private files with MCP secrets and tokens), any `.orchester`
-  folder but the run's worktree, any `orchester.db*` or `orchester-server.db*` file and the folder of Orchester's
-  programs; device, stream,
-  verbatim, drive-relative and network paths; a folder or pipe; a file with a NUL anywhere up to the last line
-  read. The file is read as it comes: numbered lines, each
-  cut to 16 KiB, at most 256 KiB, with where to read on. Known limits: the path is checked, then opened, so a link
-  swapped in between by another program could lead elsewhere (what is opened must still be a file); a mapped network
-  drive (`Z:\`) or a mounted share (`/Volumes/…`) reads as a local folder, also in a step without network.
+  arguments the person saw, and a call that arrives without one is asked about by the runner itself before it runs
+  (`orchester-call-<n>` requests). Codex is told to run every tool (`approval_mode = "approve"`, an override of its
+  process), so the runner asks for each call that asks. A call that asks reaches a person whether or not the step
+  asks before MCP actions; rules of the run and auto-approval answer it as they answer an MCP call, but auto-approval
+  never runs a project's program. A request for a call outside the worktree names, as its target, the folder the call
+  reads in (a read's file's folder, a search's folder, resolved), and *Approve similar* keeps its rule to that folder:
+  it answers every later read and search there and below it (`RuleScope::SimilarMcpTool` with a `folder`; rules made
+  before keep covering their tool everywhere). *Always allow* is unavailable (*Orchester's own tools have no list of
+  tools that run without asking yet*).
+- **Execution.** The runner runs every call off its async workers, in the run's worktree with the environment the
+  agent's own programs get (no secret); a project tool is a program and its arguments, never a shell line, its output
+  read as it comes and kept within its own limits; the answer has the invocation's MCP secrets removed and stays within
+  60 KiB, with a note on how to narrow the call (`start_line` and `length`, `limit_files`, a longer term or a path).
+  To list the files changed since the code index, git is pinned to the worktree and its own git folder (`--git-dir`,
+  read from the repository, `--work-tree`), with the native agent's hardening, an absolute empty hooks folder the
+  runner owns and submodules off.
 - **`run_project_tool`** is built in core but offered to no agent: the Tools library has no *offered to agents*
   setting and no typed parameters, and its access rules were made for pipeline steps. When offered, it is not offered
   without network (the program runs outside every sandbox) and always asks.
 - **Claude Code** gets the tools from the permission prompt's relay (`--claude-permission-prompt`), which lists them
   after `approve`; every tool that runs gets an allow rule (`mcp__Orchester__<tool>`), so the others reach the
-  prompt. Claude Code 2.1.286 removes only the prompt tool from the model's tools (`permissionPromptToolName` is
-  filtered by exact name). **Codex** gets the same relay (`orchester-runner --orchester-tools`, no `approve`) as the
-  server `Orchester` of its configuration, the runner's address in `env`, the token through `env_vars` (kept out of
-  the agent's shell commands) and a `tool_timeout_sec` long enough for a person's decision. A user's own server named
-  `Orchester` refuses the step. The relay handles one request at a time, so a call waiting for a person holds the
-  invocation's other calls of the relay. Codex 0.159.2 starts the server once for the thread and once more for each
-  `mcpServerStatus/list`, at about the same time (checked 2026-10-08), so the runner serves the two Codex relays that
-  show the token, each on its own connection, and closes the port after them: a later connection, even with the
-  token, is refused. Once Codex's inventory was checked, the port waits at most 10 seconds for a relay still to come
-  (Codex may answer the list before the thread's relay came); a handshake under way when it closes still counts,
-  and when fewer than two came the step's activity says that the agent may have worked without Orchester's tools.
-  Claude Code's permission prompt relay is served alone. Each connection shows the token on its own, at most eight at
-  once (more wait in the port's backlog), so a silent one holds no relay back; a connection without the token never
-  closes the port.
+  prompt. Its own `Read`, `Edit`, `Write`, `Grep` and `Glob` are added to `--disallowedTools` whenever it gets the
+  relay (the user's decision of 2026-10-09: the prompt names Orchester's tools and the CLI's own are taken away; its
+  shell stays for builds, tests and git). Claude Code 2.1.286 removes only the prompt tool from the model's tools
+  (`permissionPromptToolName` is filtered by exact name). **Codex** gets the same relay (`orchester-runner
+  --orchester-tools`, no `approve`) as the server `Orchester` of its configuration, the runner's address in `env`, the
+  token through `env_vars` (kept out of the agent's shell commands) and a `tool_timeout_sec` long enough for a person's
+  decision. Its shell cannot be taken away, so it is steered by the prompt alone; the live run measures how often it
+  still reads or edits through the shell. A user's own server named `Orchester` refuses the step. The relay handles
+  one request at a time, so a call waiting for a person holds the invocation's other calls of the relay. Codex 0.159.2
+  starts the server once for the thread and once more for each `mcpServerStatus/list`, at about the same time (checked
+  2026-10-08), so the runner serves the two Codex relays that show the token, each on its own connection, and closes
+  the port after them: a later connection, even with the token, is refused. Once Codex's inventory was checked, the
+  port waits at most 10 seconds for a relay still to come (Codex may answer the list before the thread's relay came);
+  a handshake under way when it closes still counts, and when fewer than two came the step's activity says that the
+  agent may have worked without Orchester's tools. Claude Code's permission prompt relay is served alone. Each
+  connection shows the token on its own, at most eight at once (more wait in the port's backlog), so a silent one
+  holds no relay back; a connection without the token never closes the port.
 - **`list_skills` and `read_skill`** (added 2026-10-08, branch `claude/skill-tools`): Codex agents could not read
   their skills. The prompt gave each skill's `SKILL.md` in the folder placed for the step execution,
-  `<repo>/.orchester/skills/<execution>/<slug>/`, which `read_outside_file` refuses as Orchester's state (*… is
-  protected: Orchester's tools never read there*), so each run stopped to ask for a shell read. `read_file` did reach
-  that folder by its absolute path (the file tools read the skills folder, read-only) and the repository's skills as
-  worktree files, but its description says *relative to the worktree root*. Both tools are offered, and run without
-  asking, in a step that has skills; the runner serves exactly what it placed for this step execution (the run's
-  pinned skills that reach the agent and the internal `orchester-codebase-index`), and, under the project's
+  `<repo>/.orchester/skills/<execution>/<slug>/`, which the reads outside the worktree refuse as Orchester's state, so
+  each run stopped to ask for a shell read. `read_file` does reach that folder by its absolute path (the file tools
+  read the skills folder, read-only) and the repository's skills as worktree files. Both tools are offered, and run
+  without asking, in a step that has skills; the runner serves exactly what it placed for this step execution (the
+  run's pinned skills that reach the agent and the internal `orchester-codebase-index`), and, under the project's
   *Repository agent files*, the repository's skills the agent's CLI itself loads (`AgentFilesMechanism`): Codex's of
   `<worktree>/.agents/skills` and `.codex/skills` while it is on, none while it is off; Claude Code none in either
   state (`--setting-sources ""`), so the tools never widen what the setting lets a CLI load. The repository's skills
@@ -247,20 +257,25 @@ invocation; a native agent can later declare the same schemas in its own request
   what is left out is listed by where it lies in the worktree, never by a path outside it. `read_skill` reads only the
   skill's own regular files, by the same rule the list uses: Orchester's skill its `SKILL.md` and the files its
   version lists, a repository skill its folder's files but those of a nested skill, a `.git` entry, the worktree's
-  `.orchester` or a link that leads out of the folder or the worktree. Its
-  `file` is a skill file path (no `..`, drive, absolute path or `\`); the answer is numbered lines within
-  `read_outside_file`'s caps, redacted like every answer. `.orchester` stays refused for `read_outside_file`. Claude
-  Code gets an allow rule for both when it gets a skills folder, which then holds every skill it is offered. The
-  native agent does not get Orchester's tools yet (P1d) and keeps
-  reading its skills with its own `read_file` by the paths its prompt lists.
-- **Prompt.** After the *Files and commands* part, a new session that gets the tools is told in a short paragraph of
-  its own (*# Orchester tools*) to use them for git and for files outside the worktree, and, with skills, to read
-  them with `read_skill` by name, never by path. The *# Skills* part then names each skill and its description
-  without a path and says to read it with `read_skill`; an agent without the tools (Claude Code without its
-  permission prompt, the native agent) still gets each `SKILL.md`'s path.
+  `.orchester` or a link that leads out of the folder or the worktree. Its `file` is a skill file path (no `..`,
+  drive, absolute path or `\`); the answer is numbered lines within `read_external_file`'s caps, redacted like every
+  answer. Claude Code gets an allow rule for both when it gets a skills folder, which then holds every skill it is
+  offered. The native agent does not get Orchester's tools yet (P1d) and keeps reading its skills with its own
+  `read_file` by the paths its prompt lists.
+- **Prompt.** The *Files and commands* part names the worktree file tools as each CLI sees them (Claude Code:
+  `mcp__Orchester__read_file`, …, and that its own Read, Edit, Write, Grep and Glob are not available; Codex: the tools
+  of the `Orchester` server, not the shell's `cat`, `rg`, `sed -i` or heredocs), and how `edit_file` is called (the
+  lines to replace and, as `expected`, what they hold now). After it, a new session that gets the tools is told in a
+  paragraph of its own (*# Orchester tools*) to use the shell for builds, tests and git, not to read or search files;
+  to read and search outside the worktree with `read_external_file` and `search_external_file`; the other tools of the
+  server it has; and, with skills, to read them with `read_skill` by name, never by path. The *# Skills* part then
+  names each skill and its description without a path and says to read it with `read_skill`; an agent without the
+  tools (Claude Code without its permission prompt, the native agent) still gets each `SKILL.md`'s path.
 - **Checked** with the fake CLIs only (`cargo test -p orchester-runner --features test-agent --test orchester_tools
-  orchester_tools`). Not checked with the real CLIs: how large answers fare against Claude Code's MCP output limit
-  (`MAX_MCP_OUTPUT_TOKENS`).
+  orchester_tools`, `--test orchester_file_tools orchester_file_tools`, `--test orchester_skill_tools
+  orchester_skill_tools`). Not checked with the real CLIs: whether Claude Code and Codex call each tool as the prompt
+  asks, how often Codex still reads or edits through its shell, and how large answers fare against Claude Code's MCP
+  output limit (`MAX_MCP_OUTPUT_TOKENS`).
 
 ## Answers and waiting requests
 

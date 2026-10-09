@@ -25,7 +25,7 @@
 //! after the result ([`ClaudeStream::take_replayed`], [`ClaudeStream::results`]).
 //!
 //! An edit with Claude Code's own tools ([`EDIT_TOOLS`]) is reported as the change it made once its result says
-//! it happened. A call of Orchester's `edit_file` or `write_file` (`mcp__Orchester__edit_file`, served over the
+//! it happened. A call of Orchester's `edit_file` or `create_file` (`mcp__Orchester__edit_file`, served over the
 //! runner's relay) is a command like any MCP call, and its change follows its successful end, so that the first
 //! edit is seen whichever tools the agent edits with. What a call of Orchester's file tools asked follows its start
 //! ([`AgentEvent::NativeCall`]): its row reads as the native agent's call of the tool, an edit's with its diff.
@@ -419,7 +419,7 @@ fn describe(tool: &str, input: &Value) -> String {
 }
 
 fn file_path(input: &Value) -> Option<String> {
-  ["file_path", "notebook_path", "path"]
+  ["file_path", "notebook_path", "path", "filename", "base_directory"]
     .into_iter()
     .find_map(|name| text(input, name))
 }

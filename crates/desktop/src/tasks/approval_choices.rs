@@ -114,7 +114,7 @@ impl ApprovalChoices {
         words: command.words().into(),
         category: command.category(),
       }),
-      RuleScope::SimilarMcpTool { server, tool } => Ok(SimilarShown::Tool {
+      RuleScope::SimilarMcpTool { server, tool, .. } => Ok(SimilarShown::Tool {
         server: server.into(),
         tool: tool.into(),
       }),
@@ -137,7 +137,7 @@ impl ApprovalChoices {
             pipelines: pipelines_of(db, state.id),
           }))
         }),
-      ApprovalSubject::McpTool { server, tool } => tool_choice(db, server, tool),
+      ApprovalSubject::McpTool { server, tool, .. } => tool_choice(db, server, tool),
     };
     Self {
       similar,

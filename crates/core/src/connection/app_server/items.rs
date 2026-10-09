@@ -9,7 +9,7 @@ use crate::connection::stream::{AgentEvent, CommandStatus, FileChange, FileChang
 /// The end of the MCP call `item`, started as `started`, as its activity: what a successful call of one of
 /// Orchester's file tools asked (its row reads as the native agent's call of the tool, an edit's with its diff), what
 /// it called and whether Codex asked first, then the change a successful call of Orchester's `edit_file` or
-/// `write_file` made. A call
+/// `create_file` made. A call
 /// fails when Codex says so, or when its answer is marked as an error (`result.isError`) where Codex passes that on.
 pub(super) fn mcp_tool_finished(item: &Value, started: Option<ToolContext>) -> Vec<Update> {
   let (Some(id), Some(server), Some(tool)) = (

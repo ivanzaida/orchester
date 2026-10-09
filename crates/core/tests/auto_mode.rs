@@ -252,6 +252,7 @@ fn auto_mode_hard_rules_win_over_any_reviewer() {
   let project_program = ApprovalSubject::McpTool {
     server: SERVER.to_owned(),
     tool: "run_project_tool".to_owned(),
+    folder: None,
   };
   assert_eq!(
     review_hold(&project_program, &rules(Some(&writing))),
@@ -260,6 +261,7 @@ fn auto_mode_hard_rules_win_over_any_reviewer() {
   let other_tool = ApprovalSubject::McpTool {
     server: "pencil".to_owned(),
     tool: "batch_design".to_owned(),
+    folder: None,
   };
   assert_eq!(review_hold(&other_tool, &rules(Some(&writing))), None);
 }

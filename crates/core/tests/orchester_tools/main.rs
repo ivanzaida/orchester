@@ -1,10 +1,10 @@
-//! Orchester's typed tools (`orchester_core::orchester_tools`): strict input, the program each git call
-//! runs with every value one argument of its own, the policy table, reads outside the worktree that never
-//! reach a credential location or Orchester's own state, answers cut to a size, and how each CLI is told
-//! about them.
+//! Orchester's typed tools (`orchester_core::orchester_tools`): strict input, the line edit that refuses what the
+//! agent did not read, the policy table, reads and searches outside the worktree that never reach a credential location
+//! or Orchester's own state, answers cut to a size, and how each CLI is told about them.
 
 mod index;
 mod input;
+mod lines;
 mod outside;
 mod policy;
 mod programs;

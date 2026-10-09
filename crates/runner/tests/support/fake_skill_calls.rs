@@ -43,12 +43,12 @@ pub fn calls(worktree: &Path) -> Vec<(&'static str, &'static str, Value)> {
     (
       "toolu_read_placed",
       "read_file",
-      json!({"path": placed, "offset": null, "limit": null}),
+      json!({"filename": placed, "start_line": null, "length": null}),
     ),
     (
       "toolu_read_repository",
       "read_file",
-      json!({"path": ".agents/skills/deploy/SKILL.md", "offset": null, "limit": null}),
+      json!({"filename": ".agents/skills/deploy/SKILL.md"}),
     ),
   ]
 }

@@ -1,10 +1,11 @@
 //! What a request asks to do, as the answers judge it: a command, classified, or a call of one tool of
-//! an MCP server.
+//! an MCP server; for a call of one of Orchester's tools that reads outside the worktree, also the folder it reads in.
 
 use std::path::Path;
 
 use crate::{
   native::command::CommandSyntax,
+  orchester_tools::{OrchesterTool, SERVER},
   permission::category::{ClassifiedCommand, CommandScope},
   run::{CommandShell, NativeCommandAsk, PendingToolApproval},
 };
@@ -12,7 +13,13 @@ use crate::{
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ApprovalSubject {
   Command(ClassifiedCommand),
-  McpTool { server: String, tool: String },
+  McpTool {
+    server: String,
+    tool: String,
+    /// The folder a call of Orchester's tools outside the worktree reads in, as the request's target names it
+    /// (`crate::orchester_tools::OrchesterTool::reads_outside`); `None` for every other call.
+    folder: Option<String>,
+  },
 }
 
 impl ApprovalSubject {
@@ -27,9 +34,12 @@ impl ApprovalSubject {
         None => ClassifiedCommand::classify_in(&approval.action, folder, scope),
       })
     } else {
+      let reads_outside = approval.server == SERVER
+        && OrchesterTool::from_name(&approval.action).is_some_and(OrchesterTool::reads_outside);
       Self::McpTool {
         server: approval.server.clone(),
         tool: approval.action.clone(),
+        folder: approval.target.clone().filter(|_| reads_outside),
       }
     }
   }

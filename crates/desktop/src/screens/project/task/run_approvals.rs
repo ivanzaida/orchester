@@ -158,7 +158,7 @@ fn section(ctx: &Ctx, title: &str, rules: Vec<Element>) -> Option<Element> {
 /// What a rule answers: an MCP tool by its server and name, a command by its words and category.
 fn scope_text(ctx: &Ctx, scope: &RuleScope) -> Arc<str> {
   match scope {
-    RuleScope::SimilarMcpTool { server, tool } => ctx.t_args(
+    RuleScope::SimilarMcpTool { server, tool, .. } => ctx.t_args(
       "runs.summary.approvals.toolRule",
       [("server", server.as_str()), ("tool", tool.as_str())],
     ),

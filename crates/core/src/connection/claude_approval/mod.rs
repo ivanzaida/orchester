@@ -296,6 +296,14 @@ impl ClaudeApprovalRequest {
     }
   }
 
+  /// This request, showing `target` as what the call works on: the folder a call of Orchester's tools outside the
+  /// worktree reads in, which Approve similar keeps the rule to.
+  #[must_use]
+  pub fn with_target(mut self, target: String) -> Self {
+    self.target = Some(target);
+    self
+  }
+
   /// The tool use the CLI asks about, unique within its session.
   pub fn call(&self) -> &str {
     &self.call
@@ -315,7 +323,8 @@ impl ClaudeApprovalRequest {
     &self.action
   }
 
-  /// The file an MCP tool names as `filePath`; the runner shows the worktree for a command.
+  /// The file an MCP tool names as `filePath`, or the folder a call of Orchester's tools outside the worktree reads
+  /// in; the runner shows the worktree for a command.
   pub fn target(&self) -> Option<&str> {
     self.target.as_deref()
   }

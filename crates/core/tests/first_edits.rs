@@ -1,6 +1,6 @@
 //! First edits made through Orchester's own file tools (ORC-69): Claude Code calls them as
-//! `mcp__Orchester__edit_file` and `mcp__Orchester__write_file`, Codex as the tools `edit_file` and
-//! `write_file` of the MCP server `Orchester`. A successful call reports the file it changed after its
+//! `mcp__Orchester__edit_file` and `mcp__Orchester__create_file`, Codex as the tools `edit_file` and
+//! `create_file` of the MCP server `Orchester`. A successful call reports the file it changed after its
 //! own end, so first-edit tracking sees it; a failed one, or a tool of another server, reports none.
 //! A change outside the repository is no first edit. The Claude Code lines follow the shapes in
 //! `fixtures/claude/synthetic-tool-use.jsonl`; the Codex lines those of `tests/app_server.rs`.
@@ -45,11 +45,20 @@ fn claude(lines: &[String]) -> Vec<AgentEvent> {
 }
 
 fn changed(item: &str, path: &str) -> AgentEvent {
+  changed_as(item, path, FileChangeKind::Modified)
+}
+
+/// What `create_file` reports: a file added at the path it names.
+fn created(item: &str, path: &str) -> AgentEvent {
+  changed_as(item, path, FileChangeKind::Added)
+}
+
+fn changed_as(item: &str, path: &str, kind: FileChangeKind) -> AgentEvent {
   AgentEvent::FileChanged {
     item: item.into(),
     changes: vec![FileChange {
       path: path.into(),
-      kind: FileChangeKind::Modified,
+      kind,
     }],
   }
 }
@@ -65,7 +74,7 @@ fn finished(item: &str, command: &str, output: &str, status: CommandStatus) -> A
 }
 
 fn edit_input(path: &str) -> Value {
-  json!({"path": path, "edits": [{"old": "hi", "new": "hi there", "replace_all": null}]})
+  json!({"filename": path, "start_line": 1, "end_line": 1, "expected": "hi", "content": "hi there"})
 }
 
 #[test]
@@ -81,13 +90,13 @@ fn claude_stream_reports_the_change_of_a_successful_orchester_edit_after_its_end
     tool_use(
       "msg_2",
       "toolu_write",
-      "mcp__Orchester__write_file",
-      &json!({"path": "notes/new.md", "content": "new notes\n"}),
+      "mcp__Orchester__create_file",
+      &json!({"filename": "notes/new.md", "content": "new notes\n"}),
     ),
-    tool_result("toolu_write", "wrote notes/new.md: 10 bytes", false),
+    tool_result("toolu_write", "created notes/new.md: 1 lines", false),
   ]);
   let edit = "mcp__Orchester__edit_file README.md";
-  let write = "mcp__Orchester__write_file notes/new.md";
+  let write = "mcp__Orchester__create_file notes/new.md";
   let calls: Vec<&AgentEvent> = events
     .iter()
     // What a call asked for its row is told in `tests/cli_file_calls.rs`.
@@ -119,10 +128,10 @@ fn claude_stream_reports_the_change_of_a_successful_orchester_edit_after_its_end
       &finished(
         "toolu_write",
         write,
-        "wrote notes/new.md: 10 bytes",
+        "created notes/new.md: 1 lines",
         CommandStatus::Completed
       ),
-      &changed("toolu_write", "notes/new.md"),
+      &created("toolu_write", "notes/new.md"),
     ]
   );
 }
@@ -148,7 +157,7 @@ fn claude_stream_reports_no_change_of_a_failed_orchester_edit_or_another_server_
       "msg_3",
       "toolu_read",
       "mcp__Orchester__read_file",
-      &json!({"path": "README.md", "offset": null, "limit": null}),
+      &json!({"filename": "README.md", "start_line": null, "length": null}),
     ),
     tool_result("toolu_read", "hi", false),
   ]);
@@ -298,8 +307,8 @@ fn codex_stream_reports_the_change_of_a_successful_orchester_edit_after_its_end(
   lines.extend(mcp_call(
     "mcp-2",
     "Orchester",
-    "write_file",
-    &json!({"path": "new.md", "content": "x"}),
+    "create_file",
+    &json!({"filename": "new.md", "content": "x"}),
     &completed,
   ));
   let finished = |item: &str, tool: &str| AgentEvent::McpToolFinished {
@@ -318,8 +327,8 @@ fn codex_stream_reports_the_change_of_a_successful_orchester_edit_after_its_end(
     [
       finished("mcp-1", "edit_file"),
       changed("mcp-1", "README.md"),
-      finished("mcp-2", "write_file"),
-      changed("mcp-2", "new.md"),
+      finished("mcp-2", "create_file"),
+      created("mcp-2", "new.md"),
     ]
   );
 }

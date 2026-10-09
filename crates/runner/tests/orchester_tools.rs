@@ -1,33 +1,34 @@
 //! Orchester's typed tools end to end: the relay each CLI starts (`orchester-runner --claude-permission-prompt`
-//! for Claude Code, `--orchester-tools` for Codex) lists the step's tools and the runner runs a call in the
-//! run's worktree, its output kept within a cap. A tool that asks runs only once approved: through Claude
-//! Code's permission prompt, or asked about by the runner when the call arrives (every Codex call, and a
-//! call a CLI ran unasked), whether or not the step asks before MCP actions. Needs `git`. Run with `cargo test -p
-//! orchester-runner --features test-agent --test orchester_tools orchester_tools`.
+//! for Claude Code, `--orchester-tools` for Codex) lists the step's tools and the runner runs a call. A call outside
+//! the worktree runs only once approved: through Claude Code's permission prompt, or asked about by the runner when
+//! the call arrives (every Codex call, and a call a CLI ran unasked), whether or not the step asks before MCP actions;
+//! the approval names the folder the call reads in, and Approve similar covers later reads and searches there; a path
+//! the tools never reach is refused before anybody is asked. Needs `git`. Run with `cargo test -p orchester-runner
+//! --features test-agent --test orchester_tools orchester_tools`.
 
 mod support;
 
-use std::{path::Path, time::Duration};
+use std::{
+  path::{Path, PathBuf},
+  time::Duration,
+};
 
 use orchester_core::{
   command::Command,
-  connection::{AgentProvider, stream::AgentEvent},
+  connection::AgentProvider,
   id::{IdempotencyKey, RunId},
   orchester_tools::OutputKept,
   permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess},
-  run::{Answerer, ApprovalAnswer, PendingToolApproval, RunStatus},
-  store::ActivityStore,
+  run::{Answerer, ApprovalAnswer, PendingToolApproval, Run, RunStatus},
 };
 use orchester_exec::run_capped;
 use orchester_ipc::Event;
 use orchester_store::ProjectDb;
-use serde_json::json;
 use tokio::sync::mpsc;
 
-use self::support::{PATIENCE, Setup, git, project, reported, scheduler_with, threads, tools::TEST_COMMAND, wait_for};
-
-/// What the fakes read outside the worktree: next to the repository's `.orchester` folder.
-const OUTSIDE: &str = "outside-notes.txt";
+use self::support::{
+  PATIENCE, Setup, TestProject, project, reported, scheduler_with, threads, tools::TEST_COMMAND, wait_for,
+};
 
 fn permissions(repository: RepositoryAccess) -> AgentPermissions {
   AgentPermissions::new(
@@ -51,9 +52,62 @@ async fn pending(root: &Path, events: &mut mpsc::UnboundedReceiver<Event>, run: 
   .expect("an approval arrives")
 }
 
-/// Claude Code calls the git tools by their allow rules, commits through them, gets a git answer cut to its
-/// size, asks a person about a read outside the worktree and gets the file once approved; a path that leaves
-/// the worktree is refused.
+/// The folders the fakes read outside the worktree, `deps-a` and `deps-b` of the repository, with a file each.
+fn outside_folders(project: &TestProject) -> (PathBuf, PathBuf) {
+  let root = project.repo.path();
+  let (first, second) = (root.join("deps-a"), root.join("deps-b"));
+  for (folder, text) in [
+    (&first, "outside line 1\noutside line 2\n"),
+    (&second, "other 1\nother 2\n"),
+  ] {
+    std::fs::create_dir_all(folder).expect("a folder outside");
+    std::fs::write(folder.join("notes.txt"), text).expect("a file outside");
+  }
+  (first, second)
+}
+
+fn same_folder(target: Option<&str>, folder: &Path) -> bool {
+  let canonical = |path: &Path| std::fs::canonicalize(path).ok();
+  target.is_some_and(|target| canonical(Path::new(target)) == canonical(folder))
+}
+
+/// Starts the run, answers the search in `deps-a` with Approve similar and the read in `deps-b` once, and waits for
+/// its end. The read in `deps-a` is answered by the rule, and the read of `.git/config` is refused unasked.
+async fn approve_outside(project: &TestProject) -> (Run, ProjectDb) {
+  let root = project.repo.path();
+  let (first, second) = outside_folders(project);
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let search = pending(root, &mut events, id).await;
+  assert!(!search.command);
+  assert_eq!(
+    (search.server.as_str(), search.action.as_str()),
+    ("Orchester", "search_external_file")
+  );
+  assert!(same_folder(search.target.as_deref(), &first), "{:?}", search.target);
+  scheduler
+    .decide_tool_approval(id, search.id, ApprovalAnswer::Similar, Answerer::Person)
+    .await
+    .expect("approved for the folder");
+  let read = pending(root, &mut events, id).await;
+  assert_eq!(read.action, "read_external_file");
+  assert!(same_folder(read.target.as_deref(), &second), "{:?}", read.target);
+  scheduler
+    .decide_tool_approval(id, read.id, ApprovalAnswer::Once, Answerer::Person)
+    .await
+    .expect("approved");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  let db = ProjectDb::open(root).expect("open");
+  assert!(db.pending_tool_approvals(id).expect("requests").is_empty());
+  (run, db)
+}
+
+/// Claude Code asks through its permission prompt about each call outside the worktree: a person approves the
+/// search for its folder, the read there is then answered by that rule, a read elsewhere asks again, and a read of
+/// `.git` is denied before anybody is asked. Its own file tools are taken away.
 #[tokio::test(flavor = "multi_thread")]
 async fn orchester_tools_serve_claude_code_through_its_permission_prompt() {
   let project = project(&Setup {
@@ -61,53 +115,58 @@ async fn orchester_tools_serve_claude_code_through_its_permission_prompt() {
     permissions: Some(permissions(RepositoryAccess::Write)),
     ..Setup::new("Use Orchester's tools.")
   });
-  let root = project.repo.path();
-  std::fs::write(root.join(OUTSIDE), "outside line 1\noutside line 2\n").expect("a file outside");
-  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
-  let id = scheduler
-    .start_run(IdempotencyKey::generate(), project.task)
-    .await
-    .expect("the run starts");
-  let request = pending(root, &mut events, id).await;
-  assert!(!request.command);
-  assert_eq!(request.server, "Orchester");
-  assert_eq!(request.action, "read_outside_file");
-  let path = root.join(OUTSIDE).to_string_lossy().into_owned();
-  assert_eq!(request.scope, Some(json!({ "path": path }).to_string()));
-  scheduler
-    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
-    .await
-    .expect("approved");
-  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  let (run, db) = approve_outside(&project).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
-  let db = ProjectDb::open(root).expect("open");
+  let id = run.id();
   assert_eq!(
     reported(&db, id, "orchester-tools: "),
     [
-      "approve,read_file,list_files,search,edit_file,write_file,git_status,git_diff,git_log,git_show,git_add,\
-       git_commit,read_outside_file,ask_question"
+      "approve,read_file,list_files,search_file,edit_file,create_file,search_external_file,read_external_file,\
+       ask_question"
     ]
   );
+  let decisions = reported(&db, id, "orchester-permission: ");
+  assert_eq!(decisions.len(), 4, "{decisions:#?}");
   assert_eq!(
-    reported(&db, id, "orchester-permission: "),
+    decisions[..3],
     [
-      "git_status allow-by-rule",
-      "git_add allow-by-rule",
-      "git_commit allow-by-rule",
-      "git_show allow-by-rule",
-      "read_outside_file allow",
-      "git_add allow-by-rule"
+      "search_external_file allow",
+      "read_external_file allow",
+      "read_external_file allow"
     ]
   );
-  assert_claude_calls(&reported(&db, id, "orchester-call: "));
-  let subjects = git(root, &["log", "--format=%s", run.branch().as_str()]);
-  assert!(subjects.contains("Add big.txt; rm -rf / $(whoami)"), "{subjects}");
-  assert_claude_shown(&db, id);
+  assert!(decisions[3].starts_with("read_external_file deny"), "{decisions:#?}");
+  let calls = reported(&db, id, "orchester-call: ");
+  assert_eq!(calls.len(), 3, "{calls:#?}");
+  assert!(
+    calls[0].starts_with("search_external_file ok") && calls[0].contains("notes.txt"),
+    "{calls:#?}"
+  );
+  assert!(calls[0].ends_with("     2: outside line 2"), "{calls:#?}");
+  assert!(
+    calls[1].ends_with(":      1\toutside line 1 |      2\toutside line 2"),
+    "{calls:#?}"
+  );
+  assert!(calls[2].ends_with(":      2\tother 2 |      2\tother 2"), "{calls:#?}");
+  let argv = reported(&db, id, "argv: ").pop().expect("argv");
+  assert!(argv.contains("mcp__Orchester__edit_file"), "{argv}");
+  assert!(!argv.contains("mcp__Orchester__read_external_file"), "{argv}");
+  assert!(argv.contains("--disallowedTools"), "{argv}");
+  for gone in ["git_status", "git_commit", "write_file", "read_outside_file"] {
+    assert!(!argv.contains(&format!("mcp__Orchester__{gone}")), "{argv}");
+  }
+  let told = reported(&db, id, "prompt| ");
+  assert!(
+    told
+      .iter()
+      .any(|line| line.contains("mcp__Orchester__read_external_file")),
+    "the prompt points the agent at the tools"
+  );
 }
 
 /// Codex gets Orchester's server in its configuration, with its token only in its environment, and every
-/// tool approved in the thread's configuration: the runner asks a person about a read outside the worktree
-/// when the call arrives, in a step that does not ask before MCP actions, and runs it once approved.
+/// tool approved in the thread's configuration: the runner asks a person about each call outside the worktree when
+/// it arrives, in a step that does not ask before MCP actions, and runs it once approved or covered by a rule.
 #[tokio::test(flavor = "multi_thread")]
 async fn orchester_tools_serve_codex_and_ask_in_the_runner() {
   let project = project(&Setup {
@@ -118,35 +177,27 @@ async fn orchester_tools_serve_codex_and_ask_in_the_runner() {
     )),
     ..Setup::new("Use Orchester's tools.")
   });
-  let root = project.repo.path();
-  std::fs::write(root.join(OUTSIDE), "outside line 1\n").expect("a file outside");
-  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
-  let id = scheduler
-    .start_run(IdempotencyKey::generate(), project.task)
-    .await
-    .expect("the run starts");
-  let request = pending(root, &mut events, id).await;
-  assert_eq!(
-    (request.server.as_str(), request.action.as_str()),
-    ("Orchester", "read_outside_file")
-  );
-  scheduler
-    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
-    .await
-    .expect("approved");
-  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  let (run, db) = approve_outside(&project).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
-  let db = ProjectDb::open(root).expect("open");
+  let id = run.id();
   assert_eq!(
     reported(&db, id, "orchester-tools: "),
-    ["read_file,list_files,search,git_status,git_diff,git_log,git_show,read_outside_file"]
+    ["read_file,list_files,search_file,search_external_file,read_external_file"]
   );
+  let calls = reported(&db, id, "orchester-call: ");
+  assert_eq!(calls.len(), 4, "{calls:#?}");
+  assert!(calls[0].starts_with("search_external_file ok: "), "{calls:#?}");
+  assert!(calls[0].ends_with("notes.txt"), "{calls:#?}");
   assert_eq!(
-    reported(&db, id, "orchester-call: "),
+    calls[1..3],
     [
-      "git_status ok: exit code: 0",
-      "read_outside_file ok:      1\toutside line 1"
+      "read_external_file ok:      1\toutside line 1",
+      "read_external_file ok:      2\tother 2"
     ]
+  );
+  assert!(
+    calls[3].starts_with("read_external_file error") && calls[3].contains("protected"),
+    "{calls:#?}"
   );
   let args = reported(&db, id, "mcp-arg: ");
   assert!(
@@ -158,12 +209,13 @@ async fn orchester_tools_serve_codex_and_ask_in_the_runner() {
     .iter()
     .find_map(|arg| arg.strip_prefix("mcp_servers.Orchester.tools="))
     .expect("Orchester's tools approved");
-  for tool in ["read_outside_file", "git_status"] {
+  for tool in ["read_external_file", "search_external_file", "read_file"] {
     assert!(
       approved.contains(&format!(r#""{tool}"={{approval_mode="approve"}}"#)),
       "{approved}"
     );
   }
+  assert!(!approved.contains("git_status"), "{approved}");
   let thread = threads(&db, id).pop().expect("a thread");
   assert!(thread["config"].get("mcp_servers").is_none(), "{thread}");
 }
@@ -177,31 +229,35 @@ async fn orchester_tools_that_ask_never_run_unapproved() {
     permissions: Some(permissions(RepositoryAccess::Write)),
     ..Setup::new("Use Orchester's tools without asking.")
   });
+  outside_folders(&project);
   let root = project.repo.path();
-  std::fs::write(root.join(OUTSIDE), "outside line 1\n").expect("a file outside");
   let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
     .await
     .expect("the run starts");
-  let request = pending(root, &mut events, id).await;
-  assert_eq!(request.action, "read_outside_file");
-  assert!(request.id.contains(":orchester-call-"), "{}", request.id);
-  scheduler
-    .decide_tool_approval(id, request.id, ApprovalAnswer::Deny, Answerer::Person)
-    .await
-    .expect("denied");
+  for action in ["search_external_file", "read_external_file", "read_external_file"] {
+    let request = pending(root, &mut events, id).await;
+    assert_eq!(request.action, action);
+    assert!(request.id.contains(":orchester-call-"), "{}", request.id);
+    scheduler
+      .decide_tool_approval(id, request.id, ApprovalAnswer::Deny, Answerer::Person)
+      .await
+      .expect("denied");
+  }
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   let db = ProjectDb::open(root).expect("open");
-  assert!(reported(&db, id, "orchester-permission: ").contains(&"read_outside_file skipped".to_owned()));
+  assert!(reported(&db, id, "orchester-permission: ").contains(&"search_external_file skipped".to_owned()));
   let calls = reported(&db, id, "orchester-call: ");
+  assert_eq!(calls.len(), 4, "{calls:#?}");
   assert!(
-    calls
+    calls[..3]
       .iter()
-      .any(|call| call.starts_with("read_outside_file error") && call.contains("denied")),
+      .all(|call| call.contains(" error ") && call.contains("denied")),
     "{calls:#?}"
   );
+  assert!(calls[3].contains("protected"), "{calls:#?}");
 }
 
 /// A program's output is read as it comes and kept within the cap, at the end the tool keeps, whatever it
@@ -218,64 +274,4 @@ fn orchester_tools_keep_program_output_within_the_cap() {
   assert!(tail.stdout.len() <= limit);
   assert!(tail.stdout.trim_end().ends_with("line 300000"));
   assert_eq!(tail.code, Some(0));
-}
-
-/// What Claude Code's calls were answered: git in the worktree, the commit, a git answer cut to its size, the
-/// file outside, and the refusal of a path that leaves the worktree.
-fn assert_claude_calls(calls: &[String]) {
-  assert_eq!(calls.len(), 6, "{calls:#?}");
-  assert!(
-    calls[0].starts_with("git_status ok") && calls[0].contains("?? big.txt"),
-    "{calls:#?}"
-  );
-  assert!(
-    calls[1].starts_with("git_add ok") && calls[1].contains("exit code: 0"),
-    "{calls:#?}"
-  );
-  assert!(calls[2].starts_with("git_commit ok"), "{calls:#?}");
-  assert!(
-    calls[3].starts_with("git_show ok") && calls[3].ends_with("bytes of output at the end left out]"),
-    "{calls:#?}"
-  );
-  let shown: usize = calls[3]
-    .split_whitespace()
-    .nth(2)
-    .and_then(|size| size.trim_end_matches(':').parse().ok())
-    .expect("a size");
-  assert!(shown < 140 * 1024, "{shown}");
-  assert_eq!(
-    calls[4],
-    "read_outside_file ok 44:      1\toutside line 1 |      2\toutside line 2"
-  );
-  assert!(
-    calls[5].starts_with("git_add error") && calls[5].contains("leaves the worktree"),
-    "{calls:#?}"
-  );
-}
-
-/// How Claude Code was told about the tools, and how its calls show in the activity.
-fn assert_claude_shown(db: &ProjectDb, id: RunId) {
-  let shown_calls: Vec<String> = db
-    .activity(id, 0)
-    .expect("activity")
-    .into_iter()
-    .filter_map(|entry| match entry.event {
-      AgentEvent::CommandFinished { command, .. } if command.starts_with("mcp__Orchester__") => Some(command),
-      _ => None,
-    })
-    .collect();
-  assert!(
-    shown_calls.contains(&"mcp__Orchester__git_status".to_owned()),
-    "{shown_calls:?}"
-  );
-  let argv = reported(db, id, "argv: ").pop().expect("argv");
-  assert!(argv.contains("mcp__Orchester__git_commit"), "{argv}");
-  assert!(!argv.contains("mcp__Orchester__read_outside_file"), "{argv}");
-  let told = reported(db, id, "prompt| ");
-  assert!(
-    told
-      .iter()
-      .any(|line| line.contains("use the tools of the Orchester MCP server")),
-    "the prompt points the agent at the tools"
-  );
 }

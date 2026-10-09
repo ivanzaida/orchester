@@ -41,6 +41,7 @@ fn organization_migration_keeps_tasks_and_runs_of_schema_38() {
   let scope = RuleScope::SimilarMcpTool {
     server: "pencil".to_owned(),
     tool: "batch_get".to_owned(),
+    folder: None,
   };
   db.add_approval_rule(run.id(), &scope, at(13))
     .expect("an approval rule");

@@ -10,7 +10,7 @@ use orchester_core::{
 };
 use serde_json::json;
 
-use crate::{Folders, context, parse, permissions, program_of, project_tool, text};
+use crate::{Folders, context, permissions, program_of, project_tool, text};
 
 /// A program's answer is its exit code and what it printed, cut at the end a tool keeps; a stop at the
 /// time limit and an exit outside the expected codes are errors.
@@ -56,10 +56,6 @@ fn orchester_tools_answers_are_bounded_and_carry_the_exit_code() {
   let stopped = program.finished(Err(CommandError::TimedOut));
   assert!(stopped.is_error());
   assert!(stopped.text().contains("did not finish within 600 seconds"));
-  let git = program_of(&parse("git_log", &json!({})).expect("valid"), &context);
-  let result = git.finished(output(Some(0), format!("START{}", "y".repeat(200_000))));
-  assert!(result.text().starts_with("exit code: 0\nSTART"));
-  assert!(result.text().ends_with("bytes of output at the end left out]"));
 }
 #[test]
 fn orchester_tools_run_project_tools_with_their_fixed_arguments() {
@@ -101,20 +97,24 @@ fn orchester_tools_run_project_tools_with_their_fixed_arguments() {
 fn orchester_tools_answers_count_what_the_runner_left_out() {
   let folders = Folders::new();
   let reads = folders.reads();
-  let context = context(&folders.worktree, &reads, &[]);
-  let git = program_of(
-    &parse("git_show", &json!({"revision": "HEAD"})).expect("valid"),
+  let exe = text(&std::env::current_exe().expect("exe"));
+  let tools = [project_tool("Run tests", &exe)];
+  let context = context(&folders.worktree, &reads, &tools);
+  let program = program_of(
+    &ToolCall::RunProjectTool {
+      name: "Run tests".to_owned(),
+    },
     &context,
   );
-  assert_eq!(git.cap(), (56 * 1024, OutputKept::Head));
-  let result = git.finished(Ok(ProgramOutput {
+  assert_eq!(program.cap(), (256 * 1024, OutputKept::Tail));
+  let result = program.finished(Ok(ProgramOutput {
     code: Some(0),
-    stdout: "commit 1".to_owned(),
+    stdout: "ok".to_owned(),
     stderr: String::new(),
     left_out: 5_000_000,
   }));
   assert_eq!(
     result.text(),
-    "exit code: 0\ncommit 1\n[5000000 bytes of output at the end left out]"
+    "exit code: 0\nok\n[5000000 bytes of output at the start left out]"
   );
 }

@@ -3,7 +3,7 @@
 //!
 //! - Orchester's skills are the ones the runner placed for this step execution: the run's pinned versions that reach
 //!   the agent, and Orchester's internal ones, in `<repo>/.orchester/skills/<execution>/<slug>/`. That folder is
-//!   Orchester's state, which `read_outside_file` never reads, so these tools are how an agent reads them. A skill
+//!   Orchester's state, which `read_external_file` never reads, so these tools are how an agent reads them. A skill
 //!   reads its own `SKILL.md` and the reference files its version lists, nothing else.
 //! - The repository's own skills are the ones the agent's CLI itself loads while the project lets it load the
 //!   repository's agent files (`crate::agent_files::RepositoryAgentFiles`): the runner names their folders, and they
@@ -12,7 +12,7 @@
 //!   the folder or the worktree to.
 //! - Each name is offered once: Orchester's skills first, then the repository's in path order. A skill not offered is
 //!   listed as left out, by where it lies in the worktree, never by a path outside it.
-//! - A read answers a regular text file's numbered lines within the limits of `read_outside_file`
+//! - A read answers a regular text file's numbered lines within the limits of `read_external_file`
 //!   ([`super::MAX_READ_BYTES`]). Listing and reading apply the same rule of what belongs to a skill ([`belongs`]).
 //! - The list keeps within bounds, cuts long descriptions and file lists short, and says what it left out ([`list`]).
 
@@ -207,7 +207,7 @@ impl StepSkills {
     if !belongs(&resolved, skill) || !is_regular_file(&resolved) {
       return Err(not_in_skill());
     }
-    Ok(read_lines(resolved, offset, limit)?)
+    Ok(read_lines(resolved, (offset, limit), "offset")?)
   }
 }
 

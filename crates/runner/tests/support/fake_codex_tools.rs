@@ -3,10 +3,11 @@
 //! environment, and lists its tools ([`start`]) once for the thread and once more for each
 //! `mcpServerStatus/list`, which then closes it; a list that has no answer within [`LIST_WAIT`] is Codex's
 //! *timed out awaiting tools/list*. With "Use Orchester's tools" the thread's server lists the tools
-//! (`orchester-tools: <names>`), calls `git_status`, then reads `outside-notes.txt` next to the repository's
-//! `.orchester` folder with `read_outside_file` (`orchester-call: <tool> <ok|error>: <first line>`). Codex sends
-//! no approval request for a tool whose approval mode is `approve`, so neither does the fake: the runner asks
-//! about the read before it answers. With "Use the skill tools" it makes the calls of [`fake_skill_calls`].
+//! (`orchester-tools: <names>`), then makes the calls outside the worktree of [`fake_tool_calls::external`]
+//! (`orchester-call: <tool> <ok|error>: <first line>`). Codex sends no approval request for a tool whose approval
+//! mode is `approve`, so neither does the fake: the runner asks about a call that needs it before it answers. With
+//! "Use the skill tools" it makes the calls of [`fake_skill_calls`], with "Use the file tools" those of a read-only
+//! step ([`fake_tool_calls::files`]).
 
 use std::{path::Path, process::Command, sync::mpsc, thread, time::Duration};
 
@@ -16,6 +17,8 @@ use super::fake_permission_prompt::Prompt;
 
 #[path = "fake_skill_calls.rs"]
 mod fake_skill_calls;
+#[path = "fake_tool_calls.rs"]
+mod fake_tool_calls;
 
 const KEY: &str = "mcp_servers.Orchester.";
 /// How long the fake waits for the tools of Orchester's server; Codex waits 30 seconds. A relay the runner
@@ -25,54 +28,29 @@ const LIST_WAIT: Duration = Duration::from_secs(6);
 /// The calls of "Use Orchester's tools", "Use the file tools" (in a read-only step: no edit) and "Use the
 /// index tools" (after `src/lib.rs` changed in the worktree, with a file the index does not know).
 fn calls(prompt: &str, worktree: &Path) -> Vec<(&'static str, Value)> {
+  let named =
+    |calls: Vec<(&'static str, &'static str, Value)>| calls.into_iter().map(|(_, tool, input)| (tool, input)).collect();
   if prompt.contains("Use the skill tools") {
-    return fake_skill_calls::calls(worktree)
-      .into_iter()
-      .map(|(_, tool, input)| (tool, input))
-      .collect();
+    return named(fake_skill_calls::calls(worktree));
   }
   if prompt.contains("Use the index tools") {
-    let changed = "// moved down
-// moved down
-pub fn parse_config() {}
-";
+    let changed = "// moved down\n// moved down\npub fn parse_config() {}\n";
     if std::fs::write(worktree.join("src").join("lib.rs"), changed).is_err()
-      || std::fs::write(
-        worktree.join("src").join("fresh.rs"),
-        "pub fn fresh() {}
-",
-      )
-      .is_err()
+      || std::fs::write(worktree.join("src").join("fresh.rs"), "pub fn fresh() {}\n").is_err()
     {
       eprintln!("cannot change the sources");
     }
-    let search =
-      json!({"pattern": "parse_config", "path": null, "glob": null, "case_insensitive": null, "context": null});
     return vec![
       ("find_symbol", json!({"name": "parse_config"})),
       ("find_symbol", json!({"name": "config", "kind": "struct"})),
-      ("search", search),
+      ("search_file", json!({"term": "parse_config"})),
       ("list_files", json!({"pattern": "*.rs", "path": null})),
     ];
   }
   if prompt.contains("Use the file tools") {
-    return vec![
-      ("read_file", json!({"path": "README.md", "offset": null, "limit": null})),
-      (
-        "edit_file",
-        json!({"path": "README.md", "edits": [{"old": "hi", "new": "ho", "replace_all": null}]}),
-      ),
-      ("write_file", json!({"path": "new.md", "content": "x"})),
-    ];
+    return named(fake_tool_calls::files(true));
   }
-  let outside = worktree
-    .ancestors()
-    .nth(3)
-    .map(|repository| repository.join("outside-notes.txt").to_string_lossy().into_owned());
-  vec![
-    ("git_status", json!({})),
-    ("read_outside_file", json!({ "path": outside })),
-  ]
+  named(fake_tool_calls::external(worktree))
 }
 
 /// Orchester's server started by Codex.

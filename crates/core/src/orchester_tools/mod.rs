@@ -1,28 +1,29 @@
-//! Orchester's own typed tools for agents (`docs/interactive-tool-approvals.md`, "Orchester's tools"): git in
-//! the worktree, a read of a file outside it, and the Tools library's command tools. An agent CLI cannot tell
-//! what a shell line does, so every such line outside its allowed commands asks a person; a typed tool says
-//! exactly what it does, so Orchester decides here whether a call runs, asks or is not offered at all
-//! ([`decide`]).
+//! Orchester's own typed tools for agents (`docs/interactive-tool-approvals.md`, "Orchester's tools"): the worktree's
+//! files, files outside it, the step's skills and the Tools library's command tools. An agent CLI cannot tell what a
+//! shell line does, so every such line outside its allowed commands asks a person; a typed tool says exactly what it
+//! does, so Orchester decides here whether a call runs, asks or is not offered at all ([`decide`]).
 //!
 //! One set serves every agent: Claude Code and Codex get it as the tools of the MCP server [`SERVER`]
-//! that the runner already serves for each invocation (`crate::connection::claude_approval::relay`),
-//! and a native agent can declare the same schemas in its own request and run the same calls.
+//! that the runner already serves for each invocation (`crate::connection::claude_approval::relay`). No tool takes a
+//! project or a run: the relay belongs to one invocation, and every worktree path is relative to its worktree.
 //!
 //! - Each tool has a name, a description, a strict input schema ([`catalog`]) and an access class ([`AccessClass`]); a
 //!   call's input is read strictly into its type ([`ToolCall::parse`]).
-//! - What a call runs is a program with its arguments as separate values ([`ToolWork`]), never a shell line: an
-//!   argument starting with `-` or holding `;`, `$(…)` or quotes stays one value of the program. It runs in the
-//!   worktree with the environment the step's agent gets, which holds no secret value, within a time limit; its output
-//!   is cut to a size ([`ToolResult`]) and its exit code returned.
-//! - A read outside the worktree never reaches a credential location, a `.git` folder or Orchester's own files, and is
-//!   cut to a size ([`OutsideReads`]).
+//! - The worktree's files are read, searched, edited line by line and created ([`FileCall`]): an edit replaces lines
+//!   only when they are what the agent read ([`replace_lines`]).
+//! - What a project tool runs is a program with its arguments as separate values ([`ToolWork`]), never a shell line, in
+//!   the worktree with the environment the step's agent gets, within a time limit; its output is cut to a size
+//!   ([`ToolResult`]) and its exit code returned.
+//! - A read or search outside the worktree never reaches a credential location, a `.git` folder or Orchester's own
+//!   files, and is cut to a size ([`OutsideReads`]).
 //! - The step's skills are listed and read by name, each within its own files ([`StepSkills`]).
 
 mod catalog;
-mod git;
+mod changes;
+mod files;
 mod index;
 mod input;
-mod link;
+mod lines;
 mod output;
 mod outside;
 mod policy;
@@ -33,40 +34,33 @@ use serde_json::Value;
 use thiserror::Error;
 
 pub use self::{
-  git::{GIT_TIMEOUT, changed_files},
+  changes::changed_files,
+  files::{DEFAULT_LIMIT_FILES, FileCall, LineEdit, MAX_LIMIT_FILES, NewFile, ReadLines, SearchTerm},
   index::{CodeIndex, FindSymbol, MAX_HITS, SymbolHit, plain_relative, shown_hits},
-  input::{CommitMessage, GitCall, RepoPath, Revision, ToolCall},
+  input::{Revision, ToolCall},
+  lines::{LineEditError, range_now, replace_lines},
   output::{MAX_ANSWER_BYTES, OutputKept, ProgramOutput, ToolResult},
   outside::{MAX_LINE_BYTES, MAX_READ_BYTES, OutsideReadError, OutsideReads},
   policy::{StepTools, ToolPolicy, auto_approvable, decide},
   skills::{SkillCall, SkillOfferError, SkillReadError, SkillSource, StepSkills},
   work::{ProjectTool, ToolContext, ToolProgram, ToolWork},
 };
-use crate::{
-  connection::stream::{CallInput, FileChange, FileChangeKind, NativeCall},
-  native::tools::ToolName as NativeTool,
-};
+use crate::connection::stream::{FileChange, FileChangeKind, NativeCall};
 
 /// The MCP server that serves the tools, the one that serves Claude Code's permission prompt.
 pub const SERVER: &str = crate::connection::claude_approval::SERVER;
 
-/// The tools Orchester offers agents. The file tools are the native agent's (`crate::native::tools`), with
-/// its schemas and inputs; the runner runs them with the native agent's executors.
+/// The tools Orchester offers agents.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum OrchesterTool {
   ReadFile,
   ListFiles,
-  Search,
+  SearchFile,
   EditFile,
-  WriteFile,
+  CreateFile,
   FindSymbol,
-  GitStatus,
-  GitDiff,
-  GitLog,
-  GitShow,
-  GitAdd,
-  GitCommit,
-  ReadOutsideFile,
+  SearchExternalFile,
+  ReadExternalFile,
   RunProjectTool,
   ListSkills,
   ReadSkill,
@@ -77,27 +71,22 @@ pub enum OrchesterTool {
 pub enum AccessClass {
   /// Reads the worktree and its repository, changes nothing.
   ReadOnly,
-  /// Changes the worktree or its branch.
+  /// Changes the worktree.
   WritesWorktree,
   /// Reaches outside the worktree, or may: another folder, the network, a program the project chose.
   Outside,
 }
 
 impl OrchesterTool {
-  pub const ALL: [Self; 16] = [
+  pub const ALL: [Self; 11] = [
     Self::ReadFile,
     Self::ListFiles,
-    Self::Search,
+    Self::SearchFile,
     Self::EditFile,
-    Self::WriteFile,
+    Self::CreateFile,
     Self::FindSymbol,
-    Self::GitStatus,
-    Self::GitDiff,
-    Self::GitLog,
-    Self::GitShow,
-    Self::GitAdd,
-    Self::GitCommit,
-    Self::ReadOutsideFile,
+    Self::SearchExternalFile,
+    Self::ReadExternalFile,
     Self::RunProjectTool,
     Self::ListSkills,
     Self::ReadSkill,
@@ -106,19 +95,14 @@ impl OrchesterTool {
   /// The name the agent calls the tool by.
   pub const fn as_str(self) -> &'static str {
     match self {
-      Self::ReadFile => NativeTool::ReadFile.as_str(),
-      Self::ListFiles => NativeTool::ListFiles.as_str(),
-      Self::Search => NativeTool::Search.as_str(),
-      Self::EditFile => NativeTool::EditFile.as_str(),
-      Self::WriteFile => NativeTool::WriteFile.as_str(),
+      Self::ReadFile => "read_file",
+      Self::ListFiles => "list_files",
+      Self::SearchFile => "search_file",
+      Self::EditFile => "edit_file",
+      Self::CreateFile => "create_file",
       Self::FindSymbol => "find_symbol",
-      Self::GitStatus => "git_status",
-      Self::GitDiff => "git_diff",
-      Self::GitLog => "git_log",
-      Self::GitShow => "git_show",
-      Self::GitAdd => "git_add",
-      Self::GitCommit => "git_commit",
-      Self::ReadOutsideFile => "read_outside_file",
+      Self::SearchExternalFile => "search_external_file",
+      Self::ReadExternalFile => "read_external_file",
       Self::RunProjectTool => "run_project_tool",
       Self::ListSkills => "list_skills",
       Self::ReadSkill => "read_skill",
@@ -143,54 +127,63 @@ impl OrchesterTool {
     Self::from_name(name.strip_prefix("mcp__")?.strip_prefix(SERVER)?.strip_prefix("__")?)
   }
 
-  /// The file a call with `input` changed once it succeeded, at the path the agent gave: `edit_file` and
-  /// `write_file` change the file at their `path`. Their answer does not say whether `write_file` made the
-  /// file, so the change reads as modified; first-edit tracking reads only the path
+  /// Whether the tool works on the worktree's files ([`FileCall`]).
+  pub const fn is_file_tool(self) -> bool {
+    matches!(
+      self,
+      Self::ReadFile | Self::ListFiles | Self::SearchFile | Self::EditFile | Self::CreateFile
+    )
+  }
+
+  /// Whether the tool reads outside the worktree, in a folder its call names: a person's approval of one call can
+  /// cover later calls in that folder (*Approve similar*), and the run's sources let it run without asking.
+  pub const fn reads_outside(self) -> bool {
+    matches!(self, Self::SearchExternalFile | Self::ReadExternalFile)
+  }
+
+  /// The file a call with `input` changed once it succeeded, at the path the agent gave: `edit_file` modifies the
+  /// file at its `filename`, `create_file` adds one there. First-edit tracking reads only the path
   /// (`crate::run::FirstEditTracker`), and the transcript shows the call's own row.
   pub fn changed_file(self, input: &Value) -> Option<FileChange> {
-    match self {
-      Self::EditFile | Self::WriteFile => Some(FileChange {
-        path: input.get("path")?.as_str()?.to_owned(),
-        kind: FileChangeKind::Modified,
-      }),
-      _ => None,
-    }
+    let kind = match self {
+      Self::EditFile => FileChangeKind::Modified,
+      Self::CreateFile => FileChangeKind::Added,
+      _ => return None,
+    };
+    Some(FileChange {
+      path: input.get("filename")?.as_str()?.to_owned(),
+      kind,
+    })
   }
 
   /// How an agent CLI's call of this tool with `input` reads in the transcript: as the native agent's call of the
-  /// same file tool, with what its input asked. `None` for another tool, and for input the tool refuses: that call
-  /// fails with the error its row shows.
+  /// same kind of file tool, with what its input asked. `None` for another tool, and for input the tool refuses: that
+  /// call fails with the error its row shows.
   pub fn shown_call(self, input: &Value) -> Option<NativeCall> {
-    let tool = self.file_tool()?;
+    use crate::native::tools::ToolName as NativeTool;
     // The refusal reaches the agent as the call's error result; the row shows that result.
-    let input = crate::native::tools::parse_call(tool.as_str(), input).ok()?;
+    let call = FileCall::read(self, input)?.ok()?;
+    let tool = match &call {
+      FileCall::Read(_) => NativeTool::ReadFile,
+      FileCall::List(_) => NativeTool::ListFiles,
+      FileCall::Search(_) => NativeTool::Search,
+      FileCall::Edit(_) => NativeTool::EditFile,
+      FileCall::Create(_) => NativeTool::WriteFile,
+    };
     Some(NativeCall {
       tool,
       detail: None,
       declined: None,
-      input: Some(CallInput::of(&input)?),
+      input: Some(call.call_input()?),
     })
-  }
-
-  /// The native agent's tool this is, for a file tool.
-  pub const fn file_tool(self) -> Option<NativeTool> {
-    match self {
-      Self::ReadFile => Some(NativeTool::ReadFile),
-      Self::ListFiles => Some(NativeTool::ListFiles),
-      Self::Search => Some(NativeTool::Search),
-      Self::EditFile => Some(NativeTool::EditFile),
-      Self::WriteFile => Some(NativeTool::WriteFile),
-      _ => None,
-    }
   }
 
   pub const fn access(self) -> AccessClass {
     match self {
-      Self::ReadFile | Self::ListFiles | Self::Search | Self::FindSymbol => AccessClass::ReadOnly,
-      Self::GitStatus | Self::GitDiff | Self::GitLog | Self::GitShow => AccessClass::ReadOnly,
+      Self::ReadFile | Self::ListFiles | Self::SearchFile | Self::FindSymbol => AccessClass::ReadOnly,
       Self::ListSkills | Self::ReadSkill => AccessClass::ReadOnly,
-      Self::EditFile | Self::WriteFile | Self::GitAdd | Self::GitCommit => AccessClass::WritesWorktree,
-      Self::ReadOutsideFile | Self::RunProjectTool => AccessClass::Outside,
+      Self::EditFile | Self::CreateFile => AccessClass::WritesWorktree,
+      Self::SearchExternalFile | Self::ReadExternalFile | Self::RunProjectTool => AccessClass::Outside,
     }
   }
 }
@@ -208,12 +201,6 @@ pub enum ToolCallError {
   UnknownProjectTool(String),
   #[error("the program `{0}` of the project tool was not found")]
   ProgramNotFound(String),
-  #[error("`{0}` is or lies in a repository of its own, which Orchester's tools do not stage")]
-  NestedRepository(String),
-  #[error("`{0}` is a folder: name the files to stage, as git_status lists them")]
-  Folder(String),
-  #[error("`{0}` is or passes through a link, which Orchester's tools do not stage")]
-  Link(String),
   #[error(transparent)]
   Outside(#[from] OutsideReadError),
   #[error(transparent)]
