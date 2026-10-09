@@ -92,8 +92,8 @@ fn files_search_term_stops_at_its_limits() {
   }
 }
 
-/// Outside the worktree the files are named by their path, and a file the caller does not let through is counted,
-/// never shown.
+/// Outside the worktree the files are named by their path, and a file the caller does not let through is never read:
+/// the answer says nothing of it, whatever it holds.
 #[test]
 fn files_search_outside_keeps_only_what_the_caller_lets_through() {
   let layout = Layout::temporary();
@@ -103,7 +103,9 @@ fn files_search_outside_keeps_only_what_the_caller_lets_through() {
     let found = ok(tools.search_outside(&layout.outside, ("secret", 20), &keep));
     assert!(found.contains("public.txt\n     1: secret word here"), "{found}");
     assert!(!found.contains("secret.txt"), "{found}");
-    assert!(found.contains("[1 files with matches left out"), "{found}");
+    assert!(!found.contains("files with matches"), "{found}");
+    let refused = ok(tools.search_outside(&layout.outside, ("secret", 20), &|_| false));
+    assert!(refused.starts_with("no matches\n"), "{refused}");
   }
 }
 

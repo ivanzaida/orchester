@@ -1,10 +1,11 @@
 //! Orchester's `search_file`, `search_external_file` and the uses `find_references` lists, for agent CLIs: the files
 //! under a folder that hold a term as literal text, in path order, each with its matching lines, at most a number of
-//! files. ripgrep searches with an argument vector Orchester builds (`--fixed-strings`, then `--smart-case`: a term in
-//! lower case matches any case; or `--word-regexp --case-sensitive` for a name as a whole word), which respects
-//! `.gitignore` and skips hidden entries; without it the folder is walked and each file searched for the term. A
-//! search outside the worktree keeps only the files its caller lets through, which the answer counts without naming
-//! them.
+//! files. In the worktree ripgrep searches with an argument vector Orchester builds (`--fixed-strings`, then
+//! `--smart-case`: a term in lower case matches any case; or `--word-regexp --case-sensitive` for a name as a whole
+//! word), which respects `.gitignore` and skips hidden entries; without it the folder is walked and each file searched
+//! for the term. Outside the worktree the files are listed first (`rg --files`, or the walk), only those the caller
+//! lets through are kept, and only those are read and searched: a file the caller refuses is never read, and the answer
+//! says nothing about it.
 
 use std::{
   path::{Path, PathBuf},
@@ -20,10 +21,11 @@ use orchester_core::{
 use super::{
   FileError, FileTools, count, done,
   limits::cut_line,
+  listing::{self, listed, walked},
   outcome,
   ripgrep::{self, Want},
   search::readable_text,
-  walk::{self, MAX_WALKED, WALK_TIMEOUT},
+  walk::{MAX_WALKED, WALK_TIMEOUT},
 };
 
 /// Lines one file shows.
@@ -54,13 +56,9 @@ struct FileHits {
 }
 
 /// What a search found so far.
-struct Found<'a> {
+struct Found {
   limit: usize,
-  keep: &'a dyn Fn(&Path) -> bool,
   files: Vec<FileHits>,
-  /// The file whose lines are being read was left out by `keep`.
-  skipping: Option<String>,
-  left_out: usize,
   matches: usize,
   bytes: usize,
   /// More files match than were listed.
@@ -70,18 +68,22 @@ struct Found<'a> {
   notes: Vec<String>,
 }
 
-impl Found<'_> {
-  /// Takes line `number` of `path` (as the answer shows it, `real` on disk), which holds the term.
-  fn line(&mut self, (path, real): (&str, &Path), number: u64, text: &str) -> Want {
-    if self.skipping.as_deref() == Some(path) {
-      return Want::More;
+impl Found {
+  fn new(limit: u32) -> Self {
+    Self {
+      limit: usize::try_from(limit).unwrap_or(usize::MAX),
+      files: Vec::new(),
+      matches: 0,
+      bytes: 0,
+      more_files: false,
+      full: false,
+      notes: Vec::new(),
     }
+  }
+
+  /// Takes line `number` of `path` (as the answer shows it), which holds the term.
+  fn line(&mut self, path: &str, number: u64, text: &str) -> Want {
     if self.files.last().is_none_or(|last| last.path != path) {
-      if !(self.keep)(real) {
-        self.skipping = Some(path.to_owned());
-        self.left_out += 1;
-        return Want::More;
-      }
       if self.files.len() == self.limit {
         self.more_files = true;
         return Want::Enough;
@@ -140,12 +142,6 @@ impl Found<'_> {
     if self.full {
       text.push_str("[the answer is full: search a longer term or fewer files]\n");
     }
-    if self.left_out > 0 {
-      text.push_str(&format!(
-        "[{} files with matches left out: credential locations or Orchester's own files]\n",
-        self.left_out
-      ));
-    }
     for note in &self.notes {
       text.push_str(note);
       text.push('\n');
@@ -158,69 +154,81 @@ impl FileTools {
   /// Orchester's `search_file`: the worktree's files that hold the call's term.
   pub fn search_term(&self, input: &SearchTerm) -> ToolOutcome {
     let worktree = self.scope.worktree().to_path_buf();
-    outcome(
-      self.term_in(&worktree, (input.term(), input.limit_files(), Matching::Text), &|_| {
-        true
-      }),
-    )
+    outcome(self.term_in(&worktree, (input.term(), input.limit_files(), Matching::Text)))
   }
 
   /// The worktree's files that use `name` as a whole word, at most `limit` of them, for `find_references`.
   pub fn search_word(&self, name: &str, limit: u32) -> ToolOutcome {
     let worktree = self.scope.worktree().to_path_buf();
-    outcome(self.term_in(&worktree, (name, limit, Matching::Word), &|_| true))
+    outcome(self.term_in(&worktree, (name, limit, Matching::Word)))
   }
 
   /// Orchester's `search_external_file`: the files under `folder` (outside the worktree, checked and resolved by the
-  /// caller) that hold `term`, at most `limit` of them, keeping only those `keep` lets through.
+  /// caller) that hold `term`, at most `limit` of them. Only the files `keep` lets through are read at all.
   pub fn search_outside(&self, folder: &Path, (term, limit): (&str, u32), keep: &dyn Fn(&Path) -> bool) -> ToolOutcome {
-    outcome(self.term_in(folder, (term, limit, Matching::Text), keep))
+    outcome(self.term_in_kept(folder, (term, limit), keep))
   }
 
-  fn term_in(
+  fn term_in(&self, folder: &Path, (term, limit, matching): (&str, u32, Matching)) -> Result<ToolOutcome, FileError> {
+    if !folder.is_dir() {
+      return Err(FileError::NotFolder(self.shown(folder)));
+    }
+    let mut found = Found::new(limit);
+    match &self.ripgrep {
+      Some(program) => self.term_with_ripgrep(program, folder, (term, matching), &mut found)?,
+      None => {
+        let listing = walked(folder, None)?;
+        self.term_in_files(listing, (term, matching), &mut found);
+        found.notes.push(NO_RIPGREP.to_owned());
+      }
+    }
+    Ok(answer(&found))
+  }
+
+  /// The search outside the worktree: the files under `folder` listed, those `keep` refuses dropped unread, the rest
+  /// searched for `term`.
+  fn term_in_kept(
     &self,
     folder: &Path,
-    (term, limit, matching): (&str, u32, Matching),
+    (term, limit): (&str, u32),
     keep: &dyn Fn(&Path) -> bool,
   ) -> Result<ToolOutcome, FileError> {
     if !folder.is_dir() {
       return Err(FileError::NotFolder(self.shown(folder)));
     }
-    let mut found = Found {
-      limit: usize::try_from(limit).unwrap_or(usize::MAX),
-      keep,
-      files: Vec::new(),
-      skipping: None,
-      left_out: 0,
-      matches: 0,
-      bytes: 0,
-      more_files: false,
-      full: false,
-      notes: Vec::new(),
+    let mut listing = match &self.ripgrep {
+      Some(program) => listed(program, folder, None)?,
+      None => walked(folder, None)?,
     };
-    match &self.ripgrep {
-      Some(program) => self.term_with_ripgrep(program, folder, (term, matching), &mut found)?,
-      None => {
-        self.term_walking(folder, (term, matching), &mut found);
-        found.notes.push(NO_RIPGREP.to_owned());
-      }
+    listing.paths.retain(|path| keep(path));
+    let mut found = Found::new(limit);
+    self.term_in_files(listing, (term, Matching::Text), &mut found);
+    if self.ripgrep.is_none() {
+      found.notes.push(NO_RIPGREP.to_owned());
     }
-    let files = found.files.iter().filter(|file| !file.lines.is_empty()).count();
-    let activity = format!("{} matches in {files} files", found.matches);
-    let detail = CallDetail::Searched {
-      scope: None,
-      matches: count(found.matches),
-      files: count(files),
-    };
-    Ok(done(found.text(), activity, Vec::new(), detail))
+    Ok(answer(&found))
   }
+}
 
+/// The outcome of a search that found `found`.
+fn answer(found: &Found) -> ToolOutcome {
+  let files = found.files.iter().filter(|file| !file.lines.is_empty()).count();
+  let activity = format!("{} matches in {files} files", found.matches);
+  let detail = CallDetail::Searched {
+    scope: None,
+    matches: count(found.matches),
+    files: count(files),
+  };
+  done(found.text(), activity, Vec::new(), detail)
+}
+
+impl FileTools {
   fn term_with_ripgrep(
     &self,
     program: &Path,
     folder: &Path,
     (term, matching): (&str, Matching),
-    found: &mut Found<'_>,
+    found: &mut Found,
   ) -> Result<(), FileError> {
     let per_file = (MAX_LINES_PER_FILE + 1).to_string();
     let columns = MAX_LINE_CHARS.to_string();
@@ -266,7 +274,7 @@ impl FileTools {
   }
 
   /// One line of ripgrep's output, `path\0<line>:<text>`.
-  fn term_line(&self, line: &str, found: &mut Found<'_>) -> Want {
+  fn term_line(&self, line: &str, found: &mut Found) -> Want {
     let Some((path, rest)) = line.split_once('\0') else {
       return Want::More;
     };
@@ -276,14 +284,15 @@ impl FileTools {
     let Ok(number) = number.parse::<u64>() else {
       return Want::More;
     };
-    let real = PathBuf::from(path);
-    found.line((&self.shown(&real), &real), number, text)
+    found.line(&self.shown(&PathBuf::from(path)), number, text)
   }
 
-  /// The search without ripgrep: each file under `folder`, in path order, searched for `term` as ripgrep would.
-  fn term_walking(&self, folder: &Path, (term, matching): (&str, Matching), found: &mut Found<'_>) {
+  /// Each file of `listing`, in path order, read and searched for `term` as ripgrep would, until the limits or the
+  /// deadline.
+  fn term_in_files(&self, listing: listing::Found, (term, matching): (&str, Matching), found: &mut Found) {
     let deadline = Instant::now() + WALK_TIMEOUT;
-    let (files, stopped) = walk::files(folder, deadline);
+    let (mut files, mut stopped) = (listing.paths, listing.more);
+    files.sort();
     let any_case = matching == Matching::Text && !term.chars().any(char::is_uppercase);
     let fold = |text: &str| if any_case { text.to_lowercase() } else { text.to_owned() };
     let needle = fold(term);
@@ -293,6 +302,7 @@ impl FileTools {
     };
     for file in files {
       if Instant::now() > deadline {
+        stopped = true;
         break;
       }
       let Some(text) = readable_text(&file) else {
@@ -300,7 +310,7 @@ impl FileTools {
       };
       let shown = self.shown(&file);
       for (number, line) in (1_u64..).zip(text.lines()) {
-        if holds(line) && found.line((&shown, &file), number, line) == Want::Enough {
+        if holds(line) && found.line(&shown, number, line) == Want::Enough {
           return;
         }
       }
