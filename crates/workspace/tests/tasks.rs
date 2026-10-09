@@ -525,3 +525,28 @@ fn task_blocked_refusal_reads_as_run_unavailable() {
   });
   assert_eq!(control_message(&refused).key, "tasks.blocked.runUnavailable");
 }
+
+#[test]
+fn task_row_run_line_names_the_step_of_a_running_run_only() {
+  use orchester_workspace::tasks::list::{self, TaskTab};
+
+  let mut fixture = support::Fixture::new();
+  let task = fixture.queued_task("Step named", support::at(10));
+  let mut run = fixture.started_run(task, support::at(20));
+  let row = |fixture: &support::Fixture| {
+    let loaded = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+    list::rows(&loaded.tasks, &loaded.pipelines, &loaded.phases, TaskTab::All)
+      .into_iter()
+      .find(|row| row.id == task)
+      .expect("the task's row")
+  };
+  let running = row(&fixture);
+  assert_eq!(running.phase, Some(orchester_core::run::TaskPhase::Running));
+  let step = running.run_step().expect("a running run names its step");
+  assert_eq!(step.number, 1);
+  assert!(!step.name.is_empty());
+  fixture.succeed(&mut run, support::at(30));
+  let done = row(&fixture);
+  assert!(done.step.is_some(), "the run keeps its last step");
+  assert_eq!(done.run_step(), None, "a finished run's line names no step");
+}
