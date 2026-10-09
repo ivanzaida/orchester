@@ -18,11 +18,12 @@ use lurq::{
   node::{CursorIcon, Element, padding::Padding},
 };
 use orchester_core::{id::ProjectId, name::Name};
-use orchester_workspace::tasks::data::ProjectTasks;
+use orchester_workspace::{runner::state::RunnerState, tasks::data::ProjectTasks};
 
 use crate::{
+  chrome::PillRef,
   navigation::{Navigation, tabs::TabSet},
-  project::Projects,
+  project::{Projects, TasksState},
   routes::{OverviewTab, ProjectPage, Route},
   theme::{ExtraSpacing, IconSize},
   ui::{
@@ -48,6 +49,37 @@ pub fn needs_you(projects: &Projects, project: ProjectId) -> Option<usize> {
     .feed(project)
     .tasks
     .with(|tasks| tasks.ready().map(ProjectTasks::needs_you))
+}
+
+/// Why a tab of a project carries a mark (handover §3.1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Attention {
+  /// This many things wait for the person.
+  Waiting(usize),
+  /// The project's runner is offline and does not start on its own.
+  RunnerOffline,
+  /// The project's tasks could not be read, or not read again.
+  TasksUnread,
+}
+
+/// What a tab of `project` marks, if anything: what waits for the person first, then an unresolved
+/// failure. Reading it in a render re-renders it when that changes.
+pub fn attention(projects: &Projects, project: ProjectId) -> Option<Attention> {
+  let open = projects.state(project)?.open()?.clone();
+  if let Some(count) = needs_you(projects, project).filter(|count| *count > 0) {
+    return Some(Attention::Waiting(count));
+  }
+  let feed = projects.feed(project);
+  let offline = feed.status.with(|status| {
+    status
+      .as_ref()
+      .is_some_and(|status| matches!(status.state_for(&open.repo_root), RunnerState::Failed { .. }))
+  });
+  if offline {
+    return Some(Attention::RunnerOffline);
+  }
+  let unread = feed.stale.with(Option::is_some) || feed.tasks.with(|tasks| matches!(tasks, TasksState::Failed(_)));
+  unread.then_some(Attention::TasksUnread)
 }
 
 /// Each project the tabs show whose tasks are read, in the order of the tabs, and what waits in it.
@@ -79,7 +111,7 @@ pub fn count_words(ctx: &Ctx, count: usize) -> String {
 pub struct NeedsYouPill;
 
 impl Component for NeedsYouPill {
-  type Props = ();
+  type Props = PillRef;
 
   fn create(_ctx: &mut Ctx) -> Self {
     Self
@@ -124,6 +156,7 @@ impl Component for NeedsYouPill {
     let pill = Tooltip::new("needs-you-pill", split).wrap(ctx, pill);
     // `Trailing` (`AqLkT`): 8 between the pill and the window controls.
     Row::new()
+      .ref_element(ctx.props::<PillRef>().0.clone())
       .padding(Padding::new().right(SpacingSize::Sm))
       .align_items(Alignment::Center)
       .child(pill)

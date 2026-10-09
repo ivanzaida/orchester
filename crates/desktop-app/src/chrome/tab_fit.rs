@@ -26,11 +26,12 @@ pub const TAB_MIN_WIDTH: f32 = LABEL_MIN_WIDTH + TAB_CHROME_WIDTH;
 const CONTROLS_WIDTH: f32 = 3.0 * 46.0;
 #[cfg(target_os = "macos")]
 const CONTROLS_WIDTH: f32 = 8.0 + 3.0 * 20.0;
-/// The *N need you* pill and the room after it (`Trailing` `AqLkT`).
-const NEEDS_YOU_WIDTH: f32 = 106.0;
-/// What the title bar takes besides the tabs: the app menu and divider (61), the strip's start (8),
-/// *New tab* with its gaps (30), the drag area, the *N need you* pill and the window controls.
-const TITLE_BAR_RESERVE: f32 = 61.0 + 8.0 + 30.0 + MIN_DRAG_WIDTH + NEEDS_YOU_WIDTH + CONTROLS_WIDTH;
+/// The *N need you* pill and the room after it as the design draws it (`Trailing` `AqLkT`), for while the
+/// pill shows but has not been laid out yet.
+pub const NEEDS_YOU_WIDTH: f32 = 106.0;
+/// What the title bar takes besides the tabs and the *N need you* pill: the app menu and divider (61),
+/// the strip's start (8), *New tab* with its gaps (30), the drag area and the window controls.
+const TITLE_BAR_RESERVE: f32 = 61.0 + 8.0 + 30.0 + MIN_DRAG_WIDTH + CONTROLS_WIDTH;
 
 /// How the tabs share their room.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -46,12 +47,13 @@ pub fn is_icon(tab: &Tab) -> bool {
   *tab.route() == Route::AllProjects
 }
 
-/// How `tabs` fit a window `window_width` wide.
-pub fn fit(window_width: f32, tabs: &TabSet) -> Fit {
+/// How `tabs` fit a window `window_width` wide whose title bar ends in `trailing` (the *N need you* pill,
+/// 0 while it does not show).
+pub fn fit(window_width: f32, trailing: f32, tabs: &TabSet) -> Fit {
   let count = tabs.tabs().len();
   let icons = tabs.tabs().iter().filter(|tab| is_icon(tab)).count();
   let labelled = count - icons;
-  let room = window_width - TITLE_BAR_RESERVE;
+  let room = window_width - TITLE_BAR_RESERVE - trailing;
   if labelled == 0 {
     return Fit::Shrunk(LABEL_MAX_WIDTH);
   }

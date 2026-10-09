@@ -13,7 +13,10 @@ use lurq::{
   node::{dimension::Dimension, padding::Padding},
 };
 
-use super::{app_menu::AppMenu, tab_strip::TabStrip};
+use super::{
+  app_menu::AppMenu,
+  tab_strip::{PillRef, TabStrip},
+};
 use crate::{shell::needs_you::NeedsYouPill, theme::ExtraSpacing};
 
 /// The line between the app menu and the tabs (`Divider` `pE6GJ`).
@@ -30,6 +33,8 @@ pub fn content(ctx: &mut Ctx, bar: ChromeTitleBar, tabs: bool) -> ChromeTitleBar
     return bar.leading(menu);
   }
   let line = ctx.theme().border_size_value(BorderSize::Sm);
+  // The tabs leave the pill the room it took when it was laid out last.
+  let pill = ctx.element_ref();
   bar
     .leading(
       menu.child(
@@ -39,6 +44,6 @@ pub fn content(ctx: &mut Ctx, bar: ChromeTitleBar, tabs: bool) -> ChromeTitleBar
           .background(PaletteColor::Border),
       ),
     )
-    .center(ctx.mount_keyed::<TabStrip>("tab-strip", ()))
-    .trailing(ctx.mount_keyed::<NeedsYouPill>("needs-you", ()))
+    .center(ctx.mount_keyed::<TabStrip>("tab-strip", PillRef(pill.clone())))
+    .trailing(ctx.mount_keyed::<NeedsYouPill>("needs-you", PillRef(pill)))
 }
