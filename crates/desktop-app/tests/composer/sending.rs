@@ -37,9 +37,7 @@ fn composer_enter_sends_once_and_empties_the_draft() {
   // Pressed twice before the first send ends: the message is stored once.
   super::key(&mut window, ENTER, (false, false));
   super::key(&mut window, ENTER, (false, false));
-  window.until("the draft emptied", |window| {
-    draft(window).is_empty() || draft(window).starts_with("Ask,")
-  });
+  window.until("the draft emptied", |window| draft(window).starts_with("Write to"));
   until_stored(&mut window, &seeded, "Localize the invoice emails", 1);
   window.until("the message, waiting for the run", |window| {
     text(window, "conversation-waiting").contains("Use the customer locale")

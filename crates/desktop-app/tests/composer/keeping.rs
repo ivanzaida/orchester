@@ -81,6 +81,46 @@ fn composer_edit_in_composer_adds_the_message_after_what_is_written() {
     window.tree.get_element_by_id(&edit).is_none(),
     "a message put back into the composer offers nothing more"
   );
+  // Its words taken out of the draft again, it offers again.
+  for _ in 0.."First\n\nCheck the cursorx".len() {
+    super::key(&mut window, ("Backspace", "Backspace"), (false, false));
+  }
+  window.until("the offers back", |window| {
+    window.tree.get_element_by_id(&edit).is_some()
+  });
+}
+
+#[test]
+fn composer_a_send_that_ends_after_the_page_closed_leaves_no_draft_to_send_twice() {
+  let (mut window, seeded) = seeded();
+  let title = "Localize the invoice emails";
+  let key = open(&mut window, &seeded, title);
+  write(&mut window, "Once");
+  // The store waits for another writer while the person leaves the task.
+  let database = seeded.repo.join(".orchester").join("orchester.db");
+  let holder = Connection::open(&database).expect("the database opens");
+  holder.execute_batch("BEGIN EXCLUSIVE").expect("the database is held");
+  super::key(&mut window, ENTER, (false, false));
+  window.navigation().go(Route::Project(
+    seeded.project,
+    ProjectPage::Task(key_of(&seeded, "Show the signed-in account"), TaskView::Conversation),
+  ));
+  window.until("the other task's composer", |window| draft(window) != "Once");
+  holder.execute_batch("ROLLBACK").expect("the database is let go");
+  until_stored(&mut window, &seeded, title, 1);
+  window.navigation().go(Route::Project(
+    seeded.project,
+    ProjectPage::Task(key.clone(), TaskView::Conversation),
+  ));
+  window.until("the task's own composer", |window| {
+    draft(window).starts_with("Write to")
+  });
+  super::key(&mut window, ENTER, (false, false));
+  for _ in 0..20 {
+    window.tree.tick_futures();
+    window.pass();
+  }
+  assert_eq!(messages(&seeded, &key).len(), 1, "stored once");
 }
 
 #[test]

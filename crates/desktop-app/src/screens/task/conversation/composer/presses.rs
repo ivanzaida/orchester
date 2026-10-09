@@ -6,7 +6,10 @@
 use std::sync::Arc;
 
 use lurq::{app::events::keyboard_event::KeyboardEvent, core::Signal};
-use orchester_core::id::{RunId, TaskId};
+use orchester_core::{
+  conversation::Recipient,
+  id::{RunId, TaskId},
+};
 use orchester_workspace::{
   tasks::conversation::{
     composer::ComposerMode,
@@ -33,11 +36,11 @@ pub(super) struct Target {
 
 /// What sending does in `mode` while something is written and no send is under way: the state's way, and
 /// the second where it has one.
-pub(super) fn presses(state: &ComposerState, target: &Target, mode: &ComposerMode) -> Sending {
+pub(super) fn presses(state: &ComposerState, target: &Target, (mode, to): (&ComposerMode, Recipient)) -> Sending {
   if state.send.state().get().is_pending() {
     return Sending::Busy;
   }
-  let Some(primary) = Action::of(mode, Way::Primary) else {
+  let Some(primary) = Action::of(mode, Way::Primary, to) else {
     return Sending::Empty;
   };
   if state.draft.get().trim().is_empty() {
@@ -45,7 +48,7 @@ pub(super) fn presses(state: &ComposerState, target: &Target, mode: &ComposerMod
   }
   Sending::Ready {
     primary: press(state, target, (Way::Primary, primary)),
-    second: Action::of(mode, Way::Second).map(|second| press(state, target, (Way::Second, second))),
+    second: Action::of(mode, Way::Second, to).map(|second| press(state, target, (Way::Second, second))),
   }
 }
 
@@ -71,7 +74,7 @@ fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action))
       reading,
       way,
       expected,
-      key: state.key_for(&text),
+      key: state.key_for(&text, (way, expected)),
       text,
     });
   })

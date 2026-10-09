@@ -37,13 +37,14 @@ fn composer_a_queued_task_sends_when_the_run_starts() {
   let (mut window, seeded) = seeded();
   open(&mut window, &seeded, "Localize the invoice emails");
   let offer = offer(&mut window);
-  assert_eq!(offer.placeholder, "Ask, clarify or redirect this task…");
-  assert_eq!(
-    offer.recipient, "To: Orchestrator · this task",
-    "no run: the task's Orchestrator"
-  );
+  // No run yet: the first agent of the task's pipeline reads the message (`YIbm7`).
+  assert_eq!(offer.placeholder, "Write to the first agent of the run…");
+  let agent = offer
+    .recipient
+    .strip_suffix(" · not started")
+    .unwrap_or_else(|| panic!("the first agent, not started: {}", offer.recipient));
   assert_eq!(offer.send, "Send when the run starts");
-  assert_eq!(offer.note, "Queued · delivered to the run’s first agent when it starts");
+  assert_eq!(offer.note, format!("Queued · delivered to {agent} when the run starts"));
   assert!(
     offer.context.is_empty(),
     "nothing to answer or continue: {}",

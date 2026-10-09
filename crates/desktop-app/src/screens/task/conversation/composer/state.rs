@@ -156,7 +156,15 @@ impl ComposerState {
         navigation.go(summary.clone());
       }
     });
-    ctx.watch(&state.draft, move |text| kept::set_draft(task, text));
+    let handled = state.handled.clone();
+    ctx.watch(&state.draft, move |text| {
+      kept::set_draft(task, text);
+      // Words put back and taken out again: their message offers again.
+      let now = Handled(kept::handled(task));
+      if handled.get_untracked() != now {
+        handled.set(now);
+      }
+    });
     let feed = project.feed.clone();
     ctx.watch(&state.after_turn.state(), move |result| {
       if result.is_fulfilled() {
@@ -180,15 +188,15 @@ impl ComposerState {
     }
   }
 
-  /// The key `text` is stored under: the one of the last attempt when the words did not change.
-  pub(super) fn key_for(&self, text: &str) -> IdempotencyKey {
-    kept::key_for(self.task, text)
+  /// The key `text`, sent `how`, is stored under: the one of the last attempt when neither changed.
+  pub(super) fn key_for(&self, text: &str, how: (Way, Action)) -> IdempotencyKey {
+    kept::key_for(self.task, text, how)
   }
 
   /// Puts `text`, the refused message `message`, into the composer, with the focus there; after what is
   /// written already, if anything is. The message offers nothing more.
   pub(super) fn edit(&self, message: MessageId, text: &str) {
-    kept::handle(self.task, message);
+    kept::handle(self.task, message, text);
     self.handled.set(Handled(kept::handled(self.task)));
     let draft = self.draft.get_untracked();
     let text = if draft.trim().is_empty() {
@@ -246,7 +254,7 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
         tracing::warn!(%error, "the runner did not take the plan's changes");
         orchester_workspace::tasks::run::control_message(&error)
       })?;
-    kept::forget(request.task, request.key);
+    kept::stored(request.task, request.key, &request.text);
     return Ok(Outcome::PlanChanges { text: request.text });
   }
   let mode = super::mode_name(&prepared.mode);
@@ -269,7 +277,7 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
     Ok((prepared, stored))
   })?;
   let id = stored.id();
-  kept::forget(request.task, key);
+  kept::stored(request.task, key, &request.text);
   // Before the task has a run, its first step takes the message.
   let Some(run) = prepared.run() else {
     return Ok(Outcome::Message {

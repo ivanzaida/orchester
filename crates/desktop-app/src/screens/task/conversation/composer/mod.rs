@@ -245,7 +245,7 @@ impl Composer {
       lost: composing.lost,
       left,
     };
-    let presses = presses::presses(&composing.state, &target, &mode);
+    let presses = presses::presses(&composing.state, &target, (&mode, recipient));
     let field = self.field(ctx, props, &mode, (&presses, leave.clone()));
     let bar = controls::bar(
       ctx,
