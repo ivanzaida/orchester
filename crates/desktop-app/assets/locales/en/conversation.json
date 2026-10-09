@@ -370,6 +370,7 @@
       "step": "{{step}} · {{agent}}",
       "summary": "Summary ↗",
       "toolMeta": "{{took}} · tool step, no tokens",
+      "toolStep": "{{step}} · Tool",
       "withReport": "{{reported}} · {{meta}}"
     },
     "separator": " · ",
