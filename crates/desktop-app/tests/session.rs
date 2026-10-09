@@ -191,9 +191,15 @@ fn session_unreadable_database_shows_the_failure_screen_with_its_path() {
   let data = Data::new();
   fs::write(data.database(), "not an Orchester database, nor any other").expect("the file is written");
   let launch = data.launch();
-  let StartupProblem::Failed(Failure::Unreadable { database, reason }) = problem(launch.start()) else {
+  let StartupProblem::Failed(Failure::Unreadable {
+    database,
+    reason,
+    damaged,
+  }) = problem(launch.start())
+  else {
     panic!("the database cannot be read");
   };
+  assert!(damaged, "it is not a database at all");
   assert_eq!(database, data.database());
   assert!(reason.contains("not a database"), "the system's words: {reason}");
 
@@ -245,4 +251,24 @@ fn session_switch_never_brings_a_process_that_is_not_the_holder() {
     Front::NoAnswer,
     "the test program is not an Orchester program"
   );
+}
+
+#[test]
+fn session_database_that_cannot_be_opened_is_not_called_damaged() {
+  let data = Data::new();
+  fs::create_dir(data.database()).expect("a folder where the database file belongs");
+  let launch = data.launch();
+  let StartupProblem::Failed(Failure::Unreadable { damaged, .. }) = problem(launch.start()) else {
+    panic!("the database cannot be opened");
+  };
+  assert!(!damaged, "nothing says the file is damaged");
+  let mut window = Window::of(data, launch);
+  let texts = window.texts("startup-unreadable").expect("the failure screen shows");
+  assert!(
+    texts
+      .iter()
+      .any(|text| text.starts_with("The database could not be opened: ")),
+    "{texts:?}"
+  );
+  assert!(!texts.iter().any(|text| text.contains("damaged")), "{texts:?}");
 }

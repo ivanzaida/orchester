@@ -33,8 +33,10 @@
     "unreadable": {
       "title": "Orchester can't read its data",
       "reason": "The database file is damaged or isn't Orchester's: “{{reason}}”.",
+      "reasonRefused": "The database could not be opened: “{{reason}}”.",
       "description": "Nothing was changed.",
-      "step": "Restore the file from a backup if you have one. Moving it out of the folder lets Orchester start with an empty project list: each project keeps its tasks and runs in its own .orchester folder."
+      "step": "Restore the file from a backup if you have one. Moving it out of the folder lets Orchester start with an empty project list: each project keeps its tasks and runs in its own .orchester folder.",
+      "stepRefused": "Close any other program that has the file open, check that your account can read and write it, then start Orchester again."
     },
     "updateFailed": {
       "title": "Orchester couldn't update its data",

@@ -73,17 +73,28 @@ impl Texts {
           step: ctx.t("startup.updateFailed.step"),
         },
       ),
-      Failure::Unreadable { database, reason } => Self::about_database(
-        ctx,
+      Failure::Unreadable {
         database,
-        Words {
-          id: "startup-unreadable",
-          title: ctx.t("startup.unreadable.title"),
-          reason: ctx.t_args("startup.unreadable.reason", [("reason", reason.as_str())]),
-          description: ctx.t("startup.unreadable.description"),
-          step: ctx.t("startup.unreadable.step"),
-        },
-      ),
+        reason,
+        damaged,
+      } => {
+        let (said, step) = if *damaged {
+          ("startup.unreadable.reason", "startup.unreadable.step")
+        } else {
+          ("startup.unreadable.reasonRefused", "startup.unreadable.stepRefused")
+        };
+        Self::about_database(
+          ctx,
+          database,
+          Words {
+            id: "startup-unreadable",
+            title: ctx.t("startup.unreadable.title"),
+            reason: ctx.t_args(said, [("reason", reason.as_str())]),
+            description: ctx.t("startup.unreadable.description"),
+            step: ctx.t(step),
+          },
+        )
+      }
       Failure::NotWritable {
         folder,
         reason,

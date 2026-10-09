@@ -51,9 +51,13 @@ pub enum Failure {
     found: u32,
     supported: u32,
   },
-  /// The database cannot be read: damaged, not Orchester's, or refused (`Tc3hg`). `reason` is the
-  /// system's words.
-  Unreadable { database: PathBuf, reason: String },
+  /// The database cannot be read (`Tc3hg`). `reason` is the system's words; `damaged` says that the
+  /// file is damaged or not a database, rather than busy or refused.
+  Unreadable {
+    database: PathBuf,
+    reason: String,
+    damaged: bool,
+  },
   /// The data folder cannot be written (`HPRXn`). `reason` is the system's words; `beside_program` says
   /// that the folder is the program's own, as on Windows, rather than one in the user's Library.
   NotWritable {
@@ -124,19 +128,21 @@ impl Failure {
         found: *found,
         supported: *supported,
       },
-      StoreError::Sqlite(error) => Self::Unreadable {
-        database,
-        reason: error.to_string(),
-      },
-      StoreError::Io { source, .. } => Self::Unreadable {
-        database,
-        reason: source.to_string(),
-      },
       error => Self::Unreadable {
         database,
-        reason: error.to_string(),
+        reason: system_words(error),
+        damaged: error.is_damaged(),
       },
     }
+  }
+}
+
+/// What the system said about `error`, without the store's own words around it.
+fn system_words(error: &StoreError) -> String {
+  match error {
+    StoreError::Sqlite(error) => error.to_string(),
+    StoreError::Io { source, .. } => source.to_string(),
+    error => error.to_string(),
   }
 }
 
