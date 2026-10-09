@@ -5,7 +5,7 @@
 
 use std::collections::BTreeSet;
 
-use super::{Pipeline, PipelineError, RepositoryAccess, Step, StepKey, StepKind, unassigned};
+use super::{Pipeline, PipelineError, PipelineSources, RepositoryAccess, Step, StepKey, StepKind, unassigned};
 use crate::{name::Name, permission::StepPermissions, resource::prompt::PromptText};
 
 /// Base of the keys given to added steps: `step`, `step-2`, …
@@ -37,6 +37,8 @@ impl EditProblem {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PipelineEdit {
   description: String,
+  /// The pipeline's sources; a removed step's go with it.
+  sources: PipelineSources,
   steps: Vec<Step>,
 }
 
@@ -44,6 +46,7 @@ impl PipelineEdit {
   pub fn new(pipeline: Pipeline) -> Self {
     Self {
       description: pipeline.description().to_owned(),
+      sources: pipeline.sources().clone(),
       steps: pipeline.into_steps(),
     }
   }
@@ -143,9 +146,16 @@ impl PipelineEdit {
     })
   }
 
-  /// The edited steps as a pipeline, or the first rule they break.
+  /// The edited steps as a pipeline, or the first rule they break. The pipeline keeps its sources and those of the
+  /// steps it still has.
   pub fn validate(&self) -> Result<Pipeline, PipelineError> {
-    Ok(Pipeline::new(self.steps.clone())?.with_description(self.description.clone()))
+    let sources = self.sources.clone().of_steps(&self.steps);
+    let pipeline = Pipeline::new(self.steps.clone())?.with_description(self.description.clone());
+    Ok(
+      pipeline
+        .with_sources(sources)
+        .expect("only the sources of the pipeline's own steps are kept"),
+    )
   }
 
   /// Everything that keeps the steps from being published: no steps, the first rule they

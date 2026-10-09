@@ -1,0 +1,299 @@
+//! Orchester's tools besides the files end to end through the relay, with the fake CLIs: `get_task` answers the run's
+//! task, `report_progress` keeps the step's line, `save_memory` keeps a task memory record, `find_references` lists
+//! where a name is used and says the code index is off, `delete_file` and `move_file` change the worktree, and
+//! `run_check` runs the command tool whose access rules offer it to the step, asking as its rules say: never, once
+//! per run (the approval covers the check's later calls) or before every call (no Approve similar). Needs `git`. Run
+//! with `cargo test -p orchester-runner --features test-agent --test orchester_run_tools orchester_run_tools`.
+
+mod support;
+
+use std::{collections::BTreeMap, path::Path};
+
+use orchester_core::{
+  connection::AgentProvider,
+  id::{IdempotencyKey, RunId},
+  memory::{MemoryFilter, MemoryStatus, MemoryStore, ScopeFilter},
+  name::Name,
+  permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess},
+  resource::{
+    AccessPolicy, AccessWindow, AllowedSteps, ApprovalMode, CommandAction, CommandArg, CommandProgram, DeniedBehavior,
+    Slug, Tool, ToolAction,
+  },
+  run::{Answerer, ApprovalAnswer, PendingToolApproval, RuleScope, Run, RunStatus},
+  store::{ResourceStore, TaskStore},
+  time::Timestamp,
+};
+use orchester_ipc::{Event, Rejection};
+use orchester_runner::execution::Scheduler;
+use orchester_store::ProjectDb;
+use tokio::sync::mpsc;
+
+use self::support::{PATIENCE, Setup, TestProject, project, reported, scheduler_with, tools::TEST_COMMAND, wait_for};
+
+/// Publishes the check `checks`: the test command printing three lines, offered to every step of the task's
+/// pipeline, asking as `approval` says.
+fn offer_check(project: &TestProject, approval: ApprovalMode) {
+  let mut db = ProjectDb::open(project.repo.path()).expect("open");
+  let pipeline = db
+    .task(project.task)
+    .expect("read")
+    .and_then(|task| task.details().pipeline)
+    .expect("the task's pipeline");
+  let action = CommandAction::new(
+    CommandProgram::new(TEST_COMMAND).expect("a program"),
+    ["print", "3"]
+      .map(|arg| CommandArg::new(arg).expect("an argument"))
+      .to_vec(),
+  );
+  let access = AccessPolicy::new(
+    BTreeMap::from([(pipeline, AllowedSteps::All)]),
+    Name::new("Local").expect("a name"),
+    approval,
+    AccessWindow::UntilStepEnds,
+    DeniedBehavior::FailStep,
+  )
+  .expect("a policy");
+  let tool = Tool::new("Runs the checks", ToolAction::Command(action), Some(access)).expect("a tool");
+  let now = Timestamp::now();
+  let id = db
+    .create_resource(
+      Slug::new("checks").expect("a slug"),
+      Name::new("Checks").expect("a name"),
+      &tool,
+      now,
+    )
+    .expect("create the check")
+    .id();
+  db.publish_draft::<Tool>(id, now).expect("publish the check");
+}
+
+async fn finished(project: &TestProject) -> (Run, ProjectDb) {
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let id: RunId = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  let db = ProjectDb::open(root).expect("open");
+  assert!(
+    db.pending_tool_approvals(id).expect("requests").is_empty(),
+    "nothing asked"
+  );
+  (run, db)
+}
+
+/// What every CLI's calls left: the progress line, the memory record, and a worktree without the moved file.
+fn assert_records(project: &TestProject, run: &Run, db: &ProjectDb) {
+  let execution = run.current_attempt().expect("an attempt").executions()[0].id();
+  let progress = db.step_progress(execution).expect("read").expect("reported");
+  assert_eq!(progress.0.as_str(), "checking the tools");
+  let filter = MemoryFilter {
+    scope: ScopeFilter::Task(project.task),
+    status: None,
+    pinned_only: false,
+  };
+  let memories = db.memories(&filter).expect("read");
+  let kept = memories
+    .iter()
+    .find(|memory| memory.content().key().map(|key| key.as_str()) == Some("readme"))
+    .expect("the note");
+  assert_eq!(kept.status(), MemoryStatus::Active);
+  assert_eq!(kept.content().text(), "The README greets.");
+  let worktree = project
+    .repo
+    .path()
+    .join(".orchester")
+    .join("worktrees")
+    .join(run.id().to_string());
+  assert!(!worktree.join("notes").join("a.md").exists());
+  assert!(!worktree.join("notes").join("b.md").exists());
+}
+
+fn permissions(commands: CommandPermission) -> AgentPermissions {
+  AgentPermissions::new(RepositoryAccess::Write, commands, NetworkAccess::On)
+}
+
+/// Claude Code calls every tool by its allow rule: none asks, the check included, since its rules approve no call.
+#[tokio::test(flavor = "multi_thread")]
+async fn orchester_run_tools_serve_claude_code() {
+  let project = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    permissions: Some(permissions(CommandPermission::Allowed(AllowedCommands::default()))),
+    ..Setup::new("Use the run tools.")
+  });
+  offer_check(&project, ApprovalMode::Never);
+  let (run, db) = finished(&project).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let id = run.id();
+  let listed = reported(&db, id, "orchester-tools: ").pop().expect("listed");
+  for tool in [
+    "delete_file",
+    "move_file",
+    "find_references",
+    "run_check",
+    "get_task",
+    "save_memory",
+    "report_progress",
+  ] {
+    assert!(listed.contains(tool), "{tool}: {listed}");
+  }
+  let decisions = reported(&db, id, "orchester-permission: ");
+  assert!(
+    decisions.iter().all(|line| line.ends_with("allow-by-rule")),
+    "{decisions:#?}"
+  );
+  let calls = reported(&db, id, "orchester-call: ");
+  let expect = [
+    ("get_task ok", "# ORC-1 · Say hello"),
+    ("report_progress ok", "reported"),
+    ("save_memory ok", "(active"),
+    ("find_references ok", "Definitions (code index):"),
+    ("create_file ok", "created notes/a.md"),
+    ("move_file ok", "moved notes/a.md to notes/b.md"),
+    ("delete_file ok", "deleted notes/b.md"),
+    ("run_check ok", "exit code: 0"),
+  ];
+  assert_eq!(calls.len(), expect.len(), "{calls:#?}");
+  for (call, (start, holds)) in calls.iter().zip(expect) {
+    assert!(
+      call.starts_with(start) && call.contains(holds),
+      "{start} … {holds}: {call}"
+    );
+  }
+  assert!(calls[7].ends_with("line 3"), "{calls:#?}");
+  assert_records(&project, &run, &db);
+}
+
+/// Codex calls the same tools through its configuration's server, every one approved there, and the runner runs each.
+#[tokio::test(flavor = "multi_thread")]
+async fn orchester_run_tools_serve_codex() {
+  let project = project(&Setup {
+    permissions: Some(permissions(CommandPermission::AnyInWorktree)),
+    ..Setup::new("Use the run tools.")
+  });
+  offer_check(&project, ApprovalMode::Never);
+  let (run, db) = finished(&project).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let id = run.id();
+  let calls = reported(&db, id, "orchester-call: ");
+  let starts: Vec<&str> = calls
+    .iter()
+    .map(|call| call.split(':').next().unwrap_or_default())
+    .collect();
+  assert_eq!(
+    starts,
+    [
+      "get_task ok",
+      "report_progress ok",
+      "save_memory ok",
+      "find_references ok",
+      "create_file ok",
+      "move_file ok",
+      "delete_file ok",
+      "run_check ok"
+    ],
+    "{calls:#?}"
+  );
+  let answers = reported(&db, id, "orchester-answer| ");
+  for told in [
+    "## Acceptance criteria",
+    "Uses:",
+    "README.md",
+    "[the code index is off for this run: definitions are not told apart from uses]",
+    "line 3",
+  ] {
+    assert!(answers.iter().any(|line| line.contains(told)), "{told}: {answers:#?}");
+  }
+  assert_records(&project, &run, &db);
+}
+
+/// A run of "Run the check twice" with `checks` asking as `approval` says, started.
+async fn check_twice(approval: ApprovalMode) -> (TestProject, Scheduler, mpsc::UnboundedReceiver<Event>, RunId) {
+  let project = project(&Setup {
+    permissions: Some(permissions(CommandPermission::AnyInWorktree)),
+    ..Setup::new("Run the check twice.")
+  });
+  offer_check(&project, approval);
+  let (scheduler, events) = scheduler_with(project.repo.path(), project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  (project, scheduler, events, id)
+}
+
+/// The run's first waiting request, a call of the check.
+async fn pending(root: &Path, events: &mut mpsc::UnboundedReceiver<Event>, id: RunId) -> PendingToolApproval {
+  let request = tokio::time::timeout(PATIENCE, async {
+    loop {
+      if let Some(request) = ProjectDb::open(root)
+        .expect("open")
+        .pending_tool_approvals(id)
+        .expect("requests")
+        .first()
+      {
+        return request.clone();
+      }
+      events.recv().await.expect("notification");
+    }
+  })
+  .await
+  .expect("an approval arrives");
+  assert_eq!(request.action, "run_check", "{request:#?}");
+  request
+}
+
+fn check_calls(root: &Path, id: RunId) -> Vec<String> {
+  reported(&ProjectDb::open(root).expect("open"), id, "orchester-call: ")
+}
+
+/// A check its rules approve once per run asks at its first call; that approval answers its second call.
+#[tokio::test(flavor = "multi_thread")]
+async fn orchester_run_tools_ask_once_per_run_for_a_check() {
+  let (project, scheduler, mut events, id) = check_twice(ApprovalMode::OncePerRun).await;
+  let root = project.repo.path();
+  let request = pending(root, &mut events, id).await;
+  scheduler
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
+    .await
+    .expect("answered");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let calls = check_calls(root, id);
+  assert_eq!(calls.len(), 2, "{calls:#?}");
+  assert!(calls.iter().all(|call| call.starts_with("run_check ok")), "{calls:#?}");
+  let rules = ProjectDb::open(root).expect("open").approval_rules(id).expect("rules");
+  assert!(
+    matches!(&rules[..], [rule] if matches!(&rule.scope, RuleScope::SimilarMcpTool { check: Some(name), .. } if name == "checks")),
+    "{rules:#?}"
+  );
+}
+
+/// A check its rules approve before every call asks at each, and Approve similar is not available for it.
+#[tokio::test(flavor = "multi_thread")]
+async fn orchester_run_tools_ask_every_call_of_a_check() {
+  let (project, scheduler, mut events, id) = check_twice(ApprovalMode::EveryCall).await;
+  let root = project.repo.path();
+  for _ in 0..2 {
+    let request = pending(root, &mut events, id).await;
+    let similar = scheduler
+      .decide_tool_approval(id, request.id.clone(), ApprovalAnswer::Similar, Answerer::Person)
+      .await;
+    assert!(matches!(similar, Err(Rejection::Failed { .. })), "{similar:?}");
+    scheduler
+      .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
+      .await
+      .expect("answered");
+  }
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(check_calls(root, id).len(), 2);
+  assert!(
+    ProjectDb::open(root)
+      .expect("open")
+      .approval_rules(id)
+      .expect("rules")
+      .is_empty()
+  );
+}

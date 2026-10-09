@@ -6,6 +6,7 @@
 mod answer;
 mod app_server;
 mod approval;
+mod checks;
 mod claude_approval;
 mod cli_version;
 mod end;
@@ -15,6 +16,7 @@ mod native;
 mod orchester_tools;
 pub(super) mod question;
 mod relay;
+mod run_records;
 mod skills;
 mod start;
 mod stderr;
@@ -287,6 +289,18 @@ impl RunTask {
     Ok(true)
   }
 
+  /// The checks `execution`'s step is offered. Read once before for the agent's tools; should the read fail now,
+  /// none: a check's call then asks each time and is never approved similar, the safe side.
+  fn checks_of(&self, execution: StepExecutionId) -> Vec<orchester_core::orchester_tools::ProjectTool> {
+    let Some(step) = self.run.execution(execution).map(|execution| execution.step().clone()) else {
+      return Vec::new();
+    };
+    self.offered_checks(&step).unwrap_or_else(|problem| {
+      tracing::warn!(?problem, "the step's checks could not be read for its approvals");
+      Vec::new()
+    })
+  }
+
   /// Records what the agent of `invocation` works without: the MCP servers and the codebase index
   /// of `left_out`.
   fn record_left_out(&mut self, invocation: &Invocation, left_out: Vec<AgentEvent>) -> Result<(), ExecutionError> {
@@ -333,6 +347,7 @@ impl RunTask {
     let worker = Worker {
       scope: command_scope(&self.root, workspace.path(), &permissions),
       profile: self.profile_of(execution),
+      checks: self.checks_of(execution),
       root: self.root.clone(),
       invocation: invocation.clone(),
       driver,

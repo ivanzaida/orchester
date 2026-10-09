@@ -97,6 +97,7 @@ fn claude_args(tool_approvals: bool, config: &ClaudeMcpConfig) -> Vec<String> {
     skills: None,
     code_index: None,
     approvals: Some(Path::new("/tmp/approvals.json")),
+    checks: &[],
   }
   .args()
   .into_iter()

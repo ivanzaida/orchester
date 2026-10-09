@@ -1,7 +1,7 @@
 //! What running a call takes, the executor contract: a program with its arguments, environment, time
 //! limit and how much of its output the agent gets ([`ToolProgram`]), which the caller runs with its own
-//! process runner and hands back to [`ToolProgram::finished`]; or a result already known, such as a read
-//! outside the worktree, which happens here.
+//! process runner and hands back to [`ToolProgram::finished`]; work the caller's file tools do; or a result already
+//! known, such as a read outside the worktree, which happens here.
 
 use std::{
   ffi::OsString,
@@ -9,29 +9,47 @@ use std::{
   time::Duration,
 };
 
-use super::{FindSymbol, OutputKept, OutsideReads, ProgramOutput, SkillCall, ToolCall, ToolCallError, ToolResult, git};
+use super::{
+  FileCall, FindSymbol, OutputKept, OutsideReadError, OutsideReads, ProgramOutput, SkillCall, ToolCall, ToolCallError,
+  ToolResult,
+};
 use crate::{
   command::{Command, CommandError},
   connection::invocation::{Platform, agent_environment},
-  native::tools::ToolInput,
-  resource::{CommandAction, CommandEnvironment, ExitCodes},
+  memory::MemoryNote,
+  resource::{ApprovalMode, CommandAction, CommandEnvironment, ExitCodes},
+  run::StepProgress,
 };
 
-/// A command tool of the project's Tools library offered to the step, as the run pinned it.
+/// A check: a command tool of the project's Tools library offered to the step, as the run pinned it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProjectTool {
   name: String,
   description: String,
   action: CommandAction,
+  approval: ApprovalMode,
 }
 
 impl ProjectTool {
-  pub fn new(name: &str, description: &str, action: CommandAction) -> Self {
+  /// The check `name` running `action`, approved as its access rules' `approval` says: never asked, asked once per
+  /// run, or asked before every call.
+  pub fn new(name: &str, description: &str, action: CommandAction, approval: ApprovalMode) -> Self {
     Self {
       name: name.to_owned(),
       description: description.to_owned(),
       action,
+      approval,
     }
+  }
+
+  /// Whether a call of it runs only once approved.
+  pub fn asks(&self) -> bool {
+    self.approval != ApprovalMode::Never
+  }
+
+  /// How its access rules approve its calls.
+  pub const fn approval(&self) -> ApprovalMode {
+    self.approval
   }
 
   pub fn name(&self) -> &str {
@@ -55,8 +73,8 @@ pub struct ToolContext<'a> {
   pub outside: &'a OutsideReads,
   pub project_tools: &'a [ProjectTool],
   pub platform: Platform,
-  /// The worktree's own git folder, which git is pinned to: a `.git` file the agent rewrote cannot send git
-  /// to a folder with a configuration of its making.
+  /// The worktree's own git folder, which git is pinned to when it lists the files changed since the code index:
+  /// a `.git` file the agent rewrote cannot send git to a folder with a configuration of its making.
   pub git_dir: &'a Path,
   /// An empty folder the runner owns, which git takes as its hooks folder, so no hook runs.
   pub hooks: &'a Path,
@@ -126,13 +144,24 @@ pub enum ToolWork {
   Run(Box<ToolProgram>),
   /// The answer, already known.
   Done(ToolResult),
-  /// A call of a file tool, which the caller's file tools run, with their read stamps of the invocation.
-  Files(Box<ToolInput>),
+  /// A call of a worktree file tool, which the caller's file tools run, with their read stamps of the invocation.
+  Files(Box<FileCall>),
+  /// `search_external_file` in `folder`, checked and resolved: the caller searches it for `term` and keeps only the
+  /// files [`OutsideReads::check`] lets through.
+  SearchExternal { folder: PathBuf, term: String },
   /// A lookup in the code index, which the caller makes knowing the files changed since the index.
   Symbols(FindSymbol),
   /// A call of `list_skills` or `read_skill`, which the caller answers from the skills it offers
   /// ([`super::StepSkills::run`]).
   Skill(SkillCall),
+  /// `find_references` of this name, which the caller answers from the code index and the worktree.
+  References(String),
+  /// `get_task`, which the caller answers from the run's records ([`super::TaskView`]).
+  Task,
+  /// `save_memory`, which the caller keeps as the project's memory setting says.
+  Memory(Box<MemoryNote>),
+  /// `report_progress`, which the caller keeps as the step's progress line.
+  Progress(StepProgress),
 }
 
 impl ToolCall {
@@ -140,29 +169,66 @@ impl ToolCall {
   /// happens here; it blocks on the file system.
   pub fn work(&self, context: &ToolContext<'_>) -> Result<ToolWork, ToolCallError> {
     match self {
-      Self::ReadOutsideFile { path, offset, limit } => {
-        let text = context.outside.read(path, *offset, *limit)?;
+      Self::ReadExternal {
+        filename,
+        start_line,
+        length,
+      } => {
+        let text = context.outside.read(filename, *start_line, *length)?;
         Ok(ToolWork::Done(ToolResult::shown(text)))
       }
-      Self::RunProjectTool { name } => Ok(ToolWork::Run(Box::new(project_program(name, context)?))),
-      Self::File(input) => Ok(ToolWork::Files(input.clone())),
+      Self::SearchExternal { base_directory, term } => Ok(ToolWork::SearchExternal {
+        folder: context.outside.check_folder(base_directory)?,
+        term: term.clone(),
+      }),
+      Self::RunCheck { name } => Ok(ToolWork::Run(Box::new(project_program(name, context)?))),
+      Self::File(call) => Ok(ToolWork::Files(call.clone())),
       Self::FindSymbol(query) => Ok(ToolWork::Symbols(query.clone())),
       Self::Skill(call) => Ok(ToolWork::Skill(call.clone())),
-      Self::Git(call) => {
-        git::refuse_nested(call, context)?;
-        Ok(ToolWork::Run(Box::new(git::program(call, context))))
-      }
+      Self::FindReferences { name } => Ok(ToolWork::References(name.clone())),
+      Self::GetTask => Ok(ToolWork::Task),
+      Self::SaveMemory(note) => Ok(ToolWork::Memory(note.clone())),
+      Self::ReportProgress(progress) => Ok(ToolWork::Progress(progress.clone())),
     }
   }
 }
 
-/// The program of project tool `name`, found as a tool step finds it.
+/// What a call outside the worktree reaches, resolved.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExternalReach {
+  /// The file it reads, or the folder it searches: what the run's sources must hold for it to run unasked.
+  pub path: PathBuf,
+  /// The folder it reads in, which its approval shows and Approve similar keeps its rule to.
+  pub folder: PathBuf,
+}
+
+impl ToolCall {
+  /// What a call outside the worktree reaches; `None` for any other call. A path the call may not reach is the error
+  /// the call would end with.
+  pub fn external_reach(&self, outside: &OutsideReads) -> Option<Result<ExternalReach, OutsideReadError>> {
+    match self {
+      Self::ReadExternal { filename, .. } => Some(outside.check(filename).map(|file| ExternalReach {
+        folder: file.parent().map_or_else(|| file.clone(), Path::to_path_buf),
+        path: file,
+      })),
+      Self::SearchExternal { base_directory, .. } => {
+        Some(outside.check_folder(base_directory).map(|folder| ExternalReach {
+          path: folder.clone(),
+          folder,
+        }))
+      }
+      _ => None,
+    }
+  }
+}
+
+/// The program of check `name`, found as a tool step finds it.
 fn project_program(name: &str, context: &ToolContext<'_>) -> Result<ToolProgram, ToolCallError> {
   let tool = context
     .project_tools
     .iter()
     .find(|tool| tool.name == name)
-    .ok_or_else(|| ToolCallError::UnknownProjectTool(name.to_owned()))?;
+    .ok_or_else(|| ToolCallError::UnknownCheck(name.to_owned()))?;
   let action = &tool.action;
   let inherited_path = context
     .inherited

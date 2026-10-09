@@ -88,8 +88,9 @@ Hard requirements:
 9. `unsafe` is denied workspace-wide. It is allowed only for FFI without a safe wrapper, in a dedicated module that
    starts with `#![allow(unsafe_code)]`, explains why at the top, keeps each `unsafe` block minimal and precedes it
    with a `// SAFETY:` comment stating the invariants (today: `crates/ipc/src/pipe_owner.rs`,
-   `crates/desktop-app/src/system_icon/windows.rs`, `crates/desktop-app/src/startup/front/windows.rs`, and the
-   test `crates/desktop-app/tests/system_icon.rs`).
+   `crates/desktop-app/src/system_icon/windows.rs`, `crates/desktop-app/src/startup/front/windows.rs`,
+   `crates/agent/src/files/entry/windows.rs`, `crates/core/src/permission/remote_drive.rs`, and the test
+   `crates/desktop-app/tests/system_icon.rs`).
 10. Domain types enforce their invariants through constructors; do not make fields public just to allow raw struct
    literals from other modules.
 11. Secrets: a secret value never reaches logs, `Debug`/`Display` output, prompts, variables, copied text, errors,

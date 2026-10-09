@@ -51,7 +51,7 @@ use tokio::{
 
 use super::{
   claude_approval::{Asked, AskedBy, PromptAnswer},
-  orchester_tools::ToolHost,
+  orchester_tools::{Looked, ToolHost},
   question::AskedQuestion,
 };
 
@@ -350,9 +350,10 @@ impl Relay {
     }
   }
 
-  /// The decision on permission prompt call `arguments`: a person's, or a refusal of what the step does
-  /// not leave to one; `None` when the relay closed its connection while the call waited. An approved call
-  /// of one of Orchester's tools leaves a grant for that call.
+  /// The decision on permission prompt call `arguments`: a person's, a refusal of what the step does not leave to
+  /// one, or, for a call of Orchester's tools, an approval when it needs none (it stays in the run's sources, or a
+  /// check asks nobody) and a refusal when it is invalid or reaches where it may not; `None` when the relay closed its
+  /// connection while the call waited. An approved call of one of Orchester's tools leaves a grant for that call.
   async fn decide(&self, arguments: &Value, lines: &mut Lines<BufReader<OwnedReadHalf>>) -> Option<String> {
     let asked = self.served.prompt.as_ref().map(|scope| scope.classify(arguments));
     let Some(ClaudeAsk::Person(request)) = asked else {
@@ -361,19 +362,55 @@ impl Relay {
     let tool = (request.server() == SERVER)
       .then(|| OrchesterTool::from_name(request.action()))
       .flatten();
+    let input = arguments.get("input").unwrap_or(&Value::Null);
+    let looked = match tool {
+      Some(tool) => Some(self.prompt_call(tool, input).await),
+      None => None,
+    };
+    match looked {
+      // A call that stays in the run's sources, or a check that asks nobody, runs without asking; its call needs no
+      // grant, so none is left.
+      Some(Ok(Looked { asks: false, .. })) => Some(PromptAnswer::Allow.result()),
+      // The call would be refused: it is denied with why, and nobody is asked.
+      Some(Err(refused)) => Some(PromptAnswer::Deny(refused).result()),
+      Some(Ok(Looked {
+        target: Some(target), ..
+      })) => {
+        let request = request.with_target(target);
+        self.ask_prompt(request, (tool, input), lines).await
+      }
+      Some(Ok(_)) | None => self.ask_prompt(request, (tool, input), lines).await,
+    }
+  }
+
+  /// A person's answer on the permission prompt call `request` of `tool` with `input`, as the prompt's result; an
+  /// approved call of one of Orchester's tools leaves a grant for that call. `None` when the relay closed its
+  /// connection while the call waited.
+  async fn ask_prompt(
+    &self,
+    request: ClaudeApprovalRequest,
+    (tool, input): (Option<OrchesterTool>, &Value),
+    lines: &mut Lines<BufReader<OwnedReadHalf>>,
+  ) -> Option<String> {
     let answer = self.ask(request, AskedBy::Prompt, lines).await?;
     if let (Some(tool), PromptAnswer::Allow) = (tool, &answer) {
-      self
-        .served
-        .tools
-        .grant(tool, arguments.get("input").unwrap_or(&Value::Null));
+      self.served.tools.grant(tool, input);
     }
     Some(answer.result())
   }
 
-  /// The answer to a call of Orchester's tool `name`: refused when it is not valid or not offered, asked
-  /// about first when it needs an approval and has none; `None` when the relay closed its connection while
-  /// the call waited.
+  /// What a permission prompt call of Orchester's `tool` with `input` needs before it runs; why the call would be
+  /// refused, when its input or its path is.
+  async fn prompt_call(&self, tool: OrchesterTool, input: &Value) -> Result<Looked, String> {
+    let tools = &self.served.tools;
+    let call = tools.parse(tool.as_str(), input).map_err(|error| error.to_string())?;
+    tools.look(&call).await
+  }
+
+  /// The answer to a call of Orchester's tool `name`: refused when it is not valid, not offered or reaches where it
+  /// may not, asked about first when it needs an approval and has none (a call outside the worktree showing the folder
+  /// it reads in), unless it stays in the run's sources; `None` when the relay closed its connection while the call
+  /// waited.
   async fn call(
     &self,
     name: &str,
@@ -385,10 +422,19 @@ impl Relay {
       Ok(call) => call,
       Err(error) => return Some(ToolResult::refused(&error)),
     };
-    if tools.asks(call.tool()) && !tools.take_grant(call.tool(), arguments) {
+    let looked = match tools.look(&call).await {
+      Ok(looked) => looked,
+      // A path the call may not reach is refused before anybody is asked.
+      Err(refused) => return Some(ToolResult::unavailable(&refused)),
+    };
+    if looked.asks && !tools.take_grant(call.tool(), arguments) {
       let number = self.asked.fetch_add(1, Ordering::Relaxed);
       let request =
         ClaudeApprovalRequest::tool_call(format!("orchester-call-{number}"), name, arguments, tools.secrets());
+      let request = match looked.target {
+        Some(target) => request.with_target(target),
+        None => request,
+      };
       match self.ask(request, AskedBy::ToolCall, lines).await? {
         PromptAnswer::Allow => {}
         PromptAnswer::Deny(told) => return Some(ToolResult::unavailable(&told)),

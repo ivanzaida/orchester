@@ -18,7 +18,7 @@ use orchester_core::{
     },
     stream::RunnerProblem,
   },
-  orchester_tools::SERVER,
+  orchester_tools::{ProjectTool, SERVER},
   permission::{CommandPermission, OutsideCommands, capability::EnforcedPermissions},
   resource::{CommandEnvironment, ModelId},
   store::SettingsStore,
@@ -65,6 +65,8 @@ pub(super) struct Cli<'a> {
   pub(super) code_index: Option<&'a Path>,
   /// Claude Code's permission prompt configuration, when the step asks a person.
   pub(super) approvals: Option<&'a Path>,
+  /// The checks the step is offered, which Claude Code's allow rules follow.
+  pub(super) checks: &'a [ProjectTool],
 }
 
 /// The program of the agent CLI `connection` runs, or why no agent starts on it: this version runs
@@ -211,6 +213,7 @@ impl RunTask {
       skills: cli.skills,
       code_index: cli.code_index,
       approvals: cli.approvals,
+      checks: cli.checks,
     }
     .command(prompt, std::env::vars_os(), cli.environment)
     .map_err(|error: InvocationError| problem(error.to_string()))?;

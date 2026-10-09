@@ -2,6 +2,7 @@
 //! step results, search terms, and which records an agent's prompt gets.
 
 mod handoff;
+mod notes;
 mod recall;
 mod records;
 mod support;
