@@ -96,6 +96,7 @@ pub struct SelectField<T: SignalValue> {
   name: Arc<str>,
   value: Signal<T>,
   options: Vec<SelectOption<T>>,
+  placeholder: Option<Arc<str>>,
   width: Dimension,
   leading: Option<Icon>,
 }
@@ -118,9 +119,16 @@ where
       name: name.into(),
       value,
       options,
+      placeholder: None,
       width: Dimension::Pct(100.0),
       leading: None,
     }
+  }
+
+  /// What the box says while no option is chosen: `value` holds none of the options.
+  pub fn placeholder(mut self, placeholder: impl Into<Arc<str>>) -> Self {
+    self.placeholder = Some(placeholder.into());
+    self
   }
 
   pub fn width(mut self, width: impl Into<Dimension>) -> Self {
@@ -142,6 +150,9 @@ where
       .width(self.width)
       .height(Dimension::Px(ControlHeight::Md.value()))
       .style(select_style(ctx));
+    if let Some(placeholder) = self.placeholder {
+      select = select.placeholder(placeholder);
+    }
     if let Some(glyph) = self.leading {
       let id = self.id.clone();
       select = select.trigger(move |state| leading_trigger(&id, glyph, state.label.as_deref().unwrap_or_default()));

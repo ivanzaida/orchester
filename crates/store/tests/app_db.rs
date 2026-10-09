@@ -160,6 +160,28 @@ fn ui_state_keeps_the_latest_value_per_key_across_opens() {
   assert_eq!(db.ui_state("other").expect("read").as_deref(), Some("kept apart"));
 }
 
+#[test]
+fn ui_state_removes_a_key_and_lists_keys_by_prefix() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
+  db.set_ui_state("form.kept.a", "1").expect("store");
+  db.set_ui_state("form.kept.b", "2").expect("store");
+  db.set_ui_state("form.other", "3").expect("store");
+  db.set_ui_state("tabs", "4").expect("store");
+  assert_eq!(
+    db.ui_state_keys("form.kept.").expect("keys"),
+    vec!["form.kept.a".to_owned(), "form.kept.b".to_owned()]
+  );
+  db.remove_ui_state("form.kept.a").expect("remove");
+  db.remove_ui_state("never.stored")
+    .expect("removing nothing is no error");
+  assert_eq!(db.ui_state("form.kept.a").expect("read"), None);
+  assert_eq!(
+    db.ui_state_keys("form.kept.").expect("keys"),
+    vec!["form.kept.b".to_owned()]
+  );
+}
+
 /// Registers a project the way schema versions 1 and 2 stored it.
 fn insert_project(raw: &rusqlite::Connection, name: &str, repo_root: &str, last_opened_at: i64) {
   raw
