@@ -41,7 +41,23 @@ use crate::{appearance::Appearance, services::Services};
 /// `orchester`.
 pub const APP_NAME: &str = "orchester-app";
 
-const INSTRUCTIONS: &str = "Orchester is a desktop app that orchestrates coding agents per project. `app_state`   tells where its window is (route, tabs, theme, size); `navigate` takes the active tab to a route by name;   `set_theme` switches dark, light or system colors and keeps the choice; debug builds add `hold_reads`, which   holds the reads of project data so a loading state can be captured. The `lurq_*` tools look at and drive the   window itself. Changing the window (navigate, set_theme, lurq input) needs window control, which a   release build grants only when the app's settings allow it or ORCHESTER_APP_MCP_WINDOW_CONTROL=on.   The domain tools set a project up and drive its work through data, with the rules of the app's screens:   add_project, connections (add_cli_connection, check_connection, list_models), agent profiles   (save_profile_draft, publish_profile), pipelines (create_pipeline, save_pipeline_draft, publish_pipeline),   instructions, project settings, then tasks (create_task, run_task), runs (get_run, send_message),   approvals, questions, plans, get_changes and merge_run. Name a project by its id or name, a task by its   key (KON-12), a run by its id or number. A refusal is a tool error with a stable `code` and the app's own   explanation in `reasons`. Answering approvals works only while a person turned on Let automation answer   approvals in the app; no tool takes or returns a secret's value.";
+const INSTRUCTIONS: &str = "Orchester is a desktop app that orchestrates coding agents per project. `app_state` \
+  tells where its window is (route, tabs, theme, size); `navigate` takes the active tab to a route by name; \
+  `set_theme` switches dark, light or system colors and keeps the choice; debug builds add `hold_reads`, which \
+  holds the reads of project data so a loading state can be captured. The `lurq_*` tools look at and drive the \
+  window itself. Changing the window (navigate, set_theme, lurq input) needs window control, which a \
+  release build grants only when the app's settings allow it or ORCHESTER_APP_MCP_WINDOW_CONTROL=on. \
+  The domain tools set a project up and drive its work through data, with the rules of the app's screens: \
+  add_project, connections (add_cli_connection, check_connection, list_models), agent profiles \
+  (save_profile_draft, publish_profile), pipelines (create_pipeline, save_pipeline_draft, publish_pipeline), \
+  instructions, project settings, then tasks (create_task, run_task), runs (get_run, send_message), \
+  approvals, questions, plans, get_changes and merge_run. Name a project by its id or name, a task by its \
+  key (KON-12), a run by its id or number. A refusal is a tool error with a stable `code` and the app's own \
+  explanation in `reasons`. Answering approvals works only while a person turned on Let automation answer \
+  approvals in the app; widening what agents may do (broader profile permissions or MCP servers, a CLI \
+  program not found on the search path, environment variables that change program loading) is refused as \
+  person_only unless a person turned on Let automation change agent permissions in Settings › Automation. \
+  Narrowing is always allowed, and no tool takes or returns a secret's value.";
 
 /// Whether the server listens, decided once at startup.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
