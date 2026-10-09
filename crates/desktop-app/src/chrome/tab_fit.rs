@@ -26,9 +26,11 @@ pub const TAB_MIN_WIDTH: f32 = LABEL_MIN_WIDTH + TAB_CHROME_WIDTH;
 const CONTROLS_WIDTH: f32 = 3.0 * 46.0;
 #[cfg(target_os = "macos")]
 const CONTROLS_WIDTH: f32 = 8.0 + 3.0 * 20.0;
+/// The *N need you* pill and the room after it (`Trailing` `AqLkT`).
+const NEEDS_YOU_WIDTH: f32 = 106.0;
 /// What the title bar takes besides the tabs: the app menu and divider (61), the strip's start (8),
-/// *New tab* with its gaps (30), the drag area and the window controls.
-const TITLE_BAR_RESERVE: f32 = 61.0 + 8.0 + 30.0 + MIN_DRAG_WIDTH + CONTROLS_WIDTH;
+/// *New tab* with its gaps (30), the drag area, the *N need you* pill and the window controls.
+const TITLE_BAR_RESERVE: f32 = 61.0 + 8.0 + 30.0 + MIN_DRAG_WIDTH + NEEDS_YOU_WIDTH + CONTROLS_WIDTH;
 
 /// How the tabs share their room.
 #[derive(Clone, Copy, Debug, PartialEq)]

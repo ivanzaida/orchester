@@ -1,8 +1,10 @@
 //! The tabs in the title bar (`Tabs` `mkCf8`): one per open tab, then *New tab*. A tab at All projects
 //! is the folders icon alone (`All projects tab` `TvmmP`, `Tab/home`); every other tab shows its screen's
 //! icon and name (`Tab/active`, `Tab/inactive`) — a task by its key — after its project's name once the
-//! project is known to be in the list (`Kontur · Overview`); a project's id is never shown. The active
-//! tab is filled with `hover` and has a close button; a middle click closes any tab that can be closed.
+//! project is known to be in the list (`Kontur · Overview`); a project's id is never shown. A tab of a
+//! project where something waits for the person ends in an amber hand (`Tab/attention` `iJNwr`) whose
+//! tooltip says how many. The active tab is filled with `hover` and has a close button; a middle click
+//! closes any tab that can be closed.
 //! The OS window title is the active tab's label and the app's name. The design's unsaved-changes dot
 //! comes with editing.
 //!
@@ -35,10 +37,12 @@ use crate::{
   },
   project::Projects,
   routes::{ProjectPage, Route},
+  shell::needs_you::{count_words, needs_you},
   theme::{ExtraColor, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon, screen_icon},
     pressable::pressable,
+    tooltip::Tooltip,
   },
 };
 
@@ -186,8 +190,27 @@ fn tab_button(
   if tab_fit::is_icon(tab) {
     return all_projects_tab(button, active);
   }
+  let attention = attention(ctx, projects, tab);
   let close = active.then(|| close_button(ctx, navigation.clone(), tab));
-  labelled_tab(button, tab, (&label, fit), close)
+  labelled_tab(button, tab, (&label, fit), (attention, close))
+}
+
+/// The amber hand of a tab whose project has something waiting for the person, with how many in its
+/// tooltip (*Kontur · 2 need you*).
+fn attention(ctx: &mut Ctx, projects: &Projects, tab: &Tab) -> Option<Element> {
+  let project = tab.route().project()?;
+  let count = needs_you(projects, project).filter(|count| *count > 0)?;
+  let name = projects.name(project)?;
+  let words = count_words(ctx, count);
+  let text = ctx.t_args(
+    "shell.tabs.attention",
+    [("project", name.as_str()), ("waiting", words.as_str())],
+  );
+  let id = format!("tab-{}-attention", tab.id());
+  let marker = icon(Icon::Hand, IconSize::Xs, PaletteColor::Warning)
+    .id(id.clone())
+    .describe("count", count.to_string());
+  Some(Tooltip::new(id, text).wrap(ctx, marker))
 }
 
 /// A tab at All projects: the folders icon.
@@ -204,7 +227,12 @@ fn all_projects_tab(button: Button, active: bool) -> Element {
     .into()
 }
 
-fn labelled_tab(button: Button, tab: &Tab, (label, fit): (&str, Fit), close: Option<Element>) -> Element {
+fn labelled_tab(
+  button: Button,
+  tab: &Tab,
+  (label, fit): (&str, Fit),
+  (attention, close): (Option<Element>, Option<Element>),
+) -> Element {
   let (glyph, text, style) = if close.is_some() {
     (
       PaletteColor::TextSecondary,
@@ -241,6 +269,7 @@ fn labelled_tab(button: Button, tab: &Tab, (label, fit): (&str, Fit), close: Opt
     .spacing(ExtraSpacing::Snug.role())
     .child(icon(screen_icon(tab.route().screen()), IconSize::Base, glyph))
     .child(text)
+    .with_children(attention)
     .with_children(close)
     .into()
 }

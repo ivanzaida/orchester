@@ -203,7 +203,11 @@ fn the_window_shows_the_active_tabs_route() {
     !switcher.iter().any(|text| text.contains(PROJECT)),
     "a project's id is never shown"
   );
-  assert_eq!(window.texts("nav-tasks"), Some(vec!["Tasks".to_owned()]));
+  assert_eq!(
+    window.texts("nav-tasks").map(|texts| texts[0].clone()),
+    Some("Tasks".to_owned()),
+    "after it, how many tasks the project has (tests/sidebar.rs)"
+  );
   navigation.open_tab();
   window.pass();
   assert_eq!(

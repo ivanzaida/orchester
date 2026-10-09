@@ -1,0 +1,111 @@
+//! What the status bar shows, as plain data: the active tab's project with its runner, tasks and usage,
+//! the session's activity, and the app's MCP server. The window gathers it ([`super::StatusBar`]); a test
+//! hands it over directly. What the bar's items do goes back as a [`BarAction`].
+
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+  time::{Instant, SystemTime},
+};
+
+use orchester_core::id::{ProjectId, RunId};
+use orchester_ipc::WorkSummary;
+use orchester_workspace::{
+  activity::{ActivityLog, OperationId},
+  runner::{RunnerStatus, state::RunnerState},
+  tasks::{data::ProjectTasks, usage::ProjectUsage},
+};
+
+use crate::{mcp::McpStatus, routes::Route};
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BarFacts {
+  /// The active tab's project, once it is open; `None` on a screen outside a project.
+  pub project: Option<ProjectFacts>,
+  /// The session's operations and events.
+  pub log: ActivityLog,
+  pub mcp: McpStatus,
+}
+
+/// The open project the active tab shows.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProjectFacts {
+  pub id: ProjectId,
+  pub name: String,
+  pub repo_root: PathBuf,
+  pub runner: RunnerFacts,
+  /// The tasks as they stand with the runner's state; `None` while they are read.
+  pub tasks: Option<ProjectTasks>,
+  /// The limits and today's usage; `None` while they are read.
+  pub usage: Option<ProjectUsage>,
+}
+
+/// The project's runner as the bar shows it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RunnerFacts {
+  pub state: RunnerState,
+  /// When the next reconnect attempt starts, while reconnecting.
+  pub next_attempt: Option<Instant>,
+  /// When its current problem began: the drop, or the failed start.
+  pub trouble_since: Option<SystemTime>,
+  /// What it works on, while it is online and has said so.
+  pub work: Option<WorkSummary>,
+  /// Runs whose agents were at work when it dropped, while no runner is back.
+  pub interrupted: usize,
+}
+
+impl RunnerFacts {
+  /// The runner of the project at `repo_root` as `status` reports it; one that has not reported yet is
+  /// starting.
+  pub fn of(status: Option<&RunnerStatus>, repo_root: &Path) -> Self {
+    let Some(status) = status else {
+      return Self::starting();
+    };
+    let state = status.state_for(repo_root);
+    Self {
+      work: (state == RunnerState::Online).then(|| status.work().cloned()).flatten(),
+      next_attempt: status.until(),
+      trouble_since: status.trouble_since(),
+      interrupted: status.interrupted(),
+      state,
+    }
+  }
+
+  pub const fn starting() -> Self {
+    Self {
+      state: RunnerState::Starting,
+      next_attempt: None,
+      trouble_since: None,
+      work: None,
+      interrupted: 0,
+    }
+  }
+}
+
+/// `tasks` as they stand while their project's runner is in `state`: without a runner online, runs
+/// recorded as running have lost their agents (`ProjectTasks::without_runner`).
+pub fn tasks_with(tasks: &ProjectTasks, state: &RunnerState) -> ProjectTasks {
+  if *state == RunnerState::Online {
+    tasks.clone()
+  } else {
+    tasks.without_runner()
+  }
+}
+
+/// What an item of the bar asks the window to do.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BarAction {
+  /// Open the active project's runner log.
+  OpenRunnerLog,
+  /// Start the active project's runner again.
+  RestartRunner,
+  /// Go to `route` in the active tab.
+  Go(Route),
+  /// Stop auto-approving these runs of the active project.
+  StopAutoApproving(Vec<RunId>),
+  /// A failure or a decision in the activity slot was opened or dismissed: it leaves the slot.
+  Resolve(OperationId),
+}
+
+/// Where the bar's actions go.
+pub type Dispatch = Arc<dyn Fn(BarAction) + Send + Sync>;

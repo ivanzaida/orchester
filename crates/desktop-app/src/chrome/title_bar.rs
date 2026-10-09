@@ -1,6 +1,7 @@
 //! What the title bar shows besides the window controls (`Title bar` `yZzwy`): the app menu and a
-//! divider, then the tabs in the bar's flexible middle, which ends in drag area. A startup screen's title
-//! bar has the app menu only (`bcDe3`). The design's trailing *Needs you* count comes with its data.
+//! divider, then the tabs in the bar's flexible middle, which ends in drag area, and the *N need you* pill
+//! before the window controls (`shell::needs_you`). A startup screen's title bar has the app menu only
+//! (`bcDe3`).
 
 use lurq::{
   app::{
@@ -13,7 +14,7 @@ use lurq::{
 };
 
 use super::{app_menu::AppMenu, tab_strip::TabStrip};
-use crate::theme::ExtraSpacing;
+use crate::{shell::needs_you::NeedsYouPill, theme::ExtraSpacing};
 
 /// The line between the app menu and the tabs (`Divider` `pE6GJ`).
 const DIVIDER_HEIGHT: f32 = 16.0;
@@ -39,4 +40,5 @@ pub fn content(ctx: &mut Ctx, bar: ChromeTitleBar, tabs: bool) -> ChromeTitleBar
       ),
     )
     .center(ctx.mount_keyed::<TabStrip>("tab-strip", ()))
+    .trailing(ctx.mount_keyed::<NeedsYouPill>("needs-you", ()))
 }
