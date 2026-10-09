@@ -900,7 +900,7 @@
       "alreadyMerged": "The run was merged already.",
       "notLatestRun": "Only the task’s latest run can be merged.",
       "mergeNotRecorded": "The merge ended without a record of it; the task page says where the run stands.",
-      "personOnly": "This widens what agents may do, which a person decides in Orchester, or lets automation decide by turning on Let automation change agent permissions in Settings › Automation."
+      "personOnly": "This widens what agents may do, which a person decides in Orchester, or lets automation decide by turning on Let automation change agent permissions in Settings › What automation may do."
     },
     "githubConnectionName": "GitHub · {{host}}",
     "widens": {

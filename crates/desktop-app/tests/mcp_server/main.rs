@@ -64,7 +64,7 @@ impl Served {
       app.i18n(),
     );
     let at = DiscoveryFolder::At(folder.path().to_path_buf());
-    let server = AppMcp::start(&mut tree, runtime, &at, config).expect("the server listens");
+    let server = AppMcp::start(&mut tree, runtime, &at, config, &link.input_gate()).expect("the server listens");
     let discovery = read_json(server.discovery_path());
     let token = discovery["token"]
       .as_str()

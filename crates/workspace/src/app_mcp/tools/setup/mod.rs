@@ -125,7 +125,7 @@ const SPECS: &[Spec] = &[
                   write access); MCP servers are the project's (list_connections). Narrowing is always taken. \
                   Anything broader than the profile's latest published version (a new profile: the most \
                   restrictive permissions its CLI enforces and no MCP server) is refused as person_only unless a \
-                  person turned on Let automation change agent permissions in Settings › Automation: write \
+                  person turned on Let automation change agent permissions in Settings › What automation may do: write \
                   access, writable folders, broader commands, network on, MCP servers, no longer asking before \
                   tool calls, approving automatically. Left out, a new profile gets the most restrictive \
                   permissions. Publish it with publish_profile.",

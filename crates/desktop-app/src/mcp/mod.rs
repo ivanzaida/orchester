@@ -15,6 +15,7 @@
 mod discovery;
 pub mod domain;
 mod guard;
+pub mod input_gate;
 mod link;
 mod server;
 pub mod settings;
@@ -31,6 +32,7 @@ use tokio::runtime::Handle;
 use self::{discovery::DiscoveryFile, server::Listening};
 pub use self::{
   discovery::DiscoveryFolder,
+  input_gate::InputGate,
   link::WindowLink,
   server::{BearerToken, endpoint},
   settings::{McpSettings, WindowControlSource},
@@ -56,7 +58,7 @@ const INSTRUCTIONS: &str = "Orchester is a desktop app that orchestrates coding 
   explanation in `reasons`. Answering approvals works only while a person turned on Let automation answer \
   approvals in the app; widening what agents may do (broader profile permissions or MCP servers, a CLI \
   program not found on the search path, environment variables that change program loading) is refused as \
-  person_only unless a person turned on Let automation change agent permissions in Settings › Automation. \
+  person_only unless a person turned on Let automation change agent permissions in Settings › What automation may do. \
   Narrowing is always allowed, and no tool takes or returns a secret's value.";
 
 /// Whether the server listens, decided once at startup.
@@ -115,11 +117,17 @@ impl AppMcp {
   /// Hosts the tools of `config` on `tree`, the window's root tree, and serves them on `runtime`,
   /// writing the discovery file in `folder`. `None` when the server cannot listen or write its file,
   /// which the log says; the window runs without MCP then.
-  pub fn start(tree: &mut Tree, runtime: &Handle, folder: &DiscoveryFolder, config: McpConfig) -> Option<Self> {
+  pub fn start(
+    tree: &mut Tree,
+    runtime: &Handle,
+    folder: &DiscoveryFolder,
+    config: McpConfig,
+    gate: &InputGate,
+  ) -> Option<Self> {
     let tools = tree.enable_mcp(config.hosted());
     let folder = folder.path()?;
     let token = BearerToken::generate();
-    let listening = match Listening::start(runtime, tools, token.clone()) {
+    let listening = match Listening::start(runtime, gate.clone(), tools, token.clone()) {
       Ok(listening) => listening,
       Err(error) => {
         tracing::error!(%error, "the app's MCP server did not start");

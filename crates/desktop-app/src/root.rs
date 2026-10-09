@@ -128,8 +128,10 @@ impl Component for SessionWindow {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let services = ctx.props::<SessionProps>().services.clone();
+    let gate = ctx.props::<SessionProps>().link.input_gate();
     // Provided on every render: a render from the root replaces the inherited context.
     ctx.provide(services);
+    ctx.provide(gate);
     ctx.provide(self.navigation.clone());
     ctx.provide(self.projects.clone());
     let projects = ctx.mount_keyed::<ProjectsHost>("projects", ());

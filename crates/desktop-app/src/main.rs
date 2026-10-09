@@ -50,7 +50,13 @@ fn main() {
   );
   // Started before the root mounts, so the status bar shows its port from the first frame.
   let config = mcp::config(mcp_settings, &link, &appearance, launch.services(), app.i18n());
-  let server = AppMcp::start(&mut tree, runtime.handle(), &DiscoveryFolder::User, config);
+  let server = AppMcp::start(
+    &mut tree,
+    runtime.handle(),
+    &DiscoveryFolder::User,
+    config,
+    &link.input_gate(),
+  );
   let mcp = McpStatus::of(server.as_ref(), mcp_settings);
   let start = launch.start();
   tree.mount_root::<Root>(&mut app, RootProps { link, mcp, start });

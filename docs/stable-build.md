@@ -207,7 +207,11 @@ whose program is not a copy found on the search path, refused before it runs; an
 variable that changes what programs load, where they connect or where tools keep their configuration
 (`PATH`, `NODE_OPTIONS`, `*_BASE_URL`, `*_PROXY`, `*_HOME`, `LD_*`, `DYLD_*`, `GIT_CONFIG*` and the
 others `orchester_core::permission::widening` lists). Narrowing is always taken. The setting is off by
-default and only a person changes it, in the window, in Settings › Automation; no MCP tool changes it.
+default and only a person changes it, in the window, in Settings › What automation may do. No domain tool
+changes it, and window input cannot either: while its row is on screen, the server refuses every window-input
+tool of lurq's (clicks and keys by element or by coordinates, values, menus, resizing) with `person_only`,
+whatever window control allows, and the switch takes no change while an MCP client's input is being applied.
+`navigate` may still show Settings, and looking at the window stays allowed.
 
 **Auto mode.** Modelled on Claude Code's auto mode, and not "approve everything": a separate reviewer
 model judges each request the rules leave to the person (rules of the run, Always allow and

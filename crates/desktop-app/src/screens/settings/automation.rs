@@ -2,7 +2,8 @@
 //! `XaNIz` with a switch, under `Form section title` `De1nE`): an application setting that is off until a
 //! person turns it on here. While it is off, the MCP server's setup tools refuse whatever would widen what
 //! agents may do (`person_only`). It is read and saved off the UI thread; while either runs, the switch
-//! cannot be flipped.
+//! cannot be flipped. While the row is mounted, the app's MCP server refuses window input
+//! (`mcp::input_gate`), so only a person flips it.
 
 use lurq::{
   app::{
@@ -22,6 +23,7 @@ use orchester_workspace::{
 };
 
 use crate::{
+  mcp::input_gate::{InputGate, Protected},
   services::Services,
   theme::{ExtraSpacing, ExtraTypography, SettingsSpacing, SettingsText},
   ui::{
@@ -44,14 +46,22 @@ type SaveAction = FutureAction<bool, bool, Message>;
 pub struct ChangePermissions {
   /// The setting as the person last chose it; `None` until they do.
   saved: Signal<Option<bool>>,
+  gate: InputGate,
+  /// While the row is mounted, the MCP server refuses window input.
+  _protected: Protected,
 }
 
 impl Component for ChangePermissions {
   type Props = NoProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let gate = ctx
+      .use_context::<InputGate>()
+      .expect("the session's window provides the MCP input gate");
     Self {
       saved: ctx.signal(None),
+      _protected: gate.protect(),
+      gate,
     }
   }
 
@@ -83,8 +93,13 @@ impl Component for ChangePermissions {
     let mut switch = Toggle::new(SWITCH_ID, ToggleKind::Switch, shown.unwrap_or(false), title.clone()).hide_label();
     // Until the stored value is known, and while it is read or saved, the switch stays as it is.
     if shown.is_some() && !fixed {
-      let saved = self.saved.clone();
+      let (saved, gate) = (self.saved.clone(), self.gate.clone());
       switch = switch.on_change(move |chosen| {
+        // An MCP client's synthetic input reaches the switch like a person's; only a person flips it.
+        if gate.input_in_flight() {
+          tracing::warn!("an MCP client's window input reached Let automation change agent permissions; ignored");
+          return;
+        }
         saved.set(Some(chosen));
         save.run(chosen);
       });

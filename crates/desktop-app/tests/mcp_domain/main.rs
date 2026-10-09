@@ -15,6 +15,7 @@ mod http;
 mod kontur;
 mod live;
 mod merge;
+mod window;
 
 use std::{
   path::{Path, PathBuf},
@@ -63,6 +64,11 @@ struct Served {
 impl Served {
   /// The app on the application database `database` in `folder`, whose projects' runner is `runner`.
   fn start(folder: TempDir, database: &Path, runner: PathBuf) -> Self {
+    Self::start_with(folder, database, runner, false)
+  }
+
+  /// [`Self::start`], with window control as given.
+  fn start_with(folder: TempDir, database: &Path, runner: PathBuf, window_control: bool) -> Self {
     let runtime = Runtime::new().expect("tokio runtime");
     let launch = Launch::begin_at(database, runner, runtime.handle(), None);
     let mut app = App::new();
@@ -73,10 +79,11 @@ impl Served {
     tree.resize(1440, 900);
     let link = WindowLink::default();
     let appearance = Appearance::new(ThemeSetting::Dark, Arc::default(), None);
-    let settings = McpSettings::with_window_control(false);
+    let settings = McpSettings::with_window_control(window_control);
     let config = mcp::config(settings, &link, &appearance, launch.services(), app.i18n());
     let discovery = DiscoveryFolder::At(folder.path().join("discovery"));
-    let server = AppMcp::start(&mut tree, runtime.handle(), &discovery, config).expect("the server listens");
+    let server =
+      AppMcp::start(&mut tree, runtime.handle(), &discovery, config, &link.input_gate()).expect("the server listens");
     let file: Value = serde_json::from_str(&std::fs::read_to_string(server.discovery_path()).expect("discovery file"))
       .expect("the discovery file is JSON");
     let token = file["token"].as_str().expect("the file holds the token").to_owned();
