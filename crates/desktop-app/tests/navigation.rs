@@ -219,7 +219,6 @@ fn shortcuts_ask_for_history_and_tab_moves() {
   assert_eq!(shortcut(keys("t", "KeyT")), None, "a plain key is typing");
   let ctrl_z_on_azerty = Keys {
     ctrl: true,
-    meta: true,
     ..keys("z", "KeyW")
   };
   assert_eq!(
@@ -243,6 +242,8 @@ fn platform_shortcuts(keys: impl Fn(&'static str, &'static str) -> Keys<'static>
   assert_eq!(shortcut(ctrl("t", "KeyT")), Some(Shortcut::NewTab));
   assert_eq!(shortcut(ctrl("w", "KeyW")), Some(Shortcut::CloseTab));
   assert_eq!(shortcut(ctrl("z", "KeyW")), None, "Ctrl+Z on AZERTY is not Ctrl+W");
+  assert_eq!(shortcut(ctrl(",", "KeyW")), None, "Ctrl+, on Dvorak is not Ctrl+W");
+  assert_eq!(shortcut(alt("[", "ArrowLeft")), None, "a typed ASCII key decides");
   assert_eq!(
     shortcut(ctrl("ц", "KeyW")),
     Some(Shortcut::CloseTab),
@@ -266,6 +267,12 @@ fn platform_shortcuts(keys: impl Fn(&'static str, &'static str) -> Keys<'static>
   assert_eq!(shortcut(cmd("t", "KeyT")), Some(Shortcut::NewTab));
   assert_eq!(shortcut(cmd("w", "KeyW")), Some(Shortcut::CloseTab));
   assert_eq!(shortcut(cmd("z", "KeyW")), None, "Cmd+Z on AZERTY is not Cmd+W");
+  assert_eq!(shortcut(cmd(",", "KeyW")), None, "Cmd+, on Dvorak is not Cmd+W");
+  assert_eq!(
+    shortcut(cmd("/", "BracketLeft")),
+    None,
+    "Cmd+/ on Dvorak does not go back"
+  );
   assert_eq!(shortcut(cmd("[", "BracketLeft")), Some(Shortcut::Back));
   assert_eq!(shortcut(cmd("]", "BracketRight")), Some(Shortcut::Forward));
 }
