@@ -44,6 +44,7 @@ use self::{
 use crate::{
   project::{ShownProject, TasksState},
   services::Services,
+  theme::ExtraSpacing,
   ui::{markdown::plain, unavailable::reason_line},
 };
 
@@ -60,7 +61,7 @@ pub fn tab(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey, detail: Arc<Tas
 }
 
 #[derive(Clone, PartialEq)]
-pub struct ConversationProps {
+struct ConversationProps {
   project: ShownProject,
   key: TaskKey,
   detail: Arc<TaskDetail>,
@@ -68,7 +69,7 @@ pub struct ConversationProps {
 
 impl lurq::app::component::DevtoolsInspectable for ConversationProps {}
 
-pub struct ConversationTab {
+struct ConversationTab {
   follow: Follow,
   toggles: Toggles,
   retry: Signal<u64>,
@@ -198,7 +199,7 @@ fn composer_place(ctx: &Ctx) -> Element {
     .id("conversation-composer-place")
     .width(Dimension::Pct(100.0))
     .padding_horizontal(SpacingSize::Section)
-    .padding_bottom(crate::theme::ExtraSpacing::Inset.role())
+    .padding_bottom(ExtraSpacing::Inset.role())
     .child(reason_line(
       "conversation-composer-unavailable",
       &ctx.t("conversation.composer.unavailable"),
