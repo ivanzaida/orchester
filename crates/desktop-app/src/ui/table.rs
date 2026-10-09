@@ -20,9 +20,9 @@ use super::{
 };
 use crate::theme::{ExtraColor, ExtraTypography, IconSize};
 
-/// `Task list header` and `Task list row` heights.
-const HEADER_HEIGHT: f32 = 32.0;
-const ROW_HEIGHT: f32 = 44.0;
+/// `Task list header` and `Task list row` heights, for a screen that sizes a table by its rows.
+pub const HEADER_HEIGHT: f32 = 32.0;
+pub const ROW_HEIGHT: f32 = 44.0;
 /// The open chevron's column (`Open` `aM7lc`).
 const OPEN_COLUMN: f32 = 14.0;
 
