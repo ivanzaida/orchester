@@ -20,7 +20,7 @@ use self::windows as platform;
 
 /// Why an entry was not changed.
 #[derive(Debug)]
-pub(super) enum EntryError {
+pub enum EntryError {
   /// The path no longer leads where it was checked to: a link or junction lies on the way.
   Moved,
   /// The entry is a folder, which these tools never delete or move.
@@ -40,11 +40,22 @@ impl From<io::Error> for EntryError {
 }
 
 /// Deletes the entry at `path`, inside the folder `root` (both resolved, `path`'s last name not followed).
-pub(super) fn remove(root: &Path, path: &Path) -> Result<(), EntryError> {
+///
+/// # Errors
+///
+/// [`EntryError::Moved`] when a link or junction on the way leads elsewhere than `path`, [`EntryError::Folder`] for a
+/// folder, [`EntryError::Io`] when the system refuses.
+pub fn remove(root: &Path, path: &Path) -> Result<(), EntryError> {
   platform::remove(root, path)
 }
 
 /// Renames the entry at `from` to `to`, where no entry may be; all inside `root` and resolved but their last names.
-pub(super) fn rename(root: &Path, from: &Path, to: &Path) -> Result<(), EntryError> {
+///
+/// # Errors
+///
+/// [`EntryError::Moved`] when a link or junction on the way to either leads elsewhere, the target's folder included,
+/// [`EntryError::Folder`] for a folder, [`EntryError::Exists`] when an entry is at `to`, [`EntryError::Io`] when the
+/// system refuses.
+pub fn rename(root: &Path, from: &Path, to: &Path) -> Result<(), EntryError> {
   platform::rename(root, from, to)
 }
