@@ -4,6 +4,10 @@
 //! UI code styles only through lurq roles (`PaletteColor`, `TypographyStyle`, `SpacingSize`,
 //! `RadiusSize`, `BorderSize`, `ShadowStyle`) and the extra roles defined here; design values live only
 //! in this module.
+//!
+//! The roles are the design's complete token set on purpose, also where no screen uses one yet (the
+//! selection, scrim, conversation, code and diff colors, `display` type, `radius_full`): the screens
+//! that need them come next and must find them here rather than add near-duplicates.
 
 mod fonts;
 mod form;

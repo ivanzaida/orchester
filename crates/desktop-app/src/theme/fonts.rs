@@ -7,11 +7,11 @@ pub const MONO: &str = "Geist Mono";
 /// Family name inside the bundled `lucide.ttf`, ISC (`assets/fonts/lucide-LICENSE.txt`).
 pub const ICONS: &str = "lucide";
 
-const FACES: [&[u8]; 6] = [
+/// The faces the type roles use: Geist at 400, 500 and 600, Geist Mono at 400, and the icons.
+const FACES: [&[u8]; 5] = [
   include_bytes!("../../assets/fonts/Geist-Regular.ttf"),
   include_bytes!("../../assets/fonts/Geist-Medium.ttf"),
   include_bytes!("../../assets/fonts/Geist-SemiBold.ttf"),
-  include_bytes!("../../assets/fonts/Geist-Bold.ttf"),
   include_bytes!("../../assets/fonts/GeistMono-Regular.ttf"),
   include_bytes!("../../assets/fonts/lucide.ttf"),
 ];

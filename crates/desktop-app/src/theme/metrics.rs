@@ -59,7 +59,8 @@ impl ExtraSpacing {
 pub enum ExtraRadius {
   /// 8: the project switcher (`Project switcher`).
   Tile,
-  /// 8: the window frame (`q9mf0k`), the radius Windows 11 rounds windows to.
+  /// The window frame's corners: 8 on Windows (`q9mf0k`, the radius Windows 11 rounds windows to), 10 on
+  /// macOS, where lurq clips the window at 10.
   Window,
   /// `radius_full` 999: pills and round avatars.
   Full,
@@ -82,11 +83,17 @@ impl ExtraRadius {
 
   pub const fn value(self) -> f32 {
     match self {
-      Self::Tile | Self::Window => 8.0,
+      Self::Tile => 8.0,
+      Self::Window => WINDOW_RADIUS,
       Self::Full => 999.0,
     }
   }
 }
+
+#[cfg(not(target_os = "macos"))]
+const WINDOW_RADIUS: f32 = 8.0;
+#[cfg(target_os = "macos")]
+const WINDOW_RADIUS: f32 = 10.0;
 
 /// `spacing_*`, `radius_*` and `border_size_*` of the design.
 pub fn install(theme: &Theme) {

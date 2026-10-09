@@ -117,11 +117,6 @@ impl Screen {
     }
   }
 
-  /// Whether the screen belongs to a project, so its route names one.
-  pub const fn in_project(self) -> bool {
-    !matches!(self, Self::AllProjects | Self::Settings)
-  }
-
   /// The segment after a project's path; `None` for its Overview, a task and screens outside a project.
   const fn segment(self) -> Option<&'static str> {
     match self {

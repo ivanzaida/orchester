@@ -14,8 +14,6 @@ pub enum Mode {
 }
 
 impl Mode {
-  pub const ALL: [Self; 2] = [Self::Dark, Self::Light];
-
   /// The name of the mode in the design and in the app's MCP tools.
   pub const fn name(self) -> &'static str {
     match self {

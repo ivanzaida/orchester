@@ -185,6 +185,12 @@ fn spacing_radii_and_borders_follow_the_design() {
     assert_eq!(theme.radius_value(extra.role()), extra.value(), "{extra:?}");
   }
   assert_eq!(ExtraRadius::Full.value(), 999.0);
+  let window = if cfg!(target_os = "macos") { 10.0 } else { 8.0 };
+  assert_eq!(
+    theme.radius_value(ExtraRadius::Window.role()),
+    window,
+    "lurq clips macOS windows at 10"
+  );
   assert_eq!(
     [BorderSize::Sm, BorderSize::Md, BorderSize::Lg].map(|size| theme.border_size_value(size)),
     [1.0, 2.0, 3.0]
