@@ -34,10 +34,25 @@ fn step_keys(pipeline: &Pipeline) -> Vec<&StepKey> {
   keys
 }
 
+/// A step is no weaker when it keeps its wiring, failure route (with no more retries before a person is
+/// asked), budget (no larger, and kept), instructions, approval and executor, and narrows no less. The
+/// retries, the budget and the instructions are where a person checks in, so they count as well.
 fn step_no_weaker(old: &Step, new: &Step) -> bool {
   let route = |step: &Step| step.on_failure.as_ref().map(|route| route.return_to.clone());
+  let retries = match (&old.on_failure, &new.on_failure) {
+    (Some(before), Some(after)) => after.max_retries <= before.max_retries,
+    _ => true,
+  };
+  let budget = match (old.budget, new.budget) {
+    (None, _) => true,
+    (Some(_), None) => false,
+    (Some(before), Some(after)) => after.get() <= before.get(),
+  };
   old.depends_on == new.depends_on
     && route(old) == route(new)
+    && retries
+    && budget
+    && old.instructions == new.instructions
     && (!old.approval_gate || new.approval_gate)
     && kind_no_weaker(&old.kind, &new.kind)
 }
@@ -49,17 +64,18 @@ fn kind_no_weaker(old: &StepKind, new: &StepKind) -> bool {
       StepKind::Agent {
         profile: before,
         repository: old_access,
+        model: old_model,
         permissions: old_narrowing,
-        ..
       },
       StepKind::Agent {
         profile: after,
         repository: new_access,
+        model: new_model,
         permissions: new_narrowing,
-        ..
       },
     ) => {
       before == after
+        && old_model == new_model
         && (*new_access == RepositoryAccess::ReadOnly || *old_access == RepositoryAccess::Write)
         && narrowing_no_weaker(old_narrowing, new_narrowing)
     }

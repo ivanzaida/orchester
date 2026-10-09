@@ -1,11 +1,16 @@
 //! A new pipeline version is no weaker than the one it replaces only when it keeps the steps, their wiring,
 //! profiles and tools, and is as strict or stricter in every step.
 
+use std::num::NonZeroU32;
+
 use orchester_core::{
   id::ResourceId,
   name::Name,
   permission::{AllowedCommands, CommandPrefix, StepCommands, StepNetwork, StepPermissions},
-  resource::{Pipeline, PromptText, RepositoryAccess, Step, StepKey, StepKind, Weaker, weaker_than},
+  resource::{
+    FailureRoute, ModelId, Pipeline, PromptText, RepositoryAccess, Step, StepKey, StepKind, Weaker, weaker_than,
+  },
+  tokens::TokenBudget,
 };
 
 fn key(value: &str) -> StepKey {
@@ -168,4 +173,46 @@ fn strictness_counts_write_access_and_network_only_when_wider() {
   assert_eq!(weaker_than(&old, &writes), plan);
   let network = changed(&steps, "plan", |step| narrowing(step).network = StepNetwork::AsProfile);
   assert_eq!(weaker_than(&old, &network), plan);
+}
+
+#[test]
+fn strictness_counts_retries_budgets_instructions_and_models() {
+  let profile = ResourceId::generate();
+  let mut steps = published(profile);
+  steps[1].on_failure = Some(FailureRoute {
+    return_to: key("plan"),
+    max_retries: NonZeroU32::new(2).expect("positive"),
+  });
+  steps[1].budget = Some(TokenBudget::new(50_000).expect("a budget"));
+  let old = pipeline(steps.clone());
+  let build = vec![Weaker::Step(key("build"))];
+  let retries = |count: u32| {
+    changed(&steps, "build", |step| {
+      if let Some(route) = &mut step.on_failure {
+        route.max_retries = NonZeroU32::new(count).expect("positive");
+      }
+    })
+  };
+  assert!(weaker_than(&old, &retries(1)).is_empty(), "fewer retries");
+  assert_eq!(weaker_than(&old, &retries(3)), build, "more retries");
+  let budget = |tokens: Option<u64>| {
+    changed(&steps, "build", |step| {
+      step.budget = tokens.map(|tokens| TokenBudget::new(tokens).expect("a budget"));
+    })
+  };
+  assert!(weaker_than(&old, &budget(Some(40_000))).is_empty(), "a smaller budget");
+  assert_eq!(weaker_than(&old, &budget(Some(60_000))), build, "a larger budget");
+  assert_eq!(weaker_than(&old, &budget(None)), build, "no budget");
+  let instructions = changed(&steps, "build", |step| {
+    step.instructions = PromptText::new("Push straight to main.").expect("a prompt");
+  });
+  assert_eq!(weaker_than(&old, &instructions), build, "other instructions");
+  let model = changed(&steps, "build", |step| {
+    if let StepKind::Agent { model, .. } = &mut step.kind {
+      *model = Some(ModelId::new("gpt-5.5").expect("a model"));
+    }
+  });
+  assert_eq!(weaker_than(&old, &model), build, "another model");
+  let described = pipeline(steps.clone()).with_description("Ships small fixes.".to_owned());
+  assert!(weaker_than(&old, &described).is_empty(), "the description may change");
 }
