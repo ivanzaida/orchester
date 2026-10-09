@@ -14,6 +14,7 @@ use std::sync::Arc;
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   components::{Button, Row, Text},
+  core::ElementRef,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -58,6 +59,7 @@ pub struct Toggle {
   label: Arc<str>,
   label_shown: bool,
   change: Option<Arc<dyn Fn(bool) + Send + Sync>>,
+  element: Option<ElementRef>,
 }
 
 impl Toggle {
@@ -71,6 +73,7 @@ impl Toggle {
       label: label.into(),
       label_shown: true,
       change: None,
+      element: None,
     }
   }
 
@@ -85,6 +88,12 @@ impl Toggle {
   /// the control is faded and cannot be flipped.
   pub fn on_change(mut self, handler: impl Fn(bool) + Send + Sync + 'static) -> Self {
     self.change = Some(Arc::new(handler));
+    self
+  }
+
+  /// `element` refers to the control, e.g. so a screen can move the focus to it.
+  pub fn element_ref(mut self, element: ElementRef) -> Self {
+    self.element = Some(element);
     self
   }
 
@@ -157,6 +166,10 @@ impl From<Toggle> for Element {
       None => inert(Button::empty())
         .opacity(DISABLED_OPACITY)
         .describe("state", "fixed"),
+    };
+    let button = match toggle.element {
+      Some(element) => button.ref_element(element),
+      None => button,
     };
     button
       .id(toggle.id)
