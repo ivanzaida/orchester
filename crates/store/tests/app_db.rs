@@ -160,6 +160,27 @@ fn ui_state_keeps_the_latest_value_per_key_across_opens() {
   assert_eq!(db.ui_state("other").expect("read").as_deref(), Some("kept apart"));
 }
 
+#[test]
+fn automation_changes_permissions_only_once_a_person_turned_it_on() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let mut db = AppDb::open(&path).expect("open");
+  assert!(
+    !db.automation_changes_permissions().expect("read"),
+    "off until turned on"
+  );
+  db.set_automation_changes_permissions(true).expect("store");
+  drop(db);
+  let mut db = AppDb::open(&path).expect("reopen");
+  assert!(db.automation_changes_permissions().expect("read"));
+  db.set_automation_changes_permissions(false).expect("store");
+  assert!(!db.automation_changes_permissions().expect("read"));
+  assert!(
+    !db.automation_answers_approvals().expect("read"),
+    "a setting of its own"
+  );
+}
+
 /// Registers a project the way schema versions 1 and 2 stored it.
 fn insert_project(raw: &rusqlite::Connection, name: &str, repo_root: &str, last_opened_at: i64) {
   raw

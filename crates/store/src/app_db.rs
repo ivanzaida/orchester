@@ -45,6 +45,7 @@ CREATE TABLE ui_state (
   settings::MIGRATION,
   settings::THRESHOLD_MIGRATION,
   settings::APPEARANCE_MIGRATION,
+  settings::AUTOMATION_PERMISSIONS_MIGRATION,
 ];
 
 /// Identifies the running session in the session log.
