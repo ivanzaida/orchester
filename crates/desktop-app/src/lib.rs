@@ -18,4 +18,4 @@ mod screens;
 pub mod settings;
 mod shell;
 pub mod theme;
-mod ui;
+pub mod ui;

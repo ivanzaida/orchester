@@ -11,6 +11,7 @@ use orchester_app::{
   root::{Root, RootProps},
   settings::AppSettings,
   theme,
+  ui::loader,
 };
 use orchester_store::StoreError;
 use tokio::runtime::Runtime;
@@ -33,6 +34,7 @@ fn main() {
 
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
+  loader::install(&mut tree);
   let link = WindowLink::default();
   let window_control = stored(settings.as_ref(), AppSettings::mcp_window_control, "window control").flatten();
   let mcp_settings = McpSettings::of_build().with_stored(window_control).with_environment();
