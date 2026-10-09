@@ -54,13 +54,21 @@ fn fallback() -> BTreeMap<String, Vec<String>> {
   locale_leaves(contents)
 }
 
-/// Every string literal of the sources that reads like a key of one of the locale's sections:
-/// dotted, starting with a section's name.
+/// Every string literal of the sources that reads like a key of one of the locale's sections
+/// (dotted, starting with a section's name), and the first literal of every `Message::new(`, `t(`
+/// and `t_args(` call, whatever it starts with.
 fn named_keys(sections: &BTreeSet<&str>) -> BTreeSet<String> {
   let mut sources = Vec::new();
   rust_sources(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut sources);
   let mut keys = BTreeSet::new();
   for source in &sources {
+    for call in ["Message::new(\"", ".t(\"", ".t_args(\""] {
+      for part in source.split(call).skip(1) {
+        if let Some((key, _)) = part.split_once('"') {
+          keys.insert(key.to_owned());
+        }
+      }
+    }
     // Every text between two quotes: a literal, or the code between two literals, which never reads
     // as a dotted key.
     let quoted = source.match_indices('"').filter_map(|(at, _)| {
