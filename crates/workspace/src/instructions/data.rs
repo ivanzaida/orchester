@@ -1,7 +1,7 @@
 //! Reading, creating and publishing the project's instructions through the project database, with
 //! the profiles and pipelines they can apply to. Each instruction follows the shared lifecycle:
 //! Draft saved → Publish vN → Published vN (`docs/design/orchester-workspace.md`, "Core workflow");
-//! drafts are saved as they are edited (see [`crate::drafts`]). Every function blocks on SQLite; the
+//! drafts are saved as they are edited, by each app. Every function blocks on SQLite; the
 //! UI calls them off the UI thread.
 
 use std::{collections::BTreeSet, path::Path, sync::Arc};

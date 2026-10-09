@@ -85,11 +85,6 @@ impl ProjectJobState {
     self.runs.get(&run).cloned().unwrap_or_default()
   }
 
-  /// The runs whose operations were asked about, with how they stand.
-  pub fn runs(&self) -> impl Iterator<Item = (RunId, &RunJobState)> {
-    self.runs.iter().map(|(run, state)| (*run, state))
-  }
-
   /// Counts the removals Orchester's MCP server made: the task pages read what the runs left again.
   pub fn removed_outside(&self) -> u64 {
     self.removed_outside
@@ -166,10 +161,6 @@ impl RunJobs {
 
   pub fn busy(&self) -> bool {
     self.state().busy()
-  }
-
-  pub fn removing(&self) -> bool {
-    self.state().removing()
   }
 
   fn update(&self, change: impl FnOnce(&mut RunJobState)) {

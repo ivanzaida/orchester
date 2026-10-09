@@ -1,7 +1,7 @@
 //! Reading, creating and publishing the project's skills through the project database, with the
 //! roles and pipelines their scope can name, and adding a reference file from disk as a project
 //! blob. Each skill follows the shared lifecycle, Draft saved → Publish vN → Published vN; drafts are
-//! saved as they are edited (see [`crate::drafts`]). Every function blocks on SQLite or the disk;
+//! saved as they are edited, by each app. Every function blocks on SQLite or the disk;
 //! the UI calls them off the UI thread.
 
 use std::{collections::BTreeSet, fs, io, path::Path, sync::Arc};

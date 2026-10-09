@@ -96,7 +96,7 @@ impl RunIntegration {
   /// Opens the confirmation of *Remove worktree* anew: discarding not agreed to, and an earlier
   /// failure, which stayed under the run's row once the dialog closed, cleared.
   pub fn open_remove(&self) {
-    if matches!(self.0.remove.get_untracked(), JobState::Failed(_)) {
+    if matches!(self.0.job.state().remove, JobState::Failed(_)) {
       self.0.job.clear_failed_removal();
       self.0.remove.set(JobState::Idle);
     }
@@ -107,7 +107,7 @@ impl RunIntegration {
   /// Closes the confirmation unless git is removing; a failure stays to be shown under the run's
   /// row in *Runs of this task* (63.06 `VBR27`).
   pub fn dismiss_remove(&self) {
-    if self.0.remove.get_untracked() == JobState::Running {
+    if self.0.job.state().remove == JobState::Running {
       return;
     }
     self.0.dialog_open.set(false);
