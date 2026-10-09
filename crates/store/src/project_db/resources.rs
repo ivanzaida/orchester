@@ -18,6 +18,58 @@ use crate::{
 const SELECT_RESOURCES: &str = "SELECT id, kind, slug, name, created_at FROM resources";
 const SELECT_VERSIONS: &str = "SELECT id, number, body, published_at FROM resource_versions";
 
+impl ProjectDb {
+  /// Publishes the draft of `resource` only if its body is `expected`, in the same transaction that reads
+  /// it: a check made on the draft holds for what is published ([`StoreError::DraftChanged`] otherwise).
+  pub fn publish_draft_matching<B: ResourceBody>(
+    &mut self,
+    resource: ResourceId,
+    expected: &B,
+    now: Timestamp,
+  ) -> Result<Version<B>, StoreError> {
+    self.publish_checked(resource, Some(expected), now)
+  }
+
+  fn publish_checked<B: ResourceBody>(
+    &mut self,
+    resource: ResourceId,
+    expected: Option<&B>,
+    now: Timestamp,
+  ) -> Result<Version<B>, StoreError> {
+    let transaction = self.connection.transaction()?;
+    check_kind::<B>(&transaction, resource)?;
+    let draft = load_draft::<B>(&transaction, resource)?.ok_or(StoreError::NoDraft(resource))?;
+    if expected.is_some_and(|expected| draft.body() != expected) {
+      return Err(StoreError::DraftChanged(resource));
+    }
+    draft.body().check_publishable()?;
+    let latest = load_versions::<B>(
+      &transaction,
+      "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
+      [resource.to_string()],
+    )?
+    .pop()
+    .map(|version| version.number());
+    let version = publish(draft, latest, now)?;
+    transaction.execute(
+      "INSERT INTO resource_versions (id, resource_id, number, body, published_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+      params![
+        version.id().to_string(),
+        resource.to_string(),
+        version.number().get(),
+        encode(version.body())?,
+        now.unix_millis()
+      ],
+    )?;
+    transaction.execute(
+      "DELETE FROM resource_drafts WHERE resource_id = ?1",
+      [resource.to_string()],
+    )?;
+    transaction.commit()?;
+    Ok(version)
+  }
+}
+
 impl ResourceStore for ProjectDb {
   type Error = StoreError;
 
@@ -112,34 +164,7 @@ impl ResourceStore for ProjectDb {
   }
 
   fn publish_draft<B: ResourceBody>(&mut self, resource: ResourceId, now: Timestamp) -> Result<Version<B>, StoreError> {
-    let transaction = self.connection.transaction()?;
-    check_kind::<B>(&transaction, resource)?;
-    let draft = load_draft::<B>(&transaction, resource)?.ok_or(StoreError::NoDraft(resource))?;
-    draft.body().check_publishable()?;
-    let latest = load_versions::<B>(
-      &transaction,
-      "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
-      [resource.to_string()],
-    )?
-    .pop()
-    .map(|version| version.number());
-    let version = publish(draft, latest, now)?;
-    transaction.execute(
-      "INSERT INTO resource_versions (id, resource_id, number, body, published_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-      params![
-        version.id().to_string(),
-        resource.to_string(),
-        version.number().get(),
-        encode(version.body())?,
-        now.unix_millis()
-      ],
-    )?;
-    transaction.execute(
-      "DELETE FROM resource_drafts WHERE resource_id = ?1",
-      [resource.to_string()],
-    )?;
-    transaction.commit()?;
-    Ok(version)
+    self.publish_checked(resource, None, now)
   }
 
   fn latest_version<B: ResourceBody>(&self, resource: ResourceId) -> Result<Option<Version<B>>, StoreError> {
