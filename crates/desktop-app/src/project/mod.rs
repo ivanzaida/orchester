@@ -97,3 +97,10 @@ pub struct ShownProject {
 }
 
 impl lurq::app::component::DevtoolsInspectable for ShownProject {}
+
+impl ShownProject {
+  /// Its tasks as they stand with its runner ([`ProjectFeed::tasks_with_runner`]).
+  pub fn tasks(&self) -> TasksState {
+    self.feed.tasks_with_runner(&self.open.repo_root)
+  }
+}

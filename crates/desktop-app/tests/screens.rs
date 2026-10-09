@@ -2,7 +2,10 @@
 //! screen is built (`BUILT`). A path that names nothing shows `screen-not-found`, which says why. The paths go
 //! straight to the router, as a tab's history would hand them over, so a path no route prints is shown
 //! too. The project the paths name is known to be open; what the window does until a project opens,
-//! and for one that cannot, is `tests/projects.rs`.
+//! and for one that cannot, is `tests/projects.rs`. The shell around the screens works with a session's
+//! services, from a data folder of the test's own.
+
+mod support;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -21,10 +24,13 @@ use orchester_app::{
   mcp::McpStatus,
   navigation::{Navigation, tabs::TabSet},
   project::{ProjectState, Projects},
+  root::Start,
   routes::{
     ChangeSource, ChangedFile, OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView,
     routes,
   },
+  services::Services,
+  startup::Launch,
   theme::{self, Mode},
 };
 use orchester_core::{
@@ -34,6 +40,7 @@ use orchester_core::{
 };
 use orchester_workspace::workspace::OpenProject;
 use parking_lot::Mutex;
+use support::Data;
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const NOT_BUILT: &str = "This screen isn't built yet.";
@@ -43,9 +50,9 @@ const BUILT: &[Screen] = &[
   Screen::Tasks,
 ];
 
-/// Where the test root leaves its router.
-#[derive(Clone, Default)]
-struct RouterSlot(Arc<Mutex<Option<RouterHandle>>>);
+/// Where the test root leaves its router, and the services it provides.
+#[derive(Clone)]
+struct RouterSlot(Arc<Mutex<Option<RouterHandle>>>, Services);
 
 impl PartialEq for RouterSlot {
   fn eq(&self, other: &Self) -> bool {
@@ -78,6 +85,7 @@ impl Component for ScreensRoot {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    ctx.provide(ctx.props::<RouterSlot>().1.clone());
     ctx.provide(McpStatus::Unavailable);
     ctx.provide(self.navigation.clone());
     ctx.provide(self.projects.clone());
@@ -89,20 +97,33 @@ struct Screens {
   app: App,
   tree: Tree,
   router: RouterHandle,
+  /// Keep the session, its data folder and its runtime while the screens show.
+  _session: (Launch, Data),
 }
 
 impl Screens {
   fn open() -> Self {
+    let data = Data::new();
+    let launch = data.launch();
+    let Start::Ready(ready) = launch.start() else {
+      panic!("the session starts");
+    };
     let mut app = App::new();
     theme::install(&mut app, Mode::Dark);
     i18n::install(&app).expect("bundled locales load");
     let mut tree = Tree::new();
     tree.resize(1440, 900);
-    let slot = RouterSlot::default();
+    app.set_tokio_handle(data.runtime.handle().clone());
+    let slot = RouterSlot(Arc::default(), ready.services);
     tree.mount_root::<ScreensRoot>(&mut app, slot.clone());
     tree.pass_headless(&mut app);
     let router = slot.0.lock().take().expect("the root left its router");
-    Self { app, tree, router }
+    Self {
+      app,
+      tree,
+      router,
+      _session: (launch, data),
+    }
   }
 
   /// The texts the screen at `path` shows under the element `id`, icon glyphs left out; `None` when
