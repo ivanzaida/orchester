@@ -356,7 +356,7 @@ fn theme_kit_type_roles_follow_the_design_in_both_modes() {
       T::MonoSmall.role(),
     ] {
       assert_eq!(
-        app.theme().typography_style(role.clone()).font_features,
+        app.theme().typography_style(role).font_features,
         no_ligatures,
         "{role:?} shows `--` as typed"
       );

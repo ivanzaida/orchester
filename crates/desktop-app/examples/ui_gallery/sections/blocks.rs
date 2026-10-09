@@ -17,6 +17,7 @@ use orchester_app::{
     card::{CardSurface, card},
     chip::TagChip,
     code_box::CodeBox,
+    detail_row::{DetailValue, detail_row},
     icon::Icon,
     markdown::MarkdownView,
     notice::{Notice, NoticeTone},
@@ -210,6 +211,23 @@ fn empty(new_task: impl Fn() + Send + Sync + 'static) -> Element {
     ActionButton::new("g-empty-new", ButtonKind::Primary, "New task")
       .icon(Icon::Plus)
       .on_click(new_task),
+  )
+  .child(
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .child(Text::new("Ready to run").variant(TypographyStyle::Caption))
+      .child(detail_row(
+        "g-empty-agents",
+        "Agents",
+        "Explorer, Planner, Builder, Reviewer",
+        DetailValue::Text,
+      ))
+      .child(detail_row(
+        "g-empty-pipeline",
+        "Pipeline",
+        "Feature delivery v3 published",
+        DetailValue::Text,
+      )),
   )
   .into()
 }

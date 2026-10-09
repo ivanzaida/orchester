@@ -95,7 +95,6 @@ pub struct SelectField<T: SignalValue> {
   id: Arc<str>,
   value: Signal<T>,
   options: Vec<SelectOption<T>>,
-  placeholder: Option<Arc<str>>,
   width: Dimension,
 }
 
@@ -110,15 +109,8 @@ where
       id: id.into(),
       value,
       options,
-      placeholder: None,
       width: Dimension::Pct(100.0),
     }
-  }
-
-  /// What the box says while no option is chosen.
-  pub fn placeholder(mut self, placeholder: impl Into<Arc<str>>) -> Self {
-    self.placeholder = Some(placeholder.into());
-    self
   }
 
   pub fn width(mut self, width: impl Into<Dimension>) -> Self {
@@ -127,14 +119,11 @@ where
   }
 
   pub fn render(self, ctx: &Ctx) -> Element {
-    let mut select = Select::new(self.value)
+    let select = Select::new(self.value)
       .options(self.options)
       .width(self.width)
       .height(Dimension::Px(ControlHeight::Md.value()))
       .style(select_style(ctx));
-    if let Some(placeholder) = self.placeholder {
-      select = select.placeholder(placeholder);
-    }
     Element::from(select).id(self.id.to_string())
   }
 }

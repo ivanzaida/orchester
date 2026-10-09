@@ -53,12 +53,6 @@ impl Tooltip {
     self
   }
 
-  /// Shown above the anchor instead of under it, e.g. for an anchor at the window's bottom.
-  pub fn above(mut self) -> Self {
-    self.placement = Placement::TopStart;
-    self
-  }
-
   /// The anchor gives up room when its row runs out of it, as text cut to its room does.
   pub fn shrink(mut self) -> Self {
     self.shrink = true;
@@ -152,7 +146,6 @@ pub struct Truncated {
   id: Arc<str>,
   text: Arc<str>,
   typography: TypographyStyle,
-  color: Option<PaletteColor>,
   width: Option<Dimension>,
 }
 
@@ -162,14 +155,8 @@ impl Truncated {
       id: id.into(),
       text: text.into(),
       typography,
-      color: None,
       width: None,
     }
-  }
-
-  pub fn color(mut self, color: impl Into<PaletteColor>) -> Self {
-    self.color = Some(color.into());
-    self
   }
 
   /// A fixed room, e.g. a table column's width; without one the text is as wide as it is, and cut where
@@ -180,15 +167,12 @@ impl Truncated {
   }
 
   pub fn render(self, ctx: &mut Ctx) -> Element {
-    let mut text = Text::new(&self.text)
+    let text = Text::new(&self.text)
       .id(self.id.to_string())
       .variant(self.typography)
       .nowrap()
       .max_width(Dimension::Pct(100.0))
       .text_overflow(TextOverflow::Elipsis);
-    if let Some(color) = self.color {
-      text = text.color(color);
-    }
     let tooltip = Tooltip::new(self.id.clone(), self.text.clone());
     match self.width {
       Some(width) => Row::new().width(width).child(tooltip.shrink().wrap(ctx, text)).into(),

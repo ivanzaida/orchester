@@ -118,7 +118,6 @@ pub struct ActionButton {
   kind: ButtonKind,
   press: Press,
   focus: Focus,
-  width: Option<Dimension>,
 }
 
 impl ActionButton {
@@ -131,7 +130,6 @@ impl ActionButton {
       kind,
       press: Press::Disabled,
       focus: Focus::Pointer,
-      width: None,
     }
   }
 
@@ -171,11 +169,6 @@ impl ActionButton {
     self
   }
 
-  pub fn width(mut self, width: impl Into<Dimension>) -> Self {
-    self.width = Some(width.into());
-    self
-  }
-
   /// The icon shown before the label: the loader or the lock replace the button's own.
   fn lead(&self) -> Option<Icon> {
     match self.press {
@@ -200,9 +193,6 @@ impl From<ActionButton> for Element {
       .describe("kind", button.kind.name())
       .describe("state", button.press.name())
       .describe("label", button.label.clone());
-    if let Some(width) = button.width {
-      frame = frame.width(width);
-    }
     if let Some(lead) = button.lead() {
       frame = frame.child(icon(lead, IconSize::Md, color.clone()).id(format!("{}-icon", button.id)));
     }

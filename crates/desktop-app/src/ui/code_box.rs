@@ -26,7 +26,7 @@ use super::{
 use crate::theme::{ExtraColor, ExtraSpacing};
 
 /// How long Copy says what happened before it offers to copy again.
-pub const COPY_FEEDBACK: Duration = Duration::from_secs(2);
+const COPY_FEEDBACK: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Copied {

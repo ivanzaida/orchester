@@ -82,6 +82,20 @@ pub fn section(ctx: &mut Ctx, state: &State) -> Element {
       unavailable_actions(press("New task")),
     ),
   ];
+  let form = Row::new()
+    .spacing(SpacingSize::Sm)
+    .child(
+      ActionButton::new("g-form-save", ButtonKind::Primary, "Create")
+        .in_form()
+        .on_click(press("Create")),
+    )
+    .child(
+      IconButton::new("g-form-remove", Icon::X, "Remove criterion")
+        .small()
+        .in_form()
+        .on_click(press("Remove criterion"))
+        .render(ctx),
+    );
   let icons = [
     cell(
       "Button/icon · JJEzp",
@@ -96,6 +110,7 @@ pub fn section(ctx: &mut Ctx, state: &State) -> Element {
         .on_click(press("Remove entry"))
         .render(ctx),
     ),
+    cell("in a form · Tab reaches them, the focus ring shows", form),
     cell(
       "Unavailable reason · QR1ER",
       reason_line(
