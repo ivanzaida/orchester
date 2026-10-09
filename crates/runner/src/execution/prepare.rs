@@ -109,7 +109,7 @@ fn check(db: &ProjectDb, root: &Path, task_id: TaskId, source: PipelineSource) -
     .map_err(|error| failed("cannot read the checked-out branch", &error))?;
   let snapshot = RunSnapshot::build(pipeline_id, &pipeline, published.versions())
     .map_err(|error| failed("cannot pin the run's configuration", &error))?;
-  let limits = task.details().limits.expect("a queued task has limits");
+  let limits = task.details().limits;
   let new = NewRun {
     task: task_id,
     snapshot,

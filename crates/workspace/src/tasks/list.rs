@@ -311,7 +311,6 @@ pub const fn missing_key(detail: MissingDetail) -> &'static str {
     MissingDetail::Brief => "tasks.readiness.missingBrief",
     MissingDetail::AcceptanceCriteria => "tasks.readiness.missingCriteria",
     MissingDetail::Pipeline => "tasks.readiness.missingPipeline",
-    MissingDetail::Limits => "tasks.readiness.missingLimits",
   }
 }
 

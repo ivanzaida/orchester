@@ -13,7 +13,7 @@ use orchester_core::{
   resource::StepKey,
   run::{RunLimit, TaskPhase},
   store::TaskStore,
-  task::{MissingDetail, Task, TaskDetails, TaskStatus, organization::WorkflowStatus},
+  task::{MissingDetail, Task, TaskDetails, TaskLimits, TaskStatus, organization::WorkflowStatus},
   time::Timestamp,
   tokens::TokenBudget,
 };
@@ -39,7 +39,6 @@ fn form<'a>(title: &'a str, criteria: &'a [String], budget: &'a str, time_limit:
     budget,
     time_limit,
     separator: ",",
-    max_budget: TokenBudget::new(10_000_000).expect("above zero"),
   }
 }
 
@@ -61,7 +60,7 @@ fn details(title: &str) -> TaskDetails {
     brief: String::new(),
     acceptance_criteria: Vec::new(),
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   }
 }
 
@@ -78,9 +77,28 @@ fn form_maps_entered_values_to_task_details() {
   assert_eq!(details.title.as_str(), "Add task search");
   assert_eq!(details.brief, "Let people find a task.");
   assert_eq!(details.acceptance_criteria, vec!["Filters as you type.".to_owned()]);
-  let limits = details.limits.expect("both limits entered");
-  assert_eq!(limits.budget().get(), 1_400_000);
-  assert_eq!(limits.max_duration(), Duration::from_secs(30 * 60));
+  let limits = details.limits;
+  assert_eq!(limits.budget(), Some(TokenBudget::new(1_400_000).expect("above zero")));
+  assert_eq!(limits.max_duration(), Some(Duration::from_secs(30 * 60)));
+}
+
+#[test]
+fn form_reads_empty_limits_as_no_limit_and_has_no_maximum() {
+  let details = |budget, time_limit| form("Task", &[], budget, time_limit).details().expect("valid form");
+  assert_eq!(details("", "").limits, TaskLimits::NONE);
+  let only_budget = details("5", "").limits;
+  assert_eq!(
+    (only_budget.budget().map(TokenBudget::get), only_budget.max_duration()),
+    (Some(5), None)
+  );
+  let only_time = details("", "30").limits;
+  assert_eq!(
+    (only_time.budget(), only_time.max_duration()),
+    (None, Some(Duration::from_secs(30 * 60)))
+  );
+  let large = details("900,000,000,000", "100000").limits;
+  assert_eq!(large.budget().map(TokenBudget::get), Some(900_000_000_000));
+  assert_eq!(large.max_duration(), Some(Duration::from_secs(100_000 * 60)));
 }
 
 #[test]
@@ -93,7 +111,7 @@ fn form_allows_an_incomplete_draft_and_names_what_is_missing() {
   let details = incomplete
     .details()
     .expect("a draft may leave everything but the title out");
-  assert_eq!(details.limits, None);
+  assert_eq!(details.limits, TaskLimits::NONE);
   assert!(details.acceptance_criteria.is_empty());
   assert_eq!(
     incomplete.missing(),
@@ -101,7 +119,6 @@ fn form_allows_an_incomplete_draft_and_names_what_is_missing() {
       MissingDetail::Brief,
       MissingDetail::AcceptanceCriteria,
       MissingDetail::Pipeline,
-      MissingDetail::Limits
     ]
   );
 }
@@ -116,7 +133,7 @@ fn form_reports_missing_details_while_the_title_is_blank() {
 }
 
 #[test]
-fn form_rejects_invalid_and_half_entered_limits() {
+fn form_rejects_malformed_limits() {
   let error_keys = |budget: &str, time_limit: &str| {
     let errors = form("Task", &[], budget, time_limit)
       .details()
@@ -126,14 +143,15 @@ fn form_rejects_invalid_and_half_entered_limits() {
       errors.time_limit.map(|message| message.key),
     )
   };
-  assert_eq!(error_keys("5", ""), (None, Some("errors.timeLimitRequired")));
-  assert_eq!(error_keys("", "30"), (Some("tokens.errors.empty"), None));
   assert_eq!(
     error_keys("1.4M", "half an hour"),
     (Some("tokens.errors.digits"), Some("errors.timeLimitInvalid"))
   );
   assert_eq!(error_keys("0", "30"), (Some("tokens.errors.zero"), None));
-  assert_eq!(error_keys("12,000,000", "30"), (Some("tokens.errors.aboveMax"), None));
+  assert_eq!(
+    error_keys("99999999999999999999999", ""),
+    (Some("tokens.errors.tooLarge"), None)
+  );
   assert_eq!(error_keys("5", "0"), (None, Some("errors.timeLimitZero")));
 }
 
@@ -206,10 +224,11 @@ fn stored_tasks() -> Vec<Task> {
     brief: "Brief.".into(),
     acceptance_criteria: vec!["Works.".into()],
     pipeline: Some(ResourceId::generate()),
-    limits: Some(
-      orchester_core::task::TaskLimits::new(TokenBudget::new(1).expect("above zero"), Duration::from_secs(60))
-        .expect("positive limits"),
-    ),
+    limits: orchester_core::task::TaskLimits::new(
+      Some(TokenBudget::new(1).expect("above zero")),
+      Some(Duration::from_secs(60)),
+    )
+    .expect("positive limits"),
     ..details("To queue")
   };
   queued = Task::from_stored(
@@ -262,7 +281,7 @@ fn readiness_names_one_missing_detail_and_counts_several() {
     Readiness::Missing(vec![MissingDetail::Pipeline]).message().key,
     "tasks.readiness.missingPipeline"
   );
-  let several = Readiness::Missing(vec![MissingDetail::Brief, MissingDetail::Limits]).message();
+  let several = Readiness::Missing(vec![MissingDetail::Brief, MissingDetail::Pipeline]).message();
   assert_eq!(several.key, "tasks.readiness.missingCount");
   assert_eq!(several.args, vec![("count", "2".to_owned())]);
 }
@@ -284,7 +303,6 @@ fn form_names_one_problem_per_message_for_invalid_limits() {
   let with_limits = |budget: &'static str, time_limit: &'static str| form("Task", &[], budget, time_limit);
   let invalid = with_limits("five", "30");
   let errors = invalid.details().expect_err("the budget is invalid");
-  assert!(!invalid.missing().contains(&MissingDetail::Limits));
   assert_eq!(
     errors
       .save_reasons()
@@ -293,9 +311,6 @@ fn form_names_one_problem_per_message_for_invalid_limits() {
       .collect::<Vec<_>>(),
     ["tasks.new.limitsBlockSave"]
   );
-  let half_entered = with_limits("5", "");
-  assert!(!half_entered.missing().contains(&MissingDetail::Limits));
-  assert!(with_limits("", "").missing().contains(&MissingDetail::Limits));
 
   let blank_title = form(" ", &[], "5", "0")
     .details()

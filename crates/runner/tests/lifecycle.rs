@@ -365,10 +365,9 @@ async fn lifecycle_daily_budget_stops_the_run_and_refuses_new_work() {
   let root = project.repo.path();
   let mut db = ProjectDb::open(root).expect("open");
   let tight = ProjectLimits::new(
-    TokenBudget::new(10_000_000).expect("above zero"),
-    TokenBudget::new(1_400_000).expect("above zero"),
+    Some(TokenBudget::new(1_400_000).expect("above zero")),
     TokenBudget::new(5_000).expect("above zero"),
-    Duration::from_secs(30 * 60),
+    Some(Duration::from_secs(30 * 60)),
   )
   .expect("limits");
   db.save_project_limits(&tight).expect("save limits");

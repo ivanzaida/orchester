@@ -45,7 +45,7 @@ impl<'k> Drive<'k> {
   /// commit on `main`.
   pub fn start(kontur: &'k mut Kontur, task: &Task, pipeline: &Published, at: Timestamp) -> Result<Self, SeedError> {
     let earlier = kontur.db.runs_of_task(task.id())?.len();
-    let limits = task.details().limits.ok_or(SeedError::NoLimits)?;
+    let limits = task.details().limits;
     let new = NewRun {
       task: task.id(),
       snapshot: pipeline.snapshot().clone(),
@@ -450,7 +450,8 @@ impl<'k> Drive<'k> {
     self.stop_open()?;
     let at = self.tick();
     if limit == RunLimit::Tokens {
-      let left = self.run.budget().get().saturating_sub(self.run.used().get());
+      let budget = self.run.budget().ok_or(SeedError::NoBudget)?;
+      let left = budget.get().saturating_sub(self.run.used().get());
       let events = self.run.record_usage(TokensUsed::new(left), at)?;
       self.record(&events)?;
     }

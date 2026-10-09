@@ -18,11 +18,11 @@ use crate::{
   tokens::{TokenBudget, TokensUsed},
 };
 
-/// New limits for a run stopped at a limit; they apply to that run only.
+/// New limits for a run stopped at a limit; they apply to that run only. `None` lifts a limit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RaisedLimits {
-  pub budget: TokenBudget,
-  pub max_duration: Duration,
+  pub budget: Option<TokenBudget>,
+  pub max_duration: Option<Duration>,
 }
 
 impl Run {
@@ -78,20 +78,16 @@ impl Run {
     })
   }
 
-  /// Raises the limits of a run stopped at a limit of its own (tokens, time) and continues it. Each new limit must be
-  /// above what the run already used (`active` agent time so far), and the budget at most
-  /// `max`, the project's maximum run budget.
+  /// Raises the limits of a run stopped at a limit of its own (tokens, time) and continues it. Each
+  /// new limit must be above what the run already used (`active` agent time so far); `None` lifts
+  /// the limit. There is no maximum.
   pub fn continue_with_limits(
     &mut self,
     limits: RaisedLimits,
     active: Duration,
-    max: TokenBudget,
     now: Timestamp,
   ) -> Result<Vec<RunEvent>, RunError> {
-    if limits.budget > max {
-      return Err(RunError::BudgetAboveMaximum { max });
-    }
-    if limits.max_duration <= active {
+    if limits.max_duration.is_some_and(|limit| limit <= active) {
       return Err(RunError::LimitNotAboveUsed(RunLimit::Time));
     }
     self.transition(now, |transition| {
@@ -103,15 +99,13 @@ impl Run {
     })
   }
 
-  /// Raises the budget of the step a run stopped at to `budget` for this run and continues it;
-  /// the published pipeline keeps its budget. `used` is what the stopped execution used over all
-  /// its invocations: the new budget must be above it, and at most `max`, the project's maximum
-  /// run budget.
+  /// Raises the budget of the step a run stopped at to `budget` for this run, or lifts it with
+  /// `None`, and continues it; the published pipeline keeps its budget. `used` is what the stopped
+  /// execution used over all its invocations: a new budget must be above it.
   pub fn raise_step_budget(
     &mut self,
-    budget: TokenBudget,
+    budget: Option<TokenBudget>,
     used: TokensUsed,
-    max: TokenBudget,
     now: Timestamp,
   ) -> Result<Vec<RunEvent>, RunError> {
     let RunStatus::Paused(PauseReason::LimitReached(limit @ RunLimit::StepBudget { execution })) = self.status else {
@@ -120,10 +114,7 @@ impl Run {
         event: "step_budget_raised",
       });
     };
-    if budget > max {
-      return Err(RunError::BudgetAboveMaximum { max });
-    }
-    if used.reached(budget) {
+    if budget.is_some_and(|budget| used.reached(budget)) {
       return Err(RunError::LimitNotAboveUsed(limit));
     }
     let step = self

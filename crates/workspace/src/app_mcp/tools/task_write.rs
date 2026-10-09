@@ -1,14 +1,14 @@
 //! `create_task` and `update_task`: a task saved as the new task form and the task page save it. The
-//! details are read with the form's rules ([`TaskForm`]: limits as a pair, below the project's
-//! maximum, the project's default limits filled in as the form fills them), and saved through the
+//! details are read with the form's rules ([`TaskForm`]: each limit optional with no maximum, the
+//! project's default limits filled in as the form fills them), and saved through the
 //! project's [`TaskWriter`], so a shared project's task goes to its server.
 
 use orchester_core::{
   id::IdempotencyKey,
-  limits::ProjectLimits,
   store::SettingsStore,
   task::{Task, TaskDetails, organization::TaskOrganization},
   time::Timestamp,
+  tokens::TokenBudget,
 };
 use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
@@ -24,6 +24,7 @@ use crate::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
+  budget::whole_minutes,
   messages::Message,
   tasks::{
     conflict::{Edit, EditSaved, save_edit},
@@ -36,7 +37,6 @@ use crate::{
 
 /// How whole tokens are grouped in the form's text; the tools give plain numbers.
 const GROUP_SEPARATOR: &str = ",";
-const SECONDS_PER_MINUTE: u64 = 60;
 
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -53,12 +53,14 @@ pub struct CreateTask {
   /// A published pipeline's id or name.
   #[serde(default)]
   pub pipeline: Option<String>,
-  /// The token budget of each run; the project's default when left out.
-  #[serde(default)]
-  pub budget_tokens: Option<u64>,
-  /// Minutes of active agent time each run may take; the project's default when left out.
-  #[serde(default)]
-  pub time_limit_minutes: Option<u64>,
+  /// The token budget of each run, with no maximum; `null` for no budget, the project's default
+  /// when left out.
+  #[serde(default, deserialize_with = "wire::limit")]
+  pub budget_tokens: Option<Option<u64>>,
+  /// Minutes of active agent time each run may take; `null` for no time limit, the project's
+  /// default when left out.
+  #[serde(default, deserialize_with = "wire::limit")]
+  pub time_limit_minutes: Option<Option<u64>>,
   #[serde(default)]
   pub workflow_status: Option<Workflow>,
   #[serde(default)]
@@ -82,10 +84,12 @@ pub struct UpdateTask {
   pub criteria: Option<Vec<String>>,
   #[serde(default)]
   pub pipeline: Option<String>,
-  #[serde(default)]
-  pub budget_tokens: Option<u64>,
-  #[serde(default)]
-  pub time_limit_minutes: Option<u64>,
+  /// The token budget of each run; `null` for no budget.
+  #[serde(default, deserialize_with = "wire::limit")]
+  pub budget_tokens: Option<Option<u64>>,
+  /// Minutes of active agent time each run may take; `null` for no time limit.
+  #[serde(default, deserialize_with = "wire::limit")]
+  pub time_limit_minutes: Option<Option<u64>>,
   #[serde(default)]
   pub workflow_status: Option<Workflow>,
   #[serde(default)]
@@ -103,7 +107,7 @@ struct Fields<'a> {
 }
 
 impl Fields<'_> {
-  fn details(&self, limits: ProjectLimits) -> Result<TaskDetails, ToolError> {
+  fn details(&self) -> Result<TaskDetails, ToolError> {
     let form = TaskForm {
       title: self.title,
       brief: self.brief,
@@ -112,7 +116,6 @@ impl Fields<'_> {
       budget: &self.budget,
       time_limit: &self.minutes,
       separator: GROUP_SEPARATOR,
-      max_budget: limits.max_run_budget(),
     };
     form.details().map_err(|errors| {
       let reasons: Vec<Message> = [errors.title, errors.budget, errors.time_limit]
@@ -152,16 +155,18 @@ fn create(services: &Services, args: &CreateTask) -> Result<Task, ToolError> {
       .as_deref()
       .map(|named| pipeline_named(&published, named))
       .transpose()?,
-    budget: args
-      .budget_tokens
-      .unwrap_or(limits.default_run_budget().get())
-      .to_string(),
-    minutes: args
-      .time_limit_minutes
-      .unwrap_or(limits.default_time_limit().as_secs() / SECONDS_PER_MINUTE)
-      .to_string(),
+    budget: wire::limit_text(
+      args
+        .budget_tokens
+        .unwrap_or(limits.default_run_budget().map(TokenBudget::get)),
+    ),
+    minutes: wire::limit_text(
+      args
+        .time_limit_minutes
+        .unwrap_or(limits.default_time_limit().map(whole_minutes)),
+    ),
   };
-  let details = fields.details(limits)?;
+  let details = fields.details()?;
   let base = TaskOrganization::default();
   let edited = organized(base.clone(), args.workflow_status, args.priority);
   let mut writer = TaskWriter::open(&root, &services.servers).map_err(write_error)?;
@@ -179,7 +184,6 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
   let open = services.project(&args.project)?;
   let root = open.repo_root;
   let db = ProjectDb::open(&root)?;
-  let limits = db.project_limits()?;
   let published = published_pipelines(&db)?;
   let task = find_task(&db, &args.key)?;
   drop(db);
@@ -190,22 +194,23 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
       .pipeline
       .and_then(|id| published.iter().find(|choice| choice.id == id)),
   };
-  let text = |given: Option<u64>, stored: Option<u64>| given.or(stored).map(|value| value.to_string());
   let fields = Fields {
     title: args.title.as_deref().unwrap_or(current.title.as_str()),
     brief: args.brief.as_deref().unwrap_or(&current.brief),
     criteria: args.criteria.as_deref().unwrap_or(&current.acceptance_criteria),
     pipeline,
-    budget: text(args.budget_tokens, current.limits.map(|limits| limits.budget().get())).unwrap_or_default(),
-    minutes: text(
-      args.time_limit_minutes,
-      current
-        .limits
-        .map(|limits| limits.max_duration().as_secs() / SECONDS_PER_MINUTE),
-    )
-    .unwrap_or_default(),
+    budget: wire::limit_text(
+      args
+        .budget_tokens
+        .unwrap_or(current.limits.budget().map(TokenBudget::get)),
+    ),
+    minutes: wire::limit_text(
+      args
+        .time_limit_minutes
+        .unwrap_or(current.limits.max_duration().map(whole_minutes)),
+    ),
   };
-  let mut details = fields.details(limits)?;
+  let mut details = fields.details()?;
   // A pipeline the project no longer publishes stays chosen until the caller chooses another.
   if args.pipeline.is_none() && pipeline.is_none() {
     details.pipeline = current.pipeline;

@@ -72,8 +72,8 @@ fn seed(repo: &Path) {
   let mut db = ProjectDb::open(repo).expect("open the project");
   let snapshot = snapshot(&db);
   let limits = TaskLimits::new(
-    TokenBudget::new(1_000_000).expect("above zero"),
-    Duration::from_secs(1_800),
+    Some(TokenBudget::new(1_000_000).expect("above zero")),
+    Some(Duration::from_secs(1_800)),
   )
   .expect("limits");
   let task = db
@@ -84,7 +84,7 @@ fn seed(repo: &Path) {
         brief: String::new(),
         acceptance_criteria: Vec::new(),
         pipeline: Some(snapshot.pipeline().resource),
-        limits: Some(limits),
+        limits,
       }],
       Timestamp::now(),
     )

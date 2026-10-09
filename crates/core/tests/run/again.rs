@@ -171,10 +171,9 @@ fn run_again_waits_while_the_daily_budget_is_used() {
   let failed = failed(131);
   let runs = [Some(&failed)];
   let limits = ProjectLimits::new(
-    tokens(10_000_000),
-    tokens(1_400_000),
+    Some(tokens(1_400_000)),
     tokens(20_000_000),
-    Duration::from_secs(1800),
+    Some(Duration::from_secs(1800)),
   )
   .expect("limits");
   let used = RunAgainInput {

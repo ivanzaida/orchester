@@ -28,10 +28,9 @@ fn app_mcp_reads_and_changes_the_project_limits() {
   assert_eq!(
     listed["projects"][0]["limits"],
     json!({
-      "max_run_budget": 10_000_000,
-      "default_run_budget": 1_400_000,
+      "default_run_budget": null,
       "daily_budget": 20_000_000,
-      "default_time_limit_minutes": 30,
+      "default_time_limit_minutes": null,
       "agent_slots": 4,
     })
   );
@@ -44,8 +43,7 @@ fn app_mcp_reads_and_changes_the_project_limits() {
   assert_eq!(
     changed["limits"],
     json!({
-      "max_run_budget": 10_000_000,
-      "default_run_budget": 1_400_000,
+      "default_run_budget": null,
       "daily_budget": 30_000_000,
       "default_time_limit_minutes": 45,
       "agent_slots": 2,
@@ -76,17 +74,30 @@ fn app_mcp_reads_and_changes_the_project_limits() {
   let error = refused(
     &mut agent,
     "update_project_limits",
-    &json!({"project": "Kontur", "default_run_budget": 12_000_000}),
-  );
-  assert_eq!(
-    error["reasons"],
-    json!(["The default can be at most the maximum run budget, 10M tokens."])
-  );
-  let error = refused(
-    &mut agent,
-    "update_project_limits",
     &json!({"project": "Kontur", "agent_slots": "four"}),
   );
   assert_eq!(error["code"], "invalid_arguments");
+  let error = refused(
+    &mut agent,
+    "update_project_limits",
+    &json!({"project": "Kontur", "max_run_budget": 10_000_000}),
+  );
+  assert_eq!(error["code"], "invalid_arguments", "there is no maximum run budget");
   assert_eq!(stored(), saved);
+
+  // No maximum, and `null` is no limit.
+  let changed = ok(
+    &mut agent,
+    "update_project_limits",
+    &json!({"project": "Kontur", "default_run_budget": 900_000_000}),
+  );
+  assert_eq!(changed["limits"]["default_run_budget"], 900_000_000);
+  let changed = ok(
+    &mut agent,
+    "update_project_limits",
+    &json!({"project": "Kontur", "default_run_budget": null, "default_time_limit_minutes": null}),
+  );
+  assert_eq!(changed["limits"]["default_run_budget"], json!(null));
+  assert_eq!(changed["limits"]["default_time_limit_minutes"], json!(null));
+  assert_eq!(stored().default_time_limit(), None);
 }

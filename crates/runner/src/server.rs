@@ -360,11 +360,11 @@ fn raise_limit(
   later: &Later<'_>,
   scheduler: Scheduler,
   run: RunId,
-  (budget, max_duration_ms): (TokenBudget, u64),
+  (budget, max_duration_ms): (Option<TokenBudget>, Option<u64>),
 ) -> Answer {
   let limits = RaisedLimits {
     budget,
-    max_duration: Duration::from_millis(max_duration_ms),
+    max_duration: max_duration_ms.map(Duration::from_millis),
   };
   later.answer(run, async move { scheduler.raise_limit(run, limits).await })
 }

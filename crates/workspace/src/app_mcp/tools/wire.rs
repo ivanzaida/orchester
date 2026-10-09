@@ -9,7 +9,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use rmcp::schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 
 /// A task's workflow status (Backlog to Canceled), which a person sets.
@@ -150,4 +150,21 @@ pub const fn time(at: Timestamp) -> i64 {
 /// Plain data of core (reasons, causes), as its own serde form writes it.
 fn plain(value: &impl Serialize) -> Value {
   serde_json::to_value(value).expect("run reasons are plain data with string keys")
+}
+
+/// An optional limit argument as given (with `#[serde(default)]` for one left out, `None`): `null`
+/// is no limit (`Some(None)`), a number sets it.
+pub fn limit<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Option<u64>>, D::Error> {
+  Option::<u64>::deserialize(deserializer).map(Some)
+}
+
+/// A limit argument that must be given, as a number or as `null` for no limit: nothing lifts or
+/// keeps a limit for a caller that left it out.
+pub fn nullable<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<u64>, D::Error> {
+  Option::<u64>::deserialize(deserializer)
+}
+
+/// A limit argument as a form's field holds it: empty for no limit.
+pub fn limit_text(value: Option<u64>) -> String {
+  value.map(|value| value.to_string()).unwrap_or_default()
 }

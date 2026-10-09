@@ -1,4 +1,4 @@
-use orchester_core::name::Name;
+use orchester_core::{name::Name, task::TaskLimits};
 use orchester_store::ProjectDb;
 
 use crate::{harness::Desktop, task_run::set_text};
@@ -129,7 +129,7 @@ fn organization_bulk_remove_tag_counts_only_tasks_that_had_it() {
       brief: String::new(),
       acceptance_criteria: vec![],
       pipeline: None,
-      limits: None,
+      limits: TaskLimits::NONE,
     };
     let tasks = db
       .create_tasks(

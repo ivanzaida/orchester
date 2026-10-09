@@ -1,17 +1,17 @@
-use std::time::Duration;
+use std::{num::NonZeroU32, time::Duration};
 
 use orchester_core::{
   connection::stream::InvocationOutcome,
   id::{InvocationId, RunId},
   run::{
-    Invocation, InvocationKind, PauseReason, RaisedLimits, Run, RunError, RunLimit, RunStatus, StepStatus, TaskPhase,
-    active_time,
+    Invocation, InvocationKind, PauseReason, RaisedLimits, Run, RunError, RunLimit, RunNumber, RunStatus, StepStatus,
+    TaskPhase, active_time,
   },
-  task::{Task, TaskDetails, TaskStatus},
+  task::{Task, TaskDetails, TaskLimits, TaskStatus},
   tokens::TokensUsed,
 };
 
-use crate::fixture::{Logged, at, model, revision, tokens};
+use crate::fixture::{Config, Logged, at, model, new_run, revision, tokens};
 
 const MINUTE: Duration = Duration::from_secs(60);
 
@@ -36,8 +36,8 @@ fn stopped_at_token_limit() -> Logged {
 
 fn raised(budget: u64, minutes: u64) -> RaisedLimits {
   RaisedLimits {
-    budget: tokens(budget),
-    max_duration: MINUTE * u32::try_from(minutes).expect("few minutes"),
+    budget: Some(tokens(budget)),
+    max_duration: Some(MINUTE * u32::try_from(minutes).expect("few minutes")),
   }
 }
 
@@ -91,7 +91,7 @@ fn run_limits_stop_at_limit_keeps_the_step_open_and_waits_for_a_raise() {
       brief: String::new(),
       acceptance_criteria: Vec::new(),
       pipeline: None,
-      limits: None,
+      limits: TaskLimits::NONE,
     },
     at(1),
   );
@@ -107,12 +107,11 @@ fn run_limits_stop_at_limit_keeps_the_step_open_and_waits_for_a_raise() {
 #[test]
 fn run_limits_raise_continues_the_run_with_the_new_limits() {
   let mut logged = stopped_at_token_limit();
-  let max = tokens(10_000_000);
-  logged.apply(|run| run.continue_with_limits(raised(2_000_000, 30), MINUTE * 24, max, at(20)));
+  logged.apply(|run| run.continue_with_limits(raised(2_000_000, 30), MINUTE * 24, at(20)));
   let run = &logged.run;
   assert_eq!(run.status(), &RunStatus::Running);
-  assert_eq!(run.budget(), tokens(2_000_000));
-  assert_eq!(run.created().budget, tokens(1_400_000));
+  assert_eq!(run.budget(), Some(tokens(2_000_000)));
+  assert_eq!(run.created().budget, Some(tokens(1_400_000)));
   assert!(!run.token_limit_reached());
   let kinds: Vec<_> = logged.log[logged.log.len() - 2..]
     .iter()
@@ -123,38 +122,62 @@ fn run_limits_raise_continues_the_run_with_the_new_limits() {
 }
 
 #[test]
-fn run_limits_raise_must_exceed_what_was_used_and_fit_the_maximum() {
+fn run_limits_raise_must_exceed_what_was_used_with_no_maximum() {
   let mut logged = stopped_at_token_limit();
   let before = logged.run.clone();
-  let max = tokens(10_000_000);
   let active = MINUTE * 24;
   assert_eq!(
-    logged
-      .run
-      .continue_with_limits(raised(1_400_000, 30), active, max, at(20)),
+    logged.run.continue_with_limits(raised(1_400_000, 30), active, at(20)),
     Err(RunError::LimitNotAboveUsed(RunLimit::Tokens))
   );
   assert_eq!(
-    logged
-      .run
-      .continue_with_limits(raised(2_000_000, 24), active, max, at(20)),
+    logged.run.continue_with_limits(raised(2_000_000, 24), active, at(20)),
     Err(RunError::LimitNotAboveUsed(RunLimit::Time))
   );
-  assert_eq!(
-    logged
-      .run
-      .continue_with_limits(raised(12_000_000, 30), active, max, at(20)),
-    Err(RunError::BudgetAboveMaximum { max })
-  );
   assert_eq!(logged.run, before);
+  let mut large = logged.clone();
+  large.apply(|run| run.continue_with_limits(raised(900_000_000_000, 30), active, at(20)));
+  assert_eq!(large.run.budget(), Some(tokens(900_000_000_000)));
   let mut running = working(10);
   assert!(matches!(
-    running
-      .run
-      .continue_with_limits(raised(2_000_000, 30), active, max, at(20)),
+    running.run.continue_with_limits(raised(2_000_000, 30), active, at(20)),
     Err(RunError::InvalidRunTransition { .. })
   ));
   assert!(running.run.stop_at_limit(RunLimit::Time, at(21)).is_ok());
+}
+
+#[test]
+fn run_limits_raise_can_lift_a_limit() {
+  let mut logged = stopped_at_token_limit();
+  let lifted = RaisedLimits {
+    budget: None,
+    max_duration: None,
+  };
+  logged.apply(|run| run.continue_with_limits(lifted, MINUTE * 24, at(20)));
+  assert_eq!((logged.run.budget(), logged.run.max_duration()), (None, None));
+  logged.apply(|run| run.record_usage(TokensUsed::new(50_000_000), at(21)));
+  assert!(!logged.run.token_limit_reached());
+  assert!(!logged.run.time_limit_reached(MINUTE * 100_000));
+  assert_eq!(Run::replay(&logged.log), Ok(logged.run));
+}
+
+#[test]
+fn run_limits_a_run_without_limits_never_reaches_one() {
+  let mut new = new_run(Config::feature_delivery().snapshot());
+  new.budget = None;
+  new.max_duration = None;
+  let number = RunNumber::new(NonZeroU32::MIN);
+  let (run, created) = Run::create(RunId::generate(), number, new, at(10)).expect("a run without limits");
+  let mut logged = Logged {
+    run,
+    log: vec![created],
+  };
+  logged.apply(|run| run.start(at(11)));
+  logged.apply(|run| run.record_usage(TokensUsed::new(u64::MAX), at(12)));
+  assert_eq!((logged.run.budget(), logged.run.max_duration()), (None, None));
+  assert!(!logged.run.token_limit_reached());
+  assert!(!logged.run.time_limit_reached(Duration::MAX));
+  assert_eq!(Run::replay(&logged.log), Ok(logged.run));
 }
 
 #[test]

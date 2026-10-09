@@ -13,7 +13,6 @@ use orchester_core::{
   store::{ConnectionStore, ResourceStore, TaskStore},
   task::{QueueError, Task, TaskDetails, TaskStatus, TaskUpdate},
   time::Timestamp,
-  tokens::compact_tokens,
 };
 use orchester_ipc::Rejection;
 use orchester_store::{ProjectDb, StoreError};
@@ -324,7 +323,6 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::WorktreeRemoved
       | Rejection::LimitNotRaised { .. }
       | Rejection::LimitNotAboveUsed { .. }
-      | Rejection::BudgetAboveMaximum { .. }
       | Rejection::ProfileNotInRun
       | Rejection::PermissionsNotEnforceable { .. }
       | Rejection::NoAgentToRestart
@@ -413,9 +411,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Rejected(Rejection::LimitNotAboveUsed {
       limit: RunLimit::StepBudget { .. },
     }) => Message::new("runs.limit.stepNotAboveUsed"),
-    RunRequestError::Rejected(Rejection::BudgetAboveMaximum { max }) => {
-      Message::new("tokens.errors.aboveMax").with("max", compact_tokens(max.get()))
-    }
+
     RunRequestError::Rejected(Rejection::PermissionsNotEnforceable { step, .. }) => {
       Message::new("runs.permissions.errors.notEnforceable").with("step", step.to_string())
     }

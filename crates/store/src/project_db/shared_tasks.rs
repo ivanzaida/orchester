@@ -67,7 +67,7 @@ pub struct CachedTask {
   pub brief: String,
   pub criteria: Vec<String>,
   pub pipeline: Option<String>,
-  pub limits: Option<TaskLimits>,
+  pub limits: TaskLimits,
   pub status: TaskStatus,
   pub organization: TaskOrganization,
   pub former_key: Option<String>,

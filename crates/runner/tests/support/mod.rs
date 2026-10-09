@@ -139,8 +139,9 @@ pub struct Setup {
   pub brief: &'static str,
   /// `false`: one step, Implement; `true`: Implement, then Review.
   pub review: bool,
-  pub budget: u64,
-  pub max_duration: Duration,
+  /// The task's token budget and time limit; `None` is no limit.
+  pub budget: Option<u64>,
+  pub max_duration: Option<Duration>,
   /// A pipeline graph instead of Implement (and Review).
   pub steps: Vec<StepSpec>,
   /// The CLI the Builder profile runs on.
@@ -173,8 +174,8 @@ impl Setup {
       secrets: Vec::new(),
       code_index: CodeIndexSetting::Off,
       native: None,
-      budget: 1_400_000,
-      max_duration: Duration::from_secs(30 * 60),
+      budget: Some(1_400_000),
+      max_duration: Some(Duration::from_secs(30 * 60)),
     }
   }
 }
@@ -349,13 +350,13 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
     .expect("pipeline")
     .id();
   db.publish_draft::<Pipeline>(delivery, now).expect("publish pipeline");
-  let budget = TokenBudget::new(setup.budget).expect("above zero");
+  let budget = setup.budget.map(|tokens| TokenBudget::new(tokens).expect("above zero"));
   let details = TaskDetails {
     title: name("Say hello"),
     brief: setup.brief.into(),
     acceptance_criteria: vec!["README.md ends with hello".into()],
     pipeline: Some(delivery),
-    limits: Some(TaskLimits::new(budget, setup.max_duration).expect("limits")),
+    limits: TaskLimits::new(budget, setup.max_duration).expect("limits"),
   };
   let mut task = db
     .create_tasks(IdempotencyKey::generate(), vec![details], now)

@@ -24,7 +24,7 @@ use super::{
 };
 use crate::{
   RunStoreError, StoreError,
-  rows::{corrupt, encode_json, millis_column, tokens_column},
+  rows::{corrupt, encode_json, optional_budget_column, optional_millis_column, tokens_column},
 };
 
 const SNAPSHOT_SCHEMA: u32 = 1;
@@ -268,10 +268,10 @@ fn insert_run(transaction: &Transaction<'_>, run: &Run, key: &str) -> Result<(),
       encode_json("run snapshot", SNAPSHOT_SCHEMA, run.snapshot())?,
       run.branch().as_str(),
       run.base().as_str(),
-      tokens_column("run budget", run.created().budget.get())?,
-      millis_column("run time limit", run.created().max_duration)?,
-      tokens_column("run budget", run.budget().get())?,
-      millis_column("run time limit", run.max_duration())?,
+      optional_budget_column("run budget", run.created().budget)?,
+      optional_millis_column("run time limit", run.created().max_duration)?,
+      optional_budget_column("run budget", run.budget())?,
+      optional_millis_column("run time limit", run.max_duration())?,
       tokens_column("run usage", run.used().get())?,
       run.pause_requested(),
       columns.status,
@@ -302,8 +302,8 @@ fn update_run(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreError
       columns.reason,
       columns.failed_step,
       columns.limit_execution,
-      tokens_column("run budget", run.budget().get())?,
-      millis_column("run time limit", run.max_duration())?,
+      optional_budget_column("run budget", run.budget())?,
+      optional_millis_column("run time limit", run.max_duration())?,
       tokens_column("run usage", run.used().get())?,
       run.pause_requested(),
       sequence_column(run.last_sequence().get())?,
@@ -317,7 +317,7 @@ fn update_run(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreError
     step_budget.execute(params![
       run.id().to_string(),
       step.as_str(),
-      tokens_column("step budget", budget.get())?
+      optional_budget_column("step budget", *budget)?
     ])?;
   }
   let mut permissions = transaction.prepare_cached(

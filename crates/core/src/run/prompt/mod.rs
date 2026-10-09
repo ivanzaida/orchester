@@ -272,7 +272,7 @@ impl PromptInput<'_> {
       Variable::RunRevision => run?.last_checkpoint()?.revision().as_str().to_owned(),
       Variable::StepId => self.step.key.as_str().to_owned(),
       Variable::StepName => self.step.name.as_str().to_owned(),
-      Variable::RunBudget => run?.budget().to_string(),
+      Variable::RunBudget => run?.budget()?.to_string(),
       // Not known to a run yet: tasks have no attachments, the project records no repository
       // or default branch, and creation times have no agreed text form.
       Variable::TaskAttachments

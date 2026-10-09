@@ -8,8 +8,6 @@ use orchester_core::{
 
 use crate::fixture::{Logged, at, key, revision, tokens};
 
-const MAX: u64 = 10_000_000;
-
 /// A run whose `research` step used its budget: its work was committed and the run stopped.
 fn stopped_at_step_budget() -> (Logged, RunLimit) {
   let mut logged = Logged::started();
@@ -35,13 +33,13 @@ fn step_budget_stop_pauses_the_run_without_failing_the_step() {
   assert!(!limit.is_run_limit());
   assert_eq!(logged.run.resume(at(16)), Err(RunError::LimitNotRaised(limit)));
   let run_limits = RaisedLimits {
-    budget: tokens(2_000_000),
-    max_duration: std::time::Duration::from_secs(3_600),
+    budget: Some(tokens(2_000_000)),
+    max_duration: Some(std::time::Duration::from_secs(3_600)),
   };
   assert!(matches!(
     logged
       .run
-      .continue_with_limits(run_limits, std::time::Duration::ZERO, tokens(MAX), at(16)),
+      .continue_with_limits(run_limits, std::time::Duration::ZERO, at(16)),
     Err(RunError::InvalidRunTransition { .. })
   ));
   assert_eq!(Run::replay(&logged.log), Ok(logged.run));
@@ -52,11 +50,15 @@ fn step_budget_raise_applies_to_the_run_and_continues_it() {
   let (mut logged, _) = stopped_at_step_budget();
   let used = TokensUsed::new(400_500);
   assert_eq!(logged.run.step_budget(&key("research")), None);
-  logged.apply(|run| run.raise_step_budget(tokens(600_000), used, tokens(MAX), at(20)));
+  logged.apply(|run| run.raise_step_budget(Some(tokens(600_000)), used, at(20)));
   let run = &logged.run;
   assert_eq!(run.status(), &RunStatus::Running);
   assert_eq!(run.step_budget(&key("research")), Some(tokens(600_000)));
-  assert_eq!(run.budget(), tokens(1_400_000), "the run's own budget is unchanged");
+  assert_eq!(
+    run.budget(),
+    Some(tokens(1_400_000)),
+    "the run's own budget is unchanged"
+  );
   let research = run.execution(logged.exec("research")).expect("execution");
   assert_eq!(research.status(), StepStatus::Running, "the same execution continues");
   assert_eq!(run.attempts().len(), 1);
@@ -69,21 +71,18 @@ fn step_budget_raise_applies_to_the_run_and_continues_it() {
 }
 
 #[test]
-fn step_budget_raise_must_exceed_what_the_step_used_and_fit_the_maximum() {
+fn step_budget_raise_must_exceed_what_the_step_used_with_no_maximum() {
   let (mut logged, limit) = stopped_at_step_budget();
   let before = logged.run.clone();
   let used = TokensUsed::new(400_500);
   assert_eq!(
-    logged.run.raise_step_budget(tokens(400_500), used, tokens(MAX), at(20)),
+    logged.run.raise_step_budget(Some(tokens(400_500)), used, at(20)),
     Err(RunError::LimitNotAboveUsed(limit))
   );
-  assert_eq!(
-    logged
-      .run
-      .raise_step_budget(tokens(12_000_000), used, tokens(MAX), at(20)),
-    Err(RunError::BudgetAboveMaximum { max: tokens(MAX) })
-  );
   assert_eq!(logged.run, before);
+  let mut large = logged.clone();
+  large.apply(|run| run.raise_step_budget(Some(tokens(900_000_000_000)), used, at(20)));
+  assert_eq!(large.run.step_budget(&key("research")), Some(tokens(900_000_000_000)));
 
   // Only a run stopped at a step's budget takes a raised step budget.
   let mut paused = Logged::started();
@@ -91,9 +90,19 @@ fn step_budget_raise_must_exceed_what_the_step_used_and_fit_the_maximum() {
   paused.apply(|run| run.start_step(research, at(12)));
   paused.apply(|run| run.stop_at_limit(RunLimit::Tokens, at(13)));
   assert!(matches!(
-    paused.run.raise_step_budget(tokens(600_000), used, tokens(MAX), at(20)),
+    paused.run.raise_step_budget(Some(tokens(600_000)), used, at(20)),
     Err(RunError::InvalidRunTransition { .. })
   ));
+}
+
+#[test]
+fn step_budget_lifted_leaves_the_step_without_a_budget_for_the_run() {
+  let (mut logged, _) = stopped_at_step_budget();
+  logged.apply(|run| run.raise_step_budget(None, TokensUsed::new(400_500), at(20)));
+  assert_eq!(logged.run.status(), &RunStatus::Running);
+  assert_eq!(logged.run.step_budget(&key("research")), None);
+  assert_eq!(logged.run.raised_step_budgets().get(&key("research")), Some(&None));
+  assert_eq!(Run::replay(&logged.log), Ok(logged.run));
 }
 
 #[test]

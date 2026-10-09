@@ -15,7 +15,11 @@ use orchester_app::{
   project::{ProjectFeed, TasksState},
   routes::{ProjectPage, Route, TaskList},
 };
-use orchester_core::{id::IdempotencyKey, name::Name, task::TaskDetails};
+use orchester_core::{
+  id::IdempotencyKey,
+  name::Name,
+  task::{TaskDetails, TaskLimits},
+};
 use orchester_workspace::tasks::{
   data::{SaveTarget, save_draft_in},
   outside::Outside,
@@ -39,7 +43,7 @@ fn draft(repo: &Path, title: &str) {
     brief: String::new(),
     acceptance_criteria: Vec::new(),
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   };
   save_draft_in(repo, SaveTarget::New(IdempotencyKey::generate()), &details).expect("the draft is saved");
 }

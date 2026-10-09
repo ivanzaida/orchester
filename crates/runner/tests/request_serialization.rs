@@ -100,7 +100,7 @@ async fn assert_other_requests_wait(scheduler: &Scheduler, run: RunId, builder: 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn requests_wait_while_a_limit_raise_starts_the_next_task() {
   let project = project(&Setup {
-    budget: 5_000,
+    budget: Some(5_000),
     provider: AgentProvider::ClaudeCodeCli,
     ..Setup::new("Work in turns.")
   });
@@ -113,8 +113,8 @@ async fn requests_wait_while_a_limit_raise_starts_the_next_task() {
   writer.execute_batch("BEGIN IMMEDIATE").expect("hold the write lock");
 
   let limits = RaisedLimits {
-    budget: TokenBudget::new(2_000_000).expect("above zero"),
-    max_duration: Duration::from_secs(30 * 60),
+    budget: Some(TokenBudget::new(2_000_000).expect("above zero")),
+    max_duration: Some(Duration::from_secs(30 * 60)),
   };
   let continuing = scheduler.clone();
   let raise = tokio::spawn(async move { continuing.raise_limit(run, limits).await });

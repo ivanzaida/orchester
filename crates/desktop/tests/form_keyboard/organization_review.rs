@@ -33,9 +33,11 @@ fn complete(pipeline: ResourceId) -> TaskDetails {
     brief: "Implement.".into(),
     acceptance_criteria: vec!["Complete.".into()],
     pipeline: Some(pipeline),
-    limits: Some(
-      TaskLimits::new(TokenBudget::new(10_000).expect("budget"), Duration::from_secs(1_800)).expect("limits"),
-    ),
+    limits: TaskLimits::new(
+      Some(TokenBudget::new(10_000).expect("budget")),
+      Some(Duration::from_secs(1_800)),
+    )
+    .expect("limits"),
   }
 }
 

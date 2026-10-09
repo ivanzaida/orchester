@@ -49,8 +49,8 @@ fn upload(number: u32, title: &str, claim: bool) -> UploadTask {
     criteria: vec!["It works.".into()],
     pipeline: Some("delivery".into()),
     limits: Some(SharedLimits {
-      budget_tokens: 1_400_000,
-      max_duration_ms: 1_800_000,
+      budget_tokens: Some(1_400_000),
+      max_duration_ms: Some(1_800_000),
     }),
     workflow: WorkflowStatus::Todo,
     priority: Priority::High,

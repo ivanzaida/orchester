@@ -148,7 +148,11 @@ fn replaying_a_queued_batch_returns_the_original_pin_after_republish() {
     brief: "Complete the requested feature.".into(),
     acceptance_criteria: vec!["It works.".into()],
     pipeline: Some(id),
-    limits: Some(TaskLimits::new(TokenBudget::new(1_000).expect("budget"), Duration::from_secs(60)).expect("limits")),
+    limits: TaskLimits::new(
+      Some(TokenBudget::new(1_000).expect("budget")),
+      Some(Duration::from_secs(60)),
+    )
+    .expect("limits"),
   };
   let batch = IdempotencyKey::generate();
   let mut queued = db

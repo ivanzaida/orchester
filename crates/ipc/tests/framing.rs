@@ -60,13 +60,19 @@ fn requests(run: RunId, task: TaskId) -> Vec<Request> {
     Command::CancelRun { run },
     Command::RaiseLimit {
       run,
-      budget: TokenBudget::new(2_000_000).expect("above zero"),
-      max_duration_ms: 1_800_000,
+      budget: Some(TokenBudget::new(2_000_000).expect("above zero")),
+      max_duration_ms: Some(1_800_000),
+    },
+    Command::RaiseLimit {
+      run,
+      budget: None,
+      max_duration_ms: None,
     },
     Command::RaiseStepBudget {
       run,
-      budget: TokenBudget::new(600_000).expect("above zero"),
+      budget: Some(TokenBudget::new(600_000).expect("above zero")),
     },
+    Command::RaiseStepBudget { run, budget: None },
     Command::ChangeRunPermissions {
       run,
       profile: ResourceId::generate(),
@@ -254,9 +260,6 @@ fn events(run: RunId, task: TaskId) -> Vec<Event> {
     reply(Reply::Rejected(Rejection::LimitNotRaised { limit: RunLimit::Time })),
     reply(Reply::Rejected(Rejection::LimitNotAboveUsed {
       limit: RunLimit::Tokens,
-    })),
-    reply(Reply::Rejected(Rejection::BudgetAboveMaximum {
-      max: TokenBudget::new(10_000_000).expect("above zero"),
     })),
     reply(Reply::Rejected(Rejection::Preflight {
       problems: vec![

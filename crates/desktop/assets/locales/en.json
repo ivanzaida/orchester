@@ -742,7 +742,7 @@
       "noLimits": "No limits set",
       "budget": "{{tokens}} tokens",
       "timeLimit": "{{minutes}} min",
-      "limits": "{{tokens}} tokens · {{minutes}} min",
+      "limits": "{{budget}} · {{time}}",
       "saveYours": "Save with your version",
       "useTheirs": "Use {{name}}'s version",
       "useSaved": "Use the saved version",
@@ -1782,7 +1782,9 @@
         "worktree": "New worktree",
         "worktreeValue": "A new folder in {{folder}}",
         "limits": "Limits",
-        "limitsValue": "{{budget}} tokens · {{minutes}} min · from the task"
+        "limitsValue": "{{budget}} · {{time}} · from the task",
+        "budgetValue": "{{budget}} tokens",
+        "timeLimitValue": "{{minutes}} min"
       },
       "remove": {
         "title": {
@@ -1844,8 +1846,10 @@
       "tokenBudget": "Token budget",
       "timeLimit": "Time limit",
       "tokensUsed": "Used {{used}} of {{limit}}",
+      "tokensUsedNoLimit": "Used {{used}} · no limit",
       "tokensUsedMidStep": "Used {{used}} of {{limit}} · {{step}} stopped mid-step",
       "timeUsed": "Used {{used}} of {{limit}} min of active agent time",
+      "timeUsedNoLimit": "Used {{used}} min of active agent time · no limit",
       "timeUsedMidStep": "Used {{used}} of {{limit}} min of active agent time · {{step}} stopped mid-step",
       "timeLeft": "{{left}} min left · pauses don’t count",
       "minutes": "minutes",
@@ -1855,6 +1859,7 @@
       "continueStepBudget": "Continue starts a new {{agent}} invocation in the same session from checkpoint {{checkpoint}} and repeats the unfinished part of {{step}}. The new step budget applies to Run {{run}} only; the pipeline keeps its own.",
       "continueStepBudgetNoCheckpoint": "Continue starts a new {{agent}} invocation in the same session and repeats the unfinished part of {{step}}. The new step budget applies to Run {{run}} only; the pipeline keeps its own.",
       "continue": "Continue",
+      "continueNoLimit": "Continue with no limit",
       "continueWith": "Continue with {{count}} tokens",
       "continueWithMinutes": {
         "one": "Continue with {{minutes}} minute",
@@ -3794,15 +3799,13 @@
       "description": "Defaults and limits for {{project}}. They apply to new tasks and runs in this project.",
       "changedOutsideConflict": "Not saved: the limits were changed elsewhere meanwhile, and together with your change they no longer fit. Reload shows them as stored.",
       "tokenBudgets": "Token budgets",
-      "max": "Maximum run budget",
-      "maxDetail": "The largest token budget a task, a run or a raised limit may have. Budget fields reject larger values and name this maximum. There is no minimum beyond more than 0.",
       "default": "Default run budget",
-      "defaultDetail": "Prefilled in New task. Must not exceed the maximum.",
+      "defaultDetail": "Prefilled in New task. Leave it empty for no limit; there is no maximum.",
       "daily": "Daily project budget",
       "dailyDetail": "Tokens all runs in this project may use per day. Shown in the status bar; new work waits once it is used up.",
       "time": "Time",
       "timeLimit": "Default time limit",
-      "timeLimitDetail": "Counts active agent time only. Time paused or waiting for you (plan approval, questions, permission requests) doesn’t count.",
+      "timeLimitDetail": "Prefilled in New task; No limit leaves tasks without one. Counts active agent time only. Time paused or waiting for you (plan approval, questions, permission requests) doesn’t count.",
       "activeTime": "active agent time",
       "minutesOption": {
         "one": "{{count}} minute",
@@ -5371,12 +5374,13 @@
   "tokens": {
     "unit": "tokens",
     "readBack": "= {{count}} tokens",
-    "readBackDefault": "= {{count}} tokens · default",
-    "readBackRun": "= {{count}} tokens · input + output · max {{max}} per run",
+    "noLimit": "No limit",
+    "readBackRun": "= {{count}} tokens · input + output",
     "readBackMore": "= {{count}} tokens · {{difference}} more than now",
     "readBackLess": "= {{count}} tokens · {{difference}} less than now",
     "usedOfBudget": "{{used}} / {{budget}} tokens",
-    "usedOfBudgetReached": "{{used}} / {{budget}} tokens · limit reached"
+    "usedOfBudgetReached": "{{used}} / {{budget}} tokens · limit reached",
+    "usedNoLimit": "{{used}} tokens · no limit"
   },
   "sharing": {
     "members": {

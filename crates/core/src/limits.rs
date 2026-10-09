@@ -1,7 +1,8 @@
-//! Project settings › Limits (02.M `c7e729`): budgets are project resources, so their bounds and
-//! defaults are project settings. Changes apply to new runs; a run keeps the limits it started
-//! with, and a raised limit is bounded by the maximum in force when it is raised. How many agents
-//! work at once is the exception: the project's runner applies it at once.
+//! Project settings › Limits (02.M `c7e729`): budgets are project resources, so their defaults
+//! are project settings. A run's budget and time limit are optional and have no maximum: an empty
+//! one means no limit (user decision 2026-10-09). Changes apply to new runs; a run keeps the
+//! limits it started with. How many agents work at once is the exception: the project's runner
+//! applies it at once.
 
 use std::{num::NonZeroU32, time::Duration};
 
@@ -11,8 +12,6 @@ use crate::tokens::{TokenBudget, TokensUsed};
 
 #[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
 pub enum ProjectLimitsError {
-  #[error("the default run budget {default} is above the maximum run budget {max}")]
-  DefaultAboveMaximum { default: TokenBudget, max: TokenBudget },
   #[error("the default time limit must be greater than zero")]
   ZeroTimeLimit,
 }
@@ -57,42 +56,33 @@ impl Default for AgentSlots {
 /// A project's token budgets, time limit default and agent slots.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProjectLimits {
-  max_run_budget: TokenBudget,
-  default_run_budget: TokenBudget,
+  default_run_budget: Option<TokenBudget>,
   daily_budget: TokenBudget,
-  default_time_limit: Duration,
+  default_time_limit: Option<Duration>,
   agent_slots: AgentSlots,
 }
 
 impl ProjectLimits {
-  /// The design's defaults: at most 10M tokens per run, 1.4M by default, 20M per project per
-  /// day, 30 minutes of active agent time and 4 agents at once.
+  /// No run budget and no time limit by default (user decision 2026-10-09), 20M tokens per
+  /// project per day and 4 agents at once.
   pub const DEFAULT: Self = Self {
-    max_run_budget: budget(10_000_000),
-    default_run_budget: budget(1_400_000),
+    default_run_budget: None,
     daily_budget: budget(20_000_000),
-    default_time_limit: Duration::from_secs(30 * 60),
+    default_time_limit: None,
     agent_slots: AgentSlots::DEFAULT,
   };
 
   /// The budgets and the time limit, with the default agent slots ([`ProjectLimits::with_agent_slots`]).
+  /// `None` for the run budget or the time limit means new tasks have none.
   pub fn new(
-    max_run_budget: TokenBudget,
-    default_run_budget: TokenBudget,
+    default_run_budget: Option<TokenBudget>,
     daily_budget: TokenBudget,
-    default_time_limit: Duration,
+    default_time_limit: Option<Duration>,
   ) -> Result<Self, ProjectLimitsError> {
-    if default_run_budget > max_run_budget {
-      return Err(ProjectLimitsError::DefaultAboveMaximum {
-        default: default_run_budget,
-        max: max_run_budget,
-      });
-    }
-    if default_time_limit.is_zero() {
+    if default_time_limit.is_some_and(|limit| limit.is_zero()) {
       return Err(ProjectLimitsError::ZeroTimeLimit);
     }
     Ok(Self {
-      max_run_budget,
       default_run_budget,
       daily_budget,
       default_time_limit,
@@ -106,13 +96,8 @@ impl ProjectLimits {
     self
   }
 
-  /// The largest budget a task, a run or a raised limit may have.
-  pub const fn max_run_budget(self) -> TokenBudget {
-    self.max_run_budget
-  }
-
-  /// Prefilled in New task.
-  pub const fn default_run_budget(self) -> TokenBudget {
+  /// Prefilled in New task; `None` leaves new tasks without a budget.
+  pub const fn default_run_budget(self) -> Option<TokenBudget> {
     self.default_run_budget
   }
 
@@ -127,8 +112,9 @@ impl ProjectLimits {
     used_today.reached(self.daily_budget)
   }
 
-  /// Prefilled in New task; counts active agent time only.
-  pub const fn default_time_limit(self) -> Duration {
+  /// Prefilled in New task; counts active agent time only. `None` leaves new tasks without a
+  /// time limit.
+  pub const fn default_time_limit(self) -> Option<Duration> {
     self.default_time_limit
   }
 

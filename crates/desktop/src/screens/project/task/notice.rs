@@ -292,11 +292,20 @@ fn stopped_at_limit(ctx: &Ctx, run: &RunView, limit: RunLimit) -> (Icon, Arc<str
   let (used, of) = match limit {
     RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => (
       compact_tokens(run.run.used().get()),
-      compact_tokens(run.run.budget().get()),
+      // A run stopped at its token limit has a budget; the time limit likewise.
+      run
+        .run
+        .budget()
+        .map(|budget| compact_tokens(budget.get()))
+        .unwrap_or_default(),
     ),
     RunLimit::Time => (
       whole_minutes(run.active_time(Timestamp::now())).to_string(),
-      whole_minutes(run.run.max_duration()).to_string(),
+      run
+        .run
+        .max_duration()
+        .map(|limit| whole_minutes(limit).to_string())
+        .unwrap_or_default(),
     ),
   };
   // The time limit's count decides the plural: "of its 1 minute", "of its 30 minutes".

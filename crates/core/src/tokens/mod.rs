@@ -13,7 +13,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub use self::input::{BudgetInputError, digits_only, parse_budget, regroup};
+pub use self::input::{BudgetInputError, digits_only, parse_budget, parse_optional_budget, regroup};
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum TokenBudgetError {

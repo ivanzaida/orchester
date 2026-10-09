@@ -32,7 +32,7 @@ pub fn cached(task: &SharedTask) -> Result<CachedTask, SharingError> {
     brief: content.brief.clone(),
     criteria: content.criteria.clone(),
     pipeline: content.pipeline.clone(),
-    limits: content.limits.as_ref().map(limits).transpose()?,
+    limits: content.limits.as_ref().map_or(Ok(TaskLimits::NONE), limits)?,
     status: task.status,
     organization: content
       .organization()
@@ -80,18 +80,25 @@ fn run_status(run: &RunStatus) -> Result<CachedRunStatus, SharingError> {
 }
 
 fn limits(limits: &SharedLimits) -> Result<TaskLimits, SharingError> {
-  let budget = TokenBudget::new(limits.budget_tokens).map_err(|_| SharingError::InvalidAnswer("task budget"))?;
-  TaskLimits::new(budget, Duration::from_millis(limits.max_duration_ms))
+  let budget = limits
+    .budget_tokens
+    .map(TokenBudget::new)
+    .transpose()
+    .map_err(|_| SharingError::InvalidAnswer("task budget"))?;
+  TaskLimits::new(budget, limits.max_duration_ms.map(Duration::from_millis))
     .map_err(|_| SharingError::InvalidAnswer("task time limit"))
 }
 
-pub fn shared_limits(limits: TaskLimits) -> SharedLimits {
-  SharedLimits {
-    budget_tokens: limits.budget().get(),
+/// A task's limits as the server keeps them: `None` for a task without any.
+pub fn shared_limits(limits: TaskLimits) -> Option<SharedLimits> {
+  (limits != TaskLimits::NONE).then(|| SharedLimits {
+    budget_tokens: limits.budget().map(TokenBudget::get),
     // Beyond u64 milliseconds is beyond any limit the store keeps (i64 milliseconds); the longest
     // limit the server takes stands for it.
-    max_duration_ms: u64::try_from(limits.max_duration().as_millis()).unwrap_or(u64::MAX),
-  }
+    max_duration_ms: limits
+      .max_duration()
+      .map(|limit| u64::try_from(limit.as_millis()).unwrap_or(u64::MAX)),
+  })
 }
 
 /// The slug of this computer's pipeline `id`: pipelines are shared by slug.
@@ -115,7 +122,7 @@ pub fn content(
     brief: details.brief.clone(),
     criteria: details.acceptance_criteria.clone(),
     pipeline: pipeline_slug(db, details.pipeline)?,
-    limits: details.limits.map(shared_limits),
+    limits: shared_limits(details.limits),
     workflow: organization.status(),
     priority: organization.priority(),
     tags: Vec::new(),
@@ -149,7 +156,7 @@ pub fn content_changes(
     changes.pipeline = Some(pipeline_slug(db, after.pipeline)?);
   }
   if before.limits != after.limits {
-    changes.limits = Some(after.limits.map(shared_limits));
+    changes.limits = Some(shared_limits(after.limits));
   }
   if cached.status() != status {
     changes.status = Some(status);

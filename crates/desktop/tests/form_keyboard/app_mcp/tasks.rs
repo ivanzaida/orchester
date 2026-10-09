@@ -63,13 +63,10 @@ fn app_mcp_creates_finds_and_changes_tasks() {
       .as_str()
       .is_some_and(|shown| shown.contains("Delivery"))
   );
-  assert!(
-    task["limits"]["budget_tokens"].as_u64().is_some(),
-    "the project's default budget"
-  );
-  assert!(
-    task["limits"]["time_limit_minutes"].as_u64().is_some(),
-    "the project's default time limit"
+  // The project's defaults: no budget and no time limit.
+  assert_eq!(
+    task["limits"],
+    json!({"budget_tokens": null, "time_limit_minutes": null})
   );
   assert_eq!(task["runs"], json!([]));
 
@@ -95,6 +92,14 @@ fn app_mcp_creates_finds_and_changes_tasks() {
     task["limits"],
     json!({"budget_tokens": 2_000_000, "time_limit_minutes": 45})
   );
+  // `null` lifts a limit; the other stays.
+  ok(
+    &mut agent,
+    "update_task",
+    &json!({"project": "Kontur", "key": "KON-1", "budget_tokens": null}),
+  );
+  let task = ok(&mut agent, "get_task", &json!({"project": "Kontur", "key": "KON-1"}));
+  assert_eq!(task["limits"], json!({"budget_tokens": null, "time_limit_minutes": 45}));
 
   finds_the_changed_task(&mut agent);
 }

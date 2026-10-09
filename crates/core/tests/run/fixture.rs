@@ -17,7 +17,7 @@ use orchester_core::{
     Answerer, BranchName, NewRun, Plan, PlanDecision, PublishedVersions, Run, RunEvent, RunNumber, RunSnapshot,
     StepStatus, StoredRun,
   },
-  task::{Task, TaskDetails},
+  task::{Task, TaskDetails, TaskLimits},
   time::Timestamp,
   tokens::TokenBudget,
 };
@@ -56,7 +56,7 @@ pub fn task(brief: &str, criteria: &[&str]) -> Task {
     brief: brief.into(),
     acceptance_criteria: criteria.iter().map(|criterion| (*criterion).to_owned()).collect(),
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   };
   Task::draft(TaskId::generate(), task_key(12), details, at(1))
 }
@@ -175,8 +175,8 @@ pub fn new_run(snapshot: RunSnapshot) -> NewRun {
     branch: BranchName::new("orchester/orc-129").expect("valid branch"),
     base: revision('a'),
     base_branch: None,
-    budget: tokens(1_400_000),
-    max_duration: std::time::Duration::from_secs(30 * 60),
+    budget: Some(tokens(1_400_000)),
+    max_duration: Some(std::time::Duration::from_secs(30 * 60)),
   }
 }
 
@@ -200,6 +200,7 @@ pub fn stored(run: &Run) -> StoredRun {
 }
 
 /// A created run with its log so far.
+#[derive(Clone)]
 pub struct Logged {
   pub run: Run,
   pub log: Vec<RunEvent>,

@@ -16,7 +16,7 @@ use orchester_core::{
   id::IdempotencyKey,
   name::Name,
   store::TaskStore,
-  task::{TaskDetails, organization::WorkflowStatus},
+  task::{TaskDetails, TaskLimits, organization::WorkflowStatus},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -99,7 +99,7 @@ fn draft(title: &str) -> TaskDetails {
     brief: String::new(),
     acceptance_criteria: Vec::new(),
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   }
 }
 

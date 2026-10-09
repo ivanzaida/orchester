@@ -126,7 +126,6 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
         tab,
         file,
         revision: shown.revision,
-        limits,
         pipelines: shown.tasks.ready().map(|tasks| tasks.pipelines.clone()),
         runner: shown.runner,
         runner_since: shown.status.trouble_since(),

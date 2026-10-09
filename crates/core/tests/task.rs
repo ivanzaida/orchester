@@ -12,8 +12,8 @@ use orchester_core::{
 
 fn default_limits() -> TaskLimits {
   TaskLimits::new(
-    TokenBudget::new(1_400_000).expect("above zero"),
-    Duration::from_secs(30 * 60),
+    Some(TokenBudget::new(1_400_000).expect("above zero")),
+    Some(Duration::from_secs(30 * 60)),
   )
   .expect("positive duration")
 }
@@ -24,7 +24,7 @@ fn title_only() -> TaskDetails {
     brief: String::new(),
     acceptance_criteria: vec!["  ".into()],
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   }
 }
 
@@ -33,7 +33,7 @@ fn complete() -> TaskDetails {
     brief: "Let users switch repositories from the sidebar.".into(),
     acceptance_criteria: vec!["The switcher lists connected repositories.".into()],
     pipeline: Some(ResourceId::generate()),
-    limits: Some(default_limits()),
+    limits: default_limits(),
     ..title_only()
   }
 }
@@ -51,10 +51,23 @@ fn incomplete_draft_reports_every_missing_detail_and_stays_a_draft() {
     MissingDetail::Brief,
     MissingDetail::AcceptanceCriteria,
     MissingDetail::Pipeline,
-    MissingDetail::Limits,
   ];
   assert_eq!(task.queue(VersionNumber::FIRST), Err(QueueError::Incomplete(expected)));
   assert_eq!(task.status(), TaskStatus::Draft);
+}
+
+#[test]
+fn a_task_without_limits_is_complete_and_queues() {
+  let mut task = task(TaskDetails {
+    limits: TaskLimits::NONE,
+    ..complete()
+  });
+  assert_eq!(task.details().missing(), Vec::new());
+  assert_eq!(task.queue(VersionNumber::FIRST), Ok(()));
+  let only_budget = TaskLimits::new(Some(TokenBudget::new(5).expect("above zero")), None).expect("limits");
+  assert_eq!(only_budget.max_duration(), None);
+  let only_time = TaskLimits::new(None, Some(Duration::from_secs(60))).expect("limits");
+  assert_eq!(only_time.budget(), None);
 }
 
 #[test]
@@ -102,7 +115,10 @@ fn first_run_key_survives_queue_and_reload_but_differs_for_another_task() {
 fn limits_reject_an_empty_budget_and_duration() {
   assert!(TokenBudget::new(0).is_err());
   let budget = TokenBudget::new(1_400_000).expect("above zero");
-  assert_eq!(TaskLimits::new(budget, Duration::ZERO), Err(LimitsError::ZeroDuration));
+  assert_eq!(
+    TaskLimits::new(Some(budget), Some(Duration::ZERO)),
+    Err(LimitsError::ZeroDuration)
+  );
 }
 
 #[test]
@@ -129,7 +145,6 @@ fn queued_task_edits_need_a_run_and_complete_details() {
       MissingDetail::Brief,
       MissingDetail::AcceptanceCriteria,
       MissingDetail::Pipeline,
-      MissingDetail::Limits,
     ]))
   );
   assert_eq!(queued.details(), &details);

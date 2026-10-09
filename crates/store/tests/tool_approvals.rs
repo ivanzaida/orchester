@@ -20,7 +20,7 @@ fn project_pending_requests_span_runs_in_request_time_order() {
     branch: BranchName::new("orchester/orc-1-run-2").expect("branch"),
     base: Revision::new(&"b".repeat(40)).expect("revision"),
     base_branch: None,
-    budget: budget(1_000_000),
+    budget: Some(budget(1_000_000)),
     max_duration: first.max_duration(),
   };
   let mut second = db

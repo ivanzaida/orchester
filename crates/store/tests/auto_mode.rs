@@ -52,8 +52,8 @@ fn auto_mode_new_runs_take_the_projects_setting() {
     branch: BranchName::new("orchester/orc-1-run-2").expect("branch"),
     base: Revision::new(&"b".repeat(40)).expect("revision"),
     base_branch: None,
-    budget: budget(1_000_000),
-    max_duration: Duration::from_secs(1_800),
+    budget: Some(budget(1_000_000)),
+    max_duration: Some(Duration::from_secs(1_800)),
   };
   let second = db
     .create_run(IdempotencyKey::generate(), next, at(20))

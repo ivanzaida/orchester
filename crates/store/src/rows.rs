@@ -47,6 +47,30 @@ pub(crate) fn duration_value(what: &'static str, millis: i64) -> Result<Duration
     .map_err(|_| corrupt(what, millis))
 }
 
+/// A budget that may be no limit, as a nullable `INTEGER` column: `NULL` is no limit.
+pub(crate) fn optional_budget_column(
+  what: &'static str,
+  budget: Option<TokenBudget>,
+) -> Result<Option<i64>, StoreError> {
+  budget.map(|budget| tokens_column(what, budget.get())).transpose()
+}
+
+pub(crate) fn optional_budget_value(
+  what: &'static str,
+  tokens: Option<i64>,
+) -> Result<Option<TokenBudget>, StoreError> {
+  tokens.map(|tokens| budget_value(what, tokens)).transpose()
+}
+
+/// A time limit that may be no limit, as whole milliseconds in a nullable `INTEGER` column.
+pub(crate) fn optional_millis_column(what: &'static str, limit: Option<Duration>) -> Result<Option<i64>, StoreError> {
+  limit.map(|limit| millis_column(what, limit)).transpose()
+}
+
+pub(crate) fn optional_duration_value(what: &'static str, millis: Option<i64>) -> Result<Option<Duration>, StoreError> {
+  millis.map(|millis| duration_value(what, millis)).transpose()
+}
+
 pub(crate) fn path_text<'a>(what: &'static str, path: &'a Path) -> Result<&'a str, StoreError> {
   path.to_str().ok_or(StoreError::Unrepresentable(what))
 }

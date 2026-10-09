@@ -277,7 +277,7 @@ async fn tools_the_run_time_limit_ends_the_program_and_stops_the_run() {
     steps: vec![
       StepSpec::new("checks", "Checks", "", &[]).command(ToolSpec::test_command(&["sleep", "600"]).timeout(900)),
     ],
-    max_duration: Duration::from_secs(2),
+    max_duration: Some(Duration::from_secs(2)),
     ..Setup::new("Say hello.")
   };
   let project = project(&setup);

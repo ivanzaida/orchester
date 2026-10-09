@@ -4,29 +4,40 @@ use orchester_core::{
   limits::{AgentSlots, AgentSlotsError, ProjectLimits, ProjectLimitsError},
   run::TokenUsage,
   time::Timestamp,
-  tokens::{BudgetInputError, TokenBudget, TokensUsed, grouped, parse_budget, regroup},
+  tokens::{BudgetInputError, TokenBudget, TokensUsed, grouped, parse_budget, parse_optional_budget, regroup},
 };
 
 fn budget(count: u64) -> TokenBudget {
   TokenBudget::new(count).expect("above zero")
 }
 
-const MAX: u64 = 10_000_000;
-
 #[test]
 fn tokens_budget_input_takes_whole_numbers_with_locale_groups() {
-  let parse = |text: &str| parse_budget(text, ",", budget(MAX)).map(TokenBudget::get);
+  let parse = |text: &str| parse_budget(text, ",").map(TokenBudget::get);
   assert_eq!(parse("1400000"), Ok(1_400_000));
   assert_eq!(parse("1,400,000"), Ok(1_400_000));
   assert_eq!(parse(" 1 400 000 "), Ok(1_400_000));
   assert_eq!(parse("1_400_000"), Ok(1_400_000));
   assert_eq!(parse("1\u{a0}400\u{a0}000"), Ok(1_400_000));
-  assert_eq!(parse("10,000,000"), Ok(MAX));
+  // No maximum: any whole number of tokens a u64 holds.
+  assert_eq!(parse("10,000,000"), Ok(10_000_000));
+  assert_eq!(parse("900,000,000,000"), Ok(900_000_000_000));
+  assert_eq!(parse("18446744073709551615"), Ok(u64::MAX));
+}
+
+#[test]
+fn tokens_optional_budget_input_reads_empty_as_no_limit() {
+  let parse = |text: &str| parse_optional_budget(text, ",").map(|budget| budget.map(TokenBudget::get));
+  assert_eq!(parse(""), Ok(None));
+  assert_eq!(parse("   "), Ok(None));
+  assert_eq!(parse("1,400,000"), Ok(Some(1_400_000)));
+  assert_eq!(parse("0"), Err(BudgetInputError::Zero));
+  assert_eq!(parse("1.4M"), Err(BudgetInputError::NotDigits));
 }
 
 #[test]
 fn tokens_budget_input_names_each_problem() {
-  let parse = |text: &str| parse_budget(text, ",", budget(MAX));
+  let parse = |text: &str| parse_budget(text, ",");
   assert_eq!(parse(""), Err(BudgetInputError::Empty));
   assert_eq!(parse("   "), Err(BudgetInputError::Empty));
   for invalid in ["1.4M", "1.5", "250k", "abc", "-5", "1.400.000", "+3", ","] {
@@ -34,15 +45,13 @@ fn tokens_budget_input_names_each_problem() {
   }
   assert_eq!(parse("0"), Err(BudgetInputError::Zero));
   assert_eq!(parse("0,000"), Err(BudgetInputError::Zero));
-  let above = Err(BudgetInputError::AboveMaximum { max: budget(MAX) });
-  assert_eq!(parse("12,000,000"), above);
-  assert_eq!(parse("99999999999999999999999"), above);
+  assert_eq!(parse("99999999999999999999999"), Err(BudgetInputError::TooLarge));
 }
 
 #[test]
 fn tokens_budget_input_uses_the_locale_separator() {
   // A locale grouping with dots reads `1.400.000`; a comma is then not a group separator.
-  let parse = |text: &str| parse_budget(text, ".", budget(MAX)).map(TokenBudget::get);
+  let parse = |text: &str| parse_budget(text, ".").map(TokenBudget::get);
   assert_eq!(parse("1.400.000"), Ok(1_400_000));
   assert_eq!(parse("1,4"), Err(BudgetInputError::NotDigits));
 }
@@ -75,12 +84,11 @@ fn tokens_usage_counts_input_and_output_without_cached_input() {
 }
 
 #[test]
-fn tokens_project_limits_default_to_the_design_values() {
+fn tokens_project_limits_default_to_no_run_limits() {
   let limits = ProjectLimits::default();
-  assert_eq!(limits.max_run_budget().get(), 10_000_000);
-  assert_eq!(limits.default_run_budget().get(), 1_400_000);
+  assert_eq!(limits.default_run_budget(), None);
   assert_eq!(limits.daily_budget().get(), 20_000_000);
-  assert_eq!(limits.default_time_limit(), Duration::from_secs(30 * 60));
+  assert_eq!(limits.default_time_limit(), None);
   assert_eq!(limits.agent_slots().get().get(), 4);
 }
 
@@ -98,24 +106,21 @@ fn tokens_agent_slots_are_one_to_sixteen() {
   let two = AgentSlots::new(2).expect("in range");
   let limits = ProjectLimits::DEFAULT.with_agent_slots(two);
   assert_eq!(limits.agent_slots(), two);
-  assert_eq!(limits.max_run_budget(), ProjectLimits::DEFAULT.max_run_budget());
+  assert_eq!(limits.daily_budget(), ProjectLimits::DEFAULT.daily_budget());
 }
 
 #[test]
-fn tokens_project_limits_keep_the_default_within_the_maximum() {
-  let thirty = Duration::from_secs(1_800);
+fn tokens_project_limits_have_optional_defaults_without_a_maximum() {
+  let thirty = Some(Duration::from_secs(1_800));
+  // A default run budget far above the daily budget is accepted: nothing bounds it.
+  let large = ProjectLimits::new(Some(budget(900_000_000)), budget(1), thirty).expect("valid");
+  assert_eq!(large.default_run_budget(), Some(budget(900_000_000)));
+  let none = ProjectLimits::new(None, budget(20_000_000), None).expect("valid");
+  assert_eq!((none.default_run_budget(), none.default_time_limit()), (None, None));
   assert_eq!(
-    ProjectLimits::new(budget(1_000_000), budget(1_400_000), budget(MAX), thirty),
-    Err(ProjectLimitsError::DefaultAboveMaximum {
-      default: budget(1_400_000),
-      max: budget(1_000_000)
-    })
-  );
-  assert_eq!(
-    ProjectLimits::new(budget(MAX), budget(1_400_000), budget(MAX), Duration::ZERO),
+    ProjectLimits::new(None, budget(20_000_000), Some(Duration::ZERO)),
     Err(ProjectLimitsError::ZeroTimeLimit)
   );
-  assert!(ProjectLimits::new(budget(MAX), budget(MAX), budget(1), thirty).is_ok());
 }
 
 #[test]
