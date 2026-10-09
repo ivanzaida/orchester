@@ -152,6 +152,17 @@ impl Seeded {
     row.y >= header.y + header.height - 0.5 && row.y + row.height <= table.y + table.height + 0.5
   }
 
+  /// Scrolls the rows far down with the wheel.
+  pub fn scroll_down(&mut self) {
+    let table = self.bounds("tasks-table");
+    let (x, y) = (table.x + table.width / 2.0, table.y + table.height / 2.0);
+    self
+      .window
+      .tree
+      .scroll(x, y, 0.0, -2000.0, lurq::app::events::ScrollPhase::Scroll);
+    self.window.pass();
+  }
+
   /// A press with the pointer at the middle of `id`.
   pub fn click(&mut self, id: &str) {
     let bounds = self

@@ -74,7 +74,7 @@ struct TasksScreen {
   view: ListView,
   /// Where the rows are scrolled to, and what they were last placed for ([`TasksScreen::place`]).
   scroll: ScrollState,
-  placed: Mutex<Option<(RowsKey, Option<TaskKey>)>>,
+  placed: Mutex<Option<Placed>>,
 }
 
 impl Component for TasksScreen {
@@ -168,10 +168,17 @@ impl TasksScreen {
       .child(header::tabs(ctx, id, list, Some(counts)))
       .child(query::query(ctx, &self.choices, Some(tasks)));
     if rows.is_empty() {
+      // Rows that come back are placed afresh, at their top.
+      *self.placed.lock() = None;
       return page.child(self.no_rows(ctx, list.tab(), counts.get(list.tab()), filtered));
     }
+    // A new list for what narrows and orders the rows, and once a highlighted task the rows lacked comes:
+    // a list keeps its top row in place while its rows change, which these must not.
     let list_key = format!("tasks-rows-{key:?}");
-    self.place(key, list.highlight(), &rows);
+    let list_key = match self.place(key, list.highlight(), &rows) {
+      true => list_key,
+      false => format!("{list_key}-awaiting"),
+    };
     let highlight = list.highlight().map(ToString::to_string);
     let shown = Rows {
       project: id,
@@ -187,22 +194,34 @@ impl TasksScreen {
   }
 
   /// Scrolls the rows when what they show changed: to the task a Create just added, or else to the top,
-  /// for another tab, search, pipeline or sort. A render for anything else leaves them where they are.
-  fn place(&self, key: RowsKey, highlight: Option<&TaskKey>, rows: &[TaskRow]) {
-    let placing = (key, highlight.cloned());
+  /// for another tab, search, pipeline or sort. A highlighted task the rows do not hold yet (the feed is
+  /// still reading the tasks again) is scrolled to once a reading brings it. A render for anything else
+  /// leaves the rows where they are. Answers whether the rows hold the highlighted task, if any.
+  fn place(&self, key: RowsKey, highlight: Option<&TaskKey>, rows: &[TaskRow]) -> bool {
     let mut placed = self.placed.lock();
-    if placed.as_ref() == Some(&placing) {
-      return;
+    let same = placed
+      .as_ref()
+      .is_some_and(|placed| placed.key == key && placed.highlight.as_ref() == highlight);
+    if same && placed.as_ref().is_some_and(|placed| placed.reached) {
+      return true;
     }
-    let shown = highlight.and_then(|task| {
+    let found = highlight.and_then(|task| {
       let task = task.to_string();
       rows.iter().position(|row| *row.key == *task)
     });
-    match shown {
+    match found {
       Some(index) => self.scroll.set_scroll_pending(0.0, ROW_HEIGHT * index as f32),
+      // Still waiting for the highlighted task: the rows stay where they were put.
+      None if same => return false,
       None => self.scroll.scroll_to_top_pending(),
     }
-    *placed = Some(placing);
+    let reached = highlight.is_none() || found.is_some();
+    *placed = Some(Placed {
+      key,
+      highlight: highlight.cloned(),
+      reached,
+    });
+    reached
   }
 
   /// Why `tab` shows no row: it has none of its `count` tasks at all, or the query hides them, which
@@ -230,4 +249,11 @@ fn online(project: &ShownProject) -> bool {
     .as_ref()
     .map(|status: &RunnerStatus| status.state_for(root))
     == Some(RunnerState::Online)
+}
+
+/// What the rows were last placed for, and whether the highlighted task, if any, was among them.
+struct Placed {
+  key: RowsKey,
+  highlight: Option<TaskKey>,
+  reached: bool,
 }

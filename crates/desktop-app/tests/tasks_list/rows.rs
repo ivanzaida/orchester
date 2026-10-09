@@ -22,7 +22,7 @@ const ROWS: [(&str, &str, Icon, &str); 12] = [
   ("KON-17", "Held · a task failed", Icon::CirclePause, "Queued"),
   ("KON-19", "Blocked · KON-18 unfinished", Icon::Ban, "Draft"),
   ("KON-23", "Raise the limit to continue", Icon::Gauge, "Stopped at limit"),
-  ("KON-24", "Run #", Icon::FileWarning, "Unreadable"),
+  ("KON-24", "Run #", Icon::CircleHelp, "Unreadable"),
 ];
 
 #[test]
@@ -121,26 +121,67 @@ fn tasks_highlight_below_the_fold_scrolls_its_row_into_view() {
 #[test]
 fn tasks_a_new_tab_sort_search_or_pipeline_starts_the_list_at_its_top() {
   let mut seeded = Seeded::tasks_in("tasks", TaskList::default(), 900);
-  let scroll_down = |seeded: &mut Seeded| {
-    let table = seeded.bounds("tasks-table");
-    let (x, y) = (table.x + table.width / 2.0, table.y + table.height / 2.0);
-    seeded
-      .window
-      .tree
-      .scroll(x, y, 0.0, -2000.0, lurq::app::events::ScrollPhase::Scroll);
-    seeded.window.pass();
-  };
-  scroll_down(&mut seeded);
+  seeded.scroll_down();
   assert!(!seeded.in_view("KON-1"), "the list scrolled down");
   choose_sort(&mut seeded, "Newest first");
   seeded.until("a new sort to start at the top", |seeded| seeded.in_view("KON-24"));
-  scroll_down(&mut seeded);
+  seeded.scroll_down();
   assert!(!seeded.in_view("KON-24"));
   seeded.go(TaskList::new(TaskListTab::Todo));
   seeded.until("a new tab to start at the top", |seeded| {
     let first = seeded.keys()[0].clone();
     seeded.in_view(&first)
   });
+}
+
+#[test]
+fn tasks_a_created_task_the_feed_reads_later_is_scrolled_into_view() {
+  let key = "KON-25".parse().expect("a task key");
+  let mut seeded = Seeded::tasks_in("tasks", TaskList::new(TaskListTab::All).with_highlight(key), 900);
+  assert!(
+    !seeded.shows("task-row-KON-25"),
+    "the feed has not read the new task yet"
+  );
+  assert!(seeded.in_view("KON-1"), "the rows wait at their top");
+  let details = orchester_core::task::TaskDetails {
+    title: orchester_core::name::Name::new("Show token spend per step").expect("a title"),
+    brief: String::new(),
+    acceptance_criteria: Vec::new(),
+    pipeline: None,
+    limits: None,
+  };
+  orchester_workspace::tasks::data::save_draft_in(
+    &seeded.repo,
+    orchester_workspace::tasks::data::SaveTarget::New(orchester_core::id::IdempotencyKey::generate()),
+    &details,
+  )
+  .expect("the draft is saved");
+  seeded.window.projects().feed(seeded.project).saved();
+  seeded.until("the new task in view", |seeded| seeded.in_view("KON-25"));
+  assert_eq!(seeded.text("task-new-KON-25"), "New");
+}
+
+#[test]
+fn tasks_rows_that_come_back_after_a_search_without_matches_start_at_the_top() {
+  let mut seeded = Seeded::tasks_in("tasks", TaskList::default(), 900);
+  seeded.scroll_down();
+  assert!(!seeded.in_view("KON-1"));
+  seeded.go(TaskList::default().with_search("zzzz"));
+  assert!(seeded.shows("tasks-no-rows"));
+  seeded.go(TaskList::default());
+  seeded.until("the rows back at the top", |seeded| seeded.in_view("KON-1"));
+}
+
+#[test]
+fn tasks_a_long_readiness_is_cut_with_an_ellipsis_inside_its_cell() {
+  let mut seeded = Seeded::tasks("task-states", TaskList::default());
+  let said = seeded.bounds("task-readiness-KON-6");
+  let row = seeded.bounds("task-row-KON-6");
+  // The row ends in its 12 padding, the 14 chevron and the 12 before it.
+  assert!(
+    said.x + said.width <= row.x + row.width - 38.0 + 0.5,
+    "the text stays in its cell: {said:?} in {row:?}"
+  );
 }
 
 /// Chooses the sort whose label starts with `label`.

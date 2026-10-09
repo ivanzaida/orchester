@@ -16,7 +16,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{id::ProjectId, project::TaskKey, run::TaskPhase, task::organization::WorkflowStatus};
+use orchester_core::{id::ProjectId, project::TaskKey, task::organization::WorkflowStatus};
 use orchester_workspace::tasks::list::{PipelineLabel, TaskRow};
 
 use super::{readiness, table};
@@ -144,7 +144,7 @@ fn workflow_cell(ctx: &mut Ctx, row: &TaskRow) -> Column {
   let run = row.phase.map_or(Status::Unreadable, Status::of_phase);
   let mut run = StatusChip::new(format!("task-run-{key}"), run).compact();
   // A run at work or one that failed says at which step (`Running · 02 Plan`).
-  if let (Some(TaskPhase::Running | TaskPhase::Failed), Some(step)) = (row.phase, &row.step) {
+  if let Some(step) = row.run_step() {
     let number = format!("{:02}", step.number);
     run = run.detail(ctx.t_args("tasks.runStep", [("number", number.as_str()), ("step", &*step.name)]));
   }
@@ -171,7 +171,10 @@ fn readiness_cell(ctx: &mut Ctx, row: &TaskRow) -> Row {
   let key = &row.key;
   let (glyph, color) = readiness::mark(row);
   let text = message_text(ctx, &row.detail);
+  // As wide as its cell at most, so a long text is cut with an ellipsis.
   Row::new()
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(icon(glyph, IconSize::Base, color.clone()).id(format!("task-readiness-icon-{key}")))

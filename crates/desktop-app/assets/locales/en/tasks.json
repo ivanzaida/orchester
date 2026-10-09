@@ -18,6 +18,7 @@
     "query": {
       "search": "Search",
       "searchPlaceholder": "Search title, key or brief",
+      "clearSearch": "Clear search",
       "pipeline": "Pipeline",
       "allPipelines": "All pipelines",
       "sort": "Sort",

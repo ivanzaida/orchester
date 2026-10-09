@@ -46,6 +46,7 @@ pub(super) struct Choices {
 pub(super) fn query(ctx: &mut Ctx, choices: &Choices, tasks: Option<&ProjectTasks>) -> Row {
   let search = FieldInput::new("tasks-search", ctx.t("tasks.query.search"), choices.search.clone())
     .search()
+    .clearable(ctx.t("tasks.query.clearSearch"))
     .placeholder(ctx.t("tasks.query.searchPlaceholder"))
     .width(Dimension::Px(SEARCH_WIDTH))
     .render(ctx);

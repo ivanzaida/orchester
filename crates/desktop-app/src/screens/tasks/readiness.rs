@@ -5,7 +5,7 @@
 //! waits on the person in `warning` (Waiting for you `hand`, Raise the limit `gauge`, Held `circle-pause`), what only
 //! waits in `text_muted` (Waiting for an agent slot `hourglass`, Needs a brief `pencil-line`), a finished run in its
 //! outcome's tone (Every step passed `success`, Run failed `danger`), and a run that cannot be read in
-//! `danger` with `file-warning`.
+//! `danger` with `circle-help`, as the run line's Unreadable status is.
 
 use lurq::app::theme::PaletteColor;
 use orchester_core::{run::TaskPhase, task_group::GroupHold};
@@ -22,7 +22,7 @@ pub(super) fn mark(row: &TaskRow) -> (Icon, PaletteColor) {
     ReadinessKind::Blocked => (Icon::Ban, PaletteColor::TextSecondary),
     ReadinessKind::NotShared => (Icon::Archive, PaletteColor::TextMuted),
     ReadinessKind::Run(phase) => phase_mark(*phase),
-    ReadinessKind::Unreadable => (Icon::FileWarning, PaletteColor::Danger),
+    ReadinessKind::Unreadable => (Icon::CircleHelp, PaletteColor::Danger),
   }
 }
 

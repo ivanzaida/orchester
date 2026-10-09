@@ -154,3 +154,16 @@ fn choose(seeded: &mut Seeded, id: &str, label: &str) {
   select.commit(index);
   seeded.window.pass();
 }
+
+#[test]
+fn tasks_the_search_s_cross_clears_it() {
+  let mut seeded = Seeded::tasks("tasks", search("HubSpot"));
+  assert_eq!(seeded.keys(), ["KON-13"]);
+  seeded.click("tasks-search-clear");
+  assert_eq!(
+    seeded.window.navigation().route_now(),
+    seeded.route(TaskList::default())
+  );
+  assert_eq!(seeded.keys().len(), 24);
+  assert!(!seeded.shows("tasks-search-clear"), "an empty search has no cross");
+}
