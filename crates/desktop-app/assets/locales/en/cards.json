@@ -70,11 +70,11 @@
         "tool": "{{agent}} wants to call a tool of the {{server}} MCP server. It waits, with its active time stopped, until you answer."
       },
       "policy": {
-        "commandsAsk": "Asks before commands · {{profile}} v{{version}}",
-        "notListed": "Not an allowed command · {{profile}} v{{version}}",
-        "beyondSandbox": "Asks to leave the sandbox · {{profile}} v{{version}}",
-        "mcpActions": "Asks before MCP actions · {{profile}} v{{version}}",
-        "profile": "{{profile}} v{{version}}"
+        "commandsAsk": "Asks before commands · {{profile}} {{version}}",
+        "notListed": "Not an allowed command · {{profile}} {{version}}",
+        "beyondSandbox": "Asks to leave the sandbox · {{profile}} {{version}}",
+        "mcpActions": "Asks before MCP actions · {{profile}} {{version}}",
+        "profile": "{{profile}} {{version}}"
       },
       "category": {
         "readOnly": "Read-only",

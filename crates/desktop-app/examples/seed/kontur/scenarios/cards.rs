@@ -157,7 +157,8 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     let Card::Shape(shape) = card else {
       let (run, invocation) = at_work(kontur, &mut task, pipeline, started)?;
       kontur.seeded(&task, state);
-      let at = kontur.ago(minutes - 10);
+      // Two minutes into the agent's turn.
+      let at = Timestamp::from_unix_millis(invocation.started_at.unix_millis() + 2 * 60_000);
       match card {
         Card::Choice { several, ends } => choice(kontur, (&run, &invocation), several, (ends, at))?,
         Card::Command(command, ends) => approval(kontur, (&run, &invocation), command, (ends, at))?,

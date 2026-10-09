@@ -256,10 +256,11 @@ impl ChoiceView {
       Column::new()
         .spacing(ExtraSpacing::Tight.role())
         .child(toggle)
+        // Under the option's words: past the 16 control and the 8 after it.
         .with_children(shown.description().map(|description| {
-          Text::new(description)
-            .variant(TypographyStyle::Caption)
+          Row::new()
             .padding_left(SpacingSize::Xl)
+            .child(Text::new(description).variant(TypographyStyle::Caption))
         }))
     });
     Column::new()
