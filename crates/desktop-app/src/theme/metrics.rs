@@ -118,10 +118,19 @@ pub enum ExtraRadius {
   BrandTile,
   /// 1.75: the ends of the Orchester mark's bars, half their width.
   BrandBar,
+  /// 2: a meter's track and fill (`Meter` `wtAQI`).
+  Meter,
 }
 
 impl ExtraRadius {
-  pub const ALL: [Self; 5] = [Self::Tile, Self::Window, Self::Full, Self::BrandTile, Self::BrandBar];
+  pub const ALL: [Self; 6] = [
+    Self::Tile,
+    Self::Window,
+    Self::Full,
+    Self::BrandTile,
+    Self::BrandBar,
+    Self::Meter,
+  ];
 
   pub fn role(self) -> RadiusSize {
     RadiusSize::extra(self.name())
@@ -134,6 +143,7 @@ impl ExtraRadius {
       Self::Full => "full",
       Self::BrandTile => "brand_tile",
       Self::BrandBar => "brand_bar",
+      Self::Meter => "meter",
     }
   }
 
@@ -144,6 +154,7 @@ impl ExtraRadius {
       Self::Full => 999.0,
       Self::BrandTile => 5.4,
       Self::BrandBar => 1.75,
+      Self::Meter => 2.0,
     }
   }
 }

@@ -109,6 +109,12 @@ impl FieldInput {
     self
   }
 
+  /// A glyph before the value that says what the field is for (`pencil-line` in the plan's note `c2mWh`).
+  pub fn leading(mut self, glyph: Icon) -> Self {
+    self.leading = Some(glyph);
+    self
+  }
+
   /// The unit of the value, after it inside the box.
   pub fn unit(mut self, unit: impl Into<Arc<str>>) -> Self {
     self.unit = Some(unit.into());
