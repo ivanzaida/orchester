@@ -1,0 +1,96 @@
+use lurq::mcp::{McpTool, Scope};
+use serde_json::{Map, Value, json};
+
+use super::{ToolError, WindowLink, object, reply, route_json, string};
+use crate::{
+  navigation::Navigation,
+  routes::{ProjectPage, ProjectRef, Route, Screen, TaskKey, TaskTab},
+};
+
+const DESCRIPTION: &str = "Take the active tab of the Orchester window to a route, as a new entry of its history \
+  (mouse back or Alt+Left returns). `route` is the screen's name: all_projects and settings take no other \
+  argument; a task takes `project`, `key` and optionally `tab` (conversation, summary, changes); every other screen \
+  takes `project`. Answers the route the tab shows. Errors are JSON with a stable `code`: unknown_route (with the \
+  known names), missing_param, unexpected_param, invalid_param, unknown_tab.";
+
+pub fn tool(link: WindowLink) -> McpTool {
+  McpTool::new("navigate")
+    .description(DESCRIPTION)
+    .scope(Scope::Interact)
+    .input_schema(schema())
+    .handler(move |_ctx, args| reply(link.navigation().and_then(|navigation| navigate(&navigation, &args))))
+}
+
+fn schema() -> Value {
+  let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
+  let tabs: Vec<&str> = TaskTab::ALL.into_iter().map(TaskTab::name).collect();
+  json!({
+    "type": "object",
+    "properties": {
+      "route": { "type": "string", "enum": names },
+      "project": { "type": "string", "description": "The project's identifier, for every screen of a project." },
+      "key": { "type": "string", "description": "The task's key, e.g. KON-12, for `task`." },
+      "tab": { "type": "string", "enum": tabs, "description": "The task's tab; conversation when left out." },
+    },
+    "required": ["route"],
+    "additionalProperties": false,
+  })
+}
+
+/// Takes the active tab to the route `args` name and answers the route it shows.
+pub fn navigate(navigation: &Navigation, args: &Value) -> Result<Value, ToolError> {
+  let route = target(&object(args)?)?;
+  navigation.go(route);
+  Ok(json!({ "route": route_json(&navigation.route_now()) }))
+}
+
+/// The route `args` name: `route`, and the parameters its screen takes.
+fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
+  let name = string(args, "route")?.ok_or(ToolError::Missing { param: "route" })?;
+  let screen = Screen::from_name(name).ok_or_else(|| ToolError::UnknownRoute { name: name.to_owned() })?;
+  let takes = params(screen);
+  if let Some(param) = args
+    .keys()
+    .find(|key| *key != "route" && !takes.contains(&key.as_str()))
+  {
+    return Err(ToolError::UnexpectedParam {
+      of: screen.name(),
+      param: param.clone(),
+    });
+  }
+  Ok(match (screen, ProjectPage::of(screen)) {
+    (Screen::AllProjects, _) => Route::AllProjects,
+    (Screen::Settings, _) => Route::Settings,
+    (_, Some(page)) => Route::Project(project(args)?, page),
+    (_, None) => Route::Project(project(args)?, ProjectPage::Task(key(args)?, tab(args)?)),
+  })
+}
+
+/// The parameters besides `route` that `screen` takes.
+const fn params(screen: Screen) -> &'static [&'static str] {
+  match screen {
+    Screen::AllProjects | Screen::Settings => &[],
+    Screen::Task => &["project", "key", "tab"],
+    _ => &["project"],
+  }
+}
+
+fn project(args: &Map<String, Value>) -> Result<ProjectRef, ToolError> {
+  let value = string(args, "project")?.ok_or(ToolError::Missing { param: "project" })?;
+  ProjectRef::new(value).map_err(|reason| ToolError::InvalidParam {
+    param: "project",
+    reason,
+  })
+}
+
+fn key(args: &Map<String, Value>) -> Result<TaskKey, ToolError> {
+  let value = string(args, "key")?.ok_or(ToolError::Missing { param: "key" })?;
+  TaskKey::new(value).map_err(|reason| ToolError::InvalidParam { param: "key", reason })
+}
+
+fn tab(args: &Map<String, Value>) -> Result<TaskTab, ToolError> {
+  let Some(name) = string(args, "tab")? else {
+    return Ok(TaskTab::default());
+  };
+  TaskTab::from_name(name).ok_or_else(|| ToolError::UnknownTab { name: name.to_owned() })
+}

@@ -2743,6 +2743,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "orchester-app"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "embed-resource",
+ "image",
+ "lurq",
+ "parking_lot",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "orchester-core"
 version = "0.1.0"
 dependencies = [

@@ -5,6 +5,7 @@ members = [
   "crates/api",
   "crates/core",
   "crates/desktop",
+  "crates/desktop-app",
   "crates/exec",
   "crates/index",
   "crates/ipc",
