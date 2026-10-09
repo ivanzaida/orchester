@@ -12,6 +12,9 @@ use crate::kontur::{Kontur, SeedError, catalogue::Published, run::Drive};
 
 /// One line past the most lines Orchester shows of a diff (`orchester_core::diff::MAX_DIFF_LINES`).
 const TOO_MANY_LINES: usize = 20_001;
+/// Repeats of a 61-character sentence in a line longer than Orchester shows whole
+/// (`orchester_core::diff::MAX_LINE_CHARS`, 1,000).
+const LONG_LINE_REPEATS: usize = 20;
 const CRITERIA: [&str; 1] = ["The change is covered by tests."];
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
@@ -38,7 +41,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   })?;
   let long_line = format!(
     "// {}\n",
-    "Each attempt is logged with its status, delay and endpoint. ".repeat(8)
+    "Each attempt is logged with its status, delay and endpoint. ".repeat(LONG_LINE_REPEATS)
   );
   let log = (
     "Format the delivery log",

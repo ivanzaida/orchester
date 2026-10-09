@@ -9,6 +9,7 @@
 //! selection, scrim, conversation, code and diff colors, `display` type, `radius_full`): the screens
 //! that need them come next and must find them here rather than add near-duplicates.
 
+mod code;
 mod fonts;
 mod form;
 mod markdown;
@@ -27,6 +28,7 @@ use lurq::{
 };
 
 pub use self::{
+  code::{CodeText, token_color},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   palette::{ExtraColor, Mode},
   shadow::ExtraShadow,

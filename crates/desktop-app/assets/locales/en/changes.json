@@ -1,0 +1,85 @@
+{
+  "changes": {
+    "groupSeparator": ",",
+    "loading": "Reading the run's changes",
+    "added": "+{{count}}",
+    "removed": "−{{count}}",
+    "type": {
+      "added": "A",
+      "deleted": "D",
+      "modified": "M",
+      "renamed": "R",
+      "copied": "C"
+    },
+    "toolbar": {
+      "base": "{{branch}} · {{revision}}",
+      "noCheckpoint": "no checkpoint yet",
+      "checkpointAfter": "checkpoint after {{number}} {{step}} · {{time}}",
+      "checkpointAt": "checkpoint at {{time}}",
+      "earlierCheckpoint": "an earlier checkpoint · reading the latest",
+      "checkpointed": "Checkpointed",
+      "size": {
+        "one": "{{files}} file · +{{additions}} / −{{deletions}}",
+        "other": "{{files}} files · +{{additions}} / −{{deletions}}"
+      }
+    },
+    "files": {
+      "checkpointed": "CHECKPOINTED",
+      "notCheckpointed": "NOT CHECKPOINTED",
+      "worktreeAfter": "In the worktree after {{revision}}",
+      "worktreeRead": "In the worktree after {{revision}} · read again {{seconds}} s ago while the agent works",
+      "worktreeReadWhileAgent": "In the worktree after {{revision}} · read again {{seconds}} s ago while {{agent}} works"
+    },
+    "diff": {
+      "checkpointedAt": "checkpointed at {{revision}}",
+      "notCheckpointed": "not checkpointed · in the worktree after {{revision}}",
+      "hunk": "@@ -{{old}} +{{new}} @@",
+      "hunkSection": "@@ -{{old}} +{{new}} @@ {{section}}",
+      "added": "+",
+      "removed": "−",
+      "lineCut": "Line shortened",
+      "noNewline": "No newline at end of file",
+      "binary": "Binary file; its content is not shown.",
+      "mode": "File mode changed from {{old}} to {{new}}.",
+      "unchanged": "Moved without changes to its content.",
+      "empty": "The file has no lines.",
+      "omitted": "{{count}} more changed lines are not shown; the file is too large. Open the run's branch in your editor to see them."
+    },
+    "noRun": {
+      "title": "No run yet",
+      "detail": "What a run of this task changes shows here once it runs."
+    },
+    "noCheckpoint": {
+      "title": "No checkpoint yet",
+      "detail": "Run {{run}} has not saved a checkpoint, and its worktree holds no changes. Changes appear here after the first one."
+    },
+    "none": {
+      "title": "No changes",
+      "detail": "The run's latest checkpoint has no changes against its base, and its worktree holds none beyond it."
+    },
+    "tooLarge": {
+      "title": "Too large to show here",
+      "detail": {
+        "one": "The run changes {{files}} file, +{{additions}} / −{{deletions}}. Orchester shows diffs of up to {{maxFiles}} files and {{maxLines}} changed lines; open the branch {{branch}} in your editor to review it.",
+        "other": "The run changes {{files}} files, +{{additions}} / −{{deletions}}. Orchester shows diffs of up to {{maxFiles}} files and {{maxLines}} changed lines; open the branch {{branch}} in your editor to review it."
+      }
+    },
+    "failed": {
+      "title": "Couldn't read the changes"
+    },
+    "worktreeTooLarge": {
+      "title": "The changes not checkpointed are too large to show",
+      "detail": {
+        "one": "The worktree holds {{files}} changed file, +{{additions}} / −{{deletions}}, beyond the checkpoint. Orchester shows diffs of up to {{maxFiles}} files and {{maxLines}} changed lines; the checkpointed files still show.",
+        "other": "The worktree holds {{files}} changed files, +{{additions}} / −{{deletions}}, beyond the checkpoint. Orchester shows diffs of up to {{maxFiles}} files and {{maxLines}} changed lines; the checkpointed files still show."
+      }
+    },
+    "worktreeFailed": {
+      "title": "Couldn't read what the worktree holds beyond the checkpoint"
+    },
+    "worktreeRemoved": {
+      "title": "The run's worktree was removed",
+      "detail": "Only its checkpointed work is shown."
+    }
+  }
+}
