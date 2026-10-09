@@ -162,12 +162,30 @@ fn waiting(ctx: &Ctx, run: &RunView) -> Option<Said> {
     .map(|plan| plan.version.get())
     .max()
     .unwrap_or(1);
-  let text = (
-    ctx.t_args("summary.notice.planTitle", [("version", version.to_string())]),
-    ctx.t_args(
+  // What approving starts: the step after the planned one in the pipeline, as the design names it.
+  let number = run.step_of(planned).map_or(0, |step| step.number);
+  let next = run.steps.iter().find(|step| step.number == number + 1);
+  let body = match next {
+    Some(next) => {
+      let (next_name, next_agent) = step_words(ctx, Some(next));
+      ctx.t_args(
+        "summary.notice.planBodyNext",
+        [
+          ("agent", agent.as_str()),
+          ("step", step.as_str()),
+          ("next", format!("{:02} {next_name}", next.number).as_str()),
+          ("nextAgent", next_agent.as_str()),
+        ],
+      )
+    }
+    None => ctx.t_args(
       "summary.notice.planBody",
       [("agent", agent.as_str()), ("step", step.as_str())],
     ),
+  };
+  let text = (
+    ctx.t_args("summary.notice.planTitle", [("version", version.to_string())]),
+    body,
   );
   Some(Said::new(NoticeTone::Warning, Icon::Hand, text).in_conversation())
 }

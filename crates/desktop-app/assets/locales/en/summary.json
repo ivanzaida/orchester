@@ -20,7 +20,7 @@
       "askingTitle": "{{agent}} asks you",
       "askingBody": "{{step}} waits for your answer in the conversation.",
       "planTitle": "Your approval is needed · plan v{{version}}",
-      "planBody": "{{agent}} wrote a plan for {{step}}; the step goes on once you decide.",
+      "planBody": "{{agent}} wrote a plan for {{step}}. Approving it finishes {{step}}.",
       "approvalTitle": "{{agent}} asks for your approval",
       "approvalBody": "{{step}} waits since {{time}} for a request its profile does not allow. Answer it in the conversation.",
       "pausedTitle": "Paused at checkpoint {{checkpoint}}",
@@ -62,7 +62,8 @@
       "cancelledBeforeStartBody": "No step ran.",
       "readyTitle": "Draft · ready to run",
       "readyBody": "Run queues it and starts its first run.",
-      "tokenLimitCheckpointTitle": "Stopped at the token limit · checkpoint {{checkpoint}}"
+      "tokenLimitCheckpointTitle": "Stopped at the token limit · checkpoint {{checkpoint}}",
+      "planBodyNext": "{{agent}} wrote a plan for {{step}}. Approving it starts {{next}} with {{nextAgent}}; nothing runs until you decide."
     },
     "steps": {
       "title": "Steps",
@@ -134,7 +135,8 @@
         "confirmOne": "Remove worktree",
         "confirmOther": "Remove worktrees"
       },
-      "lost": "No runner is connected; the run continues once one is."
+      "lost": "No runner is connected; the run continues once one is.",
+      "waitsForApproval": "{{step}} · waiting for your approval"
     },
     "thisRun": {
       "title": "This run",

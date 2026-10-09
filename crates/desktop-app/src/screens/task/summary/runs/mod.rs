@@ -17,7 +17,11 @@ use lurq::{
   components::Column,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::run::TaskPhase;
+use orchester_core::{
+  id::RunId,
+  run::{RunNumber, TaskPhase},
+};
+use orchester_workspace::tasks::history::RunRecord;
 
 use self::row::{RowProps, RunRow};
 use super::section_head;
@@ -46,45 +50,17 @@ pub fn section(ctx: &mut Ctx, runs: &Runs) -> Option<Element> {
     .filter_map(|record| record.run.as_ref())
     .find(|run| run.status().has_live_work())
     .map(|run| run.number());
-  let key: Arc<str> = detail.task.key().to_string().into();
-  let lost = runs.task.lost();
+  // The step of the latest run whose agent waits for the person's approval, by name.
+  let approval = runs.task.waiting_approval().and_then(|approval| {
+    let run = detail.run.as_ref()?;
+    Some(run.step_of(approval.approval.execution)?.name.clone())
+  });
   let rows: Vec<Element> = detail
     .history
     .iter()
     .enumerate()
     .map(|(index, record)| {
-      let live = record.run.as_ref().is_some_and(|run| run.status().has_live_work());
-      let mut record = record.clone();
-      // Without a runner the run's agent is gone: it is interrupted, as the header and steps say.
-      if lost && live {
-        record.phase = record.phase.map(TaskPhase::without_runner);
-      }
-      let props = RowProps {
-        project: runs.task.project.clone(),
-        key: key.clone(),
-        left: runs
-          .task
-          .left
-          .as_read(record.id)
-          .filter(|_| record.without_live_work().is_some()),
-        // The latest run's is in the header.
-        removable: record
-          .without_live_work()
-          .filter(|_| Some(record.id) != latest)
-          .and(runs.task.left.of(record.id))
-          .and_then(Result::ok)
-          .filter(|left| !left.worktrees.is_empty()),
-        this_run: Some(record.id) == shown,
-        job: runs.task.jobs.run(record.id),
-        others_busy: detail
-          .history
-          .iter()
-          .any(|other| other.id != record.id && runs.task.jobs.run(other.id).busy()),
-        working: working.filter(|number| Some(*number) != record.number),
-        confirming: runs.removal.run == Some(record.id),
-        lost: lost && live,
-        record,
-      };
+      let props = row_props(runs, record, (latest, shown), (working, approval.clone()));
       item(ctx, runs, props, index > 0)
     })
     .collect();
@@ -110,6 +86,55 @@ pub fn section(ctx: &mut Ctx, runs: &Runs) -> Option<Element> {
       )
       .into(),
   )
+}
+
+/// What `record`'s row shows: the run the page shows is `shown`, the task's latest run `latest`;
+/// `working` is the task's run at work, `approval` the step of the latest run waiting for an approval.
+fn row_props(
+  runs: &Runs,
+  record: &RunRecord,
+  (latest, shown): (Option<RunId>, Option<RunId>),
+  (working, approval): (Option<RunNumber>, Option<Arc<str>>),
+) -> RowProps {
+  let lost = runs.task.lost();
+  let live = record.run.as_ref().is_some_and(|run| run.status().has_live_work());
+  let mut record = record.clone();
+  // Without a runner the run's agent is gone: it is interrupted, as the header and steps say.
+  if lost && live {
+    record.phase = record.phase.map(TaskPhase::without_runner);
+  }
+  // A request its agent waits on: the run needs the person, as the header and the steps say.
+  let waits = approval.filter(|_| Some(record.id) == latest);
+  if waits.is_some() {
+    record.phase = Some(TaskPhase::Waiting);
+  }
+  let history = &runs.task.detail.history;
+  RowProps {
+    project: runs.task.project.clone(),
+    key: runs.task.detail.task.key().to_string().into(),
+    left: runs
+      .task
+      .left
+      .as_read(record.id)
+      .filter(|_| record.without_live_work().is_some()),
+    // The latest run's is in the header.
+    removable: record
+      .without_live_work()
+      .filter(|_| Some(record.id) != latest)
+      .and(runs.task.left.of(record.id))
+      .and_then(Result::ok)
+      .filter(|left| !left.worktrees.is_empty()),
+    this_run: Some(record.id) == shown,
+    job: runs.task.jobs.run(record.id),
+    others_busy: history
+      .iter()
+      .any(|other| other.id != record.id && runs.task.jobs.run(other.id).busy()),
+    working: working.filter(|number| Some(*number) != record.number),
+    confirming: runs.removal.run == Some(record.id),
+    lost: lost && live,
+    waits_for_approval: waits,
+    record,
+  }
 }
 
 /// A run's row and, under it while the row's button opened it, its removal's confirmation; on a line

@@ -28,13 +28,11 @@ use orchester_core::{
   run::{PauseReason, RunLimit, RunStatus},
   time::Timestamp,
 };
-use orchester_workspace::tasks::{approvals::ShownApproval, detail::TaskDetail};
 
 use self::runs::Runs;
 use super::{PageState, TaskContext};
 use crate::{
   navigation::Navigation,
-  project::ShownProject,
   routes::{ProjectPage, Route, TaskTab, TaskView},
   services::Services,
   theme::{TaskSpacing, TaskText},
@@ -123,8 +121,7 @@ impl TaskSummary {
       .status
       .get()
       .map(|status| status.state_for(&props.task.project.open.repo_root));
-    // A run without a runner waits for no one: nothing answers its requests until a runner is back.
-    let approval = waiting_approval(&props.task.project, detail).filter(|_| !lost);
+    let approval = props.task.waiting_approval();
     let said = notice::said(ctx, detail, runner.as_ref().filter(|_| lost), approval.as_ref());
     let conversation = said.conversation;
     let mut notice = said.notice();
@@ -165,19 +162,6 @@ pub fn decisions(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
     _ => false,
   };
   waits.then(|| reason_line("task-decision-unavailable", &ctx.t("summary.decisionNotBuilt")).into())
-}
-
-/// A tool request of the task's run that waits for the person, the oldest first.
-fn waiting_approval(project: &ShownProject, detail: &TaskDetail) -> Option<ShownApproval> {
-  let run = detail.run.as_ref()?.id();
-  match project.feed.tasks.get() {
-    crate::project::TasksState::Ready(tasks) => tasks
-      .pending_tool_approvals
-      .iter()
-      .find(|shown| shown.approval.run == run)
-      .cloned(),
-    _ => None,
-  }
 }
 
 fn open_conversation(ctx: &mut Ctx, props: &SummaryProps) -> ActionButton {

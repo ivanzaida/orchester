@@ -10,7 +10,7 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor},
+    theme::{BorderSize, PaletteColor, TypographyStyle},
   },
   components::{Column, ScrollVertical, Text},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
@@ -39,13 +39,12 @@ use crate::{
   ui::{
     detail_row::{DetailValue, detail_row, detail_row_of},
     message::message_text,
+    tooltip::Truncated,
   },
 };
 
 /// The panel's width (`W73m1n`).
 const PANEL_WIDTH: f32 = 340.0;
-/// Characters of the worktree's path shown before its middle gives way to an ellipsis.
-const PATH_CHARS: usize = 34;
 
 /// The panel around `rows`, scrolling when they are taller than the window.
 pub(super) fn panel(id: &str, title: &str, rows: Vec<Element>) -> Element {
@@ -299,17 +298,18 @@ fn permission_words(ctx: &Ctx, permissions: &AgentPermissions, mcp_asks: bool) -
 }
 
 /// Where the run works: its worktree's folder, or when it was removed.
-fn worktree(ctx: &Ctx, run: &RunView, root: &Path) -> Element {
-  match run.worktree_removed {
-    Some(removed) => {
-      let value = ctx.t_args("summary.thisRun.worktreeRemoved", [("time", display::clock(removed))]);
-      row(ctx, "summary.thisRun.worktree", &value, DetailValue::Text)
-    }
-    None => {
-      let path = display::shorten_path(&run_worktree(root, run.id()), PATH_CHARS);
-      row(ctx, "summary.thisRun.worktree", &path, DetailValue::Mono)
-    }
+fn worktree(ctx: &mut Ctx, run: &RunView, root: &Path) -> Element {
+  if let Some(removed) = run.worktree_removed {
+    let value = ctx.t_args("summary.thisRun.worktreeRemoved", [("time", display::clock(removed))]);
+    return row(ctx, "summary.thisRun.worktree", &value, DetailValue::Text);
   }
+  // One line, cut at its end; the whole path in its tooltip.
+  let path = run_worktree(root, run.id()).display().to_string();
+  let value = Truncated::new("task-this-run-worktree", path, TypographyStyle::Mono)
+    .color(PaletteColor::TextPrimary)
+    .render(ctx);
+  let value = Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(value);
+  detail_row_of("task-this-run-worktree", &ctx.t("summary.thisRun.worktree"), value).into()
 }
 
 /// *This task* of a task without a run: the pipeline and limits its first run would use.
