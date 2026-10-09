@@ -10,12 +10,14 @@
 //! that need them come next and must find them here rather than add near-duplicates.
 
 mod code;
+mod conversation;
 mod decisions;
 mod fonts;
 mod form;
 mod markdown;
 mod metrics;
 mod palette;
+mod settings;
 mod shadow;
 mod shell;
 mod startup;
@@ -33,9 +35,11 @@ use lurq::{
 
 pub use self::{
   code::{CodeText, token_color},
+  conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText},
   decisions::{DecisionSpacing, DecisionText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   palette::{ExtraColor, Mode},
+  settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,
   shell::{ShellSpacing, ShellText},
   startup::{StartupSpacing, StartupText},
@@ -60,11 +64,13 @@ pub fn install(app: &mut App, mode: Mode) {
   apply(theme, mode);
   metrics::install(theme);
   startup::install(theme);
+  settings::install(theme);
   task::install(theme);
   decisions::install(theme);
   task_form::install(theme);
   tasks::install(theme);
   shell::install(theme);
+  conversation::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

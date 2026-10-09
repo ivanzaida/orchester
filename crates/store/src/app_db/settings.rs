@@ -2,7 +2,9 @@
 //! requests through Orchester's MCP server (off until a person turns it on), the warning threshold the
 //! Usage dashboard draws in Plan limits (limits belong to accounts, so every project shows the same
 //! line; 80 % until it is changed), and `orchester-app`'s theme (dark until changed) and whether agents
-//! may control its window through its MCP server (the build decides until it is set).
+//! may control its window through its MCP server (the build decides until it is set), and whether
+//! automation may widen what agents may do through Orchester's MCP server (off until a person turns it on
+//! in the window).
 
 use orchester_core::{appearance::ThemeSetting, usage::limits::WarningThreshold};
 use rusqlite::params;
@@ -28,6 +30,12 @@ pub(super) const APPEARANCE_MIGRATION: &str = r"
 -- orchester-app: the window's theme, and window control for its MCP server (NULL: as the build decides).
 ALTER TABLE app_settings ADD COLUMN theme TEXT NOT NULL DEFAULT 'dark' CHECK (theme IN ('dark', 'light', 'system'));
 ALTER TABLE app_settings ADD COLUMN mcp_window_control INTEGER CHECK (mcp_window_control IN (0, 1));
+";
+
+pub(super) const AUTOMATION_PERMISSIONS_MIGRATION: &str = r"
+-- Let automation change agent permissions: off until a person turns it on in the window.
+ALTER TABLE app_settings ADD COLUMN automation_changes_permissions INTEGER NOT NULL DEFAULT 0
+  CHECK (automation_changes_permissions IN (0, 1));
 ";
 
 impl AppDb {
@@ -99,6 +107,25 @@ impl AppDb {
   pub fn set_mcp_window_control(&mut self, allowed: Option<bool>) -> Result<(), StoreError> {
     self.connection.execute(
       "UPDATE app_settings SET mcp_window_control = ?1 WHERE id = 1",
+      params![allowed],
+    )?;
+    Ok(())
+  }
+
+  /// Whether automation may widen what agents may do through Orchester's MCP server (*Let automation change
+  /// agent permissions*): broader profile permissions, a CLI program of its choice, environment variables
+  /// that change what programs load. Narrowing never needs it.
+  pub fn automation_changes_permissions(&self) -> Result<bool, StoreError> {
+    Ok(self.connection.query_row(
+      "SELECT automation_changes_permissions FROM app_settings WHERE id = 1",
+      [],
+      |row| row.get(0),
+    )?)
+  }
+
+  pub fn set_automation_changes_permissions(&mut self, allowed: bool) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE app_settings SET automation_changes_permissions = ?1 WHERE id = 1",
       params![allowed],
     )?;
     Ok(())

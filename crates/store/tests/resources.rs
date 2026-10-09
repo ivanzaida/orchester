@@ -503,3 +503,28 @@ fn resources_restore_an_old_version_as_a_draft_of_the_next_one() {
   assert_eq!(db.save_draft(id, &latest).unwrap(), DraftSaved::Discarded);
   assert_eq!(db.draft::<Pipeline>(id).unwrap(), None);
 }
+
+#[test]
+fn a_draft_is_published_only_while_it_is_the_one_checked() {
+  let (_repo, mut db) = project_repo();
+  let resource = db
+    .create_resource(slug("rules"), name("Rules"), &instruction("Keep it short."), at(1))
+    .expect("create");
+  let checked = instruction("Keep it short.");
+  db.save_draft(resource.id(), &Draft::new(instruction("Say anything."), None, at(2)))
+    .expect("the draft changes after the check");
+  let changed = db.publish_draft_matching(resource.id(), &checked, at(3));
+  assert!(
+    matches!(changed, Err(StoreError::DraftChanged(id)) if id == resource.id()),
+    "{changed:?}"
+  );
+  assert!(
+    db.latest_version::<Instruction>(resource.id()).expect("read").is_none(),
+    "nothing is published"
+  );
+  let draft = instruction("Say anything.");
+  let version = db
+    .publish_draft_matching(resource.id(), &draft, at(4))
+    .expect("the checked draft is published");
+  assert_eq!(version.number().get(), 1);
+}

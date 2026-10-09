@@ -28,7 +28,7 @@ pub use self::{
   pipeline::{
     EditProblem, FailureRoute, Pipeline, PipelineChange, PipelineEdit, PipelineError, PipelineSources,
     PipelineSourcesError, RepositoryAccess, StarterAssignments, StarterStep, StarterStepText, Step, StepChange,
-    StepKey, StepKind, changes, feature_delivery,
+    StepKey, StepKind, Weaker, changes, feature_delivery, weaker_than,
   },
   prompt::{PromptError, PromptText, Rendered},
   skill::{SKILL_FILE, Skill, SkillError, SkillFile, SkillFilePath},

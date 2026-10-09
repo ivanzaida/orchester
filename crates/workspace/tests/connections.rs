@@ -1,7 +1,7 @@
 //! Saving connections from the add/edit dialogs, deriving "Used by" from agent profiles, and
 //! making the project expect the account `gh` uses now.
 
-use std::fs;
+use std::{fs, path::Path};
 
 use orchester_core::{
   connection::{
@@ -23,6 +23,7 @@ use orchester_workspace::{
   connections::{
     data::{ConnectionDraft, ProjectConnections, SaveError, save},
     github::{AccountError, GitHubDraft, expect_active_account, save_github},
+    probe::found_copy,
   },
 };
 use tempfile::TempDir;
@@ -321,4 +322,45 @@ fn editing_or_checking_a_connection_keeps_the_versions_its_models_need() {
     Some("2.1.280".to_owned()),
     "2.1.89 is too old"
   );
+}
+
+/// `link` made a link to the folder `target`: a junction on Windows (no privilege needed), a symbolic link on
+/// macOS.
+fn link_folder(target: &Path, link: &Path) {
+  #[cfg(windows)]
+  {
+    let status = std::process::Command::new("cmd")
+      .arg("/C")
+      .arg("mklink")
+      .arg("/J")
+      .arg(link)
+      .arg(target)
+      .output()
+      .expect("run mklink");
+    assert!(
+      status.status.success(),
+      "mklink /J: {}",
+      String::from_utf8_lossy(&status.stderr)
+    );
+  }
+  #[cfg(unix)]
+  std::os::unix::fs::symlink(target, link).expect("a symbolic link");
+}
+
+#[test]
+fn a_program_named_through_a_link_is_saved_as_the_search_path_names_it() {
+  let folder = tempfile::tempdir().expect("temporary directory");
+  let bin = folder.path().join("bin");
+  fs::create_dir_all(&bin).expect("a folder on the search path");
+  let copy = bin.join("codex.exe");
+  fs::write(&copy, "").expect("an installed copy");
+  let other = folder.path().join("other.exe");
+  fs::write(&other, "").expect("another program");
+  let linked = folder.path().join("linked");
+  link_folder(&bin, &linked);
+  let found = vec![copy.clone()];
+  assert_eq!(found_copy(&found, &linked.join("codex.exe")), Some(copy.as_path()));
+  assert_eq!(found_copy(&found, &copy), Some(copy.as_path()));
+  assert_eq!(found_copy(&found, &other), None);
+  assert_eq!(found_copy(&found, &folder.path().join("missing.exe")), None);
 }

@@ -12,6 +12,7 @@
 mod ended;
 mod mcp;
 mod native;
+mod text;
 
 use std::sync::Arc;
 
@@ -25,7 +26,11 @@ use orchester_core::{
   time::Timestamp,
 };
 
-pub use self::{mcp::McpToolEntry, native::ApprovalEntry};
+pub use self::{
+  mcp::McpToolEntry,
+  native::ApprovalEntry,
+  text::{command_preview, in_worktree},
+};
 
 /// What one transcript entry shows.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -383,14 +388,30 @@ fn finish_command(entries: &mut Vec<Entry>, early: &mut Early, stored: &Activity
   else {
     return;
   };
-  let started = entries.iter_mut().rev().find(|entry| {
+  // The start of the same call: by its item, which a CLI may finish under other words than it started with
+  // (a declined escalation), else by its command.
+  let open = |entry: &Entry, same: &dyn Fn(&CommandEntry) -> bool| {
     entry.invocation == stored.invocation
-      && matches!(&entry.kind, EntryKind::Command(started) if started.status.is_none() && *started.command == **command)
-  });
+      && matches!(&entry.kind, EntryKind::Command(started) if started.status.is_none() && same(started))
+  };
+  let index = entries
+    .iter()
+    .rposition(|entry| open(entry, &|started| *started.item == **item))
+    .or_else(|| {
+      entries
+        .iter()
+        .rposition(|entry| open(entry, &|started| *started.command == **command))
+    });
+  let started = index.map(|index| &mut entries[index]);
+  // A call keeps the command it started with: that is what was asked about and decided.
+  let command: Arc<str> = match started.as_deref().map(|entry| &entry.kind) {
+    Some(EntryKind::Command(started)) => started.command.clone(),
+    _ => command.as_str().into(),
+  };
   let finished = |duration, (mark, native)| {
     EntryKind::Command(CommandEntry {
       item: item.as_str().into(),
-      command: command.as_str().into(),
+      command: command.clone(),
       output: output.as_str().into(),
       status: Some(*status),
       exit_code: *exit_code,

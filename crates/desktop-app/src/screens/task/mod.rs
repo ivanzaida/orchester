@@ -12,6 +12,7 @@
 
 mod changes;
 mod context;
+mod conversation;
 mod header;
 mod read;
 mod summary;
@@ -335,10 +336,10 @@ struct StaleRead(Option<Message>);
 
 impl lurq::app::component::DevtoolsInspectable for StaleRead {}
 
-/// The Conversation tab's mount point: its timeline (C1) mounts here with one line, the composer (C2)
-/// and the decision cards (C3) inside it. Until then the tab says it is not built.
-fn conversation_tab(ctx: &mut Ctx, _task: &TaskContext) -> Element {
-  tab_not_built(ctx, "task-conversation", Icon::MessageSquare, TaskTab::Conversation)
+/// The Conversation tab's mount point: its timeline (C1), with the composer (C2) and the decision cards (C3)
+/// inside it.
+fn conversation_tab(ctx: &mut Ctx, task: &TaskContext) -> Element {
+  conversation::tab(ctx, task)
 }
 
 /// The Changes tab's mount point: its file list and diff (`changes`).
