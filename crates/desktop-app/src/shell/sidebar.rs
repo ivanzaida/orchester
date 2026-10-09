@@ -120,6 +120,7 @@ impl Items<'_> {
       id: format!("nav-{}", screen.name()),
       icon: screen_icon(screen),
       label: &label,
+      count: None,
       selected: self.selected == Some(screen),
     }
     .on_click(move || navigation.go(route.clone()))
