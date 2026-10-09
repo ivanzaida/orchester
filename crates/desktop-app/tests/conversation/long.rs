@@ -6,6 +6,8 @@ use std::time::{Duration, Instant};
 
 use orchester_core::{
   connection::stream::{AgentEvent, CommandStatus},
+  project::TaskKey,
+  run::Invocation,
   store::{ActivityStore, RunStore, TaskStore},
   time::Timestamp,
 };
@@ -18,17 +20,14 @@ const TURNS: usize = 1_000;
 /// How long opening the chat may take in a debug build.
 const OPENS_WITHIN: Duration = Duration::from_secs(30);
 
-#[test]
-fn timeline_a_long_transcript_opens_at_its_end_without_building_every_row() {
-  let (mut window, seeded) = seeded("conversation");
-  let key = key_of(&seeded, "Add retry to webhook sender");
-  let mut db = ProjectDb::open(&seeded.repo).expect("the project database");
+/// The invocation of `key`'s latest run whose agent is at work.
+pub(super) fn at_work(db: &ProjectDb, key: &TaskKey) -> Invocation {
   let task = db
     .tasks()
     .expect("tasks")
     .into_iter()
-    .find(|task| *task.key() == key)
-    .expect("KON-12");
+    .find(|task| task.key() == key)
+    .expect("the task");
   let run = db
     .runs_of_task(task.id())
     .expect("runs")
@@ -36,13 +35,20 @@ fn timeline_a_long_transcript_opens_at_its_end_without_building_every_row() {
     .filter_map(Result::ok)
     .next_back()
     .expect("its latest run");
-  let invocation = db
-    .invocations(run.id())
+  db.invocations(run.id())
     .expect("invocations")
     .into_iter()
     .rev()
     .find(|invocation| invocation.ended_at.is_none())
-    .expect("its agent at work");
+    .expect("its agent at work")
+}
+
+#[test]
+fn timeline_a_long_transcript_opens_at_its_end_without_building_every_row() {
+  let (mut window, seeded) = seeded("conversation");
+  let key = key_of(&seeded, "Add retry to webhook sender");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project database");
+  let invocation = at_work(&db, &key);
   let start = Timestamp::now().unix_millis();
   let events: Vec<(Timestamp, AgentEvent)> = (0..TURNS)
     .flat_map(|turn| {
