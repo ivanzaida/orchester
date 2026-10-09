@@ -149,8 +149,16 @@ pub async fn save_pipeline_draft(
     let body = edit
       .validate()
       .map_err(|error| ToolError::refused("invalid_pipeline", vec![rule_message(&edit, &error)]))?;
-    let base = current.latest.as_ref().map_or(&current.body, |latest| &latest.body);
-    widening::allowed(&services, weakened_gates(base.steps(), body.steps()))?;
+    // Neither the published version's approvals nor those a person added to the draft since are dropped.
+    let mut dropped = weakened_gates(current.body.steps(), body.steps());
+    if let Some(latest) = &current.latest {
+      for reason in weakened_gates(latest.body.steps(), body.steps()) {
+        if !dropped.contains(&reason) {
+          dropped.push(reason);
+        }
+      }
+    }
+    widening::allowed(&services, dropped)?;
     let saved = save_draft_in(&open.repo_root, id, body)?;
     services.changes.record(open.project.id(), Outside::Pipelines);
     Ok((opened(&ProjectDb::open(&open.repo_root)?, id, &args.pipeline)?, saved))
