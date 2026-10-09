@@ -101,26 +101,9 @@ impl CommandScope {
     &self.worktree
   }
 
-  /// Whether `folder` is too broad for a rule to cover what lies in it: a drive or file system root, a folder fewer
-  /// than two levels below one, a home folder, a folder that holds one, or one fewer than two levels below one.
-  /// Paths are resolved and compared without case, so a home folder written in other letters is still one.
+  /// Whether `folder` is too broad for a rule to cover what lies in it ([`super::broad::is_broad`]), once resolved.
   pub fn is_broad_folder(&self, folder: &Path) -> bool {
-    let folder = folded(&resolved(folder));
-    let below = |base: &Path| {
-      folder
-        .strip_prefix(base)
-        .map_or(usize::MAX, |rest| rest.components().count())
-    };
-    let names = folder
-      .components()
-      .filter(|component| matches!(component, std::path::Component::Normal(_)))
-      .count();
-    names < 2
-      || self
-        .homes
-        .iter()
-        .map(|home| folded(home))
-        .any(|home| home.starts_with(&folder) || below(&home) < 2)
+    super::broad::is_broad(&resolved(folder), &self.homes)
   }
 
   /// Whether `path`, as an agent named a file it changed (absolute, or relative to the worktree), names a
@@ -338,11 +321,6 @@ fn unmapped(path: &Path) -> bool {
 /// `path` with links followed as far as it exists, or as written when it cannot be read.
 fn resolved(path: &Path) -> PathBuf {
   existing(path).map_or_else(|_| normalize(path), |found| found.path)
-}
-
-/// `path` in lower case, for comparing folders on file systems that ignore case (the safe side where they do not).
-fn folded(path: &Path) -> PathBuf {
-  PathBuf::from(path.to_string_lossy().to_lowercase())
 }
 
 /// Whether the components `names` (of a path in the home folder, in lower case) lie in one of the

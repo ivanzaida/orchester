@@ -227,8 +227,11 @@ by `read_external_file` and `search_external_file`.
   it answers every later read and search there and below it (`RuleScope::SimilarMcpTool` with a `folder`; rules made
   before keep covering their tool everywhere). The approval tile and the Summary's rule name that folder and say the
   rule covers reads and searches. It is unavailable for a folder too broad to approve as a whole
-  (`CommandScope::is_broad_folder`, paths resolved and compared without case): a drive or file system root, a folder
-  fewer than two levels below one, a home folder, a folder that holds one, or one fewer than two levels below one.
+  (`CommandScope::is_broad_folder`, paths resolved and compared without case): a drive or file system root, a mount
+  point (a folder on another device than its parent on macOS, a folder that is still a reparse point once resolved on
+  Windows), a folder fewer than two levels below one of those, the user's home folder or another user's (a folder in
+  the profiles folder: the home's parent, such as `C:\Users`, and `/Users` and `/home`), a folder that holds one, or
+  one fewer than two levels below one.
   *Always allow* is unavailable (*Orchester's own tools have no list of tools that run without asking yet*). A call
   that asks nobody (a read in the sources, a check whose rules approve no call) runs without leaving a grant.
 - **Execution.** The runner runs every call off its async workers, in the run's worktree with the environment the

@@ -1,6 +1,6 @@
 //! Approve similar for Orchester's calls that reach something narrower than their tool: a folder outside the worktree
-//! (never a root, a home folder or a folder close below one) and a check of `run_check` (keyed to the check, never one
-//! whose access rules ask before every call).
+//! (never a root, a mount point, a user's home folder or a folder close below one) and a check of `run_check` (keyed to
+//! the check, never one whose access rules ask before every call).
 
 use std::path::{Path, PathBuf};
 
@@ -61,6 +61,7 @@ fn approval_reach_is_never_similar_for_a_broad_folder() {
     orchester_core::native::scope::resolve_local(&text(path)).expect("resolved")
   };
   let home = resolve(&temporary.path().join("home"));
+  let profiles = home.parent().expect("the profiles folder").to_path_buf();
   let scope = CommandScope::new(&resolve(&home.join("work").join("repo")), &[], Some(&home), None);
   let similar = |folder: &Path| {
     RuleScope::similar(&ApprovalSubject::of(
@@ -74,6 +75,9 @@ fn approval_reach_is_never_similar_for_a_broad_folder() {
     home.clone(),
     home.join("projects"),
     home.parent().expect("a parent").to_path_buf(),
+    // Another user's home next to this one, and a folder right below it.
+    profiles.join("bob"),
+    profiles.join("bob").join("projects"),
   ] {
     assert_eq!(
       similar(&broad),
@@ -82,7 +86,19 @@ fn approval_reach_is_never_similar_for_a_broad_folder() {
       broad.display()
     );
   }
-  for narrow in [root().join("deps").join("serde"), home.join(".cargo").join("registry")] {
+  #[cfg(unix)]
+  for broad in ["/Users/bob", "/home/bob/projects", "/Users"] {
+    assert_eq!(
+      similar(Path::new(broad)),
+      Err(SimilarUnavailable::BroadFolder),
+      "{broad}"
+    );
+  }
+  for narrow in [
+    root().join("deps").join("serde"),
+    home.join(".cargo").join("registry"),
+    profiles.join("bob").join("projects").join("deps"),
+  ] {
     assert!(similar(&narrow).is_ok(), "{}", narrow.display());
   }
   let search = ApprovalSubject::of(&request("search_external_file", &text(&home)), &scope);
