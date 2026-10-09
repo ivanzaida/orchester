@@ -23,7 +23,7 @@ mod question;
 use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, components::Column, node::Element};
-use orchester_core::id::ProjectId;
+use orchester_core::id::{ProjectId, RunId};
 use orchester_workspace::{
   tasks::{
     detail::TaskDetail,
@@ -65,6 +65,16 @@ impl PartialEq for Place {
 }
 
 impl Place {
+  /// The run the card belongs to.
+  fn run(&self) -> RunId {
+    self
+      .detail
+      .run
+      .as_ref()
+      .map(|run| run.id())
+      .expect("a card is an item of its task's run's timeline")
+  }
+
   /// The run's number in the project; 0 while the task has no readable run.
   fn run_number(&self) -> u32 {
     self.detail.run.as_ref().map_or(0, |run| run.run.number().get())

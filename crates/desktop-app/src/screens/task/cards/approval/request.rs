@@ -154,7 +154,7 @@ fn facts(
       .target
       .as_deref()
       .or_else(|| shown.and_then(|shown| shown.cwd.as_deref()));
-    rows.extend(folder.map(|folder| row("cwd", "cards.approval.cwd", folder, DetailValue::Mono)));
+    rows.extend(folder.map(|folder| row("cwd", "cards.approval.cwd", &platform_path(folder), DetailValue::Mono)));
     rows.extend(
       request
         .scope
@@ -215,4 +215,14 @@ fn deny_tells(ctx: &Ctx, id: &str, request: &PendingToolApproval, shown: Option<
       .into()
     }
   }
+}
+
+/// `folder` with the platform's separator between its parts, however it was recorded (an agent may mix `/`
+/// into a Windows path).
+fn platform_path(folder: &str) -> String {
+  std::path::Path::new(folder)
+    .components()
+    .collect::<std::path::PathBuf>()
+    .display()
+    .to_string()
 }

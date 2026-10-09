@@ -48,8 +48,8 @@ fn card_of(title: &str, prefix: &str) -> (Window, String) {
   (window, id)
 }
 
-/// [`card_of`], with the seeded project.
-fn opened(title: &str, prefix: &str) -> (Window, String, ProjectId) {
+/// [`card_of`], with the seeded project and the task's key.
+fn opened(title: &str, prefix: &str) -> (Window, String, (ProjectId, TaskKey)) {
   let (mut window, seeded) = seeded();
   let task = seeded
     .tasks
@@ -65,7 +65,7 @@ fn opened(title: &str, prefix: &str) -> (Window, String, ProjectId) {
     cards(window, prefix).into_iter().any(|id| id.matches('-').count() >= 2)
   });
   let id = card_id(&mut window, prefix);
-  (window, id, seeded.project)
+  (window, id, (seeded.project, key))
 }
 
 /// The id of the one card whose id starts with `prefix`, without its parts' ids.

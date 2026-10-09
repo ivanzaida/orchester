@@ -159,6 +159,7 @@
       },
       "firstLine": "{{line}} …",
       "denyTellsCodexLabel": "Deny declines it, and Codex tells {{agent}}:"
-    }
+    },
+    "held": "Another answer is on its way to the runner; this one can be given once it arrives."
   }
 }

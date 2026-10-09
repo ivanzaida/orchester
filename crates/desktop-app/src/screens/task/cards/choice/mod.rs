@@ -18,7 +18,7 @@ use lurq::{
     theme::{PaletteColor, SpacingSize},
   },
   components::{Column, Row},
-  core::ElementRef,
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -33,11 +33,12 @@ use orchester_workspace::{
     timeline::ChoiceCard,
   },
 };
+use parking_lot::Mutex;
 
 use super::{
   Place,
-  decisions::{ChoiceDraft, Decisions, Given, Picked, Refused, Stage, refusal},
-  frame::{Stands, frame, head, note},
+  decisions::{Decisions, Given, Refused, Stage, refusal},
+  frame::{Stands, frame, head, held, note},
 };
 use crate::{
   theme::{CardsText, ExtraSpacing, IconSize},
@@ -68,6 +69,8 @@ pub(super) fn card(ctx: &mut Ctx, place: Place, card: &ChoiceCard) -> Element {
 struct ChoiceView {
   /// The first option, which takes the focus when the tab opens on the card.
   first: ElementRef,
+  /// The own answers' fields, each question's, as kept when the card was first shown.
+  own: Mutex<Option<Arc<[Signal<String>]>>>,
 }
 
 impl Component for ChoiceView {
@@ -76,6 +79,7 @@ impl Component for ChoiceView {
   fn create(_ctx: &mut Ctx) -> Self {
     Self {
       first: ElementRef::new(),
+      own: Mutex::new(None),
     }
   }
 
@@ -89,8 +93,8 @@ impl Component for ChoiceView {
       return answered::card(ctx, &id, (&place, &card));
     }
     let questions: Arc<[Question]> = card.asked.request.questions().into();
-    let kept = decisions.draft(&place.key, &questions);
-    let draft = synced(&kept, &questions);
+    let draft = decisions.draft((place.run(), &place.key), &questions);
+    let own = self.own_fields(&draft, questions.len());
     let stands = Stands::waiting(ctx.t("cards.state.waitingAnswer")).into_element(&id);
     let mut body = frame(id.clone(), true)
       .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
@@ -107,7 +111,9 @@ impl Component for ChoiceView {
         place: &place,
         card: &card,
         questions: &questions,
-        draft: (&kept, &draft),
+        draft: &draft,
+        own: &own,
+        decisions: &decisions,
         first: &self.first,
       };
       body = body.child(question::question(ctx, &shown, index));
@@ -116,6 +122,22 @@ impl Component for ChoiceView {
       ctx.focus(&self.first);
     }
     body.child(footer(ctx, (&id, &place, &card), &draft, &decisions)).into()
+  }
+}
+
+impl ChoiceView {
+  /// The own answers' fields: what is kept of them the first time the card is shown; then the fields keep
+  /// what is typed, and tell it to what is kept as it is typed.
+  fn own_fields(&self, draft: &Draft, count: usize) -> Arc<[Signal<String>]> {
+    self
+      .own
+      .lock()
+      .get_or_insert_with(|| {
+        (0..count)
+          .map(|index| Signal::new(draft.of(index).map(|picks| picks.text().to_owned()).unwrap_or_default()))
+          .collect()
+      })
+      .clone()
   }
 }
 
@@ -128,24 +150,6 @@ fn title(ctx: &Ctx, card: &ChoiceCard) -> Arc<str> {
       [("agent", &*card.agent), ("count", count.to_string().as_str())],
     ),
   }
-}
-
-/// What is picked, with each own answer as typed taken in: typing picks the own answer's row, replacing a
-/// single-choice question's pick; erasing it unpicks the row and brings no earlier pick back.
-fn synced(kept: &ChoiceDraft, questions: &[Question]) -> Draft {
-  let mut draft = kept.picked.get().0;
-  let mut changed = false;
-  for (index, own) in kept.own.iter().enumerate() {
-    let text = own.get();
-    if draft.of(index).is_some_and(|picks| picks.text() != text) {
-      draft.type_own(questions, index, &text);
-      changed = true;
-    }
-  }
-  if changed {
-    kept.picked.set(Picked(draft.clone()));
-  }
-  draft
 }
 
 /// When it was asked and what an answer does, or why it cannot be sent yet; *Send answer*; that it was sent,
@@ -171,7 +175,9 @@ fn footer(
       [("time", time.as_str()), ("agent", &*card.agent)],
     ),
   };
-  let stage = decisions.outcome(&place.key).map(|outcome| outcome.stage);
+  let stage = decisions
+    .outcome((place.run(), &place.key))
+    .map(|outcome| outcome.stage);
   let button = ActionButton::new(format!("{id}-send"), ButtonKind::Primary, ctx.t("cards.choice.send"))
     .icon(Icon::Reply)
     .in_form();
@@ -186,10 +192,11 @@ fn footer(
         answers: draft.given(questions),
       }
       .command(Answerer::Person);
-      let (decisions, key) = (decisions.clone(), place.key.clone());
-      button.on_click(move || decisions.answer(&key, Given::Answers, (&open, command.clone())))
+      let (decisions, run, key) = (decisions.clone(), place.run(), place.key.clone());
+      button.on_click(move || decisions.answer((run, &key), Given::Answers, (&open, command.clone())))
     }
   };
+  let sending = stage == Some(Stage::Sending);
   let after = match stage {
     Some(Stage::Taken(_)) => Some(
       note(
@@ -216,6 +223,7 @@ fn footer(
         )
         .child(Row::new().flex_shrink(0.0).child(button)),
     )
+    .with_children((decisions.busy() && !sending).then(|| held(ctx, id)))
     .with_children(after)
     .into()
 }

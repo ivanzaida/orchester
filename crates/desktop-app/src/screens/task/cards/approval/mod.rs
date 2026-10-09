@@ -70,7 +70,7 @@ impl Component for ApprovalView {
     let focus = decisions.take_focus(&place.key);
     let request = &card.request;
     let id = format!("cards-approval-{}", request.id);
-    let outcome = decisions.outcome(&place.key);
+    let outcome = decisions.outcome((place.run(), &place.key));
     if let Some(decided) = decided(&card, outcome.as_ref()) {
       return decided::row(ctx, &id, request, &decided);
     }
@@ -79,7 +79,7 @@ impl Component for ApprovalView {
     }
     let (shown, reviewing) = shown(ctx, &place, &request.id);
     let answering = Answering {
-      key: &place.key,
+      card: (place.run(), &place.key),
       id: &id,
       request,
       shown: shown.as_ref(),

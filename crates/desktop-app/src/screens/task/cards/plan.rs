@@ -25,7 +25,7 @@ use orchester_workspace::tasks::timeline::PlanCard;
 use super::{
   Place,
   decisions::{Decisions, Given, Outcome, Refused, Stage, refusal},
-  frame::{Stands, frame, head, note},
+  frame::{Stands, frame, head, held, note},
 };
 use crate::{
   theme::{CardsSpacing, CardsText, ExtraColor, ExtraSpacing, IconSize},
@@ -77,7 +77,7 @@ impl Component for PlanView {
     let PlanProps { place, card } = ctx.props::<PlanProps>().clone();
     let decisions = Decisions::of(ctx);
     let id = format!("cards-plan-{}-{}", card.plan.execution, card.plan.version);
-    let outcome = decisions.outcome(&place.key);
+    let outcome = decisions.outcome((place.run(), &place.key));
     let lost = card.waiting && decisions.lost();
     // Approved here, or refused as no longer waiting, before the run's change is read again.
     let settled = outcome.as_ref().is_some_and(|outcome| {
@@ -182,7 +182,7 @@ impl PlanView {
     (id, place, card): (&str, &Place, &PlanCard),
     (decisions, focus): (&Decisions, bool),
   ) -> Element {
-    let outcome = decisions.outcome(&place.key);
+    let outcome = decisions.outcome((place.run(), &place.key));
     let button = ActionButton::new(
       format!("{id}-approve"),
       ButtonKind::Primary,
@@ -197,7 +197,7 @@ impl PlanView {
       _ if decisions.busy() => button.disabled(),
       None => button.disabled(),
       Some(open) => {
-        let (decisions, key) = (decisions.clone(), place.key.clone());
+        let (decisions, run, key) = (decisions.clone(), place.run(), place.key.clone());
         let command = Command::DecidePlan {
           run: card.plan.run,
           execution: card.plan.execution,
@@ -208,7 +208,7 @@ impl PlanView {
         if focus {
           ctx.focus(&self.approve);
         }
-        button.on_click(move || decisions.answer(&key, Given::ApprovePlan, (&open, command.clone())))
+        button.on_click(move || decisions.answer((run, &key), Given::ApprovePlan, (&open, command.clone())))
       }
     };
     let composer = decisions.composer_attached();
@@ -235,6 +235,7 @@ impl PlanView {
       .spacing(SpacingSize::Sm)
       .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .child(row)
+      .with_children((decisions.busy() && !sending).then(|| held(ctx, id)))
       .with_children(outcome.and_then(|outcome| match outcome.stage {
         Stage::Refused(refused) => Some(refusal(ctx, id, &refused, &card.agent)),
         Stage::Sending | Stage::Taken(_) => None,

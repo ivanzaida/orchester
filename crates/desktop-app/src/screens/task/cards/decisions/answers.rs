@@ -1,17 +1,15 @@
-//! The answers given on a tab's cards, kept by the tab rather than by a card, so an answer under way still
-//! ends, and is shown, after its card scrolled out of the chat's list. One is sent at a time: while it is
-//! under way every card holds its answers. It runs on the app's runtime, so it ends even once no screen
-//! waits for it. What became of each, by its card's key ([`Results`]), is what the cards show until the run
-//! is read again: under way, taken by the runner and when, or why not.
+//! The answers given on the cards: sent to the project's runner one at a time, on the app's runtime, so an
+//! answer under way ends even once no screen waits for it; and what became of each (under way, taken by the
+//! runner and when, or why not), which is kept by run and card ([`super::kept`]) and shown on the card until
+//! the run is read again.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 
 use lurq::{
-  app::ctx::{Ctx, FutureAction, FutureState},
-  core::Signal,
+  app::ctx::{Ctx, FutureAction},
   node::Element,
 };
-use orchester_core::time::Timestamp;
+use orchester_core::{id::RunId, time::Timestamp};
 use orchester_ipc::{Command, Rejection};
 use orchester_workspace::{
   messages::{self, Message},
@@ -20,7 +18,7 @@ use orchester_workspace::{
   workspace::OpenProject,
 };
 
-use super::super::frame::note;
+use super::{super::frame::note, kept};
 use crate::{
   services::Services,
   ui::{field::field_error, message::message_text},
@@ -66,71 +64,56 @@ pub(in super::super) struct Outcome {
   pub(in super::super) stage: Stage,
 }
 
-/// The answers given on the tab's cards, by card key.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(super) struct Results(pub(super) BTreeMap<Arc<str>, Outcome>);
-
-impl lurq::app::component::DevtoolsInspectable for Results {}
-
-/// An answer to send: for the card `key`, `given` as `command`, to the runner of `project`.
+/// An answer to send: for the card `key` of `run`, `given` as `command`, to the runner of `project`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Sending {
+  pub(super) run: RunId,
   pub(super) key: Arc<str>,
   pub(super) given: Given,
   pub(super) project: OpenProject,
   pub(super) command: Command,
 }
 
-/// The card an answer was for, with why it did not go through.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct Refusal {
-  key: Arc<str>,
-  refused: Refused,
-}
+pub(super) type SendAnswer = FutureAction<Sending, (), ()>;
 
-impl lurq::app::component::DevtoolsInspectable for Refusal {}
-
-pub(super) type SendAnswer = FutureAction<Sending, Arc<str>, Refusal>;
-
-/// The action that sends an answer: made once by the tab and asked for in the same place in each render.
+/// The action that sends an answer: made once by the tab and asked for in the same place in each render. What
+/// became of the answer is kept ([`super::kept`]) where it ends, on the app's runtime, so it is known even
+/// once no tab waits for it; the action only says that it ended.
 pub(super) fn action(ctx: &mut Ctx) -> SendAnswer {
   let services = Services::of(ctx);
   ctx.future_action(move |sending: Sending| {
-    let (runners, runtime) = (services.runners.clone(), services.runtime.clone());
+    let (runners, runtime, clock) = (
+      services.runners.clone(),
+      services.runtime.clone(),
+      services.clock.clone(),
+    );
     async move {
       let Sending {
-        key, project, command, ..
+        run,
+        key,
+        given,
+        project,
+        command,
       } = sending;
+      let card = key.clone();
       // On the runtime, not in the screen's future: an answer under way ends even once nothing shows it.
-      let sent = runtime
-        .spawn(async move { runners.control_run_in(&project, command).await })
+      let ended = runtime
+        .spawn(async move {
+          let stage = match runners.control_run_in(&project, command).await {
+            Ok(()) => Stage::Taken(clock.now()),
+            Err(error) => Stage::Refused(refused(error)),
+          };
+          kept::set_outcome((run, &card), Outcome { given, stage });
+        })
         .await;
-      let refused = match sent {
-        Ok(Ok(())) => return Ok(key),
-        Ok(Err(error)) => refused(error),
-        Err(error) => {
-          tracing::error!(%error, "the answer did not finish");
-          Refused::Failed(messages::interrupted())
-        }
-      };
-      Err(Refusal { key, refused })
+      if let Err(error) = ended {
+        tracing::error!(%error, "the answer did not finish");
+        let stage = Stage::Refused(Refused::Failed(messages::interrupted()));
+        kept::set_outcome((run, &key), Outcome { given, stage });
+      }
+      Ok(())
     }
   })
-}
-
-/// Records where the answer `state` reports stands, once it ended, at `now`.
-pub(super) fn record(results: &Signal<Results>, state: &FutureState<Arc<str>, Refusal>, now: Timestamp) {
-  let (key, stage) = match (&state.error, &state.data) {
-    // A failure keeps the data of the answer before it: the error speaks first.
-    (Some(refusal), _) if state.is_rejected() => (refusal.key.clone(), Stage::Refused(refusal.refused.clone())),
-    (_, Some(key)) if state.is_fulfilled() => (key.clone(), Stage::Taken(now)),
-    _ => return,
-  };
-  results.update(|results| {
-    if let Some(outcome) = results.0.get_mut(&key) {
-      outcome.stage = stage;
-    }
-  });
 }
 
 fn refused(error: RunRequestError) -> Refused {

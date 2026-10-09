@@ -2,7 +2,11 @@
 //! runner): a command's card with the request whole and every answer, one answer at a time, and why it did
 //! not go through; a question's options and own answer, *Send answer* and why it waits; the focus, once.
 
-use orchester_app::ui::icon::Icon;
+use lurq::app::events::MouseButton;
+use orchester_app::{
+  routes::{ProjectPage, Route, TaskView},
+  ui::icon::Icon,
+};
 
 use super::{card_of, click, glyphs, locked, opened, text};
 use crate::support::Window;
@@ -88,17 +92,34 @@ fn card_approval_waiting_shows_the_request_whole_and_every_answer() {
 fn card_approval_takes_one_answer_at_a_time_and_says_why_it_did_not_go() {
   let (mut window, card) = card_of("Add serde to the webhook payloads", "cards-approval-");
   let (approve, deny) = (format!("{card}-approve"), format!("{card}-deny"));
-  click(&mut window, &approve);
-  assert!(loading(&mut window, &approve), "Approve once is on its way");
-  // A second press while the first is on its way changes nothing.
-  click(&mut window, &deny);
-  assert!(loading(&mut window, &approve), "the first answer stays on its way");
-  assert!(!loading(&mut window, &deny));
+  // Approve once pressed twice and Deny right after, before a frame: only the first counts. A second press
+  // that cancelled it would leave "answered already" or "no longer waits" beside live buttons.
+  press_together(&mut window, &[&approve, &approve, &deny]);
   window.until("why the answer did not go", |window| {
     window.tree.get_element_by_id(&format!("{card}-refused")).is_some()
   });
+  let refused = text(&mut window, &format!("{card}-refused"));
+  assert!(!refused.contains("answered already"), "{refused}");
+  assert!(!refused.contains("no longer waits"), "{refused}");
   assert!(!loading(&mut window, &approve), "the request still waits");
   assert_eq!(text(&mut window, &approve), "Approve once");
+  assert!(window.tree.get_element_by_id(&deny).is_some());
+}
+
+/// Presses each of `ids` in turn with no frame between them, as a quick double click or Enter held does.
+fn press_together(window: &mut Window, ids: &[&str]) {
+  for id in ids {
+    let bounds = window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"));
+    let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
+    window.tree.mouse_move(x, y);
+    window.tree.mouse_down(x, y, MouseButton::Left);
+    window.tree.mouse_up(x, y, MouseButton::Left);
+  }
+  window.pass();
 }
 
 #[test]
@@ -178,7 +199,7 @@ fn card_question_with_several_answers_checks_each() {
 
 #[test]
 fn card_that_waits_when_the_chat_opens_takes_the_focus_once() {
-  let (mut window, card, project) = opened("Pick where the docs button goes", "cards-choice-");
+  let (mut window, card, (project, _)) = opened("Pick where the docs button goes", "cards-choice-");
   let first = format!("{card}-option-0-0");
   window.until("the focus on the first option", |window| {
     focused(window).as_deref() == Some(first.as_str())
@@ -192,4 +213,30 @@ fn card_that_waits_when_the_chat_opens_takes_the_focus_once() {
     window.pass();
   }
   assert_ne!(focused(&window).as_deref(), Some(first.as_str()));
+}
+
+#[test]
+fn card_question_keeps_what_was_picked_and_typed_as_the_tabs_switch() {
+  let (mut window, card, (project, key)) = opened("Choose the export formats", "cards-choice-");
+  click(&mut window, &format!("{card}-option-0-2"));
+  click(&mut window, &format!("{card}-own-0"));
+  type_keys(&mut window, &["x", "m", "l"]);
+  for view in [TaskView::Summary, TaskView::Conversation] {
+    window
+      .navigation()
+      .go(Route::Project(project, ProjectPage::Task(key.clone(), view)));
+    window.tree.tick_futures();
+    window.pass();
+  }
+  let mark = format!("{card}-option-0-2-mark");
+  window.until("the card again", |window| {
+    window.tree.get_element_by_id(&mark).is_some()
+  });
+  let check = Icon::Check.glyph().to_string();
+  assert!(glyphs(&mut window, &mark).contains(&check), "the pick is kept");
+  assert_eq!(
+    window.texts(&format!("{card}-own-0")).unwrap_or_default().join(""),
+    "xml",
+    "the own answer is kept"
+  );
 }

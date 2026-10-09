@@ -16,7 +16,10 @@ use lurq::{
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::run::{Answerer, ApprovalAnswer, PendingToolApproval};
+use orchester_core::{
+  id::RunId,
+  run::{Answerer, ApprovalAnswer, PendingToolApproval},
+};
 use orchester_ipc::Command;
 use orchester_workspace::{
   tasks::approvals::{ShownApproval, SimilarShown},
@@ -26,7 +29,7 @@ use orchester_workspace::{
 use super::{
   super::{
     decisions::{Decisions, Given, Stage},
-    frame::note,
+    frame::{held, note},
   },
   words,
 };
@@ -54,7 +57,7 @@ pub(super) const fn approval_answer(given: Given) -> ApprovalAnswer {
 /// number, the open project its runner takes the answer for, the tab's answers, and *Approve once*, which
 /// takes the focus when the tab opens on the card.
 pub(super) struct Answering<'a> {
-  pub(super) key: &'a Arc<str>,
+  pub(super) card: (RunId, &'a Arc<str>),
   pub(super) id: &'a str,
   pub(super) request: &'a PendingToolApproval,
   pub(super) shown: Option<&'a ShownApproval>,
@@ -69,21 +72,21 @@ impl Answering<'_> {
   fn sending(&self) -> Option<Given> {
     self
       .decisions
-      .outcome(self.key)
+      .outcome(self.card)
       .filter(|outcome| outcome.stage == Stage::Sending)
       .map(|outcome| outcome.given)
   }
 
   /// Sends `given`; nothing while another answer is on its way.
   fn press(&self, given: Given, open: OpenProject) -> impl Fn() + Send + Sync + 'static {
-    let (decisions, key) = (self.decisions.clone(), self.key.clone());
+    let (decisions, (run, key)) = (self.decisions.clone(), (self.card.0, self.card.1.clone()));
     let command = Command::DecideToolApproval {
       run: self.request.run,
       approval: self.request.id.clone(),
       answer: approval_answer(given),
       by: Answerer::Person,
     };
-    move || decisions.answer(&key, given, (&open, command.clone()))
+    move || decisions.answer((run, &key), given, (&open, command.clone()))
   }
 
   /// Whether `given` can be pressed now, and how: loading while it is on its way, held while another is.
@@ -158,6 +161,7 @@ pub(super) fn answers(ctx: &Ctx, answering: &Answering<'_>) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .child(row)
+    .with_children((answering.decisions.busy() && answering.sending().is_none()).then(|| held(ctx, id)))
     .child(reason)
     .child(wider(ctx, answering))
     .into()

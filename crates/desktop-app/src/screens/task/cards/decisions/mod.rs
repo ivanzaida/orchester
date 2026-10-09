@@ -1,47 +1,46 @@
-//! What the cards of one Conversation tab share with the tab and its composer, kept by the tab so a card that
-//! scrolls out of the chat's list and back loses nothing: the answers given and under way ([`answers`]), what
-//! the person picked and typed on a question's card, whether the run lost its runner, which card takes the
-//! focus when the tab opens, and the composer that takes a question's answer or a plan's changes.
+//! What the cards of one Conversation tab share with the tab and its composer: the answers given
+//! ([`answers`]), sent by the tab one at a time; what the person picked and typed on a question's card and
+//! what became of each answer, kept by run and card for as long as the app runs ([`kept`]), so switching
+//! tabs, leaving the task or a card scrolling out of the chat loses neither; whether the run lost its
+//! runner; which card takes the focus when the tab opens; and the composer that takes a question's answer
+//! or a plan's changes.
 
 mod answers;
+mod kept;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+  sync::Arc,
+  time::{Duration, Instant},
+};
 
 use lurq::{app::ctx::Ctx, core::Signal};
-use orchester_core::question::Question;
+use orchester_core::{id::RunId, question::Question};
 use orchester_ipc::Command;
 use orchester_workspace::{tasks::question::Draft, workspace::OpenProject};
 use parking_lot::Mutex;
 
 pub(super) use self::answers::{Given, Outcome, Refused, Stage, refusal};
-use self::answers::{Results, SendAnswer, Sending};
-use crate::services::Services;
+use self::answers::{SendAnswer, Sending};
 
-/// Which card takes the focus when the tab opens: the one the chat reveals, once.
+/// How long after the chat first shows its rows the card it reveals may still take the focus: the frames
+/// it takes the chat to scroll to it and lay it out. A card that has not shown by then (the person scrolled
+/// first, or it sits in a folded step) does not take it later.
+const FOCUS_WINDOW: Duration = Duration::from_millis(1500);
+
+/// Which card takes the focus when the tab opens: the one the chat reveals, once, soon.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 enum Focus {
   /// The chat has shown no rows yet.
   #[default]
   Unsettled,
-  /// The card with this key, the first that waited for the person, until it rendered.
-  On(Arc<str>),
-  /// Taken, or nothing waited when the chat first showed its rows.
+  /// The card with this key, the first that waited for the person, if it shows before `until`.
+  On { key: Arc<str>, until: Instant },
+  /// Taken, missed, or nothing waited when the chat first showed its rows.
   Spent,
 }
 
-/// What the person picked and typed on a question's card, kept by the tab.
-#[derive(Clone)]
-pub(super) struct ChoiceDraft {
-  pub(super) picked: Signal<Picked>,
-  /// Each question's own answer, as typed.
-  pub(super) own: Arc<[Signal<String>]>,
-}
-
-/// What the person picked on a question's card.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(super) struct Picked(pub(super) Draft);
-
-impl lurq::app::component::DevtoolsInspectable for Picked {}
+/// A card's place among the kept: its run and its key in the run's timeline.
+pub(super) type Card<'a> = (RunId, &'a Arc<str>);
 
 /// Made by the Conversation tab when it is created ([`Decisions::new`], before any future of its own),
 /// kept in each render ([`Decisions::keep`], first) and provided to its cards. The composer (C2) attaches
@@ -50,8 +49,8 @@ impl lurq::app::component::DevtoolsInspectable for Picked {}
 #[derive(Clone)]
 pub struct Decisions {
   send: SendAnswer,
-  results: Signal<Results>,
-  drafts: Arc<Mutex<HashMap<Arc<str>, ChoiceDraft>>>,
+  /// Moves on whenever what is kept changes, so the cards that read it show it.
+  kept: Signal<u64>,
   lost: Signal<bool>,
   focus: Arc<Mutex<Focus>>,
   composer: Signal<bool>,
@@ -71,15 +70,17 @@ impl Decisions {
   /// A tab's, made when it is created, before any future of its own.
   pub fn new(ctx: &mut Ctx) -> Self {
     let send = answers::action(ctx);
-    let results = ctx.signal(Results::default());
-    let (clock, recorded) = (Services::of(ctx).clock, results.clone());
+    let kept = ctx.signal(0);
+    let ended = kept.clone();
+    // An answer that ended was kept where it ended: the cards read it again.
     ctx.watch(&send.state(), move |state| {
-      answers::record(&recorded, state, clock.now())
+      if !state.is_pending() {
+        ended.update(|kept| *kept += 1);
+      }
     });
     Self {
       send,
-      results,
-      drafts: Arc::default(),
+      kept,
       lost: ctx.signal(false),
       focus: Arc::default(),
       composer: ctx.signal(false),
@@ -101,11 +102,18 @@ impl Decisions {
   }
 
   /// The chat shows its rows: `waiting`, the first card that waits for the person and that the chat reveals,
-  /// takes the focus when it renders; the first time only.
+  /// takes the focus if it shows soon; the first time only.
   pub fn reveal(&self, waiting: Option<Arc<str>>) {
     let mut focus = self.focus.lock();
-    if *focus == Focus::Unsettled {
-      *focus = waiting.map_or(Focus::Spent, Focus::On);
+    match &*focus {
+      Focus::Unsettled => {
+        *focus = waiting.map_or(Focus::Spent, |key| Focus::On {
+          key,
+          until: Instant::now() + FOCUS_WINDOW,
+        });
+      }
+      Focus::On { until, .. } if Instant::now() > *until => *focus = Focus::Spent,
+      Focus::On { .. } | Focus::Spent => {}
     }
   }
 
@@ -153,42 +161,47 @@ impl Decisions {
   }
 
   /// Whether the card `key` takes the focus now: the card the chat revealed when it first showed its rows,
-  /// at its first render. Its first render uses the chance up either way, so it never comes later.
+  /// at its first render, soon. Its first render uses the chance up either way.
   pub(super) fn take_focus(&self, key: &str) -> bool {
     let mut focus = self.focus.lock();
-    if matches!(&*focus, Focus::On(on) if &**on == key) {
-      *focus = Focus::Spent;
-      return true;
+    let Focus::On { key: on, until } = &*focus else {
+      return false;
+    };
+    if &**on != key {
+      return false;
     }
-    false
+    let soon = Instant::now() <= *until;
+    *focus = Focus::Spent;
+    soon
   }
 
-  /// An answer is under way: every card holds its answers until it ends.
+  /// An answer of this tab is on its way: the others wait until it arrives.
   pub(super) fn busy(&self) -> bool {
     self.send.state().get().is_pending()
   }
 
-  /// What became of the answer given on the card `key`, if one was.
-  pub(super) fn outcome(&self, key: &str) -> Option<Outcome> {
-    self.results.with(|results| results.0.get(key).cloned())
+  /// What became of the answer given on `card`, if one was.
+  pub(super) fn outcome(&self, card: Card<'_>) -> Option<Outcome> {
+    self.kept.get();
+    kept::outcome(card)
   }
 
-  /// Sends `given` as `command` for the card `key` to the runner of `project`, unless an answer is under way
-  /// (a second press, or Enter held, must not cancel the first).
-  pub(super) fn answer(&self, key: &Arc<str>, given: Given, (project, command): (&OpenProject, Command)) {
+  /// Sends `given` as `command` for `card` to the runner of `project`, unless an answer is on its way (a
+  /// second press, or Enter held, must not cancel the first).
+  pub(super) fn answer(&self, (run, key): Card<'_>, given: Given, (project, command): (&OpenProject, Command)) {
     if self.send.state().get_untracked().is_pending() {
       return;
     }
-    self.results.update(|results| {
-      results.0.insert(
-        key.clone(),
-        Outcome {
-          given,
-          stage: Stage::Sending,
-        },
-      );
-    });
+    kept::set_outcome(
+      (run, key),
+      Outcome {
+        given,
+        stage: Stage::Sending,
+      },
+    );
+    self.kept.update(|kept| *kept += 1);
     self.send.run(Sending {
+      run,
       key: key.clone(),
       given,
       project: project.clone(),
@@ -196,16 +209,15 @@ impl Decisions {
     });
   }
 
-  /// What the person picked and typed on the card `key` of `questions`, kept from its first render.
-  pub(super) fn draft(&self, key: &Arc<str>, questions: &[Question]) -> ChoiceDraft {
-    self
-      .drafts
-      .lock()
-      .entry(key.clone())
-      .or_insert_with(|| ChoiceDraft {
-        picked: Signal::new(Picked(Draft::new(questions))),
-        own: questions.iter().map(|_| Signal::new(String::new())).collect(),
-      })
-      .clone()
+  /// What the person picked and typed on `card`, asking `questions`.
+  pub(super) fn draft(&self, card: Card<'_>, questions: &[Question]) -> Draft {
+    self.kept.get();
+    kept::draft(card, questions)
+  }
+
+  /// Changes what is picked and typed on `card` with `change`.
+  pub(super) fn change_draft(&self, card: Card<'_>, questions: &[Question], change: impl FnOnce(&mut Draft)) {
+    kept::change_draft(card, questions, change);
+    self.kept.update(|kept| *kept += 1);
   }
 }

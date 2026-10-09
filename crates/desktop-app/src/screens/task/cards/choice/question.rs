@@ -10,14 +10,14 @@ use lurq::{
     theme::{SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
-  core::ElementRef,
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::question::Question;
 use orchester_workspace::tasks::{question::Draft, timeline::ChoiceCard};
 
-use super::super::{Place, decisions::ChoiceDraft};
+use super::super::{Place, decisions::Decisions};
 use crate::{
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
@@ -35,7 +35,10 @@ pub(super) struct Shown<'a> {
   pub(super) place: &'a Place,
   pub(super) card: &'a ChoiceCard,
   pub(super) questions: &'a Arc<[Question]>,
-  pub(super) draft: (&'a ChoiceDraft, &'a Draft),
+  pub(super) draft: &'a Draft,
+  /// Each question's own answer, as its field holds it.
+  pub(super) own: &'a Arc<[Signal<String>]>,
+  pub(super) decisions: &'a Decisions,
   pub(super) first: &'a ElementRef,
 }
 
@@ -73,12 +76,21 @@ pub(super) fn question(ctx: &mut Ctx, shown: &Shown<'_>, index: usize) -> Elemen
     },
     [("agent", &*shown.card.agent)],
   );
+  let (decisions, run, key, all) = (
+    shown.decisions.clone(),
+    shown.place.run(),
+    shown.place.key.clone(),
+    shown.questions.clone(),
+  );
+  // Typing picks the own answer's row, replacing a single-choice question's pick; erasing it unpicks the row
+  // and brings no earlier pick back.
   let field = FieldInput::new(
     format!("{id}-own-{index}"),
     ctx.t("cards.choice.ownName"),
-    shown.draft.0.own[index].clone(),
+    shown.own[index].clone(),
   )
   .placeholder(ctx.t("cards.choice.ownPlaceholder"))
+  .on_change(move |text| decisions.change_draft((run, &key), &all, |draft| draft.type_own(&all, index, text)))
   .render(ctx);
   Column::new()
     .width(Dimension::Pct(100.0))
@@ -99,7 +111,7 @@ pub(super) fn question(ctx: &mut Ctx, shown: &Shown<'_>, index: usize) -> Elemen
 /// The agent's options for question `index`.
 fn options(shown: &Shown<'_>, index: usize) -> Column {
   let (id, question) = (shown.id, &shown.questions[index]);
-  let (kept, draft) = shown.draft;
+  let draft = shown.draft;
   let kind = if question.multi_select() {
     ToggleKind::Checkbox
   } else {
@@ -107,7 +119,8 @@ fn options(shown: &Shown<'_>, index: usize) -> Column {
   };
   let picks = draft.of(index).cloned().unwrap_or_default();
   let rows = question.options().iter().enumerate().map(|(option, offered)| {
-    let (picked, own) = (kept.picked.clone(), kept.own[index].clone());
+    let (decisions, own) = (shown.decisions.clone(), shown.own[index].clone());
+    let (run, key) = (shown.place.run(), shown.place.key.clone());
     let (all, multi) = (shown.questions.clone(), question.multi_select());
     let mut toggle = Toggle::new(
       format!("{id}-option-{index}-{option}"),
@@ -121,8 +134,12 @@ fn options(shown: &Shown<'_>, index: usize) -> Column {
       if !multi {
         own.set(String::new());
       }
-      let all = all.clone();
-      picked.update(move |picked| picked.0.pick(&all, (index, option)));
+      decisions.change_draft((run, &key), &all, |draft| {
+        draft.pick(&all, (index, option));
+        if !multi {
+          draft.type_own(&all, index, "");
+        }
+      });
     });
     if (index, option) == (0, 0) {
       toggle = toggle.element_ref(shown.first.clone());

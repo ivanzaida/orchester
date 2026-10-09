@@ -97,6 +97,11 @@ impl Stands {
   }
 }
 
+/// Why a card's answers wait: another answer of the tab is on its way to the runner.
+pub(super) fn held(ctx: &lurq::app::ctx::Ctx, id: &str) -> Element {
+  crate::ui::unavailable::reason_line(&format!("{id}-held"), &ctx.t("cards.held")).into()
+}
+
 /// An 11.5 `text_muted` line, `id`: when it was asked, what an answer does, what automation may do.
 pub(super) fn note(id: &str, words: &str) -> Text {
   Text::new(words)
