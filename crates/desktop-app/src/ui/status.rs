@@ -6,7 +6,7 @@
 //! The vocabulary and its icons come from the boards: Draft `circle-dashed`, Queued `clock`, Running and
 //! Working `loader-circle` (turning), Needs input `hand`, Stopped at limit `gauge`, Interrupted and
 //! Interrupted · can't continue `circle-pause`, Completed and Complete `circle-check`, Merged
-//! `git-merge`, Failed `circle-x`, Unreadable `file-warning`, Waiting `clock`, Not started
+//! `git-merge`, Failed `circle-x`, Unreadable `circle-help`, Waiting `clock`, Not started
 //! `circle-dashed`, Blocked `ban`, Paused `circle-pause` in `warning` (Usage `Q1gYMm`); Backlog
 //! `circle-dashed`, Todo `circle` (`AiCwO`), In progress `circle-dot-dashed`, In review `eye`, Done
 //! `circle-check`; High, Medium and Low `signal-*`, No priority `minus`. The boards draw no Canceled,
@@ -134,7 +134,9 @@ impl Status {
       Self::Merged => Icon::GitMerge,
       Self::Failed => Icon::CircleX,
       Self::Canceled => Icon::CircleSlash,
-      Self::Unreadable => Icon::FileWarning,
+      // The boards name `file-warning`, which Pencil has no glyph for and draws as `circle-help`; the
+      // design shows `circle-help` (`Run icon` in `XEQuo` rows of `C2E5Po`).
+      Self::Unreadable => Icon::CircleHelp,
       Self::Skipped => Icon::SkipForward,
       Self::Blocked => Icon::Ban,
     }
