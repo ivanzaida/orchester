@@ -134,7 +134,7 @@ fn step_named(edit: &PipelineEdit, named: &str) -> Result<StepKey, ToolError> {
     .ok_or_else(|| ToolError::not_found(Missing::Step, named))
 }
 
-fn create_error(error: &CreateError) -> ToolError {
+pub(super) fn create_error(error: &CreateError) -> ToolError {
   let code = match error {
     CreateError::Store(_) => "project_data",
     CreateError::NoSlug => "invalid_name",

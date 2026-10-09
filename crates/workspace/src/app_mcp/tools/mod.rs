@@ -14,6 +14,7 @@ mod questions;
 mod return_to_draft;
 mod run_task;
 mod runs;
+pub mod setup;
 mod task_write;
 mod tasks;
 mod wire;
@@ -213,13 +214,13 @@ const SPECS: &[Spec] = &[
 
 /// Every tool, as `tools/list` answers.
 pub fn listed() -> Vec<Tool> {
-  SPECS
-    .iter()
-    .map(|spec| {
-      Tool::new(spec.name, spec.description, (spec.schema)())
-        .with_annotations(ToolAnnotations::new().read_only(spec.read_only).open_world(false))
-    })
-    .collect()
+  SPECS.iter().map(tool).collect()
+}
+
+/// `spec` as clients list it.
+fn tool(spec: &Spec) -> Tool {
+  Tool::new(spec.name, spec.description, (spec.schema)())
+    .with_annotations(ToolAnnotations::new().read_only(spec.read_only).open_world(false))
 }
 
 /// Calls tool `name` with `arguments`; `None` when there is no such tool.

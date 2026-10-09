@@ -15,6 +15,7 @@ pub mod close;
 pub mod code_index;
 pub mod connections;
 pub mod display;
+pub mod drafts;
 pub mod environment;
 pub mod highlight;
 pub mod i18n;

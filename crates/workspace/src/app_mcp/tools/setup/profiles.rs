@@ -1,0 +1,196 @@
+//! `list_profiles`, `get_profile` and `publish_profile`: a project's agent profiles as Agents lists and
+//! opens them, and a draft published as its Publish does, with the editor's own rule that a connection
+//! that runs no agents cannot publish.
+
+use orchester_core::{
+  connection::{AgentConnection, mcp::McpServer},
+  permission::{AgentPermissions, CommandPermission},
+  resource::PublishError,
+};
+use orchester_store::StoreError;
+use rmcp::schemars::JsonSchema;
+use serde::Deserialize;
+use serde_json::{Value, json};
+
+use super::{super::projects::InProject, connections::agent_by_id};
+use crate::{
+  agents::{
+    data::{ProfileChange, ProfileEntry, ProjectAgents, VersionState, apply_in},
+    form::stored_effort,
+  },
+  app_mcp::{
+    error::{Missing, ToolError},
+    services::{Services, blocking},
+  },
+  messages::{self, Message},
+};
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct InProfile {
+  /// The project's id, or its name.
+  pub project: String,
+  /// The profile's id, or its role.
+  pub profile: String,
+}
+
+pub async fn list_profiles(services: &Services, args: InProject) -> Result<Value, ToolError> {
+  let services = services.clone();
+  blocking(move || {
+    let open = services.project(&args.project)?;
+    let agents = ProjectAgents::load_in(&open.repo_root)?;
+    let profiles: Vec<Value> = agents
+      .profiles
+      .iter()
+      .map(|entry| {
+        let connection = agent_by_id(&agents.connections, entry.profile.connection());
+        json!({
+          "id": entry.id.to_string(),
+          "role": entry.profile.role().as_str(),
+          "connection": connection.map(|connection| connection.name().as_str()),
+          "model": entry.profile.model().as_str(),
+          "effort": stored_effort(&entry.profile),
+          "state": state_json(entry.state),
+        })
+      })
+      .collect();
+    Ok(json!({ "profiles": profiles }))
+  })
+  .await
+}
+
+pub async fn get_profile(services: &Services, args: InProfile) -> Result<Value, ToolError> {
+  let services = services.clone();
+  blocking(move || {
+    let open = services.project(&args.project)?;
+    let agents = ProjectAgents::load_in(&open.repo_root)?;
+    let entry = profile_named(&agents, &args.profile)?;
+    Ok(json!({ "profile": profile_json(&agents, entry) }))
+  })
+  .await
+}
+
+pub async fn publish_profile(services: &Services, args: InProfile) -> Result<Value, ToolError> {
+  let services = services.clone();
+  blocking(move || {
+    let open = services.project(&args.project)?;
+    let agents = ProjectAgents::load_in(&open.repo_root)?;
+    let entry = profile_named(&agents, &args.profile)?;
+    // The editor offers no Publish on a connection that runs no agents.
+    if agent_by_id(&agents.connections, entry.profile.connection())
+      .is_some_and(|connection| !connection.provider().runs_agents())
+    {
+      return Err(ToolError::refused(
+        "connection_runs_no_agents",
+        vec![Message::new("appMcp.errors.connectionRunsNoAgents")],
+      ));
+    }
+    let id = entry.id;
+    apply_in(&open.repo_root, ProfileChange::Publish(id)).map_err(|error| publish_error(&error))?;
+    let agents = ProjectAgents::load_in(&open.repo_root)?;
+    let entry = agents
+      .profile(id)
+      .ok_or_else(|| ToolError::not_found(Missing::Profile, id.to_string()))?;
+    Ok(json!({ "profile": profile_json(&agents, entry) }))
+  })
+  .await
+}
+
+/// The profile of `agents` named by its id or, ignoring case, its role.
+pub(super) fn profile_named<'a>(agents: &'a ProjectAgents, named: &str) -> Result<&'a ProfileEntry, ToolError> {
+  let lowered = named.to_lowercase();
+  agents
+    .profiles
+    .iter()
+    .find(|entry| entry.id.to_string() == named || entry.profile.role().as_str().to_lowercase() == lowered)
+    .ok_or_else(|| ToolError::not_found(Missing::Profile, named))
+}
+
+/// A profile as `get_profile` shows it.
+pub(super) fn profile_json(agents: &ProjectAgents, entry: &ProfileEntry) -> Value {
+  let profile = &entry.profile;
+  let connection: Option<&AgentConnection> = agent_by_id(&agents.connections, profile.connection());
+  let servers: Vec<Value> = profile
+    .mcp_servers()
+    .ids()
+    .iter()
+    .map(|id| {
+      let server: Option<&McpServer> = agents.mcp.iter().find(|server| server.id() == *id);
+      json!({ "id": id.to_string(), "name": server.map(|server| server.name().to_string()) })
+    })
+    .collect();
+  let steps: Vec<Value> = agents
+    .steps
+    .iter()
+    .filter(|step| step.profile == entry.id)
+    .map(|step| json!({ "pipeline": &*step.pipeline, "step": &*step.step }))
+    .collect();
+  json!({
+    "id": entry.id.to_string(),
+    "role": profile.role().as_str(),
+    "responsibilities": profile.responsibilities(),
+    "instructions": profile.instructions().as_str(),
+    "connection": connection.map(|connection| json!({
+      "id": connection.id().to_string(),
+      "name": connection.name().as_str(),
+      "provider": connection.provider(),
+    })),
+    "model": profile.model().as_str(),
+    "effort": stored_effort(profile),
+    "permissions": permissions_json(profile.permissions()),
+    "mcp_servers": servers,
+    "state": state_json(entry.state),
+    "used_by_steps": steps,
+  })
+}
+
+/// Permissions as `save_profile_draft` takes them.
+pub(super) fn permissions_json(permissions: &AgentPermissions) -> Value {
+  let (commands, allowed) = match permissions.commands() {
+    CommandPermission::AskBefore => ("ask_before", Vec::new()),
+    CommandPermission::Allowed(list) => ("allowed", list.entries().iter().map(ToString::to_string).collect()),
+    CommandPermission::AnyInWorktree => ("any_in_worktree", Vec::new()),
+  };
+  let folders: Vec<String> = permissions
+    .writable_folders()
+    .entries()
+    .iter()
+    .map(ToString::to_string)
+    .collect();
+  json!({
+    "repository": permissions.repository(),
+    "writable_folders": folders,
+    "commands": commands,
+    "allowed_commands": allowed,
+    "network": permissions.network(),
+    "ask_before_tool_calls": permissions.interactive_tool_approvals(),
+    "approve_automatically": permissions.auto_approve(),
+  })
+}
+
+pub(super) fn state_json(state: VersionState) -> Value {
+  let name = match state {
+    VersionState::Draft { .. } => "draft",
+    VersionState::StaleDraft { .. } => "stale_draft",
+    VersionState::Published(_) => "published",
+  };
+  json!({ "state": name, "published_version": state.published().map(|version| version.get()) })
+}
+
+fn publish_error(error: &StoreError) -> ToolError {
+  let code = match error {
+    StoreError::NoDraft(_) => return no_draft(),
+    StoreError::Publish(PublishError::StaleDraft { .. }) => "stale_draft",
+    StoreError::Publish(PublishError::ConnectionMissing) => "connection_missing",
+    StoreError::Publish(PublishError::Permissions(_)) => "permissions_not_enforced",
+    StoreError::Publish(PublishError::VersionLimit) => "version_limit",
+    _ => "project_data",
+  };
+  ToolError::refused(code, vec![messages::store_error(error)])
+}
+
+/// Publishing found no draft: the latest version is current.
+pub(super) fn no_draft() -> ToolError {
+  ToolError::refused("no_draft", vec![Message::new("appMcp.errors.noDraft")])
+}
