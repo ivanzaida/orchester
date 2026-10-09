@@ -114,3 +114,15 @@ fn timeline_a_card_that_waits_says_answering_here_is_not_available_yet() {
   assert!(text.contains("asks to run a command"), "{text}");
   assert!(text.contains("Waiting for approval"), "{text}");
 }
+
+#[test]
+fn timeline_a_tool_steps_result_card_names_the_tool_step() {
+  let (mut window, seeded) = seeded("task-states");
+  let key = key_of(&seeded, "Export invoices as PDF");
+  open(&mut window, &seeded, &key, "conversation-chat");
+  window.until("the Run checks result", |window| {
+    all_text(window).contains("Run checks failed")
+  });
+  let text = all_text(&mut window);
+  assert!(text.contains("04 Run checks · Tool"), "{text}");
+}
