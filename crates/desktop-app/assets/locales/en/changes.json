@@ -3,6 +3,8 @@
     "groupSeparator": ",",
     "loading": "Reading the run's changes",
     "noTask": "This project has no task {{key}}.",
+    "taskFailed": "Couldn't read the task",
+    "tabCountPartial": "{{label}} {{count}}+",
     "added": "+{{count}}",
     "removed": "−{{count}}",
     "type": {
@@ -76,7 +78,8 @@
       }
     },
     "worktreeFailed": {
-      "title": "Couldn't read what the worktree holds beyond the checkpoint"
+      "title": "Couldn't read what the worktree holds beyond the checkpoint",
+      "detail": "git could not read the run's worktree. The checkpointed files still show; Try again reads the worktree again."
     },
     "worktreeRemoved": {
       "title": "The run's worktree was removed",

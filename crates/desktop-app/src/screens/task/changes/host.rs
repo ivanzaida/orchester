@@ -1,23 +1,22 @@
 //! A stand-in for the task page's frame until it is built (task P1): it reads the task and its latest run,
 //! shows the page tabs with the Changes tab's count, and mounts the Changes tab in the frame's slot. The
-//! frame takes this over with one mount line: [`ChangesReads`] in its `create`, [`ChangesReads::read`] on
-//! its renders, and [`ChangesTab`] on the Changes tab; this module then goes.
+//! frame takes this over as the parent module says; this module then goes.
 
 use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
   components::Column,
+  core::Signal,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
   id::{ProjectId, TaskId},
   project::TaskKey,
-  run::TaskPhase,
 };
 use orchester_workspace::{background, messages, runner::state::RunnerState, tasks::detail::TaskDetail};
 
-use super::{ChangesProps, ChangesReads, ChangesTab, Follow, RunChanges};
+use super::{ChangesProps, ChangesReads, ChangesTab, Follow, RunChanges, tab_label};
 use crate::{
   navigation::Navigation,
   project::{ShownProject, TasksState},
@@ -26,8 +25,8 @@ use crate::{
   ui::{
     icon::screen_icon,
     message::message_text,
-    state::loading,
-    tabs::{PageTab, counted, page_tabs},
+    state::{load_error, loading},
+    tabs::{PageTab, page_tabs},
   },
 };
 
@@ -59,7 +58,6 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey, view: &TaskV
   )
 }
 
-/// The task as read.
 /// Why the task cannot be shown.
 fn missing(ctx: &Ctx, why: &str) -> Element {
   let title = ctx.t(Screen::Task.title_key());
@@ -68,6 +66,7 @@ fn missing(ctx: &Ctx, why: &str) -> Element {
     .into()
 }
 
+/// The task as read.
 #[derive(Clone, PartialEq)]
 struct LoadedTask(Arc<TaskDetail>);
 
@@ -89,6 +88,8 @@ impl lurq::app::component::DevtoolsInspectable for HostProps {}
 struct Host {
   reads: ChangesReads,
   navigation: Navigation,
+  /// Counts Try again after the task could not be read.
+  reload: Signal<u64>,
 }
 
 impl Component for Host {
@@ -98,31 +99,43 @@ impl Component for Host {
     Self {
       reads: ChangesReads::new(ctx),
       navigation: Navigation::of(ctx),
+      reload: ctx.signal(0),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<HostProps>().clone();
-    let deps = (props.repo_root.clone(), props.task, props.changed);
-    let load = ctx.future(deps, |(repo_root, task, _)| async move {
+    let deps = (props.repo_root.clone(), props.task, props.changed, self.reload.get());
+    let load = ctx.future(deps, |(repo_root, task, ..)| async move {
       background::run(move || TaskDetail::load_in(&repo_root, task))
         .await?
         .map(|detail| LoadedTask(Arc::new(detail)))
-        .map_err(|error| messages::store_error(&error))
+        .map_err(|error| {
+          tracing::error!(%error, "cannot read the task");
+          messages::store_error(&error)
+        })
     });
-    let Some(LoadedTask(detail)) = load.state().get().data else {
-      return Column::new().child(loading("screen-task", &ctx.t("changes.loading")));
+    let state = load.state().get();
+    let Some(LoadedTask(detail)) = state.data else {
+      let shown = match state.error {
+        // A read again after a failure shows as being read.
+        Some(error) if !state.is_pending() => {
+          let reload = self.reload.clone();
+          let title = ctx.t("changes.taskFailed");
+          load_error(ctx, "screen-task", (&title, &message_text(ctx, &error)), move || {
+            reload.update(|attempt| *attempt += 1);
+          })
+        }
+        _ => loading("screen-task", &ctx.t("changes.loading")).into(),
+      };
+      return Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding(Padding::all(SpacingSize::Section))
+        .child(shown);
     };
-    let agent_at_work = detail.phase() == TaskPhase::Running && !detail.lost_its_runner(props.online);
     let tab = props.view.tab();
-    let follow = Follow {
-      agent_at_work,
-      tab_open: tab == TaskTab::Changes,
-    };
-    let changes = detail
-      .run
-      .as_ref()
-      .map(|run| self.reads.read(ctx, &props.repo_root, run, follow));
+    let follow = Follow::of(&detail, props.online, tab);
+    let changes = self.reads.read(ctx, &props.repo_root, &detail, follow);
     let tabs = self.tabs(ctx, &props, detail.task.key(), changes.as_ref());
     let content = match &props.view {
       TaskView::Changes(file) => ctx.mount_keyed::<ChangesTab>(
@@ -132,7 +145,7 @@ impl Component for Host {
           detail: detail.clone(),
           changes,
           file: file.clone(),
-          agent_at_work,
+          agent_at_work: follow.agent_at_work,
           reads: self.reads.clone(),
         },
       ),
@@ -155,15 +168,15 @@ impl Component for Host {
 impl Host {
   /// The page tabs, Changes with the count of the files it lists once that is known.
   fn tabs(&self, ctx: &mut Ctx, props: &HostProps, key: &TaskKey, changes: Option<&RunChanges>) -> Element {
-    let count = changes.and_then(RunChanges::listed_files);
+    let count = changes.and_then(RunChanges::file_count);
     let current = props.view.tab();
     let tabs: Vec<PageTab> = TaskTab::ALL
       .into_iter()
       .map(|tab| {
         let name = ctx.t(tab.title_key());
-        let label = match (tab, count) {
-          (TaskTab::Changes, Some(count)) => counted(ctx, &name, count),
-          _ => name,
+        let label = match tab {
+          TaskTab::Changes => tab_label(ctx, &name, count),
+          TaskTab::Summary | TaskTab::Conversation => name,
         };
         let (navigation, project, key) = (self.navigation.clone(), props.project, key.clone());
         PageTab::new(format!("task-tab-{}", tab.name()), label, tab == current, move || {

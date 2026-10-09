@@ -5,7 +5,10 @@
 //! still show. Reading shows the loading line, never an empty list.
 
 use lurq::{
-  app::{ctx::Ctx, theme::SpacingSize},
+  app::{
+    ctx::Ctx,
+    theme::{PaletteColor, SpacingSize},
+  },
   components::Column,
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -13,6 +16,9 @@ use orchester_core::diff::{Changes, MAX_DIFF_FILES, MAX_DIFF_LINES};
 use orchester_workspace::messages::Message;
 
 use super::grouped;
+
+/// The key of the message that git was not found (`ChangesError::message`).
+const GIT_MISSING: &str = "runs.changes.failure.gitMissing";
 use crate::ui::{
   button::{ActionButton, ButtonKind},
   icon::Icon,
@@ -109,7 +115,8 @@ pub fn worktree_too_large(ctx: &Ctx, size: Changes) -> Element {
   )
 }
 
-/// The worktree could not be read; Try again reads it again.
+/// The worktree could not be read; Try again reads it again. The checkpointed files stay, so it reads as
+/// information with a `danger` icon (`PEBSm`); its words are the worktree's, unless git is missing.
 pub fn worktree_failed(ctx: &Ctx, error: &Message, retry: impl Fn() + Send + Sync + 'static) -> Element {
   let again = ActionButton::new(
     "changes-worktree-try-again",
@@ -118,13 +125,20 @@ pub fn worktree_failed(ctx: &Ctx, error: &Message, retry: impl Fn() + Send + Syn
   )
   .icon(Icon::RotateCcw)
   .on_click(retry);
+  let body = if error.key == GIT_MISSING {
+    message_text(ctx, error)
+  } else {
+    ctx.t("changes.worktreeFailed.detail")
+  };
   inset(
     Notice::new(
       "changes-notice",
-      NoticeTone::Danger,
+      NoticeTone::Info,
       ctx.t("changes.worktreeFailed.title"),
     )
-    .body(message_text(ctx, error))
+    .icon(Icon::CircleAlert)
+    .mark(PaletteColor::Danger)
+    .body(body)
     .action(again),
   )
 }

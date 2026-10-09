@@ -11,18 +11,18 @@ use lurq::{
   app::ctx::{Ctx, FutureState, StreamEmitter},
   core::Signal,
 };
-use orchester_core::{id::RunId, time::Timestamp};
+use orchester_core::{id::RunId, run::TaskPhase, time::Timestamp};
 use orchester_workspace::{
   background,
   messages::Message,
   tasks::{
     changes::{Checkpointed, NotCheckpointed, Refresh, checkpointed_in, listed_files, not_checkpointed_in},
-    detail::RunView,
+    detail::{RunView, TaskDetail},
   },
 };
 use parking_lot::Mutex;
 
-use crate::services::Services;
+use crate::{routes::TaskTab, services::Services, ui::tabs::counted};
 
 /// How often the worktree is read again while an agent works in it.
 const WORKTREE_REFRESH: Duration = Duration::from_secs(3);
@@ -48,16 +48,50 @@ pub struct RunChanges {
 
 impl lurq::app::component::DevtoolsInspectable for RunChanges {}
 
+/// The count on the Changes tab's label.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FileCount {
+  pub files: usize,
+  /// The worktree's part is known; otherwise `files` counts the checkpointed files only.
+  pub complete: bool,
+}
+
 impl RunChanges {
-  /// How many files the Changes tab lists, the count on its label; `None` while that is not known
-  /// ([`listed_files`]).
-  pub fn listed_files(&self) -> Option<usize> {
+  /// How many files the Changes tab lists ([`listed_files`]); when only the worktree's part is not known
+  /// (too large to list, or unreadable), the checkpointed files, marked as not all. `None` while reading,
+  /// and when the checkpointed part is not known either.
+  pub fn file_count(&self) -> Option<FileCount> {
     let checkpointed = match &self.checkpointed {
       CheckpointedRead::Loading => None,
       CheckpointedRead::Ready(checkpointed) => Some(Ok(checkpointed)),
       CheckpointedRead::Failed(error) => Some(Err(error)),
     };
-    listed_files(checkpointed, self.worktree.as_ref().map(Result::as_ref))
+    let worktree = self.worktree.as_ref().map(Result::as_ref);
+    if let Some(files) = listed_files(checkpointed, worktree) {
+      return Some(FileCount { files, complete: true });
+    }
+    let CheckpointedRead::Ready(checkpointed) = &self.checkpointed else {
+      return None;
+    };
+    match worktree? {
+      Err(_) | Ok(NotCheckpointed::TooLarge { .. }) => {
+        checkpointed.files().map(|files| FileCount { files, complete: false })
+      }
+      Ok(NotCheckpointed::Clean | NotCheckpointed::Removed | NotCheckpointed::Read(_)) => None,
+    }
+  }
+}
+
+/// The Changes tab's label `name` with `count` when it is known: `Changes 6`, or `Changes 4+` while the
+/// worktree's files are not known.
+pub fn tab_label(ctx: &Ctx, name: &str, count: Option<FileCount>) -> Arc<str> {
+  match count {
+    None => name.into(),
+    Some(FileCount { files, complete: true }) => counted(ctx, name, files),
+    Some(FileCount { files, complete: false }) => ctx.t_args(
+      "changes.tabCountPartial",
+      [("label", name.to_owned()), ("count", files.to_string())],
+    ),
   }
 }
 
@@ -89,9 +123,20 @@ pub struct Follow {
   pub tab_open: bool,
 }
 
+impl Follow {
+  /// For `detail`'s page on `tab`, while its project's runner is `online` or not: an agent works on the
+  /// run while it runs and its runner is there.
+  pub fn of(detail: &TaskDetail, online: bool, tab: TaskTab) -> Self {
+    Self {
+      agent_at_work: detail.phase() == TaskPhase::Running && !detail.lost_its_runner(online),
+      tab_open: tab == TaskTab::Changes,
+    }
+  }
+}
+
 /// The reads of one task page: it creates them once, in its `create`, and reads with them on every render
-/// that has a run. The worktree is read again on each tick of an interval of the page's own, which lurq
-/// does not run while the page's window tab is offstage.
+/// ([`ChangesReads::read`]). The worktree is read again on each tick of an interval of the page's own,
+/// which lurq does not run while the page's window tab is offstage.
 #[derive(Clone)]
 pub struct ChangesReads {
   refresh: Arc<Refresh>,
@@ -111,13 +156,14 @@ impl ChangesReads {
     }
   }
 
-  /// The changes of `run` in the repository at `repo_root`.
-  pub fn read(&self, ctx: &mut Ctx, repo_root: &Path, run: &RunView, follow: Follow) -> RunChanges {
+  /// The changes of `detail`'s latest run in the repository at `repo_root`; `None` without a run. Call it
+  /// on every render of the page, with or without a run: its reads keep their places among the page's.
+  pub fn read(&self, ctx: &mut Ctx, repo_root: &Path, detail: &TaskDetail, follow: Follow) -> Option<RunChanges> {
     let retry = self.retry.get();
-    RunChanges {
-      checkpointed: self.checkpointed(ctx, repo_root, run, retry),
-      worktree: self.not_checkpointed(ctx, repo_root, run, (follow, retry)),
-    }
+    let run = detail.run.as_ref();
+    let checkpointed = self.checkpointed(ctx, repo_root, run, retry);
+    let worktree = self.not_checkpointed(ctx, repo_root, run, (follow, retry));
+    run.map(|_| RunChanges { checkpointed, worktree })
   }
 
   pub(super) fn retry(&self) {
@@ -128,16 +174,22 @@ impl ChangesReads {
     self.last_read.clone()
   }
 
-  fn checkpointed(&self, ctx: &mut Ctx, repo_root: &Path, run: &RunView, retry: u64) -> CheckpointedRead {
+  fn checkpointed(&self, ctx: &mut Ctx, repo_root: &Path, run: Option<&RunView>, retry: u64) -> CheckpointedRead {
     let programs = Services::of(ctx).programs;
-    let head = run
-      .run
-      .last_checkpoint()
-      .map(|checkpoint| checkpoint.revision().clone());
-    let deps = (repo_root.to_path_buf(), run.id(), run.run.base().clone(), head, retry);
-    let load = ctx.future(deps, move |(repo_root, run, base, head, _)| {
+    let range = run.map(|run| {
+      let head = run
+        .run
+        .last_checkpoint()
+        .map(|checkpoint| checkpoint.revision().clone());
+      (run.id(), run.run.base().clone(), head)
+    });
+    let deps = (repo_root.to_path_buf(), range, retry);
+    let load = ctx.future(deps, move |(repo_root, range, _)| {
       let programs = programs.clone();
       async move {
+        let Some((run, base, head)) = range else {
+          return Ok::<_, ()>(None);
+        };
         let read = background::run(move || checkpointed_in(&repo_root, &programs, &base, head.as_ref()))
           .await
           .and_then(|read| {
@@ -146,10 +198,10 @@ impl ChangesReads {
               error.message()
             })
           });
-        Ok::<_, ()>(ForRun { run, read })
+        Ok(Some(ForRun { run, read }))
       }
     });
-    match current(load.state().get(), run.id()) {
+    match run.and_then(|run| current(load.state().get(), run.id())) {
       None => CheckpointedRead::Loading,
       Some(Ok(checkpointed)) => CheckpointedRead::Ready(checkpointed),
       Some(Err(error)) => CheckpointedRead::Failed(error),
@@ -162,40 +214,50 @@ impl ChangesReads {
     &self,
     ctx: &mut Ctx,
     repo_root: &Path,
-    run: &RunView,
+    run: Option<&RunView>,
     (follow, retry): (Follow, u64),
   ) -> Option<Result<NotCheckpointed, Message>> {
     let programs = Services::of(ctx).programs;
     let (follower, last_read) = (self.refresh.follower(), self.last_read.clone());
-    let head = run
-      .run
-      .last_checkpoint()
-      .map(|checkpoint| checkpoint.revision().clone());
-    let read_at = (run.id(), run.run.status().is_terminal());
-    let deps = (repo_root.to_path_buf(), read_at, head, follow, retry);
+    let at = run.map(|run| {
+      let head = run
+        .run
+        .last_checkpoint()
+        .map(|checkpoint| checkpoint.revision().clone());
+      ((run.id(), run.run.status().is_terminal()), head)
+    });
+    let deps = (repo_root.to_path_buf(), at, follow, retry);
     let reads = ctx.stream(
       deps,
-      move |(repo_root, read_at, _, follow, _), emitter: StreamEmitter<ForRun<NotCheckpointed>, ()>| {
+      move |(repo_root, at, follow, _), emitter: StreamEmitter<Option<ForRun<NotCheckpointed>>, ()>| {
         let (programs, follower, last_read) = (programs.clone(), follower.clone(), last_read.clone());
-        let read = move || {
-          let (repo_root, programs, last_read) = (repo_root.clone(), programs.clone(), last_read.clone());
-          async move {
-            let read = background::run(move || not_checkpointed_in(&repo_root, &programs, read_at))
-              .await
-              .and_then(|read| {
-                read.map_err(|error| {
-                  tracing::warn!(%error, "cannot read the run's worktree");
-                  error.message()
-                })
-              });
-            last_read.set(Timestamp::now());
-            ForRun { run: read_at.0, read }
-          }
-        };
-        follower.follow(follow.agent_at_work, read, move |read| emitter.emit(read))
+        async move {
+          let Some((read_at, _)) = at else {
+            emitter.emit(None);
+            return;
+          };
+          let read = move || {
+            let (repo_root, programs, last_read) = (repo_root.clone(), programs.clone(), last_read.clone());
+            async move {
+              let read = background::run(move || not_checkpointed_in(&repo_root, &programs, read_at))
+                .await
+                .and_then(|read| {
+                  read.map_err(|error| {
+                    tracing::warn!(%error, "cannot read the run's worktree");
+                    error.message()
+                  })
+                });
+              last_read.set(Timestamp::now());
+              ForRun { run: read_at.0, read }
+            }
+          };
+          follower
+            .follow(follow.agent_at_work, read, move |read| emitter.emit(Some(read)))
+            .await;
+        }
       },
     );
-    current(reads.state().get(), run.id())
+    run.and_then(|run| current(reads.state().get(), run.id()))
   }
 }
 
@@ -210,9 +272,9 @@ impl<T> lurq::app::component::DevtoolsInspectable for ForRun<T> {}
 
 /// What was read for `run`: `None` before its first read, while what is there was read for another run,
 /// and while it is read again after it failed.
-fn current<T>(state: FutureState<ForRun<T>, ()>, run: RunId) -> Option<Result<T, Message>> {
+fn current<T>(state: FutureState<Option<ForRun<T>>, ()>, run: RunId) -> Option<Result<T, Message>> {
   let pending = state.is_pending();
-  let data = state.data.filter(|data| data.run == run)?;
+  let data = state.data.flatten().filter(|data| data.run == run)?;
   if pending && data.read.is_err() {
     return None;
   }

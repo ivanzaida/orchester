@@ -5,8 +5,10 @@
 //! (`RsPIH`). The file shown is part of the path (`?file=`, `&from=worktree`), and choosing another takes
 //! the current entry's place in the tab's history.
 //!
-//! The task page reads the changes ([`ChangesReads`]), so the count on the tab's label
-//! ([`RunChanges::listed_files`]) is of the files listed here, and mounts the tab with [`ChangesProps`].
+//! The task page frame takes it with three lines: [`ChangesReads::new`] in its `create`;
+//! [`ChangesReads::read`] with [`Follow::of`] on every render, whose [`RunChanges::file_count`] it shows on
+//! the tab's label through [`tab_label`], so the count is of the files listed here; and [`ChangesTab`]
+//! with [`ChangesProps`] in its Changes slot. Until it does, `host` stands in for it.
 
 mod diff;
 mod files;
@@ -46,7 +48,7 @@ use self::{
 };
 pub use self::{
   host::screen,
-  load::{ChangesReads, CheckpointedRead, Follow, RunChanges},
+  load::{ChangesReads, CheckpointedRead, Follow, RunChanges, tab_label},
 };
 use crate::{
   navigation::Navigation,
