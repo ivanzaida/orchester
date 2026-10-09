@@ -20,7 +20,7 @@ pub mod root;
 pub mod routes;
 mod screens;
 pub mod services;
-mod shell;
+pub mod shell;
 pub mod startup;
 pub mod system_icon;
 pub mod theme;

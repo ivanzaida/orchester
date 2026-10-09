@@ -127,6 +127,7 @@ impl ProjectTasks {
       row.tags = kept.iter().map(|name| Arc::from(name.as_str())).collect();
       row.not_shared = true;
       row.detail = UiMessage::new("tasks.notShared.readiness");
+      row.readiness = super::list::ReadinessKind::NotShared;
       return row;
     }
     if let Some(blocking) = self.blocking.get(&row.id).filter(|links| !links.is_empty()) {
@@ -137,8 +138,10 @@ impl ProjectTasks {
         .collect::<Vec<_>>()
         .join(separator);
       row.detail = UiMessage::new("tasks.blocked.rowUnfinished").with("tasks", keys);
+      row.readiness = super::list::ReadinessKind::Blocked;
     } else if let Some(reason) = row.organization.blocked_reason() {
       row.detail = UiMessage::new("tasks.blocked.informational").with("reason", reason.to_owned());
+      row.readiness = super::list::ReadinessKind::Blocked;
     }
     row
   }
