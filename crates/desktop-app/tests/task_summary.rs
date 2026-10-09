@@ -162,6 +162,12 @@ fn summary_notice_says_where_each_task_stands() {
     page.open(state);
     assert_eq!(page.text("task-notice-title"), title, "{state}");
   }
+  page.open("ready for review");
+  assert_eq!(
+    page.text("task-status-label"),
+    "Ready for review",
+    "the run waits for review"
+  );
   page.open("paused");
   assert!(page.text("task-notice-title").starts_with("Paused"), "paused");
   let key = page.open("latest run unreadable");

@@ -1,0 +1,35 @@
+//! What every part of a task's page reads: the task as last read and where it is, the same for the
+//! header, the Summary and the tabs and slots other tasks build (the Conversation, Changes, and the
+//! Summary's decisions), so each of them mounts with one line.
+
+use std::sync::Arc;
+
+use orchester_core::project::TaskKey;
+use orchester_workspace::tasks::{detail::TaskDetail, integration_jobs::ProjectJobState};
+
+use super::read::TaskLeftovers;
+use crate::project::ShownProject;
+
+#[derive(Clone, PartialEq)]
+pub struct TaskContext {
+  /// The open project with its feed.
+  pub project: ShownProject,
+  /// The task's key, as its page's path names it.
+  pub key: TaskKey,
+  pub detail: Arc<TaskDetail>,
+  /// What the task's runs without live work left in the repository.
+  pub left: TaskLeftovers,
+  /// The project's runner is online: a run recorded as running without one is interrupted.
+  pub online: bool,
+  /// The project's merge and removal operations as they stand.
+  pub jobs: ProjectJobState,
+}
+
+impl lurq::app::component::DevtoolsInspectable for TaskContext {}
+
+impl TaskContext {
+  /// The run is recorded as running while no runner looks after it: it is interrupted until one does.
+  pub fn lost(&self) -> bool {
+    self.detail.lost_its_runner(self.online)
+  }
+}

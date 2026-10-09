@@ -23,23 +23,18 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::project::TaskKey;
-use orchester_workspace::{
-  messages::Message,
-  tasks::{detail::TaskDetail, integration_jobs::ProjectJobState},
-};
+use orchester_workspace::messages::Message;
 
 use self::{
   controls::{ControlAction, Controls, RunControl, control_action, controls},
   run_again::{Confirmation, Confirming, StartAction},
 };
 use super::{
-  PageState, RemovalPlace,
-  read::TaskLeftovers,
+  PageState, RemovalPlace, TaskContext,
   summary::runs::{Runs, removal::confirm_for},
 };
 use crate::{
   navigation::Navigation,
-  project::ShownProject,
   routes::{ProjectPage, Route, TaskList, TaskTab, TaskView},
   services::Services,
   theme::ExtraSpacing,
@@ -47,20 +42,15 @@ use crate::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     button::{ActionButton, ButtonKind},
     icon::Icon,
-    tabs::{PageTab, page_tabs},
+    tabs::{PageTab, counted, page_tabs},
     tooltip::Truncated,
   },
 };
 
 #[derive(Clone, PartialEq)]
 pub struct HeaderProps {
-  pub project: ShownProject,
-  pub detail: Arc<TaskDetail>,
+  pub task: TaskContext,
   pub tab: TaskTab,
-  /// The project's runner is online: a run recorded as running without one is interrupted.
-  pub online: bool,
-  pub left: TaskLeftovers,
-  pub jobs: ProjectJobState,
   /// Why the task could not be read again; the page shows it as last read.
   pub stale: Option<Message>,
 }
@@ -90,15 +80,15 @@ impl Component for TaskHeader {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<HeaderProps>().clone();
     let services = Services::of(ctx);
-    let (open, feed) = (props.project.open.clone(), props.project.feed.clone());
-    let detail = props.detail.clone();
+    let (open, feed) = (props.task.project.open.clone(), props.task.project.feed.clone());
+    let detail = props.task.detail.clone();
     let runners = (services.runners.clone(), services.servers.clone());
     let action = control_action(ctx, (open.clone(), detail.task.id()), runners.clone());
     let saves = feed.revision.get() + feed.outside.get().tasks;
     let check = run_again::check(ctx, (open.repo_root.clone(), services.programs), &detail, saves);
     let start = run_again::start_action(ctx, runners, (open.repo_root, feed), self.confirming.clone());
     let (title_row, refused) = self.title_row(ctx, &props, (&action, check.as_ref()));
-    let lost = detail.lost_its_runner(props.online);
+    let lost = props.task.lost();
     let confirmation = check
       .as_ref()
       .and_then(|check| check.as_ref().ok())
@@ -140,7 +130,7 @@ impl TaskHeader {
       Option<&Result<orchester_workspace::tasks::run_again::RunAgainCheck, Message>>,
     ),
   ) -> (Element, Option<(RunControl, Message)>) {
-    let detail = &props.detail;
+    let detail = &props.task.detail;
     let state = action.state().get();
     let requested = self.requested.get();
     let pending = if state.is_pending() { requested } else { None };
@@ -152,13 +142,16 @@ impl TaskHeader {
       ctx,
       &Controls {
         detail,
-        online: props.online,
+        online: props.task.online,
         action,
         pending,
         requested: &self.requested,
       },
     );
-    let latest_busy = detail.run.as_ref().is_some_and(|run| props.jobs.run(run.id()).busy());
+    let latest_busy = detail
+      .run
+      .as_ref()
+      .is_some_and(|run| props.task.jobs.run(run.id()).busy());
     let again = run_again::button(ctx, check, (&self.confirming, &self.remove), latest_busy);
     if let Some(reason) = again.as_ref().and_then(|(_, reason)| reason.clone()) {
       reasons.push(reason);
@@ -214,12 +207,12 @@ impl TaskHeader {
     let Confirming(Some(key)) = self.confirming.get() else {
       return None;
     };
-    let (run, next) = (props.detail.run.as_ref()?, check.next.as_ref().ok()?);
-    let leftovers = props.left.of(run.id()).and_then(Result::ok);
+    let (run, next) = (props.task.detail.run.as_ref()?, check.next.as_ref().ok()?);
+    let leftovers = props.task.left.of(run.id()).and_then(Result::ok);
     Some(run_again::confirmation(
       ctx,
       &Confirmation {
-        detail: &props.detail,
+        detail: &props.task.detail,
         run,
         check,
         next,
@@ -234,18 +227,18 @@ impl TaskHeader {
 }
 
 fn task_route(props: &HeaderProps, tab: TaskTab) -> Route {
-  let key: TaskKey = props.detail.task.key().clone();
+  let key: TaskKey = props.task.detail.task.key().clone();
   Route::Project(
-    props.project.open.project.id(),
+    props.task.project.open.project.id(),
     ProjectPage::Task(key, TaskView::of(tab)),
   )
 }
 
 fn crumbs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
   let navigation = Navigation::of(ctx);
-  let project = props.project.open.project.id();
+  let project = props.task.project.open.project.id();
   let (overview, tasks) = (navigation.clone(), navigation);
-  let name = props.project.open.project.name().as_str().to_owned();
+  let name = props.task.project.open.project.name().as_str().to_owned();
   breadcrumb(
     ctx,
     "task-crumbs",
@@ -257,7 +250,7 @@ fn crumbs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
       Crumb::link(ctx.t("task.crumbs.tasks"), move || {
         tasks.go(Route::Project(project, ProjectPage::Tasks(TaskList::default())));
       }),
-      Crumb::here(props.detail.task.key().to_string()).mono(),
+      Crumb::here(props.task.detail.task.key().to_string()).mono(),
     ],
   )
   .into()
@@ -265,13 +258,13 @@ fn crumbs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
 
 /// Edit, while the task can be edited.
 fn edit_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
-  if !props.detail.editable() {
+  if !props.task.detail.editable() {
     return None;
   }
   let navigation = Navigation::of(ctx);
   let route = Route::Project(
-    props.project.open.project.id(),
-    ProjectPage::EditTask(props.detail.task.key().clone()),
+    props.task.project.open.project.id(),
+    ProjectPage::EditTask(props.task.detail.task.key().clone()),
   );
   Some(
     ActionButton::new("task-edit", ButtonKind::Ghost, ctx.t("task.edit"))
@@ -283,23 +276,24 @@ fn edit_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
 /// *Remove worktree* of the latest run, once it has no live work and still has worktrees: it opens the
 /// confirmation in the run's row on the Summary.
 fn remove_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
-  let run = props.detail.run.as_ref()?;
-  let record = props.detail.history.iter().find(|record| record.id == run.id())?;
+  let run = props.task.detail.run.as_ref()?;
+  let record = props.task.detail.history.iter().find(|record| record.id == run.id())?;
   record.without_live_work()?;
-  let left = props.left.of(run.id())?.ok()?;
+  let left = props.task.left.of(run.id())?.ok()?;
   if left.worktrees.is_empty() {
     return None;
   }
   let button =
     ActionButton::new("task-remove-worktree", ButtonKind::Ghost, ctx.t("task.removeWorktree")).icon(Icon::FolderX);
-  if props.jobs.run(run.id()).removing() {
+  if props.task.jobs.run(run.id()).removing() {
     return Some(button.loading());
   }
   if props
+    .task
     .detail
     .history
     .iter()
-    .any(|record| props.jobs.run(record.id).busy())
+    .any(|record| props.task.jobs.run(record.id).busy())
   {
     return Some(button.disabled());
   }
@@ -308,7 +302,7 @@ fn remove_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
   if state.removal.get().run == Some(run.id()) {
     return Some(button.disabled());
   }
-  let job = Services::of(ctx).jobs.of(props.project.open.project.id()).of(run.id());
+  let job = props.task.project.feed.jobs.of(run.id());
   let id = run.id();
   Some(button.on_click(move || {
     job.clear_failed_removal();
@@ -318,16 +312,16 @@ fn remove_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
 
 /// The latest run's *Remove worktree* confirmation, while the header's button opened it.
 fn removal(ctx: &mut Ctx, props: &HeaderProps) -> Option<Element> {
-  let run = props.detail.run.as_ref()?.id();
+  let run = props.task.detail.run.as_ref()?.id();
   let removal = PageState::of(ctx).removal.get();
   if !removal.shows(run, RemovalPlace::Header) {
     return None;
   }
   let runs = Runs {
-    project: &props.project,
-    detail: &props.detail,
-    left: &props.left,
-    jobs: &props.jobs,
+    project: &props.task.project,
+    detail: &props.task.detail,
+    left: &props.task.left,
+    jobs: &props.task.jobs,
     removal,
   };
   confirm_for(ctx, &runs, run)
@@ -340,19 +334,18 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
     let (navigation, route) = (navigation.clone(), task_route(props, tab));
     move || navigation.go(route.clone())
   };
-  let tab = |ctx: &Ctx, tab: TaskTab| {
-    PageTab::new(
-      format!("task-tab-{}", tab.name()),
-      ctx.t(tab.title_key()),
-      props.tab == tab,
-      open(tab),
-    )
+  let tab = |tab: TaskTab, label: Arc<str>| {
+    PageTab::new(format!("task-tab-{}", tab.name()), label, props.tab == tab, open(tab))
   };
-  // The Changes tab's count of changed files (`Changes 4`) comes with the Changes tab itself (D1).
+  let changes = ctx.t(TaskTab::Changes.title_key());
+  let changes = match super::changes_count(ctx, &props.task) {
+    Some(count) => counted(ctx, &changes, count),
+    None => changes,
+  };
   let tabs = [
-    tab(ctx, TaskTab::Summary),
-    tab(ctx, TaskTab::Conversation),
-    tab(ctx, TaskTab::Changes),
+    tab(TaskTab::Summary, ctx.t(TaskTab::Summary.title_key())),
+    tab(TaskTab::Conversation, ctx.t(TaskTab::Conversation.title_key())),
+    tab(TaskTab::Changes, changes),
     PageTab::unavailable(
       "task-tab-artifacts",
       ctx.t("task.tabs.artifacts"),

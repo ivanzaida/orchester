@@ -27,10 +27,10 @@ use orchester_core::{
   run::{PauseReason, RunLimit, RunStatus},
   time::Timestamp,
 };
-use orchester_workspace::tasks::{approvals::ShownApproval, detail::TaskDetail, integration_jobs::ProjectJobState};
+use orchester_workspace::tasks::{approvals::ShownApproval, detail::TaskDetail};
 
 use self::runs::Runs;
-use super::{PageState, read::TaskLeftovers};
+use super::{PageState, TaskContext};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -48,11 +48,7 @@ use crate::{
 
 #[derive(Clone, PartialEq)]
 pub struct SummaryProps {
-  pub project: ShownProject,
-  pub detail: Arc<TaskDetail>,
-  pub online: bool,
-  pub left: TaskLeftovers,
-  pub jobs: ProjectJobState,
+  pub task: TaskContext,
 }
 
 impl lurq::app::component::DevtoolsInspectable for SummaryProps {}
@@ -68,15 +64,15 @@ impl Component for TaskSummary {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<SummaryProps>().clone();
-    let detail = &props.detail;
+    let detail = &props.task.detail;
     let removal = PageState::of(ctx).removal.get();
     let runs = runs::section(
       ctx,
       &Runs {
-        project: &props.project,
+        project: &props.task.project,
         detail,
-        left: &props.left,
-        jobs: &props.jobs,
+        left: &props.task.left,
+        jobs: &props.task.jobs,
         removal,
       },
     );
@@ -93,11 +89,11 @@ impl Component for TaskSummary {
       return layout(column(parts.into_iter().chain(runs).collect()), None);
     }
     let parts = self.parts(ctx, &props, runs);
-    let root = props.project.open.repo_root.clone();
+    let root = props.task.project.open.repo_root.clone();
     let panel = match &detail.run {
-      Some(run) => this_run::this_run(ctx, run, &root, detail.lost_its_runner(props.online)),
+      Some(run) => this_run::this_run(ctx, run, &root, props.task.lost()),
       None => {
-        let pipelines = match props.project.feed.tasks.get() {
+        let pipelines = match props.task.project.feed.tasks.get() {
           crate::project::TasksState::Ready(tasks) => tasks.pipelines.to_vec(),
           _ => Vec::new(),
         };
@@ -111,15 +107,16 @@ impl Component for TaskSummary {
 impl TaskSummary {
   /// The column's sections, in the design's order.
   fn parts(&self, ctx: &mut Ctx, props: &SummaryProps, runs: Option<Element>) -> Vec<Element> {
-    let detail = &props.detail;
-    let lost = detail.lost_its_runner(props.online);
+    let detail = &props.task.detail;
+    let lost = props.task.lost();
     let runner = props
+      .task
       .project
       .feed
       .status
       .get()
-      .map(|status| status.state_for(&props.project.open.repo_root));
-    let approval = waiting_approval(&props.project, detail);
+      .map(|status| status.state_for(&props.task.project.open.repo_root));
+    let approval = waiting_approval(&props.task.project, detail);
     let said = notice::said(ctx, detail, runner.as_ref().filter(|_| lost), approval.as_ref());
     let conversation = said.conversation;
     let mut notice = said.notice();
@@ -138,7 +135,7 @@ impl TaskSummary {
       .as_ref()
       .map(|run| steps::section(ctx, run, lost, &waiting, now));
     std::iter::once(notice.into())
-      .chain(decisions(ctx, detail))
+      .chain(decisions(ctx, &props.task))
       .chain(steps)
       .chain(brief::sections(ctx, details))
       .chain(runs)
@@ -149,7 +146,8 @@ impl TaskSummary {
 /// Where the decisions the run waits for mount (P2: plan review, raise the limit, the decision after
 /// retries, Ready for review with its merge). Until they are built, a run that waits for one says the
 /// decision is not built in this app yet.
-fn decisions(ctx: &Ctx, detail: &TaskDetail) -> Option<Element> {
+pub fn decisions(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
+  let detail = &task.detail;
   let run = detail.run.as_ref()?;
   let waits = match run.run.status() {
     RunStatus::Running => !run.run.awaiting_plan().is_empty(),
@@ -177,8 +175,11 @@ fn waiting_approval(project: &ShownProject, detail: &TaskDetail) -> Option<Shown
 fn open_conversation(ctx: &mut Ctx, props: &SummaryProps) -> ActionButton {
   let navigation = Navigation::of(ctx);
   let route = Route::Project(
-    props.project.open.project.id(),
-    ProjectPage::Task(props.detail.task.key().clone(), TaskView::of(TaskTab::Conversation)),
+    props.task.project.open.project.id(),
+    ProjectPage::Task(
+      props.task.detail.task.key().clone(),
+      TaskView::of(TaskTab::Conversation),
+    ),
   );
   ActionButton::new(
     "task-open-conversation",

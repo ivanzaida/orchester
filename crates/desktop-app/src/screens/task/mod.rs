@@ -10,11 +10,10 @@
 //! again keeps the task as last read on the page and says why. What the task's ended runs left in the
 //! repository is read beside it, for *Remove worktree* and Run again.
 
+mod context;
 mod header;
 mod read;
 mod summary;
-
-use std::sync::Arc;
 
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
@@ -26,11 +25,12 @@ use orchester_core::{
   id::{RunId, TaskId},
   project::TaskKey,
 };
-use orchester_workspace::{messages::Message, runner::state::RunnerState, tasks::detail::TaskDetail};
+use orchester_workspace::{messages::Message, runner::state::RunnerState};
 
+pub use self::context::TaskContext;
 use self::{
   header::{HeaderProps, TaskHeader},
-  read::{ReadAgain, TaskLeftovers, TaskRead},
+  read::{ReadAgain, TaskRead},
   summary::{SummaryProps, TaskSummary},
 };
 use super::placeholder::centered;
@@ -259,7 +259,7 @@ impl Component for TaskFrame {
       TaskRead::Ready(detail, stale) => (detail, stale),
     };
     let services = Services::of(ctx);
-    let jobs = read::jobs(ctx, services.jobs.of(props.project.open.project.id()));
+    let jobs = feed.job_state.get();
     let separator = ctx.t("task.listSeparator");
     let left = read::leftovers(
       ctx,
@@ -271,16 +271,24 @@ impl Component for TaskFrame {
       .status
       .get()
       .is_some_and(|status| status.state_for(&root) == RunnerState::Online);
-    let header = HeaderProps {
+    let task = TaskContext {
       project: props.project.clone(),
-      detail: detail.clone(),
-      tab: props.tab,
+      key: props.key.clone(),
+      detail,
+      left,
       online,
-      left: left.clone(),
-      jobs: jobs.clone(),
+      jobs,
+    };
+    let header = HeaderProps {
+      task: task.clone(),
+      tab: props.tab,
       stale,
     };
-    let body = self.tab(ctx, &props, (&detail, online), (left, jobs));
+    let body = match props.tab {
+      TaskTab::Summary => ctx.mount_keyed::<TaskSummary>("task-summary", SummaryProps { task }),
+      TaskTab::Conversation => conversation_tab(ctx, &task),
+      TaskTab::Changes => changes_tab(ctx, &task),
+    };
     Column::new()
       .id("task-frame")
       .width(Dimension::Pct(100.0))
@@ -291,44 +299,22 @@ impl Component for TaskFrame {
   }
 }
 
-impl TaskFrame {
-  fn tab(
-    &self,
-    ctx: &mut Ctx,
-    props: &FrameProps,
-    (detail, online): (&Arc<TaskDetail>, bool),
-    (left, jobs): (
-      TaskLeftovers,
-      orchester_workspace::tasks::integration_jobs::ProjectJobState,
-    ),
-  ) -> Element {
-    match props.tab {
-      TaskTab::Summary => ctx.mount_keyed::<TaskSummary>(
-        "task-summary",
-        SummaryProps {
-          project: props.project.clone(),
-          detail: detail.clone(),
-          online,
-          left,
-          jobs,
-        },
-      ),
-      TaskTab::Conversation => conversation_tab(ctx, detail),
-      TaskTab::Changes => changes_tab(ctx, detail),
-    }
-  }
-}
-
-/// The Conversation tab's mount point: its timeline (C1) mounts here, with the composer (C2) and the
-/// decision cards (C3) inside it. Until then the tab says it is not built.
-fn conversation_tab(ctx: &Ctx, _detail: &Arc<TaskDetail>) -> Element {
+/// The Conversation tab's mount point: its timeline (C1) mounts here with one line, the composer (C2)
+/// and the decision cards (C3) inside it. Until then the tab says it is not built.
+fn conversation_tab(ctx: &mut Ctx, _task: &TaskContext) -> Element {
   tab_not_built(ctx, "task-conversation", Icon::MessageSquare, TaskTab::Conversation)
 }
 
-/// The Changes tab's mount point: its file list and diff (D1) mount here. Until then the tab says it is
-/// not built.
-fn changes_tab(ctx: &Ctx, _detail: &Arc<TaskDetail>) -> Element {
+/// The Changes tab's mount point: its file list and diff (D1) mount here with one line. Until then the
+/// tab says it is not built.
+fn changes_tab(ctx: &mut Ctx, _task: &TaskContext) -> Element {
   tab_not_built(ctx, "task-changes", Icon::FileDiff, TaskTab::Changes)
+}
+
+/// How many files the Changes tab lists, for its label (`Changes 4`); the Changes tab (D1) reads it
+/// here with one line. `None` while it is not known: the label is the tab's name alone.
+pub fn changes_count(_ctx: &mut Ctx, _task: &TaskContext) -> Option<usize> {
+  None
 }
 
 fn tab_not_built(ctx: &Ctx, id: &str, glyph: Icon, tab: TaskTab) -> Element {

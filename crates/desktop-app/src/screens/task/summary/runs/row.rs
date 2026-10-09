@@ -29,7 +29,6 @@ use super::line::{Line, day_and_clock, line};
 use crate::{
   project::ShownProject,
   screens::task::{PageState, RemovalPlace},
-  services::Services,
   theme::{ExtraSpacing, ExtraTypography, IconSize, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -72,7 +71,7 @@ impl Component for RunRow {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<RowProps>().clone();
     let record = &props.record;
-    let status = record.phase.map_or(Status::Unreadable, Status::of_phase);
+    let status = record.phase.map_or(Status::Unreadable, Status::of_run);
     let failed = match &props.job.remove {
       JobState::Failed(error) => Some(error.clone()),
       _ => None,
@@ -137,7 +136,7 @@ impl RunRow {
       return Some(button.disabled().into());
     }
     let (state, run) = (PageState::of(ctx), props.record.id);
-    let jobs = Services::of(ctx).jobs.of(props.project.open.project.id()).of(run);
+    let jobs = props.project.feed.jobs.of(run);
     Some(
       button
         .on_click(move || {

@@ -4,7 +4,7 @@
 
 use std::{path::PathBuf, sync::Arc};
 
-use lurq::app::ctx::{Ctx, StreamEmitter};
+use lurq::app::ctx::Ctx;
 use orchester_core::{
   id::{RunId, TaskId},
   integration::Leftovers,
@@ -18,7 +18,6 @@ use orchester_workspace::{
     detail::TaskDetail,
     history::RunRecord,
     integration::{LeftBehind, leftovers_in},
-    integration_jobs::{IntegrationJobs, ProjectJobState},
   },
 };
 
@@ -149,19 +148,4 @@ pub fn leftovers(
     (None, None) => None,
   };
   TaskLeftovers { left, stale }
-}
-
-/// The project's merge and removal operations whenever they change: the ones the window and
-/// automation share (`ProjectJobs`), so a removal either starts keeps the other's buttons waiting.
-pub fn jobs(ctx: &mut Ctx, jobs: IntegrationJobs) -> ProjectJobState {
-  let state = ctx.stream(jobs, |jobs, emitter: StreamEmitter<ProjectJobState, ()>| async move {
-    let mut updates = jobs.subscribe();
-    loop {
-      let state = updates.borrow_and_update().clone();
-      if !emitter.emit(state) || updates.changed().await.is_err() {
-        return;
-      }
-    }
-  });
-  state.state().get().data.unwrap_or_default()
 }
