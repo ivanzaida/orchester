@@ -70,8 +70,14 @@ impl RunIntegration {
     self.0.discard.clone()
   }
 
+  /// Git merges or removes for the run, as the view shows it; a render reads this.
   pub fn busy(&self) -> bool {
     self.0.state.get().busy()
+  }
+
+  /// How the run's operations stand now, for a click to decide by: the view may be a frame behind.
+  pub fn state_now(&self) -> RunJobState {
+    self.0.job.state()
   }
 
   /// Git removes the run's worktrees, whoever asked: a person, or automation.
@@ -79,12 +85,16 @@ impl RunIntegration {
     self.0.state.get().removing()
   }
 
+  /// Starts the merge and shows at once what it changed, before the feed loader passes it on.
   pub fn start_merge(&self, args: MergeArgs) {
     self.0.job.start_merge(args);
+    self.mirror(&self.0.job.state());
   }
 
+  /// Starts the removal and shows at once what it changed, before the feed loader passes it on.
   pub fn start_remove(&self, args: RemoveArgs) {
     self.0.job.start_remove(args);
+    self.mirror(&self.0.job.state());
   }
 
   /// A person's removal from this run's dialog, which closes once the worktrees are gone.
@@ -98,7 +108,7 @@ impl RunIntegration {
   pub fn open_remove(&self) {
     if matches!(self.0.job.state().remove, JobState::Failed(_)) {
       self.0.job.clear_failed_removal();
-      self.0.remove.set(JobState::Idle);
+      self.mirror(&self.0.job.state());
     }
     self.0.discard.set(false);
     self.0.dialog_open.set(true);

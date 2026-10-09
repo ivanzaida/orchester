@@ -173,8 +173,10 @@ impl Component for RemoveWorktree {
       .id(id)
       .height(Dimension::Px(height))
       .on_click(move || {
-        let waits = others.iter().any(|run| nav.integration(*run).busy());
-        if open.busy() || waits || matches!(open.remove().get_untracked(), JobState::Succeeded) {
+        // The job decides, not the view, which may be a frame behind it.
+        let waits = others.iter().any(|run| nav.integration(*run).state_now().busy());
+        let now = open.state_now();
+        if now.busy() || waits || now.remove == JobState::Succeeded {
           return;
         }
         open.open_remove();
