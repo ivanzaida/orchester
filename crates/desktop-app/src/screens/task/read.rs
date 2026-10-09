@@ -30,8 +30,8 @@ impl lurq::app::component::DevtoolsInspectable for LoadedTask {}
 /// How the task's reading stands.
 pub enum TaskRead {
   Loading,
-  /// The task as last read, and why reading it again failed, if it did.
-  Ready(Arc<TaskDetail>, Option<Message>),
+  /// The task as last read; why reading it again failed, if it did; whether it is read again now.
+  Ready(Arc<TaskDetail>, Option<Message>, bool),
   /// The first reading failed, and why.
   Failed(Message),
 }
@@ -57,8 +57,9 @@ pub fn task(ctx: &mut Ctx, root: PathBuf, task: TaskId, again: ReadAgain) -> Tas
       })
   });
   let state = load.state().get();
+  let pending = state.is_pending();
   match (state.data, state.error) {
-    (Some(LoadedTask(detail)), stale) => TaskRead::Ready(detail, stale),
+    (Some(LoadedTask(detail)), stale) => TaskRead::Ready(detail, stale, pending),
     (None, Some(error)) => TaskRead::Failed(error),
     (None, None) => TaskRead::Loading,
   }

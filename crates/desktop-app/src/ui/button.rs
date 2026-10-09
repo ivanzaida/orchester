@@ -108,6 +108,8 @@ pub struct ActionButton {
   action: Option<Arc<dyn Fn() + Send + Sync>>,
   hold: Option<Hold>,
   focus: Focus,
+  /// As wide as its parent, its icon and label centered (`Allow retry` `ae0Pi`).
+  fill: bool,
   element: Option<ElementRef>,
 }
 
@@ -122,6 +124,7 @@ impl ActionButton {
       action: None,
       hold: None,
       focus: Focus::Pointer,
+      fill: false,
       element: None,
     }
   }
@@ -154,6 +157,12 @@ impl ActionButton {
   /// for tools. Show the reason beside it with [`super::unavailable::with_reason`].
   pub fn unavailable(mut self, reason: impl Into<Arc<str>>) -> Self {
     self.hold = Some(Hold::Unavailable(reason.into()));
+    self
+  }
+
+  /// As wide as its parent, its icon and label centered.
+  pub fn fill_width(mut self) -> Self {
+    self.fill = true;
     self
   }
 
@@ -202,6 +211,9 @@ impl From<ActionButton> for Element {
       .describe("kind", button.kind.name())
       .describe("state", button.state())
       .describe("a11y_name", button.label.clone());
+    if button.fill {
+      frame = frame.width(Dimension::Pct(100.0));
+    }
     if let Some(lead) = button.lead() {
       frame = frame.child(icon(lead, IconSize::Md, color.clone()).id(format!("{}-icon", button.id)));
     }

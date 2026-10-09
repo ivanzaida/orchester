@@ -193,7 +193,9 @@
       "unconfirmed": "Task saved · run status unconfirmed",
       "queuedDescription": "This task is saved and queued. Its details cannot be edited here. Fix the issue below, then retry the run.",
       "unconfirmedDescription": "The task is saved, but the runner has not confirmed whether its run started. Check Tasks or retry the same request. The task details are locked.",
-      "limitsBlockSave": "Correct the run budget and time limit to save the task."
+      "limitsBlockSave": "Correct the run budget and time limit to save the task.",
+      "noLongerDraft": "This task was queued meanwhile, so it was not saved as a draft.",
+      "savedDetailsDiffer": "The task was saved, but what is stored differs from the form. Open it again to check it."
     },
     "edit": {
       "notStarted": "This task is queued. Its details can be edited after the first run is recorded.",
@@ -324,6 +326,8 @@
         "noBaseBranch": "This run didn’t record the branch your checkout had when it started.",
         "notSucceeded": "Only a run whose every step passed can be merged.",
         "alreadyMerged": "This run was merged already.",
+        "anotherMerge": "Another merge is under way in this project. Merge this run once it is done.",
+        "notRecorded": "Git merged the run into {{branch}}, but Orchester couldn’t record the merge. Merge again to record it.",
         "git": "Git failed: {{detail}}",
         "gitStopped": "Git did not finish. Check the repository with git status before you try again.",
         "brief": {
@@ -641,6 +645,7 @@
     "timeLimitRequired": "Enter a time limit too, or clear the budget.",
     "timeLimitInvalid": "Enter whole minutes, such as 30.",
     "timeLimitZero": "The time limit must be at least one minute.",
+    "timeLimitTooLong": "A time limit can be at most {{max}} minutes.",
     "connectionNameTaken": "Another connection of this project already has this name.",
     "connectionNotVerified": "The program was not recognized as the chosen CLI, so the connection cannot be saved.",
     "nativeNotAvailable": "Native agents are not available in this version yet.",
@@ -1102,6 +1107,7 @@
       "digits": "Use digits only, for example {{example}}.",
       "zero": "Enter a budget above 0 tokens.",
       "aboveMax": "A run budget can be at most {{max}} tokens (project setting).",
+      "tooLarge": "Enter a smaller number: a budget can be at most {{max}} tokens.",
       "defaultAboveMax": "The default can be at most the maximum run budget, {{max}} tokens.",
       "notAboveUsed": "Enter more than the {{used}} tokens this run already used.",
       "stepNotAboveUsed": "Enter more than the {{used}} tokens {{step}} already used.",

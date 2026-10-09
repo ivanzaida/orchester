@@ -167,6 +167,7 @@ fn seed_names_every_scenario_once() {
       "conversation",
       "changes",
       "cards",
+      "decisions",
       "interrupted",
       "unreadable-db",
       "tasks-unreadable",

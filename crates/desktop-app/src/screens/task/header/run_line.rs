@@ -11,22 +11,31 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::run::{PauseReason, RunStatus, TaskPhase};
+use orchester_core::{
+  integration::MergeError,
+  run::{PauseReason, RunStatus, TaskPhase},
+};
 use orchester_workspace::{
   display,
-  tasks::detail::{RunView, StepView, TaskDetail},
+  tasks::{
+    detail::{RunView, StepView, TaskDetail},
+    integration::IntegrationProblem,
+    integration_jobs::JobState,
+  },
 };
 
 use crate::{
+  screens::task::TaskContext,
   theme::{ControlHeight, ExtraTypography},
   ui::status::{Status, StatusChip},
 };
 
-pub fn status_row(ctx: &mut Ctx, detail: &TaskDetail, lost: bool) -> Element {
-  let (status, step) = status(detail, lost);
+pub fn status_row(ctx: &mut Ctx, task: &TaskContext) -> Element {
+  let detail = &task.detail;
+  let (status, detail_words) = chip_words(ctx, task);
   let mut chip = StatusChip::new("task-status", status);
-  if let Some(step) = step {
-    chip = chip.detail(step_label(ctx, step));
+  if let Some(words) = detail_words {
+    chip = chip.detail(words);
   }
   Row::new()
     .id("task-status-row")
@@ -44,6 +53,41 @@ pub fn status_row(ctx: &mut Ctx, detail: &TaskDetail, lost: bool) -> Element {
     .into()
 }
 
+/// The task's status and what it is about: the step it stands at, that the step used up its retries
+/// ("retries used", as the design's chip says), or why a merge failed ("conflict").
+fn chip_words(ctx: &Ctx, task: &TaskContext) -> (Status, Option<Arc<str>>) {
+  let detail = &task.detail;
+  let lost = task.lost();
+  if !lost && detail.phase() == TaskPhase::Stuck {
+    return (Status::NeedsInput, Some(ctx.t("task.status.retriesUsed")));
+  }
+  // A request the run's agent waits on: the run needs the person, as its notice and steps say.
+  if let Some(approval) = task.waiting_approval() {
+    let step = detail
+      .run
+      .as_ref()
+      .and_then(|run| run.step_of(approval.approval.execution));
+    return (Status::NeedsInput, step.map(|step| step_label(ctx, step)));
+  }
+  if let Some(conflict) = merge_failed(task) {
+    let words = conflict.then(|| ctx.t("task.status.conflict"));
+    return (Status::NotMerged, words);
+  }
+  let (status, step) = status(detail, lost);
+  (status, step.map(|step| step_label(ctx, step)))
+}
+
+/// Whether merging the latest run failed in this session, and whether it failed on a conflict. The
+/// merge's own panel says why in full.
+fn merge_failed(task: &TaskContext) -> Option<bool> {
+  let run = task.detail.run.as_ref().filter(|_| task.detail.merge.is_none())?;
+  let JobState::Failed(reason) = task.jobs.run(run.id()).merge else {
+    return None;
+  };
+  let conflict = IntegrationProblem::Merge(MergeError::Conflict { files: Vec::new() }).message("");
+  Some(reason.key == conflict.key)
+}
+
 /// The task's status, and the step it stands at while that says more.
 fn status(detail: &TaskDetail, lost: bool) -> (Status, Option<&StepView>) {
   if detail.latest_unreadable.is_some() {
@@ -58,7 +102,6 @@ fn status(detail: &TaskDetail, lost: bool) -> (Status, Option<&StepView>) {
     phase,
     TaskPhase::Running
       | TaskPhase::Waiting
-      | TaskPhase::Stuck
       | TaskPhase::Paused
       | TaskPhase::StoppedAtLimit
       | TaskPhase::Interrupted

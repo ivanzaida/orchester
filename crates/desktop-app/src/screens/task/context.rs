@@ -5,10 +5,10 @@
 use std::sync::Arc;
 
 use orchester_core::project::TaskKey;
-use orchester_workspace::tasks::{detail::TaskDetail, integration_jobs::ProjectJobState};
+use orchester_workspace::tasks::{approvals::ShownApproval, detail::TaskDetail, integration_jobs::ProjectJobState};
 
 use super::read::TaskLeftovers;
-use crate::project::ShownProject;
+use crate::project::{ShownProject, TasksState};
 
 #[derive(Clone, PartialEq)]
 pub struct TaskContext {
@@ -31,5 +31,24 @@ impl TaskContext {
   /// The run is recorded as running while no runner looks after it: it is interrupted until one does.
   pub fn lost(&self) -> bool {
     self.detail.lost_its_runner(self.online)
+  }
+
+  /// A tool request of the task's latest run that waits for the person, the oldest first, as the
+  /// project's feed reads the runner's pending requests. A run without a runner waits for no one:
+  /// nothing answers its requests until a runner is back. Reading it in a render re-renders it when the
+  /// project's tasks are read again.
+  pub fn waiting_approval(&self) -> Option<ShownApproval> {
+    if self.lost() {
+      return None;
+    }
+    let run = self.detail.run.as_ref()?.id();
+    match self.project.feed.tasks.get() {
+      TasksState::Ready(tasks) => tasks
+        .pending_tool_approvals
+        .iter()
+        .find(|shown| shown.approval.run == run)
+        .cloned(),
+      TasksState::Loading | TasksState::Failed(_) => None,
+    }
   }
 }

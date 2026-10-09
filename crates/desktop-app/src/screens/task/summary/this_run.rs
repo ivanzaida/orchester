@@ -10,7 +10,7 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor},
+    theme::{BorderSize, PaletteColor, TypographyStyle},
   },
   components::{Column, ScrollVertical, Text},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
@@ -18,7 +18,7 @@ use lurq::{
 use orchester_core::{
   permission::{AgentPermissions, CommandPermission, NetworkAccess},
   resource::RepositoryAccess,
-  run::{ActiveClock, StepStatus},
+  run::{ActiveClock, RunStatus, StepStatus},
   task::TaskLimits,
   tokens::{TokenBudget, compact_tokens},
 };
@@ -39,20 +39,32 @@ use crate::{
   ui::{
     detail_row::{DetailValue, detail_row, detail_row_of},
     message::message_text,
+    tooltip::Tooltip,
   },
 };
 
-/// The panel's width (`W73m1n`).
-const PANEL_WIDTH: f32 = 340.0;
-/// Characters of the worktree's path shown before its middle gives way to an ellipsis.
-const PATH_CHARS: usize = 34;
+/// Characters of the worktree's path in *This run*'s value column before its middle gives way to an
+/// ellipsis: what Geist Mono 12 fits in the column's 180 (`DFATr`).
+const PATH_CHARS: usize = 25;
 
-/// The panel around `rows`, scrolling when they are taller than the window.
-fn panel(id: &str, title: &str, rows: Vec<Element>) -> Element {
+/// The panel's width (`W73m1n`), and with a decision above it (`This run` `dbKXP` in `DVuXu`).
+const PANEL_WIDTH: f32 = 340.0;
+const WITH_LEAD_WIDTH: f32 = 360.0;
+
+/// The panel around `rows`, `lead` above its title, scrolling when they are taller than the window.
+pub(super) fn panel(id: &str, title: &str, rows: Vec<Element>, lead: Option<Element>) -> Element {
+  let width = if lead.is_some() { WITH_LEAD_WIDTH } else { PANEL_WIDTH };
+  let lead = lead.map(|lead| {
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding(Padding::new().bottom(ExtraSpacing::Inset.role()))
+      .child(lead)
+  });
   let content = Column::new()
     .width(Dimension::Pct(100.0))
     .padding(TaskSpacing::Panel.role())
     .spacing(ExtraSpacing::Tight.role())
+    .with_children(lead)
     .child(
       Column::new()
         .padding(Padding::new().bottom(ExtraSpacing::Snug.role()))
@@ -65,42 +77,21 @@ fn panel(id: &str, title: &str, rows: Vec<Element>) -> Element {
     .with_children(rows);
   Column::new()
     .id(id.to_owned())
-    .width(Dimension::Px(PANEL_WIDTH))
+    .width(Dimension::Px(width))
     .height(Dimension::Pct(100.0))
     .border_left(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(ScrollVertical::new(content).width(Dimension::Pct(100.0)).flex(1.0))
     .into()
 }
 
-/// *This run* of `run`, its active agent time counting on while the run has a runner (not `lost`).
-pub fn this_run(ctx: &mut Ctx, run: &RunView, root: &Path, lost: bool) -> Element {
+/// *This run* of `run`, its active agent time counting on while the run has a runner (not `lost`); `lead`
+/// above it is the decision the run waits for.
+pub fn this_run(ctx: &mut Ctx, run: &RunView, root: &Path, lost: bool, lead: Option<Element>) -> Element {
   let version = run.version.to_string();
   let pipeline = ctx.t_args(
     "summary.thisRun.pipelineValue",
     [("pipeline", &*run.pipeline), ("version", version.as_str())],
   );
-  let base = match run.run.base_branch() {
-    Some(branch) => ctx.t_args(
-      "summary.thisRun.baseValue",
-      [
-        ("branch", branch.as_str()),
-        ("revision", display::short_revision(run.run.base().as_str())),
-      ],
-    ),
-    None => Arc::from(display::short_revision(run.run.base().as_str())),
-  };
-  let checkpoint = run.run.last_checkpoint().map(|checkpoint| {
-    ctx.t_args(
-      "summary.thisRun.checkpointValue",
-      [
-        (
-          "revision",
-          display::short_revision(checkpoint.revision().as_str()).to_owned(),
-        ),
-        ("time", display::clock(checkpoint.created_at())),
-      ],
-    )
-  });
   let mut rows: Vec<Element> = vec![
     row(ctx, "summary.thisRun.pipeline", &pipeline, DetailValue::Text),
     row(
@@ -109,16 +100,12 @@ pub fn this_run(ctx: &mut Ctx, run: &RunView, root: &Path, lost: bool) -> Elemen
       run.run.branch().as_str(),
       DetailValue::Mono,
     ),
-    row(ctx, "summary.thisRun.base", &base, DetailValue::Mono),
+    row(ctx, "summary.thisRun.base", &base_value(ctx, run), DetailValue::Mono),
+    checkpoint_row(ctx, run),
+    row(ctx, "summary.thisRun.model", &model(ctx, run), DetailValue::Text),
+    budget_row(ctx, run),
+    cached_row(ctx, run),
   ];
-  rows.extend(checkpoint.map(|value| row(ctx, "summary.thisRun.checkpoint", &value, DetailValue::Mono)));
-  rows.push(row(ctx, "summary.thisRun.model", &model(ctx, run), DetailValue::Text));
-  rows.push(row(ctx, "summary.thisRun.budget", &budget(ctx, run), DetailValue::Text));
-  let cached = ctx.t_args(
-    "summary.thisRun.cachedValue",
-    [("count", compact_tokens(run.usage().cached_input))],
-  );
-  rows.push(row(ctx, "summary.thisRun.cached", &cached, DetailValue::Text));
   rows.push(row(
     ctx,
     "summary.thisRun.timeLimit",
@@ -129,18 +116,77 @@ pub fn this_run(ctx: &mut Ctx, run: &RunView, root: &Path, lost: bool) -> Elemen
   rows.push(ctx.mount_keyed::<ActiveTime>("task-active-time", ActiveProps { active }));
   rows.extend(permissions(ctx, run));
   rows.push(worktree(ctx, run, root));
-  panel("task-this-run", &ctx.t("summary.thisRun.title"), rows)
+  panel("task-this-run", &ctx.t("summary.thisRun.title"), rows, lead)
+}
+
+/// "main · 4d2b8e0": the branch the run started from at the revision it started at.
+pub(super) fn base_value(ctx: &Ctx, run: &RunView) -> Arc<str> {
+  let revision = display::short_revision(run.run.base().as_str());
+  match run.run.base_branch() {
+    Some(branch) => ctx.t_args(
+      "summary.thisRun.baseValue",
+      [("branch", branch.as_str()), ("revision", revision)],
+    ),
+    None => Arc::from(revision),
+  }
+}
+
+/// *Last checkpoint*: its revision and time, or that the run has none yet.
+pub(super) fn checkpoint_row(ctx: &Ctx, run: &RunView) -> Element {
+  let Some(checkpoint) = run.run.last_checkpoint() else {
+    return row(
+      ctx,
+      "summary.thisRun.checkpoint",
+      &ctx.t("summary.thisRun.noCheckpoint"),
+      DetailValue::Text,
+    );
+  };
+  let value = ctx.t_args(
+    "summary.thisRun.checkpointValue",
+    [
+      (
+        "revision",
+        display::short_revision(checkpoint.revision().as_str()).to_owned(),
+      ),
+      ("time", display::clock(checkpoint.created_at())),
+    ],
+  );
+  row(ctx, "summary.thisRun.checkpoint", &value, DetailValue::Mono)
+}
+
+/// *Cached input*: what the run read from the providers' caches, which its budget does not count.
+pub(super) fn cached_row(ctx: &Ctx, run: &RunView) -> Element {
+  let cached = ctx.t_args(
+    "summary.thisRun.cachedValue",
+    [("count", compact_tokens(run.usage().cached_input))],
+  );
+  row(ctx, "summary.thisRun.cached", &cached, DetailValue::Text)
+}
+
+/// *Budget*, in `warning` once the run used it up (`MI115` in `oTzJZ`).
+fn budget_row(ctx: &Ctx, run: &RunView) -> Element {
+  let color = if run.run.token_limit_reached() {
+    PaletteColor::Warning
+  } else {
+    PaletteColor::TextPrimary
+  };
+  let value = Text::new(&budget(ctx, run))
+    .id("task-this-run-budget")
+    .variant(ExtraTypography::Prose.role())
+    .color(color)
+    .flex(1.0);
+  detail_row_of("task-this-run-budget", &ctx.t("summary.thisRun.budget"), value).into()
 }
 
 /// The row of `key`, a key of `summary.thisRun`; its value's element id ends in the key's last part.
-fn row(ctx: &Ctx, key: &str, value: &str, kind: DetailValue) -> Element {
+pub(super) fn row(ctx: &Ctx, key: &str, value: &str, kind: DetailValue) -> Element {
   let name = key.rsplit('.').next().unwrap_or(key);
   detail_row(&format!("task-this-run-{name}"), &ctx.t(key), value, kind).into()
 }
 
 /// The step whose agent *This run* describes: the current step, or while that is a tool step, the
 /// last agent step that ran.
-fn agent_step(run: &RunView) -> Option<&StepView> {
+pub(super) fn agent_step(run: &RunView) -> Option<&StepView> {
   let ran = |step: &StepView| {
     matches!(
       step.status,
@@ -192,7 +238,7 @@ fn budget(ctx: &Ctx, run: &RunView) -> Arc<str> {
 }
 
 /// A budget without a limit is stored as the largest one (`budget::unbounded`).
-fn is_unlimited(budget: TokenBudget) -> bool {
+pub(super) fn is_unlimited(budget: TokenBudget) -> bool {
   budget == unbounded()
 }
 
@@ -205,20 +251,25 @@ fn time_limit(ctx: &Ctx, limit: std::time::Duration) -> Arc<str> {
 
 /// What the current step's agent may do: "Running with · Builder" over "Edit files · 3 commands ·
 /// Network off · MCP asks"; nothing for a tool step, or once its profile version is gone.
-fn permissions(ctx: &Ctx, run: &RunView) -> Option<Element> {
+pub(super) fn permissions(ctx: &Ctx, run: &RunView) -> Option<Element> {
   let step = agent_step(run)?;
   let permissions = step.permissions.as_ref()?;
   let agent = step.agent.as_deref().unwrap_or_default();
-  let lead_key = if run.run.status().is_terminal() {
-    "summary.thisRun.lastRanWith"
-  } else {
+  // Only a run at work runs with its agent; one that stopped, paused or ended last ran with it.
+  let lead_key = if *run.run.status() == RunStatus::Running {
     "summary.thisRun.runningWith"
+  } else {
+    "summary.thisRun.lastRanWith"
   };
   let summary = permission_words(ctx, &permissions.permissions, permissions.tool_approvals_required);
   let value = Column::new()
     .flex(1.0)
     .spacing(ExtraSpacing::Fine.role())
-    .child(Text::new(&ctx.t_args(lead_key, [("agent", agent)])).variant(ExtraTypography::Note.role()))
+    .child(
+      Text::new(&ctx.t_args(lead_key, [("agent", agent)]))
+        .id("task-this-run-permissions-lead")
+        .variant(ExtraTypography::Note.role()),
+    )
     .child(
       Text::new(&summary)
         .id("task-this-run-permissions")
@@ -261,17 +312,22 @@ fn permission_words(ctx: &Ctx, permissions: &AgentPermissions, mcp_asks: bool) -
 }
 
 /// Where the run works: its worktree's folder, or when it was removed.
-fn worktree(ctx: &Ctx, run: &RunView, root: &Path) -> Element {
-  match run.worktree_removed {
-    Some(removed) => {
-      let value = ctx.t_args("summary.thisRun.worktreeRemoved", [("time", display::clock(removed))]);
-      row(ctx, "summary.thisRun.worktree", &value, DetailValue::Text)
-    }
-    None => {
-      let path = display::shorten_path(&run_worktree(root, run.id()), PATH_CHARS);
-      row(ctx, "summary.thisRun.worktree", &path, DetailValue::Mono)
-    }
+fn worktree(ctx: &mut Ctx, run: &RunView, root: &Path) -> Element {
+  if let Some(removed) = run.worktree_removed {
+    let value = ctx.t_args("summary.thisRun.worktreeRemoved", [("time", display::clock(removed))]);
+    return row(ctx, "summary.thisRun.worktree", &value, DetailValue::Text);
   }
+  // One line that keeps the folder's start and its own name, the middle given way to an ellipsis
+  // (`DFATr`); the whole path in its tooltip.
+  let path = run_worktree(root, run.id());
+  let shown = Text::new(&display::shorten_path(&path, PATH_CHARS))
+    .id("task-this-run-worktree")
+    .variant(TypographyStyle::Mono)
+    .color(PaletteColor::TextPrimary)
+    .nowrap();
+  let value = Tooltip::new("task-this-run-worktree-tooltip", path.display().to_string()).wrap(ctx, shown);
+  let value = Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(value);
+  detail_row_of("task-this-run-worktree", &ctx.t("summary.thisRun.worktree"), value).into()
 }
 
 /// *This task* of a task without a run: the pipeline and limits its first run would use.
@@ -302,7 +358,7 @@ pub fn this_task(ctx: &mut Ctx, detail: &TaskDetail, pipelines: &[PipelineChoice
       DetailValue::Text,
     )),
   }
-  panel("task-this-task", &ctx.t("summary.thisTask.title"), rows)
+  panel("task-this-task", &ctx.t("summary.thisTask.title"), rows, None)
 }
 
 fn limit_rows(ctx: &Ctx, limits: TaskLimits) -> [Element; 2] {

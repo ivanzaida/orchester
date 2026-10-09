@@ -46,21 +46,7 @@ pub struct StepRow {
 /// *Steps* with its count and the rows of `run`'s steps at `now`. `lost`: the run is recorded as running
 /// but has no runner; `waiting`: the steps, by key, whose agent waits for an approval, and since when.
 pub fn section(ctx: &mut Ctx, run: &RunView, lost: bool, waiting: &[(Arc<str>, Timestamp)], now: Timestamp) -> Element {
-  let rows: Vec<StepRow> = progress(run, lost, now)
-    .into_iter()
-    .map(|progress| StepRow {
-      number: run
-        .steps
-        .iter()
-        .find(|step| *step.key.as_str() == *progress.id)
-        .map_or(0, |step| step.number),
-      waits_since: waiting
-        .iter()
-        .find(|(step, _)| *step == progress.id)
-        .map(|(_, since)| *since),
-      progress,
-    })
-    .collect();
+  let rows = rows(run, lost, waiting, now);
   Column::new()
     .id("task-steps")
     .width(Dimension::Pct(100.0))
@@ -73,6 +59,33 @@ pub fn section(ctx: &mut Ctx, run: &RunView, lost: bool, waiting: &[(Arc<str>, T
     ))
     .child(ctx.mount_keyed::<LiveSteps>("task-steps-rows", StepsProps { rows }))
     .into()
+}
+
+/// The rows of `run`'s steps at `now`, in stage order; `lost` and `waiting` as for [`section`].
+pub(super) fn rows(run: &RunView, lost: bool, waiting: &[(Arc<str>, Timestamp)], now: Timestamp) -> Vec<StepRow> {
+  progress(run, lost, now)
+    .into_iter()
+    .map(|progress| without_runner(progress, lost))
+    .map(|progress| StepRow {
+      number: run
+        .steps
+        .iter()
+        .find(|step| *step.key.as_str() == *progress.id)
+        .map_or(0, |step| step.number),
+      waits_since: waiting
+        .iter()
+        .find(|(step, _)| *step == progress.id)
+        .map(|(_, since)| *since),
+      progress,
+    })
+    .collect()
+}
+
+impl StepRow {
+  /// The key of the row's step.
+  pub(super) fn key(&self) -> &str {
+    &self.progress.id
+  }
 }
 
 #[derive(Clone, PartialEq)]
@@ -117,7 +130,7 @@ impl Component for LiveSteps {
   }
 }
 
-fn step_row(ctx: &Ctx, row: &StepRow, divided: bool, now: Timestamp) -> Element {
+pub(super) fn step_row(ctx: &Ctx, row: &StepRow, divided: bool, now: Timestamp) -> Element {
   let progress = &row.progress;
   let status = if row.waits_since.is_some() {
     Status::NeedsInput
@@ -157,6 +170,15 @@ fn step_row(ctx: &Ctx, row: &StepRow, divided: bool, now: Timestamp) -> Element 
   } else {
     line.into()
   }
+}
+
+/// A step of a run without a runner (`lost`) that was at work or waited for the person is interrupted:
+/// nothing works for it and nothing waits on it until a runner is back.
+fn without_runner(mut row: ProgressRow, lost: bool) -> ProgressRow {
+  if lost && matches!(row.state, ProgressState::Working | ProgressState::NeedsYou) {
+    row.state = ProgressState::Interrupted;
+  }
+  row
 }
 
 /// The label a step's state reads as.

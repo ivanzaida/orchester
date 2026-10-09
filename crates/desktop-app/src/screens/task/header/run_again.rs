@@ -21,7 +21,7 @@ use lurq::{
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
   integration::{Leftovers, WORKTREES_DIR},
-  run::can_run_again_after,
+  run::{RunAgainBlock, can_run_again_after},
   tokens::compact_tokens,
 };
 use orchester_exec::programs::Programs;
@@ -37,8 +37,10 @@ use orchester_workspace::{
     integration::file_list,
     run_again::{NextRun, RunAgainCheck, block_message, request_messages},
   },
+  workspace::OpenProject,
 };
 
+use super::controls::{Control, Reason, named_steps};
 use crate::{
   project::ProjectFeed,
   theme::{ExtraTypography, TaskText},
@@ -65,20 +67,24 @@ pub struct Confirming(pub Option<IdempotencyKey>);
 
 impl lurq::app::component::DevtoolsInspectable for Confirming {}
 
-/// Whether the task runs again after its latest run, read with the task and again whenever it is
-/// (`saves`); `None` for a latest run that cannot be followed by Run again, and until it was read.
+/// What makes Run again's check read again: tasks were saved, a run changed, the project's limits
+/// changed (the day's budget), counted as the project's feed counts them.
+pub type CheckAgain = (u64, u64, u64);
+
+/// Whether the task runs again after its latest run, read again whenever `again` changes; `None` for a
+/// latest run that cannot be followed by Run again, and until it was read.
 pub fn check(
   ctx: &mut Ctx,
   (root, programs): (PathBuf, Programs),
   detail: &TaskDetail,
-  saves: u64,
+  again: CheckAgain,
 ) -> Option<Result<RunAgainCheck, Message>> {
   let after = detail
     .run
     .as_ref()
     .filter(|run| can_run_again_after(&run.run, run.worktree_removed.is_some()))
     .map(RunView::id);
-  let deps = (root, detail.task.id(), after, saves);
+  let deps = (root, detail.task.id(), after, again);
   let load = ctx.future(deps, move |(root, task, after, _)| {
     let programs = programs.clone();
     async move {
@@ -112,6 +118,8 @@ pub struct Request {
   after: RunId,
   remove: Option<Leftovers>,
   pipeline: Arc<str>,
+  /// The pipeline's steps by key and name, so a refusal names a step as people read it.
+  steps: Arc<[(Arc<str>, Arc<str>)]>,
 }
 
 /// Why the runner did not start the run the confirmation with `key` asked for.
@@ -130,14 +138,14 @@ pub type StartAction = FutureAction<Request, (), Refused>;
 pub fn start_action(
   ctx: &mut Ctx,
   (runners, servers): (Runners, Servers),
-  (root, feed): (PathBuf, ProjectFeed),
+  (project, feed): (OpenProject, ProjectFeed),
   open: Signal<Confirming>,
 ) -> StartAction {
   ctx.future_action(move |request: Request| {
-    let (runners, servers, root, feed, open) = (
+    let (runners, servers, project, feed, open) = (
       runners.clone(),
       servers.clone(),
-      root.clone(),
+      project.clone(),
       feed.clone(),
       open.clone(),
     );
@@ -148,11 +156,16 @@ pub fn start_action(
       };
       // A shared task runs again only under the person's claim.
       let claim = servers
-        .claim_for_work(&root, request.task)
+        .claim_for_work(&project.repo_root, request.task)
         .await
         .map_err(|refusal| refused(vec![refusal.message()]))?;
       let started = runners
-        .run_again(request.key, request.task, request.after, request.remove.clone())
+        .run_again_removing_in(
+          &project,
+          request.key,
+          (request.task, request.after),
+          request.remove.clone(),
+        )
         .await;
       feed.saved();
       match started {
@@ -164,39 +177,77 @@ pub fn start_action(
         Err(error) => {
           tracing::warn!(%error, "the runner did not run the task again");
           claim.release(&servers).await;
-          Err(refused(request_messages(&error, &request.pipeline)))
+          let named = request_messages(&error, &request.pipeline)
+            .into_iter()
+            .map(|message| named_steps(message, &request.steps))
+            .collect();
+          Err(refused(named))
         }
       }
     }
   })
 }
 
-/// The Run again button, and why it is unavailable when it is; nothing until the check was read.
-/// `busy`: git removes or merges the latest run's worktrees, which must end first.
+/// The Run again button, unavailable with why when the task cannot run again or no runner is connected
+/// to start it; nothing until the check was read. `busy`: git removes or merges the latest run's worktrees, which must
+/// end first.
 pub fn button(
   ctx: &Ctx,
   check: Option<&Result<RunAgainCheck, Message>>,
   (open, remove): (&Signal<Confirming>, &Signal<bool>),
-  busy: bool,
-) -> Option<(ActionButton, Option<Arc<str>>)> {
+  (busy, online): (bool, bool),
+) -> Option<Control> {
   let button =
     ActionButton::new("task-run-again", ButtonKind::Secondary, ctx.t("task.runAgain.action")).icon(Icon::RotateCcw);
-  let blocked = match check? {
-    Err(error) => message_text(ctx, error),
+  let reason = match check? {
+    Err(error) => Reason {
+      short: ctx.t("task.reasons.runAgainUnknown"),
+      full: message_text(ctx, error),
+    },
     Ok(check) => match &check.next {
-      Err(block) => message_text(ctx, &block_message(*block, &check.pipeline)),
-      Ok(_) if busy || open.get().0.is_some() => return Some((button.disabled(), None)),
+      Err(block) => Reason {
+        short: short_block(ctx, *block, &check.pipeline),
+        full: message_text(ctx, &block_message(*block, &check.pipeline)),
+      },
+      Ok(_) if !online => Reason {
+        short: ctx.t("task.reasons.offline"),
+        full: ctx.t("task.controls.offline"),
+      },
+      Ok(_) if busy || open.get().0.is_some() => {
+        return Some(Control {
+          button: button.disabled(),
+          reason: None,
+        });
+      }
       Ok(_) => {
         let (open, remove) = (open.clone(), remove.clone());
         let button = button.on_click(move || {
           remove.set(false);
           open.set(Confirming(Some(IdempotencyKey::generate())));
         });
-        return Some((button, None));
+        return Some(Control { button, reason: None });
       }
     },
   };
-  Some((button.unavailable(blocked.clone()), Some(blocked)))
+  Some(Control {
+    button: button.unavailable(reason.full.clone()),
+    reason: Some(reason),
+  })
+}
+
+/// Why the task cannot run again, in a few words.
+fn short_block(ctx: &Ctx, block: RunAgainBlock, pipeline: &str) -> Arc<str> {
+  match block {
+    RunAgainBlock::TaskBlocked => ctx.t("task.reasons.runAgainBlocked"),
+    RunAgainBlock::NotEnded => ctx.t("task.reasons.runAgainChanged"),
+    RunAgainBlock::RunActive { number } => {
+      ctx.t_args("task.reasons.runAgainActive", [("run", number.get().to_string())])
+    }
+    RunAgainBlock::PipelineNotPublished => {
+      ctx.t_args("task.reasons.runAgainUnpublished", [("pipeline", pipeline.to_owned())])
+    }
+    RunAgainBlock::DailyBudgetUsed { .. } => ctx.t("task.reasons.runAgainDailyBudget"),
+  }
 }
 
 /// What the confirmation is drawn from.
@@ -211,6 +262,9 @@ pub struct Confirmation<'a> {
   pub remove: &'a Signal<bool>,
   pub open: &'a Signal<Confirming>,
   pub action: &'a StartAction,
+  /// Git removes or merges the run before's worktrees: the run cannot start, nor remove them, until
+  /// that ends.
+  pub busy: bool,
 }
 
 /// The confirmation in place (`Run again` card), under the header.
@@ -313,7 +367,11 @@ fn properties(ctx: &Ctx, confirm: &Confirmation) -> Element {
       "task-run-again-starts",
       &ctx.t("task.runAgain.startsFrom"),
       &ctx.t_args(
-        "task.runAgain.startsFromValue",
+        if next.steps == 1 {
+          "task.runAgain.startsFromValue.one"
+        } else {
+          "task.runAgain.startsFromValue.other"
+        },
         [("step", &*next.first_step), ("count", steps.as_str())],
       ),
       DetailValue::Text,
@@ -363,6 +421,9 @@ fn base(ctx: &Ctx, next: &NextRun) -> Arc<str> {
 
 /// *Remove the worktree of run #N*, while the run before has worktrees, and what removing it does.
 fn option(ctx: &Ctx, confirm: &Confirmation) -> Option<Element> {
+  if confirm.busy {
+    return None;
+  }
   let leftovers = confirm.leftovers.filter(|left| !left.worktrees.is_empty())?;
   let run = &confirm.run.run;
   let number = run.number().get().to_string();
@@ -429,6 +490,8 @@ fn actions(ctx: &Ctx, confirm: &Confirmation, pending: bool) -> Element {
   .in_form();
   let start = if pending {
     start.loading()
+  } else if confirm.busy {
+    start.disabled()
   } else {
     let action = confirm.action.clone();
     let request = Request {
@@ -436,6 +499,12 @@ fn actions(ctx: &Ctx, confirm: &Confirmation, pending: bool) -> Element {
       task: confirm.detail.task.id(),
       after: confirm.run.id(),
       remove: confirm.leftovers.cloned().filter(|_| confirm.remove.get()),
+      steps: confirm
+        .run
+        .steps
+        .iter()
+        .map(|step| (Arc::from(step.key.as_str()), step.name.clone()))
+        .collect(),
       pipeline: confirm.check.pipeline.clone(),
     };
     start.on_click(move || {

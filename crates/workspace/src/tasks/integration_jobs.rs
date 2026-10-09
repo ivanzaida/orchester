@@ -13,13 +13,13 @@ use std::{
 
 use orchester_core::{
   id::{ProjectId, RunId},
-  integration::Leftovers,
+  integration::{Leftovers, MergeError, RunMerge},
 };
 use orchester_exec::programs::Programs;
 use parking_lot::Mutex;
 use tokio::sync::watch;
 
-use super::integration::{merge_in, remove_in};
+use super::integration::{IntegrationProblem, merge_in, remove_in};
 use crate::{
   activity::{Activity, operations},
   messages::{self, Message},
@@ -48,6 +48,12 @@ pub struct RunJobState {
   active: Active,
   pub merge: JobState,
   pub remove: JobState,
+  /// The files the last merge conflicted in, for the task page to list; empty unless it stopped at a
+  /// conflict.
+  pub conflicts: Vec<String>,
+  /// What the last merge made of the run's work in git, also when it could not be recorded: the task
+  /// page shows it while the task is not read again with it.
+  pub merged: Option<RunMerge>,
 }
 
 impl Default for RunJobState {
@@ -56,6 +62,8 @@ impl Default for RunJobState {
       active: Active::Idle,
       merge: JobState::Idle,
       remove: JobState::Idle,
+      conflicts: Vec::new(),
+      merged: None,
     }
   }
 }
@@ -83,6 +91,15 @@ pub struct ProjectJobState {
 impl ProjectJobState {
   pub fn run(&self, run: RunId) -> RunJobState {
     self.runs.get(&run).cloned().unwrap_or_default()
+  }
+
+  /// The run git merges now, if any: one merge at a time in a project's checkout.
+  pub fn merging(&self) -> Option<RunId> {
+    self
+      .runs
+      .iter()
+      .find(|(_, state)| state.active == Active::Merge)
+      .map(|(run, _)| *run)
   }
 
   /// Counts the removals Orchester's MCP server made: the task pages read what the runs left again.
@@ -175,14 +192,22 @@ impl RunJobs {
     // Subscribers hear of a stale request that is refused too: what they show catches up with the
     // active operation instead of appearing to accept a second request. Completion is published
     // before the run is idle, and both are read under the one lock, so a stale request cannot see
-    // the run idle again before its operation's success.
-    self.update(|state| {
+    // the run idle again before its operation's success. Merges share the project's checkout: a merge
+    // while another run's merge goes on is refused, and says why.
+    self.jobs.0.send_modify(|project| {
+      let other_merge = operation == Active::Merge && project.merging().is_some_and(|run| run != self.run);
+      let state = project.runs.entry(self.run).or_default();
       let completed = (operation == Active::Merge && state.merge == JobState::Succeeded)
         || (operation == Active::Remove && state.remove == JobState::Succeeded);
-      if state.active == Active::Idle && !completed {
-        state.active = operation;
-        started = true;
+      if state.active != Active::Idle || completed {
+        return;
       }
+      if other_merge {
+        state.merge = JobState::Failed(Message::new("runs.merge.failure.anotherMerge"));
+        return;
+      }
+      state.active = operation;
+      started = true;
     });
     started
   }
@@ -195,7 +220,11 @@ impl RunJobs {
     if !self.begin(Active::Merge) {
       return;
     }
-    self.update(|state| state.merge = JobState::Running);
+    self.update(|state| {
+      state.merge = JobState::Running;
+      state.conflicts.clear();
+      state.merged = None;
+    });
     let job = self.clone();
     if let Err(error) = thread::Builder::new()
       .name("run-merge".into())
@@ -225,13 +254,20 @@ impl RunJobs {
       .with("task", key)
       .with("run", number.to_string());
     let result = catch_unwind(AssertUnwindSafe(|| merge_in(&open.repo_root, &programs, run)));
+    let (mut conflicts, mut made) = (Vec::new(), None);
     let merged = match result {
-      Ok(Ok(_)) => {
+      Ok(Ok(merged)) => {
         running.finish();
+        made = Some(merged.merge);
         JobState::Succeeded
       }
       Ok(Err(problem)) => {
         let message = problem.message(&separator);
+        match &problem {
+          IntegrationProblem::Merge(MergeError::Conflict { files }) => conflicts.clone_from(files),
+          IntegrationProblem::NotRecorded { merge, .. } => made = Some(merge.clone()),
+          _ => {}
+        }
         problem.end(running, not_done);
         JobState::Failed(message)
       }
@@ -241,7 +277,11 @@ impl RunJobs {
         JobState::Failed(messages::interrupted())
       }
     };
-    self.update(|state| state.merge = merged);
+    self.update(|state| {
+      state.merge = merged;
+      state.conflicts = conflicts;
+      state.merged = made;
+    });
     self.finish();
     changed();
   }

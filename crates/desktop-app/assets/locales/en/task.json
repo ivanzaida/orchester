@@ -24,7 +24,9 @@
     "edit": "Edit",
     "removeWorktree": "Remove worktree",
     "status": {
-      "step": "{{number}} {{step}}"
+      "step": "{{number}} {{step}}",
+      "retriesUsed": "retries used",
+      "conflict": "conflict"
     },
     "runLine": {
       "run": "Run {{run}} · {{pipeline}} {{version}}",
@@ -49,20 +51,28 @@
       "continue": "Continue run",
       "cancel": "Cancel run",
       "offline": "The runner is not connected; the run's controls return once it is online.",
-      "blocked": "Unavailable until {{tasks}} finish.",
+      "blocked": {
+        "one": "Unavailable until {{tasks}} finishes.",
+        "other": "Unavailable until {{tasks}} finish."
+      },
       "worktreeRemoved": "Continue is unavailable: run #{{run}}'s worktree was removed, so its agent has nothing to continue from. Run again starts a new run.",
       "refused": {
         "start": "The runner didn't start the run",
         "pause": "The runner didn't pause the run",
         "resume": "The runner didn't resume the run",
         "continue": "The runner didn't continue the run",
-        "cancel": "The run wasn't canceled"
-      }
+        "cancel": "The run wasn't canceled",
+        "run": "The task wasn't run"
+      },
+      "run": "Run"
     },
     "notices": {
       "staleTitle": "The task couldn't be read again; it shows as last read",
       "blockedTitle": "Blocked",
-      "blockedBy": "The run neither starts nor goes on until {{tasks}} finish.",
+      "blockedBy": {
+        "one": "The run neither starts nor goes on until {{tasks}} finishes.",
+        "other": "The run neither starts nor goes on until {{tasks}} finish."
+      },
       "blockedReason": "{{reason}} · {{waiting}}"
     },
     "runAgain": {
@@ -74,14 +84,17 @@
       },
       "pipeline": "Pipeline",
       "pipelineValue": "{{pipeline}} {{version}}",
-      "previous": "Run #{{run}}",
-      "startsFrom": "Starts from",
-      "startsFromValue": "{{step}} · {{count}} steps",
-      "base": "Base",
+      "previous": "Run #{{run}} ran on",
+      "startsFrom": "Starts with",
+      "startsFromValue": {
+        "one": "{{step}} · its only step",
+        "other": "{{step}} · {{count}} steps"
+      },
+      "base": "Starts from",
       "baseValue": "{{branch}} · {{revision}}",
       "baseDetached": "detached · {{revision}}",
       "baseUnknown": "Read when the run starts",
-      "branch": "Branch",
+      "branch": "New branch",
       "worktree": "Worktree",
       "worktreeValue": "A new one in {{folder}}",
       "limits": "Limits",
@@ -96,6 +109,19 @@
       },
       "cancel": "Cancel",
       "start": "Start run #{{run}}"
+    },
+    "reasons": {
+      "join": " · ",
+      "offline": "Runner not connected",
+      "blocked": "Blocked by {{tasks}}",
+      "worktreeRemoved": "Worktree removed",
+      "unreadable": "This run can't be read",
+      "runAgainUnknown": "Run again: couldn't check",
+      "runAgainBlocked": "Blocked by unfinished tasks",
+      "runAgainChanged": "The latest run changed",
+      "runAgainActive": "Run #{{run}} is active",
+      "runAgainUnpublished": "{{pipeline}} isn't published",
+      "runAgainDailyBudget": "Today's token budget is used"
     }
   }
 }

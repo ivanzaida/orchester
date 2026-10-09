@@ -22,7 +22,7 @@ use orchester_core::{id::ProjectId, time::Timestamp};
 use orchester_workspace::{
   background,
   messages::{self, Message},
-  runner::{RunnerStatus, Runners},
+  runner::{RunnerStatus, Runners, state::RunnerState},
   tasks::{
     data::ProjectTasks,
     integration_jobs::{IntegrationJobs, ProjectJobState},
@@ -59,6 +59,38 @@ pub struct ProjectFeed {
   pub jobs: IntegrationJobs,
   /// How those operations stand.
   pub job_state: Signal<ProjectJobState>,
+  /// The task forms of the project that hold edits not saved, which their tabs mark.
+  pub unsaved: Signal<UnsavedForms>,
+}
+
+/// Task forms holding edits that are not saved: Edit task by its task's key, New task as `None`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct UnsavedForms(pub std::sync::Arc<std::collections::BTreeSet<Option<String>>>);
+
+impl lurq::app::component::DevtoolsInspectable for UnsavedForms {}
+
+impl UnsavedForms {
+  pub fn contains(&self, task: Option<&str>) -> bool {
+    self.0.contains(&task.map(str::to_owned))
+  }
+}
+
+impl ProjectFeed {
+  /// Marks the form of `task` (`None`: New task) as holding unsaved edits, or not.
+  pub fn mark_unsaved(&self, task: Option<&str>, unsaved: bool) {
+    let form = task.map(str::to_owned);
+    if self.unsaved.get_untracked().0.contains(&form) == unsaved {
+      return;
+    }
+    self.unsaved.update(|forms| {
+      let set = std::sync::Arc::make_mut(&mut forms.0);
+      if unsaved {
+        set.insert(form);
+      } else {
+        set.remove(&form);
+      }
+    });
+  }
 }
 
 impl PartialEq for ProjectFeed {
@@ -81,6 +113,7 @@ impl ProjectFeed {
       revision: Signal::new(0),
       outside: Signal::new(OutsideCounts::default()),
       job_state: Signal::new(jobs.state()),
+      unsaved: Signal::new(UnsavedForms::default()),
       jobs,
     }
   }
@@ -88,6 +121,25 @@ impl ProjectFeed {
   /// A screen saved the project's tasks: they are read again, in every tab of the project.
   pub fn saved(&self) {
     self.revision.update(|revision| *revision += 1);
+  }
+
+  /// Whether a runner serves the project at `repo_root` now. Reading it in a render re-renders it when
+  /// that changes.
+  pub fn runner_online(&self, repo_root: &Path) -> bool {
+    self
+      .status
+      .with(|status| status.as_ref().map(|status| status.state_for(repo_root)) == Some(RunnerState::Online))
+  }
+
+  /// The tasks of the project at `repo_root` as they stand with its runner: while none serves the
+  /// project, a run recorded as running has lost its agent and is interrupted
+  /// (`ProjectTasks::without_runner`). Reading it in a render re-renders it when either changes.
+  pub fn tasks_with_runner(&self, repo_root: &Path) -> TasksState {
+    let online = self.runner_online(repo_root);
+    match self.tasks.get() {
+      TasksState::Ready(tasks) if !online => TasksState::Ready(tasks.without_runner()),
+      state => state,
+    }
   }
 }
 
