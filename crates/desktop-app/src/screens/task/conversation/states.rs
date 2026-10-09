@@ -2,8 +2,8 @@
 //! 13.5/600 and what it means in 12.5/1.5 `text_secondary` at most 520 wide, 8 apart, with actions 6 under
 //! them. Loading (`r5vGK`): the turning loader and *Loading activity for Run 128…*. Couldn't load (`YGnwp`):
 //! `circle-alert` in `danger`, why, *Open runner log* and *Try again*. Queued (`r4KFPL`): the run's steps and
-//! that nothing ran yet. A task without a run says so, or lists the messages that wait for its run; a run
-//! that cannot be read says nothing it did can be shown.
+//! that nothing ran yet, or only that the task is queued while its run is not created yet. A task without a run says
+//! so, or lists the messages that wait for its run; a run that cannot be read says nothing it did can be shown.
 
 use std::path::Path;
 
@@ -17,7 +17,7 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::run::RunStatus;
+use orchester_core::run::{RunStatus, TaskPhase};
 use orchester_workspace::{
   messages::Message,
   tasks::{
@@ -168,6 +168,16 @@ pub(super) fn without_run(ctx: &mut Ctx, detail: &TaskDetail, conversation: &Con
     return state(
       "conversation-unreadable",
       (Icon::CircleAlert, PaletteColor::Danger),
+      (&title, Some(&text)),
+      Vec::new(),
+    );
+  }
+  if conversation.entries.is_empty() && detail.phase() == TaskPhase::Queued {
+    let title = ctx.t("conversation.empty.title");
+    let text = ctx.t("conversation.empty.queuedTask");
+    return state(
+      "conversation-empty",
+      (Icon::MessageSquareDashed, PaletteColor::TextMuted),
       (&title, Some(&text)),
       Vec::new(),
     );

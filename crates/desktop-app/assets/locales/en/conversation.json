@@ -98,6 +98,7 @@
     "empty": {
       "none": "The run’s agents reported nothing.",
       "queued": "{{steps}}. Run {{run}} is queued: nothing has run yet.",
+      "queuedTask": "The task is queued: nothing has run yet. The conversation starts with its run’s first agent.",
       "starting": "Entries appear here as soon as the first agent reports.",
       "title": "Nothing in this conversation yet"
     },

@@ -102,7 +102,7 @@ impl Component for ConversationTab {
       None => (states::without_run(ctx, detail, &conversation), None),
     };
     let (body, state) = body;
-    let state = state.unwrap_or_else(|| RunState::of(&conversation, detail.run.as_ref(), false));
+    let state = state.unwrap_or_else(|| RunState::of(&conversation, detail, false));
     Column::new()
       .id("conversation")
       .width(Dimension::Pct(100.0))
@@ -166,7 +166,7 @@ impl ConversationTab {
     // person (C·15), so there is no working line and the chip says so.
     let asking = conversation.state == PanelState::Live && !run.waiting_questions.is_empty();
     let following = self.follow.following.get();
-    let state = RunState::of(conversation, Some(run), asking).following(following);
+    let state = RunState::of(conversation, &props.detail, asking).following(following);
     if shown.rows.is_empty() {
       return (states::nothing_yet(ctx, run), Some(state));
     }

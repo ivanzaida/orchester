@@ -14,9 +14,10 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
+use orchester_core::run::TaskPhase;
 use orchester_workspace::tasks::{
   conversation::{Conversation, PanelState},
-  detail::RunView,
+  detail::TaskDetail,
 };
 
 use crate::{
@@ -51,12 +52,12 @@ pub(super) enum RunState {
 }
 
 impl RunState {
-  /// The state of `conversation`, whose latest run is `run`; `asking`: an agent waits in its turn for the
-  /// answer to its question.
-  pub(super) fn of(conversation: &Conversation, run: Option<&RunView>, asking: bool) -> Self {
+  /// The state of `conversation`, the task `detail`'s; `asking`: an agent waits in its turn for the answer
+  /// to its question.
+  pub(super) fn of(conversation: &Conversation, detail: &TaskDetail, asking: bool) -> Self {
     match conversation.state {
-      PanelState::NotStarted if run.is_none() => Self::NoRun,
-      PanelState::NotStarted => Self::Queued,
+      PanelState::NotStarted if detail.run.is_some() || detail.phase() == TaskPhase::Queued => Self::Queued,
+      PanelState::NotStarted => Self::NoRun,
       PanelState::Live if asking => Self::Waiting,
       PanelState::Live => Self::Live { following: true },
       PanelState::Waiting => Self::Waiting,
