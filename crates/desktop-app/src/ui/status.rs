@@ -5,7 +5,7 @@
 //!
 //! The vocabulary and its icons come from the boards: Draft `circle-dashed`, Queued `clock`, Running and
 //! Working `loader-circle` (turning), Needs input `hand`, Stopped at limit `gauge`, Interrupted and
-//! Interrupted · can't continue `circle-pause`, Completed and Complete `circle-check`, Merged
+//! Interrupted · can't continue `circle-pause`, Completed, Complete and Ready for review `circle-check`, Merged
 //! `git-merge`, Failed `circle-x`, Unreadable `file-warning`, Waiting `clock`, Not started
 //! `circle-dashed`, Blocked `ban`, Paused `circle-pause` in `warning` (Usage `Q1gYMm`); Backlog
 //! `circle-dashed`, Todo `circle` (`AiCwO`), In progress `circle-dot-dashed`, In review `eye`, Done
@@ -46,6 +46,9 @@ pub enum Status {
   StoppedAtLimit,
   Interrupted,
   Completed,
+  /// A run whose every step passed, as its own page and its row in *Runs of this task* name it
+  /// (`F2LtFn`); task lists say Completed.
+  ReadyForReview,
   Merged,
   Failed,
   Canceled,
@@ -82,7 +85,7 @@ impl Tone {
 }
 
 impl Status {
-  pub const ALL: [Self; 19] = [
+  pub const ALL: [Self; 20] = [
     Self::Draft,
     Self::Queued,
     Self::Running,
@@ -91,6 +94,7 @@ impl Status {
     Self::StoppedAtLimit,
     Self::Interrupted,
     Self::Completed,
+    Self::ReadyForReview,
     Self::Merged,
     Self::Failed,
     Self::Canceled,
@@ -122,6 +126,15 @@ impl Status {
     }
   }
 
+  /// The label of a run in `phase` on its task's page: as [`Self::of_phase`], but a run whose every step
+  /// passed waits for review (`Ready for review` in `F2LtFn`).
+  pub const fn of_run(phase: TaskPhase) -> Self {
+    match phase {
+      TaskPhase::Succeeded => Self::ReadyForReview,
+      phase => Self::of_phase(phase),
+    }
+  }
+
   pub const fn icon(self) -> Icon {
     match self {
       Self::Draft | Self::NotStarted => Icon::CircleDashed,
@@ -130,7 +143,7 @@ impl Status {
       Self::NeedsInput => Icon::Hand,
       Self::Paused | Self::Interrupted | Self::CantContinue => Icon::CirclePause,
       Self::StoppedAtLimit => Icon::Gauge,
-      Self::Completed | Self::Complete => Icon::CircleCheck,
+      Self::Completed | Self::Complete | Self::ReadyForReview => Icon::CircleCheck,
       Self::Merged => Icon::GitMerge,
       Self::Failed => Icon::CircleX,
       Self::Canceled => Icon::CircleSlash,
@@ -145,7 +158,7 @@ impl Status {
       Self::Draft | Self::Queued | Self::Canceled | Self::Waiting | Self::Skipped | Self::NotStarted => Tone::Muted,
       Self::Running | Self::Merged | Self::Working | Self::Blocked => Tone::Secondary,
       Self::NeedsInput | Self::Paused | Self::StoppedAtLimit | Self::Interrupted | Self::CantContinue => Tone::Warning,
-      Self::Completed | Self::Complete => Tone::Success,
+      Self::Completed | Self::Complete | Self::ReadyForReview => Tone::Success,
       Self::Failed | Self::Unreadable => Tone::Danger,
     }
   }
@@ -166,6 +179,7 @@ impl Status {
       Self::StoppedAtLimit => "ui.status.stoppedAtLimit",
       Self::Interrupted => "ui.status.interrupted",
       Self::Completed => "ui.status.completed",
+      Self::ReadyForReview => "ui.status.readyForReview",
       Self::Merged => "ui.status.merged",
       Self::Failed => "ui.status.failed",
       Self::Canceled => "ui.status.canceled",
