@@ -17,6 +17,7 @@ use lurq::{
 
 use super::{
   FORM_WIDTH,
+  conflict::field_key,
   state::{Need, Phase, Subject, View},
 };
 use crate::{
@@ -40,6 +41,9 @@ pub struct Handlers {
   pub ask_discard: Handler,
   pub keep_editing: Handler,
   pub discard: Handler,
+  /// Save chosen versions; `None` until every conflicting field is chosen.
+  pub save_chosen: Option<Handler>,
+  pub back_to_editing: Handler,
 }
 
 pub fn action_bar(ctx: &mut Ctx, view: &View, confirming_discard: bool, on: &Handlers) -> Element {
@@ -60,6 +64,7 @@ pub fn action_bar(ctx: &mut Ctx, view: &View, confirming_discard: bool, on: &Han
       vec![retry_button(ctx, true, on)],
       Vec::new(),
     ),
+    _ if view.conflict.is_some() => (None, conflict_actions(ctx, view, on), conflict_reasons(ctx, view)),
     _ => (note(ctx, view), actions(ctx, view, on), reasons(ctx, view)),
   };
   let top = Row::new()
@@ -119,10 +124,10 @@ fn note(ctx: &Ctx, view: &View) -> Option<Arc<str>> {
         .kept_at
         .map(orchester_workspace::display::clock)
         .unwrap_or_default();
-      let key = if subject.is_new() {
-        "task_form.kept.noteNew"
-      } else {
-        "task_form.kept.note"
+      let key = match subject {
+        Subject::New => "task_form.kept.noteNew",
+        Subject::Draft(_) => "task_form.kept.note",
+        Subject::Ran(_) => "task_form.kept.noteRan",
       };
       Some(ctx.t_args(key, [("time", at)]))
     }
@@ -206,6 +211,52 @@ fn retry_button(ctx: &Ctx, loading: bool, on: &Handlers) -> Element {
   )
 }
 
+/// Back to editing and Save chosen versions (`Action bar` `E2h20` in `PenUu`).
+fn conflict_actions(ctx: &Ctx, view: &View, on: &Handlers) -> Vec<Element> {
+  let saving = matches!(view.phase, Phase::Saving);
+  vec![
+    button(
+      ActionButton::new(
+        "task-form-back-to-editing",
+        ButtonKind::Secondary,
+        ctx.t("task_form.conflict.back"),
+      ),
+      Some(on.back_to_editing.clone()),
+      (false, saving),
+    ),
+    button(
+      ActionButton::new(
+        "task-form-save-chosen",
+        ButtonKind::Primary,
+        ctx.t("task_form.conflict.save"),
+      ),
+      on.save_chosen.clone(),
+      (saving, false),
+    ),
+  ]
+}
+
+/// Which fields still need a choice, then why the last save failed.
+fn conflict_reasons(ctx: &mut Ctx, view: &View) -> Vec<Element> {
+  let Some(conflict) = &view.conflict else {
+    return Vec::new();
+  };
+  let fields: Vec<Arc<str>> = conflict
+    .unchosen(&view.choices)
+    .into_iter()
+    .map(|field| ctx.t(field_key(field)))
+    .collect();
+  let mut lines = Vec::new();
+  if let Some(what) = list(ctx, &fields) {
+    let text = ctx.t_args("task_form.conflict.unchosen", [("fields", what.as_ref())]);
+    lines.push(lock_line(ctx, "task-form-save-chosen-reason", &text));
+  }
+  for failure in view.failure.iter().flat_map(|failures| failures.iter()) {
+    lines.push(problem_line(&failure_text(ctx, failure)));
+  }
+  lines
+}
+
 /// Why each action cannot be pressed now, then why the last save or Create & run failed.
 fn reasons(ctx: &mut Ctx, view: &View) -> Vec<Element> {
   let mut lines = Vec::new();
@@ -230,7 +281,7 @@ fn reasons(ctx: &mut Ctx, view: &View) -> Vec<Element> {
     }
   }
   for failure in view.failure.iter().flat_map(|failures| failures.iter()) {
-    lines.push(problem_line(&message_text(ctx, failure)));
+    lines.push(problem_line(&failure_text(ctx, failure)));
   }
   lines
 }
@@ -276,6 +327,15 @@ fn lock_line(ctx: &mut Ctx, id: &str, text: &str) -> Element {
     .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted))
     .child(Row::new().flex_shrink(1.0).child(words))
     .into()
+}
+
+/// What a failure says: a change met meanwhile in the form's own words (the form reads the newer
+/// version itself), anything else in the workspace's.
+fn failure_text(ctx: &Ctx, failure: &orchester_workspace::messages::Message) -> Arc<str> {
+  if failure.key == orchester_workspace::messages::task_changed_meanwhile().key {
+    return ctx.t("task_form.conflict.changedMeanwhile");
+  }
+  message_text(ctx, failure)
 }
 
 /// What went wrong, e.g. the runner's refusal: a `warning` mark and the words in `text_secondary`

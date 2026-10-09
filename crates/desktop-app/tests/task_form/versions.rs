@@ -1,59 +1,58 @@
 //! Edits and the version they are made on: a change made elsewhere is taken while the fields hold no
-//! edits, and never overwritten under edits or by edits kept from an earlier visit; kept edits go away
-//! once saved or discarded, and New task keeps and discards them too.
+//! edits and put under them when it changed other fields, also under edits kept from an earlier visit;
+//! kept edits go away once saved or discarded, and New task keeps and discards them too. Fields both
+//! versions changed are `conflicts.rs`.
 
 use orchester_app::routes::{ProjectPage, TaskList};
 
 use crate::harness::Form;
 
-const CHANGED_MEANWHILE: &str =
-  "The task was changed since you opened it, so nothing was saved. Open it again to see the newer version.";
-
 fn tasks(form: &mut Form) {
   form.go(ProjectPage::Tasks(TaskList::default()));
 }
 
+/// Waits until the input `id` holds `value`.
+pub fn until_value(form: &mut Form, id: &str, value: &str) {
+  form.window.until(&format!("{id} holds {value}"), |window| {
+    window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.as_text_input())
+      .is_some_and(|input| input.value() == value)
+  });
+}
+
 #[test]
-fn form_a_change_made_elsewhere_is_taken_without_edits_and_never_overwritten_under_them() {
+fn form_a_change_made_elsewhere_is_taken_without_edits_and_put_under_them() {
   let mut form = Form::seeded("live");
   form.edit("KON-1");
   form.change_elsewhere("KON-1", |details| details.brief = "Brief from automation.".to_owned());
-  form.window.until("the form takes the newer version", |window| {
-    window
-      .tree
-      .get_element_by_id_mut("task-form-brief-input")
-      .and_then(|element| element.as_text_input())
-      .is_some_and(|input| input.value() == "Brief from automation.")
-  });
-  assert!(!form.exists("task-form-newer"), "no notice without edits");
+  until_value(&mut form, "task-form-brief-input", "Brief from automation.");
 
   form.set("task-form-title-input", "My own title");
   form.change_elsewhere("KON-1", |details| {
     details.brief = "Second brief from automation.".to_owned()
   });
-  form.window.until("the notice", |window| {
-    window.tree.get_element_by_id("task-form-newer").is_some()
-  });
+  until_value(&mut form, "task-form-brief-input", "Second brief from automation.");
   assert_eq!(form.value("task-form-title-input"), "My own title", "the edits stay");
-  assert_eq!(form.value("task-form-brief-input"), "Brief from automation.");
+  assert!(
+    !form.exists("task-form-conflict-fields"),
+    "nothing to choose: they changed other fields"
+  );
+  assert_eq!(form.status(), "Unsaved changes");
   form.click("task-form-save");
-  form.window.until("the save's refusal", |window| {
+  form.window.until("the change is saved", |window| {
     window
-      .texts("task-form-reasons")
-      .is_some_and(|reasons| reasons.iter().any(|reason| reason == CHANGED_MEANWHILE))
+      .texts("task-form-status-label")
+      .is_some_and(|status| status.join("") == "Draft saved locally")
   });
   let stored = form.task("KON-1").expect("KON-1");
+  assert_eq!(stored.details().title.as_str(), "My own title");
   assert_eq!(
     stored.details().brief,
     "Second brief from automation.",
     "the change made elsewhere survives"
   );
-  assert_ne!(stored.details().title.as_str(), "My own title");
-
-  form.click("task-form-reload");
-  assert_eq!(form.value("task-form-brief-input"), "Second brief from automation.");
-  assert_eq!(form.status(), "Draft saved locally");
-  assert!(!form.exists("task-form-newer"));
 }
 
 #[test]
@@ -66,7 +65,9 @@ fn form_kept_edits_made_on_an_older_version_meet_the_newer_one() {
     kept.is_some_and(|kept| kept.contains("Kept title"))
   });
   tasks(&mut form);
-  form.change_elsewhere("KON-1", |details| details.brief = "Changed while away.".to_owned());
+  form.change_elsewhere("KON-1", |details| {
+    details.title = orchester_core::name::Name::new("Title saved while away").expect("a title");
+  });
   // The form opens on the newer version, so the kept edits are filled in on the older one they were
   // made on.
   let project = form.project;
@@ -81,28 +82,26 @@ fn form_kept_edits_made_on_an_older_version_meet_the_newer_one() {
         tasks
           .tasks
           .iter()
-          .any(|task| task.details().brief == "Changed while away.")
+          .any(|task| task.details().title.as_str() == "Title saved while away")
       })
   });
   form.edit("KON-1");
-  assert_eq!(form.value("task-form-title-input"), "Kept title");
+  assert_eq!(form.status(), "Newer version saved");
   assert!(
-    form.status().starts_with("Unsaved changes · kept from "),
-    "{}",
-    form.status()
+    form.exists("task-form-conflict-title"),
+    "the title is the person's to choose"
   );
-  form.window.until("the form says the task changed", |window| {
-    window.tree.get_element_by_id("task-form-newer").is_some()
-  });
-  assert_eq!(form.value("task-form-title-input"), "Kept title", "the kept edits stay");
-  form.click("task-form-save");
-  form.window.until("the save's refusal", |window| {
-    window
-      .texts("task-form-reasons")
-      .is_some_and(|reasons| reasons.iter().any(|reason| reason == CHANGED_MEANWHILE))
-  });
+  assert_eq!(form.text("task-form-conflict-title-mine-value"), "Kept title");
+  assert_eq!(
+    form.text("task-form-conflict-title-theirs-value"),
+    "Title saved while away"
+  );
   let stored = form.task("KON-1").expect("KON-1");
-  assert_eq!(stored.details().brief, "Changed while away.");
+  assert_eq!(
+    stored.details().title.as_str(),
+    "Title saved while away",
+    "nothing was overwritten"
+  );
 }
 
 #[test]
@@ -112,8 +111,12 @@ fn form_kept_edits_go_away_once_saved_or_discarded() {
   form.edit("KON-1");
   form.set("task-form-title-input", "Saved title");
   form.until_kept(Some(task), "the edits are kept", |kept| kept.is_some());
+  let tab = form.window.navigation().tabs_now().active().id();
+  let dot = format!("tab-{tab}-unsaved");
+  assert!(form.exists(&dot), "the tab marks the unsaved edits");
   form.click("task-form-save");
   form.until_kept(Some(task), "a save removes them", |kept| kept.is_none());
+  assert!(!form.exists(&dot), "a saved form's tab has no mark");
 
   form.set("task-form-title-input", "Discarded title");
   form.until_kept(Some(task), "the edits are kept", |kept| kept.is_some());

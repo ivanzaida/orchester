@@ -1,53 +1,78 @@
 //! What the form's actions start, and what the form does once they end: a created task opens Tasks with
 //! its row highlighted, a saved edit becomes the version further edits are made on, a save that met a
-//! newer version has the project's tasks read again so the form can offer it, a started run opens the
+//! newer version where both changed a field shows the fields to choose between, a started run opens the
 //! task's Conversation, and a task queued without a run keeps the form, locked, with Retry run.
+//!
+//! An action asked for again while it is under way would replace the request in flight
+//! (`FutureAction::run`), so every press is ignored while its action is pending.
 
 use std::sync::Arc;
 
-use lurq::app::ctx::Ctx;
+use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::task::organization::TaskOrganization;
 use orchester_workspace::tasks::data::SaveTarget;
 
 use super::{
-  actions::{RunAction, RunArgs, SaveAction, SaveArgs, Saved, Started},
+  actions::{RunAction, RunArgs, SaveAction, SaveArgs, SaveOutcome, Saved, Started},
   bar::{Handler, Handlers},
   base::{Base, Written},
+  conflict::{Choices, Conflict},
   form::{FormProps, TaskForm},
   state::{Phase, View},
   values::Values,
 };
+
+/// Runs `action` with `args`, unless it is under way; a new attempt shows its own failure, if any.
+fn press<A: Clone + Send + Sync + 'static, T, E>(
+  action: &lurq::app::ctx::FutureAction<A, T, E>,
+  args: A,
+  dismissed: &Signal<bool>,
+) -> Handler
+where
+  T: lurq::core::SignalValue + Clone + PartialEq + Send + Sync + 'static,
+  E: lurq::core::SignalValue + Clone + PartialEq + Send + Sync + 'static,
+{
+  let (action, dismissed) = (action.clone(), dismissed.clone());
+  Arc::new(move || {
+    if !action.state().get_untracked().is_pending() {
+      dismissed.set(false);
+      action.run(args.clone());
+    }
+  })
+}
 
 impl TaskForm {
   pub(super) fn handlers(&self, props: &FormProps, view: &View, (save, run): (&SaveAction, &RunAction)) -> Handlers {
     let base = self.base.get_untracked();
     let made_on = base
       .as_ref()
-      .and_then(|base| Some((base.task.clone()?, base.revision?)));
+      .and_then(|base| Some((base.task.clone()?, base.revision?, base.values.clone())));
+    let separator = props.separator.clone();
     let args = view.ready.clone().map(|details| SaveArgs {
       repo_root: props.project.open.repo_root.clone(),
       // On the version the edits were made on: a change made meanwhile is met, never overwritten.
       target: made_on
         .as_ref()
-        .map_or(SaveTarget::New(self.batch), |(task, revision)| {
+        .map_or(SaveTarget::New(self.batch), |(task, revision, _)| {
           SaveTarget::Task(task.id(), *revision)
         }),
+      base: made_on
+        .as_ref()
+        .and_then(|(_, _, values)| values.task_form(&separator).details().ok()),
       details,
       organization: made_on
         .as_ref()
-        .map_or_else(TaskOrganization::default, |(task, _)| task.organization().clone()),
-    });
-    let save_handler = args.clone().map(|args| {
-      let save = save.clone();
-      Arc::new(move || save.run(args.clone())) as Handler
+        .map_or_else(TaskOrganization::default, |(task, ..)| task.organization().clone()),
     });
     let (ask, keep) = (self.confirming_discard.clone(), self.confirming_discard.clone());
     Handlers {
-      save: save_handler,
+      save: args.clone().map(|args| press(save, args, &self.dismissed)),
       run: self.run_handler(view, run, args),
       ask_discard: Arc::new(move || ask.set(true)),
       keep_editing: Arc::new(move || keep.set(false)),
       discard: self.discard_handler(),
+      save_chosen: self.save_chosen_handler(props, view, save),
+      back_to_editing: self.back_to_editing_handler(),
     }
   }
 
@@ -68,11 +93,38 @@ impl TaskForm {
       }
       Phase::Saving | Phase::Creating | Phase::Starting(_) => return None,
     };
-    let (retrying, run) = (self.retrying.clone(), run.clone());
+    let (retrying, run, dismissed) = (self.retrying.clone(), run.clone(), self.dismissed.clone());
     Some(Arc::new(move || {
-      retrying.set(retry);
-      run.run(request.clone());
+      if !run.state().get_untracked().is_pending() {
+        dismissed.set(false);
+        retrying.set(retry);
+        run.run(request.clone());
+      }
     }))
+  }
+
+  /// Save chosen versions: the newer version with every field the person changed, a conflicting one as
+  /// chosen, saved on the newer revision, so a change saved after it is met again. `None` until every
+  /// field is chosen.
+  fn save_chosen_handler(&self, props: &FormProps, view: &View, save: &SaveAction) -> Option<Handler> {
+    let conflict = view.conflict.as_ref()?;
+    let details = conflict.resolved(&view.choices)?;
+    let current = &conflict.0.current;
+    let args = SaveArgs {
+      repo_root: props.project.open.repo_root.clone(),
+      target: SaveTarget::Task(current.id(), current.revision()),
+      base: Some(current.details().clone()),
+      details,
+      organization: current.organization().clone(),
+    };
+    Some(press(save, args, &self.dismissed))
+  }
+
+  /// Back to editing: the edits stay as they are, on the version they were made on; the next save meets
+  /// the newer one again.
+  fn back_to_editing_handler(&self) -> Handler {
+    let conflict = self.conflict.clone();
+    Arc::new(move || conflict.set(None))
   }
 
   /// Discard changes: the fields show the version they were made on again (New task: empty), and
@@ -88,31 +140,50 @@ impl TaskForm {
     })
   }
 
-  /// Once a save stored the task: a new one opens Tasks with its row highlighted; an edit is the version
-  /// further edits are made on. A save that met a newer version has the tasks read again, so the form
-  /// learns of it and offers Reload.
+  /// Once a save ended: a new task opens Tasks with its row highlighted; an edit, merged with a version
+  /// saved meanwhile where they changed different fields, is shown and made the version further edits
+  /// are made on; fields both changed are shown to choose between. Acts only on a save that succeeded
+  /// (`is_fulfilled`): a failed one keeps the data of an earlier success.
   pub(super) fn follow_save(&self, ctx: &mut Ctx, save: &SaveAction, props: &FormProps) {
-    let separator = ctx.t("task_form.number.groupSeparator");
-    let (feed, nav, new) = (props.project.feed.clone(), self.nav.clone(), props.subject.is_new());
-    let (base, newer, kept_at) = (self.base.clone(), self.newer.clone(), self.kept_at.clone());
+    let (feed, nav, new, separator) = (
+      props.project.feed.clone(),
+      self.nav.clone(),
+      props.subject.is_new(),
+      props.separator.clone(),
+    );
+    let (fields, base, newer, kept_at) = (
+      self.fields.clone(),
+      self.base.clone(),
+      self.newer.clone(),
+      self.kept_at.clone(),
+    );
+    let (conflict, choices, dismissed) = (self.conflict.clone(), self.choices.clone(), self.dismissed.clone());
     let (kept, written) = (self.kept.clone(), self.written.clone());
     ctx.watch(&save.state(), move |state| {
-      if state.is_rejected() {
-        feed.saved();
-        return;
-      }
-      let Some(Saved(task)) = state.data.clone().filter(|_| state.is_fulfilled()) else {
+      let Some(outcome) = state.data.clone().filter(|_| state.is_fulfilled()) else {
         return;
       };
       feed.saved();
+      let task = match outcome {
+        SaveOutcome::Conflict(met) => {
+          choices.set(Choices::default());
+          conflict.set(Some(Conflict(met)));
+          return;
+        }
+        SaveOutcome::Stored(task) => task,
+      };
       if new && base.get_untracked().is_none_or(|base| base.task.is_none()) {
         Self::forget_kept(&kept, &written);
         nav.tasks(Some(task.key().clone()));
         return;
       }
+      let stored = Base::of(&task, &separator);
+      fields.fill(&stored.values);
+      base.set(Some(stored));
+      dismissed.set(true);
+      conflict.set(None);
       newer.set(None);
       kept_at.set(None);
-      base.set(Some(Base::of(&task, &separator)));
     });
   }
 
@@ -120,7 +191,7 @@ impl TaskForm {
   /// without a run keeps the form, which says why and offers Retry run; a draft saved without being
   /// queued is the one the form edits from now on, never a second task.
   pub(super) fn follow_run(&self, ctx: &mut Ctx, run: &RunAction, props: &FormProps) {
-    let separator = ctx.t("task_form.number.groupSeparator");
+    let separator = props.separator.clone();
     let (feed, nav, queued) = (props.project.feed.clone(), self.nav.clone(), self.queued.clone());
     let (kept, written, base) = (self.kept.clone(), self.written.clone(), self.base.clone());
     ctx.watch(&run.state(), move |state| {

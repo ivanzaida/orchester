@@ -2,28 +2,35 @@
 //! or from edits kept on this computer with the version they were made on; every save and Create & run
 //! is made on it, so a change made meanwhile, e.g. by automation through Orchester's MCP server, is
 //! met by the store's revision check and never overwritten. A newer stored version is taken while the
-//! fields hold no edits; under edits the form keeps them and says the task changed, with *Reload*
-//! (as the deprecated desktop's `new_task/outside.rs` does).
+//! fields hold no edits; under edits that changed other fields they are put on it, and where both
+//! changed a field the person chooses (`conflict`).
 
 use std::sync::Arc;
 
-use lurq::{app::ctx::Ctx, node::Element};
-use orchester_core::{sharing::TaskRevision, task::Task, time::Timestamp};
-use orchester_workspace::{background, tasks::run::StartOutcome};
+use lurq::app::ctx::Ctx;
+use orchester_core::{
+  sharing::TaskRevision,
+  task::{
+    Task,
+    content::{Choice, ContentMerge},
+  },
+  time::Timestamp,
+};
+use orchester_workspace::{
+  background,
+  tasks::{conflict::EditConflict, run::StartOutcome},
+};
 use parking_lot::Mutex;
 
 use super::{
   actions::QueuedTask,
+  conflict::{Choices, Conflict},
   form::{FormProps, KeptAt, TaskForm},
   kept::{Kept, KeptBase, KeptEdits},
   state::View,
   values::Values,
 };
-use crate::ui::{
-  button::{ActionButton, ButtonKind},
-  icon::Icon,
-  notice::{Notice, NoticeTone},
-};
+use crate::project::ProjectFeed;
 
 /// The version edits are made on.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -113,6 +120,10 @@ impl TaskForm {
       .task()
       .map_or_else(Base::new_task, |task| Base::of(task, separator));
     if let Some(task) = props.subject.task().filter(|_| props.subject.awaits_first_run()) {
+      // A queued task's details are locked: edits kept for it from an earlier visit cannot be saved.
+      if kept.is_some() {
+        self.kept.write(None);
+      }
       self.queued.set(Some(QueuedTask {
         task: task.id(),
         key: task.key().clone(),
@@ -121,7 +132,7 @@ impl TaskForm {
       self.start_from(&stored);
     } else {
       match kept.filter(|kept| kept.values.differ_from(&kept.base.values, separator)) {
-        Some(kept) => self.restore(kept, stored),
+        Some(kept) => self.restore(kept, stored, (separator, props.updated_at)),
         None => self.start_from(&stored),
       }
     }
@@ -129,39 +140,51 @@ impl TaskForm {
     true
   }
 
+  /// Fills the fields with `base` and makes it the version edits are made on; a failure met on an
+  /// earlier version is not said any more.
   fn start_from(&self, base: &Base) {
     self.fields.fill(&base.values);
     self.base.set(Some(base.clone()));
+    self.dismissed.set(true);
   }
 
   /// Fills in edits kept earlier, made on the version they were made on: when the task changed since,
-  /// a save meets the change, and the form says so with Reload.
-  fn restore(&self, kept: Kept, stored: Base) {
+  /// a save meets the change, and fields both changed are the person's to choose.
+  fn restore(&self, kept: Kept, stored: Base, (separator, at): (&str, Option<Timestamp>)) {
     let made_on = kept.base.revision.map_or(0, TaskRevision::get);
-    let base = if made_on < stored.revision_number() {
-      self.newer.set(stored.task.clone().map(Newer));
-      Base {
+    let newer = (made_on < stored.revision_number())
+      .then(|| stored.task.clone())
+      .flatten();
+    let base = match &newer {
+      Some(_) => Base {
         task: stored.task,
         revision: kept.base.revision,
         values: kept.base.values,
-      }
-    } else {
-      stored
+      },
+      None => stored,
     };
     self.fields.fill(&kept.values);
-    self.base.set(Some(base));
+    self.base.set(Some(base.clone()));
     self.kept_at.set(Some(KeptAt(kept.at)));
+    // This form keeps them from now on, as it would have written them: it removes them once saved.
+    self.kept.write(Some((&kept.values, &base.kept(), kept.at)));
+    self.kept.flush();
     *self.written.lock() = Written::Values(kept.values);
+    if let Some(newer) = newer {
+      self.meet_newer(&newer, &base, (separator, at));
+    }
   }
 
-  /// Takes a newer stored version of the task while the fields hold no edits; under edits keeps them
-  /// and remembers the newer version for the notice. Not while a save or a run request is under way:
-  /// those settle the version themselves.
+  /// Takes a newer stored version of the task while the fields hold no edits; under edits puts them on
+  /// it ([`Self::meet_newer`]). Not while a save or a run request is under way, which settle the
+  /// version themselves, nor while the person chooses between versions: saving the choice meets a
+  /// change made meanwhile.
   pub(super) fn follow_stored(&self, props: &FormProps, separator: &str, busy: bool) {
     let (Some(task), Some(base)) = (props.subject.task(), self.base.get_untracked()) else {
       return;
     };
-    if busy || task.revision().get() <= base.revision_number() {
+    let choosing = self.conflict.get_untracked().is_some();
+    if busy || choosing || task.revision().get() <= base.revision_number() {
       return;
     }
     if !self.fields.values_untracked().differ_from(&base.values, separator) {
@@ -169,14 +192,47 @@ impl TaskForm {
       self.newer.set(None);
       self.kept_at.set(None);
     } else if self.newer.get_untracked().as_ref().map(|newer| &newer.0) != Some(task) {
-      self.newer.set(Some(Newer(task.clone())));
+      self.meet_newer(task, &base, (separator, props.updated_at));
     }
+  }
+
+  /// A newer version `task` came while the fields hold edits made on `base`: when the two changed
+  /// different fields, the edits are put on it without asking; else the person chooses per field. Edits
+  /// that are not valid yet are compared once they are saved.
+  fn meet_newer(&self, task: &Arc<Task>, base: &Base, (separator, at): (&str, Option<Timestamp>)) {
+    self.newer.set(Some(Newer(task.clone())));
+    let made_on = base.values.task_form(separator).details().ok();
+    let mine = self.fields.values_untracked().task_form(separator).details().ok();
+    let (Some(made_on), Some(mine)) = (made_on, mine) else {
+      return;
+    };
+    let merge = ContentMerge::new(made_on, mine, task.details().clone());
+    if merge.is_clean() {
+      self
+        .fields
+        .fill(&Values::of_details(&merge.merged(|_| Choice::Mine), separator));
+      self.base.set(Some(Base::of(task, separator)));
+      self.newer.set(None);
+      self.dismissed.set(true);
+      return;
+    }
+    let organization = task.organization().clone();
+    self.conflict.set(Some(Conflict(Arc::new(EditConflict {
+      merge,
+      current: task.clone(),
+      by: None,
+      at,
+      organization: (organization.clone(), organization),
+    }))));
+    self.choices.set(Choices::default());
   }
 
   /// Keeps the fields' values on this computer while they differ from the version they were made on,
   /// and removes them once they do not.
-  pub(super) fn keep(&self, view: &View) {
+  pub(super) fn keep(&self, view: &View, feed: &ProjectFeed) {
+    let task = view.subject.task().map(|task| task.key().to_string());
     let Some(base) = self.base.get_untracked().filter(|_| !view.queued()) else {
+      feed.mark_unsaved(task.as_deref(), false);
       return;
     };
     let wanted = if view.changed {
@@ -185,6 +241,8 @@ impl TaskForm {
       Written::Nothing
     };
     let mut written = self.written.lock();
+    // The tab of a form whose edits are kept is marked (`Fd1ai`).
+    feed.mark_unsaved(task.as_deref(), *written != Written::Finished && view.changed);
     if *written == Written::Finished || *written == wanted {
       return;
     }
@@ -199,35 +257,5 @@ impl TaskForm {
   pub(super) fn forget_kept(kept: &KeptEdits, written: &Mutex<Written>) {
     kept.write(None);
     *written.lock() = Written::Finished;
-  }
-
-  /// The notice that the task changed while the fields hold edits, with Reload (`outside.rs` of the
-  /// deprecated desktop).
-  pub(super) fn newer_notice(&self, ctx: &Ctx, view: &View, separator: &str) -> Option<Element> {
-    let newer = self.newer.get().filter(|_| !view.locked())?;
-    let (fields, base, latest) = (self.fields.clone(), self.base.clone(), self.newer.clone());
-    let (kept_at, separator) = (self.kept_at.clone(), separator.to_owned());
-    let task = newer.0.clone();
-    let reload = ActionButton::new(
-      "task-form-reload",
-      ButtonKind::Secondary,
-      ctx.t("task_form.newer.reload"),
-    )
-    .in_form()
-    .on_click(move || {
-      let stored = Base::of(&task, &separator);
-      fields.fill(&stored.values);
-      base.set(Some(stored));
-      latest.set(None);
-      kept_at.set(None);
-    });
-    let key = newer.0.key().to_string();
-    Some(
-      Notice::new("task-form-newer", NoticeTone::Warning, ctx.t("task_form.newer.title"))
-        .icon(Icon::History)
-        .body(ctx.t_args("task_form.newer.body", [("key", key)]))
-        .action(reload)
-        .into(),
-    )
   }
 }

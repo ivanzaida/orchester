@@ -5,6 +5,7 @@
 //! run; Edit task saves only a change, discards in place, keeps unsaved changes when left, and offers no
 //! Create & run for a task that ran. Needs `git` (the seed).
 
+mod conflicts;
 mod harness;
 #[allow(
   dead_code,
@@ -62,7 +63,11 @@ fn form_limits_read_back_and_refuse_only_what_is_not_a_number() {
   form.new_task();
   assert_eq!(form.text("task-form-budget-input-read-back"), "No limit");
   assert_eq!(form.text("task-form-time-limit-input-read-back"), "No limit");
-  form.set("task-form-budget-input", "1,400,000");
+  // A budget set at once reads grouped once the field is left.
+  form.set("task-form-budget-input", "1400000");
+  focus(&mut form, "task-form-budget-input");
+  focus(&mut form, "task-form-title-input");
+  assert_eq!(form.value("task-form-budget-input"), "1,400,000");
   form.set("task-form-time-limit-input", "1");
   assert_eq!(
     form.text("task-form-budget-input-read-back"),
@@ -298,6 +303,16 @@ fn form_criteria_move_with_the_keyboard() {
     !form.exists("task-form-criterion-3-input"),
     "Backspace removes an empty one"
   );
+}
+
+fn focus(form: &mut Form, id: &str) {
+  form
+    .window
+    .tree
+    .get_element_by_id_mut(id)
+    .unwrap_or_else(|| panic!("{id} is shown"))
+    .focus();
+  form.window.pass();
 }
 
 fn key(form: &mut Form, key: &str, alt: bool) {

@@ -26,9 +26,10 @@ use orchester_workspace::{
   runner::Runners,
   sharing::{Servers, project::WorkClaim},
   tasks::{
+    conflict::{Edit, EditConflict, EditSaved, save_edit},
     data::SaveTarget,
     run::{StartOutcome, queue_in, start_messages},
-    writer::TaskWriter,
+    writer::{TaskWriter, WriteError},
   },
 };
 
@@ -38,6 +39,9 @@ pub struct SaveArgs {
   pub repo_root: PathBuf,
   pub target: SaveTarget,
   pub details: TaskDetails,
+  /// The details of the version the edits were made on, for an edit: what the person changed is put
+  /// on a version stored meanwhile (`tasks::conflict::save_edit`).
+  pub base: Option<TaskDetails>,
   /// The task's organization, unchanged: the form does not edit it yet.
   pub organization: TaskOrganization,
 }
@@ -60,7 +64,17 @@ impl Problems {
   }
 }
 
-pub type SaveAction = FutureAction<SaveArgs, Saved, Problems>;
+/// How a save ended: the task stored, or a newer version whose fields both changed, for the person to
+/// choose from (`Edit task · conflict` `PenUu`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SaveOutcome {
+  Stored(Arc<Task>),
+  Conflict(Arc<EditConflict>),
+}
+
+impl lurq::app::component::DevtoolsInspectable for SaveOutcome {}
+
+pub type SaveAction = FutureAction<SaveArgs, SaveOutcome, Problems>;
 
 pub fn save_action(ctx: &mut Ctx, servers: Servers) -> SaveAction {
   ctx.future_action(move |args: SaveArgs| {
@@ -73,30 +87,52 @@ pub fn save_action(ctx: &mut Ctx, servers: Servers) -> SaveAction {
   })
 }
 
-/// Saves `args` through the project's task writer: a shared project's server, else its database.
-fn store(args: &SaveArgs, servers: &Servers) -> Result<Saved, Problems> {
-  let write = |error: orchester_workspace::tasks::writer::WriteError| {
-    tracing::error!(%error, "cannot save the task");
-    Problems::one(error.message())
-  };
-  let mut writer = TaskWriter::open(&args.repo_root, servers).map_err(write)?;
+fn write_problem(error: &WriteError) -> Problems {
+  tracing::error!(%error, "cannot save the task");
+  Problems::one(error.message())
+}
+
+/// Saves `args` through the project's task writer: a shared project's server, else its database. A new
+/// draft under the form's key; an edit on the version it was made on, merged into a version stored
+/// meanwhile when no field both changed, else a conflict for the person.
+fn store(args: &SaveArgs, servers: &Servers) -> Result<SaveOutcome, Problems> {
+  let mut writer = TaskWriter::open(&args.repo_root, servers).map_err(|error| write_problem(&error))?;
   let organization = (&args.organization, &args.organization);
-  let task = match writer
-    .save_organized(args.target, args.details.clone(), organization, Timestamp::now())
-    .map_err(write)?
-  {
-    TaskUpdate::Saved(task) => task,
-    TaskUpdate::Conflict { .. } => return Err(Problems::one(messages::task_changed_meanwhile())),
+  let (task, details) = match args.target {
+    SaveTarget::New(_) => {
+      let task = match writer
+        .save_organized(args.target, args.details.clone(), organization, Timestamp::now())
+        .map_err(|error| write_problem(&error))?
+      {
+        TaskUpdate::Saved(task) => task,
+        TaskUpdate::Conflict { .. } => return Err(Problems::one(messages::task_changed_meanwhile())),
+      };
+      // A new draft's key may name a task an earlier attempt queued: it is not a draft to save over.
+      if task.status() != TaskStatus::Draft {
+        return Err(Problems::one(messages::task_no_longer_draft()));
+      }
+      (task, args.details.clone())
+    }
+    SaveTarget::Task(task, read) => {
+      let edit = Edit {
+        task,
+        read,
+        // Handlers always name the version; without one nothing of a newer version could be kept.
+        base: args.base.as_ref().unwrap_or(&args.details),
+        details: args.details.clone(),
+        organization,
+      };
+      match save_edit(&mut writer, edit, Timestamp::now()).map_err(|error| write_problem(&error))? {
+        EditSaved::Saved { task, details } => (task, details),
+        EditSaved::Conflict(conflict) => return Ok(SaveOutcome::Conflict(Arc::new(conflict))),
+      }
+    }
   };
-  // A new draft's key may name a task an earlier attempt queued: it is not a draft to save over.
-  if matches!(args.target, SaveTarget::New(_)) && task.status() != TaskStatus::Draft {
-    return Err(Problems::one(messages::task_no_longer_draft()));
-  }
-  if task.details() != &args.details {
+  if task.details() != &details {
     tracing::error!(task = %task.key(), "the stored details differ from the ones saved");
     return Err(Problems::one(messages::task_saved_differently()));
   }
-  Ok(Saved(Arc::new(task)))
+  Ok(SaveOutcome::Stored(Arc::new(task)))
 }
 
 /// A task queued for its first run, which has not started (yet).

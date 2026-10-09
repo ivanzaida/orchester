@@ -11,7 +11,11 @@ use orchester_core::{
 };
 use orchester_workspace::{messages::Message, tasks::data::PipelineChoice};
 
-use super::{actions::QueuedTask, values::Values};
+use super::{
+  actions::QueuedTask,
+  conflict::{Choices, Conflict},
+  values::Values,
+};
 
 /// The task the form is about.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -73,6 +77,8 @@ pub enum Need {
   TimeLimit,
   /// A task that ran keeps every detail a run needs.
   KeepComplete,
+  /// A newer version was saved under the edits: they are saved onto it first.
+  NewerVersion,
 }
 
 impl Need {
@@ -87,6 +93,7 @@ impl Need {
       Self::Budget => "task_form.reasons.need.budget",
       Self::TimeLimit => "task_form.reasons.need.timeLimit",
       Self::KeepComplete => "task_form.reasons.need.keepComplete",
+      Self::NewerVersion => "task_form.reasons.need.newerVersion",
     }
   }
 }
@@ -114,6 +121,11 @@ pub struct View {
   pub failure: Option<Arc<[Message]>>,
   /// The run being started was asked for by Retry run.
   pub retrying: bool,
+  /// A newer version was saved while the fields hold edits.
+  pub newer: bool,
+  /// The newer version's fields to choose from, while the person chooses.
+  pub conflict: Option<Conflict>,
+  pub choices: Choices,
 }
 
 impl View {
@@ -178,6 +190,9 @@ impl View {
   /// What Create & run still needs: whatever a save needs and every detail a run depends on.
   pub fn run_needs(&self) -> Vec<Need> {
     let mut needs = self.save_needs();
+    if self.newer {
+      needs.push(Need::NewerVersion);
+    }
     for detail in &self.missing {
       needs.push(match detail {
         MissingDetail::Brief => Need::Brief,

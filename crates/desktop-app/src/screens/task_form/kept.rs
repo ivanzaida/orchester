@@ -58,6 +58,9 @@ pub struct KeptEdits {
 
 struct Inner {
   project: ProjectId,
+  /// The form that writes: a form removes only what it kept itself, so two tabs on one task do not
+  /// remove each other's edits.
+  owner: Arc<str>,
   key: Mutex<Arc<str>>,
   workspace: Workspace,
   runtime: Handle,
@@ -71,9 +74,10 @@ struct Inner {
 
 impl KeptEdits {
   /// The edits of `task` of `project`; `None` is New task's.
-  pub fn new(workspace: Workspace, runtime: Handle, project: ProjectId, task: Option<TaskId>) -> Self {
+  pub fn new(workspace: Workspace, runtime: Handle, (project, task): (ProjectId, Option<TaskId>), owner: &str) -> Self {
     Self {
       inner: Arc::new(Inner {
+        owner: owner.into(),
         key: Mutex::new(key(project, task)),
         project,
         workspace,
@@ -128,7 +132,7 @@ impl KeptEdits {
   /// Keeps `values`, made on `base`, as of `at`, or removes what is kept when `None`, once the typing
   /// pauses.
   pub fn write(&self, values: Option<(&Values, &KeptBase, Timestamp)>) {
-    let text = values.map(|(values, base, at)| encode(values, base, at).to_string());
+    let text = values.map(|(values, base, at)| encode(values, base, (at, &self.inner.owner)).to_string());
     let key = self.inner.key.lock().clone();
     *self.inner.pending.lock() = Some((key, text));
     let asked = self.inner.asked.fetch_add(1, Ordering::SeqCst) + 1;
@@ -158,7 +162,7 @@ impl KeptEdits {
       loop {
         let next = inner.pending.lock().take();
         if let Some((key, text)) = next {
-          persist(&inner.workspace, &key, text.as_deref());
+          persist(&inner, &key, text.as_deref());
           continue;
         }
         inner.writing.store(false, Ordering::SeqCst);
@@ -172,14 +176,27 @@ impl KeptEdits {
   }
 }
 
-fn persist(workspace: &Workspace, key: &str, text: Option<&str>) {
+fn persist(inner: &Inner, key: &str, text: Option<&str>) {
+  let workspace = &inner.workspace;
   let done = match text {
     Some(text) => workspace.set_ui_state(key, text),
+    None if kept_by_another(workspace, key, &inner.owner) => return,
     None => workspace.remove_ui_state(key),
   };
   if let Err(error) = done {
     tracing::warn!(%error, %key, "cannot keep the form's edits");
   }
+}
+
+/// Whether what is kept under `key` was written by another form than `owner`, e.g. another tab's.
+fn kept_by_another(workspace: &Workspace, key: &str, owner: &str) -> bool {
+  let Ok(Some(text)) = workspace.ui_state(key) else {
+    return false;
+  };
+  let written_by = serde_json::from_str::<Value>(&text)
+    .ok()
+    .and_then(|value| value.get("owner")?.as_str().map(str::to_owned));
+  written_by.is_some_and(|written_by| written_by != owner)
 }
 
 fn prefix(project: ProjectId) -> String {
@@ -202,9 +219,10 @@ fn encode_values(values: &Values) -> Value {
   })
 }
 
-fn encode(values: &Values, base: &KeptBase, at: Timestamp) -> Value {
+fn encode(values: &Values, base: &KeptBase, (at, owner): (Timestamp, &str)) -> Value {
   json!({
     "at": at.unix_millis(),
+    "owner": owner,
     "values": encode_values(values),
     "base_revision": base.revision.map(TaskRevision::get),
     "base": encode_values(&base.values),

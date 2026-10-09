@@ -4,13 +4,15 @@
 //! *Create* saves a draft and opens Tasks with the new row highlighted; *Create & run* saves, queues and
 //! starts the run, and a run the runner did not start keeps the form with *Retry run* (`H8GYVZ`,
 //! `t0fDw`). Edit task saves changes in place, discards them in place (`LVI8K`), and keeps them on this
-//! computer when the page is left (`Fd1ai`). The Organization section and the conflict with a newer
-//! version of a shared task are not built yet (D4).
+//! computer when the page is left (`Fd1ai`). A newer version saved meanwhile is put under the edits, and
+//! where both changed a field the person chooses (`Edit task · conflict · newer version` `PenUu`). The
+//! Organization section is left out of the dogfood build (D4).
 
 mod actions;
 mod bar;
 mod base;
 mod brief;
+mod conflict;
 mod criteria;
 mod fields;
 mod form;
@@ -65,6 +67,8 @@ pub fn new_task(ctx: &mut Ctx, project: &ShownProject) -> Element {
     project: project.clone(),
     subject: Subject::New,
     tasks: task_ids(&tasks),
+    updated_at: None,
+    separator: ctx.t("task_form.number.groupSeparator"),
     pipelines: Some(tasks.pipelines),
   };
   ctx.mount_keyed::<TaskForm>(&format!("task-form-new-{}", project.open.project.id()), props)
@@ -81,6 +85,7 @@ pub fn edit_task(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Elemen
     return screen(Screen::EditTask, missing.into());
   };
   let task = Arc::new(task.clone());
+  let task_id = task.id();
   let subject = if tasks.phases.contains_key(&task.id()) {
     Subject::Ran(task)
   } else {
@@ -88,6 +93,8 @@ pub fn edit_task(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Elemen
   };
   let props = FormProps {
     project: project.clone(),
+    updated_at: tasks.updated.get(&task_id).copied(),
+    separator: ctx.t("task_form.number.groupSeparator"),
     subject,
     tasks: task_ids(&tasks),
     pipelines: Some(tasks.pipelines.clone()),

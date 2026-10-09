@@ -71,7 +71,7 @@ pub fn pipeline_section(ctx: &mut Ctx, view: &View, pick: &Signal<Pick>, nav: &N
   .into()
 }
 
-fn choice_label(ctx: &Ctx, choice: &PipelineChoice) -> Arc<str> {
+pub(super) fn choice_label(ctx: &Ctx, choice: &PipelineChoice) -> Arc<str> {
   ctx.t_args(
     "task_form.plan.choice",
     [
@@ -225,7 +225,11 @@ fn step_row(ctx: &Ctx, number: usize, step: &PipelineStepChoice) -> Element {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(icon(
-      if step.tool { Icon::Terminal } else { Icon::Bot },
+      match (step.pull_request, step.tool) {
+        (true, _) => Icon::GitPullRequest,
+        (false, true) => Icon::Terminal,
+        (false, false) => Icon::Bot,
+      },
       IconSize::Base,
       PaletteColor::TextSecondary,
     ))

@@ -22,7 +22,7 @@ use super::{
   state::{Phase, Subject, View},
 };
 use crate::{
-  theme::{ControlHeight, ExtraSpacing, IconSize},
+  theme::{ExtraSpacing, IconSize},
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     icon::{Icon, icon},
@@ -32,30 +32,32 @@ use crate::{
 
 pub fn head(ctx: &mut Ctx, view: &View, nav: &Nav) -> Element {
   let (title, description) = texts(ctx, view);
-  let text = Column::new()
-    .flex(1.0)
-    .spacing(SpacingSize::Xs)
+  // The status sits on the title's line, so a long one never narrows the description under it.
+  let title_line = Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Lg)
+    .align_items(Alignment::Center)
     .child(
       Text::new(&title)
         .id("task-form-title")
-        .variant(TypographyStyle::Heading),
+        .variant(TypographyStyle::Heading)
+        .flex(1.0),
     )
-    .child(
-      Text::new(&description)
-        .id("task-form-description")
-        .variant(TypographyStyle::Description),
-    );
+    .child(top_status(ctx, view));
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .child(crumbs(ctx, view, nav))
     .child(
-      Row::new()
+      Column::new()
         .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Lg)
-        .align_items(Alignment::Start)
-        .child(text)
-        .child(top_status(ctx, view)),
+        .spacing(SpacingSize::Xs)
+        .child(title_line)
+        .child(
+          Text::new(&description)
+            .id("task-form-description")
+            .variant(TypographyStyle::Description),
+        ),
     )
     .into()
 }
@@ -134,7 +136,6 @@ fn top_status(ctx: &Ctx, view: &View) -> Row {
   let (glyph, color, words) = status(ctx, view);
   Row::new()
     .id("task-form-status")
-    .height(Dimension::Px(ControlHeight::Md.value()))
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
     .flex_shrink(0.0)
@@ -173,6 +174,9 @@ fn status(ctx: &Ctx, view: &View) -> (Icon, PaletteColor, Arc<str>) {
 }
 
 fn editing_status(ctx: &Ctx, view: &View) -> (Icon, PaletteColor, Arc<str>) {
+  if view.newer || view.conflict.is_some() {
+    return (Icon::GitCompare, PaletteColor::Warning, ctx.t("task_form.status.newer"));
+  }
   if let Some(at) = view.kept_at.filter(|_| view.changed) {
     let words = ctx.t_args("task_form.status.kept", [("time", display::clock(at))]);
     return (Icon::CircleDot, PaletteColor::TextSecondary, words);

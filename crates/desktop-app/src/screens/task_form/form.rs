@@ -27,6 +27,7 @@ use super::{
   bar::action_bar,
   base::{Base, Newer, Written},
   brief::{BriefFields, brief},
+  conflict::{Choices, Conflict, conflict_parts},
   fields::Fields,
   head::{head, no_run_notice},
   kept::KeptEdits,
@@ -45,6 +46,10 @@ pub struct FormProps {
   pub pipelines: Option<Arc<Vec<PipelineChoice>>>,
   /// The project's tasks, whose kept edits stay; those of other tasks are removed.
   pub tasks: Arc<[TaskId]>,
+  /// When the task was last saved, as the project's tasks were read.
+  pub updated_at: Option<Timestamp>,
+  /// The locale's digit group separator, for budgets.
+  pub separator: Arc<str>,
 }
 
 impl DevtoolsInspectable for FormProps {}
@@ -61,6 +66,11 @@ pub struct TaskForm {
   pub(super) base: Signal<Option<Base>>,
   /// A newer version stored while the fields hold edits.
   pub(super) newer: Signal<Option<Newer>>,
+  /// The fields both versions changed, while the person chooses between them.
+  pub(super) conflict: Signal<Option<Conflict>>,
+  pub(super) choices: Signal<Choices>,
+  /// The last action's failure was met on an earlier version: it is not said any more.
+  pub(super) dismissed: Signal<bool>,
   pub(super) kept_at: Signal<Option<KeptAt>>,
   pub(super) seeded: Signal<bool>,
   pub(super) confirming_discard: Signal<bool>,
@@ -89,18 +99,27 @@ impl Component for TaskForm {
     let services = Services::of(ctx);
     let project = props.project.open.project.id();
     let task = props.subject.task().map(|task| task.id());
+    let batch = IdempotencyKey::generate();
     let form = Self {
       fields: Fields::new(ctx),
       base: ctx.signal(None),
       newer: ctx.signal(None),
+      conflict: ctx.signal(None),
+      choices: ctx.signal(Choices::default()),
+      dismissed: ctx.signal(false),
       kept_at: ctx.signal(None),
       seeded: ctx.signal(false),
       confirming_discard: ctx.signal(false),
       retrying: ctx.signal(false),
       queued: ctx.signal(None),
-      batch: IdempotencyKey::generate(),
+      batch,
       nav: Nav::new(ctx, project),
-      kept: KeptEdits::new(services.workspace.clone(), services.runtime, project, task),
+      kept: KeptEdits::new(
+        services.workspace.clone(),
+        services.runtime,
+        (project, task),
+        &batch.to_string(),
+      ),
       written: Arc::default(),
     };
     let (save, run) = form.actions(ctx, &props);
@@ -112,7 +131,7 @@ impl Component for TaskForm {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<FormProps>().clone();
     let (save, run) = self.actions(ctx, &props);
-    let separator = ctx.t("task_form.number.groupSeparator");
+    let separator = props.separator.clone();
     let screen = if props.subject.is_new() {
       Screen::NewTask
     } else {
@@ -128,7 +147,7 @@ impl Component for TaskForm {
     let busy = save.state().get_untracked().is_pending() || run.state().get_untracked().is_pending();
     self.follow_stored(&props, &separator, busy);
     let view = self.view(&props, (&save, &run), &separator);
-    self.keep(&view);
+    self.keep(&view, &props.project.feed);
     let handlers = self.handlers(&props, &view, (&save, &run));
     let page = Column::new()
       .width(Dimension::Pct(100.0))
@@ -175,8 +194,18 @@ impl TaskForm {
     (save, run)
   }
 
-  /// The page's sections, in the design's order; Organization is not built yet (D4).
+  /// The page's sections, in the design's order, or the fields to choose between while a newer version
+  /// conflicts with the edits.
   fn form(&self, ctx: &mut Ctx, props: &FormProps, view: &View, separator: &str) -> Column {
+    let page = Column::new()
+      .id("task-form")
+      .width(Dimension::Px(FORM_WIDTH))
+      .spacing(SpacingSize::Section)
+      .child(head(ctx, view, &self.nav));
+    if let Some(conflict) = &view.conflict {
+      let pipelines = props.pipelines.as_deref().map(Vec::as_slice);
+      return page.with_children(conflict_parts(ctx, conflict, &self.choices, pipelines));
+    }
     let brief_fields = BriefFields {
       title: &self.fields.title,
       brief: &self.fields.brief,
@@ -186,13 +215,8 @@ impl TaskForm {
       budget: &self.fields.budget,
       time_limit: &self.fields.time_limit,
     };
-    Column::new()
-      .id("task-form")
-      .width(Dimension::Px(FORM_WIDTH))
-      .spacing(SpacingSize::Section)
-      .child(head(ctx, view, &self.nav))
+    page
       .with_children(no_run_notice(ctx, view))
-      .with_children(self.newer_notice(ctx, view, separator))
       .child(brief(ctx, view, &props.project.open, &brief_fields))
       .child(context_section(ctx))
       .child(pipeline_section(ctx, view, &self.fields.pipeline, &self.nav))
@@ -232,6 +256,9 @@ impl TaskForm {
       kept_at: self.kept_at.get().map(|at| at.0),
       failure,
       retrying: self.retrying.get(),
+      newer: self.newer.get().is_some(),
+      conflict: self.conflict.get(),
+      choices: self.choices.get(),
     }
   }
 
@@ -253,6 +280,9 @@ impl TaskForm {
         .filter(|problems| problems.queued.is_some())
         .map_or_else(|| Arc::from([]), |problems| problems.messages.clone());
       return (Phase::NotStarted { queued, problems }, None);
+    }
+    if self.dismissed.get() {
+      return (Phase::Editing, None);
     }
     let failure = match (&saving.error, &running.error) {
       (_, Some(problems)) if running.is_rejected() && problems.queued.is_none() => Some(problems.messages.clone()),

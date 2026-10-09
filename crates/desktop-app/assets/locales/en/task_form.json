@@ -27,7 +27,8 @@
       "saved": "Draft saved locally",
       "savedRan": "Saved",
       "unsaved": "Unsaved changes",
-      "kept": "Unsaved changes · kept from {{time}}"
+      "kept": "Unsaved changes · kept from {{time}}",
+      "newer": "Newer version saved"
     },
     "queued": {
       "savedAs": "Saved as {{key}}.",
@@ -48,7 +49,8 @@
     },
     "kept": {
       "note": "Your changes from {{time}} were kept on this computer. Save them, or discard them to return to the saved draft.",
-      "noteNew": "Your changes from {{time}} were kept on this computer. Create the task, or discard them to start again."
+      "noteNew": "Your changes from {{time}} were kept on this computer. Create the task, or discard them to start again.",
+      "noteRan": "Your changes from {{time}} were kept on this computer. Save them for future runs, or discard them to return to the saved task."
     },
     "sections": {
       "brief": "Brief",
@@ -158,7 +160,8 @@
         "limits": "set a run budget and a time limit (runs need both for now)",
         "budget": "fix the run budget",
         "timeLimit": "fix the time limit",
-        "keepComplete": "a task that ran keeps a brief, criteria, a pipeline and limits"
+        "keepComplete": "a task that ran keeps a brief, criteria, a pipeline and limits",
+        "newerVersion": "save your changes on the newer version first"
       }
     },
     "discard": {
@@ -174,10 +177,39 @@
       "notFound": "No task {{key}} in this project",
       "notFoundBody": "It may have been removed, or its key changed when the project was shared."
     },
-    "newer": {
-      "title": "This task changed since you started editing",
-      "body": "A newer version of {{key}} was saved elsewhere. Your edits are kept; Save changes would not overwrite it. Reload shows the newer version in place of your edits.",
-      "reload": "Reload"
+    "conflict": {
+      "notice": "A newer version of {{key}} was saved while you were editing",
+      "noticeBy": "{{name}} saved a newer version of {{key}} while you were editing",
+      "noticeBody": "Both versions are shown for each field that differs. Choose one per field, then save. Fields only one version changed are kept as they are.",
+      "section": "Fields that differ",
+      "meta": {
+        "one": "1 field · {{chosen}} chosen",
+        "other": "{{count}} fields · {{chosen}} chosen"
+      },
+      "mine": "Your version",
+      "notSaved": "not saved",
+      "theirs": "Newer version",
+      "theirsBy": "{{name}}'s version",
+      "savedAt": "saved {{time}}",
+      "chosenMine": "Chosen: your version",
+      "chosenTheirs": "Chosen: {{name}}'s version",
+      "chooseOne": "Choose one",
+      "empty": "Empty",
+      "noCriteria": "No criteria",
+      "criterion": "{{number}}  {{text}}",
+      "noPipeline": "No pipeline",
+      "unpublishedPipeline": "A pipeline without a published version",
+      "noLimits": "No limits",
+      "limits": "{{tokens}} tokens · {{minutes}} minutes",
+      "same": {
+        "one": "1 other field needs no choice.",
+        "other": "{{count}} other fields need no choice."
+      },
+      "back": "Back to editing",
+      "save": "Save chosen versions",
+      "unchosen": "Save unavailable: choose a version for {{fields}}.",
+      "changedMeanwhile": "This task changed meanwhile, so nothing was saved. Its newer version is read again.",
+      "chosenNewer": "Chosen: the newer version"
     }
   }
 }
