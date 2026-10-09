@@ -11,10 +11,13 @@
 
 mod fonts;
 mod form;
+mod markdown;
 mod metrics;
 mod palette;
 mod shadow;
 mod typography;
+
+use std::time::Duration;
 
 use lurq::{
   app::{App, theme::Theme},
@@ -22,10 +25,19 @@ use lurq::{
 };
 
 pub use self::{
-  metrics::{ExtraRadius, ExtraSpacing},
+  metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   palette::{ExtraColor, Mode},
+  shadow::ExtraShadow,
   typography::{ExtraTypography, IconSize},
 };
+
+/// A control that cannot be used, faded as a whole: a button that is unavailable or disabled (`Create
+/// multiple` `Q9aeZ`, `Attach context` `p6caAv`).
+pub const DISABLED_OPACITY: f32 = 0.5;
+/// A shortcut beside a tooltip's label (`n75PTn` in `b6q3OZ`).
+pub const SHORTCUT_OPACITY: f32 = 0.6;
+/// One turn of a loader (`loader-circle`), which turns while it is shown; the design draws it still.
+pub const LOADER_TURN: Duration = Duration::from_secs(1);
 
 /// Loads the fonts and fills every role for `mode`.
 pub fn install(app: &mut App, mode: Mode) {
@@ -37,8 +49,8 @@ pub fn install(app: &mut App, mode: Mode) {
   theme.set_form(form::form());
 }
 
-/// Switches the colors to `mode`: the palette, and the text styles and scrollbar whose colors come
-/// from it. Every component that reads the theme follows on its next render.
+/// Switches the colors to `mode`: the palette, and the text styles, scrollbar and Markdown whose colors
+/// come from it. Every component that reads the theme follows on its next render.
 pub fn apply(theme: &Theme, mode: Mode) {
   let palette = palette::palette(mode);
   theme.set_typography(typography::typography(&palette));
@@ -46,5 +58,6 @@ pub fn apply(theme: &Theme, mode: Mode) {
     thumb_color: palette.border_strong,
     ..ScrollBarStyle::thin()
   });
+  theme.set_markdown(markdown::markdown(&palette));
   theme.set_palette(palette);
 }

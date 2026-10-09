@@ -1,12 +1,12 @@
 //! The app menu (`App menu / Orchester` `jksEw`): the mark and a chevron open it below. A custom title
 //! bar has no native menu, so the window's own commands live here. The design draws the button only;
-//! the menu is built from the shared `Menu item` and `Menu separator` and the raised surfaces of menus.
+//! the menu is the shared menu (`ui::menu`).
 
 use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize},
+    theme::{PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Placement, Popup, Row},
   core::{ElementRef, Signal},
@@ -20,7 +20,7 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon},
-    menu_item::{MenuItem, separator},
+    menu::{MenuItem, menu_panel, separator},
     pressable::pressable,
   },
 };
@@ -103,37 +103,20 @@ impl AppMenu {
     let navigation = Navigation::of(ctx);
     let window = ctx.window();
     ENTRIES.iter().fold(
-      Column::new()
-        .id("app-menu-list")
-        .width(Dimension::Px(MENU_WIDTH))
-        .padding(SpacingSize::Xs)
-        .spacing(ExtraSpacing::Hair.role())
-        .rounded(RadiusSize::Lg)
-        .background(PaletteColor::SurfaceRaised)
-        .border_inside(BorderSize::Sm, PaletteColor::Border)
-        .box_shadow(ShadowStyle::Md),
+      menu_panel("app-menu-list").width(Dimension::Px(MENU_WIDTH)),
       |menu, entry| {
         let Some((id, glyph, label_key, command)) = *entry else {
           return menu.child(separator(ctx));
         };
         let label = ctx.t(label_key);
-        let (open, navigation, window) = (self.open.clone(), navigation.clone(), window.clone());
-        menu.child(
-          MenuItem {
-            id,
-            icon: glyph,
-            label: &label,
-          }
-          .on_click(move || {
-            open.set(false);
-            match command {
-              Command::NewTab => navigation.open_tab(),
-              Command::AllProjects => navigation.go(Route::AllProjects),
-              Command::Settings => navigation.go(Route::Settings),
-              Command::Quit => window.request_close(),
-            }
-          }),
-        )
+        let (navigation, window) = (navigation.clone(), window.clone());
+        let item = MenuItem::new(id, label, move || match command {
+          Command::NewTab => navigation.open_tab(),
+          Command::AllProjects => navigation.go(Route::AllProjects),
+          Command::Settings => navigation.go(Route::Settings),
+          Command::Quit => window.request_close(),
+        });
+        menu.child(item.icon(glyph).render(ctx, &self.open))
       },
     )
   }

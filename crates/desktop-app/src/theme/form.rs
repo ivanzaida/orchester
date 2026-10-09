@@ -1,37 +1,37 @@
 use lurq::{
   app::theme::{
     FormButtonRole, FormButtonTheme, FormCheckboxStyle, FormFieldTheme, FormInputTheme, FormSliderStyle, FormTextRole,
-    FormTheme, PaletteColor, RadiusSize, TypographyStyle,
+    FormTheme, PaletteColor, RadiusSize, SpacingSize, TypographyStyle,
   },
-  node::{dimension::Dimension, padding::Padding, spacing_value::SpacingValue},
+  node::{dimension::Dimension, padding::Padding},
 };
 
-use super::ExtraColor;
+use super::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography};
 
-/// `control_height_md`, the height of fields and buttons.
-const CONTROL_HEIGHT_MD: f32 = 28.0;
-
-/// Fields, buttons, checkboxes and sliders of the Shared components board (`ASNYj`: `Field/text`,
-/// `Button/primary`, `Button/secondary`, `Checkbox/*`, `Slider`), at `control_height_md`.
+/// Fields, buttons, checkboxes and sliders of the Shared components board (`ASNYj`: `Field/text`
+/// `JFXZg`, `Button/primary` `yJ2jo`, `Button/secondary` `Dswcx`, `Checkbox/*`, `Slider`), at
+/// `control_height_md`. A field's value is 12 `text_primary` (`JQkW2`), its placeholder 12 `text_muted`
+/// (`X75zC`); a field with an error keeps its fill and takes a `danger` stroke, with the error in 11.5
+/// `danger` under it (`CqBFL`).
 pub fn form() -> FormTheme {
   FormTheme {
     field: FormFieldTheme {
-      spacing: SpacingValue::from(6.0),
+      spacing: ExtraSpacing::Snug.role().into(),
       label: text(TypographyStyle::FieldLabel, PaletteColor::TextSecondary),
       hint: text(TypographyStyle::Caption, PaletteColor::TextMuted),
-      error: text(TypographyStyle::Caption, PaletteColor::Danger),
+      error: text(ExtraTypography::Note.role(), PaletteColor::Danger),
     },
     input: FormInputTheme {
-      height: Dimension::Px(CONTROL_HEIGHT_MD),
-      padding: Padding::symmetric(10.0, 4.0),
+      height: Dimension::Px(ControlHeight::Md.value()),
+      padding: Padding::horizontal(ExtraSpacing::Loose.role()),
       radius: RadiusSize::Md,
       background: PaletteColor::SurfaceInput,
       border: PaletteColor::Border,
       border_focus: PaletteColor::BorderFocus,
-      background_error: PaletteColor::DangerMuted,
+      background_error: PaletteColor::SurfaceInput,
       border_error: PaletteColor::Danger,
-      text: text(TypographyStyle::Body, PaletteColor::TextPrimary),
-      placeholder: text(TypographyStyle::Body, PaletteColor::TextMuted),
+      text: text(TypographyStyle::Description, PaletteColor::TextPrimary),
+      placeholder: text(TypographyStyle::Description, PaletteColor::TextMuted),
       caret: PaletteColor::TextPrimary,
     },
     checkbox: FormCheckboxStyle {
@@ -76,12 +76,12 @@ pub fn form() -> FormTheme {
   }
 }
 
-/// Size, shape and focus shared by both button roles.
+/// Size, shape and focus shared by both button roles: 28 high, 12 at each side (`yJ2jo`).
 fn button() -> FormButtonRole {
   FormButtonRole {
     width: Dimension::Auto,
-    height: Dimension::Px(CONTROL_HEIGHT_MD),
-    padding: Padding::symmetric(12.0, 0.0),
+    height: Dimension::Px(ControlHeight::Md.value()),
+    padding: Padding::horizontal(SpacingSize::Md),
     radius: RadiusSize::Md,
     border_focus: PaletteColor::BorderFocus,
     ..FormButtonRole::secondary()

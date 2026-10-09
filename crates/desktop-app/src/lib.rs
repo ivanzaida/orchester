@@ -19,4 +19,4 @@ pub mod settings;
 mod shell;
 pub mod system_icon;
 pub mod theme;
-mod ui;
+pub mod ui;

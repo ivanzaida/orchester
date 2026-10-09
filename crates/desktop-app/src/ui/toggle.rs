@@ -1,0 +1,173 @@
+//! Controls that are on or off, beside an optional 12 `text_primary` label 8 from them; a press flips
+//! them. They are form controls: Tab reaches them and Enter or Space flips them.
+//! - Checkbox (`Checkbox/off` `q3JN1`, `Checkbox/on` `Una0j`): a 16 box, radius 4, `surface_input` in a `border_strong`
+//!   stroke; on, `accent` with a 12 `on_accent` check.
+//! - Radio (`Radio/off` `RchTU`, `Radio/on` `vsbEb`): a round 16 dot, `surface_input` in a `border_strong` stroke; on,
+//!   `accent` with a round 6 `on_accent` center.
+//! - Switch (`Switch/off` `H6LlDD`, `Switch/on` `XC5zU`): a round 28 × 16 track, 2 inside it, a round 12 knob; off,
+//!   `border_strong` with a `text_secondary` knob at the start; on, `accent` with an `on_accent` knob at the end.
+//!
+//! A control whose value is fixed is faded to half and cannot be flipped; the caller says why.
+
+use std::sync::Arc;
+
+use lurq::{
+  app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+  components::{Button, Row, Text},
+  layout::{Alignment, layout_kind::Justify},
+  node::{Element, border::Border, dimension::Dimension},
+};
+
+use super::{
+  icon::{Icon, icon},
+  pressable::{Focus, inert, pressable},
+};
+use crate::theme::{DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, IconSize};
+
+/// A checkbox's box and a radio's dot (`ZZTTi`, `d4Pkdw`).
+const MARK_SIZE: f32 = 16.0;
+/// A radio's center (`usaPb`).
+const RADIO_CENTER: f32 = 6.0;
+/// A switch's track and knob (`H6LlDD`, `dY0v7`).
+const TRACK_WIDTH: f32 = 28.0;
+const TRACK_HEIGHT: f32 = 16.0;
+const KNOB_SIZE: f32 = 12.0;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ToggleKind {
+  Checkbox,
+  Radio,
+  Switch,
+}
+
+impl ToggleKind {
+  const fn name(self) -> &'static str {
+    match self {
+      Self::Checkbox => "checkbox",
+      Self::Radio => "radio",
+      Self::Switch => "switch",
+    }
+  }
+}
+
+pub struct Toggle {
+  id: Arc<str>,
+  kind: ToggleKind,
+  on: bool,
+  /// What the control sets: its label beside it and its name for tools.
+  label: Arc<str>,
+  label_shown: bool,
+  change: Option<Arc<dyn Fn(bool) + Send + Sync>>,
+}
+
+impl Toggle {
+  /// A control of `kind` that is `on`, setting what `label` says; the label shows beside it and names it
+  /// for tools.
+  pub fn new(id: impl Into<Arc<str>>, kind: ToggleKind, on: bool, label: impl Into<Arc<str>>) -> Self {
+    Self {
+      id: id.into(),
+      kind,
+      on,
+      label: label.into(),
+      label_shown: true,
+      change: None,
+    }
+  }
+
+  /// The label is said elsewhere, e.g. a setting's name at the row's start (`Inspector row/switch`
+  /// `i4BnK6`): only tools read it here.
+  pub fn hide_label(mut self) -> Self {
+    self.label_shown = false;
+    self
+  }
+
+  /// Hears the value a press asks for: the other one, or on for a radio. Without it the value is fixed:
+  /// the control is faded and cannot be flipped.
+  pub fn on_change(mut self, handler: impl Fn(bool) + Send + Sync + 'static) -> Self {
+    self.change = Some(Arc::new(handler));
+    self
+  }
+
+  fn mark(&self) -> Row {
+    let round = ExtraRadius::Full.role();
+    let square = |size: f32| {
+      Row::new()
+        .width(Dimension::Px(size))
+        .height(Dimension::Px(size))
+        .align_items(Alignment::Center)
+        .justify(Justify::Center)
+    };
+    let off = |shape: Row| {
+      shape
+        .background(PaletteColor::SurfaceInput)
+        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    };
+    match (self.kind, self.on) {
+      (ToggleKind::Checkbox, false) => off(square(MARK_SIZE)).rounded(RadiusSize::Sm),
+      (ToggleKind::Checkbox, true) => square(MARK_SIZE)
+        .rounded(RadiusSize::Sm)
+        .background(PaletteColor::Accent)
+        .child(icon(Icon::Check, IconSize::Sm, ExtraColor::OnAccent.role())),
+      (ToggleKind::Radio, false) => off(square(MARK_SIZE)).rounded(round),
+      (ToggleKind::Radio, true) => square(MARK_SIZE).rounded(round).background(PaletteColor::Accent).child(
+        square(RADIO_CENTER)
+          .rounded(round)
+          .background(ExtraColor::OnAccent.role()),
+      ),
+      (ToggleKind::Switch, on) => {
+        let (track, knob, side) = if on {
+          (PaletteColor::Accent, ExtraColor::OnAccent.role(), Justify::End)
+        } else {
+          (PaletteColor::BorderStrong, PaletteColor::TextSecondary, Justify::Start)
+        };
+        Row::new()
+          .width(Dimension::Px(TRACK_WIDTH))
+          .height(Dimension::Px(TRACK_HEIGHT))
+          .padding(ExtraSpacing::Tight.role())
+          .align_items(Alignment::Center)
+          .justify(side)
+          .rounded(round)
+          .background(track)
+          .child(
+            square(KNOB_SIZE)
+              .rounded(round)
+              .background(knob)
+              .id(format!("{}-knob", self.id)),
+          )
+      }
+    }
+  }
+}
+
+impl From<Toggle> for Element {
+  fn from(toggle: Toggle) -> Self {
+    let mark = toggle.mark().id(format!("{}-mark", toggle.id));
+    let label = toggle.label_shown.then(|| {
+      Text::new(&toggle.label)
+        .id(format!("{}-label", toggle.id))
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextPrimary)
+        .nowrap()
+    });
+    let wanted = toggle.kind == ToggleKind::Radio || !toggle.on;
+    let button = match toggle.change {
+      Some(change) => Focus::Form
+        .apply(pressable(move || change(wanted)))
+        .describe("state", "enabled"),
+      None => inert(Button::empty())
+        .opacity(DISABLED_OPACITY)
+        .describe("state", "fixed"),
+    };
+    button
+      .id(toggle.id)
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .rounded(RadiusSize::Sm)
+      .describe("kind", toggle.kind.name())
+      .describe("a11y_name", toggle.label.clone())
+      .describe("checked", if toggle.on { "true" } else { "false" })
+      .child(mark)
+      .with_children(label)
+      .into()
+  }
+}
