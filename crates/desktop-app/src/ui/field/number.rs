@@ -6,7 +6,10 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, theme::TypographyStyle},
+  app::{
+    ctx::Ctx,
+    theme::{PaletteColor, TypographyStyle},
+  },
   components::{Column, Text},
   core::Signal,
   layout::Alignment,
@@ -23,7 +26,8 @@ pub struct NumberField {
   input: FieldInput,
   id: Arc<str>,
   read_back: Arc<str>,
-  refused: bool,
+  /// Why the value is not accepted, said in 11 `danger` in the read-back's place (`Aqupm` in `i4Y9hL`).
+  error: Option<Arc<str>>,
 }
 
 impl NumberField {
@@ -41,11 +45,10 @@ impl NumberField {
       input: FieldInput::new(id.clone(), name, value)
         .unit(unit)
         .mono()
-        .error_at_end()
         .width(Dimension::Px(NUMBER_FIELD_WIDTH)),
       id,
       read_back: read_back.into(),
-      refused: false,
+      error: None,
     }
   }
 
@@ -61,24 +64,35 @@ impl NumberField {
     self
   }
 
+  /// The value cannot be changed now ([`FieldInput::locked`]).
+  pub fn locked(mut self) -> Self {
+    self.input = self.input.locked();
+    self
+  }
+
   /// Why the value is not accepted, said in place of the read-back.
   pub fn error(mut self, error: impl Into<Arc<str>>) -> Self {
-    self.refused = true;
-    self.input = self.input.error(error);
+    self.error = Some(error.into());
+    self.input = self.input.invalid();
     self
   }
 
   pub fn render(self, ctx: &mut Ctx) -> Element {
-    let read_back = (!self.refused).then(|| {
-      Text::new(&self.read_back)
-        .id(format!("{}-read-back", self.id))
+    let read_back = match &self.error {
+      Some(error) => Text::new(error)
+        .id(format!("{}-note", self.id))
         .variant(TypographyStyle::Caption)
-    });
+        .color(PaletteColor::Danger)
+        .describe("role", "field-error"),
+      None => Text::new(&self.read_back)
+        .id(format!("{}-read-back", self.id))
+        .variant(TypographyStyle::Caption),
+    };
     Column::new()
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::End)
       .child(self.input.render(ctx))
-      .with_children(read_back)
+      .child(read_back)
       .into()
   }
 }

@@ -193,7 +193,9 @@
       "unconfirmed": "Task saved · run status unconfirmed",
       "queuedDescription": "This task is saved and queued. Its details cannot be edited here. Fix the issue below, then retry the run.",
       "unconfirmedDescription": "The task is saved, but the runner has not confirmed whether its run started. Check Tasks or retry the same request. The task details are locked.",
-      "limitsBlockSave": "Correct the run budget and time limit to save the task."
+      "limitsBlockSave": "Correct the run budget and time limit to save the task.",
+      "noLongerDraft": "This task was queued meanwhile, so it was not saved as a draft.",
+      "savedDetailsDiffer": "The task was saved, but what is stored differs from the form. Open it again to check it."
     },
     "edit": {
       "notStarted": "This task is queued. Its details can be edited after the first run is recorded.",
