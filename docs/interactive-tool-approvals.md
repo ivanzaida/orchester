@@ -251,10 +251,15 @@ by `read_external_file` and `search_external_file`.
   before), the invocation's secret values removed; the Summary that shows it is not built. `write_artifact` is not
   built: the project database has no `artifacts` table yet (`docs/architecture/storage.md` lists one: run, name,
   blob, and the Artifacts design wants the step execution and revision it was made at too).
-- **Deletions and moves.** `delete_file` removes one file of the step's folders, `move_file` renames one to a path
-  where none is (making its folders); both show in the run's changes (the transcript reports the deletion, and the
-  move as a deletion and an addition). The moved file is read again before it is edited. A file that appears at the
-  target between the check and the rename is replaced.
+- **Deletions and moves.** `delete_file` removes one entry of the worktree, `move_file` renames one to a path of the
+  worktree where none is (making its folders); the extra writable folders are not theirs. Both change the entry they
+  checked, a link itself and never its target (`orchester_agent` `files::entry`): on macOS the folders from the
+  worktree down are opened without following links and the entry is removed or renamed relative to its folder
+  (`unlinkat`, `renameat` with no-replace); on Windows the entry is opened with `FILE_FLAG_OPEN_REPARSE_POINT`, the
+  path the handle reached must be the one checked (`GetFinalPathNameByHandleW`), and it is deleted or renamed through
+  that handle (`SetFileInformationByHandle`, never replacing), the target's folder held open without sharing deletion.
+  Both show in the run's changes (the transcript reports the deletion, and the move as a deletion and an addition).
+  The moved file is read again before it is edited.
 - **`find_references`** lists a name's definitions from the code index (marked when their file changed since the
   index), then the worktree's files that use it as a whole word in exactly its case (ripgrep `--word-regexp
   --case-sensitive`, or the walk), at most 50 files; without the index it says so.

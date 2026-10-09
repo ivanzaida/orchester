@@ -12,10 +12,12 @@
 //! Every method blocks on file I/O and, for `list_files` and `search`, on ripgrep; the runner calls
 //! them off its async threads. Reads may run together (§4.10).
 
+mod entry;
 mod glob;
 mod limits;
 mod lines;
 mod listing;
+mod moves;
 mod read;
 mod ripgrep;
 mod search;
@@ -78,6 +80,10 @@ pub(crate) enum FileError {
   NoFileToEdit(String),
   #[error("{0} already exists; change it with edit_file after read_file")]
   Exists(String),
+  #[error("{0} is not in the worktree: only the worktree's files are deleted or moved")]
+  NotInWorktree(String),
+  #[error("{0} no longer leads where it was checked to: a link lies on the way")]
+  LinkOnTheWay(String),
   #[error("{0} changed while it was being written; read it again")]
   Moved(String),
   #[error("the glob cannot be used: {0}")]

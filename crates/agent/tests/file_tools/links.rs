@@ -49,3 +49,36 @@ fn files_links_out_of_the_worktree_are_refused() {
   let found = ok(ripgrep.search(&search_input("secret", None, None, None)));
   assert!(found.starts_with("no matches"), "{found}");
 }
+
+/// `delete_file` and `move_file` change a link itself, never its target; a link out of the worktree, a path through
+/// one and the extra writable folders are refused.
+#[test]
+fn files_delete_and_move_change_a_link_itself() {
+  let layout = Layout::temporary();
+  link_folder(
+    &layout.worktree.join("inner"),
+    &layout.worktree.join("src").join("nested"),
+  );
+  link_folder(&layout.worktree.join("escape"), &layout.outside);
+  let tools = layout.tools();
+  ok(tools.move_file("inner", "moved-link"));
+  assert!(layout.worktree.join("moved-link").symlink_metadata().is_ok());
+  ok(tools.delete_file("moved-link"));
+  assert!(layout.worktree.join("moved-link").symlink_metadata().is_err());
+  assert!(
+    layout.worktree.join("src").join("nested").join("lib.rs").exists(),
+    "the target stays"
+  );
+  for refused in [
+    failed(tools.delete_file("escape")),
+    failed(tools.delete_file("escape/secret.txt")),
+    failed(tools.move_file("escape/secret.txt", "secret.txt")),
+  ] {
+    assert!(refused.contains("outside the folders"), "{refused}");
+  }
+  assert!(layout.outside.join("secret.txt").exists());
+  std::fs::write(layout.cache.join("kept.txt"), "x").expect("a file");
+  let cached = layout.cache.join("kept.txt").display().to_string();
+  assert!(failed(tools.delete_file(&cached)).contains("not in the worktree"));
+  assert!(layout.cache.join("kept.txt").exists());
+}
