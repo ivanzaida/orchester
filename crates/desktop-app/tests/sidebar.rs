@@ -2,6 +2,12 @@
 //! runs under way as the Running list shows them, the project switcher's RECENT (five at most, the shown
 //! project checked), and what *Open folder…* makes of a chosen folder.
 
+#[path = "../examples/seed/kontur/mod.rs"]
+#[allow(
+  dead_code,
+  reason = "the seed reports what it wrote; these tests read the tasks instead"
+)]
+mod kontur;
 mod support;
 
 use std::fs;
@@ -18,16 +24,21 @@ use lurq::{
 use orchester_app::{
   i18n,
   navigation::{Navigation, tabs::TabSet},
-  project::Projects,
+  project::{Projects, TasksState},
   root::Start,
   routes::{OverviewTab, ProjectPage, Route, routes},
   shell::sidebar::{
-    running::{RowState, RunningRow, running_list},
+    running::{RowState, RunningRow, running_list, under_way},
     switcher::{FolderRefusal, open_folder},
   },
   theme::{self, Mode},
 };
-use orchester_core::{id::ProjectId, run::ActiveClock, time::Timestamp};
+use orchester_core::{
+  id::ProjectId,
+  run::{ActiveClock, TaskPhase},
+  time::Timestamp,
+};
+use orchester_workspace::tasks::data::ProjectTasks;
 use support::{Data, Window, add_project, project_id};
 
 fn overview(project: ProjectId) -> Route {
@@ -49,7 +60,7 @@ fn press(window: &mut Window, id: &str) {
 }
 
 #[test]
-fn sidebar_counts_the_tasks_with_a_dash_while_they_are_read() {
+fn sidebar_counts_the_tasks_with_a_dash_while_they_are_read_and_none_of_zero() {
   let mut window = Window::open();
   let Start::Ready(ready) = window.launch.start() else {
     panic!("the session started");
@@ -65,7 +76,7 @@ fn sidebar_counts_the_tasks_with_a_dash_while_they_are_read() {
   );
   ready.services.hold.set(false);
   window.until("the tasks to be read", |window| {
-    window.texts("nav-tasks") == Some(vec!["Tasks".to_owned(), "0".to_owned()])
+    window.texts("nav-tasks") == Some(vec!["Tasks".to_owned()])
   });
   assert!(
     window.texts("running").is_none(),
@@ -240,5 +251,91 @@ fn sidebar_running_list_names_each_run_its_step_and_time() {
     texts(&mut tree, "running-KON-21"),
     ["KON-21 · stopped", "—"],
     "no runner looks after its agent"
+  );
+}
+
+/// The QA seed's `tasks` scenario (KON-16 and KON-21 running; KON-10, KON-12 and KON-13 waiting for the
+/// person), read as the window reads it.
+fn seeded() -> (Data, std::path::PathBuf) {
+  let data = Data::new();
+  let repo = data.dir.path().join("repo-tasks");
+  let request = kontur::SeedRequest {
+    data_dir: data.dir.path().to_path_buf(),
+    repo: repo.clone(),
+    scenario: kontur::scenarios::named("tasks").expect("a known scenario"),
+    fake_codex: None,
+    now: Timestamp::now(),
+  };
+  kontur::seed(&request).expect("the scenario seeds");
+  (data, repo)
+}
+
+#[test]
+fn sidebar_running_list_takes_the_runs_under_way_and_stops_them_without_a_runner() {
+  let (_data, repo) = seeded();
+  let tasks = ProjectTasks::load(&repo).expect("the tasks read");
+  let rows = |online| -> Vec<(String, RowState)> {
+    under_way(&tasks, online)
+      .into_iter()
+      .map(|run| (run.key.to_string(), run.state))
+      .collect()
+  };
+  let working = rows(true);
+  for (key, state) in [
+    ("KON-16", RowState::Working),
+    ("KON-21", RowState::Working),
+    ("KON-12", RowState::NeedsYou),
+  ] {
+    assert!(working.contains(&(key.to_owned(), state)), "{key} in {working:?}");
+  }
+  let stopped = rows(false);
+  for key in ["KON-16", "KON-21"] {
+    assert!(
+      stopped.contains(&(key.to_owned(), RowState::Stopped)),
+      "{key} is stopped without a runner: {stopped:?}"
+    );
+  }
+  assert!(
+    stopped.contains(&("KON-12".to_owned(), RowState::NeedsYou)),
+    "a run waiting for the person still waits"
+  );
+  assert_eq!(working.len(), stopped.len(), "the same runs, only their state differs");
+}
+
+#[test]
+fn sidebar_feed_gives_the_tasks_as_they_stand_with_the_runner() {
+  let (data, repo) = seeded();
+  let launch = data.launch();
+  let mut window = Window::of(data, launch);
+  let project = window
+    .navigation()
+    .route_now()
+    .project()
+    .expect("the window opens on Kontur");
+  window.until("the runner to give up and the tasks to be read", |window| {
+    window.projects().feed_now(project).is_some_and(|feed| {
+      feed
+        .status
+        .get_untracked()
+        .is_some_and(|status| status.state().is_problem())
+        && feed.tasks.get_untracked().ready().is_some()
+    })
+  });
+  let feed = window.projects().feed_now(project).expect("the feed");
+  assert!(!feed.runner_online(&repo), "the tests' runner never starts");
+  let phase = |state: TasksState, key: &str| {
+    let tasks = state.ready().expect("the tasks are read").clone();
+    let task = tasks
+      .tasks
+      .iter()
+      .find(|task| task.key().to_string() == key)
+      .expect("the task");
+    tasks.phases.get(&task.id()).and_then(|latest| latest.phase())
+  };
+  assert_eq!(phase(feed.tasks.get_untracked(), "KON-16"), Some(TaskPhase::Running));
+  assert_eq!(
+    phase(feed.tasks_with_runner(&repo), "KON-16"),
+    Some(TaskPhase::Interrupted),
+    "without a runner a run recorded as running has lost its agent"
   );
 }
