@@ -87,7 +87,8 @@ Hard requirements:
    provider, clock), no generic parameters or config knobs "for later", no dead code, no commented-out code.
 9. `unsafe` is denied workspace-wide. It is allowed only for FFI without a safe wrapper, in a dedicated module that
    starts with `#![allow(unsafe_code)]`, explains why at the top, keeps each `unsafe` block minimal and precedes it
-   with a `// SAFETY:` comment stating the invariants (today: `crates/ipc/src/pipe_owner.rs`).
+   with a `// SAFETY:` comment stating the invariants (today: `crates/ipc/src/pipe_owner.rs`,
+   `crates/desktop-app/src/system_icon/windows.rs`, and the test `crates/desktop-app/tests/system_icon.rs`).
 10. Domain types enforce their invariants through constructors; do not make fields public just to allow raw struct
    literals from other modules.
 11. Secrets: a secret value never reaches logs, `Debug`/`Display` output, prompts, variables, copied text, errors,

@@ -12,7 +12,7 @@ use orchester_app::{
   mcp::{self, AppMcp, DiscoveryFolder, McpSettings, McpStatus, WindowLink},
   root::{Root, RootProps},
   settings::AppSettings,
-  theme,
+  system_icon, theme,
 };
 use orchester_store::StoreError;
 use tokio::runtime::Runtime;
@@ -58,9 +58,19 @@ fn main() {
   let title = app.i18n().t("shell.app.name");
   let icon = brand::window_icon().expect("the bundled window icon is a valid PNG; covered by tests/brand.rs");
   let without_focus = std::env::var_os(START_WITHOUT_FOCUS_VARIABLE).is_some_and(|value| value == "1");
+  let mut system_icon_pending = true;
   WinitWindow::new(app, tree)
     .with_title(&title)
     .with_icon(icon)
+    // The system's icons, once: the first frame is the first moment the UI thread has the window, which
+    // is not shown yet unless it starts without the focus.
+    .on_paint(move |_, _, _| {
+      if std::mem::take(&mut system_icon_pending)
+        && let Err(error) = system_icon::install()
+      {
+        tracing::warn!(%error, "the system may show a generic icon for the app");
+      }
+    })
     .with_start_without_focus(without_focus)
     // The window frames of the design (`Tasks · dark` `jn2IT`), title bar and status bar included.
     .with_size(1440, 900)

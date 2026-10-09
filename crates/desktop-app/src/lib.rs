@@ -17,5 +17,6 @@ pub mod routes;
 mod screens;
 pub mod settings;
 mod shell;
+pub mod system_icon;
 pub mod theme;
 mod ui;
