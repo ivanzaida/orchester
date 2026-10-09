@@ -1,0 +1,14 @@
+{
+  "settings": {
+    "automation": {
+      "section": "What automation may do",
+      "changePermissions": {
+        "title": "Let automation change agent permissions",
+        "description": "Lets tools connected to Orchester widen what agents may do: write access, network, commands, MCP servers, approving automatically, new CLI programs and environment variables. Only you can change this, here in the window.",
+        "unreadable": "This setting can't be read: {{reason}}",
+        "notSaved": "Not saved: {{reason}}",
+        "blocked": "A change brought by an MCP client's input was not taken: only you turn this on, here in the window."
+      }
+    }
+  }
+}

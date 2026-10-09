@@ -214,6 +214,16 @@ impl Workspace {
     self.db.lock().set_automation_answers_approvals(allowed)
   }
 
+  /// Whether automation may widen what agents may do through Orchester's MCP server (*Let automation
+  /// change agent permissions*); off until a person turns it on in the window, and no tool changes it.
+  pub fn automation_changes_permissions(&self) -> Result<bool, StoreError> {
+    self.db.lock().automation_changes_permissions()
+  }
+
+  pub fn set_automation_changes_permissions(&self, allowed: bool) -> Result<(), StoreError> {
+    self.db.lock().set_automation_changes_permissions(allowed)
+  }
+
   /// Where Usage › Plan limits draws its warning line, for every project; 80 % until it is changed.
   pub fn usage_warning_threshold(&self) -> Result<WarningThreshold, StoreError> {
     self.db.lock().usage_warning_threshold()

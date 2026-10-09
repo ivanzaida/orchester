@@ -410,10 +410,15 @@ fn changing_the_executable_drops_the_last_check() {
 fn candidates_follow_the_path_order() {
   let first = std::env::current_dir().expect("current directory").join("a");
   let second = std::env::current_dir().expect("current directory").join("b");
-  let path: OsString = std::env::join_paths([&first, &second]).expect("joinable paths");
+  let relative = PathBuf::from("node_modules").join(".bin");
+  let path: OsString = std::env::join_paths([&first, &relative, &second]).expect("joinable paths");
   let candidates = executable_candidates(AgentProvider::ClaudeCodeCli.program_name().expect("a CLI"), Some(&path));
   assert!(candidates[0].starts_with(&first));
   assert!(candidates.last().expect("candidates").starts_with(&second));
+  assert!(
+    candidates.iter().all(|candidate| candidate.is_absolute()),
+    "a relative PATH entry is left out: {candidates:?}"
+  );
   assert!(
     candidates
       .iter()

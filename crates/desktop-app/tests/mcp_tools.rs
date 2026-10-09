@@ -12,6 +12,7 @@ use orchester_app::{
   appearance::{Appearance, ThemeSetting},
   mcp::{
     McpSettings, WindowLink,
+    domain::DATA_SCOPE,
     settings::WINDOW_CONTROL_VARIABLE,
     tools::{ToolError, app_state, hold_reads, navigate, set_theme},
   },
@@ -40,10 +41,15 @@ fn window_control_is_on_in_debug_builds_only_unless_the_environment_says_otherwi
       .overridden_by(|_| Some("off".to_owned()))
       .window_control()
   );
-  assert_eq!(McpSettings::with_window_control(false).scopes(), [Scope::Observe]);
+  let data = Scope::custom(DATA_SCOPE);
+  assert_eq!(
+    McpSettings::with_window_control(false).scopes(),
+    [Scope::Observe, data.clone()],
+    "changing project data is not controlling the window"
+  );
   assert_eq!(
     McpSettings::with_window_control(true).scopes(),
-    [Scope::Observe, Scope::Interact]
+    [Scope::Observe, data, Scope::Interact]
   );
 }
 

@@ -51,6 +51,16 @@ impl PipelineEdit {
     }
   }
 
+  /// Steps given whole, valid or not, as automation sends a draft's steps: [`Self::problems`] says
+  /// which rules they break.
+  pub fn from_steps(description: &str, sources: PipelineSources, steps: Vec<Step>) -> Self {
+    Self {
+      description: description.to_owned(),
+      sources,
+      steps,
+    }
+  }
+
   pub fn description(&self) -> &str {
     &self.description
   }

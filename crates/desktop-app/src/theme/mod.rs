@@ -16,6 +16,7 @@ mod form;
 mod markdown;
 mod metrics;
 mod palette;
+mod settings;
 mod shadow;
 mod shell;
 mod startup;
@@ -36,6 +37,7 @@ pub use self::{
   decisions::{DecisionSpacing, DecisionText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   palette::{ExtraColor, Mode},
+  settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,
   shell::{ShellSpacing, ShellText},
   startup::{StartupSpacing, StartupText},
@@ -60,6 +62,7 @@ pub fn install(app: &mut App, mode: Mode) {
   apply(theme, mode);
   metrics::install(theme);
   startup::install(theme);
+  settings::install(theme);
   task::install(theme);
   decisions::install(theme);
   task_form::install(theme);

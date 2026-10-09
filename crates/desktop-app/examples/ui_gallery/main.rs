@@ -18,7 +18,7 @@ use lurq::{
 };
 use orchester_app::{
   app_log, i18n,
-  mcp::{APP_NAME, AppMcp, DiscoveryFolder, McpSettings},
+  mcp::{APP_NAME, AppMcp, DiscoveryFolder, InputGate, McpSettings},
   theme::{self, Mode},
   ui::loader,
 };
@@ -41,7 +41,14 @@ fn main() {
   loader::install(&mut tree);
   let settings = McpSettings::of_build().with_environment();
   let config = McpConfig::new().app_name(APP_NAME).scopes(settings.scopes());
-  let server = AppMcp::start(&mut tree, runtime.handle(), &DiscoveryFolder::User, config);
+  // The gallery shows no person-only control, so nothing is protected.
+  let server = AppMcp::start(
+    &mut tree,
+    runtime.handle(),
+    &DiscoveryFolder::User,
+    config,
+    &InputGate::default(),
+  );
   match &server {
     Some(server) => tracing::info!(
       pid = std::process::id(),

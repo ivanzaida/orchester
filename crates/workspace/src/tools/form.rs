@@ -218,7 +218,7 @@ fn token_error(error: &CommandError) -> Message {
   }
 }
 
-fn variable_error(error: &CommandError) -> Message {
+pub fn variable_error(error: &CommandError) -> Message {
   match error {
     CommandError::DuplicateVariable(name) => Message::new("tools.errors.duplicateVariable").with("name", name.clone()),
     CommandError::VariableValue(name) => Message::new("tools.errors.variableValue").with("name", name.clone()),

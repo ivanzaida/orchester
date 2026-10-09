@@ -180,6 +180,65 @@ install, a network command) is refused (`person_only`, with the reason), as are 
 (`automation_wider`). The run records automation's answers as such: the activity reads *approved by
 automation* or *denied by automation*, and the run's Approvals count them apart from yours.
 
+**The new app's MCP server.** `orchester-app` runs one MCP server of its own instead of two, discovery file
+`%LOCALAPPDATA%\orchester-app-mcp\<pid>.json` on Windows and `~/Library/Application Support/orchester-app-mcp/<pid>.json`
+on macOS, with the same loopback, token and connection rules. It hosts lurq's window tools, the app's
+own (`app_state`, `navigate`, `set_theme`, `hold_reads` in debug builds) and Orchester's domain tools:
+every tool of Orchester's MCP server above, and the setup tools that only this app serves, which set a
+project up end to end without its configuration screens: `add_project` and `get_project`;
+`set_project_environment` and `set_repository_agent_files` (Project settings; limits through
+`update_project_limits`); `list_connections`, `add_cli_connection` (Codex or Claude, checked before it is
+saved), `check_connection` and `list_models`; `list_profiles`, `get_profile`, `save_profile_draft` and
+`publish_profile`; `get_pipeline`, `create_pipeline` (from the starter, empty, or a copy),
+`save_pipeline_draft` and `publish_pipeline`; `list_instructions`, `save_instruction_draft` and
+`publish_instruction`; `get_changes` and `merge_run` (the Summary's *Merge into main*). Each checks its
+input with the rules of the screen it stands for and takes only what that screen offers; no tool takes or
+returns a secret's value. Tools that read are in lurq's Observe scope. Tools that change data are in a
+`data` scope that is always granted, apart from window control (`navigate`, `set_theme`, lurq's input),
+which a release build grants only when its settings or `ORCHESTER_APP_MCP_WINDOW_CONTROL=on` allow it.
+
+**Let automation change agent permissions.** Any client with the token may set a project up, so the setup
+tools only narrow what agents may do unless a person allows more. Widening it is refused with
+`person_only` and the reasons while this application setting is off: a profile's permissions or MCP
+servers broader than its latest published version (a new profile: the most restrictive permissions its
+CLI enforces and no MCP server) on save or publish, which covers write access, writable folders, broader
+commands, network access, no longer asking before tool calls and approving automatically; an agent CLI
+whose program is not a copy found on the search path, refused before it runs; any change to the project's
+environment variables, removals included, but to `RUST_LOG`, `RUST_BACKTRACE`, `CI`, `NO_COLOR`,
+`FORCE_COLOR`, `TZ`, `LANG` and the standard `LC_ALL`, `LC_CTYPE`, `LC_COLLATE`, `LC_MESSAGES`, `LC_MONETARY`,
+`LC_NUMERIC` and `LC_TIME` (`orchester_core::permission::widening::harmless_variable`), since a
+variable can change what programs load, where they connect, what they trust or where tools keep their
+configuration, and removing a person's (a proxy, say) can widen too; approving automatically, which also needs
+*Let automation answer approvals*; and removing or weakening a pipeline step's approval gate. Narrowing is always taken. The setting is off by
+default and only a person changes it, in the window, in Settings › What automation may do. No domain tool
+changes it, and window input cannot either: while its row is on screen, lurq denies its input tools when a
+call runs (also one queued earlier, or one whose answer timed out), the server refuses every window-input
+tool of lurq's (clicks and keys by element or by coordinates, values, resizing) with `person_only`, whatever
+window control allows, and the switch takes no change that turns it on while an MCP client's input is being
+applied, nor any before it was shown for one pass; turning it off is always taken. `navigate` may still
+show Settings, and looking at the window stays allowed.
+
+Pipelines follow the same rule. With the setting off, `publish_pipeline` and `duplicate_pipeline` publish
+only a version provably no weaker than the pipeline's latest published one: the same steps, wiring,
+failure routes, profiles and tools, and each step's approval gate, asking about tool calls, write access,
+commands and network the same or stricter. A pipeline's first version and anything else need a person, so
+every version a task can run is one a person published, allowed, or could not object to. A version is
+weaker also when a step gets more retries, a larger step budget or none, other instructions or another model;
+the pipeline's description may change. Accepted behaviour, as the user decided: automation may create a
+task on any published pipeline with the setting off, since every published version is one a person
+published, allowed, or could not object to. Only moving an existing task to another pipeline
+(`update_task`) is a person's decision, refused as `person_only` while the setting is off; a task without a
+pipeline may get any published one.
+`duplicate_pipeline` is shared with the deprecated desktop's server, which follows the rule too.
+
+Today only this switch is protected from window input. Person-only actions in editors still to come (a
+profile's or a pipeline's Publish, approvals) must likewise refuse synthetic input from MCP clients; lurq
+0.43 adds a way to tell it apart from a person's.
+
+What this protects against: an MCP client that holds the server's token and nothing else. Any program that
+runs as your user can still change `orchester.db` and the project's `.orchester` data directly; the switch is
+not a boundary against those.
+
 **Auto mode.** Modelled on Claude Code's auto mode, and not "approve everything": a separate reviewer
 model judges each request the rules leave to the person (rules of the run, Always allow and
 auto-approval answer first) in its context: the request as the approval card shows it (secret values

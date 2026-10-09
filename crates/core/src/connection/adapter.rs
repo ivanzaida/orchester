@@ -235,14 +235,15 @@ pub fn parse_codex_catalog(json: &str) -> Option<Vec<CatalogModel>> {
 }
 
 /// Where `program` (see [`super::ConnectionKind::program_name`]) would be found on `path` (the
-/// `PATH` variable), in search order. The caller keeps the ones that exist.
+/// `PATH` variable), in search order. The caller keeps the ones that exist. A relative entry is left out:
+/// it would name a different folder from wherever the program is run, such as a run's worktree.
 pub fn executable_candidates(program: &str, path: Option<&OsStr>) -> Vec<PathBuf> {
   let Some(path) = path else {
     return Vec::new();
   };
   let names = program_files(program);
   std::env::split_paths(path)
-    .filter(|directory| !directory.as_os_str().is_empty())
+    .filter(|directory| directory.is_absolute())
     .flat_map(|directory| names.iter().map(move |name| directory.join(name)))
     .collect()
 }

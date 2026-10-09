@@ -53,6 +53,8 @@ use serde_json::{Value, json};
 
 #[path = "fake_app_server.rs"]
 mod fake_app_server;
+#[path = "fake_codex_check.rs"]
+mod fake_codex_check;
 #[path = "fake_codex_question.rs"]
 mod fake_codex_question;
 #[path = "fake_codex_relay.rs"]
@@ -79,6 +81,9 @@ fn main() -> ExitCode {
     return ExitCode::SUCCESS;
   }
   let args: Vec<String> = std::env::args().skip(1).collect();
+  if let Some(code) = fake_codex_check::answer(&args) {
+    return code;
+  }
   if fake_codex_review::is_review(&args) {
     return fake_codex_review::review(&args);
   }

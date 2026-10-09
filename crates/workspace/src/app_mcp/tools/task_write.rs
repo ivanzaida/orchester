@@ -190,6 +190,14 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
       .pipeline
       .and_then(|id| published.iter().find(|choice| choice.id == id)),
   };
+  // Another pipeline runs the task with other steps, profiles and approvals: a person decides that. A task
+  // without one may get any published pipeline, as a new task may, and its own pipeline's newer versions
+  // passed the publishing rule already.
+  if let (Some(chosen), Some(before)) = (pipeline, current.pipeline)
+    && chosen.id != before
+  {
+    super::setup::widening::allowed(services, vec![Message::new("appMcp.widens.taskPipeline")])?;
+  }
   let text = |given: Option<u64>, stored: Option<u64>| given.or(stored).map(|value| value.to_string());
   let fields = Fields {
     title: args.title.as_deref().unwrap_or(current.title.as_str()),

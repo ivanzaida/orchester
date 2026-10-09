@@ -19,12 +19,14 @@ mod changes;
 mod edit;
 mod sources;
 mod starter;
+mod strictness;
 
 pub use self::{
   changes::{PipelineChange, StepChange, changes},
   edit::{EditProblem, PipelineEdit},
   sources::{PipelineSources, PipelineSourcesError},
   starter::{StarterAssignments, StarterStep, StarterStepText, feature_delivery},
+  strictness::{Weaker, weaker_than},
 };
 
 /// Stable key of a step within its pipeline, e.g. `implement`. Kept across versions so

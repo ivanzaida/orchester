@@ -21,6 +21,10 @@ pub enum Missing {
   Pipeline,
   Profile,
   Step,
+  Connection,
+  Instruction,
+  Tool,
+  McpServer,
 }
 
 impl Missing {
@@ -34,6 +38,10 @@ impl Missing {
       Self::Pipeline => "pipeline_not_found",
       Self::Profile => "profile_not_found",
       Self::Step => "step_not_found",
+      Self::Connection => "connection_not_found",
+      Self::Instruction => "instruction_not_found",
+      Self::Tool => "tool_not_found",
+      Self::McpServer => "mcp_server_not_found",
     }
   }
 }

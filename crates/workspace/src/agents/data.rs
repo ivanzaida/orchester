@@ -217,7 +217,24 @@ where
   S: ResourceStore<Error = StoreError> + ConnectionStore<Error = StoreError>,
 {
   let draft = store.draft::<AgentProfile>(id)?.ok_or(StoreError::NoDraft(id))?;
-  let profile = draft.body();
+  enforceable(store, draft.body())?;
+  Ok(store.publish_draft::<AgentProfile>(id, now)?.number())
+}
+
+/// [`publish`], of the draft only if it is still `checked`, read in the transaction that publishes it: what
+/// a caller checked before is what becomes the version ([`StoreError::DraftChanged`] otherwise).
+pub fn publish_checked_in(
+  repo_root: &Path,
+  id: ResourceId,
+  checked: &AgentProfile,
+) -> Result<VersionNumber, StoreError> {
+  let mut db = ProjectDb::open(repo_root)?;
+  enforceable(&db, checked)?;
+  Ok(db.publish_draft_matching(id, checked, Timestamp::now())?.number())
+}
+
+/// Refused when `profile`'s connection is gone, or its CLI cannot enforce the profile's permissions here.
+fn enforceable<S: ConnectionStore<Error = StoreError>>(store: &S, profile: &AgentProfile) -> Result<(), StoreError> {
   let connection = agent_connections(store.connections()?)
     .into_iter()
     .find(|connection| connection.id() == profile.connection())
@@ -226,7 +243,7 @@ where
     .permissions()
     .enforced_on(connection.provider(), Platform::current())
     .map_err(PublishError::from)?;
-  Ok(store.publish_draft::<AgentProfile>(id, now)?.number())
+  Ok(())
 }
 
 /// The user chose to publish a stale draft anyway: it is based on the latest version from now
