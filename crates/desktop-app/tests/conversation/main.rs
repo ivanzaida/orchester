@@ -193,12 +193,11 @@ fn timeline_an_open_group_lists_seven_rows_then_shows_more() {
   let row = ids(&mut window, "conversation-entry-")
     .into_iter()
     .filter(|id| id.ends_with("-title"))
-    .filter(|id| {
+    .rfind(|id| {
       window
         .texts(id)
         .is_some_and(|texts| texts.concat().starts_with("sed -n"))
     })
-    .next_back()
     .expect("the group's last command");
   let row = row.trim_end_matches("-title").to_owned();
   click(&mut window, &format!("{row}-toggle"));
