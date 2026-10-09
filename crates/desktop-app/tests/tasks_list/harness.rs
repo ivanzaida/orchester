@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use lurq::{app::events::MouseButton, node::element::ElementRef};
+use lurq::{app::events::MouseButton, core::ElementRect, node::element::ElementRef};
 use orchester_app::routes::{ProjectPage, Route, TaskList};
 use orchester_core::{id::ProjectId, time::Timestamp};
 
@@ -52,7 +52,13 @@ impl Seeded {
 
   /// `scenario` with its Tasks list shown at `list` once its tasks are read.
   pub fn tasks(scenario: &str, list: TaskList) -> Self {
+    Self::tasks_in(scenario, list, TALL.1)
+  }
+
+  /// [`Seeded::tasks`] in a window `height` high, the design's 900 showing 13 rows.
+  pub fn tasks_in(scenario: &str, list: TaskList, height: u32) -> Self {
     let mut seeded = Self::new(scenario);
+    seeded.window.tree.resize(TALL.0, height);
     seeded.go(list);
     seeded.window.until("the tasks", |window| {
       window
@@ -124,6 +130,26 @@ impl Seeded {
       assert!(std::time::Instant::now() < deadline, "timed out waiting for {what}");
       std::thread::sleep(std::time::Duration::from_millis(5));
     }
+  }
+
+  /// Where `id` is laid out.
+  pub fn bounds(&mut self, id: &str) -> ElementRect {
+    self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  }
+
+  /// Whether the row of `key` is laid out whole inside the table's room under its header.
+  pub fn in_view(&mut self, key: &str) -> bool {
+    let id = format!("task-row-{key}");
+    let Some(row) = self.window.tree.get_element_by_id_mut(&id).and_then(|row| row.bounds()) else {
+      return false;
+    };
+    let (table, header) = (self.bounds("tasks-table"), self.bounds("tasks-table-header"));
+    row.y >= header.y + header.height - 0.5 && row.y + row.height <= table.y + table.height + 0.5
   }
 
   /// A press with the pointer at the middle of `id`.

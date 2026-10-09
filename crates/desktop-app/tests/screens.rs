@@ -38,7 +38,10 @@ use parking_lot::Mutex;
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const NOT_BUILT: &str = "This screen isn't built yet.";
 /// The screens that show their own content, which their own tests check, in place of the placeholder.
-const BUILT: [Screen; 1] = [Screen::Tasks];
+const BUILT: &[Screen] = &[
+  // One per line, sorted, so each screen's task adds a line of its own.
+  Screen::Tasks,
+];
 
 /// Where the test root leaves its router.
 #[derive(Clone, Default)]

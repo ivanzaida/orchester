@@ -83,6 +83,13 @@ fn tasks_a_failed_reading_says_why_with_try_again_never_an_empty_list() {
   seeded.click("tasks-load-error-retry");
   seeded.until("the task read again", |seeded| seeded.shows("tasks-footer"));
   assert_eq!(seeded.keys(), ["KON-1"]);
+  seeded.go(TaskList::new(TaskListTab::Done).with_search("retry"));
+  assert_eq!(
+    seeded.text("tasks-no-rows-title"),
+    "No tasks in this tab.",
+    "a tab without tasks says so, whatever the search"
+  );
+  assert!(!seeded.shows("tasks-clear-query"));
 }
 
 #[test]

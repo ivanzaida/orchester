@@ -17,7 +17,7 @@ const ROWS: [(&str, &str, Icon, &str); 12] = [
   ("KON-8", "Waiting for its run to start", Icon::Hourglass, "Queued"),
   ("KON-9", "Every step passed", Icon::CircleCheck, "Completed"),
   ("KON-10", "Waiting for you", Icon::Hand, "Needs input"),
-  ("KON-11", "Run failed", Icon::CircleX, "Failed"),
+  ("KON-11", "Run failed", Icon::CircleX, "Failed · 04 Run checks"),
   ("KON-16", "No checkpoint yet", Icon::CirclePause, "Interrupted"),
   ("KON-17", "Held · a task failed", Icon::CirclePause, "Queued"),
   ("KON-19", "Blocked · KON-18 unfinished", Icon::Ban, "Draft"),
@@ -105,4 +105,74 @@ fn tasks_highlight_tints_the_task_a_create_added_and_badges_it_new() {
   assert!(tinted(&mut seeded, "KON-22"));
   assert!(!tinted(&mut seeded, "KON-21"));
   assert!(!seeded.shows("task-new-KON-21"));
+}
+
+#[test]
+fn tasks_highlight_below_the_fold_scrolls_its_row_into_view() {
+  let key = "KON-22".parse().expect("a task key");
+  let mut seeded = Seeded::tasks_in("tasks", TaskList::new(TaskListTab::All).with_highlight(key), 900);
+  seeded.until("the new task in view", |seeded| seeded.in_view("KON-22"));
+  assert!(
+    !seeded.in_view("KON-1"),
+    "the list scrolled to it: KON-1 is above the fold"
+  );
+}
+
+#[test]
+fn tasks_a_new_tab_sort_search_or_pipeline_starts_the_list_at_its_top() {
+  let mut seeded = Seeded::tasks_in("tasks", TaskList::default(), 900);
+  let scroll_down = |seeded: &mut Seeded| {
+    let table = seeded.bounds("tasks-table");
+    let (x, y) = (table.x + table.width / 2.0, table.y + table.height / 2.0);
+    seeded
+      .window
+      .tree
+      .scroll(x, y, 0.0, -2000.0, lurq::app::events::ScrollPhase::Scroll);
+    seeded.window.pass();
+  };
+  scroll_down(&mut seeded);
+  assert!(!seeded.in_view("KON-1"), "the list scrolled down");
+  choose_sort(&mut seeded, "Newest first");
+  seeded.until("a new sort to start at the top", |seeded| seeded.in_view("KON-24"));
+  scroll_down(&mut seeded);
+  assert!(!seeded.in_view("KON-24"));
+  seeded.go(TaskList::new(TaskListTab::Todo));
+  seeded.until("a new tab to start at the top", |seeded| {
+    let first = seeded.keys()[0].clone();
+    seeded.in_view(&first)
+  });
+}
+
+/// Chooses the sort whose label starts with `label`.
+fn choose_sort(seeded: &mut Seeded, label: &str) {
+  let mut select = seeded
+    .window
+    .tree
+    .get_element_by_id_mut("tasks-sort")
+    .and_then(|element| element.as_select())
+    .expect("the sort is a select");
+  let index = select
+    .labels()
+    .iter()
+    .position(|option| option.starts_with(label))
+    .expect("the sort offers it");
+  select.commit(index);
+  seeded.window.pass();
+}
+
+#[test]
+fn tasks_a_failed_run_says_at_which_step_and_a_pipeline_reads_with_its_version() {
+  let mut seeded = Seeded::tasks("tasks", TaskList::default());
+  let failed = seeded.text("task-run-KON-11-label");
+  assert!(
+    failed.starts_with("Failed · 0") && failed.ends_with(" Run checks"),
+    "{failed}"
+  );
+  assert_eq!(
+    seeded.text("task-run-KON-9-label"),
+    "Completed",
+    "a finished run names no step"
+  );
+  assert_eq!(seeded.text("task-pipeline-KON-12"), "Feature delivery v3");
+  assert_eq!(seeded.text("task-pipeline-KON-4"), "No pipeline");
 }

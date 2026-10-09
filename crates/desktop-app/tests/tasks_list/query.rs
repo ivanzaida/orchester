@@ -67,7 +67,6 @@ fn tasks_search_finds_the_title_key_brief_and_former_key() {
 #[test]
 fn tasks_typing_a_search_takes_the_entry_s_place_and_back_leaves_the_list() {
   let mut seeded = Seeded::tasks("tasks", TaskList::default());
-  let before = seeded.window.navigation().tabs_now().active().route().clone();
   seeded
     .window
     .tree
@@ -78,7 +77,6 @@ fn tasks_typing_a_search_takes_the_entry_s_place_and_back_leaves_the_list() {
   seeded.window.pass();
   assert_eq!(seeded.window.navigation().route_now(), seeded.route(search("HubSpot")));
   assert_eq!(seeded.keys(), ["KON-13"]);
-  assert_ne!(before, seeded.route(search("HubSpot")));
   seeded.window.navigation().back();
   seeded.window.pass();
   assert!(
@@ -106,6 +104,29 @@ fn tasks_pipeline_filter_narrows_the_rows_and_sorts_order_them() {
     Some("KON-12"),
     "Add retry to webhook sender"
   );
+  choose(&mut seeded, "tasks-sort", "Workflow status");
+  let by_status = seeded.keys();
+  let mut backlog = by_status[..3].to_vec();
+  backlog.sort();
+  assert_eq!(backlog, ["KON-22", "KON-3", "KON-4"], "Backlog first: {by_status:?}");
+  assert_eq!(
+    by_status.last().map(String::as_str),
+    Some("KON-7"),
+    "Canceled last: {by_status:?}"
+  );
+  choose(&mut seeded, "tasks-sort", "Priority");
+  let by_priority = seeded.keys();
+  let group = |range: std::ops::Range<usize>| {
+    let mut keys = by_priority[range].to_vec();
+    keys.sort();
+    keys
+  };
+  assert_eq!(
+    group(0..4),
+    ["KON-10", "KON-12", "KON-18", "KON-5"],
+    "High first: {by_priority:?}"
+  );
+  assert_eq!(group(22..24), ["KON-22", "KON-4"], "No priority last: {by_priority:?}");
   choose(&mut seeded, "tasks-pipeline-filter", "Quick fix");
   let keys = seeded.keys();
   assert!(!keys.is_empty() && keys.len() < 24, "{keys:?}");
