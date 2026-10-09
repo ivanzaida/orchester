@@ -35,7 +35,6 @@
       "editTask": "Edit task",
       "editTaskOf": "Edit {{key}}",
       "task": "Task",
-      "taskTab": "{{key}} · {{tab}}",
       "pullRequests": "Pull requests",
       "usage": "Usage",
       "pipelines": "Pipelines",
