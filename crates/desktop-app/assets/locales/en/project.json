@@ -1,0 +1,21 @@
+{
+  "project": {
+    "folder": "Folder",
+    "allProjects": "Go to All projects",
+    "unknown": {
+      "title": "No such project",
+      "body": "No project in your list has this address. It may have been removed from the list."
+    },
+    "folderMissing": {
+      "title": "The folder of {{name}} is missing",
+      "body": "Orchester keeps the project's tasks and runs in its folder, which is no longer where it was. Move it back, then try again."
+    },
+    "unreadable": {
+      "title": "Orchester can't open {{name}}",
+      "newerData": "Start the newer Orchester that wrote this project's data, or install it over this one. This build leaves the data as it is."
+    },
+    "failed": {
+      "title": "Orchester can't read its list of projects"
+    }
+  }
+}

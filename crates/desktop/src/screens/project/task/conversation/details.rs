@@ -59,6 +59,11 @@ fn workspace(ctx: &mut Ctx) -> Workspace {
     .clone()
 }
 
+/// Where the application database keeps whether the pane is open (`ui_state`), and the two values.
+const DETAILS_KEY: &str = "conversation.details";
+const DETAILS_OPEN: &str = "open";
+const DETAILS_CLOSED: &str = "closed";
+
 /// Remembers whether the pane is open; a failure only loses the choice for the next task, so it is
 /// logged.
 pub(super) fn save_action(ctx: &mut Ctx) -> SaveAction {
@@ -66,12 +71,15 @@ pub(super) fn save_action(ctx: &mut Ctx) -> SaveAction {
   ctx.future_action(move |open: bool| {
     let workspace = workspace.clone();
     async move {
-      background::run(move || workspace.save_conversation_details(open))
-        .await?
-        .map_err(|error| {
-          tracing::warn!(%error, "whether the Details pane is open was not remembered");
-          messages::store_error(&error)
-        })
+      background::run(move || {
+        let value = if open { DETAILS_OPEN } else { DETAILS_CLOSED };
+        workspace.set_ui_state(DETAILS_KEY, value)
+      })
+      .await?
+      .map_err(|error| {
+        tracing::warn!(%error, "whether the Details pane is open was not remembered");
+        messages::store_error(&error)
+      })
     }
   })
 }
@@ -83,12 +91,16 @@ pub(super) fn remembered(ctx: &mut Ctx) -> bool {
   let remembered = ctx.future((), move |()| {
     let workspace = workspace.clone();
     async move {
-      background::run(move || workspace.conversation_details())
-        .await?
-        .map_err(|error| {
-          tracing::warn!(%error, "whether the Details pane is open cannot be read; it is closed");
-          messages::store_error(&error)
-        })
+      background::run(move || {
+        workspace
+          .ui_state(DETAILS_KEY)
+          .map(|value| value.as_deref() == Some(DETAILS_OPEN))
+      })
+      .await?
+      .map_err(|error| {
+        tracing::warn!(%error, "whether the Details pane is open cannot be read; it is closed");
+        messages::store_error(&error)
+      })
     }
   });
   remembered.state().get().data.unwrap_or(false)

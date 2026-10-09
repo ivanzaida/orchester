@@ -4,8 +4,12 @@
 //! have one owner; `tests/i18n.rs` checks it. `build.rs` lists the files, so an area is added by adding
 //! its file. Every area merges into lurq's default namespace, where code names a key in full
 //! (`ctx.t("shell.screens.tasks")`). See the `orchester-ui` skill for key naming and locale rules.
+//!
+//! The words of the application layer's messages (`orchester_workspace::messages::Message`) are
+//! `orchester-workspace`'s own files, loaded under its namespace and shown with `ui::message`.
 
 use lurq::app::{App, i18n::LoadJsonError};
+use orchester_workspace::i18n as workspace;
 
 pub const FALLBACK_LOCALE: &str = "en";
 
@@ -47,6 +51,15 @@ pub fn install(app: &App) -> Result<(), LocaleError> {
           source,
         })?;
     }
+  }
+  for (locale, contents) in workspace::LOCALES {
+    i18n
+      .add_json(*locale, workspace::NAMESPACE, *contents)
+      .map_err(|source| LocaleError {
+        locale,
+        area: workspace::NAMESPACE,
+        source,
+      })?;
   }
   i18n.set_fallback_locale(FALLBACK_LOCALE);
   i18n.set_locale(FALLBACK_LOCALE);

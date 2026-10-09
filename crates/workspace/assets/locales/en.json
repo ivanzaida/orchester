@@ -1,0 +1,1144 @@
+{
+  "common": {
+    "listSeparator": ", "
+  },
+  "runner": {
+    "connection": {
+      "notRestartedSince": {
+        "one": "Tried {{attempts}} time since {{time}}. Interrupted runs keep their last checkpoint. Nothing runs until the runner starts.",
+        "other": "Tried {{attempts}} times since {{time}}. Interrupted runs keep their last checkpoint. Nothing runs until the runner starts."
+      },
+      "notRestarted": {
+        "one": "Tried {{attempts}} time. Interrupted runs keep their last checkpoint. Nothing runs until the runner starts.",
+        "other": "Tried {{attempts}} times. Interrupted runs keep their last checkpoint. Nothing runs until the runner starts."
+      }
+    }
+  },
+  "overview": {
+    "metrics": {
+      "agentsWorking": {
+        "one": "{{count}} of {{slots}} agent working",
+        "other": "{{count}} of {{slots}} agents working"
+      },
+      "agentsUnknown": "Waiting for the runner to report",
+      "interrupted": {
+        "one": "{{count}} run interrupted",
+        "other": "{{count}} runs interrupted"
+      }
+    },
+    "tabs": {
+      "running": "Running",
+      "needsYou": "Needs you",
+      "queued": "Queued",
+      "failed": "Failed"
+    },
+    "footer": {
+      "one": "{{active}} active task · {{completed}} completed",
+      "other": "{{active}} active tasks · {{completed}} completed"
+    },
+    "activity": {
+      "empty": "No runs yet. Runs appear here as they start and finish.",
+      "unreadable": {
+        "one": "No run to show: the latest run of a task could not be read. The task list marks it.",
+        "other": "No run to show: the latest runs of {{count}} tasks could not be read. The task list marks them."
+      },
+      "queued": "Run #{{run}} is waiting to start",
+      "running": "Run #{{run}} is running",
+      "waiting": "Run #{{run}} needs your input",
+      "paused": "Run #{{run}} paused",
+      "stoppedAtLimit": "Run #{{run}} stopped at its limit",
+      "interrupted": "Run #{{run}} was interrupted",
+      "succeeded": "Run #{{run}} completed",
+      "merged": "Run #{{run}} merged",
+      "failed": "Run #{{run}} failed",
+      "cancelled": "Run #{{run}} was canceled"
+    }
+  },
+  "tasks": {
+    "bulk": {
+      "reviewChanged": "A selected task’s pipeline changed. Close this review and review the selection again.",
+      "hold": {
+        "sessionEnded": "Scheduling is held after reopening. Use Start run on a pending first run, or Create & run on a queued task, to continue this group.",
+        "capacity": "Waiting for agent capacity",
+        "previous": "Waiting for the previous task to be ready for review",
+        "concurrency": "Waiting for task concurrency",
+        "groupCap": "Held at the group token cap. Select the waiting tasks and choose Return to drafts to schedule them again.",
+        "failure": "Held after a task failed or was canceled. Select the waiting tasks and choose Return to drafts to schedule them again.",
+        "startFailed": "Start failed. Check the runner log and retry after resolving the problem.",
+        "blocked": "Waiting for blocking tasks to finish. The group goes on with its other tasks.",
+        "canceled": "This task is Canceled, so its group does not start it. The group goes on with its other tasks."
+      },
+      "heldLine": {
+        "sessionEnded": {
+          "one": "{{task}} held after the project was reopened · Start run goes on",
+          "other": "{{count}} tasks held after the project was reopened · Start run goes on"
+        },
+        "capacity": {
+          "one": "{{task}} waits for an agent slot",
+          "other": "{{count}} tasks wait for an agent slot"
+        },
+        "dailyBudget": {
+          "one": "{{task}} waits for the daily budget",
+          "other": "{{count}} tasks wait for the daily budget"
+        },
+        "groupCap": {
+          "one": "{{task}} held at the group token cap · Return to drafts",
+          "other": "{{count}} tasks held at the group token cap · Return to drafts"
+        },
+        "previous": {
+          "one": "{{task}} waits for the previous task",
+          "other": "{{count}} tasks wait for the previous task"
+        },
+        "concurrency": {
+          "one": "{{task}} waits for a task slot",
+          "other": "{{count}} tasks wait for a task slot"
+        },
+        "failure": {
+          "one": "{{task}} held after a task failed · Return to drafts",
+          "other": "{{count}} tasks held after a task failed · Return to drafts"
+        },
+        "preflight": {
+          "one": "{{task}} held: it cannot start yet · Return to drafts",
+          "other": "{{count}} tasks held: they cannot start yet · Return to drafts"
+        },
+        "startFailed": {
+          "one": "{{task}} held after a start failed · Return to drafts",
+          "other": "{{count}} tasks held after a start failed · Return to drafts"
+        },
+        "blocked": {
+          "one": "{{task}} waits for its blocking tasks · Return to drafts",
+          "other": "{{count}} tasks wait for their blocking tasks · Return to drafts"
+        },
+        "canceled": {
+          "one": "{{task}} is Canceled: its group does not start it",
+          "other": "{{count}} tasks are Canceled: their group does not start them"
+        }
+      },
+      "held": {
+        "sessionEnded": "Held · project reopened",
+        "capacity": "Waiting for an agent slot",
+        "dailyBudget": "Waiting for the daily budget",
+        "groupCap": "Held · group token cap",
+        "previous": "Waiting for the previous task",
+        "concurrency": "Waiting for a task slot",
+        "failure": "Held · a task failed",
+        "preflight": "Held · cannot start yet",
+        "startFailed": "Held · start failed",
+        "blocked": "Waiting for blocking tasks",
+        "canceled": "Canceled · not started by its group"
+      },
+      "notDraft": "This task is already queued.",
+      "hasRun": "This task already has a run.",
+      "notHeld": "This task is no longer held by its group, so it stays queued.",
+      "blocked": "Blocked by an unfinished task.",
+      "skippedHasRun": "{{task}} skipped: tasks with runs keep their pipeline.",
+      "skippedNotDraft": "{{task}} skipped: only drafts can be assigned a pipeline.",
+      "stoppedGroup": "Stopped at the group token cap",
+      "stoppedGroupDetail": "This group used its shared token cap. Further task starts are held; raising this run's own limit does not raise the group cap."
+    },
+    "tabs": {
+      "all": "All",
+      "needsYou": "Needs you"
+    },
+    "readiness": {
+      "ready": "Ready to queue",
+      "missingBrief": "Needs a brief",
+      "missingCriteria": "Needs acceptance criteria",
+      "missingPipeline": "Needs a pipeline",
+      "missingLimits": "Needs a budget and time limit",
+      "missingCount": "Needs {{count}} details"
+    },
+    "progress": {
+      "queued": "Waiting for its run to start",
+      "running": "Agent at work",
+      "waiting": "Waiting for you",
+      "pausing": "Pausing at the next checkpoint",
+      "paused": "Paused at {{checkpoint}}",
+      "pausedNoCheckpoint": "Paused before its first checkpoint",
+      "stoppedAtLimit": "Raise the limit to continue",
+      "stoppedDaily": "Waits for the daily token budget",
+      "interrupted": "Last checkpoint {{checkpoint}}",
+      "interruptedNoCheckpoint": "No checkpoint yet",
+      "succeeded": "Every step passed",
+      "merged": "Merged into {{branch}}",
+      "failed": "Run failed",
+      "cancelled": "Run canceled"
+    },
+    "pipeline": {
+      "notChosen": "No pipeline",
+      "published": "{{name}} · {{version}}",
+      "unavailable": "Pipeline not published",
+      "missing": "{{slug}} · not on this computer"
+    },
+    "footer": {
+      "matches": {
+        "one": "{{count}} task matches · Workflow tab and each active filter apply together.",
+        "other": "{{count}} tasks match · Workflow tab and each active filter apply together."
+      },
+      "noRuns": {
+        "one": "{{count}} task · no runs started",
+        "other": "{{count}} tasks · no runs started"
+      },
+      "oneRun": {
+        "one": "{{count}} task · {{runs}} run started",
+        "other": "{{count}} tasks · {{runs}} run started"
+      },
+      "runs": {
+        "one": "{{count}} task · {{runs}} runs started",
+        "other": "{{count}} tasks · {{runs}} runs started"
+      }
+    },
+    "new": {
+      "queued": "Queued · run not started",
+      "unconfirmed": "Task saved · run status unconfirmed",
+      "queuedDescription": "This task is saved and queued. Its details cannot be edited here. Fix the issue below, then retry the run.",
+      "unconfirmedDescription": "The task is saved, but the runner has not confirmed whether its run started. Check Tasks or retry the same request. The task details are locked.",
+      "limitsBlockSave": "Correct the run budget and time limit to save the task."
+    },
+    "edit": {
+      "notStarted": "This task is queued. Its details can be edited after the first run is recorded.",
+      "incomplete": "A task that has started must keep a brief, acceptance criteria, pipeline and limits."
+    },
+    "workflow": {
+      "backlog": "Backlog",
+      "todo": "Todo",
+      "inProgress": "In progress",
+      "inReview": "In review",
+      "done": "Done"
+    },
+    "blocked": {
+      "reasonRequired": "Enter a reason when marking a task Blocked.",
+      "cycle": "This link would create a dependency cycle. Choose another task.",
+      "rowUnfinished": "Blocked · {{tasks}} unfinished",
+      "informational": "Blocked · {{reason}}",
+      "runUnavailable": "Run is unavailable until the linked blocking tasks finish.",
+      "messageKept": "Your message is kept. The agent reads it once the blocking tasks finish."
+    },
+    "cancel": {
+      "confirmRequired": "Confirm stopping the active run before canceling this task.",
+      "startedSince": "A run started after the confirmation opened. It was not stopped and the task was not canceled."
+    },
+    "tags": {
+      "duplicate": "A tag with that name already exists, ignoring case.",
+      "stale": "This tag no longer exists. Reload the project tag list.",
+      "sameTarget": "A tag cannot merge into itself."
+    },
+    "conflict": {
+      "changedMeanwhile": "The task was changed since you opened it, so nothing was saved. Open it again to see the newer version."
+    },
+    "notShared": {
+      "readiness": "Read-only · open it to share"
+    }
+  },
+  "runs": {
+    "unreadable": {
+      "title": "Run #{{run}} could not be read",
+      "titleUnnumbered": "A run could not be read",
+      "detail": {
+        "invalid": "A value in its record is invalid or unknown to this version of Orchester, so where the run stands is unknown. The database file is kept unchanged, so a newer version can still read the run. The log has the details.",
+        "database": "The database could not read its record, so where the run stands is unknown. The database file is kept unchanged. The log has the details."
+      },
+      "actions": "Cancel, pause, continue, merge and Remove worktree are unavailable for run #{{run}} until it can be read.",
+      "actionsUnnumbered": "Cancel, pause, continue, merge and Remove worktree are unavailable for this run until it can be read.",
+      "rejected": "This run could not be read, so it cannot change. The database file is kept unchanged."
+    },
+    "history": {
+      "failedAt": "Failed at {{step}}",
+      "cancelledAt": "Canceled at {{step}}",
+      "cancelled": "Canceled",
+      "cancelledBeforeStart": "Canceled before it started",
+      "atWork": "{{step}} · {{agent}} at work",
+      "stepAtWork": "{{step}} at work",
+      "notMerged": "Every step passed · not merged",
+      "interruptedAt": "Interrupted at {{step}}",
+      "interruptedAtCantContinue": "Interrupted at {{step}} · can’t continue",
+      "interrupted": "Interrupted",
+      "interruptedCantContinue": "Interrupted · can’t continue"
+    },
+    "permissions": {
+      "errors": {
+        "notEnforceable": "{{step}} can’t run with these permissions on its connection. Choose options the connection can enforce.",
+        "noAgentToRestart": "No agent of this profile is at work now, so none can restart. Apply from the next invocation instead.",
+        "noPending": "The new permissions were already applied; there is no restart left to cancel."
+      }
+    },
+    "retryLimit": {
+      "title": {
+        "one": "{{step}} still fails after {{retries}} retry",
+        "other": "{{step}} still fails after {{retries}} retries"
+      },
+      "brokeTitle": "{{step}} stopped again without a result"
+    },
+    "activity": {
+      "exit": "exit {{code}}",
+      "exitDuration": "exit {{code}} · {{seconds}} s",
+      "timedOut": "timed out · {{seconds}} s",
+      "timedOutUntimed": "timed out",
+      "stopped": "stopped",
+      "noExitCode": "no exit code · {{seconds}} s",
+      "noExitCodeUntimed": "no exit code",
+      "commandFailed": "failed",
+      "commandFailedDuration": "failed · {{seconds}} s",
+      "duration": "{{seconds}} s"
+    },
+    "changes": {
+      "failure": {
+        "gitMissing": "git was not found. Install git or add it to the PATH, then try again. The run is not affected.",
+        "git": "git could not compare the run’s revisions. The run is not affected; the runner log may say more."
+      }
+    },
+    "plan": {
+      "version": {
+        "awaiting": "v{{version}} · awaiting approval",
+        "approved": "v{{version}} · approved",
+        "approvedByAutomation": "v{{version}} · approved by automation",
+        "changesRequested": "v{{version}} · changes requested",
+        "changesRequestedByAutomation": "v{{version}} · changes requested by automation"
+      },
+      "errors": {
+        "notAwaited": "This plan no longer waits for a decision. The page shows where the run stands now."
+      }
+    },
+    "toolApproval": {
+      "notAwaited": "This tool action no longer waits for a decision.",
+      "answeredAlready": "This request was answered already.",
+      "automationWider": "Automation only approves a request once or denies it; the wider answers are yours.",
+      "personOnly": {
+        "unknown": "Only a person can approve this request: part of the command cannot be read to the end. Automation may deny it.",
+        "destructive": "Only a person can approve this request: it rewrites or discards history, or deletes outside the temporary folder. Automation may deny it.",
+        "outsideWrite": "Only a person can approve this request: it writes outside the worktree and its writable folders. Automation may deny it.",
+        "secrets": "Only a person can approve this request: it reads a credential location. Automation may deny it.",
+        "installs": "Only a person can approve this request: it installs software or packages. Automation may deny it.",
+        "network": "Only a person can approve this request: it reaches the network. Automation may deny it."
+      }
+    },
+    "merge": {
+      "failure": {
+        "wrongBranch": "Your checkout is on {{current}}, not {{branch}}. Switch it to {{branch}}, then merge again. Nothing was changed.",
+        "detached": "Your checkout has a detached HEAD. Switch it to {{branch}}, then merge again. Nothing was changed.",
+        "uncommitted": "Your checkout has uncommitted changes: {{files}}. Commit or stash them yourself, then merge again. Nothing was changed.",
+        "inProgress": "A merge, cherry-pick or revert is in progress in your checkout. Finish or abort it, then merge again. Nothing was changed.",
+        "conflict": "The run’s changes conflict with your branch in {{files}}. The merge was undone, so your checkout is as it was. Merge the run’s branch yourself to resolve the conflicts.",
+        "branchMissing": "The run’s branch {{branch}} no longer exists, so there is nothing to merge.",
+        "refused": "Git didn’t merge, and the merge was undone: {{detail}}",
+        "noBaseBranch": "This run didn’t record the branch your checkout had when it started.",
+        "notSucceeded": "Only a run whose every step passed can be merged.",
+        "alreadyMerged": "This run was merged already.",
+        "git": "Git failed: {{detail}}",
+        "gitStopped": "Git did not finish. Check the repository with git status before you try again.",
+        "brief": {
+          "gitMissing": "git was not found",
+          "git": "git did not finish"
+        }
+      }
+    },
+    "worktree": {
+      "failure": {
+        "notFinished": "Only a run that ended or was interrupted can have its worktrees removed.",
+        "newChanges": "Nothing was removed from {{path}}: changes appeared in it after this dialog listed them. Look at them, then remove it again.",
+        "notRemoved": "Git didn’t remove {{path}}: {{detail}}",
+        "folderUnreadable": "Couldn’t read {{path}}: {{detail}}"
+      }
+    },
+    "runAgain": {
+      "unavailable": {
+        "runActive": "Run again is unavailable: run #{{run}} of this task is active. A task has one active run at a time; Run again returns when it ends.",
+        "pipelineNotPublished": "Run again is unavailable: {{pipeline}} has no published version any more. Publish it again in Pipelines to run this task again.",
+        "dailyBudgetUsed": "Run again is unavailable: the daily token budget is used ({{used}} of {{budget}} today). New runs wait until tomorrow, or raise it in Project settings › Limits.",
+        "notEnded": "Run again is unavailable: the task’s latest run changed. Its page shows it now."
+      }
+    },
+    "preflight": {
+      "pipelineNotPublished": "The task’s pipeline has no published version.",
+      "pipelineVersionNotPinned": "This queued task has no saved pipeline version. It cannot start safely; create a new task with the same details.",
+      "noSteps": "The pipeline has no steps.",
+      "toolNotPublished": "Step “{{step}}” calls a tool without a published version.",
+      "toolNotRunnable": {
+        "http": "Step “{{step}}” calls an HTTP tool; HTTP tools use project secrets and approvals, which are not available in this version yet.",
+        "database": "Step “{{step}}” calls a database tool; database tools use project secrets and approvals, which are not available in this version yet.",
+        "command": "Step “{{step}}” calls a command tool that cannot run in this version."
+      },
+      "toolAccessRules": "Step “{{step}}” calls a command tool with access rules; tool steps cannot apply access rules in this version yet.",
+      "approvalGate": "Step “{{step}}” calls a tool and waits for an approval; only agent steps can propose a plan for review in this version.",
+      "profileNotPublished": "Step “{{step}}” uses an agent profile without a published version.",
+      "connectionMissing": "Step “{{step}}” uses an agent profile whose connection no longer exists.",
+      "unsupportedProvider": "Step “{{step}}” uses a connection that is not an agent CLI; choose a Codex or Claude Code connection for its agent profile.",
+      "connectionNotUsable": "Step “{{step}}” runs on a connection that cannot be used now, for example because it is not signed in. Check it in Connections.",
+      "permissionsNotEnforceable": "Step “{{step}}” has permissions its connection cannot enforce. Change the step’s permissions or the profile’s connection.",
+      "nativeNotAvailable": "Step “{{step}}” runs on a native agent connection. Native agents are not available in this version yet; choose a Codex or Claude Code connection for its agent profile.",
+      "notAGitRepository": "The project folder is not a git repository.",
+      "noCommits": "The repository has no commit to start the run from."
+    },
+    "start": {
+      "incomplete": "Add the missing details before running the task.",
+      "runnerUnavailable": "The runner is not connected. Try again once it is online.",
+      "lost": "The runner stopped answering. The run may have started. Retry uses the same request, so it will not create a second run.",
+      "taskMissing": "The task no longer exists.",
+      "notQueued": "The task is not queued for a run.",
+      "failed": "The runner reported a problem while starting the run. Check the task and runner log before retrying."
+    },
+    "limit": {
+      "notRaised": "The run stopped at its limit. Raise the limit to continue.",
+      "tokensNotAboveUsed": "The new budget must be above the tokens this run already used.",
+      "timeNotAboveUsed": "The new time limit must be above the active agent time this run already used.",
+      "stepNotAboveUsed": "The new step budget must be above the tokens the step already used."
+    },
+    "capacity": {
+      "dailyBudgetUsed": "Daily token budget used — new runs wait until tomorrow or raise it in Project settings.",
+      "noAgentSlot": "All {{slots}} agent slots are in use. Try again when a running run settles.",
+      "shuttingDown": "Orchester is closing; no new work starts."
+    },
+    "control": {
+      "runnerUnavailable": "The runner is not connected. Try again once it is online.",
+      "lost": "The connection to the runner ended before it answered. Check the run’s state and try again.",
+      "notRunning": "The run is not running anymore.",
+      "notPaused": "The run is not paused.",
+      "ended": "The run has already ended.",
+      "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue.",
+      "notInterrupted": "The run is not interrupted.",
+      "notWaiting": "The run does not wait for your decision any more.",
+      "failed": "The runner could not do this; its log has the details."
+    },
+    "conversation": {
+      "group": {
+        "exit": "exit {{code}}",
+        "failedCommand": "{{command}} · exit {{code}}",
+        "failedWithoutCode": "failed",
+        "failedCommandWithoutCode": "{{command}} · failed"
+      },
+      "question": {
+        "errors": {
+          "notAwaited": "The question no longer waits: its agent can no longer take an answer.",
+          "answered": "The question was answered already.",
+          "empty": "Pick an option or type your own answer.",
+          "unknownChoice": "The question has no option “{{label}}”.",
+          "repeatedChoice": "“{{label}}” is picked twice.",
+          "severalForSingle": "This question takes one answer: one option, or your own answer.",
+          "answerCount": "Answer each of the {{count}} questions."
+        }
+      }
+    },
+    "autoMode": {
+      "unavailable": {
+        "noConnection": "Auto mode needs an agent connection in this project to review with: Claude Code, Codex or the Anthropic API.",
+        "connectionGone": "The reviewer connection chosen in Project settings is gone. Choose another there.",
+        "unsupported": "The reviewer connection chosen in Project settings cannot review yet (the OpenAI API). Choose another there.",
+        "noModel": "The reviewer connection lists no model. Check it under Connections, or choose a model in Project settings."
+      }
+    }
+  },
+  "conversation": {
+    "explanation": {
+      "failedNoAgent": "This run has no agent step to continue. Its saved work remains on its branch.",
+      "merged": "This run's work was merged. Messages no longer reach its agents.",
+      "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue. Messages no longer reach its agents.",
+      "ended": "This run has ended. Messages no longer reach its agents."
+    },
+    "errors": {
+      "blank": "Write a message first.",
+      "invalidRecovery": "This message cannot continue a run. Refresh the task and try again.",
+      "notUndelivered": "This message was sent again or delivered meanwhile. The conversation shows where it stands now.",
+      "notLatestRun": "Messages go to the task’s latest run, #{{run}}."
+    }
+  },
+  "pullRequests": {
+    "detail": {
+      "diffUnreadable": "The diff is not in a format Orchester can read. Open the pull request in GitHub; the log has the details."
+    }
+  },
+  "agents": {
+    "permissions": {
+      "publish": {
+        "connectionMissing": "This profile’s connection no longer exists, so what it can enforce is unknown. Choose a connection before publishing.",
+        "notEnforceable": "The connection cannot enforce these permissions. Change them or the connection before publishing."
+      },
+      "repository": "Repository access",
+      "commands": "Commands",
+      "network": "Network",
+      "option": {
+        "readOnly": {
+          "title": "Read-only",
+          "detail": "Read files and history in the task worktree. No edits."
+        },
+        "editWorktree": {
+          "title": "Edit files in the task worktree",
+          "detail": "Create and change files only in this task’s worktree and the extra writable folders."
+        },
+        "askBefore": {
+          "title": "Ask before running commands",
+          "detail": "Commands requiring approval wait for your decision. Approve only the requested action or deny it."
+        },
+        "allowed": {
+          "title": "Allowed commands",
+          "detail": "Only these commands run. Anything else is denied and the agent is told why.",
+          "claudeDetail": "These commands run, as do known-safe read-only commands such as ls, cat or git log. Other commands ask you first.",
+          "nativeDetail": "Listed commands run, and once a command is listed, known-safe read-only ones too. Every other command asks you first."
+        },
+        "any": {
+          "title": "Any command in the worktree",
+          "detail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders.",
+          "codexDetail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders. Beyond the sandbox, commands ask you first."
+        }
+      },
+      "commandInvalid": {
+        "blank": "Type a command first.",
+        "tooLong": "A command is at most {{max}} characters long.",
+        "character": "A command cannot contain {{character}}: list each command on its own.",
+        "duplicate": "{{command}} is already allowed.",
+        "tooMany": "At most {{max}} commands can be allowed."
+      },
+      "folderInvalid": {
+        "repository": "The repository cannot be read, so the folder cannot be checked.",
+        "blank": "Type a folder first.",
+        "tooLong": "A folder is at most {{max}} characters long.",
+        "character": "A folder cannot contain control characters.",
+        "repositoryRoot": "The repository itself cannot be writable: it is your checkout.",
+        "containsRepository": "{{folder}} contains the repository, so your checkout would be writable.",
+        "inCheckout": "{{folder}} is part of your checkout. Inside the repository only folders under .orchester/ can be writable.",
+        "orchester": "{{folder}} holds Orchester’s own files, such as the runs’ worktrees and logs.",
+        "home": "Your home folder cannot be writable.",
+        "containsHome": "{{folder}} contains your home folder.",
+        "root": "A drive or file system root cannot be writable.",
+        "notAFolder": "{{folder}} is a file, not a folder.",
+        "missing": "{{folder}} does not exist. Create it first, or choose a folder under .orchester/, which is created when an agent starts.",
+        "unreadable": "{{folder}} cannot be read.",
+        "duplicate": "{{folder}} is already listed.",
+        "tooMany": "At most {{max}} folders can be listed."
+      },
+      "networkOff": "Off",
+      "networkOn": "On",
+      "networkOffDetail": "Package installs and web requests fail while network access is off.",
+      "networkOnDetail": "Commands and web tools can reach the network."
+    }
+  },
+  "connections": {
+    "native": {
+      "preset": {
+        "notOffered": "This preset is not offered on this provider."
+      },
+      "key": {
+        "valueRequired": "Enter the key’s value."
+      },
+      "fallback": {
+        "notOffered": "Not offered on this endpoint: only the official Anthropic API retries on another model."
+      }
+    },
+    "models": {
+      "fetchInvalid": "The endpoint listed models that can’t be kept as they are; add them by hand.",
+      "usedDropped": "{{profile}} uses {{model}}, which is no longer listed. Switch to another model first.",
+      "usedDroppedByStep": "Step {{step}} of {{pipeline}} runs on {{model}}, which is no longer listed. Switch it to another model first."
+    },
+    "mcp": {
+      "errors": {
+        "nameRequired": "Enter a name",
+        "nameTooLong": "A server name is at most {{max}} characters long",
+        "nameInvalid": "Use small letters, digits, - and _, starting with a letter",
+        "urlRequired": "Enter the server’s URL",
+        "urlScheme": "The URL starts with http:// or https:// and names a host",
+        "urlCredentials": "Keep user names and passwords out of the URL; use a bearer token from a secret",
+        "urlBackslash": "Use / instead of \\ in the host and path of the URL",
+        "urlHost": "The IPv6 address in the URL is not valid",
+        "whitespace": "Remove the spaces and line breaks",
+        "tooLong": "This is too long",
+        "workingDirectory": "Use a folder inside the worktree, or an absolute path",
+        "variables": "A variable cannot be used as written",
+        "unknownSecret": "This project has no secret {{secret}}",
+        "exemptToolName": "{{tool}} is not a tool name: use letters, digits, - and _",
+        "exemptToolTooLong": "A tool name is at most {{max}} characters long",
+        "exemptToolTwice": "{{tool}} is listed twice",
+        "exemptToolsTooMany": "List at most {{max}} tools"
+      }
+    }
+  },
+  "settings": {
+    "codeIndex": {
+      "listFailed": "Couldn’t read the kept indexes",
+      "rebuildFailed": "The index was not rebuilt: {{reason}}",
+      "rebuildInUse": "The index was not rebuilt: a running agent is reading it. Try again when it finishes."
+    },
+    "limits": {
+      "agentSlotsInvalid": "Enter a whole number from {{min}} to {{max}}."
+    }
+  },
+  "servers": {
+    "add": {
+      "addressInvalid": "This is not a server address. Use an http:// or https:// address without a user name, query or fragment."
+    },
+    "check": {
+      "redirect": "The address answered with a redirect to {{target}}. Orchester doesn't follow redirects: add the address of the Orchester server itself.",
+      "timedOut": "Couldn't reach {{host}}: the connection timed out after 10 s.",
+      "unreachable": "Couldn't reach {{host}}. Check the address and that the server is running.",
+      "notOrchester": "No Orchester server answered at {{address}} ({{status}} for /api/v1/server). Check the address and its path prefix.",
+      "certificate": {
+        "windows": "Windows doesn't trust the certificate of {{host}}. Add your team's certificate authority to Windows, then check again. Orchester has no switch to skip this check.",
+        "macos": "macOS doesn't trust the certificate of {{host}}. Add your team's certificate authority to the macOS keychain, then check again. Orchester has no switch to skip this check."
+      }
+    },
+    "signIn": {
+      "wrong": "The username or password is not right. Check both, or ask an admin of {{name}} to reset your password."
+    },
+    "errors": {
+      "signedOut": "This computer is signed out of the server. Sign in again with your password.",
+      "plainHttp": "Plain HTTP to {{host}} is not allowed for this server.",
+      "passwordChangeRequired": "Choose your own password first.",
+      "forbidden": "Only an admin of the server can do this.",
+      "notFound": "The server no longer knows this.",
+      "rateLimited": "The server asks to wait before trying again.",
+      "refused": "The server refused this.",
+      "setup": "Orchester cannot set up its connection to servers on this computer."
+    }
+  },
+  "time": {
+    "justNow": "Just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago",
+    "seconds": "{{count}} s",
+    "minutes": "{{count}} min",
+    "month": {
+      "jan": "Jan",
+      "feb": "Feb",
+      "mar": "Mar",
+      "apr": "Apr",
+      "may": "May",
+      "jun": "Jun",
+      "jul": "Jul",
+      "aug": "Aug",
+      "sep": "Sep",
+      "oct": "Oct",
+      "nov": "Nov",
+      "dec": "Dec"
+    },
+    "weekday": {
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat",
+      "sun": "Sun"
+    }
+  },
+  "errors": {
+    "nameRequired": "Enter a project name.",
+    "nameTooLong": "Use at most {{max}} characters.",
+    "notAGitRepository": "This folder is not the root of a git repository.",
+    "alreadyInitialized": "This repository already contains an Orchester project.",
+    "projectMissing": "The repository no longer contains its Orchester project. It may have been moved or deleted.",
+    "newerSchema": "The data was written by a newer version of Orchester.",
+    "unsupportedPath": "This folder path cannot be stored. Choose a folder whose path uses standard characters.",
+    "storage": "The data could not be read or written. The log has the details.",
+    "alwaysAllow": "Always allow can no longer add this to the profile. Answer the request again.",
+    "interrupted": "The operation stopped unexpectedly. The log has the details.",
+    "executableLocation": "The folder of the Orchester program could not be determined.",
+    "dataFolderInUse": "Another Orchester window is using this data folder. Switch to that window, or close it and start Orchester again.",
+    "dataFolderNotWritable": "Orchester cannot write to its data folder. The log has the system's reason.",
+    "runnerMissing": "The runner program was not found at {{path}}.",
+    "runnerAlreadyServed": "Another Orchester window is already running this project's runner. Close that window, then restart the runner.",
+    "runnerStartFailed": "The runner could not be started. The log has the details.",
+    "runnerLost": "The runner stopped unexpectedly and could not be reconnected. The log has the details.",
+    "titleRequired": "Enter a title to save the task.",
+    "timeLimitRequired": "Enter a time limit too, or clear the budget.",
+    "timeLimitInvalid": "Enter whole minutes, such as 30.",
+    "timeLimitZero": "The time limit must be at least one minute.",
+    "connectionNameTaken": "Another connection of this project already has this name.",
+    "connectionNotVerified": "The program was not recognized as the chosen CLI, so the connection cannot be saved.",
+    "nativeNotAvailable": "Native agents are not available in this version yet.",
+    "executableNotAbsolute": "Choose the program file by its full path.",
+    "secretNameTaken": "Another secret of this project already has this name in this environment.",
+    "secretGone": "This secret no longer exists or was archived.",
+    "secretTooLong": "The value is longer than the system keychain accepts ({{max}} bytes at most).",
+    "secretRotationNotRecorded": "The new value is stored, but the time of the change could not be recorded. The log has the details.",
+    "keychainUnsupported": "Storing secrets in the system keychain is not supported on this platform yet.",
+    "keychainDenied": "The system keychain refused access. Unlock it and try again.",
+    "keychainFailed": "The system keychain could not store the change. The log has the details.",
+    "roleRequired": "Enter a profile name to save the draft.",
+    "connectionRequired": "Choose a connection.",
+    "modelRequired": "Choose a model or enter a model id.",
+    "modelInvalid": "A model id has no spaces and at most 200 characters.",
+    "placeholderUnclosed": "A variable is opened with double braces but never closed.",
+    "unknownVariable": "{{name}} is not a variable in the catalog.",
+    "staleDraft": "A newer version ({{version}}) was published after this draft was started. Keep your draft over it to publish.",
+    "versionLimit": "This profile has reached the maximum number of versions.",
+    "githubNotSignedIn": "gh is not signed in to {{host}}. Sign in in a terminal, then try again.",
+    "githubUnavailable": "gh could not be used. Check the connection again.",
+    "repositoryNotLinked": "The project’s repository is no longer linked through this connection.",
+    "repositoryNotLinkable": "The detected repository can’t be linked. Check again first.",
+    "timeLimitEmpty": "Enter a time limit in whole minutes.",
+    "timeLimitNotAboveUsed": {
+      "one": "Enter more than the {{used}} minute this run already used.",
+      "other": "Enter more than the {{used}} minutes this run already used."
+    },
+    "olderSchema": "The data was written by an earlier version of Orchester and was not updated yet."
+  },
+  "number": {
+    "bytes": "{{count}} bytes",
+    "kib": "{{count}} KiB",
+    "mib": "{{count}} MiB"
+  },
+  "pipelines": {
+    "flow": {
+      "then": "→"
+    },
+    "count": {
+      "step": {
+        "one": "1 step",
+        "other": "{{count}} steps"
+      },
+      "task": {
+        "none": "No tasks",
+        "one": "1 task",
+        "other": "{{count}} tasks"
+      },
+      "change": {
+        "none": "No changes",
+        "one": "1 change",
+        "other": "{{count}} changes"
+      },
+      "run": {
+        "none": "No runs",
+        "one": "1 run",
+        "other": "{{count}} runs"
+      }
+    },
+    "version": {
+      "published": "Published {{version}}",
+      "publishedWithDraft": "{{version}} · Draft v{{draft}} saved",
+      "draftOnly": "Draft v1 · not published"
+    },
+    "create": {
+      "noSlug": "Use at least one letter or digit from A–Z or 0–9: the slug is made from them.",
+      "slugTaken": "The slug {{slug}} is already used by the pipeline {{pipeline}}. Choose another name."
+    },
+    "problems": {
+      "noSteps": "Add a step before you can publish",
+      "noProfile": "{{step}} has no agent profile",
+      "noTool": "{{step}} has no tool",
+      "cycle": "Cycle: {{path}}",
+      "cycleAt": "{{step}} waits for itself through the steps it runs after",
+      "duplicateStep": "Two steps use the key of {{step}}",
+      "unknownDependency": "{{step}} runs after a step that no longer exists",
+      "unknownRetryTarget": "{{step}} returns to a step that no longer exists",
+      "retryTargetNotUpstream": "{{step}} returns to {{target}}, which does not run before it",
+      "staleDraft": "This draft started from {{basedOn}}, but {{latest}} was published since. Publishing it would discard the changes in {{latest}}.",
+      "notPublishable": "The draft has problems that block publishing.",
+      "versionLimit": "This pipeline has reached the highest version number.",
+      "noDraft": "There is no saved draft to publish.",
+      "unclosedPlaceholder": "A placeholder is opened with two braces but never closed.",
+      "unknownVariable": "{{name}} is not a variable in the catalog.",
+      "invalidRetries": "Enter a whole number of retries, at least 1."
+    },
+    "step": {
+      "noProfile": "No agent profile",
+      "noTool": "No tool",
+      "chooseProfile": "Choose a profile before publishing",
+      "chooseTool": "Choose a tool before publishing",
+      "profileModel": "{{profile}} · {{model}}",
+      "tool": "Tool · {{tool}}",
+      "unpublishedProfile": "Profile not published",
+      "unpublishedTool": "Tool not published",
+      "waitsForApproval": "Waits for your approval",
+      "changesFiles": "Can change files",
+      "readsOnly": "Reads the repository",
+      "exitCodeDecides": "Its exit code decides the step",
+      "toolUnavailable": "This tool can’t run in this version yet",
+      "profileConnectionModel": "{{profile}} · {{connection}} / {{model}}"
+    },
+    "inspector": {
+      "readOnly": "Read-only",
+      "write": "Can write"
+    },
+    "changes": {
+      "description": "Pipeline · description edited",
+      "added": "{{step}} · added",
+      "removed": "{{step}} · removed",
+      "renamed": "{{step}} · renamed from {{from}}",
+      "executor": "{{step}} · agent profile or tool changed",
+      "model": "{{step}} · model changed",
+      "repositoryAccess": "{{step}} · repository access changed",
+      "permissions": "{{step}} · commands or network narrowed differently",
+      "instructions": "{{step}} · instructions edited",
+      "dependencies": "{{step}} · runs after different steps",
+      "approvalAdded": "{{step}} · now waits for approval",
+      "approvalRemoved": "{{step}} · no longer waits for approval",
+      "failureRoute": "{{step}} · when changes are requested changed",
+      "maxRetries": "{{step}} · maximum retries {{from}} → {{to}}",
+      "budget": "{{step}} · step budget {{from}} → {{to}} tokens"
+    }
+  },
+  "tools": {
+    "errors": {
+      "programRequired": "Enter the program to run.",
+      "programOutsideWorktree": "A relative program path must stay inside the worktree.",
+      "controlCharacter": "Line breaks, tabs and other control characters can’t be passed to a program.",
+      "tooLong": "This is too long.",
+      "emptyArgument": "An argument can’t be empty.",
+      "timeout": "Enter whole seconds, from 1 up to {{max}} hours.",
+      "exitCodeNotNumber": "Enter whole numbers separated by commas.",
+      "noExitCodes": "Enter at least one exit code that passes.",
+      "tooManyExitCodes": "Enter at most {{max}} exit codes.",
+      "outputLimit": "Enter whole KiB, from 1 up to {{max}}.",
+      "variableLine": "Write each variable as NAME=value: {{line}}",
+      "variableName": "{{name}} is not a variable name: a letter or underscore, then letters, digits or underscores.",
+      "duplicateVariable": "{{name}} is set more than once.",
+      "variableValue": "The value of {{name}} contains a NUL character."
+    }
+  },
+  "projectImport": {
+    "errors": {
+      "sourceMissing": "{{project}} has no Orchester data in its folder any more.",
+      "sourceOutdated": "{{project}} was last opened with an earlier version of Orchester. Open it once, then import from it.",
+      "sourceNewer": "{{project}} was written by a newer version of Orchester.",
+      "sourceUnreadable": "{{project}} could not be read. The log has the details.",
+      "targetChanged": "This project changed while you chose. Check the mappings, then import again."
+    }
+  },
+  "instructions": {
+    "errors": {
+      "blankText": "Write the instruction before you publish it.",
+      "roleRequired": "Choose the role the rule applies to.",
+      "pipelineRequired": "Choose the pipeline the rule applies in.",
+      "stepRequired": "Choose the step the rule applies to.",
+      "targetsRequired": "Choose the agents the rule applies to.",
+      "settingsInvalid": "These settings cannot be saved together."
+    }
+  },
+  "skills": {
+    "errors": {
+      "blankDescription": "Write a description first: agents choose a skill by it",
+      "blankBody": "Write the body first: it is what an agent loads"
+    }
+  },
+  "appMcp": {
+    "errors": {
+      "notAnAgentStep": "{{step}} is not an agent step, so it has no agent profile to change.",
+      "automationNotAllowed": "Let automation answer approvals is off. A person turns it on from the MCP item of Orchester’s status bar.",
+      "runNotEnded": "The run still works; its worktree is removed once it ended.",
+      "worktreeRemoved": "The run’s worktree was removed already.",
+      "integrationRunning": "A merge or worktree removal of this task is running; try again once it ended.",
+      "noWorktree": "The run left no worktree to remove.",
+      "uncommittedChanges": "The worktree holds uncommitted changes. A person decides on the task page whether to discard them.",
+      "notStoppedAtLimit": "Run #{{run}} is not stopped at a limit, so nothing waits to continue.",
+      "choiceNotOffered": "The task page does not offer this choice for how run #{{run}} stopped. get_run says how it stopped.",
+      "returnStepNotOffered": "Run #{{run}} cannot return to that step: only an earlier agent step that ran before the stuck step can take a note.",
+      "notQueued": "{{task}} is not queued, so it is not returned to the drafts.",
+      "runRecorded": "{{task}} has a run, so it stays queued; only a task whose run never started returns to the drafts.",
+      "severalQuestions": "This request asks several questions at once; answer it on its card in the task conversation.",
+      "questionAmbiguous": "Several questions wait in this run; name one by its id, as get_run lists them.",
+      "noWaitingQuestion": "No question waits for an answer in this run.",
+      "noPlanWaiting": "No plan waits for a decision in run #{{run}}.",
+      "planApproved": "Plan v{{version}} of {{step}} was approved already; no plan waits for a decision.",
+      "planChangesRequested": "Changes to plan v{{version}} of {{step}} were requested already; its agent revises it, and the revised plan waits for a decision of its own.",
+      "planRunPaused": "Run #{{run}} is paused; plan v{{version}} of {{step}} takes a decision once the run is resumed (resume_run).",
+      "planNoLongerWaits": "The plan no longer waits for a decision: it was decided since it was read. get_run says where the run stands now.",
+      "planVersionInvalid": "Plan versions count from 1.",
+      "approveNeedsVersion": "Approving names the plan version it is for, as get_run shows it waiting with its whole text, so only a plan read in full is approved.",
+      "planVersionChanged": "Plan v{{asked}} no longer waits for a decision; plan v{{version}} of {{step}} waits now.",
+      "planNoteRequired": "Request changes needs a note that says what should change in the plan.",
+      "approveTakesNoNote": "Approving takes no note, as the plan card approves without one. Request changes to send the agent a note."
+    }
+  },
+  "statusBar": {
+    "activity": {
+      "runnerReconnected": "Runner reconnected",
+      "runnerReconnectedContinued": {
+        "one": "Runner reconnected · 1 interrupted run continued",
+        "other": "Runner reconnected · {{count}} interrupted runs continued"
+      },
+      "planReady": "Plan ready for review · {{task}}",
+      "agentAsks": "{{agent}} asks · {{task}}",
+      "needsDecision": "{{step}} needs your decision · {{task}}",
+      "runReady": "Run #{{run}} ready for review"
+    },
+    "operations": {
+      "pipelineDraft": {
+        "running": "Saving draft · {{name}}",
+        "done": "Draft saved · {{name}}",
+        "failed": "Could not save draft · {{name}}"
+      },
+      "pipelinePublish": {
+        "running": "Publishing {{name}} v{{version}}",
+        "done": "Published {{name}} v{{version}}",
+        "failed": "Could not publish {{name}} v{{version}}"
+      },
+      "pipelineCreate": {
+        "running": "Creating pipeline {{name}}",
+        "done": "Pipeline created · {{name}}",
+        "failed": "Could not create pipeline {{name}}"
+      },
+      "projectCreate": {
+        "running": "Creating project {{name}}",
+        "done": "Project created · {{name}}",
+        "failed": "Could not create project {{name}}"
+      },
+      "repositoryPick": {
+        "running": "Choosing a repository folder",
+        "done": "Repository folder chosen",
+        "failed": "Could not choose a repository folder"
+      },
+      "taskDraft": {
+        "running": "Saving task {{name}}",
+        "done": "Task saved · {{name}}",
+        "failed": "Could not save task {{name}}"
+      },
+      "profileCreate": {
+        "running": "Creating agent profile {{name}}",
+        "done": "Agent profile created · {{name}}",
+        "failed": "Could not create agent profile {{name}}"
+      },
+      "profileDraft": {
+        "running": "Saving draft · {{name}}",
+        "done": "Draft saved · {{name}}",
+        "failed": "Could not save draft · {{name}}"
+      },
+      "profilePublish": {
+        "running": "Publishing agent profile",
+        "done": "Agent profile published",
+        "failed": "Could not publish agent profile"
+      },
+      "profileKeepDraft": {
+        "running": "Keeping agent profile draft",
+        "done": "Agent profile draft kept",
+        "failed": "Could not keep agent profile draft"
+      },
+      "toolCreate": {
+        "running": "Creating tool {{name}}",
+        "done": "Tool created · {{name}}",
+        "failed": "Could not create tool {{name}}"
+      },
+      "toolDraft": {
+        "running": "Saving draft · {{name}}",
+        "done": "Draft saved · {{name}}",
+        "failed": "Could not save draft · {{name}}"
+      },
+      "toolPublish": {
+        "running": "Publishing {{name}} v{{version}}",
+        "done": "Published {{name}} v{{version}}",
+        "failed": "Could not publish {{name}} v{{version}}"
+      },
+      "toolKeepDraft": {
+        "running": "Keeping the draft of {{name}}",
+        "done": "Draft kept · {{name}}",
+        "failed": "Could not keep the draft of {{name}}"
+      },
+      "connectionCheck": {
+        "running": "Checking {{name}}",
+        "done": "Checked {{name}}",
+        "failed": "Could not check {{name}}"
+      },
+      "connectionSave": {
+        "running": "Saving connection {{name}}",
+        "done": "Connection saved · {{name}}",
+        "failed": "Could not save connection {{name}}"
+      },
+      "cliCheck": {
+        "codex": {
+          "running": "Checking Codex CLI",
+          "done": "Checked Codex CLI",
+          "failed": "Could not check Codex CLI"
+        },
+        "claude": {
+          "running": "Checking Claude Code CLI",
+          "done": "Checked Claude Code CLI",
+          "failed": "Could not check Claude Code CLI"
+        },
+        "gh": {
+          "running": "Checking GitHub CLI",
+          "done": "Checked GitHub CLI",
+          "failed": "Could not check GitHub CLI"
+        }
+      },
+      "programPick": {
+        "running": "Choosing a program file",
+        "done": "Program file chosen",
+        "failed": "Could not choose a program file"
+      },
+      "expectedAccount": {
+        "running": "Recording the account {{name}} uses",
+        "done": "Recorded the account {{name}} uses",
+        "failed": "Could not record the account {{name}} uses"
+      },
+      "repositoryDetect": {
+        "running": "Detecting the GitHub repository",
+        "done": "Checked the GitHub repository",
+        "failed": "Could not check the GitHub repository"
+      },
+      "repositoryLink": {
+        "running": "Linking {{name}}",
+        "done": "Linked {{name}}",
+        "failed": "Could not link {{name}}"
+      },
+      "pullRequestSync": {
+        "running": "Syncing pull requests",
+        "done": "Pull requests synced",
+        "failed": "Could not sync pull requests"
+      },
+      "pullRequestRefresh": {
+        "running": "Reading pull request #{{name}}",
+        "done": "Read pull request #{{name}}",
+        "failed": "Could not read pull request #{{name}}"
+      },
+      "pullRequestOpen": {
+        "running": "Opening pull request #{{name}} in the browser",
+        "done": "Opened pull request #{{name}} in the browser",
+        "failed": "Could not open pull request #{{name}} in the browser"
+      },
+      "instructionDraft": {
+        "running": "Saving draft · {{name}}",
+        "done": "Draft saved · {{name}}",
+        "failed": "Could not save draft · {{name}}"
+      },
+      "instructionPublish": {
+        "running": "Publishing {{name}} v{{version}}",
+        "done": "Published {{name}} v{{version}}",
+        "failed": "Could not publish {{name}} v{{version}}"
+      },
+      "instructionCreate": {
+        "running": "Creating instruction {{name}}",
+        "done": "Instruction created · {{name}}",
+        "failed": "Could not create instruction {{name}}"
+      },
+      "secretAdd": {
+        "running": "Saving secret {{name}}",
+        "done": "Secret saved · {{name}}",
+        "failed": "Could not save secret {{name}}"
+      },
+      "secretReplace": {
+        "running": "Replacing the value of {{name}}",
+        "done": "Value replaced · {{name}}",
+        "failed": "Could not replace the value of {{name}}"
+      },
+      "secretArchive": {
+        "running": "Archiving secret {{name}}",
+        "done": "Secret archived · {{name}}",
+        "failed": "Could not archive secret {{name}}"
+      },
+      "runMerge": {
+        "running": "Merging {{task}} run #{{run}} into {{branch}}",
+        "done": "Merged {{task}} run #{{run}} into {{branch}}",
+        "failed": "Could not merge {{task}} run #{{run}} into {{branch}}",
+        "notDone": "{{task}} run #{{run}} not merged"
+      },
+      "runCleanup": {
+        "running": "Removing the worktrees of {{task}} run #{{run}}",
+        "done": "Removed the worktrees of {{task}} run #{{run}}",
+        "failed": "Could not remove the worktrees of {{task}} run #{{run}}",
+        "notDone": "Worktrees of {{task}} run #{{run}} not removed"
+      },
+      "projectEnvironment": {
+        "running": "Saving the environment",
+        "done": "Environment saved",
+        "failed": "Could not save the environment"
+      },
+      "import": {
+        "running": {
+          "one": "Importing 1 resource from {{project}}",
+          "other": "Importing {{count}} resources from {{project}}"
+        },
+        "done": {
+          "one": "Imported 1 resource from {{project}}",
+          "other": "Imported {{count}} resources from {{project}}"
+        },
+        "failed": {
+          "one": "Could not import from {{project}}",
+          "other": "Could not import from {{project}}"
+        }
+      },
+      "mcpServerOn": {
+        "running": "Turning on MCP server {{name}}",
+        "done": "MCP server turned on · {{name}}",
+        "failed": "Could not turn on MCP server {{name}}"
+      },
+      "mcpServerOff": {
+        "running": "Turning off MCP server {{name}}",
+        "done": "MCP server turned off · {{name}}",
+        "failed": "Could not turn off MCP server {{name}}"
+      },
+      "skillDraft": {
+        "running": "Saving draft · {{name}}",
+        "done": "Draft saved · {{name}}",
+        "failed": "Could not save draft · {{name}}"
+      },
+      "skillPublish": {
+        "running": "Publishing {{name}} v{{version}}",
+        "done": "Published {{name}} v{{version}}",
+        "failed": "Could not publish {{name}} v{{version}}"
+      },
+      "skillCreate": {
+        "running": "Creating skill {{name}}",
+        "done": "Skill created · {{name}}",
+        "failed": "Could not create skill {{name}}"
+      },
+      "skillFileAdd": {
+        "running": "Adding a reference file · {{name}}",
+        "done": "Reference file added · {{name}}",
+        "failed": "Could not add a reference file · {{name}}"
+      },
+      "repositoryImport": {
+        "running": "Creating {{count}} drafts from the repository",
+        "done": "Created {{count}} drafts from the repository",
+        "failed": "Could not create drafts from the repository"
+      },
+      "agentFiles": {
+        "running": "Saving repository agent files",
+        "done": "Repository agent files saved",
+        "failed": "Could not save repository agent files"
+      },
+      "codeIndex": {
+        "running": "Saving the code index setting",
+        "done": "Code index setting saved",
+        "failed": "Could not save the code index setting"
+      },
+      "codeIndexRebuild": {
+        "running": "Rebuilding the code index of {{name}}",
+        "done": "Code index of {{name}} rebuilt",
+        "failed": "Could not rebuild the code index of {{name}}"
+      }
+    }
+  },
+  "tokens": {
+    "errors": {
+      "empty": "Enter a token budget.",
+      "digits": "Use digits only, for example {{example}}.",
+      "zero": "Enter a budget above 0 tokens.",
+      "aboveMax": "A run budget can be at most {{max}} tokens (project setting).",
+      "defaultAboveMax": "The default can be at most the maximum run budget, {{max}} tokens.",
+      "notAboveUsed": "Enter more than the {{used}} tokens this run already used.",
+      "stepNotAboveUsed": "Enter more than the {{used}} tokens {{step}} already used.",
+      "stepAboveMax": "A step budget can be at most {{max}} tokens, the maximum run budget (project setting)."
+    }
+  },
+  "sharing": {
+    "errors": {
+      "serverOnly": "This change is made on the server for a shared project, and this screen cannot send it there yet.",
+      "notShared": "This project's task list is not shared.",
+      "alreadyShared": "This project's task list is shared already.",
+      "offline": "{{server}} can't be reached, so nothing was sent. The list is read-only until it answers.",
+      "notMember": "You are no longer a member of this project on the server, so nothing was sent.",
+      "serverMissing": "The server this project is shared on is no longer in Settings › Servers.",
+      "invalidAnswer": "The server answered with something Orchester can't use; nothing was changed here.",
+      "keptChanging": "The task kept changing on the server while Orchester merged your change. Open it again and save once more.",
+      "unavailable": "The server of this shared project can't be asked now.",
+      "notEditable": "The server didn't take the change: the task can't be edited in its state.",
+      "organization": "The server didn't take the status, priority, tags or links: they break a rule of the task list.",
+      "remoteTaken": "This repository is shared on the server already.",
+      "shareInProgress": "This project is being shared right now, so nothing was changed. Try again once sharing has finished."
+    },
+    "members": {
+      "noSuchUser": "The server has no user with this username. Usernames are exact; an admin of the server creates accounts.",
+      "alreadyMember": "This person is already a member. Change their role in their row.",
+      "lastOwner": "You are the last owner. Make another member an owner first; then you can become a member or leave."
+    },
+    "notShared": {
+      "readOnly": "This task is Not shared, so it is read-only. Share task on its page uploads it first."
+    }
+  },
+  "claims": {
+    "refused": {
+      "held": "{{holder}} has taken this task, so nothing started. Ask them, or wait until they release it.",
+      "heldStale": "{{holder}} has taken this task and their claim has gone stale; nothing started. Take it over from the task page once that is possible.",
+      "heldUnknown": "Someone else has taken this task, so nothing started.",
+      "merged": "This task was merged; nobody takes it into work again."
+    }
+  }
+}

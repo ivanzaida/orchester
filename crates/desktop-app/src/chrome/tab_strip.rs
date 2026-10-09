@@ -1,10 +1,10 @@
 //! The tabs in the title bar (`Tabs` `mkCf8`): one per open tab, then *New tab*. A tab at All projects
 //! is the folders icon alone (`All projects tab` `TvmmP`, `Tab/home`); every other tab shows its screen's
-//! icon and name (`Tab/active`, `Tab/inactive`) — a task by its key. The design's `<project> · <screen>`
-//! needs the project's name, which comes with reading projects; a project's id is never shown. The
-//! active tab is filled with `hover` and has a close button; a middle click closes any tab that can be
-//! closed. The OS window title is the active tab's label and the app's name. The design's
-//! unsaved-changes dot comes with editing.
+//! icon and name (`Tab/active`, `Tab/inactive`) — a task by its key — after its project's name once the
+//! project is known to be in the list (`Kontur · Overview`); a project's id is never shown. The active
+//! tab is filled with `hover` and has a close button; a middle click closes any tab that can be closed.
+//! The OS window title is the active tab's label and the app's name. The design's unsaved-changes dot
+//! comes with editing.
 //!
 //! The strip sits in the title bar's flexible middle and shares its room as `tab_fit` says; once it
 //! scrolls, the active tab is brought into view whenever it changes, the mouse wheel scrolls it
@@ -33,6 +33,7 @@ use crate::{
     Navigation,
     tabs::{Tab, TabId, TabSet},
   },
+  project::Projects,
   routes::{ProjectPage, Route},
   theme::{ExtraColor, ExtraSpacing, IconSize},
   ui::{
@@ -72,10 +73,11 @@ impl Component for TabStrip {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let navigation = Navigation::of(ctx);
+    let projects = Projects::of(ctx);
     let tabs = navigation.tabs();
     let window = ctx.window();
     let fit = tab_fit::fit(window.info().logical_width(), &tabs);
-    let active = label(ctx, tabs.active().route());
+    let active = label(ctx, &projects, tabs.active().route());
     window.set_title(ctx.t_args("shell.app.windowTitle", [("tab", active)]).to_string());
     self.reveal(&tabs, fit);
     let strip = tabs.tabs().iter().fold(
@@ -83,7 +85,7 @@ impl Component for TabStrip {
         .id("tab-strip")
         .spacing(ExtraSpacing::Tight.role())
         .align_items(Alignment::Center),
-      |strip, tab| strip.child(tab_button(ctx, &navigation, &tabs, tab, fit)),
+      |strip, tab| strip.child(tab_button(ctx, &navigation, &projects, &tabs, tab, fit)),
     );
     let wheel = self.scroll.clone();
     Row::new()
@@ -150,12 +152,19 @@ impl TabStrip {
   }
 }
 
-fn tab_button(ctx: &mut Ctx, navigation: &Navigation, tabs: &TabSet, tab: &Tab, fit: Fit) -> Element {
+fn tab_button(
+  ctx: &mut Ctx,
+  navigation: &Navigation,
+  projects: &Projects,
+  tabs: &TabSet,
+  tab: &Tab,
+  fit: Fit,
+) -> Element {
   let active = tab.id() == tabs.active().id();
   let id = tab.id();
   let (select, close) = (navigation.clone(), navigation.clone());
   let closable = tabs.can_close(id);
-  let label = label(ctx, tab.route());
+  let label = label(ctx, projects, tab.route());
   let button = pressable(move || select.select(id))
     .id(format!("tab-{id}"))
     .describe("state", if active { "active" } else { "inactive" })
@@ -256,14 +265,24 @@ fn close_button(ctx: &mut Ctx, navigation: Navigation, tab: &Tab) -> Element {
     .into()
 }
 
-/// The tab's label: its screen's name, a task by its key and its Edit task as `Edit <key>` (`Qp1B0`).
-fn label(ctx: &mut Ctx, route: &Route) -> String {
-  match route {
+/// The tab's label: its screen's name, a task by its key and its Edit task as `Edit <key>` (`Qp1B0`),
+/// after the project's name once it is known (`Kontur · KON-12`).
+fn label(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
+  let screen = match route {
     Route::Project(_, ProjectPage::Task(key, _)) => key.to_string(),
     Route::Project(_, ProjectPage::EditTask(key)) => ctx
       .t_args("shell.screens.editTaskOf", [("key", key.to_string())])
       .to_string(),
     route => ctx.t(route.screen().title_key()).to_string(),
+  };
+  match route.project().and_then(|project| projects.name(project)) {
+    Some(name) => ctx
+      .t_args(
+        "shell.tabs.inProject",
+        [("project", name.as_str()), ("label", screen.as_str())],
+      )
+      .to_string(),
+    None => screen,
   }
 }
 

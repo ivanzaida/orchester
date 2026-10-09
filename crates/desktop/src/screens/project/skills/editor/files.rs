@@ -17,7 +17,7 @@ use orchester_core::resource::{InstructionScope, Skill, SkillFile};
 
 use super::{Files, SkillEditor};
 use crate::{
-  activity::{Activity, OperationSpec, skill_operations},
+  activity::{OperationSpec, skill_operations},
   background, display,
   messages::Message,
   screens::project::secrets::labels::date,
@@ -206,7 +206,7 @@ fn kind_key(path: &str) -> &'static str {
 /// Picks a file with the system's file dialog and stores it as a reference file, reported in the
 /// status bar. Choosing nothing adds nothing.
 pub(super) fn add_file_action(ctx: &mut Ctx) -> AddFileAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |(repo_root, title, spec): AddArgs| {
     let activity = activity.clone();
     async move {

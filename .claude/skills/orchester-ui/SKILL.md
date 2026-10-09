@@ -37,12 +37,22 @@ files; the paths and the mapping tables below are the deprecated `orchester-desk
     `task.summary.*`. New task and Edit task are `task_form.json`.
 - Design values: only in `crates/desktop-app/src/theme/` (`palette.rs`, `typography.rs`, `metrics.rs`,
   `form.rs`, `shadow.rs`); call sites use lurq roles and the `ExtraColor`, `ExtraTypography`,
-  `IconSize`, `ExtraSpacing` and `ExtraRadius` roles there. A structural size (a sidebar width, a tab
+  `IconSize`, `ExtraSpacing` and `ExtraRadius` roles there. Shared roles belong to the UI kit; a value
+  only one area uses goes in that area's own `theme/<area>.rs` (`startup.rs`, `shell.rs`), registered
+  with one line in `theme/mod.rs` and `typography.rs`. A structural size (a sidebar width, a tab
   height) is a named constant next to the component that owns it, with its Pencil node id.
+- A `Message` of `orchester-workspace` is shown with `ui::message::message_text`, which reads its key in
+  the `workspace` namespace; never `ctx.t` with its key.
 - Tests: `cargo test -p orchester-app --test i18n -- locales area every_key` (load, parity per area, own
   keys only, every key the code names has its area's file and exists) and
   `cargo test -p orchester-app --test theme -- roles extra_color spacing`.
 - `tools/check.ps1`'s "ui literals" check covers `crates/desktop-app/src` too (its `theme/` exempt).
+- The UI kit (`crates/desktop-app/src/ui/`, Kontur's shared components `ASNYj`/`DMMLd`) comes first on the reuse
+  ladder: buttons, fields, selects, menus, popovers, tabs, toggles, status/priority labels, chips, notices, cards,
+  tables, empty/loading/error states, Markdown, code box, tooltips and cut text, avatars, breadcrumbs, the
+  unavailable reason. Its own words are in `en/ui.json` (`ui.*`), the shared Copy and Try again in `common.*`; extra roles add `ExtraShadow`, `ControlHeight` and the
+  `DISABLED_OPACITY` fader. Tests: `cargo test -p orchester-app --test ui_kit <filter>`;
+  every control in its states: `cargo run -p orchester-app --example ui_gallery` (MCP like the app).
 
 ## Text through i18n
 
@@ -50,8 +60,12 @@ files; the paths and the mapping tables below are the deprecated `orchester-desk
 
 - Strings: `crates/desktop/assets/locales/<locale>.json` (nested JSON, flattened by lurq to
   dotted keys). Today only `en.json` ships.
+- Keys that `orchester-workspace` names (its `Message`s, statuses, months, units) live in
+  `crates/workspace/assets/locales/<locale>.json` instead, never in both files. An app loads them
+  under the namespace `workspace` (`orchester_workspace::i18n::NAMESPACE`); the old app also loads
+  them into its default namespace, so its screens read them with `ctx.t`.
 - Loading: `crates/desktop/src/i18n.rs` (`LOCALES`, `install`). A new locale is one new
-  file plus one `LOCALES` entry.
+  file plus one `LOCALES` entry, in both crates.
 - In components: `ctx.t("tasks.newTask")`, `ctx.t_args("runs.finishedAgo", [("time", t)])`.
   Outside a component (window title, menus): `app.i18n().t(...)`.
 

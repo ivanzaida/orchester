@@ -180,71 +180,58 @@ independent design verifier (no frame exists; closest patterns) reports no block
 server dialog's *Tools that run without asking* area, the inspector's list, the profile enforcement row, the step
 inspector line and the activity mark.
 
-### M8 · Orchester's typed agent tools · branch `claude/orchester-tools` (implemented, waiting for review)
+### M12 · Agent file tools, second version (non-UI; sources need a design for their UI)
 
-User decision 2026-10-05: one set of typed tools in core (schema, approval policy, execution), served to Claude Code
-and Codex by the per-invocation relay that already serves `mcp__Orchester__approve`. Described in
-`docs/interactive-tool-approvals.md`, "Orchester's tools".
+User decision 2026-10-09. Replaces the file and git tools of M8/M9 (`crates/core/src/orchester_tools/`, served by the
+runner's per-invocation relay as `mcp__Orchester__<name>`) with this set. No tool takes a project: the relay already
+belongs to one run, and every path is relative to that run's worktree root. Agents use git themselves (shell), so
+Orchester's git tools go.
 
-- Built: `git_status`, `git_diff`, `git_log`, `git_show` (run), `git_add`, `git_commit` (run in a writing step) and
-  `read_outside_file` (asks). The runner holds approvals itself (a prompt approval leaves a one-call grant, any other
-  call that asks is asked about by the runner; Codex approves every tool in its configuration). Output is streamed
-  within its cap (`orchester_exec::run_capped`, streamed line reads). `read_outside_file` uses the shared credential
-  rule and refuses `.git` and Orchester's own state everywhere. Git is pinned to the worktree's own git folder with
-  an absolute empty hooks folder.
-- First review (FAIL, four majors) fixed: other projects' private files, unbounded output, asking tools without a
-  runner check, `run_project_tool` and the network. Re-review (FAIL, one major) fixed: git never enters a nested
-  repository and `git_add` refuses one (`cargo test -p orchester-runner --test orchester_tools_git
-  orchester_tools_git`, with a real nested filter); prompt grants are bound to their arguments; server databases and
-  NULs before the offset are refused.
-- Tests: `cargo test -p orchester-core --test orchester_tools orchester_tools`, `--test claude_approvals
-  claude_approvals`, `--test claude_invocation claude_invocation`, `--test mcp mcp`; `cargo test -p orchester-runner
-  --features test-agent --test orchester_tools orchester_tools` (and `mcp`, `execution`, `claude_approvals`, …);
-  `cargo test -p orchester-desktop --test form_keyboard approval_choices`.
-- Against the fixture (59 requests of runs 22–25): no request used git, so the git tools replace none; the 6
-  single-file reads of lurq's sources (`sed -n … ~/.cargo/registry/src/…`) become `read_outside_file` calls (each still
-  asks, or one *Approve similar*); the 18 searches outside the worktree have no tool; the other 35 are worktree work
-  for the CLI's own file tools (the *Files and commands* paragraph).
-- Not built: an *offered to agents* setting and typed parameters for Tools-library tools (a schema per tool, an
-  editor for it, a rule for how values become arguments: UI/design work), so `run_project_tool` is offered to no
-  agent; a search outside the worktree; a list for Always allow of Orchester's tools; the native agent hookup (P1d:
-  the native loop declares `StepTools::mcp_tools` and runs `ToolCall::work` itself).
-- Open: the visible text `runs.toolApproval.wider.orchesterTool` needs an independent design verification; answer
-  sizes against Claude Code's MCP output limit are unchecked with the real CLI; the runner's macOS build was not
-  cross-checked (core was).
+- `read_file(filename, start_line, length)` — worktree only; answers from the code index when it holds the file at
+  the read revision, else from disk. Records a read stamp for `edit_file`.
+- `search_file(term, limit_files)` — worktree only; the code index first (definitions of a name, then matches),
+  ripgrep for the rest; at most `limit_files` files, each with its matching lines; says when it was cut.
+- `edit_file(filename, start_line, end_line, expected, content)` — worktree only; replaces lines
+  `start_line..=end_line` with `content` only if those lines are exactly `expected` now and the file was read in this
+  invocation and has not changed since that read; otherwise refuses and says what is there now. Atomic write.
+- `create_file(filename, content)` — worktree only; refuses when the file exists (changing an existing file is
+  `edit_file`).
+- `search_external_file(base_directory, term)` and `read_external_file(filename)` — outside the worktree: run without
+  asking when the folder (or a parent) is listed in the run's **sources**, else ask the person (one approval, or
+  *Approve similar* for that folder). `.git`, Orchester's own data, credential files and other projects' private
+  state are refused as `read_outside_file` refuses them today.
+- **Sources:** folders and files an agent may read outside its worktree without asking. Listed on the project, the
+  task, the pipeline (part of the pipeline's draft and published versions, like its steps) and a pipeline step; a run
+  snapshots the union of the project's, the task's, its pinned pipeline version's and all its steps' sources when it
+  starts, and every step of the run may read them (decided 2026-10-09; later edits apply to new runs). Needs storage,
+  core rules and runner checks now; the UI is designed in `data/orchester2.pen` (layers "Sources" `XulGo` and
+  "Pipeline settings" `vEDYY`) — until the new app builds it, sources are set through Orchester's MCP server.
+- Removed: `git_status`, `git_diff`, `git_log`, `git_show`, `git_add`, `git_commit`, `write_file`,
+  `read_outside_file`, the old `search`/`edit_file` schemas, and their prompt lines; the *Files and commands* prompt
+  part names the new tools. `list_files`, `find_symbol`, `list_skills`, `read_skill` stay as they are.
+- Limits as today: answers within 60 KiB with a note on how to narrow; same confinement (plain relative paths, links
+  out refused, extra writable folders still writable by `edit_file`/`create_file`).
+- Steering (decided 2026-10-09): Claude Code gets both — the prompt names the tools and `--disallowedTools
+  Read,Edit,Write,Grep,Glob` takes its own file tools away (its shell stays for builds, tests and git). Codex calls
+  the same tools over MCP; its shell can't be removed, so it is steered by the prompt only, and the live run measures
+  how often it still reads or edits through the shell before anything stronger is decided.
+- Also wanted (decided 2026-10-09), same rules (worktree only unless said, no project argument):
+  - `delete_file(filename)` and `move_file(from, to)` — worktree only; a deletion or move shows in Changes.
+  - `find_references(name)` — from the code index; says when the index is off or stale.
+  - `run_check(name)` — runs a named command tool of the project's Tools library offered to the step (tests, lint,
+    build) with capped output and its exit code; no free-form command.
+  - `get_task()` — the run's task: title, brief, acceptance criteria, approved plan, the person's decisions and notes.
+  - `save_memory(kind, text, key?, tags?, importance?)` — a task or project memory record, proposed or active by the
+    project's saving setting (Memory design, `docs/design/orchester-workspace.md` "Task and project memory").
+  - `write_artifact(name, content)` — a file kept with the run (store `artifacts`, plus the step execution and
+    revision it was made at, as the Artifacts design proposes).
+  - `report_progress(text)` — one short status line for the step, shown on Summary; replaces the previous one.
+  The memory and artifact tools need their storage parts first; build the rest without waiting for them.
 
-### M9 · Orchester's file tools for Claude Code and Codex · branch `claude/file-tools` (implemented, waiting for review)
-
-User request 2026-10-05: agents edited through shell lines a person had to approve. `read_file`, `list_files`,
-`search`, `edit_file` and `write_file` join Orchester's tools (`docs/interactive-tool-approvals.md`, "Orchester's
-tools"), served by the relay to both CLIs and run by the runner with the native agent's executors
-(`orchester_agent::FileTools`, ORC-58; the runner now depends on `orchester-agent`, one implementation): confined to
-the worktree, the extra writable folders, the code index and skills (read-only); `.git`, `.orchester` and links out
-refused; read stamps per invocation (an edit needs a read in this invocation that still matches); atomic writes;
-answers within 128 KiB. The schemas are the native tools' (`list_files` takes `pattern`, not `glob`; `search` also
-takes `context`). Read, list and search run in every step; edit and write run in a writing step and are not offered
-in a read-only one; nothing asks.
-
-- With the code index of the run's base revision: `find_symbol {name, kind?, include_tests?, include_consts?}`
-  (offered only then; ranked: own definitions, then constants, then tests when asked; exact name, then case, then
-  prefix, then contains), `search` for a name lists its definitions first, `list_files` answers from the index's file
-  list and the files changed since the base revision; hits in changed files are marked. The index prompt part and the
-  codebase-index skill point at these tools.
-- Prompt: the *Files and commands* part names the file tools as each CLI sees them (`mcp__Orchester__edit_file`);
-  the *Orchester tools* paragraph says the shell is for builds and tests, and names the git tools. Claude Code's own
-  Edit/Write stay offered (steered by the prompt, not `--disallowedTools`), so its edit rules and checks are unchanged.
-- Tests: `cargo test -p orchester-core --test orchester_tools orchester_tools`, `--test run working`,
-  `--test claude_invocation claude_invocation`, `--test claude_approvals claude_approvals`; `cargo test -p
-  orchester-runner --features test-agent --test orchester_file_tools orchester_file_tools` (and `orchester_tools`,
-  `orchester_tools_git`, `codebase_index`, `claude*`, `execution`, …); `cargo test -p orchester-agent --test
-  file_tools file`.
-- Security review (FAIL, three majors) fixed: paths from the index and from git pass the same confinement as
-  `read_file` (plain relative paths only, resolved in the scope; others dropped and counted); `list_files` uses
-  the index only for folders of the worktree; every answer is cut to 60 KiB (`MAX_ANSWER_BYTES`, below Claude
-  Code's 25 000-token MCP limit) with a note on how to narrow it. Also: the runner takes `orchester-agent` without
-  its `http` feature (no TLS stack), `search`'s definitions follow its path and glob, `find_symbol` refuses a blank
-  name and finds constants by kind, and an unreadable list of changes falls back to the plain listing.
-- Open: the real CLIs were not run; the ripgrep lookup uses the runner's `PATH`, not the project's environment.
+**Done when:** core tests for each tool's schema and refusals (stale `expected`, unread file, existing file on create,
+paths out of the worktree, sources vs approval), runner tests with the fake Claude and Codex agents calling every tool
+through the relay, the old tools gone from both CLIs' tool lists, `tools/check.ps1` passes, and a live run with the
+real Claude Code and Codex on a throwaway repository shows each tool called and working (evidence in `docs/evidence/`).
 
 ### M6 · Environment names in secret references (needs decision)
 
@@ -2186,3 +2173,8 @@ L5 · Select menus wider than their trigger · branch `codex/select-menu-width` 
 L6 · Verifier app windows start without focus · branch `codex/l6-registry-0303` (lurq 0.30.3 registry build and filtered focus-related tests 11/11 passed; `tools/check.ps1` passed. Independent exact-PID MCP and host foreground verification observed no focus across 951 samples; live Pencil Welcome comparison found 0 blocking/major, 1 pre-existing minor copy difference. Evidence: `docs/evidence/l6-registry-0303-2026-09-29.md`).
 ORC-15 · Repository agent files, Orchester-owned skills and import from repository · branch `claude/orc15` (per-project setting, off keeps AGENTS.md and `.agents/skills` out of Codex with `project_doc_max_bytes=0` and per-skill `skills.config` on new and resumed sessions; Claude Code already loads neither with `--setting-sources ""`; skills resource with reference-file blobs, pinned by runs, placed in `.orchester/skills/<execution>/` and listed in new-session prompts; Import from repository creates drafts only. Core, store, runner and desktop tests, `tools/check.ps1` passed; independent MCP/Pencil verification: 0 blocking/major. Open: the setup Ready-step entry point is not built, Claude Code `on` does not load CLAUDE.md (user decision), macOS unchecked).
 C5 · Model requirements are recorded and saved without lost updates · branch `claude/c5` (`ConnectionStore::record_model_requirement`: one immediate transaction writes only the connection's settings; a removed connection is `ConnectionNotFound` and is not created again, a native one `NotAnAgentCliConnection`; the runner logs a removed connection instead of failing the run. `save_connection` merges the stored requirements into what it writes (`ModelRequirements::merge`, higher version wins), so a desktop copy read before the runner's record keeps it; no path clears a requirement. Tests: `orchester-store --test connections model_requirement` 5 passed and `connection` 14 passed, `orchester-runner --features test-agent --test claude claude_refused_model` and `--test execution execution_rejects_what_the_preflight` passed, `orchester-desktop --test connections connection` 8 passed; `tools/check.ps1` passed).
+M8 · Orchester's typed agent tools (`git_status`, `git_diff`, `git_log`, `git_show`, `git_add`, `git_commit`,
+`read_outside_file`) served to Claude Code and Codex by the runner's MCP relay · merge `6f027444` (review, re-review).
+M9 · Orchester's file tools for Claude Code and Codex (`read_file`, `list_files`, `search`, `edit_file`, `write_file`,
+`find_symbol` with the code index) · merge `6a7d57bd` (security review). A live run with the real CLIs was still open
+when they were merged.

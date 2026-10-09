@@ -15,7 +15,8 @@
       "label": "Orchester menu"
     },
     "tabs": {
-      "close": "Close tab"
+      "close": "Close tab",
+      "inProject": "{{project}} · {{label}}"
     },
     "sidebar": {
       "project": "Project",

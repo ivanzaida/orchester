@@ -7,7 +7,7 @@
 use orchester_core::id::ProjectId;
 use orchester_store::{RegisteredProject, StoreError};
 
-use super::model::{SavedTabs, TabSet};
+use super::model::{SavedTabs, TABS_KEY, TabSet};
 use crate::{
   navigation::{Places, Start, route::Route},
   workspace::Workspace,
@@ -25,7 +25,7 @@ impl lurq::app::component::DevtoolsInspectable for Opening {}
 /// Reads the saved tabs, opening the projects they show into `places`, or else the start screen.
 pub fn opening(workspace: &Workspace, places: &Places) -> Result<Opening, StoreError> {
   let home = Route::AllProjects.path();
-  let saved = workspace.saved_tabs()?;
+  let saved = saved_tabs(workspace)?;
   let restored = match saved {
     Some(saved) => restore(workspace, places, &saved)?,
     None => None,
@@ -42,6 +42,19 @@ pub fn opening(workspace: &Workspace, places: &Places) -> Result<Opening, StoreE
     _ => None,
   };
   Ok(Opening { set, shown_project })
+}
+
+/// The tabs the last session saved; `None` when it saved none or they cannot be read, which the log
+/// says.
+fn saved_tabs(workspace: &Workspace) -> Result<Option<SavedTabs>, StoreError> {
+  let Some(text) = workspace.ui_state(TABS_KEY)? else {
+    return Ok(None);
+  };
+  let saved = SavedTabs::decode(&text);
+  if saved.is_none() {
+    tracing::warn!("the saved tabs cannot be read; the window opens without them");
+  }
+  Ok(saved)
 }
 
 /// The saved tabs with every project they show opened; `None` when they hold no tab.

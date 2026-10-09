@@ -17,8 +17,9 @@ use orchester_core::id::ProjectId;
 
 use crate::{
   navigation::Navigation,
+  project::Projects,
   routes::{ProjectPage, Route, Screen},
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, ShellText},
   ui::{
     icon::{Icon, icon, screen_icon},
     nav_item::NavItem,
@@ -142,30 +143,42 @@ fn section_label(label: &str) -> Row {
     )
 }
 
-/// The project switcher (`Project switcher` `i0xDK7`): that a project is open, or that none is.
-/// Projects are chosen in All projects, where it leads. The open project's name and its initial in the
-/// tile come with reading projects; its id is never shown.
+/// The project switcher (`Project switcher` `i0xDK7`): the project the screen shows, by its name, its
+/// folder and its initial in the tile, or that none is open. Projects are chosen in All projects, where
+/// it leads. While the project opens, or when no project in the list has its id, it says only that a
+/// project is shown; its id is never shown.
 fn switcher(ctx: &mut Ctx, project: Option<ProjectId>, navigation: &Navigation) -> Element {
-  let (name, detail) = match project {
-    Some(_) => (ctx.t("shell.sidebar.project").to_string(), None),
-    None => (
+  let known = project.and_then(|project| Projects::of(ctx).state(project));
+  let listed = known.as_ref().and_then(|state| {
+    Some((
+      state.name()?.as_str().to_owned(),
+      state.repo_root()?.display().to_string(),
+    ))
+  });
+  let (name, detail, tile) = match (project, listed) {
+    (Some(_), Some((name, folder))) => {
+      let initial: String = name.chars().next().into_iter().flat_map(char::to_uppercase).collect();
+      let tile = Text::new(&initial).variant(ShellText::SwitcherInitial.role()).into();
+      (
+        name,
+        Some(Text::new(&folder).variant(ShellText::SwitcherPath.role())),
+        tile,
+      )
+    }
+    (Some(_), None) => (ctx.t("shell.sidebar.project").to_string(), None, folders_glyph()),
+    (None, _) => (
       ctx.t("shell.sidebar.noProject").to_string(),
-      Some(ctx.t("shell.sidebar.chooseProject")),
+      Some(Text::new(&ctx.t("shell.sidebar.chooseProject")).variant(TypographyStyle::Caption)),
+      folders_glyph(),
     ),
   };
-  let tile = glyph_tile(icon(Icon::Folders, IconSize::Base, PaletteColor::TextSecondary).into());
+  let tile = glyph_tile(tile);
   let text = Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .spacing(ExtraSpacing::Hair.role())
-    .child(
-      Text::new(&name)
-        .variant(TypographyStyle::Label)
-        .nowrap()
-        .max_width(Dimension::Pct(100.0))
-        .text_overflow(TextOverflow::Elipsis),
-    )
-    .with_children(detail.map(|detail| Text::new(&detail).variant(TypographyStyle::Caption).nowrap()));
+    .child(truncated(Text::new(&name).variant(TypographyStyle::Label)))
+    .with_children(detail.map(truncated));
   let navigation = navigation.clone();
   pressable(move || navigation.go(Route::AllProjects))
     .id("project-switcher")
@@ -181,6 +194,19 @@ fn switcher(ctx: &mut Ctx, project: Option<ProjectId>, navigation: &Navigation) 
     .child(text)
     .child(icon(Icon::ChevronsUpDown, IconSize::Base, PaletteColor::TextMuted))
     .into()
+}
+
+/// One line that ends in an ellipsis when it does not fit.
+fn truncated(text: Text) -> Text {
+  text
+    .nowrap()
+    .max_width(Dimension::Pct(100.0))
+    .text_overflow(TextOverflow::Elipsis)
+}
+
+/// The tile's content while no project's name is known.
+fn folders_glyph() -> Element {
+  icon(Icon::Folders, IconSize::Base, PaletteColor::TextSecondary).into()
 }
 
 /// The square before the project's name (`Glyph` `yJEuT`).

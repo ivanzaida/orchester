@@ -110,7 +110,7 @@ impl Component for StatusBar {
     let stop = run_approval_action(ctx);
     reload_after(ctx, &stop);
     Self {
-      activity: Activity::of(ctx),
+      activity: crate::activity::of(ctx),
       popover: ctx.signal(false),
       mcp_popover: ctx.signal(false),
       hint: ctx.signal(None),

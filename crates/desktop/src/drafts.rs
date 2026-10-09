@@ -117,7 +117,7 @@ pub fn save_action<B>(ctx: &mut Ctx) -> SaveAction<B>
 where
   B: ResourceBody + Send + Sync + 'static,
 {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |(first, queue): (SaveJob<B>, DraftQueue<B>)| {
     let activity = activity.clone();
     async move {

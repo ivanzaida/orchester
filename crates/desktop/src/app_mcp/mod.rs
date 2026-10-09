@@ -10,28 +10,25 @@
 //! user can read and which is removed when the server stops. [`AppMcpStatus`] carries the port only.
 
 mod discovery;
-mod error;
 mod guard;
 mod handler;
 mod server;
-mod services;
-mod tools;
 
 use std::num::NonZeroU16;
 
 use lurq::app::{ctx::Ctx, i18n::I18n};
+pub use orchester_workspace::app_mcp::Services;
+use orchester_workspace::{app_mcp::Translate, i18n::NAMESPACE};
 use tokio::runtime::Handle;
 
 use self::{
   discovery::DiscoveryFile,
   handler::Handler,
   server::{BearerToken, Listening},
-  tools::Translate,
 };
 pub use self::{
   discovery::DiscoveryFolder,
   server::{address, endpoint},
-  services::Services,
 };
 
 /// Whether the window starts Orchester's MCP server, and where its discovery file goes.
@@ -78,7 +75,11 @@ impl AppMcp {
   pub fn start(folder: &DiscoveryFolder, services: Services, (runtime, i18n): (&Handle, I18n)) -> Option<Self> {
     let folder = folder.path()?;
     let token = BearerToken::generate();
-    let handler = Handler::new(services, Translate::new(i18n));
+    let translate = Translate::new(move |message| {
+      let args = message.args.iter().map(|(name, value)| (*name, value.as_str()));
+      i18n.t_ns_args(NAMESPACE, message.key, args).to_string()
+    });
+    let handler = Handler::new(services, translate);
     let listening = match Listening::start(runtime, handler, token.clone()) {
       Ok(listening) => listening,
       Err(error) => {

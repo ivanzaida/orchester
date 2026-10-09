@@ -1,48 +1,32 @@
 //! Orchester desktop UI. `main.rs` only wires the window; everything else lives here so
-//! it can be tested from `tests/`.
+//! it can be tested from `tests/`. The application layer under the screens is
+//! `orchester-workspace`, re-exported here under its old module names.
 
 pub mod activity;
 pub mod agents;
 pub mod app_icon;
 pub mod app_log;
 pub mod app_mcp;
-pub mod app_paths;
-mod background;
-pub mod budget;
-pub mod clock;
 pub mod close;
-pub mod code_index;
-pub mod connections;
-pub mod display;
 pub mod drafts;
 pub mod embedded_mcp;
-pub mod environment;
-mod external;
-pub mod highlight;
 pub mod i18n;
-pub mod import;
-pub mod instructions;
-pub mod messages;
 pub mod navigation;
 pub mod pipelines;
-pub mod plan_limits;
-pub mod programs;
-pub mod project_setup;
-pub mod pull_requests;
-pub mod recovery;
-pub mod repository;
 pub mod root;
-pub mod runner;
 mod screens;
-pub mod secrets;
-pub mod tabs;
-pub use screens::{close_dialog, recovery_dialog, status_bar};
-pub mod session;
 pub mod sharing;
-pub mod skills;
+pub mod tabs;
 pub mod tasks;
 pub mod theme;
-pub mod tools;
 mod ui;
+
+use orchester_exec::external;
+pub use orchester_exec::programs;
+use orchester_workspace::background;
+pub use orchester_workspace::{
+  app_paths, budget, clock, code_index, connections, display, environment, highlight, import, instructions, messages,
+  plan_limits, project_setup, pull_requests, recovery, repository, runner, secrets, session, skills, tools, workspace,
+};
+pub use screens::{close_dialog, recovery_dialog, status_bar};
 pub use ui::{command_row, loader, markdown, pressable, unit_input::FieldStroke};
-pub mod workspace;

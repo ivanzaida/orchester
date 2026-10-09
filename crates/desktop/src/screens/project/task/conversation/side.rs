@@ -37,6 +37,7 @@ use crate::{
     },
   },
   theme::PROJECT_SIDEBAR_WIDTH,
+  ui::markdown::plain,
 };
 
 /// What the panel at the right shows.
@@ -108,14 +109,14 @@ impl ConversationTab {
     };
     let toggles = self.toggles.clone();
     let open = |key: &str, default: bool| toggles.is_open(key, default);
-    let shown = view::shown(items, &choice, &open);
+    let shown = view::shown(items, &choice, &open, &plain::rendered);
     // The rail counts the matches of every step, whichever is picked.
     let everywhere = (picked.is_some() && !choice.query.trim().is_empty()).then(|| {
       let all = Choice {
         step: None,
         ..choice.clone()
       };
-      view::shown(items, &all, &open)
+      view::shown(items, &all, &open, &plain::rendered)
     });
     let window = ctx.window().logical_width();
     let beside = if details_open {

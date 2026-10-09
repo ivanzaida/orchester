@@ -296,19 +296,27 @@ fn a_new_failure_route_allows_one_retry() {
 
 #[test]
 fn every_pipeline_message_key_exists() {
-  let (_, fallback) = LOCALES
+  // The screens' own words, and the workspace's they show too.
+  let locales: Vec<Value> = [LOCALES, orchester_workspace::i18n::LOCALES]
     .iter()
-    .find(|(locale, _)| *locale == FALLBACK_LOCALE)
-    .expect("fallback");
-  let locale: Value = serde_json::from_str(fallback).expect("locale is JSON");
-  let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    .map(|locales| {
+      let (_, fallback) = locales
+        .iter()
+        .find(|(locale, _)| *locale == FALLBACK_LOCALE)
+        .expect("fallback");
+      serde_json::from_str(fallback).expect("locale is JSON")
+    })
+    .collect();
+  let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
   let mut missing = Vec::new();
   for dir in [
-    "pipelines",
-    "screens/project/pipelines",
-    "screens/project/pipelines/editor",
+    "desktop/src/pipelines",
+    "desktop/src/screens/project/pipelines",
+    "desktop/src/screens/project/pipelines/editor",
+    // The pipelines' data and wording moved to the workspace.
+    "workspace/src/pipelines",
   ] {
-    for entry in fs::read_dir(root.join(dir)).expect("source directory") {
+    for entry in fs::read_dir(crates.join(dir)).expect("source directory") {
       let path = entry.expect("entry").path();
       if path.extension().is_none_or(|ext| ext != "rs") {
         continue;
@@ -316,14 +324,22 @@ fn every_pipeline_message_key_exists() {
       let source = fs::read_to_string(&path).expect("source");
       for part in source.split("Message::new(\"").skip(1) {
         let (key, _) = part.split_once('"').expect("closed literal");
-        let found = key.split('.').try_fold(&locale, |value, segment| value.get(segment));
-        if !found.is_some_and(Value::is_string) {
+        let found = locales.iter().any(|locale| {
+          key
+            .split('.')
+            .try_fold(locale, |value, segment| value.get(segment))
+            .is_some_and(Value::is_string)
+        });
+        if !found {
           missing.push(key.to_owned());
         }
       }
     }
   }
-  assert!(missing.is_empty(), "message keys missing from en.json: {missing:?}");
+  assert!(
+    missing.is_empty(),
+    "message keys missing from both en.json files: {missing:?}"
+  );
 }
 
 #[test]

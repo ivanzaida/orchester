@@ -29,7 +29,7 @@ use orchester_core::{
 use self::result::Created;
 use super::ProjectNav;
 use crate::{
-  activity::{Activity, OperationSpec, skill_operations},
+  activity::{OperationSpec, skill_operations},
   background,
   messages::Message,
   navigation::repository_import as query,
@@ -412,7 +412,7 @@ fn centered(panel: RecoveryPanel) -> Element {
 
 /// Creates the chosen drafts, reported in the status bar.
 fn create_action(ctx: &mut Ctx) -> CreateAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |(repo_root, key, chosen, spec): CreateArgs| {
     let activity = activity.clone();
     async move {

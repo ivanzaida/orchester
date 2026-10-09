@@ -47,7 +47,7 @@ use self::{
 };
 use super::PipelinesNav;
 use crate::{
-  activity::{Activity, OperationSpec, operations},
+  activity::{OperationSpec, operations},
   background,
   drafts::{DraftQueue, SaveAction, SaveJob, save_action},
   messages::{self, Message},
@@ -501,7 +501,7 @@ fn failed(ctx: &Ctx, error: &Message) -> Element {
 }
 
 fn publish_action(ctx: &mut Ctx) -> PublishAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |(repo_root, id, body, spec): PublishArgs| {
     let activity = activity.clone();
     async move {

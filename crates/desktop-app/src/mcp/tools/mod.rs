@@ -1,29 +1,41 @@
 //! The app's own MCP tools, served beside lurq's `lurq_*`: `app_state` reads where the window is,
-//! `navigate` takes the active tab somewhere, `set_theme` switches the colors. They run on the
-//! event-loop thread, with the tree and the app, like every other change to the window.
+//! `navigate` takes the active tab somewhere, `set_theme` switches the colors, and in debug builds
+//! `hold_reads` holds the project feeds' reads for QA. They run on the event-loop thread, with the tree
+//! and the app, like every other change to the window.
 
 mod app_state;
 mod error;
+mod hold_reads;
 mod navigate;
 mod set_theme;
 
 use lurq::mcp::McpTool;
 use serde_json::{Map, Value, json};
 
-pub use self::{app_state::app_state, error::ToolError, navigate::navigate, set_theme::set_theme};
+pub use self::{
+  app_state::app_state, error::ToolError, hold_reads::hold_reads, navigate::navigate, set_theme::set_theme,
+};
 use super::{McpSettings, WindowLink};
 use crate::{
   appearance::Appearance,
+  project::hold::ReadHold,
   routes::{ProjectPage, Route},
 };
 
-/// Every app tool, for lurq's MCP configuration.
-pub fn all(link: &WindowLink, appearance: &Appearance, settings: McpSettings) -> [McpTool; 3] {
-  [
+/// Every app tool, for lurq's MCP configuration; `hold_reads` only in debug builds of a started session,
+/// whose reads `hold` holds.
+pub fn all(link: &WindowLink, appearance: &Appearance, settings: McpSettings, hold: Option<ReadHold>) -> Vec<McpTool> {
+  let mut tools = vec![
     app_state::tool(link.clone(), appearance.clone(), settings),
     navigate::tool(link.clone()),
     set_theme::tool(appearance.clone()),
-  ]
+  ];
+  if cfg!(debug_assertions)
+    && let Some(hold) = hold
+  {
+    tools.push(hold_reads::tool(hold));
+  }
+  tools
 }
 
 /// What lurq answers for a tool: its value, or its error as JSON text.

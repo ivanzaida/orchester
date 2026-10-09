@@ -30,7 +30,7 @@ use super::{
   variables::CatalogView,
 };
 use crate::{
-  activity::{Activity, OperationSpec, operations},
+  activity::{OperationSpec, operations},
   agents::data::VersionState,
   background,
   drafts::{DraftQueue, SaveAction, SaveJob, save_action},
@@ -360,7 +360,7 @@ fn save_status(ctx: &Ctx, state: VersionState) -> Arc<str> {
 }
 
 fn publish_action(ctx: &mut Ctx) -> PublishAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |(repo_root, id, spec): PublishArgs| {
     let activity = activity.clone();
     async move {

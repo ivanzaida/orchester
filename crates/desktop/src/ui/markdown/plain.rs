@@ -23,6 +23,12 @@ pub fn has_markup(source: &str) -> bool {
   source.contains(MARKUP)
 }
 
+/// What `source` reads as once rendered, when that differs from it: what a search of the chat finds
+/// besides the source.
+pub fn rendered(source: &str) -> Option<String> {
+  has_markup(source).then(|| plain_text(source))
+}
+
 fn push_block(text: &mut String, block: &MarkdownBlock) {
   match block {
     MarkdownBlock::Paragraph(inlines) | MarkdownBlock::Heading { children: inlines, .. } => {

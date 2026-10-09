@@ -52,24 +52,22 @@ lurq = { workspace = true, features = [
   "mcp",
 ] }
 orchester-exec.workspace = true
-# Removes the codebase indexes of run worktrees it removes.
+# The code index settings show what each index holds and how its build goes.
 orchester-index.workspace = true
 orchester-ipc.workspace = true
 orchester-store.workspace = true
-orchester-vault.workspace = true
+# The application layer under the screens; the markers lurq needs of its types come with
+# `devtools-inspect`.
+orchester-workspace = { workspace = true, features = ["devtools-inspect"] }
 parking_lot.workspace = true
 rfd.workspace = true
-# Orchester's own MCP server (`app_mcp`): automation controls tasks, runs and approvals through it.
-rmcp.workspace = true
+# Orchester's own MCP server (`app_mcp`): automation controls tasks, runs and approvals through it,
+# over its streamable HTTP transport.
+rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
 # Checks that an MCP call's arguments are JSON, without building them, before the approval dialog
 # lays them out for reading.
 serde.workspace = true
 serde_json.workspace = true
-syntect.workspace = true
-thiserror.workspace = true
-# Reads the repository's discovery file `orchester.toml` (docs/architecture/server.md, decision 11);
-# already built for the server's configuration, so it adds no crate.
-toml.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
@@ -77,10 +75,6 @@ tracing-subscriber.workspace = true
 uuid.workspace = true
 # Wipes a secret value typed but not saved.
 zeroize.workspace = true
-
-# The computer's name a shared server lists this computer's session under (`sharing::device`).
-[target.'cfg(target_os = "macos")'.dependencies]
-rustix.workspace = true
 
 # Only Windows programs embed their icon; see build.rs.
 [target.'cfg(windows)'.build-dependencies]

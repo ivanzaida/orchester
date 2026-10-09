@@ -26,6 +26,10 @@ Workspace layout:
 - `crates/core` (`orchester-core`): domain model and rules. No UI, windowing, rendering, HTTP, or database client
   dependencies. Persistence, process execution and providers are reached through traits defined here, so the desktop
   app and the future server share the same core.
+- `crates/workspace` (`orchester-workspace`): the local application layer both desktop apps share — the session and
+  projects, the runners' client side, project data as screens and automation read and change it, the domain MCP
+  tools, and the words of its `Message`s (`assets/locales/`, loaded under the namespace `workspace`). No UI: lurq is
+  only an optional dependency for empty DevTools markers (feature `devtools-inspect`, `src/inspect.rs`).
 - `crates/desktop` (`orchester-desktop`, binary `orchester`): lurq UI, deprecated — replaced by `crates/desktop-app`
   and kept building and shipping until that app takes over its screens. Screens call into core; business rules do not
   live in components. Theme tokens live in `crates/desktop/src/theme/`.
@@ -83,7 +87,9 @@ Hard requirements:
    provider, clock), no generic parameters or config knobs "for later", no dead code, no commented-out code.
 9. `unsafe` is denied workspace-wide. It is allowed only for FFI without a safe wrapper, in a dedicated module that
    starts with `#![allow(unsafe_code)]`, explains why at the top, keeps each `unsafe` block minimal and precedes it
-   with a `// SAFETY:` comment stating the invariants (today: `crates/ipc/src/pipe_owner.rs`).
+   with a `// SAFETY:` comment stating the invariants (today: `crates/ipc/src/pipe_owner.rs`,
+   `crates/desktop-app/src/system_icon/windows.rs`, `crates/desktop-app/src/startup/front/windows.rs`, and the
+   test `crates/desktop-app/tests/system_icon.rs`).
 10. Domain types enforce their invariants through constructors; do not make fields public just to allow raw struct
    literals from other modules.
 11. Secrets: a secret value never reaches logs, `Debug`/`Display` output, prompts, variables, copied text, errors,

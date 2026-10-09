@@ -1,7 +1,7 @@
-//! How agent permissions read (`docs/design/orchester-workspace.md`, "Agent permissions"): the
-//! options, their summary, why a connection cannot enforce an option and how it enforces the
-//! ones it can. Which options are enforceable is decided in core
-//! (`orchester_core::permission::capability`); this module only words it.
+//! How agent permissions read (`docs/design/orchester-workspace.md`, "Agent permissions"): their
+//! summary, why a connection cannot enforce an option and how it enforces the ones it can, in the
+//! window's words. The options' keys and the allowed commands' rules are
+//! `orchester_workspace::agents::permissions`.
 
 use std::sync::Arc;
 
@@ -9,61 +9,13 @@ use lurq::app::ctx::Ctx;
 use orchester_core::{
   connection::{AgentProvider, invocation::Platform},
   permission::{
-    AgentPermissions, AllowedCommands, AllowedCommandsError, CommandPermission, CommandPrefix, CommandPrefixError,
-    NetworkAccess, RepositoryAccess,
-    capability::{
-      EnforcedPermissions, Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Support, Unavailable,
-      support,
-    },
+    AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess,
+    capability::{EnforcedPermissions, Mechanism, PermissionOption, PermissionProblem, Support, Unavailable, support},
   },
 };
+pub use orchester_workspace::agents::permissions::*;
 
-use crate::{messages::Message, screens::project::connections::status::program_key};
-
-/// Title of an option (`D2t8u` in `lcwsy`).
-pub const fn option_title(option: PermissionOption) -> &'static str {
-  match option {
-    PermissionOption::ReadOnly => "agents.permissions.option.readOnly.title",
-    PermissionOption::EditWorktree => "agents.permissions.option.editWorktree.title",
-    PermissionOption::AskBeforeCommands => "agents.permissions.option.askBefore.title",
-    PermissionOption::AllowedCommands => "agents.permissions.option.allowed.title",
-    PermissionOption::AnyCommand => "agents.permissions.option.any.title",
-    PermissionOption::NetworkOff => "agents.permissions.networkOff",
-    PermissionOption::NetworkOn => "agents.permissions.networkOn",
-  }
-}
-
-/// What an option allows on `provider` (`C85wh` in `lcwsy`). Claude Code and native agents also run
-/// known-safe read-only commands besides an allowed list, so only their *Allowed commands* says so;
-/// only Codex asks about commands that need more than its sandbox, so only its *Any command* says that.
-pub fn option_detail(option: PermissionOption, provider: Option<AgentProvider>) -> &'static str {
-  match option {
-    PermissionOption::AllowedCommands if provider.is_some_and(AgentProvider::is_native) => {
-      "agents.permissions.option.allowed.nativeDetail"
-    }
-    PermissionOption::AllowedCommands if runs_read_only_unlisted(provider) => {
-      "agents.permissions.option.allowed.claudeDetail"
-    }
-    PermissionOption::AnyCommand if provider == Some(AgentProvider::CodexCli) => {
-      "agents.permissions.option.any.codexDetail"
-    }
-    PermissionOption::ReadOnly => "agents.permissions.option.readOnly.detail",
-    PermissionOption::EditWorktree => "agents.permissions.option.editWorktree.detail",
-    PermissionOption::AskBeforeCommands => "agents.permissions.option.askBefore.detail",
-    PermissionOption::AllowedCommands => "agents.permissions.option.allowed.detail",
-    PermissionOption::AnyCommand => "agents.permissions.option.any.detail",
-    PermissionOption::NetworkOff => "agents.permissions.networkOffDetail",
-    PermissionOption::NetworkOn => "agents.permissions.networkOnDetail",
-  }
-}
-
-pub const fn setting_label(setting: PermissionSetting) -> &'static str {
-  match setting {
-    PermissionSetting::Repository => "agents.permissions.repository",
-    PermissionSetting::Commands => "agents.permissions.commands",
-    PermissionSetting::Network => "agents.permissions.network",
-  }
-}
+use crate::screens::project::connections::status::program_key;
 
 /// Why `provider` cannot enforce an option (`NtPye`, `cOfD0` in 04.B), or `None` when the option
 /// itself says it (asking before commands is marked *later*).
@@ -172,14 +124,6 @@ pub fn escalations(ctx: &Ctx, provider: Option<AgentProvider>, commands: &Comman
     )
   });
   sandboxed.then(|| ctx.t(ESCALATIONS))
-}
-
-/// Whether `provider` enforces an allowed list the way that also runs known-safe read-only commands.
-fn runs_read_only_unlisted(provider: Option<AgentProvider>) -> bool {
-  provider.is_some_and(|provider| {
-    support(provider, Platform::current(), PermissionOption::AllowedCommands)
-      == Support::Enforced(Mechanism::ClaudeAllowedTools)
-  })
 }
 
 /// For each entry of `list` whose first word changes files (`rm`, `sed`, …), that it also allows
@@ -339,33 +283,4 @@ pub fn problem(ctx: &Ctx, problem: &PermissionProblem, provider: AgentProvider) 
       [("cli", &*cli), ("option", &*ctx.t(option_title(*option)))],
     ),
   }
-}
-
-/// `list` with the command `typed` added, or why it cannot be.
-pub fn with_command(list: &AllowedCommands, typed: &str) -> Result<AllowedCommands, Message> {
-  let prefix = CommandPrefix::new(typed).map_err(|error| match error {
-    CommandPrefixError::Blank => Message::new("agents.permissions.commandInvalid.blank"),
-    CommandPrefixError::TooLong => {
-      Message::new("agents.permissions.commandInvalid.tooLong").with("max", CommandPrefix::MAX_CHARS.to_string())
-    }
-    CommandPrefixError::ForbiddenCharacter(character) => {
-      Message::new("agents.permissions.commandInvalid.character").with("character", character.to_string())
-    }
-  })?;
-  let mut entries = list.entries().to_vec();
-  entries.push(prefix);
-  AllowedCommands::new(entries).map_err(|error| match error {
-    AllowedCommandsError::Duplicate(command) => {
-      Message::new("agents.permissions.commandInvalid.duplicate").with("command", command.to_string())
-    }
-    AllowedCommandsError::TooMany => {
-      Message::new("agents.permissions.commandInvalid.tooMany").with("max", AllowedCommands::MAX_ENTRIES.to_string())
-    }
-  })
-}
-
-/// `list` without the command `removed`.
-pub fn without_command(list: &AllowedCommands, removed: &CommandPrefix) -> AllowedCommands {
-  let rest = list.entries().iter().filter(|kept| *kept != removed).cloned().collect();
-  AllowedCommands::new(rest).expect("a shorter list keeps its entries unique")
 }

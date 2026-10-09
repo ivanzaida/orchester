@@ -14,7 +14,7 @@ use lurq::{
 };
 
 use crate::{
-  activity::{Activity, operations},
+  activity::operations,
   background, display,
   messages::Message,
   screens::github::actions::ChosenPath,
@@ -36,7 +36,7 @@ pub type PickArgs = (Arc<str>, Option<ChosenPath>);
 pub type PickAction = FutureAction<PickArgs, Option<ChosenPath>, Message>;
 
 pub fn pick_action(ctx: &mut Ctx) -> PickAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |(title, current): PickArgs| {
     let activity = activity.clone();
     async move {

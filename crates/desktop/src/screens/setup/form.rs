@@ -294,7 +294,7 @@ fn navigation(ctx: &mut Ctx) -> Navigation {
 }
 
 fn create_action(ctx: &mut Ctx, workspace: Workspace) -> CreateAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |creation: Creation| {
     let (workspace, activity) = (workspace.clone(), activity.clone());
     async move {

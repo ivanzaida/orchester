@@ -25,7 +25,7 @@ use super::{
   general::{readback, sized_setting_row},
 };
 use crate::{
-  activity::{Activity, OperationSpec, skill_operations},
+  activity::{OperationSpec, skill_operations},
   background,
   messages::{self, Message},
   skills::repository::{RepositoryScan, scan},
@@ -287,7 +287,7 @@ fn save_in(repo_root: &std::path::Path, setting: RepositoryAgentFiles) -> Result
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |(repo_root, setting, spec): SaveArgs| {
     let activity = activity.clone();
     async move {

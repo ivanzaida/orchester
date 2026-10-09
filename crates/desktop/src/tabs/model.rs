@@ -259,6 +259,9 @@ impl TabSet {
 
 impl lurq::app::component::DevtoolsInspectable for TabSet {}
 
+/// Where the application database keeps the window's tabs (`ui_state`).
+pub const TABS_KEY: &str = "tabs";
+
 /// The tabs as the application database keeps them (`ui_state`): their paths in order and the
 /// active one, without their Back/Forward history.
 #[derive(Clone, Debug, PartialEq, Eq)]

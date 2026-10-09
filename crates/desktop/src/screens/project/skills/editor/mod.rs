@@ -27,7 +27,7 @@ use orchester_core::{
 use self::files::add_file_action;
 use super::{EditorContext, library::ScopeFilter};
 use crate::{
-  activity::{Activity, OperationSpec, skill_operations},
+  activity::{OperationSpec, skill_operations},
   agents::data::VersionState,
   background,
   drafts::{DraftQueue, SaveAction, SaveJob, save_action},
@@ -334,7 +334,7 @@ fn save_status(ctx: &Ctx, state: VersionState) -> Arc<str> {
 }
 
 fn publish_action(ctx: &mut Ctx) -> PublishAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |(repo_root, id, spec): PublishArgs| {
     let activity = activity.clone();
     async move {

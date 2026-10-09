@@ -22,7 +22,7 @@ use super::{
   dialog_frame::{SaveBar, dialog, save_reason_of},
 };
 use crate::{
-  activity::{Activity, operations},
+  activity::operations,
   background,
   connections::mcp::{McpServerDraft, McpServerErrors, McpServerText, TransportChoice, save_in, secret_reference},
   messages::Message,
@@ -204,7 +204,7 @@ fn first_error(errors: &McpServerErrors) -> Message {
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   let project = ctx
     .use_context::<DialogContext>()
     .expect("the connections screen provides the dialog context")

@@ -15,7 +15,7 @@ use lurq::{
 use orchester_core::time::Timestamp;
 
 use crate::{
-  activity::{Activity, operations},
+  activity::operations,
   background, external,
   messages::Message,
   programs::Programs,
@@ -91,7 +91,7 @@ pub fn load(ctx: &mut Ctx, open: &OpenProject) -> FutureHandle<Inbox, Message> {
 }
 
 fn inbox_action(ctx: &mut Ctx, open: &OpenProject, work: Work) -> InboxAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   let programs = ctx
     .use_context::<Programs>()
     .expect("the root provides Programs before mounting screens");
@@ -125,7 +125,7 @@ fn inbox_action(ctx: &mut Ctx, open: &OpenProject, work: Work) -> InboxAction {
 }
 
 pub fn open_action(ctx: &mut Ctx, open: &OpenProject) -> OpenAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   let open = open.clone();
   ctx.future_action(move |(number, url): (u64, Arc<str>)| {
     let (activity, open) = (activity.clone(), open.clone());

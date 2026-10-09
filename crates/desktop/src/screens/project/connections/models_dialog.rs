@@ -26,7 +26,7 @@ use super::{
   model_editor::{ModelEditor, ModelEditorProps, ModelRows},
 };
 use crate::{
-  activity::{Activity, operations},
+  activity::operations,
   background,
   connections::{
     model_uses::{keep_used, of_connection},
@@ -199,7 +199,7 @@ fn editing(context: &DialogContext) -> Option<AgentConnection> {
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   let context = ctx
     .use_context::<DialogContext>()
     .expect("the connections screen provides the dialog context");

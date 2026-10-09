@@ -1,11 +1,10 @@
 //! The project's settings. Not built yet.
 
 use lurq::{app::ctx::Ctx, node::Element};
-use orchester_core::id::ProjectId;
 
 use super::placeholder::placeholder;
-use crate::routes::Screen;
+use crate::{project::ShownProject, routes::Screen};
 
-pub fn screen(ctx: &mut Ctx, _project: ProjectId) -> Element {
+pub fn screen(ctx: &mut Ctx, _project: &ShownProject) -> Element {
   placeholder(ctx, Screen::ProjectSettings)
 }

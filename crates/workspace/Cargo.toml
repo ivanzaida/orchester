@@ -1,0 +1,56 @@
+[package]
+name = "orchester-workspace"
+description = "Orchester's local application layer, shared by the desktop apps: the session and projects, the runners' client side, project data as screens and automation read and change it, and the domain MCP tools. No UI toolkit."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# Empty `DevtoolsInspectable` markers for this crate's types (`inspect`), which lurq requires of
+# component props and, with its DevTools, of signal values. Apps cannot implement lurq's trait for
+# these types themselves (orphan rule), so an app that shows them enables this.
+devtools-inspect = ["dep:lurq"]
+
+[dependencies]
+# Local wall-clock time of status bar events and the local day of the daily project budget.
+chrono.workspace = true
+# Shared servers: the HTTP client of the server's API (`sharing`).
+orchester-api = { workspace = true, features = ["client"] }
+orchester-core.workspace = true
+orchester-exec.workspace = true
+# Removes the codebase indexes of run worktrees it removes.
+orchester-index.workspace = true
+orchester-ipc.workspace = true
+orchester-store.workspace = true
+orchester-vault.workspace = true
+# Only for the empty markers of `inspect`, behind `devtools-inspect`; nothing else here uses lurq.
+lurq = { workspace = true, optional = true }
+parking_lot.workspace = true
+# The tools of Orchester's own MCP server (`app_mcp`): their schemas and results.
+rmcp.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+syntect.workspace = true
+thiserror.workspace = true
+# Reads the repository's discovery file `orchester.toml` (docs/architecture/server.md, decision 11).
+toml.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+# The computer's name a shared server lists this computer's session under (`sharing::device`).
+[target.'cfg(target_os = "macos")'.dependencies]
+rustix.workspace = true
+
+[dev-dependencies]
+# Damages a run's row the way an edit outside Orchester would; the store has no API for that.
+rusqlite.workspace = true
+tempfile.workspace = true
+# Captures the log of a sign-in, to check that no token or password reaches it.
+tracing-subscriber.workspace = true
+# Shared-server tests talk to a real server on loopback with a temporary data directory.
+orchester-server.workspace = true
