@@ -3,8 +3,8 @@
 //! icon and name (`Tab/active`, `Tab/inactive`) — a task by its key — after its project's name once the
 //! project is known to be in the list (`Kontur · Overview`); a project's id is never shown. The active
 //! tab is filled with `hover` and has a close button; a middle click closes any tab that can be closed.
-//! The OS window title is the active tab's label and the app's name. The design's unsaved-changes dot
-//! comes with editing.
+//! The OS window title is the active tab's label and the app's name. A tab whose task form holds edits
+//! that are not saved ends its label in a 6 `text_secondary` dot (`Dirty` `TfKtF` in `Fd1ai`).
 //!
 //! The strip sits in the title bar's flexible middle and shares its room as `tab_fit` says; once it
 //! scrolls, the active tab is brought into view whenever it changes, the mouse wheel scrolls it
@@ -35,7 +35,7 @@ use crate::{
   },
   project::Projects,
   routes::{ProjectPage, Route},
-  theme::{ExtraColor, ExtraSpacing, IconSize},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon, screen_icon},
     pressable::pressable,
@@ -44,6 +44,8 @@ use crate::{
 
 /// Tabs and the new tab button (`Tab/*`, `New tab` `w204x`).
 const TAB_HEIGHT: f32 = 26.0;
+/// The dot of a tab whose task form holds unsaved edits (`Dirty` `TfKtF` in `Fd1ai`).
+const UNSAVED_DOT: f32 = 6.0;
 const NEW_TAB_WIDTH: f32 = 26.0;
 
 pub struct TabStrip {
@@ -187,7 +189,17 @@ fn tab_button(
     return all_projects_tab(button, active);
   }
   let close = active.then(|| close_button(ctx, navigation.clone(), tab));
-  labelled_tab(button, tab, (&label, fit), close)
+  let dirty = unsaved(projects, tab.route()).then(|| {
+    Row::new()
+      .id(format!("tab-{id}-unsaved"))
+      .width(Dimension::Px(UNSAVED_DOT))
+      .height(Dimension::Px(UNSAVED_DOT))
+      .flex_shrink(0.0)
+      .rounded(ExtraRadius::Full.role())
+      .background(PaletteColor::TextSecondary)
+      .into()
+  });
+  labelled_tab(button, tab, (&label, fit), (dirty, close))
 }
 
 /// A tab at All projects: the folders icon.
@@ -204,7 +216,24 @@ fn all_projects_tab(button: Button, active: bool) -> Element {
     .into()
 }
 
-fn labelled_tab(button: Button, tab: &Tab, (label, fit): (&str, Fit), close: Option<Element>) -> Element {
+/// Whether the task form `route` shows holds edits that are not saved.
+fn unsaved(projects: &Projects, route: &Route) -> bool {
+  let (project, task) = match route {
+    Route::Project(project, ProjectPage::NewTask) => (*project, None),
+    Route::Project(project, ProjectPage::EditTask(key)) => (*project, Some(key.to_string())),
+    _ => return false,
+  };
+  projects
+    .feed_now(project)
+    .is_some_and(|feed| feed.unsaved.get().contains(task.as_deref()))
+}
+
+fn labelled_tab(
+  button: Button,
+  tab: &Tab,
+  (label, fit): (&str, Fit),
+  (dirty, close): (Option<Element>, Option<Element>),
+) -> Element {
   let (glyph, text, style) = if close.is_some() {
     (
       PaletteColor::TextSecondary,
@@ -241,6 +270,7 @@ fn labelled_tab(button: Button, tab: &Tab, (label, fit): (&str, Fit), close: Opt
     .spacing(ExtraSpacing::Snug.role())
     .child(icon(screen_icon(tab.route().screen()), IconSize::Base, glyph))
     .child(text)
+    .with_children(dirty)
     .with_children(close)
     .into()
 }
