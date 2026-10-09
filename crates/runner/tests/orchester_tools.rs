@@ -40,11 +40,27 @@ fn permissions(repository: RepositoryAccess) -> AgentPermissions {
 }
 
 async fn pending(root: &Path, events: &mut mpsc::UnboundedReceiver<Event>, run: RunId) -> PendingToolApproval {
+  pending_where(root, events, run, |_| true).await
+}
+
+/// The run's first waiting request that is `wanted`. A request is stored before a rule of the run answers it, so one
+/// a rule answers can be seen waiting for a moment; this waits for the one a person must answer.
+async fn pending_where(
+  root: &Path,
+  events: &mut mpsc::UnboundedReceiver<Event>,
+  run: RunId,
+  wanted: impl Fn(&PendingToolApproval) -> bool,
+) -> PendingToolApproval {
   tokio::time::timeout(PATIENCE, async {
     loop {
       let db = ProjectDb::open(root).expect("open");
-      if let Some(request) = db.pending_tool_approvals(run).expect("requests").first() {
-        return request.clone();
+      if let Some(request) = db
+        .pending_tool_approvals(run)
+        .expect("requests")
+        .into_iter()
+        .find(&wanted)
+      {
+        return request;
       }
       events.recv().await.expect("notification");
     }
@@ -93,9 +109,12 @@ async fn approve_outside(project: &TestProject) -> (Run, ProjectDb) {
     .decide_tool_approval(id, search.id, ApprovalAnswer::Similar, Answerer::Person)
     .await
     .expect("approved for the folder");
-  let read = pending(root, &mut events, id).await;
+  // The read in `deps-a` the rule answers may be seen waiting for a moment first.
+  let read = pending_where(root, &mut events, id, |request| {
+    same_folder(request.target.as_deref(), &second)
+  })
+  .await;
   assert_eq!(read.action, "read_external_file");
-  assert!(same_folder(read.target.as_deref(), &second), "{:?}", read.target);
   scheduler
     .decide_tool_approval(id, read.id, ApprovalAnswer::Once, Answerer::Person)
     .await
