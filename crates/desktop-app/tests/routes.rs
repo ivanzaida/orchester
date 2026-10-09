@@ -96,12 +96,12 @@ fn paths_are_the_documented_ones() {
       format!("{root}/tasks/KON-7/edit"),
     ),
     (
-      at(ProjectPage::Task(key("KON-12"), TaskView::Conversation)),
-      format!("{root}/tasks/KON-12"),
-    ),
-    (
       at(ProjectPage::Task(key("KON-12"), TaskView::Summary)),
       format!("{root}/tasks/KON-12/summary"),
+    ),
+    (
+      at(ProjectPage::Task(key("KON-12"), TaskView::Conversation)),
+      format!("{root}/tasks/KON-12/conversation"),
     ),
     (
       at(ProjectPage::Task(key("KON-12"), TaskView::Changes(None))),
@@ -136,17 +136,34 @@ fn the_router_table_resolves_every_route_to_its_screen() {
     let path = route.path();
     let chain = table.resolve(&path);
     let leaf = chain.last().unwrap_or_else(|| panic!("{path} resolves"));
-    assert!(
-      route
-        .screen()
-        .patterns()
-        .iter()
-        .any(|pattern| pattern == leaf.pattern_raw()),
-      "{path} resolves to {} instead of {:?}",
-      leaf.pattern_raw(),
-      route.screen().patterns()
+    assert_eq!(leaf.pattern_raw(), route.screen().pattern(), "{path}");
+  }
+}
+
+#[test]
+fn a_tasks_tabs_share_one_router_pattern_and_its_forms_keep_their_own() {
+  let table = routes();
+  let leaf = |path: String| {
+    let chain = table.resolve(&path);
+    chain
+      .last()
+      .unwrap_or_else(|| panic!("{path} resolves"))
+      .pattern_raw()
+      .to_owned()
+  };
+  let task = format!("/project/{PROJECT}/tasks");
+  for tab in TaskTab::ALL {
+    let path = at(ProjectPage::Task(key("KON-12"), TaskView::of(tab))).path();
+    assert_eq!(
+      leaf(path),
+      Screen::Task.pattern(),
+      "switching tabs keeps the task's page"
     );
   }
+  assert_eq!(leaf(format!("{task}/KON-12/edit")), Screen::EditTask.pattern());
+  assert_eq!(leaf(format!("{task}/new")), Screen::NewTask.pattern());
+  assert_eq!(TaskTab::default(), TaskTab::Summary, "a task opens on its Summary");
+  assert_eq!(TaskTab::ALL[0], TaskTab::Summary, "in the design's order");
 }
 
 #[test]
@@ -158,6 +175,7 @@ fn paths_that_name_no_screen_are_no_screen_and_fall_back_in_the_router() {
     "/settings/general",
     "/project",
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/nope",
+    "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12",
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12/nope",
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12/summary/more",
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12/edit/more",
@@ -165,8 +183,9 @@ fn paths_that_name_no_screen_are_no_screen_and_fall_back_in_the_router() {
     assert_eq!(Route::parse(path), Err(RouteError::NoScreen), "{path:?}");
   }
   let table = routes();
-  let screens: Vec<String> = Screen::ALL.into_iter().flat_map(Screen::patterns).collect();
+  let screens: Vec<String> = Screen::ALL.into_iter().map(Screen::pattern).collect();
   for path in [
+    "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12",
     "/nope",
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/nope?tab=all",
     "/settings/general",
@@ -271,7 +290,7 @@ fn screens_open_on_their_first_tab() {
   for screen in [Screen::AllProjects, Screen::Settings, Screen::Task, Screen::EditTask] {
     assert_eq!(ProjectPage::of(screen), None, "{screen:?}");
   }
-  assert_eq!(TaskView::default(), TaskView::Conversation);
+  assert_eq!(TaskView::default(), TaskView::Summary);
 }
 
 #[test]

@@ -77,7 +77,7 @@ impl ProjectPage {
       Self::Tasks(list) => list.path(tasks),
       Self::NewTask => format!("{tasks}/{NEW}"),
       Self::EditTask(key) => format!("{tasks}/{key}/{EDIT}"),
-      Self::Task(key, view) => view.path(format!("{tasks}/{key}")),
+      Self::Task(key, view) => view.path(&format!("{tasks}/{key}")),
       page => project_screen_path(project_root, page.screen()),
     }
   }

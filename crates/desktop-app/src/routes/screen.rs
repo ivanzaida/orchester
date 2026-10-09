@@ -1,4 +1,4 @@
-use super::{EDIT, NEW, PROJECT_PATTERN, SETTINGS, TASKS, TaskTab, TaskView, project_screen_path};
+use super::{EDIT, NEW, PROJECT_PATTERN, SETTINGS, TASKS, project_screen_path};
 
 /// A screen of the window, as the sidebar, the tabs and the app's MCP tools name it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -124,20 +124,18 @@ impl Screen {
     }
   }
 
-  /// The router patterns of the screen's routes: one per tab for a task, one otherwise. The router
-  /// matches paths without their query.
-  pub fn patterns(self) -> Vec<String> {
+  /// The router pattern of the screen's routes, matched without the query. A task's tabs share one
+  /// (`…/tasks/:key/:tab`), so switching between them keeps the task's page; the static `new` and `edit`
+  /// segments outrank its parameters.
+  pub fn pattern(self) -> String {
     let tasks = format!("{PROJECT_PATTERN}/{TASKS}");
     match self {
-      Self::AllProjects => vec!["/".to_owned()],
-      Self::Settings => vec![format!("/{SETTINGS}")],
-      Self::NewTask => vec![format!("{tasks}/{NEW}")],
-      Self::EditTask => vec![format!("{tasks}/:key/{EDIT}")],
-      Self::Task => TaskTab::ALL
-        .into_iter()
-        .map(|tab| TaskView::of(tab).path(format!("{tasks}/:key")))
-        .collect(),
-      screen => vec![project_screen_path(PROJECT_PATTERN, screen)],
+      Self::AllProjects => "/".to_owned(),
+      Self::Settings => format!("/{SETTINGS}"),
+      Self::NewTask => format!("{tasks}/{NEW}"),
+      Self::EditTask => format!("{tasks}/:key/{EDIT}"),
+      Self::Task => format!("{tasks}/:key/:tab"),
+      screen => project_screen_path(PROJECT_PATTERN, screen),
     }
   }
 }

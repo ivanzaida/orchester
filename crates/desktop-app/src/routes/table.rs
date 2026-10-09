@@ -1,4 +1,4 @@
-//! The router's table: every screen's patterns inside the shell, and a fallback inside the shell for
+//! The router's table: every screen's pattern inside the shell, and a fallback inside the shell for
 //! paths that name nothing. Every entry shows `screens::screen`, which reads the whole path, query
 //! included, as a route or as why it names none.
 
@@ -11,8 +11,9 @@ pub fn routes() -> Routes {
   Routes::new().layout("/", shell::layout, |routes| {
     Screen::ALL
       .into_iter()
-      .flat_map(Screen::patterns)
-      .fold(routes, |routes, pattern| routes.route(&pattern, screens::screen))
+      .fold(routes, |routes, screen| {
+        routes.route(&screen.pattern(), screens::screen)
+      })
       .fallback(screens::screen)
   })
 }

@@ -6,23 +6,24 @@ use super::{
 const FILE: &str = "file";
 const FROM: &str = "from";
 
-/// A tab of a task's page (`Page tabs` `L9OIIZ` in `lUXff`).
+/// A tab of a task's page, in the design's order (`Page tabs` `L9OIIZ` in `lUXff`); Summary is the one it
+/// opens on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TaskTab {
   #[default]
-  Conversation,
   Summary,
+  Conversation,
   Changes,
 }
 
 impl TaskTab {
-  pub const ALL: [Self; 3] = [Self::Conversation, Self::Summary, Self::Changes];
+  pub const ALL: [Self; 3] = [Self::Summary, Self::Conversation, Self::Changes];
 
-  /// The name the app's MCP tools use for the tab.
+  /// The tab's name: the last segment of its path, and its name in the app's MCP tools.
   pub const fn name(self) -> &'static str {
     match self {
-      Self::Conversation => "conversation",
       Self::Summary => "summary",
+      Self::Conversation => "conversation",
       Self::Changes => "changes",
     }
   }
@@ -34,18 +35,9 @@ impl TaskTab {
   /// i18n key of the tab's name.
   pub const fn title_key(self) -> &'static str {
     match self {
-      Self::Conversation => "task.tabs.conversation",
       Self::Summary => "task.tabs.summary",
+      Self::Conversation => "task.tabs.conversation",
       Self::Changes => "task.tabs.changes",
-    }
-  }
-
-  /// The segment after the task's path; the Conversation is the task's own path.
-  pub(super) const fn segment(self) -> Option<&'static str> {
-    match self {
-      Self::Conversation => None,
-      Self::Summary => Some("summary"),
-      Self::Changes => Some("changes"),
     }
   }
 }
@@ -54,8 +46,8 @@ impl TaskTab {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TaskView {
   #[default]
-  Conversation,
   Summary,
+  Conversation,
   Changes(Option<ChangedFile>),
 }
 
@@ -63,16 +55,16 @@ impl TaskView {
   /// `tab`, on no particular file.
   pub const fn of(tab: TaskTab) -> Self {
     match tab {
-      TaskTab::Conversation => Self::Conversation,
       TaskTab::Summary => Self::Summary,
+      TaskTab::Conversation => Self::Conversation,
       TaskTab::Changes => Self::Changes(None),
     }
   }
 
   pub const fn tab(&self) -> TaskTab {
     match self {
-      Self::Conversation => TaskTab::Conversation,
       Self::Summary => TaskTab::Summary,
+      Self::Conversation => TaskTab::Conversation,
       Self::Changes(_) => TaskTab::Changes,
     }
   }
@@ -80,15 +72,12 @@ impl TaskView {
   pub const fn file(&self) -> Option<&ChangedFile> {
     match self {
       Self::Changes(file) => file.as_ref(),
-      Self::Conversation | Self::Summary => None,
+      Self::Summary | Self::Conversation => None,
     }
   }
 
-  pub(super) fn path(&self, task: String) -> String {
-    let path = match self.tab().segment() {
-      Some(segment) => format!("{task}/{segment}"),
-      None => task,
-    };
+  pub(super) fn path(&self, task: &str) -> String {
+    let path = format!("{task}/{}", self.tab().name());
     match self.file() {
       Some(file) => {
         let from = (file.source != ChangeSource::default()).then(|| file.source.name());
@@ -98,16 +87,13 @@ impl TaskView {
     }
   }
 
-  /// The view the segments after a task's path name, with its file from the query on Changes.
+  /// The view the segment after a task's path names, its tab (a task's path always names one), with its
+  /// file from the query on Changes.
   pub(super) fn parse(segments: &[&str], params: &mut Params) -> Result<Self, RouteError> {
-    let tab = match segments {
-      [] => TaskTab::Conversation,
-      [segment] => TaskTab::ALL
-        .into_iter()
-        .find(|tab| tab.segment() == Some(*segment))
-        .ok_or(RouteError::NoScreen)?,
-      _ => return Err(RouteError::NoScreen),
+    let [name] = segments else {
+      return Err(RouteError::NoScreen);
     };
+    let tab = TaskTab::from_name(name).ok_or(RouteError::NoScreen)?;
     if tab != TaskTab::Changes {
       return Ok(Self::of(tab));
     }

@@ -4,12 +4,13 @@
 //! Paths: `/` is All projects and `/settings` the app's settings. A project's screens start at
 //! `/project/<id>`, its Overview (`?tab=` the tab of its task list), and add the screen's segment, e.g.
 //! `/project/<id>/pipelines`. The Tasks list is `/project/<id>/tasks` (`?tab=`, `?q=` the search,
-//! `?highlight=` the task a Create just added) and New task `/project/<id>/tasks/new`. A task is
-//! `/project/<id>/tasks/<key>` (its Conversation, the key as in `KON-12`), with `/summary` or `/changes`
-//! (`?file=` a changed file, `&from=worktree` for its change that is not checkpointed) for its other tabs
-//! and `/edit` for Edit task. A tab or source left out of the query is the one the screen opens on.
+//! `?highlight=` the task a Create just added) and New task `/project/<id>/tasks/new`. A task's page is
+//! `/project/<id>/tasks/<key>/<tab>` (the key as in `KON-12`; `summary`, `conversation` or `changes`, with
+//! `?file=` a changed file and `&from=worktree` for its change that is not checkpointed), always with
+//! its tab, and `/project/<id>/tasks/<key>/edit` is Edit task. A tab or source left out of the query is
+//! the one the screen opens on.
 //!
-//! Another screen or another tab (`tab`, a task's tab segment) is a new entry of the tab's history
+//! Another screen or another tab (`tab`, a task's `<tab>`) is a new entry of the tab's history
 //! (`Navigation::go`); what a screen refines on its tab, `q`, `highlight` and `file` with `from`, takes the
 //! current entry's place (`Navigation::replace`), so Back leaves the screen instead of replaying it.
 //!
