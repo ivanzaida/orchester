@@ -2757,6 +2757,7 @@ dependencies = [
  "orchester-ipc",
  "orchester-store",
  "parking_lot",
+ "rusqlite",
  "serde_json",
  "tempfile",
  "thiserror 2.0.20",

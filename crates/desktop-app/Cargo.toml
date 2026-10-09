@@ -64,4 +64,7 @@ uuid.workspace = true
 embed-resource.workspace = true
 
 [dev-dependencies]
+# The QA seed (`examples/seed`) damages a run's record and sets a project database's schema version the way an
+# edit outside Orchester or a newer build would; the store has no API for either.
+rusqlite.workspace = true
 tempfile.workspace = true
