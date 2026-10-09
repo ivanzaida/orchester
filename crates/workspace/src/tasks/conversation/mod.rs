@@ -22,6 +22,7 @@ use super::detail::{RunView, TaskDetail};
 
 pub mod composer;
 pub mod follow;
+pub mod outgoing;
 mod send;
 
 /// Where the task's conversation stands, for the panel's status label.
