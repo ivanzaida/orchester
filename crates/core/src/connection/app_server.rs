@@ -16,8 +16,11 @@ use std::{collections::HashMap, fmt};
 use serde_json::{Value, json};
 use thiserror::Error;
 
-use self::items::{command_finished, file_changed, mcp_tool_finished};
 pub use self::questions::{NO_OPTIONS_REFUSED, PendingQuestion, SECRET_REFUSED};
+use self::{
+  items::{command_finished, file_changed, mcp_tool_finished},
+  own_calls::AskedOwnCalls,
+};
 use super::{
   mcp::InvocationExemptions,
   stream::{AgentEvent, FileChange, NativeCall, QuestionRefusal},
@@ -28,6 +31,7 @@ use crate::{
 };
 
 mod items;
+mod own_calls;
 mod questions;
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -162,8 +166,10 @@ struct ToolContext {
   server: String,
   action: String,
   target: Option<String>,
-  /// Codex asked for approval of the call.
+  /// Codex asked for approval of the call, or the runner did for a call of Orchester's tools.
   asked: bool,
+  /// The arguments of a call of Orchester's tools, to find the call the runner asks about; `Null` for any other.
+  arguments: Value,
   /// The files the call changes when it succeeds: a call of Orchester's `edit_file`, `create_file`, `delete_file` or
   /// `move_file`.
   changes: Vec<FileChange>,
@@ -182,6 +188,8 @@ pub struct AppServerStream {
   total: Option<TokenUsage>,
   /// The MCP tools that run without asking, in a step that asks before MCP actions.
   exemptions: InvocationExemptions,
+  /// The runner's requests about calls of Orchester's tools that have not started yet.
+  asked_own: AskedOwnCalls,
 }
 
 impl AppServerStream {
@@ -192,6 +200,25 @@ impl AppServerStream {
     Self {
       exemptions,
       ..Self::default()
+    }
+  }
+
+  /// The runner asks a person about a call of Orchester's tool `action` with `arguments`: the call's end says a person
+  /// was asked. The id of the call when it has started, so the request and the call are one row; `None` when it has
+  /// not, and its start is marked then.
+  pub fn runner_asks(&mut self, action: &str, arguments: &Value) -> Option<String> {
+    let started = self.tools.iter_mut().find(|(_, tool)| {
+      tool.server == ORCHESTER && tool.action == action && !tool.asked && tool.arguments == *arguments
+    });
+    match started {
+      Some((item, tool)) => {
+        tool.asked = true;
+        Some(item.clone())
+      }
+      None => {
+        self.asked_own.remember(action, arguments);
+        None
+      }
     }
   }
 
@@ -432,13 +459,15 @@ impl AppServerStream {
             .flatten();
           let changes = own.map_or_else(Vec::new, |tool| tool.changed_files(arguments));
           let call = own.and_then(|tool| tool.shown_call(arguments));
+          let asked = own.is_some() && self.asked_own.take(&action, arguments);
           let context = ToolContext {
             thread,
             turn,
+            target: string(arguments, "filePath"),
+            asked,
+            arguments: if own.is_some() { arguments.clone() } else { Value::Null },
             server,
             action,
-            target: string(arguments, "filePath"),
-            asked: false,
             changes,
             call,
           };

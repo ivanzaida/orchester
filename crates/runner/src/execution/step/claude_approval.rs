@@ -37,6 +37,9 @@ pub(in super::super) struct Asked {
   pub(in super::super) request: ClaudeApprovalRequest,
   pub(in super::super) reply: oneshot::Sender<PromptAnswer>,
   pub(in super::super) by: AskedBy,
+  /// The call's arguments when the runner asks about a call of Orchester's tools, so that a Codex step finds the call
+  /// it is about; `Null` for Claude Code's permission prompt.
+  pub(in super::super) arguments: serde_json::Value,
 }
 
 /// Who asks about a call.

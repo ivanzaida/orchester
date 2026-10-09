@@ -89,7 +89,8 @@ too: Codex 0.159.2 sends `mcpServer/elicitation/request` for a tool that needs a
 `{"action":"decline"}` (or the question's decline option) without a person and records the declined call
 (`McpToolDeclined`, *declined, not asked* in the activity); Codex tells the agent the call was rejected and the
 turn goes on. A request from another phase, thread or turn still fails the step. Each Codex MCP call also ends as an
-activity row of its own (`McpToolFinished`, with whether Codex asked first): *approved by you · <server>* when a
+activity row of its own (`McpToolFinished`, with whether Codex asked first, or the runner did for a call of
+Orchester's tools, matched to Codex's call by its tool and arguments): *approved by you · <server>* when a
 person approved it, *asked you · <server>* when it was asked about and did not run, and the server's name alone
 when Codex did not ask.
 
