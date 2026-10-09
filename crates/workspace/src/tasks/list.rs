@@ -454,6 +454,16 @@ impl TaskRow {
   }
 }
 
+impl TaskRow {
+  /// The step the row's run line names: the one its run is at work on, or the one it failed at
+  /// (`Running · 02 Plan`, `Failed · 04 Run checks`).
+  pub fn run_step(&self) -> Option<&CurrentStep> {
+    matches!(self.phase, Some(TaskPhase::Running | TaskPhase::Failed))
+      .then_some(self.step.as_ref())
+      .flatten()
+  }
+}
+
 fn task_pipeline_label(task: &Task, published: &[PipelineChoice], latest: Option<&LatestRun>) -> PipelineLabel {
   let pinned = latest
     .map(|run| (run.pipeline.resource, run.pipeline.number))
