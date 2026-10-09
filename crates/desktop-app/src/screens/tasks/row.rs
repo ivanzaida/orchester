@@ -12,7 +12,7 @@ use lurq::{
   },
   components::{Column, Row, Text},
   layout::Alignment,
-  node::Element,
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{id::ProjectId, project::TaskKey, task::organization::WorkflowStatus};
 use orchester_workspace::tasks::list::TaskRow;
@@ -105,8 +105,11 @@ fn title_cell(ctx: &mut Ctx, row: &TaskRow, highlighted: bool) -> Row {
     TagChip::new(format!("task-more-tags-{key}"), count)
   });
   let new = highlighted.then(|| badge(&format!("task-new-{key}"), BadgeTone::Info, &ctx.t("tasks.newBadge")));
+  // As wide as its cell at most, so the title gives up room before the tags do.
   Row::new()
     .id(format!("task-title-{key}"))
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(
