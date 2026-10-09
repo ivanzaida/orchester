@@ -7,6 +7,7 @@ mod support;
 
 use std::fs;
 
+use lurq::app::events::MouseButton;
 use orchester_app::{
   project::{Landing, ProjectState, Unavailable, landing, resolve},
   routes::{OverviewTab, ProjectPage, Route},
@@ -173,4 +174,46 @@ fn project_folder_missing_shows_its_path() {
   assert_eq!(texts[0], "The folder of Kontur is missing");
   assert!(texts.contains(&repo.display().to_string()), "{texts:?}");
   assert_eq!(window.texts("tab-1"), Some(vec!["Kontur · Overview".to_owned()]));
+}
+
+/// Clicks the middle of the element `id`.
+fn click(window: &mut Window, id: &str) {
+  let bounds = window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"));
+  let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
+  window.tree.mouse_move(x, y);
+  window.tree.mouse_down(x, y, MouseButton::Left);
+  window.tree.mouse_up(x, y, MouseButton::Left);
+  window.pass();
+}
+
+#[test]
+fn project_folder_missing_opens_once_it_is_back_and_try_again_is_pressed() {
+  let mut window = Window::open();
+  let repo = window.data.repo("repo-kontur");
+  let away = window.data.dir.path().join("repo-away");
+  fs::rename(&repo, &away).expect("the folder goes");
+  window.navigation().go(overview(project_id()));
+  window.until("the project to resolve", |window| {
+    window.texts("screen-project-folder-missing").is_some()
+  });
+  fs::rename(&away, &repo).expect("the folder comes back");
+  click(&mut window, "screen-project-folder-missing-try-again");
+  window.until("the project to open", |window| {
+    window.texts("screen-overview").is_some()
+  });
+}
+
+#[test]
+fn project_unavailable_leads_to_all_projects() {
+  let mut window = Window::open();
+  window.navigation().go(overview(ProjectId::generate()));
+  window.until("the project to resolve", |window| {
+    window.texts("screen-project-unknown").is_some()
+  });
+  click(&mut window, "screen-project-unknown-all-projects");
+  assert_eq!(window.navigation().route_now(), Route::AllProjects);
 }

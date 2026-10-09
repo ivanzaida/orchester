@@ -115,9 +115,15 @@ fn feed_stale_keeps_the_last_tasks_read() {
     "the tasks last read stay"
   );
   move_when_closed(&away, &data);
+  draft(&repo, "Read once it is back");
   feed.saved();
-  window.until("a good reading", |_| feed.stale.get_untracked().is_none());
-  assert_eq!(titles(&feed), Some(vec!["Kept on screen".to_owned()]));
+  window.pass();
+  assert!(
+    feed.stale.get_untracked().is_some(),
+    "the notice stays while the next reading is under way"
+  );
+  wait_for_titles(&mut window, &feed, &["Kept on screen", "Read once it is back"]);
+  assert_eq!(feed.stale.get_untracked(), None, "the good reading ended the notice");
 }
 
 /// Moves the folder `from` to `to` once no reading has a file in it open: Windows refuses to move a

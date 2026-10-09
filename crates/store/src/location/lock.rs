@@ -19,11 +19,26 @@ use serde::{Deserialize, Serialize};
 const LOCK_FILE: &str = "orchester.lock";
 const HOLDER_FILE: &str = "orchester.lock.holder";
 
-/// The app that holds a data folder's lock: its process and when it started.
+/// The app that holds a data folder's lock: its process, when it started, and whether its window closed
+/// and it is ending (its runners stop at checkpoints first, which takes a few seconds).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LockHolder {
   pub pid: u32,
   pub started_at: Timestamp,
+  /// Records written before an app could say so read as not closing.
+  #[serde(default)]
+  pub closing: bool,
+}
+
+impl LockHolder {
+  /// The app of `pid`, started at `started_at`, while it runs.
+  pub const fn running(pid: u32, started_at: Timestamp) -> Self {
+    Self {
+      pid,
+      started_at,
+      closing: false,
+    }
+  }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -48,7 +63,8 @@ pub enum AppLockError {
 #[derive(Debug)]
 pub struct AppLock {
   _file: File,
-  holder: PathBuf,
+  record: PathBuf,
+  holder: LockHolder,
 }
 
 impl AppLock {
@@ -76,13 +92,26 @@ impl AppLock {
       }
       Err(TryLockError::Error(source)) => return Err(io_error(source)),
     }
-    let text = serde_json::to_string(&holder).expect("a lock holder is plain numbers, which serialize to JSON");
-    fs::write(&record, text).map_err(io_error)?;
+    write_holder(&record, holder).map_err(io_error)?;
     Ok(Self {
       _file: file,
-      holder: record,
+      record,
+      holder,
     })
   }
+
+  /// Records that the holder's window closed and it is ending, so an app that starts meanwhile says
+  /// to start again in a moment rather than that this one is stuck. It keeps the lock until dropped.
+  pub fn mark_closing(&mut self) -> io::Result<()> {
+    self.holder.closing = true;
+    write_holder(&self.record, self.holder)
+  }
+}
+
+fn write_holder(record: &Path, holder: LockHolder) -> io::Result<()> {
+  let text =
+    serde_json::to_string(&holder).expect("a lock holder is plain numbers and a flag, which serialize to JSON");
+  fs::write(record, text)
 }
 
 impl Drop for AppLock {
@@ -90,7 +119,7 @@ impl Drop for AppLock {
     // The record goes before the lock does (fields drop after this), so an app that finds the lock
     // taken by the next holder reads that holder's record or none, never this one's. A record that
     // cannot be removed only says less: the next holder writes its own over it.
-    let _ = fs::remove_file(&self.holder);
+    let _ = fs::remove_file(&self.record);
   }
 }
 

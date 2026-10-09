@@ -9,11 +9,14 @@ use std::fs;
 
 use orchester_app::{
   root::Start,
-  startup::{Failure, Problem, StartupProblem},
+  startup::{
+    Failure, Problem, StartupProblem,
+    front::{self, Front},
+  },
 };
 use orchester_core::time::Timestamp;
 use orchester_ipc::SessionEnd as AttachEnd;
-use orchester_store::{AppDb, PreviousSession, SessionEnd};
+use orchester_store::{AppDb, PreviousSession, SessionEnd, location::LockHolder};
 use support::{Data, Window};
 
 /// How the last session of `data` ended, as the next one would find it. Records a session itself.
@@ -95,6 +98,83 @@ fn session_already_open_screen_names_the_folder_and_the_other_window() {
   first.end();
 }
 
+/// Rewrites the record of who holds `data`'s folder, as the app that holds it would.
+fn record_holder(data: &Data, holder: LockHolder) {
+  let text = serde_json::to_string(&holder).expect("a holder serializes");
+  fs::write(data.dir.path().join("orchester.lock.holder"), text).expect("the record is written");
+}
+
+#[test]
+fn session_closing_app_says_to_start_again_never_that_it_is_stuck() {
+  let data = Data::new();
+  let first = data.launch();
+  let started = first.services().expect("the first app started").session_start;
+  record_holder(
+    &data,
+    LockHolder {
+      closing: true,
+      ..LockHolder::running(std::process::id(), started)
+    },
+  );
+  let second = data.launch();
+  let mut window = Window::of(data, second);
+  let texts = window.texts("startup-closing").expect("the closing screen shows");
+  assert_eq!(texts[0], "Orchester is closing");
+  assert!(window.texts("startup-switch").is_none(), "nothing to switch to");
+  assert!(window.texts("startup-no-answer").is_none());
+  assert!(window.texts("startup-close").is_some());
+  assert_eq!(window.link.startup(), Some("closing"));
+  drop(window);
+  first.end();
+}
+
+#[test]
+fn session_other_app_from_another_day_says_the_day() {
+  let data = Data::new();
+  let first = data.launch();
+  let two_days_ago = Timestamp::from_unix_millis(Timestamp::now().unix_millis() - 2 * 24 * 60 * 60 * 1000);
+  record_holder(&data, LockHolder::running(18244, two_days_ago));
+  let second = data.launch();
+  let mut window = Window::of(data, second);
+  let other = window
+    .texts("startup-other-window")
+    .expect("the other window's line shows");
+  assert!(
+    other[0].starts_with("Open since ") && other[0].contains(", ") && other[0].ends_with("· process 18244"),
+    "{other:?}"
+  );
+  drop(window);
+  first.end();
+}
+
+#[test]
+fn session_that_cannot_land_ends_cleanly() {
+  let data = Data::new();
+  data.launch().end();
+  {
+    let connection = rusqlite::Connection::open(data.database()).expect("the database opens");
+    connection
+      .execute(
+        "INSERT INTO projects (id, name, repo_root, added_at, last_opened_at) VALUES ('not an id', '', 'x', 1, 1)",
+        [],
+      )
+      .expect("a project the list cannot read");
+  }
+  let launch = data.launch();
+  assert!(
+    matches!(
+      problem(launch.start()),
+      StartupProblem::Failed(Failure::Unreadable { .. })
+    ),
+    "the list of projects cannot be read"
+  );
+  assert_eq!(
+    last_session(&data),
+    PreviousSession::Ended(SessionEnd::Clean),
+    "the session that could not open ended cleanly, not as a crash"
+  );
+}
+
 #[test]
 fn session_unended_previous_is_crashed() {
   let data = Data::new();
@@ -111,9 +191,15 @@ fn session_unreadable_database_shows_the_failure_screen_with_its_path() {
   let data = Data::new();
   fs::write(data.database(), "not an Orchester database, nor any other").expect("the file is written");
   let launch = data.launch();
-  let StartupProblem::Failed(Failure::Unreadable { database, reason }) = problem(launch.start()) else {
+  let StartupProblem::Failed(Failure::Unreadable {
+    database,
+    reason,
+    damaged,
+  }) = problem(launch.start())
+  else {
     panic!("the database cannot be read");
   };
+  assert!(damaged, "it is not a database at all");
   assert_eq!(database, data.database());
   assert!(reason.contains("not a database"), "the system's words: {reason}");
 
@@ -149,4 +235,40 @@ fn session_newer_data_says_both_versions() {
     )),
     "{texts:?}"
   );
+}
+
+#[test]
+fn session_switch_never_brings_a_process_that_is_not_the_holder() {
+  let reused = LockHolder::running(std::process::id(), Timestamp::from_unix_millis(1_000));
+  assert_eq!(
+    front::bring_to_front(reused),
+    Front::NoAnswer,
+    "a process created after the holder's session started is another program"
+  );
+  let now = LockHolder::running(std::process::id(), Timestamp::now());
+  assert_eq!(
+    front::bring_to_front(now),
+    Front::NoAnswer,
+    "the test program is not an Orchester program"
+  );
+}
+
+#[test]
+fn session_database_that_cannot_be_opened_is_not_called_damaged() {
+  let data = Data::new();
+  fs::create_dir(data.database()).expect("a folder where the database file belongs");
+  let launch = data.launch();
+  let StartupProblem::Failed(Failure::Unreadable { damaged, .. }) = problem(launch.start()) else {
+    panic!("the database cannot be opened");
+  };
+  assert!(!damaged, "nothing says the file is damaged");
+  let mut window = Window::of(data, launch);
+  let texts = window.texts("startup-unreadable").expect("the failure screen shows");
+  assert!(
+    texts
+      .iter()
+      .any(|text| text.starts_with("The database could not be opened: ")),
+    "{texts:?}"
+  );
+  assert!(!texts.iter().any(|text| text.contains("damaged")), "{texts:?}");
 }

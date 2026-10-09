@@ -101,7 +101,8 @@ impl Component for ProjectLoader {
     let LoaderProps { project, active } = ctx.props::<LoaderProps>().clone();
     let projects = Projects::of(ctx);
     let workspace = Services::of(ctx).workspace;
-    let resolved = ctx.future(project, move |project| {
+    let attempt = projects.attempt(project);
+    let resolved = ctx.future((project, attempt), move |(project, _)| {
       let workspace = workspace.clone();
       async move {
         background::run(move || resolve(&workspace, project))
@@ -113,7 +114,10 @@ impl Component for ProjectLoader {
       }
     });
     let resolved = resolved.state().get();
+    // While it is opened (again), there is no answer yet: the one the attempt before gave is not it.
+    let opening = resolved.is_pending();
     match (resolved.data, resolved.error) {
+      _ if opening => {}
       (Some(state), _) => projects.set(project, state),
       (None, Some(reason)) => projects.set(project, ProjectState::Unavailable(Unavailable::Failed(reason))),
       (None, None) => {}
