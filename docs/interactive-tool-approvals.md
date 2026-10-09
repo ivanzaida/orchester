@@ -163,8 +163,8 @@ by `read_external_file` and `search_external_file`.
 | `edit_file` | `filename`, `start_line`, `end_line`, `expected`, `content` | writes the worktree | runs | not offered |
 | `create_file` | `filename`, `content` | writes the worktree | runs | not offered |
 | `find_symbol` (with the code index) | `name`, `kind?`, `include_tests?`, `include_consts?` | read-only | runs | runs |
-| `search_external_file` | `base_directory` (absolute), `term` | outside | asks | asks |
-| `read_external_file` | `filename` (absolute), `start_line?`, `length?` | outside | asks | asks |
+| `search_external_file` | `base_directory` (absolute), `term` | outside | asks; runs in the run's sources | asks; runs in the run's sources |
+| `read_external_file` | `filename` (absolute), `start_line?`, `length?` | outside | asks; runs in the run's sources | asks; runs in the run's sources |
 | `run_project_tool` | `name` | outside, network | asks (network on only) | asks (network on only) |
 | `list_skills` (with skills) | none | read-only | runs | runs |
 | `read_skill` (with skills) | `name`, `file?` (a skill file path; none or `SKILL.md` for the skill's own), `offset?`, `limit?` (≤ 10 000, 2000) | read-only | runs | runs |
@@ -197,6 +197,19 @@ by `read_external_file` and `search_external_file`.
   path is checked, then opened, so a link swapped in between by another program could lead elsewhere (what is opened
   must still be a file); a mapped network drive (`Z:\`) or a mounted share (`/Volumes/…`) reads as a local folder,
   also in a step without network.
+- **Sources** (`orchester_core::source`): folders and files outside the worktree an agent may read without asking,
+  absolute paths listed on the project and on a task (`project_sources`, `task_sources`, this machine's paths, never
+  shared; set through `ProjectDb::set_project_sources` and `set_task_sources`), on a pipeline and on its steps (in the
+  pipeline's versions, `PipelineSources`, set with `Pipeline::with_sources` and kept by `PipelineEdit`; a removed
+  step's go with it). A run snapshots their union when it starts, in its run snapshot (`RunSnapshot::with_sources`:
+  the project's, the task's, the pipeline's, then each step's, each path once with where it was listed first), so
+  later edits apply to new runs; every step of the run reads all of them. A call of `read_external_file` or
+  `search_external_file` whose resolved file or folder is a source or lies in one runs without asking: the runner
+  answers Claude Code's permission prompt itself, and runs a Codex call at once; what the tools refuse anywhere stays
+  refused in a source too. The *# Orchester tools* paragraph names the run's sources. Their screens (Project
+  settings, New task's *Attach context*, the pipeline settings and step inspector; `data/orchester2.pen`, layers
+  *Sources* and *Pipeline settings*) are not built: until then sources are set through the store API (Orchester's
+  domain MCP server of `crates/workspace` does not exist on master yet).
 - **Approval, held by the runner.** A call of a tool that asks runs only once approved, whatever the CLI does: an
   approval through Claude Code's permission prompt leaves a grant for one call of that tool with exactly the
   arguments the person saw, and a call that arrives without one is asked about by the runner itself before it runs
@@ -267,13 +280,14 @@ by `read_external_file` and `search_external_file`.
   of the `Orchester` server, not the shell's `cat`, `rg`, `sed -i` or heredocs), and how `edit_file` is called (the
   lines to replace and, as `expected`, what they hold now). After it, a new session that gets the tools is told in a
   paragraph of its own (*# Orchester tools*) to use the shell for builds, tests and git, not to read or search files;
-  to read and search outside the worktree with `read_external_file` and `search_external_file`; the other tools of the
-  server it has; and, with skills, to read them with `read_skill` by name, never by path. The *# Skills* part then
+  to read and search outside the worktree with `read_external_file` and `search_external_file` (at once in the run's
+  sources, which it names; elsewhere a person is asked first); the other tools of the server it has; and, with skills, to read them with `read_skill` by name, never by path. The *# Skills* part then
   names each skill and its description without a path and says to read it with `read_skill`; an agent without the
   tools (Claude Code without its permission prompt, the native agent) still gets each `SKILL.md`'s path.
 - **Checked** with the fake CLIs only (`cargo test -p orchester-runner --features test-agent --test orchester_tools
   orchester_tools`, `--test orchester_file_tools orchester_file_tools`, `--test orchester_skill_tools
-  orchester_skill_tools`). Not checked with the real CLIs: whether Claude Code and Codex call each tool as the prompt
+  orchester_skill_tools`); sources also with `cargo test -p orchester-core --test run sources` and `cargo test -p
+  orchester-store --test sources sources`. Not checked with the real CLIs: whether Claude Code and Codex call each tool as the prompt
   asks, how often Codex still reads or edits through its shell, and how large answers fare against Claude Code's MCP
   output limit (`MAX_MCP_OUTPUT_TOKENS`).
 

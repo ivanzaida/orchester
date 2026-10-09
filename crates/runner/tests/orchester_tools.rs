@@ -20,6 +20,7 @@ use orchester_core::{
   orchester_tools::OutputKept,
   permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess},
   run::{Answerer, ApprovalAnswer, PendingToolApproval, Run, RunStatus},
+  source::SourcePath,
 };
 use orchester_exec::run_capped;
 use orchester_ipc::Event;
@@ -218,6 +219,102 @@ async fn orchester_tools_serve_codex_and_ask_in_the_runner() {
   assert!(!approved.contains("git_status"), "{approved}");
   let thread = threads(&db, id).pop().expect("a thread");
   assert!(thread["config"].get("mcp_servers").is_none(), "{thread}");
+}
+
+fn source(folder: &Path) -> SourcePath {
+  SourcePath::new(&folder.to_string_lossy()).expect("an absolute path")
+}
+
+/// The run's sources, snapshotted when it starts from the project's and the task's lists, let Codex read and search
+/// there without anybody being asked; `.git` stays refused inside a source too, and the prompt names them.
+#[tokio::test(flavor = "multi_thread")]
+async fn orchester_tools_read_the_runs_sources_without_asking() {
+  let project = project(&Setup {
+    permissions: Some(AgentPermissions::new(
+      RepositoryAccess::ReadOnly,
+      CommandPermission::AnyInWorktree,
+      NetworkAccess::Off,
+    )),
+    ..Setup::new("Use Orchester's tools.")
+  });
+  let root = project.repo.path();
+  let (first, second) = outside_folders(&project);
+  let mut db = ProjectDb::open(root).expect("open");
+  db.set_project_sources(&[source(&first), source(&root.join(".git"))])
+    .expect("project sources");
+  db.set_task_sources(project.task, &[source(&second)])
+    .expect("task sources");
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let paths: Vec<&str> = run.snapshot().sources().paths().map(SourcePath::as_str).collect();
+  assert_eq!(paths.len(), 3, "{paths:?}");
+  let db = ProjectDb::open(root).expect("open");
+  let calls = reported(&db, id, "orchester-call: ");
+  assert_eq!(calls.len(), 4, "{calls:#?}");
+  assert!(calls[0].starts_with("search_external_file ok: "), "{calls:#?}");
+  assert_eq!(
+    calls[1..3],
+    [
+      "read_external_file ok:      1\toutside line 1",
+      "read_external_file ok:      2\tother 2"
+    ]
+  );
+  assert!(calls[3].contains("protected"), "{calls:#?}");
+  let told = reported(&db, id, "prompt| ").join("\n");
+  assert!(
+    told.contains(&format!("The run's sources: {}", first.display())),
+    "{told}"
+  );
+}
+
+/// Claude Code's permission prompt is answered by the runner for a call in the run's sources; a call elsewhere still
+/// reaches a person.
+#[tokio::test(flavor = "multi_thread")]
+async fn orchester_tools_answer_claudes_prompt_in_the_runs_sources() {
+  let project = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    permissions: Some(permissions(RepositoryAccess::Write)),
+    ..Setup::new("Use Orchester's tools.")
+  });
+  let root = project.repo.path();
+  let (first, second) = outside_folders(&project);
+  let mut db = ProjectDb::open(root).expect("open");
+  db.set_project_sources(&[source(&first)]).expect("project sources");
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let read = pending(root, &mut events, id).await;
+  assert_eq!(read.action, "read_external_file");
+  assert!(same_folder(read.target.as_deref(), &second), "{:?}", read.target);
+  scheduler
+    .decide_tool_approval(id, read.id, ApprovalAnswer::Once, Answerer::Person)
+    .await
+    .expect("approved");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let db = ProjectDb::open(root).expect("open");
+  let decisions = reported(&db, id, "orchester-permission: ");
+  assert_eq!(
+    decisions[..3],
+    [
+      "search_external_file allow",
+      "read_external_file allow",
+      "read_external_file allow"
+    ]
+  );
+  assert_eq!(reported(&db, id, "orchester-call: ").len(), 3);
+  assert_eq!(
+    db.decided_tool_approvals(id).expect("requests").len(),
+    1,
+    "only the read outside the sources asked"
+  );
 }
 
 /// A CLI that runs a call it should have asked about gets no answer unasked: the runner asks itself, and a

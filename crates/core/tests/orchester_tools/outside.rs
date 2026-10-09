@@ -211,16 +211,18 @@ fn orchester_tools_external_calls_name_the_folder_they_read_in() {
     &json!({"base_directory": text(&source), "term": "line"}),
   )
   .expect("valid");
-  let folder = search.external_folder(&reads).expect("outside").expect("allowed");
-  assert_eq!(resolved(&folder), resolved(&source));
+  let reach = search.external_reach(&reads).expect("outside").expect("allowed");
+  assert_eq!(resolved(&reach.folder), resolved(&source));
+  assert_eq!(reach.path, reach.folder);
   let context = context(&folders.worktree, &reads, &[]);
   let Ok(ToolWork::SearchExternal { folder, term }) = search.work(&context) else {
     panic!("a search is the caller's to run");
   };
   assert_eq!((resolved(&folder), term.as_str()), (resolved(&source), "line"));
   let read = parse("read_external_file", &json!({"filename": text(&source.join("lib.rs"))})).expect("valid");
-  let folder = read.external_folder(&reads).expect("outside").expect("allowed");
-  assert_eq!(resolved(&folder), resolved(&source));
+  let reach = read.external_reach(&reads).expect("outside").expect("allowed");
+  assert_eq!(resolved(&reach.folder), resolved(&source));
+  assert_eq!(resolved(&reach.path), resolved(&source.join("lib.rs")));
   for (base, refused) in [
     (folders.home.join(".ssh"), "credential"),
     (folders.dependency.join(".git"), "protected"),
@@ -231,15 +233,15 @@ fn orchester_tools_external_calls_name_the_folder_they_read_in() {
       &json!({"base_directory": text(&base), "term": "x"}),
     )
     .expect("valid");
-    let error = call.external_folder(&reads).expect("outside").expect_err("refused");
+    let error = call.external_reach(&reads).expect("outside").expect_err("refused");
     assert!(error.to_string().contains(refused), "{error}");
     assert!(call.work(&context).is_err());
   }
   let relative = parse("search_external_file", &json!({"base_directory": "deps", "term": "x"})).expect("valid");
   assert!(matches!(
-    relative.external_folder(&reads),
+    relative.external_reach(&reads),
     Some(Err(OutsideReadError::NotAbsolute(_)))
   ));
   let worktree = parse("read_file", &json!({"filename": "README.md"})).expect("valid");
-  assert!(worktree.external_folder(&reads).is_none());
+  assert!(worktree.external_reach(&reads).is_none());
 }

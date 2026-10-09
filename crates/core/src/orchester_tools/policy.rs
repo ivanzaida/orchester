@@ -5,7 +5,7 @@
 //! | --- | --- | --- |
 //! | read-only (`read_file`, `list_files`, `search_file`, `find_symbol` with the code index, `list_skills` and `read_skill` with skills) | runs | runs |
 //! | writes the worktree (`edit_file`, `create_file`) | runs | not offered |
-//! | outside the worktree (`search_external_file`, `read_external_file`) | asks | asks |
+//! | outside the worktree (`search_external_file`, `read_external_file`) | asks, runs in the run's sources | asks, runs in the run's sources |
 //! | the project's programs (`run_project_tool`), network on | asks | asks |
 //! | the project's programs, network off | not offered | not offered |
 //!
@@ -25,6 +25,7 @@ use super::{AccessClass, OrchesterTool, ProjectTool, SERVER, catalog::input_sche
 use crate::{
   permission::{AgentPermissions, NetworkAccess},
   resource::RepositoryAccess,
+  source::{RunSources, SourcePath},
 };
 
 /// What happens to a call of an offered tool.
@@ -55,12 +56,14 @@ pub fn auto_approvable(server: &str, tool: &str) -> bool {
   server != SERVER || tool != OrchesterTool::RunProjectTool.as_str()
 }
 
-/// The tools one step is offered, with their policy, and the project tools `run_project_tool` runs.
+/// The tools one step is offered, with their policy, the project tools `run_project_tool` runs, and the run's
+/// sources, which the calls outside the worktree read without asking.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct StepTools {
   offered: Vec<(OrchesterTool, ToolPolicy)>,
   /// Names and descriptions of the project tools, in library order.
   projects: Vec<(String, String)>,
+  sources: Vec<SourcePath>,
 }
 
 impl StepTools {
@@ -84,7 +87,15 @@ impl StepTools {
         .iter()
         .map(|tool| (tool.name().to_owned(), tool.description().to_owned()))
         .collect(),
+      sources: Vec::new(),
     }
+  }
+
+  /// These tools in a run with `sources`, which the prompt names.
+  #[must_use]
+  pub fn with_sources(mut self, sources: &RunSources) -> Self {
+    self.sources = sources.paths().cloned().collect();
+    self
   }
 
   /// These tools and `find_symbol`, for a step whose agent gets the code index of the run's base revision.
@@ -171,7 +182,7 @@ impl StepTools {
 
   /// The paragraph of the prompt that points the agent at the tools besides the worktree's file tools, which its
   /// *Files and commands* part names: each by the name its CLI sees ([`OrchesterTool::called`]), what reaches outside
-  /// the worktree, and how to read skills when it has any.
+  /// the worktree and the run's sources, and how to read skills when it has any.
   pub fn prompt_paragraph(&self, claude: bool) -> String {
     let others: Vec<String> = self
       .offered
@@ -181,10 +192,15 @@ impl StepTools {
       .collect();
     let mut text = format!(
       "# Orchester tools\n\nUse the shell for builds, tests and git, not to read or search files. Read and search \
-       files outside the worktree with {} and {} of the {SERVER} MCP server; a person may be asked first.",
+       files outside the worktree with {} and {} of the {SERVER} MCP server: in the run's sources they run at once, \
+       elsewhere a person is asked first.",
       OrchesterTool::ReadExternalFile.called(claude),
       OrchesterTool::SearchExternalFile.called(claude)
     );
+    if !self.sources.is_empty() {
+      let sources: Vec<&str> = self.sources.iter().map(SourcePath::as_str).collect();
+      text.push_str(&format!(" The run's sources: {}.", sources.join(", ")));
+    }
     if !others.is_empty() {
       text.push_str(&format!(" The server also has {}.", others.join(", ")));
     }

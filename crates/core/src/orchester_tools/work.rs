@@ -165,17 +165,30 @@ impl ToolCall {
   }
 }
 
+/// What a call outside the worktree reaches, resolved.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExternalReach {
+  /// The file it reads, or the folder it searches: what the run's sources must hold for it to run unasked.
+  pub path: PathBuf,
+  /// The folder it reads in, which its approval shows and Approve similar keeps its rule to.
+  pub folder: PathBuf,
+}
+
 impl ToolCall {
-  /// The folder a call outside the worktree reads in, resolved: the folder of the file it reads, or the folder it
-  /// searches; `None` for any other call. A path the call may not reach is the error the call would end with.
-  pub fn external_folder(&self, outside: &OutsideReads) -> Option<Result<PathBuf, OutsideReadError>> {
+  /// What a call outside the worktree reaches; `None` for any other call. A path the call may not reach is the error
+  /// the call would end with.
+  pub fn external_reach(&self, outside: &OutsideReads) -> Option<Result<ExternalReach, OutsideReadError>> {
     match self {
-      Self::ReadExternal { filename, .. } => Some(
-        outside
-          .check(filename)
-          .map(|file| file.parent().map_or_else(|| file.clone(), Path::to_path_buf)),
-      ),
-      Self::SearchExternal { base_directory, .. } => Some(outside.check_folder(base_directory)),
+      Self::ReadExternal { filename, .. } => Some(outside.check(filename).map(|file| ExternalReach {
+        folder: file.parent().map_or_else(|| file.clone(), Path::to_path_buf),
+        path: file,
+      })),
+      Self::SearchExternal { base_directory, .. } => {
+        Some(outside.check_folder(base_directory).map(|folder| ExternalReach {
+          path: folder.clone(),
+          folder,
+        }))
+      }
       _ => None,
     }
   }

@@ -60,11 +60,11 @@ impl OrchesterTool {
       }
       Self::SearchExternalFile => {
         "Search the files under a folder outside the worktree, such as a dependency's sources, for literal text. \
-         A person may be asked first. Credential locations are refused."
+         Runs at once in the run's sources; elsewhere a person is asked first. Credential locations are refused."
       }
       Self::ReadExternalFile => {
-        "Read a text file outside the worktree, such as a dependency's source, by absolute path. A person may be \
-         asked first. Credential locations are refused."
+        "Read a text file outside the worktree, such as a dependency's source, by absolute path. Runs at once in \
+         the run's sources; elsewhere a person is asked first. Credential locations are refused."
       }
       Self::RunProjectTool => {
         "Run one of the project's command tools by name, with its fixed arguments, in the worktree. A person may \

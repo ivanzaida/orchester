@@ -51,7 +51,7 @@ use tokio::{
 
 use super::{
   claude_approval::{Asked, AskedBy, PromptAnswer},
-  orchester_tools::ToolHost,
+  orchester_tools::{Outside, ToolHost},
   question::AskedQuestion,
 };
 
@@ -350,9 +350,10 @@ impl Relay {
     }
   }
 
-  /// The decision on permission prompt call `arguments`: a person's, or a refusal of what the step does
-  /// not leave to one; `None` when the relay closed its connection while the call waited. An approved call
-  /// of one of Orchester's tools leaves a grant for that call.
+  /// The decision on permission prompt call `arguments`: a person's, a refusal of what the step does not leave to
+  /// one, or, for a call of Orchester's tools outside the worktree, an approval when it stays in the run's sources
+  /// and a refusal when it reaches where it may not; `None` when the relay closed its connection while the call
+  /// waited. An approved call of one of Orchester's tools leaves a grant for that call.
   async fn decide(&self, arguments: &Value, lines: &mut Lines<BufReader<OwnedReadHalf>>) -> Option<String> {
     let asked = self.served.prompt.as_ref().map(|scope| scope.classify(arguments));
     let Some(ClaudeAsk::Person(request)) = asked else {
@@ -362,12 +363,32 @@ impl Relay {
       .then(|| OrchesterTool::from_name(request.action()))
       .flatten();
     let input = arguments.get("input").unwrap_or(&Value::Null);
-    let request = match tool.map(|tool| self.prompt_folder(tool, input)) {
-      Some(Ok(Some(folder))) => request.with_target(folder),
+    let answer = match tool.map(|tool| self.prompt_outside(tool, input)) {
+      // A call that stays in the run's sources runs without asking.
+      Some(Ok(Some(outside))) if outside.in_sources => PromptAnswer::Allow,
       // The call would be refused: it is denied with why, and nobody is asked.
-      Some(Err(refused)) => return Some(PromptAnswer::Deny(refused).result()),
-      Some(Ok(None)) | None => request,
+      Some(Err(refused)) => PromptAnswer::Deny(refused),
+      Some(Ok(Some(outside))) => {
+        let request = request.with_target(outside.folder);
+        return self.ask_prompt(request, (tool, input), lines).await;
+      }
+      Some(Ok(None)) | None => return self.ask_prompt(request, (tool, input), lines).await,
     };
+    if let (Some(tool), PromptAnswer::Allow) = (tool, &answer) {
+      self.served.tools.grant(tool, input);
+    }
+    Some(answer.result())
+  }
+
+  /// A person's answer on the permission prompt call `request` of `tool` with `input`, as the prompt's result; an
+  /// approved call of one of Orchester's tools leaves a grant for that call. `None` when the relay closed its
+  /// connection while the call waited.
+  async fn ask_prompt(
+    &self,
+    request: ClaudeApprovalRequest,
+    (tool, input): (Option<OrchesterTool>, &Value),
+    lines: &mut Lines<BufReader<OwnedReadHalf>>,
+  ) -> Option<String> {
     let answer = self.ask(request, AskedBy::Prompt, lines).await?;
     if let (Some(tool), PromptAnswer::Allow) = (tool, &answer) {
       self.served.tools.grant(tool, input);
@@ -375,23 +396,21 @@ impl Relay {
     Some(answer.result())
   }
 
-  /// The folder a permission prompt call of Orchester's `tool` with `input` reads in, for a tool that reads outside
-  /// the worktree; why the call would be refused, when its input or its path is.
-  fn prompt_folder(&self, tool: OrchesterTool, input: &Value) -> Result<Option<String>, String> {
+  /// How a permission prompt call of Orchester's `tool` with `input` reaches outside the worktree, for a tool that
+  /// reads there; why the call would be refused, when its input or its path is.
+  fn prompt_outside(&self, tool: OrchesterTool, input: &Value) -> Result<Option<Outside>, String> {
     if !tool.reads_outside() {
       return Ok(None);
     }
     let tools = &self.served.tools;
     let call = tools.parse(tool.as_str(), input).map_err(|error| error.to_string())?;
-    tools
-      .external_folder(&call)
-      .transpose()
-      .map_err(|error| error.to_string())
+    tools.outside(&call).transpose().map_err(|error| error.to_string())
   }
 
   /// The answer to a call of Orchester's tool `name`: refused when it is not valid, not offered or reaches where it
   /// may not, asked about first when it needs an approval and has none (a call outside the worktree showing the folder
-  /// it reads in); `None` when the relay closed its connection while the call waited.
+  /// it reads in), unless it stays in the run's sources; `None` when the relay closed its connection while the call
+  /// waited.
   async fn call(
     &self,
     name: &str,
@@ -403,17 +422,18 @@ impl Relay {
       Ok(call) => call,
       Err(error) => return Some(ToolResult::refused(&error)),
     };
-    let folder = match tools.external_folder(&call).transpose() {
-      Ok(folder) => folder,
+    let outside = match tools.outside(&call).transpose() {
+      Ok(outside) => outside,
       // A path the call may not reach is refused before anybody is asked.
       Err(error) => return Some(ToolResult::refused(&error)),
     };
-    if tools.asks(call.tool()) && !tools.take_grant(call.tool(), arguments) {
+    let in_sources = outside.as_ref().is_some_and(|outside| outside.in_sources);
+    if tools.asks(call.tool()) && !in_sources && !tools.take_grant(call.tool(), arguments) {
       let number = self.asked.fetch_add(1, Ordering::Relaxed);
       let request =
         ClaudeApprovalRequest::tool_call(format!("orchester-call-{number}"), name, arguments, tools.secrets());
-      let request = match folder {
-        Some(folder) => request.with_target(folder),
+      let request = match outside {
+        Some(outside) => request.with_target(outside.folder),
         None => request,
       };
       match self.ask(request, AskedBy::ToolCall, lines).await? {

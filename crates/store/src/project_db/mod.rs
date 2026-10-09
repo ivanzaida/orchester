@@ -37,6 +37,7 @@ mod schema;
 mod secrets;
 mod shared_tasks;
 mod sharing;
+mod sources;
 mod step_outputs;
 mod tags;
 mod task_groups;

@@ -30,6 +30,7 @@ pub mod revision;
 pub mod run;
 pub mod secret;
 pub mod sharing;
+pub mod source;
 pub mod store;
 pub mod task;
 pub mod task_group;

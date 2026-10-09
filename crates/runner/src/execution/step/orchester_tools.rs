@@ -32,6 +32,7 @@ use orchester_core::{
   },
   permission::{AgentPermissions, ResolvedFolder, category::CommandScope},
   resource::CommandEnvironment,
+  source::ResolvedSources,
 };
 use orchester_exec::run_capped;
 use parking_lot::Mutex;
@@ -90,6 +91,8 @@ pub(in super::super) struct ToolHost {
   files: ToolFiles,
   /// The skills `list_skills` and `read_skill` serve.
   skills: StepSkills,
+  /// The run's sources, resolved: a call outside the worktree that stays in one runs without asking.
+  sources: ResolvedSources,
   /// The invocation's secret values, removed from every answer.
   secrets: Vec<SecretVariable>,
   /// Tools a person or a rule approved one call of, through the CLI's own prompt, not called yet.
@@ -127,13 +130,16 @@ impl ToolHost {
     self.tools.asks(tool.as_str())
   }
 
-  /// The folder `call` reads in outside the worktree, resolved, as its approval shows it; `None` for any other call.
-  /// A path the call may not reach is the call's refusal.
-  pub(super) fn external_folder(&self, call: &ToolCall) -> Option<Result<String, ToolCallError>> {
-    let folder = call.external_folder(&self.outside)?;
+  /// How `call` reaches outside the worktree; `None` for any other call. A path the call may not reach is the call's
+  /// refusal.
+  pub(super) fn outside(&self, call: &ToolCall) -> Option<Result<Outside, ToolCallError>> {
+    let reach = call.external_reach(&self.outside)?;
     Some(
-      folder
-        .map(|folder| folder.display().to_string())
+      reach
+        .map(|reach| Outside {
+          in_sources: self.sources.covers(&reach.path),
+          folder: reach.folder.display().to_string(),
+        })
         .map_err(ToolCallError::from),
     )
   }
@@ -193,6 +199,14 @@ impl ToolHost {
   }
 }
 
+/// Where a call outside the worktree reads.
+pub(super) struct Outside {
+  /// The folder it reads in, as its approval shows it.
+  pub(super) folder: String,
+  /// It stays in the run's sources, so it runs without asking.
+  pub(super) in_sources: bool,
+}
+
 /// `arguments` as a call names them: none is an empty object.
 fn called_with(arguments: &Value) -> Value {
   if arguments.is_null() {
@@ -248,7 +262,8 @@ impl RunTask {
     let mut refused = vec![private_file::root()];
     refused.extend(self.relay.as_deref().and_then(Path::parent).map(Path::to_path_buf));
     let files = ToolFiles::new(permissions.repository(), folders, self.run.base().as_str())?;
-    let mut tools = StepTools::for_step(permissions, &[]);
+    let sources = self.run.snapshot().sources();
+    let mut tools = StepTools::for_step(permissions, &[]).with_sources(sources);
     if files.indexed() {
       tools = tools.with_code_index();
     }
@@ -265,6 +280,7 @@ impl RunTask {
       outside: OutsideReads::new(CommandScope::on_host(worktree, writable), &refused),
       files,
       skills,
+      sources: ResolvedSources::resolve(sources),
       secrets: Vec::new(),
       grants: Mutex::new(Vec::new()),
     })

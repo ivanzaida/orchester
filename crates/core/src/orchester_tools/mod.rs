@@ -43,7 +43,7 @@ pub use self::{
   outside::{MAX_LINE_BYTES, MAX_READ_BYTES, OutsideReadError, OutsideReads},
   policy::{StepTools, ToolPolicy, auto_approvable, decide},
   skills::{SkillCall, SkillOfferError, SkillReadError, SkillSource, StepSkills},
-  work::{ProjectTool, ToolContext, ToolProgram, ToolWork},
+  work::{ExternalReach, ProjectTool, ToolContext, ToolProgram, ToolWork},
 };
 use crate::connection::stream::{FileChange, FileChangeKind, NativeCall};
 

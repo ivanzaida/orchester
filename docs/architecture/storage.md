@@ -445,6 +445,8 @@ it as missing. A tool copy keeps allowed callers only for pipelines copied with 
 | `task_dependencies` | task, prerequisite, condition (`ready_for_review`, `merged`) |
 | `run_groups` | mode (parallel with limit / sequential with gate), budget cap, failure policy, scheduling paused, pinned versions |
 | `run_group_items` | group, task, position |
+| `project_sources` | position, path — the project's sources (M12): absolute paths of folders and files outside the worktree its agents may read without asking; this machine's, never shared |
+| `task_sources` | task, position, path — a task's sources, as `project_sources`; a pipeline's and its steps' are in its versions, and a run keeps the union it started with in its version snapshot |
 
 ### Execution (written by the runner)
 
