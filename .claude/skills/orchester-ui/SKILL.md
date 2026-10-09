@@ -15,6 +15,21 @@ Two rules, both mechanically checked:
 Load `lurq-ui` too — it covers component boundaries, interaction and verification. This
 skill is the Orchester-specific layer: where things live and how to name them.
 
+## The new app (`orchester-app`)
+
+`crates/desktop-app` (the `data/orchester2.pen` design) follows the same two rules with its own
+files; the paths and the mapping tables below are the deprecated `orchester-desktop`'s.
+
+- Strings: `crates/desktop-app/assets/locales/<locale>.json`, loaded by `crates/desktop-app/src/i18n.rs`;
+  shared words go in `common.*`.
+- Design values: only in `crates/desktop-app/src/theme/` (`palette.rs`, `typography.rs`, `metrics.rs`,
+  `form.rs`, `shadow.rs`); call sites use lurq roles and the `ExtraColor`, `ExtraTypography`,
+  `IconSize`, `ExtraSpacing` and `ExtraRadius` roles there. A structural size (a sidebar width, a tab
+  height) is a named constant next to the component that owns it, with its Pencil node id.
+- Tests: `cargo test -p orchester-app --test i18n -- locales every_key` and
+  `cargo test -p orchester-app --test theme -- roles extra_color spacing`.
+- `tools/check.ps1`'s "ui literals" check covers `crates/desktop-app/src` too (its `theme/` exempt).
+
 ## Text through i18n
 
 ### Where

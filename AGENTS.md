@@ -8,7 +8,8 @@ be added later, so domain logic must not depend on the desktop app.
   `docs/evidence/design-consistency-audit-2026-09-23.md`. All project data in the designs is illustrative fixture data;
   never ship it as real data or defaults.
 - Work plan and backlog: `docs/plan.md`. Take tasks from it and move them to its *Done* list when finished.
-- Design source: `data/orchester.pen`. It is encrypted — read it only through the `pencil` MCP, never Read/Grep.
+- Design source: `data/orchester.pen`; the new app's (`crates/desktop-app`) is `data/orchester2.pen`. Both are
+  encrypted — read them only through the `pencil` MCP, never Read/Grep.
 
 Cross-agent skill layout:
 
@@ -25,8 +26,14 @@ Workspace layout:
 - `crates/core` (`orchester-core`): domain model and rules. No UI, windowing, rendering, HTTP, or database client
   dependencies. Persistence, process execution and providers are reached through traits defined here, so the desktop
   app and the future server share the same core.
-- `crates/desktop` (`orchester-desktop`, binary `orchester`): lurq UI. Screens call into core; business rules do not
-  live in components. Theme tokens live in `crates/desktop/src/theme.rs`.
+- `crates/desktop` (`orchester-desktop`, binary `orchester`): lurq UI, deprecated — replaced by `crates/desktop-app`
+  and kept building and shipping until that app takes over its screens. Screens call into core; business rules do not
+  live in components. Theme tokens live in `crates/desktop/src/theme/`.
+- `crates/desktop-app` (`orchester-app`, binary `orchester-app`): the new lurq app in the `orchester2.pen` design.
+  Theme roles live in `crates/desktop-app/src/theme/`, strings in `crates/desktop-app/assets/locales/`. It keeps its
+  settings in the application database (`orchester.db`, located by `orchester_store::location`) and runs one MCP
+  server of its own that hosts lurq's window tools and the app's tools (discovery file
+  `%LOCALAPPDATA%\orchester-app-mcp\<pid>.json`). Run it with `powershell -File tools/run.ps1 app`.
 - `crates/runner` (`orchester-runner`): one process per open project, started by the desktop from the desktop's
   own directory (inside `Orchester.app` both are in `Contents/MacOS`). Run the app with
   `powershell -File tools/run.ps1` (extra arguments go to `cargo run`, e.g. `--features devtools`); plain
@@ -85,7 +92,8 @@ Hard requirements:
     synchronous critical sections. Never `std::sync::Mutex` in new code.
 13. Every user-facing string goes through i18n with a key in every shipped locale (exact key and placeholder
     parity), and every color, font, text size, spacing, radius and border comes from a lurq theme role. Design
-    values live only in `crates/desktop/src/theme/`. Exempt from i18n: developer logs, identifiers, raw user data.
+    values live only in each app's theme module (`crates/desktop/src/theme/`, `crates/desktop-app/src/theme/`).
+    Exempt from i18n: developer logs, identifiers, raw user data.
 14. Tests live in a `tests/` folder of the crate they cover, not in large inline modules. Every `cargo test` carries
     a name filter (`cargo test -p <crate> --test <binary> <filter>`); batch edits and run the affected tests once per
     milestone. `cargo check` / `cargo clippy` are fine at any time.
