@@ -1,13 +1,15 @@
 //! The selected file's diff (`Diff` `RsPIH` on `code_bg`): its head (`File head` `rIRdw`: the change's
 //! letter, the path, the added and removed counts and where the change was read) and its rows in a
-//! virtualised list that also scrolls sideways for long lines. The lines show plain at once and
-//! highlighted when a background thread finished them; highlighted files are kept per diff while the
-//! view is open, so going back to a file does not highlight it again.
+//! virtualised list that also scrolls sideways for long lines. The list is the file's own, by its source
+//! and path, so reading the worktree again keeps its scroll position. The lines show plain at once and
+//! highlighted when a background thread finished them; the tokens are kept by the file's content
+//! (`cache`), so a file whose content did not change keeps its colors.
 
+mod cache;
 mod line;
 mod rows;
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -29,30 +31,30 @@ use orchester_workspace::{
 use parking_lot::Mutex;
 
 use self::{
-  line::{DiffRowView, RowProps, content_width},
-  rows::{DiffRow, rows},
+  cache::{ContentKey, Highlights, ShownRows},
+  line::{DiffRowView, RowProps},
+  rows::DiffRow,
 };
 use super::files::{FileSummary, change_letter};
 use crate::theme::{CodeText, ExtraColor, ExtraSpacing, ExtraTypography};
+
+/// A diff, by its key, and a file's position in it.
+type DiffAt = (Arc<str>, usize);
 
 /// Height of the file head (`rIRdw`).
 const HEAD_HEIGHT: f32 = 40.0;
 /// Width changes below this are layout noise, not a resize.
 const WIDTH_EPSILON: f32 = 0.5;
 
-/// The rows of one file of one diff: plain, or highlighted; with room for a horizontal scrollbar under
-/// them, or not.
-type RowsKey = (Arc<str>, usize, bool, bool);
-/// A file of one diff, and its tokens; `None` when no grammar knows the file.
-type Highlighted = HashMap<(Arc<str>, usize), Option<Arc<FileTokens>>>;
-
 #[derive(Clone)]
 pub struct DiffViewProps {
   pub diff: Arc<Diff>,
-  /// Tells this diff's content apart from other diffs the view shows: highlighted files are kept per key.
+  /// Tells this diff's content apart from other diffs the view shows.
   pub key: Arc<str>,
   /// Position of the file in the diff.
   pub index: usize,
+  /// Which file of the list it is, whatever its content: its source and path.
+  pub file: Arc<str>,
   /// Where the change was read, at the head's end ("checkpointed at 7c1e9f2").
   pub source: Arc<str>,
 }
@@ -62,6 +64,7 @@ impl PartialEq for DiffViewProps {
     Arc::ptr_eq(&self.diff, &other.diff)
       && self.key == other.key
       && self.index == other.index
+      && self.file == other.file
       && self.source == other.source
   }
 }
@@ -72,8 +75,10 @@ pub struct DiffView {
   /// The view, and its width after the latest layout: rows are at least this wide.
   view: ElementRef,
   width: Signal<f32>,
-  highlighted: Arc<Mutex<Highlighted>>,
-  rows: Arc<Mutex<HashMap<RowsKey, Arc<Vec<DiffRow>>>>>,
+  /// The content of the file shown, for the diff and position it was worked out of.
+  content: Mutex<Option<(DiffAt, ContentKey)>>,
+  highlights: Arc<Mutex<Highlights>>,
+  shown: Mutex<Option<ShownRows>>,
 }
 
 impl Component for DiffView {
@@ -83,8 +88,9 @@ impl Component for DiffView {
     Self {
       view: ElementRef::new(),
       width: ctx.signal(0.0),
-      highlighted: Arc::new(Mutex::new(HashMap::new())),
-      rows: Arc::new(Mutex::new(HashMap::new())),
+      content: Mutex::new(None),
+      highlights: Arc::new(Mutex::new(Highlights::default())),
+      shown: Mutex::new(None),
     }
   }
 
@@ -110,19 +116,17 @@ impl Component for DiffView {
     let Some(file) = props.diff.files().get(props.index) else {
       return column;
     };
-    let tokens = self.tokens(ctx, &props);
-    let rows = self.rows(&props, file, tokens.as_deref(), false);
-    let view_width = self.width.get();
-    let content = content_width(&rows);
-    // Wider than the view: the horizontal scrollbar shows, below the last row.
-    let rows = if content > view_width {
-      self.rows(&props, file, tokens.as_deref(), true)
-    } else {
-      rows
+    let content = self.content(&props, file);
+    let tokens = self.tokens(ctx, &props, &content);
+    let shown = {
+      let mut kept = self.shown.lock();
+      let shown = ShownRows::of(kept.as_ref(), &content, file, tokens.as_deref());
+      *kept = Some(shown.clone());
+      shown
     };
-    let width = content.max(view_width);
-    let list: Element = VirtualizedList::new_shared(ctx, rows)
-      .list_key(format!("changes-diff-rows-{}-{}", props.key, props.index))
+    let width = shown.width.max(self.width.get());
+    let list: Element = VirtualizedList::new_shared(ctx, shown.rows)
+      .list_key(format!("changes-diff-rows-{}", props.file))
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .horizontal_scroll(true)
@@ -138,51 +142,46 @@ impl Component for DiffView {
 }
 
 impl DiffView {
-  /// The highlighted tokens of the selected file once a background thread made them; a file of a diff
-  /// is highlighted once while the view is open.
-  fn tokens(&self, ctx: &mut Ctx, props: &DiffViewProps) -> Option<Arc<FileTokens>> {
-    let key = (props.key.clone(), props.index);
-    let cache = self.highlighted.clone();
-    let deps = (props.key.clone(), props.index, props.diff.clone());
-    let handle = ctx.future(deps, move |(diff_key, index, diff)| {
-      let cache = cache.clone();
+  /// The content of `file`, worked out once per diff and position.
+  fn content(&self, props: &DiffViewProps, file: &FileDiff) -> ContentKey {
+    let at = (props.key.clone(), props.index);
+    let mut kept = self.content.lock();
+    if let Some((kept_at, content)) = kept.as_ref()
+      && *kept_at == at
+      && content.file == props.file
+    {
+      return content.clone();
+    }
+    let content = ContentKey::of(props.file.clone(), file);
+    *kept = Some((at, content.clone()));
+    content
+  }
+
+  /// The highlighted tokens of the file once a background thread made them; a content is highlighted once
+  /// while it stays among the files shown last.
+  fn tokens(&self, ctx: &mut Ctx, props: &DiffViewProps, content: &ContentKey) -> Option<Arc<FileTokens>> {
+    let highlights = self.highlights.clone();
+    let deps = (content.clone(), props.diff.clone(), props.index);
+    let handle = ctx.future(deps, move |(content, diff, index)| {
+      let highlights = highlights.clone();
       async move {
-        let key = (diff_key, index);
-        if let Some(done) = cache.lock().get(&key) {
-          return Ok((key, done.clone()));
+        if let Some(done) = highlights.lock().get(&content) {
+          return Ok((content, done));
         }
         let file = diff.files().get(index).cloned();
         let tokens = background::run(move || file.as_ref().and_then(highlight).map(Arc::new)).await?;
-        cache.lock().insert(key.clone(), tokens.clone());
-        Ok::<_, Message>((key, tokens))
+        highlights.lock().insert(content.clone(), tokens.clone());
+        Ok::<_, Message>((content, tokens))
       }
     });
-    if let Some(done) = self.highlighted.lock().get(&key) {
-      return done.clone();
+    if let Some(done) = self.highlights.lock().get(content) {
+      return done;
     }
-    // A pending refetch keeps the previous file's result; only this file's counts.
+    // A pending refetch keeps the previous file's result; only this content's counts.
     match handle.state().get().data {
-      Some((done, tokens)) if done == key => tokens,
+      Some((done, tokens)) if done == *content => tokens,
       _ => None,
     }
-  }
-
-  /// The rows of `file`, with a `gap` for the horizontal scrollbar after them: the same list for the same
-  /// file, tokens and gap, so the virtualised list sees an unchanged list between renders.
-  fn rows(&self, props: &DiffViewProps, file: &FileDiff, tokens: Option<&FileTokens>, gap: bool) -> Arc<Vec<DiffRow>> {
-    let key = (props.key.clone(), props.index, tokens.is_some(), gap);
-    self
-      .rows
-      .lock()
-      .entry(key)
-      .or_insert_with(|| {
-        let mut rows = rows(file, tokens);
-        if gap {
-          rows.push(DiffRow::ScrollbarGap { index: rows.len() });
-        }
-        Arc::new(rows)
-      })
-      .clone()
   }
 }
 

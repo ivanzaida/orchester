@@ -131,12 +131,17 @@ impl Component for ChangesTab {
     let column = column.with_children(notice);
     let listing = self.listing(committed.as_deref(), uncommitted.as_deref());
     if listing.is_empty() {
+      // A card says the run changed nothing only when its worktree was read clean; otherwise the notice
+      // over the files says what is not known.
       let empty = match (checkpointed, &changes.worktree) {
-        (_, None) => states::reading(ctx),
-        (Checkpointed::NoCheckpoint, _) => states::no_checkpoint(ctx, run.run.number().get()),
-        _ => states::no_changes(ctx),
+        (_, None) => Some(states::reading(ctx)),
+        (Checkpointed::NoCheckpoint, Some(Ok(NotCheckpointed::Clean))) => {
+          Some(states::no_checkpoint(ctx, run.run.number().get()))
+        }
+        (_, Some(Ok(NotCheckpointed::Clean))) => Some(states::no_changes(ctx)),
+        _ => None,
       };
-      return column.child(empty);
+      return column.with_children(empty);
     }
     let shown = Shown {
       checkpointed,
@@ -224,6 +229,7 @@ impl ChangesTab {
         diff: diff.diff.clone(),
         key: diff.key.clone(),
         index: selected.index,
+        file: format!("{}:{}", selected.source.name(), selected.path).into(),
         source,
       },
     );
