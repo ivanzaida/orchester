@@ -10,16 +10,18 @@ use orchester_app::{
     shortcuts::{Keys, Shortcut, shortcut},
     tabs::{HISTORY_LIMIT, TabSet},
   },
-  routes::{ProjectPage, ProjectRef, Route, TaskKey, TaskTab},
+  routes::{ProjectPage, Route, TaskTab},
 };
 use support::Window;
 
+const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
+
 fn project(page: ProjectPage) -> Route {
-  Route::Project(ProjectRef::new("kontur").expect("a valid project"), page)
+  Route::Project(PROJECT.parse().expect("a project id"), page)
 }
 
 fn task(tab: TaskTab) -> Route {
-  project(ProjectPage::Task(TaskKey::new("KON-12").expect("a valid key"), tab))
+  project(ProjectPage::Task("KON-12".parse().expect("a task key"), tab))
 }
 
 #[test]
@@ -140,11 +142,8 @@ fn the_window_shows_the_active_tabs_route() {
       "This screen isn't built yet.".to_owned()
     ])
   );
-  assert_eq!(window.texts("tab-1"), Some(vec!["kontur · KON-12".to_owned()]));
-  assert_eq!(
-    window.texts("project-switcher"),
-    Some(vec!["K".to_owned(), "kontur".to_owned()])
-  );
+  assert_eq!(window.texts("tab-1"), Some(vec![format!("{PROJECT} · KON-12")]));
+  assert_eq!(window.texts("project-switcher"), Some(vec![PROJECT.to_owned()]));
   assert_eq!(window.texts("nav-tasks"), Some(vec!["Tasks".to_owned()]));
   navigation.open_tab();
   window.pass();
@@ -159,7 +158,7 @@ fn the_window_shows_the_active_tabs_route() {
   navigation.forward();
   window.pass();
   assert_eq!(navigation.route_now(), task(TaskTab::Changes));
-  assert_eq!(window.texts("tab-1"), Some(vec!["kontur · KON-12".to_owned()]));
+  assert_eq!(window.texts("tab-1"), Some(vec![format!("{PROJECT} · KON-12")]));
 }
 
 /// Presses and releases `button` over the middle of the element `id`.
@@ -274,9 +273,8 @@ fn platform_shortcuts(keys: impl Fn(&'static str, &'static str) -> Keys<'static>
 #[test]
 fn a_tab_remembers_its_last_places_only() {
   let mut tabs = TabSet::default();
-  for number in 0..HISTORY_LIMIT + 10 {
-    let key = TaskKey::new(&format!("KON-{number}")).expect("a valid key");
-    tabs.go(project(ProjectPage::Task(key, TaskTab::Conversation)));
+  for number in 1..=HISTORY_LIMIT + 10 {
+    tabs.go(task_number(number));
   }
   let mut steps = 0;
   while tabs.back() {
@@ -285,14 +283,14 @@ fn a_tab_remembers_its_last_places_only() {
   assert_eq!(steps, HISTORY_LIMIT - 1);
   assert_eq!(
     *tabs.active().route(),
-    task_number(10),
+    task_number(11),
     "the oldest places were forgotten"
   );
 }
 
 fn task_number(number: usize) -> Route {
   project(ProjectPage::Task(
-    TaskKey::new(&format!("KON-{number}")).expect("a valid key"),
+    format!("KON-{number}").parse().expect("a task key"),
     TaskTab::Conversation,
   ))
 }
@@ -317,12 +315,13 @@ fn many_tabs_leave_new_tab_and_drag_area_before_the_window_controls() {
     ProjectPage::Pipelines,
     ProjectPage::Secrets,
   ] {
-    for project_name in ["kontur-desktop", "atlas-website", "orchester"] {
+    for project in [
+      PROJECT,
+      "0f1e2d3c-4b5a-4968-8776-655443322110",
+      "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+    ] {
       navigation.open_tab();
-      navigation.go(Route::Project(
-        ProjectRef::new(project_name).expect("valid"),
-        screen.clone(),
-      ));
+      navigation.go(Route::Project(project.parse().expect("a project id"), screen.clone()));
     }
   }
   window.pass();

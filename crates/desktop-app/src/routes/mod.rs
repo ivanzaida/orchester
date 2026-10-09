@@ -2,17 +2,19 @@
 //! history keeps, so everything a person can go back to is part of it.
 //!
 //! Paths: `/` is All projects and `/settings` the app's settings. A project's screens start at
-//! `/project/<project>` (its Overview) and add the screen's segment, e.g. `/project/kontur/tasks`; a
-//! task is `/project/<project>/tasks/<key>` (Conversation), with `/summary` or `/changes` for its other
-//! tabs.
+//! `/project/<id>` (its Overview) and add the screen's segment, e.g. `/project/<id>/tasks`; a task is
+//! `/project/<id>/tasks/<key>` (Conversation, the key as in `ORC-129`), with `/summary` or `/changes`
+//! for its other tabs.
+//!
+//! A project is named by its id (`orchester_core::id::ProjectId`), not its key or name: the id never
+//! changes, so a path a tab keeps still finds its project after a rename or a new key. A task is named
+//! by its key (`orchester_core::project::TaskKey`), as people read it.
 
-mod segment;
 mod table;
 
-pub use self::{
-  segment::{MAX_SEGMENT_LEN, ProjectRef, SegmentError, TaskKey},
-  table::routes,
-};
+use orchester_core::{id::ProjectId, project::TaskKey};
+
+pub use self::table::routes;
 
 const PROJECT: &str = "project";
 const SETTINGS: &str = "settings";
@@ -259,7 +261,7 @@ impl ProjectPage {
 
   fn path(&self, project_root: &str) -> String {
     match self {
-      Self::Task(key, tab) => task_path(project_root, key.as_str(), *tab),
+      Self::Task(key, tab) => task_path(project_root, &key.to_string(), *tab),
       page => project_screen_path(project_root, page.screen()),
     }
   }
@@ -267,7 +269,7 @@ impl ProjectPage {
   fn parse(segments: &[&str]) -> Option<Self> {
     match segments {
       [] => Some(Self::Overview),
-      [TASKS, key, tab @ ..] => Some(Self::Task(TaskKey::new(key).ok()?, TaskTab::parse(tab)?)),
+      [TASKS, key, tab @ ..] => Some(Self::Task(key.parse().ok()?, TaskTab::parse(tab)?)),
       [segment] => Screen::ALL
         .into_iter()
         .find(|screen| screen.segment() == Some(*segment))
@@ -282,7 +284,7 @@ impl ProjectPage {
 pub enum Route {
   AllProjects,
   Settings,
-  Project(ProjectRef, ProjectPage),
+  Project(ProjectId, ProjectPage),
 }
 
 impl Route {
@@ -294,9 +296,9 @@ impl Route {
     }
   }
 
-  pub const fn project(&self) -> Option<&ProjectRef> {
+  pub const fn project(&self) -> Option<ProjectId> {
     match self {
-      Self::Project(project, _) => Some(project),
+      Self::Project(project, _) => Some(*project),
       Self::AllProjects | Self::Settings => None,
     }
   }
@@ -328,7 +330,7 @@ impl Route {
     match segments.as_slice() {
       [] => Some(Self::AllProjects),
       [SETTINGS] => Some(Self::Settings),
-      [PROJECT, project, page @ ..] => Some(Self::Project(ProjectRef::new(project).ok()?, ProjectPage::parse(page)?)),
+      [PROJECT, project, page @ ..] => Some(Self::Project(project.parse().ok()?, ProjectPage::parse(page)?)),
       _ => None,
     }
   }

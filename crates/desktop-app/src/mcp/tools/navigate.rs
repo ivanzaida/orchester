@@ -1,17 +1,17 @@
 use lurq::mcp::{McpTool, Scope};
+use orchester_core::{
+  id::ProjectId,
+  project::{TaskKey, TaskKeyError},
+};
 use serde_json::{Map, Value, json};
 
 use super::{ToolError, WindowLink, object, reply, route_json, string};
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, ProjectRef, Route, Screen, TaskKey, TaskTab},
+  routes::{ProjectPage, Route, Screen, TaskTab},
 };
 
-const DESCRIPTION: &str = "Take the active tab of the Orchester window to a route, as a new entry of its history \
-  (mouse back or Alt+Left returns). `route` is the screen's name: all_projects and settings take no other \
-  argument; a task takes `project`, `key` and optionally `tab` (conversation, summary, changes); every other screen \
-  takes `project`. Answers the route the tab shows. Errors are JSON with a stable `code`: unknown_route (with the \
-  known names), missing_param, unexpected_param, invalid_param, unknown_tab.";
+const DESCRIPTION: &str = "Take the active tab of the Orchester window to a route, as a new entry of its history   (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects and   settings take no other argument; a task takes `project`, `key` and optionally `tab` (conversation, summary,   changes); every other screen takes `project`, the project's id (a UUID, as app_state reports it). Answers the   route the tab shows. Errors are JSON with a stable `code`: unknown_route (with the known names), missing_param,   unexpected_param, invalid_param, unknown_tab, not_a_string, not_an_object, not_ready (the window is starting).";
 
 pub fn tool(link: WindowLink) -> McpTool {
   McpTool::new("navigate")
@@ -28,7 +28,7 @@ fn schema() -> Value {
     "type": "object",
     "properties": {
       "route": { "type": "string", "enum": names },
-      "project": { "type": "string", "description": "The project's identifier, for every screen of a project." },
+      "project": { "type": "string", "description": "The project's id (a UUID), for every screen of a project." },
       "key": { "type": "string", "description": "The task's key, e.g. KON-12, for `task`." },
       "tab": { "type": "string", "enum": tabs, "description": "The task's tab; conversation when left out." },
     },
@@ -75,17 +75,20 @@ const fn params(screen: Screen) -> &'static [&'static str] {
   }
 }
 
-fn project(args: &Map<String, Value>) -> Result<ProjectRef, ToolError> {
+fn project(args: &Map<String, Value>) -> Result<ProjectId, ToolError> {
   let value = string(args, "project")?.ok_or(ToolError::Missing { param: "project" })?;
-  ProjectRef::new(value).map_err(|reason| ToolError::InvalidParam {
+  value.parse().map_err(|error: uuid::Error| ToolError::InvalidParam {
     param: "project",
-    reason,
+    reason: error.to_string(),
   })
 }
 
 fn key(args: &Map<String, Value>) -> Result<TaskKey, ToolError> {
   let value = string(args, "key")?.ok_or(ToolError::Missing { param: "key" })?;
-  TaskKey::new(value).map_err(|reason| ToolError::InvalidParam { param: "key", reason })
+  value.parse().map_err(|error: TaskKeyError| ToolError::InvalidParam {
+    param: "key",
+    reason: error.to_string(),
+  })
 }
 
 fn tab(args: &Map<String, Value>) -> Result<TaskTab, ToolError> {

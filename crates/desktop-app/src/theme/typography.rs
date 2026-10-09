@@ -16,12 +16,10 @@ use super::{
 pub enum ExtraTypography {
   /// `type/display` 28/600, tracking -0.5: the largest headline of a screen.
   Display,
-  /// A project's initial in its glyph tile, 12/600 `text_secondary` (`osv95` in `Project switcher`).
-  Initial,
 }
 
 impl ExtraTypography {
-  pub const ALL: [Self; 2] = [Self::Display, Self::Initial];
+  pub const ALL: [Self; 1] = [Self::Display];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -30,14 +28,12 @@ impl ExtraTypography {
   const fn name(self) -> &'static str {
     match self {
       Self::Display => "display",
-      Self::Initial => "initial",
     }
   }
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
       Self::Display => style(28.0, FontWeight::SemiBold, 1.15, -0.5, palette.text_primary),
-      Self::Initial => style(12.0, FontWeight::SemiBold, 1.35, 0.0, palette.text_secondary),
     }
   }
 }

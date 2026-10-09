@@ -230,8 +230,15 @@ fn tools_answer_from_the_window_without_revealing_the_token() {
   assert!(!failed);
   assert_eq!(state["route"]["name"], "all_projects");
   assert_eq!(state["window"]["width"], 1440.0);
-  let moved = served.call(&session, "navigate", &json!({ "route": "usage", "project": "kontur" }));
-  assert_eq!(tool_value(&moved).0["route"]["path"], "/project/kontur/usage");
+  let moved = served.call(
+    &session,
+    "navigate",
+    &json!({ "route": "usage", "project": "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b" }),
+  );
+  assert_eq!(
+    tool_value(&moved).0["route"]["path"],
+    "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/usage"
+  );
   let (error, failed) = tool_value(&served.call(&session, "navigate", &json!({ "route": "nowhere" })));
   assert!(failed);
   assert_eq!(error["code"], "unknown_route");

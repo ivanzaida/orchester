@@ -2,7 +2,7 @@ use serde_json::{Value, json};
 
 use crate::{
   appearance::ThemeSetting,
-  routes::{Screen, SegmentError, TaskTab},
+  routes::{Screen, TaskTab},
 };
 
 /// Why an app tool refused. Agents read it as JSON with a stable `code` ([`ToolError::to_json`]).
@@ -20,8 +20,8 @@ pub enum ToolError {
   UnknownRoute { name: String },
   #[error("`{of}` takes no `{param}`")]
   UnexpectedParam { of: &'static str, param: String },
-  #[error("`{param}` cannot name a {param}: {reason}")]
-  InvalidParam { param: &'static str, reason: SegmentError },
+  #[error("`{param}` names no {param}: {reason}")]
+  InvalidParam { param: &'static str, reason: String },
   #[error("unknown task tab `{name}`")]
   UnknownTab { name: String },
   #[error("unknown theme `{name}`")]

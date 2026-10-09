@@ -1,4 +1,4 @@
-use std::{fmt, num::NonZeroU32};
+use std::{fmt, num::NonZeroU32, str::FromStr};
 
 use thiserror::Error;
 
@@ -64,6 +64,15 @@ impl ProjectKey {
   }
 }
 
+/// Why a text is not a task's key.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum TaskKeyError {
+  #[error("a task key is a project key, a dash and a number, as in `ORC-129`; got `{0}`")]
+  Shape(String),
+  #[error(transparent)]
+  Project(#[from] ProjectKeyError),
+}
+
 /// Display key of a task (`ORC-129`). Tasks are referenced by `TaskId`; this is for people.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TaskKey {
@@ -82,6 +91,23 @@ impl TaskKey {
 
   pub const fn number(&self) -> NonZeroU32 {
     self.number
+  }
+}
+
+/// `ORC-129`: the project's key, a dash and the task's number from 1.
+impl FromStr for TaskKey {
+  type Err = TaskKeyError;
+
+  fn from_str(value: &str) -> Result<Self, Self::Err> {
+    let (project, number) = value
+      .rsplit_once('-')
+      .ok_or_else(|| TaskKeyError::Shape(value.to_owned()))?;
+    let number = number
+      .parse::<NonZeroU32>()
+      .ok()
+      .filter(|_| number.bytes().all(|byte| byte.is_ascii_digit()))
+      .ok_or_else(|| TaskKeyError::Shape(value.to_owned()))?;
+    Ok(Self::new(ProjectKey::new(project)?, number))
   }
 }
 

@@ -134,13 +134,6 @@ fn type_roles_follow_the_design() {
   check(TypographyStyle::Button, 12.0, FontWeight::Medium, 0.0, "Geist");
   check(TypographyStyle::Link, 13.0, FontWeight::Normal, 0.0, "Geist");
   check(TypographyStyle::Mono, 12.0, FontWeight::Normal, 0.0, "Geist Mono");
-  check(
-    ExtraTypography::Initial.role(),
-    12.0,
-    FontWeight::SemiBold,
-    0.0,
-    "Geist",
-  );
   let color = |role: TypographyStyle| theme.typography_style(role).color;
   assert_eq!(color(TypographyStyle::Description), Color::from_hex("#B3B3BA"));
   assert_eq!(color(TypographyStyle::Caption), Color::from_hex("#8A8A92"));

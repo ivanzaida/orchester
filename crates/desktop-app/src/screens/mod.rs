@@ -38,7 +38,7 @@ fn placeholder(ctx: &mut Ctx, route: &Route) -> Element {
   let title = match route {
     Route::Project(_, ProjectPage::Task(key, tab)) => {
       let tab = ctx.t(tab.title_key());
-      ctx.t_args("screens.taskTab", [("key", key.as_str()), ("tab", &tab)])
+      ctx.t_args("screens.taskTab", [("key", key.to_string()), ("tab", tab.to_string())])
     }
     route => ctx.t(route.screen().title_key()),
   };

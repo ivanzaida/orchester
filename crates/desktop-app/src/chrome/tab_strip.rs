@@ -216,12 +216,15 @@ fn label(ctx: &mut Ctx, route: &Route) -> Option<String> {
     Route::Project(project, page) => (project, page),
   };
   let page = match page {
-    ProjectPage::Task(key, _) => key.as_str().to_owned(),
+    ProjectPage::Task(key, _) => key.to_string(),
     page => ctx.t(page.screen().title_key()).to_string(),
   };
   Some(
     ctx
-      .t_args("tabs.projectScreen", [("project", project.as_str()), ("screen", &page)])
+      .t_args(
+        "tabs.projectScreen",
+        [("project", project.to_string()), ("screen", page)],
+      )
       .to_string(),
   )
 }

@@ -35,10 +35,10 @@ fn reply(result: Result<Value, ToolError>) -> Result<Value, String> {
 pub fn route_json(route: &Route) -> Value {
   let mut params = Map::new();
   if let Some(project) = route.project() {
-    params.insert("project".to_owned(), json!(project.as_str()));
+    params.insert("project".to_owned(), json!(project.to_string()));
   }
   if let Route::Project(_, ProjectPage::Task(key, tab)) = route {
-    params.insert("key".to_owned(), json!(key.as_str()));
+    params.insert("key".to_owned(), json!(key.to_string()));
     params.insert("tab".to_owned(), json!(tab.name()));
   }
   json!({ "name": route.screen().name(), "path": route.path(), "params": params })

@@ -1,17 +1,22 @@
 //! Every route has a path that reads back as the same route and that the router's table resolves to its
 //! screen; paths that name nothing parse to nothing and fall back in the table.
 
-use orchester_app::routes::{
-  MAX_SEGMENT_LEN, ProjectPage, ProjectRef, Route, Screen, SegmentError, TaskKey, TaskTab, routes,
-};
+use orchester_app::routes::{ProjectPage, Route, Screen, TaskTab, routes};
+use orchester_core::{id::ProjectId, project::TaskKey};
 
-fn project() -> ProjectRef {
-  ProjectRef::new("kontur").expect("a valid project")
+const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
+
+fn project() -> ProjectId {
+  PROJECT.parse().expect("a project id")
+}
+
+fn key() -> TaskKey {
+  "KON-12".parse().expect("a task key")
 }
 
 /// One route of every screen, a task once per tab.
 fn every_route() -> Vec<Route> {
-  let key = TaskKey::new("KON-12").expect("a valid key");
+  let key = key();
   let mut all: Vec<Route> = Screen::ALL
     .into_iter()
     .filter_map(|screen| match screen {
@@ -45,27 +50,33 @@ fn every_route_reads_back_from_its_path() {
 
 #[test]
 fn paths_are_the_documented_ones() {
-  let key = TaskKey::new("KON-12").expect("a valid key");
+  let key = key();
   let paths = [
     (Route::AllProjects, "/"),
     (Route::Settings, "/settings"),
-    (Route::Project(project(), ProjectPage::Overview), "/project/kontur"),
-    (Route::Project(project(), ProjectPage::Tasks), "/project/kontur/tasks"),
+    (
+      Route::Project(project(), ProjectPage::Overview),
+      "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b",
+    ),
+    (
+      Route::Project(project(), ProjectPage::Tasks),
+      "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks",
+    ),
     (
       Route::Project(project(), ProjectPage::Task(key.clone(), TaskTab::Conversation)),
-      "/project/kontur/tasks/KON-12",
+      "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12",
     ),
     (
       Route::Project(project(), ProjectPage::Task(key, TaskTab::Changes)),
-      "/project/kontur/tasks/KON-12/changes",
+      "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12/changes",
     ),
     (
       Route::Project(project(), ProjectPage::PullRequests),
-      "/project/kontur/pull-requests",
+      "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/pull-requests",
     ),
     (
       Route::Project(project(), ProjectPage::Settings),
-      "/project/kontur/settings",
+      "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/settings",
     ),
   ];
   for (route, path) in paths {
@@ -102,16 +113,20 @@ fn paths_that_name_nothing_parse_to_nothing_and_fall_back_in_the_router() {
     "/nope",
     "/settings/general",
     "/project",
-    "/project/kontur/nope",
-    "/project/kontur/tasks/KON-12/nope",
-    "/project/kontur/tasks/KON-12/summary/more",
-    "/project/a b",
+    "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/nope",
+    "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12/nope",
+    "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12/summary/more",
+    "/project/not-an-id",
     "/project/../tasks",
   ] {
     assert_eq!(Route::parse(path), None, "{path:?}");
   }
   let screens: Vec<String> = Screen::ALL.into_iter().flat_map(Screen::patterns).collect();
-  for path in ["/nope", "/project/kontur/nope", "/settings/general"] {
+  for path in [
+    "/nope",
+    "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/nope",
+    "/settings/general",
+  ] {
     let chain = table.resolve(path);
     let leaf = chain.last().unwrap_or_else(|| panic!("{path} falls back"));
     assert!(
@@ -122,19 +137,20 @@ fn paths_that_name_nothing_parse_to_nothing_and_fall_back_in_the_router() {
 }
 
 #[test]
-fn identifiers_are_single_path_segments() {
-  assert_eq!(ProjectRef::new(""), Err(SegmentError::Empty));
+fn paths_name_projects_by_id_and_tasks_by_key() {
+  assert_eq!(Route::parse("/project/kontur"), None, "a project is named by its id");
   assert_eq!(
-    ProjectRef::new(&"a".repeat(MAX_SEGMENT_LEN + 1)),
-    Err(SegmentError::TooLong)
+    Route::parse(&format!("/project/{PROJECT}/tasks/KON-0")),
+    None,
+    "task numbers start at 1"
   );
-  assert_eq!(ProjectRef::new("a/b"), Err(SegmentError::InvalidCharacter));
-  assert_eq!(TaskKey::new("KON 12"), Err(SegmentError::InvalidCharacter));
-  assert_eq!(TaskKey::new(".."), Err(SegmentError::Dots));
   assert_eq!(
-    ProjectRef::new("my_app-2.0").map(|project| project.to_string()),
-    Ok("my_app-2.0".to_owned())
+    Route::parse(&format!("/project/{PROJECT}/tasks/kon-12")),
+    None,
+    "project keys are uppercase"
   );
+  let task = Route::Project(project(), ProjectPage::Task(key(), TaskTab::Summary));
+  assert_eq!(task.path(), format!("/project/{PROJECT}/tasks/KON-12/summary"));
 }
 
 #[test]
@@ -150,10 +166,10 @@ fn screens_and_tabs_read_back_from_their_names() {
 
 #[test]
 fn a_task_selects_tasks_in_the_sidebar() {
-  let key = TaskKey::new("KON-12").expect("a valid key");
+  let key = key();
   let task = Route::Project(project(), ProjectPage::Task(key, TaskTab::Summary));
   assert_eq!(task.screen(), Screen::Task);
   assert_eq!(task.nav_screen(), Screen::Tasks);
-  assert_eq!(task.project(), Some(&project()));
+  assert_eq!(task.project(), Some(project()));
   assert_eq!(Route::Settings.project(), None);
 }

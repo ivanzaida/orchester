@@ -9,15 +9,16 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
+use orchester_core::id::ProjectId;
 
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, ProjectRef, Route, Screen},
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
+  routes::{ProjectPage, Route, Screen},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon, screen_icon},
     nav_item::NavItem,
@@ -44,7 +45,7 @@ impl Component for Sidebar {
     let route = Route::parse(&ctx.route_path());
     let navigation = Navigation::of(ctx);
     let selected = route.as_ref().map(Route::nav_screen);
-    let project = route.as_ref().and_then(Route::project).cloned();
+    let project = route.as_ref().and_then(Route::project);
     let mut sidebar = Column::new()
       .id("sidebar")
       .width(Dimension::Px(SIDEBAR_WIDTH))
@@ -55,9 +56,9 @@ impl Component for Sidebar {
           .bottom(ExtraSpacing::Loose.role()),
       )
       .spacing(ExtraSpacing::Tight.role())
-      .child(switcher(ctx, project.as_ref(), &navigation));
+      .child(switcher(ctx, project, &navigation));
     let mut bottom = vec![Screen::AllProjects, Screen::Settings];
-    if let Some(project) = &project {
+    if let Some(project) = project {
       let items = Items {
         project: Some(project),
         selected,
@@ -74,7 +75,7 @@ impl Component for Sidebar {
       bottom.push(Screen::ProjectSettings);
     }
     let items = Items {
-      project: project.as_ref(),
+      project,
       selected,
       navigation: &navigation,
     };
@@ -85,7 +86,7 @@ impl Component for Sidebar {
 /// What every navigation item of the sidebar needs: the project its screens belong to, the selected
 /// screen, and the navigation that goes there.
 struct Items<'a> {
-  project: Option<&'a ProjectRef>,
+  project: Option<ProjectId>,
   selected: Option<Screen>,
   navigation: &'a Navigation,
 }
@@ -108,7 +109,7 @@ impl Items<'_> {
     match screen {
       Screen::AllProjects => Some(Route::AllProjects),
       Screen::Settings => Some(Route::Settings),
-      screen => Some(Route::Project(self.project?.clone(), ProjectPage::of(screen)?)),
+      screen => Some(Route::Project(self.project?, ProjectPage::of(screen)?)),
     }
   }
 
@@ -142,25 +143,29 @@ fn section_label(label: &str) -> Row {
     )
 }
 
-/// The project switcher (`Project switcher` `i0xDK7`): the project of the route, named by its
-/// identifier, or that none is open. Projects are chosen in All projects, where it leads.
-fn switcher(ctx: &mut Ctx, project: Option<&ProjectRef>, navigation: &Navigation) -> Element {
-  let (tile, name, detail) = match project {
-    Some(project) => {
-      let initial = project.as_str().get(..1).unwrap_or_default().to_ascii_uppercase();
-      let initial = Text::new(&initial).variant(ExtraTypography::Initial.role());
-      (glyph_tile(initial.into()), project.as_str().to_owned(), None)
-    }
+/// The project switcher (`Project switcher` `i0xDK7`): the project of the route, named by its id until
+/// the app reads projects (then by name, with its initial in the tile), or that none is open. Projects are chosen in
+/// All projects, where it leads.
+fn switcher(ctx: &mut Ctx, project: Option<ProjectId>, navigation: &Navigation) -> Element {
+  let (name, detail) = match project {
+    Some(project) => (project.to_string(), None),
     None => (
-      glyph_tile(icon(Icon::Folders, IconSize::Base, PaletteColor::TextSecondary).into()),
       ctx.t("sidebar.noProject").to_string(),
       Some(ctx.t("sidebar.chooseProject")),
     ),
   };
+  let tile = glyph_tile(icon(Icon::Folders, IconSize::Base, PaletteColor::TextSecondary).into());
   let text = Column::new()
     .flex(1.0)
+    .min_width(Dimension::Px(0.0))
     .spacing(ExtraSpacing::Hair.role())
-    .child(Text::new(&name).variant(TypographyStyle::Label).nowrap())
+    .child(
+      Text::new(&name)
+        .variant(TypographyStyle::Label)
+        .nowrap()
+        .max_width(Dimension::Pct(100.0))
+        .text_overflow(TextOverflow::Elipsis),
+    )
     .with_children(detail.map(|detail| Text::new(&detail).variant(TypographyStyle::Caption).nowrap()));
   let navigation = navigation.clone();
   pressable(move || navigation.go(Route::AllProjects))

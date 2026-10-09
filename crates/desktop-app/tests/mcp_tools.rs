@@ -18,6 +18,8 @@ use orchester_app::{
 use serde_json::{Value, json};
 use support::Window;
 
+const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
+
 #[test]
 fn window_control_is_on_in_debug_builds_only_unless_the_environment_says_otherwise() {
   assert_eq!(McpSettings::of_build().window_control(), cfg!(debug_assertions));
@@ -63,13 +65,13 @@ fn navigate_takes_the_active_tab_to_a_named_route() {
   let navigation = window.navigation();
   let answer = navigate(
     &navigation,
-    &json!({ "route": "task", "project": "kontur", "key": "KON-12", "tab": "summary" }),
+    &json!({ "route": "task", "project": PROJECT, "key": "KON-12", "tab": "summary" }),
   )
   .expect("a valid route");
   let route = json!({
     "name": "task",
-    "path": "/project/kontur/tasks/KON-12/summary",
-    "params": { "project": "kontur", "key": "KON-12", "tab": "summary" },
+    "path": format!("/project/{PROJECT}/tasks/KON-12/summary"),
+    "params": { "project": PROJECT, "key": "KON-12", "tab": "summary" },
   });
   assert_eq!(answer, json!({ "route": route }));
   window.pass();
@@ -84,8 +86,15 @@ fn navigate_takes_the_active_tab_to_a_named_route() {
   );
   assert_eq!(state["route"], route);
   assert_eq!(state["history"], json!({ "can_back": true, "can_forward": false }));
-  navigate(&navigation, &json!({ "route": "overview", "project": "atlas" })).expect("a valid route");
-  assert_eq!(navigation.route_now().path(), "/project/atlas");
+  navigate(
+    &navigation,
+    &json!({ "route": "overview", "project": "0f1e2d3c-4b5a-4968-8776-655443322110" }),
+  )
+  .expect("a valid route");
+  assert_eq!(
+    navigation.route_now().path(),
+    "/project/0f1e2d3c-4b5a-4968-8776-655443322110"
+  );
 }
 
 #[test]
@@ -96,11 +105,11 @@ fn navigate_refuses_what_names_no_route_with_a_stable_code() {
     (json!({ "route": "dashboard" }), "unknown_route"),
     (json!({}), "missing_param"),
     (json!({ "route": "tasks" }), "missing_param"),
-    (json!({ "route": "task", "project": "kontur" }), "missing_param"),
-    (json!({ "route": "settings", "project": "kontur" }), "unexpected_param"),
+    (json!({ "route": "task", "project": PROJECT }), "missing_param"),
+    (json!({ "route": "settings", "project": PROJECT }), "unexpected_param"),
     (json!({ "route": "overview", "project": "a/b" }), "invalid_param"),
     (
-      json!({ "route": "task", "project": "kontur", "key": "KON-1", "tab": "files" }),
+      json!({ "route": "task", "project": PROJECT, "key": "KON-1", "tab": "files" }),
       "unknown_tab",
     ),
     (json!({ "route": 7 }), "not_a_string"),
