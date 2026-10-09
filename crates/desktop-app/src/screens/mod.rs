@@ -59,7 +59,7 @@ fn project_screen(ctx: &mut Ctx, project: ProjectId, page: &ProjectPage) -> Elem
       };
       page_screen(ctx, &shown, page)
     }
-    Some(ProjectState::Unavailable(unavailable)) => unavailable_project::screen(ctx, &unavailable),
+    Some(ProjectState::Unavailable(unavailable)) => unavailable_project::screen(ctx, project, &unavailable),
     // Opening a project takes a moment; the content panel stays empty meanwhile.
     None => Column::new()
       .id("screen-opening")
