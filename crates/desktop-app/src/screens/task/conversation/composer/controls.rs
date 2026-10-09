@@ -84,7 +84,7 @@ pub(super) fn bar(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(attach(ctx))
-    .child(recipient_pill(ctx, &recipient, fixed))
+    .child(recipient_pill(ctx, (&recipient, recipient_icon(bar.mode)), fixed))
     .child(Spacer::new().flex(1.0))
     .child(send(ctx, bar))
     .into()
@@ -107,9 +107,18 @@ fn attach(ctx: &mut Ctx) -> Element {
   Tooltip::new("composer-attach", reason).wrap(ctx, square)
 }
 
+/// The recipient's glyph: before the run starts, the compass of the first agent not started yet (`hJC7T`
+/// in `maV9f`); else an agent at work, `bot`.
+const fn recipient_icon(mode: &ComposerMode) -> Icon {
+  match mode {
+    ComposerMode::NotStarted => Icon::Compass,
+    _ => Icon::Bot,
+  }
+}
+
 /// The recipient pill: who gets the message and what it does with it; while it is fixed, a lock, and
 /// why in its tooltip.
-fn recipient_pill(ctx: &mut Ctx, words: &str, fixed: Option<Arc<str>>) -> Element {
+fn recipient_pill(ctx: &mut Ctx, (words, glyph): (&str, Icon), fixed: Option<Arc<str>>) -> Element {
   let pill = Row::new()
     .id("composer-recipient")
     .describe("fixed", fixed.is_some().to_string())
@@ -122,7 +131,7 @@ fn recipient_pill(ctx: &mut Ctx, words: &str, fixed: Option<Arc<str>>) -> Elemen
     .background(PaletteColor::SurfaceRaised)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
-    .child(icon(Icon::Bot, IconSize::Sm, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Sm, PaletteColor::TextSecondary))
     .child(
       Text::new(words)
         .id("composer-recipient-text")

@@ -4,13 +4,16 @@
 //! composer, typing on after it, and no more actions on that message; and no actions on such a message
 //! once no agent reads messages.
 
-use orchester_app::routes::{ProjectPage, Route, TaskView};
+use orchester_app::{
+  routes::{ProjectPage, Route, TaskView},
+  ui::icon::Icon,
+};
 use rusqlite::Connection;
 
 use super::{
   click, draft, key_of, messages, open, seeded,
   sending::{ENTER, not_delivered, until_stored},
-  text, type_on, write,
+  support, text, type_on, write,
 };
 
 #[test]
@@ -150,4 +153,40 @@ fn composer_the_draft_stays_when_the_task_is_left_and_opened_again() {
   window.until("the other task's own composer", |window| draft(window) != "Later");
   open(&mut window, &seeded, "Show the signed-in account");
   window.until("the draft back", |window| draft(window) == "Later");
+}
+
+#[test]
+fn composer_a_send_still_under_way_when_the_task_is_opened_again_shows_busy() {
+  let (mut window, seeded) = seeded();
+  let title = "Localize the invoice emails";
+  let key = open(&mut window, &seeded, title);
+  write(&mut window, "Soon");
+  let database = seeded.repo.join(".orchester").join("orchester.db");
+  let holder = Connection::open(&database).expect("the database opens");
+  holder.execute_batch("BEGIN EXCLUSIVE").expect("the database is held");
+  super::key(&mut window, ENTER, (false, false));
+  window.navigation().go(Route::Project(
+    seeded.project,
+    ProjectPage::Task(key_of(&seeded, "Show the signed-in account"), TaskView::Conversation),
+  ));
+  window.until("the other task's composer", |window| draft(window) != "Soon");
+  window.navigation().go(Route::Project(
+    seeded.project,
+    ProjectPage::Task(key, TaskView::Conversation),
+  ));
+  let loader = Icon::LoaderCircle.glyph().to_string();
+  let icon = |window: &mut support::Window| {
+    window
+      .tree
+      .get_element_by_id("composer-send-icon")
+      .and_then(|icon| icon.text_content().map(str::to_owned))
+  };
+  window.until("the send shown busy", |window| {
+    icon(window).as_deref() == Some(loader.as_str())
+  });
+  holder.execute_batch("ROLLBACK").expect("the database is let go");
+  until_stored(&mut window, &seeded, title, 1);
+  window.until("the send over, its words gone", |window| {
+    icon(window).as_deref() != Some(loader.as_str()) && draft(window).starts_with("Write to")
+  });
 }

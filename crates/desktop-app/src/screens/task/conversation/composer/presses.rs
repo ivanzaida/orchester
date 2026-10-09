@@ -37,7 +37,7 @@ pub(super) struct Target {
 /// What sending does in `mode` while something is written and no send is under way: the state's way, and
 /// the second where it has one.
 pub(super) fn presses(state: &ComposerState, target: &Target, (mode, to): (&ComposerMode, Recipient)) -> Sending {
-  if state.send.state().get().is_pending() {
+  if state.send.state().get().is_pending() || state.in_flight.get() {
     return Sending::Busy;
   }
   let Some(primary) = Action::of(mode, Way::Primary, to) else {

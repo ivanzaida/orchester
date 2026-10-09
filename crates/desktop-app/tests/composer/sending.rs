@@ -66,7 +66,21 @@ fn composer_shift_enter_adds_a_line_and_ctrl_enter_sends() {
   assert!(messages(&seeded, &key).is_empty(), "Shift+Enter sends nothing");
   super::key(&mut window, ENTER, (false, true));
   until_stored(&mut window, &seeded, "Localize the invoice emails", 1);
-  assert_eq!(messages(&seeded, &key)[0].body().as_str(), "first\nsecond");
+  let stored = &messages(&seeded, &key)[0];
+  assert_eq!(stored.body().as_str(), "first\nsecond");
+  // The chat shows it as written, on two lines: the note under the box is one line of a smaller size.
+  let said = format!("conversation-message-{}-text", stored.id());
+  let height = |window: &mut support::Window, id: &str| {
+    window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|text| text.bounds())
+      .map(|bounds| bounds.height)
+  };
+  window.until("the message in the chat", |window| height(window, &said).is_some());
+  let one = height(&mut window, "composer-note").expect("the note under the box");
+  let two = height(&mut window, &said).expect("laid out");
+  assert!(two > one * 1.6, "two lines: {two} against one line's {one}");
 }
 
 #[test]

@@ -3,14 +3,22 @@
 //! until a store succeeds, so the same words sent the same way again after an unclear failure, or after the
 //! page closed during a send whose end nobody saw, are not stored twice; and the refused messages the person
 //! put back into the composer, which offer nothing more while their words are in the draft or once they were
-//! sent. A send that went through clears its words from here itself, whether or not a page still shows the
-//! task. A task with nothing kept has no entry.
+//! sent; and the send under way, so a page opened again while it runs shows it busy until it ends. A send
+//! that went through clears its words from here itself, whether or not a page still shows the task. A task
+//! with nothing kept has no entry.
 
-use std::{collections::HashMap, sync::LazyLock};
+use std::{
+  collections::HashMap,
+  sync::{
+    LazyLock,
+    atomic::{AtomicU64, Ordering},
+  },
+};
 
 use orchester_core::id::{IdempotencyKey, MessageId, TaskId};
 use orchester_workspace::tasks::conversation::outgoing::{Action, Way};
 use parking_lot::Mutex;
+use tokio::sync::watch;
 
 /// Words sent, how, and the key they are stored under.
 struct Attempt {
@@ -26,18 +34,28 @@ struct PutBack {
   sent: bool,
 }
 
+/// A send under way: which one, and when it ends.
+#[derive(Clone)]
+pub(super) struct Flight {
+  pub(super) generation: u64,
+  pub(super) ended: watch::Receiver<bool>,
+}
+
 #[derive(Default)]
 struct Kept {
   draft: String,
   attempt: Option<Attempt>,
   put_back: Vec<PutBack>,
+  flight: Option<Flight>,
 }
 
 impl Kept {
   fn is_empty(&self) -> bool {
-    self.draft.is_empty() && self.attempt.is_none() && self.put_back.is_empty()
+    self.draft.is_empty() && self.attempt.is_none() && self.put_back.is_empty() && self.flight.is_none()
   }
 }
+
+static GENERATION: AtomicU64 = AtomicU64::new(1);
 
 static KEPT: LazyLock<Mutex<HashMap<TaskId, Kept>>> = LazyLock::new(Mutex::default);
 
@@ -118,4 +136,37 @@ pub(super) fn handle(task: TaskId, message: MessageId, text: &str) {
       });
     }
   });
+}
+
+/// A send of `task` starts: the generation it ends with ([`end`]), and what tells its end.
+pub(super) fn begin(task: TaskId) -> (u64, watch::Sender<bool>) {
+  let generation = GENERATION.fetch_add(1, Ordering::Relaxed);
+  let (ended, receiver) = watch::channel(false);
+  change(task, |kept| {
+    kept.flight = Some(Flight {
+      generation,
+      ended: receiver,
+    });
+  });
+  (generation, ended)
+}
+
+/// The send `generation` of `task` ended, however it ended.
+pub(super) fn end(task: TaskId, (generation, ended): (u64, watch::Sender<bool>)) {
+  change(task, |kept| {
+    if kept
+      .flight
+      .as_ref()
+      .is_some_and(|flight| flight.generation == generation)
+    {
+      kept.flight = None;
+    }
+  });
+  // Nobody may wait for it any more: a page that closed dropped its receiver.
+  ended.send_replace(true);
+}
+
+/// The send of `task` under way, if one is.
+pub(super) fn flight(task: TaskId) -> Option<Flight> {
+  KEPT.lock().get(&task).and_then(|kept| kept.flight.clone())
 }

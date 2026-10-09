@@ -35,7 +35,7 @@ use orchester_workspace::{
 use super::kept;
 use crate::{
   navigation::Navigation,
-  project::ShownProject,
+  project::{ProjectFeed, ShownProject},
   routes::{ProjectPage, Route, TaskView},
   services::Services,
 };
@@ -115,6 +115,11 @@ pub struct ComposerState {
   pub(super) left: Signal<Option<Context>>,
   /// The refused messages put back into the composer: they offer nothing more.
   pub(super) handled: Signal<Handled>,
+  /// The send an earlier page of the task started, under way when this one opened.
+  flight: Option<kept::Flight>,
+  /// That send has not ended yet.
+  pub(super) in_flight: Signal<bool>,
+  feed: ProjectFeed,
   pub(super) send: SendAction,
   pub(super) after_turn: AfterTurnAction,
 }
@@ -124,12 +129,16 @@ impl ComposerState {
   /// futures.
   pub fn new(ctx: &mut Ctx, project: &ShownProject, (task, key): (TaskId, &TaskKey)) -> Self {
     let (send, after_turn) = (send_action(ctx), after_turn_action(ctx));
+    let flight = kept::flight(task);
     let state = Self {
       task,
       draft: ctx.signal(kept::draft(task)),
       focus: ctx.signal(false),
       left: ctx.signal(None),
       handled: ctx.signal(Handled(kept::handled(task))),
+      in_flight: ctx.signal(flight.is_some()),
+      flight,
+      feed: project.feed.clone(),
       send,
       after_turn,
     };
@@ -179,6 +188,35 @@ impl ComposerState {
   pub fn keep(&self, ctx: &mut Ctx) {
     send_action(ctx);
     after_turn_action(ctx);
+    self.await_flight(ctx);
+  }
+
+  /// While a send that an earlier page of the task started runs, the composer is busy; once it ends, the
+  /// draft is the one kept by then (the send emptied it if it still held the sent words).
+  fn await_flight(&self, ctx: &mut Ctx) {
+    let Some(flight) = self.flight.clone() else {
+      return;
+    };
+    let wait = ctx.future(flight.generation, move |_| {
+      let mut ended = flight.ended.clone();
+      async move {
+        // A dropped sender ends the wait as well as its last word: either way the send is over.
+        let _ = ended.wait_for(|ended| *ended).await;
+        Ok::<(), Message>(())
+      }
+    });
+    let waiting = !wait.state().get().is_fulfilled();
+    if self.in_flight.get_untracked() == waiting {
+      return;
+    }
+    self.in_flight.set(waiting);
+    if !waiting {
+      let kept = kept::draft(self.task);
+      if self.draft.get_untracked() != kept {
+        self.draft.set(kept);
+      }
+      self.feed.saved();
+    }
   }
 
   /// `text` was stored: the draft empties unless the person typed on meanwhile.
@@ -210,7 +248,7 @@ impl ComposerState {
 
   /// A send is under way.
   pub(super) fn sending(&self) -> bool {
-    self.send.state().get_untracked().is_pending()
+    self.send.state().get_untracked().is_pending() || self.in_flight.get_untracked()
   }
 }
 
@@ -220,8 +258,16 @@ fn send_action(ctx: &mut Ctx) -> SendAction {
     let services = services.clone();
     let runtime = services.runtime.clone();
     async move {
-      // On the runtime, not in the screen's future: a send under way ends even once nothing shows it.
-      runtime.spawn(send(services, request)).await.map_err(|error| {
+      // On the runtime, not in the screen's future: a send under way ends even once nothing shows it, and a
+      // page opened again meanwhile shows it busy.
+      let task = request.task;
+      let flight = kept::begin(task);
+      let sending = async move {
+        let sent = send(services, request).await;
+        kept::end(task, flight);
+        sent
+      };
+      runtime.spawn(sending).await.map_err(|error| {
         tracing::error!(%error, "the send did not finish");
         messages::interrupted()
       })?
