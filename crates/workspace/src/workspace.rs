@@ -8,6 +8,7 @@ use std::{
 };
 
 use orchester_core::{
+  appearance::ThemeSetting,
   id::{ProjectId, ServerId},
   project::Project,
   run::TaskPhase,
@@ -211,6 +212,21 @@ impl Workspace {
 
   pub fn set_usage_warning_threshold(&self, threshold: WarningThreshold) -> Result<(), StoreError> {
     self.db.lock().set_usage_warning_threshold(threshold)
+  }
+
+  /// The colors the window uses (`orchester-app`); [`ThemeSetting::default`] until one is chosen.
+  pub fn theme(&self) -> Result<ThemeSetting, StoreError> {
+    self.db.lock().theme()
+  }
+
+  pub fn set_theme(&self, theme: ThemeSetting) -> Result<(), StoreError> {
+    self.db.lock().set_theme(theme)
+  }
+
+  /// Whether agents may control `orchester-app`'s window through its MCP server; `None` until it is
+  /// set, when the build decides.
+  pub fn mcp_window_control(&self) -> Result<Option<bool>, StoreError> {
+    self.db.lock().mcp_window_control()
   }
 
   /// The shared servers, in the order they were added.

@@ -1,10 +1,10 @@
 use std::{fs, path::Path};
 
-use orchester_store::SessionEnd;
+use orchester_store::{PreviousSession, SessionEnd};
 use orchester_workspace::{
   app_paths::{AppDataLocation, app_database_beside},
   project_setup::ProjectDraft,
-  session::AppSession,
+  session::{AppSession, StartupError},
   workspace::Landing,
 };
 use tempfile::TempDir;
@@ -85,12 +85,44 @@ mod macos {
 #[test]
 fn startup_reports_an_unopenable_database_with_its_path() {
   let dir = TempDir::new().expect("temporary directory");
-  let path = dir.path().join("missing").join("orchester.db");
+  let path = dir.path().join("orchester.db");
+  fs::create_dir(&path).expect("a folder where the database file belongs");
   let Err(error) = AppSession::start_at(&path) else {
-    panic!("a database in a missing directory cannot be opened");
+    panic!("a folder cannot be opened as the database");
   };
   assert_eq!(error.path(), Some(path.as_path()));
   assert_eq!(error.message().key, "errors.storage");
+}
+
+#[test]
+fn startup_reports_a_data_folder_it_cannot_write_with_its_path() {
+  let dir = TempDir::new().expect("temporary directory");
+  let folder = dir.path().join("missing");
+  let Err(error) = AppSession::start_at(&folder.join("orchester.db")) else {
+    panic!("no lock can be written in a missing folder");
+  };
+  assert!(matches!(error, StartupError::DataFolder { .. }));
+  assert_eq!(error.path(), Some(folder.as_path()));
+  assert_eq!(error.message().key, "errors.dataFolderNotWritable");
+}
+
+#[test]
+fn startup_leaves_a_data_folder_another_app_has_open() {
+  let dir = TempDir::new().expect("temporary directory");
+  let database = dir.path().join("orchester.db");
+  let first = AppSession::start_at(&database).expect("the first app starts");
+
+  let Err(StartupError::InUse { folder, holder }) = AppSession::start_at(&database) else {
+    panic!("a second app in the same data folder is refused");
+  };
+  assert_eq!(folder, dir.path());
+  let holder = holder.expect("the first app's record says who it is");
+  assert_eq!(holder.pid, std::process::id());
+  assert_eq!(holder.started_at, first.started_at());
+
+  first.end(SessionEnd::Clean).expect("the first app ends its session");
+  let next = AppSession::start_at(&database).expect("the folder is free once the first app ended");
+  assert_eq!(next.previous(), PreviousSession::Ended(SessionEnd::Clean));
 }
 
 #[test]

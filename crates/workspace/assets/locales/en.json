@@ -631,6 +631,8 @@
     "alwaysAllow": "Always allow can no longer add this to the profile. Answer the request again.",
     "interrupted": "The operation stopped unexpectedly. The log has the details.",
     "executableLocation": "The folder of the Orchester program could not be determined.",
+    "dataFolderInUse": "Another Orchester window is using this data folder. Switch to that window, or close it and start Orchester again.",
+    "dataFolderNotWritable": "Orchester cannot write to its data folder. The log has the system's reason.",
     "runnerMissing": "The runner program was not found at {{path}}.",
     "runnerAlreadyServed": "Another Orchester window is already running this project's runner. Close that window, then restart the runner.",
     "runnerStartFailed": "The runner could not be started. The log has the details.",
