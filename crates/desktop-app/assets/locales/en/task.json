@@ -1,0 +1,9 @@
+{
+  "task": {
+    "tabs": {
+      "conversation": "Conversation",
+      "summary": "Summary",
+      "changes": "Changes"
+    }
+  }
+}
