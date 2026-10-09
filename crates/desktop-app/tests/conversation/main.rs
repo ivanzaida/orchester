@@ -5,12 +5,16 @@
 //! ([`states`]). The window's runner program does not exist, so a run recorded as running reads as
 //! interrupted: the working line and *Following live* need a live run (QA's `live` scenario). Needs `git`.
 
-#[allow(dead_code, reason = "the seed's report and its database path are the QA tool's; these tests read its tasks")]
+#[allow(
+  dead_code,
+  reason = "the seed's report and its database path are the QA tool's; these tests read its tasks"
+)]
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
 mod states;
 #[path = "../support/mod.rs"]
 mod support;
+mod theme;
 
 use kontur::{SeedRequest, Seeded, scenarios};
 use lurq::{
