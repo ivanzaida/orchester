@@ -105,7 +105,8 @@ name a Codex connection that is not stored, so nothing can run.
 | `conversation` | `tasks` with a long transcript on KON-12's run: a failed command, a lost stream, a message delivered mid-turn, still working; its approval answered | Conversation |
 | `changes` | `tasks` plus KON-25 (checkpoint too large to show), KON-26 (uncommitted work too large), KON-27 (no checkpoint, uncommitted work with a long line); KON-12 has 4 files checkpointed and 2 not, KON-16 none yet, KON-1 its worktree removed | Changes |
 | `interrupted` | `tasks` whose application database's last session never ended; KON-12, KON-16 and KON-21 lose their agents | Overview interrupted runs |
-| `unreadable-db` | A project database one schema version too new: opening it fails with `SchemaTooNew` | Tasks load error |
+| `unreadable-db` | A project database one schema version too new: opening it fails with `SchemaTooNew` | The project that cannot be opened |
+| `tasks-unreadable` | The project opens; its one task's stored status is unknown, so reading the task list fails with `Corrupt` | Tasks load error |
 | `live` | Six drafts ready to run with the fake Codex (needs `-FakeAgents`): KON-1 ends ready for review, KON-2 asks to approve `cargo add serde`, KON-3 asks a question with options, KON-4 waits for its plan, KON-5 keeps working, KON-6 fails and waits for a person | Running, approval, question and plan states, live |
 
 Runs of the static scenarios are recorded, not executed: a runner that attaches records their

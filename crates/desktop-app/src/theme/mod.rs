@@ -18,6 +18,7 @@ mod settings;
 mod shadow;
 mod shell;
 mod startup;
+mod tasks;
 mod typography;
 
 use std::time::Duration;
@@ -32,8 +33,9 @@ pub use self::{
   palette::{ExtraColor, Mode},
   settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,
-  shell::ShellText,
+  shell::{ShellSpacing, ShellText},
   startup::{StartupSpacing, StartupText},
+  tasks::TasksSpacing,
   typography::{ExtraTypography, IconSize},
 };
 
@@ -53,6 +55,8 @@ pub fn install(app: &mut App, mode: Mode) {
   metrics::install(theme);
   startup::install(theme);
   settings::install(theme);
+  tasks::install(theme);
+  shell::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

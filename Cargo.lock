@@ -2758,6 +2758,7 @@ dependencies = [
  "orchester-store",
  "orchester-workspace",
  "parking_lot",
+ "rfd",
  "rusqlite",
  "serde_json",
  "tempfile",

@@ -18,7 +18,8 @@ use orchester_app::{
   },
   theme::{
     self, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography,
-    IconSize, Mode, SHORTCUT_OPACITY, SettingsSpacing, SettingsText, ShellText, StartupSpacing, StartupText,
+    IconSize, Mode, SHORTCUT_OPACITY, SettingsSpacing, SettingsText, ShellSpacing, ShellText, StartupSpacing,
+    StartupText,
   },
 };
 use orchester_store::AppDb;
@@ -223,7 +224,22 @@ fn area_roles_follow_the_startup_screens_and_the_switcher() {
     FontWeight::Normal,
     "Geist Mono",
   );
+  check(ShellText::MenuSection.role(), (10.5, 1.35), FontWeight::Medium, "Geist");
+  check(ShellText::FolderTitle.role(), (12.5, 1.4), FontWeight::Medium, "Geist");
+  check(ShellText::FolderBody.role(), (11.5, 1.45), FontWeight::Normal, "Geist");
+  assert_eq!(
+    theme.typography_style(ShellText::MenuSection.role()).letter_spacing,
+    0.6
+  );
   let color = |role: TypographyStyle| theme.typography_style(role).color;
+  assert_eq!(color(ShellText::MenuSection.role()), Color::from_hex("#8A8A92"));
+  assert_eq!(color(ShellText::FolderTitle.role()), Color::from_hex("#EDEDF0"));
+  assert_eq!(color(ShellText::FolderBody.role()), Color::from_hex("#B3B3BA"));
+  assert_eq!(
+    theme.spacing_value(ShellSpacing::FolderActions.role()),
+    Dimension::Px(ShellSpacing::FolderActions.value())
+  );
+  assert_eq!(ShellSpacing::FolderActions.value(), 22.0);
   assert_eq!(color(ShellText::SwitcherInitial.role()), Color::from_hex("#B3B3BA"));
   assert_eq!(color(ShellText::SwitcherPath.role()), Color::from_hex("#8A8A92"));
   for (spacing, value) in [(StartupSpacing::Block, 20.0), (StartupSpacing::Panel, 40.0)] {

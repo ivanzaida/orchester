@@ -1,6 +1,7 @@
 //! What the title bar shows besides the window controls (`Title bar` `yZzwy`): the app menu and a
-//! divider, then the tabs in the bar's flexible middle, which ends in drag area. A startup screen's title
-//! bar has the app menu only (`bcDe3`). The design's trailing *Needs you* count comes with its data.
+//! divider, then the tabs in the bar's flexible middle, which ends in drag area, and the *N need you* pill
+//! before the window controls (`shell::needs_you`). A startup screen's title bar has the app menu only
+//! (`bcDe3`).
 
 use lurq::{
   app::{
@@ -12,8 +13,11 @@ use lurq::{
   node::{dimension::Dimension, padding::Padding},
 };
 
-use super::{app_menu::AppMenu, tab_strip::TabStrip};
-use crate::theme::ExtraSpacing;
+use super::{
+  app_menu::AppMenu,
+  tab_strip::{PillRef, TabStrip},
+};
+use crate::{shell::needs_you::NeedsYouPill, theme::ExtraSpacing};
 
 /// The line between the app menu and the tabs (`Divider` `pE6GJ`).
 const DIVIDER_HEIGHT: f32 = 16.0;
@@ -29,6 +33,8 @@ pub fn content(ctx: &mut Ctx, bar: ChromeTitleBar, tabs: bool) -> ChromeTitleBar
     return bar.leading(menu);
   }
   let line = ctx.theme().border_size_value(BorderSize::Sm);
+  // The tabs leave the pill the room it took when it was laid out last.
+  let pill = ctx.element_ref();
   bar
     .leading(
       menu.child(
@@ -38,5 +44,6 @@ pub fn content(ctx: &mut Ctx, bar: ChromeTitleBar, tabs: bool) -> ChromeTitleBar
           .background(PaletteColor::Border),
       ),
     )
-    .center(ctx.mount_keyed::<TabStrip>("tab-strip", ()))
+    .center(ctx.mount_keyed::<TabStrip>("tab-strip", PillRef(pill.clone())))
+    .trailing(ctx.mount_keyed::<NeedsYouPill>("needs-you", PillRef(pill)))
 }
