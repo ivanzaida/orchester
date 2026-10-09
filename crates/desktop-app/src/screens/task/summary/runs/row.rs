@@ -71,7 +71,7 @@ impl Component for RunRow {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<RowProps>().clone();
     let record = &props.record;
-    let status = record.phase.map_or(Status::Unreadable, Status::of_phase);
+    let status = record.phase.map_or(Status::Unreadable, Status::of_run);
     let failed = match &props.job.remove {
       JobState::Failed(error) => Some(error.clone()),
       _ => None,

@@ -64,7 +64,7 @@ fn status(detail: &TaskDetail, lost: bool) -> (Status, Option<&StepView>) {
       | TaskPhase::Interrupted
       | TaskPhase::Failed
   );
-  (Status::of_phase(phase), step.filter(|_| with_step))
+  (Status::of_run(phase), step.filter(|_| with_step))
 }
 
 /// "03 Implement".
