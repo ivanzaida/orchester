@@ -26,6 +26,19 @@ pub struct BarFacts {
   /// The session's operations and events.
   pub log: ActivityLog,
   pub mcp: McpStatus,
+  /// How stopping runs auto-approving goes.
+  pub stopping: Stopping,
+}
+
+/// How *Stop* of the runs that auto-approve goes.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum Stopping {
+  #[default]
+  Idle,
+  /// The runs are being told to stop.
+  Busy,
+  /// They could not be stopped, and why; they still auto-approve.
+  Failed(Message),
 }
 
 /// The open project the active tab shows.
@@ -39,8 +52,17 @@ pub struct ProjectFacts {
   pub tasks: Option<ProjectTasks>,
   /// The limits and today's usage; `None` while they are read.
   pub usage: Option<ProjectUsage>,
-  /// Why the tasks shown could not be read again: they are the ones last read.
-  pub stale: Option<Message>,
+  /// Why the project's tasks could not be read, when they could not.
+  pub read_failure: Option<ReadFailure>,
+}
+
+/// The project's tasks could not be read, and why.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ReadFailure {
+  /// The first reading failed: no tasks are known.
+  First(Message),
+  /// Reading them again failed: the tasks shown are the ones last read.
+  Again(Message),
 }
 
 /// The project's runner as the bar shows it.

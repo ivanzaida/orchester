@@ -13,6 +13,7 @@ mod approvals;
 mod counts;
 mod facts;
 mod item;
+mod operations;
 mod runner;
 
 use lurq::{
@@ -26,18 +27,15 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
-use orchester_workspace::{
-  activity::{
-    Activity, ActivityLog,
-    bar::{self, ActivitySlot},
-  },
-  display,
+use orchester_workspace::activity::{
+  Activity, ActivityLog,
+  bar::{self, ActivitySlot},
 };
 
-pub use self::facts::{BarAction, BarFacts, Dispatch, ProjectFacts, RunnerFacts};
+pub use self::facts::{BarAction, BarFacts, Dispatch, ProjectFacts, ReadFailure, RunnerFacts, Stopping};
 use self::{
   act::StopAction,
-  item::{give_way, glyph, item, trimmed},
+  item::{cut, give_way, glyph, item, label},
 };
 use crate::{
   mcp::McpStatus,
@@ -49,8 +47,6 @@ use crate::{
 
 /// `Status bar` height.
 const STATUS_BAR_HEIGHT: f32 = 28.0;
-/// The project's folder is shortened in the middle past this many characters (handover §5.3).
-const FOLDER_MAX_CHARS: usize = 32;
 
 /// The window's status bar.
 pub struct StatusBar {
@@ -81,10 +77,17 @@ impl Component for StatusBar {
       .as_ref()
       .map(|(facts, feed)| (facts.repo_root.clone(), feed.clone()));
     let dispatch = act::dispatch(ctx, &services, folder_and_feed, &self.stop);
+    let stop = self.stop.state().get();
+    let stopping = match (stop.is_pending(), stop.error) {
+      (true, _) => Stopping::Busy,
+      (false, Some(reason)) => Stopping::Failed(reason),
+      (false, None) => Stopping::Idle,
+    };
     let facts = BarFacts {
       project: shown.map(|(facts, _)| facts),
       log,
       mcp,
+      stopping,
     };
     ctx.mount_keyed::<StatusBarView>("status-bar-view", BarProps { facts, dispatch })
   }
@@ -97,10 +100,12 @@ fn shown(projects: &Projects, project: ProjectId) -> Option<(ProjectFacts, Proje
   };
   let feed = projects.feed(project);
   let runner = RunnerFacts::of(feed.status.get().as_ref(), &open.repo_root);
-  let tasks = match feed.tasks_with_runner(&open.repo_root) {
-    TasksState::Ready(tasks) => Some(tasks),
-    TasksState::Loading | TasksState::Failed(_) => None,
+  let (tasks, first_failure) = match feed.tasks_with_runner(&open.repo_root) {
+    TasksState::Ready(tasks) => (Some(tasks), None),
+    TasksState::Loading => (None, None),
+    TasksState::Failed(reason) => (None, Some(ReadFailure::First(reason))),
   };
+  let read_failure = first_failure.or_else(|| feed.stale.get().map(ReadFailure::Again));
   let facts = ProjectFacts {
     id: project,
     name: open.project.name().as_str().to_owned(),
@@ -108,7 +113,7 @@ fn shown(projects: &Projects, project: ProjectId) -> Option<(ProjectFacts, Proje
     runner,
     tasks,
     usage: feed.usage.get(),
-    stale: feed.stale.get(),
+    read_failure,
   };
   Some((facts, feed))
 }
@@ -178,19 +183,24 @@ impl Component for StatusBarView {
     // activity gives way to them.
     let beside = waiting.is_empty() || slot.beside_approvals();
     left.extend(waiting);
-    // Tasks that could not be read again are the project's own unresolved failure: they take the slot
-    // until a reading succeeds.
-    let stale = project.and_then(|project| project.stale.as_ref());
-    match (stale, &slot) {
+    // Tasks that could not be read are the project's own unresolved failure: they take the slot until a
+    // reading succeeds.
+    let unread = project.and_then(|project| project.read_failure.as_ref());
+    match (unread, &slot) {
       (_, ActivitySlot::RunnerProblem(_) | ActivitySlot::Hidden) => {}
-      (Some(reason), _) => left.extend(activity::stale(ctx, reason, &dispatch)),
+      (Some(failure), _) => left.extend(activity::read_failure(ctx, failure, &dispatch)),
       (None, ActivitySlot::Activity(slot)) if beside => {
-        left.extend(activity::activity(ctx, slot, project, &dispatch));
+        left.extend(activity::activity(ctx, (slot, &facts.log), project, &dispatch));
       }
       (None, ActivitySlot::Activity(_)) => {}
     }
     if let Some(tasks) = project.and_then(|project| project.tasks.as_ref()) {
-      left.extend(approvals::auto_approving(ctx, &tasks.auto_approving, &dispatch));
+      left.extend(approvals::auto_approving(
+        ctx,
+        &tasks.auto_approving,
+        &facts.stopping,
+        &dispatch,
+      ));
     }
     right.extend(counts::app(ctx, facts.mcp));
     Row::new()
@@ -214,12 +224,12 @@ impl Component for StatusBarView {
 }
 
 /// *Kontur · H:/projects/kontur* (`Status · Kontur · H:/projects/kontur` `ZQiMf`).
-fn project_item(ctx: &Ctx, project: &ProjectFacts) -> Element {
+fn project_item(ctx: &mut Ctx, project: &ProjectFacts) -> Element {
   let text = ctx.t_args(
     "shell.status.project",
     [
       ("name", project.name.clone()),
-      ("folder", display::shorten_path(&project.repo_root, FOLDER_MAX_CHARS)),
+      ("folder", project.repo_root.display().to_string()),
     ],
   );
   item("status-project")
@@ -227,7 +237,7 @@ fn project_item(ctx: &Ctx, project: &ProjectFacts) -> Element {
     .shrink_order(give_way::PROJECT)
     .shrink_limit(ShrinkLimit::Content)
     .child(glyph(Icon::HardDrive, PaletteColor::TextMuted))
-    .child(trimmed(&text, PaletteColor::TextMuted))
+    .child(cut(ctx, "status-project-text", &text, PaletteColor::TextMuted))
     .into()
 }
 
@@ -244,7 +254,7 @@ pub fn version_only(ctx: &mut Ctx) -> Element {
     .child(
       item("status-version")
         .child(glyph(Icon::Sparkles, PaletteColor::TextMuted))
-        .child(trimmed(&version, PaletteColor::TextMuted)),
+        .child(label(&version, PaletteColor::TextMuted)),
     )
     .into()
 }

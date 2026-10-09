@@ -64,7 +64,11 @@ pub fn dispatch(
   let navigation = Navigation::of(ctx);
   let (services, stop) = (services.clone(), stop.clone());
   Arc::new(move |action| match action {
-    BarAction::OpenRunnerLog => services.runners.open_log(),
+    BarAction::OpenRunnerLog => {
+      if let Some((repo_root, _)) = &shown {
+        services.runners.open_log_of(repo_root);
+      }
+    }
     BarAction::RestartRunner => services.runners.restart(),
     BarAction::Go(route) => navigation.go(route),
     BarAction::Resolve(id) => services.activity.resolve(id),

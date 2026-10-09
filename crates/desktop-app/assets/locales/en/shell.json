@@ -17,7 +17,9 @@
     "tabs": {
       "close": "Close tab",
       "inProject": "{{project}} · {{label}}",
-      "attention": "{{project}} · {{waiting}}"
+      "attention": "{{project}} · {{waiting}}",
+      "runnerOffline": "runner offline",
+      "tasksUnread": "tasks couldn't be read"
     },
     "sidebar": {
       "project": "Project",
@@ -107,7 +109,9 @@
         "auto": "Auto-approving",
         "autoOne": "· Run {{run}} · {{task}}",
         "autoOther": "· {{count}} runs",
-        "stop": "Stop"
+        "stop": "Stop",
+        "stopping": "Stopping…",
+        "stopFailed": "Couldn't stop auto-approving · {{reason}}"
       },
       "activity": {
         "running": "{{title}}…",
@@ -133,8 +137,9 @@
       "mcpUnavailable": "MCP unavailable",
       "windowControl": "Agents can control this window",
       "version": "v{{version}}",
-      "stale": {
-        "text": "Tasks shown as last read · {{reason}}",
+      "unread": {
+        "first": "Tasks couldn't be read · {{reason}}",
+        "again": "Tasks shown as last read · {{reason}}",
         "tryAgain": "Try again"
       }
     },
@@ -182,6 +187,17 @@
         "unreadable": "This folder can't be read",
         "another": "Choose another folder…"
       }
+    },
+    "operations": {
+      "count": "{{count}} operations",
+      "separator": "·",
+      "title": "Background operations",
+      "running": "{{count}} running",
+      "close": "Close",
+      "runningSection": "RUNNING",
+      "recent": "RECENT",
+      "where": "{{project}} · {{place}}",
+      "escCloses": "Esc closes"
     }
   }
 }

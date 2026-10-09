@@ -7,26 +7,33 @@
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
-  layout::layout_kind::ShrinkLimit,
+  components::Row,
+  layout::{Alignment, layout_kind::ShrinkLimit},
   node::Element,
 };
 use orchester_core::project::TaskKey;
 use orchester_workspace::tasks::{approvals::ShownApproval, data::AutoApprovingRun};
 
 use super::{
-  facts::{BarAction, Dispatch, ProjectFacts},
-  item::{action, dropping, give_way, glyph, item, label, trimmed},
+  facts::{BarAction, Dispatch, ProjectFacts, Stopping},
+  item::{action, cut, dropping, give_way, glyph, item, label},
 };
 use crate::{
   routes::{ProjectPage, Route, TaskView},
-  ui::icon::Icon,
+  theme::ExtraSpacing,
+  ui::{icon::Icon, message::message_text},
 };
 
 /// What the request asks keeps at least this much room before it drops out.
 const ASKS_MIN_WIDTH: f32 = 100.0;
 
 /// The waiting requests, oldest first; nothing when none waits.
-pub fn approvals(ctx: &Ctx, project: &ProjectFacts, pending: &[ShownApproval], dispatch: &Dispatch) -> Vec<Element> {
+pub fn approvals(
+  ctx: &mut Ctx,
+  project: &ProjectFacts,
+  pending: &[ShownApproval],
+  dispatch: &Dispatch,
+) -> Vec<Element> {
   let Some(oldest) = pending.first() else {
     return Vec::new();
   };
@@ -41,14 +48,27 @@ pub fn approvals(ctx: &Ctx, project: &ProjectFacts, pending: &[ShownApproval], d
     .flex_shrink(1.0)
     .shrink_order(give_way::APPROVAL_WORDS)
     .shrink_limit(ShrinkLimit::Content)
-    .child(glyph(Icon::Hand, PaletteColor::Warning))
-    .child(label(&count.to_string(), PaletteColor::Warning))
-    .child(dropping(&words, PaletteColor::Warning));
+    .child(glyph(Icon::ShieldAlert, PaletteColor::Warning))
+    .child(
+      Row::new()
+        .flex_shrink(1.0)
+        .shrink_limit(ShrinkLimit::Content)
+        .spacing(ExtraSpacing::Fine.role())
+        .align_items(Alignment::Center)
+        .child(label(&count.to_string(), PaletteColor::Warning))
+        .child(dropping(&words, PaletteColor::Warning)),
+    );
+  let asks_text = asks(ctx, oldest);
   let asks = item("status-approvals-asks")
     .flex_shrink(1.0)
     .shrink_order(give_way::ASKS)
     .shrink_drop_below(ASKS_MIN_WIDTH)
-    .child(trimmed(&asks(ctx, oldest), PaletteColor::TextSecondary).id("status-approvals-asks-text"));
+    .child(cut(
+      ctx,
+      "status-approvals-asks-text",
+      &asks_text,
+      PaletteColor::TextSecondary,
+    ));
   let mut items = vec![start.into(), asks.into()];
   let key = oldest.task.as_deref().and_then(|key| key.parse::<TaskKey>().ok());
   if let Some(key) = key {
@@ -94,8 +114,15 @@ fn asks(ctx: &Ctx, shown: &ShownApproval) -> String {
     .to_string()
 }
 
-/// *Auto-approving* and which run, or how many, with *Stop*; nothing when no run auto-approves.
-pub fn auto_approving(ctx: &Ctx, runs: &[AutoApprovingRun], dispatch: &Dispatch) -> Vec<Element> {
+/// *Auto-approving* and which run, or how many, with *Stop*; nothing when no run auto-approves. While the
+/// runs are told to stop, *Stop* waits; when they could not be, why follows it, and *Stop* can be
+/// pressed again.
+pub fn auto_approving(
+  ctx: &mut Ctx,
+  runs: &[AutoApprovingRun],
+  stopping: &Stopping,
+  dispatch: &Dispatch,
+) -> Vec<Element> {
   let Some(first) = runs.first() else {
     return Vec::new();
   };
@@ -114,17 +141,46 @@ pub fn auto_approving(ctx: &Ctx, runs: &[AutoApprovingRun], dispatch: &Dispatch)
     .shrink_order(give_way::RUN)
     .shrink_limit(ShrinkLimit::Drop)
     .child(label(&which, PaletteColor::TextSecondary));
+  let mut items = vec![start.into(), run.into()];
+  if *stopping == Stopping::Busy {
+    items.push(
+      item("status-auto-approving-stop")
+        .describe("state", "busy")
+        .child(glyph(Icon::LoaderCircle, PaletteColor::TextMuted))
+        .child(label(
+          &ctx.t("shell.status.approvals.stopping"),
+          PaletteColor::TextMuted,
+        ))
+        .into(),
+    );
+    return items;
+  }
   let ids: Vec<_> = runs.iter().map(|run| run.run).collect();
   let dispatch = dispatch.clone();
-  vec![
-    start.into(),
-    run.into(),
-    action(
-      "status-auto-approving-stop",
-      &ctx.t("shell.status.approvals.stop"),
-      move || {
-        dispatch(BarAction::StopAutoApproving(ids.clone()));
-      },
-    ),
-  ]
+  items.push(action(
+    "status-auto-approving-stop",
+    &ctx.t("shell.status.approvals.stop"),
+    move || dispatch(BarAction::StopAutoApproving(ids.clone())),
+  ));
+  if let Stopping::Failed(reason) = stopping {
+    let text = ctx.t_args(
+      "shell.status.approvals.stopFailed",
+      [("reason", message_text(ctx, reason).to_string())],
+    );
+    items.push(
+      item("status-auto-approving-error")
+        .flex_shrink(1.0)
+        .shrink_order(give_way::ACTIVITY)
+        .shrink_limit(ShrinkLimit::Content)
+        .child(glyph(Icon::CircleAlert, PaletteColor::TextPrimary))
+        .child(cut(
+          ctx,
+          "status-auto-approving-error-text",
+          &text,
+          PaletteColor::TextPrimary,
+        ))
+        .into(),
+    );
+  }
+  items
 }

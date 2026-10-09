@@ -17,7 +17,7 @@ use orchester_workspace::{
 
 use super::{
   facts::{BarAction, Dispatch, RunnerFacts},
-  item::{action, dot, dropping, give_way, glyph, item, pressed, trimmed},
+  item::{action, cut, dot, dropping, give_way, glyph, item, pressed, time_part},
 };
 use crate::{
   shell::clock::{Clock, clock},
@@ -35,14 +35,19 @@ pub fn runner(ctx: &mut Ctx, runner: &RunnerFacts, dispatch: &Dispatch) -> Vec<E
     .shrink_limit(ShrinkLimit::Content)
     .child(dot(color))
     .child(dropping(&ctx.t(key), PaletteColor::TextMuted));
+  let mut retry = None;
   match &runner.state {
     RunnerState::Reconnecting { attempt, .. } => {
-      let retry = Clock::Retry {
+      let next = Clock::Retry {
         attempt: *attempt,
         limit: RECONNECT_LIMIT,
         next: runner.next_attempt,
       };
-      row = row.child(clock(ctx, "status-runner-retry", retry));
+      // The countdown is one of the bar's times: it drops out with them.
+      retry = Some(time_part(
+        "status-runner-retry",
+        clock(ctx, "status-runner-retry-text", next),
+      ));
     }
     RunnerState::Failed { cause, attempts } => {
       let detail = offline_detail(ctx, cause, *attempts, runner);
@@ -53,6 +58,7 @@ pub fn runner(ctx: &mut Ctx, runner: &RunnerFacts, dispatch: &Dispatch) -> Vec<E
     _ => {}
   }
   let mut items = vec![row.into()];
+  items.extend(retry);
   items.extend(interrupted(ctx, runner));
   if runner.state.can_restart() {
     let (restart, log) = (dispatch.clone(), dispatch.clone());
@@ -115,7 +121,7 @@ const fn cause_name(cause: &RunnerFailure) -> &'static str {
 
 /// *2 runs interrupted · they continue from their last checkpoint* while the runner reconnects, *… ·
 /// nothing runs until the runner starts* once it gave up; nothing when no agent was at work.
-fn interrupted(ctx: &Ctx, runner: &RunnerFacts) -> Option<Element> {
+fn interrupted(ctx: &mut Ctx, runner: &RunnerFacts) -> Option<Element> {
   let reconnecting = match runner.state {
     RunnerState::Reconnecting { .. } => true,
     RunnerState::Failed { .. } => false,
@@ -135,7 +141,7 @@ fn interrupted(ctx: &Ctx, runner: &RunnerFacts) -> Option<Element> {
       .shrink_order(give_way::ACTIVITY)
       .shrink_limit(ShrinkLimit::Content)
       .child(glyph(Icon::CirclePause, PaletteColor::Warning))
-      .child(trimmed(&text, PaletteColor::TextSecondary))
+      .child(cut(ctx, "status-interrupted-text", &text, PaletteColor::TextSecondary))
       .into(),
   )
 }
