@@ -20,7 +20,6 @@ pub enum Stop {
   Unconfirmed,
   Confirmed(Option<RunId>),
 }
-impl lurq::app::component::DevtoolsInspectable for Stop {}
 
 /// Why Canceled did not go ahead: the task's active run, `run`, was not the one confirmed.
 #[derive(Clone, Debug, PartialEq, Eq)]

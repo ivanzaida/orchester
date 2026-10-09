@@ -21,10 +21,11 @@ use orchester_core::{
   revision::Revision,
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
-use crate::{messages::Message, programs::Programs};
+use crate::messages::Message;
 
 mod count;
 mod follow;
@@ -62,8 +63,6 @@ pub enum Checkpointed {
   TooLarge { head: Revision, size: Changes },
 }
 
-impl lurq::app::component::DevtoolsInspectable for Checkpointed {}
-
 impl Checkpointed {
   /// How many files it changes, when that is known.
   pub fn files(&self) -> Option<usize> {
@@ -89,8 +88,6 @@ pub enum NotCheckpointed {
     size: Changes,
   },
 }
-
-impl lurq::app::component::DevtoolsInspectable for NotCheckpointed {}
 
 #[derive(Debug, Error)]
 pub enum ChangesError {

@@ -13,6 +13,7 @@ members = [
   "crates/server",
   "crates/store",
   "crates/vault",
+  "crates/workspace",
 ]
 
 [workspace.package]
@@ -50,6 +51,7 @@ orchester-ipc = { path = "crates/ipc" }
 orchester-server = { path = "crates/server" }
 orchester-store = { path = "crates/store" }
 orchester-vault = { path = "crates/vault" }
+orchester-workspace = { path = "crates/workspace" }
 # The macOS keychain store of the keyring crates, for `orchester-vault` (generic passwords in the
 # login keychain).
 apple-native-keyring-store = { version = "1", features = ["keychain"] }

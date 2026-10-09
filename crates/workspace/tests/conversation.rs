@@ -17,7 +17,7 @@ use orchester_core::{
   store::{ActivityStore, ConversationStore},
   time::Timestamp,
 };
-use orchester_desktop::tasks::{
+use orchester_workspace::tasks::{
   conversation::{
     Author, Conversation, EntryState, PanelState, Queue,
     composer::{ComposerMode, Queued, Then},

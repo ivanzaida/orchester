@@ -117,5 +117,3 @@ impl RunnerState {
     matches!(self, Self::Failed { .. } | Self::Stopped)
   }
 }
-
-impl lurq::app::component::DevtoolsInspectable for RunnerState {}

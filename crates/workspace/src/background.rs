@@ -1,4 +1,4 @@
-//! Runs blocking work (SQLite, native dialogs) on tokio's blocking pool, so lurq futures that
+//! Runs blocking work (SQLite, native dialogs) on tokio's blocking pool, so the UI futures that
 //! await it keep the UI thread free.
 
 use crate::messages::{self, Message};

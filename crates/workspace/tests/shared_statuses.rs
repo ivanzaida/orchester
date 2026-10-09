@@ -14,8 +14,8 @@ mod support;
 
 use orchester_api::{ClaimTake, SharedTask, TaskChanges, TaskPatch};
 use orchester_core::{id::TaskId, sharing::ClaimKind, task::organization::WorkflowStatus, time::Timestamp};
-use orchester_desktop::sharing::project::WorkClaim;
 use orchester_store::{AutomaticStatus, NotSent};
+use orchester_workspace::sharing::project::WorkClaim;
 use server_support::TestServer;
 use support::{Other, Person, member, shared};
 

@@ -1,48 +1,39 @@
-//! Orchester desktop UI. `main.rs` only wires the window; everything else lives here so
-//! it can be tested from `tests/`.
+//! Orchester's local application layer, shared by the desktop apps (`orchester-desktop`, being
+//! replaced, and `orchester-app`): the application session and its projects, the runners' client
+//! side and the session's background activity, project data as screens and automation read and
+//! change it, and the tools of Orchester's own MCP server. Results that a person reads carry
+//! [`messages::Message`] keys of this crate's locale files ([`i18n`]); no UI toolkit is used here.
 
 pub mod activity;
 pub mod agents;
-pub mod app_icon;
-pub mod app_log;
 pub mod app_mcp;
 pub mod app_paths;
-mod background;
+pub mod background;
 pub mod budget;
 pub mod clock;
 pub mod close;
 pub mod code_index;
 pub mod connections;
 pub mod display;
-pub mod drafts;
-pub mod embedded_mcp;
 pub mod environment;
-mod external;
 pub mod highlight;
 pub mod i18n;
 pub mod import;
+#[cfg(feature = "devtools-inspect")]
+mod inspect;
 pub mod instructions;
 pub mod messages;
-pub mod navigation;
 pub mod pipelines;
 pub mod plan_limits;
-pub mod programs;
 pub mod project_setup;
 pub mod pull_requests;
 pub mod recovery;
 pub mod repository;
-pub mod root;
 pub mod runner;
-mod screens;
 pub mod secrets;
-pub mod tabs;
-pub use screens::{close_dialog, recovery_dialog, status_bar};
 pub mod session;
 pub mod sharing;
 pub mod skills;
 pub mod tasks;
-pub mod theme;
 pub mod tools;
-mod ui;
-pub use ui::{command_row, loader, markdown, pressable, unit_input::FieldStroke};
 pub mod workspace;

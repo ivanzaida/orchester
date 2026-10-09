@@ -1,12 +1,12 @@
 use std::num::NonZeroU32;
 
 use orchester_core::run::PreflightProblem;
-use orchester_desktop::{
+use orchester_ipc::Rejection;
+use orchester_workspace::{
   i18n::{FALLBACK_LOCALE, LOCALES},
   runner::{RequestError, RunRequestError},
   tasks::run::{StartOutcome, preflight_message},
 };
-use orchester_ipc::Rejection;
 use serde_json::Value;
 
 #[test]

@@ -36,8 +36,6 @@ pub enum TransportChoice {
   Http,
 }
 
-impl lurq::app::component::DevtoolsInspectable for TransportChoice {}
-
 /// The dialog's fields as the user left them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct McpServerText {

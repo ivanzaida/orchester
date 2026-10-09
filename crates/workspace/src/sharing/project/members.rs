@@ -18,8 +18,6 @@ pub enum MemberChange {
   Remove(UserId),
 }
 
-impl lurq::app::component::DevtoolsInspectable for MemberChange {}
-
 impl ProjectServer {
   /// The project's members, as the server lists them.
   pub async fn members(&self) -> Result<Vec<Member>, SharingError> {

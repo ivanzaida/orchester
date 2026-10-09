@@ -5,7 +5,7 @@
 mod support;
 
 use orchester_core::run::{Answerer, PlanDecision, ReviewNote, RunStatus, TaskPhase};
-use orchester_desktop::tasks::{
+use orchester_workspace::tasks::{
   detail::TaskDetail,
   plan::{PlanReview, state_key},
 };

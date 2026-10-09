@@ -13,7 +13,7 @@ use orchester_core::{
   diff::{Changes, Diff},
   revision::Revision,
 };
-use orchester_desktop::{
+use orchester_workspace::{
   messages::Message,
   tasks::changes::{Checkpointed, NotCheckpointed, ReadChanges, Refresh, listed_files},
 };

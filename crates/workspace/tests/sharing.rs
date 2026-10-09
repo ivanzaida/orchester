@@ -25,7 +25,8 @@ use orchester_core::{
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
   time::Timestamp,
 };
-use orchester_desktop::{
+use orchester_store::AppDb;
+use orchester_workspace::{
   secrets::Vault,
   sharing::{
     Connection, PasswordProblem, Schedule, ServerEntry, Servers, SharingError, SignedIn, device::Device,
@@ -33,7 +34,6 @@ use orchester_desktop::{
   },
   workspace::Workspace,
 };
-use orchester_store::AppDb;
 use parking_lot::Mutex;
 use server_support::{SERVER_NAME, TestServer};
 use tempfile::TempDir;
@@ -344,14 +344,14 @@ fn sharing_the_monitor_asks_a_signed_in_server_after_a_restart() {
     "nothing is known before the server answers"
   );
   let runtime = tokio::runtime::Runtime::new().expect("the desktop's runtime");
-  let monitor = runtime.spawn(orchester_desktop::sharing::monitor(restarted.clone()));
+  let monitor = runtime.spawn(orchester_workspace::sharing::monitor(restarted.clone()));
   wait_for(|| connection() == Some(Connection::Connected));
 
   server.reset_password(&admin, "bohdan");
   monitor.abort();
   let again = desktop.restarted();
   let connection = || again.entries().expect("entries").remove(0).connection;
-  let monitor = runtime.spawn(orchester_desktop::sharing::monitor(again.clone()));
+  let monitor = runtime.spawn(orchester_workspace::sharing::monitor(again.clone()));
   wait_for(|| connection() == Some(Connection::SignedOut));
   assert!(desktop.tokens().is_empty(), "the refused token left the keychain");
   monitor.abort();
@@ -383,7 +383,7 @@ fn sharing_the_monitor_retries_on_its_own_reads_offline_and_reconnects() {
     ("alice", &first, "alice's own long password"),
   );
   let runtime = tokio::runtime::Runtime::new().expect("the desktop's runtime");
-  let monitor = runtime.spawn(orchester_desktop::sharing::monitor(desktop.servers.clone()));
+  let monitor = runtime.spawn(orchester_workspace::sharing::monitor(desktop.servers.clone()));
   let connection = || desktop.entry().connection;
   wait_for(|| connection() == Some(Connection::Connected));
 

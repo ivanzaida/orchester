@@ -29,7 +29,7 @@ use orchester_core::id::ResourceId;
 use self::editor::ToolEditor;
 use super::ProjectNav;
 use crate::{
-  activity::{Activity, OperationSpec, operations},
+  activity::{OperationSpec, operations},
   background,
   messages::{self, Message},
   navigation::route::{Page, Route, ToolSelection},
@@ -182,7 +182,7 @@ fn failed(ctx: &Ctx, error: &Message) -> Element {
 }
 
 fn change_action(ctx: &mut Ctx) -> ChangeAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |(repo_root, change, spec): ChangeArgs| {
     let activity = activity.clone();
     async move {

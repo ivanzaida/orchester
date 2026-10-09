@@ -35,8 +35,6 @@ pub struct OutsideCounts {
   pub pipelines: u64,
 }
 
-impl lurq::app::component::DevtoolsInspectable for OutsideCounts {}
-
 impl OutsideCounts {
   /// How often `change` was made.
   pub const fn of(self, change: Outside) -> u64 {
@@ -78,8 +76,6 @@ impl PartialEq for OutsideChanges {
     Arc::ptr_eq(&self.0, &other.0)
   }
 }
-
-impl lurq::app::component::DevtoolsInspectable for OutsideChanges {}
 
 impl OutsideChanges {
   /// `change` was made to `project` outside the screens.

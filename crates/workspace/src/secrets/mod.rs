@@ -8,7 +8,7 @@ use std::sync::Arc;
 use orchester_core::secret::SecretVault;
 use orchester_vault::KeychainVault;
 
-/// The keychain secret values go to, shared with screens through lurq context. The application
+/// The keychain secret values go to, shared with screens through the UI context. The application
 /// uses the OS keychain; tests hand in one in memory, so screens can be driven without touching
 /// the keychain of the user running them.
 #[derive(Clone)]
@@ -35,5 +35,3 @@ impl PartialEq for Vault {
     Arc::ptr_eq(&self.0, &other.0)
   }
 }
-
-impl lurq::app::component::DevtoolsInspectable for Vault {}

@@ -50,8 +50,6 @@ pub struct ProjectSecrets {
   pub uses: Arc<Vec<SecretUse>>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for ProjectSecrets {}
-
 impl ProjectSecrets {
   pub fn load<S>(store: &S) -> Result<Self, StoreError>
   where

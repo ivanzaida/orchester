@@ -26,7 +26,7 @@ use orchester_core::{
     organization::{Priority, TaskOrganization, WorkflowStatus},
   },
 };
-use orchester_desktop::{
+use orchester_workspace::{
   sharing::{
     SharingError,
     project::{MemberChange, WorkRefusal, discovery},

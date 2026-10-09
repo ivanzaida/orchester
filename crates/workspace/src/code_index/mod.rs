@@ -59,8 +59,6 @@ pub struct IndexRow {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IndexList(pub Arc<Vec<IndexRow>>);
 
-impl lurq::app::component::DevtoolsInspectable for IndexList {}
-
 impl IndexList {
   pub fn building(&self) -> bool {
     self.0.iter().any(|row| matches!(row.state, IndexState::Building(_)))
@@ -172,8 +170,6 @@ pub struct RipgrepCheck {
   pub tool: SearchTool,
   pub install: Result<InstallPlan, InstallUnavailable>,
 }
-
-impl lurq::app::component::DevtoolsInspectable for RipgrepCheck {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SearchTool {

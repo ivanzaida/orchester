@@ -1,17 +1,17 @@
 //! What a search matches (`docs/design/orchester-workspace.md`, "Filters and search"): message text,
 //! commands, paths and output, in lower case. What agents and the person write is found as written
-//! and as the chat shows it, its Markdown rendered.
+//! and as the chat shows it, its Markdown rendered by the app's [`Rendered`].
 
-use super::super::{Item, ItemKind, mark::MarkKind};
-use crate::{
-  tasks::transcript::{Entry, EntryKind},
-  ui::markdown::plain::{has_markup, plain_text},
+use super::{
+  super::{Item, ItemKind, mark::MarkKind},
+  Rendered,
 };
+use crate::tasks::transcript::{Entry, EntryKind};
 
 /// Whether what `item` says contains `needle`, in lower case.
-pub(super) fn matches(item: &Item, needle: &str) -> bool {
+pub(super) fn matches(item: &Item, needle: &str, rendered: Rendered<'_>) -> bool {
   let found = |text: &str| text.to_lowercase().contains(needle);
-  let written = |text: &str| found(text) || (has_markup(text) && found(&plain_text(text)));
+  let written = |text: &str| found(text) || rendered(text).is_some_and(|shown| found(&shown));
   match &item.kind {
     ItemKind::AgentMessage { text, .. } => written(text),
     ItemKind::Message(entry) | ItemKind::Question { entry, .. } => written(&entry.body),

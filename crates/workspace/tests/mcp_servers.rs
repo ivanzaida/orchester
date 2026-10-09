@@ -17,14 +17,14 @@ use orchester_core::{
   store::{McpServerStore, ResourceStore, SecretStore},
   time::Timestamp,
 };
-use orchester_desktop::{
+use orchester_store::ProjectDb;
+use orchester_workspace::{
   connections::{
     data::ProjectConnections,
     mcp::{McpServerText, TransportChoice, parse_variables, save_in, secret_reference, set_enabled_in},
   },
   pipelines::data::Assignables,
 };
-use orchester_store::ProjectDb;
 use tempfile::TempDir;
 
 fn project_db() -> (TempDir, ProjectDb) {

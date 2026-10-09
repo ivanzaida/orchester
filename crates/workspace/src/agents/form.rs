@@ -20,8 +20,6 @@ pub enum ModelSelection {
   Custom,
 }
 
-impl lurq::app::component::DevtoolsInspectable for ModelSelection {}
-
 /// A model the model selector offers.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ModelOption {

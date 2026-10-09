@@ -29,7 +29,7 @@ use orchester_core::{
     organization::{BlockingTask, ChangeActor, DependencyGate, Priority, TaskOrganization, WorkflowStatus},
   },
 };
-use orchester_desktop::sharing::{
+use orchester_workspace::sharing::{
   SharingError,
   project::{JoinReview, ShareError, lookup::Lookup},
 };
@@ -116,7 +116,7 @@ fn review(bohdan: &Person) -> JoinReview {
 }
 
 /// Bohdan joins ORC with KON-1 ticked (and KON-2, whose run works); KON-3 stays here.
-fn join(bohdan: &Person, tasks: &[TaskId; 3]) -> orchester_desktop::sharing::project::Joined {
+fn join(bohdan: &Person, tasks: &[TaskId; 3]) -> orchester_workspace::sharing::project::Joined {
   let review = review(bohdan);
   bohdan
     .block_on(bohdan.servers.join(

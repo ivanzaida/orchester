@@ -58,8 +58,6 @@ pub struct ProjectConnections {
   pub launches: Arc<Vec<(ConnectionId, Launch)>>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for ProjectConnections {}
-
 impl ProjectConnections {
   pub fn load(store: &ProjectDb) -> Result<Self, StoreError> {
     // A profile uses the connection and the MCP servers its current content names: its draft if it
@@ -168,8 +166,6 @@ pub struct ConnectionDraft {
   pub executable: PathBuf,
   pub check: ConnectionCheck,
 }
-
-impl lurq::app::component::DevtoolsInspectable for ConnectionDraft {}
 
 #[derive(Debug, Error)]
 pub enum SaveError {

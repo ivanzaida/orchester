@@ -21,8 +21,6 @@ pub enum Lookup {
   },
 }
 
-impl lurq::app::component::DevtoolsInspectable for Lookup {}
-
 impl Servers {
   /// Asks `entry` whether it has a project for `identity`.
   pub async fn lookup(&self, entry: &ServerEntry, identity: RepositoryIdentity) -> Result<Lookup, SharingError> {

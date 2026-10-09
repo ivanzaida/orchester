@@ -29,7 +29,6 @@ pub enum TaskTab {
   InReview,
   Done,
 }
-impl lurq::app::component::DevtoolsInspectable for TaskTab {}
 impl TaskTab {
   pub const ALL: [Self; 7] = [
     Self::All,
@@ -384,8 +383,6 @@ pub struct TaskRow {
   /// Kept *Not shared* when the project joined: read-only, shown behind the filter only.
   pub not_shared: bool,
 }
-
-impl lurq::app::component::DevtoolsInspectable for TaskRow {}
 
 /// The latest run of each task that has one; a task without one is a draft or queued.
 pub type Phases = HashMap<TaskId, Latest>;

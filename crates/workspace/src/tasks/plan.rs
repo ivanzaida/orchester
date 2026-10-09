@@ -23,8 +23,6 @@ pub struct PlanReview {
   plans: Vec<Plan>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for PlanReview {}
-
 impl PlanReview {
   /// The review `run` waits for, when a step of it waits for a decision on its plan; the first in
   /// pipeline order when several do.

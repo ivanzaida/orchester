@@ -12,7 +12,6 @@ mod account;
 mod connection;
 pub mod device;
 mod error;
-pub mod feed;
 mod monitor;
 mod password;
 pub mod project;
@@ -62,7 +61,7 @@ impl ServerEntry {
 }
 
 /// The servers and what the desktop knows about each one's connection. Every method that reaches the
-/// database, the keychain or a server is meant for a lurq future: the blocking parts run on the
+/// database, the keychain or a server is meant for a UI future: the blocking parts run on the
 /// blocking pool.
 #[derive(Clone)]
 pub struct Servers {
@@ -100,8 +99,6 @@ impl PartialEq for Servers {
     Arc::ptr_eq(&self.inner, &other.inner)
   }
 }
-
-impl lurq::app::component::DevtoolsInspectable for Servers {}
 
 impl Servers {
   pub fn new(workspace: Workspace, vault: Vault) -> Self {

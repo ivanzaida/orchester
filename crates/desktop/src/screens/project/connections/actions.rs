@@ -11,7 +11,7 @@ use orchester_core::id::ConnectionId;
 
 use super::Selected;
 use crate::{
-  activity::{Activity, OperationSpec},
+  activity::OperationSpec,
   background,
   connections::{
     data::recheck_in,
@@ -49,7 +49,7 @@ pub(super) type WorkAction = FutureAction<(PathBuf, ConnectionId, Work, Operatio
 /// Runs `work` on connection `id` of the project at `repo_root` off the UI thread, tracked as
 /// `spec`.
 pub(super) fn work_action(ctx: &mut Ctx) -> WorkAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   let runners = ctx
     .use_context::<Runners>()
     .expect("the root provides Runners before mounting screens");

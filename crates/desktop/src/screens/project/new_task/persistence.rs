@@ -6,7 +6,7 @@ use orchester_store::ProjectDb;
 
 use super::{NewTaskProps, SaveAction, SaveArgs, SavedDraft};
 use crate::{
-  activity::{Activity, operations},
+  activity::operations,
   background,
   messages::{self, Message},
   sharing::{Servers, feed::ServerFeed},
@@ -42,7 +42,7 @@ pub(super) fn repository_link(ctx: &mut Ctx, project: &OpenProject) -> Option<Ar
 }
 
 pub(super) fn save_action(ctx: &mut Ctx, conflict: Signal<Option<EditConflict>>) -> SaveAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   let open = ctx.props::<NewTaskProps>().project.clone();
   let runners = ctx
     .use_context::<crate::runner::Runners>()

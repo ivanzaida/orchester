@@ -1,7 +1,7 @@
 //! The command tool editor's fields: a tool reads back into the same fields, and each value the
 //! rules reject says why in its own field.
 
-use orchester_desktop::tools::form::{CommandText, tool_name};
+use orchester_workspace::tools::form::{CommandText, tool_name};
 
 fn filled() -> CommandText {
   CommandText {

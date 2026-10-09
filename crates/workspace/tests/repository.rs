@@ -15,12 +15,12 @@ use orchester_core::{
   store::{ConnectionStore, RepositoryStore},
   time::Timestamp,
 };
-use orchester_desktop::{
+use orchester_store::ProjectDb;
+use orchester_workspace::{
   connections::{data::ProjectConnections, github::expect_active_account},
   project_setup::{ProjectDraft, creatable},
   repository::{adopt, link, refresh},
 };
-use orchester_store::ProjectDb;
 use tempfile::TempDir;
 
 const REMOTES: &str = "remote -v";

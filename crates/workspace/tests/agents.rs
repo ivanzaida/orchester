@@ -19,11 +19,11 @@ use orchester_core::{
   store::{ConnectionStore, ResourceStore},
   time::Timestamp,
 };
-use orchester_desktop::agents::{
+use orchester_store::{ProjectDb, StoreError};
+use orchester_workspace::agents::{
   data::{ProjectAgents, VersionState, create_profile, keep_draft_over_latest, publish, save_draft},
   form::{ModelSelection, ProfileForm, effort_options, model_options, stored_effort},
 };
-use orchester_store::{ProjectDb, StoreError};
 use tempfile::TempDir;
 
 static READ_ONLY: AgentPermissions = AgentPermissions::before_permissions();

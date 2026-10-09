@@ -11,7 +11,7 @@ use orchester_core::{
   orchester_tools::OrchesterTool,
   run::TokenUsage,
 };
-use orchester_desktop::tasks::{
+use orchester_workspace::tasks::{
   timeline::{
     ToolRun,
     group::{GroupSummary, ToolKind, shown_as_card, tool_kind, unwrapped},

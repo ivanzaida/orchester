@@ -30,7 +30,7 @@ use super::{
   status::short_key,
 };
 use crate::{
-  activity::{Activity, operations},
+  activity::operations,
   background,
   connections::{
     data::{ConnectionDraft, save_in},
@@ -219,7 +219,7 @@ impl ConnectionDialog {
     let found = detected.data.clone().unwrap_or_default().0;
     let executable = self.picked.get().0.or_else(|| found.first().cloned());
     let deps = (provider, executable.clone(), self.attempt.get());
-    let (activity, project) = (Activity::of(ctx), self.context.project.clone());
+    let (activity, project) = (crate::activity::of(ctx), self.context.project.clone());
     let check = ctx.future(deps, move |(provider, executable, _)| {
       let (activity, spec) = (activity.clone(), operations::cli_check(&project, provider));
       async move {
@@ -304,7 +304,7 @@ fn suggested_name(ctx: &Ctx, context: &DialogContext, provider: AgentProvider) -
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   let project = ctx
     .use_context::<DialogContext>()
     .expect("the connections screen provides the dialog context")
@@ -326,7 +326,7 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
 }
 
 pub(super) fn pick_action(ctx: &mut Ctx) -> PickAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |title: Arc<str>| {
     let activity = activity.clone();
     async move {

@@ -78,8 +78,6 @@ pub struct CreateFailure {
   repo_root: PathBuf,
 }
 
-impl lurq::app::component::DevtoolsInspectable for CreateFailure {}
-
 impl CreateFailure {
   pub fn from_store(new: &NewProject, error: &StoreError) -> Self {
     let place = match error {

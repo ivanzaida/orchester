@@ -1,6 +1,7 @@
-//! The project's tasks as the UI needs them: the new task form, the task list and its tabs,
-//! and reading and saving through the project database. Task rules themselves are
-//! `orchester_core::task`; this module only maps between them and what is on screen.
+//! The project's tasks as screens and automation need them: the new task form, the task list and
+//! its tabs, runs and their conversations, and reading and saving through the project database.
+//! Task rules themselves are `orchester_core::task`; this module only maps between them and what is
+//! on screen.
 
 mod approval_choices;
 pub mod approvals;
@@ -19,7 +20,6 @@ pub mod index_use;
 pub mod integration;
 pub mod integration_jobs;
 pub mod list;
-pub mod organization;
 pub mod outside;
 pub mod overview;
 pub mod permissions;
@@ -30,7 +30,6 @@ pub mod raise;
 pub mod run;
 pub mod run_again;
 pub mod run_approvals;
-pub mod tag_chips;
 pub mod timeline;
 pub mod transcript;
 pub mod unreadable;

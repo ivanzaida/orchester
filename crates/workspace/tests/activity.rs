@@ -7,7 +7,7 @@ use std::{
   time::{Duration, Instant, SystemTime},
 };
 
-use orchester_desktop::{
+use orchester_workspace::{
   activity::{
     ActivityLog, OperationSpec, Outcome, Place, Slot, Target,
     bar::{ActivitySlot, RunnerBadge, activity_slot},

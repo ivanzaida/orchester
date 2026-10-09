@@ -258,8 +258,6 @@ pub struct TaskDetail {
   pub shared: Option<orchester_store::SharedTaskInfo>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for TaskDetail {}
-
 impl TaskDetail {
   /// Where the task stands, from its latest run; as for a task without runs while that run cannot
   /// be read.
@@ -565,7 +563,7 @@ pub fn activity_in(repo_root: &Path, run: RunId) -> Result<Vec<ActivityEntry>, S
   ProjectDb::open(repo_root)?.activity(run, 0)
 }
 
-pub(crate) fn run_store_error(error: orchester_store::RunStoreError) -> StoreError {
+pub fn run_store_error(error: orchester_store::RunStoreError) -> StoreError {
   match error {
     orchester_store::RunStoreError::Store(error) => error,
     other => StoreError::Corrupt {

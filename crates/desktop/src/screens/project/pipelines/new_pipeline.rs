@@ -22,7 +22,7 @@ use orchester_core::{
 
 use super::{PipelineId, PipelinesNav, starter_text};
 use crate::{
-  activity::{Activity, OperationSpec, operations},
+  activity::{OperationSpec, operations},
   background,
   messages::{self, Message},
   pipelines::library::{NewPipeline, StartFrom, create_in, slug_taken},
@@ -307,7 +307,7 @@ fn check_name(name: &str, taken: &[(Arc<str>, Arc<str>)]) -> Result<Name, Messag
 }
 
 fn create_action(ctx: &mut Ctx) -> CreateAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |(repo_root, new, spec): CreateArgs| {
     let activity = activity.clone();
     async move {

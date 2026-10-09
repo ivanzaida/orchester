@@ -22,7 +22,7 @@ use orchester_core::{
 
 use super::super::ProjectNav;
 use crate::{
-  activity::{Activity, OperationSpec, skill_operations},
+  activity::{OperationSpec, skill_operations},
   background,
   messages::{self, Message},
   navigation::route::Page,
@@ -199,7 +199,7 @@ fn actions(ctx: &Ctx, open: &Signal<bool>, submit: Submit, error: Option<Message
 }
 
 fn create_action(ctx: &mut Ctx) -> CreateAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |(repo_root, name, spec): CreateArgs| {
     let activity = activity.clone();
     async move {

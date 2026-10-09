@@ -48,8 +48,6 @@ pub struct PreviewCatalog {
   instructions: Vec<PublishedInstruction>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for PreviewCatalog {}
-
 /// What the preview is for, as chosen; a choice that no longer exists falls back to the first
 /// one that does.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -58,8 +56,6 @@ pub struct PreviewChoice {
   pub step: Option<StepKey>,
   pub run: Option<RunId>,
 }
-
-impl lurq::app::component::DevtoolsInspectable for PreviewChoice {}
 
 /// Why there is nothing to preview.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

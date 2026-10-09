@@ -8,7 +8,9 @@ use std::{
 };
 
 use orchester_core::id::{IdempotencyKey, TaskId};
-use orchester_desktop::{
+use orchester_ipc::{Rejection, SessionEnd::Clean};
+use orchester_store::SessionEnd;
+use orchester_workspace::{
   activity::Activity,
   app_paths::runner_beside,
   close::{CloseKind, session_end},
@@ -18,8 +20,6 @@ use orchester_desktop::{
   },
   workspace::OpenProject,
 };
-use orchester_ipc::{Rejection, SessionEnd::Clean};
-use orchester_store::SessionEnd;
 use tempfile::TempDir;
 use tokio::{runtime::Handle, sync::watch, time::timeout};
 

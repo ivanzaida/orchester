@@ -21,12 +21,12 @@ use orchester_core::{
   store::{RunStore, TaskStore},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_ipc::SessionEnd;
 use orchester_store::{ProjectDb, RunStoreError, StoreError};
 
 use crate::{
   display,
-  programs::Programs,
   tasks::{
     changes::{GIT, run_worktree},
     detail,
@@ -65,8 +65,6 @@ pub enum WorktreeState {
   /// git could not tell (the worktree is gone, or git is missing).
   Unknown,
 }
-
-impl lurq::app::component::DevtoolsInspectable for InterruptedRun {}
 
 /// Whether the previous session's end is one the recovery reports: Quit now or a crash. After
 /// "Wait for agents to save" the runs are simply paused.

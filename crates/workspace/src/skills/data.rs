@@ -91,8 +91,6 @@ pub struct ProjectSkills {
   pub pipelines: Arc<Vec<PipelineChoice>>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for ProjectSkills {}
-
 impl ProjectSkills {
   pub fn load(db: &ProjectDb) -> Result<Self, StoreError> {
     Ok(Self {

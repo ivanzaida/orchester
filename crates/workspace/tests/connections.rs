@@ -17,14 +17,14 @@ use orchester_core::{
   store::{ConnectionStore, RepositoryStore},
   time::Timestamp,
 };
-use orchester_desktop::{
+use orchester_store::{ProjectDb, StoreError};
+use orchester_workspace::{
   agents::data::{ProjectAgents, create_profile},
   connections::{
     data::{ConnectionDraft, ProjectConnections, SaveError, save},
     github::{AccountError, GitHubDraft, expect_active_account, save_github},
   },
 };
-use orchester_store::{ProjectDb, StoreError};
 use tempfile::TempDir;
 
 fn project_db() -> (TempDir, ProjectDb) {

@@ -22,15 +22,7 @@ use parking_lot::Mutex;
 use crate::{
   messages::{self, Message},
   project_setup::NewProject,
-  tabs::model::SavedTabs,
 };
-
-/// Where the application database keeps the window's tabs (`ui_state`).
-const TABS_KEY: &str = "tabs";
-/// Where it keeps whether the Conversation tab's Details pane is open, and the two values.
-const DETAILS_KEY: &str = "conversation.details";
-const DETAILS_OPEN: &str = "open";
-const DETAILS_CLOSED: &str = "closed";
 
 /// A project whose database is open and readable.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -60,8 +52,6 @@ pub struct ProjectEntry {
   pub folder_missing: bool,
 }
 
-impl lurq::app::component::DevtoolsInspectable for ProjectEntry {}
-
 /// What a listed project's own database says, read after the list is shown.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ProjectData {
@@ -72,8 +62,6 @@ pub enum ProjectData {
   /// them failed.
   Readable(Option<Arc<[TaskPhase]>>),
 }
-
-impl lurq::app::component::DevtoolsInspectable for ProjectData {}
 
 impl ProjectData {
   /// Reads the database of `project`, whose folder is there, without changing it.
@@ -102,8 +90,6 @@ impl ProjectData {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ListedData(HashMap<ProjectId, ProjectData>);
 
-impl lurq::app::component::DevtoolsInspectable for ListedData {}
-
 impl ListedData {
   pub fn read(entries: &[ProjectEntry]) -> Self {
     Self(
@@ -131,8 +117,6 @@ impl PartialEq for Workspace {
     Arc::ptr_eq(&self.db, &other.db)
   }
 }
-
-impl lurq::app::component::DevtoolsInspectable for Workspace {}
 
 impl Workspace {
   pub fn new(db: AppDb) -> Self {
@@ -200,33 +184,14 @@ impl Workspace {
     })
   }
 
-  /// The tabs the last session saved; `None` when it saved none or they cannot be read, which
-  /// the log says.
-  pub fn saved_tabs(&self) -> Result<Option<SavedTabs>, StoreError> {
-    let Some(text) = self.db.lock().ui_state(TABS_KEY)? else {
-      return Ok(None);
-    };
-    let saved = SavedTabs::decode(&text);
-    if saved.is_none() {
-      tracing::warn!("the saved tabs cannot be read; the window opens without them");
-    }
-    Ok(saved)
+  /// What an app saved under `key` of the window's state (`ui_state`), as it wrote it. Each app
+  /// keeps its own keys, so two apps never read each other's tabs.
+  pub fn ui_state(&self, key: &str) -> Result<Option<String>, StoreError> {
+    self.db.lock().ui_state(key)
   }
 
-  /// Saves the window's tabs, as [`SavedTabs::encode`] wrote them.
-  pub fn save_tabs(&self, text: &str) -> Result<(), StoreError> {
-    self.db.lock().set_ui_state(TABS_KEY, text)
-  }
-
-  /// Whether the person keeps the Conversation tab's Details pane open, for every task; closed
-  /// until they open it.
-  pub fn conversation_details(&self) -> Result<bool, StoreError> {
-    Ok(self.db.lock().ui_state(DETAILS_KEY)?.as_deref() == Some(DETAILS_OPEN))
-  }
-
-  pub fn save_conversation_details(&self, open: bool) -> Result<(), StoreError> {
-    let value = if open { DETAILS_OPEN } else { DETAILS_CLOSED };
-    self.db.lock().set_ui_state(DETAILS_KEY, value)
+  pub fn set_ui_state(&self, key: &str, text: &str) -> Result<(), StoreError> {
+    self.db.lock().set_ui_state(key, text)
   }
 
   /// Whether automation may answer waiting tool requests through Orchester's MCP server (*Let
@@ -270,5 +235,3 @@ impl Workspace {
     self.db.lock().end_session(session, end, Timestamp::now())
   }
 }
-
-impl lurq::app::component::DevtoolsInspectable for OpenProject {}

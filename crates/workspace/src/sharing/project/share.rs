@@ -23,12 +23,12 @@ use orchester_core::{
   task::{Task, TaskUpdate, organization::ChangeActor},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, SharingLink, StoreError};
 
 use super::{ProjectServer, convert, discovery, organization::tag, store::RemoteTaskStore};
 use crate::{
   background,
-  programs::Programs,
   sharing::{ServerEntry, Servers, SharingError},
 };
 
@@ -44,8 +44,6 @@ pub struct SharePlan {
   pub claimed: Vec<TaskKey>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for SharePlan {}
-
 /// The project shared, and whether the discovery file was written.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Shared {
@@ -53,8 +51,6 @@ pub struct Shared {
   /// `None` when the person did not ask for it; otherwise whether writing it worked.
   pub discovery: Option<Result<(), discovery::DiscoveryError>>,
 }
-
-impl lurq::app::component::DevtoolsInspectable for Shared {}
 
 /// Why the project was not shared.
 #[derive(Debug, thiserror::Error)]
@@ -108,8 +104,6 @@ pub enum IdentityProblem {
   /// git could not list the remotes.
   Unreadable,
 }
-
-impl lurq::app::component::DevtoolsInspectable for IdentityProblem {}
 
 /// What sharing the project at `repo_root` as `identity` would do. Blocking.
 pub fn plan(repo_root: &Path, identity: RepositoryIdentity) -> Result<SharePlan, StoreError> {

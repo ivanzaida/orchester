@@ -17,7 +17,8 @@ use orchester_core::{
   time::Timestamp,
   tokens::TokenBudget,
 };
-use orchester_desktop::{
+use orchester_store::ProjectDb;
+use orchester_workspace::{
   display,
   tasks::{
     data::{ProjectTasks, save_draft},
@@ -27,7 +28,6 @@ use orchester_desktop::{
     progress::{ProgressState, progress},
   },
 };
-use orchester_store::ProjectDb;
 use tempfile::TempDir;
 
 fn form<'a>(title: &'a str, criteria: &'a [String], budget: &'a str, time_limit: &'a str) -> TaskForm<'a> {
@@ -518,8 +518,8 @@ fn task_page_progress_reads_stopped_at_limit_for_every_limit_and_paused_for_a_pa
 #[test]
 fn task_blocked_refusal_reads_as_run_unavailable() {
   use orchester_core::run::RunAgainBlock;
-  use orchester_desktop::{runner::RunRequestError, tasks::run::control_message};
   use orchester_ipc::Rejection;
+  use orchester_workspace::{runner::RunRequestError, tasks::run::control_message};
   let refused = RunRequestError::Rejected(Rejection::RunAgainBlocked {
     block: RunAgainBlock::TaskBlocked,
   });

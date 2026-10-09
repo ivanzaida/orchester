@@ -8,9 +8,8 @@ use std::{fs, io::Write, path::Path, time::SystemTime};
 
 use orchester_api::client::ServerAddress;
 use orchester_core::{command::Command, time::Timestamp};
+use orchester_exec::programs::Programs;
 use serde::Deserialize;
-
-use crate::programs::Programs;
 
 /// The file's name at the repository root.
 pub const FILE: &str = "orchester.toml";
@@ -31,8 +30,6 @@ pub enum Discovery {
   Unreadable,
 }
 
-impl lurq::app::component::DevtoolsInspectable for Discovery {}
-
 /// The discovery file of a shared project, as Sharing shows it (10.13).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DiscoveryFile {
@@ -42,8 +39,6 @@ pub struct DiscoveryFile {
   /// Whether git has it as committed; `None` when git could not say.
   pub committed: Option<bool>,
 }
-
-impl lurq::app::component::DevtoolsInspectable for DiscoveryFile {}
 
 /// Why the discovery file was not written.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]

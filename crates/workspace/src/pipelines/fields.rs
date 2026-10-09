@@ -28,8 +28,6 @@ pub enum Executor {
   Tool(ResourceId),
 }
 
-impl lurq::app::component::DevtoolsInspectable for Executor {}
-
 impl Executor {
   pub const fn of(step: &Step) -> Self {
     match step.kind {
@@ -75,8 +73,6 @@ impl Executor {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ModelChoice(pub Option<ModelId>);
 
-impl lurq::app::component::DevtoolsInspectable for ModelChoice {}
-
 impl ModelChoice {
   pub fn of(step: &Step) -> Self {
     match &step.kind {
@@ -95,8 +91,6 @@ impl ModelChoice {
 /// Where the step returns when changes are requested, or nowhere: the run fails.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RouteChoice(pub Option<StepKey>);
-
-impl lurq::app::component::DevtoolsInspectable for RouteChoice {}
 
 impl RouteChoice {
   pub fn of(step: &Step) -> Self {
@@ -118,8 +112,6 @@ impl RouteChoice {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AccessChoice(pub RepositoryAccess);
-
-impl lurq::app::component::DevtoolsInspectable for AccessChoice {}
 
 impl AccessChoice {
   pub const fn of(step: &Step) -> Self {

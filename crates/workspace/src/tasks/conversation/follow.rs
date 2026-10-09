@@ -31,8 +31,6 @@ pub enum Sent {
   AwaitsLimit,
 }
 
-impl lurq::app::component::DevtoolsInspectable for Sent {}
-
 /// Which project's runner hears about the message: the one the window shows, or the one automation
 /// names, which starts if it has none.
 #[derive(Clone, Copy)]

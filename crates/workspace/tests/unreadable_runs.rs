@@ -4,7 +4,7 @@
 mod support;
 
 use orchester_core::{id::RunId, run::TaskPhase};
-use orchester_desktop::tasks::{
+use orchester_workspace::tasks::{
   data::ProjectTasks,
   detail::TaskDetail,
   list::{self, Latest, TaskTab},

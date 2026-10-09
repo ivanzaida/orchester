@@ -1,6 +1,6 @@
 //! Background operations of the application, for the status bar (`docs/design/
-//! orchester-workspace.md`, "Status bar"): one app-wide [`Activity`] that screens report their
-//! work to and the status bar watches.
+//! orchester-workspace.md`, "Status bar"): one app-wide [`Activity`] that screens and automation
+//! report their work to and the status bar watches.
 
 pub mod bar;
 pub mod code_index_operations;
@@ -13,7 +13,6 @@ use std::{
   time::{Instant, SystemTime},
 };
 
-use lurq::app::ctx::Ctx;
 use tokio::sync::watch;
 
 pub use self::log::{ActivityLog, Event, Operation, OperationId, OperationSpec, Outcome, Place, Slot, Target};
@@ -31,8 +30,6 @@ impl PartialEq for Activity {
   }
 }
 
-impl lurq::app::component::DevtoolsInspectable for Activity {}
-
 impl Default for Activity {
   fn default() -> Self {
     Self {
@@ -44,13 +41,6 @@ impl Default for Activity {
 impl Activity {
   pub fn new() -> Self {
     Self::default()
-  }
-
-  /// The session's activity, provided by the root.
-  pub fn of(ctx: &mut Ctx) -> Self {
-    ctx
-      .use_context::<Self>()
-      .expect("the root provides Activity before mounting screens")
   }
 
   pub fn subscribe(&self) -> watch::Receiver<ActivityLog> {

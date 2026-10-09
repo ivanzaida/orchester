@@ -19,11 +19,12 @@ use orchester_core::{
   time::Timestamp,
   tokens::compact_tokens,
 };
+use orchester_exec::programs::Programs;
 use orchester_ipc::Rejection;
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{changes::GIT, detail::run_store_error, run::start_messages};
-use crate::{messages::Message, programs::Programs, runner::RunRequestError};
+use crate::{messages::Message, runner::RunRequestError};
 
 /// Where the next run starts from: the branch the user's checkout has, if any, at its `HEAD`.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -55,8 +56,6 @@ pub struct RunAgainCheck {
   pub pipeline: Arc<str>,
   pub next: Result<NextRun, RunAgainBlock>,
 }
-
-impl lurq::app::component::DevtoolsInspectable for RunAgainCheck {}
 
 impl RunAgainCheck {
   /// Checks task `task` of the project at `repo_root` after its latest run `after`.

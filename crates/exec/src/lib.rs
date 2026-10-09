@@ -7,9 +7,11 @@
 mod capped;
 mod console;
 
+pub mod external;
 pub mod launch;
 #[cfg(unix)]
 pub mod process_group;
+pub mod programs;
 pub mod ripgrep;
 pub mod search_path;
 pub mod verifier_app;

@@ -8,14 +8,12 @@ use orchester_core::{
   run::InterruptCause,
   store::WorktreeStore,
 };
-use orchester_desktop::{
-  programs::Programs,
-  tasks::{
-    detail::TaskDetail,
-    integration::{IntegrationProblem, remove_in},
-  },
-};
+use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
+use orchester_workspace::tasks::{
+  detail::TaskDetail,
+  integration::{IntegrationProblem, remove_in},
+};
 use support::{Fixture, at};
 
 #[test]

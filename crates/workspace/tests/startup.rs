@@ -1,12 +1,12 @@
 use std::{fs, path::Path};
 
-use orchester_desktop::{
+use orchester_store::SessionEnd;
+use orchester_workspace::{
   app_paths::{AppDataLocation, app_database_beside},
   project_setup::ProjectDraft,
   session::AppSession,
   workspace::Landing,
 };
-use orchester_store::SessionEnd;
 use tempfile::TempDir;
 
 fn git_repo(parent: &Path, name: &str) -> std::path::PathBuf {
@@ -36,7 +36,7 @@ fn app_data_lives_next_to_the_executable_with_its_logs() {
 mod macos {
   use std::path::Path;
 
-  use orchester_desktop::app_paths::{AppDataLocation, macos};
+  use orchester_workspace::app_paths::{AppDataLocation, macos};
 
   #[test]
   fn app_bundle_keeps_its_data_in_the_users_library() {

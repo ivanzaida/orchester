@@ -47,8 +47,6 @@ pub struct JoinReview {
   pub tasks: Vec<ReviewTask>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for JoinReview {}
-
 /// A local task in the review.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReviewTask {
@@ -85,8 +83,6 @@ pub struct Joined {
   /// Each dropped link as the keys before joining of the task and of the task it named.
   pub dropped: Vec<(String, String)>,
 }
-
-impl lurq::app::component::DevtoolsInspectable for Joined {}
 
 /// Why the project did not join, and whether this attempt left tasks of it on the server, or found
 /// them there (`None`: the connection was lost while it uploaded, so it may have). A task the

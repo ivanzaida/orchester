@@ -34,7 +34,7 @@ use self::{
   row::{Rows, column_headings, project_row},
 };
 use crate::{
-  activity::{Activity, operations},
+  activity::operations,
   background,
   messages::{self, Message},
   navigation::{Navigation, route::Route},
@@ -358,7 +358,7 @@ fn open_action(ctx: &mut Ctx) -> OpenAction {
 /// *Open project folder…*: the native folder dialog, then the project the folder keeps.
 fn pick_action(ctx: &mut Ctx) -> PickAction {
   let workspace = navigation(ctx).workspace().clone();
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |title: Arc<str>| {
     let (workspace, activity) = (workspace.clone(), activity.clone());
     async move {

@@ -12,7 +12,7 @@ use orchester_core::time::Timestamp;
 
 use super::super::actions::{OpenAction, open_action};
 use crate::{
-  activity::{Activity, operations},
+  activity::operations,
   background,
   messages::Message,
   programs::Programs,
@@ -81,7 +81,7 @@ pub fn load(ctx: &mut Ctx, open: &OpenProject, number: u64) -> FutureHandle<Deta
 }
 
 fn refresh_action(ctx: &mut Ctx, open: &OpenProject, number: u64) -> RefreshAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   let programs = ctx
     .use_context::<Programs>()
     .expect("the root provides Programs before mounting screens");

@@ -31,8 +31,6 @@ pub struct RepositoryScan {
   pub items: Arc<Vec<ImportItem>>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for RepositoryScan {}
-
 impl RepositoryScan {
   /// The instruction files found, and how many skill folders.
   pub fn found(&self) -> (Vec<&str>, usize) {

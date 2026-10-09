@@ -10,7 +10,7 @@ use orchester_core::{
   store::{ActivityStore, ResourceStore},
   time::Timestamp,
 };
-use orchester_desktop::tasks::permissions::{ChangeState, InvocationPolicy, RunPermissions, run_permissions};
+use orchester_workspace::tasks::permissions::{ChangeState, InvocationPolicy, RunPermissions, run_permissions};
 use support::{Fixture, at};
 
 fn policy(ask: bool) -> AgentPermissions {

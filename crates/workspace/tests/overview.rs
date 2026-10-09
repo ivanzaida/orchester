@@ -7,7 +7,7 @@ use orchester_core::{
   run::{PlanVersion, StepFailure, TaskPhase, WaitReason},
   store::RunStore,
 };
-use orchester_desktop::tasks::{
+use orchester_workspace::tasks::{
   data::ProjectTasks,
   list::AwaitedPlan,
   overview::{OverviewTab, Pulse, activity_empty, figure, footer, recent_runs},

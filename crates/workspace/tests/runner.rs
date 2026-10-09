@@ -7,7 +7,8 @@ use std::{
 };
 
 use orchester_core::{connection::AgentProvider, id::RunId};
-use orchester_desktop::{
+use orchester_store::SessionEnd;
+use orchester_workspace::{
   app_paths::runner_beside,
   close::{CloseKind, ClosePlan, close_plan, session_end},
   messages::{Message, runner_not_restarted},
@@ -16,7 +17,6 @@ use orchester_desktop::{
     state::{RECONNECT_LIMIT, RunnerEvent, RunnerFailure, RunnerState, reconnect_delay},
   },
 };
-use orchester_store::SessionEnd;
 
 #[test]
 fn runner_lives_next_to_the_executable() {

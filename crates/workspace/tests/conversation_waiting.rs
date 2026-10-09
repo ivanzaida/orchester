@@ -13,7 +13,7 @@ use orchester_core::{
   run::{InterruptCause, Run, RunLimit, StepFailure},
   store::ActivityStore,
 };
-use orchester_desktop::tasks::{
+use orchester_workspace::tasks::{
   conversation::{
     Author, Conversation, EntryState, PanelState, Queue,
     composer::{ComposerMode, Queued, Then},

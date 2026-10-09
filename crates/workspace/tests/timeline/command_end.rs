@@ -2,12 +2,13 @@
 //! otherwise an agent's command reads *failed*, or only how long it took once it completed (Claude Code reports no
 //! exit codes), and a tool step's *no exit code*. Never an empty exit code or duration.
 
-use lurq::app::App;
+use std::collections::HashMap;
+
 use orchester_core::{
   connection::stream::{AgentEvent, CommandStatus, ToolCommandResult},
   id::StepExecutionId,
 };
-use orchester_desktop::{
+use orchester_workspace::{
   i18n,
   messages::Message,
   tasks::{
@@ -35,24 +36,56 @@ fn ran(command: &str, status: CommandStatus, exit_code: Option<i64>) -> [AgentEv
   ]
 }
 
-fn english() -> App {
-  let app = App::new();
-  i18n::install(&app).expect("bundled locales load");
-  app
+/// The workspace's English words, filled in as an app's translations fill them.
+struct Words(HashMap<String, String>);
+
+fn english() -> Words {
+  let (_, contents) = i18n::LOCALES
+    .iter()
+    .find(|(locale, _)| *locale == i18n::FALLBACK_LOCALE)
+    .expect("the fallback locale is shipped");
+  let mut words = HashMap::new();
+  leaves(
+    &serde_json::from_str(contents).expect("locale file is valid JSON"),
+    String::new(),
+    &mut words,
+  );
+  Words(words)
 }
 
-fn text(app: &App, message: &Message) -> String {
-  app
-    .i18n()
-    .t_args(
-      message.key,
-      message.args.iter().map(|(name, value)| (*name, value.as_str())),
-    )
-    .to_string()
+fn leaves(value: &serde_json::Value, prefix: String, out: &mut HashMap<String, String>) {
+  match value {
+    serde_json::Value::Object(map) => {
+      for (key, child) in map {
+        let path = if prefix.is_empty() {
+          key.clone()
+        } else {
+          format!("{prefix}.{key}")
+        };
+        leaves(child, path, out);
+      }
+    }
+    serde_json::Value::String(text) => {
+      out.insert(prefix, text.clone());
+    }
+    other => panic!("{prefix}: locale values must be strings or objects, got {other}"),
+  }
+}
+
+fn text(app: &Words, message: &Message) -> String {
+  let mut text = app
+    .0
+    .get(message.key)
+    .cloned()
+    .unwrap_or_else(|| message.key.to_owned());
+  for (name, value) in &message.args {
+    text = text.replace(&format!("{{{{{name}}}}}"), value);
+  }
+  text
 }
 
 /// What the row of the only command of `events` says of its end.
-fn row(app: &App, events: &[AgentEvent; 2]) -> String {
+fn row(app: &Words, events: &[AgentEvent; 2]) -> String {
   let entries = transcript(StepExecutionId::generate(), events.to_vec());
   let [
     Entry {
@@ -67,7 +100,7 @@ fn row(app: &App, events: &[AgentEvent; 2]) -> String {
 }
 
 /// What the summary of a group of `commands` says of its first failed one.
-fn group_failure(app: &App, commands: &[[AgentEvent; 2]]) -> String {
+fn group_failure(app: &Words, commands: &[[AgentEvent; 2]]) -> String {
   let entries = transcript(StepExecutionId::generate(), commands.concat());
   let failure = ToolGroup::new(entries).summary.failure().expect("a command failed");
   text(app, &failure)

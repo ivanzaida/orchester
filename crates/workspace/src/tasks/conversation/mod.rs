@@ -198,8 +198,6 @@ pub struct Conversation {
   pub first_agent: Option<Arc<str>>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for Conversation {}
-
 impl Conversation {
   /// The conversation of `detail`'s task; `lost`: the run is recorded as running without a runner;
   /// `leftovers`: what the run left once it ended, once read.

@@ -1,13 +1,13 @@
 use std::{collections::BTreeSet, path::Path};
 
 use orchester_core::name::NameError;
-use orchester_desktop::{
+use orchester_store::StoreError;
+use orchester_workspace::{
   display,
   i18n::{FALLBACK_LOCALE, LOCALES},
   messages::{self, Message},
   project_setup::{CreateFailure, ErrorPlace, ProjectDraft},
 };
-use orchester_store::StoreError;
 use serde_json::Value;
 
 fn locale() -> Value {

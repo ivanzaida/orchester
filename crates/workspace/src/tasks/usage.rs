@@ -20,8 +20,6 @@ pub struct ProjectUsage {
   pub today: TokensUsed,
 }
 
-impl lurq::app::component::DevtoolsInspectable for ProjectUsage {}
-
 impl ProjectUsage {
   /// Reads the limits and the usage since `day_start`, local midnight.
   pub fn load(repo_root: &Path, day_start: Timestamp) -> Result<Self, StoreError> {

@@ -30,8 +30,6 @@ pub struct GitHubDraft {
   pub check: GitHubCheck,
 }
 
-impl lurq::app::component::DevtoolsInspectable for GitHubDraft {}
-
 /// Adds or updates the GitHub connection in `draft` with its check. Saving needs a program that
 /// answered as the GitHub CLI; signing in can follow.
 pub fn save_github<S>(store: &mut S, draft: GitHubDraft, now: Timestamp) -> Result<ConnectionId, SaveError>

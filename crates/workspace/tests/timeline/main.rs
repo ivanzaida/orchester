@@ -14,7 +14,7 @@ use orchester_core::{
   run::{ActivityEntry, PendingToolApproval, StepStatus, TokenUsage},
   time::Timestamp,
 };
-use orchester_desktop::tasks::{
+use orchester_workspace::tasks::{
   conversation::{Author, Entry as MessageEntry, EntryState},
   timeline::{
     ApprovalCard, Item, ItemKind, StepHead, ToolGroup,
@@ -25,6 +25,11 @@ use orchester_desktop::tasks::{
   },
   transcript::{Entry, entries},
 };
+
+/// Messages read as written: these tests search no Markdown.
+fn as_written(_: &str) -> Option<String> {
+  None
+}
 
 fn at(seconds: i64) -> Timestamp {
   Timestamp::from_unix_millis(seconds * 1_000)
@@ -176,12 +181,17 @@ fn chips(rows: &[Row], index: usize) -> &[Chip] {
 #[test]
 fn timeline_a_message_carries_the_chips_of_its_tool_groups() {
   let (items, ..) = two_steps();
-  let opened = shown(&items, &Choice::default(), &|_, _| true);
+  let opened = shown(&items, &Choice::default(), &|_, _| true, &as_written);
   assert_eq!(kinds(&opened.rows), ["step", "agent", "step", "agent"]);
   let research = chips(&opened.rows, 1);
   assert_eq!(research.len(), 1, "one chip per group");
   assert!(research[0].open, "a person opened it");
-  let closed = shown(&items, &Choice::default(), &|key, _| key.starts_with("step"));
+  let closed = shown(
+    &items,
+    &Choice::default(),
+    &|key, _| key.starts_with("step"),
+    &as_written,
+  );
   assert!(!chips(&closed.rows, 1)[0].open, "a chip starts closed");
   // Tool activity with no message before it is the agent's row of its own.
   let without: Vec<Item> = items
@@ -189,7 +199,7 @@ fn timeline_a_message_carries_the_chips_of_its_tool_groups() {
     .filter(|item| !matches!(item.kind, ItemKind::AgentMessage { .. }))
     .cloned()
     .collect();
-  let rows = shown(&without, &Choice::default(), &|_, _| true).rows;
+  let rows = shown(&without, &Choice::default(), &|_, _| true, &as_written).rows;
   assert_eq!(kinds(&rows), ["step", "tools", "step", "tools"]);
   let Row::Agent(row) = &rows[1] else {
     panic!("the agent's row");
@@ -213,10 +223,10 @@ fn timeline_finished_steps_fold_into_one_line_unless_opened() {
   ));
   // The last two that ran stay open, also between two steps, before the next starts; a finished step
   // before them folds.
-  let folded = shown(&items, &Choice::default(), &|_, default| default);
+  let folded = shown(&items, &Choice::default(), &|_, default| default, &as_written);
   assert_eq!(kinds(&folded.rows), ["folded", "step", "agent", "step", "agent"]);
   // Finished steps in a row share one line, with their keys to open them.
-  let all = shown(&items, &Choice::default(), &|_, _| false);
+  let all = shown(&items, &Choice::default(), &|_, _| false, &as_written);
   assert_eq!(kinds(&all.rows), ["folded"]);
   let Row::Folded { steps, .. } = &all.rows[0] else {
     panic!("the fold");
@@ -236,6 +246,7 @@ fn timeline_show_hides_groups_or_flattens_them() {
       ..Choice::default()
     },
     &open,
+    &as_written,
   );
   assert_eq!(kinds(&messages.rows), ["step", "agent", "step", "agent"]);
   assert!(chips(&messages.rows, 1).is_empty(), "Messages hides the groups");
@@ -247,6 +258,7 @@ fn timeline_show_hides_groups_or_flattens_them() {
       ..Choice::default()
     },
     &open,
+    &as_written,
   );
   assert_eq!(
     kinds(&tools.rows),
@@ -265,6 +277,7 @@ fn timeline_search_keeps_matches_opens_their_chip_on_them_and_counts_them_by_ste
         ..Choice::default()
       },
       &|_, default| default,
+      &as_written,
     )
   };
   let cancel = search("CANCEL");
@@ -297,6 +310,7 @@ fn timeline_step_filter_shows_the_step_picked_open() {
       ..Choice::default()
     },
     &|_, _| false,
+    &as_written,
   );
   assert_eq!(kinds(&only.rows), ["step", "agent"], "the step picked is open");
   let Row::Step { emphasized, .. } = &only.rows[0] else {
@@ -418,6 +432,7 @@ fn timeline_tools_view_keeps_a_message_between_the_tool_calls_around_it() {
       ..Choice::default()
     },
     &|_, _| true,
+    &as_written,
   );
   assert_eq!(kinds(&tools.rows), ["step", "entry", "line", "entry"]);
 }
@@ -447,6 +462,7 @@ fn timeline_messages_view_counts_only_the_matches_it_shows() {
       ..Choice::default()
     },
     &|_, default| default,
+    &as_written,
   );
   // The message matches; the read in the hidden group matches too, but is not shown.
   assert_eq!(messages.matches, 1);
@@ -473,6 +489,7 @@ fn timeline_a_return_shows_before_its_step_in_every_view_even_folded() {
         ..Choice::default()
       },
       &|_, _| false,
+      &as_written,
     );
     assert_eq!(kinds(&rows.rows), ["folded", "item", "folded"], "{show:?}");
   }
@@ -483,6 +500,7 @@ fn timeline_a_return_shows_before_its_step_in_every_view_even_folded() {
       ..Choice::default()
     },
     &|_, default| default,
+    &as_written,
   );
   assert!(
     other.rows.iter().all(|row| &**row.key() != "mark-2"),
@@ -521,9 +539,46 @@ fn timeline_search_finds_a_question_with_its_step() {
       ..Choice::default()
     },
     &|_, default| default,
+    &as_written,
   );
   assert_eq!(found.matches, 1);
   assert!(
     matches!(&found.rows[1], Row::Item(Item { kind: ItemKind::Question { step, .. }, .. }) if step.as_deref() == Some("Implement"))
   );
+}
+
+/// A search finds what an agent wrote as the chat shows it, by the app's rendering of its Markdown,
+/// and as written.
+#[test]
+fn timeline_search_finds_a_message_as_rendered() {
+  let execution = StepExecutionId::generate();
+  let message = item(
+    "message",
+    execution,
+    ItemKind::AgentMessage {
+      agent: "Builder".into(),
+      step: "Research".into(),
+      text: "Use **email** sign-in".into(),
+    },
+  );
+  let items = vec![
+    item("step", execution, ItemKind::Step(head(execution, 1, "Research"))),
+    message,
+  ];
+  let search = |query: &str, rendered: &dyn Fn(&str) -> Option<String>| {
+    shown(
+      &items,
+      &Choice {
+        query: query.into(),
+        ..Choice::default()
+      },
+      &|_, default| default,
+      rendered,
+    )
+    .matches
+  };
+  let bold = |text: &str| Some(text.replace("**", ""));
+  assert_eq!(search("email sign-in", &bold), 1);
+  assert_eq!(search("email sign-in", &as_written), 0);
+  assert_eq!(search("**email**", &as_written), 1);
 }

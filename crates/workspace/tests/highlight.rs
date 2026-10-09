@@ -3,7 +3,7 @@
 //! control characters.
 
 use orchester_core::diff::Diff;
-use orchester_desktop::highlight::{Token, TokenKind, highlight, plain};
+use orchester_workspace::highlight::{Token, TokenKind, highlight, plain};
 
 fn file_diff(path: &str, lines: &[&str]) -> Diff {
   let mut text = format!(

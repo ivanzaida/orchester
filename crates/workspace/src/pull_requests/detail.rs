@@ -16,11 +16,12 @@ use orchester_core::{
   store::{ConnectionStore, PullRequestDiffStore, PullRequestStore, RepositoryStore},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
 use super::{InboxError, github_connection};
-use crate::{messages::Message, programs::Programs};
+use crate::messages::Message;
 
 /// What the pull request screen shows.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -29,8 +30,6 @@ pub enum Detail {
   Unlinked,
   Linked(Box<LinkedDetail>),
 }
-
-impl lurq::app::component::DevtoolsInspectable for Detail {}
 
 /// A pull request of the linked repository as far as it is known.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -15,8 +15,6 @@ use crate::{agents::form::prompt_error, messages::Message};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Picked<T>(pub T);
 
-impl<T> lurq::app::component::DevtoolsInspectable for Picked<T> {}
-
 /// One choice of "Apply to": every agent, the profiles with a role, or one profile.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Target {
@@ -24,8 +22,6 @@ pub enum Target {
   Role(Name),
   Profile(ResourceId),
 }
-
-impl lurq::app::component::DevtoolsInspectable for Target {}
 
 impl Target {
   /// The choices that stand for `targets`.
@@ -64,8 +60,6 @@ pub enum Events {
   StartAndResume,
 }
 
-impl lurq::app::component::DevtoolsInspectable for Events {}
-
 impl Events {
   pub const ALL: [Self; 3] = [Self::Start, Self::Resume, Self::StartAndResume];
 
@@ -98,8 +92,6 @@ pub enum ScopeChoice {
   Pipeline(Option<ResourceId>),
   Step(Option<ResourceId>, Option<StepKey>),
 }
-
-impl lurq::app::component::DevtoolsInspectable for ScopeChoice {}
 
 impl ScopeChoice {
   pub fn of(scope: &InstructionScope) -> Self {

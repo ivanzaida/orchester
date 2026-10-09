@@ -1,11 +1,12 @@
-//! The programs the desktop runs for GitHub sync (`gh`) and git, shared with screens through lurq
-//! context. The application runs real processes; tests hand in a runner that answers with
+//! The programs the desktop apps run for GitHub sync (`gh`) and git, shared with their screens. The
+//! application runs real processes; tests hand in a runner that answers with
 //! captured output, so screens that talk to GitHub can be driven without touching the real `gh`.
 
 use std::{sync::Arc, time::Duration};
 
 use orchester_core::command::CommandRunner;
-use orchester_exec::ProcessRunner;
+
+use crate::ProcessRunner;
 
 /// A `gh` that does not answer within this time counts as not running, as for connection checks.
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
@@ -54,5 +55,3 @@ impl PartialEq for Programs {
     Arc::ptr_eq(&self.quick, &other.quick) && Arc::ptr_eq(&self.git_work, &other.git_work)
   }
 }
-
-impl lurq::app::component::DevtoolsInspectable for Programs {}

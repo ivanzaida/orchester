@@ -29,15 +29,12 @@ pub enum TaskSort {
   /// Urgent first, then the most recently changed first (`rVJoA`).
   Priority,
 }
-impl lurq::app::component::DevtoolsInspectable for TaskSort {}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PipelineFilter(pub Option<ResourceId>);
-impl lurq::app::component::DevtoolsInspectable for PipelineFilter {}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Selection(pub BTreeSet<TaskId>);
-impl lurq::app::component::DevtoolsInspectable for Selection {}
 impl Selection {
   pub fn toggle(&mut self, id: TaskId) {
     if !self.0.remove(&id) {

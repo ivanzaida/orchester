@@ -40,8 +40,6 @@ pub struct EditConflict {
   pub organization: (TaskOrganization, TaskOrganization),
 }
 
-impl lurq::app::component::DevtoolsInspectable for EditConflict {}
-
 impl EditConflict {
   /// The details saved with the person's `choose` for each conflicting field.
   pub fn resolved(&self, choose: impl Fn(ContentField) -> Choice) -> TaskDetails {

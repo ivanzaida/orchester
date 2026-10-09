@@ -18,11 +18,12 @@ use orchester_core::{
   store::{MergeStore, RunStore, TaskStore},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_index::CodebaseIndexes;
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{changes::GIT, detail::run_store_error};
-use crate::{activity::Running, messages::Message, programs::Programs};
+use crate::{activity::Running, messages::Message};
 
 /// Names shown of a longer list of files, which then ends in an ellipsis.
 const SHOWN_FILES: usize = 5;
@@ -46,8 +47,6 @@ pub enum IntegrationProblem {
     detail: String,
   },
 }
-
-impl lurq::app::component::DevtoolsInspectable for IntegrationProblem {}
 
 impl From<StoreError> for IntegrationProblem {
   fn from(error: StoreError) -> Self {
@@ -209,8 +208,6 @@ pub struct Merged {
   pub cleanup: Result<Cleanup, IntegrationProblem>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for Merged {}
-
 /// Merges run `run` of the project at `repo_root`, records the merge and removes what the run left
 /// that is safe to remove: its clean worktrees and its merged branches.
 pub fn merge_in(repo_root: &Path, programs: &Programs, run: RunId) -> Result<Merged, IntegrationProblem> {
@@ -240,8 +237,6 @@ pub fn merge_in(repo_root: &Path, programs: &Programs, run: RunId) -> Result<Mer
 /// What the task's runs left in the repository, by run, as the task page holds it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LeftBehind(pub Vec<(RunId, Leftovers)>);
-
-impl lurq::app::component::DevtoolsInspectable for LeftBehind {}
 
 /// What each of `runs` left in the repository at `repo_root`, by run.
 pub fn leftovers_in(

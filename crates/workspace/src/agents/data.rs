@@ -108,8 +108,6 @@ pub struct ProjectAgents {
   pub agent_files: RepositoryAgentFiles,
 }
 
-impl lurq::app::component::DevtoolsInspectable for ProjectAgents {}
-
 impl ProjectAgents {
   pub fn load<S>(store: &S) -> Result<Self, StoreError>
   where
@@ -252,8 +250,6 @@ pub enum ProfileChange {
   Publish(ResourceId),
   KeepDraft(ResourceId),
 }
-
-impl lurq::app::component::DevtoolsInspectable for ProfileChange {}
 
 /// Applies `change` in the project database of `repo_root` and returns the profile it touched.
 pub fn apply_in(repo_root: &Path, change: ProfileChange) -> Result<ResourceId, StoreError> {

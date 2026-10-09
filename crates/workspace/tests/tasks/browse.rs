@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use orchester_core::task::organization::{Priority, TaskFilter, TaskOrganization, WorkflowStatus};
-use orchester_desktop::tasks::{
+use orchester_workspace::tasks::{
   browse::{self, PipelineFilter, Query, Selection, TaskSort},
   data::ProjectTasks,
   list::TaskTab,
@@ -13,7 +13,7 @@ fn query(
   tab: TaskTab,
   (text, pipeline, organization): (&str, PipelineFilter, &TaskFilter),
   sort: TaskSort,
-) -> Vec<orchester_desktop::tasks::list::TaskRow> {
+) -> Vec<orchester_workspace::tasks::list::TaskRow> {
   let query = Query {
     text,
     pipeline,

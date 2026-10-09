@@ -40,8 +40,6 @@ struct Pending {
   user: User,
 }
 
-impl lurq::app::component::DevtoolsInspectable for SignedIn {}
-
 impl PendingPasswordChange {
   pub fn server(&self) -> ServerId {
     self.inner.server
@@ -62,8 +60,6 @@ impl fmt::Debug for PendingPasswordChange {
       .finish_non_exhaustive()
   }
 }
-
-impl lurq::app::component::DevtoolsInspectable for PendingPasswordChange {}
 
 fn account(user: &User) -> ServerAccount {
   ServerAccount {

@@ -49,8 +49,6 @@ pub enum RunApprovalChange {
   AutoMode(bool),
 }
 
-impl lurq::app::component::DevtoolsInspectable for RunApprovalChange {}
-
 /// Applies `change` to run `run` of the project at `repo_root`.
 pub fn apply_in(repo_root: &Path, run: RunId, change: RunApprovalChange) -> Result<(), StoreError> {
   let mut db = ProjectDb::open(repo_root)?;
@@ -97,8 +95,6 @@ pub struct AutoModeState {
   pub on: bool,
   pub reviewer: Result<ReviewerShown, ReviewerUnavailable>,
 }
-
-impl lurq::app::component::DevtoolsInspectable for AutoModeState {}
 
 /// [`AutoModeState`] of run `run` of the project at `repo_root`.
 pub fn auto_mode_in(repo_root: &Path, run: RunId) -> Result<AutoModeState, StoreError> {

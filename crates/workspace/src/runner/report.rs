@@ -136,8 +136,6 @@ impl RunnerStatus {
   }
 }
 
-impl lurq::app::component::DevtoolsInspectable for RunnerStatus {}
-
 /// What every project's reporter shares: the displayed project, whose status is published, and
 /// the revisions screens follow.
 pub(super) struct Shared {

@@ -11,12 +11,12 @@ use orchester_core::{
   task::{TaskDetails, TaskLimits},
   tokens::TokenBudget,
 };
-use orchester_desktop::tasks::{
+use orchester_store::ProjectDb;
+use orchester_workspace::tasks::{
   data::{ProjectTasks, SaveTarget, pinned_pipeline, published_pipelines},
   list::PipelineLabel,
   run::queue_in,
 };
-use orchester_store::ProjectDb;
 
 use super::{now, project_db};
 
@@ -273,14 +273,14 @@ impl orchester_core::secret::SecretVault for NoKeychain {
 }
 
 /// The servers of a desktop that was never signed in to one, on its application data.
-fn servers() -> (tempfile::TempDir, orchester_desktop::sharing::Servers) {
+fn servers() -> (tempfile::TempDir, orchester_workspace::sharing::Servers) {
   let data = tempfile::TempDir::new().expect("application data");
-  let workspace = orchester_desktop::workspace::Workspace::new(
+  let workspace = orchester_workspace::workspace::Workspace::new(
     orchester_store::AppDb::open(&data.path().join("orchester.db")).expect("database"),
   );
-  let servers = orchester_desktop::sharing::Servers::new(
+  let servers = orchester_workspace::sharing::Servers::new(
     workspace,
-    orchester_desktop::secrets::Vault::with(std::sync::Arc::new(NoKeychain)),
+    orchester_workspace::secrets::Vault::with(std::sync::Arc::new(NoKeychain)),
   );
   (data, servers)
 }

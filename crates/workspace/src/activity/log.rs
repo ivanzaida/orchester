@@ -61,8 +61,6 @@ pub struct OperationSpec {
   quiet: bool,
 }
 
-impl lurq::app::component::DevtoolsInspectable for OperationSpec {}
-
 impl OperationSpec {
   pub fn new(running: Message, done: Message, failed: Message) -> Self {
     Self {
@@ -221,8 +219,6 @@ pub struct ActivityLog {
   /// Newest first.
   events: Vec<Event>,
 }
-
-impl lurq::app::component::DevtoolsInspectable for ActivityLog {}
 
 impl ActivityLog {
   pub fn start(&mut self, spec: OperationSpec, now: Instant) -> OperationId {

@@ -1,5 +1,5 @@
 //! The time the window shows live values at (a run's active agent time while an agent works),
-//! shared with screens through lurq context. The application reads the system clock; tests hand in
+//! shared with screens through the UI context. The application reads the system clock; tests hand in
 //! a clock they set themselves.
 
 use std::sync::Arc;
@@ -43,5 +43,3 @@ impl PartialEq for Clock {
     Arc::ptr_eq(&self.0, &other.0)
   }
 }
-
-impl lurq::app::component::DevtoolsInspectable for Clock {}

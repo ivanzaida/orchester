@@ -27,8 +27,6 @@ pub enum OverviewTab {
   Failed,
 }
 
-impl lurq::app::component::DevtoolsInspectable for OverviewTab {}
-
 impl OverviewTab {
   pub const ALL: [Self; 5] = [Self::All, Self::Running, Self::NeedsYou, Self::Queued, Self::Failed];
 

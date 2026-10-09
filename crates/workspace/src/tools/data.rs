@@ -84,8 +84,6 @@ pub struct ProjectTools {
   pub uses: Arc<Vec<ToolUse>>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for ProjectTools {}
-
 impl ProjectTools {
   pub fn load<S: ResourceStore>(store: &S) -> Result<Self, S::Error> {
     Ok(Self {
@@ -220,8 +218,6 @@ pub enum ToolChange {
   Publish(ResourceId),
   KeepDraft(ResourceId),
 }
-
-impl lurq::app::component::DevtoolsInspectable for ToolChange {}
 
 /// Applies `change` in the project database of `repo_root` and returns the tool it touched.
 pub fn apply_in(repo_root: &Path, change: ToolChange) -> Result<ResourceId, StoreError> {

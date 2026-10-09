@@ -21,7 +21,6 @@ use lurq::{
 use orchester_core::integration::{Leftovers, MergeKind, RunMerge};
 
 use crate::{
-  activity::Activity,
   display,
   programs::Programs,
   tasks::{
@@ -60,7 +59,7 @@ pub(super) fn merge_action(ctx: &mut Ctx, open: &OpenProject, detail: &TaskDetai
   let programs = ctx
     .use_context::<Programs>()
     .expect("the root provides Programs before mounting screens");
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   let separator = ctx.t("common.listSeparator");
   let (task, key) = (detail.task.id(), detail.task.key().to_string());
   let (number, branch) = detail.run.as_ref().map_or_else(Default::default, |run| {

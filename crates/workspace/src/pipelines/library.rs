@@ -15,7 +15,7 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use super::{data::Assignables, layout::levels};
+use super::{data::Assignables, levels::levels};
 use crate::messages::{self, Message};
 
 /// Where a pipeline is in its lifecycle.
@@ -41,8 +41,6 @@ pub struct LibraryEntry {
   pub used_by: usize,
   pub last_published: Option<Timestamp>,
 }
-
-impl lurq::app::component::DevtoolsInspectable for LibraryEntry {}
 
 /// The project's pipelines, ordered by slug.
 pub fn library(db: &ProjectDb) -> Result<Vec<LibraryEntry>, StoreError> {
@@ -88,8 +86,6 @@ pub enum StartFrom {
   Starter,
   Empty,
 }
-
-impl lurq::app::component::DevtoolsInspectable for StartFrom {}
 
 /// Translated text the starter needs: each step's name and instructions, and the name of the
 /// profile or tool it looks for in the project, e.g. "Explorer" for Research.

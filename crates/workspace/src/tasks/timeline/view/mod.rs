@@ -143,8 +143,12 @@ pub struct Shown {
   pub hidden_tools: (usize, usize),
 }
 
-/// What `items` show for `choice`; `open(key, default)` says whether a step or a chip is open.
-pub fn shown(items: &[Item], choice: &Choice, open: &dyn Fn(&str, bool) -> bool) -> Shown {
+/// How the chat shows a message's Markdown, as plain text; `None` when it reads as written.
+pub type Rendered<'a> = &'a dyn Fn(&str) -> Option<String>;
+
+/// What `items` show for `choice`; `open(key, default)` says whether a step or a chip is open, and
+/// a search also finds messages as `rendered` shows them.
+pub fn shown(items: &[Item], choice: &Choice, open: &dyn Fn(&str, bool) -> bool, rendered: Rendered<'_>) -> Shown {
   let ran: Vec<StepExecutionId> = items
     .iter()
     .filter_map(|item| match &item.kind {
@@ -156,6 +160,7 @@ pub fn shown(items: &[Item], choice: &Choice, open: &dyn Fn(&str, bool) -> bool)
     choice,
     needle: choice.needle(),
     open,
+    rendered,
     recent: ran.iter().rev().take(2).copied().collect(),
     shown: Shown::default(),
     step: None,
@@ -185,6 +190,7 @@ struct Pass<'a> {
   choice: &'a Choice,
   needle: Option<String>,
   open: &'a dyn Fn(&str, bool) -> bool,
+  rendered: Rendered<'a>,
   /// The last two executions that ran, which start open as well.
   recent: Vec<StepExecutionId>,
   shown: Shown,
@@ -233,7 +239,7 @@ impl Pass<'_> {
       items[index + 1..]
         .iter()
         .take_while(|item| !matches!(item.kind, ItemKind::Step(_) | ItemKind::Mark(_)))
-        .any(|item| matches(item, needle))
+        .any(|item| matches(item, needle, self.rendered))
     });
     if matched == Some(false) {
       return;
@@ -311,7 +317,7 @@ impl Pass<'_> {
       return self.tools(item, group);
     }
     if let Some(needle) = self.needle.as_deref() {
-      if !matches(item, needle) {
+      if !matches(item, needle, self.rendered) {
         return;
       }
       self.count(1);

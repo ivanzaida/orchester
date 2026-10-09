@@ -43,7 +43,7 @@ use super::{
   page::{self, TOPBAR_BUTTON_HEIGHT},
 };
 use crate::{
-  activity::{Activity, OperationSpec, operations},
+  activity::{OperationSpec, operations},
   background,
   messages::{self, Message},
   navigation::route::{Page, Route},
@@ -295,7 +295,7 @@ impl SecretsScreen {
 
 /// Archives a secret off the UI thread, tracked as the operation it is given.
 fn archive_action(ctx: &mut Ctx) -> ArchiveAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(
     move |(repo_root, vault, id, spec): (PathBuf, Vault, SecretId, OperationSpec)| {
       let activity = activity.clone();

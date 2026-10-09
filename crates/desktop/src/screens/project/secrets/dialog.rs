@@ -21,7 +21,7 @@ use orchester_core::{
 use zeroize::Zeroize;
 
 use crate::{
-  activity::{Activity, OperationSpec, operations},
+  activity::{OperationSpec, operations},
   background,
   messages::{self, Message},
   secrets::{
@@ -245,7 +245,7 @@ fn name_error(error: &SecretNameError) -> Message {
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |args: SaveArgs| {
     let activity = activity.clone();
     let spec = args.spec.clone();

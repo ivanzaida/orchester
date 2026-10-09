@@ -24,8 +24,6 @@ pub struct ProjectSharing {
   pub admin: bool,
 }
 
-impl lurq::app::component::DevtoolsInspectable for ProjectSharing {}
-
 /// Whether the task list takes changes, and why not.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskListAccess {

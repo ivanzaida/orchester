@@ -23,8 +23,6 @@ use crate::{
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Sources(pub Vec<RegisteredProject>);
 
-impl lurq::app::component::DevtoolsInspectable for Sources {}
-
 pub fn sources(workspace: &Workspace, current: ProjectId) -> Result<Sources, StoreError> {
   let mut projects = workspace.projects()?;
   projects.retain(|project| project.id != current);
@@ -37,8 +35,6 @@ pub struct Catalogs {
   pub source: Catalog,
   pub target: Catalog,
 }
-
-impl lurq::app::component::DevtoolsInspectable for Catalogs {}
 
 #[derive(Debug, Error)]
 pub enum LoadError {

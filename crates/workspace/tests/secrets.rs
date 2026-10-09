@@ -13,11 +13,11 @@ use orchester_core::{
   store::{ResourceStore, SecretStore},
   time::Timestamp,
 };
-use orchester_desktop::{
+use orchester_store::ProjectDb;
+use orchester_workspace::{
   connections::mcp::{McpServerText, TransportChoice, save_in, secret_reference, set_enabled_in},
   secrets::data::{ProjectSecrets, SecretUseKind, UseCounts},
 };
-use orchester_store::ProjectDb;
 use tempfile::TempDir;
 
 fn project_db() -> (TempDir, ProjectDb) {

@@ -7,7 +7,7 @@ use orchester_core::{
   run::{ActivityEntry, DecidedBy, TokenUsage, ToolDecision},
   time::Timestamp,
 };
-use orchester_desktop::tasks::transcript::{CommandMark, EntryKind, McpToolEntry, ToolCommandEntry, entries};
+use orchester_workspace::tasks::transcript::{CommandMark, EntryKind, McpToolEntry, ToolCommandEntry, entries};
 
 fn stored(events: Vec<AgentEvent>) -> Vec<ActivityEntry> {
   let (execution, invocation) = (StepExecutionId::generate(), InvocationId::generate());

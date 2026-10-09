@@ -49,8 +49,6 @@ pub struct NativeDraft {
   pub provider_fallback: bool,
 }
 
-impl lurq::app::component::DevtoolsInspectable for NativeDraft {}
-
 /// Adds or updates the connection in `draft`. A new key secret is added first, its `value` into
 /// `vault`; if the connection cannot be stored then, that secret is archived: its value is removed
 /// from the keychain and it leaves the project's secrets, while its record stays in the project

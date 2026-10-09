@@ -107,8 +107,6 @@ pub struct AutoApprovingRun {
   pub key: Arc<str>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for ProjectTasks {}
-
 impl ProjectTasks {
   /// `row` with its tag names and what blocks it, the blocking tasks' keys joined by `separator`
   /// (`common.listSeparator`).

@@ -29,8 +29,6 @@ impl Message {
   }
 }
 
-impl lurq::app::component::DevtoolsInspectable for Message {}
-
 pub fn name_error(error: &NameError) -> Message {
   match error {
     NameError::Blank => Message::new("errors.nameRequired"),

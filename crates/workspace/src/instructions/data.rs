@@ -110,8 +110,6 @@ pub struct ProjectInstructions {
   pub pipelines: Arc<Vec<PipelineChoice>>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for ProjectInstructions {}
-
 impl ProjectInstructions {
   pub fn load(db: &ProjectDb) -> Result<Self, StoreError> {
     Ok(Self {
@@ -211,8 +209,6 @@ pub struct NewInstruction {
   pub name: Name,
   pub scope: InstructionScope,
 }
-
-impl lurq::app::component::DevtoolsInspectable for NewInstruction {}
 
 /// Creates the instruction as an empty draft under a slug made from its name.
 pub fn create(db: &mut ProjectDb, new: NewInstruction, now: Timestamp) -> Result<ResourceId, StoreError> {

@@ -40,8 +40,6 @@ pub struct VersionHistory {
   versions: Vec<PublishedVersion>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for VersionHistory {}
-
 impl VersionHistory {
   pub fn load(db: &ProjectDb, pipeline: ResourceId) -> Result<Self, StoreError> {
     let mut runs = db.runs_by_pipeline_version(pipeline).map_err(run_store_error)?;

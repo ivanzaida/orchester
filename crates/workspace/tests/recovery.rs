@@ -10,9 +10,10 @@ use orchester_core::{
   run::{PendingToolApproval, WaitReason},
   store::ActivityStore,
 };
-use orchester_desktop::{programs::Programs, recovery::interrupted_runs, workspace::Workspace};
+use orchester_exec::programs::Programs;
 use orchester_ipc::SessionEnd;
 use orchester_store::AppDb;
+use orchester_workspace::{recovery::interrupted_runs, workspace::Workspace};
 use support::{Fixture, at};
 
 #[test]

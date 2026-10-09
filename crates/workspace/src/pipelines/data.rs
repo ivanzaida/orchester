@@ -171,8 +171,6 @@ pub struct OpenedPipeline {
   pub assignables: Arc<Assignables>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for OpenedPipeline {}
-
 #[derive(Debug, thiserror::Error)]
 pub enum OpenError {
   #[error(transparent)]

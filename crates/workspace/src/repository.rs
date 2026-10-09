@@ -35,8 +35,6 @@ pub struct DetectTarget {
   pub program: Option<PathBuf>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for DetectTarget {}
-
 /// Detects the GitHub repository of the folder. A folder that is not the top of a git repository
 /// cannot hold a project, whatever git says about a parent folder.
 pub fn detect(target: &DetectTarget) -> Detection {

@@ -21,7 +21,6 @@ mod worktree;
 
 use std::sync::Arc;
 
-use lurq::app::i18n::I18n;
 use rmcp::{
   handler::server::common::schema_for_type,
   model::{JsonObject, Tool, ToolAnnotations},
@@ -33,17 +32,17 @@ use self::runs::Control;
 use super::{error::ToolError, services::Services};
 use crate::messages::Message;
 
-/// A message in the words the app shows it, for results that carry the app's own explanations.
-pub struct Translate(I18n);
+/// A message in the words the app shows it, for results that carry the app's own explanations:
+/// the app words [`Message`]s of this crate's locale files ([`crate::i18n`]).
+pub struct Translate(Box<dyn Fn(&Message) -> String + Send + Sync>);
 
 impl Translate {
-  pub fn new(i18n: I18n) -> Self {
-    Self(i18n)
+  pub fn new(words: impl Fn(&Message) -> String + Send + Sync + 'static) -> Self {
+    Self(Box::new(words))
   }
 
   pub fn text(&self, message: &Message) -> String {
-    let args = message.args.iter().map(|(name, value)| (*name, value.as_str()));
-    self.0.t_args(message.key, args).to_string()
+    (self.0)(message)
   }
 }
 

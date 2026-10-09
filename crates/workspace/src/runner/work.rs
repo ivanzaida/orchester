@@ -93,8 +93,6 @@ impl ActiveWork {
   }
 }
 
-impl lurq::app::component::DevtoolsInspectable for ActiveWork {}
-
 /// Where a run stands while the application closes after "Wait for agents to save" (02.D).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SaveState {
@@ -114,5 +112,3 @@ impl SaveState {
     }
   }
 }
-
-impl lurq::app::component::DevtoolsInspectable for SaveState {}

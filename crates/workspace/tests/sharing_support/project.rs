@@ -20,7 +20,8 @@ use orchester_core::{
   task::{Task, TaskDetails},
   time::Timestamp,
 };
-use orchester_desktop::{
+use orchester_store::{AppDb, ProjectDb};
+use orchester_workspace::{
   secrets::Vault,
   sharing::{
     ServerEntry, Servers, SignedIn,
@@ -28,7 +29,6 @@ use orchester_desktop::{
   },
   workspace::Workspace,
 };
-use orchester_store::{AppDb, ProjectDb};
 use parking_lot::Mutex;
 use tempfile::TempDir;
 use tokio::runtime::Runtime;

@@ -8,7 +8,7 @@ use lurq::app::ctx::{Ctx, FutureAction};
 use orchester_core::{connection::GitHubLogin, id::ConnectionId, repository::Detection};
 
 use crate::{
-  activity::{Activity, OperationSpec, operations},
+  activity::{OperationSpec, operations},
   background,
   connections::github::{choose_program_in, expect_active_account_in},
   messages::Message,
@@ -47,7 +47,7 @@ impl lurq::app::component::DevtoolsInspectable for Done {}
 pub type WorkAction = FutureAction<SettingsWork, Done, Message>;
 
 pub fn work_action(ctx: &mut Ctx, open: OpenProject) -> WorkAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   let name = connection_name(ctx);
   ctx.future_action(move |work: SettingsWork| {
     let (activity, open, name) = (activity.clone(), open.clone(), name.clone());

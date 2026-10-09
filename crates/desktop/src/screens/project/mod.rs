@@ -65,7 +65,7 @@ use crate::{
     Navigation, PROJECT_PARAM, entry,
     import::{self as import_query, ImportTab},
     repository_import as repository_query,
-    route::{self, ChangedFile, Page, Route},
+    route::{self, ChangedFile, Page, Route, TaskPageTab},
   },
   runner::{RunnerStatus, Runners, state::RunnerState},
   tabs::{
@@ -410,7 +410,7 @@ impl Component for ProjectShell {
     let waiting = self.approvals.still_waiting(pending);
     let dialogs: Vec<ShownApproval> = waiting
       .iter()
-      .filter(|approval| approval.opens_on(page) || self.approvals.opened(&approval.approval.id))
+      .filter(|approval| opens_on(approval, page) || self.approvals.opened(&approval.approval.id))
       .cloned()
       .collect();
     ctx.provide(Shown {
@@ -467,4 +467,10 @@ impl Component for ProjectShell {
       .child(repository_import::dialog(ctx, &open))
       .with_children(task::tool_approval_modal(ctx, (&dialogs, &waiting), &self.approvals))
   }
+}
+
+/// Whether the approval dialog opens for `approval` on `page`: everywhere but its task's Conversation
+/// tab, which shows it inline.
+fn opens_on(approval: &ShownApproval, page: Option<Page>) -> bool {
+  !matches!((page, approval.task_id), (Some(Page::Task(shown, TaskPageTab::Conversation)), Some(task)) if shown == task)
 }

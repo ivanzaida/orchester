@@ -25,8 +25,6 @@ pub struct Loaded {
   pub questions: Arc<Vec<AskedQuestions>>,
 }
 
-impl lurq::app::component::DevtoolsInspectable for Loaded {}
-
 /// A run's tool requests and its agents' questions with suggested answers, as read.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Requests {
@@ -34,8 +32,6 @@ pub struct Requests {
   pub decided: Arc<Vec<DecidedToolApproval>>,
   pub questions: Arc<Vec<AskedQuestions>>,
 }
-
-impl lurq::app::component::DevtoolsInspectable for Requests {}
 
 impl Loaded {
   /// The timeline's sources: `entries`, the transcript, with `requests`.

@@ -32,8 +32,6 @@ impl Answering {
   }
 }
 
-impl lurq::app::component::DevtoolsInspectable for Answering {}
-
 /// Why the runner refused answers, in the words the app and the MCP server use.
 pub fn answer_error(error: &AnswerError) -> Message {
   match error {
@@ -85,8 +83,6 @@ impl Picks {
 pub struct Draft {
   picks: Vec<Picks>,
 }
-
-impl lurq::app::component::DevtoolsInspectable for Draft {}
 
 impl Draft {
   /// Nothing picked yet, for `questions`.

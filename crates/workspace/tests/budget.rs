@@ -6,7 +6,7 @@ use orchester_core::{
   limits::{AgentSlots, ProjectLimits},
   tokens::TokenBudget,
 };
-use orchester_desktop::budget::{
+use orchester_workspace::budget::{
   LimitsForm, TIME_LIMIT_CHOICES, budget_error, read_agent_slots, read_budget, read_minutes, time_limit_choices,
 };
 

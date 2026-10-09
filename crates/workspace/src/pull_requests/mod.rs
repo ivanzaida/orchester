@@ -16,13 +16,13 @@ use orchester_core::{
   store::{ConnectionStore, PullRequestStore, RepositoryStore},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
 use crate::{
   connections::github::{AccountError, expect_active_account},
   messages::{self, Message},
-  programs::Programs,
 };
 
 /// What the Pull requests screen shows.
@@ -32,8 +32,6 @@ pub enum Inbox {
   Unlinked,
   Linked(Box<LinkedInbox>),
 }
-
-impl lurq::app::component::DevtoolsInspectable for Inbox {}
 
 /// The linked repository's pull requests as far as they are known.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -116,8 +116,6 @@ impl PartialEq for Runners {
   }
 }
 
-impl lurq::app::component::DevtoolsInspectable for Runners {}
-
 impl Runners {
   pub fn plan_limits(&self) -> watch::Receiver<orchester_core::connection::plan_limits::PlanReadings> {
     self.inner.shared.limits.subscribe()
@@ -418,5 +416,5 @@ fn open_log(project: &Path) -> io::Result<()> {
   } else {
     orchester_ipc::runner_log_dir(project)
   };
-  crate::external::open_path(&target)
+  orchester_exec::external::open_path(&target)
 }

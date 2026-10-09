@@ -30,7 +30,7 @@ use orchester_store::RegisteredProject;
 
 use super::{ProjectNav, instructions::copy::tab_of};
 use crate::{
-  activity::{Activity, OperationSpec, Target, operations},
+  activity::{OperationSpec, Target, operations},
   background,
   import::data::{self, Catalogs, Sources},
   messages::{self, Message},
@@ -442,7 +442,7 @@ fn target_of(repo_root: &std::path::Path, copy: &CopiedResource) -> Target {
 
 /// Writes the batch, reported in the status bar, and names the page of its first copy.
 fn import_action(ctx: &mut Ctx) -> ImportAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |(repo_root, batch, spec): ImportArgs| {
     let activity = activity.clone();
     async move {

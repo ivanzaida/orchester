@@ -104,7 +104,7 @@ pub async fn remove_worktree(
       .ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
     let count = left.worktrees.len();
     let (answer, outcome) = mpsc::channel();
-    let (changes, removed, project) = (services.changes.clone(), jobs.removed_outside(), open.project.id());
+    let (changes, removed, project) = (services.changes.clone(), jobs.clone(), open.project.id());
     jobs.of(run.id()).start_remove(RemoveArgs {
       open: open.clone(),
       task: task.id(),
@@ -117,7 +117,7 @@ pub async fn remove_worktree(
       separator,
       changed: Arc::new(move || {
         changes.record(project, Outside::Tasks);
-        removed.update(|count| *count += 1);
+        removed.count_outside_removal();
       }),
       by: Remover::Automation(answer),
     });

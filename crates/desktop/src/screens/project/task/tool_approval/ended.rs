@@ -11,7 +11,7 @@ use orchester_core::id::TaskId;
 
 use super::DecisionAction;
 use crate::{
-  activity::{Activity, Place, Target},
+  activity::{Place, Target},
   messages::Message,
   screens::project::{approval_queue::ApprovalQueue, pages::Shown},
 };
@@ -56,7 +56,7 @@ impl Unanswered {
 /// [`Unanswered::Answered`] it only leaves. Called where `action` is created.
 pub(super) fn drop_when_ended(ctx: &mut Ctx, action: &DecisionAction) {
   let queue = ctx.use_context::<ApprovalQueue>();
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   let project: Option<(Arc<str>, _)> = ctx
     .use_context::<Shown>()
     .map(|shown| (shown.open.project.name().as_str().into(), shown.open.repo_root));

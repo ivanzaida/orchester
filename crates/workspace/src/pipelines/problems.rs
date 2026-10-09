@@ -28,8 +28,6 @@ pub enum ProblemKind {
   UnassignedTool,
 }
 
-impl lurq::app::component::DevtoolsInspectable for ProblemView {}
-
 fn step_name(edit: &PipelineEdit, key: &StepKey) -> String {
   edit
     .step(key)
