@@ -21,11 +21,13 @@ pub enum Unavailable {
   Unknown,
   /// The project is in the list, but its folder is not where it was: moved, renamed or deleted.
   FolderMissing { name: Name, repo_root: PathBuf },
-  /// The project's folder is there, but its data cannot be opened, and why.
+  /// The project's folder is there, but its data cannot be opened, and why; `newer_data` says that a
+  /// newer Orchester wrote it.
   Unreadable {
     name: Name,
     repo_root: PathBuf,
     reason: Message,
+    newer_data: bool,
   },
   /// The list of projects itself cannot be read, and why.
   Failed(Message),
@@ -84,6 +86,7 @@ impl Unavailable {
       name: project.name,
       repo_root: project.repo_root,
       reason: messages::store_error(error),
+      newer_data: matches!(error, StoreError::SchemaTooNew { .. }),
     }
   }
 

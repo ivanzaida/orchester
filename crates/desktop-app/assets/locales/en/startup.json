@@ -5,12 +5,17 @@
       "description": "Another Orchester window is using this data folder. One Orchester opens a data folder at a time, so its projects, runners and agents never run twice.",
       "otherWindow": "Other window",
       "since": "Open since {{time}} · process {{pid}}",
+      "sinceDay": "Open since {{month}} {{day}}, {{time}} · process {{pid}}",
       "unknownWindow": "Not known",
       "switch": "Switch to that window",
       "close": "Close this window",
       "footnote": "Switching brings that window to the front and closes this one.",
       "unsupported": "Switching to that window isn't available on this system yet. Bring it to the front yourself, then close this one.",
       "unknownProcess": "Orchester can't tell which process has the data folder open, so it can't switch to it. Close this window, then find the other one."
+    },
+    "closing": {
+      "title": "Orchester is closing",
+      "description": "The other Orchester window has closed and still has this data folder while its agents save. Start Orchester again in a few seconds."
     },
     "noAnswer": {
       "title": "That window didn't come to the front",
@@ -28,8 +33,10 @@
     "unreadable": {
       "title": "Orchester can't read its data",
       "reason": "The database file is damaged or isn't Orchester's: “{{reason}}”.",
+      "reasonRefused": "The database could not be opened: “{{reason}}”.",
       "description": "Nothing was changed.",
-      "step": "Restore the file from a backup if you have one. Moving it out of the folder lets Orchester start with an empty project list: each project keeps its tasks and runs in its own .orchester folder."
+      "step": "Restore the file from a backup if you have one. Moving it out of the folder lets Orchester start with an empty project list: each project keeps its tasks and runs in its own .orchester folder.",
+      "stepRefused": "Close any other program that has the file open, check that your account can read and write it, then start Orchester again."
     },
     "updateFailed": {
       "title": "Orchester couldn't update its data",

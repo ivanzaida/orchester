@@ -12,8 +12,15 @@ use super::{ProjectFeed, ProjectState};
 #[derive(Clone)]
 pub struct Projects {
   states: Signal<KnownStates>,
+  /// How often opening each project was asked for again ([`Projects::retry`]).
+  attempts: Signal<Attempts>,
   feeds: Arc<Mutex<HashMap<ProjectId, ProjectFeed>>>,
 }
+
+#[derive(Clone, Default, PartialEq)]
+struct Attempts(Arc<HashMap<ProjectId, u32>>);
+
+impl lurq::app::component::DevtoolsInspectable for Attempts {}
 
 /// The resolved projects by id.
 #[derive(Clone, Default, PartialEq)]
@@ -34,6 +41,7 @@ impl Projects {
   pub fn new(landed: Option<(ProjectId, ProjectState)>) -> Self {
     Self {
       states: Signal::new(KnownStates(Arc::new(landed.into_iter().collect()))),
+      attempts: Signal::new(Attempts::default()),
       feeds: Arc::default(),
     }
   }
@@ -75,6 +83,24 @@ impl Projects {
   /// The feed of `project` if it was made, without making one, for the app's MCP tools.
   pub fn feed_now(&self, project: ProjectId) -> Option<ProjectFeed> {
     self.feeds.lock().get(&project).cloned()
+  }
+
+  /// How often opening `project` was asked for again; reading it in a render re-renders it then.
+  pub fn attempt(&self, project: ProjectId) -> u32 {
+    self
+      .attempts
+      .with(|attempts| attempts.0.get(&project).copied().unwrap_or(0))
+  }
+
+  /// Opens `project` again, e.g. once its folder is back: what it stood for is forgotten, so its
+  /// screen waits for the new answer.
+  pub fn retry(&self, project: ProjectId) {
+    self.states.update(|known| {
+      Arc::make_mut(&mut known.0).remove(&project);
+    });
+    self.attempts.update(|attempts| {
+      *Arc::make_mut(&mut attempts.0).entry(project).or_insert(0) += 1;
+    });
   }
 
   /// Records what `project` stands for; its readers render only when that changed.
