@@ -197,12 +197,15 @@ by `read_external_file` and `search_external_file`.
   (every project's private files with MCP secrets and tokens), any `.orchester` folder but the run's worktree, any
   `orchester.db*` or `orchester-server.db*` file and the folder of Orchester's programs; device, stream, verbatim,
   drive-relative and network paths; a folder or pipe; a file with a NUL anywhere up to the last line read. A read is
-  numbered lines, each cut to 16 KiB, at most 56 KiB, with where to read on (`start_line`). A search runs ripgrep in
-  the checked folder and keeps only the files a read would reach (each checked again; the ones left out are counted,
-  never named), at most 20 files. A path the tools never reach is refused before anybody is asked. Known limits: a
-  path is checked, then opened, so a link swapped in between by another program could lead elsewhere (what is opened
-  must still be a file); a mapped network drive (`Z:\`) or a mounted share (`/Volumes/…`) reads as a local folder,
-  also in a step without network.
+  numbered lines, each cut to 16 KiB, at most 56 KiB, with where to read on (`start_line`). A search lists the
+  checked folder, keeps only the files a read would reach (each checked; the ones left out are neither counted nor
+  named) and searches those, at most 20 files. A path the tools never reach is refused before anybody is asked. A link
+  on the way whose target is a network or device path is read, never followed, and the path is refused before it is
+  resolved, so the server is not contacted (`permission::link_targets`). Known limits: a path is checked, then
+  opened, so a link swapped in between by another program could lead elsewhere (what is opened must still be a
+  file); a mapped network drive (`Z:\`) or a mounted share (`/Volumes/…`) reads as a local folder, also in a step
+  without network; on macOS an automounter folder (`/net/<host>` where autofs is on) mounts a share when a path in it
+  is resolved.
 - **Sources** (`orchester_core::source`): folders and files outside the worktree an agent may read without asking,
   absolute paths listed on the project and on a task (`project_sources`, `task_sources`, this machine's paths, never
   shared; set through `ProjectDb::set_project_sources` and `set_task_sources`), on a pipeline and on its steps (in the

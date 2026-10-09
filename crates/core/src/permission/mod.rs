@@ -12,6 +12,7 @@ pub mod category;
 pub mod claude;
 pub mod known_safe;
 mod launch;
+pub(crate) mod link_targets;
 pub mod mcp;
 mod narrow;
 pub mod writable;

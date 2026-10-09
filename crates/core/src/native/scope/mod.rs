@@ -244,8 +244,13 @@ pub fn in_git_folder(path: &Path) -> bool {
   })
 }
 
-/// A root folder, which must exist, with links resolved.
+/// A root folder, which must exist, with links resolved; refused before it is resolved when a link on the way leads to
+/// another machine ([`crate::permission::link_targets`]).
 fn canonical_root(path: &Path) -> Result<PathBuf, ScopeError> {
+  crate::permission::link_targets::stay_local(path).map_err(|error| ScopeError::Unresolved {
+    path: path.to_path_buf(),
+    kind: error.kind(),
+  })?;
   fs::canonicalize(path)
     .map(canonical::plain)
     .map_err(|error| ScopeError::Unresolved {

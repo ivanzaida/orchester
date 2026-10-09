@@ -20,8 +20,15 @@ pub(crate) struct ExistingError {
 }
 
 /// `path` with links resolved as far as it exists: its longest existing ancestor canonicalised, the
-/// components after it appended unchanged.
+/// components after it appended unchanged. A path with a link that leads to another machine is refused before it is
+/// resolved ([`super::link_targets`]).
 pub(crate) fn existing(path: &Path) -> Result<Existing, ExistingError> {
+  if let Err(error) = super::link_targets::stay_local(path) {
+    return Err(ExistingError {
+      path: path.to_path_buf(),
+      error,
+    });
+  }
   let mut missing = Vec::new();
   let mut current = path;
   loop {
