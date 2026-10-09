@@ -190,3 +190,30 @@ fn a_select_is_a_28_high_field() {
   assert_eq!((select.width, select.height), (160.0, 28.0));
   assert!(kit.texts("sort").contains(&"Manual order".to_owned()));
 }
+
+#[test]
+fn a_clearable_search_ends_in_a_cross_while_it_holds_text_and_the_cross_clears_it() {
+  let value = Signal::new("retry budget".to_owned());
+  let shown = value.clone();
+  let mut kit = Kit::show(move |ctx| {
+    Column::new()
+      .child(
+        FieldInput::new("search", "Search", shown.clone())
+          .search()
+          .clearable("Clear search")
+          .width(lurq::node::dimension::Dimension::Px(300.0))
+          .render(ctx),
+      )
+      .into()
+  });
+  let (frame, cross) = (kit.bounds("search-box"), kit.bounds("search-clear"));
+  assert_close(
+    frame.x + frame.width - (cross.x + cross.width),
+    10.0,
+    "the cross 10 from the end",
+  );
+  assert_close(cross.width, 13.0, "a 13 cross");
+  kit.click("search-clear");
+  assert_eq!(value.get(), "");
+  assert!(!kit.exists("search-clear"), "an empty search has no cross");
+}

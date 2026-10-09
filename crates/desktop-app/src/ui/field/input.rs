@@ -4,6 +4,7 @@
 //! 12 `text_muted` unit after it (`Limit field` `eesXH`); a text area is 84 high at least, 7 over and
 //! under its lines (`IBFli`). The box takes the `border_focus` stroke while its input has the focus
 //! (`QWfRV` in `C0Qk5`) and the `danger` stroke while its value is not accepted (`wbLGz` in `CqBFL`).
+//! A search that holds text can end in a 13 `text_muted` cross that clears it (`Clear search` `rUHLV`).
 //! It types each key once: the input writes into the value itself. A locked field shows its value in
 //! `text_secondary` on `surface_panel` and takes no input or focus (`Bzakf` in New task · queued
 //! `H8GYVZ`).
@@ -14,13 +15,13 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::TextInputEvent,
+    events::{TextInputEvent, mouse_event::MouseEvent},
     theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text, TextInput},
+  components::{Button, Column, Row, Text, TextInput},
   core::Signal,
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{CursorIcon, Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::tokens::regroup;
 
@@ -55,6 +56,8 @@ pub struct FieldInput {
   error: Option<Arc<str>>,
   /// Groups the digits of a whole number while it is typed.
   group_separator: Option<Arc<str>>,
+  /// The cross that clears a value, named this for tools.
+  clear: Option<Arc<str>>,
   width: Dimension,
   locked: bool,
   /// A 14 `text_muted` glyph at the box's end, e.g. the lock of a locked select (`H8GYVZ`).
@@ -76,6 +79,7 @@ impl PartialEq for FieldInput {
       && self.name == other.name
       && self.error == other.error
       && self.group_separator == other.group_separator
+      && self.clear == other.clear
       && self.width == other.width
       && self.locked == other.locked
       && self.trailing == other.trailing
@@ -100,6 +104,7 @@ impl FieldInput {
       name: name.into(),
       error: None,
       group_separator: None,
+      clear: None,
       width: Dimension::Pct(100.0),
       locked: false,
       trailing: None,
@@ -115,6 +120,12 @@ impl FieldInput {
   /// A search field: the magnifying glass before the value.
   pub fn search(mut self) -> Self {
     self.leading = Some(Icon::Search);
+    self
+  }
+
+  /// While it holds text, the box ends in a cross that clears it; `label` names the cross for tools.
+  pub fn clearable(mut self, label: impl Into<Arc<str>>) -> Self {
+    self.clear = Some(label.into());
     self
   }
 
@@ -231,6 +242,7 @@ impl Component for FieldBox {
           .map(|glyph| icon(glyph, IconSize::Base, PaletteColor::TextMuted).id(format!("{}-icon", props.id))),
       )
       .child(input)
+      .with_children(clear_button(&props))
       .with_children(props.unit.as_deref().map(|unit| {
         Text::new(unit)
           .variant(TypographyStyle::Description)
@@ -304,6 +316,29 @@ impl FieldBox {
       Lines::Many => input.multiline().rows(1, TEXT_AREA_MAX_LINES),
     }
   }
+}
+
+/// The cross that clears `props`' value, while it holds text and the field is clearable. A press clears the
+/// value only: it does not also press a row around the field.
+fn clear_button(props: &FieldInput) -> Option<Button> {
+  let label = props.clear.clone()?;
+  if props.value.get().is_empty() {
+    return None;
+  }
+  let value = props.value.clone();
+  Some(
+    Button::empty()
+      .id(format!("{}-clear", props.id))
+      .align_items(Alignment::Center)
+      .focusable(false)
+      .cursor(CursorIcon::Pointer)
+      .describe("a11y_name", label)
+      .on_click(move |event: MouseEvent| {
+        event.stop_propagation();
+        value.set(String::new());
+      })
+      .child(icon(Icon::X, IconSize::Base, PaletteColor::TextMuted)),
+  )
 }
 
 /// Regroups a whole number as it is typed (`1400000` → `1,400,000`). Text that is not a whole number

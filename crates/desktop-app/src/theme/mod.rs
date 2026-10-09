@@ -18,6 +18,7 @@ mod shadow;
 mod shell;
 mod startup;
 mod task_form;
+mod tasks;
 mod typography;
 
 use std::time::Duration;
@@ -34,6 +35,7 @@ pub use self::{
   shell::ShellText,
   startup::{StartupSpacing, StartupText},
   task_form::{TaskFormRadius, TaskFormSpacing, TaskFormText},
+  tasks::TasksSpacing,
   typography::{ExtraTypography, IconSize},
 };
 
@@ -53,6 +55,7 @@ pub fn install(app: &mut App, mode: Mode) {
   metrics::install(theme);
   startup::install(theme);
   task_form::install(theme);
+  tasks::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }
