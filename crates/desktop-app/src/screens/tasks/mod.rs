@@ -14,8 +14,7 @@ mod readiness;
 mod row;
 mod states;
 mod table;
-
-use std::sync::Arc;
+mod view;
 
 use lurq::{
   app::{
@@ -24,23 +23,31 @@ use lurq::{
     theme::SpacingSize,
   },
   components::Column,
+  layout::layout_kind::ScrollState,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::task::organization::TaskFilter;
+use orchester_core::{project::TaskKey, task::organization::TaskFilter};
 use orchester_workspace::{
   runner::{RunnerStatus, state::RunnerState},
   tasks::{
     browse::{self, PipelineFilter, Query, TaskSort},
     data::ProjectTasks,
+    list::TaskRow,
   },
 };
+use parking_lot::Mutex;
 
-use self::{query::Choices, table::Rows};
+use self::{
+  query::Choices,
+  table::Rows,
+  view::{ListView, RowsKey, TabCounts},
+};
 use crate::{
   navigation::Navigation,
   project::{ShownProject, TasksState},
   routes::{TaskList, TaskListTab},
   theme::{ExtraSpacing, TasksSpacing},
+  ui::table::ROW_HEIGHT,
 };
 
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, list: &TaskList) -> Element {
@@ -64,6 +71,10 @@ impl DevtoolsInspectable for TasksProps {}
 
 struct TasksScreen {
   choices: Choices,
+  view: ListView,
+  /// Where the rows are scrolled to, and what they were last placed for ([`TasksScreen::place`]).
+  scroll: ScrollState,
+  placed: Mutex<Option<(RowsKey, Option<TaskKey>)>>,
 }
 
 impl Component for TasksScreen {
@@ -80,6 +91,9 @@ impl Component for TasksScreen {
         pipeline: ctx.signal(PipelineFilter::default()),
         sort: ctx.signal(TaskSort::default()),
       },
+      view: ListView::default(),
+      scroll: ScrollState::new(),
+      placed: Mutex::new(None),
     }
   }
 
@@ -103,9 +117,12 @@ impl Component for TasksScreen {
       )
       .spacing(SpacingSize::Md)
       .child(header::header(ctx, id));
-    match shown_tasks(&project) {
+    match project.feed.tasks.get() {
       TasksState::Ready(tasks) if tasks.tasks.is_empty() => page.child(states::empty_project(ctx, id)),
-      TasksState::Ready(tasks) => self.list(ctx, page, (&project, &list), &tasks),
+      TasksState::Ready(tasks) => {
+        let (tasks, counts) = self.view.tasks(&tasks, online(&project));
+        self.list(ctx, page, (&project, &list), (&tasks, counts))
+      }
       TasksState::Loading => page
         .child(header::tabs(ctx, id, &list, None))
         .child(query::query(ctx, &self.choices, None))
@@ -126,48 +143,75 @@ impl TasksScreen {
     ctx: &mut Ctx,
     page: Column,
     (project, list): (&ShownProject, &TaskList),
-    tasks: &ProjectTasks,
+    (tasks, counts): (&ProjectTasks, TabCounts),
   ) -> Column {
     let id = project.open.project.id();
-    let tab = header::workspace_tab(list.tab());
-    let pipeline = self.choices.pipeline.get();
-    let search = list.search().unwrap_or_default();
-    let separator = ctx.t("tasks.listSeparator");
-    let organization = TaskFilter::default();
-    let query = Query {
-      text: search,
-      pipeline,
-      organization: &organization,
-      separator: &separator,
+    let key = RowsKey {
+      tab: list.tab(),
+      search: list.search().unwrap_or_default().to_owned(),
+      pipeline: self.choices.pipeline.get(),
+      sort: self.choices.sort.get(),
     };
-    let rows = Arc::new(browse::rows(tasks, tab, query, self.choices.sort.get()));
-    let filtered = !search.trim().is_empty() || pipeline.0.is_some();
-    let page =
-      page
-        .child(header::tabs(ctx, id, list, Some(tasks)))
-        .child(query::query(ctx, &self.choices, Some(tasks)));
+    let filtered = !key.search.trim().is_empty() || key.pipeline.0.is_some();
+    let separator = ctx.t("tasks.listSeparator");
+    let rows = self.view.rows(key.clone(), |tasks| {
+      let organization = TaskFilter::default();
+      let query = Query {
+        text: &key.search,
+        pipeline: key.pipeline,
+        organization: &organization,
+        separator: &separator,
+      };
+      browse::rows(tasks, header::workspace_tab(key.tab), query, key.sort)
+    });
+    let page = page
+      .child(header::tabs(ctx, id, list, Some(counts)))
+      .child(query::query(ctx, &self.choices, Some(tasks)));
     if rows.is_empty() {
-      return page.child(self.no_rows(ctx, list.tab(), tasks, filtered));
+      return page.child(self.no_rows(ctx, list.tab(), counts.get(list.tab()), filtered));
     }
+    let list_key = format!("tasks-rows-{key:?}");
+    self.place(key, list.highlight(), &rows);
     let highlight = list.highlight().map(ToString::to_string);
     let shown = Rows {
       project: id,
       tasks,
       rows,
       highlight: highlight.as_deref(),
+      scroll: self.scroll.clone(),
+      list_key,
     };
     page
       .child(table::table(ctx, &shown))
       .child(table::footer(ctx, &shown, filtered))
   }
 
-  /// Why `tab` shows no row: the query hides its tasks, which Clear undoes, or it has none.
-  fn no_rows(&self, ctx: &Ctx, tab: TaskListTab, tasks: &ProjectTasks, filtered: bool) -> Column {
+  /// Scrolls the rows when what they show changed: to the task a Create just added, or else to the top,
+  /// for another tab, search, pipeline or sort. A render for anything else leaves them where they are.
+  fn place(&self, key: RowsKey, highlight: Option<&TaskKey>, rows: &[TaskRow]) {
+    let placing = (key, highlight.cloned());
+    let mut placed = self.placed.lock();
+    if placed.as_ref() == Some(&placing) {
+      return;
+    }
+    let shown = highlight.and_then(|task| {
+      let task = task.to_string();
+      rows.iter().position(|row| *row.key == *task)
+    });
+    match shown {
+      Some(index) => self.scroll.set_scroll_pending(0.0, ROW_HEIGHT * index as f32),
+      None => self.scroll.scroll_to_top_pending(),
+    }
+    *placed = Some(placing);
+  }
+
+  /// Why `tab` shows no row: it has none of its `count` tasks at all, or the query hides them, which
+  /// Clear undoes.
+  fn no_rows(&self, ctx: &Ctx, tab: TaskListTab, count: usize, filtered: bool) -> Column {
     let word = ctx.t(header::label_key(tab));
-    if !filtered {
+    if count == 0 || !filtered {
       return states::empty_tab(ctx, &word, tab == TaskListTab::NeedsYou);
     }
-    let count = header::count(tasks, tab);
     let (search, pipeline) = (self.choices.search.clone(), self.choices.pipeline.clone());
     states::no_matches(ctx, (&word, count), move || {
       search.set(String::new());
@@ -176,19 +220,14 @@ impl TasksScreen {
   }
 }
 
-/// The feed's tasks as they stand with the project's runner: without one serving it, a run recorded as
-/// running is interrupted.
-fn shown_tasks(project: &ShownProject) -> TasksState {
+/// Whether the project's runner serves it: without one, a run recorded as running is interrupted.
+fn online(project: &ShownProject) -> bool {
   let root = &project.open.repo_root;
-  let online = project
+  project
     .feed
     .status
     .get()
     .as_ref()
     .map(|status: &RunnerStatus| status.state_for(root))
-    == Some(RunnerState::Online);
-  match project.feed.tasks.get() {
-    TasksState::Ready(tasks) if !online => TasksState::Ready(tasks.without_runner()),
-    state => state,
-  }
+    == Some(RunnerState::Online)
 }

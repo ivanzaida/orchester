@@ -4,6 +4,8 @@
 //! carries the New badge (`Row · KON-37` in `t3oAOi`). Selection is not built yet (D4), so the row has no
 //! checkbox.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -14,10 +16,10 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{id::ProjectId, project::TaskKey, task::organization::WorkflowStatus};
-use orchester_workspace::tasks::list::TaskRow;
+use orchester_core::{id::ProjectId, project::TaskKey, run::TaskPhase, task::organization::WorkflowStatus};
+use orchester_workspace::tasks::list::{PipelineLabel, TaskRow};
 
-use super::table;
+use super::{readiness, table};
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskTab, TaskView},
@@ -41,10 +43,6 @@ pub(super) struct RowProps {
   pub row: TaskRow,
   /// The task a Create just added.
   pub highlighted: bool,
-  /// Another task blocks it, or it is marked Blocked.
-  pub blocked: bool,
-  /// The icon of what its readiness cell says, and the tone of both (`readiness::mark`).
-  pub mark: (Icon, PaletteColor),
 }
 
 impl DevtoolsInspectable for RowProps {}
@@ -65,7 +63,7 @@ impl Component for TaskListRow {
     let navigation = Navigation::of(ctx);
     let task: TaskKey = key.parse().expect("a task's key reads back as a task key");
     let open = Route::Project(props.project, ProjectPage::Task(task, TaskView::of(TaskTab::Summary)));
-    let pipeline = message_text(ctx, &row.pipeline.message());
+    let pipeline = pipeline_label(ctx, &row.pipeline);
     let line = TableRow::new(format!("task-row-{key}"))
       .cell(
         table::KEY,
@@ -83,8 +81,8 @@ impl Component for TaskListRow {
         table::PRIORITY,
         priority_chip(ctx, &format!("task-priority-{key}"), row.organization.priority()),
       )
-      .cell(table::WORKFLOW, workflow_cell(ctx, row, props.blocked))
-      .cell(table::READINESS, readiness_cell(ctx, row, props.mark.clone()))
+      .cell(table::WORKFLOW, workflow_cell(ctx, row))
+      .cell(table::READINESS, readiness_cell(ctx, row))
       .on_open(move || navigation.go(open.clone()));
     if props.highlighted { line.highlighted() } else { line }
   }
@@ -126,10 +124,10 @@ fn title_cell(ctx: &mut Ctx, row: &TaskRow, highlighted: bool) -> Row {
 }
 
 /// The workflow status, with the Blocked flag beside it, over the run's status (`Workflow cell` `x5bPKe`).
-fn workflow_cell(ctx: &mut Ctx, row: &TaskRow, blocked: bool) -> Column {
+fn workflow_cell(ctx: &mut Ctx, row: &TaskRow) -> Column {
   let key = &row.key;
   let status = row.organization.status();
-  let blocked = blocked.then(|| {
+  let blocked = readiness::blocked(row).then(|| {
     Row::new()
       .id(format!("task-blocked-{key}"))
       .spacing(SpacingSize::Xs)
@@ -144,6 +142,12 @@ fn workflow_cell(ctx: &mut Ctx, row: &TaskRow, blocked: bool) -> Column {
   });
   // A task whose latest run cannot be read has no phase: its run reads Unreadable.
   let run = row.phase.map_or(Status::Unreadable, Status::of_phase);
+  let mut run = StatusChip::new(format!("task-run-{key}"), run).compact();
+  // A run at work or one that failed says at which step (`Running · 02 Plan`).
+  if let (Some(TaskPhase::Running | TaskPhase::Failed), Some(step)) = (row.phase, &row.step) {
+    let number = format!("{:02}", step.number);
+    run = run.detail(ctx.t_args("tasks.runStep", [("number", number.as_str()), ("step", &*step.name)]));
+  }
   Column::new()
     .spacing(ExtraSpacing::Fine.role())
     .child(
@@ -159,12 +163,13 @@ fn workflow_cell(ctx: &mut Ctx, row: &TaskRow, blocked: bool) -> Column {
         )
         .with_children(blocked),
     )
-    .child(StatusChip::new(format!("task-run-{key}"), run).compact().render(ctx))
+    .child(run.render(ctx))
 }
 
 /// What the task needs, or where it stands, after its icon, both in the tone it calls for.
-fn readiness_cell(ctx: &mut Ctx, row: &TaskRow, (glyph, color): (Icon, PaletteColor)) -> Row {
+fn readiness_cell(ctx: &mut Ctx, row: &TaskRow) -> Row {
   let key = &row.key;
+  let (glyph, color) = readiness::mark(row);
   let text = message_text(ctx, &row.detail);
   Row::new()
     .spacing(ExtraSpacing::Snug.role())
@@ -175,6 +180,18 @@ fn readiness_cell(ctx: &mut Ctx, row: &TaskRow, (glyph, color): (Icon, PaletteCo
         .color(color)
         .render(ctx),
     )
+}
+
+/// The pipeline a task runs: a published one by its name and version as this list words it (`Feature
+/// delivery v3`), otherwise in the workspace's words.
+fn pipeline_label(ctx: &Ctx, pipeline: &PipelineLabel) -> Arc<str> {
+  match pipeline {
+    PipelineLabel::Published { name, version } => ctx.t_args(
+      "tasks.pipelineVersion",
+      [("name", name.to_string()), ("version", version.get().to_string())],
+    ),
+    other => message_text(ctx, &other.message()),
+  }
 }
 
 /// The word of a workflow status, as the UI kit's labels say it.

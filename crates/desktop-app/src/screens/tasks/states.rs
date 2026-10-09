@@ -32,7 +32,8 @@ use crate::{
 /// `Icon` `ngIiE` of `No matches`.
 const GLYPH_TILE: f32 = 36.0;
 
-/// The project has no task yet: New task.
+/// The project has no task yet: New task. The design's *Ready to run* checklist under it (`Ready` `HiAa2`:
+/// agents, pipeline, connection) is deferred, an agreed deviation: nothing reads that readiness yet.
 pub(super) fn empty_project(ctx: &mut Ctx, project: ProjectId) -> Element {
   let navigation = Navigation::of(ctx);
   EmptyState::new(

@@ -8,20 +8,18 @@ use std::sync::Arc;
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Row, Text, VirtualizedList},
+  layout::layout_kind::ScrollState,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::tasks::{data::ProjectTasks, list, list::TaskRow};
 
-use super::{
-  readiness,
-  row::{RowProps, TaskListRow},
-};
+use super::row::{RowProps, TaskListRow};
 use crate::{
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     message::message_text,
-    table::{ColumnWidth, table_header},
+    table::{ColumnWidth, HEADER_HEIGHT, ROW_HEIGHT, table_header},
   },
 };
 
@@ -33,10 +31,6 @@ pub(super) const PIPELINE: ColumnWidth = ColumnWidth::Fixed(128.0);
 pub(super) const PRIORITY: ColumnWidth = ColumnWidth::Fixed(80.0);
 pub(super) const WORKFLOW: ColumnWidth = ColumnWidth::Fixed(168.0);
 pub(super) const READINESS: ColumnWidth = ColumnWidth::Fixed(188.0);
-
-/// `Header row` `oSCCC` and `Row · KON-12` `W7oZyC`.
-const HEADER_HEIGHT: f32 = 32.0;
-const ROW_HEIGHT: f32 = 44.0;
 
 /// The table's header, with the columns' headings.
 pub(super) fn header(ctx: &Ctx) -> Row {
@@ -62,36 +56,33 @@ pub(super) struct Rows<'a> {
   pub tasks: &'a ProjectTasks,
   pub rows: Arc<Vec<TaskRow>>,
   pub highlight: Option<&'a str>,
+  /// Where the list is scrolled to (`super::TasksScreen::place`).
+  pub scroll: ScrollState,
+  /// The list's key, new for another tab, search, pipeline or sort: a list keeps its top row in place
+  /// while its rows change, which a new list must not.
+  pub list_key: String,
 }
 
-/// The header over the rows; the task Create just added is scrolled into view.
+/// The header over the rows, scrolled where `shown.scroll` says.
 pub(super) fn table(ctx: &mut Ctx, shown: &Rows<'_>) -> Element {
   let count = shown.rows.len();
   let highlight: Option<Arc<str>> = shown
     .highlight
     .filter(|key| shown.rows.iter().any(|row| &*row.key == *key))
     .map(Arc::from);
-  let (blocking, holds) = (shown.tasks.blocking.clone(), shown.tasks.group_holds.clone());
   let project = shown.project;
-  let reveal = highlight.as_deref().map(str::to_owned);
   let rows = VirtualizedList::new_shared(ctx, shown.rows.clone())
-    .list_key("tasks-rows")
+    .list_key(shown.list_key.clone())
+    .with_scroll_state(shown.scroll.clone())
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .max_height(Dimension::Px(ROW_HEIGHT * count as f32))
-    .reveal_key(reveal)
     .mount_keyed::<TaskListRow, _, _, _>(
       |row| row.key.clone(),
-      move |row| {
-        let blocked =
-          blocking.get(&row.id).is_some_and(|by| !by.is_empty()) || row.organization.blocked_reason().is_some();
-        RowProps {
-          project,
-          row: row.clone(),
-          highlighted: highlight.as_deref() == Some(&*row.key),
-          blocked,
-          mark: readiness::mark(row, &holds, blocked),
-        }
+      move |row| RowProps {
+        project,
+        row: row.clone(),
+        highlighted: highlight.as_deref() == Some(&*row.key),
       },
     );
   Column::new()

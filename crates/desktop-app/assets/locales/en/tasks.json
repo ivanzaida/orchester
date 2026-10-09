@@ -38,6 +38,8 @@
       "workflow": "WORKFLOW / RUN",
       "readiness": "DEPENDENCY / READINESS"
     },
+    "pipelineVersion": "{{name}} v{{version}}",
+    "runStep": "{{number}} {{step}}",
     "moreTags": "+{{count}}",
     "listSeparator": ", ",
     "newBadge": "New",

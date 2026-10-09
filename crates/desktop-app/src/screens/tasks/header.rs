@@ -12,8 +12,9 @@ use lurq::{
   node::{dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
-use orchester_workspace::tasks::{data::ProjectTasks, list};
+use orchester_workspace::tasks::list;
 
+use super::view::TabCounts;
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskList, TaskListTab},
@@ -75,15 +76,15 @@ pub(super) fn new_task(ctx: &Ctx, id: &str, project: ProjectId, navigation: Navi
 
 /// The workflow tabs, each with how many tasks it holds once the tasks are read, `—` until then. Another
 /// tab keeps the search; the task Create just added is no longer pointed out there.
-pub(super) fn tabs(ctx: &mut Ctx, project: ProjectId, list: &TaskList, tasks: Option<&ProjectTasks>) -> Stack {
+pub(super) fn tabs(ctx: &mut Ctx, project: ProjectId, list: &TaskList, counts: Option<TabCounts>) -> Stack {
   let navigation = Navigation::of(ctx);
   let unknown = ctx.t("tasks.tabs.unknownCount");
   let tabs: Vec<PageTab> = TaskListTab::ALL
     .into_iter()
     .map(|tab| {
       let word = ctx.t(label_key(tab));
-      let label = match tasks {
-        Some(tasks) => counted(ctx, &word, count(tasks, tab)),
+      let label = match counts {
+        Some(counts) => counted(ctx, &word, counts.get(tab)),
         None => ctx.t_args("ui.tabCount", [("label", word), ("count", unknown.clone())]),
       };
       let to = TaskList::new(tab).with_search(list.search().unwrap_or_default());
@@ -97,11 +98,6 @@ pub(super) fn tabs(ctx: &mut Ctx, project: ProjectId, list: &TaskList, tasks: Op
     })
     .collect();
   page_tabs(ctx, "tasks-tabs", tabs)
-}
-
-/// How many tasks `tab` holds, whatever the search and the pipeline filter.
-pub(super) fn count(tasks: &ProjectTasks, tab: TaskListTab) -> usize {
-  list::rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, workspace_tab(tab)).len()
 }
 
 /// The workspace's tab of the same tasks.
