@@ -15,6 +15,8 @@ mod launch;
 pub(crate) mod link_targets;
 pub mod mcp;
 mod narrow;
+#[cfg(windows)]
+pub(crate) mod remote_drive;
 pub mod writable;
 
 use std::fmt;
