@@ -1,9 +1,10 @@
 //! Every route's path shows its screen's own element, `screen-<name>`: an honest placeholder until the
 //! screen is built. A path that names nothing shows `screen-not-found`, which says why. The paths go
 //! straight to the router, as a tab's history would hand them over, so a path no route prints is shown
-//! too.
+//! too. The project the paths name is known to be open; what the window does until a project opens,
+//! and for one that cannot, is `tests/projects.rs`.
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -19,12 +20,19 @@ use orchester_app::{
   i18n,
   mcp::McpStatus,
   navigation::{Navigation, tabs::TabSet},
+  project::{ProjectState, Projects},
   routes::{
     ChangeSource, ChangedFile, OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView,
     routes,
   },
   theme::{self, Mode},
 };
+use orchester_core::{
+  id::ProjectId,
+  name::Name,
+  project::{Project, ProjectKey},
+};
+use orchester_workspace::workspace::OpenProject;
 use parking_lot::Mutex;
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
@@ -46,21 +54,28 @@ impl DevtoolsInspectable for RouterSlot {}
 struct ScreensRoot {
   router: RouterHandle,
   navigation: Navigation,
+  projects: Projects,
 }
 
 impl Component for ScreensRoot {
   type Props = RouterSlot;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let project = PROJECT.parse().expect("a project id");
     let router = ctx.router(routes());
     let navigation = Navigation::new(ctx.signal(TabSet::default()), router.clone());
     *ctx.props::<RouterSlot>().0.lock() = Some(router.clone());
-    Self { router, navigation }
+    Self {
+      router,
+      navigation,
+      projects: Projects::new(Some((project, ProjectState::Open(kontur(project))))),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     ctx.provide(McpStatus::Unavailable);
     ctx.provide(self.navigation.clone());
+    ctx.provide(self.projects.clone());
     Router::mount(ctx, self.router.clone())
   }
 }
@@ -102,6 +117,18 @@ fn collect(element: ElementRef<'_>, into: &mut Vec<String>) {
   into.extend(element.text_content().map(str::to_owned));
   for child in element.children() {
     collect(child, into);
+  }
+}
+
+/// Kontur as an open project; nothing reads its folder here.
+fn kontur(id: ProjectId) -> OpenProject {
+  OpenProject {
+    project: Project::new(
+      id,
+      ProjectKey::new("KON").expect("a project key"),
+      Name::new("Kontur").expect("a project name"),
+    ),
+    repo_root: PathBuf::from("kontur"),
   }
 }
 

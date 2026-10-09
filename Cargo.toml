@@ -140,7 +140,9 @@ win32job = "2"
 # Windows Credential Manager store of the keyring crates, for `orchester-vault`. Without the
 # `search` feature: nothing searches credentials, and it would pull in regex.
 windows-native-keyring-store = { version = "1.1", default-features = false }
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Pipes"] }
+# Windows APIs without a safe wrapper: which process serves a named pipe (`orchester-ipc`), and finding
+# another process's window and bringing it to the front (`orchester-app`'s startup screen).
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Pipes", "Win32_UI_WindowsAndMessaging"] }
 # Wipes a secret value from memory when it is dropped (`orchester_core::secret::SecretValue`).
 # Doing that by hand needs volatile writes, i.e. `unsafe`, which the workspace denies.
 zeroize = "1"

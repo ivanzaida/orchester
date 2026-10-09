@@ -114,11 +114,21 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       font_family: Arc::from(MONO),
       ..style(12.0, FontWeight::Normal, 1.5, 0.0, primary)
     },
-    extra: extras.chain(icons).collect(),
+    extra: extras
+      .chain(icons)
+      .chain(super::startup::typography(palette))
+      .chain(super::shell::typography(palette))
+      .collect(),
   }
 }
 
-fn style(font_size: f32, weight: FontWeight, line_height: f32, letter_spacing: f32, color: Color) -> TextStyle {
+pub(super) fn style(
+  font_size: f32,
+  weight: FontWeight,
+  line_height: f32,
+  letter_spacing: f32,
+  color: Color,
+) -> TextStyle {
   TextStyle {
     font_family: Arc::from(SANS),
     font_size,

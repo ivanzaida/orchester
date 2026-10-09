@@ -16,9 +16,10 @@ use orchester_app::{
     Appearance, AppearanceError, ThemeSetting,
     system::{macos_mode, windows_mode},
   },
-  settings::AppSettings,
   theme::{self, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, Mode},
 };
+use orchester_store::AppDb;
+use orchester_workspace::workspace::Workspace;
 
 fn themed(mode: Mode) -> App {
   let mut app = App::new();
@@ -223,7 +224,7 @@ fn switching_the_mode_recolors_the_palette_and_the_text() {
 fn the_appearance_setting_switches_the_theme_and_is_kept() {
   let dir = tempfile::tempdir().expect("a temporary folder");
   let database = dir.path().join("orchester.db");
-  let settings = AppSettings::open(&database).expect("the settings open");
+  let settings = Workspace::new(AppDb::open(&database).expect("the settings open"));
   let appearance = Appearance::new(
     ThemeSetting::Dark,
     Arc::new(OnceLock::from(Mode::Light)),
@@ -246,7 +247,7 @@ fn the_appearance_setting_switches_the_theme_and_is_kept() {
     app.theme().palette_color(PaletteColor::TextPrimary),
     Color::from_hex("#18181B")
   );
-  let reopened = AppSettings::open(&database).expect("the settings open again");
+  let reopened = AppDb::open(&database).expect("the settings open again");
   assert_eq!(reopened.theme().expect("the theme is stored"), ThemeSetting::System);
 }
 

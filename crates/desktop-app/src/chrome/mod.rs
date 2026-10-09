@@ -31,8 +31,18 @@ use crate::{
 /// `Title bar` height, on Windows and macOS alike.
 const TITLE_BAR_HEIGHT: f32 = 36.0;
 
-/// The window around `screen`.
+/// The window around `screen`, with the tabs in its title bar.
 pub fn chrome(ctx: &mut Ctx, screen: Element) -> Element {
+  window(ctx, screen, true)
+}
+
+/// The window around a startup screen: its title bar has the app menu and the window controls only
+/// (`Title bar` `bcDe3` of `N0Lpc`).
+pub fn bare(ctx: &mut Ctx, screen: Element) -> Element {
+  window(ctx, screen, false)
+}
+
+fn window(ctx: &mut Ctx, screen: Element, tabs: bool) -> Element {
   let bar = ChromeTitleBar::new()
     .background(PaletteColor::SurfaceBase)
     .border_bottom(None)
@@ -48,7 +58,7 @@ pub fn chrome(ctx: &mut Ctx, screen: Element) -> Element {
         .windows_height(TITLE_BAR_HEIGHT)
         .macos_height(TITLE_BAR_HEIGHT),
     )
-    .title_bar(title_bar::content(ctx, bar))
+    .title_bar(title_bar::content(ctx, bar, tabs))
     .content(screen)
     .overlay(outline)
     .mount(ctx)

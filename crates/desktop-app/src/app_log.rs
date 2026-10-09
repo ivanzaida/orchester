@@ -6,7 +6,7 @@
 //!
 //! Without a log file (the folder cannot be created or written) the log goes to the console only.
 
-use std::{panic, sync::Arc, time::SystemTime};
+use std::{panic, path::PathBuf, sync::Arc, time::SystemTime};
 
 use orchester_ipc::daily_log::{self, DailyLog};
 use orchester_store::location;
@@ -19,8 +19,9 @@ pub const DEFAULT_FILTER: &str = "info,lurq=warn";
 pub const LOG_PREFIX: &str = "orchester-app-";
 
 /// Sends the log to today's file, to lurq's MCP log layer and, in debug builds, to the console; panics
-/// are logged too, since a release build has no console to print them to.
-pub fn install() {
+/// are logged too, since a release build has no console to print them to. Returns today's log file,
+/// which a startup screen offers; `None` without one.
+pub fn install() -> Option<PathBuf> {
   let now = SystemTime::now();
   let log = location::log_dir().and_then(|dir| DailyLog::open(&dir, LOG_PREFIX, now).map(Arc::new));
   let file = log
@@ -41,12 +42,17 @@ pub fn install() {
   }
   match log {
     Ok(log) => {
-      tracing::info!(file = %daily_log::log_path(log.dir(), LOG_PREFIX, now).display(), "application log");
+      let file = daily_log::log_path(log.dir(), LOG_PREFIX, now);
+      tracing::info!(file = %file.display(), "application log");
       if let Err(error) = daily_log::prune(log.dir(), LOG_PREFIX, now) {
         tracing::warn!(%error, "cannot delete old application log files");
       }
+      Some(file)
     }
-    Err(error) => tracing::warn!(%error, "no application log file; logging to the console only"),
+    Err(error) => {
+      tracing::warn!(%error, "no application log file; logging to the console only");
+      None
+    }
   }
 }
 

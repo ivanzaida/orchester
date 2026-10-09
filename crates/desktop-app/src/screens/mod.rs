@@ -1,7 +1,9 @@
 //! The screens the router shows inside the shell, one module per screen. Every route of the router's
-//! table comes here: the path is read as a [`Route`] once, and its screen gets what the route names.
-//! None is built yet: each shows an honest placeholder (`placeholder`), and a path that names nothing
-//! says why (`not_found`).
+//! table comes here: the path is read as a [`Route`] once, and its screen gets what the route names. A
+//! project's screen gets the project open ([`ShownProject`]); until it is, the content panel stays empty,
+//! and a project that cannot be opened shows why instead (`unavailable_project`). None is built yet:
+//! each shows an honest placeholder (`placeholder`), and a path that names nothing says why
+//! (`not_found`).
 
 mod agents;
 mod all_projects;
@@ -20,12 +22,20 @@ mod task;
 mod task_form;
 mod tasks;
 mod tools;
+mod unavailable_project;
 mod usage;
 
-use lurq::{app::ctx::Ctx, node::Element};
+use lurq::{
+  app::ctx::Ctx,
+  components::Column,
+  node::{Element, dimension::Dimension},
+};
 use orchester_core::id::ProjectId;
 
-use crate::routes::{ProjectPage, Route};
+use crate::{
+  project::{ProjectState, Projects, ShownProject},
+  routes::{ProjectPage, Route},
+};
 
 /// The screen at the router's path.
 pub fn screen(ctx: &mut Ctx) -> Element {
@@ -38,8 +48,29 @@ pub fn screen(ctx: &mut Ctx) -> Element {
   }
 }
 
-/// The screen of `project` that `page` names.
+/// The screen of `project` that `page` names, once the project is open.
 fn project_screen(ctx: &mut Ctx, project: ProjectId, page: &ProjectPage) -> Element {
+  let projects = Projects::of(ctx);
+  match projects.state(project) {
+    Some(ProjectState::Open(open)) => {
+      let shown = ShownProject {
+        feed: projects.feed(project),
+        open,
+      };
+      page_screen(ctx, &shown, page)
+    }
+    Some(ProjectState::Unavailable(unavailable)) => unavailable_project::screen(ctx, &unavailable),
+    // Opening a project takes a moment; the content panel stays empty meanwhile.
+    None => Column::new()
+      .id("screen-opening")
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Pct(100.0))
+      .into(),
+  }
+}
+
+/// The screen of the open `project` that `page` names.
+fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Element {
   match page {
     ProjectPage::Overview(tab) => overview::screen(ctx, project, *tab),
     ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),

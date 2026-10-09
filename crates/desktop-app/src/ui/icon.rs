@@ -26,13 +26,18 @@ macro_rules! icons {
 }
 
 icons! {
+  AppWindow => '\u{e426}',
   BookOpen => '\u{e05f}',
   Bot => '\u{e1bb}',
   ChartColumn => '\u{e2a3}',
   ChevronDown => '\u{e06d}',
   ChevronsUpDown => '\u{e211}',
+  CircleAlert => '\u{e077}',
   CircleHelp => '\u{e082}',
   Copy => '\u{e09e}',
+  FileText => '\u{e0cc}',
+  FolderOpen => '\u{e247}',
+  FolderX => '\u{e33e}',
   Folders => '\u{e33f}',
   GitPullRequest => '\u{e0e5}',
   GraduationCap => '\u{e234}',

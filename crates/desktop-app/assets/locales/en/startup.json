@@ -1,0 +1,62 @@
+{
+  "startup": {
+    "alreadyOpen": {
+      "title": "Orchester is already open",
+      "description": "Another Orchester window is using this data folder. One Orchester opens a data folder at a time, so its projects, runners and agents never run twice.",
+      "otherWindow": "Other window",
+      "since": "Open since {{time}} · process {{pid}}",
+      "unknownWindow": "Not known",
+      "switch": "Switch to that window",
+      "close": "Close this window",
+      "footnote": "Switching brings that window to the front and closes this one.",
+      "unsupported": "Switching to that window isn't available on this system yet. Bring it to the front yourself, then close this one.",
+      "unknownProcess": "Orchester can't tell which process has the data folder open, so it can't switch to it. Close this window, then find the other one."
+    },
+    "noAnswer": {
+      "title": "That window didn't come to the front",
+      "reason": "Orchester (process {{pid}}) didn't answer.",
+      "description": "It may be busy or stuck. This window still doesn't open the data folder.",
+      "step": "If it doesn't respond",
+      "stepBody": "If it stays stuck, end process {{pid}} in Task Manager, then start Orchester again. Its agents stop with it, and their runs are offered for continuing on the next start."
+    },
+    "newerData": {
+      "title": "Orchester can't open its data",
+      "reason": "The database was written by a newer version of Orchester.",
+      "description": "It has data version {{found}}; this build reads up to version {{supported}}. Nothing was changed.",
+      "step": "Start the newer Orchester that wrote this data, or install it over this one. This build leaves the file as it is: opening it could damage data it doesn't know."
+    },
+    "unreadable": {
+      "title": "Orchester can't read its data",
+      "reason": "The database file is damaged or isn't Orchester's: “{{reason}}”.",
+      "description": "Nothing was changed.",
+      "step": "Restore the file from a backup if you have one. Moving it out of the folder lets Orchester start with an empty project list: each project keeps its tasks and runs in its own .orchester folder."
+    },
+    "updateFailed": {
+      "title": "Orchester couldn't update its data",
+      "reason": "Updating the database to this version would leave {{count}} broken references, so it was left unchanged.",
+      "description": "It has data version {{found}}; this build needs version {{supported}}.",
+      "step": "Start the previous Orchester version to keep working with this data, and report the problem with the log."
+    },
+    "notWritable": {
+      "title": "Orchester can't write to its data folder",
+      "besideProgram": "Orchester keeps its data beside its program, and your account can't write to this folder.",
+      "elsewhere": "Orchester keeps its data in this folder, and your account can't write to it.",
+      "stepBesideProgram": "Install Orchester in a folder your account can write to, or give your account write access to this one.",
+      "stepElsewhere": "Check that your account owns this folder and can write to it, then start Orchester again."
+    },
+    "programFolder": {
+      "title": "Orchester can't find its own folder",
+      "reason": "The folder of the Orchester program could not be determined.",
+      "description": "Orchester keeps its data and its runner beside its program, so it can't open them. The log has the system's reason.",
+      "step": "Start Orchester from its install folder, or install it again."
+    },
+    "keepWorking": "To keep working",
+    "database": "Database",
+    "dataFolder": "Data folder",
+    "copy": "Copy",
+    "openLog": "Open log",
+    "showDataFolder": "Show data folder",
+    "showFolder": "Show folder",
+    "log": "Log: {{path}}"
+  }
+}

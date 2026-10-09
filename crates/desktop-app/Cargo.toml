@@ -30,13 +30,17 @@ hyper-util.workspace = true
 image.workspace = true
 # The theme setting, and the commands that read the system appearance.
 orchester-core.workspace = true
-# Runs the program that reads the system appearance with a hidden console (`appearance::system`).
+# Runs the program that reads the system appearance with a hidden console (`appearance::system`), the
+# programs of git work (`Programs`), and opens folders and files with their default program.
 orchester-exec.workspace = true
-# The daily log file (`app_log`), shared with the deprecated desktop.
+# The daily log file (`app_log`), shared with the deprecated desktop, and how a session ended.
 orchester-ipc.workspace = true
 # Where the apps keep their data and logs, and the application database (`orchester.db`) that holds the
 # app's settings.
 orchester-store.workspace = true
+# The application layer the deprecated desktop shares: the session, projects, runners, activity and
+# project data. Its DevTools markers, because its types are component props and signal values here.
+orchester-workspace = { workspace = true, features = ["devtools-inspect"] }
 lurq = { workspace = true, features = [
   "winit",
   "wgpu",
@@ -47,6 +51,12 @@ lurq = { workspace = true, features = [
   "serde",
   # The app's MCP server: lurq's window tools and the app's own (`mcp`), in every build.
   "mcp",
+  # Futures and streams of screens run on the app's runtime, off the UI thread.
+  "tokio",
+  # Agent-written Markdown in the conversation and plans.
+  "markdown",
+  # Copy (a path, a command) and copying from text inputs.
+  "clipboard",
 ] }
 parking_lot.workspace = true
 # Arguments and results of the app's MCP tools.
@@ -58,6 +68,10 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 # The bearer token of the app's MCP server, from the OS random source.
 uuid.workspace = true
+
+# Brings the window of the app that has the data folder open to the front (`startup::front`).
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
 
 # Only Windows programs embed their icon; see build.rs.
 [target.'cfg(windows)'.build-dependencies]

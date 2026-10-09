@@ -1,0 +1,18 @@
+{
+  "project": {
+    "unknown": {
+      "title": "No such project",
+      "body": "No project in your list has this address. It may have been removed from the list."
+    },
+    "folderMissing": {
+      "title": "The folder of {{name}} is missing",
+      "body": "Orchester keeps the project's tasks and runs in its folder, which is no longer where it was. Move it back, then open the project again."
+    },
+    "unreadable": {
+      "title": "Orchester can't open {{name}}"
+    },
+    "failed": {
+      "title": "Orchester can't read its list of projects"
+    }
+  }
+}

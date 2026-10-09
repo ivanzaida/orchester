@@ -7,10 +7,14 @@ use crate::{appearance::ThemeSetting, routes::Screen};
 pub enum ToolError {
   #[error("the window is not ready yet; try again")]
   NotReady,
+  #[error("the window shows a startup screen: Orchester could not open its data, so there are no tabs")]
+  NoSession,
   #[error("the arguments must be a JSON object")]
   NotAnObject,
   #[error("`{param}` must be a string")]
   NotAString { param: String },
+  #[error("`{param}` must be true or false")]
+  NotABool { param: &'static str },
   #[error("`{param}` is required")]
   Missing { param: &'static str },
   #[error("unknown route `{name}`")]
@@ -31,8 +35,10 @@ impl ToolError {
   pub const fn code(&self) -> &'static str {
     match self {
       Self::NotReady => "not_ready",
+      Self::NoSession => "no_session",
       Self::NotAnObject => "not_an_object",
       Self::NotAString { .. } => "not_a_string",
+      Self::NotABool { .. } => "not_a_bool",
       Self::Missing { .. } => "missing_param",
       Self::UnknownRoute { .. } => "unknown_route",
       Self::UnexpectedParam { .. } => "unexpected_param",

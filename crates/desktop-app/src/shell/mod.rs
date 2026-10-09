@@ -3,7 +3,7 @@
 //! and the status bar. The title bar belongs to the window chrome (`crate::chrome`).
 
 mod sidebar;
-mod status_bar;
+pub mod status_bar;
 
 use lurq::{
   app::{

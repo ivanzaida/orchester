@@ -1,6 +1,7 @@
-//! The app's MCP tools on a window without a screen: `app_state` reports where the window is,
-//! `navigate` goes through the tabs' history and refuses with typed errors, `set_theme` recolors the
-//! window, and what agents may do follows the settings.
+//! The app's MCP tools on a window without a screen: `app_state` reports where the window is and the
+//! projects its tabs show, `navigate` goes through the tabs' history and refuses with typed errors,
+//! `set_theme` recolors the window, `hold_reads` holds the project feeds' reads, and what agents may do
+//! follows the settings.
 
 mod support;
 
@@ -12,11 +13,13 @@ use orchester_app::{
   mcp::{
     McpSettings, WindowLink,
     settings::WINDOW_CONTROL_VARIABLE,
-    tools::{ToolError, app_state, navigate, set_theme},
+    tools::{ToolError, app_state, hold_reads, navigate, set_theme},
   },
-  settings::AppSettings,
+  project::hold::ReadHold,
   theme::Mode,
 };
+use orchester_store::AppDb;
+use orchester_workspace::workspace::Workspace;
 use serde_json::{Value, json};
 use support::Window;
 
@@ -49,7 +52,7 @@ fn app_state_reports_route_tabs_theme_and_window_size() {
   let mut window = Window::open();
   let appearance = Appearance::new(ThemeSetting::Dark, Arc::default(), None);
   let settings = McpSettings::with_window_control(false).with_stored(Some(true));
-  let state = app_state(&window.navigation(), &appearance, settings, &mut window.tree);
+  let state = app_state(&window.link, &appearance, settings, &mut window.tree).expect("a session's window");
   assert_eq!(
     state,
     json!({
@@ -78,19 +81,32 @@ fn navigate_takes_the_active_tab_to_a_named_route() {
     "params": { "project": PROJECT, "key": "KON-12", "tab": "summary" },
   });
   assert_eq!(answer, json!({ "route": route }));
-  window.pass();
+  window.until("the project to open", |window| window.texts("screen-task").is_some());
   assert_eq!(
     window.texts("screen-task").map(|texts| texts[0].clone()),
     Some("KON-12 · Summary".to_owned())
   );
-  let state = app_state(
-    &navigation,
-    &Appearance::new(ThemeSetting::Dark, Arc::default(), None),
-    McpSettings::of_build(),
-    &mut window.tree,
-  );
+  let appearance = Appearance::new(ThemeSetting::Dark, Arc::default(), None);
+  let state = |window: &mut Window| {
+    app_state(&window.link, &appearance, McpSettings::of_build(), &mut window.tree).expect("a session's window")
+  };
+  window.until("the runner to fail", |window| {
+    state(window)["tabs"][0]["project"]["runner"]["state"] == "failed"
+  });
+  let state = state(&mut window);
   assert_eq!(state["route"], route);
   assert_eq!(state["history"], json!({ "can_back": true, "can_forward": false }));
+  let repo = window.data.repo("repo-kontur").display().to_string();
+  assert_eq!(
+    state["tabs"][0]["project"],
+    json!({
+      "name": "Kontur",
+      "path": repo,
+      "state": "open",
+      "runner": { "state": "failed", "cause": "missing_executable" },
+    }),
+    "the test's runner program does not exist"
+  );
   navigate(
     &navigation,
     &json!({ "route": "overview", "project": "0f1e2d3c-4b5a-4968-8776-655443322110" }),
@@ -142,9 +158,8 @@ fn navigate_takes_the_parameters_each_screen_has_and_answers_them_back() {
     again.insert("route".to_owned(), args["route"].clone());
     let repeated = navigate(&navigation, &json!(again)).expect("its params name the same route");
     assert_eq!(repeated["route"]["path"], json!(path), "{args}");
-    window.pass();
     let screen = format!("screen-{}", args["route"].as_str().expect("a route name"));
-    assert!(window.texts(&screen).is_some(), "{screen} is shown for {args}");
+    window.until(&screen, |window| window.texts(&screen).is_some());
   }
   assert!(
     window.texts("screen-edit_task").is_none(),
@@ -252,7 +267,7 @@ fn navigate_refusals_list_the_known_names_and_word_each_parameter() {
 fn set_theme_switches_the_colors_and_keeps_the_choice() {
   let window = Window::open();
   let dir = tempfile::tempdir().expect("a temporary folder");
-  let settings = AppSettings::open(&dir.path().join("orchester.db")).expect("the settings open");
+  let settings = Workspace::new(AppDb::open(&dir.path().join("orchester.db")).expect("the settings open"));
   let appearance = Appearance::new(
     ThemeSetting::Dark,
     Arc::new(OnceLock::from(Mode::Dark)),
@@ -304,4 +319,27 @@ fn tools_wait_for_the_window() {
     .expect_err("no window yet");
   assert_eq!(error, ToolError::NotReady);
   assert_eq!(error.to_json()["code"], "not_ready");
+  let startup = WindowLink::default();
+  startup.attach_startup("already_open");
+  let error = startup.navigation().map(|_| Value::Null).expect_err("no tabs");
+  assert_eq!(error.to_json()["code"], "no_session");
+}
+
+#[test]
+fn hold_reads_holds_and_releases_the_feeds_reads() {
+  let hold = ReadHold::default();
+  assert_eq!(
+    hold_reads(&hold, &json!({ "held": true })).expect("a flag"),
+    json!({ "held": true })
+  );
+  assert!(hold.is_held());
+  assert_eq!(
+    hold_reads(&hold, &json!({ "held": false })).expect("a flag"),
+    json!({ "held": false })
+  );
+  assert!(!hold.is_held());
+  let error = hold_reads(&hold, &json!({ "held": "yes" })).expect_err("not a flag");
+  assert_eq!(error.to_json()["code"], "not_a_bool");
+  let error = hold_reads(&hold, &json!({})).expect_err("no flag");
+  assert_eq!(error.to_json()["code"], "missing_param");
 }

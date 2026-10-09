@@ -97,8 +97,7 @@ fn the_window_shows_a_replaced_route_and_back_leaves_the_screen() {
   let navigation = window.navigation();
   navigation.go(project(ProjectPage::Tasks(TaskList::default())));
   navigation.replace(searched("retry jitter"));
-  window.pass();
-  assert!(window.texts("screen-tasks").is_some());
+  window.until("the project to open", |window| window.texts("screen-tasks").is_some());
   assert_eq!(
     navigation.route_now().path(),
     format!("/project/{PROJECT}/tasks?q=retry%20jitter")
@@ -190,7 +189,7 @@ fn the_window_shows_the_active_tabs_route() {
   );
   assert!(window.texts("nav-overview").is_none(), "no project, no project screens");
   navigation.go(task(TaskTab::Changes));
-  window.pass();
+  window.until("the project to open", |window| window.texts("screen-task").is_some());
   assert_eq!(
     window.texts("screen-task"),
     Some(vec![
@@ -198,10 +197,10 @@ fn the_window_shows_the_active_tabs_route() {
       "This screen isn't built yet.".to_owned()
     ])
   );
-  assert_eq!(window.texts("tab-1"), Some(vec!["KON-12".to_owned()]));
-  assert_eq!(
-    window.texts("project-switcher"),
-    Some(vec!["Project".to_owned()]),
+  assert_eq!(window.texts("tab-1"), Some(vec!["Kontur · KON-12".to_owned()]));
+  let switcher = window.texts("project-switcher").expect("the switcher shows");
+  assert!(
+    !switcher.iter().any(|text| text.contains(PROJECT)),
     "a project's id is never shown"
   );
   assert_eq!(window.texts("nav-tasks"), Some(vec!["Tasks".to_owned()]));
@@ -218,7 +217,7 @@ fn the_window_shows_the_active_tabs_route() {
   navigation.forward();
   window.pass();
   assert_eq!(navigation.route_now(), task(TaskTab::Changes));
-  assert_eq!(window.texts("tab-1"), Some(vec!["KON-12".to_owned()]));
+  assert_eq!(window.texts("tab-1"), Some(vec!["Kontur · KON-12".to_owned()]));
 }
 
 /// Presses and releases `button` over the middle of the element `id`.
