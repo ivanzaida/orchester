@@ -331,16 +331,20 @@ fn properties(ctx: &Ctx, confirm: &Confirmation) -> Element {
   let previous = run.run.number().get().to_string();
   let steps = next.steps.to_string();
   let base = base(ctx, next);
-  let limits = ctx.t_args(
-    "task.runAgain.limitsValue",
-    [
-      ("budget", compact_tokens(next.limits.budget().get()).as_str()),
-      (
-        "minutes",
-        whole_minutes(next.limits.max_duration()).to_string().as_str(),
-      ),
-    ],
+  let budget = next.limits.budget().map_or_else(
+    || ctx.t("task.runAgain.noLimit"),
+    |budget| ctx.t_args("task.runAgain.budgetValue", [("budget", compact_tokens(budget.get()))]),
   );
+  let time = next.limits.max_duration().map_or_else(
+    || ctx.t("task.runAgain.noLimit"),
+    |limit| {
+      ctx.t_args(
+        "task.runAgain.timeValue",
+        [("minutes", whole_minutes(limit).to_string())],
+      )
+    },
+  );
+  let limits = ctx.t_args("task.runAgain.limitsValue", [("budget", &*budget), ("time", &*time)]);
   let pipeline = &*confirm.check.pipeline;
   Column::new()
     .id("task-run-again-properties")

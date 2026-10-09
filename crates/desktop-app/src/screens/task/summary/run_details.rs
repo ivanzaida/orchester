@@ -9,7 +9,7 @@ use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::{run::StepStatus, tokens::compact_tokens};
 use orchester_workspace::{display, tasks::detail::RunView};
 
-use super::this_run::{base_value, cached_row, checkpoint_row, is_unlimited, panel, permissions, row};
+use super::this_run::{base_value, cached_row, checkpoint_row, panel, permissions, row};
 use crate::{screens::task::TaskContext, ui::detail_row::DetailValue};
 
 const MILLIS_PER_MINUTE: i64 = 60_000;
@@ -61,12 +61,12 @@ fn duration(ctx: &Ctx, run: &RunView) -> Option<Arc<str>> {
 /// "612k · no limit", or "612k of 1.4M".
 fn tokens(ctx: &Ctx, run: &RunView) -> Arc<str> {
   let used = compact_tokens(run.run.used().get());
-  if is_unlimited(run.run.budget()) {
+  let Some(budget) = run.run.budget() else {
     return ctx.t_args("summary.runDetails.tokensNoLimit", [("used", used)]);
-  }
+  };
   ctx.t_args(
     "summary.runDetails.tokensValue",
-    [("used", used), ("budget", compact_tokens(run.run.budget().get()))],
+    [("used", used), ("budget", compact_tokens(budget.get()))],
   )
 }
 

@@ -240,6 +240,11 @@ fn stopped(ctx: &Ctx, run: &RunView, limit: RunLimit) -> Said {
       ],
     )
   };
+  // A run stops at its token limit only when it has one; the words stay whole either way.
+  let budget = run.run.budget().map_or_else(
+    || ctx.t("summary.thisRun.noLimit").to_string(),
+    |budget| compact_tokens(budget.get()),
+  );
   let (title, body) = match limit {
     RunLimit::Tokens if !checkpoint.is_empty() => (
       ctx.t_args(
@@ -248,22 +253,14 @@ fn stopped(ctx: &Ctx, run: &RunView, limit: RunLimit) -> Said {
       ),
       ctx.t_args(
         "summary.notice.tokenLimitBody",
-        [
-          ("step", step.as_str()),
-          ("budget", &compact_tokens(run.run.budget().get())),
-          ("kept", &kept),
-        ],
+        [("step", step.as_str()), ("budget", &budget), ("kept", &kept)],
       ),
     ),
     RunLimit::Tokens => (
       ctx.t("summary.notice.tokenLimitTitle"),
       ctx.t_args(
         "summary.notice.tokenLimitBody",
-        [
-          ("step", step.as_str()),
-          ("budget", &compact_tokens(run.run.budget().get())),
-          ("kept", &kept),
-        ],
+        [("step", step.as_str()), ("budget", &budget), ("kept", &kept)],
       ),
     ),
     RunLimit::Time => (
