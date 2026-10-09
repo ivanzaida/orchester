@@ -61,9 +61,10 @@ impl WorkingTools {
       (Cli::ClaudeCode, true) => {
         "Read, search and change files only with Orchester's file tools: mcp__Orchester__read_file, \
          mcp__Orchester__list_files, mcp__Orchester__search_file, mcp__Orchester__edit_file (after reading the \
-         file: give the lines to replace and, as expected, exactly what they hold now) and mcp__Orchester__create_file \
-         (new files only). Claude Code's own Read, Edit, Write, NotebookEdit, Grep and Glob are not available. Never read or change \
-         files through the shell: no `cat`, `sed`, `awk` or heredocs."
+         file: give the lines to replace and, as expected, exactly what they hold now), mcp__Orchester__create_file \
+         (new files only), mcp__Orchester__delete_file and mcp__Orchester__move_file (one file each, never a \
+         folder). Claude Code's own Read, Edit, Write, NotebookEdit, Grep and Glob are not available. Never read or \
+         change files through the shell: no `cat`, `sed`, `awk`, heredocs, `rm` or `mv`."
       }
       (Cli::ClaudeCode, false) => {
         "Read and search files only with Orchester's file tools: mcp__Orchester__read_file, \
@@ -72,8 +73,9 @@ impl WorkingTools {
       }
       (Cli::Codex, true) => {
         "Read, search and change files with the read_file, list_files, search_file, edit_file (after read_file: give \
-         the lines to replace and, as expected, exactly what they hold now) and create_file (new files only) tools \
-         of the Orchester MCP server, not through the shell (`cat`, `rg`, `sed -i`, heredocs, `>`)."
+         the lines to replace and, as expected, exactly what they hold now), create_file (new files only), delete_file \
+         and move_file (one file each, never a folder) tools of the Orchester MCP server, not through the shell \
+         (`cat`, `rg`, `sed -i`, heredocs, `>`, `rm`, `mv`)."
       }
       (Cli::Codex, false) => {
         "Read and search files with the read_file, list_files and search_file tools of the Orchester MCP server, not \
