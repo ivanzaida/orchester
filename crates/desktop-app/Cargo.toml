@@ -49,14 +49,14 @@ lurq = { workspace = true, features = [
   "i18n",
   # `I18n::add_json` for the bundled locale files.
   "serde",
+  # Text agents and people write, read as Markdown (`ui::markdown`).
+  "markdown",
+  # Copy beside a command or another long value (`ui::code_box`).
+  "clipboard",
   # The app's MCP server: lurq's window tools and the app's own (`mcp`), in every build.
   "mcp",
   # Futures and streams of screens run on the app's runtime, off the UI thread.
   "tokio",
-  # Agent-written Markdown in the conversation and plans.
-  "markdown",
-  # Copy (a path, a command) and copying from text inputs.
-  "clipboard",
 ] }
 parking_lot.workspace = true
 # Arguments and results of the app's MCP tools.
@@ -69,9 +69,15 @@ tracing-subscriber.workspace = true
 # The bearer token of the app's MCP server, from the OS random source.
 uuid.workspace = true
 
-# Brings the window of the app that has the data folder open to the front (`startup::front`).
+# Gives lurq's window class and the window the executable's embedded icon (`system_icon`): neither lurq
+# nor winit loads icon resources or sets class icons. Brings the window of the app that has the data folder
+# open to the front (`startup::front`).
 [target.'cfg(windows)'.dependencies]
-windows-sys.workspace = true
+windows-sys = { workspace = true, features = [
+  "Win32_System_LibraryLoader",
+  "Win32_System_Threading",
+  "Win32_UI_WindowsAndMessaging",
+] }
 
 # Only Windows programs embed their icon; see build.rs.
 [target.'cfg(windows)'.build-dependencies]
@@ -82,3 +88,11 @@ embed-resource.workspace = true
 # edit outside Orchester or a newer build would; the store has no API for either.
 rusqlite.workspace = true
 tempfile.workspace = true
+
+# Reads the running app's window and class icons (`tests/system_icon.rs`).
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { workspace = true, features = [
+  "Win32_Graphics_Gdi",
+  "Win32_UI_HiDpi",
+  "Win32_UI_WindowsAndMessaging",
+] }

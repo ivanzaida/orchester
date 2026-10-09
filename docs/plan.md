@@ -201,9 +201,11 @@ Orchester's git tools go.
   *Approve similar* for that folder). `.git`, Orchester's own data, credential files and other projects' private
   state are refused as `read_outside_file` refuses them today.
 - **Sources:** folders and files an agent may read outside its worktree without asking. Listed on the project, the
-  task and a pipeline step; a run snapshots the union when it starts (later edits apply to new runs). Needs storage,
-  core rules and runner checks now; the UI (Project settings, New task's *Attach context*, the step inspector) needs a
-  Kontur design first — until then sources are set through Orchester's MCP server.
+  task, the pipeline (part of the pipeline's draft and published versions, like its steps) and a pipeline step; a run
+  snapshots the union of the project's, the task's, its pinned pipeline version's and all its steps' sources when it
+  starts, and every step of the run may read them (decided 2026-10-09; later edits apply to new runs). Needs storage,
+  core rules and runner checks now; the UI is designed in `data/orchester2.pen` (layers "Sources" `XulGo` and
+  "Pipeline settings" `vEDYY`) — until the new app builds it, sources are set through Orchester's MCP server.
 - Removed: `git_status`, `git_diff`, `git_log`, `git_show`, `git_add`, `git_commit`, `write_file`,
   `read_outside_file`, the old `search`/`edit_file` schemas, and their prompt lines; the *Files and commands* prompt
   part names the new tools. `list_files`, `find_symbol`, `list_skills`, `read_skill` stay as they are.

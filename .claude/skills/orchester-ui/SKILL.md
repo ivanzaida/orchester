@@ -47,6 +47,12 @@ files; the paths and the mapping tables below are the deprecated `orchester-desk
   keys only, every key the code names has its area's file and exists) and
   `cargo test -p orchester-app --test theme -- roles extra_color spacing`.
 - `tools/check.ps1`'s "ui literals" check covers `crates/desktop-app/src` too (its `theme/` exempt).
+- The UI kit (`crates/desktop-app/src/ui/`, Kontur's shared components `ASNYj`/`DMMLd`) comes first on the reuse
+  ladder: buttons, fields, selects, menus, popovers, tabs, toggles, status/priority labels, chips, notices, cards,
+  tables, empty/loading/error states, Markdown, code box, tooltips and cut text, avatars, breadcrumbs, the
+  unavailable reason. Its own words are in `en/ui.json` (`ui.*`), the shared Copy and Try again in `common.*`; extra roles add `ExtraShadow`, `ControlHeight` and the
+  `DISABLED_OPACITY` fader. Tests: `cargo test -p orchester-app --test ui_kit <filter>`;
+  every control in its states: `cargo run -p orchester-app --example ui_gallery` (MCP like the app).
 
 ## Text through i18n
 

@@ -12,7 +12,8 @@ use orchester_app::{
   mcp::{self, AppMcp, DiscoveryFolder, McpSettings, McpStatus, WindowLink},
   root::{Root, RootProps},
   startup::Launch,
-  theme,
+  system_icon, theme,
+  ui::loader,
 };
 use orchester_store::StoreError;
 use orchester_workspace::workspace::Workspace;
@@ -38,6 +39,7 @@ fn main() {
 
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
+  loader::install(&mut tree);
   let link = WindowLink::default();
   let window_control = stored(workspace, Workspace::mcp_window_control, "window control").flatten();
   let mcp_settings = McpSettings::of_build().with_stored(window_control).with_environment();
@@ -63,9 +65,19 @@ fn main() {
   let title = app.i18n().t("shell.app.name");
   let icon = brand::window_icon().expect("the bundled window icon is a valid PNG; covered by tests/brand.rs");
   let without_focus = std::env::var_os(START_WITHOUT_FOCUS_VARIABLE).is_some_and(|value| value == "1");
+  let mut system_icon_pending = true;
   WinitWindow::new(app, tree)
     .with_title(&title)
     .with_icon(icon)
+    // The system's icons, once: the first frame is the first moment the UI thread has the window, which
+    // is not shown yet unless it starts without the focus.
+    .on_paint(move |_, _, _| {
+      if std::mem::take(&mut system_icon_pending)
+        && let Err(error) = system_icon::install()
+      {
+        tracing::warn!(%error, "the system may show a generic icon for the app");
+      }
+    })
     .with_start_without_focus(without_focus)
     // The window frames of the design (`Tasks · dark` `jn2IT`), title bar and status bar included.
     .with_size(1440, 900)

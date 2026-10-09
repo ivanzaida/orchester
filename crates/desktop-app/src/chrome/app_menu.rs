@@ -1,12 +1,12 @@
 //! The app menu (`App menu / Orchester` `jksEw`): the mark and a chevron open it below. A custom title
 //! bar has no native menu, so the window's own commands live here. The design draws the button only;
-//! the menu is built from the shared `Menu item` and `Menu separator` and the raised surfaces of menus.
+//! the menu is the shared menu (`ui::menu`).
 
 use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize},
+    theme::{PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Placement, Popup, Row},
   core::{ElementRef, Signal},
@@ -20,7 +20,7 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon},
-    menu_item::{MenuItem, separator},
+    menu::{MenuItem, menu_panel, separator},
     pressable::pressable,
   },
 };
@@ -107,39 +107,22 @@ impl AppMenu {
       .iter()
       .filter(|entry| navigation.is_some() || matches!(entry, Some((_, _, _, Command::Quit))));
     entries.fold(
-      Column::new()
-        .id("app-menu-list")
-        .width(Dimension::Px(MENU_WIDTH))
-        .padding(SpacingSize::Xs)
-        .spacing(ExtraSpacing::Hair.role())
-        .rounded(RadiusSize::Lg)
-        .background(PaletteColor::SurfaceRaised)
-        .border_inside(BorderSize::Sm, PaletteColor::Border)
-        .box_shadow(ShadowStyle::Md),
+      menu_panel("app-menu-list").width(Dimension::Px(MENU_WIDTH)),
       |menu, entry| {
         let Some((id, glyph, label_key, command)) = *entry else {
           return menu.child(separator(ctx));
         };
         let label = ctx.t(label_key);
-        let (open, navigation, window) = (self.open.clone(), navigation.clone(), window.clone());
-        menu.child(
-          MenuItem {
-            id,
-            icon: glyph,
-            label: &label,
-          }
-          .on_click(move || {
-            open.set(false);
-            match (command, &navigation) {
-              (Command::NewTab, Some(navigation)) => navigation.open_tab(),
-              (Command::AllProjects, Some(navigation)) => navigation.go(Route::AllProjects),
-              (Command::Settings, Some(navigation)) => navigation.go(Route::Settings),
-              (Command::Quit, _) => window.request_close(),
-              // Only Quit is listed without tabs.
-              (Command::NewTab | Command::AllProjects | Command::Settings, None) => {}
-            }
-          }),
-        )
+        let (navigation, window) = (navigation.clone(), window.clone());
+        let item = MenuItem::new(id, label, move || match (command, &navigation) {
+          (Command::NewTab, Some(navigation)) => navigation.open_tab(),
+          (Command::AllProjects, Some(navigation)) => navigation.go(Route::AllProjects),
+          (Command::Settings, Some(navigation)) => navigation.go(Route::Settings),
+          (Command::Quit, _) => window.request_close(),
+          // Only Quit is listed without tabs.
+          (Command::NewTab | Command::AllProjects | Command::Settings, None) => {}
+        });
+        menu.child(item.icon(glyph).render(ctx, &self.open))
       },
     )
   }

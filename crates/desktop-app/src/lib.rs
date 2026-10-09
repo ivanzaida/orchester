@@ -22,5 +22,6 @@ mod screens;
 pub mod services;
 mod shell;
 pub mod startup;
+pub mod system_icon;
 pub mod theme;
 pub mod ui;

@@ -1,6 +1,8 @@
-//! The Orchester mark (`Brand / Orchester`, `OLHng`): the window icon (taskbar button, Alt+Tab) and the
-//! mark in the title bar, drawn with the window's own anti-aliased rounded shapes. The executable's
-//! icon is embedded by `build.rs`; macOS takes an app's icon from its bundle and ignores the window's.
+//! The Orchester mark (`Brand / Orchester`, `OLHng`): the icon the window is created with (taskbar
+//! button, Alt+Tab) and the mark in the title bar, drawn with the window's own anti-aliased rounded
+//! shapes. The executable's icon is embedded by `build.rs`, and on Windows `system_icon` gives it to the
+//! window and its class once the first frame is drawn; macOS takes an app's icon from its bundle and
+//! ignores the window's.
 
 use image::{ImageError, ImageFormat};
 use lurq::{
