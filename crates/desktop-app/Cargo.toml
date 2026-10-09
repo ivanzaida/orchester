@@ -22,14 +22,17 @@ devtools = ["lurq/devtools"]
 [dependencies]
 # The routing and bearer/Origin guard of the app's MCP server (`mcp::server`, `mcp::guard`), on loopback.
 axum.workspace = true
-# The date in the name of each day's log file (`app_log`).
-chrono.workspace = true
 # The MCP server serves each connection with a header deadline and a connection cap, which axum::serve
 # cannot set; both are already built through lurq and axum.
 hyper.workspace = true
 hyper-util.workspace = true
 # Decodes the bundled PNG of the window icon.
 image.workspace = true
+# The daily log file (`app_log`), shared with the deprecated desktop.
+orchester-ipc.workspace = true
+# Where the apps keep their data and logs, and the application database (`orchester.db`) that holds the
+# app's settings.
+orchester-store.workspace = true
 lurq = { workspace = true, features = [
   "winit",
   "wgpu",

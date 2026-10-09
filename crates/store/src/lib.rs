@@ -1,9 +1,10 @@
 //! Local persistence, as described in `docs/architecture/storage.md`: one SQLite database per
-//! project in `<repo>/.orchester/`, and one application database next to the executable.
+//! project in `<repo>/.orchester/`, and one application database next to the executable (`location`).
 
 mod app_db;
 mod error;
 mod git_exclude;
+pub mod location;
 mod migrate;
 mod project_db;
 mod rows;
