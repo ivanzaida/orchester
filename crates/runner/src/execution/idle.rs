@@ -170,7 +170,6 @@ pub(super) fn rejection(error: RunError) -> Rejection {
   match error {
     RunError::LimitNotRaised(limit) => Rejection::LimitNotRaised { limit },
     RunError::LimitNotAboveUsed(limit) => Rejection::LimitNotAboveUsed { limit },
-
     other => failed("the run cannot change this way", &other),
   }
 }

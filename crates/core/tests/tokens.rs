@@ -22,7 +22,8 @@ fn tokens_budget_input_takes_whole_numbers_with_locale_groups() {
   // No maximum: any whole number of tokens a u64 holds.
   assert_eq!(parse("10,000,000"), Ok(10_000_000));
   assert_eq!(parse("900,000,000,000"), Ok(900_000_000_000));
-  assert_eq!(parse("18446744073709551615"), Ok(u64::MAX));
+  assert_eq!(parse("9223372036854775807"), Ok(TokenBudget::LARGEST));
+  assert_eq!(parse("9223372036854775808"), Err(BudgetInputError::TooLarge));
 }
 
 #[test]

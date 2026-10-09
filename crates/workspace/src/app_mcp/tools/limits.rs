@@ -9,7 +9,7 @@ use std::path::Path;
 use orchester_core::{
   limits::ProjectLimits,
   store::SettingsStore,
-  tokens::{BudgetInputError, TokenBudget},
+  tokens::{TokenBudget, parse_budget},
 };
 use orchester_store::{ProjectDb, StoreError};
 use rmcp::schemars::JsonSchema;
@@ -72,7 +72,8 @@ pub async fn update_project_limits(services: &Services, args: UpdateProjectLimit
 
 /// `stored` with the limits `args` gives, checked as the Limits tab checks its fields.
 fn changed(stored: ProjectLimits, args: &UpdateProjectLimits) -> Result<ProjectLimits, Box<LimitsErrors>> {
-  let budget = |tokens: u64| TokenBudget::new(tokens).map_err(|_| budget_error(BudgetInputError::Zero, ""));
+  // Read as a field's digits: zero and more than a budget holds are refused in the tab's words.
+  let budget = |tokens: u64| parse_budget(&tokens.to_string(), "").map_err(|error| budget_error(error, ""));
   let default_time_limit = match args.default_time_limit_minutes {
     Some(Some(minutes)) => time_limit(minutes).map(Some),
     Some(None) => Ok(None),

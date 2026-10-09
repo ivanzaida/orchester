@@ -54,7 +54,6 @@ pub enum RunError {
   LimitNotRaised(RunLimit),
   #[error("the new {0:?} limit must be above what the run already used")]
   LimitNotAboveUsed(RunLimit),
-
   #[error("no step of the run uses agent profile {0}")]
   ProfileNotInRun(ResourceId),
   #[error("step `{step}` cannot run with these permissions: {problem}")]

@@ -3817,7 +3817,7 @@
       "agentsUnit": "agents",
       "agentSlotsRange": "{{min}} to {{max}} · default {{default}}",
       "changesTitle": "Changes apply to new runs",
-      "changesDetail": "Runs already started keep their budget. Lowering the maximum below a run’s budget doesn’t stop it, but its limit can’t be raised above the new maximum. Agents working at once applies at once."
+      "changesDetail": "Runs already started keep their budget and time limit. Agents working at once applies at once."
     },
     "environment": {
       "description": "Variables {{project}} adds for its agents and command tools.",

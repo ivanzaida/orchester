@@ -1,8 +1,9 @@
 //! Budget fields take absolute whole numbers only (`docs/design/orchester-workspace.md`, "Token
 //! budgets", input rule): never `1.4M` or `250k`. The locale's group separator, spaces and
 //! underscores are ignored; a decimal separator, a unit letter or anything else makes the value
-//! invalid. There is no minimum beyond more than 0 and no maximum: a budget that should not bound
-//! anything is left empty (user decision 2026-10-09), which each field reads as it means.
+//! invalid. There is no minimum beyond more than 0 and no maximum a person sets: a budget that should
+//! not bound anything is left empty (user decision 2026-10-09), which each field reads as it means.
+//! Only a number no budget can hold ([`TokenBudget::LARGEST`]) is too large.
 
 use thiserror::Error;
 
@@ -17,7 +18,7 @@ pub enum BudgetInputError {
   NotDigits,
   #[error("a budget must be above 0 tokens")]
   Zero,
-  #[error("a budget has more digits than any number of tokens")]
+  #[error("a budget can be at most {} tokens", TokenBudget::LARGEST)]
   TooLarge,
 }
 
@@ -46,7 +47,11 @@ pub fn parse_budget(text: &str, group_separator: &str) -> Result<TokenBudget, Bu
   if digits.is_empty() {
     return Err(BudgetInputError::NotDigits);
   }
-  let tokens: u64 = digits.parse().map_err(|_| BudgetInputError::TooLarge)?;
+  let tokens: u64 = digits
+    .parse()
+    .ok()
+    .filter(|tokens| *tokens <= TokenBudget::LARGEST)
+    .ok_or(BudgetInputError::TooLarge)?;
   TokenBudget::new(tokens).map_err(|_| BudgetInputError::Zero)
 }
 

@@ -244,7 +244,8 @@ fn insert_limits_with_maximum(database: &Path, slots: &str) {
     .expect("open")
     .execute(
       &format!(
-        "INSERT INTO project_limits (id, max_run_budget, default_run_budget, daily_budget, default_time_limit_ms         {columns}) VALUES (1, 8000000, 2000000, 30000000, 2700000{slots})"
+        "INSERT INTO project_limits (id, max_run_budget, default_run_budget, daily_budget, \
+         default_time_limit_ms{columns}) VALUES (1, 8000000, 2000000, 30000000, 2700000{slots})"
       ),
       [],
     )

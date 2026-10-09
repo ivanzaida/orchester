@@ -292,7 +292,9 @@ fn stopped_at_limit(ctx: &Ctx, run: &RunView, limit: RunLimit) -> (Icon, Arc<str
   let (used, of) = match limit {
     RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => (
       compact_tokens(run.run.used().get()),
-      // A run stopped at its token limit has a budget; the time limit likewise.
+      // Only the run's own token or time limit gets this far: the group's budget is answered above,
+      // and the daily budget and a step's budget have notices of their own. No runner stops a run
+      // at a limit it does not have, so the limit named here is set.
       run
         .run
         .budget()

@@ -411,7 +411,6 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Rejected(Rejection::LimitNotAboveUsed {
       limit: RunLimit::StepBudget { .. },
     }) => Message::new("runs.limit.stepNotAboveUsed"),
-
     RunRequestError::Rejected(Rejection::PermissionsNotEnforceable { step, .. }) => {
       Message::new("runs.permissions.errors.notEnforceable").with("step", step.to_string())
     }

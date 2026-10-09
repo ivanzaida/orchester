@@ -181,6 +181,10 @@ pub const CONTINUE_PROMPT: &str = "You were stopped before you finished this ste
                                    is committed in the worktree. Continue the step from where you stopped and \
                                    finish it.";
 
+/// How `{{run.budget}}` reads for a run without a token budget (user decision 2026-10-09: no limit
+/// is a normal state). Prompts are written in English, like [`CONTINUE_PROMPT`].
+const NO_LIMIT: &str = "no limit";
+
 /// Everything one step's prompt is made of.
 #[derive(Clone, Copy, Debug)]
 pub struct PromptInput<'a> {
@@ -272,7 +276,10 @@ impl PromptInput<'_> {
       Variable::RunRevision => run?.last_checkpoint()?.revision().as_str().to_owned(),
       Variable::StepId => self.step.key.as_str().to_owned(),
       Variable::StepName => self.step.name.as_str().to_owned(),
-      Variable::RunBudget => run?.budget()?.to_string(),
+      // A run without a budget has one too: none, which the agent reads as such.
+      Variable::RunBudget => run?
+        .budget()
+        .map_or_else(|| NO_LIMIT.to_owned(), |budget| budget.to_string()),
       // Not known to a run yet: tasks have no attachments, the project records no repository
       // or default branch, and creation times have no agreed text form.
       Variable::TaskAttachments
