@@ -80,7 +80,7 @@ impl Component for ConversationHost {
       |(root, key, tasks, _)| async move { load(root, &key, tasks).await },
     );
     let state = load.state().get();
-    let body: Element = match (state.data.flatten(), state.error) {
+    let body: Element = match (state.data.and_then(|Loaded(detail)| detail), state.error) {
       (Some(detail), _) => conversation::tab(ctx, &project, &key, detail),
       (None, Some(error)) => reason_line("task-unreadable", &message_text(ctx, &error)).into(),
       (None, None) => Column::new().into(),
@@ -93,15 +93,21 @@ impl Component for ConversationHost {
   }
 }
 
-/// The task `key` of `tasks` with its latest run; `None` while the tasks are not read or none has the key.
-async fn load(root: PathBuf, key: &TaskKey, tasks: Option<ProjectTasks>) -> Result<Option<Arc<TaskDetail>>, Message> {
+/// The task with its latest run, as read; `None` while the tasks are not read or none has the key.
+#[derive(Clone, PartialEq)]
+struct Loaded(Option<Arc<TaskDetail>>);
+
+impl lurq::app::component::DevtoolsInspectable for Loaded {}
+
+/// The task `key` of `tasks` with its latest run.
+async fn load(root: PathBuf, key: &TaskKey, tasks: Option<ProjectTasks>) -> Result<Loaded, Message> {
   let Some(task) = tasks.and_then(|tasks| tasks.tasks.iter().find(|task| task.key() == key).map(|task| task.id()))
   else {
-    return Ok(None);
+    return Ok(Loaded(None));
   };
   background::run(move || TaskDetail::load_in(&root, task))
     .await?
-    .map(|detail| Some(Arc::new(detail)))
+    .map(|detail| Loaded(Some(Arc::new(detail))))
     .map_err(|error| {
       tracing::error!(%error, "cannot read the task");
       messages::store_error(&error)

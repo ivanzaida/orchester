@@ -13,7 +13,7 @@ fn timeline_theme_roles_follow_the_chat_components() {
   theme::install(&mut app, Mode::Dark);
   let theme = app.theme();
   let check = |role: TypographyStyle, (size, line_height): (f32, f32), weight: FontWeight, color: &str| {
-    let style = theme.typography_style(role.clone());
+    let style = theme.typography_style(role);
     assert_eq!(
       (style.font_size, style.line_height, style.weight, style.color),
       (size, line_height, weight, Color::from_hex(color)),
