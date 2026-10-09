@@ -31,7 +31,8 @@ what is actually on screen.
    `cargo run -p orchester-desktop` (every build includes the embedded MCP server; set
    `ORCHESTER_MCP_START_WITHOUT_FOCUS=1` so the window does not take focus). Find the MCP
    discovery file of *your* process (`%LOCALAPPDATA%\lurq\mcp\<pid>.json`). Resize the window to 1440 × 1020 logical
-   with `lurq_resize` (the 32px custom title bar from "Window chrome" in the design doc, the
+   with `lurq_resize`, which takes physical pixels: the logical size times the display's scale factor
+   (2160 × 1530 at 1.5×) (the 32px custom title bar from "Window chrome" in the design doc, the
    1440 × 960 screen frame and the 28px status bar from "Status bar"; composition example
    `cpoal`), drive the app into the designed state
    (`lurq_read_tree`, `lurq_interact`, `lurq_set_value`), wait for idle (`lurq_wait`),
@@ -123,7 +124,10 @@ python tools/lurq-mcp-client.py <pid> <tool> --app orchester-app --discovery-dir
 
 `app_state` must answer `"mcp": {"window_control": true, …}` before you drive the window.
 
-**Reach the state.** `lurq_resize` `{"width": 1440, "height": 900}`, then `navigate`, which takes
+**Reach the state.** Size the window to 1440 × 900 logical with `lurq_resize`, which takes physical
+pixels: the logical size times `app_state`'s `window.scale_factor` (`{"width": 2160, "height": 1350}` at
+1.5×, `{"width": 1440, "height": 900}` at 1×). Then check that `app_state`'s `window` reports 1440 × 900
+before you compare. Then `navigate`, which takes
 the route's params and answers the route the tab shows, for example:
 
 - `{"route": "tasks", "project": "<id>"}`, with `"tab"` `all`, `needs_you`, `backlog`, `todo`,

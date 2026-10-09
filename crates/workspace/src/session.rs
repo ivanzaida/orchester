@@ -83,7 +83,7 @@ pub struct AppSession {
   started_at: Timestamp,
   previous: PreviousSession,
   /// Held until the session ends; dropped after the end is recorded.
-  _lock: AppLock,
+  lock: AppLock,
 }
 
 impl AppSession {
@@ -98,13 +98,7 @@ impl AppSession {
   /// and records a new session. Another app that has the folder open leaves the database untouched.
   pub fn start_at(path: &Path) -> Result<Self, StartupError> {
     let started_at = Timestamp::now();
-    let lock = AppLock::acquire(
-      path,
-      LockHolder {
-        pid: std::process::id(),
-        started_at,
-      },
-    )?;
+    let lock = AppLock::acquire(path, LockHolder::running(std::process::id(), started_at))?;
     let database_error = |source| StartupError::Database {
       path: path.to_path_buf(),
       source,
@@ -122,7 +116,7 @@ impl AppSession {
       id,
       started_at,
       previous,
-      _lock: lock,
+      lock,
     })
   }
 
@@ -149,6 +143,14 @@ impl AppSession {
       PreviousSession::Ended(SessionEnd::RunsPaused) => orchester_ipc::SessionEnd::RunsPaused,
       PreviousSession::Ended(SessionEnd::QuitNow) => orchester_ipc::SessionEnd::QuitNow,
       PreviousSession::Crashed => orchester_ipc::SessionEnd::Crashed,
+    }
+  }
+
+  /// The window closed and the session is ending: an app that starts meanwhile is told this one is
+  /// closing, not that it is stuck. Losing the mark only words that app's screen less precisely.
+  pub fn mark_closing(&mut self) {
+    if let Err(error) = self.lock.mark_closing() {
+      tracing::warn!(%error, "cannot mark the data folder's lock as closing");
     }
   }
 

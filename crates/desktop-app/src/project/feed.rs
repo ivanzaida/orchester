@@ -155,7 +155,9 @@ impl Component for FeedLoader {
     let hold = services.hold;
     let (tasks, stale) = tasks(ctx, (root.clone(), saved, states), &hold);
     publish(&self.feed.tasks, tasks);
-    publish(&self.feed.stale, stale);
+    if let Some(stale) = stale {
+      publish(&self.feed.stale, stale);
+    }
     let day_start = Timestamp::now().local_day_start();
     // Limits automation changed count too: the status bar and New task show them.
     let deps = (root, saved + outside.limits, (states, changes), day_start);
@@ -268,9 +270,10 @@ fn status(ctx: &mut Ctx, runners: &Runners, root: &Path) -> Option<RunnerStatus>
 }
 
 /// The project's tasks, read again whenever tasks were saved or a run changed state, and why the last
-/// reading failed. A failed reading keeps the tasks last read, so no page or form showing them is
-/// replaced; only a failed first reading leaves no tasks to show.
-fn tasks(ctx: &mut Ctx, deps: (PathBuf, u64, u64), hold: &ReadHold) -> (TasksState, Option<Message>) {
+/// reading failed: `None` while a reading of tasks already shown is under way, which keeps what the
+/// previous reading said until this one ends. A failed reading keeps the tasks last read, so no page or
+/// form showing them is replaced; only a failed first reading leaves no tasks to show.
+fn tasks(ctx: &mut Ctx, deps: (PathBuf, u64, u64), hold: &ReadHold) -> (TasksState, Option<Option<Message>>) {
   let hold = hold.clone();
   let load = ctx.future(deps, move |(repo_root, ..)| {
     let hold = hold.clone();
@@ -285,10 +288,12 @@ fn tasks(ctx: &mut Ctx, deps: (PathBuf, u64, u64), hold: &ReadHold) -> (TasksSta
     }
   });
   let state = load.state().get();
+  let reading = state.is_pending();
   match (state.data, state.error) {
-    (Some(tasks), stale) => (TasksState::Ready(tasks), stale),
-    (None, Some(error)) => (TasksState::Failed(error), None),
-    (None, None) => (TasksState::Loading, None),
+    (Some(tasks), _) if reading => (TasksState::Ready(tasks), None),
+    (Some(tasks), stale) => (TasksState::Ready(tasks), Some(stale)),
+    (None, Some(error)) => (TasksState::Failed(error), Some(None)),
+    (None, None) => (TasksState::Loading, Some(None)),
   }
 }
 
