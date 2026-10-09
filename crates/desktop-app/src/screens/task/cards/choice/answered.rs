@@ -2,7 +2,7 @@
 //! *Answered · 16:44*, each question with what was answered (a check and the option, or the person's own
 //! words in quotes), and who answered when: the person, or automation through Orchester's MCP server. A
 //! question whose agent stopped waiting before an answer reached it reads *Ended without an answer*, with the
-//! options it offered.
+//! options it offered; one whose run was interrupted while it waited says so.
 
 use std::sync::Arc;
 
@@ -82,9 +82,18 @@ fn outcome<'a>(ctx: &Ctx, card: &'a ChoiceCard) -> Outcome<'a> {
   let asked = display::clock(card.asked.request.asked_at());
   let (answers, by, at) = match &card.asked.state {
     QuestionState::Answered { answers, by, at } => (answers, *by, *at),
-    // Interrupted; a waiting request is not shown here.
     QuestionState::Interrupted { at } => return ended(ctx, card, (&asked, *at)),
-    QuestionState::Waiting => return ended(ctx, card, (&asked, card.asked.request.asked_at())),
+    // Shown here only while its run was interrupted.
+    QuestionState::Waiting => {
+      return Outcome {
+        stands: Stands::interrupted(ctx.t("cards.state.interrupted")),
+        answers: None,
+        context: ctx.t_args(
+          "cards.choice.lost",
+          [("asked", asked.as_str()), ("agent", &*card.agent)],
+        ),
+      };
+    }
   };
   let time = display::clock(at);
   let key = match by {

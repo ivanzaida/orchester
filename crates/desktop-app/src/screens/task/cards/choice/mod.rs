@@ -98,7 +98,8 @@ impl Component for ChoiceView {
     let ChoiceProps { place, card } = ctx.props::<ChoiceProps>().clone();
     let action = decide(ctx, place.project);
     let id = format!("cards-choice-{}", card.asked.request.id());
-    if !matches!(card.asked.state, QuestionState::Waiting) {
+    // Waiting while its run was interrupted, it no longer waits either.
+    if !matches!(card.asked.state, QuestionState::Waiting) || place.lost(ctx) {
       return answered::card(ctx, &id, (&place, &card));
     }
     let questions: Arc<[Question]> = card.asked.request.questions().into();

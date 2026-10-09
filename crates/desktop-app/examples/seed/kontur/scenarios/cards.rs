@@ -4,6 +4,10 @@
 //! answered by automation and ended before an answer; a command waiting for approval; commands approved once
 //! by the person, denied by the person, approved by automation and ended without an answer; a plan longer
 //! than its card shows waiting (v1), and a plan revised after changes were asked for (v2).
+//!
+//! Its runs are recorded, not executed: without a runner a run recorded at work reads interrupted, and with
+//! what its agent asked in its turn (the command waiting, the questions with suggested answers waiting); a
+//! runner that attaches ends them. Reach those waiting on live runs (`live`).
 
 use orchester_core::{
   question::{GivenAnswer, Question, QuestionOption, QuestionRequest, QuestionTurn},

@@ -71,6 +71,15 @@ impl Stands {
     }
   }
 
+  /// The run was interrupted: no agent waits for an answer now.
+  pub(super) fn interrupted(words: std::sync::Arc<str>) -> Self {
+    Self {
+      glyph: Icon::CirclePause,
+      words,
+      color: PaletteColor::TextMuted,
+    }
+  }
+
   pub(super) fn into_element(self, id: &str) -> Element {
     Row::new()
       .id(format!("{id}-state"))

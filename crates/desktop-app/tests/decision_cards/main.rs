@@ -2,7 +2,10 @@
 //! question its step waits on, questions with suggested answers (waiting, several answers, answered by the
 //! person and by automation, ended before an answer), a command waiting for approval and the ways one ends
 //! (approved once, denied, approved by automation, ended without an answer), and plans. The window's runner
-//! program does not exist: an answer reaches no runner, and the card says why. Needs `git`.
+//! program does not exist: an answer reaches no runner, and the card says why; and a run recorded at work is
+//! interrupted, so what its agent asked in its turn (an approval, a question with suggested answers) no
+//! longer waits. Those cards waiting are QA's, on live runs (`qa-app.ps1 -Scenario live -FakeAgents`).
+//! Needs `git`.
 
 #[allow(
   dead_code,
@@ -144,53 +147,6 @@ fn card_question_waits_and_sends_the_answer_to_the_composer() {
 }
 
 #[test]
-fn card_question_with_options_waits_until_answered_and_says_why_it_did_not_go() {
-  let (mut window, card) = card_of("Pick where the docs button goes", "cards-choice-");
-  let shown = text(&mut window, &card);
-  for words in [
-    "Builder asks you",
-    "Waiting for your answer",
-    "Where should the docs button go?",
-    "Builder's options",
-    "In the top bar",
-    "Beside the account menu, where people look for help.",
-    "In the sidebar footer",
-    "In the command palette only",
-  ] {
-    assert!(shown.contains(words), "{words:?} in {shown}");
-  }
-  assert!(
-    window.tree.get_element_by_id(&format!("{card}-own-0")).is_some(),
-    "own answer field"
-  );
-  let send = format!("{card}-send");
-  click(&mut window, &send);
-  assert!(
-    window.tree.get_element_by_id(&format!("{card}-refused")).is_none(),
-    "Send answer waits for an answer"
-  );
-  click(&mut window, &format!("{card}-option-0-1"));
-  click(&mut window, &send);
-  window.until("why the answer did not go", |window| {
-    window.tree.get_element_by_id(&format!("{card}-refused")).is_some()
-  });
-}
-
-#[test]
-fn card_question_with_several_answers_checks_each() {
-  let (mut window, card) = card_of("Choose the export formats", "cards-choice-");
-  assert!(text(&mut window, &card).contains("Builder's options · pick one or more"));
-  for option in ["0-0", "0-2"] {
-    click(&mut window, &format!("{card}-option-{option}"));
-  }
-  let check = Icon::Check.glyph().to_string();
-  for (option, on) in [("0-0", true), ("0-1", false), ("0-2", true)] {
-    let marked = glyphs(&mut window, &format!("{card}-option-{option}-mark")).contains(&check);
-    assert_eq!(marked, on, "option {option}");
-  }
-}
-
-#[test]
 fn card_question_with_options_answered_says_what_by_whom_and_when() {
   let (mut window, card) = card_of("Name the retry setting", "cards-choice-");
   let shown = text(&mut window, &card);
@@ -259,67 +215,6 @@ fn card_plan_versions_say_which_waits_and_what_was_asked() {
 }
 
 #[test]
-fn card_approval_shows_the_request_whole_and_every_answer() {
-  let (mut window, card) = card_of("Add serde to the webhook payloads", "cards-approval-");
-  window.until("the request's choices", |window| {
-    window.tree.get_element_by_id(&format!("{card}-reason")).is_some()
-  });
-  assert_eq!(text(&mut window, &format!("{card}-title")), "Approve command?");
-  assert!(text(&mut window, &format!("{card}-since")).starts_with("waiting since "));
-  assert_eq!(text(&mut window, &format!("{card}-category")), "Network");
-  assert_eq!(
-    text(&mut window, &format!("{card}-reason")),
-    "Installs a package from the network: crates.io · serde"
-  );
-  assert_eq!(
-    text(&mut window, &format!("{card}-value")),
-    "cargo add serde --features derive",
-    "the command whole"
-  );
-  assert_eq!(text(&mut window, &format!("{card}-value-copy")), "Copy");
-  let agent = text(&mut window, &format!("{card}-agent"));
-  assert!(agent.starts_with("Builder · Implement · Run "), "{agent}");
-  assert!(text(&mut window, &format!("{card}-note")).contains("Adds the dependency"));
-  // The static seed has no agent connection, so the words are Orchester's, not Codex's own.
-  assert_eq!(
-    text(&mut window, &format!("{card}-deny-tells")),
-    "Deny tells Builder: “Denied by the person reviewing this run. Continue without it.”",
-    "what the agent gets, word for word"
-  );
-  assert_eq!(text(&mut window, &format!("{card}-deny")), "Deny");
-  assert_eq!(text(&mut window, &format!("{card}-approve")), "Approve once");
-  assert!(locked(&mut window, &format!("{card}-deny-message")));
-  assert!(text(&mut window, &format!("{card}-deny-message-reason")).contains("Deny, then write to Builder"));
-  let similar = text(&mut window, &format!("{card}-similar"));
-  assert!(similar.starts_with("Approve similar in this run"), "{similar}");
-  let everything = text(&mut window, &format!("{card}-everything"));
-  assert!(everything.starts_with("Approve everything in this run"), "{everything}");
-  assert!(locked(&mut window, &format!("{card}-always")));
-  assert_eq!(
-    text(&mut window, &format!("{card}-always")),
-    "Always allow… Not available yet: adding a command to a profile from an approval is planned."
-  );
-  let automation = text(&mut window, &format!("{card}-automation"));
-  assert!(
-    automation.starts_with("Automation through Orchester's MCP server may"),
-    "{automation}"
-  );
-}
-
-#[test]
-fn card_approval_answer_without_a_runner_says_why() {
-  let (mut window, card) = card_of("Add serde to the webhook payloads", "cards-approval-");
-  click(&mut window, &format!("{card}-approve"));
-  window.until("why the answer did not go", |window| {
-    window.tree.get_element_by_id(&format!("{card}-refused")).is_some()
-  });
-  assert!(
-    window.tree.get_element_by_id(&format!("{card}-approve")).is_some(),
-    "the request still waits"
-  );
-}
-
-#[test]
 fn card_approval_decided_reads_how_by_whom_and_when() {
   for (title, decided, asked) in [
     ("Add rand to the jitter", "Approved once · by you at ", "cargo add rand"),
@@ -348,4 +243,39 @@ fn card_approval_decided_reads_how_by_whom_and_when() {
       "{title}"
     );
   }
+}
+
+#[test]
+fn card_requests_of_a_run_that_lost_its_runner_no_longer_wait() {
+  // The window has no runner: a run recorded at work is interrupted, and so is what its agent asked in its
+  // turn. Nothing reads as waiting or can be answered.
+  for (title, prefix, gone) in [
+    ("Pick where the docs button goes", "cards-choice-", "-send"),
+    ("Choose the export formats", "cards-choice-", "-send"),
+    ("Add serde to the webhook payloads", "cards-approval-", "-approve"),
+  ] {
+    let (mut window, card) = card_of(title, prefix);
+    let shown = text(&mut window, &card);
+    assert!(shown.contains("Interrupted · "), "{title}: {shown}");
+    assert!(!shown.contains("Waiting for"), "{title}: {shown}");
+    assert!(
+      window.tree.get_element_by_id(&format!("{card}{gone}")).is_none(),
+      "{title} cannot be answered"
+    );
+  }
+  let (mut window, card) = card_of("Pick where the docs button goes", "cards-choice-");
+  let context = text(&mut window, &format!("{card}-context"));
+  assert!(
+    context.contains("the run was interrupted before an answer reached Builder"),
+    "{context}"
+  );
+  let (mut window, card) = card_of("Add serde to the webhook payloads", "cards-approval-");
+  assert_eq!(
+    text(&mut window, &format!("{card}-decided")),
+    "Interrupted · Builder no longer waits for an answer"
+  );
+  assert_eq!(
+    text(&mut window, &format!("{card}-asked")),
+    "cargo add serde --features derive"
+  );
 }

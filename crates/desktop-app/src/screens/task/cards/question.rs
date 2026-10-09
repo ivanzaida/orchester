@@ -69,7 +69,9 @@ impl Component for QuestionCard {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let QuestionProps { place, entry } = ctx.props::<QuestionProps>().clone();
     let id = format!("cards-question-{}", entry.id);
-    let open = entry.state == EntryState::Question { open: true };
+    let asked = entry.state == EntryState::Question { open: true };
+    let lost = asked && place.lost(ctx);
+    let open = asked && !lost;
     let agent = match &entry.author {
       Author::Agent(agent) | Author::YouTo(agent) => agent.clone(),
       Author::You => "".into(),
@@ -79,6 +81,11 @@ impl Component for QuestionCard {
       (
         PaletteColor::Warning,
         Stands::waiting(ctx.t("cards.state.waitingAnswer")),
+      )
+    } else if lost {
+      (
+        PaletteColor::TextSecondary,
+        Stands::interrupted(ctx.t("cards.state.interrupted")),
       )
     } else {
       (
@@ -91,7 +98,7 @@ impl Component for QuestionCard {
       )
     };
     let text = MarkdownView::new(format!("{id}-text"), entry.body.clone(), place.links.clone()).render(ctx);
-    let context = context(ctx, &place, &entry, (&agent, open));
+    let context = context(ctx, &place, &entry, (&agent, open, lost));
     let decisions = Decisions::of(ctx);
     let actions = open.then(|| self.actions(ctx, &id, decisions.as_ref(), entry.at));
     frame(id.clone(), open)
@@ -146,10 +153,13 @@ impl QuestionCard {
   }
 }
 
-/// When and in which step it was asked, and what waiting does, or that the answer follows.
-fn context(ctx: &Ctx, place: &Place, entry: &Entry, (agent, open): (&str, bool)) -> std::sync::Arc<str> {
+/// When and in which step it was asked, and what waiting does, that the run was interrupted, or that the
+/// answer follows.
+fn context(ctx: &Ctx, place: &Place, entry: &Entry, (agent, open, lost): (&str, bool, bool)) -> std::sync::Arc<str> {
   let time = display::clock(entry.at);
-  let key = match (open, place.step.is_some()) {
+  let key = match (open || lost, place.step.is_some()) {
+    _ if lost && place.step.is_some() => "cards.question.lost",
+    _ if lost => "cards.question.lostNoStep",
     (true, true) => "cards.question.waiting",
     (true, false) => "cards.question.waitingNoStep",
     (false, true) => "cards.question.answered",

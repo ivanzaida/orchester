@@ -81,6 +81,9 @@ impl Component for ApprovalView {
     if let Some(decided) = self.decided(ctx, &card, &state) {
       return decided::row(ctx, &id, request, &decided);
     }
+    if place.lost(ctx) {
+      return decided::row(ctx, &id, request, &Decided::Lost);
+    }
     let (shown, reviewing) = shown(ctx, &place, &request.id);
     if !state.is_pending() && Decisions::of(ctx).is_some_and(|decisions| decisions.take_focus(request.requested_at)) {
       ctx.focus(&self.once);

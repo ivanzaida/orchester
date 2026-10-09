@@ -78,7 +78,8 @@ impl Component for PlanView {
     let PlanProps { place, card } = ctx.props::<PlanProps>().clone();
     let action = decide(ctx, place.project);
     let id = format!("cards-plan-{}-{}", card.plan.step.as_str(), card.plan.version);
-    let waiting = card.waiting && action.state().get().data.is_none();
+    let lost = card.waiting && place.lost(ctx);
+    let waiting = card.waiting && !lost && action.state().get().data.is_none();
     let version = card.plan.version.to_string();
     let title = ctx.t_args(
       "cards.plan.title",
@@ -91,7 +92,7 @@ impl Component for PlanView {
       &id,
       (Icon::Map, IconSize::Md, PaletteColor::TextSecondary),
       (&title, CardsText::Title.role()),
-      stands(ctx, &card, waiting).into_element(&id),
+      stands(ctx, &card, (waiting, lost)).into_element(&id),
     )
     .padding(Padding::symmetric(
       ExtraSpacing::Inset.role(),
@@ -220,8 +221,9 @@ impl PlanView {
   }
 }
 
-/// Where a version stands: it waits, it was decided (by automation, when it was), or a later version came.
-fn stands(ctx: &Ctx, card: &PlanCard, waiting: bool) -> Stands {
+/// Where a version stands: it waits, its run was interrupted, it was decided (by automation, when it was),
+/// or a later version came.
+fn stands(ctx: &Ctx, card: &PlanCard, (waiting, lost): (bool, bool)) -> Stands {
   let decided = |glyph, key: &str, color| Stands {
     glyph,
     words: ctx.t(key),
@@ -229,6 +231,7 @@ fn stands(ctx: &Ctx, card: &PlanCard, waiting: bool) -> Stands {
   };
   match (&card.plan.review, waiting) {
     (_, true) => Stands::waiting(ctx.t("cards.state.waitingApproval")),
+    (None, false) if lost => Stands::interrupted(ctx.t("cards.state.interrupted")),
     // Approved here, before the run's change is read again.
     (None, false) if card.waiting => decided(Icon::CircleCheck, "cards.state.approved", PaletteColor::Success),
     (None, false) => decided(Icon::History, "cards.state.earlier", PaletteColor::TextMuted),

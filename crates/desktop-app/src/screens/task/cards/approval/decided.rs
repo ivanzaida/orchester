@@ -32,6 +32,8 @@ pub(super) enum Decided {
   },
   /// Someone answered it before the person's answer reached the runner.
   AnsweredAlready,
+  /// It waits while its run is interrupted: no agent waits for the answer now.
+  Lost,
 }
 
 pub(super) fn row(ctx: &Ctx, id: &str, request: &PendingToolApproval, decided: &Decided) -> Element {
@@ -73,12 +75,22 @@ pub(super) fn row(ctx: &Ctx, id: &str, request: &PendingToolApproval, decided: &
 
 /// The glyph, its color and the words of how `decided` went.
 fn said(ctx: &Ctx, request: &PendingToolApproval, decided: &Decided) -> (Icon, PaletteColor, std::sync::Arc<str>) {
-  let Decided::Recorded { decision, by, at } = decided else {
-    return (
-      Icon::CircleCheck,
-      PaletteColor::TextMuted,
-      ctx.t("cards.approval.decided.answered"),
-    );
+  let (decision, by, at) = match decided {
+    Decided::Recorded { decision, by, at } => (decision, by, at),
+    Decided::AnsweredAlready => {
+      return (
+        Icon::CircleCheck,
+        PaletteColor::TextMuted,
+        ctx.t("cards.approval.decided.answered"),
+      );
+    }
+    Decided::Lost => {
+      return (
+        Icon::CirclePause,
+        PaletteColor::TextMuted,
+        ctx.t_args("cards.approval.decided.lost", [("agent", request.agent.as_str())]),
+      );
+    }
   };
   let time = display::clock(*at);
   let words = |key: &str| ctx.t_args(key, [("time", time.as_str()), ("agent", request.agent.as_str())]);
