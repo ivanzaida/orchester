@@ -1,16 +1,15 @@
 //! What the composer keeps while the task's page shows the task, whichever tab or run it shows: the
-//! draft, the key a draft's words are stored under until they are, and the sends under way, so a tab
-//! switch or a new run neither loses the draft nor stops a send. The task page makes it once
-//! ([`ComposerState::new`]) and keeps it in each render ([`ComposerState::keep`]); the Conversation tab
-//! and its messages reach it through the page's context.
+//! context the person left and the sends under way, so a tab switch or a new run does not stop a send; the
+//! draft, its key and the messages put back into it are kept for as long as the app runs ([`super::kept`]).
+//! The task page makes it once ([`ComposerState::new`]) and keeps it in each render
+//! ([`ComposerState::keep`]); the Conversation tab and its messages reach it through the page's context.
 //!
-//! A send reads the task again and stores the message as its latest run's state offers then
-//! (`outgoing`), then lets what its action says follow on the project's runner; the whole of it runs on
+//! A send reads the task again and does what the person pressed, if the run's state still offers it, or
+//! is refused, keeping the draft (`outgoing`); it then lets what its action says follow on the project's
+//! runner; the whole of it runs on
 //! the app's runtime, so it ends even when no screen waits for it any more. A plan's changes are a
 //! decision told to the runner. A message its agent's CLI did not take is queued again for when its
 //! turn ends, and the runner of its own run is told.
-
-use std::sync::Arc;
 
 use lurq::{
   app::ctx::{Ctx, FutureAction},
@@ -27,13 +26,13 @@ use orchester_workspace::{
   tasks::conversation::{
     composer::ComposerMode,
     follow::{RunnerOf, Sent, Stored, follow, tell},
-    outgoing::{Way, plan_changes, prepare_in, store_in},
+    outgoing::{Action, Context, Way, plan_changes, prepare_in, store_in},
     send_after_turn_in,
   },
   workspace::OpenProject,
 };
-use parking_lot::Mutex;
 
+use super::kept;
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -41,15 +40,17 @@ use crate::{
   services::Services,
 };
 
-/// A message to send: for `task`'s latest run as the person saw it (`written_for`), sent `way`, read as
-/// they read it (`lost`: the run lost its runner; `left_context`: they left a question's or a plan's mode).
+/// A message to send: for `task`'s latest run as the person saw it (`written_for`), sent `way` to do what
+/// they pressed (`expected`), read as they read it (`lost`: the run lost its runner; `left`: the question's
+/// or the plan's mode they left).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Request {
   pub(super) project: OpenProject,
   pub(super) task: TaskId,
   pub(super) written_for: Option<RunId>,
-  pub(super) reading: (bool, bool),
+  pub(super) reading: (bool, Option<Context>),
   pub(super) way: Way,
+  pub(super) expected: Action,
   pub(super) key: IdempotencyKey,
   pub(super) text: String,
 }
@@ -96,27 +97,39 @@ impl lurq::app::component::DevtoolsInspectable for Refused {}
 
 pub(super) type AfterTurnAction = FutureAction<AfterTurn, (MessageId, Sent), Refused>;
 
-/// The composer's draft, its key, and its sends, kept by the task's page.
+/// The refused messages put back into the composer.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(super) struct Handled(pub(super) Vec<MessageId>);
+
+impl lurq::app::component::DevtoolsInspectable for Handled {}
+
+/// The composer's draft, the context the person left, and its sends, kept by the task's page.
 #[derive(Clone)]
 pub struct ComposerState {
+  task: TaskId,
   pub(super) draft: Signal<String>,
   /// Set to put the focus in the message field.
   pub(super) focus: Signal<bool>,
-  /// The words last sent and the key they are stored under until a store succeeds: sent again unchanged,
-  /// they keep it, so a retry after an unclear failure stores nothing new; changed, they get a new one.
-  attempt: Arc<Mutex<Option<(String, IdempotencyKey)>>>,
+  /// The question's or the plan's mode the person left with its line's × or Esc: while the run's state
+  /// offers it, the composer writes an ordinary message instead.
+  pub(super) left: Signal<Option<Context>>,
+  /// The refused messages put back into the composer: they offer nothing more.
+  pub(super) handled: Signal<Handled>,
   pub(super) send: SendAction,
   pub(super) after_turn: AfterTurnAction,
 }
 
 impl ComposerState {
-  /// The composer of the task `key` of `project`: made once by its page, before any of its own futures.
-  pub fn new(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Self {
+  /// The composer of `task`, the task `key` of `project`: made once by its page, before any of its own
+  /// futures.
+  pub fn new(ctx: &mut Ctx, project: &ShownProject, (task, key): (TaskId, &TaskKey)) -> Self {
     let (send, after_turn) = (send_action(ctx), after_turn_action(ctx));
     let state = Self {
-      draft: ctx.signal(String::new()),
+      task,
+      draft: ctx.signal(kept::draft(task)),
       focus: ctx.signal(false),
-      attempt: Arc::default(),
+      left: ctx.signal(None),
+      handled: ctx.signal(Handled(kept::handled(task))),
       send,
       after_turn,
     };
@@ -143,6 +156,7 @@ impl ComposerState {
         navigation.go(summary.clone());
       }
     });
+    ctx.watch(&state.draft, move |text| kept::set_draft(task, text));
     let feed = project.feed.clone();
     ctx.watch(&state.after_turn.state(), move |result| {
       if result.is_fulfilled() {
@@ -159,33 +173,23 @@ impl ComposerState {
     after_turn_action(ctx);
   }
 
-  /// `text` was stored: the draft empties unless the person typed on meanwhile, and the next words get a
-  /// key of their own.
+  /// `text` was stored: the draft empties unless the person typed on meanwhile.
   fn stored(&self, text: &str) {
     if self.draft.get_untracked() == text {
       self.draft.set(String::new());
-    }
-    let mut attempt = self.attempt.lock();
-    if attempt.as_ref().is_some_and(|(sent, _)| sent == text) {
-      *attempt = None;
     }
   }
 
   /// The key `text` is stored under: the one of the last attempt when the words did not change.
   pub(super) fn key_for(&self, text: &str) -> IdempotencyKey {
-    let mut attempt = self.attempt.lock();
-    match attempt.as_ref() {
-      Some((sent, key)) if sent == text => *key,
-      _ => {
-        let key = IdempotencyKey::generate();
-        *attempt = Some((text.to_owned(), key));
-        key
-      }
-    }
+    kept::key_for(self.task, text)
   }
 
-  /// Puts `text` into the composer, with the focus there; after what is written already, if anything is.
-  pub(super) fn edit(&self, text: &str) {
+  /// Puts `text`, the refused message `message`, into the composer, with the focus there; after what is
+  /// written already, if anything is. The message offers nothing more.
+  pub(super) fn edit(&self, message: MessageId, text: &str) {
+    kept::handle(self.task, message);
+    self.handled.set(Handled(kept::handled(self.task)));
     let draft = self.draft.get_untracked();
     let text = if draft.trim().is_empty() {
       text.to_owned()
@@ -222,11 +226,18 @@ fn send_action(ctx: &mut Ctx) -> SendAction {
 async fn send(services: Services, request: Request) -> Result<Outcome, Message> {
   let (root, task, written_for) = (request.project.repo_root.clone(), request.task, request.written_for);
   let reading = request.reading;
-  let prepared = background::run(move || prepare_in(&root, (task, written_for), reading))
-    .await?
-    .map_err(|error| error.message())?;
-  if let ComposerMode::PlanChanges { .. } = prepared.mode {
-    let command = plan_changes(&prepared, &request.text, Answerer::Person).map_err(|error| error.message())?;
+  let (way, expected) = (request.way, request.expected);
+  let prepared = background::run(move || {
+    let prepared = prepare_in(&root, (task, written_for), reading)?;
+    // What the person pressed, or nothing: the run may have moved on since they saw it.
+    prepared.check(way, expected)?;
+    Ok(prepared)
+  })
+  .await?
+  .map_err(|error: orchester_workspace::tasks::conversation::outgoing::OutgoingError| error.message())?;
+  if let ComposerMode::PlanChanges { version, .. } = prepared.mode {
+    let command =
+      plan_changes(&prepared, &request.text, (Answerer::Person, Some(version))).map_err(|error| error.message())?;
     services
       .runners
       .control_run_in(&request.project, command)
@@ -235,6 +246,7 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
         tracing::warn!(%error, "the runner did not take the plan's changes");
         orchester_workspace::tasks::run::control_message(&error)
       })?;
+    kept::forget(request.task, request.key);
     return Ok(Outcome::PlanChanges { text: request.text });
   }
   let mode = super::mode_name(&prepared.mode);
@@ -257,6 +269,7 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
     Ok((prepared, stored))
   })?;
   let id = stored.id();
+  kept::forget(request.task, key);
   // Before the task has a run, its first step takes the message.
   let Some(run) = prepared.run() else {
     return Ok(Outcome::Message {

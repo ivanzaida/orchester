@@ -161,19 +161,22 @@ fn composer_a_message_for_a_run_stopped_at_its_limit_is_kept_and_summary_opens()
 }
 
 #[test]
-fn composer_a_message_its_agent_did_not_take_goes_after_the_turn_or_back_into_the_composer() {
+fn composer_a_message_its_agent_did_not_take_is_sent_again_when_the_run_continues() {
   let (mut window, seeded) = seeded();
   let title = "Paginate the events API";
   let key = key_of(&seeded, title);
   let id = not_delivered(&seeded, &key, "Check the cursor");
   open(&mut window, &seeded, title);
-  let edit = format!("composer-edit-{id}");
+  let again = format!("composer-send-after-turn-{id}");
   window.until("the message's actions", |window| {
-    window.tree.get_element_by_id(&edit).is_some()
+    window.tree.get_element_by_id(&again).is_some()
   });
-  click(&mut window, &edit);
-  assert_eq!(draft(&mut window), "Check the cursor", "Edit in composer");
-  click(&mut window, &format!("composer-send-after-turn-{id}"));
+  assert_eq!(
+    text(&mut window, &again),
+    "Send when the run continues",
+    "the run is paused: no turn runs"
+  );
+  click(&mut window, &again);
   window.until("queued again", |_| {
     messages(&seeded, &key).iter().any(|message| {
       message.id() == id
@@ -188,7 +191,7 @@ fn composer_a_message_its_agent_did_not_take_goes_after_the_turn_or_back_into_th
     })
   });
   window.until("the actions gone", |window| {
-    window.tree.get_element_by_id(&edit).is_none()
+    window.tree.get_element_by_id(&again).is_none()
   });
 }
 
@@ -250,4 +253,18 @@ fn composer_a_paused_run_offers_its_second_way_in_the_send_menu() {
     .expect("the menu is laid out")
     .width;
   assert!((width - 320.0).abs() < 0.5, "the menu keeps its width: {width}");
+  let bottom = |window: &mut support::Window, id: &str| {
+    let bounds = window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .expect("laid out");
+    (bounds.y, bounds.y + bounds.height)
+  };
+  let (_, menu_bottom) = bottom(&mut window, "composer-send-menu");
+  let (button_top, _) = bottom(&mut window, "composer-send-button");
+  assert!(
+    button_top - menu_bottom >= 5.5,
+    "the menu opens over the button with a gap: {menu_bottom} / {button_top}"
+  );
 }

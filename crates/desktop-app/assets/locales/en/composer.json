@@ -48,7 +48,7 @@
       "raiseLimit": "Your message is kept; Summary opens to raise the limit. The run’s agent reads it when the run continues.",
       "resume": "Resume and send resumes the run; its agent reads your message before its next action.",
       "runAgain": "Run again with this message starts the task’s next run from the first step, in a new worktree. Its first agent reads your message.",
-      "takenAsAnswer": "Queued · {{agent}} waits for an answer and takes this message as it",
+      "takenAsAnswer": "Queued · {{agent}} waits for an answer and takes this message as its answer",
       "toolStep": "Queued · a command tool runs this step; the next agent reads it at its turn"
     },
     "placeholder": {
@@ -95,6 +95,7 @@
       "queue": "Send",
       "raiseLimit": "Raise the limit and continue",
       "requestChanges": "Request changes",
+      "empty": "Write a message to send it.",
       "resume": "Resume and send",
       "runAgain": "Run again with this message",
       "whenStarts": "Send when the run starts",
@@ -104,7 +105,9 @@
     "undelivered": {
       "afterTurn": "Send after this turn",
       "edit": "Edit in composer",
-      "failed": "Not sent after this turn: {{reason}}"
+      "failed": "Not sent again: {{reason}}",
+      "followUp": "Send as follow-up",
+      "whenContinues": "Send when the run continues"
     }
   }
 }

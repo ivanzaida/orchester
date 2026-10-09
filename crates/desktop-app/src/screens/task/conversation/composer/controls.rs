@@ -169,9 +169,14 @@ fn send(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
       .child(face)
       .into(),
   };
-  let primary = Tooltip::new("composer-send", label.clone())
-    .shortcut(ctx.t("composer.keys.enter"))
-    .wrap(ctx, primary);
+  // Faded while nothing is written: its tooltip says so.
+  let tip = match bar.sending {
+    Sending::Empty => Tooltip::new("composer-send", ctx.t("composer.send.empty")),
+    Sending::Busy | Sending::Ready { .. } => {
+      Tooltip::new("composer-send", label.clone()).shortcut(ctx.t("composer.keys.enter"))
+    }
+  };
+  let primary = tip.wrap(ctx, primary);
   let split = ways.map(|ways| (options(ctx, bar), ways));
   let menu = split.as_ref().map(|(_, ways)| send_menu(ctx, bar, ways));
   let enabled = matches!(bar.sending, Sending::Ready { .. });
@@ -276,7 +281,8 @@ fn send_menu(ctx: &mut Ctx, bar: &Bar<'_>, (first, second): &(Way, Way)) -> Elem
   Popup::new(bar.anchor.clone(), panel)
     .open(bar.menu.clone())
     .placement(Placement::TopEnd)
-    .offset(0.0, -ExtraSpacing::Snug.value())
+    // Away from the button: lurq moves an overlay above its anchor up by a positive offset.
+    .offset(0.0, ExtraSpacing::Snug.value())
     .into()
 }
 

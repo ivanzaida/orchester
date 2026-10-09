@@ -237,7 +237,7 @@ impl Component for TaskFrame {
 
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<FrameProps>().clone();
-    let composer = conversation::ComposerState::new(ctx, &props.project, &props.key);
+    let composer = conversation::ComposerState::new(ctx, &props.project, (props.task, &props.key));
     Self {
       composer,
       retries: ctx.signal(0),

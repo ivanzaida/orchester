@@ -1,7 +1,8 @@
 //! What the composer keeps: a draft through a failed send that came after one that went through, with
-//! *Try again*; a draft through a switch to another tab of the task and back; what is written when a message
-//! its agent did not take is put back into the composer; and no actions on such a message once no agent
-//! reads messages.
+//! *Try again*; a draft through a switch to another tab of the task and back, and through leaving the task
+//! and opening it again; what is written when a message its agent did not take is put back into the
+//! composer, typing on after it, and no more actions on that message; and no actions on such a message
+//! once no agent reads messages.
 
 use orchester_app::routes::{ProjectPage, Route, TaskView};
 use rusqlite::Connection;
@@ -9,7 +10,7 @@ use rusqlite::Connection;
 use super::{
   click, draft, key_of, messages, open, seeded,
   sending::{ENTER, not_delivered, until_stored},
-  text, write,
+  text, type_on, write,
 };
 
 #[test]
@@ -67,6 +68,19 @@ fn composer_edit_in_composer_adds_the_message_after_what_is_written() {
   });
   click(&mut window, &edit);
   assert_eq!(draft(&mut window), "First\n\nCheck the cursor");
+  // The field has the focus, its caret after what was put in it.
+  window.until("the field focused", |window| {
+    window
+      .tree
+      .focused_element()
+      .is_some_and(|element| element.id() == Some("composer-input"))
+  });
+  type_on(&mut window, "x");
+  assert_eq!(draft(&mut window), "First\n\nCheck the cursorx");
+  assert!(
+    window.tree.get_element_by_id(&edit).is_none(),
+    "a message put back into the composer offers nothing more"
+  );
 }
 
 #[test]
@@ -85,4 +99,15 @@ fn composer_a_message_of_a_run_no_agent_reads_offers_nothing() {
       .get_element_by_id(&format!("composer-send-after-turn-{id}"))
       .is_none()
   );
+}
+
+#[test]
+fn composer_the_draft_stays_when_the_task_is_left_and_opened_again() {
+  let (mut window, seeded) = seeded();
+  open(&mut window, &seeded, "Show the signed-in account");
+  write(&mut window, "Later");
+  open(&mut window, &seeded, "Paginate the events API");
+  window.until("the other task's own composer", |window| draft(window) != "Later");
+  open(&mut window, &seeded, "Show the signed-in account");
+  window.until("the draft back", |window| draft(window) == "Later");
 }

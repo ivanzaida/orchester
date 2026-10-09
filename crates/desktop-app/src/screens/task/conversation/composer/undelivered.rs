@@ -1,9 +1,11 @@
 //! Under a message sent now that its agent's CLI did not take (*Could not deliver to Builder: … Your message
-//! is kept here.*): *Send after this turn*, which queues it again for when the agent's turn ends and tells
-//! the runner of its own run, offered while it is a message of the latest run and an agent can still read
-//! it; and *Edit in composer*, which puts its words into the composer after what is written there, with the
-//! focus there, offered while the composer takes words (handover, "Messages"). What the runner did not take
-//! the composer says under its box; why the message was not queued again is said here.
+//! is kept here.*): sending it again, which queues it for when the agent's turn ends and tells the runner
+//! of its own run, offered while it is a message of the latest run and an agent can still read it, and
+//! named for what happens then (*Send after this turn* while an agent works, *Send as follow-up* once the
+//! run is ready for review, *Send when the run continues* while it waits); and *Edit in composer*, which
+//! puts its words into the composer after what is written there, with the focus there, offered while the
+//! composer takes words (handover, "Messages"). A message put back into the composer offers nothing more. What the
+//! runner did not take the composer says under its box; why the message was not queued again is said here.
 
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
@@ -11,8 +13,8 @@ use lurq::{
   layout::Alignment,
   node::Element,
 };
-use orchester_core::id::{MessageId, RunId};
-use orchester_workspace::tasks::conversation::{Entry, EntryState};
+use orchester_core::id::MessageId;
+use orchester_workspace::tasks::conversation::{Entry, EntryState, PanelState, outgoing::after_turn_run};
 
 use super::{Composing, state::AfterTurn};
 use crate::ui::{
@@ -79,24 +81,25 @@ impl Component for Undelivered {
   }
 }
 
-/// The run the message was sent to, while it is the task's latest and an agent of it can still read it.
-fn readable_run(composing: &Composing, message: MessageId) -> Option<RunId> {
-  let latest = composing.detail.run.as_ref()?.id();
-  let run = composing
-    .detail
-    .messages
-    .iter()
-    .find(|stored| stored.id() == message)?
-    .run()?;
-  (run == latest && composing.takes_messages).then_some(run)
+/// What sending the message again is called while the run stands at `panel`.
+const fn again_key(panel: PanelState) -> &'static str {
+  match panel {
+    PanelState::Live => "composer.undelivered.afterTurn",
+    PanelState::Ready => "composer.undelivered.followUp",
+    _ => "composer.undelivered.whenContinues",
+  }
 }
 
 fn buttons(ctx: &Ctx, props: &UndeliveredProps, composing: &Composing, pending: bool) -> Option<Row> {
-  let after_turn = readable_run(composing, props.message).map(|run| {
+  if composing.state.handled.get().0.contains(&props.message) {
+    return None;
+  }
+  let reads = composing.panel.takes_messages();
+  let after_turn = after_turn_run(&composing.detail, reads, props.message).map(|run| {
     let button = ActionButton::new(
       format!("composer-send-after-turn-{}", props.message),
       ButtonKind::Ghost,
-      ctx.t("composer.undelivered.afterTurn"),
+      ctx.t(again_key(composing.panel)),
     )
     .icon(Icon::Clock);
     if pending {
@@ -112,14 +115,14 @@ fn buttons(ctx: &Ctx, props: &UndeliveredProps, composing: &Composing, pending: 
     button.on_click(move || action.run(request.clone()))
   });
   let edit = composing.writable.then(|| {
-    let (state, text) = (composing.state.clone(), props.text.clone());
+    let (state, message, text) = (composing.state.clone(), props.message, props.text.clone());
     ActionButton::new(
       format!("composer-edit-{}", props.message),
       ButtonKind::Ghost,
       ctx.t("composer.undelivered.edit"),
     )
     .icon(Icon::Pencil)
-    .on_click(move || state.edit(&text))
+    .on_click(move || state.edit(message, &text))
   });
   if after_turn.is_none() && edit.is_none() {
     return None;

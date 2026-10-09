@@ -19,6 +19,7 @@
 mod context;
 mod controls;
 mod feedback;
+mod kept;
 mod presses;
 mod state;
 mod undelivered;
@@ -37,11 +38,15 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{conversation::Recipient, id::MessageId, project::TaskKey, run::PlanVersion};
+use orchester_core::{conversation::Recipient, id::MessageId, project::TaskKey};
 use orchester_workspace::{
   messages::Message,
   tasks::{
-    conversation::{Conversation, composer::ComposerMode, outgoing::offer},
+    conversation::{
+      Conversation, PanelState,
+      composer::ComposerMode,
+      outgoing::{Context, offer},
+    },
     detail::{RunView, TaskDetail},
   },
 };
@@ -82,8 +87,8 @@ pub(super) struct Composing {
   detail: Arc<TaskDetail>,
   /// The latest run is recorded as running while no runner looks after it.
   lost: bool,
-  /// An agent of the latest run can still read a message.
-  takes_messages: bool,
+  /// Where the latest run's conversation stands.
+  panel: PanelState,
   /// The composer takes words: its run can be read and its state is not closed.
   writable: bool,
 }
@@ -108,7 +113,7 @@ pub(super) fn dock(ctx: &mut Ctx, follow: &Follow, task: &TaskContext, conversat
     .use_context::<ComposerState>()
     .expect("the task page keeps the composer's state before its tabs");
   let run = task.detail.run.as_ref();
-  let open = offer(conversation, run, false).0 != ComposerMode::Closed;
+  let open = offer(conversation, run, None).0 != ComposerMode::Closed;
   let composing = Composing {
     state,
     follow: follow.clone(),
@@ -116,7 +121,7 @@ pub(super) fn dock(ctx: &mut Ctx, follow: &Follow, task: &TaskContext, conversat
     key: task.key.clone(),
     detail: task.detail.clone(),
     lost: task.lost(),
-    takes_messages: conversation.state.takes_messages(),
+    panel: conversation.state,
     writable: open && task.detail.latest_unreadable.is_none(),
   };
   ctx.provide(composing.clone());
@@ -149,32 +154,7 @@ impl PartialEq for DockProps {
 
 impl lurq::app::component::DevtoolsInspectable for DockProps {}
 
-/// What a mode answers or changes, which its line names and the person can leave.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Context {
-  Question(MessageId),
-  Plan(PlanVersion),
-}
-
-impl Context {
-  fn of(mode: &ComposerMode) -> Option<Self> {
-    match mode {
-      ComposerMode::Answer { question, .. } => Some(Self::Question(*question)),
-      ComposerMode::PlanChanges { version, .. } => Some(Self::Plan(*version)),
-      _ => None,
-    }
-  }
-}
-
-/// The context the person left with its line's × or Esc: while it is the one the run's state offers, the
-/// composer writes an ordinary message instead.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct Left(Option<Context>);
-
-impl lurq::app::component::DevtoolsInspectable for Left {}
-
 struct Composer {
-  left: Signal<Left>,
   menu: Signal<bool>,
   focused: Signal<bool>,
   input: ElementRef,
@@ -196,7 +176,6 @@ impl Component for Composer {
       }
     });
     Self {
-      left: ctx.signal(Left::default()),
       menu: ctx.signal(false),
       focused: ctx.signal(false),
       input: ElementRef::new(),
@@ -229,26 +208,26 @@ impl Component for Composer {
 
 impl Composer {
   /// The mode the run's state offers for its default recipient, without the context the person left;
-  /// whether they left it, and how to leave it.
-  fn mode(&self, props: &DockProps) -> (ComposerMode, Recipient, (bool, Option<Press>)) {
+  /// the context they left, and how to leave the one offered.
+  fn mode(&self, props: &DockProps) -> (ComposerMode, Recipient, (Option<Context>, Option<Press>)) {
     let conversation = &props.conversation;
     let run = props.composing.detail.run.as_ref();
-    let (offered, recipient) = offer(conversation, run, false);
+    let (offered, recipient) = offer(conversation, run, None);
     let context = Context::of(&offered);
     // The question was answered or ended, the plan decided: what was left is gone with it.
-    let left = self.left.get();
-    if left.0.is_some() && left.0 != context {
-      self.left.set(Left::default());
+    let left = props.composing.state.left.get();
+    if left.is_some() && left != context {
+      props.composing.state.left.set(None);
     }
-    if context.is_some() && left.0 == context {
-      let (mode, recipient) = offer(conversation, run, true);
-      return (mode, recipient, (true, None));
+    if context.is_some() && left == context {
+      let (mode, recipient) = offer(conversation, run, left);
+      return (mode, recipient, (left, None));
     }
     let leave = context.map(|context| {
-      let left = self.left.clone();
-      Arc::new(move || left.set(Left(Some(context)))) as Press
+      let left = props.composing.state.left.clone();
+      Arc::new(move || left.set(Some(context))) as Press
     });
-    (offered, recipient, (false, leave))
+    (offered, recipient, (None, leave))
   }
 
   fn content(&self, ctx: &mut Ctx, props: &DockProps) -> Vec<Element> {
@@ -266,7 +245,7 @@ impl Composer {
       lost: composing.lost,
       left,
     };
-    let presses = presses::presses(&composing.state, &target, mode.then_later().is_some());
+    let presses = presses::presses(&composing.state, &target, &mode);
     let field = self.field(ctx, props, &mode, (&presses, leave.clone()));
     let bar = controls::bar(
       ctx,
