@@ -190,6 +190,8 @@ fn timeline_an_open_group_lists_seven_rows_then_shows_more() {
   // A command's row opens to its output.
   let row = with_text(&mut window, "conversation-entry-", "sed -n 1,60p");
   let row = row.trim_end_matches("-title").to_owned();
+  // The row may sit at the chat's top edge, partly out of view: it is pressed in full view.
+  wheel(&mut window, 100.0);
   click(&mut window, &format!("{row}-toggle"));
   window.until("the command's output", |window| {
     window.texts(&format!("{row}-output")).is_some()
