@@ -1,8 +1,11 @@
 //! The tabs in the title bar (`Tabs` `mkCf8`): one per open tab, then *New tab*. A tab at All projects
 //! is the folders icon alone (`All projects tab` `TvmmP`, `Tab/home`); every other tab shows its screen's
 //! icon and name (`Tab/active`, `Tab/inactive`) — a task by its key — after its project's name once the
-//! project is known to be in the list (`Kontur · Overview`); a project's id is never shown. The active
-//! tab is filled with `hover` and has a close button; a middle click closes any tab that can be closed.
+//! project is known to be in the list (`Kontur · Overview`); a project's id is never shown. A tab of a
+//! project where something waits for the person ends in an amber hand (`Tab/attention` `iJNwr`), one with
+//! an unresolved failure (runner offline, tasks unread) in a red alert; the mark's tooltip says which. The
+//! active tab is filled with `hover` and has a close button; a middle click
+//! closes any tab that can be closed.
 //! The OS window title is the active tab's label and the app's name. A tab whose task form holds edits
 //! that are not saved ends its label in a 6 `text_secondary` dot (`Dirty` `TfKtF` in `Fd1ai`).
 //!
@@ -12,12 +15,13 @@
 
 use lurq::{
   app::{
-    component::Component,
+    component::{Component, DevtoolsInspectable},
     ctx::Ctx,
     events::{MouseButton, MouseEvent, ScrollEvent},
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Button, Row, ScrollHorizontal, Text, TextOverflow},
+  core::ElementRef,
   layout::{
     Alignment,
     layout_kind::{Justify, ScrollState},
@@ -35,10 +39,12 @@ use crate::{
   },
   project::Projects,
   routes::{ProjectPage, Route},
+  shell::needs_you::{self, Attention, count_words},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon, screen_icon},
     pressable::pressable,
+    tooltip::Tooltip,
   },
 };
 
@@ -63,8 +69,21 @@ struct Revealed {
   scrolling: bool,
 }
 
+/// The title bar's *N need you* pill, as it was laid out last.
+#[derive(Clone)]
+pub struct PillRef(pub ElementRef);
+
+/// One pill for the window's life.
+impl PartialEq for PillRef {
+  fn eq(&self, _: &Self) -> bool {
+    true
+  }
+}
+
+impl DevtoolsInspectable for PillRef {}
+
 impl Component for TabStrip {
-  type Props = ();
+  type Props = PillRef;
 
   fn create(_ctx: &mut Ctx) -> Self {
     Self {
@@ -78,7 +97,7 @@ impl Component for TabStrip {
     let projects = Projects::of(ctx);
     let tabs = navigation.tabs();
     let window = ctx.window();
-    let fit = tab_fit::fit(window.info().logical_width(), &tabs);
+    let fit = tab_fit::fit(window.info().logical_width(), pill_width(ctx, &projects, &tabs), &tabs);
     let active = label(ctx, &projects, tabs.active().route());
     window.set_title(ctx.t_args("shell.app.windowTitle", [("tab", active)]).to_string());
     self.reveal(&tabs, fit);
@@ -118,6 +137,20 @@ impl Component for TabStrip {
           .height(Dimension::Px(TAB_HEIGHT)),
       )
       .child(Row::new().flex(1.0))
+  }
+}
+
+/// The room the *N need you* pill takes: none while it does not show, what it took when it was laid out
+/// last, or the design's until it has been.
+fn pill_width(ctx: &mut Ctx, projects: &Projects, tabs: &TabSet) -> f32 {
+  if needs_you::waiting(projects, tabs).is_empty() {
+    return 0.0;
+  }
+  let pill = &ctx.props::<PillRef>().0;
+  if pill.is_attached() && pill.width() > 0.0 {
+    pill.width()
+  } else {
+    tab_fit::NEEDS_YOU_WIDTH
   }
 }
 
@@ -188,6 +221,7 @@ fn tab_button(
   if tab_fit::is_icon(tab) {
     return all_projects_tab(button, active);
   }
+  let attention = attention(ctx, projects, tab);
   let close = active.then(|| close_button(ctx, navigation.clone(), tab));
   let dirty = unsaved(projects, tab.route()).then(|| {
     Row::new()
@@ -199,7 +233,37 @@ fn tab_button(
       .background(PaletteColor::TextSecondary)
       .into()
   });
-  labelled_tab(button, tab, (&label, fit), (dirty, close))
+  labelled_tab(button, tab, (&label, fit), (dirty, attention, close))
+}
+
+/// The mark of a tab whose project needs the person (an amber hand, *Kontur · 2 need you*) or has an
+/// unresolved failure (a red alert, *Kontur · runner offline*), with what it means in its tooltip.
+fn attention(ctx: &mut Ctx, projects: &Projects, tab: &Tab) -> Option<Element> {
+  let project = tab.route().project()?;
+  let mark = needs_you::attention(projects, project)?;
+  let name = projects.name(project)?;
+  let (glyph, color, what, state) = match mark {
+    Attention::Waiting(count) => (Icon::Hand, PaletteColor::Warning, count_words(ctx, count), "needs-you"),
+    Attention::RunnerOffline => (
+      Icon::CircleAlert,
+      PaletteColor::Danger,
+      ctx.t("shell.tabs.runnerOffline").to_string(),
+      "runner-offline",
+    ),
+    Attention::TasksUnread => (
+      Icon::CircleAlert,
+      PaletteColor::Danger,
+      ctx.t("shell.tabs.tasksUnread").to_string(),
+      "tasks-unread",
+    ),
+  };
+  let text = ctx.t_args(
+    "shell.tabs.attention",
+    [("project", name.as_str()), ("waiting", what.as_str())],
+  );
+  let id = format!("tab-{}-attention", tab.id());
+  let marker = icon(glyph, IconSize::Xs, color).id(id.clone()).describe("state", state);
+  Some(Tooltip::new(id, text).wrap(ctx, marker))
 }
 
 /// A tab at All projects: the folders icon.
@@ -232,7 +296,7 @@ fn labelled_tab(
   button: Button,
   tab: &Tab,
   (label, fit): (&str, Fit),
-  (dirty, close): (Option<Element>, Option<Element>),
+  (dirty, attention, close): (Option<Element>, Option<Element>, Option<Element>),
 ) -> Element {
   let (glyph, text, style) = if close.is_some() {
     (
@@ -271,6 +335,7 @@ fn labelled_tab(
     .child(icon(screen_icon(tab.route().screen()), IconSize::Base, glyph))
     .child(text)
     .with_children(dirty)
+    .with_children(attention)
     .with_children(close)
     .into()
 }
