@@ -132,7 +132,11 @@
       "mcpListening": "MCP on :{{port}}",
       "mcpUnavailable": "MCP unavailable",
       "windowControl": "Agents can control this window",
-      "version": "v{{version}}"
+      "version": "v{{version}}",
+      "stale": {
+        "text": "Tasks shown as last read · {{reason}}",
+        "tryAgain": "Try again"
+      }
     },
     "needsYou": {
       "one": "{{count}} needs you",

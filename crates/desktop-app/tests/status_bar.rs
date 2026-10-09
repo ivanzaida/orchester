@@ -141,6 +141,7 @@ fn kontur(runner: RunnerFacts, tasks: ProjectTasks) -> ProjectFacts {
       limits: ProjectLimits::default(),
       today: TokensUsed::new(3_800_000),
     }),
+    stale: None,
   }
 }
 
@@ -508,6 +509,36 @@ fn status_failure_is_dismissed_from_the_slot() {
   });
   bar.press("status-activity-dismiss");
   assert_eq!(bar.asked(), [BarAction::Resolve(id)]);
+}
+
+#[test]
+fn status_stale_tasks_take_the_slot_with_try_again() {
+  let mut log = ActivityLog::default();
+  log.start(operation("Feature delivery"), Instant::now());
+  let stale = |runner| ProjectFacts {
+    stale: Some(Message::new("errors.runnerLost")),
+    ..kontur(runner, ProjectTasks::default())
+  };
+  let mut bar = Bar::of(BarFacts {
+    log: log.clone(),
+    ..facts(Some(stale(runner(RunnerState::Online))))
+  });
+  let text = bar.texts("status-activity-text").expect("the slot shows").join("");
+  assert!(text.starts_with("Tasks shown as last read · "), "{text}");
+  bar.press("status-read-again");
+  assert_eq!(bar.asked(), [BarAction::ReadAgain]);
+  let offline = runner(RunnerState::Failed {
+    cause: RunnerFailure::Lost,
+    attempts: 5,
+  });
+  let mut down = Bar::of(BarFacts {
+    log,
+    ..facts(Some(stale(offline)))
+  });
+  assert!(
+    down.texts("status-read-again").is_none(),
+    "a runner problem comes first"
+  );
 }
 
 /// The bar at 960 with everything shown: the version and Tokens today give way, then the counts' words;

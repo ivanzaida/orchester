@@ -17,7 +17,6 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
-use orchester_workspace::runner::state::RunnerState;
 
 use self::{
   running::{Running, RunningProps, under_way},
@@ -108,10 +107,7 @@ fn running(ctx: &mut Ctx, project: ProjectId) -> Option<Element> {
     return None;
   };
   let feed = projects.feed(project);
-  let online = feed
-    .status
-    .get()
-    .is_some_and(|status| status.state_for(&open.repo_root) == RunnerState::Online);
+  let online = feed.runner_online(&open.repo_root);
   let runs = feed
     .tasks
     .with(|tasks| tasks.ready().map(|tasks| under_way(tasks, online)))?;

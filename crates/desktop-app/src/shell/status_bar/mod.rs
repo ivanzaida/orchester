@@ -41,7 +41,7 @@ use self::{
 };
 use crate::{
   mcp::McpStatus,
-  project::{ProjectFeed, ProjectState, Projects},
+  project::{ProjectFeed, ProjectState, Projects, TasksState},
   routes::Route,
   services::Services,
   ui::icon::Icon,
@@ -97,9 +97,10 @@ fn shown(projects: &Projects, project: ProjectId) -> Option<(ProjectFacts, Proje
   };
   let feed = projects.feed(project);
   let runner = RunnerFacts::of(feed.status.get().as_ref(), &open.repo_root);
-  let tasks = feed
-    .tasks
-    .with(|tasks| tasks.ready().map(|tasks| facts::tasks_with(tasks, &runner.state)));
+  let tasks = match feed.tasks_with_runner(&open.repo_root) {
+    TasksState::Ready(tasks) => Some(tasks),
+    TasksState::Loading | TasksState::Failed(_) => None,
+  };
   let facts = ProjectFacts {
     id: project,
     name: open.project.name().as_str().to_owned(),
@@ -107,6 +108,7 @@ fn shown(projects: &Projects, project: ProjectId) -> Option<(ProjectFacts, Proje
     runner,
     tasks,
     usage: feed.usage.get(),
+    stale: feed.stale.get(),
   };
   Some((facts, feed))
 }
@@ -176,8 +178,16 @@ impl Component for StatusBarView {
     // activity gives way to them.
     let beside = waiting.is_empty() || slot.beside_approvals();
     left.extend(waiting);
-    if let (true, ActivitySlot::Activity(slot)) = (beside, &slot) {
-      left.extend(activity::activity(ctx, slot, project, &dispatch));
+    // Tasks that could not be read again are the project's own unresolved failure: they take the slot
+    // until a reading succeeds.
+    let stale = project.and_then(|project| project.stale.as_ref());
+    match (stale, &slot) {
+      (_, ActivitySlot::RunnerProblem(_) | ActivitySlot::Hidden) => {}
+      (Some(reason), _) => left.extend(activity::stale(ctx, reason, &dispatch)),
+      (None, ActivitySlot::Activity(slot)) if beside => {
+        left.extend(activity::activity(ctx, slot, project, &dispatch));
+      }
+      (None, ActivitySlot::Activity(_)) => {}
     }
     if let Some(tasks) = project.and_then(|project| project.tasks.as_ref()) {
       left.extend(approvals::auto_approving(ctx, &tasks.auto_approving, &dispatch));

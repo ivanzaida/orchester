@@ -22,7 +22,7 @@ use orchester_core::{id::ProjectId, time::Timestamp};
 use orchester_workspace::{
   background,
   messages::{self, Message},
-  runner::{RunnerStatus, Runners},
+  runner::{RunnerStatus, Runners, state::RunnerState},
   tasks::{
     data::ProjectTasks,
     integration_jobs::{IntegrationJobs, ProjectJobState},
@@ -87,6 +87,25 @@ impl ProjectFeed {
   /// A screen saved the project's tasks: they are read again, in every tab of the project.
   pub fn saved(&self) {
     self.revision.update(|revision| *revision += 1);
+  }
+
+  /// Whether a runner serves the project at `repo_root` now. Reading it in a render re-renders it when
+  /// that changes.
+  pub fn runner_online(&self, repo_root: &Path) -> bool {
+    self
+      .status
+      .with(|status| status.as_ref().map(|status| status.state_for(repo_root)) == Some(RunnerState::Online))
+  }
+
+  /// The tasks of the project at `repo_root` as they stand with its runner: while none serves the
+  /// project, a run recorded as running has lost its agent and is interrupted
+  /// (`ProjectTasks::without_runner`). Reading it in a render re-renders it when either changes.
+  pub fn tasks_with_runner(&self, repo_root: &Path) -> TasksState {
+    let online = self.runner_online(repo_root);
+    match self.tasks.get() {
+      TasksState::Ready(tasks) if !online => TasksState::Ready(tasks.without_runner()),
+      state => state,
+    }
   }
 }
 

@@ -68,6 +68,11 @@ pub fn dispatch(
     BarAction::RestartRunner => services.runners.restart(),
     BarAction::Go(route) => navigation.go(route),
     BarAction::Resolve(id) => services.activity.resolve(id),
+    BarAction::ReadAgain => {
+      if let Some((_, feed)) = &shown {
+        feed.saved();
+      }
+    }
     BarAction::StopAutoApproving(runs) => {
       // The bar offers *Stop* only for the shown project's runs; one stop at a time.
       let Some((repo_root, feed)) = &shown else {

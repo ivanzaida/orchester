@@ -12,6 +12,7 @@ use orchester_core::id::{ProjectId, RunId};
 use orchester_ipc::WorkSummary;
 use orchester_workspace::{
   activity::{ActivityLog, OperationId},
+  messages::Message,
   runner::{RunnerStatus, state::RunnerState},
   tasks::{data::ProjectTasks, usage::ProjectUsage},
 };
@@ -38,6 +39,8 @@ pub struct ProjectFacts {
   pub tasks: Option<ProjectTasks>,
   /// The limits and today's usage; `None` while they are read.
   pub usage: Option<ProjectUsage>,
+  /// Why the tasks shown could not be read again: they are the ones last read.
+  pub stale: Option<Message>,
 }
 
 /// The project's runner as the bar shows it.
@@ -82,16 +85,6 @@ impl RunnerFacts {
   }
 }
 
-/// `tasks` as they stand while their project's runner is in `state`: without a runner online, runs
-/// recorded as running have lost their agents (`ProjectTasks::without_runner`).
-pub fn tasks_with(tasks: &ProjectTasks, state: &RunnerState) -> ProjectTasks {
-  if *state == RunnerState::Online {
-    tasks.clone()
-  } else {
-    tasks.without_runner()
-  }
-}
-
 /// What an item of the bar asks the window to do.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BarAction {
@@ -105,6 +98,8 @@ pub enum BarAction {
   StopAutoApproving(Vec<RunId>),
   /// A failure or a decision in the activity slot was opened or dismissed: it leaves the slot.
   Resolve(OperationId),
+  /// Read the active project's tasks again, after a reading failed.
+  ReadAgain,
 }
 
 /// Where the bar's actions go.

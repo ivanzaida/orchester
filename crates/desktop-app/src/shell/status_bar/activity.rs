@@ -19,6 +19,7 @@ use orchester_core::project::TaskKey;
 use orchester_workspace::{
   activity::{Event, Operation, Outcome, Place, Slot, Target},
   display,
+  messages::Message,
 };
 
 use super::{
@@ -93,6 +94,30 @@ fn failure(ctx: &Ctx, event: &Event, project: Option<&ProjectFacts>, dispatch: &
     );
   }
   items
+}
+
+/// The tasks shown are the ones last read, because reading them again failed, and *Try again*.
+pub fn stale(ctx: &Ctx, reason: &Message, dispatch: &Dispatch) -> Vec<Element> {
+  let text = ctx.t_args(
+    "shell.status.stale.text",
+    [("reason", message_text(ctx, reason).to_string())],
+  );
+  let row = item("status-activity")
+    .describe("state", "stale")
+    .flex_shrink(1.0)
+    .shrink_order(give_way::ACTIVITY)
+    .shrink_limit(ShrinkLimit::Content)
+    .background(PaletteColor::SurfaceRaised)
+    .rounded(RadiusSize::Md)
+    .child(glyph(Icon::CircleAlert, PaletteColor::TextPrimary))
+    .child(trimmed(&text, PaletteColor::TextPrimary).id("status-activity-text"));
+  let dispatch = dispatch.clone();
+  vec![
+    row.into(),
+    action("status-read-again", &ctx.t("shell.status.stale.tryAgain"), move || {
+      dispatch(BarAction::ReadAgain);
+    }),
+  ]
 }
 
 /// One operation under way and how long it has run, or how many and the newest.
