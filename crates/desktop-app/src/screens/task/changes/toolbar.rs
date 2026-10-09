@@ -60,7 +60,7 @@ pub fn toolbar(ctx: &Ctx, run: &RunView, checkpointed: &Checkpointed) -> Element
     Checkpointed::NoCheckpoint => return row.child(detail(&ctx.t("changes.toolbar.noCheckpoint"))).into(),
     Checkpointed::Read { head, changes } => {
       let diff = &changes.diff;
-      let files = u32::try_from(diff.files().len()).unwrap_or(u32::MAX);
+      let files = u32::try_from(diff.files().len()).expect("a diff Orchester reads has at most MAX_DIFF_FILES files");
       (
         head,
         Changes {

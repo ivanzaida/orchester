@@ -2,6 +2,7 @@
   "changes": {
     "groupSeparator": ",",
     "loading": "Reading the run's changes",
+    "noTask": "This project has no task {{key}}.",
     "added": "+{{count}}",
     "removed": "−{{count}}",
     "type": {

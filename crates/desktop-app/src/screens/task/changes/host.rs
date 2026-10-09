@@ -20,10 +20,12 @@ use orchester_workspace::{background, messages, runner::state::RunnerState, task
 use super::{ChangesProps, ChangesReads, ChangesTab, Follow, RunChanges};
 use crate::{
   navigation::Navigation,
-  project::ShownProject,
+  project::{ShownProject, TasksState},
   routes::{ProjectPage, Route, Screen, TaskTab, TaskView},
-  screens::placeholder::titled,
+  screens::placeholder::{centered, titled},
   ui::{
+    icon::screen_icon,
+    message::message_text,
     state::loading,
     tabs::{PageTab, counted, page_tabs},
   },
@@ -31,14 +33,13 @@ use crate::{
 
 /// A task's page at `view`.
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey, view: &TaskView) -> Element {
-  let task = project
-    .feed
-    .tasks
-    .get()
-    .ready()
-    .and_then(|tasks| tasks.tasks.iter().find(|task| task.key() == key).map(|task| task.id()));
+  let task = match project.feed.tasks.get() {
+    TasksState::Ready(tasks) => tasks.tasks.iter().find(|task| task.key() == key).map(|task| task.id()),
+    TasksState::Loading => return loading("screen-task", &ctx.t("changes.loading")).into(),
+    TasksState::Failed(error) => return missing(ctx, &message_text(ctx, &error)),
+  };
   let Some(task) = task else {
-    return loading("screen-task", &ctx.t("changes.loading")).into();
+    return missing(ctx, &ctx.t_args("changes.noTask", [("key", key.to_string())]));
   };
   let online = project
     .feed
@@ -59,6 +60,14 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey, view: &TaskV
 }
 
 /// The task as read.
+/// Why the task cannot be shown.
+fn missing(ctx: &Ctx, why: &str) -> Element {
+  let title = ctx.t(Screen::Task.title_key());
+  centered(screen_icon(Screen::Task), &title, why)
+    .id("screen-task")
+    .into()
+}
+
 #[derive(Clone, PartialEq)]
 struct LoadedTask(Arc<TaskDetail>);
 
