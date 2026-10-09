@@ -20,12 +20,11 @@ use lurq::{
 };
 use orchester_core::run::{Answerer, PlanDecision};
 use orchester_ipc::Command;
-use orchester_workspace::tasks::timeline::{NextStep, PlanCard};
+use orchester_workspace::tasks::timeline::PlanCard;
 
 use super::{
   Place,
-  action::{Decide, decide, refusal},
-  decisions::Decisions,
+  decisions::{Decisions, Given, Outcome, Refused, Stage, refusal},
   frame::{Stands, frame, head, note},
 };
 use crate::{
@@ -76,10 +75,18 @@ impl Component for PlanView {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let PlanProps { place, card } = ctx.props::<PlanProps>().clone();
-    let action = decide(ctx, place.project);
-    let id = format!("cards-plan-{}-{}", card.plan.step.as_str(), card.plan.version);
-    let lost = card.waiting && place.lost(ctx);
-    let waiting = card.waiting && !lost && action.state().get().data.is_none();
+    let decisions = Decisions::of(ctx);
+    let id = format!("cards-plan-{}-{}", card.plan.execution, card.plan.version);
+    let outcome = decisions.outcome(&place.key);
+    let lost = card.waiting && decisions.lost();
+    // Approved here, or refused as no longer waiting, before the run's change is read again.
+    let settled = outcome.as_ref().is_some_and(|outcome| {
+      matches!(
+        outcome.stage,
+        Stage::Taken(_) | Stage::Refused(Refused::Ended | Refused::Superseded)
+      )
+    });
+    let waiting = card.waiting && !lost && !settled;
     let version = card.plan.version.to_string();
     let title = ctx.t_args(
       "cards.plan.title",
@@ -92,18 +99,29 @@ impl Component for PlanView {
       &id,
       (Icon::Map, IconSize::Md, PaletteColor::TextSecondary),
       (&title, CardsText::Title.role()),
-      stands(ctx, &card, (waiting, lost)).into_element(&id),
+      stands(ctx, &card, (waiting, lost, outcome.as_ref())).into_element(&id),
     )
     .padding(Padding::symmetric(
       ExtraSpacing::Inset.role(),
       CardsSpacing::PlanHead.role(),
     ))
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border));
-    let footer = waiting.then(|| self.footer(ctx, (&id, &card), &action));
+    let focus = decisions.take_focus(&place.key);
+    let footer = waiting.then(|| self.footer(ctx, (&id, &place, &card), (&decisions, focus)));
+    // Why a decision given here did not count, once the plan no longer waits for one.
+    let refused = match outcome.map(|outcome| outcome.stage) {
+      Some(Stage::Refused(refused @ (Refused::Ended | Refused::Superseded))) if !waiting => Some(refused),
+      _ => None,
+    };
     frame(id.clone(), waiting)
       .child(head)
       .child(self.body(ctx, &id, (&place, &card)))
       .with_children(footer)
+      .with_children(refused.map(|refused| {
+        Column::new()
+          .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
+          .child(refusal(ctx, &id, &refused, &card.agent))
+      }))
   }
 }
 
@@ -156,9 +174,15 @@ impl PlanView {
       .into()
   }
 
-  /// *Approve plan & continue* and what approving starts; why it did not go through.
-  fn footer(&self, ctx: &mut Ctx, (id, card): (&str, &PlanCard), action: &Decide) -> Element {
-    let state = action.state().get();
+  /// *Approve plan & continue* and what approving starts; why it did not go through. It takes the focus with
+  /// `focus`.
+  fn footer(
+    &self,
+    ctx: &mut Ctx,
+    (id, place, card): (&str, &Place, &PlanCard),
+    (decisions, focus): (&Decisions, bool),
+  ) -> Element {
+    let outcome = decisions.outcome(&place.key);
     let button = ActionButton::new(
       format!("{id}-approve"),
       ButtonKind::Primary,
@@ -167,37 +191,38 @@ impl PlanView {
     .icon(Icon::Check)
     .in_form()
     .element_ref(self.approve.clone());
-    let button = if state.is_pending() {
-      button.loading()
-    } else {
-      let (action, command) = (
-        action.clone(),
-        Command::DecidePlan {
+    let sending = outcome.as_ref().is_some_and(|outcome| outcome.stage == Stage::Sending);
+    let button = match place.open(ctx) {
+      _ if sending => button.loading(),
+      _ if decisions.busy() => button.disabled(),
+      None => button.disabled(),
+      Some(open) => {
+        let (decisions, key) = (decisions.clone(), place.key.clone());
+        let command = Command::DecidePlan {
           run: card.plan.run,
           execution: card.plan.execution,
           version: card.plan.version,
           decision: PlanDecision::Approved,
           by: Answerer::Person,
-        },
-      );
-      button.on_click(move || action.run(command.clone()))
+        };
+        if focus {
+          ctx.focus(&self.approve);
+        }
+        button.on_click(move || decisions.answer(&key, Given::ApprovePlan, (&open, command.clone())))
+      }
     };
-    let decisions = Decisions::of(ctx);
-    if !state.is_pending()
-      && decisions
-        .as_ref()
-        .is_some_and(|decisions| decisions.take_focus(card.plan.created_at))
-    {
-      ctx.focus(&self.approve);
-    }
-    let composer = decisions.is_some_and(|decisions| decisions.composer_attached());
+    let composer = decisions.composer_attached();
+    let next = card
+      .next
+      .as_ref()
+      .map(|next| (place.label_of(ctx, &next.step), next.agent.clone()));
     let row = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Loose.role())
       .align_items(Alignment::Center)
       .child(Row::new().flex_shrink(0.0).child(button))
       .child(
-        note(&format!("{id}-hint"), &hint(ctx, card.next.as_ref(), composer))
+        note(&format!("{id}-hint"), &hint(ctx, next, composer))
           .flex(1.0)
           .min_width(Dimension::Px(0.0)),
       );
@@ -210,20 +235,17 @@ impl PlanView {
       .spacing(SpacingSize::Sm)
       .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .child(row)
-      .with_children(
-        state
-          .error
-          .as_ref()
-          .filter(|_| !state.is_pending())
-          .map(|refused| refusal(ctx, id, refused, &card.agent)),
-      )
+      .with_children(outcome.and_then(|outcome| match outcome.stage {
+        Stage::Refused(refused) => Some(refusal(ctx, id, &refused, &card.agent)),
+        Stage::Sending | Stage::Taken(_) => None,
+      }))
       .into()
   }
 }
 
-/// Where a version stands: it waits, its run was interrupted, it was decided (by automation, when it was),
-/// or a later version came.
-fn stands(ctx: &Ctx, card: &PlanCard, (waiting, lost): (bool, bool)) -> Stands {
+/// Where a version stands: it waits, its run was interrupted, it was decided (by automation, when it was;
+/// here, before the run is read again), or a later version came.
+fn stands(ctx: &Ctx, card: &PlanCard, (waiting, lost, outcome): (bool, bool, Option<&Outcome>)) -> Stands {
   let decided = |glyph, key: &str, color| Stands {
     glyph,
     words: ctx.t(key),
@@ -232,8 +254,9 @@ fn stands(ctx: &Ctx, card: &PlanCard, (waiting, lost): (bool, bool)) -> Stands {
   match (&card.plan.review, waiting) {
     (_, true) => Stands::waiting(ctx.t("cards.state.waitingApproval")),
     (None, false) if lost => Stands::interrupted(ctx.t("cards.state.interrupted")),
-    // Approved here, before the run's change is read again.
-    (None, false) if card.waiting => decided(Icon::CircleCheck, "cards.state.approved", PaletteColor::Success),
+    (None, false) if outcome.is_some_and(|outcome| matches!(outcome.stage, Stage::Taken(_))) => {
+      decided(Icon::CircleCheck, "cards.state.approved", PaletteColor::Success)
+    }
     (None, false) => decided(Icon::History, "cards.state.earlier", PaletteColor::TextMuted),
     (Some(review), false) => match (&review.decision, review.by) {
       (PlanDecision::Approved, Answerer::Person) => {
@@ -257,19 +280,17 @@ fn stands(ctx: &Ctx, card: &PlanCard, (waiting, lost): (bool, bool)) -> Stands {
 }
 
 /// What approving starts, and where the changes a plan needs are asked for: the composer, while it is there.
-fn hint(ctx: &Ctx, next: Option<&NextStep>, composer: bool) -> Arc<str> {
+/// `next` is the step that starts, as the conversation names it ("03 Implement"), and its agent.
+fn hint(ctx: &Ctx, next: Option<(Arc<str>, Option<Arc<str>>)>, composer: bool) -> Arc<str> {
   let key = |with: &'static str, without: &'static str| if composer { with } else { without };
   match next {
-    Some(NextStep {
-      step,
-      agent: Some(agent),
-    }) => ctx.t_args(
+    Some((step, Some(agent))) => ctx.t_args(
       key("cards.plan.hint.agent", "cards.plan.hint.agentNoComposer"),
-      [("step", &**step), ("agent", &**agent)],
+      [("step", &*step), ("agent", &*agent)],
     ),
-    Some(NextStep { step, agent: None }) => ctx.t_args(
+    Some((step, None)) => ctx.t_args(
       key("cards.plan.hint.tool", "cards.plan.hint.toolNoComposer"),
-      [("step", &**step)],
+      [("step", &*step)],
     ),
     None => ctx.t(key("cards.plan.hint.last", "cards.plan.hint.lastNoComposer")),
   }

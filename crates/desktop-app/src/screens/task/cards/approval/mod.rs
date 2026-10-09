@@ -12,30 +12,24 @@ mod request;
 mod words;
 
 use lurq::{
-  app::{
-    component::Component,
-    ctx::{Ctx, FutureState},
-    theme::SpacingSize,
-  },
-  core::{ElementRef, Signal},
+  app::{component::Component, ctx::Ctx, theme::SpacingSize},
+  core::ElementRef,
   node::{Element, padding::Padding},
 };
 use orchester_core::run::ToolApprovalDecision;
 use orchester_workspace::tasks::{approvals::ShownApproval, timeline::ApprovalCard};
 
 use self::{
-  answers::{Answer, Answering},
+  answers::{Answering, approval_answer},
   decided::Decided,
 };
 use super::{
   Place,
-  action::{Refused, decide, refusal},
-  decisions::Decisions,
+  decisions::{Decisions, Given, Outcome, Refused, Stage, refusal},
   frame::frame,
 };
 use crate::{
   project::{Projects, TasksState},
-  services::Services,
   theme::ExtraSpacing,
 };
 
@@ -58,50 +52,49 @@ pub(super) fn card(ctx: &mut Ctx, place: Place, card: &ApprovalCard) -> Element 
 }
 
 struct ApprovalView {
-  pressed: Signal<Option<Answer>>,
   once: ElementRef,
 }
 
 impl Component for ApprovalView {
   type Props = ApprovalProps;
 
-  fn create(ctx: &mut Ctx) -> Self {
+  fn create(_ctx: &mut Ctx) -> Self {
     Self {
-      pressed: ctx.signal(None),
       once: ElementRef::new(),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let ApprovalProps { place, card } = ctx.props::<ApprovalProps>().clone();
-    let action = decide(ctx, place.project);
+    let decisions = Decisions::of(ctx);
+    let focus = decisions.take_focus(&place.key);
     let request = &card.request;
     let id = format!("cards-approval-{}", request.id);
-    let state = action.state().get();
-    if let Some(decided) = self.decided(ctx, &card, &state) {
+    let outcome = decisions.outcome(&place.key);
+    if let Some(decided) = decided(&card, outcome.as_ref()) {
       return decided::row(ctx, &id, request, &decided);
     }
-    if place.lost(ctx) {
+    if decisions.lost() {
       return decided::row(ctx, &id, request, &Decided::Lost);
     }
     let (shown, reviewing) = shown(ctx, &place, &request.id);
-    if !state.is_pending() && Decisions::of(ctx).is_some_and(|decisions| decisions.take_focus(request.requested_at)) {
-      ctx.focus(&self.once);
-    }
     let answering = Answering {
+      key: &place.key,
       id: &id,
       request,
       shown: shown.as_ref(),
       run: place.run_number(),
-      action: &action,
-      pressed: &self.pressed,
+      open: place.open(ctx),
+      decisions: &decisions,
       once: &self.once,
     };
-    let failed = state
-      .error
-      .as_ref()
-      .filter(|_| !state.is_pending())
-      .map(|refused| refusal(ctx, &id, refused, &request.agent));
+    if focus && answering.open.is_some() && !decisions.busy() {
+      ctx.focus(&self.once);
+    }
+    let failed = outcome.and_then(|outcome| match outcome.stage {
+      Stage::Refused(refused) => Some(refusal(ctx, &id, &refused, &request.agent)),
+      Stage::Sending | Stage::Taken(_) => None,
+    });
     let head = request::head(ctx, &id, request);
     let body = request::body(ctx, &id, (&place, request), (shown.as_ref(), reviewing));
     frame(id.clone(), true)
@@ -116,39 +109,37 @@ impl Component for ApprovalView {
   }
 }
 
-impl ApprovalView {
-  /// How the request was answered: as recorded, or as the runner just took the person's answer or said it
-  /// no longer waits; `None` while it waits.
-  fn decided(&self, ctx: &mut Ctx, card: &ApprovalCard, state: &FutureState<(), Refused>) -> Option<Decided> {
-    let now = Services::of(ctx).clock.now();
-    if let Some(decision) = card.decided {
-      return Some(Decided::Recorded {
-        decision,
-        by: card.decided_by,
-        at: card.decided_at.unwrap_or(now),
-      });
+/// How the request was answered: as recorded, or as the runner just took the person's answer or said it no
+/// longer waits; `None` while it waits.
+fn decided(card: &ApprovalCard, outcome: Option<&Outcome>) -> Option<Decided> {
+  if let Some(decision) = card.decided {
+    return Some(Decided::Recorded {
+      decision,
+      by: card.decided_by,
+      at: card.decided_at,
+    });
+  }
+  match &outcome?.stage {
+    Stage::Taken(at) => {
+      let given = outcome?.given;
+      let decision = if given == Given::Deny {
+        ToolApprovalDecision::Denied
+      } else {
+        ToolApprovalDecision::Approved
+      };
+      Some(Decided::Recorded {
+        decision: Some(decision),
+        by: Some(approval_answer(given).decided_by()),
+        at: Some(*at),
+      })
     }
-    if state.is_pending() {
-      return None;
-    }
-    match (&state.data, &state.error) {
-      (Some(()), _) => self.pressed.get().map(|answer| Decided::Recorded {
-        decision: Some(if answer == Answer::Deny {
-          ToolApprovalDecision::Denied
-        } else {
-          ToolApprovalDecision::Approved
-        }),
-        by: Some(answer.answer().decided_by()),
-        at: now,
-      }),
-      (None, Some(Refused::Ended)) => Some(Decided::Recorded {
-        decision: None,
-        by: None,
-        at: now,
-      }),
-      (None, Some(Refused::Answered)) => Some(Decided::AnsweredAlready),
-      (None, Some(Refused::Failed(_)) | None) => None,
-    }
+    Stage::Refused(Refused::Ended) => Some(Decided::Recorded {
+      decision: None,
+      by: None,
+      at: None,
+    }),
+    Stage::Refused(Refused::Answered) => Some(Decided::AnsweredAlready),
+    Stage::Sending | Stage::Refused(Refused::Superseded | Refused::Failed(_)) => None,
   }
 }
 

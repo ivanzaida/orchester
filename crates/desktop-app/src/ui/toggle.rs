@@ -60,6 +60,8 @@ pub struct Toggle {
   label_shown: bool,
   change: Option<Arc<dyn Fn(bool) + Send + Sync>>,
   element: Option<ElementRef>,
+  /// Room after the label, so the focus ring around the control clears its last letter.
+  ring_room: bool,
 }
 
 impl Toggle {
@@ -74,6 +76,7 @@ impl Toggle {
       label_shown: true,
       change: None,
       element: None,
+      ring_room: false,
     }
   }
 
@@ -94,6 +97,12 @@ impl Toggle {
   /// `element` refers to the control, e.g. so a screen can move the focus to it.
   pub fn element_ref(mut self, element: ElementRef) -> Self {
     self.element = Some(element);
+    self
+  }
+
+  /// Room after the label for the focus ring, where the control stands among others in a card (`Z4HeE3`).
+  pub fn ring_room(mut self) -> Self {
+    self.ring_room = true;
     self
   }
 
@@ -170,6 +179,11 @@ impl From<Toggle> for Element {
     let button = match toggle.element {
       Some(element) => button.ref_element(element),
       None => button,
+    };
+    let button = if toggle.ring_room {
+      button.padding_right(ExtraSpacing::Snug.role())
+    } else {
+      button
     };
     button
       .id(toggle.id)

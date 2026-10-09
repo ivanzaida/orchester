@@ -5,14 +5,16 @@
 //! by the person, denied by the person, approved by automation and ended without an answer; a plan longer
 //! than its card shows waiting (v1), and a plan revised after changes were asked for (v2).
 //!
-//! Its runs are recorded, not executed: without a runner a run recorded at work reads interrupted, and with
-//! what its agent asked in its turn (the command waiting, the questions with suggested answers waiting); a
-//! runner that attaches ends them. Reach those waiting on live runs (`live`).
+//! Its runs are recorded, not executed: without a runner a run recorded at work reads interrupted, and so does
+//! what its agent asked in its turn; a runner that attaches ends it. So that the waiting command and
+//! questions with suggested answers can be answered on screen without a runner, their step is recorded
+//! waiting for the person (`held`), which the runner itself does not do for them; two more are left at
+//! work, so they read interrupted. Live runs (`live`) show them as the runner keeps them.
 
 use orchester_core::{
   question::{GivenAnswer, Question, QuestionOption, QuestionRequest, QuestionTurn},
-  run::{Answerer, DecidedBy, Invocation, PendingToolApproval, Run, ToolApprovalDecision},
-  store::ActivityStore,
+  run::{Answerer, DecidedBy, Invocation, PendingToolApproval, Run, ToolApprovalDecision, WaitReason},
+  store::{ActivityStore, RunStore},
   task::Task,
   time::Timestamp,
 };
@@ -21,7 +23,7 @@ use crate::kontur::{
   Kontur, SeedError,
   catalogue::Published,
   run::Drive,
-  shapes::{self, Shape},
+  shapes::{self, APPROVAL_COMMAND, Shape},
 };
 
 const CRITERIA: [&str; 1] = ["The change is covered by tests."];
@@ -40,9 +42,9 @@ enum Card {
   /// One of the shapes the task page shows (a question, an approval, a plan).
   Shape(Shape),
   /// A question with suggested answers; several answers may be picked.
-  Choice { several: bool, ends: Ending },
-  /// A command that asks to be approved, and how it ended.
-  Command(&'static str, Option<Decision>),
+  Choice { several: bool, ends: Ending, held: bool },
+  /// A command that asks to be approved, how it ended, and whether its step is held waiting for it.
+  Command(&'static str, Option<Decision>, bool),
   /// Plan proposes a plan, which waits for a decision.
   Plan(&'static str),
 }
@@ -62,7 +64,7 @@ enum Decision {
   Ended,
 }
 
-const CARDS: [(&str, Card, &str); 13] = [
+const CARDS: [(&str, Card, &str); 15] = [
   (
     "Sync contacts with HubSpot",
     Card::Shape(Shape::Question("implement")),
@@ -73,6 +75,7 @@ const CARDS: [(&str, Card, &str); 13] = [
     Card::Choice {
       several: false,
       ends: Ending::Waiting,
+      held: true,
     },
     "question with options waiting",
   ),
@@ -81,6 +84,7 @@ const CARDS: [(&str, Card, &str); 13] = [
     Card::Choice {
       several: true,
       ends: Ending::Waiting,
+      held: true,
     },
     "question with several answers waiting",
   ),
@@ -89,6 +93,7 @@ const CARDS: [(&str, Card, &str); 13] = [
     Card::Choice {
       several: false,
       ends: Ending::Answered(Answerer::Person),
+      held: false,
     },
     "question with options answered by you",
   ),
@@ -97,6 +102,7 @@ const CARDS: [(&str, Card, &str); 13] = [
     Card::Choice {
       several: false,
       ends: Ending::Answered(Answerer::Automation),
+      held: false,
     },
     "question with options answered by automation",
   ),
@@ -105,17 +111,32 @@ const CARDS: [(&str, Card, &str); 13] = [
     Card::Choice {
       several: false,
       ends: Ending::Interrupted,
+      held: false,
     },
     "question with options ended without an answer",
   ),
   (
     "Add serde to the webhook payloads",
-    Card::Shape(Shape::Approval("implement")),
+    Card::Command(APPROVAL_COMMAND, None, true),
     "command waiting for approval",
   ),
   (
+    "Add jitter to the retries",
+    Card::Command("cargo add rand", None, false),
+    "command waiting, its run interrupted",
+  ),
+  (
+    "Pick the retry header",
+    Card::Choice {
+      several: false,
+      ends: Ending::Waiting,
+      held: false,
+    },
+    "question with options waiting, its run interrupted",
+  ),
+  (
     "Add rand to the jitter",
-    Card::Command("cargo add rand", Some(Decision::Decided(DecidedBy::Person))),
+    Card::Command("cargo add rand", Some(Decision::Decided(DecidedBy::Person)), false),
     "command approved once by you",
   ),
   (
@@ -123,17 +144,22 @@ const CARDS: [(&str, Card, &str); 13] = [
     Card::Command(
       "cargo publish --dry-run",
       Some(Decision::Decided(DecidedBy::PersonDeny)),
+      false,
     ),
     "command denied by you",
   ),
   (
     "Fetch the latest schema",
-    Card::Command("git fetch origin", Some(Decision::Decided(DecidedBy::Automation))),
+    Card::Command(
+      "git fetch origin",
+      Some(Decision::Decided(DecidedBy::Automation)),
+      false,
+    ),
     "command approved by automation",
   ),
   (
     "Push the release tag",
-    Card::Command("git push origin v1.2.0", Some(Decision::Ended)),
+    Card::Command("git push origin v1.2.0", Some(Decision::Ended), false),
     "command ended without an answer",
   ),
   ("Add retry to webhook sender", Card::Plan(LONG_PLAN), "plan v1 waiting"),
@@ -164,8 +190,14 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
       // Two minutes into the agent's turn.
       let at = Timestamp::from_unix_millis(invocation.started_at.unix_millis() + 2 * 60_000);
       match card {
-        Card::Choice { several, ends } => choice(kontur, (&run, &invocation), several, (ends, at))?,
-        Card::Command(command, ends) => approval(kontur, (&run, &invocation), command, (ends, at))?,
+        Card::Choice { several, ends, held } => {
+          choice(kontur, (&run, &invocation), several, (ends, at))?;
+          hold(kontur, run, (&invocation, held))?;
+        }
+        Card::Command(command, ends, held) => {
+          approval(kontur, (&run, &invocation), command, (ends, at))?;
+          hold(kontur, run, (&invocation, held))?;
+        }
         Card::Shape(_) | Card::Plan(_) => {}
       }
       continue;
@@ -194,6 +226,18 @@ fn at_work(
     .find(|invocation| invocation.ended_at.is_none())
     .ok_or(SeedError::NotAtWork)?;
   Ok((run, invocation))
+}
+
+/// With `held`, `invocation`'s step is recorded waiting for the person, so its request reads waiting without a
+/// runner.
+fn hold(kontur: &mut Kontur, mut run: Run, (invocation, held): (&Invocation, bool)) -> Result<(), SeedError> {
+  if !held {
+    return Ok(());
+  }
+  let at = Timestamp::from_unix_millis(invocation.started_at.unix_millis() + 3 * 60_000);
+  let events = run.wait_step(invocation.execution, WaitReason::Approval, at)?;
+  kontur.db.append_events(&run, &events)?;
+  Ok(())
 }
 
 fn invalid(error: impl std::fmt::Display) -> SeedError {

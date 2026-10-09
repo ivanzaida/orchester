@@ -24,7 +24,7 @@ use super::{
   words,
 };
 use crate::{
-  theme::{CardsText, ExtraTypography, IconSize},
+  theme::{CardsText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     chip::TagChip,
     code_box::CodeBox,
@@ -85,7 +85,7 @@ pub(super) fn body(
   body.extend(reviewing.then(|| note(&format!("{id}-reviewing"), &ctx.t("cards.approval.reviewing")).into()));
   body.extend(value_box(ctx, id, request));
   body.push(facts(ctx, id, (place, request), shown));
-  body.push(note(&format!("{id}-deny-tells"), &deny_tells(ctx, request, shown)).into());
+  body.push(deny_tells(ctx, id, request, shown));
   body
 }
 
@@ -147,9 +147,11 @@ fn facts(
   let row = |name: &str, key: &str, value: &str, kind| detail_row(&format!("{id}-{name}"), &ctx.t(key), value, kind);
   let mut rows = vec![row("agent", "cards.approval.agent", &agent, DetailValue::Text)];
   if request.command {
-    let folder = shown
-      .and_then(|shown| shown.cwd.as_deref())
-      .or(request.target.as_deref());
+    // Where the agent runs it, whole, as recorded; else as the repository names it.
+    let folder = request
+      .target
+      .as_deref()
+      .or_else(|| shown.and_then(|shown| shown.cwd.as_deref()));
     rows.extend(folder.map(|folder| row("cwd", "cards.approval.cwd", folder, DetailValue::Mono)));
     rows.extend(
       request
@@ -177,15 +179,38 @@ fn facts(
     .into()
 }
 
-/// The words Deny tells the agent, exactly: Orchester's for Claude Code, Codex's own for Codex.
-fn deny_tells(ctx: &Ctx, request: &PendingToolApproval, shown: Option<&ShownApproval>) -> std::sync::Arc<str> {
-  let (key, told) = match shown {
-    Some(shown) if shown.choices.codex => ("cards.approval.denyTellsCodex", shown.choices.told.clone()),
-    Some(shown) => ("cards.approval.denyTells", shown.choices.told.clone()),
-    None => (
-      "cards.approval.denyTells",
-      denial_message(request, Answerer::Person).into(),
-    ),
-  };
-  ctx.t_args(key, [("agent", request.agent.as_str()), ("message", &*told)])
+/// The words Deny tells the agent, exactly: Orchester's for Claude Code, in its sentence; Codex's own for
+/// Codex, under what says so, in mono as Codex words them.
+fn deny_tells(ctx: &Ctx, id: &str, request: &PendingToolApproval, shown: Option<&ShownApproval>) -> Element {
+  let agent = request.agent.as_str();
+  let id = format!("{id}-deny-tells");
+  match shown {
+    Some(shown) if shown.choices.codex => Column::new()
+      .id(id.clone())
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Tight.role())
+      .child(note(
+        &format!("{id}-label"),
+        &ctx.t_args("cards.approval.denyTellsCodexLabel", [("agent", agent)]),
+      ))
+      .child(
+        Text::new(&shown.choices.told)
+          .id(format!("{id}-words"))
+          .variant(ExtraTypography::MonoKey.role())
+          .selectable(true)
+          .width(Dimension::Pct(100.0)),
+      )
+      .into(),
+    _ => {
+      let told: std::sync::Arc<str> = match shown {
+        Some(shown) => shown.choices.told.clone(),
+        None => denial_message(request, Answerer::Person).into(),
+      };
+      note(
+        &id,
+        &ctx.t_args("cards.approval.denyTells", [("agent", agent), ("message", &*told)]),
+      )
+      .into()
+    }
+  }
 }

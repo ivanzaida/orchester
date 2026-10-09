@@ -24,11 +24,12 @@ use crate::{
 
 /// How a request was answered.
 pub(super) enum Decided {
-  /// `decision` (`None`: it ended without one) by `by`, at `at`.
+  /// `decision` (`None`: it ended without one) by `by`, at `at`; `at` is `None` for a request the runner
+  /// just said no longer waits, whose end it did not time.
   Recorded {
     decision: Option<ToolApprovalDecision>,
     by: Option<DecidedBy>,
-    at: Timestamp,
+    at: Option<Timestamp>,
   },
   /// Someone answered it before the person's answer reached the runner.
   AnsweredAlready,
@@ -92,6 +93,9 @@ fn said(ctx: &Ctx, request: &PendingToolApproval, decided: &Decided) -> (Icon, P
       );
     }
   };
+  let Some(at) = at else {
+    return untimed(ctx, request, *decision);
+  };
   let time = display::clock(*at);
   let words = |key: &str| ctx.t_args(key, [("time", time.as_str()), ("agent", request.agent.as_str())]);
   match decision {
@@ -101,10 +105,11 @@ fn said(ctx: &Ctx, request: &PendingToolApproval, decided: &Decided) -> (Icon, P
       words("cards.approval.decided.ended"),
     ),
     Some(ToolApprovalDecision::Denied) => {
-      let key = if *by == Some(DecidedBy::AutomationDeny) {
-        "cards.approval.decided.deniedByAutomation"
-      } else {
-        "cards.approval.decided.denied"
+      let key = match by {
+        Some(DecidedBy::AutomationDeny) => "cards.approval.decided.deniedByAutomation",
+        Some(_) => "cards.approval.decided.denied",
+        // Decided before who answered was recorded.
+        None => "cards.approval.decided.deniedAt",
       };
       (Icon::Ban, PaletteColor::TextSecondary, words(key))
     }
@@ -120,6 +125,32 @@ fn said(ctx: &Ctx, request: &PendingToolApproval, decided: &Decided) -> (Icon, P
       };
       (Icon::ShieldCheck, PaletteColor::Success, words(key))
     }
+  }
+}
+
+/// How a request went whose time is not known: it ended as the runner just said, or was decided without a
+/// time recorded.
+fn untimed(
+  ctx: &Ctx,
+  request: &PendingToolApproval,
+  decision: Option<ToolApprovalDecision>,
+) -> (Icon, PaletteColor, std::sync::Arc<str>) {
+  match decision {
+    None => (
+      Icon::ClockAlert,
+      PaletteColor::TextMuted,
+      ctx.t_args("cards.approval.decided.endedNow", [("agent", request.agent.as_str())]),
+    ),
+    Some(ToolApprovalDecision::Denied) => (
+      Icon::Ban,
+      PaletteColor::TextSecondary,
+      ctx.t("cards.approval.decided.deniedUntimed"),
+    ),
+    Some(ToolApprovalDecision::Approved) => (
+      Icon::ShieldCheck,
+      PaletteColor::Success,
+      ctx.t("cards.approval.decided.approvedUntimed"),
+    ),
   }
 }
 

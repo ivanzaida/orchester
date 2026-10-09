@@ -14,7 +14,6 @@ use lurq::{
   layout::Alignment,
   node::{Element, padding::Padding},
 };
-use orchester_core::time::Timestamp;
 use orchester_workspace::{
   display,
   tasks::conversation::{Author, Entry, EntryState},
@@ -69,8 +68,10 @@ impl Component for QuestionCard {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let QuestionProps { place, entry } = ctx.props::<QuestionProps>().clone();
     let id = format!("cards-question-{}", entry.id);
+    let decisions = Decisions::of(ctx);
+    let focus = decisions.take_focus(&place.key);
     let asked = entry.state == EntryState::Question { open: true };
-    let lost = asked && place.lost(ctx);
+    let lost = asked && decisions.lost();
     let open = asked && !lost;
     let agent = match &entry.author {
       Author::Agent(agent) | Author::YouTo(agent) => agent.clone(),
@@ -99,8 +100,7 @@ impl Component for QuestionCard {
     };
     let text = MarkdownView::new(format!("{id}-text"), entry.body.clone(), place.links.clone()).render(ctx);
     let context = context(ctx, &place, &entry, (&agent, open, lost));
-    let decisions = Decisions::of(ctx);
-    let actions = open.then(|| self.actions(ctx, &id, decisions.as_ref(), entry.at));
+    let actions = open.then(|| self.actions(ctx, &id, &decisions, focus));
     frame(id.clone(), open)
       .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
       .spacing(ExtraSpacing::Loose.role())
@@ -119,7 +119,8 @@ impl Component for QuestionCard {
 impl QuestionCard {
   /// *Answer*, which sends the person to the composer; unavailable, and why, while the composer takes no
   /// answer here.
-  fn actions(&self, ctx: &mut Ctx, id: &str, decisions: Option<&Decisions>, asked: Timestamp) -> Element {
+  /// It takes the focus with `focus`, when it can be pressed.
+  fn actions(&self, ctx: &mut Ctx, id: &str, decisions: &Decisions, focus: bool) -> Element {
     let button = ActionButton::new(
       format!("{id}-answer"),
       ButtonKind::Primary,
@@ -127,7 +128,7 @@ impl QuestionCard {
     )
     .icon(Icon::Reply)
     .in_form();
-    let Some(decisions) = decisions.filter(|decisions| decisions.composer_attached()) else {
+    if !decisions.composer_attached() {
       return Column::new()
         .spacing(SpacingSize::Sm)
         .child(button.unavailable(ctx.t("cards.question.composerUnavailable")))
@@ -136,8 +137,8 @@ impl QuestionCard {
           &ctx.t("cards.question.composerUnavailable"),
         ))
         .into();
-    };
-    if decisions.take_focus(asked) {
+    }
+    if focus {
       ctx.focus(&self.answer);
     }
     let asks = decisions.clone();

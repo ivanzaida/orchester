@@ -4,22 +4,30 @@
 //! *Always allow…*, saying what it covers before it is chosen. An answer the request does not offer stays in
 //! place, faded, with a lock and why. *Always allow…* and *Deny with a message* are not built (D6).
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Button, Column, Row, Spacer, Text},
-  core::{ElementRef, Signal},
+  core::ElementRef,
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::run::{Answerer, ApprovalAnswer, PendingToolApproval};
 use orchester_ipc::Command;
-use orchester_workspace::tasks::approvals::{ShownApproval, SimilarShown};
+use orchester_workspace::{
+  tasks::approvals::{ShownApproval, SimilarShown},
+  workspace::OpenProject,
+};
 
 use super::{
-  super::{action::Decide, frame::note},
+  super::{
+    decisions::{Decisions, Given, Stage},
+    frame::note,
+  },
   words,
 };
 use crate::{
@@ -32,72 +40,76 @@ use crate::{
   },
 };
 
-/// What a card's answer sends, and which button sent it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Answer {
-  Once,
-  Similar,
-  Everything,
-  Deny,
-}
-
-impl lurq::app::component::DevtoolsInspectable for Answer {}
-
-impl Answer {
-  pub(super) const fn answer(self) -> ApprovalAnswer {
-    match self {
-      Self::Once => ApprovalAnswer::Once,
-      Self::Similar => ApprovalAnswer::Similar,
-      Self::Everything => ApprovalAnswer::ApproveRun,
-      Self::Deny => ApprovalAnswer::Deny,
-    }
+/// The runner's answer for what the person gave on the card.
+pub(super) const fn approval_answer(given: Given) -> ApprovalAnswer {
+  match given {
+    Given::ApproveSimilar => ApprovalAnswer::Similar,
+    Given::ApproveEverything => ApprovalAnswer::ApproveRun,
+    Given::Deny => ApprovalAnswer::Deny,
+    Given::ApproveOnce | Given::Answers | Given::ApprovePlan => ApprovalAnswer::Once,
   }
 }
 
-/// What the answers act on: the request, its choices once read, the run's number, the action, the answer
-/// pressed last, and *Approve once*, which takes the focus when the tab opens on the card.
+/// What the answers act on: the card's key and element id, the request, its choices once read, the run's
+/// number, the open project its runner takes the answer for, the tab's answers, and *Approve once*, which
+/// takes the focus when the tab opens on the card.
 pub(super) struct Answering<'a> {
+  pub(super) key: &'a Arc<str>,
   pub(super) id: &'a str,
   pub(super) request: &'a PendingToolApproval,
   pub(super) shown: Option<&'a ShownApproval>,
   pub(super) run: u32,
-  pub(super) action: &'a Decide,
-  pub(super) pressed: &'a Signal<Option<Answer>>,
+  pub(super) open: Option<OpenProject>,
+  pub(super) decisions: &'a Decisions,
   pub(super) once: &'a ElementRef,
 }
 
 impl Answering<'_> {
-  /// Sends `answer`, once nothing else is on its way.
-  fn press(&self, answer: Answer) -> impl Fn() + Send + Sync + 'static {
-    let (action, pressed) = (self.action.clone(), self.pressed.clone());
+  /// What the card sent last, while it is on its way.
+  fn sending(&self) -> Option<Given> {
+    self
+      .decisions
+      .outcome(self.key)
+      .filter(|outcome| outcome.stage == Stage::Sending)
+      .map(|outcome| outcome.given)
+  }
+
+  /// Sends `given`; nothing while another answer is on its way.
+  fn press(&self, given: Given, open: OpenProject) -> impl Fn() + Send + Sync + 'static {
+    let (decisions, key) = (self.decisions.clone(), self.key.clone());
     let command = Command::DecideToolApproval {
       run: self.request.run,
       approval: self.request.id.clone(),
-      answer: answer.answer(),
+      answer: approval_answer(given),
       by: Answerer::Person,
     };
-    move || {
-      pressed.set(Some(answer));
-      action.run(command.clone());
+    move || decisions.answer(&key, given, (&open, command.clone()))
+  }
+
+  /// Whether `given` can be pressed now, and how: loading while it is on its way, held while another is.
+  fn hold(&self, given: Given) -> Result<OpenProject, bool> {
+    if self.sending() == Some(given) {
+      return Err(true);
+    }
+    match &self.open {
+      Some(open) if !self.decisions.busy() => Ok(open.clone()),
+      _ => Err(false),
     }
   }
 
-  /// `answer`'s button: loading while it is on its way, held while another is.
-  fn button(&self, ctx: &Ctx, answer: Answer, (kind, glyph, key): (ButtonKind, Icon, &str)) -> ActionButton {
-    let id = match answer {
-      Answer::Once => "approve",
-      Answer::Deny => "deny",
-      Answer::Similar => "similar",
-      Answer::Everything => "everything",
+  /// `given`'s button.
+  fn button(&self, ctx: &Ctx, given: Given, (kind, glyph, key): (ButtonKind, Icon, &str)) -> ActionButton {
+    let id = match given {
+      Given::Deny => "deny",
+      _ => "approve",
     };
     let button = ActionButton::new(format!("{}-{id}", self.id), kind, ctx.t(key))
       .icon(glyph)
       .in_form();
-    let busy = self.action.state().get().is_pending();
-    match (busy, self.pressed.get() == Some(answer)) {
-      (true, true) => button.loading(),
-      (true, false) => button.disabled(),
-      (false, _) => button.on_click(self.press(answer)),
+    match self.hold(given) {
+      Err(true) => button.loading(),
+      Err(false) => button.disabled(),
+      Ok(open) => button.on_click(self.press(given, open)),
     }
   }
 }
@@ -116,13 +128,13 @@ pub(super) fn answers(ctx: &Ctx, answering: &Answering<'_>) -> Element {
   ));
   let deny = answering.button(
     ctx,
-    Answer::Deny,
+    Given::Deny,
     (ButtonKind::Secondary, Icon::Ban, "cards.approval.deny"),
   );
   let once = answering
     .button(
       ctx,
-      Answer::Once,
+      Given::ApproveOnce,
       (ButtonKind::Primary, Icon::Check, "cards.approval.approveOnce"),
     )
     .element_ref(answering.once.clone());
@@ -194,13 +206,13 @@ fn wider(ctx: &Ctx, answering: &Answering<'_>) -> Element {
     .child(tile(
       ctx,
       answering,
-      (Answer::Similar, Icon::ShieldCheck, "cards.approval.similar"),
+      (Given::ApproveSimilar, Icon::ShieldCheck, "cards.approval.similar"),
       similar,
     ))
     .child(tile(
       ctx,
       answering,
-      (Answer::Everything, Icon::Zap, "cards.approval.everything"),
+      (Given::ApproveEverything, Icon::Zap, "cards.approval.everything"),
       everything,
     ))
     .child(locked(
@@ -211,38 +223,39 @@ fn wider(ctx: &Ctx, answering: &Answering<'_>) -> Element {
     .into()
 }
 
-/// A tile that gives `answer` and says what it covers, or, faded with a lock, why it is not offered.
+/// A tile that gives `given` and says what it covers, or, faded with a lock, why it is not offered.
 fn tile(
   ctx: &Ctx,
   answering: &Answering<'_>,
-  (answer, glyph, title): (Answer, Icon, &str),
-  covers: Result<std::sync::Arc<str>, std::sync::Arc<str>>,
+  (given, glyph, title): (Given, Icon, &str),
+  covers: Result<Arc<str>, Arc<str>>,
 ) -> Element {
   let id = format!(
     "{}-{}",
     answering.id,
-    match answer {
-      Answer::Similar => "similar",
-      _ => "everything",
+    if given == Given::ApproveSimilar {
+      "similar"
+    } else {
+      "everything"
     }
   );
   let covers = match covers {
     Ok(covers) => covers,
     Err(reason) => return locked(&id, &ctx.t(title), &reason),
   };
-  let busy = answering.action.state().get().is_pending();
-  let under_way = busy && answering.pressed.get() == Some(answer);
-  let glyph = if under_way { Icon::LoaderCircle } else { glyph };
-  let frame = tile_frame(&id, glyph, (&ctx.t(title), &covers));
-  if busy {
-    return inert(frame)
-      .opacity(DISABLED_OPACITY)
-      .describe("state", if under_way { "loading" } else { "disabled" })
-      .into();
-  }
-  let press = answering.press(answer);
+  let open = match answering.hold(given) {
+    Ok(open) => open,
+    Err(under_way) => {
+      let glyph = if under_way { Icon::LoaderCircle } else { glyph };
+      return inert(tile_frame(&id, glyph, (&ctx.t(title), &covers)))
+        .opacity(DISABLED_OPACITY)
+        .describe("state", if under_way { "loading" } else { "disabled" })
+        .into();
+    }
+  };
+  let press = answering.press(given, open);
   Focus::Form
-    .apply(frame)
+    .apply(tile_frame(&id, glyph, (&ctx.t(title), &covers)))
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .cursor(CursorIcon::Pointer)
     .describe("state", "enabled")
