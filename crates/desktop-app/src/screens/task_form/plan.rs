@@ -99,6 +99,7 @@ fn control(ctx: &mut Ctx, view: &View, pick: &Signal<Pick>, nav: &Nav) -> Elemen
       .child(
         FieldInput::new("task-form-pipeline-input", name, box_text)
           .locked()
+          .trailing(Icon::Lock)
           .render(ctx),
       )
       .child(open)
@@ -114,6 +115,7 @@ fn control(ctx: &mut Ctx, view: &View, pick: &Signal<Pick>, nav: &Nav) -> Elemen
       .child(
         FieldInput::new("task-form-pipeline-input", name, Signal::new(chosen.to_string()))
           .locked()
+          .trailing(Icon::Lock)
           .render(ctx),
       )
       .into();

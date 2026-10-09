@@ -5,7 +5,12 @@
 use std::{fs, path::Path};
 
 use orchester_app::routes::{ProjectPage, Route};
-use orchester_core::{project::TaskKey, store::TaskStore, task::Task};
+use orchester_core::{
+  id::TaskId,
+  project::TaskKey,
+  store::TaskStore,
+  task::{Task, TaskDetails},
+};
 use orchester_store::ProjectDb;
 
 use crate::{
@@ -166,6 +171,38 @@ impl Form {
       .expect("tasks")
       .into_iter()
       .find(|task| *task.key() == key)
+  }
+}
+
+impl Form {
+  /// Changes the task `key` in the project's database, as automation or another app would, and has the
+  /// window read the project's tasks again.
+  pub fn change_elsewhere(&mut self, key: &str, change: impl FnOnce(&mut TaskDetails)) {
+    let task = self.task(key).expect("the task is stored");
+    let mut details = task.details().clone();
+    change(&mut details);
+    let saved = self
+      .db()
+      .update_task(task.id(), task.revision(), details)
+      .expect("the change is stored")
+      .saved()
+      .expect("no conflict");
+    assert!(saved.revision().get() > task.revision().get());
+    self.window.projects().feed(self.project).saved();
+    self.window.pass();
+  }
+
+  /// Waits until what is kept for `task` satisfies `done`.
+  pub fn until_kept(&mut self, task: Option<TaskId>, what: &str, done: impl Fn(Option<&str>) -> bool) {
+    let (project, key) = (
+      self.project,
+      task.map_or_else(|| "new".to_owned(), |task| task.to_string()),
+    );
+    let key = format!("orchester-app.task_form.kept.{project}.{key}");
+    self.window.until(what, |window| {
+      let workspace = window.launch.workspace().expect("the session started");
+      done(workspace.ui_state(&key).expect("the window state reads").as_deref())
+    });
   }
 }
 

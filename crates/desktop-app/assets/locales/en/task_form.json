@@ -47,7 +47,8 @@
       "creatingDraft": "Saving a draft. Tasks opens next with the new task highlighted."
     },
     "kept": {
-      "note": "Your changes from {{time}} were kept on this computer. Save them, or discard them to return to what is saved."
+      "note": "Your changes from {{time}} were kept on this computer. Save them, or discard them to return to the saved draft.",
+      "noteNew": "Your changes from {{time}} were kept on this computer. Create the task, or discard them to start again."
     },
     "sections": {
       "brief": "Brief",
@@ -163,13 +164,20 @@
     "discard": {
       "question": "Discard your changes to {{key}}?",
       "consequence": "The draft stays as it was last saved.",
-      "consequenceRan": "The task stays as it was last saved."
+      "consequenceRan": "The task stays as it was last saved.",
+      "questionNew": "Discard your unsaved task?",
+      "consequenceNew": "The form starts empty again."
     },
     "load": {
       "reading": "Reading the project's tasks…",
       "failed": "The project's tasks cannot be read",
       "notFound": "No task {{key}} in this project",
       "notFoundBody": "It may have been removed, or its key changed when the project was shared."
+    },
+    "newer": {
+      "title": "This task changed since you started editing",
+      "body": "A newer version of {{key}} was saved elsewhere. Your edits are kept; Save changes would not overwrite it. Reload shows the newer version in place of your edits.",
+      "reload": "Reload"
     }
   }
 }

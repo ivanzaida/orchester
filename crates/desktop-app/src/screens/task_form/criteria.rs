@@ -164,7 +164,11 @@ fn criterion_row(
         .variant(ExtraTypography::MonoNote.role()),
     )
     .child(criterion_input(ctx, criteria, row, &number, locked));
-  let frame = if index + 1 < count {
+  // The criterion being typed in takes the focused stroke (`Criterion 4` in `v2c76`); the others are
+  // divided by a line.
+  let frame = if row.focused.get() && !locked {
+    frame.border(Border::inside(BorderSize::Sm, PaletteColor::BorderFocus))
+  } else if index + 1 < count {
     frame.border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
   } else {
     frame

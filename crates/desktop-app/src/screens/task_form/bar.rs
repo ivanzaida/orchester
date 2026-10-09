@@ -25,6 +25,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     message::message_text,
+    tooltip::Truncated,
   },
 };
 
@@ -41,7 +42,7 @@ pub struct Handlers {
   pub discard: Handler,
 }
 
-pub fn action_bar(ctx: &Ctx, view: &View, confirming_discard: bool, on: &Handlers) -> Element {
+pub fn action_bar(ctx: &mut Ctx, view: &View, confirming_discard: bool, on: &Handlers) -> Element {
   if confirming_discard {
     return discard_question(ctx, view, on);
   }
@@ -113,12 +114,17 @@ fn note(ctx: &Ctx, view: &View) -> Option<Arc<str>> {
     (Phase::Creating, _) => Some(ctx.t("task_form.progress.creatingForRun")),
     (Phase::Starting(_), _) => Some(ctx.t("task_form.progress.starting")),
     (Phase::Saving, Subject::New) => Some(ctx.t("task_form.progress.creatingDraft")),
-    (Phase::Editing, Subject::Draft(_) | Subject::Ran(_)) if view.changed && view.kept_at.is_some() => {
+    (Phase::Editing, subject) if view.changed && view.kept_at.is_some() => {
       let at = view
         .kept_at
         .map(orchester_workspace::display::clock)
         .unwrap_or_default();
-      Some(ctx.t_args("task_form.kept.note", [("time", at)]))
+      let key = if subject.is_new() {
+        "task_form.kept.noteNew"
+      } else {
+        "task_form.kept.note"
+      };
+      Some(ctx.t_args(key, [("time", at)]))
     }
     (_, Subject::Ran(_)) => Some(ctx.t("task_form.reasons.ranNoRun")),
     _ => None,
@@ -131,7 +137,8 @@ fn actions(ctx: &Ctx, view: &View, on: &Handlers) -> Vec<Element> {
   let running = matches!(view.phase, Phase::Creating | Phase::Starting(_));
   let mut actions = Vec::new();
   let edits = !view.subject.is_new();
-  if edits && view.changed && !busy {
+  // New task offers Discard only for edits kept from an earlier visit (`Fd1ai`).
+  if (edits || view.kept_at.is_some()) && view.changed && !busy {
     actions.push(button(
       ActionButton::new(
         "task-form-discard",
@@ -200,7 +207,7 @@ fn retry_button(ctx: &Ctx, loading: bool, on: &Handlers) -> Element {
 }
 
 /// Why each action cannot be pressed now, then why the last save or Create & run failed.
-fn reasons(ctx: &Ctx, view: &View) -> Vec<Element> {
+fn reasons(ctx: &mut Ctx, view: &View) -> Vec<Element> {
   let mut lines = Vec::new();
   if !view.locked() {
     let edits = !view.subject.is_new();
@@ -212,10 +219,14 @@ fn reasons(ctx: &Ctx, view: &View) -> Vec<Element> {
     } else {
       reason(ctx, "task_form.reasons.create", &view.create_needs())
     };
-    lines.extend(save.map(|text| lock_line("task-form-save-reason", &text)));
+    if let Some(text) = save {
+      lines.push(lock_line(ctx, "task-form-save-reason", &text));
+    }
     if !matches!(view.subject, Subject::Ran(_)) {
       let run = reason(ctx, "task_form.reasons.run", &view.run_needs());
-      lines.extend(run.map(|text| lock_line("task-form-run-reason", &text)));
+      if let Some(text) = run {
+        lines.push(lock_line(ctx, "task-form-run-reason", &text));
+      }
     }
   }
   for failure in view.failure.iter().flat_map(|failures| failures.iter()) {
@@ -250,8 +261,12 @@ fn list(ctx: &Ctx, items: &[Arc<str>]) -> Option<Arc<str>> {
   }
 }
 
-/// Why an action cannot be pressed: a lock and the words, 12 `text_muted` (`Reason` `SACr6`).
-fn lock_line(id: &str, text: &str) -> Element {
+/// Why an action cannot be pressed: a lock and the words, 12 `text_muted` (`Reason` `SACr6`), on one
+/// line at the bar's end; a longer reason is cut, whole in its tooltip.
+fn lock_line(ctx: &mut Ctx, id: &str, text: &str) -> Element {
+  let words = Truncated::new(format!("{id}-text"), text, TypographyStyle::Description)
+    .color(PaletteColor::TextMuted)
+    .render(ctx);
   Row::new()
     .id(id.to_owned())
     .spacing(ExtraSpacing::Snug.role())
@@ -259,12 +274,7 @@ fn lock_line(id: &str, text: &str) -> Element {
     .max_width(Dimension::Pct(100.0))
     .describe("role", "unavailable-reason")
     .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted))
-    .child(
-      Text::new(text)
-        .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
-        .flex_shrink(1.0),
-    )
+    .child(Row::new().flex_shrink(1.0).child(words))
     .into()
 }
 
@@ -288,10 +298,10 @@ fn discard_question(ctx: &Ctx, view: &View, on: &Handlers) -> Element {
     .task()
     .map(|task| task.key().to_string())
     .unwrap_or_default();
-  let consequence = if matches!(view.subject, Subject::Ran(_)) {
-    "task_form.discard.consequenceRan"
-  } else {
-    "task_form.discard.consequence"
+  let (question, consequence) = match view.subject {
+    Subject::New => ("task_form.discard.questionNew", "task_form.discard.consequenceNew"),
+    Subject::Draft(_) => ("task_form.discard.question", "task_form.discard.consequence"),
+    Subject::Ran(_) => ("task_form.discard.question", "task_form.discard.consequenceRan"),
   };
   let question = Row::new()
     .flex(1.0)
@@ -302,7 +312,7 @@ fn discard_question(ctx: &Ctx, view: &View, on: &Handlers) -> Element {
       Column::new()
         .spacing(ExtraSpacing::Tight.role())
         .child(
-          Text::new(&ctx.t_args("task_form.discard.question", [("key", key)]))
+          Text::new(&ctx.t_args(question, [("key", key)]))
             .id("task-form-discard-question")
             .variant(ExtraTypography::Strong.role()),
         )

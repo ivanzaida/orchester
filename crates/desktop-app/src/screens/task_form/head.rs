@@ -173,19 +173,21 @@ fn status(ctx: &Ctx, view: &View) -> (Icon, PaletteColor, Arc<str>) {
 }
 
 fn editing_status(ctx: &Ctx, view: &View) -> (Icon, PaletteColor, Arc<str>) {
+  if let Some(at) = view.kept_at.filter(|_| view.changed) {
+    let words = ctx.t_args("task_form.status.kept", [("time", display::clock(at))]);
+    return (Icon::CircleDot, PaletteColor::TextSecondary, words);
+  }
   match (&view.subject, view.changed) {
     (Subject::New, _) => (
       Icon::CircleDashed,
       PaletteColor::TextMuted,
       ctx.t("task_form.status.notSaved"),
     ),
-    (_, true) => {
-      let words = view.kept_at.map_or_else(
-        || ctx.t("task_form.status.unsaved"),
-        |at| ctx.t_args("task_form.status.kept", [("time", display::clock(at))]),
-      );
-      (Icon::CircleDot, PaletteColor::TextSecondary, words)
-    }
+    (_, true) => (
+      Icon::CircleDot,
+      PaletteColor::TextSecondary,
+      ctx.t("task_form.status.unsaved"),
+    ),
     (Subject::Draft(_), false) => (Icon::Check, PaletteColor::TextMuted, ctx.t("task_form.status.saved")),
     (Subject::Ran(_), false) => (Icon::Check, PaletteColor::TextMuted, ctx.t("task_form.status.savedRan")),
   }

@@ -1,15 +1,24 @@
 //! Edits that are not saved, kept on this computer (`Leaving with unsaved changes` `Fd1ai`): leaving the
 //! form never asks and never loses them. They are kept in the application database's window state
-//! (`ui_state`) under a key of this app's own per project and task, and filled in again when the form
-//! opens there, later or after a restart, with the time they were kept. A save or a discard clears them.
+//! (`ui_state`) under a key of this app's own per project and task, with the version of the task they
+//! were made on, and filled in again when the form opens there, later or after a restart. A save on that
+//! version then meets any change made since, so kept edits never overwrite a newer version unseen. A
+//! save or a discard removes them, and opening a form removes those of tasks that no longer exist.
+//!
+//! Writes wait until the typing pauses, run off the UI thread one after another, and are flushed when the
+//! form closes.
 
-use std::sync::{
-  Arc,
-  atomic::{AtomicU64, Ordering},
+use std::{
+  sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicU64, Ordering},
+  },
+  time::Duration,
 };
 
 use orchester_core::{
   id::{ProjectId, ResourceId, TaskId},
+  sharing::TaskRevision,
   time::Timestamp,
 };
 use orchester_workspace::workspace::Workspace;
@@ -19,84 +28,171 @@ use tokio::runtime::Handle;
 
 use super::values::Values;
 
-/// Edits kept from an earlier visit, and when they were kept.
+/// How long typing pauses before the edits are written.
+const PAUSE: Duration = Duration::from_millis(500);
+/// The key of New task's kept edits, after the project's prefix.
+const NEW: &str = "new";
+
+/// The version edits were made on: its revision (none for a task not created yet) and its values.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct KeptBase {
+  pub revision: Option<TaskRevision>,
+  pub values: Values,
+}
+
+/// Edits kept from an earlier visit, the version they were made on, and when they were kept.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Kept {
   pub values: Values,
+  pub base: KeptBase,
   pub at: Timestamp,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Kept {}
 
-/// Where one form keeps its edits. Writes run off the UI thread, in order: one that would land after a
-/// newer one is dropped.
+/// Where one form keeps its edits.
 #[derive(Clone)]
 pub struct KeptEdits {
-  key: Arc<str>,
+  inner: Arc<Inner>,
+}
+
+struct Inner {
+  project: ProjectId,
+  key: Mutex<Arc<str>>,
   workspace: Workspace,
   runtime: Handle,
-  /// The number of the latest write asked for, and of the latest one done.
-  asked: Arc<AtomicU64>,
-  done: Arc<Mutex<u64>>,
+  /// The write asked for last that is not done yet: its key, and the text to keep or `None` to remove.
+  pending: Mutex<Option<(Arc<str>, Option<String>)>>,
+  /// Counts the writes asked for, so a pause that ends after a newer one writes nothing.
+  asked: AtomicU64,
+  /// A write runs; it takes the pending one after it.
+  writing: AtomicBool,
 }
 
 impl KeptEdits {
   /// The edits of `task` of `project`; `None` is New task's.
   pub fn new(workspace: Workspace, runtime: Handle, project: ProjectId, task: Option<TaskId>) -> Self {
-    let task = task.map_or_else(|| "new".to_owned(), |task| task.to_string());
     Self {
-      key: format!("orchester-app.task_form.kept.{project}.{task}").into(),
-      workspace,
-      runtime,
-      asked: Arc::default(),
-      done: Arc::default(),
+      inner: Arc::new(Inner {
+        key: Mutex::new(key(project, task)),
+        project,
+        workspace,
+        runtime,
+        pending: Mutex::new(None),
+        asked: AtomicU64::new(0),
+        writing: AtomicBool::new(false),
+      }),
     }
   }
 
-  /// The edits kept here, if any. Blocks on SQLite. Text that cannot be read as kept edits is logged and
-  /// reads as none: nothing is lost that a person could get back.
-  pub fn read(&self) -> Option<Kept> {
-    let text = match self.workspace.ui_state(&self.key) {
+  /// The edits kept here, if any, after removing the kept edits of the project's tasks that are not in
+  /// `tasks` any more. Blocks on SQLite. Text that cannot be read as kept edits is logged and reads as
+  /// none.
+  pub fn read(&self, tasks: &[TaskId]) -> Option<Kept> {
+    self.prune(tasks);
+    let key = self.inner.key.lock().clone();
+    let text = match self.inner.workspace.ui_state(&key) {
       Ok(text) => text?,
       Err(error) => {
-        tracing::warn!(%error, key = %self.key, "cannot read the kept edits");
+        tracing::warn!(%error, %key, "cannot read the kept edits");
         return None;
       }
     };
-    if text.is_empty() {
-      return None;
-    }
     let kept = serde_json::from_str::<Value>(&text)
       .ok()
       .and_then(|value| decode(&value));
     if kept.is_none() {
-      tracing::warn!(key = %self.key, "kept edits that cannot be read are left out");
+      tracing::warn!(%key, "kept edits that cannot be read are left out");
     }
     kept
   }
 
-  /// Keeps `values` as of `at`, or clears what is kept when `None`.
-  pub fn write(&self, values: Option<(&Values, Timestamp)>) {
-    let text = values.map_or_else(String::new, |(values, at)| encode(values, at).to_string());
-    let number = self.asked.fetch_add(1, Ordering::SeqCst) + 1;
-    let (key, workspace, done) = (self.key.clone(), self.workspace.clone(), self.done.clone());
-    // Spawned rather than awaited: the write must land also when the form closes right after it.
-    self.runtime.spawn_blocking(move || {
-      let mut done = done.lock();
-      if *done > number {
+  fn prune(&self, tasks: &[TaskId]) {
+    let prefix = prefix(self.inner.project);
+    let keys = match self.inner.workspace.ui_state_keys(&prefix) {
+      Ok(keys) => keys,
+      Err(error) => {
+        tracing::warn!(%error, "cannot list the kept edits");
         return;
       }
-      if let Err(error) = workspace.set_ui_state(&key, &text) {
-        tracing::warn!(%error, %key, "cannot keep the form's edits");
+    };
+    for key in keys {
+      let task = key[prefix.len()..].parse::<TaskId>().ok();
+      let gone = task.is_some_and(|task| !tasks.contains(&task));
+      if gone && let Err(error) = self.inner.workspace.remove_ui_state(&key) {
+        tracing::warn!(%error, %key, "cannot remove kept edits of a task that is gone");
       }
-      *done = number;
+    }
+  }
+
+  /// Keeps `values`, made on `base`, as of `at`, or removes what is kept when `None`, once the typing
+  /// pauses.
+  pub fn write(&self, values: Option<(&Values, &KeptBase, Timestamp)>) {
+    let text = values.map(|(values, base, at)| encode(values, base, at).to_string());
+    let key = self.inner.key.lock().clone();
+    *self.inner.pending.lock() = Some((key, text));
+    let asked = self.inner.asked.fetch_add(1, Ordering::SeqCst) + 1;
+    let edits = self.clone();
+    self.inner.runtime.spawn(async move {
+      tokio::time::sleep(PAUSE).await;
+      if edits.inner.asked.load(Ordering::SeqCst) == asked {
+        edits.flush();
+      }
+    });
+  }
+
+  /// Removes what is kept now and keeps the form's edits under `task` from here: New task created it.
+  pub fn move_to(&self, task: TaskId) {
+    self.write(None);
+    self.flush();
+    *self.inner.key.lock() = key(self.inner.project, Some(task));
+  }
+
+  /// Writes the pending edits now, e.g. as the form closes.
+  pub fn flush(&self) {
+    if self.inner.writing.swap(true, Ordering::SeqCst) {
+      return;
+    }
+    let inner = self.inner.clone();
+    self.inner.runtime.spawn_blocking(move || {
+      loop {
+        let next = inner.pending.lock().take();
+        if let Some((key, text)) = next {
+          persist(&inner.workspace, &key, text.as_deref());
+          continue;
+        }
+        inner.writing.store(false, Ordering::SeqCst);
+        // A write asked for between the take and the store above is taken here, unless another flush
+        // took over.
+        if inner.pending.lock().is_none() || inner.writing.swap(true, Ordering::SeqCst) {
+          return;
+        }
+      }
     });
   }
 }
 
-fn encode(values: &Values, at: Timestamp) -> Value {
+fn persist(workspace: &Workspace, key: &str, text: Option<&str>) {
+  let done = match text {
+    Some(text) => workspace.set_ui_state(key, text),
+    None => workspace.remove_ui_state(key),
+  };
+  if let Err(error) = done {
+    tracing::warn!(%error, %key, "cannot keep the form's edits");
+  }
+}
+
+fn prefix(project: ProjectId) -> String {
+  format!("orchester-app.task_form.kept.{project}.")
+}
+
+fn key(project: ProjectId, task: Option<TaskId>) -> Arc<str> {
+  let task = task.map_or_else(|| NEW.to_owned(), |task| task.to_string());
+  format!("{}{task}", prefix(project)).into()
+}
+
+fn encode_values(values: &Values) -> Value {
   json!({
-    "at": at.unix_millis(),
     "title": values.title,
     "brief": values.brief,
     "criteria": values.criteria,
@@ -106,7 +202,16 @@ fn encode(values: &Values, at: Timestamp) -> Value {
   })
 }
 
-fn decode(value: &Value) -> Option<Kept> {
+fn encode(values: &Values, base: &KeptBase, at: Timestamp) -> Value {
+  json!({
+    "at": at.unix_millis(),
+    "values": encode_values(values),
+    "base_revision": base.revision.map(TaskRevision::get),
+    "base": encode_values(&base.values),
+  })
+}
+
+fn decode_values(value: &Value) -> Option<Values> {
   let text = |name: &str| value.get(name)?.as_str().map(str::to_owned);
   let pipeline = match value.get("pipeline")? {
     Value::Null => None,
@@ -119,14 +224,26 @@ fn decode(value: &Value) -> Option<Kept> {
     .iter()
     .map(|criterion| criterion.as_str().map(str::to_owned))
     .collect::<Option<Vec<_>>>()?;
+  Some(Values {
+    title: text("title")?,
+    brief: text("brief")?,
+    criteria,
+    pipeline,
+    budget: text("budget")?,
+    time_limit: text("time_limit")?,
+  })
+}
+
+fn decode(value: &Value) -> Option<Kept> {
+  let revision = match value.get("base_revision")? {
+    Value::Null => None,
+    revision => Some(TaskRevision::try_from(revision.as_u64()?).ok()?),
+  };
   Some(Kept {
-    values: Values {
-      title: text("title")?,
-      brief: text("brief")?,
-      criteria,
-      pipeline,
-      budget: text("budget")?,
-      time_limit: text("time_limit")?,
+    values: decode_values(value.get("values")?)?,
+    base: KeptBase {
+      revision,
+      values: decode_values(value.get("base")?)?,
     },
     at: Timestamp::from_unix_millis(value.get("at")?.as_i64()?),
   })

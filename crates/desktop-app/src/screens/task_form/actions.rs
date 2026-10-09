@@ -16,9 +16,10 @@ use orchester_core::{
   id::TaskId,
   project::TaskKey,
   resource::VersionNumber,
-  task::{Task, TaskDetails, TaskUpdate, organization::TaskOrganization},
+  task::{Task, TaskDetails, TaskStatus, TaskUpdate, organization::TaskOrganization},
   time::Timestamp,
 };
+use orchester_store::ProjectDb;
 use orchester_workspace::{
   background,
   messages::{self, Message},
@@ -80,13 +81,22 @@ fn store(args: &SaveArgs, servers: &Servers) -> Result<Saved, Problems> {
   };
   let mut writer = TaskWriter::open(&args.repo_root, servers).map_err(write)?;
   let organization = (&args.organization, &args.organization);
-  match writer
+  let task = match writer
     .save_organized(args.target, args.details.clone(), organization, Timestamp::now())
     .map_err(write)?
   {
-    TaskUpdate::Saved(task) => Ok(Saved(Arc::new(task))),
-    TaskUpdate::Conflict { .. } => Err(Problems::one(messages::task_changed_meanwhile())),
+    TaskUpdate::Saved(task) => task,
+    TaskUpdate::Conflict { .. } => return Err(Problems::one(messages::task_changed_meanwhile())),
+  };
+  // A new draft's key may name a task an earlier attempt queued: it is not a draft to save over.
+  if matches!(args.target, SaveTarget::New(_)) && task.status() != TaskStatus::Draft {
+    return Err(Problems::one(messages::task_no_longer_draft()));
   }
+  if task.details() != &args.details {
+    tracing::error!(task = %task.key(), "the stored details differ from the ones saved");
+    return Err(Problems::one(messages::task_saved_differently()));
+  }
+  Ok(Saved(Arc::new(task)))
 }
 
 /// A task queued for its first run, which has not started (yet).
@@ -116,11 +126,13 @@ pub struct Started(pub TaskKey);
 
 impl lurq::app::component::DevtoolsInspectable for Started {}
 
-/// Why the run did not start, and the task queued for it, if it was queued.
+/// Why the run did not start, and the task queued for it, if it was queued, or else the draft Create &
+/// run saved before it stopped.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunProblems {
   pub messages: Arc<[Message]>,
   pub queued: Option<QueuedTask>,
+  pub saved: Option<Saved>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for RunProblems {}
@@ -156,15 +168,27 @@ async fn queue(
   save: Box<SaveArgs>,
   version: VersionNumber,
 ) -> Result<(QueuedTask, WorkClaim), RunProblems> {
-  let not_queued = |messages: Arc<[Message]>| RunProblems { messages, queued: None };
+  let not_queued = |messages: Arc<[Message]>| RunProblems {
+    messages,
+    queued: None,
+    saved: None,
+  };
   let servers = services.servers.clone();
+  let (repo_root, target) = (save.repo_root.clone(), save.target);
   let queued = background::run(move || queue_in(&save.repo_root, &servers, save.target, save.details, version))
     .await
-    .map_err(|message| not_queued(Arc::from([message])))?
-    .map_err(|failure| {
+    .map_err(|message| not_queued(Arc::from([message])))?;
+  let queued = match queued {
+    Ok(queued) => queued,
+    Err(failure) => {
       tracing::warn!(?failure, "the task was not queued for a run");
-      not_queued(failure.messages().into())
-    })?;
+      let saved = saved_draft(repo_root, target).await;
+      return Err(RunProblems {
+        saved,
+        ..not_queued(failure.messages().into())
+      });
+    }
+  };
   let task = QueuedTask {
     task: queued.task.id(),
     key: queued.task.key().clone(),
@@ -174,11 +198,32 @@ async fn queue(
   Ok((task, queued.claim))
 }
 
+/// The draft a Create & run that stopped before queuing saved under the form's key, so the form goes on
+/// editing it rather than making a second task. Nothing for a form that edits a task already.
+async fn saved_draft(repo_root: PathBuf, target: SaveTarget) -> Option<Saved> {
+  let SaveTarget::New(batch) = target else {
+    return None;
+  };
+  let found = background::run(move || ProjectDb::open(&repo_root).and_then(|db| db.task_by_batch(batch))).await;
+  match found {
+    Ok(Ok(task)) => task
+      .filter(|task| task.status() == TaskStatus::Draft)
+      .map(|task| Saved(Arc::new(task))),
+    Ok(Err(error)) => {
+      tracing::warn!(%error, "cannot tell whether Create & run saved its task");
+      None
+    }
+    // Background work that did not finish is logged by `background::run`.
+    Err(_) => None,
+  }
+}
+
 /// Asks the runner to start the queued task's first run under the task's own key.
 async fn start(services: &RunServices, queued: QueuedTask, claim: WorkClaim) -> Result<Started, RunProblems> {
   let refused = |messages: Arc<[Message]>, queued: QueuedTask| RunProblems {
     messages,
     queued: Some(queued),
+    saved: None,
   };
   let claim = claim.and(
     services

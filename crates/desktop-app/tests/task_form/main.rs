@@ -14,6 +14,7 @@ mod harness;
 mod kontur;
 #[path = "../support/mod.rs"]
 mod support;
+mod versions;
 
 use harness::Form;
 use orchester_app::routes::{ProjectPage, Route, TaskList};
@@ -76,6 +77,12 @@ fn form_limits_read_back_and_refuse_only_what_is_not_a_number() {
   assert_eq!(
     form.text("task-form-budget-input-read-back"),
     "= 50B tokens · input + output"
+  );
+  form.set("task-form-budget-input", "1,000");
+  form.set("task-form-time-limit-input", "0");
+  assert_eq!(
+    form.text("task-form-time-limit-input-note"),
+    "The time limit must be at least one minute."
   );
   form.set("task-form-budget-input", "1.4m");
   form.set("task-form-time-limit-input", "half an hour");

@@ -158,13 +158,18 @@ impl View {
     self.save_needs()
   }
 
-  /// What Save changes still needs; `None` while nothing differs from what is stored.
+  /// What Save changes still needs; `None` while nothing differs from what is stored. A task that ran
+  /// keeps every detail a run depends on (core's `TaskStatus::check_edit`).
   pub fn save_changes_needs(&self) -> Option<Vec<Need>> {
     if !self.changed {
       return None;
     }
     let mut needs = self.save_needs();
-    if matches!(self.subject, Subject::Ran(_)) && needs.is_empty() && !self.missing.is_empty() {
+    let refused = match &self.subject {
+      Subject::Ran(task) => task.status().check_edit(true, self.missing.clone()).is_err(),
+      Subject::New | Subject::Draft(_) => false,
+    };
+    if needs.is_empty() && refused {
       needs.push(Need::KeepComplete);
     }
     Some(needs)

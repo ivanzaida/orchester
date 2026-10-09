@@ -1,13 +1,17 @@
 //! The Limits section (`Section · Limits` `WpoKn`): the run budget and the time limit (`Limit field`
-//! `UQFos`), each read back in words under it. Both are optional and have no maximum (the person's
-//! decision of 2026-10-09): an empty field is no limit, and only text that is not a whole number is
-//! refused, in the field's own words (`i4Y9hL`).
+//! `UQFos`), each read back in words under it. A budget has no maximum (the person's decision of
+//! 2026-10-09); text that is not a whole number is refused in the field's own words (`i4Y9hL`). Both empty
+//! is no limit on the task, which a draft may have; one without the other is refused, and a run still
+//! needs both, until the workspace takes the limits one by one (`claude/limits-optional`).
 
 use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, core::Signal, node::Element};
 use orchester_core::tokens::{compact_tokens, parse_budget};
-use orchester_workspace::{budget::unbounded, messages::Message};
+use orchester_workspace::{
+  budget::{read_minutes, unbounded, whole_minutes},
+  messages::Message,
+};
 
 use super::{
   sections::{Label, Place, section, side_row},
@@ -78,13 +82,14 @@ fn budget_field(ctx: &mut Ctx, view: &View, value: &Signal<String>, separator: &
 
 fn time_field(ctx: &mut Ctx, view: &View, value: &Signal<String>) -> Element {
   let text = view.values.time_limit.trim();
-  let read_back = match text.parse::<u64>() {
+  let read_back = match read_minutes(text).map(whole_minutes) {
     _ if text.is_empty() => ctx.t("task_form.fields.timeLimit.noLimit"),
     Ok(1) => ctx.t("task_form.fields.timeLimit.readBack.one"),
     Ok(minutes) => ctx.t_args(
       "task_form.fields.timeLimit.readBack.other",
       [("count", minutes.to_string())],
     ),
+    // What the field refuses is said by its error once the workspace reads the limits.
     Err(_) => Arc::from(""),
   };
   let field = NumberField::new(

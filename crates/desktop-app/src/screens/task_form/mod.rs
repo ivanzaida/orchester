@@ -9,8 +9,10 @@
 
 mod actions;
 mod bar;
+mod base;
 mod brief;
 mod criteria;
+mod fields;
 mod form;
 mod handlers;
 mod head;
@@ -29,7 +31,10 @@ use lurq::{
   components::Column,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{id::ProjectId, project::TaskKey};
+use orchester_core::{
+  id::{ProjectId, TaskId},
+  project::TaskKey,
+};
 use orchester_workspace::tasks::data::ProjectTasks;
 
 use self::{
@@ -59,6 +64,7 @@ pub fn new_task(ctx: &mut Ctx, project: &ShownProject) -> Element {
   let props = FormProps {
     project: project.clone(),
     subject: Subject::New,
+    tasks: task_ids(&tasks),
     pipelines: Some(tasks.pipelines),
   };
   ctx.mount_keyed::<TaskForm>(&format!("task-form-new-{}", project.open.project.id()), props)
@@ -83,9 +89,14 @@ pub fn edit_task(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Elemen
   let props = FormProps {
     project: project.clone(),
     subject,
+    tasks: task_ids(&tasks),
     pipelines: Some(tasks.pipelines.clone()),
   };
   ctx.mount_keyed::<TaskForm>(&format!("task-form-{}-{key}", project.open.project.id()), props)
+}
+
+fn task_ids(tasks: &ProjectTasks) -> Arc<[TaskId]> {
+  tasks.tasks.iter().map(|task| task.id()).collect()
 }
 
 /// The project's tasks and pipelines, which the form starts from; until they are read, `form`'s screen
