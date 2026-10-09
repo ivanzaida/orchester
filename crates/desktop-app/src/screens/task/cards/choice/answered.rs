@@ -47,7 +47,7 @@ pub(super) fn card(ctx: &mut Ctx, id: &str, (place, card): (&Place, &ChoiceCard)
     answers,
     context,
   } = outcome(ctx, card);
-  let title = ctx.t_args("cards.question.asks", [("agent", &*card.agent)]);
+  let title = super::title(ctx, card);
   let mut frame = frame(id.to_owned(), false)
     .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
     .spacing(ExtraSpacing::Loose.role())

@@ -104,13 +104,7 @@ impl Component for ChoiceView {
     let questions: Arc<[Question]> = card.asked.request.questions().into();
     self.seed(&questions);
     let draft = self.draft(&questions);
-    let title = match questions.len() {
-      1 => ctx.t_args("cards.question.asks", [("agent", &*card.agent)]),
-      count => ctx.t_args(
-        "cards.question.asksSeveral",
-        [("agent", &*card.agent), ("count", count.to_string().as_str())],
-      ),
-    };
+    let title = title(ctx, &card);
     let stands = Stands::waiting(ctx.t("cards.state.waitingAnswer")).into_element(&id);
     let mut body = frame(id.clone(), true)
       .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
@@ -128,6 +122,17 @@ impl Component for ChoiceView {
     body
       .child(self.footer(ctx, (&id, &place, &card), &draft, &action))
       .into()
+  }
+}
+
+/// *Builder asks you*, or how many questions it asks.
+fn title(ctx: &Ctx, card: &ChoiceCard) -> Arc<str> {
+  match card.asked.request.questions().len() {
+    1 => ctx.t_args("cards.question.asks", [("agent", &*card.agent)]),
+    count => ctx.t_args(
+      "cards.question.asksSeveral",
+      [("agent", &*card.agent), ("count", count.to_string().as_str())],
+    ),
   }
 }
 
