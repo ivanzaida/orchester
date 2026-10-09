@@ -6,6 +6,8 @@
 //! changes the data, and nothing retries by itself: the causes do not go away on their own, and
 //! Orchester is started again once they are fixed.
 
+mod already_open;
+mod failure;
 pub mod front;
 pub mod launch;
 mod parts;
@@ -89,6 +91,10 @@ impl StartupProblem {
   /// The name `app_state` reports the screen by.
   pub const fn name(&self) -> &'static str {
     match self {
+      Self::AlreadyOpen {
+        holder: Some(LockHolder { closing: true, .. }),
+        ..
+      } => "closing",
       Self::AlreadyOpen { .. } => "already_open",
       Self::Failed(Failure::NewerData { .. }) => "newer_data",
       Self::Failed(Failure::UpdateFailed { .. }) => "update_failed",

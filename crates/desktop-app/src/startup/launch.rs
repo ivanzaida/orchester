@@ -119,9 +119,13 @@ impl Launch {
   /// waiting at most [`QUIET_STOP_TIMEOUT`] for each, and how the session ended is recorded. Without a
   /// session there is nothing to end.
   pub fn end(self) {
-    let Some(Running { session, services, .. }) = self.running else {
+    let Some(Running {
+      mut session, services, ..
+    }) = self.running
+    else {
       return;
     };
+    session.mark_closing();
     let outcome = services
       .runtime
       .block_on(services.runners.shutdown(Some(QUIET_STOP_TIMEOUT)));

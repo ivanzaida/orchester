@@ -13,7 +13,7 @@ use orchester_app::{
 };
 use orchester_core::time::Timestamp;
 use orchester_ipc::SessionEnd as AttachEnd;
-use orchester_store::{AppDb, PreviousSession, SessionEnd};
+use orchester_store::{AppDb, PreviousSession, SessionEnd, location::LockHolder};
 use support::{Data, Window};
 
 /// How the last session of `data` ended, as the next one would find it. Records a session itself.
@@ -92,6 +92,55 @@ fn session_already_open_screen_names_the_folder_and_the_other_window() {
   );
   assert!(window.texts("tab-strip").is_none(), "no tabs");
   assert_eq!(window.link.startup(), Some("already_open"));
+  first.end();
+}
+
+/// Rewrites the record of who holds `data`'s folder, as the app that holds it would.
+fn record_holder(data: &Data, holder: LockHolder) {
+  let text = serde_json::to_string(&holder).expect("a holder serializes");
+  fs::write(data.dir.path().join("orchester.lock.holder"), text).expect("the record is written");
+}
+
+#[test]
+fn session_closing_app_says_to_start_again_never_that_it_is_stuck() {
+  let data = Data::new();
+  let first = data.launch();
+  let started = first.services().expect("the first app started").session_start;
+  record_holder(
+    &data,
+    LockHolder {
+      closing: true,
+      ..LockHolder::running(std::process::id(), started)
+    },
+  );
+  let second = data.launch();
+  let mut window = Window::of(data, second);
+  let texts = window.texts("startup-closing").expect("the closing screen shows");
+  assert_eq!(texts[0], "Orchester is closing");
+  assert!(window.texts("startup-switch").is_none(), "nothing to switch to");
+  assert!(window.texts("startup-no-answer").is_none());
+  assert!(window.texts("startup-close").is_some());
+  assert_eq!(window.link.startup(), Some("closing"));
+  drop(window);
+  first.end();
+}
+
+#[test]
+fn session_other_app_from_another_day_says_the_day() {
+  let data = Data::new();
+  let first = data.launch();
+  let two_days_ago = Timestamp::from_unix_millis(Timestamp::now().unix_millis() - 2 * 24 * 60 * 60 * 1000);
+  record_holder(&data, LockHolder::running(18244, two_days_ago));
+  let second = data.launch();
+  let mut window = Window::of(data, second);
+  let other = window
+    .texts("startup-other-window")
+    .expect("the other window's line shows");
+  assert!(
+    other[0].starts_with("Open since ") && other[0].contains(", ") && other[0].ends_with("· process 18244"),
+    "{other:?}"
+  );
+  drop(window);
   first.end();
 }
 
