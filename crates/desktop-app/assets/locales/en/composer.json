@@ -65,6 +65,10 @@
     },
     "recipient": {
       "agent": "{{agent}} · {{state}}",
+      "fixed": {
+        "answer": "Your answer goes to the agent that asked.",
+        "plan": "The plan’s changes go to the agent whose plan waits."
+      },
       "orchestrator": "To: Orchestrator · this task",
       "state": {
         "asking": "asked you",
@@ -93,7 +97,6 @@
       "requestChanges": "Request changes",
       "resume": "Resume and send",
       "runAgain": "Run again with this message",
-      "sending": "Sending…",
       "whenStarts": "Send when the run starts",
       "withoutContinuing": "Send without continuing",
       "withoutResuming": "Send without resuming"

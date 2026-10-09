@@ -3,23 +3,24 @@
 //! tab's sides and 14 over its bottom, one box — `surface_input` in a `border_strong` stroke, radius 10, 10
 //! by 12 inside, 8 between the message and its row ([`controls`]) — with what the message answers or
 //! changes over it ([`context`]) and one quiet line under it where that changes the outcome ([`words`]),
-//! 6 apart. The run's state decides what sending does (`ComposerMode`); once no agent reads messages and
-//! none can again, the box keeps only a lock and the reason.
+//! 6 apart. The run's state decides what sending does (`ComposerMode`, offered by `outgoing::offer`, and
+//! decided again from the task read when the message is sent); once no agent reads messages and none can
+//! again, the box keeps only a lock and the reason.
 //!
 //! Enter sends the state's way (now, while the agent at work takes a message mid-turn); Ctrl+Enter (Cmd+Enter
 //! on macOS) sends the second way where the state has one (*Send after this turn*, *Send without resuming*)
 //! and the state's way elsewhere; Shift+Enter adds a line, and an Enter that confirms an input method's
 //! composition only confirms it. Esc closes the send menu, then leaves a question's or a plan's mode.
-//! The draft is the tab's ([`ComposerLink`]): it stays until the message is stored, so a failed send keeps
-//! it, with *Try again*; it is stored once per draft (its idempotency key changes only after a store), so
-//! a retry never sends twice. A message its agent's CLI did not take offers *Send after this turn* and
-//! *Edit in composer* under it ([`undelivered`]).
+//! The draft and the sends are the task page's ([`ComposerState`]), so a tab switch or a new run keeps them:
+//! the draft stays until its message is stored, so a failed send keeps it, with *Try again*; its words are
+//! stored once under their key, so a retry never sends twice. A message its agent's CLI did not take offers
+//! *Send after this turn* and *Edit in composer* under it ([`undelivered`]).
 
 mod context;
 mod controls;
 mod feedback;
 mod presses;
-mod send;
+mod state;
 mod undelivered;
 mod words;
 
@@ -36,25 +37,21 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{
-  conversation::Recipient,
-  id::{IdempotencyKey, MessageId},
-  project::TaskKey,
-  run::PlanVersion,
-};
+use orchester_core::{conversation::Recipient, id::MessageId, project::TaskKey, run::PlanVersion};
 use orchester_workspace::{
   messages::Message,
   tasks::{
-    conversation::{Conversation, composer::ComposerMode, follow::Sent},
-    detail::TaskDetail,
+    conversation::{Conversation, composer::ComposerMode, outgoing::offer},
+    detail::{RunView, TaskDetail},
   },
 };
 use parking_lot::Mutex;
 
+pub use self::state::ComposerState;
 pub(super) use self::undelivered::undelivered;
 use self::{
   controls::{Bar, Sending},
-  send::{Outgoing, PlanAction, SendAction, plan_action, send_action},
+  presses::Target,
 };
 use super::{TaskContext, timeline::Follow};
 use crate::{
@@ -74,38 +71,21 @@ const MAX_LINES: usize = 6;
 /// A press of the send button, of a send menu's way, of a key or of a link.
 pub(super) type Press = Arc<dyn Fn() + Send + Sync>;
 
-/// The composer's draft and the requests to focus it, which the tab keeps while it shows the task, so
-/// the chat's messages can put a message back into it (*Edit in composer*).
-#[derive(Clone)]
-pub(super) struct ComposerLink {
-  draft: Signal<String>,
-  focus: Signal<bool>,
-}
-
-impl ComposerLink {
-  pub(super) fn new(ctx: &mut Ctx) -> Self {
-    Self {
-      draft: ctx.signal(String::new()),
-      focus: ctx.signal(false),
-    }
-  }
-
-  /// Puts `text` into the composer, with the focus in it.
-  fn edit(&self, text: String) {
-    self.draft.set(text);
-    self.focus.set(true);
-  }
-}
-
-/// What the composer and the chat's messages act on: the task `key` of `project` as the tab shows it, and
-/// the chat, which follows a message the person sent.
+/// What the composer and the chat's messages act on: the task `key` of `project` as the tab shows it, the
+/// composer's state the page keeps, and the chat, which follows a message the person sent.
 #[derive(Clone)]
 pub(super) struct Composing {
-  link: ComposerLink,
+  state: ComposerState,
   follow: Follow,
   project: ShownProject,
   key: TaskKey,
   detail: Arc<TaskDetail>,
+  /// The latest run is recorded as running while no runner looks after it.
+  lost: bool,
+  /// An agent of the latest run can still read a message.
+  takes_messages: bool,
+  /// The composer takes words: its run can be read and its state is not closed.
+  writable: bool,
 }
 
 impl Composing {
@@ -123,18 +103,21 @@ impl Composing {
 /// The composer for `task` as the page read it and `conversation` as the tab reads it, under the chat that
 /// `follow` keeps at its end; it also lets the chat's messages reach the composer, so the tab calls it
 /// before the chat.
-pub(super) fn dock(
-  ctx: &mut Ctx,
-  (link, follow): (&ComposerLink, &Follow),
-  task: &TaskContext,
-  conversation: &Conversation,
-) -> Element {
+pub(super) fn dock(ctx: &mut Ctx, follow: &Follow, task: &TaskContext, conversation: &Conversation) -> Element {
+  let state = ctx
+    .use_context::<ComposerState>()
+    .expect("the task page keeps the composer's state before its tabs");
+  let run = task.detail.run.as_ref();
+  let open = offer(conversation, run, false).0 != ComposerMode::Closed;
   let composing = Composing {
-    link: link.clone(),
+    state,
     follow: follow.clone(),
     project: task.project.clone(),
     key: task.key.clone(),
     detail: task.detail.clone(),
+    lost: task.lost(),
+    takes_messages: conversation.state.takes_messages(),
+    writable: open && task.detail.latest_unreadable.is_none(),
   };
   ctx.provide(composing.clone());
   ctx.mount_keyed::<Composer>(
@@ -152,24 +135,19 @@ struct DockProps {
   conversation: Arc<Conversation>,
 }
 
-/// Compared by what it shows; the draft by its signal.
+/// Compared by what it shows; the composer's state by its draft.
 impl PartialEq for DockProps {
   fn eq(&self, other: &Self) -> bool {
     self.composing.project == other.composing.project
       && self.composing.key == other.composing.key
       && self.composing.detail == other.composing.detail
-      && self.composing.link.draft.id() == other.composing.link.draft.id()
+      && self.composing.lost == other.composing.lost
+      && self.composing.state.draft.id() == other.composing.state.draft.id()
       && self.conversation == other.conversation
   }
 }
 
 impl lurq::app::component::DevtoolsInspectable for DockProps {}
-
-/// The idempotency key the draft is stored under; a new one once it is stored.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct DraftKey(IdempotencyKey);
-
-impl lurq::app::component::DevtoolsInspectable for DraftKey {}
 
 /// What a mode answers or changes, which its line names and the person can leave.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -196,14 +174,11 @@ struct Left(Option<Context>);
 impl lurq::app::component::DevtoolsInspectable for Left {}
 
 struct Composer {
-  key: Signal<DraftKey>,
   left: Signal<Left>,
   menu: Signal<bool>,
   focused: Signal<bool>,
   input: ElementRef,
   anchor: ElementRef,
-  /// The message last sent, which *Try again* sends again with the draft as it is then.
-  last: Arc<Mutex<Option<Outgoing>>>,
   /// The question the field last took the focus for: once per question.
   answering: Mutex<Option<MessageId>>,
 }
@@ -213,70 +188,34 @@ impl Component for Composer {
 
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<DockProps>().clone();
-    let (sending, plan) = (send_action(ctx), plan_action(ctx));
-    let key = ctx.signal(DraftKey(IdempotencyKey::generate()));
-    let last: Arc<Mutex<Option<Outgoing>>> = Arc::default();
-    let summary = props.composing.open(ctx, TaskView::Summary);
-    let (draft, feed, renewed, sent) = (
-      props.composing.link.draft.clone(),
-      props.composing.project.feed.clone(),
-      key.clone(),
-      last.clone(),
-    );
     let follow = props.composing.follow.clone();
-    ctx.watch(&sending.state(), move |state| {
-      let Some(stored) = state.data.as_ref().filter(|_| !state.is_pending()) else {
-        return;
-      };
-      // What was typed while it was sent stays.
-      if sent
-        .lock()
-        .as_ref()
-        .is_some_and(|last| last.text == draft.get_untracked())
-      {
-        draft.set(String::new());
-      }
-      renewed.set(DraftKey(IdempotencyKey::generate()));
-      feed.saved();
-      follow.follow_again();
-      // The message waits for the raised limit, which the person sets on the Summary.
-      if *stored == Sent::AwaitsLimit {
-        summary();
-      }
-    });
-    let (draft, feed) = (props.composing.link.draft.clone(), props.composing.project.feed.clone());
-    ctx.watch(&plan.state(), move |state| {
-      if !state.is_pending() && state.data.is_some() {
-        draft.set(String::new());
-        feed.saved();
+    ctx.watch(&props.composing.state.send.state(), move |result| {
+      // A failure keeps the data of the send before it: only a send that went through moves the chat.
+      if result.is_fulfilled() {
+        follow.follow_again();
       }
     });
     Self {
-      key,
       left: ctx.signal(Left::default()),
       menu: ctx.signal(false),
       focused: ctx.signal(false),
       input: ElementRef::new(),
       anchor: ElementRef::new(),
-      last,
       answering: Mutex::new(None),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<DockProps>().clone();
-    // The actions first, in the order `create` made them: lurq keeps them by the order they are asked for.
-    let (sending, plan) = (send_action(ctx), plan_action(ctx));
-    let link = &props.composing.link;
-    if link.focus.get() {
+    let state = &props.composing.state;
+    if state.focus.get() {
       ctx.focus(&self.input);
-      link.focus.set(false);
+      state.focus.set(false);
     }
-    let detail = &props.composing.detail;
-    let content = if detail.latest_unreadable.is_some() {
+    let content = if props.composing.detail.latest_unreadable.is_some() {
       vec![closed(&ctx.t("composer.closed.unreadable"))]
     } else {
-      self.content(ctx, &props, (&sending, &plan))
+      self.content(ctx, &props)
     };
     Column::new()
       .id("composer")
@@ -289,12 +228,12 @@ impl Component for Composer {
 }
 
 impl Composer {
-  /// The mode the run's state offers for its default recipient, without the context the person left.
-  fn mode(&self, props: &DockProps) -> (ComposerMode, Recipient, Option<Press>) {
+  /// The mode the run's state offers for its default recipient, without the context the person left;
+  /// whether they left it, and how to leave it.
+  fn mode(&self, props: &DockProps) -> (ComposerMode, Recipient, (bool, Option<Press>)) {
     let conversation = &props.conversation;
     let run = props.composing.detail.run.as_ref();
-    let recipient = ComposerMode::of(conversation, run, Recipient::Orchestrator).default_recipient(conversation);
-    let offered = ComposerMode::of(conversation, run, recipient);
+    let (offered, recipient) = offer(conversation, run, false);
     let context = Context::of(&offered);
     // The question was answered or ended, the plan decided: what was left is gone with it.
     let left = self.left.get();
@@ -302,28 +241,32 @@ impl Composer {
       self.left.set(Left::default());
     }
     if context.is_some() && left.0 == context {
-      return (offered.without_context(conversation, recipient), recipient, None);
+      let (mode, recipient) = offer(conversation, run, true);
+      return (mode, recipient, (true, None));
     }
     let leave = context.map(|context| {
       let left = self.left.clone();
       Arc::new(move || left.set(Left(Some(context)))) as Press
     });
-    (offered, recipient, leave)
+    (offered, recipient, (false, leave))
   }
 
-  fn content(&self, ctx: &mut Ctx, props: &DockProps, (sending, plan): (&SendAction, &PlanAction)) -> Vec<Element> {
-    let (mode, recipient, leave) = self.mode(props);
+  fn content(&self, ctx: &mut Ctx, props: &DockProps) -> Vec<Element> {
+    let (mode, recipient, (left, leave)) = self.mode(props);
     if mode == ComposerMode::Closed {
       let reason = Message::new(props.conversation.state.closed_reason());
       return vec![closed(&message_text(ctx, &reason))];
     }
     self.focus_question(ctx, &mode);
-    let busy = sending.state().get().is_pending() || plan.state().get().is_pending();
-    let presses = if busy {
-      Sending::Busy
-    } else {
-      self.presses(props, (&mode, recipient), (sending, plan))
+    let composing = &props.composing;
+    let target = Target {
+      project: composing.project.open.clone(),
+      task: composing.detail.task.id(),
+      written_for: composing.detail.run.as_ref().map(RunView::id),
+      lost: composing.lost,
+      left,
     };
+    let presses = presses::presses(&composing.state, &target, mode.then_later().is_some());
     let field = self.field(ctx, props, &mode, (&presses, leave.clone()));
     let bar = controls::bar(
       ctx,
@@ -353,9 +296,9 @@ impl Composer {
       .rounded(RadiusSize::Lg)
       .child(field)
       .child(bar);
-    let feedback = feedback::line(ctx, (sending, plan), &presses);
+    let feedback = feedback::line(ctx, &composing.state, (&props.conversation, mode_name(&mode)), &presses);
     let note = words::note(ctx, &mode, &props.conversation).map(|note| quiet(&note));
-    context::line(ctx, &props.composing, (&mode, recipient), leave)
+    context::line(ctx, composing, (&mode, recipient), leave)
       .into_iter()
       .chain(std::iter::once(composer.into()))
       .chain(feedback)
@@ -394,7 +337,7 @@ impl Composer {
     let (gained, lost) = (self.focused.clone(), self.focused.clone());
     let placeholder = words::placeholder(ctx, mode, &props.conversation);
     let keys = presses::keys(presses, leave, self.menu.clone());
-    TextInput::styled(props.composing.link.draft.clone(), resolve(PaletteColor::TextPrimary))
+    TextInput::styled(props.composing.state.draft.clone(), resolve(PaletteColor::TextPrimary))
       .placeholder_style(resolve(PaletteColor::TextMuted))
       .caret_color(PaletteColor::TextPrimary)
       .id("composer-input")
@@ -443,7 +386,8 @@ fn closed(reason: &str) -> Element {
     .into()
 }
 
-/// The name `describe` reports the mode by, for tests and QA.
+/// The name `describe` reports the mode by, for tests and QA; a stored message's queued reason belongs to
+/// the mode it was sent in.
 const fn mode_name(mode: &ComposerMode) -> &'static str {
   match mode {
     ComposerMode::Steer(_) => "steer",

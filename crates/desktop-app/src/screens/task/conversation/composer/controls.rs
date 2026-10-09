@@ -8,6 +8,8 @@
 //! chevron split the button (`KkfI8`, `ZFD5V`: 1 by 16, then 20 wide, a 12 chevron) and open the send menu
 //! over it. The permissions chip and the recipient menu are not part of this build (D4).
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -68,7 +70,13 @@ pub(super) struct Bar<'a> {
 }
 
 pub(super) fn bar(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
-  let fixed = bar.mode.fixed_recipient().is_some() || matches!(bar.mode, ComposerMode::PlanChanges { .. });
+  let fixed = match bar.mode {
+    ComposerMode::Answer { .. } if bar.mode.fixed_recipient().is_some() => {
+      Some(ctx.t("composer.recipient.fixed.answer"))
+    }
+    ComposerMode::PlanChanges { .. } => Some(ctx.t("composer.recipient.fixed.plan")),
+    _ => None,
+  };
   let recipient = words::recipient(ctx, bar.mode, bar.conversation, bar.recipient);
   Row::new()
     .id("composer-bar")
@@ -76,7 +84,7 @@ pub(super) fn bar(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(attach(ctx))
-    .child(recipient_pill(&recipient, fixed))
+    .child(recipient_pill(ctx, &recipient, fixed))
     .child(Spacer::new().flex(1.0))
     .child(send(ctx, bar))
     .into()
@@ -99,11 +107,12 @@ fn attach(ctx: &mut Ctx) -> Element {
   Tooltip::new("composer-attach", reason).wrap(ctx, square)
 }
 
-/// The recipient pill: who gets the message and what it does with it; a lock while it is fixed.
-fn recipient_pill(words: &str, fixed: bool) -> Element {
-  Row::new()
+/// The recipient pill: who gets the message and what it does with it; while it is fixed, a lock, and
+/// why in its tooltip.
+fn recipient_pill(ctx: &mut Ctx, words: &str, fixed: Option<Arc<str>>) -> Element {
+  let pill = Row::new()
     .id("composer-recipient")
-    .describe("fixed", fixed.to_string())
+    .describe("fixed", fixed.is_some().to_string())
     .height(Dimension::Px(ControlHeight::Sm.value()))
     .flex_shrink(1.0)
     .min_width(Dimension::Px(0.0))
@@ -121,8 +130,15 @@ fn recipient_pill(words: &str, fixed: bool) -> Element {
         .color(PaletteColor::TextSecondary)
         .nowrap(),
     )
-    .with_children(fixed.then(|| icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted)))
-    .into()
+    .with_children(
+      fixed
+        .is_some()
+        .then(|| icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted)),
+    );
+  match fixed {
+    Some(reason) => Tooltip::new("composer-recipient", reason.clone()).wrap(ctx, pill.describe("reason", reason)),
+    None => pill.into(),
+  }
 }
 
 /// The send button, split with the send menu where the state has two ways of sending.

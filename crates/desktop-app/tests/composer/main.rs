@@ -7,6 +7,7 @@
 //! stays queued; an agent at work (*Send now*, *Send after this turn*) needs a live run (QA's `live`
 //! scenario). Needs `git`.
 
+mod keeping;
 #[allow(
   dead_code,
   reason = "the seed's report and its database path are the QA tool's; these tests read its tasks"

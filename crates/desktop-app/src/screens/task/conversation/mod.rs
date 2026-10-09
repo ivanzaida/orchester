@@ -40,6 +40,7 @@ use orchester_workspace::{
   },
 };
 
+pub use self::composer::ComposerState;
 use self::{
   read::{Transcript, TranscriptRead, Waiting, with_requests},
   timeline::{Follow, Timeline, Toggles},
@@ -60,7 +61,6 @@ pub fn tab(ctx: &mut Ctx, task: &TaskContext) -> Element {
 }
 
 struct ConversationTab {
-  composer: composer::ComposerLink,
   follow: Follow,
   toggles: Toggles,
   retry: Signal<u64>,
@@ -72,7 +72,6 @@ impl Component for ConversationTab {
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
-      composer: composer::ComposerLink::new(ctx),
       follow: Follow::new(ctx),
       toggles: Toggles::new(ctx),
       retry: ctx.signal(0),
@@ -90,7 +89,7 @@ impl Component for ConversationTab {
       .and_then(|run| task.left.as_read(run.id()))
       .and_then(Result::ok);
     let conversation = Conversation::of(detail, task.lost(), leftovers.as_ref());
-    let composer = composer::dock(ctx, (&self.composer, &self.follow), &task, &conversation);
+    let composer = composer::dock(ctx, &self.follow, &task, &conversation);
     let (body, state) = match &detail.run {
       Some(run) => self.run_body(ctx, &task, run, &conversation),
       None => (states::without_run(ctx, detail, &conversation), None),

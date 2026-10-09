@@ -1,5 +1,5 @@
 //! Under the box, after a send: why it did not go through, with *Try again*, the draft kept; or why the
-//! runner did not take a stored message, which stays queued.
+//! runner did not take a stored message, while it still waits.
 
 use lurq::{
   app::{
@@ -10,12 +10,16 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::tasks::conversation::follow::Sent;
+use orchester_core::id::MessageId;
+use orchester_workspace::{
+  messages::Message,
+  tasks::conversation::{Conversation, EntryState, follow::Sent},
+};
 
 use super::{
   Press,
   controls::Sending,
-  send::{PlanAction, SendAction},
+  state::{ComposerState, Outcome},
 };
 use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
@@ -28,14 +32,19 @@ use crate::{
 };
 
 /// Why the last send did not go through, with *Try again*; or why the runner did not take a stored
-/// message, which stays queued.
-pub(super) fn line(ctx: &mut Ctx, (sending, plan): (&SendAction, &PlanAction), presses: &Sending) -> Option<Element> {
-  let (sent, decided) = (sending.state().get(), plan.state().get());
-  if sent.is_pending() || decided.is_pending() {
+/// message, while it still waits and the run's state is the one it was sent in (`mode`).
+pub(super) fn line(
+  ctx: &mut Ctx,
+  state: &ComposerState,
+  (conversation, mode): (&Conversation, &str),
+  presses: &Sending,
+) -> Option<Element> {
+  let sent = state.send.state().get();
+  if sent.is_pending() {
     return None;
   }
-  let failed = sent.error.or(decided.error);
-  if let Some(error) = failed {
+  let (rejected, fulfilled) = (sent.is_rejected(), sent.is_fulfilled());
+  if let Some(error) = sent.error.filter(|_| rejected) {
     let text = ctx.t_args("composer.failed", [("reason", &*message_text(ctx, &error))]);
     let retry = match presses {
       Sending::Ready { primary, .. } => Some(retry(ctx, primary.clone())),
@@ -52,20 +61,40 @@ pub(super) fn line(ctx: &mut Ctx, (sending, plan): (&SendAction, &PlanAction), p
         .into(),
     );
   }
-  let Some(Sent::Queued(reason)) = sent.data else {
-    return None;
+  let waits = |id: MessageId| {
+    conversation
+      .entries
+      .iter()
+      .any(|entry| entry.id == id && matches!(entry.state, EntryState::Queued(_)))
   };
-  let reason = message_text(ctx, &reason);
-  Some(
-    Row::new()
-      .id("composer-kept")
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Snug.role())
-      .align_items(Alignment::Center)
-      .child(icon(Icon::Clock, IconSize::Sm, PaletteColor::TextMuted))
-      .child(Text::new(&reason).variant(ExtraTypography::Note.role()))
-      .into(),
-  )
+  let message = match sent.data.filter(|_| fulfilled) {
+    Some(Outcome::Message {
+      id,
+      sent: Sent::Queued(reason),
+      mode: sent_in,
+      ..
+    }) if sent_in == mode && waits(id) => Some(reason),
+    _ => None,
+  };
+  let after_turn = state.after_turn.state().get();
+  let fulfilled = after_turn.is_fulfilled();
+  let again = match after_turn.data.filter(|_| fulfilled) {
+    Some((id, Sent::Queued(reason))) if waits(id) => Some(reason),
+    _ => None,
+  };
+  message.or(again).map(|reason| kept(ctx, &reason))
+}
+
+/// A stored message the runner did not take waits, and why.
+fn kept(ctx: &Ctx, reason: &Message) -> Element {
+  Row::new()
+    .id("composer-kept")
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::Clock, IconSize::Sm, PaletteColor::TextMuted))
+    .child(Text::new(&message_text(ctx, reason)).variant(ExtraTypography::Note.role()))
+    .into()
 }
 
 /// *Try again*: the failed send again, with the draft as it is.

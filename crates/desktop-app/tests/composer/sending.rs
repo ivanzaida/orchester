@@ -18,7 +18,7 @@ use rusqlite::Connection;
 use super::{click, detail, draft, key_of, messages, open, seeded, task_id, text, type_on, write};
 
 /// Waits until the task `title` has `count` messages stored.
-fn until_stored(window: &mut support::Window, seeded: &kontur::Seeded, title: &str, count: usize) {
+pub(super) fn until_stored(window: &mut support::Window, seeded: &kontur::Seeded, title: &str, count: usize) {
   let key = key_of(seeded, title);
   window.until(&format!("{count} messages of {key}"), |_| {
     super::messages(seeded, &key).len() == count
@@ -27,7 +27,7 @@ fn until_stored(window: &mut support::Window, seeded: &kontur::Seeded, title: &s
 
 use super::{kontur, support};
 
-const ENTER: (&str, &str) = ("Enter", "Enter");
+pub(super) const ENTER: (&str, &str) = ("Enter", "Enter");
 
 #[test]
 fn composer_enter_sends_once_and_empties_the_draft() {
@@ -192,8 +192,8 @@ fn composer_a_message_its_agent_did_not_take_goes_after_the_turn_or_back_into_th
   });
 }
 
-/// Stores `words` sent now to the paused run of `key`, which its agent's CLI refused.
-fn not_delivered(
+/// Stores `words` sent now to the latest run of `key`, which its agent's CLI refused.
+pub(super) fn not_delivered(
   seeded: &kontur::Seeded,
   key: &orchester_core::project::TaskKey,
   words: &str,
@@ -203,7 +203,8 @@ fn not_delivered(
     .stopped_step()
     .or_else(|| run.current_step())
     .and_then(|step| step.execution)
-    .expect("the run stopped in an agent's step");
+    .or_else(|| run.steps.iter().rev().find_map(|step| step.execution))
+    .expect("an agent's step ran");
   let body = MessageBody::new(words).expect("a message");
   let message = Message::from_person(
     task_id(seeded, key),
