@@ -224,9 +224,11 @@ failure routes, profiles and tools, and each step's approval gate, asking about 
 commands and network the same or stricter. A pipeline's first version and anything else need a person, so
 every version a task can run is one a person published, allowed, or could not object to. A version is
 weaker also when a step gets more retries, a larger step budget or none, other instructions or another model;
-the pipeline's description may change. Automation may create a task on any published pipeline, but moving
-an existing task to another pipeline (`update_task`) is a person's decision, refused as `person_only` while
-the setting is off; a task without a pipeline may get any published one.
+the pipeline's description may change. Accepted behaviour, as the user decided: automation may create a
+task on any published pipeline with the setting off, since every published version is one a person
+published, allowed, or could not object to. Only moving an existing task to another pipeline
+(`update_task`) is a person's decision, refused as `person_only` while the setting is off; a task without a
+pipeline may get any published one.
 `duplicate_pipeline` is shared with the deprecated desktop's server, which follows the rule too.
 
 Today only this switch is protected from window input. Person-only actions in editors still to come (a

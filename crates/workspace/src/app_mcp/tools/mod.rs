@@ -77,7 +77,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "create_task",
-    description: "Saves a new draft task. Limits left out take the project's defaults, as the new task form fills them.",
+    description: "Saves a new draft task. Limits left out take the project's defaults, as the new task form fills them. Any published pipeline may be chosen, with Let automation change agent permissions on or off: every published version is one a person published, allowed, or could not object to (accepted behaviour). Moving an existing task to another pipeline is a person's decision (update_task).",
     schema: schema_for_type::<task_write::CreateTask>,
     read_only: false,
   },
