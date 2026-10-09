@@ -6,7 +6,7 @@ use lurq::{
   core::Signal,
   node::dimension::Dimension,
 };
-use orchester_app::ui::field::{FieldInput, NumberField, SelectField, field};
+use orchester_app::ui::field::{FieldInput, NumberField, SelectField, field, field_error};
 
 use crate::harness::{Kit, assert_close, gap_after, gap_under};
 
@@ -219,3 +219,30 @@ fn a_clearable_search_ends_in_a_cross_while_it_holds_text_and_the_cross_clears_i
   assert_eq!(value.get(), "");
   assert!(!kit.exists("search-clear"), "an empty search has no cross");
 }
+
+#[test]
+fn a_field_error_wraps_within_its_column() {
+  let mut kit = Kit::show(|_ctx| {
+    Column::new()
+      .width(Dimension::Px(NARROW))
+      .child(field_error(
+        "refused",
+        "The runner is not connected. Try again once it is online, then decide again.",
+      ))
+      .into()
+  });
+  let (error, text) = (kit.bounds("refused"), kit.bounds("refused-text"));
+  assert_close(error.width, NARROW, "the error is as wide as its column");
+  assert!(
+    text.x + text.width <= error.x + error.width + 0.5,
+    "the words end inside the column"
+  );
+  assert!(text.height > 20.0, "the words wrap onto a second line: {}", text.height);
+  assert_eq!(
+    kit.texts("refused-text"),
+    ["The runner is not connected. Try again once it is online, then decide again."]
+  );
+}
+
+/// A narrow column, as the retries panel's card is (`j7DjNG`, 288 inside).
+const NARROW: f32 = 200.0;
