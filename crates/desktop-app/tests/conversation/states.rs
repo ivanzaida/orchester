@@ -44,6 +44,10 @@ fn timeline_an_unreadable_run_shows_nothing_it_did() {
   open(&mut window, &seeded, &key, "conversation-unreadable");
   let text = all_text(&mut window);
   assert!(text.contains("could not be read"), "{text}");
+  assert!(
+    window.tree.get_element_by_id("conversation-run-state").is_none(),
+    "where an unreadable run stands is unknown: no state chip"
+  );
   assert!(text.contains("Summary lists the task’s runs"), "{text}");
 }
 
