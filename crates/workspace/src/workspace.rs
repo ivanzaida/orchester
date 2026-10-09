@@ -195,6 +195,15 @@ impl Workspace {
     self.db.lock().set_ui_state(key, text)
   }
 
+  pub fn remove_ui_state(&self, key: &str) -> Result<(), StoreError> {
+    self.db.lock().remove_ui_state(key)
+  }
+
+  /// The keys of the window's state that start with `prefix`.
+  pub fn ui_state_keys(&self, prefix: &str) -> Result<Vec<String>, StoreError> {
+    self.db.lock().ui_state_keys(prefix)
+  }
+
   /// Whether automation may answer waiting tool requests through Orchester's MCP server (*Let
   /// automation answer approvals*); off until a person turns it on.
   pub fn automation_answers_approvals(&self) -> Result<bool, StoreError> {

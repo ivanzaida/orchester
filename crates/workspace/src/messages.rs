@@ -151,6 +151,21 @@ pub fn interrupted() -> Message {
   Message::new("errors.interrupted")
 }
 
+/// A task was changed since it was read, so a change made on what was read was not saved.
+pub fn task_changed_meanwhile() -> Message {
+  Message::new("tasks.conflict.changedMeanwhile")
+}
+
+/// A save of a new draft found its task queued meanwhile, so it was not saved as a draft.
+pub fn task_no_longer_draft() -> Message {
+  Message::new("tasks.new.noLongerDraft")
+}
+
+/// A save stored details that differ from the ones it was given.
+pub fn task_saved_differently() -> Message {
+  Message::new("tasks.new.savedDetailsDiffer")
+}
+
 pub fn runner_failure(failure: &RunnerFailure) -> Message {
   match failure {
     RunnerFailure::MissingExecutable { path } => {

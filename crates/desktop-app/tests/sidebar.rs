@@ -38,7 +38,7 @@ use orchester_core::{
   run::{ActiveClock, TaskPhase},
   time::Timestamp,
 };
-use orchester_workspace::tasks::data::ProjectTasks;
+use orchester_workspace::tasks::{data::ProjectTasks, integration_jobs::ProjectJobs};
 use support::{Data, Window, add_project, project_id};
 
 fn overview(project: ProjectId) -> Route {
@@ -193,7 +193,7 @@ impl Component for RunningRoot {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     ctx.provide(self.navigation.clone());
-    ctx.provide(Projects::new(None));
+    ctx.provide(Projects::new(None, ProjectJobs::default()));
     let rows = ctx.props::<Rows>().0.clone();
     running_list(ctx, project_id(), &rows)
   }

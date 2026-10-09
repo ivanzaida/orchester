@@ -114,10 +114,14 @@ impl Component for SessionWindow {
   type Props = SessionProps;
 
   fn create(ctx: &mut Ctx) -> Self {
-    let SessionProps { link, landing, .. } = ctx.props::<SessionProps>().clone();
+    let SessionProps {
+      link,
+      landing,
+      services,
+    } = ctx.props::<SessionProps>().clone();
     let router = ctx.router(routes::routes());
     let navigation = Navigation::new(ctx.signal(TabSet::at(landing.route)), router.clone());
-    let projects = Projects::new(landing.project);
+    let projects = Projects::new(landing.project, services.jobs);
     link.attach(navigation.clone(), projects.clone());
     Self {
       router,
