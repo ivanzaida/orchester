@@ -178,7 +178,6 @@ fn plan(ctx: &mut Ctx, choice: &PipelineChoice, nav: &Nav) -> Element {
     ButtonKind::Ghost,
     ctx.t("task_form.plan.view"),
   )
-  .icon(Icon::ArrowUpRight)
   .on_click(move || nav.pipelines());
   let meta = ctx.t_args(
     "task_form.plan.meta",
