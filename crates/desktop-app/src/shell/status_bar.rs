@@ -38,10 +38,10 @@ impl Component for StatusBar {
       .use_context::<McpStatus>()
       .expect("the root provides the MCP status before mounting the shell")
     {
-      McpStatus::Listening { port } => ctx.t_args("status.mcpListening", [("port", port)]),
-      McpStatus::Unavailable => ctx.t("status.mcpUnavailable"),
+      McpStatus::Listening { port } => ctx.t_args("shell.status.mcpListening", [("port", port)]),
+      McpStatus::Unavailable => ctx.t("shell.status.mcpUnavailable"),
     };
-    let version = ctx.t_args("status.version", [("version", env!("CARGO_PKG_VERSION"))]);
+    let version = ctx.t_args("shell.status.version", [("version", env!("CARGO_PKG_VERSION"))]);
     Row::new()
       .id("status-bar")
       .width(Dimension::Pct(100.0))

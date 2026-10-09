@@ -48,7 +48,7 @@ fn main() {
     tree.mount_devtools(&mut app);
   }
 
-  let title = app.i18n().t("app.name");
+  let title = app.i18n().t("shell.app.name");
   let icon = brand::window_icon().expect("the bundled window icon is a valid PNG; covered by tests/brand.rs");
   let without_focus = std::env::var_os(START_WITHOUT_FOCUS_VARIABLE).is_some_and(|value| value == "1");
   WinitWindow::new(app, tree)

@@ -101,21 +101,21 @@ impl Screen {
   /// i18n key of the screen's name.
   pub const fn title_key(self) -> &'static str {
     match self {
-      Self::AllProjects => "screens.allProjects",
-      Self::Settings => "screens.settings",
-      Self::Overview => "screens.overview",
-      Self::Tasks => "screens.tasks",
-      Self::Task => "screens.task",
-      Self::PullRequests => "screens.pullRequests",
-      Self::Usage => "screens.usage",
-      Self::Pipelines => "screens.pipelines",
-      Self::Agents => "screens.agents",
-      Self::Instructions => "screens.instructions",
-      Self::Skills => "screens.skills",
-      Self::Tools => "screens.tools",
-      Self::Secrets => "screens.secrets",
-      Self::Connections => "screens.connections",
-      Self::ProjectSettings => "screens.projectSettings",
+      Self::AllProjects => "shell.screens.allProjects",
+      Self::Settings => "shell.screens.settings",
+      Self::Overview => "shell.screens.overview",
+      Self::Tasks => "shell.screens.tasks",
+      Self::Task => "shell.screens.task",
+      Self::PullRequests => "shell.screens.pullRequests",
+      Self::Usage => "shell.screens.usage",
+      Self::Pipelines => "shell.screens.pipelines",
+      Self::Agents => "shell.screens.agents",
+      Self::Instructions => "shell.screens.instructions",
+      Self::Skills => "shell.screens.skills",
+      Self::Tools => "shell.screens.tools",
+      Self::Secrets => "shell.screens.secrets",
+      Self::Connections => "shell.screens.connections",
+      Self::ProjectSettings => "shell.screens.projectSettings",
     }
   }
 
@@ -179,9 +179,9 @@ impl TaskTab {
   /// i18n key of the tab's name.
   pub const fn title_key(self) -> &'static str {
     match self {
-      Self::Conversation => "taskTabs.conversation",
-      Self::Summary => "taskTabs.summary",
-      Self::Changes => "taskTabs.changes",
+      Self::Conversation => "task.tabs.conversation",
+      Self::Summary => "task.tabs.summary",
+      Self::Changes => "task.tabs.changes",
     }
   }
 

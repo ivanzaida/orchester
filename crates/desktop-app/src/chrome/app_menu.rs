@@ -57,7 +57,7 @@ const ENTRIES: [Option<(&str, Icon, &str, Command)>; 5] = [
     Command::Settings,
   )),
   None,
-  Some(("menu-quit", Icon::LogOut, "menu.quit", Command::Quit)),
+  Some(("menu-quit", Icon::LogOut, "shell.menu.quit", Command::Quit)),
 ];
 
 pub struct AppMenu {

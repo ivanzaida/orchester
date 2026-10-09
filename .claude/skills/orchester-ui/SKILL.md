@@ -20,13 +20,19 @@ skill is the Orchester-specific layer: where things live and how to name them.
 `crates/desktop-app` (the `data/orchester2.pen` design) follows the same two rules with its own
 files; the paths and the mapping tables below are the deprecated `orchester-desktop`'s.
 
-- Strings: `crates/desktop-app/assets/locales/<locale>.json`, loaded by `crates/desktop-app/src/i18n.rs`;
-  shared words go in `common.*`.
+- Strings: one file per locale and area, `crates/desktop-app/assets/locales/<locale>/<area>.json`
+  (`shell`, `common`, `task`, and a screen's own area such as `tasks` or `task_form`). An area's file
+  holds its keys under the area's name and nothing else (`tasks.json` is `{"tasks": {…}}`), so a key's
+  first segment names its file and no key is in two files. `build.rs` lists the files and
+  `crates/desktop-app/src/i18n.rs` loads them all into lurq's default namespace, so code names a key in
+  full (`ctx.t("tasks.newTask")`); a new area is just a new file, in every shipped locale. Shared words
+  go in `common.*`; screen names, the chrome, the sidebar and the status bar in `shell.*`.
 - Design values: only in `crates/desktop-app/src/theme/` (`palette.rs`, `typography.rs`, `metrics.rs`,
   `form.rs`, `shadow.rs`); call sites use lurq roles and the `ExtraColor`, `ExtraTypography`,
   `IconSize`, `ExtraSpacing` and `ExtraRadius` roles there. A structural size (a sidebar width, a tab
   height) is a named constant next to the component that owns it, with its Pencil node id.
-- Tests: `cargo test -p orchester-app --test i18n -- locales every_key` and
+- Tests: `cargo test -p orchester-app --test i18n -- locales area every_key` (load, parity per area, own
+  keys only, every key the code names exists) and
   `cargo test -p orchester-app --test theme -- roles extra_color spacing`.
 - `tools/check.ps1`'s "ui literals" check covers `crates/desktop-app/src` too (its `theme/` exempt).
 

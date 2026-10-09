@@ -67,7 +67,7 @@ impl Component for TabStrip {
     let label_width = label_width(window.info().logical_width(), tabs.tabs().len());
     let active =
       label(ctx, tabs.active().route()).unwrap_or_else(|| ctx.t(Screen::AllProjects.title_key()).to_string());
-    window.set_title(ctx.t_args("app.windowTitle", [("tab", active)]).to_string());
+    window.set_title(ctx.t_args("shell.app.windowTitle", [("tab", active)]).to_string());
     let strip = tabs.tabs().iter().fold(
       Row::new()
         .id("tab-strip")
@@ -222,7 +222,7 @@ fn label(ctx: &mut Ctx, route: &Route) -> Option<String> {
   Some(
     ctx
       .t_args(
-        "tabs.projectScreen",
+        "shell.tabs.projectScreen",
         [("project", project.to_string()), ("screen", page)],
       )
       .to_string(),

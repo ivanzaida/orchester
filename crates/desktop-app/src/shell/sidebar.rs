@@ -70,7 +70,7 @@ impl Component for Sidebar {
             .group(ctx, &Screen::PROJECT_MAIN)
             .padding(Padding::new().top(SpacingSize::Sm)),
         )
-        .child(section_label(&ctx.t("nav.configure")))
+        .child(section_label(&ctx.t("shell.nav.configure")))
         .child(items.group(ctx, &Screen::CONFIGURE));
       bottom.push(Screen::ProjectSettings);
     }
@@ -150,8 +150,8 @@ fn switcher(ctx: &mut Ctx, project: Option<ProjectId>, navigation: &Navigation) 
   let (name, detail) = match project {
     Some(project) => (project.to_string(), None),
     None => (
-      ctx.t("sidebar.noProject").to_string(),
-      Some(ctx.t("sidebar.chooseProject")),
+      ctx.t("shell.sidebar.noProject").to_string(),
+      Some(ctx.t("shell.sidebar.chooseProject")),
     ),
   };
   let tile = glyph_tile(icon(Icon::Folders, IconSize::Base, PaletteColor::TextSecondary).into());

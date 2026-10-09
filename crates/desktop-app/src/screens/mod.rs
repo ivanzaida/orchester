@@ -29,8 +29,8 @@ pub fn screen(ctx: &mut Ctx) -> Element {
 /// A path that names no screen, or names one with an identifier no route can hold.
 pub fn not_found(ctx: &mut Ctx) -> Element {
   let path = ctx.route_path();
-  let title = ctx.t("notFound.title");
-  let body = ctx.t_args("notFound.body", [("path", path)]);
+  let title = ctx.t("shell.notFound.title");
+  let body = ctx.t_args("shell.notFound.body", [("path", path)]);
   centered(Icon::CircleHelp, &title, &body).id("screen-not-found").into()
 }
 
@@ -38,11 +38,14 @@ fn placeholder(ctx: &mut Ctx, route: &Route) -> Element {
   let title = match route {
     Route::Project(_, ProjectPage::Task(key, tab)) => {
       let tab = ctx.t(tab.title_key());
-      ctx.t_args("screens.taskTab", [("key", key.to_string()), ("tab", tab.to_string())])
+      ctx.t_args(
+        "shell.screens.taskTab",
+        [("key", key.to_string()), ("tab", tab.to_string())],
+      )
     }
     route => ctx.t(route.screen().title_key()),
   };
-  let body = ctx.t("placeholder.notBuilt");
+  let body = ctx.t("shell.placeholder.notBuilt");
   centered(screen_icon(route.screen()), &title, &body)
     .id("screen-placeholder")
     .describe("screen", route.screen().name())
