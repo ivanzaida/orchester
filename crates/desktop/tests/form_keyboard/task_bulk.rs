@@ -35,9 +35,11 @@ fn drafts(repo: &Path) {
     brief: brief.into(),
     acceptance_criteria: vec!["One line is appended.".into()],
     pipeline: Some(pipeline),
-    limits: Some(
-      TaskLimits::new(TokenBudget::new(1_400_000).expect("budget"), Duration::from_secs(1800)).expect("limits"),
-    ),
+    limits: TaskLimits::new(
+      Some(TokenBudget::new(1_400_000).expect("budget")),
+      Some(Duration::from_secs(1800)),
+    )
+    .expect("limits"),
   };
   let created = db
     .create_tasks(

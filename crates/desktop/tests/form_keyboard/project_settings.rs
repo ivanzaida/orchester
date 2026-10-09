@@ -99,7 +99,6 @@ fn project_settings_without_a_link_offer_detection() {
   );
 }
 
-const MAX_BUDGET: &str = "limits-max-run-budget";
 pub(crate) const DEFAULT_BUDGET: &str = "limits-default-run-budget";
 pub(crate) const DAILY_BUDGET: &str = "limits-daily-budget";
 const TIME_LIMIT: &str = "limits-default-time-limit";
@@ -110,7 +109,7 @@ pub(crate) fn limits_tab(desktop: &mut Desktop) {
   desktop.click("settings-tab-limits");
   desktop.settle("the stored limits", |tree| {
     tree
-      .get_element_by_id_mut(MAX_BUDGET)
+      .get_element_by_id_mut(DAILY_BUDGET)
       .and_then(|element| element.as_text_input())
       .is_some_and(|input| !input.value().is_empty())
   });
@@ -140,25 +139,28 @@ fn project_settings_limits_show_the_defaults_and_their_fields_in_order() {
   limits_tab(&mut desktop);
   let description = "Defaults and limits for Kontur. They apply to new tasks and runs in this project.";
   assert!(desktop.tree.root().is_some_and(|root| contains_text(root, description)));
-  assert_eq!(desktop.value(MAX_BUDGET), "10,000,000");
-  assert_eq!(desktop.value(DEFAULT_BUDGET), "1,400,000");
+  // No run budget and no time limit by default, and no maximum run budget at all.
+  assert_eq!(desktop.value(DEFAULT_BUDGET), "");
   assert_eq!(desktop.value(DAILY_BUDGET), "20,000,000");
   let (choices, chosen) = time_limit(&mut desktop);
-  assert_eq!(chosen, ["30 minutes"]);
-  assert_eq!(choices.first().map(String::as_str), Some("15 minutes"));
-  assert!(shows(&mut desktop, "settings-limits", "= 10M tokens · default"));
+  assert_eq!(chosen, ["No limit"]);
+  assert_eq!(
+    choices.iter().take(2).map(String::as_str).collect::<Vec<_>>(),
+    ["No limit", "15 minutes"]
+  );
+  assert!(shows(&mut desktop, "settings-limits", "No limit"));
+  assert!(shows(&mut desktop, "settings-limits", "= 20M tokens"));
   assert!(shows(&mut desktop, "settings-save-status", "All changes saved"));
   assert!(desktop.tree.get_element_by_id("settings-limits-notice").is_some());
   assert_eq!(desktop.value(AGENT_SLOTS), "4");
   assert_eq!(
-    desktop.stops(6, false),
+    desktop.stops(5, false),
     expected(&[
-      Some(MAX_BUDGET),
       Some(DEFAULT_BUDGET),
       Some(DAILY_BUDGET),
       Some(TIME_LIMIT),
       Some(AGENT_SLOTS),
-      Some(MAX_BUDGET)
+      Some(DEFAULT_BUDGET)
     ])
   );
 }
@@ -168,25 +170,23 @@ fn project_settings_limits_save_a_valid_change_when_its_field_is_left() {
   let mut desktop = Desktop::with_project();
   limits_tab(&mut desktop);
   desktop.tab_to(DEFAULT_BUDGET, 10);
-  for _ in 0.."1,400,000".len() {
-    desktop.key("Backspace", "Backspace");
-  }
-  desktop.type_text("12000000");
+  desktop.type_text("12x");
   assert!(shows(
     &mut desktop,
     "settings-limits",
-    "The default can be at most the maximum run budget, 10M tokens."
+    "Use digits only, for example 1,400,000."
   ));
   // Leaving an invalid field saves nothing.
   desktop.tab();
   assert_eq!(stored_limits(desktop.repo()), ProjectLimits::DEFAULT);
   desktop.shift_tab();
   desktop.key("Backspace", "Backspace");
-  assert_eq!(desktop.value(DEFAULT_BUDGET), "1,200,000");
+  // No maximum: a default above the daily budget is a valid default.
+  desktop.type_text("0000000");
+  assert_eq!(desktop.value(DEFAULT_BUDGET), "120,000,000");
   desktop.tab();
   let expected_limits = ProjectLimits::new(
-    ProjectLimits::DEFAULT.max_run_budget(),
-    TokenBudget::new(1_200_000).expect("above zero"),
+    Some(TokenBudget::new(120_000_000).expect("above zero")),
     ProjectLimits::DEFAULT.daily_budget(),
     ProjectLimits::DEFAULT.default_time_limit(),
   )
@@ -198,6 +198,14 @@ fn project_settings_limits_save_a_valid_change_when_its_field_is_left() {
       .get_element_by_id("settings-save-status")
       .is_some_and(|status| contains_text(status, "All changes saved"))
   });
+  // Emptied, the default is no limit again.
+  desktop.shift_tab();
+  for _ in 0.."120,000,000".len() {
+    desktop.key("Backspace", "Backspace");
+  }
+  assert!(shows(&mut desktop, "settings-limits", "No limit"));
+  desktop.tab();
+  desktop.settle("no default budget", |_| stored_limits(&repo) == ProjectLimits::DEFAULT);
 }
 
 #[test]
@@ -206,14 +214,14 @@ fn project_settings_limits_save_a_time_limit_when_it_is_chosen() {
   limits_tab(&mut desktop);
   desktop.tab_to(DAILY_BUDGET, 10);
   desktop.tab();
-  // The select opens on the chosen 30 minutes; Down moves to 45 and Enter chooses it.
+  // The select opens on the chosen No limit; Down moves to 15 minutes and Enter chooses it.
   desktop.enter();
   desktop.key("ArrowDown", "ArrowDown");
   desktop.enter();
-  assert_eq!(time_limit(&mut desktop).1, ["45 minutes"]);
+  assert_eq!(time_limit(&mut desktop).1, ["15 minutes"]);
   let repo = desktop.repo().to_path_buf();
   desktop.settle("the saved time limit", |_| {
-    stored_limits(&repo).default_time_limit() == std::time::Duration::from_secs(45 * 60)
+    stored_limits(&repo).default_time_limit() == Some(std::time::Duration::from_secs(15 * 60))
   });
   assert!(shows(&mut desktop, "settings-limits", "active agent time"));
 }

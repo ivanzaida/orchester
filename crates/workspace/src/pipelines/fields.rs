@@ -13,7 +13,7 @@ use orchester_core::{
 
 use super::problems::prompt_error;
 use crate::{
-  budget::{read_budget, unbounded},
+  budget::read_optional_budget,
   messages::{self, Message},
 };
 
@@ -139,10 +139,7 @@ pub fn parse_instructions(text: &str) -> Result<PromptText, Message> {
 /// A step budget field's text, whole tokens grouped with `separator` (the budget input rule);
 /// empty text means no step budget.
 pub fn parse_budget(text: &str, separator: &str) -> Result<Option<TokenBudget>, Message> {
-  if text.trim().is_empty() {
-    return Ok(None);
-  }
-  read_budget(text, separator, unbounded()).map(Some)
+  read_optional_budget(text, separator)
 }
 
 /// A step budget in its field, grouped for the locale; empty without one.

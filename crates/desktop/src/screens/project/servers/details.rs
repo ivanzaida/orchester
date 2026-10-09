@@ -44,7 +44,7 @@ use crate::{
 const TAB_ROW_HEIGHT: f32 = 42.0;
 const HEADER_BUTTON_HEIGHT: f32 = 32.0;
 /// The API version this build speaks; a server speaking another is refused when it is added.
-pub(super) const API_VERSION: u8 = 1;
+pub(super) const API_VERSION: u8 = 2;
 
 #[derive(Clone)]
 pub(super) struct DetailsProps {

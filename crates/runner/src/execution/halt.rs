@@ -120,7 +120,7 @@ impl RunTask {
   fn reached_limit(&self) -> Result<Option<RunLimit>, ExecutionError> {
     Ok(if self.run.token_limit_reached() {
       Some(RunLimit::Tokens)
-    } else if self.time_left()?.is_zero() {
+    } else if self.time_left()?.is_some_and(|left| left.is_zero()) {
       Some(RunLimit::Time)
     } else if idle::daily_budget_used(&self.db)? {
       Some(RunLimit::DailyBudget)

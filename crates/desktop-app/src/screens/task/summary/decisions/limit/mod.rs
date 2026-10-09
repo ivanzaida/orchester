@@ -2,15 +2,11 @@
 //! the run's stages, *Raise the limit* ([`card`]): what the run used of the limit that stopped it, a field
 //! for the new limit in whole numbers with what it reads as, what continuing does, *Continue with …*, and
 //! *Remove the limit*; then the tokens each step used ([`by_step`]). The new limit applies to this run
-//! only. Limits have no maximum of their own (the person's decision of 2026-10-09): any whole number above
-//! what was used is taken, up to what the project database holds (`budget::largest_stored`,
-//! `budget::MAX_STORED_MINUTES`); a runner that still holds a project maximum says so when it refuses.
-//!
-//! A run's limits cannot be empty in this version, so *Remove the limit* is unavailable and says why; once
-//! run limits are optional in core (task LIM) it sends no limit (`None`). Every request needs the
-//! project's runner: without one the actions are unavailable with the header's reason. A stop at a task
-//! group's budget, or at a step's budget that was not recorded, is not raised here: it says why, and
-//! offers nothing to press.
+//! only. Limits are optional and have no maximum (the person's decision of 2026-10-09): any whole number
+//! above what was used is taken, up to what a budget or time limit can hold, and *Remove the limit*
+//! continues the run without the limit that stopped it (`None`). Every request needs the project's runner:
+//! without one the actions are unavailable with the header's reason. A stop at a task group's budget, or
+//! at a step's budget that was not recorded, is not raised here: it says why, and offers nothing to press.
 
 mod by_step;
 mod card;
@@ -29,7 +25,7 @@ use orchester_core::{
   tokens::{TokenBudget, TokensUsed, grouped},
 };
 use orchester_workspace::{
-  budget::{largest_stored, minutes_text, whole_minutes},
+  budget::{minutes_text, whole_minutes},
   display,
   messages::Message,
   tasks::{
@@ -56,9 +52,9 @@ impl lurq::app::component::DevtoolsInspectable for Raising {}
 pub struct Stop<'a> {
   pub run: &'a RunView,
   pub limit: RunLimit,
-  /// Tokens used of, and the budget of, the run; after a step's budget, of that step's execution.
-  /// `None` for a group's budget, which the run does not raise.
-  pub tokens: Option<(TokensUsed, TokenBudget)>,
+  /// Tokens used of, and the budget of, the run (`None` without one); after a step's budget, of that
+  /// step's execution. `None` for a group's budget, which the run does not raise.
+  pub tokens: Option<(TokensUsed, Option<TokenBudget>)>,
   pub active: Duration,
   pub stopped: Option<&'a StepView>,
 }
@@ -87,12 +83,14 @@ impl<'a> Stop<'a> {
   fn suggestion(&self, separator: &str) -> String {
     match self.limit {
       RunLimit::Time => {
-        let limit = self.run.run.max_duration() + self.run.run.max_duration() / 2;
-        let minutes = whole_minutes(limit).max(whole_minutes(self.active) + 1);
-        minutes_text(MINUTE * u32::try_from(minutes).unwrap_or(u32::MAX))
+        let Some(current) = self.run.run.max_duration() else {
+          return String::new();
+        };
+        let minutes = whole_minutes(current + current / 2).max(whole_minutes(self.active) + 1);
+        minutes_text(Some(MINUTE * u32::try_from(minutes).unwrap_or(u32::MAX)))
       }
       _ => {
-        let Some((_, budget)) = self.tokens else {
+        let Some((_, Some(budget))) = self.tokens else {
           return String::new();
         };
         let raised = budget.get().saturating_add(budget.get() / 2);
@@ -104,11 +102,19 @@ impl<'a> Stop<'a> {
     }
   }
 
-  /// The new limit in `text`, or why it is not one: above what was used, with no maximum. `None` when
-  /// the run has nothing to raise (a group's budget).
+  /// The new limit in `text`, or why it is not one: above what was used, with no maximum. An empty field
+  /// names no new limit: *Remove the limit* is how the run continues without one. `None` when the run has
+  /// nothing to raise (a group's budget).
   pub fn read(&self, text: &str, separator: &str) -> Option<Result<Raise, Message>> {
+    let unit = self.field()?;
+    if text.trim().is_empty() {
+      return Some(Err(match unit {
+        Unit::Minutes => raise::minutes_needed(),
+        Unit::Tokens => raise::budget_needed(),
+      }));
+    }
     let run = &self.run.run;
-    Some(match (self.field()?, self.limit, self.tokens) {
+    Some(match (unit, self.limit, self.tokens) {
       (Unit::Minutes, ..) => raise::time_limit(text, self.active).map(|max_duration| {
         Raise::Limits(RaisedLimits {
           budget: run.budget(),
@@ -118,16 +124,31 @@ impl<'a> Stop<'a> {
       (Unit::Tokens, _, None) => return None,
       (Unit::Tokens, RunLimit::StepBudget { .. }, Some((used, _))) => {
         let step = self.stopped.map(|step| &*step.name).unwrap_or_default();
-        raise::step_budget(text, separator, (used, largest_stored()), step).map(Raise::StepBudget)
+        raise::step_budget(text, separator, used, step).map(Raise::StepBudget)
       }
-      (Unit::Tokens, _, Some((used, _))) => {
-        raise::run_budget(text, separator, (used, largest_stored())).map(|budget| {
-          Raise::Limits(RaisedLimits {
-            budget,
-            max_duration: run.max_duration(),
-          })
+      (Unit::Tokens, _, Some((used, _))) => raise::run_budget(text, separator, used).map(|budget| {
+        Raise::Limits(RaisedLimits {
+          budget,
+          max_duration: run.max_duration(),
         })
-      }
+      }),
+    })
+  }
+
+  /// What *Remove the limit* asks: the run continues without the limit that stopped it, keeping its
+  /// other one.
+  pub fn remove(&self) -> Option<Raise> {
+    let run = &self.run.run;
+    Some(match (self.field()?, self.limit) {
+      (Unit::Minutes, _) => Raise::Limits(RaisedLimits {
+        budget: run.budget(),
+        max_duration: None,
+      }),
+      (Unit::Tokens, RunLimit::StepBudget { .. }) => Raise::StepBudget(None),
+      (Unit::Tokens, _) => Raise::Limits(RaisedLimits {
+        budget: None,
+        max_duration: run.max_duration(),
+      }),
     })
   }
 }

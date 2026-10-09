@@ -111,7 +111,7 @@ fn run_of(
     brief: String::new(),
     acceptance_criteria: Vec::new(),
     pipeline: Some(pipeline),
-    limits: Some(TaskLimits::new(budget, Duration::from_secs(1_800)).expect("limits")),
+    limits: TaskLimits::new(Some(budget), Some(Duration::from_secs(1_800))).expect("limits"),
   };
   let task = db
     .create_tasks(IdempotencyKey::generate(), vec![details], at(8))
@@ -130,8 +130,8 @@ fn run_of(
     branch: BranchName::new("orchester/orc-1-run-1").expect("branch"),
     base: Revision::new(&"a".repeat(40)).expect("revision"),
     base_branch: None,
-    budget,
-    max_duration: Duration::from_secs(1_800),
+    budget: Some(budget),
+    max_duration: Some(Duration::from_secs(1_800)),
   };
   let mut run = db.create_run(IdempotencyKey::generate(), new, at(9)).expect("run");
   let events = run.start(at(9)).expect("start");

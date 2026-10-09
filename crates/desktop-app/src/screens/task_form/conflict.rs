@@ -19,7 +19,7 @@ use lurq::{
 };
 use orchester_core::{
   task::{
-    TaskDetails,
+    TaskDetails, TaskLimits,
     content::{Choice, ContentField},
   },
   tokens::compact_tokens,
@@ -343,21 +343,35 @@ fn value_text(ctx: &Ctx, field: ContentField, details: &TaskDetails, pipelines: 
       .collect::<Vec<_>>()
       .join("\n"),
     ContentField::Pipeline => pipeline_text(ctx, details, pipelines),
-    ContentField::Limits => details.limits.map_or_else(
-      || ctx.t("task_form.conflict.noLimits").to_string(),
-      |limits| {
-        ctx
-          .t_args(
-            "task_form.conflict.limits",
-            [
-              ("tokens", compact_tokens(limits.budget().get())),
-              ("minutes", whole_minutes(limits.max_duration()).to_string()),
-            ],
-          )
-          .to_string()
-      },
-    ),
+    ContentField::Limits => limits_text(ctx, details.limits),
   }
+}
+
+/// "1.4M tokens · 30 minutes", one of them "no token limit" / "no time limit", or "No limits" for a task
+/// without either.
+fn limits_text(ctx: &Ctx, limits: TaskLimits) -> String {
+  if limits == TaskLimits::NONE {
+    return ctx.t("task_form.conflict.noLimits").to_string();
+  }
+  let budget = limits.budget().map_or_else(
+    || ctx.t("task_form.conflict.noBudget"),
+    |budget| ctx.t_args("task_form.conflict.budget", [("tokens", compact_tokens(budget.get()))]),
+  );
+  let time = limits.max_duration().map_or_else(
+    || ctx.t("task_form.conflict.noTimeLimit"),
+    |limit| {
+      ctx.t_args(
+        "task_form.conflict.timeLimit",
+        [("minutes", whole_minutes(limit).to_string())],
+      )
+    },
+  );
+  ctx
+    .t_args(
+      "task_form.conflict.limits",
+      [("budget", budget.to_string()), ("time", time.to_string())],
+    )
+    .to_string()
 }
 
 fn pipeline_text(ctx: &Ctx, details: &TaskDetails, pipelines: Option<&[PipelineChoice]>) -> String {

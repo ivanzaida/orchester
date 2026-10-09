@@ -335,7 +335,7 @@ impl Scheduler {
 
   /// Raises, for `run` only, the budget of the step it stopped at, and continues the run: the
   /// stopped agent's CLI session continues.
-  pub async fn raise_step_budget(&self, run: RunId, budget: TokenBudget) -> Result<(), Rejection> {
+  pub async fn raise_step_budget(&self, run: RunId, budget: Option<TokenBudget>) -> Result<(), Rejection> {
     self
       .continue_settled(run, |db, root| idle::raise_step_budget(db, root, run, budget))
       .await

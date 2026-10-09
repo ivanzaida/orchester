@@ -13,7 +13,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub use self::input::{BudgetInputError, digits_only, parse_budget, regroup};
+pub use self::input::{BudgetInputError, digits_only, parse_budget, parse_optional_budget, regroup};
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum TokenBudgetError {
@@ -27,6 +27,10 @@ pub enum TokenBudgetError {
 pub struct TokenBudget(NonZeroU64);
 
 impl TokenBudget {
+  /// The most tokens a budget field takes: what a store keeps in a signed 64-bit integer, far above
+  /// anything a run uses. Not a limit a person sets.
+  pub const LARGEST: u64 = i64::MAX.unsigned_abs();
+
   pub fn new(tokens: u64) -> Result<Self, TokenBudgetError> {
     NonZeroU64::new(tokens).map(Self).ok_or(TokenBudgetError::Zero)
   }

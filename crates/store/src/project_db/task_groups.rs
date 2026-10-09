@@ -89,7 +89,7 @@ impl ProjectDb {
       let mut task = self.task(*id)?.ok_or(StoreError::TaskNotFound(*id))?;
       if let Some(limits) = limits {
         let mut details = task.details().clone();
-        details.limits = Some(limits);
+        details.limits = limits;
         task
           .edit(details, false)
           .map_err(|source| StoreError::TaskNotEditable { task: *id, source })?;

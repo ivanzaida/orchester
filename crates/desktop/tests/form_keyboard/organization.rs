@@ -5,7 +5,7 @@ use orchester_core::{
   name::Name,
   store::TaskStore,
   task::{
-    TaskDetails,
+    TaskDetails, TaskLimits,
     organization::{ChangeActor, Priority, TaskOrganization, WorkflowStatus},
   },
   time::Timestamp,
@@ -90,7 +90,7 @@ fn organization_bulk_status_priority_and_filters() {
       brief: String::new(),
       acceptance_criteria: vec![],
       pipeline: None,
-      limits: None,
+      limits: TaskLimits::NONE,
     };
     db.create_tasks(
       IdempotencyKey::generate(),
@@ -147,7 +147,7 @@ fn organization_tag_delete_confirmation_escape_preserves_assignments() {
       brief: String::new(),
       acceptance_criteria: vec![],
       pipeline: None,
-      limits: None,
+      limits: TaskLimits::NONE,
     };
     let task = db
       .create_tasks(IdempotencyKey::generate(), vec![details], Timestamp::now())
@@ -288,7 +288,7 @@ fn organization_tag_rename_and_merge_preserve_task_assignment() {
       brief: String::new(),
       acceptance_criteria: vec![],
       pipeline: None,
-      limits: None,
+      limits: TaskLimits::NONE,
     };
     let task = db
       .create_tasks(IdempotencyKey::generate(), vec![details], Timestamp::now())
@@ -367,7 +367,7 @@ fn organization_bulk_add_and_remove_tags_updates_every_selected_task() {
       brief: String::new(),
       acceptance_criteria: vec![],
       pipeline: None,
-      limits: None,
+      limits: TaskLimits::NONE,
     };
     db.create_tasks(
       IdempotencyKey::generate(),
@@ -440,13 +440,11 @@ fn seed_readiness(repo: &Path) {
     brief: "Implement.".into(),
     acceptance_criteria: vec!["Complete.".into()],
     pipeline: Some(pipeline),
-    limits: Some(
-      TaskLimits::new(
-        TokenBudget::new(10000).expect("budget"),
-        std::time::Duration::from_secs(1800),
-      )
-      .expect("limits"),
-    ),
+    limits: TaskLimits::new(
+      Some(TokenBudget::new(10000).expect("budget")),
+      Some(std::time::Duration::from_secs(1800)),
+    )
+    .expect("limits"),
   };
   let tasks = db
     .create_tasks(IdempotencyKey::generate(), vec![details.clone(), details], at(10))
@@ -541,7 +539,7 @@ pub(crate) fn seed_dependencies(repo: &Path) {
     brief: String::new(),
     acceptance_criteria: vec![],
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   };
   let tasks = db
     .create_tasks(

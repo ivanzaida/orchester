@@ -15,7 +15,10 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{run::RunLimit, tokens::compact_tokens};
+use orchester_core::{
+  run::RunLimit,
+  tokens::{TokenBudget, compact_tokens},
+};
 use orchester_workspace::{budget::whole_minutes, display, messages::Message, tasks::raise::Raise};
 
 use super::{
@@ -67,17 +70,24 @@ impl RaiseCard<'_> {
     };
     let (pending, refused) = state(self.action, self.asked.get());
     let offline = (!self.online).then(|| ctx.t("task.controls.offline"));
-    let remove = ctx.t("decisions.limit.removeUnavailable");
-    let reasons = offline
-      .iter()
-      .map(|reason| ("raise-limit-offline", reason.clone()))
-      .chain([("raise-limit-remove-reason", remove)])
-      .map(|(id, reason)| -> Element { reason_line(id, &reason).into() });
+    let removing = match (unit, self.stop.limit) {
+      (Unit::Minutes, _) => ctx.t("decisions.limit.removeMeaning.time"),
+      (Unit::Tokens, RunLimit::StepBudget { .. }) => {
+        let step = self.stop.stopped.map(|step| step.name.to_string()).unwrap_or_default();
+        ctx.t_args("decisions.limit.removeMeaning.step", [("step", step.as_str())])
+      }
+      (Unit::Tokens, _) => ctx.t("decisions.limit.removeMeaning.tokens"),
+    };
+    let removing = Text::new(&removing)
+      .id("raise-limit-remove-meaning")
+      .variant(TypographyStyle::Description)
+      .color(PaletteColor::TextMuted);
     card
       .child(divider())
       .child(self.input_row(ctx, unit, read.as_ref()))
       .child(self.actions(ctx, unit, read.ok(), (pending, offline.clone())))
-      .with_children(reasons.collect::<Vec<_>>())
+      .child(removing)
+      .with_children(offline.map(|reason| reason_line("raise-limit-offline", &reason)))
       .with_children(refused.map(|refused| field_error("raise-limit-refused", &message_text(ctx, &refused))))
       .into()
   }
@@ -87,7 +97,12 @@ impl RaiseCard<'_> {
     let stop = self.stop;
     let step = stop.stopped.map(|step| step.name.to_string()).unwrap_or_default();
     let tokens = stop.tokens.map(|(used, budget)| {
-      let (used_text, of) = (compact_tokens(used.get()), compact_tokens(budget.get()));
+      let used_text = compact_tokens(used.get());
+      let Some(budget) = budget else {
+        let text = ctx.t_args("decisions.limit.tokensUsedNoLimit", [("used", used_text.as_str())]);
+        return (text, None);
+      };
+      let of = compact_tokens(budget.get());
       let key = match (stop.limit, stop.stopped.is_some()) {
         (RunLimit::Tokens | RunLimit::StepBudget { .. }, true) => "decisions.limit.tokensUsedMidStep",
         _ => "decisions.limit.tokensUsed",
@@ -102,17 +117,20 @@ impl RaiseCard<'_> {
       );
       let reached = used.reached(budget);
       let tone = if reached { MeterTone::Reached } else { MeterTone::Plain };
-      (text, meter("raise-limit-meter", (used.get(), budget.get()), tone))
+      (text, Some(meter("raise-limit-meter", (used.get(), budget.get()), tone)))
     });
     let name = match stop.limit {
       RunLimit::StepBudget { .. } => ctx.t_args("decisions.limit.stepTokens", [("step", step.as_str())]),
       _ => ctx.t("decisions.limit.tokens"),
     };
-    let (used_minutes, of) = (whole_minutes(stop.active), whole_minutes(stop.run.run.max_duration()));
-    let time = ctx.t_args(
-      "decisions.limit.timeUsed",
-      [("used", used_minutes.to_string()), ("limit", of.to_string())],
-    );
+    let used_minutes = whole_minutes(stop.active).to_string();
+    let time = match stop.run.run.max_duration() {
+      Some(limit) => ctx.t_args(
+        "decisions.limit.timeUsed",
+        [("used", used_minutes), ("limit", whole_minutes(limit).to_string())],
+      ),
+      None => ctx.t_args("decisions.limit.timeUsedNoLimit", [("used", used_minutes)]),
+    };
     let mut used = Column::new()
       .id("raise-limit-used")
       .width(Dimension::Pct(100.0))
@@ -120,14 +138,14 @@ impl RaiseCard<'_> {
     if let Some((text, bar)) = tokens {
       used = used
         .child(used_row("raise-limit-tokens", &name, &text, PaletteColor::TextPrimary))
-        .child(
+        .with_children(bar.map(|bar| {
           Row::new()
             .width(Dimension::Pct(100.0))
             .spacing(SpacingSize::Md)
             .align_items(Alignment::Center)
             .child(Column::new().width(Dimension::Px(LABEL_WIDTH)))
-            .child(Column::new().flex(1.0).child(bar)),
-        );
+            .child(Column::new().flex(1.0).child(bar))
+        }));
     }
     used
       .child(used_row(
@@ -157,7 +175,7 @@ impl RaiseCard<'_> {
       Unit::Tokens => input,
     };
     let (input, hint) = match read {
-      Ok(raise) => (input, Some(self.read_back(ctx, *raise))),
+      Ok(raise) => (input, self.read_back(ctx, unit, *raise)),
       Err(error) => (input.error(message_text(ctx, error)), None),
     };
     let input = match unit {
@@ -185,18 +203,17 @@ impl RaiseCard<'_> {
   }
 
   /// "= 2M tokens · 600k more than now", "= 135 min · 45 min more than now".
-  fn read_back(&self, ctx: &Ctx, raise: Raise) -> Arc<str> {
+  fn read_back(&self, ctx: &Ctx, unit: Unit, raise: Raise) -> Option<Arc<str>> {
     let run = &self.stop.run.run;
-    let (new, now, minutes) = match (raise, self.stop.tokens) {
-      (Raise::StepBudget(budget), Some((_, before))) => (budget.get(), before.get(), false),
-      (Raise::Limits(limits), _) if self.stop.limit == RunLimit::Time => (
-        whole_minutes(limits.max_duration),
-        whole_minutes(run.max_duration()),
-        true,
-      ),
-      (Raise::Limits(limits), _) => (limits.budget.get(), run.budget().get(), false),
-      (Raise::StepBudget(budget), None) => (budget.get(), budget.get(), false),
-    };
+    let minutes = unit == Unit::Minutes;
+    let new = self.new_count(unit, raise)?;
+    let now = match (raise, self.stop.tokens) {
+      _ if minutes => run.max_duration().map(whole_minutes),
+      (Raise::StepBudget(_), Some((_, before))) => before.map(TokenBudget::get),
+      (Raise::StepBudget(_), None) => None,
+      (Raise::Limits(_), _) => run.budget().map(TokenBudget::get),
+    }
+    .unwrap_or(new);
     let show = |count: u64| {
       if minutes {
         count.to_string()
@@ -210,7 +227,7 @@ impl RaiseCard<'_> {
       (_, false) => ("decisions.limit.readBack.tokens", 0),
       (_, true) => ("decisions.limit.readBack.minutes", 0),
     };
-    ctx.t_args(key, [("count", show(new)), ("difference", show(difference))])
+    Some(ctx.t_args(key, [("count", show(new)), ("difference", show(difference))]))
   }
 
   /// What continuing does (`mft2W`): where the run resumes, and that what follows runs under the new
@@ -244,7 +261,7 @@ impl RaiseCard<'_> {
     }
   }
 
-  /// *Continue with …*, which needs the runner, and *Remove the limit*, which needs optional limits.
+  /// *Continue with …* and *Remove the limit*, which both need the runner.
   fn actions(
     &self,
     ctx: &Ctx,
@@ -252,7 +269,7 @@ impl RaiseCard<'_> {
     raise: Option<Raise>,
     (pending, offline): (Option<Raising>, Option<Arc<str>>),
   ) -> Element {
-    let label = match raise.map(|raise| self.new_value(unit, raise)) {
+    let label = match raise.and_then(|raise| self.new_value(unit, raise)) {
       Some(value) => ctx.t_args(
         match unit {
           Unit::Tokens => "decisions.limit.continueWithTokens",
@@ -265,8 +282,8 @@ impl RaiseCard<'_> {
     let go = ActionButton::new("raise-limit-continue", ButtonKind::Primary, label)
       .icon(Icon::Play)
       .in_form();
-    let go = match (offline, pending, raise) {
-      (Some(reason), ..) => go.unavailable(reason),
+    let go = match (&offline, pending, raise) {
+      (Some(reason), ..) => go.unavailable(reason.clone()),
       (None, Some(Raising), _) => go.loading(),
       (None, None, Some(raise)) => self.press(go, raise),
       (None, None, None) => go.disabled(),
@@ -276,8 +293,12 @@ impl RaiseCard<'_> {
       ButtonKind::Secondary,
       ctx.t("decisions.limit.remove"),
     )
-    .icon(Icon::Infinity)
-    .unavailable(ctx.t("decisions.limit.removeUnavailable"));
+    .icon(Icon::Infinity);
+    let remove = match (offline, pending, self.stop.remove()) {
+      (Some(reason), ..) => remove.unavailable(reason),
+      (None, None, Some(removed)) => self.press(remove, removed),
+      (None, ..) => remove.disabled(),
+    };
     Row::new()
       .id("raise-limit-actions")
       .width(Dimension::Pct(100.0))
@@ -288,12 +309,21 @@ impl RaiseCard<'_> {
       .into()
   }
 
-  /// The new limit as *Continue with …* names it: "2M tokens", "135 min".
-  fn new_value(&self, unit: Unit, raise: Raise) -> String {
+  /// The new limit as *Continue with …* names it: "2M tokens", "135 min"; `None` without one.
+  fn new_value(&self, unit: Unit, raise: Raise) -> Option<String> {
+    let count = self.new_count(unit, raise)?;
+    Some(match unit {
+      Unit::Minutes => count.to_string(),
+      Unit::Tokens => compact_tokens(count),
+    })
+  }
+
+  /// The new limit in its unit: whole minutes or tokens; `None` when it is no limit.
+  fn new_count(&self, unit: Unit, raise: Raise) -> Option<u64> {
     match (unit, raise) {
-      (Unit::Minutes, Raise::Limits(limits)) => whole_minutes(limits.max_duration).to_string(),
-      (_, Raise::StepBudget(budget)) => compact_tokens(budget.get()),
-      (_, Raise::Limits(limits)) => compact_tokens(limits.budget.get()),
+      (Unit::Minutes, Raise::Limits(limits)) => limits.max_duration.map(whole_minutes),
+      (_, Raise::StepBudget(budget)) => budget.map(TokenBudget::get),
+      (_, Raise::Limits(limits)) => limits.budget.map(TokenBudget::get),
     }
   }
 

@@ -31,8 +31,8 @@ fn step_status(run: &Run, step: &str) -> Option<StepStatus> {
 
 fn raised(budget: u64, max_duration: Duration) -> RaisedLimits {
   RaisedLimits {
-    budget: TokenBudget::new(budget).expect("above zero"),
-    max_duration,
+    budget: Some(TokenBudget::new(budget).expect("above zero")),
+    max_duration: Some(max_duration),
   }
 }
 
@@ -134,7 +134,7 @@ async fn control_cancel_ends_the_agent_and_its_processes_and_keeps_the_worktree(
 async fn control_token_limit_commits_the_work_and_continues_the_session_once_raised() {
   // Claude Code reports each message's usage while its turn goes on; Codex reports a turn's at its end.
   let project = project(&Setup {
-    budget: 5_000,
+    budget: Some(5_000),
     provider: AgentProvider::ClaudeCodeCli,
     ..Setup::new("Work in turns.")
   });
@@ -172,19 +172,17 @@ async fn control_token_limit_commits_the_work_and_continues_the_session_once_rai
       limit: RunLimit::Tokens
     })
   );
-  assert_eq!(
-    scheduler.raise_limit(id, raised(12_000_000, long)).await,
-    Err(Rejection::BudgetAboveMaximum {
-      max: TokenBudget::new(10_000_000).expect("above zero")
-    })
-  );
+  // There is no maximum: any budget above what the run used continues it.
   scheduler
-    .raise_limit(id, raised(2_000_000, long))
+    .raise_limit(id, raised(900_000_000_000, long))
     .await
     .expect("the run continues");
   let done = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(done.status(), &RunStatus::Succeeded);
-  assert_eq!(done.budget().get(), 2_000_000);
+  assert_eq!(
+    done.budget(),
+    Some(TokenBudget::new(900_000_000_000).expect("above zero"))
+  );
   let head = done
     .last_checkpoint()
     .expect("checkpoint")
@@ -205,7 +203,7 @@ async fn control_token_limit_commits_the_work_and_continues_the_session_once_rai
 #[tokio::test(flavor = "multi_thread")]
 async fn control_time_limit_counts_active_time_and_stops_the_agent() {
   let project = project(&Setup {
-    max_duration: Duration::from_secs(2),
+    max_duration: Some(Duration::from_secs(2)),
     ..Setup::new("Keep working.")
   });
   let root = project.repo.path();
@@ -237,6 +235,36 @@ async fn control_time_limit_counts_active_time_and_stops_the_agent() {
   let db = ProjectDb::open(root).expect("open");
   let threads = threads(&db, id);
   assert_eq!(threads[1]["threadId"], "fake-thread-1", "the session continues");
+}
+
+/// The work that stops a run with a budget of 5,000 tokens, or with a time limit of 2 seconds, goes on
+/// without a budget or a time limit: a run without limits never stops at one.
+#[tokio::test(flavor = "multi_thread")]
+async fn control_a_run_without_limits_never_stops_at_a_limit() {
+  let project = project(&Setup {
+    budget: None,
+    max_duration: None,
+    provider: AgentProvider::ClaudeCodeCli,
+    ..Setup::new("Work in turns.")
+  });
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let id = start(&scheduler, project.task).await;
+  let working = wait_for(root, &mut events, id, |run| {
+    run.used() > TokensUsed::new(5_000) || run.status() != &RunStatus::Running
+  })
+  .await;
+  assert_eq!(working.status(), &RunStatus::Running);
+  assert_eq!((working.budget(), working.max_duration()), (None, None));
+  // Longer than the time limit that stops the same agent, and past the turn whose usage would stop it.
+  tokio::time::sleep(Duration::from_secs(3)).await;
+  let db = ProjectDb::open(root).expect("open");
+  let still = db.run(id).expect("read").expect("run");
+  assert_eq!(still.status(), &RunStatus::Running, "no limit stopped the run");
+  let invocations = db.invocations(id).expect("invocations");
+  assert_eq!(invocations.len(), 1);
+  assert_eq!(invocations[0].outcome, None, "the agent is still at work");
+  scheduler.cancel_run(id).await.expect("the run is cancelled");
 }
 
 /// A run whose start failed stays pending. Cancelling it ends it without an attempt, and the

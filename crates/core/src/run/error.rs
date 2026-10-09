@@ -8,7 +8,6 @@ use crate::{
   id::{CheckpointId, ResourceId, RunId, StepExecutionId},
   permission::capability::PermissionProblem,
   resource::StepKey,
-  tokens::TokenBudget,
 };
 
 /// A rejected run transition or an event log that does not describe a valid run.
@@ -51,12 +50,12 @@ pub enum RunError {
   NeedsExplicitContinue(InterruptCause),
   #[error("the time limit must be greater than zero")]
   ZeroDuration,
+  #[error("a time limit can be at most {} milliseconds", crate::limits::LONGEST_TIME_LIMIT.as_millis())]
+  TimeLimitTooLong,
   #[error("the run stopped at its {0:?} limit and continues only with a raised limit")]
   LimitNotRaised(RunLimit),
   #[error("the new {0:?} limit must be above what the run already used")]
   LimitNotAboveUsed(RunLimit),
-  #[error("a run budget can be at most {max} tokens")]
-  BudgetAboveMaximum { max: TokenBudget },
   #[error("no step of the run uses agent profile {0}")]
   ProfileNotInRun(ResourceId),
   #[error("step `{step}` cannot run with these permissions: {problem}")]

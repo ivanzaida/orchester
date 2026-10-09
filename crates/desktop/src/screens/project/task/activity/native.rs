@@ -127,13 +127,17 @@ pub(super) fn started_row(ctx: &Ctx, invocation: &Invocation) -> Element {
 
 /// *Run budget*: the run's counted tokens of its budget, "248k / 1.4M tokens" (`IbPlN`).
 pub(super) fn budget_row(ctx: &Ctx, run: &RunView) -> Element {
-  let value = ctx.t_args(
-    "tokens.usedOfBudget",
-    [
-      ("used", compact_tokens(run.usage().counted()).as_str()),
-      ("budget", compact_tokens(run.run.budget().get()).as_str()),
-    ],
-  );
+  let used = compact_tokens(run.usage().counted());
+  let value = match run.run.budget() {
+    Some(budget) => ctx.t_args(
+      "tokens.usedOfBudget",
+      [
+        ("used", used.as_str()),
+        ("budget", compact_tokens(budget.get()).as_str()),
+      ],
+    ),
+    None => ctx.t_args("tokens.usedNoLimit", [("used", used.as_str())]),
+  };
   property(&ctx.t("runs.activity.panel.runBudget"), &value)
 }
 

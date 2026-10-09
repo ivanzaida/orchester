@@ -11,11 +11,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::{UserRef, wire};
 
+/// A task's token budget and time limit; each is optional, `None` being no limit. A task with
+/// neither has no `SharedLimits` at all.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SharedLimits {
-  pub budget_tokens: u64,
-  pub max_duration_ms: u64,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub budget_tokens: Option<u64>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub max_duration_ms: Option<u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

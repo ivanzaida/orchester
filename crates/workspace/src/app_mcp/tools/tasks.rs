@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use orchester_core::{
   store::TaskStore,
   task::{Task, organization::TaskFilter},
+  tokens::TokenBudget,
 };
 use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
@@ -22,6 +23,7 @@ use crate::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
+  budget::whole_minutes,
   tasks::{
     browse::{self, PipelineFilter, Query, TaskSort},
     data::ProjectTasks,
@@ -138,10 +140,10 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
       "shown": translate.text(&pipeline.message()),
       "pinned_version": task.pipeline_version().map(|version| version.get()),
     },
-    "limits": task.details().limits.map(|limits| json!({
-      "budget_tokens": limits.budget().get(),
-      "time_limit_minutes": limits.max_duration().as_secs() / 60,
-    })),
+    "limits": {
+      "budget_tokens": task.details().limits.budget().map(TokenBudget::get),
+      "time_limit_minutes": task.details().limits.max_duration().map(whole_minutes),
+    },
     "phase": wire::phase(detail.phase()),
     "runs": runs,
   }))

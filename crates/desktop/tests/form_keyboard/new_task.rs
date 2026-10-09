@@ -3,8 +3,9 @@ use std::time::Duration;
 use lurq::app::Tree;
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
+  limits::ProjectLimits,
   name::Name,
-  store::TaskStore,
+  store::{SettingsStore, TaskStore},
   task::{TaskDetails, TaskLimits, TaskStatus},
   time::Timestamp,
   tokens::TokenBudget,
@@ -30,13 +31,21 @@ const CREATE: &str = "save-draft";
 /// More than the window has stops on this screen.
 const MAX_STOPS: usize = 30;
 
+/// New task in a project whose defaults are a run budget of 1.4M tokens and 30 minutes.
 pub(crate) fn new_task() -> Desktop {
-  let mut desktop = Desktop::with_project();
-  desktop.wait_for("nav-tasks");
-  desktop.click("nav-tasks");
-  desktop.wait_for("tasks-new-task");
-  desktop.click("tasks-new-task");
-  desktop.wait_for(TITLE);
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    let defaults = ProjectLimits::new(
+      Some(TokenBudget::new(1_400_000).expect("above zero")),
+      ProjectLimits::DEFAULT.daily_budget(),
+      Some(Duration::from_secs(30 * 60)),
+    )
+    .expect("limits");
+    ProjectDb::open(repo)
+      .expect("open")
+      .save_project_limits(&defaults)
+      .expect("save the defaults");
+  });
+  open_new_task(&mut desktop);
   // The limits start at the project's defaults once those are read; a key typed before then
   // would keep the field from taking them.
   desktop.settle("the default budget", |tree| {
@@ -46,6 +55,39 @@ pub(crate) fn new_task() -> Desktop {
       .is_some_and(|input| input.value() == "1,400,000")
   });
   desktop
+}
+
+fn open_new_task(desktop: &mut Desktop) {
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for("tasks-new-task");
+  desktop.click("tasks-new-task");
+  desktop.wait_for(TITLE);
+}
+
+#[test]
+fn new_task_without_project_defaults_has_no_limits() {
+  let mut desktop = Desktop::with_project();
+  open_new_task(&mut desktop);
+  desktop.settle("the read-backs", |tree| {
+    tree.get_element_by_id("task-budget-readback").is_some() && tree.get_element_by_id("task-time-readback").is_some()
+  });
+  assert_eq!(desktop.value(BUDGET), "");
+  assert_eq!(desktop.value(TIME_LIMIT), "");
+  assert!(shows(&mut desktop, "task-budget-readback", "No limit"));
+  assert!(shows(&mut desktop, "task-time-readback", "No limit"));
+  desktop.tab_to(TITLE, MAX_STOPS);
+  desktop.type_text("Unlimited");
+  desktop.enter();
+  let repo = desktop.repo.clone();
+  desktop.settle("the task without limits", |_| {
+    ProjectDb::open(&repo)
+      .expect("open")
+      .tasks()
+      .expect("tasks")
+      .iter()
+      .any(|task| task.details().title.as_str() == "Unlimited" && task.details().limits == TaskLimits::NONE)
+  });
 }
 
 #[test]
@@ -277,10 +319,11 @@ fn queued_task_cannot_be_reported_as_a_saved_draft() {
     brief: "Add a switcher.".into(),
     acceptance_criteria: vec!["The switcher works.".into()],
     pipeline: Some(ResourceId::generate()),
-    limits: Some(
-      TaskLimits::new(TokenBudget::new(1_400_000).expect("budget"), Duration::from_secs(1800))
-        .expect("positive limits"),
-    ),
+    limits: TaskLimits::new(
+      Some(TokenBudget::new(1_400_000).expect("budget")),
+      Some(Duration::from_secs(1800)),
+    )
+    .expect("positive limits"),
   };
   let mut db = ProjectDb::open(&desktop.repo).expect("open project");
   let mut task = save_draft(&mut db, batch, details.clone(), Timestamp::now())
@@ -307,7 +350,7 @@ fn new_task_budget_starts_at_the_project_default_and_groups_digits_while_typing(
   assert!(shows(
     &mut desktop,
     "task-budget-readback",
-    "= 1.4M tokens · input + output · max 10M per run"
+    "= 1.4M tokens · input + output"
   ));
   assert!(shows(
     &mut desktop,
@@ -318,15 +361,14 @@ fn new_task_budget_starts_at_the_project_default_and_groups_digits_while_typing(
   for _ in 0.."1,400,000".len() {
     desktop.key("Backspace", "Backspace");
   }
-  assert!(shows(&mut desktop, "execution-plan", "Enter a token budget."));
-  desktop.type_text("25000000");
-  assert_eq!(desktop.value(BUDGET), "25,000,000");
-  assert!(shows(
-    &mut desktop,
-    "execution-plan",
-    "A run budget can be at most 10M tokens (project setting)."
-  ));
-  desktop.key("Backspace", "Backspace");
+  // Empty is no limit, and there is no maximum.
+  assert!(shows(&mut desktop, "task-budget-readback", "No limit"));
+  desktop.type_text("25000000000");
+  assert_eq!(desktop.value(BUDGET), "25,000,000,000");
+  assert!(shows(&mut desktop, "task-budget-readback", "= 25B tokens"));
+  for _ in 0..4 {
+    desktop.key("Backspace", "Backspace");
+  }
   assert_eq!(desktop.value(BUDGET), "2,500,000");
   assert!(shows(&mut desktop, "task-budget-readback", "= 2.5M tokens"));
   desktop.type_text("k");

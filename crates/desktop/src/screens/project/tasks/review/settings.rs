@@ -101,14 +101,14 @@ impl SchedulingReview {
         ctx,
         "tasks-review-cap",
         ("tasks.bulk.groupCap", "tasks.bulk.totalTokens"),
-        self.cap.clone(),
+        (self.cap.clone(), Budget::Required),
         locked,
       )))
       .child(Column::new().flex(1.0).child(self.token_field(
         ctx,
         "tasks-review-budget",
         ("tasks.bulk.perTask", "tasks.bulk.eachTokens"),
-        self.budget.clone(),
+        (self.budget.clone(), Budget::Optional),
         locked,
       )))
       .into()

@@ -78,7 +78,7 @@ pub struct NewTaskProps {
   pub project: OpenProject,
   /// Published pipelines, once the project's data is read.
   pub pipelines: Option<Arc<Vec<PipelineChoice>>>,
-  /// The project's limits, once read: the defaults the form starts with and the maximum budget.
+  /// The project's limits, once read: the defaults the form starts with.
   pub limits: Option<ProjectLimits>,
   /// The saved task the form edits (Edit task); `None` for a new task.
   pub editing: Option<Editing>,
@@ -348,14 +348,13 @@ impl Component for NewTaskForm {
     let save = save_action(ctx, self.conflict.clone());
     let run = run_action(ctx, self.queued_task.clone());
     let link = repository_link(ctx, &props.project);
-    let limits = props.limits.unwrap_or_default();
     self.seed(ctx, props.limits, props.editing.as_ref(), props.recovering.as_ref());
     self.show_merged(ctx);
     let edited = props.editing.as_ref();
     let editing = edited.map(|editing| &*editing.task);
     let recovered = props.recovering.as_ref().map(|recovering| &*recovering.task);
     let separator = ctx.t("number.groupSeparator");
-    let state = self.state(&save, &run, &separator, (limits, edited), recovered.is_some());
+    let state = self.state(&save, &run, &separator, edited, recovered.is_some());
     self.follow_outside(edited, &state);
     self.mark_unsaved(&state, editing);
     let (target, base) = self.target(editing.or(recovered), &save);
@@ -394,7 +393,7 @@ impl Component for NewTaskForm {
         .child(plan::execution_plan(
           ctx,
           self,
-          (props.pipelines.as_deref(), limits),
+          props.pipelines.as_deref(),
           &state,
           submit.clone(),
           start,
@@ -455,9 +454,11 @@ impl NewTaskForm {
       return;
     };
     self.seeded.set(true);
-    if self.budget.get_untracked().is_empty() {
+    if self.budget.get_untracked().is_empty()
+      && let Some(budget) = limits.default_run_budget()
+    {
       let separator = ctx.t("number.groupSeparator");
-      self.budget.set(grouped(limits.default_run_budget().get(), &separator));
+      self.budget.set(grouped(budget.get(), &separator));
     }
     if self.time_limit.get_untracked().is_empty() {
       self.time_limit.set(minutes_text(limits.default_time_limit()));
