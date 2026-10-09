@@ -4,7 +4,8 @@
 //! reasoning summaries, usage reports and unparsed lines; agent messages and problems never fold
 //! into a group. A group's summary counts by kind: files read, searches, memory, commands run (named
 //! when there are one or two), files edited, MCP calls; a failed command is named with its exit
-//! code, or as failed when its CLI reported none, and a group whose command still runs ends with it.
+//! code, or as failed when its CLI reported none, and a command without an end is named so wherever
+//! it sits.
 
 use std::{collections::BTreeSet, sync::Arc};
 
@@ -213,7 +214,8 @@ pub struct GroupSummary {
   pub calls: usize,
   /// The first command that failed, and its exit code.
   pub failed: Option<(Arc<str>, Option<i64>)>,
-  /// The command still running at its end, while it grows.
+  /// Its last command without an end, wherever it sits: one still running while the group grows, or one
+  /// that never ended.
   pub running: Option<Arc<str>>,
   pub first: Option<Timestamp>,
   pub last: Option<Timestamp>,
@@ -255,7 +257,7 @@ impl GroupSummary {
       }
     }
     summary.edits = edited.len();
-    summary.running = entries.last().and_then(running_command);
+    summary.running = entries.iter().rev().find_map(running_command);
     summary
   }
 

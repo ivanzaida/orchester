@@ -19,24 +19,32 @@ use std::{collections::HashMap, sync::Arc};
 
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
-  components::{Column, VirtualizedList},
+  components::{Column, Stack, VirtualizedList},
   core::Signal,
+  layout::StackAlignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   id::{InvocationId, ProjectId, StepExecutionId},
   project::TaskKey,
+  run::{DecidedBy, DecidedToolApproval, PendingToolApproval, ToolApprovalDecision},
 };
 use orchester_workspace::tasks::{
   detail::TaskDetail,
   timeline::{
     Item, ItemKind,
+    group::unwrapped,
     view::{Row, Shown},
   },
   transcript::{Entry, EntryKind},
 };
 
-pub(super) use self::{divider::step_label, follow::Follow, message::person_message, working::Working};
+pub(super) use self::{
+  divider::step_label,
+  follow::Follow,
+  message::person_message,
+  working::{Wait, Working},
+};
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskView},
@@ -54,9 +62,33 @@ pub(super) struct Timeline {
   /// The run's invocations whose agent works now: only their unfinished calls run. While no agent works
   /// (the run waits, paused or was interrupted), it is empty, and an unfinished call has no end.
   pub(super) working: Arc<[InvocationId]>,
+  /// The run's tool requests that wait for the person, and those decided.
+  pub(super) pending: Arc<Vec<PendingToolApproval>>,
+  pub(super) decided: Arc<Vec<DecidedToolApproval>>,
 }
 
 impl Timeline {
+  /// Whether a request of `invocation` to run `command` (its first line, as a group names it) waits for the
+  /// person: the command has not started.
+  fn awaits_approval(&self, invocation: InvocationId, command: &str) -> bool {
+    self.pending.iter().any(|request| {
+      request.invocation == invocation
+        && request.command
+        && unwrapped(&request.action).lines().next().unwrap_or_default() == command
+    })
+  }
+
+  /// How a person or automation answered `invocation`'s request to run `command`, when one denied it.
+  fn denied_by(&self, invocation: InvocationId, command: &str) -> Option<DecidedBy> {
+    self
+      .decided
+      .iter()
+      .filter(|decided| decided.request.invocation == invocation && decided.request.command)
+      .filter(|decided| decided.decision == Some(ToolApprovalDecision::Denied))
+      .find(|decided| unwrapped(&decided.request.action) == unwrapped(command))
+      .and_then(|decided| decided.decided_by)
+  }
+
   /// Whether invocation `invocation` works now.
   fn works(&self, invocation: InvocationId) -> bool {
     self.working.contains(&invocation)
@@ -183,15 +215,21 @@ pub(super) fn chat(
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .mount_keyed::<RowView, _, _, _>(|row| row.key().to_string(), Clone::clone);
+  // Floats over the chat's foot (`Lqg8j` in `B67XdS`): it takes no room from the rows.
   let jump = (!follow.following.get()).then(|| follow.jump(ctx, arrived));
-  Column::new()
-    .id("conversation-chat")
+  let rows = Column::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
     .padding_top(SpacingSize::Sm)
     .padding_bottom(SpacingSize::Xs)
     .child(list)
-    .child(follow.end(ctx))
+    .child(follow.end(ctx));
+  Stack::new()
+    .id("conversation-chat")
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .stack_align(StackAlignment::BottomCenter)
+    .child(rows)
     .with_children(jump)
     .into()
 }

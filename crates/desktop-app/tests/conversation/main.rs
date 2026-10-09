@@ -372,4 +372,33 @@ fn timeline_opening_a_group_while_following_keeps_it_in_place() {
     window.tree.get_element_by_id("conversation-jump").is_some(),
     "the chat no longer follows"
   );
+  // The chip stays in view, and Jump to latest floats over the chat without covering it.
+  let bounds = |window: &mut Window, id: &str| {
+    window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  let (chat, chip, jump) = (
+    bounds(&mut window, "conversation-chat"),
+    bounds(&mut window, &chip),
+    bounds(&mut window, "conversation-jump"),
+  );
+  assert!(
+    chip.y >= chat.y && chip.y + chip.height <= chat.y + chat.height,
+    "the opened chip is in view: {chip:?} in {chat:?}"
+  );
+  let overlaps = chip.x < jump.x + jump.width
+    && jump.x < chip.x + chip.width
+    && chip.y < jump.y + jump.height
+    && jump.y < chip.y + chip.height;
+  assert!(
+    !overlaps,
+    "Jump to latest leaves the chip uncovered: {chip:?}, {jump:?}"
+  );
+  assert!(
+    jump.y + jump.height <= chat.y + chat.height + 0.5,
+    "Jump to latest floats inside the chat: {jump:?} in {chat:?}"
+  );
 }
