@@ -6,10 +6,7 @@ use orchester_core::time::Timestamp;
 use orchester_store::location::{AppLock, AppLockError, LockHolder};
 
 fn holder(pid: u32) -> LockHolder {
-  LockHolder {
-    pid,
-    started_at: Timestamp::from_unix_millis(1_760_000_000_000),
-  }
+  LockHolder::running(pid, Timestamp::from_unix_millis(1_760_000_000_000))
 }
 
 #[test]
@@ -64,4 +61,40 @@ fn app_lock_reports_a_data_folder_it_cannot_write() {
     panic!("no lock can be written in a folder that is not there");
   };
   assert_eq!(reported, folder);
+}
+
+#[test]
+fn app_lock_says_when_its_holder_is_closing() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let database = dir.path().join("orchester.db");
+
+  let mut held = AppLock::acquire(&database, holder(7)).expect("the first app takes the lock");
+  held.mark_closing().expect("the record is rewritten");
+  let Err(AppLockError::InUse { holder: found, .. }) = AppLock::acquire(&database, holder(8)) else {
+    panic!("a closing app still holds the folder");
+  };
+  assert_eq!(
+    found,
+    Some(LockHolder {
+      closing: true,
+      ..holder(7)
+    })
+  );
+}
+
+#[test]
+fn app_lock_reads_a_record_without_the_closing_flag_as_running() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let database = dir.path().join("orchester.db");
+
+  let _held = AppLock::acquire(&database, holder(1)).expect("the first app takes the lock");
+  fs::write(
+    dir.path().join("orchester.lock.holder"),
+    r#"{"pid":1,"started_at":1760000000000}"#,
+  )
+  .expect("an older record");
+  let Err(AppLockError::InUse { holder: found, .. }) = AppLock::acquire(&database, holder(2)) else {
+    panic!("the folder is in use");
+  };
+  assert_eq!(found, Some(holder(1)));
 }
