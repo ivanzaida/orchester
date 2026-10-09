@@ -20,7 +20,7 @@ mod unix;
 mod windows;
 
 use std::{
-  fs, io,
+  io,
   path::{Component, Path, PathBuf},
 };
 
@@ -191,7 +191,7 @@ impl FileScope {
     {
       return false;
     }
-    match fs::canonicalize(workdir.join(arg)) {
+    match canonical::canonicalize(&workdir.join(arg)) {
       Ok(found) => {
         let found = canonical::plain(found);
         within(&found, &self.worktree)
@@ -247,11 +247,7 @@ pub fn in_git_folder(path: &Path) -> bool {
 /// A root folder, which must exist, with links resolved; refused before it is resolved when a link on the way leads to
 /// another machine ([`crate::permission::link_targets`]).
 fn canonical_root(path: &Path) -> Result<PathBuf, ScopeError> {
-  crate::permission::link_targets::stay_local(path).map_err(|error| ScopeError::Unresolved {
-    path: path.to_path_buf(),
-    kind: error.kind(),
-  })?;
-  fs::canonicalize(path)
+  canonical::canonicalize(path)
     .map(canonical::plain)
     .map_err(|error| ScopeError::Unresolved {
       path: path.to_path_buf(),

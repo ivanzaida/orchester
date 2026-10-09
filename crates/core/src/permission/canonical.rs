@@ -62,6 +62,19 @@ pub(crate) fn existing(path: &Path) -> Result<Existing, ExistingError> {
   }
 }
 
+/// `fs::canonicalize(path)`, refused before anything is resolved when the path is on a network drive or a link on its
+/// way leads to another machine ([`super::link_targets`]).
+pub(crate) fn canonicalize(path: &Path) -> io::Result<PathBuf> {
+  super::link_targets::stay_local(path)?;
+  fs::canonicalize(path)
+}
+
+/// `fs::metadata(path)`, which follows links, refused first as [`canonicalize`] is.
+pub(crate) fn metadata(path: &Path) -> io::Result<fs::Metadata> {
+  super::link_targets::stay_local(path)?;
+  fs::metadata(path)
+}
+
 /// `path` without `.` and `..` components, without reading the file system.
 pub(crate) fn normalize(path: &Path) -> PathBuf {
   let mut normalized = PathBuf::new();

@@ -20,7 +20,7 @@ mod list;
 mod repository;
 
 use std::{
-  fs, io,
+  io,
   path::{Path, PathBuf},
 };
 
@@ -121,7 +121,7 @@ impl StepSkills {
     files: &[SkillFilePath],
   ) -> Result<(), SkillOfferError> {
     let found = document.parent().unwrap_or(document);
-    let folder = fs::canonicalize(found)
+    let folder = canonical::canonicalize(found)
       .map(canonical::plain)
       .map_err(|error| SkillOfferError {
         path: found.to_path_buf(),
@@ -193,7 +193,7 @@ impl StepSkills {
         file.segments().fold(skill.folder.clone(), |path, name| path.join(name))
       }
     };
-    let resolved = match fs::canonicalize(&path) {
+    let resolved = match canonical::canonicalize(&path) {
       Ok(resolved) => canonical::plain(resolved),
       Err(error) if error.kind() == io::ErrorKind::NotFound => return Err(not_in_skill()),
       Err(error) => {
@@ -226,10 +226,10 @@ fn belongs(path: &Path, skill: &OfferedSkill) -> bool {
     .ancestors()
     .skip(1)
     .take_while(|ancestor| *ancestor != folder.as_path())
-    .all(|ancestor| !ancestor.join(SKILL_FILE).exists())
+    .all(|ancestor| canonical::metadata(&ancestor.join(SKILL_FILE)).is_err())
 }
 
 /// Whether `path` is a regular file, as its links lead.
 fn is_regular_file(path: &Path) -> bool {
-  fs::metadata(path).is_ok_and(|metadata| metadata.is_file())
+  canonical::metadata(path).is_ok_and(|metadata| metadata.is_file())
 }
