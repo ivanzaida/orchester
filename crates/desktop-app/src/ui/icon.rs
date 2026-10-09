@@ -41,6 +41,7 @@ icons! {
   ListChecks => '\u{e1d0}',
   LogOut => '\u{e10e}',
   Minus => '\u{e11c}',
+  MousePointerClick => '\u{e120}',
   Plug => '\u{e37f}',
   Plus => '\u{e13d}',
   RadioTower => '\u{e404}',

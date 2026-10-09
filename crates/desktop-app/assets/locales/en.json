@@ -60,6 +60,7 @@
   "status": {
     "mcpListening": "MCP on :{{port}}",
     "mcpUnavailable": "MCP unavailable",
-    "version": "v{{version}}"
+    "version": "v{{version}}",
+    "windowControl": "Agents can control this window"
   }
 }

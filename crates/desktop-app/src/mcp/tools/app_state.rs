@@ -4,14 +4,15 @@ use lurq::{
 };
 use serde_json::{Value, json};
 
-use super::{WindowLink, reply, route_json};
+use super::{McpSettings, WindowLink, reply, route_json};
 use crate::{appearance::Appearance, navigation::Navigation, root::WINDOW_ID};
 
 const DESCRIPTION: &str = "Where the Orchester window is: the active tab's route (name, path, params) and whether \
   it can go back or forward, every open tab with its route, the theme (setting dark/light/system and the mode it \
-  shows), and the window's size in logical pixels with its scale factor (null before the first layout).";
+  shows), whether agents may control the window and what decided it (build, stored, environment), and the \
+  window's size in logical pixels with its scale factor (null before the first layout).";
 
-pub fn tool(link: WindowLink, appearance: Appearance) -> McpTool {
+pub fn tool(link: WindowLink, appearance: Appearance, settings: McpSettings) -> McpTool {
   McpTool::new("app_state")
     .description(DESCRIPTION)
     .scope(Scope::Observe)
@@ -21,13 +22,13 @@ pub fn tool(link: WindowLink, appearance: Appearance) -> McpTool {
       reply(
         link
           .navigation()
-          .map(|navigation| app_state(&navigation, &appearance, ctx.tree)),
+          .map(|navigation| app_state(&navigation, &appearance, settings, ctx.tree)),
       )
     })
 }
 
 /// The state `app_state` reports for the window `tree` shows.
-pub fn app_state(navigation: &Navigation, appearance: &Appearance, tree: &mut Tree) -> Value {
+pub fn app_state(navigation: &Navigation, appearance: &Appearance, settings: McpSettings, tree: &mut Tree) -> Value {
   let tabs = navigation.tabs_now();
   let active = tabs.active();
   let open: Vec<Value> = tabs
@@ -46,6 +47,7 @@ pub fn app_state(navigation: &Navigation, appearance: &Appearance, tree: &mut Tr
     "history": { "can_back": active.can_back(), "can_forward": active.can_forward() },
     "tabs": open,
     "theme": { "setting": appearance.setting().name(), "mode": appearance.mode().name() },
+    "mcp": { "window_control": settings.window_control(), "source": settings.source().name() },
     "window": window(tree),
   })
 }

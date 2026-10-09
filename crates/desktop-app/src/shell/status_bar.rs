@@ -34,13 +34,28 @@ impl Component for StatusBar {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let mcp = match ctx
+    let status = ctx
       .use_context::<McpStatus>()
-      .expect("the root provides the MCP status before mounting the shell")
-    {
-      McpStatus::Listening { port } => ctx.t_args("status.mcpListening", [("port", port)]),
+      .expect("the root provides the MCP status before mounting the shell");
+    let mcp = match status {
+      McpStatus::Listening { port, .. } => ctx.t_args("status.mcpListening", [("port", port)]),
       McpStatus::Unavailable => ctx.t("status.mcpUnavailable"),
     };
+    // Agents may click and type in the window: said while it lasts, whatever decided it.
+    let window_control = matches!(
+      status,
+      McpStatus::Listening {
+        window_control: true,
+        ..
+      }
+    )
+    .then(|| {
+      item(
+        "status-window-control",
+        Icon::MousePointerClick,
+        &ctx.t("status.windowControl"),
+      )
+    });
     let version = ctx.t_args("status.version", [("version", env!("CARGO_PKG_VERSION"))]);
     Row::new()
       .id("status-bar")
@@ -49,6 +64,7 @@ impl Component for StatusBar {
       .padding(Padding::horizontal(SpacingSize::Sm))
       .align_items(Alignment::Center)
       .child(Row::new().flex(1.0))
+      .with_children(window_control)
       .child(item("status-mcp", Icon::RadioTower, &mcp))
       .child(item("status-version", Icon::Sparkles, &version))
   }
