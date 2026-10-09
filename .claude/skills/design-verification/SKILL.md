@@ -135,8 +135,20 @@ the route's params and answers the route the tab shows, for example:
 - `{"route": "new_task", "project": "<id>"}`, `{"route": "edit_task", "project": "<id>", "key": "KON-20"}`.
 
 Then `lurq_read_tree`, `lurq_interact`, `lurq_set_value`, `lurq_wait`, and `lurq_screenshot` with
-`--image-out .tmp/verify/<screen>/app.png`. Stop your app with `Stop-Process -Id <pid>` (only the
-pid you started); the next app's start removes the discovery file a stopped app left.
+`--image-out .tmp/verify/<screen>/app.png`.
+
+**Stop it.** Close the app gracefully with its own close button: `lurq_read_tree` lists it as
+`#window-close` with a `ref`, and `lurq_interact` `{"ref": "<ref>", "action": "click"}` clicks it; the
+app ends what it started and removes its discovery file. If that is not possible,
+stop its children first — its runner, whose parent pid is the app's — then the app, and only those
+pids:
+
+```text
+Get-CimInstance Win32_Process -Filter "ParentProcessId = <pid>" | ForEach-Object { Stop-Process -Id $_.ProcessId }
+Stop-Process -Id <pid>
+```
+
+The next app's start removes the discovery file a stopped app left.
 
 **Agreed deviations (D4/D6)**, reported in their own list, never as matches: the step rail, the
 conversation's search and filters, the Details pane, task selection and filters, the
