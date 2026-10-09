@@ -85,7 +85,7 @@ fn highlight_after_a_cut_line_continues_from_the_other_side() {
 }
 
 #[test]
-fn highlight_reads_operators_as_text_and_self_async_and_await_as_keywords() {
+fn highlight_reads_operators_and_variants_as_text_and_self_async_and_await_as_keywords() {
   let diff = file_diff(
     "src/sender.rs",
     &[
@@ -106,6 +106,13 @@ fn highlight_reads_operators_as_text_and_self_async_and_await_as_keywords() {
   assert_eq!(kind_of(&lines[1], "self"), Some(TokenKind::Keyword));
   assert_eq!(kind_of(&lines[1], "await"), Some(TokenKind::Keyword));
   assert_eq!(kind_of(&lines[2], "1"), Some(TokenKind::Constant));
+  assert!(
+    lines[3]
+      .iter()
+      .all(|token| !token.text.contains("Ok") || token.kind == TokenKind::Plain),
+    "an enum variant reads as text: {:?}",
+    lines[3]
+  );
   for (line, operators) in [
     (1, ["=", "&", "?"].as_slice()),
     (2, &["+="]),

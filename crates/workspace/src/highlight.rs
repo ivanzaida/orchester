@@ -245,15 +245,19 @@ fn kind(scopes: &ScopeStack) -> TokenKind {
 
 /// Scope prefixes to kinds, most specific first, following GitHub Dark (`primer/github-vscode-
 /// theme`): parameters and plain variables read as text, other variables and declared names as
-/// `code-variable`, built-ins and tags as `code-constant`; as the Kontur design colors code, operators
-/// read as text and `self` or `this` as keywords.
+/// `code-variable`, tags as `code-constant`; as the Kontur design colors code, numbers and the language's
+/// own constants are its only constants (enum variants such as `Ok`, named constants and built-in types
+/// read as text), operators read as text, and `self` or `this` as keywords.
 fn rules() -> &'static [(Scope, TokenKind)] {
   static RULES: OnceLock<Vec<(Scope, TokenKind)>> = OnceLock::new();
   RULES.get_or_init(|| {
     [
       ("comment", TokenKind::Comment),
       ("string", TokenKind::String),
-      ("constant", TokenKind::Constant),
+      ("constant.numeric", TokenKind::Constant),
+      ("constant.language", TokenKind::Constant),
+      ("constant.character", TokenKind::String),
+      ("constant", TokenKind::Plain),
       ("variable.language", TokenKind::Keyword),
       ("variable.function", TokenKind::Function),
       ("variable.parameter", TokenKind::Plain),
@@ -264,7 +268,7 @@ fn rules() -> &'static [(Scope, TokenKind)] {
       ("entity.name.tag", TokenKind::Constant),
       ("entity.name", TokenKind::Variable),
       ("entity.other.inherited-class", TokenKind::Variable),
-      ("support", TokenKind::Constant),
+      ("support", TokenKind::Plain),
       ("keyword.operator", TokenKind::Plain),
       ("keyword", TokenKind::Keyword),
       ("storage", TokenKind::Keyword),
