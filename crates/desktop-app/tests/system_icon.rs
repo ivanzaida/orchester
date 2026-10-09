@@ -1,7 +1,7 @@
 //! The running app gives Windows its icon: `orchester-app`, started without taking the focus (so the
-//! test leaves the person's keyboard alone), soon has the icon embedded in its executable at the
-//! system's sizes as its window icons (taskbar button, Alt+Tab, thumbnail) and as its window class's
-//! icons, which the taskbar takes when the window does not answer. macOS takes an app's icon from its
+//! test leaves the person's keyboard alone), soon has the icon embedded in its executable (big: the
+//! 256px frame; small: the system's size) as its window icons (taskbar button, Alt+Tab, thumbnail) and as its window
+//! class's icons, which the taskbar takes when the window does not answer. macOS takes an app's icon from its
 //! bundle instead (`system_icon` reports that it has none); there is nothing to read there.
 //!
 //! Reading another process's window is FFI with no safe wrapper available, so `unsafe` is allowed in
@@ -24,8 +24,8 @@ use windows_sys::{
       WindowsAndMessaging::{
         EnumWindows, GCLP_HICON, GCLP_HICONSM, GET_CLASS_LONG_INDEX, GWL_EXSTYLE, GetClassLongPtrW, GetIconInfo,
         GetSystemMetrics, GetWindowLongPtrW, GetWindowThreadProcessId, HICON, ICON_BIG, ICON_SMALL, ICONINFO,
-        IsWindowVisible, PostMessageW, SM_CXICON, SM_CXSMICON, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_CLOSE,
-        WM_GETICON, WS_EX_TOOLWINDOW,
+        IsWindowVisible, PostMessageW, SM_CXSMICON, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_CLOSE, WM_GETICON,
+        WS_EX_TOOLWINDOW,
       },
     },
   },
@@ -52,6 +52,8 @@ fn system_icon_reaches_the_window_and_its_class() {
   let mut app = Started(
     Command::new(env!("CARGO_BIN_EXE_orchester-app"))
       .env("ORCHESTER_APP_MCP_START_WITHOUT_FOCUS", "1")
+      // No agent drives the window while the test reads it.
+      .env("ORCHESTER_APP_MCP_WINDOW_CONTROL", "off")
       .spawn()
       .expect("the app starts"),
   );
@@ -60,12 +62,16 @@ fn system_icon_reaches_the_window_and_its_class() {
   let small = eventually(|| class_icon(window, GCLP_HICONSM)).expect("the window class gets a small icon");
 
   // SAFETY: no pointers. As DPI aware as the app (winit makes it so), the test thread reads the
-  // system's icon sizes at the system's scale, as the app does.
-  let (big_side, small_side) = unsafe {
+  // system's small icon size at the system's scale, as the app does.
+  let small_side = unsafe {
     SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-    (GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CXSMICON))
+    GetSystemMetrics(SM_CXSMICON)
   };
-  assert_eq!(icon_size(big), Some((big_side, big_side)), "class icon");
+  assert_eq!(
+    icon_size(big),
+    Some((256, 256)),
+    "class icon: the largest frame, for any scale"
+  );
   assert_eq!(icon_size(small), Some((small_side, small_side)), "small class icon");
   assert_eq!(window_icon(window, ICON_BIG), Some(big), "the window's own big icon");
   assert_eq!(

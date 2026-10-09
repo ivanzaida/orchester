@@ -7,12 +7,12 @@ use std::{io, ptr};
 
 use windows_sys::{
   Win32::{
-    Foundation::{HWND, LPARAM},
+    Foundation::{HWND, LPARAM, SetLastError},
     System::{LibraryLoader::GetModuleHandleW, Threading::GetCurrentThreadId},
     UI::WindowsAndMessaging::{
-      EnumThreadWindows, GCLP_HICON, GCLP_HICONSM, GET_CLASS_LONG_INDEX, GetClassLongPtrW, GetSystemMetrics, HICON,
-      ICON_BIG, ICON_SMALL, IMAGE_ICON, LR_DEFAULTCOLOR, LoadImageW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON,
-      SYSTEM_METRICS_INDEX, SendMessageW, SetClassLongPtrW, WM_GETICON, WM_SETICON,
+      EnumThreadWindows, GCLP_HICON, GCLP_HICONSM, GET_CLASS_LONG_INDEX, GetSystemMetrics, HICON, ICON_BIG, ICON_SMALL,
+      IMAGE_ICON, LR_DEFAULTCOLOR, LoadImageW, SM_CXSMICON, SM_CYSMICON, SendMessageW, SetClassLongPtrW, WM_GETICON,
+      WM_SETICON,
     },
   },
   core::BOOL,
@@ -22,32 +22,37 @@ use super::SystemIconError;
 
 /// The icon group of `assets/icon/orchester.rc`: `1 ICON "assets/icon/orchester.ico"`.
 const ICON_RESOURCE: usize = 1;
+/// The largest frame of `orchester.ico` (`tests/brand.rs`).
+const LARGEST_FRAME: i32 = 256;
 
 /// Gives each of this thread's windows that carries a window icon (lurq's), and its class, the
-/// executable's icon: the big one (taskbar button, Alt+Tab) and the small one (thumbnail) at the
-/// system's sizes. Runs on the UI thread, once the first frame is presented: setting the window's icon
-/// again then also has the taskbar read it anew from a window that answers.
+/// executable's icon: the big one (taskbar button, Alt+Tab) from the largest frame, which Windows scales
+/// down sharply for any display's scale, and the small one (thumbnail) at the system's small size. Runs
+/// on the UI thread, once the first frame is presented: setting the window's icon again then also has
+/// the taskbar read it anew from a window that answers.
 pub fn install() -> Result<(), SystemIconError> {
-  let big = embedded_icon(SM_CXICON, SM_CYICON)?;
-  let small = embedded_icon(SM_CXSMICON, SM_CYSMICON)?;
   let windows = windows_with_icon();
   if windows.is_empty() {
     return Err(SystemIconError::NoWindow);
   }
+  let big = embedded_icon(LARGEST_FRAME, LARGEST_FRAME)?;
+  // SAFETY: value queries without pointers.
+  let (width, height) = unsafe { (GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON)) };
+  let small = embedded_icon(width, height)?;
   for window in windows {
-    set_class_icon(window, GCLP_HICON, big)?;
+    // Small first: setting the big icon of a class without a small one has Windows derive a small icon,
+    // and leaves a last error (invalid handle) although it succeeds.
     set_class_icon(window, GCLP_HICONSM, small)?;
+    set_class_icon(window, GCLP_HICON, big)?;
     set_window_icon(window, ICON_BIG, big);
     set_window_icon(window, ICON_SMALL, small);
   }
   Ok(())
 }
 
-/// The executable's icon at the size of two system metrics, the frame Windows picks from
-/// `orchester.ico`. It is never destroyed: the class and the window use it while the process runs.
-fn embedded_icon(width: SYSTEM_METRICS_INDEX, height: SYSTEM_METRICS_INDEX) -> Result<HICON, SystemIconError> {
-  // SAFETY: value queries without pointers.
-  let (width, height) = unsafe { (GetSystemMetrics(width), GetSystemMetrics(height)) };
+/// The executable's icon at `width` x `height`, the frame Windows picks from `orchester.ico`. It is never
+/// destroyed: the class and the window use it while the process runs.
+fn embedded_icon(width: i32, height: i32) -> Result<HICON, SystemIconError> {
   // SAFETY: a null name asks for the module of the process's executable, which is never unloaded.
   let module = unsafe { GetModuleHandleW(ptr::null()) };
   // SAFETY: `module` is the executable, and a resource ID in place of a name is how resource functions
@@ -97,13 +102,14 @@ unsafe extern "system" fn collect(window: HWND, list: LPARAM) -> BOOL {
 }
 
 fn set_class_icon(window: HWND, which: GET_CLASS_LONG_INDEX, icon: HICON) -> Result<(), SystemIconError> {
-  // SAFETY: `window` is a window of this thread; its class keeps `icon`, which is never destroyed. The
-  // result, the icon it replaces, tells nothing: it is 0 before (winit registers its class without
-  // icons), and the call leaves a stale last error even when it succeeds, so success is read back.
-  unsafe { SetClassLongPtrW(window, which, icon as isize) };
-  // SAFETY: as above; a value query.
-  if unsafe { GetClassLongPtrW(window, which) } != icon as usize {
-    return Err(SystemIconError::SetClassIcon(io::Error::last_os_error()));
+  // SAFETY: no pointers. The call returns the icon it replaces, 0 here (winit registers its class
+  // without icons), so only a last error set by the call itself tells a failure.
+  unsafe { SetLastError(0) };
+  // SAFETY: `window` is a window of this thread; its class keeps `icon`, which is never destroyed.
+  let previous = unsafe { SetClassLongPtrW(window, which, icon as isize) };
+  let error = io::Error::last_os_error();
+  if previous == 0 && error.raw_os_error() != Some(0) {
+    return Err(SystemIconError::SetClassIcon(error));
   }
   Ok(())
 }
