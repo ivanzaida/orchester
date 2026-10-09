@@ -179,6 +179,12 @@ fn paths_that_name_no_screen_are_no_screen_and_fall_back_in_the_router() {
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12/nope",
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12/summary/more",
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12/edit/more",
+    "/nope?q=%zz",
+    "/settings/",
+    "//",
+    "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/new/",
+    "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b//tasks",
+    "/project/not-an-id/",
   ] {
     assert_eq!(Route::parse(path), Err(RouteError::NoScreen), "{path:?}");
   }

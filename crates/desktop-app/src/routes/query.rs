@@ -5,31 +5,36 @@ use std::fmt::Write as _;
 
 use super::RouteError;
 
-/// The decoded parameters of a path's query. A route's parser takes the ones its screen takes; one left
-/// over is a parameter the screen does not take.
+/// The parameters of a path's query. A route's parser takes the ones its screen takes, once the path has
+/// named the screen, and a value is decoded only then; one left over is a parameter the screen does not
+/// take.
 pub(super) struct Params(Vec<(String, String)>);
 
 impl Params {
-  pub(super) fn parse(query: &str) -> Result<Self, RouteError> {
+  /// The parameters of `query`, their values still encoded.
+  pub(super) fn new(query: &str) -> Self {
     let params = query
       .split('&')
       .filter(|pair| !pair.is_empty())
       .map(|pair| {
         let (name, value) = pair.split_once('=').unwrap_or((pair, ""));
-        let decoded = decode(value).ok_or_else(|| RouteError::InvalidParam {
-          param: name.to_owned(),
-          value: value.to_owned(),
-        })?;
-        Ok((name.to_owned(), decoded))
+        (name.to_owned(), value.to_owned())
       })
-      .collect::<Result<_, RouteError>>()?;
-    Ok(Self(params))
+      .collect();
+    Self(params)
   }
 
-  /// The value of `name`, taken out of the query; a repeated parameter stays for [`Params::finish`].
-  pub(super) fn take(&mut self, name: &str) -> Option<String> {
-    let index = self.0.iter().position(|(param, _)| param == name)?;
-    Some(self.0.remove(index).1)
+  /// The decoded value of `name`, taken out of the query; a repeated parameter stays for
+  /// [`Params::finish`].
+  pub(super) fn take(&mut self, name: &str) -> Result<Option<String>, RouteError> {
+    let Some(index) = self.0.iter().position(|(param, _)| param == name) else {
+      return Ok(None);
+    };
+    let (param, value) = self.0.remove(index);
+    match decode(&value) {
+      Some(decoded) => Ok(Some(decoded)),
+      None => Err(RouteError::InvalidParam { param, value }),
+    }
   }
 
   /// The value of `name` that `read` understands, or the default when the query has none.
@@ -38,7 +43,7 @@ impl Params {
     name: &str,
     read: impl FnOnce(&str) -> Option<T>,
   ) -> Result<T, RouteError> {
-    let Some(value) = self.take(name) else {
+    let Some(value) = self.take(name)? else {
       return Ok(T::default());
     };
     read(&value).ok_or_else(|| RouteError::InvalidParam {

@@ -112,10 +112,10 @@ impl TaskList {
 
   pub(super) fn take(params: &mut Params) -> Result<Self, RouteError> {
     let mut list = Self::new(params.take_or_default(TAB, TaskListTab::from_name)?);
-    if let Some(text) = params.take(SEARCH) {
+    if let Some(text) = params.take(SEARCH)? {
       list = list.with_search(text);
     }
-    if let Some(key) = params.take(HIGHLIGHT) {
+    if let Some(key) = params.take(HIGHLIGHT)? {
       list = list.with_highlight(key.parse::<TaskKey>().map_err(|_| RouteError::InvalidParam {
         param: HIGHLIGHT.to_owned(),
         value: key,

@@ -97,7 +97,7 @@ impl TaskView {
     if tab != TaskTab::Changes {
       return Ok(Self::of(tab));
     }
-    let Some(path) = params.take(FILE) else {
+    let Some(path) = params.take(FILE)? else {
       return Ok(Self::Changes(None));
     };
     let from = params.take_or_default(FROM, ChangeSource::from_name)?;

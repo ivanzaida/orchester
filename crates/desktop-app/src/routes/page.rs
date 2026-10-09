@@ -1,7 +1,7 @@
 use orchester_core::project::TaskKey;
 
 use super::{
-  EDIT, NEW, OverviewTab, RouteError, Screen, TAB, TASKS, TaskList, TaskListTab, TaskView, project_screen_path,
+  EDIT, NEW, OverviewTab, RouteError, Screen, TAB, TASKS, TaskList, TaskView, project_screen_path,
   query::{Params, with_query},
 };
 
@@ -28,11 +28,11 @@ pub enum ProjectPage {
 impl ProjectPage {
   /// The page of a project screen that names nothing but the project, as it opens: every one but the
   /// screens of a task.
-  pub const fn of(screen: Screen) -> Option<Self> {
+  pub fn of(screen: Screen) -> Option<Self> {
     Some(match screen {
       Screen::AllProjects | Screen::Settings | Screen::EditTask | Screen::Task => return None,
-      Screen::Overview => Self::Overview(OverviewTab::Running),
-      Screen::Tasks => Self::Tasks(TaskList::new(TaskListTab::All)),
+      Screen::Overview => Self::Overview(OverviewTab::default()),
+      Screen::Tasks => Self::Tasks(TaskList::default()),
       Screen::NewTask => Self::NewTask,
       Screen::PullRequests => Self::PullRequests,
       Screen::Usage => Self::Usage,

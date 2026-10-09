@@ -91,16 +91,21 @@ impl Route {
     }
   }
 
-  /// The route at `path`, query included.
+  /// The route at `path`, query included. The path is matched first, so an address that names no screen
+  /// says so whatever its query holds.
   pub fn parse(path: &str) -> Result<Self, RouteError> {
     let (path, query) = path.split_once('?').unwrap_or((path, ""));
-    let mut params = Params::parse(query)?;
+    let mut params = Params::new(query);
     let rest = path.strip_prefix('/').ok_or(RouteError::NoScreen)?;
     let segments: Vec<&str> = if rest.is_empty() {
       Vec::new()
     } else {
       rest.split('/').collect()
     };
+    // A trailing `/` or a `//` leaves an empty segment, which no screen's path has.
+    if segments.contains(&"") {
+      return Err(RouteError::NoScreen);
+    }
     let route = match segments.as_slice() {
       [] => Self::AllProjects,
       [SETTINGS] => Self::Settings,
