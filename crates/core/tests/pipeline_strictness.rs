@@ -1,15 +1,17 @@
 //! A new pipeline version is no weaker than the one it replaces only when it keeps the steps, their wiring,
 //! profiles and tools, and is as strict or stricter in every step.
 
-use std::num::NonZeroU32;
+use std::{collections::BTreeMap, num::NonZeroU32};
 
 use orchester_core::{
   id::ResourceId,
   name::Name,
   permission::{AllowedCommands, CommandPrefix, StepCommands, StepNetwork, StepPermissions},
   resource::{
-    FailureRoute, ModelId, Pipeline, PromptText, RepositoryAccess, Step, StepKey, StepKind, Weaker, weaker_than,
+    FailureRoute, ModelId, Pipeline, PipelineSources, PromptText, RepositoryAccess, Step, StepKey, StepKind, Weaker,
+    weaker_than,
   },
+  source::SourcePath,
   tokens::TokenBudget,
 };
 
@@ -215,4 +217,17 @@ fn strictness_counts_retries_budgets_instructions_and_models() {
   assert_eq!(weaker_than(&old, &model), build, "another model");
   let described = pipeline(steps.clone()).with_description("Ships small fixes.".to_owned());
   assert!(weaker_than(&old, &described).is_empty(), "the description may change");
+}
+
+#[test]
+fn strictness_counts_other_sources() {
+  let profile = ResourceId::generate();
+  let old = pipeline(published(profile));
+  let folder = std::env::temp_dir().display().to_string();
+  let source = SourcePath::new(&folder).expect("an absolute local folder");
+  let reads_more = pipeline(published(profile))
+    .with_sources(PipelineSources::new(vec![source], BTreeMap::new()))
+    .expect("sources of the pipeline");
+  assert_eq!(weaker_than(&old, &reads_more), [Weaker::Sources]);
+  assert!(weaker_than(&reads_more, &reads_more.clone()).is_empty());
 }

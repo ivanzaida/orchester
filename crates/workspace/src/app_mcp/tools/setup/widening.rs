@@ -92,6 +92,7 @@ pub(in crate::app_mcp::tools) fn check_pipeline(
       .into_iter()
       .map(|weaker| match weaker {
         Weaker::Steps => Message::new("appMcp.widens.pipelineSteps"),
+        Weaker::Sources => Message::new("appMcp.widens.pipelineSources"),
         Weaker::Step(key) => Message::new("appMcp.widens.pipelineStep").with("step", step_name(&key)),
       })
       .collect(),

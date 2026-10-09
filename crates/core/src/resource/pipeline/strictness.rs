@@ -11,6 +11,8 @@ use crate::permission::{StepCommands, StepNetwork, StepPermissions};
 pub enum Weaker {
   /// Steps were added or removed, so the flow cannot be compared step by step.
   Steps,
+  /// The sources the pipeline or its steps list changed: what its agents read is a person's to choose.
+  Sources,
   /// The step is wired, run or narrowed differently, or no longer waits or asks where it did.
   Step(StepKey),
 }
@@ -20,12 +22,13 @@ pub fn weaker_than(old: &Pipeline, new: &Pipeline) -> Vec<Weaker> {
   if step_keys(old) != step_keys(new) {
     return vec![Weaker::Steps];
   }
-  old
+  let sources = (old.sources() != new.sources()).then_some(Weaker::Sources);
+  let steps = old
     .steps()
     .iter()
     .filter(|before| new.step(&before.key).is_none_or(|after| !step_no_weaker(before, after)))
-    .map(|before| Weaker::Step(before.key.clone()))
-    .collect()
+    .map(|before| Weaker::Step(before.key.clone()));
+  sources.into_iter().chain(steps).collect()
 }
 
 fn step_keys(pipeline: &Pipeline) -> Vec<&StepKey> {
