@@ -20,6 +20,15 @@ pub fn unbounded() -> TokenBudget {
   TokenBudget::new(u64::MAX).expect("u64::MAX is above zero")
 }
 
+/// The largest token budget the project database holds: its columns are 64-bit signed integers.
+pub fn largest_stored() -> TokenBudget {
+  TokenBudget::new(i64::MAX.unsigned_abs()).expect("i64::MAX is above zero")
+}
+
+/// The longest time limit the project database holds, in whole minutes: it stores whole milliseconds in
+/// a 64-bit signed integer.
+pub const MAX_STORED_MINUTES: u64 = i64::MAX.unsigned_abs() / (SECONDS_PER_MINUTE * 1000);
+
 /// What a person reads for a budget field's text that is not a budget.
 pub fn budget_error(error: BudgetInputError, separator: &str) -> Message {
   match error {
@@ -28,10 +37,17 @@ pub fn budget_error(error: BudgetInputError, separator: &str) -> Message {
       Message::new("tokens.errors.digits").with("example", grouped(EXAMPLE_BUDGET, separator))
     }
     BudgetInputError::Zero => Message::new("tokens.errors.zero"),
-    BudgetInputError::AboveMaximum { max } => {
-      Message::new("tokens.errors.aboveMax").with("max", compact_tokens(max.get()))
-    }
+    BudgetInputError::AboveMaximum { max } => above(max, separator),
   }
+}
+
+/// Why a budget above `max` is not taken: the project's maximum run budget, or for a field without a
+/// maximum ([`largest_stored`]), what the project database holds, its digits grouped with `separator`.
+pub fn above(max: TokenBudget, separator: &str) -> Message {
+  if max == largest_stored() {
+    return Message::new("tokens.errors.tooLarge").with("max", grouped(max.get(), separator));
+  }
+  Message::new("tokens.errors.aboveMax").with("max", compact_tokens(max.get()))
 }
 
 /// A budget field's text read as a budget of at most `max`.
@@ -49,10 +65,13 @@ pub fn read_minutes(text: &str) -> Result<Duration, Message> {
   time_limit(minutes)
 }
 
-/// A time limit of `minutes` whole minutes, above zero.
+/// A time limit of `minutes` whole minutes, above zero and at most [`MAX_STORED_MINUTES`].
 pub fn time_limit(minutes: u64) -> Result<Duration, Message> {
   if minutes == 0 {
     return Err(Message::new("errors.timeLimitZero"));
+  }
+  if minutes > MAX_STORED_MINUTES {
+    return Err(Message::new("errors.timeLimitTooLong").with("max", MAX_STORED_MINUTES.to_string()));
   }
   minutes
     .checked_mul(SECONDS_PER_MINUTE)
