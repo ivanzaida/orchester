@@ -1,63 +1,28 @@
-//! The typed input of each tool, read strictly from a call's arguments (unknown fields refused), then
-//! checked into values that cannot carry what the program would read as something else: a path that is
-//! relative and stays in the worktree, a revision that is no option, a message that goes to the
-//! program's standard input rather than its arguments.
+//! The typed input of each tool, read strictly from a call's arguments (unknown fields refused), then checked into
+//! values that cannot carry what the program would read as something else.
 
-use std::{fmt, num::NonZeroU32};
+use std::num::NonZeroU32;
 
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{FindSymbol, OrchesterTool, SkillCall, StepTools, ToolCallError};
+use super::{FileCall, FindSymbol, OrchesterTool, SkillCall, StepTools, ToolCallError, files::term};
 use crate::{
-  native::tools::{ToolInput, ToolInputError, parse_call},
+  memory::{Importance, MemoryContent, MemoryKey, MemoryKind, MemoryNote, NoteScope, Tags},
   resource::{SKILL_FILE, SkillFilePath},
+  run::StepProgress,
 };
 
-/// Commits `git_log` lists when the call gives no `count`.
-pub(super) const DEFAULT_LOG_COUNT: u32 = 20;
-pub(super) const MAX_LOG_COUNT: u32 = 200;
-/// Paths one `git_add` call may stage.
-pub(super) const MAX_ADD_PATHS: usize = 100;
-/// Lines `read_outside_file` returns when the call gives no `limit`.
+/// Lines a read returns when the call gives no `length` or `limit`.
 pub(super) const DEFAULT_READ_LINES: u32 = 2000;
 pub(super) const MAX_READ_LINES: u32 = 10_000;
-/// The longest path, revision or project tool name a call may give, in characters.
-const MAX_TEXT_CHARS: usize = 4096;
+/// The longest path a call outside the worktree may give, in characters.
+const MAX_PATH_CHARS: usize = 4096;
 const MAX_REVISION_CHARS: usize = 256;
-const MAX_MESSAGE_CHARS: usize = 20_000;
 /// The longest skill name a call may give, in characters.
 const MAX_SKILL_NAME_CHARS: usize = 200;
 
-/// A file or folder relative to the worktree root: not absolute, no `..`, no `:` (a Windows drive or
-/// stream, or git's pathspec magic), no control character.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RepoPath(String);
-
-impl RepoPath {
-  pub fn new(value: &str) -> Result<Self, String> {
-    if value.is_empty() {
-      return Err("a path must not be empty".to_owned());
-    }
-    if value.chars().count() > MAX_TEXT_CHARS || value.chars().any(char::is_control) {
-      return Err(format!("`{value}` is not a path"));
-    }
-    if value.contains(':') || value.starts_with(['/', '\\']) {
-      return Err(format!("`{value}` is not relative to the worktree root"));
-    }
-    if value.split(['/', '\\']).any(|part| part == "..") {
-      return Err(format!("`{value}` leaves the worktree"));
-    }
-    Ok(Self(value.to_owned()))
-  }
-
-  pub fn as_str(&self) -> &str {
-    &self.0
-  }
-}
-
-/// A revision git resolves: no option (a leading `-`), no whitespace or control character, no `:`
-/// (`git_show` adds `:<path>` itself).
+/// A revision git resolves: no option (a leading `-`), no whitespace or control character, no `:`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Revision(String);
 
@@ -80,59 +45,34 @@ impl Revision {
   }
 }
 
-/// A commit message, which git reads from standard input: not blank, no NUL.
-#[derive(Clone, PartialEq, Eq)]
-pub struct CommitMessage(String);
-
-impl CommitMessage {
-  pub fn new(value: &str) -> Result<Self, String> {
-    if value.trim().is_empty() {
-      return Err("the commit message must not be blank".to_owned());
-    }
-    if value.contains('\0') || value.chars().count() > MAX_MESSAGE_CHARS {
-      return Err("the commit message is not text git takes".to_owned());
-    }
-    Ok(Self(value.to_owned()))
-  }
-
-  pub fn as_str(&self) -> &str {
-    &self.0
-  }
-}
-
-impl fmt::Debug for CommitMessage {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "CommitMessage({} characters)", self.0.chars().count())
-  }
-}
-
 /// One call, read into its tool's input.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ToolCall {
-  /// A call of a file tool, read into the native agent's input.
-  File(Box<ToolInput>),
+  /// A call of a worktree file tool.
+  File(Box<FileCall>),
   FindSymbol(FindSymbol),
-  Git(GitCall),
-  ReadOutsideFile {
-    path: String,
-    offset: u32,
-    limit: u32,
+  /// `read_external_file`: lines of a file outside the worktree, by absolute path.
+  ReadExternal {
+    filename: String,
+    start_line: u32,
+    length: u32,
   },
-  RunProjectTool {
+  /// `search_external_file`: the files under a folder outside the worktree that hold a term.
+  SearchExternal {
+    base_directory: String,
+    term: String,
+  },
+  /// `find_references`: where a name is used, with its definitions from the code index.
+  FindReferences {
+    name: String,
+  },
+  RunCheck {
     name: String,
   },
   Skill(SkillCall),
-}
-
-/// A call of one of the git tools.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum GitCall {
-  Status,
-  Diff { path: Option<RepoPath>, staged: bool },
-  Log { path: Option<RepoPath>, count: u32 },
-  Show { revision: Revision, path: Option<RepoPath> },
-  Add { paths: Vec<RepoPath> },
-  Commit { message: CommitMessage },
+  GetTask,
+  SaveMemory(Box<MemoryNote>),
+  ReportProgress(StepProgress),
 }
 
 #[derive(Deserialize)]
@@ -141,56 +81,46 @@ struct NoInput {}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct DiffInput {
+struct ExternalReadInput {
+  filename: String,
   #[serde(default)]
-  path: Option<String>,
+  start_line: Option<NonZeroU32>,
   #[serde(default)]
-  staged: Option<bool>,
+  length: Option<NonZeroU32>,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct LogInput {
-  #[serde(default)]
-  path: Option<String>,
-  #[serde(default)]
-  count: Option<NonZeroU32>,
+struct ExternalSearchInput {
+  base_directory: String,
+  term: String,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct ShowInput {
-  revision: String,
-  #[serde(default)]
-  path: Option<String>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct AddInput {
-  paths: Vec<String>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CommitInput {
-  message: String,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ReadInput {
-  path: String,
-  #[serde(default)]
-  offset: Option<NonZeroU32>,
-  #[serde(default)]
-  limit: Option<NonZeroU32>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ProjectInput {
+struct NameInput {
   name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MemoryInput {
+  kind: String,
+  text: String,
+  #[serde(default)]
+  key: Option<String>,
+  #[serde(default)]
+  tags: Option<Vec<String>>,
+  #[serde(default)]
+  importance: Option<String>,
+  #[serde(default)]
+  scope: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProgressInput {
+  text: String,
 }
 
 #[derive(Deserialize)]
@@ -219,53 +149,35 @@ impl ToolCall {
       arguments.clone()
     };
     let call = read(tool, arguments).map_err(|message| ToolCallError::Invalid { tool, message })?;
-    if let Self::RunProjectTool { name } = &call
-      && !step.offers_project_tool(name)
+    if let Self::RunCheck { name } = &call
+      && !step.offers_check(name)
     {
-      return Err(ToolCallError::UnknownProjectTool(name.clone()));
+      return Err(ToolCallError::UnknownCheck(name.clone()));
     }
     Ok(call)
   }
 
   pub fn tool(&self) -> OrchesterTool {
     match self {
-      Self::File(input) => {
-        OrchesterTool::from_name(input.name().as_str()).expect("a file call is one of the file tools")
-      }
+      Self::File(call) => call.tool(),
       Self::FindSymbol(_) => OrchesterTool::FindSymbol,
-      Self::Git(GitCall::Status) => OrchesterTool::GitStatus,
-      Self::Git(GitCall::Diff { .. }) => OrchesterTool::GitDiff,
-      Self::Git(GitCall::Log { .. }) => OrchesterTool::GitLog,
-      Self::Git(GitCall::Show { .. }) => OrchesterTool::GitShow,
-      Self::Git(GitCall::Add { .. }) => OrchesterTool::GitAdd,
-      Self::Git(GitCall::Commit { .. }) => OrchesterTool::GitCommit,
-      Self::ReadOutsideFile { .. } => OrchesterTool::ReadOutsideFile,
-      Self::RunProjectTool { .. } => OrchesterTool::RunProjectTool,
+      Self::ReadExternal { .. } => OrchesterTool::ReadExternalFile,
+      Self::SearchExternal { .. } => OrchesterTool::SearchExternalFile,
+      Self::FindReferences { .. } => OrchesterTool::FindReferences,
+      Self::RunCheck { .. } => OrchesterTool::RunCheck,
       Self::Skill(SkillCall::List) => OrchesterTool::ListSkills,
       Self::Skill(SkillCall::Read { .. }) => OrchesterTool::ReadSkill,
+      Self::GetTask => OrchesterTool::GetTask,
+      Self::SaveMemory(_) => OrchesterTool::SaveMemory,
+      Self::ReportProgress(_) => OrchesterTool::ReportProgress,
     }
-  }
-}
-
-/// `arguments` read as file tool `tool`'s input, as the native agent reads it.
-fn file_call(tool: OrchesterTool, arguments: &Value) -> Result<ToolCall, String> {
-  match parse_call(tool.as_str(), arguments) {
-    Ok(input) => Ok(ToolCall::File(Box::new(input))),
-    Err(ToolInputError::Invalid { message, .. }) => Err(message),
-    Err(error) => Err(error.to_string()),
   }
 }
 
 /// `arguments` read as `tool`'s input, or why they are not.
 fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
   let invalid = |error: serde_json::Error| error.to_string();
-  let path = |path: Option<String>| path.as_deref().map(RepoPath::new).transpose();
   Ok(match tool {
-    OrchesterTool::ReadFile
-    | OrchesterTool::ListFiles
-    | OrchesterTool::Search
-    | OrchesterTool::EditFile
-    | OrchesterTool::WriteFile => file_call(tool, &arguments)?,
     OrchesterTool::FindSymbol => {
       let query: FindSymbol = serde_json::from_value(arguments).map_err(invalid)?;
       if query.name().trim().is_empty() {
@@ -273,48 +185,19 @@ fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
       }
       ToolCall::FindSymbol(query)
     }
-    OrchesterTool::GitStatus => {
-      serde_json::from_value::<NoInput>(arguments).map_err(invalid)?;
-      ToolCall::Git(GitCall::Status)
-    }
-    OrchesterTool::GitDiff => {
-      let input: DiffInput = serde_json::from_value(arguments).map_err(invalid)?;
-      ToolCall::Git(GitCall::Diff {
-        path: path(input.path)?,
-        staged: input.staged.unwrap_or(false),
-      })
-    }
-    OrchesterTool::GitLog => {
-      let input: LogInput = serde_json::from_value(arguments).map_err(invalid)?;
-      let count = input.count.map_or(DEFAULT_LOG_COUNT, NonZeroU32::get);
-      if count > MAX_LOG_COUNT {
-        return Err(format!("count is at most {MAX_LOG_COUNT}"));
+    OrchesterTool::ReadExternalFile => {
+      let input: ExternalReadInput = serde_json::from_value(arguments).map_err(invalid)?;
+      ToolCall::ReadExternal {
+        filename: path(input.filename)?,
+        start_line: input.start_line.map_or(1, NonZeroU32::get),
+        length: lines(input.length, "length")?,
       }
-      ToolCall::Git(GitCall::Log {
-        path: path(input.path)?,
-        count,
-      })
     }
-    OrchesterTool::GitShow => {
-      let input: ShowInput = serde_json::from_value(arguments).map_err(invalid)?;
-      ToolCall::Git(GitCall::Show {
-        revision: Revision::new(&input.revision)?,
-        path: path(input.path)?,
-      })
-    }
-    OrchesterTool::GitAdd => add(&serde_json::from_value(arguments).map_err(invalid)?)?,
-    OrchesterTool::GitCommit => {
-      let input: CommitInput = serde_json::from_value(arguments).map_err(invalid)?;
-      ToolCall::Git(GitCall::Commit {
-        message: CommitMessage::new(&input.message)?,
-      })
-    }
-    OrchesterTool::ReadOutsideFile => {
-      let input: ReadInput = serde_json::from_value(arguments).map_err(invalid)?;
-      ToolCall::ReadOutsideFile {
-        path: input.path,
-        offset: input.offset.map_or(1, NonZeroU32::get),
-        limit: lines(input.limit)?,
+    OrchesterTool::SearchExternalFile => {
+      let input: ExternalSearchInput = serde_json::from_value(arguments).map_err(invalid)?;
+      ToolCall::SearchExternal {
+        base_directory: path(input.base_directory)?,
+        term: term(input.term)?,
       }
     }
     OrchesterTool::ListSkills => {
@@ -322,18 +205,93 @@ fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
       ToolCall::Skill(SkillCall::List)
     }
     OrchesterTool::ReadSkill => read_skill(&serde_json::from_value(arguments).map_err(invalid)?)?,
-    OrchesterTool::RunProjectTool => {
-      let input: ProjectInput = serde_json::from_value(arguments).map_err(invalid)?;
-      ToolCall::RunProjectTool { name: input.name }
+    OrchesterTool::RunCheck => {
+      let input: NameInput = serde_json::from_value(arguments).map_err(invalid)?;
+      ToolCall::RunCheck { name: input.name }
+    }
+    OrchesterTool::FindReferences => {
+      let input: NameInput = serde_json::from_value(arguments).map_err(invalid)?;
+      ToolCall::FindReferences {
+        name: reference_name(&input.name)?,
+      }
+    }
+    OrchesterTool::GetTask => {
+      serde_json::from_value::<NoInput>(arguments).map_err(invalid)?;
+      ToolCall::GetTask
+    }
+    OrchesterTool::SaveMemory => memory_note(&serde_json::from_value(arguments).map_err(invalid)?)?,
+    OrchesterTool::ReportProgress => {
+      let input: ProgressInput = serde_json::from_value(arguments).map_err(invalid)?;
+      ToolCall::ReportProgress(StepProgress::new(&input.text).map_err(|error| error.to_string())?)
+    }
+    OrchesterTool::ReadFile
+    | OrchesterTool::ListFiles
+    | OrchesterTool::SearchFile
+    | OrchesterTool::EditFile
+    | OrchesterTool::CreateFile
+    | OrchesterTool::DeleteFile
+    | OrchesterTool::MoveFile => {
+      let file = FileCall::read(tool, &arguments)
+        .unwrap_or_else(|| Err(format!("{} has no file input Orchester reads", tool.as_str())))?;
+      ToolCall::File(Box::new(file))
     }
   })
 }
 
-/// The lines a read gives, [`DEFAULT_READ_LINES`] when `limit` is none.
-fn lines(limit: Option<NonZeroU32>) -> Result<u32, String> {
+/// A name `find_references` looks for: an identifier, as code writes it.
+fn reference_name(value: &str) -> Result<String, String> {
+  let mut chars = value.chars();
+  let identifier = chars.next().is_some_and(|first| first.is_alphabetic() || first == '_')
+    && chars.all(|c| c.is_alphanumeric() || c == '_')
+    && value.chars().count() <= MAX_SKILL_NAME_CHARS;
+  if identifier {
+    Ok(value.to_owned())
+  } else {
+    Err(format!(
+      "`{value}` is not a name: letters, digits and `_`, not starting with a digit"
+    ))
+  }
+}
+
+/// A `save_memory` call: its content as a person's record would hold it, for the task (the default) or the project.
+fn memory_note(input: &MemoryInput) -> Result<ToolCall, String> {
+  let kind = MemoryKind::from_name(&input.kind).ok_or_else(|| {
+    let kinds: Vec<&str> = MemoryKind::ALL.iter().map(|kind| kind.name()).collect();
+    format!("`{}` is not a kind of memory: {}", input.kind, kinds.join(", "))
+  })?;
+  let mut content = MemoryContent::new(kind, &input.text).map_err(|error| error.to_string())?;
+  if let Some(key) = input.key.as_deref() {
+    content = content.with_key(MemoryKey::new(key).map_err(|error| error.to_string())?);
+  }
+  if let Some(tags) = &input.tags {
+    content = content.with_tags(Tags::new(tags.iter().map(String::as_str)).map_err(|error| error.to_string())?);
+  }
+  if let Some(importance) = input.importance.as_deref() {
+    let importance =
+      Importance::from_name(importance).ok_or_else(|| format!("`{importance}` is not low, normal or high"))?;
+    content = content.with_importance(importance);
+  }
+  let scope = match input.scope.as_deref() {
+    None | Some("task") => NoteScope::Task,
+    Some("project") => NoteScope::Project,
+    Some(other) => return Err(format!("`{other}` is not a memory scope: task or project")),
+  };
+  Ok(ToolCall::SaveMemory(Box::new(MemoryNote::new(scope, content))))
+}
+
+/// A path outside the worktree as a call gives it: not blank, at most [`MAX_PATH_CHARS`].
+fn path(value: String) -> Result<String, String> {
+  if value.trim().is_empty() || value.chars().count() > MAX_PATH_CHARS {
+    return Err(format!("`{value}` is not a path"));
+  }
+  Ok(value)
+}
+
+/// The lines a read gives, [`DEFAULT_READ_LINES`] when `limit` is none; `field` names it in the error.
+fn lines(limit: Option<NonZeroU32>, field: &str) -> Result<u32, String> {
   let limit = limit.map_or(DEFAULT_READ_LINES, NonZeroU32::get);
   if limit > MAX_READ_LINES {
-    return Err(format!("limit is at most {MAX_READ_LINES}"));
+    return Err(format!("{field} is at most {MAX_READ_LINES}"));
   }
   Ok(limit)
 }
@@ -353,21 +311,6 @@ fn read_skill(input: &SkillInput) -> Result<ToolCall, String> {
     name: name.to_owned(),
     file,
     offset: input.offset.map_or(1, NonZeroU32::get),
-    limit: lines(input.limit)?,
+    limit: lines(input.limit, "limit")?,
   }))
-}
-
-fn add(input: &AddInput) -> Result<ToolCall, String> {
-  if input.paths.is_empty() {
-    return Err("name at least one path".to_owned());
-  }
-  if input.paths.len() > MAX_ADD_PATHS {
-    return Err(format!("at most {MAX_ADD_PATHS} paths"));
-  }
-  let paths = input
-    .paths
-    .iter()
-    .map(|path| RepoPath::new(path))
-    .collect::<Result<_, _>>()?;
-  Ok(ToolCall::Git(GitCall::Add { paths }))
 }

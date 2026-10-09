@@ -2,7 +2,7 @@
 //! index", run details): the usage of the turns that began before its first edit, and when and
 //! where that edit was, or that it changed no file. An edit is a change to a file in the repository
 //! (the run's worktree) that the agent reports: Codex `file_change` items, Claude Code's edit tools,
-//! Orchester's `edit_file` and `write_file` for either CLI, a native agent's file tools. A change in
+//! Orchester's `edit_file` and `create_file` for either CLI, a native agent's file tools. A change in
 //! a writable folder outside the worktree is no edit of the repository, and a file a shell command
 //! writes is not seen. A turn's usage arrives when it completes, so the turn in which the first edit happens
 //! counts as before it: Codex reports a whole turn's usage at its end, which then makes the count an

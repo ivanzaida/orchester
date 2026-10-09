@@ -1,18 +1,21 @@
 //! Which tools a step is offered and whether a call asks (`docs/interactive-tool-approvals.md`, "Orchester's
 //! tools"):
 //!
-//! | Access class | Step that may write | Read-only step |
+//! | Access class (tools) | Step that may write the worktree | Read-only step |
 //! | --- | --- | --- |
-//! | read-only (`read_file`, `list_files`, `search`, `find_symbol` with the code index, `git_status`, `git_diff`, `git_log`, `git_show`, `list_skills` and `read_skill` with skills) | runs | runs |
-//! | writes the worktree (`edit_file`, `write_file`, `git_add`, `git_commit`) | runs | not offered |
-//! | outside the worktree (`read_outside_file`) | asks | asks |
-//! | the project's programs (`run_project_tool`), network on | asks | asks |
-//! | the project's programs, network off | not offered | not offered |
+//! | read-only (`read_file`, `list_files`, `search_file`, `find_references`, `get_task`, `find_symbol` with the code index, `list_skills` and `read_skill` with skills) | runs | runs |
+//! | writes the worktree (`edit_file`, `create_file`, `delete_file`, `move_file`) | runs | not offered |
+//! | records with the run or the project (`save_memory`, `report_progress`) | runs | runs |
+//! | outside the worktree (`search_external_file`, `read_external_file`) | asks; runs without asking in the run's sources | asks; runs without asking in the run's sources |
+//! | the checks offered to the step (`run_check`), network on | runs a check whose access rules approve no call; asks for any other, once per run or at every call as they say | runs a check whose access rules approve no call; asks for any other, once per run or at every call as they say |
+//! | the checks, network off | not offered | not offered |
 //!
 //! A call that asks reaches a person as any request outside the step's permissions does, and Orchester's
 //! own answers (a rule of Approve similar, auto-approval) apply to it as to an MCP call, but auto-approval
-//! never runs a project's program ([`auto_approvable`]): it may reach the network, which auto-approval leaves
-//! to a person for commands too. Whether the step asks before MCP actions does not change this: these tools
+//! never runs a check ([`auto_approvable`]): it may reach the network, which auto-approval leaves to a person for
+//! commands too. A check is a command tool of the Tools library whose access rules let the run's pipeline and the
+//! step call it; one whose rules approve no call (`ApprovalMode::Never`) runs without asking, any other asks
+//! ([`ProjectTool::asks`]). Whether the step asks before MCP actions does not change this: these tools
 //! are Orchester's, not a server the profile chose. The runner holds the line itself: a call of a tool that
 //! asks runs only with a person's or a rule's approval of it, given through the CLI's own prompt or asked by
 //! the runner when the call arrives. Claude Code gets an allow rule for each tool that runs
@@ -21,10 +24,11 @@
 
 use serde_json::{Value, json};
 
-use super::{AccessClass, OrchesterTool, ProjectTool, SERVER, catalog::input_schema};
+use super::{AccessClass, OrchesterTool, ProjectTool, SERVER, ToolCall, catalog::input_schema};
 use crate::{
   permission::{AgentPermissions, NetworkAccess},
   resource::RepositoryAccess,
+  source::{RunSources, SourcePath},
 };
 
 /// What happens to a call of an offered tool.
@@ -36,40 +40,42 @@ pub enum ToolPolicy {
   Asks,
 }
 
-/// The policy of `tool` in a step with `permissions`; `None` when the step is not offered it. A project's
-/// program runs outside every sandbox, so a step without network gets none.
+/// The policy of `tool` in a step with `permissions`; `None` when the step is not offered it. A check runs outside
+/// every sandbox, so a step without network gets none; [`StepTools::for_step`] lets the checks that ask no person
+/// run.
 pub fn decide(tool: OrchesterTool, permissions: &AgentPermissions) -> Option<ToolPolicy> {
   match tool.access() {
-    AccessClass::ReadOnly => Some(ToolPolicy::Runs),
+    AccessClass::ReadOnly | AccessClass::Records => Some(ToolPolicy::Runs),
     AccessClass::WritesWorktree => (permissions.repository() == RepositoryAccess::Write).then_some(ToolPolicy::Runs),
-    AccessClass::Outside if tool == OrchesterTool::RunProjectTool && permissions.network() == NetworkAccess::Off => {
-      None
-    }
+    AccessClass::Outside if tool == OrchesterTool::RunCheck && permissions.network() == NetworkAccess::Off => None,
     AccessClass::Outside => Some(ToolPolicy::Asks),
   }
 }
 
 /// Whether auto-approval may answer a call of `tool` of MCP server `server`: any call but one of Orchester's
-/// `run_project_tool`.
+/// `run_check`.
 pub fn auto_approvable(server: &str, tool: &str) -> bool {
-  server != SERVER || tool != OrchesterTool::RunProjectTool.as_str()
+  server != SERVER || tool != OrchesterTool::RunCheck.as_str()
 }
 
-/// The tools one step is offered, with their policy, and the project tools `run_project_tool` runs.
+/// The tools one step is offered, with their policy, the checks `run_check` runs, and the run's sources, which the
+/// calls outside the worktree read without asking.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct StepTools {
   offered: Vec<(OrchesterTool, ToolPolicy)>,
-  /// Names and descriptions of the project tools, in library order.
-  projects: Vec<(String, String)>,
+  /// Name, description and whether a call asks, of each check, in library order.
+  checks: Vec<(String, String, bool)>,
+  sources: Vec<SourcePath>,
 }
 
 impl StepTools {
-  /// The tools of a step with `permissions` that may run `projects`; `run_project_tool` only when there
-  /// is one.
-  pub fn for_step(permissions: &AgentPermissions, projects: &[ProjectTool]) -> Self {
+  /// The tools of a step with `permissions` offered `checks`; `run_check` only when there is one. `run_check` runs
+  /// without asking when no check asks.
+  pub fn for_step(permissions: &AgentPermissions, checks: &[ProjectTool]) -> Self {
+    let all_run = checks.iter().all(|check| !check.asks());
     let offered = OrchesterTool::ALL
       .into_iter()
-      .filter(|tool| *tool != OrchesterTool::RunProjectTool || !projects.is_empty())
+      .filter(|tool| *tool != OrchesterTool::RunCheck || !checks.is_empty())
       .filter(|tool| {
         !matches!(
           tool,
@@ -77,14 +83,26 @@ impl StepTools {
         )
       })
       .filter_map(|tool| decide(tool, permissions).map(|policy| (tool, policy)))
+      .map(|(tool, policy)| match tool {
+        OrchesterTool::RunCheck if all_run => (tool, ToolPolicy::Runs),
+        _ => (tool, policy),
+      })
       .collect();
     Self {
       offered,
-      projects: projects
+      checks: checks
         .iter()
-        .map(|tool| (tool.name().to_owned(), tool.description().to_owned()))
+        .map(|check| (check.name().to_owned(), check.description().to_owned(), check.asks()))
         .collect(),
+      sources: Vec::new(),
     }
+  }
+
+  /// These tools in a run with `sources`, which the prompt names.
+  #[must_use]
+  pub fn with_sources(mut self, sources: &RunSources) -> Self {
+    self.sources = sources.paths().cloned().collect();
+    self
   }
 
   /// These tools and `find_symbol`, for a step whose agent gets the code index of the run's base revision.
@@ -93,7 +111,7 @@ impl StepTools {
     let at = self
       .offered
       .iter()
-      .position(|(tool, _)| tool.file_tool().is_none())
+      .position(|(tool, _)| !tool.is_file_tool())
       .unwrap_or(self.offered.len());
     self.offered.insert(at, (OrchesterTool::FindSymbol, ToolPolicy::Runs));
     self
@@ -122,13 +140,22 @@ impl StepTools {
       .map(|(_, policy)| *policy)
   }
 
-  /// Whether the tool named `name` is offered and asks: a call of it runs only once approved.
+  /// Whether the tool named `name` is offered and asks: a call of it runs only once approved, unless
+  /// [`Self::call_asks`] says the call itself does not.
   pub fn asks(&self, name: &str) -> bool {
     OrchesterTool::from_name(name).and_then(|tool| self.policy(tool)) == Some(ToolPolicy::Asks)
   }
 
-  pub(super) fn offers_project_tool(&self, name: &str) -> bool {
-    self.projects.iter().any(|(project, _)| project == name)
+  /// Whether `call` runs only once approved: a check by its own access rules, any other call by its tool's policy.
+  pub fn call_asks(&self, call: &ToolCall) -> bool {
+    match call {
+      ToolCall::RunCheck { name } => self.checks.iter().any(|(check, _, asks)| check == name && *asks),
+      _ => self.asks(call.tool().as_str()),
+    }
+  }
+
+  pub(super) fn offers_check(&self, name: &str) -> bool {
+    self.checks.iter().any(|(check, ..)| check == name)
   }
 
   /// One Claude Code allow rule per tool that runs, `mcp__Orchester__<tool>`; the tools that ask get none,
@@ -158,7 +185,7 @@ impl StepTools {
         json!({
           "name": tool.as_str(),
           "description": tool.description(),
-          "inputSchema": input_schema(*tool, &self.projects),
+          "inputSchema": input_schema(*tool, &self.checks),
           "annotations": {
             "readOnlyHint": tool.read_only(),
             "destructiveHint": false,
@@ -169,29 +196,37 @@ impl StepTools {
       .collect()
   }
 
-  /// The paragraph of the prompt that points the agent at the tools besides the file tools, which its *Files
-  /// and commands* part names: each by the name its CLI sees ([`OrchesterTool::called`]), and how to read skills when
-  /// it has any.
+  /// The paragraph of the prompt that points the agent at the tools besides the worktree's file tools, which its
+  /// *Files and commands* part names: each by the name its CLI sees ([`OrchesterTool::called`]), what reaches outside
+  /// the worktree and the run's sources, and how to read skills when it has any.
   pub fn prompt_paragraph(&self, claude: bool) -> String {
-    let names: Vec<String> = self
+    let others: Vec<String> = self
       .offered
       .iter()
-      .filter(|(tool, _)| tool.file_tool().is_none())
+      .filter(|(tool, _)| !tool.is_file_tool() && !tool.reads_outside())
       .map(|(tool, _)| tool.called(claude))
       .collect();
-    let skills = if self.policy(OrchesterTool::ReadSkill).is_some() {
-      format!(
+    let mut text = format!(
+      "# Orchester tools\n\nUse the shell for builds, tests and git, not to read or search files. Read and search \
+       files outside the worktree with {} and {} of the {SERVER} MCP server: in the run's sources they run at once, \
+       elsewhere a person is asked first.",
+      OrchesterTool::ReadExternalFile.called(claude),
+      OrchesterTool::SearchExternalFile.called(claude)
+    );
+    if !self.sources.is_empty() {
+      let sources: Vec<&str> = self.sources.iter().map(SourcePath::as_str).collect();
+      text.push_str(&format!(" The run's sources: {}.", sources.join(", ")));
+    }
+    if !others.is_empty() {
+      text.push_str(&format!(" The server also has {}.", others.join(", ")));
+    }
+    if self.policy(OrchesterTool::ReadSkill).is_some() {
+      text.push_str(&format!(
         " Read your skills with {} by name, never by path; {} lists them.",
         OrchesterTool::ReadSkill.called(claude),
         OrchesterTool::ListSkills.called(claude)
-      )
-    } else {
-      String::new()
-    };
-    format!(
-      "# Orchester tools\n\nUse the shell only for builds and tests. For git and for files outside the worktree, \
-       use the tools of the {SERVER} MCP server first: {}.{skills}",
-      names.join(", ")
-    )
+      ));
+    }
+    text
   }
 }

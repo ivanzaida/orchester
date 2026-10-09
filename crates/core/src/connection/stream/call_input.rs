@@ -1,6 +1,6 @@
 //! What an agent CLI's call of one of Orchester's file tools asked, read from the call's input, so that its
 //! transcript row reads as the native agent's row for the same tool (04.H10): what the call is about and, for
-//! `edit_file` and `write_file`, the change ([`CallChange`]). The answer a CLI gets says less than the native
+//! `edit_file` and `create_file`, the change ([`CallChange`]). The answer a CLI gets says less than the native
 //! executors report (no lines read, no matches counted), so the row shows what the input asked; the call's end says
 //! whether it happened.
 //!
@@ -34,7 +34,7 @@ pub struct CallInput {
 pub enum Requested {
   /// `edit_file`: its replacements, in order.
   Edits(Vec<EditText>),
-  /// `write_file`: the file's whole new content.
+  /// `create_file` (or the native agent's `write_file`): the file's whole new content.
   Content(String),
 }
 
@@ -101,6 +101,16 @@ impl CallInput {
     })
   }
 
+  /// What a call about `target`, looking in `scope`, asked, with the whole texts of the change it `requested`.
+  pub fn requested(target: &str, scope: Option<&str>, requested: Option<Requested>) -> Self {
+    Self {
+      target: target.to_owned(),
+      scope: scope.map(str::to_owned),
+      change: None,
+      requested,
+    }
+  }
+
   /// What the call is about: the file it reads, edits or writes, the folder and pattern it lists, or the pattern
   /// it searches for.
   pub fn target(&self) -> &str {
@@ -112,7 +122,7 @@ impl CallInput {
     self.scope.as_deref()
   }
 
-  /// The change an `edit_file` or `write_file` call asked for, once settled.
+  /// The change an `edit_file` or `create_file` call asked for, once settled.
   pub fn change(&self) -> Option<&Arc<CallChange>> {
     self.change.as_ref()
   }

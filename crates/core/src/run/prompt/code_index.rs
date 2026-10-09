@@ -40,7 +40,7 @@ pub(super) fn push(text: &mut String, code_index: Option<CodeIndexPrompt<'_>>) {
          symbols-consts.tsv, the definitions in test folders in symbols-tests.tsv), outline/<path>.md (the items of \
          one file with their line ranges) and docs.md (Markdown headings).\n\
          Start there instead of listing folders or reading whole files: find a definition with Orchester's \
-         find_symbol tool, search with its search tool (a name's definitions come first) and list files with its \
+         find_symbol tool, search with its search_file tool (a name's definitions come first) and list files with its \
          list_files tool, which all read this index; open the outline of a file before you read it, and read only \
          the lines you need. The orchester-codebase-index skill ({skill}) gives `rg` searches of these files, for \
          when Orchester's tools are not offered.\n\

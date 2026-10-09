@@ -90,14 +90,3 @@ fn files_list_known_files_are_confined() {
   let index = ok(tools.list_known_files(&list_input(None, Some(&text(&layout.index))), &known));
   assert!(index.contains("symbols.tsv"), "{index}");
 }
-
-#[test]
-fn files_search_covers_its_path_and_glob() {
-  let layout = Layout::temporary();
-  let tools = layout.tools();
-  let input = crate::search_input("hello", Some("src"), Some("*.rs"), None);
-  assert!(tools.search_covers(&input, "src/nested/lib.rs"));
-  assert!(!tools.search_covers(&input, "README.md"));
-  assert!(!tools.search_covers(&crate::search_input("hello", None, Some("*.md"), None), "src/main.rs"));
-  assert!(!tools.search_covers(&crate::search_input("hello", None, None, None), "../outside/secret.txt"));
-}

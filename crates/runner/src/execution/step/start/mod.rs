@@ -262,7 +262,7 @@ impl RunTask {
     let folders = ToolFolders::new(worktree, &writable, (index.folder.as_deref(), placed.folder.as_deref()));
     let (tools, claude_approvals) = self.step_tools(
       (enforced.permissions(), &setup, offered),
-      (invocation, folders),
+      (execution, invocation, folders),
       &environment,
     )?;
     placed.read_with = skill_tool(&tools, &setup, claude_approvals.is_some());
@@ -280,6 +280,7 @@ impl RunTask {
     let prompt = told_of_tools(prompt, &tools, (&setup, claude_approvals.is_some(), continuation));
     let secrets = setup.claude_secrets();
     let (claude_exemptions, unapplied) = setup.claude_exemptions(enforced.permissions().interactive_tool_approvals());
+    let checks = tools.checks().to_vec();
     let cli = Cli {
       executable,
       model,
@@ -293,6 +294,7 @@ impl RunTask {
       repository_skills: repository.as_deref(),
       code_index: index.folder.as_deref(),
       approvals: claude_approvals.as_ref().map(ClaudeApprovals::config),
+      checks: &checks,
     };
     let started = self.cli_command(&cli, setup, prompt, tools)?;
     let mut left_out = left_out;

@@ -366,7 +366,7 @@ fn summary_remove_worktree_from_the_header_and_then_continue_is_unavailable() {
   // It stays open as the tabs switch.
   page.click("task-tab-conversation");
   page.window.until("the Conversation tab", |window| {
-    window.texts("task-conversation").is_some()
+    window.texts("conversation-toolbar").is_some()
   });
   assert!(page.has(&confirm), "the confirmation stays open");
   page.click("task-tab-summary");
@@ -465,7 +465,7 @@ fn summary_run_again_confirms_in_place_and_starts_the_next_run() {
   // Switching tabs keeps it open.
   page.click("task-tab-conversation");
   page.wait("the Conversation tab", |window| {
-    window.texts("task-conversation").is_some()
+    window.texts("conversation-toolbar").is_some()
   });
   assert!(page.has("task-run-again-confirm"));
   page.click("task-run-again-start");

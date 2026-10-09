@@ -27,7 +27,10 @@
 //!   tool ([`crate::connection::claude_approval`]); on a resumed session too, as the prompt is not part of the session.
 //! - Orchester's tools ([`crate::orchester_tools`]) are served by the same relay: each tool the step's permissions let
 //!   run without asking gets an `mcp__Orchester__<tool>` allow rule, added to the other allowed tools; the others reach
-//!   the permission prompt.
+//!   the permission prompt. The agent then reads, searches and changes files only through them (the user's decision of
+//!   2026-10-09): Claude Code's own `Read`, `Edit`, `MultiEdit`, `Write`, `NotebookEdit`, `NotebookRead`, `Grep`,
+//!   `Glob` and `LS` are added to `--disallowedTools` ([`CLAUDE_FILE_TOOLS`]); its shell stays for builds, tests and
+//!   git.
 //! - Permissions: the step's enforced permissions as [`crate::permission::claude::permission_args`] maps them (tools
 //!   offered, permission mode, denied tools, allowed command prefixes, and the edit rules of the worktree and the extra
 //!   writable folders when the step does not run in `acceptEdits`). Bypass modes are never used.
@@ -69,7 +72,7 @@ use crate::{
     claude_approval::{ClaudeApprovalScope, PROMPT_TOOL},
     mcp::{InvocationExemptions, McpServerName},
   },
-  orchester_tools::StepTools,
+  orchester_tools::{ProjectTool, StepTools},
   permission::{
     capability::{EnforcedPermissions, Mechanism, PermissionSetting},
     claude::{PermissionFolders, edits_allowed_by_rule, permission_args},
@@ -77,6 +80,21 @@ use crate::{
   resource::CommandEnvironment,
   run::STEP_RESULT_SCHEMA,
 };
+
+/// Claude Code's own file tools, which an invocation served Orchester's tools does not get: its agent uses those.
+/// `MultiEdit`, `LS` and `NotebookRead` are older names some versions still offer; a name a version does not know is
+/// ignored there.
+const CLAUDE_FILE_TOOLS: [&str; 9] = [
+  "Read",
+  "Edit",
+  "MultiEdit",
+  "Write",
+  "NotebookEdit",
+  "NotebookRead",
+  "Grep",
+  "Glob",
+  "LS",
+];
 
 /// [`STEP_RESULT_SCHEMA`] on one line, as `--json-schema` takes it.
 pub fn result_schema() -> String {
@@ -139,6 +157,8 @@ pub struct ClaudeInvocation<'a> {
   pub code_index: Option<&'a Path>,
   /// The configuration file of the permission prompt relay, for permissions that ask a person.
   pub approvals: Option<&'a Path>,
+  /// The checks the step is offered (`run_check`), whose access rules decide whether it asks.
+  pub checks: &'a [ProjectTool],
 }
 
 impl ClaudeInvocation<'_> {
@@ -202,6 +222,7 @@ impl ClaudeInvocation<'_> {
     let mut permission = permission_args(self.permissions, servers, exempt, folders);
     if self.approvals.is_some() {
       allow_more(&mut permission, self.orchester_rules());
+      disallow_more(&mut permission, &CLAUDE_FILE_TOOLS);
     }
     args.extend(permission);
     for root in granted {
@@ -218,11 +239,11 @@ impl ClaudeInvocation<'_> {
   }
 
   /// The allow rules of the Orchester tools that run: only those get one, so the others reach the permission
-  /// prompt. They follow from the permissions, `find_symbol` from the code index the agent gets, and `list_skills`
-  /// and `read_skill` from its skills folder: Claude Code loads no repository skill, so the skills it is offered are
-  /// the ones placed there.
+  /// prompt. They follow from the permissions and the step's checks, `find_symbol` from the code index the agent gets,
+  /// and `list_skills` and `read_skill` from its skills folder: Claude Code loads no repository skill, so the skills
+  /// it is offered are the ones placed there.
   fn orchester_rules(&self) -> Vec<String> {
-    let mut tools = StepTools::for_step(self.permissions.permissions(), &[]);
+    let mut tools = StepTools::for_step(self.permissions.permissions(), self.checks);
     if self.code_index.is_some() {
       tools = tools.with_code_index();
     }
@@ -280,23 +301,46 @@ impl ClaudeInvocation<'_> {
   }
 }
 
-/// `permission` with `rules` added to its `--allowedTools` list, which takes every value up to the next
-/// option; a list of its own when it has none.
+/// `permission` with `rules` added to its `--allowedTools` list ([`add_to_list`]).
 fn allow_more(permission: &mut Vec<String>, rules: Vec<String>) {
-  if rules.is_empty() {
+  add_to_list(permission, "--allowedTools", rules);
+}
+
+/// `permission` with `tools` added to its `--disallowedTools` list ([`add_to_list`]), each once.
+fn disallow_more(permission: &mut Vec<String>, tools: &[&str]) {
+  let listed = |tool: &&str| {
+    permission
+      .iter()
+      .skip_while(|arg| *arg != "--disallowedTools")
+      .skip(1)
+      .take_while(|arg| !arg.starts_with("--"))
+      .any(|arg| arg == tool)
+  };
+  let missing: Vec<String> = tools
+    .iter()
+    .filter(|tool| !listed(tool))
+    .map(|tool| (*tool).to_owned())
+    .collect();
+  add_to_list(permission, "--disallowedTools", missing);
+}
+
+/// `permission` with `values` added to the list of option `flag`, which takes every value up to the next option; a
+/// list of its own when it has none.
+fn add_to_list(permission: &mut Vec<String>, flag: &str, values: Vec<String>) {
+  if values.is_empty() {
     return;
   }
-  match permission.iter().position(|arg| arg == "--allowedTools") {
-    Some(flag) => {
-      let end = permission[flag + 1..]
+  match permission.iter().position(|arg| arg == flag) {
+    Some(at) => {
+      let end = permission[at + 1..]
         .iter()
         .position(|arg| arg.starts_with("--"))
-        .map_or(permission.len(), |offset| flag + 1 + offset);
-      permission.splice(end..end, rules);
+        .map_or(permission.len(), |offset| at + 1 + offset);
+      permission.splice(end..end, values);
     }
     None => {
-      permission.push("--allowedTools".to_owned());
-      permission.extend(rules);
+      permission.push(flag.to_owned());
+      permission.extend(values);
     }
   }
 }

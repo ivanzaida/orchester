@@ -99,6 +99,7 @@ fn claude<'a>(
     skills,
     code_index: None,
     approvals: None,
+    checks: &[],
   }
 }
 

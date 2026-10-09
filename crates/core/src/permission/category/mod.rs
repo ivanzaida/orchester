@@ -14,6 +14,7 @@
 //! ([`crate::run::auto_verdict`]).
 
 mod awk_program;
+mod broad;
 mod files;
 mod gh;
 mod git;
