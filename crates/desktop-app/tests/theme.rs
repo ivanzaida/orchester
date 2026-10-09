@@ -18,7 +18,7 @@ use orchester_app::{
   },
   theme::{
     self, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography,
-    IconSize, Mode, SHORTCUT_OPACITY, ShellText, StartupSpacing, StartupText,
+    IconSize, Mode, SHORTCUT_OPACITY, SettingsSpacing, SettingsText, ShellText, StartupSpacing, StartupText,
   },
 };
 use orchester_store::AppDb;
@@ -228,6 +228,19 @@ fn area_roles_follow_the_startup_screens_and_the_switcher() {
   assert_eq!(color(ShellText::SwitcherPath.role()), Color::from_hex("#8A8A92"));
   for (spacing, value) in [(StartupSpacing::Block, 20.0), (StartupSpacing::Panel, 40.0)] {
     assert_eq!(spacing.value(), value, "{spacing:?}");
+    assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
+  }
+  check(
+    SettingsText::SectionTitle.role(),
+    (13.0, 1.3),
+    FontWeight::SemiBold,
+    "Geist",
+  );
+  for (spacing, value) in [
+    (SettingsSpacing::PanelTop, 28.0),
+    (SettingsSpacing::PanelSide, 40.0),
+    (SettingsSpacing::SectionTitle, 10.0),
+  ] {
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
   }
 }

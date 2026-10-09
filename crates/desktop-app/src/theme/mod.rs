@@ -14,6 +14,7 @@ mod form;
 mod markdown;
 mod metrics;
 mod palette;
+mod settings;
 mod shadow;
 mod shell;
 mod startup;
@@ -29,6 +30,7 @@ use lurq::{
 pub use self::{
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   palette::{ExtraColor, Mode},
+  settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,
   shell::ShellText,
   startup::{StartupSpacing, StartupText},
@@ -50,6 +52,7 @@ pub fn install(app: &mut App, mode: Mode) {
   apply(theme, mode);
   metrics::install(theme);
   startup::install(theme);
+  settings::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

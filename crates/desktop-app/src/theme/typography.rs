@@ -183,6 +183,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
     extra: extras
       .chain(icons)
       .chain(super::startup::typography(palette))
+      .chain(super::settings::typography(palette))
       .chain(super::shell::typography(palette))
       .collect(),
   }

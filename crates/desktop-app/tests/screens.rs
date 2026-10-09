@@ -1,8 +1,8 @@
 //! Every route's path shows its screen's own element, `screen-<name>`: an honest placeholder until the
-//! screen is built. A path that names nothing shows `screen-not-found`, which says why. The paths go
-//! straight to the router, as a tab's history would hand them over, so a path no route prints is shown
-//! too. The project the paths name is known to be open; what the window does until a project opens,
-//! and for one that cannot, is `tests/projects.rs`.
+//! screen is built (Settings, built in part, is `tests/settings.rs`). A path that names nothing shows
+//! `screen-not-found`, which says why. The paths go straight to the router, as a tab's history would hand them over, so
+//! a path no route prints is shown too. The project the paths name is known to be open; what the window does until a
+//! project opens, and for one that cannot, is `tests/projects.rs`.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -145,7 +145,8 @@ fn every_screen() -> Vec<(Route, &'static str)> {
   let changes = TaskView::Changes(Some(
     ChangedFile::new("src/a b.rs", ChangeSource::Worktree).expect("a file path"),
   ));
-  let mut all = vec![(Route::AllProjects, "All projects"), (Route::Settings, "Settings")];
+  // Settings is built in part; `tests/settings.rs` shows it.
+  let mut all = vec![(Route::AllProjects, "All projects")];
   all.extend([
     (at(ProjectPage::Overview(OverviewTab::Failed)), "Overview"),
     (
@@ -183,7 +184,7 @@ fn screens_each_route_mounts_its_own_placeholder() {
   let routes = every_screen();
   for screen in Screen::ALL {
     assert!(
-      routes.iter().any(|(route, _)| route.screen() == screen),
+      screen == Screen::Settings || routes.iter().any(|(route, _)| route.screen() == screen),
       "{screen:?} is covered"
     );
   }
