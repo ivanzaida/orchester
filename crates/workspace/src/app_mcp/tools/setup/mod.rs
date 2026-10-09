@@ -49,10 +49,11 @@ const SPECS: &[Spec] = &[
     description: "Replaces the environment variables the project adds to every agent CLI and command tool its runs \
                   start, as Project settings › Environment does: names are letters, digits and _ (not starting with \
                   a digit), each name once ignoring case. They are stored and shown in plain text, so never put a \
-                  secret in one. Setting a variable that changes what programs load, where they connect or where \
-                  tools keep their configuration (PATH, NODE_OPTIONS, *_BASE_URL, *_PROXY, *_HOME, LD_*, DYLD_*, \
-                  GIT_CONFIG*, …) is refused as person_only unless a person turned on Let automation change agent \
-                  permissions; removing one is not. An empty list removes them all. Returns the variables as saved.",
+                  secret in one. Adding, changing or removing any variable but RUST_LOG, RUST_BACKTRACE, CI, \
+                  NO_COLOR, FORCE_COLOR, TZ, LANG and LC_* is refused as person_only unless a person turned on Let \
+                  automation change agent permissions: a variable can change what programs load, where they \
+                  connect, what they trust or where tools keep their configuration. An empty list removes them all. \
+                  Returns the variables as saved.",
     schema: schema_for_type::<project::SetProjectEnvironment>,
     read_only: false,
   },

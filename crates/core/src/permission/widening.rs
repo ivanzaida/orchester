@@ -1,7 +1,8 @@
-//! What widens what agents may do, beyond what they were given: broader profile permissions, and project
-//! environment variables that change which programs agents and command tools load, where they connect or
-//! where their tools keep their configuration. Automation may narrow freely; widening is a person's
-//! decision unless a person lets automation make it (*Let automation change agent permissions*).
+//! What widens what agents may do, beyond what they were given: broader profile permissions, and changes to
+//! project environment variables, which can change which programs agents and command tools load, where
+//! they connect or where their tools keep their configuration ([`harmless_variable`] names the few that
+//! cannot). Automation may narrow freely; widening is a person's decision unless a person lets automation
+//! make it (*Let automation change agent permissions*).
 
 use super::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess};
 
@@ -75,58 +76,27 @@ fn commands_widen(base: &CommandPermission, next: &CommandPermission) -> bool {
   }
 }
 
-/// Variables that change which programs load and how (search paths, preloads, interpreter options, shell
-/// start files), where agents and tools connect (model endpoints, proxies), or where they keep their
-/// configuration (config and tool homes). Names are compared ignoring case, as Windows does.
-const LOADING_NAMES: &[&str] = &[
-  "ALL_PROXY",
-  "APPDATA",
-  "BASH_ENV",
-  "CDPATH",
-  "CLAUDE_CONFIG_DIR",
-  "COMSPEC",
-  "ENV",
-  "GIT_ASKPASS",
-  "GIT_EXEC_PATH",
-  "GIT_SSH",
-  "GIT_SSH_COMMAND",
-  "HOME",
-  "JAVA_TOOL_OPTIONS",
-  "LOCALAPPDATA",
-  "NODE_OPTIONS",
-  "NODE_PATH",
-  "NO_PROXY",
-  "PATH",
-  "PATHEXT",
-  "PERL5LIB",
-  "PERL5OPT",
-  "PROMPT_COMMAND",
-  "PSMODULEPATH",
-  "PYTHONHOME",
-  "PYTHONPATH",
-  "PYTHONSTARTUP",
-  "RUBYLIB",
-  "RUBYOPT",
-  "RUSTC_WRAPPER",
-  "SHELL",
-  "SSH_ASKPASS",
-  "USERPROFILE",
-  "ZDOTDIR",
-  "_JAVA_OPTIONS",
+/// Variables that only change how programs log, color their output, or tell the time and the language:
+/// the ones automation may set or remove without a person. Names are compared ignoring case, as Windows
+/// does.
+const HARMLESS_NAMES: &[&str] = &[
+  "CI",
+  "FORCE_COLOR",
+  "LANG",
+  "NO_COLOR",
+  "RUST_BACKTRACE",
+  "RUST_LOG",
+  "TZ",
 ];
 
-/// Prefixes of variable families that do the same: the dynamic loaders' and git's configuration.
-const LOADING_PREFIXES: &[&str] = &["DYLD_", "GIT_CONFIG", "LD_", "NPM_CONFIG_"];
+/// Prefixes of harmless variable families: the locale's categories (`LC_ALL`, `LC_TIME`…).
+const HARMLESS_PREFIXES: &[&str] = &["LC_"];
 
-/// Suffixes of the same: model endpoints, proxies and tool homes (`OPENAI_BASE_URL`, `HTTPS_PROXY`,
-/// `CODEX_HOME`).
-const LOADING_SUFFIXES: &[&str] = &["_BASE_URL", "_HOME", "_PROXY"];
-
-/// Whether the environment variable `name` changes which programs agents and command tools load, where
-/// they connect or where their tools keep their configuration, so setting it widens what they may do.
-pub fn changes_loading(name: &str) -> bool {
+/// Whether setting or removing the environment variable `name` cannot change what agents and command
+/// tools may do. Any other variable may: it can change which programs load, where they connect, what they
+/// trust or where their tools keep their configuration, and removing one a person set (a proxy, say) can
+/// widen as well, so it is a person's decision. The list is short on purpose: what it leaves out is refused.
+pub fn harmless_variable(name: &str) -> bool {
   let name = name.trim().to_ascii_uppercase();
-  LOADING_NAMES.contains(&name.as_str())
-    || LOADING_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
-    || LOADING_SUFFIXES.iter().any(|suffix| name.ends_with(suffix))
+  HARMLESS_NAMES.contains(&name.as_str()) || HARMLESS_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
 }

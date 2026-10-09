@@ -107,25 +107,24 @@ fn domain_a_cli_of_automations_choosing_needs_a_person_before_it_runs() {
 }
 
 #[test]
-fn domain_variables_that_change_program_loading_need_a_person() {
+fn domain_only_harmless_variables_change_without_a_person() {
   let mut served = served();
   let set = |variables: Value| json!({ "project": "Kontur", "variables": variables });
-  let path = json!([{ "name": "RUST_LOG", "value": "info" }, { "name": "Path", "value": "C:\\tools" }]);
+  let path = json!([{ "name": "RUST_LOG", "value": "info" }, { "name": "Path", "value": "C:\tools" }]);
   assert_person_only(&served.refused("set_project_environment", &set(path.clone())));
-  assert_person_only(&served.refused(
-    "set_project_environment",
-    &set(json!([{ "name": "OPENAI_BASE_URL", "value": "http://example.invalid" }])),
-  ));
-  served.ok(
-    "set_project_environment",
-    &set(json!([{ "name": "RUST_LOG", "value": "info" }])),
-  );
+  for name in ["OPENAI_BASE_URL", "CLAUDE_CODE_SHELL_PREFIX", "DATABASE_NAME"] {
+    assert_person_only(&served.refused("set_project_environment", &set(json!([{ "name": name, "value": "x" }]))));
+  }
+  let harmless = json!([{ "name": "RUST_LOG", "value": "info" }, { "name": "LC_ALL", "value": "C" }]);
+  served.ok("set_project_environment", &set(harmless));
   served.let_automation_widen(true);
   served.ok("set_project_environment", &set(path.clone()));
   served.let_automation_widen(false);
   let mut more = path.as_array().expect("variables").clone();
   more.push(json!({ "name": "CI", "value": "1" }));
   served.ok("set_project_environment", &set(json!(more)));
+  assert_person_only(&served.refused("set_project_environment", &set(json!([]))));
+  served.let_automation_widen(true);
   served.ok("set_project_environment", &set(json!([])));
 }
 

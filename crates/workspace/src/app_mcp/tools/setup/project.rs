@@ -2,11 +2,14 @@
 //! added as project setup adds it, read as Project settings shows it, and the settings of its
 //! Environment and General tabs changed as they change them.
 
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{
+  collections::{BTreeMap, BTreeSet},
+  path::PathBuf,
+};
 
 use orchester_core::{
   agent_files::RepositoryAgentFiles,
-  permission::widening::changes_loading,
+  permission::widening::harmless_variable,
   repository::Detection,
   resource::{CommandEnvironment, ResourceKind, VariableName},
   store::{ConnectionStore, RepositoryStore, ResourceStore, SettingsStore},
@@ -166,17 +169,20 @@ pub async fn set_environment(services: &Services, args: SetProjectEnvironment) -
     let environment = environment(args.variables)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
     let current = db.project_environment()?;
-    // Setting a variable that changes what programs load, where they connect or where tools keep their
-    // configuration is a person's decision; removing one is not.
-    let widened = environment
+    // Any change but to a harmless variable is a person's decision, a removal included: removing a
+    // person's proxy or certificate setting can widen as well.
+    let old: BTreeMap<String, &str> = current.iter().map(|(name, value)| (name.to_string(), value)).collect();
+    let new: BTreeMap<String, &str> = environment
       .iter()
-      .filter(|(name, value)| {
-        changes_loading(name.as_str())
-          && current
-            .iter()
-            .all(|(old, old_value)| old != *name || old_value != *value)
-      })
-      .map(|(name, _)| Message::new("appMcp.widens.variable").with("name", name.to_string()))
+      .map(|(name, value)| (name.to_string(), value))
+      .collect();
+    let widened = old
+      .keys()
+      .chain(new.keys())
+      .collect::<BTreeSet<_>>()
+      .into_iter()
+      .filter(|name| old.get(*name) != new.get(*name) && !harmless_variable(name))
+      .map(|name| Message::new("appMcp.widens.variable").with("name", name.clone()))
       .collect();
     widening::allowed(&services, widened)?;
     db.save_project_environment(&environment)?;

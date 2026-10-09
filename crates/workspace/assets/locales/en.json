@@ -912,7 +912,7 @@
       "autoApprove": "Approving automatically, where the latest version asks a person.",
       "mcpServers": "MCP servers the latest version does not give its agents.",
       "program": "{{program}} is not a copy of the CLI found on the search path.",
-      "variable": "{{name}} changes what programs load, where they connect or where tools keep their configuration."
+      "variable": "{{name}} would change: a variable can change what programs load, where they connect, what they trust or where tools keep their configuration."
     }
   },
   "statusBar": {

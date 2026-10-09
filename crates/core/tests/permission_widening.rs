@@ -1,11 +1,10 @@
-//! What widens what agents may do: profile permissions broader than those they replace, and project
-//! environment variables that change what programs load, where they connect or where tools keep their
-//! configuration.
+//! What widens what agents may do: profile permissions broader than those they replace, and any change to
+//! a project environment variable but the few harmless ones.
 
 use orchester_core::permission::{
   AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, FolderBounds, NetworkAccess, RepositoryAccess,
   WritableFolder, WritableFolders,
-  widening::{Widening, changes_loading},
+  widening::{Widening, harmless_variable},
 };
 
 fn allowed(commands: &[&str]) -> CommandPermission {
@@ -120,37 +119,44 @@ fn widening_counts_a_writable_folder_not_granted_before() {
 }
 
 #[test]
-fn widening_variables_that_change_loading_endpoints_proxies_or_homes() {
+fn widening_takes_only_a_short_list_of_harmless_variables() {
+  for name in [
+    "RUST_LOG",
+    "rust_backtrace",
+    "CI",
+    "NO_COLOR",
+    "FORCE_COLOR",
+    "TZ",
+    "LANG",
+    "LC_ALL",
+    "lc_time",
+  ] {
+    assert!(harmless_variable(name), "{name} changes nothing agents may do");
+  }
   for name in [
     "PATH",
-    "path",
     "NODE_OPTIONS",
     "OPENAI_BASE_URL",
-    "ANTHROPIC_BASE_URL",
     "HTTPS_PROXY",
-    "http_proxy",
-    "ALL_PROXY",
-    "NO_PROXY",
     "CODEX_HOME",
-    "CLAUDE_CONFIG_DIR",
-    "GIT_SSH_COMMAND",
-    "GIT_CONFIG_GLOBAL",
-    "GIT_CONFIG_COUNT",
-    "BASH_ENV",
-    "ENV",
-    "LD_PRELOAD",
-    "LD_LIBRARY_PATH",
-    "DYLD_INSERT_LIBRARIES",
-    "PYTHONPATH",
-    "PYTHONSTARTUP",
-    "RUBYOPT",
-    "PERL5OPT",
-    "ComSpec",
-    "PATHEXT",
+    "CLAUDE_CODE_SHELL_PREFIX",
+    "CLAUDE_ENV_FILE",
+    "AWS_ENDPOINT_URL",
+    "ANTHROPIC_API_KEY",
+    "GIT_EXTERNAL_DIFF",
+    "GIT_PROXY_COMMAND",
+    "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER",
+    "RUSTFLAGS",
+    "CC",
+    "DOTNET_STARTUP_HOOKS",
+    "PIP_INDEX_URL",
+    "EDITOR",
+    "SSL_CERT_FILE",
+    "NODE_TLS_REJECT_UNAUTHORIZED",
+    "SYSTEMROOT",
+    "TEMP",
+    "DATABASE_NAME",
   ] {
-    assert!(changes_loading(name), "{name} is a person's decision");
-  }
-  for name in ["RUST_LOG", "CI", "DATABASE_NAME", "FEATURE_FLAGS", "ENVIRONMENT"] {
-    assert!(!changes_loading(name), "{name} changes no loading");
+    assert!(!harmless_variable(name), "{name} is a person's decision");
   }
 }
