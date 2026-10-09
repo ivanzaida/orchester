@@ -14,7 +14,7 @@ use orchester_ipc::Command;
 
 use super::detail::RunView;
 use crate::{
-  budget::{budget_error, read_budget, read_minutes, whole_minutes},
+  budget::{above, budget_error, largest_stored, read_budget, read_minutes, whole_minutes},
   messages::Message,
 };
 
@@ -69,6 +69,7 @@ pub fn step_budget(
   step: &str,
 ) -> Result<TokenBudget, Message> {
   let budget = parse_budget(text, separator, max).map_err(|error| match error {
+    BudgetInputError::AboveMaximum { max } if max == largest_stored() => above(max, separator),
     BudgetInputError::AboveMaximum { max } => {
       Message::new("tokens.errors.stepAboveMax").with("max", compact_tokens(max.get()))
     }
