@@ -1,7 +1,11 @@
-//! What a key press asks of the window: Back, Forward and the tabs (`docs/design/orchester-workspace.md`,
-//! "Tabs" › "Keyboard"). Ctrl+Tab and Ctrl+Shift+Tab switch tabs on every platform; the others follow
-//! the platform: Ctrl+T / Ctrl+W and Alt+Left / Alt+Right on Windows, Cmd+T / Cmd+W and Cmd+[ / Cmd+]
-//! on macOS. Alt+Left and Alt+Right are left to a focused text field, which moves by words with them.
+//! What a key press asks of the window: Back, Forward and the tabs. Implemented so far: Ctrl+Tab and
+//! Ctrl+Shift+Tab switch tabs on every platform; Ctrl+T / Ctrl+W and Alt+Left / Alt+Right on Windows,
+//! Cmd+T / Cmd+W and Cmd+[ / Cmd+] on macOS. Alt+Left and Alt+Right are left to a focused text field,
+//! which moves by words with them. The rest of the design's table (`docs/design/orchester-workspace.md`,
+//! "Tabs" › "Keyboard") is not built yet.
+//!
+//! A shortcut is the key as typed: on AZERTY, Ctrl+Z (typed at the place of QWERTY's W) is not Ctrl+W.
+//! Only where the layout types no Latin letter (Cyrillic, Greek…) the key's place stands in for it.
 
 use lurq::app::events::KeyboardEvent;
 
@@ -43,9 +47,14 @@ impl<'a> Keys<'a> {
     }
   }
 
-  /// Whether this is the key `key` (as typed) or the key at `code`.
+  /// Whether this is the key `key` as typed; or, when the layout types no Latin letter here, the key at
+  /// `code`.
   fn is(self, key: &str, code: &str) -> bool {
-    self.key.eq_ignore_ascii_case(key) || self.code == code
+    if self.key.eq_ignore_ascii_case(key) {
+      return true;
+    }
+    let typed_latin_letter = self.key.len() == 1 && self.key.bytes().all(|byte| byte.is_ascii_alphabetic());
+    !typed_latin_letter && self.code == code
   }
 
   /// Only `ctrl` of the modifiers other than Shift.

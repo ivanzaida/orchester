@@ -1,16 +1,16 @@
 {
   "app": {
-    "name": "Orchester"
+    "name": "Orchester",
+    "windowTitle": "{{tab}} — Orchester"
+  },
+  "common": {
+    "newTab": "New tab"
   },
   "menu": {
-    "newTab": "New tab",
-    "allProjects": "All projects",
-    "settings": "Settings",
     "quit": "Quit Orchester"
   },
   "tabs": {
-    "projectScreen": "{{project}} · {{screen}}",
-    "newTab": "New tab"
+    "projectScreen": "{{project}} · {{screen}}"
   },
   "sidebar": {
     "noProject": "No project open",

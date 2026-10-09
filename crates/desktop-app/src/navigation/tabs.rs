@@ -6,6 +6,9 @@ use std::fmt;
 
 use crate::routes::Route;
 
+/// The places a tab remembers; going somewhere past it forgets the oldest.
+pub const HISTORY_LIMIT: usize = 50;
+
 /// A tab's identity, stable while the tab is open and never reused in the window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct TabId(u64);
@@ -55,14 +58,18 @@ impl Tab {
     self.at + 1 < self.history.len()
   }
 
-  /// Goes to `route`, dropping the places ahead; `false` when the tab is there already.
+  /// Goes to `route`, dropping the places ahead and, past [`HISTORY_LIMIT`], the oldest; `false` when
+  /// the tab is there already.
   fn go(&mut self, route: Route) -> bool {
     if *self.route() == route {
       return false;
     }
     self.history.truncate(self.at + 1);
     self.history.push(route);
-    self.at += 1;
+    if self.history.len() > HISTORY_LIMIT {
+      self.history.remove(0);
+    }
+    self.at = self.history.len() - 1;
     true
   }
 

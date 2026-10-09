@@ -16,7 +16,7 @@ use lurq::{
 use crate::{
   brand::mark,
   navigation::Navigation,
-  routes::Route,
+  routes::{Route, Screen},
   theme::{ExtraColor, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon},
@@ -43,14 +43,19 @@ enum Command {
 
 /// The rows of the menu: id, icon, i18n key, command; `None` is a separator.
 const ENTRIES: [Option<(&str, Icon, &str, Command)>; 5] = [
-  Some(("menu-new-tab", Icon::Plus, "menu.newTab", Command::NewTab)),
+  Some(("menu-new-tab", Icon::Plus, "common.newTab", Command::NewTab)),
   Some((
     "menu-all-projects",
     Icon::Folders,
-    "menu.allProjects",
+    Screen::AllProjects.title_key(),
     Command::AllProjects,
   )),
-  Some(("menu-settings", Icon::Settings, "menu.settings", Command::Settings)),
+  Some((
+    "menu-settings",
+    Icon::Settings,
+    Screen::Settings.title_key(),
+    Command::Settings,
+  )),
   None,
   Some(("menu-quit", Icon::LogOut, "menu.quit", Command::Quit)),
 ];
@@ -89,7 +94,7 @@ impl Component for AppMenu {
     let menu = Popup::new(self.anchor.clone(), self.menu(ctx))
       .open(self.open.clone())
       .placement(Placement::BottomStart)
-      .offset(0.0, 2.0);
+      .offset(0.0, ExtraSpacing::Tight.value());
     Row::new().child(button).child(menu)
   }
 }
@@ -110,7 +115,7 @@ impl AppMenu {
         .box_shadow(ShadowStyle::Md),
       |menu, entry| {
         let Some((id, glyph, label_key, command)) = *entry else {
-          return menu.child(separator());
+          return menu.child(separator(ctx));
         };
         let label = ctx.t(label_key);
         let (open, navigation, window) = (self.open.clone(), navigation.clone(), window.clone());

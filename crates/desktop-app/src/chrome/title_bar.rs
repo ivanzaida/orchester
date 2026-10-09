@@ -1,11 +1,11 @@
-//! What the title bar shows besides the window controls (`Title bar` `yZzwy`): the app menu, a divider
-//! and the tabs. The design's trailing *Needs you* count comes with its data; until then the rest of the
-//! bar is the drag area.
+//! What the title bar shows besides the window controls (`Title bar` `yZzwy`): the app menu and a
+//! divider, then the tabs in the bar's flexible middle, which ends in drag area. The design's trailing
+//! *Needs you* count comes with its data.
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize},
+    theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{ChromeTitleBar, Row},
   layout::Alignment,
@@ -19,18 +19,20 @@ use crate::theme::ExtraSpacing;
 const DIVIDER_HEIGHT: f32 = 16.0;
 
 pub fn content(ctx: &mut Ctx, bar: ChromeTitleBar) -> ChromeTitleBar {
-  bar.leading(
-    Row::new()
-      .padding(Padding::new().left(ExtraSpacing::Snug.role()))
-      .spacing(SpacingSize::Xs)
-      .align_items(Alignment::Center)
-      .child(ctx.mount_keyed::<AppMenu>("app-menu", ()))
-      .child(
-        Row::new()
-          .width(Dimension::Px(1.0))
-          .height(Dimension::Px(DIVIDER_HEIGHT))
-          .background(PaletteColor::Border),
-      )
-      .child(ctx.mount_keyed::<TabStrip>("tab-strip", ())),
-  )
+  let line = ctx.theme().border_size_value(BorderSize::Sm);
+  bar
+    .leading(
+      Row::new()
+        .padding(Padding::new().left(ExtraSpacing::Snug.role()))
+        .spacing(SpacingSize::Xs)
+        .align_items(Alignment::Center)
+        .child(ctx.mount_keyed::<AppMenu>("app-menu", ()))
+        .child(
+          Row::new()
+            .width(Dimension::Px(line))
+            .height(Dimension::Px(DIVIDER_HEIGHT))
+            .background(PaletteColor::Border),
+        ),
+    )
+    .center(ctx.mount_keyed::<TabStrip>("tab-strip", ()))
 }

@@ -1,7 +1,10 @@
 //! A menu row (`Menu item` `mAHGP`) and the line between groups (`Menu separator` `UoDdI`).
 
 use lurq::{
-  app::theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+  app::{
+    ctx::Ctx,
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+  },
   components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, Style, dimension::Dimension, padding::Padding},
@@ -46,14 +49,16 @@ impl MenuItem<'_> {
   }
 }
 
-pub fn separator() -> Element {
+/// The line between groups, `border_size_sm` thick.
+pub fn separator(ctx: &mut Ctx) -> Element {
+  let line = ctx.theme().border_size_value(BorderSize::Sm);
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding(Padding::vertical(SpacingSize::Xs))
     .child(
       Row::new()
         .width(Dimension::Pct(100.0))
-        .height(Dimension::Px(1.0))
+        .height(Dimension::Px(line))
         .background(PaletteColor::Border),
     )
     .into()

@@ -8,7 +8,7 @@ use lurq::app::events::MouseButton;
 use orchester_app::{
   navigation::{
     shortcuts::{Keys, Shortcut, shortcut},
-    tabs::TabSet,
+    tabs::{HISTORY_LIMIT, TabSet},
   },
   routes::{ProjectPage, ProjectRef, Route, TaskKey, TaskTab},
 };
@@ -218,6 +218,16 @@ fn shortcuts_ask_for_history_and_tab_moves() {
     Some(Shortcut::PreviousTab)
   );
   assert_eq!(shortcut(keys("t", "KeyT")), None, "a plain key is typing");
+  let ctrl_z_on_azerty = Keys {
+    ctrl: true,
+    meta: true,
+    ..keys("z", "KeyW")
+  };
+  assert_eq!(
+    shortcut(ctrl_z_on_azerty),
+    None,
+    "the typed letter decides, not its place"
+  );
   platform_shortcuts(keys);
 }
 
@@ -233,6 +243,12 @@ fn platform_shortcuts(keys: impl Fn(&'static str, &'static str) -> Keys<'static>
   };
   assert_eq!(shortcut(ctrl("t", "KeyT")), Some(Shortcut::NewTab));
   assert_eq!(shortcut(ctrl("w", "KeyW")), Some(Shortcut::CloseTab));
+  assert_eq!(shortcut(ctrl("z", "KeyW")), None, "Ctrl+Z on AZERTY is not Ctrl+W");
+  assert_eq!(
+    shortcut(ctrl("ц", "KeyW")),
+    Some(Shortcut::CloseTab),
+    "a Cyrillic layout uses the place"
+  );
   assert_eq!(shortcut(alt("ArrowLeft", "ArrowLeft")), Some(Shortcut::Back));
   assert_eq!(shortcut(alt("ArrowRight", "ArrowRight")), Some(Shortcut::Forward));
   let typing = Keys {
@@ -250,6 +266,125 @@ fn platform_shortcuts(keys: impl Fn(&'static str, &'static str) -> Keys<'static>
   };
   assert_eq!(shortcut(cmd("t", "KeyT")), Some(Shortcut::NewTab));
   assert_eq!(shortcut(cmd("w", "KeyW")), Some(Shortcut::CloseTab));
+  assert_eq!(shortcut(cmd("z", "KeyW")), None, "Cmd+Z on AZERTY is not Cmd+W");
   assert_eq!(shortcut(cmd("[", "BracketLeft")), Some(Shortcut::Back));
   assert_eq!(shortcut(cmd("]", "BracketRight")), Some(Shortcut::Forward));
+}
+
+#[test]
+fn a_tab_remembers_its_last_places_only() {
+  let mut tabs = TabSet::default();
+  for number in 0..HISTORY_LIMIT + 10 {
+    let key = TaskKey::new(&format!("KON-{number}")).expect("a valid key");
+    tabs.go(project(ProjectPage::Task(key, TaskTab::Conversation)));
+  }
+  let mut steps = 0;
+  while tabs.back() {
+    steps += 1;
+  }
+  assert_eq!(steps, HISTORY_LIMIT - 1);
+  assert_eq!(
+    *tabs.active().route(),
+    task_number(10),
+    "the oldest places were forgotten"
+  );
+}
+
+fn task_number(number: usize) -> Route {
+  project(ProjectPage::Task(
+    TaskKey::new(&format!("KON-{number}")).expect("a valid key"),
+    TaskTab::Conversation,
+  ))
+}
+
+/// The bounds of the element `id`.
+fn bounds(window: &mut Window, id: &str) -> lurq::core::ElementRect {
+  window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"))
+}
+
+#[test]
+fn many_tabs_leave_new_tab_and_drag_area_before_the_window_controls() {
+  let mut window = Window::open();
+  window.tree.resize(960, 640);
+  let navigation = window.navigation();
+  for screen in [
+    ProjectPage::Overview,
+    ProjectPage::Tasks,
+    ProjectPage::Pipelines,
+    ProjectPage::Secrets,
+  ] {
+    for project_name in ["kontur-desktop", "atlas-website", "orchester"] {
+      navigation.open_tab();
+      navigation.go(Route::Project(
+        ProjectRef::new(project_name).expect("valid"),
+        screen.clone(),
+      ));
+    }
+  }
+  window.pass();
+  let (new_tab, drag) = (bounds(&mut window, "new-tab"), bounds(&mut window, "title-bar-drag"));
+  // The Windows controls take 3 × 46 at the right edge.
+  assert!(drag.width >= 48.0 - 0.5, "the drag area keeps 48: {drag:?}");
+  assert!(
+    drag.x + drag.width <= 960.0 - 138.0 + 0.5,
+    "the controls stay in the window: {drag:?}"
+  );
+  assert!(
+    new_tab.x + new_tab.width <= drag.x + 0.5,
+    "New tab stays visible: {new_tab:?}"
+  );
+}
+
+#[test]
+fn side_buttons_and_keys_move_through_history_and_tabs() {
+  let mut window = Window::open();
+  let navigation = window.navigation();
+  navigation.go(project(ProjectPage::Usage));
+  window.pass();
+  window.tree.mouse_up(700.0, 400.0, MouseButton::Other(4));
+  assert_eq!(navigation.route_now(), Route::AllProjects, "the back button goes back");
+  window.tree.mouse_up(700.0, 400.0, MouseButton::Other(5));
+  assert_eq!(
+    navigation.route_now(),
+    project(ProjectPage::Usage),
+    "the forward button goes forward"
+  );
+  key(&mut window, "ArrowLeft", "ArrowLeft", &Modifier::Alt);
+  assert_eq!(navigation.route_now(), Route::AllProjects);
+  key(&mut window, "t", "KeyT", &Modifier::Command);
+  assert_eq!(navigation.tabs_now().tabs().len(), 2, "a new tab opened");
+  key(&mut window, "w", "KeyW", &Modifier::Command);
+  assert_eq!(navigation.tabs_now().tabs().len(), 1, "the new tab closed");
+}
+
+enum Modifier {
+  Alt,
+  /// Ctrl, Cmd on macOS.
+  Command,
+}
+
+/// Presses `key` with `modifier`, as the platform names its shortcuts.
+fn key(window: &mut Window, key: &str, code: &str, modifier: &Modifier) {
+  let (ctrl, alt, meta) = match modifier {
+    Modifier::Alt if cfg!(target_os = "macos") => (false, false, true),
+    Modifier::Alt => (false, true, false),
+    Modifier::Command if cfg!(target_os = "macos") => (false, false, true),
+    Modifier::Command => (true, false, false),
+  };
+  let (key, code) = if cfg!(target_os = "macos") && code == "ArrowLeft" {
+    ("[", "BracketLeft")
+  } else {
+    (key, code)
+  };
+  window
+    .tree
+    .key_down_with_meta(key.to_owned(), code.to_owned(), false, ctrl, alt, meta);
+  window
+    .tree
+    .key_up_with_meta(key.to_owned(), code.to_owned(), false, ctrl, alt, meta);
+  window.pass();
 }

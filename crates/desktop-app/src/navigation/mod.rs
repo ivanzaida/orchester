@@ -89,11 +89,12 @@ impl Navigation {
     self.change(|tabs| tabs.close(tabs.active().id()));
   }
 
-  /// Applies `change` to the tabs; when it changed them, stores them and shows the active route.
+  /// Applies `change` to the tabs in place; when it changed them, shows the active route. A change
+  /// that changed nothing still notifies the tabs' readers, which then render the same tabs.
   fn change(&self, change: impl FnOnce(&mut TabSet) -> bool) {
-    let mut tabs = self.tabs.get_untracked();
-    if change(&mut tabs) {
-      self.tabs.set(tabs);
+    let mut changed = false;
+    self.tabs.update(|tabs| changed = change(tabs));
+    if changed {
       self.show();
     }
   }
