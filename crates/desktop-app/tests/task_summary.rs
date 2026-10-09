@@ -216,9 +216,10 @@ fn summary_notice_says_where_each_task_stands() {
     ("interrupted", "Interrupted at Implement"),
     ("failed", "Failed at Run checks"),
     ("cancelled", "Canceled"),
-    ("waits after retries", "Run checks still fails after its retries"),
+    // The decision after retries words how often the step sent the work back (`DVuXu`).
+    ("waits after retries", "Run checks still fails after 2 retries"),
     ("ready for review", "Ready for your review"),
-    ("merged", "Merged"),
+    ("merged", "Merged into main"),
   ];
   for (state, title) in cases {
     page.open(state);
@@ -282,10 +283,9 @@ fn summary_steps_and_the_panels_show_the_run() {
   assert_eq!(page.text("task-this-run-timeLimit"), "90 min");
   assert_eq!(page.text("task-this-run-budget"), "500k / 500k tokens · limit reached");
   assert!(page.text("task-this-run-permissions-lead").starts_with("Last ran with"));
-  assert_eq!(
-    page.text("task-brief-text"),
-    "Say in the status bar when the GitHub token expired."
-  );
+  // Raising the limit takes the Summary's place of the brief (`oTzJZ`); a paused run keeps it.
+  page.open("paused");
+  assert_eq!(page.text("task-brief-text"), "Page the events endpoint with a cursor.");
   assert_eq!(
     page.text("task-criteria"),
     "Acceptance criteria 2 1 The change is covered by tests. 2 Nothing changes for existing users."

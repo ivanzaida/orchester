@@ -84,6 +84,20 @@ fn similar(ctx: &Ctx, view: &View<'_>, shown: &ShownApproval) -> Tile {
       ),
       Offer::Press(Arc::new(view.answer(Pressed::Similar, ApprovalAnswer::Similar))),
     ),
+    Ok(SimilarShown::Folder { folder }) => (
+      ctx.t_args(
+        "runs.toolApproval.wider.similarFolder",
+        [("folder", &**folder), ("run", run.as_str())],
+      ),
+      Offer::Press(Arc::new(view.answer(Pressed::Similar, ApprovalAnswer::Similar))),
+    ),
+    Ok(SimilarShown::Check { name }) => (
+      ctx.t_args(
+        "runs.toolApproval.wider.similarCheck",
+        [("check", &**name), ("run", run.as_str())],
+      ),
+      Offer::Press(Arc::new(view.answer(Pressed::Similar, ApprovalAnswer::Similar))),
+    ),
     Ok(SimilarShown::Command { words, category }) => (
       ctx.t_args(
         "runs.toolApproval.wider.similarCommand",
@@ -149,6 +163,8 @@ pub(in crate::screens::project::task) const fn similar_unavailable(unavailable: 
     SimilarUnavailable::SeveralAsk => "runs.toolApproval.wider.severalAsk",
     SimilarUnavailable::Destructive => "runs.toolApproval.wider.similarDestructive",
     SimilarUnavailable::Secrets => "runs.toolApproval.wider.secrets",
+    SimilarUnavailable::BroadFolder => "runs.toolApproval.wider.similarBroadFolder",
+    SimilarUnavailable::EveryCall => "runs.toolApproval.wider.similarEveryCall",
   }
 }
 

@@ -253,6 +253,7 @@ fn mcp_claude_gets_a_private_config_file_and_allows_only_the_servers_tools() {
     code_index: None,
     // Every Claude Code step asks about commands through the permission prompt.
     approvals: Some(Path::new("/tmp/orchester-mcp/approvals.json")),
+    checks: &[],
   }
   .command("Do it.", Vec::new(), &CommandEnvironment::default())
   .expect("a Unicode worktree");

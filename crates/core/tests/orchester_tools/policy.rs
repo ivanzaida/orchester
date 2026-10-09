@@ -5,7 +5,7 @@ use orchester_core::{
     claude_approval::{ApprovalToken, ClaudeApprovalScope, ClaudeAsk},
     invocation::{CodexMcp, CodexOrchester},
   },
-  orchester_tools::{OrchesterTool, StepTools, ToolPolicy, auto_approvable, decide},
+  orchester_tools::{OrchesterTool, StepTools, ToolCall, ToolPolicy, auto_approvable, decide},
   permission::NetworkAccess,
   resource::RepositoryAccess,
 };
@@ -20,20 +20,28 @@ fn orchester_tools_policy_follows_the_table() {
   let write = permissions(RepositoryAccess::Write);
   let read = permissions(RepositoryAccess::ReadOnly);
   for (tool, writing, reading) in [
-    (OrchesterTool::GitStatus, Some(ToolPolicy::Runs), Some(ToolPolicy::Runs)),
-    (OrchesterTool::GitDiff, Some(ToolPolicy::Runs), Some(ToolPolicy::Runs)),
-    (OrchesterTool::GitLog, Some(ToolPolicy::Runs), Some(ToolPolicy::Runs)),
-    (OrchesterTool::GitShow, Some(ToolPolicy::Runs), Some(ToolPolicy::Runs)),
-    (OrchesterTool::GitAdd, Some(ToolPolicy::Runs), None),
-    (OrchesterTool::GitCommit, Some(ToolPolicy::Runs), None),
+    (OrchesterTool::ReadFile, Some(ToolPolicy::Runs), Some(ToolPolicy::Runs)),
+    (OrchesterTool::ListFiles, Some(ToolPolicy::Runs), Some(ToolPolicy::Runs)),
     (
-      OrchesterTool::ReadOutsideFile,
+      OrchesterTool::SearchFile,
+      Some(ToolPolicy::Runs),
+      Some(ToolPolicy::Runs),
+    ),
+    (OrchesterTool::EditFile, Some(ToolPolicy::Runs), None),
+    (OrchesterTool::CreateFile, Some(ToolPolicy::Runs), None),
+    (
+      OrchesterTool::SearchExternalFile,
+      Some(ToolPolicy::Asks),
+      Some(ToolPolicy::Asks),
+    ),
+    (
+      OrchesterTool::ReadExternalFile,
       Some(ToolPolicy::Asks),
       Some(ToolPolicy::Asks),
     ),
     (
       // These steps have no network (see the next test for one with it).
-      OrchesterTool::RunProjectTool,
+      OrchesterTool::RunCheck,
       None,
       None,
     ),
@@ -50,24 +58,35 @@ fn orchester_tools_policy_follows_the_table() {
     [
       "read_file",
       "list_files",
-      "search",
-      "git_status",
-      "git_diff",
-      "git_log",
-      "git_show",
-      "read_outside_file"
+      "search_file",
+      "find_references",
+      "search_external_file",
+      "read_external_file",
+      "get_task",
+      "save_memory",
+      "report_progress"
     ]
   );
+  for gone in [
+    "git_status",
+    "git_diff",
+    "git_log",
+    "git_show",
+    "git_add",
+    "git_commit",
+    "write_file",
+    "read_outside_file",
+    "search",
+  ] {
+    assert_eq!(OrchesterTool::from_name(gone), None, "{gone}");
+  }
   let project = [project_tool("Run tests", "/bin/true")];
   let mut online = write;
   online.set_network(NetworkAccess::On);
   let offered = StepTools::for_step(&online, &project);
-  assert_eq!(offered.policy(OrchesterTool::RunProjectTool), Some(ToolPolicy::Asks));
+  assert_eq!(offered.policy(OrchesterTool::RunCheck), Some(ToolPolicy::Asks));
   let listed = offered.mcp_tools();
-  let run = listed
-    .iter()
-    .find(|tool| tool["name"] == "run_project_tool")
-    .expect("listed");
+  let run = listed.iter().find(|tool| tool["name"] == "run_check").expect("listed");
   assert_eq!(run["inputSchema"]["properties"]["name"]["enum"], json!(["Run tests"]));
   assert_eq!(run["inputSchema"]["additionalProperties"], json!(false));
   assert!(
@@ -76,6 +95,29 @@ fn orchester_tools_policy_follows_the_table() {
       .all(|tool| tool["inputSchema"]["additionalProperties"] == json!(false))
   );
 }
+/// A check whose access rules approve no call runs without asking; with one that asks, `run_check` asks for that one.
+#[test]
+fn orchester_tools_checks_ask_by_their_access_rules() {
+  let mut online = permissions(RepositoryAccess::Write);
+  online.set_network(NetworkAccess::On);
+  let project = [project_tool("Run tests", "/bin/true")];
+  let quiet = orchester_core::orchester_tools::ProjectTool::new(
+    "lint",
+    "",
+    orchester_core::resource::CommandAction::new(
+      orchester_core::resource::CommandProgram::new("/bin/true").expect("a program"),
+      Vec::new(),
+    ),
+    orchester_core::resource::ApprovalMode::Never,
+  );
+  let only_quiet = StepTools::for_step(&online, std::slice::from_ref(&quiet));
+  assert_eq!(only_quiet.policy(OrchesterTool::RunCheck), Some(ToolPolicy::Runs));
+  let mixed = StepTools::for_step(&online, &[quiet, project[0].clone()]);
+  assert_eq!(mixed.policy(OrchesterTool::RunCheck), Some(ToolPolicy::Asks));
+  let call = |name: &str| ToolCall::parse("run_check", &json!({ "name": name }), &mixed).expect("offered");
+  assert!(!mixed.call_asks(&call("lint")));
+  assert!(mixed.call_asks(&call("Run tests")));
+}
 #[test]
 fn orchester_tools_tell_each_cli_what_runs_and_what_asks() {
   assert_eq!(
@@ -83,11 +125,11 @@ fn orchester_tools_tell_each_cli_what_runs_and_what_asks() {
     [
       "mcp__Orchester__read_file",
       "mcp__Orchester__list_files",
-      "mcp__Orchester__search",
-      "mcp__Orchester__git_status",
-      "mcp__Orchester__git_diff",
-      "mcp__Orchester__git_log",
-      "mcp__Orchester__git_show"
+      "mcp__Orchester__search_file",
+      "mcp__Orchester__find_references",
+      "mcp__Orchester__get_task",
+      "mcp__Orchester__save_memory",
+      "mcp__Orchester__report_progress"
     ]
   );
   let approved = writing().codex_approved();
@@ -96,16 +138,17 @@ fn orchester_tools_tell_each_cli_what_runs_and_what_asks() {
     [
       "read_file",
       "list_files",
-      "search",
+      "search_file",
       "edit_file",
-      "write_file",
-      "git_status",
-      "git_diff",
-      "git_log",
-      "git_show",
-      "git_add",
-      "git_commit",
-      "read_outside_file",
+      "create_file",
+      "delete_file",
+      "move_file",
+      "find_references",
+      "search_external_file",
+      "read_external_file",
+      "get_task",
+      "save_memory",
+      "report_progress",
     ]
   );
   let token = ApprovalToken::generate();
@@ -151,19 +194,21 @@ fn orchester_tools_that_ask_reach_a_person_through_claudes_prompt() {
   let call = |tool: &str| {
     scope.classify(&json!({
       "tool_name": tool,
-      "input": {"path": "/deps/src/lib.rs"},
+      "input": {"filename": "/deps/src/lib.rs"},
       "tool_use_id": "toolu_1",
     }))
   };
-  let ClaudeAsk::Person(request) = call("mcp__Orchester__read_outside_file") else {
+  let ClaudeAsk::Person(request) = call("mcp__Orchester__read_external_file") else {
     panic!("a read outside asks a person");
   };
   assert_eq!(request.server(), "Orchester");
-  assert_eq!(request.action(), "read_outside_file");
+  assert_eq!(request.action(), "read_external_file");
   assert!(!request.is_command());
-  assert_eq!(request.scope(), Some(r#"{"path":"/deps/src/lib.rs"}"#));
+  assert_eq!(request.scope(), Some(r#"{"filename":"/deps/src/lib.rs"}"#));
+  assert_eq!(request.with_target("/deps/src".to_owned()).target(), Some("/deps/src"));
+  assert_eq!(call("mcp__Orchester__read_file"), ClaudeAsk::Refused);
+  assert_eq!(call("mcp__Orchester__edit_file"), ClaudeAsk::Refused);
   assert_eq!(call("mcp__Orchester__git_status"), ClaudeAsk::Refused);
-  assert_eq!(call("mcp__Orchester__git_commit"), ClaudeAsk::Refused);
   assert_eq!(call("mcp__Orchester__approve"), ClaudeAsk::Refused);
 }
 
@@ -173,15 +218,15 @@ fn orchester_tools_that_ask_reach_a_person_through_claudes_prompt() {
 fn orchester_tools_project_programs_follow_the_network_and_skip_auto_approval() {
   let mut online = permissions(RepositoryAccess::Write);
   online.set_network(NetworkAccess::On);
-  assert_eq!(decide(OrchesterTool::RunProjectTool, &online), Some(ToolPolicy::Asks));
+  assert_eq!(decide(OrchesterTool::RunCheck, &online), Some(ToolPolicy::Asks));
   assert_eq!(
-    decide(OrchesterTool::RunProjectTool, &permissions(RepositoryAccess::Write)),
+    decide(OrchesterTool::RunCheck, &permissions(RepositoryAccess::Write)),
     None
   );
   let project = [project_tool("Run tests", "/bin/true")];
   let offline = StepTools::for_step(&permissions(RepositoryAccess::Write), &project);
-  assert_eq!(offline.policy(OrchesterTool::RunProjectTool), None);
-  assert!(!auto_approvable("Orchester", "run_project_tool"));
-  assert!(auto_approvable("Orchester", "read_outside_file"));
-  assert!(auto_approvable("pencil", "run_project_tool"));
+  assert_eq!(offline.policy(OrchesterTool::RunCheck), None);
+  assert!(!auto_approvable("Orchester", "run_check"));
+  assert!(auto_approvable("Orchester", "read_external_file"));
+  assert!(auto_approvable("pencil", "run_check"));
 }

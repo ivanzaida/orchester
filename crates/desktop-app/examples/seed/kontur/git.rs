@@ -75,6 +75,14 @@ pub fn write_files(dir: &Path, files: &[(&str, String)]) -> Result<(), GitError>
   Ok(())
 }
 
+/// Writes `files` in the checkout `dir` and commits everything with `message`; the commit.
+pub fn commit(dir: &Path, files: &[(&str, String)], message: &str) -> Result<Revision, GitError> {
+  write_files(dir, files)?;
+  git(dir, &["add", "--all"])?;
+  git(dir, &["commit", "--quiet", "-m", message])?;
+  head(dir)
+}
+
 /// Makes `root` a repository on `main` with `files` in one commit, under a QA identity of its own so
 /// the user's global identity and signing settings stay out of it; the commit.
 pub fn init(root: &Path, files: &[(&str, String)]) -> Result<Revision, GitError> {
@@ -118,10 +126,7 @@ impl Worktree {
 
   /// Writes `files` and commits everything with `message`, as a checkpoint does; the commit.
   pub fn commit(&self, files: &[(&str, String)], message: &str) -> Result<Revision, GitError> {
-    write_files(&self.path, files)?;
-    git(&self.path, &["add", "--all"])?;
-    git(&self.path, &["commit", "--quiet", "-m", message])?;
-    head(&self.path)
+    commit(&self.path, files, message)
   }
 
   /// Writes `files` and leaves them uncommitted: an agent's work since the last checkpoint.

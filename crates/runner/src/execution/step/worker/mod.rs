@@ -26,6 +26,7 @@ use orchester_core::{
   conversation::Message,
   id::{ResourceId, StepExecutionId, TaskId},
   native::session::StopMode,
+  orchester_tools::ProjectTool,
   permission::category::CommandScope,
   question::QuestionRequest,
   run::{Answerer, ApprovalAnswer, FirstEditTracker, Invocation, PendingToolApproval, RunLimit},
@@ -184,6 +185,9 @@ pub(in super::super) struct Worker {
   pub(in super::super) scope: CommandScope,
   /// The agent profile of the step, which Always allow of a command adds to.
   pub(in super::super) profile: Option<ResourceId>,
+  /// The checks the step is offered, whose access rules decide whether a `run_check` call may be approved similar
+  /// and whether one approval covers the run.
+  pub(in super::super) checks: Vec<ProjectTool>,
   /// People's messages sent now, for the running turn.
   pub(in super::super) steers: mpsc::UnboundedReceiver<Vec<Message>>,
   /// Auto mode's review of the waiting approval, while it is under way.

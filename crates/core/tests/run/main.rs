@@ -21,6 +21,7 @@ mod retry_prompt;
 mod schedule;
 mod skills;
 mod snapshot;
+mod sources;
 mod step_budget;
 mod steps;
 mod stuck;

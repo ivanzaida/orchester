@@ -19,6 +19,10 @@ thiserror.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+# Whether a drive letter is a network share (`GetDriveTypeW`), so a path on one is never resolved: std cannot tell.
+windows-sys = { workspace = true, features = ["Win32_Storage_FileSystem"] }
+
 [dev-dependencies]
 # The in-memory secret store and keychain of the secret tests are shared across threads.
 parking_lot.workspace = true

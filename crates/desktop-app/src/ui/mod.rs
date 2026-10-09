@@ -17,6 +17,7 @@ pub mod loader;
 pub mod markdown;
 pub mod menu;
 pub mod message;
+pub mod meter;
 pub mod nav_item;
 pub mod notice;
 pub mod popover;

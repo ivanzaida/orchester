@@ -1,10 +1,11 @@
-//! `read_outside_file`: part of a text file outside the worktree, such as a dependency's source. The path
-//! is absolute and local and is resolved with its links followed before anything is read.
+//! `read_external_file` and `search_external_file`: part of a text file outside the worktree, such as a dependency's
+//! source, and the files under a folder there that hold a term. The path is absolute and local and is resolved with
+//! its links followed before anything is read; a search keeps only the files that pass the same check.
 //!
-//! What it may reach is the whole disk but a deny list, not an allow list of dependency folders: the
+//! What they may reach is the whole disk but a deny list, not an allow list of dependency folders: the
 //! folders where toolchains keep sources (`~/.cargo/registry/src`, `~/go/pkg/mod`, `~/.m2`, a toolchain's
 //! library sources, …) differ by toolchain and machine, and Orchester names no toolchain's folders (the
-//! user's decision of 2026-10-02, "Cargo-specific build folder handling removed"). Every read asks a person
+//! user's decision of 2026-10-02, "Cargo-specific build folder handling removed"). Every call asks a person
 //! unless a rule of the run or auto-approval answers it, and refused are:
 //!
 //! - the credential locations the command classifier knows ([`CommandScope::holds_credentials`]: the home folder's dot
@@ -56,6 +57,8 @@ pub enum OutsideReadError {
   Protected(PathBuf),
   #[error("{} is not a file", .0.display())]
   NotAFile(PathBuf),
+  #[error("{} is not a folder", .0.display())]
+  NotAFolder(PathBuf),
   #[error("{} is not a text file", .0.display())]
   Binary(PathBuf),
   #[error("{} cannot be read: {kind}", .path.display())]
@@ -84,6 +87,25 @@ impl OutsideReads {
 
   /// The file `path` names, resolved, or why it may not be read.
   pub fn check(&self, path: &str) -> Result<PathBuf, OutsideReadError> {
+    let resolved = self.allowed(path)?;
+    if !resolved.is_file() {
+      return Err(OutsideReadError::NotAFile(resolved));
+    }
+    Ok(resolved)
+  }
+
+  /// The folder `path` names, resolved, or why it may not be searched. The files a search finds there are each
+  /// checked again ([`Self::check`]): a credential location or Orchester's state inside it stays out.
+  pub fn check_folder(&self, path: &str) -> Result<PathBuf, OutsideReadError> {
+    let resolved = self.allowed(path)?;
+    if !resolved.is_dir() {
+      return Err(OutsideReadError::NotAFolder(resolved));
+    }
+    Ok(resolved)
+  }
+
+  /// `path` resolved, unless it is relative or lies where these reads never reach.
+  fn allowed(&self, path: &str) -> Result<PathBuf, OutsideReadError> {
     if !Path::new(path).is_absolute() {
       return Err(OutsideReadError::NotAbsolute(path.to_owned()));
     }
@@ -93,9 +115,6 @@ impl OutsideReads {
     }
     if self.scope.holds_credentials(&resolved) {
       return Err(OutsideReadError::Credentials(resolved));
-    }
-    if !resolved.is_file() {
-      return Err(OutsideReadError::NotAFile(resolved));
     }
     Ok(resolved)
   }
@@ -115,16 +134,16 @@ impl OutsideReads {
     named || self.refused.iter().any(|folder| path.starts_with(folder))
   }
 
-  /// Lines `offset` (from 1) to `offset + limit - 1` of `path`, numbered, as [`read_lines`] reads them.
-  pub fn read(&self, path: &str, offset: u32, limit: u32) -> Result<String, OutsideReadError> {
-    read_lines(self.check(path)?, offset, limit)
+  /// Lines `start_line` (from 1) to `start_line + length - 1` of `path`, numbered, as [`read_lines`] reads them.
+  pub fn read(&self, path: &str, start_line: u32, length: u32) -> Result<String, OutsideReadError> {
+    read_lines(self.check(path)?, (start_line, length), "start_line")
   }
 }
 
 /// Lines `offset` (from 1) to `offset + limit - 1` of `file`, a resolved path, numbered, at most
-/// [`MAX_READ_BYTES`] of them, with a note when the file goes on. Lines before `offset` are skipped without
-/// being kept.
-pub(super) fn read_lines(file: PathBuf, offset: u32, limit: u32) -> Result<String, OutsideReadError> {
+/// [`MAX_READ_BYTES`] of them, with a note when the file goes on naming the call's field `on`. Lines before `offset`
+/// are skipped without being kept.
+pub(super) fn read_lines(file: PathBuf, (offset, limit): (u32, u32), on: &str) -> Result<String, OutsideReadError> {
   let unreadable = |error: io::Error| OutsideReadError::Unreadable {
     path: file.clone(),
     kind: error.kind(),
@@ -152,7 +171,7 @@ pub(super) fn read_lines(file: PathBuf, offset: u32, limit: u32) -> Result<Strin
     }
     // Writing to a String cannot fail.
     if number > last || bytes + line.len() > MAX_READ_BYTES {
-      let _ = writeln!(text, "[the file goes on: read on from offset {number}]");
+      let _ = writeln!(text, "[the file goes on: read on from {on} {number}]");
       return Ok(text);
     }
     bytes += line.len();

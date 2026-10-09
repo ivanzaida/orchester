@@ -23,7 +23,7 @@ pub use self::{
   auto::{AutoAsk, AutoVerdict, auto_approves, auto_verdict},
   permitted::permitted,
   rule::{ApprovalRule, ApprovalRuleId, RuleScope, SimilarUnavailable, answering},
-  subject::ApprovalSubject,
+  subject::{ApprovalSubject, ToolReach},
 };
 use super::PendingToolApproval;
 use crate::permission::{CommandPrefix, category::CommandCategory};

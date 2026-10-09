@@ -206,7 +206,7 @@ fn timeline_shows_the_change_of_orchester_s_edit_tool_by_its_call_s_row() {
   events.push(AgentEvent::McpToolFinished {
     item: "mcp-1".into(),
     server: "Orchester".into(),
-    tool: "write_file".into(),
+    tool: "create_file".into(),
     status: CommandStatus::Completed,
     asked: false,
   });
@@ -234,7 +234,7 @@ fn timeline_shows_the_change_of_orchester_s_edit_tool_by_its_call_s_row() {
 #[test]
 fn timeline_a_cli_s_orchester_edit_carries_its_change_and_counts_as_an_edit() {
   let execution = StepExecutionId::generate();
-  let input = json!({"path": "README.md", "edits": [{"old": "hi", "new": "hi there", "replace_all": null}]});
+  let input = json!({"filename": "README.md", "start_line": 1, "end_line": 1, "expected": "hi", "content": "hi there"});
   // Settled, as the runner stores it.
   let mut settled = AgentEvent::NativeCall {
     item: String::new(),

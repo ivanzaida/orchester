@@ -157,8 +157,8 @@ fn answer_text(text: &str) -> String {
     return text.to_owned();
   }
   format!(
-    "{shown}\n[truncated: {left_out} more bytes of this answer were left out; narrow the call with offset and \
-     limit, a path or a glob]"
+    "{shown}\n[truncated: {left_out} more bytes of this answer were left out; narrow the call with start_line \
+     and length, limit_files, a longer term or a path]"
   )
 }
 
