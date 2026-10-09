@@ -1,9 +1,10 @@
 //! Settings of the application rather than of a project: whether automation may answer waiting tool
-//! requests through Orchester's MCP server (off until a person turns it on), and the warning
-//! threshold the Usage dashboard draws in Plan limits (limits belong to accounts, so every project
-//! shows the same line; 80 % until it is changed).
+//! requests through Orchester's MCP server (off until a person turns it on), the warning threshold the
+//! Usage dashboard draws in Plan limits (limits belong to accounts, so every project shows the same
+//! line; 80 % until it is changed), and `orchester-app`'s theme (dark until changed) and whether agents
+//! may control its window through its MCP server (the build decides until it is set).
 
-use orchester_core::usage::limits::WarningThreshold;
+use orchester_core::{appearance::ThemeSetting, usage::limits::WarningThreshold};
 use rusqlite::params;
 
 use super::AppDb;
@@ -21,6 +22,12 @@ pub(super) const THRESHOLD_MIGRATION: &str = r"
 -- Usage › Plan limits › Warning threshold (ORC-72), a whole percentage of a window.
 ALTER TABLE app_settings ADD COLUMN usage_warning_threshold INTEGER NOT NULL DEFAULT 80
   CHECK (usage_warning_threshold BETWEEN 1 AND 100);
+";
+
+pub(super) const APPEARANCE_MIGRATION: &str = r"
+-- orchester-app: the window's theme, and window control for its MCP server (NULL: as the build decides).
+ALTER TABLE app_settings ADD COLUMN theme TEXT NOT NULL DEFAULT 'dark' CHECK (theme IN ('dark', 'light', 'system'));
+ALTER TABLE app_settings ADD COLUMN mcp_window_control INTEGER CHECK (mcp_window_control IN (0, 1));
 ";
 
 impl AppDb {
@@ -58,6 +65,41 @@ impl AppDb {
     self.connection.execute(
       "UPDATE app_settings SET usage_warning_threshold = ?1 WHERE id = 1",
       params![threshold.percent()],
+    )?;
+    Ok(())
+  }
+
+  /// The theme `orchester-app` shows.
+  pub fn theme(&self) -> Result<ThemeSetting, StoreError> {
+    let name: String = self
+      .connection
+      .query_row("SELECT theme FROM app_settings WHERE id = 1", [], |row| row.get(0))?;
+    ThemeSetting::from_name(&name).ok_or_else(|| corrupt("theme", name))
+  }
+
+  pub fn set_theme(&mut self, theme: ThemeSetting) -> Result<(), StoreError> {
+    self
+      .connection
+      .execute("UPDATE app_settings SET theme = ?1 WHERE id = 1", params![theme.name()])?;
+    Ok(())
+  }
+
+  /// Whether agents may control `orchester-app`'s window through its MCP server; `None` until it is set,
+  /// when the build decides.
+  pub fn mcp_window_control(&self) -> Result<Option<bool>, StoreError> {
+    Ok(
+      self
+        .connection
+        .query_row("SELECT mcp_window_control FROM app_settings WHERE id = 1", [], |row| {
+          row.get(0)
+        })?,
+    )
+  }
+
+  pub fn set_mcp_window_control(&mut self, allowed: Option<bool>) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE app_settings SET mcp_window_control = ?1 WHERE id = 1",
+      params![allowed],
     )?;
     Ok(())
   }

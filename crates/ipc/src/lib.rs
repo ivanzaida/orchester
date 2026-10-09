@@ -10,6 +10,7 @@
 //! rest of the crate is written against `AsyncRead`/`AsyncWrite`, so both carry the same frames.
 
 mod client;
+pub mod daily_log;
 mod error;
 mod exit_code;
 pub mod frame;

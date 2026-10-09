@@ -1,6 +1,6 @@
 [package]
 name = "orchester-desktop"
-description = "Orchester desktop app."
+description = "Orchester desktop app. Deprecated: replaced by orchester-app (crates/desktop-app)."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -139,3 +139,27 @@ fn queued_task_edits_need_a_run_and_complete_details() {
   assert_eq!(queued.status(), TaskStatus::Queued);
   assert_eq!(queued.pipeline_version(), Some(VersionNumber::FIRST));
 }
+
+#[test]
+fn task_keys_read_back_from_their_text() {
+  use orchester_core::project::{TaskKey, TaskKeyError};
+
+  let key: TaskKey = "ORC-129".parse().expect("a task key");
+  assert_eq!(
+    (key.project().as_str(), key.number().get(), key.to_string().as_str()),
+    ("ORC", 129, "ORC-129")
+  );
+  for text in ["ORC", "ORC-", "ORC-0", "ORC-+1", "ORC-12a", "-12"] {
+    assert!(
+      matches!(
+        text.parse::<TaskKey>(),
+        Err(TaskKeyError::Shape(_) | TaskKeyError::Project(_))
+      ),
+      "{text}"
+    );
+  }
+  assert!(
+    matches!("orc-1".parse::<TaskKey>(), Err(TaskKeyError::Project(_))),
+    "keys are uppercase"
+  );
+}

@@ -270,6 +270,11 @@ and both builds open the same one.
   of it until you install a build that includes the migration. Do not open real projects with a
   dev build of an unmerged branch that adds a migration: that schema version may never exist on
   `master`.
+- **The application database migrates too.** A build with `orchester-app`'s settings (its theme
+  and agents' window control) migrates `orchester.db` to schema version 6 when it first starts, and
+  an older install then refuses that database. Before the first start of a newly installed build,
+  copy `orchester.db` (with its `-wal` file, if any) aside, so the older install can still be
+  restored with its data.
 
 ## Logs
 

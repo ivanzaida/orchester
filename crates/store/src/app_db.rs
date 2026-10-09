@@ -44,6 +44,7 @@ CREATE TABLE ui_state (
   servers::MIGRATION,
   settings::MIGRATION,
   settings::THRESHOLD_MIGRATION,
+  settings::APPEARANCE_MIGRATION,
 ];
 
 /// Identifies the running session in the session log.
