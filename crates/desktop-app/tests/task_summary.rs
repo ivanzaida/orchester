@@ -244,12 +244,11 @@ fn summary_tabs_keep_the_frame_and_lock_what_is_not_built() {
   assert!(page.locked("task-tab-memory"));
   page.click("task-tab-conversation");
   page.window.until("the Conversation tab", |window| {
-    window.texts("task-conversation").is_some()
+    window.tree.get_element_by_id("conversation-toolbar").is_some()
   });
-  assert_eq!(
-    page.text("task-conversation"),
-    "Conversation This tab isn't built yet.",
-    "{key}"
+  assert!(
+    page.text("conversation-run-state").contains("Canceled"),
+    "the Conversation tab of {key} mounts in the frame"
   );
   assert!(page.has("task-header"), "the frame stays");
   page.click("task-tab-summary");
