@@ -207,7 +207,7 @@ fn domain_pipeline_tools_tell_the_feed() {
   let before = counted(&project);
   served.ok(
     "create_pipeline",
-    &json!({ "project": "Kontur", "name": "Told", "from": "starter" }),
+    &json!({ "project": "Kontur", "name": "Told", "from": "empty" }),
   );
   assert_eq!(counted(&project), before + 1, "create_pipeline");
   served.ok(
@@ -217,4 +217,36 @@ fn domain_pipeline_tools_tell_the_feed() {
   assert_eq!(counted(&project), before + 2, "save_pipeline_draft");
   served.ok("publish_pipeline", &json!({ "project": "Kontur", "pipeline": "Told" }));
   assert_eq!(counted(&project), before + 3, "publish_pipeline");
+}
+
+#[test]
+fn domain_dropping_a_steps_approval_needs_a_person() {
+  let mut served = served();
+  served.ok(
+    "create_pipeline",
+    &json!({ "project": "Kontur", "name": "Gated", "from": "empty" }),
+  );
+  let steps = |plan_gate: bool, ask: bool, with_plan: bool| {
+    let mut steps = Vec::new();
+    if with_plan {
+      steps.push(json!({ "key": "plan", "name": "Plan", "approval_gate": plan_gate }));
+    }
+    steps.push(json!({
+      "key": "build",
+      "name": "Build",
+      "profile": "Builder",
+      "runs_after": if with_plan { json!(["plan"]) } else { json!([]) },
+      "narrow": { "ask_before_tool_calls": ask },
+    }));
+    json!({ "project": "Kontur", "pipeline": "Gated", "steps": steps })
+  };
+  served.ok("save_pipeline_draft", &steps(true, true, true));
+  assert_person_only(&served.refused("save_pipeline_draft", &steps(false, true, true)));
+  assert_person_only(&served.refused("save_pipeline_draft", &steps(true, false, true)));
+  assert_person_only(&served.refused("save_pipeline_draft", &steps(true, true, false)));
+  let mut renamed = steps(true, true, true);
+  renamed["steps"][1]["name"] = json!("Build it");
+  served.ok("save_pipeline_draft", &renamed);
+  served.let_automation_widen(true);
+  served.ok("save_pipeline_draft", &steps(false, false, true));
 }

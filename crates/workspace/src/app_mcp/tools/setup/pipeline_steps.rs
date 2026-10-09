@@ -25,6 +25,7 @@ use super::{
   super::Translate,
   pipelines::{opened, pipeline_json, pipeline_named},
   profile_input::Access,
+  widening,
 };
 use crate::{
   agents::permissions::with_command,
@@ -148,6 +149,8 @@ pub async fn save_pipeline_draft(
     let body = edit
       .validate()
       .map_err(|error| ToolError::refused("invalid_pipeline", vec![rule_message(&edit, &error)]))?;
+    let base = current.latest.as_ref().map_or(&current.body, |latest| &latest.body);
+    widening::allowed(&services, weakened_gates(base.steps(), body.steps()))?;
     let saved = save_draft_in(&open.repo_root, id, body)?;
     services.changes.record(open.project.id(), Outside::Pipelines);
     Ok((opened(&ProjectDb::open(&open.repo_root)?, id, &args.pipeline)?, saved))
@@ -156,6 +159,26 @@ pub async fn save_pipeline_draft(
   let mut value = pipeline_json(&opened, translate);
   value["draft_kept"] = json!(saved == DraftSaved::Stored);
   Ok(json!({ "pipeline": value }))
+}
+
+/// The approvals `steps` drop from `base`, the latest published version (or, before the first, the draft as
+/// it stands): a step that waits for a person's approval, or asks a person about its tool calls, and no
+/// longer does or is gone. Dropping one is a person's decision; other narrowing within the profile is not.
+fn weakened_gates(base: &[Step], steps: &[Step]) -> Vec<Message> {
+  let asks =
+    |step: &Step| matches!(&step.kind, StepKind::Agent { permissions, .. } if permissions.interactive_tool_approvals);
+  let mut reasons = Vec::new();
+  for old in base {
+    let new = steps.iter().find(|step| step.key == old.key);
+    let named = |key: &'static str| Message::new(key).with("step", old.name.as_str().to_owned());
+    if old.approval_gate && !new.is_some_and(|step| step.approval_gate) {
+      reasons.push(named("appMcp.widens.approvalGate"));
+    }
+    if asks(old) && !new.is_some_and(asks) {
+      reasons.push(named("appMcp.widens.stepToolCalls"));
+    }
+  }
+  reasons
 }
 
 /// The step `input` describes, or why the inspector would not take it, naming the step.

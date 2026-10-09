@@ -174,7 +174,9 @@ const SPECS: &[Spec] = &[
                   runs after the steps it names (no cycles), may wait at an approval gate, may return to an earlier \
                   step it runs after when it fails (1 or more retries), and may have a token budget (left out: no \
                   step budget). Refused with the editor's reasons when the steps do not form a pipeline; nothing is \
-                  saved then.",
+                  saved then. Dropping an approval gate, or asking about tool calls, that the latest published \
+                  version (before the first: the draft) has, a step removed with it included, is refused as \
+                  person_only unless a person turned on Let automation change agent permissions.",
     schema: schema_for_type::<pipeline_steps::SavePipelineDraft>,
     read_only: false,
   },
