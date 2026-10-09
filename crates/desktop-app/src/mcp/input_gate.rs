@@ -77,8 +77,8 @@ struct Counts {
   protected: AtomicUsize,
   /// Window-input calls the server forwarded that have not answered.
   in_flight: AtomicUsize,
-  /// lurq's control of its tools, once the server started.
-  tools: Mutex<Option<McpHandle>>,
+  /// lurq's control of its tools once the server started, and the tools the gate denied through it.
+  tools: Mutex<Option<(McpHandle, Vec<&'static str>)>>,
 }
 
 /// Shared between the app's MCP server and the window. Clones share the same counts.
@@ -97,17 +97,20 @@ impl InputGate {
   /// Marks a protected control as mounted until the returned guard is dropped.
   /// Lets the gate deny lurq's input tools through `tools` while a protected control is mounted.
   pub fn attach(&self, tools: McpHandle) {
-    *self.0.tools.lock() = Some(tools);
+    *self.0.tools.lock() = Some((tools, Vec::new()));
   }
 
   /// Marks a protected control as mounted until the returned guard is dropped; the first one makes lurq
   /// deny its input tools. Called on the event loop, which runs lurq's tool calls.
   pub fn protect(&self) -> Protected {
     if self.0.protected.fetch_add(1, Ordering::SeqCst) == 0
-      && let Some(tools) = self.0.tools.lock().as_ref()
+      && let Some((tools, denied)) = self.0.tools.lock().as_mut()
     {
       for tool in INPUT {
-        tools.deny_tool(*tool);
+        if !denied.contains(tool) {
+          tools.deny_tool(*tool);
+          denied.push(tool);
+        }
       }
     }
     Protected(self.clone())
@@ -138,10 +141,13 @@ pub struct Protected(InputGate);
 
 impl Drop for Protected {
   fn drop(&mut self) {
+    // Only what the gate denied is allowed again. lurq cannot say which tools are denied otherwise; the
+    // app's configuration denies none (its scopes decide), and the gate is the only one that denies at run
+    // time.
     if self.0.0.protected.fetch_sub(1, Ordering::SeqCst) == 1
-      && let Some(tools) = self.0.0.tools.lock().as_ref()
+      && let Some((tools, denied)) = self.0.0.tools.lock().as_mut()
     {
-      for tool in INPUT {
+      for tool in denied.drain(..) {
         tools.allow_tool(tool);
       }
     }
