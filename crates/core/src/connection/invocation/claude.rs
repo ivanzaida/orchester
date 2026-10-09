@@ -28,8 +28,8 @@
 //! - Orchester's tools ([`crate::orchester_tools`]) are served by the same relay: each tool the step's permissions let
 //!   run without asking gets an `mcp__Orchester__<tool>` allow rule, added to the other allowed tools; the others reach
 //!   the permission prompt. The agent then reads, searches and changes files only through them (the user's decision of
-//!   2026-10-09): Claude Code's own `Read`, `Edit`, `Write`, `Grep` and `Glob` are added to `--disallowedTools`
-//!   ([`CLAUDE_FILE_TOOLS`]); its shell stays for builds, tests and git.
+//!   2026-10-09): Claude Code's own `Read`, `Edit`, `Write`, `NotebookEdit`, `Grep` and `Glob` are added to
+//!   `--disallowedTools` ([`CLAUDE_FILE_TOOLS`]); its shell stays for builds, tests and git.
 //! - Permissions: the step's enforced permissions as [`crate::permission::claude::permission_args`] maps them (tools
 //!   offered, permission mode, denied tools, allowed command prefixes, and the edit rules of the worktree and the extra
 //!   writable folders when the step does not run in `acceptEdits`). Bypass modes are never used.
@@ -81,7 +81,7 @@ use crate::{
 };
 
 /// Claude Code's own file tools, which an invocation served Orchester's tools does not get: its agent uses those.
-const CLAUDE_FILE_TOOLS: [&str; 5] = ["Read", "Edit", "Write", "Grep", "Glob"];
+const CLAUDE_FILE_TOOLS: [&str; 6] = ["Read", "Edit", "Write", "NotebookEdit", "Grep", "Glob"];
 
 /// [`STEP_RESULT_SCHEMA`] on one line, as `--json-schema` takes it.
 pub fn result_schema() -> String {

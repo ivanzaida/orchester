@@ -76,7 +76,7 @@ const WRITE_RULES: [&str; 12] = [
 ];
 /// Claude Code's own file tools, which an invocation served Orchester's tools has on its disallowed list, after the
 /// ones its permissions deny.
-const OWN_FILE_TOOLS: [&str; 5] = ["Read", "Edit", "Write", "Grep", "Glob"];
+const OWN_FILE_TOOLS: [&str; 6] = ["Read", "Edit", "Write", "NotebookEdit", "Grep", "Glob"];
 /// The permission prompt's configuration file, for the invocations that ask a person.
 const APPROVALS: &str = "/tmp/approvals.json";
 
@@ -266,6 +266,7 @@ fn claude_invocation_write_allows_the_listed_commands_and_asks_for_others() {
           "Read",
           "Edit",
           "Write",
+          "NotebookEdit",
           "Grep",
           "Glob",
           "--allowedTools",

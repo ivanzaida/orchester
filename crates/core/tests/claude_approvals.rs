@@ -337,7 +337,7 @@ fn claude_approvals_invocation_gets_the_prompt_and_leaves_open_what_a_person_dec
         "--allowedTools mcp__Orchester__read_file mcp__Orchester__list_files mcp__Orchester__search_file \
          mcp__Orchester__edit_file mcp__Orchester__create_file mcp__Orchester__delete_file mcp__Orchester__move_file \
          mcp__Orchester__find_references mcp__Orchester__get_task mcp__Orchester__save_memory \
-         mcp__Orchester__report_progress mcp__Orchester__ask_question --disallowedTools Read Edit Write Grep Glob \
+         mcp__Orchester__report_progress mcp__Orchester__ask_question --disallowedTools Read Edit Write NotebookEdit Grep Glob \
          --resume s"
       ),
       "{args}"

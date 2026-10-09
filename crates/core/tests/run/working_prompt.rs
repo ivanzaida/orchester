@@ -54,7 +54,7 @@ fn working_prompt_names_the_tools_of_the_cli_and_the_access() {
     "Read, search and change files only with Orchester's file tools: mcp__Orchester__read_file, \
      mcp__Orchester__list_files, mcp__Orchester__search_file, mcp__Orchester__edit_file (after reading the file: give \
      the lines to replace and, as expected, exactly what they hold now) and mcp__Orchester__create_file (new files \
-     only). Claude Code's own Read, Edit, Write, Grep and Glob are not available. Never read or change files through \
+     only). Claude Code's own Read, Edit, Write, NotebookEdit, Grep and Glob are not available. Never read or change files through \
      the shell: no `cat`, `sed`, `awk` or heredocs.\nCommands already run in the task's worktree: never \
      start one with `cd`. Run one command per call, bare, without `;`, `&&` or variables, so that it matches the \
      allowed commands; other commands wait for a person's approval."

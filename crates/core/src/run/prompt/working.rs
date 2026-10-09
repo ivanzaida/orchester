@@ -62,7 +62,7 @@ impl WorkingTools {
         "Read, search and change files only with Orchester's file tools: mcp__Orchester__read_file, \
          mcp__Orchester__list_files, mcp__Orchester__search_file, mcp__Orchester__edit_file (after reading the \
          file: give the lines to replace and, as expected, exactly what they hold now) and mcp__Orchester__create_file \
-         (new files only). Claude Code's own Read, Edit, Write, Grep and Glob are not available. Never read or change \
+         (new files only). Claude Code's own Read, Edit, Write, NotebookEdit, Grep and Glob are not available. Never read or change \
          files through the shell: no `cat`, `sed`, `awk` or heredocs."
       }
       (Cli::ClaudeCode, false) => {

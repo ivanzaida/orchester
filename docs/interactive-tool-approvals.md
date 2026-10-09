@@ -273,8 +273,8 @@ by `read_external_file` and `search_external_file`.
   --case-sensitive`, or the walk), at most 50 files; without the index it says so.
 - **Claude Code** gets the tools from the permission prompt's relay (`--claude-permission-prompt`), which lists them
   after `approve`; every tool that runs gets an allow rule (`mcp__Orchester__<tool>`), so the others reach the
-  prompt. Its own `Read`, `Edit`, `Write`, `Grep` and `Glob` are added to `--disallowedTools` whenever it gets the
-  relay (the user's decision of 2026-10-09: the prompt names Orchester's tools and the CLI's own are taken away; its
+  prompt. Its own `Read`, `Edit`, `Write`, `NotebookEdit`, `Grep` and `Glob` are added to `--disallowedTools`
+  whenever it gets the relay (the user's decision of 2026-10-09: the prompt names Orchester's tools and the CLI's own are taken away; its
   shell stays for builds, tests and git). Claude Code 2.1.286 removes only the prompt tool from the model's tools
   (`permissionPromptToolName` is filtered by exact name). **Codex** gets the same relay (`orchester-runner
   --orchester-tools`, no `approve`) as the server `Orchester` of its configuration, the runner's address in `env`, the
@@ -316,8 +316,8 @@ by `read_external_file` and `search_external_file`.
   offered. The native agent does not get Orchester's tools yet (P1d) and keeps reading its skills with its own
   `read_file` by the paths its prompt lists.
 - **Prompt.** The *Files and commands* part names the worktree file tools as each CLI sees them (Claude Code:
-  `mcp__Orchester__read_file`, …, and that its own Read, Edit, Write, Grep and Glob are not available; Codex: the tools
-  of the `Orchester` server, not the shell's `cat`, `rg`, `sed -i` or heredocs), and how `edit_file` is called (the
+  `mcp__Orchester__read_file`, …, and that its own Read, Edit, Write, NotebookEdit, Grep and Glob are not available;
+  Codex: the tools of the `Orchester` server, not the shell's `cat`, `rg`, `sed -i` or heredocs), and how `edit_file` is called (the
   lines to replace and, as `expected`, what they hold now). After it, a new session that gets the tools is told in a
   paragraph of its own (*# Orchester tools*) to use the shell for builds, tests and git, not to read or search files;
   to read and search outside the worktree with `read_external_file` and `search_external_file` (at once in the run's
