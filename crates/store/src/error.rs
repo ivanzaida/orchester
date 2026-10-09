@@ -31,7 +31,8 @@ pub enum StoreError {
   /// Migrating from schema version `found` to `supported` left `references` rows referring to rows
   /// that do not exist; nothing was changed.
   #[error(
-    "migrating the database from version {found} to {supported} would leave {references} broken references; it was      left unchanged"
+    "migrating the database from version {found} to {supported} would leave {references} broken references; it was \
+     left unchanged"
   )]
   MigrationBrokeReferences {
     references: i64,
