@@ -65,6 +65,14 @@ fn command_tool_program_is_a_name_a_worktree_path_or_an_absolute_path() {
       "{escaping}"
     );
   }
+  for drive_relative in ["C:check.exe", r"c:tools\check.exe", "D:"] {
+    assert!(
+      matches!(CommandProgram::new(drive_relative), Err(CommandError::DriveRelative(_))),
+      "{drive_relative}"
+    );
+  }
+  assert!(CommandProgram::new(r"C:\tools\check.exe").is_ok());
+  assert!(CommandProgram::new("C:/tools/check.exe").is_ok());
   let absolute = std::env::temp_dir().join("check");
   let absolute = absolute.to_str().expect("a Unicode temporary folder");
   assert_eq!(
@@ -194,6 +202,36 @@ fn command_tool_candidates_follow_the_path_or_the_worktree() {
     [worktree.join("scripts/check.cmd")]
   );
   assert!(cargo.program_candidates(&worktree, None, Platform::MacOs).is_empty());
+  // A relative folder of the PATH would be looked in from the worktree, which agents write.
+  let relative = std::env::join_paths([PathBuf::from("bin"), one.clone()]).expect("join");
+  assert_eq!(
+    cargo.program_candidates(&worktree, Some(&relative), Platform::MacOs),
+    [one.join("cargo")]
+  );
+}
+
+#[test]
+fn command_tool_process_on_windows_does_not_start_programs_from_the_worktree_by_name() {
+  let worktree = std::env::temp_dir().join("worktree");
+  let found = PathBuf::from("C:/tools/cargo.exe");
+  let environment = [("PATH", "C:/tools"), ("NoDefaultCurrentDirectoryInExePath", "0")]
+    .map(|(name, value)| (OsString::from(name), OsString::from(value)));
+  let process = full_command().process(
+    &found,
+    &worktree,
+    environment,
+    &CommandEnvironment::default(),
+    Platform::Windows,
+  );
+  let set: Vec<_> = process
+    .env()
+    .iter()
+    .filter(|(name, _)| name.eq_ignore_ascii_case("NoDefaultCurrentDirectoryInExePath"))
+    .collect();
+  assert_eq!(
+    set,
+    [&("NoDefaultCurrentDirectoryInExePath".to_owned(), "1".to_owned())]
+  );
 }
 
 #[test]
@@ -208,7 +246,7 @@ fn command_tool_process_adds_the_project_variables_under_its_own() {
     (variable("rust_log"), "warn".to_owned()),
   ]))
   .expect("valid variables");
-  let process = full_command().process(&found, &worktree, environment, &project);
+  let process = full_command().process(&found, &worktree, environment, &project, Platform::MacOs);
   assert_eq!(
     process.env(),
     [
@@ -238,7 +276,13 @@ fn command_tool_process_runs_in_the_worktree_with_the_cleaned_environment_and_it
     ("rust_log", "debug"),
   ]
   .map(|(name, value)| (OsString::from(name), OsString::from(value)));
-  let process = full_command().process(&found, &worktree, environment, &CommandEnvironment::default());
+  let process = full_command().process(
+    &found,
+    &worktree,
+    environment,
+    &CommandEnvironment::default(),
+    Platform::MacOs,
+  );
   assert_eq!(process.program(), found);
   assert_eq!(process.args(), ["test", "--workspace", "name with space"]);
   assert_eq!(process.current_dir(), Some(worktree.as_path()));
@@ -263,7 +307,13 @@ fn command_tool_process_gets_no_secret_variable() {
     .map(|(name, value)| (OsString::from(name), OsString::from(value)));
   let project =
     CommandEnvironment::new(BTreeMap::from([(variable("RUST_LOG"), "warn".to_owned())])).expect("valid variables");
-  let process = full_command().process(&PathBuf::from("/usr/bin/cargo"), &worktree, environment, &project);
+  let process = full_command().process(
+    &PathBuf::from("/usr/bin/cargo"),
+    &worktree,
+    environment,
+    &project,
+    Platform::MacOs,
+  );
   assert!(process.secret_env().is_empty());
   assert!(process.env().iter().all(|(name, _)| name != "GH_TOKEN"));
 }

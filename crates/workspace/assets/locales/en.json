@@ -812,6 +812,7 @@
     "errors": {
       "programRequired": "Enter the program to run.",
       "programOutsideWorktree": "A relative program path must stay inside the worktree.",
+      "programDriveRelative": "Write the program's path from the drive's root, e.g. C:\\tools\\check.exe, or give its name alone.",
       "controlCharacter": "Line breaks, tabs and other control characters can’t be passed to a program.",
       "tooLong": "This is too long.",
       "emptyArgument": "An argument can’t be empty.",
@@ -919,6 +920,25 @@
       "mcpProgramMissing": "{{program}} is not a file on this computer."
     },
     "githubConnectionName": "GitHub · {{host}}",
+    "projectTools": {
+      "errors": {
+        "nameNotEditable": "A tool keeps the name it was made with; leave out the name to change it.",
+        "nameTaken": "Another tool is named {{name}}. Give the new tool a name of its own.",
+        "notACommandTool": "{{tool}} is not a command tool; only command tools are made and changed in this version.",
+        "programInRepository": "{{program}} lies inside the project's repository, where a run's work can change it. A command tool's program is a fixed file outside it; run a script of the repository through its interpreter, e.g. program powershell with -File tools/check.ps1.",
+        "programInWorktree": "A command tool's program is a fixed file: name it as found on the search path, or by its absolute path outside the repository. A script of the repository runs through its interpreter, e.g. program powershell with -File tools/check.ps1.",
+        "programNotFound": "No program {{program}} was found on the search path or at that path.",
+        "programPathNotText": "The program was found at {{program}}, a path that is not valid Unicode text, which a tool cannot store. Name a copy at another path."
+      },
+      "widens": {
+        "newTool": "A new command tool runs its program whenever a pipeline step calls it: with your rights, network access and no sandbox, on files the agents before the step wrote (scripts, build files, configuration). Allow it only where you would let those agents do that.",
+        "firstVersion": "A tool's first version lets pipeline steps run its program with your rights, network access and no sandbox, on files the agents before them wrote, so a person publishes it.",
+        "program": "The tool would run {{program}} where it ran {{before}}.",
+        "arguments": "The tool's arguments would change, and with them what its program does.",
+        "exitCodes": "Exit codes {{codes}} would pass, which did not.",
+        "toolStep": "Step {{step}} would run {{tool}} with your rights, network access and no sandbox, on files the agents before it wrote; the pipeline does not call it there yet. Approve it only after agents you would let do that."
+      }
+    },
     "widens": {
       "repository": "Write access to the repository, which the latest version does not give.",
       "writableFolder": "A writable folder outside the worktree that the latest version does not give.",

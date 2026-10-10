@@ -16,6 +16,7 @@ mod kontur;
 mod live;
 mod mcp_servers;
 mod merge;
+mod tools;
 mod window;
 
 use std::{
