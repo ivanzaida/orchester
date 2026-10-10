@@ -1,16 +1,19 @@
 # ORC-22 implementation validation
 
-2026-10-11. Final saved candidate: branch `orchester/orc-22-run-1`.
-Orchester checkpointed the implementation, fake-cell harness, tests and initial
-evidence in `febfd82989e4abbe62ea3cd61fde9ee947fed778`, originally based on
-`c263258d145eb22c167bda6a702e6e2cf35a6615`. The implementing agent made no commit.
-The completed candidate adds the person-approved `tools/check.ps1` change and
-updates this report and the plan. No Rust or test input changed after the
-checkpoint, so the 41 passing filtered tests below remain valid for it.
-They include deterministic result-before-turn-completion synchronization,
-distinct continuation request IDs and the added core protocol regression.
-The fresh successful gate result covers the final saved script. Subsequent
-Rust changes invalidate the test results; gate changes require a fresh gate.
+2026-10-11. The current review-correction candidate is
+`d2bb69a09f31e1bd8c61377faf178dc41fe78c8a` plus the saved changes documented in
+**Review correction — current validation** below. No implementing agent commit
+was made. That section is the verdict on the current inputs.
+
+The initial validation below describes the earlier candidate. Orchester
+checkpointed its implementation, fake-cell harness, tests and initial evidence
+in `febfd82989e4abbe62ea3cd61fde9ee947fed778`, originally based on
+`c263258d145eb22c167bda6a702e6e2cf35a6615`. The following candidate added the
+person-approved `tools/check.ps1` change and reached `d2bb69a`. Its 41 passing
+filtered tests and gate result are retained as historical evidence. Review
+found that its fake delayed MCP item completion until cell collection, masking
+the result-before-turn-completion race; those results are not validation of the
+corrected fake or changed Rust below.
 
 ## Reproduction and behavior
 
@@ -20,7 +23,7 @@ message. The approval vanished when the runner ended the process tree.
 `cargo test -p orchester-runner --features test-agent --test codex_tool_wait codex_tool_wait_approval`
 failed at that assertion. This is pre-fix evidence, not the current verdict.
 
-The eight current runner tests cover approval and denial three seconds after
+The eight initial runner tests cover approval and denial three seconds after
 the model turn completes, the result returning before turn completion, a
 delayed previous turn-start reply, pause, cancel, runner loss, and graceful
 shutdown. Approved and denied calls finish in one invocation and one attempt.
@@ -28,7 +31,7 @@ Stopped decisions never produce a failed attempt, never execute the outside
 read and refuse stale approval answers. The continuation retains the original
 model, effort, environment and output schema.
 
-## Current filtered tests
+## Initial filtered tests (before review correction)
 
 All commands exited 0. There are 41 passing tests in these filtered suites.
 
@@ -48,9 +51,9 @@ was rerun successfully. No source dependency or user's installation changed.
 Earlier intermediate runs of the new suite passed 2, then 7, then 8 tests;
 the current 8-test result above supersedes those intermediate results.
 
-## Quality checks and environment limits
+## Initial quality checks and environment limits
 
-| Command | Current result |
+| Command | Initial candidate result |
 | --- | --- |
 | `powershell -File tools/check.ps1` | Fresh exit 0, `check: OK`: formatting of all 13 workspace packages, full-workspace clippy, source size and UI literal checks pass with the approved per-package fix. |
 | `cargo +nightly fmt --all -- --check` | Earlier diagnostic, before the gate change: Windows error 206, command line too long. A short drive alias canonicalized back to the long path and did not repair it. |
@@ -95,7 +98,7 @@ initially failed with schannel NoCredentials; setting
 The successful file-tool test prepended
 `(Join-Path $PWD '.tmp/orc-22/tools/bin') + ';' + $env:PATH` to PATH.
 
-## Not run
+## Initial validation limits
 
 No unfiltered or full-workspace test suite, signed-in Codex/Claude live run,
 macOS runtime test, desktop build/start or Pencil verification was performed.
@@ -106,3 +109,96 @@ so there are no new design nodes or states for a Pencil verifier to compare.
 Review should check the provisional model final message, persistent pending
 approval, same-thread result collection, request-ID handling and interrupted
 decision paths. See `docs/interactive-tool-approvals.md`, ORC-22 section.
+
+## Review correction — current validation
+
+2026-10-11. Inputs: HEAD `d2bb69a09f31e1bd8c61377faf178dc41fe78c8a`
+plus the saved runner source/test changes. The runner patch digest from
+`git diff -- crates/runner | git hash-object --stdin` is
+`455ea8d46d97aebbb07e8a4f3d4573fdadd59c10`. Rust and test inputs stayed
+unchanged after the successful commands below; subsequent edits only update
+the cause documentation, plan and this evidence. `tools/check.ps1` retains the
+previously person-approved per-package formatting fix, unchanged in this correction.
+
+The corrected fake completes its MCP item on the background thread as soon as
+the relay returns the result, before collection. The fast-result test waits for
+both that stored item-completion event and the returned-result marker before
+releasing the model turn. It also proves no turn completion or cell collection
+has happened yet. Fast approvals and fast denials then collect the existing
+result in the same invocation and attempt. Delayed approval/denial and the four
+interruption cases remain covered.
+
+The App Server session retains an approval-result collection flag through MCP
+item completion and resets it when starting the continuation. Because the
+protocol does not certify whether the model collected the cell, a synchronous
+approval also receives one conservative continuation. The fake now remains
+available after a successful model turn as App Server does, and can return its
+already-collected final report without rerunning tools or editing files again.
+The existing synchronous relay regression asserts the two turn request IDs,
+one attempt and unchanged counts of actual tool calls.
+
+### Fresh successful filtered tests
+
+All exited 0: **55 tests passed**. For runner suites, the scratch ripgrep
+directory `.tmp/orc-22/tools/bin` was prepended to PATH.
+
+| Command | Result |
+| --- | --- |
+| `cargo test -p orchester-runner --features test-agent --test codex_tool_wait codex_tool_wait` | 9 passed |
+| `cargo test -p orchester-runner --features test-agent --test orchester_tools orchester_tools` | 6 passed |
+| `cargo test -p orchester-runner --features test-agent --test claude_approvals claude_approvals` | 11 passed |
+| `cargo test -p orchester-runner --features test-agent --test claude_prompt_relay claude_prompt_relay` | 6 passed |
+| `cargo test -p orchester-runner --features test-agent --test codex_relay codex_relay` | 5 passed |
+| `cargo test -p orchester-runner --features test-agent --test approval_shutdown approval_shutdown` | 3 passed |
+| `cargo test -p orchester-core --test app_server app_server` | 2 passed, 10 filtered out |
+| `cargo test -p orchester-runner --features test-agent --test execution execution` | 5 passed |
+| `cargo test -p orchester-runner --features test-agent --test questions questions` | 2 passed |
+| `cargo test -p orchester-runner --features test-agent --test codex_escalations codex_escalations` | 4 passed |
+| `cargo test -p orchester-runner --features test-agent --test codex_resume codex_resume` | 2 passed |
+
+### Gate, diagnostics and prerequisites in this correction
+
+| Command | Result |
+| --- | --- |
+| `powershell -File tools/check.ps1` | Exit 0, `check: OK`; per-package formatting, full-workspace clippy, file sizes and UI literals pass on the current Rust/test inputs |
+| `cargo +nightly fmt -p orchester-runner -- --check` | Initially exit 1 on new test formatting; corrected through file tools and rerun with exit 0, also covered by the gate |
+| `cargo clippy -p orchester-runner --all-targets --all-features --target aarch64-apple-darwin -- -D warnings` | Exit 1: native dependency build scripts cannot find `cc`; no runner macOS cross-clippy verdict |
+| `Get-Command rg -ErrorAction SilentlyContinue \| Select-Object Source` | Exit 1: no ripgrep on the shell's original PATH |
+| `cargo install ripgrep --locked --root .tmp/orc-22/tools --target-dir .tmp/orc-22/tools-target` with `CARGO_HTTP_SSL_BACKEND=openssl` | Exit 0: real ripgrep 15.2.0 already installed in this worktree's scratch folder; reused it |
+| `git status --short` | Exit 0: clean starting worktree; final changed paths are this correction |
+| `git rev-parse HEAD` | Exit 0: starting revision above |
+| `git diff --stat` | Exit 0: correction paths inspected |
+| `git diff --check` | Exit 0 |
+| `git diff -- crates/runner \| git hash-object --stdin` | Exit 0: patch digest above |
+
+### Reproduction and intermediate failures retained as context
+
+`cargo test -p orchester-runner --features test-agent --test codex_tool_wait codex_tool_wait_result_returned_before_turn_completion_is_collected`
+was run twice before the production correction. The first run exited 1 on an
+ownership error in the new assertion (the approval answer had been moved).
+That was repaired by recording the expected outcome before sending the answer.
+The second run compiled and exited 1 after the test timed out waiting for a
+successful run: it had received the provisional question instead of collecting
+the cell. This reproduces the review finding with the corrected event boundary.
+
+An intermediate `codex_tool_wait codex_tool_wait` run passed all nine tests
+after the production fix but before the later shared-fake correction; the fresh
+nine-test run above supersedes it. An intermediate
+`cargo test -p orchester-runner --features test-agent --test orchester_tools orchester_tools`
+exited 1 (5 passed / 1 failed) because the old synchronous fake exited rather
+than receiving the conservative continuation. The corrected fake's fresh
+six-test pass above supersedes it.
+
+### Not run and verification handoff
+
+No full/unfiltered test suite, signed-in Codex/Claude live run, historical
+project database read, macOS runtime test, desktop build/start or Pencil
+verification was performed. No visual surface changed; there are no Pencil
+nodes or UI states for the verifier to compare. Runner macOS cross-clippy
+remains blocked by the environment's missing C compiler.
+
+Review should examine the independent collection flag, its reset at
+continuation start, the MCP completion-before-turn-completion synchronization,
+the single invocation/attempt, and the synchronous case's lack of repeated
+tool calls. Earlier test/gate results above are historical; this section covers
+the changed inputs.

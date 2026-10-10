@@ -117,6 +117,8 @@ pub(super) struct AppServerSession {
   turn: Option<String>,
   turn_request: u64,
   turn_replies: BTreeSet<u64>,
+  /// MCP completion does not prove that the model collected a yielded approval result.
+  approval_results_to_collect: bool,
   stream: AppServerStream,
   /// The configured MCP servers the step does not choose, turned off for its thread.
   turned_off: Vec<String>,
@@ -136,6 +138,7 @@ impl AppServerSession {
       turn: None,
       turn_request: 5,
       turn_replies: BTreeSet::new(),
+      approval_results_to_collect: false,
       stream: AppServerStream::with_exemptions(setup.exemptions.clone()),
       setup,
     }
@@ -155,6 +158,7 @@ impl AppServerSession {
   /// The runner asks a person about a call of Orchester's tool `action` with `arguments`
   /// ([`AppServerStream::runner_asks`]): the id of Codex's call when it has started.
   pub fn runner_asks(&mut self, action: &str, arguments: &serde_json::Value) -> Option<String> {
+    self.approval_results_to_collect = true;
     self.stream.runner_asks(action, arguments)
   }
 
@@ -195,8 +199,9 @@ impl AppServerSession {
     std::mem::take(&mut self.steer_answers)
   }
 
-  pub fn has_active_orchester_tools(&self) -> bool {
-    self.stream.has_active_orchester_tools()
+  /// Calls still running, or approval results that a yielded cell may still hold.
+  pub fn has_orchester_results_to_collect(&self) -> bool {
+    self.approval_results_to_collect || self.stream.has_active_orchester_tools()
   }
 
   pub fn has_active_tools(&self) -> bool {
@@ -479,6 +484,7 @@ impl AppServerSession {
   pub async fn continue_tools(&mut self, process: &Supervised) -> io::Result<()> {
     self.phase = Phase::Turn;
     self.turn = None;
+    self.approval_results_to_collect = false;
     // Request 6 belongs to config/read; each continuation gets a fresh JSON-RPC id.
     self.turn_request = self.turn_request.max(6) + 1;
     self.turn_with(

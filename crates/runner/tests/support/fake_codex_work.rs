@@ -267,7 +267,7 @@ fn first_time(worktree: &Path, prompt: &str) -> bool {
 
 /// Appends `line` to `README.md` (or writes the step's own file), reports it as a command and a file change, then
 /// the final message and the usage.
-pub fn finish(session: &Session, line: &str, result: &StepReport) -> Step {
+pub fn finish(session: &mut Session, line: &str, result: &StepReport) -> Step {
   let worktree = &session.cwd;
   let file = if result.own_file {
     format!("{}.txt", result.step.to_lowercase().replace(' ', "-"))
@@ -321,8 +321,9 @@ pub fn finish(session: &Session, line: &str, result: &StepReport) -> Step {
     "Done.".to_owned()
   };
   message(session, "item_3", &text);
+  session.completed_result = Some(text);
   complete(session, None);
-  Step::Exit(ExitCode::SUCCESS)
+  Step::Go
 }
 
 /// A message the agent wrote, as a completed `agentMessage` item.

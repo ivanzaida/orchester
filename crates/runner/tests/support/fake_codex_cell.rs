@@ -4,7 +4,7 @@ use std::{path::Path, process::ExitCode, sync::mpsc, thread, time::Duration};
 use serde_json::json;
 
 use super::{
-  Session, Step, complete,
+  Session, Step, TURN, complete, emit,
   fake_codex_work::{finish, message, report_of},
   fake_permission_prompt::Prompt,
   notify,
@@ -32,8 +32,15 @@ pub fn start(session: &mut Session, prompt: &str, structured: bool) -> Step {
       "tool": "search_external_file", "arguments": arguments}}),
   );
   let (sender, answer) = mpsc::channel();
+  let thread = session.thread.clone();
   thread::spawn(move || {
     let result = server.call("search_external_file", &arguments);
+    // Codex completes the MCP item when it returns, before the model collects the yielded cell.
+    emit(
+      &json!({"method": "item/completed", "params": {"threadId": thread, "turnId": TURN,
+      "item": {"id": "cell-search", "type": "mcpToolCall", "server": "Orchester",
+        "tool": "search_external_file", "status": "completed"}}}),
+    );
     eprintln!("cell-returned: yes");
     // A terminated fake cannot collect the result.
     sender.send((server, result)).ok();
@@ -61,7 +68,12 @@ fn wait_to_end(worktree: &Path) {
 
 pub fn collect(session: &mut Session) -> Step {
   let Some(cell) = session.cell.take() else {
-    return Step::Exit(ExitCode::from(2));
+    let Some(text) = session.completed_result.take() else {
+      return Step::Exit(ExitCode::from(2));
+    };
+    message(session, "already-collected", &text);
+    complete(session, None);
+    return Step::Go;
   };
   let Ok((server, Some((text, failed)))) = cell.answer.recv_timeout(Duration::from_secs(15)) else {
     eprintln!("cell: no answer");
@@ -69,11 +81,5 @@ pub fn collect(session: &mut Session) -> Step {
   };
   session.orchester = Some(server);
   eprintln!("cell: {}: {text}", if failed { "denied" } else { "approved" });
-  notify(
-    session,
-    "item/completed",
-    json!({"item": {"id": "cell-search", "type": "mcpToolCall",
-    "server": "Orchester", "tool": "search_external_file", "status": "completed"}}),
-  );
   finish(session, "collected", &report_of(&cell.prompt, cell.structured))
 }

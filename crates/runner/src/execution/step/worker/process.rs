@@ -283,7 +283,7 @@ impl Worker {
         if self.tool_relay.as_ref().is_some_and(Listening::busy)
           || self
             .app_server()
-            .is_some_and(AppServerSession::has_active_orchester_tools)
+            .is_some_and(AppServerSession::has_orchester_results_to_collect)
           || matches!(&watch.approval, Some((_, Awaiting::Tool { .. })))
         {
           watch.tools_after_turn = true;

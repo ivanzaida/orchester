@@ -207,6 +207,8 @@ async fn orchester_tools_serve_codex_and_ask_in_the_runner() {
       report_progress"
     ]
   );
+  assert_eq!(reported(&db, id, "turn-request: "), ["5", "7"]);
+  assert_eq!(run.attempts().len(), 1);
   let calls = reported(&db, id, "orchester-call: ");
   assert_eq!(calls.len(), 4, "{calls:#?}");
   assert!(calls[0].starts_with("search_external_file ok: "), "{calls:#?}");

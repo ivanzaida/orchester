@@ -36,7 +36,7 @@ pub fn ask(session: &Session) {
 }
 
 /// Takes the response to the questions and works on.
-pub fn answered(session: &Session, answer: &Value, (prompt, structured): (&str, bool)) -> Step {
+pub fn answered(session: &mut Session, answer: &Value, (prompt, structured): (&str, bool)) -> Step {
   let answers = &answer["result"]["answers"];
   if !answers.is_object() {
     eprintln!("not an answer to the questions: {answer}");

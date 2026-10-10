@@ -521,20 +521,33 @@ retains the originating step for callbacks after a yield. These sources explain
 the mechanism; the version-specific observation above is from the reported
 0.159.2 run, not a new live-model probe.
 
-The runner now holds the same process and relay while Orchester's call is
+The runner holds the same process and relay while Orchester's call is
 outstanding, including a queued approval not yet consumed by the worker.
-Started Orchester MCP items also cover the ordering where the result returns
-before the runner receives the model's turn completion. The relay reports when
-it has sent the tool result. Once the call has returned and no approval remains,
-the runner starts a continuation in the same thread, invocation and attempt,
-with the same model, effort, environment and output schema. Each turn uses a
-distinct JSON-RPC request ID, so a late acknowledgement of the previous turn
-cannot be mistaken for the continuation's reply. It asks the agent to collect
-the existing yielded cell with `functions.wait` and continue using the
-approval or denial, without repeating the call. The earlier final message is
-provisional until this continuation finishes. No new approval is granted by the
-continuation, and the invocation's active time remains stopped while a person
-decides.
+A started MCP item covers a call still running, but a completed item does not
+prove the model collected its result. Codex 0.159.2's
+[MCP call handler](https://github.com/openai/codex/blob/rust-v0.159.2/codex-rs/core/src/mcp_tool_call.rs#L613)
+emits completion when the MCP call returns, before returning the result to
+code mode. A fast approval or denial can therefore clear the pending decision,
+idle the relay and complete the MCP item before `turn/completed`, while the
+yielded cell still holds the result. The first ORC-22 implementation missed
+this ordering because its fake completed the item only when collecting the cell.
+
+The App Server session now remembers an Orchester approval's need for result
+collection independently of active MCP items. Item completion cannot clear it;
+starting the collection continuation clears it. The relay reports when it has
+sent the tool result. Once the model turn has ended, the call has returned and
+no approval remains, the runner starts a continuation in the same thread,
+invocation and attempt, with the same model, effort, environment and output
+schema. The protocol does not certify cell collection, so this is conservative:
+a turn with a synchronous approved call also gets one continuation, which can
+use results it already collected. It must not repeat the tools.
+
+Each turn uses a distinct JSON-RPC request ID, so a late acknowledgement of the
+previous turn cannot be mistaken for the continuation's reply. The continuation
+asks the agent to collect the existing yielded cell with `functions.wait` and
+continue using the approval or denial. The earlier final message is provisional
+until this continuation finishes. No new approval is granted, and the
+invocation's active time remains stopped while a person decides.
 
 Pause, cancel, runner stop and graceful shutdown still end an unanswered request
 as interrupted, refuse a stale answer and preserve the attempt; they do not
@@ -544,17 +557,23 @@ blocking `--permission-prompt-tool` path. M12's successful live outside reads
 (`docs/plan.md`, Done) exercised approvals without this premature model-turn
 completion; they do not rule out the code-mode sequence above.
 
-The fake Codex now starts a real relay search on a background thread, emits
-`turn/completed` with a pending-cell result, and collects that same call on the
-runner's continuation. Before the fix,
+The fake Codex starts a real relay search on a background thread and completes
+the MCP item on that thread when the result returns, independently of cell
+collection. It emits `turn/completed` with a pending-cell result and collects
+that same call on the runner's continuation. Before the initial fix,
 `cargo test -p orchester-runner --features test-agent --test codex_tool_wait codex_tool_wait_approval`
-failed because the waiting approval had vanished. The fixed suite checks an
-approval and a denial three seconds after turn completion, the reverse
-result/completion ordering, a late turn-start acknowledgement, and each of the
-four stop paths. It asserts a single attempt and invocation, the actual search
-result or denial, and stale-answer
-refusal. It does not run a signed-in Codex model or read the historical project
-database; the historical sequence above is the evidence supplied with ORC-22.
+failed because the waiting approval had vanished. With the corrected fake but
+before the review correction, the filtered
+`codex_tool_wait_result_returned_before_turn_completion_is_collected` test
+failed waiting for success: the provisional question had become the step result.
+
+The nine tool-wait tests check approval and denial three seconds after turn
+completion, fast approval and denial with the MCP item completed before the
+model turn ends, a late turn-start acknowledgement, and four stop paths. They
+assert a single attempt and invocation, actual search output or denial, and
+stale-answer refusal. The synchronous relay test also asserts one continuation
+and no repeated tool calls. There is no signed-in Codex model probe or historical
+project database read; the historical sequence above was supplied with ORC-22.
 
 ## Build directories
 

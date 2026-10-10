@@ -775,12 +775,17 @@ The runner keeps the process and relay alive across a model turn's completion
 while an Orchester call waits, then collects its result in the same thread,
 invocation and attempt. Pause, cancel, runner loss and shutdown preserve the
 attempt and interrupt the decision without granting it. The fake reproduces the
-pre-fix failure; eight tests cover delayed approval/denial, result ordering,
-late turn-start replies and stops. Claude's existing approval tests pass.
+pre-fix failure; nine tests cover delayed approval/denial, fast approval and denial
+with MCP item completion preceding turn completion, late turn-start replies and
+stops. Review's ordering finding is reproduced and corrected: approval results
+remain eligible for collection after their MCP item completes. A synchronous
+approved result receives one continuation without repeating tools. Claude's
+existing approval tests pass.
 Cause: `docs/interactive-tool-approvals.md`, ORC-22 section.
 The person approved a separate small `tools/check.ps1` change to check formatting
-per workspace package, avoiding Windows error 206 in long run worktree paths.
-Validation: 41 filtered tests pass and `powershell -File tools/check.ps1` passes;
+per workspace package, avoiding Windows error 206 in long run worktree paths;
+that earlier change is retained unchanged in the review correction.
+Validation: 55 fresh filtered tests pass and `powershell -File tools/check.ps1` passes;
 commands, input revisions and limitations: `docs/evidence/orc-22-tool-wait-validation.md`.
 No signed-in live agent run or UI change; the runner's macOS cross-check remains
 blocked by the environment's missing C compiler.

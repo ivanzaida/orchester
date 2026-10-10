@@ -152,6 +152,8 @@ pub struct Session {
   /// The thread's start of Orchester's server, once its tools were listed (after `mcpServerStatus/list`).
   pub orchester: Option<fake_permission_prompt::Prompt>,
   pub cell: Option<fake_codex_cell::Cell>,
+  /// The model already collected synchronous tool results; a continuation reuses its final report.
+  pub completed_result: Option<String>,
   deferred_turn_reply: Option<Value>,
   /// What the thread's model asks of the runner's end of the relay.
   probe: fake_codex_relay::Probe,
@@ -179,6 +181,7 @@ impl Session {
       argument_servers: false,
       orchester: None,
       cell: None,
+      completed_result: None,
       deferred_turn_reply: None,
       probe: fake_codex_relay::Probe::None,
       silent: None,

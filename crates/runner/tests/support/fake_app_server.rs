@@ -274,7 +274,7 @@ fn mcp_answered(session: &mut Session, answer: &Value) -> Step {
 }
 
 /// A declined request: the model was told and works on without it.
-fn went_on(session: &Session, prompt: &str, structured: bool) -> Step {
+fn went_on(session: &mut Session, prompt: &str, structured: bool) -> Step {
   eprintln!("went on");
   if append(&session.cwd, "went on").is_err() {
     eprintln!("cannot write README.md");

@@ -149,8 +149,7 @@ async fn codex_tool_wait_denial_after_a_completed_turn_continues_the_same_attemp
   delayed_decision(ApprovalAnswer::Deny, "Yield outside read.").await;
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn codex_tool_wait_result_returned_before_turn_completion_is_collected() {
+async fn result_before_turn_completion(answer: ApprovalAnswer) {
   let Waiting {
     project,
     runner,
@@ -159,26 +158,64 @@ async fn codex_tool_wait_result_returned_before_turn_completion_is_collected() {
     request,
   } = Waiting::start().await;
   let root = project.repo.path();
+  let approves = answer == ApprovalAnswer::Once;
   runner
-    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
+    .decide_tool_approval(id, request.id, answer, Answerer::Person)
     .await
-    .expect("approve");
-  // Wait for the actual result, while the fake's model is still held before turn/completed.
+    .expect("decide");
+  let db = ProjectDb::open(root).expect("open");
+  // Hold turn/completed until the runner has received the MCP item's completion and the result.
   tokio::time::timeout(PATIENCE, async {
     loop {
-      if !reported(&ProjectDb::open(root).expect("open"), id, "cell-returned: ").is_empty() {
+      if db
+        .activity(id, 0)
+        .expect("activity")
+        .iter()
+        .any(|entry| matches!(&entry.event, AgentEvent::McpToolFinished { item, .. } if item == "cell-search"))
+        && !reported(&db, id, "cell-returned: ").is_empty()
+      {
         break;
       }
       events.recv().await.expect("notification");
     }
   })
   .await
-  .expect("the relay returns its result");
+  .expect("the relay result and MCP completion arrive");
+  assert!(
+    !db
+      .activity(id, 0)
+      .expect("activity")
+      .iter()
+      .any(|entry| matches!(entry.event, AgentEvent::TurnCompleted { .. }))
+  );
+  assert!(
+    reported(&db, id, "cell: ").is_empty(),
+    "the model has not collected its cell"
+  );
   ended_turn(root, id).await;
   let done = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(done.status(), &RunStatus::Succeeded);
   assert_eq!(done.attempts().len(), 1);
-  assert!(reported(&ProjectDb::open(root).expect("open"), id, "cell: ")[0].contains("notes.txt"));
+  assert_eq!(db.invocations(id).expect("invocations").len(), 1);
+  assert_eq!(reported(&db, id, "turn-request: "), ["5", "7"]);
+  let results = reported(&db, id, "cell: ");
+  assert_eq!(results.len(), 1);
+  if approves {
+    assert!(results[0].starts_with("approved: "), "{results:?}");
+    assert!(results[0].contains("notes.txt"), "{results:?}");
+  } else {
+    assert!(results[0].starts_with("denied: "), "{results:?}");
+  }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn codex_tool_wait_result_returned_before_turn_completion_is_collected() {
+  result_before_turn_completion(ApprovalAnswer::Once).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn codex_tool_wait_denial_returned_before_turn_completion_is_collected() {
+  result_before_turn_completion(ApprovalAnswer::Deny).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
