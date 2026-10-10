@@ -20,7 +20,8 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   reports it). overview also takes `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as after \
   Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; connections `tab` and \
   `selected` (the id of the connection its inspector shows); new_connection `kind`; edit_connection `connection` \
-  (an MCP server's id). A tab or kind left out is the one the screen opens on. Answers the route the tab shows, whose params navigate takes back. Errors are JSON with \
+  (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab. A tab or kind left out is the one \
+  the screen opens on. Answers the route the tab shows, whose params navigate takes back. Errors are JSON with \
   a stable `code`: unknown_route (with the known names), missing_param, unexpected_param, invalid_param, \
   unknown_tab (with the screen's tabs), not_a_string, not_an_object, not_ready (the window is starting).";
 
@@ -59,6 +60,7 @@ fn schema() -> Value {
       "selected": { "type": "string", "description": "connections: the id of the connection its inspector shows." },
       "kind": { "type": "string", "enum": kinds, "description": "new_connection: what it adds." },
       "connection": { "type": "string", "description": "edit_connection: the MCP server's id." },
+      "tool": { "type": "string", "description": "tools: the tool’s id, or new for a command draft; omitted opens the library." },
       "from": {
         "type": "string",
         "enum": sources,
@@ -109,7 +111,7 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
     Screen::Agents => ProjectPage::Agents,
     Screen::Instructions => ProjectPage::Instructions,
     Screen::Skills => ProjectPage::Skills,
-    Screen::Tools => ProjectPage::Tools,
+    Screen::Tools => tools_page(args)?,
     Screen::Secrets => ProjectPage::Secrets,
     Screen::Connections => ProjectPage::Connections(connections_view(args)?),
     Screen::NewConnection => ProjectPage::NewConnection(new_connection(args)?),
@@ -128,6 +130,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::EditTask => &["project", "key"],
     Screen::Task => &["project", "key", "tab", "file", "from"],
     Screen::Connections => &["project", "tab", "selected"],
+    Screen::Tools => &["project", "tool", "tab"],
     Screen::NewConnection => &["project", "kind"],
     Screen::EditConnection => &["project", "connection"],
     Screen::NewTask
@@ -137,10 +140,28 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     | Screen::Agents
     | Screen::Instructions
     | Screen::Skills
-    | Screen::Tools
     | Screen::Secrets
     | Screen::ProjectSettings => &["project"],
   }
+}
+
+fn tools_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
+  let Some(tool) = string(args, "tool")? else {
+    return Ok(ProjectPage::Tools);
+  };
+  if tool == "new" {
+    return Ok(ProjectPage::NewTool);
+  }
+  let id = tool.parse().map_err(|e: uuid::Error| ToolError::InvalidParam {
+    param: "tool",
+    reason: e.to_string(),
+  })?;
+  let chosen = tab(
+    args,
+    crate::routes::ToolTab::from_name,
+    &crate::routes::ToolTab::ALL.map(crate::routes::ToolTab::name),
+  )?;
+  Ok(ProjectPage::Tool(id, chosen))
 }
 
 fn project(args: &Map<String, Value>) -> Result<ProjectId, ToolError> {

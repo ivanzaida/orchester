@@ -14,7 +14,7 @@ mod inspector;
 mod list;
 mod mcp_form;
 mod page;
-mod widen;
+pub(crate) mod widen;
 mod words;
 mod work;
 

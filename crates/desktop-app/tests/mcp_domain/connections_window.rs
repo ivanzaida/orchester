@@ -14,7 +14,7 @@ use super::{
 };
 
 /// Kontur with its connections seeded, served with window control on.
-fn controlled() -> (Served, ProjectId, std::path::PathBuf) {
+pub(super) fn controlled() -> (Served, ProjectId, std::path::PathBuf) {
   let folder = tempfile::tempdir().expect("a temporary folder");
   let request = SeedRequest {
     data_dir: folder.path().join("bin"),
@@ -49,18 +49,18 @@ impl Served {
       .to_owned()
   }
 
-  fn click_by_client(&mut self, id: &str) -> Result<Value, Value> {
+  pub(super) fn click_by_client(&mut self, id: &str) -> Result<Value, Value> {
     let reference = self.reference(id);
     self.call("lurq_interact", &json!({ "action": "click", "ref": reference }))
   }
 
-  fn set_by_client(&mut self, id: &str, value: &str) {
+  pub(super) fn set_by_client(&mut self, id: &str, value: &str) {
     let reference = self.reference(id);
     self.ok("lurq_set_value", &json!({ "ref": reference, "value": value }));
   }
 
   /// A person's press on element `id`, in the window itself.
-  fn click_by_person(&mut self, id: &str) {
+  pub(super) fn click_by_person(&mut self, id: &str) {
     self
       .tree
       .get_element_by_id_mut(id)
@@ -69,7 +69,7 @@ impl Served {
     self.pass();
   }
 
-  fn shows(&mut self, id: &str) -> bool {
+  pub(super) fn shows(&mut self, id: &str) -> bool {
     self.tree.get_element_by_id(id).is_some()
   }
 }

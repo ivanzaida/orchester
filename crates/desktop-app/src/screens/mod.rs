@@ -83,7 +83,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Agents => agents::screen(ctx, project),
     ProjectPage::Instructions => instructions::screen(ctx, project),
     ProjectPage::Skills => skills::screen(ctx, project),
-    ProjectPage::Tools => tools::screen(ctx, project),
+    ProjectPage::Tools | ProjectPage::NewTool | ProjectPage::Tool(..) => tools::screen(ctx, project, page),
     ProjectPage::Secrets => secrets::screen(ctx, project),
     ProjectPage::Connections(view) => connections::screen(ctx, project, *view),
     ProjectPage::NewConnection(kind) => connections::new_connection(ctx, project, *kind),

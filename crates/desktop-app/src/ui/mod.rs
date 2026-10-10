@@ -31,5 +31,6 @@ pub mod status;
 pub mod table;
 pub mod tabs;
 pub mod toggle;
+pub mod tool_row;
 pub mod tooltip;
 pub mod unavailable;

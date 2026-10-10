@@ -28,6 +28,7 @@ use crate::{
     services::{Services, blocking},
   },
   messages::{self, Message},
+  tasks::outside::Outside,
   tools::data::{ProjectTools, ToolEntry},
 };
 
@@ -158,6 +159,7 @@ async fn publish_tool(services: &Services, args: InTool) -> Result<Value, ToolEr
     // Published only while the draft is the one just checked.
     db.publish_draft_matching(id, draft.body(), Timestamp::now())
       .map_err(|error| publish_error(&error))?;
+    services.changes.record(open.project.id(), Outside::Tools);
     let tools = ProjectTools::load(&db)?;
     let entry = tools
       .tool(id)
@@ -203,7 +205,7 @@ fn summary_json(entry: &ToolEntry) -> Value {
     "kind": entry.tool.kind(),
     "description": entry.tool.description(),
     "state": state_json(entry.state),
-    "runnable": entry.tool.kind().runnable() && entry.tool.access().is_none(),
+    "runnable": entry.runnable(),
   })
 }
 

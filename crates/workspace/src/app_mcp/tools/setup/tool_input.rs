@@ -21,7 +21,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
-  project::{Variable, changed_variables, environment},
+  project::{Variable, environment},
   project_tools::{tool_json, tool_named},
   tool_program::found_program,
   widening,
@@ -101,6 +101,9 @@ pub async fn save_tool_draft(services: &Services, args: SaveToolDraft) -> Result
     let entry = tools
       .tool(id)
       .ok_or_else(|| ToolError::not_found(Missing::Tool, id.to_string()))?;
+    services
+      .changes
+      .record(open.project.id(), crate::tasks::outside::Outside::Tools);
     let mut value = tool_json(&tools, entry);
     value["draft_kept"] = json!(saved == DraftSaved::Stored);
     Ok(json!({ "tool": value }))
@@ -130,33 +133,7 @@ fn changed_tool(
   Ok(command_tool(description, action, entry.tool.access().cloned()))
 }
 
-/// What `after` runs that `before` did not: another program, other arguments, exit codes that now pass,
-/// or variables changed but harmless ones. Narrower exit codes, the description, the timeout and the
-/// output limit change nothing a person must decide.
-pub(super) fn widenings(before: &CommandAction, after: &CommandAction) -> Vec<Message> {
-  let mut reasons = Vec::new();
-  if before.program() != after.program() {
-    reasons.push(
-      Message::new("appMcp.projectTools.widens.program")
-        .with("program", after.program().as_str().to_owned())
-        .with("before", before.program().as_str().to_owned()),
-    );
-  }
-  if before.args() != after.args() {
-    reasons.push(Message::new("appMcp.projectTools.widens.arguments"));
-  }
-  let passing: Vec<String> = after
-    .exit_codes()
-    .iter()
-    .filter(|code| !before.exit_codes().contains(*code))
-    .map(|code| code.to_string())
-    .collect();
-  if !passing.is_empty() {
-    reasons.push(Message::new("appMcp.projectTools.widens.exitCodes").with("codes", passing.join(", ")));
-  }
-  reasons.extend(changed_variables(before.environment(), after.environment()));
-  reasons
-}
+pub(super) use crate::tools::widening::widenings;
 
 /// The command `args` describe over `before` (the tool's command; none for a new tool), its program
 /// found as a step would start it with `project`'s variables, outside `repository`.

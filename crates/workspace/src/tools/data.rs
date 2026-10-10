@@ -30,6 +30,10 @@ pub struct ToolEntry {
 }
 
 impl ToolEntry {
+  /// Whether this kind of tool runs today, without an unimplemented secret policy.
+  pub fn runnable(&self) -> bool {
+    self.tool.kind().runnable() && self.tool.access().is_none()
+  }
   /// `None` for a resource with neither a draft nor a version, which the store never creates.
   pub fn new(id: ResourceId, name: &Name, draft: Option<Draft<Tool>>, latest: Option<&Version<Tool>>) -> Option<Self> {
     let published = latest.map(Version::number);

@@ -33,6 +33,8 @@ use crate::{
 
 /// A text area's least height (`IBFli` in `s72p3L`).
 const TEXT_AREA_HEIGHT: f32 = 84.0;
+/// Compact command fields in `QTEaI` and `A4zqOZ`.
+const COMPACT_AREA_HEIGHT: f32 = 50.0;
 /// The most lines a text area grows to before its lines scroll.
 const TEXT_AREA_MAX_LINES: usize = 12;
 
@@ -40,6 +42,7 @@ const TEXT_AREA_MAX_LINES: usize = 12;
 enum Lines {
   One,
   Many,
+  Compact,
 }
 
 #[derive(Clone)]
@@ -144,6 +147,12 @@ impl FieldInput {
   /// A text area: lines wrap and add up as they are typed.
   pub fn text_area(mut self) -> Self {
     self.lines = Lines::Many;
+    self
+  }
+
+  /// A compact multiline field, as command arguments and variables are in Tools.
+  pub fn compact_text_area(mut self) -> Self {
+    self.lines = Lines::Compact;
     self
   }
 
@@ -260,10 +269,14 @@ impl Component for FieldBox {
           .trailing
           .map(|glyph| icon(glyph, IconSize::Md, PaletteColor::TextMuted).id(format!("{}-trailing", props.id))),
       ),
-      Lines::Many => dress(
+      Lines::Many | Lines::Compact => dress(
         Row::new()
           .id(format!("{}-box", props.id))
-          .min_height(Dimension::Px(TEXT_AREA_HEIGHT))
+          .min_height(Dimension::Px(if props.lines == Lines::Compact {
+            COMPACT_AREA_HEIGHT
+          } else {
+            TEXT_AREA_HEIGHT
+          }))
           .padding(Padding::symmetric(
             ExtraSpacing::Loose.role(),
             ExtraSpacing::TextArea.role(),
@@ -324,7 +337,7 @@ impl FieldBox {
     }
     match props.lines {
       Lines::One => input.single_line(),
-      Lines::Many => input.multiline().rows(1, TEXT_AREA_MAX_LINES),
+      Lines::Many | Lines::Compact => input.multiline().rows(1, TEXT_AREA_MAX_LINES),
     }
   }
 }
