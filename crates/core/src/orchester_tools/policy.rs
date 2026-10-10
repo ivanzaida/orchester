@@ -45,7 +45,7 @@ pub enum ToolPolicy {
 /// run.
 pub fn decide(tool: OrchesterTool, permissions: &AgentPermissions) -> Option<ToolPolicy> {
   match tool.access() {
-    AccessClass::ReadOnly | AccessClass::Records => Some(ToolPolicy::Runs),
+    AccessClass::ReadOnly | AccessClass::Records | AccessClass::RunProcesses => Some(ToolPolicy::Runs),
     AccessClass::WritesWorktree => (permissions.repository() == RepositoryAccess::Write).then_some(ToolPolicy::Runs),
     AccessClass::Outside if tool == OrchesterTool::RunCheck && permissions.network() == NetworkAccess::Off => None,
     AccessClass::Outside => Some(ToolPolicy::Asks),
@@ -188,7 +188,7 @@ impl StepTools {
           "inputSchema": input_schema(*tool, &self.checks),
           "annotations": {
             "readOnlyHint": tool.read_only(),
-            "destructiveHint": false,
+            "destructiveHint": *tool == OrchesterTool::StopRunProcess,
             "openWorldHint": tool.access() == AccessClass::Outside,
           },
         })
@@ -227,6 +227,13 @@ impl StepTools {
         OrchesterTool::ListSkills.called(claude)
       ));
     }
+    text.push_str(&format!(
+      " Find apps you started with {} and stop them with {}(pid), instead of Stop-Process or kill. \
+       They run without asking; executables outside this run's worktree, the runner and the agent CLI are refused. \
+       Stop only apps you started.",
+      OrchesterTool::ListRunProcesses.called(claude),
+      OrchesterTool::StopRunProcess.called(claude),
+    ));
     text
   }
 }

@@ -13,6 +13,7 @@ pub mod launch;
 pub mod process_group;
 pub mod programs;
 pub mod ripgrep;
+pub mod run_processes;
 pub mod search_path;
 pub mod verifier_app;
 

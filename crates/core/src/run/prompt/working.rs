@@ -55,6 +55,17 @@ impl WorkingTools {
     })
   }
 
+  fn processes(self) -> &'static str {
+    match self.cli {
+      Cli::ClaudeCode => {
+        "Find apps you started with mcp__Orchester__list_run_processes and stop them with mcp__Orchester__stop_run_process(pid), instead of Stop-Process or kill. These tools run without asking and refuse executables outside this run's worktree, the runner and the agent CLI. Stop only apps you started."
+      }
+      Cli::Codex => {
+        "Find apps you started with list_run_processes and stop them with stop_run_process(pid) of the Orchester MCP server, instead of Stop-Process or kill. These tools run without asking and refuse executables outside this run's worktree, the runner and the agent CLI. Stop only apps you started."
+      }
+    }
+  }
+
   /// The part's text.
   pub(super) fn text(self) -> String {
     let files = match (self.cli, self.edits) {
@@ -94,7 +105,7 @@ impl WorkingTools {
       }
       Commands::Sandboxed => "Commands already run in the task's worktree: never start one with `cd`.",
     };
-    [files, commands]
+    [files, commands, self.processes()]
       .into_iter()
       .filter(|line| !line.is_empty())
       .collect::<Vec<_>>()

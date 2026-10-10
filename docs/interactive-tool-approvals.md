@@ -169,6 +169,8 @@ by `read_external_file` and `search_external_file`.
 | `find_symbol` (with the code index) | `name`, `kind?`, `include_tests?`, `include_consts?` | read-only | runs | runs |
 | `search_external_file` | `base_directory` (absolute), `term` | outside | asks; runs in the run's sources | asks; runs in the run's sources |
 | `read_external_file` | `filename` (absolute), `start_line?`, `length?` | outside | asks; runs in the run's sources | asks; runs in the run's sources |
+| `list_run_processes` | none | run processes | runs | runs |
+| `stop_run_process` | `pid` (positive integer) | run processes | runs | runs |
 | `run_check` (with checks) | `name` (one of the step's checks) | outside, network | by the check's access rules (network on only) | as a writing step |
 | `list_skills` (with skills) | none | read-only | runs | runs |
 | `read_skill` (with skills) | `name`, `file?` (a skill file path; none or `SKILL.md` for the skill's own), `offset?`, `limit?` (≤ 10 000, 2000) | read-only | runs | runs |
@@ -176,6 +178,20 @@ by `read_external_file` and `search_external_file`.
 | `save_memory` | `kind`, `text`, `key?`, `tags?`, `importance?`, `scope?` (`task`, the default, or `project`) | records | runs | runs |
 | `report_progress` | `text` (one line, ≤ 200 characters) | records | runs | runs |
 
+- **Run processes (ORC-21).** `list_run_processes` lists processes whose executable, resolved through links,
+  lies inside this invocation's run worktree: pid, name, relative executable path and start time (UTC Unix
+  microseconds). The process's working directory and arguments grant nothing. `stop_run_process(pid)` requests
+  close (WM_CLOSE to only its windows on Windows, SIGTERM on macOS), waits up to two seconds, ends survivors
+  and waits up to one more second. Its answer reports `closed`, `ended`, `already gone`, or a clear refusal.
+  Every descendant must pass the same executable rule; a tree containing an outside or uninspectable child
+  is refused before any close request. Descendants discovered during the grace period are checked too.
+  The runner, its ancestors, the relay and the configured agent CLI executable are protected even inside the
+  worktree. Windows retains process handles; macOS checks executable and microsecond creation time again
+  before each signal. Processes hidden by OS permissions or whose executable cannot be resolved are never
+  listed or stopped. Both tools are offered in writing and read-only steps and never ask for approval:
+  Claude Code receives exact allow rules; Codex receives `approval_mode = "approve"`, and the runner enforces
+  the executable boundary. Both CLIs' *Files and commands* prompt and continuing-session tool steering tell
+  agents to use them instead of `Stop-Process` / `kill`, and to stop only apps they started.
 - **Schemas** are strict (`additionalProperties: false`, each property typed and bounded); a call is read into its
   type with unknown fields refused, and an invalid call is answered with an error result that says why.
 - **Worktree files** (`orchester_agent::FileTools`, confined to the step's `FileScope` as before: the worktree, the

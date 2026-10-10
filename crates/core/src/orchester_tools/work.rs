@@ -10,8 +10,8 @@ use std::{
 };
 
 use super::{
-  FileCall, FindSymbol, OutputKept, OutsideReadError, OutsideReads, ProgramOutput, SkillCall, ToolCall, ToolCallError,
-  ToolResult,
+  FileCall, FindSymbol, OutputKept, OutsideReadError, OutsideReads, ProcessCall, ProgramOutput, SkillCall, ToolCall,
+  ToolCallError, ToolResult,
 };
 use crate::{
   command::{Command, CommandError},
@@ -156,6 +156,8 @@ pub enum ToolWork {
   /// A call of `list_skills` or `read_skill`, which the caller answers from the skills it offers
   /// ([`super::StepSkills::run`]).
   Skill(SkillCall),
+  /// The caller's process executor applies the run's executable boundary to every target.
+  Processes(ProcessCall),
   /// `find_references` of this name, which the caller answers from the code index and the worktree.
   References(String),
   /// `get_task`, which the caller answers from the run's records ([`super::TaskView`]).
@@ -187,6 +189,7 @@ impl ToolCall {
       Self::File(call) => Ok(ToolWork::Files(call.clone())),
       Self::FindSymbol(query) => Ok(ToolWork::Symbols(query.clone())),
       Self::Skill(call) => Ok(ToolWork::Skill(call.clone())),
+      Self::Processes(call) => Ok(ToolWork::Processes(*call)),
       Self::FindReferences { name } => Ok(ToolWork::References(name.clone())),
       Self::GetTask => Ok(ToolWork::Task),
       Self::SaveMemory(note) => Ok(ToolWork::Memory(note.clone())),

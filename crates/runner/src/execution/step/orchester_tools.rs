@@ -36,7 +36,7 @@ use orchester_core::{
   resource::CommandEnvironment,
   source::ResolvedSources,
 };
-use orchester_exec::run_capped;
+use orchester_exec::{run_capped, run_processes::RunProcesses};
 use parking_lot::Mutex;
 use serde_json::Value;
 
@@ -94,6 +94,7 @@ pub(in super::super) struct ToolHost {
   outside: OutsideReads,
   /// The file tools, with the read stamps of this invocation.
   files: ToolFiles,
+  pub(super) processes: RunProcesses,
   /// The skills `list_skills` and `read_skill` serve.
   skills: StepSkills,
   /// The run's sources, resolved: a call outside the worktree that stays in one runs without asking.
@@ -220,6 +221,7 @@ impl ToolHost {
       Ok(ToolWork::Progress(progress)) => self.records.report_progress(&progress, &self.secrets),
       Ok(ToolWork::Symbols(query)) => self.files.symbols(&query, &context),
       Ok(ToolWork::Skill(call)) => self.skills.run(&call),
+      Ok(ToolWork::Processes(call)) => self.processes.run(call),
       Ok(ToolWork::Run(program)) => program.finished(run_capped(program.command(), program.timeout(), program.cap())),
       Err(error) => ToolResult::refused(&error),
     }
@@ -289,6 +291,11 @@ impl RunTask {
     let mut refused = vec![private_file::root()];
     refused.extend(self.relay.as_deref().and_then(Path::parent).map(Path::to_path_buf));
     let files = ToolFiles::new(permissions.repository(), folders, self.run.base().as_str())?;
+    let processes = RunProcesses::new(worktree).map_err(|error| problem(error.to_string()))?;
+    let runner = std::env::current_exe().map_err(|error| problem(error.to_string()))?;
+    processes
+      .protect_executable(&runner)
+      .map_err(|error| problem(error.to_string()))?;
     let sources = self.run.snapshot().sources();
     let step = self
       .run
@@ -313,6 +320,7 @@ impl RunTask {
       project: environment.clone(),
       outside: OutsideReads::new(CommandScope::on_host(worktree, writable), &refused),
       files,
+      processes,
       skills,
       sources: ResolvedSources::resolve(sources),
       checks,

@@ -133,6 +133,10 @@ name = "orchester_run_tools"
 required-features = ["test-agent"]
 
 [[test]]
+name = "orchester_process_tools"
+required-features = ["test-agent"]
+
+[[test]]
 name = "mcp_exempt_tools"
 required-features = ["test-agent"]
 

@@ -28,6 +28,7 @@ mod lines;
 mod output;
 mod outside;
 mod policy;
+mod processes;
 mod skills;
 mod task_view;
 mod work;
@@ -44,6 +45,7 @@ pub use self::{
   output::{MAX_ANSWER_BYTES, OutputKept, ProgramOutput, ToolResult},
   outside::{MAX_LINE_BYTES, MAX_READ_BYTES, OutsideReadError, OutsideReads},
   policy::{StepTools, ToolPolicy, auto_approvable, decide},
+  processes::{ProcessCall, ProcessScopeError, RunProcessScope},
   skills::{SkillCall, SkillOfferError, SkillReadError, SkillSource, StepSkills},
   task_view::TaskView,
   work::{ExternalReach, ProjectTool, ToolContext, ToolProgram, ToolWork},
@@ -68,6 +70,8 @@ pub enum OrchesterTool {
   SearchExternalFile,
   ReadExternalFile,
   RunCheck,
+  ListRunProcesses,
+  StopRunProcess,
   ListSkills,
   ReadSkill,
   GetTask,
@@ -86,10 +90,12 @@ pub enum AccessClass {
   Outside,
   /// Keeps something with the run or the project (memory, the step's progress line); changes no file.
   Records,
+  /// Lists or stops processes whose resolved executable stays in this run's worktree.
+  RunProcesses,
 }
 
 impl OrchesterTool {
-  pub const ALL: [Self; 17] = [
+  pub const ALL: [Self; 19] = [
     Self::ReadFile,
     Self::ListFiles,
     Self::SearchFile,
@@ -102,6 +108,8 @@ impl OrchesterTool {
     Self::SearchExternalFile,
     Self::ReadExternalFile,
     Self::RunCheck,
+    Self::ListRunProcesses,
+    Self::StopRunProcess,
     Self::ListSkills,
     Self::ReadSkill,
     Self::GetTask,
@@ -124,6 +132,8 @@ impl OrchesterTool {
       Self::SearchExternalFile => "search_external_file",
       Self::ReadExternalFile => "read_external_file",
       Self::RunCheck => "run_check",
+      Self::ListRunProcesses => "list_run_processes",
+      Self::StopRunProcess => "stop_run_process",
       Self::ListSkills => "list_skills",
       Self::ReadSkill => "read_skill",
       Self::GetTask => "get_task",
@@ -221,6 +231,7 @@ impl OrchesterTool {
       Self::EditFile | Self::CreateFile | Self::DeleteFile | Self::MoveFile => AccessClass::WritesWorktree,
       Self::SearchExternalFile | Self::ReadExternalFile | Self::RunCheck => AccessClass::Outside,
       Self::SaveMemory | Self::ReportProgress => AccessClass::Records,
+      Self::ListRunProcesses | Self::StopRunProcess => AccessClass::RunProcesses,
     }
   }
 }

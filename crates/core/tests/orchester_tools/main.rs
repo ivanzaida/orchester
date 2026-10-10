@@ -7,6 +7,7 @@ mod input;
 mod lines;
 mod outside;
 mod policy;
+mod processes;
 mod programs;
 mod run_tools;
 mod skill_list;

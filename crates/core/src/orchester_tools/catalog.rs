@@ -63,6 +63,12 @@ impl OrchesterTool {
   /// What the agent is told the tool does.
   pub const fn description(self) -> &'static str {
     match self {
+      Self::ListRunProcesses => {
+        "List processes whose resolved executable lies inside this run's worktree: pid, name, relative executable path and start time."
+      }
+      Self::StopRunProcess => {
+        "Stop a process and its children inside this run's worktree without asking: request close, wait briefly, then end survivors. Outside executables, the runner and agent CLIs are refused. Reports closed, ended or already gone."
+      }
       Self::ReadFile => {
         "Read a text file of the worktree as numbered lines. Read a file before you edit it: edit_file needs this \
          read."
@@ -135,6 +141,7 @@ impl OrchesterTool {
         | Self::CreateFile
         | Self::DeleteFile
         | Self::MoveFile
+        | Self::StopRunProcess
         | Self::RunCheck
         | Self::SaveMemory
         | Self::ReportProgress
@@ -168,7 +175,11 @@ pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String, boo
     OrchesterTool::DeleteFile => fixed(DELETE_FILE),
     OrchesterTool::MoveFile => fixed(MOVE_FILE),
     OrchesterTool::FindReferences => fixed(FIND_REFERENCES),
-    OrchesterTool::GetTask => fixed(NO_INPUT),
+    OrchesterTool::GetTask | OrchesterTool::ListRunProcesses => fixed(NO_INPUT),
+    OrchesterTool::StopRunProcess => json!({"type":"object","properties":{
+      "pid":{"type":"integer","minimum":1,"maximum":u32::MAX,
+        "description":"The process id from list_run_processes. Only this run's executable paths may be stopped."}
+    },"required":["pid"],"additionalProperties":false}),
     OrchesterTool::SaveMemory => fixed(SAVE_MEMORY),
     OrchesterTool::ReportProgress => fixed(REPORT_PROGRESS),
     OrchesterTool::FindSymbol => fixed(FIND_SYMBOL),

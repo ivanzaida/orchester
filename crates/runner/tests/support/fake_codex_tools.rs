@@ -15,6 +15,9 @@ use serde_json::{Value, json};
 
 use super::fake_permission_prompt::Prompt;
 
+#[path = "fake_process_tools.rs"]
+mod fake_process_tools;
+
 #[path = "fake_skill_calls.rs"]
 mod fake_skill_calls;
 #[path = "fake_tool_calls.rs"]
@@ -129,19 +132,27 @@ pub fn report(server: Option<&mut Prompt>, worktree: &Path, prompt: &str) {
     return;
   };
   eprintln!("orchester-tools: {}", server.list().unwrap_or_default().join(","));
+  if prompt.contains("Use the process tools") {
+    fake_process_tools::exercise(worktree, |tool, arguments| report_call(server, tool, arguments));
+    return;
+  }
   for (tool, arguments) in calls(prompt, worktree) {
-    match server.call(tool, &arguments) {
-      Some((text, failed)) => {
-        eprintln!(
-          "orchester-call: {tool} {}: {}",
-          if failed { "error" } else { "ok" },
-          text.lines().next().unwrap_or_default()
-        );
-        for line in text.lines() {
-          eprintln!("orchester-answer| {line}");
-        }
+    report_call(server, tool, &arguments);
+  }
+}
+
+fn report_call(server: &mut Prompt, tool: &str, arguments: &Value) {
+  match server.call(tool, arguments) {
+    Some((text, failed)) => {
+      eprintln!(
+        "orchester-call: {tool} {}: {}",
+        if failed { "error" } else { "ok" },
+        text.lines().next().unwrap_or_default()
+      );
+      for line in text.lines() {
+        eprintln!("orchester-answer| {line}");
       }
-      None => eprintln!("orchester-call: {tool} no answer"),
     }
+    None => eprintln!("orchester-call: {tool} no answer"),
   }
 }
