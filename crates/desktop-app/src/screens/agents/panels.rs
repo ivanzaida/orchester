@@ -11,7 +11,7 @@ use orchester_core::{
   connection::invocation::Platform,
   permission::capability::{PermissionOption, support},
 };
-use orchester_workspace::agents::data::ProjectAgents;
+use orchester_workspace::agents::data::{ProjectAgents, VersionState};
 
 use super::{editor::Props, fields::Fields, words};
 const PANEL_WIDTH: f32 = 320.0;
@@ -35,9 +35,13 @@ pub fn draft(ctx: &Ctx, props: &Props, fields: &Fields) -> Element {
     Text::new(&ctx.t_args("agents.draftCard", [("version", (version + 1).to_string())]))
       .variant(TypographyStyle::Label),
   );
-  if version > 0 {
+  let based_on = props.entry.as_ref().and_then(|entry| match entry.state {
+    VersionState::StaleDraft { based_on, .. } => based_on,
+    state => state.published(),
+  });
+  if let Some(base) = based_on {
     panel = panel.child(words::note(
-      &ctx.t_args("agents.basedOn", [("version", version.to_string())]),
+      &ctx.t_args("agents.basedOn", [("version", base.get().to_string())]),
     ));
   }
   if let Some(entry) = props
@@ -91,7 +95,12 @@ pub fn enforcement(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents) -> Elemen
       .into();
   };
   let permissions = fields.permissions.get().0;
-  let title = ctx.t_args("agents.enforced", [("provider", connection.name().as_str())]);
+  let effective = permissions.enforced_on(connection.provider(), Platform::current());
+  let title = if effective.is_ok() {
+    ctx.t_args("agents.enforced", [("provider", connection.name().as_str())])
+  } else {
+    ctx.t("agents.notEnforced")
+  };
   let mut panel = panel("agent-enforcement")
     .child(Text::new(&title).variant(TypographyStyle::Label))
     .child(words::note(connection.name().as_str()));
@@ -115,18 +124,20 @@ pub fn enforcement(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents) -> Elemen
     (
       "agents.network",
       PermissionOption::of_network(permissions.network()),
-      ctx.t(
-        if permissions.effective_network(connection.provider(), Platform::current())
-          == orchester_core::permission::NetworkAccess::On
-        {
-          "agents.on"
-        } else {
-          "agents.off"
-        },
-      ),
+      words::network(ctx, &permissions, Some(connection.provider())),
     ),
   ] {
-    let state = match support(connection.provider(), Platform::current(), option) {
+    let support = effective.as_ref().map_or_else(
+      |_| support(connection.provider(), Platform::current(), option),
+      |effective| {
+        if option == PermissionOption::NetworkOff && effective.network_stays_on().is_some() {
+          support(connection.provider(), Platform::current(), option)
+        } else {
+          orchester_core::permission::capability::Support::Enforced(effective.mechanism(option.setting()))
+        }
+      },
+    );
+    let state = match support {
       orchester_core::permission::capability::Support::Enforced(mechanism) => {
         super::enforcement::mechanism(ctx, mechanism, &permissions)
       }

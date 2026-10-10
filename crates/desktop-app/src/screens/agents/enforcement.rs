@@ -82,6 +82,7 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
 
 pub fn summary(ctx: &Ctx, fields: &Fields, listed: &orchester_workspace::agents::data::ProjectAgents) -> Element {
   let permissions = fields.permissions.get().0;
+  let provider = fields.connection(listed).map(|c| c.provider());
   let write = permissions.repository() == RepositoryAccess::Write;
   let mut row = Row::new()
     .id("agent-permission-summary")
@@ -99,21 +100,18 @@ pub fn summary(ctx: &Ctx, fields: &Fields, listed: &orchester_workspace::agents:
     ))
     .child(item(
       Icon::Globe,
-      &ctx.t(
-        if permissions.network() == orchester_core::permission::NetworkAccess::On {
-          "agents.networkOn"
-        } else {
-          "agents.networkOff"
-        },
-      ),
+      &words::network(ctx, &permissions, provider),
       PaletteColor::TextSecondary,
     ));
   if let Some(connection) = fields.connection(listed) {
     let enforced = permissions
       .enforced_on(connection.provider(), Platform::current())
-      .is_ok()
+      .is_ok_and(|effective| effective.network_stays_on().is_none())
       && connection.provider().runs_agents();
-    let text = if enforced {
+    let fallback = permissions.effective_network(connection.provider(), Platform::current()) != permissions.network();
+    let text = if fallback {
+      ctx.t("agents.cannotBlockNetwork")
+    } else if enforced {
       ctx.t_args("agents.enforced", [("provider", connection.name().as_str())])
     } else {
       ctx.t("agents.notEnforced")

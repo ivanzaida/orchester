@@ -34,7 +34,7 @@
         "nativeNetwork": "commands keep the network · no web tools"
       },
     "outsideChange": "This profile changed elsewhere. Your edits are kept here; reload the saved profile before saving again.",
-    "connectionReset": "The connection changed. Review its model and permissions before saving.",
+    "connectionReset": "The connection changed. Unsupported permissions, approval switches and MCP selections were reset. Review the model and permissions before saving.",
     "mcpLimit": "The maximum number of MCP servers is selected.",
     "description": "Each profile is a role for pipeline steps: what the agent is for, the connection and model it runs on, and what it may do.",
     "new": "New agent",
@@ -138,6 +138,8 @@
     "on": "On",
     "off": "Off",
     "networkOn": "Network on",
+    "networkFallback": "Network on · cannot block",
+    "networkUnknown": "Network unavailable",
     "networkOff": "Network off",
     "mcp": "MCP servers",
     "mcpNone": "This project has no MCP servers yet. Agents work without them.",

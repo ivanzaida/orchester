@@ -124,6 +124,9 @@ fn command_option(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>, o
   let toggle = Toggle::new(format!("agent-option-{option:?}"), ToggleKind::Radio, selected, title);
   let toggle = if available {
     toggle.on_change(move |_| {
+      if PermissionOption::of_commands(value.get().0.commands()) == option {
+        return;
+      }
       value.update(|p| {
         p.0.set_commands(match option {
           PermissionOption::AllowedCommands => CommandPermission::Allowed(AllowedCommands::default()),

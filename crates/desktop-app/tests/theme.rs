@@ -159,6 +159,16 @@ fn type_roles_follow_the_design() {
 }
 
 #[test]
+fn agents_page_spacing_matches_the_design() {
+  let app = themed(Mode::Dark);
+  assert_eq!(
+    app.theme().spacing_value(theme::agents::page_spacing()),
+    Dimension::Px(40.0),
+    "NPPl4 and a7PAf leave 40 at each side"
+  );
+}
+
+#[test]
 fn spacing_radii_and_borders_follow_the_design() {
   let app = themed(Mode::Dark);
   let theme = app.theme();

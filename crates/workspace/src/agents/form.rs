@@ -4,7 +4,9 @@
 use std::collections::BTreeMap;
 
 use orchester_core::{
-  connection::{AgentConnection, ModelSupport, REASONING_EFFORT, mcp::McpServerSelection},
+  connection::{
+    AgentConnection, AgentProvider, ModelSupport, REASONING_EFFORT, invocation::Platform, mcp::McpServerSelection,
+  },
   name::{Name, NameError},
   permission::AgentPermissions,
   resource::{AgentProfile, ModelId, PromptError, PromptText, ProviderSettings},
@@ -56,6 +58,25 @@ pub fn effort_options<'a>(connection: &'a AgentConnection, model: &ModelId) -> &
     .catalog()
     .and_then(|catalog| catalog.model(model))
     .map_or(&[], |model| model.efforts())
+}
+
+/// Adapts a profile's access settings when its connection changes. Native connections do not
+/// accept CLI approval switches or MCP servers; the editor shows these resets before saving.
+pub fn access_for_connection(
+  permissions: &AgentPermissions,
+  servers: &McpServerSelection,
+  provider: AgentProvider,
+  platform: Platform,
+) -> (AgentPermissions, McpServerSelection) {
+  let (mut permissions, _) = permissions.fitted_to(provider, platform);
+  let servers = if provider.is_native() {
+    permissions.set_auto_approve(false);
+    permissions.set_interactive_tool_approvals(false);
+    McpServerSelection::none()
+  } else {
+    servers.clone()
+  };
+  (permissions, servers)
 }
 
 /// Field values of the editor, as entered.

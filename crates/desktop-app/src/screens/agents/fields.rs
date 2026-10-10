@@ -12,7 +12,7 @@ use orchester_core::{
 };
 use orchester_workspace::agents::{
   data::{ProfileEntry, ProjectAgents},
-  form::{ModelSelection, ProfileErrors, ProfileForm, effort_options, stored_effort},
+  form::{ModelSelection, ProfileErrors, ProfileForm, access_for_connection, effort_options, stored_effort},
 };
 
 use super::words;
@@ -105,12 +105,14 @@ impl Fields {
       );
       fields.changed_connection.set(true);
       if let Some(connection) = connection {
-        let (fitted, _) = fields
-          .permissions
-          .get_untracked()
-          .0
-          .fitted_to(connection.provider(), Platform::current());
-        fields.permissions.set(Permissions(fitted));
+        let (permissions, servers) = access_for_connection(
+          &fields.permissions.get_untracked().0,
+          &fields.servers.get_untracked().0,
+          connection.provider(),
+          Platform::current(),
+        );
+        fields.permissions.set(Permissions(permissions));
+        fields.servers.set(Servers(servers));
       }
     });
     let effort = self.effort.clone();

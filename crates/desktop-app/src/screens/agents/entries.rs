@@ -100,7 +100,14 @@ impl Component for AgentRow {
           .child(Text::new(&connection_name).variant(TypographyStyle::Description))
           .child(Text::new(&model).variant(TypographyStyle::Caption)),
       )
-      .child(words::note(&words::summary(ctx, profile.permissions())).width(Dimension::Px(PERMISSIONS)))
+      .child(
+        words::note(&words::summary(
+          ctx,
+          profile.permissions(),
+          connection.map(|c| c.provider()),
+        ))
+        .width(Dimension::Px(PERMISSIONS)),
+      )
       .child(words::note(&words::list_version(ctx, entry.state)).width(Dimension::Px(VERSION)))
       .child(words::note(&used).width(Dimension::Px(USED)))
       .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted));

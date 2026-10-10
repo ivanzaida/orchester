@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, components::Text};
 use orchester_core::{
+  connection::{AgentProvider, invocation::Platform},
   permission::{AgentPermissions, CommandPermission, NetworkAccess},
   resource::RepositoryAccess,
 };
@@ -78,15 +79,25 @@ pub fn commands(ctx: &Ctx, permissions: &AgentPermissions) -> Arc<str> {
     }
   }
 }
-pub fn summary(ctx: &Ctx, permissions: &AgentPermissions) -> Arc<str> {
+pub fn network(ctx: &Ctx, permissions: &AgentPermissions, provider: Option<AgentProvider>) -> Arc<str> {
+  let Some(provider) = provider else {
+    return ctx.t("agents.networkUnknown");
+  };
+  let effective = permissions.effective_network(provider, Platform::current());
+  ctx.t(if effective != permissions.network() {
+    "agents.networkFallback"
+  } else if effective == NetworkAccess::On {
+    "agents.networkOn"
+  } else {
+    "agents.networkOff"
+  })
+}
+pub fn summary(ctx: &Ctx, permissions: &AgentPermissions, provider: Option<AgentProvider>) -> Arc<str> {
   let repository = ctx.t(match permissions.repository() {
     RepositoryAccess::ReadOnly => "agents.readOnly",
     RepositoryAccess::Write => "agents.write",
   });
-  let network = ctx.t(match permissions.network() {
-    NetworkAccess::Off => "agents.networkOff",
-    NetworkAccess::On => "agents.networkOn",
-  });
+  let network = network(ctx, permissions, provider);
   ctx.t_args(
     "agents.summary",
     [

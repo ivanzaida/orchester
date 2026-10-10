@@ -121,7 +121,11 @@ impl Component for Editor {
     if let Some(question) = actions::confirm(ctx, &self.pending, &self.busy, &work) {
       page = page.child(question);
     }
-    let body = self.body(ctx, &props);
+    let body = if self.busy.get() {
+      crate::ui::state::loading("agent-saving", &ctx.t("agents.saving")).into()
+    } else {
+      self.body(ctx, &props)
+    };
     page.child(
       ScrollVertical::new(body)
         .flex(1.0)

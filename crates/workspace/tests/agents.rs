@@ -30,7 +30,9 @@ static READ_ONLY: AgentPermissions = AgentPermissions::before_permissions();
 static NO_MCP_SERVERS: McpServerSelection = McpServerSelection::none();
 
 fn project_db() -> (TempDir, ProjectDb) {
-  let repo = tempfile::tempdir().expect("temporary directory");
+  let scratch = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/agents");
+  fs::create_dir_all(&scratch).expect("scratch directory");
+  let repo = tempfile::tempdir_in(scratch).expect("temporary directory");
   fs::create_dir(repo.path().join(".git")).expect("create .git");
   let project = Project::new(
     ProjectId::generate(),
@@ -325,6 +327,40 @@ fn profile_publish_refuses_permissions_its_connection_cannot_enforce() {
     publish(&mut db, orphan, now()),
     Err(StoreError::Publish(PublishError::ConnectionMissing))
   ));
+}
+
+#[test]
+fn profile_connection_transition_clears_native_incompatibilities_and_preserves_cli_settings() {
+  use orchester_core::connection::invocation::Platform;
+  use orchester_workspace::agents::form::access_for_connection;
+
+  let mut permissions = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::Allowed(
+      AllowedCommands::new(vec![CommandPrefix::new("cargo test").expect("prefix")]).expect("list"),
+    ),
+    NetworkAccess::Off,
+  );
+  permissions.set_auto_approve(true);
+  permissions.set_interactive_tool_approvals(true);
+  let servers = McpServerSelection::new(vec![ConnectionId::generate()]).expect("selection");
+  for platform in [Platform::Windows, Platform::MacOs] {
+    for provider in [AgentProvider::AnthropicApi, AgentProvider::OpenAiApi] {
+      let (adapted, selected) = access_for_connection(&permissions, &servers, provider, platform);
+      assert!(!adapted.auto_approve());
+      assert!(!adapted.interactive_tool_approvals());
+      assert!(selected.ids().is_empty());
+      assert_eq!(adapted.commands(), permissions.commands());
+      assert_eq!(adapted.repository(), RepositoryAccess::Write);
+      assert_eq!(adapted.network(), NetworkAccess::On);
+      assert!(adapted.enforced_on(provider, platform).is_ok());
+    }
+    let (adapted, selected) = access_for_connection(&permissions, &servers, AgentProvider::ClaudeCodeCli, platform);
+    assert!(adapted.auto_approve());
+    assert!(adapted.interactive_tool_approvals());
+    assert_eq!(selected, servers);
+    assert_eq!(adapted.commands(), permissions.commands());
+  }
 }
 
 /// A Codex connection that is not stored in the project.
