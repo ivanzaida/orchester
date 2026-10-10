@@ -3739,6 +3739,170 @@
               ]
             }
           ]
+        },
+        {
+          "type": "frame",
+          "id": "m9dwA",
+          "name": "Status bar · project path on hover",
+          "layout": "vertical",
+          "gap": 11,
+          "children": [
+            {
+              "type": "text",
+              "id": "dyQQ3",
+              "name": "Label · Status bar · project path on hover",
+              "fill": "#8A8A92",
+              "content": "Status bar · project path on hover",
+              "fontFamily": "$font_sans",
+              "fontSize": 16,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "z61KIT",
+              "name": "Status bar · project path on hover · dark",
+              "clip": true,
+              "width": 520,
+              "fill": "$surface_base",
+              "cornerRadius": 8,
+              "layout": "vertical",
+              "gap": 6,
+              "padding": [
+                16,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Nd9oe",
+                  "name": "Tooltip row",
+                  "width": "fill_container",
+                  "padding": [
+                    0,
+                    8
+                  ],
+                  "children": [
+                    {
+                      "id": "C9Phsz",
+                      "type": "ref",
+                      "ref": "b6q3OZ",
+                      "name": "Tooltip · project path",
+                      "descendants": {
+                        "mF90E": {
+                          "content": "H:/projects/kontur",
+                          "fontFamily": "$font_mono"
+                        },
+                        "n75PTn": {
+                          "enabled": false
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "g7RFw",
+                  "name": "Status bar",
+                  "width": "fill_container",
+                  "height": 28,
+                  "padding": [
+                    0,
+                    8
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "id": "f5nEqj",
+                      "type": "ref",
+                      "ref": "wnnsD",
+                      "name": "Status · Kontur · hover",
+                      "fill": "$hover",
+                      "cornerRadius": "$radius_sm",
+                      "descendants": {
+                        "GNexz": {
+                          "icon": "hard-drive",
+                          "fill": "$text_secondary"
+                        },
+                        "dEV6Z": {
+                          "content": "Kontur",
+                          "fill": "$text_secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "LA3S5",
+                      "type": "ref",
+                      "ref": "wnnsD",
+                      "name": "Status · main",
+                      "descendants": {
+                        "GNexz": {
+                          "icon": "git-branch"
+                        },
+                        "dEV6Z": {
+                          "content": "main"
+                        }
+                      }
+                    },
+                    {
+                      "type": "frame",
+                      "id": "CU6Pr",
+                      "name": "Status · runner",
+                      "height": 26,
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "JxChq",
+                          "name": "Dot",
+                          "fill": "$success",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "TiKt6",
+                          "name": "Label",
+                          "fill": "$text_muted",
+                          "content": "Runner online",
+                          "fontFamily": "$font_sans",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "K5DG43",
+                      "name": "Spacer",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "id": "p4OtH",
+                      "type": "ref",
+                      "ref": "wnnsD",
+                      "name": "Status · Agents 2/4",
+                      "descendants": {
+                        "GNexz": {
+                          "icon": "bot"
+                        },
+                        "dEV6Z": {
+                          "content": "Agents 2/4"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -13042,13 +13206,13 @@
                   "id": "MMvyA",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -14459,13 +14623,13 @@
                   "id": "B4YEv",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -15699,13 +15863,13 @@
                   "id": "c5ASZ",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -17095,13 +17259,13 @@
                   "id": "D4K6NI",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -18552,13 +18716,13 @@
                   "id": "Kx6l9",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -19962,13 +20126,13 @@
                   "id": "eRPxn",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -27443,13 +27607,13 @@
                   "id": "c208H",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -29447,13 +29611,13 @@
                   "id": "n6ggb7",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -31976,13 +32140,13 @@
                   "id": "fL1XW",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -33869,13 +34033,13 @@
                   "id": "sfXXm",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -35762,13 +35926,13 @@
                   "id": "FAOex",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -36711,13 +36875,13 @@
                           "id": "yZNcP",
                           "type": "ref",
                           "ref": "wnnsD",
-                          "name": "Status · Kontur · H:/projects/kontur",
+                          "name": "Status · Kontur",
                           "descendants": {
                             "GNexz": {
                               "icon": "hard-drive"
                             },
                             "dEV6Z": {
-                              "content": "Kontur · H:/projects/kontur"
+                              "content": "Kontur"
                             }
                           }
                         },
@@ -37007,13 +37171,13 @@
                           "id": "OMMje",
                           "type": "ref",
                           "ref": "wnnsD",
-                          "name": "Status · Kontur · H:/projects/kontur",
+                          "name": "Status · Kontur",
                           "descendants": {
                             "GNexz": {
                               "icon": "hard-drive"
                             },
                             "dEV6Z": {
-                              "content": "Kontur · H:/projects/kontur"
+                              "content": "Kontur"
                             }
                           }
                         },
@@ -37279,13 +37443,13 @@
                           "id": "UCVbo",
                           "type": "ref",
                           "ref": "wnnsD",
-                          "name": "Status · Kontur · H:/projects/kontur",
+                          "name": "Status · Kontur",
                           "descendants": {
                             "GNexz": {
                               "icon": "hard-drive"
                             },
                             "dEV6Z": {
-                              "content": "Kontur · H:/projects/kontur"
+                              "content": "Kontur"
                             }
                           }
                         },
@@ -37541,13 +37705,13 @@
                           "id": "n378dr",
                           "type": "ref",
                           "ref": "wnnsD",
-                          "name": "Status · Kontur · H:/projects/kontur",
+                          "name": "Status · Kontur",
                           "descendants": {
                             "GNexz": {
                               "icon": "hard-drive"
                             },
                             "dEV6Z": {
-                              "content": "Kontur · H:/projects/kontur"
+                              "content": "Kontur"
                             }
                           }
                         },
@@ -37803,13 +37967,13 @@
                           "id": "noiXq",
                           "type": "ref",
                           "ref": "wnnsD",
-                          "name": "Status · Kontur · H:/projects/kontur",
+                          "name": "Status · Kontur",
                           "descendants": {
                             "GNexz": {
                               "icon": "hard-drive"
                             },
                             "dEV6Z": {
-                              "content": "Kontur · H:/projects/kontur"
+                              "content": "Kontur"
                             }
                           }
                         },
@@ -38096,13 +38260,13 @@
                           "id": "SPGon",
                           "type": "ref",
                           "ref": "wnnsD",
-                          "name": "Status · Kontur · H:/projects/kontur",
+                          "name": "Status · Kontur",
                           "descendants": {
                             "GNexz": {
                               "icon": "hard-drive"
                             },
                             "dEV6Z": {
-                              "content": "Kontur · H:/projects/kontur"
+                              "content": "Kontur"
                             }
                           }
                         },
@@ -38368,13 +38532,13 @@
                           "id": "mgajQ",
                           "type": "ref",
                           "ref": "wnnsD",
-                          "name": "Status · Kontur · H:/projects/kontur",
+                          "name": "Status · Kontur",
                           "descendants": {
                             "GNexz": {
                               "icon": "hard-drive"
                             },
                             "dEV6Z": {
-                              "content": "Kontur · H:/projects/kontur"
+                              "content": "Kontur"
                             }
                           }
                         },
@@ -38620,13 +38784,13 @@
                           "id": "LsYyC",
                           "type": "ref",
                           "ref": "wnnsD",
-                          "name": "Status · Kontur · H:/projects/kontur",
+                          "name": "Status · Kontur",
                           "descendants": {
                             "GNexz": {
                               "icon": "hard-drive"
                             },
                             "dEV6Z": {
-                              "content": "Kontur · H:/projects/kontur"
+                              "content": "Kontur"
                             }
                           }
                         },
@@ -38882,13 +39046,13 @@
                           "id": "G9bcX",
                           "type": "ref",
                           "ref": "wnnsD",
-                          "name": "Status · Kontur · H:/projects/kontur",
+                          "name": "Status · Kontur",
                           "descendants": {
                             "GNexz": {
                               "icon": "hard-drive"
                             },
                             "dEV6Z": {
-                              "content": "Kontur · H:/projects/kontur"
+                              "content": "Kontur"
                             }
                           }
                         },
@@ -39100,13 +39264,13 @@
                           "id": "dpq2I",
                           "type": "ref",
                           "ref": "wnnsD",
-                          "name": "Status · Kontur · H:/projects/kontur",
+                          "name": "Status · Kontur",
                           "descendants": {
                             "GNexz": {
                               "icon": "hard-drive"
                             },
                             "dEV6Z": {
-                              "content": "Kontur · H:/projects/kontur"
+                              "content": "Kontur"
                             }
                           }
                         },
@@ -39338,13 +39502,13 @@
                           "id": "T29aA",
                           "type": "ref",
                           "ref": "wnnsD",
-                          "name": "Status · Kontur · H:/projects/kontur",
+                          "name": "Status · Kontur",
                           "descendants": {
                             "GNexz": {
                               "icon": "hard-drive"
                             },
                             "dEV6Z": {
-                              "content": "Kontur · H:/projects/kontur"
+                              "content": "Kontur"
                             }
                           }
                         },
@@ -39590,13 +39754,13 @@
                           "id": "F1bgg",
                           "type": "ref",
                           "ref": "wnnsD",
-                          "name": "Status · Kontur · H:/projects/kontur",
+                          "name": "Status · Kontur",
                           "descendants": {
                             "GNexz": {
                               "icon": "hard-drive"
                             },
                             "dEV6Z": {
-                              "content": "Kontur · H:/projects/kontur"
+                              "content": "Kontur"
                             }
                           }
                         },
@@ -41919,13 +42083,13 @@
                   "id": "kgErB",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -44293,13 +44457,13 @@
                   "id": "nfGsV",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -46236,13 +46400,13 @@
                   "id": "H6HMw",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -48244,13 +48408,13 @@
                   "id": "uVp9K",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -50187,13 +50351,13 @@
                   "id": "f2Q4DM",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -52192,13 +52356,13 @@
                   "id": "i6UrbZ",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -54172,13 +54336,13 @@
                   "id": "vtsLZ",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -56171,13 +56335,13 @@
                   "id": "IKKfk",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -58250,13 +58414,13 @@
                   "id": "txQsX",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -59695,13 +59859,13 @@
                   "id": "FbsvM",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -65807,13 +65971,13 @@
                   "id": "Kt7lq",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -69478,13 +69642,13 @@
                   "id": "YF2t7",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -70968,13 +71132,13 @@
                   "id": "T7k54v",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -72441,13 +72605,13 @@
                   "id": "xnzfR",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -74705,13 +74869,13 @@
                   "id": "B2AGR",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -76945,13 +77109,13 @@
                   "id": "W2dZRa",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -78915,13 +79079,13 @@
                   "id": "DRINn",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -81415,13 +81579,13 @@
                   "id": "a7SpOB",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -84890,13 +85054,13 @@
                   "id": "wLLek",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -86692,13 +86856,13 @@
                   "id": "L9jHpU",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -91957,13 +92121,13 @@
                   "id": "LGMbP",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -93951,13 +94115,13 @@
                   "id": "VL4vq",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -101704,13 +101868,13 @@
                   "id": "edIEP",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -104555,13 +104719,13 @@
                   "id": "X3Uir",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -106327,13 +106491,13 @@
                   "id": "Oq8yr",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -107971,13 +108135,13 @@
                   "id": "FMkqM",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -109250,13 +109414,13 @@
                   "id": "Jekf4",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -110299,13 +110463,13 @@
                   "id": "ptFel",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -112119,13 +112283,13 @@
                   "id": "nd9HH",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -114026,13 +114190,13 @@
                   "id": "WohrC",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -115158,13 +115322,13 @@
                   "id": "Gnnqu",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -116359,13 +116523,13 @@
                   "id": "cM4OJ",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -118356,13 +118520,13 @@
                   "id": "a3tBd",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -120000,13 +120164,13 @@
                   "id": "JWH6J",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -122335,13 +122499,13 @@
                   "id": "E3hByw",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -124299,13 +124463,13 @@
                   "id": "j7Cov",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -125750,13 +125914,13 @@
                   "id": "P8zblU",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -127201,13 +127365,13 @@
                   "id": "Z908z",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -129379,13 +129543,13 @@
                   "id": "wFAhU",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -131077,13 +131241,13 @@
                   "id": "k2r99",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -132432,13 +132596,13 @@
                   "id": "y9R2Wf",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -133470,13 +133634,13 @@
                   "id": "u3x470",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -134881,13 +135045,13 @@
                   "id": "f6Qa4",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -136898,13 +137062,13 @@
                   "id": "vTPcF",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -137705,7 +137869,8 @@
                                       "fill": "$text_muted",
                                       "content": "e.g. Dependency updates",
                                       "fontFamily": "$font_sans",
-                                      "fontSize": 14
+                                      "fontSize": 14,
+                                      "fontWeight": "normal"
                                     }
                                   ]
                                 }
@@ -138884,13 +139049,13 @@
                   "id": "jr0lX",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -140933,13 +141098,13 @@
                   "id": "q0FMLy",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -142730,13 +142895,13 @@
                   "id": "mEmmT",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -144348,13 +144513,13 @@
                   "id": "kJlug",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -146202,13 +146367,13 @@
                   "id": "BM4xf",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -150195,13 +150360,13 @@
                   "id": "kC58Q",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -152233,13 +152398,13 @@
                   "id": "bFWcC",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -154232,13 +154397,13 @@
                   "id": "qP7GP",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -158905,13 +159070,13 @@
                   "id": "m2WQK4",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -161157,13 +161322,13 @@
                   "id": "oMaxH",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -163346,13 +163511,13 @@
                   "id": "u17Qm",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -166363,13 +166528,13 @@
                   "id": "FSQMZ",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -169929,13 +170094,13 @@
                   "id": "C45Ua",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -172119,13 +172284,13 @@
                   "id": "GLpYp",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -177602,13 +177767,13 @@
                   "id": "Wg6Xu",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -179968,13 +180133,13 @@
                   "id": "Ohjnd",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -182281,13 +182446,13 @@
                   "id": "gyjjd",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -184525,13 +184690,13 @@
                   "id": "mJNF7",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -186290,13 +186455,13 @@
                   "id": "iIfKj",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -188556,13 +188721,13 @@
                   "id": "NBHcT",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -189955,13 +190120,13 @@
                   "id": "ggIH5",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -190739,13 +190904,13 @@
                   "id": "hN17Y",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -193646,13 +193811,13 @@
                   "id": "I1Bd3q",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -195724,13 +195889,13 @@
                   "id": "WDzlj",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -196929,13 +197094,13 @@
                   "id": "TRQim",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -198234,13 +198399,13 @@
                   "id": "mrOnN",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -199308,13 +199473,13 @@
                   "id": "eQZY1",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -200333,7 +200498,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "Run the checks after every change you mean to keep:",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -200402,7 +200568,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "1. `scripts/check.sh` runs formatting, lints and tests.",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -200441,7 +200608,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "2. Read the summary at the end. A failed check names its step.",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -200480,7 +200648,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "3. Fix the cause, then run only that step again with",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -200519,7 +200688,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "   `scripts/check.sh --step <name>`.",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -200588,7 +200758,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "Do not hand the work over while a check fails. If a test fails",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -200627,7 +200798,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "for a reason outside your change, say so in the handover and",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -200666,7 +200838,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "name the test.",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -200735,7 +200908,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "See [check-steps.md](reference/check-steps.md) for what each step",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -200774,7 +200948,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "runs and [flaky-tests.md](reference/flaky-tests.md) before you",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -200813,7 +200988,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "retry a test. Pipe a long log through scripts/summarize.sh.",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             }
@@ -201319,13 +201495,13 @@
                   "id": "L1F17",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -202344,7 +202520,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "Run the checks after every change you mean to keep:",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -202413,7 +202590,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "1. `scripts/check.sh` runs formatting, lints and tests.",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -202427,7 +202605,7 @@
                                               "children": [
                                                 {
                                                   "type": "text",
-                                                  "id": "mX8vL",
+                                                  "id": "Kz7Uf",
                                                   "name": "No",
                                                   "fill": "$text_muted",
                                                   "textGrowth": "fixed-width",
@@ -202452,7 +202630,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "2. Read the summary at the end. A failed check names its step.",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -202491,7 +202670,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "3. Fix the cause, then run only that step again with",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -202530,7 +202710,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "   `scripts/check.sh --step <name>`.",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -202599,7 +202780,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "Do not hand the work over while a check fails. If a test fails",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -202638,7 +202820,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "for a reason outside your change, say so in the handover and",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -202677,7 +202860,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "name the test.",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -202746,7 +202930,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "See [check-steps.md](reference/check-steps.md) for what each step",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -202785,7 +202970,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "runs and [flaky-tests.md](reference/flaky-tests.md) before you",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             },
@@ -202824,7 +203010,8 @@
                                                   "fill": "$text_primary",
                                                   "content": "retry a test. Pipe a long log through scripts/summarize.sh.",
                                                   "fontFamily": "$font_mono",
-                                                  "fontSize": 12
+                                                  "fontSize": 12,
+                                                  "fontWeight": "normal"
                                                 }
                                               ]
                                             }
@@ -203330,13 +203517,13 @@
                   "id": "r9zHoQ",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -203787,7 +203974,8 @@
                                   "fill": "$text_primary",
                                   "content": "Run the checks after every change you mean to keep:",
                                   "fontFamily": "$font_mono",
-                                  "fontSize": 12
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -203856,7 +204044,8 @@
                                   "fill": "$text_primary",
                                   "content": "1. `scripts/check.sh` runs formatting, lints and tests.",
                                   "fontFamily": "$font_mono",
-                                  "fontSize": 12
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -203895,7 +204084,8 @@
                                   "fill": "$text_primary",
                                   "content": "2. Read the summary at the end. A failed check names its step.",
                                   "fontFamily": "$font_mono",
-                                  "fontSize": 12
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -203934,7 +204124,8 @@
                                   "fill": "$text_primary",
                                   "content": "3. Fix the cause, then run only that step again with",
                                   "fontFamily": "$font_mono",
-                                  "fontSize": 12
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -203973,7 +204164,8 @@
                                   "fill": "$text_primary",
                                   "content": "   `scripts/check.sh --step <name>`.",
                                   "fontFamily": "$font_mono",
-                                  "fontSize": 12
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -204042,7 +204234,8 @@
                                   "fill": "$text_primary",
                                   "content": "Do not hand the work over while a check fails. If a test fails",
                                   "fontFamily": "$font_mono",
-                                  "fontSize": 12
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -204081,7 +204274,8 @@
                                   "fill": "$text_primary",
                                   "content": "for a reason outside your change, say so in the handover and",
                                   "fontFamily": "$font_mono",
-                                  "fontSize": 12
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -204120,7 +204314,8 @@
                                   "fill": "$text_primary",
                                   "content": "name the test.",
                                   "fontFamily": "$font_mono",
-                                  "fontSize": 12
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -204189,7 +204384,8 @@
                                   "fill": "$text_primary",
                                   "content": "See [check-steps.md](reference/check-steps.md) for what each step",
                                   "fontFamily": "$font_mono",
-                                  "fontSize": 12
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -204228,7 +204424,8 @@
                                   "fill": "$text_primary",
                                   "content": "runs and [flaky-tests.md](reference/flaky-tests.md) before you",
                                   "fontFamily": "$font_mono",
-                                  "fontSize": 12
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -204267,7 +204464,8 @@
                                   "fill": "$text_primary",
                                   "content": "retry a test. Pipe a long log through scripts/summarize.sh.",
                                   "fontFamily": "$font_mono",
-                                  "fontSize": 12
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             }
@@ -205798,13 +205996,13 @@
                   "id": "TdYRo",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -207478,13 +207676,13 @@
                   "id": "mVdOR",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -208722,13 +208920,13 @@
                   "id": "f5agGu",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -209881,13 +210079,13 @@
                   "id": "v68wT",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -212698,13 +212896,13 @@
                   "id": "TNfSi",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -214181,13 +214379,13 @@
                   "id": "H66Ds",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -215128,13 +215326,13 @@
                   "id": "yPreu",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -216417,13 +216615,13 @@
                   "id": "R1H6we",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -218170,13 +218368,13 @@
                   "id": "lTXkJ",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -219997,13 +220195,13 @@
                   "id": "gle0I",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -221483,13 +221681,13 @@
                   "id": "KZhqw",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -223997,13 +224195,13 @@
                   "id": "z7OmX",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -229036,13 +229234,13 @@
                   "id": "fQveI",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -230475,13 +230673,13 @@
                   "id": "QmFSj",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -233119,13 +233317,13 @@
                   "id": "PmvnD",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -234672,13 +234870,13 @@
                   "id": "dZRwK",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -237220,13 +237418,13 @@
                   "id": "ai4ku",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -238687,13 +238885,13 @@
                   "id": "cIawp",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -240569,13 +240767,13 @@
                   "id": "aqlbT",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -241605,13 +241803,13 @@
                   "id": "hhLmA",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -242627,13 +242825,13 @@
                   "id": "Z4Tnk",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -243604,13 +243802,13 @@
                   "id": "tiSuT",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -247690,13 +247888,13 @@
                   "id": "aLXSB",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -250333,13 +250531,13 @@
                   "id": "Kw3IE",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -253939,13 +254137,13 @@
                   "id": "gIJPg",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -256933,13 +257131,13 @@
                   "id": "OvnQO",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -260547,13 +260745,13 @@
                   "id": "MNAoF",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -263083,13 +263281,13 @@
                   "id": "r92MZp",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -265903,13 +266101,13 @@
                   "id": "vIy6h",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -268706,13 +268904,13 @@
                   "id": "IZjgy",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -270209,13 +270407,13 @@
                   "id": "PLBoM",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -273243,13 +273441,13 @@
                   "id": "y122pn",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -275932,13 +276130,13 @@
                   "id": "q68iX",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -277526,13 +277724,13 @@
                   "id": "XULbZ",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -280475,13 +280673,13 @@
                   "id": "q8dvme",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -281669,13 +281867,13 @@
                   "id": "g9Vkx",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -282780,13 +282978,13 @@
                   "id": "b1U0X6",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -283699,13 +283897,13 @@
                   "id": "MejxJ",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -285193,13 +285391,13 @@
                   "id": "BGRO9",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -290375,13 +290573,13 @@
                   "id": "q1cp2",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -295571,13 +295769,13 @@
                   "id": "GIBzH",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -301370,13 +301568,13 @@
                   "id": "fBo2F",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -307237,13 +307435,13 @@
                   "id": "RbES1",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -308978,13 +309176,13 @@
                   "id": "teQpj",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -309823,13 +310021,13 @@
                   "id": "k8OsE",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -310547,13 +310745,13 @@
                   "id": "znTgw",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -310963,13 +311161,13 @@
                       "id": "Y0UTZ",
                       "type": "ref",
                       "ref": "wnnsD",
-                      "name": "Status · Kontur · H:/projects/kontur",
+                      "name": "Status · Kontur",
                       "descendants": {
                         "GNexz": {
                           "icon": "hard-drive"
                         },
                         "dEV6Z": {
-                          "content": "Kontur · H:/projects/kontur"
+                          "content": "Kontur"
                         }
                       }
                     },
@@ -314586,13 +314784,13 @@
                   "id": "WTC3m",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -316446,13 +316644,13 @@
                   "id": "c21ReY",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -320247,13 +320445,13 @@
                   "id": "XbMZh",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -320738,13 +320936,13 @@
                       "id": "HCBwT",
                       "type": "ref",
                       "ref": "wnnsD",
-                      "name": "Status · Kontur · H:/projects/kontur",
+                      "name": "Status · Kontur",
                       "descendants": {
                         "GNexz": {
                           "icon": "hard-drive"
                         },
                         "dEV6Z": {
-                          "content": "Kontur · H:/projects/kontur"
+                          "content": "Kontur"
                         }
                       }
                     },
@@ -331329,13 +331527,13 @@
                   "id": "WN5qD",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -336644,13 +336842,13 @@
                   "id": "JPgk1",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -340645,13 +340843,13 @@
                   "id": "ZGfta",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -342452,13 +342650,13 @@
                   "id": "Z5yvU",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -343714,13 +343912,13 @@
                   "id": "h08Rc",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -346637,13 +346835,13 @@
                   "id": "rbaP6",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -349054,13 +349252,13 @@
                   "id": "qG2nL",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -351075,13 +351273,13 @@
                   "id": "LfzxP",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -355280,13 +355478,13 @@
                   "id": "Hlzqx",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -356710,13 +356908,13 @@
                   "id": "o0TWUC",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -358366,13 +358564,13 @@
                   "id": "xaJrA",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -363313,13 +363511,13 @@
                   "id": "tJGQ1",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -386370,13 +386568,13 @@
                   "id": "p1ki1k",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -388732,13 +388930,13 @@
                   "id": "LAkqT",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -390889,13 +391087,13 @@
                   "id": "RsFBK",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -393141,13 +393339,13 @@
                   "id": "mJTOp",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -400621,13 +400819,13 @@
                   "id": "GTuqu",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -402590,13 +402788,13 @@
                   "id": "Tb7kg",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -416977,13 +417175,13 @@
                   "id": "f4ud1",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -418776,13 +418974,13 @@
                   "id": "K4ZBL",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -420063,13 +420261,13 @@
                   "id": "z6e32",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -421704,13 +421902,13 @@
                   "id": "ejjsE",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -424781,13 +424979,13 @@
                   "id": "tTHwV",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -426878,13 +427076,13 @@
                   "id": "T96FGx",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -429179,13 +429377,13 @@
                   "id": "o6UzyF",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -431239,13 +431437,13 @@
                   "id": "Hub1F",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -433578,13 +433776,13 @@
                   "id": "HEhBF",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -435474,13 +435672,13 @@
                   "id": "FTWIx",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -437392,13 +437590,13 @@
                   "id": "eSYjW",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -444279,13 +444477,13 @@
                   "id": "IKwTZ",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -446270,13 +446468,13 @@
                   "id": "j3Ult",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -448027,13 +448225,13 @@
                   "id": "lsfz7",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -450188,13 +450386,13 @@
                   "id": "yQBVg",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -451726,13 +451924,13 @@
                   "id": "Pi6St",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -453503,13 +453701,13 @@
                   "id": "zvu2s",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -455573,13 +455771,13 @@
                   "id": "p6w6E",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -458866,13 +459064,13 @@
                   "id": "cZT9E",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -464703,13 +464901,13 @@
                   "id": "KTIf9",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -471939,13 +472137,13 @@
                   "id": "JzxsA",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -476450,13 +476648,13 @@
                   "id": "x8EMKG",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -480867,13 +481065,13 @@
                   "id": "Vf2Jh",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -490004,13 +490202,13 @@
                   "id": "qcUje",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -493963,13 +494161,13 @@
                   "id": "Fa4Qu",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -495636,13 +495834,13 @@
                   "id": "w8p5fV",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -499356,13 +499554,13 @@
                   "id": "LLl2Y",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -501326,13 +501524,13 @@
                   "id": "Y5jdU",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -502957,13 +503155,13 @@
                   "id": "Rpx9W",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -504928,13 +505126,13 @@
                   "id": "YO3ot",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -507373,13 +507571,13 @@
                   "id": "B2ET28",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -510000,13 +510198,13 @@
                   "id": "P9HZB7",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -515137,13 +515335,13 @@
                   "id": "Wuclh",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -517570,13 +517768,13 @@
                   "id": "Z9uyQ",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -520291,13 +520489,13 @@
                   "id": "rmxBd",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -521993,13 +522191,13 @@
                   "id": "U4Midx",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -523439,13 +523637,13 @@
                   "id": "KOz7L",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -524881,13 +525079,13 @@
                   "id": "SrYrN",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -526568,13 +526766,13 @@
                   "id": "KZopg",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -528310,13 +528508,13 @@
                   "id": "E99YMB",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -529710,13 +529908,13 @@
                   "id": "bOSeB",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -538696,13 +538894,13 @@
                   "id": "ehIZM",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -541132,13 +541330,13 @@
                   "id": "yxWOT",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -544346,13 +544544,13 @@
                   "id": "zWF9l",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -545999,13 +546197,13 @@
                   "id": "z9IMlN",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -549670,13 +549868,13 @@
                   "id": "I1Ft4",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -553150,13 +553348,13 @@
                   "id": "z8q6A",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -555329,13 +555527,13 @@
                   "id": "JmKQh",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -557166,13 +557364,13 @@
                   "id": "XEp2R",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -558315,13 +558513,13 @@
                   "id": "TSXAB",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -563940,13 +564138,13 @@
                   "id": "MEbHZ",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -565741,13 +565939,13 @@
                   "id": "kRMTB",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -571875,13 +572073,13 @@
                   "id": "d8J8JV",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -574128,13 +574326,13 @@
                   "id": "n1VrgW",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -579753,13 +579951,13 @@
                   "id": "G2Pfrp",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -582519,13 +582717,13 @@
                   "id": "ogos3",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -585813,13 +586011,13 @@
                   "id": "xbd6V",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -588858,13 +589056,13 @@
                   "id": "yhHPz",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -591885,13 +592083,13 @@
                   "id": "i7wXG",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -596241,13 +596439,13 @@
                   "id": "DzyE3",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
@@ -598829,13 +599027,13 @@
                   "id": "IV2uT",
                   "type": "ref",
                   "ref": "wnnsD",
-                  "name": "Status · Kontur · H:/projects/kontur",
+                  "name": "Status · Kontur",
                   "descendants": {
                     "GNexz": {
                       "icon": "hard-drive"
                     },
                     "dEV6Z": {
-                      "content": "Kontur · H:/projects/kontur"
+                      "content": "Kontur"
                     }
                   }
                 },
