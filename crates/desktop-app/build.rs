@@ -2,8 +2,9 @@
 //! `orchester-app.exe` on Windows, where Explorer, a taskbar pin and the Start menu shortcut take a
 //! program's icon from its resources.
 //!
-//! On macOS a program has no embedded icon: it comes from an `.app` bundle, which this app does not
-//! have yet. There is nothing to build, so the icon step does nothing there and cannot fail the build.
+//! On macOS a program has no embedded icon: it comes from the `.app` bundle (`CFBundleIconFile`; see
+//! `tools/package-macos.sh`). There is nothing to build, so the icon step does nothing there and cannot
+//! fail the build.
 //! (`cfg(windows)` below is the build host; Orchester is built natively on each platform.)
 
 #![allow(

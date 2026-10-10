@@ -47,8 +47,9 @@ Workspace layout:
   approvals, pipelines; the status bar shows its port) for controlling the app, and lurq's UI server
   (`%LOCALAPPDATA%\lurq\mcp\<pid>.json`) for screenshots and the element tree, which only reads in release builds
   and also drives the UI in debug builds (design verification).
-  On macOS: `cargo build -p orchester-runner && cargo run -p orchester-desktop`; `tools/package-macos.sh` builds
-  `Orchester.app` and `tools/install-macos.sh` installs it (`docs/stable-build.md`).
+  On macOS: `cargo build -p orchester-runner && cargo run -p orchester-desktop` (the new app:
+  `cargo build -p orchester-runner && cargo run -p orchester-app`); `tools/package-macos.sh` builds
+  `Orchester.app` and `Orchester App.app` and `tools/install-macos.sh` installs both (`docs/stable-build.md`).
 - `crates/exec` (`orchester-exec`): runs external programs (git, gh, agent CLIs) for the desktop and the runner,
   implementing core's `CommandRunner`. Platform details (hidden console window, process groups and kill, the macOS
   program search path) stay behind `cfg` here.
