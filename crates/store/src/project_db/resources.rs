@@ -27,8 +27,29 @@ impl ProjectDb {
     latest: Option<VersionNumber>,
     draft: &Draft<B>,
   ) -> Result<DraftSaved, StoreError> {
+    self.save_draft_and_name_matching(resource, expected, latest, draft, None)
+  }
+
+  /// Saves an editor draft and an optional display-name change atomically; slugs never change.
+  pub fn save_draft_and_name_matching<B: ResourceBody>(
+    &mut self,
+    resource: ResourceId,
+    expected: &B,
+    latest: Option<VersionNumber>,
+    draft: &Draft<B>,
+    names: Option<(&str, &Name)>,
+  ) -> Result<DraftSaved, StoreError> {
     let transaction = self.connection.transaction()?;
     check_kind::<B>(&transaction, resource)?;
+    if let Some((before, after)) = names {
+      let changed = transaction.execute(
+        "UPDATE resources SET name = ?1 WHERE id = ?2 AND name = ?3",
+        params![after.as_str(), resource.to_string(), before],
+      )?;
+      if changed != 1 {
+        return Err(StoreError::DraftChanged(resource));
+      }
+    }
     let stored = load_draft::<B>(&transaction, resource)?;
     let published = load_versions::<B>(
       &transaction,

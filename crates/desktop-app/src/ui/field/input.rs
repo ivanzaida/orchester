@@ -40,6 +40,7 @@ const TEXT_AREA_MAX_LINES: usize = 12;
 enum Lines {
   One,
   Many,
+  Compact,
 }
 
 #[derive(Clone)]
@@ -147,6 +148,12 @@ impl FieldInput {
     self
   }
 
+  /// A compact inspector text area (bR5AO), growing with wrapped text.
+  pub fn compact_area(mut self) -> Self {
+    self.lines = Lines::Compact;
+    self
+  }
+
   /// The value in Geist Mono, as identifiers and figures are (handover §5.2); the placeholder stays.
   pub fn mono(mut self) -> Self {
     self.mono = true;
@@ -184,7 +191,7 @@ impl FieldInput {
   }
 
   /// The value is not accepted and the caller says why: the stroke turns `danger`, no note is added.
-  pub(super) fn invalid(mut self) -> Self {
+  pub fn invalid(mut self) -> Self {
     self.invalid = true;
     self
   }
@@ -260,10 +267,14 @@ impl Component for FieldBox {
           .trailing
           .map(|glyph| icon(glyph, IconSize::Md, PaletteColor::TextMuted).id(format!("{}-trailing", props.id))),
       ),
-      Lines::Many => dress(
+      Lines::Many | Lines::Compact => dress(
         Row::new()
           .id(format!("{}-box", props.id))
-          .min_height(Dimension::Px(TEXT_AREA_HEIGHT))
+          .min_height(Dimension::Px(if props.lines == Lines::Compact {
+            ControlHeight::Md.value()
+          } else {
+            TEXT_AREA_HEIGHT
+          }))
           .padding(Padding::symmetric(
             ExtraSpacing::Loose.role(),
             ExtraSpacing::TextArea.role(),
@@ -324,7 +335,7 @@ impl FieldBox {
     }
     match props.lines {
       Lines::One => input.single_line(),
-      Lines::Many => input.multiline().rows(1, TEXT_AREA_MAX_LINES),
+      Lines::Many | Lines::Compact => input.multiline().rows(1, TEXT_AREA_MAX_LINES),
     }
   }
 }

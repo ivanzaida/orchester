@@ -18,6 +18,7 @@ pub enum Work {
     root: PathBuf,
     before: OpenedPipeline,
     body: Pipeline,
+    name: orchester_core::name::Name,
     allowed: Allowed,
   },
   Publish {
@@ -39,8 +40,9 @@ pub fn action(ctx: &mut Ctx, project: orchester_core::id::ProjectId) -> Action {
             root,
             before,
             body,
+            name,
             allowed,
-          } => write::save_in(&root, &before, body, &allowed),
+          } => write::save_named_in(&root, &before, body, &name, &allowed),
           Work::Publish { root, before, allowed } => write::publish_in(&root, before.id, &before.body, &allowed),
         }
         .map_err(|error| error.message());

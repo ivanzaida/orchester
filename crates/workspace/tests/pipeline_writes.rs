@@ -125,3 +125,51 @@ fn pipeline_writes_keep_unassigned_starter_drafts_but_publication_stays_strict()
   assert!(db.latest_version::<Pipeline>(id).unwrap().is_none());
   assert_eq!(db.draft::<Pipeline>(id).unwrap().unwrap().body(), &edited);
 }
+#[test]
+fn pipeline_writes_rename_preserves_slug_and_rejects_stale_names_atomically() {
+  let folder = tempfile::tempdir().unwrap();
+  std::fs::create_dir(folder.path().join(".git")).unwrap();
+  let mut db = ProjectDb::create(
+    folder.path(),
+    Project::new(
+      ProjectId::generate(),
+      ProjectKey::new("TEST").unwrap(),
+      Name::new("Test").unwrap(),
+    ),
+  )
+  .unwrap();
+  let body = Pipeline::new(vec![]).unwrap();
+  let id = db
+    .create_resource(
+      Slug::new("pipeline").unwrap(),
+      Name::new("Pipeline").unwrap(),
+      &body,
+      Timestamp::now(),
+    )
+    .unwrap()
+    .id();
+  let before = OpenedPipeline::load(&db, id).unwrap();
+  let after = write::save_named_in(
+    folder.path(),
+    &before,
+    body.clone(),
+    &Name::new("Delivery").unwrap(),
+    &Allowed::default(),
+  )
+  .unwrap();
+  assert_eq!(&*after.name, "Delivery");
+  assert_eq!(&*after.slug, "pipeline");
+  assert!(matches!(
+    write::save_named_in(
+      folder.path(),
+      &before,
+      body.with_description("stale edit".into()),
+      &Name::new("Old editor").unwrap(),
+      &Allowed::default()
+    ),
+    Err(WriteError::Store(orchester_store::StoreError::DraftChanged(_)))
+  ));
+  let current = OpenedPipeline::load(&db, id).unwrap();
+  assert_eq!(&*current.name, "Delivery");
+  assert!(current.body.description().is_empty());
+}

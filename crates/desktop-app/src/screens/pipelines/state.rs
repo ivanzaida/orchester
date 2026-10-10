@@ -16,6 +16,7 @@ pub enum Panel {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Editing {
   pub opened: OpenedPipeline,
+  pub name: orchester_core::name::Name,
   pub edit: PipelineEdit,
   pub panel: Panel,
   pub errors: BTreeMap<String, Message>,
@@ -23,12 +24,15 @@ pub struct Editing {
   pub viewing: Option<Pipeline>,
   pub viewing_version: Option<orchester_core::resource::VersionNumber>,
   pub epoch: u64,
+  pub comparing: bool,
+  pub published_notice: Option<orchester_core::resource::VersionNumber>,
 }
 impl DevtoolsInspectable for Editing {}
 impl Editing {
   pub fn new(opened: OpenedPipeline) -> Self {
     Self {
       edit: PipelineEdit::new(opened.body.clone()),
+      name: orchester_core::name::Name::new(&opened.name).expect("stored resource names are valid"),
       opened,
       panel: Panel::Pipeline,
       errors: BTreeMap::new(),
@@ -36,10 +40,12 @@ impl Editing {
       viewing: None,
       viewing_version: None,
       epoch: 0,
+      comparing: false,
+      published_notice: None,
     }
   }
   pub fn dirty(&self) -> bool {
-    self.edit.validate().as_ref() != Ok(&self.opened.body)
+    self.name.as_str() != self.opened.name.as_ref() || self.edit.validate().as_ref() != Ok(&self.opened.body)
   }
   pub fn shown(&self) -> PipelineEdit {
     self
@@ -63,6 +69,10 @@ impl Editing {
     }
   }
   pub fn saved(&mut self, opened: OpenedPipeline) {
+    let latest = opened.latest.as_ref().map(|v| v.number);
+    if latest != self.opened.latest.as_ref().map(|v| v.number) {
+      self.published_notice = latest;
+    }
     self.opened = opened;
   }
 }

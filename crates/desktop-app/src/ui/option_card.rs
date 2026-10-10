@@ -40,6 +40,7 @@ pub struct OptionCard {
   description: Arc<str>,
   chosen: bool,
   choice: Choice,
+  content: Vec<Element>,
 }
 
 impl OptionCard {
@@ -57,8 +58,15 @@ impl OptionCard {
       title: title.into(),
       description: description.into(),
       chosen,
+      content: Vec::new(),
       choice: Choice::Choose(Arc::new(choose)),
     }
+  }
+
+  /// Additional details, such as starter steps or a source-version picker.
+  pub fn content(mut self, content: impl Into<Element>) -> Self {
+    self.content.push(content.into());
+    self
   }
 
   /// The choice cannot be made, for `reason`.
@@ -151,7 +159,7 @@ impl From<OptionCard> for Element {
           .padding(Padding::new().top(ExtraSpacing::Hair.role()))
           .child(card.dot()),
       )
-      .child(text);
+      .child(text.with_children(card.content));
     match card.choice {
       Choice::Choose(choose) => Focus::Form
         .apply(frame)

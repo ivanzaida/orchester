@@ -56,6 +56,13 @@ pub fn property_of(id: &str, label: &str, value: impl Into<Element>) -> Row {
   )
 }
 
+/// Compact editable property (LC20M), with the control owning its vertical inset.
+pub fn control(id: &str, label: &str, value: impl Into<Element>) -> Row {
+  property_of(id, label, value)
+    .padding(Padding::new())
+    .align_items(Alignment::Center)
+}
+
 fn value_text(id: &str, value: &str, kind: PropertyValue) -> Text {
   let (style, color) = match kind {
     PropertyValue::Plain => (ExtraTypography::Property.role(), PaletteColor::TextPrimary),
@@ -89,7 +96,7 @@ fn framed(id: &str, name: &str, label: Text, value: impl Into<Element>) -> Row {
         .width(Dimension::Px(LABEL_WIDTH))
         .flex_shrink(0.0),
     )
-    .child(value)
+    .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(value))
 }
 
 /// A variable as a property: its name in Geist Mono 11.5 (`Variable · DOCS_INDEX` in `XRCed`), its value as

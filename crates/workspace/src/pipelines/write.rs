@@ -51,6 +51,18 @@ pub fn save_in(
   body: Pipeline,
   allowed: &Allowed,
 ) -> Result<OpenedPipeline, WriteError> {
+  let name = orchester_core::name::Name::new(&before.name).expect("stored resource names are valid");
+  save_named_in(root, before, body, &name, allowed)
+}
+
+/// Saves the editable display name with the draft; the stable slug and all published bodies stay intact.
+pub fn save_named_in(
+  root: &Path,
+  before: &OpenedPipeline,
+  body: Pipeline,
+  name: &orchester_core::name::Name,
+  allowed: &Allowed,
+) -> Result<OpenedPipeline, WriteError> {
   let mut db = ProjectDb::open(root)?;
   let current = OpenedPipeline::load(&db, before.id)?;
   for step in body.steps() {
@@ -63,11 +75,12 @@ pub fn save_in(
     return Err(WriteError::PersonOnly);
   }
   let draft = Draft::new(body, before.based_on, Timestamp::now());
-  db.save_draft_matching(
+  db.save_draft_and_name_matching(
     before.id,
     &before.body,
     before.latest.as_ref().map(|v| v.number),
     &draft,
+    Some((&before.name, name)),
   )?;
   Ok(OpenedPipeline::load(&db, before.id)?)
 }

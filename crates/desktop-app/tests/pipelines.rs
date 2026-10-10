@@ -25,7 +25,9 @@ fn pipelines_new_is_a_page_and_empty_draft_survives_reopening() {
   assert!(draft.body().steps().is_empty());
   assert_eq!(draft.body().description(), "Keep dependencies current.");
   editor.click("pipeline-publish");
-  assert!(editor.text("pipeline-publish-problem").contains("Add a step"));
+  assert!(editor.text("screen-pipelines").contains("Add a step before publishing"));
+  assert!(!editor.exists("pipeline-publish-confirm"));
+  assert!(editor.exists("pipeline-add-first"));
   editor.click("pipeline-parent");
   editor.until("library row", |e| e.exists(&format!("pipeline-row-{id}")));
   assert!(editor.text(&format!("pipeline-row-{id}")).contains("Draft"));
@@ -105,6 +107,8 @@ fn pipelines_publish_weaker_version_asks_in_place_and_preserves_history() {
   editor.until("v2", |e| {
     e.db().latest_version::<Pipeline>(id).unwrap().unwrap().number().get() == 2
   });
+  editor.until("published notice", |e| e.exists("pipeline-publish-notice"));
+  editor.click("pipeline-publish-notice-close");
   let versions = editor.db().versions::<Pipeline>(id).unwrap();
   assert!(versions[0].body().steps()[0].approval_gate);
   assert!(!versions[1].body().steps()[0].approval_gate);
@@ -174,6 +178,7 @@ fn pipelines_agent_and_tool_steps_dependencies_retries_and_narrowing_are_saved()
   editor.choose("step-failure", "Inspect");
   editor.set("step-retries", "3");
   editor.click("pipeline-step-step");
+  editor.click("step-after-picker");
   editor.click("step-after-step-2");
   assert!(
     editor.exists("pipeline-rule-error"),
@@ -229,9 +234,11 @@ fn pipelines_valid_changes_autosave_and_published_history_is_read_only() {
       .steps()[0]
       .approval_gate
   );
-  editor.click("pipeline-exit-history");
+  editor.click("pipeline-back-draft");
   assert!(!editor.text("screen-pipelines").contains("Viewing v1"));
 }
 
+#[path = "pipelines/layout.rs"]
+mod layout;
 #[path = "pipelines/regressions.rs"]
 mod regressions;

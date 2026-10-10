@@ -26,7 +26,7 @@ fn pipelines_unassigned_starter_saves_edits_but_cannot_publish() {
   assert!(editor.db().latest_version::<Pipeline>(id).unwrap().is_none());
   editor.click("pipeline-step-implement");
   assert!(editor.exists("step-write"));
-  editor.click("step-write");
+  editor.click("step-read");
   editor.until("write removed", |e| {
     e.db()
       .draft::<Pipeline>(id)
@@ -178,7 +178,7 @@ fn pipelines_sidebar_history_and_tabs_preserve_unconfirmed_and_invalid_edits() {
   );
   editor.open(id);
   editor.click("pipeline-step-step");
-  assert_eq!(editor.value("step-budget"), "");
+  assert_eq!(editor.value("step-budget"), "No limit");
   editor.click("pipeline-parent");
   editor.until("clean departure", |e| e.exists(&format!("pipeline-row-{id}")));
 }

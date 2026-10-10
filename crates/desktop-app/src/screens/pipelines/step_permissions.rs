@@ -13,13 +13,15 @@ use orchester_workspace::pipelines::{data::ProfileChoice, narrowing};
 use super::{parts, state::State};
 use crate::ui::{
   icon::Icon,
-  inspector::note,
+  inspector::{PropertyValue, control, note, property},
+  pressable::Focus,
+  tabs::{Segment, SegmentFace, segmented},
   toggle::{Toggle, ToggleKind},
 };
 
 pub fn rows(ctx: &Ctx, state: &State, step: &Step, locked: bool) -> Element {
   let mut body = Column::new()
-    .spacing(SpacingSize::Md)
+    .spacing(SpacingSize::Xs)
     .child(parts::section(ctx, "pipelines.gateAccess"));
   let (edit, key) = (state.clone(), step.key.clone());
   let gate = Toggle::new(
@@ -28,11 +30,15 @@ pub fn rows(ctx: &Ctx, state: &State, step: &Step, locked: bool) -> Element {
     step.approval_gate,
     ctx.t("pipelines.gate"),
   );
-  body = body.child(if locked {
-    gate
-  } else {
-    gate.on_change(move |on| edit.update(|s| s.change(&key, |step| step.approval_gate = on)))
-  });
+  body = body.child(switch_row(
+    ctx,
+    "pipelines.gate",
+    if locked {
+      gate
+    } else {
+      gate.on_change(move |on| edit.update(|s| s.change(&key, |step| step.approval_gate = on)))
+    },
+  ));
   let StepKind::Agent {
     profile, repository, ..
   } = &step.kind
@@ -42,31 +48,35 @@ pub fn rows(ctx: &Ctx, state: &State, step: &Step, locked: bool) -> Element {
   let editing = state.get();
   let choice = profile.and_then(|id| editing.opened.assignables.profile(id));
   let (edit, key) = (state.clone(), step.key.clone());
-  let writes = Toggle::new(
-    "step-write",
-    ToggleKind::Switch,
-    *repository == RepositoryAccess::Write,
-    ctx.t("pipelines.canWrite"),
-  );
-  body = body.child(
-    if !locked && (choice.is_some_and(narrowing::can_write) || *repository == RepositoryAccess::Write) {
-      writes.on_change(move |on| {
-        edit.update(|s| {
-          s.change(&key, |step| {
-            if let StepKind::Agent { repository, .. } = &mut step.kind {
-              *repository = if on {
-                RepositoryAccess::Write
-              } else {
-                RepositoryAccess::ReadOnly
-              };
-            }
-          })
-        })
-      })
-    } else {
-      writes
-    },
-  );
+  let writable = !locked && (choice.is_some_and(narrowing::can_write) || *repository == RepositoryAccess::Write);
+  let segments = [(false, "pipelines.readOnly"), (true, "pipelines.canWrite")].map(|(write, label)| {
+    let (edit, key) = (edit.clone(), key.clone());
+    Segment::new(
+      if write { "step-write" } else { "step-read" },
+      SegmentFace::Text(ctx.t(label)),
+      (*repository == RepositoryAccess::Write) == write,
+      move || {
+        if writable {
+          edit.update(|s| {
+            s.change(&key, |step| {
+              if let StepKind::Agent { repository, .. } = &mut step.kind {
+                *repository = if write {
+                  RepositoryAccess::Write
+                } else {
+                  RepositoryAccess::ReadOnly
+                };
+              }
+            })
+          });
+        }
+      },
+    )
+  });
+  body = body.child(control(
+    "step-access",
+    &ctx.t("pipelines.access"),
+    segmented("step-access-choice", segments, Focus::Form),
+  ));
   let Some(choice) = choice else {
     return body
       .child(note("step-narrow-note", Icon::Info, &ctx.t("pipelines.narrowHint")))
@@ -76,6 +86,12 @@ pub fn rows(ctx: &Ctx, state: &State, step: &Step, locked: bool) -> Element {
   if !narrowing::can_block_network(choice) || narrowing::commands(choice).is_empty() {
     body = body.child(parts::note(&ctx.t("pipelines.narrowUnavailable")));
   }
+  body = body.child(property(
+    "step-command-summary",
+    &ctx.t("pipelines.commands"),
+    &command_summary(ctx, step),
+    PropertyValue::Plain,
+  ));
   body = body.child(command_rows(state, step, choice, locked));
   body.child(network_rows(ctx, state, step, choice, locked)).into()
 }
@@ -130,7 +146,7 @@ fn network_rows(ctx: &Ctx, state: &State, step: &Step, choice: &ProfileChoice, l
     StepCommands::AsProfile => all.clone(),
     StepCommands::Only(only) => only.entries().iter().map(ToString::to_string).collect(),
   };
-  let mut body = Column::new().spacing(SpacingSize::Md);
+  let mut body = Column::new().spacing(SpacingSize::Xs);
   let (edit, key, choice_clone, only, ask) = (
     state.clone(),
     step.key.clone(),
@@ -145,11 +161,15 @@ fn network_rows(ctx: &Ctx, state: &State, step: &Step, choice: &ProfileChoice, l
     ctx.t("pipelines.networkOff"),
   );
   let list = (!all.is_empty()).then_some(only);
-  body = body.child(if !locked && narrowing::can_block_network(choice) {
-    network.on_change(move |off| apply(&edit, &key, &choice_clone, list.as_deref(), off, ask))
-  } else {
-    network
-  });
+  body = body.child(switch_row(
+    ctx,
+    "pipelines.networkOff",
+    if !locked && narrowing::can_block_network(choice) {
+      network.on_change(move |off| apply(&edit, &key, &choice_clone, list.as_deref(), off, ask))
+    } else {
+      network
+    },
+  ));
   let (edit, key, choice, only, off) = (
     state.clone(),
     step.key.clone(),
@@ -165,11 +185,15 @@ fn network_rows(ctx: &Ctx, state: &State, step: &Step, choice: &ProfileChoice, l
     ctx.t("pipelines.askTools"),
   );
   body
-    .child(if locked {
-      asks
-    } else {
-      asks.on_change(move |ask| apply(&edit, &key, &choice, list.as_deref(), off, ask))
-    })
+    .child(switch_row(
+      ctx,
+      "pipelines.askTools",
+      if locked {
+        asks
+      } else {
+        asks.on_change(move |ask| apply(&edit, &key, &choice, list.as_deref(), off, ask))
+      },
+    ))
     .child(note("step-narrow-note", Icon::Info, &ctx.t("pipelines.narrowHint")))
     .into()
 }
@@ -191,4 +215,26 @@ fn apply(
       })
     })
   });
+}
+fn switch_row(ctx: &Ctx, key: &str, toggle: Toggle) -> lurq::components::Row {
+  lurq::components::Row::new()
+    .width(lurq::node::dimension::Dimension::Pct(100.0))
+    .min_height(lurq::node::dimension::Dimension::Px(28.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(lurq::layout::Alignment::Center)
+    .child(parts::caption(&ctx.t(key)).flex(1.0))
+    .child(toggle.hide_label())
+}
+fn command_summary(ctx: &Ctx, step: &Step) -> String {
+  if let StepKind::Agent { permissions, .. } = &step.kind
+    && let StepCommands::Only(only) = &permissions.commands
+  {
+    return ctx
+      .t_args(
+        "pipelines.allowedCommands",
+        [("count", only.entries().len().to_string())],
+      )
+      .to_string();
+  }
+  ctx.t("pipelines.inherit").to_string()
 }

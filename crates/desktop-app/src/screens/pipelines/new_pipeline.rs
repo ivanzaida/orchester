@@ -33,7 +33,7 @@ use crate::{
   theme::ExtraSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
-    field::{FieldInput, SelectField, field},
+    field::{FieldInput, SelectField},
     icon::Icon,
     inspector::{PropertyValue, property},
     message::message_text,
@@ -82,10 +82,16 @@ impl Component for NewPipeline {
       .get();
     let copies: Vec<_> = listed
       .data
+      .clone()
       .unwrap_or_default()
       .into_iter()
       .filter(|p| !matches!(p.state, VersionState::DraftOnly))
       .collect();
+    let collision = listed
+      .data
+      .as_ref()
+      .and_then(|entries| orchester_workspace::pipelines::library::matching_name(entries, &self.name.get()))
+      .cloned();
     let chosen = match self.start.get() {
       0 => Some(Start::Starter),
       1 => self.copy.get().parse().ok().map(Start::Copy),
@@ -96,7 +102,7 @@ impl Component for NewPipeline {
     let button = ActionButton::new("pipeline-create", ButtonKind::Primary, ctx.t("pipelines.create"));
     let button = if save.state().get().is_pending() {
       button.loading()
-    } else if let Some(start) = chosen.filter(|_| !name.trim().is_empty()) {
+    } else if let Some(start) = chosen.filter(|_| !name.trim().is_empty() && collision.is_none()) {
       let save = save.clone();
       button.on_click(move || {
         save.run((name.clone(), description.clone(), start));
@@ -104,18 +110,20 @@ impl Component for NewPipeline {
     } else {
       button.disabled()
     };
-    let head = self.header(ctx, id, button);
+    let head = self.header(ctx, id, button, collision.is_some());
     let choices = self.choices(ctx, &copies);
     let content = Column::new()
       .flex(1.0)
       .height(Dimension::Pct(100.0))
       .padding(ExtraSpacing::Roomy.role())
-      .spacing(SpacingSize::Xl)
+      .background(crate::theme::pipelines::canvas_color())
       .align_items(Alignment::Center)
-      .child(parts::caption(&ctx.t("pipelines.onStart")))
+      .child(super::canvas::start_node(ctx))
+      .child(super::canvas::edge(ctx))
       .child(choices);
-    let panel = self.inspector(ctx);
-    let mut page = parts::page().child(head).child(
+    let panel = self.inspector(ctx, collision.is_some());
+    let strip = collision_strip(ctx, id, collision);
+    let mut page = parts::page().child(head).with_children(strip).child(
       Row::new()
         .flex(1.0)
         .min_height(Dimension::Px(0.0))
@@ -133,23 +141,30 @@ impl Component for NewPipeline {
   }
 }
 impl NewPipeline {
-  fn header(&self, ctx: &mut Ctx, id: orchester_core::id::ProjectId, button: ActionButton) -> Row {
+  fn header(&self, ctx: &mut Ctx, id: orchester_core::id::ProjectId, button: ActionButton, collision: bool) -> Row {
     let nav = Navigation::of(ctx);
+    let mut name = FieldInput::new("pipeline-name", ctx.t("pipelines.name"), self.name.clone())
+      .placeholder(ctx.t("pipelines.namePlaceholder"))
+      .width(Dimension::Px(NAME_WIDTH));
+    if collision {
+      name = name.invalid();
+    }
+    let name = name.render(ctx);
     parts::header()
       .child(
         ActionButton::new("pipeline-parent", ButtonKind::Ghost, ctx.t("pipelines.title"))
           .on_click(move || nav.go(Route::Project(id, ProjectPage::Pipelines))),
       )
-      .child(
-        FieldInput::new("pipeline-name", ctx.t("pipelines.name"), self.name.clone())
-          .placeholder(ctx.t("pipelines.namePlaceholder"))
-          .width(Dimension::Px(NAME_WIDTH))
-          .render(ctx),
-      )
+      .child(crate::ui::icon::icon(
+        Icon::ChevronRight,
+        crate::theme::IconSize::Sm,
+        lurq::app::theme::PaletteColor::TextMuted,
+      ))
+      .child(name)
       .child(parts::caption(&ctx.t("pipelines.notCreated")))
       .child(Spacer::new().flex(1.0))
       .child(
-        ActionButton::new("pipeline-cancel", ButtonKind::Ghost, ctx.t("pipelines.cancel")).on_click({
+        ActionButton::new("pipeline-cancel", ButtonKind::Secondary, ctx.t("pipelines.cancel")).on_click({
           let nav = Navigation::of(ctx);
           move || nav.go(Route::Project(id, ProjectPage::Pipelines))
         }),
@@ -168,32 +183,42 @@ impl NewPipeline {
       (2, "pipelines.empty", "pipelines.emptyHint", Icon::Plus),
     ] {
       let start = self.start.clone();
-      let card = OptionCard::new(
+      let mut card = OptionCard::new(
         format!("pipeline-start-{value}"),
         (glyph, ctx.t(title)),
         ctx.t(detail),
         self.start.get() == value,
         move || start.set(value),
       );
-      choices = choices.child(card);
-      if value == 1 && self.start.get() == 1 {
-        choices = choices.child(
+      if value == 0 {
+        card = card.content(starter_chips(ctx));
+      }
+      if value == 1 {
+        card = card.content(
           SelectField::new(
             "pipeline-copy",
             ctx.t("pipelines.copy"),
             self.copy.clone(),
             copies
               .iter()
-              .map(|p| SelectOption::new(p.id.to_string(), p.name.clone()))
+              .map(|p| {
+                SelectOption::new(p.id.to_string(), p.name.clone()).detail(match p.state {
+                  VersionState::Published(v) | VersionState::PublishedWithDraft(v) => {
+                    ctx.t_args("pipelines.version", [("version", v.get().to_string())])
+                  }
+                  VersionState::DraftOnly => ctx.t("pipelines.never"),
+                })
+              })
               .collect(),
           )
           .render(ctx),
         );
       }
+      choices = choices.child(card);
     }
-    choices
+    choices.child(parts::note(&ctx.t("pipelines.presets")))
   }
-  fn inspector(&self, ctx: &mut Ctx) -> Element {
+  fn inspector(&self, ctx: &mut Ctx, collision: bool) -> Element {
     let slug = Slug::from_name(&self.name.get())
       .map(|s| s.as_str().to_owned())
       .unwrap_or_default();
@@ -202,35 +227,62 @@ impl NewPipeline {
       ctx.t("pipelines.description"),
       self.description.clone(),
     )
-    .text_area()
+    .compact_area()
     .placeholder(ctx.t("pipelines.descriptionPlaceholder"))
     .render(ctx);
     let body = parts::panel_body()
+      .child(parts::section(ctx, "pipelines.general"))
       .child(property(
         "pipeline-slug",
         &ctx.t("pipelines.slug"),
         &slug,
-        PropertyValue::Mono,
+        if collision {
+          PropertyValue::MonoDanger
+        } else {
+          PropertyValue::Mono
+        },
       ))
       .child(parts::note(&ctx.t("pipelines.slugHint")))
-      .child(field(
-        "pipeline-description",
-        Some(&ctx.t("pipelines.description")),
+      .child(crate::ui::inspector::control(
+        "pipeline-description-row",
+        &ctx.t("pipelines.description"),
         description,
-        None,
       ))
-      .child(parts::section(ctx, "pipelines.nothingSaved"))
-      .child(parts::note(&ctx.t("pipelines.createHint")));
+      .child(parts::section(ctx, "pipelines.runsTitle"))
+      .child(property(
+        "pipeline-new-starts",
+        &ctx.t("pipelines.starts"),
+        &ctx.t("pipelines.onStart"),
+        PropertyValue::Plain,
+      ))
+      .child(property(
+        "pipeline-new-published",
+        &ctx.t("pipelines.publishedLabel"),
+        &ctx.t("pipelines.never"),
+        PropertyValue::Muted,
+      ))
+      .child(property(
+        "pipeline-new-used",
+        &ctx.t("pipelines.usedBy"),
+        &ctx.t("pipelines.notUsed"),
+        PropertyValue::Muted,
+      ))
+      .child(crate::ui::notice::handling_notice(
+        "pipeline-nothing-saved",
+        Icon::Info,
+        &ctx.t("pipelines.createHint"),
+      ));
     parts::panel(
       ctx,
       &ctx.t("pipelines.pipeline"),
       &ctx.t("pipelines.new"),
       body.into(),
       None,
+      None,
     )
   }
 }
-fn starter(ctx: &Ctx) -> StarterText {
+pub(super) fn starter(ctx: &Ctx) -> StarterText {
   StarterText::new(|step| {
     let area = match step {
       StarterStep::Research => "research",
@@ -269,4 +321,44 @@ fn create_action(
       .await?
     }
   })
+}
+fn collision_strip(
+  ctx: &mut Ctx,
+  id: orchester_core::id::ProjectId,
+  collision: Option<orchester_workspace::pipelines::library::LibraryEntry>,
+) -> Option<crate::ui::notice::Notice> {
+  collision.map(|existing| {
+    let nav = Navigation::of(ctx);
+    crate::ui::notice::Notice::new(
+      "pipeline-create-error",
+      crate::ui::notice::NoticeTone::Danger,
+      ctx.t("pipelines.collision"),
+    )
+    .action(
+      ActionButton::new(
+        "pipeline-open-existing",
+        ButtonKind::Secondary,
+        ctx.t("pipelines.openExisting"),
+      )
+      .on_click(move || nav.go(Route::Project(id, ProjectPage::Pipeline(existing.id)))),
+    )
+  })
+}
+pub(super) fn starter_chips(ctx: &Ctx) -> Column {
+  let starter = starter(ctx).pipeline(&Default::default());
+  let mut chips = Column::new().spacing(SpacingSize::Xs);
+  for steps in starter.steps().chunks(3) {
+    chips = chips.child(
+      Row::new()
+        .spacing(SpacingSize::Xs)
+        .with_children(steps.iter().map(|step| {
+          Row::new()
+            .padding(SpacingSize::Xs)
+            .border_inside(lurq::app::theme::BorderSize::Sm, lurq::app::theme::PaletteColor::Border)
+            .rounded(lurq::app::theme::RadiusSize::Sm)
+            .child(parts::caption(step.name.as_str()))
+        })),
+    );
+  }
+  chips
 }

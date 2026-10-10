@@ -1,13 +1,17 @@
 //! Pipelines library and editor (Pencil layers i4jt6V and vEDYY).
 mod canvas;
+mod dependencies;
 mod editor;
+mod graph_routes;
 mod history;
 mod inspector;
 mod leaving;
 mod library;
 mod new_pipeline;
 mod parts;
+mod publication;
 mod settings;
+mod settings_nav;
 mod state;
 mod step_fields;
 mod step_permissions;

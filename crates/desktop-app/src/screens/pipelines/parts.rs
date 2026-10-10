@@ -33,7 +33,24 @@ pub fn header() -> Row {
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
 }
-pub fn panel(_ctx: &Ctx, eyebrow: &str, title: &str, body: Element, footer: Option<Element>) -> Element {
+pub fn panel(
+  ctx: &mut Ctx,
+  eyebrow: &str,
+  title: &str,
+  body: Element,
+  footer: Option<Element>,
+  close: Option<super::state::State>,
+) -> Element {
+  let close = close.map(|state| {
+    crate::ui::icon_button::IconButton::new(
+      "pipeline-inspector-close",
+      crate::ui::icon::Icon::X,
+      ctx.t("pipelines.closeInspector"),
+    )
+    .small()
+    .on_click(move || state.update(|s| s.panel = super::state::Panel::Pipeline))
+    .render(ctx)
+  });
   Column::new()
     .id("pipeline-inspector")
     .width(Dimension::Px(INSPECTOR_WIDTH))
@@ -49,7 +66,13 @@ pub fn panel(_ctx: &Ctx, eyebrow: &str, title: &str, body: Element, footer: Opti
         .align_items(Alignment::Center)
         .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
         .child(Text::new(eyebrow).variant(ExtraTypography::ColumnHeading.role()))
-        .child(Text::new(title).variant(TypographyStyle::Title)),
+        .child(
+          Text::new(title)
+            .variant(TypographyStyle::Title)
+            .flex(1.0)
+            .min_width(Dimension::Px(0.0)),
+        )
+        .with_children(close),
     )
     .child(ScrollVertical::new(body).flex(1.0).min_height(Dimension::Px(0.0)))
     .with_children(footer)
@@ -62,7 +85,11 @@ pub fn panel_body() -> Column {
     .spacing(ExtraSpacing::Loose.role())
 }
 pub fn section(ctx: &Ctx, key: &'static str) -> Element {
-  section_title(key, &ctx.t(key), None).into()
+  section_title(key, &ctx.t(key), None)
+    .height(Dimension::Px(30.0))
+    .padding(Padding::new().top(ExtraSpacing::Loose.role()))
+    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .into()
 }
 pub fn caption(text: &str) -> Text {
   Text::new(text).variant(TypographyStyle::Caption)

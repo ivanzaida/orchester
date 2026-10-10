@@ -108,7 +108,7 @@ impl PartialEq for EditorProps {
 }
 impl DevtoolsInspectable for EditorProps {}
 #[derive(Clone, PartialEq)]
-struct Snapshot(Option<orchester_core::resource::Pipeline>);
+struct Snapshot(Option<(orchester_core::resource::Pipeline, orchester_core::name::Name)>);
 impl DevtoolsInspectable for Snapshot {}
 pub struct Editor {
   state: State,
@@ -181,7 +181,11 @@ impl Component for Editor {
         .into()
     };
     let leave = super::leaving::question(ctx, &self.leave, writing);
-    let mut page = parts::page().child(head).with_children(leave).child(content);
+    let mut page = parts::page()
+      .child(head)
+      .with_children(leave)
+      .with_children(super::publication::problems(ctx, &self.state))
+      .child(content);
     if self.confirm_save.get() {
       page = page.child(self.save_question(ctx, &props, &action));
     }
@@ -202,14 +206,14 @@ impl Component for Editor {
       let view = problem_view(&editing.edit, problem, &ctx.t("pipelines.then"));
       page = page.child(field_error("pipeline-rule-error", &message_text(ctx, &view.message)));
     }
-    page
+    super::publication::with_success(ctx, &self.state, page.into())
   }
 }
 impl Editor {
   fn autosave(&self, ctx: &mut Ctx, props: &EditorProps, action: &Action) {
     let editing = self.state.get();
     let body = (editing.dirty() && editing.errors.is_empty() && editing.viewing.is_none() && !self.leave.requested())
-      .then(|| editing.edit.validate().ok())
+      .then(|| editing.edit.validate().ok().map(|body| (body, editing.name.clone())))
       .flatten();
     let ready = ctx
       .future(body, |body| async move {
@@ -220,7 +224,7 @@ impl Editor {
     let (state, action, root) = (self.state.clone(), action.clone(), props.project.open.repo_root.clone());
     let leave = self.leave.clone();
     ctx.watch(&ready, move |ready| {
-      let Some(Snapshot(Some(body))) = &ready.data else {
+      let Some(Snapshot(Some((body, name)))) = &ready.data else {
         return;
       };
       let current = state.get();
@@ -232,12 +236,14 @@ impl Editor {
         || !current.dirty()
         || !current.errors.is_empty()
         || current.edit.validate().as_ref() != Ok(body)
+        || &current.name != name
         || !draft_reasons(&current.opened, body).is_empty()
       {
         return;
       }
       action.run(Work::Save {
         root: root.clone(),
+        name: current.name,
         before: current.opened,
         body: body.clone(),
         allowed: Allowed::default(),
@@ -251,32 +257,42 @@ impl Editor {
     let back = ActionButton::new("pipeline-parent", ButtonKind::Ghost, ctx.t("pipelines.title"))
       .on_click(move || nav.go(Route::Project(id, ProjectPage::Pipelines)));
     let status = save_status(ctx, &editing, busy);
-    let next = next_version(&editing.opened)
-      .map(|v| v.get().to_string())
-      .unwrap_or_default();
-    let state = self.state.clone();
-    let publish = ActionButton::new(
-      "pipeline-publish",
-      ButtonKind::Primary,
-      ctx.t_args("pipelines.publish", [("version", next)]),
-    )
-    .on_click(move || state.update(|s| s.panel = Panel::Publish));
-    let publish = if busy || editing.dirty() || !editing.errors.is_empty() || editing.opened.draft_saved_at.is_none() {
-      publish.disabled()
-    } else {
-      publish
-    };
+    let publish = self.publish_button(ctx, &editing, busy);
     let mut head = parts::header()
       .child(back)
+      .child(crate::ui::icon::icon(
+        crate::ui::icon::Icon::ChevronRight,
+        crate::theme::IconSize::Sm,
+        lurq::app::theme::PaletteColor::TextMuted,
+      ))
       .child(
         lurq::components::Text::new(&editing.opened.name)
           .id("pipeline-title")
           .variant(crate::theme::ExtraTypography::Strong.role()),
       )
+      .with_children((editing.panel == Panel::Settings).then(|| {
+        Row::new()
+          .spacing(lurq::app::theme::SpacingSize::Sm)
+          .child(crate::ui::icon::icon(
+            crate::ui::icon::Icon::ChevronRight,
+            crate::theme::IconSize::Sm,
+            lurq::app::theme::PaletteColor::TextMuted,
+          ))
+          .child(parts::caption(&ctx.t("pipelines.settings")))
+      }))
+      .child(crate::ui::icon::icon(
+        crate::ui::icon::Icon::Check,
+        crate::theme::IconSize::Sm,
+        lurq::app::theme::PaletteColor::TextMuted,
+      ))
       .child(parts::caption(&status))
       .child(Spacer::new().flex(1.0));
+    if editing.edit.steps().is_empty() {
+      head = head.child(parts::caption(&ctx.t("pipelines.publishEmpty")));
+    }
+    head = head.child(super::publication::run_button(ctx, &editing));
     if editing.viewing.is_some() {
-      return head.child(back_to_draft(ctx, self.state.clone())).into();
+      return head.child(publish.disabled()).into();
     }
     if editing.dirty() {
       let (state, asking, action, root) = (
@@ -297,6 +313,7 @@ impl Editor {
           }
           action.run(Work::Save {
             root: root.clone(),
+            name: current.name,
             before: current.opened,
             body,
             allowed: Allowed::default(),
@@ -311,6 +328,38 @@ impl Editor {
       );
     }
     head.child(publish).into()
+  }
+  fn publish_button(&self, ctx: &Ctx, editing: &Editing, busy: bool) -> ActionButton {
+    if editing.opened.latest.is_some() && editing.opened.draft_saved_at.is_none() && !editing.dirty() {
+      let state = self.state.clone();
+      return ActionButton::new(
+        "pipeline-header-history",
+        ButtonKind::Secondary,
+        ctx.t("pipelines.history"),
+      )
+      .icon(crate::ui::icon::Icon::History)
+      .on_click(move || state.update(|s| s.panel = Panel::History));
+    }
+    let next = next_version(&editing.opened)
+      .map(|v| v.get().to_string())
+      .unwrap_or_default();
+    let state = self.state.clone();
+    let publish = ActionButton::new(
+      "pipeline-publish",
+      ButtonKind::Primary,
+      ctx.t_args("pipelines.publish", [("version", next)]),
+    )
+    .on_click(move || state.update(|s| s.panel = Panel::Publish));
+    if busy
+      || editing.dirty()
+      || !editing.errors.is_empty()
+      || editing.opened.draft_saved_at.is_none()
+      || !super::publication::valid(editing)
+    {
+      publish.disabled()
+    } else {
+      publish
+    }
   }
   fn save_question(&self, ctx: &mut Ctx, props: &EditorProps, action: &Action) -> Element {
     let editing = self.state.get();
@@ -342,6 +391,7 @@ impl Editor {
           done.set(false);
           action.run(Work::Save {
             root: root.clone(),
+            name: current.name,
             before: current.opened,
             body: body.clone(),
             allowed: Allowed(reasons.clone()),
@@ -353,7 +403,7 @@ impl Editor {
   }
   fn publish_panel(&self, ctx: &mut Ctx, props: &EditorProps, action: &Action, busy: bool) -> Element {
     let editing = self.state.get();
-    let (body, valid) = publish_review(ctx, &editing);
+    let (body, valid) = super::publication::review(ctx, &editing);
     let reasons = publish_reasons(editing.opened.latest.as_ref().map(|v| &v.body), &editing.opened.body);
     let footer = if valid && !busy {
       let (state, action, root, before) = (
@@ -413,6 +463,7 @@ impl Editor {
       &editing.opened.name,
       body.into(),
       footer,
+      Some(self.state.clone()),
     )
   }
 }
@@ -435,48 +486,4 @@ fn save_status(ctx: &Ctx, editing: &Editing, busy: bool) -> std::sync::Arc<str> 
   } else {
     ctx.t("pipelines.saved")
   }
-}
-fn back_to_draft(ctx: &Ctx, state: State) -> ActionButton {
-  ActionButton::new(
-    "pipeline-exit-history",
-    ButtonKind::Secondary,
-    ctx.t("pipelines.returnDraft"),
-  )
-  .on_click(move || {
-    state.update(|s| {
-      s.viewing = None;
-      s.viewing_version = None;
-      s.panel = Panel::Pipeline;
-      s.epoch += 1;
-    })
-  })
-}
-fn publish_review(ctx: &Ctx, editing: &Editing) -> (lurq::components::Column, bool) {
-  let problems = editing.edit.problems();
-  let invalid: Vec<_> = editing
-    .edit
-    .steps()
-    .iter()
-    .filter_map(|step| orchester_workspace::pipelines::narrowing::check_step(step, &editing.opened.assignables).err())
-    .collect();
-  let mut body = parts::panel_body().child(parts::note(&ctx.t("pipelines.reviewHint")));
-  for problem in &problems {
-    let view = problem_view(&editing.edit, problem, &ctx.t("pipelines.then"));
-    body = body.child(field_error(
-      "pipeline-publish-problem",
-      &message_text(ctx, &view.message),
-    ));
-  }
-  for error in &invalid {
-    body = body.child(field_error("pipeline-publish-problem", &message_text(ctx, error)));
-  }
-  if let Some(latest) = &editing.opened.latest {
-    for change in orchester_core::resource::changes(&latest.body, &editing.opened.body) {
-      body = body.child(parts::note(&message_text(
-        ctx,
-        &orchester_workspace::pipelines::describe::change(&change),
-      )));
-    }
-  }
-  (body, problems.is_empty() && invalid.is_empty())
 }

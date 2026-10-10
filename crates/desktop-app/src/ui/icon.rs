@@ -50,6 +50,7 @@ icons! {
   Check => '\u{e06c}',
   CheckCheck => '\u{e38e}',
   ChevronDown => '\u{e06d}',
+  ChevronLeft => '\u{e06e}',
   ChevronRight => '\u{e06f}',
   ChevronUp => '\u{e070}',
   ChevronsUpDown => '\u{e211}',

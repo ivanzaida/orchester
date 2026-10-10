@@ -15,7 +15,7 @@ use orchester_workspace::pipelines::fields::{self, Executor, ModelChoice, RouteC
 use super::{parts, state::State};
 use crate::ui::{
   field::{FieldInput, SelectField},
-  inspector::property_of,
+  inspector::control as property_of,
   message::message_text,
 };
 
@@ -74,7 +74,7 @@ impl Component for Fields {
     self.watch(ctx, &props);
     let mut body = Column::new()
       .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
+      .spacing(SpacingSize::Xs)
       .child(Self::text(
         ctx,
         &props,
@@ -97,7 +97,7 @@ impl Component for Fields {
           .into_iter()
           .map(|m| SelectOption::new(ModelChoice(Some(m.clone())), m.as_str().to_owned())),
       );
-      let options = locked_options(options, props.locked);
+      let options = locked_options(options, props.locked || self.executor.get() == Executor::Unset);
       let select = SelectField::new("step-model", ctx.t("pipelines.model"), self.model.clone(), options).render(ctx);
       body = body.child(property_of("step-model-row", &ctx.t("pipelines.model"), select));
     }
@@ -127,7 +127,12 @@ impl Fields {
     let title = ctx.t(label);
     let mut field = FieldInput::new(id, title.clone(), value);
     if multiline {
-      field = field.text_area();
+      field = field.compact_area();
+    }
+    if id == "step-budget" {
+      field = field
+        .placeholder(ctx.t("pipelines.noLimit"))
+        .unit(ctx.t("pipelines.tokens"));
     }
     if props.locked {
       field = field.locked();
@@ -158,41 +163,29 @@ impl Fields {
       }
     }));
     let options = locked_options(options, props.locked);
-    property_of(
-      "step-executor-row",
-      &ctx.t("pipelines.profile"),
-      SelectField::new(
-        "step-executor",
-        ctx.t("pipelines.executor"),
-        self.executor.clone(),
-        options,
-      )
-      .render(ctx),
+    let input = SelectField::new(
+      "step-executor",
+      ctx.t("pipelines.executor"),
+      self.executor.clone(),
+      options,
     )
-    .into()
+    .render(ctx);
+    let mut column = Column::new().width(Dimension::Pct(100.0)).child(input);
+    if self.executor.get() == Executor::Unset {
+      column = column
+        .border_inside(lurq::app::theme::BorderSize::Sm, lurq::app::theme::PaletteColor::Danger)
+        .child(crate::ui::field::field_error(
+          "step-profile-required",
+          &ctx.t("pipelines.missingProfile"),
+        ));
+    }
+    property_of("step-executor-row", &ctx.t("pipelines.profile"), column).into()
   }
+
   fn flow(&self, ctx: &mut Ctx, props: &Props) -> Element {
     let editing = props.state.get();
     let mut body = Column::new().width(Dimension::Pct(100.0)).spacing(SpacingSize::Sm);
-    let mut dependencies = Column::new().spacing(SpacingSize::Xs);
-    for step in editing.shown().steps().iter().filter(|s| s.key != props.step.key) {
-      let (state, key, dependency) = (props.state.clone(), props.step.key.clone(), step.key.clone());
-      let toggle = crate::ui::toggle::Toggle::new(
-        format!("step-after-{}", step.key),
-        crate::ui::toggle::ToggleKind::Checkbox,
-        props.step.depends_on.contains(&step.key),
-        step.name.as_str(),
-      );
-      dependencies = dependencies.child(if props.locked {
-        toggle
-      } else {
-        toggle.on_change(move |on| {
-          state.update(|s| {
-            s.edit.set_dependency(&key, &dependency, on);
-          })
-        })
-      });
-    }
+    let dependencies = ctx.mount_keyed::<super::dependencies::Dependencies>("step-dependencies-picker", props.clone());
     body = body.child(property_of(
       "step-dependencies",
       &ctx.t("pipelines.after"),
@@ -212,6 +205,12 @@ impl Fields {
       "step-failure-row",
       &ctx.t("pipelines.failure"),
       SelectField::new("step-failure", ctx.t("pipelines.failure"), self.route.clone(), options).render(ctx),
+    ));
+    body = body.child(crate::ui::inspector::property(
+      "step-stopped",
+      &ctx.t("pipelines.stopped"),
+      &ctx.t("pipelines.fixedFailure"),
+      crate::ui::inspector::PropertyValue::Muted,
     ));
     if props.step.on_failure.is_some() {
       body = body.child(Self::text(

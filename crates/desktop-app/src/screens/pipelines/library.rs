@@ -3,11 +3,11 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    theme::{SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text, VirtualizedList},
   core::Signal,
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::{
   background, messages,
@@ -20,10 +20,10 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{ProjectPage, Route},
-  theme::{ExtraSpacing, ExtraTypography},
+  theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
-    icon::Icon,
+    icon::{Icon, icon},
     message::message_text,
     state::{EmptyState, load_error, loading},
     table::{ColumnWidth, HEADER_HEIGHT, TableRow, table_header},
@@ -64,8 +64,8 @@ impl Component for Library {
       .child(
         Column::new()
           .flex(1.0)
-          .spacing(SpacingSize::Xs)
-          .child(Text::new(&ctx.t("pipelines.title")).variant(TypographyStyle::Heading))
+          .spacing(SpacingSize::Sm)
+          .child(Text::new(&ctx.t("pipelines.title")).variant(ExtraTypography::Display.role()))
           .child(Text::new(&ctx.t("pipelines.subtitle")).variant(TypographyStyle::Description)),
       )
       .child(
@@ -98,12 +98,7 @@ impl Component for Library {
       return page.child(content);
     };
     if entries.is_empty() {
-      return page.child(EmptyState::new(
-        "pipelines-empty",
-        Icon::Workflow,
-        ctx.t("pipelines.emptyTitle"),
-        ctx.t("pipelines.emptyDetail"),
-      ));
+      return empty(ctx, id, page);
     }
     populated(ctx, id, &entries, page)
   }
@@ -148,7 +143,25 @@ impl Component for LibraryRow {
           )),
       )
       .cell(ColumnWidth::Fixed(STEPS), parts::caption(&entry.step_count.to_string()))
-      .cell(ColumnWidth::Fixed(VERSION), parts::caption(&state))
+      .cell(
+        ColumnWidth::Fixed(VERSION),
+        Row::new()
+          .spacing(SpacingSize::Sm)
+          .child(icon(
+            if matches!(entry.state, VersionState::DraftOnly) {
+              Icon::Pencil
+            } else {
+              Icon::CircleCheck
+            },
+            IconSize::Sm,
+            if matches!(entry.state, VersionState::DraftOnly) {
+              PaletteColor::TextMuted
+            } else {
+              PaletteColor::Success
+            },
+          ))
+          .child(parts::caption(&state)),
+      )
       .cell(ColumnWidth::Fixed(USED), parts::caption(&used))
       .cell(ColumnWidth::Fixed(PUBLISHED), parts::caption(&published))
       .on_open(move || nav.go(Route::Project(props.project, ProjectPage::Pipeline(entry.id))))
@@ -217,21 +230,25 @@ fn populated(ctx: &mut Ctx, id: orchester_core::id::ProjectId, entries: &[Librar
   );
   page
     .child(parts::caption(
-      &ctx.t_args("pipelines.count", [("count", entries.len().to_string())]),
+      &ctx.t_args(
+        "pipelines.count",
+        [
+          ("count", entries.len().to_string()),
+          (
+            "published",
+            entries
+              .iter()
+              .filter(|e| !matches!(e.state, VersionState::DraftOnly))
+              .count()
+              .to_string(),
+          ),
+        ],
+      ),
     ))
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Xl)
-        .child(Text::new(&ctx.t("pipelines.versionsTitle")).variant(TypographyStyle::Label))
-        .with_children(
-          ["pipelines.draftHint", "pipelines.publishHint", "pipelines.pinnedHint"]
-            .map(|key| parts::note(&ctx.t(key)).flex(1.0)),
-        ),
-    )
+    .child(versions_help(ctx))
     .child(Spacer::new())
 }
-fn age(ctx: &Ctx, at: orchester_core::time::Timestamp) -> std::sync::Arc<str> {
+pub(super) fn age(ctx: &Ctx, at: orchester_core::time::Timestamp) -> std::sync::Arc<str> {
   let minutes = (orchester_core::time::Timestamp::now().unix_millis() - at.unix_millis()).max(0) / 60_000;
   let (key, count) = match minutes {
     0 => return ctx.t("pipelines.justNow"),
@@ -240,4 +257,72 @@ fn age(ctx: &Ctx, at: orchester_core::time::Timestamp) -> std::sync::Arc<str> {
     _ => ("pipelines.daysAgo", minutes / 1440),
   };
   ctx.t_args(key, [("count", count.to_string())])
+}
+fn versions_help(ctx: &Ctx) -> Row {
+  let mut stages = Row::new().flex(1.0).spacing(ExtraSpacing::Inset.role());
+  for (index, (glyph, title, detail)) in [
+    (Icon::Pencil, "pipelines.draftStage", "pipelines.draftHint"),
+    (Icon::GitBranch, "pipelines.publishStage", "pipelines.publishHint"),
+    (Icon::History, "pipelines.pinnedStage", "pipelines.pinnedHint"),
+  ]
+  .into_iter()
+  .enumerate()
+  {
+    if index > 0 {
+      stages = stages.child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::TextMuted));
+    }
+    stages = stages.child(
+      Row::new()
+        .flex(1.0)
+        .spacing(SpacingSize::Sm)
+        .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary))
+        .child(
+          Column::new()
+            .flex(1.0)
+            .spacing(SpacingSize::Xs)
+            .child(Text::new(&ctx.t(title)).variant(ExtraTypography::Strong.role()))
+            .child(parts::note(&ctx.t(detail))),
+        ),
+    );
+  }
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
+    .spacing(ExtraSpacing::Inset.role())
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Lg)
+    .child(
+      Text::new(&ctx.t("pipelines.versionsTitle"))
+        .variant(ExtraTypography::Strong.role())
+        .width(Dimension::Px(150.0)),
+    )
+    .child(stages)
+}
+fn empty(ctx: &mut Ctx, project: orchester_core::id::ProjectId, page: Column) -> Column {
+  let nav = Navigation::of(ctx);
+  let starter = Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(SpacingSize::Lg)
+    .spacing(SpacingSize::Sm)
+    .background(PaletteColor::SurfaceRaised)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Lg)
+    .child(Text::new(&ctx.t("pipelines.starter")).variant(ExtraTypography::Strong.role()))
+    .child(parts::caption(&ctx.t("pipelines.starterHint")))
+    .child(super::new_pipeline::starter_chips(ctx));
+  page
+    .child(
+      EmptyState::new(
+        "pipelines-empty",
+        Icon::Workflow,
+        ctx.t("pipelines.emptyTitle"),
+        ctx.t("pipelines.emptyDetail"),
+      )
+      .child(starter)
+      .child(
+        ActionButton::new("pipeline-empty-create", ButtonKind::Primary, ctx.t("pipelines.new"))
+          .on_click(move || nav.go(Route::Project(project, ProjectPage::NewPipeline))),
+      ),
+    )
+    .child(versions_help(ctx))
 }
