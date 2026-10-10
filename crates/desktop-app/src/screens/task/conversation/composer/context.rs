@@ -136,11 +136,12 @@ fn limit_words(ctx: &Ctx, run: &RunView) -> Option<Arc<str>> {
     return None;
   };
   match *limit {
+    // A run stops at a limit only when it has one; without it there is nothing to name.
     RunLimit::Tokens => Some(ctx.t_args(
       "composer.context.stoppedTokens",
       [
         ("used", compact_tokens(run.run.used().get()).as_str()),
-        ("limit", compact_tokens(run.run.budget().get()).as_str()),
+        ("limit", compact_tokens(run.run.budget()?.get()).as_str()),
       ],
     )),
     RunLimit::Time => Some(ctx.t_args(
@@ -150,7 +151,7 @@ fn limit_words(ctx: &Ctx, run: &RunView) -> Option<Arc<str>> {
           "used",
           whole_minutes(run.active_time(Timestamp::now())).to_string().as_str(),
         ),
-        ("limit", whole_minutes(run.run.max_duration()).to_string().as_str()),
+        ("limit", whole_minutes(run.run.max_duration()?).to_string().as_str()),
       ],
     )),
     RunLimit::StepBudget { execution } => {
