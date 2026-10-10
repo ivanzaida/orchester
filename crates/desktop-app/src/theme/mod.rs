@@ -16,6 +16,7 @@ mod conversation;
 mod decisions;
 mod fonts;
 mod form;
+mod lifecycle;
 mod markdown;
 mod metrics;
 mod palette;
@@ -41,6 +42,7 @@ pub use self::{
   composer::{ComposerColor, ComposerRadius, ComposerText},
   conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText},
   decisions::{DecisionSpacing, DecisionText},
+  lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   palette::{ExtraColor, Mode},
   settings::{SettingsSpacing, SettingsText},
@@ -74,6 +76,7 @@ pub fn install(app: &mut App, mode: Mode) {
   task_form::install(theme);
   tasks::install(theme);
   shell::install(theme);
+  lifecycle::install(theme);
   conversation::install(theme);
   cards::install(theme);
   composer::install(theme);

@@ -15,15 +15,16 @@ use lurq::{
 
 use super::{
   app_menu::AppMenu,
-  tab_strip::{PillRef, TabStrip},
+  tab_strip::{PillRef, TabStrip, TabStripProps},
 };
 use crate::{shell::needs_you::NeedsYouPill, theme::ExtraSpacing};
 
 /// The line between the app menu and the tabs (`Divider` `pE6GJ`).
 const DIVIDER_HEIGHT: f32 = 16.0;
 
-/// `bar` with the app menu and, when `tabs`, the divider and the tabs.
-pub fn content(ctx: &mut Ctx, bar: ChromeTitleBar, tabs: bool) -> ChromeTitleBar {
+/// `bar` with the app menu and, when `tabs`, the divider and the tabs; `closing` while the closing panel
+/// holds the window.
+pub fn content(ctx: &mut Ctx, bar: ChromeTitleBar, tabs: bool, closing: bool) -> ChromeTitleBar {
   let menu = Row::new()
     .padding(Padding::new().left(ExtraSpacing::Snug.role()))
     .spacing(SpacingSize::Xs)
@@ -44,6 +45,12 @@ pub fn content(ctx: &mut Ctx, bar: ChromeTitleBar, tabs: bool) -> ChromeTitleBar
           .background(PaletteColor::Border),
       ),
     )
-    .center(ctx.mount_keyed::<TabStrip>("tab-strip", PillRef(pill.clone())))
+    .center(ctx.mount_keyed::<TabStrip>(
+      "tab-strip",
+      TabStripProps {
+        pill: PillRef(pill.clone()),
+        closing,
+      },
+    ))
     .trailing(ctx.mount_keyed::<NeedsYouPill>("needs-you", PillRef(pill)))
 }

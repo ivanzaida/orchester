@@ -17,14 +17,15 @@ use super::{
 const BACK_BUTTON: MouseButton = MouseButton::Other(4);
 const FORWARD_BUTTON: MouseButton = MouseButton::Other(5);
 
-/// `content` filling the window, with the history and tab input around it.
-pub fn window_input(navigation: &Navigation, content: Element) -> Column {
+/// `content` filling the window, with the history and tab input around it while `active`; none while the
+/// closing panel holds the window.
+pub fn window_input(navigation: &Navigation, content: Element, active: bool) -> Column {
   let (mouse, keys) = (navigation.clone(), navigation.clone());
   Column::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
     .on_mouse_up(move |event: MouseEvent| {
-      if event.default_prevented() {
+      if !active || event.default_prevented() {
         return;
       }
       match event.button {
@@ -36,7 +37,7 @@ pub fn window_input(navigation: &Navigation, content: Element) -> Column {
     })
     .child(content)
     .child(Column::new().on_key_down(move |event: KeyboardEvent| {
-      if event.default_prevented() {
+      if !active || event.default_prevented() {
         return;
       }
       let Some(shortcut) = shortcut(Keys::of(&event)) else {
