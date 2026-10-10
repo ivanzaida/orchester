@@ -83,3 +83,45 @@ fn pipeline_writes_require_person_for_first_publish_and_removing_gates() {
   assert_eq!(db.versions::<Pipeline>(id).unwrap()[0].body(), &body);
   assert!(OpenedPipeline::load(&db, id).unwrap().draft_saved_at.is_none());
 }
+
+#[test]
+fn pipeline_writes_keep_unassigned_starter_drafts_but_publication_stays_strict() {
+  use orchester_core::resource::{PromptText, StarterAssignments, StarterStepText, feature_delivery};
+  let folder = tempfile::tempdir().unwrap();
+  std::fs::create_dir(folder.path().join(".git")).unwrap();
+  let mut db = ProjectDb::create(
+    folder.path(),
+    Project::new(
+      ProjectId::generate(),
+      ProjectKey::new("TEST").unwrap(),
+      Name::new("Test").unwrap(),
+    ),
+  )
+  .unwrap();
+  let body = feature_delivery(
+    |step| StarterStepText {
+      name: Name::new(step.key()).unwrap(),
+      instructions: PromptText::new("").unwrap(),
+    },
+    StarterAssignments::default(),
+  );
+  let id = db
+    .create_resource(
+      Slug::new("starter").unwrap(),
+      Name::new("Starter").unwrap(),
+      &body,
+      Timestamp::now(),
+    )
+    .unwrap()
+    .id();
+  let opened = OpenedPipeline::load(&db, id).unwrap();
+  let edited = body.with_description("Still choosing profiles".into());
+  let saved = write::save_in(folder.path(), &opened, edited.clone(), &Allowed::default()).unwrap();
+  assert_eq!(saved.body, edited);
+  assert!(matches!(
+    write::publish_in(folder.path(), id, &edited, &Allowed(publish_reasons(None, &edited))),
+    Err(WriteError::Store(_))
+  ));
+  assert!(db.latest_version::<Pipeline>(id).unwrap().is_none());
+  assert_eq!(db.draft::<Pipeline>(id).unwrap().unwrap().body(), &edited);
+}

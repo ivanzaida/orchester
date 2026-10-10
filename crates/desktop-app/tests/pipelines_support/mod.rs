@@ -190,3 +190,39 @@ impl Editor {
     id
   }
 }
+
+impl Editor {
+  pub fn value(&mut self, id: &str) -> String {
+    self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|e| e.as_text_input())
+      .expect("text input")
+      .value()
+  }
+
+  pub fn focus(&mut self, id: &str) {
+    self.window.tree.get_element_by_id_mut(id).expect("input").focus();
+    self.window.pass();
+  }
+
+  pub fn key(&mut self, key: &str, control: bool) {
+    let ctrl = control && !cfg!(target_os = "macos");
+    let meta = control && cfg!(target_os = "macos");
+    let code = if key.len() == 1 {
+      format!("Key{}", key.to_uppercase())
+    } else {
+      key.to_owned()
+    };
+    self
+      .window
+      .tree
+      .key_down_with_meta(key.into(), code.clone(), false, ctrl, false, meta);
+    self
+      .window
+      .tree
+      .key_up_with_meta(key.into(), code, false, ctrl, false, meta);
+    self.window.pass();
+  }
+}

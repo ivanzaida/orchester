@@ -109,7 +109,8 @@ pub fn check_step(
             .ok_or_else(|| Message::new("appMcp.errors.profileNotPublished").with("profile", id.to_string()))
         })
         .transpose()?;
-      if *repository == RepositoryAccess::Write && !choice.is_some_and(can_write) {
+      // An unassigned starter is an incomplete draft; publication rejects missing executors.
+      if *repository == RepositoryAccess::Write && choice.is_some_and(|choice| !can_write(choice)) {
         return Err(Message::new("appMcp.errors.stepCannotWrite"));
       }
       if *narrowing != StepPermissions::default() {

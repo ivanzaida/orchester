@@ -64,7 +64,6 @@ impl Editing {
   }
   pub fn saved(&mut self, opened: OpenedPipeline) {
     self.opened = opened;
-    self.epoch += 1;
   }
 }
 pub type State = Signal<Editing>;

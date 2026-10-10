@@ -1,0 +1,157 @@
+//! Review regressions: incomplete starters, input identity and leaving with pending edits.
+use orchester_app::routes::{ProjectPage, Route};
+use orchester_core::{
+  resource::{Pipeline, RepositoryAccess, StepKind},
+  store::ResourceStore,
+};
+
+use crate::pipelines_support::Editor;
+
+#[test]
+fn pipelines_unassigned_starter_saves_edits_but_cannot_publish() {
+  let mut editor = Editor::new();
+  editor.go(ProjectPage::NewPipeline);
+  editor.until("new pipeline", |e| e.exists("pipeline-name"));
+  editor.set("pipeline-name", "Delivery");
+  editor.click("pipeline-create");
+  editor.until("starter", |e| e.exists("pipeline-step-implement"));
+  let id = editor.selected();
+  editor.set("pipeline-description", "An incomplete starter");
+  editor.until("starter saved", |e| {
+    e.db().draft::<Pipeline>(id).unwrap().unwrap().body().description() == "An incomplete starter"
+  });
+  editor.click("pipeline-publish");
+  assert!(editor.exists("pipeline-publish-problem"));
+  assert!(!editor.exists("pipeline-publish-confirm"));
+  assert!(editor.db().latest_version::<Pipeline>(id).unwrap().is_none());
+  editor.click("pipeline-step-implement");
+  assert!(editor.exists("step-write"));
+  editor.click("step-write");
+  editor.until("write removed", |e| {
+    e.db()
+      .draft::<Pipeline>(id)
+      .unwrap()
+      .unwrap()
+      .body()
+      .steps()
+      .iter()
+      .any(|step| {
+        step.key.as_str() == "implement"
+          && matches!(
+            step.kind,
+            StepKind::Agent {
+              repository: RepositoryAccess::ReadOnly,
+              ..
+            }
+          )
+      })
+  });
+}
+
+#[test]
+fn pipelines_keyboard_focus_caret_and_undo_survive_autosave() {
+  let mut editor = Editor::new();
+  let id = editor.empty("Typing");
+  editor.open(id);
+  keyboard_across_save(&mut editor, "pipeline-description");
+  editor.click("pipeline-settings");
+  keyboard_across_save(&mut editor, "pipeline-settings-description");
+  editor.click("pipeline-back-steps");
+  editor.click("pipeline-add-step");
+  editor.set("step-name", "Typing");
+  keyboard_across_save(&mut editor, "step-instructions");
+}
+
+fn keyboard_across_save(editor: &mut Editor, field: &str) {
+  editor.set(field, "");
+  editor.focus(field);
+  for key in ["a", "b", "c", "ArrowLeft", "x"] {
+    editor.key(key, false);
+  }
+  assert_eq!(editor.value(field), "abxc");
+  editor.until("autosave completed", |e| {
+    !e.exists("pipeline-save") && !e.text("screen-pipelines").contains("Saving draft")
+  });
+  // No refocus: typing resumes at the same caret, and Undo reaches the pre-save history.
+  editor.key("y", false);
+  assert_eq!(editor.value(field), "abxyc", "the caret stays in the middle");
+  editor.key("z", true);
+  assert_eq!(editor.value(field), "abxc");
+  editor.key("z", true);
+  assert_eq!(editor.value(field), "abc");
+}
+
+#[test]
+fn pipelines_leaving_before_autosave_requires_a_decision_and_keep_preserves_edits() {
+  let mut editor = Editor::new();
+  let id = editor.empty("Pending");
+  editor.go(ProjectPage::Pipelines);
+  editor.open(id);
+  editor.set("pipeline-description", "Pending description");
+  editor.click("pipeline-parent");
+  assert_eq!(editor.selected(), id);
+  assert!(editor.exists("pipeline-leave-question"));
+  assert_eq!(editor.value("pipeline-description"), "Pending description");
+  assert_eq!(
+    editor.db().draft::<Pipeline>(id).unwrap().unwrap().body().description(),
+    ""
+  );
+  editor.click("pipeline-leave-keep");
+  assert!(!editor.exists("pipeline-leave-question"));
+  editor.until("kept work saved", |e| {
+    e.db().draft::<Pipeline>(id).unwrap().unwrap().body().description() == "Pending description"
+  });
+  editor.click("pipeline-parent");
+  editor.until("library", |e| e.exists(&format!("pipeline-row-{id}")));
+  editor.open(id);
+  assert_eq!(editor.value("pipeline-description"), "Pending description");
+}
+
+#[test]
+fn pipelines_sidebar_history_and_tabs_preserve_unconfirmed_and_invalid_edits() {
+  let mut editor = Editor::new();
+  let id = editor.published();
+  editor.go(ProjectPage::Pipelines);
+  editor.open(id);
+  editor.click("pipeline-step-step");
+  editor.click("step-gate");
+  editor.click("nav-tasks");
+  assert_eq!(editor.selected(), id);
+  assert!(editor.exists("pipeline-leave-question"));
+  editor.click("pipeline-leave-keep");
+  editor.window.navigation().back();
+  editor.window.pass();
+  assert_eq!(editor.selected(), id);
+  assert!(editor.exists("pipeline-leave-question"));
+  editor.click("pipeline-leave-keep");
+  editor.window.navigation().open_tab();
+  editor.window.pass();
+  assert_eq!(editor.window.navigation().tabs_now().tabs().len(), 1);
+  assert!(editor.exists("pipeline-leave-question"));
+  editor.click("pipeline-leave-keep");
+  editor.click("pipeline-save");
+  editor.until("protected save", |e| e.exists("pipeline-save-question-confirm"));
+  assert!(editor.gated(), "navigation must never authorize the weaker edit");
+  assert!(editor.db().draft::<Pipeline>(id).unwrap().is_none());
+  editor.click("pipeline-save-question-keep");
+  editor.set("step-budget", "invalid");
+  editor.window.navigation().close_active();
+  editor.window.pass();
+  assert!(editor.exists("pipeline-leave-question"));
+  assert_eq!(editor.value("step-budget"), "invalid");
+  editor.click("pipeline-leave-keep");
+  editor.click("nav-tasks");
+  editor.click("pipeline-leave-confirm");
+  editor.window.until("departed", |w| {
+    matches!(w.navigation().route_now(), Route::Project(_, ProjectPage::Tasks(_)))
+  });
+  assert!(
+    editor.db().draft::<Pipeline>(id).unwrap().is_none(),
+    "explicit discard never saves"
+  );
+  editor.open(id);
+  editor.click("pipeline-step-step");
+  assert_eq!(editor.value("step-budget"), "");
+  editor.click("pipeline-parent");
+  editor.until("clean departure", |e| e.exists(&format!("pipeline-row-{id}")));
+}

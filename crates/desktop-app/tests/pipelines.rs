@@ -232,3 +232,6 @@ fn pipelines_valid_changes_autosave_and_published_history_is_read_only() {
   editor.click("pipeline-exit-history");
   assert!(!editor.text("screen-pipelines").contains("Viewing v1"));
 }
+
+#[path = "pipelines/regressions.rs"]
+mod regressions;

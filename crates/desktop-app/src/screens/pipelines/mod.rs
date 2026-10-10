@@ -3,6 +3,7 @@ mod canvas;
 mod editor;
 mod history;
 mod inspector;
+mod leaving;
 mod library;
 mod new_pipeline;
 mod parts;

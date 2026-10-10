@@ -40,11 +40,7 @@ pub fn rows(ctx: &Ctx, state: &State, step: &Step, locked: bool) -> Element {
     return body.into();
   };
   let editing = state.get();
-  let Some(choice) = profile.and_then(|id| editing.opened.assignables.profile(id)) else {
-    return body
-      .child(note("step-narrow-note", Icon::Info, &ctx.t("pipelines.narrowHint")))
-      .into();
-  };
+  let choice = profile.and_then(|id| editing.opened.assignables.profile(id));
   let (edit, key) = (state.clone(), step.key.clone());
   let writes = Toggle::new(
     "step-write",
@@ -53,7 +49,7 @@ pub fn rows(ctx: &Ctx, state: &State, step: &Step, locked: bool) -> Element {
     ctx.t("pipelines.canWrite"),
   );
   body = body.child(
-    if !locked && (narrowing::can_write(choice) || *repository == RepositoryAccess::Write) {
+    if !locked && (choice.is_some_and(narrowing::can_write) || *repository == RepositoryAccess::Write) {
       writes.on_change(move |on| {
         edit.update(|s| {
           s.change(&key, |step| {
@@ -71,6 +67,11 @@ pub fn rows(ctx: &Ctx, state: &State, step: &Step, locked: bool) -> Element {
       writes
     },
   );
+  let Some(choice) = choice else {
+    return body
+      .child(note("step-narrow-note", Icon::Info, &ctx.t("pipelines.narrowHint")))
+      .into();
+  };
   body = body.child(parts::section(ctx, "pipelines.permissions"));
   if !narrowing::can_block_network(choice) || narrowing::commands(choice).is_empty() {
     body = body.child(parts::note(&ctx.t("pipelines.narrowUnavailable")));

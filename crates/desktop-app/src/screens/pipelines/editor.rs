@@ -113,18 +113,33 @@ impl DevtoolsInspectable for Snapshot {}
 pub struct Editor {
   state: State,
   confirm_save: Signal<bool>,
+  writing: Signal<bool>,
+  leave: crate::navigation::guard::LeaveGuard,
 }
 impl Component for Editor {
   type Props = EditorProps;
   fn create(ctx: &mut Ctx) -> Self {
+    let state = ctx.signal(Editing::new(ctx.props::<EditorProps>().opened.clone()));
+    let writing = ctx.signal(false);
+    let (edits, pending) = (state.clone(), writing.clone());
+    let leave = Navigation::of(ctx).guard(move || {
+      let edits = edits.get_untracked();
+      edits.dirty() || !edits.errors.is_empty() || pending.get_untracked()
+    });
     Self {
-      state: ctx.signal(Editing::new(ctx.props::<EditorProps>().opened.clone())),
+      state,
+      writing,
+      leave,
       confirm_save: ctx.signal(false),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<EditorProps>().clone();
     let action = work::action(ctx, props.project.open.project.id());
+    let writing = action.state().get().is_pending();
+    if self.writing.get_untracked() != writing {
+      self.writing.set(writing);
+    }
     self.autosave(ctx, &props, &action);
     let state = self.state.clone();
     ctx.watch(&action.state(), move |result| {
@@ -143,7 +158,7 @@ impl Component for Editor {
     let busy = action.state().get().is_pending() || self.confirm_save.get();
     let head = self.header(ctx, &props, &action, busy);
     let content = if editing.panel == Panel::Settings {
-      super::settings::page(ctx, &self.state, busy)
+      super::settings::page(ctx, &self.state, self.confirm_save.get())
     } else {
       let graph = super::canvas::canvas(ctx, &self.state, busy);
       let panel = match &editing.panel {
@@ -155,7 +170,7 @@ impl Component for Editor {
             state: self.state.clone(),
           },
         ),
-        _ => super::inspector::panel(ctx, &self.state, busy),
+        _ => super::inspector::panel(ctx, &self.state, self.confirm_save.get()),
       };
       Row::new()
         .width(Dimension::Pct(100.0))
@@ -165,7 +180,8 @@ impl Component for Editor {
         .child(panel)
         .into()
     };
-    let mut page = parts::page().child(head).child(content);
+    let leave = super::leaving::question(ctx, &self.leave, writing);
+    let mut page = parts::page().child(head).with_children(leave).child(content);
     if self.confirm_save.get() {
       page = page.child(self.save_question(ctx, &props, &action));
     }
@@ -192,7 +208,7 @@ impl Component for Editor {
 impl Editor {
   fn autosave(&self, ctx: &mut Ctx, props: &EditorProps, action: &Action) {
     let editing = self.state.get();
-    let body = (editing.dirty() && editing.errors.is_empty() && editing.viewing.is_none())
+    let body = (editing.dirty() && editing.errors.is_empty() && editing.viewing.is_none() && !self.leave.requested())
       .then(|| editing.edit.validate().ok())
       .flatten();
     let ready = ctx
@@ -202,6 +218,7 @@ impl Editor {
       })
       .state();
     let (state, action, root) = (self.state.clone(), action.clone(), props.project.open.repo_root.clone());
+    let leave = self.leave.clone();
     ctx.watch(&ready, move |ready| {
       let Some(Snapshot(Some(body))) = &ready.data else {
         return;
@@ -209,6 +226,7 @@ impl Editor {
       let current = state.get();
       let writing = action.state().get();
       if ready.is_pending()
+        || leave.requested()
         || writing.is_pending()
         || writing.error.is_some()
         || !current.dirty()
