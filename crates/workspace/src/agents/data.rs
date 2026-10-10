@@ -98,6 +98,9 @@ pub struct StepUse {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ProjectAgents {
   pub profiles: Arc<Vec<ProfileEntry>>,
+  pub usage: Arc<super::usage::Usage>,
+  /// Latest published bodies, for comparing a draft with what new runs currently use.
+  pub published: Arc<Vec<ProfileEntry>>,
   /// Agent provider connections: the only kind a profile can run on.
   pub connections: Arc<Vec<AgentConnection>>,
   pub steps: Arc<Vec<StepUse>>,
@@ -118,6 +121,8 @@ impl ProjectAgents {
   {
     Ok(Self {
       profiles: Arc::new(profiles(store)?),
+      usage: Arc::default(),
+      published: Arc::new(published_profiles(store)?),
       connections: Arc::new(agent_connections(store.connections()?)),
       steps: Arc::new(step_uses(store)?),
       mcp: Arc::new(store.mcp_servers()?),
@@ -127,6 +132,14 @@ impl ProjectAgents {
 
   pub fn load_in(repo_root: &Path) -> Result<Self, StoreError> {
     Self::load(&ProjectDb::open(repo_root)?)
+  }
+
+  /// Editor data plus draft pipeline uses and active runs for the screen's Usage tab.
+  pub fn for_screen(repo_root: &Path) -> Result<Self, StoreError> {
+    let db = ProjectDb::open(repo_root)?;
+    let mut listed = Self::load(&db)?;
+    listed.usage = Arc::new(super::usage::Usage::load(&db)?);
+    Ok(listed)
   }
 
   pub fn profile(&self, id: ResourceId) -> Option<&ProfileEntry> {
@@ -143,6 +156,17 @@ pub fn profiles<S: ResourceStore>(store: &S) -> Result<Vec<ProfileEntry>, S::Err
       Some(entry) => entries.push(entry),
       // Nothing to show or edit; listing it would need content that does not exist.
       None => tracing::error!(resource = %resource.id(), "agent profile has neither a draft nor a version"),
+    }
+  }
+  Ok(entries)
+}
+
+fn published_profiles<S: ResourceStore>(store: &S) -> Result<Vec<ProfileEntry>, S::Error> {
+  let mut entries = Vec::new();
+  for resource in store.resources(ResourceKind::AgentProfile)? {
+    let latest = store.latest_version(resource.id())?;
+    if let Some(entry) = ProfileEntry::new(resource.id(), None, latest.as_ref()) {
+      entries.push(entry);
     }
   }
   Ok(entries)

@@ -24,6 +24,8 @@ pub enum Outside {
   Pipelines,
   /// A connection or an MCP server was added, changed, checked or removed.
   Connections,
+  /// An agent profile draft or published version changed.
+  Profiles,
 }
 
 /// How often each kind of a project's data changed outside the screens.
@@ -36,6 +38,7 @@ pub struct OutsideCounts {
   pub limits: u64,
   pub pipelines: u64,
   pub connections: u64,
+  pub profiles: u64,
 }
 
 impl OutsideCounts {
@@ -49,6 +52,7 @@ impl OutsideCounts {
       Outside::Limits => self.limits,
       Outside::Pipelines => self.pipelines,
       Outside::Connections => self.connections,
+      Outside::Profiles => self.profiles,
     }
   }
 
@@ -61,6 +65,7 @@ impl OutsideCounts {
       Outside::Limits => &mut self.limits,
       Outside::Pipelines => &mut self.pipelines,
       Outside::Connections => &mut self.connections,
+      Outside::Profiles => &mut self.profiles,
     };
     *count += 1;
   }

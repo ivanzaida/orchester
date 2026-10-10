@@ -155,6 +155,9 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
       None => ProfileChange::Create(profile),
     };
     let id = apply_in(&root, change)?;
+    services
+      .changes
+      .record(open.project.id(), crate::tasks::outside::Outside::Profiles);
     let agents = ProjectAgents::load_in(&root)?;
     let entry = agents
       .profile(id)

@@ -9,6 +9,7 @@
 //! selection, scrim, conversation, code and diff colors, `display` type, `radius_full`): the screens
 //! that need them come next and must find them here rather than add near-duplicates.
 
+pub mod agents;
 mod cards;
 mod code;
 mod composer;
@@ -73,6 +74,7 @@ pub fn install(app: &mut App, mode: Mode) {
   let theme = app.theme();
   apply(theme, mode);
   metrics::install(theme);
+  agents::install(theme);
   startup::install(theme);
   settings::install(theme);
   task::install(theme);

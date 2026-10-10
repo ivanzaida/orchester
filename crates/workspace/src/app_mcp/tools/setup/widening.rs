@@ -4,11 +4,10 @@
 //! change agent permissions* in the window. No tool changes that switch.
 
 use orchester_core::{
-  connection::{AgentProvider, invocation::Platform},
+  connection::AgentProvider,
   id::ResourceId,
-  permission::{AgentPermissions, widening::Widening},
+  permission::widening::Widening,
   resource::{AgentProfile, Pipeline, StepKey, Weaker, weaker_than},
-  store::ResourceStore,
 };
 use orchester_store::ProjectDb;
 
@@ -36,34 +35,10 @@ pub(super) fn check_profile(
   (id, profile): (Option<ResourceId>, &AgentProfile),
   provider: AgentProvider,
 ) -> Result<(), ToolError> {
-  let latest = match id {
-    Some(id) => db.latest_version::<AgentProfile>(id)?,
-    None => None,
-  };
-  let (base, servers) = latest.as_ref().map_or_else(
-    || {
-      (
-        AgentPermissions::most_restrictive(provider, Platform::current()),
-        Vec::new(),
-      )
-    },
-    |version| {
-      let body = version.body();
-      (body.permissions().clone(), body.mcp_servers().ids().to_vec())
-    },
-  );
-  let widenings = profile.permissions().widenings_from(&base);
-  let mut reasons: Vec<Message> = widenings.iter().copied().map(message).collect();
-  if profile
-    .mcp_servers()
-    .ids()
-    .iter()
-    .any(|server| !servers.contains(server))
-  {
-    reasons.push(Message::new("appMcp.widens.mcpServers"));
-  }
+  let reasons = crate::agents::widening::reasons(db, id, profile, provider)?;
+  let auto = reasons.contains(&crate::agents::widening::message(Widening::AutoApprove));
   allowed(services, reasons)?;
-  if widenings.contains(&Widening::AutoApprove) && !services.workspace.automation_answers_approvals()? {
+  if auto && !services.workspace.automation_answers_approvals()? {
     return Err(ToolError::refused(
       "automation_not_allowed",
       vec![Message::new("appMcp.errors.autoApproveNeedsAnswers")],
@@ -98,15 +73,4 @@ pub(in crate::app_mcp::tools) fn check_pipeline(
       .collect(),
   };
   allowed(services, reasons)
-}
-
-fn message(widening: Widening) -> Message {
-  Message::new(match widening {
-    Widening::Repository => "appMcp.widens.repository",
-    Widening::WritableFolder => "appMcp.widens.writableFolder",
-    Widening::Commands => "appMcp.widens.commands",
-    Widening::Network => "appMcp.widens.network",
-    Widening::ToolCallsUnasked => "appMcp.widens.toolCallsUnasked",
-    Widening::AutoApprove => "appMcp.widens.autoApprove",
-  })
 }
