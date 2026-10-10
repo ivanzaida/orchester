@@ -163,7 +163,11 @@ pub fn worktree_failed(
     Notice::new(
       "changes-notice",
       NoticeTone::Info,
-      ctx.t("changes.worktreeFailed.title"),
+      ctx.t(if checkpointed {
+        "changes.worktreeFailed.title"
+      } else {
+        "changes.worktreeFailed.titleNoCheckpoint"
+      }),
     )
     .icon(Icon::CircleAlert)
     .mark(PaletteColor::Danger)

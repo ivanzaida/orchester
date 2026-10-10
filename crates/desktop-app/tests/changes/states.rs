@@ -144,5 +144,10 @@ fn changes_of_an_unreadable_run_a_missing_worktree_and_a_run_without_checkpoint(
   page.changes("KON-27", "changes-notice");
   let notice = page.texts("changes-notice").concat();
   assert!(notice.contains("has no checkpoint yet"), "{notice}");
+  assert!(
+    notice.starts_with("Couldn't read what the run's worktree holds"),
+    "{notice}"
+  );
+  assert!(!notice.contains("beyond the checkpoint"), "{notice}");
   assert!(!notice.contains("checkpointed files still show"), "{notice}");
 }

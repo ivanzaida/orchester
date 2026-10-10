@@ -64,6 +64,8 @@ pub fn change_letter(ctx: &Ctx, change: &FileChange) -> (Arc<str>, PaletteColor)
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FileSummary {
   pub change: FileChange,
+  /// Where a renamed or copied file came from.
+  pub from: Option<Arc<str>>,
   pub additions: u32,
   pub deletions: u32,
   pub binary: bool,
@@ -71,8 +73,10 @@ pub struct FileSummary {
 
 impl FileSummary {
   pub fn of(file: &FileDiff) -> Self {
+    let moved = matches!(file.change(), FileChange::Renamed { .. } | FileChange::Copied { .. });
     Self {
       change: file.change().clone(),
+      from: file.old_path().filter(|_| moved).map(Arc::from),
       additions: file.additions(),
       deletions: file.deletions(),
       binary: file.is_binary(),
@@ -314,8 +318,9 @@ fn file_row(ctx: &mut Ctx, listed: &Listed, summary: &FileSummary, selected: boo
   }
 }
 
-/// The path in the room its row leaves it, cut near its middle
-/// (`migrations/0042_…_attempts.sql` in `qT0kd`); while it is cut, its whole path shows in a tooltip.
+/// The path in the room its row leaves it, cut near its middle (`migrations/0042_…_attempts.sql` in
+/// `qT0kd`); while it is cut its whole path shows in a tooltip, which for a renamed or copied file also
+/// says where it came from.
 fn path_text(ctx: &mut Ctx, id: &str, path: &str, summary: &FileSummary) -> Element {
   let counts: f32 = summary
     .count_texts(ctx)
@@ -334,10 +339,13 @@ fn path_text(ctx: &mut Ctx, id: &str, path: &str, summary: &FileSummary) -> Elem
     .id(id.to_owned())
     .variant(TypographyStyle::Mono)
     .nowrap();
-  if shown == path {
-    return text.into();
-  }
-  Tooltip::new(format!("{id}-tooltip"), path.to_owned()).wrap(ctx, text)
+  // The whole path while it is cut, and where a renamed or copied file came from.
+  let tooltip: Arc<str> = match &summary.from {
+    Some(from) => ctx.t_args("changes.files.movedFrom", [("path", path), ("from", &**from)]),
+    None if shown == path => return text.into(),
+    None => path.into(),
+  };
+  Tooltip::new(format!("{id}-tooltip"), tooltip).wrap(ctx, text)
 }
 
 #[allow(

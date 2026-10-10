@@ -31,7 +31,8 @@
       "notCheckpointed": "NOT CHECKPOINTED",
       "worktreeAfter": "In the worktree after {{revision}}",
       "worktreeRead": "In the worktree after {{revision}} · read again {{seconds}} s ago while the agent works",
-      "worktreeReadWhileAgent": "In the worktree after {{revision}} · read again {{seconds}} s ago while {{agent}} works"
+      "worktreeReadWhileAgent": "In the worktree after {{revision}} · read again {{seconds}} s ago while {{agent}} works",
+      "movedFrom": "{{path}} · from {{from}}"
     },
     "diff": {
       "checkpointedAt": "checkpointed at {{revision}}",
@@ -81,6 +82,7 @@
     },
     "worktreeFailed": {
       "title": "Couldn't read what the worktree holds beyond the checkpoint",
+      "titleNoCheckpoint": "Couldn't read what the run's worktree holds",
       "detail": "git could not read the run's worktree. The checkpointed files still show; Try again reads the worktree again.",
       "detailNoCheckpoint": "git could not read the run's worktree, and the run has no checkpoint yet. Try again reads the worktree again."
     },
