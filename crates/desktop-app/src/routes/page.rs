@@ -1,4 +1,7 @@
-use orchester_core::{id::ConnectionId, project::TaskKey};
+use orchester_core::{
+  id::{ConnectionId, ResourceId},
+  project::TaskKey,
+};
 
 use super::{
   CONNECTIONS, ConnectionsView, EDIT, NEW, NewConnection, OverviewTab, RouteError, Screen, TAB, TASKS, TaskList,
@@ -17,6 +20,8 @@ pub enum ProjectPage {
   PullRequests,
   Usage,
   Pipelines,
+  NewPipeline,
+  Pipeline(ResourceId),
   Agents,
   Instructions,
   Skills,
@@ -63,7 +68,7 @@ impl ProjectPage {
       Self::Task(..) => Screen::Task,
       Self::PullRequests => Screen::PullRequests,
       Self::Usage => Screen::Usage,
-      Self::Pipelines => Screen::Pipelines,
+      Self::Pipelines | Self::NewPipeline | Self::Pipeline(_) => Screen::Pipelines,
       Self::Agents => Screen::Agents,
       Self::Instructions => Screen::Instructions,
       Self::Skills => Screen::Skills,
@@ -88,6 +93,8 @@ impl ProjectPage {
       Self::NewTask => format!("{tasks}/{NEW}"),
       Self::EditTask(key) => format!("{tasks}/{key}/{EDIT}"),
       Self::Task(key, view) => view.path(&format!("{tasks}/{key}")),
+      Self::NewPipeline => format!("{project_root}/pipelines/new"),
+      Self::Pipeline(id) => format!("{project_root}/pipelines/{id}"),
       Self::Connections(view) => view.path(connections),
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
@@ -108,6 +115,8 @@ impl ProjectPage {
           rest => TaskView::parse(rest, params).map(|view| Self::Task(key, view)),
         }
       }
+      ["pipelines", NEW] => Ok(Self::NewPipeline),
+      ["pipelines", id] => id.parse().map(Self::Pipeline).map_err(|_| RouteError::NoScreen),
       [CONNECTIONS] => ConnectionsView::take(params).map(Self::Connections),
       [CONNECTIONS, NEW] => NewConnection::take(params).map(Self::NewConnection),
       [CONNECTIONS, id, EDIT] => id.parse().map(Self::EditConnection).map_err(|_| RouteError::NoScreen),

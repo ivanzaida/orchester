@@ -1,0 +1,243 @@
+//! Pipelines library GaNsb and empty sI5K0.
+use lurq::{
+  app::{
+    component::Component,
+    ctx::Ctx,
+    theme::{SpacingSize, TypographyStyle},
+  },
+  components::{Column, Row, Spacer, Text, VirtualizedList},
+  core::Signal,
+  node::{Element, dimension::Dimension, padding::Padding},
+};
+use orchester_workspace::{
+  background, messages,
+  pipelines::library::{LibraryEntry, VersionState, library_in},
+  tasks::outside::Outside,
+};
+
+use super::parts;
+use crate::{
+  navigation::Navigation,
+  project::ShownProject,
+  routes::{ProjectPage, Route},
+  theme::{ExtraSpacing, ExtraTypography},
+  ui::{
+    button::{ActionButton, ButtonKind},
+    icon::Icon,
+    message::message_text,
+    state::{EmptyState, load_error, loading},
+    table::{ColumnWidth, HEADER_HEIGHT, TableRow, table_header},
+  },
+};
+
+/// Columns of tgdj2 / DSUqE.
+const STEPS: f32 = 48.0;
+const ROW_HEIGHT: f32 = 58.0;
+const VERSION: f32 = 190.0;
+const USED: f32 = 140.0;
+const PUBLISHED: f32 = 110.0;
+pub struct Library {
+  retry: Signal<u64>,
+}
+impl Component for Library {
+  type Props = ShownProject;
+  fn create(ctx: &mut Ctx) -> Self {
+    Self { retry: ctx.signal(0) }
+  }
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let project = ctx.props::<ShownProject>().clone();
+    let revision = self.retry.get() + project.feed.outside.get().of(Outside::Pipelines);
+    let loaded = ctx
+      .future((project.open.repo_root.clone(), revision), |(root, _)| async move {
+        background::run(move || library_in(&root).map_err(|e| messages::store_error(&e))).await?
+      })
+      .state()
+      .get();
+    let nav = Navigation::of(ctx);
+    let id = project.open.project.id();
+    let new = ActionButton::new("pipeline-new", ButtonKind::Primary, ctx.t("pipelines.new"))
+      .icon(Icon::Plus)
+      .on_click(move || nav.go(Route::Project(id, ProjectPage::NewPipeline)));
+    let header = Row::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Md)
+      .child(
+        Column::new()
+          .flex(1.0)
+          .spacing(SpacingSize::Xs)
+          .child(Text::new(&ctx.t("pipelines.title")).variant(TypographyStyle::Heading))
+          .child(Text::new(&ctx.t("pipelines.subtitle")).variant(TypographyStyle::Description)),
+      )
+      .child(
+        ActionButton::new("pipeline-import", ButtonKind::Secondary, ctx.t("pipelines.import"))
+          .unavailable(ctx.t("pipelines.planned")),
+      )
+      .child(new);
+    let page = parts::page()
+      .padding(
+        Padding::new()
+          .top(ExtraSpacing::Roomy.role())
+          .left(crate::theme::pipelines::page_inset())
+          .right(crate::theme::pipelines::page_inset()),
+      )
+      .spacing(SpacingSize::Lg)
+      .child(header);
+    let Some(entries) = loaded.data else {
+      let content = match loaded.error {
+        Some(error) if !loaded.is_pending() => {
+          let retry = self.retry.clone();
+          load_error(
+            ctx,
+            "pipelines-error",
+            (&ctx.t("pipelines.loadFailed"), &message_text(ctx, &error)),
+            move || retry.update(|v| *v += 1),
+          )
+        }
+        _ => loading("pipelines-loading", &ctx.t("pipelines.reading")).into(),
+      };
+      return page.child(content);
+    };
+    if entries.is_empty() {
+      return page.child(EmptyState::new(
+        "pipelines-empty",
+        Icon::Workflow,
+        ctx.t("pipelines.emptyTitle"),
+        ctx.t("pipelines.emptyDetail"),
+      ));
+    }
+    populated(ctx, id, &entries, page)
+  }
+}
+#[derive(Clone, PartialEq)]
+struct RowProps {
+  project: orchester_core::id::ProjectId,
+  words: (LibraryEntry, String, String, String),
+}
+impl lurq::app::component::DevtoolsInspectable for RowProps {}
+struct LibraryRow;
+impl Component for LibraryRow {
+  type Props = RowProps;
+  fn create(_: &mut Ctx) -> Self {
+    Self
+  }
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let props = ctx.props::<RowProps>().clone();
+    let (entry, state, used, published) = props.words;
+    let nav = Navigation::of(ctx);
+    TableRow::new(format!("pipeline-row-{}", entry.id))
+      .height(ROW_HEIGHT)
+      .spacing(SpacingSize::Lg)
+      .cell(
+        ColumnWidth::Fill,
+        Column::new()
+          .spacing(ExtraSpacing::Tight.role())
+          .child(Text::new(&entry.name).variant(ExtraTypography::Strong.role()))
+          .child(parts::caption(
+            &entry
+              .stages
+              .iter()
+              .map(|stage| {
+                stage
+                  .iter()
+                  .map(|name| name.as_ref())
+                  .collect::<Vec<_>>()
+                  .join(&ctx.t("pipelines.parallel"))
+              })
+              .collect::<Vec<_>>()
+              .join(&ctx.t("pipelines.then")),
+          )),
+      )
+      .cell(ColumnWidth::Fixed(STEPS), parts::caption(&entry.step_count.to_string()))
+      .cell(ColumnWidth::Fixed(VERSION), parts::caption(&state))
+      .cell(ColumnWidth::Fixed(USED), parts::caption(&used))
+      .cell(ColumnWidth::Fixed(PUBLISHED), parts::caption(&published))
+      .on_open(move || nav.go(Route::Project(props.project, ProjectPage::Pipeline(entry.id))))
+  }
+}
+fn row_words(ctx: &Ctx, entry: &LibraryEntry) -> (LibraryEntry, String, String, String) {
+  let state = match entry.state {
+    VersionState::DraftOnly => ctx.t("pipelines.draftOnly"),
+    VersionState::Published(v) => ctx.t_args("pipelines.published", [("version", v.get().to_string())]),
+    VersionState::PublishedWithDraft(v) => ctx.t_args("pipelines.withDraft", [("version", v.get().to_string())]),
+  };
+  let published = entry
+    .last_published
+    .map_or_else(|| ctx.t("pipelines.never").to_string(), |at| age(ctx, at).to_string());
+  (
+    entry.clone(),
+    state.to_string(),
+    ctx
+      .t_args("pipelines.tasks", [("count", entry.used_by.to_string())])
+      .to_string(),
+    published,
+  )
+}
+fn populated(ctx: &mut Ctx, id: orchester_core::id::ProjectId, entries: &[LibraryEntry], page: Column) -> Column {
+  let labels = [
+    "pipelines.columns.name",
+    "pipelines.columns.steps",
+    "pipelines.columns.version",
+    "pipelines.columns.used",
+    "pipelines.columns.published",
+  ]
+  .map(|k| ctx.t(k));
+  let widths = [
+    ColumnWidth::Fill,
+    ColumnWidth::Fixed(STEPS),
+    ColumnWidth::Fixed(VERSION),
+    ColumnWidth::Fixed(USED),
+    ColumnWidth::Fixed(PUBLISHED),
+  ];
+  let headings: Vec<_> = widths
+    .into_iter()
+    .zip(labels.iter().map(|s| Some(s.as_ref())))
+    .collect();
+  let rows = std::sync::Arc::new(
+    entries
+      .iter()
+      .map(|entry| RowProps {
+        project: id,
+        words: row_words(ctx, entry),
+      })
+      .collect::<Vec<_>>(),
+  );
+  let list = VirtualizedList::new_shared(ctx, rows)
+    .width(Dimension::Pct(100.0))
+    .flex(1.0)
+    .max_height(Dimension::Px(ROW_HEIGHT * entries.len() as f32))
+    .mount_keyed::<LibraryRow, _, _, _>(|row| row.words.0.id.to_string(), Clone::clone);
+  let page = page.child(
+    Column::new()
+      .id("pipelines-library")
+      .width(Dimension::Pct(100.0))
+      .flex(1.0)
+      .max_height(Dimension::Px(HEADER_HEIGHT + ROW_HEIGHT * entries.len() as f32))
+      .child(table_header("pipelines-headings", &headings, true).spacing(SpacingSize::Lg))
+      .child(list),
+  );
+  page
+    .child(parts::caption(
+      &ctx.t_args("pipelines.count", [("count", entries.len().to_string())]),
+    ))
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Xl)
+        .child(Text::new(&ctx.t("pipelines.versionsTitle")).variant(TypographyStyle::Label))
+        .with_children(
+          ["pipelines.draftHint", "pipelines.publishHint", "pipelines.pinnedHint"]
+            .map(|key| parts::note(&ctx.t(key)).flex(1.0)),
+        ),
+    )
+    .child(Spacer::new())
+}
+fn age(ctx: &Ctx, at: orchester_core::time::Timestamp) -> std::sync::Arc<str> {
+  let minutes = (orchester_core::time::Timestamp::now().unix_millis() - at.unix_millis()).max(0) / 60_000;
+  let (key, count) = match minutes {
+    0 => return ctx.t("pipelines.justNow"),
+    1..60 => ("pipelines.minutesAgo", minutes),
+    60..1440 => ("pipelines.hoursAgo", minutes / 60),
+    _ => ("pipelines.daysAgo", minutes / 1440),
+  };
+  ctx.t_args(key, [("count", count.to_string())])
+}

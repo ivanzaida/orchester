@@ -1,0 +1,74 @@
+//! Editor frame and inspector geometry from gHEgt, Oriq0 and K3w4J.
+use lurq::{
+  app::{
+    ctx::Ctx,
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+  },
+  components::{Column, Row, ScrollVertical, Text},
+  layout::Alignment,
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+};
+
+use crate::{
+  theme::{ExtraSpacing, ExtraTypography},
+  ui::inspector::section_title,
+};
+
+pub const INSPECTOR_WIDTH: f32 = 340.0;
+const HEADER_HEIGHT: f32 = 52.0;
+const INSPECTOR_HEADER: f32 = 44.0;
+
+pub fn page() -> Column {
+  Column::new()
+    .id("screen-pipelines")
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+}
+pub fn header() -> Row {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(HEADER_HEIGHT))
+    .padding(Padding::horizontal(ExtraSpacing::Tabs.role()))
+    .spacing(SpacingSize::Md)
+    .align_items(Alignment::Center)
+    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+}
+pub fn panel(_ctx: &Ctx, eyebrow: &str, title: &str, body: Element, footer: Option<Element>) -> Element {
+  Column::new()
+    .id("pipeline-inspector")
+    .width(Dimension::Px(INSPECTOR_WIDTH))
+    .height(Dimension::Pct(100.0))
+    .background(PaletteColor::SurfacePanel)
+    .border_left(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(
+      Row::new()
+        .height(Dimension::Px(INSPECTOR_HEADER))
+        .width(Dimension::Pct(100.0))
+        .padding(Padding::horizontal(ExtraSpacing::Inset.role()))
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+        .child(Text::new(eyebrow).variant(ExtraTypography::ColumnHeading.role()))
+        .child(Text::new(title).variant(TypographyStyle::Title)),
+    )
+    .child(ScrollVertical::new(body).flex(1.0).min_height(Dimension::Px(0.0)))
+    .with_children(footer)
+    .into()
+}
+pub fn panel_body() -> Column {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
+    .spacing(ExtraSpacing::Loose.role())
+}
+pub fn section(ctx: &Ctx, key: &'static str) -> Element {
+  section_title(key, &ctx.t(key), None).into()
+}
+pub fn caption(text: &str) -> Text {
+  Text::new(text).variant(TypographyStyle::Caption)
+}
+pub fn note(text: &str) -> Text {
+  Text::new(text)
+    .variant(ExtraTypography::Note.role())
+    .width(Dimension::Pct(100.0))
+}

@@ -75,6 +75,8 @@ pub struct TableRow {
   /// The chevron's column stays, empty, in a table whose other rows open.
   open_column: bool,
   highlighted: bool,
+  height: f32,
+  spacing: SpacingSize,
 }
 
 impl TableRow {
@@ -85,7 +87,20 @@ impl TableRow {
       open: None,
       open_column: false,
       highlighted: false,
+      height: ROW_HEIGHT,
+      spacing: SpacingSize::Md,
     }
+  }
+
+  /// The pipeline library's taller two-line rows (DSUqE).
+  pub fn height(mut self, height: f32) -> Self {
+    self.height = height;
+    self
+  }
+  /// Gap between this table's columns.
+  pub fn spacing(mut self, spacing: SpacingSize) -> Self {
+    self.spacing = spacing;
+    self
   }
 
   /// The next cell, in its column's width.
@@ -120,7 +135,7 @@ impl From<TableRow> for Element {
       .cells
       .into_iter()
       .map(|(width, content)| width.sized(Row::new()).align_items(Alignment::Center).child(content));
-    let content = line(Row::new(), ROW_HEIGHT).with_children(cells);
+    let content = line(Row::new(), row.height).spacing(row.spacing).with_children(cells);
     let content = if row.highlighted {
       content
         .background(PaletteColor::InfoMuted)

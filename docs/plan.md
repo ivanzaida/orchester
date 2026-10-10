@@ -56,6 +56,16 @@ person's choice per the design), and how a reopened window picks the runs up aga
 `Ob1P7` in `data/orchester2.pen`. **Done when** closing with agents at work and reopening shows the same runs live,
 tested with the fake agents, and an independent design verification passes.
 
+### A2 · Pipelines page and editor (ORC-3, UI)
+
+Implemented on `orchester/orc-3-run-1` (2026-10-10), waiting for the run's independent review and design
+verification. Library, page-based creation, step/edge/failure/gate/narrowing editing, autosaved drafts,
+protected publication and version history are built in `crates/desktop-app`; rules remain in workspace.
+Settings proposals identified by the design remain visibly unavailable. Commands, outcomes and the exact Pencil
+states for Verify are in [the implementation handoff](evidence/orc-3-pipelines-implementation.md).
+**Done when** the task's acceptance criteria and independent verification against Pipelines `i4jt6V` and
+Pipeline settings `vEDYY` pass. Move to Done after that verdict.
+
 ### A3 · Set up the Orchester project through the new app's MCP tools (user + agent)
 
 The person turns on *Let automation change agent permissions* in Settings; an agent then adds the project, CLI

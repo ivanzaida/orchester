@@ -8,11 +8,7 @@
 use std::num::NonZeroU32;
 
 use orchester_core::{
-  connection::invocation::Platform,
-  permission::{
-    AllowedCommands, CommandPermission, NetworkAccess, StepCommands, StepNetwork, StepPermissions,
-    capability::{PermissionOption, support},
-  },
+  permission::StepPermissions,
   resource::{DraftSaved, FailureRoute, ModelId, PipelineEdit, RepositoryAccess, Step, StepKey, StepKind},
   tokens::{BudgetInputError, TokenBudget},
 };
@@ -28,7 +24,6 @@ use super::{
   widening,
 };
 use crate::{
-  agents::permissions::with_command,
   app_mcp::{
     error::ToolError,
     services::{Services, blocking},
@@ -150,21 +145,7 @@ pub async fn save_pipeline_draft(
     let body = edit
       .validate()
       .map_err(|error| ToolError::refused("invalid_pipeline", vec![rule_message(&edit, &error)]))?;
-    // Neither the published version's approvals nor those a person added to the draft since are dropped.
-    let mut dropped = weakened_gates(current.body.steps(), body.steps());
-    if let Some(latest) = &current.latest {
-      for reason in weakened_gates(latest.body.steps(), body.steps()) {
-        if !dropped.contains(&reason) {
-          dropped.push(reason);
-        }
-      }
-    }
-    let latest_steps = current.latest.as_ref().map_or(&[][..], |latest| latest.body.steps());
-    dropped.extend(added_tool_steps(
-      [current.body.steps(), latest_steps],
-      body.steps(),
-      &current.assignables,
-    ));
+    let dropped = crate::pipelines::widening::draft_reasons(&current, &body);
     widening::allowed(&services, dropped)?;
     let saved = save_draft_in(&open.repo_root, id, body)?;
     services.changes.record(open.project.id(), Outside::Pipelines);
@@ -174,54 +155,6 @@ pub async fn save_pipeline_draft(
   let mut value = pipeline_json(&opened, translate);
   value["draft_kept"] = json!(saved == DraftSaved::Stored);
   Ok(json!({ "pipeline": value }))
-}
-
-/// The approvals `steps` drop from `base`, the latest published version (or, before the first, the draft as
-/// it stands): a step that waits for a person's approval, or asks a person about its tool calls, and no
-/// longer does or is gone. Dropping one is a person's decision; other narrowing within the profile is not.
-fn weakened_gates(base: &[Step], steps: &[Step]) -> Vec<Message> {
-  let asks =
-    |step: &Step| matches!(&step.kind, StepKind::Agent { permissions, .. } if permissions.interactive_tool_approvals);
-  let mut reasons = Vec::new();
-  for old in base {
-    let new = steps.iter().find(|step| step.key == old.key);
-    let named = |key: &'static str| Message::new(key).with("step", old.name.as_str().to_owned());
-    if old.approval_gate && !new.is_some_and(|step| step.approval_gate) {
-      reasons.push(named("appMcp.widens.approvalGate"));
-    }
-    if asks(old) && !new.is_some_and(asks) {
-      reasons.push(named("appMcp.widens.stepToolCalls"));
-    }
-  }
-  reasons
-}
-
-/// The steps of `steps` that call a tool where neither the draft as it stands nor the latest published
-/// version (`bases`) calls it under the same key: each runs a program on this computer, which a person
-/// decides.
-fn added_tool_steps(bases: [&[Step]; 2], steps: &[Step], assignables: &Assignables) -> Vec<Message> {
-  let calls = |step: &Step| match step.kind {
-    StepKind::Tool { tool } => tool,
-    StepKind::Agent { .. } => None,
-  };
-  steps
-    .iter()
-    .filter_map(|step| Some((step, calls(step)?)))
-    .filter(|(step, tool)| {
-      !bases
-        .iter()
-        .flat_map(|base| base.iter())
-        .any(|before| before.key == step.key && calls(before) == Some(*tool))
-    })
-    .map(|(step, tool)| {
-      let name = assignables
-        .tool(tool)
-        .map_or_else(|| tool.to_string(), |choice| choice.name.to_string());
-      Message::new("appMcp.projectTools.widens.toolStep")
-        .with("step", step.name.as_str().to_owned())
-        .with("tool", name)
-    })
-    .collect()
 }
 
 /// The step `input` describes, or why the inspector would not take it, naming the step.
@@ -335,46 +268,11 @@ fn agent(input: &StepInput, choice: Option<&ProfileChoice>) -> Result<StepKind, 
   })
 }
 
-/// The narrowing `narrow` asks for, where the inspector offers it on `choice`: some of an allowed list
-/// its CLI enforces, network off where it has network and its CLI can block it.
 fn narrowed(narrow: &NarrowInput, choice: &ProfileChoice) -> Result<StepPermissions, Message> {
-  let enforced = |option| {
-    choice
-      .provider
-      .is_some_and(|provider| support(provider, Platform::current(), option).is_enforced())
-  };
-  let mut permissions = StepPermissions {
-    interactive_tool_approvals: narrow.ask_before_tool_calls,
-    ..StepPermissions::default()
-  };
-  if let Some(commands) = &narrow.only_commands {
-    let CommandPermission::Allowed(allowed) = choice.permissions.commands() else {
-      return Err(Message::new("appMcp.errors.narrowCommandsNotOffered"));
-    };
-    if allowed.entries().is_empty() || !enforced(PermissionOption::AllowedCommands) {
-      return Err(Message::new("appMcp.errors.narrowCommandsNotOffered"));
-    }
-    let mut only = AllowedCommands::default();
-    for command in commands {
-      only = with_command(&only, command)?;
-      if only
-        .entries()
-        .last()
-        .is_some_and(|added| !allowed.entries().contains(added))
-      {
-        return Err(Message::new("appMcp.errors.commandNotInProfile").with("command", command.clone()));
-      }
-    }
-    // Keeping every command of the profile narrows nothing, as the inspector's toggles have it.
-    if only.entries().len() < allowed.entries().len() {
-      permissions.commands = StepCommands::Only(only);
-    }
-  }
-  if narrow.network_off {
-    if choice.permissions.network() != NetworkAccess::On || !enforced(PermissionOption::NetworkOff) {
-      return Err(Message::new("appMcp.errors.networkOffNotOffered"));
-    }
-    permissions.network = StepNetwork::Off;
-  }
-  Ok(permissions)
+  crate::pipelines::narrowing::permissions(
+    narrow.only_commands.as_deref(),
+    narrow.network_off,
+    narrow.ask_before_tool_calls,
+    choice,
+  )
 }

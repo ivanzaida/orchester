@@ -10,8 +10,20 @@ Push-Location $repositoryRoot
 try {
     # rustfmt.toml uses nightly-only options; the pinned stable toolchain would ignore them.
     Write-Output "== rustfmt"
-    cargo +nightly fmt --all -- --check
-    if ($LASTEXITCODE -ne 0) { $failed = $true }
+    # Long run-worktree paths exceed Windows' command-line limit when rustfmt receives every
+    # test binary at once. Check the same workspace members one package at a time.
+    $metadataText = cargo metadata --no-deps --format-version 1
+    if ($LASTEXITCODE -ne 0) {
+        $failed = $true
+    } else {
+        $metadata = $metadataText | ConvertFrom-Json
+        foreach ($package in $metadata.packages) {
+            if ($metadata.workspace_members -contains $package.id) {
+                cargo +nightly fmt --package $package.name -- --check
+                if ($LASTEXITCODE -ne 0) { $failed = $true }
+            }
+        }
+    }
 
     Write-Output "== clippy"
     cargo clippy --workspace --all-targets --all-features -- -D warnings
