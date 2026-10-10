@@ -42,9 +42,6 @@ enum Lines {
   Many,
 }
 
-/// What hears each edit's value.
-type OnChange = Arc<dyn Fn(&str) + Send + Sync>;
-
 #[derive(Clone)]
 pub struct FieldInput {
   id: Arc<str>,
@@ -67,11 +64,9 @@ pub struct FieldInput {
   trailing: Option<Icon>,
   /// The value is not accepted, and something else says why: only the stroke turns `danger`.
   invalid: bool,
-  /// Hears each edit's value, as it lands in the field.
-  change: Option<OnChange>,
 }
 
-/// Compared by what it shows; the value by its signal, the handler of edits by identity.
+/// Compared by what it shows; the value by its signal.
 impl PartialEq for FieldInput {
   fn eq(&self, other: &Self) -> bool {
     self.id == other.id
@@ -89,10 +84,6 @@ impl PartialEq for FieldInput {
       && self.locked == other.locked
       && self.trailing == other.trailing
       && self.invalid == other.invalid
-      && match (&self.change, &other.change) {
-        (Some(change), Some(other)) => Arc::ptr_eq(change, other),
-        (change, other) => change.is_none() && other.is_none(),
-      }
   }
 }
 
@@ -118,15 +109,7 @@ impl FieldInput {
       locked: false,
       trailing: None,
       invalid: false,
-      change: None,
     }
-  }
-
-  /// `change` hears the value of each edit the person makes, as it lands in the field; not a value set from
-  /// elsewhere.
-  pub fn on_change(mut self, change: impl Fn(&str) + Send + Sync + 'static) -> Self {
-    self.change = Some(Arc::new(change));
-    self
   }
 
   pub fn placeholder(mut self, placeholder: impl Into<Arc<str>>) -> Self {
@@ -337,8 +320,6 @@ impl FieldBox {
         .focusable(false);
     } else if let Some(separator) = props.group_separator.clone() {
       input = input.on_input(group_while_typing(props.value.clone(), separator));
-    } else if let Some(change) = props.change.clone() {
-      input = input.on_input(move |event: TextInputEvent| change(event.new_value()));
     }
     match props.lines {
       Lines::One => input.single_line(),

@@ -4,7 +4,7 @@
 
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Spacer, Text, TextOverflow},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -52,9 +52,12 @@ pub(super) fn head(
     .align_items(Alignment::Center)
     .child(icon(glyph, size, color))
     .child(
+      // One line, as the design draws it; a long title (a plan's task) ends in an ellipsis.
       Text::new(title)
         .id(format!("{id}-title"))
         .variant(role)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
         .flex_shrink(1.0)
         .min_width(Dimension::Px(0.0)),
     )

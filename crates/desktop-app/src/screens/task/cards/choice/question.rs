@@ -76,21 +76,12 @@ pub(super) fn question(ctx: &mut Ctx, shown: &Shown<'_>, index: usize) -> Elemen
     },
     [("agent", &*shown.card.agent)],
   );
-  let (decisions, run, key, all) = (
-    shown.decisions.clone(),
-    shown.place.run(),
-    shown.place.key.clone(),
-    shown.questions.clone(),
-  );
-  // Typing picks the own answer's row, replacing a single-choice question's pick; erasing it unpicks the row
-  // and brings no earlier pick back.
   let field = FieldInput::new(
     format!("{id}-own-{index}"),
     ctx.t("cards.choice.ownName"),
     shown.own[index].clone(),
   )
   .placeholder(ctx.t("cards.choice.ownPlaceholder"))
-  .on_change(move |text| decisions.change_draft((run, &key), &all, |draft| draft.type_own(&all, index, text)))
   .render(ctx);
   Column::new()
     .width(Dimension::Pct(100.0))

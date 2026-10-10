@@ -94,7 +94,7 @@ impl Component for ChoiceView {
     }
     let questions: Arc<[Question]> = card.asked.request.questions().into();
     let draft = decisions.draft((place.run(), &place.key), &questions);
-    let own = self.own_fields(&draft, questions.len());
+    let own = self.own_fields(ctx, (&place, &questions), &draft);
     let stands = Stands::waiting(ctx.t("cards.state.waitingAnswer")).into_element(&id);
     let mut body = frame(id.clone(), true)
       .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
@@ -128,16 +128,32 @@ impl Component for ChoiceView {
 impl ChoiceView {
   /// The own answers' fields: what is kept of them the first time the card is shown; then the fields keep
   /// what is typed, and tell it to what is kept as it is typed.
-  fn own_fields(&self, draft: &Draft, count: usize) -> Arc<[Signal<String>]> {
-    self
-      .own
-      .lock()
-      .get_or_insert_with(|| {
-        (0..count)
-          .map(|index| Signal::new(draft.of(index).map(|picks| picks.text().to_owned()).unwrap_or_default()))
-          .collect()
-      })
-      .clone()
+  ///
+  /// Whatever sets a field's value (typing, a paste, a tool), it reaches what is kept: typing picks the own
+  /// answer's row, replacing a single-choice question's pick; erasing it unpicks the row and brings no earlier
+  /// pick back.
+  fn own_fields(
+    &self,
+    ctx: &mut Ctx,
+    (place, questions): (&Place, &Arc<[Question]>),
+    draft: &Draft,
+  ) -> Arc<[Signal<String>]> {
+    let mut own = self.own.lock();
+    if let Some(fields) = &*own {
+      return fields.clone();
+    }
+    let decisions = Decisions::of(ctx);
+    let fields: Arc<[Signal<String>]> = (0..questions.len())
+      .map(|index| Signal::new(draft.of(index).map(|picks| picks.text().to_owned()).unwrap_or_default()))
+      .collect();
+    for (index, field) in fields.iter().enumerate() {
+      let (decisions, run, key, all) = (decisions.clone(), place.run(), place.key.clone(), questions.clone());
+      ctx.watch(field, move |text: &String| {
+        decisions.change_draft((run, &key), &all, |draft| draft.type_own(&all, index, text));
+      });
+    }
+    *own = Some(fields.clone());
+    fields
   }
 }
 

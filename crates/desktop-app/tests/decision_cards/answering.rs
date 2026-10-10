@@ -248,6 +248,13 @@ fn card_orchesters_own_read_outside_says_why_it_asks() {
     window.tree.get_element_by_id(&format!("{card}-similar")).is_some()
   });
   assert_eq!(text(&mut window, &format!("{card}-title")), "Approve tool action?");
+  let title = window
+    .tree
+    .get_element_by_id_mut(&format!("{card}-title"))
+    .and_then(|element| element.bounds())
+    .expect("the title is laid out");
+  // One line of 13/1.35, as the command card's title.
+  assert!(title.height < 20.0, "the title takes one line: {}", title.height);
   let explain = text(&mut window, &format!("{card}-explain"));
   assert!(
     explain.starts_with("Builder wants to read outside the worktree"),
@@ -265,5 +272,39 @@ fn card_orchesters_own_read_outside_says_why_it_asks() {
   assert!(
     similar.starts_with("Approve similar in this run Reads and searches outside the worktree in "),
     "{similar}"
+  );
+}
+
+#[test]
+fn card_question_own_answer_set_by_a_tool_counts_and_is_kept() {
+  let (mut window, card, (project, key)) = opened("Pick where the docs button goes", "cards-choice-");
+  let own = format!("{card}-own-0");
+  // As a paste or an accessibility tool sets it: the value only, no typing.
+  window
+    .tree
+    .get_element_by_id_mut(&own)
+    .and_then(|element| element.as_text_input())
+    .expect("the own answer's field")
+    .set_value("Under the search box");
+  window.pass();
+  window.pass();
+  let context = format!("{card}-context");
+  assert!(
+    text(&mut window, &context).starts_with("Asked at "),
+    "the answer counts: {}",
+    text(&mut window, &context)
+  );
+  for view in [TaskView::Summary, TaskView::Conversation] {
+    window
+      .navigation()
+      .go(Route::Project(project, ProjectPage::Task(key.clone(), view)));
+    window.tree.tick_futures();
+    window.pass();
+  }
+  window.until("the card again", |window| window.tree.get_element_by_id(&own).is_some());
+  assert_eq!(
+    window.texts(&own).unwrap_or_default().join(""),
+    "Under the search box",
+    "the own answer is kept"
   );
 }
