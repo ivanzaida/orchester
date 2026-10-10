@@ -83,14 +83,22 @@ check
 # Replace each whole bundle by moving it into place: macOS may kill a program whose file changed
 # in place, because it caches the code signature. Both are copied before either is replaced.
 mkdir -p "$install_dir"
+had_database=0
+[ ! -f "$data_dir/orchester.db" ] || had_database=1
 for app in "${bundles[@]}"; do
   rm -rf "$install_dir/.$app.new" "$install_dir/.$app.old"
   ditto "$build_dir/package/$app" "$install_dir/.$app.new"
 done
+replaced=""
 for app in "${bundles[@]}"; do
-  [ ! -e "$install_dir/$app" ] || mv "$install_dir/$app" "$install_dir/.$app.old"
-  mv "$install_dir/.$app.new" "$install_dir/$app"
+  if ! { [ ! -e "$install_dir/$app" ] || mv "$install_dir/$app" "$install_dir/.$app.old"; } ||
+    ! mv "$install_dir/.$app.new" "$install_dir/$app"; then
+    [ -z "$replaced" ] || fail "replaced$replaced but not $app: $install_dir now mixes two builds (the old $app may be \
+.$app.old). Do not start Orchester from it; run this script again."
+    fail "cannot replace $install_dir/$app; nothing was replaced (the old one may be .$app.old)"
+  fi
   rm -rf "$install_dir/.$app.old"
+  replaced="$replaced $app"
 done
 
 if [ "$import_dev_data" = 1 ]; then
@@ -105,3 +113,8 @@ fi
 echo "Installed Orchester ($commit) to $install_dir: Orchester App.app (the new app) and Orchester.app"
 echo "Start one from Finder or Spotlight, or with: open \"$install_dir/Orchester App.app\""
 echo "One app at a time: both use the data in $data_dir."
+if [ "$had_database" = 1 ]; then
+  echo "Before the first start of this build, with both apps closed, copy aside $data_dir/orchester.db" \
+    "(and orchester.db-wal) and each project's .orchester/orchester.db (and its -wal): this build may" \
+    "migrate them, and an older build then refuses them. See docs/stable-build.md." >&2
+fi

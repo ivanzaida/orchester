@@ -11,6 +11,12 @@ from the same build.
 
 ## Install and update (Windows)
 
+**Back up before the first start of a newer build.** With both apps closed, copy aside the
+application database `orchester.db` (with its `-wal` file, if any) and each project's
+`.orchester\orchester.db` (with its `-wal`) in its repository. A newer build migrates both kinds
+when it opens them, and an older build then refuses them, so only these copies let you go back.
+The script reminds you when the install folder already has a database.
+
 ```powershell
 powershell -File tools/install.ps1
 ```
@@ -44,6 +50,12 @@ Options:
 | `-StartMenuShortcut` | Add *Orchester App* (the new app) and *Orchester* (the deprecated one) to your Start menu, each with its program's icon. |
 
 ## Install and update (macOS)
+
+**Back up before the first start of a newer build.** With both apps closed, copy aside the
+application database `~/Library/Application Support/Orchester/orchester.db` (with its `-wal` file,
+if any) and each project's `.orchester/orchester.db` (with its `-wal`) in its repository. A newer
+build migrates both kinds when it opens them, and an older build then refuses them, so only these
+copies let you go back. The script reminds you when that folder already has a database.
 
 On a Mac with the Rust toolchain (`rustup`, which picks up `rust-toolchain.toml`) and the Xcode
 command line tools (`xcode-select --install`, for the C compiler, `lipo` and `codesign`):
@@ -356,11 +368,10 @@ and both builds open the same one.
   of it until you install a build that includes the migration. Do not open real projects with a
   dev build of an unmerged branch that adds a migration: that schema version may never exist on
   `master`.
-- **The application database migrates too.** A build with `orchester-app`'s settings (its theme
-  and agents' window control) migrates `orchester.db` to schema version 6 when it first starts, and
-  an older install then refuses that database. Before the first start of a newly installed build,
-  copy `orchester.db` (with its `-wal` file, if any) aside, so the older install can still be
-  restored with its data.
+- **The application database migrates too.** A newer build migrates `orchester.db` when it first
+  starts (`orchester-app`'s settings, for example), and an older install then refuses that
+  database. Back up both kinds of database before the first start of a newly installed build (see
+  the install sections), so the older install can still be restored with its data.
 - **What a too-new database looks like to an older build.** The new app shows *Orchester can't
   open its data*: "The database was written by a newer version of Orchester. It has data version
   … ; this build reads up to version …. Nothing was changed." The deprecated app shows *Orchester

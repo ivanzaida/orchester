@@ -42,6 +42,22 @@ function Assert-NotRunning([string]$Directory, [string]$What) {
     }
 }
 
+# Refuses while any installed program is running, whatever path it was started by (a junction, a
+# subst drive, a short name) and whoever runs it: Windows does not let anyone open the file of a
+# running program for exclusive writing.
+function Assert-NotInUse {
+    foreach ($program in $programs) {
+        $target = Join-Path $InstallDir $program
+        if (-not (Test-Path -LiteralPath $target -PathType Leaf)) { continue }
+        try {
+            [System.IO.File]::Open($target, "Open", "ReadWrite", "None").Dispose()
+        }
+        catch {
+            throw "$target is in use (is Orchester running from ${InstallDir}?). Close it and run this script again."
+        }
+    }
+}
+
 function Assert-CanImportDevData {
     $source = Join-Path $devDir "orchester.db"
     if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
@@ -76,8 +92,31 @@ Assert-NotRunning $InstallDir "The installed Orchester"
 if ($ImportDevData) { Assert-CanImportDevData }
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-foreach ($program in $programs) {
-    Copy-Item -LiteralPath (Join-Path $BuildDir "release\$program") -Destination (Join-Path $InstallDir $program) -Force
+$hadDatabase = Test-Path -LiteralPath (Join-Path $InstallDir "orchester.db") -PathType Leaf
+# All three are copied beside the installed ones first, then each replaces its own, so a failed copy
+# changes nothing and a failed replacement says which programs are from which build.
+$replaced = @()
+try {
+    foreach ($program in $programs) {
+        Copy-Item -LiteralPath (Join-Path $BuildDir "release\$program") -Destination (Join-Path $InstallDir "$program.new") -Force
+    }
+    Assert-NotInUse
+    foreach ($program in $programs) {
+        $target = Join-Path $InstallDir $program
+        Move-Item -LiteralPath "$target.new" -Destination $target -Force
+        $replaced += $program
+    }
+}
+catch {
+    foreach ($program in $programs) {
+        Remove-Item -LiteralPath (Join-Path $InstallDir "$program.new") -Force -ErrorAction SilentlyContinue
+    }
+    if ($replaced.Count -gt 0) {
+        $kept = @($programs | Where-Object { $replaced -notcontains $_ })
+        Write-Warning ("$InstallDir now mixes two builds: replaced $($replaced -join ', '); not replaced " +
+            "$($kept -join ', '). Do not start Orchester from it; close what runs there and run this script again.")
+    }
+    throw
 }
 if ($ImportDevData) {
     foreach ($file in $databaseFiles) {
@@ -109,3 +148,8 @@ Write-Output "Installed Orchester ($commit) to $InstallDir"
 Write-Output "Start the new app with: $appExecutable"
 Write-Output "Start the deprecated app with: $executable"
 Write-Output "One app at a time: both use the application database in $InstallDir."
+if ($hadDatabase) {
+    Write-Warning ("Before the first start of this build, with both apps closed, copy aside $InstallDir\orchester.db " +
+        "(and orchester.db-wal) and each project's .orchester\orchester.db (and its -wal): this build may migrate " +
+        "them, and an older build then refuses them. See docs/stable-build.md.")
+}
