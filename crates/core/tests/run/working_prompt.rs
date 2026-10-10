@@ -40,6 +40,14 @@ fn part(working: Option<WorkingTools>, event: InjectionEvent) -> Option<String> 
   Some(part.trim().to_owned())
 }
 
+fn claude_processes() -> &'static str {
+  "\nFind apps you started with mcp__Orchester__list_run_processes and stop them with mcp__Orchester__stop_run_process(pid), instead of Stop-Process or kill. These tools run without asking and refuse executables outside this run's worktree, the runner and the agent CLI. Stop only apps you started."
+}
+
+fn codex_processes() -> &'static str {
+  "\nFind apps you started with list_run_processes and stop them with stop_run_process(pid) of the Orchester MCP server, instead of Stop-Process or kill. These tools run without asking and refuse executables outside this run's worktree, the runner and the agent CLI. Stop only apps you started."
+}
+
 #[test]
 fn working_prompt_names_the_tools_of_the_cli_and_the_access() {
   let start = InjectionEvent::Start;
@@ -50,7 +58,9 @@ fn working_prompt_names_the_tools_of_the_cli_and_the_access() {
   )
   .expect("a part");
   assert_eq!(
-    claude_writes,
+    claude_writes
+      .strip_suffix(claude_processes())
+      .expect("process steering"),
     "Read, search and change files only with Orchester's file tools: mcp__Orchester__read_file, \
      mcp__Orchester__list_files, mcp__Orchester__search_file, mcp__Orchester__edit_file (after reading the file: give \
      the lines to replace and, as expected, exactly what they hold now), mcp__Orchester__create_file (new files \
@@ -70,7 +80,7 @@ fn working_prompt_names_the_tools_of_the_cli_and_the_access() {
   )
   .expect("a part");
   assert_eq!(
-    claude_reads,
+    claude_reads.strip_suffix(claude_processes()).expect("process steering"),
     "Read and search files only with Orchester's file tools: mcp__Orchester__read_file, \
      mcp__Orchester__list_files and mcp__Orchester__search_file. Claude Code's own Read, Grep and Glob are not \
      available; do not read files through the shell (`cat`, `sed`, `awk`).\nCommands already run in the task's \
@@ -87,7 +97,7 @@ fn working_prompt_names_the_tools_of_the_cli_and_the_access() {
   )
   .expect("a part");
   assert_eq!(
-    codex_writes,
+    codex_writes.strip_suffix(codex_processes()).expect("process steering"),
     "Read, search and change files with the read_file, list_files, search_file, edit_file (after read_file: give \
      the lines to replace and, as expected, exactly what they hold now), create_file (new files only), delete_file \
      and move_file (one file each, never a folder) tools of the Orchester MCP server, not through the shell (`cat`, \
@@ -104,7 +114,7 @@ fn working_prompt_names_the_tools_of_the_cli_and_the_access() {
   )
   .expect("a part");
   assert_eq!(
-    codex_reads,
+    codex_reads.strip_suffix(codex_processes()).expect("process steering"),
     "Read and search files with the read_file, list_files and search_file tools of the Orchester MCP server, not \
      through the shell (`cat`, `rg`, `sed`, `awk`).\nCommands already run in the task's worktree: never start one with \
      `cd`."

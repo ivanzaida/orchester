@@ -12,6 +12,9 @@ use serde_json::{Value, json};
 
 use super::{Fake, fake_claude_rules, fake_permission_prompt::Prompt, fake_skill_calls, fake_tool_calls};
 
+#[path = "fake_process_tools.rs"]
+mod fake_process_tools;
+
 impl Fake {
   /// "Use Orchester's tools": the calls outside the worktree ([`fake_tool_calls::external`]).
   pub fn use_orchester_tools(
@@ -48,6 +51,23 @@ impl Fake {
     for (call, tool, input) in fake_tool_calls::files(false) {
       self.use_tool(args, &mut server, (call, tool, &input));
     }
+    self.finish(worktree, "hello", step)
+  }
+
+  pub fn use_process_tools(
+    &self,
+    worktree: &Path,
+    (args, opened): (&[String], Option<Prompt>),
+    step: &str,
+  ) -> ExitCode {
+    let Some(mut server) = opened.or_else(|| Prompt::open(args)) else {
+      return ExitCode::from(2);
+    };
+    let mut index = 0;
+    fake_process_tools::exercise(worktree, |tool, input| {
+      index += 1;
+      self.use_tool(args, &mut server, (&format!("toolu_process_{index}"), tool, input));
+    });
     self.finish(worktree, "hello", step)
   }
 

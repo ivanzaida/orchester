@@ -94,10 +94,14 @@ fn fail_once(file: Option<&str>) -> Result<bool, String> {
 
 fn spawn_sleeper() -> Result<(), String> {
   let program = std::env::current_exe().map_err(|error| error.to_string())?;
-  let child = std::process::Command::new(program)
-    .env(SLEEPER, "1")
-    .spawn()
-    .map_err(|error| error.to_string())?;
+  let mut command = std::process::Command::new(program);
+  command.env(SLEEPER, "1");
+  #[cfg(windows)]
+  if std::env::var_os("ORCHESTER_TEST_COMMAND_DETACHED").is_some() {
+    use std::os::windows::process::CommandExt;
+    command.creation_flags(0x0000_0008);
+  }
+  let child = command.spawn().map_err(|error| error.to_string())?;
   println!("child pid: {}", child.id());
   std::io::stdout().flush().map_err(|error| error.to_string())
 }

@@ -108,6 +108,10 @@ impl RunTask {
     prompt: String,
     tools: Arc<ToolHost>,
   ) -> Result<CliCommand, RunnerProblem> {
+    tools
+      .processes
+      .protect_executable(cli.executable)
+      .map_err(|error| problem(format!("cannot protect agent CLI: {error}")))?;
     match setup {
       McpSetup::Codex(mcp) => {
         let CodexTools { server, listening } = self.codex_tools(tools)?;

@@ -768,6 +768,30 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-21 · Agent tools to stop apps started in a run (implemented 2026-10-11 in run worktree
+`01a127bc-59bd-774a-8edd-a0f0bc989311`; implementation checks passed, independent review/QA follows).
+
+The per-invocation relay provides `list_run_processes` and `stop_run_process(pid)` to both agents without approval.
+Executable paths resolve inside this run's worktree; outside processes, the runner and agent CLI are refused.
+Descendants inside the worktree are stopped with the root; descendants outside it (such as `conhost.exe`) are left
+running and named. Windows sends WM_CLOSE and macOS SIGTERM,
+then a bounded grace period precedes forced termination. Prompts and `docs/interactive-tool-approvals.md` steer
+both agents to these tools. Core path/permission tests and executor/runner relay tests passed; macOS is checked
+and linted for `aarch64-apple-darwin`, with runtime QA on a Mac outstanding. No visual states or Pencil nodes changed.
+The person separately approved the small `tools/check.ps1` change: check formatting per workspace manifest with
+the same nightly flags to avoid Windows's command-length limit. Full gate result and each test command are recorded
+in `.tmp/orc21/verification.md`.
+Review corrections retain exited parents during child discovery, rescan after termination, and use macOS audit
+tokens to bind executable lookup and signals to an exec generation. Exit races are treated as disappearance.
+Regression tests cover children born during close, listing churn and macOS stale tokens/exits; the latter are
+cross-checked here and need runtime QA on a Mac. Fresh correction evidence is in `.tmp/orc21/review-fixes.md`.
+Security review fixes (2026-10-11): outside descendants are left running instead of refusing the stop; the
+reported executable path must lie inside the worktree before links are resolved; after the first close request each
+process gets an outcome and nothing aborts the stop; refusals show no path; macOS before 15 signals by pid after
+re-checking the audit token, since `proc_signal_with_audittoken` first ships in macOS 15.
+Re-review: only processes started at or after the run's creation are listed or stopped, since a running executable
+moved into the worktree is reported at its new path.
+
 New app, first working set (merged 2026-10-09/10 into master; each reviewed, QA'd live and design-verified by
 separate agents): T1 Tasks list (`claude/app-tasks`), F2 shell live data (`claude/app-shell`), P1 task page and Summary
 (`claude/app-task-page`), N1 New/Edit task with the per-field conflict chooser (`claude/app-task-form`), P2 Summary

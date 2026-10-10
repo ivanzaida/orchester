@@ -169,6 +169,8 @@ by `read_external_file` and `search_external_file`.
 | `find_symbol` (with the code index) | `name`, `kind?`, `include_tests?`, `include_consts?` | read-only | runs | runs |
 | `search_external_file` | `base_directory` (absolute), `term` | outside | asks; runs in the run's sources | asks; runs in the run's sources |
 | `read_external_file` | `filename` (absolute), `start_line?`, `length?` | outside | asks; runs in the run's sources | asks; runs in the run's sources |
+| `list_run_processes` | none | run processes | runs | runs |
+| `stop_run_process` | `pid` (positive integer) | run processes | runs | runs |
 | `run_check` (with checks) | `name` (one of the step's checks) | outside, network | by the check's access rules (network on only) | as a writing step |
 | `list_skills` (with skills) | none | read-only | runs | runs |
 | `read_skill` (with skills) | `name`, `file?` (a skill file path; none or `SKILL.md` for the skill's own), `offset?`, `limit?` (≤ 10 000, 2000) | read-only | runs | runs |
@@ -176,6 +178,37 @@ by `read_external_file` and `search_external_file`.
 | `save_memory` | `kind`, `text`, `key?`, `tags?`, `importance?`, `scope?` (`task`, the default, or `project`) | records | runs | runs |
 | `report_progress` | `text` (one line, ≤ 200 characters) | records | runs | runs |
 
+- **Run processes (ORC-21).** `list_run_processes` lists processes whose executable lies inside this invocation's
+  run worktree: pid, name, relative executable path and start time (UTC Unix microseconds). The executable path
+  as the OS reports it must lie inside the worktree (compared by whole components; ASCII case, the `\\?\` prefix
+  and the worktree's own spelling as given or resolved are accepted), and so must that path with links resolved: a
+  link placed at an outside program's path that leads into the worktree never makes that program stoppable. The
+  process's working directory and arguments grant nothing. Only processes that started at or after the run was
+  created (the earliest moment of every attempt, so an app started in an earlier attempt stays stoppable) are
+  listed or stopped: a running executable can be moved, within its volume, into the worktree, and Windows and macOS
+  then report the new path, so a program running since before the run is never the run's. Programs started during
+  the run from outside the worktree and moved into it later are not caught by this rule. `stop_run_process(pid)` stops the process and those of
+  its descendants whose executables pass the same rule: it requests close (WM_CLOSE to only their windows on
+  Windows, SIGTERM on macOS), waits up to two seconds, ends survivors and waits up to one more second. A descendant
+  outside the worktree (on Windows, every console program's `conhost.exe`) is never closed or ended; it is left
+  running and named in the answer by file name and pid only, and its own descendants inside the worktree are still
+  stopped. The stop is refused as a whole only before any close request: when the pid itself is outside the
+  worktree, started before the run, unreadable or protected, or its tree exceeds the bound. After the first close request nothing aborts
+  the stop; the answer reports each process as `closed`, `ended`, `already gone` (it exited by itself before its
+  close request), `not stopped` with the reason, or `failed` with the reason, and is an error when a process inside
+  the worktree was not stopped. Refusals never show a path. Descendants discovered during grace and escalation are
+  checked too; exited parents stay tracked, with macOS birth ancestry retained across reparenting, and late
+  children also receive close before force. Protected even inside the worktree: the runner process and its
+  ancestors (by pid), and the runner's own executable and the configured agent CLI executable (by resolved path).
+  Nothing else is protected; in particular the relay process the CLI starts is not. Windows retains process handles,
+  so a pid cannot be reused between check and stop. macOS binds path lookup to an audit token whose PID version
+  changes on exec; on macOS 15 and later TERM/KILL are bound to that token too, while on macOS 11–14, which lack
+  that call, the token is read again immediately before `kill(pid)` (a residual race of an exec, or an exit and pid
+  reuse, in that moment). Processes hidden by OS permissions or whose executable cannot be resolved are never
+  listed or stopped. Both tools are offered in writing and read-only steps and never ask for approval:
+  Claude Code receives exact allow rules; Codex receives `approval_mode = "approve"`, and the runner enforces
+  the executable boundary. Both CLIs' *Files and commands* prompt and continuing-session tool steering tell
+  agents to use them instead of `Stop-Process` / `kill`, and to stop only apps they started.
 - **Schemas** are strict (`additionalProperties: false`, each property typed and bounded); a call is read into its
   type with unknown fields refused, and an invalid call is answered with an error result that says why.
 - **Worktree files** (`orchester_agent::FileTools`, confined to the step's `FileScope` as before: the worktree, the

@@ -2824,13 +2824,16 @@ dependencies = [
 name = "orchester-exec"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "orchester-core",
  "parking_lot",
  "rustix 1.1.5",
+ "serde_json",
  "sha2",
  "tempfile",
  "thiserror 2.0.20",
  "tracing",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

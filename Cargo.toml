@@ -80,6 +80,8 @@ keyring-core = "1"
 # 0.42: an app's own MCP server hosts lurq's window tools (`McpConfig::hosted`, `McpHandle::service`); see
 # `orchester-app`'s `mcp` module.
 lurq = { version = "0.42.0", default-features = false }
+# libproc process enumeration and identity on macOS; already transitive through rustix.
+libc = "0.2"
 parking_lot = "0.12"
 # Native folder picker for choosing a project repository; lurq already uses it for DevTools.
 rfd = "0.15"

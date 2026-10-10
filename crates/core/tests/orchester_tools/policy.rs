@@ -62,6 +62,8 @@ fn orchester_tools_policy_follows_the_table() {
       "find_references",
       "search_external_file",
       "read_external_file",
+      "list_run_processes",
+      "stop_run_process",
       "get_task",
       "save_memory",
       "report_progress"
@@ -127,6 +129,8 @@ fn orchester_tools_tell_each_cli_what_runs_and_what_asks() {
       "mcp__Orchester__list_files",
       "mcp__Orchester__search_file",
       "mcp__Orchester__find_references",
+      "mcp__Orchester__list_run_processes",
+      "mcp__Orchester__stop_run_process",
       "mcp__Orchester__get_task",
       "mcp__Orchester__save_memory",
       "mcp__Orchester__report_progress"
@@ -146,6 +150,8 @@ fn orchester_tools_tell_each_cli_what_runs_and_what_asks() {
       "find_references",
       "search_external_file",
       "read_external_file",
+      "list_run_processes",
+      "stop_run_process",
       "get_task",
       "save_memory",
       "report_progress",
