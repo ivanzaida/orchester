@@ -294,6 +294,24 @@ pub fn publish_checked_in(
   Ok(db.publish_draft_matching(id, checked, Timestamp::now())?.number())
 }
 
+/// Publishes exactly the stale draft and latest version the person reviewed, atomically.
+pub fn publish_stale_checked_in(root: &Path, expected: &ProfileEntry) -> Result<VersionNumber, StoreError> {
+  let mut db = ProjectDb::open(root)?;
+  enforceable(&db, &expected.profile)?;
+  let now = Timestamp::now();
+  db.publish_draft_with(expected.id, now, |draft: Draft<AgentProfile>, latest| {
+    if ProfileEntry::new(expected.id, Some(draft.clone()), latest.as_ref()).as_ref() != Some(expected) {
+      return Err(StoreError::DraftChanged(expected.id));
+    }
+    Ok(Draft::new(
+      draft.body().clone(),
+      latest.as_ref().map(Version::number),
+      now,
+    ))
+  })
+  .map(|version| version.number())
+}
+
 /// Refused when `profile`'s connection is gone, or its CLI cannot enforce the profile's permissions here.
 fn enforceable<S: ConnectionStore<Error = StoreError>>(store: &S, profile: &AgentProfile) -> Result<(), StoreError> {
   let connection = agent_connections(store.connections()?)

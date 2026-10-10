@@ -308,15 +308,15 @@ fn agents_delayed_folder_add_preserves_removal_and_saved_permissions() {
   screen.click("agent-add-folder");
   // No tick_futures: validation cannot be delivered before the person removes A.
   screen.click("agent-remove-folder-0");
-  assert!(!screen.text("agent-folders").contains(".orchester/build-a"));
+  assert!(!screen.text("agent-folders-row").contains(".orchester/build-a"));
   screen.until("folder B added", |s| {
-    s.text("agent-folders").contains(".orchester/build-b") && s.exists("agent-remove-folder-0")
+    s.text("agent-folders-row").contains(".orchester/build-b") && s.exists("agent-remove-folder-0")
   });
-  assert!(!screen.text("agent-folders").contains(".orchester/build-a"));
+  assert!(!screen.text("agent-folders-row").contains(".orchester/build-a"));
 
   screen.set("agent-folder", ".orchester/build-b");
   screen.click("agent-add-folder");
-  screen.until("duplicate refused", |s| s.exists("agent-folder-error"));
+  screen.until("duplicate refused", |s| s.exists("agent-folder-note"));
   assert!(!screen.exists("agent-remove-folder-1"));
   screen.click("agent-save");
   screen.until("widening question", |s| s.exists("agent-confirm-confirm"));

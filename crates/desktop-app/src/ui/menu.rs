@@ -23,7 +23,7 @@ use lurq::{
 
 use super::{
   icon::{Icon, icon},
-  pressable::{inert, pressable},
+  pressable::{Focus, inert, pressable},
   tooltip::Truncated,
 };
 use crate::theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
@@ -77,6 +77,7 @@ pub struct MenuItem {
   shortcut: Option<Arc<str>>,
   detail: Option<Arc<str>>,
   chosen: bool,
+  focus: Focus,
   choice: Choice,
 }
 
@@ -99,6 +100,7 @@ impl MenuItem {
       shortcut: None,
       detail: None,
       chosen: false,
+      focus: Focus::Pointer,
       choice,
     }
   }
@@ -117,6 +119,12 @@ impl MenuItem {
   /// What the row is, under its label.
   pub fn detail(mut self, detail: impl Into<Arc<str>>) -> Self {
     self.detail = Some(detail.into());
+    self
+  }
+
+  /// A choice within a form's field menu: reachable with Tab and activated with Enter or Space.
+  pub fn in_form(mut self) -> Self {
+    self.focus = Focus::Form;
     self
   }
 
@@ -196,19 +204,21 @@ impl MenuItem {
     match self.choice {
       Choice::Action(choose) => {
         let open = open.clone();
-        pressable(move || {
-          open.set(false);
-          choose();
-        })
-        .id(self.id.clone())
-        .describe("a11y_name", self.label.clone())
-        .width(Dimension::Pct(100.0))
-        .rounded(RadiusSize::Sm)
-        .describe("chosen", if self.chosen { "true" } else { "false" })
-        .child(row)
-        .describe("state", "enabled")
-        .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-        .into()
+        self
+          .focus
+          .apply(pressable(move || {
+            open.set(false);
+            choose();
+          }))
+          .id(self.id.clone())
+          .describe("a11y_name", self.label.clone())
+          .width(Dimension::Pct(100.0))
+          .rounded(RadiusSize::Sm)
+          .describe("chosen", if self.chosen { "true" } else { "false" })
+          .child(row)
+          .describe("state", "enabled")
+          .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+          .into()
       }
       Choice::Unavailable(_) => inert(surface(row))
         .describe("state", "unavailable")

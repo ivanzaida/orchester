@@ -7,7 +7,7 @@ use lurq::{
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
-  node::{Element, dimension::Dimension},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
   connection::{AgentProvider, invocation::Platform, mcp::McpServerSelection},
@@ -66,8 +66,12 @@ impl Component for PermissionsForm {
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Roomy.role())
-      .child(repository(ctx, fields, provider))
-      .child(lists)
+      .child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .child(repository(ctx, fields, provider))
+          .child(lists),
+      )
       .child(network(ctx, fields, provider))
       .child(mcp(ctx, &props, provider))
       .child(approvals(ctx, fields, provider))
@@ -147,13 +151,18 @@ fn command_option(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>, o
   Column::new()
     .spacing(SpacingSize::Xs)
     .child(toggle)
-    .child(words::note(&detail))
-    .with_children((!available).then(|| {
-      reason_line(
-        &format!("agent-option-{option:?}-reason"),
-        &super::enforcement::unavailable(ctx, provider, option),
-      )
-    }))
+    .child(
+      Column::new()
+        .padding(Padding::new().left(SpacingSize::Xl))
+        .spacing(ExtraSpacing::Snug.role())
+        .child(words::note(&detail))
+        .with_children((!available).then(|| {
+          reason_line(
+            &format!("agent-option-{option:?}-reason"),
+            &super::enforcement::unavailable(ctx, provider, option),
+          )
+        })),
+    )
     .into()
 }
 fn repository(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>) -> Element {
@@ -164,6 +173,7 @@ fn repository(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>) -> El
     vec![
       Row::new()
         .width(Dimension::Pct(100.0))
+        .padding(Padding::vertical(SpacingSize::Md))
         .spacing(SpacingSize::Md)
         .child(
           Column::new()

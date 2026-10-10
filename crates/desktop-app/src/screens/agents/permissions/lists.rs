@@ -9,7 +9,7 @@ use lurq::{
   },
   components::{Column, Row},
   core::Signal,
-  node::{Element, dimension::Dimension},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::permission::{CommandPermission, RepositoryAccess, WritableFolder, capability::PermissionOption};
 use orchester_workspace::{
@@ -24,8 +24,9 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     field::{FieldInput, field_error},
-    form_section::section,
+    form_section::{Label, Place, section, stacked_row},
     icon::Icon,
+    list_entry,
     message::message_text,
   },
 };
@@ -75,9 +76,13 @@ impl Component for Lists {
     let props = ctx.props::<Props>().clone();
     let add = folder_action(ctx);
     let folder_state = add.state().get();
-    let folder_input = FieldInput::new("agent-folder", ctx.t("agents.folderPath"), self.folder.clone())
+    let mut folder_input = FieldInput::new("agent-folder", ctx.t("agents.folderPath"), self.folder.clone())
       .placeholder(ctx.t("agents.folderPath"))
-      .render(ctx);
+      .mono();
+    if let Some(error) = self.folder_error.get() {
+      folder_input = folder_input.error(message_text(ctx, &error));
+    }
+    let folder_input = folder_input.render(ctx);
     let fields = props.fields.clone();
     let folder = self.folder.clone();
     let root = props.project.open.repo_root.clone();
@@ -90,14 +95,16 @@ impl Component for Lists {
     } else {
       folder_button.on_click(move || add.run((root.clone(), folder.get())))
     };
-    let mut folder_rows: Vec<Element> = Vec::new();
+    let mut entries = Vec::new();
     for entry in props.fields.permissions.get().0.writable_folders().entries() {
       let (entry, signal) = (entry.clone(), props.fields.permissions.clone());
       let text = entry.to_string();
-      folder_rows.push(entry_row(
+      let remove_label = ctx.t("agents.remove");
+      entries.push(list_entry::removable(
         ctx,
+        &format!("agent-remove-folder-{}", entries.len()),
         &text,
-        format!("agent-remove-folder-{}", folder_rows.len()),
+        &remove_label,
         move || {
           signal.update(|p| {
             p.0
@@ -106,24 +113,28 @@ impl Component for Lists {
         },
       ));
     }
-    folder_rows.insert(0, words::note(&ctx.t("agents.foldersHint")).into());
-    folder_rows.push(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Sm)
-        .child(Column::new().flex(1.0).child(folder_input))
-        .child(folder_button)
-        .into(),
-    );
-    folder_rows.push(words::note(&ctx.t("agents.folderNote")).into());
-    if let Some(error) = self.folder_error.get() {
-      folder_rows.push(field_error("agent-folder-error", &message_text(ctx, &error)).into());
+    let mut folder_rows = Column::new().width(Dimension::Pct(100.0)).spacing(SpacingSize::Sm);
+    if !entries.is_empty() {
+      folder_rows = folder_rows.child(list_entry::list_surface("agent-folder-entries").with_children(entries));
     }
+    folder_rows = folder_rows
+      .child(
+        Row::new()
+          .width(Dimension::Pct(100.0))
+          .spacing(SpacingSize::Sm)
+          .child(Column::new().flex(1.0).child(folder_input))
+          .child(folder_button),
+      )
+      .child(words::note(&ctx.t("agents.folderNote")));
     let commands = self.commands(ctx, &props);
     Column::new()
       .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Xl)
-      .child(section("agent-folders", &ctx.t("agents.folders"), None, folder_rows))
+      .spacing(crate::theme::ExtraSpacing::Roomy.role())
+      .child(stacked_row(
+        Label::new("agent-folders", ctx.t("agents.folders")).description(ctx.t("agents.foldersHint")),
+        folder_rows,
+        Place::Last,
+      ))
       .child(commands)
   }
 }
@@ -131,80 +142,110 @@ impl Lists {
   fn commands(&self, ctx: &mut Ctx, props: &Props) -> Element {
     let fields = &props.fields;
     let provider = fields.connection(&props.listed).map(|c| c.provider());
-    let mut rows = vec![
-      command_option(ctx, fields, provider, PermissionOption::AskBeforeCommands),
-      command_option(ctx, fields, provider, PermissionOption::AllowedCommands),
-    ];
+    let mut allowed = Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(crate::theme::ExtraSpacing::Snug.role())
+      .child(command_option(ctx, fields, provider, PermissionOption::AllowedCommands));
     if let CommandPermission::Allowed(list) = fields.permissions.get().0.commands() {
-      for command in list.entries() {
-        let (command, signal) = (command.clone(), fields.permissions.clone());
-        rows.push(
-          crate::ui::chip::TagChip::new(format!("agent-command-{}", rows.len()), command.as_str())
-            .mono()
-            .removable(ctx.t("agents.remove"), {
-              let command = command.clone();
-              move || {
-                signal.update(|p| {
-                  if let CommandPermission::Allowed(list) = p.0.commands() {
-                    p.0
-                      .set_commands(CommandPermission::Allowed(permissions::without_command(list, &command)));
-                  }
-                })
-              }
-            })
-            .into(),
-        );
-      }
-      let input = FieldInput::new("agent-command", ctx.t("agents.command"), self.command.clone())
-        .placeholder(ctx.t("agents.commandPlaceholder"))
-        .render(ctx);
-      let (value, typed, error) = (fields.permissions.clone(), self.command.clone(), self.error.clone());
-      let add =
-        ActionButton::new("agent-add-command", ButtonKind::Secondary, ctx.t("agents.addCommand")).on_click(move || {
-          if let CommandPermission::Allowed(list) = value.get().0.commands() {
-            match permissions::with_command(list, &typed.get()) {
-              Ok(list) => {
-                value.update(|p| p.0.set_commands(CommandPermission::Allowed(list)));
-                typed.set(String::new());
-                error.set(None);
-              }
-              Err(reason) => error.set(Some(reason)),
-            }
-          }
-        });
-      rows.push(
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Sm)
-          .child(Column::new().flex(1.0).child(input))
-          .child(add)
-          .into(),
-      );
-      if let Some(error) = self.error.get() {
-        rows.push(field_error("agent-command-error", &message_text(ctx, &error)).into());
-      }
-      rows.push(words::note(&ctx.t("agents.commandNote")).into());
+      allowed = allowed.child(self.command_editor(ctx, props, list));
     }
-    rows.push(command_option(ctx, fields, provider, PermissionOption::AnyCommand));
     section(
       "agent-commands",
       &ctx.t("agents.commands"),
       None,
-      vec![Column::new().spacing(SpacingSize::Sm).with_children(rows).into()],
+      vec![
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding(Padding::new().top(SpacingSize::Md).bottom(SpacingSize::Xs))
+          .spacing(crate::theme::ExtraSpacing::Inset.role())
+          .child(command_option(
+            ctx,
+            fields,
+            provider,
+            PermissionOption::AskBeforeCommands,
+          ))
+          .child(allowed)
+          .child(command_option(ctx, fields, provider, PermissionOption::AnyCommand))
+          .into(),
+      ],
     )
     .into()
+  }
+  fn command_editor(
+    &self,
+    ctx: &mut Ctx,
+    props: &Props,
+    list: &orchester_core::permission::AllowedCommands,
+  ) -> Element {
+    let fields = &props.fields;
+    let mut chips = Row::new()
+      .width(Dimension::Pct(100.0))
+      .wrap()
+      .spacing(crate::theme::ExtraSpacing::Snug.role())
+      .padding(Padding::symmetric(
+        SpacingSize::Sm,
+        crate::theme::ExtraSpacing::Snug.role(),
+      ));
+    for (index, command) in list.entries().iter().enumerate() {
+      let (command, signal) = (command.clone(), fields.permissions.clone());
+      chips = chips.child(
+        crate::ui::chip::TagChip::new(format!("agent-command-{index}"), command.as_str())
+          .mono()
+          .removable(ctx.t("agents.remove"), move || {
+            signal.update(|p| {
+              if let CommandPermission::Allowed(list) = p.0.commands() {
+                p.0
+                  .set_commands(CommandPermission::Allowed(permissions::without_command(list, &command)));
+              }
+            });
+          }),
+      );
+    }
+    let input = FieldInput::new("agent-command", ctx.t("agents.command"), self.command.clone())
+      .placeholder(ctx.t("agents.commandPlaceholder"))
+      .mono()
+      .render(ctx);
+    let (value, typed, error) = (fields.permissions.clone(), self.command.clone(), self.error.clone());
+    let add = ActionButton::new("agent-add-command", ButtonKind::Secondary, ctx.t("agents.addCommand"))
+      .icon(Icon::Plus)
+      .on_click(move || {
+        if let CommandPermission::Allowed(list) = value.get().0.commands() {
+          match permissions::with_command(list, &typed.get()) {
+            Ok(list) => {
+              value.update(|p| p.0.set_commands(CommandPermission::Allowed(list)));
+              typed.set(String::new());
+              error.set(None);
+            }
+            Err(reason) => error.set(Some(reason)),
+          }
+        }
+      });
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding(Padding::new().left(SpacingSize::Xl))
+      .spacing(SpacingSize::Sm)
+      .with_children(
+        (!list.entries().is_empty()).then(|| list_entry::list_surface("agent-command-entries").child(chips)),
+      )
+      .child(
+        Row::new()
+          .width(Dimension::Pct(100.0))
+          .spacing(SpacingSize::Sm)
+          .child(Column::new().flex(1.0).child(input))
+          .child(add),
+      )
+      .with_children(
+        self
+          .error
+          .get()
+          .map(|error| field_error("agent-command-error", &message_text(ctx, &error))),
+      )
+      .child(words::note(&ctx.t("agents.commandNote")))
+      .into()
   }
 }
 fn folder_action(ctx: &mut Ctx) -> lurq::app::ctx::FutureAction<(PathBuf, String), Folder, Message> {
   ctx.future_action(|(root, typed): (PathBuf, String)| async move {
     background::run(move || folders::validate(&typed, &root).map(Folder)).await?
   })
-}
-fn entry_row(ctx: &Ctx, text: &str, id: String, remove: impl Fn() + Send + Sync + 'static) -> Element {
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .child(Column::new().flex(1.0).child(words::note(text)))
-    .child(ActionButton::new(id, ButtonKind::Ghost, ctx.t("agents.remove")).on_click(remove))
-    .into()
 }

@@ -11,6 +11,8 @@ use crate::messages::{self, Message};
 pub enum Action {
   Save,
   Publish,
+  /// The person confirmed replacing the latest version with this stale draft.
+  PublishStale,
   KeepDraft,
 }
 
@@ -46,7 +48,7 @@ pub fn apply(root: &Path, request: &Request) -> Result<Outcome, Message> {
     .iter()
     .find(|c| c.id() == request.profile.connection())
     .ok_or_else(|| Message::new("errors.connectionRequired"))?;
-  if request.action == Action::Publish && !connection.provider().runs_agents() {
+  if matches!(request.action, Action::Publish | Action::PublishStale) && !connection.provider().runs_agents() {
     return Err(Message::new("appMcp.errors.connectionRunsNoAgents"));
   }
   request
@@ -92,10 +94,13 @@ fn perform(root: &Path, request: &Request) -> Result<ResourceId, Message> {
     (Action::Publish, Some(expected)) => {
       data::publish_checked_in(root, expected.id, &request.profile).map(|_| expected.id)
     }
+    (Action::PublishStale, Some(expected)) if request.profile == expected.profile => {
+      data::publish_stale_checked_in(root, expected).map(|_| expected.id)
+    }
     (Action::KeepDraft, Some(expected)) if request.profile == expected.profile => {
       data::keep_draft_checked_in(root, expected).map(|()| expected.id)
     }
-    (Action::KeepDraft, Some(_)) => return Err(Message::new("errors.draftChanged")),
+    (Action::KeepDraft | Action::PublishStale, Some(_)) => return Err(Message::new("errors.draftChanged")),
     (_, None) => return Err(Message::new("appMcp.errors.noDraft")),
   };
   result.map_err(|error| messages::store_error(&error))

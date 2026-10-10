@@ -106,7 +106,7 @@ pub fn draft(ctx: &Ctx, props: &Props, fields: &Fields) -> Element {
   );
   panel("agent-draft-card")
     .child(heading(
-      Icon::FilePen,
+      Icon::CircleDot,
       &ctx.t_args("agents.draftCard", [("version", (version + 1).to_string())]),
       &meta,
     ))
@@ -145,7 +145,7 @@ fn changes(
     }
   }
   for (key, from, to) in [
-    ("agents.model", base.model().as_str().to_owned(), fields.model.get()),
+    ("agents.model", base.model().as_str().to_owned(), fields.model_value()),
     (
       "agents.effort",
       orchester_workspace::agents::form::stored_effort(base).unwrap_or_default(),

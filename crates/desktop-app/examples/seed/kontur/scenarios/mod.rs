@@ -1,6 +1,7 @@
 //! The scenarios the seed writes, one file each, and their registry ([`ALL`]): one line per scenario.
 
 mod agents;
+mod agents_cases;
 mod cards;
 mod changes;
 mod connections;

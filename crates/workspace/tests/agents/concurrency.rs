@@ -118,6 +118,19 @@ fn profile_checked_keep_rejects_intervening_body_base_and_version_changes() {
       _ => unreachable!(),
     }
     let before = entry(&db, expected.id);
+    let publish_result = data::publish_stale_checked_in(repo.path(), &expected);
+    assert!(
+      matches!(
+        publish_result,
+        Err(StoreError::DraftChanged(_) | StoreError::NoDraft(_))
+      ),
+      "{change}: {publish_result:?}"
+    );
+    assert_eq!(
+      entry(&db, expected.id),
+      before,
+      "rejected publish changed storage: {change}"
+    );
     let result = data::keep_draft_checked_in(repo.path(), &expected);
     assert!(
       matches!(result, Err(StoreError::DraftChanged(_))),
@@ -179,4 +192,23 @@ fn profile_draft_transaction_holds_write_lock_through_validation_and_persistence
       .expect("unlocked"),
     1
   );
+}
+#[test]
+fn profile_stale_publish_preserves_reviewed_body_and_holds_transaction_lock() {
+  let (repo, mut db, expected, _) = fixture(true);
+  let other = rusqlite::Connection::open(repo.path().join(".orchester/orchester.db")).expect("other");
+  other.busy_timeout(std::time::Duration::ZERO).expect("no waiting");
+  let published = db
+    .publish_draft_with(expected.id, now(), |draft: Draft<AgentProfile>, latest| {
+      assert_eq!(
+        ProfileEntry::new(expected.id, Some(draft.clone()), latest.as_ref()),
+        Some(expected.clone())
+      );
+      assert!(other.execute("UPDATE resource_drafts SET based_on = NULL", []).is_err());
+      Ok(Draft::new(draft.body().clone(), latest.map(|v| v.number()), now()))
+    })
+    .expect("atomic publish");
+  assert_eq!(published.body(), &expected.profile);
+  assert_eq!(published.number(), version(3));
+  assert!(db.draft::<AgentProfile>(expected.id).expect("draft").is_none());
 }

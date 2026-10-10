@@ -268,15 +268,25 @@ impl Editor {
       .fields
       .connection(&props.listed)
       .is_some_and(|c| c.provider().runs_agents());
-    let can_publish = connection_runs
-      && !dirty
-      && state.has_draft()
-      && !matches!(state, VersionState::StaleDraft { .. })
-      && props.entry.is_some();
+    let can_publish = connection_runs && !dirty && state.has_draft() && props.entry.is_some();
     let publish = if !connection_runs {
       publish.unavailable(ctx.t("agents.notEnforced"))
     } else if self.busy.get() || !can_publish || self.pending.get().0.is_some() {
       publish.disabled()
+    } else if matches!(state, VersionState::StaleDraft { .. }) {
+      let pending = self.pending.clone();
+      let request = Request {
+        existing: props.entry.clone(),
+        profile: props
+          .entry
+          .as_ref()
+          .expect("publish requires a saved profile")
+          .profile
+          .clone(),
+        action: Action::PublishStale,
+        allowed: Vec::new(),
+      };
+      publish.on_click(move || pending.set(Pending(Some(request.clone()))))
     } else {
       self.bind(publish, Action::Publish, props, work, profile)
     };
@@ -289,23 +299,6 @@ impl Editor {
         self.bind(save, Action::Save, props, work, profile)
       };
       row = row.child(save);
-    }
-    if matches!(state, VersionState::StaleDraft { .. }) {
-      let pending = self.pending.clone();
-      let request = props.entry.as_ref().map(|entry| Request {
-        existing: Some(entry.clone()),
-        profile: entry.profile.clone(),
-        action: Action::KeepDraft,
-        allowed: Vec::new(),
-      });
-      let button = ActionButton::new("agent-keep-draft", ButtonKind::Secondary, ctx.t("agents.keepDraft"));
-      row = row.child(if self.busy.get() || dirty || self.pending.get().0.is_some() {
-        button.disabled()
-      } else if let Some(request) = request {
-        button.on_click(move || pending.set(Pending(Some(request.clone()))))
-      } else {
-        button.disabled()
-      });
     }
     row.into()
   }
@@ -391,7 +384,11 @@ fn save_status(status: &str, state: VersionState, dirty: bool) -> Row {
       } else if stale {
         Icon::GitBranch
       } else {
-        Icon::Check
+        match state {
+          VersionState::Published(_) => Icon::CircleCheck,
+          VersionState::Draft { published: None } => Icon::CircleDashed,
+          _ => Icon::CircleDot,
+        }
       },
       IconSize::Base,
       if stale {

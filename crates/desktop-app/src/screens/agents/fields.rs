@@ -37,6 +37,8 @@ pub struct Fields {
   pub model: Signal<String>,
   pub custom: Signal<String>,
   pub effort: Signal<String>,
+  model_open: Signal<bool>,
+  effort_open: Signal<bool>,
   pub permissions: Signal<Permissions>,
   pub servers: Signal<Servers>,
   changed_connection: Signal<bool>,
@@ -72,6 +74,8 @@ impl Fields {
       model: ctx.signal(profile.map_or_else(String::new, |p| p.model().as_str().to_owned())),
       custom: ctx.signal(String::new()),
       changed_connection: ctx.signal(false),
+      model_open: ctx.signal(false),
+      effort_open: ctx.signal(false),
       effort: ctx.signal(profile.and_then(stored_effort).unwrap_or_default()),
       permissions: ctx.signal(Permissions(permissions)),
       servers: ctx.signal(Servers(
@@ -122,10 +126,16 @@ impl Fields {
     let id = self.connection.get();
     listed.connections.iter().find(|c| c.id().to_string() == id)
   }
+  pub fn model_value(&self) -> String {
+    let selected = self.model.get();
+    if selected.is_empty() {
+      self.custom.get()
+    } else {
+      selected
+    }
+  }
   pub fn profile(&self, listed: &ProjectAgents) -> Result<AgentProfile, Box<ProfileErrors>> {
-    let model = self.model.get();
-    let custom = self.custom.get();
-    let model = if model.is_empty() { &custom } else { &model };
+    let model = self.model_value();
     let effort = self.effort.get();
     ProfileForm {
       role: &self.role.get(),
@@ -133,7 +143,7 @@ impl Fields {
       instructions: &self.instructions.get(),
       connection: self.connection(listed),
       model: &ModelSelection::Custom,
-      custom_model: model,
+      custom_model: &model,
       effort: if effort.is_empty() { None } else { Some(&effort) },
       permissions: &self.permissions.get().0,
       mcp_servers: &self.servers.get().0,
@@ -235,18 +245,28 @@ impl Fields {
     )
     .into()
   }
-  fn model_notice(&self, ctx: &Ctx, listed: &ProjectAgents) -> Element {
-    let model = self.model.get();
-    let custom = self.custom.get();
-    let model = if model.is_empty() { &custom } else { &model };
+  fn model_notice(&self, ctx: &mut Ctx, listed: &ProjectAgents) -> Element {
+    let model = self.model_value();
     let problem = self.connection(listed).and_then(|connection| {
-      let model = orchester_core::resource::ModelId::new(model).ok()?;
-      connection.cannot_run(&model).map(|problem| (model, problem))
+      let model = orchester_core::resource::ModelId::new(&model).ok()?;
+      connection
+        .cannot_run(&model)
+        .map(|problem| (connection.id(), model, problem))
     });
     Column::new()
       .width(Dimension::Pct(100.0))
-      .with_children(problem.map(|(model, problem)| {
-        crate::ui::notice::Notice::new(
+      .with_children(problem.map(|(connection, model, problem)| {
+        use crate::{
+          routes::{ConnectionsView, ProjectPage, Route},
+          ui::{
+            button::{ActionButton, ButtonKind},
+            icon::Icon,
+          },
+        };
+        let open = self.model_open.clone();
+        let nav = crate::navigation::Navigation::of(ctx);
+        let project = ctx.props::<super::editor::Props>().project.open.project.id();
+        let notice = crate::ui::notice::Notice::new(
           "agent-model-too-old",
           crate::ui::notice::NoticeTone::Warning,
           ctx.t_args(
@@ -255,6 +275,27 @@ impl Fields {
           ),
         )
         .body(ctx.t_args("agents.cliTooOldHint", [("required", problem.required.as_str())]))
+        .action(
+          ActionButton::new("agent-choose-model", ButtonKind::Secondary, ctx.t("agents.chooseModel"))
+            .on_click(move || open.set(true)),
+        )
+        .action(
+          ActionButton::new(
+            "agent-open-connection",
+            ButtonKind::Primary,
+            ctx.t("agents.openConnection"),
+          )
+          .icon(Icon::Plug)
+          .on_click(move || {
+            nav.go(Route::Project(
+              project,
+              ProjectPage::Connections(ConnectionsView::default().with_selected(connection)),
+            ))
+          }),
+        );
+        Column::new()
+          .padding(lurq::node::padding::Padding::new().bottom(SpacingSize::Md))
+          .child(notice)
       }))
       .into()
   }
@@ -276,18 +317,46 @@ impl Fields {
     FieldInput::new(id, ctx.t(key), signal).render(ctx)
   }
   fn selects(&self, ctx: &mut Ctx, listed: &ProjectAgents) -> (Element, Element) {
+    (self.model_field(ctx, listed), self.effort_field(ctx, listed))
+  }
+  fn model_field(&self, ctx: &mut Ctx, listed: &ProjectAgents) -> Element {
+    use crate::ui::{
+      choice_field::{Choice, ChoiceField},
+      icon::Icon,
+    };
     let connection = self.connection(listed);
+    let model_choice = |value: String| Choice {
+      label: value.clone().into(),
+      value,
+      icon: Icon::Sparkles,
+      detail: connection.map(|c| c.name().as_str().into()),
+      separator: false,
+    };
     let mut models: Vec<_> = connection
       .into_iter()
       .flat_map(|c| c.models())
-      .map(|m| SelectOption::new(m.id().as_str().to_owned(), m.id().as_str()))
+      .map(|m| model_choice(m.id().as_str().to_owned()))
       .collect();
     let current = self.model.get();
-    if !current.is_empty() && !connection.is_some_and(|c| c.models().iter().any(|m| m.id().as_str() == current)) {
-      models.push(SelectOption::new(current.clone(), current));
+    if !current.is_empty() && !models.iter().any(|m| m.value == current) {
+      models.push(model_choice(current));
     }
-    models.push(SelectOption::new(String::new(), ctx.t("agents.otherModel")));
-    let model = SelectField::new("agent-model", ctx.t("agents.model"), self.model.clone(), models).render(ctx);
+    models.push(Choice {
+      value: String::new(),
+      label: ctx.t("agents.otherModel"),
+      icon: Icon::TextCursorInput,
+      detail: Some(ctx.t("agents.otherModelHint")),
+      separator: true,
+    });
+    let model = ChoiceField {
+      id: "agent-model".into(),
+      name: ctx.t("agents.model"),
+      value: self.model.clone(),
+      choices: models,
+      open: self.model_open.clone(),
+      width: CONTROL_WIDTH,
+    }
+    .render(ctx);
     let mut model = Column::new()
       .width(Dimension::Px(CONTROL_WIDTH))
       .spacing(SpacingSize::Sm)
@@ -296,20 +365,49 @@ impl Fields {
       model = model
         .child(FieldInput::new("agent-custom-model", ctx.t("agents.customModel"), self.custom.clone()).render(ctx));
     }
-    let mut efforts = vec![SelectOption::new(String::new(), ctx.t("agents.defaultEffort"))];
+    model.into()
+  }
+  fn effort_field(&self, ctx: &mut Ctx, listed: &ProjectAgents) -> Element {
+    use crate::ui::{
+      choice_field::{Choice, ChoiceField},
+      icon::Icon,
+    };
+    let connection = self.connection(listed);
+    let mut efforts = vec![Choice {
+      value: String::new(),
+      label: ctx.t("agents.defaultEffort"),
+      icon: Icon::SlidersHorizontal,
+      detail: Some(ctx.t("agents.defaultEffortHint")),
+      separator: false,
+    }];
     if let Some(c) = connection
-      && let Ok(id) = orchester_core::resource::ModelId::new(&self.model.get())
+      && let Ok(id) = orchester_core::resource::ModelId::new(&self.model_value())
     {
-      efforts.extend(
-        effort_options(c, &id)
-          .iter()
-          .map(|effort| SelectOption::new(effort.clone(), effort.clone())),
-      );
+      efforts.extend(effort_options(c, &id).iter().map(|effort| {
+        let (icon, label) = match effort.as_str() {
+          "low" => (Icon::SignalLow, ctx.t("agents.effortLow")),
+          "medium" => (Icon::SignalMedium, ctx.t("agents.effortMedium")),
+          "high" => (Icon::SignalHigh, ctx.t("agents.effortHigh")),
+          _ => (Icon::SignalHigh, effort.as_str().into()),
+        };
+        Choice {
+          value: effort.clone(),
+          label,
+          icon,
+          detail: None,
+          separator: false,
+        }
+      }));
     }
-    let effort = SelectField::new("agent-effort", ctx.t("agents.effort"), self.effort.clone(), efforts)
-      .width(Dimension::Px(CONTROL_WIDTH))
-      .render(ctx);
-    (model.into(), effort)
+    ChoiceField {
+      id: "agent-effort".into(),
+      name: ctx.t("agents.effort"),
+      value: self.effort.clone(),
+      choices: efforts,
+      open: self.effort_open.clone(),
+      width: CONTROL_WIDTH,
+    }
+    .render(ctx)
   }
 }
 pub fn label(ctx: &Ctx, id: &str, title: &str, hint: &str) -> Label {

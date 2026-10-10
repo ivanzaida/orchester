@@ -51,7 +51,14 @@ pub fn state_note(ctx: &Ctx, state: VersionState, dirty: bool) -> Arc<str> {
       VersionState::Draft { .. } => "agents.versionNote",
     }
   };
-  ctx.t_args(key, [("version", state.published().map_or(0, |v| v.get()).to_string())])
+  let version = state.published().map_or(0, |v| v.get());
+  ctx.t_args(
+    key,
+    [
+      ("version", version.to_string()),
+      ("next", version.saturating_add(1).to_string()),
+    ],
+  )
 }
 
 pub fn list_version(ctx: &Ctx, state: VersionState) -> Arc<str> {

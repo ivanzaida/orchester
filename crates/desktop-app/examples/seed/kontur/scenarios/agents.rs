@@ -78,7 +78,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
       break;
     }
   }
-  Ok(())
+  super::agents_cases::seed(kontur)
 }
 
 fn changed(profile: &AgentProfile, responsibility: &str) -> Result<AgentProfile, SeedError> {

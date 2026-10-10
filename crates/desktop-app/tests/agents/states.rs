@@ -58,13 +58,24 @@ fn agents_draft_and_stale_draft_states() {
   .expect("stale draft");
   screen.open(id);
   assert!(screen.text("agent-save-status").contains("Draft based on v0"));
-  assert!(screen.exists("agent-keep-draft"));
-  screen.click("agent-keep-draft");
+  assert!(!screen.exists("agent-keep-draft"));
+  screen.click("agent-publish");
   screen.until("question armed", |s| s.exists("agent-confirm-confirm"));
+  assert!(screen.window.link.input_gate().protecting());
+  screen.click("agent-confirm-keep");
+  assert!(screen.listed().profile(id).expect("profile").state.has_draft());
+  screen.click("agent-publish");
+  screen.until("question armed again", |s| s.exists("agent-confirm-confirm"));
   screen.window.tree.tick_futures();
   screen.window.pass();
   screen.click("agent-confirm-confirm");
-  screen.until("draft kept", |s| s.text("screen-agents").contains("Draft saved"));
+  screen.until("published", |s| {
+    s.exists("agent-save-status") && s.text("agent-save-status").contains("Published v2")
+  });
+  assert_eq!(
+    db.latest_version::<AgentProfile>(id).expect("read").expect("v2").body(),
+    &super::harness::changed(draft.body())
+  );
 }
 #[test]
 fn agents_failed_load_can_retry() {

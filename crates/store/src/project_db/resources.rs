@@ -58,21 +58,35 @@ impl ProjectDb {
     expected: Option<&B>,
     now: Timestamp,
   ) -> Result<Version<B>, StoreError> {
+    self.publish_draft_with(resource, now, |draft, _| {
+      if expected.is_some_and(|expected| draft.body() != expected) {
+        return Err(StoreError::DraftChanged(resource));
+      }
+      Ok(draft)
+    })
+  }
+
+  /// Validates or rebases the draft under the publishing transaction. A rejected candidate
+  /// changes neither the draft nor the versions; concurrent writers cannot change the reviewed base.
+  pub fn publish_draft_with<B: ResourceBody>(
+    &mut self,
+    resource: ResourceId,
+    now: Timestamp,
+    prepare: impl FnOnce(Draft<B>, Option<Version<B>>) -> Result<Draft<B>, StoreError>,
+  ) -> Result<Version<B>, StoreError> {
     let transaction = self.connection.transaction()?;
     check_kind::<B>(&transaction, resource)?;
     let draft = load_draft::<B>(&transaction, resource)?.ok_or(StoreError::NoDraft(resource))?;
-    if expected.is_some_and(|expected| draft.body() != expected) {
-      return Err(StoreError::DraftChanged(resource));
-    }
-    draft.body().check_publishable()?;
     let latest = load_versions::<B>(
       &transaction,
       "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
       [resource.to_string()],
     )?
-    .pop()
-    .map(|version| version.number());
-    let version = publish(draft, latest, now)?;
+    .pop();
+    let number = latest.as_ref().map(Version::number);
+    let draft = prepare(draft, latest)?;
+    draft.body().check_publishable()?;
+    let version = publish(draft, number, now)?;
     transaction.execute(
       "INSERT INTO resource_versions (id, resource_id, number, body, published_at) VALUES (?1, ?2, ?3, ?4, ?5)",
       params![
