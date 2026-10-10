@@ -1,21 +1,6 @@
 {
   "conversation": {
     "agentMeta": "{{step}} · {{time}}",
-    "card": {
-      "answered": "Answered",
-      "approved": "Approved",
-      "asks": "{{agent}} asks you",
-      "asksCommand": "{{agent}} asks to run a command",
-      "asksTool": "{{agent}} asks to use an MCP tool",
-      "changesRequested": "Changes requested",
-      "denied": "Denied",
-      "ended": "Ended without an answer",
-      "plan": "Plan v{{version}}",
-      "superseded": "Earlier version",
-      "unavailable": "Answering in the chat is not available in this version yet.",
-      "waitingAnswer": "Waiting for your answer",
-      "waitingApproval": "Waiting for approval"
-    },
     "change": {
       "every": "Replaces every occurrence; the lines show one",
       "finalBreakAdded": "Adds the final line break",

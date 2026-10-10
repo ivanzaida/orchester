@@ -246,6 +246,15 @@ impl ComposerState {
     self.focus.set(true);
   }
 
+  /// The person turns to the composer from a card, to answer a question or say what a plan needs: the
+  /// question's or the plan's mode comes back if they had left it, and the focus goes into the box.
+  pub fn take_up(&self) {
+    if self.left.get_untracked().is_some() {
+      self.left.set(None);
+    }
+    self.focus.set(true);
+  }
+
   /// A send is under way.
   pub(super) fn sending(&self) -> bool {
     self.send.state().get_untracked().is_pending() || self.in_flight.get_untracked()

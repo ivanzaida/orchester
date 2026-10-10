@@ -16,19 +16,20 @@ use std::{collections::HashMap, fmt};
 use serde_json::{Value, json};
 use thiserror::Error;
 
-use self::items::{command_finished, file_changed, mcp_tool_finished};
 pub use self::questions::{NO_OPTIONS_REFUSED, PendingQuestion, SECRET_REFUSED};
+use self::{
+  items::{command_finished, file_changed, mcp_tool_finished},
+  tool_calls::{AskedOwnCalls, ToolContext},
+};
 use super::{
   mcp::InvocationExemptions,
-  stream::{AgentEvent, FileChange, NativeCall, QuestionRefusal},
+  stream::{AgentEvent, QuestionRefusal},
 };
-use crate::{
-  orchester_tools::{OrchesterTool, SERVER as ORCHESTER},
-  run::TokenUsage,
-};
+use crate::run::TokenUsage;
 
 mod items;
 mod questions;
+mod tool_calls;
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum ProtocolError {
@@ -155,22 +156,6 @@ pub enum Update {
   },
 }
 
-#[derive(Clone)]
-struct ToolContext {
-  thread: String,
-  turn: String,
-  server: String,
-  action: String,
-  target: Option<String>,
-  /// Codex asked for approval of the call.
-  asked: bool,
-  /// The files the call changes when it succeeds: a call of Orchester's `edit_file`, `create_file`, `delete_file` or
-  /// `move_file`.
-  changes: Vec<FileChange>,
-  /// What a call of one of Orchester's file tools asked, for its row.
-  call: Option<NativeCall>,
-}
-
 /// Parses notifications and correlates a later approval request with its pending tool item.
 #[derive(Default)]
 pub struct AppServerStream {
@@ -182,6 +167,8 @@ pub struct AppServerStream {
   total: Option<TokenUsage>,
   /// The MCP tools that run without asking, in a step that asks before MCP actions.
   exemptions: InvocationExemptions,
+  /// The runner's requests about calls of Orchester's tools that have not started yet.
+  asked_own: AskedOwnCalls,
 }
 
 impl AppServerStream {
@@ -410,43 +397,7 @@ impl AppServerStream {
       return Vec::new();
     };
     match item.get("type").and_then(Value::as_str) {
-      Some("mcpToolCall") => {
-        if let (Some(id), Some(thread), Some(turn), Some(server), Some(action)) = (
-          string(item, "id"),
-          string(params, "threadId"),
-          string(params, "turnId"),
-          string(item, "server"),
-          string(item, "tool"),
-        ) {
-          let not_asked = self
-            .exemptions
-            .exempts(&server, &action)
-            .then(|| AgentEvent::McpToolNotAsked {
-              item: id.clone(),
-              server: server.clone(),
-              tool: action.clone(),
-            });
-          let arguments = item.get("arguments").unwrap_or(&Value::Null);
-          let own = (server == ORCHESTER)
-            .then(|| OrchesterTool::from_name(&action))
-            .flatten();
-          let changes = own.map_or_else(Vec::new, |tool| tool.changed_files(arguments));
-          let call = own.and_then(|tool| tool.shown_call(arguments));
-          let context = ToolContext {
-            thread,
-            turn,
-            server,
-            action,
-            target: string(arguments, "filePath"),
-            asked: false,
-            changes,
-            call,
-          };
-          self.tools.insert(id, context);
-          return not_asked.map(Update::Activity).into_iter().collect();
-        }
-        Vec::new()
-      }
+      Some("mcpToolCall") => self.mcp_tool_started(params, item),
       Some("commandExecution") => match (string(item, "id"), string(item, "command")) {
         (Some(item), Some(command)) => vec![Update::Activity(AgentEvent::CommandStarted { item, command })],
         _ => Vec::new(),
@@ -503,6 +454,8 @@ impl AppServerStream {
   }
 
   fn turn_completed(&mut self, params: &Value) -> Vec<Update> {
+    // A request whose call Codex never started (the turn was cancelled) must not mark a later call.
+    self.asked_own.clear();
     let turn = params.get("turn").unwrap_or(&Value::Null);
     let status = turn.get("status").and_then(Value::as_str);
     let mut updates = vec![Update::Activity(AgentEvent::TurnCompleted { usage: self.usage })];

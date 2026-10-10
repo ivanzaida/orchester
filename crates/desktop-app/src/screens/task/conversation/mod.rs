@@ -47,7 +47,7 @@ use self::{
   timeline::{Follow, Timeline, Toggles},
   toolbar::RunState,
 };
-use super::TaskContext;
+use super::{TaskContext, cards::Decisions};
 use crate::{project::TasksState, services::Services, ui::markdown::plain};
 
 /// The tab's content for `task`, as the task page read it. Keyed by the task and its latest run, so a new
@@ -62,6 +62,7 @@ pub fn tab(ctx: &mut Ctx, task: &TaskContext) -> Element {
 }
 
 struct ConversationTab {
+  decisions: Decisions,
   follow: Follow,
   toggles: Toggles,
   retry: Signal<u64>,
@@ -74,6 +75,7 @@ impl Component for ConversationTab {
   fn create(ctx: &mut Ctx) -> Self {
     let follow = Follow::new(ctx);
     Self {
+      decisions: Decisions::new(ctx),
       toggles: Toggles::new(ctx, follow.clone()),
       follow,
       retry: ctx.signal(0),
@@ -82,6 +84,9 @@ impl Component for ConversationTab {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    // First, as the tab made it: lurq keeps a component's futures by the order it asks for them.
+    self.decisions.keep(ctx);
+    ctx.provide(self.decisions.clone());
     let task = ctx.props::<TaskContext>().clone();
     let detail = &task.detail;
     // What the latest run left once it ended, as last read: a removed worktree closes the conversation.
@@ -151,6 +156,13 @@ impl ConversationTab {
     if shown.rows.is_empty() {
       return (states::nothing_yet(ctx, run), Some(state));
     }
+    self.decisions.follow_runner(task.lost());
+    self.decisions.reveal(
+      items
+        .iter()
+        .find(|item| items::waits_for_you(item))
+        .map(|item| item.key.clone()),
+    );
     ctx.provide(Timeline {
       project: task.project.open.project.id(),
       key: task.key.clone(),

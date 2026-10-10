@@ -1,0 +1,230 @@
+//! What a waiting tool request asks (`Approval card` `gwOaJ`, with the agent's note of `YDJsC`): *Approve
+//! command?* and since when it waits; what the agent wants and what waiting does; its category chip and the
+//! setting it asks under; why the classifier asks; the command whole, or an MCP call's arguments, in a mono
+//! box with Copy; the agent · step · run · task, the working directory and the agent's note; and the words
+//! Deny tells the agent.
+
+use lurq::{
+  app::{
+    ctx::Ctx,
+    theme::{PaletteColor, SpacingSize},
+  },
+  components::{Column, Row, Text},
+  layout::Alignment,
+  node::{Element, dimension::Dimension},
+};
+use orchester_core::run::{Answerer, PendingToolApproval, denial_message};
+use orchester_workspace::{display, tasks::approvals::ShownApproval};
+
+use super::{
+  super::{
+    Place,
+    frame::{head as card_head, note},
+  },
+  words,
+};
+use crate::{
+  theme::{CardsText, ExtraSpacing, ExtraTypography, IconSize},
+  ui::{
+    chip::TagChip,
+    code_box::CodeBox,
+    detail_row::{DetailValue, detail_row},
+    icon::Icon,
+  },
+};
+
+/// *Approve command?* or *Approve tool action?*, and since when it waits.
+pub(super) fn head(ctx: &Ctx, id: &str, request: &PendingToolApproval) -> Element {
+  let title = ctx.t(if request.command {
+    "cards.approval.commandTitle"
+  } else {
+    "cards.approval.toolTitle"
+  });
+  let since = Text::new(&ctx.t_args(
+    "cards.approval.waitingSince",
+    [("time", display::clock(request.requested_at).as_str())],
+  ))
+  .id(format!("{id}-since"))
+  .variant(ExtraTypography::Note.role())
+  .nowrap()
+  .into();
+  card_head(
+    id,
+    (Icon::ShieldAlert, IconSize::Nav, PaletteColor::Warning),
+    (&title, CardsText::ApprovalTitle.role()),
+    since,
+  )
+  .into()
+}
+
+/// Everything between the head and the answers.
+pub(super) fn body(
+  ctx: &mut Ctx,
+  id: &str,
+  (place, request): (&Place, &PendingToolApproval),
+  (shown, reviewing): (Option<&ShownApproval>, bool),
+) -> Vec<Element> {
+  let explain = words::explanation(ctx, shown, request);
+  let mut body: Vec<Element> = vec![
+    Text::new(&explain)
+      .id(format!("{id}-explain"))
+      .variant(ExtraTypography::Prose.role())
+      .width(Dimension::Pct(100.0))
+      .into(),
+    subject(ctx, id, request, shown),
+  ];
+  let reason = match words::own_reach(request) {
+    Some(reach) => Some(words::own_reason(ctx, reach)),
+    None => shown
+      .and_then(|shown| shown.choices.reason.as_ref())
+      .map(|reason| words::reason(ctx, reason)),
+  };
+  body.extend(reason.map(|reason| {
+    Text::new(&reason)
+      .id(format!("{id}-reason"))
+      .variant(ExtraTypography::Lead.role())
+      .color(PaletteColor::TextPrimary)
+      .width(Dimension::Pct(100.0))
+      .into()
+  }));
+  body.extend(reviewing.then(|| note(&format!("{id}-reviewing"), &ctx.t("cards.approval.reviewing")).into()));
+  body.extend(value_box(ctx, id, request));
+  body.push(facts(ctx, id, (place, request), shown));
+  body.push(deny_tells(ctx, id, request, shown));
+  body
+}
+
+/// The category chip and the setting the request asks under; an MCP call's server and tool.
+fn subject(ctx: &Ctx, id: &str, request: &PendingToolApproval, shown: Option<&ShownApproval>) -> Element {
+  let chip = match shown.and_then(|shown| Some((shown.choices.category?, shown.choices.secrets))) {
+    Some((category, secrets)) if request.command => ctx.t(words::subject_key(category, secrets)),
+    _ if request.command => ctx.t("cards.approval.category.unknown"),
+    _ => request.server.as_str().into(),
+  };
+  let policy = shown.and_then(|shown| words::policy(ctx, shown));
+  Row::new()
+    .id(format!("{id}-subject"))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(TagChip::new(format!("{id}-category"), chip))
+    .with_children(policy.map(|policy| {
+      Text::new(&policy)
+        .id(format!("{id}-policy"))
+        .variant(ExtraTypography::Prose.role())
+        .nowrap()
+    }))
+    .into()
+}
+
+/// The command whole, or an MCP call's arguments as recorded, in a mono box with Copy.
+fn value_box(ctx: &mut Ctx, id: &str, request: &PendingToolApproval) -> Option<Element> {
+  let (label, value) = match (request.command, request.scope.as_deref()) {
+    (true, _) => (ctx.t("cards.approval.command"), request.action.as_str()),
+    (false, Some(arguments)) => (ctx.t("cards.approval.arguments"), arguments),
+    (false, None) => return None,
+  };
+  Some(CodeBox::new(format!("{id}-value"), label, value).render(ctx))
+}
+
+/// The agent · step · run · task, the working directory (or an MCP call's tool and target), and the agent's
+/// note on a command.
+fn facts(
+  ctx: &Ctx,
+  id: &str,
+  (place, request): (&Place, &PendingToolApproval),
+  shown: Option<&ShownApproval>,
+) -> Element {
+  // "03 Implement" as the chat names the step (`zZoFw` in `YDJsC`), else its name.
+  let step = place
+    .step
+    .clone()
+    .or_else(|| shown.and_then(|shown| shown.step.clone()))
+    .unwrap_or_default();
+  let run = place.run_number().to_string();
+  let task = place.detail.task.key().to_string();
+  let agent = ctx.t_args(
+    "cards.approval.agentValue",
+    [
+      ("agent", request.agent.as_str()),
+      ("step", &*step),
+      ("run", run.as_str()),
+      ("task", task.as_str()),
+    ],
+  );
+  let row = |name: &str, key: &str, value: &str, kind| detail_row(&format!("{id}-{name}"), &ctx.t(key), value, kind);
+  let mut rows = vec![row("agent", "cards.approval.agent", &agent, DetailValue::Text)];
+  if request.command {
+    // Where the agent runs it, whole, as recorded; else as the repository names it.
+    let folder = request
+      .target
+      .as_deref()
+      .or_else(|| shown.and_then(|shown| shown.cwd.as_deref()));
+    rows.extend(folder.map(|folder| {
+      row(
+        "cwd",
+        "cards.approval.cwd",
+        &words::platform_path(folder),
+        DetailValue::Mono,
+      )
+    }));
+    rows.extend(
+      request
+        .scope
+        .as_deref()
+        .map(|said| row("note", "cards.approval.note", said, DetailValue::Text)),
+    );
+  } else {
+    let tool = ctx.t_args(
+      "cards.approval.toolValue",
+      [("server", request.server.as_str()), ("tool", request.action.as_str())],
+    );
+    rows.push(row("tool", "cards.approval.tool", &tool, DetailValue::Mono));
+    rows.extend(
+      request
+        .target
+        .as_deref()
+        .map(|target| row("target", "cards.approval.target", target, DetailValue::Mono)),
+    );
+  }
+  Column::new()
+    .id(format!("{id}-facts"))
+    .width(Dimension::Pct(100.0))
+    .with_children(rows)
+    .into()
+}
+
+/// The words Deny tells the agent, exactly: Orchester's for Claude Code, in its sentence; Codex's own for
+/// Codex, under what says so, in mono as Codex words them.
+fn deny_tells(ctx: &Ctx, id: &str, request: &PendingToolApproval, shown: Option<&ShownApproval>) -> Element {
+  let agent = request.agent.as_str();
+  let id = format!("{id}-deny-tells");
+  match shown {
+    Some(shown) if shown.choices.codex => Column::new()
+      .id(id.clone())
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Tight.role())
+      .child(note(
+        &format!("{id}-label"),
+        &ctx.t_args("cards.approval.denyTellsCodexLabel", [("agent", agent)]),
+      ))
+      .child(
+        Text::new(&shown.choices.told)
+          .id(format!("{id}-words"))
+          .variant(ExtraTypography::MonoKey.role())
+          .selectable(true)
+          .width(Dimension::Pct(100.0)),
+      )
+      .into(),
+    _ => {
+      let told: std::sync::Arc<str> = match shown {
+        Some(shown) => shown.choices.told.clone(),
+        None => denial_message(request, Answerer::Person).into(),
+      };
+      note(
+        &id,
+        &ctx.t_args("cards.approval.denyTells", [("agent", agent), ("message", &*told)]),
+      )
+      .into()
+    }
+  }
+}

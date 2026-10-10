@@ -10,6 +10,7 @@
 //! again keeps the task as last read on the page and says why. What the task's ended runs left in the
 //! repository is read beside it, for *Remove worktree* and Run again.
 
+mod cards;
 mod changes;
 mod context;
 mod conversation;

@@ -13,6 +13,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Button, Text},
+  core::ElementRef,
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -109,6 +110,7 @@ pub struct ActionButton {
   focus: Focus,
   /// As wide as its parent, its icon and label centered (`Allow retry` `ae0Pi`).
   fill: bool,
+  element: Option<ElementRef>,
 }
 
 impl ActionButton {
@@ -123,6 +125,7 @@ impl ActionButton {
       hold: None,
       focus: Focus::Pointer,
       fill: false,
+      element: None,
     }
   }
 
@@ -166,6 +169,12 @@ impl ActionButton {
   /// A button of a form or a card: a Tab stop with the focus ring.
   pub fn in_form(mut self) -> Self {
     self.focus = Focus::Form;
+    self
+  }
+
+  /// `element` refers to the button, e.g. so a screen can move the focus to it.
+  pub fn element_ref(mut self, element: ElementRef) -> Self {
+    self.element = Some(element);
     self
   }
 
@@ -215,6 +224,9 @@ impl From<ActionButton> for Element {
         .color(color)
         .nowrap(),
     );
+    if let Some(element) = button.element {
+      frame = frame.ref_element(element);
+    }
     if let Some(Hold::Unavailable(reason)) = &button.hold {
       frame = frame.describe("reason", reason.clone());
     }

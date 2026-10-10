@@ -9,6 +9,7 @@
 //! selection, scrim, conversation, code and diff colors, `display` type, `radius_full`): the screens
 //! that need them come next and must find them here rather than add near-duplicates.
 
+mod cards;
 mod code;
 mod composer;
 mod conversation;
@@ -35,6 +36,7 @@ use lurq::{
 };
 
 pub use self::{
+  cards::{CardsSpacing, CardsText},
   code::{CodeText, token_color},
   composer::{ComposerColor, ComposerRadius, ComposerText},
   conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText},
@@ -73,6 +75,7 @@ pub fn install(app: &mut App, mode: Mode) {
   tasks::install(theme);
   shell::install(theme);
   conversation::install(theme);
+  cards::install(theme);
   composer::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());

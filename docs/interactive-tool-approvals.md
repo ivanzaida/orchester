@@ -89,7 +89,8 @@ too: Codex 0.159.2 sends `mcpServer/elicitation/request` for a tool that needs a
 `{"action":"decline"}` (or the question's decline option) without a person and records the declined call
 (`McpToolDeclined`, *declined, not asked* in the activity); Codex tells the agent the call was rejected and the
 turn goes on. A request from another phase, thread or turn still fails the step. Each Codex MCP call also ends as an
-activity row of its own (`McpToolFinished`, with whether Codex asked first): *approved by you · <server>* when a
+activity row of its own (`McpToolFinished`, with whether Codex asked first, or the runner did for a call of
+Orchester's tools, matched to Codex's call by its tool and arguments): *approved by you · <server>* when a
 person approved it, *asked you · <server>* when it was asked about and did not run, and the server's name alone
 when Codex did not ask.
 
@@ -321,10 +322,11 @@ by `read_external_file` and `search_external_file`.
   answer. Claude Code gets an allow rule for both when it gets a skills folder, which then holds every skill it is
   offered. The native agent does not get Orchester's tools yet (P1d) and keeps reading its skills with its own
   `read_file` by the paths its prompt lists.
-- **Prompt.** The *Files and commands* part names the worktree file tools as each CLI sees them (Claude Code:
-  `mcp__Orchester__read_file`, …, and that its own Read, Edit, Write, NotebookEdit, Grep and Glob are not available;
-  Codex: the tools of the `Orchester` server, not the shell's `cat`, `rg`, `sed -i` or heredocs), and how `edit_file` is called (the
-  lines to replace and, as `expected`, what they hold now). After it, a new session that gets the tools is told in a
+- **Prompt.** The *Files and commands* part names every worktree file tool the step is offered as each CLI sees it
+  (`read_file`, `list_files` and `search_file`; in a writing step also `edit_file`, `create_file`, `delete_file` and
+  `move_file`; Claude Code: `mcp__Orchester__read_file`, …, and that its own Read, Edit, Write, NotebookEdit, Grep and
+  Glob are not available; Codex: the tools of the `Orchester` server, not the shell's `cat`, `rg`, `sed -i`, heredocs,
+  `rm` or `mv`), and how `edit_file` is called (the lines to replace and, as `expected`, what they hold now). After it, a new session that gets the tools is told in a
   paragraph of its own (*# Orchester tools*) to use the shell for builds, tests and git, not to read or search files;
   to read and search outside the worktree with `read_external_file` and `search_external_file` (at once in the run's
   sources, which it names; elsewhere a person is asked first); the other tools of the server it has; and, with skills, to read them with `read_skill` by name, never by path. The *# Skills* part then

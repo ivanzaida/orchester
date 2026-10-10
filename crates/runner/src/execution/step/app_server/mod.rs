@@ -148,6 +148,12 @@ impl AppServerSession {
     .await
   }
 
+  /// The runner asks a person about a call of Orchester's tool `action` with `arguments`
+  /// ([`AppServerStream::runner_asks`]): the id of Codex's call when it has started.
+  pub fn runner_asks(&mut self, action: &str, arguments: &serde_json::Value) -> Option<String> {
+    self.stream.runner_asks(action, arguments)
+  }
+
   pub fn complete(&self) -> bool {
     self.phase == Phase::Complete
   }

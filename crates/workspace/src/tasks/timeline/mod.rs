@@ -110,6 +110,8 @@ pub struct ApprovalCard {
   pub decided: Option<Option<orchester_core::run::ToolApprovalDecision>>,
   /// Who answered it, once it is answered and that was recorded.
   pub decided_by: Option<orchester_core::run::DecidedBy>,
+  /// When it was answered or ended, once it was.
+  pub decided_at: Option<Timestamp>,
   /// What auto mode did with it, once it is answered; while it waits, the shown request says.
   pub review: Option<orchester_core::run::review::Review>,
 }
@@ -397,7 +399,7 @@ fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<
     .pending
     .iter()
     .filter(|request| request.execution == execution)
-    .map(|request| (request.clone(), None, None, None));
+    .map(|request| (request.clone(), None, None, None, None));
   let decided = sources
     .decided
     .iter()
@@ -408,12 +410,13 @@ fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<
         decided.request.clone(),
         Some(decided.decision),
         decided.decided_by,
+        Some(decided.decided_at),
         decided.review.clone(),
       )
     });
   pending
     .chain(decided)
-    .map(|(request, decided, decided_by, review)| Item {
+    .map(|(request, decided, decided_by, decided_at, review)| Item {
       key: approval_key(&request.id),
       execution: Some(execution),
       at: request.requested_at,
@@ -422,6 +425,7 @@ fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<
         request,
         decided,
         decided_by,
+        decided_at,
         review,
       }),
     })
