@@ -1,7 +1,7 @@
 //! What the Conversation tab shows instead of a timeline, on `task-states`: a queued run that has not
 //! started (its steps), a task that never ran, a run that cannot be read, the transcript being read while
-//! reads are held, and a transcript that cannot be read with *Try again*; and a card that waits for a
-//! decision (C3's), saying answering in the chat is not available yet.
+//! reads are held, and a transcript that cannot be read with *Try again*. The decision cards are
+//! `tests/decision_cards`'.
 
 use rusqlite::Connection;
 
@@ -91,19 +91,6 @@ fn timeline_a_transcript_that_cannot_be_read_offers_try_again() {
   window.until("the chat", |window| {
     window.tree.get_element_by_id("conversation-failed").is_none()
   });
-}
-
-#[test]
-fn timeline_a_card_that_waits_says_answering_here_is_not_available_yet() {
-  let (mut window, seeded) = seeded("task-states");
-  let key = key_of(&seeded, "Add serde to the webhook payloads");
-  open(&mut window, &seeded, &key, "conversation-chat");
-  window.until("the request's card", |window| {
-    all_text(window).contains("Answering in the chat is not available in this version yet.")
-  });
-  let text = all_text(&mut window);
-  assert!(text.contains("asks to run a command"), "{text}");
-  assert!(text.contains("Waiting for approval"), "{text}");
 }
 
 #[test]

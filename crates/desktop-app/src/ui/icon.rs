@@ -174,6 +174,7 @@ icons! {
   Workflow => '\u{e425}',
   Wrench => '\u{e1b1}',
   X => '\u{e1b2}',
+  Zap => '\u{e1b4}',
 }
 
 /// `icon` at `size` in `color`. A loader turns for as long as it is shown (`ui::loader`).
