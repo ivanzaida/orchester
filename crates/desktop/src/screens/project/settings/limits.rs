@@ -1,8 +1,10 @@
-//! Project settings / Limits (02.M `c7e729`): the maximum run budget, the default run budget, the
-//! daily project budget, the default time limit of active agent time and how many agents work at
-//! once. A budget or the agent count saves when its field is left or Enter is pressed, and a time
-//! limit when it is chosen, once every field is valid; the topbar says whether all changes are
-//! saved. Changes apply to new runs, except the agent count, which the runner applies at once.
+//! Project settings / Limits (02.M `c7e729`): the default run budget, the daily project budget, the
+//! default time limit of active agent time and how many agents work at once. The default run budget
+//! and time limit are optional with no maximum: empty, or *No limit*, leaves new tasks without one
+//! (user decision 2026-10-09). A budget or the agent count saves when its field is left or Enter is
+//! pressed, and a time limit when it is chosen, once every field is valid; the topbar says whether
+//! all changes are saved. Changes apply to new runs, except the agent count, which the runner
+//! applies at once.
 
 use std::sync::Arc;
 
@@ -29,7 +31,7 @@ use super::{
 };
 use crate::{
   background,
-  budget::{LimitsErrors, LimitsForm, minutes_text, read_budget, time_limit_choices, unbounded},
+  budget::{LimitsErrors, LimitsForm, minutes_text, read_optional_budget, time_limit_choices},
   messages::{self, Message},
   runner::Runners,
   tasks::{
@@ -95,7 +97,6 @@ type SaveAction = FutureAction<(std::path::PathBuf, ProjectLimits, ProjectLimits
 /// Cloned by the save it commits, which reads the fields when it runs.
 #[derive(Clone)]
 pub struct LimitsTab {
-  max: Signal<String>,
   default: Signal<String>,
   daily: Signal<String>,
   time: Signal<String>,
@@ -119,7 +120,6 @@ impl Component for LimitsTab {
       .expect("the project shell provides ProjectNav");
     let runners = ctx.use_context::<Runners>().expect("the application provides Runners");
     let tab = Self {
-      max: ctx.signal(String::new()),
       default: ctx.signal(String::new()),
       daily: ctx.signal(String::new()),
       time: ctx.signal(String::new()),
@@ -232,7 +232,6 @@ impl LimitsTab {
     read: impl Fn(&Signal<String>) -> String,
   ) -> Result<ProjectLimits, Box<LimitsErrors>> {
     LimitsForm {
-      max_run_budget: &read(&self.max),
       default_run_budget: &read(&self.default),
       daily_budget: &read(&self.daily),
       default_time_limit: &read(&self.time),
@@ -259,28 +258,18 @@ impl LimitsTab {
     })
   }
 
-  fn budget_settings<'a>(&'a self, errors: &'a LimitsErrors) -> [BudgetSetting<'a>; 3] {
-    let defaults = ProjectLimits::DEFAULT;
+  fn budget_settings<'a>(&'a self, errors: &'a LimitsErrors) -> [BudgetSetting<'a>; 2] {
     [
-      BudgetSetting {
-        id: "limits-max-run-budget",
-        keys: ("settings.limits.max", "settings.limits.maxDetail"),
-        value: &self.max,
-        default: Some(defaults.max_run_budget().get()),
-        error: errors.max_run_budget.as_ref(),
-      },
       BudgetSetting {
         id: "limits-default-run-budget",
         keys: ("settings.limits.default", "settings.limits.defaultDetail"),
         value: &self.default,
-        default: None,
         error: errors.default_run_budget.as_ref(),
       },
       BudgetSetting {
         id: "limits-daily-budget",
         keys: ("settings.limits.daily", "settings.limits.dailyDetail"),
         value: &self.daily,
-        default: None,
         error: errors.daily_budget.as_ref(),
       },
     ]
@@ -333,8 +322,12 @@ impl LimitsTab {
   /// Shows `limits`, as stored, in the fields.
   fn fill(&self, limits: ProjectLimits, separator: &str) {
     self.stored.set(Some(Stored(limits)));
-    self.max.set(grouped(limits.max_run_budget().get(), separator));
-    self.default.set(grouped(limits.default_run_budget().get(), separator));
+    self.default.set(
+      limits
+        .default_run_budget()
+        .map(|budget| grouped(budget.get(), separator))
+        .unwrap_or_default(),
+    );
     self.daily.set(grouped(limits.daily_budget().get(), separator));
     self.slots.set(limits.agent_slots().get().to_string());
     // Last: setting the time limit saves what the fields hold, as a person's choice does. With every
@@ -344,34 +337,24 @@ impl LimitsTab {
   }
 }
 
-/// One token budget setting (`Ml60C`, `y7xpzT`, `XpyYy`).
+/// One token budget setting (`y7xpzT`, `XpyYy`).
 struct BudgetSetting<'a> {
   id: &'static str,
   /// Name and description.
   keys: (&'static str, &'static str),
   value: &'a Signal<String>,
-  /// The design's default, which the read-back names (for the maximum, as in `SkKCa`).
-  default: Option<u64>,
   error: Option<&'a Message>,
 }
 
 impl BudgetSetting<'_> {
-  /// The setting with its input and its read-back or error.
+  /// The setting with its input and its read-back or error: an empty field reads back as no limit.
   fn render(self, ctx: &Ctx, input: UnitInput, separator: &str) -> Element {
     let note = match self.error {
       Some(error) => field_error(&message_text(ctx, error)),
-      None => {
-        let budget = read_budget(&self.value.get(), separator, unbounded())
-          .ok()
-          .map(|budget| budget.get());
-        let count = budget.map(compact_tokens).unwrap_or_default();
-        let key = if budget.is_some() && budget == self.default {
-          "tokens.readBackDefault"
-        } else {
-          "tokens.readBack"
-        };
-        readback(&ctx.t_args(key, [("count", count.as_str())]))
-      }
+      None => match read_optional_budget(&self.value.get(), separator).ok().flatten() {
+        Some(budget) => readback(&ctx.t_args("tokens.readBack", [("count", compact_tokens(budget.get()).as_str())])),
+        None => readback(&ctx.t("tokens.noLimit")),
+      },
     };
     let (name, description) = self.keys;
     sized_setting_row(
@@ -420,11 +403,11 @@ fn slots_row(ctx: &Ctx, input: Element, error: Option<&Message>) -> Element {
   )
 }
 
-/// The time limit select (`bPPG9`): "30 minutes". Its value is the limit's whole minutes as
-/// the Limits form reads them.
+/// The time limit select (`bPPG9`): "No limit", then "30 minutes" and the other choices. Its value is
+/// the limit's whole minutes as the Limits form reads them, empty for no limit.
 fn time_select(ctx: &Ctx, time: &Signal<String>) -> Element {
   let current = time.get().trim().parse::<u64>().ok();
-  let options = time_limit_choices(current).into_iter().map(|minutes| {
+  let minutes = time_limit_choices(current).into_iter().map(|minutes| {
     let count = minutes.to_string();
     let key = if minutes == 1 {
       "settings.limits.minutesOption.one"
@@ -434,6 +417,7 @@ fn time_select(ctx: &Ctx, time: &Signal<String>) -> Element {
     let label = ctx.t_args(key, [("count", count.as_str())]);
     (count, label)
   });
+  let options = std::iter::once((String::new(), ctx.t("tokens.noLimit"))).chain(minutes);
   Element::from(
     Select::new(time.clone())
       .options(options)
@@ -467,13 +451,12 @@ fn save_action(ctx: &mut Ctx, runners: &Runners) -> SaveAction {
 
 /// The person's change from `base` to `asked`, put on the limits as stored now (`stored`): a limit they
 /// did not change keeps what automation may have changed meanwhile. `None` when the result breaks the
-/// rules of the limits, e.g. a default above a maximum lowered elsewhere.
+/// rules of the limits.
 fn rebased(base: ProjectLimits, asked: ProjectLimits, stored: ProjectLimits) -> Option<ProjectLimits> {
   fn pick<T: PartialEq + Copy>(base: T, asked: T, stored: T) -> T {
     if asked == base { stored } else { asked }
   }
   let limits = ProjectLimits::new(
-    pick(base.max_run_budget(), asked.max_run_budget(), stored.max_run_budget()),
     pick(
       base.default_run_budget(),
       asked.default_run_budget(),

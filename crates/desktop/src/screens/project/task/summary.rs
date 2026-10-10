@@ -18,7 +18,6 @@ use lurq::{
 };
 use orchester_core::{
   connection::stream::InvocationOutcome,
-  limits::ProjectLimits,
   run::{PauseReason, RunFailure, RunLimit, RunStatus},
   tokens::compact_tokens,
 };
@@ -57,7 +56,7 @@ const PANEL_WIDTH: f32 = 336.0;
 pub(super) fn summary(
   ctx: &mut Ctx,
   detail: &TaskDetail,
-  (limits, lost, pipelines): (Option<ProjectLimits>, Option<Lost>, Option<&[PipelineChoice]>),
+  (lost, pipelines): (Option<Lost>, Option<&[PipelineChoice]>),
   (repo_root, scrolls, revision): (&Path, &TaskScrolls, (u64, u64)),
   (reason, runs): (Option<Element>, Option<Element>),
 ) -> Element {
@@ -80,7 +79,7 @@ pub(super) fn summary(
   let raise = detail
     .run
     .as_ref()
-    .and_then(|run| raise_panel(ctx, run, (limits, !detail.blocked_by.is_empty())));
+    .and_then(|run| raise_panel(ctx, run, !detail.blocked_by.is_empty()));
   // Brief and criteria on a run page describe what that run was asked to do, even after the
   // task is edited for a later run.
   let details = detail.run_task.as_ref().unwrap_or(&detail.task).details();
@@ -170,7 +169,7 @@ fn progress_column(content: Column, latest: Option<Element>, scroll: &ScrollStat
 }
 
 /// Raise the limit to continue (`ZUYM0`), for a run stopped at a limit.
-fn raise_panel(ctx: &mut Ctx, run: &RunView, (limits, blocked): (Option<ProjectLimits>, bool)) -> Option<Element> {
+fn raise_panel(ctx: &mut Ctx, run: &RunView, blocked: bool) -> Option<Element> {
   // A daily budget stop continues with a plain resume: the run's own limits were not reached.
   let RunStatus::Paused(PauseReason::LimitReached(limit)) = run.run.status() else {
     return None;
@@ -178,7 +177,7 @@ fn raise_panel(ctx: &mut Ctx, run: &RunView, (limits, blocked): (Option<ProjectL
   if *limit == RunLimit::DailyBudget {
     return None;
   }
-  let props = RaiseLimitProps::of(run, *limit, limits?, blocked)?;
+  let props = RaiseLimitProps::of(run, *limit, blocked)?;
   Some(ctx.mount_keyed::<RaiseLimitPanel>(
     &format!("raise-limit-{}-{}", run.id(), run.run.last_sequence().get()),
     props,
@@ -238,10 +237,13 @@ fn this_run(
   );
   let active = run.active_clock(&run.invocations, clock(ctx).now(), lost);
   let time = ctx.mount_keyed::<ActiveTime>("task-active-time", ActiveTimeProps { active });
-  let time_limit = ctx.t_args(
-    "runs.summary.timeLimitValue",
-    [("minutes", whole_minutes(run.run.max_duration()).to_string().as_str())],
-  );
+  let time_limit = match run.run.max_duration() {
+    Some(limit) => ctx.t_args(
+      "runs.summary.timeLimitValue",
+      [("minutes", whole_minutes(limit).to_string().as_str())],
+    ),
+    None => ctx.t("tokens.noLimit"),
+  };
   let step = run.current_step();
   // A tool step's command runs on no model.
   let command_tool = ctx.t("runs.activity.commandTool");
@@ -356,13 +358,17 @@ pub(super) fn budget_value(ctx: &Ctx, run: &RunView) -> Arc<str> {
   } else {
     "tokens.usedOfBudget"
   };
-  ctx.t_args(
-    key,
-    [
-      ("used", compact_tokens(run.run.used().get()).as_str()),
-      ("budget", compact_tokens(run.run.budget().get()).as_str()),
-    ],
-  )
+  let used = compact_tokens(run.run.used().get());
+  match run.run.budget() {
+    Some(budget) => ctx.t_args(
+      key,
+      [
+        ("used", used.as_str()),
+        ("budget", compact_tokens(budget.get()).as_str()),
+      ],
+    ),
+    None => ctx.t_args("tokens.usedNoLimit", [("used", used.as_str())]),
+  }
 }
 
 /// `reason` with the Blocked notice under it, either alone, or neither.

@@ -64,7 +64,7 @@ fn pending(db: &mut ProjectDb, repo: &Path, task: &orchester_core::task::Task, s
     .expect("git");
   assert!(head.status.success());
   let base = Revision::new(String::from_utf8(head.stdout).expect("utf8").trim()).expect("revision");
-  let limits = task.details().limits.expect("limits");
+  let limits = task.details().limits;
   db.create_run(
     task.id().first_run_key(),
     NewRun {
@@ -87,8 +87,8 @@ fn fixture(repo: &Path, fake: &Path) {
   let pipeline = db.resources(ResourceKind::Pipeline).expect("pipelines")[0].id();
   let snapshot = snapshot(&db, pipeline);
   let limits = TaskLimits::new(
-    TokenBudget::new(1_400_000).expect("budget"),
-    std::time::Duration::from_secs(1800),
+    Some(TokenBudget::new(1_400_000).expect("budget")),
+    Some(std::time::Duration::from_secs(1800)),
   )
   .expect("limits");
   let details = ["Z Queue target", "B Review target", "C Done target", "A Draft target"]
@@ -98,7 +98,7 @@ fn fixture(repo: &Path, fake: &Path) {
       brief: "Append one line.".into(),
       acceptance_criteria: vec!["One line is appended.".into()],
       pipeline: Some(pipeline),
-      limits: Some(limits),
+      limits,
     })
     .collect();
   let tasks = db

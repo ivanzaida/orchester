@@ -18,7 +18,7 @@ use orchester_core::{
   tokens::compact_tokens,
 };
 use orchester_ipc::Command;
-use orchester_workspace::{budget::unbounded, tasks::detail::RunView};
+use orchester_workspace::tasks::detail::RunView;
 
 use super::{
   super::{
@@ -107,14 +107,15 @@ impl DecideCard<'_> {
   /// "Tokens used 1.1M", "Remaining budget No limit".
   fn facts(&self, ctx: &Ctx) -> Element {
     let run = &self.run.run;
-    let left = if run.budget() == unbounded() {
-      ctx.t("decisions.retries.noLimit")
-    } else {
-      ctx.t_args(
-        "decisions.retries.tokens",
-        [("count", compact_tokens(run.used().left_of(run.budget())))],
-      )
-    };
+    let left = run.budget().map_or_else(
+      || ctx.t("decisions.retries.noLimit"),
+      |budget| {
+        ctx.t_args(
+          "decisions.retries.tokens",
+          [("count", compact_tokens(run.used().left_of(budget)))],
+        )
+      },
+    );
     Column::new()
       .width(Dimension::Pct(100.0))
       .child(detail_row(

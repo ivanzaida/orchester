@@ -162,20 +162,25 @@ pub(super) fn this_task(
   this_run_panel(rows, scroll, &ctx.t("runs.summary.taskNote"))
 }
 
-fn limit_rows(ctx: &Ctx, limits: Option<TaskLimits>) -> Vec<Element> {
-  let Some(limits) = limits else {
+fn limit_rows(ctx: &Ctx, limits: TaskLimits) -> Vec<Element> {
+  if limits == TaskLimits::NONE {
     return vec![styled_property(
       &ctx.t("runs.summary.limits"),
       &ctx.t("runs.summary.noLimits"),
       ValueStyle::Unset,
     )];
+  }
+  let budget = match limits.budget() {
+    Some(budget) => ctx.t_args("runs.tokens", [("count", compact_tokens(budget.get()).as_str())]),
+    None => ctx.t("tokens.noLimit"),
   };
-  let budget = ctx.t_args(
-    "runs.tokens",
-    [("count", compact_tokens(limits.budget().get()).as_str())],
-  );
-  let minutes = whole_minutes(limits.max_duration()).to_string();
-  let time_limit = ctx.t_args("runs.summary.timeLimitValue", [("minutes", minutes.as_str())]);
+  let time_limit = match limits.max_duration() {
+    Some(limit) => ctx.t_args(
+      "runs.summary.timeLimitValue",
+      [("minutes", whole_minutes(limit).to_string().as_str())],
+    ),
+    None => ctx.t("tokens.noLimit"),
+  };
   vec![
     property(&ctx.t("runs.summary.budget"), &budget),
     property(&ctx.t("runs.summary.timeLimit"), &time_limit),

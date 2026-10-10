@@ -38,11 +38,15 @@ impl SchedulingReview {
     ctx: &Ctx,
     id: &'static str,
     keys: (&str, &str),
-    value: Signal<String>,
+    (value, kind): (Signal<String>, Budget),
     locked: bool,
   ) -> Element {
     let separator = ctx.t("number.groupSeparator");
-    let parsed = read_budget(&value.get(), &separator, budget::unbounded());
+    let text = value.get();
+    let parsed = match kind {
+      Budget::Required => read_budget(&text, &separator).map(Some),
+      Budget::Optional => read_optional_budget(&text, &separator),
+    };
     let input = UnitInput::new(id, value, ctx.t("tokens.unit"), self.focused.clone())
       .tokens(separator)
       .read_only(locked)
@@ -50,11 +54,11 @@ impl SchedulingReview {
       .size(Dimension::Pct(100.0), Dimension::Px(REVIEW_FIELD_HEIGHT))
       .render(ctx);
     let note = parsed.into_iter().map(|budget| {
-      Element::from(
-        Text::new(&ctx.t_args(keys.1, [("count", compact_tokens(budget.get()))]))
-          .variant(ExtraTypography::ReadBack.role()),
-      )
-      .id(format!("{id}-readback"))
+      let text = match budget {
+        Some(budget) => ctx.t_args(keys.1, [("count", compact_tokens(budget.get()))]),
+        None => ctx.t("tokens.noLimit"),
+      };
+      Element::from(Text::new(&text).variant(ExtraTypography::ReadBack.role())).id(format!("{id}-readback"))
     });
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -108,7 +112,12 @@ impl SchedulingReview {
         )
         .into();
     }
-    let value = ctx.t_args("tasks.bulk.timeValue", [("minutes", self.minutes.get())]);
+    let minutes = self.minutes.get();
+    let value = if minutes.trim().is_empty() {
+      ctx.t("tokens.noLimit")
+    } else {
+      ctx.t_args("tasks.bulk.timeValue", [("minutes", minutes)])
+    };
     let row = Row::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(crate::theme::TASK_REVIEW_PROPERTY_HEIGHT))

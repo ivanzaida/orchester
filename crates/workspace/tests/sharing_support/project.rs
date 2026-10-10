@@ -17,7 +17,7 @@ use orchester_core::{
   repository::RepositoryIdentity,
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
   store::TaskStore,
-  task::{Task, TaskDetails},
+  task::{Task, TaskDetails, TaskLimits},
   time::Timestamp,
 };
 use orchester_store::{AppDb, ProjectDb};
@@ -184,7 +184,7 @@ pub fn details(title: &str) -> TaskDetails {
     brief: String::new(),
     acceptance_criteria: Vec::new(),
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   }
 }
 

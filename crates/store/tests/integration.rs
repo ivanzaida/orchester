@@ -27,7 +27,7 @@ fn integration_base_branch_is_kept_with_the_run() {
     branch: branch("orchester/orc-1-run-2"),
     base: Revision::new(&"b".repeat(40)).expect("revision"),
     base_branch: Some(branch("main")),
-    budget: budget(1_000_000),
+    budget: Some(budget(1_000_000)),
     max_duration: first.max_duration(),
   };
   let second = db.create_run(IdempotencyKey::generate(), new, at(20)).expect("run");

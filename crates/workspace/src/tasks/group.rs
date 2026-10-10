@@ -4,7 +4,7 @@ use std::{collections::BTreeSet, path::Path};
 use orchester_core::{
   id::{ResourceId, TaskId},
   resource::Pipeline,
-  store::{ResourceStore, SettingsStore, TaskStore},
+  store::{ResourceStore, TaskStore},
   task::TaskStatus,
   task_group::{GroupHold, ReviewedPipeline, TaskGroup},
   task_selection::SelectionProblem,
@@ -157,15 +157,6 @@ pub fn queue(
     .map_err(|error| vec![messages::store_error(&error)])?
   {
     return Ok(existing);
-  }
-  let maximum = db
-    .project_limits()
-    .map_err(|error| vec![messages::store_error(&error)])?
-    .max_run_budget();
-  if limits.budget() > maximum {
-    return Err(vec![
-      Message::new("tokens.errors.aboveMax").with("max", orchester_core::tokens::compact_tokens(maximum.get())),
-    ]);
   }
   let mut problems = Vec::new();
   for id in group.tasks() {

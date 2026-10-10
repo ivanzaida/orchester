@@ -217,10 +217,11 @@ impl Form {
         "brief": details.brief,
         "criteria": details.acceptance_criteria,
         "pipeline": details.pipeline.map(|pipeline| pipeline.to_string()),
-        "budget": details.limits.map(|limits| limits.budget().get().to_string()).unwrap_or_default(),
+        "budget": details.limits.budget().map(|budget| budget.get().to_string()).unwrap_or_default(),
         "time_limit": details
           .limits
-          .map(|limits| (limits.max_duration().as_secs() / 60).to_string())
+          .max_duration()
+          .map(|limit| (limit.as_secs() / 60).to_string())
           .unwrap_or_default(),
       })
     };

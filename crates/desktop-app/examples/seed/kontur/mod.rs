@@ -116,8 +116,8 @@ pub enum SeedError {
   NotAtWork,
   #[error("the run's worktree was removed")]
   WorktreeRemoved,
-  #[error("the task has no limits to run with")]
-  NoLimits,
+  #[error("the run has no token budget to stop at")]
+  NoBudget,
   #[error("the task names no pipeline to run")]
   NoPipeline,
   #[error("the task changed while it was saved")]
@@ -149,7 +149,7 @@ fn name(text: &str) -> Name {
 /// Every task's limits: generous, so only the scenarios that stop at a limit reach one.
 fn limits() -> TaskLimits {
   let budget = TokenBudget::new(500_000).expect("above zero");
-  TaskLimits::new(budget, Duration::from_secs(90 * 60)).expect("a time limit above zero")
+  TaskLimits::new(Some(budget), Some(Duration::from_secs(90 * 60))).expect("a time limit above zero")
 }
 
 impl Kontur {
@@ -192,7 +192,7 @@ impl Kontur {
       brief: brief.to_owned(),
       acceptance_criteria: criteria.iter().map(|criterion| (*criterion).to_owned()).collect(),
       pipeline: pipeline.map(Published::id),
-      limits: Some(limits()),
+      limits: limits(),
     };
     let mut created = self.db.create_tasks(IdempotencyKey::generate(), vec![details], at)?;
     Ok(created.remove(0))
@@ -265,14 +265,9 @@ impl Kontur {
     let budget = TokenBudget::new(used.get())
       .map_err(|_| SeedError::Invalid("no run used tokens today to spend the daily budget with".to_owned()))?;
     let limits = self.db.project_limits()?;
-    let spent = ProjectLimits::new(
-      limits.max_run_budget(),
-      limits.default_run_budget(),
-      budget,
-      limits.default_time_limit(),
-    )
-    .map_err(|error| SeedError::Invalid(error.to_string()))?
-    .with_agent_slots(limits.agent_slots());
+    let spent = ProjectLimits::new(limits.default_run_budget(), budget, limits.default_time_limit())
+      .map_err(|error| SeedError::Invalid(error.to_string()))?
+      .with_agent_slots(limits.agent_slots());
     self.db.save_project_limits(&spent)?;
     Ok(())
   }

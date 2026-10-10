@@ -175,13 +175,11 @@ fn queued_task(db: &mut ProjectDb, pipeline: orchester_core::id::ResourceId) -> 
     brief: "Switch repositories.".into(),
     acceptance_criteria: vec!["It switches".into()],
     pipeline: Some(pipeline),
-    limits: Some(
-      TaskLimits::new(
-        TokenBudget::new(1_400_000).expect("above zero"),
-        std::time::Duration::from_secs(1_800),
-      )
-      .expect("limits"),
-    ),
+    limits: TaskLimits::new(
+      Some(TokenBudget::new(1_400_000).expect("above zero")),
+      Some(std::time::Duration::from_secs(1_800)),
+    )
+    .expect("limits"),
   };
   let mut task = db
     .create_tasks(IdempotencyKey::generate(), vec![details], at(5))

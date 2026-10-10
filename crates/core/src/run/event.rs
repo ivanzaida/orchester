@@ -93,10 +93,13 @@ pub struct RunCreated {
   /// Orchester recorded it.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub base_branch: Option<BranchName>,
-  pub budget: TokenBudget,
+  /// `None`: the run has no token budget.
+  #[serde(default)]
+  pub budget: Option<TokenBudget>,
   /// The most active agent time the run may use; pauses and waits for a person do not count.
-  #[serde(with = "millis")]
-  pub max_duration: Duration,
+  /// `None`: the run has no time limit.
+  #[serde(default, with = "optional_millis")]
+  pub max_duration: Option<Duration>,
 }
 
 /// A step execution created by a new attempt.
@@ -119,16 +122,19 @@ pub enum RunEventKind {
   },
   Resumed,
   /// A run stopped at a limit got new limits; it continues with a [`RunEventKind::Resumed`].
+  /// `None` lifts that limit.
   LimitRaised {
-    budget: TokenBudget,
-    #[serde(with = "millis")]
-    max_duration: Duration,
+    #[serde(default)]
+    budget: Option<TokenBudget>,
+    #[serde(default, with = "optional_millis")]
+    max_duration: Option<Duration>,
   },
   /// A run stopped at the budget of `step` may use `budget` tokens in each execution of that step
-  /// from now on; it continues with a [`RunEventKind::Resumed`].
+  /// from now on, or any number with `None`; it continues with a [`RunEventKind::Resumed`].
   StepBudgetRaised {
     step: StepKey,
-    budget: TokenBudget,
+    #[serde(default)]
+    budget: Option<TokenBudget>,
   },
   Interrupted {
     cause: InterruptCause,
@@ -292,18 +298,23 @@ impl RunEventKind {
   }
 }
 
-/// A duration stored as whole milliseconds.
-mod millis {
+/// An optional duration stored as whole milliseconds, `null` for none.
+mod optional_millis {
   use std::time::Duration;
 
   use serde::{Deserialize, Deserializer, Serializer};
 
-  pub(super) fn serialize<S: Serializer>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error> {
-    let millis = u64::try_from(duration.as_millis()).map_err(serde::ser::Error::custom)?;
-    serializer.serialize_u64(millis)
+  pub(super) fn serialize<S: Serializer>(duration: &Option<Duration>, serializer: S) -> Result<S::Ok, S::Error> {
+    match duration {
+      Some(duration) => {
+        let millis = u64::try_from(duration.as_millis()).map_err(serde::ser::Error::custom)?;
+        serializer.serialize_some(&millis)
+      }
+      None => serializer.serialize_none(),
+    }
   }
 
-  pub(super) fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Duration, D::Error> {
-    u64::deserialize(deserializer).map(Duration::from_millis)
+  pub(super) fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Duration>, D::Error> {
+    Option::<u64>::deserialize(deserializer).map(|millis| millis.map(Duration::from_millis))
   }
 }

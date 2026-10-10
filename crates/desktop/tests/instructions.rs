@@ -116,9 +116,11 @@ impl Project {
       brief: "Users sign in with GitHub.".into(),
       acceptance_criteria: Vec::new(),
       pipeline: Some(pipeline),
-      limits: Some(
-        TaskLimits::new(TokenBudget::new(1_000_000).expect("budget"), Duration::from_secs(1_800)).expect("limits"),
-      ),
+      limits: TaskLimits::new(
+        Some(TokenBudget::new(1_000_000).expect("budget")),
+        Some(Duration::from_secs(1_800)),
+      )
+      .expect("limits"),
     };
     db.create_tasks(IdempotencyKey::generate(), vec![details], at(5))
       .expect("task");
@@ -320,7 +322,7 @@ fn instructions_preview_says_why_there_is_nothing_to_preview() {
     brief: String::new(),
     acceptance_criteria: Vec::new(),
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   };
   db.create_tasks(IdempotencyKey::generate(), vec![details], at(1))
     .expect("task");

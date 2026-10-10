@@ -15,7 +15,10 @@ use rusqlite::{Connection, OptionalExtension, Params, Row, Transaction, params};
 use super::ProjectDb;
 use crate::{
   StoreError,
-  rows::{budget_value, corrupt, decode_json, duration_value, encode_json, millis_column, parse, tokens_column},
+  rows::{
+    corrupt, decode_json, encode_json, optional_budget_column, optional_budget_value, optional_duration_value,
+    optional_millis_column, parse, tokens_column,
+  },
 };
 
 /// A shared task names its pipeline by slug (`docs/architecture/server.md`, "Pipelines by name"): it
@@ -86,17 +89,7 @@ impl ProjectDb {
       .as_deref()
       .map(|id| parse("run task pipeline", id))
       .transpose()?;
-    details.limits = match (snapshot.budget, snapshot.duration) {
-      (Some(tokens), Some(millis)) => Some(
-        TaskLimits::new(
-          budget_value("run task budget", tokens)?,
-          duration_value("run task duration", millis)?,
-        )
-        .map_err(|error| corrupt("run task limits", error))?,
-      ),
-      (None, None) => None,
-      _ => return Err(corrupt("run task limits", "one limit is missing")),
-    };
+    details.limits = task_limits(snapshot.budget, snapshot.duration)?;
     let organization = task.organization().clone();
     Ok(Some(
       Task::from_stored(
@@ -410,7 +403,7 @@ impl TaskRow {
   }
 
   fn into_task(self, project: &ProjectKey, acceptance_criteria: Vec<String>) -> Result<Task, StoreError> {
-    let limits = self.limits()?;
+    let limits = task_limits(self.budget_tokens, self.max_duration_ms)?;
     let details = TaskDetails {
       title: Name::new(&self.title).map_err(|error| corrupt("task title", error))?,
       brief: self.brief,
@@ -439,27 +432,21 @@ impl TaskRow {
       .with_revision(revision_value(self.revision)?),
     )
   }
-
-  fn limits(&self) -> Result<Option<TaskLimits>, StoreError> {
-    let (Some(tokens), Some(duration_ms)) = (self.budget_tokens, self.max_duration_ms) else {
-      return Ok(None);
-    };
-    TaskLimits::new(
-      budget_value("task budget", tokens)?,
-      duration_value("task time limit", duration_ms)?,
-    )
-    .map(Some)
-    .map_err(|error| corrupt("task limits", error))
-  }
 }
 
-pub(super) fn limit_columns(limits: Option<TaskLimits>) -> Result<(Option<i64>, Option<i64>), StoreError> {
-  let Some(limits) = limits else {
-    return Ok((None, None));
-  };
+/// A task's limits from its budget and time limit columns, each `NULL` for no limit.
+fn task_limits(budget: Option<i64>, duration: Option<i64>) -> Result<TaskLimits, StoreError> {
+  TaskLimits::new(
+    optional_budget_value("task budget", budget)?,
+    optional_duration_value("task time limit", duration)?,
+  )
+  .map_err(|error| corrupt("task limits", error))
+}
+
+pub(super) fn limit_columns(limits: TaskLimits) -> Result<(Option<i64>, Option<i64>), StoreError> {
   Ok((
-    Some(tokens_column("task budget", limits.budget().get())?),
-    Some(millis_column("task time limit", limits.max_duration())?),
+    optional_budget_column("task budget", limits.budget())?,
+    optional_millis_column("task time limit", limits.max_duration())?,
   ))
 }
 

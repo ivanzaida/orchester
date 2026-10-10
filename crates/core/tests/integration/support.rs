@@ -219,8 +219,8 @@ pub fn run(base: &str, base_branch: Option<&str>, ending: Ending) -> Run {
     branch: BranchName::new(RUN_BRANCH).expect("valid branch"),
     base: Revision::new(base).expect("a full revision"),
     base_branch: base_branch.map(|branch| BranchName::new(branch).expect("valid branch")),
-    budget: TokenBudget::new(1_400_000).expect("a budget"),
-    max_duration: Duration::from_secs(30 * 60),
+    budget: Some(TokenBudget::new(1_400_000).expect("a budget")),
+    max_duration: Some(Duration::from_secs(30 * 60)),
   };
   let number = RunNumber::new(NonZeroU32::new(3).expect("positive"));
   let (mut run, _) = Run::create(RunId::generate(), number, new, now()).expect("a valid run");

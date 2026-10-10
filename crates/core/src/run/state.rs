@@ -32,9 +32,10 @@ pub struct NewRun {
   pub base: Revision,
   /// The branch the user's checkout had at `base`; `None` on a detached HEAD.
   pub base_branch: Option<BranchName>,
-  pub budget: TokenBudget,
-  /// Most active agent time the run may use.
-  pub max_duration: Duration,
+  /// `None`: the run has no token budget.
+  pub budget: Option<TokenBudget>,
+  /// Most active agent time the run may use; `None`: no time limit.
+  pub max_duration: Option<Duration>,
 }
 
 /// Current state of a run as persisted alongside its events, before [`Run::restore`] checks it.
@@ -44,11 +45,12 @@ pub struct StoredRun {
   pub created: RunCreated,
   pub created_at: Timestamp,
   pub status: RunStatus,
-  /// Limits in force, the creation limits or the last raised ones.
-  pub budget: TokenBudget,
-  pub max_duration: Duration,
-  /// Step budgets raised for this run, in force instead of the snapshot's.
-  pub step_budgets: BTreeMap<StepKey, TokenBudget>,
+  /// Limits in force, the creation limits or the last raised ones; `None` is no limit.
+  pub budget: Option<TokenBudget>,
+  pub max_duration: Option<Duration>,
+  /// Step budgets raised for this run, in force instead of the snapshot's; `None` lifted the
+  /// step's budget.
+  pub step_budgets: BTreeMap<StepKey, Option<TokenBudget>>,
   /// Permissions changed for this run, by agent profile.
   pub permissions: BTreeMap<ResourceId, RunPermissions>,
   pub used: TokensUsed,
@@ -67,9 +69,9 @@ pub struct Run {
   pub(super) created: Arc<RunCreated>,
   pub(super) created_at: Timestamp,
   pub(super) status: RunStatus,
-  pub(super) budget: TokenBudget,
-  pub(super) max_duration: Duration,
-  pub(super) step_budgets: BTreeMap<StepKey, TokenBudget>,
+  pub(super) budget: Option<TokenBudget>,
+  pub(super) max_duration: Option<Duration>,
+  pub(super) step_budgets: BTreeMap<StepKey, Option<TokenBudget>>,
   pub(super) permissions: BTreeMap<ResourceId, RunPermissions>,
   pub(super) used: TokensUsed,
   pub(super) pause_requested: bool,
@@ -97,8 +99,11 @@ impl Run {
   }
 
   pub(super) fn from_created(id: RunId, created: RunCreated, at: Timestamp) -> Result<Self, RunError> {
-    if created.max_duration.is_zero() {
+    if zero(created.max_duration) {
       return Err(RunError::ZeroDuration);
+    }
+    if crate::limits::too_long(created.max_duration) {
+      return Err(RunError::TimeLimitTooLong);
     }
     Ok(Self {
       id,
@@ -120,7 +125,7 @@ impl Run {
   /// Rebuilds a persisted run, rejecting state that no event log could have produced.
   pub fn restore(stored: StoredRun) -> Result<Self, RunError> {
     let mut run = Self::from_created(stored.id, stored.created, stored.created_at)?;
-    if stored.max_duration.is_zero() {
+    if zero(stored.max_duration) {
       return Err(RunError::ZeroDuration);
     }
     run.status = stored.status;
@@ -224,13 +229,14 @@ impl Run {
     self.created.base_branch.as_ref()
   }
 
-  /// The token budget in force: the creation budget or the last raised one.
-  pub const fn budget(&self) -> TokenBudget {
+  /// The token budget in force: the creation budget or the last raised one; `None` when the run
+  /// has none.
+  pub const fn budget(&self) -> Option<TokenBudget> {
     self.budget
   }
 
-  /// The time limit on active agent time in force.
-  pub const fn max_duration(&self) -> Duration {
+  /// The time limit on active agent time in force; `None` when the run has none.
+  pub const fn max_duration(&self) -> Option<Duration> {
     self.max_duration
   }
 
@@ -242,15 +248,14 @@ impl Run {
   /// The budget in force for each execution of `step`: the one raised for this run, else the
   /// snapshot's; `None` when the step has none.
   pub fn step_budget(&self, step: &StepKey) -> Option<TokenBudget> {
-    self
-      .step_budgets
-      .get(step)
-      .copied()
-      .or_else(|| self.snapshot().body().step(step).and_then(|step| step.budget))
+    match self.step_budgets.get(step) {
+      Some(raised) => *raised,
+      None => self.snapshot().body().step(step).and_then(|step| step.budget),
+    }
   }
 
-  /// Step budgets raised for this run.
-  pub const fn raised_step_budgets(&self) -> &BTreeMap<StepKey, TokenBudget> {
+  /// Step budgets raised for this run; `None` lifted the step's budget.
+  pub const fn raised_step_budgets(&self) -> &BTreeMap<StepKey, Option<TokenBudget>> {
     &self.step_budgets
   }
 
@@ -259,14 +264,17 @@ impl Run {
     &self.permissions
   }
 
-  /// Whether the used tokens have reached the budget.
+  /// Whether the used tokens have reached the budget; never for a run without one.
   pub const fn token_limit_reached(&self) -> bool {
-    self.used.reached(self.budget)
+    match self.budget {
+      Some(budget) => self.used.reached(budget),
+      None => false,
+    }
   }
 
-  /// Whether `active` agent time has reached the time limit.
+  /// Whether `active` agent time has reached the time limit; never for a run without one.
   pub fn time_limit_reached(&self, active: Duration) -> bool {
-    active >= self.max_duration
+    self.max_duration.is_some_and(|limit| active >= limit)
   }
 
   /// A person asked to pause and the run is settling at its next checkpoint ("Pausing…").
@@ -357,4 +365,9 @@ impl Run {
   pub(super) fn step_keys(&self) -> BTreeSet<&StepKey> {
     self.snapshot().steps().iter().map(|step| step.key()).collect()
   }
+}
+
+/// A time limit of zero, which no run may have.
+fn zero(limit: Option<Duration>) -> bool {
+  limit.is_some_and(|limit| limit.is_zero())
 }

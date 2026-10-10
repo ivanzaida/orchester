@@ -22,29 +22,40 @@ use crate::{
 pub enum LimitsError {
   #[error("run time limit must be greater than zero")]
   ZeroDuration,
+  #[error("run time limit can be at most {} milliseconds", crate::limits::LONGEST_TIME_LIMIT.as_millis())]
+  TooLong,
 }
 
 /// Per-task token budget and time limit on active agent time; each run of the task starts with
-/// them.
+/// them. Both are optional and have no maximum: `None` means no limit (user decision 2026-10-09).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TaskLimits {
-  budget: TokenBudget,
-  max_duration: Duration,
+  budget: Option<TokenBudget>,
+  max_duration: Option<Duration>,
 }
 
 impl TaskLimits {
-  pub fn new(budget: TokenBudget, max_duration: Duration) -> Result<Self, LimitsError> {
-    if max_duration.is_zero() {
+  /// No budget and no time limit.
+  pub const NONE: Self = Self {
+    budget: None,
+    max_duration: None,
+  };
+
+  pub fn new(budget: Option<TokenBudget>, max_duration: Option<Duration>) -> Result<Self, LimitsError> {
+    if max_duration.is_some_and(|limit| limit.is_zero()) {
       return Err(LimitsError::ZeroDuration);
+    }
+    if crate::limits::too_long(max_duration) {
+      return Err(LimitsError::TooLong);
     }
     Ok(Self { budget, max_duration })
   }
 
-  pub const fn budget(self) -> TokenBudget {
+  pub const fn budget(self) -> Option<TokenBudget> {
     self.budget
   }
 
-  pub const fn max_duration(self) -> Duration {
+  pub const fn max_duration(self) -> Option<Duration> {
     self.max_duration
   }
 }
@@ -56,7 +67,7 @@ pub struct TaskDetails {
   pub brief: String,
   pub acceptance_criteria: Vec<String>,
   pub pipeline: Option<ResourceId>,
-  pub limits: Option<TaskLimits>,
+  pub limits: TaskLimits,
 }
 
 /// A detail a task must have before it can be queued.
@@ -65,22 +76,16 @@ pub enum MissingDetail {
   Brief,
   AcceptanceCriteria,
   Pipeline,
-  Limits,
 }
 
 impl TaskDetails {
   pub fn missing(&self) -> Vec<MissingDetail> {
-    missing_details(
-      &self.brief,
-      &self.acceptance_criteria,
-      self.pipeline.is_some(),
-      self.limits.is_some(),
-    )
+    missing_details(&self.brief, &self.acceptance_criteria, self.pipeline.is_some())
   }
 }
 
 /// Completeness is identical for local resource IDs and shared pipeline slugs.
-pub fn missing_details(brief: &str, criteria: &[String], pipeline: bool, limits: bool) -> Vec<MissingDetail> {
+pub fn missing_details(brief: &str, criteria: &[String], pipeline: bool) -> Vec<MissingDetail> {
   let checks = [
     (brief.trim().is_empty(), MissingDetail::Brief),
     (
@@ -88,7 +93,6 @@ pub fn missing_details(brief: &str, criteria: &[String], pipeline: bool, limits:
       MissingDetail::AcceptanceCriteria,
     ),
     (!pipeline, MissingDetail::Pipeline),
-    (!limits, MissingDetail::Limits),
   ];
   checks
     .into_iter()

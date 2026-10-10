@@ -77,13 +77,13 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "create_task",
-    description: "Saves a new draft task. Limits left out take the project's defaults, as the new task form fills them. Any published pipeline may be chosen, with Let automation change agent permissions on or off: every published version is one a person published, allowed, or could not object to (accepted behaviour). Moving an existing task to another pipeline is a person's decision (update_task).",
+    description: "Saves a new draft task. Limits left out take the project's defaults, as the new task form fills them; null is no limit, and there is no maximum. Any published pipeline may be chosen, with Let automation change agent permissions on or off: every published version is one a person published, allowed, or could not object to (accepted behaviour). Moving an existing task to another pipeline is a person's decision (update_task).",
     schema: schema_for_type::<task_write::CreateTask>,
     read_only: false,
   },
   Spec {
     name: "update_task",
-    description: "Changes a task's details or organization; fields left out stay as they are. Changing a task's pipeline to another pipeline is a person's decision: refused as person_only unless a person turned on Let automation change agent permissions (a task without a pipeline may get any published one).",
+    description: "Changes a task's details or organization; fields left out stay as they are, and a null limit is no limit. Changing a task's pipeline to another pipeline is a person's decision: refused as person_only unless a person turned on Let automation change agent permissions (a task without a pipeline may get any published one).",
     schema: schema_for_type::<task_write::UpdateTask>,
     read_only: false,
   },
@@ -158,7 +158,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "continue_run",
-    description: "Continues a run stopped at a limit with a choice its task page offers for how it stopped: raise_limits (token budget and time limit), raise_step_budget, resume (after the daily budget), allow_retry or return_to (a step that used up its retries or broke again). Every value is given; nothing raises a limit by itself. Refusals name why.",
+    description: "Continues a run stopped at a limit with a choice its task page offers for how it stopped: raise_limits (token budget and time limit), raise_step_budget, resume (after the daily budget), allow_retry or return_to (a step that used up its retries or broke again). Every value is given, null for no limit; nothing raises or lifts a limit by itself. Refusals name why.",
     schema: schema_for_type::<continue_run::ContinueRun>,
     read_only: false,
   },
@@ -194,7 +194,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "update_project_limits",
-    description: "Changes a project's limits as Project settings › Limits does: maximum, default and daily token budgets, the default time limit in minutes and how many agents work at once (1 to 16, applied at once by the project's runner). Limits left out stay as they are; invalid ones are refused with why. Returns the limits as saved.",
+    description: "Changes a project's limits as Project settings › Limits does: the default run budget and default time limit in minutes (no maximum; null for no limit), the daily token budget and how many agents work at once (1 to 16, applied at once by the project's runner). Limits left out stay as they are; invalid ones are refused with why. Returns the limits as saved, null for no limit.",
     schema: schema_for_type::<limits::UpdateProjectLimits>,
     read_only: false,
   },

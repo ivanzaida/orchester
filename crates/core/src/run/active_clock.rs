@@ -53,7 +53,7 @@ impl ActiveClock {
       return self.stopped();
     }
     Self {
-      limit: Some(run.max_duration()),
+      limit: run.max_duration(),
       ..self
     }
   }

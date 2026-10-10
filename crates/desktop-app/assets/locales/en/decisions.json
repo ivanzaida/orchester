@@ -39,8 +39,10 @@
       "stepTokens": "{{step}} tokens",
       "activeTime": "Active agent time",
       "tokensUsed": "Used {{used}} of {{limit}}",
+      "tokensUsedNoLimit": "Used {{used}} · no token limit",
       "tokensUsedMidStep": "Used {{used}} of {{limit}} · {{step}} stopped mid-step",
       "timeUsed": "Used {{used}} of {{limit}} min",
+      "timeUsedNoLimit": "Used {{used}} min · no time limit",
       "newBudget": "New token budget for this run",
       "newStepBudget": "New budget for {{step}} in this run",
       "newTime": "New time limit for this run",
@@ -65,7 +67,11 @@
       "byStepTitle": "Tokens by step",
       "byStep": "{{tokens}} tokens · {{agent}}",
       "byStepStopped": "{{tokens}} tokens · {{agent}} · attempt {{attempt}} · stopped mid-step",
-      "removeUnavailable": "Remove the limit needs optional run limits, which this version doesn't have yet. Raise the limit instead.",
+      "removeMeaning": {
+        "tokens": "Remove the limit continues the run with no token limit.",
+        "time": "Remove the limit continues the run with no time limit.",
+        "step": "Remove the limit continues the run with no budget for {{step}} in this run."
+      },
       "stepNoBudget": "No budget of this step was recorded, so there is none to raise here."
     },
     "retries": {

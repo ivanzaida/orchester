@@ -9,9 +9,7 @@
 use orchester_core::{
   id::{RunId, TaskId},
   run::{PauseReason, RaisedLimits, ReviewNote, RunLimit, RunStatus, StuckDecision},
-  store::SettingsStore,
   time::Timestamp,
-  tokens::TokenBudget,
 };
 use orchester_ipc::Command;
 use orchester_store::ProjectDb;
@@ -19,7 +17,10 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::runs::{find_run, status_now};
+use super::{
+  runs::{find_run, status_now},
+  wire,
+};
 use crate::{
   app_mcp::{
     error::ToolError,
@@ -55,15 +56,23 @@ pub struct ContinueRun {
 #[schemars(crate = "rmcp::schemars")]
 pub enum Choice {
   /// For a run stopped at its token budget or its time limit: continue with this token budget, above
-  /// what the run used and at most the project's maximum run budget, and this time limit in whole
-  /// minutes, above the active time the run used.
+  /// what the run used, and this time limit in whole minutes, above the active time the run used.
+  /// Both are required; there is no maximum, and `null` is no limit.
   RaiseLimits {
-    budget_tokens: u64,
-    time_limit_minutes: u64,
+    #[serde(deserialize_with = "wire::nullable")]
+    #[schemars(required)]
+    budget_tokens: Option<u64>,
+    #[serde(deserialize_with = "wire::nullable")]
+    #[schemars(required)]
+    time_limit_minutes: Option<u64>,
   },
   /// For a run stopped at a step's budget: continue with this budget for that step, above what the
-  /// step used and at most the project's maximum run budget.
-  RaiseStepBudget { budget_tokens: u64 },
+  /// step used. Required; there is no maximum, and `null` is no budget for the step in this run.
+  RaiseStepBudget {
+    #[serde(deserialize_with = "wire::nullable")]
+    #[schemars(required)]
+    budget_tokens: Option<u64>,
+  },
   /// For a run stopped by the project's daily budget: resume, as the page's Resume does. The runner
   /// refuses while today's budget is still used up.
   Resume,
@@ -119,7 +128,6 @@ struct Named {
 fn request(project: &OpenProject, args: &ContinueRun) -> Result<(Named, Request), ToolError> {
   let db = ProjectDb::open(&project.repo_root)?;
   let run = find_run(&db, &args.run)?;
-  let max_budget = db.project_limits()?.max_run_budget();
   drop(db);
   let number = run.number().get().to_string();
   let detail = TaskDetail::load_in(&project.repo_root, run.task())?;
@@ -140,9 +148,7 @@ fn request(project: &OpenProject, args: &ContinueRun) -> Result<(Named, Request)
     task: run.task(),
   };
   let request = match (view.run.status(), &args.choice) {
-    (RunStatus::Paused(PauseReason::LimitReached(limit)), choice) => {
-      at_limit(view, (*limit, choice), max_budget, &number)?
-    }
+    (RunStatus::Paused(PauseReason::LimitReached(limit)), choice) => at_limit(view, (*limit, choice), &number)?,
     (RunStatus::WaitingForPerson(_), choice) => Request::Command(Command::DecideStuckRun {
       run: run.id(),
       decision: decision(view, choice, &number)?,
@@ -159,12 +165,7 @@ fn request(project: &OpenProject, args: &ContinueRun) -> Result<(Named, Request)
 }
 
 /// What continuing a run stopped at `limit` with `choice` asks.
-fn at_limit(
-  view: &RunView,
-  (limit, choice): (RunLimit, &Choice),
-  max_budget: TokenBudget,
-  number: &str,
-) -> Result<Request, ToolError> {
+fn at_limit(view: &RunView, (limit, choice): (RunLimit, &Choice), number: &str) -> Result<Request, ToolError> {
   let not_offered = || refused("choice_not_offered", "appMcp.errors.choiceNotOffered", number);
   let used = raise::budget_use(view, limit);
   let raise = match (limit, choice) {
@@ -177,8 +178,11 @@ fn at_limit(
       },
     ) => {
       let (used, _) = used.ok_or_else(not_offered)?;
-      let budget = raise::run_budget(&budget_tokens.to_string(), GROUP_SEPARATOR, (used, max_budget));
-      let time = raise::time_limit(&time_limit_minutes.to_string(), view.active_time(Timestamp::now()));
+      let budget = raise::run_budget(&wire::limit_text(*budget_tokens), GROUP_SEPARATOR, used);
+      let time = raise::time_limit(
+        &wire::limit_text(*time_limit_minutes),
+        view.active_time(Timestamp::now()),
+      );
       match (budget, time) {
         (Ok(budget), Ok(max_duration)) => Raise::Limits(RaisedLimits { budget, max_duration }),
         (budget, time) => {
@@ -190,7 +194,7 @@ fn at_limit(
     (RunLimit::StepBudget { .. }, Choice::RaiseStepBudget { budget_tokens }) => {
       let (used, _) = used.ok_or_else(not_offered)?;
       let step = view.stopped_step().map(|step| &*step.name).unwrap_or_default();
-      let budget = raise::step_budget(&budget_tokens.to_string(), GROUP_SEPARATOR, (used, max_budget), step)
+      let budget = raise::step_budget(&wire::limit_text(*budget_tokens), GROUP_SEPARATOR, used, step)
         .map_err(|reason| ToolError::refused("invalid_limit", vec![reason]))?;
       Raise::StepBudget(budget)
     }

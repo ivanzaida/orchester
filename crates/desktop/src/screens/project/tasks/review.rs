@@ -30,7 +30,7 @@ use super::{
 };
 use crate::{
   background,
-  budget::{self, read_budget, read_minutes},
+  budget::{self, read_budget, read_minutes, read_optional_budget},
   messages::Message,
   tasks::{group, list::TaskRow},
   theme::{
@@ -78,6 +78,14 @@ enum Mode {
   Sequential,
 }
 impl lurq::app::component::DevtoolsInspectable for Mode {}
+
+/// Whether a token field must hold a budget (the group's cap) or may be empty for no limit (each
+/// task's budget).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Budget {
+  Required,
+  Optional,
+}
 
 type QueueSubmission = (PathBuf, TaskGroup, TaskLimits, Vec<ReviewedPipeline>);
 
@@ -231,15 +239,24 @@ impl SchedulingReview {
       .collect();
     let selected: Vec<_> = tasks.tasks.iter().filter(|t| order.contains(&t.id())).collect();
     let separator = ctx.t("number.groupSeparator");
-    if let Some(limits) = selected.first().and_then(|t| t.details().limits) {
-      self.budget.set(grouped(limits.budget().get(), &separator));
+    if let Some(limits) = selected.first().map(|t| t.details().limits) {
+      self.budget.set(
+        limits
+          .budget()
+          .map(|budget| grouped(budget.get(), &separator))
+          .unwrap_or_default(),
+      );
       self.minutes.set(budget::minutes_text(limits.max_duration()));
     }
+    // The tasks' budgets together; tasks without a budget add nothing, and none at all leaves the
+    // group's cap for the person to enter.
     let cap = selected
       .iter()
-      .filter_map(|t| t.details().limits)
-      .fold(0_u64, |sum, l| sum.saturating_add(l.budget().get()));
-    self.cap.set(grouped(cap, &separator));
+      .filter_map(|t| t.details().limits.budget())
+      .fold(0_u64, |sum, budget| sum.saturating_add(budget.get()));
+    if cap > 0 {
+      self.cap.set(grouped(cap, &separator));
+    }
     self.concurrent.set(if order.len() > 1 { 2 } else { 1 });
     self.chosen.set(OrderChoice(order.first().copied()));
     self.order.set(TaskOrder::new(order));
@@ -249,8 +266,8 @@ impl SchedulingReview {
 
   fn configuration(&self, ctx: &Ctx) -> Result<(TaskGroup, TaskLimits), Message> {
     let separator = ctx.t("number.groupSeparator");
-    let cap = read_budget(&self.cap.get(), &separator, budget::unbounded())?;
-    let budget = read_budget(&self.budget.get(), &separator, budget::unbounded())?;
+    let cap = read_budget(&self.cap.get(), &separator)?;
+    let budget = read_optional_budget(&self.budget.get(), &separator)?;
     let duration = read_minutes(&self.minutes.get())?;
     let limits = TaskLimits::new(budget, duration).expect("read_minutes rejects zero");
     let mode = match self.mode.get() {

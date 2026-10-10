@@ -1,7 +1,7 @@
 //! The prompt an agent invocation starts with: its parts in assembly order, the instructions
 //! injected at each event, where every part came from, and variables without a value.
 
-use std::{collections::BTreeSet, num::NonZeroU32};
+use std::{collections::BTreeSet, num::NonZeroU32, time::Duration};
 
 use orchester_core::{
   id::ResourceId,
@@ -12,7 +12,7 @@ use orchester_core::{
   },
   run::{
     CONTINUE_PROMPT, DependencyOutput, InstructionSource, InstructionVersion, PipelineInfo, ProfileInfo,
-    PromptAssemblyError, PromptInput, PromptPart, PromptSource, RunContext,
+    PromptAssemblyError, PromptInput, PromptPart, PromptSource, RaisedLimits, RunContext, RunLimit,
   },
   task::Task,
 };
@@ -183,6 +183,30 @@ fn prompt_names_a_variable_without_a_value_instead_of_leaving_it_empty() {
     .expect("known")
     .text;
   assert!(text.contains("Budget 1400000"));
+}
+
+#[test]
+fn prompt_names_no_limit_for_a_run_without_a_budget() {
+  let mut unlimited = Prompt::new(builder("Budget {{run.budget}}."), step_with(""), task("Brief.", &[]));
+  let research = unlimited.logged.exec("research");
+  unlimited.logged.apply(|run| run.start_step(research, at(12)));
+  unlimited
+    .logged
+    .apply(|run| run.stop_at_limit(RunLimit::Tokens, at(13)));
+  let lifted = RaisedLimits {
+    budget: None,
+    max_duration: None,
+  };
+  unlimited
+    .logged
+    .apply(|run| run.continue_with_limits(lifted, Duration::ZERO, at(14)));
+  assert_eq!(unlimited.logged.run.budget(), None);
+  let text = unlimited
+    .input(&[], &[], true)
+    .assemble(InjectionEvent::Start)
+    .expect("a run without a budget still starts its steps")
+    .text;
+  assert!(text.contains("Budget no limit."), "{text}");
 }
 
 #[test]

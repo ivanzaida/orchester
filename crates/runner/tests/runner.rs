@@ -297,8 +297,8 @@ async fn runner_answers_attach_and_start_run_requests() {
     Command::CancelRun { run },
     Command::RaiseLimit {
       run,
-      budget: TokenBudget::new(2_000_000).expect("above zero"),
-      max_duration_ms: 60_000,
+      budget: Some(TokenBudget::new(2_000_000).expect("above zero")),
+      max_duration_ms: Some(60_000),
     },
   ];
   for (id, command) in (3..).zip(controls) {

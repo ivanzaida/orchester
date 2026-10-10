@@ -22,9 +22,11 @@ fn base() -> TaskDetails {
     brief: "Export token usage.".into(),
     acceptance_criteria: vec!["The export covers the selected period".into()],
     pipeline: Some(ResourceId::generate()),
-    limits: Some(
-      TaskLimits::new(TokenBudget::new(1_400_000).expect("budget"), Duration::from_secs(1_800)).expect("limits"),
-    ),
+    limits: TaskLimits::new(
+      Some(TokenBudget::new(1_400_000).expect("budget")),
+      Some(Duration::from_secs(1_800)),
+    )
+    .expect("limits"),
   }
 }
 
@@ -59,14 +61,17 @@ fn content_fields_both_changed_are_the_person_s_choice() {
   };
   let theirs = TaskDetails {
     brief: "Export token usage to CSV from the Usage dashboard.".into(),
-    limits: None,
+    limits: TaskLimits::NONE,
     ..base.clone()
   };
   let merge = ContentMerge::new(base, mine.clone(), theirs.clone());
   assert_eq!(merge.conflicts(), vec![ContentField::Brief]);
   assert_eq!(merge.kept(), vec![ContentField::Limits]);
   let yours = merge.merged(|_| Choice::Mine);
-  assert_eq!((yours.brief.as_str(), yours.limits), (mine.brief.as_str(), None));
+  assert_eq!(
+    (yours.brief.as_str(), yours.limits),
+    (mine.brief.as_str(), TaskLimits::NONE)
+  );
   let hers = merge.merged(|_| Choice::Theirs);
   assert_eq!(hers, theirs);
 }

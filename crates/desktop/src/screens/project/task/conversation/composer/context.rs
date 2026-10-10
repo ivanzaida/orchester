@@ -128,7 +128,7 @@ fn limit_text(ctx: &Ctx, run: &RunView) -> Option<Arc<str>> {
       "runs.conversation.composer.stoppedTokens",
       [
         ("used", compact_tokens(run.run.used().get()).as_str()),
-        ("limit", compact_tokens(run.run.budget().get()).as_str()),
+        ("limit", compact_tokens(run.run.budget()?.get()).as_str()),
       ],
     )),
     RunLimit::Time => Some(ctx.t_args(
@@ -138,7 +138,7 @@ fn limit_text(ctx: &Ctx, run: &RunView) -> Option<Arc<str>> {
           "used",
           whole_minutes(run.active_time(Timestamp::now())).to_string().as_str(),
         ),
-        ("limit", whole_minutes(run.run.max_duration()).to_string().as_str()),
+        ("limit", whole_minutes(run.run.max_duration()?).to_string().as_str()),
       ],
     )),
     RunLimit::StepBudget { execution } => {

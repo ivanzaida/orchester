@@ -110,7 +110,7 @@ impl RunAgainCheck {
       steps: steps.len(),
       base: base(programs.runner(), repo_root),
       branch: BranchName::for_next_run(task.key(), listed.len()),
-      limits: task.details().limits.expect("a task that ran has limits"),
+      limits: task.details().limits,
     };
     Ok(Self {
       after,

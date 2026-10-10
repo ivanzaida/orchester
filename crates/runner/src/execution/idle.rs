@@ -56,8 +56,8 @@ pub(super) fn resume(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Prep
   store_continuation(db, root, run, &events)
 }
 
-/// Raises the limits of a run stopped at a limit, within the project's maximum run budget, and
-/// continues it.
+/// Raises the limits of a run stopped at a limit above what it used, or lifts them, and continues
+/// it.
 pub(super) fn raise(db: &mut ProjectDb, root: &Path, run: RunId, limits: RaisedLimits) -> Result<Prepared, Rejection> {
   let mut run = load(db, run)?;
   if !matches!(run.status(), RunStatus::Paused(PauseReason::LimitReached(limit)) if limit.is_run_limit()) {
@@ -67,23 +67,19 @@ pub(super) fn raise(db: &mut ProjectDb, root: &Path, run: RunId, limits: RaisedL
   let invocations = db
     .invocations(run.id())
     .map_err(|error| failed("cannot read the run's invocations", &error))?;
-  let max = db
-    .project_limits()
-    .map_err(|error| failed("cannot read the project's limits", &error))?
-    .max_run_budget();
   let events = run
-    .continue_with_limits(limits, active_time(&invocations, now), max, now)
+    .continue_with_limits(limits, active_time(&invocations, now), now)
     .map_err(rejection)?;
   store_continuation(db, root, run, &events)
 }
 
-/// Raises the budget of the step a run stopped at, within the project's maximum run budget and
-/// above what the stopped execution used, and continues the run.
+/// Raises the budget of the step a run stopped at above what the stopped execution used, or lifts
+/// it with `None`, and continues the run.
 pub(super) fn raise_step_budget(
   db: &mut ProjectDb,
   root: &Path,
   run: RunId,
-  budget: TokenBudget,
+  budget: Option<TokenBudget>,
 ) -> Result<Prepared, Rejection> {
   let mut run = load(db, run)?;
   let RunStatus::Paused(PauseReason::LimitReached(RunLimit::StepBudget { execution })) = *run.status() else {
@@ -92,16 +88,12 @@ pub(super) fn raise_step_budget(
   let invocations = db
     .invocations(run.id())
     .map_err(|error| failed("cannot read the run's invocations", &error))?;
-  let max = db
-    .project_limits()
-    .map_err(|error| failed("cannot read the project's limits", &error))?
-    .max_run_budget();
   let reviews = db
     .reviewer_usage(run.id())
     .map_err(|error| failed("cannot read what the run's reviews cost", &error))?;
   let used = execution_tokens(&invocations, &reviews, execution);
   let events = run
-    .raise_step_budget(budget, used, max, Timestamp::now())
+    .raise_step_budget(budget, used, Timestamp::now())
     .map_err(rejection)?;
   store_continuation(db, root, run, &events)
 }
@@ -178,7 +170,6 @@ pub(super) fn rejection(error: RunError) -> Rejection {
   match error {
     RunError::LimitNotRaised(limit) => Rejection::LimitNotRaised { limit },
     RunError::LimitNotAboveUsed(limit) => Rejection::LimitNotAboveUsed { limit },
-    RunError::BudgetAboveMaximum { max } => Rejection::BudgetAboveMaximum { max },
     other => failed("the run cannot change this way", &other),
   }
 }

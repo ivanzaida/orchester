@@ -340,7 +340,7 @@ or admin); **admin**; **holder** (member holding the task's claim).
 
 | Method and path | Auth | Request | Response | Errors |
 | --- | --- | --- | --- | --- |
-| `GET /server` | none | | `{ name, api_version: 1, needs_bootstrap }` | |
+| `GET /server` | none | | `{ name, api_version: 2, needs_bootstrap }` (2: task limits each optional) | |
 | `POST /auth/sessions` | none | `{ username, password, device }` | `201 { token, session, user, password_change_required }` | `401 invalid_credentials`, `429 rate_limited` |
 | `GET /auth/me` | user | | `{ user }` | `401` |
 | `GET /auth/sessions` | user | | `{ sessions: [Session] }` | |

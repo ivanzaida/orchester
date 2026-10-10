@@ -93,12 +93,22 @@ fn store_error_messages_are_translatable() {
     StoreError::AlreadyInitialized(path()),
     StoreError::NotInitialized(path()),
     StoreError::SchemaTooNew { found: 9, supported: 1 },
-    StoreError::Unrepresentable("repository path"),
+    StoreError::UnrepresentablePath("repository path"),
+    StoreError::Unrepresentable("task time limit"),
     StoreError::EmptyBatch,
   ];
   for error in &errors {
     assert_translatable(&messages::store_error(error));
   }
+  // A number too large to store is not a folder path.
+  assert_eq!(
+    messages::store_error(&StoreError::Unrepresentable("task time limit")).key,
+    "errors.unstorableValue"
+  );
+  assert_eq!(
+    messages::store_error(&StoreError::UnrepresentablePath("repository path")).key,
+    "errors.unsupportedPath"
+  );
 }
 
 #[test]

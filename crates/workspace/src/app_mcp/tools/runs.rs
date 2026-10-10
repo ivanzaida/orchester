@@ -11,6 +11,7 @@ use orchester_core::{
   },
   store::{RunStore, TaskStore},
   time::Timestamp,
+  tokens::TokenBudget,
 };
 use orchester_ipc::Command;
 use orchester_store::ProjectDb;
@@ -84,7 +85,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
       "status": wire::run_status(run.status()),
       "tokens": {
         "used": run.used().get(),
-        "budget": run.budget().get(),
+        "budget": run.budget().map(TokenBudget::get),
         "input": usage.input,
         "cached_input": usage.cached_input,
         "output": usage.output,
@@ -92,7 +93,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
       },
       "time": {
         "active_seconds": view.active_time(Timestamp::now()).as_secs(),
-        "limit_seconds": run.max_duration().as_secs(),
+        "limit_seconds": run.max_duration().map(|limit| limit.as_secs()),
       },
       "steps": steps,
       "plans": decided,

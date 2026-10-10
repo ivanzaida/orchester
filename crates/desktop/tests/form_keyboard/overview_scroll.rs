@@ -3,7 +3,13 @@
 //! with the wheel, and the scrollbar sits in a gutter of its own beside them.
 
 use lurq::{app::events::ScrollPhase, core::ElementRect};
-use orchester_core::{id::IdempotencyKey, name::Name, store::TaskStore, task::TaskDetails, time::Timestamp};
+use orchester_core::{
+  id::IdempotencyKey,
+  name::Name,
+  store::TaskStore,
+  task::{TaskDetails, TaskLimits},
+  time::Timestamp,
+};
 use orchester_desktop::theme::gutter_width;
 use orchester_store::ProjectDb;
 
@@ -24,7 +30,7 @@ fn seed(repo: &std::path::Path) {
       brief: String::new(),
       acceptance_criteria: vec![],
       pipeline: None,
-      limits: None,
+      limits: TaskLimits::NONE,
     })
     .collect();
   db.create_tasks(IdempotencyKey::generate(), details, Timestamp::now())

@@ -125,13 +125,13 @@ pub(super) fn open_conversation(ctx: &Ctx, nav: &ProjectNav, detail: &TaskDetail
 fn decision_props(ctx: &Ctx, run: &RunView, stuck: &Stuck, (stacked, blocked): (bool, bool)) -> RetryDecisionProps {
   let failed = stuck.step();
   let retry_from = run.run.retry_from().unwrap_or(failed).clone();
-  let left = ctx.t_args(
-    "runs.retryLimit.remainingValue",
-    [(
-      "count",
-      compact_tokens(run.run.used().left_of(run.run.budget())).as_str(),
-    )],
-  );
+  let left = match run.run.budget() {
+    Some(budget) => ctx.t_args(
+      "runs.retryLimit.remainingValue",
+      [("count", compact_tokens(run.run.used().left_of(budget)).as_str())],
+    ),
+    None => ctx.t("tokens.noLimit"),
+  };
   let targets: Arc<[(StepKey, Arc<str>)]> = run
     .run
     .return_targets()

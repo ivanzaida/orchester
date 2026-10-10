@@ -24,8 +24,8 @@ use orchester_core::{
   task::TaskStatus,
 };
 
-const RUN_REASON_EMPTY: &str = "Run unavailable: add a task title, describe the outcome, add an acceptance criterion, \
-                                choose a pipeline and set a run budget and a time limit (runs need both for now).";
+const RUN_REASON_EMPTY: &str =
+  "Run unavailable: add a task title, describe the outcome, add an acceptance criterion and choose a pipeline.";
 
 #[test]
 fn form_new_task_says_what_each_action_needs() {
@@ -46,14 +46,11 @@ fn form_new_task_says_what_each_action_needs() {
   );
   form.set("task-form-title-input", "Add a delivery log");
   form.choose_pipeline("Quick fix v1");
-  assert_eq!(
-    form.reasons(),
-    vec![
-      "Run unavailable: describe the outcome, add an acceptance criterion and set a run budget and a time limit \
-       (runs need both for now)."
-        .to_owned()
-    ]
-  );
+  // Limits are optional: a budget without a time limit, or neither, holds nothing back.
+  let without_limits = vec!["Run unavailable: describe the outcome and add an acceptance criterion.".to_owned()];
+  assert_eq!(form.reasons(), without_limits);
+  form.set("task-form-budget-input", "5000");
+  assert_eq!(form.reasons(), without_limits);
   assert!(form.exists("task-form-plan"), "the chosen pipeline's plan shows");
 }
 
@@ -61,8 +58,14 @@ fn form_new_task_says_what_each_action_needs() {
 fn form_limits_read_back_and_refuse_only_what_is_not_a_number() {
   let mut form = Form::seeded("live");
   form.new_task();
-  assert_eq!(form.text("task-form-budget-input-read-back"), "No limit");
-  assert_eq!(form.text("task-form-time-limit-input-read-back"), "No limit");
+  assert_eq!(
+    form.text("task-form-budget-input-read-back"),
+    "No limit · the run uses what it needs"
+  );
+  assert_eq!(
+    form.text("task-form-time-limit-input-read-back"),
+    "No limit · the run takes the time it needs"
+  );
   // A budget set at once reads grouped once the field is left.
   form.set("task-form-budget-input", "1400000");
   focus(&mut form, "task-form-budget-input");
@@ -82,6 +85,12 @@ fn form_limits_read_back_and_refuse_only_what_is_not_a_number() {
   assert_eq!(
     form.text("task-form-budget-input-read-back"),
     "= 50B tokens · input + output"
+  );
+  // More minutes than a time limit can hold is refused in the field, not when the task is saved.
+  form.set("task-form-time-limit-input", "307445734561825860");
+  assert_eq!(
+    form.text("task-form-time-limit-input-note"),
+    "A time limit can be at most 153722867280912 minutes."
   );
   form.set("task-form-budget-input", "1,000");
   form.set("task-form-time-limit-input", "0");
@@ -122,7 +131,11 @@ fn form_create_saves_a_draft_and_highlights_it_in_tasks() {
   let task = form.task("KON-7").expect("Create stored the task");
   assert_eq!(task.status(), TaskStatus::Draft);
   assert_eq!(task.details().title.as_str(), "Write the delivery docs");
-  assert_eq!(task.details().limits, None, "empty limits are no limits");
+  assert_eq!(
+    task.details().limits,
+    orchester_core::task::TaskLimits::NONE,
+    "empty limits are no limits"
+  );
 }
 
 #[test]
