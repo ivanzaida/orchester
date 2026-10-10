@@ -233,13 +233,18 @@ struct TaskFrame {
   /// Why the task could not be read again, kept while it is read again until a reading succeeds.
   stale: Signal<StaleRead>,
   state: PageState,
+  /// The composer's draft and sends, kept across the page's tabs and the task's runs.
+  composer: conversation::ComposerState,
 }
 
 impl Component for TaskFrame {
   type Props = FrameProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let props = ctx.props::<FrameProps>().clone();
+    let composer = conversation::ComposerState::new(ctx, &props.project, (props.task, &props.key));
     Self {
+      composer,
       retries: ctx.signal(0),
       stale: ctx.signal(StaleRead(None)),
       state: PageState {
@@ -252,6 +257,9 @@ impl Component for TaskFrame {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<FrameProps>().clone();
+    // First: the composer's sends are kept by the order the page asks for its futures.
+    self.composer.keep(ctx);
+    ctx.provide(self.composer.clone());
     ctx.provide(self.state.clone());
     let feed = &props.project.feed;
     let saves = feed.revision.get() + feed.outside.get().tasks;

@@ -7,11 +7,9 @@
 //! agent reads any more, and that does not run again, refuses it.
 
 use orchester_core::{
-  conversation::{Recipient, Timing},
   id::{IdempotencyKey, RunId},
-  run::{Answerer, PlanDecision, ReviewNote},
+  run::Answerer,
 };
-use orchester_ipc::Command;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -28,14 +26,12 @@ use crate::{
   messages::Message,
   tasks::{
     conversation::{
-      Conversation, SendError,
-      composer::{ComposerMode, Then},
+      SendError,
+      composer::ComposerMode,
       follow::{RunnerOf, Sent, Stored, follow},
-      send_in,
+      outgoing::{OutgoingError, Way, plan_changes, prepare_in, store_in},
     },
-    detail::TaskDetail,
     outside::Outside,
-    plan::PlanReview,
     run::control_message,
   },
   workspace::OpenProject,
@@ -66,35 +62,39 @@ pub enum SendTiming {
   AfterTurn,
 }
 
-/// What the run's state makes of the message, read from what is stored.
-struct Prepared {
-  /// The task's latest run, which the message is for.
-  run: RunId,
-  detail: TaskDetail,
-  conversation: Conversation,
-  mode: ComposerMode,
-  recipient: Recipient,
-  timing: Timing,
-}
-
 pub async fn send_message(services: &Services, args: SendMessage, translate: &Translate) -> Result<Value, ToolError> {
   let reading = services.clone();
   let (project, run) = (args.project.clone(), args.run.clone());
   let (project, prepared) = blocking(move || {
     let project = reading.project(&project)?;
     let named = find_run(&orchester_store::ProjectDb::open(&project.repo_root)?, &run)?;
-    let prepared = prepare(&project, named.id(), named.task(), args.timing)?;
+    // Automation reads the run as stored: the runner it asks starts if the project has none.
+    let prepared = prepare_in(&project.repo_root, (named.task(), Some(named.id())), (false, None)).map_err(refusal)?;
     Ok((project, prepared))
   })
   .await?;
-  let run = prepared.run;
+  let run = prepared.run().expect("the run named is the task's latest");
   if let ComposerMode::PlanChanges { .. } = prepared.mode {
-    request_plan_changes(services, &project, &prepared, &args.text).await?;
+    let command = plan_changes(&prepared, &args.text, (Answerer::Automation, None)).map_err(refusal)?;
+    services
+      .runners
+      .control_run_in(&project, command)
+      .await
+      .map_err(|error| ToolError::runner(&error, vec![control_message(&error)]))?;
     return reply(&project, run, ("request_plan_changes", Sent::Taken), translate).await;
   }
-  let then = prepared.mode.then().ok_or_else(|| closed(&prepared.conversation))?;
   let key = IdempotencyKey::generate();
-  store(&project, &prepared, (key, then), args.text).await?;
+  let way = match (&prepared.mode, args.timing) {
+    (ComposerMode::Steer(working), Some(SendTiming::Now)) if working.mid_turn => Way::Primary,
+    (ComposerMode::Steer(working), _) if working.mid_turn => Way::Second,
+    _ => Way::Primary,
+  };
+  let (root, text) = (project.repo_root.clone(), args.text.clone());
+  let (prepared, then) = blocking(move || {
+    let (then, _) = store_in(&root, &prepared, (key, way), &text).map_err(refusal)?;
+    Ok((prepared, then))
+  })
+  .await?;
   // An open Conversation of the task reads the stored message in place.
   services.changes.record(project.project.id(), Outside::Tasks);
   let pipeline = prepared
@@ -112,117 +112,30 @@ pub async fn send_message(services: &Services, args: SendMessage, translate: &Tr
   };
   let runner = (&services.runners, &services.servers, RunnerOf::Project(&project));
   let sent = follow(runner, &stored, then).await;
-  reply(&project, run, (action(&prepared), sent), translate).await
+  reply(&project, run, (action(&prepared.mode, way), sent), translate).await
 }
 
-/// The task's conversation and the composer's mode for the message, with whom it goes to; refused
-/// unless `run` is the task's latest.
-fn prepare(
-  project: &OpenProject,
-  run: RunId,
-  task: orchester_core::id::TaskId,
-  timing: Option<SendTiming>,
-) -> Result<Prepared, ToolError> {
-  let detail = TaskDetail::load_in(&project.repo_root, task)?;
-  let latest = detail.run.as_ref().map(crate::tasks::detail::RunView::id);
-  if latest != Some(run) {
-    let reason = match &detail.run {
-      Some(latest) => {
-        Message::new("conversation.errors.notLatestRun").with("run", latest.run.number().get().to_string())
-      }
-      None => Message::new("runs.unreadable.rejected"),
-    };
-    return Err(ToolError::refused("not_latest_run", vec![reason]));
+/// Why the message was refused, as the tool says it.
+fn refusal(error: OutgoingError) -> ToolError {
+  let reason = error.message();
+  match error {
+    OutgoingError::Store(error) | OutgoingError::Send(SendError::Store(error)) => error.into(),
+    OutgoingError::NotLatestRun(_) => ToolError::refused("not_latest_run", vec![reason]),
+    OutgoingError::Closed(_) => ToolError::refused("no_agent_reads", vec![reason]),
+    OutgoingError::Send(SendError::Blank) => ToolError::refused("blank_message", vec![reason]),
+    OutgoingError::Changed
+    | OutgoingError::NoSecondWay
+    | OutgoingError::NoPlan
+    | OutgoingError::Send(SendError::InvalidRecovery | SendError::NotUndelivered | SendError::NotReadable) => {
+      ToolError::refused("not_sent", vec![reason])
+    }
   }
-  // Automation reads the run as stored: the runner it asks starts if the project has none.
-  let conversation = Conversation::of(&detail, false, None);
-  let run_view = detail.run.as_ref();
-  let recipient = ComposerMode::of(&conversation, run_view, Recipient::Orchestrator).default_recipient(&conversation);
-  let mode = ComposerMode::of(&conversation, run_view, recipient);
-  let timing = match (&mode, timing) {
-    (ComposerMode::Steer(working), Some(SendTiming::Now)) if working.mid_turn => Timing::Now,
-    _ => Timing::AfterTurn,
-  };
-  Ok(Prepared {
-    run,
-    detail,
-    conversation,
-    mode,
-    recipient,
-    timing,
-  })
-}
-
-/// Stores the message as the composer stores it: for the task's next run when it runs again, with
-/// the failure it continues after when it continues the run.
-async fn store(
-  project: &OpenProject,
-  prepared: &Prepared,
-  (key, then): (IdempotencyKey, Then),
-  text: String,
-) -> Result<(), ToolError> {
-  let root = project.repo_root.clone();
-  let task = prepared.detail.task.id();
-  let run = Some(prepared.run).filter(|_| !then.for_next_run());
-  let recovery_after = prepared
-    .conversation
-    .recovery_after
-    .filter(|_| prepared.mode == ComposerMode::Continue);
-  let (recipient, timing) = (prepared.recipient, prepared.timing);
-  blocking(move || {
-    send_in(&root, key, (task, run, recovery_after), (recipient, timing), &text).map_err(|error| {
-      let reason = error.message();
-      match error {
-        SendError::Store(error) => error.into(),
-        SendError::Blank => ToolError::refused("blank_message", vec![reason]),
-        SendError::InvalidRecovery | SendError::NotUndelivered => ToolError::refused("not_sent", vec![reason]),
-      }
-    })?;
-    Ok(())
-  })
-  .await
-}
-
-/// *Request changes* with the message as the changes the waiting plan needs, recorded as automation's:
-/// it came through Orchester's MCP server.
-async fn request_plan_changes(
-  services: &Services,
-  project: &OpenProject,
-  prepared: &Prepared,
-  text: &str,
-) -> Result<(), ToolError> {
-  let review = prepared
-    .detail
-    .run
-    .as_ref()
-    .and_then(PlanReview::of)
-    .expect("a plan waits in the plan's mode");
-  let note = ReviewNote::new(text)
-    .map_err(|_| ToolError::refused("blank_message", vec![Message::new("conversation.errors.blank")]))?;
-  let waiting = review.waiting();
-  let command = Command::DecidePlan {
-    run: review.run,
-    execution: waiting.execution,
-    version: waiting.version,
-    decision: PlanDecision::ChangesRequested { note },
-    by: Answerer::Automation,
-  };
-  services
-    .runners
-    .control_run_in(project, command)
-    .await
-    .map_err(|error| ToolError::runner(&error, vec![control_message(&error)]))
-}
-
-/// No agent reads the message, and the task does not run again: why, as the closed composer says it.
-fn closed(conversation: &Conversation) -> ToolError {
-  ToolError::refused("no_agent_reads", vec![Message::new(conversation.state.closed_reason())])
 }
 
 /// What the composer's action is in the run's state, as the result names it.
-fn action(prepared: &Prepared) -> &'static str {
-  match &prepared.mode {
-    ComposerMode::Steer(_) if prepared.timing == Timing::Now => "send_now",
+fn action(mode: &ComposerMode, way: Way) -> &'static str {
+  match mode {
+    ComposerMode::Steer(working) if working.mid_turn && way == Way::Primary => "send_now",
     ComposerMode::Steer(_) => "send_after_turn",
     ComposerMode::Queue(_) => "queue",
     ComposerMode::Answer { .. } => "answer",

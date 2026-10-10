@@ -170,6 +170,7 @@ pub fn palette(mode: Mode) -> ThemePalette {
     extra: ExtraColor::ALL
       .into_iter()
       .map(|extra| (Arc::from(extra.name()), extra.color(mode)))
+      .chain(super::composer::colors(mode))
       .collect(),
   }
 }
