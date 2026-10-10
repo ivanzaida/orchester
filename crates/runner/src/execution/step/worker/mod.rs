@@ -281,6 +281,16 @@ impl Watch {
 
 impl Worker {
   /// The App Server conversation, for Codex.
+  pub(super) fn app_server_mut(&mut self) -> Option<&mut AppServerSession> {
+    match &mut self.driver {
+      Driver::Process {
+        transport: Transport::AppServer(app),
+        ..
+      } => Some(&mut **app),
+      Driver::Process { .. } | Driver::Native(_) => None,
+    }
+  }
+
   pub(super) const fn app_server(&self) -> Option<&AppServerSession> {
     match &self.driver {
       Driver::Process {

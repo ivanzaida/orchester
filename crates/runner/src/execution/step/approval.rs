@@ -124,7 +124,12 @@ impl Worker {
   /// A permission prompt call of Claude Code, or a call of Orchester's tools the relay holds, that a person
   /// decides. A prompt call asked about before is denied without asking again.
   pub(super) async fn request_claude_approval(&mut self, watch: &mut Watch, asked: Asked) -> Result<(), StoreError> {
-    let Asked { request, reply, by } = asked;
+    let Asked {
+      request,
+      reply,
+      by,
+      arguments,
+    } = asked;
     let first = match (by, self.claude_approvals.as_mut()) {
       (AskedBy::ToolCall, _) => true,
       (AskedBy::Prompt, approvals) => approvals.is_some_and(|approvals| approvals.first_ask(request.call())),
@@ -154,7 +159,12 @@ impl Worker {
       scope: request.scope().map(str::to_owned),
       native: None,
     };
-    let call = request.call().to_owned();
+    // A Codex call the runner asks about is the call Codex started: one row, whose end says a person was asked.
+    let codex_item = match (by, self.app_server_mut()) {
+      (AskedBy::ToolCall, Some(app)) => app.runner_asks(request.action(), &arguments),
+      _ => None,
+    };
+    let call = codex_item.unwrap_or_else(|| request.call().to_owned());
     let key = call.clone();
     let awaiting = match by {
       AskedBy::Prompt => Awaiting::Claude { call, reply },

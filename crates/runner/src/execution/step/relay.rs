@@ -392,7 +392,7 @@ impl Relay {
     (tool, input): (Option<OrchesterTool>, &Value),
     lines: &mut Lines<BufReader<OwnedReadHalf>>,
   ) -> Option<String> {
-    let answer = self.ask(request, AskedBy::Prompt, lines).await?;
+    let answer = self.ask(request, (AskedBy::Prompt, Value::Null), lines).await?;
     if let (Some(tool), PromptAnswer::Allow) = (tool, &answer) {
       self.served.tools.grant(tool, input);
     }
@@ -435,7 +435,7 @@ impl Relay {
         Some(target) => request.with_target(target),
         None => request,
       };
-      match self.ask(request, AskedBy::ToolCall, lines).await? {
+      match self.ask(request, (AskedBy::ToolCall, arguments.clone()), lines).await? {
         PromptAnswer::Allow => {}
         PromptAnswer::Deny(told) => return Some(ToolResult::unavailable(&told)),
         PromptAnswer::Repeated => return Some(ToolResult::unavailable(DENIED)),
@@ -449,11 +449,17 @@ impl Relay {
   async fn ask(
     &self,
     request: ClaudeApprovalRequest,
-    by: AskedBy,
+    (by, arguments): (AskedBy, Value),
     lines: &mut Lines<BufReader<OwnedReadHalf>>,
   ) -> Option<PromptAnswer> {
     let (reply, decision) = oneshot::channel();
-    if self.requests.send(Asked { request, reply, by }).is_err() {
+    let asked = Asked {
+      request,
+      reply,
+      by,
+      arguments,
+    };
+    if self.requests.send(asked).is_err() {
       return Some(PromptAnswer::Repeated);
     }
     tokio::select! {

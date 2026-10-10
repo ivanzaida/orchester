@@ -277,3 +277,63 @@ fn a_user_message_the_turn_took_is_reported_with_its_text() {
   let updates = stream.parse(&taken.to_string()).expect("item");
   assert!(matches!(updates.as_slice(), [Update::InputTaken(text)] if text == "Also cover cancel."));
 }
+
+/// Codex runs Orchester's tools without asking, so the runner asks a person itself; the call's end then says a person
+/// was asked, whether the runner's request comes before Codex starts the call or after.
+#[test]
+fn app_server_a_call_the_runner_asked_about_ends_as_asked() {
+  let input = json!({"filename": "/deps/notes.txt"});
+  let call = |id: &str, arguments: &Value| {
+    let item = json!({"id": id, "type": "mcpToolCall", "server": "Orchester", "tool": "read_external_file",
+      "arguments": arguments});
+    let mut done = item.clone();
+    done["status"] = json!("completed");
+    (
+      json!({"method": "item/started", "params": {"threadId": "t", "turnId": "turn", "item": item}}).to_string(),
+      json!({"method": "item/completed", "params": {"threadId": "t", "turnId": "turn", "item": done}}).to_string(),
+    )
+  };
+  let asked = |updates: Vec<Update>| {
+    updates.into_iter().find_map(|update| match update {
+      Update::Activity(AgentEvent::McpToolFinished { item, asked, .. }) => Some((item, asked)),
+      _ => None,
+    })
+  };
+  let mut stream = AppServerStream::default();
+  let (started, completed) = call("mcp-1", &input);
+  stream.parse(&started).expect("started");
+  assert_eq!(
+    stream.runner_asks("read_external_file", &input).as_deref(),
+    Some("mcp-1")
+  );
+  assert_eq!(
+    asked(stream.parse(&completed).expect("completed")),
+    Some(("mcp-1".to_owned(), true))
+  );
+  // Asked before Codex started the call: its start is marked.
+  assert_eq!(stream.runner_asks("read_external_file", &input), None);
+  let (started, completed) = call("mcp-2", &input);
+  stream.parse(&started).expect("started");
+  assert_eq!(
+    asked(stream.parse(&completed).expect("completed")),
+    Some(("mcp-2".to_owned(), true))
+  );
+  // A call with other arguments was not asked about.
+  let (started, completed) = call("mcp-3", &json!({"filename": "/deps/other.txt"}));
+  stream.parse(&started).expect("started");
+  assert_eq!(
+    asked(stream.parse(&completed).expect("completed")),
+    Some(("mcp-3".to_owned(), false))
+  );
+  // A request whose call Codex never started (the turn was interrupted) does not mark a later identical call.
+  assert_eq!(stream.runner_asks("read_external_file", &input), None);
+  let interrupted = json!({"method": "turn/completed", "params": {"threadId": "t", "turn": {"id": "turn",
+    "status": "interrupted"}}});
+  stream.parse(&interrupted.to_string()).expect("turn ended");
+  let (started, completed) = call("mcp-4", &input);
+  stream.parse(&started).expect("started");
+  assert_eq!(
+    asked(stream.parse(&completed).expect("completed")),
+    Some(("mcp-4".to_owned(), false))
+  );
+}
