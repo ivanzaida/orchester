@@ -6,6 +6,7 @@ mod app_menu;
 mod tab_fit;
 mod tab_strip;
 mod title_bar;
+mod traffic_lights;
 
 use std::sync::Arc;
 
@@ -13,11 +14,12 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
+    events::MouseEvent,
     theme::{BorderSize, PaletteColor},
   },
   components::{
     ChromeBorderPolicy, ChromeTitleBar, Row, Text, WindowChrome, WindowChromeMode, WindowChromeProps,
-    WindowControlContent, WindowControlKind, WindowControls,
+    WindowControlContent, WindowControlKind, WindowControlStyle, WindowControls,
   },
   layout::{Alignment, layout_kind::Justify},
   node::{Element, HitTestBehavior, TextColor, dimension::Dimension},
@@ -25,6 +27,7 @@ use lurq::{
 
 pub use self::tab_strip::PillRef;
 use crate::{
+  services::Services,
   theme::{ExtraColor, ExtraRadius, IconSize},
   ui::icon::{Icon, glyph as icon_glyph},
 };
@@ -45,10 +48,12 @@ pub fn bare(ctx: &mut Ctx, screen: Element) -> Element {
 }
 
 fn window(ctx: &mut Ctx, screen: Element, tabs: bool, closing: bool) -> Element {
+  let close = close(ctx);
+  let lights = cfg!(target_os = "macos").then(|| traffic_lights::lights(ctx, close.clone()));
   let bar = ChromeTitleBar::new()
     .background(PaletteColor::SurfaceBase)
     .border_bottom(None)
-    .controls(controls(ctx));
+    .controls(controls(ctx, &close));
   let outline = ctx.mount_keyed::<WindowOutline>("window-outline", ());
   WindowChrome::new()
     .props(
@@ -60,10 +65,26 @@ fn window(ctx: &mut Ctx, screen: Element, tabs: bool, closing: bool) -> Element 
         .windows_height(TITLE_BAR_HEIGHT)
         .macos_height(TITLE_BAR_HEIGHT),
     )
-    .title_bar(title_bar::content(ctx, bar, tabs, closing))
+    .title_bar(title_bar::content(ctx, bar, (tabs, closing), lights))
     .content(screen)
     .overlay(outline)
     .mount(ctx)
+}
+
+/// What the window's own close controls do: ask to close, as the system's close does.
+pub(super) type Close = Arc<dyn Fn() + Send + Sync>;
+
+/// The close of a started session goes to its close flow, which may hold it (`lifecycle`) and closes the
+/// window once it may; a startup screen's window closes as the system asks.
+fn close(ctx: &mut Ctx) -> Close {
+  let window = ctx.window();
+  match ctx.use_context::<Services>() {
+    Some(services) => Arc::new(move || {
+      let window = window.clone();
+      services.close.request(move || window.close());
+    }),
+    None => Arc::new(move || window.request_close()),
+  }
 }
 
 /// The window's 1px frame (the `border_strong` stroke of the window frames), rounded like the window's
@@ -93,10 +114,19 @@ impl Component for WindowOutline {
 
 /// The Windows controls (`Window controls` `i3Ckir`): lucide glyphs in `text_secondary`, the `hover` and
 /// `pressed` overlays. The design gives the close control no color of its own, so it hovers like the
-/// others. Each control's content fills it and carries an id and a name for agents. macOS keeps lurq's
-/// traffic lights, which take neither.
-fn controls(ctx: &mut Ctx) -> WindowControls {
+/// others. Each control's content fills it and carries an id and a name for agents. lurq's close control
+/// closes the window outright after its handler; the close control's content takes the press first and
+/// asks to close instead, which the window's close flow can hold (`lifecycle`). On macOS lurq's traffic
+/// lights have the same forced close and no content of their own, so the app draws them
+/// ([`traffic_lights`]) and lurq's are hidden.
+fn controls(ctx: &mut Ctx, close: &Close) -> WindowControls {
+  let style = if cfg!(target_os = "macos") {
+    WindowControlStyle::Hidden
+  } else {
+    WindowControlStyle::Windows
+  };
   let mut controls = WindowControls::new()
+    .style(style)
     .foreground(PaletteColor::TextSecondary)
     .hover_background(ExtraColor::Hover.role())
     .active_background(ExtraColor::Pressed.role());
@@ -131,22 +161,38 @@ fn controls(ctx: &mut Ctx) -> WindowControls {
     ),
   ] {
     let name = ctx.t(name_key);
-    controls = controls.content(kind, control(id, name, glyph, size));
+    let press = (kind == WindowControlKind::Close).then(|| close.clone());
+    controls = controls.content(kind, control(id, name, (glyph, size), press));
   }
   controls
 }
 
-fn control(id: &'static str, name: Arc<str>, glyph: Icon, size: IconSize) -> WindowControlContent {
+/// A control's content; the close control's (`close`) asks the window to close.
+fn control(
+  id: &'static str,
+  name: Arc<str>,
+  (glyph, size): (Icon, IconSize),
+  close: Option<Close>,
+) -> WindowControlContent {
   let glyph = icon_glyph(glyph);
   WindowControlContent::element(move |color: TextColor| {
-    Row::new()
+    let content = Row::new()
       .id(id)
       .describe("a11y_name", name.clone())
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .align_items(Alignment::Center)
       .justify(Justify::Center)
-      .child(Text::new(&glyph).variant(size.role()).color(color))
-      .into()
+      .child(Text::new(&glyph).variant(size.role()).color(color));
+    match close.clone() {
+      Some(close) => content
+        .on_click(move |event: MouseEvent| {
+          close();
+          event.prevent_default();
+          event.stop_immediate_propagation();
+        })
+        .into(),
+      None => content.into(),
+    }
   })
 }
