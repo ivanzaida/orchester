@@ -326,9 +326,9 @@ outside a bundle keeps it next to its executable, as on Windows.
   the app crashes or is killed. Another app started on the same data, a second copy of the same
   one or the other app, opens nothing there: the new app shows *Orchester is already open* with the
   folder and the other window's process, *Switch to that window* (Windows) and *Close this window*,
-  or *Orchester is closing* while the other one is ending; the deprecated app shows *Another
-  Orchester window is using this data folder. Switch to that window, or close it and start
-  Orchester again.* with the folder. Close the one you are done with, then start the other.
+  or *Orchester is closing* while the other one is ending; the deprecated app shows *Orchester
+  cannot open its database*: "Another Orchester window is using this data folder. Switch to that
+  window, or close it and start Orchester again." with the folder. Close the one you are done with, then start the other.
 - **Both apps come from one build.** They read and migrate the same application database and the
   same project databases, and start the same runner, so `tools/install.ps1` (and
   `tools/install-macos.sh`) always builds and installs them together. Never copy one app from
@@ -362,8 +362,9 @@ and both builds open the same one.
   restored with its data.
 - **What a too-new database looks like to an older build.** The new app shows *Orchester can't
   open its data*: "The database was written by a newer version of Orchester. It has data version
-  … ; this build reads up to version …. Nothing was changed." The deprecated app shows "The data
-  was written by a newer version of Orchester." with the database's path instead of its window.
+  … ; this build reads up to version …. Nothing was changed." The deprecated app shows *Orchester
+  cannot open its database*: "The data was written by a newer version of Orchester." with the
+  database's path, instead of its window.
   A project database a newer build migrated is refused the same way when the project opens (see
   *Schema versions* above). Neither changes the file. Install the newer build (both apps) again,
   or restore the copy you set aside. A build refuses only a schema version it does not know: what
