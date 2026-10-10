@@ -34,7 +34,8 @@ fn status_items_without_a_project_are_the_apps_own() {
   assert!(unavailable.texts("status-window-control").is_none());
 }
 
-/// The project item says the project's name; its folder shows in the name's tooltip.
+/// The project item says the project's name; its folder shows in a tooltip that hangs from the item's
+/// start, the glyph included in what the pointer rests on (`z61KIT`).
 #[test]
 fn status_project_is_its_name_with_its_folder_in_a_tooltip() {
   let mut bar = Bar::of(facts(Some(kontur(
@@ -42,7 +43,18 @@ fn status_project_is_its_name_with_its_folder_in_a_tooltip() {
     ProjectTasks::default(),
   ))));
   assert_eq!(bar.texts("status-project"), Some(vec!["Kontur".to_owned()]));
+  let (item, name) = (bar.bounds("status-project"), bar.bounds("status-project-text"));
+  assert_eq!(
+    name.x - item.x,
+    8.0 + 12.0 + 6.0,
+    "padding, glyph and gap before the name"
+  );
   assert_eq!(bar.tooltip("status-project-text"), Some(vec![ROOT.to_owned()]));
+  assert_eq!(
+    bar.bounds("status-project-text-tooltip").x,
+    item.x,
+    "the tooltip starts at the item"
+  );
 }
 
 #[test]

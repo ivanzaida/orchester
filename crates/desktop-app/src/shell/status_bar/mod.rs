@@ -21,7 +21,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, StreamEmitter},
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Row, Spacer},
   layout::{Alignment, layout_kind::ShrinkLimit},
@@ -36,13 +36,14 @@ use orchester_workspace::activity::{
 pub use self::facts::{BarAction, BarFacts, Dispatch, ProjectFacts, ReadFailure, RunnerFacts, Stopping};
 use self::{
   act::Stopper,
-  item::{give_way, glyph, item, label},
+  item::{frame, give_way, glyph, item, label},
 };
 use crate::{
   mcp::McpStatus,
   project::{ProjectFeed, ProjectState, Projects, TasksState},
   routes::Route,
   services::Services,
+  theme::ExtraColor,
   ui::{icon::Icon, tooltip::Truncated},
 };
 
@@ -229,7 +230,9 @@ impl Component for StatusBarView {
   }
 }
 
-/// *Kontur* (`ZQiMf`), its folder in the name's tooltip; once the name is cut, the tooltip says both.
+/// *Kontur* (`ZQiMf`), its folder in a mono tooltip from the item's start while the pointer rests on it,
+/// the item in the `hover` fill with its words in `text_secondary` (`f5nEqj`, `C9Phsz` in `z61KIT`); once
+/// the name is cut, the tooltip says both.
 fn project_item(ctx: &mut Ctx, project: &ProjectFacts) -> Element {
   let folder = project.repo_root.display().to_string();
   let both = ctx.t_args(
@@ -239,12 +242,23 @@ fn project_item(ctx: &mut Ctx, project: &ProjectFacts) -> Element {
   let name = Truncated::new("status-project-text", project.name.as_str(), TypographyStyle::Caption)
     .color(PaletteColor::TextMuted)
     .hint(folder, both)
+    .mono()
+    .framed(PaletteColor::TextSecondary, |row, hovered| {
+      let row = frame(row).rounded(RadiusSize::Sm);
+      if hovered {
+        row
+          .background(ExtraColor::Hover.role())
+          .child(glyph(Icon::HardDrive, PaletteColor::TextSecondary))
+      } else {
+        row.child(glyph(Icon::HardDrive, PaletteColor::TextMuted))
+      }
+    })
     .render(ctx);
-  item("status-project")
+  Row::new()
+    .id("status-project")
     .flex_shrink(1.0)
     .shrink_order(give_way::PROJECT)
     .shrink_limit(ShrinkLimit::Content)
-    .child(glyph(Icon::HardDrive, PaletteColor::TextMuted))
     .child(name)
     .into()
 }

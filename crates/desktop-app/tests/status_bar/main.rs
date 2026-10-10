@@ -11,6 +11,7 @@ use std::{
 
 use lurq::{
   app::{App, Tree, events::MouseButton},
+  core::ElementRect,
   node::element::ElementRef,
 };
 use orchester_app::{
@@ -92,12 +93,15 @@ impl Bar {
 
   /// The width the element `id` takes; 0 once it gave way.
   fn width(&mut self, id: &str) -> f32 {
+    self.bounds(id).width
+  }
+
+  fn bounds(&mut self, id: &str) -> ElementRect {
     self
       .tree
       .get_element_by_id_mut(id)
       .and_then(|element| element.bounds())
       .unwrap_or_else(|| panic!("{id} is laid out"))
-      .width
   }
 
   fn press(&mut self, id: &str) {
@@ -115,11 +119,7 @@ impl Bar {
 
   /// The words of the tooltip of the element `id`, once the pointer rested on it.
   fn tooltip(&mut self, id: &str) -> Option<Vec<String>> {
-    let bounds = self
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|element| element.bounds())
-      .unwrap_or_else(|| panic!("{id} is laid out"));
+    let bounds = self.bounds(id);
     let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
     self.tree.mouse_move(x, y);
     self.tree.pass_headless(&mut self.app);
