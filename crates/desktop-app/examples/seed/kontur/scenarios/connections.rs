@@ -58,7 +58,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
 }
 
 /// A CLI connection, recorded as its check found it.
-fn cli(
+pub(super) fn cli(
   kontur: &mut Kontur,
   (named, provider, program): (&str, AgentProvider, PathBuf),
   (version, sign_in, models): (&str, SignIn, &[&str]),

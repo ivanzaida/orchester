@@ -88,3 +88,29 @@ fn agents_failed_load_can_retry() {
   screen.click("agents-load-error-retry");
   screen.until("retried", |s| s.exists("agents-new"));
 }
+#[test]
+fn agents_profile_form_fits_the_initial_viewport_and_published_card_has_no_draft() {
+  let mut screen = Agents::new(true);
+  let id = screen.profile(true);
+  screen.open(id);
+  let mut bounds = |id: &str| {
+    screen
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} laid out"))
+  };
+  let label = bounds("agent-role-label");
+  let name = bounds("agent-role-box");
+  let instructions = bounds("agent-instructions-box");
+  assert!(label.width > 60.0, "name label has room: {label:?}");
+  assert!(name.y < 350.0, "name starts near the top: {name:?}");
+  assert!(
+    instructions.y + instructions.height < 872.0,
+    "instructions fit above the status bar: {instructions:?}"
+  );
+  let card = screen.text("agent-draft-card");
+  assert!(card.contains("No changes since v1"), "{card}");
+  assert!(!card.contains("Draft v2"), "{card}");
+}

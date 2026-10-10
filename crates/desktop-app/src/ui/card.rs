@@ -42,11 +42,15 @@ impl CardSurface {
 
 /// A card on `surface` with the element id `id`, as wide as its parent; add its content as children.
 pub fn card(id: &str, surface: CardSurface) -> Column {
+  card_frame(id, surface).padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
+}
+
+/// A card whose header and body own their padding (`LruUv`, `VsylR`).
+pub fn card_frame(id: &str, surface: CardSurface) -> Column {
   let (fill, stroke) = surface.colors();
   let card = Column::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
     .border(Border::inside(BorderSize::Sm, stroke))
     .rounded(RadiusSize::Lg)
     .clip();

@@ -25,6 +25,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     field::{FieldInput, field_error},
     form_section::section,
+    icon::Icon,
     message::message_text,
   },
 };
@@ -74,11 +75,14 @@ impl Component for Lists {
     let props = ctx.props::<Props>().clone();
     let add = folder_action(ctx);
     let folder_state = add.state().get();
-    let folder_input = FieldInput::new("agent-folder", ctx.t("agents.folderPath"), self.folder.clone()).render(ctx);
+    let folder_input = FieldInput::new("agent-folder", ctx.t("agents.folderPath"), self.folder.clone())
+      .placeholder(ctx.t("agents.folderPath"))
+      .render(ctx);
     let fields = props.fields.clone();
     let folder = self.folder.clone();
     let root = props.project.open.repo_root.clone();
-    let folder_button = ActionButton::new("agent-add-folder", ButtonKind::Secondary, ctx.t("agents.addFolder"));
+    let folder_button =
+      ActionButton::new("agent-add-folder", ButtonKind::Secondary, ctx.t("agents.addFolder")).icon(Icon::Folder);
     let folder_button = if folder_state.is_pending() {
       folder_button.loading()
     } else if fields.permissions.get().0.repository() != RepositoryAccess::Write {
@@ -102,6 +106,7 @@ impl Component for Lists {
         },
       ));
     }
+    folder_rows.insert(0, words::note(&ctx.t("agents.foldersHint")).into());
     folder_rows.push(
       Row::new()
         .width(Dimension::Pct(100.0))

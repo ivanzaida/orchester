@@ -7,6 +7,7 @@ mod fields;
 mod list;
 mod panels;
 mod permissions;
+mod policy_panel;
 mod uses;
 mod words;
 
@@ -76,16 +77,18 @@ impl Component for AgentsScreen {
       outside.of(Outside::Profiles),
       project.feed.changes.get(),
     );
+    let hold = crate::services::Services::of(ctx).hold;
     let loaded = ctx
-      .future(
-        (project.open.repo_root.clone(), dep),
-        |(root, (revision, ..))| async move {
+      .future((project.open.repo_root.clone(), dep), move |(root, (revision, ..))| {
+        let hold = hold.clone();
+        async move {
+          hold.released().await;
           background::run(move || ProjectAgents::for_screen(&root))
             .await?
             .map(|listed| (revision, listed))
             .map_err(|error| messages::store_error(&error))
-        },
-      )
+        }
+      })
       .state()
       .get();
     let frame = Column::new()

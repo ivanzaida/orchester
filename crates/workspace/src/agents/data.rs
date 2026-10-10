@@ -98,6 +98,8 @@ pub struct StepUse {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ProjectAgents {
   pub profiles: Arc<Vec<ProfileEntry>>,
+  /// Persisted draft save times; independent of the editor’s optimistic content comparison.
+  pub draft_times: Arc<std::collections::BTreeMap<ResourceId, Timestamp>>,
   pub usage: Arc<super::usage::Usage>,
   /// Latest published bodies, for comparing a draft with what new runs currently use.
   pub published: Arc<Vec<ProfileEntry>>,
@@ -121,6 +123,7 @@ impl ProjectAgents {
   {
     Ok(Self {
       profiles: Arc::new(profiles(store)?),
+      draft_times: Arc::new(draft_times(store)?),
       usage: Arc::default(),
       published: Arc::new(published_profiles(store)?),
       connections: Arc::new(agent_connections(store.connections()?)),
@@ -354,4 +357,13 @@ pub fn save_permissions_to_draft(
   };
   save_draft(&mut db, id, body.with_permissions(permissions), Timestamp::now())?;
   Ok(latest.map_or(1, |latest| latest.number().get().saturating_add(1)))
+}
+fn draft_times<S: ResourceStore>(store: &S) -> Result<std::collections::BTreeMap<ResourceId, Timestamp>, S::Error> {
+  let mut times = std::collections::BTreeMap::new();
+  for resource in store.resources(ResourceKind::AgentProfile)? {
+    if let Some(draft) = store.draft::<AgentProfile>(resource.id())? {
+      times.insert(resource.id(), draft.updated_at());
+    }
+  }
+  Ok(times)
 }

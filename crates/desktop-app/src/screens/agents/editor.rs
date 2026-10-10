@@ -3,10 +3,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Text},
   core::Signal,
+  layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::agents::{
@@ -22,11 +23,12 @@ use super::{
 };
 use crate::{
   project::ShownProject,
-  theme::{ExtraSpacing, agents::page_spacing},
+  theme::{ExtraSpacing, IconSize, agents::page_spacing},
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     button::{ActionButton, ButtonKind},
     field::field_error,
+    icon::{Icon, icon},
     message::message_text,
     tabs::{PageTab, page_tabs},
   },
@@ -176,7 +178,7 @@ impl Editor {
         Padding::new()
           .left(page_spacing())
           .right(page_spacing())
-          .top(SpacingSize::Lg),
+          .top(SpacingSize::Xl),
       )
       .spacing(SpacingSize::Md)
       .child(crumbs)
@@ -187,15 +189,28 @@ impl Editor {
           .child(
             Column::new()
               .flex(1.0)
-              .spacing(ExtraSpacing::Snug.role())
+              .spacing(SpacingSize::Xs)
               .child(Text::new(&title).variant(TypographyStyle::Heading))
               .child(words::note(&self.fields.responsibility.get())),
           )
-          .child(words::note(&status).id("agent-save-status"))
-          .child(actions),
+          .child(
+            Column::new()
+              .align_items(Alignment::End)
+              .spacing(ExtraSpacing::Snug.role())
+              .child(
+                Row::new()
+                  .spacing(SpacingSize::Md)
+                  .align_items(Alignment::Center)
+                  .child(save_status(&status, state, dirty))
+                  .child(actions),
+              )
+              .with_children(
+                (dirty || !matches!(state, VersionState::Draft { published: Some(_) }))
+                  .then(|| Text::new(&words::state_note(ctx, state, dirty)).variant(TypographyStyle::Caption)),
+              ),
+          ),
       )
       .child(super::enforcement::summary(ctx, &self.fields, &props.listed))
-      .child(words::note(&words::state_note(ctx, state, dirty)))
       .child(page_tabs(ctx, "agent-tabs", tabs))
       .into()
   }
@@ -241,9 +256,14 @@ impl Editor {
     let next = state.published().map_or(1, |v| v.get().saturating_add(1));
     let publish = ActionButton::new(
       "agent-publish",
-      ButtonKind::Primary,
+      if dirty {
+        ButtonKind::Secondary
+      } else {
+        ButtonKind::Primary
+      },
       ctx.t_args("agents.publish", [("version", next.to_string())]),
-    );
+    )
+    .icon(Icon::Upload);
     let connection_runs = self
       .fields
       .connection(&props.listed)
@@ -262,7 +282,7 @@ impl Editor {
     };
     let mut row = Row::new().spacing(SpacingSize::Sm).child(publish);
     if dirty {
-      let save = ActionButton::new("agent-save", ButtonKind::Primary, ctx.t("agents.save"));
+      let save = ActionButton::new("agent-save", ButtonKind::Primary, ctx.t("agents.save")).icon(Icon::Save);
       let save = if self.busy.get() || self.pending.get().0.is_some() {
         save.disabled()
       } else {
@@ -328,15 +348,15 @@ impl Editor {
         );
         Row::new()
           .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Xl)
+          .spacing(SpacingSize::Section)
           .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(form))
-          .child(super::panels::enforcement(ctx, &self.fields, &props.listed))
+          .child(super::policy_panel::enforcement(ctx, &self.fields, &props.listed))
           .into()
       }
       2 => super::uses::render(ctx, props),
       _ => Row::new()
         .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Xl)
+        .spacing(SpacingSize::Section)
         .child(
           Column::new()
             .flex(1.0)
@@ -348,8 +368,43 @@ impl Editor {
     };
     Column::new()
       .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(page_spacing(), SpacingSize::Lg))
+      .padding(
+        Padding::new()
+          .left(page_spacing())
+          .right(page_spacing())
+          .top(ExtraSpacing::Tabs.role())
+          .bottom(SpacingSize::Lg),
+      )
       .child(body)
       .into()
   }
+}
+fn save_status(status: &str, state: VersionState, dirty: bool) -> Row {
+  let stale = matches!(state, VersionState::StaleDraft { .. });
+  Row::new()
+    .id("agent-save-status")
+    .spacing(ExtraSpacing::Pair.role())
+    .align_items(Alignment::Center)
+    .child(icon(
+      if dirty {
+        Icon::CircleDot
+      } else if stale {
+        Icon::GitBranch
+      } else {
+        Icon::Check
+      },
+      IconSize::Base,
+      if stale {
+        PaletteColor::Warning
+      } else if matches!(state, VersionState::Published(_)) && !dirty {
+        PaletteColor::Success
+      } else {
+        PaletteColor::TextMuted
+      },
+    ))
+    .child(words::note(status).color(if stale {
+      PaletteColor::Warning
+    } else {
+      PaletteColor::TextSecondary
+    }))
 }

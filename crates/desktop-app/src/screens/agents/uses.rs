@@ -5,12 +5,26 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
-  node::{Element, border::Border, dimension::Dimension},
+  layout::Alignment,
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::agents::usage::PipelineUse;
 
 use super::{editor::Props, words};
-use crate::ui::table::{ColumnWidth, table_header};
+use crate::{
+  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  ui::{
+    icon::{Icon, icon},
+    icon_button::IconButton,
+    table::{ColumnWidth, table_header},
+  },
+};
+/// Pipeline use row mKzHh: the pipeline column fills the room these columns leave.
+const STEP: f32 = 204.0;
+const MODEL: f32 = 220.0;
+const PERMISSIONS: f32 = 210.0;
+const RUNS: f32 = 130.0;
+const ROW_HEIGHT: f32 = 56.0;
 
 pub fn render(ctx: &mut Ctx, props: &Props) -> Element {
   let profile = props.entry.as_ref().map(|e| e.id);
@@ -44,9 +58,16 @@ pub fn render(ctx: &mut Ctx, props: &Props) -> Element {
         "agent-uses-header",
         &headings
           .iter()
-          .map(|h| (ColumnWidth::Fill, Some(&**h)))
+          .zip([
+            ColumnWidth::Fill,
+            ColumnWidth::Fixed(STEP),
+            ColumnWidth::Fixed(MODEL),
+            ColumnWidth::Fixed(PERMISSIONS),
+            ColumnWidth::Fixed(RUNS),
+          ])
+          .map(|(h, width)| (width, Some(&**h)))
           .collect::<Vec<_>>(),
-        false,
+        true,
       ));
     for (index, step) in steps.iter().enumerate() {
       table = table.child(use_row(ctx, index, step));
@@ -65,19 +86,19 @@ pub fn render(ctx: &mut Ctx, props: &Props) -> Element {
         ),
       ],
     );
-    page = page.child(table.child(Row::new().padding(SpacingSize::Md).child(words::note(&counts))));
+    page = page.child(
+      table.child(
+        Row::new()
+          .width(Dimension::Pct(100.0))
+          .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
+          .background(PaletteColor::SurfacePanel)
+          .child(Text::new(&counts).variant(TypographyStyle::Caption)),
+      ),
+    );
   }
   page.child(active(ctx, props)).into()
 }
-fn use_row(ctx: &Ctx, index: usize, step: &PipelineUse) -> Element {
-  let version = ctx.t_args(
-    if step.draft {
-      "agents.draftVersion"
-    } else {
-      "agents.published"
-    },
-    [("version", step.version.to_string())],
-  );
+fn use_row(ctx: &mut Ctx, index: usize, step: &PipelineUse) -> Element {
   let model = step
     .model
     .as_ref()
@@ -92,24 +113,22 @@ fn use_row(ctx: &Ctx, index: usize, step: &PipelineUse) -> Element {
   Row::new()
     .id(format!("agent-use-{index}"))
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(64.0))
-    .padding(SpacingSize::Md)
+    .height(Dimension::Px(ROW_HEIGHT))
+    .align_items(Alignment::Center)
+    .padding(Padding::horizontal(SpacingSize::Md))
     .spacing(SpacingSize::Md)
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(pipeline_cell(ctx, step))
     .child(
-      Column::new()
-        .flex(1.0)
-        .child(words::note(&step.name))
-        .child(words::note(&version)),
+      Row::new()
+        .width(Dimension::Px(STEP))
+        .spacing(SpacingSize::Sm)
+        .child(Text::new(&format!("{:02}", step.position)).variant(ExtraTypography::MonoNote.role()))
+        .child(words::note(&step.step)),
     )
     .child(
       Column::new()
-        .flex(1.0)
-        .child(words::note(&format!("{:02} {}", step.position, step.step))),
-    )
-    .child(
-      Column::new()
-        .flex(1.0)
+        .width(Dimension::Px(MODEL))
         .child(words::note(&model))
         .child(words::note(&ctx.t(if step.model_overridden {
           "agents.override"
@@ -117,12 +136,25 @@ fn use_row(ctx: &Ctx, index: usize, step: &PipelineUse) -> Element {
           "agents.fromProfile"
         }))),
     )
-    .child(Column::new().flex(1.0).child(words::note(&ctx.t(if step.narrowed {
-      "agents.narrowed"
-    } else {
-      "agents.samePermissions"
-    }))))
-    .child(Column::new().flex(1.0).child(words::note(&state)))
+    .child(
+      Column::new()
+        .width(Dimension::Px(PERMISSIONS))
+        .child(words::note(&ctx.t(if step.narrowed {
+          "agents.narrowed"
+        } else {
+          "agents.samePermissions"
+        }))),
+    )
+    .child(Column::new().width(Dimension::Px(RUNS)).child(words::note(&state)))
+    .child(
+      IconButton::new(
+        format!("agent-use-open-{index}"),
+        Icon::ChevronRight,
+        ctx.t("agents.pipelineUnavailable"),
+      )
+      .small()
+      .render(ctx),
+    )
     .into()
 }
 fn active(ctx: &mut Ctx, props: &Props) -> Element {
@@ -182,4 +214,32 @@ fn active(ctx: &mut Ctx, props: &Props) -> Element {
     );
   }
   section.into()
+}
+fn pipeline_cell(ctx: &Ctx, step: &PipelineUse) -> Column {
+  let version = ctx.t_args(
+    if step.draft {
+      "agents.draftVersion"
+    } else {
+      "agents.published"
+    },
+    [("version", step.version.to_string())],
+  );
+  Column::new()
+    .flex(1.0)
+    .child(Text::new(&step.name).variant(TypographyStyle::Label).nowrap())
+    .child(
+      Row::new()
+        .spacing(ExtraSpacing::Pair.role())
+        .align_items(Alignment::Center)
+        .child(icon(
+          if step.draft { Icon::FilePen } else { Icon::CircleCheck },
+          IconSize::Sm,
+          if step.draft {
+            PaletteColor::TextMuted
+          } else {
+            PaletteColor::Success
+          },
+        ))
+        .child(Text::new(&version).variant(ExtraTypography::Note.role())),
+    )
 }

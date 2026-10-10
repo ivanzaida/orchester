@@ -8,7 +8,7 @@ use lurq::{
   },
   components::Row,
   layout::Alignment,
-  node::Element,
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   connection::{AgentProvider, invocation::Platform},
@@ -20,7 +20,7 @@ use orchester_core::{
 
 use super::{fields::Fields, words};
 use crate::{
-  theme::IconSize,
+  theme::{ControlHeight, IconSize},
   ui::icon::{Icon, icon},
 };
 
@@ -86,18 +86,21 @@ pub fn summary(ctx: &Ctx, fields: &Fields, listed: &orchester_workspace::agents:
   let write = permissions.repository() == RepositoryAccess::Write;
   let mut row = Row::new()
     .id("agent-permission-summary")
-    .spacing(SpacingSize::Lg)
+    .min_height(Dimension::Px(ControlHeight::Sm.value()))
+    .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(item(
       if write { Icon::PencilLine } else { Icon::Eye },
       &ctx.t(if write { "agents.writeTitle" } else { "agents.readOnly" }),
       PaletteColor::TextSecondary,
     ))
+    .child(words::note("·"))
     .child(item(
       Icon::Terminal,
       &words::commands(ctx, &permissions),
       PaletteColor::TextSecondary,
     ))
+    .child(words::note("·"))
     .child(item(
       Icon::Globe,
       &words::network(ctx, &permissions, provider),
@@ -116,7 +119,7 @@ pub fn summary(ctx: &Ctx, fields: &Fields, listed: &orchester_workspace::agents:
     } else {
       ctx.t("agents.notEnforced")
     };
-    row = row.child(item(
+    row = row.child(words::note("·")).child(item(
       if enforced { Icon::ShieldCheck } else { Icon::ShieldAlert },
       &text,
       if enforced {

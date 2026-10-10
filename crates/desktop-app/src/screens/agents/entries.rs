@@ -11,7 +11,7 @@ use lurq::{
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::agents::{
-  data::{ProfileEntry, ProjectAgents},
+  data::{ProfileEntry, ProjectAgents, VersionState},
   form::stored_effort,
 };
 
@@ -23,11 +23,12 @@ use crate::{
     icon::{Icon, icon},
     pressable::pressable,
     table::{ColumnWidth, table_header},
+    tooltip::Truncated,
   },
 };
 
 pub const ROW_HEIGHT: f32 = 60.0;
-pub const TABLE_CHROME: f32 = 70.0;
+pub const TABLE_CHROME: f32 = 69.0;
 const CONNECTION: f32 = 190.0;
 const PERMISSIONS: f32 = 240.0;
 const VERSION: f32 = 170.0;
@@ -72,6 +73,18 @@ impl Component for AgentRow {
     };
     let id = entry.id;
     let view = props.view;
+    let title = Truncated::new(
+      format!("agent-name-{id}"),
+      profile.role().as_str(),
+      TypographyStyle::Label,
+    )
+    .render(ctx);
+    let responsibility = Truncated::new(
+      format!("agent-detail-{id}"),
+      profile.responsibilities(),
+      TypographyStyle::Description,
+    )
+    .render(ctx);
     let row = Row::new()
       .height(Dimension::Px(ROW_HEIGHT))
       .width(Dimension::Pct(100.0))
@@ -84,22 +97,18 @@ impl Component for AgentRow {
           .flex(1.0)
           .min_width(Dimension::Px(0.0))
           .spacing(ExtraSpacing::Loose.role())
+          .align_items(Alignment::Center)
           .child(profile_avatar(&format!("agent-avatar-{id}"), profile.role().as_str()))
           .child(
             Column::new()
               .flex(1.0)
+              .min_width(Dimension::Px(0.0))
               .spacing(ExtraSpacing::Tight.role())
-              .child(Text::new(profile.role().as_str()).variant(TypographyStyle::Label))
-              .child(Text::new(profile.responsibilities()).variant(TypographyStyle::Description)),
+              .child(title)
+              .child(responsibility),
           ),
       )
-      .child(
-        Column::new()
-          .width(Dimension::Px(CONNECTION))
-          .spacing(ExtraSpacing::Tight.role())
-          .child(Text::new(&connection_name).variant(TypographyStyle::Description))
-          .child(Text::new(&model).variant(TypographyStyle::Caption)),
-      )
+      .child(connection_cell(ctx, &connection_name, model, connection.is_some()))
       .child(
         words::note(&words::summary(
           ctx,
@@ -108,7 +117,7 @@ impl Component for AgentRow {
         ))
         .width(Dimension::Px(PERMISSIONS)),
       )
-      .child(words::note(&words::list_version(ctx, entry.state)).width(Dimension::Px(VERSION)))
+      .child(version_marker(ctx, entry))
       .child(words::note(&used).width(Dimension::Px(USED)))
       .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted));
     pressable(move || view.set(View::Edit(id)))
@@ -129,4 +138,71 @@ pub fn header(ctx: &Ctx) -> Row {
   .map(|(width, key)| (width, ctx.t(key)));
   let headings: Vec<_> = headings.iter().map(|(width, text)| (*width, Some(&**text))).collect();
   table_header("agents-table-header", &headings, true)
+}
+fn version_marker(ctx: &mut Ctx, entry: &ProfileEntry) -> Row {
+  let state = entry.state;
+  let (glyph, color) = match state {
+    VersionState::Published(_) => (Icon::CircleCheck, PaletteColor::Success),
+    VersionState::StaleDraft { .. } => (Icon::CircleAlert, PaletteColor::Warning),
+    VersionState::Draft { published: None } => (Icon::CircleDashed, PaletteColor::TextMuted),
+    VersionState::Draft { .. } => (Icon::CircleDot, PaletteColor::TextSecondary),
+  };
+  Row::new()
+    .width(Dimension::Px(VERSION))
+    .spacing(ExtraSpacing::Pair.role())
+    .align_items(Alignment::Center)
+    .child(icon(glyph, IconSize::Base, color.clone()))
+    .child(
+      Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(
+        Truncated::new(
+          format!("agent-version-{}", entry.id),
+          words::list_version(ctx, state),
+          crate::theme::ExtraTypography::Prose.role(),
+        )
+        .color(if matches!(state, VersionState::Published(_)) {
+          PaletteColor::TextSecondary
+        } else {
+          color
+        })
+        .render(ctx),
+      ),
+    )
+}
+fn connection_cell(ctx: &Ctx, connection_name: &str, model: std::sync::Arc<str>, connected: bool) -> Column {
+  Column::new()
+    .width(Dimension::Px(CONNECTION))
+    .spacing(ExtraSpacing::Tight.role())
+    .child(
+      Row::new()
+        .spacing(ExtraSpacing::Snug.role())
+        .align_items(Alignment::Center)
+        .child(icon(
+          if connected { Icon::Plug } else { Icon::Unplug },
+          IconSize::Sm,
+          if connected {
+            PaletteColor::TextMuted
+          } else {
+            PaletteColor::Warning
+          },
+        ))
+        .child(
+          Text::new(connection_name)
+            .variant(TypographyStyle::Description)
+            .color(if connected {
+              PaletteColor::TextSecondary
+            } else {
+              PaletteColor::Warning
+            })
+            .nowrap(),
+        ),
+    )
+    .child(
+      Text::new(&if connected {
+        model
+      } else {
+        ctx.t("agents.chooseConnection")
+      })
+      .variant(TypographyStyle::Caption)
+      .nowrap(),
+    )
 }

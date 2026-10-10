@@ -4,9 +4,9 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::SpacingSize,
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row},
+  components::{Column, Row, Text},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -27,10 +27,10 @@ use super::{
 };
 use crate::{
   project::ShownProject,
-  theme::ExtraSpacing,
+  theme::{ExtraSpacing, IconSize},
   ui::{
     form_section::{Place, section, side_row},
-    icon::Icon,
+    icon::{Icon, icon},
     message::message_text,
     option_card::OptionCard,
     toggle::{Toggle, ToggleKind},
@@ -82,14 +82,14 @@ fn option(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>, option: P
   ]
   .contains(&option);
   let value = fields.permissions.clone();
-  let title = message_text(ctx, &orchester_workspace::messages::Message::new(option_title(option)));
-  let detail = message_text(
-    ctx,
-    &orchester_workspace::messages::Message::new(option_detail(option, provider)),
-  );
+  let (glyph, title, detail) = if option == PermissionOption::ReadOnly {
+    (Icon::Eye, ctx.t("agents.readOnly"), ctx.t("agents.readOnlyHint"))
+  } else {
+    (Icon::PencilLine, ctx.t("agents.writeTitle"), ctx.t("agents.writeHint"))
+  };
   let card = OptionCard::new(
     format!("agent-option-{option:?}"),
-    (Icon::Shield, title),
+    (glyph, title),
     detail,
     selected,
     move || {
@@ -115,10 +115,16 @@ fn option(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>, option: P
 fn command_option(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>, option: PermissionOption) -> Element {
   let selected = PermissionOption::of_commands(fields.permissions.get().0.commands()) == option;
   let title = message_text(ctx, &orchester_workspace::messages::Message::new(option_title(option)));
-  let detail = message_text(
-    ctx,
-    &orchester_workspace::messages::Message::new(option_detail(option, provider)),
-  );
+  let detail = if option == PermissionOption::AllowedCommands
+    && !provider.is_some_and(|p| support(p, Platform::current(), option).is_enforced())
+  {
+    ctx.t("agents.allowedHint")
+  } else {
+    message_text(
+      ctx,
+      &orchester_workspace::messages::Message::new(option_detail(option, provider)),
+    )
+  };
   let value = fields.permissions.clone();
   let available = provider.is_some_and(|p| support(p, Platform::current(), option).is_enforced());
   let toggle = Toggle::new(format!("agent-option-{option:?}"), ToggleKind::Radio, selected, title);
@@ -189,7 +195,8 @@ fn network(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>) -> Eleme
     ToggleKind::Switch,
     on,
     ctx.t(if on { "agents.on" } else { "agents.off" }),
-  );
+  )
+  .hide_label();
   let toggle = if available {
     toggle
       .on_change(move |on| value.update(|p| p.0.set_network(if on { NetworkAccess::On } else { NetworkAccess::Off })))
@@ -203,7 +210,10 @@ fn network(ctx: &Ctx, fields: &Fields, provider: Option<AgentProvider>) -> Eleme
     vec![
       side_row(
         label(ctx, "agent-network", "agents.networkAccess", "agents.networkHint"),
-        toggle,
+        Row::new()
+          .spacing(SpacingSize::Sm)
+          .child(words::note(&ctx.t(if on { "agents.on" } else { "agents.off" })))
+          .child(toggle),
         Place::Last,
         false,
       ),
@@ -292,18 +302,7 @@ fn mcp(ctx: &mut Ctx, props: &Props, provider: Option<AgentProvider>) -> Element
     } else {
       toggle
     };
-    rows.push(side_row(
-      crate::ui::form_section::Label::new(&format!("agent-mcp-{id}"), server.name().as_str()).description(ctx.t(
-        if server.enabled() {
-          "agents.mcpHint"
-        } else {
-          "agents.mcpDisabled"
-        },
-      )),
-      toggle,
-      Place::Within,
-      false,
-    ));
+    rows.push(mcp_row(ctx, server, toggle));
   }
   if rows.is_empty() {
     rows.push(words::note(&ctx.t("agents.mcpNone")).into());
@@ -316,19 +315,55 @@ fn mcp(ctx: &mut Ctx, props: &Props, provider: Option<AgentProvider>) -> Element
   }
   let nav = crate::navigation::Navigation::of(ctx);
   let project = props.project.open.project.id();
-  rows.push(
-    crate::ui::button::ActionButton::new(
-      "agent-add-mcp",
-      crate::ui::button::ButtonKind::Ghost,
-      ctx.t("agents.addMcp"),
-    )
-    .on_click(move || {
-      nav.go(crate::routes::Route::Project(
-        project,
-        crate::routes::ProjectPage::NewConnection(crate::routes::NewConnection::McpServer),
-      ))
-    })
-    .into(),
+  if listed.mcp.is_empty() {
+    rows.push(
+      crate::ui::button::ActionButton::new(
+        "agent-add-mcp",
+        crate::ui::button::ButtonKind::Ghost,
+        ctx.t("agents.addMcp"),
+      )
+      .on_click(move || {
+        nav.go(crate::routes::Route::Project(
+          project,
+          crate::routes::ProjectPage::NewConnection(crate::routes::NewConnection::McpServer),
+        ))
+      })
+      .into(),
+    );
+  }
+  let count = ctx.t_args(
+    "agents.mcpSelection",
+    [
+      ("selected", selected.ids().len().to_string()),
+      ("total", listed.mcp.len().to_string()),
+    ],
   );
-  section("agent-mcp", &ctx.t("agents.mcp"), None, rows).into()
+  section("agent-mcp", &ctx.t("agents.mcp"), Some(&count), rows).into()
+}
+fn mcp_row(ctx: &Ctx, server: &orchester_core::connection::mcp::McpServer, toggle: Toggle) -> Element {
+  let (glyph, detail) = match server.transport() {
+    orchester_core::connection::mcp::McpTransport::Stdio(stdio) => (
+      Icon::Server,
+      ctx.t_args("agents.mcpStdio", [("program", stdio.program().as_str())]),
+    ),
+    orchester_core::connection::mcp::McpTransport::Http(http) => {
+      (Icon::Globe, ctx.t_args("agents.mcpHttp", [("host", http.url().host())]))
+    }
+  };
+
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .padding(lurq::node::padding::Padding::vertical(SpacingSize::Md))
+    .spacing(ExtraSpacing::Loose.role())
+    .child(icon(glyph, IconSize::Md, PaletteColor::TextMuted))
+    .child(
+      Column::new()
+        .flex(1.0)
+        .spacing(ExtraSpacing::Tight.role())
+        .child(Text::new(server.name().as_str()).variant(TypographyStyle::Label))
+        .child(words::note(&detail))
+        .with_children((!server.enabled()).then(|| words::note(&ctx.t("agents.mcpDisabled")))),
+    )
+    .child(toggle)
+    .into()
 }

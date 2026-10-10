@@ -141,7 +141,9 @@ impl Fields {
     .profile()
   }
   pub fn render(&self, ctx: &mut Ctx, listed: &ProjectAgents) -> Element {
-    let name = self.input(ctx, "agent-role", "agents.role", self.role.clone());
+    let name = FieldInput::new("agent-role", ctx.t("agents.role"), self.role.clone())
+      .width(Dimension::Px(CONTROL_WIDTH))
+      .render(ctx);
     let responsibility = self.input(
       ctx,
       "agent-responsibility",
@@ -150,13 +152,6 @@ impl Fields {
     );
     let connection = self.connection_select(ctx, listed);
     let (model, effort) = self.selects(ctx, listed);
-    let instructions = FieldInput::new(
-      "agent-instructions",
-      ctx.t("agents.instructions"),
-      self.instructions.clone(),
-    )
-    .text_area()
-    .render(ctx);
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Xl)
@@ -196,6 +191,7 @@ impl Fields {
             Place::Within,
             false,
           ),
+          self.model_notice(ctx, listed),
           form_section::side_row(
             label(ctx, "agent-effort", "agents.effort", "agents.effortHint"),
             effort,
@@ -213,12 +209,50 @@ impl Fields {
             .into(),
         ],
       ))
-      .child(form_section::section(
-        "agent-instructions-section",
-        &ctx.t("agents.instructions"),
-        Some(&ctx.t("agents.markdown")),
-        vec![words::note(&ctx.t("agents.instructionsHint")).into(), instructions],
-      ))
+      .child(self.instructions_section(ctx))
+      .into()
+  }
+  fn instructions_section(&self, ctx: &mut Ctx) -> Element {
+    let instructions = FieldInput::new(
+      "agent-instructions",
+      ctx.t("agents.instructions"),
+      self.instructions.clone(),
+    )
+    .text_area()
+    .render(ctx);
+    form_section::section(
+      "agent-instructions-section",
+      &ctx.t("agents.instructions"),
+      Some(&ctx.t("agents.markdown")),
+      vec![
+        Column::new()
+          .padding(lurq::node::padding::Padding::new().top(SpacingSize::Md))
+          .spacing(crate::theme::ExtraSpacing::Loose.role())
+          .child(words::note(&ctx.t("agents.instructionsHint")))
+          .child(instructions)
+          .into(),
+      ],
+    )
+    .into()
+  }
+  fn model_notice(&self, ctx: &Ctx, listed: &ProjectAgents) -> Element {
+    let problem = self.connection(listed).and_then(|connection| {
+      let model = orchester_core::resource::ModelId::new(&self.model.get()).ok()?;
+      connection.cannot_run(&model).map(|problem| (model, problem))
+    });
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .with_children(problem.map(|(model, problem)| {
+        crate::ui::notice::Notice::new(
+          "agent-model-too-old",
+          crate::ui::notice::NoticeTone::Warning,
+          ctx.t_args(
+            "agents.cliTooOld",
+            [("installed", problem.installed.as_str()), ("model", model.as_str())],
+          ),
+        )
+        .body(ctx.t_args("agents.cliTooOldHint", [("required", problem.required.as_str())]))
+      }))
       .into()
   }
   fn connection_select(&self, ctx: &mut Ctx, listed: &ProjectAgents) -> Element {

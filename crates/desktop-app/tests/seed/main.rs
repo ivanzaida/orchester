@@ -3,6 +3,7 @@
 //! tabs and phases, the runs' checkpoints, worktrees and transcripts, the live connection (`live`), the schema a
 //! newer build left, and what the seed refuses (`refusals`). Needs `git`.
 
+mod agents;
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
 mod live;

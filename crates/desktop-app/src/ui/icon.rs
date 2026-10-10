@@ -181,6 +181,7 @@ icons! {
   TriangleAlert => '\u{e193}',
   Undo2 => '\u{e2a1}',
   Unplug => '\u{e45d}',
+  Upload => '\u{e19e}',
   User => '\u{e19f}',
   UserRoundCheck => '\u{e1a0}',
   UserRoundCog => '\u{e342}',

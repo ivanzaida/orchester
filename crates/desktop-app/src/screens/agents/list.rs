@@ -6,6 +6,7 @@ use lurq::{
   },
   components::{Column, Row, Text, VirtualizedList},
   core::Signal,
+  layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::agents::data::ProjectAgents;
@@ -19,10 +20,10 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{ConnectionsView, ProjectPage, Route},
-  theme::{ExtraSpacing, agents::page_spacing},
+  theme::{ExtraSpacing, ExtraTypography, IconSize, agents::page_spacing},
   ui::{
     button::{ActionButton, ButtonKind},
-    icon::Icon,
+    icon::{Icon, icon},
     state::EmptyState,
   },
 };
@@ -31,7 +32,7 @@ pub(super) fn list(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents
   let page = Column::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(page_spacing(), SpacingSize::Xl))
+    .padding(Padding::symmetric(page_spacing(), SpacingSize::Section))
     .spacing(ExtraSpacing::Tabs.role())
     .child(header(ctx, listed, view.clone()));
   if listed.profiles.is_empty() {
@@ -81,9 +82,21 @@ pub(super) fn list(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents
         .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
         .child(super::entries::header(ctx))
         .child(rows)
-        .child(Row::new().padding(SpacingSize::Md).child(words::note(&counts))),
+        .child(
+          Row::new()
+            .width(Dimension::Pct(100.0))
+            .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
+            .background(PaletteColor::SurfacePanel)
+            .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+            .child(Text::new(&counts).variant(TypographyStyle::Caption)),
+        ),
     )
-    .child(words::note(&ctx.t("agents.versionNote")))
+    .child(
+      Row::new()
+        .spacing(ExtraSpacing::Snug.role())
+        .child(icon(Icon::History, IconSize::Sm, PaletteColor::TextMuted))
+        .child(Text::new(&ctx.t("agents.versionNote")).variant(TypographyStyle::Caption)),
+    )
     .into()
 }
 
@@ -96,27 +109,38 @@ fn new_button(ctx: &Ctx, id: &str, listed: &ProjectAgents, view: Signal<View>) -
   }
 }
 fn import(ctx: &Ctx, id: &str) -> ActionButton {
-  ActionButton::new(id, ButtonKind::Secondary, ctx.t("agents.import")).unavailable(ctx.t("agents.importUnavailable"))
+  ActionButton::new(id, ButtonKind::Secondary, ctx.t("agents.import"))
+    .icon(Icon::Download)
+    .unavailable(ctx.t("agents.importUnavailable"))
 }
 fn header(ctx: &Ctx, listed: &ProjectAgents, view: Signal<View>) -> Row {
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Lg)
+    .align_items(Alignment::End)
     .child(
       Column::new()
         .flex(1.0)
         .spacing(ExtraSpacing::Snug.role())
-        .child(Text::new(&ctx.t("agents.title")).variant(TypographyStyle::Heading))
-        .child(words::note(&ctx.t("agents.description"))),
+        .child(Text::new(&ctx.t("agents.title")).variant(ExtraTypography::Display.role()))
+        .child(
+          Text::new(&ctx.t("agents.description"))
+            .variant(TypographyStyle::Body)
+            .color(PaletteColor::TextSecondary),
+        ),
     )
-    .child(import(ctx, "agents-import"))
-    .child(new_button(ctx, "agents-new", listed, view))
+    .child(
+      Row::new()
+        .spacing(SpacingSize::Sm)
+        .child(import(ctx, "agents-import"))
+        .child(new_button(ctx, "agents-new", listed, view)),
+    )
 }
 fn empty(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, view: Signal<View>) -> Element {
   let has_connection = !listed.connections.is_empty();
   let mut empty = EmptyState::new(
     "agents-empty",
-    Icon::Bot,
+    if has_connection { Icon::Bot } else { Icon::Unplug },
     ctx.t("agents.emptyTitle"),
     ctx.t(if has_connection {
       "agents.emptyDetail"
@@ -137,25 +161,54 @@ fn empty(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, view: Si
         ButtonKind::Primary,
         ctx.t("agents.openConnections"),
       )
+      .icon(Icon::Plug)
       .on_click(move || nav.go(Route::Project(id, ProjectPage::Connections(ConnectionsView::default())))),
     );
   }
-  let names: Vec<Element> = listed
-    .connections
-    .iter()
-    .map(|c| words::note(c.name().as_str()).into())
-    .collect();
-  let connections = Column::new()
-    .spacing(SpacingSize::Sm)
-    .child(words::note(&ctx.t_args(
-      "agents.connections",
-      [("project", project.open.project.name().as_str())],
-    )))
-    .with_children(names)
-    .with_children((!has_connection).then(|| words::note(&ctx.t("agents.none"))));
-  Column::new()
-    .spacing(SpacingSize::Lg)
-    .child(empty)
-    .child(connections)
-    .into()
+  empty.child(empty_connections(ctx, project, listed)).into()
+}
+fn empty_connections(ctx: &Ctx, project: &ShownProject, listed: &ProjectAgents) -> Column {
+  let mut connections = Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::new().top(SpacingSize::Md))
+    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .spacing(ExtraSpacing::Snug.role())
+    .child(
+      Text::new(&ctx.t_args(
+        "agents.connections",
+        [("project", project.open.project.name().as_str())],
+      ))
+      .variant(TypographyStyle::Caption),
+    );
+  for connection in listed.connections.iter() {
+    let shown = crate::screens::connections::words::agent_status(connection.status());
+    let detail = ctx.t_args(
+      "agents.connectionState",
+      [
+        (
+          "provider",
+          ctx.t(crate::screens::connections::words::provider_key(connection.provider())),
+        ),
+        ("status", ctx.t(shown.key)),
+      ],
+    );
+    connections = connections.child(
+      Row::new()
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(icon(shown.icon, IconSize::Base, shown.tone.color()))
+        .child(Text::new(connection.name().as_str()).variant(TypographyStyle::Label))
+        .child(words::note(&detail)),
+    );
+  }
+  if listed.connections.is_empty() {
+    connections = connections.child(
+      Row::new()
+        .spacing(SpacingSize::Sm)
+        .child(icon(Icon::Circle, IconSize::Base, PaletteColor::TextMuted))
+        .child(Text::new(&ctx.t("agents.none")).variant(TypographyStyle::Label))
+        .child(words::note(&ctx.t("agents.needsConnection"))),
+    );
+  }
+  connections
 }
