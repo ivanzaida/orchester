@@ -1,19 +1,25 @@
 #!/usr/bin/env bash
-# Builds Orchester.app on a Mac: the release desktop and runner, the icon and Info.plist, signed
-# ad hoc. The app is not notarized (see docs/stable-build.md, "macOS").
+# Builds the two Orchester apps on a Mac from one release build: Orchester.app (the deprecated
+# desktop) and Orchester App.app (the new app), each with the runner, the icon and Info.plist,
+# signed ad hoc. They share the data in ~/Library, so they come from the same build. The apps are
+# not notarized (see docs/stable-build.md, "macOS").
 #   tools/package-macos.sh [--universal] [--build-dir <dir>] [--out-dir <dir>] [--no-sign]
 #
 #   --universal   Apple silicon and Intel in one app (needs both rustup targets; see below).
 #   --build-dir   Cargo target directory (default: target/ of this checkout).
-#   --out-dir     Where Orchester.app is written (default: <build-dir>/macos).
-#   --no-sign     Leave the bundle unsigned (the linker still signs each program ad hoc on Apple
+#   --out-dir     Where the two bundles are written (default: <build-dir>/macos).
+#   --no-sign     Leave the bundles unsigned (the linker still signs each program ad hoc on Apple
 #                 silicon, but the bundle's Info.plist and icon are not sealed).
 #
-# Bundle layout (the desktop finds the runner beside itself, in Contents/MacOS):
+# Bundle layout (each app finds the runner beside itself, in Contents/MacOS):
 #   Orchester.app/Contents/Info.plist
 #   Orchester.app/Contents/MacOS/orchester
 #   Orchester.app/Contents/MacOS/orchester-runner
 #   Orchester.app/Contents/Resources/orchester.icns
+#   Orchester App.app/Contents/Info.plist
+#   Orchester App.app/Contents/MacOS/orchester-app
+#   Orchester App.app/Contents/MacOS/orchester-runner
+#   Orchester App.app/Contents/Resources/orchester.icns
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
@@ -21,8 +27,7 @@ build_dir="$repo/target"
 out_dir=""
 universal=0
 sign=1
-bundle_id="dev.orchester.desktop"
-programs="orchester orchester-runner"
+programs="orchester orchester-app orchester-runner"
 
 fail() {
   echo "package-macos: $*" >&2
@@ -35,7 +40,7 @@ while [ $# -gt 0 ]; do
     --no-sign) sign=0 ;;
     --build-dir) [ $# -ge 2 ] || fail "--build-dir needs a directory"; build_dir="$2"; shift ;;
     --out-dir) [ $# -ge 2 ] || fail "--out-dir needs a directory"; out_dir="$2"; shift ;;
-    -h | --help) sed -n '2,16p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,22p' "$0"; exit 0 ;;
     *) fail "unknown option $1 (see --help)" ;;
   esac
   shift
@@ -46,17 +51,16 @@ done
 version=$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' "$repo/Cargo.toml")
 [ -n "$version" ] || fail "cannot read the version from [workspace.package] in Cargo.toml"
 
-# cargo build for the host, or for `$1` when given. Every build includes the embedded MCP server.
+# cargo build for the host, or for `$1` when given. Every build includes the embedded MCP servers.
 build() {
   (cd "$repo" && cargo build --release --locked --target-dir "$build_dir" \
-    -p orchester-desktop -p orchester-runner ${1:+--target "$1"})
+    -p orchester-desktop -p orchester-app -p orchester-runner ${1:+--target "$1"})
 }
 
-staging="$out_dir/.Orchester.app.partial"
-app="$out_dir/Orchester.app"
-rm -rf "$staging"
-mkdir -p "$staging/Contents/MacOS" "$staging/Contents/Resources"
-
+# The built programs, one universal file each with --universal.
+programs_dir="$out_dir/.programs"
+rm -rf "$programs_dir"
+mkdir -p "$programs_dir"
 if [ "$universal" = 1 ]; then
   targets="aarch64-apple-darwin x86_64-apple-darwin"
   for target in $targets; do
@@ -65,18 +69,19 @@ if [ "$universal" = 1 ]; then
     build "$target"
   done
   for program in $programs; do
-    lipo -create -output "$staging/Contents/MacOS/$program" \
+    lipo -create -output "$programs_dir/$program" \
       "$build_dir/aarch64-apple-darwin/release/$program" "$build_dir/x86_64-apple-darwin/release/$program"
   done
 else
   build
   for program in $programs; do
-    cp "$build_dir/release/$program" "$staging/Contents/MacOS/$program"
+    cp "$build_dir/release/$program" "$programs_dir/$program"
   done
 fi
 
-cp "$repo/crates/desktop/assets/icon/orchester.icns" "$staging/Contents/Resources/orchester.icns"
-cat > "$staging/Contents/Info.plist" <<PLIST
+# Info.plist of the app named $1 whose program is $2, with the bundle identifier $3.
+info_plist() {
+  cat <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -84,17 +89,17 @@ cat > "$staging/Contents/Info.plist" <<PLIST
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleDisplayName</key>
-  <string>Orchester</string>
+  <string>$1</string>
   <key>CFBundleExecutable</key>
-  <string>orchester</string>
+  <string>$2</string>
   <key>CFBundleIconFile</key>
   <string>orchester</string>
   <key>CFBundleIdentifier</key>
-  <string>$bundle_id</string>
+  <string>$3</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>Orchester</string>
+  <string>$1</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -110,16 +115,34 @@ cat > "$staging/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
-plutil -lint -s "$staging/Contents/Info.plist" || fail "the generated Info.plist is invalid"
+}
 
-if [ "$sign" = 1 ]; then
-  # Ad hoc ("-"): no Apple identity, so the app runs only on Macs that built or trust it, and it
-  # is not notarized. The runner is signed first, then the bundle seals it with the rest.
-  codesign --force --sign - --timestamp=none "$staging/Contents/MacOS/orchester-runner"
-  codesign --force --sign - --timestamp=none "$staging"
-  codesign --verify --strict "$staging"
-fi
+# Writes $out_dir/<$1>.app for the program $2 with the runner beside it, bundle identifier $3.
+bundle() {
+  local name="$1" program="$2" bundle_id="$3"
+  local staging="$out_dir/.$name.app.partial"
+  local app="$out_dir/$name.app"
+  rm -rf "$staging"
+  mkdir -p "$staging/Contents/MacOS" "$staging/Contents/Resources"
+  cp "$programs_dir/$program" "$programs_dir/orchester-runner" "$staging/Contents/MacOS/"
+  # Both apps show the same mark: crates/desktop-app/assets/icon/orchester.ico is this icon too.
+  cp "$repo/crates/desktop/assets/icon/orchester.icns" "$staging/Contents/Resources/orchester.icns"
+  info_plist "$name" "$program" "$bundle_id" > "$staging/Contents/Info.plist"
+  plutil -lint -s "$staging/Contents/Info.plist" || fail "the generated Info.plist of $name.app is invalid"
 
-rm -rf "$app"
-mv "$staging" "$app"
-echo "Built $app (version $version$([ "$universal" = 1 ] && echo ", universal"))"
+  if [ "$sign" = 1 ]; then
+    # Ad hoc ("-"): no Apple identity, so the app runs only on Macs that built or trust it, and it
+    # is not notarized. The runner is signed first, then the bundle seals it with the rest.
+    codesign --force --sign - --timestamp=none "$staging/Contents/MacOS/orchester-runner"
+    codesign --force --sign - --timestamp=none "$staging"
+    codesign --verify --strict "$staging"
+  fi
+
+  rm -rf "$app"
+  mv "$staging" "$app"
+  echo "Built $app (version $version$([ "$universal" = 1 ] && echo ", universal"))"
+}
+
+bundle "Orchester" orchester dev.orchester.desktop
+bundle "Orchester App" orchester-app dev.orchester.app
+rm -rf "$programs_dir"
