@@ -171,7 +171,9 @@ fn seed_names_every_scenario_once() {
       "interrupted",
       "unreadable-db",
       "tasks-unreadable",
-      "live"
+      "live",
+      "lifecycle",
+      "connections"
     ]
   );
   for name in names {

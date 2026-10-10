@@ -48,6 +48,8 @@
       "tools": "Tools",
       "secrets": "Secrets",
       "connections": "Connections",
+      "newConnection": "Add connection",
+      "editConnection": "Edit connection",
       "projectSettings": "Project settings"
     },
     "placeholder": {

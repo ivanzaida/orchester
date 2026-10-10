@@ -224,6 +224,8 @@ pub const fn screen_icon(screen: Screen) -> Icon {
     Screen::Tools => Icon::Wrench,
     Screen::Secrets => Icon::KeyRound,
     Screen::Connections => Icon::Plug,
+    Screen::NewConnection => Icon::Plus,
+    Screen::EditConnection => Icon::Pencil,
     Screen::ProjectSettings => Icon::SlidersHorizontal,
   }
 }

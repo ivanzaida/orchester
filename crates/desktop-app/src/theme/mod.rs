@@ -12,6 +12,7 @@
 mod cards;
 mod code;
 mod composer;
+mod connections;
 mod conversation;
 mod decisions;
 mod fonts;
@@ -40,6 +41,7 @@ pub use self::{
   cards::{CardsSpacing, CardsText},
   code::{CodeText, token_color},
   composer::{ComposerColor, ComposerRadius, ComposerText},
+  connections::{ConnectionsSpacing, ConnectionsText},
   conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText},
   decisions::{DecisionSpacing, DecisionText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
@@ -75,6 +77,7 @@ pub fn install(app: &mut App, mode: Mode) {
   decisions::install(theme);
   task_form::install(theme);
   tasks::install(theme);
+  connections::install(theme);
   shell::install(theme);
   lifecycle::install(theme);
   conversation::install(theme);

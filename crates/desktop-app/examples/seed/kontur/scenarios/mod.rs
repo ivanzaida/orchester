@@ -2,6 +2,7 @@
 
 mod cards;
 mod changes;
+mod connections;
 mod conversation;
 mod decisions;
 mod empty;
@@ -56,7 +57,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 12] = [
+pub const ALL: [Scenario; 13] = [
   Scenario::of("empty", empty::seed),
   Scenario::of("tasks", tasks::seed),
   Scenario::of("task-states", task_states::seed),
@@ -69,6 +70,7 @@ pub const ALL: [Scenario; 12] = [
   Scenario::of("tasks-unreadable", tasks_unreadable::seed),
   Scenario::with_fake_codex("live", live::seed),
   Scenario::with_fake_codex("lifecycle", lifecycle::seed),
+  Scenario::of("connections", connections::seed),
 ];
 
 /// The scenario called `name`.

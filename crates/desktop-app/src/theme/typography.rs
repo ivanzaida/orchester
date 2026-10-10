@@ -220,6 +220,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::composer::typography(palette))
       .chain(super::cards::typography(palette))
       .chain(super::lifecycle::typography(palette))
+      .chain(super::connections::typography(palette))
       .collect(),
   }
 }

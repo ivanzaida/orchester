@@ -70,6 +70,14 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
       }
     }
     ProjectPage::EditTask(key) => insert("key", &key.to_string()),
+    ProjectPage::Connections(view) => {
+      insert("tab", view.tab().name());
+      if let Some(connection) = view.selected() {
+        insert("selected", &connection.to_string());
+      }
+    }
+    ProjectPage::NewConnection(kind) => insert("kind", kind.name()),
+    ProjectPage::EditConnection(connection) => insert("connection", &connection.to_string()),
     ProjectPage::Task(key, view) => {
       insert("key", &key.to_string());
       insert("tab", view.tab().name());

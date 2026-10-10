@@ -1,0 +1,332 @@
+{
+  "connections": {
+    "title": "Connections",
+    "description": "Agent providers, GitHub and MCP servers this project uses. Each agent profile chooses its connection and model.",
+    "add": "Add connection",
+    "addAgent": "Add agent provider",
+    "cancel": "Cancel",
+    "reading": "Reading the connections…",
+    "loadFailed": "Connections could not be read",
+    "tabs": {
+      "all": "All connections",
+      "agentProviders": "Agent providers",
+      "github": "GitHub",
+      "mcpServers": "MCP servers",
+      "unknownCount": "—"
+    },
+    "menu": {
+      "agent": "Agent provider",
+      "agentDetail": "Codex CLI, Claude Code CLI, Anthropic API or OpenAI API",
+      "github": "GitHub connection",
+      "mcp": "MCP server",
+      "mcpDetail": "A program on this computer, or a remote server"
+    },
+    "columns": {
+      "connection": "CONNECTION",
+      "type": "TYPE",
+      "usedBy": "USED BY",
+      "status": "STATUS"
+    },
+    "type": {
+      "provider": "Provider",
+      "native": "Native",
+      "github": "GitHub",
+      "mcp": "MCP"
+    },
+    "usage": {
+      "one": "1 agent",
+      "other": "{{count}} agents"
+    },
+    "repos": {
+      "one": "1 repo",
+      "other": "{{count}} repos"
+    },
+    "row": {
+      "agent": "{{vendor}} · {{program}} {{version}}",
+      "agentUnchecked": "{{vendor}} · {{program}}",
+      "native": "{{provider}} · {{host}}",
+      "github": "gh · {{host}}",
+      "githubSignedIn": "gh · {{host}} · signed in as {{account}}"
+    },
+    "notice": {
+      "providers": "Each agent can use a different provider. Choose the connection and model in each agent profile; one pipeline can mix providers.",
+      "github": "Pull requests and the Create pull request tool reach GitHub only through gh. Its accounts are shared by every project on this computer; {{project}} records the one it expects.",
+      "mcp": "Agents run without your own CLI configuration, so the MCP servers they get are the ones {{project}} adds here. Each agent profile chooses which of them its agents get."
+    },
+    "ownership": "Connections belong to {{project}}. CLI connections use the account the CLI is signed in to on this computer; {{project}} records which account it expects.",
+    "emptyTitle": "No connections yet",
+    "emptyDetail": "A connection is how {{project}} reaches an agent provider (a CLI on this computer or a model API with a project key), GitHub through gh, or an MCP server. Add the Codex or Claude Code CLI installed on this computer; each agent profile then chooses its connection and model.",
+    "emptyProvidersTitle": "No agent providers yet",
+    "provider": {
+      "codex": "Codex CLI",
+      "claude": "Claude Code CLI",
+      "codexShort": "Codex",
+      "claudeShort": "Claude",
+      "anthropicApi": "Anthropic API (native)",
+      "openaiApi": "OpenAI API (native)",
+      "anthropicApiShort": "Anthropic API",
+      "openaiApiShort": "OpenAI API",
+      "openai": "OpenAI",
+      "anthropic": "Anthropic"
+    },
+    "status": {
+      "notChecked": "Not checked",
+      "connected": "Connected",
+      "signInRequired": "Sign-in required",
+      "signInUnknown": "Sign-in status unknown",
+      "notFound": "Not found",
+      "notRecognized": "Not recognized",
+      "couldNotRun": "Could not run",
+      "checking": "Checking…",
+      "keyMissing": "Key missing",
+      "keyRejected": "Key rejected",
+      "billingProblem": "Billing problem",
+      "endpointUnreachable": "Endpoint unreachable"
+    },
+    "detail": {
+      "notChecked": "This connection has not been checked yet.",
+      "connected": "The CLI answers and is signed in. Orchester runs it with the account it is signed in to.",
+      "signInCodex": "The Codex CLI is not signed in. Run codex login in a terminal, then check again. Orchester never signs in for you.",
+      "signInClaude": "The Claude Code CLI is not signed in. Run claude auth login in a terminal, then check again. Orchester never signs in for you.",
+      "signInUnknown": "The CLI answers, but whether it is signed in could not be determined. Agents may fail to start until it is.",
+      "executableMissing": "The program file does not exist. Install the CLI again, then check again.",
+      "notRecognized": "The program answered, but not as the expected CLI.",
+      "couldNotRun": "The program could not be started or did not answer in time. Check again."
+    },
+    "property": {
+      "provider": "Provider",
+      "program": "Program",
+      "programFile": "Program file",
+      "runsWith": "Runs with",
+      "script": "Script",
+      "version": "Version",
+      "execution": "Execution",
+      "authentication": "Authentication",
+      "lastChecked": "Last checked",
+      "preset": "Preset",
+      "endpoint": "Endpoint",
+      "host": "Host",
+      "path": "Path",
+      "account": "Account",
+      "scopes": "Scopes"
+    },
+    "thisComputer": "This computer",
+    "cliLogin": "CLI login",
+    "notCheckedYet": "Not checked yet",
+    "unknown": "Unknown",
+    "availableModels": "Available models",
+    "models": "Models",
+    "modelNeeds": "{{model}} · needs {{required}}",
+    "modelsAfterCheck": "Models are known after a successful check.",
+    "noModelsListed": "The CLI listed no models. Profiles can still enter a model id, marked as not verified.",
+    "modelSource": {
+      "provider": "Listed by the model catalog bundled with the CLI.",
+      "aliases": "The CLI did not list its models; these are the current model ids and the aliases its help documents.",
+      "providerAndCurrentIds": "The current model ids, then the models the CLI lists."
+    },
+    "cliTooOld": {
+      "heading": "{{cli}} {{installed}} can’t run {{model}}; version {{required}} or newer is needed",
+      "detail": "A run found this when the model’s provider refused the CLI. Update the CLI, then check the connection again."
+    },
+    "refreshModels": "Refresh models",
+    "usedBy": "Used by",
+    "usedByLink": "{{role}} → {{model}}",
+    "notUsed": "No agent profile uses this connection yet.",
+    "test": "Test connection",
+    "edit": "Edit connection",
+    "editCliUnavailable": "Editing a CLI connection is not built in this app yet.",
+    "checkAgain": "Check again",
+    "recheck": "Recheck",
+    "runInTerminal": "Run this in a terminal, then check again.",
+    "nativeNotAvailable": {
+      "heading": "{{connection}} uses {{provider}}, which is not available yet",
+      "detail": "Native agents are not available in this version of Orchester. A step whose profile runs on this connection doesn’t start, so a run with one doesn’t start either. Choose a Codex or Claude Code connection."
+    },
+    "native": {
+      "preset": {
+        "official": "Official preset",
+        "deepseek": "DeepSeek preset",
+        "custom": "Custom preset"
+      },
+      "key": "API key · {{name}} ({{environment}})",
+      "keyGone": "API key · secret missing",
+      "execution": "This computer (Orchester runs the agent)",
+      "modelsUnavailable": "Editing and fetching a native connection’s models comes with native agent runs in a later version.",
+      "testUnavailable": "Testing a native connection comes with native agent runs in a later version. Until then Orchester neither reaches its API nor reads its key, and profiles that use it cannot run."
+    },
+    "kind": {
+      "label": "Kind",
+      "codexDetail": "Runs the codex program, signed in on this computer.",
+      "claudeDetail": "Runs the claude program, signed in on this computer.",
+      "anthropicDetail": "Orchester runs the agent on the Messages API with a project API key.",
+      "openaiDetail": "Orchester runs the agent on the Responses API with a project API key.",
+      "nativeHint": "Native kinds need no CLI: Orchester sends requests to the model API itself and runs the tools under its own permission rules.",
+      "nativeUnavailable": "Native agents are not available in this version of Orchester."
+    },
+    "dialog": {
+      "addTitle": "Add connection",
+      "description": "Project: {{project}}. An agent provider runs the agents of the profiles that choose it.",
+      "notSaved": "Not saved yet",
+      "saving": "Saving…",
+      "connection": "Connection",
+      "name": "Name",
+      "nameHint": "Shown in agent profiles, pipelines and runs.",
+      "nameTaken": "Another connection of this project already has this name.",
+      "suggestedName": "{{provider}} · {{project}}",
+      "suggestedNameNumbered": "{{provider}} · {{project}} {{number}}",
+      "program": "Program",
+      "programHint": "The {{program}} program this connection runs.",
+      "notFoundOnPath": "Not found on PATH",
+      "chooseFile": "Choose file…",
+      "chooseFileUnavailable": "Only a copy found on the PATH can be chosen in this app; choosing another program file is not built yet.",
+      "programMissing": "{{program}} was not found on the PATH. Install it, then recheck.",
+      "programFoundOne": "Found on the PATH.",
+      "programFoundMany": "Found {{count}} on the PATH; the first is used unless you choose another.",
+      "check": "Check",
+      "detectingWord": "Detecting",
+      "detecting": "Looking for the program on the PATH…",
+      "checking": "Asking the CLI for its version, sign-in and models…",
+      "noProgramToCheck": "No program on the PATH to check.",
+      "signedIn": "Signed in",
+      "notSignedIn": "Not signed in",
+      "verifiedSignedIn": "{{program}} {{version}} · signed in",
+      "verifiedSignedOut": "{{program}} {{version}} · not signed in: sign in with the CLI, then recheck",
+      "verifiedSignInUnknown": "{{program}} {{version}} · sign-in status unknown",
+      "notRecognized": "The program did not answer as the {{program}}.",
+      "runToSignIn": "Run this in a terminal, then recheck.",
+      "authTitle": "Uses the {{program}} sign-in",
+      "authDetail": "Orchester runs the CLI on this computer with the account it is signed in to and stores no credentials. This connection belongs to {{project}}; other projects need their own.",
+      "nextStep": "After saving, select this connection in an agent profile and choose its model.",
+      "waitForCheck": "Save is available once the program has been checked.",
+      "save": "Save connection",
+      "reasons": {
+        "failed": "Not saved: {{reason}}",
+        "reading": "Save is available once the project’s connections have been read.",
+        "name": "Save unavailable: {{reason}}",
+        "noProgram": "Save is available once the program is found on the PATH.",
+        "notRecognized": "The program was not recognized as the chosen CLI, so the connection cannot be saved."
+      }
+    },
+    "github": {
+      "add": "Add GitHub connection",
+      "addUnavailable": "Adding a GitHub connection is not built in this app yet.",
+      "editUnavailable": "Editing a GitHub connection and changing its account or access are not built in this app yet.",
+      "emptyTitle": "No GitHub connection yet",
+      "emptyDetail": "{{project}} reaches GitHub only through the GitHub CLI (gh) on this computer.",
+      "status": {
+        "signedIn": "Signed in",
+        "notSignedIn": "Not signed in",
+        "wrongAccount": "Wrong account",
+        "missingScope": "Missing scope: repo",
+        "notFound": "gh not found",
+        "unrecognized": "Unrecognized"
+      },
+      "detail": {
+        "signedIn": "Orchester runs gh with its own sign-in on this computer. It never signs in, stores or sees tokens.",
+        "notSignedIn": "Run this in a terminal, then check again. Pull request steps are unavailable until gh is signed in.",
+        "signInUnknown": "gh answered, but whether it is signed in could not be read. Check again; pull request steps may fail until it is.",
+        "wrongAccount": "Signed in as {{active}}, expected {{expected}}. Switch gh back in a terminal, or make {{project}} expect {{active}}. Creating pull requests is blocked; Orchester never switches accounts.",
+        "missingScope": "Orchester needs the {{scope}} scope to read and create pull requests. Add it in a terminal, then check again.",
+        "notFound": "Install the GitHub CLI, then check again. Pull request steps are unavailable.",
+        "unrecognized": "The program did not answer as the GitHub CLI. Update gh, then check again.",
+        "couldNotRun": "gh could not be started or did not answer in time. Check again."
+      },
+      "accountUntilFound": "Unknown until gh is found",
+      "noScopes": "None listed",
+      "usedByProject": "Used by {{project}}",
+      "expectedAccount": "Expected account",
+      "repository": "Repository",
+      "repositoryName": "{{owner}} / {{name}}",
+      "remote": "Remote",
+      "useAccount": "Use this account ({{account}})"
+    },
+    "mcp": {
+      "add": "Add MCP server",
+      "emptyTitle": "No MCP servers yet",
+      "emptyDetail": "Agents run without your own CLI configuration, so the MCP servers they get are the ones {{project}} adds here. An agent profile chooses which of them its agents get.",
+      "row": {
+        "stdio": "Program · {{program}}",
+        "http": "Remote MCP · {{host}}"
+      },
+      "status": {
+        "on": "On",
+        "off": "Turned off"
+      },
+      "property": {
+        "type": "Type",
+        "program": "Program",
+        "arguments": "Arguments",
+        "folder": "Starts in",
+        "startedBy": "Started by",
+        "reachedBy": "Reached by",
+        "endpoint": "Endpoint"
+      },
+      "typeStdio": "Program on this computer",
+      "typeHttp": "Remote MCP",
+      "theWorktree": "The worktree",
+      "startedByCli": "The agent’s CLI, with each agent",
+      "reachedByCli": "The agent’s CLI, over HTTP",
+      "bearer": "Bearer token from {{secret}}",
+      "noAuthentication": "None",
+      "fromSecret": "From {{secret}}",
+      "secretName": "{{name}} ({{environment}})",
+      "secretGone": "a secret this project no longer has",
+      "variables": "Variables",
+      "exemptTools": "Tools that run without asking",
+      "exemptToolsNone": "None. When a profile asks before MCP actions, every tool of this server asks.",
+      "exemptToolsNote": "Only these tools of this server, and only for agent profiles that ask before MCP actions. Every other tool still asks.",
+      "tools": "Discovered tools",
+      "toolsNote": "Orchester does not connect to MCP servers itself, so it cannot list their tools yet. The agent’s CLI lists them when an agent starts.",
+      "refreshTools": "Refresh tools",
+      "notUsed": "No agent profile gives this server to its agents yet.",
+      "offUsers": "Turned off: {{profiles}} work without it until it is turned on.",
+      "turnOff": "Turn off",
+      "turnOn": "Turn on",
+      "remove": "Remove",
+      "removeInUse": "Remove is unavailable while agent profiles choose this server: {{profiles}}.",
+      "detail": "The agent’s CLI starts or reaches this server when an agent that gets it starts, and ends it with the agent. A server that does not start is listed in the run’s activity.",
+      "offDetail": "Turned off: no agent gets this server. Profiles keep choosing it, and their agents get it again once it is turned on.",
+      "confirmOff": {
+        "title": "Turn off {{name}}?",
+        "body": "{{profiles}} work without it from their next agent start. Agents at work now keep it until they end.",
+        "keep": "Keep it on"
+      },
+      "confirmRemove": {
+        "title": "Remove {{name}}?",
+        "body": "Its settings are deleted. No agent profile chooses it, so no agent loses it.",
+        "keep": "Keep it"
+      },
+      "dialog": {
+        "addTitle": "Add MCP server",
+        "editTitle": "Edit MCP server",
+        "editCrumb": "Edit",
+        "description": "Project: {{project}}. The agent’s CLI starts or reaches this server with each agent that gets it.",
+        "unsaved": "Unsaved changes",
+        "noChanges": "No changes",
+        "unchanged": "Nothing changed yet.",
+        "server": "Server",
+        "name": "Name",
+        "nameHint": "Agents know the server and its tools by this name.",
+        "namePlaceholder": "project-knowledge",
+        "stdioDetail": "The agent’s CLI starts it with each agent.",
+        "httpDetail": "The agent’s CLI reaches it over HTTP.",
+        "programPlaceholder": "npx",
+        "programHint": "A program on the PATH or in the worktree, or an absolute path.",
+        "folderHint": "A folder in the worktree, or an absolute path. Claude Code starts every server in the worktree.",
+        "argumentsHint": "One argument per line, passed as written.",
+        "variablesHint": "One NAME=value per line. ${secret:NAME@environment} takes the value of a project secret.",
+        "addSecret": "Add a variable from a secret…",
+        "noSecrets": "This project has no secrets",
+        "urlPlaceholder": "https://mcp.example.dev/mcp",
+        "bearerHint": "None, or a bearer token from a project secret.",
+        "approvals": "Approvals",
+        "exemptToolsHint": "One tool name per line, as the server names it (get_screenshot). When an agent profile asks before MCP actions, only these tools of this server run without asking; every other tool still asks. List only tools that change nothing.",
+        "secretsTitle": "Secret values stay out of arguments and logs",
+        "secretsDetail": "They are read from the system keychain when an agent starts and handed to its CLI only through its environment (Codex) or a file only it reads, removed when the agent ends (Claude Code).",
+        "nextStep": "Choose which agent profiles get this server on their Permissions tab.",
+        "goneTitle": "This MCP server is no longer here",
+        "goneDetail": "It was removed from the project. Connections lists the servers it has."
+      }
+    }
+  }
+}

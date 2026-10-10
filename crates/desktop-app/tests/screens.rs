@@ -26,8 +26,8 @@ use orchester_app::{
   project::{ProjectState, Projects},
   root::Start,
   routes::{
-    ChangeSource, ChangedFile, OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView,
-    routes,
+    ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, NewConnection, OverviewTab, ProjectPage, Route, Screen,
+    TaskList, TaskListTab, TaskTab, TaskView, routes,
   },
   services::Services,
   startup::Launch,
@@ -43,13 +43,17 @@ use parking_lot::Mutex;
 use support::Data;
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
+const CONNECTION: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
 const NOT_BUILT: &str = "This screen isn't built yet.";
 /// What a task's page shows while the project's tasks are read; nothing reads them here.
 const READING_TASK: &str = "Reading the task…";
 /// The screens that show their own content, which their own tests check, in place of the placeholder.
 const BUILT: &[Screen] = &[
   // One per line, sorted, so each screen's task adds a line of its own.
+  Screen::Connections,
+  Screen::EditConnection,
   Screen::EditTask,
+  Screen::NewConnection,
   Screen::NewTask,
   Screen::Tasks,
 ];
@@ -207,7 +211,22 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
     (at(ProjectPage::Skills), placeholder("Skills")),
     (at(ProjectPage::Tools), placeholder("Tools")),
     (at(ProjectPage::Secrets), placeholder("Secrets")),
-    (at(ProjectPage::Connections), placeholder("Connections")),
+    (
+      at(ProjectPage::Connections(ConnectionsView::new(
+        ConnectionsTab::McpServers,
+      ))),
+      placeholder("Connections"),
+    ),
+    (
+      at(ProjectPage::NewConnection(NewConnection::McpServer)),
+      placeholder("Add connection"),
+    ),
+    (
+      at(ProjectPage::EditConnection(
+        CONNECTION.parse().expect("a connection id"),
+      )),
+      placeholder("Edit connection"),
+    ),
     (at(ProjectPage::Settings), placeholder("Project settings")),
   ]);
   all

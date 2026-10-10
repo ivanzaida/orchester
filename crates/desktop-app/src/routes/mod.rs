@@ -7,18 +7,22 @@
 //! `?highlight=` the task a Create just added) and New task `/project/<id>/tasks/new`. A task's page is
 //! `/project/<id>/tasks/<key>/<tab>` (the key as in `KON-12`; `summary`, `conversation` or `changes`, with
 //! `?file=` a changed file and `&from=worktree` for its change that is not checkpointed), always with
-//! its tab, and `/project/<id>/tasks/<key>/edit` is Edit task. A tab or source left out of the query is
-//! the one the screen opens on.
+//! its tab, and `/project/<id>/tasks/<key>/edit` is Edit task. Connections is `/project/<id>/connections`
+//! (`?tab=`, `?selected=` the connection its inspector shows), Add connection `/project/<id>/connections/new`
+//! (`?kind=mcp_server` adds an MCP server) and `/project/<id>/connections/<connection id>/edit` edits an MCP
+//! server. A tab, source or kind left out of the query is the one the screen opens on.
 //!
 //! Another screen or another tab (`tab`, a task's `<tab>`) is a new entry of the tab's history
 //! (`Navigation::go`); what a screen refines on its tab, `q`, `highlight` and `file` with `from`, takes the
-//! current entry's place (`Navigation::replace`), so Back leaves the screen instead of replaying it.
+//! current entry's place (`Navigation::replace`), so Back leaves the screen instead of replaying it; so does
+//! the connection Connections shows in its inspector (`selected`).
 //!
 //! A project is named by its id (`orchester_core::id::ProjectId`), not its key or name: the id never
 //! changes, so a path a tab keeps still finds its project after a rename or a new key. A task is named
 //! by its key (`orchester_core::project::TaskKey`), as people read it. A path that names no route reads
 //! as a [`RouteError`] that says why.
 
+mod connections;
 mod error;
 mod overview;
 mod page;
@@ -32,6 +36,7 @@ use orchester_core::id::ProjectId;
 
 use self::query::Params;
 pub use self::{
+  connections::{ConnectionsTab, ConnectionsView, NewConnection},
   error::RouteError,
   overview::OverviewTab,
   page::ProjectPage,
@@ -44,6 +49,7 @@ pub use self::{
 const PROJECT: &str = "project";
 const SETTINGS: &str = "settings";
 const TASKS: &str = "tasks";
+const CONNECTIONS: &str = "connections";
 const NEW: &str = "new";
 const EDIT: &str = "edit";
 /// The query parameter of a screen's tab.
@@ -79,6 +85,7 @@ impl Route {
   pub const fn nav_screen(&self) -> Screen {
     match self.screen() {
       Screen::Task | Screen::NewTask | Screen::EditTask => Screen::Tasks,
+      Screen::NewConnection | Screen::EditConnection => Screen::Connections,
       screen => screen,
     }
   }

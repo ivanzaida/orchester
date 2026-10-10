@@ -3,17 +3,25 @@
 //! in the table.
 
 use orchester_app::routes::{
-  ChangeSource, ChangedFile, OverviewTab, ProjectPage, Route, RouteError, Screen, TaskList, TaskListTab, TaskTab,
-  TaskView, routes,
+  ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, NewConnection, OverviewTab, ProjectPage, Route,
+  RouteError, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
 };
-use orchester_core::{id::ProjectId, project::TaskKey};
+use orchester_core::{
+  id::{ConnectionId, ProjectId},
+  project::TaskKey,
+};
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
+const CONNECTION: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
 /// A search and a file path with every character a query must escape, and some it need not.
 const AWKWARD: &str = "retry & jitter #2 ? 100% = ü/слово+";
 
 fn project() -> ProjectId {
   PROJECT.parse().expect("a project id")
+}
+
+fn connection() -> ConnectionId {
+  CONNECTION.parse().expect("a connection id")
 }
 
 fn key(key: &str) -> TaskKey {
@@ -44,7 +52,13 @@ fn every_route() -> Vec<Route> {
         .with_highlight(key("KON-13")),
     )),
     at(ProjectPage::EditTask(key("KON-7"))),
+    at(ProjectPage::EditConnection(connection())),
+    at(ProjectPage::Connections(
+      ConnectionsView::new(ConnectionsTab::McpServers).with_selected(connection()),
+    )),
   ]);
+  all.extend(ConnectionsTab::ALL.map(|tab| at(ProjectPage::Connections(ConnectionsView::new(tab)))));
+  all.extend(NewConnection::ALL.map(|kind| at(ProjectPage::NewConnection(kind))));
   all.extend(TaskTab::ALL.map(|tab| at(ProjectPage::Task(key("KON-12"), TaskView::of(tab)))));
   for source in ChangeSource::ALL {
     for path in ["src/webhooks/sender.rs", AWKWARD] {
@@ -332,4 +346,40 @@ fn a_task_and_its_forms_select_tasks_in_the_sidebar() {
   }
   assert_eq!(at(ProjectPage::NewTask).screen(), Screen::NewTask);
   assert_eq!(Route::Settings.project(), None);
+}
+
+#[test]
+fn connections_pages_have_their_documented_paths_and_select_connections() {
+  let root = format!("/project/{PROJECT}/connections");
+  for (page, path) in [
+    (ProjectPage::Connections(ConnectionsView::default()), root.clone()),
+    (
+      ProjectPage::Connections(ConnectionsView::new(ConnectionsTab::McpServers).with_selected(connection())),
+      format!("{root}?tab=mcp_servers&selected={CONNECTION}"),
+    ),
+    (
+      ProjectPage::NewConnection(NewConnection::AgentProvider),
+      format!("{root}/new"),
+    ),
+    (
+      ProjectPage::NewConnection(NewConnection::McpServer),
+      format!("{root}/new?kind=mcp_server"),
+    ),
+    (
+      ProjectPage::EditConnection(connection()),
+      format!("{root}/{CONNECTION}/edit"),
+    ),
+  ] {
+    let route = at(page);
+    assert_eq!(route.path(), path);
+    assert_eq!(route.nav_screen(), Screen::Connections, "{route:?}");
+  }
+  assert_eq!(
+    Route::parse(&format!("{root}/not-an-id/edit")),
+    Err(RouteError::NoScreen)
+  );
+  assert!(matches!(
+    Route::parse(&format!("{root}?selected=nope")),
+    Err(RouteError::InvalidParam { .. })
+  ));
 }
