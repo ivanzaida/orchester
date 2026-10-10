@@ -1,6 +1,6 @@
 //! The status bar (`Status bar` `sMpGe` of `q9mf0k`; handover §3.3), for the active tab's project: on the
-//! left the project and its folder, the runner and the activity slot; on the right the project's counts
-//! and tokens, the waiting requests with *Review* and the runs that auto-approve with *Stop* (`xommZ`),
+//! left the project, its folder in the name's tooltip, the runner and the activity slot; on the right the project's
+//! counts and tokens, the waiting requests with *Review* and the runs that auto-approve with *Stop* (`xommZ`),
 //! the app's MCP server and the version.
 //! Every item shows only measured data. A screen outside a project shows the activity and the app's items
 //! only, its events named by their project. A startup screen's bar has the version only.
@@ -21,7 +21,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, StreamEmitter},
-    theme::{PaletteColor, SpacingSize},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Row, Spacer},
   layout::{Alignment, layout_kind::ShrinkLimit},
@@ -36,14 +36,14 @@ use orchester_workspace::activity::{
 pub use self::facts::{BarAction, BarFacts, Dispatch, ProjectFacts, ReadFailure, RunnerFacts, Stopping};
 use self::{
   act::Stopper,
-  item::{cut, give_way, glyph, item, label},
+  item::{give_way, glyph, item, label},
 };
 use crate::{
   mcp::McpStatus,
   project::{ProjectFeed, ProjectState, Projects, TasksState},
   routes::Route,
   services::Services,
-  ui::icon::Icon,
+  ui::{icon::Icon, tooltip::Truncated},
 };
 
 /// `Status bar` height.
@@ -229,21 +229,23 @@ impl Component for StatusBarView {
   }
 }
 
-/// *Kontur · H:/projects/kontur* (`Status · Kontur · H:/projects/kontur` `ZQiMf`).
+/// *Kontur* (`ZQiMf`), its folder in the name's tooltip; once the name is cut, the tooltip says both.
 fn project_item(ctx: &mut Ctx, project: &ProjectFacts) -> Element {
-  let text = ctx.t_args(
-    "shell.status.project",
-    [
-      ("name", project.name.clone()),
-      ("folder", project.repo_root.display().to_string()),
-    ],
+  let folder = project.repo_root.display().to_string();
+  let both = ctx.t_args(
+    "shell.status.projectCut",
+    [("name", project.name.as_str()), ("folder", folder.as_str())],
   );
+  let name = Truncated::new("status-project-text", project.name.as_str(), TypographyStyle::Caption)
+    .color(PaletteColor::TextMuted)
+    .hint(folder, both)
+    .render(ctx);
   item("status-project")
     .flex_shrink(1.0)
     .shrink_order(give_way::PROJECT)
     .shrink_limit(ShrinkLimit::Content)
     .child(glyph(Icon::HardDrive, PaletteColor::TextMuted))
-    .child(cut(ctx, "status-project-text", &text, PaletteColor::TextMuted))
+    .child(name)
     .into()
 }
 

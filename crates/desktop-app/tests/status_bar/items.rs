@@ -34,6 +34,17 @@ fn status_items_without_a_project_are_the_apps_own() {
   assert!(unavailable.texts("status-window-control").is_none());
 }
 
+/// The project item says the project's name; its folder shows in the name's tooltip.
+#[test]
+fn status_project_is_its_name_with_its_folder_in_a_tooltip() {
+  let mut bar = Bar::of(facts(Some(kontur(
+    runner(RunnerState::Online),
+    ProjectTasks::default(),
+  ))));
+  assert_eq!(bar.texts("status-project"), Some(vec!["Kontur".to_owned()]));
+  assert_eq!(bar.tooltip("status-project-text"), Some(vec![ROOT.to_owned()]));
+}
+
 #[test]
 fn status_runner_says_each_state() {
   let since = SystemTime::now() - Duration::from_secs(60);

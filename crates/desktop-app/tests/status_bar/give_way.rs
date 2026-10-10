@@ -43,6 +43,25 @@ fn status_gives_way_in_its_order_at_960() {
   }
 }
 
+/// A project's name cut on a narrow window keeps itself and its folder in its tooltip.
+#[test]
+fn status_project_name_cut_says_name_and_folder_in_its_tooltip() {
+  let name = "Kontur platform, billing, the partner portal and the reporting service";
+  let project = ProjectFacts {
+    name: name.to_owned(),
+    ..kontur(runner(RunnerState::Online), ProjectTasks::default())
+  };
+  let mut wide = Bar::of(facts(Some(project.clone())));
+  let whole = wide.width("status-project-text");
+  let mut narrow = Bar::at(700, facts(Some(project)));
+  let cut = narrow.width("status-project-text");
+  assert!(cut > 0.0 && cut < whole, "the name is cut: {cut} of {whole}");
+  assert_eq!(
+    narrow.tooltip("status-project-text"),
+    Some(vec![format!("{name} · {ROOT}")])
+  );
+}
+
 /// The counts' labels give way together: at any width all show or none does.
 #[test]
 fn status_count_labels_give_way_as_one_group() {
