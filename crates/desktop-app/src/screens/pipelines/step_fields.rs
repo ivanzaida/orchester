@@ -278,10 +278,24 @@ impl Fields {
         });
       }
     });
+    self.watch_choices(ctx, props);
+  }
+  fn watch_choices(&self, ctx: &mut Ctx, props: &Props) {
     let (state, key, locked) = (props.state.clone(), props.step.key.clone(), props.locked);
+    let model = self.model.clone();
     ctx.watch(&self.executor, move |value| {
       if !locked {
-        state.update(|s| s.change(&key, |step| value.apply(step)));
+        let mut selected = None;
+        state.update(|s| {
+          s.change(&key, |step| {
+            value.apply(step);
+            selected = Some(ModelChoice::of(step));
+          });
+        });
+        // Signal watchers can run immediately and write to state themselves.
+        if let Some(selected) = selected {
+          model.set(selected);
+        }
       }
     });
     let (state, key, locked) = (props.state.clone(), props.step.key.clone(), props.locked);
@@ -291,9 +305,31 @@ impl Fields {
       }
     });
     let (state, key, locked) = (props.state.clone(), props.step.key.clone(), props.locked);
+    let retries = self.retries.clone();
     ctx.watch(&self.route, move |value| {
       if !locked {
-        state.update(|s| s.change(&key, |step| value.clone().apply(step)));
+        let mut restored = None;
+        state.update(|s| {
+          s.change(&key, |step| {
+            let had_route = step.on_failure.is_some();
+            value.clone().apply(step);
+            if !had_route {
+              restored = step.on_failure.as_ref().map(|route| route.max_retries.to_string());
+            }
+          });
+          let id = format!("{key}:step-retries");
+          if value.0.is_none() {
+            s.inputs.remove(&id);
+            s.errors.remove(&id);
+          } else if let Some(text) = &restored {
+            // A newly enabled route uses the domain's retry count, including after remounting.
+            s.inputs.insert(id.clone(), text.clone());
+            s.errors.remove(&id);
+          }
+        });
+        if let Some(text) = restored {
+          retries.set(text);
+        }
       }
     });
   }
