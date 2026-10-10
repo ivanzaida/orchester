@@ -20,7 +20,10 @@ use orchester_workspace::{close::RunStands, display, runner::ActiveWork, tasks::
 
 use crate::{
   theme::{ExtraSpacing, ExtraTypography, IconSize, LifecycleSpacing, LifecycleText},
-  ui::icon::{Icon, icon},
+  ui::{
+    icon::{Icon, icon},
+    message::message_text,
+  },
 };
 
 /// The width of a row's status and of its last cell (`Status` `gowVm`; `Last` as the panels widen it).
@@ -45,7 +48,7 @@ pub struct Shown<'a> {
 struct Line<'a> {
   id: String,
   key: &'a str,
-  title: &'a str,
+  title: Arc<str>,
   detail: Arc<str>,
   status: (Icon, PaletteColor, Arc<str>),
   last: Arc<str>,
@@ -61,7 +64,11 @@ pub fn group(ctx: &Ctx, project: &str, title: &str, runs: &[Shown<'_>]) -> Eleme
 /// Git's operations in project `project` (`Git work · Kontur`).
 pub fn jobs_group(ctx: &Ctx, project: &str, jobs: &[&BusyJob]) -> Element {
   let title = ctx.t_args("lifecycle.close.group.git", [("project", project)]);
-  let lines: Vec<Line<'_>> = jobs.iter().map(|job| job_line(ctx, job)).collect();
+  let lines: Vec<Line<'_>> = jobs
+    .iter()
+    .enumerate()
+    .map(|(index, job)| job_line(ctx, (index, job)))
+    .collect();
   framed(&format!("closing-git-{project}"), &title, lines)
 }
 
@@ -117,7 +124,7 @@ fn run_line<'a>(ctx: &Ctx, shown: &Shown<'a>) -> Line<'a> {
   Line {
     id: work.run().to_string(),
     key: work.task_key(),
-    title: work.task_title(),
+    title: work.task_title().into(),
     detail: ctx.t_args(
       "lifecycle.close.row.stepAgent",
       [("step", work.step()), ("agent", work.agent())],
@@ -128,20 +135,24 @@ fn run_line<'a>(ctx: &Ctx, shown: &Shown<'a>) -> Line<'a> {
   }
 }
 
-fn job_line<'a>(ctx: &Ctx, job: &'a BusyJob) -> Line<'a> {
-  let (detail, status) = if job.merge {
-    ("lifecycle.close.row.merge", "lifecycle.close.row.merging")
+fn job_line<'a>(ctx: &Ctx, (index, job): (usize, &'a BusyJob)) -> Line<'a> {
+  let (detail, status, stands) = if job.merge {
+    ("lifecycle.close.row.checkout", "lifecycle.close.row.merging", "merging")
   } else {
-    ("lifecycle.close.row.removal", "lifecycle.close.row.removing")
+    (
+      "lifecycle.close.row.worktrees",
+      "lifecycle.close.row.removing",
+      "removing",
+    )
   };
   Line {
-    id: format!("{}-{}", job.task_key, job.run_number),
-    key: &job.task_key,
-    title: "",
-    detail: ctx.t_args(detail, [("run", job.run_number.to_string())]),
+    id: format!("git-{}-{index}", job.project),
+    key: "",
+    title: message_text(ctx, &job.what),
+    detail: ctx.t(detail),
     status: (Icon::LoaderCircle, PaletteColor::TextSecondary, ctx.t(status)),
     last: ctx.t("lifecycle.close.row.git"),
-    stands: "git",
+    stands,
   }
 }
 
@@ -163,7 +174,7 @@ fn row(line: Line<'_>, last: bool) -> Element {
             .flex_shrink(0.0),
         )
         .child(
-          Text::new(line.title)
+          Text::new(&line.title)
             .id(format!("closing-title-{id}"))
             .variant(ExtraTypography::Strong.role())
             .nowrap()

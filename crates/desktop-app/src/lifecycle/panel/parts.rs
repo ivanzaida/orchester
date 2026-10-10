@@ -29,8 +29,15 @@ const TILE_SIZE: f32 = 40.0;
 
 /// The icon tile, the heading and what it means; while the agents save, how long it has waited
 /// (`Head` `d5mNQ`, `lxswN`, `b0VfYe`).
-pub(super) fn head(ctx: &Ctx, stage: Stage, elapsed: Option<Duration>) -> Element {
+pub(super) fn head(ctx: &Ctx, (stage, git_only): (Stage, bool), elapsed: Option<Duration>) -> Element {
   let (glyph_icon, color, title, description) = match stage {
+    // Only git's operations hold the close: no agent is at work.
+    Stage::Confirm if git_only => (
+      Icon::Power,
+      PaletteColor::TextSecondary,
+      "lifecycle.close.confirm.gitTitle",
+      "lifecycle.close.confirm.gitDescription",
+    ),
     Stage::Confirm => (
       Icon::Power,
       PaletteColor::TextSecondary,

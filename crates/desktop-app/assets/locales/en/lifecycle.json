@@ -3,7 +3,9 @@
     "close": {
       "confirm": {
         "title": "Close Orchester while agents are working?",
-        "description": "Closing stops the runner and every agent in it. Orchester has no background mode, so nothing keeps running after the window closes."
+        "description": "Closing stops the runner and every agent in it. Orchester has no background mode, so nothing keeps running after the window closes.",
+        "gitTitle": "Close Orchester while git work runs?",
+        "gitDescription": "A merge or a worktree removal is under way. Closing now could leave the checkout or the worktree half changed: wait for git to finish, or quit now."
       },
       "waiting": {
         "title": "Saving before closing",
@@ -38,11 +40,11 @@
         },
         "pausedAt": "Paused at {{checkpoint}}",
         "paused": "Paused",
-        "merge": "Merging run #{{run}} into its branch",
-        "removal": "Removing run #{{run}}'s worktree",
         "merging": "Merging…",
         "removing": "Removing…",
-        "git": "Closing waits for git"
+        "git": "Closing waits for git",
+        "checkout": "In the project's checkout",
+        "worktrees": "In the run's worktrees"
       },
       "provider": {
         "anthropicApi": "Anthropic API",
@@ -137,15 +139,16 @@
       },
       "partial": {
         "title": "{{continued}} of {{count}} runs continued",
-        "run": "{{task}} could not continue: {{reason}}",
+        "run": "{{task}}: {{reason}}",
         "stays": "Each stays interrupted; continue it later from its task page.",
         "open": "Open {{task}}"
       },
       "unread": {
         "title": "Some interrupted runs could not be read",
         "body": "{{reasons}}\nThey stay as they are; their task pages show them.",
-        "run": "A run could not be read: {{reason}}",
-        "project": "This project's runs could not be read: {{reason}}"
+        "run": "Another run: {{reason}}",
+        "project": "This project's runs: {{reason}}",
+        "runOf": "A run of {{task}}: {{reason}}"
       }
     }
   }

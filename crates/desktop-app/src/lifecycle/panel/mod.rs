@@ -1,7 +1,7 @@
 //! The closing panel in the content panel, where the page was (`Closing panel` of `u3Fw36`, `lxm8W`,
 //! `n5psM`): what closing does, the runs with an agent at work by project and git's operations under way,
 //! the tasks that only wait for a person, the two choices and the actions. What it lists is read live
-//! (`CloseFlow::board`): it follows the runners' reports and, each second, git and the time.
+//! (`CloseFlow::board`): it follows the runners' reports and git's operations, and while waiting the time.
 
 mod actions;
 mod parts;
@@ -22,7 +22,7 @@ use lurq::{
 use orchester_workspace::{
   close::{Board, CloseFlow, ClosePhase, RunStands, Stage},
   runner::Runners,
-  tasks::integration_jobs::BusyJob,
+  tasks::integration_jobs::{BusyJob, ProjectJobs},
 };
 use parking_lot::Mutex;
 
@@ -38,7 +38,7 @@ use crate::{
 
 /// The closing panel's width (`Closing panel` `v9psPQ`).
 const PANEL_WIDTH: f32 = 880.0;
-/// How often the panel looks again at git and says the time again.
+/// How often the waiting panel says the time again.
 const TICK: Duration = Duration::from_secs(1);
 
 #[derive(Clone)]
@@ -87,10 +87,11 @@ impl Component for ClosingPanel {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let PanelProps { phase, close, focus } = ctx.props::<PanelProps>().clone();
-    let runners = Services::of(ctx).runners;
+    let services = Services::of(ctx);
+    let runners = services.runners;
     work_changes(ctx, &runners);
+    job_changes(ctx, &services.jobs);
     self.tick.get();
-    self.interval.start();
     let since = match phase {
       ClosePhase::Confirming => None,
       ClosePhase::Waiting { since } => Some(since),
@@ -98,6 +99,13 @@ impl Component for ClosingPanel {
     };
     let board = close.board();
     let stage = board.stage();
+    // Only while waiting does the panel say a time that changes on its own.
+    if stage == Stage::Waiting {
+      self.interval.start();
+    } else {
+      self.interval.stop();
+    }
+    let git_only = board.runs.is_empty() && !board.jobs.is_empty();
     self.move_focus(ctx, focus.get());
     // A start after now (the clock was set back since) has waited no time yet.
     let elapsed = since.map(|since| since.elapsed().unwrap_or_default());
@@ -107,7 +115,7 @@ impl Component for ClosingPanel {
       .width(Dimension::Pct(100.0))
       .max_width(Dimension::Px(PANEL_WIDTH))
       .spacing(SpacingSize::Xl)
-      .child(head(ctx, stage, elapsed))
+      .child(head(ctx, (stage, git_only), elapsed))
       .with_children(groups(ctx, stage, &board, &runners));
     panel = match stage {
       Stage::Confirm => panel.with_children(waiting_note(ctx)).child(choices(ctx)),
@@ -250,6 +258,20 @@ fn group_title(ctx: &Ctx, stage: Stage, project: &str, runs: &[Shown<'_>]) -> st
       ("project", project),
     ],
   )
+}
+
+/// The projects' git operations' revision; reading it renders the panel again whenever one changes.
+fn job_changes(ctx: &mut Ctx, jobs: &ProjectJobs) -> u64 {
+  let changes = ctx.stream(jobs.clone(), |jobs, emitter: StreamEmitter<u64, ()>| async move {
+    let mut updates = jobs.changes();
+    loop {
+      let revision = *updates.borrow_and_update();
+      if !emitter.emit(revision) || updates.changed().await.is_err() {
+        return;
+      }
+    }
+  });
+  changes.state().get().data.unwrap_or(0)
 }
 
 /// The runners' work revision; reading it renders the panel again whenever a runner reports.

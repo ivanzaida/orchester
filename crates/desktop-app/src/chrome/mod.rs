@@ -49,7 +49,9 @@ pub fn bare(ctx: &mut Ctx, screen: Element) -> Element {
 
 fn window(ctx: &mut Ctx, screen: Element, tabs: bool, closing: bool) -> Element {
   let close = close(ctx);
-  let lights = cfg!(target_os = "macos").then(|| traffic_lights::lights(ctx, close.clone()));
+  let lights = cfg!(target_os = "macos").then(|| {
+    ctx.mount_keyed::<traffic_lights::TrafficLights>("traffic-lights", traffic_lights::LightsProps(close.clone()))
+  });
   let bar = ChromeTitleBar::new()
     .background(PaletteColor::SurfaceBase)
     .border_bottom(None)

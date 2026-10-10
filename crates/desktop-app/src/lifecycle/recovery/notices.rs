@@ -83,12 +83,15 @@ pub(super) fn unread_lines(ctx: &Ctx, unread: &[Unread]) -> Vec<Arc<str>> {
   unread
     .iter()
     .map(|unread| {
-      let key = if unread.run.is_some() {
-        "lifecycle.recovery.unread.run"
-      } else {
-        "lifecycle.recovery.unread.project"
-      };
-      ctx.t_args(key, [("reason", message_text(ctx, &unread.reason).to_string())])
+      let reason = message_text(ctx, &unread.reason).to_string();
+      match (&unread.task_key, unread.run) {
+        (Some(task), _) => ctx.t_args(
+          "lifecycle.recovery.unread.runOf",
+          [("task", task.to_string()), ("reason", reason)],
+        ),
+        (None, Some(_)) => ctx.t_args("lifecycle.recovery.unread.run", [("reason", reason)]),
+        (None, None) => ctx.t_args("lifecycle.recovery.unread.project", [("reason", reason)]),
+      }
     })
     .collect()
 }

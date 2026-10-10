@@ -138,33 +138,43 @@ impl Live {
         .status_of(&repo)
         .is_some_and(|status| *status.state() == RunnerState::Online)
     });
-    let domain = app_mcp::Services::new(
-      services.workspace.clone(),
-      services.runners.clone(),
-      services.servers.clone(),
-      services.programs.clone(),
-      (
-        services.changes.clone(),
-        services.activity.clone(),
-        services.jobs.clone(),
-      ),
+    let domain = self.domain();
+    let answer = self.call(
+      &domain,
+      "run_task",
+      json!({"project": self.project.to_string(), "key": key}),
     );
-    let translate = Translate::new(|message| message.key.to_owned());
-    let arguments = json!({"project": self.project.to_string(), "key": key});
-    let Value::Object(arguments) = arguments else {
-      unreachable!("a JSON object")
-    };
-    let answer = self
-      .window
-      .data
-      .runtime
-      .block_on(app_mcp::call(&domain, &translate, "run_task", arguments))
-      .expect("run_task is a domain tool")
-      .unwrap_or_else(|error| panic!("{key} runs: {error:?}"));
     answer["run"]["id"]
       .as_str()
       .and_then(|id| id.parse().ok())
       .expect("the run's id")
+  }
+
+  /// Calls the app's domain tool `tool` with `arguments`, as automation does.
+  fn call(&self, domain: &app_mcp::Services, tool: &str, arguments: Value) -> Value {
+    let translate = Translate::new(|message| message.key.to_owned());
+    let Value::Object(arguments) = arguments else {
+      unreachable!("a JSON object")
+    };
+    self
+      .window
+      .data
+      .runtime
+      .block_on(app_mcp::call(domain, &translate, tool, arguments))
+      .unwrap_or_else(|| panic!("{tool} is a domain tool"))
+      .unwrap_or_else(|error| panic!("{tool}: {error:?}"))
+  }
+
+  /// The app's domain tools on this window's services.
+  fn domain(&self) -> app_mcp::Services {
+    let services = self.services();
+    app_mcp::Services::new(
+      services.workspace.clone(),
+      services.runners.clone(),
+      services.servers.clone(),
+      services.programs.clone(),
+      (services.changes.clone(), services.activity.clone(), services.jobs),
+    )
   }
 
   /// Waits until the runner reports `run`'s agent at work.
@@ -465,4 +475,25 @@ fn interrupt(repo: &Path, runs: &[RunId]) {
       .expect("a run at work can be interrupted");
     db.append_events(&run, &events).expect("record the interruption");
   }
+}
+
+#[test]
+fn lifecycle_close_held_for_an_agent_closes_quietly_once_no_work_is_left() {
+  let mut live = Live::seeded();
+  let run = live.run("KON-1");
+  live.at_work(run);
+  live.press_close();
+  live.wait("the closing panel", |live| live.has(&format!("closing-row-{run}")));
+  // The agent's work ends while the person decides: nothing is left to ask about.
+  let domain = live.domain();
+  live.call(
+    &domain,
+    "cancel_run",
+    json!({"project": live.project.to_string(), "run": run.to_string()}),
+  );
+  live.wait("the window let close", |live| live.closed());
+  assert_eq!(live.services().close.session_end(), Some(SessionEnd::Clean));
+  let Live { window, .. } = live;
+  let Window { launch, .. } = window;
+  launch.end();
 }
