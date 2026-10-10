@@ -148,7 +148,7 @@ fn tasks_a_created_task_the_feed_reads_later_is_scrolled_into_view() {
     brief: String::new(),
     acceptance_criteria: Vec::new(),
     pipeline: None,
-    limits: None,
+    limits: orchester_core::task::TaskLimits::NONE,
   };
   orchester_workspace::tasks::data::save_draft_in(
     &seeded.repo,

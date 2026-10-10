@@ -15,11 +15,11 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
 };
-use orchester_core::{limits::ProjectLimits, task::MissingDetail, tokens::compact_tokens};
+use orchester_core::{task::MissingDetail, tokens::compact_tokens};
 
 use super::{FormState, NewTaskForm, PipelineSelection, missing_note};
 use crate::{
-  budget::read_budget,
+  budget::read_optional_budget,
   navigation::route::{Page, PipelineView},
   tabs::OpenIn,
   tasks::data::PipelineChoice,
@@ -48,7 +48,7 @@ const CREATE_AND_RUN_HEIGHT: f32 = 42.0;
 pub fn execution_plan(
   ctx: &Ctx,
   form: &NewTaskForm,
-  (pipelines, limits): (Option<&Vec<PipelineChoice>>, ProjectLimits),
+  pipelines: Option<&Vec<PipelineChoice>>,
   state: &FormState,
   save: Submit,
   start: Submit,
@@ -78,7 +78,7 @@ pub fn execution_plan(
     .with_children(steps)
     .with_children(pipeline.map(|choice| view_pipeline(ctx, form, choice)))
     .with_children(missing_note(ctx, state, MissingDetail::Pipeline))
-    .child(run_limits(ctx, form, state, limits))
+    .child(run_limits(ctx, form, state))
     .with_children(pipeline.map(|choice| review_policy(ctx, choice)));
   // The column reaches past `PLAN_WIDTH` into the form's right padding by the details' scroll
   // gutter; the actions keep out of it, so they end where the details do (`HVSv5`).
@@ -330,22 +330,24 @@ fn run_status(ctx: &Ctx, state: &FormState) -> Vec<Element> {
 }
 
 /// Run budget and time limit (`iuFln`), each with its read-back or its error (`RgvJX`, `d6zYDZ`).
-fn run_limits(ctx: &Ctx, form: &NewTaskForm, state: &FormState, limits: ProjectLimits) -> Element {
+/// Both are optional: an empty field reads back as no limit.
+fn run_limits(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
   let budget_error = state.errors.budget.as_ref().map(|error| message_text(ctx, error));
   let time_error = state.errors.time_limit.as_ref().map(|error| message_text(ctx, error));
   let separator = ctx.t("number.groupSeparator");
-  let max = limits.max_run_budget();
-  let budget_readback = read_budget(&form.budget.get(), &separator, max).ok().map(|budget| {
-    ctx.t_args(
-      "tokens.readBackRun",
-      [
-        ("count", compact_tokens(budget.get()).as_str()),
-        ("max", compact_tokens(max.get()).as_str()),
-      ],
-    )
+  let budget_readback = read_optional_budget(&form.budget.get(), &separator)
+    .ok()
+    .map(|budget| match budget {
+      Some(budget) => ctx.t_args("tokens.readBackRun", [("count", compact_tokens(budget.get()).as_str())]),
+      None => ctx.t("tokens.noLimit"),
+    });
+  let time_readback = time_error.is_none().then(|| {
+    if form.time_limit.get().trim().is_empty() {
+      ctx.t("tokens.noLimit")
+    } else {
+      ctx.t("tasks.new.timeLimitReadBack")
+    }
   });
-  let time_readback =
-    (time_error.is_none() && !form.time_limit.get().trim().is_empty()).then(|| ctx.t("tasks.new.timeLimitReadBack"));
   let budget = UnitInput::new(
     "task-budget",
     form.budget.clone(),
@@ -376,7 +378,6 @@ fn run_limits(ctx: &Ctx, form: &NewTaskForm, state: &FormState, limits: ProjectL
     .child(limit_row(ctx, "tasks.new.timeLimit", time))
     .with_children(time_error.map(|error| wrapping_field_error(&error)))
     .with_children(time_readback.map(|text| read_back("task-time-readback", &text)))
-    .with_children(missing_note(ctx, state, MissingDetail::Limits))
     .into()
 }
 

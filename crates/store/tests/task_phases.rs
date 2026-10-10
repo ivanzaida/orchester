@@ -3,7 +3,12 @@
 
 mod support;
 
-use orchester_core::{id::IdempotencyKey, run::TaskPhase, store::TaskStore, task::TaskDetails};
+use orchester_core::{
+  id::IdempotencyKey,
+  run::TaskPhase,
+  store::TaskStore,
+  task::{TaskDetails, TaskLimits},
+};
 use orchester_store::ProjectDb;
 
 use self::support::{at, name, started_run};
@@ -16,7 +21,7 @@ fn task_phases_come_from_the_latest_run_or_the_task() {
     brief: String::new(),
     acceptance_criteria: Vec::new(),
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   };
   db.create_tasks(IdempotencyKey::generate(), vec![draft], at(10))
     .expect("a draft task");

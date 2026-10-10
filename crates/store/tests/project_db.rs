@@ -31,18 +31,18 @@ fn details(title: &str) -> TaskDetails {
     brief: String::new(),
     acceptance_criteria: Vec::new(),
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   }
 }
 
 fn complete(title: &str) -> TaskDetails {
   let budget = orchester_core::tokens::TokenBudget::new(1_400_000).expect("above zero");
-  let limits = TaskLimits::new(budget, Duration::from_secs(1800)).expect("positive limits");
+  let limits = TaskLimits::new(Some(budget), Some(Duration::from_secs(1800))).expect("positive limits");
   TaskDetails {
     brief: "Let users switch repositories.".into(),
     acceptance_criteria: vec!["Lists repositories.".into(), "Remembers the choice.".into()],
     pipeline: Some(ResourceId::generate()),
-    limits: Some(limits),
+    limits,
     ..details(title)
   }
 }

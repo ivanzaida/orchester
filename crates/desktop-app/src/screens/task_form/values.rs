@@ -3,10 +3,7 @@
 //! saved (`kept`).
 
 use orchester_core::{id::ResourceId, task::TaskDetails, tokens::grouped};
-use orchester_workspace::{
-  budget::{minutes_text, unbounded},
-  tasks::form::TaskForm,
-};
+use orchester_workspace::{budget::minutes_text, tasks::form::TaskForm};
 
 /// The fields' values. Criteria are one entry per row, blank rows included.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -33,17 +30,15 @@ impl Values {
       pipeline: details.pipeline,
       budget: details
         .limits
-        .map(|limits| grouped(limits.budget().get(), separator))
+        .budget()
+        .map(|budget| grouped(budget.get(), separator))
         .unwrap_or_default(),
-      time_limit: details
-        .limits
-        .map(|limits| minutes_text(limits.max_duration()))
-        .unwrap_or_default(),
+      time_limit: minutes_text(details.limits.max_duration()),
     }
   }
 
-  /// The values as the workspace checks them. Run budgets have no maximum (the person's decision of
-  /// 2026-10-09): only text that is not a budget is refused.
+  /// The values as the workspace checks them. Limits are optional and have no maximum (the person's
+  /// decision of 2026-10-09): only text that is not a budget or whole minutes is refused.
   pub fn task_form<'a>(&'a self, separator: &'a str) -> TaskForm<'a> {
     TaskForm {
       title: &self.title,
@@ -53,7 +48,6 @@ impl Values {
       budget: &self.budget,
       time_limit: &self.time_limit,
       separator,
-      max_budget: unbounded(),
     }
   }
 

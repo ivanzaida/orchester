@@ -1,8 +1,9 @@
 //! Budget fields take absolute whole numbers only (`docs/design/orchester-workspace.md`, "Token
 //! budgets", input rule): never `1.4M` or `250k`. The locale's group separator, spaces and
 //! underscores are ignored; a decimal separator, a unit letter or anything else makes the value
-//! invalid. There is no minimum beyond more than 0, and the project's maximum run budget bounds
-//! every run budget.
+//! invalid. There is no minimum beyond more than 0 and no maximum a person sets: a budget that should
+//! not bound anything is left empty (user decision 2026-10-09), which each field reads as it means.
+//! Only a number no budget can hold ([`TokenBudget::LARGEST`]) is too large.
 
 use thiserror::Error;
 
@@ -17,8 +18,8 @@ pub enum BudgetInputError {
   NotDigits,
   #[error("a budget must be above 0 tokens")]
   Zero,
-  #[error("a run budget can be at most {max} tokens")]
-  AboveMaximum { max: TokenBudget },
+  #[error("a budget can be at most {} tokens", TokenBudget::LARGEST)]
+  TooLarge,
 }
 
 /// Characters a person may type between digits for readability: spaces (also the no-break
@@ -37,8 +38,8 @@ pub fn digits_only(text: &str, group_separator: &str) -> Option<String> {
   digits.bytes().all(|byte| byte.is_ascii_digit()).then_some(digits)
 }
 
-/// Reads a budget field: a whole number of tokens above 0 and at most `max`.
-pub fn parse_budget(text: &str, group_separator: &str, max: TokenBudget) -> Result<TokenBudget, BudgetInputError> {
+/// Reads a budget field: a whole number of tokens above 0.
+pub fn parse_budget(text: &str, group_separator: &str) -> Result<TokenBudget, BudgetInputError> {
   if text.trim().is_empty() {
     return Err(BudgetInputError::Empty);
   }
@@ -46,13 +47,21 @@ pub fn parse_budget(text: &str, group_separator: &str, max: TokenBudget) -> Resu
   if digits.is_empty() {
     return Err(BudgetInputError::NotDigits);
   }
-  // More digits than a u64 holds is certainly above any maximum.
-  let tokens: u64 = digits.parse().map_err(|_| BudgetInputError::AboveMaximum { max })?;
-  let budget = TokenBudget::new(tokens).map_err(|_| BudgetInputError::Zero)?;
-  if budget > max {
-    return Err(BudgetInputError::AboveMaximum { max });
+  let tokens: u64 = digits
+    .parse()
+    .ok()
+    .filter(|tokens| *tokens <= TokenBudget::LARGEST)
+    .ok_or(BudgetInputError::TooLarge)?;
+  TokenBudget::new(tokens).map_err(|_| BudgetInputError::Zero)
+}
+
+/// Reads a limit's budget field, where empty means no limit: `None` for an empty field, else the
+/// budget [`parse_budget`] reads.
+pub fn parse_optional_budget(text: &str, group_separator: &str) -> Result<Option<TokenBudget>, BudgetInputError> {
+  if text.trim().is_empty() {
+    return Ok(None);
   }
-  Ok(budget)
+  parse_budget(text, group_separator).map(Some)
 }
 
 /// `text` with its digits grouped for the locale while it is typed (en: `1400000` →

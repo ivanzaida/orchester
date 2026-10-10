@@ -100,17 +100,17 @@ pub enum Command {
   /// Continues interrupted runs `runs` from their last checkpoints, as far as the agent slots
   /// and the daily budget allow. Answered with [`Reply::Continued`].
   ContinueRuns { runs: Vec<RunId> },
-  /// Raises the limits of run `run`, stopped at a limit, and continues it. Answered with
-  /// [`Reply::Accepted`] once it runs again.
+  /// Raises the limits of run `run`, stopped at a limit, and continues it; `None` lifts a limit.
+  /// Answered with [`Reply::Accepted`] once it runs again.
   RaiseLimit {
     run: RunId,
-    budget: TokenBudget,
-    max_duration_ms: u64,
+    budget: Option<TokenBudget>,
+    max_duration_ms: Option<u64>,
   },
-  /// Raises, for run `run` only, the budget of the step it stopped at to `budget`, and continues
-  /// it: the stopped agent's CLI session continues. Answered with [`Reply::Accepted`] once it
-  /// runs again.
-  RaiseStepBudget { run: RunId, budget: TokenBudget },
+  /// Raises, for run `run` only, the budget of the step it stopped at to `budget`, or lifts it
+  /// with `None`, and continues it: the stopped agent's CLI session continues. Answered with
+  /// [`Reply::Accepted`] once it runs again.
+  RaiseStepBudget { run: RunId, budget: Option<TokenBudget> },
   /// Run `run` uses `permissions` for agent profile `profile` from the next invocation of each of
   /// its steps; with [`PermissionsApply::Now`] the profile's agents at work also restart at their
   /// next checkpoint, resuming their CLI sessions. Answered with [`Reply::Accepted`] once the
@@ -416,10 +416,6 @@ pub enum Rejection {
   /// A raised limit must be above what the run already used.
   LimitNotAboveUsed {
     limit: RunLimit,
-  },
-  /// A run budget can be at most the project's maximum run budget.
-  BudgetAboveMaximum {
-    max: TokenBudget,
   },
   /// The project's runs used today's token budget `budget`: runs start or continue again once
   /// the day has room (tomorrow, or a raised daily budget).

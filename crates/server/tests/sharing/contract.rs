@@ -68,13 +68,16 @@ async fn s1b_number_and_limits_preserve_core_unsigned_ranges() {
     )
     .await,
   );
-  assert_eq!(changed.content.limits.as_ref().expect("limits").budget_tokens, u64::MAX);
+  assert_eq!(
+    changed.content.limits.as_ref().expect("limits").budget_tokens,
+    Some(u64::MAX)
+  );
   let read = server
     .request("GET", &task_path(project, &changed), Some(&owner.token), None)
     .await
     .json::<TaskResponse>()
     .task;
-  assert_eq!(read.content.limits.expect("limits").max_duration_ms, u64::MAX);
+  assert_eq!(read.content.limits.expect("limits").max_duration_ms, Some(u64::MAX));
   server.finish().await;
 }
 

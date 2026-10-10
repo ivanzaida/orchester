@@ -8,7 +8,7 @@ async fn client_reads_what_the_server_is_and_whether_it_has_an_admin() {
   let client = server.client();
   let info = client.server_info().await.expect("server info");
   assert_eq!(info.name, "Kontur team");
-  assert_eq!(info.api_version, 1);
+  assert_eq!(info.api_version, 2);
   assert!(info.needs_bootstrap);
   server.admin().await;
   assert!(!client.server_info().await.expect("server info").needs_bootstrap);

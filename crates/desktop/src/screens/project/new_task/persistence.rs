@@ -88,8 +88,8 @@ pub(super) fn save_action(ctx: &mut Ctx, conflict: Signal<Option<EditConflict>>)
             Err(match error {
               TaskDraftSaveError::Store(error) => messages::store_error(&error),
               TaskDraftSaveError::Write(error) => error.message(),
-              TaskDraftSaveError::NotDraft(_) => Message::new("tasks.new.noLongerDraft"),
-              TaskDraftSaveError::DetailsMismatch => Message::new("tasks.new.savedDetailsDiffer"),
+              TaskDraftSaveError::NotDraft(_) => Message::new("tasks.new.alreadyQueued"),
+              TaskDraftSaveError::DetailsMismatch => Message::new("tasks.new.storedDraftDiffers"),
               TaskDraftSaveError::Changed(_) => Message::new("tasks.conflict.changedMeanwhile"),
             })
           }

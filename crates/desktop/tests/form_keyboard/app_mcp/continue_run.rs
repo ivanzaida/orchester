@@ -105,10 +105,16 @@ fn app_mcp_continue_run_raises_the_budget_of_the_step_it_stopped_at() {
     refused_with(&mut client, json!({"kind": "raise_step_budget", "budget_tokens": 1000})),
     "invalid_limit"
   );
+  assert_eq!(
+    refused_with(&mut client, json!({"kind": "raise_step_budget"})),
+    "invalid_arguments",
+    "nothing lifts a limit by itself"
+  );
+  // `null` lifts the step's budget for this run.
   ok(
     &mut client,
     "continue_run",
-    &with(json!({"kind": "raise_step_budget", "budget_tokens": 100_000})),
+    &with(json!({"kind": "raise_step_budget", "budget_tokens": null})),
   );
   desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
 }

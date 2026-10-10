@@ -8,7 +8,7 @@ use orchester_core::{
   orchester_tools::{FileCall, OrchesterTool, TaskView, ToolCall, ToolCallError},
   project::{ProjectKey, TaskKey},
   run::{Answerer, Plan, PlanDecision, PlanReview, PlanVersion, ReviewNote, StepProgress},
-  task::{Task, TaskDetails},
+  task::{Task, TaskDetails, TaskLimits},
   time::Timestamp,
 };
 use serde_json::{Value, json};
@@ -102,7 +102,7 @@ fn task() -> Task {
     brief: "Users sign in with GitHub.".to_owned(),
     acceptance_criteria: vec!["The button shows".to_owned(), "Tokens are kept".to_owned()],
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   };
   let key = TaskKey::new(ProjectKey::new("KON").expect("a key"), 12.try_into().expect("non-zero"));
   Task::draft(TaskId::generate(), key, details, Timestamp::from_unix_millis(1))

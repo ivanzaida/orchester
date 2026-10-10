@@ -81,7 +81,7 @@ pub struct CreateFailure {
 impl CreateFailure {
   pub fn from_store(new: &NewProject, error: &StoreError) -> Self {
     let place = match error {
-      StoreError::NotAGitRepository(_) | StoreError::AlreadyInitialized(_) | StoreError::Unrepresentable(_) => {
+      StoreError::NotAGitRepository(_) | StoreError::AlreadyInitialized(_) | StoreError::UnrepresentablePath(_) => {
         ErrorPlace::Repository
       }
       _ => ErrorPlace::Form,

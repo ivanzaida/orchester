@@ -10,7 +10,7 @@ use orchester_core::{
   id::IdempotencyKey,
   name::Name,
   store::TaskStore,
-  task::{Task, TaskDetails, TaskUpdate},
+  task::{Task, TaskDetails, TaskLimits, TaskUpdate},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -30,7 +30,7 @@ fn draft() -> TaskDetails {
     brief: "Export token usage.".into(),
     acceptance_criteria: vec!["The export covers the selected period".into()],
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   }
 }
 

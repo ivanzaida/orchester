@@ -98,7 +98,12 @@
       "worktree": "Worktree",
       "worktreeValue": "A new one in {{folder}}",
       "limits": "Limits",
-      "limitsValue": "{{budget}} tokens · {{minutes}} min",
+      "limitsValue": "{{budget}} · {{time}}",
+      "budgetValue": "{{budget}} tokens",
+      "timeValue": "{{minutes}} min",
+      "noBudget": "no token limit",
+      "noTimeLimit": "no time limit",
+      "noLimits": "No limits",
       "remove": {
         "title": "Remove the worktrees of run #{{run}}",
         "clean": "Nothing in them is uncommitted; {{branch}} keeps their committed work.",

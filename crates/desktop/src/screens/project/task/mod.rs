@@ -68,7 +68,6 @@ use lurq::{
 use orchester_core::{
   id::TaskId,
   integration::Leftovers,
-  limits::ProjectLimits,
   run::{RunStatus, TaskPhase},
   task::TaskStatus,
 };
@@ -114,8 +113,7 @@ pub struct TaskProps {
   pub file: Option<ChangedFile>,
   /// Changes when tasks were saved or the runner changed a run: the task is read again.
   pub revision: (u64, u64),
-  /// The project's limits, once read: the most a raised limit may be.
-  pub limits: Option<ProjectLimits>,
+
   /// The project's published pipelines, once read: the one a task without a run would use.
   pub pipelines: Option<Arc<Vec<PipelineChoice>>>,
   /// The project's runner, and since when it has had trouble: a run recorded as running is
@@ -345,7 +343,7 @@ impl TaskScreen {
         summary::summary(
           ctx,
           detail,
-          (props.limits, lost, props.pipelines.as_deref().map(Vec::as_slice)),
+          (lost, props.pipelines.as_deref().map(Vec::as_slice)),
           (&props.project.repo_root, &self.scrolls, props.revision),
           (reason, runs),
         )

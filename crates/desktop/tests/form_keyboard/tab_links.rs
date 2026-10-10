@@ -43,13 +43,11 @@ fn seed(repo: &Path) {
     brief: String::new(),
     acceptance_criteria: Vec::new(),
     pipeline: None,
-    limits: Some(
-      TaskLimits::new(
-        TokenBudget::new(1_000_000).expect("above zero"),
-        Duration::from_secs(1_800),
-      )
-      .expect("limits"),
-    ),
+    limits: TaskLimits::new(
+      Some(TokenBudget::new(1_000_000).expect("above zero")),
+      Some(Duration::from_secs(1_800)),
+    )
+    .expect("limits"),
   };
   let task = db
     .create_tasks(IdempotencyKey::generate(), vec![details], at(5))

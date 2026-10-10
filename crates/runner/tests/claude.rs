@@ -291,7 +291,7 @@ async fn claude_that_is_not_signed_in_fails_the_step_with_a_typed_outcome() {
 async fn claude_stopped_at_a_limit_resumes_its_session_once_raised() {
   let project = project(&Setup {
     provider: AgentProvider::ClaudeCodeCli,
-    budget: 5_000,
+    budget: Some(5_000),
     ..Setup::new("Work in turns.")
   });
   let root = project.repo.path();
@@ -318,8 +318,8 @@ async fn claude_stopped_at_a_limit_resumes_its_session_once_raised() {
     .raise_limit(
       id,
       RaisedLimits {
-        budget: TokenBudget::new(2_000_000).expect("above zero"),
-        max_duration: Duration::from_secs(30 * 60),
+        budget: Some(TokenBudget::new(2_000_000).expect("above zero")),
+        max_duration: Some(Duration::from_secs(30 * 60)),
       },
     )
     .await
@@ -342,7 +342,7 @@ async fn claude_runs_the_profiles_full_model_id_in_new_and_resumed_sessions() {
   let project = project(&Setup {
     provider: AgentProvider::ClaudeCodeCli,
     model: Some("claude-opus-5-5"),
-    budget: 5_000,
+    budget: Some(5_000),
     ..Setup::new("Work in turns.")
   });
   let root = project.repo.path();
@@ -359,8 +359,8 @@ async fn claude_runs_the_profiles_full_model_id_in_new_and_resumed_sessions() {
     .raise_limit(
       id,
       RaisedLimits {
-        budget: TokenBudget::new(2_000_000).expect("above zero"),
-        max_duration: Duration::from_secs(30 * 60),
+        budget: Some(TokenBudget::new(2_000_000).expect("above zero")),
+        max_duration: Some(Duration::from_secs(30 * 60)),
       },
     )
     .await

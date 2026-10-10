@@ -20,7 +20,7 @@ use orchester_core::{
     RunEvent, RunLimit, RunSnapshot, RunStatus, StepExecutor, StepFailure, StepStatus,
   },
   store::{ResourceStore, RunStore, TaskStore},
-  task::TaskDetails,
+  task::{TaskDetails, TaskLimits},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
 };
@@ -106,7 +106,7 @@ impl Fixture {
       brief: String::new(),
       acceptance_criteria: Vec::new(),
       pipeline: None,
-      limits: None,
+      limits: TaskLimits::NONE,
     };
     db.create_tasks(IdempotencyKey::generate(), vec![details], at(1))
       .expect("create task")[0]
@@ -173,8 +173,8 @@ impl Fixture {
       branch: BranchName::new("orchester/orc-1").expect("valid branch"),
       base: revision('a'),
       base_branch: None,
-      budget: TokenBudget::new(1_400_000).expect("above zero"),
-      max_duration: std::time::Duration::from_secs(1_800),
+      budget: Some(TokenBudget::new(1_400_000).expect("above zero")),
+      max_duration: Some(std::time::Duration::from_secs(1_800)),
     }
   }
 
@@ -512,9 +512,8 @@ fn runs_stopped_at_a_step_budget_round_trip_with_the_raised_budget() {
   assert_eq!(stored.status(), &RunStatus::Paused(PauseReason::LimitReached(limit)));
   assert_eq!(stored, run);
   let budget = TokenBudget::new(600_000).expect("above zero");
-  let max = TokenBudget::new(10_000_000).expect("above zero");
   fixture.apply(&mut run, |run| {
-    run.raise_step_budget(budget, TokensUsed::new(400_000), max, at(17))
+    run.raise_step_budget(Some(budget), TokensUsed::new(400_000), at(17))
   });
   let stored = fixture.db.run(run.id()).expect("load").expect("exists");
   assert_eq!(stored.status(), &RunStatus::Running);

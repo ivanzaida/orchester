@@ -31,7 +31,7 @@ use super::{
 };
 use crate::{
   RunStoreError, StoreError,
-  rows::{budget_value, corrupt, decode_body, decode_document, decode_json, duration_value, parse},
+  rows::{corrupt, decode_body, decode_document, decode_json, optional_budget_value, optional_duration_value, parse},
 };
 
 const SELECT_RUNS: &str = "SELECT id, task_id, number, snapshot, branch, base_revision, initial_budget_tokens, \
@@ -147,14 +147,16 @@ pub(super) fn load_checkpoint(connection: &Connection, run: RunId) -> Result<Opt
   )))
 }
 
-fn load_step_budgets(connection: &Connection, run: &str) -> Result<BTreeMap<StepKey, TokenBudget>, StoreError> {
+fn load_step_budgets(connection: &Connection, run: &str) -> Result<BTreeMap<StepKey, Option<TokenBudget>>, StoreError> {
   let mut statement = connection.prepare("SELECT step_key, budget_tokens FROM run_step_budgets WHERE run_id = ?1")?;
   let rows = statement
-    .query_map([run], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?
+    .query_map([run], |row| {
+      Ok((row.get::<_, String>(0)?, row.get::<_, Option<i64>>(1)?))
+    })?
     .collect::<Result<Vec<_>, _>>()?;
   rows
     .into_iter()
-    .map(|(step, budget)| Ok((step_key(&step)?, budget_value("step budget", budget)?)))
+    .map(|(step, budget)| Ok((step_key(&step)?, optional_budget_value("step budget", budget)?)))
     .collect()
 }
 
@@ -285,8 +287,8 @@ struct RunRow {
   snapshot: String,
   branch: String,
   base: String,
-  /// Creation budget and time limit, then the ones in force.
-  limits: [i64; 4],
+  /// Creation budget and time limit, then the ones in force; `None` is no limit.
+  limits: [Option<i64>; 4],
   used_tokens: i64,
   pause_requested: bool,
   status: String,
@@ -333,8 +335,8 @@ impl RunRow {
         .map(BranchName::new)
         .transpose()
         .map_err(|error| corrupt("run base branch", error))?,
-      budget: budget_value("run budget", initial_budget)?,
-      max_duration: duration_value("run time limit", initial_duration)?,
+      budget: optional_budget_value("run budget", initial_budget)?,
+      max_duration: optional_duration_value("run time limit", initial_duration)?,
     };
     let stored = StoredRun {
       id,
@@ -346,8 +348,8 @@ impl RunRow {
         self.failed_step.as_deref(),
         self.limit_execution.as_deref(),
       )?,
-      budget: budget_value("run budget", budget)?,
-      max_duration: duration_value("run time limit", duration)?,
+      budget: optional_budget_value("run budget", budget)?,
+      max_duration: optional_duration_value("run time limit", duration)?,
       step_budgets: load_step_budgets(connection, &row)?,
       permissions: load_permissions(connection, &row)?,
       used: TokensUsed::new(u64::try_from(self.used_tokens).map_err(|_| corrupt("run usage", self.used_tokens))?),

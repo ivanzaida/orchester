@@ -1,7 +1,5 @@
 //! What the form holds compared with what is stored, and what can be pressed.
 
-use orchester_core::limits::ProjectLimits;
-
 use super::{Editing, FormState, NewTaskForm, RunAction, SaveAction};
 use crate::tasks::form::{FormErrors, TaskForm};
 
@@ -11,7 +9,7 @@ impl NewTaskForm {
     save: &SaveAction,
     run: &RunAction,
     separator: &str,
-    (limits, editing): (ProjectLimits, Option<&Editing>),
+    editing: Option<&Editing>,
     recovered: bool,
   ) -> FormState {
     let criteria: Vec<String> = self
@@ -34,7 +32,6 @@ impl NewTaskForm {
       budget: &budget,
       time_limit: &time_limit,
       separator,
-      max_budget: limits.max_run_budget(),
     };
     let saving = save.state().get();
     let (mut ready, errors) = match form.details() {

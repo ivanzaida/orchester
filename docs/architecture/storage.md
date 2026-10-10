@@ -140,8 +140,8 @@ fewer stop no agent, and new work waits until fewer agents work than the slots.
   its turn, its work is committed as a checkpoint in its worktree, and the run stops at its limit
   (*Stopped at limit*, naming the execution). Agents of other steps finish their invocations, as at a
   pause, and nothing new starts; no retry is taken. Raising that step's budget for the run (above
-  what the execution used, at most the project's maximum run budget) continues the stopped agent's
-  CLI session. The raised budget applies to this run only; the published pipeline keeps its own.
+  what the execution used, with no maximum; empty lifts it) continues the stopped agent's CLI
+  session. The raised budget applies to this run only; the published pipeline keeps its own.
 - **Outputs.** A new agent session ends with a structured result (Codex `--output-schema`,
   `{outcome: done|failed|question, summary}`); its summary — or, without one, the final message — is the
   step's output, and the prompts of the steps that depend on it include it with its source (step,
@@ -391,7 +391,7 @@ open at the next start means the previous session crashed.
 | `meta` | schema version, project id |
 | `project` | key (`ORC`), name, repository, default branch |
 | `counters` | next task number, next run number |
-| `project_limits` | at most one row: maximum run budget, default run budget, daily project budget, default time limit; without it the defaults apply (10M, 1.4M, 20M tokens, 30 min) |
+| `project_limits` | at most one row: default run budget and default time limit (each `NULL` for no limit), daily project budget, agent slots; without it the defaults apply (no run budget, 20M tokens a day, no time limit, 4 agents). There is no maximum run budget (user decision 2026-10-09) |
 | `project_environment` | Project settings › Environment: variable name (unique without regard to case) and plain value, added to the cleaned environment of every agent CLI and command tool the project's runs start, under a command tool's own variables; read at each start |
 | `money_budgets_before_tokens` | the money budgets tasks and runs had before budgets became tokens, kept by the migration that replaced them with the default run budget |
 | `money_step_budgets_before_tokens` | the money step budgets of published pipeline versions and drafts from before step budgets became tokens, per version or draft and step |
@@ -441,7 +441,7 @@ it as missing. A tool copy keeps allowed callers only for pipelines copied with 
 
 | Table | Purpose |
 | --- | --- |
-| `tasks` | key, title, brief, acceptance criteria, pipeline resource, limits, status (`draft` or `queued`: submitted, which a finished run does not change; see "State machines"), idempotency key |
+| `tasks` | key, title, brief, acceptance criteria, pipeline resource, limits (token budget and time limit, each `NULL` for no limit), status (`draft` or `queued`: submitted, which a finished run does not change; see "State machines"), idempotency key |
 | `task_dependencies` | task, prerequisite, condition (`ready_for_review`, `merged`) |
 | `run_groups` | mode (parallel with limit / sequential with gate), budget cap, failure policy, scheduling paused, pinned versions |
 | `run_group_items` | group, task, position |
@@ -452,10 +452,10 @@ it as missing. A tool copy keeps allowed callers only for pipelines copied with 
 
 | Table | Purpose |
 | --- | --- |
-| `runs` | task, number, group, version snapshot, status and reason (a pause is requested or at a limit; at a step's budget with the execution that used it; waiting for a person, with the step whose retries ran out or that broke again), branch, base revision and the branch the user's checkout had there, worktree, token budget and time limit at creation and in force, tokens used, pause requested |
+| `runs` | task, number, group, version snapshot, status and reason (a pause is requested or at a limit; at a step's budget with the execution that used it; waiting for a person, with the step whose retries ran out or that broke again), branch, base revision and the branch the user's checkout had there, worktree, token budget and time limit at creation and in force (`NULL` for no limit), tokens used, pause requested |
 | `run_merges` | a run that succeeded and was merged into its base branch: the branch, the commit it was at afterwards, how (fast-forward, merge commit, already merged), when — desktop-written, once per run |
 | `run_worktree_removals` | when a run's own worktree was removed (*Remove worktree*, a merge, Run again), once per run — written by the desktop or the runner, whichever removed it |
-| `run_step_budgets` | step budgets raised for one run after it stopped at them, per run and step |
+| `run_step_budgets` | step budgets raised for one run after it stopped at them, per run and step; `NULL` lifted the step's budget |
 | `run_permissions` | permissions changed for one run, per run and agent profile: the permissions the run's steps on that profile use instead of the profile's (each step still narrows them), the agents to restart with them at their next checkpoint (*Apply now*) and the last one that did |
 | `attempts` | run, number, status, reason (initial, retry, a follow-up naming the step it asks, recovery, a restart naming the step that broke, or returned by a person to a step with their note) |
 | `step_executions` | attempt, pipeline step, agent profile version, effective model, status, failure reason (agent failed, reported failed, not started, merge conflict, checkpoint failed, command failed; step budget only in records of earlier versions) |

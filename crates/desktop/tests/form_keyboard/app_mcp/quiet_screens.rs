@@ -272,7 +272,7 @@ fn app_mcp_quiet_limits_tab_follows_the_tool_and_keeps_a_persons_edit() {
   desktop.tab();
   let repo = desktop.repo().to_path_buf();
   desktop.wait_until("the person's default saved", |_| {
-    stored_limits(&repo).default_run_budget().get() == 1_200_000
+    stored_limits(&repo).default_run_budget().map(|budget| budget.get()) == Some(1_200_000)
   });
   assert_eq!(stored_limits(&repo).daily_budget().get(), 40_000_000);
   desktop.wait_until("the fields show what is stored", |desktop| {

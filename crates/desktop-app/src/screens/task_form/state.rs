@@ -72,7 +72,6 @@ pub enum Need {
   Criteria,
   Pipeline,
   NoPipelines,
-  Limits,
   Budget,
   TimeLimit,
   /// A task that ran keeps every detail a run needs.
@@ -89,7 +88,6 @@ impl Need {
       Self::Criteria => "task_form.reasons.need.criteria",
       Self::Pipeline => "task_form.reasons.need.pipeline",
       Self::NoPipelines => "task_form.reasons.need.noPipelines",
-      Self::Limits => "task_form.reasons.need.limits",
       Self::Budget => "task_form.reasons.need.budget",
       Self::TimeLimit => "task_form.reasons.need.timeLimit",
       Self::KeepComplete => "task_form.reasons.need.keepComplete",
@@ -199,7 +197,6 @@ impl View {
         MissingDetail::AcceptanceCriteria => Need::Criteria,
         MissingDetail::Pipeline if self.no_pipelines() => Need::NoPipelines,
         MissingDetail::Pipeline => Need::Pipeline,
-        MissingDetail::Limits => Need::Limits,
       });
     }
     // A pipeline that is no longer published cannot run, though the task names it.

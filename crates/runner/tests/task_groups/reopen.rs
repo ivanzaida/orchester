@@ -280,7 +280,7 @@ fn record_pending_member(
   first: &orchester_core::run::Run,
 ) -> orchester_core::run::Run {
   let task = db.task(group.tasks()[1]).expect("task").expect("exists");
-  let limits = task.details().limits.expect("limits");
+  let limits = task.details().limits;
   db.create_run(
     task.id().first_run_key(),
     orchester_core::run::NewRun {

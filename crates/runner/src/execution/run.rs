@@ -215,11 +215,9 @@ impl RunTask {
   /// build to finish in the background; the next start of the task reuses it.
   async fn wait(&mut self, waiting_for_slot: bool) -> Result<(), ExecutionError> {
     let working = !self.agents.is_empty();
-    let deadline = if working {
-      self.time_check()?
-    } else {
-      Instant::now() + SLOT_RETRY
-    };
+    // A run without a time limit has no time to check; it still looks for a free slot again.
+    let time_check = if working { self.time_check()? } else { None };
+    let deadline = time_check.or_else(|| waiting_for_slot.then(|| Instant::now() + SLOT_RETRY));
     tokio::select! {
       Some(event) = self.events.recv() => self.on_worker_event(event),
       control = self.controls.recv(), if self.listening => match control {
@@ -229,7 +227,7 @@ impl RunTask {
           Ok(())
         }
       },
-      () = tokio::time::sleep_until(deadline), if working || waiting_for_slot => {
+      () = tokio::time::sleep_until(deadline.unwrap_or_else(Instant::now)), if deadline.is_some() => {
         if working {
           self.check_time()?;
         }
@@ -252,15 +250,20 @@ impl RunTask {
   }
 
   /// When the time limit is to be checked next: the time left is shared by the agents at work.
-  fn time_check(&self) -> Result<Instant, ExecutionError> {
+  /// `None` for a run without a time limit.
+  fn time_check(&self) -> Result<Option<Instant>, ExecutionError> {
     let working = u32::try_from(self.agents.len()).unwrap_or(u32::MAX).max(1);
-    let share = (self.time_left()? / working).max(TIME_CHECK_FLOOR);
-    Ok(Instant::now() + share)
+    Ok(
+      self
+        .time_left()?
+        .map(|left| Instant::now() + (left / working).max(TIME_CHECK_FLOOR)),
+    )
   }
 
   /// Ends every agent once the run's active agent time is used up.
   fn check_time(&mut self) -> Result<(), ExecutionError> {
-    if self.time_left()?.is_zero() && self.pending.limit.is_none_or(|limit| !limit.is_run_limit()) {
+    let used_up = self.time_left()?.is_some_and(|left| left.is_zero());
+    if used_up && self.pending.limit.is_none_or(|limit| !limit.is_run_limit()) {
       self.pending.limit = Some(RunLimit::Time);
       self.stop_agents(Stop::Now(StopCause::Limit(RunLimit::Time)));
     }
@@ -268,10 +271,14 @@ impl RunTask {
   }
 
   /// Active agent time left before the time limit; agents working at once each add theirs.
-  pub(super) fn time_left(&self) -> Result<Duration, ExecutionError> {
+  /// `None` for a run without a time limit, which never stops at one.
+  pub(super) fn time_left(&self) -> Result<Option<Duration>, ExecutionError> {
+    let Some(limit) = self.run.max_duration() else {
+      return Ok(None);
+    };
     let invocations = self.db.invocations(self.run.id())?;
     let active = active_time(&invocations, Timestamp::now());
-    Ok(self.run.max_duration().saturating_sub(active))
+    Ok(Some(limit.saturating_sub(active)))
   }
 
   /// Tells every agent still counted for the run `stop`.

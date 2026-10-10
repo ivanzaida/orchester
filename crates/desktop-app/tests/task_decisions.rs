@@ -246,12 +246,15 @@ fn decision_raise_reads_back_the_new_limit_and_asks_the_runner() {
   );
   assert!(page.locked("raise-limit-continue"), "continuing waits for a runner");
   assert_eq!(page.text("raise-limit-offline"), OFFLINE);
-  assert!(page.locked("raise-limit-remove"), "run limits cannot be empty yet");
-  let remove = page.text("raise-limit-remove-reason");
-  assert!(
-    remove.starts_with("Remove the limit needs optional run limits"),
-    "{remove}"
+  // Removing the limit continues the run without it, which needs the runner too.
+  assert!(page.locked("raise-limit-remove"), "removing waits for a runner");
+  assert_eq!(
+    page.text("raise-limit-remove-meaning"),
+    "Remove the limit continues the run with no token limit."
   );
+  // An empty field names no new limit: Remove the limit is how the run goes on without one.
+  page.set("raise-limit-input", "");
+  page.until_says("raise-limit-input-note", "Enter a token budget.");
   assert!(page.has("raise-limit-tokens-by-step"));
   assert_eq!(page.text("raise-limit-step-research"), "40k tokens · Explorer");
 }

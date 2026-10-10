@@ -13,7 +13,7 @@ pub use orchester_core::{
   resource::StepKey,
   run::Run,
   store::{ActivityStore, TaskStore},
-  task::TaskDetails,
+  task::{TaskDetails, TaskLimits},
 };
 pub use orchester_store::{ProjectDb, StoreError};
 
@@ -55,7 +55,7 @@ pub fn another_task(db: &mut ProjectDb) -> TaskId {
     brief: String::new(),
     acceptance_criteria: Vec::new(),
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   };
   db.create_tasks(IdempotencyKey::generate(), vec![details], at(1))
     .expect("task")[0]
