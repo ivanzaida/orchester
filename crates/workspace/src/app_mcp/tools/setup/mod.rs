@@ -12,6 +12,8 @@ mod pipelines;
 mod profile_input;
 mod profiles;
 mod project;
+mod project_tools;
+mod tool_input;
 pub(super) mod widening;
 
 use rmcp::{
@@ -175,9 +177,14 @@ const SPECS: &[Spec] = &[
                   runs after the steps it names (no cycles), may wait at an approval gate, may return to an earlier \
                   step it runs after when it fails (1 or more retries), and may have a token budget (left out: no \
                   step budget). Refused with the editor's reasons when the steps do not form a pipeline; nothing is \
-                  saved then. Dropping an approval gate, or asking about tool calls, that the latest published \
-                  version (before the first: the draft) has, a step removed with it included, is refused as \
-                  person_only unless a person turned on Let automation change agent permissions.",
+                  saved then. A command step names a published command tool (publish_tool) as `tool`, runs after \
+                  the steps it checks, and may return to one of them when the program fails, e.g. {\"key\": \
+                  \"check\", \"name\": \"Check\", \"tool\": \"Check\", \"runs_after\": [\"implement\"], \
+                  \"on_failure\": {\"return_to\": \"implement\", \"retries\": 2}}. Unless a person turned on Let \
+                  automation change agent permissions, these are refused as person_only: dropping an approval \
+                  gate, or asking about tool calls, that the latest published version (before the first: the \
+                  draft) has, a step removed with it included; and a step that calls a tool neither the draft nor \
+                  the latest version calls under its key, since it runs a program on this computer.",
     schema: schema_for_type::<pipeline_steps::SavePipelineDraft>,
     read_only: false,
   },
@@ -241,7 +248,7 @@ const SPECS: &[Spec] = &[
 
 /// Every setup tool, as `tools/list` answers.
 pub fn listed() -> Vec<Tool> {
-  SPECS.iter().map(tool).collect()
+  SPECS.iter().chain(project_tools::SPECS).map(tool).collect()
 }
 
 /// Calls setup tool `name` with `arguments`; `None` when there is no such tool.
@@ -251,6 +258,9 @@ pub async fn call(
   name: &str,
   arguments: JsonObject,
 ) -> Option<Result<Value, ToolError>> {
+  if project_tools::SPECS.iter().any(|spec| spec.name == name) {
+    return Some(project_tools::call(services, name, Value::Object(arguments)).await);
+  }
   if !SPECS.iter().any(|spec| spec.name == name) {
     return None;
   }

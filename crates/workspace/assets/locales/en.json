@@ -913,6 +913,23 @@
       "autoApproveNeedsAnswers": "Approving automatically answers requests in a person's place, so it also needs Let automation answer approvals, which a person turns on in the window."
     },
     "githubConnectionName": "GitHub · {{host}}",
+    "projectTools": {
+      "errors": {
+        "nameNotEditable": "A tool keeps the name it was made with; leave out the name to change it.",
+        "nameTaken": "Another tool is named {{name}}. Give the new tool a name of its own.",
+        "notACommandTool": "{{tool}} is not a command tool; only command tools are made and changed in this version.",
+        "programInWorktree": "Name the program as found on the search path or by its absolute path. A script in the repository runs through its interpreter, e.g. program powershell with -File tools/check.ps1.",
+        "programNotFound": "No program {{program}} was found on the search path or at that path."
+      },
+      "widens": {
+        "newTool": "A new command tool runs its program on this computer whenever a pipeline step calls it.",
+        "firstVersion": "A tool's first version has nothing to be compared with, so a person publishes it.",
+        "program": "The tool would run {{program}} where it ran {{before}}.",
+        "arguments": "The tool's arguments would change, and with them what its program does.",
+        "exitCodes": "Exit codes {{codes}} would pass, which did not.",
+        "toolStep": "Step {{step}} would call {{tool}}, a program run on this computer, which the pipeline does not call there yet."
+      }
+    },
     "widens": {
       "repository": "Write access to the repository, which the latest version does not give.",
       "writableFolder": "A writable folder outside the worktree that the latest version does not give.",
