@@ -574,3 +574,16 @@ fn theme_kit_inspector_roles_follow_the_design() {
     );
   }
 }
+
+#[test]
+fn theme_agents_active_task_role_matches_rx5w5() {
+  for mode in [Mode::Dark, Mode::Light] {
+    let app = themed(mode);
+    let theme = app.theme();
+    let style = theme.typography_style(theme::agents::active_task_text());
+    assert_eq!(style.font_size, 12.5);
+    assert_eq!(style.weight, FontWeight::Normal);
+    assert_eq!(style.color, theme.palette_color(PaletteColor::TextPrimary));
+    assert_eq!(&*style.font_family, "Geist");
+  }
+}

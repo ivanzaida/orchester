@@ -5,8 +5,9 @@ use orchester_core::{
   id::ResourceId,
   project::TaskKey,
   resource::{AgentProfile, ModelId, Pipeline, Resource, ResourceKind, StepKey, StepKind, VersionNumber},
-  run::{Run, StepExecutor, StepStatus},
+  run::{Run, RunEventKind, StepExecutor, StepStatus},
   store::{ResourceStore, RunStore, TaskStore},
+  time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
 
@@ -28,6 +29,10 @@ pub struct PipelineUse {
 pub struct ActiveUse {
   pub profile: ResourceId,
   pub version: VersionNumber,
+  pub profile_name: Option<Arc<str>>,
+  pub position: usize,
+  /// The run's recorded Started event, absent when its log does not contain one.
+  pub started_at: Option<Timestamp>,
   pub task: TaskKey,
   pub title: Arc<str>,
   pub pipeline: Arc<str>,
@@ -155,8 +160,20 @@ fn active_uses(db: &ProjectDb, run: &Run) -> Result<Vec<ActiveUse>, StoreError> 
   let resource = db
     .resource(pinned.resource)?
     .ok_or(StoreError::ResourceNotFound(pinned.resource))?;
+  let started_at = db
+    .events(run.id())
+    .map_err(crate::tasks::detail::run_store_error)?
+    .iter()
+    .find(|event| matches!(event.kind(), RunEventKind::Started))
+    .map(|event| event.at());
   let mut uses = Vec::new();
-  for step in run.snapshot().steps().iter().filter(|step| executing(run, step.key())) {
+  for (index, step) in run
+    .snapshot()
+    .steps()
+    .iter()
+    .enumerate()
+    .filter(|(_, step)| executing(run, step.key()))
+  {
     let StepExecutor::Agent { profile, .. } = step.executor() else {
       continue;
     };
@@ -168,6 +185,11 @@ fn active_uses(db: &ProjectDb, run: &Run) -> Result<Vec<ActiveUse>, StoreError> 
     uses.push(ActiveUse {
       profile: profile.resource,
       version: profile.number,
+      profile_name: db
+        .version::<AgentProfile>(profile.resource, profile.number)?
+        .map(|version| version.body().role().as_str().into()),
+      position: index + 1,
+      started_at,
       task: task.key().clone(),
       title: task.details().title.as_str().into(),
       pipeline: resource.name().as_str().into(),

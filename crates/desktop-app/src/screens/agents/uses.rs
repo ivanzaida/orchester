@@ -96,7 +96,7 @@ pub fn render(ctx: &mut Ctx, props: &Props) -> Element {
       ),
     );
   }
-  page.child(active(ctx, props)).into()
+  page.child(super::active::render(ctx, props)).into()
 }
 fn use_row(ctx: &mut Ctx, index: usize, step: &PipelineUse) -> Element {
   let model = step
@@ -156,64 +156,6 @@ fn use_row(ctx: &mut Ctx, index: usize, step: &PipelineUse) -> Element {
       .render(ctx),
     )
     .into()
-}
-fn active(ctx: &mut Ctx, props: &Props) -> Element {
-  let mut section = Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Md)
-    .child(Text::new(&ctx.t("agents.activeTitle")).variant(TypographyStyle::Title));
-  let active: Vec<_> = props
-    .listed
-    .usage
-    .active
-    .iter()
-    .filter(|r| props.entry.as_ref().is_some_and(|p| p.id == r.profile))
-    .collect();
-  if active.is_empty() {
-    return section.child(words::note(&ctx.t("agents.noActive"))).into();
-  }
-  let navigation = crate::navigation::Navigation::of(ctx);
-  for (index, run) in active.iter().enumerate() {
-    let nav = navigation.clone();
-    let route = crate::routes::Route::Project(
-      props.project.open.project.id(),
-      crate::routes::ProjectPage::Task(run.task.clone(), crate::routes::TaskView::Summary),
-    );
-    let title = ctx.t_args(
-      "agents.activeTask",
-      [("key", run.task.to_string()), ("title", run.title.to_string())],
-    );
-    let detail = ctx.t_args(
-      "agents.activeWhere",
-      [
-        ("pipeline", run.pipeline.to_string()),
-        ("version", run.pipeline_version.get().to_string()),
-        ("step", run.step.to_string()),
-      ],
-    );
-    section = section.child(
-      crate::ui::pressable::pressable(move || nav.go(route.clone()))
-        .id(format!("agent-active-{index}"))
-        .width(Dimension::Pct(100.0))
-        .child(
-          Row::new()
-            .width(Dimension::Pct(100.0))
-            .padding(SpacingSize::Md)
-            .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-            .rounded(RadiusSize::Lg)
-            .child(
-              Column::new()
-                .flex(1.0)
-                .child(words::note(&title))
-                .child(words::note(&detail)),
-            )
-            .child(words::note(
-              &ctx.t_args("agents.keepsVersion", [("version", run.version.get().to_string())]),
-            )),
-        ),
-    );
-  }
-  section.into()
 }
 fn pipeline_cell(ctx: &Ctx, step: &PipelineUse) -> Column {
   let version = ctx.t_args(
