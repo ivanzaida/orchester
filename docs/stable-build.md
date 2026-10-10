@@ -4,25 +4,41 @@
 Orchester. For daily use, install a release build in its own directory instead; agent builds
 never touch it.
 
+An install holds both desktop apps: the new `orchester-app` (*Orchester App*) and the deprecated
+`orchester` (*Orchester*), with the runner both start from their own folder. They share the
+application database and its project list, one app at a time (see [Data](#data)), and always come
+from the same build.
+
 ## Install and update (Windows)
+
+**Back up before the first start of a newer build.** With both apps closed, copy aside the
+application database `orchester.db` (with its `-wal` file, if any) and each project's
+`.orchester\orchester.db` (with its `-wal`) in its repository. A newer build migrates both kinds
+when it opens them, and an older build then refuses them, so only these copies let you go back.
+The script reminds you when the install folder already has a database.
 
 ```powershell
 powershell -File tools/install.ps1
 ```
 
-- Builds `orchester-desktop` and `orchester-runner` in release into
-  `%LOCALAPPDATA%\Orchester\build` (not the repository's `target/`) and copies `orchester.exe`
-  and `orchester-runner.exe` into `%LOCALAPPDATA%\Orchester\app`. Fonts, icons and locales are
-  compiled into the executables; at runtime they need only the Visual C++ runtime, which the
-  MSVC toolchain has already installed.
+- Builds `orchester-app`, `orchester-desktop` and `orchester-runner` in one release build into
+  `%LOCALAPPDATA%\Orchester\build` (not the repository's `target/`) and copies
+  `orchester-app.exe`, `orchester.exe` and `orchester-runner.exe` into
+  `%LOCALAPPDATA%\Orchester\app`. Fonts, icons and locales are compiled into the executables; at
+  runtime they need only the Visual C++ runtime, which the MSVC toolchain has already installed.
+- To install somewhere else, name the folder, e.g.
+  `powershell -File tools/install.ps1 -InstallDir E:\projects\orchester`. An existing install
+  there is updated in place: its `orchester.db` stays (see [Data](#data) before the first start of
+  a newer build).
 - It installs what the checkout holds, uncommitted changes included, and prints the commit.
   Install from an up-to-date `master` with a clean working tree.
-- To update, close the installed Orchester and run the script again. While it runs from the
-  install directory (the desktop or one of its runners), the script refuses and changes nothing;
+- To update, close both installed apps and run the script again. While anything runs from the
+  install directory (either app or one of its runners), the script refuses and changes nothing;
   it never stops Orchester itself.
-- The release build of `orchester.exe` is a Windows program without a console, so starting it
-  from Explorer or the Start menu opens only its window. Its log goes to a file (see
-  [Logs](#logs)). Dev builds (`tools/run.ps1`) keep the console and print the log there too.
+- The release builds of `orchester-app.exe` and `orchester.exe` are Windows programs without a
+  console, so starting one from Explorer or the Start menu opens only its window. Its log goes to
+  a file (see [Logs](#logs)). Dev builds (`tools/run.ps1`) keep the console and print the log
+  there too.
 
 Options:
 
@@ -31,9 +47,15 @@ Options:
 | `-InstallDir <dir>` | Install somewhere else. |
 | `-BuildDir <dir>` | Build somewhere else. |
 | `-ImportDevData` | Copy the dev app database (see below). |
-| `-StartMenuShortcut` | Add *Orchester* to your Start menu. |
+| `-StartMenuShortcut` | Add *Orchester App* (the new app) and *Orchester* (the deprecated one) to your Start menu, each with its program's icon. |
 
 ## Install and update (macOS)
+
+**Back up before the first start of a newer build.** With both apps closed, copy aside the
+application database `~/Library/Application Support/Orchester/orchester.db` (with its `-wal` file,
+if any) and each project's `.orchester/orchester.db` (with its `-wal`) in its repository. A newer
+build migrates both kinds when it opens them, and an older build then refuses them, so only these
+copies let you go back. The script reminds you when that folder already has a database.
 
 On a Mac with the Rust toolchain (`rustup`, which picks up `rust-toolchain.toml`) and the Xcode
 command line tools (`xcode-select --install`, for the C compiler, `lipo` and `codesign`):
@@ -42,18 +64,20 @@ command line tools (`xcode-select --install`, for the C compiler, `lipo` and `co
 tools/install-macos.sh
 ```
 
-- Builds `orchester-desktop` and `orchester-runner` in release into
+- Builds `orchester-app`, `orchester-desktop` and `orchester-runner` in one release build into
   `~/Library/Application Support/Orchester/build` (not the repository's `target/`), packages them
-  with `tools/package-macos.sh` into `Orchester.app` and moves it to `~/Applications/Orchester.app`.
-  Start it from Finder, Launchpad or Spotlight, or with `open ~/Applications/Orchester.app`.
-- The bundle is `Contents/MacOS/orchester` (the desktop), `Contents/MacOS/orchester-runner` (the
-  desktop starts it from its own folder), `Contents/Resources/orchester.icns` and
-  `Contents/Info.plist` (identifier `dev.orchester.desktop`, version from `Cargo.toml`, high
-  resolution capable, macOS 11 or later).
-- As on Windows, it installs what the checkout holds, prints the commit, and refuses while the
-  installed app or one of its runners is running; it never stops Orchester itself. The new bundle
-  replaces the old one as a whole (macOS can kill a program whose file was changed in place,
-  because it caches the code signature).
+  with `tools/package-macos.sh` into two bundles, `Orchester App.app` (the new app) and
+  `Orchester.app` (the deprecated one), and moves both to `~/Applications`. Start one from Finder,
+  Launchpad or Spotlight, or with `open "$HOME/Applications/Orchester App.app"`.
+- Each bundle is its program in `Contents/MacOS/` (`orchester-app`, or `orchester` for the
+  deprecated app), `Contents/MacOS/orchester-runner` (the app starts it from its own folder),
+  `Contents/Resources/orchester.icns` and `Contents/Info.plist` (identifier `dev.orchester.app`,
+  or `dev.orchester.desktop`; version from `Cargo.toml`, high resolution capable, macOS 11 or
+  later). Both keep their data in the same Library folder (see [Data](#data)).
+- As on Windows, it installs what the checkout holds, prints the commit, and refuses while either
+  installed app or one of its runners is running; it never stops Orchester itself. Both bundles
+  are copied beside the old ones first, then each replaces its old one as a whole (macOS can kill
+  a program whose file was changed in place, because it caches the code signature).
 
 Options:
 
@@ -64,9 +88,10 @@ Options:
 | `--universal` | One app for Apple silicon and Intel (`rustup target add aarch64-apple-darwin x86_64-apple-darwin` first). |
 | `--import-dev-data` | Copy the dev app database (see [Data](#data)). |
 
-`tools/package-macos.sh` alone builds `Orchester.app` into `target/macos/` (`--help` lists its
+`tools/package-macos.sh` alone builds both bundles into `target/macos/` (`--help` lists its
 options). A development build runs without a bundle: `cargo build -p orchester-runner && cargo
-run -p orchester-desktop` (what `tools/run.ps1` does on Windows).
+run -p orchester-app` (or `-p orchester-desktop` for the deprecated app; what `tools/run.ps1 app`
+and `tools/run.ps1` do on Windows).
 
 **Signing.** The bundle is signed ad hoc (`codesign -s -`): no Apple Developer identity, and it
 is **not notarized**. A build made on the Mac it runs on has no quarantine flag, so Gatekeeper
@@ -74,7 +99,7 @@ lets it start. A copy downloaded or sent from another Mac is quarantined and ref
 that Mac instead (or remove the flag with `xattr -dr com.apple.quarantine Orchester.app` if you
 trust the copy). Every build has a new ad hoc signature, so after an update macOS may ask once
 more before Orchester reads the project secrets it keeps in the login keychain; choose *Always
-Allow*.
+Allow*. Each of the two apps asks for itself.
 
 **Programs from Finder.** An app started from Finder gets a minimal `PATH`
 (`/usr/bin:/bin:/usr/sbin:/sbin`). Orchester therefore looks for the agent CLIs and `gh`, and
@@ -302,11 +327,25 @@ setting and stays within what auto-approval allows.
 
 ## Data
 
-The application database (`orchester.db`, the list of known projects and the session log) lives
-next to the executable on Windows. The installed app therefore starts with its own, empty
-project list, separate from the dev build's `target\debug\orchester.db`. On macOS the installed
-`Orchester.app` keeps it in `~/Library/Application Support/Orchester/` (nothing inside an app
-bundle is writable); a dev build outside a bundle keeps it next to its executable, as on Windows.
+The application database (`orchester.db`, the list of known projects, the session log and the
+new app's settings) lives next to the executables on Windows. Both installed apps use the same
+one, and the install starts with its own, empty project list, separate from the dev build's
+`target\debug\orchester.db`. On macOS both installed bundles keep it in
+`~/Library/Application Support/Orchester/` (nothing inside an app bundle is writable); a dev build
+outside a bundle keeps it next to its executable, as on Windows.
+
+- **One app at a time.** The app that opens the database holds `orchester.lock` beside it (who
+  holds it is in `orchester.lock.holder`) until it has ended; the system lets go of it also when
+  the app crashes or is killed. Another app started on the same data, a second copy of the same
+  one or the other app, opens nothing there: the new app shows *Orchester is already open* with the
+  folder and the other window's process, *Switch to that window* (Windows) and *Close this window*,
+  or *Orchester is closing* while the other one is ending; the deprecated app shows *Orchester
+  cannot open its database*: "Another Orchester window is using this data folder. Switch to that
+  window, or close it and start Orchester again." with the folder. Close the one you are done with, then start the other.
+- **Both apps come from one build.** They read and migrate the same application database and the
+  same project databases, and start the same runner, so `tools/install.ps1` (and
+  `tools/install-macos.sh`) always builds and installs them together. Never copy one app from
+  another build beside the other.
 
 `-ImportDevData` (`--import-dev-data` on macOS) copies the dev database (with its `-wal` file, if
 any) from `target/debug` of the checkout the script runs from into the installed app's place. It
@@ -329,17 +368,28 @@ and both builds open the same one.
   of it until you install a build that includes the migration. Do not open real projects with a
   dev build of an unmerged branch that adds a migration: that schema version may never exist on
   `master`.
-- **The application database migrates too.** A build with `orchester-app`'s settings (its theme
-  and agents' window control) migrates `orchester.db` to schema version 6 when it first starts, and
-  an older install then refuses that database. Before the first start of a newly installed build,
-  copy `orchester.db` (with its `-wal` file, if any) aside, so the older install can still be
-  restored with its data.
+- **The application database migrates too.** A newer build migrates `orchester.db` when it first
+  starts (`orchester-app`'s settings, for example), and an older install then refuses that
+  database. Back up both kinds of database before the first start of a newly installed build (see
+  the install sections), so the older install can still be restored with its data.
+- **What a too-new database looks like to an older build.** The new app shows *Orchester can't
+  open its data*: "The database was written by a newer version of Orchester. It has data version
+  … ; this build reads up to version …. Nothing was changed." The deprecated app shows *Orchester
+  cannot open its database*: "The data was written by a newer version of Orchester." with the
+  database's path, instead of its window.
+  A project database a newer build migrated is refused the same way when the project opens (see
+  *Schema versions* above). Neither changes the file. Install the newer build (both apps) again,
+  or restore the copy you set aside. A build refuses only a schema version it does not know: what
+  a newer build writes within a version the older one knows (new kinds of run events, for
+  example) is not refused but may be misread, one more reason never to run apps from different
+  builds on one database.
 
 ## Logs
 
-- **The app's log** is `logs\orchester-<YYYY-MM-DD>.log` next to the executable (UTC date); the
-  installed macOS app writes it to `~/Library/Logs/Orchester/` (Console.app lists it under *Log
-  Reports*). So the installed app and the dev build (`target\debug\logs\`) keep separate logs.
+- **The app's log** is `logs\orchester-app-<YYYY-MM-DD>.log` for the new app and
+  `logs\orchester-<YYYY-MM-DD>.log` for the deprecated one, next to the executables (UTC date); the
+  installed macOS apps write them to `~/Library/Logs/Orchester/` (Console.app lists it under *Log
+  Reports*). So the installed apps and the dev build (`target\debug\logs\`) keep separate logs.
   A session that runs past midnight continues in the next day's file; files older than 14 days are deleted
   when the app starts and when a new day's file begins. Nothing else in `logs\` is touched. A
   panic is logged there as well. `RUST_LOG` sets the level as usual (default `info`).

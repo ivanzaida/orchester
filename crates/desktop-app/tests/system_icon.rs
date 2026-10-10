@@ -2,7 +2,7 @@
 //! test leaves the person's keyboard alone), soon has the icon embedded in its executable (big: the
 //! 256px frame; small: the system's size) as its window icons (taskbar button, Alt+Tab, thumbnail) and as its window
 //! class's icons, which the taskbar takes when the window does not answer. macOS takes an app's icon from its
-//! bundle instead (`system_icon` reports that it has none); there is nothing to read there.
+//! bundle instead (`tools/package-macos.sh`); there is nothing to read there.
 //!
 //! Reading another process's window is FFI with no safe wrapper available, so `unsafe` is allowed in
 //! this test, each block with its `// SAFETY:` comment.
