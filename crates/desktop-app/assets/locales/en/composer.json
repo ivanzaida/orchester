@@ -1,0 +1,113 @@
+{
+  "composer": {
+    "attach": "Attaching files is not available yet.",
+    "closed": {
+      "unreadable": "The latest run’s record cannot be read, so messages cannot reach its agents."
+    },
+    "context": {
+      "answering": "Answering {{agent}}’s question from {{time}}",
+      "continue": "Continue {{step}} with your instructions · attempt {{attempt}}",
+      "deciding": "Waiting for your decision",
+      "leave": "Write an ordinary message instead",
+      "noReader": "No agent of this run reads messages any more",
+      "openDecision": "Open the decision →",
+      "planChanges": "Changes to plan v{{version}} · {{agent}} writes plan v{{next}} from your note",
+      "stoppedStep": "Stopped at the step budget of {{step}} · used {{used}} of {{limit}} tokens",
+      "stoppedTime": "Stopped at the time limit · used {{used}} of {{limit}} min of active agent time",
+      "stoppedTokens": "Stopped at the token limit · used {{used}} of {{limit}} tokens"
+    },
+    "failed": "Your message was not sent: {{reason}} It stays here.",
+    "keys": {
+      "cmdEnter": "Cmd+Enter",
+      "ctrlEnter": "Ctrl+Enter",
+      "enter": "Enter"
+    },
+    "menu": {
+      "afterTurn": "Waits until {{agent}} finishes its turn",
+      "continueLater": "Waits until the run continues",
+      "now": "{{agent}} gets it at its next tool call",
+      "nowUnavailable": "{{agent}}’s connection takes no message while its turn runs",
+      "options": "More ways to send",
+      "resume": "The run goes on, and its agent reads it first",
+      "resumeLater": "Waits until you resume the run"
+    },
+    "note": {
+      "answerAbove": "{{agent}} waits for your answer above; a message here reaches it after you answer.",
+      "checkpoint": "Queued · delivered at the next checkpoint of an agent at work",
+      "continue": "Your message continues this run from its saved work. The agent resumes its session when available; dependent steps run again.",
+      "continueInterrupted": "Continue run and send continues the run from its last checkpoint; its agent reads your message before its next action.",
+      "dailyBudget": "Queued · the project’s runs used today’s token budget; the run’s agent reads it when the run resumes",
+      "deciding": "Queued · the run waits for your decision on its Summary",
+      "followUp": "Asking continues {{agent}}’s session in the run’s worktree. The run is ready for review again when it is done.",
+      "followUpNoAgent": "No agent step of this run can be asked again.",
+      "groupBudget": "Queued · the task group used its token budget; the run’s agent reads it when the run continues",
+      "nextTurn": "Queued · waiting for {{agent}}’s next turn",
+      "nextTurnUnnamed": "Queued · waiting for the agent’s next turn",
+      "notStarted": "Queued · delivered to {{agent}} when the run starts",
+      "notStartedUnnamed": "Queued · delivered to the run’s first agent when it starts",
+      "raiseLimit": "Your message is kept; Summary opens to raise the limit. The run’s agent reads it when the run continues.",
+      "resume": "Resume and send resumes the run; its agent reads your message before its next action.",
+      "runAgain": "Run again with this message starts the task’s next run from the first step, in a new worktree. Its first agent reads your message.",
+      "takenAsAnswer": "Queued · {{agent}} waits for an answer and takes this message as its answer",
+      "toolStep": "Queued · a command tool runs this step; the next agent reads it at its turn"
+    },
+    "placeholder": {
+      "agent": "Message {{agent}}…",
+      "answer": "Write your answer…",
+      "continue": "Tell {{agent}} how to continue the run…",
+      "continueUnnamed": "Say how the run should continue…",
+      "firstAgent": "Write to the first agent of the run…",
+      "followUp": "Ask a question or request a follow-up…",
+      "nextRun": "Write to the first agent of the next run…",
+      "planChanges": "Describe the changes the plan needs…",
+      "run": "Message an agent of this run…",
+      "task": "Ask, clarify or redirect this task…"
+    },
+    "recipient": {
+      "agent": "{{agent}} · {{state}}",
+      "fixed": {
+        "answer": "Your answer goes to the agent that asked.",
+        "plan": "The plan’s changes go to the agent whose plan waits."
+      },
+      "orchestrator": "To: Orchestrator · this task",
+      "state": {
+        "asking": "asked you",
+        "continues": "continues the run",
+        "deciding": "waiting for your decision",
+        "interrupted": "interrupted",
+        "nextRun": "next run",
+        "notStarted": "not started",
+        "notWorking": "not working now",
+        "paused": "paused",
+        "planWaits": "waiting for approval",
+        "resumes": "resumes its session",
+        "stopped": "stopped at limit",
+        "working": "working"
+      }
+    },
+    "send": {
+      "afterTurn": "Send after this turn",
+      "answer": "Send answer",
+      "continue": "Continue with instructions",
+      "continueRun": "Continue run and send",
+      "followUp": "Send follow-up",
+      "now": "Send now",
+      "queue": "Send",
+      "raiseLimit": "Raise the limit and continue",
+      "requestChanges": "Request changes",
+      "empty": "Write a message to send it.",
+      "resume": "Resume and send",
+      "runAgain": "Run again with this message",
+      "whenStarts": "Send when the run starts",
+      "withoutContinuing": "Send without continuing",
+      "withoutResuming": "Send without resuming"
+    },
+    "undelivered": {
+      "afterTurn": "Send after this turn",
+      "edit": "Edit in composer",
+      "failed": "Not sent again: {{reason}}",
+      "followUp": "Send as follow-up",
+      "whenContinues": "Send when the run continues"
+    }
+  }
+}

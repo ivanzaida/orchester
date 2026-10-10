@@ -256,6 +256,8 @@ pub struct TaskDetail {
   pub unsent_status: Option<orchester_store::UnsentStatus>,
   /// How the task stands on its server, for a task of a shared project or one kept *Not shared*.
   pub shared: Option<orchester_store::SharedTaskInfo>,
+  /// Before the task has a run: the agent its run would start with.
+  pub first_agent: Option<Arc<str>>,
 }
 
 impl TaskDetail {
@@ -318,8 +320,13 @@ impl TaskDetail {
       Some(run) => db.run_merge(run.id())?,
       None => None,
     };
+    let first_agent = match latest {
+      None => super::first_agent::first_agent(&db, &task)?,
+      Some(_) => None,
+    };
     Ok(Self {
       run: latest.map(|run| run_view(&db, run)).transpose()?,
+      first_agent,
       run_task,
       merge,
       history,
@@ -346,6 +353,7 @@ impl TaskDetail {
       missing_pipeline: None,
       unsent_status: None,
       shared: None,
+      first_agent: None,
     }
   }
 }

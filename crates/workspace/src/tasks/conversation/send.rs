@@ -1,5 +1,6 @@
 //! Storing a person's message: a new one, sent now or after the turn, once per draft; and one sent
-//! now that its agent's CLI did not take, sent after the turn instead. Both block on SQLite.
+//! now that its agent's CLI did not take, sent after the turn instead, while its run is the task's latest
+//! and an agent of it can still read it. Both block on SQLite.
 
 use std::path::Path;
 
@@ -12,7 +13,11 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use crate::messages::{self, Message as UiMessage};
+use super::outgoing::{after_turn_run, conversation_of};
+use crate::{
+  messages::{self, Message as UiMessage},
+  tasks::detail::TaskDetail,
+};
 
 /// Why a message was not sent.
 #[derive(Debug)]
@@ -21,6 +26,8 @@ pub enum SendError {
   InvalidRecovery,
   /// The message is no longer one that was not delivered: it was sent again, or taken after all.
   NotUndelivered,
+  /// The message's run ended or is no longer the task's latest: no agent reads it any more.
+  NotReadable,
   Store(StoreError),
 }
 
@@ -30,6 +37,7 @@ impl SendError {
       Self::Blank => UiMessage::new("conversation.errors.blank"),
       Self::InvalidRecovery => UiMessage::new("conversation.errors.invalidRecovery"),
       Self::NotUndelivered => UiMessage::new("conversation.errors.notUndelivered"),
+      Self::NotReadable => UiMessage::new("conversation.errors.notReadable"),
       Self::Store(error) => messages::store_error(error),
     }
   }
@@ -61,8 +69,13 @@ pub fn send_in(
 }
 
 /// Queues `task`'s message `id`, which its agent's CLI did not take, again for when its agent's
-/// turn ends (*Send after this turn*).
+/// turn ends (*Send after this turn*); refused once no agent of its run reads it ([`after_turn_run`]).
 pub fn send_after_turn_in(repo_root: &Path, task: TaskId, id: MessageId) -> Result<Message, SendError> {
+  let detail = TaskDetail::load_in(repo_root, task).map_err(SendError::Store)?;
+  let reads = conversation_of(&detail, false).state.takes_messages();
+  if after_turn_run(&detail, reads, id).is_none() {
+    return Err(SendError::NotReadable);
+  }
   let mut db = ProjectDb::open(repo_root).map_err(SendError::Store)?;
   let stored = db.messages(task).map_err(SendError::Store)?;
   let before = stored
