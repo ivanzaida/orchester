@@ -5,27 +5,33 @@
 //! `NAME=${secret:SECRET_NAME@environment}`, which names the secret, never its value. The tools that
 //! run without asking are one name per line. Saving blocks on SQLite; the UI calls it off the UI thread.
 
-use std::{collections::BTreeMap, path::Path};
+mod save;
+mod widening;
+
+use std::collections::BTreeMap;
 
 use orchester_core::{
   connection::mcp::{
-    ExemptTools, ExemptToolsError, HttpServer, McpEnvValue, McpEnvironment, McpServer, McpServerError, McpServerName,
+    ExemptTools, ExemptToolsError, HttpServer, McpEnvValue, McpEnvironment, McpServer, McpServerName,
     McpServerNameError, McpToolName, McpToolNameError, McpTransport, McpUrl, StdioServer, TransportError,
     WorkingDirectory,
   },
-  id::{ConnectionId, SecretId},
+  id::SecretId,
   resource::{CommandArg, CommandProgram, VariableName},
   secret::Secret,
-  store::McpServerStore,
-  time::Timestamp,
 };
-use orchester_store::{ProjectDb, StoreError};
 
+pub use self::{
+  save::{McpSaveError, profiles_using, remove_in, save_in, set_enabled_in, store_in},
+  widening::{enabling, widenings},
+};
 use crate::{
-  messages::{self, Message},
+  messages::Message,
   tools::form::{parse_arguments, program_message},
 };
 
+/// The key of the message that another server has the name: callers that report it apart match it.
+pub const NAME_TAKEN: &str = "errors.connectionNameTaken";
 const SECRET_OPEN: &str = "${secret:";
 const SECRET_CLOSE: &str = "}";
 
@@ -136,7 +142,7 @@ impl McpServerText {
       .map_err(|error| name_message(&error))
       .and_then(|name| {
         if taken.contains(&name) {
-          Err(Message::new("errors.connectionNameTaken"))
+          Err(Message::new(NAME_TAKEN))
         } else {
           Ok(name)
         }
@@ -301,61 +307,4 @@ fn transport_message(error: &TransportError) -> Message {
       Message::new("connections.mcp.errors.workingDirectory")
     }
   }
-}
-
-/// Stores `draft` as a new server, or as server `id`'s new settings.
-pub fn save_in(repo_root: &Path, id: Option<ConnectionId>, draft: McpServerDraft) -> Result<ConnectionId, Message> {
-  let saved = save(
-    &mut ProjectDb::open(repo_root).map_err(|error| store_message(&error))?,
-    id,
-    draft,
-  );
-  saved.map_err(|error| match error {
-    SaveError::Store(error) => store_message(&error),
-    SaveError::Server(McpServerError::EnvironmentOnHttp) => Message::new("connections.mcp.errors.variables"),
-  })
-}
-
-enum SaveError {
-  Store(StoreError),
-  Server(McpServerError),
-}
-
-fn save(db: &mut ProjectDb, id: Option<ConnectionId>, draft: McpServerDraft) -> Result<ConnectionId, SaveError> {
-  let Some(id) = id else {
-    let mut server = McpServer::new(
-      ConnectionId::generate(),
-      draft.name,
-      draft.transport,
-      draft.environment,
-      Timestamp::now(),
-    )
-    .map_err(SaveError::Server)?;
-    server.set_exempt_tools(draft.exempt_tools);
-    db.create_mcp_server(&server).map_err(SaveError::Store)?;
-    return Ok(server.id());
-  };
-  let mut server = db
-    .mcp_server(id)
-    .map_err(SaveError::Store)?
-    .ok_or(SaveError::Store(StoreError::ConnectionNotFound(id)))?;
-  server
-    .update(draft.name, draft.transport, draft.environment)
-    .map_err(SaveError::Server)?;
-  server.set_exempt_tools(draft.exempt_tools);
-  db.save_mcp_server(&server).map_err(SaveError::Store)?;
-  Ok(id)
-}
-
-/// Turns server `id` on or off for every profile that chooses it.
-pub fn set_enabled_in(repo_root: &Path, id: ConnectionId, enabled: bool) -> Result<(), StoreError> {
-  let mut db = ProjectDb::open(repo_root)?;
-  let mut server = db.mcp_server(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
-  server.set_enabled(enabled);
-  db.save_mcp_server(&server)
-}
-
-fn store_message(error: &StoreError) -> Message {
-  tracing::error!(%error, "cannot save the MCP server");
-  messages::store_error(error)
 }

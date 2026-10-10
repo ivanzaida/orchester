@@ -1,6 +1,7 @@
 //! MCP servers as the Connections screen edits them: the dialog's fields to a server and back, a
 //! variable taken from a secret written by the secret's name, the tools that run without asking, and
-//! the profiles that give a server to their agents. Run with `cargo test -p orchester-desktop --test mcp_servers mcp`.
+//! the profiles that give a server to their agents. Run with `cargo test -p orchester-workspace --test mcp_servers
+//! mcp`.
 
 use std::fs;
 
@@ -21,7 +22,10 @@ use orchester_store::ProjectDb;
 use orchester_workspace::{
   connections::{
     data::ProjectConnections,
-    mcp::{McpServerText, TransportChoice, parse_variables, save_in, secret_reference, set_enabled_in},
+    mcp::{
+      McpSaveError, McpServerText, TransportChoice, enabling, parse_variables, remove_in, save_in, secret_reference,
+      set_enabled_in, widenings,
+    },
   },
   pipelines::data::Assignables,
 };
@@ -279,4 +283,100 @@ batch_get",
   let assignables = Assignables::load(&db).expect("load");
   let choice = assignables.profile(profile.id()).expect("the published profile");
   assert_eq!(assignables.exempt_tools(choice), [("pencil".into(), 2)]);
+}
+
+/// A server no profile chooses is removed; one a profile's draft or published version chooses is kept,
+/// and the refusal names the profile's role.
+#[test]
+fn mcp_servers_are_removed_once_no_profile_chooses_them() {
+  let (repo, mut db) = project_db();
+  let chosen = remote("pencil", "", true);
+  let unchosen = remote("notes", "", true);
+  db.create_mcp_server(&chosen).expect("server");
+  db.create_mcp_server(&unchosen).expect("server");
+  let body = AgentProfile::new(
+    Name::new("Builder").expect("valid"),
+    String::new(),
+    PromptText::new("Build.").expect("prompt"),
+    ConnectionId::generate(),
+    ModelId::new("haiku").expect("model"),
+    ProviderSettings::default(),
+  )
+  .with_mcp_servers(McpServerSelection::new(vec![chosen.id()]).expect("one server"));
+  db.create_resource(
+    Slug::new("builder").expect("slug"),
+    Name::new("Builder").expect("valid"),
+    &body,
+    Timestamp::from_unix_millis(1),
+  )
+  .expect("profile");
+  remove_in(repo.path(), unchosen.id()).expect("removed");
+  let refused = remove_in(repo.path(), chosen.id()).expect_err("a profile chooses it");
+  assert!(matches!(&refused, McpSaveError::InUse(roles) if roles.len() == 1 && &*roles[0] == "Builder"));
+  assert_eq!(refused.message().key, "connections.mcp.errors.inUse");
+  let left: Vec<String> = db
+    .mcp_servers()
+    .expect("read")
+    .iter()
+    .map(|server| server.name().to_string())
+    .collect();
+  assert_eq!(left, ["pencil"]);
+}
+
+/// What a change widens: a new server, another program, a variable but a harmless one, an added exempt
+/// tool, turning a server on. Renaming, a harmless variable, dropping exempt tools and turning off do not.
+#[test]
+fn mcp_widenings_name_what_a_change_lets_agents_do() {
+  let secrets = [secret("DOCS_TOKEN", Environment::Staging)];
+  let draft = |text: McpServerText| text.draft(&[], &secrets).expect("valid fields");
+  let base = McpServerText {
+    exempt_tools: "search\nread".to_owned(),
+    ..stdio_text()
+  };
+  let keys = |reasons: Vec<orchester_workspace::messages::Message>| -> Vec<String> {
+    reasons.iter().map(|reason| reason.key.to_owned()).collect()
+  };
+  assert_eq!(
+    keys(widenings(None, &draft(base.clone()))),
+    ["appMcp.widens.mcpServerAdded"]
+  );
+  let stored = {
+    let draft = draft(base.clone());
+    let mut server = McpServer::new(
+      ConnectionId::generate(),
+      draft.name,
+      draft.transport,
+      draft.environment,
+      Timestamp::from_unix_millis(1),
+    )
+    .expect("valid");
+    server.set_exempt_tools(draft.exempt_tools);
+    server
+  };
+  let narrower = McpServerText {
+    name: "docs-renamed".to_owned(),
+    variables: format!("{}\nRUST_LOG=info", base.variables),
+    exempt_tools: "read".to_owned(),
+    ..base.clone()
+  };
+  assert!(widenings(Some(&stored), &draft(narrower)).is_empty());
+  let wider = McpServerText {
+    program: "uvx".to_owned(),
+    variables: "LOG_LEVEL=trace".to_owned(),
+    exempt_tools: "search\nread\nwrite".to_owned(),
+    ..base
+  };
+  assert_eq!(
+    keys(widenings(Some(&stored), &draft(wider))),
+    [
+      "appMcp.widens.mcpProgram",
+      "appMcp.widens.variable",
+      "appMcp.widens.variable",
+      "appMcp.widens.mcpExemptTools"
+    ]
+  );
+  let mut off = stored.clone();
+  off.set_enabled(false);
+  assert_eq!(keys(enabling(&off, true)), ["appMcp.widens.mcpServerEnabled"]);
+  assert!(enabling(&off, false).is_empty() && enabling(&stored, true).is_empty());
 }

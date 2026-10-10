@@ -213,7 +213,8 @@ every tool of Orchester's MCP server above, and the setup tools that only this a
 project up end to end without its configuration screens: `add_project` and `get_project`;
 `set_project_environment` and `set_repository_agent_files` (Project settings; limits through
 `update_project_limits`); `list_connections`, `add_cli_connection` (Codex or Claude, checked before it is
-saved), `check_connection` and `list_models`; `list_profiles`, `get_profile`, `save_profile_draft` and
+saved), `check_connection` and `list_models`; `add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`
+and `remove_mcp_server` (Connections › MCP servers); `list_profiles`, `get_profile`, `save_profile_draft` and
 `publish_profile`; `get_pipeline`, `create_pipeline` (from the starter, empty, or a copy),
 `save_pipeline_draft` and `publish_pipeline`; `list_instructions`, `save_instruction_draft` and
 `publish_instruction`; `get_changes` and `merge_run` (the Summary's *Merge into main*). Each checks its
@@ -234,7 +235,15 @@ environment variables, removals included, but to `RUST_LOG`, `RUST_BACKTRACE`, `
 `LC_NUMERIC` and `LC_TIME` (`orchester_core::permission::widening::harmless_variable`), since a
 variable can change what programs load, where they connect, what they trust or where tools keep their
 configuration, and removing a person's (a proxy, say) can widen too; approving automatically, which also needs
-*Let automation answer approvals*; and removing or weakening a pipeline step's approval gate. Narrowing is always taken. The setting is off by
+*Let automation answer approvals*; removing or weakening a pipeline step's approval gate; and the project's
+MCP servers (`add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`): adding one, giving one another
+program, arguments, starting folder, endpoint or bearer secret, changing any of its variables but the harmless
+ones above (removals included), adding a tool that runs without asking, and turning one on. A program automation
+names for a server is an absolute path to an existing file, stored as the file system resolves it (links
+followed), so a link the client controls cannot point it elsewhere later; a secret is named
+(`NAME@environment`), never its value. Renaming a server, dropping its bearer secret or exempt tools, turning it
+off and removing it (`remove_mcp_server`; refused as `in_use` while a profile's draft or latest version chooses
+it) are narrowing. Narrowing is always taken. The setting is off by
 default and only a person changes it, in the window, in Settings › What automation may do. No domain tool
 changes it, and window input cannot either: while its row is on screen, lurq denies its input tools when a
 call runs (also one queued earlier, or one whose answer timed out), the server refuses every window-input

@@ -241,3 +241,18 @@ get_editor_state",
       .is_empty()
   );
 }
+
+#[test]
+fn mcp_servers_are_deleted_by_id() {
+  let (_repo, mut db) = project_repo();
+  let files = local("files", SecretId::generate());
+  let knowledge = remote("knowledge");
+  db.create_mcp_server(&files).unwrap();
+  db.create_mcp_server(&knowledge).unwrap();
+  db.delete_mcp_server(files.id()).unwrap();
+  assert_eq!(db.mcp_servers().unwrap(), vec![knowledge]);
+  assert!(matches!(
+    db.delete_mcp_server(files.id()),
+    Err(StoreError::ConnectionNotFound(_))
+  ));
+}

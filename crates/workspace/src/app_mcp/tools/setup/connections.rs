@@ -96,11 +96,7 @@ pub async fn list_connections(services: &Services, args: InProject) -> Result<Va
         })
       })
       .collect();
-    let mcp: Vec<Value> = listed
-      .mcp
-      .iter()
-      .map(|server| json!({ "id": server.id().to_string(), "name": server.name().to_string() }))
-      .collect();
+    let mcp = super::mcp_servers::servers_json(&ProjectDb::open(&open.repo_root)?, &listed.mcp, &listed.secrets)?;
     Ok(json!({ "agents": agents, "github": github, "mcp_servers": mcp }))
   })
   .await

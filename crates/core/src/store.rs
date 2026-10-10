@@ -249,6 +249,10 @@ pub trait McpServerStore {
   /// Stores the current name, transport, variables and enabled flag of an existing server.
   fn save_mcp_server(&mut self, server: &McpServer) -> Result<(), Self::Error>;
 
+  /// Removes a stored server. Profiles that still name it are the caller's to check first: an agent
+  /// whose profile names a server that is gone starts without it, and its run's activity says so.
+  fn delete_mcp_server(&mut self, id: ConnectionId) -> Result<(), Self::Error>;
+
   fn mcp_server(&self, id: ConnectionId) -> Result<Option<McpServer>, Self::Error>;
 
   /// The MCP servers of the project that can be read back, ordered by name; [`Self::unreadable_mcp_servers`]

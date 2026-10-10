@@ -72,6 +72,16 @@ impl McpServerStore for ProjectDb {
     Ok(())
   }
 
+  fn delete_mcp_server(&mut self, id: ConnectionId) -> Result<(), StoreError> {
+    let removed = self
+      .connection
+      .execute("DELETE FROM mcp_servers WHERE id = ?1", [id.to_string()])?;
+    if removed == 0 {
+      return Err(StoreError::ConnectionNotFound(id));
+    }
+    Ok(())
+  }
+
   fn mcp_server(&self, id: ConnectionId) -> Result<Option<McpServer>, StoreError> {
     stored(&self.connection, "WHERE id = ?1", [id.to_string()])?
       .pop()

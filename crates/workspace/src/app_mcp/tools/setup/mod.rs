@@ -6,6 +6,7 @@
 
 mod connections;
 mod instructions;
+mod mcp_servers;
 mod merge;
 mod pipeline_steps;
 mod pipelines;
@@ -69,8 +70,11 @@ const SPECS: &[Spec] = &[
     name: "list_connections",
     description: "A project's connections: agent connections (id, name, provider codex_cli, claude_code_cli, \
                   anthropic_api or openai_api, program, status from the last check, CLI version, number of models), \
-                  GitHub connections (id, name, host, status) and MCP servers (id, name), which profiles can give \
-                  their agents. Secrets and their values are never listed.",
+                  GitHub connections (id, name, host, status) and MCP servers, which profiles can give their \
+                  agents: id, name, enabled, transport (stdio with program, args and working_directory, or http \
+                  with url and bearer_secret), environment, the tools that run without asking and the roles of \
+                  the profiles that choose it. A secret is named as NAME@environment or ${secret:NAME@environment}; \
+                  secret values are never listed.",
     schema: schema_for_type::<super::projects::InProject>,
     read_only: true,
   },
@@ -100,6 +104,49 @@ const SPECS: &[Spec] = &[
                   (it runs as not verified); an effort is kept only where the model lists it.",
     schema: schema_for_type::<connections::InConnection>,
     read_only: true,
+  },
+  Spec {
+    name: "add_mcp_server",
+    description: "Adds an MCP server to a project, as Connections › Add MCP server does: a unique `name` (small \
+                  letters, digits, - and _, starting with a letter) and either a `program` the agent's CLI starts \
+                  with each agent (an absolute path to an existing file, stored as the file system resolves it, \
+                  links followed; with `args`, `working_directory` inside the worktree or absolute, and \
+                  `environment`, where ${secret:NAME@environment} takes a project secret's value when an agent \
+                  starts) or a remote `url` it reaches over HTTP (with an optional `bearer_secret` NAME@environment), \
+                  and `exempt_tools`, the server's tools that run without asking for profiles that ask before MCP \
+                  actions. A server runs only for profiles that choose it (save_profile_draft). Refused as \
+                  person_only unless a person turned on Let automation change agent permissions. Returns the \
+                  server as list_connections lists it.",
+    schema: schema_for_type::<mcp_servers::AddMcpServer>,
+    read_only: false,
+  },
+  Spec {
+    name: "update_mcp_server",
+    description: "Changes an MCP server's fields, as Edit MCP server does; a field left out keeps its value, and \
+                  `program` or `url` switches how it is reached. Renaming, dropping the bearer secret and removing \
+                  tools that run without asking are always taken. Another program, arguments, folder, endpoint or \
+                  bearer secret, any variable but RUST_LOG, RUST_BACKTRACE, CI, NO_COLOR, FORCE_COLOR, TZ, LANG and \
+                  the LC_ ones (removals included), and a tool added to exempt_tools are refused as person_only \
+                  unless a person turned on Let automation change agent permissions. Whether it is on stays.",
+    schema: schema_for_type::<mcp_servers::UpdateMcpServer>,
+    read_only: false,
+  },
+  Spec {
+    name: "remove_mcp_server",
+    description: "Removes an MCP server from a project. Refused as in_use while an agent profile's draft or latest \
+                  published version chooses it (the reasons name their roles): switch them first, or turn the \
+                  server off with set_mcp_server_enabled, which keeps its settings.",
+    schema: schema_for_type::<mcp_servers::InServer>,
+    read_only: false,
+  },
+  Spec {
+    name: "set_mcp_server_enabled",
+    description: "Turns an MCP server on or off for every profile that chooses it, as its inspector's Turn on and \
+                  Turn off do: agents that start from now on get it, or work without it; agents at work keep what \
+                  they started with. Turning off is always taken; turning on is refused as person_only unless a \
+                  person turned on Let automation change agent permissions.",
+    schema: schema_for_type::<mcp_servers::SetMcpServerEnabled>,
+    read_only: false,
   },
   Spec {
     name: "list_profiles",
@@ -272,6 +319,10 @@ async fn dispatch(
     "add_cli_connection" => connections::add_cli_connection(services, parse(arguments)?).await,
     "check_connection" => connections::check_connection(services, parse(arguments)?).await,
     "list_models" => connections::list_models(services, parse(arguments)?).await,
+    "add_mcp_server" => mcp_servers::add_mcp_server(services, parse(arguments)?).await,
+    "update_mcp_server" => mcp_servers::update_mcp_server(services, parse(arguments)?).await,
+    "remove_mcp_server" => mcp_servers::remove_mcp_server(services, parse(arguments)?).await,
+    "set_mcp_server_enabled" => mcp_servers::set_mcp_server_enabled(services, parse(arguments)?).await,
     other => configure(services, translate, other, arguments).await,
   }
 }
