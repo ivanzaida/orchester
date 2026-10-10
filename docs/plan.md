@@ -44,6 +44,50 @@ Environment variables, project MCP servers, tabs, and the installed stable build
 7. *Merge into main* merges into the user's checkout, which must be on `master` with no uncommitted changes. Do not
    merge from Orchester while another agent is merging branches into `master` by hand.
 
+## A · New app (`crates/desktop-app`) — the path to developing Orchester in it
+
+Merged on 2026-10-09/10 (see *Done*): F1, T1, F2, P1, N1, P2, C1, C2, C3, D1, I1, M1, LIM, M12 and its follow-ups. Still
+needed before Orchester's own work moves into the new app, in this order:
+
+### A1 · W1 Window lifecycle (UI)
+
+What happens to running agents when the window closes (keep the runner and its agents, or stop them, with the
+person's choice per the design), and how a reopened window picks the runs up again. Design: layer "App lifecycle"
+`Ob1P7` in `data/orchester2.pen`. **Done when** closing with agents at work and reopening shows the same runs live,
+tested with the fake agents, and an independent design verification passes.
+
+### A3 · Set up the Orchester project through the new app's MCP tools (user + agent)
+
+The person turns on *Let automation change agent permissions* in Settings; an agent then adds the project, CLI
+connections, agent profiles, the *Orchester change* pipeline and instructions with the domain MCP tools (`D1` above
+lists the content); the person turns the switch off again.
+
+### A4 · lurq 0.43 (non-UI and UI)
+
+lurq 0.43.0 is released (ivanzaida/lurq#47). Bump it and replace the workarounds it makes unnecessary: Markdown that
+fits its content for the person's bubble (`MarkdownProps::fit_content`), `Ctx::scroll_into_view` for Summary's row
+confirmations, `FutureAction::run_if_idle` / `FutureState::outcome()` for the hand-written press guards and
+watches, `is_synthetic_input()` as a second lock on the Settings permission switch, `focus_visible` for keyboard-only
+focus rings. Note the behaviour changes: `focus()` now scrolls into view; create-time actions now run.
+
+### A5 · Follow-ups found during review and QA
+
+- Secret values written literally into a command or an agent's description reach the approval card, the MCP tree and
+  Copy (old app too): redact known secret values in approval text.
+- Confirm the agent CLIs' sandboxes cannot write the project database (`.orchester/orchester.db`) or `.git` hooks; every
+  person-only gate assumes they can't.
+- A plain question at tab open focuses the card's *Answer* button although the composer is already in answer mode;
+  focus the composer box instead. A plan at open focuses *Approve plan & continue* (a stray Enter approves).
+- `tab_labels_pill_sums_every_open_project_and_splits_it_in_its_tooltip` is flaky (waits for the runner badge, not for
+  the second project's tasks), and so is `summary_run_again_confirms_in_place_and_starts_the_next_run`
+  (`task_summary.rs:177`, "task-tab-summary is laid out"; fails about once in a full run, passes alone).
+- The title bar shows "0 need you" when nothing needs you; *Cancel run* has no confirmation.
+- Per-role agent avatars (profiles have no icon field; the conversation uses a generic bot).
+- Claude Code is not told that a person approved its outside read (its approval reply carries no message).
+- The task-states seed's KON-10 "Canceled" shows "Ready to queue" (product check).
+- Chat Orchestrator (OR1, layers `TrG83`/`Xir64`) and Overview (O1, `vgqpM`) are built as Orchester tasks once A1–A3
+  are done.
+
 ## T · Tests and runner
 
 ### T4 · A listing survives a row whose id cannot be parsed (non-UI)
@@ -179,59 +223,6 @@ An MCP server lists tools that run without asking when a profile asks before MCP
 independent design verifier (no frame exists; closest patterns) reports no blocking or major mismatch for the MCP
 server dialog's *Tools that run without asking* area, the inspector's list, the profile enforcement row, the step
 inspector line and the activity mark.
-
-### M12 · Agent file tools, second version (non-UI; sources need a design for their UI)
-
-User decision 2026-10-09. Replaces the file and git tools of M8/M9 (`crates/core/src/orchester_tools/`, served by the
-runner's per-invocation relay as `mcp__Orchester__<name>`) with this set. No tool takes a project: the relay already
-belongs to one run, and every path is relative to that run's worktree root. Agents use git themselves (shell), so
-Orchester's git tools go.
-
-- `read_file(filename, start_line, length)` — worktree only; answers from the code index when it holds the file at
-  the read revision, else from disk. Records a read stamp for `edit_file`.
-- `search_file(term, limit_files)` — worktree only; the code index first (definitions of a name, then matches),
-  ripgrep for the rest; at most `limit_files` files, each with its matching lines; says when it was cut.
-- `edit_file(filename, start_line, end_line, expected, content)` — worktree only; replaces lines
-  `start_line..=end_line` with `content` only if those lines are exactly `expected` now and the file was read in this
-  invocation and has not changed since that read; otherwise refuses and says what is there now. Atomic write.
-- `create_file(filename, content)` — worktree only; refuses when the file exists (changing an existing file is
-  `edit_file`).
-- `search_external_file(base_directory, term)` and `read_external_file(filename)` — outside the worktree: run without
-  asking when the folder (or a parent) is listed in the run's **sources**, else ask the person (one approval, or
-  *Approve similar* for that folder). `.git`, Orchester's own data, credential files and other projects' private
-  state are refused as `read_outside_file` refuses them today.
-- **Sources:** folders and files an agent may read outside its worktree without asking. Listed on the project, the
-  task, the pipeline (part of the pipeline's draft and published versions, like its steps) and a pipeline step; a run
-  snapshots the union of the project's, the task's, its pinned pipeline version's and all its steps' sources when it
-  starts, and every step of the run may read them (decided 2026-10-09; later edits apply to new runs). Needs storage,
-  core rules and runner checks now; the UI is designed in `data/orchester2.pen` (layers "Sources" `XulGo` and
-  "Pipeline settings" `vEDYY`) — until the new app builds it, sources are set through Orchester's MCP server.
-- Removed: `git_status`, `git_diff`, `git_log`, `git_show`, `git_add`, `git_commit`, `write_file`,
-  `read_outside_file`, the old `search`/`edit_file` schemas, and their prompt lines; the *Files and commands* prompt
-  part names the new tools. `list_files`, `find_symbol`, `list_skills`, `read_skill` stay as they are.
-- Limits as today: answers within 60 KiB with a note on how to narrow; same confinement (plain relative paths, links
-  out refused, extra writable folders still writable by `edit_file`/`create_file`).
-- Steering (decided 2026-10-09): Claude Code gets both — the prompt names the tools and `--disallowedTools
-  Read,Edit,Write,Grep,Glob` takes its own file tools away (its shell stays for builds, tests and git). Codex calls
-  the same tools over MCP; its shell can't be removed, so it is steered by the prompt only, and the live run measures
-  how often it still reads or edits through the shell before anything stronger is decided.
-- Also wanted (decided 2026-10-09), same rules (worktree only unless said, no project argument):
-  - `delete_file(filename)` and `move_file(from, to)` — worktree only; a deletion or move shows in Changes.
-  - `find_references(name)` — from the code index; says when the index is off or stale.
-  - `run_check(name)` — runs a named command tool of the project's Tools library offered to the step (tests, lint,
-    build) with capped output and its exit code; no free-form command.
-  - `get_task()` — the run's task: title, brief, acceptance criteria, approved plan, the person's decisions and notes.
-  - `save_memory(kind, text, key?, tags?, importance?)` — a task or project memory record, proposed or active by the
-    project's saving setting (Memory design, `docs/design/orchester-workspace.md` "Task and project memory").
-  - `write_artifact(name, content)` — a file kept with the run (store `artifacts`, plus the step execution and
-    revision it was made at, as the Artifacts design proposes).
-  - `report_progress(text)` — one short status line for the step, shown on Summary; replaces the previous one.
-  The memory and artifact tools need their storage parts first; build the rest without waiting for them.
-
-**Done when:** core tests for each tool's schema and refusals (stale `expected`, unread file, existing file on create,
-paths out of the worktree, sources vs approval), runner tests with the fake Claude and Codex agents calling every tool
-through the relay, the old tools gone from both CLIs' tool lists, `tools/check.ps1` passes, and a live run with the
-real Claude Code and Codex on a throwaway repository shows each tool called and working (evidence in `docs/evidence/`).
 
 ### M6 · Environment names in secret references (needs decision)
 
@@ -776,6 +767,21 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+New app, first working set (merged 2026-10-09/10 into master; each reviewed, QA'd live and design-verified by
+separate agents): T1 Tasks list (`claude/app-tasks`), F2 shell live data (`claude/app-shell`), P1 task page and Summary
+(`claude/app-task-page`), N1 New/Edit task with the per-field conflict chooser (`claude/app-task-form`), P2 Summary
+decisions and merge (`claude/app-decisions`), C1 conversation timeline (`claude/app-conversation`), C2 composer
+(`claude/app-composer`), C3 decision cards wired to the composer (`claude/app-cards`), D1 Changes tab (`claude/app-changes`), M1 domain MCP and setup tools
+with the person-only switch *Let automation change agent permissions* (`claude/app-domain-mcp`, five security
+review rounds), LIM optional limits with no maximum (`claude/limits-optional`, protocol 22), I1 install of both apps from one
+build (`claude/app-install`; `tools/install.ps1 -InstallDir E:\projects\orchester`, back up `orchester.db` and each
+project's `.orchester\orchester.db` first, see `docs/stable-build.md`).
+
+M12 · Agent file tools, second version (`claude/agent-tools`, merged 2026-10-10, three security review rounds) and its
+follow-ups (`claude/agent-tools-fixes`). A live run with the real Claude Code 2.1.286 and Codex 0.159.2 passed: both
+used only Orchester's file tools (no built-ins, no shell), edits stayed in the worktree, outside reads asked and
+source reads did not, `run_check` worked, approvals continued the run, no secret reached logs or the database.
 
 Who decided a plan · branch `claude/plan-by` (merged 2026-10-08, reviewed, tests
 passed, design-verified)
