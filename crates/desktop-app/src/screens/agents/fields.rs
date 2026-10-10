@@ -236,8 +236,11 @@ impl Fields {
     .into()
   }
   fn model_notice(&self, ctx: &Ctx, listed: &ProjectAgents) -> Element {
+    let model = self.model.get();
+    let custom = self.custom.get();
+    let model = if model.is_empty() { &custom } else { &model };
     let problem = self.connection(listed).and_then(|connection| {
-      let model = orchester_core::resource::ModelId::new(&self.model.get()).ok()?;
+      let model = orchester_core::resource::ModelId::new(model).ok()?;
       connection.cannot_run(&model).map(|problem| (model, problem))
     });
     Column::new()
