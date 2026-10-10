@@ -62,7 +62,7 @@
       "invalidParam": "{{value}} is not a value of {{param}} in {{path}}."
     },
     "status": {
-      "project": "{{name}} · {{folder}}",
+      "projectCut": "{{name}} · {{folder}}",
       "runner": {
         "starting": "Runner starting",
         "online": "Runner online",

@@ -11,6 +11,7 @@ use std::{
 
 use lurq::{
   app::{App, Tree, events::MouseButton},
+  core::ElementRect,
   node::element::ElementRef,
 };
 use orchester_app::{
@@ -19,6 +20,7 @@ use orchester_app::{
   routes::{OverviewTab, ProjectPage, Route, TaskView},
   shell::status_bar::{BarAction, BarFacts, BarProps, ProjectFacts, ReadFailure, RunnerFacts, StatusBarView, Stopping},
   theme::{self, Mode},
+  ui::tooltip::TOOLTIP_DELAY,
 };
 use orchester_core::{
   id::{InvocationId, ProjectId, RunId, StepExecutionId, TaskId},
@@ -91,12 +93,15 @@ impl Bar {
 
   /// The width the element `id` takes; 0 once it gave way.
   fn width(&mut self, id: &str) -> f32 {
+    self.bounds(id).width
+  }
+
+  fn bounds(&mut self, id: &str) -> ElementRect {
     self
       .tree
       .get_element_by_id_mut(id)
       .and_then(|element| element.bounds())
       .unwrap_or_else(|| panic!("{id} is laid out"))
-      .width
   }
 
   fn press(&mut self, id: &str) {
@@ -110,6 +115,19 @@ impl Bar {
     self.tree.mouse_down(x, y, MouseButton::Left);
     self.tree.mouse_up(x, y, MouseButton::Left);
     self.tree.pass_headless(&mut self.app);
+  }
+
+  /// The words of the tooltip of the element `id`, once the pointer rested on it.
+  fn tooltip(&mut self, id: &str) -> Option<Vec<String>> {
+    let bounds = self.bounds(id);
+    let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
+    self.tree.mouse_move(x, y);
+    self.tree.pass_headless(&mut self.app);
+    self
+      .tree
+      .tick_timers_at(Instant::now() + TOOLTIP_DELAY + Duration::from_millis(50));
+    self.tree.pass_headless(&mut self.app);
+    self.texts(&format!("{id}-tooltip"))
   }
 
   fn asked(&self) -> Vec<BarAction> {

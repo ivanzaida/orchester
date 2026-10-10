@@ -7,10 +7,10 @@ use std::sync::{
 };
 
 use lurq::{
-  app::theme::{RadiusSize, SpacingSize},
+  app::theme::{PaletteColor, RadiusSize, SpacingSize},
   components::{Column, Row, Text},
   core::Signal,
-  node::dimension::Dimension,
+  node::{dimension::Dimension, padding::Padding},
 };
 use orchester_app::{
   theme::{ExtraRadius, ExtraTypography},
@@ -399,6 +399,52 @@ fn text_cut_to_its_room_keeps_its_whole_value_in_a_tooltip_that_wraps() {
     panel.width
   );
   assert!(panel.height > 30.0, "its words wrap onto more lines: {}", panel.height);
+}
+
+#[test]
+fn cut_text_with_a_hint_shows_it_whether_or_not_it_is_cut() {
+  let name = "Kontur platform, billing and the partner portal";
+  let mut kit = Kit::show(move |ctx| {
+    let text =
+      |id: &str| Truncated::new(id.to_owned(), name, ExtraTypography::Strong.role()).hint("H:/projects/kontur", "both");
+    Column::new()
+      .child(Row::new().width(Dimension::Px(120.0)).child(text("cut").render(ctx)))
+      .child(text("fits").render(ctx))
+      .into()
+  });
+  kit.rest_on("fits");
+  assert_eq!(
+    kit.texts("fits-tooltip"),
+    ["H:/projects/kontur"],
+    "text that fits says its hint"
+  );
+  kit.rest_on("cut");
+  assert_eq!(kit.texts("cut-tooltip"), ["both"], "cut text says the hint for its cut");
+}
+
+#[test]
+fn framed_cut_text_hangs_its_tooltip_from_the_control_it_names() {
+  let mut kit = Kit::show(|ctx| {
+    Truncated::new("name", "Kontur", ExtraTypography::Strong.role())
+      .hint("H:/projects/kontur", "Kontur · H:/projects/kontur")
+      .mono()
+      .framed(PaletteColor::TextPrimary, |row, _| {
+        row
+          .id("control")
+          .padding(Padding::horizontal(SpacingSize::Sm))
+          .child(Text::new("before").id("before"))
+      })
+      .render(ctx)
+  });
+  let (control, before) = (kit.bounds("control"), kit.bounds("before"));
+  assert_eq!(
+    before.x - control.x,
+    8.0,
+    "the frame's room and parts come before the text"
+  );
+  kit.rest_on("before");
+  assert_eq!(kit.texts("name-tooltip"), ["H:/projects/kontur"]);
+  assert_eq!(kit.bounds("name-tooltip").x, control.x, "from the control's start");
 }
 
 #[test]
