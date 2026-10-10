@@ -12,6 +12,9 @@ pub enum McpServerProblem {
   Disabled,
   /// Its program is no file on the `PATH` or in the worktree.
   ProgramNotFound { program: String },
+  /// Its program file now leads into the project's repository (a worktree included) or off this computer, where
+  /// it was not when it was saved; it was not started.
+  ProgramMoved { program: String },
   /// Claude Code starts every server in the worktree; this one is set to start in another folder.
   WorkingDirectoryUnsupported,
   /// Windows: the program is a command script, and argument `position` (from 0) would be changed by

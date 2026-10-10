@@ -142,6 +142,7 @@ fn server_problem(ctx: &Ctx, problem: &McpServerProblem) -> (Arc<str>, Option<Ar
     McpServerProblem::Missing => ctx.t("conversation.mcp.missing"),
     McpServerProblem::Disabled => ctx.t("conversation.mcp.disabled"),
     McpServerProblem::ProgramNotFound { program } => one("conversation.mcp.programNotFound", "program", program),
+    McpServerProblem::ProgramMoved { program } => one("conversation.mcp.programMoved", "program", program),
     McpServerProblem::WorkingDirectoryUnsupported => ctx.t("conversation.mcp.workingDirectory"),
     McpServerProblem::UnsafeScriptArgument { position } => one(
       "conversation.mcp.scriptArgument",

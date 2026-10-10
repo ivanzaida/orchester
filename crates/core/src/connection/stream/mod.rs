@@ -221,6 +221,9 @@ pub enum RunnerProblem {
   StepBudgetReached { budget: u64 },
   /// A command tool's `program` is no file on the `PATH` or in the worktree; it was not started.
   ProgramNotFound { program: String },
+  /// A command tool's `program` file now leads into the project's repository (a worktree included) or off this
+  /// computer; it was not started.
+  ProgramMoved { program: String },
   /// Claude Code's permission prompt never reached the runner, so no action could be approved:
   /// every call it asked about was denied as unavailable.
   PermissionPromptUnreachable,

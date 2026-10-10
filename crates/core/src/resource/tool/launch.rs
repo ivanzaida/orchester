@@ -14,11 +14,13 @@ use super::command::{CommandAction, CommandArg, CommandEnvironment, CommandProgr
 use crate::{
   command::Command,
   connection::invocation::{Platform, agent_environment},
+  permission::{ProgramPlace, program_place, stays_local},
 };
 
 /// The variable that keeps Windows from looking up a program named without a path in the current
-/// directory first (`NeedCurrentDirectoryForExePathW`); `cmd.exe` respects it as well.
-const NO_CURRENT_DIRECTORY_IN_EXE_PATH: (&str, &str) = ("NoDefaultCurrentDirectoryInExePath", "1");
+/// directory first (`NeedCurrentDirectoryForExePathW`); `cmd.exe` respects it as well. MCP servers are started with
+/// it too.
+pub const NO_CURRENT_DIRECTORY_IN_EXE_PATH: (&str, &str) = ("NoDefaultCurrentDirectoryInExePath", "1");
 
 /// Extensions Windows starts a program file by, in the order they are tried after a bare name.
 const WINDOWS_EXTENSIONS: [&str; 4] = ["exe", "cmd", "bat", "com"];
@@ -27,25 +29,42 @@ impl CommandProgram {
   /// Files the program may be on `platform`, in search order: a bare name in each absolute folder of
   /// `path` (the `PATH` the program starts with), a relative path in `worktree`, an absolute path
   /// as it is. On Windows a name without one of the program extensions is also tried with each.
-  /// Command tools and MCP servers look their programs up this way.
+  /// Command tools and MCP servers look their programs up this way. A folder of the `PATH`, or an absolute path, that
+  /// names another machine or a device, or leads there through a link, is passed over unread
+  /// ([`stays_local`]).
   pub fn candidates(&self, worktree: &Path, path: Option<&OsStr>, platform: Platform) -> Vec<PathBuf> {
     let bases: Vec<PathBuf> = match self.location() {
       ProgramLocation::OnPath(name) => path
         .map(|path| {
           std::env::split_paths(path)
             // A relative folder would be looked in from the worktree, which agents write.
-            .filter(|folder| folder.is_absolute())
+            .filter(|folder| folder.is_absolute() && stays_local(folder).is_ok())
             .map(|folder| folder.join(name))
             .collect()
         })
         .unwrap_or_default(),
       ProgramLocation::InWorktree(relative) => vec![worktree.join(relative)],
-      ProgramLocation::Absolute(absolute) => vec![absolute.to_path_buf()],
+      ProgramLocation::Absolute(absolute) if stays_local(absolute).is_ok() => vec![absolute.to_path_buf()],
+      ProgramLocation::Absolute(_) => Vec::new(),
     };
     bases
       .into_iter()
       .flat_map(|base| with_extensions(base, platform))
       .collect()
+  }
+
+  /// Checks, just before it starts, where the file `found` of a program stored as a fixed file (an absolute path)
+  /// leads: still on this machine and outside `repository`, which holds the worktrees agents write, as when it was
+  /// saved. A name or a path in the worktree is looked up each time and not checked here.
+  ///
+  /// # Errors
+  ///
+  /// A [`ProgramPlace`] says where it leads now.
+  pub fn check_place(&self, found: &Path, repository: &Path) -> Result<(), ProgramPlace> {
+    match self.location() {
+      ProgramLocation::Absolute(_) => program_place(found, repository),
+      ProgramLocation::OnPath(_) | ProgramLocation::InWorktree(_) => Ok(()),
+    }
   }
 }
 

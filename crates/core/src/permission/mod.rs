@@ -28,7 +28,7 @@ use thiserror::Error;
 
 pub use self::{
   launch::{LaunchPermissions, OutsideCommands},
-  local_file::{resolve_local, stays_local},
+  local_file::{ProgramPlace, program_place, resolve_local, stays_local},
   narrow::{StepCommands, StepNetwork, StepPermissions},
   writable::{
     FolderBounds, ResolvedFolder, WritableFolder, WritableFolderError, WritableFolders, WritableFoldersError,

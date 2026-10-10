@@ -61,7 +61,7 @@ impl McpServerProblem {
   fn redact(&mut self, redact: &impl Fn(&str) -> String) {
     match self {
       Self::FailedToStart { detail: Some(detail) } => *detail = redact(detail),
-      Self::ProgramNotFound { program } => *program = redact(program),
+      Self::ProgramNotFound { program } | Self::ProgramMoved { program } => *program = redact(program),
       Self::SecretMissing { secret } | Self::SecretArchived { secret } | Self::SecretUnreadable { secret } => {
         *secret = redact(secret);
       }
@@ -90,7 +90,7 @@ impl RunnerProblem {
       | Self::ModelRetrying { error: detail, .. } => *detail = redact(detail),
       Self::CodexSettingsIgnored { folder } => *folder = redact(folder),
       Self::UnavailableVariable { variable } => *variable = redact(variable),
-      Self::ProgramNotFound { program } => *program = redact(program),
+      Self::ProgramNotFound { program } | Self::ProgramMoved { program } => *program = redact(program),
       Self::QuestionRefused { question, .. } => *question = redact(question),
       Self::MergeConflict { branch, files } => {
         *branch = redact(branch);

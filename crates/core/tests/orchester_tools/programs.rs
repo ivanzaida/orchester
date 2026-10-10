@@ -97,6 +97,26 @@ fn orchester_tools_run_checks_with_their_fixed_arguments() {
   );
 }
 
+/// A check whose stored program now lies in the repository, which holds the worktrees agents write, is not
+/// started.
+#[test]
+fn orchester_tools_do_not_start_a_check_program_inside_the_repository() {
+  let folders = Folders::new();
+  let reads = folders.reads();
+  let planted = folders.worktree.join("planted.exe");
+  std::fs::write(&planted, b"agent's").expect("a planted program");
+  let tools = [project_tool("Planted", &text(&planted))];
+  let context = context(&folders.worktree, &reads, &tools);
+  assert_eq!(
+    ToolCall::RunCheck {
+      name: "Planted".to_owned()
+    }
+    .work(&context)
+    .err(),
+    Some(ToolCallError::ProgramMoved(text(&planted)))
+  );
+}
+
 /// What the runner did not keep of a program's streams counts with what the answer cuts.
 #[test]
 fn orchester_tools_answers_count_what_the_runner_left_out() {

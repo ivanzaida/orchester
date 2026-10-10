@@ -85,6 +85,8 @@ const NO_HOOKS: &str = "no-hooks";
 pub(in super::super) struct ToolHost {
   tools: StepTools,
   worktree: PathBuf,
+  /// The project's repository, which holds the worktrees.
+  repository: PathBuf,
   git_dir: PathBuf,
   hooks: PathBuf,
   inherited: Vec<(OsString, OsString)>,
@@ -199,6 +201,7 @@ impl ToolHost {
   fn run_blocking(&self, call: &ToolCall) -> ToolResult {
     let context = ToolContext {
       worktree: &self.worktree,
+      repository: &self.repository,
       inherited: &self.inherited,
       project: &self.project,
       outside: &self.outside,
@@ -303,6 +306,7 @@ impl RunTask {
     Ok(ToolHost {
       tools,
       worktree: worktree.to_path_buf(),
+      repository: self.root.clone(),
       git_dir: self.worktree_git_dir(worktree)?,
       hooks,
       inherited: std::env::vars_os().collect(),

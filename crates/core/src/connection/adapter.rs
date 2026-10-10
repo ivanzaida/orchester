@@ -243,7 +243,8 @@ pub fn executable_candidates(program: &str, path: Option<&OsStr>) -> Vec<PathBuf
   };
   let names = program_files(program);
   std::env::split_paths(path)
-    .filter(|directory| directory.is_absolute())
+    // A folder on another machine is passed over unread, as a program's (`CommandProgram::candidates`).
+    .filter(|directory| directory.is_absolute() && crate::permission::stays_local(directory).is_ok())
     .flat_map(|directory| names.iter().map(move |name| directory.join(name)))
     .collect()
 }
