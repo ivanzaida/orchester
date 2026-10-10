@@ -155,10 +155,8 @@ pub(super) fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Opt
       installed,
       required,
     } => cli_too_old(ctx, model, installed, required),
-    RunnerProblem::ProgramNotFound { program } => (
-      ctx.t_args("runs.activity.problem.programNotFound", [("program", program.as_str())]),
-      Some(ctx.t("runs.activity.problem.programNotFoundDetail")),
-    ),
+    RunnerProblem::ProgramNotFound { program } => program_problem(ctx, program, false),
+    RunnerProblem::ProgramMoved { program } => program_problem(ctx, program, true),
     RunnerProblem::CodebaseIndexUnavailable { detail } => (
       ctx.t("runs.activity.problem.codebaseIndexUnavailable"),
       Some(detail.as_str().into()),
@@ -348,4 +346,21 @@ const fn fallback_key(fallback: RipgrepFallback) -> &'static str {
     RipgrepFallback::GitGrep => "runs.activity.problem.ripgrepFallback.gitGrep",
     RipgrepFallback::OwnTools => "runs.activity.problem.ripgrepFallback.ownTools",
   }
+}
+
+/// A command tool's program that did not start: not found, or `moved` into the project's repository or off this
+/// computer.
+fn program_problem(ctx: &Ctx, program: &str, moved: bool) -> (Arc<str>, Option<Arc<str>>) {
+  let (title, detail) = if moved {
+    (
+      "runs.activity.problem.programMoved",
+      "runs.activity.problem.programMovedDetail",
+    )
+  } else {
+    (
+      "runs.activity.problem.programNotFound",
+      "runs.activity.problem.programNotFoundDetail",
+    )
+  };
+  (ctx.t_args(title, [("program", program)]), Some(ctx.t(detail)))
 }

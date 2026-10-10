@@ -4,6 +4,7 @@
 //! each with a stable code. `live` sets a project up end to end through the tools alone and works a
 //! task with the real runner and the fake Codex. Needs `git`.
 
+mod connections_window;
 mod gates;
 #[path = "../mcp_server/http.rs"]
 mod http;
@@ -14,6 +15,7 @@ mod http;
 )]
 mod kontur;
 mod live;
+mod mcp_servers;
 mod merge;
 mod tools;
 mod window;
@@ -287,6 +289,10 @@ fn domain_tools_are_listed_beside_lurqs_and_the_apps_with_their_scopes() {
     "decide_approval",
     "add_project",
     "add_cli_connection",
+    "add_mcp_server",
+    "update_mcp_server",
+    "remove_mcp_server",
+    "set_mcp_server_enabled",
     "save_profile_draft",
     "save_pipeline_draft",
     "save_instruction_draft",

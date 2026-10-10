@@ -241,3 +241,28 @@ get_editor_state",
       .is_empty()
   );
 }
+
+#[test]
+fn mcp_servers_are_deleted_by_id_unless_they_are_used() {
+  let (_repo, mut db) = project_repo();
+  let files = local("files", SecretId::generate());
+  let knowledge = remote("knowledge");
+  db.create_mcp_server(&files).unwrap();
+  db.create_mcp_server(&knowledge).unwrap();
+  let used = db
+    .delete_unused_mcp_server(knowledge.id(), &|_| Ok(vec!["Builder".into()]))
+    .unwrap();
+  assert_eq!(used.len(), 1);
+  assert!(
+    db.delete_unused_mcp_server(files.id(), &|_| Ok(Vec::new()))
+      .unwrap()
+      .is_empty()
+  );
+  assert_eq!(db.mcp_servers().unwrap(), vec![knowledge]);
+  assert!(matches!(
+    db.delete_unused_mcp_server(files.id(), &|_| Ok(Vec::new())),
+    Err(StoreError::ConnectionNotFound(_))
+  ));
+  // A failed removal leaves no transaction open.
+  db.create_mcp_server(&files).unwrap();
+}

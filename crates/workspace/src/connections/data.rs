@@ -23,6 +23,7 @@ use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
 use super::{
+  mcp::server_uses,
   model_uses::{self, ModelUse},
   probe,
 };
@@ -60,22 +61,23 @@ pub struct ProjectConnections {
 
 impl ProjectConnections {
   pub fn load(store: &ProjectDb) -> Result<Self, StoreError> {
-    // A profile uses the connection and the MCP servers its current content names: its draft if it
-    // has one.
-    let uses = profiles(store)?
+    // A profile runs on the connection its current content names (its draft if it has one); it gives its agents
+    // the MCP servers its draft or its latest published version names (`mcp::server_uses`), the rule removal uses.
+    let mut uses: Vec<ProfileUse> = profiles(store)?
       .into_iter()
-      .flat_map(|entry| {
-        let servers = entry.profile.mcp_servers().ids().to_vec();
-        std::iter::once(entry.profile.connection())
-          .chain(servers)
-          .map(move |connection| ProfileUse {
-            connection,
-            profile: entry.id,
-            role: entry.profile.role().as_str().into(),
-            model: entry.profile.model().clone(),
-          })
+      .map(|entry| ProfileUse {
+        connection: entry.profile.connection(),
+        profile: entry.id,
+        role: entry.profile.role().as_str().into(),
+        model: entry.profile.model().clone(),
       })
       .collect();
+    uses.extend(server_uses(store)?.into_iter().map(|used| ProfileUse {
+      connection: used.server,
+      profile: used.profile,
+      role: used.role,
+      model: used.model,
+    }));
     let connections = store.connections()?;
     let launches = connections
       .iter()
@@ -134,6 +136,16 @@ impl ProjectConnections {
   /// Profiles that run on `id`, or give their agents MCP server `id`, in profile order.
   pub fn used_by(&self, id: ConnectionId) -> impl Iterator<Item = &ProfileUse> {
     self.uses.iter().filter(move |used| used.connection == id)
+  }
+}
+
+/// The command a person runs in a terminal to sign the CLI of `provider` in, as its inspector shows it to
+/// copy; Orchester never runs it. `None` for a native provider, which signs in with its key.
+pub const fn sign_in_command(provider: AgentProvider) -> Option<&'static str> {
+  match provider {
+    AgentProvider::CodexCli => Some("codex login"),
+    AgentProvider::ClaudeCodeCli => Some("claude auth login"),
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => None,
   }
 }
 

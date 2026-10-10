@@ -24,6 +24,10 @@ pub(super) fn mcp_server_text(
       ctx.t_args("runs.activity.mcp.programNotFound", [("program", program.as_str())]),
       None,
     ),
+    McpServerProblem::ProgramMoved { program } => (
+      ctx.t_args("runs.activity.mcp.programMoved", [("program", program.as_str())]),
+      None,
+    ),
     McpServerProblem::WorkingDirectoryUnsupported => (ctx.t("runs.activity.mcp.workingDirectory"), None),
     McpServerProblem::UnsafeScriptArgument { position } => (
       ctx.t_args(

@@ -23,7 +23,7 @@ use orchester_workspace::{
 };
 
 use crate::{
-  mcp::input_gate::{InputGate, Protected},
+  mcp::input_gate::{Guarded, InputGate, Protected},
   services::Services,
   theme::{ExtraSpacing, ExtraTypography, SettingsSpacing, SettingsText},
   ui::{
@@ -63,7 +63,7 @@ impl Component for ChangePermissions {
     Self {
       saved: ctx.signal(None),
       blocked: ctx.signal(false),
-      _protected: gate.protect(),
+      _protected: gate.protect(Guarded::PermissionsSetting),
       gate,
     }
   }

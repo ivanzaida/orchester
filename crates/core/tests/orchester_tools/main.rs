@@ -119,6 +119,8 @@ pub fn context<'a>(worktree: &'a Path, reads: &'a OutsideReads, tools: &'a [Proj
   static ENVIRONMENT: std::sync::LazyLock<CommandEnvironment> = std::sync::LazyLock::new(CommandEnvironment::default);
   ToolContext {
     worktree,
+    // The worktree stands for the repository that holds it.
+    repository: worktree,
     inherited: &[],
     project: &ENVIRONMENT,
     outside: reads,

@@ -1,4 +1,4 @@
-use super::{EDIT, NEW, PROJECT_PATTERN, SETTINGS, TASKS, project_screen_path};
+use super::{CONNECTIONS, EDIT, NEW, PROJECT_PATTERN, SETTINGS, TASKS, project_screen_path};
 
 /// A screen of the window, as the sidebar, the tabs and the app's MCP tools name it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -19,11 +19,13 @@ pub enum Screen {
   Tools,
   Secrets,
   Connections,
+  NewConnection,
+  EditConnection,
   ProjectSettings,
 }
 
 impl Screen {
-  pub const ALL: [Self; 17] = [
+  pub const ALL: [Self; 19] = [
     Self::AllProjects,
     Self::Settings,
     Self::Overview,
@@ -40,6 +42,8 @@ impl Screen {
     Self::Tools,
     Self::Secrets,
     Self::Connections,
+    Self::NewConnection,
+    Self::EditConnection,
     Self::ProjectSettings,
   ];
   /// The project's screens the sidebar lists first (`Nav · Overview` … `Nav · Usage` in `q9mf0k`).
@@ -74,6 +78,8 @@ impl Screen {
       Self::Tools => "tools",
       Self::Secrets => "secrets",
       Self::Connections => "connections",
+      Self::NewConnection => "new_connection",
+      Self::EditConnection => "edit_connection",
       Self::ProjectSettings => "project_settings",
     }
   }
@@ -101,6 +107,8 @@ impl Screen {
       Self::Tools => "shell.screens.tools",
       Self::Secrets => "shell.screens.secrets",
       Self::Connections => "shell.screens.connections",
+      Self::NewConnection => "shell.screens.newConnection",
+      Self::EditConnection => "shell.screens.editConnection",
       Self::ProjectSettings => "shell.screens.projectSettings",
     }
   }
@@ -109,7 +117,14 @@ impl Screen {
   /// Overview, the screens of a task and the screens outside a project.
   pub(super) const fn segment(self) -> Option<&'static str> {
     match self {
-      Self::AllProjects | Self::Settings | Self::Overview | Self::NewTask | Self::EditTask | Self::Task => None,
+      Self::AllProjects
+      | Self::Settings
+      | Self::Overview
+      | Self::NewTask
+      | Self::EditTask
+      | Self::Task
+      | Self::NewConnection
+      | Self::EditConnection => None,
       Self::Tasks => Some(TASKS),
       Self::PullRequests => Some("pull-requests"),
       Self::Usage => Some("usage"),
@@ -119,7 +134,7 @@ impl Screen {
       Self::Skills => Some("skills"),
       Self::Tools => Some("tools"),
       Self::Secrets => Some("secrets"),
-      Self::Connections => Some("connections"),
+      Self::Connections => Some(CONNECTIONS),
       Self::ProjectSettings => Some(SETTINGS),
     }
   }
@@ -135,6 +150,8 @@ impl Screen {
       Self::NewTask => format!("{tasks}/{NEW}"),
       Self::EditTask => format!("{tasks}/:key/{EDIT}"),
       Self::Task => format!("{tasks}/:key/:tab"),
+      Self::NewConnection => format!("{PROJECT_PATTERN}/{CONNECTIONS}/{NEW}"),
+      Self::EditConnection => format!("{PROJECT_PATTERN}/{CONNECTIONS}/:connection/{EDIT}"),
       screen => project_screen_path(PROJECT_PATTERN, screen),
     }
   }

@@ -4,10 +4,12 @@
 //! tools that run without asking are part of the settings since they were added; settings written
 //! before then have none.
 
+use std::sync::Arc;
+
 use orchester_core::{
   connection::mcp::{ExemptTools, McpEnvironment, McpServer, McpServerName, McpTransport, UnreadableMcpServer},
   id::ConnectionId,
-  store::McpServerStore,
+  store::{McpServerStore, ServerUsers},
   time::Timestamp,
 };
 use rusqlite::{Connection, OptionalExtension, Params, Row, params};
@@ -70,6 +72,42 @@ impl McpServerStore for ProjectDb {
     }
     transaction.commit()?;
     Ok(())
+  }
+
+  fn delete_unused_mcp_server(
+    &mut self,
+    id: ConnectionId,
+    users: &ServerUsers<Self>,
+  ) -> Result<Vec<Arc<str>>, StoreError> {
+    // An immediate transaction holds the write lock from the start, so no profile can choose the server between
+    // the question and the removal; the reads inside it see the database as it stands.
+    self.connection.execute_batch("BEGIN IMMEDIATE")?;
+    let outcome = users(self).and_then(|users| {
+      if !users.is_empty() {
+        return Ok(users);
+      }
+      match self
+        .connection
+        .execute("DELETE FROM mcp_servers WHERE id = ?1", [id.to_string()])?
+      {
+        0 => Err(StoreError::ConnectionNotFound(id)),
+        _ => Ok(users),
+      }
+    });
+    let end = match &outcome {
+      Ok(users) if users.is_empty() => "COMMIT",
+      _ => "ROLLBACK",
+    };
+    if let Err(error) = self.connection.execute_batch(end) {
+      // A COMMIT that failed (the database busy or full) leaves the transaction open: it is rolled back, so the
+      // connection is not left inside it. Losing the rollback's own error is correct: the first error is the one
+      // returned, and SQLite rolls back a transaction still open when the connection closes.
+      if !self.connection.is_autocommit() {
+        let _ = self.connection.execute_batch("ROLLBACK");
+      }
+      return Err(error.into());
+    }
+    outcome
   }
 
   fn mcp_server(&self, id: ConnectionId) -> Result<Option<McpServer>, StoreError> {

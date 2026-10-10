@@ -1,7 +1,8 @@
-use orchester_core::project::TaskKey;
+use orchester_core::{id::ConnectionId, project::TaskKey};
 
 use super::{
-  EDIT, NEW, OverviewTab, RouteError, Screen, TAB, TASKS, TaskList, TaskView, project_screen_path,
+  CONNECTIONS, ConnectionsView, EDIT, NEW, NewConnection, OverviewTab, RouteError, Screen, TAB, TASKS, TaskList,
+  TaskView, project_screen_path,
   query::{Params, with_query},
 };
 
@@ -21,7 +22,10 @@ pub enum ProjectPage {
   Skills,
   Tools,
   Secrets,
-  Connections,
+  Connections(ConnectionsView),
+  NewConnection(NewConnection),
+  /// Edit MCP server, the server's id.
+  EditConnection(ConnectionId),
   Settings,
 }
 
@@ -30,7 +34,9 @@ impl ProjectPage {
   /// screens of a task.
   pub fn of(screen: Screen) -> Option<Self> {
     Some(match screen {
-      Screen::AllProjects | Screen::Settings | Screen::EditTask | Screen::Task => return None,
+      Screen::AllProjects | Screen::Settings | Screen::EditTask | Screen::Task | Screen::EditConnection => {
+        return None;
+      }
       Screen::Overview => Self::Overview(OverviewTab::default()),
       Screen::Tasks => Self::Tasks(TaskList::default()),
       Screen::NewTask => Self::NewTask,
@@ -42,7 +48,8 @@ impl ProjectPage {
       Screen::Skills => Self::Skills,
       Screen::Tools => Self::Tools,
       Screen::Secrets => Self::Secrets,
-      Screen::Connections => Self::Connections,
+      Screen::Connections => Self::Connections(ConnectionsView::default()),
+      Screen::NewConnection => Self::NewConnection(NewConnection::default()),
       Screen::ProjectSettings => Self::Settings,
     })
   }
@@ -62,13 +69,16 @@ impl ProjectPage {
       Self::Skills => Screen::Skills,
       Self::Tools => Screen::Tools,
       Self::Secrets => Screen::Secrets,
-      Self::Connections => Screen::Connections,
+      Self::Connections(_) => Screen::Connections,
+      Self::NewConnection(_) => Screen::NewConnection,
+      Self::EditConnection(_) => Screen::EditConnection,
       Self::Settings => Screen::ProjectSettings,
     }
   }
 
   pub(super) fn path(&self, project_root: &str) -> String {
     let tasks = format!("{project_root}/{TASKS}");
+    let connections = format!("{project_root}/{CONNECTIONS}");
     match self {
       Self::Overview(tab) => {
         let tab = (*tab != OverviewTab::default()).then(|| tab.name());
@@ -78,6 +88,9 @@ impl ProjectPage {
       Self::NewTask => format!("{tasks}/{NEW}"),
       Self::EditTask(key) => format!("{tasks}/{key}/{EDIT}"),
       Self::Task(key, view) => view.path(&format!("{tasks}/{key}")),
+      Self::Connections(view) => view.path(connections),
+      Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
+      Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
       page => project_screen_path(project_root, page.screen()),
     }
   }
@@ -95,6 +108,9 @@ impl ProjectPage {
           rest => TaskView::parse(rest, params).map(|view| Self::Task(key, view)),
         }
       }
+      [CONNECTIONS] => ConnectionsView::take(params).map(Self::Connections),
+      [CONNECTIONS, NEW] => NewConnection::take(params).map(Self::NewConnection),
+      [CONNECTIONS, id, EDIT] => id.parse().map(Self::EditConnection).map_err(|_| RouteError::NoScreen),
       [segment] => Screen::ALL
         .into_iter()
         .find(|screen| screen.segment() == Some(*segment))

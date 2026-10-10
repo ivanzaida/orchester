@@ -35,8 +35,8 @@ pub use self::{
   tool::{
     AccessPolicy, AccessPolicyError, AccessWindow, AllowedSteps, ApprovalMode, CommandAction, CommandArg,
     CommandEnvironment, CommandError, CommandProgram, CommandTimeout, DatabaseQuery, DeniedBehavior, ExitCodes,
-    FieldName, FieldNameError, HttpAuth, HttpError, HttpMethod, HttpRequest, OutputLimit, ProgramLocation,
-    RequestTarget, ResponseSource, Tool, ToolAction, ToolError, ToolKind, VariableName,
+    FieldName, FieldNameError, HttpAuth, HttpError, HttpMethod, HttpRequest, NO_CURRENT_DIRECTORY_IN_EXE_PATH,
+    OutputLimit, ProgramLocation, RequestTarget, ResponseSource, Tool, ToolAction, ToolError, ToolKind, VariableName,
   },
   variable::{UnknownVariable, Variable, VariableGroup, VariableType},
 };

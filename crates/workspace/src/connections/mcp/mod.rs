@@ -5,27 +5,36 @@
 //! `NAME=${secret:SECRET_NAME@environment}`, which names the secret, never its value. The tools that
 //! run without asking are one name per line. Saving blocks on SQLite; the UI calls it off the UI thread.
 
-use std::{collections::BTreeMap, path::Path};
+mod save;
+mod widening;
+
+use std::collections::BTreeMap;
 
 use orchester_core::{
   connection::mcp::{
-    ExemptTools, ExemptToolsError, HttpServer, McpEnvValue, McpEnvironment, McpServer, McpServerError, McpServerName,
+    ExemptTools, ExemptToolsError, HttpServer, McpEnvValue, McpEnvironment, McpServer, McpServerName,
     McpServerNameError, McpToolName, McpToolNameError, McpTransport, McpUrl, StdioServer, TransportError,
     WorkingDirectory,
   },
-  id::{ConnectionId, SecretId},
+  id::SecretId,
   resource::{CommandArg, CommandProgram, VariableName},
   secret::Secret,
-  store::McpServerStore,
-  time::Timestamp,
 };
-use orchester_store::{ProjectDb, StoreError};
 
+pub use self::{
+  save::{
+    McpSaveError, ServerUse, profiles_using, program_problem_message, remove_in, save_in, server_uses, set_enabled_in,
+    store_in,
+  },
+  widening::{Allowed, enabling, widenings},
+};
 use crate::{
-  messages::{self, Message},
+  messages::Message,
   tools::form::{parse_arguments, program_message},
 };
 
+/// The key of the message that another server has the name: callers that report it apart match it.
+pub const NAME_TAKEN: &str = "errors.connectionNameTaken";
 const SECRET_OPEN: &str = "${secret:";
 const SECRET_CLOSE: &str = "}";
 
@@ -63,6 +72,8 @@ pub struct McpServerErrors {
   pub working_directory: Option<Message>,
   pub variables: Option<Message>,
   pub url: Option<Message>,
+  /// The bearer secret is not one of the project's active secrets.
+  pub bearer: Option<Message>,
   pub exempt_tools: Option<Message>,
 }
 
@@ -135,8 +146,12 @@ impl McpServerText {
     let name = McpServerName::new(&self.name)
       .map_err(|error| name_message(&error))
       .and_then(|name| {
+        // A tool names a server by its id or its name: a name that reads as an id would be ambiguous.
+        if name.as_str().parse::<orchester_core::id::ConnectionId>().is_ok() {
+          return Err(Message::new("connections.mcp.errors.nameIsId"));
+        }
         if taken.contains(&name) {
-          Err(Message::new("errors.connectionNameTaken"))
+          Err(Message::new(NAME_TAKEN))
         } else {
           Ok(name)
         }
@@ -147,7 +162,7 @@ impl McpServerText {
     };
     let transport = match self.transport {
       TransportChoice::Stdio => self.stdio(&mut errors),
-      TransportChoice::Http => self.http(&mut errors),
+      TransportChoice::Http => self.http(&mut errors, secrets),
     };
     let environment = match self.transport {
       TransportChoice::Stdio => {
@@ -183,14 +198,16 @@ impl McpServerText {
     Some(McpTransport::Stdio(StdioServer::new(program, arguments, directory)))
   }
 
-  fn http(&self, errors: &mut McpServerErrors) -> Option<McpTransport> {
-    match McpUrl::new(&self.url) {
-      Ok(url) => Some(McpTransport::Http(HttpServer::new(url, self.bearer))),
-      Err(error) => {
-        errors.url = Some(transport_message(&error));
-        None
-      }
+  fn http(&self, errors: &mut McpServerErrors, secrets: &[Secret]) -> Option<McpTransport> {
+    let url = McpUrl::new(&self.url).map_err(|error| errors.url = Some(transport_message(&error)));
+    let active = self
+      .bearer
+      .is_none_or(|bearer| secrets.iter().any(|secret| secret.id() == bearer));
+    if !active {
+      errors.bearer = Some(Message::new("connections.mcp.errors.bearerGone"));
     }
+    let url = url.ok()?;
+    active.then(|| McpTransport::Http(HttpServer::new(url, self.bearer)))
   }
 }
 
@@ -246,13 +263,14 @@ pub fn parse_variables(text: &str, secrets: &[Secret]) -> Result<McpEnvironment,
 }
 
 /// The secret `NAME@environment` (or a secret id kept from before) names.
+/// Only the project's active secrets (`secrets`) can be named: an archived one, or another project's, cannot.
 fn secret_of(reference: &str, secrets: &[Secret]) -> Result<SecretId, Message> {
-  if let Ok(id) = reference.parse::<SecretId>() {
-    return Ok(id);
-  }
+  let by_id = reference.parse::<SecretId>().ok();
   secrets
     .iter()
-    .find(|secret| format!("{}@{}", secret.name(), secret.environment().as_str()) == reference)
+    .find(|secret| {
+      Some(secret.id()) == by_id || format!("{}@{}", secret.name(), secret.environment().as_str()) == reference
+    })
     .map(Secret::id)
     .ok_or_else(|| Message::new("connections.mcp.errors.unknownSecret").with("secret", reference.to_owned()))
 }
@@ -301,61 +319,4 @@ fn transport_message(error: &TransportError) -> Message {
       Message::new("connections.mcp.errors.workingDirectory")
     }
   }
-}
-
-/// Stores `draft` as a new server, or as server `id`'s new settings.
-pub fn save_in(repo_root: &Path, id: Option<ConnectionId>, draft: McpServerDraft) -> Result<ConnectionId, Message> {
-  let saved = save(
-    &mut ProjectDb::open(repo_root).map_err(|error| store_message(&error))?,
-    id,
-    draft,
-  );
-  saved.map_err(|error| match error {
-    SaveError::Store(error) => store_message(&error),
-    SaveError::Server(McpServerError::EnvironmentOnHttp) => Message::new("connections.mcp.errors.variables"),
-  })
-}
-
-enum SaveError {
-  Store(StoreError),
-  Server(McpServerError),
-}
-
-fn save(db: &mut ProjectDb, id: Option<ConnectionId>, draft: McpServerDraft) -> Result<ConnectionId, SaveError> {
-  let Some(id) = id else {
-    let mut server = McpServer::new(
-      ConnectionId::generate(),
-      draft.name,
-      draft.transport,
-      draft.environment,
-      Timestamp::now(),
-    )
-    .map_err(SaveError::Server)?;
-    server.set_exempt_tools(draft.exempt_tools);
-    db.create_mcp_server(&server).map_err(SaveError::Store)?;
-    return Ok(server.id());
-  };
-  let mut server = db
-    .mcp_server(id)
-    .map_err(SaveError::Store)?
-    .ok_or(SaveError::Store(StoreError::ConnectionNotFound(id)))?;
-  server
-    .update(draft.name, draft.transport, draft.environment)
-    .map_err(SaveError::Server)?;
-  server.set_exempt_tools(draft.exempt_tools);
-  db.save_mcp_server(&server).map_err(SaveError::Store)?;
-  Ok(id)
-}
-
-/// Turns server `id` on or off for every profile that chooses it.
-pub fn set_enabled_in(repo_root: &Path, id: ConnectionId, enabled: bool) -> Result<(), StoreError> {
-  let mut db = ProjectDb::open(repo_root)?;
-  let mut server = db.mcp_server(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
-  server.set_enabled(enabled);
-  db.save_mcp_server(&server)
-}
-
-fn store_message(error: &StoreError) -> Message {
-  tracing::error!(%error, "cannot save the MCP server");
-  messages::store_error(error)
 }

@@ -473,6 +473,18 @@ pub fn mcp_server_switch(open: &OpenProject, name: &str, enabled: bool) -> Opera
     .target(in_project(open, Place::Connections))
 }
 
+/// Removing MCP server `name` from the project.
+pub fn mcp_server_remove(open: &OpenProject, name: &str) -> OperationSpec {
+  Wording {
+    running: "statusBar.operations.mcpServerRemove.running",
+    done: "statusBar.operations.mcpServerRemove.done",
+    failed: "statusBar.operations.mcpServerRemove.failed",
+  }
+  .named(name)
+  .project(open.project.name().as_str())
+  .target(in_project(open, Place::Connections))
+}
+
 /// Checking a provider's CLI in the connection dialog; named by the product, e.g. "Codex CLI".
 /// `None` for a native provider, which has no CLI to check.
 pub fn cli_check(open: &OpenProject, provider: AgentProvider) -> Option<OperationSpec> {

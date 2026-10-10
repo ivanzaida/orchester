@@ -1,6 +1,7 @@
 //! MCP servers as the Connections screen edits them: the dialog's fields to a server and back, a
 //! variable taken from a secret written by the secret's name, the tools that run without asking, and
-//! the profiles that give a server to their agents. Run with `cargo test -p orchester-desktop --test mcp_servers mcp`.
+//! the profiles that give a server to their agents. Run with `cargo test -p orchester-workspace --test mcp_servers
+//! mcp`.
 
 use std::fs;
 
@@ -21,7 +22,10 @@ use orchester_store::ProjectDb;
 use orchester_workspace::{
   connections::{
     data::ProjectConnections,
-    mcp::{McpServerText, TransportChoice, parse_variables, save_in, secret_reference, set_enabled_in},
+    mcp::{
+      Allowed, McpSaveError, McpServerText, TransportChoice, enabling, parse_variables, remove_in, save_in,
+      secret_reference, set_enabled_in, store_in, widenings,
+    },
   },
   pipelines::data::Assignables,
 };
@@ -93,12 +97,12 @@ fn mcp_dialog_fields_become_a_server_and_read_back() {
     format!("DOCS_TOKEN={}\nLOG_LEVEL=debug", secret_reference(&secrets[0]))
   );
   assert_eq!(text.arguments, "-y\n@acme/docs-mcp");
-  // A secret the project no longer lists keeps its reference.
+  // A secret the project no longer lists keeps its reference, which cannot be saved again until another is chosen.
   let kept = McpServerText::of(&server, &[]);
   assert!(kept.variables.contains(&secrets[0].id().to_string()));
   assert_eq!(
-    parse_variables(&kept.variables, &[]).expect("still valid"),
-    *server.environment()
+    parse_variables(&kept.variables, &[]).map_err(|message| message.key),
+    Err("connections.mcp.errors.unknownSecret")
   );
 }
 
@@ -148,7 +152,13 @@ fn mcp_servers_are_saved_listed_and_turned_off() {
   let (repo, mut db) = project_db();
   let token = secret("DOCS_TOKEN", Environment::Staging);
   db.create_secret(&token).expect("secret");
-  let draft = stdio_text().draft(&[], std::slice::from_ref(&token)).expect("valid");
+  // A program outside the repository, which saving keeps as the file it is.
+  let program = std::env::current_exe().expect("the test program");
+  let text = McpServerText {
+    program: program.to_string_lossy().into_owned(),
+    ..stdio_text()
+  };
+  let draft = text.draft(&[], std::slice::from_ref(&token)).expect("valid");
   let id = save_in(repo.path(), None, draft).expect("saved");
   let connections = ProjectConnections::load(&db).expect("load");
   assert_eq!(connections.mcp.len(), 1);
@@ -158,7 +168,7 @@ fn mcp_servers_are_saved_listed_and_turned_off() {
   assert!(!db.mcp_server(id).expect("read").expect("stored").enabled());
   let renamed = McpServerText {
     name: "docs-2".to_owned(),
-    ..stdio_text()
+    ..text
   }
   .draft(&[], std::slice::from_ref(&token))
   .expect("valid");
@@ -279,4 +289,191 @@ batch_get",
   let assignables = Assignables::load(&db).expect("load");
   let choice = assignables.profile(profile.id()).expect("the published profile");
   assert_eq!(assignables.exempt_tools(choice), [("pencil".into(), 2)]);
+}
+
+/// A server no profile chooses is removed; one a profile's draft or published version chooses is kept,
+/// and the refusal names the profile's role.
+#[test]
+fn mcp_servers_are_removed_once_no_profile_chooses_them() {
+  let (repo, mut db) = project_db();
+  let chosen = remote("pencil", "", true);
+  let unchosen = remote("notes", "", true);
+  db.create_mcp_server(&chosen).expect("server");
+  db.create_mcp_server(&unchosen).expect("server");
+  let body = AgentProfile::new(
+    Name::new("Builder").expect("valid"),
+    String::new(),
+    PromptText::new("Build.").expect("prompt"),
+    ConnectionId::generate(),
+    ModelId::new("haiku").expect("model"),
+    ProviderSettings::default(),
+  )
+  .with_mcp_servers(McpServerSelection::new(vec![chosen.id()]).expect("one server"));
+  db.create_resource(
+    Slug::new("builder").expect("slug"),
+    Name::new("Builder").expect("valid"),
+    &body,
+    Timestamp::from_unix_millis(1),
+  )
+  .expect("profile");
+  remove_in(repo.path(), unchosen.id()).expect("removed");
+  let refused = remove_in(repo.path(), chosen.id()).expect_err("a profile chooses it");
+  assert!(matches!(&refused, McpSaveError::InUse(roles) if roles.len() == 1 && &*roles[0] == "Builder"));
+  assert_eq!(refused.message().key, "connections.mcp.errors.inUse");
+  let left: Vec<String> = db
+    .mcp_servers()
+    .expect("read")
+    .iter()
+    .map(|server| server.name().to_string())
+    .collect();
+  assert_eq!(left, ["pencil"]);
+}
+
+/// What a change widens: a new server, another program, a variable but a harmless one, an added exempt
+/// tool, turning a server on. Renaming, a harmless variable, dropping exempt tools and turning off do not.
+#[test]
+fn mcp_widenings_name_what_a_change_lets_agents_do() {
+  let secrets = [secret("DOCS_TOKEN", Environment::Staging)];
+  let draft = |text: McpServerText| text.draft(&[], &secrets).expect("valid fields");
+  let base = McpServerText {
+    exempt_tools: "search\nread".to_owned(),
+    ..stdio_text()
+  };
+  let keys = |reasons: Vec<orchester_workspace::messages::Message>| -> Vec<String> {
+    reasons.iter().map(|reason| reason.key.to_owned()).collect()
+  };
+  assert_eq!(
+    keys(widenings(None, &draft(base.clone()))),
+    ["appMcp.widens.mcpServerAdded"]
+  );
+  let stored = {
+    let draft = draft(base.clone());
+    let mut server = McpServer::new(
+      ConnectionId::generate(),
+      draft.name,
+      draft.transport,
+      draft.environment,
+      Timestamp::from_unix_millis(1),
+    )
+    .expect("valid");
+    server.set_exempt_tools(draft.exempt_tools);
+    server
+  };
+  let narrower = McpServerText {
+    variables: format!("{}\nRUST_LOG=info", base.variables),
+    exempt_tools: "read".to_owned(),
+    ..base.clone()
+  };
+  assert!(widenings(Some(&stored), &draft(narrower)).is_empty());
+  let renamed = McpServerText {
+    name: "docs-renamed".to_owned(),
+    ..base.clone()
+  };
+  assert_eq!(
+    keys(widenings(Some(&stored), &draft(renamed))),
+    ["appMcp.widens.mcpRename"]
+  );
+  let secret_under_a_harmless_name = McpServerText {
+    variables: format!("{}\nLANG=${{secret:DOCS_TOKEN@staging}}", base.variables),
+    ..base.clone()
+  };
+  assert_eq!(
+    keys(widenings(Some(&stored), &draft(secret_under_a_harmless_name))),
+    ["appMcp.widens.variable"],
+    "a secret's value widens under any name"
+  );
+  let wider = McpServerText {
+    program: "uvx".to_owned(),
+    variables: "LOG_LEVEL=trace".to_owned(),
+    exempt_tools: "search\nread\nwrite".to_owned(),
+    ..base
+  };
+  assert_eq!(
+    keys(widenings(Some(&stored), &draft(wider))),
+    [
+      "appMcp.widens.mcpProgram",
+      "appMcp.widens.variable",
+      "appMcp.widens.variable",
+      "appMcp.widens.mcpExemptTools"
+    ]
+  );
+  let mut off = stored.clone();
+  off.set_enabled(false);
+  assert_eq!(keys(enabling(&off, true)), ["appMcp.widens.mcpServerEnabled"]);
+  assert!(enabling(&off, false).is_empty() && enabling(&stored, true).is_empty());
+}
+
+/// Only the project's active secrets can be named, by name or by id; a bearer secret too.
+#[test]
+fn mcp_dialog_names_only_the_projects_active_secrets() {
+  let token = secret("DOCS_TOKEN", Environment::Staging);
+  let secrets = [token.clone()];
+  let by_id = McpServerText {
+    variables: format!("DOCS_TOKEN=${{secret:{}}}", token.id()),
+    ..stdio_text()
+  };
+  assert!(by_id.draft(&[], &secrets).is_ok());
+  let other = McpServerText {
+    variables: format!("DOCS_TOKEN=${{secret:{}}}", SecretId::generate()),
+    ..stdio_text()
+  };
+  let errors = other.draft(&[], &secrets).expect_err("another project's secret");
+  assert_eq!(
+    errors.variables.map(|message| message.key),
+    Some("connections.mcp.errors.unknownSecret")
+  );
+  let remote = McpServerText {
+    transport: TransportChoice::Http,
+    url: "https://mcp.example.dev/mcp".to_owned(),
+    bearer: Some(SecretId::generate()),
+    ..McpServerText::new_server()
+  };
+  let errors = McpServerText {
+    name: "docs".to_owned(),
+    ..remote
+  }
+  .draft(&[], &secrets)
+  .expect_err("an archived bearer secret");
+  assert_eq!(
+    errors.bearer.map(|message| message.key),
+    Some("connections.mcp.errors.bearerGone")
+  );
+}
+
+/// A save widens only what was allowed, checked against the server as stored when it is made: a server changed
+/// meanwhile, so that the save widens what a person did not confirm, is not saved.
+#[test]
+fn mcp_saves_widen_only_what_was_allowed() {
+  let (repo, db) = project_db();
+  let text = McpServerText {
+    variables: String::new(),
+    ..stdio_text()
+  };
+  let id = save_in(repo.path(), None, text.draft(&[], &[]).expect("valid")).expect("saved");
+  let stored = db.mcp_server(id).expect("read").expect("stored");
+  // The fields as Edit MCP server opens them, with the program as stored.
+  let text = McpServerText::of(&stored, &[]);
+  let wider = McpServerText {
+    exempt_tools: "search_docs".to_owned(),
+    ..text.clone()
+  }
+  .draft(&[], &[])
+  .expect("valid");
+  let confirmed = widenings(Some(&stored), &wider);
+  let Err(McpSaveError::Changed(reasons)) = store_in(repo.path(), Some(id), wider.clone(), &Allowed::These(Vec::new()))
+  else {
+    panic!("a save that asked nothing cannot widen");
+  };
+  assert_eq!(reasons, confirmed);
+  assert_eq!(
+    store_in(repo.path(), Some(id), wider, &Allowed::These(confirmed)).ok(),
+    Some(id),
+    "what a person confirmed is saved"
+  );
+  let narrower = text.draft(&[], &[]).expect("valid");
+  assert_eq!(
+    store_in(repo.path(), Some(id), narrower, &Allowed::These(Vec::new())).ok(),
+    Some(id),
+    "a save that only narrows needs nothing"
+  );
 }

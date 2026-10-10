@@ -238,6 +238,10 @@ pub enum ToolCallError {
   UnknownCheck(String),
   #[error("the program `{0}` of the check was not found")]
   ProgramNotFound(String),
+  #[error(
+    "the program `{0}` of the check now leads into the project's repository or off this computer, so it was not      started; a person can choose it again on the project's Tools page"
+  )]
+  ProgramMoved(String),
   #[error(transparent)]
   Outside(#[from] OutsideReadError),
   #[error(transparent)]

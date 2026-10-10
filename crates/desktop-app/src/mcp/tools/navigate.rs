@@ -1,6 +1,6 @@
 use lurq::mcp::{McpTool, Scope};
 use orchester_core::{
-  id::ProjectId,
+  id::{ConnectionId, ProjectId},
   project::{TaskKey, TaskKeyError},
 };
 use serde_json::{Map, Value, json};
@@ -9,7 +9,8 @@ use super::{ToolError, WindowLink, object, reply, route_json, string};
 use crate::{
   navigation::Navigation,
   routes::{
-    ChangeSource, ChangedFile, OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView,
+    ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, NewConnection, OverviewTab, ProjectPage, Route, Screen,
+    TaskList, TaskListTab, TaskTab, TaskView,
   },
 };
 
@@ -17,8 +18,9 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects and \
   settings take no other argument; every other screen takes `project`, the project's id (a UUID, as app_state \
   reports it). overview also takes `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as after \
-  Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`. A tab left out is the \
-  one the screen opens on. Answers the route the tab shows, whose params navigate takes back. Errors are JSON with \
+  Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; connections `tab` and \
+  `selected` (the id of the connection its inspector shows); new_connection `kind`; edit_connection `connection` \
+  (an MCP server's id). A tab or kind left out is the one the screen opens on. Answers the route the tab shows, whose params navigate takes back. Errors are JSON with \
   a stable `code`: unknown_route (with the known names), missing_param, unexpected_param, invalid_param, \
   unknown_tab (with the screen's tabs), not_a_string, not_an_object, not_ready (the window is starting).";
 
@@ -33,11 +35,13 @@ pub fn tool(link: WindowLink) -> McpTool {
 fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
-    "The screen's tab, the one it opens on when left out: overview {}; tasks {}; task {}.",
+    "The screen's tab, the one it opens on when left out: overview {}; tasks {}; task {}; connections {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
     TaskTab::ALL.map(TaskTab::name).join(", "),
+    ConnectionsTab::ALL.map(ConnectionsTab::name).join(", "),
   );
+  let kinds: Vec<&str> = NewConnection::ALL.into_iter().map(NewConnection::name).collect();
   let sources: Vec<&str> = ChangeSource::ALL.into_iter().map(ChangeSource::name).collect();
   json!({
     "type": "object",
@@ -52,6 +56,9 @@ fn schema() -> Value {
         "type": "string",
         "description": "task: the repository path of a changed file to show on the changes tab (the tab when left out).",
       },
+      "selected": { "type": "string", "description": "connections: the id of the connection its inspector shows." },
+      "kind": { "type": "string", "enum": kinds, "description": "new_connection: what it adds." },
+      "connection": { "type": "string", "description": "edit_connection: the MCP server's id." },
       "from": {
         "type": "string",
         "enum": sources,
@@ -104,7 +111,9 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
     Screen::Skills => ProjectPage::Skills,
     Screen::Tools => ProjectPage::Tools,
     Screen::Secrets => ProjectPage::Secrets,
-    Screen::Connections => ProjectPage::Connections,
+    Screen::Connections => ProjectPage::Connections(connections_view(args)?),
+    Screen::NewConnection => ProjectPage::NewConnection(new_connection(args)?),
+    Screen::EditConnection => ProjectPage::EditConnection(connection(args, "connection")?),
     Screen::ProjectSettings => ProjectPage::Settings,
   };
   Ok(Route::Project(project(args)?, page))
@@ -118,6 +127,9 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Tasks => &["project", "tab", "q", "highlight"],
     Screen::EditTask => &["project", "key"],
     Screen::Task => &["project", "key", "tab", "file", "from"],
+    Screen::Connections => &["project", "tab", "selected"],
+    Screen::NewConnection => &["project", "kind"],
+    Screen::EditConnection => &["project", "connection"],
     Screen::NewTask
     | Screen::PullRequests
     | Screen::Usage
@@ -127,7 +139,6 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     | Screen::Skills
     | Screen::Tools
     | Screen::Secrets
-    | Screen::Connections
     | Screen::ProjectSettings => &["project"],
   }
 }
@@ -162,6 +173,42 @@ fn tab<T: Default>(
   from_name(given).ok_or_else(|| ToolError::UnknownTab {
     name: given.to_owned(),
     known: known.to_vec(),
+  })
+}
+
+/// The connection id in `param`, which is required.
+fn connection(args: &Map<String, Value>, param: &'static str) -> Result<ConnectionId, ToolError> {
+  let value = string(args, param)?.ok_or(ToolError::Missing { param })?;
+  value.parse().map_err(|error: uuid::Error| ToolError::InvalidParam {
+    param,
+    reason: format!("`{value}` is not a connection id ({error})"),
+  })
+}
+
+fn connections_view(args: &Map<String, Value>) -> Result<ConnectionsView, ToolError> {
+  let tab = tab(
+    args,
+    ConnectionsTab::from_name,
+    &ConnectionsTab::ALL.map(ConnectionsTab::name),
+  )?;
+  let view = ConnectionsView::new(tab);
+  if args.contains_key("selected") {
+    return Ok(view.with_selected(connection(args, "selected")?));
+  }
+  Ok(view)
+}
+
+/// What `kind` adds, an agent provider when left out.
+fn new_connection(args: &Map<String, Value>) -> Result<NewConnection, ToolError> {
+  let Some(name) = string(args, "kind")? else {
+    return Ok(NewConnection::default());
+  };
+  NewConnection::from_name(name).ok_or_else(|| ToolError::InvalidParam {
+    param: "kind",
+    reason: format!(
+      "`{name}` is not one of {}",
+      NewConnection::ALL.map(NewConnection::name).join(", ")
+    ),
   })
 }
 

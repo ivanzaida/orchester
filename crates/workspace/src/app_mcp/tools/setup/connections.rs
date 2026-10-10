@@ -31,6 +31,7 @@ use crate::{
     probe,
   },
   messages::{self, Message},
+  tasks::outside::Outside,
 };
 
 /// The agent CLIs a connection can be added for.
@@ -96,11 +97,7 @@ pub async fn list_connections(services: &Services, args: InProject) -> Result<Va
         })
       })
       .collect();
-    let mcp: Vec<Value> = listed
-      .mcp
-      .iter()
-      .map(|server| json!({ "id": server.id().to_string(), "name": server.name().to_string() }))
-      .collect();
+    let mcp = super::mcp_servers::servers_json(&listed);
     Ok(json!({ "agents": agents, "github": github, "mcp_servers": mcp }))
   })
   .await
@@ -149,6 +146,7 @@ pub async fn add_cli_connection(services: &Services, args: AddCliConnection) -> 
       check: check.clone(),
     };
     let id = save_in(&open.repo_root, draft).map_err(|error| save_error(&error, &check))?;
+    services.changes.record(open.project.id(), Outside::Connections);
     let listed = ProjectConnections::load_in(&open.repo_root)?;
     let connection = listed
       .connection(id)
@@ -167,6 +165,7 @@ pub async fn check_connection(services: &Services, args: InConnection) -> Result
       SaveError::NativeNotAvailable => refused("not_checked", error.message()),
       other => ToolError::refused("project_data", vec![other.message()]),
     })?;
+    services.changes.record(open.project.id(), Outside::Connections);
     let listed = ProjectConnections::load_in(&open.repo_root)?;
     let connection = match (listed.connection(id), listed.github_connection(id)) {
       (Some(agent), _) => agent_json(agent, &listed.secrets),

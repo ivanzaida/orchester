@@ -4,7 +4,7 @@
 
 use lurq::{app::ctx::Ctx, node::Element};
 
-use super::sections::{Label, Place, not_built, section, side_row};
+use crate::ui::form_section::{Label, Place, not_built, section, side_row};
 
 pub fn context_section(ctx: &Ctx) -> Element {
   let label = Label::new("task-form-context", ctx.t("task_form.fields.context.label"))

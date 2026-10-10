@@ -13,11 +13,12 @@ use orchester_workspace::{
   messages::Message,
 };
 
-use super::{
-  sections::{Label, Place, section, side_row},
-  state::View,
+use super::state::View;
+use crate::ui::{
+  field::NumberField,
+  form_section::{Label, Place, section, side_row},
+  message::message_text,
 };
-use crate::ui::{field::NumberField, message::message_text};
 
 pub struct LimitFields<'a> {
   pub budget: &'a Signal<String>,

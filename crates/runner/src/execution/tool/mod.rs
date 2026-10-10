@@ -113,10 +113,7 @@ impl RunTask {
   ) -> Result<(PinnedCommand, PathBuf, CommandEnvironment), RunnerProblem> {
     let command = self.pinned_command(execution)?;
     let environment = self.environment()?;
-    let program =
-      find_program(&command.action, &environment, worktree).ok_or_else(|| RunnerProblem::ProgramNotFound {
-        program: command.action.program().as_str().to_owned(),
-      })?;
+    let program = find_program(&command.action, &environment, worktree, &self.root)?;
     Ok((command, program, environment))
   }
 
@@ -203,11 +200,24 @@ impl RunTask {
   }
 }
 
-/// The first file the program is, on the `PATH` it starts with or in `worktree`.
-fn find_program(action: &CommandAction, project: &CommandEnvironment, worktree: &Path) -> Option<PathBuf> {
+/// The first file the program is, on the `PATH` it starts with or in `worktree`; a program stored as a fixed file
+/// must still lead outside `repository` and stay on this machine (`CommandProgram::check_place`).
+fn find_program(
+  action: &CommandAction,
+  project: &CommandEnvironment,
+  worktree: &Path,
+  repository: &Path,
+) -> Result<PathBuf, RunnerProblem> {
+  let program = || action.program().as_str().to_owned();
   let path = action.search_path(project, std::env::var_os("PATH"));
-  action
+  let found = action
     .program_candidates(worktree, path.as_deref(), Platform::current())
     .into_iter()
     .find(|candidate| candidate.is_file())
+    .ok_or_else(|| RunnerProblem::ProgramNotFound { program: program() })?;
+  action
+    .program()
+    .check_place(&found, repository)
+    .map_err(|_| RunnerProblem::ProgramMoved { program: program() })?;
+  Ok(found)
 }

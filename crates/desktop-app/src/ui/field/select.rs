@@ -99,6 +99,8 @@ pub struct SelectField<T: SignalValue> {
   placeholder: Option<Arc<str>>,
   width: Dimension,
   leading: Option<Icon>,
+  /// The chosen option's label in Geist Mono: a path or an identifier.
+  mono: bool,
 }
 
 impl<T> SelectField<T>
@@ -122,6 +124,7 @@ where
       placeholder: None,
       width: Dimension::Pct(100.0),
       leading: None,
+      mono: false,
     }
   }
 
@@ -143,6 +146,12 @@ where
     self
   }
 
+  /// The chosen option's label in Geist Mono, e.g. a program's path (`Program` in `cEJy4`).
+  pub fn mono(mut self) -> Self {
+    self.mono = true;
+    self
+  }
+
   pub fn render(self, ctx: &Ctx) -> Element {
     let mut select = Select::new(self.value)
       .name(self.name.clone())
@@ -153,9 +162,10 @@ where
     if let Some(placeholder) = self.placeholder {
       select = select.placeholder(placeholder);
     }
-    if let Some(glyph) = self.leading {
-      let id = self.id.clone();
-      select = select.trigger(move |state| leading_trigger(&id, glyph, state.label.as_deref().unwrap_or_default()));
+    if self.leading.is_some() || self.mono {
+      let (id, glyph, mono) = (self.id.clone(), self.leading, self.mono);
+      select =
+        select.trigger(move |state| leading_trigger(&id, (glyph, mono), state.label.as_deref().unwrap_or_default()));
     }
     // lurq's select takes no accessible name of its own; tools read it from the select's row.
     Row::new()
@@ -166,18 +176,23 @@ where
   }
 }
 
-/// The chosen option's `label` (element id `<id>-label`) after `glyph`, cut with an ellipsis where the box runs out of
-/// room (its menu lists the whole label), and the chevron at the end.
-fn leading_trigger(id: &str, glyph: Icon, label: &str) -> Element {
+/// The chosen option's `label` (element id `<id>-label`) after `glyph`, if any, in Geist Mono when `mono`, cut with an
+/// ellipsis where the box runs out of room (its menu lists the whole label), and the chevron at the end.
+fn leading_trigger(id: &str, (glyph, mono): (Option<Icon>, bool), label: &str) -> Element {
+  let style = if mono {
+    TypographyStyle::Mono
+  } else {
+    TypographyStyle::Description
+  };
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Base, PaletteColor::TextSecondary).flex_shrink(0.0))
+    .with_children(glyph.map(|glyph| icon(glyph, IconSize::Base, PaletteColor::TextSecondary).flex_shrink(0.0)))
     .child(
       Text::new(label)
         .id(format!("{id}-label"))
-        .variant(TypographyStyle::Description)
+        .variant(style)
         .color(PaletteColor::TextPrimary)
         .flex(1.0)
         .min_width(Dimension::Px(0.0))

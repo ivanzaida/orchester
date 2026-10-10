@@ -1,7 +1,7 @@
 //! Keeps MCP clients' window input away from a person-only control (*Let automation change agent
-//! permissions*). lurq's synthetic input reaches the same handlers as a person's, so the control cannot
-//! tell them apart; the app can, because every synthetic input arrives as a call of one of lurq's input
-//! tools. Three locks:
+//! permissions*, and the Connections page's question that confirms what a change widens). lurq's synthetic input
+//! reaches the same handlers as a person's, so the control cannot tell them apart; the app can, because every synthetic
+//! input arrives as a call of one of lurq's input tools. Three locks:
 //!
 //! - While a protected control is mounted, lurq itself denies its input tools ([`INPUT`]), checked on the event loop
 //!   when a call runs: a call queued before the control mounted, or one whose answer timed out and runs later, is
@@ -51,9 +51,23 @@ pub const LOOKING: &[&str] = &[
   "lurq_windows",
 ];
 
-const REFUSAL: &str = "A person changes this setting in the window: while Settings shows Let automation change agent \
-  permissions, window input from MCP clients (clicks, keys, values, resizing, menus) is refused. Looking at the window \
-  and the app's own tools stay available.";
+/// What a refused client reads while Settings shows *Let automation change agent permissions*.
+const SETTING_REFUSAL: &str = "A person changes this setting in the window: while Settings shows Let automation \
+  change agent permissions, window input from MCP clients (clicks, keys, values, resizing, menus) is refused.";
+/// What a refused client reads while a Connections page asks a person to confirm what a change widens.
+const QUESTION_REFUSAL: &str = "A person answers this in the window: while a Connections page asks to confirm what \
+  a change to an MCP server lets agents do (in any of the window's tabs, until it is answered or the page is left), \
+  window input from MCP clients (clicks, keys, values, resizing, menus) is refused.";
+const STILL_AVAILABLE: &str = "Looking at the window and the app's own tools stay available.";
+
+/// Which person-only control is mounted, for the words a refused client reads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Guarded {
+  /// Settings' *Let automation change agent permissions*.
+  PermissionsSetting,
+  /// A Connections page's question that confirms what saving or turning on a server widens.
+  WideningQuestion,
+}
 
 /// lurq's tools that send the window input or change it, which lurq denies while a protected control is
 /// mounted. `tests/mcp_tools.rs` checks that every lurq tool is in this list or in [`LOOKING`].
@@ -75,6 +89,8 @@ pub fn sends_input(tool: &str) -> bool {
 struct Counts {
   /// Protected controls mounted.
   protected: AtomicUsize,
+  /// Of them, Connections pages' questions ([`Guarded::WideningQuestion`]).
+  questions: AtomicUsize,
   /// Window-input calls the server forwarded that have not answered.
   in_flight: AtomicUsize,
   /// lurq's control of its tools once the server started, and the tools the gate denied through it.
@@ -100,9 +116,12 @@ impl InputGate {
     *self.0.tools.lock() = Some((tools, Vec::new()));
   }
 
-  /// Marks a protected control as mounted until the returned guard is dropped; the first one makes lurq
+  /// Marks the protected control `what` as mounted until the returned guard is dropped; the first one makes lurq
   /// deny its input tools. Called on the event loop, which runs lurq's tool calls.
-  pub fn protect(&self) -> Protected {
+  pub fn protect(&self, what: Guarded) -> Protected {
+    if what == Guarded::WideningQuestion {
+      self.0.questions.fetch_add(1, Ordering::SeqCst);
+    }
     if self.0.protected.fetch_add(1, Ordering::SeqCst) == 0
       && let Some((tools, denied)) = self.0.tools.lock().as_mut()
     {
@@ -113,7 +132,22 @@ impl InputGate {
         }
       }
     }
-    Protected(self.clone())
+    Protected(self.clone(), what)
+  }
+
+  /// Why window input is refused now: the protected controls mounted, in words for the client.
+  fn refusal(&self) -> String {
+    let questions = self.0.questions.load(Ordering::SeqCst);
+    let settings = self.0.protected.load(Ordering::SeqCst).saturating_sub(questions);
+    let mut words: Vec<&str> = Vec::new();
+    if settings > 0 {
+      words.push(SETTING_REFUSAL);
+    }
+    if questions > 0 {
+      words.push(QUESTION_REFUSAL);
+    }
+    words.push(STILL_AVAILABLE);
+    words.join(" ")
   }
 
   /// Whether a protected control is mounted.
@@ -137,10 +171,13 @@ impl InputGate {
 }
 
 /// A protected control's mark; dropping it, when the control unmounts, lifts the lock.
-pub struct Protected(InputGate);
+pub struct Protected(InputGate, Guarded);
 
 impl Drop for Protected {
   fn drop(&mut self) {
+    if self.1 == Guarded::WideningQuestion {
+      self.0.0.questions.fetch_sub(1, Ordering::SeqCst);
+    }
     // Only what the gate denied is allowed again. lurq cannot say which tools are denied otherwise; the
     // app's configuration denies none (its scopes decide), and the gate is the only one that denies at run
     // time.
@@ -193,7 +230,7 @@ impl ServerHandler for GuardedTools {
     }
     if self.gate.protecting() {
       tracing::info!(tool = %request.name, "window input refused while a person-only control shows");
-      let refusal = serde_json::json!({ "code": "person_only", "message": REFUSAL });
+      let refusal = serde_json::json!({ "code": "person_only", "message": self.gate.refusal() });
       return Ok(CallToolResult::error(vec![ContentBlock::text(refusal.to_string())]).into());
     }
     // Only calls that go on to the window count, so refused calls cannot keep a person's change out.

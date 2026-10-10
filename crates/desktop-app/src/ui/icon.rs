@@ -13,8 +13,9 @@ use crate::{routes::Screen, theme::IconSize};
 /// the design's `chart-column` is the font's `bar-chart-3`, `circle-alert` its `alert-circle`,
 /// `circle-check` its `check-circle-2`, `clock` its `clock-4`, `file-pen` its `file-edit`, `file-warning` its
 /// `file-exclamation-point`, `house` its `home`, `loader-circle` its `loader-2`,
-/// `message-circle-question` its `message-circle-question-mark`, `square-plus` its `plus-square` and
-/// `triangle-alert` its `alert-triangle`.
+/// `message-circle-question` its `message-circle-question-mark`, `plug-zap` its `plug-zap-2`, `square-plus` its
+/// `plus-square`, `triangle-alert` its `alert-triangle`, `user-round-check` its `user-check` and
+/// `user-round-cog` its `user-cog`.
 macro_rules! icons {
   ($($name:ident => $glyph:literal,)*) => {
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,6 +60,7 @@ icons! {
   CircleDot => '\u{e345}',
   CircleDotDashed => '\u{e4b1}',
   CircleHelp => '\u{e082}',
+  CircleMinus => '\u{e07e}',
   CirclePause => '\u{e07f}',
   CirclePlay => '\u{e080}',
   CircleSlash => '\u{e402}',
@@ -72,6 +74,8 @@ icons! {
   Compass => '\u{e09b}',
   Copy => '\u{e09e}',
   CornerDownLeft => '\u{e0a1}',
+  Cpu => '\u{e0a9}',
+  Database => '\u{e0ad}',
   DatabaseZap => '\u{e50b}',
   Download => '\u{e0b2}',
   Equal => '\u{e1bd}',
@@ -100,6 +104,7 @@ icons! {
   GitCompareArrows => '\u{e553}',
   GitMerge => '\u{e0e4}',
   GitPullRequest => '\u{e0e5}',
+  Globe => '\u{e0e8}',
   GraduationCap => '\u{e234}',
   Hammer => '\u{e0ec}',
   Hand => '\u{e1d7}',
@@ -142,10 +147,12 @@ icons! {
   PencilLine => '\u{e4f0}',
   Play => '\u{e13c}',
   Plug => '\u{e37f}',
+  PlugZap => '\u{e45c}',
   Plus => '\u{e13d}',
   Power => '\u{e140}',
   Radio => '\u{e142}',
   RadioTower => '\u{e404}',
+  RefreshCw => '\u{e145}',
   Reply => '\u{e22a}',
   RotateCcw => '\u{e148}',
   Save => '\u{e14d}',
@@ -153,6 +160,7 @@ icons! {
   Scissors => '\u{e14e}',
   Search => '\u{e151}',
   SearchX => '\u{e4ad}',
+  Server => '\u{e153}',
   Settings => '\u{e154}',
   Shield => '\u{e158}',
   ShieldAlert => '\u{e1fe}',
@@ -174,6 +182,8 @@ icons! {
   Undo2 => '\u{e2a1}',
   Unplug => '\u{e45d}',
   User => '\u{e19f}',
+  UserRoundCheck => '\u{e1a0}',
+  UserRoundCog => '\u{e342}',
   Users => '\u{e1a4}',
   Workflow => '\u{e425}',
   Wrench => '\u{e1b1}',
@@ -214,6 +224,8 @@ pub const fn screen_icon(screen: Screen) -> Icon {
     Screen::Tools => Icon::Wrench,
     Screen::Secrets => Icon::KeyRound,
     Screen::Connections => Icon::Plug,
+    Screen::NewConnection => Icon::Plus,
+    Screen::EditConnection => Icon::Pencil,
     Screen::ProjectSettings => Icon::SlidersHorizontal,
   }
 }

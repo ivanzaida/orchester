@@ -29,7 +29,7 @@ use super::{
   operations::{Operations, OperationsProps},
 };
 use crate::{
-  routes::{OverviewTab, ProjectPage, Route, TaskList, TaskView},
+  routes::{ConnectionsView, OverviewTab, ProjectPage, Route, TaskList, TaskView},
   shell::clock::{Clock, clock},
   theme::ExtraSpacing,
   ui::{icon::Icon, message::message_text},
@@ -262,7 +262,7 @@ fn page(place: Place, project: &ProjectFacts) -> Option<ProjectPage> {
     Place::AgentProfile(_) => ProjectPage::Agents,
     Place::Tool(_) => ProjectPage::Tools,
     Place::Secrets => ProjectPage::Secrets,
-    Place::Connections => ProjectPage::Connections,
+    Place::Connections => ProjectPage::Connections(ConnectionsView::default()),
     Place::Settings => ProjectPage::Settings,
   })
 }

@@ -1,4 +1,4 @@
-//! The form's building blocks (`Task form` `FXCiX`, `Shared components · Forms` `DMMLd`): a section's
+//! A full-page form's building blocks (`Shared components · Forms` `DMMLd`; New task, Add connection): a section's
 //! title over its rows (`Section` `De1nE`: 13/600, a `border` line 10 under it, a 11 `text_muted` note at
 //! its end), a row with its label and description at the start and its control at the end (`Form row`
 //! `XaNIz`: 12 over and under, 24 between, the label 13/500 with its description 3 under it), a row
@@ -15,7 +15,7 @@ use lurq::{
 };
 
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, TaskFormText},
+  theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
     unavailable::with_reason,
@@ -34,7 +34,7 @@ pub fn section(id: &str, title: &str, note: Option<&str>, rows: Vec<Element>) ->
     .child(
       Text::new(title)
         .id(format!("{id}-title"))
-        .variant(TaskFormText::SectionTitle.role()),
+        .variant(ExtraTypography::FormSection.role()),
     )
     .child(Spacer::new().flex(1.0))
     .with_children(note.map(|note| {

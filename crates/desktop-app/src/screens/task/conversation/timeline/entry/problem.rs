@@ -103,10 +103,8 @@ pub(super) fn text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<
       ctx,
       [("model", model), ("installed", installed), ("required", required)],
     ),
-    RunnerProblem::ProgramNotFound { program } => (
-      ctx.t_args("conversation.problem.programNotFound", [("program", program.as_str())]),
-      Some(ctx.t("conversation.problem.programNotFoundDetail")),
-    ),
+    RunnerProblem::ProgramNotFound { program } => program_problem(ctx, program, false),
+    RunnerProblem::ProgramMoved { program } => program_problem(ctx, program, true),
     RunnerProblem::CodebaseIndexUnavailable { detail } => {
       titled("conversation.problem.codebaseIndexUnavailable", detail)
     }
@@ -147,6 +145,23 @@ pub(super) fn text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<
       native_problem(ctx, problem)
     }
   }
+}
+
+/// A command tool's program that did not start: not found, or `moved` into the project's repository or off this
+/// computer.
+fn program_problem(ctx: &Ctx, program: &str, moved: bool) -> (Arc<str>, Option<Arc<str>>) {
+  let (title, detail) = if moved {
+    (
+      "conversation.problem.programMoved",
+      "conversation.problem.programMovedDetail",
+    )
+  } else {
+    (
+      "conversation.problem.programNotFound",
+      "conversation.problem.programNotFoundDetail",
+    )
+  };
+  (ctx.t_args(title, [("program", program)]), Some(ctx.t(detail)))
 }
 
 /// A model the provider's API refused to the installed CLI, and the version it needs.

@@ -22,7 +22,7 @@ use orchester_core::{
     stream::{AgentEvent, RunnerProblem},
   },
   id::{InvocationId, SecretId},
-  resource::{AgentProfile, CommandEnvironment},
+  resource::{AgentProfile, CommandEnvironment, NO_CURRENT_DIRECTORY_IN_EXE_PATH, VariableName},
   secret::{SecretValue, SecretVault},
   store::{McpServerStore, SecretStore},
 };
@@ -175,7 +175,7 @@ impl RunTask {
         left_out.push((server.name().to_string(), McpServerProblem::Disabled));
         continue;
       }
-      match launched(&server, worktree, environment, &mut secrets) {
+      match launched(&server, (worktree, &self.root), environment, &mut secrets) {
         Ok(launch) => launches.push(launch),
         Err(problem) => left_out.push((server.name().to_string(), problem)),
       }
@@ -188,10 +188,11 @@ fn named(left_out: Vec<(McpServerName, McpServerProblem)>) -> impl Iterator<Item
   left_out.into_iter().map(|(name, problem)| (name.to_string(), problem))
 }
 
-/// `server` as the CLI is given it, with its program found and its secrets read.
+/// `server` as the CLI is given it, with its program found in `worktree` or on the `PATH` (and still leading outside
+/// `repository`) and its secrets read.
 fn launched(
   server: &McpServer,
-  worktree: &Path,
+  (worktree, repository): (&Path, &Path),
   environment: &CommandEnvironment,
   secrets: &mut Secrets<'_>,
 ) -> Result<McpLaunch, McpServerProblem> {
@@ -203,12 +204,12 @@ fn launched(
     }
     McpTransport::Stdio(stdio) => stdio,
   };
-  let program = started(stdio, worktree, environment)?;
+  let program = started(stdio, (worktree, repository), environment)?;
   let working_directory = stdio
     .working_directory()
     .map(|directory| unicode(directory.resolve(worktree)))
     .transpose()?;
-  let mut variables = Vec::new();
+  let mut variables = no_current_directory(server);
   for (name, value) in server.environment().iter() {
     let value = match value {
       McpEnvValue::Text(text) => LaunchValue::Text(text.clone()),
@@ -223,10 +224,11 @@ fn launched(
 /// The program that starts and its arguments: the file the server's program is on the `PATH`
 /// the CLI starts with (the project's, else Orchester's search path, which on macOS adds the usual install
 /// folders) or in the worktree, started as
-/// `orchester-exec` would start it.
+/// `orchester-exec` would start it. A program stored as a fixed file must still lead outside `repository` and stay on
+/// this machine (`CommandProgram::check_place`).
 fn started(
   stdio: &StdioServer,
-  worktree: &Path,
+  (worktree, repository): (&Path, &Path),
   environment: &CommandEnvironment,
 ) -> Result<(String, Vec<String>), McpServerProblem> {
   let path = environment
@@ -239,6 +241,12 @@ fn started(
     .into_iter()
     .find(|candidate| candidate.is_file())
     .ok_or_else(|| McpServerProblem::ProgramNotFound {
+      program: stdio.program().as_str().to_owned(),
+    })?;
+  stdio
+    .program()
+    .check_place(&found, repository)
+    .map_err(|_| McpServerProblem::ProgramMoved {
       program: stdio.program().as_str().to_owned(),
     })?;
   let args: Vec<String> = stdio.args().iter().map(|arg| arg.as_str().to_owned()).collect();
@@ -262,6 +270,21 @@ fn started(
       Ok((unicode(PathBuf::from(shell))?, [head.to_vec(), args].concat()))
     }
   }
+}
+
+/// On Windows the server is told, as a command tool's program is, not to start programs by name from its current
+/// directory, which may be the worktree (`NO_CURRENT_DIRECTORY_IN_EXE_PATH`), unless it sets that variable itself.
+fn no_current_directory(server: &McpServer) -> Vec<(VariableName, LaunchValue)> {
+  let (name, value) = NO_CURRENT_DIRECTORY_IN_EXE_PATH;
+  let own = server
+    .environment()
+    .iter()
+    .any(|(variable, _)| variable.as_str().eq_ignore_ascii_case(name));
+  if !cfg!(windows) || own {
+    return Vec::new();
+  }
+  let name = VariableName::new(name).expect("the variable's name is a valid name");
+  vec![(name, LaunchValue::Text(value.to_owned()))]
 }
 
 fn unicode(path: PathBuf) -> Result<String, McpServerProblem> {

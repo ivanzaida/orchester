@@ -65,6 +65,8 @@ impl ProjectTool {
 #[derive(Clone, Copy, Debug)]
 pub struct ToolContext<'a> {
   pub worktree: &'a Path,
+  /// The project's repository, which holds the worktrees: a check's stored program must not lead into it.
+  pub repository: &'a Path,
   /// The environment Orchester runs in; programs get the part an agent CLI gets
   /// ([`agent_environment`]), as the agent's own commands do.
   pub inherited: &'a [(OsString, OsString)],
@@ -241,6 +243,10 @@ fn project_program(name: &str, context: &ToolContext<'_>) -> Result<ToolProgram,
     .into_iter()
     .find(|candidate| candidate.is_file())
     .ok_or_else(|| ToolCallError::ProgramNotFound(action.program().as_str().to_owned()))?;
+  action
+    .program()
+    .check_place(&program, context.repository)
+    .map_err(|_| ToolCallError::ProgramMoved(action.program().as_str().to_owned()))?;
   let command = action.process(
     &program,
     context.worktree,

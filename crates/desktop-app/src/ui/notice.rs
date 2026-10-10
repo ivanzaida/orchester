@@ -5,6 +5,10 @@
 //! `uqbUH`), a warning on `warning_muted` in `warning` (`iw9rS`), a failure on `danger_muted` in
 //! `danger` (`kXWCj`, `fRrDA`), a success on `success_muted` in `success` (`nqp68`). The text wraps and
 //! the icon stays with the first line.
+//!
+//! Handling notice (`Handling notice` `mERxM`): how something is handled, in one paragraph: a 15
+//! `text_secondary` icon and the words in 12/1.45 `text_secondary`, 10 apart; radius 8, 10 over and under and
+//! 12 at its sides, `surface_raised` in a `border` stroke.
 
 use std::sync::Arc;
 
@@ -16,7 +20,7 @@ use lurq::{
 };
 
 use super::icon::{Icon, icon};
-use crate::theme::{ExtraSpacing, ExtraTypography, IconSize};
+use crate::theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NoticeTone {
@@ -151,4 +155,25 @@ impl From<Notice> for Element {
       .with_children(actions)
       .into()
   }
+}
+
+/// A handling notice: `text` beside `glyph`.
+pub fn handling_notice(id: &str, glyph: Icon, text: &str) -> Row {
+  Row::new()
+    .id(id.to_owned())
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
+    .spacing(ExtraSpacing::Loose.role())
+    .align_items(Alignment::Start)
+    .background(PaletteColor::SurfaceRaised)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(ExtraRadius::Tile.role())
+    .child(icon(glyph, IconSize::Nav, PaletteColor::TextSecondary))
+    .child(
+      Text::new(text)
+        .id(format!("{id}-text"))
+        .variant(ExtraTypography::Prose.role())
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0)),
+    )
 }

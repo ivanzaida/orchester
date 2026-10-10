@@ -21,7 +21,6 @@ mod head;
 mod kept;
 mod limits;
 mod plan;
-mod sections;
 mod state;
 mod unbuilt;
 mod values;
