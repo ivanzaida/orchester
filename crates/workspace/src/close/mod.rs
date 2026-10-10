@@ -1,12 +1,22 @@
 //! Closing the window closes the application (`docs/architecture/storage.md`, "Lifecycle").
 //! Without active work the runner is stopped quietly; with active work the close is held for
 //! a confirmation: wait for agents to save, quit now, or cancel. The window's close hook and the
-//! confirmation's state are each app's; what a close leads to and how the session ends are here.
+//! confirmation's state are each app's; what a close leads to and how the session ends are here,
+//! with the flow that holds a close while the person decides ([`CloseFlow`]).
+
+mod board;
+mod flow;
+mod waiting;
 
 use std::sync::Arc;
 
 use orchester_store::SessionEnd;
 
+pub use self::{
+  board::{Board, RunStands, Stage},
+  flow::{CloseFlow, ClosePhase},
+  waiting::{PersonWait, WaitingTask, waiting_for_person},
+};
 use crate::runner::{ActiveWork, ShutdownOutcome};
 
 /// What a close request leads to.

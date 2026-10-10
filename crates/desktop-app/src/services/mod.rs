@@ -1,6 +1,7 @@
 //! What a started session works with, shared by the window and the app's MCP tools: the workspace and
 //! its projects, the projects' runners, the session's background activity, the programs git work runs,
-//! the clock, the keychain, the shared servers, and what automation changed and is merging or removing.
+//! the clock, the keychain, the shared servers, what automation changed and is merging or removing, and
+//! the window's close flow and the start-up recovery of the runs the previous session left interrupted.
 //! They come from `orchester-workspace`, which the deprecated desktop shares; this app only puts them
 //! together ([`Services::start`]) and hands them to its screens ([`Services::of`]).
 //!
@@ -16,6 +17,8 @@ use orchester_ipc::SessionEnd;
 use orchester_workspace::{
   activity::Activity,
   clock::Clock,
+  close::CloseFlow,
+  recovery::Recovery,
   runner::Runners,
   secrets::Vault,
   session::AppSession,
@@ -54,6 +57,10 @@ pub struct Services {
   pub previous_end: SessionEnd,
   /// When this session started.
   pub session_start: Timestamp,
+  /// What closing the window does with the agents at work.
+  pub close: CloseFlow,
+  /// The runs the previous session left interrupted, and what the person decided for them.
+  pub recovery: Recovery,
 }
 
 /// Services are the session's: two are equal when they share its workspace.
@@ -72,16 +79,27 @@ impl Services {
     let activity = Activity::new();
     let workspace = session.workspace().clone();
     let vault = Vault::keychain();
+    let runners = Runners::new(runner, runtime.clone(), activity.clone(), session.previous_end());
+    let programs = Programs::processes();
+    let jobs = ProjectJobs::default();
+    let recovery = Recovery::start(
+      (workspace.clone(), programs.clone()),
+      session.previous_end(),
+      session.interrupted_since(),
+      &runtime,
+    );
     Self {
-      runners: Runners::new(runner, runtime.clone(), activity.clone(), session.previous_end()),
+      close: CloseFlow::new(runners.clone(), jobs.clone(), runtime.clone()),
+      recovery,
+      runners,
       servers: Servers::new(workspace.clone(), vault.clone()),
       workspace,
       activity,
-      programs: Programs::processes(),
+      programs,
       clock: Clock::system(),
       vault,
       changes: OutsideChanges::default(),
-      jobs: ProjectJobs::default(),
+      jobs,
       hold: ReadHold::default(),
       runtime,
       previous_end: session.previous_end(),

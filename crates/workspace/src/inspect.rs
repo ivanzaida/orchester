@@ -12,6 +12,9 @@ impl DevtoolsInspectable for crate::agents::data::ProfileChange {}
 impl DevtoolsInspectable for crate::agents::data::ProjectAgents {}
 impl DevtoolsInspectable for crate::agents::form::ModelSelection {}
 impl DevtoolsInspectable for crate::clock::Clock {}
+impl DevtoolsInspectable for crate::close::CloseFlow {}
+impl DevtoolsInspectable for crate::close::ClosePhase {}
+impl DevtoolsInspectable for crate::close::WaitingTask {}
 impl DevtoolsInspectable for crate::code_index::IndexList {}
 impl DevtoolsInspectable for crate::code_index::RipgrepCheck {}
 impl DevtoolsInspectable for crate::connections::data::ConnectionDraft {}
@@ -45,6 +48,8 @@ impl DevtoolsInspectable for crate::project_setup::CreateFailure {}
 impl DevtoolsInspectable for crate::pull_requests::Inbox {}
 impl DevtoolsInspectable for crate::pull_requests::detail::Detail {}
 impl DevtoolsInspectable for crate::recovery::InterruptedRun {}
+impl DevtoolsInspectable for crate::recovery::Recovery {}
+impl DevtoolsInspectable for crate::recovery::RecoveryState {}
 impl DevtoolsInspectable for crate::repository::DetectTarget {}
 impl DevtoolsInspectable for crate::runner::ActiveWork {}
 impl DevtoolsInspectable for crate::runner::RunnerStatus {}

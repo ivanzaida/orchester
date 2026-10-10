@@ -9,7 +9,7 @@ use std::{
 };
 
 use orchester_core::{
-  id::TaskId,
+  id::{RunId, TaskId},
   run::{PlanVersion, RunNumber},
 };
 use orchester_ipc::WorkSummary;
@@ -148,6 +148,9 @@ pub(super) struct Shared {
   pub(super) limits: watch::Sender<orchester_core::connection::plan_limits::PlanReadings>,
   /// Each project's run change notifications, kept across its runners.
   pub(super) counters: Mutex<HashMap<PathBuf, RunCounters>>,
+  /// When a runner last reported an event of each run it works on (its agent's activity, a change of
+  /// the run), with the run's project; a run leaves when its runner's work no longer lists it.
+  pub(super) last_events: Mutex<HashMap<RunId, (PathBuf, SystemTime)>>,
   /// Where runner events (a reconnect) are recorded for the status bar.
   pub(super) activity: Activity,
 }
@@ -222,6 +225,14 @@ impl Reporter {
       counters.states.send_modify(|revision| *revision += 1);
       counters.changes.send_modify(|revision| *revision += 1);
     }
+  }
+
+  /// The runner reported an event of `run`: now is when it last did.
+  pub(super) fn event_of(&self, run: RunId) {
+    let Some(root) = self.status.borrow().project_root().map(Path::to_path_buf) else {
+      return;
+    };
+    self.shared.last_events.lock().insert(run, (root, SystemTime::now()));
   }
 
   /// A run's transcript grew: screens showing the transcript read it again.
@@ -344,6 +355,13 @@ impl Reporter {
 
   /// The runner's latest work summary.
   pub(super) fn work(&self, summary: WorkSummary) {
+    if let Some(root) = self.status.borrow().project_root() {
+      self
+        .shared
+        .last_events
+        .lock()
+        .retain(|run, (project, _)| project != root || summary.runs.iter().any(|work| work.run == *run));
+    }
     let summary = Arc::new(summary);
     if self
       .change(|status| {

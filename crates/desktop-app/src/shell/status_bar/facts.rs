@@ -73,7 +73,7 @@ pub struct RunnerFacts {
   pub next_attempt: Option<Instant>,
   /// When its current problem began: the drop, or the failed start.
   pub trouble_since: Option<SystemTime>,
-  /// What it works on, while it is online and has said so.
+  /// What it works on, while it is online or stopping and has said so.
   pub work: Option<WorkSummary>,
   /// Runs whose agents were at work when it dropped, while no runner is back.
   pub interrupted: usize,
@@ -88,7 +88,10 @@ impl RunnerFacts {
     };
     let state = status.state_for(repo_root);
     Self {
-      work: (state == RunnerState::Online).then(|| status.work().cloned()).flatten(),
+      // While the window closes the runner stops at checkpoints, and what it last reported still counts.
+      work: matches!(state, RunnerState::Online | RunnerState::Stopping)
+        .then(|| status.work().cloned())
+        .flatten(),
       next_attempt: status.until(),
       trouble_since: status.trouble_since(),
       interrupted: status.interrupted(),

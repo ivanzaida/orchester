@@ -32,6 +32,6 @@ pub fn install(tree: &mut Tree) {
 }
 
 /// The loader `glyph`, turning about its centre at a constant speed for as long as it is shown.
-pub(super) fn turning(glyph: Text) -> Text {
+pub(crate) fn turning(glyph: Text) -> Text {
   glyph.animation(Animation::new(TURN).duration(LOADER_TURN).linear().infinite())
 }

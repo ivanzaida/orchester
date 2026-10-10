@@ -21,7 +21,7 @@ use tokio::sync::watch;
 
 use super::integration::{IntegrationProblem, merge_in, remove_in};
 use crate::{
-  activity::{Activity, operations},
+  activity::{Activity, OperationSpec, operations},
   messages::{self, Message},
   workspace::OpenProject,
 };
@@ -42,10 +42,22 @@ enum Active {
   Remove,
 }
 
+/// What git does for a run while the window closes: closing waits for it, or the person quits with it
+/// shown (the closing panel). Every value is runtime data.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BusyJob {
+  pub project: Arc<str>,
+  /// What it does, as the status bar says it while it runs ("Merging KON-1 run #1 into main").
+  pub what: Message,
+  pub merge: bool,
+}
+
 /// One run's operations as they stand.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RunJobState {
   active: Active,
+  /// The operation under way, as the closing panel names it.
+  busy_with: Option<BusyJob>,
   pub merge: JobState,
   pub remove: JobState,
   /// The files the last merge conflicted in, for the task page to list; empty unless it stopped at a
@@ -60,6 +72,7 @@ impl Default for RunJobState {
   fn default() -> Self {
     Self {
       active: Active::Idle,
+      busy_with: None,
       merge: JobState::Idle,
       remove: JobState::Idle,
       conflicts: Vec::new(),
@@ -108,13 +121,14 @@ impl ProjectJobState {
   }
 }
 
-/// One project's operations. Clones share state, including across tabs of the project.
+/// One project's operations. Clones share state, including across tabs of the project; every change
+/// also counts in the revision its [`ProjectJobs`] shares.
 #[derive(Clone)]
-pub struct IntegrationJobs(watch::Sender<ProjectJobState>);
+pub struct IntegrationJobs(watch::Sender<ProjectJobState>, watch::Sender<u64>);
 
 impl Default for IntegrationJobs {
   fn default() -> Self {
-    Self(watch::Sender::new(ProjectJobState::default()))
+    Self(watch::Sender::new(ProjectJobState::default()), watch::Sender::new(0))
   }
 }
 
@@ -143,13 +157,24 @@ impl IntegrationJobs {
   /// Records a removal automation made, after it changed what the run left.
   pub fn count_outside_removal(&self) {
     self.0.send_modify(|state| state.removed_outside += 1);
+    self.changed();
+  }
+
+  fn changed(&self) {
+    self.1.send_modify(|revision| *revision += 1);
   }
 }
 
 /// Every project's merge and removal operations, shared by the window's tabs and Orchester's MCP server,
 /// so a removal a tool starts guards the task page's buttons and the other way round.
-#[derive(Clone, Default)]
-pub struct ProjectJobs(Arc<Mutex<HashMap<ProjectId, IntegrationJobs>>>);
+#[derive(Clone)]
+pub struct ProjectJobs(Arc<Mutex<HashMap<ProjectId, IntegrationJobs>>>, watch::Sender<u64>);
+
+impl Default for ProjectJobs {
+  fn default() -> Self {
+    Self(Arc::default(), watch::Sender::new(0))
+  }
+}
 
 impl PartialEq for ProjectJobs {
   fn eq(&self, other: &Self) -> bool {
@@ -160,7 +185,35 @@ impl PartialEq for ProjectJobs {
 impl ProjectJobs {
   /// The operations of `project`, made the first time they are asked for.
   pub fn of(&self, project: ProjectId) -> IntegrationJobs {
-    self.0.lock().entry(project).or_default().clone()
+    let revision = self.1.clone();
+    self
+      .0
+      .lock()
+      .entry(project)
+      .or_insert_with(|| IntegrationJobs(watch::Sender::new(ProjectJobState::default()), revision))
+      .clone()
+  }
+
+  /// Changes whenever an operation of any project changes.
+  pub fn changes(&self) -> watch::Receiver<u64> {
+    self.1.subscribe()
+  }
+
+  /// The merges and worktree removals under way in every project.
+  pub fn busy(&self) -> Vec<BusyJob> {
+    let projects: Vec<IntegrationJobs> = self.0.lock().values().cloned().collect();
+    projects
+      .iter()
+      .flat_map(|jobs| {
+        jobs
+          .0
+          .borrow()
+          .runs
+          .values()
+          .filter_map(|run| run.busy_with.clone())
+          .collect::<Vec<_>>()
+      })
+      .collect()
   }
 }
 
@@ -185,6 +238,7 @@ impl RunJobs {
       .jobs
       .0
       .send_modify(|state| change(state.runs.entry(self.run).or_default()));
+    self.jobs.changed();
   }
 
   fn begin(&self, operation: Active) -> bool {
@@ -213,7 +267,20 @@ impl RunJobs {
   }
 
   fn finish(&self) {
-    self.update(|state| state.active = Active::Idle);
+    self.update(|state| {
+      state.active = Active::Idle;
+      state.busy_with = None;
+    });
+  }
+
+  /// Names the operation that began, `what` it does, for the closing panel.
+  fn name(&self, open: &OpenProject, what: &OperationSpec, merge: bool) {
+    let busy = BusyJob {
+      project: open.project.name().as_str().into(),
+      what: what.running().clone(),
+      merge,
+    };
+    self.update(|state| state.busy_with = Some(busy));
   }
 
   /// Starts merging the run on a thread of its own; whether it began, which it does not while another
@@ -227,6 +294,8 @@ impl RunJobs {
       state.conflicts.clear();
       state.merged = None;
     });
+    let what = operations::run_merge(&args.open, args.task, (&args.key, args.number), &args.branch);
+    self.name(&args.open, &what, true);
     let job = self.clone();
     if let Err(error) = thread::Builder::new()
       .name("run-merge".into())
@@ -298,6 +367,8 @@ impl RunJobs {
     if !self.begin(Active::Remove) {
       return;
     }
+    let what = operations::run_cleanup(&args.open, args.task, (&args.key, args.number));
+    self.name(&args.open, &what, false);
     let automation = match &args.by {
       Remover::Person(_) => {
         self.update(|state| state.remove = JobState::Running);

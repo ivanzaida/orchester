@@ -27,7 +27,7 @@ use lurq::{
     layout_kind::{Justify, ScrollState},
     scrollbar::ScrollBarStyle,
   },
-  node::{CursorIcon, Element, Style, dimension::Dimension, padding::Padding},
+  node::{CursorIcon, Element, HitTestBehavior, Style, dimension::Dimension, padding::Padding},
 };
 use parking_lot::Mutex;
 
@@ -40,7 +40,7 @@ use crate::{
   project::Projects,
   routes::{ProjectPage, Route},
   shell::needs_you::{self, Attention, count_words},
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
+  theme::{CLOSING_TABS_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon, screen_icon},
     pressable::pressable,
@@ -82,8 +82,18 @@ impl PartialEq for PillRef {
 
 impl DevtoolsInspectable for PillRef {}
 
+/// The strip's props: the pill's room, and whether the closing panel holds the window, when the tabs stay
+/// in place, dimmed, and do not react (`Tabs` `L7gRf` in `u3Fw36`).
+#[derive(Clone, PartialEq)]
+pub struct TabStripProps {
+  pub pill: PillRef,
+  pub closing: bool,
+}
+
+impl DevtoolsInspectable for TabStripProps {}
+
 impl Component for TabStrip {
-  type Props = PillRef;
+  type Props = TabStripProps;
 
   fn create(_ctx: &mut Ctx) -> Self {
     Self {
@@ -109,11 +119,18 @@ impl Component for TabStrip {
       |strip, tab| strip.child(tab_button(ctx, &navigation, &projects, &tabs, tab, fit)),
     );
     let wheel = self.scroll.clone();
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::new().left(SpacingSize::Sm))
+    let closing = ctx.props::<TabStripProps>().closing;
+    let tabs = Row::new()
+      .flex_shrink(1.0)
+      .min_width(Dimension::Px(0.0))
       .spacing(ExtraSpacing::Tight.role())
       .align_items(Alignment::Center)
+      .opacity(if closing { CLOSING_TABS_OPACITY } else { 1.0 })
+      .hit_test(if closing {
+        HitTestBehavior::None
+      } else {
+        HitTestBehavior::Auto
+      })
       .child(
         ScrollHorizontal::new(strip)
           .id("tab-scroll")
@@ -128,7 +145,13 @@ impl Component for TabStrip {
             }
           }),
       )
-      .child(new_tab(ctx, navigation))
+      .child(new_tab(ctx, navigation));
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .padding(Padding::new().left(SpacingSize::Sm))
+      .spacing(ExtraSpacing::Tight.role())
+      .align_items(Alignment::Center)
+      .child(tabs)
       // The drag area: the 48 that always stay, then whatever the tabs leave.
       .child(
         Row::new()
@@ -146,7 +169,7 @@ fn pill_width(ctx: &mut Ctx, projects: &Projects, tabs: &TabSet) -> f32 {
   if needs_you::waiting(projects, tabs).is_empty() {
     return 0.0;
   }
-  let pill = &ctx.props::<PillRef>().0;
+  let pill = &ctx.props::<TabStripProps>().pill.0;
   if pill.is_attached() && pill.width() > 0.0 {
     pill.width()
   } else {

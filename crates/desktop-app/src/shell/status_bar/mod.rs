@@ -47,7 +47,7 @@ use crate::{
 };
 
 /// `Status bar` height.
-const STATUS_BAR_HEIGHT: f32 = 28.0;
+pub const STATUS_BAR_HEIGHT: f32 = 28.0;
 
 /// The window's status bar.
 pub struct StatusBar {

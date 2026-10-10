@@ -266,6 +266,10 @@ impl Workspace {
     self.db.lock().start_session(std::process::id(), now)
   }
 
+  pub(crate) fn session_started_before(&self, session: SessionId) -> Result<Option<Timestamp>, StoreError> {
+    self.db.lock().session_started_before(session)
+  }
+
   pub(crate) fn end_session(&self, session: SessionId, end: SessionEnd) -> Result<(), StoreError> {
     self.db.lock().end_session(session, end, Timestamp::now())
   }

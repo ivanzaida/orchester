@@ -229,7 +229,7 @@ fn run_row(ctx: &Ctx, run: &InterruptedRun, props: &RecoveryDialogProps) -> Elem
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(
-      Text::new(&run.task_key)
+      Text::new(&run.task_key.to_string())
         .variant(TypographyStyle::Mono)
         .color(PaletteColor::TextSecondary),
     )

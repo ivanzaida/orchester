@@ -436,7 +436,8 @@ impl Session {
         self.pending.answer(id, reply);
         true
       }
-      Some(Ok(Some(Event::RunChanged { task, .. }))) => {
+      Some(Ok(Some(Event::RunChanged { run, task }))) => {
+        reporter.event_of(run);
         reporter.run_changed();
         reporter.task_run_changed(task);
         true
@@ -449,7 +450,8 @@ impl Session {
         reporter.run_changed();
         true
       }
-      Some(Ok(Some(Event::AgentActivity { .. }))) => {
+      Some(Ok(Some(Event::AgentActivity { run, .. }))) => {
+        reporter.event_of(run);
         reporter.transcript_grew();
         true
       }

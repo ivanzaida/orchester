@@ -133,10 +133,11 @@ impl Launch {
     self.running.as_ref().map(|running| &running.services)
   }
 
-  /// Ends the session quietly once the window closed. Its lock says it is closing; the shared servers'
-  /// monitor and sync stop; every runner is asked to stop at a checkpoint, waiting at most
-  /// [`QUIET_STOP_TIMEOUT`] for each; the services go; and how the session ended is recorded, which
-  /// lets go of the data folder last. Without a session there is nothing to end.
+  /// Ends the session once the window closed. Its lock says it is closing; the shared servers' monitor
+  /// and sync stop; the close flow has stopped the runners as the person chose (otherwise every runner
+  /// is asked to stop at a checkpoint, waiting at most [`QUIET_STOP_TIMEOUT`] for each); the services
+  /// go; and how the session ended is recorded, which lets go of the data folder last. Without a
+  /// session there is nothing to end.
   pub fn end(self) {
     let Some(Running {
       mut session,
@@ -148,11 +149,14 @@ impl Launch {
     };
     session.mark_closing();
     drop(background);
-    let runtime = services.runtime.clone();
-    let outcome = runtime.block_on(services.runners.shutdown(Some(QUIET_STOP_TIMEOUT)));
+    let end = services.close.session_end().unwrap_or_else(|| {
+      let outcome = services
+        .runtime
+        .block_on(services.runners.shutdown(Some(QUIET_STOP_TIMEOUT)));
+      session_end(CloseKind::Quiet, outcome)
+    });
     drop(services);
-    let end = session_end(CloseKind::Quiet, outcome);
-    tracing::info!(?outcome, ?end, "the session ends");
+    tracing::info!(?end, "the session ends");
     if let Err(error) = session.end(end) {
       tracing::error!(%error, "cannot record the end of the session");
     }

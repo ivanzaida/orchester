@@ -82,6 +82,8 @@ pub struct AppSession {
   id: SessionId,
   started_at: Timestamp,
   previous: PreviousSession,
+  /// When the previous session started, if there was one.
+  previous_started_at: Option<Timestamp>,
   /// Held until the session ends; dropped after the end is recorded.
   lock: AppLock,
 }
@@ -105,6 +107,7 @@ impl AppSession {
     };
     let workspace = Workspace::new(AppDb::open(path).map_err(database_error)?);
     let (id, previous) = workspace.start_session(started_at).map_err(database_error)?;
+    let previous_started_at = workspace.session_started_before(id).map_err(database_error)?;
     if matches!(
       previous,
       PreviousSession::Crashed | PreviousSession::Ended(SessionEnd::QuitNow)
@@ -116,6 +119,7 @@ impl AppSession {
       id,
       started_at,
       previous,
+      previous_started_at,
       lock,
     })
   }
@@ -128,6 +132,14 @@ impl AppSession {
   /// cut off by the previous session's end.
   pub fn started_at(&self) -> Timestamp {
     self.started_at
+  }
+
+  /// Since when the runs the previous session left interrupted were stopped: its start. A runner can
+  /// record its runs as interrupted before this session starts (on macOS it ends them itself when its
+  /// app quits or goes away), so the recovery looks from there. This session's start when there was
+  /// none before.
+  pub fn interrupted_since(&self) -> Timestamp {
+    self.previous_started_at.unwrap_or(self.started_at)
   }
 
   /// How the previous session ended: after Quit now or a crash, runs it left at work are

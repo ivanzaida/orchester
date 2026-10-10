@@ -197,6 +197,19 @@ impl AppDb {
     Ok((session, previous))
   }
 
+  /// When the session before `session` started; `None` for the first session.
+  pub fn session_started_before(&self, session: SessionId) -> Result<Option<Timestamp>, StoreError> {
+    let started: Option<i64> = self
+      .connection
+      .query_row(
+        "SELECT started_at FROM sessions WHERE id < ?1 ORDER BY id DESC LIMIT 1",
+        [session.0],
+        |row| row.get(0),
+      )
+      .optional()?;
+    Ok(started.map(Timestamp::from_unix_millis))
+  }
+
   /// The window state stored under `key`; `None` when nothing was stored.
   pub fn ui_state(&self, key: &str) -> Result<Option<String>, StoreError> {
     Ok(
