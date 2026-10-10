@@ -119,6 +119,30 @@ impl Page {
     self.window.pass();
   }
 
+  /// Presses and releases `key` with no modifier.
+  fn key(&mut self, key: &str) {
+    let tree = &mut self.window.tree;
+    tree.key_down_with_meta(key.to_owned(), key.to_owned(), false, false, false, false);
+    tree.key_up_with_meta(key.to_owned(), key.to_owned(), false, false, false, false);
+    self.window.pass();
+  }
+
+  /// The colors the text `text` is painted in, as the last layout paints it.
+  fn painted_all(&self, text: &str) -> Vec<Color> {
+    self
+      .window
+      .tree
+      .painted_quads()
+      .into_iter()
+      .filter_map(|quad| match quad.content {
+        QuadContent::Text {
+          text: painted, style, ..
+        } if painted == text => Some(style.color),
+        _ => None,
+      })
+      .collect()
+  }
+
   /// The color the text `text` is painted in, as the last layout paints it.
   fn painted(&self, text: &str) -> Option<Color> {
     self
@@ -199,13 +223,13 @@ fn changes_lists_both_groups_with_counts_line_numbers_and_a_chosen_file() {
     "an added file has no removed count: {row:?}"
   );
   // The first file of the checkpointed group, in git's order, shows: an added migration, its lines
-  // numbered on the new side only, its long path cut in the middle so its name stays.
+  // numbered on the new side only, its long path cut near its middle as the design cuts it.
   let line = page.texts("changes-diff-line");
   assert_eq!(line[..2], ["1", "+"], "no old number, new number 1: {line:?}");
   let migration = page
     .texts("changes-file:migrations/0042_delivery_attempts.sql-path")
     .concat();
-  assert!(migration.ends_with("…0042_delivery_attempts.sql"), "{migration}");
+  assert_eq!(migration, "migrations/0042_de…_attempts.sql");
   // Choosing a worktree file puts it in the path, in place of the current entry.
   page.click("changes-worktree-file:src/webhooks/log.rs");
   page.window.until("the worktree file", |window| {
@@ -222,6 +246,26 @@ fn changes_lists_both_groups_with_counts_line_numbers_and_a_chosen_file() {
     ("src/webhooks/log.rs", ChangeSource::Worktree)
   );
   assert_eq!(page.texts("changes-diff-path"), ["src/webhooks/log.rs"]);
+  // Leaving the tab and opening it again opens the file it showed.
+  page.click("task-tab-summary");
+  page.wait_for("task-summary");
+  page.click("task-tab-changes");
+  page.wait_for("changes-diff-path");
+  assert_eq!(page.texts("changes-diff-path"), ["src/webhooks/log.rs"]);
+  // ArrowDown and ArrowUp choose the next and the previous file of the list.
+  page.key("ArrowDown");
+  page.window.until("the next file", |window| {
+    window
+      .texts("changes-diff-path")
+      .is_some_and(|texts| texts == ["tests/webhooks/jitter.rs"])
+  });
+  page.key("ArrowUp");
+  page.key("ArrowUp");
+  page.window.until("two files up", |window| {
+    window
+      .texts("changes-diff-path")
+      .is_some_and(|texts| texts == ["tests/webhooks/retry.rs"])
+  });
 }
 
 #[test]
@@ -251,7 +295,7 @@ fn changes_paints_keywords_and_numbers_and_leaves_operators_plain() {
     "a number in code_number"
   );
   let plain = page.tokens("code-plain");
-  for operator in [" = ", "+=", "&&", "=>"] {
+  for operator in [" = ", "+=", "&&", "=>", "Ok("] {
     let token = plain
       .iter()
       .find(|text| text.contains(operator))

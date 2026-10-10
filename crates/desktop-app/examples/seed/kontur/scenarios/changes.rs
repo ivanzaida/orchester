@@ -3,8 +3,8 @@
 //! new), KON-16 before its first checkpoint with a clean worktree, KON-9 ready for review with its worktree,
 //! and KON-1 merged with its worktree removed. Added here: KON-25 whose checkpoint is too large to show,
 //! KON-26 whose uncommitted work is, KON-27 with uncommitted work and no checkpoint, one of its lines too
-//! long to show whole, and KON-28 whose worktree changed a checkpointed file again, so the file is in both
-//! groups and counts once.
+//! long to show whole, and KON-28 whose worktree changed checkpointed files again (one by removing a line), so
+//! they are in both groups and count once.
 
 use orchester_core::task::organization::{Priority, WorkflowStatus};
 
@@ -63,7 +63,13 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     drive
       .checkpoint(
         "implement",
-        &[("src/webhooks/attempts.rs", "pub struct Attempt;\n".to_owned())],
+        &[
+          ("src/webhooks/attempts.rs", "pub struct Attempt;\n".to_owned()),
+          (
+            "src/webhooks/retries.rs",
+            "pub const RETRIES: u32 = 3;\npub const DELAY_MS: u64 = 250;\n".to_owned(),
+          ),
+        ],
       )?
       .uncommitted(&[
         (
@@ -71,6 +77,8 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
           "pub struct Attempt {\n  pub number: u32,\n}\n".to_owned(),
         ),
         ("src/webhooks/attempts_log.rs", "pub fn record() {}\n".to_owned()),
+        // A line removed and none added: the file's only count is its removed lines.
+        ("src/webhooks/retries.rs", "pub const RETRIES: u32 = 3;\n".to_owned()),
       ])?;
     Ok(())
   })

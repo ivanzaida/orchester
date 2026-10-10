@@ -3,6 +3,7 @@
 
 use std::fs;
 
+use lurq::node::color::Color;
 use orchester_app::routes::ChangeSource;
 
 use super::Page;
@@ -40,9 +41,18 @@ fn changes_states_no_checkpoint_too_large_removed_and_line_shortened() {
   assert!(!page.shows("changes-group-worktree"));
 
   page.changes("KON-28", "changes-group-worktree");
-  assert_eq!(page.texts("changes-group-checkpointed")[1], "1");
-  assert_eq!(page.texts("changes-group-worktree")[1], "2");
-  assert_eq!(page.tab_label(), "Changes 2", "a file in both groups counts once");
+  assert_eq!(page.texts("changes-group-checkpointed")[1], "2");
+  assert_eq!(page.texts("changes-group-worktree")[1], "3");
+  assert_eq!(page.tab_label(), "Changes 3", "a file in both groups counts once");
+  // A file with removed lines only has its removed count alone, in `danger`.
+  let retries = page.texts("changes-worktree-file:src/webhooks/retries.rs");
+  assert_eq!(retries[2..], ["−1"], "{retries:?}");
+  let removed = page.painted_all("−1");
+  assert!(!removed.is_empty());
+  assert!(
+    removed.iter().all(|color| *color == Color::from_hex("#F0605A")),
+    "{removed:?}"
+  );
 
   page.open_file("KON-27", "src/webhooks/format.rs", ChangeSource::Worktree);
   page.wait_for("changes-line-cut");
@@ -108,4 +118,31 @@ fn changes_that_cannot_be_read_say_why_until_try_again() {
   page.wait_for("changes-group-checkpointed");
   page.wait_for("changes-group-worktree");
   assert_eq!(page.tab_label(), "Changes 6");
+}
+
+#[test]
+fn changes_of_an_unreadable_run_a_missing_worktree_and_a_run_without_checkpoint() {
+  let mut page = Page::open();
+  page.changes("KON-24", "changes-unreadable");
+  let card = page.texts("changes-unreadable").concat();
+  assert!(card.contains("Summary lists the task’s runs"), "{card}");
+  assert!(!page.shows("changes-no-run"));
+
+  // A run that has not ended without its worktree: an error, not a clean worktree.
+  let worktree = page.worktree("KON-16");
+  let away = worktree.with_extension("away");
+  fs::rename(&worktree, &away).expect("move the worktree away");
+  page.changes("KON-16", "changes-notice");
+  let notice = page.texts("changes-notice").concat();
+  assert!(notice.contains("worktree is missing"), "{notice}");
+  assert!(!page.shows("changes-no-checkpoint"));
+  fs::rename(&away, &worktree).expect("bring the worktree back");
+
+  // Without a checkpoint, a worktree that cannot be read does not speak of checkpointed files.
+  let worktree = page.worktree("KON-27");
+  fs::write(worktree.join(".git"), "gitdir: missing\n").expect("break the worktree's link");
+  page.changes("KON-27", "changes-notice");
+  let notice = page.texts("changes-notice").concat();
+  assert!(notice.contains("has no checkpoint yet"), "{notice}");
+  assert!(!notice.contains("checkpointed files still show"), "{notice}");
 }
