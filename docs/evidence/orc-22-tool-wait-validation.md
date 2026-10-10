@@ -1,12 +1,16 @@
 # ORC-22 implementation validation
 
-2026-10-11. Saved candidate: branch `orchester/orc-22-run-1`, based on
-`c263258d145eb22c167bda6a702e6e2cf35a6615`, with the uncommitted ORC-22
-implementation, fake-cell harness and regression tests. No commit was made.
-The latest results below cover the current Rust changes, including the
-deterministic result-before-turn-completion synchronization, distinct
-continuation request IDs, and the added core protocol regression. Subsequent
-Rust changes invalidate these results.
+2026-10-11. Final saved candidate: branch `orchester/orc-22-run-1`.
+Orchester checkpointed the implementation, fake-cell harness, tests and initial
+evidence in `febfd82989e4abbe62ea3cd61fde9ee947fed778`, originally based on
+`c263258d145eb22c167bda6a702e6e2cf35a6615`. The implementing agent made no commit.
+The completed candidate adds the person-approved `tools/check.ps1` change and
+updates this report and the plan. No Rust or test input changed after the
+checkpoint, so the 41 passing filtered tests below remain valid for it.
+They include deterministic result-before-turn-completion synchronization,
+distinct continuation request IDs and the added core protocol regression.
+The fresh successful gate result covers the final saved script. Subsequent
+Rust changes invalidate the test results; gate changes require a fresh gate.
 
 ## Reproduction and behavior
 
@@ -48,8 +52,8 @@ the current 8-test result above supersedes those intermediate results.
 
 | Command | Current result |
 | --- | --- |
-| `powershell -File tools/check.ps1` | Exit 1: Windows error 206 from `cargo +nightly fmt --all -- --check`. Workspace clippy, source size and UI literal checks pass. |
-| `cargo +nightly fmt --all -- --check` | Windows error 206: command line too long in this worktree. A short drive alias canonicalized back to the long path and did not repair it. |
+| `powershell -File tools/check.ps1` | Fresh exit 0, `check: OK`: formatting of all 13 workspace packages, full-workspace clippy, source size and UI literal checks pass with the approved per-package fix. |
+| `cargo +nightly fmt --all -- --check` | Earlier diagnostic, before the gate change: Windows error 206, command line too long. A short drive alias canonicalized back to the long path and did not repair it. |
 | `cargo +nightly fmt -p orchester-core -p orchester-runner -- --check` | Exit 0 |
 | Per-workspace-package `cargo +nightly fmt --package <name> -- --check`, using `cargo metadata --no-deps --format-version 1` | Exit 0 for all 13 workspace packages |
 | `cargo clippy -p orchester-core -p orchester-runner --all-targets --all-features -- -D warnings` | Exit 0; the later full-workspace clippy within check.ps1 also passed on the current Rust changes |
@@ -77,9 +81,13 @@ foreach ($fmtPackage in $fmtMetadata.packages) {
 if ($fmtFailed) { exit 1 }
 ```
 
-The gate remains unchanged. Approval was requested to make it perform those
-same checks per package, because AGENTS.md forbids changes outside the requested
-scope without approval. ORC-22 is not marked done while check.ps1 fails.
+The person explicitly approved the per-package gate fix as its own small change
+within this task. `tools/check.ps1` now obtains workspace package names through
+Cargo metadata and checks formatting separately for each package, retaining
+nightly-only formatting options and failure handling. Its fresh run exits 0.
+Earlier gate runs failed with Windows error 206; these are retained as pre-change
+evidence and are not the verdict on the final script. ORC-22 is now recorded in
+the plan's Done list.
 
 Scratch prerequisite commands: `cargo install ripgrep --locked --root .tmp/orc-22/tools --target-dir .tmp/orc-22/tools-target`
 initially failed with schannel NoCredentials; setting

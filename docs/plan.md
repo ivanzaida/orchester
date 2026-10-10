@@ -768,6 +768,23 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-22 · Codex ends its turn while an Orchester tool call waits for the person
+(`orchester/orc-22-run-1`, implemented 2026-10-11, awaiting review).
+
+The runner keeps the process and relay alive across a model turn's completion
+while an Orchester call waits, then collects its result in the same thread,
+invocation and attempt. Pause, cancel, runner loss and shutdown preserve the
+attempt and interrupt the decision without granting it. The fake reproduces the
+pre-fix failure; eight tests cover delayed approval/denial, result ordering,
+late turn-start replies and stops. Claude's existing approval tests pass.
+Cause: `docs/interactive-tool-approvals.md`, ORC-22 section.
+The person approved a separate small `tools/check.ps1` change to check formatting
+per workspace package, avoiding Windows error 206 in long run worktree paths.
+Validation: 41 filtered tests pass and `powershell -File tools/check.ps1` passes;
+commands, input revisions and limitations: `docs/evidence/orc-22-tool-wait-validation.md`.
+No signed-in live agent run or UI change; the runner's macOS cross-check remains
+blocked by the environment's missing C compiler.
+
 New app, first working set (merged 2026-10-09/10 into master; each reviewed, QA'd live and design-verified by
 separate agents): T1 Tasks list (`claude/app-tasks`), F2 shell live data (`claude/app-shell`), P1 task page and Summary
 (`claude/app-task-page`), N1 New/Edit task with the per-field conflict chooser (`claude/app-task-form`), P2 Summary
