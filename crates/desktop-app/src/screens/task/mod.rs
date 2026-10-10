@@ -11,6 +11,7 @@
 //! repository is read beside it, for *Remove worktree* and Run again.
 
 mod cards;
+mod changes;
 mod context;
 mod conversation;
 mod header;
@@ -32,11 +33,11 @@ use orchester_workspace::{messages::Message, runner::state::RunnerState};
 
 pub use self::context::TaskContext;
 use self::{
+  changes::{ChangesReads, FileCount, Follow},
   header::{HeaderProps, TaskHeader},
   read::{ReadAgain, TaskRead},
   summary::{SummaryProps, TaskSummary},
 };
-use super::placeholder::centered;
 use crate::{
   navigation::Navigation,
   project::{ShownProject, TasksState},
@@ -231,6 +232,8 @@ impl PageState {
 /// One task's frame and its current tab.
 struct TaskFrame {
   retries: Signal<u64>,
+  /// The Changes tab's reads, for its count in the page tabs and the tab itself.
+  changes: ChangesReads,
   /// Why the task could not be read again, kept while it is read again until a reading succeeds.
   stale: Signal<StaleRead>,
   state: PageState,
@@ -247,6 +250,7 @@ impl Component for TaskFrame {
     Self {
       composer,
       retries: ctx.signal(0),
+      changes: ChangesReads::new(ctx),
       stale: ctx.signal(StaleRead(None)),
       state: PageState {
         removal: ctx.signal(Removal::closed()),
@@ -262,6 +266,7 @@ impl Component for TaskFrame {
     self.composer.keep(ctx);
     ctx.provide(self.composer.clone());
     ctx.provide(self.state.clone());
+    ctx.provide(self.changes.clone());
     let feed = &props.project.feed;
     let saves = feed.revision.get() + feed.outside.get().tasks;
     let again = ReadAgain {
@@ -288,6 +293,8 @@ impl Component for TaskFrame {
       .status
       .get()
       .is_some_and(|status| status.state_for(&root) == RunnerState::Online);
+    let follow = Follow::of(&detail, online, props.tab);
+    self.changes.read(ctx, &root, &detail, follow);
     let task = TaskContext {
       project: props.project.clone(),
       key: props.key.clone(),
@@ -343,24 +350,13 @@ fn conversation_tab(ctx: &mut Ctx, task: &TaskContext) -> Element {
   conversation::tab(ctx, task)
 }
 
-/// The Changes tab's mount point: its file list and diff (D1) mount here with one line. Until then the
-/// tab says it is not built.
-fn changes_tab(ctx: &mut Ctx, _task: &TaskContext) -> Element {
-  tab_not_built(ctx, "task-changes", Icon::FileDiff, TaskTab::Changes)
+/// The Changes tab's mount point: its file list and diff (`changes`).
+fn changes_tab(ctx: &mut Ctx, task: &TaskContext) -> Element {
+  changes::tab(ctx, task)
 }
 
-/// How many files the Changes tab lists, for its label (`Changes 4`); the Changes tab (D1) reads it
-/// here with one line. `None` while it is not known: the label is the tab's name alone.
-pub fn changes_count(_ctx: &mut Ctx, _task: &TaskContext) -> Option<usize> {
-  None
-}
-
-fn tab_not_built(ctx: &Ctx, id: &str, glyph: Icon, tab: TaskTab) -> Element {
-  let title = ctx.t(tab.title_key());
-  let body = ctx.t("task.page.tabNotBuilt");
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .flex(1.0)
-    .child(centered(glyph, &title, &body).id(id.to_owned()))
-    .into()
+/// How many files the Changes tab lists, for its label (`Changes 4`, `Changes 4+` while its worktree's
+/// files are not known); `None` while it is not known: the label is the tab's name alone.
+pub fn changes_count(ctx: &mut Ctx, _task: &TaskContext) -> Option<FileCount> {
+  changes::count(ctx)
 }

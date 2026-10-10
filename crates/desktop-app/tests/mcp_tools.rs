@@ -87,10 +87,13 @@ fn navigate_takes_the_active_tab_to_a_named_route() {
     "params": { "project": PROJECT, "key": "KON-12", "tab": "summary" },
   });
   assert_eq!(answer, json!({ "route": route }));
-  window.until("the project to open", |window| window.texts("screen-task").is_some());
+  // The project has no tasks: once its tasks are read, the task's page says KON-12 is not there.
+  window.until("the task to be looked up", |window| {
+    window.texts("task-not-found-title").is_some()
+  });
   assert_eq!(
-    window.texts("screen-task").map(|texts| texts[0].clone()),
-    Some("KON-12 · Summary".to_owned())
+    window.texts("task-not-found-title"),
+    Some(vec!["No task KON-12 in Kontur".to_owned()])
   );
   let appearance = Appearance::new(ThemeSetting::Dark, Arc::default(), None);
   let state = |window: &mut Window| {

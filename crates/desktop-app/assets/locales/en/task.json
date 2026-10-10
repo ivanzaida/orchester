@@ -15,8 +15,7 @@
       "loadFailed": "The task couldn't be read",
       "notFound": "No task {{task}} in {{project}}",
       "notFoundBody": "It may have been deleted, or its key changed. The task list shows the project's tasks.",
-      "toTasks": "Open the task list",
-      "tabNotBuilt": "This tab isn't built yet."
+      "toTasks": "Open the task list"
     },
     "crumbs": {
       "tasks": "Tasks"

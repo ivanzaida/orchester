@@ -10,6 +10,7 @@
 //! that need them come next and must find them here rather than add near-duplicates.
 
 mod cards;
+mod code;
 mod composer;
 mod conversation;
 mod decisions;
@@ -36,6 +37,7 @@ use lurq::{
 
 pub use self::{
   cards::{CardsSpacing, CardsText},
+  code::{CodeText, token_color},
   composer::{ComposerColor, ComposerRadius, ComposerText},
   conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText},
   decisions::{DecisionSpacing, DecisionText},

@@ -187,6 +187,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::task::typography(palette))
       .chain(super::decisions::typography(palette))
       .chain(super::shell::typography(palette))
+      .chain(super::code::typography(palette))
       .chain(super::task_form::typography(palette))
       .chain(super::conversation::typography(palette))
       .chain(super::composer::typography(palette))

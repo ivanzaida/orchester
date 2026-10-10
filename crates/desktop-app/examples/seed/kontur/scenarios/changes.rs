@@ -2,8 +2,9 @@
 //! form. From `tasks`: KON-12's checkpoint (4 files) and the work in its worktree since (2 files, one of them
 //! new), KON-16 before its first checkpoint with a clean worktree, KON-9 ready for review with its worktree,
 //! and KON-1 merged with its worktree removed. Added here: KON-25 whose checkpoint is too large to show,
-//! KON-26 whose uncommitted work is, and KON-27 with uncommitted work and no checkpoint, one of its lines
-//! too long to show whole.
+//! KON-26 whose uncommitted work is, KON-27 with uncommitted work and no checkpoint, one of its lines too
+//! long to show whole, and KON-28 whose worktree changed checkpointed files again (one by removing a line), so
+//! they are in both groups and count once.
 
 use orchester_core::task::organization::{Priority, WorkflowStatus};
 
@@ -12,6 +13,9 @@ use crate::kontur::{Kontur, SeedError, catalogue::Published, run::Drive};
 
 /// One line past the most lines Orchester shows of a diff (`orchester_core::diff::MAX_DIFF_LINES`).
 const TOO_MANY_LINES: usize = 20_001;
+/// Repeats of a 61-character sentence in a line longer than Orchester shows whole
+/// (`orchester_core::diff::MAX_LINE_CHARS`, 1,000).
+const LONG_LINE_REPEATS: usize = 20;
 const CRITERIA: [&str; 1] = ["The change is covered by tests."];
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
@@ -38,7 +42,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   })?;
   let long_line = format!(
     "// {}\n",
-    "Each attempt is logged with its status, delay and endpoint. ".repeat(8)
+    "Each attempt is logged with its status, delay and endpoint. ".repeat(LONG_LINE_REPEATS)
   );
   let log = (
     "Format the delivery log",
@@ -52,6 +56,30 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
         "pub mod format;\npub mod log;\npub mod sender;\npub mod settings;\n".to_owned(),
       ),
     ])?;
+    Ok(())
+  })?;
+  let again = ("Log every delivery attempt", "a checkpointed file changed again");
+  variant(kontur, feature, again, |drive| {
+    drive
+      .checkpoint(
+        "implement",
+        &[
+          ("src/webhooks/attempts.rs", "pub struct Attempt;\n".to_owned()),
+          (
+            "src/webhooks/retries.rs",
+            "pub const RETRIES: u32 = 3;\npub const DELAY_MS: u64 = 250;\n".to_owned(),
+          ),
+        ],
+      )?
+      .uncommitted(&[
+        (
+          "src/webhooks/attempts.rs",
+          "pub struct Attempt {\n  pub number: u32,\n}\n".to_owned(),
+        ),
+        ("src/webhooks/attempts_log.rs", "pub fn record() {}\n".to_owned()),
+        // A line removed and none added: the file's only count is its removed lines.
+        ("src/webhooks/retries.rs", "pub const RETRIES: u32 = 3;\n".to_owned()),
+      ])?;
     Ok(())
   })
 }

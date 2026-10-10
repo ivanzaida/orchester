@@ -19,7 +19,6 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::project::TaskKey;
 use orchester_workspace::{messages::Message, tasks::run_again::RunAgainCheck};
 
 use self::{
@@ -38,7 +37,7 @@ use crate::{
   theme::ExtraSpacing,
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
-    tabs::{PageTab, counted, page_tabs},
+    tabs::{PageTab, page_tabs},
   },
 };
 
@@ -180,14 +179,6 @@ impl TaskHeader {
   }
 }
 
-fn task_route(props: &HeaderProps, tab: TaskTab) -> Route {
-  let key: TaskKey = props.task.detail.task.key().clone();
-  Route::Project(
-    props.task.project.open.project.id(),
-    ProjectPage::Task(key, TaskView::of(tab)),
-  )
-}
-
 fn crumbs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
   let navigation = Navigation::of(ctx);
   let project = props.task.project.open.project.id();
@@ -228,18 +219,28 @@ fn removal(ctx: &mut Ctx, props: &HeaderProps) -> Option<Element> {
 /// which are not built yet.
 fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
   let navigation = Navigation::of(ctx);
+  let changes_reads = super::changes::ChangesReads::of(ctx);
+  let (project, key) = (
+    props.task.project.open.project.id(),
+    props.task.detail.task.key().clone(),
+  );
+  // Changes opens on the file it showed last.
   let open = |tab: TaskTab| {
-    let (navigation, route) = (navigation.clone(), task_route(props, tab));
-    move || navigation.go(route.clone())
+    let (navigation, changes_reads, key) = (navigation.clone(), changes_reads.clone(), key.clone());
+    move || {
+      let view = match tab {
+        TaskTab::Changes => TaskView::Changes(changes_reads.shown_file()),
+        TaskTab::Summary | TaskTab::Conversation => TaskView::of(tab),
+      };
+      navigation.go(Route::Project(project, ProjectPage::Task(key.clone(), view)));
+    }
   };
   let tab = |tab: TaskTab, label: Arc<str>| {
     PageTab::new(format!("task-tab-{}", tab.name()), label, props.tab == tab, open(tab))
   };
   let changes = ctx.t(TaskTab::Changes.title_key());
-  let changes = match super::changes_count(ctx, &props.task) {
-    Some(count) => counted(ctx, &changes, count),
-    None => changes,
-  };
+  let count = super::changes_count(ctx, &props.task);
+  let changes = super::changes::tab_label(ctx, &changes, count);
   let tabs = [
     tab(TaskTab::Summary, ctx.t(TaskTab::Summary.title_key())),
     tab(TaskTab::Conversation, ctx.t(TaskTab::Conversation.title_key())),

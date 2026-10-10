@@ -65,6 +65,8 @@ pub struct Notice {
   id: Arc<str>,
   tone: NoticeTone,
   icon: Icon,
+  /// The icon's color where it is not its tone's.
+  mark: Option<PaletteColor>,
   title: Arc<str>,
   body: Option<Arc<str>>,
   actions: Vec<Element>,
@@ -76,6 +78,7 @@ impl Notice {
       id: id.into(),
       tone,
       icon: tone.icon(),
+      mark: None,
       title: title.into(),
       body: None,
       actions: Vec::new(),
@@ -85,6 +88,13 @@ impl Notice {
   /// The icon that says what the notice is about, in place of its tone's.
   pub fn icon(mut self, icon: Icon) -> Self {
     self.icon = icon;
+    self
+  }
+
+  /// The icon in `color` instead of its tone's: a failure that leaves what is shown in place reads as
+  /// information with a `danger` icon (`Notice · Couldn’t reach GitHub` in `PEBSm`).
+  pub fn mark(mut self, color: PaletteColor) -> Self {
+    self.mark = Some(color);
     self
   }
 
@@ -104,6 +114,7 @@ impl Notice {
 impl From<Notice> for Element {
   fn from(notice: Notice) -> Self {
     let (fill, stroke, mark) = notice.tone.colors();
+    let mark = notice.mark.unwrap_or(mark);
     let text = Column::new()
       .id(format!("{}-text", notice.id))
       .flex(1.0)
