@@ -28,6 +28,7 @@ use orchester_exec::{
   },
   search_path::search_path,
 };
+pub use orchester_index::{BuildPhase, BuildProgress, IndexState as KeptIndexState};
 use orchester_index::{CodebaseIndexes, IndexError, IndexState};
 use orchester_store::{ProjectDb, StoreError};
 

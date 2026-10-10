@@ -2,14 +2,10 @@
 //! added as project setup adds it, read as Project settings shows it, and the settings of its
 //! Environment and General tabs changed as they change them.
 
-use std::{
-  collections::{BTreeMap, BTreeSet},
-  path::PathBuf,
-};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use orchester_core::{
   agent_files::RepositoryAgentFiles,
-  permission::widening::harmless_variable,
   repository::Detection,
   resource::{CommandEnvironment, ResourceKind, VariableName},
   store::{ConnectionStore, RepositoryStore, ResourceStore, SettingsStore},
@@ -169,27 +165,17 @@ pub async fn set_environment(services: &Services, args: SetProjectEnvironment) -
     let environment = environment(args.variables)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
     let current = db.project_environment()?;
-    widening::allowed(&services, changed_variables(&current, &environment))?;
+    widening::allowed(&services, crate::environment::widenings(&current, &environment))?;
     db.save_project_environment(&environment)?;
+    services
+      .changes
+      .record(open.project.id(), crate::tasks::outside::Outside::ProjectSettings);
     Ok(json!({ "environment": environment_json(&db.project_environment()?) }))
   })
   .await
 }
 
-/// The variables `new` changes from `old` but harmless ones, each a reason a person decides it: a
-/// removal included, since removing a person's proxy or certificate setting can widen as well.
-pub(super) fn changed_variables(old: &CommandEnvironment, new: &CommandEnvironment) -> Vec<Message> {
-  let old: BTreeMap<String, &str> = old.iter().map(|(name, value)| (name.to_string(), value)).collect();
-  let new: BTreeMap<String, &str> = new.iter().map(|(name, value)| (name.to_string(), value)).collect();
-  old
-    .keys()
-    .chain(new.keys())
-    .collect::<BTreeSet<_>>()
-    .into_iter()
-    .filter(|name| old.get(*name) != new.get(*name) && !harmless_variable(name))
-    .map(|name| Message::new("appMcp.widens.variable").with("name", name.clone()))
-    .collect()
-}
+pub(super) use crate::environment::widenings as changed_variables;
 
 /// The variables as Project settings › Environment checks them.
 pub(super) fn environment(variables: Vec<Variable>) -> Result<CommandEnvironment, ToolError> {
@@ -224,6 +210,9 @@ pub async fn set_agent_files(services: &Services, args: SetAgentFiles) -> Result
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
     db.save_repository_agent_files(setting)?;
+    services
+      .changes
+      .record(open.project.id(), crate::tasks::outside::Outside::ProjectSettings);
     Ok(json!({ "repository_agent_files": db.repository_agent_files()?.is_on() }))
   })
   .await

@@ -133,6 +133,16 @@ fn tokens_daily_budget_is_used_once_today_reaches_it() {
 }
 
 #[test]
+fn tokens_optional_daily_budget_never_stops_work_until_a_limit_is_restored() {
+  let unlimited = ProjectLimits::DEFAULT.with_daily_budget_limit(None);
+  assert_eq!(unlimited.daily_budget_limit(), None);
+  assert!(!unlimited.daily_budget_used(TokensUsed::new(u64::MAX)));
+  let restored = unlimited.with_daily_budget_limit(Some(budget(900_000_000)));
+  assert!(!restored.daily_budget_used(TokensUsed::new(899_999_999)));
+  assert!(restored.daily_budget_used(TokensUsed::new(900_000_000)));
+}
+
+#[test]
 fn tokens_the_local_day_starts_at_or_before_now_and_within_a_day() {
   let now = Timestamp::now();
   let start = now.local_day_start();

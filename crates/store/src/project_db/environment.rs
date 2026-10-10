@@ -24,13 +24,34 @@ pub(super) fn load(connection: &Connection) -> Result<CommandEnvironment, StoreE
 /// Replaces every stored variable with those of `environment`, atomically.
 pub(super) fn save(connection: &mut Connection, environment: &CommandEnvironment) -> Result<(), StoreError> {
   let transaction = connection.transaction()?;
-  transaction.execute("DELETE FROM project_environment", [])?;
-  {
-    let mut insert = transaction.prepare("INSERT INTO project_environment (name, value) VALUES (?1, ?2)")?;
-    for (name, value) in environment.iter() {
-      insert.execute(params![name.as_str(), value])?;
-    }
-  }
+  write(&transaction, environment)?;
   transaction.commit()?;
   Ok(())
+}
+
+fn write(connection: &Connection, environment: &CommandEnvironment) -> Result<(), StoreError> {
+  connection.execute("DELETE FROM project_environment", [])?;
+  let mut insert = connection.prepare("INSERT INTO project_environment (name, value) VALUES (?1, ?2)")?;
+  for (name, value) in environment.iter() {
+    insert.execute(params![name.as_str(), value])?;
+  }
+  Ok(())
+}
+
+impl super::ProjectDb {
+  /// Compare and save in one immediate transaction, so a confirmed environment cannot silently overwrite a concurrent
+  /// change.
+  pub fn save_environment_if_current(
+    &mut self,
+    base: &CommandEnvironment,
+    asked: &CommandEnvironment,
+  ) -> Result<bool, StoreError> {
+    let transaction = self.connection.transaction()?;
+    if load(&transaction)? != *base {
+      return Ok(false);
+    }
+    write(&transaction, asked)?;
+    transaction.commit()?;
+    Ok(true)
+  }
 }

@@ -20,6 +20,8 @@ pub enum Outside {
   CodeIndex,
   /// The project's limits changed.
   Limits,
+  /// Project environment or repository agent files changed.
+  ProjectSettings,
   /// A pipeline was added or published.
   Pipelines,
   /// A connection or an MCP server was added, changed, checked or removed.
@@ -34,6 +36,7 @@ pub struct OutsideCounts {
   pub auto_mode: u64,
   pub code_index: u64,
   pub limits: u64,
+  pub project_settings: u64,
   pub pipelines: u64,
   pub connections: u64,
 }
@@ -47,6 +50,7 @@ impl OutsideCounts {
       Outside::AutoMode => self.auto_mode,
       Outside::CodeIndex => self.code_index,
       Outside::Limits => self.limits,
+      Outside::ProjectSettings => self.project_settings,
       Outside::Pipelines => self.pipelines,
       Outside::Connections => self.connections,
     }
@@ -59,6 +63,7 @@ impl OutsideCounts {
       Outside::AutoMode => &mut self.auto_mode,
       Outside::CodeIndex => &mut self.code_index,
       Outside::Limits => &mut self.limits,
+      Outside::ProjectSettings => &mut self.project_settings,
       Outside::Pipelines => &mut self.pipelines,
       Outside::Connections => &mut self.connections,
     };

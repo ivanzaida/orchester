@@ -43,6 +43,21 @@ impl ProjectDb {
     Ok(settings)
   }
 
+  /// Saves the exact change reviewed by the person only while its baseline is still current.
+  pub fn save_auto_mode_if_current(
+    &mut self,
+    base: &AutoModeSettings,
+    asked: &AutoModeSettings,
+  ) -> Result<bool, StoreError> {
+    let transaction = self.connection.transaction()?;
+    if read_auto_mode(&transaction)? != *base {
+      return Ok(false);
+    }
+    write_auto_mode(&transaction, asked)?;
+    transaction.commit()?;
+    Ok(true)
+  }
+
   /// Records the push URL of `origin` as `run` starts; `None` when the repository has no `origin`.
   pub fn record_run_origin(&mut self, run: RunId, url: Option<&str>) -> Result<(), StoreError> {
     self.connection.execute(

@@ -1,0 +1,233 @@
+//! Auto mode's reviewer and the input-locked, in-place person-only question.
+mod controls;
+
+use std::sync::Arc;
+
+use lurq::{
+  app::{
+    component::{Component, DevtoolsInspectable},
+    ctx::Ctx,
+    theme::SpacingSize,
+  },
+  components::Column,
+  core::Signal,
+  node::Element,
+};
+use orchester_core::run::review::AutoModeSettings;
+use orchester_workspace::project_settings::{self, Settings};
+
+use super::super::{
+  Status, TabProps,
+  work::{self, Change, Save},
+};
+use crate::screens::connections::widen::{WidenConfirm, WidenProps};
+
+#[derive(Clone)]
+pub struct Props {
+  pub tab: TabProps,
+  pub settings: Settings,
+  pub parent_read: Signal<Option<work::Read>>,
+  pub refresh: Signal<u64>,
+}
+impl PartialEq for Props {
+  fn eq(&self, other: &Self) -> bool {
+    self.tab == other.tab && self.settings == other.settings
+  }
+}
+impl DevtoolsInspectable for Props {}
+#[derive(Clone, PartialEq)]
+struct Stored(Settings);
+impl DevtoolsInspectable for Stored {}
+#[derive(Clone, PartialEq)]
+struct Asked(Option<AutoModeSettings>);
+impl DevtoolsInspectable for Asked {}
+
+#[derive(Clone)]
+pub struct AutoMode {
+  connection: Signal<String>,
+  model: Signal<String>,
+  effort: Signal<String>,
+  stored: Signal<Stored>,
+  supplied: Signal<Stored>,
+  asking: Signal<Asked>,
+  attempted: Signal<Asked>,
+}
+impl Component for AutoMode {
+  type Props = Props;
+  fn create(ctx: &mut Ctx) -> Self {
+    let settings = ctx.props::<Props>().settings.clone();
+    let (connection, model, effort) = values(&settings);
+    let tab = Self {
+      connection: ctx.signal(connection),
+      model: ctx.signal(model),
+      effort: ctx.signal(effort),
+      stored: ctx.signal(Stored(settings.clone())),
+      supplied: ctx.signal(Stored(settings)),
+      asking: ctx.signal(Asked(None)),
+      attempted: ctx.signal(Asked(None)),
+    };
+    let save = work::action(ctx);
+    tab.follow(ctx, &save);
+    let after = tab.clone();
+    ctx.watch(&tab.connection, move |connection| {
+      if *connection == values(&after.stored.get_untracked().0).0 {
+        return;
+      }
+      after.model.set(project_settings::default_model(
+        &after.stored.get_untracked().0,
+        connection,
+      ));
+      after.effort.set(String::new());
+    });
+    let after = tab.clone();
+    ctx.watch(&tab.model, move |model| {
+      if *model != values(&after.stored.get_untracked().0).1 {
+        after.effort.set(String::new());
+      }
+    });
+    tab
+  }
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let props = ctx.props::<Props>().clone();
+    let save = work::action(ctx);
+    if props.settings != self.supplied.get_untracked().0 && !save.state().get().is_pending() {
+      self.supplied.set(Stored(props.settings.clone()));
+      // A parent echo of our save must keep a select the person has already edited again.
+      if props.settings != self.stored.get_untracked().0 {
+        self.fill(props.settings.clone());
+        self.attempted.set(Asked(None));
+        self.asking.set(Asked(None));
+      }
+    }
+    self.commit(&props, &save);
+    let settings = self.stored.get().0;
+    let mut content = Column::new()
+      .spacing(SpacingSize::Md)
+      .child(controls::section(ctx, self, &props, &settings, &save))
+      .with_children(work::error(ctx, &save));
+    if let Some(asked) = self.asking.get().0 {
+      content = content.child(self.question(ctx, &props, &save, asked));
+    }
+    content
+  }
+}
+impl AutoMode {
+  fn fill(&self, settings: Settings) {
+    let (connection, model, effort) = values(&settings);
+    // Publish the baseline before changing the select signals their watchers read.
+    self.stored.set(Stored(settings));
+    self.connection.set(connection);
+    self.model.set(model);
+    self.effort.set(effort);
+  }
+  fn follow(&self, ctx: &mut Ctx, save: &Save) {
+    let (tab, status, feed) = (
+      self.clone(),
+      ctx.props::<Props>().tab.status.clone(),
+      ctx.props::<Props>().tab.project.feed.clone(),
+    );
+    let props = ctx.props::<Props>().clone();
+    ctx.watch(&save.state(), move |state| {
+      if state.is_pending() {
+        status.set(Status::Saving);
+      } else if state.error.is_some() {
+        status.set(Status::Failed);
+      } else if let Some(saved) = &state.data {
+        tab.fill(saved.0.clone());
+        // Invalidate older parent reads before they can replace this saved reviewer or a new edit.
+        props.parent_read.set(Some(work::Read(saved.0.clone(), u64::MAX)));
+        props.refresh.update(|revision| *revision += 1);
+        tab.asking.set(Asked(None));
+        status.set(Status::Saved);
+        feed.saved();
+      }
+    });
+  }
+  fn commit(&self, props: &Props, save: &Save) {
+    if save.state().get().is_pending() || self.asking.get().0.is_some() {
+      return;
+    }
+    let settings = self.stored.get().0;
+    let Ok(reviewer) =
+      project_settings::reviewer(&settings, &self.connection.get(), &self.model.get(), &self.effort.get())
+    else {
+      return;
+    };
+    let mut asked = settings.auto_mode.clone();
+    asked.reviewer = reviewer;
+    if asked == settings.auto_mode || self.attempted.get_untracked().0.as_ref() == Some(&asked) {
+      return;
+    }
+    self.request(props, save, asked);
+  }
+  fn request(&self, props: &Props, save: &Save, asked: AutoModeSettings) {
+    let base = self.stored.get_untracked().0.auto_mode;
+    self.attempted.set(Asked(Some(asked.clone())));
+    if project_settings::auto_widens(&base, &asked) {
+      self.asking.set(Asked(Some(asked)));
+      props.tab.status.set(Status::Unsaved);
+    } else {
+      save.run((
+        props.tab.project.open.repo_root.clone(),
+        Change::Auto {
+          base,
+          asked,
+          confirmed: false,
+        },
+      ));
+    }
+  }
+  fn question(&self, ctx: &mut Ctx, props: &Props, save: &Save, asked: AutoModeSettings) -> Element {
+    let (tab, save, root, base, status) = (
+      self.clone(),
+      save.clone(),
+      props.tab.project.open.repo_root.clone(),
+      self.stored.get_untracked().0.auto_mode,
+      props.tab.status.clone(),
+    );
+    ctx.mount_keyed::<WidenConfirm>(
+      "settings-auto-confirm",
+      WidenProps {
+        id: "settings-auto-question",
+        title: ctx.t("project_settings.confirmAuto"),
+        reasons: vec![ctx.t("project_settings.confirmAutoDetail")].into(),
+        keep: ctx.t("project_settings.keep"),
+        confirm: ctx.t("project_settings.confirm"),
+        on_keep: Arc::new(move || {
+          tab.fill(tab.stored.get_untracked().0);
+          tab.asking.set(Asked(None));
+          status.set(Status::Saved);
+        }),
+        on_confirm: Arc::new(move || {
+          if !save.state().get_untracked().is_pending() {
+            save.run((
+              root.clone(),
+              Change::Auto {
+                base: base.clone(),
+                asked: asked.clone(),
+                confirmed: true,
+              },
+            ));
+          }
+        }),
+      },
+    )
+  }
+}
+fn values(settings: &Settings) -> (String, String, String) {
+  match &settings.auto_mode.reviewer {
+    Some(choice) => (
+      choice.connection.to_string(),
+      choice.model.as_str().to_owned(),
+      choice.effort.clone().unwrap_or_default(),
+    ),
+    None => (
+      String::new(),
+      project_settings::review_options(settings, "", "")
+        .resolved
+        .map(|r| r.model.as_str().to_owned())
+        .unwrap_or_default(),
+      String::new(),
+    ),
+  }
+}

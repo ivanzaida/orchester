@@ -1,4 +1,8 @@
 {
+  "projectSettings": {
+    "personOnly": "Only a person can confirm this environment change.",
+    "changedOutside": "Changed outside this screen. Reload the stored variables and review your change again."
+  },
   "common": {
     "listSeparator": ", "
   },

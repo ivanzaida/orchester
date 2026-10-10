@@ -69,6 +69,7 @@ impl Default for AgentSlots {
 pub struct ProjectLimits {
   default_run_budget: Option<TokenBudget>,
   daily_budget: TokenBudget,
+  daily_budget_unlimited: bool,
   default_time_limit: Option<Duration>,
   agent_slots: AgentSlots,
 }
@@ -79,6 +80,7 @@ impl ProjectLimits {
   pub const DEFAULT: Self = Self {
     default_run_budget: None,
     daily_budget: budget(20_000_000),
+    daily_budget_unlimited: false,
     default_time_limit: None,
     agent_slots: AgentSlots::DEFAULT,
   };
@@ -99,6 +101,7 @@ impl ProjectLimits {
     Ok(Self {
       default_run_budget,
       daily_budget,
+      daily_budget_unlimited: false,
       default_time_limit,
       agent_slots: AgentSlots::DEFAULT,
     })
@@ -115,7 +118,27 @@ impl ProjectLimits {
     self.default_run_budget
   }
 
-  /// Tokens all runs of the project may use per day.
+  /// Sets the daily limit without discarding the last finite budget, used by the legacy app.
+  #[must_use]
+  pub const fn with_daily_budget_limit(mut self, limit: Option<TokenBudget>) -> Self {
+    self.daily_budget_unlimited = limit.is_none();
+    if let Some(budget) = limit {
+      self.daily_budget = budget;
+    }
+    self
+  }
+
+  /// Tokens all runs may use per day; `None` means no daily limit.
+  pub const fn daily_budget_limit(self) -> Option<TokenBudget> {
+    if self.daily_budget_unlimited {
+      None
+    } else {
+      Some(self.daily_budget)
+    }
+  }
+
+  /// The last finite daily budget, for callers of the legacy settings API.
+  /// Enforcement uses `daily_budget_used`; new screens use `daily_budget_limit`.
   pub const fn daily_budget(self) -> TokenBudget {
     self.daily_budget
   }
@@ -123,7 +146,7 @@ impl ProjectLimits {
   /// Whether the project's runs used up today's budget with `used_today`: new runs wait and
   /// running ones stop at their next turn until the day has room again.
   pub const fn daily_budget_used(self, used_today: TokensUsed) -> bool {
-    used_today.reached(self.daily_budget)
+    !self.daily_budget_unlimited && used_today.reached(self.daily_budget)
   }
 
   /// Prefilled in New task; counts active agent time only. `None` leaves new tasks without a

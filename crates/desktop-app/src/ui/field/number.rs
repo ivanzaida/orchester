@@ -28,6 +28,7 @@ pub struct NumberField {
   read_back: Arc<str>,
   /// Why the value is not accepted, said in 11 `danger` in the read-back's place (`Aqupm` in `i4Y9hL`).
   error: Option<Arc<str>>,
+  read_back_alignment: Alignment,
 }
 
 impl NumberField {
@@ -49,6 +50,7 @@ impl NumberField {
       id,
       read_back: read_back.into(),
       error: None,
+      read_back_alignment: Alignment::End,
     }
   }
 
@@ -77,6 +79,23 @@ impl NumberField {
     self
   }
 
+  /// Use the containing form's control width.
+  pub fn width(mut self, width: Dimension) -> Self {
+    self.input = self.input.width(width);
+    self
+  }
+
+  /// Align the read-back with the containing form's controls.
+  pub fn read_back_alignment(mut self, alignment: Alignment) -> Self {
+    self.read_back_alignment = alignment;
+    self
+  }
+
+  pub fn on_leave(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
+    self.input = self.input.on_leave(handler);
+    self
+  }
+
   pub fn render(self, ctx: &mut Ctx) -> Element {
     let read_back = match &self.error {
       Some(error) => Text::new(error)
@@ -90,7 +109,7 @@ impl NumberField {
     };
     Column::new()
       .spacing(ExtraSpacing::Snug.role())
-      .align_items(Alignment::End)
+      .align_items(self.read_back_alignment)
       .child(self.input.render(ctx))
       .child(read_back)
       .into()

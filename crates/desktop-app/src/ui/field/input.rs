@@ -64,6 +64,7 @@ pub struct FieldInput {
   trailing: Option<Icon>,
   /// The value is not accepted, and something else says why: only the stroke turns `danger`.
   invalid: bool,
+  on_leave: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 /// Compared by what it shows; the value by its signal.
@@ -109,6 +110,7 @@ impl FieldInput {
       locked: false,
       trailing: None,
       invalid: false,
+      on_leave: None,
     }
   }
 
@@ -186,6 +188,12 @@ impl FieldInput {
   /// The value is not accepted and the caller says why: the stroke turns `danger`, no note is added.
   pub(super) fn invalid(mut self) -> Self {
     self.invalid = true;
+    self
+  }
+
+  /// Commits an autosaving field after its edit and grouping have landed.
+  pub fn on_leave(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
+    self.on_leave = Some(Arc::new(handler));
     self
   }
 
@@ -307,11 +315,11 @@ impl FieldBox {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .on_focus(move || gained.set(true))
-      .on_blur(regroup_on_leave(
-        lost,
-        props.value.clone(),
-        props.group_separator.clone(),
-      ));
+      .on_blur({
+        let regroup = regroup_on_leave(lost, props.value.clone(), props.group_separator.clone());
+        let on_leave = props.on_leave.clone();
+        move || { regroup(); if let Some(commit) = &on_leave { commit(); } }
+      });
     if let Some(placeholder) = &props.placeholder {
       input = input.placeholder(placeholder);
     }
