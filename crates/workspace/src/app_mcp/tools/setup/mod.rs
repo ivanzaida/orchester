@@ -14,6 +14,7 @@ mod profiles;
 mod project;
 mod project_tools;
 mod tool_input;
+mod tool_program;
 pub(super) mod widening;
 
 use rmcp::{

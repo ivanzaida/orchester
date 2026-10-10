@@ -1,10 +1,14 @@
 //! The project's command tools through the domain tools: made, saved and published as their editor does,
-//! the program found on the search path and stored as found. A command tool runs a program on this
-//! computer whenever a pipeline step calls it, so making one, changing what it runs, publishing its first
-//! version and adding a step that calls it are a person's decisions while *Let automation change agent
-//! permissions* is off; its description, timeout and output limit are not.
+//! the program found on the search path and kept as a fixed file outside the repository. A command step
+//! runs its program with the person's rights, network access and no sandbox, so making a tool, changing
+//! what it runs, publishing its first version and adding a step that calls it are a person's decisions
+//! while *Let automation change agent permissions* is off; its description, timeout and output limit are
+//! not.
 
-use std::path::Path;
+use std::{
+  env, fs,
+  path::{Path, PathBuf},
+};
 
 use serde_json::{Value, json};
 
@@ -31,11 +35,12 @@ fn check(changes: Value) -> Value {
   args
 }
 
-/// [`check`] for the Check tool made already: named by `tool`, without its name.
+/// `changes` to the Check tool made already; the fields left out keep their values.
 fn change(changes: Value) -> Value {
-  let mut args = check(changes);
-  args["tool"] = json!("Check");
-  args.as_object_mut().expect("arguments").remove("name");
+  let mut args = json!({ "project": "Kontur", "tool": "Check" });
+  if let (Value::Object(args), Value::Object(changes)) = (&mut args, changes) {
+    args.extend(changes);
+  }
   args
 }
 
@@ -78,14 +83,26 @@ fn domain_a_command_tool_is_made_and_published_once_a_person_lets_it() {
   let second = served.ok("publish_tool", &publish);
   assert_eq!(second["tool"]["state"]["published_version"], 2, "{second}");
   assert_eq!(second["tool"]["command"]["timeout_secs"], 3600);
+  let kept = served.ok("save_tool_draft", &change(json!({ "timeout_secs": 120 })));
+  let command = &kept["tool"]["command"];
+  assert_eq!(command["arguments"], json!(["grep", "--quiet", "hello"]), "{kept}");
+  assert_eq!(command["environment"], json!([{ "name": "RUST_LOG", "value": "info" }]));
+  assert_eq!(command["output_limit_kib"], 512);
+  assert_eq!(kept["tool"]["description"], "Says hello.");
   for widening in [
     json!({ "arguments": ["grep", "--quiet", "bye"] }),
     json!({ "program": env!("CARGO") }),
     json!({ "exit_codes": [0, 1] }),
     json!({ "environment": [{ "name": "OPENAI_BASE_URL", "value": "http://localhost:1" }] }),
+    json!({ "environment": [{ "name": "PATH", "value": served.folder.path().display().to_string() }] }),
   ] {
     assert_person_only(&served.refused("save_tool_draft", &change(widening)));
   }
+  served.let_automation_widen(true);
+  let path = json!([{ "name": "PATH", "value": served.folder.path().display().to_string() }]);
+  served.ok("save_tool_draft", &change(json!({ "environment": path })));
+  served.let_automation_widen(false);
+  assert_person_only(&served.refused("publish_tool", &publish));
   let tools = served.ok("list_tools", &json!({ "project": "Kontur" }));
   let names: Vec<&str> = tools["tools"]
     .as_array()
@@ -185,4 +202,89 @@ fn domain_a_command_step_with_a_failure_route_needs_a_person() {
     tool["tool"]["used_by_steps"],
     json!([{ "pipeline": "Change", "version": 1, "step": "Run the checks" }])
   );
+  served.let_automation_widen(false);
+  let mut other_tool = steps("Run the checks");
+  other_tool["steps"][1]["tool"] = json!("Run checks");
+  assert_person_only(&served.refused("save_pipeline_draft", &other_tool));
+}
+
+#[test]
+fn domain_a_tools_program_is_a_fixed_file_outside_the_repository() {
+  let codex = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+  let (mut served, seeded) = Served::seeded_with("empty", Some(codex));
+  served.let_automation_widen(true);
+  let target = seeded.repo.join("target");
+  fs::create_dir_all(&target).expect("a folder in the repository");
+  let planted = target.join(format!("planted{}", env::consts::EXE_SUFFIX));
+  fs::write(&planted, "not a program").expect("a file in the repository");
+  let inside = served.refused(
+    "save_tool_draft",
+    &check(json!({ "program": planted.display().to_string() })),
+  );
+  assert_eq!(inside["code"], "program_in_repository", "{inside}");
+  let link = served.folder.path().join("link");
+  if link_folder(&target, &link) {
+    let through = link.join(planted.file_name().expect("a file name"));
+    let linked = served.refused(
+      "save_tool_draft",
+      &check(json!({ "program": through.display().to_string() })),
+    );
+    assert_eq!(linked["code"], "program_in_repository", "{linked}");
+  }
+  let on_path = json!([{ "name": "PATH", "value": target.display().to_string() }]);
+  let named = served.refused(
+    "save_tool_draft",
+    &check(json!({ "program": "planted", "environment": on_path })),
+  );
+  assert_eq!(named["code"], "program_in_repository", "{named}");
+  // A relative folder of the PATH would be looked in from the step's worktree: it is skipped.
+  let test = env::current_exe().expect("the test's path");
+  if let Some(relative) = relative_to_current_dir(test.parent().expect("the test's folder")) {
+    let stem = test.file_stem().and_then(|stem| stem.to_str()).expect("a name");
+    let relative_path = json!([{ "name": "PATH", "value": relative.display().to_string() }]);
+    let skipped = served.refused(
+      "save_tool_draft",
+      &check(json!({ "program": stem, "environment": relative_path })),
+    );
+    assert_eq!(skipped["code"], "program_not_found", "{skipped}");
+  }
+  let drive_relative = served.refused("save_tool_draft", &check(json!({ "program": "C:check.exe" })));
+  assert_eq!(drive_relative["code"], "invalid_tool");
+  let mut no_program = check(json!({}));
+  no_program.as_object_mut().expect("arguments").remove("program");
+  assert_eq!(served.refused("save_tool_draft", &no_program)["code"], "invalid_tool");
+}
+
+/// Links `link` to the folder `target`: a junction on Windows, a symbolic link elsewhere; false when
+/// this computer does not allow it.
+fn link_folder(target: &Path, link: &Path) -> bool {
+  #[cfg(windows)]
+  {
+    std::process::Command::new("cmd")
+      .args(["/C", "mklink", "/J"])
+      .arg(link)
+      .arg(target)
+      .output()
+      .is_ok_and(|output| output.status.success())
+  }
+  #[cfg(not(windows))]
+  {
+    std::os::unix::fs::symlink(target, link).is_ok()
+  }
+}
+
+/// `folder` as a path relative to the current directory; `None` when they share no root (another drive).
+fn relative_to_current_dir(folder: &Path) -> Option<PathBuf> {
+  let current = env::current_dir().ok()?;
+  let (from, to): (Vec<_>, Vec<_>) = (current.components().collect(), folder.components().collect());
+  let shared = from.iter().zip(&to).take_while(|(a, b)| a == b).count();
+  if shared == 0 {
+    return None;
+  }
+  let mut relative = PathBuf::new();
+  for _ in shared..from.len() {
+    relative.push("..");
+  }
+  to[shared..].iter().for_each(|part| relative.push(part));
+  Some(relative)
 }

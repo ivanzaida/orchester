@@ -206,6 +206,7 @@ pub fn program_message(error: &CommandError) -> Message {
   match error {
     CommandError::BlankProgram => Message::new("tools.errors.programRequired"),
     CommandError::OutsideWorktree(_) => Message::new("tools.errors.programOutsideWorktree"),
+    CommandError::DriveRelative(_) => Message::new("tools.errors.programDriveRelative"),
     other => token_error(other),
   }
 }

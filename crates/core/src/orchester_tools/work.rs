@@ -246,6 +246,7 @@ fn project_program(name: &str, context: &ToolContext<'_>) -> Result<ToolProgram,
     context.worktree,
     context.inherited.iter().cloned(),
     context.project,
+    context.platform,
   );
   let limit = (action.output_limit().bytes(), OutputKept::Tail);
   Ok(ToolProgram::new(command, action.timeout().duration(), limit).expecting(action.exit_codes().clone()))

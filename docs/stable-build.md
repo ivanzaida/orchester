@@ -237,7 +237,8 @@ environment variables, removals included, but to `RUST_LOG`, `RUST_BACKTRACE`, `
 variable can change what programs load, where they connect, what they trust or where tools keep their
 configuration, and removing a person's (a proxy, say) can widen too; approving automatically, which also needs
 *Let automation answer approvals*; removing or weakening a pipeline step's approval gate; and command tools, since
-a command tool runs a program on this computer whenever a pipeline step calls it: making one, changing its program
+a command step runs its program with your rights, network access and no sandbox, on files the agents before it wrote
+(scripts, build files, package and git configuration): making one, changing its program
 or arguments, letting more exit codes pass, changing any of its variables but the harmless ones above, publishing
 its first version or a version that does any of these, and a pipeline step that calls a tool where neither the
 draft nor the latest published version calls it under that key. Narrowing is always taken. The setting is off by
@@ -263,11 +264,15 @@ pipeline may get any published one.
 `duplicate_pipeline` is shared with the deprecated desktop's server, which follows the rule too.
 
 Command tools through the tools: `save_tool_draft` takes the program as a name found on the search path (the
-tool's own `PATH` variable, else the project's, else the app's) or as the absolute path of an existing file, and
-stores the file it found, so what a person allows is the file that runs; a path inside the repository is refused,
-since each run's worktree holds its own copy that the agents before the step could change (run a script through
-its interpreter instead). Arguments go to the program as they are, without a shell, in the worktree of the step
-that calls the tool. For example, a *Check* step that runs `tools/check.ps1` after *Implement* and returns to it
+tool's own `PATH` variable, else the project's, else the app's; relative folders are skipped) or as the absolute
+path of an existing file outside the project's repository, and stores the file it found, so the program itself is
+a fixed file; a path inside the repository, also through a link or junction, is refused (run a script through its
+interpreter instead). On an existing tool a field left out keeps its value. Arguments go to the program as they
+are, without a shell, in the worktree of the step that calls the tool; on Windows it does not start programs from
+that worktree by name (`NoDefaultCurrentDirectoryInExePath`). A fixed program is not a sandbox: a command step
+runs with your rights, network access and no sandbox, and its program reads the files the agents before it wrote,
+such as `tools/check.ps1` itself, `build.rs` or a cargo, npm or git configuration. Approve a tool step only after
+agents you would let run code that way. For example, a *Check* step that runs `tools/check.ps1` after *Implement* and returns to it
 when the check fails, with *Let automation change agent permissions* on:
 
 ```text

@@ -1,17 +1,16 @@
 //! `save_tool_draft`: a command tool's editor through Orchester's MCP server. Every field is checked by
-//! the core type it becomes, with the editor's words; the program is looked up as a step would start it
-//! and stored as found, so what a person allows is the file that runs. A command tool runs a program on
-//! this computer whenever a pipeline step calls it, so making one, or changing what it runs, is a
+//! the core type it becomes, with the editor's words, and the program is kept as a fixed file
+//! ([`super::tool_program`]). A command step runs its program with the person's rights, network access
+//! and no sandbox, on files the agents before it wrote, so making a tool, or changing what it runs, is a
 //! person's decision unless a person lets automation make it.
 
-use std::{ffi::OsStr, path::Path};
+use std::path::Path;
 
 use orchester_core::{
-  connection::invocation::Platform,
   name::Name,
   resource::{
     AccessPolicy, CommandAction, CommandArg, CommandEnvironment, CommandProgram, CommandTimeout, DraftSaved, ExitCodes,
-    OutputLimit, ProgramLocation, Tool, ToolAction,
+    OutputLimit, Tool, ToolAction,
   },
   store::SettingsStore,
   time::Timestamp,
@@ -24,6 +23,7 @@ use serde_json::{Value, json};
 use super::{
   project::{Variable, changed_variables, environment},
   project_tools::{tool_json, tool_named},
+  tool_program::found_program,
   widening,
 };
 use crate::{
@@ -34,11 +34,12 @@ use crate::{
   drafts::save_draft_in,
   messages::{self, Message},
   tools::{
-    data::{ProjectTools, create_tool},
+    data::{ProjectTools, ToolEntry, create_tool},
     form::program_message,
   },
 };
 
+/// On an existing tool, a field left out keeps its value; on a new one it takes the default named.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(crate = "rmcp::schemars")]
@@ -49,23 +50,22 @@ pub struct SaveToolDraft {
   pub tool: Option<String>,
   /// A new tool's name, unique among the project's tools; a tool keeps the name it was made with.
   pub name: Option<String>,
-  /// What the tool does, for the people and agents who choose it.
-  #[serde(default)]
-  pub description: String,
-  /// The program: a name found on the search path (`cargo`, `powershell`) or an absolute path to a file.
-  /// It is stored as the file found.
-  pub program: String,
-  /// The arguments, each passed to the program as it is: no shell reads them.
-  #[serde(default)]
-  pub arguments: Vec<String>,
-  /// How long it may run, in seconds (1 up to 24 hours); left out, 600.
+  /// What the tool does, for the people and agents who choose it; a new tool's default is none.
+  pub description: Option<String>,
+  /// The program: a name found on the search path (`cargo`, `powershell`) or an absolute path to a file
+  /// outside the project's repository. It is stored as the file found. Required for a new tool.
+  pub program: Option<String>,
+  /// The arguments, each passed to the program as it is: no shell reads them. A new tool's default is
+  /// none.
+  pub arguments: Option<Vec<String>>,
+  /// How long it may run, in seconds (1 up to 24 hours); a new tool's default is 600.
   pub timeout_secs: Option<u64>,
-  /// The exit codes that pass; left out, 0 only.
+  /// The exit codes that pass; a new tool's default is 0 only.
   pub exit_codes: Option<Vec<i64>>,
-  /// Variables the tool adds for its program; plain text, so never a secret.
-  #[serde(default)]
-  pub environment: Vec<Variable>,
-  /// How much of its output the run keeps, in KiB (1 up to 16384); left out, 256.
+  /// Every variable the tool adds for its program, replacing those it has; plain text, so never a
+  /// secret. A new tool's default is none.
+  pub environment: Option<Vec<Variable>>,
+  /// How much of its output the run keeps, in KiB (1 up to 16384); a new tool's default is 256.
   pub output_limit_kib: Option<u32>,
 }
 
@@ -75,31 +75,22 @@ pub async fn save_tool_draft(services: &Services, args: SaveToolDraft) -> Result
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
     let tools = ProjectTools::load(&db)?;
+    let project = db.project_environment()?;
     let existing = args
       .tool
       .as_deref()
       .map(|named| tool_named(&tools, named))
       .transpose()?;
-    let action = command(&args, &db.project_environment()?)?;
     let (id, saved) = match existing {
-      Some(_) if args.name.is_some() => {
-        return Err(refused(
-          "name_not_editable",
-          Message::new("appMcp.projectTools.errors.nameNotEditable"),
-        ));
-      }
       Some(entry) => {
-        let ToolAction::Command(before) = entry.tool.action() else {
-          return Err(not_a_command_tool(&entry.name));
-        };
-        widening::allowed(&services, widenings(before, &action))?;
-        let tool = command_tool(&args.description, action, entry.tool.access().cloned());
+        let tool = changed_tool(&services, &args, entry, (&project, &open.repo_root))?;
         (entry.id, save_draft_in(&open.repo_root, entry.id, tool)?)
       }
       None => {
+        let action = command(&args, None, &project, &open.repo_root)?;
         let name = new_name(&tools, args.name.as_deref())?;
         widening::allowed(&services, vec![Message::new("appMcp.projectTools.widens.newTool")])?;
-        let tool = command_tool(&args.description, action, None);
+        let tool = command_tool(args.description.as_deref().unwrap_or_default(), action, None);
         (
           create_tool(&mut db, &name, &tool, Timestamp::now())?,
           DraftSaved::Stored,
@@ -115,6 +106,28 @@ pub async fn save_tool_draft(services: &Services, args: SaveToolDraft) -> Result
     Ok(json!({ "tool": value }))
   })
   .await
+}
+
+/// `entry` with the fields `args` give, unless it widens what the tool runs and no person lets it.
+fn changed_tool(
+  services: &Services,
+  args: &SaveToolDraft,
+  entry: &ToolEntry,
+  (project, repository): (&CommandEnvironment, &Path),
+) -> Result<Tool, ToolError> {
+  if args.name.is_some() {
+    return Err(refused(
+      "name_not_editable",
+      Message::new("appMcp.projectTools.errors.nameNotEditable"),
+    ));
+  }
+  let ToolAction::Command(before) = entry.tool.action() else {
+    return Err(not_a_command_tool(&entry.name));
+  };
+  let action = command(args, Some(before), project, repository)?;
+  widening::allowed(services, widenings(before, &action))?;
+  let description = args.description.as_deref().unwrap_or(entry.tool.description());
+  Ok(command_tool(description, action, entry.tool.access().cloned()))
 }
 
 /// What `after` runs that `before` did not: another program, other arguments, exit codes that now pass,
@@ -145,62 +158,59 @@ pub(super) fn widenings(before: &CommandAction, after: &CommandAction) -> Vec<Me
   reasons
 }
 
-/// The command `args` describe, its program found as a step would start it with `project`'s variables.
-fn command(args: &SaveToolDraft, project: &CommandEnvironment) -> Result<CommandAction, ToolError> {
+/// The command `args` describe over `before` (the tool's command; none for a new tool), its program
+/// found as a step would start it with `project`'s variables, outside `repository`.
+fn command(
+  args: &SaveToolDraft,
+  before: Option<&CommandAction>,
+  project: &CommandEnvironment,
+  repository: &Path,
+) -> Result<CommandAction, ToolError> {
   let invalid = |reason: Message| refused("invalid_tool", reason);
-  let program = CommandProgram::new(&args.program).map_err(|error| invalid(program_message(&error)))?;
-  let arguments = args
-    .arguments
-    .iter()
-    .map(|argument| CommandArg::new(argument).map_err(|error| invalid(program_message(&error))))
-    .collect::<Result<Vec<_>, _>>()?;
-  let timeout = CommandTimeout::from_secs(args.timeout_secs.unwrap_or(CommandTimeout::DEFAULT.secs()))
-    .map_err(|_| invalid(Message::new("tools.errors.timeout").with("max", CommandTimeout::MAX_HOURS.to_string())))?;
-  let exit_codes = match &args.exit_codes {
-    None => ExitCodes::success(),
-    Some(codes) => ExitCodes::new(codes.iter().copied().collect()).map_err(|_| exit_codes_error(codes))?,
+  let environment = match &args.environment {
+    Some(variables) => environment(variables.clone())?,
+    None => before.map(|before| before.environment().clone()).unwrap_or_default(),
   };
-  let output_limit = OutputLimit::from_kib(args.output_limit_kib.unwrap_or(OutputLimit::DEFAULT.kib()))
-    .map_err(|_| invalid(Message::new("tools.errors.outputLimit").with("max", OutputLimit::MAX_KIB.to_string())))?;
-  let environment = environment(args.environment.clone())?;
-  // The PATH a step would look the program up in: the tool's own, the project's, or the app's.
-  let path = CommandAction::new(program.clone(), Vec::new())
-    .with_environment(environment.clone())
-    .search_path(project, orchester_exec::search_path::search_path());
-  let found = found_program(&program, path.as_deref())?;
+  let program = match (&args.program, before) {
+    (Some(text), _) => {
+      let program = CommandProgram::new(text).map_err(|error| invalid(program_message(&error)))?;
+      // The PATH a step would look the program up in: the tool's own, the project's, or the app's.
+      let path = CommandAction::new(program.clone(), Vec::new())
+        .with_environment(environment.clone())
+        .search_path(project, orchester_exec::search_path::search_path());
+      found_program(&program, path.as_deref(), repository)?
+    }
+    (None, Some(before)) => before.program().clone(),
+    (None, None) => return Err(invalid(Message::new("tools.errors.programRequired"))),
+  };
+  let arguments = match &args.arguments {
+    Some(arguments) => arguments
+      .iter()
+      .map(|argument| CommandArg::new(argument).map_err(|error| invalid(program_message(&error))))
+      .collect::<Result<Vec<_>, _>>()?,
+    None => before.map(|before| before.args().to_vec()).unwrap_or_default(),
+  };
+  let timeout = match args.timeout_secs {
+    Some(secs) => CommandTimeout::from_secs(secs)
+      .map_err(|_| invalid(Message::new("tools.errors.timeout").with("max", CommandTimeout::MAX_HOURS.to_string())))?,
+    None => before.map_or(CommandTimeout::DEFAULT, CommandAction::timeout),
+  };
+  let exit_codes = match &args.exit_codes {
+    Some(codes) => ExitCodes::new(codes.iter().copied().collect()).map_err(|_| exit_codes_error(codes))?,
+    None => before.map_or_else(ExitCodes::success, |before| before.exit_codes().clone()),
+  };
+  let output_limit = match args.output_limit_kib {
+    Some(kib) => OutputLimit::from_kib(kib)
+      .map_err(|_| invalid(Message::new("tools.errors.outputLimit").with("max", OutputLimit::MAX_KIB.to_string())))?,
+    None => before.map_or(OutputLimit::DEFAULT, CommandAction::output_limit),
+  };
   Ok(
-    CommandAction::new(found, arguments)
+    CommandAction::new(program, arguments)
       .with_timeout(timeout)
       .with_exit_codes(exit_codes)
       .with_output_limit(output_limit)
       .with_environment(environment),
   )
-}
-
-/// The file `program` is: the first copy on `path` for a name, an absolute path as it is (on Windows
-/// also with a program extension). A path in the worktree is refused: each run's worktree holds its own
-/// copy, which the agents before the step could change, so a person could not tell what runs.
-fn found_program(program: &CommandProgram, path: Option<&OsStr>) -> Result<CommandProgram, ToolError> {
-  if matches!(program.location(), ProgramLocation::InWorktree(_)) {
-    return Err(refused(
-      "program_in_worktree",
-      Message::new("appMcp.projectTools.errors.programInWorktree"),
-    ));
-  }
-  let not_found = || {
-    refused(
-      "program_not_found",
-      Message::new("appMcp.projectTools.errors.programNotFound").with("program", program.as_str().to_owned()),
-    )
-  };
-  // The worktree is not looked in: a name or an absolute path does not depend on it.
-  let found = program
-    .candidates(Path::new(""), path, Platform::current())
-    .into_iter()
-    .find(|candidate| candidate.is_file())
-    .ok_or_else(not_found)?;
-  let found = found.to_str().ok_or_else(not_found)?;
-  CommandProgram::new(found).map_err(|error| refused("invalid_tool", program_message(&error)))
 }
 
 fn exit_codes_error(codes: &[i64]) -> ToolError {

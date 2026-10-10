@@ -46,24 +46,28 @@ pub(super) const SPECS: &[Spec] = &[
     description: "One tool as its editor shows it (its draft if it has one, otherwise its latest version): a \
                   command tool's program, arguments, timeout, exit codes that pass, environment variables and \
                   output limit; where it stands; and which published pipeline steps call it. A command tool runs \
-                  in the worktree of the step that calls it, without a shell.",
+                  in the worktree of the step that calls it, without a shell, with the person's rights, network \
+                  access and no sandbox.",
     schema: schema_for_type::<InTool>,
     read_only: true,
   },
   Spec {
     name: "save_tool_draft",
-    description: "Saves a command tool's draft with every field of its editor; without `tool` a new one is made \
-                  under `name`. The program is a name found on the search path (the tool's PATH, else the \
-                  project's, else the app's) or an absolute path to an existing file, and is stored as the file \
-                  found; a path inside the repository is refused (run a script through its interpreter: program \
-                  powershell, arguments -File tools/check.ps1). Each argument is passed as it is, no shell reads \
-                  it; the step's worktree is the working directory. Left out: timeout 600 seconds, exit code 0, \
-                  no variables, output limit 256 KiB. Variables are plain text: never a secret. A command tool \
-                  runs a program on this computer whenever a step calls it, so unless a person turned on Let \
-                  automation change agent permissions, making one is refused as person_only, as is changing its \
-                  program or arguments, letting more exit codes pass, or changing any variable but the harmless \
-                  ones set_project_environment names. Its description, timeout and output limit, and fewer exit \
-                  codes, are always taken. Publish it with publish_tool.",
+    description: "Saves a command tool's draft as its editor does; without `tool` a new one is made under \
+                  `name`. On an existing tool a field left out keeps its value; a new tool needs `program` and \
+                  otherwise gets no description, no arguments, timeout 600 seconds, exit code 0, no variables \
+                  and output limit 256 KiB. The program is a name found on the search path (the tool's PATH, \
+                  else the project's, else the app's; relative folders are skipped) or an absolute path to an \
+                  existing file outside the project's repository, and is stored as the file found, so the \
+                  program itself is a fixed file; a path inside the repository is refused (run a script through \
+                  its interpreter: program powershell, arguments -File tools/check.ps1). That is not a sandbox: \
+                  the step runs the program in its worktree with your rights, network access and no sandbox, \
+                  and the program reads files the agents before it wrote (scripts, build files, configuration). \
+                  Each argument is passed as it is, no shell reads it. Variables are plain text: never a secret. \
+                  Unless a person turned on Let automation change agent permissions, making a tool is refused as \
+                  person_only, as is changing its program or arguments, letting more exit codes pass, or \
+                  changing any variable but the harmless ones set_project_environment names. Its description, \
+                  timeout and output limit, and fewer exit codes, are always taken. Publish it with publish_tool.",
     schema: schema_for_type::<tool_input::SaveToolDraft>,
     read_only: false,
   },
@@ -74,7 +78,9 @@ pub(super) const SPECS: &[Spec] = &[
                   than the latest, and as draft_changed for a draft that changed while it was checked. Unless a \
                   person turned on Let automation change agent permissions, a tool's first version is refused as \
                   person_only, and so is a draft that runs another program or other arguments than the latest \
-                  version, lets more exit codes pass or changes a variable but the harmless ones.",
+                  version, lets more exit codes pass or changes a variable but the harmless ones: a step that \
+                  calls it runs its program with the person's rights, network access and no sandbox, on files \
+                  the agents before it wrote.",
     schema: schema_for_type::<InTool>,
     read_only: false,
   },
@@ -161,13 +167,13 @@ async fn publish_tool(services: &Services, args: InTool) -> Result<Value, ToolEr
   .await
 }
 
-/// The project's tool named by its id or, ignoring case, its name.
+/// The project's tool named by its id or else, ignoring case, by its name.
 pub(super) fn tool_named<'a>(tools: &'a ProjectTools, named: &str) -> Result<&'a ToolEntry, ToolError> {
   let lowered = named.to_lowercase();
-  tools
-    .tools
-    .iter()
-    .find(|entry| entry.id.to_string() == named || entry.name.to_lowercase() == lowered)
+  // An id names one tool for certain; a name could also be another tool's id.
+  let by_id = tools.tools.iter().find(|entry| entry.id.to_string() == named);
+  by_id
+    .or_else(|| tools.tools.iter().find(|entry| entry.name.to_lowercase() == lowered))
     .ok_or_else(|| ToolError::not_found(Missing::Tool, named))
 }
 
