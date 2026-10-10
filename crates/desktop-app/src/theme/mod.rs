@@ -10,6 +10,7 @@
 //! that need them come next and must find them here rather than add near-duplicates.
 
 mod cards;
+mod composer;
 mod conversation;
 mod decisions;
 mod fonts;
@@ -35,6 +36,7 @@ use lurq::{
 
 pub use self::{
   cards::{CardsSpacing, CardsText},
+  composer::{ComposerColor, ComposerRadius, ComposerText},
   conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText},
   decisions::{DecisionSpacing, DecisionText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
@@ -72,6 +74,7 @@ pub fn install(app: &mut App, mode: Mode) {
   shell::install(theme);
   conversation::install(theme);
   cards::install(theme);
+  composer::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

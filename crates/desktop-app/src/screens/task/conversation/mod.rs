@@ -4,7 +4,7 @@
 //! cards that wait for a decision (C3's, `timeline::cards`) and while an agent works the working line;
 //! following it live, or *Jump to latest* once the person scrolled up. Over it the toolbar's run state
 //! chip ([`toolbar`]); before the run can be shown, why not ([`states`]): loading, couldn't load, queued,
-//! no run yet, unreadable. Under it the composer's place (C2).
+//! no run yet, unreadable. Under it the composer ([`composer`]).
 //!
 //! The task page (P1) reads the task and hands it here ([`tab`]); the transcript and the run's requests are
 //! read here ([`read`]), again as the runner reports changes of the project's runs (the feed counts them per
@@ -12,6 +12,7 @@
 //! the task starts the tab afresh. The step rail, *Show*, the search and Details are not part of this
 //! build (D4): the chat shows every step.
 
+mod composer;
 mod read;
 mod states;
 mod timeline;
@@ -20,7 +21,7 @@ mod toolbar;
 use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
-  app::{component::Component, ctx::Ctx, theme::SpacingSize},
+  app::{component::Component, ctx::Ctx},
   components::Column,
   core::Signal,
   node::{Element, dimension::Dimension},
@@ -40,18 +41,14 @@ use orchester_workspace::{
   },
 };
 
+pub use self::composer::ComposerState;
 use self::{
   read::{Transcript, TranscriptRead, Waiting, with_requests},
   timeline::{Follow, Timeline, Toggles},
   toolbar::RunState,
 };
 use super::{TaskContext, cards::Decisions};
-use crate::{
-  project::TasksState,
-  services::Services,
-  theme::ExtraSpacing,
-  ui::{markdown::plain, unavailable::reason_line},
-};
+use crate::{project::TasksState, services::Services, ui::markdown::plain};
 
 /// The tab's content for `task`, as the task page read it. Keyed by the task and its latest run, so a new
 /// run starts with nothing opened and following its end.
@@ -98,6 +95,7 @@ impl Component for ConversationTab {
       .and_then(|run| task.left.as_read(run.id()))
       .and_then(Result::ok);
     let conversation = Conversation::of(detail, task.lost(), leftovers.as_ref());
+    let composer = composer::dock(ctx, &self.follow, &task, &conversation);
     let (body, state) = match &detail.run {
       Some(run) => self.run_body(ctx, &task, run, &conversation),
       None => (states::without_run(ctx, detail, &conversation), None),
@@ -116,7 +114,7 @@ impl Component for ConversationTab {
           .min_height(Dimension::Px(0.0))
           .child(body),
       )
-      .child(composer_place(ctx))
+      .child(composer)
   }
 }
 
@@ -267,19 +265,4 @@ fn working_invocations(run: &RunView, live: bool) -> Arc<[InvocationId]> {
     .filter(|invocation| invocation.ended_at.is_none())
     .map(|invocation| invocation.id)
     .collect()
-}
-
-/// Where the composer goes (C2). Until it is built, the chat says writing to the run's agents is not
-/// available here.
-fn composer_place(ctx: &Ctx) -> Element {
-  Column::new()
-    .id("conversation-composer-place")
-    .width(Dimension::Pct(100.0))
-    .padding_horizontal(SpacingSize::Section)
-    .padding_bottom(ExtraSpacing::Inset.role())
-    .child(reason_line(
-      "conversation-composer-unavailable",
-      &ctx.t("conversation.composer.unavailable"),
-    ))
-    .into()
 }

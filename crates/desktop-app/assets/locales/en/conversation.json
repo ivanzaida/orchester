@@ -14,9 +14,6 @@
         "other": "{{count}} more lines of the change are not shown"
       }
     },
-    "composer": {
-      "unavailable": "Writing to the run’s agents from this tab is not available in this version yet."
-    },
     "decision": {
       "aCommand": "command",
       "alwaysAllowed": "always allowed · {{subject}}",
