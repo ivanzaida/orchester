@@ -6,9 +6,12 @@
 //!   prompt also says "Never complete the call", as for a cell Codex abandoned. "Fail the turn" ends the turn failed
 //!   instead, as a usage limit does. "Ask a command after" has the cell, once its call returned, ask about a command
 //!   (`cell-command`) for the turn that started it; the continuation finishes once that is answered (`cell command:
-//!   <decision>`).
+//!   <decision>`). A continuation that comes before the answer waits for it, unless the prompt says "Give up waiting"
+//!   (it ends its turn with the cell uncollected, as when Codex's wait times out) or "Ask another decision" (it asks
+//!   about a second command, `another-command`, while the first waits).
 //! - "Abandon an Orchester call": starts a call of Orchester's tools that never reaches the relay nor completes, then
-//!   finishes the turn as usual.
+//!   finishes the turn as usual. "Call a tool every turn" also calls `get_task` in that turn and in each continuation,
+//!   which finishes again with the same result.
 use std::{path::Path, process::ExitCode, sync::mpsc, thread, time::Duration};
 
 use serde_json::{Value, json};
@@ -17,7 +20,7 @@ use super::{
   Session, Step, complete, emit,
   fake_codex_work::{StepReport, finish, message, report_of},
   fake_permission_prompt::Prompt,
-  notify,
+  notify, request,
 };
 
 const TRIGGER: &str = "Yield outside read";
@@ -25,6 +28,8 @@ const CONTINUE: &str = "Collect the results of the Orchester tool calls";
 const ABANDON: &str = "Abandon an Orchester call";
 /// The id of the request the cell asks about its command.
 pub const COMMAND: u64 = 500;
+/// The id of the second command a continuation asks about while the first waits.
+const ANOTHER: u64 = 501;
 
 pub struct Cell {
   answer: mpsc::Receiver<(Prompt, Option<(String, bool)>)>,
@@ -130,7 +135,23 @@ fn abandon(session: &mut Session, prompt: &str, structured: bool) -> Step {
     json!({"item": {"id": "abandoned-call", "type": "mcpToolCall", "server": "Orchester",
       "tool": "read_file", "arguments": {"path": "README.md"}}}),
   );
+  session.calls_every_turn = prompt.contains("Call a tool every turn");
+  if session.calls_every_turn {
+    call_a_tool(session);
+  }
   finish(session, "hello", &report_of(prompt, structured))
+}
+
+/// Calls `get_task` through the relay, which answers it at once.
+fn call_a_tool(session: &mut Session) {
+  let answer = session
+    .orchester
+    .as_mut()
+    .and_then(|server| server.call("get_task", &json!({})));
+  eprintln!(
+    "every-turn call: {}",
+    if answer.is_some() { "answered" } else { "no answer" }
+  );
 }
 
 fn wait_to_end(worktree: &Path) {
@@ -141,13 +162,51 @@ fn wait_to_end(worktree: &Path) {
 
 fn collect(session: &mut Session) -> Step {
   let Some(cell) = session.cell.take() else {
-    let Some(text) = session.completed_result.take() else {
+    if session.calls_every_turn {
+      call_a_tool(session);
+    }
+    let text = if session.calls_every_turn {
+      session.completed_result.clone()
+    } else {
+      session.completed_result.take()
+    };
+    let Some(text) = text else {
       return Step::Exit(ExitCode::from(2));
     };
     message(session, "already-collected", &text);
     complete(session, None);
     return Step::Go;
   };
+  if cell.asks_command && !matches!(session.cell_command, Command::Answered(_)) {
+    if cell.prompt.contains("Give up waiting") {
+      eprintln!("cell: gave up waiting");
+      session.cell = Some(cell);
+      message(
+        session,
+        "still-pending",
+        &json!({"outcome": "question", "summary": "The command in tool cell 14 still waits"}).to_string(),
+      );
+      complete(session, None);
+      return Step::Go;
+    }
+    if cell.prompt.contains("Ask another decision") {
+      session.cell = Some(cell);
+      let cwd = session.cwd.to_string_lossy().into_owned();
+      notify(
+        session,
+        "item/started",
+        json!({"item": {"id": "another-command", "type": "commandExecution", "command": "another-command"}}),
+      );
+      request(
+        session,
+        ANOTHER,
+        "item/commandExecution/requestApproval",
+        json!({"itemId": "another-command", "command": "another-command", "cwd": cwd,
+          "availableDecisions": ["accept", "decline"]}),
+      );
+      return Step::Go;
+    }
+  }
   let Ok((server, Some((text, failed)))) = cell.answer.recv_timeout(Duration::from_secs(15)) else {
     eprintln!("cell: no answer");
     return Step::Exit(ExitCode::from(2));

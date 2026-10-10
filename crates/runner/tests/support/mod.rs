@@ -7,6 +7,7 @@
 
 pub mod hold;
 pub mod native;
+pub mod tool_wait;
 pub mod tools;
 pub mod vault;
 

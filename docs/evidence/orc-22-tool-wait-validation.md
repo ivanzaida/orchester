@@ -216,3 +216,14 @@ failed with the production changes reverted and pass with them. Fresh filtered r
 `codex_escalations` (4), `command_approvals` (4), `send_now` (7), `send_now_delivery` (4), `retries` (4),
 `approval_choices` (11), `auto_mode` (10), `orchester_file_tools` (4), `codex_resume` (2), and
 `orchester-core --test app_server` (13). Earlier sections are historical for these inputs.
+
+## Third review correction
+
+2026-10-11. A re-review found that a decision a yielded cell asked could still be lost: a continuation started while
+it waited, so the model could end that turn (the decision ended interrupted) or ask a second decision (the turn
+failed). It also asked for a hard cap on continuations and for a requested pause to checkpoint before a continuation.
+Now a waiting decision keeps the turn alive and holds the continuation until it is settled; at most three
+continuations follow in a row without a decision or a call the runner waited for; a pause stops before the
+continuation. The tool-wait tests are split into `codex_tool_wait` (13) and `codex_tool_wait_bounds` (4). The four
+new tests (a waiting decision with a continuation that would give up, one that would ask another decision, the cap,
+the pause) failed with the previous production code and pass now.

@@ -777,12 +777,15 @@ invocation and attempt. Pause, cancel, runner loss and shutdown preserve the
 attempt and interrupt the decision without granting it. Approval results remain
 eligible for collection after their MCP item completes; a synchronous approved
 result receives one continuation without repeating tools. Continuations are
-bounded: one needs a relay call returned since the last, so a call Codex never
-completes cannot start turn after turn, and a failed or interrupted turn is never
-continued. A decision a yielded cell asks for its ended turn (a command approval)
-reaches a person instead of failing the step. Thirteen `codex_tool_wait` tests
-cover delayed and fast approval and denial, late turn-start replies, stops, the
-continuation bounds and the yielded cell's command; Claude's approval tests pass.
+bounded: one needs a relay call returned or a decision settled since the last, so a
+call Codex never completes cannot start turn after turn; a failed or interrupted
+turn is never continued; at most three follow in a row without a decision or a call
+the runner waited for; a requested pause checkpoints instead. A decision a yielded
+cell asks for its ended turn (a command approval) reaches a person, and no
+continuation starts while it waits. `codex_tool_wait` (13) and
+`codex_tool_wait_bounds` (4) cover delayed and fast approval and denial, late
+turn-start replies, stops, the bounds and the yielded cell's command; Claude's
+approval tests pass.
 Cause and design: `docs/interactive-tool-approvals.md`, ORC-22 section; earlier
 validation: `docs/evidence/orc-22-tool-wait-validation.md`.
 The person approved a separate small `tools/check.ps1` change to check formatting

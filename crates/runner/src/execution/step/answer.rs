@@ -312,6 +312,9 @@ impl Worker {
         decision,
       },
     )?;
+    // A decision is progress: a yielded cell that waited on it can now be collected.
+    watch.idle_continuations = 0;
+    self.continue_after_tools(watch).await?;
     Ok(Ok(()))
   }
 }

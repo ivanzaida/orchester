@@ -1,104 +1,23 @@
-//! A yielded Orchester MCP call must survive the model ending its turn before the person decides.
+//! A yielded Orchester MCP call must survive the model ending its turn before the person decides, and so must a
+//! decision the yielded cell asks of Codex. The bounds of its continuations: `codex_tool_wait_bounds`.
 mod support;
 
 use std::{path::Path, time::Duration};
 
 use orchester_core::{
-  connection::stream::{AgentEvent, InvocationOutcome},
-  id::{IdempotencyKey, RunId},
-  permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
-  run::{Answerer, ApprovalAnswer, InterruptCause, PendingToolApproval, RunStatus},
+  connection::stream::AgentEvent,
+  id::RunId,
+  run::{Answerer, ApprovalAnswer, InterruptCause, RunStatus},
   store::{ActivityStore, RunStore},
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
-use support::{PATIENCE, Setup, TestProject, project, reported, scheduler_with, wait_for, wait_for_idle};
+use support::{
+  PATIENCE, reported,
+  tool_wait::{Waiting, command_setup, ended_turn, pending},
+  wait_for, wait_for_idle,
+};
 use tokio::sync::mpsc;
-
-struct Waiting {
-  project: TestProject,
-  runner: Scheduler,
-  events: mpsc::UnboundedReceiver<Event>,
-  id: RunId,
-  request: PendingToolApproval,
-}
-
-impl Waiting {
-  async fn start() -> Self {
-    Self::start_with("Yield outside read.").await
-  }
-
-  async fn start_with(brief: &'static str) -> Self {
-    Self::begin(&Setup::new(brief)).await
-  }
-
-  async fn begin(setup: &Setup) -> Self {
-    let project = project(setup);
-    let root = project.repo.path();
-    let folder = root.join("deps-a");
-    std::fs::create_dir(&folder).expect("outside folder");
-    std::fs::write(folder.join("notes.txt"), "outside line").expect("outside file");
-    let (runner, mut events) = scheduler_with(root, project.vault.clone());
-    let id = runner
-      .start_run(IdempotencyKey::generate(), project.task)
-      .await
-      .expect("start");
-    let request = pending(root, &mut events, id, |_| true).await;
-    Self {
-      project,
-      runner,
-      events,
-      id,
-      request,
-    }
-  }
-}
-
-async fn pending(
-  root: &Path,
-  events: &mut mpsc::UnboundedReceiver<Event>,
-  id: RunId,
-  wanted: impl Fn(&PendingToolApproval) -> bool,
-) -> PendingToolApproval {
-  tokio::time::timeout(PATIENCE, async {
-    loop {
-      if let Some(request) = ProjectDb::open(root)
-        .expect("open")
-        .pending_tool_approvals(id)
-        .expect("pending")
-        .into_iter()
-        .find(|request| wanted(request))
-      {
-        return request;
-      }
-      events.recv().await.expect("notification");
-    }
-  })
-  .await
-  .expect("approval arrives")
-}
-
-async fn ended_turn(root: &Path, id: RunId) {
-  let worktree = root.join(".orchester/worktrees").join(id.to_string());
-  std::fs::write(worktree.join("yield-turn.txt"), "end the model turn").expect("release turn");
-  tokio::time::timeout(PATIENCE, async {
-    loop {
-      if ProjectDb::open(root)
-        .expect("open")
-        .activity(id, 0)
-        .expect("activity")
-        .iter()
-        .any(|entry| matches!(entry.event, AgentEvent::TurnCompleted { .. }))
-      {
-        return;
-      }
-      tokio::time::sleep(Duration::from_millis(20)).await;
-    }
-  })
-  .await
-  .expect("the model ends the turn");
-}
 
 async fn delayed_decision(answer: ApprovalAnswer, brief: &'static str) {
   let Waiting {
@@ -317,100 +236,14 @@ async fn codex_tool_wait_a_call_codex_never_completes_is_continued_once() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn codex_tool_wait_an_abandoned_call_that_never_returned_is_not_continued() {
-  let project = project(&Setup::new("Abandon an Orchester call."));
-  let root = project.repo.path();
-  let (runner, mut events) = scheduler_with(root, project.vault.clone());
-  let id = runner
-    .start_run(IdempotencyKey::generate(), project.task)
-    .await
-    .expect("start");
-  let done = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
-  assert_eq!(done.status(), &RunStatus::Succeeded);
-  assert_eq!(done.attempts().len(), 1);
-  let db = ProjectDb::open(root).expect("open");
-  assert_eq!(db.invocations(id).expect("invocations").len(), 1);
-  assert_eq!(reported(&db, id, "turn-request: "), ["5"]);
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn codex_tool_wait_a_failed_turn_is_not_continued() {
-  let Waiting {
-    project,
-    runner,
-    mut events,
-    id,
-    request,
-  } = Waiting::start_with("Yield outside read. Fail the turn.").await;
-  let root = project.repo.path();
-  runner
-    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
-    .await
-    .expect("decide");
-  let db = ProjectDb::open(root).expect("open");
-  // The call returned before the turn failed: a completed turn would be continued to collect it.
-  tokio::time::timeout(PATIENCE, async {
-    while reported(&db, id, "cell-returned: ").is_empty() {
-      events.recv().await.expect("notification");
-    }
-  })
-  .await
-  .expect("the relay returns the call");
-  ended_turn(root, id).await;
-  let first = tokio::time::timeout(PATIENCE, async {
-    loop {
-      if let Some(ended) = db
-        .invocations(id)
-        .expect("invocations")
-        .into_iter()
-        .next()
-        .filter(|invocation| invocation.ended_at.is_some())
-      {
-        return ended;
-      }
-      events.recv().await.expect("notification");
-    }
-  })
-  .await
-  .expect("the failed turn ends its invocation");
-  assert!(
-    matches!(&first.outcome, Some(InvocationOutcome::TurnFailed { message }) if message.contains("usage limit")),
-    "{:?}",
-    first.outcome
-  );
-  let turn_requests: Vec<_> = db
-    .activity(id, 0)
-    .expect("activity")
-    .into_iter()
-    .filter(|entry| entry.invocation == first.id)
-    .filter_map(|entry| match entry.event {
-      AgentEvent::Raw { line, .. } => line.strip_prefix("turn-request: ").map(str::to_owned),
-      _ => None,
-    })
-    .collect();
-  assert_eq!(turn_requests, ["5"], "no continuation after a failed turn");
-  assert!(reported(&db, id, "cell: ").is_empty());
-  runner.stop_all(InterruptCause::RunnerLost).await;
-  wait_for_idle(&runner).await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn codex_tool_wait_a_command_the_yielded_cell_asks_reaches_a_person() {
-  let setup = Setup {
-    permissions: Some(AgentPermissions::new(
-      RepositoryAccess::Write,
-      CommandPermission::AnyInWorktree,
-      NetworkAccess::Off,
-    )),
-    ..Setup::new("Yield outside read. Ask a command after.")
-  };
   let Waiting {
     project,
     runner,
     mut events,
     id,
     request,
-  } = Waiting::begin(&setup).await;
+  } = Waiting::begin(&command_setup("Yield outside read. Ask a command after.")).await;
   let root = project.repo.path();
   ended_turn(root, id).await;
   runner
@@ -424,7 +257,12 @@ async fn codex_tool_wait_a_command_the_yielded_cell_asks_reaches_a_person() {
     .decide_tool_approval(id, command.id, ApprovalAnswer::Once, Answerer::Person)
     .await
     .expect("decide the command");
-  let done = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  collected_with_command(root, &mut events, id).await;
+}
+
+/// The run succeeded in one attempt and invocation, its one continuation collecting the cell after its command.
+async fn collected_with_command(root: &Path, events: &mut mpsc::UnboundedReceiver<Event>, id: RunId) {
+  let done = wait_for(root, events, id, |run| run.status().is_terminal()).await;
   assert_eq!(done.status(), &RunStatus::Succeeded);
   assert_eq!(done.attempts().len(), 1);
   let db = ProjectDb::open(root).expect("open");
@@ -434,4 +272,48 @@ async fn codex_tool_wait_a_command_the_yielded_cell_asks_reaches_a_person() {
   let results = reported(&db, id, "cell: ");
   assert_eq!(results.len(), 1);
   assert!(results[0].starts_with("approved: "), "{results:?}");
+  assert!(!db.has_interrupted_tool_approval(id).expect("approvals"));
+}
+
+/// The cell's command waits as its turn ends: Codex is continued only once the person answered it, so the
+/// continuation can neither end its turn on the waiting cell nor ask a second decision meanwhile.
+async fn decision_waits_at_turn_end(brief: &'static str) {
+  let mut waiting = Waiting::begin(&command_setup(brief)).await;
+  waiting.approve_in_turn().await;
+  let Waiting {
+    project,
+    runner,
+    mut events,
+    id,
+    ..
+  } = waiting;
+  let root = project.repo.path();
+  let command = pending(root, &mut events, id, |request| request.command).await;
+  ended_turn(root, id).await;
+  tokio::time::sleep(Duration::from_secs(1)).await;
+  let db = ProjectDb::open(root).expect("open");
+  assert_eq!(
+    reported(&db, id, "turn-request: "),
+    ["5"],
+    "no continuation while the decision waits"
+  );
+  assert_eq!(
+    db.pending_tool_approvals(id).expect("pending"),
+    std::slice::from_ref(&command)
+  );
+  runner
+    .decide_tool_approval(id, command.id, ApprovalAnswer::Once, Answerer::Person)
+    .await
+    .expect("decide the command");
+  collected_with_command(root, &mut events, id).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn codex_tool_wait_a_waiting_decision_outlives_a_turn_that_would_give_up() {
+  decision_waits_at_turn_end("Yield outside read. Ask a command after. Give up waiting.").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn codex_tool_wait_a_waiting_decision_is_not_joined_by_another() {
+  decision_waits_at_turn_end("Yield outside read. Ask a command after. Ask another decision.").await;
 }

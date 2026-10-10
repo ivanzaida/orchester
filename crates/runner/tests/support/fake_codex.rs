@@ -156,6 +156,8 @@ pub struct Session {
   pub cell: Option<fake_codex_cell::Cell>,
   /// A command the yielded cell asked about (`fake_codex_cell`).
   pub cell_command: fake_codex_cell::Command,
+  /// Every turn calls one of Orchester's tools (`fake_codex_cell`).
+  pub calls_every_turn: bool,
   /// The model already collected synchronous tool results; a continuation reuses its final report.
   pub completed_result: Option<String>,
   deferred_turn_reply: Option<Value>,
@@ -188,6 +190,7 @@ impl Session {
       turns: 0,
       cell: None,
       cell_command: fake_codex_cell::Command::default(),
+      calls_every_turn: false,
       completed_result: None,
       deferred_turn_reply: None,
       probe: fake_codex_relay::Probe::None,

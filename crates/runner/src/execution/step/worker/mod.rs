@@ -238,6 +238,9 @@ pub(super) struct Watch {
   /// The relay's returns ([`Listening::returns`]) when Codex was last continued: a further continuation needs one
   /// since.
   returns_continued: u64,
+  /// Continuations since a decision was settled or a call returned that Codex waited for after its turn
+  /// (`process::MAX_IDLE_CONTINUATIONS`).
+  pub(super) idle_continuations: u8,
 }
 
 impl Watch {
@@ -261,6 +264,7 @@ impl Watch {
       closed_after_result: None,
       tools_after_turn: false,
       returns_continued: 0,
+      idle_continuations: 0,
     })
   }
 

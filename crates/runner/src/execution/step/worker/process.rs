@@ -29,6 +29,10 @@ use super::{
 };
 use crate::supervisor::{ProcessEvent, ProcessExit};
 
+/// Continuations of a Codex turn in a row without a decision settled or a call returned that the runner waited for
+/// after a turn: a safety net under the progress each continuation needs ([`Worker::tools_outlive_turn`]).
+const MAX_IDLE_CONTINUATIONS: u8 = 3;
+
 /// The next event of a CLI's process; a native driver has none.
 async fn next_event(driver: &mut Driver) -> Option<ProcessEvent> {
   match driver {
@@ -106,7 +110,13 @@ impl Worker {
     match relayed {
       Relayed::Approval(asked) => self.request_claude_approval(watch, asked).await?,
       Relayed::Question(asked) => self.request_relay_question(watch, asked)?,
-      Relayed::Returned => self.continue_after_tools(watch).await?,
+      Relayed::Returned => {
+        // A call returned while Codex waited after its turn: work went on, which a continuation may collect.
+        if watch.tools_after_turn {
+          watch.idle_continuations = 0;
+        }
+        self.continue_after_tools(watch).await?;
+      }
     }
     self.stop_at_checkpoint(watch);
     Ok(())
@@ -295,33 +305,49 @@ impl Worker {
     }
   }
 
-  /// Whether Orchester's tools outlive the Codex turn that ended: a call still runs or waits for a person, or one
-  /// returned since Codex was last continued and its result may not be collected yet. Calls Codex still shows open
-  /// are not enough on their own: it may never complete one it abandoned, and each continuation is a model turn.
+  /// Whether Orchester's tools outlive the Codex turn that ended: a call still runs, a decision still waits (a call
+  /// of Orchester's tools, or one a yielded cell asked of Codex), or a call returned since Codex was last continued
+  /// and its result may not be collected yet. Calls Codex still shows open are not enough on their own: it may never
+  /// complete one it abandoned, and each continuation is a model turn.
   fn tools_outlive_turn(&self, watch: &Watch) -> bool {
     let Some(relay) = self.tool_relay.as_ref() else {
       return false;
     };
     relay.busy()
-      || matches!(&watch.approval, Some((_, Awaiting::Tool { .. })))
+      || watch.approval.is_some()
       || (relay.returns() > watch.returns_continued
         && self
           .app_server()
           .is_some_and(AppServerSession::has_orchester_results_to_collect))
   }
 
-  /// Collects a yielded call in the same Codex thread once the relay has returned it. A decision a yielded cell asks
-  /// of Codex meanwhile (a command) does not hold the continuation back: the cell waits for its answer either way.
-  async fn continue_after_tools(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
-    if !watch.tools_after_turn || self.tool_relay.as_ref().is_some_and(Listening::busy) {
+  /// Collects a yielded call in the same Codex thread once the relay has returned it and no decision waits: a
+  /// continuation while a yielded cell's decision waits could end its turn, or ask another, before the person
+  /// answers. Called again once the decision is settled. A stop, a reached budget or a requested pause ends the
+  /// agent instead (a pause checkpoints it), as does the [`MAX_IDLE_CONTINUATIONS`] cap.
+  pub(in super::super) async fn continue_after_tools(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
+    if !watch.tools_after_turn || watch.approval.is_some() || self.tool_relay.as_ref().is_some_and(Listening::busy) {
       return Ok(());
     }
     watch.tools_after_turn = false;
-    if watch.stop.is_some() || watch.over.is_some() {
-      watch.stop = watch.stop.or(watch.over);
+    let stop = watch
+      .stop
+      .or(watch.over)
+      .or_else(|| watch.pause_requested.then_some(StopCause::Paused));
+    if stop.is_some() {
+      watch.stop = stop;
       self.driver.end();
       return Ok(());
     }
+    if watch.idle_continuations >= MAX_IDLE_CONTINUATIONS {
+      tracing::warn!(
+        invocation = %watch.invocation.id,
+        "Codex was continued {MAX_IDLE_CONTINUATIONS} times without a decision or a call it waited for; the step ends"
+      );
+      self.driver.end();
+      return Ok(());
+    }
+    watch.idle_continuations += 1;
     watch.returns_continued = self.tool_relay.as_ref().map_or(0, Listening::returns);
     if let Driver::Process {
       transport: Transport::AppServer(app),

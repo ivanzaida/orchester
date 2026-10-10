@@ -542,15 +542,25 @@ schema. The protocol does not certify cell collection, so this is conservative:
 a turn with a synchronous approved call also gets one continuation, which can
 use results it already collected. It must not repeat the tools.
 
-Continuations are bounded by progress. A completed turn is continued only while
-a relay call still runs or waits for a person, or when the relay has returned a
-call since the last continuation and a result may still be uncollected. An MCP
-item Codex still shows open is not enough on its own: Codex may never send
-`item/completed` for a cell it abandoned, and each continuation is a paid model
-turn, so a turn with no returned call since the last continuation ends the step
-as before ORC-22. A failed turn (a usage limit, for one) or an interrupted one is
-never continued, whatever its tools still do; `Update::TurnEnded` says whether
-the turn completed.
+Continuations are bounded by progress. A completed turn is kept alive only while
+a relay call still runs, a decision still waits (an Orchester call's, or one a
+yielded cell asked of Codex), or the relay has returned a call since the last
+continuation and a result may still be uncollected. An MCP item Codex still
+shows open is not enough on its own: Codex may never send `item/completed` for a
+cell it abandoned, and each continuation is a paid model turn, so a turn with
+none of these ends the step as before ORC-22. A failed turn (a usage limit, for
+one) or an interrupted one is never continued, whatever its tools still do;
+`Update::TurnEnded` says whether the turn completed.
+
+A hard cap sits under that rule: at most three continuations in a row without a
+decision settled or a call returned that the runner waited for after a turn
+(`MAX_IDLE_CONTINUATIONS`). A model that calls an Orchester tool in every
+continuation while an abandoned call stays open would otherwise be continued
+forever, each of its calls counting as a returned call. Calls that return while
+a turn runs therefore do not reset the cap; a settled decision (by the person, a
+rule or auto mode) or a call the runner waited for after the turn ended does.
+At the cap the runner logs a warning and ends the step as before ORC-22: no
+failure of its own, the last turn's result stands.
 
 A yielded cell keeps working after its turn ended and may still ask Codex for a
 decision, such as a command approval once the awaited call returned. The App
@@ -558,8 +568,13 @@ Server session remembers each turn that ended with Orchester's tools still at
 work and treats a request of the same thread for such a turn as part of the
 step: it reaches a person like one asked during the turn, while the runner
 waits, before the continuation's `turn/started`, or during the continuation. A
-request for any other turn still fails the step. Such a pending Codex decision
-does not hold the continuation back: the cell waits for its answer either way.
+request for any other turn still fails the step. While such a decision waits no
+continuation starts: one would leave the model with a cell blocked on the
+person, so it could end its turn before the answer (the decision would end
+interrupted with the attempt) or ask a second decision while the first waits
+(which fails the turn). A turn that ends while the decision waits keeps the
+process alive. Once the decision is settled it counts as progress, like a
+returned call, and the continuation starts.
 
 Each turn uses a distinct JSON-RPC request ID, so a late acknowledgement of the
 previous turn cannot be mistaken for the continuation's reply. The continuation
@@ -571,14 +586,17 @@ invocation's active time remains stopped while a person decides.
 Pause, cancel, runner stop and graceful shutdown still end an unanswered request
 as interrupted, refuse a stale answer and preserve the attempt; they do not
 route it through step failure or consume a broken attempt. A stop or reached
-budget prevents the tool continuation from starting. Claude Code keeps its
+budget prevents the tool continuation from starting, and so does a requested
+pause: with nothing left to wait for, the agent stops at the pause checkpoint
+instead of starting a turn that would only be ended. Claude Code keeps its
 blocking `--permission-prompt-tool` path. M12's successful live outside reads
 (`docs/plan.md`, Done) exercised approvals without this premature model-turn
 completion; they do not rule out the code-mode sequence above.
 
 The fake Codex starts a real relay search on a background thread and completes
 the MCP item on that thread when the result returns, independently of cell
-collection. Each of its turns has an id of its own, as Codex's do. It emits `turn/completed` with a pending-cell result and collects
+collection. Each of its turns has an id of its own, as Codex's do. It emits
+`turn/completed` with a pending-cell result and collects
 that same call on the runner's continuation. Before the initial fix,
 `cargo test -p orchester-runner --features test-agent --test codex_tool_wait codex_tool_wait_approval`
 failed because the waiting approval had vanished. With the corrected fake but
@@ -586,15 +604,20 @@ before the review correction, the filtered
 `codex_tool_wait_result_returned_before_turn_completion_is_collected` test
 failed waiting for success: the provisional question had become the step result.
 
-The thirteen tool-wait tests check approval and denial three seconds after turn
-completion, fast approval and denial with the MCP item completed before the
-model turn ends, a late turn-start acknowledgement, and four stop paths. They
-assert a single attempt and invocation, actual search output or denial, and
-stale-answer refusal. The bounds have tests of their own: a call Codex never
-completes is continued once, an abandoned call that never reached the relay is
-not continued, and a failed turn whose call already returned is not continued
-(each counting the `turn/start` requests); a command approval the yielded cell
-asks for its ended turn reaches a person and the step succeeds. The synchronous relay test also asserts one continuation
+The thirteen `codex_tool_wait` tests check approval and denial three seconds
+after turn completion, fast approval and denial with the MCP item completed
+before the model turn ends, a late turn-start acknowledgement, and four stop
+paths. They assert a single attempt and invocation, actual search output or
+denial, and stale-answer refusal. A command approval the yielded cell asks for
+its ended turn reaches a person; one that waits as the turn ends holds the
+continuation back until it is answered, which a fake continuation that would
+give up on the cell, or ask a second decision, proves. A call Codex never
+completes is continued once. The four `codex_tool_wait_bounds` tests count
+`turn/start` requests: an abandoned call that never reached the relay is not
+continued, a failed turn whose call already returned is not continued, a model
+that calls a tool in every turn is continued three times, and a pause requested
+after the call returned checkpoints without a continuation. The synchronous
+relay test also asserts one continuation
 and no repeated tool calls. There is no signed-in Codex model probe or historical
 project database read; the historical sequence above was supplied with ORC-22.
 

@@ -121,6 +121,10 @@ name = "codex_tool_wait"
 required-features = ["test-agent"]
 
 [[test]]
+name = "codex_tool_wait_bounds"
+required-features = ["test-agent"]
+
+[[test]]
 name = "orchester_tools"
 required-features = ["test-agent"]
 
