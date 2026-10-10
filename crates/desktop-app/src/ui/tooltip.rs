@@ -2,7 +2,8 @@
 //! over and under it and 8 at its sides, an optional shortcut 8 after it in Geist Mono 10 at 60 %. It
 //! shows while the pointer rests on its anchor and lets the pointer through; a long one wraps. [`Truncated`]
 //! is text cut to one line with an ellipsis that keeps its full value in a tooltip, shown only while the
-//! text is cut (handover §5.3), or that has a hint of its own, worded for whether it is cut.
+//! text is cut (handover §5.3), or that has a hint of its own, worded for whether it is cut. A path or a
+//! command in a tooltip is in Geist Mono 11/500 (`C9Phsz`).
 
 use std::{sync::Arc, time::Duration};
 
@@ -30,6 +31,8 @@ pub struct Tooltip {
   id: Arc<str>,
   text: Arc<str>,
   shortcut: Option<Arc<str>>,
+  /// The words are a path or a command.
+  mono: bool,
   /// The anchor is this text, cut to its room: the tooltip shows only while it is cut.
   cut: Option<CutText>,
 }
@@ -40,6 +43,34 @@ struct CutText {
   typography: TypographyStyle,
   color: Option<PaletteColor>,
   hint: Option<Hint>,
+  frame: Option<Frame>,
+}
+
+/// Lays out the control a cut text names from the anchor's row, given whether the pointer rests on it.
+type LayOut = dyn Fn(Row, bool) -> Row + Send + Sync;
+
+/// The control a cut text names, laid out around it: the anchor is the whole control.
+#[derive(Clone)]
+struct Frame {
+  lay_out: Arc<LayOut>,
+  /// The text's color while the pointer rests on the control.
+  hovered: PaletteColor,
+}
+
+/// A frame compares by its colors: its layout depends only on whether the pointer rests, and closures do
+/// not compare.
+impl PartialEq for Frame {
+  fn eq(&self, other: &Self) -> bool {
+    self.hovered == other.hovered
+  }
+}
+
+impl std::fmt::Debug for Frame {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("Frame")
+      .field("hovered", &self.hovered)
+      .finish_non_exhaustive()
+  }
 }
 
 /// A cut text's tooltip that shows whether or not the text is cut.
@@ -58,8 +89,15 @@ impl Tooltip {
       id: id.into(),
       text: text.into(),
       shortcut: None,
+      mono: false,
       cut: None,
     }
+  }
+
+  /// The words are a path or a command: in Geist Mono.
+  pub fn mono(mut self) -> Self {
+    self.mono = true;
+    self
   }
 
   /// The keys that do the same, after the label.
@@ -86,6 +124,11 @@ impl Tooltip {
   }
 
   fn panel(&self, words: &str) -> Row {
+    let typography = if self.mono {
+      ExtraTypography::MonoLabel.role()
+    } else {
+      TypographyStyle::FieldLabel
+    };
     let mut panel = Row::new()
       .id(format!("{}-tooltip", self.id))
       .padding(Padding::symmetric(SpacingSize::Sm, SpacingSize::Xs))
@@ -95,7 +138,7 @@ impl Tooltip {
       .rounded(RadiusSize::Sm)
       .child(
         Text::new(words)
-          .variant(TypographyStyle::FieldLabel)
+          .variant(typography)
           .color(PaletteColor::TextInverse)
           .max_width(Dimension::Px(TEXT_MAX_WIDTH)),
       );
@@ -188,11 +231,21 @@ const CUT_TOLERANCE: f32 = 0.5;
 
 impl TooltipHost {
   /// The cut text in `anchor`, which gives up room when its row runs out of it, and, while the pointer
-  /// rests on it, an unseen whole copy in an overlay that measures it without moving the row.
+  /// rests on it, an unseen whole copy in an overlay that measures it without moving the row. A framed
+  /// text's anchor is the control it names.
   fn cut_text(&self, anchor: Row, tooltip: &Tooltip, cut: &CutText) -> Row {
-    let text = |text: Text| match cut.color.clone() {
+    let resting = self.resting.get();
+    let color = match &cut.frame {
+      Some(frame) if resting => Some(frame.hovered.clone()),
+      _ => cut.color.clone(),
+    };
+    let text = |text: Text| match color.clone() {
       Some(color) => text.variant(cut.typography).color(color).nowrap(),
       None => text.variant(cut.typography).nowrap(),
+    };
+    let anchor = match &cut.frame {
+      Some(frame) => (frame.lay_out)(anchor, resting),
+      None => anchor,
     };
     anchor
       .flex_shrink(1.0)
@@ -206,7 +259,7 @@ impl TooltipHost {
           .text_overflow(TextOverflow::Elipsis),
       )
       // The copy is an overlay, out of the row's flow and out of its name: laid out whole, unseen.
-      .with_children(self.resting.get().then(|| {
+      .with_children(resting.then(|| {
         let whole = text(Text::new(&tooltip.text))
           .ref_element(self.whole.clone())
           .opacity(0.0);
@@ -229,6 +282,8 @@ pub struct Truncated {
   typography: TypographyStyle,
   color: Option<PaletteColor>,
   hint: Option<Hint>,
+  mono: bool,
+  frame: Option<Frame>,
 }
 
 impl Truncated {
@@ -240,6 +295,8 @@ impl Truncated {
       typography,
       color: None,
       hint: None,
+      mono: false,
+      frame: None,
     }
   }
 
@@ -259,13 +316,36 @@ impl Truncated {
     self
   }
 
+  /// The tooltip's words are a path or a command: in Geist Mono.
+  pub fn mono(mut self) -> Self {
+    self.mono = true;
+    self
+  }
+
+  /// The text names a control that `lay_out` builds around it from the anchor's row, given whether the
+  /// pointer rests on it: the parts before the text, the control's room and its fill. The text is in
+  /// `hovered` while the pointer rests. The whole control is the anchor: the tooltip hangs from its start.
+  pub fn framed(
+    mut self,
+    hovered: impl Into<PaletteColor>,
+    lay_out: impl Fn(Row, bool) -> Row + Send + Sync + 'static,
+  ) -> Self {
+    self.frame = Some(Frame {
+      lay_out: Arc::new(lay_out),
+      hovered: hovered.into(),
+    });
+    self
+  }
+
   pub fn render(self, ctx: &mut Ctx) -> Element {
     let key = format!("tooltip-{}", self.id);
     let tooltip = Tooltip {
+      mono: self.mono,
       cut: Some(CutText {
         typography: self.typography,
         color: self.color,
         hint: self.hint,
+        frame: self.frame,
       }),
       ..Tooltip::new(self.id, self.text)
     };

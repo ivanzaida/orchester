@@ -397,6 +397,13 @@ fn theme_kit_type_roles_follow_the_design_in_both_modes() {
         "Geist Mono",
         (dark_secondary, light_secondary),
       ),
+      T::MonoLabel => (
+        11.0,
+        FontWeight::Medium,
+        1.35,
+        "Geist Mono",
+        (dark_secondary, light_secondary),
+      ),
       T::Initials => (9.0, FontWeight::SemiBold, 1.0, "Geist", (dark_primary, light_primary)),
     })
   };
@@ -426,6 +433,7 @@ fn theme_kit_type_roles_follow_the_design_in_both_modes() {
       T::MonoKey.role(),
       T::MonoNote.role(),
       T::MonoSmall.role(),
+      T::MonoLabel.role(),
     ] {
       assert_eq!(
         app.theme().typography_style(role).font_features,

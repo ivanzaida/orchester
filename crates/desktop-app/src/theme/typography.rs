@@ -37,12 +37,14 @@ pub enum ExtraTypography {
   MonoNote,
   /// Mono 10 `text_secondary`: a shortcut in a tooltip (`n75PTn`) or a key cap (`ylWgq`).
   MonoSmall,
+  /// Mono 11/500 `text_secondary`, 1.35: a path in a tooltip (`mF90E` in `C9Phsz`).
+  MonoLabel,
   /// 9/600 `text_primary`: a person's initials in an avatar (`dWnjG` in `x5rV0`).
   Initials,
 }
 
 impl ExtraTypography {
-  pub const ALL: [Self; 11] = [
+  pub const ALL: [Self; 12] = [
     Self::Display,
     Self::Strong,
     Self::Note,
@@ -53,6 +55,7 @@ impl ExtraTypography {
     Self::MonoKey,
     Self::MonoNote,
     Self::MonoSmall,
+    Self::MonoLabel,
     Self::Initials,
   ];
 
@@ -72,6 +75,7 @@ impl ExtraTypography {
       Self::MonoKey => "mono_key",
       Self::MonoNote => "mono_note",
       Self::MonoSmall => "mono_small",
+      Self::MonoLabel => "mono_label",
       Self::Initials => "initials",
     }
   }
@@ -90,6 +94,7 @@ impl ExtraTypography {
       Self::MonoKey => mono(11.5, palette.text_muted),
       Self::MonoNote => mono(11.0, palette.text_muted),
       Self::MonoSmall => mono(10.0, palette.text_secondary),
+      Self::MonoLabel => self::mono(style(11.0, FontWeight::Medium, 1.35, 0.0, palette.text_secondary)),
       Self::Initials => sans(9.0, FontWeight::SemiBold, 1.0, palette.text_primary),
     }
   }
