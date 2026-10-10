@@ -136,6 +136,7 @@ fn limit_words(ctx: &Ctx, run: &RunView) -> Option<Arc<str>> {
     return None;
   };
   match *limit {
+    // A run stops at a limit only when it has one; without it there is nothing to name.
     RunLimit::Tokens => Some(ctx.t_args(
       "composer.context.stoppedTokens",
       [
