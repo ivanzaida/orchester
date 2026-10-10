@@ -15,12 +15,17 @@ use orchester_workspace::workspace::OpenProject;
 
 use super::{
   criteria::{Criterion, criteria_row},
-  sections::{Label, Place, section, side_row, stacked_row},
   state::View,
 };
 use crate::{
   theme::{ExtraTypography, TaskFormRadius, TaskFormText},
-  ui::{avatar::initials, field::FieldInput, message::message_text, tooltip::Truncated},
+  ui::{
+    avatar::initials,
+    field::FieldInput,
+    form_section::{Label, Place, section, side_row, stacked_row},
+    message::message_text,
+    tooltip::Truncated,
+  },
 };
 
 /// The project's tile (`Avatar` `cBsT5`), and the most room its name and folder take beside the row's

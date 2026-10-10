@@ -20,16 +20,13 @@ use lurq::{
 use orchester_core::id::ResourceId;
 use orchester_workspace::tasks::data::{PipelineChoice, PipelineStepChoice};
 
-use super::{
-  Nav,
-  sections::{Label, Place, section, side_row},
-  state::View,
-};
+use super::{Nav, state::View};
 use crate::{
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     field::{FieldInput, SelectField},
+    form_section::{Label, Place, section, side_row},
     icon::{Icon, icon},
     message::message_text,
   },

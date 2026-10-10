@@ -369,7 +369,7 @@ fn theme_kit_type_roles_follow_the_design_in_both_modes() {
     let (dark_secondary, light_secondary) = ("#B3B3BA", "#45454D");
     let (dark_muted, light_muted) = ("#8A8A92", "#6B6B74");
     Some(match role {
-      T::Display => return None,
+      T::Display | T::OptionTitle | T::Property | T::InspectorSection | T::PropertyMono => return None,
       T::Strong => (13.0, FontWeight::Medium, 1.3, "Geist", (dark_primary, light_primary)),
       T::Note => (11.5, FontWeight::Normal, 1.4, "Geist", (dark_muted, light_muted)),
       T::NoteStrong => (11.5, FontWeight::Medium, 1.4, "Geist", (dark_primary, light_primary)),
@@ -539,5 +539,26 @@ fn theme_focus_ring_and_markdown_follow_the_mode() {
       "links in accent_text"
     );
     assert_eq!(markdown.link.text.weight, Some(FontWeight::Medium));
+  }
+}
+
+/// The kit's roles of option cards and inspectors (`Imh8O`, `vhBEA`, `QDBns`): size, weight, line height and
+/// family, in dark.
+#[test]
+fn theme_kit_inspector_roles_follow_the_design() {
+  use ExtraTypography as T;
+  let app = themed(Mode::Dark);
+  for (role, (size, weight, line_height, family)) in [
+    (T::OptionTitle, (12.5, FontWeight::Medium, 1.3, "Geist")),
+    (T::Property, (12.0, FontWeight::Normal, 1.3, "Geist")),
+    (T::InspectorSection, (12.0, FontWeight::SemiBold, 1.3, "Geist")),
+    (T::PropertyMono, (12.0, FontWeight::Normal, 1.3, "Geist Mono")),
+  ] {
+    let style = app.theme().typography_style(role.role());
+    assert_eq!(
+      (style.font_size, style.weight, style.line_height, &*style.font_family),
+      (size, weight, line_height, family),
+      "{role:?}"
+    );
   }
 }

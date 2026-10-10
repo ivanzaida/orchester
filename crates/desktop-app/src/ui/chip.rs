@@ -17,7 +17,7 @@ use lurq::{
 };
 
 use super::icon::{Icon, icon};
-use crate::theme::{ExtraRadius, ExtraSpacing, IconSize};
+use crate::theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
 
 /// A badge's dot (`Vydkx`).
 const DOT_SIZE: f32 = 6.0;
@@ -32,6 +32,8 @@ pub struct TagChip {
   id: Arc<str>,
   name: Arc<str>,
   remove: Option<Remove>,
+  /// The name is an identifier, in Geist Mono (`Chip · search_docs` in `XRCed`).
+  mono: bool,
 }
 
 impl TagChip {
@@ -40,7 +42,15 @@ impl TagChip {
       id: id.into(),
       name: name.into(),
       remove: None,
+      mono: false,
     }
+  }
+
+  /// The name in Geist Mono: an identifier such as a tool's name.
+  #[must_use]
+  pub const fn mono(mut self) -> Self {
+    self.mono = true;
+    self
   }
 
   /// The cross that removes the tag; `label` names it for tools (`Remove webhooks`).
@@ -67,7 +77,11 @@ impl From<TagChip> for Element {
       .child(
         Text::new(&chip.name)
           .id(format!("{}-label", chip.id))
-          .variant(TypographyStyle::FieldLabel)
+          .variant(if chip.mono {
+            ExtraTypography::MonoLabel.role()
+          } else {
+            TypographyStyle::FieldLabel
+          })
           .nowrap(),
       );
     let Some(Remove { label, action }) = chip.remove else {

@@ -30,10 +30,11 @@ use orchester_workspace::{
   tasks::{conflict::EditConflict, data::PipelineChoice},
 };
 
-use super::{plan::choice_label, sections::section};
+use super::plan::choice_label;
 use crate::{
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
+    form_section::section,
     icon::{Icon, icon},
     notice::{Notice, NoticeTone},
     pressable::{Focus, pressable},

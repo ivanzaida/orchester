@@ -41,10 +41,20 @@ pub enum ExtraTypography {
   MonoLabel,
   /// 9/600 `text_primary`: a person's initials in an avatar (`dWnjG` in `x5rV0`).
   Initials,
+  /// 12.5/500 `text_primary`: an option card's title (`ldQGh` in `Option card/off` `Imh8O`).
+  OptionTitle,
+  /// 12 `text_secondary`, 1.3: what an inspector's property is (`X7na6R` in `Inspector row/value` `vhBEA`); its
+  /// value in `text_primary` (`UtQHq`).
+  Property,
+  /// 12/600 `text_primary`: an inspector section's title (`e7HM1L` in `Inspector section title` `QDBns`).
+  InspectorSection,
+  /// Geist Mono 12 `text_primary`, 1.3: a property's value that is a path or a command (`Program file` in
+  /// `VIpsx`).
+  PropertyMono,
 }
 
 impl ExtraTypography {
-  pub const ALL: [Self; 12] = [
+  pub const ALL: [Self; 16] = [
     Self::Display,
     Self::Strong,
     Self::Note,
@@ -57,6 +67,10 @@ impl ExtraTypography {
     Self::MonoSmall,
     Self::MonoLabel,
     Self::Initials,
+    Self::OptionTitle,
+    Self::Property,
+    Self::InspectorSection,
+    Self::PropertyMono,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -77,6 +91,10 @@ impl ExtraTypography {
       Self::MonoSmall => "mono_small",
       Self::MonoLabel => "mono_label",
       Self::Initials => "initials",
+      Self::OptionTitle => "option_title",
+      Self::Property => "property",
+      Self::InspectorSection => "inspector_section",
+      Self::PropertyMono => "property_mono",
     }
   }
 
@@ -96,6 +114,10 @@ impl ExtraTypography {
       Self::MonoSmall => mono(10.0, palette.text_secondary),
       Self::MonoLabel => self::mono(style(11.0, FontWeight::Medium, 1.35, 0.0, palette.text_secondary)),
       Self::Initials => sans(9.0, FontWeight::SemiBold, 1.0, palette.text_primary),
+      Self::OptionTitle => sans(12.5, FontWeight::Medium, 1.3, palette.text_primary),
+      Self::Property => sans(12.0, FontWeight::Normal, 1.3, palette.text_secondary),
+      Self::InspectorSection => sans(12.0, FontWeight::SemiBold, 1.3, palette.text_primary),
+      Self::PropertyMono => self::mono(sans(12.0, FontWeight::Normal, 1.3, palette.text_primary)),
     }
   }
 }

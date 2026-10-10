@@ -17,14 +17,12 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
-use super::{
-  sections::{Label, Place, stacked_row},
-  state::View,
-};
+use super::state::View;
 use crate::{
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
+    form_section::{Label, Place, stacked_row},
     icon::Icon,
     icon_button::IconButton,
   },
