@@ -17,21 +17,27 @@ fn profile(editor: &Editor, name: &str, commands: &[&str]) -> ResourceId {
   db.create_connection(
     &Connection::new(
       connection,
-      Name::new(name).unwrap(),
+      Name::new(name).expect("valid fixture name"),
       ConnectionKind::Agent(AgentProvider::ClaudeCodeCli),
       AgentEndpoint::Program(editor.window.data.dir.path().join("unused-claude")),
       Timestamp::now(),
     )
-    .unwrap(),
+    .expect("valid fixture connection"),
   )
-  .unwrap();
-  let commands = AllowedCommands::new(commands.iter().map(|s| CommandPrefix::new(s).unwrap()).collect()).unwrap();
+  .expect("create fixture connection");
+  let commands = AllowedCommands::new(
+    commands
+      .iter()
+      .map(|s| CommandPrefix::new(s).expect("valid fixture command prefix"))
+      .collect(),
+  )
+  .expect("valid fixture command allowlist");
   let profile = AgentProfile::new(
-    Name::new(name).unwrap(),
+    Name::new(name).expect("valid fixture name"),
     "".into(),
-    PromptText::new("").unwrap(),
+    PromptText::new("").expect("empty fixture prompt is valid"),
     connection,
-    ModelId::new("test-model").unwrap(),
+    ModelId::new("test-model").expect("valid fixture model"),
     ProviderSettings::default(),
   )
   .with_permissions(AgentPermissions::new(
@@ -41,14 +47,15 @@ fn profile(editor: &Editor, name: &str, commands: &[&str]) -> ResourceId {
   ));
   let id = db
     .create_resource(
-      Slug::from_name(name).unwrap(),
-      Name::new(name).unwrap(),
+      Slug::from_name(name).expect("fixture name yields a slug"),
+      Name::new(name).expect("valid fixture name"),
       &profile,
       Timestamp::now(),
     )
-    .unwrap()
+    .expect("create fixture profile")
     .id();
-  db.publish_draft::<AgentProfile>(id, Timestamp::now()).unwrap();
+  db.publish_draft::<AgentProfile>(id, Timestamp::now())
+    .expect("publish fixture profile");
   id
 }
 
@@ -64,8 +71,8 @@ fn changed_profile() -> (Editor, ResourceId) {
   editor.until("narrowed draft saved", |e| {
     e.db()
       .draft::<Pipeline>(id)
-      .unwrap()
-      .unwrap()
+      .expect("read narrowed pipeline draft")
+      .expect("pipeline draft exists after creation")
       .body()
       .steps()
       .first()
