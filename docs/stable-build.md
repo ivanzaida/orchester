@@ -78,7 +78,8 @@ Options:
 
 `tools/package-macos.sh` alone builds both bundles into `target/macos/` (`--help` lists its
 options). A development build runs without a bundle: `cargo build -p orchester-runner && cargo
-run -p orchester-desktop` (what `tools/run.ps1` does on Windows).
+run -p orchester-app` (or `-p orchester-desktop` for the deprecated app; what `tools/run.ps1 app`
+and `tools/run.ps1` do on Windows).
 
 **Signing.** The bundle is signed ad hoc (`codesign -s -`): no Apple Developer identity, and it
 is **not notarized**. A build made on the Mac it runs on has no quarantine flag, so Gatekeeper
