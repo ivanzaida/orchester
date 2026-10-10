@@ -13,6 +13,7 @@ pub mod claude;
 pub mod known_safe;
 mod launch;
 pub(crate) mod link_targets;
+mod local_file;
 pub mod mcp;
 mod narrow;
 #[cfg(windows)]
@@ -27,6 +28,7 @@ use thiserror::Error;
 
 pub use self::{
   launch::{LaunchPermissions, OutsideCommands},
+  local_file::{resolve_local, stays_local},
   narrow::{StepCommands, StepNetwork, StepPermissions},
   writable::{
     FolderBounds, ResolvedFolder, WritableFolder, WritableFolderError, WritableFolders, WritableFoldersError,

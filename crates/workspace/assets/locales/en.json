@@ -555,7 +555,14 @@
         "exemptToolTooLong": "A tool name is at most {{max}} characters long",
         "exemptToolTwice": "{{tool}} is listed twice",
         "exemptToolsTooMany": "List at most {{max}} tools",
-        "inUse": "Agent profiles still choose this server: {{profiles}}. Switch them to work without it first, or turn it off, which keeps its settings."
+        "inUse": "Agent profiles still choose this server: {{profiles}}. Switch them to work without it first, or turn it off, which keeps its settings.",
+        "programInWorktree": "Name the program as found on the search path, or by its absolute path outside the repository: a path in the worktree is a file a run's agents can change. A script of the repository runs through its interpreter, e.g. program node with the script as its argument.",
+        "programNotFound": "No program {{program}} was found on the search path or at that path.",
+        "programNotLocal": "{{program}} is on another computer or a device, or reached through a link that leads there; name a program on this computer.",
+        "programInRepository": "{{program}} lies inside the project's repository, where a run's work can change it. Name a program outside it, or run a script of the repository through its interpreter.",
+        "programNotText": "The program was found at {{program}}, a path that is not valid Unicode text, which cannot be stored. Name a copy at another path.",
+        "bearerGone": "The bearer token's secret is archived or gone. Choose another one, or none.",
+        "nameIsId": "A name cannot look like a server's id. Use small letters, digits, - and _, starting with a letter."
       }
     }
   },
@@ -917,7 +924,7 @@
       "mcpArgument": "An argument is empty or holds a line break: {{value}}",
       "mcpVariable": "A variable is empty or holds a line break: {{value}}",
       "mcpExemptTool": "A tool name is empty or holds a line break: {{value}}",
-      "mcpProgramMissing": "{{program}} is not a file on this computer."
+      "mcpFieldNotApplicable": "{{field}} is not a field of this server's transport: a program has args, working_directory and environment, a remote server bearer_secret."
     },
     "githubConnectionName": "GitHub · {{host}}",
     "projectTools": {
@@ -963,7 +970,8 @@
       "mcpFolder": "The server's program would start in another folder.",
       "mcpEndpoint": "Agents would reach the server at {{endpoint}}.",
       "mcpBearer": "The server would be sent another secret as its bearer token.",
-      "mcpExemptTools": "{{tools}} would run without asking, where a person is asked now."
+      "mcpExemptTools": "{{tools}} would run without asking, where a person is asked now.",
+      "mcpRename": "The server would be named {{server}}: a run's answers that approve tools of a server by its name would then apply to it."
     }
   },
   "statusBar": {

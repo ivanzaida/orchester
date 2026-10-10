@@ -239,6 +239,9 @@ pub trait ConnectionStore {
   fn connections(&self) -> Result<Vec<Connection>, Self::Error>;
 }
 
+/// Who still uses an MCP server, asked of `S` as it stands inside a removal's transaction.
+pub type ServerUsers<S> = dyn Fn(&S) -> Result<Vec<std::sync::Arc<str>>, <S as McpServerStore>::Error>;
+
 /// The project's MCP servers. Written by the desktop; the runner reads them when an agent starts.
 pub trait McpServerStore {
   type Error: std::error::Error + Send + Sync + 'static;
@@ -249,9 +252,13 @@ pub trait McpServerStore {
   /// Stores the current name, transport, variables and enabled flag of an existing server.
   fn save_mcp_server(&mut self, server: &McpServer) -> Result<(), Self::Error>;
 
-  /// Removes a stored server. Profiles that still name it are the caller's to check first: an agent
-  /// whose profile names a server that is gone starts without it, and its run's activity says so.
-  fn delete_mcp_server(&mut self, id: ConnectionId) -> Result<(), Self::Error>;
+  /// Removes server `id` unless `users`, asked inside the same write transaction, names who still uses it; then
+  /// nothing is removed and their names come back. Nothing else can start using the server in between.
+  fn delete_unused_mcp_server(
+    &mut self,
+    id: ConnectionId,
+    users: &ServerUsers<Self>,
+  ) -> Result<Vec<std::sync::Arc<str>>, Self::Error>;
 
   fn mcp_server(&self, id: ConnectionId) -> Result<Option<McpServer>, Self::Error>;
 

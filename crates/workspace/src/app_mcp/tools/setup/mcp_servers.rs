@@ -1,13 +1,14 @@
 //! `add_mcp_server`, `update_mcp_server`, `remove_mcp_server` and `set_mcp_server_enabled`: the project's MCP
 //! servers as Connections › MCP servers adds, edits, turns on or off and removes them, through the same
 //! fields and rules (`connections::mcp`). What widens what agents may do (`connections::mcp::widenings`: a new
-//! server, another program, arguments, folder, endpoint or bearer secret, a variable but the harmless ones,
-//! a tool that runs without asking, turning a server on) is refused as `person_only` unless a person lets
-//! automation change agent permissions; removing, turning off and dropping exempt tools are always taken.
-//! A program automation names is an absolute path to an existing file, stored as the file system resolves
-//! it, so a link the client controls cannot point it elsewhere later. A secret is named, never its value.
+//! server, a new name, another program, arguments, folder, endpoint or bearer secret, a variable but the harmless
+//! ones, a variable that takes a secret, a tool that runs without asking, turning a server on) is refused as
+//! `person_only` unless a person lets automation change agent permissions, judged by the fields' text before
+//! anything reads the disk; removing, turning off and dropping exempt tools are always taken. A program is stored
+//! as the fixed file it is, outside the repository, as a command tool's (`tools::program`). A secret is named,
+//! never its value, and only the project's active secrets can be named.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use orchester_core::{
   connection::mcp::{McpEnvValue, McpServer, McpServerName, McpTransport},
@@ -26,11 +27,12 @@ use crate::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
-  connections::mcp::{
-    self, McpSaveError, McpServerText, NAME_TAKEN, TransportChoice, enabling, profiles_using, secret_reference,
-    widenings,
+  connections::{
+    data::ProjectConnections,
+    mcp::{self, McpSaveError, McpServerText, NAME_TAKEN, TransportChoice, enabling, widenings},
   },
   messages::Message,
+  tools::program::ProgramProblem,
 };
 
 /// A variable the server's program gets.
@@ -169,13 +171,15 @@ pub async fn set_mcp_server_enabled(services: &Services, args: SetMcpServerEnabl
 }
 
 /// The project's MCP servers, as `list_connections` lists them.
-pub(super) fn servers_json(db: &ProjectDb, servers: &[McpServer], secrets: &[Secret]) -> Result<Vec<Value>, ToolError> {
-  servers.iter().map(|server| server_json(db, server, secrets)).collect()
+pub(super) fn servers_json(listed: &ProjectConnections) -> Vec<Value> {
+  listed.mcp.iter().map(|server| server_json(listed, server)).collect()
 }
 
-/// `server` with every field Edit MCP server shows, its secrets by name, and the roles of the profiles that
-/// choose it.
-fn server_json(db: &ProjectDb, server: &McpServer, secrets: &[Secret]) -> Result<Value, ToolError> {
+/// `server` with the fields Edit MCP server shows, and the roles of the profiles that choose it. A secret is named
+/// (`NAME@environment`), never its value; a variable's plain value and the values of the endpoint's query are left
+/// out, since a person may have pasted a token there: automation sees that they are set, not what they hold.
+fn server_json(listed: &ProjectConnections, server: &McpServer) -> Value {
+  let secrets = &listed.secrets;
   let secret_named = |id| {
     secrets
       .iter()
@@ -191,53 +195,73 @@ fn server_json(db: &ProjectDb, server: &McpServer, secrets: &[Secret]) -> Result
     }),
     McpTransport::Http(http) => json!({
       "kind": "http",
-      "url": http.url().as_str(),
+      "url": without_query_values(http.url().as_str()),
       "bearer_secret": http.bearer().and_then(secret_named),
     }),
   };
   let environment: Vec<Value> = server
     .environment()
     .iter()
-    .map(|(name, value)| {
-      let value = match value {
-        McpEnvValue::Text(text) => text.clone(),
-        McpEnvValue::Secret(id) => secrets
-          .iter()
-          .find(|secret| secret.id() == *id)
-          .map_or_else(|| format!("${{secret:{id}}}"), secret_reference),
-      };
-      json!({ "name": name.to_string(), "value": value })
+    .map(|(name, value)| match value {
+      McpEnvValue::Text(_) => json!({ "name": name.to_string(), "kind": "text" }),
+      McpEnvValue::Secret(id) => json!({
+        "name": name.to_string(),
+        "kind": "secret",
+        "secret": secret_named(*id),
+      }),
     })
     .collect();
-  Ok(json!({
+  let used_by: Vec<&str> = listed.used_by(server.id()).map(|used| &*used.role).collect();
+  json!({
     "id": server.id().to_string(),
     "name": server.name().as_str(),
     "enabled": server.enabled(),
     "transport": transport,
     "environment": environment,
     "exempt_tools": server.exempt_tools().tools().iter().map(|tool| tool.as_str()).collect::<Vec<_>>(),
-    "used_by": profiles_using(db, server.id())?.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
-  }))
+    "used_by": used_by,
+  })
+}
+
+/// `url` with each query value replaced by `…`, its names kept, and a fragment's text left out.
+fn without_query_values(url: &str) -> String {
+  let Some((base, query)) = url.split_once('?') else {
+    return url.to_owned();
+  };
+  let (query, fragment) = query.split_once('#').map_or((query, false), |(query, _)| (query, true));
+  let names: Vec<String> = query
+    .split('&')
+    .map(|pair| match pair.split_once('=') {
+      Some((name, _)) => format!("{name}=…"),
+      None => pair.to_owned(),
+    })
+    .collect();
+  let fragment = if fragment { "#…" } else { "" };
+  format!("{base}?{}{fragment}", names.join("&"))
 }
 
 fn server_result(repo_root: &Path, id: ConnectionId) -> Result<Value, ToolError> {
-  let db = ProjectDb::open(repo_root)?;
-  let server = db
-    .mcp_server(id)?
+  let listed = ProjectConnections::load_in(repo_root)?;
+  let server = listed
+    .mcp_server(id)
     .ok_or_else(|| ToolError::not_found(Missing::McpServer, id.to_string()))?;
-  Ok(json!({ "server": server_json(&db, &server, &db.secrets()?)? }))
+  Ok(json!({ "server": server_json(&listed, server) }))
 }
 
-/// The project's server named by `named`: its id or its name.
+/// The project's server named by `named`: its id, or else its name (a name never reads as an id).
 fn server_named(db: &ProjectDb, named: &str) -> Result<McpServer, ToolError> {
-  db.mcp_servers()?
-    .into_iter()
-    .find(|server| server.id().to_string() == named || server.name().as_str() == named)
+  let servers = db.mcp_servers()?;
+  let by_id = servers.iter().position(|server| server.id().to_string() == named);
+  let by_name = || servers.iter().position(|server| server.name().as_str() == named);
+  by_id
+    .or_else(by_name)
+    .map(|index| servers[index].clone())
     .ok_or_else(|| ToolError::not_found(Missing::McpServer, named))
 }
 
 /// `text` with the `fields` given put in, as a person would type them into the page.
 fn filled(mut text: McpServerText, fields: ServerFields, secrets: &[Secret]) -> Result<McpServerText, ToolError> {
+  applies(&text, &fields)?;
   match (&fields.program, &fields.url) {
     (Some(_), Some(_)) => return Err(refused("invalid_transport", "appMcp.errors.mcpProgramAndUrl")),
     (Some(_), None) => text.transport = TransportChoice::Stdio,
@@ -248,7 +272,8 @@ fn filled(mut text: McpServerText, fields: ServerFields, secrets: &[Secret]) -> 
     text.name = name;
   }
   if let Some(program) = fields.program {
-    text.program = resolved_program(&program)?;
+    // Taken as written: nothing reads the disk before the gate (`widening::allowed`) let the change through.
+    text.program = program;
   }
   if let Some(args) = fields.args {
     text.arguments = lines(&args, "appMcp.errors.mcpArgument")?;
@@ -300,6 +325,7 @@ fn checked(
       errors.working_directory,
       errors.variables,
       errors.url,
+      errors.bearer,
       errors.exempt_tools,
     ]
     .into_iter()
@@ -340,46 +366,40 @@ fn bearer_secret(named: &str, secrets: &[Secret]) -> Result<Option<orchester_cor
     })
 }
 
-/// The program at `program`, an absolute path to an existing file, as the file system resolves it: links
-/// and junctions followed, so the stored path names the file itself.
-fn resolved_program(program: &str) -> Result<String, ToolError> {
-  let path = Path::new(program);
-  if !path.is_absolute() {
-    return Err(refused("program_not_absolute", "errors.executableNotAbsolute"));
-  }
-  let missing = || {
-    ToolError::refused(
-      "program_not_found",
-      vec![Message::new("appMcp.errors.mcpProgramMissing").with("program", program.to_owned())],
-    )
+/// Refuses a field the server's transport (after `fields` chose it) does not have, rather than dropping it.
+fn applies(text: &McpServerText, fields: &ServerFields) -> Result<(), ToolError> {
+  let transport = match (&fields.program, &fields.url) {
+    (Some(_), _) => TransportChoice::Stdio,
+    (None, Some(_)) => TransportChoice::Http,
+    (None, None) => text.transport,
   };
-  let resolved = path.canonicalize().map_err(|_| missing())?;
-  if !resolved.is_file() {
-    return Err(missing());
-  }
-  plain(resolved).into_os_string().into_string().map_err(|_| missing())
-}
-
-/// `path` without the `\\?\` a resolved Windows path starts with, as a person writes it.
-#[cfg(windows)]
-fn plain(path: PathBuf) -> PathBuf {
-  let Some(text) = path.to_str() else {
-    return path;
+  let misplaced = match transport {
+    TransportChoice::Stdio => vec![("bearer_secret", fields.bearer_secret.is_some())],
+    TransportChoice::Http => vec![
+      ("args", fields.args.is_some()),
+      ("working_directory", fields.working_directory.is_some()),
+      ("environment", fields.environment.is_some()),
+    ],
   };
-  if let Some(share) = text.strip_prefix(r"\\?\UNC\") {
-    return PathBuf::from(format!(r"\\{share}"));
+  match misplaced.into_iter().find(|(_, given)| *given) {
+    Some((field, _)) => Err(ToolError::refused(
+      "field_not_applicable",
+      vec![Message::new("appMcp.errors.mcpFieldNotApplicable").with("field", field.to_owned())],
+    )),
+    None => Ok(()),
   }
-  text.strip_prefix(r"\\?\").map_or_else(|| path.clone(), PathBuf::from)
-}
-
-/// `path` as it is: a resolved path on macOS has no prefix to drop.
-#[cfg(not(windows))]
-const fn plain(path: PathBuf) -> PathBuf {
-  path
 }
 
 fn save_refusal(error: &McpSaveError) -> ToolError {
   let code = match error {
+    McpSaveError::Program(problem) => match problem {
+      ProgramProblem::InWorktree => "program_in_worktree",
+      ProgramProblem::NotFound(_) => "program_not_found",
+      ProgramProblem::NotLocal(_) => "program_not_local",
+      ProgramProblem::InRepository(_) => "program_in_repository",
+      ProgramProblem::NotText(_) => "program_path_not_text",
+      ProgramProblem::Invalid(_) => "invalid_server",
+    },
     McpSaveError::Store(orchester_store::StoreError::DuplicateConnectionName(_)) => "name_taken",
     McpSaveError::Store(orchester_store::StoreError::ConnectionNotFound(_)) => "not_found",
     McpSaveError::InUse(_) => "in_use",

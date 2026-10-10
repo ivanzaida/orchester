@@ -4,10 +4,12 @@
 //! tools that run without asking are part of the settings since they were added; settings written
 //! before then have none.
 
+use std::sync::Arc;
+
 use orchester_core::{
   connection::mcp::{ExemptTools, McpEnvironment, McpServer, McpServerName, McpTransport, UnreadableMcpServer},
   id::ConnectionId,
-  store::McpServerStore,
+  store::{McpServerStore, ServerUsers},
   time::Timestamp,
 };
 use rusqlite::{Connection, OptionalExtension, Params, Row, params};
@@ -72,14 +74,32 @@ impl McpServerStore for ProjectDb {
     Ok(())
   }
 
-  fn delete_mcp_server(&mut self, id: ConnectionId) -> Result<(), StoreError> {
-    let removed = self
-      .connection
-      .execute("DELETE FROM mcp_servers WHERE id = ?1", [id.to_string()])?;
-    if removed == 0 {
-      return Err(StoreError::ConnectionNotFound(id));
-    }
-    Ok(())
+  fn delete_unused_mcp_server(
+    &mut self,
+    id: ConnectionId,
+    users: &ServerUsers<Self>,
+  ) -> Result<Vec<Arc<str>>, StoreError> {
+    // An immediate transaction holds the write lock from the start, so no profile can choose the server between
+    // the question and the removal; the reads inside it see the database as it stands.
+    self.connection.execute_batch("BEGIN IMMEDIATE")?;
+    let outcome = users(self).and_then(|users| {
+      if !users.is_empty() {
+        return Ok(users);
+      }
+      match self
+        .connection
+        .execute("DELETE FROM mcp_servers WHERE id = ?1", [id.to_string()])?
+      {
+        0 => Err(StoreError::ConnectionNotFound(id)),
+        _ => Ok(users),
+      }
+    });
+    let end = match &outcome {
+      Ok(users) if users.is_empty() => "COMMIT",
+      _ => "ROLLBACK",
+    };
+    self.connection.execute_batch(end)?;
+    outcome
   }
 
   fn mcp_server(&self, id: ConnectionId) -> Result<Option<McpServer>, StoreError> {

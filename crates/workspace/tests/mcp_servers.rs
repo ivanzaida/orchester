@@ -97,12 +97,12 @@ fn mcp_dialog_fields_become_a_server_and_read_back() {
     format!("DOCS_TOKEN={}\nLOG_LEVEL=debug", secret_reference(&secrets[0]))
   );
   assert_eq!(text.arguments, "-y\n@acme/docs-mcp");
-  // A secret the project no longer lists keeps its reference.
+  // A secret the project no longer lists keeps its reference, which cannot be saved again until another is chosen.
   let kept = McpServerText::of(&server, &[]);
   assert!(kept.variables.contains(&secrets[0].id().to_string()));
   assert_eq!(
-    parse_variables(&kept.variables, &[]).expect("still valid"),
-    *server.environment()
+    parse_variables(&kept.variables, &[]).map_err(|message| message.key),
+    Err("connections.mcp.errors.unknownSecret")
   );
 }
 
@@ -152,7 +152,13 @@ fn mcp_servers_are_saved_listed_and_turned_off() {
   let (repo, mut db) = project_db();
   let token = secret("DOCS_TOKEN", Environment::Staging);
   db.create_secret(&token).expect("secret");
-  let draft = stdio_text().draft(&[], std::slice::from_ref(&token)).expect("valid");
+  // A program outside the repository, which saving keeps as the file it is.
+  let program = std::env::current_exe().expect("the test program");
+  let text = McpServerText {
+    program: program.to_string_lossy().into_owned(),
+    ..stdio_text()
+  };
+  let draft = text.draft(&[], std::slice::from_ref(&token)).expect("valid");
   let id = save_in(repo.path(), None, draft).expect("saved");
   let connections = ProjectConnections::load(&db).expect("load");
   assert_eq!(connections.mcp.len(), 1);
@@ -162,7 +168,7 @@ fn mcp_servers_are_saved_listed_and_turned_off() {
   assert!(!db.mcp_server(id).expect("read").expect("stored").enabled());
   let renamed = McpServerText {
     name: "docs-2".to_owned(),
-    ..stdio_text()
+    ..text
   }
   .draft(&[], std::slice::from_ref(&token))
   .expect("valid");
@@ -354,12 +360,28 @@ fn mcp_widenings_name_what_a_change_lets_agents_do() {
     server
   };
   let narrower = McpServerText {
-    name: "docs-renamed".to_owned(),
     variables: format!("{}\nRUST_LOG=info", base.variables),
     exempt_tools: "read".to_owned(),
     ..base.clone()
   };
   assert!(widenings(Some(&stored), &draft(narrower)).is_empty());
+  let renamed = McpServerText {
+    name: "docs-renamed".to_owned(),
+    ..base.clone()
+  };
+  assert_eq!(
+    keys(widenings(Some(&stored), &draft(renamed))),
+    ["appMcp.widens.mcpRename"]
+  );
+  let secret_under_a_harmless_name = McpServerText {
+    variables: format!("{}\nLANG=${{secret:DOCS_TOKEN@staging}}", base.variables),
+    ..base.clone()
+  };
+  assert_eq!(
+    keys(widenings(Some(&stored), &draft(secret_under_a_harmless_name))),
+    ["appMcp.widens.variable"],
+    "a secret's value widens under any name"
+  );
   let wider = McpServerText {
     program: "uvx".to_owned(),
     variables: "LOG_LEVEL=trace".to_owned(),
@@ -379,4 +401,41 @@ fn mcp_widenings_name_what_a_change_lets_agents_do() {
   off.set_enabled(false);
   assert_eq!(keys(enabling(&off, true)), ["appMcp.widens.mcpServerEnabled"]);
   assert!(enabling(&off, false).is_empty() && enabling(&stored, true).is_empty());
+}
+
+/// Only the project's active secrets can be named, by name or by id; a bearer secret too.
+#[test]
+fn mcp_dialog_names_only_the_projects_active_secrets() {
+  let token = secret("DOCS_TOKEN", Environment::Staging);
+  let secrets = [token.clone()];
+  let by_id = McpServerText {
+    variables: format!("DOCS_TOKEN=${{secret:{}}}", token.id()),
+    ..stdio_text()
+  };
+  assert!(by_id.draft(&[], &secrets).is_ok());
+  let other = McpServerText {
+    variables: format!("DOCS_TOKEN=${{secret:{}}}", SecretId::generate()),
+    ..stdio_text()
+  };
+  let errors = other.draft(&[], &secrets).expect_err("another project's secret");
+  assert_eq!(
+    errors.variables.map(|message| message.key),
+    Some("connections.mcp.errors.unknownSecret")
+  );
+  let remote = McpServerText {
+    transport: TransportChoice::Http,
+    url: "https://mcp.example.dev/mcp".to_owned(),
+    bearer: Some(SecretId::generate()),
+    ..McpServerText::new_server()
+  };
+  let errors = McpServerText {
+    name: "docs".to_owned(),
+    ..remote
+  }
+  .draft(&[], &secrets)
+  .expect_err("an archived bearer secret");
+  assert_eq!(
+    errors.bearer.map(|message| message.key),
+    Some("connections.mcp.errors.bearerGone")
+  );
 }

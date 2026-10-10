@@ -22,7 +22,10 @@ use orchester_core::{
 };
 
 pub use self::{
-  save::{McpSaveError, profiles_using, remove_in, save_in, set_enabled_in, store_in},
+  save::{
+    McpSaveError, ServerUse, profiles_using, program_problem_message, remove_in, save_in, server_uses, set_enabled_in,
+    store_in,
+  },
   widening::{enabling, widenings},
 };
 use crate::{
@@ -69,6 +72,8 @@ pub struct McpServerErrors {
   pub working_directory: Option<Message>,
   pub variables: Option<Message>,
   pub url: Option<Message>,
+  /// The bearer secret is not one of the project's active secrets.
+  pub bearer: Option<Message>,
   pub exempt_tools: Option<Message>,
 }
 
@@ -141,6 +146,10 @@ impl McpServerText {
     let name = McpServerName::new(&self.name)
       .map_err(|error| name_message(&error))
       .and_then(|name| {
+        // A tool names a server by its id or its name: a name that reads as an id would be ambiguous.
+        if name.as_str().parse::<orchester_core::id::ConnectionId>().is_ok() {
+          return Err(Message::new("connections.mcp.errors.nameIsId"));
+        }
         if taken.contains(&name) {
           Err(Message::new(NAME_TAKEN))
         } else {
@@ -153,7 +162,7 @@ impl McpServerText {
     };
     let transport = match self.transport {
       TransportChoice::Stdio => self.stdio(&mut errors),
-      TransportChoice::Http => self.http(&mut errors),
+      TransportChoice::Http => self.http(&mut errors, secrets),
     };
     let environment = match self.transport {
       TransportChoice::Stdio => {
@@ -189,14 +198,16 @@ impl McpServerText {
     Some(McpTransport::Stdio(StdioServer::new(program, arguments, directory)))
   }
 
-  fn http(&self, errors: &mut McpServerErrors) -> Option<McpTransport> {
-    match McpUrl::new(&self.url) {
-      Ok(url) => Some(McpTransport::Http(HttpServer::new(url, self.bearer))),
-      Err(error) => {
-        errors.url = Some(transport_message(&error));
-        None
-      }
+  fn http(&self, errors: &mut McpServerErrors, secrets: &[Secret]) -> Option<McpTransport> {
+    let url = McpUrl::new(&self.url).map_err(|error| errors.url = Some(transport_message(&error)));
+    let active = self
+      .bearer
+      .is_none_or(|bearer| secrets.iter().any(|secret| secret.id() == bearer));
+    if !active {
+      errors.bearer = Some(Message::new("connections.mcp.errors.bearerGone"));
     }
+    let url = url.ok()?;
+    active.then(|| McpTransport::Http(HttpServer::new(url, self.bearer)))
   }
 }
 
@@ -252,13 +263,14 @@ pub fn parse_variables(text: &str, secrets: &[Secret]) -> Result<McpEnvironment,
 }
 
 /// The secret `NAME@environment` (or a secret id kept from before) names.
+/// Only the project's active secrets (`secrets`) can be named: an archived one, or another project's, cannot.
 fn secret_of(reference: &str, secrets: &[Secret]) -> Result<SecretId, Message> {
-  if let Ok(id) = reference.parse::<SecretId>() {
-    return Ok(id);
-  }
+  let by_id = reference.parse::<SecretId>().ok();
   secrets
     .iter()
-    .find(|secret| format!("{}@{}", secret.name(), secret.environment().as_str()) == reference)
+    .find(|secret| {
+      Some(secret.id()) == by_id || format!("{}@{}", secret.name(), secret.environment().as_str()) == reference
+    })
     .map(Secret::id)
     .ok_or_else(|| Message::new("connections.mcp.errors.unknownSecret").with("secret", reference.to_owned()))
 }

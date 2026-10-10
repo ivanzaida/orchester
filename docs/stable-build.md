@@ -243,14 +243,22 @@ a command step runs its program with your rights, network access and no sandbox,
 or arguments, letting more exit codes pass, changing any of its variables but the harmless ones above, publishing
 its first version or a version that does any of these, and a pipeline step that calls a tool where neither the
 draft nor the latest published version calls it under that key; and the project's
-MCP servers (`add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`): adding one, giving one another
-program, arguments, starting folder, endpoint or bearer secret, changing any of its variables but the harmless
-ones above (removals included), adding a tool that runs without asking, and turning one on. A program automation
-names for a server is an absolute path to an existing file, stored as the file system resolves it (links
-followed), so a link the client controls cannot point it elsewhere later; a secret is named
-(`NAME@environment`), never its value. Renaming a server, dropping its bearer secret or exempt tools, turning it
-off and removing it (`remove_mcp_server`; refused as `in_use` while a profile's draft or latest version chooses
-it) are narrowing. Narrowing is always taken. The setting is off by
+MCP servers (`add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`): adding one, renaming one (the
+answers a person gave in a run, *Approve similar*, name a server's tools by its name), giving one another program,
+arguments, starting folder, endpoint or bearer secret, changing any of its variables but the harmless ones above
+(removals included), giving any variable a secret's value whatever its name, adding a tool that runs without
+asking, and turning one on. These are judged by the fields as given, before anything reads the disk, so a refused
+program on a share is never contacted. A server's program, from the window or a tool, is stored as the fixed file
+it is, as a command tool's: a name found on the search path or an absolute path, links followed, refused when it
+lies inside the project's repository, is relative to the worktree, or names another computer or a device
+(`\\server\share`, `\\?\UNC\…`, `\\.\…`, a drive mapped to a share, or a link that leads there), by its text
+before it is read. Only the project's active secrets can be named (`NAME@environment`), never their values;
+`list_connections` names a variable and whether it is plain text or a secret, but leaves out plain values and the
+values of an endpoint's query, where a person may have pasted a token. Dropping a server's bearer secret or exempt
+tools, turning it off and removing it (`remove_mcp_server`; refused as `in_use` while a profile's draft or latest
+published version chooses it, checked and removed in one transaction) are narrowing. In the window, a save or Turn
+on that widens asks a person in place, and window input is refused while that question shows, as for the switch
+below. Narrowing is always taken. The setting is off by
 default and only a person changes it, in the window, in Settings › What automation may do. No domain tool
 changes it, and window input cannot either: while its row is on screen, lurq denies its input tools when a
 call runs (also one queued earlier, or one whose answer timed out), the server refuses every window-input
