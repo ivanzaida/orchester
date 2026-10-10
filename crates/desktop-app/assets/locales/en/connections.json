@@ -275,6 +275,10 @@
       "fromSecret": "From {{secret}}",
       "secretName": "{{name}} ({{environment}})",
       "secretGone": "a secret this project no longer has",
+      "secretMissing": {
+        "title": "A secret this server needs is archived or gone",
+        "detail": "Agents start without this server until it has its secret again. Edit the server to choose another secret, or restore the secret on the Secrets page."
+      },
       "variables": "Variables",
       "exemptTools": "Tools that run without asking",
       "exemptToolsNone": "None. When a profile asks before MCP actions, every tool of this server asks.",

@@ -92,6 +92,12 @@ fn domain_window_input_cannot_save_a_widening_mcp_server() {
     .click_by_client("connection-confirm-save-confirm")
     .expect_err("a client cannot confirm");
   assert_eq!(refused["code"], "person_only", "{refused}");
+  assert!(
+    refused["message"]
+      .as_str()
+      .is_some_and(|message| message.contains("Connections page")),
+    "the client reads which question keeps it out: {refused}"
+  );
   for _ in 0..5 {
     served.pass();
   }
@@ -131,4 +137,24 @@ fn domain_window_input_cannot_turn_on_an_mcp_server() {
   served.until("the server on", |_| {
     server(&repo, "postgres-dev").is_some_and(|server| server.enabled())
   });
+}
+
+/// The open Connections page reads the servers again when a domain tool changes one.
+#[test]
+fn domain_tools_changes_show_on_the_open_connections_page() {
+  let (mut served, project, repo) = controlled();
+  let docs = server(&repo, "kontur-docs").expect("kontur-docs");
+  assert!(docs.enabled());
+  served.ok(
+    "navigate",
+    &json!({
+      "route": "connections", "project": project.to_string(), "tab": "mcp_servers", "selected": docs.id().to_string(),
+    }),
+  );
+  served.until("the inspector", |served| served.shows("connection-turn-off"));
+  served.ok(
+    "set_mcp_server_enabled",
+    &json!({ "project": project.to_string(), "server": "kontur-docs", "enabled": false }),
+  );
+  served.until("the server shown off", |served| served.shows("connection-turn-on"));
 }

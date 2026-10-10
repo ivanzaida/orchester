@@ -23,8 +23,8 @@ use orchester_workspace::{
   connections::{
     data::ProjectConnections,
     mcp::{
-      McpSaveError, McpServerText, TransportChoice, enabling, parse_variables, remove_in, save_in, secret_reference,
-      set_enabled_in, widenings,
+      Allowed, McpSaveError, McpServerText, TransportChoice, enabling, parse_variables, remove_in, save_in,
+      secret_reference, set_enabled_in, store_in, widenings,
     },
   },
   pipelines::data::Assignables,
@@ -437,5 +437,43 @@ fn mcp_dialog_names_only_the_projects_active_secrets() {
   assert_eq!(
     errors.bearer.map(|message| message.key),
     Some("connections.mcp.errors.bearerGone")
+  );
+}
+
+/// A save widens only what was allowed, checked against the server as stored when it is made: a server changed
+/// meanwhile, so that the save widens what a person did not confirm, is not saved.
+#[test]
+fn mcp_saves_widen_only_what_was_allowed() {
+  let (repo, db) = project_db();
+  let text = McpServerText {
+    variables: String::new(),
+    ..stdio_text()
+  };
+  let id = save_in(repo.path(), None, text.draft(&[], &[]).expect("valid")).expect("saved");
+  let stored = db.mcp_server(id).expect("read").expect("stored");
+  // The fields as Edit MCP server opens them, with the program as stored.
+  let text = McpServerText::of(&stored, &[]);
+  let wider = McpServerText {
+    exempt_tools: "search_docs".to_owned(),
+    ..text.clone()
+  }
+  .draft(&[], &[])
+  .expect("valid");
+  let confirmed = widenings(Some(&stored), &wider);
+  let Err(McpSaveError::Changed(reasons)) = store_in(repo.path(), Some(id), wider.clone(), &Allowed::These(Vec::new()))
+  else {
+    panic!("a save that asked nothing cannot widen");
+  };
+  assert_eq!(reasons, confirmed);
+  assert_eq!(
+    store_in(repo.path(), Some(id), wider, &Allowed::These(confirmed)).ok(),
+    Some(id),
+    "what a person confirmed is saved"
+  );
+  let narrower = text.draft(&[], &[]).expect("valid");
+  assert_eq!(
+    store_in(repo.path(), Some(id), narrower, &Allowed::These(Vec::new())).ok(),
+    Some(id),
+    "a save that only narrows needs nothing"
   );
 }

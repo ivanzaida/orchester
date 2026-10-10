@@ -34,6 +34,7 @@ use crate::{
     icon::{Icon, icon},
     inspector::{self, PropertyValue, property, variable},
     message::message_text,
+    notice::{Notice, NoticeTone},
     unavailable::reason_line,
   },
 };
@@ -54,7 +55,8 @@ pub(super) fn parts(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'
     mcp_status(server.enabled()),
     Some(switch),
   );
-  let mut body: Vec<Element> = vec![properties(ctx, server, inspecting).into()];
+  let mut body: Vec<Element> = secret_missing(ctx, server, inspecting).into_iter().collect();
+  body.push(properties(ctx, server, inspecting).into());
   body.extend(variables(ctx, server, inspecting));
   body.push(exempt_tools(ctx, server));
   body.push(discovered_tools(ctx));
@@ -190,6 +192,32 @@ fn http_rows(ctx: &Ctx, http: &HttpServer, inspecting: &Inspecting<'_>) -> Vec<R
       PropertyValue::Plain,
     ),
   ]
+}
+
+/// That a variable or the bearer token takes its value from a secret the project archived or no longer has, so the
+/// runner leaves the server out, and what a person does about it.
+fn secret_missing(ctx: &Ctx, server: &McpServer, inspecting: &Inspecting<'_>) -> Option<Element> {
+  let bearer = match server.transport() {
+    McpTransport::Http(http) => http.bearer(),
+    McpTransport::Stdio(_) => None,
+  };
+  let variables = server.environment().iter().filter_map(|(_, value)| match value {
+    McpEnvValue::Secret(secret) => Some(*secret),
+    McpEnvValue::Text(_) => None,
+  });
+  let missing = bearer
+    .into_iter()
+    .chain(variables)
+    .any(|id| !inspecting.listed.secrets.iter().any(|secret| secret.id() == id));
+  missing.then(|| {
+    Notice::new(
+      "connection-secret-missing",
+      NoticeTone::Warning,
+      ctx.t("connections.mcp.secretMissing.title"),
+    )
+    .body(ctx.t("connections.mcp.secretMissing.detail"))
+    .into()
+  })
 }
 
 /// `NAME (environment)` of secret `id`, or that the project no longer has it.

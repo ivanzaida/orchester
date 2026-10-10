@@ -109,6 +109,17 @@ fn head_row(ctx: &mut Ctx, head: Head) -> Column {
     .child(title)
 }
 
+/// `question` in the action bar's place, as wide as the form's column.
+pub(super) fn question_bar(question: Element) -> Element {
+  Row::new()
+    .id("connection-form-question")
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::new().left(SpacingSize::Xl).right(SpacingSize::Xl))
+    .justify(Justify::Center)
+    .child(Column::new().width(Dimension::Px(FORM_WIDTH)).child(question))
+    .into()
+}
+
 /// The action bar: `actions` at the end of the form's column, and `reason` under them when the last
 /// cannot be used.
 pub(super) fn action_bar(actions: Vec<Element>, reason: Option<&str>) -> Element {

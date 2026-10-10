@@ -116,3 +116,33 @@ fn connections_mcp_server_is_turned_off_and_on_and_removed() {
       && seeded.text("connections-tab-mcp_servers") == "MCP servers 2"
   });
 }
+
+/// Confirming a save stores the fields as they are when it is pressed, also a value changed while the question
+/// showed: the question says the same, so it is not shown anew.
+#[test]
+fn connections_mcp_server_confirmed_save_stores_the_current_fields() {
+  let mut seeded = Seeded::new("connections");
+  let docs = seeded.server("kontur-docs").expect("kontur-docs");
+  seeded.go(ProjectPage::EditConnection(docs.id()));
+  seeded.until("the form", |seeded| seeded.exists("connection-mcp-variables"));
+  seeded.set("connection-mcp-variables", "DOCS_INDEX=first");
+  seeded.click("connection-save");
+  seeded.until("the question", |seeded| {
+    seeded.exists("connection-confirm-save-confirm")
+  });
+  assert!(seeded.text("connection-confirm-save").contains("DOCS_INDEX"));
+  seeded.set("connection-mcp-variables", "DOCS_INDEX=second");
+  seeded.click("connection-confirm-save-confirm");
+  seeded.until("the saved server", |seeded| seeded.exists("connection-inspector"));
+  let edited = seeded.server("kontur-docs").expect("kontur-docs");
+  let values: Vec<String> = edited
+    .environment()
+    .iter()
+    .map(|(name, value)| format!("{name}={value:?}"))
+    .collect();
+  assert_eq!(
+    values,
+    [r#"DOCS_INDEX=Text("second")"#],
+    "the value shown when confirming is stored"
+  );
+}

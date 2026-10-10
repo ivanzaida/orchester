@@ -16,7 +16,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
-use super::{McpServerDraft, NAME_TAKEN};
+use super::{Allowed, McpServerDraft, NAME_TAKEN, widenings};
 use crate::{
   messages::{self, Message},
   tools::program::{ProgramProblem, fixed_program},
@@ -36,6 +36,9 @@ pub enum McpSaveError {
   /// switch first.
   #[error("agent profiles still choose the MCP server")]
   InUse(Vec<Arc<str>>),
+  /// The server changed since the save was asked for, so it widens what was not allowed: these reasons.
+  #[error("the MCP server changed meanwhile")]
+  Changed(Vec<Message>),
 }
 
 impl McpSaveError {
@@ -49,6 +52,7 @@ impl McpSaveError {
       Self::Server(McpServerError::EnvironmentOnHttp) => Message::new("connections.mcp.errors.variables"),
       Self::Program(problem) => program_problem_message(problem),
       Self::InUse(roles) => Message::new("connections.mcp.errors.inUse").with("profiles", roles.join(", ")),
+      Self::Changed(_) => Message::new("connections.mcp.errors.changedMeanwhile"),
     }
   }
 }
@@ -73,18 +77,24 @@ pub fn program_problem_message(problem: &ProgramProblem) -> Message {
   }
 }
 
-/// Stores `draft` as a new server, or as server `id`'s new settings, keeping whether it is on. A program another
-/// than the stored one is stored as the fixed file it is, looked up on this app's search path, outside `repo_root`.
+/// Stores `draft` as a new server, or as server `id`'s new settings, keeping whether it is on, when what it widens
+/// over the server as stored now is `allowed`. A program another than the stored one is stored as the fixed file it
+/// is, looked up on this app's search path, outside `repo_root`.
 pub fn store_in(
   repo_root: &Path,
   id: Option<ConnectionId>,
   draft: McpServerDraft,
+  allowed: &Allowed,
 ) -> Result<ConnectionId, McpSaveError> {
   let mut db = ProjectDb::open(repo_root)?;
   let stored = match id {
     Some(id) => Some(db.mcp_server(id)?.ok_or(StoreError::ConnectionNotFound(id))?),
     None => None,
   };
+  let reasons = widenings(stored.as_ref(), &draft);
+  if !allowed.covers(&reasons) {
+    return Err(McpSaveError::Changed(reasons));
+  }
   let transport = fixed_transport(repo_root, stored.as_ref(), draft.transport)?;
   let Some(mut server) = stored else {
     let mut server = McpServer::new(
@@ -127,9 +137,9 @@ fn fixed_transport(
   )))
 }
 
-/// [`store_in`], its failure in words.
+/// [`store_in`] for the old app's dialog, which a person fills in and which asks nothing, its failure in words.
 pub fn save_in(repo_root: &Path, id: Option<ConnectionId>, draft: McpServerDraft) -> Result<ConnectionId, Message> {
-  store_in(repo_root, id, draft).map_err(|error| error.message())
+  store_in(repo_root, id, draft, &Allowed::Anything).map_err(|error| error.message())
 }
 
 /// Turns server `id` on or off for every profile that chooses it.

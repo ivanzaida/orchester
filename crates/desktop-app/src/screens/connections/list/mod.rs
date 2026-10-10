@@ -20,7 +20,9 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ConnectionId;
-use orchester_workspace::{activity::operations, connections::data::ProjectConnections, messages::Message};
+use orchester_workspace::{
+  activity::operations, connections::data::ProjectConnections, messages::Message, tasks::outside::Outside,
+};
 
 use self::header::AddMenu;
 use super::{
@@ -102,7 +104,9 @@ impl Component for ConnectionsScreen {
     let ListProps { project, view } = ctx.props::<ListProps>().clone();
     // The work first, then the reading: the same places in every render.
     let work = work::action(ctx);
-    let loaded = data::load(ctx, project.open.repo_root.clone(), self.revision.get());
+    // Read again after a Try again press, and when automation changed the project's connections.
+    let revision = self.revision.get() + project.feed.outside.get().of(Outside::Connections);
+    let loaded = data::load(ctx, project.open.repo_root.clone(), revision);
     let id = project.open.project.id();
     let page = Column::new()
       .id(format!("screen-{}", Screen::Connections.name()))

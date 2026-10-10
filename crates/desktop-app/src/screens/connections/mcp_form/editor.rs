@@ -1,7 +1,9 @@
 //! The MCP server's fields, filled once from what the page read (the stored server, or nothing for a new one),
 //! the head, and the action bar. A field whose value cannot be used says why under it; the action bar says the
 //! first reason in field order. A save that widens what agents may do (`connections::mcp::widenings`) asks a
-//! person in place first (`widen`); one that only narrows is saved at once.
+//! person in place first (`widen`); one that only narrows is saved at once. Confirming saves the fields as they are
+//! when it is pressed, only while they widen what the question says; the save itself then checks that against the
+//! server as stored (`Allowed`), which automation may have changed meanwhile.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -23,7 +25,7 @@ use orchester_workspace::{
   background,
   connections::{
     data::ProjectConnections,
-    mcp::{McpServerDraft, McpServerErrors, McpServerText, store_in, widenings},
+    mcp::{Allowed, McpServerDraft, McpServerErrors, McpServerText, store_in, widenings},
   },
   messages::Message,
 };
@@ -35,7 +37,7 @@ use crate::{
   routes::{ConnectionsTab, ConnectionsView, ProjectPage, Route, Screen},
   screens::connections::{
     data::Saved,
-    page::{Head, action_bar, page},
+    page::{Head, action_bar, page, question_bar},
     widen::{WidenConfirm, WidenProps},
   },
   services::Services,
@@ -59,12 +61,13 @@ pub struct EditorProps {
 
 impl DevtoolsInspectable for EditorProps {}
 
-/// What a save stores.
+/// What a save stores, and what it may widen.
 #[derive(Clone)]
 struct Save {
   repo_root: PathBuf,
   id: Option<ConnectionId>,
   draft: McpServerDraft,
+  allowed: Allowed,
 }
 
 type SaveAction = FutureAction<Save, Saved, Message>;
@@ -141,11 +144,12 @@ impl McpEditor {
       repo_root: props.project.open.repo_root.clone(),
       id: props.stored.as_ref().map(McpServer::id),
       draft,
+      allowed: Allowed::These(Vec::new()),
     });
     if self.confirming.get()
       && let Some(start) = &start
     {
-      return self.confirm(ctx, props, save, start.clone());
+      return self.confirm(ctx, props, save, start);
     }
     let navigation = Navigation::of(ctx);
     let project = props.project.open.project.id();
@@ -177,13 +181,14 @@ impl McpEditor {
     action_bar(vec![cancel.into(), button.into()], reason)
   }
 
-  /// What saving widens, for a person to confirm in place of the actions.
-  fn confirm(&self, ctx: &mut Ctx, props: &EditorProps, save: &SaveAction, start: Save) -> Element {
-    let reasons: Arc<[Arc<str>]> = widenings(props.stored.as_ref(), &start.draft)
-      .iter()
-      .map(|reason| message_text(ctx, reason))
-      .collect();
+  /// What saving widens, for a person to confirm in place of the actions. The question's handlers outlive renders
+  /// that only change a value (its props compare by their words), so confirming reads the fields then.
+  fn confirm(&self, ctx: &mut Ctx, props: &EditorProps, save: &SaveAction, start: &Save) -> Element {
+    let shown = widenings(props.stored.as_ref(), &start.draft);
+    let reasons: Arc<[Arc<str>]> = shown.iter().map(|reason| message_text(ctx, reason)).collect();
     let (save, done, keep) = (save.clone(), self.confirming.clone(), self.confirming.clone());
+    let (fields, start) = (self.fields.clone(), start.clone());
+    let (listed, stored) = (props.listed.clone(), props.stored.clone());
     let question = WidenProps {
       id: "connection-confirm-save",
       title: ctx.t("connections.mcp.dialog.widenTitle"),
@@ -191,12 +196,25 @@ impl McpEditor {
       confirm: ctx.t("connections.dialog.save"),
       keep: ctx.t("connections.mcp.dialog.keepEditing"),
       on_confirm: Arc::new(move || {
+        let editing = stored.as_ref().map(McpServer::id);
+        // Fields that no longer make a server, or that widen what the question does not say yet, are not saved:
+        // the next render shows their reason, or the question with their reasons.
+        let Ok(draft) = fields.text().draft(&taken(&listed, editing), &listed.secrets) else {
+          return;
+        };
+        if widenings(stored.as_ref(), &draft) != shown {
+          return;
+        }
         done.set(false);
-        save.run(start.clone());
+        save.run(Save {
+          draft,
+          allowed: Allowed::These(shown.clone()),
+          ..start.clone()
+        });
       }),
       on_keep: Arc::new(move || keep.set(false)),
     };
-    ctx.mount_keyed::<WidenConfirm>("connection-confirm-save", question)
+    question_bar(ctx.mount_keyed::<WidenConfirm>("connection-confirm-save", question))
   }
 }
 
@@ -333,7 +351,7 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
       let spec = operations::connection_save(&open, save.draft.name.as_str());
       let store = async move {
         background::run(move || {
-          store_in(&save.repo_root, save.id, save.draft)
+          store_in(&save.repo_root, save.id, save.draft, &save.allowed)
             .map(Saved)
             .map_err(|error| error.message())
         })

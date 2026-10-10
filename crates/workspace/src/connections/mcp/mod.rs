@@ -26,7 +26,7 @@ pub use self::{
     McpSaveError, ServerUse, profiles_using, program_problem_message, remove_in, save_in, server_uses, set_enabled_in,
     store_in,
   },
-  widening::{enabling, widenings},
+  widening::{Allowed, enabling, widenings},
 };
 use crate::{
   messages::Message,

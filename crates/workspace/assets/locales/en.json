@@ -556,6 +556,7 @@
         "exemptToolTwice": "{{tool}} is listed twice",
         "exemptToolsTooMany": "List at most {{max}} tools",
         "inUse": "Agent profiles still choose this server: {{profiles}}. Switch them to work without it first, or turn it off, which keeps its settings.",
+        "changedMeanwhile": "The server was changed elsewhere while you edited it, so this save would allow more than you confirmed. Check the fields and save again.",
         "programInWorktree": "Name the program as found on the search path, or by its absolute path outside the repository: a path in the worktree is a file a run's agents can change. A script of the repository runs through its interpreter, e.g. program node with the script as its argument.",
         "programNotFound": "No program {{program}} was found on the search path or at that path.",
         "programNotLocal": "{{program}} is on another computer or a device, or reached through a link that leads there; name a program on this computer.",

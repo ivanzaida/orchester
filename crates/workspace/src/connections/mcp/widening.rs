@@ -44,6 +44,26 @@ pub fn widenings(stored: Option<&McpServer>, draft: &McpServerDraft) -> Vec<Mess
   reasons
 }
 
+/// What a save may widen, checked against the server as it is stored when the save is made: another change made
+/// meanwhile (by automation, or in another window) may widen what the person did not see.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Allowed {
+  /// Whatever it widens: a person lets automation widen (*Let automation change agent permissions*).
+  Anything,
+  /// Only what these reasons say, which a person confirmed; none for a save that asked nothing.
+  These(Vec<Message>),
+}
+
+impl Allowed {
+  /// Whether every one of `reasons` is allowed.
+  pub fn covers(&self, reasons: &[Message]) -> bool {
+    match self {
+      Self::Anything => true,
+      Self::These(allowed) => reasons.iter().all(|reason| allowed.contains(reason)),
+    }
+  }
+}
+
 /// Why turning `server` on widens: it was off, and the profiles that choose it get it again.
 pub fn enabling(server: &McpServer, enabled: bool) -> Vec<Message> {
   if enabled && !server.enabled() {

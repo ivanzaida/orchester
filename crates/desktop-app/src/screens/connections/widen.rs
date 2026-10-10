@@ -20,7 +20,7 @@ use lurq::{
 use orchester_workspace::messages::Message;
 
 use crate::{
-  mcp::input_gate::{InputGate, Protected},
+  mcp::input_gate::{Guarded, InputGate, Protected},
   theme::{ConnectionsText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -63,7 +63,7 @@ impl Component for WidenConfirm {
   fn create(ctx: &mut Ctx) -> Self {
     let gate = ctx.use_context::<InputGate>();
     Self {
-      _protected: gate.as_ref().map(InputGate::protect),
+      _protected: gate.as_ref().map(|gate| gate.protect(Guarded::WideningQuestion)),
       gate,
     }
   }

@@ -29,9 +29,10 @@ use crate::{
   },
   connections::{
     data::ProjectConnections,
-    mcp::{self, McpSaveError, McpServerText, NAME_TAKEN, TransportChoice, enabling, widenings},
+    mcp::{self, Allowed, McpSaveError, McpServerText, NAME_TAKEN, TransportChoice, enabling, widenings},
   },
   messages::Message,
+  tasks::outside::Outside,
   tools::program::ProgramProblem,
 };
 
@@ -124,8 +125,9 @@ pub async fn add_mcp_server(services: &Services, args: AddMcpServer) -> Result<V
     let secrets = db.secrets()?;
     let text = filled(McpServerText::new_server(), args.fields, &secrets)?;
     let draft = checked(&text, &db, None, &secrets)?;
-    widening::allowed(&services, widenings(None, &draft))?;
-    let id = mcp::store_in(&open.repo_root, None, draft).map_err(|error| save_refusal(&error))?;
+    let allowed = allowance(&services, widenings(None, &draft))?;
+    let id = mcp::store_in(&open.repo_root, None, draft, &allowed).map_err(|error| save_refusal(&error))?;
+    services.changes.record(open.project.id(), Outside::Connections);
     server_result(&open.repo_root, id)
   })
   .await
@@ -140,8 +142,9 @@ pub async fn update_mcp_server(services: &Services, args: UpdateMcpServer) -> Re
     let secrets = db.secrets()?;
     let text = filled(McpServerText::of(&stored, &secrets), args.fields, &secrets)?;
     let draft = checked(&text, &db, Some(&stored), &secrets)?;
-    widening::allowed(&services, widenings(Some(&stored), &draft))?;
-    mcp::store_in(&open.repo_root, Some(stored.id()), draft).map_err(|error| save_refusal(&error))?;
+    let allowed = allowance(&services, widenings(Some(&stored), &draft))?;
+    mcp::store_in(&open.repo_root, Some(stored.id()), draft, &allowed).map_err(|error| save_refusal(&error))?;
+    services.changes.record(open.project.id(), Outside::Connections);
     server_result(&open.repo_root, stored.id())
   })
   .await
@@ -153,6 +156,7 @@ pub async fn remove_mcp_server(services: &Services, args: InServer) -> Result<Va
     let open = services.project(&args.project)?;
     let server = server_named(&ProjectDb::open(&open.repo_root)?, &args.server)?;
     mcp::remove_in(&open.repo_root, server.id()).map_err(|error| save_refusal(&error))?;
+    services.changes.record(open.project.id(), Outside::Connections);
     Ok(json!({ "removed": { "id": server.id().to_string(), "name": server.name().as_str() } }))
   })
   .await
@@ -165,6 +169,7 @@ pub async fn set_mcp_server_enabled(services: &Services, args: SetMcpServerEnabl
     let server = server_named(&ProjectDb::open(&open.repo_root)?, &args.server)?;
     widening::allowed(&services, enabling(&server, args.enabled))?;
     mcp::set_enabled_in(&open.repo_root, server.id(), args.enabled)?;
+    services.changes.record(open.project.id(), Outside::Connections);
     server_result(&open.repo_root, server.id())
   })
   .await
@@ -390,6 +395,18 @@ fn applies(text: &McpServerText, fields: &ServerFields) -> Result<(), ToolError>
   }
 }
 
+/// What a save may widen once [`widening::allowed`] let it: anything while a person lets automation widen, else
+/// nothing, also when the server changed meanwhile (`mcp::store_in` checks the server as stored then).
+fn allowance(services: &Services, reasons: Vec<Message>) -> Result<Allowed, ToolError> {
+  let widens = !reasons.is_empty();
+  widening::allowed(services, reasons)?;
+  Ok(if widens {
+    Allowed::Anything
+  } else {
+    Allowed::These(Vec::new())
+  })
+}
+
 fn save_refusal(error: &McpSaveError) -> ToolError {
   let code = match error {
     McpSaveError::Program(problem) => match problem {
@@ -403,9 +420,14 @@ fn save_refusal(error: &McpSaveError) -> ToolError {
     McpSaveError::Store(orchester_store::StoreError::DuplicateConnectionName(_)) => "name_taken",
     McpSaveError::Store(orchester_store::StoreError::ConnectionNotFound(_)) => "not_found",
     McpSaveError::InUse(_) => "in_use",
+    McpSaveError::Changed(_) => "changed_meanwhile",
     McpSaveError::Store(_) | McpSaveError::Server(_) => "project_data",
   };
-  ToolError::refused(code, vec![error.message()])
+  let mut reasons = vec![error.message()];
+  if let McpSaveError::Changed(widens) = error {
+    reasons.extend(widens.iter().cloned());
+  }
+  ToolError::refused(code, reasons)
 }
 
 fn refused(code: &str, key: &'static str) -> ToolError {

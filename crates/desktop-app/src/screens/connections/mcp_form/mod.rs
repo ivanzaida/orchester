@@ -19,7 +19,7 @@ use lurq::{
   node::Element,
 };
 use orchester_core::id::ConnectionId;
-use orchester_workspace::connections::mcp::McpServerText;
+use orchester_workspace::{connections::mcp::McpServerText, tasks::outside::Outside};
 
 use self::editor::{EditorProps, McpEditor};
 use super::data;
@@ -59,7 +59,10 @@ impl Component for McpForm {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<McpFormProps>().clone();
-    let loaded = data::load(ctx, props.project.open.repo_root.clone(), self.revision.get());
+    // Read again when automation changed the project's connections: the fields keep what was typed, and a save
+    // that widens asks against the server as it is now.
+    let revision = self.revision.get() + props.project.feed.outside.get().of(Outside::Connections);
+    let loaded = data::load(ctx, props.project.open.repo_root.clone(), revision);
     let screen = if props.server.is_some() {
       Screen::EditConnection
     } else {
