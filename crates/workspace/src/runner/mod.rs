@@ -356,7 +356,29 @@ impl Runners {
   /// When a runner last reported an event of `run` (its agent's activity or a change of the run) in
   /// this session; `None` before the first one.
   pub fn last_event(&self, run: RunId) -> Option<SystemTime> {
-    self.inner.shared.last_events.lock().get(&run).copied()
+    self.inner.shared.last_events.lock().get(&run).map(|(_, at)| *at)
+  }
+
+  /// Every run the runners last reported working on, with where it stands while they stop at
+  /// checkpoints (saved ones included), whatever state each runner is in now, by project name.
+  pub fn board(&self) -> Vec<(ActiveWork, SaveState)> {
+    let projects = self.inner.projects.lock();
+    let mut entries: Vec<&ProjectRunner> = projects.values().collect();
+    entries.sort_by(|left, right| left.name.cmp(&right.name));
+    entries
+      .into_iter()
+      .flat_map(|entry| {
+        let status = entry.status.borrow();
+        let runs: Vec<(ActiveWork, SaveState)> = status.work().map_or_else(Vec::new, |work| {
+          work
+            .runs
+            .iter()
+            .map(|run| (ActiveWork::reported(&entry.name, run), SaveState::of(&run.state)))
+            .collect()
+        });
+        runs
+      })
+      .collect()
   }
 
   /// Where `run` stands while the application closes after "Wait for agents to save", from its

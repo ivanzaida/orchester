@@ -6,9 +6,11 @@
 //! waiting, and the answer or the decision resumes its agent's session. Runs interrupted
 //! earlier, e.g. ones not continued at an earlier start, are not this end's and are not listed.
 //! Nothing continues on its own; the user continues all of them or none.
-//! Blocks on SQLite and git; the UI calls it off the UI thread. [`Recovery`] reads them once for the
+//! Blocks on SQLite and git; the UI calls it off the UI thread. Runs or projects that cannot be read are
+//! named, and the others are still offered. [`Recovery`] reads them once for the
 //! session and keeps what the person decided.
 
+mod pending;
 mod session;
 
 use std::{
@@ -20,6 +22,7 @@ use orchester_core::{
   command::Command,
   connection::AgentProvider,
   id::{ProjectId, RunId, TaskId},
+  project::TaskKey,
   run::{InterruptCause, ListedRun, Run, RunEvent, RunStatus},
   store::{RunStore, TaskStore},
   time::Timestamp,
@@ -31,6 +34,7 @@ use orchester_store::{ProjectDb, RunStoreError, StoreError};
 pub use self::session::{Continuation, Decision, NotContinued, Reading, Recovery, RecoveryState};
 use crate::{
   display,
+  messages::{self, Message},
   tasks::{
     changes::{GIT, run_worktree},
     detail,
@@ -46,7 +50,7 @@ pub struct InterruptedRun {
   pub project: Arc<str>,
   pub run: RunId,
   pub task: TaskId,
-  pub task_key: Arc<str>,
+  pub task_key: TaskKey,
   pub task_title: Arc<str>,
   pub number: u32,
   /// The step it was working on, with its agent role, provider and model.
@@ -58,6 +62,8 @@ pub struct InterruptedRun {
   /// Its last checkpoint: the short revision and when it was saved.
   pub checkpoint: Option<(Arc<str>, Timestamp)>,
   pub worktree: WorktreeState,
+  /// The first file of the worktree that is not committed, which *View changes* opens.
+  pub uncommitted_file: Option<Arc<str>>,
 }
 
 /// What the run's worktree holds beyond its last checkpoint.
@@ -76,19 +82,41 @@ pub fn reports(previous: SessionEnd) -> bool {
   matches!(previous, SessionEnd::QuitNow | SessionEnd::Crashed)
 }
 
-/// The runs `previous`, the end of the last session, left interrupted in the registered
-/// projects; this session started at `since`. A project whose database cannot be read is
-/// skipped and logged; it shows as unavailable when opened, and its runner records the
-/// interruption when it starts.
+/// What the recovery found: the runs it can offer, and those it could not read, by project.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Found {
+  pub runs: Vec<InterruptedRun>,
+  pub unread: Vec<Unread>,
+}
+
+/// A run left at work that cannot be read, or a project whose runs cannot be: it stays as it is, and
+/// its task page shows it; the recovery names it rather than leaving it out silently.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Unread {
+  pub project_id: ProjectId,
+  /// The run, when it is one run; `None` when the project's runs could not be listed.
+  pub run: Option<RunId>,
+  pub reason: Message,
+}
+
+/// The runs `previous`, the end of the last session, left interrupted in the registered projects, each
+/// project's interrupted at what `since` says for it or later (the previous session's start: a runner
+/// can record its runs as interrupted before this session starts), or none of it when it says `None`. A
+/// project whose database cannot be opened is skipped and logged; it shows as unavailable when opened,
+/// and its runner records the interruption when it starts. What cannot be read is named in
+/// [`Found::unread`], and the rest is still offered.
 pub fn interrupted_runs(
   workspace: &Workspace,
   programs: &Programs,
   previous: SessionEnd,
-  since: Timestamp,
-) -> Result<Vec<InterruptedRun>, StoreError> {
+  since: &dyn Fn(ProjectId) -> Option<Timestamp>,
+) -> Result<Found, StoreError> {
   let stale_cause = orchester_ipc::AttachSession::Fresh { previous_end: previous }.interrupt_cause();
-  let mut found = Vec::new();
+  let mut found = Found::default();
   for project in workspace.projects()? {
+    let Some(since) = since(project.id) else {
+      continue;
+    };
     let db = match ProjectDb::open(&project.repo_root) {
       Ok(db) => db,
       Err(error) => {
@@ -96,28 +124,53 @@ pub fn interrupted_runs(
         continue;
       }
     };
+    let project_id = db.project().id();
+    let unread = |run: Option<RunId>, error: &StoreError| Unread {
+      project_id,
+      run,
+      reason: messages::store_error(error),
+    };
+    let (runs, unreadable) = match left_at_work(&db, since) {
+      Ok(left) => left,
+      Err(error) => {
+        tracing::warn!(project = %project.repo_root.display(), %error, "cannot list a project's runs for recovery");
+        found.unread.push(unread(None, &error));
+        continue;
+      }
+    };
+    found
+      .unread
+      .extend(unreadable.iter().map(|(run, error)| unread(Some(*run), error)));
     let name: Arc<str> = project.name.as_str().into();
-    for run in left_at_work(&db, since)? {
+    for run in runs {
+      let id = run.id();
       let cause = match run.status() {
         RunStatus::Interrupted(cause) => *cause,
         _ => stale_cause,
       };
-      found.push(describe(&db, programs, (&project.repo_root, &name), run, cause)?);
+      match describe(&db, programs, (&project.repo_root, &name), run, cause) {
+        Ok(interrupted) => found.runs.push(interrupted),
+        Err(error) => {
+          tracing::warn!(run = %id, %error, "cannot describe an interrupted run");
+          found.unread.push(unread(Some(id), &error));
+        }
+      }
     }
   }
   Ok(found)
 }
 
+/// A run that cannot be read, and why.
+type Unreadable = (RunId, StoreError);
+
 /// Runs still recorded as running with an agent or a step at work, as the runner interrupts them
-/// when it attaches, and runs recorded as interrupted since `since` (by this session's runner when
-/// it attached), ordered by number. A run that cannot be read cannot be continued: it is logged and
-/// left out, and its task shows it as unreadable.
-fn left_at_work(db: &ProjectDb, since: Timestamp) -> Result<Vec<Run>, StoreError> {
-  let mut runs: Vec<Run> = readable(db.running_runs().map_err(detail::run_store_error)?)
-    .into_iter()
-    .filter(|run| !run.waits_for_a_person())
-    .collect();
-  for run in readable(db.interrupted_runs().map_err(detail::run_store_error)?) {
+/// when it attaches, and runs recorded as interrupted since `since`, ordered by number; and the runs
+/// recorded as running that cannot be read, with why. An unreadable run recorded as interrupted is
+/// left out and logged: when it was interrupted cannot be read either.
+fn left_at_work(db: &ProjectDb, since: Timestamp) -> Result<(Vec<Run>, Vec<Unreadable>), StoreError> {
+  let (running, unreadable) = readable(db.running_runs().map_err(detail::run_store_error)?);
+  let mut runs: Vec<Run> = running.into_iter().filter(|run| !run.waits_for_a_person()).collect();
+  for run in readable(db.interrupted_runs().map_err(detail::run_store_error)?).0 {
     let interrupted_at = db
       .events(run.id())
       .map_err(detail::run_store_error)?
@@ -128,21 +181,23 @@ fn left_at_work(db: &ProjectDb, since: Timestamp) -> Result<Vec<Run>, StoreError
     }
   }
   runs.sort_by_key(|run| run.number());
-  Ok(runs)
+  Ok((runs, unreadable))
 }
 
-/// The runs of `listed` that can be read; the others are logged.
-fn readable(listed: Vec<ListedRun<RunStoreError>>) -> Vec<Run> {
-  listed
-    .into_iter()
-    .filter_map(|run| match run {
-      Ok(run) => Some(run),
-      Err(unreadable) => {
-        tracing::warn!(run = %unreadable.id, error = %unreadable.error, "a run left at work cannot be read");
-        None
+/// The runs of `listed` that can be read, and the others with why; those are logged.
+fn readable(listed: Vec<ListedRun<RunStoreError>>) -> (Vec<Run>, Vec<Unreadable>) {
+  let mut runs = Vec::new();
+  let mut unreadable = Vec::new();
+  for run in listed {
+    match run {
+      Ok(run) => runs.push(run),
+      Err(run) => {
+        tracing::warn!(run = %run.id, error = %run.error, "a run left at work cannot be read");
+        unreadable.push((run.id, detail::run_store_error(run.error)));
       }
-    })
-    .collect()
+    }
+  }
+  (runs, unreadable)
 }
 
 fn describe(
@@ -162,13 +217,14 @@ fn describe(
     )
   });
   let worktree = run_worktree(root, view.run.id());
+  let (state, uncommitted_file) = worktree_state(programs, &worktree);
   Ok(InterruptedRun {
     project_id: db.project().id(),
     project_root: root.to_path_buf(),
     project: project.clone(),
     run: view.run.id(),
     task: task.id(),
-    task_key: task.key().to_string().into(),
+    task_key: task.key().clone(),
     task_title: task.details().title.as_str().into(),
     number: view.run.number().get(),
     step: step.map(|step| step.name.clone()),
@@ -177,29 +233,39 @@ fn describe(
     model: step.and_then(|step| step.model.clone()),
     cause,
     checkpoint,
-    worktree: worktree_state(programs, &worktree),
+    worktree: state,
+    uncommitted_file,
   })
 }
 
-/// Counts the files git reports as changed or untracked in `worktree`.
-fn worktree_state(programs: &Programs, worktree: &Path) -> WorktreeState {
+/// Counts the files git reports as changed or untracked in `worktree`, and names the first of them as a
+/// repository path.
+fn worktree_state(programs: &Programs, worktree: &Path) -> (WorktreeState, Option<Arc<str>>) {
   if !worktree.is_dir() {
-    return WorktreeState::Unknown;
+    return (WorktreeState::Unknown, None);
   }
   let status =
     Command::new(Path::new(GIT), ["status", "--porcelain", "--untracked-files=all"]).with_current_dir(worktree);
   match programs.runner().run(&status) {
-    Ok(output) if output.success() => match output.stdout.lines().filter(|line| !line.trim().is_empty()).count() {
-      0 => WorktreeState::Clean,
-      files => WorktreeState::Uncommitted(files),
-    },
+    Ok(output) if output.success() => {
+      let files: Vec<&str> = output.stdout.lines().filter(|line| !line.trim().is_empty()).collect();
+      // `XY path`, or `XY from -> to` for a rename: the path the worktree has now.
+      let first = files.first().and_then(|line| line.get(3..)).map(|path| {
+        let path = path.rsplit(" -> ").next().unwrap_or(path);
+        Arc::from(path.trim_matches('"'))
+      });
+      match files.len() {
+        0 => (WorktreeState::Clean, None),
+        count => (WorktreeState::Uncommitted(count), first),
+      }
+    }
     Ok(output) => {
       tracing::warn!(worktree = %worktree.display(), stderr = %output.stderr, "git status failed");
-      WorktreeState::Unknown
+      (WorktreeState::Unknown, None)
     }
     Err(error) => {
       tracing::warn!(worktree = %worktree.display(), %error, "cannot run git status");
-      WorktreeState::Unknown
+      (WorktreeState::Unknown, None)
     }
   }
 }

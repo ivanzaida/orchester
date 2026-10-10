@@ -144,9 +144,9 @@ impl StartupRecovery {
       props.session_start,
     );
     let load = ctx.future(deps, |(workspace, programs, previous, since)| async move {
-      background::run(move || recovery::interrupted_runs(&workspace, &programs, previous, since))
+      background::run(move || recovery::interrupted_runs(&workspace, &programs, previous, &|_| Some(since)))
         .await?
-        .map(|runs| InterruptedRuns(runs.into()))
+        .map(|found| InterruptedRuns(found.runs.into()))
         .map_err(|error| {
           tracing::error!(%error, "cannot read the interrupted runs");
           messages::store_error(&error)

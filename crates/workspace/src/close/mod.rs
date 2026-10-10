@@ -4,6 +4,7 @@
 //! confirmation's state are each app's; what a close leads to and how the session ends are here,
 //! with the flow that holds a close while the person decides ([`CloseFlow`]).
 
+mod board;
 mod flow;
 mod waiting;
 
@@ -12,7 +13,8 @@ use std::sync::Arc;
 use orchester_store::SessionEnd;
 
 pub use self::{
-  flow::{CloseFlow, ClosePhase, Proceed},
+  board::{Board, RunStands, Stage},
+  flow::{CloseFlow, ClosePhase},
   waiting::{PersonWait, WaitingTask, waiting_for_person},
 };
 use crate::runner::{ActiveWork, ShutdownOutcome};

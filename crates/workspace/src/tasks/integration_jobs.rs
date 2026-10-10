@@ -42,10 +42,22 @@ enum Active {
   Remove,
 }
 
+/// What git does for a run while the window closes: closing waits for it, or the person quits with it
+/// shown (the closing panel). Every value is runtime data.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BusyJob {
+  pub project: Arc<str>,
+  pub task_key: Arc<str>,
+  pub run_number: u32,
+  pub merge: bool,
+}
+
 /// One run's operations as they stand.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RunJobState {
   active: Active,
+  /// The operation under way, as the closing panel names it.
+  busy_with: Option<BusyJob>,
   pub merge: JobState,
   pub remove: JobState,
   /// The files the last merge conflicted in, for the task page to list; empty unless it stopped at a
@@ -60,6 +72,7 @@ impl Default for RunJobState {
   fn default() -> Self {
     Self {
       active: Active::Idle,
+      busy_with: None,
       merge: JobState::Idle,
       remove: JobState::Idle,
       conflicts: Vec::new(),
@@ -162,6 +175,23 @@ impl ProjectJobs {
   pub fn of(&self, project: ProjectId) -> IntegrationJobs {
     self.0.lock().entry(project).or_default().clone()
   }
+
+  /// The merges and worktree removals under way in every project.
+  pub fn busy(&self) -> Vec<BusyJob> {
+    let projects: Vec<IntegrationJobs> = self.0.lock().values().cloned().collect();
+    projects
+      .iter()
+      .flat_map(|jobs| {
+        jobs
+          .0
+          .borrow()
+          .runs
+          .values()
+          .filter_map(|run| run.busy_with.clone())
+          .collect::<Vec<_>>()
+      })
+      .collect()
+  }
 }
 
 /// One run's operations, a handle on its project's [`IntegrationJobs`].
@@ -213,7 +243,21 @@ impl RunJobs {
   }
 
   fn finish(&self) {
-    self.update(|state| state.active = Active::Idle);
+    self.update(|state| {
+      state.active = Active::Idle;
+      state.busy_with = None;
+    });
+  }
+
+  /// Names the operation that began, for the closing panel.
+  fn name(&self, open: &OpenProject, (key, number): (&str, u32), merge: bool) {
+    let busy = BusyJob {
+      project: open.project.name().as_str().into(),
+      task_key: key.into(),
+      run_number: number,
+      merge,
+    };
+    self.update(|state| state.busy_with = Some(busy));
   }
 
   /// Starts merging the run on a thread of its own; whether it began, which it does not while another
@@ -227,6 +271,7 @@ impl RunJobs {
       state.conflicts.clear();
       state.merged = None;
     });
+    self.name(&args.open, (&args.key, args.number), true);
     let job = self.clone();
     if let Err(error) = thread::Builder::new()
       .name("run-merge".into())
@@ -298,6 +343,7 @@ impl RunJobs {
     if !self.begin(Active::Remove) {
       return;
     }
+    self.name(&args.open, (&args.key, args.number), false);
     let automation = match &args.by {
       Remover::Person(_) => {
         self.update(|state| state.remove = JobState::Running);

@@ -1,9 +1,10 @@
 //! The close flow of a window (`docs/architecture/storage.md`, "Lifecycle"; the closing panel of layer
 //! "App lifecycle" `Ob1P7` in `data/orchester2.pen`). Orchester has no background mode: a close with no
 //! agent at work stops the runners at once and closes; with agents at work the close is held while the
-//! person chooses to wait for the agents to save, to quit now, or to cancel. The window's close hook,
-//! which hands over how to let the window close, and the panel are each app's; what a close leads to
-//! and how the session ends are here.
+//! person chooses to wait for the agents to save, to quit now, or to cancel. A merge or a worktree removal
+//! under way holds the close the same way: closing waits for git, or the person quits with it shown. The
+//! window's close hook, which hands over how to let the window close, and the panel are each app's; what a
+//! close leads to and how the session ends are here.
 
 use std::{
   sync::Arc,
@@ -14,22 +15,27 @@ use orchester_store::SessionEnd;
 use parking_lot::Mutex;
 use tokio::{runtime::Handle, sync::watch, task::JoinHandle};
 
-use super::{CloseKind, ClosePlan, close_plan, session_end};
-use crate::runner::{ActiveWork, QUIET_STOP_TIMEOUT, Runners, ShutdownOutcome};
+use super::{Board, CloseKind, ClosePlan, close_plan, session_end};
+use crate::{
+  runner::{QUIET_STOP_TIMEOUT, Runners, ShutdownOutcome},
+  tasks::integration_jobs::ProjectJobs,
+};
 
 /// Lets the window close; called once the close flow decided it may.
-pub type Proceed = Box<dyn FnOnce() + Send>;
+type Proceed = Box<dyn FnOnce() + Send>;
 
-/// Where a close stands.
+/// How often the flow looks again whether git is done, while it waits for it.
+const JOBS_RECHECK: Duration = Duration::from_millis(200);
+
+/// Where a close stands. What the panel lists is read live ([`CloseFlow::board`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ClosePhase {
   Open,
-  /// The close is held while the person decides; the runs with an agent at work.
-  Confirming(Arc<[ActiveWork]>),
+  /// The close is held while the person decides.
+  Confirming,
   /// "Wait for agents to save" was chosen at `since`: the runners stop at checkpoints, with no
-  /// deadline, and the window closes once they stopped.
+  /// deadline, git finishes, and the window closes once both are done.
   Waiting {
-    work: Arc<[ActiveWork]>,
     since: SystemTime,
   },
   /// Nothing was at work: the runners stop at once and the window closes.
@@ -39,7 +45,7 @@ pub enum ClosePhase {
 impl ClosePhase {
   /// Whether the closing panel takes the window's body: the person decides or waits.
   pub const fn holds_window(&self) -> bool {
-    matches!(self, Self::Confirming(_) | Self::Waiting { .. })
+    matches!(self, Self::Confirming | Self::Waiting { .. })
   }
 }
 
@@ -51,6 +57,8 @@ pub struct CloseFlow {
 
 struct Inner {
   runners: Runners,
+  /// The projects' merges and worktree removals, which closing does not cut off unasked.
+  jobs: ProjectJobs,
   runtime: Handle,
   phase: watch::Sender<ClosePhase>,
   /// The held close; whoever takes it decides how the session ends.
@@ -66,10 +74,11 @@ impl PartialEq for CloseFlow {
 }
 
 impl CloseFlow {
-  pub fn new(runners: Runners, runtime: Handle) -> Self {
+  pub fn new(runners: Runners, jobs: ProjectJobs, runtime: Handle) -> Self {
     Self {
       inner: Arc::new(Inner {
         runners,
+        jobs,
         runtime,
         phase: watch::Sender::new(ClosePhase::Open),
         request: Mutex::new(None),
@@ -88,6 +97,11 @@ impl CloseFlow {
     self.inner.phase.borrow().clone()
   }
 
+  /// What the panel lists now: the runs at work or saving, and git's operations.
+  pub fn board(&self) -> Board {
+    Board::of(&self.phase(), &self.inner.runners, &self.inner.jobs)
+  }
+
   /// The window asks to close; `proceed` lets it. A request while a close is under way is dropped,
   /// which keeps the window open until that close finishes: the window's × and Alt+F4 / Cmd+Q do
   /// nothing more while the panel is shown.
@@ -97,31 +111,31 @@ impl CloseFlow {
     }
     *self.inner.request.lock() = Some(Box::new(proceed));
     match close_plan(self.inner.runners.active_work()) {
-      ClosePlan::StopQuietly => {
+      ClosePlan::StopQuietly if self.inner.jobs.busy().is_empty() => {
         self.inner.phase.send_replace(ClosePhase::Stopping);
         self.stop_then_close(CloseKind::Quiet, Some(QUIET_STOP_TIMEOUT));
       }
-      ClosePlan::Confirm(work) => {
-        self.inner.phase.send_replace(ClosePhase::Confirming(work));
+      ClosePlan::StopQuietly | ClosePlan::Confirm(_) => {
+        self.inner.phase.send_replace(ClosePhase::Confirming);
       }
     }
   }
 
   /// "Wait for agents to save": no new steps or tool calls start, every agent goes on to its next
-  /// checkpoint, the runs are paused, then the window closes. No deadline: Quit now stays offered.
+  /// checkpoint, the runs are paused, git finishes, then the window closes. No deadline: Quit now
+  /// stays offered.
   pub fn wait_for_agents(&self) {
-    let ClosePhase::Confirming(work) = self.phase() else {
+    if self.phase() != ClosePhase::Confirming {
       return;
-    };
+    }
     self.inner.phase.send_replace(ClosePhase::Waiting {
-      work,
       since: SystemTime::now(),
     });
     self.stop_then_close(CloseKind::WaitForAgents, None);
   }
 
   /// "Quit now": the runners and their agents are ended at once, without a checkpoint, and the
-  /// window closes.
+  /// window closes, git's operations with it.
   pub fn quit_now(&self) {
     if !self.phase().holds_window() {
       return;
@@ -136,7 +150,7 @@ impl CloseFlow {
   /// Keeps the window open, unchanged; only while the person decides: once the runners stopped
   /// starting new work, cancelling would leave the runs paused without closing.
   pub fn cancel(&self) {
-    if !matches!(self.phase(), ClosePhase::Confirming(_)) {
+    if self.phase() != ClosePhase::Confirming {
       return;
     }
     drop(self.inner.request.lock().take());
@@ -147,6 +161,10 @@ impl CloseFlow {
     let flow = self.clone();
     let task = self.inner.runtime.spawn(async move {
       let outcome = flow.inner.runners.shutdown(deadline).await;
+      // Git's operations run on threads of their own; the process must not end under them.
+      while !flow.inner.jobs.busy().is_empty() {
+        tokio::time::sleep(JOBS_RECHECK).await;
+      }
       flow.close(kind, outcome);
     });
     *self.inner.stopping.lock() = Some(task);

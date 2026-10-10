@@ -4,7 +4,10 @@
 //! its own; a project's runs not continued stay interrupted and each is continued later from its task
 //! page. After "Wait for agents to save" nothing is offered: those runs are paused.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+  collections::{BTreeMap, HashMap},
+  sync::Arc,
+};
 
 use orchester_core::{
   id::{ProjectId, RunId},
@@ -14,7 +17,7 @@ use orchester_exec::programs::Programs;
 use orchester_ipc::SessionEnd;
 use tokio::{runtime::Handle, sync::watch};
 
-use super::{InterruptedRun, interrupted_runs, reports};
+use super::{InterruptedRun, Unread, interrupted_runs, pending, reports};
 use crate::{
   background,
   messages::{self, Message},
@@ -32,7 +35,11 @@ pub enum Reading {
   Reading,
   /// The runs could not be read; they stay interrupted and each can be continued from its task page.
   Failed(Message),
-  Read(Arc<[InterruptedRun]>),
+  /// The runs it can offer, and what it could not read.
+  Read {
+    runs: Arc<[InterruptedRun]>,
+    unread: Arc<[Unread]>,
+  },
 }
 
 /// What the person decided for one project's interrupted runs.
@@ -74,7 +81,19 @@ impl RecoveryState {
   /// The interrupted runs of `project`, in the order of their numbers; none until they are read.
   pub fn runs_of(&self, project: ProjectId) -> Vec<InterruptedRun> {
     match &self.reading {
-      Reading::Read(runs) => runs.iter().filter(|run| run.project_id == project).cloned().collect(),
+      Reading::Read { runs, .. } => runs.iter().filter(|run| run.project_id == project).cloned().collect(),
+      Reading::Nothing | Reading::Reading | Reading::Failed(_) => Vec::new(),
+    }
+  }
+
+  /// What the recovery could not read of `project`.
+  pub fn unread_of(&self, project: ProjectId) -> Vec<Unread> {
+    match &self.reading {
+      Reading::Read { unread, .. } => unread
+        .iter()
+        .filter(|unread| unread.project_id == project)
+        .cloned()
+        .collect(),
       Reading::Nothing | Reading::Reading | Reading::Failed(_) => Vec::new(),
     }
   }
@@ -89,6 +108,8 @@ impl RecoveryState {
 pub struct Recovery {
   state: watch::Sender<RecoveryState>,
   runtime: Handle,
+  /// Where undecided runs are kept across starts.
+  workspace: Workspace,
 }
 
 impl PartialEq for Recovery {
@@ -98,36 +119,32 @@ impl PartialEq for Recovery {
 }
 
 impl Recovery {
-  /// Starts reading the runs `previous`, the end of the last session, left interrupted in the
-  /// registered projects, on `runtime`, when that end is one the recovery reports; this session
-  /// started at `since`.
+  /// Starts reading, on `runtime`, the runs left interrupted in the registered projects: after Quit now
+  /// or a crash (`previous`), those interrupted at `since` or later (the previous session's start); and
+  /// the runs of projects whose interrupted runs the person has not decided on yet, also after a clean
+  /// end, since they were interrupted. Projects with runs to offer are kept undecided until the person
+  /// decides.
   pub fn start(
     (workspace, programs): (Workspace, Programs),
     previous: SessionEnd,
     since: Timestamp,
     runtime: &Handle,
   ) -> Self {
-    let reports = reports(previous);
+    let undecided = pending::read(&workspace);
+    let reads = reports(previous) || !undecided.is_empty();
     let recovery = Self {
       state: watch::Sender::new(RecoveryState {
-        reading: if reports { Reading::Reading } else { Reading::Nothing },
+        reading: if reads { Reading::Reading } else { Reading::Nothing },
         previous,
         decisions: Arc::default(),
       }),
       runtime: runtime.clone(),
+      workspace: workspace.clone(),
     };
-    if reports {
+    if reads {
       let state = recovery.state.clone();
       runtime.spawn(async move {
-        let read = background::run(move || interrupted_runs(&workspace, &programs, previous, since)).await;
-        let reading = match read {
-          Ok(Ok(runs)) => Reading::Read(runs.into()),
-          Ok(Err(error)) => {
-            tracing::error!(%error, "cannot read the interrupted runs");
-            Reading::Failed(messages::store_error(&error))
-          }
-          Err(message) => Reading::Failed(message),
-        };
+        let reading = read((workspace, programs), previous, since, undecided).await;
         state.send_modify(|state| state.reading = reading);
       });
     }
@@ -143,11 +160,15 @@ impl Recovery {
     self.state.borrow().clone()
   }
 
-  /// *Don't continue*: `project`'s runs stay interrupted and the notice goes.
+  /// *Don't continue*, or the notice put away (what could not be read, or the runs that did not
+  /// continue): `project`'s runs stay as they are and the notice goes. Not while they continue.
   pub fn leave(&self, project: ProjectId) {
-    self.decide(project, |decision| {
-      matches!(decision, Decision::Undecided).then_some(Decision::Left)
+    let left = self.decide(project, |decision| {
+      (!matches!(decision, Decision::Continuing | Decision::Left)).then_some(Decision::Left)
     });
+    if left {
+      pending::settle(&self.workspace, project);
+    }
   }
 
   /// *Continue all*: continues every interrupted run of `project` from its checkpoint through its
@@ -169,6 +190,7 @@ impl Recovery {
         not_continued = continuation.not_continued.len(),
         "continued interrupted runs"
       );
+      pending::settle(&recovery.workspace, project);
       recovery.decide(project, |_| Some(Decision::Continued(continuation)));
     });
   }
@@ -182,6 +204,51 @@ impl Recovery {
       Arc::make_mut(&mut state.decisions).insert(project, decision);
       true
     })
+  }
+}
+
+/// Reads the interrupted runs: of every project after a Quit now or a crash (`previous`), since `since`
+/// or since its undecided runs were interrupted, whichever is earlier; otherwise only of the projects in
+/// `undecided`. The projects with runs to offer are kept undecided.
+async fn read(
+  (workspace, programs): (Workspace, Programs),
+  previous: SessionEnd,
+  since: Timestamp,
+  undecided: HashMap<ProjectId, Timestamp>,
+) -> Reading {
+  let every = reports(previous);
+  let read = background::run(move || {
+    let since_of = |project: ProjectId| match (undecided.get(&project), every) {
+      (Some(kept), true) => Some((*kept).min(since)),
+      (Some(kept), false) => Some(*kept),
+      (None, true) => Some(since),
+      (None, false) => None,
+    };
+    let found = interrupted_runs(&workspace, &programs, previous, &since_of)?;
+    let mut kept: Vec<ProjectId> = found.runs.iter().map(|run| run.project_id).collect();
+    kept.dedup();
+    for project in &kept {
+      if let Some(since) = since_of(*project) {
+        pending::keep(&workspace, *project, since);
+      }
+    }
+    // Undecided runs that are no longer interrupted (continued from their task pages) need no notice.
+    for project in undecided.keys().filter(|project| !kept.contains(project)) {
+      pending::settle(&workspace, *project);
+    }
+    Ok::<_, orchester_store::StoreError>(found)
+  })
+  .await;
+  match read {
+    Ok(Ok(found)) => Reading::Read {
+      runs: found.runs.into(),
+      unread: found.unread.into(),
+    },
+    Ok(Err(error)) => {
+      tracing::error!(%error, "cannot read the interrupted runs");
+      Reading::Failed(messages::store_error(&error))
+    }
+    Err(message) => Reading::Failed(message),
   }
 }
 
