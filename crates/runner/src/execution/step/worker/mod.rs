@@ -233,6 +233,8 @@ pub(super) struct Watch {
   steering: steer::Steering,
   /// The turn failure recorded when the prompt or relay closed after the CLI delivered its result.
   pub(super) closed_after_result: Option<String>,
+  /// A completed Codex turn left a call of Orchester's tools outstanding.
+  tools_after_turn: bool,
 }
 
 impl Watch {
@@ -254,6 +256,7 @@ impl Watch {
       approved_calls: HashSet::new(),
       steering: steer::Steering::default(),
       closed_after_result: None,
+      tools_after_turn: false,
     })
   }
 

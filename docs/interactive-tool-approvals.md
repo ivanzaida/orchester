@@ -499,6 +499,63 @@ implicit workspace root with the extra sandbox writable roots when checking the 
 Project MCP secret values are redacted from commands, output, messages, errors and approval metadata
 before they reach activity tracking or storage, including their JSON-escaped form.
 
+## Codex turns with pending Orchester calls (ORC-22)
+
+ORC-3 run 5 (`01a12776-6863-771a-ac12-62e125bd1e06`, 2026-10-10, Codex
+0.159.2 with `gpt-6-astra`) ended its model turn with `search_external_file` still
+waiting for approval. Its result said the lookup was pending in tool cell 14.
+The reported `decision_interrupted` and relay-close `turn_failed` followed in the
+same millisecond. The runner's `Update::TurnEnded` handler unconditionally ended
+the Codex process tree, which ended its relay and the approval's reply channel.
+This was a runner shutdown caused by treating a model turn's end as the end of
+all tool work. Increasing `tool_timeout_sec` cannot repair that lifecycle.
+
+Codex code-mode `functions.exec` may yield a cell while an awaited nested MCP call
+is outstanding. The model can then stop without collecting it with
+`functions.wait`; `turn/completed` consequently does not prove that every nested
+call completed. The thread owns the cell. OpenAI's current
+[code-mode service](https://github.com/openai/codex/blob/main/codex-rs/core/src/tools/code_mode/mod.rs)
+retains cells until collection, interruption or session shutdown, and its
+[dispatch broker](https://github.com/openai/codex/blob/main/codex-rs/core/src/tools/code_mode/delegate.rs)
+retains the originating step for callbacks after a yield. These sources explain
+the mechanism; the version-specific observation above is from the reported
+0.159.2 run, not a new live-model probe.
+
+The runner now holds the same process and relay while Orchester's call is
+outstanding, including a queued approval not yet consumed by the worker.
+Started Orchester MCP items also cover the ordering where the result returns
+before the runner receives the model's turn completion. The relay reports when
+it has sent the tool result. Once the call has returned and no approval remains,
+the runner starts a continuation in the same thread, invocation and attempt,
+with the same model, effort, environment and output schema. Each turn uses a
+distinct JSON-RPC request ID, so a late acknowledgement of the previous turn
+cannot be mistaken for the continuation's reply. It asks the agent to collect
+the existing yielded cell with `functions.wait` and continue using the
+approval or denial, without repeating the call. The earlier final message is
+provisional until this continuation finishes. No new approval is granted by the
+continuation, and the invocation's active time remains stopped while a person
+decides.
+
+Pause, cancel, runner stop and graceful shutdown still end an unanswered request
+as interrupted, refuse a stale answer and preserve the attempt; they do not
+route it through step failure or consume a broken attempt. A stop or reached
+budget prevents the tool continuation from starting. Claude Code keeps its
+blocking `--permission-prompt-tool` path. M12's successful live outside reads
+(`docs/plan.md`, Done) exercised approvals without this premature model-turn
+completion; they do not rule out the code-mode sequence above.
+
+The fake Codex now starts a real relay search on a background thread, emits
+`turn/completed` with a pending-cell result, and collects that same call on the
+runner's continuation. Before the fix,
+`cargo test -p orchester-runner --features test-agent --test codex_tool_wait codex_tool_wait_approval`
+failed because the waiting approval had vanished. The fixed suite checks an
+approval and a denial three seconds after turn completion, the reverse
+result/completion ordering, a late turn-start acknowledgement, and each of the
+four stop paths. It asserts a single attempt and invocation, the actual search
+result or denial, and stale-answer
+refusal. It does not run a signed-in Codex model or read the historical project
+database; the historical sequence above is the evidence supplied with ORC-22.
+
 ## Build directories
 
 Project Environment variables reach agents and command tools as written; nothing is rewritten per

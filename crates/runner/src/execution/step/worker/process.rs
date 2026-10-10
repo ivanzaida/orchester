@@ -106,6 +106,7 @@ impl Worker {
     match relayed {
       Relayed::Approval(asked) => self.request_claude_approval(watch, asked).await?,
       Relayed::Question(asked) => self.request_relay_question(watch, asked)?,
+      Relayed::Returned => self.continue_after_tools(watch).await?,
     }
     self.stop_at_checkpoint(watch);
     Ok(())
@@ -279,10 +280,48 @@ impl Worker {
         if input_kept {
           self.kept_at_turn_end(watch)?;
         }
-        self.driver.end();
+        if self.tool_relay.as_ref().is_some_and(Listening::busy)
+          || self
+            .app_server()
+            .is_some_and(AppServerSession::has_active_orchester_tools)
+          || matches!(&watch.approval, Some((_, Awaiting::Tool { .. })))
+        {
+          watch.tools_after_turn = true;
+          self.continue_after_tools(watch).await?;
+        } else {
+          self.driver.end();
+        }
         Ok(())
       }
     }
+  }
+
+  /// Collects a yielded call in the same Codex thread once the relay has returned it.
+  async fn continue_after_tools(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
+    if !watch.tools_after_turn || watch.approval.is_some() || self.tool_relay.as_ref().is_some_and(Listening::busy) {
+      return Ok(());
+    }
+    watch.tools_after_turn = false;
+    if watch.stop.is_some() || watch.over.is_some() {
+      watch.stop = watch.stop.or(watch.over);
+      self.driver.end();
+      return Ok(());
+    }
+    if let Driver::Process {
+      transport: Transport::AppServer(app),
+      process,
+    } = &mut self.driver
+      && let Err(error) = app.continue_tools(process).await
+    {
+      self.observe(
+        watch,
+        AgentEvent::TurnFailed {
+          message: format!("cannot continue Codex after a tool result: {error}"),
+        },
+      )?;
+      self.driver.end();
+    }
+    Ok(())
   }
 
   /// Ends the activity with how many lines of Codex's standard error it did not keep, if any.

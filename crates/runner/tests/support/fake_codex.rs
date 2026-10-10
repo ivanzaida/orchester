@@ -53,6 +53,8 @@ use serde_json::{Value, json};
 
 #[path = "fake_app_server.rs"]
 mod fake_app_server;
+#[path = "fake_codex_cell.rs"]
+mod fake_codex_cell;
 #[path = "fake_codex_check.rs"]
 mod fake_codex_check;
 #[path = "fake_codex_question.rs"]
@@ -149,6 +151,8 @@ pub struct Session {
   argument_servers: bool,
   /// The thread's start of Orchester's server, once its tools were listed (after `mcpServerStatus/list`).
   pub orchester: Option<fake_permission_prompt::Prompt>,
+  pub cell: Option<fake_codex_cell::Cell>,
+  deferred_turn_reply: Option<Value>,
   /// What the thread's model asks of the runner's end of the relay.
   probe: fake_codex_relay::Probe,
   /// A connection to it that never shows the token, kept open.
@@ -174,6 +178,8 @@ impl Session {
       user_server_off: false,
       argument_servers: false,
       orchester: None,
+      cell: None,
+      deferred_turn_reply: None,
       probe: fake_codex_relay::Probe::None,
       silent: None,
       approved_tools: BTreeSet::new(),
@@ -201,7 +207,7 @@ impl Session {
           self.start_orchester();
         }
       }
-      Some("turn/start") => return self.turn(params),
+      Some("turn/start") => return self.turn(&message["id"], params),
       Some("turn/steer") => return fake_codex_work::steered(self, &message["id"], params),
       None => return fake_app_server::answered(self, message),
       Some(other) => {
@@ -367,7 +373,7 @@ impl Session {
     }
   }
 
-  fn turn(&mut self, params: &Value) -> Step {
+  fn turn(&mut self, id: &Value, params: &Value) -> Step {
     if self.probe == fake_codex_relay::Probe::Knock {
       eprintln!("late-knock: {}", fake_codex_relay::knock(&self.args, None));
     }
@@ -391,7 +397,15 @@ impl Session {
       eprintln!("the turn's workspace roots {selected:?} are not the thread's {expected:?}");
       return Step::Exit(ExitCode::from(2));
     }
-    emit(&json!({"id": 5, "result": {"turn": {"id": TURN}}}));
+    if let Some(previous) = self.deferred_turn_reply.take() {
+      emit(&json!({"id": previous, "result": {"turn": {"id": TURN}}}));
+    }
+    eprintln!("turn-request: {id}");
+    if prompt.contains("Delay turn reply") {
+      self.deferred_turn_reply = Some(id.clone());
+    } else {
+      emit(&json!({"id": id, "result": {"turn": {"id": TURN}}}));
+    }
     emit(&json!({"method": "turn/started", "params": {"threadId": self.thread, "turn": {"id": TURN}}}));
     let structured = !params["outputSchema"].is_null();
     fake_codex_work::work(self, &prompt, structured)

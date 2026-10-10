@@ -115,6 +115,8 @@ pub(super) struct AppServerSession {
   phase: Phase,
   thread: Option<String>,
   turn: Option<String>,
+  turn_request: u64,
+  turn_replies: BTreeSet<u64>,
   stream: AppServerStream,
   /// The configured MCP servers the step does not choose, turned off for its thread.
   turned_off: Vec<String>,
@@ -132,6 +134,8 @@ impl AppServerSession {
       steer_answers: Vec::new(),
       thread: None,
       turn: None,
+      turn_request: 5,
+      turn_replies: BTreeSet::new(),
       stream: AppServerStream::with_exemptions(setup.exemptions.clone()),
       setup,
     }
@@ -189,6 +193,10 @@ impl AppServerSession {
   /// Codex's answers to `turn/steer` requests since the last call.
   pub fn take_steer_answers(&mut self) -> Vec<SteerAnswer> {
     std::mem::take(&mut self.steer_answers)
+  }
+
+  pub fn has_active_orchester_tools(&self) -> bool {
+    self.stream.has_active_orchester_tools()
   }
 
   pub fn has_active_tools(&self) -> bool {
@@ -366,11 +374,13 @@ impl AppServerSession {
         self.start_turn(process).await.map_err(|error| io_message(&error))?;
         Ok(left_out)
       }
-      (Phase::Turn, 5) => {
-        self.phase = Phase::Working;
+      (Phase::Turn | Phase::Working | Phase::Complete, id) if self.turn_replies.remove(&id) => {
+        // A previous turn/start reply may arrive after its turn completed and the next one started.
+        if id == self.turn_request && self.phase == Phase::Turn {
+          self.phase = Phase::Working;
+        }
         Ok(Vec::new())
       }
-      (Phase::Complete, 5) => Ok(Vec::new()),
       _ => Err("Codex App Server responded out of sequence".to_owned().into()),
     }
   }
@@ -460,8 +470,25 @@ impl AppServerSession {
     send(process, json!({"id":3,"method":method,"params":params})).await
   }
 
-  async fn start_turn(&self, process: &Supervised) -> io::Result<()> {
-    let mut params = json!({"threadId":self.thread,"input":[{"type":"text","text":self.setup.prompt}],
+  async fn start_turn(&mut self, process: &Supervised) -> io::Result<()> {
+    let prompt = self.setup.prompt.clone();
+    self.turn_with(process, &prompt).await
+  }
+
+  /// A yielded code-mode cell belongs to the thread, not to the model turn that started it.
+  pub async fn continue_tools(&mut self, process: &Supervised) -> io::Result<()> {
+    self.phase = Phase::Turn;
+    self.turn = None;
+    // Request 6 belongs to config/read; each continuation gets a fresh JSON-RPC id.
+    self.turn_request = self.turn_request.max(6) + 1;
+    self.turn_with(
+      process,
+      "Collect the results of the Orchester tool calls you already started. If a code-mode exec cell yielded, use functions.wait with its existing cell_id until its result is collected. Continue this step using the approval or denial and tool results. Do not repeat the calls or report the step finished while results are pending.",
+    ).await
+  }
+
+  async fn turn_with(&mut self, process: &Supervised, prompt: &str) -> io::Result<()> {
+    let mut params = json!({"threadId":self.thread,"input":[{"type":"text","text":prompt}],
     "model":self.setup.model,"environments":[{
       "environmentId":"local","cwd":self.setup.worktree,
         "runtimeWorkspaceRoots":self.setup.runtime_roots()
@@ -472,7 +499,12 @@ impl AppServerSession {
     if let Some(schema) = &self.setup.output_schema {
       params["outputSchema"] = schema.clone();
     }
-    send(process, json!({"id":5,"method":"turn/start","params":params})).await
+    self.turn_replies.insert(self.turn_request);
+    send(
+      process,
+      json!({"id":self.turn_request,"method":"turn/start","params":params}),
+    )
+    .await
   }
 }
 

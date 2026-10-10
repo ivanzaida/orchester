@@ -337,3 +337,37 @@ fn app_server_a_call_the_runner_asked_about_ends_as_asked() {
     Some(("mcp-4".to_owned(), false))
   );
 }
+
+#[test]
+fn app_server_orchester_call_remains_active_across_a_completed_model_turn() {
+  let mut stream = AppServerStream::default();
+  for (id, server) in [("own", "Orchester"), ("other", "pencil")] {
+    let started = json!({"method": "item/started", "params": {"threadId": "t", "turnId": "turn",
+      "item": {"id": id, "type": "mcpToolCall", "server": server, "tool": "read_file", "arguments": {}}}});
+    stream.parse(&started.to_string()).expect("start");
+  }
+  assert!(stream.has_active_orchester_tools());
+  stream
+    .parse(
+      &json!({"method": "turn/completed", "params": {"threadId": "t",
+    "turn": {"id": "turn", "status": "completed"}}})
+      .to_string(),
+    )
+    .expect("turn end");
+  assert!(
+    stream.has_active_orchester_tools(),
+    "a model's final message does not complete a nested MCP call"
+  );
+  stream
+    .parse(
+      &json!({"method": "item/completed", "params": {"item": {
+    "id": "own", "type": "mcpToolCall", "status": "completed"}}})
+      .to_string(),
+    )
+    .expect("call end");
+  assert!(
+    !stream.has_active_orchester_tools(),
+    "an unrelated server does not hold Orchester's continuation"
+  );
+  assert!(stream.has_active_tools());
+}

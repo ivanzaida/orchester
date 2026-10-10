@@ -98,6 +98,12 @@ const ANSWERS: [(&str, SteerAnswer); 6] = [
 ];
 
 pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
+  if prompt.starts_with(super::fake_codex_cell::CONTINUE) {
+    return super::fake_codex_cell::collect(session);
+  }
+  if prompt.contains(super::fake_codex_cell::TRIGGER) {
+    return super::fake_codex_cell::start(session, prompt, structured);
+  }
   let worktree = session.cwd.clone();
   let answer = ANSWERS
     .iter()
