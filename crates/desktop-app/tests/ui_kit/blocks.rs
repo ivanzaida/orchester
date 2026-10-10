@@ -402,6 +402,27 @@ fn text_cut_to_its_room_keeps_its_whole_value_in_a_tooltip_that_wraps() {
 }
 
 #[test]
+fn cut_text_with_a_hint_shows_it_whether_or_not_it_is_cut() {
+  let name = "Kontur platform, billing and the partner portal";
+  let mut kit = Kit::show(move |ctx| {
+    let text =
+      |id: &str| Truncated::new(id.to_owned(), name, ExtraTypography::Strong.role()).hint("H:/projects/kontur", "both");
+    Column::new()
+      .child(Row::new().width(Dimension::Px(120.0)).child(text("cut").render(ctx)))
+      .child(text("fits").render(ctx))
+      .into()
+  });
+  kit.rest_on("fits");
+  assert_eq!(
+    kit.texts("fits-tooltip"),
+    ["H:/projects/kontur"],
+    "text that fits says its hint"
+  );
+  kit.rest_on("cut");
+  assert_eq!(kit.texts("cut-tooltip"), ["both"], "cut text says the hint for its cut");
+}
+
+#[test]
 fn resting_on_cut_text_does_not_move_its_row() {
   let mut kit = Kit::show(|ctx| {
     Row::new()

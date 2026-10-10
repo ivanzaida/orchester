@@ -2,7 +2,7 @@
 //! over and under it and 8 at its sides, an optional shortcut 8 after it in Geist Mono 10 at 60 %. It
 //! shows while the pointer rests on its anchor and lets the pointer through; a long one wraps. [`Truncated`]
 //! is text cut to one line with an ellipsis that keeps its full value in a tooltip, shown only while the
-//! text is cut (handover §5.3).
+//! text is cut (handover §5.3), or that has a hint of its own, worded for whether it is cut.
 
 use std::{sync::Arc, time::Duration};
 
@@ -34,11 +34,19 @@ pub struct Tooltip {
   cut: Option<CutText>,
 }
 
-/// How a cut text is set.
+/// How a cut text is set, and what its tooltip says.
 #[derive(Clone, Debug, PartialEq)]
 struct CutText {
   typography: TypographyStyle,
   color: Option<PaletteColor>,
+  hint: Option<Hint>,
+}
+
+/// A cut text's tooltip that shows whether or not the text is cut.
+#[derive(Clone, Debug, PartialEq)]
+struct Hint {
+  fits: Arc<str>,
+  cut: Arc<str>,
 }
 
 impl DevtoolsInspectable for Tooltip {}
@@ -66,7 +74,18 @@ impl Tooltip {
     ctx.mount_keyed_with::<TooltipHost>(&key, self, vec![anchor.into()])
   }
 
-  fn panel(&self) -> Row {
+  /// What the tooltip says once the pointer rested on its anchor, if it shows at all: a cut text's own
+  /// words only while it is cut; its hint's words either way.
+  fn words(&self, fits: bool) -> Option<&Arc<str>> {
+    match &self.cut {
+      None => Some(&self.text),
+      Some(CutText { hint: Some(hint), .. }) => Some(if fits { &hint.fits } else { &hint.cut }),
+      Some(_) if fits => None,
+      Some(_) => Some(&self.text),
+    }
+  }
+
+  fn panel(&self, words: &str) -> Row {
     let mut panel = Row::new()
       .id(format!("{}-tooltip", self.id))
       .padding(Padding::symmetric(SpacingSize::Sm, SpacingSize::Xs))
@@ -75,7 +94,7 @@ impl Tooltip {
       .background(PaletteColor::TextPrimary)
       .rounded(RadiusSize::Sm)
       .child(
-        Text::new(&self.text)
+        Text::new(words)
           .variant(TypographyStyle::FieldLabel)
           .color(PaletteColor::TextInverse)
           .max_width(Dimension::Px(TEXT_MAX_WIDTH)),
@@ -95,6 +114,8 @@ impl Tooltip {
 
 struct TooltipHost {
   shown: Signal<bool>,
+  /// When it showed, the cut text was whole: it fits its room.
+  fits: Signal<bool>,
   /// The pointer rests on the anchor: a cut text's whole copy is laid out to measure it.
   resting: Signal<bool>,
   timer: Timeout,
@@ -108,18 +129,17 @@ impl Component for TooltipHost {
   type Props = Tooltip;
 
   fn create(ctx: &mut Ctx) -> Self {
-    let shown = ctx.signal(false);
+    let (shown, fits) = (ctx.signal(false), ctx.signal(false));
     let (cut, whole) = (ctx.element_ref(), ctx.element_ref());
-    let (show, measured, unmeasured) = (shown.clone(), cut.clone(), whole.clone());
+    let (show, fit, measured, unmeasured) = (shown.clone(), fits.clone(), cut.clone(), whole.clone());
     let timer = ctx.create_timeout(TOOLTIP_DELAY, move || {
-      // Text that fits says all it has: only a cut one gets the tooltip. Without a cut text the copy
-      // that measures it is not laid out.
-      if !unmeasured.is_attached() || unmeasured.width() > measured.width() + CUT_TOLERANCE {
-        show.set(true);
-      }
+      // Without a cut text the copy that measures it is not laid out.
+      fit.set(unmeasured.is_attached() && unmeasured.width() <= measured.width() + CUT_TOLERANCE);
+      show.set(true);
     });
     Self {
       shown,
+      fits,
       resting: ctx.signal(false),
       timer,
       anchor: ctx.element_ref(),
@@ -148,9 +168,9 @@ impl Component for TooltipHost {
       Some(cut) => self.cut_text(anchor, &tooltip, cut),
       None => anchor.with_children(ctx.children().iter().cloned()),
     };
-    if self.shown.get() {
+    if let Some(words) = tooltip.words(self.fits.get()).filter(|_| self.shown.get()) {
       anchor = anchor.child(
-        Popup::new(self.anchor.clone(), tooltip.panel())
+        Popup::new(self.anchor.clone(), tooltip.panel(words))
           .open_when(true)
           .placement(Placement::BottomStart)
           .offset(0.0, ExtraSpacing::Snug.value())
@@ -208,6 +228,7 @@ pub struct Truncated {
   text: Arc<str>,
   typography: TypographyStyle,
   color: Option<PaletteColor>,
+  hint: Option<Hint>,
 }
 
 impl Truncated {
@@ -218,6 +239,7 @@ impl Truncated {
       text: text.into(),
       typography,
       color: None,
+      hint: None,
     }
   }
 
@@ -227,12 +249,23 @@ impl Truncated {
     self
   }
 
+  /// A tooltip whenever the pointer rests on the text, not only while it is cut: `fits` while the text
+  /// fits its room, `cut` while it is cut (which says the text's own words too).
+  pub fn hint(mut self, fits: impl Into<Arc<str>>, cut: impl Into<Arc<str>>) -> Self {
+    self.hint = Some(Hint {
+      fits: fits.into(),
+      cut: cut.into(),
+    });
+    self
+  }
+
   pub fn render(self, ctx: &mut Ctx) -> Element {
     let key = format!("tooltip-{}", self.id);
     let tooltip = Tooltip {
       cut: Some(CutText {
         typography: self.typography,
         color: self.color,
+        hint: self.hint,
       }),
       ..Tooltip::new(self.id, self.text)
     };
