@@ -22,7 +22,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::diff::{Diff, FileDiff};
+use orchester_core::diff::{Diff, FileChange, FileDiff};
 use orchester_workspace::{
   background,
   highlight::{FileTokens, highlight},
@@ -208,6 +208,7 @@ fn head(ctx: &Ctx, file: &FileDiff, source: &str) -> Element {
         .variant(CodeText::DiffPath.role())
         .nowrap(),
     )
+    .with_children(moved_from(ctx, file))
     .with_children(FileSummary::of(file).counts(ctx, ExtraTypography::MonoKey.role()))
     .child(Row::new().flex(1.0))
     .child(
@@ -217,4 +218,19 @@ fn head(ctx: &Ctx, file: &FileDiff, source: &str) -> Element {
         .nowrap(),
     )
     .into()
+}
+
+/// Where a renamed or copied file came from ("from old/path"), after its path.
+fn moved_from(ctx: &Ctx, file: &FileDiff) -> Option<Element> {
+  let (FileChange::Renamed { .. } | FileChange::Copied { .. }) = file.change() else {
+    return None;
+  };
+  let from = file.old_path()?;
+  Some(
+    Text::new(&ctx.t_args("changes.diff.renamedFrom", [("path", from)]))
+      .id("changes-diff-from")
+      .variant(ExtraTypography::Note.role())
+      .nowrap()
+      .into(),
+  )
 }

@@ -37,7 +37,6 @@ use self::{
   read::{ReadAgain, TaskRead},
   summary::{SummaryProps, TaskSummary},
 };
-use super::placeholder::centered;
 use crate::{
   navigation::Navigation,
   project::{ShownProject, TasksState},
@@ -351,14 +350,4 @@ fn changes_tab(ctx: &mut Ctx, task: &TaskContext) -> Element {
 /// files are not known); `None` while it is not known: the label is the tab's name alone.
 pub fn changes_count(ctx: &mut Ctx, _task: &TaskContext) -> Option<FileCount> {
   changes::count(ctx)
-}
-
-fn tab_not_built(ctx: &Ctx, id: &str, glyph: Icon, tab: TaskTab) -> Element {
-  let title = ctx.t(tab.title_key());
-  let body = ctx.t("task.page.tabNotBuilt");
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .flex(1.0)
-    .child(centered(glyph, &title, &body).id(id.to_owned()))
-    .into()
 }

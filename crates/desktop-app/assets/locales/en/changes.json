@@ -44,9 +44,10 @@
       "noNewline": "No newline at end of file",
       "binary": "Binary file; its content is not shown.",
       "mode": "File mode changed from {{old}} to {{new}}.",
-      "unchanged": "Moved without changes to its content.",
+      "unchanged": "Moved from {{path}} without changes to its content.",
       "empty": "The file has no lines.",
-      "omitted": "{{count}} more changed lines are not shown; the file is too large. Open the run's branch in your editor to see them."
+      "omitted": "{{count}} more changed lines are not shown; the file is too large. Open the run's branch in your editor to see them.",
+      "renamedFrom": "from {{path}}"
     },
     "noRun": {
       "title": "No run yet",
@@ -54,7 +55,8 @@
     },
     "noCheckpoint": {
       "title": "No checkpoint yet",
-      "detail": "Run {{run}} has not saved a checkpoint, and its worktree holds no changes. Changes appear here after the first one."
+      "detail": "Run {{run}} has no checkpoint yet and its worktree holds no changes.",
+      "detailEnded": "Run {{run}} ended without a checkpoint, and its worktree holds no changes."
     },
     "none": {
       "title": "No changes",
@@ -79,11 +81,13 @@
     },
     "worktreeFailed": {
       "title": "Couldn't read what the worktree holds beyond the checkpoint",
-      "detail": "git could not read the run's worktree. The checkpointed files still show; Try again reads the worktree again."
+      "detail": "git could not read the run's worktree. The checkpointed files still show; Try again reads the worktree again.",
+      "detailNoCheckpoint": "git could not read the run's worktree, and the run has no checkpoint yet. Try again reads the worktree again."
     },
     "worktreeRemoved": {
       "title": "The run's worktree was removed",
       "detail": "Only its checkpointed work is shown."
-    }
+    },
+    "unreadable": "Nothing this run changed can be shown until its record can be read. Summary lists the task’s runs."
   }
 }

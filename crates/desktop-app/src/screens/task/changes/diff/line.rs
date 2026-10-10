@@ -205,7 +205,7 @@ fn note_row(ctx: &Ctx, note: &FileNote, width: Dimension) -> Element {
       Icon::Info,
       ctx.t_args("changes.diff.mode", [("old", &**old), ("new", &**new)]),
     ),
-    FileNote::Unchanged => (Icon::Info, ctx.t("changes.diff.unchanged")),
+    FileNote::Unchanged { from } => (Icon::Info, ctx.t_args("changes.diff.unchanged", [("path", &**from)])),
     FileNote::Empty => (Icon::Info, ctx.t("changes.diff.empty")),
     FileNote::Omitted(lines) => (
       Icon::Scissors,

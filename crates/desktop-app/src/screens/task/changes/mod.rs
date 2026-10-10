@@ -24,6 +24,7 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
+    events::KeyboardEvent,
     theme::{BorderSize, PaletteColor},
   },
   components::{Column, Row},
@@ -52,6 +53,7 @@ use super::TaskContext;
 use crate::{
   navigation::Navigation,
   routes::{ChangeSource, ChangedFile, ProjectPage, Route, TaskTab, TaskView},
+  ui::message::message_text,
 };
 
 /// How many files the Changes tab lists, for its label; `None` while that is not known: what the page's
@@ -132,6 +134,9 @@ impl Component for ChangesTab {
     let props = ctx.props::<ChangesProps>().clone();
     let column = Column::new().id("task-changes").width(Dimension::Pct(100.0)).flex(1.0);
     let changes = props.reads.latest();
+    if let Some(unreadable) = &props.detail.latest_unreadable {
+      return column.child(states::unreadable(ctx, &message_text(ctx, &unreadable.title())));
+    }
     let Some(run) = props.detail.run.as_ref() else {
       return column.child(states::no_run(ctx));
     };
@@ -154,7 +159,8 @@ impl Component for ChangesTab {
       Checkpointed::Read { changes, .. } => Some(changes.clone()),
       Checkpointed::NoCheckpoint => None,
     };
-    let (uncommitted, notice) = worktree(ctx, &props, changes.worktree.as_ref());
+    let checkpointed_files = committed.is_some();
+    let (uncommitted, notice) = worktree(ctx, &props, (changes.worktree.as_ref(), checkpointed_files));
     let column = column.with_children(notice);
     let listing = self.listing(committed.as_deref(), uncommitted.as_deref());
     if listing.is_empty() {
@@ -163,7 +169,8 @@ impl Component for ChangesTab {
       let empty = match (checkpointed, &changes.worktree) {
         (_, None) => Some(states::reading(ctx)),
         (Checkpointed::NoCheckpoint, Some(Ok(NotCheckpointed::Clean))) => {
-          Some(states::no_checkpoint(ctx, run.run.number().get()))
+          let ended = run.run.status().is_terminal();
+          Some(states::no_checkpoint(ctx, run.run.number().get(), ended))
         }
         (_, Some(Ok(NotCheckpointed::Clean))) => Some(states::no_changes(ctx)),
         _ => None,
@@ -223,8 +230,14 @@ impl ChangesTab {
     listing: &FileListing,
     shown: &Shown<'_>,
   ) -> Element {
-    let position = listing.position(props.file.as_ref());
+    // No file named: the one shown last stays while it is listed, e.g. when a read adds files above it.
+    let named = props.file.clone().or_else(|| props.reads.shown_file());
+    let position = listing.position(named.as_ref());
     let selected = listing.files[position].clone();
+    // A listed path is never empty, so it always names a file.
+    if let Ok(file) = ChangedFile::new(selected.path.to_string(), selected.source) {
+      props.reads.set_shown(file);
+    }
     let note = shown.uncommitted.map(|changes| WorktreeNote {
       revision: short_revision(changes.from.as_str()).into(),
       live: props.agent_at_work.then(|| {
@@ -234,6 +247,7 @@ impl ChangesTab {
     });
     let items = self.items(listing, shown, (position, note));
     let select = self.select(props);
+    let keys = arrow_keys(listing, position, select.clone());
     let list = Column::new()
       .width(Dimension::Px(FILE_LIST_WIDTH))
       .height(Dimension::Pct(100.0))
@@ -264,6 +278,7 @@ impl ChangesTab {
       .id("changes-body")
       .width(Dimension::Pct(100.0))
       .flex(1.0)
+      .on_key_down(keys)
       .child(list)
       .child(view)
       .into()
@@ -331,11 +346,32 @@ impl ChangesTab {
   }
 }
 
+/// ArrowDown and ArrowUp choose the next and the previous file of the list, unless a text field has the
+/// keys or a modifier is held.
+fn arrow_keys(listing: &FileListing, position: usize, select: files::SelectFile) -> impl Fn(KeyboardEvent) + use<> {
+  let files = listing.files.clone();
+  move |event: KeyboardEvent| {
+    let plain = !(event.ctrl || event.alt || event.meta || event.shift);
+    if event.default_prevented() || event.text_input_focused || !plain {
+      return;
+    }
+    let next = match event.key.as_str() {
+      "ArrowDown" => position + 1,
+      "ArrowUp" if position > 0 => position - 1,
+      _ => return,
+    };
+    if let Some(file) = files.get(next) {
+      event.prevent_default();
+      select(file);
+    }
+  }
+}
+
 /// What the worktree adds to the list, and the notice over the files when it adds nothing it read.
 fn worktree(
   ctx: &Ctx,
   props: &ChangesProps,
-  worktree: Option<&Result<NotCheckpointed, Message>>,
+  (worktree, checkpointed): (Option<&Result<NotCheckpointed, Message>>, bool),
 ) -> (Option<Arc<ReadChanges>>, Option<Element>) {
   match worktree {
     Some(Ok(NotCheckpointed::Read(changes))) => (Some(changes.clone()), None),
@@ -343,7 +379,12 @@ fn worktree(
     Some(Ok(NotCheckpointed::Removed)) => (None, Some(states::worktree_removed(ctx))),
     Some(Err(error)) => {
       let reads = props.reads.clone();
-      (None, Some(states::worktree_failed(ctx, error, move || reads.retry())))
+      (
+        None,
+        Some(states::worktree_failed(ctx, (error, checkpointed), move || {
+          reads.retry()
+        })),
+      )
     }
     Some(Ok(NotCheckpointed::Clean)) | None => (None, None),
   }

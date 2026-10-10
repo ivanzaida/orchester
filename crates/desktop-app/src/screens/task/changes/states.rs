@@ -4,6 +4,8 @@
 //! not be read; a notice (`R3Pyx`) over the files for the worktree's part, while the checkpointed files
 //! still show. Reading shows the loading line, never an empty list.
 
+use std::path::PathBuf;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -42,13 +44,29 @@ pub fn no_run(ctx: &Ctx) -> Element {
   ))
 }
 
-/// Run `run` has no checkpoint and its worktree holds nothing: nothing of its work is there yet.
-pub fn no_checkpoint(ctx: &Ctx, run: u32) -> Element {
+/// The task's latest run cannot be read, `title` says which: nothing it did can be shown until it can.
+pub fn unreadable(ctx: &Ctx, title: &str) -> Element {
+  card(EmptyState::new(
+    "changes-unreadable",
+    Icon::FileWarning,
+    title.to_owned(),
+    ctx.t("changes.unreadable"),
+  ))
+}
+
+/// Run `run` has no checkpoint and its worktree holds nothing: nothing of its work is there yet, or, once
+/// it `ended`, at all.
+pub fn no_checkpoint(ctx: &Ctx, run: u32, ended: bool) -> Element {
+  let detail = if ended {
+    "changes.noCheckpoint.detailEnded"
+  } else {
+    "changes.noCheckpoint.detail"
+  };
   card(EmptyState::new(
     "changes-no-checkpoint",
     Icon::GitCommitHorizontal,
     ctx.t("changes.noCheckpoint.title"),
-    ctx.t_args("changes.noCheckpoint.detail", [("run", run.to_string())]),
+    ctx.t_args(detail, [("run", run.to_string())]),
   ))
 }
 
@@ -115,9 +133,14 @@ pub fn worktree_too_large(ctx: &Ctx, size: Changes) -> Element {
   )
 }
 
-/// The worktree could not be read; Try again reads it again. The checkpointed files stay, so it reads as
-/// information with a `danger` icon (`PEBSm`); its words are the worktree's, unless git is missing.
-pub fn worktree_failed(ctx: &Ctx, error: &Message, retry: impl Fn() + Send + Sync + 'static) -> Element {
+/// The worktree could not be read; Try again reads it again. What was read stays, so it reads as
+/// information with a `danger` icon (`PEBSm`); its words are the worktree's, and say the checkpointed
+/// files still show only when there are some, unless git or the worktree itself is missing.
+pub fn worktree_failed(
+  ctx: &Ctx,
+  (error, checkpointed): (&Message, bool),
+  retry: impl Fn() + Send + Sync + 'static,
+) -> Element {
   let again = ActionButton::new(
     "changes-worktree-try-again",
     ButtonKind::Secondary,
@@ -125,11 +148,16 @@ pub fn worktree_failed(ctx: &Ctx, error: &Message, retry: impl Fn() + Send + Syn
   )
   .icon(Icon::RotateCcw)
   .on_click(retry);
-  let git_missing = ChangesError::Git(GitDiffError::Run(CommandError::NotFound)).message();
-  let body = if *error == git_missing {
+  let own_words = [
+    ChangesError::Git(GitDiffError::Run(CommandError::NotFound)).message(),
+    ChangesError::WorktreeMissing(PathBuf::new()).message(),
+  ];
+  let body = if own_words.contains(error) {
     message_text(ctx, error)
-  } else {
+  } else if checkpointed {
     ctx.t("changes.worktreeFailed.detail")
+  } else {
+    ctx.t("changes.worktreeFailed.detailNoCheckpoint")
   };
   inset(
     Notice::new(

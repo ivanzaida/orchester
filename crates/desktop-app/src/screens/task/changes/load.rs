@@ -22,7 +22,11 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
-use crate::{routes::TaskTab, services::Services, ui::tabs::counted};
+use crate::{
+  routes::{ChangedFile, TaskTab},
+  services::Services,
+  ui::tabs::counted,
+};
 
 /// How often the worktree is read again while an agent works in it.
 const WORKTREE_REFRESH: Duration = Duration::from_secs(3);
@@ -147,6 +151,9 @@ pub struct ChangesReads {
   last_read: LastRead,
   /// What was read last; `None` without a run.
   latest: Signal<Option<RunChanges>>,
+  /// The file the Changes tab showed last: it stays shown while no file is named and it is listed, and
+  /// the tab opens on it again.
+  shown: Arc<Mutex<Option<ChangedFile>>>,
 }
 
 impl ChangesReads {
@@ -158,6 +165,7 @@ impl ChangesReads {
       retry: ctx.signal(0),
       last_read: LastRead::default(),
       latest: ctx.signal(None),
+      shown: Arc::default(),
     }
   }
 
@@ -185,6 +193,15 @@ impl ChangesReads {
       self.latest.set(changes.clone());
     }
     changes
+  }
+
+  /// The file the Changes tab showed last, for the page tabs to open it on.
+  pub fn shown_file(&self) -> Option<ChangedFile> {
+    self.shown.lock().clone()
+  }
+
+  pub(super) fn set_shown(&self, file: ChangedFile) {
+    *self.shown.lock() = Some(file);
   }
 
   pub(super) fn retry(&self) {

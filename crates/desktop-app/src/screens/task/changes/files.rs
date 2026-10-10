@@ -42,7 +42,7 @@ const ROW_BESIDES_PATH: f32 = 64.0;
 const COUNT_GAP: f32 = 8.0;
 const PATH_CHAR_WIDTH: f32 = 7.2;
 const COUNT_CHAR_WIDTH: f32 = 6.6;
-/// The fewest characters a cut path keeps of its start.
+/// The least room a path is cut in; with less it shows whole and its row cuts it.
 const CUT_HEAD: usize = 4;
 /// How often the line saying when the worktree was read is brought up to date.
 const AGE_TICK: Duration = Duration::from_secs(1);
@@ -85,20 +85,23 @@ impl FileSummary {
     self
       .count_texts(ctx)
       .into_iter()
-      .zip([PaletteColor::Success, PaletteColor::Danger].into_iter().cycle())
       .map(|(text, color)| Text::new(&text).variant(typography).color(color).nowrap().into())
       .collect()
   }
 
-  fn count_texts(&self, ctx: &Ctx) -> Vec<Arc<str>> {
+  /// Each count there is with its own tone.
+  fn count_texts(&self, ctx: &Ctx) -> Vec<(Arc<str>, PaletteColor)> {
     if self.binary {
       return Vec::new();
     }
-    [(self.additions, "changes.added"), (self.deletions, "changes.removed")]
-      .into_iter()
-      .filter(|(count, _)| *count > 0)
-      .map(|(count, key)| ctx.t_args(key, [("count", count.to_string())]))
-      .collect()
+    [
+      (self.additions, "changes.added", PaletteColor::Success),
+      (self.deletions, "changes.removed", PaletteColor::Danger),
+    ]
+    .into_iter()
+    .filter(|(count, ..)| *count > 0)
+    .map(|(count, key, color)| (ctx.t_args(key, [("count", count.to_string())]), color))
+    .collect()
   }
 }
 
@@ -311,13 +314,13 @@ fn file_row(ctx: &mut Ctx, listed: &Listed, summary: &FileSummary, selected: boo
   }
 }
 
-/// The path in the room its row leaves it, cut in the middle so its file name stays
+/// The path in the room its row leaves it, cut near its middle
 /// (`migrations/0042_…_attempts.sql` in `qT0kd`); while it is cut, its whole path shows in a tooltip.
 fn path_text(ctx: &mut Ctx, id: &str, path: &str, summary: &FileSummary) -> Element {
   let counts: f32 = summary
     .count_texts(ctx)
     .iter()
-    .map(|count| COUNT_GAP + chars(count) * COUNT_CHAR_WIDTH)
+    .map(|(count, _)| COUNT_GAP + chars(count) * COUNT_CHAR_WIDTH)
     .sum();
   let room = (FILE_LIST_WIDTH - ROW_BESIDES_PATH - counts) / PATH_CHAR_WIDTH;
   #[allow(
@@ -345,15 +348,14 @@ fn chars(text: &str) -> f32 {
   text.chars().count() as f32
 }
 
-/// `path` in at most `room` characters: whole when it fits, otherwise its start, `…` and its end, the
-/// end long enough for its file name when there is room for that.
+/// `path` in at most `room` characters: whole when it fits, otherwise its start, `…` and its end, cut near
+/// its middle as the design cuts it (`migrations/0042_…_attempts.sql`: 16 before, 13 after).
 pub fn middle_cut(path: &str, room: usize) -> String {
   let characters: Vec<char> = path.chars().collect();
   if characters.len() <= room || room <= CUT_HEAD + 1 {
     return path.to_owned();
   }
-  let name = path.rsplit('/').next().unwrap_or(path).chars().count();
-  let tail = name.max((room - 1) / 2).min(room - 1 - CUT_HEAD);
+  let tail = (room - 1) * 9 / 20;
   let head = room - 1 - tail;
   let mut cut: String = characters[..head].iter().collect();
   cut.push('…');

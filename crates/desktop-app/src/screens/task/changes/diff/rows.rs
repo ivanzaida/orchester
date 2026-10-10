@@ -58,8 +58,10 @@ pub enum FileNote {
     old: Arc<str>,
     new: Arc<str>,
   },
-  /// Renamed or copied without changing its content.
-  Unchanged,
+  /// Renamed or copied from `from` without changing its content.
+  Unchanged {
+    from: Arc<str>,
+  },
   /// An added or deleted file without lines.
   Empty,
   /// Lines of a very large file that are not shown.
@@ -120,7 +122,9 @@ fn notes(file: &FileDiff) -> Vec<FileNote> {
     notes.push(FileNote::Binary);
   } else if file.hunks().is_empty() {
     match file.change() {
-      FileChange::Renamed { .. } | FileChange::Copied { .. } => notes.push(FileNote::Unchanged),
+      FileChange::Renamed { .. } | FileChange::Copied { .. } => notes.push(FileNote::Unchanged {
+        from: file.old_path().unwrap_or_default().into(),
+      }),
       FileChange::Added | FileChange::Deleted => notes.push(FileNote::Empty),
       FileChange::Modified => {}
     }
