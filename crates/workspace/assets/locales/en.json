@@ -1162,6 +1162,11 @@
         "done": "MCP server turned off · {{name}}",
         "failed": "Could not turn off MCP server {{name}}"
       },
+      "mcpServerRemove": {
+        "running": "Removing MCP server {{name}}",
+        "done": "MCP server removed · {{name}}",
+        "failed": "Could not remove MCP server {{name}}"
+      },
       "skillDraft": {
         "running": "Saving draft · {{name}}",
         "done": "Draft saved · {{name}}",

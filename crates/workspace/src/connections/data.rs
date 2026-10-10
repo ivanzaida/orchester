@@ -137,6 +137,16 @@ impl ProjectConnections {
   }
 }
 
+/// The command a person runs in a terminal to sign the CLI of `provider` in, as its inspector shows it to
+/// copy; Orchester never runs it. `None` for a native provider, which signs in with its key.
+pub const fn sign_in_command(provider: AgentProvider) -> Option<&'static str> {
+  match provider {
+    AgentProvider::CodexCli => Some("codex login"),
+    AgentProvider::ClaudeCodeCli => Some("claude auth login"),
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => None,
+  }
+}
+
 /// The agent provider connections among `connections`, in their order.
 pub fn agent_connections(connections: Vec<Connection>) -> Vec<AgentConnection> {
   connections
