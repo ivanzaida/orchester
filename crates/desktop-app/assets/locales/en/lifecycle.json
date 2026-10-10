@@ -22,7 +22,8 @@
         "saved": {
           "one": "{{saved}} of {{count}} run saved · {{project}}",
           "other": "{{saved}} of {{count}} runs saved · {{project}}"
-        }
+        },
+        "git": "Git work · {{project}}"
       },
       "row": {
         "stepAgent": "{{step}} · {{agent}}",
@@ -36,7 +37,12 @@
           "minutes": "Step still running · last event {{minutes}} min ago"
         },
         "pausedAt": "Paused at {{checkpoint}}",
-        "paused": "Paused"
+        "paused": "Paused",
+        "merge": "Merging run #{{run}} into its branch",
+        "removal": "Removing run #{{run}}'s worktree",
+        "merging": "Merging…",
+        "removing": "Removing…",
+        "git": "Closing waits for git"
       },
       "provider": {
         "anthropicApi": "Anthropic API",
@@ -86,7 +92,10 @@
         }
       },
       "reviewRuns": "Review runs",
-      "continueAll": "Continue all",
+      "continueAll": {
+        "one": "Continue",
+        "other": "Continue all"
+      },
       "hide": "Hide",
       "columns": {
         "task": "TASK",
@@ -128,13 +137,15 @@
       },
       "partial": {
         "title": "{{continued}} of {{count}} runs continued",
-        "one": "{{task}} could not continue. {{reason}} It stays interrupted; continue it later from its task page.",
-        "other": "{{tasks}} could not continue. Each stays interrupted; continue it later from its task page.",
+        "run": "{{task}} could not continue: {{reason}}",
+        "stays": "Each stays interrupted; continue it later from its task page.",
         "open": "Open {{task}}"
       },
       "unread": {
-        "title": "The runs Orchester's last session interrupted could not be read",
-        "body": "{{reason}} Each stays interrupted; continue it later from its task page."
+        "title": "Some interrupted runs could not be read",
+        "body": "{{reasons}}\nThey stay as they are; their task pages show them.",
+        "run": "A run could not be read: {{reason}}",
+        "project": "This project's runs could not be read: {{reason}}"
       }
     }
   }

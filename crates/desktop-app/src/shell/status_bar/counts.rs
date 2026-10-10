@@ -149,10 +149,13 @@ impl Count<'_> {
 }
 
 /// *3/4*: agents at work of the agent slots, as the runner reports them; not known (a dash) unless the
-/// runner is online and has reported.
+/// runner is online, or stopping while the window closes, and has reported.
 fn agents(project: &ProjectFacts) -> Option<String> {
   match (&project.runner.state, &project.runner.work) {
-    (RunnerState::Online, Some(work)) => Some(format!("{}/{}", work.agents_working(), work.agent_slots)),
+    // While the window closes the runner stops, and its last report still counts.
+    (RunnerState::Online | RunnerState::Stopping, Some(work)) => {
+      Some(format!("{}/{}", work.agents_working(), work.agent_slots))
+    }
     _ => None,
   }
 }

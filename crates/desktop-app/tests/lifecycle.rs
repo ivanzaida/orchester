@@ -32,7 +32,7 @@ use orchester_app::{services::Services, startup::Launch};
 use orchester_core::{
   connection::stream::AgentEvent,
   id::{ProjectId, RunId},
-  run::RunStatus,
+  run::{InterruptCause, RunStatus},
   store::{ActivityStore, RunStore},
   time::Timestamp,
 };
@@ -75,8 +75,6 @@ struct Live {
   runner: PathBuf,
   project: ProjectId,
   repo: PathBuf,
-  /// Set once the close flow lets the window close.
-  closed: Arc<AtomicBool>,
 }
 
 impl Live {
@@ -109,7 +107,6 @@ impl Live {
       runner: runner.to_path_buf(),
       project,
       repo,
-      closed: Arc::new(AtomicBool::new(false)),
     }
   }
 
@@ -178,14 +175,14 @@ impl Live {
     });
   }
 
-  /// The window's close request, as its × or the app's MCP raise it.
-  fn request_close(&mut self) {
-    let closed = self.closed.clone();
-    self
-      .services()
-      .close
-      .request(move || closed.store(true, Ordering::Release));
-    self.window.pass();
+  /// Presses the window's own close control (the title bar's ×, or the macOS close light).
+  fn press_close(&mut self) {
+    self.click("window-close");
+  }
+
+  /// Whether the close flow let the window close, and how the session ended then.
+  fn closed(&self) -> bool {
+    self.services().close.session_end().is_some()
   }
 
   fn key(&mut self, key: &str) {
@@ -235,7 +232,7 @@ impl Live {
   /// Waits for the window to be let close, ends the session as `main` does, and starts the app again on
   /// the same data.
   fn reopen(mut self) -> Self {
-    self.wait("the window let close", |live| live.closed.load(Ordering::Acquire));
+    self.wait("the window let close", |live| live.closed());
     let Live {
       window,
       runner,
@@ -314,7 +311,7 @@ fn lifecycle_close_with_agents_working_waits_for_them_to_save_and_the_runs_stay_
   let run = live.run("KON-2");
   live.at_work(run);
 
-  live.request_close();
+  live.press_close();
   live.wait("the closing panel", |live| live.has(&format!("closing-row-{run}")));
   assert_eq!(live.text("closing-title"), "Close Orchester while agents are working?");
   assert!(
@@ -328,10 +325,10 @@ fn lifecycle_close_with_agents_working_waits_for_them_to_save_and_the_runs_stay_
   live.key("Escape");
   live.wait("the page back", |live| !live.has("closing-panel"));
   assert_eq!(live.services().close.phase(), ClosePhase::Open);
-  assert!(!live.closed.load(Ordering::Acquire), "Cancel keeps the window open");
+  assert!(!live.closed(), "Cancel keeps the window open");
   assert!(live.has("sidebar"));
 
-  live.request_close();
+  live.press_close();
   live.wait("the closing panel again", |live| live.has("closing-wait"));
   live.key("Enter");
   live.wait("the agents saving", |live| {
@@ -341,10 +338,10 @@ fn lifecycle_close_with_agents_working_waits_for_them_to_save_and_the_runs_stay_
         .contains("Saving at next checkpoint")
   });
   assert!(live.text("closing-progress").contains("Closes after 1 more run"));
-  live.request_close();
+  live.press_close();
   assert!(
-    !live.closed.load(Ordering::Acquire),
-    "a second close request changes nothing"
+    !live.closed(),
+    "the window's × changes nothing more while the panel is shown"
   );
 
   std::fs::write(live.repo.join(".orchester").join("fake-release"), "released").expect("release the fake");
@@ -363,27 +360,37 @@ fn lifecycle_close_with_agents_working_waits_for_them_to_save_and_the_runs_stay_
 }
 
 #[test]
-fn lifecycle_quit_now_ends_the_agents_and_the_next_start_continues_their_runs() {
+fn lifecycle_quit_now_while_agents_save_ends_them_and_the_next_starts_offer_their_runs_until_continued() {
   let mut live = Live::seeded();
-  let run = live.run("KON-1");
-  live.at_work(run);
+  let first = live.run("KON-1");
+  live.at_work(first);
   let repo = live.repo.clone();
   let mut helper = None;
   live.wait("the agent's helper", |_| {
-    helper = reported(&repo, run, "helper pid: ").pop();
+    helper = reported(&repo, first, "helper pid: ").pop();
     helper.is_some()
   });
   let helper = helper.expect("the helper's pid");
-  let agent = reported(&repo, run, "pid: ").pop().expect("the agent's pid");
+  let agent = reported(&repo, first, "pid: ").pop().expect("the agent's pid");
   assert!(is_running(&agent) && is_running(&helper));
 
-  live.request_close();
-  live.wait("the closing panel", |live| live.has("closing-quit-now"));
-  // Tab moves to Quit now first; Enter presses it.
+  live.press_close();
+  live.wait("the closing panel", |live| live.has(&format!("closing-row-{first}")));
+  // A run that starts while the panel is shown is listed too.
+  let second = live.run("KON-2");
+  live.wait("the run that started", |live| {
+    live.has(&format!("closing-row-{second}"))
+  });
+  live.key("Enter");
+  live.wait("the agents saving", |live| {
+    live.text("closing-title") == "Saving before closing"
+  });
+  assert!(live.text("closing-progress").contains("Closes after 2 more runs"));
+  // Tab moves to Quit now, the one choice left while the agents save; Enter presses it.
   live.key("Tab");
   live.key("Enter");
   assert_eq!(live.services().close.session_end(), Some(SessionEnd::QuitNow));
-  let mut live = live.reopen();
+  live.wait("the window let close", |live| live.closed());
   let deadline = Instant::now() + Duration::from_secs(10);
   while is_running(&agent) && Instant::now() < deadline {
     thread::sleep(Duration::from_millis(100));
@@ -393,44 +400,69 @@ fn lifecycle_quit_now_ends_the_agents_and_the_next_start_continues_their_runs() 
   if cfg!(windows) {
     assert!(!is_running(&helper), "and what it started");
   }
+  // As a macOS runner does when its app quits: it records its runs as interrupted before the next start.
+  interrupt(&repo, &[first, second]);
 
-  live.wait("the interrupted run offered", |live| live.has("recovery-review"));
+  let mut live = live.reopen();
+  live.wait("the interrupted runs offered", |live| live.has("recovery-review"));
   assert_eq!(
     live.text("recovery-notice-title"),
-    "1 run was interrupted when Orchester closed"
+    "2 runs were interrupted when Orchester closed"
   );
+  // Nothing decided: the notice comes back after a clean restart.
+  live.press_close();
+  let mut live = live.reopen();
+  live.wait("the runs offered again", |live| live.has("recovery-review"));
   live.click("recovery-review");
-  live.wait("the list in place", |live| live.has(&format!("recovery-run-{run}")));
-  assert!(live.text(&format!("recovery-run-{run}")).contains("You chose Quit now"));
-  assert!(matches!(live.run_status(run), RunStatus::Interrupted(_)));
+  live.wait("the list in place", |live| live.has(&format!("recovery-run-{first}")));
+  assert!(
+    live
+      .text(&format!("recovery-run-{first}"))
+      .contains("You chose Quit now")
+  );
 
   live.click("recovery-continue");
   let services = live.services();
   let project = live.project;
-  live.wait("the run continued", |_| {
+  live.wait("the runs continued", |_| {
     matches!(services.recovery.state().decision(project), Decision::Continued(_))
   });
   let Decision::Continued(continuation) = services.recovery.state().decision(project) else {
     unreachable!("waited for it")
   };
-  assert_eq!((continuation.continued, continuation.not_continued.len()), (1, 0));
+  assert_eq!((continuation.continued, continuation.not_continued.len()), (2, 0));
   live.wait("the notice gone", |live| !live.has("recovery-notice"));
-  assert!(
-    !matches!(live.run_status(run), RunStatus::Interrupted(_)),
-    "the run is live again"
-  );
+  for run in [first, second] {
+    assert!(
+      !matches!(live.run_status(run), RunStatus::Interrupted(_)),
+      "the run is live again"
+    );
+  }
 
-  live.request_close();
+  live.press_close();
   live.wait("the window closing or asking", |live| {
-    live.closed.load(Ordering::Acquire) || live.has("closing-quit-now")
+    live.closed() || live.has("closing-quit-now")
   });
   if live.has("closing-quit-now") {
     live.click("closing-quit-now");
   }
-  live.wait("the window let close at the end", |live| {
-    live.closed.load(Ordering::Acquire)
-  });
+  live.wait("the window let close at the end", |live| live.closed());
   let Live { window, .. } = live;
   let Window { launch, .. } = window;
   launch.end();
+}
+
+/// Records `runs` of the project in `repo` as interrupted by Quit now, now.
+fn interrupt(repo: &Path, runs: &[RunId]) {
+  let mut db = ProjectDb::open(repo).expect("the project's database");
+  for id in runs {
+    let mut run = db.run(*id).expect("read the run").expect("the run");
+    if matches!(run.status(), RunStatus::Interrupted(_)) {
+      continue;
+    }
+    let events = run
+      .interrupt(InterruptCause::QuitNow, Timestamp::now())
+      .expect("a run at work can be interrupted");
+    db.append_events(&run, &events).expect("record the interruption");
+  }
 }

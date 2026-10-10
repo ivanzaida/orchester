@@ -11,7 +11,7 @@ use lurq::{
   layout::Alignment,
   node::{CursorIcon, Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{id::ProjectId, project::TaskKey, run::InterruptCause};
+use orchester_core::{id::ProjectId, run::InterruptCause};
 use orchester_workspace::{
   display,
   recovery::{InterruptedRun, WorktreeState},
@@ -20,8 +20,8 @@ use orchester_workspace::{
 use super::super::rows::provider_key;
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, Route, TaskTab, TaskView},
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  routes::{ChangeSource, ChangedFile, ProjectPage, Route, TaskTab, TaskView},
+  theme::{ExtraSpacing, ExtraTypography, IconSize, LifecycleText},
   ui::{
     icon::{Icon, icon},
     pressable::pressable,
@@ -115,7 +115,7 @@ fn task(ctx: &Ctx, run: &InterruptedRun) -> Column {
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
         .child(
-          Text::new(&run.task_key)
+          Text::new(&run.task_key.to_string())
             .variant(ExtraTypography::MonoKey.role())
             .nowrap()
             .flex_shrink(0.0),
@@ -152,7 +152,7 @@ fn during(ctx: &Ctx, run: &InterruptedRun) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Fine.role())
-    .child(Text::new(&step).variant(TypographyStyle::Body))
+    .child(Text::new(&step).variant(LifecycleText::Cell.role()))
     .with_children(agent.map(|agent| {
       Text::new(&agent)
         .variant(ExtraTypography::Note.role())
@@ -213,26 +213,27 @@ fn worktree(ctx: &Ctx, (project, navigation): (ProjectId, &Navigation), run: &In
     .align_items(Alignment::Center)
     .child(icon(glyph, IconSize::Sm, color))
     .child(Text::new(&words).variant(role).flex(1.0));
-  let view = uncommitted
-    .then(|| run.task_key.parse::<TaskKey>().ok())
-    .flatten()
-    .map(|key| {
-      let (navigation, route) = (
-        navigation.clone(),
-        Route::Project(project, ProjectPage::Task(key, TaskView::of(TaskTab::Changes))),
-      );
-      pressable(move || navigation.go(route.clone()))
-        .id(format!("recovery-view-changes-{}", run.run))
-        .cursor(CursorIcon::Pointer)
-        .spacing(ExtraSpacing::Snug.role())
-        .align_items(Alignment::Center)
-        .child(
-          Text::new(&ctx.t("lifecycle.recovery.viewChanges"))
-            .variant(ExtraTypography::Strong.role())
-            .nowrap(),
-        )
-        .child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::TextPrimary))
-    });
+  // *View changes* opens the files that are not committed, from the first of them; git names no file
+  // with an empty path, and the tab would then open on its list.
+  let view = run.uncommitted_file.as_deref().map(|file| {
+    let view = ChangedFile::new(file, ChangeSource::Worktree)
+      .map_or(TaskView::of(TaskTab::Changes), |file| TaskView::Changes(Some(file)));
+    let (navigation, route) = (
+      navigation.clone(),
+      Route::Project(project, ProjectPage::Task(run.task_key.clone(), view)),
+    );
+    pressable(move || navigation.go(route.clone()))
+      .id(format!("recovery-view-changes-{}", run.run))
+      .cursor(CursorIcon::Pointer)
+      .spacing(ExtraSpacing::Snug.role())
+      .align_items(Alignment::Center)
+      .child(
+        Text::new(&ctx.t("lifecycle.recovery.viewChanges"))
+          .variant(LifecycleText::Link.role())
+          .nowrap(),
+      )
+      .child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::TextPrimary))
+  });
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Fine.role())

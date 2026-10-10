@@ -26,8 +26,8 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, _tab: OverviewTab) -> Eleme
         .padding(
           Padding::new()
             .top(SpacingSize::Section)
-            .left(LifecycleSpacing::PanelSide.role())
-            .right(LifecycleSpacing::PanelSide.role()),
+            .left(LifecycleSpacing::NoticeSide.role())
+            .right(LifecycleSpacing::NoticeSide.role()),
         )
         .child(notice),
     )

@@ -81,14 +81,15 @@ impl Services {
     let vault = Vault::keychain();
     let runners = Runners::new(runner, runtime.clone(), activity.clone(), session.previous_end());
     let programs = Programs::processes();
+    let jobs = ProjectJobs::default();
     let recovery = Recovery::start(
       (workspace.clone(), programs.clone()),
       session.previous_end(),
-      session.started_at(),
+      session.interrupted_since(),
       &runtime,
     );
     Self {
-      close: CloseFlow::new(runners.clone(), runtime.clone()),
+      close: CloseFlow::new(runners.clone(), jobs.clone(), runtime.clone()),
       recovery,
       runners,
       servers: Servers::new(workspace.clone(), vault.clone()),
@@ -98,7 +99,7 @@ impl Services {
       clock: Clock::system(),
       vault,
       changes: OutsideChanges::default(),
-      jobs: ProjectJobs::default(),
+      jobs,
       hold: ReadHold::default(),
       runtime,
       previous_end: session.previous_end(),

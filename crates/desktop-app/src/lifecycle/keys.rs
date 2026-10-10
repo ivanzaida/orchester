@@ -20,7 +20,7 @@ impl Choice {
   /// work, only Quit now.
   fn available(phase: &ClosePhase) -> &'static [Self] {
     match phase {
-      ClosePhase::Confirming(_) => &[Self::QuitNow, Self::Cancel, Self::Wait],
+      ClosePhase::Confirming => &[Self::QuitNow, Self::Cancel, Self::Wait],
       ClosePhase::Waiting { .. } => &[Self::QuitNow],
       ClosePhase::Open | ClosePhase::Stopping => &[],
     }
