@@ -14,7 +14,11 @@ use orchester_app::{
   },
   routes::{OverviewTab, ProjectPage, Route, TaskList, TaskTab, TaskView},
 };
-use orchester_core::{id::IdempotencyKey, name::Name, task::TaskDetails};
+use orchester_core::{
+  id::IdempotencyKey,
+  name::Name,
+  task::{TaskDetails, TaskLimits},
+};
 use orchester_workspace::tasks::data::{SaveTarget, save_draft_in};
 use support::Window;
 
@@ -206,7 +210,7 @@ fn the_window_shows_the_active_tabs_route() {
     brief: String::new(),
     acceptance_criteria: Vec::new(),
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   };
   let target = SaveTarget::New(IdempotencyKey::generate());
   save_draft_in(&window.data.repo("repo-kontur"), target, &draft).expect("the draft is saved");
