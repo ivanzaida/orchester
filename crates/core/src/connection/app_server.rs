@@ -19,20 +19,17 @@ use thiserror::Error;
 pub use self::questions::{NO_OPTIONS_REFUSED, PendingQuestion, SECRET_REFUSED};
 use self::{
   items::{command_finished, file_changed, mcp_tool_finished},
-  own_calls::AskedOwnCalls,
+  tool_calls::{AskedOwnCalls, ToolContext},
 };
 use super::{
   mcp::InvocationExemptions,
-  stream::{AgentEvent, FileChange, NativeCall, QuestionRefusal},
+  stream::{AgentEvent, QuestionRefusal},
 };
-use crate::{
-  orchester_tools::{OrchesterTool, SERVER as ORCHESTER},
-  run::TokenUsage,
-};
+use crate::run::TokenUsage;
 
 mod items;
-mod own_calls;
 mod questions;
+mod tool_calls;
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum ProtocolError {
@@ -159,24 +156,6 @@ pub enum Update {
   },
 }
 
-#[derive(Clone)]
-struct ToolContext {
-  thread: String,
-  turn: String,
-  server: String,
-  action: String,
-  target: Option<String>,
-  /// Codex asked for approval of the call, or the runner did for a call of Orchester's tools.
-  asked: bool,
-  /// The arguments of a call of Orchester's tools, to find the call the runner asks about; `Null` for any other.
-  arguments: Value,
-  /// The files the call changes when it succeeds: a call of Orchester's `edit_file`, `create_file`, `delete_file` or
-  /// `move_file`.
-  changes: Vec<FileChange>,
-  /// What a call of one of Orchester's file tools asked, for its row.
-  call: Option<NativeCall>,
-}
-
 /// Parses notifications and correlates a later approval request with its pending tool item.
 #[derive(Default)]
 pub struct AppServerStream {
@@ -200,25 +179,6 @@ impl AppServerStream {
     Self {
       exemptions,
       ..Self::default()
-    }
-  }
-
-  /// The runner asks a person about a call of Orchester's tool `action` with `arguments`: the call's end says a person
-  /// was asked. The id of the call when it has started, so the request and the call are one row; `None` when it has
-  /// not, and its start is marked then.
-  pub fn runner_asks(&mut self, action: &str, arguments: &Value) -> Option<String> {
-    let started = self.tools.iter_mut().find(|(_, tool)| {
-      tool.server == ORCHESTER && tool.action == action && !tool.asked && tool.arguments == *arguments
-    });
-    match started {
-      Some((item, tool)) => {
-        tool.asked = true;
-        Some(item.clone())
-      }
-      None => {
-        self.asked_own.remember(action, arguments);
-        None
-      }
     }
   }
 
@@ -437,45 +397,7 @@ impl AppServerStream {
       return Vec::new();
     };
     match item.get("type").and_then(Value::as_str) {
-      Some("mcpToolCall") => {
-        if let (Some(id), Some(thread), Some(turn), Some(server), Some(action)) = (
-          string(item, "id"),
-          string(params, "threadId"),
-          string(params, "turnId"),
-          string(item, "server"),
-          string(item, "tool"),
-        ) {
-          let not_asked = self
-            .exemptions
-            .exempts(&server, &action)
-            .then(|| AgentEvent::McpToolNotAsked {
-              item: id.clone(),
-              server: server.clone(),
-              tool: action.clone(),
-            });
-          let arguments = item.get("arguments").unwrap_or(&Value::Null);
-          let own = (server == ORCHESTER)
-            .then(|| OrchesterTool::from_name(&action))
-            .flatten();
-          let changes = own.map_or_else(Vec::new, |tool| tool.changed_files(arguments));
-          let call = own.and_then(|tool| tool.shown_call(arguments));
-          let asked = own.is_some() && self.asked_own.take(&action, arguments);
-          let context = ToolContext {
-            thread,
-            turn,
-            target: string(arguments, "filePath"),
-            asked,
-            arguments: if own.is_some() { arguments.clone() } else { Value::Null },
-            server,
-            action,
-            changes,
-            call,
-          };
-          self.tools.insert(id, context);
-          return not_asked.map(Update::Activity).into_iter().collect();
-        }
-        Vec::new()
-      }
+      Some("mcpToolCall") => self.mcp_tool_started(params, item),
       Some("commandExecution") => match (string(item, "id"), string(item, "command")) {
         (Some(item), Some(command)) => vec![Update::Activity(AgentEvent::CommandStarted { item, command })],
         _ => Vec::new(),
@@ -532,6 +454,8 @@ impl AppServerStream {
   }
 
   fn turn_completed(&mut self, params: &Value) -> Vec<Update> {
+    // A request whose call Codex never started (the turn was cancelled) must not mark a later call.
+    self.asked_own.clear();
     let turn = params.get("turn").unwrap_or(&Value::Null);
     let status = turn.get("status").and_then(Value::as_str);
     let mut updates = vec![Update::Activity(AgentEvent::TurnCompleted { usage: self.usage })];

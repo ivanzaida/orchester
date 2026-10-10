@@ -325,4 +325,15 @@ fn app_server_a_call_the_runner_asked_about_ends_as_asked() {
     asked(stream.parse(&completed).expect("completed")),
     Some(("mcp-3".to_owned(), false))
   );
+  // A request whose call Codex never started (the turn was interrupted) does not mark a later identical call.
+  assert_eq!(stream.runner_asks("read_external_file", &input), None);
+  let interrupted = json!({"method": "turn/completed", "params": {"threadId": "t", "turn": {"id": "turn",
+    "status": "interrupted"}}});
+  stream.parse(&interrupted.to_string()).expect("turn ended");
+  let (started, completed) = call("mcp-4", &input);
+  stream.parse(&started).expect("started");
+  assert_eq!(
+    asked(stream.parse(&completed).expect("completed")),
+    Some(("mcp-4".to_owned(), false))
+  );
 }
