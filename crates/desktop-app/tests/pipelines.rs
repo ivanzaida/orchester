@@ -240,5 +240,7 @@ fn pipelines_valid_changes_autosave_and_published_history_is_read_only() {
 
 #[path = "pipelines/layout.rs"]
 mod layout;
+#[path = "pipelines/permissions.rs"]
+mod permissions;
 #[path = "pipelines/regressions.rs"]
 mod regressions;

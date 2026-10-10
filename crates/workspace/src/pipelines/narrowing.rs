@@ -33,6 +33,15 @@ fn enforced(choice: &ProfileChoice, option: PermissionOption) -> bool {
     .is_some_and(|p| support(p, Platform::current(), option).is_enforced())
 }
 
+/// Restores command and network inheritance without dropping the step's tool-approval gate.
+/// Saving and publishing still use the ordinary widening checks.
+pub fn inherit_profile(current: &StepPermissions) -> StepPermissions {
+  StepPermissions {
+    interactive_tool_approvals: current.interactive_tool_approvals,
+    ..StepPermissions::default()
+  }
+}
+
 /// Validates only the narrowing the profile and its connection support on this platform.
 pub fn permissions(
   only_commands: Option<&[String]>,

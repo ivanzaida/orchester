@@ -102,6 +102,7 @@
     "askTools": "Ask when a tool needs approval",
     "narrowHint": "Steps can only narrow profile permissions.",
     "narrowUnavailable": "Only choices the profile and its connection enforce on this platform can be changed.",
+    "resetPermissions": "Use profile commands and network",
     "toolUnavailable": "This tool cannot run as a pipeline step in this version.",
     "duplicate": "Duplicate step",
     "remove": "Remove step",

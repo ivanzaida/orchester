@@ -93,7 +93,10 @@ pub fn rows(ctx: &Ctx, state: &State, step: &Step, locked: bool) -> Element {
     PropertyValue::Plain,
   ));
   body = body.child(command_rows(state, step, choice, locked));
-  body.child(network_rows(ctx, state, step, choice, locked)).into()
+  body
+    .child(network_rows(ctx, state, step, choice, locked))
+    .child(reset(ctx, state, step, locked))
+    .into()
 }
 fn command_rows(state: &State, step: &Step, choice: &ProfileChoice, locked: bool) -> Column {
   let StepKind::Agent { permissions, .. } = &step.kind else {
@@ -207,7 +210,7 @@ fn apply(
 ) {
   let result = narrowing::permissions(only, off, ask, choice);
   state.update(|s| {
-    s.field("step-permissions", result, |s, value| {
+    s.field(&format!("{key}:step-permissions"), result, |s, value| {
       s.change(key, |step| {
         if let StepKind::Agent { permissions, .. } = &mut step.kind {
           *permissions = value;
@@ -237,4 +240,35 @@ fn command_summary(ctx: &Ctx, step: &Step) -> String {
       .to_string();
   }
   ctx.t("pipelines.inherit").to_string()
+}
+
+fn reset(ctx: &Ctx, state: &State, step: &Step, locked: bool) -> Column {
+  use crate::ui::button::{ActionButton, ButtonKind};
+
+  let body = Column::new();
+  let StepKind::Agent { permissions, .. } = &step.kind else {
+    return body;
+  };
+  let inherited = narrowing::inherit_profile(permissions);
+  if inherited == *permissions {
+    return body;
+  }
+  let (edit, key) = (state.clone(), step.key.clone());
+  let reset = ActionButton::new(
+    "step-permissions-reset",
+    ButtonKind::Ghost,
+    ctx.t("pipelines.resetPermissions"),
+  )
+  .on_click(move || {
+    edit.update(|s| {
+      s.field(&format!("{key}:step-permissions"), Ok(inherited.clone()), |s, value| {
+        s.change(&key, |step| {
+          if let StepKind::Agent { permissions, .. } = &mut step.kind {
+            *permissions = value;
+          }
+        });
+      });
+    });
+  });
+  body.child(if locked { reset.disabled() } else { reset })
 }

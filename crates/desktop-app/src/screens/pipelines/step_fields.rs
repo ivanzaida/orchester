@@ -290,6 +290,7 @@ impl Fields {
             value.apply(step);
             selected = Some(ModelChoice::of(step));
           });
+          s.errors.remove(&format!("{key}:step-permissions"));
         });
         // Signal watchers can run immediately and write to state themselves.
         if let Some(selected) = selected {
