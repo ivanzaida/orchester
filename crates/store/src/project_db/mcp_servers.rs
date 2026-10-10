@@ -98,7 +98,15 @@ impl McpServerStore for ProjectDb {
       Ok(users) if users.is_empty() => "COMMIT",
       _ => "ROLLBACK",
     };
-    self.connection.execute_batch(end)?;
+    if let Err(error) = self.connection.execute_batch(end) {
+      // A COMMIT that failed (the database busy or full) leaves the transaction open: it is rolled back, so the
+      // connection is not left inside it. Losing the rollback's own error is correct: the first error is the one
+      // returned, and SQLite rolls back a transaction still open when the connection closes.
+      if !self.connection.is_autocommit() {
+        let _ = self.connection.execute_batch("ROLLBACK");
+      }
+      return Err(error.into());
+    }
     outcome
   }
 
