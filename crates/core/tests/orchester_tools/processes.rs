@@ -1,4 +1,5 @@
-//! The process rule uses executable paths with links resolved, not a working directory or a prefix string.
+//! The process rule uses executable paths as reported and with links resolved, not a working directory or a prefix
+//! string.
 
 use std::{
   fs,
@@ -61,7 +62,7 @@ fn run_processes_path_inside_outside_and_prefix_sibling() {
 }
 
 #[test]
-fn run_processes_path_resolves_links_in_both_directions() {
+fn run_processes_path_refuses_links_in_both_directions() {
   let folder = folders();
   let root = folder.path().join("run");
   let outside = folder.path().join("other");
@@ -74,10 +75,23 @@ fn run_processes_path_resolves_links_in_both_directions() {
   link(&folder.path().join("run-alias"), &root);
   let scope = RunProcessScope::new(&folder.path().join("run-alias")).expect("linked root");
   assert_eq!(scope.relative_executable(&root.join("escape/app")).expect("path"), None);
+  // A program reported at an outside path stays outside even when a link there now leads into the worktree.
   assert_eq!(
     scope.relative_executable(&outside.join("enter/app")).expect("path"),
-    Some(PathBuf::from("app"))
+    None
   );
+  for spelling in [root.join("app"), folder.path().join("run-alias/app")] {
+    assert_eq!(
+      scope.relative_executable(&spelling).expect("path"),
+      Some(PathBuf::from("app")),
+      "{}",
+      spelling.display()
+    );
+  }
+  // Joining `..` to a verbatim (`\\?\`) path pops instead; the usual spelling keeps the component.
+  let plain = PathBuf::from(root.to_string_lossy().trim_start_matches(r"\\?\"));
+  let parent = plain.join("escape").join("..").join("app");
+  assert_eq!(scope.relative_executable(&parent).expect("path"), None, "{parent:?}");
 }
 
 #[cfg(windows)]

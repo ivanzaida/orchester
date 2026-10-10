@@ -22,6 +22,11 @@ use orchester_core::orchester_tools::ProcessCall;
 use orchester_exec::run_processes::RunProcesses;
 use serde_json::Value;
 
+/// Windows creation flags; macOS ignores them.
+const DETACHED_PROCESS: u32 = 0x0000_0008;
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 struct Sleeper(Child);
 
 impl Sleeper {
@@ -30,6 +35,17 @@ impl Sleeper {
   }
 
   fn configured(program: &Path, window: bool, child_program: Option<&Path>) -> Self {
+    Self::spawn(program, window, child_program, DETACHED_PROCESS)
+  }
+
+  /// Started like a console program the app starts: no window, but a console of its own (and so a conhost on
+  /// Windows). Its child, if any, is started the same way.
+  #[cfg(windows)]
+  fn hidden_console(program: &Path, child_program: &Path) -> Self {
+    Self::spawn(program, false, Some(child_program), CREATE_NO_WINDOW)
+  }
+
+  fn spawn(program: &Path, window: bool, child_program: Option<&Path>, flags: u32) -> Self {
     let ready = program.with_extension("ready");
     let mut command = Command::new(program);
     command.env("ORCHESTER_PROCESS_READY", &ready);
@@ -47,12 +63,13 @@ impl Sleeper {
     command
       .args(["--exact", "run_processes_stand_in", "--ignored"])
       .env("ORCHESTER_PROCESS_STAND_IN", "1")
+      .env("ORCHESTER_PROCESS_FLAGS", flags.to_string())
       .stdout(Stdio::null())
       .stderr(Stdio::null());
     #[cfg(windows)]
     {
       use std::os::windows::process::CommandExt;
-      command.creation_flags(0x0000_0008);
+      command.creation_flags(flags);
     }
     let child = command.spawn().expect("stand-in");
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
@@ -158,7 +175,11 @@ fn spawn_child(program: std::ffi::OsString, wait: bool) -> Child {
   #[cfg(windows)]
   {
     use std::os::windows::process::CommandExt;
-    command.creation_flags(0x0000_0008);
+    let flags = std::env::var("ORCHESTER_PROCESS_FLAGS")
+      .ok()
+      .and_then(|flags| flags.parse().ok())
+      .unwrap_or(DETACHED_PROCESS);
+    command.creation_flags(flags);
   }
   let child = command.spawn().expect("child");
   if wait {
@@ -219,6 +240,7 @@ fn run_processes_lists_exact_scope_and_refuses_outside_and_protected_programs() 
     "{}",
     result.text()
   );
+  assert!(!result.text().contains("other-run"), "no path: {}", result.text());
   assert!(foreign.0.try_wait().expect("wait").is_none());
   executor.protect_executable(&inside).expect("protect configured CLI");
   let result = executor.run(own.call());
@@ -266,7 +288,7 @@ fn run_processes_requests_close_before_ending() {
 }
 
 #[test]
-fn run_processes_refuses_a_tree_with_an_outside_child_before_closing_parent() {
+fn run_processes_stops_the_parent_and_leaves_an_outside_child_running() {
   let folder = folder();
   let worktree = folder.path().join("run");
   let outside = folder.path().join("other");
@@ -279,22 +301,70 @@ fn run_processes_refuses_a_tree_with_an_outside_child_before_closing_parent() {
     .expect("child pid")
     .parse()
     .expect("pid");
-  let executor = RunProcesses::new(&worktree).expect("scope");
-  let refused = executor.run(parent.call());
-  let parent_alive = parent.0.try_wait().expect("parent status").is_none();
+  let result = RunProcesses::new(&worktree).expect("scope").run(parent.call());
   // This outside PID is a stand-in we just started, in our own scratch folder.
-  let cleanup = RunProcesses::new(&outside)
-    .expect("cleanup scope")
-    .run(ProcessCall::Stop {
-      pid: NonZeroU32::new(child_pid).expect("pid"),
-    });
+  let outside_scope = RunProcesses::new(&outside).expect("cleanup scope");
+  let listed = outside_scope.run(ProcessCall::List);
+  let cleanup = outside_scope.run(ProcessCall::Stop {
+    pid: NonZeroU32::new(child_pid).expect("pid"),
+  });
   assert!(!cleanup.is_error(), "{}", cleanup.text());
+  assert!(!result.is_error(), "{}", result.text());
   assert!(
-    refused.is_error() && refused.text().contains("outside"),
+    parent.0.try_wait().expect("parent status").is_some(),
     "{}",
-    refused.text()
+    result.text()
   );
-  assert!(parent_alive, "preflight refusal must send no close request");
+  let line = format!("pid {child_pid}: not stopped, its executable is outside this run's worktree; still running");
+  assert!(result.text().contains(&line), "{}", result.text());
+  assert!(!result.text().contains("other"), "no outside path: {}", result.text());
+  assert!(
+    listed.text().contains(&format!("\"pid\":{child_pid}")),
+    "{}",
+    listed.text()
+  );
+}
+
+/// Every console program has a conhost child outside the worktree; it never blocks the stop and is not touched.
+#[cfg(windows)]
+#[test]
+fn run_processes_stops_a_console_tree_and_leaves_its_conhost() {
+  let folder = folder();
+  let parent_program = copy(folder.path(), "console-parent");
+  let child_program = copy(folder.path(), "console-child");
+  let mut parent = Sleeper::hidden_console(&parent_program, &child_program);
+  let child_pid: u32 = fs::read_to_string(parent_program.with_extension("ready"))
+    .expect("child pid")
+    .parse()
+    .expect("pid");
+  let executor = RunProcesses::new(folder.path()).expect("scope");
+  let result = executor.run(parent.call());
+  let remaining = executor.run(ProcessCall::List);
+  assert!(!result.is_error(), "{}", result.text());
+  assert!(
+    parent.0.try_wait().expect("parent status").is_some(),
+    "{}",
+    result.text()
+  );
+  assert!(
+    result.text().contains(&format!("pid {child_pid}: ended")),
+    "{}",
+    result.text()
+  );
+  assert!(
+    result
+      .text()
+      .lines()
+      .any(|line| line.contains("not stopped, its executable is outside") && line.ends_with("(conhost.exe)")),
+    "{}",
+    result.text()
+  );
+  assert!(
+    !result.text().contains("System32"),
+    "no outside path: {}",
+    result.text()
+  );
+  assert_eq!(remaining.text(), "[]");
 }
 
 #[test]

@@ -1,6 +1,7 @@
 #![allow(unsafe_code)]
-//! libproc PID enumeration has no safe wrapper. Executable lookup and signals are bound to an audit token,
-//! so neither PID reuse nor exec between validation and signalling can redirect a stop to another executable.
+//! libproc PID enumeration has no safe wrapper. Executable lookup and signals are bound to an audit token, so
+//! neither PID reuse nor exec between validation and signalling can redirect a stop to another executable (before
+//! macOS 15 the signal re-checks the token immediately before it; see `identity`).
 
 mod identity;
 
@@ -28,17 +29,15 @@ pub(super) fn snapshot() -> io::Result<Vec<Entry>> {
     }
     let mut result = Vec::new();
     for pid in pids.into_iter().take(count as usize).filter(|pid| *pid > 0) {
-      match read(pid as u32) {
-        Ok(Some(info)) => result.push(Entry {
+      // Exited, other users' or otherwise uninspectable processes can never pass the executable rule, so one of
+      // them never fails the whole list.
+      if let Ok(Some(info)) = read(pid as u32) {
+        result.push(Entry {
           pid: info.bsd.pbi_pid,
           parent: info.bsd.pbi_ppid,
           unique_id: info.unique.unique_id,
           parent_unique_id: info.unique.parent_unique_id,
-        }),
-        Ok(None) => {}
-        // Other users' protected processes are not inspectable; they can never pass the executable rule.
-        Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {}
-        Err(error) => return Err(error),
+        });
       }
     }
     return Ok(result);
@@ -78,11 +77,17 @@ impl Process {
         }));
       }
     };
+    let started = current
+      .bsd
+      .pbi_start_tvsec
+      .checked_mul(1_000_000)
+      .and_then(|micros| micros.checked_add(current.bsd.pbi_start_tvusec))
+      .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "process start time out of range"))?;
     Ok(Some(Self {
       info: Info {
         pid: entry.pid,
         path,
-        started: current.bsd.pbi_start_tvsec * 1_000_000 + current.bsd.pbi_start_tvusec,
+        started,
       },
       unique_id: current.unique.unique_id,
       token,

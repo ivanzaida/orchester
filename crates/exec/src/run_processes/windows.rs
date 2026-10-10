@@ -14,14 +14,17 @@ use windows_sys::Win32::{
       CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
     },
     Threading::{
-      GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE, QueryFullProcessImageNameW,
-      TerminateProcess, WaitForSingleObject,
+      GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
+      QueryFullProcessImageNameW, TerminateProcess, WaitForSingleObject,
     },
   },
   UI::WindowsAndMessaging::{EnumWindows, GetWindowThreadProcessId, PostMessageW, WM_CLOSE},
 };
 
 use super::{Entry, Info};
+
+/// 1970-01-01 in FILETIME's 100-nanosecond ticks since 1601-01-01.
+const UNIX_EPOCH_TICKS: u64 = 116_444_736_000_000_000;
 
 struct Handle(HANDLE);
 
@@ -72,7 +75,7 @@ pub(super) struct Process {
 
 impl Process {
   pub(super) fn open(entry: Entry, stopping: bool) -> io::Result<Option<Self>> {
-    let rights = PROCESS_QUERY_LIMITED_INFORMATION | 0x0010_0000 | if stopping { PROCESS_TERMINATE } else { 0 };
+    let rights = PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE | if stopping { PROCESS_TERMINATE } else { 0 };
     // SAFETY: PID and access flags are scalar values; no inherited handle is requested.
     let raw = unsafe { OpenProcess(rights, 0, entry.pid) };
     if raw.is_null() {
@@ -176,7 +179,10 @@ fn start_time(handle: &Handle) -> io::Result<u64> {
     return Err(io::Error::last_os_error());
   }
   let ticks = (u64::from(start.dwHighDateTime) << 32) | u64::from(start.dwLowDateTime);
-  Ok((ticks - 116_444_736_000_000_000) / 10)
+  ticks
+    .checked_sub(UNIX_EPOCH_TICKS)
+    .map(|since_epoch| since_epoch / 10)
+    .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "process start time precedes the Unix epoch"))
 }
 
 struct CloseRequest<'a> {
