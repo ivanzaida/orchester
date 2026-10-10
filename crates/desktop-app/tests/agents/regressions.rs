@@ -282,3 +282,55 @@ fn agents_failed_delayed_save_restores_the_unsaved_fields() {
   assert_eq!(value, "Keep this unsaved value");
   assert!(screen.exists("agent-save"));
 }
+
+#[test]
+fn agents_delayed_folder_add_preserves_removal_and_saved_permissions() {
+  use orchester_core::permission::WritableFolders;
+  use orchester_workspace::agents::folders;
+
+  let mut screen = Agents::new(true);
+  let id = screen.profile(false);
+  let mut permissions = screen
+    .listed()
+    .profile(id)
+    .expect("profile")
+    .profile
+    .permissions()
+    .clone();
+  permissions.set_repository(RepositoryAccess::Write);
+  permissions.set_writable_folders(
+    folders::with_folder(&WritableFolders::none(), ".orchester/build-a", &screen.root).expect("folder A"),
+  );
+  save_permissions(&screen, id, permissions);
+  screen.open(id);
+  screen.click("agent-tab-permissions");
+  screen.set("agent-folder", ".orchester/build-b");
+  screen.click("agent-add-folder");
+  // No tick_futures: validation cannot be delivered before the person removes A.
+  screen.click("agent-remove-folder-0");
+  assert!(!screen.text("agent-folders").contains(".orchester/build-a"));
+  screen.until("folder B added", |s| {
+    s.text("agent-folders").contains(".orchester/build-b") && s.exists("agent-remove-folder-0")
+  });
+  assert!(!screen.text("agent-folders").contains(".orchester/build-a"));
+
+  screen.set("agent-folder", ".orchester/build-b");
+  screen.click("agent-add-folder");
+  screen.until("duplicate refused", |s| s.exists("agent-folder-error"));
+  assert!(!screen.exists("agent-remove-folder-1"));
+  screen.click("agent-save");
+  screen.until("widening question", |s| s.exists("agent-confirm-confirm"));
+  screen.window.tree.tick_futures();
+  screen.window.pass();
+  screen.click("agent-confirm-confirm");
+  screen.until("saved", |s| !s.exists("agent-save") && !s.exists("agent-saving"));
+  let saved = screen.listed().profile(id).expect("profile").profile.clone();
+  let folders: Vec<_> = saved
+    .permissions()
+    .writable_folders()
+    .entries()
+    .iter()
+    .map(|folder| folder.as_str())
+    .collect();
+  assert_eq!(folders, [".orchester/build-b"]);
+}

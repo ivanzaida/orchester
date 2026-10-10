@@ -19,6 +19,28 @@ const SELECT_RESOURCES: &str = "SELECT id, kind, slug, name, created_at FROM res
 const SELECT_VERSIONS: &str = "SELECT id, number, body, published_at FROM resource_versions";
 
 impl ProjectDb {
+  /// Reads the draft and latest version under the write lock, then saves the returned draft.
+  /// A rejected edit leaves storage unchanged; no competing writer can run between the read and save.
+  pub fn update_draft<B: ResourceBody>(
+    &mut self,
+    resource: ResourceId,
+    edit: impl FnOnce(Option<Draft<B>>, Option<Version<B>>) -> Result<Draft<B>, StoreError>,
+  ) -> Result<DraftSaved, StoreError> {
+    let transaction = self.connection.transaction()?;
+    check_kind::<B>(&transaction, resource)?;
+    let draft = load_draft::<B>(&transaction, resource)?;
+    let latest = load_versions::<B>(
+      &transaction,
+      "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
+      [resource.to_string()],
+    )?
+    .pop();
+    let changed = edit(draft, latest)?;
+    let saved = write_draft(&transaction, resource, &changed)?;
+    transaction.commit()?;
+    Ok(saved)
+  }
+
   /// Publishes the draft of `resource` only if its body is `expected`, in the same transaction that reads
   /// it: a check made on the draft holds for what is published ([`StoreError::DraftChanged`] otherwise).
   pub fn publish_draft_matching<B: ResourceBody>(
@@ -123,39 +145,11 @@ impl ResourceStore for ProjectDb {
   }
 
   fn save_draft<B: ResourceBody>(&mut self, resource: ResourceId, draft: &Draft<B>) -> Result<DraftSaved, StoreError> {
-    let body = encode(draft.body())?;
     let transaction = self.connection.transaction()?;
     check_kind::<B>(&transaction, resource)?;
-    let base = match draft.based_on() {
-      Some(number) => load_versions::<B>(
-        &transaction,
-        "WHERE resource_id = ?1 AND number = ?2",
-        params![resource.to_string(), number.get()],
-      )?
-      .pop(),
-      None => None,
-    };
-    if base.is_some_and(|version| draft.repeats(&version)) {
-      transaction.execute(
-        "DELETE FROM resource_drafts WHERE resource_id = ?1",
-        [resource.to_string()],
-      )?;
-      transaction.commit()?;
-      return Ok(DraftSaved::Discarded);
-    }
-    transaction.execute(
-      "INSERT INTO resource_drafts (resource_id, body, based_on, updated_at) VALUES (?1, ?2, ?3, ?4) \
-       ON CONFLICT (resource_id) DO UPDATE SET body = excluded.body, based_on = excluded.based_on, \
-       updated_at = excluded.updated_at",
-      params![
-        resource.to_string(),
-        body,
-        draft.based_on().map(VersionNumber::get),
-        draft.updated_at().unix_millis()
-      ],
-    )?;
+    let saved = write_draft(&transaction, resource, draft)?;
     transaction.commit()?;
-    Ok(DraftSaved::Stored)
+    Ok(saved)
   }
 
   fn draft<B: ResourceBody>(&self, resource: ResourceId) -> Result<Option<Draft<B>>, StoreError> {
@@ -199,6 +193,42 @@ impl ResourceStore for ProjectDb {
     )?;
     Ok(found.pop())
   }
+}
+
+fn write_draft<B: ResourceBody>(
+  connection: &Connection,
+  resource: ResourceId,
+  draft: &Draft<B>,
+) -> Result<DraftSaved, StoreError> {
+  let body = encode(draft.body())?;
+  let base = match draft.based_on() {
+    Some(number) => load_versions::<B>(
+      connection,
+      "WHERE resource_id = ?1 AND number = ?2",
+      params![resource.to_string(), number.get()],
+    )?
+    .pop(),
+    None => None,
+  };
+  if base.is_some_and(|version| draft.repeats(&version)) {
+    connection.execute(
+      "DELETE FROM resource_drafts WHERE resource_id = ?1",
+      [resource.to_string()],
+    )?;
+    return Ok(DraftSaved::Discarded);
+  }
+  connection.execute(
+    "INSERT INTO resource_drafts (resource_id, body, based_on, updated_at) VALUES (?1, ?2, ?3, ?4) \
+     ON CONFLICT (resource_id) DO UPDATE SET body = excluded.body, based_on = excluded.based_on, \
+     updated_at = excluded.updated_at",
+    params![
+      resource.to_string(),
+      body,
+      draft.based_on().map(VersionNumber::get),
+      draft.updated_at().unix_millis()
+    ],
+  )?;
+  Ok(DraftSaved::Stored)
 }
 
 /// Fails unless `resource` exists and holds bodies of type `B`.

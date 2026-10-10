@@ -11,7 +11,7 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::permission::{CommandPermission, RepositoryAccess, WritableFolders, capability::PermissionOption};
+use orchester_core::permission::{CommandPermission, RepositoryAccess, WritableFolder, capability::PermissionOption};
 use orchester_workspace::{
   agents::{folders, permissions},
   background,
@@ -30,12 +30,13 @@ use crate::{
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Folders(WritableFolders);
-impl DevtoolsInspectable for Folders {}
+struct Folder(WritableFolder);
+impl DevtoolsInspectable for Folder {}
 pub struct Lists {
   command: Signal<String>,
   folder: Signal<String>,
   error: Signal<Option<Message>>,
+  folder_error: Signal<Option<Message>>,
 }
 impl Component for Lists {
   type Props = Props;
@@ -45,13 +46,26 @@ impl Component for Lists {
       command: ctx.signal(String::new()),
       folder: ctx.signal(String::new()),
       error: ctx.signal(None),
+      folder_error: ctx.signal(None),
     };
     let add = folder_action(ctx);
     let typed = component.folder.clone();
+    let error = component.folder_error.clone();
     ctx.watch(&add.state(), move |state| {
-      if let Some(Folders(folders)) = state.data.clone().filter(|_| state.is_fulfilled()) {
-        fields.permissions.update(|p| p.0.set_writable_folders(folders));
-        typed.set(String::new());
+      if state.is_pending() {
+        error.set(None);
+      } else if let Some(Folder(folder)) = state.data.clone().filter(|_| state.is_fulfilled()) {
+        fields.permissions.update(
+          |p| match folders::with_validated_folder(p.0.writable_folders(), folder) {
+            Ok(folders) => {
+              p.0.set_writable_folders(folders);
+              typed.set(String::new());
+            }
+            Err(reason) => error.set(Some(reason)),
+          },
+        );
+      } else if state.is_rejected() {
+        error.set(state.error.clone());
       }
     });
     component
@@ -70,13 +84,7 @@ impl Component for Lists {
     } else if fields.permissions.get().0.repository() != RepositoryAccess::Write {
       folder_button.disabled()
     } else {
-      folder_button.on_click(move || {
-        add.run((
-          root.clone(),
-          fields.permissions.get().0.writable_folders().clone(),
-          folder.get(),
-        ))
-      })
+      folder_button.on_click(move || add.run((root.clone(), folder.get())))
     };
     let mut folder_rows: Vec<Element> = Vec::new();
     for entry in props.fields.permissions.get().0.writable_folders().entries() {
@@ -103,7 +111,7 @@ impl Component for Lists {
         .into(),
     );
     folder_rows.push(words::note(&ctx.t("agents.folderNote")).into());
-    if let Some(error) = folder_state.error.clone().filter(|_| folder_state.is_rejected()) {
+    if let Some(error) = self.folder_error.get() {
       folder_rows.push(field_error("agent-folder-error", &message_text(ctx, &error)).into());
     }
     let commands = self.commands(ctx, &props);
@@ -182,9 +190,9 @@ impl Lists {
     .into()
   }
 }
-fn folder_action(ctx: &mut Ctx) -> lurq::app::ctx::FutureAction<(PathBuf, WritableFolders, String), Folders, Message> {
-  ctx.future_action(|(root, list, typed): (PathBuf, WritableFolders, String)| async move {
-    background::run(move || folders::with_folder(&list, &typed, &root).map(Folders)).await?
+fn folder_action(ctx: &mut Ctx) -> lurq::app::ctx::FutureAction<(PathBuf, String), Folder, Message> {
+  ctx.future_action(|(root, typed): (PathBuf, String)| async move {
+    background::run(move || folders::validate(&typed, &root).map(Folder)).await?
   })
 }
 fn entry_row(ctx: &Ctx, text: &str, id: String, remove: impl Fn() + Send + Sync + 'static) -> Element {

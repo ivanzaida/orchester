@@ -79,16 +79,23 @@ pub fn apply(root: &Path, request: &Request) -> Result<Outcome, Message> {
   if reasons.iter().any(|reason| !request.allowed.contains(reason)) {
     return Ok(Outcome::Confirm(reasons));
   }
-  let id = perform(root, id, request)?;
+  let id = perform(root, request)?;
   Ok(Outcome::Saved(id))
 }
 
-fn perform(root: &Path, id: Option<ResourceId>, request: &Request) -> Result<ResourceId, Message> {
-  let result = match (request.action, id) {
+fn perform(root: &Path, request: &Request) -> Result<ResourceId, Message> {
+  let result = match (request.action, &request.existing) {
     (Action::Save, None) => data::apply_in(root, ProfileChange::Create(request.profile.clone())),
-    (Action::Save, Some(id)) => data::apply_in(root, ProfileChange::SaveDraft(id, request.profile.clone())),
-    (Action::Publish, Some(id)) => data::publish_checked_in(root, id, &request.profile).map(|_| id),
-    (Action::KeepDraft, Some(id)) => data::apply_in(root, ProfileChange::KeepDraft(id)),
+    (Action::Save, Some(expected)) => {
+      data::save_draft_checked_in(root, expected, request.profile.clone()).map(|()| expected.id)
+    }
+    (Action::Publish, Some(expected)) => {
+      data::publish_checked_in(root, expected.id, &request.profile).map(|_| expected.id)
+    }
+    (Action::KeepDraft, Some(expected)) if request.profile == expected.profile => {
+      data::keep_draft_checked_in(root, expected).map(|()| expected.id)
+    }
+    (Action::KeepDraft, Some(_)) => return Err(Message::new("errors.draftChanged")),
     (_, None) => return Err(Message::new("appMcp.errors.noDraft")),
   };
   result.map_err(|error| messages::store_error(&error))

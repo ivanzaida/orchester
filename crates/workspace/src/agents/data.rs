@@ -233,6 +233,40 @@ pub fn save_draft<S: ResourceStore>(
   store.save_draft(id, &Draft::new(profile, based_on, now)).map(|_| ())
 }
 
+/// Saves an editor candidate only while the draft body, base and latest version still match.
+pub fn save_draft_checked_in(root: &Path, expected: &ProfileEntry, profile: AgentProfile) -> Result<(), StoreError> {
+  edit_checked_in(root, expected, move |draft, latest| {
+    let based_on = draft.map_or_else(|| latest.map(Version::number), |draft| draft.based_on());
+    Ok(Draft::new(profile, based_on, Timestamp::now()))
+  })
+}
+
+/// Rebases only the draft the person saw, against the latest version they saw.
+pub fn keep_draft_checked_in(root: &Path, expected: &ProfileEntry) -> Result<(), StoreError> {
+  edit_checked_in(root, expected, |draft, latest| {
+    let draft = draft.ok_or(StoreError::NoDraft(expected.id))?;
+    Ok(Draft::new(
+      draft.body().clone(),
+      latest.map(Version::number),
+      Timestamp::now(),
+    ))
+  })
+}
+
+fn edit_checked_in(
+  root: &Path,
+  expected: &ProfileEntry,
+  edit: impl FnOnce(Option<Draft<AgentProfile>>, Option<&Version<AgentProfile>>) -> Result<Draft<AgentProfile>, StoreError>,
+) -> Result<(), StoreError> {
+  ProjectDb::open(root)?.update_draft(expected.id, |draft, latest| {
+    if ProfileEntry::new(expected.id, draft.clone(), latest.as_ref()).as_ref() != Some(expected) {
+      return Err(StoreError::DraftChanged(expected.id));
+    }
+    edit(draft, latest.as_ref())
+  })?;
+  Ok(())
+}
+
 /// Publishes the saved draft as the next version, if its connection's CLI can enforce its
 /// permissions on this platform (`PublishError::Permissions`); a profile whose connection is gone
 /// cannot say what is enforced (`PublishError::ConnectionMissing`).

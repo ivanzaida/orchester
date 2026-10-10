@@ -19,9 +19,18 @@ pub fn bounds(repo_root: &Path) -> Result<FolderBounds, Message> {
   })
 }
 
+/// Checks one typed folder against the filesystem without capturing the editor's current list.
+pub fn validate(typed: &str, repo_root: &Path) -> Result<WritableFolder, Message> {
+  WritableFolder::new(typed, &bounds(repo_root)?).map_err(|error| folder_error(&error))
+}
+
 /// `list` with the folder `typed` added, or why it cannot be. Reads the file system.
 pub fn with_folder(list: &WritableFolders, typed: &str, repo_root: &Path) -> Result<WritableFolders, Message> {
-  let folder = WritableFolder::new(typed, &bounds(repo_root)?).map_err(|error| folder_error(&error))?;
+  with_validated_folder(list, validate(typed, repo_root)?)
+}
+
+/// Adds a validated folder to the current list, preserving edits made during filesystem validation.
+pub fn with_validated_folder(list: &WritableFolders, folder: WritableFolder) -> Result<WritableFolders, Message> {
   let mut entries = list.entries().to_vec();
   entries.push(folder);
   WritableFolders::new(entries).map_err(|error| match error {
