@@ -53,32 +53,59 @@ fn pipelines_keyboard_focus_caret_and_undo_survive_autosave() {
   let mut editor = Editor::new();
   let id = editor.empty("Typing");
   editor.open(id);
-  keyboard_across_save(&mut editor, "pipeline-description");
+  keyboard_across_save(&mut editor, "pipeline-description", "a");
   editor.click("pipeline-settings");
-  keyboard_across_save(&mut editor, "pipeline-settings-description");
+  keyboard_across_save(&mut editor, "pipeline-settings-description", "d");
   editor.click("pipeline-back-steps");
   editor.click("pipeline-add-step");
   editor.set("step-name", "Typing");
-  keyboard_across_save(&mut editor, "step-instructions");
+  keyboard_across_save(&mut editor, "step-instructions", "g");
 }
 
-fn keyboard_across_save(editor: &mut Editor, field: &str) {
+fn keyboard_across_save(editor: &mut Editor, field: &str, first: &str) {
   editor.set(field, "");
   editor.focus(field);
-  for key in ["a", "b", "c", "ArrowLeft", "x"] {
+  // Position the caret immediately before the save, independently of insertion behavior.
+  for key in [first, "b", "c", "ArrowLeft"] {
     editor.key(key, false);
   }
-  assert_eq!(editor.value(field), "abxc");
+  let typed = format!("{first}bc");
+  assert_eq!(editor.value(field), typed);
+  assert!(editor.exists("pipeline-save"), "each field must cause a new save");
   editor.until("autosave completed", |e| {
     !e.exists("pipeline-save") && !e.text("screen-pipelines").contains("Saving draft")
   });
+  let saved = editor
+    .db()
+    .draft::<Pipeline>(editor.selected())
+    .expect("read the saved pipeline")
+    .expect("autosave created a draft");
+  let saved_text = if field == "step-instructions" {
+    saved.body().steps()[0].instructions.as_str()
+  } else {
+    saved.body().description()
+  };
+  assert_eq!(saved_text, typed, "the typed value reached the database");
+  assert_eq!(
+    editor
+      .window
+      .tree
+      .focused_element()
+      .and_then(|e| e.id().map(str::to_owned))
+      .as_deref(),
+    Some(field)
+  );
   // No refocus: typing resumes at the same caret, and Undo reaches the pre-save history.
   editor.key("y", false);
-  assert_eq!(editor.value(field), "abxyc", "the caret stays in the middle");
+  assert_eq!(
+    editor.value(field),
+    format!("{first}byc"),
+    "the caret stays in the middle"
+  );
   editor.key("z", true);
-  assert_eq!(editor.value(field), "abxc");
+  assert_eq!(editor.value(field), typed);
   editor.key("z", true);
-  assert_eq!(editor.value(field), "abc");
+  assert_eq!(editor.value(field), format!("{first}b"));
 }
 
 #[test]

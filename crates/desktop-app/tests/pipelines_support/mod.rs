@@ -196,10 +196,11 @@ impl Editor {
     self
       .window
       .tree
-      .get_element_by_id_mut(id)
-      .and_then(|e| e.as_text_input())
+      .get_element_by_id(id)
       .expect("text input")
-      .value()
+      .text_content()
+      .unwrap_or_default()
+      .to_owned()
   }
 
   pub fn focus(&mut self, id: &str) {
