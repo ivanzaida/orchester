@@ -235,6 +235,9 @@ pub(super) struct Watch {
   pub(super) closed_after_result: Option<String>,
   /// A completed Codex turn left a call of Orchester's tools outstanding.
   tools_after_turn: bool,
+  /// The relay's returns ([`Listening::returns`]) when Codex was last continued: a further continuation needs one
+  /// since.
+  returns_continued: u64,
 }
 
 impl Watch {
@@ -257,6 +260,7 @@ impl Watch {
       steering: steer::Steering::default(),
       closed_after_result: None,
       tools_after_turn: false,
+      returns_continued: 0,
     })
   }
 

@@ -542,6 +542,25 @@ schema. The protocol does not certify cell collection, so this is conservative:
 a turn with a synchronous approved call also gets one continuation, which can
 use results it already collected. It must not repeat the tools.
 
+Continuations are bounded by progress. A completed turn is continued only while
+a relay call still runs or waits for a person, or when the relay has returned a
+call since the last continuation and a result may still be uncollected. An MCP
+item Codex still shows open is not enough on its own: Codex may never send
+`item/completed` for a cell it abandoned, and each continuation is a paid model
+turn, so a turn with no returned call since the last continuation ends the step
+as before ORC-22. A failed turn (a usage limit, for one) or an interrupted one is
+never continued, whatever its tools still do; `Update::TurnEnded` says whether
+the turn completed.
+
+A yielded cell keeps working after its turn ended and may still ask Codex for a
+decision, such as a command approval once the awaited call returned. The App
+Server session remembers each turn that ended with Orchester's tools still at
+work and treats a request of the same thread for such a turn as part of the
+step: it reaches a person like one asked during the turn, while the runner
+waits, before the continuation's `turn/started`, or during the continuation. A
+request for any other turn still fails the step. Such a pending Codex decision
+does not hold the continuation back: the cell waits for its answer either way.
+
 Each turn uses a distinct JSON-RPC request ID, so a late acknowledgement of the
 previous turn cannot be mistaken for the continuation's reply. The continuation
 asks the agent to collect the existing yielded cell with `functions.wait` and
@@ -559,7 +578,7 @@ completion; they do not rule out the code-mode sequence above.
 
 The fake Codex starts a real relay search on a background thread and completes
 the MCP item on that thread when the result returns, independently of cell
-collection. It emits `turn/completed` with a pending-cell result and collects
+collection. Each of its turns has an id of its own, as Codex's do. It emits `turn/completed` with a pending-cell result and collects
 that same call on the runner's continuation. Before the initial fix,
 `cargo test -p orchester-runner --features test-agent --test codex_tool_wait codex_tool_wait_approval`
 failed because the waiting approval had vanished. With the corrected fake but
@@ -567,11 +586,15 @@ before the review correction, the filtered
 `codex_tool_wait_result_returned_before_turn_completion_is_collected` test
 failed waiting for success: the provisional question had become the step result.
 
-The nine tool-wait tests check approval and denial three seconds after turn
+The thirteen tool-wait tests check approval and denial three seconds after turn
 completion, fast approval and denial with the MCP item completed before the
 model turn ends, a late turn-start acknowledgement, and four stop paths. They
 assert a single attempt and invocation, actual search output or denial, and
-stale-answer refusal. The synchronous relay test also asserts one continuation
+stale-answer refusal. The bounds have tests of their own: a call Codex never
+completes is continued once, an abandoned call that never reached the relay is
+not continued, and a failed turn whose call already returned is not continued
+(each counting the `turn/start` requests); a command approval the yielded cell
+asks for its ended turn reaches a person and the step succeeds. The synchronous relay test also asserts one continuation
 and no repeated tool calls. There is no signed-in Codex model probe or historical
 project database read; the historical sequence above was supplied with ORC-22.
 

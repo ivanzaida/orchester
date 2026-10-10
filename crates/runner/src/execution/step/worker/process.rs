@@ -276,17 +276,16 @@ impl Worker {
         Ok(())
       }
       Update::InputTaken(text) => self.input_taken(watch, &text, None),
-      Update::TurnEnded { input_kept } => {
+      Update::TurnEnded { input_kept, completed } => {
         if input_kept {
           self.kept_at_turn_end(watch)?;
         }
-        if self.tool_relay.as_ref().is_some_and(Listening::busy)
-          || self
-            .app_server()
-            .is_some_and(AppServerSession::has_orchester_results_to_collect)
-          || matches!(&watch.approval, Some((_, Awaiting::Tool { .. })))
-        {
+        // A failed turn (a usage limit, for one) or an interrupted one ends the step, whatever its tools still do.
+        if completed && self.tools_outlive_turn(watch) {
           watch.tools_after_turn = true;
+          if let Some(app) = self.app_server_mut() {
+            app.tools_outlived_turn();
+          }
           self.continue_after_tools(watch).await?;
         } else {
           self.driver.end();
@@ -296,9 +295,25 @@ impl Worker {
     }
   }
 
-  /// Collects a yielded call in the same Codex thread once the relay has returned it.
+  /// Whether Orchester's tools outlive the Codex turn that ended: a call still runs or waits for a person, or one
+  /// returned since Codex was last continued and its result may not be collected yet. Calls Codex still shows open
+  /// are not enough on their own: it may never complete one it abandoned, and each continuation is a model turn.
+  fn tools_outlive_turn(&self, watch: &Watch) -> bool {
+    let Some(relay) = self.tool_relay.as_ref() else {
+      return false;
+    };
+    relay.busy()
+      || matches!(&watch.approval, Some((_, Awaiting::Tool { .. })))
+      || (relay.returns() > watch.returns_continued
+        && self
+          .app_server()
+          .is_some_and(AppServerSession::has_orchester_results_to_collect))
+  }
+
+  /// Collects a yielded call in the same Codex thread once the relay has returned it. A decision a yielded cell asks
+  /// of Codex meanwhile (a command) does not hold the continuation back: the cell waits for its answer either way.
   async fn continue_after_tools(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
-    if !watch.tools_after_turn || watch.approval.is_some() || self.tool_relay.as_ref().is_some_and(Listening::busy) {
+    if !watch.tools_after_turn || self.tool_relay.as_ref().is_some_and(Listening::busy) {
       return Ok(());
     }
     watch.tools_after_turn = false;
@@ -307,6 +322,7 @@ impl Worker {
       self.driver.end();
       return Ok(());
     }
+    watch.returns_continued = self.tool_relay.as_ref().map_or(0, Listening::returns);
     if let Driver::Process {
       transport: Transport::AppServer(app),
       process,

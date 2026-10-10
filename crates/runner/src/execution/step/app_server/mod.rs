@@ -119,6 +119,9 @@ pub(super) struct AppServerSession {
   turn_replies: BTreeSet<u64>,
   /// MCP completion does not prove that the model collected a yielded approval result.
   approval_results_to_collect: bool,
+  /// Turns that ended while Orchester's tools still worked for them: a yielded code-mode cell of one goes on after
+  /// its turn and may still ask a decision ([`Self::tools_outlived_turn`]).
+  yielded_turns: BTreeSet<String>,
   stream: AppServerStream,
   /// The configured MCP servers the step does not choose, turned off for its thread.
   turned_off: Vec<String>,
@@ -139,6 +142,7 @@ impl AppServerSession {
       turn_request: 5,
       turn_replies: BTreeSet::new(),
       approval_results_to_collect: false,
+      yielded_turns: BTreeSet::new(),
       stream: AppServerStream::with_exemptions(setup.exemptions.clone()),
       setup,
     }
@@ -204,6 +208,11 @@ impl AppServerSession {
     self.approval_results_to_collect || self.stream.has_active_orchester_tools()
   }
 
+  /// The turn that ended left Orchester's tools working: its cells' requests stay part of the step.
+  pub fn tools_outlived_turn(&mut self) {
+    self.yielded_turns.extend(self.turn.clone());
+  }
+
   pub fn has_active_tools(&self) -> bool {
     self.stream.has_active_tools()
   }
@@ -258,9 +267,9 @@ impl AppServerSession {
     self.response(&value, process).await
   }
 
-  /// Fails the step on a decision Codex asks outside the active turn, or about a command this step
-  /// never leaves to a person. An MCP approval in a step that does not ask before MCP actions is
-  /// declined at once, without a person, and the declined call is recorded: Codex 0.159.2 asks it even
+  /// Fails the step on a decision Codex asks outside the active turn (or a turn whose yielded cells still work), or
+  /// about a command this step never leaves to a person. An MCP approval in a step that does not ask before MCP actions
+  /// is declined at once, without a person, and the declined call is recorded: Codex 0.159.2 asks it even
   /// with `mcp_elicitations` off.
   fn screen(&self, updates: Vec<Update>) -> Result<Vec<Update>, AppServerFailure> {
     let mut screened = Vec::with_capacity(updates.len());
@@ -278,9 +287,13 @@ impl AppServerSession {
         screened.push(update);
         continue;
       };
-      let active = matches!(self.phase, Phase::Turn | Phase::Working)
-        && self.thread.as_deref() == Some(request.thread.as_str())
-        && self.turn.as_deref() == request.turn.as_deref();
+      let running =
+        matches!(self.phase, Phase::Turn | Phase::Working) && self.turn.as_deref() == request.turn.as_deref();
+      let yielded = request
+        .turn
+        .as_ref()
+        .is_some_and(|turn| self.yielded_turns.contains(turn));
+      let active = self.thread.as_deref() == Some(request.thread.as_str()) && (running || yielded);
       if !active || (request.is_command() && !self.setup.command_approvals && !self.setup.sandbox_approvals) {
         return Err(
           "Codex App Server requested a tool decision outside the active turn"

@@ -45,7 +45,7 @@ use std::{fs::OpenOptions, io::Write, path::Path, process::ExitCode, thread, tim
 
 use serde_json::json;
 
-use super::{HELPER, Session, Step, TURN, complete, emit, fake_app_server, fake_codex_tools, notify};
+use super::{HELPER, Session, Step, complete, emit, fake_app_server, fake_codex_tools, notify};
 
 /// The account's limits App Server reports during a turn.
 const LIMITS: &str = include_str!("../../../core/tests/fixtures/codex/plan-limits.jsonl");
@@ -98,11 +98,8 @@ const ANSWERS: [(&str, SteerAnswer); 6] = [
 ];
 
 pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
-  if prompt.starts_with(super::fake_codex_cell::CONTINUE) {
-    return super::fake_codex_cell::collect(session);
-  }
-  if prompt.contains(super::fake_codex_cell::TRIGGER) {
-    return super::fake_codex_cell::start(session, prompt, structured);
+  if let Some(step) = super::fake_codex_cell::work(session, prompt, structured) {
+    return step;
   }
   let worktree = session.cwd.clone();
   let answer = ANSWERS
@@ -204,7 +201,7 @@ pub fn steered(session: &mut Session, id: &serde_json::Value, params: &serde_jso
       notify(
         session,
         "turn/completed",
-        json!({"turn": {"id": TURN, "status": "interrupted"}}),
+        json!({"turn": {"id": session.turn, "status": "interrupted"}}),
       );
       return Step::Go;
     }

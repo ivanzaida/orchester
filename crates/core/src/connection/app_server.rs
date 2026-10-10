@@ -150,9 +150,11 @@ pub enum Update {
   /// The running turn took a person's message: a `userMessage` item with this text completed.
   InputTaken(String),
   /// The turn ended; `input_kept`: Codex kept in the thread any `turn/steer` input it had accepted but
-  /// not given the model yet, as it does unless the turn was interrupted.
+  /// not given the model yet, as it does unless the turn was interrupted; `completed`: the turn neither failed
+  /// nor was interrupted.
   TurnEnded {
     input_kept: bool,
+    completed: bool,
   },
 }
 
@@ -468,7 +470,10 @@ impl AppServerStream {
       updates.push(Update::Activity(AgentEvent::TurnFailed { message }));
     }
     let input_kept = status != Some("interrupted");
-    updates.push(Update::TurnEnded { input_kept });
+    updates.push(Update::TurnEnded {
+      input_kept,
+      completed: status == Some("completed"),
+    });
     updates
   }
 }

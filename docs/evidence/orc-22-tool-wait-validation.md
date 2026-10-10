@@ -202,3 +202,17 @@ continuation start, the MCP completion-before-turn-completion synchronization,
 the single invocation/attempt, and the synchronous case's lack of repeated
 tool calls. Earlier test/gate results above are historical; this section covers
 the changed inputs.
+
+## Second review correction
+
+2026-10-11. A further review found that continuations were unbounded (an MCP item Codex never completes, or a
+failed turn, started turn after turn) and that a decision a yielded cell asks after its turn ended failed the step as
+outside the active turn. The correction continues a completed turn only while a relay call runs or waits, or when one
+returned since the last continuation; never continues a failed or interrupted turn; and accepts requests for turns
+that ended with Orchester's tools at work (`docs/interactive-tool-approvals.md`, ORC-22 section). Four new
+`codex_tool_wait` tests (a call never completed, an abandoned call, a failed turn, a command the yielded cell asks)
+failed with the production changes reverted and pass with them. Fresh filtered runs: `codex_tool_wait` (13),
+`orchester_tools` (6), `codex_relay` (5), `claude_approvals` (11), `approval_shutdown` (3), `questions` (2),
+`codex_escalations` (4), `command_approvals` (4), `send_now` (7), `send_now_delivery` (4), `retries` (4),
+`approval_choices` (11), `auto_mode` (10), `orchester_file_tools` (4), `codex_resume` (2), and
+`orchester-core --test app_server` (13). Earlier sections are historical for these inputs.

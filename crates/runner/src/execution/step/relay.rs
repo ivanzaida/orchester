@@ -139,6 +139,11 @@ impl Listening {
     self.calls.busy()
   }
 
+  /// How many calls of Orchester's tools the relay has returned ([`Calls::returns`]).
+  pub(super) fn returns(&self) -> u64 {
+    self.calls.returns()
+  }
+
   /// Whether the relay reached the runner.
   pub(super) fn reached(&self) -> bool {
     self.taken() > 0

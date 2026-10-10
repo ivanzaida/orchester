@@ -212,7 +212,10 @@ fn unknown_server_request_fails_closed_and_turn_usage_is_counted_once() {
           output: 35
         }
       }),
-      Update::TurnEnded { input_kept: true }
+      Update::TurnEnded {
+        input_kept: true,
+        completed: true
+      }
     ]
   ));
 }
@@ -226,7 +229,21 @@ fn an_interrupted_turn_does_not_keep_the_input_it_accepted() {
     let ended = json!({"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","items":[],"status":status}}});
     let updates = stream.parse(&ended.to_string()).expect("turn");
     assert!(
-      matches!(updates.last(), Some(Update::TurnEnded { input_kept }) if *input_kept == kept),
+      matches!(updates.last(), Some(Update::TurnEnded { input_kept, .. }) if *input_kept == kept),
+      "{status}"
+    );
+  }
+}
+
+#[test]
+fn only_a_completed_turn_ends_completed() {
+  // A failed turn (a usage limit, for one) or an interrupted one is not continued.
+  for (status, completed) in [("completed", true), ("failed", false), ("interrupted", false)] {
+    let mut stream = AppServerStream::default();
+    let ended = json!({"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","items":[],"status":status}}});
+    let updates = stream.parse(&ended.to_string()).expect("turn");
+    assert!(
+      matches!(updates.last(), Some(Update::TurnEnded { completed: ended, .. }) if *ended == completed),
       "{status}"
     );
   }

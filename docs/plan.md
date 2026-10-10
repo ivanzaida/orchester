@@ -769,24 +769,24 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 ## Done
 
 ORC-22 · Codex ends its turn while an Orchester tool call waits for the person
-(`orchester/orc-22-run-1`, implemented 2026-10-11, awaiting review).
+(`orchester/orc-22-run-1`, 2026-10-11; review findings fixed).
 
 The runner keeps the process and relay alive across a model turn's completion
 while an Orchester call waits, then collects its result in the same thread,
 invocation and attempt. Pause, cancel, runner loss and shutdown preserve the
-attempt and interrupt the decision without granting it. The fake reproduces the
-pre-fix failure; nine tests cover delayed approval/denial, fast approval and denial
-with MCP item completion preceding turn completion, late turn-start replies and
-stops. Review's ordering finding is reproduced and corrected: approval results
-remain eligible for collection after their MCP item completes. A synchronous
-approved result receives one continuation without repeating tools. Claude's
-existing approval tests pass.
-Cause: `docs/interactive-tool-approvals.md`, ORC-22 section.
+attempt and interrupt the decision without granting it. Approval results remain
+eligible for collection after their MCP item completes; a synchronous approved
+result receives one continuation without repeating tools. Continuations are
+bounded: one needs a relay call returned since the last, so a call Codex never
+completes cannot start turn after turn, and a failed or interrupted turn is never
+continued. A decision a yielded cell asks for its ended turn (a command approval)
+reaches a person instead of failing the step. Thirteen `codex_tool_wait` tests
+cover delayed and fast approval and denial, late turn-start replies, stops, the
+continuation bounds and the yielded cell's command; Claude's approval tests pass.
+Cause and design: `docs/interactive-tool-approvals.md`, ORC-22 section; earlier
+validation: `docs/evidence/orc-22-tool-wait-validation.md`.
 The person approved a separate small `tools/check.ps1` change to check formatting
-per workspace package, avoiding Windows error 206 in long run worktree paths;
-that earlier change is retained unchanged in the review correction.
-Validation: 55 fresh filtered tests pass and `powershell -File tools/check.ps1` passes;
-commands, input revisions and limitations: `docs/evidence/orc-22-tool-wait-validation.md`.
+per workspace package, avoiding Windows error 206 in long run worktree paths.
 No signed-in live agent run or UI change; the runner's macOS cross-check remains
 blocked by the environment's missing C compiler.
 

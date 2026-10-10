@@ -4,8 +4,9 @@ mod support;
 use std::{path::Path, time::Duration};
 
 use orchester_core::{
-  connection::stream::AgentEvent,
+  connection::stream::{AgentEvent, InvocationOutcome},
   id::{IdempotencyKey, RunId},
+  permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
   run::{Answerer, ApprovalAnswer, InterruptCause, PendingToolApproval, RunStatus},
   store::{ActivityStore, RunStore},
 };
@@ -29,7 +30,11 @@ impl Waiting {
   }
 
   async fn start_with(brief: &'static str) -> Self {
-    let project = project(&Setup::new(brief));
+    Self::begin(&Setup::new(brief)).await
+  }
+
+  async fn begin(setup: &Setup) -> Self {
+    let project = project(setup);
     let root = project.repo.path();
     let folder = root.join("deps-a");
     std::fs::create_dir(&folder).expect("outside folder");
@@ -39,7 +44,7 @@ impl Waiting {
       .start_run(IdempotencyKey::generate(), project.task)
       .await
       .expect("start");
-    let request = pending(root, &mut events, id).await;
+    let request = pending(root, &mut events, id, |_| true).await;
     Self {
       project,
       runner,
@@ -50,16 +55,22 @@ impl Waiting {
   }
 }
 
-async fn pending(root: &Path, events: &mut mpsc::UnboundedReceiver<Event>, id: RunId) -> PendingToolApproval {
+async fn pending(
+  root: &Path,
+  events: &mut mpsc::UnboundedReceiver<Event>,
+  id: RunId,
+  wanted: impl Fn(&PendingToolApproval) -> bool,
+) -> PendingToolApproval {
   tokio::time::timeout(PATIENCE, async {
     loop {
       if let Some(request) = ProjectDb::open(root)
         .expect("open")
         .pending_tool_approvals(id)
         .expect("pending")
-        .first()
+        .into_iter()
+        .find(|request| wanted(request))
       {
-        return request.clone();
+        return request;
       }
       events.recv().await.expect("notification");
     }
@@ -297,4 +308,130 @@ async fn codex_tool_wait_runner_stop_does_not_fail_the_attempt() {
 #[tokio::test(flavor = "multi_thread")]
 async fn codex_tool_wait_shutdown_does_not_fail_the_attempt() {
   interrupted_decision(StopWaiting::Shutdown).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn codex_tool_wait_a_call_codex_never_completes_is_continued_once() {
+  // The continuation collects the cell; the call Codex still shows open earns no further turn.
+  delayed_decision(ApprovalAnswer::Once, "Yield outside read. Never complete the call.").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn codex_tool_wait_an_abandoned_call_that_never_returned_is_not_continued() {
+  let project = project(&Setup::new("Abandon an Orchester call."));
+  let root = project.repo.path();
+  let (runner, mut events) = scheduler_with(root, project.vault.clone());
+  let id = runner
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("start");
+  let done = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(done.status(), &RunStatus::Succeeded);
+  assert_eq!(done.attempts().len(), 1);
+  let db = ProjectDb::open(root).expect("open");
+  assert_eq!(db.invocations(id).expect("invocations").len(), 1);
+  assert_eq!(reported(&db, id, "turn-request: "), ["5"]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn codex_tool_wait_a_failed_turn_is_not_continued() {
+  let Waiting {
+    project,
+    runner,
+    mut events,
+    id,
+    request,
+  } = Waiting::start_with("Yield outside read. Fail the turn.").await;
+  let root = project.repo.path();
+  runner
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
+    .await
+    .expect("decide");
+  let db = ProjectDb::open(root).expect("open");
+  // The call returned before the turn failed: a completed turn would be continued to collect it.
+  tokio::time::timeout(PATIENCE, async {
+    while reported(&db, id, "cell-returned: ").is_empty() {
+      events.recv().await.expect("notification");
+    }
+  })
+  .await
+  .expect("the relay returns the call");
+  ended_turn(root, id).await;
+  let first = tokio::time::timeout(PATIENCE, async {
+    loop {
+      if let Some(ended) = db
+        .invocations(id)
+        .expect("invocations")
+        .into_iter()
+        .next()
+        .filter(|invocation| invocation.ended_at.is_some())
+      {
+        return ended;
+      }
+      events.recv().await.expect("notification");
+    }
+  })
+  .await
+  .expect("the failed turn ends its invocation");
+  assert!(
+    matches!(&first.outcome, Some(InvocationOutcome::TurnFailed { message }) if message.contains("usage limit")),
+    "{:?}",
+    first.outcome
+  );
+  let turn_requests: Vec<_> = db
+    .activity(id, 0)
+    .expect("activity")
+    .into_iter()
+    .filter(|entry| entry.invocation == first.id)
+    .filter_map(|entry| match entry.event {
+      AgentEvent::Raw { line, .. } => line.strip_prefix("turn-request: ").map(str::to_owned),
+      _ => None,
+    })
+    .collect();
+  assert_eq!(turn_requests, ["5"], "no continuation after a failed turn");
+  assert!(reported(&db, id, "cell: ").is_empty());
+  runner.stop_all(InterruptCause::RunnerLost).await;
+  wait_for_idle(&runner).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn codex_tool_wait_a_command_the_yielded_cell_asks_reaches_a_person() {
+  let setup = Setup {
+    permissions: Some(AgentPermissions::new(
+      RepositoryAccess::Write,
+      CommandPermission::AnyInWorktree,
+      NetworkAccess::Off,
+    )),
+    ..Setup::new("Yield outside read. Ask a command after.")
+  };
+  let Waiting {
+    project,
+    runner,
+    mut events,
+    id,
+    request,
+  } = Waiting::begin(&setup).await;
+  let root = project.repo.path();
+  ended_turn(root, id).await;
+  runner
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
+    .await
+    .expect("decide the call");
+  // Asked for the turn that started the cell, which ended before.
+  let command = pending(root, &mut events, id, |request| request.command).await;
+  assert_eq!(command.action, "cell-command");
+  runner
+    .decide_tool_approval(id, command.id, ApprovalAnswer::Once, Answerer::Person)
+    .await
+    .expect("decide the command");
+  let done = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(done.status(), &RunStatus::Succeeded);
+  assert_eq!(done.attempts().len(), 1);
+  let db = ProjectDb::open(root).expect("open");
+  assert_eq!(db.invocations(id).expect("invocations").len(), 1);
+  assert_eq!(reported(&db, id, "turn-request: "), ["5", "7"]);
+  assert_eq!(reported(&db, id, "cell command: "), ["accept"]);
+  let results = reported(&db, id, "cell: ");
+  assert_eq!(results.len(), 1);
+  assert!(results[0].starts_with("approved: "), "{results:?}");
 }
