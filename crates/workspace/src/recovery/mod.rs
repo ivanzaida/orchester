@@ -6,7 +6,10 @@
 //! waiting, and the answer or the decision resumes its agent's session. Runs interrupted
 //! earlier, e.g. ones not continued at an earlier start, are not this end's and are not listed.
 //! Nothing continues on its own; the user continues all of them or none.
-//! Blocks on SQLite and git; the UI calls it off the UI thread.
+//! Blocks on SQLite and git; the UI calls it off the UI thread. [`Recovery`] reads them once for the
+//! session and keeps what the person decided.
+
+mod session;
 
 use std::{
   path::{Path, PathBuf},
@@ -25,6 +28,7 @@ use orchester_exec::programs::Programs;
 use orchester_ipc::SessionEnd;
 use orchester_store::{ProjectDb, RunStoreError, StoreError};
 
+pub use self::session::{Continuation, Decision, NotContinued, Reading, Recovery, RecoveryState};
 use crate::{
   display,
   tasks::{

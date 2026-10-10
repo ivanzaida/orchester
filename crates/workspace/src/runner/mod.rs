@@ -31,7 +31,7 @@ use std::{
 use orchester_core::id::RunId;
 use orchester_ipc::{AttachSession, RefusedRun, Rejection, SessionEnd, WorkState};
 use parking_lot::Mutex;
-use tokio::{runtime::Handle, sync::watch};
+use tokio::{runtime::Handle, sync::watch, task::JoinSet};
 
 use self::{
   connection::Connection,
@@ -134,6 +134,7 @@ impl Runners {
           runs: watch::Sender::new(0),
           limits: watch::Sender::new(Default::default()),
           counters: Mutex::new(HashMap::new()),
+          last_events: Mutex::new(HashMap::new()),
           activity,
         }),
         projects: Mutex::new(HashMap::new()),
@@ -352,6 +353,12 @@ impl Runners {
       .collect()
   }
 
+  /// When a runner last reported an event of `run` (its agent's activity or a change of the run) in
+  /// this session; `None` before the first one.
+  pub fn last_event(&self, run: RunId) -> Option<SystemTime> {
+    self.inner.shared.last_events.lock().get(&run).copied()
+  }
+
   /// Where `run` stands while the application closes after "Wait for agents to save", from its
   /// runner's latest report; `None` when no runner reported it.
   pub fn save_state(&self, run: RunId) -> Option<SaveState> {
@@ -376,13 +383,15 @@ impl Runners {
       .values_mut()
       .filter_map(|entry| entry.connection.take())
       .collect();
-    let stopping: Vec<_> = connections
-      .into_iter()
-      .map(|connection| self.inner.runtime.spawn(connection.stop(deadline)))
-      .collect();
+    // Dropping the set, when this future is dropped (Quit now while agents save), ends every stop
+    // under way and with it the runners and their agents.
+    let mut stopping = JoinSet::new();
+    for connection in connections {
+      stopping.spawn_on(connection.stop(deadline), &self.inner.runtime);
+    }
     let mut outcome = ShutdownOutcome::NoRunner;
-    for stop in stopping {
-      let stopped = stop.await.unwrap_or_else(|error| {
+    while let Some(stopped) = stopping.join_next().await {
+      let stopped = stopped.unwrap_or_else(|error| {
         tracing::error!(%error, "stopping a runner failed");
         ShutdownOutcome::Unanswered
       });
