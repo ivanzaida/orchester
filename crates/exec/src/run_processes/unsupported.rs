@@ -23,6 +23,12 @@ impl Process {
   pub(super) fn open(_entry: Entry, _stopping: bool) -> io::Result<Option<Self>> {
     Err(unavailable())
   }
+  pub(super) fn is_parent_of(&self, _entry: Entry) -> bool {
+    false
+  }
+  pub(super) fn is_process(&self, entry: Entry) -> bool {
+    entry.pid == self.info.pid
+  }
   pub(super) fn alive(&self) -> io::Result<bool> {
     Err(unavailable())
   }

@@ -1,11 +1,12 @@
 #![allow(unsafe_code)]
-//! libproc has no safe wrapper in std or rustix. Its typed records supply executable paths and microsecond
-//! creation times; each signal rechecks both. Signals use rustix's safe kill wrapper.
-//! ABI: https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/proc_info.h
+//! libproc PID enumeration has no safe wrapper. Executable lookup and signals are bound to an audit token,
+//! so neither PID reuse nor exec between validation and signalling can redirect a stop to another executable.
 
-use std::{ffi::OsString, io, mem, os::unix::ffi::OsStringExt, path::PathBuf};
+mod identity;
 
-use rustix::process::{Pid, Signal, kill_process};
+use std::{io, mem};
+
+use identity::{AuditToken, read};
 
 use super::{Entry, Info};
 
@@ -27,10 +28,12 @@ pub(super) fn snapshot() -> io::Result<Vec<Entry>> {
     }
     let mut result = Vec::new();
     for pid in pids.into_iter().take(count as usize).filter(|pid| *pid > 0) {
-      match bsd_info(pid as u32) {
+      match read(pid as u32) {
         Ok(Some(info)) => result.push(Entry {
-          pid: info.pbi_pid,
-          parent: info.pbi_ppid,
+          pid: info.bsd.pbi_pid,
+          parent: info.bsd.pbi_ppid,
+          unique_id: info.unique.unique_id,
+          parent_unique_id: info.unique.parent_unique_id,
         }),
         Ok(None) => {}
         // Other users' protected processes are not inspectable; they can never pass the executable rule.
@@ -44,109 +47,94 @@ pub(super) fn snapshot() -> io::Result<Vec<Entry>> {
 
 pub(super) struct Process {
   pub(super) info: Info,
+  unique_id: u64,
+  token: AuditToken,
 }
 
 impl Process {
   pub(super) fn open(entry: Entry, _stopping: bool) -> io::Result<Option<Self>> {
-    let Some(bsd) = bsd_info(entry.pid)? else {
+    let Some(current) = read(entry.pid)? else {
       return Ok(None);
     };
-    if bsd.pbi_status == 5 {
+    if current.exited() || (entry.unique_id != 0 && entry.unique_id != current.unique.unique_id) {
       return Ok(None);
     }
-    let path = image(entry.pid)?;
-    // A PID reused between the path and BSD queries must not combine identities.
-    let Some(after) = bsd_info(entry.pid)? else {
-      return Ok(None);
+    let token = current.token();
+    let path = match token.image() {
+      Ok(Some(path)) => path,
+      result => {
+        // Distinguish exit from exec: only disappearance is "already gone".
+        let Some(after) = read(entry.pid)? else {
+          return Ok(None);
+        };
+        if after.exited() || after.unique.unique_id != current.unique.unique_id {
+          return Ok(None);
+        }
+        return Err(result.err().unwrap_or_else(|| {
+          io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "cannot verify executable identity; refused",
+          )
+        }));
+      }
     };
-    if (bsd.pbi_start_tvsec, bsd.pbi_start_tvusec) != (after.pbi_start_tvsec, after.pbi_start_tvusec) {
-      return Ok(None);
-    }
     Ok(Some(Self {
       info: Info {
         pid: entry.pid,
         path,
-        started: bsd.pbi_start_tvsec * 1_000_000 + bsd.pbi_start_tvusec,
+        started: current.bsd.pbi_start_tvsec * 1_000_000 + current.bsd.pbi_start_tvusec,
       },
+      unique_id: current.unique.unique_id,
+      token,
     }))
   }
 
+  pub(super) fn is_parent_of(&self, entry: Entry) -> bool {
+    // Birth ancestry survives reparenting to launchd when a close handler exits.
+    entry.parent_unique_id == self.unique_id
+  }
+
+  pub(super) fn is_process(&self, entry: Entry) -> bool {
+    entry.unique_id == self.unique_id
+  }
+
   pub(super) fn alive(&self) -> io::Result<bool> {
-    let entry = Entry {
-      pid: self.info.pid,
-      parent: 0,
-    };
-    let Some(current) = Self::open(entry, false)? else {
+    let Some(current) = read(self.info.pid)? else {
       return Ok(false);
     };
-    if current.info.started != self.info.started {
+    if current.exited() || current.unique.unique_id != self.unique_id {
       return Ok(false);
     }
-    if current.info.path != self.info.path {
-      return Err(io::Error::new(
+    // Exec changes pidversion even for the same executable; do not refresh the grant to signal it.
+    if current.token() == self.token {
+      Ok(true)
+    } else {
+      Err(io::Error::new(
         io::ErrorKind::PermissionDenied,
-        "process changed its executable; refused",
-      ));
+        "process changed its executable identity; refused",
+      ))
     }
-    Ok(true)
   }
 
   pub(super) fn close(&self) -> io::Result<()> {
-    self.signal(Signal::TERM)
+    self.signal(libc::SIGTERM)
   }
 
   pub(super) fn end(&self) -> io::Result<()> {
-    self.signal(Signal::KILL)
+    self.signal(libc::SIGKILL)
   }
 
-  fn signal(&self, signal: Signal) -> io::Result<()> {
-    if !self.alive()? {
-      return Ok(());
+  fn signal(&self, signal: i32) -> io::Result<()> {
+    match self.token.signal(signal) {
+      Ok(()) => Ok(()),
+      Err(error) if error.raw_os_error() == Some(libc::ESRCH) => {
+        if self.alive()? {
+          Err(error)
+        } else {
+          Ok(())
+        }
+      }
+      Err(error) => Err(error),
     }
-    let pid = i32::try_from(self.info.pid)
-      .ok()
-      .and_then(Pid::from_raw)
-      .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "invalid process id"))?;
-    match kill_process(pid, signal) {
-      Ok(()) | Err(rustix::io::Errno::SRCH) => Ok(()),
-      Err(error) => Err(error.into()),
-    }
   }
-}
-
-fn bsd_info(pid: u32) -> io::Result<Option<libc::proc_bsdinfo>> {
-  let pid = i32::try_from(pid).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid process id"))?;
-  // SAFETY: proc_bsdinfo is a C record with integer fields and byte arrays, all valid zeroed.
-  let mut info: libc::proc_bsdinfo = unsafe { mem::zeroed() };
-  let size = mem::size_of::<libc::proc_bsdinfo>() as i32;
-  // SAFETY: the record has exactly the documented PROC_PIDTBSDINFO buffer size and alignment.
-  let read = unsafe {
-    libc::proc_pidinfo(
-      pid,
-      libc::PROC_PIDTBSDINFO,
-      0,
-      (&mut info as *mut libc::proc_bsdinfo).cast(),
-      size,
-    )
-  };
-  if read == size {
-    return Ok(Some(info));
-  }
-  let error = io::Error::last_os_error();
-  if error.raw_os_error() == Some(libc::ESRCH) {
-    Ok(None)
-  } else {
-    Err(error)
-  }
-}
-
-fn image(pid: u32) -> io::Result<PathBuf> {
-  let mut bytes = vec![0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
-  // SAFETY: BSD lookup checked that PID fits i32; the buffer has the required maximum byte capacity.
-  let read = unsafe { libc::proc_pidpath(pid as i32, bytes.as_mut_ptr().cast(), bytes.len() as u32) };
-  if read <= 0 {
-    return Err(io::Error::last_os_error());
-  }
-  bytes.truncate(bytes.iter().position(|byte| *byte == 0).unwrap_or(bytes.len()));
-  Ok(PathBuf::from(OsString::from_vec(bytes)))
 }

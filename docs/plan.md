@@ -780,6 +780,10 @@ and linted for `aarch64-apple-darwin`, with runtime QA on a Mac outstanding. No 
 The person separately approved the small `tools/check.ps1` change: check formatting per workspace manifest with
 the same nightly flags to avoid Windows's command-length limit. Full gate result and each test command are recorded
 in `.tmp/orc21/verification.md`.
+Review corrections retain exited parents during child discovery, rescan after termination, and use macOS audit
+tokens to bind executable lookup and signals to an exec generation. Exit races are treated as disappearance.
+Regression tests cover children born during close, listing churn and macOS stale tokens/exits; the latter are
+cross-checked here and need runtime QA on a Mac. Fresh correction evidence is in `.tmp/orc21/review-fixes.md`.
 
 New app, first working set (merged 2026-10-09/10 into master; each reviewed, QA'd live and design-verified by
 separate agents): T1 Tasks list (`claude/app-tasks`), F2 shell live data (`claude/app-shell`), P1 task page and Summary

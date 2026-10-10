@@ -1,5 +1,11 @@
 //! Starts copies of this test binary as sleepers; all scratch and all processes belong to this test.
 
+#[cfg(target_os = "macos")]
+#[path = "../src/run_processes/macos/identity.rs"]
+mod identity;
+#[cfg(target_os = "macos")]
+#[path = "support/process_term.rs"]
+mod process_term;
 #[cfg(windows)]
 #[path = "support/process_window.rs"]
 mod process_window;
@@ -32,6 +38,11 @@ impl Sleeper {
     }
     if window {
       command.env("ORCHESTER_PROCESS_WINDOW", "1");
+      if let Some(program) = child_program {
+        command
+          .env_remove("ORCHESTER_PROCESS_CHILD")
+          .env("ORCHESTER_PROCESS_LATE_CHILD", program);
+      }
     }
     command
       .args(["--exact", "run_processes_stand_in", "--ignored"])
@@ -83,31 +94,33 @@ fn run_processes_stand_in() {
   );
   #[cfg(windows)]
   if std::env::var_os("ORCHESTER_PROCESS_WINDOW").is_some() {
-    process_window::wait_for_close().expect("window");
+    process_window::wait_for_close(close_action).expect("window");
     return;
   }
-  let child = std::env::var_os("ORCHESTER_PROCESS_CHILD").map(|program| {
-    let child_ready = PathBuf::from(&program).with_extension("child-ready");
-    let mut command = Command::new(program);
-    command.env("ORCHESTER_PROCESS_READY", &child_ready);
-    command
-      .args(["--exact", "run_processes_stand_in", "--ignored"])
-      .env_remove("ORCHESTER_PROCESS_CHILD")
-      .stdout(Stdio::null())
-      .stderr(Stdio::null());
-    #[cfg(windows)]
-    {
-      use std::os::windows::process::CommandExt;
-      command.creation_flags(0x0000_0008);
-    }
-    let child = command.spawn().expect("child");
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
-    while !child_ready.exists() {
-      assert!(std::time::Instant::now() < deadline, "child did not start");
-      std::thread::sleep(Duration::from_millis(10));
-    }
-    child
-  });
+  #[cfg(target_os = "macos")]
+  if std::env::var_os("ORCHESTER_PROCESS_WINDOW").is_some() {
+    process_term::wait_for_close(close_action).expect("term");
+    return;
+  }
+  #[cfg(target_os = "macos")]
+  if let Some(program) = std::env::var_os("ORCHESTER_PROCESS_EXEC") {
+    use std::os::unix::process::CommandExt;
+    let ready = std::env::var_os("ORCHESTER_PROCESS_READY").expect("ready path");
+    fs::write(&ready, "ready").expect("ready");
+    wait_for_file(&PathBuf::from(&program).with_extension("go"));
+    panic!(
+      "exec failed: {}",
+      Command::new(program)
+        .args(["--exact", "run_processes_stand_in", "--ignored"])
+        .env_remove("ORCHESTER_PROCESS_EXEC")
+        .env(
+          "ORCHESTER_PROCESS_READY",
+          PathBuf::from(ready).with_extension("after-exec")
+        )
+        .exec()
+    );
+  }
+  let child = std::env::var_os("ORCHESTER_PROCESS_CHILD").map(|program| spawn_child(program, true));
   fs::write(
     std::env::var_os("ORCHESTER_PROCESS_READY").expect("ready path"),
     child
@@ -116,6 +129,54 @@ fn run_processes_stand_in() {
   )
   .expect("ready");
   std::thread::sleep(Duration::from_secs(60));
+}
+
+fn close_action() -> std::io::Result<()> {
+  if let Some(program) = std::env::var_os("ORCHESTER_PROCESS_LATE_CHILD") {
+    let child = spawn_child(program, false);
+    fs::write(
+      PathBuf::from(std::env::var_os("ORCHESTER_PROCESS_READY").expect("ready")).with_extension("late-pid"),
+      child.id().to_string(),
+    )?;
+    // Exit immediately after spawning: the executor must discover the child via an exited parent.
+    std::process::exit(0);
+  }
+  Ok(())
+}
+
+fn spawn_child(program: std::ffi::OsString, wait: bool) -> Child {
+  let child_ready = PathBuf::from(&program).with_extension("child-ready");
+  let mut command = Command::new(program);
+  command
+    .args(["--exact", "run_processes_stand_in", "--ignored"])
+    .env("ORCHESTER_PROCESS_READY", &child_ready)
+    .env_remove("ORCHESTER_PROCESS_CHILD")
+    .env_remove("ORCHESTER_PROCESS_LATE_CHILD")
+    .env_remove("ORCHESTER_PROCESS_WINDOW")
+    .stdout(Stdio::null())
+    .stderr(Stdio::null());
+  #[cfg(windows)]
+  {
+    use std::os::windows::process::CommandExt;
+    command.creation_flags(0x0000_0008);
+  }
+  let child = command.spawn().expect("child");
+  if wait {
+    wait_for_file(&child_ready);
+  }
+  child
+}
+
+fn wait_for_file(path: &Path) {
+  let deadline = std::time::Instant::now() + Duration::from_secs(10);
+  while !path.exists() {
+    assert!(
+      std::time::Instant::now() < deadline,
+      "stand-in did not become ready: {}",
+      path.display()
+    );
+    std::thread::sleep(Duration::from_millis(10));
+  }
 }
 
 fn folder() -> tempfile::TempDir {
@@ -191,9 +252,9 @@ fn run_processes_stops_only_inside_and_reports_already_gone() {
   );
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 #[test]
-fn run_processes_requests_window_close_before_ending() {
+fn run_processes_requests_close_before_ending() {
   let folder = folder();
   let program = copy(folder.path(), "window-app");
   let mut own = Sleeper::configured(&program, true, None);
@@ -245,6 +306,127 @@ fn run_processes_refuses_the_executor_process_even_inside_its_scope() {
   });
   assert!(
     result.is_error() && result.text().contains("protected"),
+    "{}",
+    result.text()
+  );
+}
+#[test]
+fn run_processes_stops_a_child_spawned_during_close_after_parent_exits() {
+  let folder = folder();
+  let parent_program = copy(folder.path(), "closing-parent");
+  let child_program = copy(folder.path(), "late-child");
+  let mut parent = Sleeper::configured(&parent_program, true, Some(&child_program));
+  let executor = RunProcesses::new(folder.path()).expect("scope");
+  let result = executor.run(parent.call());
+  let pid_file = parent_program.with_extension("late-pid");
+  wait_for_file(&pid_file);
+  let child_pid: u32 = fs::read_to_string(pid_file).expect("late pid").parse().expect("pid");
+  let remaining = executor.run(ProcessCall::List);
+  // Clean up our own child even if the regression leaves it alive, before asserting.
+  let cleanup = executor.run(ProcessCall::Stop {
+    pid: NonZeroU32::new(child_pid).expect("pid"),
+  });
+  assert!(!cleanup.is_error(), "{}", cleanup.text());
+  assert!(!result.is_error(), "{}", result.text());
+  assert!(
+    result.text().contains(&format!("pid {child_pid}:")),
+    "{}",
+    result.text()
+  );
+  assert!(!remaining.is_error(), "{}", remaining.text());
+  assert_eq!(
+    serde_json::from_str::<Vec<Value>>(remaining.text())
+      .expect("list")
+      .len(),
+    0
+  );
+  assert_eq!(parent.0.wait().expect("parent").code(), Some(0));
+}
+
+#[test]
+fn run_processes_listing_tolerates_processes_exiting_during_inspection() {
+  let folder = folder();
+  let program = copy(folder.path(), "short-lived");
+  let executor = RunProcesses::new(folder.path()).expect("scope");
+  for _ in 0..32 {
+    let mut child = Command::new(&program)
+      .args(["--list"])
+      .stdout(Stdio::null())
+      .stderr(Stdio::null())
+      .spawn()
+      .expect("short-lived child");
+    let listed = executor.run(ProcessCall::List);
+    child.wait().expect("reap");
+    assert!(!listed.is_error(), "{}", listed.text());
+  }
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn run_processes_audit_token_refuses_exec_after_validation() {
+  let folder = folder();
+  let worktree = folder.path().join("run");
+  let other = folder.path().join("other");
+  fs::create_dir(&worktree).expect("run");
+  fs::create_dir(&other).expect("other");
+  let inside = copy(&worktree, "before-exec");
+  let outside = copy(&other, "after-exec");
+  let ready = inside.with_extension("ready");
+  let child = Command::new(&inside)
+    .args(["--exact", "run_processes_stand_in", "--ignored"])
+    .env("ORCHESTER_PROCESS_STAND_IN", "1")
+    .env("ORCHESTER_PROCESS_READY", &ready)
+    .env("ORCHESTER_PROCESS_EXEC", &outside)
+    .stdout(Stdio::null())
+    .stderr(Stdio::null())
+    .spawn()
+    .expect("exec stand-in");
+  let mut child = Sleeper(child);
+  wait_for_file(&ready);
+  let before = identity::read(child.0.id()).expect("identity").expect("live");
+  assert!(!before.exited());
+  let token = before.token();
+  assert_eq!(
+    fs::canonicalize(token.image().expect("image").expect("path")).expect("resolved"),
+    fs::canonicalize(&inside).expect("inside")
+  );
+  fs::write(outside.with_extension("go"), "exec").expect("go");
+  wait_for_file(&ready.with_extension("after-exec"));
+  let after = identity::read(child.0.id()).expect("after").expect("live");
+  assert_eq!(before.unique.unique_id, after.unique.unique_id);
+  assert!(before.token() != after.token(), "exec must advance pidversion");
+  assert!(token.image().expect("stale image").is_none());
+  for signal in [libc::SIGTERM, libc::SIGKILL] {
+    assert_eq!(
+      token.signal(signal).expect_err("stale token").raw_os_error(),
+      Some(libc::ESRCH)
+    );
+    assert!(child.0.try_wait().expect("outside status").is_none());
+  }
+  let refused = RunProcesses::new(&worktree).expect("scope").run(child.call());
+  assert!(
+    refused.is_error() && refused.text().contains("outside"),
+    "{}",
+    refused.text()
+  );
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn run_processes_audit_lookup_treats_exit_between_queries_as_gone() {
+  let folder = folder();
+  let program = copy(folder.path(), "exiting");
+  let mut child = Sleeper::start(&program);
+  let before = identity::read(child.0.id()).expect("BSD identity").expect("live");
+  let token = before.token();
+  // Reproduce exit after identity lookup but before executable lookup, using only our own stand-in.
+  child.0.kill().expect("end owned stand-in");
+  child.0.wait().expect("reap");
+  assert!(token.image().expect("exit is disappearance").is_none());
+  assert!(identity::read(child.0.id()).expect("exited identity").is_none());
+  let result = RunProcesses::new(folder.path()).expect("scope").run(child.call());
+  assert!(
+    !result.is_error() && result.text().contains("already gone"),
     "{}",
     result.text()
   );

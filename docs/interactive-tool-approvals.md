@@ -184,10 +184,12 @@ by `read_external_file` and `search_external_file`.
   close (WM_CLOSE to only its windows on Windows, SIGTERM on macOS), waits up to two seconds, ends survivors
   and waits up to one more second. Its answer reports `closed`, `ended`, `already gone`, or a clear refusal.
   Every descendant must pass the same executable rule; a tree containing an outside or uninspectable child
-  is refused before any close request. Descendants discovered during the grace period are checked too.
-  The runner, its ancestors, the relay and the configured agent CLI executable are protected even inside the
-  worktree. Windows retains process handles; macOS checks executable and microsecond creation time again
-  before each signal. Processes hidden by OS permissions or whose executable cannot be resolved are never
+  is refused before any close request. Descendants discovered during grace and escalation are checked too;
+  exited parents stay tracked, with macOS birth ancestry retained across reparenting. Late children also receive
+  close before force. The runner, its ancestors, the relay and the configured agent CLI executable are protected
+  even inside the worktree. Windows retains process handles; macOS binds path lookup and TERM/KILL to an audit
+  token whose PID version changes on exec. A stale token is refused by the kernel, with no numeric-PID fallback.
+  Processes hidden by OS permissions or whose executable cannot be resolved are never
   listed or stopped. Both tools are offered in writing and read-only steps and never ask for approval:
   Claude Code receives exact allow rules; Codex receives `approval_mode = "approve"`, and the runner enforces
   the executable boundary. Both CLIs' *Files and commands* prompt and continuing-session tool steering tell

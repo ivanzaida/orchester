@@ -104,6 +104,15 @@ impl Process {
     if process.alive()? { Ok(Some(process)) } else { Ok(None) }
   }
 
+  pub(super) fn is_parent_of(&self, entry: Entry) -> bool {
+    // The retained handle prevents reuse of the parent's PID even after it exits.
+    entry.parent == self.info.pid
+  }
+
+  pub(super) fn is_process(&self, entry: Entry) -> bool {
+    entry.pid == self.info.pid
+  }
+
   pub(super) fn alive(&self) -> io::Result<bool> {
     running(&self.handle)
   }

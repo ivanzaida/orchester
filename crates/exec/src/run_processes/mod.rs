@@ -37,6 +37,23 @@ const MAX_TREE: usize = 1024;
 struct Entry {
   pid: u32,
   parent: u32,
+  #[cfg(target_os = "macos")]
+  unique_id: u64,
+  #[cfg(target_os = "macos")]
+  parent_unique_id: u64,
+}
+
+impl Entry {
+  fn pid(pid: u32) -> Self {
+    Self {
+      pid,
+      parent: 0,
+      #[cfg(target_os = "macos")]
+      unique_id: 0,
+      #[cfg(target_os = "macos")]
+      parent_unique_id: 0,
+    }
+  }
 }
 
 struct Info {
@@ -135,11 +152,10 @@ impl RunProcesses {
 
   fn stop(&self, pid: NonZeroU32) -> Result<String, ProcessError> {
     let pid = pid.get();
-    let Some(root) =
-      platform::Process::open(Entry { pid, parent: 0 }, true).map_err(|error| ProcessError::Refused {
-        pid,
-        reason: format!("cannot verify executable: {error}"),
-      })?
+    let Some(root) = platform::Process::open(Entry::pid(pid), true).map_err(|error| ProcessError::Refused {
+      pid,
+      reason: format!("cannot verify executable: {error}"),
+    })?
     else {
       return Ok(format!("pid {pid}: already gone"));
     };
@@ -164,7 +180,7 @@ impl RunProcesses {
       }
       thread::sleep(POLL);
     }
-    let mut report = self.finish_tree(pid, &tree, &protected)?;
+    let mut report = self.finish_tree(pid, &mut tree, &protected, &mut close_errors)?;
     if !close_errors.is_empty() {
       report.push_str(&format!("\n{}", close_errors.join("\n")));
     }
@@ -200,12 +216,12 @@ impl RunProcesses {
     while index < tree.len() {
       let parent = &tree[index];
       let (parent_pid, parent_started) = (parent.info.pid, parent.info.started);
-      if !parent.alive()? {
-        index += 1;
-        continue;
-      }
-      for entry in entries.iter().filter(|entry| entry.parent == parent_pid) {
-        if tree.iter().any(|process| process.info.pid == entry.pid) {
+      // Retain exited parents: a close handler can spawn a child and exit between snapshots.
+      for entry in entries {
+        if !tree[index].is_parent_of(*entry) {
+          continue;
+        }
+        if tree.iter().any(|process| process.is_process(*entry)) {
           continue;
         }
         let Some(child) = platform::Process::open(*entry, true)? else {
@@ -232,31 +248,44 @@ impl RunProcesses {
   fn finish_tree(
     &self,
     pid: u32,
-    tree: &[platform::Process],
+    tree: &mut Vec<platform::Process>,
     protected: &BTreeSet<u32>,
+    close_errors: &mut Vec<String>,
   ) -> Result<String, ProcessError> {
-    let mut reports = Vec::new();
-    for process in tree.iter().rev() {
-      let ended = process.alive()?;
-      if ended {
-        self.validate(process, protected)?;
-        process.end()?;
-      }
-      reports.push(format!(
-        "pid {}: {}",
-        process.info.pid,
-        if ended { "ended" } else { "closed" }
-      ));
-    }
+    let mut ended = vec![false; tree.len()];
     let deadline = Instant::now() + END_WAIT;
-    while !all_gone(tree)? {
+    loop {
+      for (process, ended) in tree.iter().zip(&mut ended).rev() {
+        if !*ended && process.alive()? {
+          self.validate(process, protected)?;
+          process.end()?;
+          *ended = true;
+        }
+      }
+      let gone = all_gone(tree)?;
+      let old_len = tree.len();
+      // Scan after checking exits, so the final snapshot includes children born before those exits.
+      self.discover(tree, &platform::snapshot()?, protected)?;
+      if gone && old_len == tree.len() {
+        return Ok(
+          tree
+            .iter()
+            .zip(ended)
+            .map(|(process, ended)| format!("pid {}: {}", process.info.pid, if ended { "ended" } else { "closed" }))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        );
+      }
+      for process in &tree[old_len..] {
+        self.request_close(process, protected, close_errors)?;
+      }
+      ended.resize(tree.len(), false);
       if Instant::now() >= deadline {
         return Err(ProcessError::StillRunning(pid));
       }
+      // Even a child first seen during escalation gets a close request and a bounded wait.
       thread::sleep(POLL);
     }
-    reports.reverse();
-    Ok(reports.join("\n"))
   }
 }
 
