@@ -2,7 +2,8 @@
 //! "App lifecycle" `Ob1P7` in `data/orchester2.pen`). Orchester has no background mode: a close with no
 //! agent at work stops the runners at once and closes; with agents at work the close is held while the
 //! person chooses to wait for the agents to save, to quit now, or to cancel. A merge or a worktree removal
-//! under way holds the close the same way: closing waits for git, or the person quits with it shown. The
+//! under way holds the close the same way: closing waits for git, or the person quits with it shown. When
+//! the held work ends while the person decides, nothing is left to ask about and the window closes. The
 //! window's close hook, which hands over how to let the window close, and the panel are each app's; what a
 //! close leads to and how the session ends are here.
 
@@ -117,21 +118,55 @@ impl CloseFlow {
       }
       ClosePlan::StopQuietly | ClosePlan::Confirm(_) => {
         self.inner.phase.send_replace(ClosePhase::Confirming);
+        self.close_once_idle();
       }
     }
+  }
+
+  /// While the person decides, closes the window quietly as soon as no agent works and git is done.
+  fn close_once_idle(&self) {
+    let flow = self.clone();
+    let (mut work, mut jobs) = (self.inner.runners.work_changes(), self.inner.jobs.changes());
+    self.inner.runtime.spawn(async move {
+      loop {
+        tokio::select! {
+          _ = work.changed() => {}
+          _ = jobs.changed() => {}
+          () = tokio::time::sleep(JOBS_RECHECK) => {}
+        }
+        if flow.phase() != ClosePhase::Confirming {
+          return;
+        }
+        if flow.inner.runners.active_work().is_empty() && flow.inner.jobs.busy().is_empty() {
+          if flow.leave_confirming(ClosePhase::Stopping) {
+            flow.stop_then_close(CloseKind::Quiet, Some(QUIET_STOP_TIMEOUT));
+          }
+          return;
+        }
+      }
+    });
+  }
+
+  /// Moves on from Confirming to `next`; whether it was still Confirming, so only one move happens.
+  fn leave_confirming(&self, next: ClosePhase) -> bool {
+    self.inner.phase.send_if_modified(|phase| {
+      if *phase != ClosePhase::Confirming {
+        return false;
+      }
+      *phase = next;
+      true
+    })
   }
 
   /// "Wait for agents to save": no new steps or tool calls start, every agent goes on to its next
   /// checkpoint, the runs are paused, git finishes, then the window closes. No deadline: Quit now
   /// stays offered.
   pub fn wait_for_agents(&self) {
-    if self.phase() != ClosePhase::Confirming {
-      return;
-    }
-    self.inner.phase.send_replace(ClosePhase::Waiting {
+    if self.leave_confirming(ClosePhase::Waiting {
       since: SystemTime::now(),
-    });
-    self.stop_then_close(CloseKind::WaitForAgents, None);
+    }) {
+      self.stop_then_close(CloseKind::WaitForAgents, None);
+    }
   }
 
   /// "Quit now": the runners and their agents are ended at once, without a checkpoint, and the
@@ -150,11 +185,9 @@ impl CloseFlow {
   /// Keeps the window open, unchanged; only while the person decides: once the runners stopped
   /// starting new work, cancelling would leave the runs paused without closing.
   pub fn cancel(&self) {
-    if self.phase() != ClosePhase::Confirming {
-      return;
+    if self.leave_confirming(ClosePhase::Open) {
+      drop(self.inner.request.lock().take());
     }
-    drop(self.inner.request.lock().take());
-    self.inner.phase.send_replace(ClosePhase::Open);
   }
 
   fn stop_then_close(&self, kind: CloseKind, deadline: Option<Duration>) {

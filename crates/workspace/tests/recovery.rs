@@ -186,3 +186,40 @@ fn recovery_session_keeps_undecided_runs_across_a_clean_restart_until_the_person
   let (_, after) = read(SessionEnd::Clean);
   assert_eq!(after.reading, Reading::Nothing, "decided: nothing more to offer");
 }
+
+#[test]
+fn recovery_session_does_not_offer_again_what_the_person_left_after_a_later_quit_now() {
+  // A ends with Quit now; in B the runner records the run as interrupted and the person leaves it; B ends
+  // with Quit now too. C looks from B's start, and still does not offer the run the person left.
+  let mut fixture = Fixture::new();
+  let working = fixture.task("Write docs", at(10));
+  let mut run = fixture.started_run(working, at(20));
+  let events = run
+    .interrupt(InterruptCause::QuitNow, at(50))
+    .expect("B's runner interrupts the run");
+  fixture.record(&run, &events);
+  let project = fixture.db.project().id();
+  let app = tempfile::tempdir().expect("an app folder");
+  let workspace = Workspace::new(AppDb::open(&app.path().join("orchester.db")).expect("the app database"));
+  workspace.open(fixture.repo.path()).expect("the project is registered");
+  let runtime = tokio::runtime::Runtime::new().expect("a runtime");
+  let read = || {
+    let recovery = Recovery::start(
+      (workspace.clone(), Programs::processes()),
+      SessionEnd::QuitNow,
+      at(40),
+      runtime.handle(),
+    );
+    let mut updates = recovery.subscribe();
+    let state = runtime.block_on(async {
+      let read = updates.wait_for(|state| state.reading != Reading::Reading).await;
+      read.expect("the recovery reads").clone()
+    });
+    (recovery, state)
+  };
+  let (in_b, offered) = read();
+  assert_eq!(offered.runs_of(project).len(), 1, "B offers the run");
+  in_b.leave(project);
+  let (_, in_c) = read();
+  assert!(in_c.runs_of(project).is_empty(), "C does not offer it again");
+}

@@ -87,6 +87,8 @@ pub fn reports(previous: SessionEnd) -> bool {
 pub struct Found {
   pub runs: Vec<InterruptedRun>,
   pub unread: Vec<Unread>,
+  /// The projects whose database could not be opened; they show as unavailable when opened.
+  pub unopened: Vec<ProjectId>,
 }
 
 /// A run left at work that cannot be read, or a project whose runs cannot be: it stays as it is, and
@@ -96,6 +98,8 @@ pub struct Unread {
   pub project_id: ProjectId,
   /// The run, when it is one run; `None` when the project's runs could not be listed.
   pub run: Option<RunId>,
+  /// The run's task, when it could be read.
+  pub task_key: Option<TaskKey>,
   pub reason: Message,
 }
 
@@ -121,13 +125,15 @@ pub fn interrupted_runs(
       Ok(db) => db,
       Err(error) => {
         tracing::warn!(project = %project.repo_root.display(), %error, "cannot read a project for recovery");
+        found.unopened.push(project.id);
         continue;
       }
     };
     let project_id = db.project().id();
-    let unread = |run: Option<RunId>, error: &StoreError| Unread {
+    let unread = |run: Option<(RunId, TaskId)>, error: &StoreError| Unread {
       project_id,
-      run,
+      run: run.map(|(run, _)| run),
+      task_key: run.and_then(|(_, task)| task_key(&db, task)),
       reason: messages::store_error(error),
     };
     let (runs, unreadable) = match left_at_work(&db, since) {
@@ -138,12 +144,14 @@ pub fn interrupted_runs(
         continue;
       }
     };
-    found
-      .unread
-      .extend(unreadable.iter().map(|(run, error)| unread(Some(*run), error)));
+    found.unread.extend(
+      unreadable
+        .iter()
+        .map(|(run, task, error)| unread(Some((*run, *task)), error)),
+    );
     let name: Arc<str> = project.name.as_str().into();
     for run in runs {
-      let id = run.id();
+      let (id, task) = (run.id(), run.task());
       let cause = match run.status() {
         RunStatus::Interrupted(cause) => *cause,
         _ => stale_cause,
@@ -152,7 +160,7 @@ pub fn interrupted_runs(
         Ok(interrupted) => found.runs.push(interrupted),
         Err(error) => {
           tracing::warn!(run = %id, %error, "cannot describe an interrupted run");
-          found.unread.push(unread(Some(id), &error));
+          found.unread.push(unread(Some((id, task)), &error));
         }
       }
     }
@@ -160,8 +168,20 @@ pub fn interrupted_runs(
   Ok(found)
 }
 
-/// A run that cannot be read, and why.
-type Unreadable = (RunId, StoreError);
+/// A run that cannot be read, its task, and why.
+type Unreadable = (RunId, TaskId, StoreError);
+
+/// The key of `task`, to name a run that cannot be read; `None` when the task cannot be read either, and
+/// the run is named without it.
+fn task_key(db: &ProjectDb, task: TaskId) -> Option<TaskKey> {
+  match db.task(task) {
+    Ok(task) => task.map(|task| task.key().clone()),
+    Err(error) => {
+      tracing::warn!(%task, %error, "cannot read the task of a run that cannot be read");
+      None
+    }
+  }
+}
 
 /// Runs still recorded as running with an agent or a step at work, as the runner interrupts them
 /// when it attaches, and runs recorded as interrupted since `since`, ordered by number; and the runs
@@ -193,7 +213,7 @@ fn readable(listed: Vec<ListedRun<RunStoreError>>) -> (Vec<Run>, Vec<Unreadable>
       Ok(run) => runs.push(run),
       Err(run) => {
         tracing::warn!(run = %run.id, error = %run.error, "a run left at work cannot be read");
-        unreadable.push((run.id, detail::run_store_error(run.error)));
+        unreadable.push((run.id, run.task, detail::run_store_error(run.error)));
       }
     }
   }

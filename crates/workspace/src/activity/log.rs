@@ -73,6 +73,11 @@ impl OperationSpec {
     }
   }
 
+  /// What the operation says while it runs.
+  pub fn running(&self) -> &Message {
+    &self.running
+  }
+
   /// The project the operation belongs to, by name.
   pub fn project(mut self, name: &str) -> Self {
     self.project = Some(name.into());

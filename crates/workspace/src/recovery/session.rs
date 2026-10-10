@@ -4,10 +4,7 @@
 //! its own; a project's runs not continued stay interrupted and each is continued later from its task
 //! page. After "Wait for agents to save" nothing is offered: those runs are paused.
 
-use std::{
-  collections::{BTreeMap, HashMap},
-  sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 use orchester_core::{
   id::{ProjectId, RunId},
@@ -130,8 +127,8 @@ impl Recovery {
     since: Timestamp,
     runtime: &Handle,
   ) -> Self {
-    let undecided = pending::read(&workspace);
-    let reads = reports(previous) || !undecided.is_empty();
+    let marks = pending::read(&workspace);
+    let reads = reports(previous) || !marks.pending.is_empty();
     let recovery = Self {
       state: watch::Sender::new(RecoveryState {
         reading: if reads { Reading::Reading } else { Reading::Nothing },
@@ -144,7 +141,7 @@ impl Recovery {
     if reads {
       let state = recovery.state.clone();
       runtime.spawn(async move {
-        let reading = read((workspace, programs), previous, since, undecided).await;
+        let reading = read((workspace, programs), previous, since, marks).await;
         state.send_modify(|state| state.reading = reading);
       });
     }
@@ -167,7 +164,7 @@ impl Recovery {
       (!matches!(decision, Decision::Continuing | Decision::Left)).then_some(Decision::Left)
     });
     if left {
-      pending::settle(&self.workspace, project);
+      pending::decide(&self.workspace, project, Timestamp::now());
     }
   }
 
@@ -190,7 +187,7 @@ impl Recovery {
         not_continued = continuation.not_continued.len(),
         "continued interrupted runs"
       );
-      pending::settle(&recovery.workspace, project);
+      pending::decide(&recovery.workspace, project, Timestamp::now());
       recovery.decide(project, |_| Some(Decision::Continued(continuation)));
     });
   }
@@ -208,33 +205,44 @@ impl Recovery {
 }
 
 /// Reads the interrupted runs: of every project after a Quit now or a crash (`previous`), since `since`
-/// or since its undecided runs were interrupted, whichever is earlier; otherwise only of the projects in
-/// `undecided`. The projects with runs to offer are kept undecided.
+/// or since its undecided runs were interrupted, whichever is earlier; otherwise only of the projects with
+/// undecided runs. Never from before the person last decided about a project's runs. The projects with
+/// runs to offer are kept undecided; a project whose undecided runs are no longer interrupted is not.
 async fn read(
   (workspace, programs): (Workspace, Programs),
   previous: SessionEnd,
   since: Timestamp,
-  undecided: HashMap<ProjectId, Timestamp>,
+  marks: pending::Marks,
 ) -> Reading {
   let every = reports(previous);
   let read = background::run(move || {
-    let since_of = |project: ProjectId| match (undecided.get(&project), every) {
-      (Some(kept), true) => Some((*kept).min(since)),
-      (Some(kept), false) => Some(*kept),
-      (None, true) => Some(since),
-      (None, false) => None,
+    let since_of = |project: ProjectId| {
+      let from = match (marks.pending.get(&project), every) {
+        (Some(kept), true) => (*kept).min(since),
+        (Some(kept), false) => *kept,
+        (None, true) => since,
+        (None, false) => return None,
+      };
+      Some(marks.decided.get(&project).map_or(from, |decided| from.max(*decided)))
     };
     let found = interrupted_runs(&workspace, &programs, previous, &since_of)?;
-    let mut kept: Vec<ProjectId> = found.runs.iter().map(|run| run.project_id).collect();
-    kept.dedup();
-    for project in &kept {
+    let mut offered: Vec<ProjectId> = found.runs.iter().map(|run| run.project_id).collect();
+    offered.dedup();
+    for project in &offered {
       if let Some(since) = since_of(*project) {
         pending::keep(&workspace, *project, since);
       }
     }
-    // Undecided runs that are no longer interrupted (continued from their task pages) need no notice.
-    for project in undecided.keys().filter(|project| !kept.contains(project)) {
-      pending::settle(&workspace, *project);
+    // A project that could not be read keeps its mark: its runs may still be interrupted.
+    let unread = |project: &ProjectId| {
+      found.unopened.contains(project) || found.unread.iter().any(|unread| unread.project_id == *project)
+    };
+    for project in marks
+      .pending
+      .keys()
+      .filter(|project| !offered.contains(project) && !unread(project))
+    {
+      pending::forget(&workspace, *project);
     }
     Ok::<_, orchester_store::StoreError>(found)
   })

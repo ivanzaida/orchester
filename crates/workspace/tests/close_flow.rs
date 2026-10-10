@@ -19,6 +19,7 @@ use orchester_store::SessionEnd;
 use orchester_workspace::{
   activity::Activity,
   close::{Board, CloseFlow, ClosePhase, RunStands, Stage},
+  messages::Message,
   runner::{ActiveWork, ActiveWorkFields, Runners},
   tasks::integration_jobs::{BusyJob, ProjectJobs},
 };
@@ -81,8 +82,10 @@ fn work(task_key: &str) -> ActiveWork {
 fn merge() -> BusyJob {
   BusyJob {
     project: "Kontur".into(),
-    task_key: "KON-3".into(),
-    run_number: 4,
+    what: Message::new("statusBar.operations.runMerge.running")
+      .with("task", "KON-3".to_owned())
+      .with("run", "4".to_owned())
+      .with("branch", "main".to_owned()),
     merge: true,
   }
 }
