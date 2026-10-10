@@ -19,7 +19,10 @@ use std::{
 
 #[cfg(target_os = "macos")]
 use macos as platform;
-use orchester_core::orchester_tools::{ProcessCall, ProcessScopeError, RunProcessScope, ToolResult};
+use orchester_core::{
+  orchester_tools::{ProcessCall, ProcessScopeError, RunProcessScope, ToolResult},
+  time::Timestamp,
+};
 use parking_lot::Mutex;
 use serde_json::json;
 use thiserror::Error;
@@ -71,6 +74,7 @@ impl Info {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Refusal {
   Protected,
+  StartedBeforeRun,
   Outside,
   Unreadable,
   TreeBound,
@@ -80,6 +84,7 @@ impl fmt::Display for Refusal {
   fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
     formatter.write_str(match self {
       Self::Protected => "the runner, its ancestors, the runner's executable and the agent CLI are protected",
+      Self::StartedBeforeRun => "it started before this run",
       Self::Outside => "its executable is outside this run's worktree",
       Self::Unreadable => "its executable cannot be read",
       Self::TreeBound => "its process tree exceeds the bound of processes one stop handles",
@@ -104,9 +109,10 @@ pub struct RunProcesses {
 }
 
 impl RunProcesses {
-  pub fn new(worktree: &Path) -> Result<Self, ProcessScopeError> {
+  /// The executor of the run working in `worktree`, created at `run_created` ([`RunProcessScope::new`]).
+  pub fn new(worktree: &Path, run_created: Timestamp) -> Result<Self, ProcessScopeError> {
     Ok(Self {
-      scope: RunProcessScope::new(worktree)?,
+      scope: RunProcessScope::new(worktree, run_created)?,
       protected: Mutex::new(Vec::new()),
     })
   }
@@ -136,6 +142,9 @@ impl RunProcesses {
       let Ok(Some(process)) = platform::Process::open(entry, false) else {
         continue;
       };
+      if !self.scope.started_in_run(process.info.started) {
+        continue;
+      }
       // An executable may disappear while listing; it cannot pass a resolved-path rule.
       if let Ok(Some(relative)) = self.scope.relative_executable(&process.info.path) {
         listed.push(json!({
@@ -155,6 +164,9 @@ impl RunProcesses {
   fn validate(&self, process: &platform::Process, protected_pids: &BTreeSet<u32>) -> Result<(), Refusal> {
     if protected_pids.contains(&process.info.pid) {
       return Err(Refusal::Protected);
+    }
+    if !self.scope.started_in_run(process.info.started) {
+      return Err(Refusal::StartedBeforeRun);
     }
     match self.scope.relative_executable(&process.info.path) {
       Ok(Some(_)) => {}

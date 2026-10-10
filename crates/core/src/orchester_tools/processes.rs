@@ -8,7 +8,7 @@ use std::{
 
 use thiserror::Error;
 
-use crate::permission::canonical;
+use crate::{permission::canonical, time::Timestamp};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProcessCall {
@@ -23,6 +23,8 @@ pub struct RunProcessScope {
   root: PathBuf,
   /// The worktree as the run was given it, absolute, so a program started through that spelling is recognised.
   given: PathBuf,
+  /// When the run was created, in microseconds since the Unix epoch: no process older than that is the run's.
+  run_created_micros: u64,
 }
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -34,7 +36,9 @@ pub enum ProcessScopeError {
 }
 
 impl RunProcessScope {
-  pub fn new(worktree: &Path) -> Result<Self, ProcessScopeError> {
+  /// The scope of the run working in `worktree`, created at `run_created`: the earliest moment of every attempt of
+  /// the run, so an app started in an earlier attempt stays the run's.
+  pub fn new(worktree: &Path, run_created: Timestamp) -> Result<Self, ProcessScopeError> {
     let root = resolve(worktree)?;
     if !root.is_dir() {
       return Err(ProcessScopeError::NotDirectory(root));
@@ -46,7 +50,15 @@ impl RunProcessScope {
     Ok(Self {
       root,
       given: canonical::normalize(&given),
+      // An instant before the epoch excludes nothing, as no process starts before it.
+      run_created_micros: u64::try_from(run_created.unix_millis()).map_or(0, |millis| millis.saturating_mul(1000)),
     })
+  }
+
+  /// Whether a process that started at `started_unix_micros` can be the run's. A program running since before the
+  /// run never is, even when its executable has since been moved into the worktree.
+  pub fn started_in_run(&self, started_unix_micros: u64) -> bool {
+    started_unix_micros >= self.run_created_micros
   }
 
   /// The executable's resolved path relative to this run, or none when it lies outside.

@@ -291,7 +291,7 @@ impl RunTask {
     let mut refused = vec![private_file::root()];
     refused.extend(self.relay.as_deref().and_then(Path::parent).map(Path::to_path_buf));
     let files = ToolFiles::new(permissions.repository(), folders, self.run.base().as_str())?;
-    let processes = RunProcesses::new(worktree).map_err(|error| problem(error.to_string()))?;
+    let processes = RunProcesses::new(worktree, self.run.created_at()).map_err(|error| problem(error.to_string()))?;
     let runner = std::env::current_exe().map_err(|error| problem(error.to_string()))?;
     processes
       .protect_executable(&runner)

@@ -29,8 +29,12 @@ impl Drop for Started {
       }
       Err(error) => eprintln!("cannot inspect stand-in: {error}"),
     }
-    let command =
-      orchester_exec::run_processes::RunProcesses::new(&std::env::current_dir().expect("worktree")).expect("scope");
+    // Cleans up only the stand-in this helper started, so any start time is the run's.
+    let command = orchester_exec::run_processes::RunProcesses::new(
+      &std::env::current_dir().expect("worktree"),
+      orchester_core::time::Timestamp::from_unix_millis(0),
+    )
+    .expect("scope");
     let call = orchester_core::orchester_tools::ProcessCall::Stop {
       pid: std::num::NonZeroU32::new(self.descendant).expect("child pid"),
     };

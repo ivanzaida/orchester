@@ -1,5 +1,8 @@
 //! Starts copies of this test binary as sleepers; all scratch and all processes belong to this test.
 
+#[cfg(windows)]
+#[path = "support/console_children.rs"]
+mod console_children;
 #[cfg(target_os = "macos")]
 #[path = "../src/run_processes/macos/identity.rs"]
 mod identity;
@@ -18,7 +21,7 @@ use std::{
   time::Duration,
 };
 
-use orchester_core::orchester_tools::ProcessCall;
+use orchester_core::{orchester_tools::ProcessCall, time::Timestamp};
 use orchester_exec::run_processes::RunProcesses;
 use serde_json::Value;
 
@@ -206,6 +209,25 @@ fn folder() -> tempfile::TempDir {
   tempfile::tempdir_in(base).expect("folder")
 }
 
+/// The executor of a run created a minute ago, so every stand-in a test starts is the run's.
+fn processes_of(worktree: &Path) -> RunProcesses {
+  let run_created = Timestamp::from_unix_millis(Timestamp::now().unix_millis() - 60_000);
+  RunProcesses::new(worktree, run_created).expect("scope")
+}
+
+/// Polls `check` for up to ten seconds; the last answer is returned either way.
+#[cfg(windows)]
+fn eventually<T>(mut check: impl FnMut() -> (bool, T)) -> T {
+  let deadline = std::time::Instant::now() + Duration::from_secs(10);
+  loop {
+    let (done, value) = check();
+    if done || std::time::Instant::now() >= deadline {
+      return value;
+    }
+    std::thread::sleep(Duration::from_millis(20));
+  }
+}
+
 fn copy(root: &Path, name: &str) -> PathBuf {
   let destination = root.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
   fs::copy(std::env::current_exe().expect("test binary"), &destination).expect("copy");
@@ -223,7 +245,7 @@ fn run_processes_lists_exact_scope_and_refuses_outside_and_protected_programs() 
   let outside = copy(&other, "outside");
   let mut own = Sleeper::start(&inside);
   let mut foreign = Sleeper::start(&outside);
-  let executor = RunProcesses::new(&worktree).expect("scope");
+  let executor = processes_of(&worktree);
   let result = executor.run(ProcessCall::List);
   assert!(!result.is_error(), "{}", result.text());
   let listed: Vec<Value> = serde_json::from_str(result.text()).expect("list");
@@ -257,7 +279,7 @@ fn run_processes_stops_only_inside_and_reports_already_gone() {
   let folder = folder();
   let program = copy(folder.path(), "app");
   let mut own = Sleeper::start(&program);
-  let executor = RunProcesses::new(folder.path()).expect("scope");
+  let executor = processes_of(folder.path());
   let result = executor.run(own.call());
   assert!(!result.is_error(), "{}", result.text());
   assert!(
@@ -280,7 +302,7 @@ fn run_processes_requests_close_before_ending() {
   let folder = folder();
   let program = copy(folder.path(), "window-app");
   let mut own = Sleeper::configured(&program, true, None);
-  let executor = RunProcesses::new(folder.path()).expect("scope");
+  let executor = processes_of(folder.path());
   let result = executor.run(own.call());
   assert!(!result.is_error(), "{}", result.text());
   assert!(result.text().contains("closed"), "{}", result.text());
@@ -301,9 +323,9 @@ fn run_processes_stops_the_parent_and_leaves_an_outside_child_running() {
     .expect("child pid")
     .parse()
     .expect("pid");
-  let result = RunProcesses::new(&worktree).expect("scope").run(parent.call());
+  let result = processes_of(&worktree).run(parent.call());
   // This outside PID is a stand-in we just started, in our own scratch folder.
-  let outside_scope = RunProcesses::new(&outside).expect("cleanup scope");
+  let outside_scope = processes_of(&outside);
   let listed = outside_scope.run(ProcessCall::List);
   let cleanup = outside_scope.run(ProcessCall::Stop {
     pid: NonZeroU32::new(child_pid).expect("pid"),
@@ -337,40 +359,73 @@ fn run_processes_stops_a_console_tree_and_leaves_its_conhost() {
     .expect("child pid")
     .parse()
     .expect("pid");
-  let executor = RunProcesses::new(folder.path()).expect("scope");
+  let conhosts = eventually(|| {
+    let found: Vec<u32> = [parent.0.id(), child_pid]
+      .into_iter()
+      .flat_map(|pid| console_children::children_named(pid, "conhost.exe").expect("snapshot"))
+      .collect();
+    (found.len() == 2, found)
+  });
+  assert_eq!(conhosts.len(), 2, "each console stand-in has its console host");
+  let executor = processes_of(folder.path());
   let result = executor.run(parent.call());
-  let remaining = executor.run(ProcessCall::List);
   assert!(!result.is_error(), "{}", result.text());
-  assert!(
-    parent.0.try_wait().expect("parent status").is_some(),
-    "{}",
-    result.text()
-  );
   assert!(
     result.text().contains(&format!("pid {child_pid}: ended")),
     "{}",
     result.text()
   );
-  assert!(
-    result
-      .text()
-      .lines()
-      .any(|line| line.contains("not stopped, its executable is outside") && line.ends_with("(conhost.exe)")),
-    "{}",
-    result.text()
-  );
+  for conhost in conhosts {
+    let prefix = format!("pid {conhost}: not stopped, its executable is outside this run's worktree");
+    assert!(
+      result
+        .text()
+        .lines()
+        .any(|line| line.starts_with(&prefix) && line.ends_with("(conhost.exe)")),
+      "{}",
+      result.text()
+    );
+  }
   assert!(
     !result.text().contains("System32"),
     "no outside path: {}",
     result.text()
   );
-  assert_eq!(remaining.text(), "[]");
+  let exited = eventually(|| {
+    let exited = parent.0.try_wait().expect("parent status").is_some();
+    (exited, exited)
+  });
+  assert!(exited, "{}", result.text());
+  let remaining = eventually(|| {
+    let listed = executor.run(ProcessCall::List);
+    (listed.text() == "[]", listed.text().to_owned())
+  });
+  assert_eq!(remaining, "[]");
+}
+
+#[test]
+fn run_processes_refuses_a_process_older_than_the_run() {
+  let folder = folder();
+  let program = copy(folder.path(), "older");
+  let mut older = Sleeper::start(&program);
+  std::thread::sleep(Duration::from_millis(20));
+  let executor = RunProcesses::new(folder.path(), Timestamp::now()).expect("scope");
+  let listed = executor.run(ProcessCall::List);
+  assert_eq!(listed.text(), "[]");
+  let refused = executor.run(older.call());
+  assert!(
+    refused.is_error() && refused.text().contains("refused") && refused.text().contains("started before this run"),
+    "{}",
+    refused.text()
+  );
+  assert!(!refused.text().contains("older"), "no path: {}", refused.text());
+  assert!(older.0.try_wait().expect("status").is_none());
 }
 
 #[test]
 fn run_processes_refuses_the_executor_process_even_inside_its_scope() {
   let executable = std::env::current_exe().expect("test binary");
-  let executor = RunProcesses::new(executable.parent().expect("folder")).expect("scope");
+  let executor = processes_of(executable.parent().expect("folder"));
   let result = executor.run(ProcessCall::Stop {
     pid: NonZeroU32::new(std::process::id()).expect("own pid"),
   });
@@ -386,7 +441,7 @@ fn run_processes_stops_a_child_spawned_during_close_after_parent_exits() {
   let parent_program = copy(folder.path(), "closing-parent");
   let child_program = copy(folder.path(), "late-child");
   let mut parent = Sleeper::configured(&parent_program, true, Some(&child_program));
-  let executor = RunProcesses::new(folder.path()).expect("scope");
+  let executor = processes_of(folder.path());
   let result = executor.run(parent.call());
   let pid_file = parent_program.with_extension("late-pid");
   wait_for_file(&pid_file);
@@ -417,7 +472,7 @@ fn run_processes_stops_a_child_spawned_during_close_after_parent_exits() {
 fn run_processes_listing_tolerates_processes_exiting_during_inspection() {
   let folder = folder();
   let program = copy(folder.path(), "short-lived");
-  let executor = RunProcesses::new(folder.path()).expect("scope");
+  let executor = processes_of(folder.path());
   for _ in 0..32 {
     let mut child = Command::new(&program)
       .args(["--list"])
@@ -473,7 +528,7 @@ fn run_processes_audit_token_refuses_exec_after_validation() {
     );
     assert!(child.0.try_wait().expect("outside status").is_none());
   }
-  let refused = RunProcesses::new(&worktree).expect("scope").run(child.call());
+  let refused = processes_of(&worktree).run(child.call());
   assert!(
     refused.is_error() && refused.text().contains("outside"),
     "{}",
@@ -494,7 +549,7 @@ fn run_processes_audit_lookup_treats_exit_between_queries_as_gone() {
   child.0.wait().expect("reap");
   assert!(token.image().expect("exit is disappearance").is_none());
   assert!(identity::read(child.0.id()).expect("exited identity").is_none());
-  let result = RunProcesses::new(folder.path()).expect("scope").run(child.call());
+  let result = processes_of(folder.path()).run(child.call());
   assert!(
     !result.is_error() && result.text().contains("already gone"),
     "{}",

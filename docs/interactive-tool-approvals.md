@@ -183,13 +183,17 @@ by `read_external_file` and `search_external_file`.
   as the OS reports it must lie inside the worktree (compared by whole components; ASCII case, the `\\?\` prefix
   and the worktree's own spelling as given or resolved are accepted), and so must that path with links resolved: a
   link placed at an outside program's path that leads into the worktree never makes that program stoppable. The
-  process's working directory and arguments grant nothing. `stop_run_process(pid)` stops the process and those of
+  process's working directory and arguments grant nothing. Only processes that started at or after the run was
+  created (the earliest moment of every attempt, so an app started in an earlier attempt stays stoppable) are
+  listed or stopped: a running executable can be moved, within its volume, into the worktree, and Windows and macOS
+  then report the new path, so a program running since before the run is never the run's. Programs started during
+  the run from outside the worktree and moved into it later are not caught by this rule. `stop_run_process(pid)` stops the process and those of
   its descendants whose executables pass the same rule: it requests close (WM_CLOSE to only their windows on
   Windows, SIGTERM on macOS), waits up to two seconds, ends survivors and waits up to one more second. A descendant
   outside the worktree (on Windows, every console program's `conhost.exe`) is never closed or ended; it is left
   running and named in the answer by file name and pid only, and its own descendants inside the worktree are still
   stopped. The stop is refused as a whole only before any close request: when the pid itself is outside the
-  worktree, unreadable or protected, or its tree exceeds the bound. After the first close request nothing aborts
+  worktree, started before the run, unreadable or protected, or its tree exceeds the bound. After the first close request nothing aborts
   the stop; the answer reports each process as `closed`, `ended`, `already gone` (it exited by itself before its
   close request), `not stopped` with the reason, or `failed` with the reason, and is an error when a process inside
   the worktree was not stopped. Refusals never show a path. Descendants discovered during grace and escalation are

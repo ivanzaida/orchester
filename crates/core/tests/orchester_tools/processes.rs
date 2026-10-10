@@ -9,6 +9,7 @@ use std::{
 use orchester_core::{
   orchester_tools::{OrchesterTool, ProcessCall, RunProcessScope, StepTools, ToolCall, ToolPolicy},
   resource::RepositoryAccess,
+  time::Timestamp,
 };
 use serde_json::json;
 
@@ -50,7 +51,7 @@ fn run_processes_path_inside_outside_and_prefix_sibling() {
   fs::create_dir(&sibling).expect("sibling");
   let outside = sibling.join("app");
   fs::write(&outside, "").expect("executable");
-  let scope = RunProcessScope::new(&root).expect("scope");
+  let scope = RunProcessScope::new(&root, Timestamp::now()).expect("scope");
   assert_eq!(
     scope.relative_executable(&inside).expect("path"),
     Some(PathBuf::from("target/debug/app"))
@@ -58,7 +59,7 @@ fn run_processes_path_inside_outside_and_prefix_sibling() {
   assert_eq!(scope.relative_executable(&outside).expect("path"), None);
   assert_eq!(scope.relative_executable(&nested).expect("folder"), None);
   assert!(scope.relative_executable(&root.join("missing")).is_err());
-  assert!(RunProcessScope::new(&inside).is_err());
+  assert!(RunProcessScope::new(&inside, Timestamp::now()).is_err());
 }
 
 #[test]
@@ -73,7 +74,7 @@ fn run_processes_path_refuses_links_in_both_directions() {
   link(&root.join("escape"), &outside);
   link(&outside.join("enter"), &root);
   link(&folder.path().join("run-alias"), &root);
-  let scope = RunProcessScope::new(&folder.path().join("run-alias")).expect("linked root");
+  let scope = RunProcessScope::new(&folder.path().join("run-alias"), Timestamp::now()).expect("linked root");
   assert_eq!(scope.relative_executable(&root.join("escape/app")).expect("path"), None);
   // A program reported at an outside path stays outside even when a link there now leads into the worktree.
   assert_eq!(
@@ -101,7 +102,8 @@ fn run_processes_path_windows_case_and_verbatim_spelling() {
   let root = folder.path().join("WorkTree");
   fs::create_dir(&root).expect("folder");
   fs::write(root.join("App.EXE"), "").expect("executable");
-  let scope = RunProcessScope::new(&PathBuf::from(root.to_string_lossy().to_lowercase())).expect("case");
+  let scope =
+    RunProcessScope::new(&PathBuf::from(root.to_string_lossy().to_lowercase()), Timestamp::now()).expect("case");
   assert!(
     scope
       .relative_executable(&root.join("app.exe"))
@@ -168,7 +170,7 @@ fn run_processes_path_windows_distinct_unicode_names_stay_outside() {
   fs::create_dir(&outside).expect("distinct Windows name");
   fs::write(root.join("app.exe"), "").expect("inside");
   fs::write(outside.join("app.exe"), "").expect("outside");
-  let scope = RunProcessScope::new(&root).expect("scope");
+  let scope = RunProcessScope::new(&root, Timestamp::now()).expect("scope");
   assert!(
     scope
       .relative_executable(&root.join("app.exe"))
@@ -179,4 +181,14 @@ fn run_processes_path_windows_distinct_unicode_names_stay_outside() {
     scope.relative_executable(&outside.join("app.exe")).expect("outside"),
     None
   );
+}
+
+#[test]
+fn run_processes_scope_refuses_processes_started_before_the_run() {
+  let folder = folders();
+  let run_created = Timestamp::from_unix_millis(1_700_000_000_000);
+  let scope = RunProcessScope::new(folder.path(), run_created).expect("scope");
+  assert!(!scope.started_in_run(1_699_999_999_999_999));
+  assert!(scope.started_in_run(1_700_000_000_000_000));
+  assert!(scope.started_in_run(1_700_000_000_000_001));
 }

@@ -789,6 +789,8 @@ Security review fixes (2026-10-11): outside descendants are left running instead
 reported executable path must lie inside the worktree before links are resolved; after the first close request each
 process gets an outcome and nothing aborts the stop; refusals show no path; macOS before 15 signals by pid after
 re-checking the audit token, since `proc_signal_with_audittoken` first ships in macOS 15.
+Re-review: only processes started at or after the run's creation are listed or stopped, since a running executable
+moved into the worktree is reported at its new path.
 
 New app, first working set (merged 2026-10-09/10 into master; each reviewed, QA'd live and design-verified by
 separate agents): T1 Tasks list (`claude/app-tasks`), F2 shell live data (`claude/app-shell`), P1 task page and Summary

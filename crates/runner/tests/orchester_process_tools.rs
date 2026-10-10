@@ -63,7 +63,7 @@ async fn exercise(provider: AgentProvider) {
   }
   // Listing includes both copies inside this worktree, then stopping the parent removes both.
   let worktree = root.join(".orchester/worktrees").join(id.to_string());
-  let executor = orchester_exec::run_processes::RunProcesses::new(&worktree).expect("scope");
+  let executor = orchester_exec::run_processes::RunProcesses::new(&worktree, run.created_at()).expect("scope");
   let remaining = executor.run(orchester_core::orchester_tools::ProcessCall::List);
   assert!(!remaining.is_error(), "{}", remaining.text());
   assert_eq!(remaining.text(), "[]");
