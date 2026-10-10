@@ -16,7 +16,7 @@ use super::{
   icon::{Icon, icon},
   pressable::pressable,
 };
-use crate::theme::{ControlHeight, ExtraColor, ExtraSpacing, IconSize};
+use crate::theme::{ControlHeight, ExtraColor, ExtraSpacing, IconSize, MENU_SPLIT_OPACITY};
 
 /// The split between the label and the chevron (`Split` `gsHDM`).
 const SPLIT_HEIGHT: f32 = 14.0;
@@ -75,7 +75,8 @@ impl From<MenuButton> for Element {
         Row::new()
           .width(Dimension::Px(1.0))
           .height(Dimension::Px(SPLIT_HEIGHT))
-          .background(on_accent.clone()),
+          .background(on_accent.clone())
+          .opacity(MENU_SPLIT_OPACITY),
       )
       .child(icon(Icon::ChevronDown, IconSize::Md, on_accent))
       .into()

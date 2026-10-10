@@ -96,35 +96,25 @@ impl Checked {
 pub(super) fn program_row(
   ctx: &mut Ctx,
   provider: AgentProvider,
-  (found, chosen, shown): (&FutureState<Copies, Message>, &Signal<String>, &Signal<String>),
+  (found, chosen): (&FutureState<Copies, Message>, &Signal<String>),
 ) -> Element {
   let program = provider.program_name().unwrap_or_default();
   let copies: &[PathBuf] = found.data.as_ref().map_or(&[], |copies| copies.0.as_slice());
   let label = ctx.t("connections.dialog.program");
   let control: Element = match copies {
-    [] | [_] => {
-      let path = copies
-        .first()
-        .map(|copy| copy.display().to_string())
-        .unwrap_or_default();
-      if shown.get_untracked() != path {
-        shown.set(path);
-      }
-      FieldInput::new("connection-program", label.clone(), shown.clone())
-        .placeholder(ctx.t("connections.dialog.notFoundOnPath"))
-        .mono()
-        .locked()
-        .render(ctx)
-    }
+    [] | [_] => FieldInput::new("connection-program", label.clone(), chosen.clone())
+      .placeholder(ctx.t("connections.dialog.notFoundOnPath"))
+      .mono()
+      .locked()
+      .render(ctx),
     copies => {
       let options = copies
         .iter()
         .map(|copy| SelectOption::new(copy.display().to_string(), copy.display().to_string()))
         .collect();
-      if chosen.get_untracked().is_empty() {
-        chosen.set(copies[0].display().to_string());
-      }
-      SelectField::new("connection-program", label.clone(), chosen.clone(), options).render(ctx)
+      SelectField::new("connection-program", label.clone(), chosen.clone(), options)
+        .mono()
+        .render(ctx)
     }
   };
   let choose_reason = ctx.t("connections.dialog.chooseFileUnavailable");

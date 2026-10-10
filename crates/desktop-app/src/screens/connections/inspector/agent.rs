@@ -34,7 +34,7 @@ use crate::{
 };
 
 /// The longest path a property shows in full (`C:\…\npm\claude.cmd`).
-const PATH_CHARS: usize = 36;
+const PATH_CHARS: usize = 26;
 /// Product names of the programs that start a launcher script; identifiers, not translated.
 const NODE: &str = "Node.js";
 const CMD: &str = "cmd.exe";

@@ -369,7 +369,6 @@ fn theme_kit_type_roles_follow_the_design_in_both_modes() {
     let (dark_secondary, light_secondary) = ("#B3B3BA", "#45454D");
     let (dark_muted, light_muted) = ("#8A8A92", "#6B6B74");
     Some(match role {
-      T::Display | T::OptionTitle | T::Property | T::InspectorSection | T::PropertyMono => return None,
       T::Strong => (13.0, FontWeight::Medium, 1.3, "Geist", (dark_primary, light_primary)),
       T::Note => (11.5, FontWeight::Normal, 1.4, "Geist", (dark_muted, light_muted)),
       T::NoteStrong => (11.5, FontWeight::Medium, 1.4, "Geist", (dark_primary, light_primary)),
@@ -405,6 +404,8 @@ fn theme_kit_type_roles_follow_the_design_in_both_modes() {
         (dark_secondary, light_secondary),
       ),
       T::Initials => (9.0, FontWeight::SemiBold, 1.0, "Geist", (dark_primary, light_primary)),
+      // Display is not checked here; the inspector and form roles are in `theme_kit_inspector_roles_follow_the_design`.
+      _ => return None,
     })
   };
   for mode in [Mode::Dark, Mode::Light] {
@@ -553,6 +554,7 @@ fn theme_kit_inspector_roles_follow_the_design() {
     (T::Property, (12.0, FontWeight::Normal, 1.3, "Geist")),
     (T::InspectorSection, (12.0, FontWeight::SemiBold, 1.3, "Geist")),
     (T::PropertyMono, (12.0, FontWeight::Normal, 1.3, "Geist Mono")),
+    (T::FormSection, (13.0, FontWeight::SemiBold, 1.3, "Geist")),
   ] {
     let style = app.theme().typography_style(role.role());
     assert_eq!(

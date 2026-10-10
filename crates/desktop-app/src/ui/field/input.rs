@@ -299,7 +299,8 @@ impl FieldBox {
       PaletteColor::TextPrimary
     };
     let mut input = TextInput::styled(props.value.clone(), resolve(value, color))
-      .placeholder_style(resolve(TypographyStyle::Description, PaletteColor::TextMuted))
+      // A mono field's placeholder reads in its own type (`The worktree` in `M20DGB`).
+      .placeholder_style(resolve(value, PaletteColor::TextMuted))
       .caret_color(PaletteColor::TextPrimary)
       .id(props.id.to_string())
       .describe("a11y_name", props.name.clone())

@@ -51,10 +51,12 @@ pub enum ExtraTypography {
   /// Geist Mono 12 `text_primary`, 1.3: a property's value that is a path or a command (`Program file` in
   /// `VIpsx`).
   PropertyMono,
+  /// 13/600 `text_primary`: a form section's title over its rows (`Title` `t27V7` in `Section` `De1nE`).
+  FormSection,
 }
 
 impl ExtraTypography {
-  pub const ALL: [Self; 16] = [
+  pub const ALL: [Self; 17] = [
     Self::Display,
     Self::Strong,
     Self::Note,
@@ -71,6 +73,7 @@ impl ExtraTypography {
     Self::Property,
     Self::InspectorSection,
     Self::PropertyMono,
+    Self::FormSection,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -95,6 +98,7 @@ impl ExtraTypography {
       Self::Property => "property",
       Self::InspectorSection => "inspector_section",
       Self::PropertyMono => "property_mono",
+      Self::FormSection => "form_section",
     }
   }
 
@@ -118,6 +122,7 @@ impl ExtraTypography {
       Self::Property => sans(12.0, FontWeight::Normal, 1.3, palette.text_secondary),
       Self::InspectorSection => sans(12.0, FontWeight::SemiBold, 1.3, palette.text_primary),
       Self::PropertyMono => self::mono(sans(12.0, FontWeight::Normal, 1.3, palette.text_primary)),
+      Self::FormSection => sans(13.0, FontWeight::SemiBold, 1.3, palette.text_primary),
     }
   }
 }

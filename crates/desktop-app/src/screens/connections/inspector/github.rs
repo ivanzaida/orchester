@@ -28,7 +28,7 @@ use crate::{
   },
 };
 
-const PATH_CHARS: usize = 36;
+const PATH_CHARS: usize = 26;
 
 pub(super) fn parts(
   ctx: &mut Ctx,
@@ -50,20 +50,38 @@ pub(super) fn parts(
     .render(ctx)
   });
   let reason = ctx.t("connections.github.editUnavailable");
-  let first = vec![
-    check_button(
-      inspecting,
-      ("connection-check", ctx.t("connections.checkAgain")),
-      actions,
-    )
-    .icon(Icon::RefreshCw)
-    .into(),
-    ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.edit"))
-      .icon(Icon::Pencil)
+  let locked = |id: &str, key: &str, glyph: Icon| -> Element {
+    ActionButton::new(id.to_owned(), ButtonKind::Secondary, ctx.t(key))
+      .icon(glyph)
       .unavailable(reason.clone())
-      .into(),
-  ];
-  let mut rows = vec![first];
+      .into()
+  };
+  // gh that is missing or answers as another program is pointed at another file; one that answers is edited.
+  let other = match state {
+    GitHubState::ProgramMissing | GitHubState::Unrecognized => locked(
+      "connection-choose-program",
+      "connections.github.chooseProgram",
+      Icon::FolderOpen,
+    ),
+    _ => locked("connection-edit", "connections.edit", Icon::Pencil),
+  };
+  let check = check_button(
+    inspecting,
+    ("connection-check", ctx.t("connections.checkAgain")),
+    actions,
+  )
+  .icon(Icon::RefreshCw);
+  let mut rows = vec![vec![check.into(), other]];
+  if matches!(
+    state,
+    GitHubState::SignedIn { .. } | GitHubState::WrongAccount { .. } | GitHubState::MissingScope { .. }
+  ) {
+    rows.push(vec![locked(
+      "connection-change-account",
+      "connections.github.changeAccount",
+      Icon::UserRoundCog,
+    )]);
+  }
   if let GitHubState::WrongAccount { active, .. } = &state {
     let label = ctx.t_args("connections.github.useAccount", [("account", active.as_str())]);
     let button = ActionButton::new("connection-use-account", ButtonKind::Secondary, label).icon(Icon::UserRoundCheck);
@@ -208,6 +226,12 @@ fn used_by_project(ctx: &Ctx, connection: &GitHubConnection, inspecting: &Inspec
         &ctx.t("connections.github.remote"),
         link.remote().as_str(),
         PropertyValue::Mono,
+      ))
+      .child(property(
+        "connection-used-by-tool",
+        &ctx.t("connections.github.usedByTool"),
+        &ctx.t("connections.github.toolsUnavailable"),
+        PropertyValue::Muted,
       ))
       .into(),
   )

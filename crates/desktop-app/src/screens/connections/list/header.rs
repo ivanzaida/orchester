@@ -1,7 +1,7 @@
 //! The top of Connections (`Header` `SUpbd`, `Tabs` `qVM0O`): its title and what it holds, the add action of
 //! its tab, and the tabs with their counts. On All connections the add action is a menu of the kinds
 //! (`Add connection · menu open` in `oK3aE`); on a kind's tab it adds that kind directly. Adding a GitHub
-//! connection is not built in this app yet: it stays in place, locked, and says why.
+//! connection is not built in this app yet: it stays in place, locked, and the tab says why under its notice.
 
 use std::sync::Arc;
 
@@ -25,7 +25,6 @@ use crate::{
     menu::{MenuItem, menu_panel},
     menu_button::MenuButton,
     tabs::{PageTab, counted, page_tabs},
-    unavailable::with_reason,
   },
 };
 
@@ -88,15 +87,11 @@ fn add_action(ctx: &mut Ctx, project: ProjectId, tab: ConnectionsTab, menu: &Add
     ConnectionsTab::AgentProviders => primary(ctx, "connections.add", add(NewConnection::AgentProvider)),
     ConnectionsTab::McpServers => primary(ctx, "connections.mcp.add", add(NewConnection::McpServer)),
     ConnectionsTab::GitHub => {
-      let reason = ctx.t("connections.github.addUnavailable");
-      with_reason(
-        ActionButton::new("connections-add", ButtonKind::Primary, ctx.t("connections.github.add"))
-          .icon(Icon::Plus)
-          .unavailable(reason.clone()),
-        "connections-add-reason",
-        &reason,
-      )
-      .into()
+      // Locked; why is said under the tab's notice, so the header keeps the height of the other tabs'.
+      ActionButton::new("connections-add", ButtonKind::Primary, ctx.t("connections.github.add"))
+        .icon(Icon::Plus)
+        .unavailable(ctx.t("connections.github.addUnavailable"))
+        .into()
     }
   }
 }

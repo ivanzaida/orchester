@@ -3,16 +3,13 @@
 //! and on, and removing one no profile chooses; one a profile chooses cannot be removed. A field that cannot
 //! be used says why, and Save says the first reason.
 
+use std::path::Path;
+
 use orchester_app::routes::{ConnectionsTab, NewConnection, ProjectPage};
 use orchester_core::connection::mcp::McpTransport;
 
 use super::harness::Seeded;
 
-/// The program the user adds Pencil's MCP server with, on each platform.
-#[cfg(windows)]
-const PENCIL: &str = r"D:\Pencil\resources\app.asar.unpacked\out\mcp-server-windows-x64.exe";
-#[cfg(not(windows))]
-const PENCIL: &str = "/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64";
 const TOOLS: &str = "get_editor_state\nget_guidelines\nbatch_get\nsnapshot_layout\nget_screenshot\nget_variables\nbatch_design\nset_variables\nexport_nodes";
 
 #[test]
@@ -23,24 +20,41 @@ fn connections_mcp_server_is_added_with_its_tools_that_run_without_asking() {
   assert!(
     seeded
       .text("connection-form-reason")
-      .contains("Use small letters, digits"),
+      .contains("use small letters, digits"),
     "the first reason is the name's"
   );
   seeded.set("connection-mcp-name", "pencil-design");
-  seeded.set("connection-mcp-program", PENCIL);
+  // A program outside the project's repository: this test's own.
+  let program = std::env::current_exe().expect("the test program");
+  seeded.set("connection-mcp-program", &program.to_string_lossy());
   seeded.set("connection-mcp-arguments", "--app\ndesktop\n--agent\ncodexCLI");
   seeded.set("connection-mcp-exempt-tools", TOOLS);
   assert!(
     !seeded.exists("connection-form-reason"),
     "nothing keeps it from being saved"
   );
+  // A new server widens what agents may do: a person confirms it in place.
   seeded.click("connection-save");
-  seeded.until("the saved server", |seeded| seeded.exists("connection-inspector"));
+  seeded.until("the question", |seeded| {
+    seeded.exists("connection-confirm-save-confirm")
+  });
+  assert!(seeded.text("connection-confirm-save").contains("pencil-design"));
+  seeded.click("connection-confirm-save-confirm");
+  seeded.until("the saved server", |seeded| {
+    if let Some(reason) = seeded.window.texts("connection-form-reason") {
+      panic!("not saved: {reason:?}");
+    }
+    seeded.exists("connection-inspector")
+  });
   let server = seeded.server("pencil-design").expect("the server is stored");
   let McpTransport::Stdio(stdio) = server.transport() else {
     panic!("a program on this computer");
   };
-  assert_eq!(stdio.program().as_str(), PENCIL);
+  assert_eq!(
+    Path::new(stdio.program().as_str()),
+    program.as_path(),
+    "the program is the file itself"
+  );
   let args: Vec<&str> = stdio.args().iter().map(|arg| arg.as_str()).collect();
   assert_eq!(args, ["--app", "desktop", "--agent", "codexCLI"]);
   assert_eq!(server.exempt_tools().len(), 9);
@@ -84,6 +98,10 @@ fn connections_mcp_server_is_turned_off_and_on_and_removed() {
     seeded.server("kontur-docs").is_some_and(|server| !server.enabled()) && seeded.exists("connection-turn-on")
   });
   seeded.click("connection-turn-on");
+  seeded.until("the question", |seeded| {
+    seeded.exists("connection-confirm-turn-on-confirm")
+  });
+  seeded.click("connection-confirm-turn-on-confirm");
   seeded.until("the server turned on", |seeded| {
     seeded.server("kontur-docs").is_some_and(|server| server.enabled()) && seeded.exists("connection-turn-off")
   });

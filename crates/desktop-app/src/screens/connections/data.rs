@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use lurq::app::ctx::{Ctx, FutureState};
+use lurq::app::ctx::{Ctx, FutureHandle, FutureState};
 use orchester_core::{
   connection::{AgentConnection, GitHubConnection, GitHubState, mcp::McpServer},
   id::ConnectionId,
@@ -19,15 +19,19 @@ use crate::routes::ConnectionsTab;
 
 /// The project's connections at `repo_root`, read when the screen shows and again for each `revision`.
 pub(super) fn load(ctx: &mut Ctx, repo_root: PathBuf, revision: u64) -> FutureState<ProjectConnections, Message> {
-  let read = ctx.future((repo_root, revision), |(repo_root, _)| async move {
+  reading(ctx, repo_root, revision).state().get()
+}
+
+/// [`load`]'s reading itself, for a page that follows its outcome.
+pub(super) fn reading(ctx: &mut Ctx, repo_root: PathBuf, revision: u64) -> FutureHandle<ProjectConnections, Message> {
+  ctx.future((repo_root, revision), |(repo_root, _)| async move {
     background::run(move || ProjectConnections::load_in(&repo_root))
       .await?
       .map_err(|error| {
         tracing::error!(%error, "the project's connections cannot be read");
         messages::store_error(&error)
       })
-  });
-  read.state().get()
+  })
 }
 
 /// The connection a form saved.

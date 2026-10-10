@@ -49,6 +49,8 @@ pub(super) enum Confirm {
   TurnOff,
   /// Remove an MCP server.
   Remove,
+  /// Turn on an MCP server, which widens what the agents of the profiles that choose it get (`widen`).
+  TurnOn,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Confirm {}

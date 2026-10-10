@@ -6,7 +6,7 @@
 //! Remove. Turning off a server profiles choose, and removing one, ask in place in the footer; a server
 //! profiles still choose cannot be removed, and says which they are.
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use lurq::{
   app::{
@@ -18,10 +18,12 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::connection::mcp::{HttpServer, McpEnvValue, McpServer, McpTransport, StdioServer};
+use orchester_workspace::{connections::mcp::enabling, display};
 
 use super::{Actions, Confirm, Inspecting, Parts, footer, header};
 use crate::{
   screens::connections::{
+    widen::{WidenConfirm, WidenProps},
     words::{mcp_glyph, mcp_status},
     work::Work,
   },
@@ -31,9 +33,13 @@ use crate::{
     chip::TagChip,
     icon::{Icon, icon},
     inspector::{self, PropertyValue, property, variable},
+    message::message_text,
     unavailable::reason_line,
   },
 };
+
+/// The longest program path a property shows in full, as an agent CLI's.
+const PATH_CHARS: usize = 26;
 
 pub(super) fn parts(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'_>, actions: &Actions) -> Parts {
   let users: Vec<String> = inspecting
@@ -54,7 +60,9 @@ pub(super) fn parts(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'
   body.push(discovered_tools(ctx));
   body.push(used_by(ctx, server, &users, actions));
   let footer = match inspecting.confirming {
-    Some(confirm) => confirmation(ctx, server, confirm, &users, actions),
+    Some(Confirm::TurnOn) => turn_on(ctx, server, actions),
+    Some(Confirm::TurnOff) => confirmation(ctx, server, Narrowing::TurnOff, &users, actions),
+    Some(Confirm::Remove) => confirmation(ctx, server, Narrowing::Remove, &users, actions),
     None => plain_footer(ctx, server, inspecting, actions, &users),
   };
   Parts {
@@ -68,6 +76,7 @@ pub(super) fn parts(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'
 fn switch(ctx: &Ctx, server: &McpServer, inspecting: &Inspecting<'_>, actions: &Actions, used: bool) -> Element {
   let (id, start, confirm) = (server.id(), actions.start.clone(), actions.confirm.clone());
   let enabled = server.enabled();
+
   let button = if enabled {
     ActionButton::new(
       "connection-turn-off",
@@ -86,7 +95,8 @@ fn switch(ctx: &Ctx, server: &McpServer, inspecting: &Inspecting<'_>, actions: &
     (Some(Work::SetEnabled(_)), _) => button.loading().into(),
     (Some(_), _) | (None, Some(_)) => button.disabled().into(),
     (None, None) if enabled && used => button.on_click(move || confirm(Some(Confirm::TurnOff))).into(),
-    (None, None) => button.on_click(move || start(id, Work::SetEnabled(!enabled))).into(),
+    (None, None) if enabled => button.on_click(move || start(id, Work::SetEnabled(false))).into(),
+    (None, None) => button.on_click(move || confirm(Some(Confirm::TurnOn))).into(),
   }
 }
 
@@ -118,7 +128,7 @@ fn stdio_rows(ctx: &Ctx, stdio: &StdioServer) -> Vec<Row> {
     property(
       "connection-program",
       &ctx.t("connections.mcp.property.program"),
-      stdio.program().as_str(),
+      &display::shorten_path(Path::new(stdio.program().as_str()), PATH_CHARS),
       PropertyValue::Mono,
     ),
   ];
@@ -288,7 +298,12 @@ fn used_by(ctx: &Ctx, server: &McpServer, users: &[String], actions: &Actions) -
   if server.enabled() || users.is_empty() {
     return section;
   }
-  let off = ctx.t_args("connections.mcp.offUsers", [("profiles", users.join(", "))]);
+  let key = if users.len() == 1 {
+    "connections.mcp.offUsersOne"
+  } else {
+    "connections.mcp.offUsers"
+  };
+  let off = ctx.t_args(key, [("profiles", users.join(", "))]);
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
@@ -342,39 +357,94 @@ fn plain_footer(
   footer(ctx, inspecting, (&sentence, Vec::new()), (rows, reasons))
 }
 
+/// Turning the server on, asked of a person in place with what it widens (`widen`).
+fn turn_on(ctx: &mut Ctx, server: &McpServer, actions: &Actions) -> Element {
+  let reasons: Arc<[Arc<str>]> = enabling(server, true)
+    .iter()
+    .map(|reason| message_text(ctx, reason))
+    .collect();
+  let (start, close, keep, id) = (
+    actions.start.clone(),
+    actions.confirm.clone(),
+    actions.confirm.clone(),
+    server.id(),
+  );
+  let props = WidenProps {
+    id: "connection-confirm-turn-on",
+    title: ctx.t_args("connections.mcp.confirmOn.title", [("name", server.name().as_str())]),
+    reasons,
+    confirm: ctx.t("connections.mcp.turnOn"),
+    keep: ctx.t("connections.mcp.confirmOn.keep"),
+    on_confirm: Arc::new(move || {
+      close(None);
+      start(id, Work::SetEnabled(true));
+    }),
+    on_keep: Arc::new(move || keep(None)),
+  };
+  ctx.mount_keyed::<WidenConfirm>(&format!("connection-turn-on-{id}"), props)
+}
+
 /// The question the footer asks in place (`Confirm · Turn off` `D2FVJJ`): what turning the server off, or
 /// removing it, does, with the way back first.
-fn confirmation(ctx: &Ctx, server: &McpServer, confirm: Confirm, users: &[String], actions: &Actions) -> Element {
-  let name = server.name().as_str();
-  let (title, body, act) = match confirm {
-    Confirm::TurnOff => (
-      ctx.t_args("connections.mcp.confirmOff.title", [("name", name)]),
-      ctx.t_args("connections.mcp.confirmOff.body", [("profiles", users.join(", "))]),
-      (
+/// What the footer asks before it narrows what agents get.
+#[derive(Clone, Copy)]
+enum Narrowing {
+  TurnOff,
+  Remove,
+}
+
+/// A narrowing's words: what it asks, what it does, its action's id, label, icon and work, and the way back.
+struct Asked {
+  title: Arc<str>,
+  body: Arc<str>,
+  act: (&'static str, Arc<str>, Icon, Work),
+  keep: Arc<str>,
+}
+
+fn asked(ctx: &Ctx, name: &str, confirm: Narrowing, users: &[String]) -> Asked {
+  match confirm {
+    Narrowing::TurnOff => Asked {
+      title: ctx.t_args("connections.mcp.confirmOff.title", [("name", name)]),
+      body: ctx.t_args(
+        if users.len() == 1 {
+          "connections.mcp.confirmOff.bodyOne"
+        } else {
+          "connections.mcp.confirmOff.body"
+        },
+        [("profiles", users.join(", "))],
+      ),
+      act: (
         "connection-confirm-turn-off",
         ctx.t("connections.mcp.turnOff"),
         Icon::Power,
         Work::SetEnabled(false),
       ),
-    ),
-    Confirm::Remove => (
-      ctx.t_args("connections.mcp.confirmRemove.title", [("name", name)]),
-      ctx.t("connections.mcp.confirmRemove.body"),
-      (
+      keep: ctx.t("connections.mcp.confirmOff.keep"),
+    },
+    Narrowing::Remove => Asked {
+      title: ctx.t_args("connections.mcp.confirmRemove.title", [("name", name)]),
+      body: ctx.t("connections.mcp.confirmRemove.body"),
+      act: (
         "connection-confirm-remove",
         ctx.t("connections.mcp.remove"),
         Icon::Trash2,
         Work::Remove,
       ),
-    ),
-  };
-  let keep_key = match confirm {
-    Confirm::TurnOff => "connections.mcp.confirmOff.keep",
-    Confirm::Remove => "connections.mcp.confirmRemove.keep",
-  };
+      keep: ctx.t("connections.mcp.confirmRemove.keep"),
+    },
+  }
+}
+
+fn confirmation(ctx: &Ctx, server: &McpServer, confirm: Narrowing, users: &[String], actions: &Actions) -> Element {
+  let Asked {
+    title,
+    body,
+    act,
+    keep: keep_label,
+  } = asked(ctx, server.name().as_str(), confirm, users);
   let back = actions.confirm.clone();
   let keep =
-    ActionButton::new("connection-confirm-keep", ButtonKind::Secondary, ctx.t(keep_key)).on_click(move || back(None));
+    ActionButton::new("connection-confirm-keep", ButtonKind::Secondary, keep_label).on_click(move || back(None));
   let (start, close, id, work) = (actions.start.clone(), actions.confirm.clone(), server.id(), act.3);
   let go = ActionButton::new(act.0, ButtonKind::Danger, act.1)
     .icon(act.2)

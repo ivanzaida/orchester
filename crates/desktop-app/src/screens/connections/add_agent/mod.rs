@@ -13,7 +13,8 @@ use std::{path::PathBuf, sync::Arc};
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, FutureAction, FutureState},
+    ctx::{Ctx, FutureAction, FutureHandle, FutureState},
+    i18n::I18n,
     theme::{PaletteColor, SpacingSize},
   },
   components::{Column, Row, Text},
@@ -90,10 +91,9 @@ pub struct AddAgent {
   /// The name the page last suggested: while the field holds it, or nothing, choosing another CLI
   /// suggests another; a name the person typed stays.
   suggested: Signal<String>,
-  /// The copy chosen among those found, by its path as shown; empty: the first.
+  /// The copy chosen among those found, by its path as shown: the first once they are found, and again whenever
+  /// the CLI changes; empty while none is found.
   program: Signal<String>,
-  /// The one copy found, as its locked field shows it.
-  found_path: Signal<String>,
   /// Counts Recheck presses: each looks for the program and checks it again.
   recheck: Signal<u64>,
 }
@@ -107,10 +107,41 @@ impl Component for AddAgent {
       name: ctx.signal(String::new()),
       suggested: ctx.signal(String::new()),
       program: ctx.signal(String::new()),
-      found_path: ctx.signal(String::new()),
       recheck: ctx.signal(0),
     };
     let save = save_action(ctx);
+    // The reading and the search at their places of every render, so the choice follows what is found.
+    let props = ctx.props::<AddAgentProps>().clone();
+    let read = data::reading(ctx, props.project.open.repo_root.clone(), 0);
+    let (i18n, name, suggested, kind) = (
+      ctx.i18n().clone(),
+      page.name.clone(),
+      page.suggested.clone(),
+      page.kind.clone(),
+    );
+    ctx.watch(&read.state(), move |state| {
+      if let Some(listed) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
+        let project = props.project.open.project.name().as_str();
+        let new = suggested_name(&i18n, listed, kind.get_untracked().0, project);
+        suggest(&name, &suggested, new);
+      }
+    });
+    let copies = found(ctx, AgentProvider::CodexCli, 0);
+    let program = page.program.clone();
+    ctx.watch(&copies.state(), move |state| {
+      if !state.is_fulfilled() {
+        return;
+      }
+      let copies = state.data.as_ref().map_or(&[][..], |copies| copies.0.as_slice());
+      let chosen = program.get_untracked();
+      if !copies.iter().any(|copy| copy.display().to_string() == chosen) {
+        program.set(
+          copies
+            .first()
+            .map_or_else(String::new, |copy| copy.display().to_string()),
+        );
+      }
+    });
     let project = ctx.props::<AddAgentProps>().project.open.project.id();
     let navigation = Navigation::of(ctx);
     ctx.watch(&save.state(), move |state| {
@@ -127,14 +158,13 @@ impl Component for AddAgent {
     let save = save_action(ctx);
     let listed = data::load(ctx, props.project.open.repo_root.clone(), 0);
     let provider = self.kind.get().0;
-    let found = found(ctx, provider, self.recheck.get());
+    let found = found(ctx, provider, self.recheck.get()).state().get();
     let program = self.chosen(found.data.as_ref().map(|copies| copies.0.as_slice()));
     let checked = checked(ctx, (provider, program.clone()), self.recheck.get());
-    self.suggest(ctx, &props, listed.data.as_ref());
     let state = Checked::of(&found, program.as_ref(), &checked);
     let reason = self.reason(ctx, listed.data.as_ref(), &state, &save.state().get());
     let sections = vec![
-      self.kind_section(ctx),
+      self.kind_section(ctx, listed.data.as_ref(), props.project.open.project.name().as_str()),
       self.connection_section(ctx, listed.data.as_ref(), (&found, &state)),
       after(ctx, provider, props.project.open.project.name().as_str()),
     ];
@@ -147,34 +177,11 @@ impl Component for AddAgent {
 impl AddAgent {
   /// The copy to check: the one chosen, else the first found.
   fn chosen(&self, found: Option<&[PathBuf]>) -> Option<PathBuf> {
-    let found = found?;
     let chosen = self.program.get();
-    found
-      .iter()
-      .find(|copy| copy.display().to_string() == chosen)
-      .or_else(|| found.first())
-      .cloned()
+    found?.iter().find(|copy| copy.display().to_string() == chosen).cloned()
   }
 
   /// Fills the name with the suggested one until the person types their own.
-  fn suggest(&self, ctx: &Ctx, props: &AddAgentProps, listed: Option<&ProjectConnections>) {
-    let Some(listed) = listed else {
-      return;
-    };
-    let current = self.name.get_untracked();
-    if !current.is_empty() && current != self.suggested.get_untracked() {
-      return;
-    }
-    let project = props.project.open.project.name().as_str();
-    let suggested = suggested_name(ctx, listed, self.kind.get_untracked().0, project);
-    if current != suggested {
-      self.name.set(suggested.clone());
-    }
-    if self.suggested.get_untracked() != suggested {
-      self.suggested.set(suggested);
-    }
-  }
-
   /// The first reason Save connection cannot be used, in field order; `None` once it can.
   fn reason(
     &self,
@@ -237,10 +244,12 @@ impl AddAgent {
     action_bar(vec![cancel.into(), button.into()], reason)
   }
 
-  fn kind_section(&self, ctx: &Ctx) -> Element {
+  /// The kinds; choosing another CLI suggests its name, unless the person typed one.
+  fn kind_section(&self, ctx: &Ctx, listed: Option<&ProjectConnections>, project: &str) -> Element {
     let card = |provider: AgentProvider, (id, glyph, detail): (&str, Icon, &str)| -> Element {
-      let kind = self.kind.clone();
-      let program = self.program.clone();
+      let (kind, program) = (self.kind.clone(), self.program.clone());
+      let (name, suggested) = (self.name.clone(), self.suggested.clone());
+      let suggestion = listed.map(|listed| suggested_name(ctx.i18n(), listed, provider, project));
       let card = OptionCard::new(
         id.to_owned(),
         (glyph, ctx.t(super::words::provider_key(provider))),
@@ -249,6 +258,9 @@ impl AddAgent {
         move || {
           program.set(String::new());
           kind.set(Kind(provider));
+          if let Some(new) = suggestion.clone() {
+            suggest(&name, &suggested, new);
+          }
         },
       );
       match provider.is_native() {
@@ -327,7 +339,7 @@ impl AddAgent {
       input.render(ctx),
       Place::Within,
     );
-    let program = program_row(ctx, provider, (found, &self.program, &self.found_path));
+    let program = program_row(ctx, provider, (found, &self.program));
     let check = check_row(ctx, provider, state, &self.recheck);
     section(
       "connection-section",
@@ -340,11 +352,10 @@ impl AddAgent {
 }
 
 /// The CLI's copies found on the search path, newest first, looked for again at each Recheck.
-fn found(ctx: &mut Ctx, provider: AgentProvider, recheck: u64) -> FutureState<Copies, Message> {
-  let read = ctx.future((Kind(provider), recheck), |(Kind(provider), _)| async move {
+fn found(ctx: &mut Ctx, provider: AgentProvider, recheck: u64) -> FutureHandle<Copies, Message> {
+  ctx.future((Kind(provider), recheck), |(Kind(provider), _)| async move {
     background::run(move || Copies(Arc::new(probe::detect_agent(provider)))).await
-  });
-  read.state().get()
+  })
 }
 
 /// The check of `program` as `provider`'s CLI, again at each Recheck; none without a program.
@@ -386,10 +397,19 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
 }
 
 /// `{CLI} · {project}`, numbered when another connection of the project has the name.
-fn suggested_name(ctx: &Ctx, listed: &ProjectConnections, provider: AgentProvider, project: &str) -> String {
-  let short = ctx.t(short_key(provider));
+/// Puts `new` in the name while it holds the last suggestion or nothing: a name the person typed stays.
+fn suggest(name: &Signal<String>, suggested: &Signal<String>, new: String) {
+  let current = name.get_untracked();
+  if current.is_empty() || current == suggested.get_untracked() {
+    name.set(new.clone());
+  }
+  suggested.set(new);
+}
+
+fn suggested_name(i18n: &I18n, listed: &ProjectConnections, provider: AgentProvider, project: &str) -> String {
+  let short = i18n.t(short_key(provider));
   let taken = |name: &str| taken_names(listed).any(|taken| taken == name);
-  let plain = ctx.t_args(
+  let plain = i18n.t_args(
     "connections.dialog.suggestedName",
     [("provider", &*short), ("project", project)],
   );
@@ -398,7 +418,7 @@ fn suggested_name(ctx: &Ctx, listed: &ProjectConnections, provider: AgentProvide
   }
   (2_usize..)
     .map(|number| {
-      ctx
+      i18n
         .t_args(
           "connections.dialog.suggestedNameNumbered",
           [

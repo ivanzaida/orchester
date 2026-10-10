@@ -6,15 +6,16 @@
 
 use lurq::{
   app::{
+    component::DevtoolsInspectable,
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Popup, Row, SelectOption, Spacer, Text},
+  components::{Column, Placement, Popup, Row, SelectOption, Spacer, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::secret::Secret;
+use orchester_core::{id::SecretId, secret::Secret};
 use orchester_workspace::{
   connections::{
     data::ProjectConnections,
@@ -30,15 +31,21 @@ use crate::{
     field::{FieldInput, SelectField},
     form_section::{Label, Place, section, stacked_row},
     icon::{Icon, icon},
-    menu::{MenuItem, menu, menu_panel},
+    menu::{MenuItem, menu_panel},
     message::message_text,
     notice::{Notice, NoticeTone},
     option_card::OptionCard,
   },
 };
 
-/// No bearer secret, as the Authentication select names it.
-const NO_SECRET: &str = "";
+/// The Authentication select's choice: a bearer token from a project secret, or none.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct Bearer(Option<SecretId>);
+
+impl DevtoolsInspectable for Bearer {}
+
+/// The secrets menu's width (`Add a variable from a secret… · menu` in `euVYY`).
+const SECRETS_MENU_WIDTH: f32 = 300.0;
 
 /// The page's fields.
 #[derive(Clone)]
@@ -50,8 +57,7 @@ pub(super) struct Fields {
   folder: Signal<String>,
   variables: Signal<String>,
   url: Signal<String>,
-  /// The bearer secret's id, empty for none.
-  bearer: Signal<String>,
+  bearer: Signal<Bearer>,
   exempt_tools: Signal<String>,
   /// The secrets menu of Variables.
   secrets_open: Signal<bool>,
@@ -59,34 +65,21 @@ pub(super) struct Fields {
 }
 
 impl Fields {
-  pub(super) fn new(ctx: &mut Ctx) -> Self {
+  /// The fields, filled with `text`.
+  pub(super) fn new(ctx: &mut Ctx, text: &McpServerText) -> Self {
     Self {
-      name: ctx.signal(String::new()),
-      transport: ctx.signal(TransportChoice::Stdio),
-      program: ctx.signal(String::new()),
-      arguments: ctx.signal(String::new()),
-      folder: ctx.signal(String::new()),
-      variables: ctx.signal(String::new()),
-      url: ctx.signal(String::new()),
-      bearer: ctx.signal(NO_SECRET.to_owned()),
-      exempt_tools: ctx.signal(String::new()),
+      name: ctx.signal(text.name.clone()),
+      transport: ctx.signal(text.transport),
+      program: ctx.signal(text.program.clone()),
+      arguments: ctx.signal(text.arguments.clone()),
+      folder: ctx.signal(text.working_directory.clone()),
+      variables: ctx.signal(text.variables.clone()),
+      url: ctx.signal(text.url.clone()),
+      bearer: ctx.signal(Bearer(text.bearer)),
+      exempt_tools: ctx.signal(text.exempt_tools.clone()),
       secrets_open: ctx.signal(false),
       secrets_anchor: ctx.element_ref(),
     }
-  }
-
-  pub(super) fn fill(&self, text: &McpServerText) {
-    self.name.set(text.name.clone());
-    self.transport.set(text.transport);
-    self.program.set(text.program.clone());
-    self.arguments.set(text.arguments.clone());
-    self.folder.set(text.working_directory.clone());
-    self.variables.set(text.variables.clone());
-    self.url.set(text.url.clone());
-    self
-      .bearer
-      .set(text.bearer.map_or_else(String::new, |id| id.to_string()));
-    self.exempt_tools.set(text.exempt_tools.clone());
   }
 
   /// The fields as typed.
@@ -99,7 +92,7 @@ impl Fields {
       working_directory: self.folder.get(),
       variables: self.variables.get(),
       url: self.url.get(),
-      bearer: self.bearer.get().parse().ok(),
+      bearer: self.bearer.get().0,
       exempt_tools: self.exempt_tools.get(),
     }
   }
@@ -347,8 +340,14 @@ impl Fields {
         .render(ctx, &self.secrets_open)
       })
       .collect();
-    let panel = menu_panel("connection-mcp-secrets").with_children(rows);
-    let popup: Popup = menu(self.secrets_anchor.clone(), self.secrets_open.clone(), panel);
+    let panel = menu_panel("connection-mcp-secrets")
+      .width(Dimension::Px(SECRETS_MENU_WIDTH))
+      .with_children(rows);
+    // Under the button, its end at the button's end (`euVYY`).
+    let popup = Popup::new(self.secrets_anchor.clone(), panel)
+      .open(self.secrets_open.clone())
+      .placement(Placement::BottomEnd)
+      .offset(0.0, ExtraSpacing::Snug.value());
     Row::new().flex_shrink(0.0).child(button).child(popup).into()
   }
 
@@ -363,7 +362,7 @@ impl Fields {
     .mono()
     .render(ctx);
     let mut options = vec![SelectOption::new(
-      NO_SECRET.to_owned(),
+      Bearer(None),
       ctx.t("connections.mcp.noAuthentication").to_string(),
     )];
     options.extend(secrets.iter().map(|secret| {
@@ -375,7 +374,7 @@ impl Fields {
         ],
       );
       SelectOption::new(
-        secret.id().to_string(),
+        Bearer(Some(secret.id())),
         ctx.t_args("connections.mcp.bearer", [("secret", &*name)]).to_string(),
       )
     }));

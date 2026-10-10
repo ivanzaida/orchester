@@ -13,14 +13,12 @@ use super::typography::style;
 /// Text of the task form.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskFormText {
-  /// 13/600 `text_primary`: a section's title over its rows (`Title` `t27V7` in `Section` `De1nE`).
-  SectionTitle,
   /// 11/600 `text_primary`: the project's initial in its tile (`K` `C0mXJ` in `Row · Project` `lra40`).
   ProjectInitial,
 }
 
 impl TaskFormText {
-  pub const ALL: [Self; 2] = [Self::SectionTitle, Self::ProjectInitial];
+  pub const ALL: [Self; 1] = [Self::ProjectInitial];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -28,14 +26,12 @@ impl TaskFormText {
 
   const fn name(self) -> &'static str {
     match self {
-      Self::SectionTitle => "task_form_section_title",
       Self::ProjectInitial => "task_form_project_initial",
     }
   }
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::SectionTitle => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::ProjectInitial => style(11.0, FontWeight::SemiBold, 1.0, 0.0, palette.text_primary),
     }
   }

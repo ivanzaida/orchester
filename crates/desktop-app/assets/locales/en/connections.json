@@ -210,7 +210,7 @@
     "github": {
       "add": "Add GitHub connection",
       "addUnavailable": "Adding a GitHub connection is not built in this app yet.",
-      "editUnavailable": "Editing a GitHub connection and changing its account or access are not built in this app yet.",
+      "editUnavailable": "Editing a GitHub connection, choosing its program and changing its account or access are not built in this app yet.",
       "emptyTitle": "No GitHub connection yet",
       "emptyDetail": "{{project}} reaches GitHub only through the GitHub CLI (gh) on this computer.",
       "status": {
@@ -238,7 +238,11 @@
       "repository": "Repository",
       "repositoryName": "{{owner}} / {{name}}",
       "remote": "Remote",
-      "useAccount": "Use this account ({{account}})"
+      "useAccount": "Use this account ({{account}})",
+      "chooseProgram": "Choose program…",
+      "changeAccount": "Change account or access",
+      "usedByTool": "Used by tool",
+      "toolsUnavailable": "Not listed in this app yet"
     },
     "mcp": {
       "add": "Add MCP server",
@@ -289,7 +293,8 @@
       "confirmOff": {
         "title": "Turn off {{name}}?",
         "body": "{{profiles}} work without it from their next agent start. Agents at work now keep it until they end.",
-        "keep": "Keep it on"
+        "keep": "Keep it on",
+        "bodyOne": "{{profiles}} works without it from its next agent start. Agents at work now keep it until they end."
       },
       "confirmRemove": {
         "title": "Remove {{name}}?",
@@ -311,7 +316,7 @@
         "stdioDetail": "The agent’s CLI starts it with each agent.",
         "httpDetail": "The agent’s CLI reaches it over HTTP.",
         "programPlaceholder": "npx",
-        "programHint": "A program on the PATH or in the worktree, or an absolute path.",
+        "programHint": "A program on the PATH, or an absolute path outside the repository.",
         "folderHint": "A folder in the worktree, or an absolute path. Claude Code starts every server in the worktree.",
         "argumentsHint": "One argument per line, passed as written.",
         "variablesHint": "One NAME=value per line. ${secret:NAME@environment} takes the value of a project secret.",
@@ -325,7 +330,14 @@
         "secretsDetail": "They are read from the system keychain when an agent starts and handed to its CLI only through its environment (Codex) or a file only it reads, removed when the agent ends (Claude Code).",
         "nextStep": "Choose which agent profiles get this server on their Permissions tab.",
         "goneTitle": "This MCP server is no longer here",
-        "goneDetail": "It was removed from the project. Connections lists the servers it has."
+        "goneDetail": "It was removed from the project. Connections lists the servers it has.",
+        "widenTitle": "Saving widens what agents may do",
+        "keepEditing": "Keep editing"
+      },
+      "offUsersOne": "Turned off: {{profiles}} works without it until it is turned on.",
+      "confirmOn": {
+        "title": "Turn on {{name}}?",
+        "keep": "Keep it off"
       }
     }
   }

@@ -60,6 +60,8 @@ pub use self::{
 /// A control that cannot be used, faded as a whole: a button that is unavailable or disabled (`Create
 /// multiple` `Q9aeZ`, `Attach context` `p6caAv`).
 pub const DISABLED_OPACITY: f32 = 0.5;
+/// The split between a menu button's label and its chevron (`Split` `gsHDM` in `Bm2gp`).
+pub const MENU_SPLIT_OPACITY: f32 = 0.25;
 /// A shortcut beside a tooltip's label (`n75PTn` in `b6q3OZ`).
 pub const SHORTCUT_OPACITY: f32 = 0.6;
 /// One turn of a loader (`loader-circle`), which turns while it is shown; the design draws it still.

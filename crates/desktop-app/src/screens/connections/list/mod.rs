@@ -29,7 +29,6 @@ use super::{
   work::{self, Start, Work, WorkAction},
 };
 use crate::{
-  mcp::input_gate::InputGate,
   navigation::Navigation,
   project::ShownProject,
   routes::{ConnectionsTab, ConnectionsView, NewConnection, ProjectPage, Route, Screen},
@@ -42,6 +41,7 @@ use crate::{
     message::message_text,
     notice::handling_notice,
     state::{EmptyState, load_error, loading},
+    unavailable::reason_line,
   },
 };
 
@@ -77,9 +77,6 @@ pub struct ConnectionsScreen {
   last: Signal<LastOn>,
   asking: Signal<Asking>,
   menu: AddMenu,
-  /// Tells an MCP client's window input from a person's; `None` in a window without the app's MCP server,
-  /// where no client's input arrives.
-  gate: Option<InputGate>,
 }
 
 impl Component for ConnectionsScreen {
@@ -95,7 +92,6 @@ impl Component for ConnectionsScreen {
         open: ctx.signal(false),
         anchor: ctx.element_ref(),
       },
-      gate: ctx.use_context::<InputGate>(),
     };
     let work = work::action(ctx);
     screen.follow(ctx, &work);
@@ -142,7 +138,6 @@ impl ConnectionsScreen {
   fn follow(&self, ctx: &mut Ctx, work: &WorkAction) {
     let (revision, running) = (self.revision.clone(), self.running.clone());
     let navigation = Navigation::of(ctx);
-    let props = ctx.props::<ListProps>().clone();
     ctx.watch(&work.state(), move |state| {
       if state.is_pending() {
         return;
@@ -152,9 +147,11 @@ impl ConnectionsScreen {
       if let Some(done) = state.data.filter(|_| state.is_fulfilled())
         && done.work == Work::Remove
       {
-        let project = props.project.open.project.id();
-        let view = ConnectionsView::new(props.view.tab());
-        navigation.replace(Route::Project(project, ProjectPage::Connections(view)));
+        // The tab the screen shows now, which may not be the one it opened on.
+        if let Route::Project(project, ProjectPage::Connections(view)) = navigation.route_now() {
+          let view = ConnectionsView::new(view.tab());
+          navigation.replace(Route::Project(project, ProjectPage::Connections(view)));
+        }
       }
     });
   }
@@ -266,7 +263,7 @@ impl ConnectionsScreen {
     listed: &ProjectConnections,
     (inspected, work): (ConnectionId, &WorkAction),
   ) -> Actions {
-    let (work, running, last, gate) = (work.clone(), self.running.clone(), self.last.clone(), self.gate.clone());
+    let (work, running, last) = (work.clone(), self.running.clone(), self.last.clone());
     let open = project.open.clone();
     let names: Vec<(ConnectionId, String)> = data::entries(listed, ConnectionsTab::All)
       .into_iter()
@@ -289,7 +286,6 @@ impl ConnectionsScreen {
         id,
         work: piece,
         spec,
-        by_automation: gate.as_ref().is_some_and(InputGate::input_in_flight),
       });
     });
     let asking = self.asking.clone();
@@ -305,14 +301,25 @@ impl ConnectionsScreen {
 }
 
 /// What the tab's kind is about (`Notice · Each agent can use a different provider` `oy0c2`).
-fn tab_notice(ctx: &Ctx, tab: ConnectionsTab, project: &ShownProject) -> Row {
+/// On GitHub, why its Add GitHub connection is locked follows.
+fn tab_notice(ctx: &Ctx, tab: ConnectionsTab, project: &ShownProject) -> Column {
   let (glyph, key) = match tab {
     ConnectionsTab::All | ConnectionsTab::AgentProviders => (Icon::Workflow, "connections.notice.providers"),
     ConnectionsTab::GitHub => (Icon::GitPullRequest, "connections.notice.github"),
     ConnectionsTab::McpServers => (Icon::Server, "connections.notice.mcp"),
   };
   let name = project.open.project.name().as_str();
-  handling_notice("connections-notice", glyph, &ctx.t_args(key, [("project", name)]))
+  let reason = (tab == ConnectionsTab::GitHub)
+    .then(|| reason_line("connections-add-reason", &ctx.t("connections.github.addUnavailable")));
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .child(handling_notice(
+      "connections-notice",
+      glyph,
+      &ctx.t_args(key, [("project", name)]),
+    ))
+    .with_children(reason)
 }
 
 /// Whose the connections are (`Note · Connections belong to Kontur.` `OVuKt`).
@@ -396,12 +403,18 @@ fn empty_tab(ctx: &Ctx, project: &ShownProject, tab: ConnectionsTab) -> Element 
     }
   };
   let name = project.open.project.name().as_str();
-  let empty = EmptyState::new(
+  let mut empty = EmptyState::new(
     "connections-empty-tab",
     glyph,
     ctx.t(title),
     ctx.t_args(detail, [("project", name)]),
   );
+  if tab == ConnectionsTab::GitHub {
+    empty = empty.child(reason_line(
+      "connections-add-reason",
+      &ctx.t("connections.github.addUnavailable"),
+    ));
+  }
   Column::new()
     .width(Dimension::Pct(100.0))
     .flex(1.0)
