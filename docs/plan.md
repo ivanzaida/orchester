@@ -768,6 +768,19 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-21 · Agent tools to stop apps started in a run (implemented 2026-10-11 in run worktree
+`01a127bc-59bd-774a-8edd-a0f0bc989311`; implementation checks passed, independent review/QA follows).
+
+The per-invocation relay provides `list_run_processes` and `stop_run_process(pid)` to both agents without approval.
+Executable paths resolve inside this run's worktree; outside processes, the runner and agent CLI are refused.
+Every descendant must satisfy the same rule before closing the tree. Windows sends WM_CLOSE and macOS SIGTERM,
+then a bounded grace period precedes forced termination. Prompts and `docs/interactive-tool-approvals.md` steer
+both agents to these tools. Core path/permission tests and executor/runner relay tests passed; macOS is checked
+and linted for `aarch64-apple-darwin`, with runtime QA on a Mac outstanding. No visual states or Pencil nodes changed.
+The person separately approved the small `tools/check.ps1` change: check formatting per workspace manifest with
+the same nightly flags to avoid Windows's command-length limit. Full gate result and each test command are recorded
+in `.tmp/orc21/verification.md`.
+
 New app, first working set (merged 2026-10-09/10 into master; each reviewed, QA'd live and design-verified by
 separate agents): T1 Tasks list (`claude/app-tasks`), F2 shell live data (`claude/app-shell`), P1 task page and Summary
 (`claude/app-task-page`), N1 New/Edit task with the per-field conflict chooser (`claude/app-task-form`), P2 Summary

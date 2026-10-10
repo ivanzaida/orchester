@@ -10,8 +10,15 @@ Push-Location $repositoryRoot
 try {
     # rustfmt.toml uses nightly-only options; the pinned stable toolchain would ignore them.
     Write-Output "== rustfmt"
-    cargo +nightly fmt --all -- --check
-    if ($LASTEXITCODE -ne 0) { $failed = $true }
+    $workspace = cargo metadata --no-deps --format-version 1 | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0) {
+        $failed = $true
+    } else {
+        foreach ($package in $workspace.packages) {
+            cargo +nightly fmt --manifest-path $package.manifest_path -- --check
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+        }
+    }
 
     Write-Output "== clippy"
     cargo clippy --workspace --all-targets --all-features -- -D warnings
