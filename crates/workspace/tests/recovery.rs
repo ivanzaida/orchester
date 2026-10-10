@@ -6,6 +6,7 @@
 mod support;
 
 use orchester_core::{
+  id::ProjectId,
   resource::ModelId,
   run::{PendingToolApproval, WaitReason},
   store::ActivityStore,
@@ -13,7 +14,10 @@ use orchester_core::{
 use orchester_exec::programs::Programs;
 use orchester_ipc::SessionEnd;
 use orchester_store::AppDb;
-use orchester_workspace::{recovery::interrupted_runs, workspace::Workspace};
+use orchester_workspace::{
+  recovery::{Decision, Reading, Recovery, RecoveryState, interrupted_runs},
+  workspace::Workspace,
+};
 use support::{Fixture, at};
 
 #[test]
@@ -73,4 +77,45 @@ fn recovery_lists_a_run_held_at_a_tool_approval() {
   let listed = interrupted_runs(&workspace, &Programs::processes(), SessionEnd::Crashed, at(30)).expect("read");
   let runs: Vec<_> = listed.iter().map(|run| run.run).collect();
   assert_eq!(runs, [run.id()], "the agent that held the request is gone");
+}
+
+/// The session's recovery after `previous`, of a crashed session's project with one run at work, once it
+/// has read; and that run.
+fn recovery_after(previous: SessionEnd) -> (Recovery, RecoveryState, orchester_core::id::RunId, ProjectId) {
+  let mut fixture = Fixture::new();
+  let working = fixture.task("Write docs", at(10));
+  let at_work = fixture.started_run(working, at(20));
+  let project = fixture.db.project().id();
+  let app = tempfile::tempdir().expect("an app folder");
+  let workspace = Workspace::new(AppDb::open(&app.path().join("orchester.db")).expect("the app database"));
+  workspace.open(fixture.repo.path()).expect("the project is registered");
+  let runtime = tokio::runtime::Runtime::new().expect("a runtime");
+  let recovery = Recovery::start((workspace, Programs::processes()), previous, at(90), runtime.handle());
+  let mut updates = recovery.subscribe();
+  let state = runtime.block_on(async {
+    let read = updates.wait_for(|state| state.reading != Reading::Reading).await;
+    read.expect("the recovery reads").clone()
+  });
+  (recovery, state, at_work.id(), project)
+}
+
+#[test]
+fn recovery_session_offers_the_runs_a_quit_now_interrupted_by_project() {
+  let (recovery, state, run, project) = recovery_after(SessionEnd::QuitNow);
+  let runs: Vec<_> = state
+    .runs_of(project)
+    .iter()
+    .map(|interrupted| interrupted.run)
+    .collect();
+  assert_eq!(runs, [run]);
+  assert_eq!(state.decision(project), Decision::Undecided);
+  recovery.leave(project);
+  assert_eq!(recovery.state().decision(project), Decision::Left);
+}
+
+#[test]
+fn recovery_session_offers_nothing_after_wait_for_agents_to_save() {
+  let (_, state, _, project) = recovery_after(SessionEnd::RunsPaused);
+  assert_eq!(state.reading, Reading::Nothing);
+  assert!(state.runs_of(project).is_empty());
 }

@@ -146,8 +146,16 @@ impl RecoveryNotice {
 /// The list's title and why the runs were interrupted.
 fn list_head(ctx: &Ctx, previous: SessionEnd, count: usize) -> Row {
   let body = match previous {
-    SessionEnd::QuitNow => "lifecycle.recovery.body.quitNow",
-    _ => "lifecycle.recovery.body.crashed",
+    SessionEnd::QuitNow => plural(
+      count,
+      "lifecycle.recovery.body.quitNow.one",
+      "lifecycle.recovery.body.quitNow.other",
+    ),
+    _ => plural(
+      count,
+      "lifecycle.recovery.body.crashed.one",
+      "lifecycle.recovery.body.crashed.other",
+    ),
   };
   Row::new()
     .width(Dimension::Pct(100.0))

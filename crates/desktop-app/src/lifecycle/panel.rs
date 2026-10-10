@@ -34,7 +34,6 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, glyph, icon},
-    unavailable::with_reason,
   },
 };
 
@@ -220,13 +219,25 @@ impl ClosingPanel {
         let row = row
           .child(cancel.disabled())
           .child(progress(&ctx.t_args(key, [("count", count.as_str())])));
-        with_reason(
-          row,
-          "closing-cancel-reason",
-          &ctx.t("lifecycle.close.cancelUnavailable"),
-        )
-        .width(Dimension::Pct(100.0))
-        .into()
+        // `Reason line` (`NGPaQ`): the lock and why, at the actions' end, 8 under them.
+        let reason = Row::new()
+          .width(Dimension::Pct(100.0))
+          .justify(Justify::End)
+          .spacing(ExtraSpacing::Snug.role())
+          .align_items(Alignment::Center)
+          .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted))
+          .child(
+            Text::new(&ctx.t("lifecycle.close.cancelUnavailable"))
+              .id("closing-cancel-reason")
+              .variant(ExtraTypography::Note.role())
+              .nowrap(),
+          );
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .spacing(SpacingSize::Sm)
+          .child(row)
+          .child(reason)
+          .into()
       }
       Stage::Saved => row.child(progress(&ctx.t("lifecycle.close.closing"))).into(),
     };

@@ -76,8 +76,14 @@
         "other": "Their worktrees and commits are kept. Continue them from their last checkpoint, or leave them stopped."
       },
       "body": {
-        "crashed": "Orchester stopped unexpectedly. Nothing has been restarted. Continue all of them from their last checkpoints, or none; work after a checkpoint is not counted as done.",
-        "quitNow": "You chose Quit now. Nothing has been restarted. Continue all of them from their last checkpoints, or none; work after a checkpoint is not counted as done."
+        "crashed": {
+          "one": "Orchester stopped unexpectedly. Nothing has been restarted. Continue the run from its last checkpoint, or leave it; work after a checkpoint is not counted as done.",
+          "other": "Orchester stopped unexpectedly. Nothing has been restarted. Continue all of them from their last checkpoints, or none; work after a checkpoint is not counted as done."
+        },
+        "quitNow": {
+          "one": "You chose Quit now. Nothing has been restarted. Continue the run from its last checkpoint, or leave it; work after a checkpoint is not counted as done.",
+          "other": "You chose Quit now. Nothing has been restarted. Continue all of them from their last checkpoints, or none; work after a checkpoint is not counted as done."
+        }
       },
       "reviewRuns": "Review runs",
       "continueAll": "Continue all",
