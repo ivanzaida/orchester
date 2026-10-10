@@ -26,7 +26,6 @@
       "answered": "Asked at {{time}} · {{step}} · the answer follows in the conversation",
       "answeredNoStep": "Asked at {{time}} · the answer follows in the conversation",
       "answer": "Answer",
-      "composerUnavailable": "Answering is not available here yet: the composer comes with a later build.",
       "lost": "Asked at {{time}} · {{step}} · the run was interrupted before an answer",
       "lostNoStep": "Asked at {{time}} · the run was interrupted before an answer"
     },
@@ -59,9 +58,9 @@
         "agent": "Starts {{step}} with {{agent}}. To ask for changes, write in the composer.",
         "tool": "Starts {{step}}. To ask for changes, write in the composer.",
         "last": "No step follows it: the run goes on. To ask for changes, write in the composer.",
-        "agentNoComposer": "Starts {{step}} with {{agent}}. Asking for changes is not available here yet.",
-        "toolNoComposer": "Starts {{step}}. Asking for changes is not available here yet.",
-        "lastNoComposer": "No step follows it: the run goes on. Asking for changes is not available here yet."
+        "agentOnly": "Starts {{step}} with {{agent}}.",
+        "toolOnly": "Starts {{step}}.",
+        "lastOnly": "No step follows it: the run goes on."
       }
     },
     "approval": {

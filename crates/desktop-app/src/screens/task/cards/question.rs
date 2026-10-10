@@ -9,7 +9,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, SpacingSize},
   },
-  components::{Column, Row},
+  components::Row,
   core::ElementRef,
   layout::Alignment,
   node::{Element, padding::Padding},
@@ -20,7 +20,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  Place,
+  ComposerState, Place,
   decisions::Decisions,
   frame::{Stands, frame, head, note},
 };
@@ -30,7 +30,6 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
     markdown::MarkdownView,
-    unavailable::reason_line,
   },
 };
 
@@ -100,7 +99,8 @@ impl Component for QuestionCard {
     };
     let text = MarkdownView::new(format!("{id}-text"), entry.body.clone(), place.links.clone()).render(ctx);
     let context = context(ctx, &place, &entry, (&agent, open, lost));
-    let actions = open.then(|| self.actions(ctx, &id, &decisions, focus));
+    let composer = Place::composer(ctx);
+    let actions = open.then(|| self.actions(ctx, &id, composer, focus)).flatten();
     frame(id.clone(), open)
       .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
       .spacing(ExtraSpacing::Loose.role())
@@ -120,7 +120,8 @@ impl QuestionCard {
   /// *Answer*, which sends the person to the composer; unavailable, and why, while the composer takes no
   /// answer here.
   /// It takes the focus with `focus`, when it can be pressed.
-  fn actions(&self, ctx: &mut Ctx, id: &str, decisions: &Decisions, focus: bool) -> Element {
+  fn actions(&self, ctx: &mut Ctx, id: &str, composer: Option<ComposerState>, focus: bool) -> Option<Element> {
+    let composer = composer?;
     let button = ActionButton::new(
       format!("{id}-answer"),
       ButtonKind::Primary,
@@ -128,29 +129,20 @@ impl QuestionCard {
     )
     .icon(Icon::Reply)
     .in_form();
-    if !decisions.composer_attached() {
-      return Column::new()
-        .spacing(SpacingSize::Sm)
-        .child(button.unavailable(ctx.t("cards.question.composerUnavailable")))
-        .child(reason_line(
-          &format!("{id}-answer-reason"),
-          &ctx.t("cards.question.composerUnavailable"),
-        ))
-        .into();
-    }
     if focus {
       ctx.focus(&self.answer);
     }
-    let asks = decisions.clone();
-    Row::new()
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(
-        button
-          .element_ref(self.answer.clone())
-          .on_click(move || asks.ask_composer()),
-      )
-      .into()
+    Some(
+      Row::new()
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(
+          button
+            .element_ref(self.answer.clone())
+            .on_click(move || composer.take_up()),
+        )
+        .into(),
+    )
   }
 }
 

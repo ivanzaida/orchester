@@ -154,9 +154,25 @@ fn card_question_waits_and_sends_the_answer_to_the_composer() {
     context.contains("Implement · Builder's active time is stopped until you answer."),
     "{context}"
   );
-  // This build has no composer yet: Answer says so instead of doing nothing.
-  assert!(locked(&mut window, &format!("{card}-answer")));
-  assert!(text(&mut window, &format!("{card}-answer-reason")).contains("the composer comes with a later build"));
+  // The person left the question's mode for an ordinary message: Answer brings it back, focus in the box.
+  click(&mut window, "composer-leave");
+  window.until("an ordinary message", |window| {
+    window.tree.get_element_by_id("composer-context").is_none()
+  });
+  click(&mut window, &format!("{card}-answer"));
+  window.until("the question's mode", |window| {
+    window
+      .texts("composer-context-text")
+      .is_some_and(|texts| texts.join(" ").starts_with("Answering Builder’s question from "))
+  });
+  window.until("the focus in the composer", |window| {
+    window
+      .tree
+      .focused_element()
+      .and_then(|element| element.id().map(str::to_owned))
+      .as_deref()
+      == Some("composer-input")
+  });
 }
 
 #[test]
@@ -204,12 +220,23 @@ fn card_plan_shows_its_first_lines_the_whole_plan_and_approve() {
   let hint = text(&mut window, &format!("{card}-hint"));
   assert_eq!(
     hint,
-    "Starts 03 Implement with Builder. Asking for changes is not available here yet."
+    "Starts 03 Implement with Builder. To ask for changes, write in the composer."
   );
   assert_eq!(text(&mut window, &format!("{card}-approve")), "Approve plan & continue");
   click(&mut window, &format!("{card}-approve"));
   window.until("why the approval did not go", |window| {
     window.tree.get_element_by_id(&format!("{card}-refused")).is_some()
+  });
+  // The hint leads to the composer, in the plan's mode, after the person left it.
+  click(&mut window, "composer-leave");
+  window.until("an ordinary message", |window| {
+    window.tree.get_element_by_id("composer-context").is_none()
+  });
+  click(&mut window, &format!("{card}-changes"));
+  window.until("the plan's mode", |window| {
+    window
+      .texts("composer-context-text")
+      .is_some_and(|texts| texts.join(" ").starts_with("Changes to plan v1"))
   });
 }
 

@@ -2,8 +2,7 @@
 //! ([`answers`]), sent by the tab one at a time; what the person picked and typed on a question's card and
 //! what became of each answer, kept by run and card for as long as the app runs ([`kept`]), so switching
 //! tabs, leaving the task or a card scrolling out of the chat loses neither; whether the run lost its
-//! runner; which card takes the focus when the tab opens; and the composer that takes a question's answer
-//! or a plan's changes.
+//! runner; and which card takes the focus when the tab opens.
 
 mod answers;
 mod kept;
@@ -43,9 +42,7 @@ enum Focus {
 pub(super) type Card<'a> = (RunId, &'a Arc<str>);
 
 /// Made by the Conversation tab when it is created ([`Decisions::new`], before any future of its own),
-/// kept in each render ([`Decisions::keep`], first) and provided to its cards. The composer (C2) attaches
-/// itself with [`Decisions::attach_composer`] once it is mounted where it answers a question and takes a
-/// plan's changes, and moves the focus into its box whenever [`Decisions::composer_focus_asks`] moves on.
+/// kept in each render ([`Decisions::keep`], first) and provided to its cards.
 #[derive(Clone)]
 pub struct Decisions {
   send: SendAnswer,
@@ -53,8 +50,6 @@ pub struct Decisions {
   kept: Signal<u64>,
   lost: Signal<bool>,
   focus: Arc<Mutex<Focus>>,
-  composer: Signal<bool>,
-  composer_focus: Signal<u64>,
 }
 
 impl PartialEq for Decisions {
@@ -83,8 +78,6 @@ impl Decisions {
       kept,
       lost: ctx.signal(false),
       focus: Arc::default(),
-      composer: ctx.signal(false),
-      composer_focus: ctx.signal(0),
     }
   }
 
@@ -117,28 +110,6 @@ impl Decisions {
     }
   }
 
-  /// The composer is mounted and takes a question's answer and a plan's changes: the cards send the person
-  /// there.
-  #[expect(
-    dead_code,
-    reason = "the composer (C2, built beside the cards) calls it once it is mounted"
-  )]
-  pub fn attach_composer(&self) {
-    if !self.composer.get_untracked() {
-      self.composer.set(true);
-    }
-  }
-
-  /// How often a card asked the composer to take the focus; the composer reads it as it renders and moves
-  /// the focus into its box each time it moves on.
-  #[expect(
-    dead_code,
-    reason = "the composer (C2, built beside the cards) reads it as it renders"
-  )]
-  pub fn composer_focus_asks(&self) -> u64 {
-    self.composer_focus.get()
-  }
-
   /// The tab's, which it provides before its cards.
   pub(super) fn of(ctx: &mut Ctx) -> Self {
     ctx
@@ -148,16 +119,6 @@ impl Decisions {
 
   pub(super) fn lost(&self) -> bool {
     self.lost.get()
-  }
-
-  /// Whether the composer takes free answers here.
-  pub(super) fn composer_attached(&self) -> bool {
-    self.composer.get()
-  }
-
-  /// Asks the composer to take the focus.
-  pub(super) fn ask_composer(&self) {
-    self.composer_focus.update(|asks| *asks += 1);
   }
 
   /// Whether the card `key` takes the focus now: the card the chat revealed when it first showed its rows,

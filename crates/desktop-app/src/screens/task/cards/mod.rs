@@ -33,6 +33,7 @@ use orchester_workspace::{
 };
 
 pub use self::decisions::Decisions;
+use super::conversation::ComposerState;
 use crate::{project::Projects, ui::markdown::LinkHandler};
 
 /// How a step is named in the conversation: "03 Implement" for step 3, Implement.
@@ -85,6 +86,12 @@ impl Place {
     Projects::of(ctx)
       .state(self.project)
       .and_then(|state| state.open().cloned())
+  }
+
+  /// The composer under the chat, where a question's answer and a plan's changes are written; `None` where a
+  /// card is shown without one.
+  fn composer(ctx: &mut Ctx) -> Option<ComposerState> {
+    ctx.use_context::<ComposerState>()
   }
 
   /// "03 Implement" for the step of the card's run named `step`, while its pipeline has it; else its name.

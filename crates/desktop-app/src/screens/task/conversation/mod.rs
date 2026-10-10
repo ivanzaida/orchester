@@ -86,6 +86,7 @@ impl Component for ConversationTab {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     // First, as the tab made it: lurq keeps a component's futures by the order it asks for them.
     self.decisions.keep(ctx);
+    ctx.provide(self.decisions.clone());
     let task = ctx.props::<TaskContext>().clone();
     let detail = &task.detail;
     // What the latest run left once it ended, as last read: a removed worktree closes the conversation.
@@ -162,7 +163,6 @@ impl ConversationTab {
         .find(|item| items::waits_for_you(item))
         .map(|item| item.key.clone()),
     );
-    ctx.provide(self.decisions.clone());
     ctx.provide(Timeline {
       project: task.project.open.project.id(),
       key: task.key.clone(),

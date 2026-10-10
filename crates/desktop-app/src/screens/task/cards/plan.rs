@@ -23,7 +23,7 @@ use orchester_ipc::Command;
 use orchester_workspace::tasks::timeline::PlanCard;
 
 use super::{
-  Place,
+  ComposerState, Place,
   decisions::{Decisions, Given, Outcome, Refused, Stage, refusal},
   frame::{Stands, frame, head, held, note},
 };
@@ -211,7 +211,7 @@ impl PlanView {
         button.on_click(move || decisions.answer((run, &key), Given::ApprovePlan, (&open, command.clone())))
       }
     };
-    let composer = decisions.composer_attached();
+    let composer = Place::composer(ctx);
     let next = card
       .next
       .as_ref()
@@ -221,11 +221,7 @@ impl PlanView {
       .spacing(ExtraSpacing::Loose.role())
       .align_items(Alignment::Center)
       .child(Row::new().flex_shrink(0.0).child(button))
-      .child(
-        note(&format!("{id}-hint"), &hint(ctx, next, composer))
-          .flex(1.0)
-          .min_width(Dimension::Px(0.0)),
-      );
+      .child(hint_line(ctx, id, (next, composer)));
     Column::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(
@@ -280,19 +276,39 @@ fn stands(ctx: &Ctx, card: &PlanCard, (waiting, lost, outcome): (bool, bool, Opt
   }
 }
 
-/// What approving starts, and where the changes a plan needs are asked for: the composer, while it is there.
+/// The step that approving starts, as the conversation names it ("03 Implement"), and its agent unless a tool
+/// runs it.
+type Next = (Arc<str>, Option<Arc<str>>);
+
+/// What approving starts, and that the changes a plan needs are written in the composer: a press on it takes
+/// the person there, in the plan's mode. Without a composer, what approving starts only.
+fn hint_line(ctx: &Ctx, id: &str, (next, composer): (Option<Next>, Option<ComposerState>)) -> Element {
+  let words = note(&format!("{id}-hint"), &hint(ctx, next, composer.is_some()))
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0));
+  match composer {
+    Some(composer) => pressable(move || composer.take_up())
+      .id(format!("{id}-changes"))
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .child(words)
+      .into(),
+    None => words.into(),
+  }
+}
+
 /// `next` is the step that starts, as the conversation names it ("03 Implement"), and its agent.
-fn hint(ctx: &Ctx, next: Option<(Arc<str>, Option<Arc<str>>)>, composer: bool) -> Arc<str> {
+fn hint(ctx: &Ctx, next: Option<Next>, composer: bool) -> Arc<str> {
   let key = |with: &'static str, without: &'static str| if composer { with } else { without };
   match next {
     Some((step, Some(agent))) => ctx.t_args(
-      key("cards.plan.hint.agent", "cards.plan.hint.agentNoComposer"),
+      key("cards.plan.hint.agent", "cards.plan.hint.agentOnly"),
       [("step", &*step), ("agent", &*agent)],
     ),
     Some((step, None)) => ctx.t_args(
-      key("cards.plan.hint.tool", "cards.plan.hint.toolNoComposer"),
+      key("cards.plan.hint.tool", "cards.plan.hint.toolOnly"),
       [("step", &*step)],
     ),
-    None => ctx.t(key("cards.plan.hint.last", "cards.plan.hint.lastNoComposer")),
+    None => ctx.t(key("cards.plan.hint.last", "cards.plan.hint.lastOnly")),
   }
 }
