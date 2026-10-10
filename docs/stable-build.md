@@ -215,7 +215,9 @@ project up end to end without its configuration screens: `add_project` and `get_
 `update_project_limits`); `list_connections`, `add_cli_connection` (Codex or Claude, checked before it is
 saved), `check_connection` and `list_models`; `list_profiles`, `get_profile`, `save_profile_draft` and
 `publish_profile`; `get_pipeline`, `create_pipeline` (from the starter, empty, or a copy),
-`save_pipeline_draft` and `publish_pipeline`; `list_instructions`, `save_instruction_draft` and
+`save_pipeline_draft` and `publish_pipeline`; `list_tools`, `get_tool`, `save_tool_draft` and `publish_tool`
+(command tools, which pipeline steps call; HTTP and database tools are listed by kind and description only,
+and no tool is removed or archived in this version); `list_instructions`, `save_instruction_draft` and
 `publish_instruction`; `get_changes` and `merge_run` (the Summary's *Merge into main*). Each checks its
 input with the rules of the screen it stands for and takes only what that screen offers; no tool takes or
 returns a secret's value. Tools that read are in lurq's Observe scope. Tools that change data are in a
@@ -234,7 +236,12 @@ environment variables, removals included, but to `RUST_LOG`, `RUST_BACKTRACE`, `
 `LC_NUMERIC` and `LC_TIME` (`orchester_core::permission::widening::harmless_variable`), since a
 variable can change what programs load, where they connect, what they trust or where tools keep their
 configuration, and removing a person's (a proxy, say) can widen too; approving automatically, which also needs
-*Let automation answer approvals*; and removing or weakening a pipeline step's approval gate. Narrowing is always taken. The setting is off by
+*Let automation answer approvals*; removing or weakening a pipeline step's approval gate; and command tools, since
+a command step runs its program with your rights, network access and no sandbox, on files the agents before it wrote
+(scripts, build files, package and git configuration): making one, changing its program
+or arguments, letting more exit codes pass, changing any of its variables but the harmless ones above, publishing
+its first version or a version that does any of these, and a pipeline step that calls a tool where neither the
+draft nor the latest published version calls it under that key. Narrowing is always taken. The setting is off by
 default and only a person changes it, in the window, in Settings › What automation may do. No domain tool
 changes it, and window input cannot either: while its row is on screen, lurq denies its input tools when a
 call runs (also one queued earlier, or one whose answer timed out), the server refuses every window-input
@@ -255,6 +262,30 @@ published, allowed, or could not object to. Only moving an existing task to anot
 (`update_task`) is a person's decision, refused as `person_only` while the setting is off; a task without a
 pipeline may get any published one.
 `duplicate_pipeline` is shared with the deprecated desktop's server, which follows the rule too.
+
+Command tools through the tools: `save_tool_draft` takes the program as a name found on the search path (the
+tool's own `PATH` variable, else the project's, else the app's; relative folders are skipped) or as the absolute
+path of an existing file outside the project's repository, and stores the file it found, so the program itself is
+a fixed file; a path inside the repository, also through a link or junction, is refused (run a script through its
+interpreter instead). On an existing tool a field left out keeps its value. Arguments go to the program as they
+are, without a shell, in the worktree of the step that calls the tool; on Windows it does not start programs from
+that worktree by name (`NoDefaultCurrentDirectoryInExePath`). A fixed program is not a sandbox: a command step
+runs with your rights, network access and no sandbox, and its program reads the files the agents before it wrote,
+such as `tools/check.ps1` itself, `build.rs` or a cargo, npm or git configuration. Approve a tool step only after
+agents you would let run code that way. For example, a *Check* step that runs `tools/check.ps1` after *Implement* and returns to it
+when the check fails, with *Let automation change agent permissions* on:
+
+```text
+save_tool_draft     {"project": "Orchester", "name": "Check", "description": "Runs tools/check.ps1.",
+                     "program": "powershell",
+                     "arguments": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tools/check.ps1"],
+                     "timeout_secs": 3600}
+publish_tool        {"project": "Orchester", "tool": "Check"}
+save_pipeline_draft {"project": "Orchester", "pipeline": "Orchester change", "steps": [...the steps it has...,
+                     {"key": "check", "name": "Check", "tool": "Check", "runs_after": ["implement"],
+                      "on_failure": {"return_to": "implement", "retries": 2}}]}
+publish_pipeline    {"project": "Orchester", "pipeline": "Orchester change"}
+```
 
 Today only this switch is protected from window input. Person-only actions in editors still to come (a
 profile's or a pipeline's Publish, approvals) must likewise refuse synthetic input from MCP clients; lurq

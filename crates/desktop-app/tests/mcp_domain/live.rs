@@ -241,6 +241,47 @@ changed by hand
 }
 
 #[test]
+fn domain_a_command_step_made_through_the_tools_checks_the_agents_work() {
+  let (mut served, repo, fake) = served();
+  set_up(&mut served, &repo, &fake);
+  let check = json!({
+    "project": "Kontur",
+    "name": "Check",
+    "program": "git",
+    "arguments": ["grep", "--quiet", "hello"],
+  });
+  served.ok("save_tool_draft", &check);
+  served.ok("publish_tool", &json!({ "project": "Kontur", "tool": "Check" }));
+  served.ok(
+    "save_pipeline_draft",
+    &json!({ "project": "Kontur", "pipeline": "Delivery", "steps": [
+      { "key": "implement", "name": "Implement", "profile": "Builder", "repository": "write", "instructions": "Append one line." },
+      {
+        "key": "check",
+        "name": "Check",
+        "tool": "Check",
+        "runs_after": ["implement"],
+        "on_failure": { "return_to": "implement", "retries": 1 },
+      },
+    ] }),
+  );
+  let pipeline = served.ok(
+    "publish_pipeline",
+    &json!({ "project": "Kontur", "pipeline": "Delivery" }),
+  );
+  assert_eq!(pipeline["pipeline"]["published_version"], 2, "{pipeline}");
+  let key = run(&mut served, "Say hello.");
+  served.until("the run to be ready for review", |served| {
+    let task = served.ok("get_task", &json!({ "project": "Kontur", "key": key }));
+    task["phase"] == "succeeded"
+  });
+  let run = served.ok("get_run", &json!({ "project": "Kontur", "run": "1" }));
+  let check = &run["steps"][1];
+  assert_eq!(check["tool_step"], true, "{run}");
+  assert_eq!(check["status"]["state"], "passed", "{run}");
+}
+
+#[test]
 fn domain_automation_cannot_approve_a_network_request() {
   let (mut served, repo, fake) = served();
   set_up(&mut served, &repo, &fake);

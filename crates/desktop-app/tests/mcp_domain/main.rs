@@ -15,6 +15,7 @@ mod http;
 mod kontur;
 mod live;
 mod merge;
+mod tools;
 mod window;
 
 use std::{

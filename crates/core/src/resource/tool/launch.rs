@@ -16,11 +16,15 @@ use crate::{
   connection::invocation::{Platform, agent_environment},
 };
 
+/// The variable that keeps Windows from looking up a program named without a path in the current
+/// directory first (`NeedCurrentDirectoryForExePathW`); `cmd.exe` respects it as well.
+const NO_CURRENT_DIRECTORY_IN_EXE_PATH: (&str, &str) = ("NoDefaultCurrentDirectoryInExePath", "1");
+
 /// Extensions Windows starts a program file by, in the order they are tried after a bare name.
 const WINDOWS_EXTENSIONS: [&str; 4] = ["exe", "cmd", "bat", "com"];
 
 impl CommandProgram {
-  /// Files the program may be on `platform`, in search order: a bare name in each folder of
+  /// Files the program may be on `platform`, in search order: a bare name in each absolute folder of
   /// `path` (the `PATH` the program starts with), a relative path in `worktree`, an absolute path
   /// as it is. On Windows a name without one of the program extensions is also tried with each.
   /// Command tools and MCP servers look their programs up this way.
@@ -29,7 +33,8 @@ impl CommandProgram {
       ProgramLocation::OnPath(name) => path
         .map(|path| {
           std::env::split_paths(path)
-            .filter(|folder| !folder.as_os_str().is_empty())
+            // A relative folder would be looked in from the worktree, which agents write.
+            .filter(|folder| folder.is_absolute())
             .map(|folder| folder.join(name))
             .collect()
         })
@@ -63,17 +68,25 @@ impl CommandAction {
 
   /// The process that runs `program` (a file [`Self::program_candidates`] found) in `worktree`,
   /// with the allowed part of `environment`, then the variables the project adds (`project`), then
-  /// the tool's; each replaces one of the same name.
+  /// the tool's; each replaces one of the same name. On Windows the process is also told not to start
+  /// programs from its current directory, the worktree, by name ([`NO_CURRENT_DIRECTORY_IN_EXE_PATH`]):
+  /// a `.cmd` shim that starts `node` would otherwise start a `node.exe` an agent left there.
   pub fn process(
     &self,
     program: &Path,
     worktree: &Path,
     environment: impl IntoIterator<Item = (OsString, OsString)>,
     project: &CommandEnvironment,
+    platform: Platform,
   ) -> Command {
     let mut variables = agent_environment(environment);
     project.add_to(&mut variables);
     self.environment().add_to(&mut variables);
+    if platform == Platform::Windows {
+      let (name, value) = NO_CURRENT_DIRECTORY_IN_EXE_PATH;
+      variables.retain(|(existing, _)| !existing.eq_ignore_ascii_case(name));
+      variables.push((name.to_owned(), value.to_owned()));
+    }
     Command::new(program, self.args().iter().map(CommandArg::as_str))
       .with_current_dir(worktree)
       .with_environment(variables)

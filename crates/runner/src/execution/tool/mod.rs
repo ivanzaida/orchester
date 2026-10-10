@@ -85,9 +85,13 @@ impl RunTask {
     }
     .started();
     self.record(&invocation, started)?;
-    let process = command
-      .action
-      .process(&program, workspace.path(), std::env::vars_os(), &environment);
+    let process = command.action.process(
+      &program,
+      workspace.path(),
+      std::env::vars_os(),
+      &environment,
+      Platform::current(),
+    );
     match Supervised::start(&process) {
       Ok(process) => self.follow(execution, invocation, command, process, workspace),
       Err(error) => {

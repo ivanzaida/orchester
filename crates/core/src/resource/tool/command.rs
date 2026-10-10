@@ -30,6 +30,9 @@ pub enum CommandError {
   /// A relative program path is looked up in the worktree and must stay inside it.
   #[error("the program `{0}` leaves the worktree")]
   OutsideWorktree(String),
+  /// `C:x.exe` names a file relative to the current folder of drive C, which depends on the process.
+  #[error("the program `{0}` names a drive without a folder from its root")]
+  DriveRelative(String),
   #[error("the timeout must be between 1 second and {max} hours", max = CommandTimeout::MAX_HOURS)]
   Timeout,
   #[error("a command tool expects at least one exit code")]
@@ -65,6 +68,14 @@ fn check_token(value: &str) -> Result<(), CommandError> {
   Ok(())
 }
 
+/// Whether `value` starts with a drive (`C:`) not followed by a separator. Read the same on every
+/// platform, so a body means the same on Windows and macOS.
+fn drive_relative(value: &str) -> bool {
+  let mut chars = value.chars();
+  let drive = chars.next().is_some_and(|letter| letter.is_ascii_alphabetic()) && chars.next() == Some(':');
+  drive && !matches!(chars.next(), Some('/' | '\\'))
+}
+
 /// The program a command tool starts: a name looked up on the `PATH` (`cargo`), a path inside
 /// the worktree (`scripts/check.sh`) or an absolute path. Surrounding spaces are not part of it.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -88,6 +99,9 @@ impl CommandProgram {
       return Err(CommandError::BlankProgram);
     }
     check_token(value)?;
+    if drive_relative(value) {
+      return Err(CommandError::DriveRelative(value.to_owned()));
+    }
     let program = Self(value.to_owned());
     // Both separators count on every platform, so a body means the same on Windows and macOS.
     let leaves = value.split(['/', '\\']).any(|segment| segment == "..");

@@ -159,6 +159,12 @@ pub async fn save_pipeline_draft(
         }
       }
     }
+    let latest_steps = current.latest.as_ref().map_or(&[][..], |latest| latest.body.steps());
+    dropped.extend(added_tool_steps(
+      [current.body.steps(), latest_steps],
+      body.steps(),
+      &current.assignables,
+    ));
     widening::allowed(&services, dropped)?;
     let saved = save_draft_in(&open.repo_root, id, body)?;
     services.changes.record(open.project.id(), Outside::Pipelines);
@@ -188,6 +194,34 @@ fn weakened_gates(base: &[Step], steps: &[Step]) -> Vec<Message> {
     }
   }
   reasons
+}
+
+/// The steps of `steps` that call a tool where neither the draft as it stands nor the latest published
+/// version (`bases`) calls it under the same key: each runs a program on this computer, which a person
+/// decides.
+fn added_tool_steps(bases: [&[Step]; 2], steps: &[Step], assignables: &Assignables) -> Vec<Message> {
+  let calls = |step: &Step| match step.kind {
+    StepKind::Tool { tool } => tool,
+    StepKind::Agent { .. } => None,
+  };
+  steps
+    .iter()
+    .filter_map(|step| Some((step, calls(step)?)))
+    .filter(|(step, tool)| {
+      !bases
+        .iter()
+        .flat_map(|base| base.iter())
+        .any(|before| before.key == step.key && calls(before) == Some(*tool))
+    })
+    .map(|(step, tool)| {
+      let name = assignables
+        .tool(tool)
+        .map_or_else(|| tool.to_string(), |choice| choice.name.to_string());
+      Message::new("appMcp.projectTools.widens.toolStep")
+        .with("step", step.name.as_str().to_owned())
+        .with("tool", name)
+    })
+    .collect()
 }
 
 /// The step `input` describes, or why the inspector would not take it, naming the step.
