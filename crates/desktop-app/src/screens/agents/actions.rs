@@ -65,7 +65,7 @@ pub fn follow(ctx: &mut Ctx, work: &Work, pending: Signal<Pending>, busy: Signal
 }
 pub fn confirm(ctx: &mut Ctx, pending: &Signal<Pending>, busy: &Signal<bool>, work: &Work) -> Option<Element> {
   let request = pending.get().0?;
-  let stale = matches!(request.action, Action::KeepDraft | Action::PublishStale);
+  let stale = matches!(request.action, Action::PublishStale);
   let mut reasons: Vec<Arc<str>> = request.allowed.iter().map(|reason| message_text(ctx, reason)).collect();
   if stale {
     reasons.insert(0, ctx.t("agents.keepWarning"));

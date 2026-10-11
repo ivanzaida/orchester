@@ -13,7 +13,6 @@ pub enum Action {
   Publish,
   /// The person confirmed replacing the latest version with this stale draft.
   PublishStale,
-  KeepDraft,
 }
 
 /// A fixed candidate: confirmation never reads newly edited fields.
@@ -55,7 +54,7 @@ pub fn apply(root: &Path, request: &Request) -> Result<Outcome, Message> {
     .profile
     .permissions()
     .enforced_on(connection.provider(), Platform::current())
-    .map_err(|_| Message::new("agents.permissions.publish.notEnforceable"))?;
+    .map_err(|problem| super::permissions::not_enforceable(&problem))?;
   if connection.provider().is_native()
     && (request.profile.permissions().interactive_tool_approvals()
       || request.profile.permissions().auto_approve()
@@ -63,18 +62,11 @@ pub fn apply(root: &Path, request: &Request) -> Result<Outcome, Message> {
   {
     return Err(Message::new("appMcp.errors.nativeNoSwitches"));
   }
-  if request
-    .profile
-    .mcp_servers()
-    .ids()
-    .iter()
-    .any(|id| !listed.mcp.iter().any(|server| server.id() == *id))
-  {
-    return Err(Message::new("appMcp.errors.mcpServersInvalid").with(
-      "max",
-      orchester_core::connection::mcp::McpServerSelection::MAX.to_string(),
-    ));
-  }
+  super::servers::check(
+    &listed.mcp,
+    request.existing.as_ref().map(|entry| &entry.profile),
+    &request.profile,
+  )?;
   let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
   let reasons = super::widening::reasons(&db, id, &request.profile, connection.provider())
     .map_err(|error| messages::store_error(&error))?;
@@ -97,10 +89,7 @@ fn perform(root: &Path, request: &Request) -> Result<ResourceId, Message> {
     (Action::PublishStale, Some(expected)) if request.profile == expected.profile => {
       data::publish_stale_checked_in(root, expected).map(|_| expected.id)
     }
-    (Action::KeepDraft, Some(expected)) if request.profile == expected.profile => {
-      data::keep_draft_checked_in(root, expected).map(|()| expected.id)
-    }
-    (Action::KeepDraft | Action::PublishStale, Some(_)) => return Err(Message::new("errors.draftChanged")),
+    (Action::PublishStale, Some(_)) => return Err(Message::new("errors.draftChanged")),
     (_, None) => return Err(Message::new("appMcp.errors.noDraft")),
   };
   result.map_err(|error| messages::store_error(&error))

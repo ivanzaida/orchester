@@ -87,7 +87,7 @@ fn profile_checked_save_rejects_intervening_body_base_and_version_changes() {
 }
 
 #[test]
-fn profile_checked_keep_rejects_intervening_body_base_and_version_changes() {
+fn profile_checked_stale_publish_rejects_intervening_body_base_and_version_changes() {
   for change in ["body", "base", "version", "removed"] {
     let (repo, db, expected, candidate) = fixture(true);
     let mut other = ProjectDb::open(repo.path()).expect("other connection");
@@ -131,17 +131,11 @@ fn profile_checked_keep_rejects_intervening_body_base_and_version_changes() {
       before,
       "rejected publish changed storage: {change}"
     );
-    let result = data::keep_draft_checked_in(repo.path(), &expected);
-    assert!(
-      matches!(result, Err(StoreError::DraftChanged(_))),
-      "{change}: {result:?}"
-    );
-    assert_eq!(entry(&db, expected.id), before, "{change}");
   }
 }
 
 #[test]
-fn profile_checked_edits_keep_lifecycle_and_discard_repeated_drafts() {
+fn profile_checked_save_keeps_lifecycle_and_discards_repeated_drafts() {
   let (repo, db, expected, candidate) = fixture(false);
   data::save_draft_checked_in(repo.path(), &expected, candidate).expect("save");
   let saved = entry(&db, expected.id);
@@ -153,17 +147,6 @@ fn profile_checked_edits_keep_lifecycle_and_discard_repeated_drafts() {
   );
   data::save_draft_checked_in(repo.path(), &saved, expected.profile.clone()).expect("revert");
   assert_eq!(entry(&db, expected.id), expected);
-
-  let (repo, db, expected, _) = fixture(true);
-  data::keep_draft_checked_in(repo.path(), &expected).expect("keep confirmed draft");
-  let saved = entry(&db, expected.id);
-  assert_eq!(saved.profile, expected.profile);
-  assert_eq!(
-    saved.state,
-    VersionState::Draft {
-      published: Some(version(2))
-    }
-  );
 }
 
 #[test]

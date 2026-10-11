@@ -3,6 +3,8 @@
 
 #[path = "agents/concurrency.rs"]
 mod concurrency;
+#[path = "agents/servers.rs"]
+mod servers;
 use std::{fs, num::NonZeroU32};
 
 use orchester_core::{

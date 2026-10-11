@@ -161,6 +161,8 @@
     "askTools": "Ask before MCP actions that require approval",
     "unavailable": "Unavailable on this connection.",
     "nativeUnavailable": "This connection does not offer approval switches or MCP servers.",
+    "summarySeparator": "·",
+    "connectionVersion": "{{name}} · {{version}}",
     "summary": "{{repository}} · {{commands}} · {{network}}",
     "commandsCount": "{{count}} allowed commands",
     "asksCommands": "Asks before commands",

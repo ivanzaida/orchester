@@ -41,10 +41,17 @@ pub struct Props {
   pub entry: Option<ProfileEntry>,
   pub view: Signal<View>,
   pub revision: Signal<u64>,
+  pub retry: Signal<u64>,
+  pub load_error: Option<orchester_workspace::messages::Message>,
+  pub reading: bool,
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    self.project == other.project && self.listed == other.listed && self.entry == other.entry
+    self.project == other.project
+      && self.listed == other.listed
+      && self.entry == other.entry
+      && self.load_error == other.load_error
+      && self.reading == other.reading
   }
 }
 impl DevtoolsInspectable for Props {}
@@ -91,6 +98,7 @@ impl Component for Editor {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(head);
+    page = page.with_children(read_failure(ctx, &props));
     if self.tried.get()
       && let Err(errors) = &checked
     {
@@ -120,7 +128,10 @@ impl Component for Editor {
             .on_click(move || revision.update(|n| *n += 1)),
         );
     }
-    if let Some(question) = actions::confirm(ctx, &self.pending, &self.busy, &work) {
+    if props.load_error.is_none()
+      && !props.reading
+      && let Some(question) = actions::confirm(ctx, &self.pending, &self.busy, &work)
+    {
       page = page.child(question);
     }
     let body = if self.busy.get() {
@@ -271,7 +282,12 @@ impl Editor {
     let can_publish = connection_runs && !dirty && state.has_draft() && props.entry.is_some();
     let publish = if !connection_runs {
       publish.unavailable(ctx.t("agents.notEnforced"))
-    } else if self.busy.get() || !can_publish || self.pending.get().0.is_some() {
+    } else if self.busy.get()
+      || props.reading
+      || props.load_error.is_some()
+      || !can_publish
+      || self.pending.get().0.is_some()
+    {
       publish.disabled()
     } else if matches!(state, VersionState::StaleDraft { .. }) {
       let pending = self.pending.clone();
@@ -293,7 +309,7 @@ impl Editor {
     let mut row = Row::new().spacing(SpacingSize::Sm).child(publish);
     if dirty {
       let save = ActionButton::new("agent-save", ButtonKind::Primary, ctx.t("agents.save")).icon(Icon::Save);
-      let save = if self.busy.get() || self.pending.get().0.is_some() {
+      let save = if self.busy.get() || props.reading || props.load_error.is_some() || self.pending.get().0.is_some() {
         save.disabled()
       } else {
         self.bind(save, Action::Save, props, work, profile)
@@ -404,4 +420,15 @@ fn save_status(status: &str, state: VersionState, dirty: bool) -> Row {
     } else {
       PaletteColor::TextSecondary
     }))
+}
+
+fn read_failure(ctx: &Ctx, props: &Props) -> Option<Element> {
+  let error = props.load_error.as_ref()?;
+  let retry = props.retry.clone();
+  Some(crate::ui::state::load_error(
+    ctx,
+    "agents-load-error",
+    (&ctx.t("agents.loadFailed"), &message_text(ctx, error)),
+    move || retry.update(|n| *n += 1),
+  ))
 }

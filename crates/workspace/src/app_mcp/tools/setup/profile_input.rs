@@ -1,15 +1,19 @@
 //! `save_profile_draft`: an agent profile's editor through Orchester's MCP server. Every field is
 //! checked as the editor checks it (`agents::form`, `agents::permissions`, `agents::folders`), and only
 //! what the editor offers is taken: permissions the connection's CLI enforces on this computer, the
-//! project's MCP servers, an effort the model lists, and no approval switches or MCP servers on a
-//! connection whose agents Orchester runs itself. Permissions and MCP servers broader than the profile's
-//! latest published version (before its first: the most restrictive its CLI enforces, no server) are a
+//! project's MCP servers (adding only one that is turned on), an effort the model lists, and no approval switches or
+//! MCP servers on a connection whose agents Orchester runs itself. Permissions and MCP servers broader than the
+//! profile's latest published version (before its first: the most restrictive its CLI enforces, no server) are a
 //! person's decision ([`widening`]); narrowing them is always taken.
 
 use std::path::Path;
 
 use orchester_core::{
-  connection::{AgentConnection, invocation::Platform, mcp::McpServerSelection},
+  connection::{
+    AgentConnection,
+    invocation::Platform,
+    mcp::{McpServer, McpServerSelection},
+  },
   id::ConnectionId,
   permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, WritableFolders},
   resource::{AgentProfile, ModelId, RepositoryAccess},
@@ -30,7 +34,8 @@ use crate::{
     data::{ProfileChange, ProjectAgents, apply_in},
     folders::with_folder,
     form::{ModelSelection, ProfileForm, effort_options},
-    permissions::with_command,
+    permissions::{not_enforceable, with_command},
+    servers,
   },
   app_mcp::{
     error::{Missing, ToolError},
@@ -146,8 +151,11 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
       ),
     };
     offered(&connection, &permissions, &args)?;
-    let servers = mcp_servers(&db, &args.mcp_servers)?;
+    let project_servers = db.mcp_servers()?;
+    let servers = mcp_servers(&project_servers, &args.mcp_servers)?;
     let profile = form(&args, &connection, &permissions, &servers)?;
+    servers::check(&project_servers, existing.map(|entry| &entry.profile), &profile)
+      .map_err(|reason| refused("mcp_server_not_offered", reason))?;
     let id = existing.map(|entry| entry.id);
     widening::check_profile(&services, &db, (id, &profile), connection.provider())?;
     let change = match existing {
@@ -248,11 +256,8 @@ fn offered(
   args: &SaveProfileDraft,
 ) -> Result<(), ToolError> {
   let provider = connection.provider();
-  if permissions.enforced_on(provider, Platform::current()).is_err() {
-    return Err(refused(
-      "permissions_not_enforced",
-      Message::new("agents.permissions.publish.notEnforceable"),
-    ));
+  if let Err(problem) = permissions.enforced_on(provider, Platform::current()) {
+    return Err(refused("permissions_not_enforced", not_enforceable(&problem)));
   }
   let switches = permissions.interactive_tool_approvals() || permissions.auto_approve() || !args.mcp_servers.is_empty();
   if provider.is_native() && switches {
@@ -262,8 +267,7 @@ fn offered(
 }
 
 /// The project's MCP servers `named` names, by id or name.
-fn mcp_servers(db: &ProjectDb, named: &[String]) -> Result<McpServerSelection, ToolError> {
-  let servers = db.mcp_servers()?;
+fn mcp_servers(servers: &[McpServer], named: &[String]) -> Result<McpServerSelection, ToolError> {
   let ids = named
     .iter()
     .map(|name| {

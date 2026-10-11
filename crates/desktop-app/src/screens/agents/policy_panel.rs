@@ -82,9 +82,14 @@ pub fn enforcement(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents) -> Elemen
     )
     .into()
 }
-fn connection_detail(connection: &AgentConnection) -> String {
+fn connection_detail(ctx: &Ctx, connection: &AgentConnection) -> String {
   match connection.last_check().map(|check| &check.result) {
-    Some(CheckResult::Available { version, .. }) => format!("{} · {version}", connection.name()),
+    Some(CheckResult::Available { version, .. }) => ctx
+      .t_args(
+        "agents.connectionVersion",
+        [("name", connection.name().as_str()), ("version", version.as_str())],
+      )
+      .to_string(),
     _ => connection.name().to_string(),
   }
 }
@@ -233,10 +238,7 @@ fn connection_settings(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents, mut r
   rows
 }
 fn header(ctx: &Ctx, connection: &AgentConnection, permissions: &AgentPermissions) -> Column {
-  let enforced = permissions
-    .enforced_on(connection.provider(), Platform::current())
-    .is_ok_and(|effective| effective.network_stays_on().is_none())
-    && connection.provider().runs_agents();
+  let enforced = orchester_workspace::agents::permissions::fully_enforced(permissions, connection.provider());
   let title = if enforced {
     ctx.t_args("agents.enforced", [("provider", connection.name().as_str())])
   } else {
@@ -274,7 +276,7 @@ fn header(ctx: &Ctx, connection: &AgentConnection, permissions: &AgentPermission
       Text::new(&ctx.t_args(
         "agents.connectionState",
         [
-          ("provider", connection_detail(connection)),
+          ("provider", connection_detail(ctx, connection)),
           ("status", checked.to_string()),
         ],
       ))

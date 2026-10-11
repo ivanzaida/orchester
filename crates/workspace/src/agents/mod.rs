@@ -5,5 +5,6 @@ pub mod editor;
 pub mod folders;
 pub mod form;
 pub mod permissions;
+pub mod servers;
 pub mod usage;
 pub mod widening;

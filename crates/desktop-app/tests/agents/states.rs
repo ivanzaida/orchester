@@ -125,3 +125,86 @@ fn agents_profile_form_fits_the_initial_viewport_and_published_card_has_no_draft
   assert!(card.contains("No changes since v1"), "{card}");
   assert!(!card.contains("Draft v2"), "{card}");
 }
+
+#[test]
+fn agents_failed_refetch_replaces_retained_data_and_retry_restores_it() {
+  let mut screen = Agents::new(true);
+  let id = screen.profile(false);
+  screen.go();
+  assert!(screen.exists(&format!("agent-{id}")));
+  let db = rusqlite::Connection::open(screen.root.join(".orchester/orchester.db")).expect("fixture db");
+  let body: String = db
+    .query_row("SELECT body FROM resource_drafts", [], |row| row.get(0))
+    .expect("body");
+  db.execute("UPDATE resource_drafts SET body = 'broken'", [])
+    .expect("corrupt disposable fixture");
+  let feed = screen.window.projects().feed(super::support::project_id());
+  feed.outside.update(|counts| counts.profiles += 1);
+  screen.until("failed refetch", |s| s.exists("agents-load-error"));
+  assert!(!screen.exists(&format!("agent-{id}")), "stale profile is hidden");
+  assert!(!screen.exists("agents-new"));
+  assert!(screen.text("agents-load-error").contains("could not"));
+  db.execute("UPDATE resource_drafts SET body = ?1", [&body])
+    .expect("restore fixture");
+  screen.click("agents-load-error-retry");
+  screen.until("retry restored profiles", |s| s.exists(&format!("agent-{id}")));
+  assert!(!screen.exists("agents-load-error"));
+}
+
+#[test]
+fn agents_failed_refetch_and_retry_preserve_unsaved_editor_fields_and_tab() {
+  let mut screen = Agents::new(true);
+  let id = screen.profile(false);
+  screen.open(id);
+  screen.set("agent-responsibility", "My unsaved responsibility");
+  screen.set("agent-instructions", "My unsaved instructions");
+  screen.click("agent-tab-permissions");
+  let db = rusqlite::Connection::open(screen.root.join(".orchester/orchester.db")).expect("fixture db");
+  let body: String = db
+    .query_row("SELECT body FROM resource_drafts", [], |row| row.get(0))
+    .expect("body");
+  db.execute("UPDATE resource_drafts SET body = 'broken'", [])
+    .expect("corrupt disposable fixture");
+  screen
+    .window
+    .projects()
+    .feed(super::support::project_id())
+    .outside
+    .update(|counts| counts.profiles += 1);
+  screen.until("failed editor refetch", |s| s.exists("agents-load-error"));
+  assert!(screen.exists("agent-repository"), "permission tab remains mounted");
+  screen.click("agent-save");
+  assert!(!screen.exists("agent-saving"), "saving retained data is disabled");
+  screen.click("agent-publish");
+  assert!(!screen.exists("agent-saving"), "publishing retained data is disabled");
+  db.execute("UPDATE resource_drafts SET body = ?1", [&body])
+    .expect("restore fixture");
+  screen.click("agents-load-error-retry");
+  screen.until("editor read recovered", |s| !s.exists("agents-load-error"));
+  assert!(screen.exists("agent-repository"), "retry preserves selected tab");
+  screen.click("agent-tab-profile");
+  for (id, expected) in [
+    ("agent-responsibility", "My unsaved responsibility"),
+    ("agent-instructions", "My unsaved instructions"),
+  ] {
+    let value = screen
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.as_text_input())
+      .expect("field")
+      .value();
+    assert_eq!(value, expected);
+  }
+  assert!(screen.text("agent-save-status").contains("Unsaved"));
+  screen.until("save enabled after retry", |s| {
+    s.click("agent-save");
+    s.exists("agent-saving")
+  });
+  screen.until("preserved fields saved", |s| {
+    !s.exists("agent-save") && s.exists("agent-role")
+  });
+  let profile = screen.listed().profile(id).expect("profile").profile.clone();
+  assert_eq!(profile.responsibilities(), "My unsaved responsibility");
+  assert_eq!(profile.instructions().as_str(), "My unsaved instructions");
+}

@@ -456,9 +456,16 @@
   },
   "agents": {
     "permissions": {
+      "notEnforceable": {
+        "allowedCommands": "Allowed commands is unavailable: this connection cannot limit commands to a list. Choose Ask before running commands or change the connection.",
+        "anyCommand": "Any command in the worktree is unavailable: this connection cannot confine commands to the worktree. Choose Ask before running commands or change the connection.",
+        "networkOff": "Network off is unavailable: this connection cannot block commands from reaching the network. Choose Network on or change the connection.",
+        "noRepositoryOption": "This connection cannot enforce any repository access option. Choose another connection.",
+        "noCommandsOption": "This connection cannot enforce any command permission option. Choose another connection.",
+        "noNetworkOption": "This connection cannot enforce any network option. Choose another connection."
+      },
       "publish": {
-        "connectionMissing": "This profile’s connection no longer exists, so what it can enforce is unknown. Choose a connection before publishing.",
-        "notEnforceable": "The connection cannot enforce these permissions. Change them or the connection before publishing."
+        "connectionMissing": "This profile’s connection no longer exists, so what it can enforce is unknown. Choose a connection before publishing."
       },
       "repository": "Repository access",
       "commands": "Commands",
@@ -687,7 +694,7 @@
       "other": "Enter more than the {{used}} minutes this run already used."
     },
     "olderSchema": "The data was written by an earlier version of Orchester and was not updated yet.",
-    "draftChanged": "The draft changed since it was read. Read it again before publishing."
+    "draftChanged": "The draft changed since it was read. Read it again before saving or publishing."
   },
   "number": {
     "bytes": "{{count}} bytes",
@@ -897,6 +904,8 @@
       "commandsNeedAllowed": "Allowed commands are listed only with the commands choice allowed.",
       "foldersNeedWrite": "Extra writable folders apply only with write access to the repository.",
       "nativeNoSwitches": "On a connection whose agents Orchester runs itself, the approval switches and MCP servers are not offered in this version.",
+      "mcpServerMissing": "MCP server {{server}} is no longer available. Remove it from the selection and try again.",
+      "mcpServerOff": "MCP server {{server}} is turned off. Turn it on in Connections before adding it to this profile.",
       "mcpServersInvalid": "Name each MCP server once, at most {{max}}.",
       "copyOfRequired": "Copying needs the pipeline to copy (copy_of).",
       "copyOfNotTaken": "Only a copy names a pipeline to copy (copy_of).",

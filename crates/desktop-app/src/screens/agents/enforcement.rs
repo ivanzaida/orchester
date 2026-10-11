@@ -94,23 +94,20 @@ pub fn summary(ctx: &Ctx, fields: &Fields, listed: &orchester_workspace::agents:
       &ctx.t(if write { "agents.writeTitle" } else { "agents.readOnly" }),
       PaletteColor::TextSecondary,
     ))
-    .child(words::note("·"))
+    .child(words::note(&ctx.t("agents.summarySeparator")))
     .child(item(
       Icon::Terminal,
       &words::commands(ctx, &permissions),
       PaletteColor::TextSecondary,
     ))
-    .child(words::note("·"))
+    .child(words::note(&ctx.t("agents.summarySeparator")))
     .child(item(
       Icon::Globe,
       &words::network(ctx, &permissions, provider),
       PaletteColor::TextSecondary,
     ));
   if let Some(connection) = fields.connection(listed) {
-    let enforced = permissions
-      .enforced_on(connection.provider(), Platform::current())
-      .is_ok_and(|effective| effective.network_stays_on().is_none())
-      && connection.provider().runs_agents();
+    let enforced = orchester_workspace::agents::permissions::fully_enforced(&permissions, connection.provider());
     let fallback = permissions.effective_network(connection.provider(), Platform::current()) != permissions.network();
     let text = if fallback {
       ctx.t("agents.cannotBlockNetwork")
@@ -119,7 +116,7 @@ pub fn summary(ctx: &Ctx, fields: &Fields, listed: &orchester_workspace::agents:
     } else {
       ctx.t("agents.notEnforced")
     };
-    row = row.child(words::note("·")).child(item(
+    row = row.child(words::note(&ctx.t("agents.summarySeparator"))).child(item(
       if enforced { Icon::ShieldCheck } else { Icon::ShieldAlert },
       &text,
       if enforced {

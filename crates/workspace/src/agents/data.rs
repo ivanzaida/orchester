@@ -244,18 +244,6 @@ pub fn save_draft_checked_in(root: &Path, expected: &ProfileEntry, profile: Agen
   })
 }
 
-/// Rebases only the draft the person saw, against the latest version they saw.
-pub fn keep_draft_checked_in(root: &Path, expected: &ProfileEntry) -> Result<(), StoreError> {
-  edit_checked_in(root, expected, |draft, latest| {
-    let draft = draft.ok_or(StoreError::NoDraft(expected.id))?;
-    Ok(Draft::new(
-      draft.body().clone(),
-      latest.map(Version::number),
-      Timestamp::now(),
-    ))
-  })
-}
-
 fn edit_checked_in(
   root: &Path,
   expected: &ProfileEntry,
