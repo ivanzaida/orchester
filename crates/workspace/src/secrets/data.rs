@@ -55,7 +55,21 @@ impl ProjectSecrets {
   where
     S: SecretStore<Error = StoreError> + ResourceStore<Error = StoreError> + McpServerStore<Error = StoreError>,
   {
-    let secrets = store.secrets()?;
+    Self::load_selected(store, None)
+  }
+
+  /// Also reads an explicitly inspected archived secret, without returning it to the active list.
+  pub fn load_selected<S>(store: &S, selected: Option<SecretId>) -> Result<Self, StoreError>
+  where
+    S: SecretStore<Error = StoreError> + ResourceStore<Error = StoreError> + McpServerStore<Error = StoreError>,
+  {
+    let mut secrets = store.secrets()?;
+    if let Some(id) = selected
+      && !secrets.iter().any(|secret| secret.id() == id)
+      && let Some(secret) = store.secret(id)?
+    {
+      secrets.push(secret);
+    }
     let tools = current_tools(store)?;
     let servers = store.mcp_servers()?;
     let uses = secrets
@@ -88,6 +102,22 @@ impl ProjectSecrets {
 
   pub fn load_in(repo_root: &Path) -> Result<Self, StoreError> {
     Self::load(&ProjectDb::open(repo_root)?)
+  }
+
+  pub fn load_selected_in(repo_root: &Path, selected: Option<SecretId>) -> Result<Self, StoreError> {
+    Self::load_selected(&ProjectDb::open(repo_root)?, selected)
+  }
+
+  /// Active secrets in the selected environment, in database order.
+  pub fn in_environment(&self, environment: Option<secret::Environment>) -> impl Iterator<Item = &Secret> {
+    self.secrets.iter().filter(move |secret| {
+      !secret.is_archived() && environment.is_none_or(|environment| secret.environment() == environment)
+    })
+  }
+
+  /// Changing credentials selected by resources may widen their access to external systems.
+  pub fn replacement_needs_person(&self, id: SecretId) -> bool {
+    self.used_by(id).next().is_some()
   }
 
   pub fn secret(&self, id: SecretId) -> Option<&Secret> {

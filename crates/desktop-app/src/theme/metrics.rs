@@ -171,6 +171,8 @@ pub enum ControlHeight {
   Sm,
   /// 28: buttons, fields, selects, menu items (`yJ2jo`, `JFXZg`, `mAHGP`).
   Md,
+  /// 26: an inspector's close (Secrets m1So5).
+  Inspector,
 }
 
 impl ControlHeight {
@@ -178,6 +180,7 @@ impl ControlHeight {
     match self {
       Self::Sm => 24.0,
       Self::Md => 28.0,
+      Self::Inspector => 26.0,
     }
   }
 }

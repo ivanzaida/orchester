@@ -2761,6 +2761,7 @@ dependencies = [
  "orchester-workspace",
  "parking_lot",
  "rfd",
+ "rmcp",
  "rusqlite",
  "serde_json",
  "tempfile",
@@ -2770,6 +2771,7 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "windows-sys 0.61.2",
+ "zeroize",
 ]
 
 [[package]]

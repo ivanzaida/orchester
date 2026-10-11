@@ -70,6 +70,8 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 # The bearer token of the app's MCP server, from the OS random source.
 uuid.workspace = true
+# Wipes unsaved credential input when its inspector closes.
+zeroize.workspace = true
 
 # Gives lurq's window class and the window the executable's embedded icon (`system_icon`): neither lurq
 # nor winit loads icon resources or sets class icons. Brings the window of the app that has the data folder
@@ -86,6 +88,8 @@ windows-sys = { workspace = true, features = [
 embed-resource.workspace = true
 
 [dev-dependencies]
+# Exercises the production MCP tools over an in-process transport without discovery-file ACLs.
+rmcp = { workspace = true, features = ["client"] }
 # The QA seed (`examples/seed`) damages a run's record and sets a project database's schema version the way an
 # edit outside Orchester or a newer build would; the store has no API for either.
 rusqlite.workspace = true

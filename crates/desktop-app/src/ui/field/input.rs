@@ -27,7 +27,7 @@ use orchester_core::tokens::regroup;
 
 use super::field_error;
 use crate::{
-  theme::{ControlHeight, ExtraSpacing, IconSize},
+  theme::{ControlHeight, ExtraSpacing, IconSize, SecretsText},
   ui::icon::{Icon, icon},
 };
 
@@ -64,6 +64,7 @@ pub struct FieldInput {
   trailing: Option<Icon>,
   /// The value is not accepted, and something else says why: only the stroke turns `danger`.
   invalid: bool,
+  masked: bool,
 }
 
 /// Compared by what it shows; the value by its signal.
@@ -84,6 +85,7 @@ impl PartialEq for FieldInput {
       && self.locked == other.locked
       && self.trailing == other.trailing
       && self.invalid == other.invalid
+      && self.masked == other.masked
   }
 }
 
@@ -109,7 +111,16 @@ impl FieldInput {
       locked: false,
       trailing: None,
       invalid: false,
+      masked: false,
     }
+  }
+
+  /// Credential input: lurq masks rendering and MCP inspection and blocks copying/cutting the value.
+  /// The caller must supply a signal made outside Ctx, so DevTools never records it.
+  pub fn masked(mut self) -> Self {
+    self.masked = true;
+    self.trailing = Some(Icon::LockKeyhole);
+    self
   }
 
   pub fn placeholder(mut self, placeholder: impl Into<Arc<str>>) -> Self {
@@ -184,7 +195,7 @@ impl FieldInput {
   }
 
   /// The value is not accepted and the caller says why: the stroke turns `danger`, no note is added.
-  pub(super) fn invalid(mut self) -> Self {
+  pub fn invalid(mut self) -> Self {
     self.invalid = true;
     self
   }
@@ -255,11 +266,14 @@ impl Component for FieldBox {
           .color(PaletteColor::TextMuted)
           .nowrap()
       }))
-      .with_children(
-        props
-          .trailing
-          .map(|glyph| icon(glyph, IconSize::Md, PaletteColor::TextMuted).id(format!("{}-trailing", props.id))),
-      ),
+      .with_children(props.trailing.map(|glyph| {
+        icon(
+          glyph,
+          if props.masked { IconSize::Base } else { IconSize::Md },
+          PaletteColor::TextMuted,
+        )
+        .id(format!("{}-trailing", props.id))
+      })),
       Lines::Many => dress(
         Row::new()
           .id(format!("{}-box", props.id))
@@ -287,7 +301,9 @@ impl FieldBox {
   fn input(&self, ctx: &Ctx, props: &FieldInput) -> TextInput {
     let theme = ctx.theme();
     let resolve = |typography, color| FormTextRole { typography, color }.resolve(&theme.typography(), &theme.palette());
-    let value = if props.mono {
+    let value = if props.masked {
+      SecretsText::Credential.role()
+    } else if props.mono {
       TypographyStyle::Mono
     } else {
       TypographyStyle::Description
@@ -312,6 +328,9 @@ impl FieldBox {
         props.value.clone(),
         props.group_separator.clone(),
       ));
+    if props.masked {
+      input = input.mask();
+    }
     if let Some(placeholder) = &props.placeholder {
       input = input.placeholder(placeholder);
     }
