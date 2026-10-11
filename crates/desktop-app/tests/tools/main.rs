@@ -2,6 +2,7 @@
 mod actions;
 mod harness;
 mod other_states;
+mod refresh;
 mod states;
 #[path = "../support/mod.rs"]
 mod support;

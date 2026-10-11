@@ -19,6 +19,7 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
+use orchester_core::id::ResourceId;
 use orchester_workspace::{
   background,
   messages::{self, Message},
@@ -41,13 +42,16 @@ pub struct Props {
 }
 impl DevtoolsInspectable for Props {}
 struct ToolsScreen {
+  // Save and explicit Reload reset fields; read retries keep the editor's mount key.
   revision: Signal<u64>,
+  retry: Signal<u64>,
 }
 impl Component for ToolsScreen {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       revision: ctx.signal(0),
+      retry: ctx.signal(0),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -61,28 +65,49 @@ impl Component for ToolsScreen {
     let outside = props.project.feed.outside.get();
     let outside = (outside.pipelines, outside.tools);
     let reading = ctx
-      .future((root, id, revision, outside), |(root, id, revision, _)| async move {
-        background::run(move || EditorData::load_in(&root, id))
-          .await?
-          .map(|data| (id, revision, data))
-          .map_err(|error| messages::store_error(&error))
-      })
+      .future(
+        (root, id, revision, outside, self.retry.get()),
+        |(root, id, revision, ..)| async move {
+          background::run(move || EditorData::load_in(&root, id))
+            .await?
+            .map(|data| (id, revision, data))
+            .map_err(|error| messages::store_error(&error))
+        },
+      )
       .state()
       .get();
     let frame = Column::new()
       .id("screen-tools")
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0));
-    if let Some(error) = reading.error.as_ref().filter(|_| !reading.is_pending()) {
+    let error = reading.error.as_ref().filter(|_| !reading.is_pending());
+    if matches!(props.page, ProjectPage::Tools)
+      && let Some(error) = error
+    {
       return frame.child(self.failed(ctx, error));
     }
-    let Some((read_id, read_revision, data)) = reading.data else {
-      return frame.child(loading("tools-loading", &ctx.t("tools.reading")));
+    let current = reading
+      .data
+      .filter(|(read_id, read_revision, _)| *read_id == id && *read_revision == revision);
+    let Some((_, _, data)) = current else {
+      return match error {
+        Some(error) => frame.child(self.failed(ctx, error)),
+        None => frame.child(loading("tools-loading", &ctx.t("tools.reading"))),
+      };
     };
-    if read_id != id || read_revision != revision {
-      return frame.child(loading("tools-loading", &ctx.t("tools.reading")));
-    }
-    let child = match props.page {
+    let child = self.content(ctx, props, data, id);
+    frame.with_children(error.map(|error| self.failed(ctx, error))).child(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .min_height(Dimension::Px(0.0))
+        .child(child),
+    )
+  }
+}
+impl ToolsScreen {
+  fn content(&self, ctx: &mut Ctx, props: Props, data: EditorData, id: Option<ResourceId>) -> Element {
+    match props.page {
       ProjectPage::Tools => ctx.mount_keyed::<library::Library>(
         "tools-library",
         library::Props {
@@ -92,12 +117,14 @@ impl Component for ToolsScreen {
       ),
       ProjectPage::NewTool | ProjectPage::Tool(..) => {
         if id.is_some_and(|id| data.listed.tool(id).is_none()) {
-          return frame.child(crate::ui::notice::Notice::new(
+          return crate::ui::notice::Notice::new(
             "tool-missing",
             crate::ui::notice::NoticeTone::Danger,
             ctx.t("tools.notFound"),
-          ));
+          )
+          .into();
         }
+        let revision = self.revision.get();
         let entry = id.and_then(|id| data.listed.tool(id)).cloned();
         let key = format!(
           "tool-editor-{}-{revision}",
@@ -115,18 +142,15 @@ impl Component for ToolsScreen {
         )
       }
       _ => unreachable!("Tools mounts only its own pages"),
-    };
-    frame.child(child)
+    }
   }
-}
-impl ToolsScreen {
   fn failed(&self, ctx: &Ctx, error: &Message) -> Element {
-    let revision = self.revision.clone();
+    let retry = self.retry.clone();
     load_error(
       ctx,
       "tools-load-error",
       (&ctx.t("tools.loadFailed"), &message_text(ctx, error)),
-      move || revision.update(|r| *r += 1),
+      move || retry.update(|r| *r += 1),
     )
   }
 }
