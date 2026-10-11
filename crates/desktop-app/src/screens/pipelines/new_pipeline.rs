@@ -216,7 +216,7 @@ impl NewPipeline {
       )
       .inline_summary();
       if value == 0 {
-        card = card.content(starter_chips(ctx));
+        card = card.content(starter_chips(ctx, true));
       }
       if value == 2 {
         card = card.content(parts::note(&ctx.t("pipelines.emptyHint")));
@@ -417,7 +417,7 @@ fn collision_strip(
       .into()
   })
 }
-pub(super) fn starter_chips(ctx: &Ctx) -> Row {
+pub(super) fn starter_chips(ctx: &Ctx, compact: bool) -> Row {
   let starter = starter(ctx).pipeline(&Default::default());
   let mut chain = Row::new()
     .width(Dimension::Pct(100.0))
@@ -428,17 +428,31 @@ pub(super) fn starter_chips(ctx: &Ctx) -> Row {
     .iter()
     .enumerate()
   {
-    let mut group = Column::new().spacing(SpacingSize::Xs);
-    for index in level {
-      group = group.child(starter_chip(&starter.steps()[*index], *index));
-    }
-    if level.len() > 1 {
-      group = group
-        .id("pipeline-starter-parallel")
-        .padding(SpacingSize::Xs)
-        .border_inside(lurq::app::theme::BorderSize::Sm, lurq::app::theme::PaletteColor::Border)
-        .rounded(lurq::app::theme::RadiusSize::Md);
-    }
+    let group: Element = if compact {
+      let mut inline = Row::new()
+        .spacing(ExtraSpacing::Pair.role())
+        .align_items(Alignment::Center);
+      for (position, index) in level.iter().enumerate() {
+        if position > 0 {
+          inline = inline.child(parts::note(&ctx.t("pipelines.parallel")).id("pipeline-starter-parallel-marker"));
+        }
+        inline = inline.child(starter_chip(&starter.steps()[*index], *index));
+      }
+      inline.into()
+    } else {
+      let mut group = Column::new().spacing(SpacingSize::Xs);
+      for index in level {
+        group = group.child(starter_chip(&starter.steps()[*index], *index));
+      }
+      if level.len() > 1 {
+        group = group
+          .id("pipeline-starter-parallel")
+          .padding(SpacingSize::Xs)
+          .border_inside(lurq::app::theme::BorderSize::Sm, lurq::app::theme::PaletteColor::Border)
+          .rounded(lurq::app::theme::RadiusSize::Md);
+      }
+      group.into()
+    };
     let mut stage_row = Row::new()
       .spacing(ExtraSpacing::Pair.role())
       .align_items(Alignment::Center);

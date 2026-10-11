@@ -336,7 +336,7 @@ fn empty(ctx: &mut Ctx, project: orchester_core::id::ProjectId, page: Column) ->
         .child(Text::new(&ctx.t("pipelines.starter")).variant(ExtraTypography::Strong.role()))
         .child(parts::caption(&ctx.t("pipelines.starterLibraryHint"))),
     )
-    .child(super::new_pipeline::starter_chips(ctx));
+    .child(super::new_pipeline::starter_chips(ctx, false));
   page
     .child(
       EmptyState::new(

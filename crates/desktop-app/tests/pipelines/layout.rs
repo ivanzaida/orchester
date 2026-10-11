@@ -39,6 +39,34 @@ fn pipelines_empty_library_entries_select_the_requested_start_on_the_creation_pa
 }
 
 #[test]
+fn pipelines_new_starter_preview_stays_compact_across_creation_states() {
+  let mut editor = Editor::new();
+  editor.empty("Existing pipeline");
+  editor.go(orchester_app::routes::ProjectPage::NewPipeline);
+  editor.until("new pipeline", |e| e.exists("pipeline-start-0"));
+  for state in ["default", "collision", "empty"] {
+    if state == "collision" {
+      editor.set("pipeline-name", "Existing pipeline");
+      editor.until("name collision", |e| e.exists("pipeline-slug-collision"));
+    } else if state == "empty" {
+      editor.set("pipeline-name", "");
+      editor.click("pipeline-start-2");
+    }
+    assert!(!editor.exists("pipeline-starter-parallel"));
+    assert!(editor.text("pipeline-starter-parallel-marker").contains('∥'));
+    let bounds = editor
+      .window
+      .tree
+      .get_element_by_id_mut("pipeline-start-0")
+      .and_then(|element| element.bounds())
+      .expect("starter option laid out");
+    // Iewpp in lAQis: two compact chip rows inside a 560 × 103 option.
+    assert!((bounds.width - 560.0).abs() < 1.0, "{state}: {bounds:?}");
+    assert!((bounds.height - 103.0).abs() < 3.0, "{state}: {bounds:?}");
+  }
+}
+
+#[test]
 fn pipelines_first_version_without_draft_has_no_phantom_entry_or_self_comparison() {
   let mut editor = Editor::new();
   let id = editor.published();
