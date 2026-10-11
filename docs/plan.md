@@ -768,6 +768,16 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-6 · Command Tools page · branch `orchester/orc-6-run-1` (done 2026-10-11, merged `08d8c007`).
+
+The new app lists and edits project command tools. Save, stale-draft resolution and Publish check the expected
+resource and permission widening inside the same immediate transaction as the write, preserving concurrent edits.
+Independent review and re-review passed after reproducing and fixing a lost-update race; 38 filtered tests, the
+original reproducer and `tools/check.ps1` passed. Post-merge workspace/all-targets/all-features `cargo check` and
+`tools/check.ps1` passed. Independent scoped Pencil verification found no blocking or major mismatch in reached
+command-tool states; Built in remains Unverified, with recorded visual minors and real-person acceptance omissions.
+Full tests, macOS checks/runtime and fresh native captures of the domain-only transaction fix were not run.
+
 ORC-21 · Agent tools to stop apps started in a run (implemented 2026-10-11 in run worktree
 `01a127bc-59bd-774a-8edd-a0f0bc989311`; implementation checks passed, independent review/QA follows).
 
