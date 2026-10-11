@@ -62,6 +62,7 @@ pub(super) struct Environment {
   stored: Signal<Option<Stored>>,
   asking: Signal<Asking>,
   revision: Signal<u64>,
+  reloading: Signal<bool>,
 }
 impl Component for Environment {
   type Props = TabProps;
@@ -71,6 +72,7 @@ impl Component for Environment {
       stored: ctx.signal(None),
       asking: ctx.signal(Asking(None)),
       revision: ctx.signal(0),
+      reloading: ctx.signal(false),
     };
     let save = action(ctx);
     let (after, status, feed) = (
@@ -99,6 +101,7 @@ impl Component for Environment {
     let props = ctx.props::<TabProps>().clone();
     let save = action(ctx);
     let state = self.read(ctx, &props);
+    self.finish_reload(&state, &save);
     if self.stored.get_untracked().is_none() && state.is_pending() {
       return page::scroll(self.pending(ctx, &state));
     }
@@ -116,9 +119,19 @@ impl Component for Environment {
     let outside =
       !state.is_pending() && self.stored.get().is_some_and(|s| s != read) && !save.state().get().is_pending();
     if outside && !changed && asking.is_none() {
-      self.fill(read.clone());
+      self.fill(read);
     }
-    if !save.state().get().is_pending() && save.state().get().error.is_none() {
+    if !changed
+      && asking.is_none()
+      && !self.reloading.get()
+      && !save.state().get().is_pending()
+      && save.state().get().error.is_some()
+    {
+      save.state().set(FutureState::idle());
+    }
+    if state.error.is_some() {
+      props.status.set(Status::Failed);
+    } else if !save.state().get().is_pending() && save.state().get().error.is_none() {
       props.status.set(if parse_environment(&self.text.get()).is_err() {
         Status::Invalid
       } else if changed {
@@ -157,7 +170,7 @@ impl Component for Environment {
           .error
           .map(|e| field_error("settings-environment-save-error", &message_text(ctx, &e))),
       )
-      .with_children((outside && changed).then(|| self.outside(ctx, read)))
+      .with_children((self.reloading.get() || (outside && changed)).then(|| self.outside(ctx)))
       .child(page::review_notice(ctx, true));
     if let Some(request) = asking {
       content = content.child(self.question(ctx, &props, &save, request));
@@ -166,6 +179,18 @@ impl Component for Environment {
   }
 }
 impl Environment {
+  fn finish_reload(&self, state: &FutureState<Stored, Message>, save: &Save) {
+    if self.reloading.get()
+      && !state.is_pending()
+      && state.error.is_none()
+      && let Some(read) = &state.data
+    {
+      self.fill(read.clone());
+      self.asking.set(Asking(None));
+      self.reloading.set(false);
+      save.state().set(FutureState::idle());
+    }
+  }
   fn read(&self, ctx: &mut Ctx, props: &TabProps) -> FutureState<Stored, Message> {
     let revision = self.revision.get() + props.project.feed.outside.get().of(Outside::ProjectSettings);
     let mut state = ctx
@@ -288,7 +313,7 @@ impl Environment {
       },
     )
   }
-  fn outside(&self, ctx: &Ctx, read: Stored) -> Element {
+  fn outside(&self, ctx: &Ctx) -> Element {
     let tab = self.clone();
     Notice::new(
       "settings-environment-outside",
@@ -303,8 +328,8 @@ impl Environment {
         ctx.t("project_settings.reload"),
       )
       .on_click(move || {
-        tab.fill(read.clone());
-        tab.asking.set(Asking(None));
+        tab.reloading.set(true);
+        tab.revision.update(|revision| *revision += 1);
       }),
     )
     .into()

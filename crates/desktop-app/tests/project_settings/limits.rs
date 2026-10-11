@@ -101,3 +101,82 @@ fn project_settings_limits_preserve_outside_fields_and_reload_unsaved_edits() {
   assert_eq!(page.value("settings-default-budget"), "");
   assert_eq!(page.value("settings-agent-slots"), "4");
 }
+
+#[test]
+fn project_settings_limits_failed_edit_reverts_all_fields_without_a_write_and_unlocks_navigation() {
+  let mut page = Settings::new(false);
+  page.tab("limits", "settings-default-budget");
+  let original = page.db().project_limits().expect("baseline");
+  let fields = [
+    ("settings-default-budget", "2000000"),
+    ("settings-daily-budget", "5000000"),
+    ("settings-time-limit", "60"),
+    ("settings-agent-slots", "8"),
+  ];
+  let baseline: Vec<_> = fields.iter().map(|(id, _)| (*id, page.value(id))).collect();
+  let sql = rusqlite::Connection::open(page.repo.join(".orchester/orchester.db")).expect("fixture DB");
+  sql
+    .execute_batch(
+      "CREATE TRIGGER reject_limits BEFORE INSERT ON project_limits
+     BEGIN SELECT RAISE(ABORT, 'regression write refused'); END;",
+    )
+    .expect("controlled failure");
+  for (id, draft) in fields {
+    page.set(id, draft);
+  }
+  page.leave();
+  page.until("limits save failed", |p| p.exists("settings-limits-retry"));
+  assert_eq!(page.db().project_limits().expect("unchanged"), original);
+  page.click("settings-tab-general");
+  assert!(page.exists("settings-limits-retry"));
+  // The rejection remains installed: Saved must come from abandonment, not an extra write.
+  for (id, value) in baseline {
+    page.set(id, &value);
+  }
+  page.leave();
+  page.saved();
+  assert!(!page.exists("settings-limits-retry"));
+  assert!(!page.exists("settings-save-error"));
+  assert_eq!(page.db().project_limits().expect("baseline kept"), original);
+  page.tab("general", "settings-project-name");
+  page.tab("limits", "settings-default-budget");
+  assert_eq!(page.db().project_limits().expect("no later write"), original);
+}
+
+#[test]
+fn project_settings_limits_same_value_recovery_does_not_submit_an_extra_write() {
+  let mut page = Settings::new(false);
+  page.tab("limits", "settings-default-budget");
+  let sql = rusqlite::Connection::open(page.repo.join(".orchester/orchester.db")).expect("fixture DB");
+  sql
+    .execute_batch(
+      "CREATE TRIGGER reject_limits BEFORE INSERT ON project_limits
+     BEGIN SELECT RAISE(ABORT, 'regression write refused'); END;",
+    )
+    .expect("controlled failure");
+  page.set("settings-default-budget", "2000000");
+  page.leave();
+  page.until("limits failure", |p| p.exists("settings-limits-retry"));
+  // Focus the failed field while its draft is still rejected; then measure only baseline recovery.
+  page.set("settings-default-budget", "2000000");
+  page.until("focused failed draft", |p| {
+    p.text("project-settings-save-status").starts_with("Not saved") && p.exists("settings-limits-retry")
+  });
+  // Count subsequent writes instead of refusing them, so an unnecessary same-value save cannot hide.
+  sql
+    .execute_batch(
+      "DROP TRIGGER reject_limits;
+     CREATE TABLE recovery_writes (id INTEGER);
+     CREATE TRIGGER count_limits BEFORE INSERT ON project_limits
+     BEGIN INSERT INTO recovery_writes VALUES (1); END;",
+    )
+    .expect("write counter");
+  page.set("settings-default-budget", "");
+  page.leave();
+  page.saved();
+  page.tab("general", "settings-project-name");
+  let writes: i64 = sql
+    .query_row("SELECT COUNT(*) FROM recovery_writes", [], |r| r.get(0))
+    .expect("count");
+  assert_eq!(writes, 0, "abandonment must not save the already-stored limits");
+}

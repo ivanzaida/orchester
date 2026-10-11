@@ -23,7 +23,14 @@ impl AutoMode {
     }
     button
       .on_click(move || {
-        if let Some(asked) = tab.attempted.get_untracked().0 {
+        if !tab.outside()
+          && let Ok(mut asked) = tab.draft()
+        {
+          // The switch reads back storage after failure; retain only its requested state.
+          // Reviewer retry always uses the current visible controls.
+          if let Some(attempt) = tab.attempted.get_untracked().0 {
+            asked.new_runs = attempt.new_runs;
+          }
           tab.request(&props, &save, asked);
         }
       })

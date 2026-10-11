@@ -185,19 +185,38 @@ impl AutoMode {
       }
     });
   }
+  fn draft(&self) -> Result<AutoModeSettings, orchester_workspace::messages::Message> {
+    let settings = self.stored.get().0;
+    let reviewer =
+      project_settings::reviewer(&settings, &self.connection.get(), &self.model.get(), &self.effort.get())?;
+    let mut asked = settings.auto_mode;
+    asked.reviewer = reviewer;
+    Ok(asked)
+  }
   fn commit(&self, props: &Props, save: &Save) {
     if save.state().get().is_pending() || self.asking.get().0.is_some() {
       return;
     }
     let settings = self.stored.get().0;
-    let Ok(reviewer) =
-      project_settings::reviewer(&settings, &self.connection.get(), &self.model.get(), &self.effort.get())
-    else {
+    let Ok(asked) = self.draft() else {
       return;
     };
-    let mut asked = settings.auto_mode.clone();
-    asked.reviewer = reviewer;
-    if asked == settings.auto_mode || self.attempted.get_untracked().0.as_ref() == Some(&asked) {
+    if asked == settings.auto_mode {
+      if self.failed.get_untracked()
+        && self
+          .attempted
+          .get_untracked()
+          .0
+          .is_some_and(|attempt| attempt.reviewer != asked.reviewer)
+      {
+        self.failed.set(false);
+        self.attempted.set(Asked(None));
+        save.state().set(lurq::app::ctx::FutureState::idle());
+        props.tab.status.set(Status::Saved);
+      }
+      return;
+    }
+    if self.attempted.get_untracked().0.as_ref() == Some(&asked) {
       return;
     }
     self.request(props, save, asked);

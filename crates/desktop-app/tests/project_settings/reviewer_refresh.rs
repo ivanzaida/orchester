@@ -163,3 +163,101 @@ fn project_settings_failed_widening_retry_requires_a_fresh_person_question() {
     "sonnet"
   );
 }
+
+#[test]
+fn project_settings_failed_reviewer_reverting_to_baseline_abandons_retry_and_question() {
+  for widening in [false, true] {
+    let mut page = Settings::new(true);
+    page.choose("settings-reviewer-connection", "Claude Code");
+    page.saved();
+    page.choose("settings-reviewer-model", "haiku");
+    page.saved();
+    if widening {
+      question(&mut page);
+    }
+    let original = page.db().auto_mode_settings().expect("A");
+    fail_writes(&page, true);
+    if widening {
+      start_save(&mut page);
+    } else {
+      page.choose("settings-reviewer-model", "sonnet");
+    }
+    page.until("B failed", |p| p.exists("settings-auto-retry"));
+    assert!(page.text("settings-reviewer-model").contains("sonnet"));
+    // Leaving the failure trigger installed proves abandonment does not need another write.
+    page.choose("settings-reviewer-model", "haiku");
+    page.saved();
+    assert!(page.text("settings-reviewer-model").contains("haiku"));
+    assert!(!page.exists("settings-auto-retry"));
+    assert!(!page.exists("settings-auto-question"));
+    assert!(!page.window.link.input_gate().protecting());
+    assert_eq!(page.db().auto_mode_settings().expect("A retained"), original);
+    page.tab("limits", "settings-default-budget");
+    page.tab("general", "settings-reviewer-model");
+    assert!(page.text("settings-reviewer-model").contains("haiku"));
+    assert_eq!(page.db().auto_mode_settings().expect("no abandoned B"), original);
+  }
+}
+
+#[test]
+fn project_settings_failed_reviewer_new_draft_confirms_and_saves_only_visible_choice() {
+  let mut page = Settings::new(true);
+  question(&mut page);
+  let original = page.db().auto_mode_settings().expect("A");
+  fail_writes(&page, true);
+  start_save(&mut page);
+  page.until("B failed", |p| p.exists("settings-auto-retry"));
+  // C differs from B in effort. It gets its own question and cannot reuse B's confirmation.
+  page.choose("settings-reviewer-effort", "high");
+  page.until("C question", |p| p.exists("settings-auto-question-confirm"));
+  assert!(page.text("settings-reviewer-model").contains("sonnet"));
+  assert!(page.text("settings-reviewer-effort").contains("high"));
+  assert!(page.window.link.input_gate().protecting());
+  assert_eq!(page.db().auto_mode_settings().expect("C not confirmed"), original);
+  start_save(&mut page);
+  page.until("C failed", |p| p.exists("settings-auto-retry"));
+  fail_writes(&page, false);
+  page.click("settings-auto-retry");
+  assert!(page.exists("settings-auto-question-confirm"));
+  assert!(page.text("settings-reviewer-effort").contains("high"));
+  assert_eq!(
+    page.db().auto_mode_settings().expect("retry still needs confirmation"),
+    original
+  );
+  start_save(&mut page);
+  page.saved();
+  let saved = page.db().auto_mode_settings().expect("C").reviewer.expect("reviewer");
+  assert_eq!(saved.model.as_str(), "sonnet");
+  assert_eq!(saved.effort.as_deref(), Some("high"));
+  page.tab("limits", "settings-default-budget");
+  page.tab("general", "settings-reviewer-model");
+  assert!(page.text("settings-reviewer-effort").contains("high"));
+}
+
+#[test]
+fn project_settings_failed_auto_switch_keeps_explicit_retry_and_fresh_confirmation() {
+  let mut page = Settings::new(true);
+  let original = page.db().auto_mode_settings().expect("Off");
+  fail_writes(&page, true);
+  page.click("settings-auto-new-runs");
+  page.until("enable question", |p| p.exists("settings-auto-question-confirm"));
+  start_save(&mut page);
+  page.until("enable failed", |p| p.exists("settings-auto-retry"));
+  assert!(!page.db().auto_mode_settings().expect("still Off").new_runs);
+  for _ in 0..30 {
+    page.window.tree.tick_futures();
+    page.window.pass();
+  }
+  assert!(
+    page.exists("settings-auto-retry"),
+    "a switch failure is not reviewer abandonment"
+  );
+  fail_writes(&page, false);
+  page.click("settings-auto-retry");
+  assert!(page.exists("settings-auto-question-confirm"));
+  assert!(page.window.link.input_gate().protecting());
+  assert_eq!(page.db().auto_mode_settings().expect("not confirmed"), original);
+  start_save(&mut page);
+  page.saved();
+  assert!(page.db().auto_mode_settings().expect("enabled").new_runs);
+}

@@ -142,6 +142,11 @@ impl Component for Limits {
       self.fill(data.clone());
       stored = data.clone();
     }
+    if !changed && !save.state().get().is_pending() && save.state().get().error.is_some() {
+      self.submitted.set(Submitted(None));
+      self.queued.set(false);
+      save.state().set(lurq::app::ctx::FutureState::idle());
+    }
     if !save.state().get().is_pending() && save.state().get().error.is_none() {
       props
         .status

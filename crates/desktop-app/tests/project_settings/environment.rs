@@ -93,6 +93,80 @@ fn project_settings_environment_a_confirmed_change_cannot_overwrite_outside_edit
     "Not saved · Orchester couldn't write the settings"
   );
   page.click("settings-environment-reload");
+  page.saved();
   assert_eq!(page.value(INPUT), "CI=1");
+  assert!(!page.exists("settings-environment-save-error"));
   assert!(!page.window.link.input_gate().protecting());
+  page.tab("limits", "settings-default-budget");
+}
+
+fn failed_save(page: &mut Settings) {
+  page.tab("environment", INPUT);
+  let sql = rusqlite::Connection::open(page.repo.join(".orchester/orchester.db")).expect("fixture DB");
+  sql
+    .execute_batch(
+      "CREATE TRIGGER reject_environment BEFORE INSERT ON project_environment
+     BEGIN SELECT RAISE(ABORT, 'regression write refused'); END;",
+    )
+    .expect("controlled failure");
+  page.set(INPUT, "RUST_LOG=debug");
+  page.leave();
+  page.until("save failure", |p| p.exists("settings-environment-save-error"));
+}
+
+#[test]
+fn project_settings_environment_failed_save_reverts_without_a_write_and_unlocks_navigation() {
+  let mut page = Settings::new(false);
+  failed_save(&mut page);
+  page.set(INPUT, "");
+  page.leave();
+  page.saved();
+  assert!(!page.exists("settings-environment-save-error"));
+  assert!(page.db().project_environment().expect("baseline").is_empty());
+  page.tab("limits", "settings-default-budget");
+}
+
+#[test]
+fn project_settings_environment_reload_recovers_save_failure_only_after_a_fresh_successful_read() {
+  let mut page = Settings::new(false);
+  failed_save(&mut page);
+  let sql = rusqlite::Connection::open(page.repo.join(".orchester/orchester.db")).expect("fixture DB");
+  sql
+    .execute_batch("DROP TRIGGER reject_environment;")
+    .expect("allow outside write");
+  page
+    .db()
+    .save_project_environment(&parse_environment("CI=1").expect("outside"))
+    .expect("outside save");
+  page.outside(Outside::ProjectSettings);
+  page.until("Reload offered", |p| p.exists("settings-environment-reload"));
+  // Break the stored environment after the notice's read. Reload must not accept that cached read.
+  sql
+    .execute(
+      "INSERT INTO project_environment (name, value) VALUES ('1INVALID', 'x')",
+      [],
+    )
+    .expect("bad fixture row");
+  page.click("settings-environment-reload");
+  page.until("reload failed", |p| p.exists("settings-environment-read-error"));
+  assert_eq!(page.value(INPUT), "RUST_LOG=debug");
+  assert!(page.exists("settings-environment-save-error"));
+  assert!(page.text("project-settings-save-status").starts_with("Not saved"));
+  page.click("settings-tab-limits");
+  assert!(page.exists(INPUT), "failed Reload cannot unlock section navigation");
+  sql
+    .execute_batch(
+      "DELETE FROM project_environment WHERE name = '1INVALID';
+     UPDATE project_environment SET value = '2' WHERE name = 'CI';",
+    )
+    .expect("repair fixture");
+  page.click("settings-environment-reload");
+  page.saved();
+  assert_eq!(page.value(INPUT), "CI=2", "successful Reload reads current storage");
+  assert!(!page.exists("settings-environment-save-error"));
+  assert!(!page.exists("settings-environment-read-error"));
+  assert!(!page.window.link.input_gate().protecting());
+  page.tab("limits", "settings-default-budget");
+  page.tab("environment", INPUT);
+  assert_eq!(page.value(INPUT), "CI=2");
 }
