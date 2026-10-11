@@ -768,6 +768,15 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-9 · Project settings page · branch `orchester/orc-9-run-1` (done 2026-10-11, merged `fc9d0c2c`).
+Independent source review and scoped Pencil verification accepted the exact integration tree `a9d07d87`;
+141 tests in 20 filtered groups and `tools/check.ps1` passed. The person completed Environment widening,
+Auto On and a different offered Reviewer choice, each with decline and confirmation; native readback,
+read-only persistence and input release were independently assessed. Post-merge workspace/all-targets/
+all-features `cargo check` and `tools/check.ps1` passed. Nine visual minors remain. Unsupported active-run
+authority, native faults/retry/Reload, host behavior, real vault/clipboard and macOS remain Unverified;
+960/light and full test suites were not run. Visibly unavailable sections retain their scoped disposition.
+
 Textarea click focus (done 2026-10-11): multiline FieldInput owns its full visible input area, including blank body and padding. Sixteen filtered regressions and check.ps1 passed; independent code review and ten native coordinate-focus checks passed. Shared dimensions remain unchanged; the existing local retry-note 84/58px Pencil discrepancy and macOS/native compact/locked states are outside this focused fix.
 
 ORC-7 · Secrets page · branch `orchester/orc-7-run-1` (done 2026-10-11, merged `2b61296d`).
