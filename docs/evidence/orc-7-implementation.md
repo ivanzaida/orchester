@@ -1,6 +1,6 @@
 # ORC-7 implementation handoff — 2026-10-11
 
-Candidate: saved working-tree changes based on HEAD `c263258d145eb22c167bda6a702e6e2cf35a6615`. No commit was made by this agent. This report covers the Rust, locale and Cargo changes saved before this report was written. It is implementation evidence, not an independent design-verification verdict.
+Candidate: Orchester checkpoint `c846b42e97be6669252c3fee4e099b15b38c29a0`, based on `c263258d145eb22c167bda6a702e6e2cf35a6615`, plus this documentation-only handoff update. No commit was made by this agent. Rust, locale and Cargo inputs are unchanged since the passing filtered Windows tests, clippy and formatting checks below, so their evidence is reused for the checkpoint. This report is implementation evidence, not an independent design-verification verdict.
 
 ## Implemented
 
@@ -16,7 +16,7 @@ Candidate: saved working-tree changes based on HEAD `c263258d145eb22c167bda6a702
 
 Import remains explicitly unavailable. The Usage log and Recent access show the design's honest unrecorded state; access events do not exist in this version. No deprecated-app files, installed-app data, or Pencil design file were changed. No modal was added. No platform-specific behavior was introduced.
 
-## Current validation
+## Windows validation and earlier Apple attempts
 
 Commands are listed once with their latest outcome. Earlier failed runs are history, not a verdict on the current saved candidate.
 
@@ -44,7 +44,7 @@ Commands are listed once with their latest outcome. Earlier failed runs are hist
 | `$env:CC_aarch64_apple_darwin = 'clang'; $env:AR_aarch64_apple_darwin = 'llvm-ar'; cargo check -p orchester-app -p orchester-workspace --target aarch64-apple-darwin` | BLOCKED on the current candidate: Clang targets Apple correctly, but Apple SDK headers are absent (stdlib.h, stdio.h, TargetConditionals.h); exit 1 before app code |
 | `clang --version` | PASS: Clang 22.1.7, installed at C:/Program Files/LLVM/bin |
 
-The environment-variable assignments above were issued as separate PowerShell lines within the command process; no persistent system/compiler configuration was changed.
+The Apple attempts preceded the person's deferral instruction; no Apple check was rerun after that instruction. The environment-variable assignments above were issued as separate PowerShell lines within the command process; no persistent system/compiler configuration was changed.
 
 ## Earlier command history
 
@@ -65,7 +65,7 @@ The environment-variable assignments above were issued as separate PowerShell li
 - `powershell -File tools/check.ps1`: deliberately not run, per the Implement-step instruction; the pipeline Check step is authoritative.
 - No unfiltered cargo test, full workspace suite, native macOS test run, installed-app run, release packaging or installation.
 - Independent design verification is still required in the later Verify step; implementation tests are not that verification.
-- Successful Apple-target compilation still requires an Apple SDK/cross toolchain or a Mac. AGENTS.md rule 0 requires that validation; this environment currently cannot complete it.
+- Apple build/clippy/runtime validation: NOT RUN successfully here; deferred to the person's Mac by their explicit 2026-10-11 answer, which restates the standing decision from docs/orchestrator-handover.md. No cfg(target_os) code was added. The earlier unsuccessful cross-check attempts above are preserved as history, not a blocking verdict on Implement. Do not change toolchains or expand scope to cross-compile here.
 - 960 and light passes are out of scope. docs/plan.md was not moved to Done before Check and independent Verify pass.
 
 ## Verify against Pencil
@@ -100,3 +100,7 @@ Excluded: w7lvK2 (960) and HNDFN (light).
 The public domain lifecycle and MCP APIs write project metadata; seed only a verifier-owned project below .tmp. The action tests in tests/secrets/actions.rs and state tests in states.rs show routes/element IDs and exact state transitions. Never use the person's project database or real secrets.
 
 The in-memory vault in tests/secrets/harness.rs can deterministically fail or hold writes. Its fixture is headless only; native visual verification of pending/failure states needs the verifier's approved test-state mechanism. Do not substitute old screenshots or claim those states verified when they cannot be reached. Independent native capture and exact-PID/focus requirements belong to the Verify step.
+
+## Implement completion after the person's answer
+
+The person authorized finishing Implement with the saved candidate and filtered Windows evidence, deferring macOS validation to their Mac. Check runs tools/check.ps1, followed by independent Review and Verify. The gate was not rerun, and no commit, install or merge was performed. The cited docs/orchestrator-handover.md is absent in this run's checkpoint; the person's explicit answer supplies the effective standing decision without requiring a scope change. Only this report was edited after the checkpoint, so no test inputs changed.
