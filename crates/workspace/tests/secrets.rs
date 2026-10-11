@@ -265,3 +265,102 @@ fn secrets_selected_archive_keeps_uses_without_returning_to_the_active_list() {
   assert_eq!(data.used_by(active.id()).count(), 1);
   assert!(data.replacement_needs_person(active.id()));
 }
+
+#[derive(Default)]
+struct CountingVault(std::sync::atomic::AtomicUsize);
+
+impl orchester_core::secret::SecretVault for CountingVault {
+  fn store(
+    &self,
+    _key: &orchester_core::secret::VaultKey,
+    _value: &orchester_core::secret::SecretValue,
+  ) -> Result<(), orchester_core::secret::VaultError> {
+    self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    Ok(())
+  }
+
+  fn read(
+    &self,
+    _key: &orchester_core::secret::VaultKey,
+  ) -> Result<orchester_core::secret::SecretValue, orchester_core::secret::VaultError> {
+    Err(orchester_core::secret::VaultError::NotFound)
+  }
+
+  fn delete(&self, _key: &orchester_core::secret::VaultKey) -> Result<(), orchester_core::secret::VaultError> {
+    panic!("replacement must not delete a credential")
+  }
+}
+
+#[test]
+fn secrets_replacement_checks_current_bindings_before_touching_the_vault() {
+  use std::sync::atomic::Ordering;
+
+  use orchester_core::secret::SecretValue;
+  use orchester_workspace::secrets::data::{ReplacementOutcome, ReplacementPermission, replace_allowed_in};
+
+  let (repo, mut db) = project_db();
+  let active = secret("DOCS_TOKEN");
+  db.create_secret(&active).expect("metadata");
+  let snapshot = ProjectSecrets::load(&db).expect("unused snapshot");
+  assert!(!snapshot.replacement_needs_person(active.id()));
+  let vault = CountingVault::default();
+  let value = SecretValue::new("fixture-only-replacement".into()).expect("fixture");
+  assert_eq!(
+    replace_allowed_in(
+      repo.path(),
+      &vault,
+      active.id(),
+      &value,
+      ReplacementPermission::UnusedOnly
+    )
+    .expect("unused"),
+    ReplacementOutcome::Replaced
+  );
+  let rotated = db.secret(active.id()).expect("metadata").expect("secret").rotated_at();
+  let server = McpServerText {
+    name: "remote".into(),
+    transport: TransportChoice::Http,
+    url: "https://mcp.example.test".into(),
+    bearer: Some(active.id()),
+    ..McpServerText::new_server()
+  };
+  save_in(
+    repo.path(),
+    None,
+    server.draft(&[], std::slice::from_ref(&active)).expect("draft"),
+  )
+  .expect("server");
+  assert!(!snapshot.replacement_needs_person(active.id()), "snapshot is stale");
+  assert_eq!(
+    replace_allowed_in(
+      repo.path(),
+      &vault,
+      active.id(),
+      &value,
+      ReplacementPermission::UnusedOnly
+    )
+    .expect("recheck"),
+    ReplacementOutcome::NeedsPerson
+  );
+  assert_eq!(
+    vault.0.load(Ordering::SeqCst),
+    1,
+    "no additional vault write without confirmation"
+  );
+  assert_eq!(
+    db.secret(active.id()).expect("metadata").expect("secret").rotated_at(),
+    rotated
+  );
+  assert_eq!(
+    replace_allowed_in(
+      repo.path(),
+      &vault,
+      active.id(),
+      &value,
+      ReplacementPermission::PersonConfirmed
+    )
+    .expect("confirmed"),
+    ReplacementOutcome::Replaced
+  );
+  assert_eq!(vault.0.load(Ordering::SeqCst), 2);
+}

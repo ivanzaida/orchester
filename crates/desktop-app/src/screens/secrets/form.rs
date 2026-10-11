@@ -14,7 +14,7 @@ use orchester_core::secret::{Environment, Secret, SecretKind, SecretValue};
 use orchester_workspace::{
   activity::operations,
   secrets::{
-    data::ProjectSecrets,
+    data::{ProjectSecrets, ReplacementPermission},
     form::{NameCheck, check_name},
   },
 };
@@ -71,13 +71,21 @@ impl Component for SecretForm {
     let action = work::action(ctx);
     let value = form.value.clone();
     let environment = form.environment.clone();
+    let asking = form.asking.clone();
     ctx.watch(&action.state(), move |state| {
-      if let Some(work::Saved(id)) = state.data.filter(|_| state.is_fulfilled()) {
-        value.update(Zeroize::zeroize);
-        props
-          .view
-          .reveal(id, environment.get().0.expect("the form selects an environment"));
-        props.view.revision.update(|revision| *revision += 1);
+      match state.data.filter(|_| state.is_fulfilled()) {
+        Some(work::Outcome::Saved(id)) => {
+          value.update(Zeroize::zeroize);
+          props
+            .view
+            .reveal(id, environment.get().0.expect("the form selects an environment"));
+          props.view.revision.update(|revision| *revision += 1);
+        }
+        Some(work::Outcome::NeedsPerson) => {
+          asking.set(true);
+          props.view.revision.update(|revision| *revision += 1);
+        }
+        None => {}
       }
     });
     form
@@ -123,13 +131,14 @@ impl SecretForm {
     props: &Props,
     check: &NameCheck,
     action: &work::Action,
+    permission: ReplacementPermission,
   ) -> Option<Arc<dyn Fn() + Send + Sync>> {
     if action.state().get().is_pending() || self.value.with(|value| value.trim().is_empty()) {
       return None;
     }
     let (write, spec) = match &props.secret {
       Some(secret) => (
-        work::Write::Replace(secret.id()),
+        work::Write::Replace(secret.id(), permission),
         operations::secret_replace(&props.project.open, secret.name().as_str()),
       ),
       None => {

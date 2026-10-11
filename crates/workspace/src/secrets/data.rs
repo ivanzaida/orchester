@@ -194,6 +194,41 @@ pub fn replace_in(
   secret::replace_value(&mut db, vault, project, id, value, Timestamp::now()).map(|_| ())
 }
 
+/// Authorization carried from the inline replacement question.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReplacementPermission {
+  UnusedOnly,
+  PersonConfirmed,
+}
+
+/// A replacement either completed or waits for a person, without touching the vault.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReplacementOutcome {
+  Replaced,
+  NeedsPerson,
+}
+
+/// Rechecks stored references before replacing a credential; a page snapshot cannot authorize it.
+pub fn replace_allowed_in(
+  repo_root: &Path,
+  vault: &dyn SecretVault,
+  id: SecretId,
+  value: &SecretValue,
+  permission: ReplacementPermission,
+) -> Result<ReplacementOutcome, SecretFailure> {
+  let mut db = ProjectDb::open(repo_root).map_err(SecretError::Store)?;
+  if permission == ReplacementPermission::UnusedOnly
+    && ProjectSecrets::load(&db)
+      .map_err(SecretError::Store)?
+      .replacement_needs_person(id)
+  {
+    return Ok(ReplacementOutcome::NeedsPerson);
+  }
+  let project = db.project().id();
+  secret::replace_value(&mut db, vault, project, id, value, Timestamp::now())?;
+  Ok(ReplacementOutcome::Replaced)
+}
+
 /// Archives secret `id` of the project at `repo_root`, removing its value from `vault`.
 pub fn archive_in(repo_root: &Path, vault: &dyn SecretVault, id: SecretId) -> Result<(), SecretFailure> {
   let mut db = ProjectDb::open(repo_root).map_err(SecretError::Store)?;

@@ -1,6 +1,6 @@
 # ORC-7 implementation handoff — 2026-10-11
 
-Current return from Check: checkpoint `3a9ddaa79f4f41351bd57fee405889ff2938a932` plus a formatting-gate correction and this report update. Fresh results and the precise evidence limits are in **Return from Check attempt 1** below. The following original handoff is preserved as earlier evidence.
+Current return from Review attempt 2: checkpoint `6054c4eb5a62111b389474063bc7a5842a7dd361` plus the saved replacement-authorization correction, its regressions and this report. Fresh results and evidence limits are in **Return from Review attempt 2** below. Previous handoffs and failures remain earlier evidence for their named inputs.
 Candidate: Orchester checkpoint `c846b42e97be6669252c3fee4e099b15b38c29a0`, based on `c263258d145eb22c167bda6a702e6e2cf35a6615`, plus this documentation-only handoff update. No commit was made by this agent. Rust, locale and Cargo inputs are unchanged since the passing filtered Windows tests, clippy and formatting checks below, so their evidence is reused for the checkpoint. This report is implementation evidence, not an independent design-verification verdict.
 
 ## Implemented
@@ -147,3 +147,35 @@ The metadata/package commands first ran in an exploratory PowerShell loop, then 
 Not run in this return: `tools/check.ps1` itself (the Implement instruction reserves it for the authoritative pipeline Check), another clippy run, the unrelated test suites, native UI capture, independent Review/Verify, macOS checks/runtime, release packaging or installation. The returned Check's clippy, file-size and UI-literal sections passed against unchanged Rust and unchanged rules for those sections; that evidence remains limited to those inputs and is not a passing full-gate verdict for the edited script. Apple validation remains deferred to the person's Mac. No commit was made.
 
 Read-only Pencil access confirmed the current Secrets layer `ccz8n` and every frame in the Verify table above. Verify must still compare DrLE6 (list/inspector), LDP7i (use variants), YGy5i/Gam8g/j0ffR (add/duplicates/validation), yTCmk (replace), K2epbr/XoPMi (archive/impact), aKeYe/L0uiU/Ds3OR (usage/empty states), z9erZk (read retry), nykwz/SsCvf (pending/failed writes), plus the person-only question/input lock, archived references, credential clearing and long-name tooltips. The 960 and light frames remain excluded. Leave the plan pending until Check and independent Verify pass.
+
+## Return from Review attempt 2 — 2026-10-11
+
+Candidate: checkpoint `6054c4eb5a62111b389474063bc7a5842a7dd361` plus saved edits to workspace secrets data/tests, desktop-app secrets form/fields/work/privacy tests, and this report. No commit was made. This section covers those current Rust inputs; earlier passing Check results do not establish a full Check pass for this correction.
+
+The reported stale-reference defect was confirmed in the checkpoint: the form used its loaded references and the workspace wrote without checking again. The new workspace `replace_allowed_in` accepts typed replacement permission and loads current stored tool/MCP references before any vault write. An unconfirmed replacement with references returns `NeedsPerson` without changing vault contents or rotation metadata. The screen retains masked input, refreshes references, and mounts the existing Connections person-only question/input lock; only its guarded person-confirm handler carries confirmed permission. Declining releases the lock. A deferred operation produces no activity success event. The deprecated app's existing person-filled replacement entry point is unchanged.
+
+Regression coverage:
+- Workspace: an unused replacement succeeds; a binding stored after the read causes the unconfirmed replacement to stop before the vault or metadata changes; confirmed replacement succeeds.
+- Real headless app with production MCP tools: load unused, bind after the read without notifying the page, request replacement via MCP, observe the question/lock and unchanged credential/rotation, refuse automated confirmation, decline and unlock, then confirm as a person and write once.
+
+Fresh commands and outcomes (repeated commands grouped):
+
+| Command | Outcome |
+| --- | --- |
+| `git status --short` | PASS: clean at entry; final status contains only the seven correction/report files |
+| `git rev-parse HEAD` | PASS: checkpoint identified above |
+| `cargo +nightly fmt -p orchester-app -p orchester-workspace` | PASS: three runs while batching the correction |
+| `cargo test -p orchester-app --test secrets secrets_` | First run: 14 passed, new regression stopped at an incorrect unused-label assertion; corrected assertion, final run PASS: 15 tests |
+| `cargo test -p orchester-workspace --test secrets secret` | PASS: 4 tests |
+| `cargo test -p orchester-workspace --test secrets mcp_variable` | PASS: 1 test |
+| `cargo test -p orchester-app --test screens screens_each_route` | PASS: 1 test |
+| `cargo clippy -p orchester-app -p orchester-workspace --all-targets -- -D warnings` | PASS |
+| `cargo +nightly fmt -p orchester-app -p orchester-workspace -- --check` | PASS |
+| `git diff --stat` | PASS: inspected correction scope |
+| `git diff --numstat` | PASS: inspected the seven saved correction/report files |
+| `git diff -- crates/workspace/src/secrets/data.rs crates/desktop-app/src/screens/secrets/form.rs crates/desktop-app/src/screens/secrets/form/fields.rs crates/desktop-app/src/screens/secrets/work.rs` | PASS: reviewed production correction |
+| `git diff --check` | PASS |
+
+Not run: `tools/check.ps1` (reserved for the authoritative pipeline Check), unfiltered/full workspace tests, repeated i18n/theme/UI-kit suites (no locale/theme/UI-kit changes), native app capture, independent design Verify, macOS builds/runtime, packaging or installation. macOS validation remains deferred to the person's Mac. No platform-specific code was introduced. The plan stays pending until Check and independent Verify pass.
+
+Read-only Pencil access inspected Secrets layer `ccz8n` and the replacement frame `yTCmk`, including its screenshot. The later verifier must compare the states/nodes in the existing Verify table: DrLE6 list/inspector; LDP7i use variants; YGy5i/Gam8g/j0ffR add/duplicate/validation; yTCmk replacement; K2epbr/XoPMi archive; aKeYe/L0uiU/Ds3OR usage/empty; z9erZk read retry; nykwz/SsCvf pending/failed writes. Additionally verify replacement after a reference is added since the page read: unchanged credential until the in-place question is confirmed by a person, refreshed Used by, input lock/refusal, decline/retry and unlock. Credential clearing, archived references and long-name tooltips remain in the handoff. 960/light remain excluded.

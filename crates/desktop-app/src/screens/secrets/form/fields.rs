@@ -9,7 +9,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::secret::{Environment, SecretKind, SecretName, SecretNameError};
-use orchester_workspace::secrets::form::NameCheck;
+use orchester_workspace::secrets::{data::ReplacementPermission, form::NameCheck};
 
 use super::{Props, SecretForm};
 use crate::{
@@ -274,9 +274,9 @@ impl SecretForm {
 
   pub(super) fn footer(&self, ctx: &mut Ctx, props: &Props, check: &NameCheck, action: &work::Action) -> Element {
     let state = action.state().get();
-    let submit = self.save(ctx, props, check, action);
+    let submit = self.save(ctx, props, check, action, ReplacementPermission::UnusedOnly);
     if self.asking.get()
-      && let Some(save) = submit.clone()
+      && let Some(save) = self.save(ctx, props, check, action, ReplacementPermission::PersonConfirmed)
     {
       return self.question(ctx, save);
     }

@@ -114,3 +114,61 @@ fn secrets_mcp_tree_masks_values_and_refuses_automated_replacement_confirmation(
   s.click("secret-confirm-replacement-keep");
   assert!(!s.window.link.input_gate().protecting());
 }
+
+#[test]
+fn secrets_stale_unused_replacement_rechecks_references_and_requires_person_confirmation() {
+  use std::sync::atomic::Ordering;
+
+  use orchester_core::{secret::VaultKey, store::SecretStore};
+
+  use super::support::project_id;
+
+  let mut s = Secrets::new();
+  let secret = s.seed("DOCS_TOKEN", Environment::Development);
+  let key = VaultKey::new(project_id(), secret.id());
+  s.list();
+  s.click("secret-replace");
+  s.set("secret-value", NEXT);
+  assert!(!s.text("secret-uses").contains("kontur-docs"));
+  // The page keeps its unused snapshot while another caller stores a binding.
+  s.bind(&secret);
+  let client = Client::new(&mut s);
+  let requested = client.click(&mut s, "secret-save");
+  assert!(!requested["isError"].as_bool().unwrap_or(false));
+  s.until("save-time replacement question", |s| {
+    s.exists("secret-confirm-replacement-confirm")
+  });
+  assert!(s.window.link.input_gate().protecting());
+  assert!(s.vault.contains(&key, VALUE));
+  assert_eq!(s.vault.stores.load(Ordering::SeqCst), 1);
+  assert!(
+    s.db()
+      .secret(secret.id())
+      .expect("metadata")
+      .expect("secret")
+      .rotated_at()
+      .is_none()
+  );
+  s.private();
+  let refused = client.click(&mut s, "secret-confirm-replacement-confirm");
+  assert!(refused["isError"].as_bool().unwrap_or(false));
+  let error: Value = serde_json::from_str(refused["content"][0]["text"].as_str().expect("error")).expect("JSON error");
+  assert_eq!(error["code"], "person_only");
+  assert!(s.vault.contains(&key, VALUE));
+  s.click("secret-confirm-replacement-keep");
+  assert!(!s.window.link.input_gate().protecting());
+  assert!(s.vault.contains(&key, VALUE));
+  s.click("secret-save");
+  s.until("armed replacement question", |s| {
+    s.window.tree.tick_futures();
+    s.exists("secret-confirm-replacement-confirm")
+  });
+  s.window.pass();
+  s.click("secret-confirm-replacement-confirm");
+  s.until("person replaced", |s| {
+    s.exists("secret-inspector-name") && !s.exists("secret-value")
+  });
+  assert!(s.vault.contains(&key, NEXT));
+  assert_eq!(s.vault.stores.load(Ordering::SeqCst), 2);
+  assert!(!s.window.link.input_gate().protecting());
+}
