@@ -36,36 +36,54 @@ use crate::{
 };
 
 #[derive(Clone, PartialEq)]
-struct Read(RepositoryRead);
+struct Read(RepositoryRead, u64);
 impl DevtoolsInspectable for Read {}
-type Check = FutureAction<PathBuf, Read, Message>;
+type Check = FutureAction<(PathBuf, u64), Read, Message>;
 
-pub fn section(ctx: &mut Ctx, props: &TabProps, settings: &Settings, save: &Save) -> Element {
+pub fn section(ctx: &mut Ctx, props: &TabProps, settings: &Settings, save: &Save, revision: u64) -> Element {
   let changes = Services::of(ctx).changes;
   let project = props.project.open.project.id();
-  let check: Check = ctx.future_action(move |root: PathBuf| {
+  let check: Check = ctx.future_action(move |(root, revision): (PathBuf, u64)| {
     let changes = changes.clone();
     async move {
-      let read = background::run(move || project_settings::check_repository_in(&root).map(Read)).await??;
+      let read = background::run(move || project_settings::check_repository_in(&root).map(|read| Read(read, revision)))
+        .await??;
       changes.record(project, Outside::Connections);
       Ok(read)
     }
   });
+  let checked = check.state().get();
   let state = ctx
     .future(
-      (props.project.open.repo_root.clone(), settings.connections.clone()),
-      |(root, _)| async move {
-        background::run(move || project_settings::repository_in(&root).map(Read))
+      (
+        props.project.open.repo_root.clone(),
+        settings.connections.clone(),
+        revision,
+        props.project.feed.outside.get().of(Outside::Connections),
+        checked.data.clone(),
+      ),
+      |(root, _, revision, ..)| async move {
+        background::run(move || project_settings::repository_in(&root).map(|read| Read(read, revision)))
           .await?
           .map_err(|e| messages::store_error(&e))
       },
     )
     .state()
     .get();
-  let checked = check.state().get();
-  let data = checked.data.as_ref().or(state.data.as_ref());
+  let fresh = state.data.as_ref().filter(|read| read.1 == revision);
+  let checked_read = checked.data.as_ref().filter(|read| read.1 == revision);
+  // A check's snapshot is useful during its readback, but cannot override later saves.
+  let data = if state.is_pending() {
+    checked_read.or(fresh)
+  } else {
+    fresh.or(checked_read)
+  };
   let mut rows = match data {
-    Some(read) => linked_rows(ctx, props, save, &check, &read.0),
+    Some(read) => {
+      let mut shown = read.0.clone();
+      shown.detection = checked_read.and_then(|read| read.0.detection.clone());
+      linked_rows(ctx, props, save, &check, &shown, revision)
+    }
     None => vec![crate::ui::state::loading("settings-github-loading", &ctx.t("project_settings.reading")).into()],
   };
   if let Some(error) = checked.error.as_ref().or(state.error.as_ref()) {
@@ -73,8 +91,15 @@ pub fn section(ctx: &mut Ctx, props: &TabProps, settings: &Settings, save: &Save
   }
   form_section("settings-github", &ctx.t("project_settings.github"), None, rows).into()
 }
-fn linked_rows(ctx: &mut Ctx, props: &TabProps, save: &Save, check: &Check, read: &RepositoryRead) -> Vec<Element> {
-  let repo_control = repository_control(ctx, props, check, read);
+fn linked_rows(
+  ctx: &mut Ctx,
+  props: &TabProps,
+  save: &Save,
+  check: &Check,
+  read: &RepositoryRead,
+  revision: u64,
+) -> Vec<Element> {
+  let repo_control = repository_control(ctx, props, check, read, revision);
   let account_control = account_control(ctx, props, save, read);
   let mut rows = vec![
     page::row(
@@ -146,7 +171,7 @@ fn detection_text(ctx: &Ctx, state: &DetectionState) -> std::sync::Arc<str> {
   };
   ctx.t(key)
 }
-fn repository_control(ctx: &mut Ctx, props: &TabProps, check: &Check, read: &RepositoryRead) -> Column {
+fn repository_control(ctx: &mut Ctx, props: &TabProps, check: &Check, read: &RepositoryRead, revision: u64) -> Column {
   let repository = read
     .link
     .as_ref()
@@ -197,7 +222,7 @@ fn repository_control(ctx: &mut Ctx, props: &TabProps, check: &Check, read: &Rep
   repo_control = repo_control.child(if check.state().get().is_pending() {
     button.loading()
   } else {
-    button.on_click(move || action.run(root.clone()))
+    button.on_click(move || action.run((root.clone(), revision)))
   });
   repo_control
 }

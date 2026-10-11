@@ -1,5 +1,5 @@
 //! Limits (jupiT, iZS4K): save on leave, per-field validation and optional-limit readbacks.
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use lurq::{
   app::{
@@ -38,6 +38,7 @@ pub(super) struct Limits {
   revision: Signal<u64>,
   separator: Arc<str>,
   submitted: Signal<Submitted>,
+  queued: Signal<bool>,
 }
 #[derive(Clone, PartialEq)]
 struct Submitted(Option<LimitsText>);
@@ -95,6 +96,7 @@ impl Component for Limits {
       revision: ctx.signal(0),
       separator: ctx.t("project_settings.groupSeparator"),
       submitted: ctx.signal(Submitted(None)),
+      queued: ctx.signal(false),
     };
     let save = work::action(ctx);
     work::follow(
@@ -104,13 +106,20 @@ impl Component for Limits {
       tab.revision.clone(),
       tab.stored.clone(),
     );
-    let after = tab.clone();
+    let (after, next, root) = (
+      tab.clone(),
+      save.clone(),
+      ctx.props::<TabProps>().project.open.repo_root.clone(),
+    );
     ctx.watch(&save.state(), move |state| {
       if !state.is_pending()
         && state.error.is_none()
         && let Some(saved) = &state.data
       {
         after.accept(saved.0.limits);
+        if after.queued.get_untracked() {
+          after.submit(&root, &next);
+        }
       }
     });
     tab
@@ -212,25 +221,32 @@ impl Limits {
   }
   fn commit(&self, props: &TabProps, save: &Save) -> Arc<dyn Fn() + Send + Sync> {
     let (tab, save, root) = (self.clone(), save.clone(), props.project.open.repo_root.clone());
-    Arc::new(move || {
-      let Some(base) = tab.stored.get_untracked() else {
-        return;
-      };
-      let parsed = tab.text().limits(base.0.limits, &tab.separator);
-      let Ok(asked) = parsed else {
-        return;
-      };
-      if asked != base.0.limits && !save.state().get_untracked().is_pending() {
-        tab.submitted.set(Submitted(Some(tab.text())));
-        save.run((
-          root.clone(),
-          Change::Limits {
-            base: base.0.limits,
-            asked,
-          },
-        ));
-      }
-    })
+    Arc::new(move || tab.submit(&root, &save))
+  }
+  fn submit(&self, root: &Path, save: &Save) {
+    if save.state().get_untracked().is_pending() {
+      // A later blur must be committed even when it reverted to the pre-save baseline.
+      self.queued.set(true);
+      return;
+    }
+    self.queued.set(false);
+    let Some(base) = self.stored.get_untracked() else {
+      return;
+    };
+    let text = self.text();
+    let Ok(asked) = text.limits(base.0.limits, &self.separator) else {
+      return;
+    };
+    if asked != base.0.limits {
+      self.submitted.set(Submitted(Some(text)));
+      save.run((
+        root.to_path_buf(),
+        Change::Limits {
+          base: base.0.limits,
+          asked,
+        },
+      ));
+    }
   }
   fn number(
     &self,

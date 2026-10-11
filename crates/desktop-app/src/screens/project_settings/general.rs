@@ -62,7 +62,7 @@ impl Component for General {
     self.stored.set(Some(read.clone()));
     let settings = read.0;
     let identity = identity(ctx, &props);
-    let github = github::section(ctx, &props, &settings, &save);
+    let github = github::section(ctx, &props, &settings, &save, self.revision.get());
     let files = agent_files(ctx, &props, &settings, &save);
     let auto = ctx.mount_keyed::<auto_mode::AutoMode>(
       "settings-auto-mode",

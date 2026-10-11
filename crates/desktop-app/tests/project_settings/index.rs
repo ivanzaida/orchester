@@ -95,6 +95,27 @@ fn project_settings_code_index_lists_ready_and_failed_revisions_and_rebuilds() {
     false
   });
 }
+#[test]
+fn project_settings_review_code_index_refreshes_runner_created_and_removed_indexes() {
+  let mut page = Settings::new(false);
+  git(&page.repo, &["init"]);
+  page.tab("codeIndex", "settings-code-index");
+  if !page.db().code_index().expect("setting").is_on() {
+    page.click("settings-code-index");
+    page.saved();
+  }
+  page.until("empty index list", |p| p.exists("settings-no-indexes"));
+  let revision = Revision::new("1111111111111111111111111111111111111111").expect("revision");
+  assert!(code_index::rebuild_in(&page.repo, &revision).is_err());
+  let feed = page.window.projects().feed(crate::support::project_id());
+  feed.changes.update(|revision| *revision += 1);
+  page.until("runner-created index", |p| p.exists("settings-index-1111111"));
+  assert!(page.text("settings-index-1111111").contains("Failed"));
+  fs::remove_file(page.repo.join(".orchester/index/.failures").join(revision.as_str())).expect("remove fixture index");
+  feed.changes.update(|revision| *revision += 1);
+  page.until("runner-removed index", |p| p.exists("settings-no-indexes"));
+}
+
 pub(super) fn git(root: &std::path::Path, args: &[&str]) {
   let output = Command::new("git")
     .arg("-C")

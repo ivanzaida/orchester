@@ -121,3 +121,58 @@ fn project_settings_auto_mode_needs_a_reviewer_and_refuses_stale_changes() {
   );
   assert_eq!(db.auto_mode_settings().expect("kept"), asked);
 }
+
+#[test]
+fn project_settings_default_reviewer_keeps_model_and_effort_edits() {
+  use orchester_core::{
+    connection::{
+      AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
+    },
+    id::ConnectionId,
+    resource::ModelId,
+    store::ConnectionStore,
+  };
+  let (repo, mut db) = project();
+  let mut agent = AgentConnection::new(
+    ConnectionId::generate(),
+    Name::new("Codex").expect("name"),
+    AgentProvider::CodexCli,
+    std::env::current_exe().expect("program"),
+    orchester_core::time::Timestamp::now(),
+  )
+  .expect("agent");
+  agent
+    .record_check(ConnectionCheck {
+      at: orchester_core::time::Timestamp::now(),
+      result: CheckResult::Available {
+        version: "0.139.0".into(),
+        sign_in: SignIn::SignedIn,
+        catalog: ModelCatalog::new(
+          CatalogSource::Provider,
+          vec![CatalogModel::new(
+            ModelId::new("gpt-5.5").expect("model"),
+            vec!["low".into(), "high".into()],
+          )],
+        ),
+      },
+    })
+    .expect("check");
+  let id = agent.id();
+  db.create_connection(&agent.into_connection()).expect("connection");
+  let settings = project_settings::load_in(repo.path()).expect("settings");
+  assert_eq!(
+    project_settings::reviewer(&settings, "", "gpt-5.5", "").expect("default"),
+    None
+  );
+  let choice = project_settings::reviewer(&settings, "", "gpt-5.5", "high")
+    .expect("chosen effort")
+    .expect("explicit reviewer");
+  assert_eq!(choice.connection, id);
+  assert_eq!(choice.effort.as_deref(), Some("high"));
+  let choice = project_settings::reviewer(&settings, "", "another-model", "")
+    .expect("chosen model")
+    .expect("explicit reviewer");
+  assert_eq!(choice.connection, id);
+  assert_eq!(choice.model.as_str(), "another-model");
+  assert!(project_settings::reviewer(&settings, "", "gpt-5.5", "invalid").is_err());
+}

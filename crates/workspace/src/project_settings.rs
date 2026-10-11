@@ -144,18 +144,25 @@ pub fn reviewer(
   model: &str,
   effort: &str,
 ) -> Result<Option<ReviewerChoice>, Message> {
-  if connection.is_empty() {
-    return Ok(None);
-  }
-  let selected = settings
-    .connections
-    .iter()
-    .find(|c| c.id().to_string() == connection)
-    .ok_or_else(|| {
-      Message::new(unavailable_key(
-        orchester_core::run::review::ReviewerUnavailable::ConnectionGone,
-      ))
-    })?;
+  let selected = if connection.is_empty() {
+    if (model.is_empty() || model == default_model(settings, "")) && effort.is_empty() {
+      return Ok(None);
+    }
+    // Editing the default's model or effort pins the connection that default resolves to.
+    resolve_reviewer(&AutoModeSettings::default(), &settings.connections)
+      .map_err(|why| Message::new(unavailable_key(why)))?
+      .connection
+  } else {
+    settings
+      .connections
+      .iter()
+      .find(|c| c.id().to_string() == connection)
+      .ok_or_else(|| {
+        Message::new(unavailable_key(
+          orchester_core::run::review::ReviewerUnavailable::ConnectionGone,
+        ))
+      })?
+  };
   if reviewer_kind(selected).is_none() {
     return Err(Message::new(unavailable_key(
       orchester_core::run::review::ReviewerUnavailable::Unsupported,

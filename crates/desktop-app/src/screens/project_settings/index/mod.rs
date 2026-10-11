@@ -192,8 +192,14 @@ impl CodeIndex {
   fn list(&self, ctx: &mut Ctx, props: &TabProps) -> FutureState<Listed, Message> {
     ctx
       .future(
-        (props.project.open.repo_root.clone(), self.list_revision.get()),
-        |(root, _)| async move { background::run(move || code_index::list_in(&root).map(Listed)).await? },
+        (
+          props.project.open.repo_root.clone(),
+          self.list_revision.get(),
+          props.project.feed.changes.get(),
+          props.project.feed.revision.get(),
+          props.project.feed.outside.get().of(Outside::CodeIndex),
+        ),
+        |(root, ..)| async move { background::run(move || code_index::list_in(&root).map(Listed)).await? },
       )
       .state()
       .get()

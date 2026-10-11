@@ -2,8 +2,10 @@
 mod domain;
 mod environment;
 mod general;
+mod github;
 mod harness;
 mod index;
 mod limits;
+mod review_regressions;
 #[path = "../support/mod.rs"]
 mod support;
