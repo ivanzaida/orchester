@@ -145,6 +145,10 @@ name = "orchester_process_tools"
 required-features = ["test-agent"]
 
 [[test]]
+name = "orchester_app_tools"
+required-features = ["test-agent"]
+
+[[test]]
 name = "mcp_exempt_tools"
 required-features = ["test-agent"]
 
@@ -254,6 +258,11 @@ orchester-store.workspace = true
 orchester-vault.workspace = true
 parking_lot.workspace = true
 serde_json.workspace = true
+# The run app relay uses a bounded loopback HTTP client and decodes/re-encodes PNGs without metadata.
+reqwest = { workspace = true, features = ["blocking"] }
+rustls.workspace = true
+base64.workspace = true
+image.workspace = true
 # The empty folder auto mode's reviewer runs in, removed after the review; already a test dependency.
 tempfile.workspace = true
 thiserror.workspace = true

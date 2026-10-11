@@ -12,6 +12,9 @@ use serde_json::{Value, json};
 
 use super::{Fake, fake_claude_rules, fake_permission_prompt::Prompt, fake_skill_calls, fake_tool_calls};
 
+#[path = "fake_app_tools.rs"]
+mod fake_app_tools;
+
 #[path = "fake_process_tools.rs"]
 mod fake_process_tools;
 
@@ -63,6 +66,21 @@ impl Fake {
     let Some(mut server) = opened.or_else(|| Prompt::open(args)) else {
       return ExitCode::from(2);
     };
+    if self.prompt.contains("Call the run app") {
+      fake_app_tools::exercise(worktree, |tool, input| {
+        let name = format!("mcp__Orchester__{tool}");
+        assert!(fake_claude_rules::mcp(args, &name).runs(), "exact allow rule");
+        eprintln!("app-permission: allow-by-rule");
+        let result = server.call_result(tool, input).expect("relay");
+        self.tool_result(
+          "app-call",
+          &result.to_string(),
+          result["isError"].as_bool().unwrap_or(false),
+        );
+        result
+      });
+      return self.finish(worktree, "hello", step);
+    }
     let mut index = 0;
     fake_process_tools::exercise(worktree, |tool, input| {
       index += 1;

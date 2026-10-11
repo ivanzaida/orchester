@@ -171,6 +171,7 @@ by `read_external_file` and `search_external_file`.
 | `read_external_file` | `filename` (absolute), `start_line?`, `length?` | outside | asks; runs in the run's sources | asks; runs in the run's sources |
 | `list_run_processes` | none | run processes | runs | runs |
 | `stop_run_process` | `pid` (positive integer) | run processes | runs | runs |
+| `call_run_app` | `pid`, `tool` (embedded MCP name), `arguments` (object) | run processes | runs | runs |
 | `run_check` (with checks) | `name` (one of the step's checks) | outside, network | by the check's access rules (network on only) | as a writing step |
 | `list_skills` (with skills) | none | read-only | runs | runs |
 | `read_skill` (with skills) | `name`, `file?` (a skill file path; none or `SKILL.md` for the skill's own), `offset?`, `limit?` (≤ 10 000, 2000) | read-only | runs | runs |
@@ -209,6 +210,25 @@ by `read_external_file` and `search_external_file`.
   Claude Code receives exact allow rules; Codex receives `approval_mode = "approve"`, and the runner enforces
   the executable boundary. Both CLIs' *Files and commands* prompt and continuing-session tool steering tell
   agents to use them instead of `Stop-Process` / `kill`, and to stop only apps they started.
+- **Run app calls (ORC-23).** `mcp__Orchester__call_run_app(pid, tool, arguments)` (Codex: `call_run_app`)
+  drives the exact app the run started, using ORC-21's process validation before reading discovery or making HTTP
+  requests. Outside executables (the installed app and another run's app included), older processes, protected
+  executables and unreadable identities are refused, without asking. The process identity is retained and checked
+  before each request: a Windows process handle or macOS audit token. The executable must be `orchester-app` or
+  `orchester`; discovery must name that app and exactly the requested pid. Discovery is found by pid in the
+  per-user data folder (`LOCALAPPDATA` on Windows; `~/Library/Application Support` on macOS), or a QA discovery
+  folder under this worktree's `.tmp/`. Links escaping the worktree, ambiguous QA discovery and non-loopback URLs
+  are refused. The new app uses `orchester-app-mcp`; the deprecated desktop uses `lurq/mcp` for `lurq_*` tools
+  and `orchester-mcp` for domain tools.
+  The relay initializes MCP and calls one tool using bounded JSON or SSE responses, without proxies or redirects.
+  The token is held in a redacting secret type, put only in a sensitive authorization header and removed from
+  returned text, structured values and keys. Transport errors never contain discovery or response contents.
+  Text and structured content are returned; PNG blocks become relative paths under `.tmp/run-app/`, decoded
+  and re-encoded without metadata. No credential is sent to the agent, prompt, events or logs.
+  Both CLIs receive the same approval exemption as the process tools even in read-only, network-off steps with
+  MCP approval enabled. Fresh and continuing-session prompts steer agents to this tool instead of running
+  `tools/lurq-mcp-client.py` outside the sandbox; the design-verification skill does too. This grants no access
+  to the person's installed app, another run or arbitrary network endpoints.
 - **Schemas** are strict (`additionalProperties: false`, each property typed and bounded); a call is read into its
   type with unknown fields refused, and an invalid call is answered with an error result that says why.
 - **Worktree files** (`orchester_agent::FileTools`, confined to the step's `FileScope` as before: the worktree, the

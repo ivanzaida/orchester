@@ -29,14 +29,14 @@ what is actually on screen.
 2. **App screenshot in the same state.** For orchester-app, follow "orchester-app: start,
    connect, reach the state" below. For the deprecated desktop, build and run the implementation with
    `cargo run -p orchester-desktop` (every build includes the embedded MCP server; set
-   `ORCHESTER_MCP_START_WITHOUT_FOCUS=1` so the window does not take focus). Find the MCP
-   discovery file of *your* process (`%LOCALAPPDATA%\lurq\mcp\<pid>.json`). Resize the window to 1440 × 1020 logical
+   `ORCHESTER_MCP_START_WITHOUT_FOCUS=1` so the window does not take focus). Retain the
+   pid of *your* process and connect with `mcp__Orchester__call_run_app(pid, tool, arguments)`. Resize the window to 1440 × 1020 logical
    with `lurq_resize`, which takes physical pixels: the logical size times the display's scale factor
    (2160 × 1530 at 1.5×) (the 32px custom title bar from "Window chrome" in the design doc, the
    1440 × 960 screen frame and the 28px status bar from "Status bar"; composition example
    `cpoal`), drive the app into the designed state
    (`lurq_read_tree`, `lurq_interact`, `lurq_set_value`), wait for idle (`lurq_wait`),
-   and capture `lurq_screenshot` to `.tmp/verify/<screen>/app.png`. Use fixture data that
+   and call `lurq_screenshot` through the relay; open and cite its returned PNG path. Use fixture data that
    matches the design's content where the app allows it, so text lengths are comparable.
    Use a throwaway git repository under `.tmp/`, never a real project.
 3. **Look at both images** at full size, region by region — do not rely on the element tree
@@ -113,14 +113,17 @@ Runs of the static scenarios are recorded, not executed: a runner that attaches 
 running runs interrupted and ends the approvals they waited for. Capture running states of
 static scenarios with `-NoRunner`; reach live states with `live`.
 
-**Connect.** The discovery file `%LOCALAPPDATA%\orchester-app-mcp\<pid>.json`
-(`~/Library/Application Support/orchester-app-mcp/<pid>.json` on macOS) holds `pid`, `app`
-(`orchester-app`), `url`, `port` and the bearer `token`. Call tools with the client, which sends
-the token and keeps it out of its output:
+**Connect.** Use the per-invocation relay tool `mcp__Orchester__call_run_app(pid, tool, arguments)`
+(Codex: `call_run_app` of the Orchester server). Pass the exact pid printed by the QA starter.
+It runs without asking only for an app whose resolved executable is inside this run's worktree,
+using the same process boundary as `stop_run_process`. The relay finds the exact-pid discovery file
+in the user's discovery folder or an isolated QA profile under the worktree's `.tmp/`, checks its
+pid and app name, and keeps the token private. Use it instead of running `tools/lurq-mcp-client.py`,
+reading discovery or escalating a script outside the sandbox.
 
-```text
-python tools/lurq-mcp-client.py <pid> <tool> --app orchester-app --discovery-dir "%LOCALAPPDATA%\orchester-app-mcp" [--arguments "<json>"] [--image-out <png>]
-```
+For example, call `call_run_app` with `{"pid":12345,"tool":"app_state","arguments":{}}`.
+Every embedded tool uses this same relay, including `navigate`, `lurq_resize` and `lurq_screenshot`.
+PNG images are saved under `.tmp/run-app/`; the answer gives a relative path to open and cite.
 
 `app_state` must answer `"mcp": {"window_control": true, …}` before you drive the window.
 
@@ -139,19 +142,14 @@ the route's params and answers the route the tab shows, for example:
   `worktree`;
 - `{"route": "new_task", "project": "<id>"}`, `{"route": "edit_task", "project": "<id>", "key": "KON-20"}`.
 
-Then `lurq_read_tree`, `lurq_interact`, `lurq_set_value`, `lurq_wait`, and `lurq_screenshot` with
-`--image-out .tmp/verify/<screen>/app.png`.
+Then call `lurq_read_tree`, `lurq_interact`, `lurq_set_value`, `lurq_wait`, and `lurq_screenshot`
+through `call_run_app`. Open the returned PNG path and include it in the verification report.
 
 **Stop it.** Close the app gracefully with its own close button: `lurq_read_tree` lists it as
 `#window-close` with a `ref`, and `lurq_interact` `{"ref": "<ref>", "action": "click"}` clicks it; the
 app ends what it started and removes its discovery file. If that is not possible,
-stop its children first — its runner, whose parent pid is the app's — then the app, and only those
-pids:
-
-```text
-Get-CimInstance Win32_Process -Filter "ParentProcessId = <pid>" | ForEach-Object { Stop-Process -Id $_.ProcessId }
-Stop-Process -Id <pid>
-```
+use `mcp__Orchester__stop_run_process(pid)` to stop the app and its children inside the run's
+worktree. Stop only the app you started; never run `Stop-Process` or `kill` for this.
 
 The next app's start removes the discovery file a stopped app left.
 
@@ -166,14 +164,11 @@ scenario or tool reaches yet (loading, runner could not restart) is reported as 
 
 ## Rules for the verifier
 
-- Several agents may run Orchester at the same time, and every instance writes its MCP
-  discovery file to the same folder. Never pick "the newest" discovery file: take the pid of the
-  process you started, open `<discovery folder>\<that pid>.json` (orchester-app:
-  `%LOCALAPPDATA%\orchester-app-mcp`; the deprecated desktop: `%LOCALAPPDATA%\lurq\mcp`), and
-  before every batch of actions confirm the connection still belongs to that pid (`lurq_windows`
-  / the discovery file's `pid`). If it does not, stop and reconnect — never act on another instance.
-- The discovery file holds a bearer token. Never print, log, paste or commit it; let
-  `tools/lurq-mcp-client.py` read it.
+- Several agents may run Orchester at the same time. Use only the pid you started with
+  `mcp__Orchester__call_run_app`; never select the newest discovery file. Before each batch,
+  call `lurq_windows` or `app_state` through the relay and confirm the intended app state.
+- The relay owns discovery credentials. Never read, print, log, paste or commit a discovery
+  token, and never pass one as a tool argument.
 - Run your own copy of the binaries in your own folder when another agent or the user may be
   using the same `target/` directory, so each instance has its own `orchester.db` next to it.
 - On Windows a debug build is a console program: its console window belongs to the same pid as

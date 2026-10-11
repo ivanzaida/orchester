@@ -1,40 +1,36 @@
 # Calling an app's embedded MCP inside a run
 
-`tools/lurq-mcp-client.py` calls one lurq MCP tool on the **exact PID** of an app started by the run. It reads that
-PID's discovery file in memory, validates the app name and loopback endpoint, and never prints the discovery file or
-bearer token. HTTP redirects are rejected so the token cannot be forwarded to a server-supplied URL. The client also
-redacts the token if a tool echoes it in a result. Python 3 is required in the agent's environment.
-Results are printed as ASCII-safe JSON, so non-ASCII UI text remains available through JSON escapes even in Windows
-PowerShell pipes.
+Agents use `mcp__Orchester__call_run_app(pid, tool, arguments)` (Codex: `call_run_app` of the
+Orchester server), instead of running `tools/lurq-mcp-client.py` themselves. Start an isolated app
+with `tools/qa-app.ps1`, retain its printed pid, and pass that exact pid on every call:
 
-Build and copy the desktop and runner to a run-owned app directory before starting them. The Cargo target directory can
-be rebuilt by another build or feature set between build and launch (D6). Start only that copied desktop with L6's
-no-focus option, record its PID, and use the same discovery data directory for the app and client:
-
-- Windows: set `LOCALAPPDATA` for **both child processes** to a writable run-owned directory. The discovery file is
-  under `LOCALAPPDATA/lurq/mcp/<pid>.json`.
-- macOS: set `HOME` for **both child processes** to a writable run-owned directory. The discovery file is under
-  `HOME/Library/Application Support/lurq/mcp/<pid>.json`.
-
-Call a tool with the PID returned when starting that app, for example:
-
-```text
-python tools/lurq-mcp-client.py 12345 lurq_windows
-python tools/lurq-mcp-client.py 12345 lurq_read_tree --arguments '{"window":"main","max_chars":1000}'
-python tools/lurq-mcp-client.py 12345 lurq_screenshot --arguments '{"window":"main"}' --image-out .tmp/verify/task/app.png
+```json
+{"pid":12345,"tool":"lurq_windows","arguments":{}}
+{"pid":12345,"tool":"navigate","arguments":{"route":"tasks","project":"<id>"}}
+{"pid":12345,"tool":"lurq_screenshot","arguments":{"window":"main"}}
 ```
 
-On macOS, use `python3` if `python` is unavailable. `--discovery-dir` can point directly to the run-owned `lurq/mcp`
-directory when the client's environment differs from the app's. The optional `--app` value defaults to `orchester`.
-For `lurq_screenshot`, `--image-out` writes one PNG to the supplied run-owned path, creating its parent directory if
-needed. The client checks the single image block, `image/png` MIME, base64, PNG chunk checksums and complete decodable
-RGBA8 image data before writing the file. It
-reports only JSON metadata (`saved`, MIME, byte count and dimensions); the PNG base64 and discovery credential never
-appear in output. Without `--image-out`, it reports the same metadata with `saved:false` and writes no file. A failed
-call or file write exits nonzero and does not report success. Other MCP tools keep their existing JSON result output.
-Do not put secret values in `--arguments`: command lines and tool results may be recorded in run activity. The client
-protects the **discovery bearer token**, not arbitrary data returned by an MCP tool. It does not launch or close the
-app; the verifier owns only its own PID and must close that process after the check.
+The relay reuses `stop_run_process`'s resolved executable path, process age and protection rules.
+Executables outside this run's worktree are refused before any discovery or HTTP call: the person's
+installed app and another run's app are never driven. It finds discovery by pid in the per-user
+folder or an isolated QA profile under this worktree's `.tmp/`, validates the pid, app name and
+loopback URL, and keeps the discovery credential inside the host. Text and structured content are
+returned with the token redacted. PNG images are saved under `.tmp/run-app/`; open the relative
+path returned by the tool and cite it as the app screenshot. No Python invocation, discovery read
+or sandbox exception is needed.
 
-The client is a transport helper. D4 still requires a separate verifier to compare Pencil and app screenshots at
-the same state and size, and a host-side check that the user's foreground window was not taken.
+The new app (`orchester-app`) shares one embedded server for app and lurq tools; the deprecated
+desktop (`orchester`) uses the lurq server for `lurq_*` tools and its domain server for other tools.
+Discovery uses `LOCALAPPDATA` on Windows and `~/Library/Application Support` on macOS.
+Keep QA profiles under the worktree's `.tmp/` when overriding the app's data location.
+
+Build and copy programs into a run-owned folder before launch so concurrent builds cannot change
+the running candidate, and enable its no-focus startup option. Drive only the app you started.
+Close it through the embedded close button, or use `mcp__Orchester__stop_run_process(pid)`.
+
+`tools/lurq-mcp-client.py` remains a manual diagnostic helper. It is not the agent workflow: an
+unsandboxed approval would run whatever that worktree script currently says. Do not pass discovery
+credentials or other secrets as tool arguments, since arguments can appear in run activity.
+
+A separate verifier must still compare Pencil and app screenshots in the same state and size,
+and verify that the user's foreground window was not taken.

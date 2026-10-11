@@ -2,6 +2,7 @@
 //! signal individual processes. A stop reaches the root and the descendants inside the worktree; a descendant
 //! outside it is never closed or ended, only named in the report.
 
+mod app;
 #[cfg(target_os = "macos")]
 mod macos;
 mod stop;
@@ -17,6 +18,7 @@ use std::{
   path::{Path, PathBuf},
 };
 
+pub use app::{RunAppProcess, RunAppProcessError};
 #[cfg(target_os = "macos")]
 use macos as platform;
 use orchester_core::{

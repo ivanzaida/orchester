@@ -10,8 +10,8 @@ use std::{
 };
 
 use super::{
-  FileCall, FindSymbol, OutputKept, OutsideReadError, OutsideReads, ProcessCall, ProgramOutput, SkillCall, ToolCall,
-  ToolCallError, ToolResult,
+  AppCall, FileCall, FindSymbol, OutputKept, OutsideReadError, OutsideReads, ProcessCall, ProgramOutput, SkillCall,
+  ToolCall, ToolCallError, ToolResult,
 };
 use crate::{
   command::{Command, CommandError},
@@ -158,6 +158,8 @@ pub enum ToolWork {
   Skill(SkillCall),
   /// The caller's process executor applies the run's executable boundary to every target.
   Processes(ProcessCall),
+  /// Calls one embedded MCP tool after the executor validates its process and discovery.
+  App(AppCall),
   /// `find_references` of this name, which the caller answers from the code index and the worktree.
   References(String),
   /// `get_task`, which the caller answers from the run's records ([`super::TaskView`]).
@@ -189,6 +191,7 @@ impl ToolCall {
       Self::File(call) => Ok(ToolWork::Files(call.clone())),
       Self::FindSymbol(query) => Ok(ToolWork::Symbols(query.clone())),
       Self::Skill(call) => Ok(ToolWork::Skill(call.clone())),
+      Self::App(call) => Ok(ToolWork::App(call.clone())),
       Self::Processes(call) => Ok(ToolWork::Processes(*call)),
       Self::FindReferences { name } => Ok(ToolWork::References(name.clone())),
       Self::GetTask => Ok(ToolWork::Task),

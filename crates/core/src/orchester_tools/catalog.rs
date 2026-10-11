@@ -69,6 +69,9 @@ impl OrchesterTool {
       Self::StopRunProcess => {
         "Stop a process and its children inside this run's worktree without asking: request close, wait briefly, then end survivors. Outside executables, the runner and agent CLIs are refused. Reports closed, ended or already gone."
       }
+      Self::CallRunApp => {
+        "Call one embedded MCP tool of an app started inside this run's worktree, without asking. Other executables and mismatched discovery files are refused. The relay keeps the token private; PNG images are saved under .tmp/ and returned as relative paths. Use this instead of tools/lurq-mcp-client.py."
+      }
       Self::ReadFile => {
         "Read a text file of the worktree as numbered lines. Read a file before you edit it: edit_file needs this \
          read."
@@ -142,6 +145,7 @@ impl OrchesterTool {
         | Self::DeleteFile
         | Self::MoveFile
         | Self::StopRunProcess
+        | Self::CallRunApp
         | Self::RunCheck
         | Self::SaveMemory
         | Self::ReportProgress
@@ -180,6 +184,11 @@ pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String, boo
       "pid":{"type":"integer","minimum":1,"maximum":u32::MAX,
         "description":"The process id from list_run_processes. Only this run's executable paths may be stopped."}
     },"required":["pid"],"additionalProperties":false}),
+    OrchesterTool::CallRunApp => json!({"type":"object","properties":{
+      "pid":{"type":"integer","minimum":1,"maximum":u32::MAX,"description":"The pid of the app this run started."},
+      "tool":{"type":"string","minLength":1,"maxLength":200,"description":"The embedded MCP tool name, e.g. lurq_windows, navigate or lurq_screenshot."},
+      "arguments":{"type":"object","description":"That tool's arguments; use {} for none. Never a discovery token."}
+    },"required":["pid","tool","arguments"],"additionalProperties":false}),
     OrchesterTool::SaveMemory => fixed(SAVE_MEMORY),
     OrchesterTool::ReportProgress => fixed(REPORT_PROGRESS),
     OrchesterTool::FindSymbol => fixed(FIND_SYMBOL),

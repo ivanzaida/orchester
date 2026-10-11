@@ -768,6 +768,19 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-23 · Agent tool: drive the app a run started, without asking (implemented 2026-10-11 in run worktree
+`01a12acf-2d86-700e-8094-befc53b4e0b5`; implementation checks pass, pipeline Check and independent review/QA follow).
+
+`call_run_app(pid, tool, arguments)` is served by the per-invocation relay to both CLIs without approval, including
+read-only steps with network off and MCP approvals enabled. It reuses ORC-21's process validation, finds exact-pid
+user or QA discovery, validates its pid/app/loopback endpoint, holds the credential only in the relay and redacts
+returned text and structured content. PNGs are decoded and re-encoded without metadata under `.tmp/run-app/`, with
+relative paths returned. JSON and SSE responses are bounded; redirects and proxies are disabled. Prompts, the
+approval documentation and the design-verification skill steer agents to the relay instead of the Python script.
+Core refusal/redaction tests and both CLI relay tests with a started stand-in pass; core and executor pass macOS
+cross-check and cross-clippy. The runner macOS check is blocked by missing target C tooling in existing native
+dependencies. No visual states or Pencil nodes changed. Commands and limits: `docs/evidence/orc-23-run-app-validation.md`.
+
 ORC-21 · Agent tools to stop apps started in a run (implemented 2026-10-11 in run worktree
 `01a127bc-59bd-774a-8edd-a0f0bc989311`; implementation checks passed, independent review/QA follows).
 
