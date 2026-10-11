@@ -212,7 +212,10 @@ fn unknown_server_request_fails_closed_and_turn_usage_is_counted_once() {
           output: 35
         }
       }),
-      Update::TurnEnded { input_kept: true }
+      Update::TurnEnded {
+        input_kept: true,
+        completed: true
+      }
     ]
   ));
 }
@@ -226,7 +229,21 @@ fn an_interrupted_turn_does_not_keep_the_input_it_accepted() {
     let ended = json!({"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","items":[],"status":status}}});
     let updates = stream.parse(&ended.to_string()).expect("turn");
     assert!(
-      matches!(updates.last(), Some(Update::TurnEnded { input_kept }) if *input_kept == kept),
+      matches!(updates.last(), Some(Update::TurnEnded { input_kept, .. }) if *input_kept == kept),
+      "{status}"
+    );
+  }
+}
+
+#[test]
+fn only_a_completed_turn_ends_completed() {
+  // A failed turn (a usage limit, for one) or an interrupted one is not continued.
+  for (status, completed) in [("completed", true), ("failed", false), ("interrupted", false)] {
+    let mut stream = AppServerStream::default();
+    let ended = json!({"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","items":[],"status":status}}});
+    let updates = stream.parse(&ended.to_string()).expect("turn");
+    assert!(
+      matches!(updates.last(), Some(Update::TurnEnded { completed: ended, .. }) if *ended == completed),
       "{status}"
     );
   }
@@ -336,4 +353,38 @@ fn app_server_a_call_the_runner_asked_about_ends_as_asked() {
     asked(stream.parse(&completed).expect("completed")),
     Some(("mcp-4".to_owned(), false))
   );
+}
+
+#[test]
+fn app_server_orchester_call_remains_active_across_a_completed_model_turn() {
+  let mut stream = AppServerStream::default();
+  for (id, server) in [("own", "Orchester"), ("other", "pencil")] {
+    let started = json!({"method": "item/started", "params": {"threadId": "t", "turnId": "turn",
+      "item": {"id": id, "type": "mcpToolCall", "server": server, "tool": "read_file", "arguments": {}}}});
+    stream.parse(&started.to_string()).expect("start");
+  }
+  assert!(stream.has_active_orchester_tools());
+  stream
+    .parse(
+      &json!({"method": "turn/completed", "params": {"threadId": "t",
+    "turn": {"id": "turn", "status": "completed"}}})
+      .to_string(),
+    )
+    .expect("turn end");
+  assert!(
+    stream.has_active_orchester_tools(),
+    "a model's final message does not complete a nested MCP call"
+  );
+  stream
+    .parse(
+      &json!({"method": "item/completed", "params": {"item": {
+    "id": "own", "type": "mcpToolCall", "status": "completed"}}})
+      .to_string(),
+    )
+    .expect("call end");
+  assert!(
+    !stream.has_active_orchester_tools(),
+    "an unrelated server does not hold Orchester's continuation"
+  );
+  assert!(stream.has_active_tools());
 }

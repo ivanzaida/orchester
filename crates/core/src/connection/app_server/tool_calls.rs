@@ -57,6 +57,10 @@ impl AskedOwnCalls {
 }
 
 impl AppServerStream {
+  /// Orchester calls can outlive a yielded code-mode exec and the model turn that started it.
+  pub fn has_active_orchester_tools(&self) -> bool {
+    self.tools.values().any(|tool| tool.server == ORCHESTER)
+  }
   /// The runner asks a person about a call of Orchester's tool `action` with `arguments`: the call's end says a person
   /// was asked. The id of the call when it has started, so the request and the call are one row; `None` when it has
   /// not, and its start is marked then (within the same turn).

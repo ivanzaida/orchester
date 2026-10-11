@@ -45,7 +45,7 @@ use std::{fs::OpenOptions, io::Write, path::Path, process::ExitCode, thread, tim
 
 use serde_json::json;
 
-use super::{HELPER, Session, Step, TURN, complete, emit, fake_app_server, fake_codex_tools, notify};
+use super::{HELPER, Session, Step, complete, emit, fake_app_server, fake_codex_tools, notify};
 
 /// The account's limits App Server reports during a turn.
 const LIMITS: &str = include_str!("../../../core/tests/fixtures/codex/plan-limits.jsonl");
@@ -98,6 +98,9 @@ const ANSWERS: [(&str, SteerAnswer); 6] = [
 ];
 
 pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
+  if let Some(step) = super::fake_codex_cell::work(session, prompt, structured) {
+    return step;
+  }
   let worktree = session.cwd.clone();
   let answer = ANSWERS
     .iter()
@@ -199,7 +202,7 @@ pub fn steered(session: &mut Session, id: &serde_json::Value, params: &serde_jso
       notify(
         session,
         "turn/completed",
-        json!({"turn": {"id": TURN, "status": "interrupted"}}),
+        json!({"turn": {"id": session.turn, "status": "interrupted"}}),
       );
       return Step::Go;
     }
@@ -262,7 +265,7 @@ fn first_time(worktree: &Path, prompt: &str) -> bool {
 
 /// Appends `line` to `README.md` (or writes the step's own file), reports it as a command and a file change, then
 /// the final message and the usage.
-pub fn finish(session: &Session, line: &str, result: &StepReport) -> Step {
+pub fn finish(session: &mut Session, line: &str, result: &StepReport) -> Step {
   let worktree = &session.cwd;
   let file = if result.own_file {
     format!("{}.txt", result.step.to_lowercase().replace(' ', "-"))
@@ -316,8 +319,9 @@ pub fn finish(session: &Session, line: &str, result: &StepReport) -> Step {
     "Done.".to_owned()
   };
   message(session, "item_3", &text);
+  session.completed_result = Some(text);
   complete(session, None);
-  Step::Exit(ExitCode::SUCCESS)
+  Step::Go
 }
 
 /// A message the agent wrote, as a completed `agentMessage` item.

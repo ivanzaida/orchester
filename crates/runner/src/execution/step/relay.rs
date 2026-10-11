@@ -53,6 +53,7 @@ use super::{
   claude_approval::{Asked, AskedBy, PromptAnswer},
   orchester_tools::{Looked, ToolHost},
   question::AskedQuestion,
+  relay_calls::Calls,
 };
 
 /// How long a connection has to show the token.
@@ -95,6 +96,8 @@ pub(super) struct Listening {
   requests: mpsc::UnboundedReceiver<Asked>,
   /// The `ask_question` calls the person answers.
   questions: mpsc::UnboundedReceiver<AskedQuestion>,
+  calls: Calls,
+  returned: mpsc::UnboundedReceiver<()>,
   /// The relays that showed the token.
   taken: Arc<AtomicUsize>,
   /// Starts the last wait for the relays ([`Self::stop_accepting`]).
@@ -114,6 +117,8 @@ pub(super) enum Relayed {
   Approval(Asked),
   /// An `ask_question` call the person answers.
   Question(AskedQuestion),
+  /// An Orchester call returned its result, or its connection ended.
+  Returned,
 }
 
 impl Listening {
@@ -125,8 +130,18 @@ impl Listening {
     tokio::select! {
       Some(asked) = listening.requests.recv() => Some(Relayed::Approval(asked)),
       Some(asked) = listening.questions.recv() => Some(Relayed::Question(asked)),
+      Some(()) = listening.returned.recv() => Some(Relayed::Returned),
       else => pending().await,
     }
+  }
+
+  pub(super) fn busy(&self) -> bool {
+    self.calls.busy()
+  }
+
+  /// How many calls of Orchester's tools the relay has returned ([`Calls::returns`]).
+  pub(super) fn returns(&self) -> u64 {
+    self.calls.returns()
   }
 
   /// Whether the relay reached the runner.
@@ -177,6 +192,7 @@ impl Bound {
     let (sender, requests) = mpsc::unbounded_channel();
     let (asking, questions) = mpsc::unbounded_channel();
     let (stop, stopped) = oneshot::channel();
+    let (calls, returned) = Calls::new();
     let taken = Arc::new(AtomicUsize::new(0));
     let relay = Relay {
       token,
@@ -185,10 +201,13 @@ impl Bound {
       questions: asking,
       taken: taken.clone(),
       asked: AtomicU64::new(0),
+      calls: calls.clone(),
     };
     Listening {
       requests,
       questions,
+      calls,
+      returned,
       taken,
       stop: Some(stop),
       listener: tokio::spawn(relay.accept(self.listener, stopped)),
@@ -208,6 +227,7 @@ struct Relay {
   taken: Arc<AtomicUsize>,
   /// Calls of Orchester's tools asked about, and questions asked, so far, which name each such request.
   asked: AtomicU64,
+  calls: Calls,
 }
 
 impl Relay {
@@ -293,7 +313,9 @@ impl Relay {
   /// One request per line, each answered on one line.
   async fn serve(&self, mut lines: Lines<BufReader<OwnedReadHalf>>, mut write: OwnedWriteHalf) {
     while let Ok(Some(line)) = lines.next_line().await {
-      let answer = match serde_json::from_str::<RelayRequest>(&line) {
+      let request = serde_json::from_str::<RelayRequest>(&line);
+      let held = matches!(&request, Ok(RelayRequest::Call { .. })).then(|| self.calls.start());
+      let answer = match request {
         Ok(RelayRequest::Ask(arguments)) => self.decide(&arguments, &mut lines).await,
         Ok(RelayRequest::List) => Some(Value::Array(self.listed()).to_string()),
         Ok(RelayRequest::Call { name, arguments }) if self.asks_questions() && name == ask_question::NAME => self
@@ -313,6 +335,7 @@ impl Relay {
       if write.write_all(format!("{answer}\n").as_bytes()).await.is_err() {
         return;
       }
+      drop(held);
     }
   }
 

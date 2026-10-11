@@ -25,8 +25,8 @@
 //! A model with `-refused-` in its name is refused with a two-line reason that echoes the token of
 //! Orchester's server (`ORCHESTER_APPROVAL_TOKEN`), so tests can check how the runner reports a refusal.
 //!
-//! A new session is `fake-thread-1`; `thread/resume` continues the thread it names in the worktree, unless
-//! its id has `-gone-` in it: then Codex has no history of it and refuses, as 0.159.2 does.
+//! A new session is `fake-thread-1`, its n-th turn `fake-turn-<n>`; `thread/resume` continues the thread it names in
+//! the worktree, unless its id has `-gone-` in it: then Codex has no history of it and refuses, as 0.159.2 does.
 //!
 //! Its configuration (`config/read`) has, besides the project servers of its arguments, the user's own
 //! server `user-global`, which runs unless the thread's configuration turns it off. Its layers are the
@@ -53,6 +53,8 @@ use serde_json::{Value, json};
 
 #[path = "fake_app_server.rs"]
 mod fake_app_server;
+#[path = "fake_codex_cell.rs"]
+mod fake_codex_cell;
 #[path = "fake_codex_check.rs"]
 mod fake_codex_check;
 #[path = "fake_codex_question.rs"]
@@ -72,8 +74,6 @@ mod fake_permission_prompt;
 
 /// Set for the helper process, which only waits.
 const HELPER: &str = "ORCHESTER_FAKE_CODEX_HELPER";
-/// The turn every session works in.
-const TURN: &str = "fake-turn-1";
 
 fn main() -> ExitCode {
   if std::env::var_os(HELPER).is_some() {
@@ -149,6 +149,18 @@ pub struct Session {
   argument_servers: bool,
   /// The thread's start of Orchester's server, once its tools were listed (after `mcpServerStatus/list`).
   pub orchester: Option<fake_permission_prompt::Prompt>,
+  /// The running or last turn: `fake-turn-<n>` for the session's n-th turn, as each turn of Codex has an id of its
+  /// own.
+  pub turn: String,
+  turns: u32,
+  pub cell: Option<fake_codex_cell::Cell>,
+  /// A command the yielded cell asked about (`fake_codex_cell`).
+  pub cell_command: fake_codex_cell::Command,
+  /// Every turn calls one of Orchester's tools (`fake_codex_cell`).
+  pub calls_every_turn: bool,
+  /// The model already collected synchronous tool results; a continuation reuses its final report.
+  pub completed_result: Option<String>,
+  deferred_turn_reply: Option<Value>,
   /// What the thread's model asks of the runner's end of the relay.
   probe: fake_codex_relay::Probe,
   /// A connection to it that never shows the token, kept open.
@@ -174,6 +186,13 @@ impl Session {
       user_server_off: false,
       argument_servers: false,
       orchester: None,
+      turn: String::new(),
+      turns: 0,
+      cell: None,
+      cell_command: fake_codex_cell::Command::default(),
+      calls_every_turn: false,
+      completed_result: None,
+      deferred_turn_reply: None,
       probe: fake_codex_relay::Probe::None,
       silent: None,
       approved_tools: BTreeSet::new(),
@@ -201,8 +220,9 @@ impl Session {
           self.start_orchester();
         }
       }
-      Some("turn/start") => return self.turn(params),
+      Some("turn/start") => return self.turn(&message["id"], params),
       Some("turn/steer") => return fake_codex_work::steered(self, &message["id"], params),
+      None if message["id"] == fake_codex_cell::COMMAND => return fake_codex_cell::command_answered(self, message),
       None => return fake_app_server::answered(self, message),
       Some(other) => {
         eprintln!("unexpected request: {other}");
@@ -367,7 +387,7 @@ impl Session {
     }
   }
 
-  fn turn(&mut self, params: &Value) -> Step {
+  fn turn(&mut self, id: &Value, params: &Value) -> Step {
     if self.probe == fake_codex_relay::Probe::Knock {
       eprintln!("late-knock: {}", fake_codex_relay::knock(&self.args, None));
     }
@@ -391,8 +411,18 @@ impl Session {
       eprintln!("the turn's workspace roots {selected:?} are not the thread's {expected:?}");
       return Step::Exit(ExitCode::from(2));
     }
-    emit(&json!({"id": 5, "result": {"turn": {"id": TURN}}}));
-    emit(&json!({"method": "turn/started", "params": {"threadId": self.thread, "turn": {"id": TURN}}}));
+    if let Some(previous) = self.deferred_turn_reply.take() {
+      emit(&json!({"id": previous, "result": {"turn": {"id": self.turn}}}));
+    }
+    self.turns += 1;
+    self.turn = format!("fake-turn-{}", self.turns);
+    eprintln!("turn-request: {id}");
+    if prompt.contains("Delay turn reply") {
+      self.deferred_turn_reply = Some(id.clone());
+    } else {
+      emit(&json!({"id": id, "result": {"turn": {"id": self.turn}}}));
+    }
+    emit(&json!({"method": "turn/started", "params": {"threadId": self.thread, "turn": {"id": self.turn}}}));
     let structured = !params["outputSchema"].is_null();
     fake_codex_work::work(self, &prompt, structured)
   }
@@ -458,14 +488,14 @@ pub fn emit(value: &Value) {
 /// A notification of the session's turn.
 pub fn notify(session: &Session, method: &str, mut params: Value) {
   params["threadId"] = json!(session.thread);
-  params["turnId"] = json!(TURN);
+  params["turnId"] = json!(session.turn);
   emit(&json!({"method": method, "params": params}));
 }
 
 /// A request of the session's turn, with `id`.
 pub fn request(session: &Session, id: u64, method: &str, mut params: Value) {
   params["threadId"] = json!(session.thread);
-  params["turnId"] = json!(TURN);
+  params["turnId"] = json!(session.turn);
   emit(&json!({"id": id, "method": method, "params": params}));
 }
 
@@ -479,8 +509,8 @@ pub fn complete(session: &Session, error: Option<&str>) {
     json!({"tokenUsage": {"last": usage, "total": usage}}),
   );
   let turn = match error {
-    None => json!({"id": TURN, "status": "completed"}),
-    Some(message) => json!({"id": TURN, "status": "failed", "error": {"message": message}}),
+    None => json!({"id": session.turn, "status": "completed"}),
+    Some(message) => json!({"id": session.turn, "status": "failed", "error": {"message": message}}),
   };
   notify(session, "turn/completed", json!({"turn": turn}));
 }

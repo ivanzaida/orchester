@@ -792,6 +792,35 @@ re-checking the audit token, since `proc_signal_with_audittoken` first ships in 
 Re-review: only processes started at or after the run's creation are listed or stopped, since a running executable
 moved into the worktree is reported at its new path.
 
+ORC-22 · Codex ends its turn while an Orchester tool call waits for the person
+(`orchester/orc-22-run-1`, 2026-10-11; review findings fixed).
+
+The runner keeps the process and relay alive across a model turn's completion
+while an Orchester call waits, then collects its result in the same thread,
+invocation and attempt. Pause, cancel, runner loss and shutdown preserve the
+attempt and interrupt the decision without granting it. Approval results remain
+eligible for collection after their MCP item completes; a synchronous approved
+result receives one continuation without repeating tools. Continuations are
+bounded: one needs a relay call returned or a decision settled since the last, so a
+call Codex never completes cannot start turn after turn; a failed or interrupted
+turn is never continued; at most three follow in a row without a decision or a call
+the runner waited for; a requested pause checkpoints instead. A decision a yielded
+cell asks for its ended turn (a command approval) reaches a person, and no
+continuation starts while it waits. `codex_tool_wait` (13) and
+`codex_tool_wait_bounds` (9) cover delayed and fast approval and denial, late
+turn-start replies, stops, the bounds and the yielded cell's command; Claude's
+approval tests pass.
+Final independent review fixed command completion and permission-checkpoint races:
+commands keep the invocation alive, Apply now checkpoints before continuation,
+and withdrawing Apply now releases it. The final 34 filtered runner tests and
+`tools/check.ps1` passed; four new ordering regressions fail on the original code.
+Cause and design: `docs/interactive-tool-approvals.md`, ORC-22 section; earlier
+validation: `docs/evidence/orc-22-tool-wait-validation.md`.
+The person approved a separate small `tools/check.ps1` change to check formatting
+per workspace package, avoiding Windows error 206 in long run worktree paths.
+No signed-in live agent run or UI change; the runner's macOS cross-check remains
+blocked by the environment's missing C compiler.
+
 New app, first working set (merged 2026-10-09/10 into master; each reviewed, QA'd live and design-verified by
 separate agents): T1 Tasks list (`claude/app-tasks`), F2 shell live data (`claude/app-shell`), P1 task page and Summary
 (`claude/app-task-page`), N1 New/Edit task with the per-field conflict chooser (`claude/app-task-form`), P2 Summary

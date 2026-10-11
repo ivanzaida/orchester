@@ -115,6 +115,13 @@ pub(super) struct AppServerSession {
   phase: Phase,
   thread: Option<String>,
   turn: Option<String>,
+  turn_request: u64,
+  turn_replies: BTreeSet<u64>,
+  /// MCP completion does not prove that the model collected a yielded approval result.
+  approval_results_to_collect: bool,
+  /// Turns that ended while Orchester's tools still worked for them: a yielded code-mode cell of one goes on after
+  /// its turn and may still ask a decision ([`Self::tools_outlived_turn`]).
+  yielded_turns: BTreeSet<String>,
   stream: AppServerStream,
   /// The configured MCP servers the step does not choose, turned off for its thread.
   turned_off: Vec<String>,
@@ -132,6 +139,10 @@ impl AppServerSession {
       steer_answers: Vec::new(),
       thread: None,
       turn: None,
+      turn_request: 5,
+      turn_replies: BTreeSet::new(),
+      approval_results_to_collect: false,
+      yielded_turns: BTreeSet::new(),
       stream: AppServerStream::with_exemptions(setup.exemptions.clone()),
       setup,
     }
@@ -151,6 +162,7 @@ impl AppServerSession {
   /// The runner asks a person about a call of Orchester's tool `action` with `arguments`
   /// ([`AppServerStream::runner_asks`]): the id of Codex's call when it has started.
   pub fn runner_asks(&mut self, action: &str, arguments: &serde_json::Value) -> Option<String> {
+    self.approval_results_to_collect = true;
     self.stream.runner_asks(action, arguments)
   }
 
@@ -189,6 +201,16 @@ impl AppServerSession {
   /// Codex's answers to `turn/steer` requests since the last call.
   pub fn take_steer_answers(&mut self) -> Vec<SteerAnswer> {
     std::mem::take(&mut self.steer_answers)
+  }
+
+  /// Calls still running, or approval results that a yielded cell may still hold.
+  pub fn has_orchester_results_to_collect(&self) -> bool {
+    self.approval_results_to_collect || self.stream.has_active_orchester_tools()
+  }
+
+  /// The turn that ended left Orchester's tools working: its cells' requests stay part of the step.
+  pub fn tools_outlived_turn(&mut self) {
+    self.yielded_turns.extend(self.turn.clone());
   }
 
   pub fn has_active_tools(&self) -> bool {
@@ -245,9 +267,9 @@ impl AppServerSession {
     self.response(&value, process).await
   }
 
-  /// Fails the step on a decision Codex asks outside the active turn, or about a command this step
-  /// never leaves to a person. An MCP approval in a step that does not ask before MCP actions is
-  /// declined at once, without a person, and the declined call is recorded: Codex 0.159.2 asks it even
+  /// Fails the step on a decision Codex asks outside the active turn (or a turn whose yielded cells still work), or
+  /// about a command this step never leaves to a person. An MCP approval in a step that does not ask before MCP actions
+  /// is declined at once, without a person, and the declined call is recorded: Codex 0.159.2 asks it even
   /// with `mcp_elicitations` off.
   fn screen(&self, updates: Vec<Update>) -> Result<Vec<Update>, AppServerFailure> {
     let mut screened = Vec::with_capacity(updates.len());
@@ -265,9 +287,13 @@ impl AppServerSession {
         screened.push(update);
         continue;
       };
-      let active = matches!(self.phase, Phase::Turn | Phase::Working)
-        && self.thread.as_deref() == Some(request.thread.as_str())
-        && self.turn.as_deref() == request.turn.as_deref();
+      let running =
+        matches!(self.phase, Phase::Turn | Phase::Working) && self.turn.as_deref() == request.turn.as_deref();
+      let yielded = request
+        .turn
+        .as_ref()
+        .is_some_and(|turn| self.yielded_turns.contains(turn));
+      let active = self.thread.as_deref() == Some(request.thread.as_str()) && (running || yielded);
       if !active || (request.is_command() && !self.setup.command_approvals && !self.setup.sandbox_approvals) {
         return Err(
           "Codex App Server requested a tool decision outside the active turn"
@@ -366,11 +392,13 @@ impl AppServerSession {
         self.start_turn(process).await.map_err(|error| io_message(&error))?;
         Ok(left_out)
       }
-      (Phase::Turn, 5) => {
-        self.phase = Phase::Working;
+      (Phase::Turn | Phase::Working | Phase::Complete, id) if self.turn_replies.remove(&id) => {
+        // A previous turn/start reply may arrive after its turn completed and the next one started.
+        if id == self.turn_request && self.phase == Phase::Turn {
+          self.phase = Phase::Working;
+        }
         Ok(Vec::new())
       }
-      (Phase::Complete, 5) => Ok(Vec::new()),
       _ => Err("Codex App Server responded out of sequence".to_owned().into()),
     }
   }
@@ -460,8 +488,26 @@ impl AppServerSession {
     send(process, json!({"id":3,"method":method,"params":params})).await
   }
 
-  async fn start_turn(&self, process: &Supervised) -> io::Result<()> {
-    let mut params = json!({"threadId":self.thread,"input":[{"type":"text","text":self.setup.prompt}],
+  async fn start_turn(&mut self, process: &Supervised) -> io::Result<()> {
+    let prompt = self.setup.prompt.clone();
+    self.turn_with(process, &prompt).await
+  }
+
+  /// A yielded code-mode cell belongs to the thread, not to the model turn that started it.
+  pub async fn continue_tools(&mut self, process: &Supervised) -> io::Result<()> {
+    self.phase = Phase::Turn;
+    self.turn = None;
+    self.approval_results_to_collect = false;
+    // Request 6 belongs to config/read; each continuation gets a fresh JSON-RPC id.
+    self.turn_request = self.turn_request.max(6) + 1;
+    self.turn_with(
+      process,
+      "Collect the results of the Orchester tool calls you already started. If a code-mode exec cell yielded, use functions.wait with its existing cell_id until its result is collected. Continue this step using the approval or denial and tool results. Do not repeat the calls or report the step finished while results are pending.",
+    ).await
+  }
+
+  async fn turn_with(&mut self, process: &Supervised, prompt: &str) -> io::Result<()> {
+    let mut params = json!({"threadId":self.thread,"input":[{"type":"text","text":prompt}],
     "model":self.setup.model,"environments":[{
       "environmentId":"local","cwd":self.setup.worktree,
         "runtimeWorkspaceRoots":self.setup.runtime_roots()
@@ -472,7 +518,12 @@ impl AppServerSession {
     if let Some(schema) = &self.setup.output_schema {
       params["outputSchema"] = schema.clone();
     }
-    send(process, json!({"id":5,"method":"turn/start","params":params})).await
+    self.turn_replies.insert(self.turn_request);
+    send(
+      process,
+      json!({"id":self.turn_request,"method":"turn/start","params":params}),
+    )
+    .await
   }
 }
 

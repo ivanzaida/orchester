@@ -532,6 +532,128 @@ implicit workspace root with the extra sandbox writable roots when checking the 
 Project MCP secret values are redacted from commands, output, messages, errors and approval metadata
 before they reach activity tracking or storage, including their JSON-escaped form.
 
+## Codex turns with pending Orchester calls (ORC-22)
+
+ORC-3 run 5 (`01a12776-6863-771a-ac12-62e125bd1e06`, 2026-10-10, Codex
+0.159.2 with `gpt-6-astra`) ended its model turn with `search_external_file` still
+waiting for approval. Its result said the lookup was pending in tool cell 14.
+The reported `decision_interrupted` and relay-close `turn_failed` followed in the
+same millisecond. The runner's `Update::TurnEnded` handler unconditionally ended
+the Codex process tree, which ended its relay and the approval's reply channel.
+This was a runner shutdown caused by treating a model turn's end as the end of
+all tool work. Increasing `tool_timeout_sec` cannot repair that lifecycle.
+
+Codex code-mode `functions.exec` may yield a cell while an awaited nested MCP call
+is outstanding. The model can then stop without collecting it with
+`functions.wait`; `turn/completed` consequently does not prove that every nested
+call completed. The thread owns the cell. OpenAI's current
+[code-mode service](https://github.com/openai/codex/blob/main/codex-rs/core/src/tools/code_mode/mod.rs)
+retains cells until collection, interruption or session shutdown, and its
+[dispatch broker](https://github.com/openai/codex/blob/main/codex-rs/core/src/tools/code_mode/delegate.rs)
+retains the originating step for callbacks after a yield. These sources explain
+the mechanism; the version-specific observation above is from the reported
+0.159.2 run, not a new live-model probe.
+
+The runner holds the same process and relay while Orchester's call is
+outstanding, including a queued approval not yet consumed by the worker.
+A started MCP item covers a call still running, but a completed item does not
+prove the model collected its result. Codex 0.159.2's
+[MCP call handler](https://github.com/openai/codex/blob/rust-v0.159.2/codex-rs/core/src/mcp_tool_call.rs#L613)
+emits completion when the MCP call returns, before returning the result to
+code mode. A fast approval or denial can therefore clear the pending decision,
+idle the relay and complete the MCP item before `turn/completed`, while the
+yielded cell still holds the result. The first ORC-22 implementation missed
+this ordering because its fake completed the item only when collecting the cell.
+
+The App Server session now remembers an Orchester approval's need for result
+collection independently of active MCP items. Item completion cannot clear it;
+starting the collection continuation clears it. The relay reports when it has
+sent the tool result. Once the model turn has ended, the call has returned and
+no approval remains, the runner starts a continuation in the same thread,
+invocation and attempt, with the same model, effort, environment and output
+schema. The protocol does not certify cell collection, so this is conservative:
+a turn with a synchronous approved call also gets one continuation, which can
+use results it already collected. It must not repeat the tools.
+
+Continuations are bounded by progress. A completed turn is kept alive only while
+a relay call still runs, a decision still waits (an Orchester call's, or one a
+yielded cell asked of Codex), or the relay has returned a call since the last
+continuation and a result may still be uncollected. An MCP item Codex still
+shows open is not enough on its own: Codex may never send `item/completed` for a
+cell it abandoned, and each continuation is a paid model turn, so a turn with
+none of these ends the step as before ORC-22. A failed turn (a usage limit, for
+one) or an interrupted one is never continued, whatever its tools still do;
+`Update::TurnEnded` says whether the turn completed.
+
+A hard cap sits under that rule: at most three continuations in a row without a
+decision settled or a call returned that the runner waited for after a turn
+(`MAX_IDLE_CONTINUATIONS`). A model that calls an Orchester tool in every
+continuation while an abandoned call stays open would otherwise be continued
+forever, each of its calls counting as a returned call. Calls that return while
+a turn runs therefore do not reset the cap; a settled decision (by the person, a
+rule or auto mode) or a call the runner waited for after the turn ended does.
+At the cap the runner logs a warning and ends the step as before ORC-22: no
+failure of its own, the last turn's result stands.
+
+A yielded cell keeps working after its turn ended and may still ask Codex for a
+decision, such as a command approval once the awaited call returned. The App
+Server session remembers each turn that ended with Orchester's tools still at
+work and treats a request of the same thread for such a turn as part of the
+step: it reaches a person like one asked during the turn, while the runner
+waits, before the continuation's `turn/started`, or during the continuation. A
+request for any other turn still fails the step. While such a decision waits no
+continuation starts: one would leave the model with a cell blocked on the
+person, so it could end its turn before the answer (the decision would end
+interrupted with the attempt) or ask a second decision while the first waits
+(which fails the turn). A turn that ends while the decision waits keeps the
+process alive. Once the decision is settled it counts as progress, like a
+returned call, and the continuation starts.
+
+Each turn uses a distinct JSON-RPC request ID, so a late acknowledgement of the
+previous turn cannot be mistaken for the continuation's reply. The continuation
+asks the agent to collect the existing yielded cell with `functions.wait` and
+continue using the approval or denial. The earlier final message is provisional
+until this continuation finishes. No new approval is granted, and the
+invocation's active time remains stopped while a person decides.
+
+Pause, cancel, runner stop and graceful shutdown still end an unanswered request
+as interrupted, refuse a stale answer and preserve the attempt; they do not
+route it through step failure or consume a broken attempt. A stop or reached
+budget prevents the tool continuation from starting, and so does a requested
+pause: with nothing left to wait for, the agent stops at the pause checkpoint
+instead of starting a turn that would only be ended. Claude Code keeps its
+blocking `--permission-prompt-tool` path. M12's successful live outside reads
+(`docs/plan.md`, Done) exercised approvals without this premature model-turn
+completion; they do not rule out the code-mode sequence above.
+
+The fake Codex starts a real relay search on a background thread and completes
+the MCP item on that thread when the result returns, independently of cell
+collection. Each of its turns has an id of its own, as Codex's do. It emits
+`turn/completed` with a pending-cell result and collects
+that same call on the runner's continuation. Before the initial fix,
+`cargo test -p orchester-runner --features test-agent --test codex_tool_wait codex_tool_wait_approval`
+failed because the waiting approval had vanished. With the corrected fake but
+before the review correction, the filtered
+`codex_tool_wait_result_returned_before_turn_completion_is_collected` test
+failed waiting for success: the provisional question had become the step result.
+
+The thirteen `codex_tool_wait` tests check approval and denial three seconds
+after turn completion, fast approval and denial with the MCP item completed
+before the model turn ends, a late turn-start acknowledgement, and four stop
+paths. They assert a single attempt and invocation, actual search output or
+denial, and stale-answer refusal. A command approval the yielded cell asks for
+its ended turn reaches a person; one that waits as the turn ends holds the
+continuation back until it is answered, which a fake continuation that would
+give up on the cell, or ask a second decision, proves. A call Codex never
+completes is continued once. The four `codex_tool_wait_bounds` tests count
+`turn/start` requests: an abandoned call that never reached the relay is not
+continued, a failed turn whose call already returned is not continued, a model
+that calls a tool in every turn is continued three times, and a pause requested
+after the call returned checkpoints without a continuation. The synchronous
+relay test also asserts one continuation
+and no repeated tool calls. There is no signed-in Codex model probe or historical
+project database read; the historical sequence above was supplied with ORC-22.
+
 ## Build directories
 
 Project Environment variables reach agents and command tools as written; nothing is rewritten per
