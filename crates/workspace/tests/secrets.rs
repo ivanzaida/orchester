@@ -1,5 +1,10 @@
 //! Which project resources appear in a secret's read-only Used by list.
 
+#[path = "secrets/replacement.rs"]
+mod replacement;
+#[path = "secrets/transaction_failures.rs"]
+mod transaction_failures;
+
 use std::{collections::BTreeMap, fs};
 
 use orchester_core::{
@@ -21,7 +26,9 @@ use orchester_workspace::{
 use tempfile::TempDir;
 
 fn project_db() -> (TempDir, ProjectDb) {
-  let repo = tempfile::tempdir().expect("temporary directory");
+  let scratch = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/secrets-tests");
+  fs::create_dir_all(&scratch).expect("test scratch");
+  let repo = TempDir::new_in(scratch).expect("temporary directory");
   fs::create_dir(repo.path().join(".git")).expect("create .git");
   let project = Project::new(
     ProjectId::generate(),
@@ -57,7 +64,10 @@ fn mcp_variable_and_bearer_references_appear_once_per_server() {
   let reference = secret_reference(&variable);
   let stdio = McpServerText {
     name: "docs".to_owned(),
-    program: "npx".to_owned(),
+    program: std::env::current_exe()
+      .expect("test executable")
+      .to_string_lossy()
+      .into_owned(),
     variables: format!("FIRST={reference}\nSECOND={reference}"),
     ..McpServerText::new_server()
   };
@@ -148,7 +158,10 @@ fn tool_and_mcp_server_using_one_secret_have_separate_counts() {
   let reference = secret_reference(&shared);
   let server = McpServerText {
     name: "docs".to_owned(),
-    program: "npx".to_owned(),
+    program: std::env::current_exe()
+      .expect("test executable")
+      .to_string_lossy()
+      .into_owned(),
     variables: format!("FIRST={reference}\nSECOND={reference}"),
     ..McpServerText::new_server()
   };
@@ -175,4 +188,184 @@ fn tool_and_mcp_server_using_one_secret_have_separate_counts() {
   assert_eq!(&*uses[0].name, "Deploy");
   assert_eq!(uses[1].kind, SecretUseKind::McpServer(server_id));
   assert_eq!(&*uses[1].name, "docs");
+}
+
+#[test]
+fn secrets_name_check_is_typed_environment_scoped_and_ignores_archives() {
+  use orchester_core::secret::SecretNameError;
+  use orchester_workspace::secrets::form::{NameCheck, check_name};
+  let existing = secret("DOCS_TOKEN");
+  let secrets = [existing.clone()];
+  assert_eq!(check_name(&secrets, "  ", Environment::Staging), NameCheck::Empty);
+  assert!(matches!(
+    check_name(&secrets, "lower_case", Environment::Staging),
+    NameCheck::Invalid(_)
+  ));
+  assert!(matches!(
+    check_name(&secrets, &"A".repeat(129), Environment::Staging),
+    NameCheck::Invalid(SecretNameError::TooLong { .. })
+  ));
+  assert_eq!(
+    check_name(&secrets, " DOCS_TOKEN ", Environment::Staging),
+    NameCheck::Taken(existing.clone())
+  );
+  assert!(
+    check_name(&secrets, "DOCS_TOKEN", Environment::Production)
+      .new_secret(SecretKind::ApiKey, Environment::Production)
+      .is_some()
+  );
+  let archived = Secret::from_stored(
+    existing.id(),
+    NewSecret {
+      name: existing.name().clone(),
+      kind: existing.kind(),
+      environment: existing.environment(),
+    },
+    existing.created_at(),
+    None,
+    Some(Timestamp::from_unix_millis(3)),
+  );
+  assert!(matches!(
+    check_name(&[archived], "DOCS_TOKEN", Environment::Staging),
+    NameCheck::Free(_)
+  ));
+}
+
+#[test]
+fn secrets_selected_archive_keeps_uses_without_returning_to_the_active_list() {
+  let (repo, mut db) = project_db();
+  let active = secret("DOCS_TOKEN");
+  db.create_secret(&active).expect("metadata");
+  let server = McpServerText {
+    name: "docs".to_owned(),
+    program: std::env::current_exe()
+      .expect("test executable")
+      .to_string_lossy()
+      .into_owned(),
+    variables: format!("TOKEN={}", secret_reference(&active)),
+    ..McpServerText::new_server()
+  };
+  save_in(
+    repo.path(),
+    None,
+    server.draft(&[], std::slice::from_ref(&active)).expect("draft"),
+  )
+  .expect("server");
+  let archived = Secret::from_stored(
+    active.id(),
+    NewSecret {
+      name: active.name().clone(),
+      kind: active.kind(),
+      environment: active.environment(),
+    },
+    active.created_at(),
+    None,
+    Some(Timestamp::from_unix_millis(3)),
+  );
+  db.save_secret(&archived).expect("archive metadata");
+  assert!(ProjectSecrets::load(&db).expect("active").secrets.is_empty());
+  let data = ProjectSecrets::load_selected(&db, Some(active.id())).expect("selected archive");
+  assert!(data.secret(active.id()).expect("archived metadata").is_archived());
+  assert_eq!(data.in_environment(None).count(), 0);
+  assert_eq!(data.used_by(active.id()).count(), 1);
+  assert!(data.replacement_needs_person(active.id()));
+}
+
+#[derive(Default)]
+struct CountingVault(std::sync::atomic::AtomicUsize);
+
+impl orchester_core::secret::SecretVault for CountingVault {
+  fn store(
+    &self,
+    _key: &orchester_core::secret::VaultKey,
+    _value: &orchester_core::secret::SecretValue,
+  ) -> Result<(), orchester_core::secret::VaultError> {
+    self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    Ok(())
+  }
+
+  fn read(
+    &self,
+    _key: &orchester_core::secret::VaultKey,
+  ) -> Result<orchester_core::secret::SecretValue, orchester_core::secret::VaultError> {
+    Err(orchester_core::secret::VaultError::NotFound)
+  }
+
+  fn delete(&self, _key: &orchester_core::secret::VaultKey) -> Result<(), orchester_core::secret::VaultError> {
+    panic!("replacement must not delete a credential")
+  }
+}
+
+#[test]
+fn secrets_replacement_checks_current_bindings_before_touching_the_vault() {
+  use std::sync::atomic::Ordering;
+
+  use orchester_core::secret::SecretValue;
+  use orchester_workspace::secrets::data::{ReplacementOutcome, ReplacementPermission, replace_allowed_in};
+
+  let (repo, mut db) = project_db();
+  let active = secret("DOCS_TOKEN");
+  db.create_secret(&active).expect("metadata");
+  let snapshot = ProjectSecrets::load(&db).expect("unused snapshot");
+  assert!(!snapshot.replacement_needs_person(active.id()));
+  let vault = CountingVault::default();
+  let value = SecretValue::new("fixture-only-replacement".into()).expect("fixture");
+  assert_eq!(
+    replace_allowed_in(
+      repo.path(),
+      &vault,
+      active.id(),
+      &value,
+      ReplacementPermission::UnusedOnly
+    )
+    .expect("unused"),
+    ReplacementOutcome::Replaced
+  );
+  let rotated = db.secret(active.id()).expect("metadata").expect("secret").rotated_at();
+  let server = McpServerText {
+    name: "remote".into(),
+    transport: TransportChoice::Http,
+    url: "https://mcp.example.test".into(),
+    bearer: Some(active.id()),
+    ..McpServerText::new_server()
+  };
+  save_in(
+    repo.path(),
+    None,
+    server.draft(&[], std::slice::from_ref(&active)).expect("draft"),
+  )
+  .expect("server");
+  assert!(!snapshot.replacement_needs_person(active.id()), "snapshot is stale");
+  assert_eq!(
+    replace_allowed_in(
+      repo.path(),
+      &vault,
+      active.id(),
+      &value,
+      ReplacementPermission::UnusedOnly
+    )
+    .expect("recheck"),
+    ReplacementOutcome::NeedsPerson
+  );
+  assert_eq!(
+    vault.0.load(Ordering::SeqCst),
+    1,
+    "no additional vault write without confirmation"
+  );
+  assert_eq!(
+    db.secret(active.id()).expect("metadata").expect("secret").rotated_at(),
+    rotated
+  );
+  assert_eq!(
+    replace_allowed_in(
+      repo.path(),
+      &vault,
+      active.id(),
+      &value,
+      ReplacementPermission::PersonConfirmed
+    )
+    .expect("confirmed"),
+    ReplacementOutcome::Replaced
+  );
+  assert_eq!(vault.0.load(Ordering::SeqCst), 2);
 }

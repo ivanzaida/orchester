@@ -23,6 +23,8 @@ use crate::theme::{ExtraColor, ExtraTypography, IconSize};
 /// `Task list header` and `Task list row` heights, for a screen that sizes a table by its rows.
 pub const HEADER_HEIGHT: f32 = 32.0;
 pub const ROW_HEIGHT: f32 = 44.0;
+/// Secrets row I2uJV0.
+pub const SECRET_ROW_HEIGHT: f32 = 48.0;
 /// The open chevron's column (`Open` `aM7lc`).
 const OPEN_COLUMN: f32 = 14.0;
 
@@ -75,6 +77,8 @@ pub struct TableRow {
   /// The chevron's column stays, empty, in a table whose other rows open.
   open_column: bool,
   highlighted: bool,
+  selected: bool,
+  secret: bool,
 }
 
 impl TableRow {
@@ -85,7 +89,21 @@ impl TableRow {
       open: None,
       open_column: false,
       highlighted: false,
+      selected: false,
+      secret: false,
     }
+  }
+
+  /// Secret list row (I2uJV0): 48 high, 12 inside and between its columns.
+  pub fn secret(mut self) -> Self {
+    self.secret = true;
+    self
+  }
+
+  /// The inspected row is inert and takes the accent-muted fill (Secrets, aio2p).
+  pub fn selected(mut self) -> Self {
+    self.selected = true;
+    self
   }
 
   /// The next cell, in its column's width.
@@ -97,6 +115,7 @@ impl TableRow {
   /// A press on the row runs `open`; the row ends in the chevron.
   pub fn on_open(mut self, open: impl Fn() + Send + Sync + 'static) -> Self {
     self.open = Some(Arc::new(open));
+    self.open_column = true;
     self
   }
 
@@ -121,6 +140,21 @@ impl From<TableRow> for Element {
       .into_iter()
       .map(|(width, content)| width.sized(Row::new()).align_items(Alignment::Center).child(content));
     let content = line(Row::new(), ROW_HEIGHT).with_children(cells);
+    let content = if row.secret {
+      content
+        .height(Dimension::Px(SECRET_ROW_HEIGHT))
+        .padding(Padding::horizontal(crate::theme::SecretsSpacing::Cell.role()))
+        .spacing(crate::theme::SecretsSpacing::Cell.role())
+    } else {
+      content
+    };
+    let content = if row.selected {
+      content
+        .background(PaletteColor::AccentMuted)
+        .describe("selected", "true")
+    } else {
+      content
+    };
     let content = if row.highlighted {
       content
         .background(PaletteColor::InfoMuted)
@@ -129,10 +163,17 @@ impl From<TableRow> for Element {
     } else {
       content
     };
-    let Some(open) = row.open else {
+    let open = if row.selected { None } else { row.open };
+    let Some(open) = open else {
       return content
         .id(row.id.to_string())
-        .with_children(row.open_column.then(|| Row::new().width(Dimension::Px(OPEN_COLUMN))))
+        .with_children(row.open_column.then(|| {
+          Row::new().width(Dimension::Px(OPEN_COLUMN)).with_children(
+            row
+              .selected
+              .then(|| icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted)),
+          )
+        }))
         .into();
     };
     pressable(move || open())

@@ -47,6 +47,7 @@ mod tasks;
 mod tool_approvals;
 mod usage;
 mod worktree_removals;
+mod write_transaction;
 
 use std::{
   fs,

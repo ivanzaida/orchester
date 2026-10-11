@@ -35,6 +35,8 @@ pub enum ButtonKind {
   Ghost,
   /// `danger_muted`, its content `danger`.
   Danger,
+  /// Destructive text on the ghost button (Secrets inspector, Emd0h).
+  DangerGhost,
 }
 
 impl ButtonKind {
@@ -44,6 +46,7 @@ impl ButtonKind {
       Self::Secondary => "secondary",
       Self::Ghost => "ghost",
       Self::Danger => "danger",
+      Self::DangerGhost => "danger-ghost",
     }
   }
 
@@ -53,7 +56,7 @@ impl ButtonKind {
       Self::Primary => ExtraColor::OnAccent.role(),
       Self::Secondary => PaletteColor::TextPrimary,
       Self::Ghost => PaletteColor::TextSecondary,
-      Self::Danger => PaletteColor::Danger,
+      Self::Danger | Self::DangerGhost => PaletteColor::Danger,
     }
   }
 
@@ -63,7 +66,7 @@ impl ButtonKind {
       Self::Secondary => button
         .background(PaletteColor::SurfaceRaised)
         .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong)),
-      Self::Ghost => button,
+      Self::Ghost | Self::DangerGhost => button,
       Self::Danger => button.background(PaletteColor::DangerMuted),
     }
   }
@@ -79,7 +82,7 @@ impl ButtonKind {
       Self::Secondary => button
         .hovered_style(fill(PaletteColor::Border))
         .active_style(fill(PaletteColor::BorderStrong)),
-      Self::Ghost => button
+      Self::Ghost | Self::DangerGhost => button
         .hovered_style(fill(ExtraColor::Hover.role()))
         .active_style(fill(ExtraColor::Pressed.role())),
       Self::Danger => button

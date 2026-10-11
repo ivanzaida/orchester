@@ -10,13 +10,19 @@ Push-Location $repositoryRoot
 try {
     # rustfmt.toml uses nightly-only options; the pinned stable toolchain would ignore them.
     Write-Output "== rustfmt"
-    $workspace = cargo metadata --no-deps --format-version 1 | ConvertFrom-Json
+    # One rustfmt invocation for the whole workspace exceeds Windows' command-line limit.
+    $formatMetadataJson = cargo +nightly metadata --no-deps --format-version 1
     if ($LASTEXITCODE -ne 0) {
         $failed = $true
-    } else {
-        foreach ($package in $workspace.packages) {
-            cargo +nightly fmt --manifest-path $package.manifest_path -- --check
-            if ($LASTEXITCODE -ne 0) { $failed = $true }
+    }
+    else {
+        $formatMetadata = $formatMetadataJson | ConvertFrom-Json
+        foreach ($formatPackage in $formatMetadata.packages) {
+            if ($formatMetadata.workspace_members -contains $formatPackage.id) {
+                Write-Output "== rustfmt $($formatPackage.name)"
+                cargo +nightly fmt -p $formatPackage.name -- --check
+                if ($LASTEXITCODE -ne 0) { $failed = $true }
+            }
         }
     }
 

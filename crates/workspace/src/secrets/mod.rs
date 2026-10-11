@@ -2,6 +2,8 @@
 //! replacing and archiving secrets.
 
 pub mod data;
+pub mod form;
+mod replacement;
 
 use std::sync::Arc;
 

@@ -151,6 +151,14 @@ pub const WEEKDAY_KEYS: [&str; 7] = [
   "time.weekday.sun",
 ];
 
+/// Local calendar parts for a translated date: month index, day and year.
+pub fn calendar_date(at: Timestamp) -> (usize, u32, i32) {
+  use chrono::Datelike;
+  let millis = u64::try_from(at.unix_millis()).unwrap_or_default();
+  let local = chrono::DateTime::<chrono::Local>::from(UNIX_EPOCH + Duration::from_millis(millis));
+  (local.month0() as usize, local.day(), local.year())
+}
+
 /// A revision as people read it: its first seven characters.
 pub fn short_revision(revision: &str) -> &str {
   revision.get(..7).unwrap_or(revision)

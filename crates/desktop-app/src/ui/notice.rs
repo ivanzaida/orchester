@@ -13,7 +13,7 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
+  app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
@@ -159,6 +159,28 @@ impl From<Notice> for Element {
 
 /// A handling notice: `text` beside `glyph`.
 pub fn handling_notice(id: &str, glyph: Icon, text: &str) -> Row {
+  handling_notice_content(id, glyph, text, None)
+}
+
+/// The in-notice link of mERxM/AuGQr, used to open an existing credential (Gam8g).
+pub fn handling_notice_action(
+  id: &str,
+  action_id: &str,
+  glyph: Icon,
+  text: &str,
+  label: &str,
+  on_click: impl Fn() + Send + Sync + 'static,
+) -> Row {
+  let action = super::pressable::pressable(on_click)
+    .id(action_id.to_owned())
+    .spacing(SpacingSize::Xs)
+    .align_items(Alignment::Center)
+    .child(Text::new(label).variant(TypographyStyle::Label))
+    .child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::TextPrimary));
+  handling_notice_content(id, glyph, text, Some(action.into()))
+}
+
+fn handling_notice_content(id: &str, glyph: Icon, text: &str, action: Option<Element>) -> Row {
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
@@ -170,10 +192,15 @@ pub fn handling_notice(id: &str, glyph: Icon, text: &str) -> Row {
     .rounded(ExtraRadius::Tile.role())
     .child(icon(glyph, IconSize::Nav, PaletteColor::TextSecondary))
     .child(
-      Text::new(text)
-        .id(format!("{id}-text"))
-        .variant(ExtraTypography::Prose.role())
+      Column::new()
         .flex(1.0)
-        .min_width(Dimension::Px(0.0)),
+        .min_width(Dimension::Px(0.0))
+        .spacing(ExtraSpacing::Snug.role())
+        .child(
+          Text::new(text)
+            .id(format!("{id}-text"))
+            .variant(ExtraTypography::Prose.role()),
+        )
+        .with_children(action),
     )
 }

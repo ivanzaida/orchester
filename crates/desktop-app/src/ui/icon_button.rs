@@ -28,6 +28,8 @@ pub enum IconButtonSize {
   Regular,
   /// 24 square, 14 `text_muted` glyph: removing an entry from a row.
   Small,
+  /// Inspector close (Secrets m1So5): 26 square, 15 glyph.
+  Inspector,
 }
 
 impl IconButtonSize {
@@ -35,6 +37,7 @@ impl IconButtonSize {
     match self {
       Self::Regular => ControlHeight::Md.value(),
       Self::Small => ControlHeight::Sm.value(),
+      Self::Inspector => ControlHeight::Inspector.value(),
     }
   }
 
@@ -42,6 +45,7 @@ impl IconButtonSize {
     match self {
       Self::Regular => (IconSize::Lg, PaletteColor::TextSecondary),
       Self::Small => (IconSize::Md, PaletteColor::TextMuted),
+      Self::Inspector => (IconSize::Nav, PaletteColor::TextSecondary),
     }
   }
 }
@@ -71,6 +75,11 @@ impl IconButton {
 
   pub fn small(mut self) -> Self {
     self.size = IconButtonSize::Small;
+    self
+  }
+
+  pub fn inspector(mut self) -> Self {
+    self.size = IconButtonSize::Inspector;
     self
   }
 
