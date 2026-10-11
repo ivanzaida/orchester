@@ -42,14 +42,7 @@ pub fn select_style(ctx: &Ctx) -> SelectStyle {
   let stroke = |color| SelectPartStyle::new().border_inside(BorderSize::Sm, color);
   let highlight = || SelectPartStyle::new().background(ExtraColor::Hover.role());
   SelectStyle::unstyled()
-    .trigger(
-      stroke(PaletteColor::Border)
-        .background(PaletteColor::SurfaceInput)
-        .rounded(RadiusSize::Md)
-        .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-        .min_height(ControlHeight::Md.value())
-        .text(text(TypographyStyle::Description, PaletteColor::TextPrimary)),
-    )
+    .trigger(trigger_style(ctx, PaletteColor::Border))
     .trigger_hovered(stroke(PaletteColor::BorderStrong))
     .trigger_focused(stroke(PaletteColor::BorderFocus))
     .trigger_open(stroke(PaletteColor::BorderFocus))
@@ -91,6 +84,23 @@ pub fn select_style(ctx: &Ctx) -> SelectStyle {
     .checkmark_gap(SpacingSize::Sm)
 }
 
+fn trigger_style(ctx: &Ctx, color: PaletteColor) -> SelectPartStyle {
+  let theme = ctx.theme();
+  SelectPartStyle::new()
+    .border_inside(BorderSize::Sm, color)
+    .background(PaletteColor::SurfaceInput)
+    .rounded(RadiusSize::Md)
+    .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
+    .min_height(ControlHeight::Md.value())
+    .text(
+      FormTextRole {
+        typography: TypographyStyle::Description,
+        color: PaletteColor::TextPrimary,
+      }
+      .resolve(&theme.typography(), &theme.palette()),
+    )
+}
+
 pub struct SelectField<T: SignalValue> {
   id: Arc<str>,
   name: Arc<str>,
@@ -101,6 +111,9 @@ pub struct SelectField<T: SignalValue> {
   leading: Option<Icon>,
   /// The chosen option's label in Geist Mono: a path or an identifier.
   mono: bool,
+  invalid: bool,
+  warning: bool,
+  locked: bool,
 }
 
 impl<T> SelectField<T>
@@ -125,6 +138,9 @@ where
       width: Dimension::Pct(100.0),
       leading: None,
       mono: false,
+      invalid: false,
+      warning: false,
+      locked: false,
     }
   }
 
@@ -152,13 +168,38 @@ where
     self
   }
 
+  /// A refused choice keeps its rounded field outline in the error color.
+  pub fn invalid(mut self) -> Self {
+    self.invalid = true;
+    self
+  }
+
+  /// A draft choice that must be published first keeps the warning outline (adK4e).
+  pub fn warning(mut self) -> Self {
+    self.warning = true;
+    self
+  }
+
+  /// An unavailable choice is visibly disabled and cannot open its menu.
+  pub fn locked(mut self) -> Self {
+    self.locked = true;
+    self
+  }
+
   pub fn render(self, ctx: &Ctx) -> Element {
+    let mut style = select_style(ctx);
+    if self.warning {
+      style = style.trigger(trigger_style(ctx, PaletteColor::Warning));
+    }
+    if self.invalid {
+      style = style.trigger(trigger_style(ctx, PaletteColor::Danger));
+    }
     let mut select = Select::new(self.value)
       .name(self.name.clone())
       .options(self.options)
       .width(self.width)
       .height(Dimension::Px(ControlHeight::Md.value()))
-      .style(select_style(ctx));
+      .style(style);
     if let Some(placeholder) = self.placeholder {
       select = select.placeholder(placeholder);
     }
@@ -171,6 +212,17 @@ where
     Row::new()
       .width(self.width)
       .describe("a11y_name", self.name)
+      .describe("locked", if self.locked { "true" } else { "false" })
+      .hit_test(if self.locked {
+        lurq::node::HitTestBehavior::None
+      } else {
+        lurq::node::HitTestBehavior::Auto
+      })
+      .opacity(if self.locked {
+        crate::theme::DISABLED_OPACITY
+      } else {
+        1.0
+      })
       .child(Element::from(select).id(self.id.to_string()))
       .into()
   }

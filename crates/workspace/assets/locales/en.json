@@ -734,6 +734,7 @@
       "slugTaken": "The slug {{slug}} is already used by the pipeline {{pipeline}}. Choose another name."
     },
     "problems": {
+      "missing": "This pipeline no longer exists.",
       "noSteps": "Add a step before you can publish",
       "noProfile": "{{step}} has no agent profile",
       "noTool": "{{step}} has no tool",

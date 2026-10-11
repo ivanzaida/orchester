@@ -61,7 +61,14 @@ pub struct ProjectFeed {
   pub job_state: Signal<ProjectJobState>,
   /// The task forms of the project that hold edits not saved, which their tabs mark.
   pub unsaved: Signal<UnsavedForms>,
+  /// Saved pipeline names read by editor tabs, shared with their chrome labels.
+  pub pipeline_names: Signal<PipelineNames>,
 }
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PipelineNames(pub std::sync::Arc<std::collections::BTreeMap<orchester_core::id::ResourceId, String>>);
+
+impl lurq::app::component::DevtoolsInspectable for PipelineNames {}
 
 /// Task forms holding edits that are not saved: Edit task by its task's key, New task as `None`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -76,6 +83,15 @@ impl UnsavedForms {
 }
 
 impl ProjectFeed {
+  /// Records a saved pipeline name without notifying chrome when it is unchanged.
+  pub fn pipeline_named(&self, id: orchester_core::id::ResourceId, name: &str) {
+    if self.pipeline_names.get_untracked().0.get(&id).map(String::as_str) != Some(name) {
+      self.pipeline_names.update(|names| {
+        std::sync::Arc::make_mut(&mut names.0).insert(id, name.to_owned());
+      });
+    }
+  }
+
   /// Marks the form of `task` (`None`: New task) as holding unsaved edits, or not.
   pub fn mark_unsaved(&self, task: Option<&str>, unsaved: bool) {
     let form = task.map(str::to_owned);
@@ -114,6 +130,7 @@ impl ProjectFeed {
       outside: Signal::new(OutsideCounts::default()),
       job_state: Signal::new(jobs.state()),
       unsaved: Signal::new(UnsavedForms::default()),
+      pipeline_names: Signal::new(PipelineNames::default()),
       jobs,
     }
   }

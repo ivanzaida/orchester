@@ -19,6 +19,55 @@ const SELECT_RESOURCES: &str = "SELECT id, kind, slug, name, created_at FROM res
 const SELECT_VERSIONS: &str = "SELECT id, number, body, published_at FROM resource_versions";
 
 impl ProjectDb {
+  /// Saves only over the body and latest version the editor read, checked inside the write transaction.
+  pub fn save_draft_matching<B: ResourceBody>(
+    &mut self,
+    resource: ResourceId,
+    expected: &B,
+    latest: Option<VersionNumber>,
+    draft: &Draft<B>,
+  ) -> Result<DraftSaved, StoreError> {
+    self.save_draft_and_name_matching(resource, expected, latest, draft, None)
+  }
+
+  /// Saves an editor draft and an optional display-name change atomically; slugs never change.
+  pub fn save_draft_and_name_matching<B: ResourceBody>(
+    &mut self,
+    resource: ResourceId,
+    expected: &B,
+    latest: Option<VersionNumber>,
+    draft: &Draft<B>,
+    names: Option<(&str, &Name)>,
+  ) -> Result<DraftSaved, StoreError> {
+    let transaction = self.connection.transaction()?;
+    check_kind::<B>(&transaction, resource)?;
+    if let Some((before, after)) = names {
+      let changed = transaction.execute(
+        "UPDATE resources SET name = ?1 WHERE id = ?2 AND name = ?3",
+        params![after.as_str(), resource.to_string(), before],
+      )?;
+      if changed != 1 {
+        return Err(StoreError::DraftChanged(resource));
+      }
+    }
+    let stored = load_draft::<B>(&transaction, resource)?;
+    let published = load_versions::<B>(
+      &transaction,
+      "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
+      [resource.to_string()],
+    )?
+    .pop();
+    let current = stored
+      .as_ref()
+      .map(Draft::body)
+      .or_else(|| published.as_ref().map(Version::body));
+    if current != Some(expected) || published.as_ref().map(Version::number) != latest {
+      return Err(StoreError::DraftChanged(resource));
+    }
+    let saved = save_draft(&transaction, resource, draft)?;
+    transaction.commit()?;
+    Ok(saved)
+  }
   /// Publishes the draft of `resource` only if its body is `expected`, in the same transaction that reads
   /// it: a check made on the draft holds for what is published ([`StoreError::DraftChanged`] otherwise).
   pub fn publish_draft_matching<B: ResourceBody>(
@@ -27,17 +76,29 @@ impl ProjectDb {
     expected: &B,
     now: Timestamp,
   ) -> Result<Version<B>, StoreError> {
-    self.publish_checked(resource, Some(expected), now)
+    self.publish_checked(resource, Some(expected), None, now)
+  }
+
+  /// Also pins the latest version against which a permission review was made.
+  pub fn publish_draft_matching_version<B: ResourceBody>(
+    &mut self,
+    resource: ResourceId,
+    expected: &B,
+    latest: Option<VersionNumber>,
+    now: Timestamp,
+  ) -> Result<Version<B>, StoreError> {
+    self.publish_checked(resource, Some(expected), Some(latest), now)
   }
 
   fn publish_checked<B: ResourceBody>(
     &mut self,
     resource: ResourceId,
     expected: Option<&B>,
+    expected_latest: Option<Option<VersionNumber>>,
     now: Timestamp,
   ) -> Result<Version<B>, StoreError> {
     let transaction = self.connection.transaction()?;
-    let version = publish_checked(&transaction, resource, expected, now)?;
+    let version = publish_checked(&transaction, resource, expected, expected_latest, now)?;
     transaction.commit()?;
     Ok(version)
   }
@@ -77,7 +138,7 @@ impl ProjectDb {
         save_draft(&transaction, id, &draft)?;
       }
       ResourceUpdate::PublishDraft(now) => {
-        publish_checked::<B>(&transaction, id, None, now)?;
+        publish_checked::<B>(&transaction, id, None, None, now)?;
       }
     }
     transaction.commit().map_err(StoreError::from)?;
@@ -150,7 +211,7 @@ impl ResourceStore for ProjectDb {
   }
 
   fn publish_draft<B: ResourceBody>(&mut self, resource: ResourceId, now: Timestamp) -> Result<Version<B>, StoreError> {
-    self.publish_checked(resource, None, now)
+    self.publish_checked(resource, None, None, now)
   }
 
   fn latest_version<B: ResourceBody>(&self, resource: ResourceId) -> Result<Option<Version<B>>, StoreError> {
@@ -191,6 +252,7 @@ fn publish_checked<B: ResourceBody>(
   connection: &Connection,
   resource: ResourceId,
   expected: Option<&B>,
+  expected_latest: Option<Option<VersionNumber>>,
   now: Timestamp,
 ) -> Result<Version<B>, StoreError> {
   check_kind::<B>(connection, resource)?;
@@ -206,6 +268,9 @@ fn publish_checked<B: ResourceBody>(
   )?
   .pop()
   .map(|version| version.number());
+  if expected_latest.is_some_and(|expected| expected != latest) {
+    return Err(StoreError::DraftChanged(resource));
+  }
   let version = publish(draft, latest, now)?;
   connection.execute(
     "INSERT INTO resource_versions (id, resource_id, number, body, published_at) VALUES (?1, ?2, ?3, ?4, ?5)",

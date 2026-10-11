@@ -175,6 +175,13 @@ impl FieldInput {
     self
   }
 
+  /// A compact inspector text area, retaining the input's full hit area and multiline growth.
+  pub fn compact_area(mut self) -> Self {
+    self.lines = Lines::Many;
+    self.area_height = ControlHeight::Md.value();
+    self
+  }
+
   /// A text area with the design's least height, retaining growth and scrolling for longer input.
   pub fn area_height(mut self, height: f32) -> Self {
     self.area_height = height;

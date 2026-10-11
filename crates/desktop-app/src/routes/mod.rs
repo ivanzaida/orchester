@@ -58,6 +58,8 @@ const EDIT: &str = "edit";
 const TAB: &str = "tab";
 /// A project's path with its identifier as the router's parameter.
 const PROJECT_PATTERN: &str = "/project/:project";
+const NEW_PIPELINE_PATTERN: &str = "/project/:project/pipelines/new";
+const PIPELINE_PATTERN: &str = "/project/:project/pipelines/:pipeline";
 
 /// A place in the window.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -68,6 +70,14 @@ pub enum Route {
 }
 
 impl Route {
+  /// A pipeline's list, creation page and editor belong to one sidebar screen, with distinct paths.
+  pub fn pattern(&self) -> String {
+    match self {
+      Self::Project(_, ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline) => NEW_PIPELINE_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::Pipeline(_)) => PIPELINE_PATTERN.to_owned(),
+      _ => self.screen().pattern(),
+    }
+  }
   pub const fn screen(&self) -> Screen {
     match self {
       Self::AllProjects => Screen::AllProjects,

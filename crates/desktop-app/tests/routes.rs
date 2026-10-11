@@ -51,6 +51,9 @@ fn every_route() -> Vec<Route> {
         .with_search("  spaced  ")
         .with_highlight(key("KON-13")),
     )),
+    at(ProjectPage::NewPipeline),
+    at(ProjectPage::NewEmptyPipeline),
+    at(ProjectPage::Pipeline(PROJECT.parse().expect("a resource id"))),
     at(ProjectPage::EditTask(key("KON-7"))),
     at(ProjectPage::EditConnection(connection())),
     at(ProjectPage::Connections(
@@ -150,7 +153,7 @@ fn the_router_table_resolves_every_route_to_its_screen() {
     let path = route.path();
     let chain = table.resolve(&path);
     let leaf = chain.last().unwrap_or_else(|| panic!("{path} resolves"));
-    assert_eq!(leaf.pattern_raw(), route.screen().pattern(), "{path}");
+    assert_eq!(leaf.pattern_raw(), route.pattern(), "{path}");
   }
 }
 
@@ -382,4 +385,17 @@ fn connections_pages_have_their_documented_paths_and_select_connections() {
     Route::parse(&format!("{root}?selected=nope")),
     Err(RouteError::InvalidParam { .. })
   ));
+}
+#[test]
+fn pipelines_pages_have_their_own_paths_and_select_pipelines() {
+  let id = PROJECT.parse().expect("resource id");
+  for (page, suffix) in [
+    (ProjectPage::NewPipeline, "new".to_owned()),
+    (ProjectPage::Pipeline(id), id.to_string()),
+  ] {
+    let route = at(page);
+    assert_eq!(route.path(), format!("/project/{PROJECT}/pipelines/{suffix}"));
+    assert_eq!(Route::parse(&route.path()), Ok(route.clone()));
+    assert_eq!(route.screen(), Screen::Pipelines);
+  }
 }

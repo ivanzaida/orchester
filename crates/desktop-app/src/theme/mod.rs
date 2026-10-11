@@ -21,6 +21,7 @@ mod lifecycle;
 mod markdown;
 mod metrics;
 mod palette;
+pub mod pipelines;
 mod secrets;
 mod settings;
 mod shadow;
@@ -75,6 +76,7 @@ pub fn install(app: &mut App, mode: Mode) {
   let theme = app.theme();
   apply(theme, mode);
   metrics::install(theme);
+  pipelines::install(theme);
   startup::install(theme);
   settings::install(theme);
   task::install(theme);
