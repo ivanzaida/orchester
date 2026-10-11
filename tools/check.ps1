@@ -10,8 +10,21 @@ Push-Location $repositoryRoot
 try {
     # rustfmt.toml uses nightly-only options; the pinned stable toolchain would ignore them.
     Write-Output "== rustfmt"
-    cargo +nightly fmt --all -- --check
-    if ($LASTEXITCODE -ne 0) { $failed = $true }
+    # One rustfmt invocation for the whole workspace exceeds Windows' command-line limit.
+    $formatMetadataJson = cargo +nightly metadata --no-deps --format-version 1
+    if ($LASTEXITCODE -ne 0) {
+        $failed = $true
+    }
+    else {
+        $formatMetadata = $formatMetadataJson | ConvertFrom-Json
+        foreach ($formatPackage in $formatMetadata.packages) {
+            if ($formatMetadata.workspace_members -contains $formatPackage.id) {
+                Write-Output "== rustfmt $($formatPackage.name)"
+                cargo +nightly fmt -p $formatPackage.name -- --check
+                if ($LASTEXITCODE -ne 0) { $failed = $true }
+            }
+        }
+    }
 
     Write-Output "== clippy"
     cargo clippy --workspace --all-targets --all-features -- -D warnings

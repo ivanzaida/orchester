@@ -1,5 +1,6 @@
 # ORC-7 implementation handoff — 2026-10-11
 
+Current return from Check: checkpoint `3a9ddaa79f4f41351bd57fee405889ff2938a932` plus a formatting-gate correction and this report update. Fresh results and the precise evidence limits are in **Return from Check attempt 1** below. The following original handoff is preserved as earlier evidence.
 Candidate: Orchester checkpoint `c846b42e97be6669252c3fee4e099b15b38c29a0`, based on `c263258d145eb22c167bda6a702e6e2cf35a6615`, plus this documentation-only handoff update. No commit was made by this agent. Rust, locale and Cargo inputs are unchanged since the passing filtered Windows tests, clippy and formatting checks below, so their evidence is reused for the checkpoint. This report is implementation evidence, not an independent design-verification verdict.
 
 ## Implemented
@@ -104,3 +105,45 @@ The in-memory vault in tests/secrets/harness.rs can deterministically fail or ho
 ## Implement completion after the person's answer
 
 The person authorized finishing Implement with the saved candidate and filtered Windows evidence, deferring macOS validation to their Mac. Check runs tools/check.ps1, followed by independent Review and Verify. The gate was not rerun, and no commit, install or merge was performed. The cited docs/orchestrator-handover.md is absent in this run's checkpoint; the person's explicit answer supplies the effective standing decision without requiring a scope change. Only this report was edited after the checkpoint, so no test inputs changed.
+
+## Return from Check attempt 1 — 2026-10-11
+
+Current candidate: checkpoint `3a9ddaa79f4f41351bd57fee405889ff2938a932` plus the saved changes to `tools/check.ps1` and this report. The implementation, Rust, locales and Cargo files are unchanged. The earlier sections retain their original candidate and evidence; this section records fresh checks for the returned candidate.
+
+The Check failure was reproduced: `cargo +nightly fmt --all -- --check` exits 1 with Windows OS error 206. The gate now obtains workspace membership from Cargo metadata and invokes nightly formatting separately for each package, keeping `--check`. Metadata errors and any package failure still mark the gate failed; a package failure does not skip later packages. No formatting, clippy, file-size or UI-literal rule was relaxed. No other gate stage or application code changed.
+
+Fresh commands and outcomes:
+
+| Command | Outcome |
+| --- | --- |
+| `git status --short` | PASS: clean at entry; final changes are the gate script and this report |
+| `git rev-parse HEAD` | PASS: checkpoint identified above |
+| `cargo +nightly fmt --all -- --check` | Reproduced the returned failure: exit 1, OS error 206 |
+| `cargo +nightly metadata --no-deps --format-version 1` | PASS: discovers all 13 workspace packages |
+| `cargo +nightly fmt -p orchester-agent -- --check` | PASS |
+| `cargo +nightly fmt -p orchester-core -- --check` | PASS |
+| `cargo +nightly fmt -p orchester-exec -- --check` | PASS |
+| `cargo +nightly fmt -p orchester-api -- --check` | PASS |
+| `cargo +nightly fmt -p orchester-server -- --check` | PASS |
+| `cargo +nightly fmt -p orchester-desktop -- --check` | PASS |
+| `cargo +nightly fmt -p orchester-index -- --check` | PASS |
+| `cargo +nightly fmt -p orchester-ipc -- --check` | PASS |
+| `cargo +nightly fmt -p orchester-store -- --check` | PASS |
+| `cargo +nightly fmt -p orchester-workspace -- --check` | PASS |
+| `cargo +nightly fmt -p orchester-vault -- --check` | PASS |
+| `cargo +nightly fmt -p orchester-app -- --check` | PASS |
+| `cargo +nightly fmt -p orchester-runner -- --check` | PASS |
+| `powershell -NoProfile -ExecutionPolicy Bypass -File .tmp/orc-7-check-return/format-stage.ps1` | PASS: runs the exact saved formatting section under Windows PowerShell, all 13 packages, exit 0 |
+| `powershell -NoProfile -ExecutionPolicy Bypass -File .tmp/orc-7-check-return/format-stage-tests.ps1` | PASS: parses the full saved gate, then tests success, metadata failure, package-failure retention, continued checking and workspace membership with a Cargo stub |
+| `cargo test -p orchester-app --test secrets secrets_` | PASS: 14 tests |
+| `cargo test -p orchester-workspace --test secrets secret` | PASS: 3 tests |
+| `cargo test -p orchester-workspace --test secrets mcp_variable` | PASS: 1 test |
+| `cargo test -p orchester-app --test screens screens_each_route` | PASS: 1 test |
+| `git diff --check` | PASS |
+| `git diff -- tools/check.ps1` | PASS: inspected the gate-only correction |
+
+The metadata/package commands first ran in an exploratory PowerShell loop, then in the exact saved formatting section, and finally through the isolated Windows PowerShell script above. All package-formatting executions passed. The scratch failure-propagation harness initially failed twice because its PowerShell function stub bound arguments differently from native Cargo; the stub was corrected, and its final run passes. The diagnostic `function cargo { $args -join '|' }; cargo +nightly fmt -p alpha -- --check` passed and established how a PowerShell function consumes the standalone argument separator; it did not run native Cargo or touch a package. Scratch scripts are ignored under `.tmp/orc-7-check-return/`.
+
+Not run in this return: `tools/check.ps1` itself (the Implement instruction reserves it for the authoritative pipeline Check), another clippy run, the unrelated test suites, native UI capture, independent Review/Verify, macOS checks/runtime, release packaging or installation. The returned Check's clippy, file-size and UI-literal sections passed against unchanged Rust and unchanged rules for those sections; that evidence remains limited to those inputs and is not a passing full-gate verdict for the edited script. Apple validation remains deferred to the person's Mac. No commit was made.
+
+Read-only Pencil access confirmed the current Secrets layer `ccz8n` and every frame in the Verify table above. Verify must still compare DrLE6 (list/inspector), LDP7i (use variants), YGy5i/Gam8g/j0ffR (add/duplicates/validation), yTCmk (replace), K2epbr/XoPMi (archive/impact), aKeYe/L0uiU/Ds3OR (usage/empty states), z9erZk (read retry), nykwz/SsCvf (pending/failed writes), plus the person-only question/input lock, archived references, credential clearing and long-name tooltips. The 960 and light frames remain excluded. Leave the plan pending until Check and independent Verify pass.
