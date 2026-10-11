@@ -19,6 +19,30 @@ const SELECT_RESOURCES: &str = "SELECT id, kind, slug, name, created_at FROM res
 const SELECT_VERSIONS: &str = "SELECT id, number, body, published_at FROM resource_versions";
 
 impl ProjectDb {
+  /// Reads the draft and latest version under the write lock, then saves the returned draft.
+  /// A rejected edit leaves storage unchanged; no competing writer can run between the read and save.
+  pub fn update_draft<B: ResourceBody>(
+    &mut self,
+    resource: ResourceId,
+    edit: impl FnOnce(Option<Draft<B>>, Option<Version<B>>) -> Result<Draft<B>, StoreError>,
+  ) -> Result<DraftSaved, StoreError> {
+    let transaction = self
+      .connection
+      .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+    check_kind::<B>(&transaction, resource)?;
+    let draft = load_draft::<B>(&transaction, resource)?;
+    let latest = load_versions::<B>(
+      &transaction,
+      "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
+      [resource.to_string()],
+    )?
+    .pop();
+    let changed = edit(draft, latest)?;
+    let saved = save_draft(&transaction, resource, &changed)?;
+    transaction.commit()?;
+    Ok(saved)
+  }
+
   /// Publishes the draft of `resource` only if its body is `expected`, in the same transaction that reads
   /// it: a check made on the draft holds for what is published ([`StoreError::DraftChanged`] otherwise).
   pub fn publish_draft_matching<B: ResourceBody>(
@@ -38,6 +62,32 @@ impl ProjectDb {
   ) -> Result<Version<B>, StoreError> {
     let transaction = self.connection.transaction()?;
     let version = publish_checked(&transaction, resource, expected, now)?;
+    transaction.commit()?;
+    Ok(version)
+  }
+
+  /// Validates or rebases the draft under the publishing transaction. A rejected candidate
+  /// changes neither the draft nor the versions; concurrent writers cannot change the reviewed base.
+  pub fn publish_draft_with<B: ResourceBody>(
+    &mut self,
+    resource: ResourceId,
+    now: Timestamp,
+    prepare: impl FnOnce(Draft<B>, Option<Version<B>>) -> Result<Draft<B>, StoreError>,
+  ) -> Result<Version<B>, StoreError> {
+    let transaction = self
+      .connection
+      .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+    check_kind::<B>(&transaction, resource)?;
+    let draft = load_draft::<B>(&transaction, resource)?.ok_or(StoreError::NoDraft(resource))?;
+    let latest = load_versions::<B>(
+      &transaction,
+      "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
+      [resource.to_string()],
+    )?
+    .pop();
+    let number = latest.as_ref().map(Version::number);
+    let draft = prepare(draft, latest)?;
+    let version = publish_prepared(&transaction, resource, draft, number, now)?;
     transaction.commit()?;
     Ok(version)
   }
@@ -198,7 +248,6 @@ fn publish_checked<B: ResourceBody>(
   if expected.is_some_and(|expected| draft.body() != expected) {
     return Err(StoreError::DraftChanged(resource));
   }
-  draft.body().check_publishable()?;
   let latest = load_versions::<B>(
     connection,
     "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
@@ -206,6 +255,17 @@ fn publish_checked<B: ResourceBody>(
   )?
   .pop()
   .map(|version| version.number());
+  publish_prepared(connection, resource, draft, latest, now)
+}
+
+fn publish_prepared<B: ResourceBody>(
+  connection: &Connection,
+  resource: ResourceId,
+  draft: Draft<B>,
+  latest: Option<VersionNumber>,
+  now: Timestamp,
+) -> Result<Version<B>, StoreError> {
+  draft.body().check_publishable()?;
   let version = publish(draft, latest, now)?;
   connection.execute(
     "INSERT INTO resource_versions (id, resource_id, number, body, published_at) VALUES (?1, ?2, ?3, ?4, ?5)",

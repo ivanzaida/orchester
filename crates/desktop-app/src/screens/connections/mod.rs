@@ -15,7 +15,7 @@ mod list;
 mod mcp_form;
 mod page;
 pub(crate) mod widen;
-mod words;
+pub(super) mod words;
 mod work;
 
 use lurq::{app::ctx::Ctx, node::Element};

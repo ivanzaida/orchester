@@ -114,7 +114,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::Publish(PublishError::ConnectionMissing) => {
       Message::new("agents.permissions.publish.connectionMissing")
     }
-    StoreError::Publish(PublishError::Permissions(_)) => Message::new("agents.permissions.publish.notEnforceable"),
+    StoreError::Publish(PublishError::Permissions(problem)) => crate::agents::permissions::not_enforceable(problem),
     StoreError::AlwaysAllow(_) => Message::new("errors.alwaysAllow"),
   }
 }

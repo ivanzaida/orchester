@@ -185,6 +185,7 @@ icons! {
   Tag => '\u{e17f}',
   Tags => '\u{e35c}',
   Terminal => '\u{e181}',
+  TextCursorInput => '\u{e265}',
   Timer => '\u{e1e0}',
   Trash2 => '\u{e18e}',
   TriangleAlert => '\u{e193}',

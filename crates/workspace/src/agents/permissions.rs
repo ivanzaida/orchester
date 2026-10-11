@@ -6,8 +6,8 @@
 use orchester_core::{
   connection::{AgentProvider, invocation::Platform},
   permission::{
-    AllowedCommands, AllowedCommandsError, CommandPrefix, CommandPrefixError,
-    capability::{Mechanism, PermissionOption, PermissionSetting, Support, support},
+    AgentPermissions, AllowedCommands, AllowedCommandsError, CommandPrefix, CommandPrefixError,
+    capability::{Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Support, Unavailable, support},
   },
 };
 
@@ -63,6 +63,30 @@ pub fn runs_read_only_unlisted(provider: Option<AgentProvider>) -> bool {
   provider.is_some_and(|provider| {
     support(provider, Platform::current(), PermissionOption::AllowedCommands)
       == Support::Enforced(Mechanism::ClaudeAllowedTools)
+  })
+}
+
+/// Whether `provider` runs agents and enforces every chosen permission here, network off included.
+pub fn fully_enforced(permissions: &AgentPermissions, provider: AgentProvider) -> bool {
+  provider.runs_agents()
+    && permissions
+      .enforced_on(provider, Platform::current())
+      .is_ok_and(|effective| effective.network_stays_on().is_none())
+}
+
+/// Why a connection cannot run `problem`'s permissions, naming the setting it cannot enforce.
+pub const fn not_enforceable(problem: &PermissionProblem) -> Message {
+  Message::new(match problem {
+    PermissionProblem::NotEnforceable { reason, .. } => match reason {
+      Unavailable::CannotLimitCommands => "agents.permissions.notEnforceable.allowedCommands",
+      Unavailable::CannotConfineCommands => "agents.permissions.notEnforceable.anyCommand",
+      Unavailable::CannotBlockNetwork => "agents.permissions.notEnforceable.networkOff",
+    },
+    PermissionProblem::NoEnforceableOption { setting } => match setting {
+      PermissionSetting::Repository => "agents.permissions.notEnforceable.noRepositoryOption",
+      PermissionSetting::Commands => "agents.permissions.notEnforceable.noCommandsOption",
+      PermissionSetting::Network => "agents.permissions.notEnforceable.noNetworkOption",
+    },
   })
 }
 

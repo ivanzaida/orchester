@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use super::{ToolError, object, reply};
 use crate::project::hold::ReadHold;
 
-const DESCRIPTION: &str = "Debug builds only. `held: true` holds every read of a project's tasks and limits that \
+const DESCRIPTION: &str = "Debug builds only. `held: true` holds every read of a project's tasks, limits and agent profiles that \
   starts from now on, so a screen that reads them for the first time stays in its loading state (open a project \
   no tab showed yet, e.g. with navigate); data already on screen stays while a read waits. `held: false` lets \
   the waiting reads go. Answers whether reads are held.";

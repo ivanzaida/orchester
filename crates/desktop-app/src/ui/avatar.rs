@@ -4,7 +4,7 @@
 //! `border` stroke.
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, RadiusSize},
+  app::theme::{BorderSize, PaletteColor, RadiusSize, TypographyStyle},
   components::{Row, Text},
   layout::{Alignment, layout_kind::Justify},
   node::{border::Border, dimension::Dimension},
@@ -71,6 +71,19 @@ pub fn credential_avatar(id: &str, glyph: Icon, inspector: bool) -> Row {
       if inspector { IconSize::Nav } else { IconSize::Md },
       PaletteColor::TextSecondary,
     ))
+}
+
+/// The profile list's 28-pixel role tile (Agents / NA7sg / xV94H).
+pub fn profile_avatar(id: &str, role: &str) -> Row {
+  let letter: String = role.chars().take(1).flat_map(char::to_uppercase).collect();
+  tile(id, 28.0)
+    .rounded(RadiusSize::Md)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(
+      Text::new(&letter)
+        .variant(TypographyStyle::Label)
+        .color(PaletteColor::TextSecondary),
+    )
 }
 
 /// The initials of `name`: the first letters of its first two words, in capitals (`Ada Lovelace` →

@@ -28,6 +28,8 @@ pub enum Outside {
   Connections,
   /// A command tool was added, saved or published.
   Tools,
+  /// An agent profile draft or published version changed.
+  Profiles,
 }
 
 /// How often each kind of a project's data changed outside the screens.
@@ -42,6 +44,7 @@ pub struct OutsideCounts {
   pub pipelines: u64,
   pub connections: u64,
   pub tools: u64,
+  pub profiles: u64,
 }
 
 impl OutsideCounts {
@@ -57,6 +60,7 @@ impl OutsideCounts {
       Outside::Pipelines => self.pipelines,
       Outside::Connections => self.connections,
       Outside::Tools => self.tools,
+      Outside::Profiles => self.profiles,
     }
   }
 
@@ -71,6 +75,7 @@ impl OutsideCounts {
       Outside::Pipelines => &mut self.pipelines,
       Outside::Connections => &mut self.connections,
       Outside::Tools => &mut self.tools,
+      Outside::Profiles => &mut self.profiles,
     };
     *count += 1;
   }
