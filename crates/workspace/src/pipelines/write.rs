@@ -3,7 +3,6 @@
 use std::path::Path;
 
 use orchester_core::{
-  id::ResourceId,
   resource::{Draft, Pipeline, VersionNumber},
   time::Timestamp,
 };
@@ -86,13 +85,10 @@ pub fn save_named_in(
 }
 
 /// Publishes the exact saved draft reviewed by the person, checking the current comparison again.
-pub fn publish_in(
-  root: &Path,
-  id: ResourceId,
-  body: &Pipeline,
-  allowed: &Allowed,
-) -> Result<OpenedPipeline, WriteError> {
+pub fn publish_in(root: &Path, before: &OpenedPipeline, allowed: &Allowed) -> Result<OpenedPipeline, WriteError> {
   let mut db = ProjectDb::open(root)?;
+  let id = before.id;
+  let body = &before.body;
   let current = OpenedPipeline::load(&db, id)?;
   for step in body.steps() {
     super::narrowing::check_step(step, &current.assignables).map_err(WriteError::InvalidStep)?;
@@ -101,7 +97,7 @@ pub fn publish_in(
   if !reasons.iter().all(|reason| allowed.0.contains(reason)) {
     return Err(WriteError::PersonOnly);
   }
-  db.publish_draft_matching_version(id, body, current.latest.as_ref().map(|v| v.number), Timestamp::now())?;
+  db.publish_draft_matching_version(id, body, before.latest.as_ref().map(|v| v.number), Timestamp::now())?;
   Ok(OpenedPipeline::load(&db, id)?)
 }
 

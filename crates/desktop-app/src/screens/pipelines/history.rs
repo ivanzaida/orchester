@@ -8,7 +8,6 @@ use lurq::{
   components::{Column, Row, Text},
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::resource::PipelineEdit;
 use orchester_workspace::{background, messages, pipelines::history::VersionHistory};
 
 use super::{
@@ -28,74 +27,60 @@ use crate::{
 pub struct Props {
   pub project: ShownProject,
   pub state: State,
+  pub writing: bool,
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    self.project == other.project
+    self.project == other.project && self.writing == other.writing
   }
 }
 impl DevtoolsInspectable for Props {}
-pub struct History;
+pub struct History {
+  retry: lurq::core::Signal<u64>,
+}
 impl Component for History {
   type Props = Props;
-  fn create(_: &mut Ctx) -> Self {
-    Self
+  fn create(ctx: &mut Ctx) -> Self {
+    ctx.props::<Props>().state.update(|s| {
+      s.comparing = false;
+      s.restore_requested = false;
+    });
+    Self { retry: ctx.signal(0) }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    panel(ctx, &props.project, &props.state)
+    panel(ctx, &props.project, &props.state, props.writing, &self.retry)
   }
 }
-fn panel(ctx: &mut Ctx, project: &ShownProject, state: &State) -> Element {
+fn panel(
+  ctx: &mut Ctx,
+  project: &ShownProject,
+  state: &State,
+  writing: bool,
+  retry: &lurq::core::Signal<u64>,
+) -> Element {
   let editing = state.get();
   let loaded = ctx
     .future(
-      (project.open.repo_root.clone(), editing.opened.id, editing.epoch),
-      |(root, id, _)| async move {
+      (
+        project.open.repo_root.clone(),
+        editing.opened.id,
+        editing.epoch,
+        retry.get(),
+      ),
+      |(root, id, ..)| async move {
         background::run(move || VersionHistory::load_in(&root, id).map_err(|e| messages::store_error(&e))).await?
       },
     )
     .state()
     .get();
   let mut body = parts::panel_body();
-  match loaded.data {
+  match loaded.data.filter(|_| loaded.error.is_none()) {
     Some(history) => {
       if history.versions().is_empty() {
         body = body.child(parts::note(&ctx.t("pipelines.historyEmpty")));
       }
-      let draft = state.clone();
-      body = body.child(
-        crate::ui::pressable::pressable(move || back(&draft))
-          .id("pipeline-history-draft")
-          .width(Dimension::Pct(100.0))
-          .padding(SpacingSize::Sm)
-          .child(
-            Column::new()
-              .spacing(SpacingSize::Xs)
-              .child(
-                Text::new(
-                  &ctx.t_args(
-                    "pipelines.draftVersion",
-                    [(
-                      "version",
-                      orchester_workspace::pipelines::write::next_version(&editing.opened)
-                        .map_or_else(String::new, |v| v.get().to_string()),
-                    )],
-                  ),
-                )
-                .variant(crate::theme::ExtraTypography::Strong.role()),
-              )
-              .child(parts::caption(&editing.opened.draft_saved_at.map_or_else(
-                || ctx.t("pipelines.noDraft"),
-                |at| {
-                  ctx.t_args(
-                    "pipelines.draftSavedAt",
-                    [("age", super::library::age(ctx, at).to_string())],
-                  )
-                },
-              ))),
-          ),
-      );
+      body = body.child(draft_row(ctx, state));
       for version in history.versions() {
         body = body.child(version_row(
           ctx,
@@ -105,11 +90,13 @@ fn panel(ctx: &mut Ctx, project: &ShownProject, state: &State) -> Element {
         ));
       }
       if let Some(version) = editing.viewing_version.and_then(|n| history.version(n)) {
-        body = details(ctx, state, version, body);
+        body = details(ctx, state, version, body, writing);
       }
     }
     None => {
-      body = body.child(loading("pipeline-history-loading", &ctx.t("pipelines.reading")));
+      if loaded.error.is_none() {
+        body = body.child(loading("pipeline-history-loading", &ctx.t("pipelines.reading")));
+      }
     }
   }
   if let Some(error) = loaded.error {
@@ -117,6 +104,15 @@ fn panel(ctx: &mut Ctx, project: &ShownProject, state: &State) -> Element {
       "pipeline-history-error",
       &message_text(ctx, &error),
     ));
+    let retry = retry.clone();
+    body = body.child(
+      ActionButton::new(
+        "pipeline-history-retry",
+        ButtonKind::Secondary,
+        ctx.t("pipelines.reload"),
+      )
+      .on_click(move || retry.update(|n| *n += 1)),
+    );
   }
   parts::panel(
     ctx,
@@ -127,10 +123,10 @@ fn panel(ctx: &mut Ctx, project: &ShownProject, state: &State) -> Element {
     Some(state.clone()),
   )
 }
-fn restore_button(ctx: &Ctx, state: &State) -> ActionButton {
+fn restore_button(ctx: &Ctx, state: &State, writing: bool) -> ActionButton {
   let editing = state.get();
   let restore = state.clone();
-  ActionButton::new(
+  let button = ActionButton::new(
     "pipeline-restore",
     ButtonKind::Secondary,
     ctx.t_args(
@@ -146,17 +142,17 @@ fn restore_button(ctx: &Ctx, state: &State) -> ActionButton {
   .icon(crate::ui::icon::Icon::RotateCcw)
   .on_click(move || {
     restore.update(|s| {
-      if let Some(body) = s.viewing.take() {
-        s.edit = PipelineEdit::new(body);
-        s.viewing_version = None;
-        s.comparing = false;
-        s.panel = Panel::Pipeline;
-        s.epoch += 1;
-        s.errors.clear();
-        s.inputs.clear();
+      if writing {
+        return;
+      }
+      if s.opened.draft_saved_at.is_some() || s.dirty() || !s.errors.is_empty() {
+        s.restore_requested = true;
+      } else {
+        s.restore();
       }
     })
-  })
+  });
+  if writing { button.disabled() } else { button }
 }
 fn comparison_tag(ctx: &Ctx, editing: &super::state::Editing) -> Row {
   let count = editing.viewing.as_ref().map_or(0, |before| {
@@ -180,8 +176,18 @@ fn comparison_tag(ctx: &Ctx, editing: &super::state::Editing) -> Row {
       crate::theme::ExtraColor::Selection.role(),
     ))
     .child(
-      parts::caption(&ctx.t_args("pipelines.comparisonCount", [("count", count.to_string())]))
-        .color(crate::theme::ExtraColor::Selection.role()),
+      parts::caption(&ctx.t_args(
+        if count == 1 {
+          "pipelines.comparisonCountOne"
+        } else {
+          "pipelines.comparisonCount"
+        },
+        [
+          ("count", count.to_string()),
+          ("target", comparison_title(ctx, editing).to_string()),
+        ],
+      ))
+      .color(crate::theme::ExtraColor::Selection.role()),
     )
 }
 fn version_row(
@@ -221,6 +227,7 @@ fn version_row(
         s.viewing = Some((*snapshot).clone());
         s.viewing_version = Some(number);
         s.comparing = false;
+        s.restore_requested = false;
         s.epoch += 1;
       });
     }
@@ -260,6 +267,7 @@ pub fn back(state: &State) {
     s.viewing = None;
     s.viewing_version = None;
     s.comparing = false;
+    s.restore_requested = false;
     s.panel = Panel::Pipeline;
     s.epoch += 1;
   });
@@ -286,8 +294,13 @@ pub fn toolbar(ctx: &Ctx, state: &State) -> Element {
     ))
     .with_children(editing.comparing.then(|| comparison_tag(ctx, &editing)))
     .child(
-      ActionButton::new("pipeline-back-draft", ButtonKind::Ghost, ctx.t("pipelines.returnDraft"))
-        .on_click(move || back(&target)),
+      ActionButton::new(
+        "pipeline-back-draft",
+        ButtonKind::Secondary,
+        ctx.t("pipelines.returnDraft"),
+      )
+      .icon(crate::ui::icon::Icon::ChevronLeft)
+      .on_click(move || back(&target)),
     )
     .into()
 }
@@ -296,6 +309,7 @@ fn details(
   state: &State,
   version: &orchester_workspace::pipelines::history::PublishedVersion,
   mut body: Column,
+  writing: bool,
 ) -> Column {
   let editing = state.get();
   body = body
@@ -307,44 +321,111 @@ fn details(
     .child(parts::caption(
       &ctx.t_args("pipelines.runs", [("count", version.runs.len().to_string())]),
     ));
-  let changes = if editing.comparing {
-    orchester_core::resource::changes(&version.body, &editing.opened.body)
-  } else {
-    version.changes.as_ref().map(|c| c.changes.clone()).unwrap_or_default()
-  };
+  let changes = version.changes.as_ref().map(|c| c.changes.clone()).unwrap_or_default();
   if changes.is_empty() {
-    body = body.child(parts::note(&ctx.t(if editing.comparing {
-      "pipelines.noDraft"
-    } else {
-      "pipelines.firstVersion"
-    })));
+    body = body.child(parts::note(&ctx.t("pipelines.firstVersion")));
   }
   for change in &changes {
     body = body.child(parts::change_row(ctx, change));
   }
-  let compare = state.clone();
+  if editing.comparing {
+    body = body.child(crate::ui::inspector::section_title(
+      "pipeline-comparison-changes",
+      &comparison_title(ctx, &editing),
+      None,
+    ));
+    for change in orchester_core::resource::changes(&version.body, &editing.opened.body) {
+      body = body.child(parts::change_row(ctx, &change));
+    }
+  }
+  if editing.restore_requested {
+    return body.child(super::restore::question(ctx, state, writing));
+  }
   body = body.child(
     Row::new()
       .spacing(SpacingSize::Sm)
-      .child(
-        ActionButton::new(
-          "pipeline-compare",
-          ButtonKind::Secondary,
-          ctx.t(if editing.comparing {
-            "pipelines.hideComparison"
-          } else {
-            "pipelines.compare"
-          }),
-        )
-        .icon(crate::ui::icon::Icon::GitCompare)
-        .on_click(move || compare.update(|s| s.comparing = !s.comparing)),
-      )
-      .child(restore_button(ctx, state)),
+      .child(compare_button(ctx, state))
+      .child(restore_button(ctx, state, writing)),
   );
+  if editing.dirty() || !editing.errors.is_empty() {
+    body = body.child(parts::note(&ctx.t("pipelines.compareUnavailable")));
+  }
   body = body.child(crate::ui::notice::handling_notice(
     "history-pinned",
     crate::ui::icon::Icon::Info,
     &ctx.t("pipelines.pinnedHint"),
   ));
   body
+}
+fn comparison_title(ctx: &Ctx, editing: &super::state::Editing) -> std::sync::Arc<str> {
+  let (key, version) = if editing.opened.draft_saved_at.is_some() {
+    (
+      "pipelines.comparedSavedDraft",
+      orchester_workspace::pipelines::write::next_version(&editing.opened),
+    )
+  } else {
+    (
+      "pipelines.comparedPublished",
+      editing.opened.latest.as_ref().map(|v| v.number),
+    )
+  };
+  ctx.t_args(
+    key,
+    [("version", version.map_or_else(String::new, |v| v.get().to_string()))],
+  )
+}
+fn draft_row(ctx: &Ctx, state: &State) -> Element {
+  let editing = state.get();
+  let target = state.clone();
+  crate::ui::pressable::pressable(move || back(&target))
+    .id("pipeline-history-draft")
+    .width(Dimension::Pct(100.0))
+    .padding(SpacingSize::Sm)
+    .child(
+      Column::new()
+        .spacing(SpacingSize::Xs)
+        .child(
+          Text::new(
+            &ctx.t_args(
+              "pipelines.draftVersion",
+              [(
+                "version",
+                orchester_workspace::pipelines::write::next_version(&editing.opened)
+                  .map_or_else(String::new, |v| v.get().to_string()),
+              )],
+            ),
+          )
+          .variant(crate::theme::ExtraTypography::Strong.role()),
+        )
+        .child(parts::caption(&super::summary::draft(ctx, &editing)))
+        .with_children(editing.opened.draft_saved_at.map(|at| {
+          parts::caption(&ctx.t_args(
+            "pipelines.draftSavedAt",
+            [("age", super::library::age(ctx, at).to_string())],
+          ))
+        })),
+    )
+    .into()
+}
+fn compare_button(ctx: &Ctx, state: &State) -> ActionButton {
+  let editing = state.get();
+  let compare = state.clone();
+  let button = ActionButton::new(
+    "pipeline-compare",
+    ButtonKind::Secondary,
+    ctx.t(if editing.comparing {
+      "pipelines.hideComparison"
+    } else if editing.opened.draft_saved_at.is_some() {
+      "pipelines.compare"
+    } else {
+      "pipelines.comparePublished"
+    }),
+  )
+  .icon(crate::ui::icon::Icon::GitCompare)
+  .on_click(move || compare.update(|s| s.comparing = !s.comparing));
+  if editing.dirty() || !editing.errors.is_empty() {
+    button.disabled()
+  } else {
+    button
+  }
 }

@@ -24,7 +24,8 @@ pub fn question(ctx: &mut Ctx, guard: &LeaveGuard, writing: bool, name: &str) ->
   let navigation = Navigation::of(ctx);
   let leave = guard.clone();
   let keep = guard.clone();
-  let confirm = ActionButton::new("pipeline-leave-confirm", ButtonKind::Danger, ctx.t("pipelines.leave"))
+  let confirm = ActionButton::new("pipeline-leave-confirm", ButtonKind::Primary, ctx.t("pipelines.leave"))
+    .icon(crate::ui::icon::Icon::LogOut)
     .on_click(move || leave.leave(&navigation));
   Some(
     card("pipeline-leave-question", CardSurface::Decision)
@@ -46,11 +47,11 @@ pub fn question(ctx: &mut Ctx, guard: &LeaveGuard, writing: bool, name: &str) ->
       .child(
         Row::new()
           .spacing(SpacingSize::Sm)
+          .child(if writing { confirm.disabled() } else { confirm })
           .child(
             ActionButton::new("pipeline-leave-keep", ButtonKind::Secondary, ctx.t("pipelines.keep"))
               .on_click(move || keep.keep_editing()),
-          )
-          .child(if writing { confirm.disabled() } else { confirm }),
+          ),
       )
       .into(),
   )

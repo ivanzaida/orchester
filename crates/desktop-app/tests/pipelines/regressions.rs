@@ -192,7 +192,7 @@ fn pipelines_failure_route_reset_keeps_displayed_and_saved_retries_in_sync() {
   editor.set("step-name", "Inspect");
   editor.click("pipeline-add-step");
   editor.set("step-name", "Verify");
-  editor.choose("step-failure", "Inspect");
+  editor.choose("step-failure", "01 Inspect");
   editor.set("step-retries", "3");
   editor.until("three retries saved", |e| {
     e.db()
@@ -207,7 +207,7 @@ fn pipelines_failure_route_reset_keeps_displayed_and_saved_retries_in_sync() {
   });
   editor.choose("step-failure", "Fail the run");
   assert!(!editor.exists("step-retries"));
-  editor.choose("step-failure", "Inspect");
+  editor.choose("step-failure", "01 Inspect");
   assert_eq!(editor.value("step-retries"), "1");
   editor.click("pipeline-start");
   editor.click("pipeline-step-step-2");
@@ -230,16 +230,16 @@ fn pipelines_removing_failure_route_clears_obsolete_retry_errors() {
     editor.click("pipeline-add-step");
     editor.set("step-name", name);
   }
-  editor.choose("step-failure", "Inspect");
+  editor.choose("step-failure", "01 Inspect");
   editor.set("step-retries", "3");
-  editor.choose("step-failure", "Repair");
+  editor.choose("step-failure", "02 Repair");
   assert_eq!(
     editor.value("step-retries"),
     "3",
     "changing only the target keeps retries"
   );
   editor.set("step-retries", "invalid");
-  editor.choose("step-failure", "Inspect");
+  editor.choose("step-failure", "01 Inspect");
   assert_eq!(
     editor.value("step-retries"),
     "invalid",
@@ -250,7 +250,7 @@ fn pipelines_removing_failure_route_clears_obsolete_retry_errors() {
   assert!(!editor.exists("pipeline-field-error"));
   editor.click("pipeline-start");
   editor.click("pipeline-step-step-3");
-  editor.choose("step-failure", "Repair");
+  editor.choose("step-failure", "02 Repair");
   assert_eq!(editor.value("step-retries"), "1");
   editor.until("valid route saved", |e| {
     e.db()
@@ -288,7 +288,7 @@ fn pipelines_executor_reset_keeps_displayed_and_saved_model_in_sync() {
         if model.as_str() == "test-model")
       })
   });
-  editor.choose("step-executor", "Not assigned");
+  editor.choose("step-executor", "Choose a profile");
   assert!(
     editor.text("step-model").contains("test-model"),
     "agent changes keep the override"

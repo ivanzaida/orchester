@@ -55,11 +55,12 @@ fn pipeline_writes_require_person_for_first_publish_and_removing_gates() {
     )
     .unwrap()
     .id();
+  let before = OpenedPipeline::load(&db, id).unwrap();
   assert!(matches!(
-    write::publish_in(folder.path(), id, &body, &Allowed::default()),
+    write::publish_in(folder.path(), &before, &Allowed::default()),
     Err(WriteError::PersonOnly)
   ));
-  let first = write::publish_in(folder.path(), id, &body, &Allowed(publish_reasons(None, &body))).unwrap();
+  let first = write::publish_in(folder.path(), &before, &Allowed(publish_reasons(None, &body))).unwrap();
   edit.update(&key, |step| step.approval_gate = false);
   let weaker = edit.validate().unwrap();
   assert!(matches!(
@@ -74,11 +75,11 @@ fn pipeline_writes_require_person_for_first_publish_and_removing_gates() {
   )
   .unwrap();
   assert!(matches!(
-    write::publish_in(folder.path(), id, &weaker, &Allowed::default()),
+    write::publish_in(folder.path(), &saved, &Allowed::default()),
     Err(WriteError::PersonOnly)
   ));
   let reasons = publish_reasons(saved.latest.as_ref().map(|v| &v.body), &weaker);
-  let published = write::publish_in(folder.path(), id, &weaker, &Allowed(reasons)).unwrap();
+  let published = write::publish_in(folder.path(), &saved, &Allowed(reasons)).unwrap();
   assert_eq!(published.latest.unwrap().number.get(), 2);
   assert_eq!(db.versions::<Pipeline>(id).unwrap()[0].body(), &body);
   assert!(OpenedPipeline::load(&db, id).unwrap().draft_saved_at.is_none());
@@ -119,7 +120,7 @@ fn pipeline_writes_keep_unassigned_starter_drafts_but_publication_stays_strict()
   let saved = write::save_in(folder.path(), &opened, edited.clone(), &Allowed::default()).unwrap();
   assert_eq!(saved.body, edited);
   assert!(matches!(
-    write::publish_in(folder.path(), id, &edited, &Allowed(publish_reasons(None, &edited))),
+    write::publish_in(folder.path(), &saved, &Allowed(publish_reasons(None, &edited))),
     Err(WriteError::Store(_))
   ));
   assert!(db.latest_version::<Pipeline>(id).unwrap().is_none());

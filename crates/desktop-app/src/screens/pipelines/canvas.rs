@@ -153,7 +153,7 @@ pub fn edge(ctx: &Ctx) -> Column {
 }
 
 fn add_button(ctx: &Ctx, state: &State, id: &str) -> ActionButton {
-  ActionButton::new(id, ButtonKind::Secondary, ctx.t("pipelines.addStep"))
+  ActionButton::new(id, ButtonKind::Ghost, ctx.t("pipelines.addStep"))
     .icon(Icon::Plus)
     .on_click(add_action(ctx, state))
 }
@@ -188,7 +188,7 @@ fn toolbar(ctx: &Ctx, state: &State, readonly: bool) -> Element {
   Row::new()
     .padding(SpacingSize::Xs)
     .background(PaletteColor::SurfaceRaised)
-    .rounded(RadiusSize::Md)
+    .rounded(crate::theme::ExtraRadius::Full.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
     .spacing(SpacingSize::Xs)
     .child(if readonly { add.disabled() } else { add })
@@ -299,8 +299,9 @@ fn empty_graph(ctx: &Ctx, state: &State, mut graph: Stack, y: f32) -> Stack {
   graph = graph.child(
     Column::new()
       .child(
-        ActionButton::new("pipeline-use-starter", ButtonKind::Ghost, ctx.t("pipelines.useStarter")).on_click(
-          move || {
+        ActionButton::new("pipeline-use-starter", ButtonKind::Ghost, ctx.t("pipelines.useStarter"))
+          .icon(Icon::Workflow)
+          .on_click(move || {
             target.update(|s| {
               if s.viewing.is_some() {
                 return;
@@ -311,8 +312,7 @@ fn empty_graph(ctx: &Ctx, state: &State, mut graph: Stack, y: f32) -> Stack {
               );
               s.epoch += 1;
             })
-          },
-        ),
+          }),
       )
       .absolute_position(
         (GRAPH_WIDTH / 2.0) - 70.0,

@@ -69,6 +69,7 @@ impl Component for NewPipeline {
     let id = project.open.project.id();
     ctx.watch(&save.state(), move |state| {
       if !state.is_pending()
+        && state.error.is_none()
         && let Some(Created(created)) = state.data
       {
         nav.replace(Route::Project(id, ProjectPage::Pipeline(created)));
@@ -153,8 +154,9 @@ impl NewPipeline {
     parts::header()
       .spacing(ExtraSpacing::Snug.role())
       .child(
-        ActionButton::new("pipeline-parent", ButtonKind::Ghost, ctx.t("pipelines.title"))
-          .on_click(move || nav.go(Route::Project(id, ProjectPage::Pipelines))),
+        crate::ui::pressable::pressable(move || nav.go(Route::Project(id, ProjectPage::Pipelines)))
+          .id("pipeline-parent")
+          .child(Text::new(&ctx.t("pipelines.title")).variant(TypographyStyle::Button)),
       )
       .child(crate::ui::icon::icon(
         Icon::ChevronRight,
@@ -169,9 +171,16 @@ impl NewPipeline {
       ))
       .child(parts::caption(&ctx.t("pipelines.notCreated")))
       .child(Spacer::new().flex(1.0))
-      .with_children(self.name.get().trim().is_empty().then(|| {
-        crate::ui::unavailable::reason_line("pipeline-name-required", &ctx.t("pipelines.nameRequired"))
-          .width(Dimension::Px(141.0))
+      .with_children((self.name.get().trim().is_empty() || collision).then(|| {
+        crate::ui::unavailable::reason_line(
+          "pipeline-name-required",
+          &ctx.t(if collision {
+            "pipelines.freeSlugRequired"
+          } else {
+            "pipelines.nameRequired"
+          }),
+        )
+        .width(Dimension::Px(141.0))
       }))
       .child(
         ActionButton::new("pipeline-cancel", ButtonKind::Secondary, ctx.t("pipelines.cancel")).on_click({
@@ -210,36 +219,45 @@ impl NewPipeline {
       }
       if value == 1 {
         card = card.content(
-          SelectField::new(
-            "pipeline-copy",
-            ctx.t("pipelines.copy"),
-            self.copy.clone(),
-            copies
-              .iter()
-              .map(|p| {
-                SelectOption::new(p.id.to_string(), p.name.clone()).detail(match p.state {
-                  VersionState::Published(v) | VersionState::PublishedWithDraft(v) => {
-                    ctx.t_args("pipelines.version", [("version", v.get().to_string())])
-                  }
-                  VersionState::DraftOnly => ctx.t("pipelines.never"),
-                })
-              })
-              .collect(),
-          )
-          .placeholder(ctx.t("pipelines.choosePipeline"))
-          .width(Dimension::Px(180.0))
-          .leading(Icon::Workflow)
-          .render(ctx),
+          Row::new()
+            .spacing(SpacingSize::Sm)
+            .align_items(Alignment::Center)
+            .child(
+              SelectField::new(
+                "pipeline-copy",
+                ctx.t("pipelines.copy"),
+                self.copy.clone(),
+                copies
+                  .iter()
+                  .map(|p| {
+                    SelectOption::new(p.id.to_string(), p.name.clone()).detail(match p.state {
+                      VersionState::Published(v) | VersionState::PublishedWithDraft(v) => {
+                        ctx.t_args("pipelines.version", [("version", v.get().to_string())])
+                      }
+                      VersionState::DraftOnly => ctx.t("pipelines.never"),
+                    })
+                  })
+                  .collect(),
+              )
+              .placeholder(ctx.t("pipelines.choosePipeline"))
+              .width(Dimension::Px(180.0))
+              .leading(Icon::Workflow)
+              .render(ctx),
+            )
+            .child(parts::caption(&ctx.t("pipelines.copyVersionHint"))),
         );
       }
       choices = choices.child(card);
     }
-    choices.child(parts::note(&ctx.t("pipelines.presets")))
+    choices.child(crate::ui::unavailable::reason_line(
+      "pipeline-presets",
+      &ctx.t("pipelines.presets"),
+    ))
   }
   fn inspector(&self, ctx: &mut Ctx, collision: Option<&str>) -> Element {
     let slug = Slug::from_name(&self.name.get())
       .map(|s| s.as_str().to_owned())
-      .unwrap_or_default();
+      .unwrap_or_else(|| ctx.t("pipelines.unset").to_string());
     let description = FieldInput::new(
       "pipeline-description",
       ctx.t("pipelines.description"),
@@ -300,14 +318,11 @@ impl NewPipeline {
         &ctx.t("pipelines.notUsed"),
         PropertyValue::Muted,
       ))
-      .child(
-        crate::ui::notice::Notice::new(
-          "pipeline-nothing-saved",
-          crate::ui::notice::NoticeTone::Info,
-          ctx.t("pipelines.nothingSaved"),
-        )
-        .body(ctx.t("pipelines.createHint")),
-      );
+      .child(parts::text_notice(
+        "pipeline-nothing-saved",
+        &ctx.t("pipelines.nothingSaved"),
+        &ctx.t("pipelines.createHint"),
+      ));
     parts::panel(
       ctx,
       &ctx.t("pipelines.pipeline"),
@@ -378,7 +393,14 @@ fn collision_strip(
         crate::theme::IconSize::Sm,
         lurq::app::theme::PaletteColor::Danger,
       ))
-      .child(parts::note(&ctx.t_args("pipelines.slugCollision", [("slug", existing.slug.to_string())])).flex(1.0))
+      .child(
+        parts::note(&ctx.t_args(
+          "pipelines.slugCollision",
+          [("slug", existing.slug.to_string()), ("name", existing.name.to_string())],
+        ))
+        .color(lurq::app::theme::PaletteColor::TextPrimary)
+        .flex(1.0),
+      )
       .child(
         ActionButton::new(
           "pipeline-open-existing",

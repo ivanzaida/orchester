@@ -6,8 +6,9 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
-  components::{Column, Row, Stack},
+  components::{Column, Row, Stack, Svg},
   node::{HitTestBehavior, dimension::Dimension, padding::Padding},
+  svg::SvgData,
 };
 use orchester_core::resource::{PipelineEdit, StepKey};
 
@@ -49,18 +50,7 @@ pub fn routes(ctx: &Ctx, mut graph: Stack, shown: &PipelineEdit, positions: &Pos
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .hit_test(HitTestBehavior::None);
-    overlay = segment(ctx, overlay, from, (lane, from.1));
-    overlay = segment(ctx, overlay, (lane, from.1), (lane, to.1));
-    overlay = segment(ctx, overlay, (lane, to.1), to);
-    overlay = overlay.child(
-      Column::new()
-        .child(icon(
-          if left { Icon::ChevronRight } else { Icon::ChevronLeft },
-          IconSize::Xs,
-          PaletteColor::TextMuted,
-        ))
-        .absolute_position(to.0 - 5.0, to.1 - 5.0),
-    );
+    overlay = overlay.child(connector(ctx, from, to, lane));
     overlay = overlay.child(
       Column::new()
         .child(
@@ -81,16 +71,52 @@ pub fn routes(ctx: &Ctx, mut graph: Stack, shown: &PipelineEdit, positions: &Pos
   }
   graph
 }
-fn segment(ctx: &Ctx, graph: Stack, from: (f32, f32), to: (f32, f32)) -> Stack {
-  let stroke = ctx.theme().border_size_value(BorderSize::Sm);
-  graph.child(
-    Column::new()
-      .child(
-        Row::new()
-          .width(Dimension::Px((to.0 - from.0).abs().max(stroke)))
-          .height(Dimension::Px((to.1 - from.1).abs().max(stroke)))
-          .background(PaletteColor::TextMuted),
-      )
-      .absolute_position(from.0.min(to.0), from.1.min(to.1)),
-  )
+fn connector(ctx: &Ctx, from: (f32, f32), to: (f32, f32), lane: f32) -> Column {
+  let stroke = ctx.theme().border_size_value(crate::theme::pipelines::return_stroke());
+  let bend = ctx
+    .theme()
+    .radius_value(crate::theme::pipelines::return_radius())
+    .min((from.1 - to.1).abs() / 2.0);
+  let (dx, dy) = ((lane - from.0).signum(), (to.1 - from.1).signum());
+  let (left, top) = (from.0.min(to.0).min(lane) - stroke, from.1.min(to.1) - 5.0);
+  let (width, height) = (from.0.max(to.0).max(lane) - left + stroke, (to.1 - from.1).abs() + 10.0);
+  let path = format!(
+    "M{} {} H{} Q{} {} {} {} V{} Q{} {} {} {} H{}",
+    from.0,
+    from.1,
+    lane - dx * bend,
+    lane,
+    from.1,
+    lane,
+    from.1 + dy * bend,
+    to.1 - dy * bend,
+    lane,
+    to.1,
+    lane - dx * bend,
+    to.1,
+    to.0
+  );
+  let outline = format!(
+    r#"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="{left} {top} {width} {height}"><path d="{path}" fill="none" stroke="black" stroke-width="{stroke}"/></svg>"#
+  );
+  let arrow_x = to.0 + dx * 7.0;
+  let arrow = format!(
+    r#"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="{left} {top} {width} {height}"><path d="M{} {} L{arrow_x} {} L{arrow_x} {} Z"/></svg>"#,
+    to.0,
+    to.1,
+    to.1 - 4.0,
+    to.1 + 4.0
+  );
+  let color = ctx.theme().palette_color(PaletteColor::TextMuted);
+  Column::new()
+    .child(
+      Stack::new()
+        .width(Dimension::Px(width))
+        .height(Dimension::Px(height))
+        .child(
+          Svg::new(SvgData::from_str(&outline).with_stroke(color)).size(Dimension::Px(width), Dimension::Px(height)),
+        )
+        .child(Svg::new(SvgData::from_str(&arrow).with_fill(color)).size(Dimension::Px(width), Dimension::Px(height))),
+    )
+    .absolute_position(left, top)
 }

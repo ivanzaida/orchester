@@ -7,14 +7,17 @@ mod history;
 mod inspector;
 mod leaving;
 mod library;
+mod load_editor;
 mod new_pipeline;
 mod parts;
 mod publication;
+mod restore;
 mod settings;
 mod settings_nav;
 mod state;
 mod step_fields;
 mod step_permissions;
+mod summary;
 mod work;
 
 use lurq::{app::ctx::Ctx, node::Element};
@@ -33,9 +36,9 @@ pub fn new_pipeline(ctx: &mut Ctx, project: &ShownProject) -> Element {
   ctx.mount_keyed::<new_pipeline::NewPipeline>(&format!("pipeline-new-{}", project.open.project.id()), project.clone())
 }
 pub fn editor(ctx: &mut Ctx, project: &ShownProject, id: ResourceId) -> Element {
-  ctx.mount_keyed::<editor::LoadEditor>(
+  ctx.mount_keyed::<load_editor::LoadEditor>(
     &format!("pipeline-{id}"),
-    editor::LoadProps {
+    load_editor::LoadProps {
       project: project.clone(),
       id,
     },

@@ -151,3 +151,11 @@ pub fn pipeline_name_error(ctx: &Ctx, error: &orchester_workspace::messages::Mes
     crate::ui::message::message_text(ctx, error)
   }
 }
+/// Text-only inspector notice in lAQis and Z26ZFs.
+pub fn text_notice(id: &str, title: &str, detail: &str) -> Column {
+  crate::ui::card::card(id, crate::ui::card::CardSurface::Raised)
+    .padding(SpacingSize::Sm)
+    .spacing(SpacingSize::Xs)
+    .child(Text::new(title).variant(ExtraTypography::Strong.role()))
+    .child(note(detail))
+}

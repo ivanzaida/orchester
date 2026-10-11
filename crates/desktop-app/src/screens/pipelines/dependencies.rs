@@ -9,7 +9,6 @@ use lurq::{
 use super::step_fields::Props;
 use crate::ui::{
   button::{ActionButton, ButtonKind},
-  icon::Icon,
   popover::{PopoverSide, popover, popover_panel},
   toggle::{Toggle, ToggleKind},
 };
@@ -33,8 +32,9 @@ impl Component for Dependencies {
     let names: Vec<_> = shown
       .steps()
       .iter()
-      .filter(|s| props.step.depends_on.contains(&s.key))
-      .map(|s| s.name.as_str())
+      .enumerate()
+      .filter(|(_, s)| props.step.depends_on.contains(&s.key))
+      .map(|(index, s)| format!("{:02} {}", index + 1, s.name))
       .collect();
     let label = if names.is_empty() {
       ctx.t("pipelines.onStart").to_string()
@@ -42,20 +42,24 @@ impl Component for Dependencies {
       names.join(", ")
     };
     let open = self.open.clone();
-    let trigger = ActionButton::new("step-after-picker", ButtonKind::Secondary, label)
-      .icon(Icon::ChevronDown)
+    let trigger = ActionButton::new("step-after-picker", ButtonKind::Select, label)
       .fill_width()
       .element_ref(self.anchor.clone())
       .on_click(move || open.update(|v| *v = !*v));
     let mut menu = popover_panel("step-after-menu", 260.0);
-    for step in shown.steps().iter().filter(|s| s.key != props.step.key) {
+    for (index, step) in shown
+      .steps()
+      .iter()
+      .enumerate()
+      .filter(|(_, s)| s.key != props.step.key)
+    {
       let (state, key, dependency) = (props.state.clone(), props.step.key.clone(), step.key.clone());
       menu = menu.child(
         Toggle::new(
           format!("step-after-{}", step.key),
           ToggleKind::Checkbox,
           props.step.depends_on.contains(&step.key),
-          step.name.as_str(),
+          format!("{:02} {}", index + 1, step.name),
         )
         .on_change(move |on| {
           state.update(|s| {

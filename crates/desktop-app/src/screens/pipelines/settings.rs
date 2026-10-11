@@ -165,19 +165,14 @@ impl Component for General {
         .as_ref()
         .map(|v| v.body.description().to_owned())
         .unwrap_or_default();
-      control = control
-        .child(crate::ui::chip::TagChip::new(
-          "pipeline-description-changed",
-          ctx.t("pipelines.changed"),
-        ))
-        .child(
-          ActionButton::new(
-            "pipeline-description-undo",
-            ButtonKind::Ghost,
-            ctx.t("pipelines.undoChange"),
-          )
-          .on_click(move || undo.set(before.clone())),
-        );
+      control = control.child(changed_tag(ctx, &editing)).child(
+        ActionButton::new(
+          "pipeline-description-undo",
+          ButtonKind::Secondary,
+          ctx.t("pipelines.undoChange"),
+        )
+        .on_click(move || undo.set(before.clone())),
+      );
     }
     form_section::section(
       "pipeline-settings-general",
@@ -246,7 +241,7 @@ fn starts(ctx: &Ctx) -> Element {
     &ctx.t("pipelines.starts"),
     None,
     vec![form_section::side_row(
-      Label::new("pipeline-settings-trigger", ctx.t("pipelines.starts")).description(ctx.t("pipelines.startsHelp")),
+      Label::new("pipeline-settings-trigger", ctx.t("pipelines.startsRun")).description(ctx.t("pipelines.startsHelp")),
       choices,
       Place::Last,
       true,
@@ -275,7 +270,7 @@ impl General {
     });
   }
   fn identity(&self, ctx: &mut Ctx) -> (Element, Element) {
-    let props = ctx.props::<SummaryProps>();
+    let props = ctx.props::<SummaryProps>().clone();
     let mut name =
       FieldInput::new("pipeline-settings-name", ctx.t("pipelines.name"), self.name.clone()).width(Dimension::Px(300.0));
     if props.locked {
@@ -298,7 +293,11 @@ impl General {
       .child(slug)
       .child(crate::ui::unavailable::reason_line(
         "pipeline-slug-fixed",
-        &ctx.t("pipelines.slugFixed"),
+        &if props.state.get().opened.latest.is_some() {
+          ctx.t("pipelines.slugPublished")
+        } else {
+          ctx.t("pipelines.slugFixed")
+        },
       ))
       .into();
     (name, slug)
@@ -373,7 +372,7 @@ fn draft_strip(ctx: &Ctx, state: &State) -> Element {
     .child(
       ActionButton::new(
         "pipeline-settings-undo",
-        ButtonKind::Ghost,
+        ButtonKind::Secondary,
         ctx.t("pipelines.undoChange"),
       )
       .icon(Icon::Undo2)
@@ -416,4 +415,26 @@ fn proposals(ctx: &Ctx, sections: &super::settings_nav::Sections, mut form: Colu
     .ref_element(sections.target("pipelines.who")),
   );
   form
+}
+fn changed_tag(ctx: &Ctx, editing: &super::state::Editing) -> Row {
+  Row::new()
+    .padding(lurq::node::padding::Padding::symmetric(
+      SpacingSize::Sm,
+      ExtraSpacing::Tight.role(),
+    ))
+    .rounded(crate::theme::ExtraRadius::Full.role())
+    .background(lurq::app::theme::PaletteColor::InfoMuted)
+    .child(
+      parts::caption(
+        &ctx.t_args(
+          "pipelines.changedDraft",
+          [(
+            "version",
+            orchester_workspace::pipelines::write::next_version(&editing.opened)
+              .map_or_else(String::new, |v| v.get().to_string()),
+          )],
+        ),
+      )
+      .color(crate::theme::ExtraColor::Selection.role()),
+    )
 }

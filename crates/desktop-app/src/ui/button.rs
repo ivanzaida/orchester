@@ -35,6 +35,10 @@ pub enum ButtonKind {
   Ghost,
   /// `danger_muted`, its content `danger`.
   Danger,
+  /// A destructive text action without fill (SVBQi, Remove step).
+  DangerGhost,
+  /// A field-like menu trigger with a trailing chevron (LWah7, Runs after).
+  Select,
 }
 
 impl ButtonKind {
@@ -44,6 +48,8 @@ impl ButtonKind {
       Self::Secondary => "secondary",
       Self::Ghost => "ghost",
       Self::Danger => "danger",
+      Self::DangerGhost => "danger-ghost",
+      Self::Select => "select",
     }
   }
 
@@ -51,9 +57,9 @@ impl ButtonKind {
   fn content(self) -> PaletteColor {
     match self {
       Self::Primary => ExtraColor::OnAccent.role(),
-      Self::Secondary => PaletteColor::TextPrimary,
+      Self::Secondary | Self::Select => PaletteColor::TextPrimary,
       Self::Ghost => PaletteColor::TextSecondary,
-      Self::Danger => PaletteColor::Danger,
+      Self::Danger | Self::DangerGhost => PaletteColor::Danger,
     }
   }
 
@@ -63,7 +69,10 @@ impl ButtonKind {
       Self::Secondary => button
         .background(PaletteColor::SurfaceRaised)
         .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong)),
-      Self::Ghost => button,
+      Self::Ghost | Self::DangerGhost => button,
+      Self::Select => button
+        .background(PaletteColor::SurfaceInput)
+        .border(Border::inside(BorderSize::Sm, PaletteColor::Border)),
       Self::Danger => button.background(PaletteColor::DangerMuted),
     }
   }
@@ -76,10 +85,10 @@ impl ButtonKind {
       Self::Primary => button
         .hovered_style(fill(PaletteColor::AccentHover))
         .active_style(fill(PaletteColor::AccentHover)),
-      Self::Secondary => button
+      Self::Secondary | Self::Select => button
         .hovered_style(fill(PaletteColor::Border))
         .active_style(fill(PaletteColor::BorderStrong)),
-      Self::Ghost => button
+      Self::Ghost | Self::DangerGhost => button
         .hovered_style(fill(ExtraColor::Hover.role()))
         .active_style(fill(ExtraColor::Pressed.role())),
       Self::Danger => button
@@ -211,19 +220,25 @@ impl From<ActionButton> for Element {
       .describe("kind", button.kind.name())
       .describe("state", button.state())
       .describe("a11y_name", button.label.clone());
-    if button.fill {
+    if button.fill || button.kind == ButtonKind::Select {
       frame = frame.width(Dimension::Pct(100.0));
     }
     if let Some(lead) = button.lead() {
       frame = frame.child(icon(lead, IconSize::Md, color.clone()).id(format!("{}-icon", button.id)));
     }
-    frame = button.kind.dressed(frame).child(
-      Text::new(&button.label)
-        .id(format!("{}-label", button.id))
-        .variant(TypographyStyle::Button)
-        .color(color)
-        .nowrap(),
-    );
+    let label = Text::new(&button.label)
+      .id(format!("{}-label", button.id))
+      .variant(TypographyStyle::Button)
+      .color(color)
+      .nowrap();
+    frame = button.kind.dressed(frame).child(if button.kind == ButtonKind::Select {
+      label.flex(1.0).min_width(Dimension::Px(0.0))
+    } else {
+      label
+    });
+    if button.kind == ButtonKind::Select {
+      frame = frame.child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted));
+    }
     if let Some(element) = button.element {
       frame = frame.ref_element(element);
     }

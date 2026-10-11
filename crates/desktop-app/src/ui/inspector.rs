@@ -109,7 +109,7 @@ pub fn variable(id: &str, name: &str, value: &str, kind: PropertyValue) -> Row {
   let label = Text::new(name)
     .variant(ExtraTypography::MonoKey.role())
     .color(PaletteColor::TextSecondary);
-  framed(id, name, label, value_text(id, value, kind))
+  framed(id, name, label, value_text(id, value, kind)).padding(Padding::vertical(ExtraSpacing::Snug.role()))
 }
 
 /// A section's title with what it counts at its end, if anything.

@@ -6,7 +6,15 @@ pub fn page_inset() -> SpacingSize {
 pub fn parallel_radius() -> RadiusSize {
   RadiusSize::extra("pipeline_parallel")
 }
+pub fn return_radius() -> RadiusSize {
+  RadiusSize::extra("pipeline_return")
+}
+pub fn return_stroke() -> lurq::app::theme::BorderSize {
+  lurq::app::theme::BorderSize::extra("pipeline_return")
+}
 pub fn install(theme: &Theme) {
+  theme.set_radius_value(return_radius(), 8.0);
+  theme.set_border_size_value(return_stroke(), 1.5);
   theme.set_spacing_value(page_inset(), 40.0);
   theme.set_palette_color(canvas_color(), lurq::node::color::Color::from_hex("#0D0D0F"));
   theme.set_radius_value(parallel_radius(), 12.0);

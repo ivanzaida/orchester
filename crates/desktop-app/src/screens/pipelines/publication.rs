@@ -131,13 +131,19 @@ pub fn review(ctx: &Ctx, editing: &Editing) -> (Column, bool) {
     .unwrap_or_default();
   let mut body = parts::panel_body()
     .spacing(crate::theme::ExtraSpacing::Loose.role())
-    .child(parts::note(&ctx.t("pipelines.reviewHint")))
+    .child(parts::note(
+      &ctx.t_args("pipelines.reviewVersionHint", [("version", next.to_string())]),
+    ))
     .child(cards)
     .child(
       crate::ui::inspector::section_title(
         "pipeline-changes-title",
         &ctx.t_args(
-          "pipelines.changesSince",
+          if changes.len() == 1 {
+            "pipelines.changeSince"
+          } else {
+            "pipelines.changesSince"
+          },
           [("count", changes.len().to_string()), ("version", current.to_string())],
         ),
         Some(&ctx.t("pipelines.taggedOnCanvas")),
@@ -188,10 +194,21 @@ pub fn with_success(ctx: &mut Ctx, state: &State, content: Element) -> Element {
   .render(ctx);
   let notice = crate::ui::notice::Notice::new(
     "pipeline-publish-notice",
-    crate::ui::notice::NoticeTone::Success,
-    ctx.t_args("pipelines.publishedSuccess", [("version", version.get().to_string())]),
+    crate::ui::notice::NoticeTone::Info,
+    ctx.t_args(
+      "pipelines.publishedSuccess",
+      [
+        ("version", version.get().to_string()),
+        ("name", state.get().name.to_string()),
+      ],
+    ),
   )
-  .body(ctx.t("pipelines.pinnedHint"))
+  .icon(Icon::CircleCheck)
+  .mark(PaletteColor::Success)
+  .body(ctx.t_args(
+    "pipelines.publishedConsequence",
+    [("version", version.get().to_string())],
+  ))
   .action(close);
   lurq::components::Stack::new()
     .width(Dimension::Pct(100.0))

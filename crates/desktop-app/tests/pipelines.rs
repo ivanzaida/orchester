@@ -175,7 +175,7 @@ fn pipelines_agent_and_tool_steps_dependencies_retries_and_narrowing_are_saved()
   editor.click("pipeline-add-step");
   editor.set("step-name", "Verify");
   editor.choose("step-executor", "Checks");
-  editor.choose("step-failure", "Inspect");
+  editor.choose("step-failure", "01 Inspect");
   editor.set("step-retries", "3");
   editor.click("pipeline-step-step");
   editor.click("step-after-picker");
@@ -238,6 +238,10 @@ fn pipelines_valid_changes_autosave_and_published_history_is_read_only() {
   assert!(!editor.text("screen-pipelines").contains("Viewing v1"));
 }
 
+#[path = "pipelines/async_failures.rs"]
+mod async_failures;
+#[path = "pipelines/history_safety.rs"]
+mod history_safety;
 #[path = "pipelines/layout.rs"]
 mod layout;
 #[path = "pipelines/permissions.rs"]

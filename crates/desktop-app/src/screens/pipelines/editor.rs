@@ -10,15 +10,11 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::id::ResourceId;
-use orchester_workspace::{
-  background,
-  pipelines::{
-    data::OpenedPipeline,
-    problems::problem_view,
-    widening::{draft_reasons, publish_reasons},
-    write::{Allowed, next_version},
-  },
+use orchester_workspace::pipelines::{
+  data::OpenedPipeline,
+  problems::problem_view,
+  widening::{draft_reasons, publish_reasons},
+  write::{Allowed, next_version},
 };
 
 use super::{
@@ -35,75 +31,19 @@ use crate::{
     button::{ActionButton, ButtonKind},
     field::field_error,
     message::message_text,
-    state::{load_error, loading},
   },
 };
 
-#[derive(Clone, PartialEq)]
-pub struct LoadProps {
-  pub project: ShownProject,
-  pub id: ResourceId,
-}
-impl DevtoolsInspectable for LoadProps {}
-pub struct LoadEditor {
-  retry: Signal<u64>,
-}
-impl Component for LoadEditor {
-  type Props = LoadProps;
-  fn create(ctx: &mut Ctx) -> Self {
-    Self { retry: ctx.signal(0) }
-  }
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<LoadProps>().clone();
-    let revision = self.retry.get();
-    let loaded = ctx
-      .future(
-        (props.project.open.repo_root.clone(), props.id, revision),
-        |(root, id, _)| async move {
-          background::run(move || OpenedPipeline::load_in(&root, id).map_err(super::work_error)).await?
-        },
-      )
-      .state()
-      .get();
-    if loaded.is_pending() {
-      return parts::page()
-        .child(loading("pipeline-loading", &ctx.t("pipelines.reading")))
-        .into();
-    }
-    if let Some(opened) = loaded.data {
-      return ctx.mount_keyed::<Editor>(
-        &format!("pipeline-editor-{}", self.retry.get()),
-        EditorProps {
-          project: props.project,
-          opened,
-          reload: self.retry.clone(),
-        },
-      );
-    }
-    let content = match loaded.error {
-      Some(error) if !loaded.is_pending() => {
-        let retry = self.retry.clone();
-        load_error(
-          ctx,
-          "pipeline-load-error",
-          (&ctx.t("pipelines.loadFailed"), &message_text(ctx, &error)),
-          move || retry.update(|v| *v += 1),
-        )
-      }
-      _ => loading("pipeline-loading", &ctx.t("pipelines.reading")).into(),
-    };
-    parts::page().child(content).into()
-  }
-}
 #[derive(Clone)]
 pub struct EditorProps {
   pub project: ShownProject,
   pub opened: OpenedPipeline,
   pub reload: Signal<u64>,
+  pub loading: bool,
 }
 impl PartialEq for EditorProps {
   fn eq(&self, other: &Self) -> bool {
-    self.project == other.project && self.opened == other.opened
+    self.project == other.project && self.opened == other.opened && self.loading == other.loading
   }
 }
 impl DevtoolsInspectable for EditorProps {}
@@ -146,6 +86,7 @@ impl Component for Editor {
     let state = self.state.clone();
     ctx.watch(&action.state(), move |result| {
       if !result.is_pending()
+        && result.error.is_none()
         && let Some(opened) = &result.data
       {
         state.update(|state| {
@@ -157,7 +98,7 @@ impl Component for Editor {
       }
     });
     let editing = self.state.get();
-    let busy = action.state().get().is_pending() || self.confirm_save.get();
+    let busy = action.state().get().is_pending() || self.confirm_save.get() || props.loading;
     let head = self.header(ctx, &props, &action, busy);
     let content = if editing.panel == Panel::Settings {
       super::settings::page(ctx, &self.state, self.confirm_save.get())
@@ -170,6 +111,7 @@ impl Component for Editor {
           super::history::Props {
             project: props.project.clone(),
             state: self.state.clone(),
+            writing: busy,
           },
         ),
         _ => super::inspector::panel(ctx, &self.state, self.confirm_save.get()),
@@ -201,7 +143,16 @@ impl Component for Editor {
         );
       }
     }
+    let page = self.errors(ctx, &editing, page);
+    super::publication::with_success(ctx, &self.state, page.into())
+  }
+}
+impl Editor {
+  fn errors(&self, ctx: &Ctx, editing: &Editing, mut page: lurq::components::Column) -> lurq::components::Column {
     for (field, error) in &editing.errors {
+      if field == "pipeline-name" && editing.panel == Panel::Settings {
+        continue;
+      }
       let message = if field == "pipeline-name" {
         parts::pipeline_name_error(ctx, error)
       } else {
@@ -213,15 +164,18 @@ impl Component for Editor {
       let view = problem_view(&editing.edit, problem, &ctx.t("pipelines.then"));
       page = page.child(field_error("pipeline-rule-error", &message_text(ctx, &view.message)));
     }
-    super::publication::with_success(ctx, &self.state, page.into())
+    page
   }
-}
-impl Editor {
   fn autosave(&self, ctx: &mut Ctx, props: &EditorProps, action: &Action) {
     let editing = self.state.get();
-    let body = (editing.dirty() && editing.errors.is_empty() && editing.viewing.is_none() && !self.leave.requested())
-      .then(|| editing.edit.validate().ok().map(|body| (body, editing.name.clone())))
-      .flatten();
+    let body = (editing.dirty()
+      && editing.errors.is_empty()
+      && editing.viewing.is_none()
+      && !editing.restore_requested
+      && !props.loading
+      && !self.leave.requested())
+    .then(|| editing.edit.validate().ok().map(|body| (body, editing.name.clone())))
+    .flatten();
     let ready = ctx
       .future(body, |body| async move {
         tokio::time::sleep(std::time::Duration::from_millis(700)).await;
@@ -240,6 +194,8 @@ impl Editor {
         || leave.requested()
         || writing.is_pending()
         || writing.error.is_some()
+        || current.viewing.is_some()
+        || current.restore_requested
         || !current.dirty()
         || !current.errors.is_empty()
         || current.edit.validate().as_ref() != Ok(body)
@@ -285,7 +241,10 @@ impl Editor {
             crate::theme::IconSize::Sm,
             lurq::app::theme::PaletteColor::TextMuted,
           ))
-          .child(parts::caption(&ctx.t("pipelines.settings")))
+          .child(
+            lurq::components::Text::new(&ctx.t("pipelines.settings"))
+              .variant(crate::theme::ExtraTypography::Strong.role()),
+          )
       }))
       .child(crate::ui::icon::icon(
         crate::ui::icon::Icon::Check,
@@ -356,8 +315,10 @@ impl Editor {
       ButtonKind::Primary,
       ctx.t_args("pipelines.publish", [("version", next)]),
     )
+    .icon(crate::ui::icon::Icon::ArrowUp)
     .on_click(move || state.update(|s| s.panel = Panel::Publish));
     if busy
+      || editing.panel == Panel::Publish
       || editing.dirty()
       || !editing.errors.is_empty()
       || editing.opened.draft_saved_at.is_none()
@@ -435,6 +396,7 @@ impl Editor {
               )],
             ),
           )
+          .icon(crate::ui::icon::Icon::ArrowUp)
           .on_click(move || {
             action.run(Work::Publish {
               root: root.clone(),

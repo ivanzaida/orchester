@@ -14,10 +14,10 @@ use lurq::{
 
 use super::state::{Panel, State};
 use crate::{
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
-    icon::{Icon, icon},
+    icon::Icon,
     pressable::pressable,
   },
 };
@@ -90,9 +90,11 @@ impl Sections {
             .width(Dimension::Pct(100.0))
             .align_items(Alignment::Center)
             .child(Text::new(&ctx.t(key)).variant(TypographyStyle::Description).flex(1.0))
-            .with_children(
-              (changed && key == KEYS[0]).then(|| icon(Icon::CircleDot, IconSize::Xs, PaletteColor::Warning)),
-            ),
+            .with_children((changed && key == KEYS[0]).then(|| {
+              Text::new(&ctx.t("pipelines.oneChange"))
+                .variant(TypographyStyle::FieldLabel)
+                .color(ExtraColor::Selection.role())
+            })),
         );
         if self.active.get() == key {
           link.background(ExtraColor::Hover.role())

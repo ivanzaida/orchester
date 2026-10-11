@@ -43,7 +43,7 @@ pub fn action(ctx: &mut Ctx, project: orchester_core::id::ProjectId) -> Action {
             name,
             allowed,
           } => write::save_named_in(&root, &before, body, &name, &allowed),
-          Work::Publish { root, before, allowed } => write::publish_in(&root, before.id, &before.body, &allowed),
+          Work::Publish { root, before, allowed } => write::publish_in(&root, &before, &allowed),
         }
         .map_err(|error| error.message());
         if result.is_ok() {

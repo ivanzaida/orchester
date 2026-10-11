@@ -25,6 +25,7 @@ pub struct Editing {
   pub viewing_version: Option<orchester_core::resource::VersionNumber>,
   pub epoch: u64,
   pub comparing: bool,
+  pub restore_requested: bool,
   pub published_notice: Option<orchester_core::resource::VersionNumber>,
 }
 impl DevtoolsInspectable for Editing {}
@@ -41,6 +42,7 @@ impl Editing {
       viewing_version: None,
       epoch: 0,
       comparing: false,
+      restore_requested: false,
       published_notice: None,
     }
   }
@@ -66,6 +68,18 @@ impl Editing {
       Err(error) => {
         self.errors.insert(id.to_owned(), error);
       }
+    }
+  }
+  pub fn restore(&mut self) {
+    if let Some(body) = self.viewing.take() {
+      self.edit = PipelineEdit::new(body);
+      self.viewing_version = None;
+      self.comparing = false;
+      self.restore_requested = false;
+      self.panel = Panel::Pipeline;
+      self.epoch += 1;
+      self.errors.clear();
+      self.inputs.clear();
     }
   }
   pub fn saved(&mut self, opened: OpenedPipeline) {

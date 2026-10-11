@@ -6,6 +6,7 @@
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
 mod live;
+mod pipelines;
 mod refusals;
 
 use std::{
@@ -173,7 +174,9 @@ fn seed_names_every_scenario_once() {
       "tasks-unreadable",
       "live",
       "lifecycle",
-      "connections"
+      "connections",
+      "pipelines",
+      "pipelines-empty"
     ]
   );
   for name in names {

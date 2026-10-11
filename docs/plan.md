@@ -63,6 +63,8 @@ verification. Library, page-based creation, step/edge/failure/gate/narrowing edi
 protected publication and version history are built in `crates/desktop-app`; rules remain in workspace.
 Settings proposals identified by the design remain visibly unavailable. Commands, outcomes and the exact Pencil
 states for Verify are in [the implementation handoff](evidence/orc-3-pipelines-implementation.md).
+Review/Verify9 safety corrections, filtered checks and supported QA fixtures are recorded in
+[the correction handoff](evidence/orc-3-verify9-corrections-2026-10-11.md); fresh independent verdicts remain required.
 **Done when** the task's acceptance criteria and independent verification against Pipelines `i4jt6V` and
 Pipeline settings `vEDYY` pass. Move to Done after that verdict.
 

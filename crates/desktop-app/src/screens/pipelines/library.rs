@@ -59,7 +59,7 @@ impl Component for Library {
       .icon(Icon::Plus)
       .on_click(move || nav.go(Route::Project(id, ProjectPage::NewPipeline)));
     let header = Row::new()
-      .align_items(lurq::layout::Alignment::Center)
+      .align_items(lurq::layout::Alignment::Start)
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)
       .child(
@@ -83,6 +83,17 @@ impl Component for Library {
       )
       .spacing(SpacingSize::Lg)
       .child(header);
+    if !loaded.is_pending()
+      && let Some(error) = &loaded.error
+    {
+      let retry = self.retry.clone();
+      return page.child(load_error(
+        ctx,
+        "pipelines-error",
+        (&ctx.t("pipelines.loadFailed"), &message_text(ctx, error)),
+        move || retry.update(|v| *v += 1),
+      ));
+    }
     let Some(entries) = loaded.data else {
       let content = match loaded.error {
         Some(error) if !loaded.is_pending() => {
@@ -262,9 +273,9 @@ pub(super) fn age(ctx: &Ctx, at: orchester_core::time::Timestamp) -> std::sync::
 fn versions_help(ctx: &Ctx) -> Row {
   let mut stages = Row::new().flex(1.0).spacing(ExtraSpacing::Inset.role());
   for (index, (glyph, title, detail)) in [
-    (Icon::Pencil, "pipelines.draftStage", "pipelines.draftHint"),
-    (Icon::GitBranch, "pipelines.publishStage", "pipelines.publishHint"),
-    (Icon::History, "pipelines.pinnedStage", "pipelines.pinnedHint"),
+    (Icon::Save, "pipelines.draftStage", "pipelines.draftHint"),
+    (Icon::ArrowUp, "pipelines.publishStage", "pipelines.publishHint"),
+    (Icon::Lock, "pipelines.pinnedStage", "pipelines.pinnedHint"),
   ]
   .into_iter()
   .enumerate()

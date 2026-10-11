@@ -92,7 +92,7 @@ impl Component for Fields {
       );
       let options = locked_options(options, props.locked || self.executor.get() == Executor::Unset);
       let select = SelectField::new("step-model", ctx.t("pipelines.model"), self.model.clone(), options)
-        .leading(crate::ui::icon::Icon::Bot);
+        .leading(crate::ui::icon::Icon::Cpu);
       let select = if self.executor.get() == Executor::Unset {
         select.locked()
       } else {
@@ -145,7 +145,7 @@ impl Fields {
   }
   fn executor(&self, ctx: &Ctx, props: &Props) -> Element {
     let editing = props.state.get();
-    let mut options = vec![SelectOption::new(Executor::Unset, ctx.t("pipelines.unassigned"))];
+    let mut options = vec![SelectOption::new(Executor::Unset, ctx.t("pipelines.chooseProfile"))];
     options.extend(
       editing
         .opened
@@ -182,17 +182,20 @@ impl Fields {
     .render(ctx);
     let mut column = Column::new().width(Dimension::Pct(100.0)).child(input);
     if self.executor.get() == Executor::Unset {
-      column = column.child(crate::ui::field::field_error(
-        "step-profile-required",
-        &ctx.t("pipelines.missingProfile"),
-      ));
+      column = column.child(
+        parts::note(&ctx.t("pipelines.missingProfile"))
+          .id("step-profile-required")
+          .color(lurq::app::theme::PaletteColor::Danger),
+      );
     }
     let label = if matches!(props.step.kind, StepKind::Tool { .. }) {
       "pipelines.tool"
     } else {
       "pipelines.profile"
     };
-    property_of("step-executor-row", &ctx.t(label), column).into()
+    Column::new()
+      .child(property_of("step-executor-row", &ctx.t(label), column).align_items(lurq::layout::Alignment::Start))
+      .into()
   }
 
   fn flow(&self, ctx: &mut Ctx, props: &Props) -> Element {
@@ -210,8 +213,9 @@ impl Fields {
         .shown()
         .steps()
         .iter()
-        .filter(|s| s.key != props.step.key)
-        .map(|s| SelectOption::new(RouteChoice(Some(s.key.clone())), s.name.as_str().to_owned())),
+        .enumerate()
+        .filter(|(_, s)| s.key != props.step.key)
+        .map(|(index, s)| SelectOption::new(RouteChoice(Some(s.key.clone())), format!("{:02} {}", index + 1, s.name))),
     );
     let options = locked_options(options, props.locked);
     body = body.child(property_of(

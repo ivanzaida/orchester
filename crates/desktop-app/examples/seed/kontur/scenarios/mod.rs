@@ -9,6 +9,7 @@ mod empty;
 mod interrupted;
 mod lifecycle;
 mod live;
+mod pipelines;
 mod task_states;
 mod tasks;
 mod tasks_unreadable;
@@ -57,7 +58,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 13] = [
+pub const ALL: [Scenario; 15] = [
   Scenario::of("empty", empty::seed),
   Scenario::of("tasks", tasks::seed),
   Scenario::of("task-states", task_states::seed),
@@ -71,6 +72,8 @@ pub const ALL: [Scenario; 13] = [
   Scenario::with_fake_codex("live", live::seed),
   Scenario::with_fake_codex("lifecycle", lifecycle::seed),
   Scenario::of("connections", connections::seed),
+  Scenario::of("pipelines", pipelines::seed),
+  Scenario::of("pipelines-empty", pipelines::empty),
 ];
 
 /// The scenario called `name`.

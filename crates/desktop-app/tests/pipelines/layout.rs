@@ -102,9 +102,9 @@ fn pipelines_settings_undo_and_history_show_the_selected_version() {
   editor.until("version", |e| e.exists("pipeline-version-1"));
   editor.click("pipeline-version-1");
   editor.click("pipeline-compare");
-  assert!(editor.text("screen-pipelines").contains("Compared with draft"));
+  assert!(editor.text("screen-pipelines").contains("Compared with saved draft v2"));
   editor.click("pipeline-start");
-  assert_eq!(editor.value("pipeline-description"), "");
+  assert_eq!(editor.value("pipeline-description"), "What this pipeline is for");
 }
 
 #[test]
