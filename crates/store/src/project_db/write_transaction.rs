@@ -6,22 +6,22 @@ use crate::StoreError;
 impl ProjectDb {
   /// Runs `write` under an immediate transaction. The callback must not start nested transactions.
   /// Other handles and processes cannot commit bindings between its reads and external writes.
+  /// A commit failure is mapped with the callback's outcome, including any completed external writes.
   pub fn with_write_transaction<T, E>(
     &mut self,
     write: impl FnOnce(&mut Self) -> Result<T, E>,
-    database_error: impl Fn(StoreError) -> E,
+    begin_error: impl FnOnce(StoreError) -> E,
+    commit_error: impl FnOnce(T, StoreError) -> E,
   ) -> Result<T, E> {
     self
       .connection
       .execute_batch("BEGIN IMMEDIATE")
-      .map_err(|error| database_error(error.into()))?;
+      .map_err(|error| begin_error(error.into()))?;
     let transaction = WriteTransaction(self);
     let value = write(transaction.0)?;
-    transaction
-      .0
-      .connection
-      .execute_batch("COMMIT")
-      .map_err(|error| database_error(error.into()))?;
+    if let Err(error) = transaction.0.connection.execute_batch("COMMIT") {
+      return Err(commit_error(value, error.into()));
+    }
     Ok(value)
   }
 }

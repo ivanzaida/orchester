@@ -229,6 +229,10 @@ pub fn replace_allowed_in(
       Ok(ReplacementOutcome::Replaced)
     },
     SecretError::Store,
+    |outcome, source| match outcome {
+      ReplacementOutcome::Replaced => SecretError::RotationNotRecorded { secret: id, source },
+      ReplacementOutcome::NeedsPerson => SecretError::Store(source),
+    },
   )
 }
 

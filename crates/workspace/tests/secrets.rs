@@ -2,6 +2,8 @@
 
 #[path = "secrets/replacement.rs"]
 mod replacement;
+#[path = "secrets/transaction_failures.rs"]
+mod transaction_failures;
 
 use std::{collections::BTreeMap, fs};
 
