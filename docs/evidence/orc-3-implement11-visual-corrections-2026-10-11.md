@@ -1,8 +1,9 @@
 # ORC-3 Implement11: publication problems
 
-Candidate: the scoped implementation commit containing this report, based on
-8bb6ebfbe5b5c3b46be4c01693888e169691acda. This is implementation evidence, not an
-independent Review or native design-verification verdict. ORC-3 remains pending.
+Implementation candidate: 43e51b4cb26b5577660745c67a11243abd25ea4b, based on
+8bb6ebfbe5b5c3b46be4c01693888e169691acda. The saved follow-up changes this handoff
+only; implementation and test inputs are unchanged. This is implementation evidence,
+not an independent Review or native design-verification verdict. ORC-3 remains pending.
 
 ## Corrections
 
@@ -14,8 +15,10 @@ independent Review or native design-verification verdict. ORC-3 remains pending.
   publication notice, inherited draft model, and provenance. Publication validation
   still refuses the draft. **Open profile remains unavailable:** this candidate has
   no profile editor route and Agents is an unbuilt placeholder. The button exposes
-  that reason through a tooltip. A scope decision was requested: retain the unavailable
-  action or add a read-only draft profile page. This portion is not claimed complete.
+  that reason through a tooltip. The person authorized retaining this ORC-2 dependency
+  limitation and proceeding to Check/Review/Verify. Do not add a draft-profile page or
+  bypass ORC-2. This decision does not declare V10-M2 passed; independent review must
+  assess the exact candidate and retained limitation before merge.
 - V10-M3: unsupported tools show the unavailable executor notice, a locked graph
   badge and an unused model field. The explanation names database/HTTP/access-rule
   limitations as appropriate. Runnable command tools retain their normal presentation.
@@ -84,5 +87,12 @@ At Windows dark 1440×900, use the existing pipelines fixture:
 
 The supported unsupported database differs from the drawing's planned pull-request
 tool: compare unavailable structure while preserving the truthful database explanation.
-There is no frame for a new read-only profile page; do not invent one without resolving
-the scope decision.
+The scope decision is resolved: keep this task within Pipelines and retain the visibly
+unavailable Open profile action while ORC-2 is pending. No new profile page is authorized.
+
+On resumption after the person's decision, git confirmed the clean 43e51b4c candidate.
+Only this handoff changed. The listed filtered test passes are reused solely because
+implementation and test inputs are unchanged; no tests were rerun on resumption.
+A fresh `powershell -File tools/check.ps1` passed on the resumed candidate.
+The documentation commit was blocked by permission to create the worktree git index
+lock. This handoff remains saved, uncommitted; HEAD remains 43e51b4c.
