@@ -73,6 +73,7 @@ struct Save {
 type SaveAction = FutureAction<Save, Saved, Message>;
 
 pub struct McpEditor {
+  save: SaveAction,
   fields: Fields,
   /// A save was asked for: every field's error shows, also of fields left empty.
   tried: Signal<bool>,
@@ -86,11 +87,12 @@ impl Component for McpEditor {
   fn create(ctx: &mut Ctx) -> Self {
     let text = ctx.props::<EditorProps>().text.clone();
     let editor = Self {
+      save: save_action(ctx),
       fields: Fields::new(ctx, &text),
       tried: ctx.signal(false),
       confirming: ctx.signal(false),
     };
-    let save = save_action(ctx);
+    let save = editor.save.clone();
     let project = ctx.props::<EditorProps>().project.open.project.id();
     let navigation = Navigation::of(ctx);
     ctx.watch(&save.state(), move |state| {
@@ -104,7 +106,7 @@ impl Component for McpEditor {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<EditorProps>().clone();
-    let save = save_action(ctx);
+    let save = self.save.clone();
     let screen = if props.stored.is_some() {
       Screen::EditConnection
     } else {
@@ -191,6 +193,7 @@ impl McpEditor {
     let (listed, stored) = (props.listed.clone(), props.stored.clone());
     let question = WidenProps {
       card: false,
+      automation: crate::mcp::input_gate::Guarded::PermissionWidening,
       id: "connection-confirm-save",
       title: ctx.t("connections.mcp.dialog.widenTitle"),
       reasons,

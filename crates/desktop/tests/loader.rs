@@ -2,6 +2,8 @@
 //! of running work (`clVjO`) hold real loaders; the dialog is mounted on stage and offstage the way
 //! a window tab's content is. The fixtures are test data only.
 
+extern crate lurq_legacy as lurq;
+
 use std::{f32::consts::TAU, sync::Arc, thread, time::Duration};
 
 use lurq::{

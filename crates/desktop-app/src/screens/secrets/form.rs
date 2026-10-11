@@ -45,6 +45,7 @@ impl PartialEq for Props {
 }
 impl DevtoolsInspectable for Props {}
 pub(super) struct SecretForm {
+  action: work::Action,
   name: Signal<String>,
   kind: Signal<KindChoice>,
   environment: Signal<EnvironmentChoice>,
@@ -57,6 +58,7 @@ impl Component for SecretForm {
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<Props>().clone();
     let form = Self {
+      action: work::action(ctx),
       name: ctx.signal(String::new()),
       kind: ctx.signal(KindChoice(
         props.secret.as_ref().map_or(SecretKind::ApiKey, Secret::kind),
@@ -68,7 +70,7 @@ impl Component for SecretForm {
       value: Signal::new(String::new()),
       asking: ctx.signal(false),
     };
-    let action = work::action(ctx);
+    let action = form.action.clone();
     let value = form.value.clone();
     let environment = form.environment.clone();
     let asking = form.asking.clone();
@@ -92,7 +94,7 @@ impl Component for SecretForm {
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    let action = work::action(ctx);
+    let action = self.action.clone();
     let state = action.state().get();
     let check = check_name(
       &props.listed.secrets,
@@ -183,6 +185,7 @@ impl SecretForm {
       WidenProps {
         id: "secret-confirm-replacement",
         card: false,
+        automation: crate::mcp::input_gate::Guarded::WideningQuestion,
         title: ctx.t("secrets.rotation.question"),
         reasons: Arc::from([ctx.t("secrets.rotation.reason")]),
         confirm: ctx.t("secrets.replace"),

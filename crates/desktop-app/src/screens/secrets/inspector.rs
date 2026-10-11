@@ -59,7 +59,9 @@ impl PartialEq for Props {
   }
 }
 impl DevtoolsInspectable for Props {}
-pub(super) struct Inspector;
+pub(super) struct Inspector {
+  action: work::Action,
+}
 impl Component for Inspector {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
@@ -71,11 +73,11 @@ impl Component for Inspector {
         view.revision.update(|revision| *revision += 1);
       }
     });
-    Self
+    Self { action }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    let action = work::action(ctx);
+    let action = self.action.clone();
     let body = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(SpacingSize::Lg, SecretsSpacing::Body.role()))

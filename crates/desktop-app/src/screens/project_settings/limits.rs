@@ -30,6 +30,7 @@ use crate::ui::{
 
 #[derive(Clone)]
 pub(super) struct Limits {
+  save: Save,
   default: Signal<String>,
   daily: Signal<String>,
   minutes: Signal<String>,
@@ -88,6 +89,7 @@ impl Component for Limits {
   type Props = TabProps;
   fn create(ctx: &mut Ctx) -> Self {
     let tab = Self {
+      save: work::action(ctx),
       default: ctx.signal(String::new()),
       daily: ctx.signal(String::new()),
       minutes: ctx.signal(String::new()),
@@ -98,7 +100,7 @@ impl Component for Limits {
       submitted: ctx.signal(Submitted(None)),
       queued: ctx.signal(false),
     };
-    let save = work::action(ctx);
+    let save = tab.save.clone();
     work::follow(
       ctx,
       &save,
@@ -126,7 +128,7 @@ impl Component for Limits {
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
-    let save = work::action(ctx);
+    let save = self.save.clone();
     let revision = self.revision.get() + props.project.feed.outside.get().of(Outside::Limits);
     let state = work::load(ctx, props.project.open.repo_root.clone(), revision);
     let Some(data) = state.data.clone().or_else(|| self.stored.get()) else {

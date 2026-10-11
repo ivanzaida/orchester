@@ -27,6 +27,7 @@ use crate::{
 };
 #[derive(Clone)]
 pub(super) struct General {
+  save: work::Save,
   stored: Signal<Option<Read>>,
   revision: Signal<u64>,
 }
@@ -34,10 +35,11 @@ impl Component for General {
   type Props = TabProps;
   fn create(ctx: &mut Ctx) -> Self {
     let tab = Self {
+      save: work::action(ctx),
       stored: ctx.signal(None),
       revision: ctx.signal(0),
     };
-    let save = work::action(ctx);
+    let save = tab.save.clone();
     work::follow(
       ctx,
       &save,
@@ -49,7 +51,7 @@ impl Component for General {
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
-    let save = work::action(ctx);
+    let save = self.save.clone();
     let outside = props.project.feed.outside.get();
     let revision = self.revision.get()
       + outside.of(Outside::AutoMode)

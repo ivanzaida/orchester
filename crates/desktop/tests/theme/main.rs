@@ -1,3 +1,5 @@
+extern crate lurq_legacy as lurq;
+
 use lurq::{
   app::{
     App,

@@ -2,6 +2,8 @@
 //! what becomes active, the last tab leaving a fresh All projects tab, reordering, what is saved
 //! and restored, the strip's widths and overflow, and the shortcuts.
 
+extern crate lurq_legacy as lurq;
+
 use lurq::{app::events::KeyboardEvent, core::NodeId};
 use orchester_desktop::tabs::{
   input::{Shortcut, shortcut},

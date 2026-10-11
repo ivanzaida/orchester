@@ -1,3 +1,5 @@
+extern crate lurq_legacy as lurq;
+
 use std::{collections::BTreeMap, fs, path::Path};
 
 use lurq::app::App;

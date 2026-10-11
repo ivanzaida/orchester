@@ -17,8 +17,8 @@ workspace = true
 [features]
 default = []
 # In-app DevTools, opened as a secondary window at startup.
-devtools = ["lurq/devtools"]
-perf_profile = ["lurq/perf_profile"]
+devtools = ["lurq_legacy/devtools"]
+perf_profile = ["lurq_legacy/perf_profile"]
 
 [dependencies]
 # The HTTP routing and bearer check of Orchester's own MCP server (`app_mcp`), on loopback.
@@ -32,7 +32,7 @@ image.workspace = true
 orchester-core.workspace = true
 # Shared servers: the HTTP client of the server's API (`sharing`).
 orchester-api = { workspace = true, features = ["client"] }
-lurq = { workspace = true, features = [
+lurq_legacy = { workspace = true, features = [
   "winit",
   "wgpu",
   "router",
@@ -57,8 +57,8 @@ orchester-index.workspace = true
 orchester-ipc.workspace = true
 orchester-store.workspace = true
 # The application layer under the screens; the markers lurq needs of its types come with
-# `devtools-inspect`.
-orchester-workspace = { workspace = true, features = ["devtools-inspect"] }
+# `devtools-inspect-legacy`.
+orchester-workspace = { workspace = true, features = ["devtools-inspect-legacy"] }
 parking_lot.workspace = true
 rfd.workspace = true
 # Orchester's own MCP server (`app_mcp`): automation controls tasks, runs and approvals through it,

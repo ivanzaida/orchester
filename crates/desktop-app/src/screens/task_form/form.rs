@@ -61,6 +61,8 @@ pub struct KeptAt(pub Timestamp);
 impl DevtoolsInspectable for KeptAt {}
 
 pub struct TaskForm {
+  save: SaveAction,
+  run: RunAction,
   pub(super) fields: Fields,
   /// The version the edits are made on; `None` until the fields are filled.
   pub(super) base: Signal<Option<Base>>,
@@ -100,7 +102,20 @@ impl Component for TaskForm {
     let project = props.project.open.project.id();
     let task = props.subject.task().map(|task| task.id());
     let batch = IdempotencyKey::generate();
+    let queued = ctx.signal(None);
+    let save = save_action(ctx, services.servers.clone());
+    let run = run_action(
+      ctx,
+      RunServices {
+        runners: services.runners.clone(),
+        servers: services.servers.clone(),
+        repo_root: props.project.open.repo_root.clone(),
+        queued: queued.clone(),
+      },
+    );
     let form = Self {
+      save: save.clone(),
+      run: run.clone(),
       fields: Fields::new(ctx),
       base: ctx.signal(None),
       newer: ctx.signal(None),
@@ -111,7 +126,7 @@ impl Component for TaskForm {
       seeded: ctx.signal(false),
       confirming_discard: ctx.signal(false),
       retrying: ctx.signal(false),
-      queued: ctx.signal(None),
+      queued,
       batch,
       nav: Nav::new(ctx, project),
       kept: KeptEdits::new(
@@ -122,7 +137,6 @@ impl Component for TaskForm {
       ),
       written: Arc::default(),
     };
-    let (save, run) = form.actions(ctx, &props);
     form.follow_save(ctx, &save, &props);
     form.follow_run(ctx, &run, &props);
     form
@@ -130,7 +144,7 @@ impl Component for TaskForm {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<FormProps>().clone();
-    let (save, run) = self.actions(ctx, &props);
+    let (save, run) = (self.save.clone(), self.run.clone());
     let separator = props.separator.clone();
     let screen = if props.subject.is_new() {
       Screen::NewTask
@@ -178,22 +192,6 @@ const fn phase_name(phase: &Phase) -> &'static str {
 }
 
 impl TaskForm {
-  /// The save and run actions, in the same order every time: they are the component's first futures.
-  fn actions(&self, ctx: &mut Ctx, props: &FormProps) -> (SaveAction, RunAction) {
-    let services = Services::of(ctx);
-    let save = save_action(ctx, services.servers.clone());
-    let run = run_action(
-      ctx,
-      RunServices {
-        runners: services.runners,
-        servers: services.servers,
-        repo_root: props.project.open.repo_root.clone(),
-        queued: self.queued.clone(),
-      },
-    );
-    (save, run)
-  }
-
   /// The page's sections, in the design's order, or the fields to choose between while a newer version
   /// conflicts with the edits.
   fn form(&self, ctx: &mut Ctx, props: &FormProps, view: &View, separator: &str) -> Column {

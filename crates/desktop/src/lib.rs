@@ -2,6 +2,8 @@
 //! it can be tested from `tests/`. The application layer under the screens is
 //! `orchester-workspace`, re-exported here under its old module names.
 
+extern crate lurq_legacy as lurq;
+
 pub mod activity;
 pub mod agents;
 pub mod app_icon;

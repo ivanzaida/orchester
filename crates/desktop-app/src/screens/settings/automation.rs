@@ -1,14 +1,15 @@
 //! *What automation may do* with its one built row, *Let automation change agent permissions* (`Form row`
 //! `XaNIz` with a switch, under `Form section title` `De1nE`): an application setting that is off until a
 //! person turns it on here. While it is off, the MCP server's setup tools refuse whatever would widen what
-//! agents may do (`person_only`). It is read and saved off the UI thread; while either runs, the switch
-//! cannot be flipped. While the row is mounted, the app's MCP server refuses window input
+//! agents may do (`person_only`), including matching window confirmations. It is read and saved off the UI thread;
+//! while either runs, the switch cannot be flipped. While the row is mounted, the app's MCP server refuses window input
 //! (`mcp::input_gate`), so only a person flips it.
 
 use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction, FutureState},
+    events::{InputSource, input_source},
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Row, Text},
@@ -48,7 +49,6 @@ pub struct ChangePermissions {
   saved: Signal<Option<bool>>,
   /// A change the row did not take because an MCP client's input brought it.
   blocked: Signal<bool>,
-  gate: InputGate,
   /// While the row is mounted, the MCP server refuses window input.
   _protected: Protected,
 }
@@ -64,7 +64,6 @@ impl Component for ChangePermissions {
       saved: ctx.signal(None),
       blocked: ctx.signal(false),
       _protected: gate.protect(Guarded::PermissionsSetting),
-      gate,
     }
   }
 
@@ -93,7 +92,7 @@ impl Component for ChangePermissions {
     let switch = Toggle::new(SWITCH_ID, ToggleKind::Switch, shown.unwrap_or(false), title.clone()).hide_label();
     // Until the stored value is known, and while it is read or saved, the switch stays as it is.
     let switch = if shown.is_some() && !fixed && armed {
-      self.listen(switch, save)
+      self.listen(switch, save, workspace.clone())
     } else {
       switch
     };
@@ -134,17 +133,20 @@ impl Component for ChangePermissions {
 }
 
 impl ChangePermissions {
-  /// `switch`, saving what a person chooses. Turning it on while an MCP client's input is applied is not
-  /// taken, and the row says so; turning it off narrows what automation may do and is always taken.
-  fn listen(&self, switch: Toggle, save: SaveAction) -> Toggle {
-    let (saved, blocked, gate) = (self.saved.clone(), self.blocked.clone(), self.gate.clone());
+  /// `switch`, saving what a person chooses. Synthetic input never changes this human-only control; its source remains
+  /// known even after the caller stops waiting.
+  fn listen(&self, switch: Toggle, save: SaveAction, workspace: Workspace) -> Toggle {
+    let (saved, blocked) = (self.saved.clone(), self.blocked.clone());
     switch.on_change(move |chosen| {
-      if chosen && gate.input_in_flight() {
-        tracing::warn!("an MCP client's window input reached Let automation change agent permissions; not taken");
+      if input_source() == InputSource::Synthetic {
+        tracing::warn!("synthetic input reached Let automation change agent permissions; not taken");
         blocked.set(true);
         return;
       }
       blocked.set(false);
+      if !chosen {
+        workspace.revoke_automation_permission_consent();
+      }
       saved.set(Some(chosen));
       save.run(chosen);
     })

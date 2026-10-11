@@ -257,8 +257,12 @@ before it is read. Only the project's active secrets can be named (`NAME@environ
 values of an endpoint's query, where a person may have pasted a token. Dropping a server's bearer secret or exempt
 tools, turning it off and removing it (`remove_mcp_server`; refused as `in_use` while a profile's draft or latest
 published version chooses it, checked and removed in one transaction) are narrowing. In the window, a save or Turn
-on that widens asks a person in place, and window input is refused while that question shows, as for the switch
-below. Narrowing is always taken. The setting is off by
+on that widens asks in place. With the permission opt-in on, authenticated clients with independently granted
+window control may answer the matching permission confirmations; otherwise their window input is refused.
+Automatic approvals require the separate approvals opt-in too. Secret replacement and publishing a stale agent
+draft remain person-only, irrespective of the permission opt-in. Consent is re-read before forwarded input and
+checked again when a confirmation runs; unknown, pending, revoked or failed consent cannot authorize it.
+Narrowing is always taken. The setting is off by
 default and only a person changes it, in the window, in Settings › What automation may do. No domain tool
 changes it, and window input cannot either: while its row is on screen, lurq denies its input tools when a
 call runs (also one queued earlier, or one whose answer timed out), the server refuses every window-input

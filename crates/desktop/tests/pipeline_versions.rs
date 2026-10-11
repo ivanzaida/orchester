@@ -3,6 +3,8 @@
 //! restored version stored as a draft on top of the latest version, or no draft at all when it
 //! repeats the latest.
 
+extern crate lurq_legacy as lurq;
+
 // The project fixture of the workspace's tests.
 #[path = "../../workspace/tests/support/mod.rs"]
 mod support;
