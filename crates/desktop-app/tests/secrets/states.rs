@@ -124,6 +124,31 @@ fn secrets_wide_layout_uses_the_list_and_inline_editor_dimensions_and_close_clea
 }
 
 #[test]
+fn secrets_five_rows_fit_before_the_handling_notice() {
+  let mut s = Secrets::new();
+  let entries: Vec<_> = (0..5)
+    .map(|index| s.seed(&format!("TOKEN_{index}"), Environment::Development))
+    .collect();
+  s.list();
+  let bounds = |s: &mut Secrets, id: &str| {
+    s.window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  let table = bounds(&mut s, "secrets-list");
+  assert_eq!(table.height, 272.0, "32px header and five 48px rows");
+  for secret in entries {
+    let row = bounds(&mut s, &format!("secret-row-{}", secret.id()));
+    assert_eq!(row.height, 48.0);
+    assert!(row.y + row.height <= table.y + table.height, "every row fits");
+  }
+  let notice = bounds(&mut s, "secrets-handling");
+  assert_eq!(notice.y - table.y - table.height, 14.0);
+}
+
+#[test]
 fn secrets_external_connection_edits_refresh_used_by_in_place() {
   let mut s = Secrets::new();
   let secret = s.seed("DOCS_TOKEN", Environment::Development);

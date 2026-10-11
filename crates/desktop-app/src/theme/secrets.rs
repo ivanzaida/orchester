@@ -7,6 +7,8 @@ use lurq::{
 };
 
 use super::typography::{mono, style};
+/// Pending field groups and primary actions, ZO3gD and fEyY0.
+pub const SECRETS_PENDING_OPACITY: f32 = 0.6;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SecretsText {

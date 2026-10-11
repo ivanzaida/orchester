@@ -18,7 +18,7 @@ use crate::{
     state::{EnvironmentChoice, KindChoice},
     words, work,
   },
-  theme::{ControlHeight, ExtraSpacing, ExtraTypography, SecretsSpacing, SecretsText},
+  theme::{ControlHeight, ExtraSpacing, ExtraTypography, SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
   ui::{
     avatar::{credential_avatar, credential_project_avatar},
     button::{ActionButton, ButtonKind},
@@ -135,20 +135,25 @@ impl SecretForm {
       "secrets.form.valueHint"
     });
     body = body.child(
-      field("secret-value-field", Some(&label), value.render(ctx), None).child(
-        Text::new(&hint)
-          .id("secret-value-field-hint")
-          .variant(SecretsText::ValueHint.role()),
-      ),
+      field("secret-value-field", Some(&label), value.render(ctx), None)
+        .opacity(if pending { SECRETS_PENDING_OPACITY } else { 1.0 })
+        .child(
+          Text::new(&hint)
+            .id("secret-value-field-hint")
+            .variant(SecretsText::ValueHint.role()),
+        ),
     );
     if !replacing {
       body = body
-        .child(field(
-          "secret-project-field",
-          Some(&ctx.t("secrets.project")),
-          project_row(ctx, props),
-          None,
-        ))
+        .child(
+          field(
+            "secret-project-field",
+            Some(&ctx.t("secrets.project")),
+            project_row(ctx, props),
+            None,
+          )
+          .opacity(if pending { SECRETS_PENDING_OPACITY } else { 1.0 }),
+        )
         .child(self.environment_field(ctx, pending));
     }
     body = body.child(self.notice(ctx, props, check));
@@ -188,6 +193,7 @@ impl SecretForm {
       input.render(ctx),
       None,
     )
+    .opacity(if pending { SECRETS_PENDING_OPACITY } else { 1.0 })
     .with_children(hint.map(|hint| {
       Text::new(&hint)
         .id("secret-name-field-hint")
@@ -214,7 +220,9 @@ impl SecretForm {
     } else {
       SelectField::new("secret-kind", label.clone(), self.kind.clone(), options).render(ctx)
     };
-    field("secret-kind-field", Some(&label), control, None).into()
+    field("secret-kind-field", Some(&label), control, None)
+      .opacity(if pending { SECRETS_PENDING_OPACITY } else { 1.0 })
+      .into()
   }
 
   fn environment_field(&self, ctx: &mut Ctx, pending: bool) -> Element {
@@ -251,7 +259,9 @@ impl SecretForm {
       )
       .render(ctx)
     };
-    field("secret-form-environment-field", Some(&label), control, None).into()
+    field("secret-form-environment-field", Some(&label), control, None)
+      .opacity(if pending { SECRETS_PENDING_OPACITY } else { 1.0 })
+      .into()
   }
 
   fn notice(&self, ctx: &Ctx, props: &Props, check: &NameCheck) -> Element {
@@ -335,7 +345,11 @@ impl SecretForm {
         .spacing(SpacingSize::Sm)
         .child(Spacer::new().flex(1.0))
         .child(if pending { cancel.disabled() } else { cancel })
-        .child(save),
+        .child(
+          Row::new()
+            .opacity(if pending { SECRETS_PENDING_OPACITY } else { 1.0 })
+            .child(save),
+        ),
     );
     if submit.is_none() && !pending {
       footer = footer.child(
