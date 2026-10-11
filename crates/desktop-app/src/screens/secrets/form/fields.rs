@@ -95,19 +95,23 @@ impl SecretForm {
       .padding(Padding::symmetric(SpacingSize::Lg, SecretsSpacing::Body.role()))
       .spacing(SecretsSpacing::Body.role());
     if let Some(secret) = &props.secret {
-      body = body
-        .child(Text::new(&ctx.t("secrets.rotation.title")).variant(SecretsText::InspectorTitle.role()))
-        .child(
-          Text::new(&ctx.t_args(
-            "secrets.rotation.subtitle",
-            [
-              ("name", secret.name().as_str()),
-              ("project", props.project.open.project.name().as_str()),
-              ("environment", &ctx.t(words::environment_key(secret.environment()))),
-            ],
-          ))
-          .variant(ExtraTypography::Note.role()),
-        );
+      body = body.child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .spacing(SpacingSize::Xs)
+          .child(Text::new(&ctx.t("secrets.rotation.title")).variant(ExtraTypography::Strong.role()))
+          .child(
+            Text::new(&ctx.t_args(
+              "secrets.rotation.subtitle",
+              [
+                ("name", secret.name().as_str()),
+                ("project", props.project.open.project.name().as_str()),
+                ("environment", &ctx.t(words::environment_key(secret.environment()))),
+              ],
+            ))
+            .variant(ExtraTypography::Prose.role()),
+          ),
+      );
     } else {
       body = body
         .child(self.name_field(ctx, props, check, pending))
@@ -125,15 +129,18 @@ impl SecretForm {
     });
     let hint = ctx.t(if replacing {
       "secrets.rotation.hint"
+    } else if matches!(check, NameCheck::Taken(_)) {
+      "secrets.form.takenValueHint"
     } else {
       "secrets.form.valueHint"
     });
-    body = body.child(field(
-      "secret-value-field",
-      Some(&label),
-      value.render(ctx),
-      Some(&hint),
-    ));
+    body = body.child(
+      field("secret-value-field", Some(&label), value.render(ctx), None).child(
+        Text::new(&hint)
+          .id("secret-value-field-hint")
+          .variant(SecretsText::ValueHint.role()),
+      ),
+    );
     if !replacing {
       body = body
         .child(field(
@@ -166,7 +173,9 @@ impl SecretForm {
       )),
       _ => None,
     };
-    let mut input = FieldInput::new("secret-name", ctx.t("secrets.form.name"), self.name.clone()).mono();
+    let mut input = FieldInput::new("secret-name", ctx.t("secrets.form.name"), self.name.clone())
+      .mono()
+      .placeholder(ctx.t("secrets.form.namePlaceholder"));
     if pending {
       input = input.locked();
     }
@@ -329,7 +338,12 @@ impl SecretForm {
         .child(save),
     );
     if submit.is_none() && !pending {
-      footer = footer.child(reason_line("secret-save-reason", &self.reason(ctx, check, replacing)));
+      footer = footer.child(
+        Row::new()
+          .width(Dimension::Pct(100.0))
+          .child(Spacer::new().flex(1.0))
+          .child(reason_line("secret-save-reason", &self.reason(ctx, check, replacing)).width(Dimension::Auto)),
+      );
     }
     footer.into()
   }

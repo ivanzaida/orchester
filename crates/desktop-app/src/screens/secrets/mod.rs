@@ -13,7 +13,7 @@ use lurq::{
     ctx::Ctx,
     theme::SpacingSize,
   },
-  components::Row,
+  components::{Column, Row},
   node::{Element, dimension::Dimension},
 };
 use orchester_workspace::{
@@ -79,10 +79,11 @@ impl Component for SecretsScreen {
       .state()
       .get();
     let page = page::frame().child(page::header(ctx, &project, &self.view));
-    let count = loaded
-      .data
-      .as_ref()
-      .map_or(0, |listed| listed.in_environment(None).count());
+    let count = if loaded.error.is_some() && !loaded.is_pending() {
+      None
+    } else {
+      loaded.data.as_ref().map(|listed| listed.in_environment(None).count())
+    };
     let page = page.child(page::tabs(ctx, &self.view, count));
     if self.view.panel.get() == Panel::Usage {
       return page.child(page::usage(ctx));
@@ -105,12 +106,20 @@ impl Component for SecretsScreen {
 impl SecretsScreen {
   fn failed(&self, ctx: &Ctx, error: &Message) -> Element {
     let revision = self.view.revision.clone();
-    load_error(
-      ctx,
-      "secrets-load-error",
-      (&ctx.t("secrets.loadFailed"), &message_text(ctx, error)),
-      move || revision.update(|revision| *revision += 1),
-    )
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(crate::theme::SecretsSpacing::Body.role())
+      .child(list::filters(ctx, &self.view, None))
+      .child(load_error(
+        ctx,
+        "secrets-load-error",
+        (
+          &ctx.t("secrets.loadFailed"),
+          &ctx.t_args("secrets.loadFailureDetail", [("reason", message_text(ctx, error))]),
+        ),
+        move || revision.update(|revision| *revision += 1),
+      ))
+      .into()
   }
 
   fn body(&self, ctx: &mut Ctx, project: &ShownProject, listed: &ProjectSecrets) -> Element {

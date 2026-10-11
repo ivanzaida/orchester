@@ -2,6 +2,7 @@
 mod actions;
 mod harness;
 mod privacy;
+mod qa;
 mod states;
 #[path = "../support/mod.rs"]
 mod support;

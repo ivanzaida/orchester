@@ -54,7 +54,7 @@ fn secrets_theme_roles_resolve_the_wide_dark_frames() {
     ),
     (
       SecretsText::ConfirmTitle,
-      12.5,
+      13.0,
       1.4,
       FontWeight::Medium,
       "Geist",

@@ -34,6 +34,7 @@ use crate::{
     icon::{Icon, icon},
     inspector,
     message::message_text,
+    notice::handling_notice,
     tooltip::Truncated,
   },
 };
@@ -79,7 +80,7 @@ impl Component for Inspector {
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(SpacingSize::Lg, SecretsSpacing::Body.role()))
       .spacing(SecretsSpacing::Body.role())
-      .child(metadata(ctx, &props.project, &props.secret))
+      .child(metadata(ctx, &props.project, &props.secret, !props.archive))
       .child(uses(ctx, &props.project, &props.listed, &props.secret))
       .with_children((!props.archive).then(|| {
         inspector::section("secret-recent", ExtraSpacing::Snug.role())
@@ -126,12 +127,22 @@ impl Inspector {
         [("project", props.project.open.project.name().as_str())],
       );
       footer = footer
-        .child(Text::new(&title).variant(SecretsText::ConfirmTitle.role()))
-        .child(Text::new(&explanation).variant(ExtraTypography::Note.role()))
+        .background(PaletteColor::SurfaceRaised)
+        .padding(Padding::symmetric(SpacingSize::Lg, SecretsSpacing::Body.role()))
+        .spacing(ExtraSpacing::Loose.role())
         .child(
-          Text::new(&words::archive_impact(ctx, props.listed.use_counts(props.secret.id())))
-            .variant(ExtraTypography::Note.role()),
-        );
+          Row::new()
+            .spacing(SpacingSize::Sm)
+            .align_items(Alignment::Center)
+            .child(icon(Icon::Archive, IconSize::Md, PaletteColor::Danger))
+            .child(Text::new(&title).variant(SecretsText::ConfirmTitle.role())),
+        )
+        .child(Text::new(&explanation).variant(ExtraTypography::Prose.role()))
+        .child(handling_notice(
+          "secret-archive-impact",
+          Icon::Unlink,
+          &words::archive_impact(ctx, props.listed.use_counts(props.secret.id())),
+        ));
     }
     if let Some(error) = &state.error {
       footer = footer.child(field_error("secret-archive-error", &message_text(ctx, error)));
@@ -252,7 +263,7 @@ pub(super) fn header(ctx: &mut Ctx, secret: &Secret) -> Element {
     )
     .into()
 }
-fn metadata(ctx: &Ctx, project: &ShownProject, secret: &Secret) -> Element {
+fn metadata(ctx: &Ctx, project: &ShownProject, secret: &Secret, show_hint: bool) -> Element {
   let date = match secret.rotated_at() {
     Some(at) => words::date(ctx, at),
     None => ctx.t_args(
@@ -280,14 +291,14 @@ fn metadata(ctx: &Ctx, project: &ShownProject, secret: &Secret) -> Element {
     .spacing(ExtraSpacing::Snug.role())
     .child(Text::new(&ctx.t("secrets.value")).variant(TypographyStyle::FieldLabel))
     .with_children((!secret.is_archived()).then_some(value))
-    .child(
+    .with_children(show_hint.then(|| {
       Text::new(&ctx.t(if secret.is_archived() {
         "secrets.archivedHint"
       } else {
         "secrets.valueHint"
       }))
-      .variant(TypographyStyle::Caption),
-    );
+      .variant(SecretsText::ValueHint.role())
+    }));
   let properties = Column::new()
     .width(Dimension::Pct(100.0))
     .child(inspector::property(
@@ -342,7 +353,7 @@ pub(super) fn uses(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectSecret
       ),
     };
     let (navigation, project_id) = (navigation.clone(), project.open.project.id());
-    section = section.child(inspector::link(
+    section = section.child(inspector::used_by_link(
       &format!("secret-use-{:?}", used.kind),
       glyph,
       &label,

@@ -1,6 +1,9 @@
-//! The Secrets page's header, tabs and undrawn access log.
+//! The Secrets page's header, tabs and unrecorded access log.
 use lurq::{
-  app::{ctx::Ctx, theme::SpacingSize},
+  app::{
+    ctx::Ctx,
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
+  },
   components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
@@ -9,10 +12,11 @@ use lurq::{
 use super::state::{Panel, View};
 use crate::{
   project::ShownProject,
-  theme::{ExtraSpacing, ExtraTypography, SecretsSpacing, SecretsText},
+  theme::{ExtraSpacing, ExtraTypography, IconSize, SecretsSpacing, SecretsText},
   ui::{
     button::{ActionButton, ButtonKind},
-    icon::Icon,
+    icon::{Icon, icon},
+    inspector,
     state::EmptyState,
     tabs::{PageTab, counted, page_tabs},
   },
@@ -65,7 +69,7 @@ pub(super) fn header(ctx: &Ctx, project: &ShownProject, view: &View) -> Row {
         ),
     )
 }
-pub(super) fn tabs(ctx: &mut Ctx, view: &View, count: usize) -> Element {
+pub(super) fn tabs(ctx: &mut Ctx, view: &View, count: Option<usize>) -> Element {
   let usage = view.panel.get() == Panel::Usage;
   let (list, log) = (view.panel.clone(), view.panel.clone());
   page_tabs(
@@ -74,7 +78,11 @@ pub(super) fn tabs(ctx: &mut Ctx, view: &View, count: usize) -> Element {
     [
       PageTab::new(
         "secrets-tab-list",
-        counted(ctx, &ctx.t("secrets.list"), count),
+        match count {
+          None => ctx.t("secrets.listUnknown"),
+          Some(0) => ctx.t("secrets.list"),
+          Some(count) => counted(ctx, &ctx.t("secrets.list"), count),
+        },
         !usage,
         move || list.set(Panel::Inspect),
       ),
@@ -86,18 +94,29 @@ pub(super) fn tabs(ctx: &mut Ctx, view: &View, count: usize) -> Element {
   .into()
 }
 pub(super) fn usage(ctx: &Ctx) -> Element {
-  let more = Column::new()
-    .spacing(SpacingSize::Sm)
-    .child(Text::new(&ctx.t("secrets.usageHeading")).variant(ExtraTypography::Strong.role()))
-    .child(Text::new(&ctx.t("secrets.usageWho")).variant(ExtraTypography::Note.role()))
-    .child(Text::new(&ctx.t("secrets.usageOutcome")).variant(ExtraTypography::Note.role()))
-    .child(Text::new(&ctx.t("secrets.usageNever")).variant(ExtraTypography::Note.role()));
+  let mut more = inspector::section("secrets-usage-details", ExtraSpacing::Snug.role())
+    .child(Text::new(&ctx.t("secrets.usageHeading")).variant(SecretsText::UsageHeading.role()));
+  for (id, glyph, key) in [
+    ("secrets-usage-who", Icon::Bot, "secrets.usageWho"),
+    ("secrets-usage-outcome", Icon::CircleCheck, "secrets.usageOutcome"),
+    ("secrets-usage-never", Icon::LockKeyhole, "secrets.usageNever"),
+  ] {
+    more = more.child(
+      Row::new()
+        .id(id)
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+        .child(Text::new(&ctx.t(key)).variant(TypographyStyle::Description)),
+    );
+  }
   EmptyState::new(
     "secrets-usage",
-    Icon::History,
+    Icon::ScrollText,
     ctx.t("secrets.usageTitle"),
     ctx.t("secrets.usageDetail"),
   )
+  .secrets()
   .child(more)
   .into()
 }

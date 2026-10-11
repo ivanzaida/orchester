@@ -23,6 +23,8 @@ use crate::theme::{ControlHeight, ExtraSpacing, ExtraTypography, IconSize};
 
 /// The column of what a property is (`Label` `X7na6R`).
 const LABEL_WIDTH: f32 = 120.0;
+/// Used-by link Q91kML.
+const USED_BY_HEIGHT: f32 = 36.0;
 
 /// How a property's value reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -145,17 +147,42 @@ pub fn note(id: &str, glyph: Icon, text: &str) -> Row {
 
 /// A link to what uses the inspected item, which `open` opens; without one it only names it.
 pub fn link(id: &str, glyph: Icon, label: &str, open: Option<Arc<dyn Fn() + Send + Sync>>) -> Element {
+  link_frame(id, glyph, label, open, false)
+}
+
+/// Secrets Used-by link (Q91kML), 36 high on the raised surface.
+pub fn used_by_link(id: &str, glyph: Icon, label: &str, open: Option<Arc<dyn Fn() + Send + Sync>>) -> Element {
+  link_frame(id, glyph, label, open, true)
+}
+
+fn link_frame(id: &str, glyph: Icon, label: &str, open: Option<Arc<dyn Fn() + Send + Sync>>, used_by: bool) -> Element {
   let content = |row: Row| {
     row
       .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(ControlHeight::Md.value()))
+      .height(Dimension::Px(if used_by {
+        USED_BY_HEIGHT
+      } else {
+        ControlHeight::Md.value()
+      }))
       .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .background(PaletteColor::SurfaceInput)
+      .background(if used_by {
+        PaletteColor::SurfaceRaised
+      } else {
+        PaletteColor::SurfaceInput
+      })
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Md)
-      .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(
+        glyph,
+        if used_by { IconSize::Md } else { IconSize::Base },
+        if used_by {
+          PaletteColor::TextSecondary
+        } else {
+          PaletteColor::TextMuted
+        },
+      ))
       .child(
         Text::new(label)
           .variant(ExtraTypography::Property.role())

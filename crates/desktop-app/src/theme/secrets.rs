@@ -19,10 +19,13 @@ pub enum SecretsText {
   InspectorTitle,
   ColumnHeading,
   ConfirmTitle,
+  ValueHint,
+  UsageHeading,
+  EnvironmentEmpty,
 }
 
 impl SecretsText {
-  pub const ALL: [Self; 9] = [
+  pub const ALL: [Self; 12] = [
     Self::Lead,
     Self::Name,
     Self::InspectorName,
@@ -32,6 +35,9 @@ impl SecretsText {
     Self::InspectorTitle,
     Self::ColumnHeading,
     Self::ConfirmTitle,
+    Self::ValueHint,
+    Self::UsageHeading,
+    Self::EnvironmentEmpty,
   ];
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -47,6 +53,9 @@ impl SecretsText {
       Self::InspectorTitle => "secrets_inspector_title",
       Self::ColumnHeading => "secrets_column_heading",
       Self::ConfirmTitle => "secrets_confirm_title",
+      Self::ValueHint => "secrets_value_hint",
+      Self::UsageHeading => "secrets_usage_heading",
+      Self::EnvironmentEmpty => "secrets_environment_empty",
     }
   }
   fn style(self, palette: &ThemePalette) -> TextStyle {
@@ -59,7 +68,10 @@ impl SecretsText {
       Self::Mask => mono(style(14.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
       Self::InspectorTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::ColumnHeading => style(11.0, FontWeight::Medium, 1.3, 0.4, palette.text_muted),
-      Self::ConfirmTitle => style(12.5, FontWeight::Medium, 1.4, 0.0, palette.text_primary),
+      Self::ConfirmTitle => style(13.0, FontWeight::Medium, 1.4, 0.0, palette.text_primary),
+      Self::ValueHint => style(11.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
+      Self::UsageHeading => style(11.0, FontWeight::Medium, 1.3, 0.0, palette.text_muted),
+      Self::EnvironmentEmpty => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
     }
   }
 }

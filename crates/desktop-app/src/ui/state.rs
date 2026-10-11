@@ -28,6 +28,8 @@ use crate::theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
 /// An empty state's glyph tile (`q4tTW`) and the widest its explanation runs (`bKD3G`).
 const GLYPH_TILE: f32 = 36.0;
 const EXPLANATION_WIDTH: f32 = 620.0;
+/// Explanation of GE9ao/ImhCU in Secrets.
+const SECRETS_EXPLANATION_WIDTH: f32 = 640.0;
 
 pub struct EmptyState {
   id: Arc<str>,
@@ -36,6 +38,7 @@ pub struct EmptyState {
   explanation: Arc<str>,
   actions: Vec<Element>,
   more: Vec<Element>,
+  secrets: bool,
 }
 
 impl EmptyState {
@@ -52,7 +55,14 @@ impl EmptyState {
       explanation: explanation.into(),
       actions: Vec::new(),
       more: Vec::new(),
+      secrets: false,
     }
+  }
+
+  /// The Secrets empty panels (GE9ao/ImhCU) use a wider explanation and six-pixel text gap.
+  pub fn secrets(mut self) -> Self {
+    self.secrets = true;
+    self
   }
 
   /// An action in the row under the explanation.
@@ -81,7 +91,11 @@ impl From<EmptyState> for Element {
       .child(icon(empty.glyph, IconSize::Xl, PaletteColor::TextSecondary))
       .id(format!("{}-glyph", empty.id));
     let text = Column::new()
-      .spacing(SpacingSize::Xs)
+      .spacing(if empty.secrets {
+        ExtraSpacing::Snug.role()
+      } else {
+        SpacingSize::Xs
+      })
       .child(
         Text::new(&empty.title)
           .id(format!("{}-title", empty.id))
@@ -90,7 +104,11 @@ impl From<EmptyState> for Element {
       .child(
         Text::new(&empty.explanation)
           .variant(ExtraTypography::Lead.role())
-          .max_width(Dimension::Px(EXPLANATION_WIDTH)),
+          .max_width(Dimension::Px(if empty.secrets {
+            SECRETS_EXPLANATION_WIDTH
+          } else {
+            EXPLANATION_WIDTH
+          })),
       );
     let actions = (!empty.actions.is_empty()).then(|| {
       Row::new()

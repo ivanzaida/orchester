@@ -29,7 +29,9 @@ fn secrets_list_filters_environments_and_shows_metadata_and_mcp_environment_uses
   s.choose("secrets-environment", "Production");
   assert!(s.text("secrets-empty").contains("No secrets in Production."));
   assert!(!s.exists("secret-inspector"));
-  s.click("secrets-empty-add");
+  assert!(s.text("secrets-list").contains("NAME"));
+  assert!(!s.exists("secrets-empty-add"));
+  s.click("secrets-add");
   assert!(
     s.text("secret-form-environment").contains("Production"),
     "add inherits the filter"
@@ -41,6 +43,9 @@ fn secrets_empty_project_and_usage_log_explain_what_is_available() {
   let mut s = Secrets::new();
   s.list();
   assert!(s.text("secrets-empty").contains("No secrets yet"));
+  assert!(!s.exists("secrets-filter"));
+  assert!(s.exists("secrets-empty-import"));
+  assert_eq!(s.text("secrets-tab-list"), "Secrets");
   s.click("secrets-tab-usage");
   assert!(s.text("secrets-usage").contains("No access recorded yet"));
   assert!(s.text("secrets-usage").contains("Never the value"));

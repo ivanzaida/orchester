@@ -42,6 +42,8 @@ const USED: ColumnWidth = ColumnWidth::Fixed(120.0);
 const ROW_HEIGHT: f32 = 48.0;
 const HEADER_HEIGHT: f32 = 32.0;
 const FILTER_WIDTH: f32 = 180.0;
+/// Compact environment-empty row RlvMO in Ds3OR.
+const EMPTY_ROW_HEIGHT: f32 = 76.0;
 
 pub(super) fn column(ctx: &mut Ctx, listed: &ProjectSecrets, view: &View, selected: Option<SecretId>) -> Column {
   let entries: Vec<Secret> = listed.in_environment(view.environment.get().0).cloned().collect();
@@ -50,28 +52,15 @@ pub(super) fn column(ctx: &mut Ctx, listed: &ProjectSecrets, view: &View, select
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .height(Dimension::Pct(100.0))
-    .spacing(SecretsSpacing::Body.role())
-    .child(filters(ctx, view, count));
-  if count == 0 {
-    let panel = view.panel.clone();
-    let (title, detail) = match view.environment.get().0 {
-      Some(environment) => (
-        ctx.t_args(
-          "secrets.environmentEmpty",
-          [("environment", ctx.t(words::environment_key(environment)))],
-        ),
-        ctx.t("secrets.environmentEmptyDetail"),
-      ),
-      None => (ctx.t("secrets.emptyTitle"), ctx.t("secrets.emptyDetail")),
-    };
-    column = column.child(
-      EmptyState::new("secrets-empty", Icon::KeyRound, title, detail).action(
-        ActionButton::new("secrets-empty-add", ButtonKind::Primary, ctx.t("secrets.add"))
-          .icon(Icon::Plus)
-          .on_click(move || panel.set(Panel::Add)),
-      ),
-    );
+    .spacing(SecretsSpacing::Body.role());
+  if listed.in_environment(None).next().is_none() {
+    column = column.child(project_empty(ctx, view));
+  } else if count == 0 {
+    column = column
+      .child(filters(ctx, view, Some(count)))
+      .child(environment_empty(ctx, view));
   } else {
+    column = column.child(filters(ctx, view, Some(count)));
     let rows: Arc<Vec<RowProps>> = Arc::new(
       entries
         .into_iter()
@@ -112,7 +101,68 @@ pub(super) fn column(ctx: &mut Ctx, listed: &ProjectSecrets, view: &View, select
     .child(Spacer::new().flex(1.0))
 }
 
-fn filters(ctx: &Ctx, view: &View, count: usize) -> Row {
+fn project_empty(ctx: &Ctx, view: &View) -> Element {
+  let panel = view.panel.clone();
+  EmptyState::new(
+    "secrets-empty",
+    Icon::KeyRound,
+    ctx.t("secrets.emptyTitle"),
+    ctx.t("secrets.emptyDetail"),
+  )
+  .secrets()
+  .action(
+    ActionButton::new("secrets-empty-add", ButtonKind::Primary, ctx.t("secrets.add"))
+      .icon(Icon::Plus)
+      .on_click(move || panel.set(Panel::Add)),
+  )
+  .action(
+    ActionButton::new("secrets-empty-import", ButtonKind::Secondary, ctx.t("secrets.import"))
+      .icon(Icon::Download)
+      .unavailable(ctx.t("secrets.importUnavailable")),
+  )
+  .into()
+}
+
+fn environment_empty(ctx: &Ctx, view: &View) -> Element {
+  let environment = view
+    .environment
+    .get()
+    .0
+    .expect("a nonempty project has no rows only under an environment filter");
+  Column::new()
+    .id("secrets-list")
+    .width(Dimension::Pct(100.0))
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Lg)
+    .clip()
+    .child(header(ctx))
+    .child(
+      Column::new()
+        .id("secrets-empty")
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Px(EMPTY_ROW_HEIGHT))
+        .padding(Padding::symmetric(
+          SecretsSpacing::Cell.role(),
+          ExtraSpacing::Tabs.role(),
+        ))
+        .spacing(SpacingSize::Xs)
+        .child(
+          Text::new(&ctx.t_args(
+            "secrets.environmentEmpty",
+            [("environment", ctx.t(words::environment_key(environment)))],
+          ))
+          .variant(SecretsText::EnvironmentEmpty.role()),
+        )
+        .child(
+          Text::new(&ctx.t("secrets.environmentEmptyDetail"))
+            .variant(TypographyStyle::Description)
+            .color(PaletteColor::TextMuted),
+        ),
+    )
+    .into()
+}
+
+pub(super) fn filters(ctx: &Ctx, view: &View, count: Option<usize>) -> Row {
   let mut options = vec![SelectOption::new(
     EnvironmentChoice(None),
     ctx.t("secrets.allEnvironments"),
@@ -139,11 +189,18 @@ fn filters(ctx: &Ctx, view: &View, count: usize) -> Row {
       .render(ctx),
     )
     .child(Spacer::new().flex(1.0))
-    .child(
-      Text::new(&ctx.t_args("secrets.count", [("count", count.to_string())]))
-        .id("secrets-count")
-        .variant(TypographyStyle::Caption),
-    )
+    .with_children(count.map(|count| {
+      Text::new(&ctx.t_args(
+        if count == 1 {
+          "secrets.countOne"
+        } else {
+          "secrets.count"
+        },
+        [("count", count.to_string())],
+      ))
+      .id("secrets-count")
+      .variant(TypographyStyle::Caption)
+    }))
 }
 
 fn header(ctx: &Ctx) -> Row {
