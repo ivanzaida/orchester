@@ -78,7 +78,15 @@ impl From<MenuButton> for Element {
           .background(on_accent.clone())
           .opacity(MENU_SPLIT_OPACITY),
       )
-      .child(icon(Icon::ChevronDown, IconSize::Md, on_accent))
+      .child(icon(
+        if state == "open" {
+          Icon::ChevronUp
+        } else {
+          Icon::ChevronDown
+        },
+        IconSize::Md,
+        on_accent,
+      ))
       .into()
   }
 }

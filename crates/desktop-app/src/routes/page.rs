@@ -1,8 +1,11 @@
-use orchester_core::{id::ConnectionId, project::TaskKey};
+use orchester_core::{
+  id::{ConnectionId, ResourceId},
+  project::TaskKey,
+};
 
 use super::{
   CONNECTIONS, ConnectionsView, EDIT, NEW, NewConnection, OverviewTab, RouteError, Screen, TAB, TASKS, TaskList,
-  TaskView, project_screen_path,
+  TaskView, ToolTab, project_screen_path,
   query::{Params, with_query},
 };
 
@@ -21,6 +24,8 @@ pub enum ProjectPage {
   Instructions,
   Skills,
   Tools,
+  NewTool,
+  Tool(ResourceId, ToolTab),
   Secrets,
   Connections(ConnectionsView),
   NewConnection(NewConnection),
@@ -67,7 +72,7 @@ impl ProjectPage {
       Self::Agents => Screen::Agents,
       Self::Instructions => Screen::Instructions,
       Self::Skills => Screen::Skills,
-      Self::Tools => Screen::Tools,
+      Self::Tools | Self::NewTool | Self::Tool(..) => Screen::Tools,
       Self::Secrets => Screen::Secrets,
       Self::Connections(_) => Screen::Connections,
       Self::NewConnection(_) => Screen::NewConnection,
@@ -88,6 +93,11 @@ impl ProjectPage {
       Self::NewTask => format!("{tasks}/{NEW}"),
       Self::EditTask(key) => format!("{tasks}/{key}/{EDIT}"),
       Self::Task(key, view) => view.path(&format!("{tasks}/{key}")),
+      Self::NewTool => with_query(format!("{project_root}/tools"), &[("tool", Some("new"))]),
+      Self::Tool(id, tab) => with_query(
+        format!("{project_root}/tools"),
+        &[("tool", Some(&id.to_string())), (TAB, Some(tab.name()))],
+      ),
       Self::Connections(view) => view.path(connections),
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
@@ -108,6 +118,15 @@ impl ProjectPage {
           rest => TaskView::parse(rest, params).map(|view| Self::Task(key, view)),
         }
       }
+      ["tools"] => match params.take("tool")?.as_deref() {
+        None => Ok(Self::Tools),
+        Some("new") => Ok(Self::NewTool),
+        Some(id) => {
+          let id = id.parse().map_err(|_| RouteError::NoScreen)?;
+          let tab = params.take_or_default(TAB, ToolTab::from_name)?;
+          Ok(Self::Tool(id, tab))
+        }
+      },
       [CONNECTIONS] => ConnectionsView::take(params).map(Self::Connections),
       [CONNECTIONS, NEW] => NewConnection::take(params).map(Self::NewConnection),
       [CONNECTIONS, id, EDIT] => id.parse().map(Self::EditConnection).map_err(|_| RouteError::NoScreen),

@@ -56,6 +56,7 @@ const BUILT: &[Screen] = &[
   Screen::NewConnection,
   Screen::NewTask,
   Screen::Tasks,
+  Screen::Tools,
 ];
 
 /// Where the test root leaves its router, and the services it provides.

@@ -18,6 +18,7 @@ mod live;
 mod mcp_servers;
 mod merge;
 mod tools;
+mod tools_window;
 mod window;
 
 use std::{

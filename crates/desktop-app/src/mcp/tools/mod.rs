@@ -78,6 +78,11 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
     }
     ProjectPage::NewConnection(kind) => insert("kind", kind.name()),
     ProjectPage::EditConnection(connection) => insert("connection", &connection.to_string()),
+    ProjectPage::NewTool => insert("tool", "new"),
+    ProjectPage::Tool(tool, tab) => {
+      insert("tool", &tool.to_string());
+      insert("tab", tab.name());
+    }
     ProjectPage::Task(key, view) => {
       insert("key", &key.to_string());
       insert("tab", view.tab().name());

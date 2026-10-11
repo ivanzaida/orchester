@@ -398,6 +398,7 @@ fn turn_on(ctx: &mut Ctx, server: &McpServer, actions: &Actions) -> Element {
     server.id(),
   );
   let props = WidenProps {
+    card: false,
     id: "connection-confirm-turn-on",
     title: ctx.t_args("connections.mcp.confirmOn.title", [("name", server.name().as_str())]),
     reasons,

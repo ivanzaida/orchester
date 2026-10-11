@@ -20,7 +20,8 @@ zstd.workspace = true
 
 [features]
 # `ProjectDb::create_at_version` and `AppDb::create_at_version` for the store's own migration tests,
-# which enable it below: a database at an older schema version, for a test to fill with the rows that
+# which enable it below; also a fixture busy handler that observes write-lock contention.
+# A database at an older schema version, for a test to fill with the rows that
 # version wrote.
 test-support = []
 

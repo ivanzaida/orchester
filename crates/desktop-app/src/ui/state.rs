@@ -36,6 +36,8 @@ pub struct EmptyState {
   explanation: Arc<str>,
   actions: Vec<Element>,
   more: Vec<Element>,
+  wide: bool,
+  compact: bool,
 }
 
 impl EmptyState {
@@ -52,7 +54,21 @@ impl EmptyState {
       explanation: explanation.into(),
       actions: Vec::new(),
       more: Vec::new(),
+      wide: false,
+      compact: false,
     }
+  }
+
+  /// Full-width explanation, as the Tools state panel (`yUrNX`) uses.
+  pub fn wide(mut self) -> Self {
+    self.wide = true;
+    self
+  }
+
+  /// Compact Tools access rules variant (`b8yzr`): 20 inside, 12 apart, 13/12 text.
+  pub fn compact(mut self) -> Self {
+    self.compact = true;
+    self
   }
 
   /// An action in the row under the explanation.
@@ -81,16 +97,38 @@ impl From<EmptyState> for Element {
       .child(icon(empty.glyph, IconSize::Xl, PaletteColor::TextSecondary))
       .id(format!("{}-glyph", empty.id));
     let text = Column::new()
+      .width(if empty.wide {
+        Dimension::Pct(100.0)
+      } else {
+        Dimension::Auto
+      })
       .spacing(SpacingSize::Xs)
       .child(
         Text::new(&empty.title)
           .id(format!("{}-title", empty.id))
-          .variant(TypographyStyle::Title),
+          .variant(if empty.compact {
+            ExtraTypography::Strong.role()
+          } else {
+            TypographyStyle::Title
+          }),
       )
       .child(
         Text::new(&empty.explanation)
-          .variant(ExtraTypography::Lead.role())
-          .max_width(Dimension::Px(EXPLANATION_WIDTH)),
+          .width(if empty.wide {
+            Dimension::Pct(100.0)
+          } else {
+            Dimension::Auto
+          })
+          .variant(if empty.compact {
+            TypographyStyle::Description
+          } else {
+            ExtraTypography::Lead.role()
+          })
+          .max_width(if empty.wide {
+            Dimension::Auto
+          } else {
+            Dimension::Px(EXPLANATION_WIDTH)
+          }),
       );
     let actions = (!empty.actions.is_empty()).then(|| {
       Row::new()
@@ -101,8 +139,16 @@ impl From<EmptyState> for Element {
     Column::new()
       .id(empty.id.clone())
       .width(Dimension::Pct(100.0))
-      .padding(ExtraSpacing::Roomy.role())
-      .spacing(ExtraSpacing::Inset.role())
+      .padding(if empty.compact {
+        ExtraSpacing::Tabs.role()
+      } else {
+        ExtraSpacing::Roomy.role()
+      })
+      .spacing(if empty.compact {
+        SpacingSize::Md
+      } else {
+        ExtraSpacing::Inset.role()
+      })
       .background(PaletteColor::SurfacePanel)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Lg)

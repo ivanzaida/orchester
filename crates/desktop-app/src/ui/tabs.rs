@@ -49,6 +49,7 @@ pub struct PageTab {
   label: Arc<str>,
   current: bool,
   state: TabState,
+  explanation: Option<Arc<str>>,
 }
 
 impl PageTab {
@@ -64,6 +65,7 @@ impl PageTab {
       label: label.into(),
       current,
       state: TabState::Open(Arc::new(on_open)),
+      explanation: None,
     }
   }
 
@@ -75,7 +77,14 @@ impl PageTab {
       label: label.into(),
       current: false,
       state: TabState::Unavailable(reason.into()),
+      explanation: None,
     }
+  }
+
+  /// Opens an explanation panel for an unavailable feature, with the design's lock glyph.
+  pub fn explanation(mut self, reason: impl Into<Arc<str>>) -> Self {
+    self.explanation = Some(reason.into());
+    self
   }
 
   fn render(self, ctx: &mut Ctx) -> Element {
@@ -111,6 +120,8 @@ impl PageTab {
       .id(self.id.clone())
       .height(Dimension::Px(TAB_HEIGHT))
       .padding(Padding::horizontal(ExtraSpacing::Tight.role()))
+      .spacing(ExtraSpacing::Pair.role())
+      .align_items(Alignment::Center)
       .describe("a11y_name", self.label.clone())
       .describe("state", if self.current { "current" } else { "enabled" })
       .child(
@@ -120,12 +131,21 @@ impl PageTab {
           .color(color)
           .nowrap(),
       );
-    if self.current {
+    let button = if self.explanation.is_some() {
+      button.child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted))
+    } else {
+      button
+    };
+    let button: Element = if self.current {
       button
         .border_bottom(Border::inside(BorderSize::Md, PaletteColor::Accent))
         .into()
     } else {
       button.into()
+    };
+    match self.explanation {
+      Some(reason) => Tooltip::new(self.id, reason).wrap(ctx, button),
+      None => button,
     }
   }
 }

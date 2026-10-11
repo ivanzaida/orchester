@@ -70,6 +70,6 @@ fn tool_form_says_which_field_is_wrong() {
   );
   assert_eq!(
     tool_name("  ").map_err(|message| message.key),
-    Err("errors.nameRequired")
+    Err("tools.errors.nameRequired")
   );
 }

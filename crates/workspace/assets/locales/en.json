@@ -646,6 +646,7 @@
     "unsupportedPath": "This folder path cannot be stored. Choose a folder whose path uses standard characters.",
     "unstorableValue": "A value is too large to be stored. The log has the details.",
     "storage": "The data could not be read or written. The log has the details.",
+    "databaseLocked": "database is locked.",
     "alwaysAllow": "Always allow can no longer add this to the profile. Answer the request again.",
     "interrupted": "The operation stopped unexpectedly. The log has the details.",
     "executableLocation": "The folder of the Orchester program could not be determined.",
@@ -818,6 +819,7 @@
   },
   "tools": {
     "errors": {
+      "nameRequired": "Enter a tool name.",
       "programRequired": "Enter the program to run.",
       "programOutsideWorktree": "A relative program path must stay inside the worktree.",
       "programDriveRelative": "Write the program's path from the drive's root, e.g. C:\\tools\\check.exe, or give its name alone.",

@@ -37,36 +37,51 @@ impl ProjectDb {
     now: Timestamp,
   ) -> Result<Version<B>, StoreError> {
     let transaction = self.connection.transaction()?;
-    check_kind::<B>(&transaction, resource)?;
-    let draft = load_draft::<B>(&transaction, resource)?.ok_or(StoreError::NoDraft(resource))?;
-    if expected.is_some_and(|expected| draft.body() != expected) {
-      return Err(StoreError::DraftChanged(resource));
-    }
-    draft.body().check_publishable()?;
+    let version = publish_checked(&transaction, resource, expected, now)?;
+    transaction.commit()?;
+    Ok(version)
+  }
+}
+
+/// A checked mutation of the resource snapshot read under the write lock.
+pub enum ResourceUpdate<B> {
+  SaveDraft(Draft<B>),
+  PublishDraft(Timestamp),
+}
+
+impl ProjectDb {
+  /// Reads the resource, its draft and latest version under an immediate write lock, then applies
+  /// `update` in that transaction. A rejected snapshot leaves the resource unchanged.
+  pub fn update_resource<B: ResourceBody, E: From<StoreError>>(
+    &mut self,
+    id: ResourceId,
+    update: impl FnOnce(Resource, Option<Draft<B>>, Option<Version<B>>) -> Result<ResourceUpdate<B>, E>,
+  ) -> Result<(), E> {
+    let transaction = self
+      .connection
+      .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+      .map_err(StoreError::from)?;
+    check_kind::<B>(&transaction, id)?;
+    let resource = load_resources(&transaction, "WHERE id = ?1", [id.to_string()])?
+      .pop()
+      .ok_or(StoreError::ResourceNotFound(id))?;
+    let draft = load_draft::<B>(&transaction, id)?;
     let latest = load_versions::<B>(
       &transaction,
       "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
-      [resource.to_string()],
+      [id.to_string()],
     )?
-    .pop()
-    .map(|version| version.number());
-    let version = publish(draft, latest, now)?;
-    transaction.execute(
-      "INSERT INTO resource_versions (id, resource_id, number, body, published_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-      params![
-        version.id().to_string(),
-        resource.to_string(),
-        version.number().get(),
-        encode(version.body())?,
-        now.unix_millis()
-      ],
-    )?;
-    transaction.execute(
-      "DELETE FROM resource_drafts WHERE resource_id = ?1",
-      [resource.to_string()],
-    )?;
-    transaction.commit()?;
-    Ok(version)
+    .pop();
+    match update(resource, draft, latest)? {
+      ResourceUpdate::SaveDraft(draft) => {
+        save_draft(&transaction, id, &draft)?;
+      }
+      ResourceUpdate::PublishDraft(now) => {
+        publish_checked::<B>(&transaction, id, None, now)?;
+      }
+    }
+    transaction.commit().map_err(StoreError::from)?;
+    Ok(())
   }
 }
 
@@ -123,39 +138,10 @@ impl ResourceStore for ProjectDb {
   }
 
   fn save_draft<B: ResourceBody>(&mut self, resource: ResourceId, draft: &Draft<B>) -> Result<DraftSaved, StoreError> {
-    let body = encode(draft.body())?;
     let transaction = self.connection.transaction()?;
-    check_kind::<B>(&transaction, resource)?;
-    let base = match draft.based_on() {
-      Some(number) => load_versions::<B>(
-        &transaction,
-        "WHERE resource_id = ?1 AND number = ?2",
-        params![resource.to_string(), number.get()],
-      )?
-      .pop(),
-      None => None,
-    };
-    if base.is_some_and(|version| draft.repeats(&version)) {
-      transaction.execute(
-        "DELETE FROM resource_drafts WHERE resource_id = ?1",
-        [resource.to_string()],
-      )?;
-      transaction.commit()?;
-      return Ok(DraftSaved::Discarded);
-    }
-    transaction.execute(
-      "INSERT INTO resource_drafts (resource_id, body, based_on, updated_at) VALUES (?1, ?2, ?3, ?4) \
-       ON CONFLICT (resource_id) DO UPDATE SET body = excluded.body, based_on = excluded.based_on, \
-       updated_at = excluded.updated_at",
-      params![
-        resource.to_string(),
-        body,
-        draft.based_on().map(VersionNumber::get),
-        draft.updated_at().unix_millis()
-      ],
-    )?;
+    let saved = save_draft(&transaction, resource, draft)?;
     transaction.commit()?;
-    Ok(DraftSaved::Stored)
+    Ok(saved)
   }
 
   fn draft<B: ResourceBody>(&self, resource: ResourceId) -> Result<Option<Draft<B>>, StoreError> {
@@ -199,6 +185,80 @@ impl ResourceStore for ProjectDb {
     )?;
     Ok(found.pop())
   }
+}
+
+fn publish_checked<B: ResourceBody>(
+  connection: &Connection,
+  resource: ResourceId,
+  expected: Option<&B>,
+  now: Timestamp,
+) -> Result<Version<B>, StoreError> {
+  check_kind::<B>(connection, resource)?;
+  let draft = load_draft::<B>(connection, resource)?.ok_or(StoreError::NoDraft(resource))?;
+  if expected.is_some_and(|expected| draft.body() != expected) {
+    return Err(StoreError::DraftChanged(resource));
+  }
+  draft.body().check_publishable()?;
+  let latest = load_versions::<B>(
+    connection,
+    "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
+    [resource.to_string()],
+  )?
+  .pop()
+  .map(|version| version.number());
+  let version = publish(draft, latest, now)?;
+  connection.execute(
+    "INSERT INTO resource_versions (id, resource_id, number, body, published_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+    params![
+      version.id().to_string(),
+      resource.to_string(),
+      version.number().get(),
+      encode(version.body())?,
+      now.unix_millis()
+    ],
+  )?;
+  connection.execute(
+    "DELETE FROM resource_drafts WHERE resource_id = ?1",
+    [resource.to_string()],
+  )?;
+  Ok(version)
+}
+
+fn save_draft<B: ResourceBody>(
+  connection: &Connection,
+  resource: ResourceId,
+  draft: &Draft<B>,
+) -> Result<DraftSaved, StoreError> {
+  let body = encode(draft.body())?;
+  check_kind::<B>(connection, resource)?;
+  let base = match draft.based_on() {
+    Some(number) => load_versions::<B>(
+      connection,
+      "WHERE resource_id = ?1 AND number = ?2",
+      params![resource.to_string(), number.get()],
+    )?
+    .pop(),
+    None => None,
+  };
+  if base.is_some_and(|version| draft.repeats(&version)) {
+    connection.execute(
+      "DELETE FROM resource_drafts WHERE resource_id = ?1",
+      [resource.to_string()],
+    )?;
+    return Ok(DraftSaved::Discarded);
+  }
+  connection.execute(
+    "INSERT INTO resource_drafts (resource_id, body, based_on, updated_at) VALUES (?1, ?2, ?3, ?4) \
+       ON CONFLICT (resource_id) DO UPDATE SET body = excluded.body, based_on = excluded.based_on, \
+       updated_at = excluded.updated_at",
+    params![
+      resource.to_string(),
+      body,
+      draft.based_on().map(VersionNumber::get),
+      draft.updated_at().unix_millis()
+    ],
+  )?;
+  Ok(DraftSaved::Stored)
 }
 
 /// Fails unless `resource` exists and holds bodies of type `B`.

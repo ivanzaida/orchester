@@ -21,7 +21,7 @@ use orchester_workspace::messages::Message;
 
 use crate::{
   mcp::input_gate::{Guarded, InputGate, Protected},
-  theme::{ConnectionsText, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ConnectionsText, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -33,6 +33,7 @@ type Handler = Arc<dyn Fn() + Send + Sync>;
 #[derive(Clone)]
 pub struct WidenProps {
   pub id: &'static str,
+  pub card: bool,
   pub title: Arc<str>,
   pub reasons: Arc<[Arc<str>]>,
   pub confirm: Arc<str>,
@@ -44,8 +45,21 @@ pub struct WidenProps {
 /// The props are equal when they say the same: the handlers are made anew on every render.
 impl PartialEq for WidenProps {
   fn eq(&self, other: &Self) -> bool {
-    (self.id, &self.title, &self.reasons, &self.confirm, &self.keep)
-      == (other.id, &other.title, &other.reasons, &other.confirm, &other.keep)
+    (
+      self.card,
+      self.id,
+      &self.title,
+      &self.reasons,
+      &self.confirm,
+      &self.keep,
+    ) == (
+      other.card,
+      other.id,
+      &other.title,
+      &other.reasons,
+      &other.confirm,
+      &other.keep,
+    )
   }
 }
 
@@ -98,7 +112,11 @@ impl Component for WidenConfirm {
     } else {
       confirm.disabled()
     };
-    question(&props, (keep, confirm))
+    if props.card {
+      card_question(&props, (keep, confirm))
+    } else {
+      question(&props, (keep, confirm))
+    }
   }
 }
 
@@ -142,5 +160,41 @@ fn question(props: &WidenProps, (keep, confirm): (ActionButton, ActionButton)) -
         .child(Spacer::new().flex(1.0))
         .child(keep)
         .child(confirm),
+    )
+}
+fn card_question(props: &WidenProps, (keep, confirm): (ActionButton, ActionButton)) -> Column {
+  let lines = props.reasons.iter().map(|reason| {
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Start)
+      .child(icon(Icon::ShieldAlert, IconSize::Base, PaletteColor::TextMuted))
+      .child(
+        Text::new(reason)
+          .variant(lurq::app::theme::TypographyStyle::Description)
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0)),
+      )
+  });
+  Column::new()
+    .id(props.id)
+    .width(Dimension::Pct(100.0))
+    .padding(SpacingSize::Lg)
+    .spacing(ExtraSpacing::Loose.role())
+    .background(PaletteColor::SurfaceRaised)
+    .rounded(ExtraRadius::Tile.role())
+    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    .child(
+      Text::new(&props.title)
+        .id(format!("{}-title", props.id))
+        .variant(ExtraTypography::Strong.role()),
+    )
+    .with_children(lines)
+    .child(
+      Row::new()
+        .spacing(SpacingSize::Sm)
+        .padding(Padding::new().top(ExtraSpacing::Snug.role()))
+        .child(confirm)
+        .child(keep),
     )
 }

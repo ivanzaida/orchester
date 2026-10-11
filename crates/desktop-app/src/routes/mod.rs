@@ -31,6 +31,7 @@ mod screen;
 mod table;
 mod task;
 mod tasks;
+mod tools;
 
 use orchester_core::id::ProjectId;
 
@@ -44,6 +45,7 @@ pub use self::{
   table::routes,
   task::{ChangeSource, ChangedFile, TaskTab, TaskView},
   tasks::{TaskList, TaskListTab},
+  tools::ToolTab,
 };
 
 const PROJECT: &str = "project";

@@ -2,5 +2,7 @@
 //! command tool editor's fields.
 
 pub mod data;
+pub mod editor;
 pub mod form;
 pub mod program;
+pub mod widening;

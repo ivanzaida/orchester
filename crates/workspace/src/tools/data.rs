@@ -30,6 +30,10 @@ pub struct ToolEntry {
 }
 
 impl ToolEntry {
+  /// Whether this kind of tool runs today, without an unimplemented secret policy.
+  pub fn runnable(&self) -> bool {
+    self.tool.kind().runnable() && self.tool.access().is_none()
+  }
   /// `None` for a resource with neither a draft nor a version, which the store never creates.
   pub fn new(id: ResourceId, name: &Name, draft: Option<Draft<Tool>>, latest: Option<&Version<Tool>>) -> Option<Self> {
     let published = latest.map(Version::number);
@@ -65,6 +69,8 @@ pub struct ToolUse {
   pub pipeline_name: Arc<str>,
   pub version: VersionNumber,
   pub step: Arc<str>,
+  /// One-based position in the published pipeline.
+  pub ordinal: usize,
 }
 
 /// A pipeline whose latest published version calls tools, for "Used in your pipelines".
@@ -156,7 +162,7 @@ fn tool_uses<S: ResourceStore>(store: &S) -> Result<Vec<ToolUse>, S::Error> {
     let Some(version) = store.latest_version::<Pipeline>(resource.id())? else {
       continue;
     };
-    for step in version.body().steps() {
+    for (index, step) in version.body().steps().iter().enumerate() {
       if let StepKind::Tool { tool: Some(tool) } = &step.kind {
         uses.push(ToolUse {
           tool: *tool,
@@ -164,6 +170,7 @@ fn tool_uses<S: ResourceStore>(store: &S) -> Result<Vec<ToolUse>, S::Error> {
           pipeline_name: resource.name().as_str().into(),
           version: version.number(),
           step: step.name.as_str().into(),
+          ordinal: index + 1,
         });
       }
     }

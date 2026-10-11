@@ -14,5 +14,5 @@ pub use error::{RunStoreError, StoreError};
 pub use git_exclude::is_repository_root;
 pub use project_db::{
   AutomaticStatus, CachedClaim, CachedRunStatus, CachedTask, DecisionCounts, JoinedKey, NotSent, ProjectDb,
-  ReadOnlyProjectDb, ReturnedTask, SharedPerson, SharedTaskInfo, SharingLink, UnsentStatus,
+  ReadOnlyProjectDb, ResourceUpdate, ReturnedTask, SharedPerson, SharedTaskInfo, SharingLink, UnsentStatus,
 };
