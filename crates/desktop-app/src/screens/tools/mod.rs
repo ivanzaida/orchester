@@ -84,7 +84,7 @@ impl Component for ToolsScreen {
     if matches!(props.page, ProjectPage::Tools)
       && let Some(error) = error
     {
-      return frame.child(self.failed(ctx, error));
+      return frame.child(self.library(ctx, props.project, Err(error.clone())));
     }
     let current = reading
       .data
@@ -108,13 +108,7 @@ impl Component for ToolsScreen {
 impl ToolsScreen {
   fn content(&self, ctx: &mut Ctx, props: Props, data: EditorData, id: Option<ResourceId>) -> Element {
     match props.page {
-      ProjectPage::Tools => ctx.mount_keyed::<library::Library>(
-        "tools-library",
-        library::Props {
-          project: props.project,
-          listed: data.listed,
-        },
-      ),
+      ProjectPage::Tools => self.library(ctx, props.project, Ok(data.listed)),
       ProjectPage::NewTool | ProjectPage::Tool(..) => {
         if id.is_some_and(|id| data.listed.tool(id).is_none()) {
           return crate::ui::notice::Notice::new(
@@ -137,12 +131,28 @@ impl ToolsScreen {
             data,
             entry,
             revision: self.revision.clone(),
+            read_revision: self.retry.get(),
             page: props.page,
           },
         )
       }
       _ => unreachable!("Tools mounts only its own pages"),
     }
+  }
+  fn library(
+    &self,
+    ctx: &mut Ctx,
+    project: ShownProject,
+    listed: Result<orchester_workspace::tools::data::ProjectTools, Message>,
+  ) -> Element {
+    ctx.mount_keyed::<library::Library>(
+      "tools-library",
+      library::Props {
+        project,
+        listed,
+        retry: self.retry.clone(),
+      },
+    )
   }
   fn failed(&self, ctx: &Ctx, error: &Message) -> Element {
     let retry = self.retry.clone();

@@ -50,7 +50,11 @@ fn tools_library_reports_kind_state_version_and_published_callers() {
   assert!(t.text("tool-uses").contains("Delivery v1 / Run checks"));
   t.click("tool-tab-access");
   assert!(t.text("tool-access-tab").contains("Exit code decides the step"));
-  assert!(t.text("tool-access-step-0").contains("Delivery"));
+  let access = t.text("tool-access-step-0");
+  assert!(
+    access.contains("Delivery v1") && access.contains("01 Run checks"),
+    "{access}"
+  );
   t.click("tool-tab-inputs_outputs");
   assert!(t.text("tool-inputs-unavailable").contains("not available yet"));
   t.click("tool-tab-usage_log");
@@ -124,6 +128,8 @@ fn tools_stale_draft_can_be_kept_or_replaced_with_latest() {
   .expect("stale draft");
   t.edit(id);
   assert!(t.exists("tool-stale"));
+  let notice = t.text("tool-stale");
+  assert!(notice.contains("v1") && notice.contains("v2"), "{notice}");
   t.click("tool-publish");
   assert!(!t.exists("tool-confirm"));
   t.click("tool-keep-draft");

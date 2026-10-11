@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use orchester_core::{
-  name::Name,
+  name::{Name, NameError},
   resource::{
     AccessPolicy, CommandAction, CommandArg, CommandEnvironment, CommandError, CommandProgram, CommandTimeout,
     ExitCodes, OutputLimit, Tool, ToolAction, VariableName,
@@ -190,7 +190,10 @@ pub struct CommandErrors {
 
 /// The name of a new tool as typed.
 pub fn tool_name(text: &str) -> Result<Name, Message> {
-  Name::new(text).map_err(|error| messages::name_error(&error))
+  Name::new(text).map_err(|error| match error {
+    NameError::Blank => Message::new("tools.errors.nameRequired"),
+    other => messages::name_error(&other),
+  })
 }
 
 fn lines(text: &str) -> impl Iterator<Item = &str> {

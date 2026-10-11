@@ -193,7 +193,7 @@ impl FieldInput {
   }
 
   /// The value is not accepted and the caller says why: the stroke turns `danger`, no note is added.
-  pub(super) fn invalid(mut self) -> Self {
+  pub fn invalid(mut self) -> Self {
     self.invalid = true;
     self
   }

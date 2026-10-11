@@ -47,11 +47,16 @@ pub struct EditorProps {
   pub data: EditorData,
   pub entry: Option<ToolEntry>,
   pub revision: Signal<u64>,
+  pub read_revision: u64,
   pub page: ProjectPage,
 }
 impl PartialEq for EditorProps {
   fn eq(&self, o: &Self) -> bool {
-    self.project == o.project && self.data == o.data && self.entry == o.entry && self.page == o.page
+    self.project == o.project
+      && self.data == o.data
+      && self.entry == o.entry
+      && self.page == o.page
+      && self.read_revision == o.read_revision
   }
 }
 impl DevtoolsInspectable for EditorProps {}
@@ -109,18 +114,7 @@ impl Component for ToolEditor {
     let unchanged = self.fields.text() == self.text && self.baseline.is_some();
     let changed = self.baseline != p.entry;
     let busy = self.busy.get();
-    let state = if busy {
-      ctx.t("tools.saving")
-    } else if self.baseline.is_none() {
-      ctx.t("tools.notSaved")
-    } else if !unchanged {
-      ctx.t("tools.unsaved")
-    } else {
-      match self.baseline.as_ref().expect("the baseline exists").state {
-        VersionState::Draft { .. } => ctx.t("tools.draftSaved"),
-        _ => words::version(ctx, self.baseline.as_ref().expect("the baseline exists")),
-      }
-    };
+    let state = words::editor_state(ctx, self.baseline.as_ref(), unchanged, busy);
     let title = self
       .baseline
       .as_ref()
@@ -136,8 +130,10 @@ impl Component for ToolEditor {
       Some(ctx.t("tools.checking"))
     } else if changed {
       Some(ctx.t("tools.changed"))
+    } else if self.baseline.is_none() && self.fields.name.get().is_empty() && self.fields.text().program.is_empty() {
+      Some(ctx.t("tools.enterRequired"))
     } else if checked.is_err() {
-      Some(ctx.t("tools.fixFields"))
+      Some(ctx.t_args("tools.fixFields", [("count", error_count(&errors).to_string())]))
     } else {
       None
     };
@@ -170,7 +166,12 @@ impl Component for ToolEditor {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(head)
-      .with_children(question)
+      .with_children(question.map(|question| {
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding(Padding::symmetric(ConnectionsSpacing::Page.role(), SpacingSize::Lg))
+          .child(question)
+      }))
       .child(body)
   }
 }
@@ -222,7 +223,7 @@ impl ToolEditor {
     }
     let Some(edit) = edit else {
       return match reason {
-        Some(r) => button.unavailable(r.to_owned()),
+        Some(_) => button.disabled(),
         None => button.disabled(),
       };
     };
@@ -269,6 +270,7 @@ impl ToolEditor {
       "tool-confirm",
       WidenProps {
         id: "tool-confirm",
+        card: true,
         title: ctx.t("tools.confirmTitle"),
         reasons: words.into(),
         confirm: ctx.t("tools.confirm"),
@@ -315,8 +317,22 @@ impl ToolEditor {
       );
     }
     let content: Element = if read_only {
-      Notice::new("tool-read-only", NoticeTone::Info, ctx.t("tools.readOnlyTitle"))
-        .body(ctx.t("tools.readOnlyDetail"))
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Lg)
+        .child(
+          crate::ui::state::EmptyState::new(
+            "tool-read-only",
+            Icon::Lock,
+            ctx.t("tools.readOnlyTitle"),
+            ctx.t(match p.entry.as_ref().map(|e| e.tool.action()) {
+              Some(orchester_core::resource::ToolAction::Http(_)) => "tools.httpUnavailable",
+              _ => "tools.databaseUnavailable",
+            }),
+          )
+          .wide(),
+        )
+        .child(note("tool-command-only", Icon::Info, &ctx.t("tools.readOnlyDetail")))
         .into()
     } else {
       match tab {
@@ -325,12 +341,22 @@ impl ToolEditor {
           self.fields.render(ctx, errors, self.baseline.is_some(), locked).into()
         }
         ToolTab::Access => super::access::access(ctx, p).into(),
-        ToolTab::InputsOutputs => Notice::new("tool-inputs-unavailable", NoticeTone::Info, ctx.t("tools.inputsTitle"))
-          .body(ctx.t("tools.inputsDetail"))
-          .into(),
-        ToolTab::UsageLog => Notice::new("tool-usage-unavailable", NoticeTone::Info, ctx.t("tools.usageTitle"))
-          .body(ctx.t("tools.usageDetail"))
-          .into(),
+        ToolTab::InputsOutputs => crate::ui::state::EmptyState::new(
+          "tool-inputs-unavailable",
+          Icon::ArrowRightLeft,
+          ctx.t("tools.inputsTitle"),
+          ctx.t("tools.inputsDetail"),
+        )
+        .wide()
+        .into(),
+        ToolTab::UsageLog => crate::ui::state::EmptyState::new(
+          "tool-usage-unavailable",
+          Icon::History,
+          ctx.t("tools.usageTitle"),
+          ctx.t("tools.usageDetail"),
+        )
+        .wide()
+        .into(),
       }
     };
     main = main.child(content);
@@ -346,7 +372,7 @@ impl ToolEditor {
   }
   fn stale(&self, ctx: &mut Ctx, p: &EditorProps, locked: bool, action: &Work) -> Option<Element> {
     let e = self.baseline.as_ref()?;
-    let VersionState::StaleDraft { published, .. } = e.state else {
+    let VersionState::StaleDraft { based_on, published } = e.state else {
       return None;
     };
     let start = ActionButton::new(
@@ -363,7 +389,20 @@ impl ToolEditor {
     let keep = self.action_button(keep, enabled.then(|| Edit::KeepDraft(e.clone())), p, action, None);
     Some(
       Notice::new("tool-stale", NoticeTone::Warning, ctx.t("tools.staleTitle"))
-        .body(ctx.t("tools.staleDetail"))
+        .body(ctx.t_args(
+          "tools.staleDetail",
+          [
+            (
+              "baseline",
+              based_on.map_or(ctx.t("tools.noBaseline").to_string(), |v| {
+                ctx
+                  .t_args("tools.compactVersion", [("version", v.get().to_string())])
+                  .to_string()
+              }),
+            ),
+            ("version", published.map_or(0, |v| v.get()).to_string()),
+          ],
+        ))
         .action(start)
         .action(keep)
         .into(),
@@ -390,4 +429,18 @@ fn publish_reason(ctx: &Ctx, entry: Option<&ToolEntry>, unchanged: bool) -> Opti
     ));
   }
   next_version(Some(entry)).is_none().then(|| ctx.t("tools.versionLimit"))
+}
+fn error_count(errors: &CommandErrors) -> usize {
+  [
+    &errors.name,
+    &errors.program,
+    &errors.arguments,
+    &errors.timeout,
+    &errors.exit_codes,
+    &errors.output_limit,
+    &errors.environment,
+  ]
+  .into_iter()
+  .filter(|error| error.is_some())
+  .count()
 }

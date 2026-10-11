@@ -818,6 +818,7 @@
   },
   "tools": {
     "errors": {
+      "nameRequired": "Enter a tool name.",
       "programRequired": "Enter the program to run.",
       "programOutsideWorktree": "A relative program path must stay inside the worktree.",
       "programDriveRelative": "Write the program's path from the drive's root, e.g. C:\\tools\\check.exe, or give its name alone.",

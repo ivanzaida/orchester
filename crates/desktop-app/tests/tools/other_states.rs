@@ -66,6 +66,11 @@ fn tools_load_error_is_explicit_and_retry_reads_current_data() {
   t.window.until("library read error", |w| {
     w.tree.get_element_by_id("tools-load-error").is_some()
   });
+  assert!(
+    t.exists("tools-add"),
+    "the library header remains available during a read failure"
+  );
+  assert!(t.text("tools-library").contains("Couldn’t load the project’s tools"));
   assert!(!t.exists("tools-empty"), "a failed read never claims an empty project");
   // The fixture's database returns to its original schema; Retry must read it again.
   sqlite

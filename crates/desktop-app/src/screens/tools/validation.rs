@@ -32,7 +32,7 @@ pub(super) fn checked(
   let given = parsed.as_ref().ok().cloned();
   let root = p.project.open.repo_root.clone();
   let reading = ctx
-    .future((root, given.clone()), |(root, given)| async move {
+    .future((root, given.clone(), p.read_revision), |(root, given, _)| async move {
       let source = given.clone();
       let fixed = match given {
         Some(tool) => Some(background::run(move || editor::prepare_in(&root, &tool)).await??),

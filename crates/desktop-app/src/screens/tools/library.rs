@@ -13,31 +13,44 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{id::ProjectId, resource::ToolAction};
-use orchester_workspace::tools::data::{ProjectTools, ToolEntry};
+use orchester_workspace::{
+  messages::Message,
+  tools::data::{ProjectTools, ToolEntry},
+};
+
+// Locked type field `u4Idbz` in `aaHkr`.
+const TYPE_FILTER_WIDTH: f32 = 150.0;
 
 use super::words;
 use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{ProjectPage, Route, ToolTab},
-  theme::{ConnectionsSpacing, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ConnectionsSpacing, ConnectionsText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     inspector::note,
     menu::{MenuItem, menu_panel},
     menu_button::MenuButton,
-    state::EmptyState,
+    message::message_text,
+    state::{EmptyState, load_error},
     table::HEADER_HEIGHT,
     tool_row::{self, ToolRow},
     unavailable::reason_line,
   },
 };
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct Props {
   pub project: ShownProject,
-  pub listed: ProjectTools,
+  pub listed: Result<ProjectTools, Message>,
+  pub retry: Signal<u64>,
+}
+impl PartialEq for Props {
+  fn eq(&self, other: &Self) -> bool {
+    self.project == other.project && self.listed == other.listed
+  }
 }
 impl DevtoolsInspectable for Props {}
 pub struct Library {
@@ -67,6 +80,21 @@ impl Component for Library {
       )
       .spacing(SpacingSize::Lg)
       .child(self.header(ctx, &props));
+    let listed = match &props.listed {
+      Ok(listed) => listed,
+      Err(error) => {
+        let retry = props.retry.clone();
+        return page.child(load_error(
+          ctx,
+          "tools-load-error",
+          (
+            &ctx.t("tools.loadFailed"),
+            &ctx.t_args("tools.loadFailedDetail", [("cause", message_text(ctx, error))]),
+          ),
+          move || retry.update(|r| *r += 1),
+        ));
+      }
+    };
     let ownership = note(
       "tools-ownership",
       Icon::Info,
@@ -75,7 +103,7 @@ impl Component for Library {
         [("project", props.project.open.project.name().as_str())],
       ),
     );
-    if props.listed.tools.is_empty() {
+    if listed.tools.is_empty() {
       let nav = Navigation::of(ctx);
       return page
         .child(
@@ -85,27 +113,19 @@ impl Component for Library {
             ctx.t("tools.emptyTitle"),
             ctx.t("tools.emptyDetail"),
           )
+          .wide()
           .action(
-            ActionButton::new("tools-create-command", ButtonKind::Primary, ctx.t("tools.command"))
+            ActionButton::new("tools-create-command", ButtonKind::Primary, ctx.t("tools.addCommand"))
               .icon(Icon::Terminal)
               .on_click(move || nav.go(Route::Project(project, ProjectPage::NewTool))),
-          )
-          .child(reason_line("tools-other-kinds", &ctx.t("tools.otherKinds"))),
+          ),
         )
+        .child(reason_line("tools-other-kinds", &ctx.t("tools.otherKinds")))
         .child(ownership);
     }
     page
-      .child(
-        Row::new()
-          .spacing(ExtraSpacing::Loose.role())
-          .align_items(Alignment::Center)
-          .child(
-            ActionButton::new("tools-type-filter", ButtonKind::Secondary, ctx.t("tools.allTypes"))
-              .unavailable(ctx.t("tools.filterUnavailable")),
-          )
-          .child(reason_line("tools-filter-reason", &ctx.t("tools.filterUnavailable"))),
-      )
-      .child(table(ctx, project, &props.listed))
+      .child(type_filter(ctx))
+      .child(table(ctx, project, listed))
       .child(ownership)
   }
 }
@@ -115,7 +135,8 @@ impl Library {
     Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Lg)
-      .align_items(Alignment::End)
+      .align_items(Alignment::Start)
+      .padding(Padding::new().bottom(SpacingSize::Xs))
       .child(
         Column::new()
           .flex(1.0)
@@ -126,20 +147,26 @@ impl Library {
               "tools.description",
               [("project", props.project.open.project.name().as_str())],
             ))
-            .variant(ExtraTypography::Prose.role()),
+            .variant(ConnectionsText::Lead.role()),
           ),
       )
       .child(
-        ActionButton::new("tools-import", ButtonKind::Secondary, ctx.t("tools.import"))
-          .icon(Icon::Download)
-          .unavailable(ctx.t("tools.importUnavailable")),
+        Row::new()
+          .padding(Padding::new().top(SpacingSize::Sm))
+          .spacing(SpacingSize::Sm)
+          .align_items(Alignment::Center)
+          .child(
+            ActionButton::new("tools-import", ButtonKind::Secondary, ctx.t("tools.import"))
+              .icon(Icon::Download)
+              .unavailable(ctx.t("tools.importUnavailable")),
+          )
+          .child(MenuButton::new(
+            "tools-add",
+            (Icon::Plus, ctx.t("tools.add")),
+            self.menu.clone(),
+            self.anchor.clone(),
+          )),
       )
-      .child(MenuButton::new(
-        "tools-add",
-        (Icon::Plus, ctx.t("tools.add")),
-        self.menu.clone(),
-        self.anchor.clone(),
-      ))
       .child(
         Popup::new(self.anchor.clone(), panel)
           .open(self.menu.clone())
@@ -148,8 +175,8 @@ impl Library {
       )
   }
   fn menu(&self, ctx: &mut Ctx, project: ProjectId) -> Column {
-    // Add menu `c7vkR`: 340 wide.
-    const MENU_WIDTH: f32 = 340.0;
+    // Add menu `Tc6qI`: 392 wide.
+    const MENU_WIDTH: f32 = 392.0;
     let nav = Navigation::of(ctx);
     let command = MenuItem::new("tools-add-command", ctx.t("tools.command"), move || {
       nav.go(Route::Project(project, ProjectPage::NewTool))
@@ -158,22 +185,28 @@ impl Library {
     .detail(ctx.t("tools.newDetail"))
     .render(ctx, &self.menu);
     let others = [
-      ("tools.http", Icon::Globe),
-      ("tools.mcp", Icon::Server),
-      ("tools.database", Icon::Database),
-      ("tools.pullRequest", Icon::GitPullRequest),
+      ("tools.http", Icon::Globe, "tools.menuSecretsReason"),
+      ("tools.databaseQuery", Icon::Database, "tools.menuSecretsReason"),
+      ("tools.importMcp", Icon::Plug, "tools.menuSecretsReason"),
+      ("tools.pullRequest", Icon::GitPullRequest, "tools.menuPushReason"),
     ];
     let mut panel = menu_panel("tools-add-menu")
       .width(Dimension::Px(MENU_WIDTH))
-      .child(Text::new(&ctx.t("tools.menuTitle")).variant(TypographyStyle::Title))
-      .child(Text::new(&ctx.t("tools.menuDetail")).variant(ExtraTypography::Note.role()))
+      .child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding(SpacingSize::Sm)
+          .spacing(ExtraSpacing::Tight.role())
+          .child(Text::new(&ctx.t("tools.menuTitle")).variant(TypographyStyle::Label))
+          .child(Text::new(&ctx.t("tools.menuDetail")).variant(TypographyStyle::Caption)),
+      )
       .child(command);
-    for (key, icon) in others {
+    for (key, icon, reason) in others {
       panel = panel.child(
         MenuItem::unavailable(
           format!("tools-add-{}", key.replace('.', "-")),
           ctx.t(key),
-          ctx.t("tools.otherKinds"),
+          ctx.t(reason),
         )
         .icon(icon)
         .render(ctx, &self.menu),
@@ -275,16 +308,7 @@ impl Component for LibraryRow {
       detail_mono: matches!(p.entry.tool.action(), ToolAction::Command(_)),
       cells: vec![
         Text::new(&ctx.t(key)).variant(ExtraTypography::Property.role()).into(),
-        Row::new()
-          .spacing(ExtraSpacing::Snug.role())
-          .align_items(Alignment::Center)
-          .child(icon(Icon::KeyRound, IconSize::Sm, PaletteColor::TextMuted))
-          .child(
-            Text::new(&secrets)
-              .variant(ExtraTypography::Property.role())
-              .color(PaletteColor::TextMuted),
-          )
-          .into(),
+        secret_cell(&p.entry, &secrets),
         Text::new(&words::version(ctx, &p.entry))
           .variant(ExtraTypography::Property.role())
           .into(),
@@ -296,7 +320,7 @@ impl Component for LibraryRow {
             if p.entry.runnable() && p.entry.state.published().is_some() {
               Icon::CircleCheck
             } else if p.entry.runnable() {
-              Icon::CircleDot
+              Icon::Pencil
             } else {
               Icon::Lock
             },
@@ -322,4 +346,46 @@ impl Component for LibraryRow {
       }),
     }
   }
+}
+fn type_filter(ctx: &Ctx) -> Row {
+  Row::new()
+    .spacing(ExtraSpacing::Loose.role())
+    .align_items(Alignment::Center)
+    .child(
+      Row::new()
+        .id("tools-type-filter")
+        .width(Dimension::Px(TYPE_FILTER_WIDTH))
+        .height(Dimension::Px(crate::theme::ControlHeight::Md.value()))
+        .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .background(PaletteColor::SurfaceInput)
+        .border_inside(BorderSize::Sm, PaletteColor::Border)
+        .rounded(RadiusSize::Md)
+        .describe("state", "unavailable")
+        .child(
+          Text::new(&ctx.t("tools.allTypes"))
+            .variant(TypographyStyle::Description)
+            .flex(1.0),
+        )
+        .child(icon(Icon::Lock, IconSize::Md, PaletteColor::TextMuted)),
+    )
+    .child(reason_line("tools-filter-reason", &ctx.t("tools.filterUnavailable")))
+}
+fn secret_cell(entry: &ToolEntry, secrets: &str) -> Element {
+  Row::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .with_children(
+      entry
+        .tool
+        .access()
+        .map(|_| icon(Icon::KeyRound, IconSize::Sm, PaletteColor::TextMuted)),
+    )
+    .child(
+      Text::new(secrets)
+        .variant(ExtraTypography::Property.role())
+        .color(PaletteColor::TextMuted),
+    )
+    .into()
 }

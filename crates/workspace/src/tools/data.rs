@@ -69,6 +69,8 @@ pub struct ToolUse {
   pub pipeline_name: Arc<str>,
   pub version: VersionNumber,
   pub step: Arc<str>,
+  /// One-based position in the published pipeline.
+  pub ordinal: usize,
 }
 
 /// A pipeline whose latest published version calls tools, for "Used in your pipelines".
@@ -160,7 +162,7 @@ fn tool_uses<S: ResourceStore>(store: &S) -> Result<Vec<ToolUse>, S::Error> {
     let Some(version) = store.latest_version::<Pipeline>(resource.id())? else {
       continue;
     };
-    for step in version.body().steps() {
+    for (index, step) in version.body().steps().iter().enumerate() {
       if let StepKind::Tool { tool: Some(tool) } = &step.kind {
         uses.push(ToolUse {
           tool: *tool,
@@ -168,6 +170,7 @@ fn tool_uses<S: ResourceStore>(store: &S) -> Result<Vec<ToolUse>, S::Error> {
           pipeline_name: resource.name().as_str().into(),
           version: version.number(),
           step: step.name.as_str().into(),
+          ordinal: index + 1,
         });
       }
     }

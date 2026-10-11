@@ -18,7 +18,6 @@ use crate::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     icon::{Icon, icon},
     tabs::{PageTab, page_tabs},
-    unavailable::reason_line,
   },
 };
 
@@ -26,7 +25,7 @@ pub(super) fn head(
   ctx: &mut Ctx,
   p: &EditorProps,
   title: &str,
-  state: &str,
+  state: &(std::sync::Arc<str>, Icon, PaletteColor),
   actions: Vec<Element>,
   reason: Option<&str>,
 ) -> Column {
@@ -47,21 +46,24 @@ pub(super) fn head(
     .entry
     .as_ref()
     .map_or(ctx.t("tools.command"), |e| ctx.t(words::kind(&e.tool).0));
+  let glyph = p.entry.as_ref().map_or(Icon::Terminal, |e| words::kind(&e.tool).1);
   let name = Row::new()
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
     .child(Text::new(title).id("tool-title").variant(TypographyStyle::Heading))
-    .child(Text::new(&kind).variant(TypographyStyle::Description));
+    .child(
+      Row::new()
+        .spacing(ExtraSpacing::Pair.role())
+        .align_items(Alignment::Center)
+        .child(icon(glyph, crate::theme::IconSize::Base, PaletteColor::TextSecondary))
+        .child(Text::new(&kind).variant(TypographyStyle::Description)),
+    );
   let status = Row::new()
     .id("tool-state")
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
-    .child(icon(
-      Icon::CircleDot,
-      crate::theme::IconSize::Base,
-      PaletteColor::TextSecondary,
-    ))
-    .child(Text::new(state).variant(ExtraTypography::Property.role()));
+    .child(icon(state.1, crate::theme::IconSize::Base, state.2.clone()))
+    .child(Text::new(&state.0).variant(ExtraTypography::Property.role()));
   let description = p
     .entry
     .as_ref()
@@ -76,7 +78,11 @@ pub(super) fn head(
         .child(status)
         .with_children(actions),
     )
-    .with_children(reason.map(|reason| reason_line("tool-action-reason", reason)));
+    .with_children(reason.map(|reason| {
+      Text::new(reason)
+        .id("tool-action-reason")
+        .variant(TypographyStyle::Caption)
+    }));
   let row = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Lg)

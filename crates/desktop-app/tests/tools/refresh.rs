@@ -83,6 +83,37 @@ fn tools_new_editor_preserves_unsaved_values_through_failed_refresh_and_retry() 
   );
 }
 
+#[test]
+fn tools_retry_revalidates_after_storage_recovers_without_changing_fields() {
+  let mut t = Tools::new();
+  let id = t.seed("Checks", true);
+  t.edit(id);
+  let schema = Schema::of(&t);
+  schema.fail();
+  t.set("tool-description", "Keep this unsaved description");
+  t.window.until("validation fails during the outage", |w| {
+    w.tree.get_element_by_id("tool-program-note").is_some()
+  });
+  refresh(&t);
+  wait_failed(&mut t);
+  schema.restore();
+  t.click("tools-load-error-retry");
+  t.window.until("successful retry also reruns validation", |w| {
+    w.tree.get_element_by_id("tools-load-error").is_none()
+      && w.tree.get_element_by_id("tool-program-note").is_none()
+      && !w
+        .texts("tool-action-reason")
+        .is_some_and(|t| t.join(" ").contains("Checking"))
+  });
+  assert_fields(&mut t, &[("tool-description", "Keep this unsaved description")]);
+  t.click("tool-save");
+  t.wait_state("Draft saved");
+  assert_eq!(
+    command_text(&t.entry(id).tool).description,
+    "Keep this unsaved description"
+  );
+}
+
 fn refresh(t: &Tools) {
   t.window
     .projects()

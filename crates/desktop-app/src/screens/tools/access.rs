@@ -15,16 +15,16 @@ use crate::{
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
+    form_section::section,
     icon::{Icon, icon},
-    inspector::{note, section_title},
-    notice::{Notice, NoticeTone},
+    inspector::note,
+    state::EmptyState,
     table::{ColumnWidth, table_header},
   },
 };
 const PIPELINE: f32 = 280.0;
 const RESULT: f32 = 200.0;
 const ROW: f32 = 56.0;
-const OPEN: f32 = 14.0;
 
 pub(super) fn access(ctx: &Ctx, p: &EditorProps) -> Column {
   let uses: Vec<_> = p.entry.iter().flat_map(|e| p.data.listed.used_by(e.id)).collect();
@@ -57,33 +57,40 @@ pub(super) fn access(ctx: &Ctx, p: &EditorProps) -> Column {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xl)
     .child(
-      Column::new()
-        .spacing(SpacingSize::Md)
-        .child(section_title(
-          "tool-access-uses-title",
-          &ctx.t("tools.usedTitle"),
-          Some(&ctx.t_args("tools.usedSteps", [("count", uses.len().to_string())])),
-        ))
-        .child(table)
-        .child(note("tool-uses-note", Icon::Pin, &ctx.t("tools.usesNote"))),
+      section(
+        "tool-access-uses-title",
+        &ctx.t("tools.usedTitle"),
+        Some(&ctx.t_args("tools.stepsCount", [("count", uses.len().to_string())])),
+        vec![
+          table.into(),
+          note("tool-uses-note", Icon::Pin, &ctx.t("tools.usesNote")).into(),
+        ],
+      )
+      .spacing(SpacingSize::Md),
     )
     .child(
-      Column::new()
-        .spacing(SpacingSize::Md)
-        .child(section_title(
-          "tool-rules-title",
-          &ctx.t("tools.rulesTitle"),
-          Some(&ctx.t("tools.rulesStatus")),
-        ))
-        .child(
-          Notice::new("tool-access-rules", NoticeTone::Info, ctx.t("tools.accessTitle"))
-            .body(ctx.t("tools.accessDetail"))
-            .action(
-              ActionButton::new("tool-access-edit", ButtonKind::Secondary, ctx.t("tools.editAccess"))
-                .icon(Icon::SlidersHorizontal)
-                .unavailable(ctx.t("tools.accessTitle")),
-            ),
-        ),
+      section(
+        "tool-rules-title",
+        &ctx.t("tools.rulesTitle"),
+        Some(&ctx.t("tools.rulesStatus")),
+        vec![
+          EmptyState::new(
+            "tool-access-rules",
+            Icon::Shield,
+            ctx.t("tools.accessTitle"),
+            ctx.t("tools.accessDetail"),
+          )
+          .wide()
+          .compact()
+          .action(
+            ActionButton::new("tool-access-edit", ButtonKind::Secondary, ctx.t("tools.editAccess"))
+              .icon(Icon::SlidersHorizontal)
+              .disabled(),
+          )
+          .into(),
+        ],
+      )
+      .spacing(SpacingSize::Md),
     )
 }
 fn caller(ctx: &Ctx, index: usize, used: &ToolUse) -> Row {
@@ -101,13 +108,25 @@ fn caller(ctx: &Ctx, index: usize, used: &ToolUse) -> Row {
         .width(Dimension::Px(PIPELINE))
         .spacing(ExtraSpacing::Tight.role())
         .child(
-          Text::new(&used.pipeline_name)
-            .variant(ExtraTypography::Strong.role())
-            .nowrap(),
+          Text::new(&ctx.t_args(
+            "tools.pipelineTitle",
+            [
+              ("pipeline", used.pipeline_name.to_string()),
+              ("version", used.version.get().to_string()),
+            ],
+          ))
+          .variant(ExtraTypography::Strong.role())
+          .nowrap(),
         )
         .child(
-          Text::new(&ctx.t_args("tools.pipelineVersion", [("version", used.version.get().to_string())]))
-            .variant(ExtraTypography::Note.role()),
+          Row::new()
+            .spacing(ExtraSpacing::Pair.role())
+            .align_items(Alignment::Center)
+            .child(icon(Icon::CircleCheck, IconSize::Sm, PaletteColor::Success))
+            .child(
+              Text::new(&ctx.t_args("tools.published", [("version", used.version.get().to_string())]))
+                .variant(ExtraTypography::Note.role()),
+            ),
         ),
     )
     .child(
@@ -115,13 +134,22 @@ fn caller(ctx: &Ctx, index: usize, used: &ToolUse) -> Row {
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .spacing(SpacingSize::Sm)
-        .child(icon(Icon::Terminal, IconSize::Md, PaletteColor::TextMuted))
-        .child(Text::new(&used.step).variant(TypographyStyle::Body).nowrap()),
+        .align_items(Alignment::Center)
+        .child(
+          Text::new(&format!("{:02}", used.ordinal))
+            .variant(ExtraTypography::MonoKey.role())
+            .color(PaletteColor::TextMuted),
+        )
+        .child(
+          Text::new(used.step.as_ref())
+            .variant(ExtraTypography::Lead.role())
+            .nowrap(),
+        ),
     )
     .child(
       Text::new(&ctx.t("tools.exitResult"))
         .variant(TypographyStyle::Description)
         .width(Dimension::Px(RESULT)),
     )
-    .child(Row::new().width(Dimension::Px(OPEN)))
+    .child(icon(Icon::ArrowUpRight, IconSize::Md, PaletteColor::TextMuted).describe("state", "unavailable"))
 }

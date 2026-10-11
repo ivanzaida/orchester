@@ -190,6 +190,7 @@ impl McpEditor {
     let (fields, start) = (self.fields.clone(), start.clone());
     let (listed, stored) = (props.listed.clone(), props.stored.clone());
     let question = WidenProps {
+      card: false,
       id: "connection-confirm-save",
       title: ctx.t("connections.mcp.dialog.widenTitle"),
       reasons,
