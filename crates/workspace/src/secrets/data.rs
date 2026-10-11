@@ -217,16 +217,19 @@ pub fn replace_allowed_in(
   permission: ReplacementPermission,
 ) -> Result<ReplacementOutcome, SecretFailure> {
   let mut db = ProjectDb::open(repo_root).map_err(SecretError::Store)?;
-  if permission == ReplacementPermission::UnusedOnly
-    && ProjectSecrets::load(&db)
-      .map_err(SecretError::Store)?
-      .replacement_needs_person(id)
-  {
-    return Ok(ReplacementOutcome::NeedsPerson);
-  }
-  let project = db.project().id();
-  secret::replace_value(&mut db, vault, project, id, value, Timestamp::now())?;
-  Ok(ReplacementOutcome::Replaced)
+  db.with_write_transaction(
+    |db| {
+      if permission == ReplacementPermission::UnusedOnly
+        && super::replacement::needs_person(db, id).map_err(SecretError::Store)?
+      {
+        return Ok(ReplacementOutcome::NeedsPerson);
+      }
+      let project = db.project().id();
+      secret::replace_value(db, vault, project, id, value, Timestamp::now())?;
+      Ok(ReplacementOutcome::Replaced)
+    },
+    SecretError::Store,
+  )
 }
 
 /// Archives secret `id` of the project at `repo_root`, removing its value from `vault`.

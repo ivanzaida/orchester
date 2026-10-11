@@ -1,5 +1,8 @@
 //! Which project resources appear in a secret's read-only Used by list.
 
+#[path = "secrets/replacement.rs"]
+mod replacement;
+
 use std::{collections::BTreeMap, fs};
 
 use orchester_core::{
