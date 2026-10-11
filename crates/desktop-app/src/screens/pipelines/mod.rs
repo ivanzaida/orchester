@@ -1,5 +1,6 @@
 //! Pipelines library and editor (Pencil layers i4jt6V and vEDYY).
 mod canvas;
+mod command_picker;
 mod dependencies;
 mod editor;
 mod graph_routes;

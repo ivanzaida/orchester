@@ -80,7 +80,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::PullRequests => pull_requests::screen(ctx, project),
     ProjectPage::Usage => usage::screen(ctx, project),
     ProjectPage::Pipelines => pipelines::screen(ctx, project),
-    ProjectPage::NewPipeline => pipelines::new_pipeline(ctx, project),
+    ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline => pipelines::new_pipeline(ctx, project),
     ProjectPage::Pipeline(id) => pipelines::editor(ctx, project, *id),
     ProjectPage::Agents => agents::screen(ctx, project),
     ProjectPage::Instructions => instructions::screen(ctx, project),

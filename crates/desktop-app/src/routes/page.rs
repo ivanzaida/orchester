@@ -21,6 +21,7 @@ pub enum ProjectPage {
   Usage,
   Pipelines,
   NewPipeline,
+  NewEmptyPipeline,
   Pipeline(ResourceId),
   Agents,
   Instructions,
@@ -68,7 +69,7 @@ impl ProjectPage {
       Self::Task(..) => Screen::Task,
       Self::PullRequests => Screen::PullRequests,
       Self::Usage => Screen::Usage,
-      Self::Pipelines | Self::NewPipeline | Self::Pipeline(_) => Screen::Pipelines,
+      Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(_) => Screen::Pipelines,
       Self::Agents => Screen::Agents,
       Self::Instructions => Screen::Instructions,
       Self::Skills => Screen::Skills,
@@ -94,6 +95,7 @@ impl ProjectPage {
       Self::EditTask(key) => format!("{tasks}/{key}/{EDIT}"),
       Self::Task(key, view) => view.path(&format!("{tasks}/{key}")),
       Self::NewPipeline => format!("{project_root}/pipelines/new"),
+      Self::NewEmptyPipeline => format!("{project_root}/pipelines/new?start=empty"),
       Self::Pipeline(id) => format!("{project_root}/pipelines/{id}"),
       Self::Connections(view) => view.path(connections),
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
@@ -115,7 +117,14 @@ impl ProjectPage {
           rest => TaskView::parse(rest, params).map(|view| Self::Task(key, view)),
         }
       }
-      ["pipelines", NEW] => Ok(Self::NewPipeline),
+      ["pipelines", NEW] => match params.take("start")?.as_deref() {
+        None | Some("starter") => Ok(Self::NewPipeline),
+        Some("empty") => Ok(Self::NewEmptyPipeline),
+        Some(value) => Err(RouteError::InvalidParam {
+          param: "start".to_owned(),
+          value: value.to_owned(),
+        }),
+      },
       ["pipelines", id] => id.parse().map(Self::Pipeline).map_err(|_| RouteError::NoScreen),
       [CONNECTIONS] => ConnectionsView::take(params).map(Self::Connections),
       [CONNECTIONS, NEW] => NewConnection::take(params).map(Self::NewConnection),

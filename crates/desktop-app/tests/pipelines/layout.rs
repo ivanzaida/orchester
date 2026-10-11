@@ -4,6 +4,83 @@ use orchester_core::{resource::Pipeline, store::ResourceStore};
 use crate::pipelines_support::Editor;
 
 #[test]
+fn pipelines_empty_library_entries_select_the_requested_start_on_the_creation_page() {
+  for (action, empty) in [("pipeline-empty-create", false), ("pipeline-empty-start", true)] {
+    let mut editor = Editor::new();
+    editor.go(orchester_app::routes::ProjectPage::Pipelines);
+    editor.until("empty library", |e| e.exists("pipelines-empty"));
+    assert!(editor.exists("pipeline-empty-create") && editor.exists("pipeline-empty-start"));
+    assert!(
+      editor
+        .text("pipelines-empty")
+        .contains("Nothing runs until you publish it")
+    );
+    let parallel = editor.text("pipeline-starter-parallel");
+    assert!(parallel.contains("Run checks") && parallel.contains("Review"));
+    editor.click(action);
+    editor.until("new pipeline page", |e| e.exists("pipeline-name"));
+    let route = editor.window.navigation().route_now();
+    assert_eq!(orchester_app::routes::Route::parse(&route.path()).unwrap(), route);
+    assert!(
+      editor
+        .db()
+        .resources(orchester_core::resource::ResourceKind::Pipeline)
+        .unwrap()
+        .is_empty()
+    );
+    editor.set("pipeline-name", "Entry choice");
+    editor.click("pipeline-create");
+    editor.until("created draft", |e| e.exists("pipeline-add-step"));
+    let id = editor.selected();
+    let draft = editor.db().draft::<Pipeline>(id).unwrap().unwrap();
+    assert_eq!(draft.body().steps().is_empty(), empty);
+    assert!(editor.db().latest_version::<Pipeline>(id).unwrap().is_none());
+  }
+}
+
+#[test]
+fn pipelines_first_version_without_draft_has_no_phantom_entry_or_self_comparison() {
+  let mut editor = Editor::new();
+  let id = editor.published();
+  editor.open(id);
+  editor.click("pipeline-history");
+  editor.until("first version", |e| e.exists("pipeline-version-1"));
+  assert!(!editor.exists("pipeline-history-draft"));
+  assert!(editor.text("pipeline-version-1").contains("first version"));
+  editor.click("pipeline-version-1");
+  assert_eq!(editor.text("pipeline-compare-label"), "Compare with draft");
+  assert!(
+    editor
+      .text("pipeline-history-no-draft")
+      .contains("Your next edit starts draft v2")
+  );
+  editor.click("pipeline-compare");
+  assert!(!editor.exists("pipeline-comparison-changes"));
+  assert!(!editor.text("screen-pipelines").contains("Compared with published"));
+  for id in ["pipeline-compare", "pipeline-restore"] {
+    let bounds = editor
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|e| e.bounds())
+      .unwrap();
+    assert!(
+      bounds.x >= 1092.0 && bounds.x + bounds.width <= 1432.0,
+      "{id}: {bounds:?}"
+    );
+  }
+  assert!(editor.db().draft::<Pipeline>(id).unwrap().is_none());
+  editor.click("pipeline-back-draft");
+  editor.set("pipeline-description", "First unpublished edit");
+  editor.until("real draft saved", |e| e.db().draft::<Pipeline>(id).unwrap().is_some());
+  editor.click("pipeline-history");
+  editor.until("real draft entry", |e| e.exists("pipeline-history-draft"));
+  editor.click("pipeline-version-1");
+  editor.click("pipeline-compare");
+  assert!(editor.text("pipeline-comparison-changes").contains("saved draft v2"));
+}
+
+#[test]
 fn pipelines_inspector_fields_fit_the_window_and_dependency_picker_stays_compact() {
   let mut editor = Editor::new();
   editor.profile();

@@ -101,6 +101,81 @@ fn bounds(editor: &mut Editor, id: &str) -> lurq::core::ElementRect {
 }
 
 #[test]
+fn pipelines_legal_long_names_keep_problem_actions_selectable_and_graph_cards_separate() {
+  let mut editor = Editor::new();
+  let (id, _) = problems(&editor);
+  let mut db = editor.db();
+  let saved = db.draft::<Pipeline>(id).unwrap().unwrap();
+  let mut edit = PipelineEdit::new(saved.body().clone());
+  let keys: Vec<_> = edit.steps().iter().map(|step| step.key.clone()).collect();
+  for (index, key) in keys.iter().take(2).enumerate() {
+    let prefix = if index == 0 { "Long name " } else { "Long step " };
+    let long = format!("{prefix}{}", "W".repeat(190));
+    assert_eq!(long.chars().count(), 200);
+    edit.update(key, |step| step.name = name(&long));
+  }
+  let body = edit.validate().unwrap();
+  db.save_draft(
+    id,
+    &orchester_core::resource::Draft::new(body.clone(), None, Timestamp::now()),
+  )
+  .unwrap();
+  editor.open(id);
+  let mut previous_bottom = 0.0;
+  for (index, step) in body.steps().iter().enumerate() {
+    let link = if index == 0 {
+      "pipeline-problem-0".to_owned()
+    } else {
+      format!("pipeline-problem-executor-{}", step.key)
+    };
+    let action = bounds(&mut editor, &link);
+    let label = bounds(&mut editor, &format!("{link}-label"));
+    let strip = bounds(&mut editor, "pipeline-problem-strip");
+    assert!(
+      action.x >= strip.x && action.x + action.width <= strip.x + strip.width,
+      "{action:?}"
+    );
+    assert!(
+      label.x >= action.x && label.x + label.width <= action.x + action.width,
+      "{label:?}"
+    );
+    click_center(&mut editor, &link);
+    assert_eq!(
+      editor.value("step-name"),
+      step.name.as_str(),
+      "full name remains editable"
+    );
+    let card = bounds(&mut editor, &format!("pipeline-step-{}", step.key));
+    let title = bounds(&mut editor, &format!("pipeline-step-title-{}", step.key));
+    let executor = bounds(&mut editor, &format!("pipeline-step-executor-{}", step.key));
+    assert!(
+      card.y >= previous_bottom + 20.0,
+      "cards and connectors must stay separate: {card:?}"
+    );
+    assert!(title.y + title.height <= executor.y, "title covers metadata");
+    assert!(
+      executor.y + executor.height < card.y + card.height,
+      "metadata covers access badge"
+    );
+    assert!(title.x + title.width <= card.x + card.width, "title exceeds card");
+    previous_bottom = card.y + card.height;
+  }
+}
+
+fn click_center(editor: &mut Editor, id: &str) {
+  let rect = bounds(editor, id);
+  let (x, y) = (rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+  editor.window.tree.mouse_move(x, y);
+  editor
+    .window
+    .tree
+    .mouse_down(x, y, lurq::app::events::MouseButton::Left);
+  editor.window.tree.mouse_up(x, y, lurq::app::events::MouseButton::Left);
+  editor.window.pass();
+  editor.window.pass();
+}
+
+#[test]
 fn pipelines_publication_problems_fit_and_select_every_named_step() {
   let mut editor = Editor::new();
   let (id, profile) = problems(&editor);

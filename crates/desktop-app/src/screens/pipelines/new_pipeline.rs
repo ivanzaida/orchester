@@ -55,10 +55,14 @@ pub struct NewPipeline {
 impl Component for NewPipeline {
   type Props = ShownProject;
   fn create(ctx: &mut Ctx) -> Self {
+    let empty = matches!(
+      Navigation::of(ctx).route_now(),
+      Route::Project(_, ProjectPage::NewEmptyPipeline)
+    );
     Self {
       name: ctx.signal(String::new()),
       description: ctx.signal(String::new()),
-      start: ctx.signal(0),
+      start: ctx.signal(if empty { 2 } else { 0 }),
       copy: ctx.signal(String::new()),
     }
   }
@@ -413,48 +417,57 @@ fn collision_strip(
       .into()
   })
 }
-pub(super) fn starter_chips(ctx: &Ctx) -> Column {
+pub(super) fn starter_chips(ctx: &Ctx) -> Row {
   let starter = starter(ctx).pipeline(&Default::default());
-  let mut chips = Column::new().spacing(ExtraSpacing::Snug.role());
-  for (line, steps) in starter.steps().chunks(5).enumerate() {
-    let mut row = Row::new()
+  let mut chain = Row::new()
+    .width(Dimension::Pct(100.0))
+    .wrap()
+    .spacing(ExtraSpacing::Pair.role())
+    .align_items(Alignment::Center);
+  for (stage, level) in orchester_workspace::pipelines::levels::levels(starter.steps())
+    .iter()
+    .enumerate()
+  {
+    let mut group = Column::new().spacing(SpacingSize::Xs);
+    for index in level {
+      group = group.child(starter_chip(&starter.steps()[*index], *index));
+    }
+    if level.len() > 1 {
+      group = group
+        .id("pipeline-starter-parallel")
+        .padding(SpacingSize::Xs)
+        .border_inside(lurq::app::theme::BorderSize::Sm, lurq::app::theme::PaletteColor::Border)
+        .rounded(lurq::app::theme::RadiusSize::Md);
+    }
+    let mut stage_row = Row::new()
       .spacing(ExtraSpacing::Pair.role())
       .align_items(Alignment::Center);
-    for (index, step) in steps.iter().enumerate() {
-      if index > 0 || line > 0 {
-        let previous = &starter.steps()[line * 5 + index - 1];
-        row = if step.depends_on == previous.depends_on {
-          row.child(parts::caption(&ctx.t("pipelines.parallel")))
-        } else {
-          row.child(crate::ui::icon::icon(
-            Icon::ArrowRight,
-            crate::theme::IconSize::Xs,
-            lurq::app::theme::PaletteColor::TextMuted,
-          ))
-        };
-      }
-      row = row.child(
-        Row::new()
-          .height(Dimension::Px(24.0))
-          .align_items(Alignment::Center)
-          .padding(lurq::node::padding::Padding::horizontal(SpacingSize::Sm))
-          .spacing(ExtraSpacing::Snug.role())
-          .border_inside(lurq::app::theme::BorderSize::Sm, lurq::app::theme::PaletteColor::Border)
-          .rounded(lurq::app::theme::RadiusSize::Sm)
-          .child(
-            Text::new(&format!("{:02}", line * 5 + index + 1)).variant(crate::theme::ExtraTypography::MonoSmall.role()),
-          )
-          .child(parts::caption(step.name.as_str()))
-          .with_children(step.approval_gate.then(|| {
-            crate::ui::icon::icon(
-              Icon::Hand,
-              crate::theme::IconSize::Xs,
-              lurq::app::theme::PaletteColor::Warning,
-            )
-          })),
-      );
+    if stage > 0 {
+      stage_row = stage_row.child(crate::ui::icon::icon(
+        Icon::ArrowRight,
+        crate::theme::IconSize::Xs,
+        lurq::app::theme::PaletteColor::TextMuted,
+      ));
     }
-    chips = chips.child(row);
+    chain = chain.child(stage_row.child(group));
   }
-  chips
+  chain
+}
+fn starter_chip(step: &orchester_core::resource::Step, index: usize) -> Row {
+  Row::new()
+    .height(Dimension::Px(24.0))
+    .align_items(Alignment::Center)
+    .padding(lurq::node::padding::Padding::horizontal(SpacingSize::Sm))
+    .spacing(ExtraSpacing::Snug.role())
+    .border_inside(lurq::app::theme::BorderSize::Sm, lurq::app::theme::PaletteColor::Border)
+    .rounded(lurq::app::theme::RadiusSize::Sm)
+    .child(Text::new(&format!("{:02}", index + 1)).variant(crate::theme::ExtraTypography::MonoSmall.role()))
+    .child(parts::caption(step.name.as_str()))
+    .with_children(step.approval_gate.then(|| {
+      crate::ui::icon::icon(
+        Icon::Hand,
+        crate::theme::IconSize::Xs,
+        lurq::app::theme::PaletteColor::Warning,
+      )
+    }))
 }

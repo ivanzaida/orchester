@@ -329,8 +329,13 @@ fn empty(ctx: &mut Ctx, project: orchester_core::id::ProjectId, page: Column) ->
     .background(PaletteColor::SurfaceRaised)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
-    .child(Text::new(&ctx.t("pipelines.starter")).variant(ExtraTypography::Strong.role()))
-    .child(parts::caption(&ctx.t("pipelines.starterHint")))
+    .child(
+      Row::new()
+        .spacing(SpacingSize::Sm)
+        .align_items(lurq::layout::Alignment::Center)
+        .child(Text::new(&ctx.t("pipelines.starter")).variant(ExtraTypography::Strong.role()))
+        .child(parts::caption(&ctx.t("pipelines.starterLibraryHint"))),
+    )
     .child(super::new_pipeline::starter_chips(ctx));
   page
     .child(
@@ -342,8 +347,33 @@ fn empty(ctx: &mut Ctx, project: orchester_core::id::ProjectId, page: Column) ->
       )
       .child(starter)
       .child(
-        ActionButton::new("pipeline-empty-create", ButtonKind::Primary, ctx.t("pipelines.new"))
-          .on_click(move || nav.go(Route::Project(project, ProjectPage::NewPipeline))),
+        Row::new()
+          .width(Dimension::Pct(100.0))
+          .wrap()
+          .spacing(SpacingSize::Sm)
+          .align_items(lurq::layout::Alignment::Center)
+          .child(
+            ActionButton::new(
+              "pipeline-empty-create",
+              ButtonKind::Primary,
+              ctx.t("pipelines.createFromStarter"),
+            )
+            .icon(Icon::Sparkles)
+            .on_click({
+              let nav = nav.clone();
+              move || nav.go(Route::Project(project, ProjectPage::NewPipeline))
+            }),
+          )
+          .child(
+            ActionButton::new(
+              "pipeline-empty-start",
+              ButtonKind::Secondary,
+              ctx.t("pipelines.startEmpty"),
+            )
+            .icon(Icon::Plus)
+            .on_click(move || nav.go(Route::Project(project, ProjectPage::NewEmptyPipeline))),
+          )
+          .child(parts::caption(&ctx.t("pipelines.emptyCreationHint"))),
       ),
     )
     .child(versions_help(ctx))

@@ -71,7 +71,7 @@ impl Route {
   /// A pipeline's list, creation page and editor belong to one sidebar screen, with distinct paths.
   pub fn pattern(&self) -> String {
     match self {
-      Self::Project(_, ProjectPage::NewPipeline) => NEW_PIPELINE_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline) => NEW_PIPELINE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Pipeline(_)) => PIPELINE_PATTERN.to_owned(),
       _ => self.screen().pattern(),
     }

@@ -348,7 +348,12 @@ fn card_body(ctx: &Ctx, editing: &super::state::Editing, step: &Step, index: usi
         .child(Text::new(&format!("{:02}", index + 1)).variant(ExtraTypography::MonoNote.role()))
         .child(
           Text::new(step.name.as_str())
+            .id(format!("pipeline-step-title-{}", step.key))
+            .describe("a11y_name", step.name.as_str().to_owned())
             .variant(ExtraTypography::Strong.role())
+            .nowrap()
+            .text_overflow(lurq::components::TextOverflow::Elipsis)
+            .min_width(Dimension::Px(0.0))
             .flex(1.0),
         )
         .with_children(invalid.then(|| icon(Icon::CircleAlert, IconSize::Sm, PaletteColor::Danger))),
@@ -368,7 +373,12 @@ fn card_body(ctx: &Ctx, editing: &super::state::Editing, step: &Step, index: usi
         ))
         .child(
           Text::new(&message_text(ctx, &executor_line(step, &editing.opened.assignables)))
+            .id(format!("pipeline-step-executor-{}", step.key))
             .variant(ExtraTypography::Note.role())
+            .nowrap()
+            .text_overflow(lurq::components::TextOverflow::Elipsis)
+            .min_width(Dimension::Px(0.0))
+            .flex(1.0)
             .color(if invalid {
               PaletteColor::Danger
             } else {

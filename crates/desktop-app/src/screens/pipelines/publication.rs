@@ -52,7 +52,8 @@ pub fn problems(ctx: &Ctx, state: &State) -> Option<Element> {
     let view = problem_view(&editing.edit, problem, &ctx.t("pipelines.then"));
     let target = state.clone();
     let text = message_text(ctx, &view.message);
-    let mut link = ActionButton::new(format!("pipeline-problem-{index}"), ButtonKind::Ghost, text.clone());
+    let mut link =
+      ActionButton::new(format!("pipeline-problem-{index}"), ButtonKind::Ghost, text.clone()).bounded_label();
     if let Some(step) = view.step {
       link = link.on_click(move || target.update(|s| s.panel = Panel::Step(step.clone())));
     }
@@ -67,6 +68,7 @@ pub fn problems(ctx: &Ctx, state: &State) -> Option<Element> {
           ButtonKind::Ghost,
           ctx.t_args("pipelines.executorProblem", [("step", step.name.as_str())]),
         )
+        .bounded_label()
         .on_click(move || target.update(|s| s.panel = Panel::Step(key.clone()))),
       );
     }

@@ -80,7 +80,9 @@ fn panel(
       if history.versions().is_empty() {
         body = body.child(parts::note(&ctx.t("pipelines.historyEmpty")));
       }
-      body = body.child(draft_row(ctx, state));
+      if editing.opened.draft_saved_at.is_some() || editing.dirty() || !editing.errors.is_empty() {
+        body = body.child(draft_row(ctx, state));
+      }
       for version in history.versions() {
         body = body.child(version_row(
           ctx,
@@ -139,6 +141,7 @@ fn restore_button(ctx: &Ctx, state: &State, writing: bool) -> ActionButton {
       )],
     ),
   )
+  .bounded_label()
   .icon(crate::ui::icon::Icon::RotateCcw)
   .on_click(move || {
     restore.update(|s| {
@@ -211,7 +214,11 @@ fn version_row(
     ));
   }
   let meta = ctx.t_args(
-    "pipelines.historyMeta",
+    if version.changes.is_none() {
+      "pipelines.historyFirstMeta"
+    } else {
+      "pipelines.historyMeta"
+    },
     [
       ("age", super::library::age(ctx, version.published_at).to_string()),
       (
@@ -322,7 +329,7 @@ fn details(
       &ctx.t_args("pipelines.runs", [("count", version.runs.len().to_string())]),
     ));
   let changes = version.changes.as_ref().map(|c| c.changes.clone()).unwrap_or_default();
-  if changes.is_empty() {
+  if version.changes.is_none() {
     body = body.child(parts::note(&ctx.t("pipelines.firstVersion")));
   }
   for change in &changes {
@@ -343,12 +350,27 @@ fn details(
   }
   body = body.child(
     Row::new()
+      .width(Dimension::Pct(100.0))
+      .wrap()
       .spacing(SpacingSize::Sm)
       .child(compare_button(ctx, state))
       .child(restore_button(ctx, state, writing)),
   );
   if editing.dirty() || !editing.errors.is_empty() {
     body = body.child(parts::note(&ctx.t("pipelines.compareUnavailable")));
+  } else if no_comparison_draft(&editing) {
+    body = body.child(crate::ui::inspector::note(
+      "pipeline-history-no-draft",
+      crate::ui::icon::Icon::Lock,
+      &ctx.t_args(
+        "pipelines.historyNoDraft",
+        [(
+          "version",
+          orchester_workspace::pipelines::write::next_version(&editing.opened)
+            .map_or_else(String::new, |v| v.get().to_string()),
+        )],
+      ),
+    ));
   }
   body = body.child(crate::ui::notice::handling_notice(
     "history-pinned",
@@ -407,6 +429,10 @@ fn draft_row(ctx: &Ctx, state: &State) -> Element {
     )
     .into()
 }
+fn no_comparison_draft(editing: &super::state::Editing) -> bool {
+  editing.opened.draft_saved_at.is_none() && editing.viewing_version == editing.opened.latest.as_ref().map(|v| v.number)
+}
+
 fn compare_button(ctx: &Ctx, state: &State) -> ActionButton {
   let editing = state.get();
   let compare = state.clone();
@@ -415,7 +441,7 @@ fn compare_button(ctx: &Ctx, state: &State) -> ActionButton {
     ButtonKind::Secondary,
     ctx.t(if editing.comparing {
       "pipelines.hideComparison"
-    } else if editing.opened.draft_saved_at.is_some() {
+    } else if editing.opened.draft_saved_at.is_some() || no_comparison_draft(&editing) {
       "pipelines.compare"
     } else {
       "pipelines.comparePublished"
@@ -423,7 +449,7 @@ fn compare_button(ctx: &Ctx, state: &State) -> ActionButton {
   )
   .icon(crate::ui::icon::Icon::GitCompare)
   .on_click(move || compare.update(|s| s.comparing = !s.comparing));
-  if editing.dirty() || !editing.errors.is_empty() {
+  if editing.dirty() || !editing.errors.is_empty() || no_comparison_draft(&editing) {
     button.disabled()
   } else {
     button

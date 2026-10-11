@@ -119,6 +119,7 @@ pub struct ActionButton {
   focus: Focus,
   /// As wide as its parent, its icon and label centered (`Allow retry` `ae0Pi`).
   fill: bool,
+  bounded: bool,
   element: Option<ElementRef>,
 }
 
@@ -134,6 +135,7 @@ impl ActionButton {
       hold: None,
       focus: Focus::Pointer,
       fill: false,
+      bounded: false,
       element: None,
     }
   }
@@ -172,6 +174,12 @@ impl ActionButton {
   /// As wide as its parent, its icon and label centered.
   pub fn fill_width(mut self) -> Self {
     self.fill = true;
+    self
+  }
+
+  /// Keep a long label within the available width; the full accessible name is retained.
+  pub fn bounded_label(mut self) -> Self {
+    self.bounded = true;
     self
   }
 
@@ -223,6 +231,9 @@ impl From<ActionButton> for Element {
     if button.fill || button.kind == ButtonKind::Select {
       frame = frame.width(Dimension::Pct(100.0));
     }
+    if button.bounded {
+      frame = frame.max_width(Dimension::Pct(100.0)).min_width(Dimension::Px(0.0));
+    }
     if let Some(lead) = button.lead() {
       frame = frame.child(icon(lead, IconSize::Md, color.clone()).id(format!("{}-icon", button.id)));
     }
@@ -231,6 +242,14 @@ impl From<ActionButton> for Element {
       .variant(TypographyStyle::Button)
       .color(color)
       .nowrap();
+    let label = if button.bounded {
+      label
+        .flex_shrink(1.0)
+        .min_width(Dimension::Px(0.0))
+        .text_overflow(lurq::components::TextOverflow::Elipsis)
+    } else {
+      label
+    };
     frame = button.kind.dressed(frame).child(if button.kind == ButtonKind::Select {
       label.flex(1.0).min_width(Dimension::Px(0.0))
     } else {

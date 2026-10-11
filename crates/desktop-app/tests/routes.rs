@@ -52,6 +52,7 @@ fn every_route() -> Vec<Route> {
         .with_highlight(key("KON-13")),
     )),
     at(ProjectPage::NewPipeline),
+    at(ProjectPage::NewEmptyPipeline),
     at(ProjectPage::Pipeline(PROJECT.parse().expect("a resource id"))),
     at(ProjectPage::EditTask(key("KON-7"))),
     at(ProjectPage::EditConnection(connection())),
