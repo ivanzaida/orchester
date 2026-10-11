@@ -283,21 +283,9 @@ impl Component for FieldBox {
         )
         .id(format!("{}-trailing", props.id))
       })),
-      Lines::Many | Lines::Compact => dress(
-        Row::new()
-          .id(format!("{}-box", props.id))
-          .min_height(Dimension::Px(if props.lines == Lines::Compact {
-            COMPACT_AREA_HEIGHT
-          } else {
-            TEXT_AREA_HEIGHT
-          }))
-          .padding(Padding::symmetric(
-            ExtraSpacing::Loose.role(),
-            ExtraSpacing::TextArea.role(),
-          ))
-          .align_items(Alignment::Start),
-      )
-      .child(Column::new().flex(1.0).child(input)),
+      Lines::Many | Lines::Compact => {
+        dress(Row::new().id(format!("{}-box", props.id)).align_items(Alignment::Start)).child(input)
+      }
     };
     let Some(error) = &props.error else {
       return Column::new().width(props.width).child(frame);
@@ -356,7 +344,19 @@ impl FieldBox {
     }
     match props.lines {
       Lines::One => input.single_line(),
-      Lines::Many | Lines::Compact => input.multiline().rows(1, TEXT_AREA_MAX_LINES),
+      Lines::Many | Lines::Compact => input
+        .multiline()
+        .rows(1, TEXT_AREA_MAX_LINES)
+        // The input owns the whole hit area, including its empty body and text insets.
+        .min_height(Dimension::Px(if props.lines == Lines::Compact {
+          COMPACT_AREA_HEIGHT
+        } else {
+          TEXT_AREA_HEIGHT
+        }))
+        .padding(Padding::symmetric(
+          ExtraSpacing::Loose.role(),
+          ExtraSpacing::TextArea.role(),
+        )),
     }
   }
 }

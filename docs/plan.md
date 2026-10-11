@@ -768,6 +768,8 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+Textarea click focus (done 2026-10-11): multiline FieldInput owns its full visible input area, including blank body and padding. Sixteen filtered regressions and check.ps1 passed; independent code review and ten native coordinate-focus checks passed. Shared dimensions remain unchanged; the existing local retry-note 84/58px Pencil discrepancy and macOS/native compact/locked states are outside this focused fix.
+
 ORC-7 · Secrets page · branch `orchester/orc-7-run-1` (done 2026-10-11, merged `2b61296d`).
 Independent code review and re-reviews resolved native/retained references, concurrent binding and post-vault COMMIT error reporting. Eleven targeted regressions passed independently; 50 integration regressions and required post-merge cargo check all targets/features and check.ps1 passed. Independent scoped Pencil verification found no blocking/major in inspected regions; nine minor findings remain. Exact historical visual evidence plus unchanged visual-source delta and fresh candidate production captures are recorded in the run worktree reports. Person-only/no-frame states, native post-vault COMMIT painting, real keychain/clipboard/navigation and macOS remain Unverified; 960/light excluded. Integration resolution independently reviewed with both Tools and Secrets variants preserved.
 
