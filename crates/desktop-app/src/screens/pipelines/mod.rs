@@ -15,6 +15,7 @@ mod restore;
 mod settings;
 mod settings_nav;
 mod state;
+mod step_executor;
 mod step_fields;
 mod step_permissions;
 mod summary;

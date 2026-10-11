@@ -81,7 +81,7 @@ fn value_text(id: &str, value: &str, kind: PropertyValue) -> Text {
     .id(format!("{id}-value"))
     .variant(style)
     .color(color)
-    .flex(1.0)
+    .width(Dimension::Pct(100.0))
     .min_width(Dimension::Px(0.0))
 }
 

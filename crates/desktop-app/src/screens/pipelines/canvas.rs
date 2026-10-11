@@ -323,14 +323,6 @@ fn empty_graph(ctx: &Ctx, state: &State, mut graph: Stack, y: f32) -> Stack {
   graph
 }
 fn card_body(ctx: &Ctx, editing: &super::state::Editing, step: &Step, index: usize, selected: bool) -> Column {
-  let outcome = match step.kind {
-    StepKind::Tool { .. } => "pipelines.toolBadge",
-    StepKind::Agent {
-      repository: RepositoryAccess::ReadOnly,
-      ..
-    } => "pipelines.readBadge",
-    _ => "pipelines.writeBadge",
-  };
   let invalid = orchester_workspace::pipelines::narrowing::check_step(step, &editing.opened.assignables).is_err()
     || matches!(
       step.kind,
@@ -387,9 +379,29 @@ fn card_body(ctx: &Ctx, editing: &super::state::Editing, step: &Step, index: usi
   if step.approval_gate {
     body = body.child(step_badge(&ctx.t("pipelines.gateBadge"), Icon::Hand));
   }
-  body = body.child(step_badge(
-    &ctx.t(outcome),
+  body = body.child(outcome_badge(ctx, step, invalid));
+  if invalid && !selected {
+    body = body.border(Border::inside(BorderSize::Sm, PaletteColor::Danger));
+  }
+  body
+}
+fn outcome_badge(ctx: &Ctx, step: &Step, invalid: bool) -> Row {
+  let outcome = match step.kind {
+    StepKind::Tool { .. } => "pipelines.toolBadge",
+    StepKind::Agent {
+      repository: RepositoryAccess::ReadOnly,
+      ..
+    } => "pipelines.readBadge",
+    _ => "pipelines.writeBadge",
+  };
+  step_badge(
+    &ctx.t(if matches!(step.kind, StepKind::Tool { .. }) && invalid {
+      "pipelines.toolUnavailableBadge"
+    } else {
+      outcome
+    }),
     match step.kind {
+      StepKind::Tool { .. } if invalid => Icon::Lock,
       StepKind::Tool { .. } => Icon::Terminal,
       StepKind::Agent {
         repository: RepositoryAccess::Write,
@@ -397,12 +409,9 @@ fn card_body(ctx: &Ctx, editing: &super::state::Editing, step: &Step, index: usi
       } => Icon::FilePen,
       _ => Icon::BookOpen,
     },
-  ));
-  if invalid && !selected {
-    body = body.border(Border::inside(BorderSize::Sm, PaletteColor::Danger));
-  }
-  body
+  )
 }
+
 fn parallel_frame(ctx: &Ctx, width: f32, height: f32) -> Column {
   Column::new()
     .width(Dimension::Px(width + 24.0))

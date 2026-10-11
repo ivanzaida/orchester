@@ -248,3 +248,6 @@ mod layout;
 mod permissions;
 #[path = "pipelines/regressions.rs"]
 mod regressions;
+
+#[path = "pipelines/publication_states.rs"]
+mod publication_states;

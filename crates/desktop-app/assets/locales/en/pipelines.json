@@ -253,6 +253,18 @@
     "slugPublished": "Set when v1 was first published. Tasks and runs use it to identify this pipeline.",
     "compareUnavailable": "Save a valid draft to compare.",
     "comparePublished": "Compare with published",
-    "copyVersionHint": "Published version → draft v1"
+    "copyVersionHint": "Published version → draft v1",
+    "executorProblem": "{{step}} · check executor",
+    "toolUnavailableBadge": "Unavailable in this version",
+    "profileDraft": "{{name}} · draft v1",
+    "profileUnpublished": "Profile not published",
+    "profileDraftHint": "{{name}} has only draft v1. Publish it before this pipeline can publish; runs use published profiles only.",
+    "profileDraftModel": "From the profile’s draft. It may change before {{name}} is published.",
+    "openProfile": "Open profile",
+    "profilePageUnavailable": "The agent profile page is not available in this app yet.",
+    "toolModelUnused": "Not used by tools",
+    "databaseUnavailable": "Database actions cannot run as pipeline steps yet. Pick a command tool without access rules or an agent profile.",
+    "httpUnavailable": "HTTP actions cannot run as pipeline steps yet. Pick a command tool without access rules or an agent profile.",
+    "toolAccessUnavailable": "Pipeline steps cannot run command tools with access rules yet. Pick a command tool without access rules or an agent profile."
   }
 }

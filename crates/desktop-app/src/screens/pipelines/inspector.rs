@@ -205,6 +205,8 @@ impl Component for StepInspector {
       props.locked,
     ));
     if let Err(error) = orchester_workspace::pipelines::narrowing::check_step(&props.step, &editing.opened.assignables)
+      && super::step_executor::draft_profile(&props).is_none()
+      && super::step_executor::unavailable_tool(&props).is_none()
     {
       body = body.child(crate::ui::field::field_error(
         "step-executor-error",
@@ -338,7 +340,7 @@ fn summary_metadata(ctx: &Ctx, editing: &super::state::Editing, name: Element, d
       "pipeline-step-count",
       &ctx.t("pipelines.steps"),
       &super::summary::steps(ctx, &shown),
-      PropertyValue::Mono,
+      PropertyValue::Plain,
     ))
     .with_children(
       editing

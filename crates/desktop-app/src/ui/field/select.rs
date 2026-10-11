@@ -112,6 +112,7 @@ pub struct SelectField<T: SignalValue> {
   /// The chosen option's label in Geist Mono: a path or an identifier.
   mono: bool,
   invalid: bool,
+  warning: bool,
   locked: bool,
 }
 
@@ -138,6 +139,7 @@ where
       leading: None,
       mono: false,
       invalid: false,
+      warning: false,
       locked: false,
     }
   }
@@ -172,6 +174,12 @@ where
     self
   }
 
+  /// A draft choice that must be published first keeps the warning outline (adK4e).
+  pub fn warning(mut self) -> Self {
+    self.warning = true;
+    self
+  }
+
   /// An unavailable choice is visibly disabled and cannot open its menu.
   pub fn locked(mut self) -> Self {
     self.locked = true;
@@ -180,6 +188,9 @@ where
 
   pub fn render(self, ctx: &Ctx) -> Element {
     let mut style = select_style(ctx);
+    if self.warning {
+      style = style.trigger(trigger_style(ctx, PaletteColor::Warning));
+    }
     if self.invalid {
       style = style.trigger(trigger_style(ctx, PaletteColor::Danger));
     }

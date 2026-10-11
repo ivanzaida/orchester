@@ -9,7 +9,7 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::{Step, StepKind};
+use orchester_core::resource::Step;
 use orchester_workspace::pipelines::fields::{self, Executor, ModelChoice, RouteChoice};
 
 use super::{parts, state::State};
@@ -77,38 +77,18 @@ impl Component for Fields {
         crate::ui::inspector::section_title("pipelines.executor", &ctx.t("pipelines.executor"), None)
           .height(Dimension::Px(20.0)),
       )
-      .child(self.executor(ctx, &props));
-    if matches!(props.step.kind, StepKind::Agent { .. }) {
-      let editing = props.state.get();
-      let models = fields::model_choices(
-        editing.opened.assignables.profiles.iter().map(|p| &p.model),
-        self.model.get().0.as_ref(),
-      );
-      let mut options = vec![SelectOption::new(ModelChoice(None), ctx.t("pipelines.inherit"))];
-      options.extend(
-        models
-          .into_iter()
-          .map(|m| SelectOption::new(ModelChoice(Some(m.clone())), m.as_str().to_owned())),
-      );
-      let options = locked_options(options, props.locked || self.executor.get() == Executor::Unset);
-      let select = SelectField::new("step-model", ctx.t("pipelines.model"), self.model.clone(), options)
-        .leading(crate::ui::icon::Icon::Cpu);
-      let select = if self.executor.get() == Executor::Unset {
-        select.locked()
-      } else {
-        select
-      }
-      .render(ctx);
-      body = body.child(property_of("step-model-row", &ctx.t("pipelines.model"), select));
+      .child(super::step_executor::executor(ctx, &props, self.executor.clone()));
+    body = body.child(super::step_executor::model(ctx, &props, &self.model));
+    if super::step_executor::unavailable_tool(&props).is_none() {
+      body = body.child(Self::text(
+        ctx,
+        &props,
+        "step-instructions",
+        "pipelines.instructions",
+        self.instructions.clone(),
+        true,
+      ));
     }
-    body = body.child(Self::text(
-      ctx,
-      &props,
-      "step-instructions",
-      "pipelines.instructions",
-      self.instructions.clone(),
-      true,
-    ));
     body
       .child(parts::section(ctx, "pipelines.flow"))
       .child(self.flow(ctx, &props))
@@ -142,60 +122,6 @@ impl Fields {
     }
     let input = field.render(ctx);
     property_of(&format!("{id}-row"), &title, input).into()
-  }
-  fn executor(&self, ctx: &Ctx, props: &Props) -> Element {
-    let editing = props.state.get();
-    let mut options = vec![SelectOption::new(Executor::Unset, ctx.t("pipelines.chooseProfile"))];
-    options.extend(
-      editing
-        .opened
-        .assignables
-        .profiles
-        .iter()
-        .map(|p| SelectOption::new(Executor::Profile(p.id), p.name.clone())),
-    );
-    options.extend(editing.opened.assignables.tools.iter().map(|t| {
-      let option = SelectOption::new(Executor::Tool(t.id), t.name.clone());
-      if t.runnable {
-        option
-      } else {
-        option.detail(ctx.t("pipelines.toolUnavailable")).disabled(true)
-      }
-    }));
-    let options = locked_options(options, props.locked);
-    let input = SelectField::new(
-      "step-executor",
-      ctx.t("pipelines.executor"),
-      self.executor.clone(),
-      options,
-    )
-    .leading(if matches!(props.step.kind, StepKind::Tool { .. }) {
-      crate::ui::icon::Icon::Wrench
-    } else {
-      crate::ui::icon::Icon::Bot
-    });
-    let input = if self.executor.get() == Executor::Unset {
-      input.invalid()
-    } else {
-      input
-    }
-    .render(ctx);
-    let mut column = Column::new().width(Dimension::Pct(100.0)).child(input);
-    if self.executor.get() == Executor::Unset {
-      column = column.child(
-        parts::note(&ctx.t("pipelines.missingProfile"))
-          .id("step-profile-required")
-          .color(lurq::app::theme::PaletteColor::Danger),
-      );
-    }
-    let label = if matches!(props.step.kind, StepKind::Tool { .. }) {
-      "pipelines.tool"
-    } else {
-      "pipelines.profile"
-    };
-    Column::new()
-      .child(property_of("step-executor-row", &ctx.t(label), column).align_items(lurq::layout::Alignment::Start))
-      .into()
   }
 
   fn flow(&self, ctx: &mut Ctx, props: &Props) -> Element {
@@ -339,7 +265,7 @@ impl Fields {
     });
   }
 }
-fn locked_options<T>(options: Vec<SelectOption<T>>, locked: bool) -> Vec<SelectOption<T>> {
+pub(super) fn locked_options<T>(options: Vec<SelectOption<T>>, locked: bool) -> Vec<SelectOption<T>> {
   options
     .into_iter()
     .map(|option| if locked { option.disabled(true) } else { option })

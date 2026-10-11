@@ -37,6 +37,7 @@ pub fn problems(ctx: &Ctx, state: &State) -> Option<Element> {
   }
   let mut strip = Row::new()
     .id("pipeline-problem-strip")
+    .wrap()
     .width(Dimension::Pct(100.0))
     .padding(SpacingSize::Sm)
     .spacing(SpacingSize::Md)
@@ -58,13 +59,13 @@ pub fn problems(ctx: &Ctx, state: &State) -> Option<Element> {
     strip = strip.child(link);
   }
   for step in editing.edit.steps() {
-    if let Err(message) = narrowing::check_step(step, &editing.opened.assignables) {
+    if narrowing::check_step(step, &editing.opened.assignables).is_err() {
       let (target, key) = (state.clone(), step.key.clone());
       strip = strip.child(
         ActionButton::new(
           format!("pipeline-problem-executor-{}", step.key),
           ButtonKind::Ghost,
-          message_text(ctx, &message),
+          ctx.t_args("pipelines.executorProblem", [("step", step.name.as_str())]),
         )
         .on_click(move || target.update(|s| s.panel = Panel::Step(key.clone()))),
       );
