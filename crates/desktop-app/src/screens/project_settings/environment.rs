@@ -129,7 +129,9 @@ impl Component for Environment {
     {
       save.state().set(FutureState::idle());
     }
-    if state.error.is_some() {
+    if self.reloading.get() {
+      props.status.set(Status::Saving);
+    } else if state.error.is_some() {
       props.status.set(Status::Failed);
     } else if !save.state().get().is_pending() && save.state().get().error.is_none() {
       props.status.set(if parse_environment(&self.text.get()).is_err() {
@@ -159,18 +161,16 @@ impl Component for Environment {
         .spacing(crate::theme::ExtraSpacing::Inset.role()),
       )
       .with_children(
-        state
-          .error
-          .map(|e| field_error("settings-environment-read-error", &message_text(ctx, &e))),
-      )
-      .with_children(
         save
           .state()
           .get()
           .error
           .map(|e| field_error("settings-environment-save-error", &message_text(ctx, &e))),
       )
-      .with_children((self.reloading.get() || (outside && changed)).then(|| self.outside(ctx)))
+      .with_children(match &state.error {
+        Some(error) => Some(self.read_error(ctx, &save, error)),
+        None => (self.reloading.get() || (outside && changed)).then(|| self.outside(ctx, &save)),
+      })
       .child(page::review_notice(ctx, true));
     if let Some(request) = asking {
       content = content.child(self.question(ctx, &props, &save, request));
@@ -180,14 +180,15 @@ impl Component for Environment {
 }
 impl Environment {
   fn finish_reload(&self, state: &FutureState<Stored, Message>, save: &Save) {
-    if self.reloading.get()
-      && !state.is_pending()
-      && state.error.is_none()
+    if !self.reloading.get() || state.is_pending() {
+      return;
+    }
+    self.reloading.set(false);
+    if state.error.is_none()
       && let Some(read) = &state.data
     {
       self.fill(read.clone());
       self.asking.set(Asking(None));
-      self.reloading.set(false);
       save.state().set(FutureState::idle());
     }
   }
@@ -235,7 +236,7 @@ impl Environment {
     .mono()
     .text_style(crate::theme::ExtraTypography::MonoArea.role())
     .on_leave(move || commit());
-    if asking || save.state().get().is_pending() {
+    if asking || self.reloading.get() || save.state().get().is_pending() {
       input = input.locked();
     }
     if let Err(error) = parse_environment(&self.text.get()) {
@@ -268,7 +269,10 @@ impl Environment {
   fn commit(&self, props: &TabProps, save: &Save) -> Arc<dyn Fn() + Send + Sync> {
     let (tab, save, root) = (self.clone(), save.clone(), props.project.open.repo_root.clone());
     Arc::new(move || {
-      if save.state().get_untracked().is_pending() || tab.asking.get_untracked().0.is_some() {
+      if tab.reloading.get_untracked()
+        || save.state().get_untracked().is_pending()
+        || tab.asking.get_untracked().0.is_some()
+      {
         return;
       }
       let (Some(base), Ok(asked)) = (tab.stored.get_untracked(), parse_environment(&tab.text.get_untracked())) else {
@@ -295,7 +299,12 @@ impl Environment {
       .map(|m| message_text(ctx, m))
       .collect::<Vec<_>>();
     request.confirmed = true;
-    let (save, root, asking) = (save.clone(), props.project.open.repo_root.clone(), self.asking.clone());
+    let (save, root, asking, reloading) = (
+      save.clone(),
+      props.project.open.repo_root.clone(),
+      self.asking.clone(),
+      self.reloading.clone(),
+    );
     ctx.mount_keyed::<WidenConfirm>(
       "settings-environment-confirm",
       WidenProps {
@@ -306,33 +315,50 @@ impl Environment {
         confirm: ctx.t("project_settings.confirm"),
         on_keep: Arc::new(move || asking.set(Asking(None))),
         on_confirm: Arc::new(move || {
-          if !save.state().get_untracked().is_pending() {
+          if !reloading.get_untracked() && !save.state().get_untracked().is_pending() {
             save.run((root.clone(), request.clone()));
           }
         }),
       },
     )
   }
-  fn outside(&self, ctx: &Ctx) -> Element {
-    let tab = self.clone();
+  fn read_error(&self, ctx: &Ctx, save: &Save, error: &Message) -> Element {
     Notice::new(
-      "settings-environment-outside",
-      NoticeTone::Warning,
-      ctx.t("project_settings.outsideTitle"),
+      "settings-environment-read-error",
+      NoticeTone::Danger,
+      ctx.t("project_settings.loadFailed"),
     )
-    .body(ctx.t("project_settings.outsideDetail"))
-    .action(
-      ActionButton::new(
-        "settings-environment-reload",
-        ButtonKind::Secondary,
-        ctx.t("project_settings.reload"),
-      )
-      .on_click(move || {
-        tab.reloading.set(true);
-        tab.revision.update(|revision| *revision += 1);
-      }),
-    )
+    .body(message_text(ctx, error))
+    .action(self.reload_button(ctx, save, "project_settings.retry"))
     .into()
+  }
+  fn outside(&self, ctx: &Ctx, save: &Save) -> Element {
+    let title = if self.reloading.get() {
+      "project_settings.reading"
+    } else {
+      "project_settings.outsideTitle"
+    };
+    Notice::new("settings-environment-outside", NoticeTone::Warning, ctx.t(title))
+      .body(ctx.t("project_settings.outsideDetail"))
+      .action(self.reload_button(ctx, save, "project_settings.reload"))
+      .into()
+  }
+  fn reload_button(&self, ctx: &Ctx, save: &Save, label: &str) -> ActionButton {
+    let (tab, save) = (self.clone(), save.clone());
+    let button = ActionButton::new("settings-environment-reload", ButtonKind::Secondary, ctx.t(label));
+    if self.reloading.get() {
+      return button.loading();
+    }
+    if save.state().get().is_pending() {
+      return button.disabled();
+    }
+    button.on_click(move || {
+      if tab.reloading.get_untracked() || save.state().get_untracked().is_pending() {
+        return;
+      }
+      tab.reloading.set(true);
+      tab.revision.update(|revision| *revision += 1);
+    })
   }
 }
 fn helper(ctx: &mut Ctx, props: &TabProps) -> Element {
