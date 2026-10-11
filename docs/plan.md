@@ -768,6 +768,16 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-2 · Agents page · branch `orchester/orc-2-run-4` (done 2026-10-11, merged `500f9965`).
+Independent source review accepted integration tree `4a0021f3`; 23 filtered groups / 134 executions passed
+on its unchanged production predecessor, followed by six inventory-correction checks and `tools/check.ps1`.
+Independent scoped Pencil/native verification found no blocking or major mismatch in reached Agents and
+shared-field states. The person completed stale publication decline/confirm and permission-widening
+allow/decline; native and read-only storage outcomes were independently accepted. Post-merge workspace/
+all-targets/all-features `cargo check` and `tools/check.ps1` passed. Recorded visual minors remain.
+Native failed-refetch/fault/loading, other capability/model/menu combinations, active-run usage, host/real CLI
+and macOS remain Unverified; 960/light, full suites and per-invocation relay coverage were not performed.
+
 ORC-9 · Project settings page · branch `orchester/orc-9-run-1` (done 2026-10-11, merged `fc9d0c2c`).
 Independent source review and scoped Pencil verification accepted the exact integration tree `a9d07d87`;
 141 tests in 20 filtered groups and `tools/check.ps1` passed. The person completed Environment widening,
