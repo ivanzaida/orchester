@@ -1,6 +1,6 @@
 # ORC-7: implementation returned from Verify attempt 3
 
-Candidate: base HEAD cb503ded89347f61dea8932e6c28808506ce4a8e plus the saved changes in this return. No commit was made. The previous report at .tmp/verify/orc7/report.md remains evidence for the old candidate only.
+Candidate: implementation based on cb503ded89347f61dea8932e6c28808506ce4a8e, subsequently checkpointed by Orchester as 8c9c8f165f8c0a7f5a79410fee23c30e439e896c. This follow-up changes this evidence document only; the tested app/fixture source is unchanged. The implementer made no commit. The previous report at .tmp/verify/orc7/report.md remains evidence for the old candidate only.
 
 ## Corrections
 
@@ -63,7 +63,11 @@ Read only layer Secrets ccz8n in data/orchester2.pen through Pencil:
 | Save/replace pending and failures | nykwz |
 | Archive pending and failures | SsCvf |
 
-Also check credential clearing, archived metadata, refreshed references and the in-place person-only replacement question/input lock/refusal/decline/retry. The list fixture reaches the question; it requires actual person input to authorize replacement. Automated coverage exercises both authorization and refusal. 960/light remain excluded; macOS native validation remains deferred to the person's Mac.
+Also check credential clearing, archived metadata, refreshed references and the in-place person-only replacement question/input lock/refusal/decline/retry. The list fixture reaches the question; it requires actual person input to authorize replacement. Automated coverage exercises both authorization and refusal.
+
+Native person-only question/confirmation/decline/retry and input-lock visual states: **Unverified** in this implementation step. Headless coverage is not native screenshot evidence. Read-failure/retry and the captured lifecycle pending/failure states have disposable native runtime smoke evidence, but independent design verification of every named frame remains **Unverified** until the later Verify step. Any unsupported or uncaptured variant must retain that status; fixture availability alone does not verify it. Credentials were never supplied in prompts or recorded MCP arguments; only the example's private synthetic masked input was used.
+
+960/light remain out of scope; macOS native validation remains deferred to the person's Mac.
 
 ## Checks and commands
 
