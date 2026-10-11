@@ -167,7 +167,11 @@ fn tokens(ctx: &Ctx, project: &ProjectFacts, unknown: &str, press: impl Fn() + S
     |usage| {
       (
         compact_tokens(usage.today.get()),
-        compact_tokens(usage.limits.daily_budget().get()),
+        usage
+          .limits
+          .daily_budget_limit()
+          .map(|budget| compact_tokens(budget.get()))
+          .unwrap_or_else(|| ctx.t("project_settings.noLimit").to_string()),
       )
     },
   );

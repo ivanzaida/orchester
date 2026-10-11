@@ -16,6 +16,7 @@ mod mcp;
 mod memory;
 mod native_commands;
 mod native_conversations;
+mod optional_daily_budget;
 mod optional_limits;
 mod organization;
 mod permitted_decisions;
@@ -534,4 +535,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   sources::MIGRATION,
   step_progress::MIGRATION,
   optional_limits::MIGRATION,
+  optional_daily_budget::MIGRATION,
 ];

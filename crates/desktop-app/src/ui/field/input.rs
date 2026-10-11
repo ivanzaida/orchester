@@ -54,6 +54,7 @@ pub struct FieldInput {
   unit: Option<Arc<str>>,
   lines: Lines,
   mono: bool,
+  text_style: Option<TypographyStyle>,
   name: Arc<str>,
   /// Why the value is not accepted, said under the box, whose stroke turns `danger`.
   error: Option<Arc<str>>,
@@ -62,12 +63,14 @@ pub struct FieldInput {
   /// The cross that clears a value, named this for tools.
   clear: Option<Arc<str>>,
   width: Dimension,
+  area_height: f32,
   locked: bool,
   /// A 14 `text_muted` glyph at the box's end, e.g. the lock of a locked select (`H8GYVZ`).
   trailing: Option<Icon>,
   /// The value is not accepted, and something else says why: only the stroke turns `danger`.
   invalid: bool,
   masked: bool,
+  on_leave: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 /// Compared by what it shows; the value by its signal.
@@ -80,11 +83,13 @@ impl PartialEq for FieldInput {
       && self.unit == other.unit
       && self.lines == other.lines
       && self.mono == other.mono
+      && self.text_style == other.text_style
       && self.name == other.name
       && self.error == other.error
       && self.group_separator == other.group_separator
       && self.clear == other.clear
       && self.width == other.width
+      && self.area_height == other.area_height
       && self.locked == other.locked
       && self.trailing == other.trailing
       && self.invalid == other.invalid
@@ -106,15 +111,18 @@ impl FieldInput {
       unit: None,
       lines: Lines::One,
       mono: false,
+      text_style: None,
       name: name.into(),
       error: None,
       group_separator: None,
       clear: None,
       width: Dimension::Pct(100.0),
+      area_height: TEXT_AREA_HEIGHT,
       locked: false,
       trailing: None,
       invalid: false,
       masked: false,
+      on_leave: None,
     }
   }
 
@@ -167,9 +175,21 @@ impl FieldInput {
     self
   }
 
+  /// A text area with the design's least height, retaining growth and scrolling for longer input.
+  pub fn area_height(mut self, height: f32) -> Self {
+    self.area_height = height;
+    self
+  }
+
   /// The value in Geist Mono, as identifiers and figures are (handover §5.2); the placeholder stays.
   pub fn mono(mut self) -> Self {
     self.mono = true;
+    self
+  }
+
+  /// The design's text role for the value and placeholder.
+  pub fn text_style(mut self, style: TypographyStyle) -> Self {
+    self.text_style = Some(style);
     self
   }
 
@@ -206,6 +226,12 @@ impl FieldInput {
   /// The value is not accepted and the caller says why: the stroke turns `danger`, no note is added.
   pub fn invalid(mut self) -> Self {
     self.invalid = true;
+    self
+  }
+
+  /// Commits an autosaving field after its edit and grouping have landed.
+  pub fn on_leave(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
+    self.on_leave = Some(Arc::new(handler));
     self
   }
 
@@ -304,10 +330,12 @@ impl FieldBox {
     let resolve = |typography, color| FormTextRole { typography, color }.resolve(&theme.typography(), &theme.palette());
     let value = if props.masked {
       SecretsText::Credential.role()
-    } else if props.mono {
-      TypographyStyle::Mono
     } else {
-      TypographyStyle::Description
+      props.text_style.unwrap_or(if props.mono {
+        TypographyStyle::Mono
+      } else {
+        TypographyStyle::Description
+      })
     };
     let (gained, lost) = (self.focused.clone(), self.focused.clone());
     let color = if props.locked {
@@ -324,11 +352,11 @@ impl FieldBox {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .on_focus(move || gained.set(true))
-      .on_blur(regroup_on_leave(
-        lost,
-        props.value.clone(),
-        props.group_separator.clone(),
-      ));
+      .on_blur({
+        let regroup = regroup_on_leave(lost, props.value.clone(), props.group_separator.clone());
+        let on_leave = props.on_leave.clone();
+        move || { regroup(); if let Some(commit) = &on_leave { commit(); } }
+      });
     if props.masked {
       input = input.mask();
     }
@@ -351,7 +379,7 @@ impl FieldBox {
         .min_height(Dimension::Px(if props.lines == Lines::Compact {
           COMPACT_AREA_HEIGHT
         } else {
-          TEXT_AREA_HEIGHT
+          props.area_height
         }))
         .padding(Padding::symmetric(
           ExtraSpacing::Loose.role(),

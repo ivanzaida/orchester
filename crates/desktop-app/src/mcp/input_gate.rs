@@ -55,7 +55,7 @@ pub const LOOKING: &[&str] = &[
 const SETTING_REFUSAL: &str = "A person changes this setting in the window: while Settings shows Let automation \
   change agent permissions, window input from MCP clients (clicks, keys, values, resizing, menus) is refused.";
 /// What a refused client reads while a Connections page asks a person to confirm what a change widens.
-const QUESTION_REFUSAL: &str = "A person answers this in the window: while a Connections page, Tools page or Secrets page asks to \
+const QUESTION_REFUSAL: &str = "A person answers this in the window: while a Connections page, Tools page, Secrets page or Project settings asks to \
   confirm what a change lets agents do (in any tab, until it is answered or the page is left), \
   window input from MCP clients (clicks, keys, values, resizing, menus) is refused.";
 const STILL_AVAILABLE: &str = "Looking at the window and the app's own tools stay available.";

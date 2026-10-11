@@ -39,8 +39,10 @@ pub struct UpdateProjectLimits {
   /// left out.
   #[serde(default, deserialize_with = "wire::limit")]
   pub default_run_budget: Option<Option<u64>>,
-  /// Tokens all runs of the project may use per day. Unchanged when left out.
-  pub daily_budget: Option<u64>,
+  /// Tokens all runs of the project may use per day, with no maximum; `null` for no limit.
+  /// Unchanged when left out.
+  #[serde(default, deserialize_with = "wire::limit")]
+  pub daily_budget: Option<Option<u64>>,
   /// Whole minutes of active agent time prefilled in New task, above 0; `null` for no default time
   /// limit. Unchanged when left out.
   #[serde(default, deserialize_with = "wire::limit")]
@@ -84,11 +86,21 @@ fn changed(stored: ProjectLimits, args: &UpdateProjectLimits) -> Result<ProjectL
       Some(given) => given.map(budget).transpose(),
       None => Ok(stored.default_run_budget()),
     },
-    daily_budget: args.daily_budget.map_or(Ok(stored.daily_budget()), budget),
+    daily_budget: match args.daily_budget {
+      Some(Some(given)) => budget(given),
+      Some(None) | None => Ok(stored.daily_budget()),
+    },
     default_time_limit,
     agent_slots: args.agent_slots.map_or(Ok(stored.agent_slots()), agent_slots),
   }
   .limits()
+  .map(|limits| {
+    limits.with_daily_budget_limit(match args.daily_budget {
+      Some(None) => None,
+      Some(Some(_)) => Some(limits.daily_budget()),
+      None => stored.daily_budget_limit(),
+    })
+  })
 }
 
 /// Refused with the reason of each limit that cannot be saved, in the words of the Limits tab.
@@ -110,7 +122,7 @@ fn refused(errors: LimitsErrors) -> ToolError {
 pub fn limits_json(limits: ProjectLimits) -> Value {
   json!({
     "default_run_budget": limits.default_run_budget().map(TokenBudget::get),
-    "daily_budget": limits.daily_budget().get(),
+    "daily_budget": limits.daily_budget_limit().map(TokenBudget::get),
     "default_time_limit_minutes": limits.default_time_limit().map(whole_minutes),
     "agent_slots": limits.agent_slots().get().get(),
   })

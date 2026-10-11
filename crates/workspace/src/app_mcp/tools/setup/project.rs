@@ -167,11 +167,15 @@ pub async fn set_environment(services: &Services, args: SetProjectEnvironment) -
     let current = db.project_environment()?;
     widening::allowed(&services, changed_variables(&current, &environment))?;
     db.save_project_environment(&environment)?;
+    services
+      .changes
+      .record(open.project.id(), crate::tasks::outside::Outside::ProjectSettings);
     Ok(json!({ "environment": environment_json(&db.project_environment()?) }))
   })
   .await
 }
-pub(super) use crate::tools::widening::changed_variables;
+
+pub(super) use crate::environment::widenings as changed_variables;
 
 /// The variables as Project settings › Environment checks them.
 pub(super) fn environment(variables: Vec<Variable>) -> Result<CommandEnvironment, ToolError> {
@@ -206,6 +210,9 @@ pub async fn set_agent_files(services: &Services, args: SetAgentFiles) -> Result
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
     db.save_repository_agent_files(setting)?;
+    services
+      .changes
+      .record(open.project.id(), crate::tasks::outside::Outside::ProjectSettings);
     Ok(json!({ "repository_agent_files": db.repository_agent_files()?.is_on() }))
   })
   .await

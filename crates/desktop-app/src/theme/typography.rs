@@ -53,10 +53,12 @@ pub enum ExtraTypography {
   PropertyMono,
   /// 13/600 `text_primary`: a form section's title over its rows (`Title` `t27V7` in `Section` `De1nE`).
   FormSection,
+  /// Geist Mono 12, 1.7: environment variables (uSWRr/IBFli).
+  MonoArea,
 }
 
 impl ExtraTypography {
-  pub const ALL: [Self; 17] = [
+  pub const ALL: [Self; 18] = [
     Self::Display,
     Self::Strong,
     Self::Note,
@@ -74,6 +76,7 @@ impl ExtraTypography {
     Self::InspectorSection,
     Self::PropertyMono,
     Self::FormSection,
+    Self::MonoArea,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -99,6 +102,7 @@ impl ExtraTypography {
       Self::InspectorSection => "inspector_section",
       Self::PropertyMono => "property_mono",
       Self::FormSection => "form_section",
+      Self::MonoArea => "mono_area",
     }
   }
 
@@ -123,6 +127,7 @@ impl ExtraTypography {
       Self::InspectorSection => sans(12.0, FontWeight::SemiBold, 1.3, palette.text_primary),
       Self::PropertyMono => self::mono(sans(12.0, FontWeight::Normal, 1.3, palette.text_primary)),
       Self::FormSection => sans(13.0, FontWeight::SemiBold, 1.3, palette.text_primary),
+      Self::MonoArea => self::mono(sans(12.0, FontWeight::Normal, 1.7, palette.text_primary)),
     }
   }
 }

@@ -38,10 +38,14 @@ pub enum ExtraSpacing {
   BrandBars,
   /// 2: the app menu below the button that opens it.
   MenuOffset,
+  /// 18: settings heading to tabs (eDPtp, including trimmed text line boxes).
+  SettingsHead,
+  /// 18: the index empty line's top (lNMHR).
+  IndexEmpty,
 }
 
 impl ExtraSpacing {
-  pub const ALL: [Self; 15] = [
+  pub const ALL: [Self; 17] = [
     Self::Hair,
     Self::Tight,
     Self::Fine,
@@ -57,6 +61,8 @@ impl ExtraSpacing {
     Self::Loading,
     Self::BrandBars,
     Self::MenuOffset,
+    Self::SettingsHead,
+    Self::IndexEmpty,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -80,6 +86,8 @@ impl ExtraSpacing {
       Self::Loading => "loading",
       Self::BrandBars => "brand_bars",
       Self::MenuOffset => "menu_offset",
+      Self::SettingsHead => "settings_head",
+      Self::IndexEmpty => "index_empty",
     }
   }
 
@@ -99,6 +107,7 @@ impl ExtraSpacing {
       Self::Loading => 56.0,
       Self::BrandBars => 2.5,
       Self::MenuOffset => 2.0,
+      Self::SettingsHead | Self::IndexEmpty => 18.0,
     }
   }
 }
@@ -167,6 +176,8 @@ const WINDOW_RADIUS: f32 = 10.0;
 /// The design's control heights (`control_height_sm`, `control_height_md`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ControlHeight {
+  /// 22: the helper's Open Secrets action (ZdkB0).
+  Helper,
   /// 24: a removable row's button (`ivlGM` in `o6h0L5`).
   Sm,
   /// 28: buttons, fields, selects, menu items (`yJ2jo`, `JFXZg`, `mAHGP`).
@@ -178,6 +189,7 @@ pub enum ControlHeight {
 impl ControlHeight {
   pub const fn value(self) -> f32 {
     match self {
+      Self::Helper => 22.0,
       Self::Sm => 24.0,
       Self::Md => 28.0,
       Self::Inspector => 26.0,

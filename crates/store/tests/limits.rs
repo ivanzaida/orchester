@@ -39,6 +39,45 @@ fn limits_default_until_saved_then_round_trip() {
 }
 
 #[test]
+fn limits_optional_daily_budget_persists_and_can_be_restored() {
+  let (repo, mut db, ..) = started_run();
+  let unlimited = ProjectLimits::DEFAULT.with_daily_budget_limit(None);
+  db.save_project_limits(&unlimited).expect("save without a daily limit");
+  let mut reopened = ProjectDb::open(repo.path()).expect("reopen");
+  let read = reopened.project_limits().expect("limits");
+  assert_eq!(read.daily_budget_limit(), None);
+  assert!(!read.daily_budget_used(TokensUsed::new(u64::MAX)));
+  let finite = read.with_daily_budget_limit(Some(budget(900_000_000)));
+  reopened.save_project_limits(&finite).expect("restore a daily limit");
+  assert_eq!(
+    db.project_limits().expect("limits").daily_budget_limit(),
+    Some(budget(900_000_000))
+  );
+}
+
+#[test]
+fn limits_optional_daily_migration_preserves_existing_finite_limits() {
+  let (repo, mut db, ..) = started_run();
+  db.save_project_limits(&ProjectLimits::DEFAULT)
+    .expect("save finite limits");
+  drop(db);
+  let database = repo.path().join(".orchester").join("orchester.db");
+  let before = schema_version(&database) - 1;
+  let old = copied_at_version(&database, before);
+  assert!(
+    ProjectDb::create_at_version(&repo.path().join("empty-old"), before)
+      .expect("old schema")
+      .prepare("SELECT daily_budget_unlimited FROM project_limits")
+      .is_err()
+  );
+  let upgraded = ProjectDb::open(old.path()).expect("migrate");
+  assert_eq!(
+    upgraded.project_limits().expect("limits").daily_budget_limit(),
+    Some(budget(20_000_000))
+  );
+}
+
+#[test]
 fn limits_agent_slots_persist_with_the_other_limits() {
   let (repo, mut db, ..) = started_run();
   let two = AgentSlots::new(2).expect("in range");
@@ -101,7 +140,7 @@ fn limits_migration_keeps_every_limit_and_drops_the_maximum() {
     .id();
   drop(db);
   let database = current.path().join(".orchester").join("orchester.db");
-  let before = schema_version(&database) - 1;
+  let before = version_before_maximum_removed(schema_version(&database));
   let old = copied_at_version(&database, before);
   let old_database = old.path().join(".orchester").join("orchester.db");
   assert!(has_maximum(&Connection::open(&old_database).expect("open")));
@@ -233,6 +272,17 @@ fn has_maximum(connection: &Connection) -> bool {
     .expect("columns")
     .exists([])
     .expect("columns")
+}
+
+/// The most recent schema with a maximum run budget, independent of newer migrations.
+fn version_before_maximum_removed(latest: u32) -> u32 {
+  (1..latest)
+    .rev()
+    .find(|&version| {
+      let repo = tempfile::tempdir().expect("temporary directory");
+      has_maximum(&ProjectDb::create_at_version(repo.path(), version).expect("an old database"))
+    })
+    .expect("a schema with a maximum run budget")
 }
 
 /// Project settings › Limits as a schema with a maximum run budget stored them: at most 8M per run,

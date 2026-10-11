@@ -15,6 +15,14 @@ use crate::{
   rows::{corrupt, decode_json, encode_json},
 };
 
+/// Outcome of a compare-and-save, including a refused caller policy.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AutoModeSave {
+  Saved,
+  ChangedOutside,
+  Refused,
+}
+
 const REVIEW: &str = "tool approval review";
 const REVIEW_SCHEMA: u32 = 1;
 
@@ -41,6 +49,30 @@ impl ProjectDb {
     write_auto_mode(&transaction, &settings)?;
     transaction.commit()?;
     Ok(settings)
+  }
+
+  /// Whether an existing run uses the project's reviewer, independent of the new-run default.
+  pub fn has_auto_mode_runs(&self) -> Result<bool, StoreError> {
+    read_auto_mode_runs(&self.connection)
+  }
+
+  /// Checks the baseline and the caller's authority against existing runs in the write transaction.
+  pub fn save_auto_mode_if_current(
+    &mut self,
+    base: &AutoModeSettings,
+    asked: &AutoModeSettings,
+    permitted: impl FnOnce(bool) -> bool,
+  ) -> Result<AutoModeSave, StoreError> {
+    let transaction = self.connection.transaction()?;
+    if read_auto_mode(&transaction)? != *base {
+      return Ok(AutoModeSave::ChangedOutside);
+    }
+    if !permitted(read_auto_mode_runs(&transaction)?) {
+      return Ok(AutoModeSave::Refused);
+    }
+    write_auto_mode(&transaction, asked)?;
+    transaction.commit()?;
+    Ok(AutoModeSave::Saved)
   }
 
   /// Records the push URL of `origin` as `run` starts; `None` when the repository has no `origin`.
@@ -168,6 +200,14 @@ impl ProjectDb {
 /// `review` as the column stores it, for a decided request read with others.
 pub(super) fn decode_review(stored: Option<String>) -> Result<Option<Review>, StoreError> {
   stored.map(|text| decode_json(REVIEW, REVIEW_SCHEMA, &text)).transpose()
+}
+
+fn read_auto_mode_runs(connection: &Connection) -> Result<bool, StoreError> {
+  Ok(
+    connection.query_row("SELECT EXISTS(SELECT 1 FROM runs WHERE auto_mode = 1)", [], |row| {
+      row.get(0)
+    })?,
+  )
 }
 
 fn read_auto_mode(connection: &Connection) -> Result<AutoModeSettings, StoreError> {

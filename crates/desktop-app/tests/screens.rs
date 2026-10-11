@@ -55,6 +55,7 @@ const BUILT: &[Screen] = &[
   Screen::EditTask,
   Screen::NewConnection,
   Screen::NewTask,
+  Screen::ProjectSettings,
   Screen::Secrets,
   Screen::Tasks,
   Screen::Tools,
