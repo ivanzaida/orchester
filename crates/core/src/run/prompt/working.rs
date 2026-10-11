@@ -58,10 +58,10 @@ impl WorkingTools {
   fn processes(self) -> &'static str {
     match self.cli {
       Cli::ClaudeCode => {
-        "Find apps you started with mcp__Orchester__list_run_processes and stop them with mcp__Orchester__stop_run_process(pid), instead of Stop-Process or kill. These tools run without asking and refuse executables outside this run's worktree, the runner and the agent CLI. Stop only apps you started."
+        "Find apps you started with mcp__Orchester__list_run_processes and stop them with mcp__Orchester__stop_run_process(pid), instead of Stop-Process or kill. These tools run without asking and refuse executables outside this run's worktree, the runner and the agent CLI. Stop only apps you started. Drive that app with mcp__Orchester__call_run_app(pid, tool, arguments) instead of running tools/lurq-mcp-client.py. The relay finds discovery itself, keeps its token private and returns PNG paths under .tmp/."
       }
       Cli::Codex => {
-        "Find apps you started with list_run_processes and stop them with stop_run_process(pid) of the Orchester MCP server, instead of Stop-Process or kill. These tools run without asking and refuse executables outside this run's worktree, the runner and the agent CLI. Stop only apps you started."
+        "Find apps you started with list_run_processes and stop them with stop_run_process(pid) of the Orchester MCP server, instead of Stop-Process or kill. These tools run without asking and refuse executables outside this run's worktree, the runner and the agent CLI. Stop only apps you started. Drive that app with call_run_app(pid, tool, arguments) instead of running tools/lurq-mcp-client.py. The relay finds discovery itself, keeps its token private and returns PNG paths under .tmp/."
       }
     }
   }

@@ -230,9 +230,11 @@ impl StepTools {
     text.push_str(&format!(
       " Find apps you started with {} and stop them with {}(pid), instead of Stop-Process or kill. \
        They run without asking; executables outside this run's worktree, the runner and the agent CLI are refused. \
-       Stop only apps you started.",
+       Stop only apps you started. Drive that app with {}(pid, tool, arguments) instead of running tools/lurq-mcp-client.py. \
+       The relay finds discovery itself, keeps its token private and returns PNG paths under .tmp/.",
       OrchesterTool::ListRunProcesses.called(claude),
       OrchesterTool::StopRunProcess.called(claude),
+      OrchesterTool::CallRunApp.called(claude),
     ));
     text
   }

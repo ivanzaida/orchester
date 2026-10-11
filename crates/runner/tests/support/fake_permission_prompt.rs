@@ -101,6 +101,9 @@ impl Prompt {
     Some((text, result["isError"].as_bool().unwrap_or(false)))
   }
 
+  pub fn call_result(&mut self, name: &str, arguments: &Value) -> Option<Value> {
+    self.request("tools/call", &json!({"name": name, "arguments": arguments}))
+  }
   fn request(&mut self, method: &str, params: &Value) -> Option<Value> {
     self.next += 1;
     let id = self.next;

@@ -68,6 +68,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 embed-resource = "3"
 # Decodes the bundled PNG of the window icon. Already compiled with its PNG decoder for lurq's
 # clipboard (arboard), so it adds no crate to the build.
+base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png"] }
 # HTTP/1 connection builder exposes header/idle deadlines that axum::serve cannot configure.
 hyper = { version = "1", default-features = false, features = ["http1", "server"] }
