@@ -256,3 +256,6 @@ mod publication_states;
 
 #[path = "pipelines/profile_navigation.rs"]
 mod profile_navigation;
+
+#[path = "pipelines/publication_notice.rs"]
+mod publication_notice;

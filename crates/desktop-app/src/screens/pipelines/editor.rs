@@ -145,10 +145,18 @@ impl Component for Editor {
       }
     }
     let page = self.errors(ctx, &editing, page);
-    super::publication::with_success(ctx, &self.state, page.into())
+    self.with_publication_notice(ctx, page.into())
   }
 }
 impl Editor {
+  fn with_publication_notice(&self, ctx: &mut Ctx, content: Element) -> Element {
+    let editing = self.state.get();
+    if self.confirm_save.get() || self.leave.requested() || editing.panel == Panel::Publish || editing.restore_requested
+    {
+      return content;
+    }
+    super::publication::with_success(ctx, &self.state, content)
+  }
   fn errors(&self, ctx: &Ctx, editing: &Editing, mut page: lurq::components::Column) -> lurq::components::Column {
     for (field, error) in &editing.errors {
       if field == "pipeline-name" && editing.panel == Panel::Settings {
