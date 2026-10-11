@@ -195,6 +195,7 @@ impl AutoMode {
         confirm: ctx.t("project_settings.confirm"),
         on_keep: Arc::new(move || {
           tab.fill(tab.stored.get_untracked().0);
+          tab.attempted.set(Asked(None));
           tab.asking.set(Asked(None));
           status.set(Status::Saved);
         }),
