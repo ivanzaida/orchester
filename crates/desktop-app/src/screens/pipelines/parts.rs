@@ -41,6 +41,23 @@ pub fn panel(
   footer: Option<Element>,
   close: Option<super::state::State>,
 ) -> Element {
+  panel_with_title(
+    ctx,
+    eyebrow,
+    Text::new(title).variant(TypographyStyle::Title).into(),
+    body,
+    footer,
+    close,
+  )
+}
+pub fn panel_with_title(
+  ctx: &mut Ctx,
+  eyebrow: &str,
+  title: Element,
+  body: Element,
+  footer: Option<Element>,
+  close: Option<super::state::State>,
+) -> Element {
   let close = close.map(|state| {
     crate::ui::icon_button::IconButton::new(
       "pipeline-inspector-close",
@@ -66,12 +83,7 @@ pub fn panel(
         .align_items(Alignment::Center)
         .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
         .child(Text::new(eyebrow).variant(ExtraTypography::ColumnHeading.role()))
-        .child(
-          Text::new(title)
-            .variant(TypographyStyle::Title)
-            .flex(1.0)
-            .min_width(Dimension::Px(0.0)),
-        )
+        .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(title))
         .with_children(close),
     )
     .child(ScrollVertical::new(body).flex(1.0).min_height(Dimension::Px(0.0)))
@@ -82,7 +94,7 @@ pub fn panel_body() -> Column {
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
-    .spacing(ExtraSpacing::Loose.role())
+    .spacing(SpacingSize::Xs)
 }
 pub fn section(ctx: &Ctx, key: &'static str) -> Element {
   section_title(key, &ctx.t(key), None)
@@ -98,4 +110,44 @@ pub fn note(text: &str) -> Text {
   Text::new(text)
     .variant(ExtraTypography::Note.role())
     .width(Dimension::Pct(100.0))
+}
+
+/// XoQDX: the change's own symbol, aligned to its first line.
+pub fn change_row(ctx: &Ctx, change: &orchester_core::resource::PipelineChange) -> Row {
+  use orchester_core::resource::{PipelineChange, StepChange};
+
+  use crate::ui::icon::{Icon, icon};
+  let glyph = match change {
+    PipelineChange::Description => Icon::FilePen,
+    PipelineChange::Step { change, .. } => match change {
+      StepChange::Added => Icon::Plus,
+      StepChange::Removed => Icon::Minus,
+      StepChange::FailureRoute | StepChange::MaxRetries { .. } => Icon::Undo2,
+      StepChange::Model | StepChange::Executor => Icon::Bot,
+      StepChange::ApprovalGate { .. } => Icon::Hand,
+      StepChange::Permissions | StepChange::RepositoryAccess => Icon::Shield,
+      _ => Icon::FilePen,
+    },
+  };
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Start)
+    .child(icon(glyph, crate::theme::IconSize::Base, PaletteColor::TextMuted))
+    .child(
+      Text::new(&crate::ui::message::message_text(
+        ctx,
+        &orchester_workspace::pipelines::describe::change(change),
+      ))
+      .variant(ExtraTypography::Prose.role())
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0)),
+    )
+}
+pub fn pipeline_name_error(ctx: &Ctx, error: &orchester_workspace::messages::Message) -> std::sync::Arc<str> {
+  if *error == orchester_workspace::messages::name_error(&orchester_core::name::NameError::Blank) {
+    ctx.t("pipelines.invalidName")
+  } else {
+    crate::ui::message::message_text(ctx, error)
+  }
 }

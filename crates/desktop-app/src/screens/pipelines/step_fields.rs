@@ -32,7 +32,6 @@ impl PartialEq for Props {
 }
 impl DevtoolsInspectable for Props {}
 pub struct Fields {
-  name: Signal<String>,
   instructions: Signal<String>,
   retries: Signal<String>,
   budget: Signal<String>,
@@ -53,7 +52,6 @@ impl Component for Fields {
     };
     let text = |id: &str, fallback: String| inputs.get(&format!("{}:{id}", step.key)).cloned().unwrap_or(fallback);
     Self {
-      name: ctx.signal(text("step-name", step.name.as_str().to_owned())),
       instructions: ctx.signal(text("step-instructions", step.instructions.as_str().to_owned())),
       retries: ctx.signal(text(
         "step-retries",
@@ -75,15 +73,10 @@ impl Component for Fields {
     let mut body = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Xs)
-      .child(Self::text(
-        ctx,
-        &props,
-        "step-name",
-        "pipelines.stepName",
-        self.name.clone(),
-        false,
-      ))
-      .child(parts::section(ctx, "pipelines.executor"))
+      .child(
+        crate::ui::inspector::section_title("pipelines.executor", &ctx.t("pipelines.executor"), None)
+          .height(Dimension::Px(20.0)),
+      )
       .child(self.executor(ctx, &props));
     if matches!(props.step.kind, StepKind::Agent { .. }) {
       let editing = props.state.get();
@@ -98,7 +91,14 @@ impl Component for Fields {
           .map(|m| SelectOption::new(ModelChoice(Some(m.clone())), m.as_str().to_owned())),
       );
       let options = locked_options(options, props.locked || self.executor.get() == Executor::Unset);
-      let select = SelectField::new("step-model", ctx.t("pipelines.model"), self.model.clone(), options).render(ctx);
+      let select = SelectField::new("step-model", ctx.t("pipelines.model"), self.model.clone(), options)
+        .leading(crate::ui::icon::Icon::Bot);
+      let select = if self.executor.get() == Executor::Unset {
+        select.locked()
+      } else {
+        select
+      }
+      .render(ctx);
       body = body.child(property_of("step-model-row", &ctx.t("pipelines.model"), select));
     }
     body = body.child(Self::text(
@@ -169,22 +169,35 @@ impl Fields {
       self.executor.clone(),
       options,
     )
+    .leading(if matches!(props.step.kind, StepKind::Tool { .. }) {
+      crate::ui::icon::Icon::Wrench
+    } else {
+      crate::ui::icon::Icon::Bot
+    });
+    let input = if self.executor.get() == Executor::Unset {
+      input.invalid()
+    } else {
+      input
+    }
     .render(ctx);
     let mut column = Column::new().width(Dimension::Pct(100.0)).child(input);
     if self.executor.get() == Executor::Unset {
-      column = column
-        .border_inside(lurq::app::theme::BorderSize::Sm, lurq::app::theme::PaletteColor::Danger)
-        .child(crate::ui::field::field_error(
-          "step-profile-required",
-          &ctx.t("pipelines.missingProfile"),
-        ));
+      column = column.child(crate::ui::field::field_error(
+        "step-profile-required",
+        &ctx.t("pipelines.missingProfile"),
+      ));
     }
-    property_of("step-executor-row", &ctx.t("pipelines.profile"), column).into()
+    let label = if matches!(props.step.kind, StepKind::Tool { .. }) {
+      "pipelines.tool"
+    } else {
+      "pipelines.profile"
+    };
+    property_of("step-executor-row", &ctx.t(label), column).into()
   }
 
   fn flow(&self, ctx: &mut Ctx, props: &Props) -> Element {
     let editing = props.state.get();
-    let mut body = Column::new().width(Dimension::Pct(100.0)).spacing(SpacingSize::Sm);
+    let mut body = Column::new().width(Dimension::Pct(100.0)).spacing(SpacingSize::Xs);
     let dependencies = ctx.mount_keyed::<super::dependencies::Dependencies>("step-dependencies-picker", props.clone());
     body = body.child(property_of(
       "step-dependencies",
@@ -209,7 +222,7 @@ impl Fields {
     body = body.child(crate::ui::inspector::property(
       "step-stopped",
       &ctx.t("pipelines.stopped"),
-      &ctx.t("pipelines.fixedFailure"),
+      &ctx.t("pipelines.stoppedSummary"),
       crate::ui::inspector::PropertyValue::Muted,
     ));
     if props.step.on_failure.is_some() {
@@ -225,18 +238,6 @@ impl Fields {
     body.into()
   }
   fn watch(&self, ctx: &mut Ctx, props: &Props) {
-    let (state, key, locked) = (props.state.clone(), props.step.key.clone(), props.locked);
-    ctx.watch(&self.name, move |text| {
-      if !locked {
-        state.update(|s| {
-          let id = format!("{key}:step-name");
-          s.inputs.insert(id.clone(), text.clone());
-          s.field(&id, fields::parse_name(text), |s, value| {
-            s.change(&key, |step| step.name = value)
-          })
-        });
-      }
-    });
     let (state, key, locked) = (props.state.clone(), props.step.key.clone(), props.locked);
     ctx.watch(&self.instructions, move |text| {
       if !locked {

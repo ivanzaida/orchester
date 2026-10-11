@@ -153,27 +153,30 @@ pub fn edge(ctx: &Ctx) -> Column {
 }
 
 fn add_button(ctx: &Ctx, state: &State, id: &str) -> ActionButton {
+  ActionButton::new(id, ButtonKind::Secondary, ctx.t("pipelines.addStep"))
+    .icon(Icon::Plus)
+    .on_click(add_action(ctx, state))
+}
+fn add_action(ctx: &Ctx, state: &State) -> impl Fn() + Send + Sync + 'static {
   let add_state = state.clone();
   let first = ctx.t("pipelines.newStep");
   let numbered = ctx.t("pipelines.newStepNumber");
-  ActionButton::new(id, ButtonKind::Secondary, ctx.t("pipelines.addStep"))
-    .icon(Icon::Plus)
-    .on_click(move || {
-      add_state.update(|s| {
-        if s.viewing.is_some() {
-          return;
-        }
-        let name = unused_step_name(s.edit.steps(), &first, |n| {
-          numbered.replace("{{number}}", &n.to_string())
-        });
-        let after = match &s.panel {
-          Panel::Step(key) => Some(key.clone()),
-          _ => None,
-        };
-        let key = s.edit.add_step(name, after.as_ref());
-        s.panel = Panel::Step(key);
+  move || {
+    add_state.update(|s| {
+      if s.viewing.is_some() {
+        return;
+      }
+      let name = unused_step_name(s.edit.steps(), &first, |n| {
+        numbered.replace("{{number}}", &n.to_string())
       });
+      let after = match &s.panel {
+        Panel::Step(key) => Some(key.clone()),
+        _ => None,
+      };
+      let key = s.edit.add_step(name, after.as_ref());
+      s.panel = Panel::Step(key);
     })
+  }
 }
 fn toolbar(ctx: &Ctx, state: &State, readonly: bool) -> Element {
   if state.get().viewing.is_some() {
@@ -216,13 +219,16 @@ fn card(ctx: &Ctx, state: &State, step: &Step, index: usize) -> Element {
   };
   if reference.is_some_and(|before| before.steps().iter().find(|s| s.key == step.key) != Some(step)) {
     let tagged = Stack::new().child(body).child(
-      Column::new()
-        .padding(SpacingSize::Xs)
-        .rounded(RadiusSize::Sm)
+      Row::new()
+        .padding(Padding::horizontal(SpacingSize::Sm))
+        .spacing(SpacingSize::Xs)
+        .rounded(crate::theme::ExtraRadius::Full.role())
         .background(PaletteColor::SurfacePanel)
         .border(Border::inside(BorderSize::Sm, ExtraColor::Selection.role()))
+        .child(icon(Icon::FilePen, IconSize::Xs, ExtraColor::Selection.role()))
         .child(parts::caption(&ctx.t("pipelines.changed")).color(ExtraColor::Selection.role()))
-        .absolute_position(CARD_WIDTH - 62.0, -10.0),
+        .hit_test(lurq::node::HitTestBehavior::None)
+        .absolute_position(CARD_WIDTH - 88.0, 0.0),
     );
     return pressable(move || select.update(|s| s.panel = Panel::Step(key.clone())))
       .id(format!("pipeline-step-{}", step.key))
@@ -277,19 +283,15 @@ fn empty_graph(ctx: &Ctx, state: &State, mut graph: Stack, y: f32) -> Stack {
       .child(edge(ctx))
       .absolute_position((GRAPH_WIDTH / 2.0) - 6.0, y),
   );
-  let first = add_button(ctx, state, "pipeline-add-first");
   graph = graph.child(
     Column::new()
-      .child(
-        Column::new()
-          .width(Dimension::Px(CARD_WIDTH))
-          .padding(SpacingSize::Md)
-          .spacing(SpacingSize::Sm)
-          .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
-          .rounded(RadiusSize::Lg)
-          .child(first)
-          .child(parts::note(&ctx.t("pipelines.emptyStepsHint"))),
-      )
+      .child(crate::ui::add_slot::add_slot(
+        ctx,
+        "pipeline-add-first",
+        &ctx.t("pipelines.emptySteps"),
+        &ctx.t("pipelines.emptyStepsHint"),
+        add_action(ctx, state),
+      ))
       .absolute_position((GRAPH_WIDTH / 2.0) - CARD_WIDTH / 2.0, y + EDGE_HEIGHT),
   );
   let starter = super::new_pipeline::starter(ctx);
@@ -312,7 +314,10 @@ fn empty_graph(ctx: &Ctx, state: &State, mut graph: Stack, y: f32) -> Stack {
           },
         ),
       )
-      .absolute_position((GRAPH_WIDTH / 2.0) - 70.0, y + 150.0),
+      .absolute_position(
+        (GRAPH_WIDTH / 2.0) - 70.0,
+        y + EDGE_HEIGHT + crate::ui::add_slot::HEIGHT + 12.0,
+      ),
   );
 
   graph
@@ -326,6 +331,11 @@ fn card_body(ctx: &Ctx, editing: &super::state::Editing, step: &Step, index: usi
     } => "pipelines.readBadge",
     _ => "pipelines.writeBadge",
   };
+  let invalid = orchester_workspace::pipelines::narrowing::check_step(step, &editing.opened.assignables).is_err()
+    || matches!(
+      step.kind,
+      StepKind::Agent { profile: None, .. } | StepKind::Tool { tool: None }
+    );
   let mut body = Column::new()
     .width(Dimension::Px(CARD_WIDTH))
     .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
@@ -344,7 +354,12 @@ fn card_body(ctx: &Ctx, editing: &super::state::Editing, step: &Step, index: usi
       Row::new()
         .spacing(ExtraSpacing::Snug.role())
         .child(Text::new(&format!("{:02}", index + 1)).variant(ExtraTypography::MonoNote.role()))
-        .child(Text::new(step.name.as_str()).variant(ExtraTypography::Strong.role())),
+        .child(
+          Text::new(step.name.as_str())
+            .variant(ExtraTypography::Strong.role())
+            .flex(1.0),
+        )
+        .with_children(invalid.then(|| icon(Icon::CircleAlert, IconSize::Sm, PaletteColor::Danger))),
     )
     .child(
       Row::new()
@@ -362,7 +377,11 @@ fn card_body(ctx: &Ctx, editing: &super::state::Editing, step: &Step, index: usi
         .child(
           Text::new(&message_text(ctx, &executor_line(step, &editing.opened.assignables)))
             .variant(ExtraTypography::Note.role())
-            .color(PaletteColor::TextSecondary),
+            .color(if invalid {
+              PaletteColor::Danger
+            } else {
+              PaletteColor::TextSecondary
+            }),
         ),
     );
   if step.approval_gate {
@@ -379,11 +398,7 @@ fn card_body(ctx: &Ctx, editing: &super::state::Editing, step: &Step, index: usi
       _ => Icon::BookOpen,
     },
   ));
-  if matches!(
-    step.kind,
-    StepKind::Agent { profile: None, .. } | StepKind::Tool { tool: None }
-  ) || orchester_workspace::pipelines::narrowing::check_step(step, &editing.opened.assignables).is_err()
-  {
+  if invalid && !selected {
     body = body.border(Border::inside(BorderSize::Sm, PaletteColor::Danger));
   }
   body

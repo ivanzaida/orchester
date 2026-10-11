@@ -4,17 +4,17 @@ use std::collections::BTreeMap;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, Spacer, Text},
   core::{ElementRef, Signal},
   layout::{Alignment, layout_kind::ScrollState},
-  node::{border::Border, dimension::Dimension},
+  node::{border::Border, dimension::Dimension, padding::Padding},
 };
 
 use super::state::{Panel, State};
 use crate::{
-  theme::{ExtraColor, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -55,14 +55,17 @@ impl Sections {
     Column::new()
       .width(Dimension::Px(212.0))
       .height(Dimension::Pct(100.0))
-      .padding(SpacingSize::Md)
-      .spacing(SpacingSize::Xs)
+      .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Inset.role()))
+      .spacing(ExtraSpacing::Tight.role())
       .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .child(
-        ActionButton::new("pipeline-back-steps", ButtonKind::Ghost, ctx.t("pipelines.back"))
+        ActionButton::new("pipeline-back-steps", ButtonKind::Secondary, ctx.t("pipelines.back"))
+          .icon(Icon::ChevronLeft)
           .on_click(move || back.update(|s| s.panel = Panel::Pipeline)),
       )
+      .child(Spacer::new().height(Dimension::Px(14.0)))
       .child(Text::new(&ctx.t("pipelines.settingsNav")).variant(ExtraTypography::ColumnHeading.role()))
+      .child(Spacer::new().height(Dimension::Px(6.0)))
       .with_children(KEYS.map(|key| {
         let (target, origin, scroll, active) = (
           self.target(key),
@@ -70,7 +73,7 @@ impl Sections {
           self.scroll.clone(),
           self.active.clone(),
         );
-        pressable(move || {
+        let link = pressable(move || {
           scroll.set_scroll_pending(0.0, target.y() - origin.y());
           active.set(key);
         })
@@ -80,12 +83,8 @@ impl Sections {
         ))
         .width(Dimension::Pct(100.0))
         .height(Dimension::Px(30.0))
-        .padding(SpacingSize::Sm)
-        .background(if self.active.get() == key {
-          ExtraColor::Hover.role()
-        } else {
-          PaletteColor::SurfaceBase
-        })
+        .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
+        .rounded(RadiusSize::Md)
         .child(
           Row::new()
             .width(Dimension::Pct(100.0))
@@ -94,7 +93,12 @@ impl Sections {
             .with_children(
               (changed && key == KEYS[0]).then(|| icon(Icon::CircleDot, IconSize::Xs, PaletteColor::Warning)),
             ),
-        )
+        );
+        if self.active.get() == key {
+          link.background(ExtraColor::Hover.role())
+        } else {
+          link
+        }
       }))
   }
 }

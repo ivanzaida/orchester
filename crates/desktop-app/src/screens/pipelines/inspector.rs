@@ -55,13 +55,22 @@ impl PartialEq for SummaryProps {
 }
 impl DevtoolsInspectable for SummaryProps {}
 pub struct Summary {
+  name: Signal<String>,
   description: Signal<String>,
 }
 impl Component for Summary {
   type Props = SummaryProps;
   fn create(ctx: &mut Ctx) -> Self {
+    let editing = ctx.props::<SummaryProps>().state.get();
     Self {
-      description: ctx.signal(ctx.props::<SummaryProps>().state.get().shown().description().to_owned()),
+      name: ctx.signal(
+        editing
+          .inputs
+          .get("pipeline-name")
+          .cloned()
+          .unwrap_or_else(|| editing.name.to_string()),
+      ),
+      description: ctx.signal(editing.shown().description().to_owned()),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -73,6 +82,24 @@ impl Component for Summary {
         state.update(|s| s.edit.set_description(text));
       }
     });
+    let (state, locked) = (props.state.clone(), props.locked);
+    ctx.watch(&self.name, move |text| {
+      if !locked {
+        state.update(|s| {
+          s.inputs.insert("pipeline-name".to_owned(), text.clone());
+          s.field(
+            "pipeline-name",
+            orchester_workspace::pipelines::fields::parse_name(text),
+            |s, name| s.name = name,
+          );
+        });
+      }
+    });
+    let mut name = FieldInput::new("pipeline-summary-name", ctx.t("pipelines.name"), self.name.clone());
+    if let Some(error) = editing.errors.get("pipeline-name") {
+      name = name.error(parts::pipeline_name_error(ctx, error));
+    }
+    let name = if props.locked { name.locked() } else { name }.render(ctx);
     let description = FieldInput::new(
       "pipeline-description",
       ctx.t("pipelines.description"),
@@ -85,7 +112,7 @@ impl Component for Summary {
       description
     }
     .render(ctx);
-    let mut body = summary_metadata(ctx, &editing, description);
+    let mut body = summary_metadata(ctx, &editing, name, description);
     let history = props.state.clone();
     body = body.child(
       ActionButton::new(
@@ -99,7 +126,7 @@ impl Component for Summary {
       body = body.child(crate::ui::inspector::note(
         "pipeline-unpublished-note",
         crate::ui::icon::Icon::Info,
-        &ctx.t("pipelines.createHint"),
+        &ctx.t("pipelines.notPublishedHint"),
       ));
     }
     let state = props.state;
@@ -122,18 +149,44 @@ impl Component for Summary {
   }
 }
 pub struct StepInspector {
+  name: Signal<String>,
   removing: Signal<bool>,
 }
 impl Component for StepInspector {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
+    let props = ctx.props::<Props>().clone();
+    let editing = props.state.get();
+    let name = editing
+      .inputs
+      .get(&format!("{}:step-name", props.step.key))
+      .filter(|_| editing.viewing.is_none())
+      .cloned()
+      .unwrap_or_else(|| props.step.name.as_str().to_owned());
     Self {
+      name: ctx.signal(name),
       removing: ctx.signal(false),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
     let editing = props.state.get();
+    let (state, key, locked) = (props.state.clone(), props.step.key.clone(), props.locked);
+    ctx.watch(&self.name, move |text| {
+      if !locked {
+        state.update(|s| {
+          let id = format!("{key}:step-name");
+          s.inputs.insert(id.clone(), text.clone());
+          s.field(
+            &id,
+            orchester_workspace::pipelines::fields::parse_name(text),
+            |s, value| s.change(&key, |step| step.name = value),
+          );
+        });
+      }
+    });
+    let title = FieldInput::new("step-name", ctx.t("pipelines.stepName"), self.name.clone());
+    let title = if props.locked { title.locked() } else { title }.render(ctx);
     let fields = ctx.mount_keyed::<Fields>("step-fields", props.clone());
     let mut body = parts::panel_body().child(fields).child(super::step_permissions::rows(
       ctx,
@@ -155,13 +208,13 @@ impl Component for StepInspector {
       .iter()
       .position(|s| s.key == props.step.key)
       .map_or(0, |n| n + 1);
-    parts::panel(
+    parts::panel_with_title(
       ctx,
       &ctx.t_args("pipelines.step", [("number", format!("{number:02}"))]),
-      props.step.name.as_str(),
+      title,
       body.into(),
       Some(footer),
-      Some(props.state.clone()),
+      Some(props.state),
     )
   }
 }
@@ -197,8 +250,9 @@ impl StepInspector {
         )
         .into();
     }
-    let duplicate =
-      ActionButton::new("step-duplicate", ButtonKind::Secondary, ctx.t("pipelines.duplicate")).on_click(move || {
+    let duplicate = ActionButton::new("step-duplicate", ButtonKind::Secondary, ctx.t("pipelines.duplicate"))
+      .icon(crate::ui::icon::Icon::Copy)
+      .on_click(move || {
         state.update(|s| {
           if let Some(key) = s.edit.duplicate_step(&key) {
             s.panel = Panel::Step(key);
@@ -206,25 +260,40 @@ impl StepInspector {
         })
       });
     let remove = self.removing.clone();
-    let remove =
-      ActionButton::new("step-remove", ButtonKind::Ghost, ctx.t("pipelines.remove")).on_click(move || remove.set(true));
+    let remove = ActionButton::new("step-remove", ButtonKind::Danger, ctx.t("pipelines.remove"))
+      .icon(crate::ui::icon::Icon::Trash2)
+      .on_click(move || remove.set(true));
     Row::new()
       .width(Dimension::Pct(100.0))
       .padding(SpacingSize::Md)
       .spacing(SpacingSize::Sm)
       .child(if props.locked { duplicate.disabled() } else { duplicate })
+      .child(lurq::components::Spacer::new().flex(1.0))
       .child(if props.locked { remove.disabled() } else { remove })
       .into()
   }
 }
-fn summary_metadata(ctx: &Ctx, editing: &super::state::Editing, description: Element) -> Column {
-  let body = parts::panel_body()
-    .child(parts::section(ctx, "pipelines.general"))
-    .child(property(
-      "pipeline-summary-name",
+fn summary_metadata(ctx: &Ctx, editing: &super::state::Editing, name: Element, description: Element) -> Column {
+  let shown = editing.shown();
+  let published = editing.opened.latest.as_ref().map_or_else(
+    || ctx.t("pipelines.never"),
+    |v| ctx.t_args("pipelines.version", [("version", v.number.get().to_string())]),
+  );
+  let draft = if editing.opened.draft_saved_at.is_some() {
+    "pipelines.saved"
+  } else {
+    "pipelines.noDraft"
+  };
+  parts::panel_body()
+    .child(crate::ui::inspector::section_title(
+      "pipeline-summary-section",
+      &ctx.t("pipelines.pipelineSection"),
+      None,
+    ))
+    .child(crate::ui::inspector::control(
+      "pipeline-summary-name-row",
       &ctx.t("pipelines.name"),
-      &editing.opened.name,
-      PropertyValue::Plain,
+      name,
     ))
     .child(property(
       "pipeline-slug",
@@ -241,52 +310,37 @@ fn summary_metadata(ctx: &Ctx, editing: &super::state::Editing, description: Ele
     .child(property(
       "pipeline-starts",
       &ctx.t("pipelines.starts"),
-      &ctx.t("pipelines.onStart"),
+      &ctx.t("pipelines.onTaskStart"),
       PropertyValue::Plain,
     ))
     .child(property(
-      "pipeline-step-count",
-      &ctx.t("pipelines.steps"),
-      &editing.shown().steps().len().to_string(),
-      PropertyValue::Mono,
+      "pipeline-draft-state",
+      &ctx.t("pipelines.draftLabel"),
+      &ctx.t(draft),
+      PropertyValue::Muted,
+    ))
+    .child(property(
+      "pipeline-published",
+      &ctx.t("pipelines.publishedLabel"),
+      &published,
+      PropertyValue::Plain,
     ))
     .child(property(
       "pipeline-used-by",
       &ctx.t("pipelines.usedBy"),
       &ctx.t_args("pipelines.tasks", [("count", editing.opened.used_by.to_string())]),
       PropertyValue::Plain,
-    ));
-  body
-    .child(parts::section(ctx, "pipelines.versions"))
-    .child(property(
-      "pipeline-published",
-      &ctx.t("pipelines.publishedLabel"),
-      &editing.opened.latest.as_ref().map_or_else(
-        || ctx.t("pipelines.never"),
-        |v| ctx.t_args("pipelines.version", [("version", v.number.get().to_string())]),
-      ),
-      PropertyValue::Plain,
     ))
     .child(property(
-      "pipeline-draft-state",
-      &ctx.t("pipelines.draftLabel"),
-      &ctx.t(if editing.opened.draft_saved_at.is_some() {
-        "pipelines.saved"
-      } else {
-        "pipelines.noDraft"
-      }),
-      PropertyValue::Plain,
-    ))
-    .child(property(
-      "pipeline-gate-count",
-      &ctx.t("pipelines.gates"),
-      &editing
-        .shown()
-        .steps()
-        .iter()
-        .filter(|s| s.approval_gate)
-        .count()
-        .to_string(),
+      "pipeline-step-count",
+      &ctx.t("pipelines.steps"),
+      &shown.steps().len().to_string(),
       PropertyValue::Mono,
+    ))
+    .child(parts::section(ctx, "pipelines.versions"))
+    .child(crate::ui::inspector::note(
+      "pipeline-versions-note",
+      crate::ui::icon::Icon::Info,
+      &ctx.t("pipelines.versionsExplanation"),
     ))
 }

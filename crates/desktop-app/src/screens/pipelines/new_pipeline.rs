@@ -121,7 +121,7 @@ impl Component for NewPipeline {
       .child(super::canvas::start_node(ctx))
       .child(super::canvas::edge(ctx))
       .child(choices);
-    let panel = self.inspector(ctx, collision.is_some());
+    let panel = self.inspector(ctx, collision.as_ref().map(|entry| entry.name.as_ref()));
     let strip = collision_strip(ctx, id, collision);
     let mut page = parts::page().child(head).with_children(strip).child(
       Row::new()
@@ -151,6 +151,7 @@ impl NewPipeline {
     }
     let name = name.render(ctx);
     parts::header()
+      .spacing(ExtraSpacing::Snug.role())
       .child(
         ActionButton::new("pipeline-parent", ButtonKind::Ghost, ctx.t("pipelines.title"))
           .on_click(move || nav.go(Route::Project(id, ProjectPage::Pipelines))),
@@ -161,8 +162,17 @@ impl NewPipeline {
         lurq::app::theme::PaletteColor::TextMuted,
       ))
       .child(name)
+      .child(crate::ui::icon::icon(
+        Icon::CircleDashed,
+        crate::theme::IconSize::Sm,
+        lurq::app::theme::PaletteColor::TextMuted,
+      ))
       .child(parts::caption(&ctx.t("pipelines.notCreated")))
       .child(Spacer::new().flex(1.0))
+      .with_children(self.name.get().trim().is_empty().then(|| {
+        crate::ui::unavailable::reason_line("pipeline-name-required", &ctx.t("pipelines.nameRequired"))
+          .width(Dimension::Px(141.0))
+      }))
       .child(
         ActionButton::new("pipeline-cancel", ButtonKind::Secondary, ctx.t("pipelines.cancel")).on_click({
           let nav = Navigation::of(ctx);
@@ -174,13 +184,14 @@ impl NewPipeline {
   fn choices(&self, ctx: &Ctx, copies: &[orchester_workspace::pipelines::library::LibraryEntry]) -> Column {
     let mut choices = Column::new()
       .width(Dimension::Px(START_WIDTH))
-      .spacing(SpacingSize::Md)
+      .spacing(ExtraSpacing::Loose.role())
       .child(Text::new(&ctx.t("pipelines.startFrom")).variant(TypographyStyle::Title))
-      .child(parts::note(&ctx.t("pipelines.startHint")));
+      .child(parts::note(&ctx.t("pipelines.startHint")))
+      .child(Spacer::new().height(Dimension::Px(4.0)));
     for (value, title, detail, glyph) in [
       (0, "pipelines.starter", "pipelines.starterHint", Icon::Workflow),
       (1, "pipelines.copy", "pipelines.copyHint", Icon::Copy),
-      (2, "pipelines.empty", "pipelines.emptyHint", Icon::Plus),
+      (2, "pipelines.empty", "pipelines.noSteps", Icon::Plus),
     ] {
       let start = self.start.clone();
       let mut card = OptionCard::new(
@@ -189,9 +200,13 @@ impl NewPipeline {
         ctx.t(detail),
         self.start.get() == value,
         move || start.set(value),
-      );
+      )
+      .inline_summary();
       if value == 0 {
         card = card.content(starter_chips(ctx));
+      }
+      if value == 2 {
+        card = card.content(parts::note(&ctx.t("pipelines.emptyHint")));
       }
       if value == 1 {
         card = card.content(
@@ -211,6 +226,9 @@ impl NewPipeline {
               })
               .collect(),
           )
+          .placeholder(ctx.t("pipelines.choosePipeline"))
+          .width(Dimension::Px(180.0))
+          .leading(Icon::Workflow)
           .render(ctx),
         );
       }
@@ -218,7 +236,7 @@ impl NewPipeline {
     }
     choices.child(parts::note(&ctx.t("pipelines.presets")))
   }
-  fn inspector(&self, ctx: &mut Ctx, collision: bool) -> Element {
+  fn inspector(&self, ctx: &mut Ctx, collision: Option<&str>) -> Element {
     let slug = Slug::from_name(&self.name.get())
       .map(|s| s.as_str().to_owned())
       .unwrap_or_default();
@@ -231,18 +249,33 @@ impl NewPipeline {
     .placeholder(ctx.t("pipelines.descriptionPlaceholder"))
     .render(ctx);
     let body = parts::panel_body()
-      .child(parts::section(ctx, "pipelines.general"))
+      .child(crate::ui::inspector::section_title(
+        "pipeline-new-section",
+        &ctx.t("pipelines.pipelineSection"),
+        None,
+      ))
       .child(property(
         "pipeline-slug",
         &ctx.t("pipelines.slug"),
         &slug,
-        if collision {
+        if collision.is_some() {
           PropertyValue::MonoDanger
         } else {
           PropertyValue::Mono
         },
       ))
-      .child(parts::note(&ctx.t("pipelines.slugHint")))
+      .child(crate::ui::inspector::control(
+        "pipeline-slug-hint",
+        "",
+        match collision {
+          Some(name) => crate::ui::field::field_error(
+            "pipeline-slug-collision",
+            &ctx.t_args("pipelines.slugUsedBy", [("name", name)]),
+          )
+          .into(),
+          None => Element::from(parts::note(&ctx.t("pipelines.slugHint"))),
+        },
+      ))
       .child(crate::ui::inspector::control(
         "pipeline-description-row",
         &ctx.t("pipelines.description"),
@@ -252,7 +285,7 @@ impl NewPipeline {
       .child(property(
         "pipeline-new-starts",
         &ctx.t("pipelines.starts"),
-        &ctx.t("pipelines.onStart"),
+        &ctx.t("pipelines.onTaskStart"),
         PropertyValue::Plain,
       ))
       .child(property(
@@ -267,11 +300,14 @@ impl NewPipeline {
         &ctx.t("pipelines.notUsed"),
         PropertyValue::Muted,
       ))
-      .child(crate::ui::notice::handling_notice(
-        "pipeline-nothing-saved",
-        Icon::Info,
-        &ctx.t("pipelines.createHint"),
-      ));
+      .child(
+        crate::ui::notice::Notice::new(
+          "pipeline-nothing-saved",
+          crate::ui::notice::NoticeTone::Info,
+          ctx.t("pipelines.nothingSaved"),
+        )
+        .body(ctx.t("pipelines.createHint")),
+      );
     parts::panel(
       ctx,
       &ctx.t("pipelines.pipeline"),
@@ -326,39 +362,77 @@ fn collision_strip(
   ctx: &mut Ctx,
   id: orchester_core::id::ProjectId,
   collision: Option<orchester_workspace::pipelines::library::LibraryEntry>,
-) -> Option<crate::ui::notice::Notice> {
+) -> Option<Element> {
   collision.map(|existing| {
     let nav = Navigation::of(ctx);
-    crate::ui::notice::Notice::new(
-      "pipeline-create-error",
-      crate::ui::notice::NoticeTone::Danger,
-      ctx.t("pipelines.collision"),
-    )
-    .action(
-      ActionButton::new(
-        "pipeline-open-existing",
-        ButtonKind::Secondary,
-        ctx.t("pipelines.openExisting"),
+    Row::new()
+      .id("pipeline-create-error")
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Px(40.0))
+      .padding(lurq::node::padding::Padding::horizontal(ExtraSpacing::Tabs.role()))
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .background(lurq::app::theme::PaletteColor::DangerMuted)
+      .child(crate::ui::icon::icon(
+        Icon::CircleAlert,
+        crate::theme::IconSize::Sm,
+        lurq::app::theme::PaletteColor::Danger,
+      ))
+      .child(parts::note(&ctx.t_args("pipelines.slugCollision", [("slug", existing.slug.to_string())])).flex(1.0))
+      .child(
+        ActionButton::new(
+          "pipeline-open-existing",
+          ButtonKind::Ghost,
+          ctx.t_args("pipelines.openPipeline", [("name", existing.name.to_string())]),
+        )
+        .icon(Icon::ArrowUpRight)
+        .on_click(move || nav.go(Route::Project(id, ProjectPage::Pipeline(existing.id)))),
       )
-      .on_click(move || nav.go(Route::Project(id, ProjectPage::Pipeline(existing.id)))),
-    )
+      .into()
   })
 }
 pub(super) fn starter_chips(ctx: &Ctx) -> Column {
   let starter = starter(ctx).pipeline(&Default::default());
-  let mut chips = Column::new().spacing(SpacingSize::Xs);
-  for steps in starter.steps().chunks(3) {
-    chips = chips.child(
-      Row::new()
-        .spacing(SpacingSize::Xs)
-        .with_children(steps.iter().map(|step| {
-          Row::new()
-            .padding(SpacingSize::Xs)
-            .border_inside(lurq::app::theme::BorderSize::Sm, lurq::app::theme::PaletteColor::Border)
-            .rounded(lurq::app::theme::RadiusSize::Sm)
-            .child(parts::caption(step.name.as_str()))
-        })),
-    );
+  let mut chips = Column::new().spacing(ExtraSpacing::Snug.role());
+  for (line, steps) in starter.steps().chunks(5).enumerate() {
+    let mut row = Row::new()
+      .spacing(ExtraSpacing::Pair.role())
+      .align_items(Alignment::Center);
+    for (index, step) in steps.iter().enumerate() {
+      if index > 0 || line > 0 {
+        let previous = &starter.steps()[line * 5 + index - 1];
+        row = if step.depends_on == previous.depends_on {
+          row.child(parts::caption(&ctx.t("pipelines.parallel")))
+        } else {
+          row.child(crate::ui::icon::icon(
+            Icon::ArrowRight,
+            crate::theme::IconSize::Xs,
+            lurq::app::theme::PaletteColor::TextMuted,
+          ))
+        };
+      }
+      row = row.child(
+        Row::new()
+          .height(Dimension::Px(24.0))
+          .align_items(Alignment::Center)
+          .padding(lurq::node::padding::Padding::horizontal(SpacingSize::Sm))
+          .spacing(ExtraSpacing::Snug.role())
+          .border_inside(lurq::app::theme::BorderSize::Sm, lurq::app::theme::PaletteColor::Border)
+          .rounded(lurq::app::theme::RadiusSize::Sm)
+          .child(
+            Text::new(&format!("{:02}", line * 5 + index + 1)).variant(crate::theme::ExtraTypography::MonoSmall.role()),
+          )
+          .child(parts::caption(step.name.as_str()))
+          .with_children(step.approval_gate.then(|| {
+            crate::ui::icon::icon(
+              Icon::Hand,
+              crate::theme::IconSize::Xs,
+              lurq::app::theme::PaletteColor::Warning,
+            )
+          })),
+      );
+    }
+    chips = chips.child(row);
   }
   chips
 }

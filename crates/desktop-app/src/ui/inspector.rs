@@ -54,13 +54,18 @@ pub fn property_of(id: &str, label: &str, value: impl Into<Element>) -> Row {
     Text::new(label).variant(ExtraTypography::Property.role()),
     value,
   )
+  .padding(Padding::vertical(ExtraSpacing::Snug.role()))
 }
 
 /// Compact editable property (LC20M), with the control owning its vertical inset.
 pub fn control(id: &str, label: &str, value: impl Into<Element>) -> Row {
-  property_of(id, label, value)
-    .padding(Padding::new())
-    .align_items(Alignment::Center)
+  framed(
+    id,
+    label,
+    Text::new(label).variant(ExtraTypography::Property.role()),
+    value,
+  )
+  .align_items(Alignment::Center)
 }
 
 fn value_text(id: &str, value: &str, kind: PropertyValue) -> Text {
@@ -86,7 +91,6 @@ fn framed(id: &str, name: &str, label: Text, value: impl Into<Element>) -> Row {
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .min_height(Dimension::Px(ControlHeight::Md.value()))
-    .padding(Padding::vertical(ExtraSpacing::Snug.role()))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
     .describe("property", name.to_owned())

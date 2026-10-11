@@ -141,6 +141,8 @@ impl Component for Editor {
       self.writing.set(writing);
     }
     self.autosave(ctx, &props, &action);
+    let opened = self.state.get().opened;
+    props.project.feed.pipeline_named(opened.id, &opened.name);
     let state = self.state.clone();
     ctx.watch(&action.state(), move |result| {
       if !result.is_pending()
@@ -180,7 +182,7 @@ impl Component for Editor {
         .child(panel)
         .into()
     };
-    let leave = super::leaving::question(ctx, &self.leave, writing);
+    let leave = super::leaving::question(ctx, &self.leave, writing, editing.name.as_str());
     let mut page = parts::page()
       .child(head)
       .with_children(leave)
@@ -199,8 +201,13 @@ impl Component for Editor {
         );
       }
     }
-    for error in editing.errors.values() {
-      page = page.child(field_error("pipeline-field-error", &message_text(ctx, error)));
+    for (field, error) in &editing.errors {
+      let message = if field == "pipeline-name" {
+        parts::pipeline_name_error(ctx, error)
+      } else {
+        message_text(ctx, error)
+      };
+      page = page.child(field_error("pipeline-field-error", &message));
     }
     for problem in editing.edit.problems().iter().filter(|p| p.blocks_saving()) {
       let view = problem_view(&editing.edit, problem, &ctx.t("pipelines.then"));
@@ -414,11 +421,19 @@ impl Editor {
       );
       let keep = self.state.clone();
       if reasons.is_empty() {
-        Some(
+        Some(super::publication::footer(
+          ctx,
+          &self.state,
           ActionButton::new(
             "pipeline-publish-confirm",
             ButtonKind::Primary,
-            ctx.t("pipelines.publishNow"),
+            ctx.t_args(
+              "pipelines.publish",
+              [(
+                "version",
+                next_version(&editing.opened).map_or_else(String::new, |v| v.get().to_string()),
+              )],
+            ),
           )
           .on_click(move || {
             action.run(Work::Publish {
@@ -426,9 +441,8 @@ impl Editor {
               before: before.clone(),
               allowed: Allowed::default(),
             });
-          })
-          .into(),
-        )
+          }),
+        ))
       } else {
         let words = reasons.iter().map(|m| message_text(ctx, m)).collect();
         Some(ctx.mount_keyed::<WidenConfirm>(
@@ -460,7 +474,16 @@ impl Editor {
     parts::panel(
       ctx,
       &ctx.t("pipelines.publishTitle"),
-      &editing.opened.name,
+      &ctx.t_args(
+        "pipelines.publishName",
+        [
+          ("name", editing.opened.name.to_string()),
+          (
+            "version",
+            next_version(&editing.opened).map_or_else(String::new, |v| v.get().to_string()),
+          ),
+        ],
+      ),
       body.into(),
       footer,
       Some(self.state.clone()),
@@ -484,6 +507,6 @@ fn save_status(ctx: &Ctx, editing: &Editing, busy: bool) -> std::sync::Arc<str> 
       [("version", latest.number.get().to_string())],
     )
   } else {
-    ctx.t("pipelines.saved")
+    ctx.t("pipelines.savedUnpublished")
   }
 }

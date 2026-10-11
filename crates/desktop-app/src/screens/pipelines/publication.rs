@@ -97,9 +97,32 @@ pub fn review(ctx: &Ctx, editing: &Editing) -> (Column, bool) {
   let cards = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
-    .child(version_card(ctx, "pipelines.currentVersion", &current))
+    .align_items(lurq::layout::Alignment::Center)
+    .child(version_card(
+      ctx,
+      "pipelines.currentVersion",
+      &current,
+      &editing
+        .opened
+        .latest
+        .as_ref()
+        .map_or_else(|| ctx.t("pipelines.never"), |v| super::library::age(ctx, v.at)),
+    ))
     .child(icon(Icon::ArrowRight, IconSize::Md, PaletteColor::TextMuted))
-    .child(version_card(ctx, "pipelines.nextVersion", &next));
+    .child(version_card(
+      ctx,
+      "pipelines.nextVersion",
+      &next,
+      &editing.opened.draft_saved_at.map_or_else(
+        || ctx.t("pipelines.unsaved"),
+        |at| {
+          ctx.t_args(
+            "pipelines.draftSavedAt",
+            [("age", super::library::age(ctx, at).to_string())],
+          )
+        },
+      ),
+    ));
   let changes = editing
     .opened
     .latest
@@ -107,25 +130,23 @@ pub fn review(ctx: &Ctx, editing: &Editing) -> (Column, bool) {
     .map(|v| orchester_core::resource::changes(&v.body, &editing.opened.body))
     .unwrap_or_default();
   let mut body = parts::panel_body()
+    .spacing(crate::theme::ExtraSpacing::Loose.role())
     .child(parts::note(&ctx.t("pipelines.reviewHint")))
     .child(cards)
     .child(
-      Text::new(&ctx.t_args("pipelines.changesCount", [("count", changes.len().to_string())]))
-        .variant(ExtraTypography::InspectorSection.role()),
+      crate::ui::inspector::section_title(
+        "pipeline-changes-title",
+        &ctx.t_args(
+          "pipelines.changesSince",
+          [("count", changes.len().to_string()), ("version", current.to_string())],
+        ),
+        Some(&ctx.t("pipelines.taggedOnCanvas")),
+      )
+      .padding(lurq::node::padding::Padding::new().top(crate::theme::ExtraSpacing::Loose.role()))
+      .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border)),
     );
   for change in changes {
-    body = body.child(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .child(icon(Icon::GitCompare, IconSize::Sm, PaletteColor::TextMuted))
-        .child(
-          parts::note(&message_text(
-            ctx,
-            &orchester_workspace::pipelines::describe::change(&change),
-          ))
-          .flex(1.0),
-        ),
-    );
+    body = body.child(parts::change_row(ctx, &change));
   }
   body = body
     .child(parts::section(ctx, "pipelines.pinnedStage"))
@@ -136,16 +157,21 @@ pub fn review(ctx: &Ctx, editing: &Editing) -> (Column, bool) {
     ));
   (body, valid(editing))
 }
-fn version_card(ctx: &Ctx, label: &str, version: &str) -> Column {
+fn version_card(ctx: &Ctx, label: &str, version: &str, detail: &str) -> Column {
   Column::new()
     .flex(1.0)
-    .padding(SpacingSize::Md)
-    .spacing(SpacingSize::Sm)
+    .height(Dimension::Px(72.0))
+    .padding(lurq::node::padding::Padding::symmetric(
+      SpacingSize::Md,
+      crate::theme::ExtraSpacing::Loose.role(),
+    ))
+    .spacing(crate::theme::ExtraSpacing::Tight.role())
     .background(PaletteColor::SurfaceInput)
     .rounded(RadiusSize::Md)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(parts::caption(&ctx.t(label)))
     .child(Text::new(version).variant(ExtraTypography::Strong.role()))
+    .child(parts::caption(detail))
 }
 pub fn with_success(ctx: &mut Ctx, state: &State, content: Element) -> Element {
   let Some(version) = state.get().published_notice else {
@@ -181,5 +207,31 @@ pub fn with_success(ctx: &mut Ctx, state: &State, content: Element) -> Element {
         .justify(lurq::layout::layout_kind::Justify::End)
         .child(Column::new().width(Dimension::Px(360.0)).child(notice)),
     )
+    .into()
+}
+
+/// D8r7o: fixed actions below the scrollable review, inset from the inspector edges.
+pub fn footer(ctx: &Ctx, state: &State, publish: ActionButton) -> Element {
+  let cancel = state.clone();
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(48.0))
+    .padding(lurq::node::padding::Padding::symmetric(
+      crate::theme::ExtraSpacing::Inset.role(),
+      crate::theme::ExtraSpacing::Loose.role(),
+    ))
+    .spacing(SpacingSize::Sm)
+    .align_items(lurq::layout::Alignment::Center)
+    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(lurq::components::Spacer::new().flex(1.0))
+    .child(
+      ActionButton::new(
+        "pipeline-publish-cancel",
+        ButtonKind::Secondary,
+        ctx.t("pipelines.cancel"),
+      )
+      .on_click(move || cancel.update(|s| s.panel = Panel::Pipeline)),
+    )
+    .child(publish)
     .into()
 }

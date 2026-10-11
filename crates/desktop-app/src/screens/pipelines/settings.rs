@@ -83,32 +83,7 @@ fn content(ctx: &mut Ctx, state: &State, busy: bool, sections: &super::settings_
         .ref_element(sections.target("pipelines.starts"))
         .child(starts(ctx)),
     );
-  for key in [
-    "pipelines.runDefaults",
-    "pipelines.failureDefaults",
-    "pipelines.permissions",
-    "pipelines.sources",
-    "pipelines.delivery",
-    "pipelines.archive",
-  ] {
-    form = form.child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .ref_element(sections.target(key))
-        .spacing(SpacingSize::Md)
-        .child(parts::section(ctx, key))
-        .child(parts::note(&ctx.t("pipelines.proposal"))),
-    );
-  }
-  form = form.child(
-    property(
-      "pipeline-scope",
-      &ctx.t("pipelines.who"),
-      &ctx.t("pipelines.scope"),
-      PropertyValue::Plain,
-    )
-    .ref_element(sections.target("pipelines.who")),
-  );
+  form = proposals(ctx, sections, form);
   Row::new()
     .id("pipeline-settings-page")
     .width(Dimension::Pct(100.0))
@@ -116,16 +91,23 @@ fn content(ctx: &mut Ctx, state: &State, busy: bool, sections: &super::settings_
     .min_height(Dimension::Px(0.0))
     .child(navigation)
     .child(
-      ScrollVertical::new(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .padding(ExtraSpacing::Roomy.role())
-          .align_items(Alignment::Center)
-          .ref_element(sections.origin.clone())
-          .child(form),
-      )
-      .with_scroll_state(sections.scroll.clone())
-      .flex(1.0),
+      Column::new()
+        .flex(1.0)
+        .height(Dimension::Pct(100.0))
+        .with_children(changed.then(|| draft_strip(ctx, state)))
+        .child(
+          ScrollVertical::new(
+            Column::new()
+              .width(Dimension::Pct(100.0))
+              .padding(ExtraSpacing::Roomy.role())
+              .align_items(Alignment::Center)
+              .ref_element(sections.origin.clone())
+              .child(form),
+          )
+          .with_scroll_state(sections.scroll.clone())
+          .flex(1.0)
+          .min_height(Dimension::Px(0.0)),
+        ),
     )
     .into()
 }
@@ -140,7 +122,14 @@ impl Component for General {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       description: ctx.signal(ctx.props::<SummaryProps>().state.get().shown().description().to_owned()),
-      name: ctx.signal(ctx.props::<SummaryProps>().state.get().name.to_string()),
+      name: ctx.signal({
+        let editing = ctx.props::<SummaryProps>().state.get();
+        editing
+          .inputs
+          .get("pipeline-name")
+          .cloned()
+          .unwrap_or_else(|| editing.name.to_string())
+      }),
       slug: ctx.signal(ctx.props::<SummaryProps>().state.get().opened.slug.to_string()),
     }
   }
@@ -176,14 +165,19 @@ impl Component for General {
         .as_ref()
         .map(|v| v.body.description().to_owned())
         .unwrap_or_default();
-      control = control.child(parts::caption(&ctx.t("pipelines.changed"))).child(
-        ActionButton::new(
-          "pipeline-description-undo",
-          ButtonKind::Ghost,
-          ctx.t("pipelines.undoChange"),
-        )
-        .on_click(move || undo.set(before.clone())),
-      );
+      control = control
+        .child(crate::ui::chip::TagChip::new(
+          "pipeline-description-changed",
+          ctx.t("pipelines.changed"),
+        ))
+        .child(
+          ActionButton::new(
+            "pipeline-description-undo",
+            ButtonKind::Ghost,
+            ctx.t("pipelines.undoChange"),
+          )
+          .on_click(move || undo.set(before.clone())),
+        );
     }
     form_section::section(
       "pipeline-settings-general",
@@ -219,7 +213,7 @@ fn starts(ctx: &Ctx) -> Element {
     .spacing(SpacingSize::Sm)
     .child(OptionCard::new(
       "pipeline-on-start",
-      (Icon::Zap, ctx.t("pipelines.onStart")),
+      (Icon::Zap, ctx.t("pipelines.onTaskStart")),
       ctx.t("pipelines.onStartHelp"),
       true,
       || {},
@@ -236,11 +230,15 @@ fn starts(ctx: &Ctx) -> Element {
       OptionCard::new(
         id,
         (glyph, ctx.t(title)),
-        ctx.t("pipelines.plannedTrigger"),
+        ctx.t(if id == "pipeline-scheduled" {
+          "pipelines.scheduledHelp"
+        } else {
+          "pipelines.githubTriggerHelp"
+        }),
         false,
         || {},
       )
-      .unavailable(ctx.t("pipelines.planned")),
+      .unavailable(ctx.t("pipelines.plannedTrigger")),
     );
   }
   form_section::section(
@@ -263,7 +261,10 @@ impl General {
     ctx.watch(&self.name, move |text| {
       if !locked {
         let name = orchester_workspace::pipelines::fields::parse_name(text);
-        rename.update(|s| s.field("pipeline-name", name, |s, name| s.name = name));
+        rename.update(|s| {
+          s.inputs.insert("pipeline-name".to_owned(), text.clone());
+          s.field("pipeline-name", name, |s, name| s.name = name);
+        });
       }
     });
     let state = props.state.clone();
@@ -281,7 +282,7 @@ impl General {
       name = name.locked();
     }
     if let Some(error) = props.state.get().errors.get("pipeline-name") {
-      name = name.error(crate::ui::message::message_text(ctx, error));
+      name = name.error(parts::pipeline_name_error(ctx, error));
     }
     let name = name.render(ctx);
     let slug = FieldInput::new("pipeline-settings-slug", ctx.t("pipelines.slug"), self.slug.clone())
@@ -291,6 +292,15 @@ impl General {
       .width(Dimension::Px(300.0))
       .render(ctx);
 
+    let slug = Column::new()
+      .width(Dimension::Px(300.0))
+      .spacing(ExtraSpacing::Snug.role())
+      .child(slug)
+      .child(crate::ui::unavailable::reason_line(
+        "pipeline-slug-fixed",
+        &ctx.t("pipelines.slugFixed"),
+      ))
+      .into();
     (name, slug)
   }
 }
@@ -310,7 +320,19 @@ fn heading(ctx: &Ctx, changed: bool, editing: &super::state::Editing) -> Column 
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .child(Text::new(&ctx.t("pipelines.settings")).variant(TypographyStyle::Heading))
-    .child(parts::note(&ctx.t("pipelines.settingsHint")))
+    .child(parts::note(
+      &ctx.t_args(
+        "pipelines.settingsDescription",
+        [
+          ("name", editing.name.to_string()),
+          (
+            "version",
+            orchester_workspace::pipelines::write::next_version(&editing.opened)
+              .map_or_else(String::new, |v| v.get().to_string()),
+          ),
+        ],
+      ),
+    ))
     .child(
       Row::new()
         .id("pipeline-settings-draft")
@@ -323,4 +345,75 @@ fn heading(ctx: &Ctx, changed: bool, editing: &super::state::Editing) -> Column 
         ))
         .child(parts::caption(&status)),
     )
+}
+
+fn draft_strip(ctx: &Ctx, state: &State) -> Element {
+  let editing = state.get();
+  let undo = state.clone();
+  let version = orchester_workspace::pipelines::write::next_version(&editing.opened)
+    .map_or_else(String::new, |v| v.get().to_string());
+  Row::new()
+    .id("pipeline-settings-change-strip")
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(44.0))
+    .padding(lurq::node::padding::Padding::horizontal(SpacingSize::Lg))
+    .spacing(ExtraSpacing::Loose.role())
+    .align_items(Alignment::Center)
+    .background(lurq::app::theme::PaletteColor::SurfaceRaised)
+    .child(crate::ui::icon::icon(
+      Icon::FilePen,
+      crate::theme::IconSize::Md,
+      lurq::app::theme::PaletteColor::TextSecondary,
+    ))
+    .child(
+      Text::new(&ctx.t_args("pipelines.settingsChangeCount", [("version", version)]))
+        .variant(crate::theme::ExtraTypography::Strong.role()),
+    )
+    .child(parts::note(&ctx.t("pipelines.settingsImpact")).flex(1.0))
+    .child(
+      ActionButton::new(
+        "pipeline-settings-undo",
+        ButtonKind::Ghost,
+        ctx.t("pipelines.undoChange"),
+      )
+      .icon(Icon::Undo2)
+      .on_click(move || {
+        undo.update(|s| {
+          if let Some(latest) = &s.opened.latest {
+            s.edit.set_description(latest.body.description());
+            s.epoch += 1;
+          }
+        })
+      }),
+    )
+    .into()
+}
+fn proposals(ctx: &Ctx, sections: &super::settings_nav::Sections, mut form: Column) -> Column {
+  for key in [
+    "pipelines.runDefaults",
+    "pipelines.failureDefaults",
+    "pipelines.permissions",
+    "pipelines.sources",
+    "pipelines.delivery",
+    "pipelines.archive",
+  ] {
+    form = form.child(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .ref_element(sections.target(key))
+        .spacing(SpacingSize::Md)
+        .child(parts::section(ctx, key))
+        .child(parts::note(&ctx.t("pipelines.proposal"))),
+    );
+  }
+  form = form.child(
+    property(
+      "pipeline-scope",
+      &ctx.t("pipelines.who"),
+      &ctx.t("pipelines.scope"),
+      PropertyValue::Plain,
+    )
+    .ref_element(sections.target("pipelines.who")),
+  );
+  form
 }

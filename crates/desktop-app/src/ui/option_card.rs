@@ -41,6 +41,7 @@ pub struct OptionCard {
   chosen: bool,
   choice: Choice,
   content: Vec<Element>,
+  inline_summary: bool,
 }
 
 impl OptionCard {
@@ -59,6 +60,7 @@ impl OptionCard {
       description: description.into(),
       chosen,
       content: Vec::new(),
+      inline_summary: false,
       choice: Choice::Choose(Arc::new(choose)),
     }
   }
@@ -67,6 +69,40 @@ impl OptionCard {
   pub fn content(mut self, content: impl Into<Element>) -> Self {
     self.content.push(content.into());
     self
+  }
+
+  /// Compact starting-point card: summary beside its title, details below (Iewpp).
+  pub fn inline_summary(mut self) -> Self {
+    self.inline_summary = true;
+    self
+  }
+
+  fn text(&self, glyph: PaletteColor) -> Column {
+    let title = Row::new()
+      .spacing(ExtraSpacing::Snug.role())
+      .align_items(Alignment::Center)
+      .with_children((!self.inline_summary).then(|| icon(self.icon, IconSize::Md, glyph)))
+      .child(
+        Text::new(&self.title)
+          .id(format!("{}-title", self.id))
+          .variant(ExtraTypography::OptionTitle.role()),
+      )
+      .with_children(
+        self
+          .inline_summary
+          .then(|| Text::new(&self.description).variant(ExtraTypography::Note.role())),
+      );
+    Column::new()
+      .flex(1.0)
+      .spacing(if self.inline_summary {
+        SpacingSize::Sm
+      } else {
+        SpacingSize::Xs
+      })
+      .child(title)
+      .with_children(
+        (!self.inline_summary).then(|| Text::new(&self.description).variant(ExtraTypography::Prose.role())),
+      )
   }
 
   /// The choice cannot be made, for `reason`.
@@ -121,22 +157,7 @@ impl From<OptionCard> for Element {
       ),
       Choice::Choose(_) => None,
     };
-    let text = Column::new()
-      .flex(1.0)
-      .spacing(SpacingSize::Xs)
-      .child(
-        Row::new()
-          .spacing(ExtraSpacing::Snug.role())
-          .align_items(Alignment::Center)
-          .child(icon(card.icon, IconSize::Md, glyph))
-          .child(
-            Text::new(&card.title)
-              .id(format!("{}-title", card.id))
-              .variant(ExtraTypography::OptionTitle.role()),
-          ),
-      )
-      .child(Text::new(&card.description).variant(ExtraTypography::Prose.role()))
-      .with_children(reason);
+    let text = card.text(glyph).with_children(reason);
     let (fill, stroke) = if card.chosen {
       (PaletteColor::SurfaceRaised, PaletteColor::Accent)
     } else {

@@ -17,7 +17,7 @@ use crate::{
   },
 };
 
-pub fn question(ctx: &mut Ctx, guard: &LeaveGuard, writing: bool) -> Option<Element> {
+pub fn question(ctx: &mut Ctx, guard: &LeaveGuard, writing: bool, name: &str) -> Option<Element> {
   if !guard.requested() {
     return None;
   }
@@ -32,8 +32,17 @@ pub fn question(ctx: &mut Ctx, guard: &LeaveGuard, writing: bool) -> Option<Elem
       .rounded(ExtraRadius::Tile.role())
       .padding(SpacingSize::Lg)
       .spacing(ExtraSpacing::Loose.role())
-      .child(Text::new(&ctx.t("pipelines.leaveTitle")).variant(ExtraTypography::Strong.role()))
-      .child(super::parts::note(&ctx.t("pipelines.leaveHint")))
+      .child(Text::new(&ctx.t_args("pipelines.leaveNamed", [("name", name)])).variant(ExtraTypography::Strong.role()))
+      .child(crate::ui::inspector::note(
+        "pipeline-leave-discard",
+        crate::ui::icon::Icon::FilePen,
+        &ctx.t("pipelines.leaveDiscard"),
+      ))
+      .child(crate::ui::inspector::note(
+        "pipeline-leave-saved",
+        crate::ui::icon::Icon::ShieldCheck,
+        &ctx.t("pipelines.leaveSaved"),
+      ))
       .child(
         Row::new()
           .spacing(SpacingSize::Sm)

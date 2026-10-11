@@ -59,6 +59,7 @@ impl Component for Library {
       .icon(Icon::Plus)
       .on_click(move || nav.go(Route::Project(id, ProjectPage::NewPipeline)));
     let header = Row::new()
+      .align_items(lurq::layout::Alignment::Center)
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)
       .child(
@@ -275,7 +276,17 @@ fn versions_help(ctx: &Ctx) -> Row {
       Row::new()
         .flex(1.0)
         .spacing(SpacingSize::Sm)
-        .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary))
+        .child(
+          Row::new()
+            .width(Dimension::Px(28.0))
+            .height(Dimension::Px(28.0))
+            .align_items(lurq::layout::Alignment::Center)
+            .justify(lurq::layout::layout_kind::Justify::Center)
+            .rounded(RadiusSize::Md)
+            .background(PaletteColor::SurfaceRaised)
+            .border_inside(BorderSize::Sm, PaletteColor::Border)
+            .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary)),
+        )
         .child(
           Column::new()
             .flex(1.0)

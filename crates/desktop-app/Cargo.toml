@@ -44,6 +44,8 @@ orchester-workspace = { workspace = true, features = ["devtools-inspect"] }
 lurq = { workspace = true, features = [
   "winit",
   "wgpu",
+  # The dashed add-step slot from v1nZD.
+  "svg",
   "router",
   "form",
   "i18n",

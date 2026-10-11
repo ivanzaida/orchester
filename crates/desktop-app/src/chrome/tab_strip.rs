@@ -388,6 +388,15 @@ fn close_button(ctx: &mut Ctx, navigation: Navigation, tab: &Tab) -> Element {
 fn label(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
   let screen = match route {
     Route::Project(_, ProjectPage::Task(key, _)) => key.to_string(),
+    Route::Project(_, ProjectPage::NewPipeline) => ctx.t("pipelines.new").to_string(),
+    Route::Project(project, ProjectPage::Pipeline(id)) => projects
+      .feed(*project)
+      .pipeline_names
+      .get()
+      .0
+      .get(id)
+      .cloned()
+      .unwrap_or_else(|| ctx.t(route.screen().title_key()).to_string()),
     Route::Project(_, ProjectPage::EditTask(key)) => ctx
       .t_args("shell.screens.editTaskOf", [("key", key.to_string())])
       .to_string(),

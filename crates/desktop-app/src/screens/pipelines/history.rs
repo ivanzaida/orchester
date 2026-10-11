@@ -9,10 +9,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::resource::PipelineEdit;
-use orchester_workspace::{
-  background, messages,
-  pipelines::{describe, history::VersionHistory},
-};
+use orchester_workspace::{background, messages, pipelines::history::VersionHistory};
 
 use super::{
   parts,
@@ -75,8 +72,28 @@ fn panel(ctx: &mut Ctx, project: &ShownProject, state: &State) -> Element {
           .child(
             Column::new()
               .spacing(SpacingSize::Xs)
-              .child(Text::new(&ctx.t("pipelines.draftLabel")).variant(crate::theme::ExtraTypography::Strong.role()))
-              .child(parts::caption(&ctx.t("pipelines.saved"))),
+              .child(
+                Text::new(
+                  &ctx.t_args(
+                    "pipelines.draftVersion",
+                    [(
+                      "version",
+                      orchester_workspace::pipelines::write::next_version(&editing.opened)
+                        .map_or_else(String::new, |v| v.get().to_string()),
+                    )],
+                  ),
+                )
+                .variant(crate::theme::ExtraTypography::Strong.role()),
+              )
+              .child(parts::caption(&editing.opened.draft_saved_at.map_or_else(
+                || ctx.t("pipelines.noDraft"),
+                |at| {
+                  ctx.t_args(
+                    "pipelines.draftSavedAt",
+                    [("age", super::library::age(ctx, at).to_string())],
+                  )
+                },
+              ))),
           ),
       );
       for version in history.versions() {
@@ -101,58 +118,71 @@ fn panel(ctx: &mut Ctx, project: &ShownProject, state: &State) -> Element {
       &message_text(ctx, &error),
     ));
   }
-  let footer = footer(ctx, state);
   parts::panel(
     ctx,
+    &ctx.t("pipelines.historyTitle"),
     &ctx.t("pipelines.history"),
-    &editing.opened.name,
     body.into(),
-    Some(footer.into()),
+    None,
     Some(state.clone()),
   )
 }
-fn footer(ctx: &Ctx, state: &State) -> Column {
+fn restore_button(ctx: &Ctx, state: &State) -> ActionButton {
   let editing = state.get();
-  let back = state.clone();
   let restore = state.clone();
-  let mut footer = Column::new()
-    .width(Dimension::Pct(100.0))
-    .padding(SpacingSize::Md)
-    .spacing(SpacingSize::Sm)
+  ActionButton::new(
+    "pipeline-restore",
+    ButtonKind::Secondary,
+    ctx.t_args(
+      "pipelines.restoreVersion",
+      [(
+        "version",
+        editing
+          .viewing_version
+          .map_or_else(String::new, |v| v.get().to_string()),
+      )],
+    ),
+  )
+  .icon(crate::ui::icon::Icon::RotateCcw)
+  .on_click(move || {
+    restore.update(|s| {
+      if let Some(body) = s.viewing.take() {
+        s.edit = PipelineEdit::new(body);
+        s.viewing_version = None;
+        s.comparing = false;
+        s.panel = Panel::Pipeline;
+        s.epoch += 1;
+        s.errors.clear();
+        s.inputs.clear();
+      }
+    })
+  })
+}
+fn comparison_tag(ctx: &Ctx, editing: &super::state::Editing) -> Row {
+  let count = editing.viewing.as_ref().map_or(0, |before| {
+    orchester_core::resource::changes(before, &editing.opened.body)
+      .iter()
+      .filter_map(|change| match change {
+        orchester_core::resource::PipelineChange::Step { key, .. } => Some(key),
+        orchester_core::resource::PipelineChange::Description => None,
+      })
+      .collect::<std::collections::BTreeSet<_>>()
+      .len()
+  });
+  Row::new()
+    .padding(lurq::node::padding::Padding::horizontal(SpacingSize::Sm))
+    .spacing(SpacingSize::Xs)
+    .rounded(crate::theme::ExtraRadius::Full.role())
+    .background(PaletteColor::InfoMuted)
+    .child(crate::ui::icon::icon(
+      crate::ui::icon::Icon::GitCompare,
+      crate::theme::IconSize::Xs,
+      crate::theme::ExtraColor::Selection.role(),
+    ))
     .child(
-      ActionButton::new(
-        "pipeline-history-back",
-        ButtonKind::Secondary,
-        ctx.t("pipelines.returnDraft"),
-      )
-      .on_click(move || {
-        back.update(|s| {
-          s.viewing = None;
-          s.viewing_version = None;
-          s.comparing = false;
-          s.panel = Panel::Pipeline;
-          s.epoch += 1;
-        })
-      }),
-    );
-  if editing.viewing.is_some() {
-    footer = footer.child(
-      ActionButton::new("pipeline-restore", ButtonKind::Secondary, ctx.t("pipelines.restore")).on_click(move || {
-        restore.update(|s| {
-          if let Some(body) = s.viewing.take() {
-            s.edit = PipelineEdit::new(body);
-            s.viewing_version = None;
-            s.comparing = false;
-            s.panel = Panel::Pipeline;
-            s.epoch += 1;
-            s.errors.clear();
-            s.inputs.clear();
-          }
-        })
-      }),
-    );
-  }
-  footer
+      parts::caption(&ctx.t_args("pipelines.comparisonCount", [("count", count.to_string())]))
+        .color(crate::theme::ExtraColor::Selection.role()),
+    )
 }
 fn version_row(
   ctx: &Ctx,
@@ -169,7 +199,10 @@ fn version_row(
       .variant(crate::theme::ExtraTypography::Strong.role()),
   );
   if latest {
-    head = head.child(parts::caption(&ctx.t("pipelines.latest")).color(PaletteColor::Success));
+    head = head.child(crate::ui::chip::TagChip::new(
+      "pipeline-latest-badge",
+      ctx.t("pipelines.latest"),
+    ));
   }
   let meta = ctx.t_args(
     "pipelines.historyMeta",
@@ -204,7 +237,20 @@ fn version_row(
   .child(
     Column::new()
       .spacing(SpacingSize::Xs)
-      .child(head)
+      .width(Dimension::Pct(100.0))
+      .child(
+        head
+          .child(lurq::components::Spacer::new().flex(1.0))
+          .child(crate::ui::icon::icon(
+            if selected {
+              crate::ui::icon::Icon::ChevronDown
+            } else {
+              crate::ui::icon::Icon::ChevronRight
+            },
+            crate::theme::IconSize::Sm,
+            PaletteColor::TextMuted,
+          )),
+      )
       .child(parts::caption(&meta)),
   )
   .into()
@@ -238,7 +284,7 @@ pub fn toolbar(ctx: &Ctx, state: &State) -> Element {
         )],
       ),
     ))
-    .with_children(editing.comparing.then(|| parts::caption(&ctx.t("pipelines.comparing"))))
+    .with_children(editing.comparing.then(|| comparison_tag(ctx, &editing)))
     .child(
       ActionButton::new("pipeline-back-draft", ButtonKind::Ghost, ctx.t("pipelines.returnDraft"))
         .on_click(move || back(&target)),
@@ -253,7 +299,11 @@ fn details(
 ) -> Column {
   let editing = state.get();
   body = body
-    .child(parts::section(ctx, "pipelines.changes"))
+    .child(crate::ui::inspector::section_title(
+      "pipeline-version-changes",
+      &ctx.t_args("pipelines.changesIn", [("version", version.number.get().to_string())]),
+      None,
+    ))
     .child(parts::caption(
       &ctx.t_args("pipelines.runs", [("count", version.runs.len().to_string())]),
     ));
@@ -270,12 +320,26 @@ fn details(
     })));
   }
   for change in &changes {
-    body = body.child(parts::note(&message_text(ctx, &describe::change(change))));
+    body = body.child(parts::change_row(ctx, change));
   }
   let compare = state.clone();
   body = body.child(
-    ActionButton::new("pipeline-compare", ButtonKind::Secondary, ctx.t("pipelines.compare"))
-      .on_click(move || compare.update(|s| s.comparing = !s.comparing)),
+    Row::new()
+      .spacing(SpacingSize::Sm)
+      .child(
+        ActionButton::new(
+          "pipeline-compare",
+          ButtonKind::Secondary,
+          ctx.t(if editing.comparing {
+            "pipelines.hideComparison"
+          } else {
+            "pipelines.compare"
+          }),
+        )
+        .icon(crate::ui::icon::Icon::GitCompare)
+        .on_click(move || compare.update(|s| s.comparing = !s.comparing)),
+      )
+      .child(restore_button(ctx, state)),
   );
   body = body.child(crate::ui::notice::handling_notice(
     "history-pinned",
