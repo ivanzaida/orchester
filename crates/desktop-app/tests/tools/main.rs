@@ -4,5 +4,6 @@ mod harness;
 mod other_states;
 mod refresh;
 mod states;
+mod storage;
 #[path = "../support/mod.rs"]
 mod support;

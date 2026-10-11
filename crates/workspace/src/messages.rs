@@ -76,6 +76,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::NotShared => Message::new("sharing.errors.notShared"),
     StoreError::AlreadyShared => Message::new("sharing.errors.alreadyShared"),
     StoreError::DraftChanged(_) => Message::new("errors.draftChanged"),
+    StoreError::Sqlite(_) if error.is_locked() => Message::new("errors.databaseLocked"),
     StoreError::Sqlite(_)
     | StoreError::Io { .. }
     | StoreError::Corrupt { .. }

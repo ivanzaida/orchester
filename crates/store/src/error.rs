@@ -144,6 +144,15 @@ pub enum StoreError {
 }
 
 impl StoreError {
+  /// Whether another database connection holds a lock that prevents this operation.
+  pub fn is_locked(&self) -> bool {
+    matches!(
+      self,
+      Self::Sqlite(rusqlite::Error::SqliteFailure(failure, _))
+        if matches!(failure.code, rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked)
+    )
+  }
+
   /// Whether the database file is damaged or is not a database at all, as opposed to one that is busy,
   /// refused or cannot be reached: what it holds cannot be trusted.
   pub fn is_damaged(&self) -> bool {
