@@ -51,7 +51,6 @@ impl Worker {
     let mut grace_armed = false;
     let mut listening = true;
     let mut deciding = self.app_server().is_some() || self.claude_approvals.is_some();
-    let mut steering = true;
     loop {
       tokio::select! {
         event = next_event(&mut self.driver) => match event {
@@ -66,10 +65,7 @@ impl Worker {
         },
         // A closed channel reads `None`, which leaves the branch out.
         Some(given) = self.answers.recv() => self.answer_question(&mut watch, given).await?,
-        messages = self.steers.recv(), if steering => match messages {
-          Some(messages) => self.steer(&mut watch, messages).await?,
-          None => steering = false,
-        },
+        Some(messages) = self.steers.recv() => self.steer(&mut watch, messages).await?,
         Some(relayed) = ClaudeApprovals::next(self.claude_approvals.as_mut()) => self.relayed(&mut watch, relayed).await?,
         Some(relayed) = Listening::next(self.tool_relay.as_mut()) => self.relayed(&mut watch, relayed).await?,
         reviewed = review::next(&mut self.reviewing), if self.reviewing.is_some() => {
@@ -79,7 +75,7 @@ impl Worker {
         closed = watch.relay_closed(), if watch.stop.is_none() => self.relay_closed(&mut watch, closed)?,
         stop = self.stops.recv(), if listening => match stop {
           Some(stop) => {
-            if self.receive_stop(&mut watch, stop) {
+            if self.receive_stop(&mut watch, stop).await? {
               grace.as_mut().reset(Instant::now() + TURN_GRACE);
               grace_armed = true;
             }
@@ -96,11 +92,15 @@ impl Worker {
 
   /// A line the CLI wrote: what it says, the messages sent now it can take, and a stop that waited for it.
   async fn output(&mut self, watch: &mut Watch, stream: OutputStream, line: &str) -> Result<(), StoreError> {
+    let commands = watch.commands.len();
     self.receive_output(watch, stream, line).await?;
     self.steer_early(watch).await?;
     self.stop_at_checkpoint(watch);
     if watch.stop.is_some() {
       self.driver.end();
+    }
+    if watch.commands.len() < commands {
+      self.continue_after_tools(watch).await?;
     }
     Ok(())
   }
@@ -131,7 +131,7 @@ impl Worker {
   }
 
   /// Carries out what the run tells the agent; whether its turn now has [`TURN_GRACE`] to end on its own.
-  fn receive_stop(&mut self, watch: &mut Watch, stop: Stop) -> bool {
+  async fn receive_stop(&mut self, watch: &mut Watch, stop: Stop) -> Result<bool, StoreError> {
     match stop {
       Stop::Now(cause) => {
         if watch.stop.is_none() {
@@ -142,7 +142,7 @@ impl Worker {
       Stop::AfterTurn(cause) => {
         if watch.over.is_none() && watch.stop.is_none() {
           watch.over = Some(cause);
-          return true;
+          return Ok(true);
         }
       }
       Stop::AfterCommand(cause) => {
@@ -155,9 +155,12 @@ impl Worker {
         watch.pause_requested = true;
         self.stop_at_checkpoint(watch);
       }
-      Stop::Withdraw => watch.after_command = None,
+      Stop::Withdraw => {
+        watch.after_command = None;
+        self.continue_after_tools(watch).await?;
+      }
     }
-    false
+    Ok(false)
   }
 
   async fn receive_output(&mut self, watch: &mut Watch, stream: OutputStream, line: &str) -> Result<(), StoreError> {
@@ -305,15 +308,16 @@ impl Worker {
     }
   }
 
-  /// Whether Orchester's tools outlive the Codex turn that ended: a call still runs, a decision still waits (a call
-  /// of Orchester's tools, or one a yielded cell asked of Codex), or a call returned since Codex was last continued
-  /// and its result may not be collected yet. Calls Codex still shows open are not enough on their own: it may never
-  /// complete one it abandoned, and each continuation is a model turn.
+  /// Whether Orchester's tools outlive the Codex turn that ended: a call or command still runs, a decision still waits
+  /// (a call of Orchester's tools, or one a yielded cell asked of Codex), or a call returned since Codex was last
+  /// continued and its result may not be collected yet. Calls Codex still shows open are not enough on their own: it
+  /// may never complete one it abandoned, and each continuation is a model turn.
   fn tools_outlive_turn(&self, watch: &Watch) -> bool {
     let Some(relay) = self.tool_relay.as_ref() else {
       return false;
     };
     relay.busy()
+      || !watch.commands.is_empty()
       || watch.approval.is_some()
       || (relay.returns() > watch.returns_continued
         && self
@@ -321,12 +325,18 @@ impl Worker {
           .is_some_and(AppServerSession::has_orchester_results_to_collect))
   }
 
-  /// Collects a yielded call in the same Codex thread once the relay has returned it and no decision waits: a
-  /// continuation while a yielded cell's decision waits could end its turn, or ask another, before the person
-  /// answers. Called again once the decision is settled. A stop, a reached budget or a requested pause ends the
-  /// agent instead (a pause checkpoints it), as does the [`MAX_IDLE_CONTINUATIONS`] cap.
+  /// Collects a yielded call in the same Codex thread once the relay has returned it and no command or decision waits:
+  /// a continuation while a yielded cell's decision waits could end its turn, or ask another, before the person
+  /// answers. Called again once the decision is settled or its command finishes. Apply now waits for the safe
+  /// checkpoint before another invocation takes the new permissions. A stop, a reached budget or a requested pause ends
+  /// the agent instead (a pause checkpoints it), as does the [`MAX_IDLE_CONTINUATIONS`] cap.
   pub(in super::super) async fn continue_after_tools(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
-    if !watch.tools_after_turn || watch.approval.is_some() || self.tool_relay.as_ref().is_some_and(Listening::busy) {
+    if !watch.tools_after_turn
+      || watch.approval.is_some()
+      || !watch.commands.is_empty()
+      || watch.after_command.is_some()
+      || self.tool_relay.as_ref().is_some_and(Listening::busy)
+    {
       return Ok(());
     }
     watch.tools_after_turn = false;

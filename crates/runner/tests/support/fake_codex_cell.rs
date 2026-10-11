@@ -8,7 +8,11 @@
 //!   (`cell-command`) for the turn that started it; the continuation finishes once that is answered (`cell command:
 //!   <decision>`). A continuation that comes before the answer waits for it, unless the prompt says "Give up waiting"
 //!   (it ends its turn with the cell uncollected, as when Codex's wait times out) or "Ask another decision" (it asks
-//!   about a second command, `another-command`, while the first waits).
+//!   about a second command, `another-command`, while the first waits). "Hold command completion" keeps the approved
+//!   command running until `release-cell-command.txt` exists, independently of the model's continuation. "Hold MCP
+//!   completion" waits for `release-cell-item.txt` after the relay returns, before completing the MCP item. "End turn
+//!   after command approval" ends the turn while its approved command runs. "Start command in continuation" starts a
+//!   held command when collecting the cell, then ends that model turn.
 //! - "Abandon an Orchester call": starts a call of Orchester's tools that never reaches the relay nor completes, then
 //!   finishes the turn as usual. "Call a tool every turn" also calls `get_task` in that turn and in each continuation,
 //!   which finishes again with the same result.
@@ -52,6 +56,8 @@ pub enum Command {
 pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Option<Step> {
   if prompt.starts_with(CONTINUE) {
     Some(collect(session))
+  } else if prompt.contains(TRIGGER) && session.resumed {
+    Some(finish(session, "resumed", &report_of(prompt, structured)))
   } else if prompt.contains(TRIGGER) {
     Some(start(session, prompt, structured))
   } else if prompt.contains(ABANDON) {
@@ -78,8 +84,13 @@ fn start(session: &mut Session, prompt: &str, structured: bool) -> Step {
   let cwd = session.cwd.to_string_lossy().into_owned();
   let completes = !prompt.contains("Never complete the call");
   let asks_command = prompt.contains("Ask a command after");
+  let holds_item = prompt.contains("Hold MCP completion");
   thread::spawn(move || {
     let result = server.call("search_external_file", &arguments);
+    eprintln!("cell-returned: yes");
+    if holds_item {
+      wait_for_release(Path::new(&cwd), "release-cell-item.txt");
+    }
     // Codex completes the MCP item when it returns, before the model collects the yielded cell.
     if completes {
       emit(
@@ -88,7 +99,6 @@ fn start(session: &mut Session, prompt: &str, structured: bool) -> Step {
           "tool": "search_external_file", "status": "completed"}}}),
       );
     }
-    eprintln!("cell-returned: yes");
     if asks_command {
       ask_command(&thread, &turn, &cwd);
     }
@@ -101,17 +111,21 @@ fn start(session: &mut Session, prompt: &str, structured: bool) -> Step {
     structured,
     asks_command,
   });
-  wait_to_end(&session.cwd);
+  if prompt.contains("End turn after command approval") {
+    return Step::Go;
+  }
+  wait_for_release(&session.cwd, "yield-turn.txt");
+  pending_done(session, prompt.contains("Fail the turn"));
+  Step::Go
+}
+
+fn pending_done(session: &Session, failed: bool) {
   message(
     session,
     "pending-cell",
     &json!({"outcome": "question", "summary": "Lookup pending in tool cell 14"}).to_string(),
   );
-  complete(
-    session,
-    prompt.contains("Fail the turn").then_some("usage limit reached"),
-  );
-  Step::Go
+  complete(session, failed.then_some("usage limit reached"));
 }
 
 /// The cell, still at work after its turn `turn` ended, asks about a command of that turn.
@@ -154,8 +168,8 @@ fn call_a_tool(session: &mut Session) {
   );
 }
 
-fn wait_to_end(worktree: &Path) {
-  while !worktree.join("yield-turn.txt").exists() {
+fn wait_for_release(worktree: &Path, marker: &str) {
+  while !worktree.join(marker).exists() {
     thread::sleep(Duration::from_millis(10));
   }
 }
@@ -215,6 +229,14 @@ fn collect(session: &mut Session) -> Step {
   eprintln!("cell: {}: {text}", if failed { "denied" } else { "approved" });
   let report = report_of(&cell.prompt, cell.structured);
   if !cell.asks_command {
+    if cell.prompt.contains("Start command in continuation") {
+      notify(
+        session,
+        "item/started",
+        json!({"item": {"id": "cell-command", "type": "commandExecution", "command": "cell-command"}}),
+      );
+      hold_command(session, "accept");
+    }
     return finish(session, "collected", &report);
   }
   match std::mem::take(&mut session.cell_command) {
@@ -229,6 +251,22 @@ fn collect(session: &mut Session) -> Step {
 /// The answer to the cell's command, before or after the continuation collected the cell.
 pub fn command_answered(session: &mut Session, answer: &Value) -> Step {
   let decision = answer["result"]["decision"].as_str().unwrap_or_default().to_owned();
+  let holds = session
+    .cell
+    .as_ref()
+    .is_some_and(|cell| cell.prompt.contains("Hold command completion"));
+  if holds {
+    hold_command(session, &decision);
+  } else {
+    command_completed(&session.thread, &session.turn, &decision);
+  }
+  if session
+    .cell
+    .as_ref()
+    .is_some_and(|cell| cell.prompt.contains("End turn after command approval"))
+  {
+    pending_done(session, false);
+  }
   match std::mem::take(&mut session.cell_command) {
     Command::Collected(report) => command_done(session, &decision, &report),
     Command::None | Command::Answered(_) => {
@@ -240,12 +278,28 @@ pub fn command_answered(session: &mut Session, answer: &Value) -> Step {
 
 fn command_done(session: &mut Session, decision: &str, report: &StepReport) -> Step {
   eprintln!("cell command: {decision}");
-  let status = if decision == "accept" { "completed" } else { "declined" };
-  notify(
-    session,
-    "item/completed",
-    json!({"item": {"id": "cell-command", "type": "commandExecution", "command": "cell-command",
-      "status": status, "exitCode": 0, "aggregatedOutput": ""}}),
-  );
   finish(session, "collected", report)
+}
+
+fn hold_command(session: &Session, decision: &str) {
+  let (thread, turn, cwd, decision) = (
+    session.thread.clone(),
+    session.turn.clone(),
+    session.cwd.clone(),
+    decision.to_owned(),
+  );
+  thread::spawn(move || {
+    eprintln!("cell-command-running: yes");
+    wait_for_release(&cwd, "release-cell-command.txt");
+    command_completed(&thread, &turn, &decision);
+  });
+}
+
+fn command_completed(thread: &str, turn: &str, decision: &str) {
+  let status = if decision == "accept" { "completed" } else { "declined" };
+  emit(
+    &json!({"method": "item/completed", "params": {"threadId": thread, "turnId": turn,
+      "item": {"id": "cell-command", "type": "commandExecution", "command": "cell-command",
+      "status": status, "exitCode": 0, "aggregatedOutput": ""}}}),
+  );
 }
