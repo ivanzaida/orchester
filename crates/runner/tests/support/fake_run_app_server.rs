@@ -15,15 +15,34 @@ const TOKEN: &str = "stand-in-app-private-token";
 
 pub fn serve(folder: &str) -> Result<(), String> {
   let folder = Path::new(folder);
+  let app = if folder.ends_with("orchester-mcp") {
+    "orchester"
+  } else {
+    "orchester-app"
+  };
+  let listener = publish(folder, app)?;
+  if app == "orchester" {
+    let windows = folder.parent().ok_or("profile")?.join("lurq/mcp");
+    let ui_listener = publish(&windows, app)?;
+    std::thread::spawn(move || accept(&ui_listener, &windows).expect("stand-in UI server"));
+  }
+  println!("ready");
+  std::io::stdout().flush().map_err(|_| "flush")?;
+  accept(&listener, folder)
+}
+
+fn publish(folder: &Path, app: &str) -> Result<TcpListener, String> {
   fs::create_dir_all(folder).map_err(|_| "discovery folder")?;
   let listener = TcpListener::bind("127.0.0.1:0").map_err(|_| "bind")?;
   let port = listener.local_addr().map_err(|_| "address")?.port();
   let pid = std::process::id();
-  let discovery = json!({"pid":pid,"app":"orchester-app","port":port,
+  let discovery = json!({"pid":pid,"app":app,"port":port,
     "url":format!("http://127.0.0.1:{port}/mcp"),"token":TOKEN});
   fs::write(folder.join(format!("{pid}.json")), discovery.to_string()).map_err(|_| "discovery")?;
-  println!("ready");
-  std::io::stdout().flush().map_err(|_| "flush")?;
+  Ok(listener)
+}
+
+fn accept(listener: &TcpListener, folder: &Path) -> Result<(), String> {
   for stream in listener.incoming() {
     let stream = stream.map_err(|_| "accept")?;
     let folder = folder.to_path_buf();

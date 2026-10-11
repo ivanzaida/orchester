@@ -20,7 +20,7 @@ impl Drop for App {
   }
 }
 
-fn start(worktree: &Path) -> (App, PathBuf) {
+fn start(worktree: &Path, app: &str) -> (App, PathBuf) {
   let original = std::env::current_exe()
     .expect("CLI")
     .parent()
@@ -30,15 +30,19 @@ fn start(worktree: &Path) -> (App, PathBuf) {
     } else {
       "orchester-test-command"
     });
-  let folder = worktree.join(".tmp/qa/app");
+  let folder = worktree.join(".tmp/qa").join(app);
   fs::create_dir_all(folder.join("bin")).expect("bin");
   let program = folder.join("bin").join(if cfg!(windows) {
-    "orchester-app.exe"
+    format!("{app}.exe")
   } else {
-    "orchester-app"
+    app.to_owned()
   });
   fs::copy(original, &program).expect("copy");
-  let discovery = folder.join("profile/orchester-app-mcp");
+  let discovery = folder.join("profile").join(if app == "orchester" {
+    "orchester-mcp"
+  } else {
+    "orchester-app-mcp"
+  });
   (start_program(&program, &discovery), discovery)
 }
 
@@ -65,7 +69,7 @@ fn start_program(program: &Path, discovery: &Path) -> App {
 }
 
 pub fn exercise(worktree: &Path, mut call: impl FnMut(&str, &Value) -> Value) {
-  let (app, folder) = start(worktree);
+  let (app, folder) = start(worktree, "orchester-app");
   let pid = app.0.id();
   let discovery_file = folder.join(format!("{pid}.json"));
   let initial = fs::read(&discovery_file).expect("discovery");
@@ -136,6 +140,75 @@ pub fn exercise(worktree: &Path, mut call: impl FnMut(&str, &Value) -> Value) {
   assert_eq!(
     calls.lines().collect::<Vec<_>>(),
     ["navigate", "lurq_screenshot", "tool_error", "bad_image", "redirect"]
+  );
+  exercise_deprecated(worktree, &mut call);
+}
+
+fn exercise_deprecated(worktree: &Path, call: &mut impl FnMut(&str, &Value) -> Value) {
+  let (app, domain) = start(worktree, "orchester");
+  let pid = app.0.id();
+  let windows = domain.parent().expect("profile").join("lurq/mcp");
+  let filename = format!("{pid}.json");
+  let domain_file = domain.join(&filename);
+  let discovery = fs::read(&domain_file).expect("domain discovery");
+  let domain_info: Value = serde_json::from_slice(&discovery).expect("domain discovery");
+  let windows_info: Value =
+    serde_json::from_slice(&fs::read(windows.join(&filename)).expect("UI discovery")).expect("UI discovery");
+  assert_ne!(domain_info["port"], windows_info["port"]);
+  let unrelated = worktree.join(".tmp/qa/unrelated");
+  fs::create_dir_all(&unrelated).expect("unrelated");
+  fs::write(unrelated.join(&filename), "invalid discovery").expect("unrelated discovery");
+
+  let navigate = json!({"pid":pid,"tool":"navigate","arguments":{"route":"runs"}});
+  let answer = call("call_run_app", &navigate);
+  assert_eq!(answer["isError"], false);
+  assert_eq!(answer["structuredContent"]["route"], "runs");
+  eprintln!("app-relay: dual-server domain selected");
+  let answer = call(
+    "call_run_app",
+    &json!({"pid":pid,"tool":"lurq_screenshot","arguments":{}}),
+  );
+  assert_eq!(answer["isError"], false);
+  let path = answer["content"][0]["text"]
+    .as_str()
+    .expect("path")
+    .strip_prefix("PNG saved: ")
+    .expect("saved");
+  let image = image::open(worktree.join(path)).expect("PNG");
+  assert_eq!((image.width(), image.height()), (2, 2));
+  eprintln!("app-relay: dual-server UI selected");
+
+  fs::remove_file(&domain_file).expect("remove domain discovery");
+  let refused = call("call_run_app", &navigate);
+  assert_eq!(refused["isError"], true);
+  assert!(
+    refused["content"][0]["text"]
+      .as_str()
+      .expect("error")
+      .contains("no MCP discovery")
+  );
+  eprintln!("app-relay: missing selected server refused");
+  fs::write(&domain_file, &discovery).expect("restore domain discovery");
+  let duplicate = worktree.join(".tmp/qa/duplicate/orchester-mcp");
+  fs::create_dir_all(&duplicate).expect("duplicate folder");
+  fs::write(duplicate.join(filename), discovery).expect("duplicate discovery");
+  let refused = call("call_run_app", &navigate);
+  assert_eq!(refused["isError"], true);
+  assert!(
+    refused["content"][0]["text"]
+      .as_str()
+      .expect("error")
+      .contains("more than one")
+  );
+  eprintln!("app-relay: duplicate selected server refused");
+
+  assert_eq!(
+    fs::read_to_string(domain.join("calls")).expect("domain calls"),
+    "navigate\n"
+  );
+  assert_eq!(
+    fs::read_to_string(windows.join("calls")).expect("UI calls"),
+    "lurq_screenshot\n"
   );
 }
 

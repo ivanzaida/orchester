@@ -1,9 +1,10 @@
 # ORC-23 implementation validation · 2026-10-11
 
-Candidate: the saved, uncommitted implementation in run worktree
-`01a12acf-2d86-700e-8094-befc53b4e0b5`, based on
-`eae8b2668382e98cbee8318d0fc3c9269df9d7a2`. No commit or installed-app change was made.
-The final results below cover the current Rust candidate; subsequent edits are documentation only.
+Original candidate: implementation in run worktree `01a12acf-2d86-700e-8094-befc53b4e0b5`,
+based on `eae8b2668382e98cbee8318d0fc3c9269df9d7a2`, later checkpointed as
+`2ab0c2c505e8a39e460cd362e4b268880bb7bcb1`. The sections through **Not run and handoff**
+record that original implementation's evidence, not the corrected candidate. Fresh review-correction
+results for saved work on top of `2ab0c2c5` follow at the end. No installed-app change was made.
 
 ## Implemented
 
@@ -93,3 +94,48 @@ check was retried on the final candidate and still stops in native dependencies.
   and mismatched discovery using stand-ins, never by driving the person's install.
 - The running invocation's relay is not hot-reloaded by source edits. A fresh relay built from this
   candidate is needed to expose the new tool in a live QA invocation. No installed runner was modified.
+
+## Review correction · 2026-10-11
+
+Candidate: saved, uncommitted changes on top of `2ab0c2c505e8a39e460cd362e4b268880bb7bcb1`
+in this same run worktree. The earlier Check/review results do not certify these changed inputs.
+
+Confirmed the finding in `run_app/discovery.rs`: QA discovery discarded the server folder selected
+for the tool and collected every matching pid filename under `.tmp/`. It now requires the selected
+server folder suffix on the candidate and its resolved path, retaining the existing worktree boundary,
+search bounds and duplicate-candidate refusal. This shared code applies on Windows and macOS.
+
+The stand-in now also runs as the deprecated `orchester` executable with two MCP listeners and two
+discovery files for one pid in an isolated QA profile. Both CLI relay tests prove domain navigation
+reaches only `orchester-mcp`, UI screenshots reach only `lurq/mcp`, and an unrelated matching pid
+filename is ignored. They also prove that a missing selected server and duplicate discovery for the
+selected server are refused, with neither server receiving an extra tool call. Existing no-approval,
+process refusal, redaction, structured-result and PNG assertions still pass.
+
+### Commands run in this correction
+
+| Command | Outcome |
+| --- | --- |
+| `cargo test -p orchester-runner --features test-agent --test orchester_app_tools call_run_app` | Before production fix: exit 1, both regression tests timed out. After fix: exit 0, 2 passed. After final fixture lint correction: exit 0, 2 passed. |
+| `cargo test -p orchester-core --test orchester_tools call_run_app` | Exit 0: 5 passed. Core inputs remain unchanged afterward. |
+| `cargo +nightly fmt --manifest-path crates/runner/Cargo.toml` | Exit 0. |
+| `cargo +nightly fmt --manifest-path crates/runner/Cargo.toml -- --check` | Exit 0 on final Rust changes. |
+| `cargo clippy -p orchester-runner --all-targets --all-features -- -D warnings` | Initially exit 1: needless value parameter in stand-in listener helper. Changed it to a borrow; final exit 0. |
+| `cargo check -p orchester-runner --target aarch64-apple-darwin` | Exit 1 in existing native dependency build scripts: target C compiler `cc` unavailable (ring, SQLite, zstd and tree-sitter). No runner macOS compilation verdict; later fixture-only edits are outside this command's targets. |
+| `git status --short` | Exit 0; saved work is uncommitted. Git warns its global ignore file is unreadable. |
+| `git rev-parse HEAD` | Exit 0: `2ab0c2c505e8a39e460cd362e4b268880bb7bcb1`. |
+| `git diff --check` | Exit 0. |
+| `git diff --stat` | Exit 0; scoped runner correction and this evidence document. |
+| `git diff -- crates/runner/src/execution/step/run_app/discovery.rs crates/runner/tests/orchester_app_tools.rs crates/runner/tests/support/fake_app_tools.rs crates/runner/tests/support/fake_run_app_server.rs` | Exit 0; inspected correction. |
+
+### Not run in this correction and verifier handoff
+
+- `powershell -File tools/check.ps1` is deferred to the authoritative following Check step, as required
+  by this Implement step. The earlier passing Check is not reused for the changed candidate.
+- No full workspace/unfiltered tests, other original filtered suites, real GUI QA, macOS runtime QA,
+  live signed-in CLI QA, install or commit. Windows compilation is covered by runner clippy and tests.
+- No visual states or Pencil nodes changed; there are no Pencil comparisons for this correction.
+- Functional QA should cover the deprecated desktop's isolated profile with both discovery files:
+  call a domain tool and `lurq_screenshot` through a freshly built relay without approvals, confirm
+  the PNG path and content, and confirm tokens never enter activity. Retain the original new-app QA
+  and outside-pid refusal checks above. Use only apps the run starts; never drive the person's install.

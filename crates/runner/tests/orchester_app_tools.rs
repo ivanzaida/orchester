@@ -61,11 +61,15 @@ async fn exercise(provider: AgentProvider) {
       "navigate structured and redacted",
       "screenshot saved",
       "errors redacted and invalid PNG refused",
-      "redirect refused"
+      "redirect refused",
+      "dual-server domain selected",
+      "dual-server UI selected",
+      "missing selected server refused",
+      "duplicate selected server refused"
     ]
   );
   if provider == AgentProvider::ClaudeCodeCli {
-    assert_eq!(reported(&db, id, "app-permission: ").len(), 11);
+    assert_eq!(reported(&db, id, "app-permission: ").len(), 15);
   }
   // The fake app echoes its token. Neither its answers nor the persisted transcript may contain it.
   let transcript = reported(&db, id, "");

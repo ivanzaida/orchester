@@ -32,7 +32,7 @@ pub(super) fn find(worktree: &Path, pid: NonZeroU32, app: &str, tool: &str) -> R
     }
   }
   let root = fs::canonicalize(worktree).map_err(|_| AppError::ReadDiscovery)?;
-  let matches = qa_files(&root, &name)?;
+  let matches = qa_files(&root, folder, &name)?;
   match matches.as_slice() {
     [path] => read(path, pid, app),
     [] => Err(AppError::Missing),
@@ -68,7 +68,8 @@ fn read(path: &Path, pid: NonZeroU32, app: &str) -> Result<AppDiscovery, AppErro
   AppDiscovery::parse(&bytes, pid, app).map_err(AppError::from)
 }
 
-fn qa_files(root: &Path, name: &str) -> Result<Vec<PathBuf>, AppError> {
+fn qa_files(root: &Path, server_folder: &str, name: &str) -> Result<Vec<PathBuf>, AppError> {
+  let suffix = Path::new(server_folder).join(name);
   let mut pending = vec![(root.join(".tmp"), 0)];
   let mut matches = Vec::new();
   let mut remaining = MAX_SEARCH_ENTRIES;
@@ -88,9 +89,9 @@ fn qa_files(root: &Path, name: &str) -> Result<Vec<PathBuf>, AppError> {
       if kind.is_symlink() {
         continue;
       }
-      if kind.is_file() && entry.file_name() == name {
+      if kind.is_file() && entry.path().ends_with(&suffix) {
         let path = fs::canonicalize(entry.path()).map_err(|_| AppError::ReadDiscovery)?;
-        if path.starts_with(root) {
+        if path.starts_with(root) && path.ends_with(&suffix) {
           matches.push(path);
         }
       } else if kind.is_dir() && depth < 12 {
