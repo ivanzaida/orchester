@@ -53,6 +53,7 @@ impl Component for General {
     let outside = props.project.feed.outside.get();
     let revision = self.revision.get()
       + outside.of(Outside::AutoMode)
+      + outside.of(Outside::Runs)
       + outside.of(Outside::Connections)
       + outside.of(Outside::ProjectSettings);
     let state = work::load(ctx, props.project.open.repo_root.clone(), revision);
@@ -206,11 +207,14 @@ fn agent_files(ctx: &mut Ctx, props: &TabProps, settings: &Settings, save: &work
         .variant(ExtraTypography::Prose.role())
         .color(PaletteColor::TextSecondary),
     )
-    .child(not_built(
-      "settings-import",
-      &ctx.t("project_settings.import"),
-      &ctx.t("project_settings.importUnavailable"),
-    ));
+    .child(
+      not_built(
+        "settings-import",
+        &ctx.t("project_settings.import"),
+        &ctx.t("project_settings.importUnavailable"),
+      )
+      .align_items(lurq::layout::Alignment::Start),
+    );
   let panel = Column::new()
     .id("settings-files-panel")
     .padding(lurq::node::padding::Padding::symmetric(
@@ -232,6 +236,8 @@ fn agent_files(ctx: &mut Ctx, props: &TabProps, settings: &Settings, save: &work
   )
   .into()
 }
+/// The repository panel's aligned labels (hDIi9).
+const AGENT_LABEL_WIDTH: f32 = 130.0;
 fn files_pair(ctx: &Ctx, id: &str, key: &str, value: &str) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
@@ -239,14 +245,15 @@ fn files_pair(ctx: &Ctx, id: &str, key: &str, value: &str) -> Element {
     .child(
       Text::new(&ctx.t(key))
         .id(id.to_owned())
-        .variant(ExtraTypography::Strong.role())
-        .width(Dimension::Px(90.0)),
+        .variant(ExtraTypography::Prose.role())
+        .color(PaletteColor::TextMuted)
+        .width(Dimension::Px(AGENT_LABEL_WIDTH)),
     )
     .child(
       Text::new(value)
         .id(format!("{id}-values"))
         .variant(lurq::app::theme::TypographyStyle::Mono)
-        .color(PaletteColor::TextSecondary)
+        .color(PaletteColor::TextPrimary)
         .flex(1.0),
     )
     .into()

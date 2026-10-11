@@ -37,13 +37,17 @@ pub fn panel(ctx: &Ctx, state: &FutureState<Listed, Message>, rebuild: &Rebuild,
       _ => None,
     })
     .sum();
-  let total = ctx.t_args(
-    "project_settings.indexTotal",
-    [
-      ("count", rows.len().to_string()),
-      ("size", message_text(ctx, &display::byte_size(bytes)).to_string()),
-    ],
-  );
+  let total = if rows.is_empty() {
+    ctx.t("project_settings.noneKept")
+  } else {
+    ctx.t_args(
+      "project_settings.indexTotal",
+      [
+        ("count", rows.len().to_string()),
+        ("size", message_text(ctx, &display::byte_size(bytes)).to_string()),
+      ],
+    )
+  };
   let title = Row::new()
     .width(Dimension::Pct(100.0))
     .align_items(Alignment::Center)
@@ -72,14 +76,19 @@ pub fn panel(ctx: &Ctx, state: &FutureState<Listed, Message>, rebuild: &Rebuild,
     ));
   } else if rows.is_empty() {
     panel = panel.child(
-      Column::new()
+      Row::new()
         .id("settings-no-indexes")
-        .padding(SpacingSize::Md)
-        .child(Text::new(&ctx.t("project_settings.noIndexes")).variant(ExtraTypography::Strong.role()))
-        .child(super::super::page::note(
-          "settings-no-indexes-detail",
-          &ctx.t("project_settings.noIndexesDetail"),
-        )),
+        .width(Dimension::Pct(100.0))
+        .justify(lurq::layout::layout_kind::Justify::Center)
+        .align_items(Alignment::Center)
+        .spacing(SpacingSize::Sm)
+        .padding(
+          Padding::new()
+            .top(ExtraSpacing::IndexEmpty.role())
+            .bottom(ExtraSpacing::Loose.role()),
+        )
+        .child(icon(Icon::Database, IconSize::Md, PaletteColor::TextMuted))
+        .child(Text::new(&ctx.t("project_settings.noIndexesDetail")).variant(TypographyStyle::Description)),
     );
   } else {
     panel = panel.with_children(rows.iter().map(|row| index_row(ctx, row, rebuild, root)));

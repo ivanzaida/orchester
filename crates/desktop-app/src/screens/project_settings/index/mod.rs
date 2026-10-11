@@ -36,6 +36,7 @@ use super::{
 use crate::ui::{
   field::field_error,
   form_section::{Place, section},
+  icon::Icon,
   message::message_text,
   notice::{Notice, NoticeTone},
   toggle::{Toggle, ToggleKind},
@@ -114,21 +115,13 @@ impl Component for CodeIndex {
     let on = read.0.code_index.is_on();
     let row = setting(ctx, &props, on, &list, &save);
     let mut rows = vec![
-      page::note("settings-index-description", &ctx.t("project_settings.indexDetail")),
+      page::explanation("settings-index-description", &ctx.t("project_settings.indexDetail")),
       row,
     ];
     if on {
       rows.push(list::panel(ctx, &list, &rebuild, &props.project.open.repo_root));
     } else {
-      rows.push(
-        Notice::new(
-          "settings-index-off",
-          NoticeTone::Info,
-          ctx.t("project_settings.indexOffTitle"),
-        )
-        .body(ctx.t("project_settings.indexOffNote"))
-        .into(),
-      );
+      rows.push(off_notice(ctx));
     }
     let content = Column::new()
       .spacing(crate::theme::ExtraSpacing::Roomy.role())
@@ -138,12 +131,15 @@ impl Component for CodeIndex {
           .error
           .map(|e| field_error("settings-index-load-error", &message_text(ctx, &e))),
       )
-      .child(section(
-        "settings-index-section",
-        &ctx.t("project_settings.indexHeading"),
-        None,
-        rows,
-      ))
+      .child(
+        section(
+          "settings-index-section",
+          &ctx.t("project_settings.indexHeading"),
+          None,
+          rows,
+        )
+        .spacing(SpacingSize::Md),
+      )
       .with_children(
         rebuild
           .state()
@@ -214,6 +210,17 @@ impl CodeIndex {
       .get()
   }
 }
+fn off_notice(ctx: &Ctx) -> Element {
+  Notice::new(
+    "settings-index-off",
+    NoticeTone::Info,
+    ctx.t("project_settings.indexOffTitle"),
+  )
+  .icon(Icon::CircleOff)
+  .body(ctx.t("project_settings.indexOffNote"))
+  .into()
+}
+
 fn setting(ctx: &Ctx, props: &TabProps, on: bool, list: &FutureState<Listed, Message>, save: &Save) -> Element {
   let start = work::start(save, props.project.open.repo_root.clone(), Change::Index(!on));
   let toggle = Toggle::new(
@@ -231,15 +238,25 @@ fn setting(ctx: &Ctx, props: &TabProps, on: bool, list: &FutureState<Listed, Mes
   } else {
     toggle.on_change(move |_| start())
   };
-  let readback = list
-    .data
-    .as_ref()
-    .map(|list| ctx.t_args("project_settings.indexKept", [("count", list.0.0.len().to_string())]));
+  let readback = if !on {
+    Some((Icon::CircleMinus, ctx.t("project_settings.indexDirect")))
+  } else {
+    list.data.as_ref().map(|list| {
+      (
+        Icon::Database,
+        if list.0.0.is_empty() {
+          ctx.t("project_settings.noIndexes")
+        } else {
+          ctx.t_args("project_settings.indexKept", [("count", list.0.0.len().to_string())])
+        },
+      )
+    })
+  };
   let control = Column::new()
     .width(Dimension::Px(page::CONTROL_WIDTH))
     .spacing(SpacingSize::Sm)
     .child(toggle)
-    .with_children(readback.map(|text| page::note("settings-index-kept", &text)));
+    .with_children(readback.map(|(icon, text)| page::icon_note("settings-index-kept", icon, &text)));
   page::row(
     ctx,
     "settings-index-use",

@@ -12,12 +12,9 @@ use lurq::{
 
 use super::{Status, Tab};
 use crate::{
-  navigation::Navigation,
   project::ShownProject,
-  routes::{ProjectPage, Route, TaskList},
   theme::{ExtraSpacing, ExtraTypography, TaskFormSpacing},
   ui::{
-    button::{ActionButton, ButtonKind},
     form_section::{Label, Place, side_row},
     icon::{Icon, icon},
     notice::{Notice, NoticeTone},
@@ -45,14 +42,21 @@ pub fn header(
     .into_iter()
     .map(|choice| {
       let select = selected.clone();
-      let status = status.clone();
+      if tab != choice && status.get() != Status::Saved {
+        return PageTab::unavailable(
+          format!("settings-tab-{}", choice.name()),
+          ctx.t(choice.key()),
+          ctx.t("project_settings.finishEditing"),
+        );
+      }
       PageTab::new(
         format!("settings-tab-{}", choice.name()),
         ctx.t(choice.key()),
         tab == choice,
         move || {
-          select.set(choice);
-          status.set(Status::Saved);
+          if tab != choice {
+            select.set(choice);
+          }
         },
       )
     })
@@ -86,7 +90,7 @@ pub fn header(
         .left(SpacingSize::Xl)
         .right(SpacingSize::Xl),
     )
-    .spacing(SpacingSize::Md)
+    .spacing(crate::theme::ExtraSpacing::SettingsHead.role())
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(content)
     .child(Column::new().width(Dimension::Px(WIDTH)).child(tabs))
@@ -132,6 +136,22 @@ pub fn row(ctx: &Ctx, id: &str, keys: (&str, &str), control: Element, place: Pla
     true,
   )
 }
+pub fn icon_note(id: &str, glyph: Icon, words: &str) -> Element {
+  Row::new()
+    .id(id.to_owned())
+    .spacing(ExtraSpacing::Pair.role())
+    .align_items(Alignment::Start)
+    .child(icon(glyph, crate::theme::IconSize::Sm, PaletteColor::TextMuted))
+    .child(Text::new(words).variant(ExtraTypography::Note.role()).flex(1.0))
+    .into()
+}
+pub fn explanation(id: &str, words: &str) -> Element {
+  Text::new(words)
+    .id(id.to_owned())
+    .variant(ExtraTypography::Prose.role())
+    .width(Dimension::Pct(100.0))
+    .into()
+}
 pub fn note(id: &str, words: &str) -> Element {
   Text::new(words)
     .id(id.to_owned())
@@ -139,9 +159,7 @@ pub fn note(id: &str, words: &str) -> Element {
     .width(Dimension::Pct(100.0))
     .into()
 }
-pub fn review_notice(ctx: &mut Ctx, project: &ShownProject, environment: bool) -> Element {
-  let nav = Navigation::of(ctx);
-  let id = project.open.project.id();
+pub fn review_notice(ctx: &mut Ctx, environment: bool) -> Element {
   let keys = if environment {
     (
       "project_settings.environmentChanges",
@@ -151,15 +169,8 @@ pub fn review_notice(ctx: &mut Ctx, project: &ShownProject, environment: bool) -
     ("project_settings.changesTitle", "project_settings.changesDetail")
   };
   Notice::new("settings-changes-notice", NoticeTone::Info, ctx.t(keys.0))
+    .icon(Icon::History)
     .body(ctx.t(keys.1))
-    .action(
-      ActionButton::new(
-        "settings-review-runs",
-        ButtonKind::Secondary,
-        ctx.t("project_settings.reviewRuns"),
-      )
-      .on_click(move || nav.go(Route::Project(id, ProjectPage::Tasks(TaskList::default())))),
-    )
     .into()
 }
 fn save_status(ctx: &Ctx, status: &Signal<Status>) -> Row {

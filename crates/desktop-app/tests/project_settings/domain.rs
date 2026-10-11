@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 
 use super::harness::Settings;
 
-fn call(page: &Settings, name: &str, args: Value) -> Result<Value, ToolError> {
+pub(super) fn call(page: &Settings, name: &str, args: Value) -> Result<Value, ToolError> {
   let s = page.window.launch.services().expect("launched services");
   let services = app_mcp::Services::new(
     s.workspace.clone(),

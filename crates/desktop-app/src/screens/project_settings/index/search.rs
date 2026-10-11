@@ -51,7 +51,7 @@ pub fn section(
     let revision = revision.clone();
     let button = ActionButton::new(
       "settings-ripgrep-check",
-      ButtonKind::Ghost,
+      ButtonKind::Secondary,
       ctx.t("project_settings.checkAgain"),
     )
     .icon(Icon::RefreshCw)

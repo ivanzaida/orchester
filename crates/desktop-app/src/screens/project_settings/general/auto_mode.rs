@@ -1,5 +1,6 @@
 //! Auto mode's reviewer and the input-locked, in-place person-only question.
 mod controls;
+mod feedback;
 
 use std::sync::Arc;
 
@@ -51,6 +52,7 @@ pub struct AutoMode {
   supplied: Signal<Stored>,
   asking: Signal<Asked>,
   attempted: Signal<Asked>,
+  failed: Signal<bool>,
 }
 impl Component for AutoMode {
   type Props = Props;
@@ -65,6 +67,7 @@ impl Component for AutoMode {
       supplied: ctx.signal(Stored(settings)),
       asking: ctx.signal(Asked(None)),
       attempted: ctx.signal(Asked(None)),
+      failed: ctx.signal(false),
     };
     let save = work::action(ctx);
     tab.follow(ctx, &save);
@@ -90,21 +93,27 @@ impl Component for AutoMode {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
     let save = work::action(ctx);
-    if props.settings != self.supplied.get_untracked().0 && !save.state().get().is_pending() {
-      self.supplied.set(Stored(props.settings.clone()));
-      // A parent echo of our save must keep a select the person has already edited again.
-      if props.settings != self.stored.get_untracked().0 {
-        self.fill(props.settings.clone());
-        self.attempted.set(Asked(None));
-        self.asking.set(Asked(None));
-      }
+    self.refresh(&props.settings, save.state().get().is_pending());
+    let outside = self.outside();
+    if !outside {
+      self.commit(&props, &save);
     }
-    self.commit(&props, &save);
     let settings = self.stored.get().0;
     let mut content = Column::new()
       .spacing(SpacingSize::Md)
       .child(controls::section(ctx, self, &props, &settings, &save))
-      .with_children(work::error(ctx, &save));
+      .with_children(self.failed.get().then(|| work::error(ctx, &save)).flatten())
+      .with_children(self.failed.get().then(|| self.retry(ctx, &props, &save)))
+      .with_children(outside.then(|| self.reload(ctx, &props)));
+    // A neighboring General save must not label this unfinished reviewer as saved.
+    props.tab.status.get();
+    if save.state().get().is_pending() {
+      props.tab.status.set(Status::Saving);
+    } else if outside || self.asking.get().0.is_some() {
+      props.tab.status.set(Status::Unsaved);
+    } else if self.failed.get() {
+      props.tab.status.set(Status::Failed);
+    }
     if let Some(asked) = self.asking.get().0 {
       content = content.child(self.question(ctx, &props, &save, asked));
     }
@@ -112,6 +121,36 @@ impl Component for AutoMode {
   }
 }
 impl AutoMode {
+  fn dirty(&self) -> bool {
+    let stored = self.stored.get_untracked().0;
+    (
+      self.connection.get_untracked(),
+      self.model.get_untracked(),
+      self.effort.get_untracked(),
+    ) != values(&stored)
+      || self.asking.get_untracked().0.is_some()
+      || self.failed.get_untracked()
+  }
+  fn outside(&self) -> bool {
+    let (stored, supplied) = (self.stored.get().0, self.supplied.get().0);
+    stored.auto_mode != supplied.auto_mode || stored.connections != supplied.connections
+  }
+  fn refresh(&self, supplied: &Settings, pending: bool) {
+    if pending || *supplied == self.supplied.get_untracked().0 {
+      return;
+    }
+    self.supplied.set(Stored(supplied.clone()));
+    if !self.dirty() {
+      self.fill(supplied.clone());
+      self.attempted.set(Asked(None));
+    } else {
+      // Unrelated settings and run authority may refresh without discarding the reviewed baseline.
+      let mut stored = supplied.clone();
+      stored.auto_mode = self.stored.get_untracked().0.auto_mode;
+      stored.connections = self.stored.get_untracked().0.connections;
+      self.stored.set(Stored(stored));
+    }
+  }
   fn fill(&self, settings: Settings) {
     let (connection, model, effort) = values(&settings);
     // Publish the baseline before changing the select signals their watchers read.
@@ -131,6 +170,8 @@ impl AutoMode {
       if state.is_pending() {
         status.set(Status::Saving);
       } else if state.error.is_some() {
+        tab.failed.set(true);
+        tab.asking.set(Asked(None));
         status.set(Status::Failed);
       } else if let Some(saved) = &state.data {
         tab.fill(saved.0.clone());
@@ -138,6 +179,7 @@ impl AutoMode {
         props.parent_read.set(Some(work::Read(saved.0.clone(), u64::MAX)));
         props.refresh.update(|revision| *revision += 1);
         tab.asking.set(Asked(None));
+        tab.failed.set(false);
         status.set(Status::Saved);
         feed.saved();
       }
@@ -161,9 +203,11 @@ impl AutoMode {
     self.request(props, save, asked);
   }
   fn request(&self, props: &Props, save: &Save, asked: AutoModeSettings) {
-    let base = self.stored.get_untracked().0.auto_mode;
+    let settings = self.stored.get_untracked().0;
+    let base = settings.auto_mode;
+    self.failed.set(false);
     self.attempted.set(Asked(Some(asked.clone())));
-    if project_settings::auto_widens(&base, &asked) {
+    if project_settings::auto_widens(&base, &asked, settings.auto_runs) {
       self.asking.set(Asked(Some(asked)));
       props.tab.status.set(Status::Unsaved);
     } else {

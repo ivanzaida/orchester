@@ -26,15 +26,24 @@ fn project_settings_general_shows_project_identity_and_saves_repository_agent_fi
 fn project_settings_auto_mode_without_a_reviewer_says_why_it_cannot_turn_on() {
   let mut page = Settings::new(false);
   assert!(page.exists("settings-auto-unavailable"));
+  assert!(!page.exists("settings-reviewer-connection"));
+  assert!(!page.exists("settings-reviewer-model"));
+  assert!(!page.exists("settings-reviewer-effort"));
+  assert!(page.text("settings-auto-open-connections").contains("Open Connections"));
   page.click("settings-auto-new-runs");
   assert!(!page.db().auto_mode_settings().expect("auto mode").new_runs);
   assert!(!page.exists("settings-auto-question"));
+  page.click("settings-auto-open-connections");
+  assert!(matches!(
+    page.window.navigation().route_now(),
+    orchester_app::routes::Route::Project(_, orchester_app::routes::ProjectPage::Connections(_))
+  ));
 }
 
 #[test]
 fn project_settings_auto_mode_asks_a_person_then_saves_and_can_turn_off_without_asking() {
   let mut page = Settings::new(true);
-  assert!(page.text("settings-reviewer-readback").contains("haiku"));
+  assert!(page.text("settings-reviewer-readback").to_lowercase().contains("haiku"));
   page.click("settings-auto-new-runs");
   page.until("auto-mode question", |p| p.exists("settings-auto-question-confirm"));
   assert!(page.window.link.input_gate().protecting());

@@ -61,6 +61,7 @@ use rusqlite::{Connection, params};
 
 pub use self::{
   approval_rules::DecisionCounts,
+  auto_mode::AutoModeSave,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
   joining::{JoinedKey, ReturnedTask},
   read_only::ReadOnlyProjectDb,

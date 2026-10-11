@@ -51,6 +51,7 @@ pub struct FieldInput {
   unit: Option<Arc<str>>,
   lines: Lines,
   mono: bool,
+  text_style: Option<TypographyStyle>,
   name: Arc<str>,
   /// Why the value is not accepted, said under the box, whose stroke turns `danger`.
   error: Option<Arc<str>>,
@@ -59,6 +60,7 @@ pub struct FieldInput {
   /// The cross that clears a value, named this for tools.
   clear: Option<Arc<str>>,
   width: Dimension,
+  area_height: f32,
   locked: bool,
   /// A 14 `text_muted` glyph at the box's end, e.g. the lock of a locked select (`H8GYVZ`).
   trailing: Option<Icon>,
@@ -77,11 +79,13 @@ impl PartialEq for FieldInput {
       && self.unit == other.unit
       && self.lines == other.lines
       && self.mono == other.mono
+      && self.text_style == other.text_style
       && self.name == other.name
       && self.error == other.error
       && self.group_separator == other.group_separator
       && self.clear == other.clear
       && self.width == other.width
+      && self.area_height == other.area_height
       && self.locked == other.locked
       && self.trailing == other.trailing
       && self.invalid == other.invalid
@@ -102,11 +106,13 @@ impl FieldInput {
       unit: None,
       lines: Lines::One,
       mono: false,
+      text_style: None,
       name: name.into(),
       error: None,
       group_separator: None,
       clear: None,
       width: Dimension::Pct(100.0),
+      area_height: TEXT_AREA_HEIGHT,
       locked: false,
       trailing: None,
       invalid: false,
@@ -149,9 +155,21 @@ impl FieldInput {
     self
   }
 
+  /// A text area with the design's least height, retaining growth and scrolling for longer input.
+  pub fn area_height(mut self, height: f32) -> Self {
+    self.area_height = height;
+    self
+  }
+
   /// The value in Geist Mono, as identifiers and figures are (handover §5.2); the placeholder stays.
   pub fn mono(mut self) -> Self {
     self.mono = true;
+    self
+  }
+
+  /// The design's text role for the value and placeholder.
+  pub fn text_style(mut self, style: TypographyStyle) -> Self {
+    self.text_style = Some(style);
     self
   }
 
@@ -271,7 +289,7 @@ impl Component for FieldBox {
       Lines::Many => dress(
         Row::new()
           .id(format!("{}-box", props.id))
-          .min_height(Dimension::Px(TEXT_AREA_HEIGHT))
+          .min_height(Dimension::Px(props.area_height))
           .padding(Padding::symmetric(
             ExtraSpacing::Loose.role(),
             ExtraSpacing::TextArea.role(),
@@ -295,11 +313,11 @@ impl FieldBox {
   fn input(&self, ctx: &Ctx, props: &FieldInput) -> TextInput {
     let theme = ctx.theme();
     let resolve = |typography, color| FormTextRole { typography, color }.resolve(&theme.typography(), &theme.palette());
-    let value = if props.mono {
+    let value = props.text_style.unwrap_or(if props.mono {
       TypographyStyle::Mono
     } else {
       TypographyStyle::Description
-    };
+    });
     let (gained, lost) = (self.focused.clone(), self.focused.clone());
     let color = if props.locked {
       PaletteColor::TextSecondary

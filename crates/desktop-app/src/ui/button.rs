@@ -110,6 +110,7 @@ pub struct ActionButton {
   focus: Focus,
   /// As wide as its parent, its icon and label centered (`Allow retry` `ae0Pi`).
   fill: bool,
+  compact: bool,
   element: Option<ElementRef>,
 }
 
@@ -125,6 +126,7 @@ impl ActionButton {
       hold: None,
       focus: Focus::Pointer,
       fill: false,
+      compact: false,
       element: None,
     }
   }
@@ -166,6 +168,12 @@ impl ActionButton {
     self
   }
 
+  /// A 22-high helper action with a 12 icon and note-size label (ZdkB0).
+  pub fn compact(mut self) -> Self {
+    self.compact = true;
+    self
+  }
+
   /// A button of a form or a card: a Tab stop with the focus ring.
   pub fn in_form(mut self) -> Self {
     self.focus = Focus::Form;
@@ -200,9 +208,18 @@ impl ActionButton {
 impl From<ActionButton> for Element {
   fn from(button: ActionButton) -> Self {
     let color = button.kind.content();
+    let (height, glyph, label) = if button.compact {
+      (
+        ControlHeight::Helper,
+        IconSize::Sm,
+        crate::theme::ExtraTypography::Note.role(),
+      )
+    } else {
+      (ControlHeight::Md, IconSize::Md, TypographyStyle::Button)
+    };
     let mut frame = Button::empty()
       .id(button.id.clone())
-      .height(Dimension::Px(ControlHeight::Md.value()))
+      .height(Dimension::Px(height.value()))
       .padding(Padding::horizontal(SpacingSize::Md))
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
@@ -215,12 +232,12 @@ impl From<ActionButton> for Element {
       frame = frame.width(Dimension::Pct(100.0));
     }
     if let Some(lead) = button.lead() {
-      frame = frame.child(icon(lead, IconSize::Md, color.clone()).id(format!("{}-icon", button.id)));
+      frame = frame.child(icon(lead, glyph, color.clone()).id(format!("{}-icon", button.id)));
     }
     frame = button.kind.dressed(frame).child(
       Text::new(&button.label)
         .id(format!("{}-label", button.id))
-        .variant(TypographyStyle::Button)
+        .variant(label)
         .color(color)
         .nowrap(),
     );

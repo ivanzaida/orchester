@@ -5,11 +5,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction, FutureState},
-    theme::SpacingSize,
   },
-  components::Column,
+  components::{Column, Row, Text},
   core::Signal,
-  node::Element,
+  layout::Alignment,
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::resource::CommandEnvironment;
 use orchester_workspace::{
@@ -27,11 +27,15 @@ use crate::{
     button::{ActionButton, ButtonKind},
     field::{FieldInput, field, field_error},
     form_section::section,
+    icon::Icon,
     message::message_text,
     notice::{Notice, NoticeTone},
     state::{load_error, loading},
   },
 };
+
+/// Area uSWRr/IBFli in O8o0l, at the 720px form width.
+const ENVIRONMENT_HEIGHT: f32 = 132.0;
 
 #[derive(Clone, Eq)]
 struct Stored(CommandEnvironment, u64);
@@ -126,18 +130,21 @@ impl Component for Environment {
     let fields = self.fields(ctx, &props, &save, asking.is_some());
     let mut content = Column::new()
       .spacing(crate::theme::ExtraSpacing::Roomy.role())
-      .child(section(
-        "settings-environment-section",
-        &ctx.t("project_settings.environmentHeading"),
-        None,
-        vec![
-          page::note(
-            "settings-environment-description",
-            &ctx.t("project_settings.environmentDetail"),
-          ),
-          fields,
-        ],
-      ))
+      .child(
+        section(
+          "settings-environment-section",
+          &ctx.t("project_settings.environmentHeading"),
+          None,
+          vec![
+            page::explanation(
+              "settings-environment-description",
+              &ctx.t("project_settings.environmentDetail"),
+            ),
+            fields,
+          ],
+        )
+        .spacing(crate::theme::ExtraSpacing::Inset.role()),
+      )
       .with_children(
         state
           .error
@@ -151,7 +158,7 @@ impl Component for Environment {
           .map(|e| field_error("settings-environment-save-error", &message_text(ctx, &e))),
       )
       .with_children((outside && changed).then(|| self.outside(ctx, read)))
-      .child(page::review_notice(ctx, &props.project, true));
+      .child(page::review_notice(ctx, true));
     if let Some(request) = asking {
       content = content.child(self.question(ctx, &props, &save, request));
     }
@@ -199,7 +206,9 @@ impl Environment {
       self.text.clone(),
     )
     .text_area()
+    .area_height(ENVIRONMENT_HEIGHT)
     .mono()
+    .text_style(crate::theme::ExtraTypography::MonoArea.role())
     .on_leave(move || commit());
     if asking || save.state().get().is_pending() {
       input = input.locked();
@@ -211,38 +220,20 @@ impl Environment {
     let count = parse_environment(&self.text.get())
       .map(|v| v.iter().count())
       .unwrap_or(0);
-    let nav = crate::navigation::Navigation::of(ctx);
-    let project = props.project.open.project.id();
     Column::new()
-      .spacing(SpacingSize::Sm)
+      .spacing(crate::theme::ExtraSpacing::Snug.role())
       .child(field(
         "settings-environment",
         Some(&ctx.t("project_settings.variables")),
         variables,
         None,
       ))
-      .child(page::note(
+      .child(page::icon_note(
         "settings-variable-count",
+        Icon::List,
         &ctx.t_args("project_settings.variableCount", [("count", count.to_string())]),
       ))
-      .child(page::note(
-        "settings-environment-plaintext",
-        &ctx.t("project_settings.plainText"),
-      ))
-      .child(
-        ActionButton::new(
-          "settings-open-secrets",
-          ButtonKind::Ghost,
-          ctx.t("project_settings.openSecrets"),
-        )
-        .in_form()
-        .on_click(move || {
-          nav.go(crate::routes::Route::Project(
-            project,
-            crate::routes::ProjectPage::Secrets,
-          ))
-        }),
-      )
+      .child(helper(ctx, props))
       .into()
   }
   fn fill(&self, stored: Stored) {
@@ -319,6 +310,44 @@ impl Environment {
     .into()
   }
 }
+fn helper(ctx: &mut Ctx, props: &TabProps) -> Element {
+  let nav = crate::navigation::Navigation::of(ctx);
+  let project = props.project.open.project.id();
+  Row::new()
+    .id("settings-environment-helper")
+    .width(Dimension::Pct(100.0))
+    .spacing(crate::theme::ExtraSpacing::Snug.role())
+    .align_items(Alignment::Start)
+    .child(crate::ui::icon::icon(
+      Icon::Eye,
+      crate::theme::IconSize::Sm,
+      lurq::app::theme::PaletteColor::TextMuted,
+    ))
+    .child(
+      Text::new(&ctx.t("project_settings.plainText"))
+        .id("settings-environment-plaintext")
+        .variant(crate::theme::ExtraTypography::Note.role())
+        .flex(1.0),
+    )
+    .child(
+      ActionButton::new(
+        "settings-open-secrets",
+        ButtonKind::Ghost,
+        ctx.t("project_settings.openSecrets"),
+      )
+      .icon(Icon::KeyRound)
+      .compact()
+      .in_form()
+      .on_click(move || {
+        nav.go(crate::routes::Route::Project(
+          project,
+          crate::routes::ProjectPage::Secrets,
+        ))
+      }),
+    )
+    .into()
+}
+
 fn action(ctx: &mut Ctx) -> Save {
   let changes = crate::services::Services::of(ctx).changes;
   ctx.future_action(move |(root, request): (PathBuf, Requested)| {

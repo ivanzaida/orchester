@@ -30,6 +30,7 @@ pub struct Settings {
   pub agent_files: RepositoryAgentFiles,
   pub code_index: CodeIndexSetting,
   pub auto_mode: AutoModeSettings,
+  pub auto_runs: bool,
   pub connections: Vec<Connection>,
 }
 
@@ -40,6 +41,7 @@ pub fn load_in(root: &Path) -> Result<Settings, StoreError> {
     agent_files: db.repository_agent_files()?,
     code_index: db.code_index()?,
     auto_mode: db.auto_mode_settings()?,
+    auto_runs: db.has_auto_mode_runs()?,
     connections: db.connections()?,
   })
 }
@@ -181,8 +183,8 @@ pub fn reviewer(
 }
 
 /// Auto mode answers for the person; enabling it or changing its active reviewer needs confirmation.
-pub fn auto_widens(base: &AutoModeSettings, asked: &AutoModeSettings) -> bool {
-  asked.new_runs && (!base.new_runs || base.reviewer != asked.reviewer)
+pub fn auto_widens(base: &AutoModeSettings, asked: &AutoModeSettings, auto_runs: bool) -> bool {
+  (asked.new_runs && !base.new_runs) || ((asked.new_runs || auto_runs) && base.reviewer != asked.reviewer)
 }
 
 pub fn save_auto_mode_in(
@@ -191,21 +193,32 @@ pub fn save_auto_mode_in(
   asked: &AutoModeSettings,
   confirmed: bool,
 ) -> Result<(), Message> {
-  if auto_widens(base, asked) && !confirmed {
+  let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  if auto_widens(
+    base,
+    asked,
+    db.has_auto_mode_runs().map_err(|e| messages::store_error(&e))?,
+  ) && !confirmed
+  {
     return Err(Message::new("projectSettings.personOnly"));
   }
-  let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
   let connections = db.connections().map_err(|error| messages::store_error(&error))?;
-  if asked.new_runs {
+  if asked.new_runs
+    || (db.has_auto_mode_runs().map_err(|e| messages::store_error(&e))? && base.reviewer != asked.reviewer)
+  {
     resolve_reviewer(asked, &connections).map_err(|why| Message::new(unavailable_key(why)))?;
   }
-  if !db
-    .save_auto_mode_if_current(base, asked)
+  use orchester_store::AutoModeSave;
+  match db
+    .save_auto_mode_if_current(base, asked, |auto_runs| {
+      confirmed || !auto_widens(base, asked, auto_runs)
+    })
     .map_err(|error| messages::store_error(&error))?
   {
-    return Err(Message::new("projectSettings.changedOutside"));
+    AutoModeSave::Saved => Ok(()),
+    AutoModeSave::ChangedOutside => Err(Message::new("projectSettings.changedOutside")),
+    AutoModeSave::Refused => Err(Message::new("projectSettings.personOnly")),
   }
-  Ok(())
 }
 
 fn pick<T: Copy + PartialEq>(before: T, entered: T, stored: T) -> T {
@@ -215,6 +228,7 @@ fn pick<T: Copy + PartialEq>(before: T, entered: T, stored: T) -> T {
 /// Options and read-back of the reviewer form, resolved by the domain rather than the component.
 pub struct ReviewOptions {
   pub connections: Vec<(String, String)>,
+  pub default_connection: Option<String>,
   pub models: Vec<String>,
   pub efforts: Vec<String>,
   pub resolved: Result<crate::tasks::run_approvals::ReviewerShown, Message>,
@@ -250,6 +264,10 @@ pub fn review_options(settings: &Settings, connection: &str, model: &str) -> Rev
     }
   }
   ReviewOptions {
+    // No default caption when unavailable; the form retains the explicit refusal in resolved.
+    default_connection: resolve_reviewer(&AutoModeSettings::default(), &settings.connections)
+      .ok()
+      .map(|r| r.connection.name().as_str().to_owned()),
     connections: settings
       .connections
       .iter()

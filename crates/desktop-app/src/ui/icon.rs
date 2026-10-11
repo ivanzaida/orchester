@@ -61,6 +61,7 @@ icons! {
   CircleDotDashed => '\u{e4b1}',
   CircleHelp => '\u{e082}',
   CircleMinus => '\u{e07e}',
+  CircleOff => '\u{e401}',
   CirclePause => '\u{e07f}',
   CirclePlay => '\u{e080}',
   CircleSlash => '\u{e402}',

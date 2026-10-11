@@ -13,10 +13,13 @@ use super::{AutoMode, Props};
 use crate::{
   screens::project_settings::{page, work::Save},
   ui::{
+    button::{ActionButton, ButtonKind},
     field::{FieldInput, SelectField, field},
     form_section::{Place, section as form_section},
+    icon::Icon,
     message::message_text,
     toggle::{Toggle, ToggleKind},
+    unavailable::reason_line,
   },
 };
 
@@ -24,7 +27,11 @@ pub fn section(ctx: &mut Ctx, tab: &AutoMode, props: &Props, settings: &Settings
   let options = project_settings::review_options(settings, &tab.connection.get(), &tab.model.get());
   let busy = save.state().get().is_pending() || tab.asking.get().0.is_some();
   let on_row = switch_row(ctx, tab, props, settings, save, (options.resolved.as_ref().err(), busy));
-  let reviewer = reviewer_row(ctx, tab, options, busy);
+  let reviewer = if options.connections.is_empty() {
+    unavailable_reviewer(ctx, props)
+  } else {
+    reviewer_row(ctx, tab, options, busy)
+  };
   form_section(
     "settings-auto",
     &ctx.t("project_settings.auto"),
@@ -63,8 +70,7 @@ fn switch_row(
   let control = Column::new()
     .width(Dimension::Px(page::CONTROL_WIDTH))
     .spacing(SpacingSize::Sm)
-    .child(toggle)
-    .with_children(unavailable.map(|why| page::note("settings-auto-unavailable", &message_text(ctx, why))));
+    .child(toggle);
   page::row(
     ctx,
     "settings-auto-on",
@@ -73,8 +79,42 @@ fn switch_row(
     Place::Within,
   )
 }
+fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
+  let nav = crate::navigation::Navigation::of(ctx);
+  let project = props.tab.project.open.project.id();
+  let control = Column::new()
+    .width(Dimension::Px(page::CONTROL_WIDTH))
+    .spacing(crate::theme::ExtraSpacing::Snug.role())
+    .child(reason_line(
+      "settings-auto-unavailable",
+      &ctx.t("project_settings.reviewerUnavailable"),
+    ))
+    .child(
+      ActionButton::new(
+        "settings-auto-open-connections",
+        ButtonKind::Secondary,
+        ctx.t("project_settings.openConnections"),
+      )
+      .icon(Icon::Plug)
+      .in_form()
+      .on_click(move || {
+        nav.go(crate::routes::Route::Project(
+          project,
+          crate::routes::ProjectPage::Connections(crate::routes::ConnectionsView::default()),
+        ));
+      }),
+    );
+  page::row(
+    ctx,
+    "settings-auto-reviewer",
+    ("project_settings.reviewer", "project_settings.reviewerDetail"),
+    control.into(),
+    Place::Last,
+  )
+}
 fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::ReviewOptions, busy: bool) -> Element {
-  let connections = std::iter::once((String::new(), ctx.t("project_settings.default")))
+  let default = default_connection_label(ctx, options.default_connection.as_deref());
+  let connections = std::iter::once((String::new(), default))
     .chain(options.connections.into_iter().map(|(id, name)| (id, name.into())))
     .collect();
   let connection = select(
@@ -93,7 +133,7 @@ fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::Review
     options
       .models
       .into_iter()
-      .map(|model| (model.clone(), model.into()))
+      .map(|model| (model.clone(), model_label(ctx, &model)))
       .collect(),
     busy,
   );
@@ -115,7 +155,10 @@ fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::Review
   let note = match options.resolved {
     Ok(shown) => ctx.t_args(
       "project_settings.reviewedBy",
-      [("model", shown.model.as_str()), ("connection", &shown.connection)],
+      [
+        ("model", model_label(ctx, shown.model.as_str()).as_ref()),
+        ("connection", &shown.connection),
+      ],
     ),
     Err(why) => message_text(ctx, &why),
   };
@@ -148,6 +191,23 @@ fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::Review
     controls.into(),
     Place::Last,
   )
+}
+
+fn default_connection_label(ctx: &Ctx, name: Option<&str>) -> Arc<str> {
+  name
+    .map(|name| ctx.t_args("project_settings.defaultConnection", [("connection", name)]))
+    .unwrap_or_else(|| ctx.t("project_settings.default"))
+}
+
+fn model_label(ctx: &Ctx, model: &str) -> Arc<str> {
+  let key = match model {
+    "claude-haiku-4-5-20251001" => "project_settings.haiku45",
+    "claude-sonnet-5-5" => "project_settings.sonnet55",
+    "claude-opus-5-5" => "project_settings.opus55",
+    "claude-fable-5-1" => "project_settings.fable51",
+    _ => return model.into(),
+  };
+  ctx.t(key)
 }
 
 fn select(

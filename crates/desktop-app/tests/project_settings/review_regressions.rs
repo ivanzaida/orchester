@@ -127,7 +127,7 @@ fn project_settings_review_reselecting_a_reviewer_after_keep_asks_again_and_save
   assert!(!page.exists("settings-auto-question"));
   assert!(!page.window.link.input_gate().protecting());
   assert_eq!(page.text("project-settings-save-status"), "All changes saved");
-  assert!(page.text("settings-reviewer-readback").contains("haiku"));
+  assert!(page.text("settings-reviewer-readback").to_lowercase().contains("haiku"));
   assert_eq!(page.db().auto_mode_settings().expect("kept"), original);
 
   page.choose("settings-reviewer-model", "sonnet");

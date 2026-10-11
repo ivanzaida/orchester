@@ -20,7 +20,11 @@ fn project_settings_code_index_saves_its_switch_and_checks_the_search_tool() {
     page.saved();
   }
   page.until("empty index panel", |p| p.exists("settings-no-indexes"));
-  assert!(page.text("settings-no-indexes").contains("The first run"));
+  assert!(
+    page
+      .text("settings-no-indexes")
+      .contains("built when the next run starts")
+  );
   page.until("ripgrep checked", |p| {
     p.text("settings-ripgrep-state").contains("not found")
   });

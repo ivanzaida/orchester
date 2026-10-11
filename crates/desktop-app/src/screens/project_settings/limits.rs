@@ -180,7 +180,7 @@ impl Component for Limits {
       )
       .with_children((outside && changed).then(|| self.outside(ctx, data)))
       .with_children(fields)
-      .child(page::review_notice(ctx, &props.project, false));
+      .child(page::review_notice(ctx, false));
     page::scroll(content)
   }
 }
@@ -271,7 +271,14 @@ impl Limits {
       let count = orchester_workspace::budget::read_optional_budget(&text, &self.separator)
         .map(|v| v.map(|v| compact_tokens(v.get())).unwrap_or_default())
         .unwrap_or_default();
-      ctx.t_args("project_settings.budgetReadback", [("count", count)])
+      ctx.t_args(
+        if matches!(kind, Field::Daily) {
+          "project_settings.dailyBudgetReadback"
+        } else {
+          "project_settings.budgetReadback"
+        },
+        [("count", count)],
+      )
     };
     let commit = commit.clone();
     let mut field = NumberField::new(kind.id(), ctx.t(label), value.clone(), ctx.t(unit), readback)

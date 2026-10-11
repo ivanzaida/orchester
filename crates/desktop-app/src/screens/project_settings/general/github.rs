@@ -214,7 +214,7 @@ fn repository_control(ctx: &mut Ctx, props: &TabProps, check: &Check, read: &Rep
   let (action, root) = (check.clone(), props.project.open.repo_root.clone());
   let button = ActionButton::new(
     "settings-github-check",
-    ButtonKind::Ghost,
+    ButtonKind::Secondary,
     ctx.t("project_settings.checkAgain"),
   )
   .icon(Icon::RefreshCw)
