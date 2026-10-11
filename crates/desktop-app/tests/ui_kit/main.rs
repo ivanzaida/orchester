@@ -11,3 +11,4 @@ mod fields;
 mod harness;
 mod icons;
 mod labels;
+mod textarea_focus;

@@ -4,6 +4,7 @@ use lurq::{
   app::theme::SpacingSize,
   components::{Column, SelectOption},
   core::Signal,
+  layout::quad::QuadContent,
   node::dimension::Dimension,
 };
 use orchester_app::ui::{
@@ -62,13 +63,19 @@ fn a_text_field_is_a_28_high_box_10_in_with_its_label_and_hint_6_away() {
 fn a_text_area_is_84_high_at_least_7_over_its_lines() {
   let mut kit = form(
     &Signal::new(String::new()),
-    &Signal::new(String::new()),
+    &Signal::new("Example outcome".to_owned()),
     &Signal::new(String::new()),
   );
-  let (frame, input) = (kit.bounds("outcome-box"), kit.bounds("outcome"));
+  let frame = kit.bounds("outcome-box");
+  let text = kit
+    .tree
+    .painted_quads()
+    .into_iter()
+    .find(|quad| matches!(&quad.content, QuadContent::Text { text, .. } if text == "Example outcome"))
+    .expect("the text area's value is painted");
   assert_close(frame.height, 84.0, "text area height");
-  assert_close(input.x - frame.x, 10.0, "sides");
-  assert_close(input.y - frame.y, 7.0, "top");
+  assert_close(text.x - frame.x, 10.0, "sides");
+  assert_close(text.y - frame.y, 7.0, "top");
 }
 
 #[test]
