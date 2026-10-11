@@ -792,8 +792,12 @@ original reproducer and `tools/check.ps1` passed. Post-merge workspace/all-targe
 command-tool states; Built in remains Unverified, with recorded visual minors and real-person acceptance omissions.
 Full tests, macOS checks/runtime and fresh native captures of the domain-only transaction fix were not run.
 
-ORC-23 · Agent tool: drive the app a run started, without asking (implemented 2026-10-11 in run worktree
-`01a12acf-2d86-700e-8094-befc53b4e0b5`; implementation checks pass, pipeline Check and independent review/QA follow).
+ORC-23 · Agent tool: drive the app a run started, without asking (done 2026-10-11, merged `b2fa04f8`).
+The person independently reviewed the exact integrated tree `73cf26b9`: PASS, no blocking findings.
+Seven filtered integration groups passed (66 executions with overlapping filters, one intentional ignored entry),
+as did `tools/check.ps1`. Post-merge workspace/all-targets/all-features `cargo check` and `tools/check.ps1` passed.
+Full suites, fresh native macOS checks/runtime, GUI QA and live signed-in CLI runs were not performed here.
+Original run: `01a12acf-2d86-700e-8094-befc53b4e0b5`; historical implementation evidence remains scoped below.
 
 `call_run_app(pid, tool, arguments)` is served by the per-invocation relay to both CLIs without approval, including
 read-only steps with network off and MCP approvals enabled. It reuses ORC-21's process validation, finds exact-pid
