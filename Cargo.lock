@@ -2958,6 +2958,7 @@ dependencies = [
  "orchester-server",
  "orchester-store",
  "orchester-vault",
+ "orchester-workspace",
  "parking_lot",
  "rmcp",
  "rusqlite",

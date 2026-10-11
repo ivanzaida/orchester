@@ -11,6 +11,8 @@ workspace = true
 
 [features]
 default = []
+# Deterministic editor tests observe when their own SQLite connection waits for the write lock.
+test-support = ["orchester-store/test-support"]
 # Empty `DevtoolsInspectable` markers for this crate's types (`inspect`), which lurq requires of
 # component props and, with its DevTools, of signal values. Apps cannot implement lurq's trait for
 # these types themselves (orphan rule), so an app that shows them enables this.
@@ -47,6 +49,7 @@ tracing.workspace = true
 rustix.workspace = true
 
 [dev-dependencies]
+orchester-workspace = { workspace = true, features = ["test-support"] }
 # Damages a run's row the way an edit outside Orchester would; the store has no API for that.
 rusqlite.workspace = true
 tempfile.workspace = true

@@ -64,6 +64,7 @@ pub use self::{
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
   joining::{JoinedKey, ReturnedTask},
   read_only::ReadOnlyProjectDb,
+  resources::ResourceUpdate,
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
   sharing::SharingLink,
 };
@@ -144,6 +145,13 @@ impl ProjectDb {
     let directory = repo_root.join(DIRECTORY);
     fs::create_dir_all(&directory).map_err(StoreError::io(&directory))?;
     migrate::open(&database, migrations)
+  }
+
+  /// Replaces the timeout with a fixture's lock-wait observer for deterministic concurrency tests.
+  #[cfg(feature = "test-support")]
+  pub fn set_busy_handler_for_test(&self, callback: fn(i32) -> bool) -> Result<(), StoreError> {
+    self.connection.busy_handler(Some(callback))?;
+    Ok(())
   }
 
   pub const fn project(&self) -> &Project {

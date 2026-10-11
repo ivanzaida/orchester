@@ -8,7 +8,7 @@ use orchester_core::{
   store::{ResourceStore, SettingsStore},
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ProjectDb, ResourceUpdate, StoreError};
 
 use super::{
   data::{ProjectTools, ToolEntry, create_tool},
@@ -17,7 +17,6 @@ use super::{
 };
 use crate::{
   connections::mcp::{Allowed, program_problem_message},
-  drafts,
   messages::{self, Message},
 };
 
@@ -98,6 +97,20 @@ pub fn apply_in(root: &Path, edit: Edit, allowed: &Allowed) -> Result<ResourceId
   })
 }
 
+/// Runs the real editor operation on a fixture connection whose lock waits can be observed.
+#[cfg(feature = "test-support")]
+pub fn apply_with_db_for_test(
+  db: &mut ProjectDb,
+  root: &Path,
+  edit: Edit,
+  allowed: &Allowed,
+) -> Result<ResourceId, Message> {
+  apply(db, root, edit, allowed).map_err(|e| match e {
+    EditorError::Store(e) => messages::store_error(&e),
+    EditorError::Message(m) => m,
+  })
+}
+
 /// Resolves and checks the program for a reviewable draft, without storing anything.
 /// Call off the UI thread; applying the edit checks the file again.
 pub fn prepare_in(root: &Path, tool: &Tool) -> Result<Tool, Message> {
@@ -118,55 +131,67 @@ impl From<StoreError> for EditorError {
   }
 }
 
-fn apply(db: &mut ProjectDb, root: &Path, edit: Edit, allowed: &Allowed) -> Result<ResourceId, EditorError> {
-  let expected = match &edit {
-    Edit::Save { before, .. } => before.as_ref(),
-    Edit::Publish(e) | Edit::KeepDraft(e) | Edit::StartLatest(e) => Some(e),
+fn apply(db: &mut ProjectDb, root: &Path, mut edit: Edit, allowed: &Allowed) -> Result<ResourceId, EditorError> {
+  if let Edit::Save { tool, .. } = &mut edit {
+    **tool = fixed_tool(db, root, tool)?;
+  }
+  if let Edit::Save {
+    name,
+    tool,
+    before: None,
+  } = &edit
+  {
+    if !allowed.covers(&edit.reasons(None)) {
+      return Err(EditorError::Message(Message::new("errors.draftChanged")));
+    }
+    let listed = ProjectTools::load(db)?;
+    new_name(&listed, name.as_str()).map_err(EditorError::Message)?;
+    return Ok(create_tool(db, name, tool, Timestamp::now())?);
+  }
+  apply_existing(db, &edit, allowed)
+}
+
+fn apply_existing(db: &mut ProjectDb, edit: &Edit, allowed: &Allowed) -> Result<ResourceId, EditorError> {
+  let expected = match edit {
+    Edit::Save { before: Some(e), .. } | Edit::Publish(e) | Edit::KeepDraft(e) | Edit::StartLatest(e) => e,
+    Edit::Save { before: None, .. } => unreachable!("new tools are created separately"),
   };
-  let listed = ProjectTools::load(db)?;
-  if let Some(expected) = expected {
-    if listed.tool(expected.id) != Some(expected) {
-      return Err(StoreError::DraftChanged(expected.id).into());
-    }
-    if !matches!(expected.tool.action(), ToolAction::Command(_)) {
-      return Err(EditorError::Message(
-        Message::new("appMcp.projectTools.errors.notACommandTool").with("tool", expected.name.to_string()),
-      ));
-    }
+  if !matches!(expected.tool.action(), ToolAction::Command(_)) {
+    return Err(EditorError::Message(
+      Message::new("appMcp.projectTools.errors.notACommandTool").with("tool", expected.name.to_string()),
+    ));
   }
-  let latest = expected.map(|e| db.latest_version::<Tool>(e.id)).transpose()?.flatten();
-  if !allowed.covers(&edit.reasons(latest.as_ref().map(|v| v.body()))) {
-    return Err(EditorError::Message(Message::new("errors.draftChanged")));
-  }
-  let now = Timestamp::now();
-  match edit {
-    Edit::Save { name, tool, before } => {
-      let tool = fixed_tool(db, root, &tool)?;
-      match before {
-        Some(e) => {
-          drafts::save_draft(db, e.id, tool, now)?;
-          Ok(e.id)
-        }
-        None => {
-          new_name(&listed, name.as_str()).map_err(EditorError::Message)?;
-          Ok(create_tool(db, &name, &tool, now)?)
-        }
+  let id = expected.id;
+  db.update_resource::<Tool, EditorError>(id, |resource, draft: Option<Draft<Tool>>, latest| {
+    let based_on = draft
+      .as_ref()
+      .map_or_else(|| latest.as_ref().map(|v| v.number()), Draft::based_on);
+    if ToolEntry::new(id, resource.name(), draft, latest.as_ref()).as_ref() != Some(expected) {
+      return Err(StoreError::DraftChanged(id).into());
+    }
+    if !allowed.covers(&edit.reasons(latest.as_ref().map(|v| v.body()))) {
+      return Err(StoreError::DraftChanged(id).into());
+    }
+    let now = Timestamp::now();
+    match edit {
+      Edit::Save { tool, .. } => Ok(ResourceUpdate::SaveDraft(Draft::new(*tool.clone(), based_on, now))),
+      Edit::Publish(_) => Ok(ResourceUpdate::PublishDraft(now)),
+      Edit::KeepDraft(e) => Ok(ResourceUpdate::SaveDraft(Draft::new(
+        e.tool.clone(),
+        latest.as_ref().map(|v| v.number()),
+        now,
+      ))),
+      Edit::StartLatest(_) => {
+        let latest = latest.ok_or(StoreError::NoDraft(id))?;
+        Ok(ResourceUpdate::SaveDraft(Draft::new(
+          latest.body().clone(),
+          Some(latest.number()),
+          now,
+        )))
       }
     }
-    Edit::Publish(e) => {
-      db.publish_draft_matching(e.id, &e.tool, now)?;
-      Ok(e.id)
-    }
-    Edit::KeepDraft(e) => {
-      db.save_draft(e.id, &Draft::new(e.tool, latest.as_ref().map(|v| v.number()), now))?;
-      Ok(e.id)
-    }
-    Edit::StartLatest(e) => {
-      let latest = latest.ok_or(StoreError::NoDraft(e.id))?;
-      db.save_draft(e.id, &Draft::new(latest.body().clone(), Some(latest.number()), now))?;
-      Ok(e.id)
-    }
-  }
+  })?;
+  Ok(id)
 }
 
 fn fixed_tool(db: &ProjectDb, root: &Path, tool: &Tool) -> Result<Tool, EditorError> {
