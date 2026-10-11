@@ -60,6 +60,7 @@ const TAB: &str = "tab";
 const PROJECT_PATTERN: &str = "/project/:project";
 const NEW_PIPELINE_PATTERN: &str = "/project/:project/pipelines/new";
 const PIPELINE_PATTERN: &str = "/project/:project/pipelines/:pipeline";
+const AGENT_PATTERN: &str = "/project/:project/agents/:agent";
 
 /// A place in the window.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -75,6 +76,7 @@ impl Route {
     match self {
       Self::Project(_, ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline) => NEW_PIPELINE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Pipeline(_)) => PIPELINE_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::Agent(_)) => AGENT_PATTERN.to_owned(),
       _ => self.screen().pattern(),
     }
   }

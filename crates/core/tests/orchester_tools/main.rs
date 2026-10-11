@@ -2,6 +2,7 @@
 //! agent did not read, the policy table, reads and searches outside the worktree that never reach a credential location
 //! or Orchester's own state, answers cut to a size, and how each CLI is told about them.
 
+mod app;
 mod index;
 mod input;
 mod lines;

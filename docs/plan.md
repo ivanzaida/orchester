@@ -768,6 +768,16 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-2 · Agents page · branch `orchester/orc-2-run-4` (done 2026-10-11, merged `500f9965`).
+Independent source review accepted integration tree `4a0021f3`; 23 filtered groups / 134 executions passed
+on its unchanged production predecessor, followed by six inventory-correction checks and `tools/check.ps1`.
+Independent scoped Pencil/native verification found no blocking or major mismatch in reached Agents and
+shared-field states. The person completed stale publication decline/confirm and permission-widening
+allow/decline; native and read-only storage outcomes were independently accepted. Post-merge workspace/
+all-targets/all-features `cargo check` and `tools/check.ps1` passed. Recorded visual minors remain.
+Native failed-refetch/fault/loading, other capability/model/menu combinations, active-run usage, host/real CLI
+and macOS remain Unverified; 960/light, full suites and per-invocation relay coverage were not performed.
+
 ORC-9 · Project settings page · branch `orchester/orc-9-run-1` (done 2026-10-11, merged `fc9d0c2c`).
 Independent source review and scoped Pencil verification accepted the exact integration tree `a9d07d87`;
 141 tests in 20 filtered groups and `tools/check.ps1` passed. The person completed Environment widening,
@@ -791,6 +801,23 @@ original reproducer and `tools/check.ps1` passed. Post-merge workspace/all-targe
 `tools/check.ps1` passed. Independent scoped Pencil verification found no blocking or major mismatch in reached
 command-tool states; Built in remains Unverified, with recorded visual minors and real-person acceptance omissions.
 Full tests, macOS checks/runtime and fresh native captures of the domain-only transaction fix were not run.
+
+ORC-23 · Agent tool: drive the app a run started, without asking (done 2026-10-11, merged `b2fa04f8`).
+The person independently reviewed the exact integrated tree `73cf26b9`: PASS, no blocking findings.
+Seven filtered integration groups passed (66 executions with overlapping filters, one intentional ignored entry),
+as did `tools/check.ps1`. Post-merge workspace/all-targets/all-features `cargo check` and `tools/check.ps1` passed.
+Full suites, fresh native macOS checks/runtime, GUI QA and live signed-in CLI runs were not performed here.
+Original run: `01a12acf-2d86-700e-8094-befc53b4e0b5`; historical implementation evidence remains scoped below.
+
+`call_run_app(pid, tool, arguments)` is served by the per-invocation relay to both CLIs without approval, including
+read-only steps with network off and MCP approvals enabled. It reuses ORC-21's process validation, finds exact-pid
+user or QA discovery, validates its pid/app/loopback endpoint, holds the credential only in the relay and redacts
+returned text and structured content. PNGs are decoded and re-encoded without metadata under `.tmp/run-app/`, with
+relative paths returned. JSON and SSE responses are bounded; redirects and proxies are disabled. Prompts, the
+approval documentation and the design-verification skill steer agents to the relay instead of the Python script.
+Core refusal/redaction tests and both CLI relay tests with a started stand-in pass; core and executor pass macOS
+cross-check and cross-clippy. The runner macOS check is blocked by missing target C tooling in existing native
+dependencies. No visual states or Pencil nodes changed. Commands and limits: `docs/evidence/orc-23-run-app-validation.md`.
 
 ORC-21 · Agent tools to stop apps started in a run (implemented 2026-10-11 in run worktree
 `01a127bc-59bd-774a-8edd-a0f0bc989311`; implementation checks passed, independent review/QA follows).

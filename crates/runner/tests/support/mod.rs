@@ -191,6 +191,10 @@ pub struct TestProject {
 
 pub fn project(setup: &Setup) -> TestProject {
   let repo = tempfile::tempdir().expect("temporary directory");
+  project_in(setup, repo)
+}
+
+pub fn project_in(setup: &Setup, repo: TempDir) -> TestProject {
   let root = repo.path();
   git(root, &["init", "--quiet", "--initial-branch=main"]);
   git(root, &["config", "user.name", "Orchester Test"]);

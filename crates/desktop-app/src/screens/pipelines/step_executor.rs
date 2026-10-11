@@ -86,7 +86,7 @@ pub fn executor(ctx: &mut Ctx, props: &Props, value: Signal<Executor>) -> Elemen
       )
       .inspector()
       .body(ctx.t_args("pipelines.profileDraftHint", [("name", profile.name.as_ref())]))
-      .action(profile_action(ctx)),
+      .action(profile_action(ctx, props, &profile)),
     );
   }
   if let StepKind::Tool { tool: Some(id) } = props.step.kind
@@ -111,17 +111,30 @@ pub fn executor(ctx: &mut Ctx, props: &Props, value: Signal<Executor>) -> Elemen
   body.into()
 }
 
-fn profile_action(ctx: &mut Ctx) -> Element {
-  let reason = ctx.t("pipelines.profilePageUnavailable");
-  crate::ui::tooltip::Tooltip::new("step-open-profile-reason", reason.clone()).wrap(
-    ctx,
-    ActionButton::new(
-      "step-open-profile",
-      ButtonKind::Secondary,
-      ctx.t("pipelines.openProfile"),
-    )
-    .unavailable(reason),
-  )
+fn profile_action(ctx: &mut Ctx, props: &Props, profile: &DraftProfileChoice) -> Element {
+  let button = ActionButton::new(
+    "step-open-profile",
+    ButtonKind::Secondary,
+    ctx.t_args("pipelines.openProfile", [("name", profile.name.as_ref())]),
+  );
+  if props.navigation_locked {
+    return crate::ui::tooltip::Tooltip::new("step-open-profile-reason", ctx.t("pipelines.profileWait"))
+      .wrap(ctx, button.disabled());
+  }
+  let navigation = crate::navigation::Navigation::of(ctx);
+  let project = navigation
+    .route_now()
+    .project()
+    .expect("a pipeline editor belongs to a project");
+  let id = profile.id;
+  button
+    .on_click(move || {
+      navigation.go(crate::routes::Route::Project(
+        project,
+        crate::routes::ProjectPage::Agent(id),
+      ))
+    })
+    .into()
 }
 
 fn executor_options(ctx: &Ctx, props: &Props, draft: Option<&DraftProfileChoice>) -> Vec<SelectOption<Executor>> {

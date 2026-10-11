@@ -110,6 +110,7 @@ fn permission_section(ctx: &mut Ctx, state: &State, step: &Step, choice: &Profil
       state: state.clone(),
       step: step.clone(),
       locked,
+      navigation_locked: locked,
     },
   );
   body = body.child(control("step-command-summary", &ctx.t("pipelines.commands"), picker));

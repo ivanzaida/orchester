@@ -50,6 +50,7 @@ const READING_TASK: &str = "Reading the task…";
 /// The screens that show their own content, which their own tests check, in place of the placeholder.
 const BUILT: &[Screen] = &[
   // One per line, sorted, so each screen's task adds a line of its own.
+  Screen::Agents,
   Screen::Connections,
   Screen::EditConnection,
   Screen::EditTask,

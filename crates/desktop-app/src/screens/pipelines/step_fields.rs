@@ -24,10 +24,11 @@ pub struct Props {
   pub state: State,
   pub step: Step,
   pub locked: bool,
+  pub navigation_locked: bool,
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    self.step == other.step && self.locked == other.locked
+    self.step == other.step && self.locked == other.locked && self.navigation_locked == other.navigation_locked
   }
 }
 impl DevtoolsInspectable for Props {}

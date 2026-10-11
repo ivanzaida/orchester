@@ -221,6 +221,7 @@ impl ToolHost {
       Ok(ToolWork::Progress(progress)) => self.records.report_progress(&progress, &self.secrets),
       Ok(ToolWork::Symbols(query)) => self.files.symbols(&query, &context),
       Ok(ToolWork::Skill(call)) => self.skills.run(&call),
+      Ok(ToolWork::App(call)) => super::run_app::call(&self.processes, &self.worktree, &call),
       Ok(ToolWork::Processes(call)) => self.processes.run(call),
       Ok(ToolWork::Run(program)) => program.finished(run_capped(program.command(), program.timeout(), program.cap())),
       Err(error) => ToolResult::refused(&error),

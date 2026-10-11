@@ -98,6 +98,11 @@ pub struct StepUse {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ProjectAgents {
   pub profiles: Arc<Vec<ProfileEntry>>,
+  /// Persisted draft save times; independent of the editor’s optimistic content comparison.
+  pub draft_times: Arc<std::collections::BTreeMap<ResourceId, Timestamp>>,
+  pub usage: Arc<super::usage::Usage>,
+  /// Latest published bodies, for comparing a draft with what new runs currently use.
+  pub published: Arc<Vec<ProfileEntry>>,
   /// Agent provider connections: the only kind a profile can run on.
   pub connections: Arc<Vec<AgentConnection>>,
   pub steps: Arc<Vec<StepUse>>,
@@ -118,6 +123,9 @@ impl ProjectAgents {
   {
     Ok(Self {
       profiles: Arc::new(profiles(store)?),
+      draft_times: Arc::new(draft_times(store)?),
+      usage: Arc::default(),
+      published: Arc::new(published_profiles(store)?),
       connections: Arc::new(agent_connections(store.connections()?)),
       steps: Arc::new(step_uses(store)?),
       mcp: Arc::new(store.mcp_servers()?),
@@ -127,6 +135,14 @@ impl ProjectAgents {
 
   pub fn load_in(repo_root: &Path) -> Result<Self, StoreError> {
     Self::load(&ProjectDb::open(repo_root)?)
+  }
+
+  /// Editor data plus draft pipeline uses and active runs for the screen's Usage tab.
+  pub fn for_screen(repo_root: &Path) -> Result<Self, StoreError> {
+    let db = ProjectDb::open(repo_root)?;
+    let mut listed = Self::load(&db)?;
+    listed.usage = Arc::new(super::usage::Usage::load(&db)?);
+    Ok(listed)
   }
 
   pub fn profile(&self, id: ResourceId) -> Option<&ProfileEntry> {
@@ -143,6 +159,17 @@ pub fn profiles<S: ResourceStore>(store: &S) -> Result<Vec<ProfileEntry>, S::Err
       Some(entry) => entries.push(entry),
       // Nothing to show or edit; listing it would need content that does not exist.
       None => tracing::error!(resource = %resource.id(), "agent profile has neither a draft nor a version"),
+    }
+  }
+  Ok(entries)
+}
+
+fn published_profiles<S: ResourceStore>(store: &S) -> Result<Vec<ProfileEntry>, S::Error> {
+  let mut entries = Vec::new();
+  for resource in store.resources(ResourceKind::AgentProfile)? {
+    let latest = store.latest_version(resource.id())?;
+    if let Some(entry) = ProfileEntry::new(resource.id(), None, latest.as_ref()) {
+      entries.push(entry);
     }
   }
   Ok(entries)
@@ -209,6 +236,28 @@ pub fn save_draft<S: ResourceStore>(
   store.save_draft(id, &Draft::new(profile, based_on, now)).map(|_| ())
 }
 
+/// Saves an editor candidate only while the draft body, base and latest version still match.
+pub fn save_draft_checked_in(root: &Path, expected: &ProfileEntry, profile: AgentProfile) -> Result<(), StoreError> {
+  edit_checked_in(root, expected, move |draft, latest| {
+    let based_on = draft.map_or_else(|| latest.map(Version::number), |draft| draft.based_on());
+    Ok(Draft::new(profile, based_on, Timestamp::now()))
+  })
+}
+
+fn edit_checked_in(
+  root: &Path,
+  expected: &ProfileEntry,
+  edit: impl FnOnce(Option<Draft<AgentProfile>>, Option<&Version<AgentProfile>>) -> Result<Draft<AgentProfile>, StoreError>,
+) -> Result<(), StoreError> {
+  ProjectDb::open(root)?.update_draft(expected.id, |draft, latest| {
+    if ProfileEntry::new(expected.id, draft.clone(), latest.as_ref()).as_ref() != Some(expected) {
+      return Err(StoreError::DraftChanged(expected.id));
+    }
+    edit(draft, latest.as_ref())
+  })?;
+  Ok(())
+}
+
 /// Publishes the saved draft as the next version, if its connection's CLI can enforce its
 /// permissions on this platform (`PublishError::Permissions`); a profile whose connection is gone
 /// cannot say what is enforced (`PublishError::ConnectionMissing`).
@@ -231,6 +280,24 @@ pub fn publish_checked_in(
   let mut db = ProjectDb::open(repo_root)?;
   enforceable(&db, checked)?;
   Ok(db.publish_draft_matching(id, checked, Timestamp::now())?.number())
+}
+
+/// Publishes exactly the stale draft and latest version the person reviewed, atomically.
+pub fn publish_stale_checked_in(root: &Path, expected: &ProfileEntry) -> Result<VersionNumber, StoreError> {
+  let mut db = ProjectDb::open(root)?;
+  enforceable(&db, &expected.profile)?;
+  let now = Timestamp::now();
+  db.publish_draft_with(expected.id, now, |draft: Draft<AgentProfile>, latest| {
+    if ProfileEntry::new(expected.id, Some(draft.clone()), latest.as_ref()).as_ref() != Some(expected) {
+      return Err(StoreError::DraftChanged(expected.id));
+    }
+    Ok(Draft::new(
+      draft.body().clone(),
+      latest.as_ref().map(Version::number),
+      now,
+    ))
+  })
+  .map(|version| version.number())
 }
 
 /// Refused when `profile`'s connection is gone, or its CLI cannot enforce the profile's permissions here.
@@ -296,4 +363,13 @@ pub fn save_permissions_to_draft(
   };
   save_draft(&mut db, id, body.with_permissions(permissions), Timestamp::now())?;
   Ok(latest.map_or(1, |latest| latest.number().get().saturating_add(1)))
+}
+fn draft_times<S: ResourceStore>(store: &S) -> Result<std::collections::BTreeMap<ResourceId, Timestamp>, S::Error> {
+  let mut times = std::collections::BTreeMap::new();
+  for resource in store.resources(ResourceKind::AgentProfile)? {
+    if let Some(draft) = store.draft::<AgentProfile>(resource.id())? {
+      times.insert(resource.id(), draft.updated_at());
+    }
+  }
+  Ok(times)
 }

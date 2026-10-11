@@ -6,7 +6,9 @@ use std::num::NonZeroU32;
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{FileCall, FindSymbol, OrchesterTool, ProcessCall, SkillCall, StepTools, ToolCallError, files::term};
+use super::{
+  AppCall, FileCall, FindSymbol, OrchesterTool, ProcessCall, SkillCall, StepTools, ToolCallError, files::term,
+};
 use crate::{
   memory::{Importance, MemoryContent, MemoryKey, MemoryKind, MemoryNote, NoteScope, Tags},
   resource::{SKILL_FILE, SkillFilePath},
@@ -71,6 +73,7 @@ pub enum ToolCall {
   },
   Skill(SkillCall),
   Processes(ProcessCall),
+  App(AppCall),
   GetTask,
   SaveMemory(Box<MemoryNote>),
   ReportProgress(StepProgress),
@@ -177,6 +180,7 @@ impl ToolCall {
       Self::GetTask => OrchesterTool::GetTask,
       Self::Processes(ProcessCall::List) => OrchesterTool::ListRunProcesses,
       Self::Processes(ProcessCall::Stop { .. }) => OrchesterTool::StopRunProcess,
+      Self::App(_) => OrchesterTool::CallRunApp,
       Self::SaveMemory(_) => OrchesterTool::SaveMemory,
       Self::ReportProgress(_) => OrchesterTool::ReportProgress,
     }
@@ -195,6 +199,7 @@ fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
       let input: StopProcessInput = serde_json::from_value(arguments).map_err(invalid)?;
       ToolCall::Processes(ProcessCall::Stop { pid: input.pid })
     }
+    OrchesterTool::CallRunApp => ToolCall::App(AppCall::parse(arguments)?),
     OrchesterTool::FindSymbol => {
       let query: FindSymbol = serde_json::from_value(arguments).map_err(invalid)?;
       if query.name().trim().is_empty() {

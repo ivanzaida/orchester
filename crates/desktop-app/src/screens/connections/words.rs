@@ -10,7 +10,7 @@ use crate::ui::icon::Icon;
 
 /// The tone a status is said in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Tone {
+pub(crate) enum Tone {
   Success,
   Warning,
   Danger,
@@ -22,7 +22,7 @@ pub(super) enum Tone {
 
 impl Tone {
   /// The icon's color.
-  pub(super) const fn color(self) -> PaletteColor {
+  pub(crate) const fn color(self) -> PaletteColor {
     match self {
       Self::Success => PaletteColor::Success,
       Self::Warning => PaletteColor::Warning,
@@ -43,7 +43,7 @@ impl Tone {
 
 /// A status as the list and the inspector show it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct Shown {
+pub(crate) struct Shown {
   pub icon: Icon,
   pub tone: Tone,
   pub key: &'static str,
@@ -58,7 +58,7 @@ impl Shown {
 /// While a check runs (`Checking…` in `uBsQM`).
 pub(super) const CHECKING: Shown = Shown::of(Icon::LoaderCircle, Tone::Busy, "connections.status.checking");
 
-pub(super) const fn agent_status(status: ConnectionStatus) -> Shown {
+pub(crate) const fn agent_status(status: ConnectionStatus) -> Shown {
   use ConnectionStatus as S;
   use Tone as C;
   match status {
@@ -104,7 +104,7 @@ pub(super) const fn mcp_status(enabled: bool) -> Shown {
 }
 
 /// The provider's name, e.g. "Claude Code CLI".
-pub(super) const fn provider_key(provider: AgentProvider) -> &'static str {
+pub(crate) const fn provider_key(provider: AgentProvider) -> &'static str {
   match provider {
     AgentProvider::CodexCli => "connections.provider.codex",
     AgentProvider::ClaudeCodeCli => "connections.provider.claude",

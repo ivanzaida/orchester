@@ -253,3 +253,6 @@ mod reload_pending;
 
 #[path = "pipelines/publication_states.rs"]
 mod publication_states;
+
+#[path = "pipelines/profile_navigation.rs"]
+mod profile_navigation;

@@ -43,12 +43,17 @@ pub struct ProgramOutput {
 pub struct ToolResult {
   text: String,
   is_error: bool,
+  app: Option<Value>,
 }
 
 impl ToolResult {
   /// The answer of a call that ran and has `text` to show.
   pub const fn shown(text: String) -> Self {
-    Self { text, is_error: false }
+    Self {
+      text,
+      is_error: false,
+      app: None,
+    }
   }
 
   /// The answer of a call that did not run.
@@ -56,12 +61,17 @@ impl ToolResult {
     Self {
       text: error.to_string(),
       is_error: true,
+      app: None,
     }
   }
 
   /// The answer of a file tool: its text, an error when `is_error`.
   pub const fn of_file_tool(text: String, is_error: bool) -> Self {
-    Self { text, is_error }
+    Self {
+      text,
+      is_error,
+      app: None,
+    }
   }
 
   /// The answer of a call that could not reach its program, such as Orchester's tools being unavailable.
@@ -69,6 +79,7 @@ impl ToolResult {
     Self {
       text: reason.to_owned(),
       is_error: true,
+      app: None,
     }
   }
 
@@ -90,12 +101,14 @@ impl ToolResult {
             timeout.as_secs()
           ),
           is_error: true,
+          app: None,
         };
       }
       Err(error) => {
         return Self {
           text: error.to_string(),
           is_error: true,
+          app: None,
         };
       }
     };
@@ -124,6 +137,32 @@ impl ToolResult {
     Self {
       text,
       is_error: !output.code.is_some_and(|code| expected.contains(i64::from(code))),
+      app: None,
+    }
+  }
+
+  /// A normalized embedded MCP result, including its structured content, within the relay's answer cap.
+  pub fn from_app(result: Value) -> Self {
+    if result.to_string().len() > MAX_ANSWER_BYTES {
+      return Self::unavailable("the app result exceeds the relay's answer limit; narrow the requested result");
+    }
+    let mut text = result["content"]
+      .as_array()
+      .into_iter()
+      .flatten()
+      .filter_map(|block| block["text"].as_str())
+      .collect::<Vec<_>>()
+      .join("\n");
+    if let Some(structured) = result.get("structuredContent") {
+      if !text.is_empty() {
+        text.push('\n');
+      }
+      text.push_str(&structured.to_string());
+    }
+    Self {
+      text,
+      is_error: result["isError"].as_bool().unwrap_or(false),
+      app: Some(result),
     }
   }
 
@@ -138,18 +177,39 @@ impl ToolResult {
   /// This answer with the values of `secrets` removed.
   #[must_use]
   pub fn redacted(self, secrets: &[SecretVariable]) -> Self {
+    if let Some(app) = self.app {
+      // Reapply the cap: redacting a short secret may expand text or structured content.
+      return Self::from_app(redact_value(app, secrets));
+    }
     Self {
       text: redact_secrets(&self.text, secrets),
       is_error: self.is_error,
+      app: None,
     }
   }
 
   /// The MCP `tools/call` result, its text within [`MAX_ANSWER_BYTES`] whatever the tool's own limit.
   pub fn mcp(&self) -> Value {
+    if let Some(app) = &self.app {
+      return app.clone();
+    }
     json!({"content": [{"type": "text", "text": answer_text(&self.text)}], "isError": self.is_error})
   }
 }
 
+fn redact_value(value: Value, secrets: &[SecretVariable]) -> Value {
+  match value {
+    Value::String(text) => Value::String(redact_secrets(&text, secrets)),
+    Value::Array(values) => Value::Array(values.into_iter().map(|value| redact_value(value, secrets)).collect()),
+    Value::Object(values) => Value::Object(
+      values
+        .into_iter()
+        .map(|(key, value)| (redact_secrets(&key, secrets), redact_value(value, secrets)))
+        .collect(),
+    ),
+    value => value,
+  }
+}
 /// `text` within [`MAX_ANSWER_BYTES`], with a note when it was cut.
 fn answer_text(text: &str) -> String {
   let (shown, left_out) = bounded(text, MAX_ANSWER_BYTES - ANSWER_NOTE_ROOM, OutputKept::Head);

@@ -228,3 +228,42 @@ fn domain_mcp_servers_a_profile_chooses_are_not_removed() {
   assert_eq!(refused["code"], "in_use", "{refused}");
   assert_eq!(listed(&mut served).len(), 1);
 }
+
+#[test]
+fn domain_profile_mcp_selection_checks_enabled_added_disabled_kept_removed_and_missing() {
+  let (mut served, repo) = served();
+  served.let_automation_widen(true);
+  served.ok("add_mcp_server", &pencil());
+  let mut args = json!({
+    "project": "Kontur", "role": "Designer", "connection": "Codex · Kontur", "model": "gpt-5.5",
+    "mcp_servers": ["pencil-design"],
+  });
+  served.ok("save_profile_draft", &args);
+  args["profile"] = json!("Designer");
+  let off = json!({"project": "Kontur", "server": "pencil-design", "enabled": false});
+  served.ok("set_mcp_server_enabled", &off);
+  served.ok("save_profile_draft", &args);
+  args["mcp_servers"] = json!([]);
+  served.ok("save_profile_draft", &args);
+  args["mcp_servers"] = json!(["pencil-design"]);
+  let error = served.refused("save_profile_draft", &args);
+  assert_eq!(error["code"], "mcp_server_not_offered");
+  assert!(
+    error["reasons"][0].as_str().expect("reason").contains("turned off"),
+    "{error}"
+  );
+  args["mcp_servers"] = json!(["missing-server"]);
+  let error = served.refused("save_profile_draft", &args);
+  assert_eq!(error["code"], "mcp_server_not_found");
+  let db = ProjectDb::open(&repo).expect("fixture db");
+  let listed = orchester_workspace::agents::data::ProjectAgents::load(&db).expect("agents");
+  let designer = listed
+    .profiles
+    .iter()
+    .find(|entry| entry.profile.role().as_str() == "Designer")
+    .expect("designer");
+  assert!(
+    designer.profile.mcp_servers().ids().is_empty(),
+    "rejections changed no stored selection"
+  );
+}

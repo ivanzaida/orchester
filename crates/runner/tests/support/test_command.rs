@@ -18,6 +18,8 @@
   reason = "a stand-in for a program a tool runs: printing is what it is for"
 )]
 
+mod fake_run_app_server;
+
 use std::{fs, io::Write, process::ExitCode, thread, time::Duration};
 
 /// Set for the copy `spawn-sleeper` starts, which only sleeps.
@@ -53,6 +55,7 @@ fn main() -> ExitCode {
         Err(error) => Err(error),
       },
       "spawn-sleeper" => spawn_sleeper(),
+      "serve-app" => fake_run_app_server::serve(rest.next().unwrap_or_default()),
       "sleep" => sleep(rest.next()),
       "exit" => return ExitCode::from(rest.next().and_then(|code| code.parse().ok()).unwrap_or(2)),
       other => Err(format!("unknown action {other}")),

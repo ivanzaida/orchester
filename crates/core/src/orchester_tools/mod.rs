@@ -19,6 +19,7 @@
 //!   files, and is cut to a size ([`OutsideReads`]).
 //! - The step's skills are listed and read by name, each within its own files ([`StepSkills`]).
 
+mod app;
 mod catalog;
 mod changes;
 mod files;
@@ -37,6 +38,7 @@ use serde_json::Value;
 use thiserror::Error;
 
 pub use self::{
+  app::{AppCall, AppDiscovery, AppDiscoveryError},
   changes::changed_files,
   files::{DEFAULT_LIMIT_FILES, FileCall, LineEdit, MAX_LIMIT_FILES, NewFile, ReadLines, SearchTerm},
   index::{CodeIndex, FindSymbol, MAX_HITS, SymbolHit, plain_relative, shown_hits},
@@ -72,6 +74,7 @@ pub enum OrchesterTool {
   RunCheck,
   ListRunProcesses,
   StopRunProcess,
+  CallRunApp,
   ListSkills,
   ReadSkill,
   GetTask,
@@ -90,12 +93,12 @@ pub enum AccessClass {
   Outside,
   /// Keeps something with the run or the project (memory, the step's progress line); changes no file.
   Records,
-  /// Lists or stops processes whose resolved executable stays in this run's worktree.
+  /// Lists, stops or drives app processes whose resolved executable stays in this run's worktree.
   RunProcesses,
 }
 
 impl OrchesterTool {
-  pub const ALL: [Self; 19] = [
+  pub const ALL: [Self; 20] = [
     Self::ReadFile,
     Self::ListFiles,
     Self::SearchFile,
@@ -110,6 +113,7 @@ impl OrchesterTool {
     Self::RunCheck,
     Self::ListRunProcesses,
     Self::StopRunProcess,
+    Self::CallRunApp,
     Self::ListSkills,
     Self::ReadSkill,
     Self::GetTask,
@@ -134,6 +138,7 @@ impl OrchesterTool {
       Self::RunCheck => "run_check",
       Self::ListRunProcesses => "list_run_processes",
       Self::StopRunProcess => "stop_run_process",
+      Self::CallRunApp => "call_run_app",
       Self::ListSkills => "list_skills",
       Self::ReadSkill => "read_skill",
       Self::GetTask => "get_task",
@@ -231,7 +236,7 @@ impl OrchesterTool {
       Self::EditFile | Self::CreateFile | Self::DeleteFile | Self::MoveFile => AccessClass::WritesWorktree,
       Self::SearchExternalFile | Self::ReadExternalFile | Self::RunCheck => AccessClass::Outside,
       Self::SaveMemory | Self::ReportProgress => AccessClass::Records,
-      Self::ListRunProcesses | Self::StopRunProcess => AccessClass::RunProcesses,
+      Self::ListRunProcesses | Self::StopRunProcess | Self::CallRunApp => AccessClass::RunProcesses,
     }
   }
 }

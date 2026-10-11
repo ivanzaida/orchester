@@ -54,6 +54,7 @@ fn every_route() -> Vec<Route> {
     at(ProjectPage::NewPipeline),
     at(ProjectPage::NewEmptyPipeline),
     at(ProjectPage::Pipeline(PROJECT.parse().expect("a resource id"))),
+    at(ProjectPage::Agent(CONNECTION.parse().expect("an agent resource id"))),
     at(ProjectPage::EditTask(key("KON-7"))),
     at(ProjectPage::EditConnection(connection())),
     at(ProjectPage::Connections(
@@ -398,4 +399,25 @@ fn pipelines_pages_have_their_own_paths_and_select_pipelines() {
     assert_eq!(Route::parse(&route.path()), Ok(route.clone()));
     assert_eq!(route.screen(), Screen::Pipelines);
   }
+}
+
+#[test]
+fn agents_pages_have_exact_current_resource_paths_and_select_agents() {
+  let id = CONNECTION.parse().expect("a resource id");
+  let route = at(ProjectPage::Agent(id));
+  assert_eq!(route.path(), format!("/project/{PROJECT}/agents/{CONNECTION}"));
+  assert_eq!(Route::parse(&route.path()), Ok(route.clone()));
+  assert_eq!(route.nav_screen(), Screen::Agents);
+  assert_eq!(route.pattern(), "/project/:project/agents/:agent");
+  let table = routes();
+  let chain = table.resolve(&route.path());
+  assert_eq!(
+    chain.last().expect("agent route resolves").pattern_raw(),
+    route.pattern()
+  );
+  assert_eq!(at(ProjectPage::Agents).path(), format!("/project/{PROJECT}/agents"));
+  assert_eq!(
+    Route::parse(&format!("/project/{PROJECT}/agents/not-an-id")),
+    Err(RouteError::NoScreen)
+  );
 }

@@ -91,6 +91,9 @@ pub async fn publish_profile(services: &Services, args: InProfile) -> Result<Val
     }
     // Published only while the draft is the one just checked.
     publish_checked_in(&open.repo_root, id, &entry.profile).map_err(|error| publish_error(&error))?;
+    services
+      .changes
+      .record(open.project.id(), crate::tasks::outside::Outside::Profiles);
     let agents = ProjectAgents::load_in(&open.repo_root)?;
     let entry = agents
       .profile(id)

@@ -15,6 +15,9 @@ use serde_json::{Value, json};
 
 use super::fake_permission_prompt::Prompt;
 
+#[path = "fake_app_tools.rs"]
+mod fake_app_tools;
+
 #[path = "fake_process_tools.rs"]
 mod fake_process_tools;
 
@@ -132,6 +135,12 @@ pub fn report(server: Option<&mut Prompt>, worktree: &Path, prompt: &str) {
     return;
   };
   eprintln!("orchester-tools: {}", server.list().unwrap_or_default().join(","));
+  if prompt.contains("Call the run app") {
+    fake_app_tools::exercise(worktree, |tool, arguments| {
+      server.call_result(tool, arguments).expect("relay")
+    });
+    return;
+  }
   if prompt.contains("Use the process tools") {
     fake_process_tools::exercise(worktree, |tool, arguments| report_call(server, tool, arguments));
     return;

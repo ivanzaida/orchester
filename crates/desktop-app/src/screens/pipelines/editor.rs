@@ -115,7 +115,7 @@ impl Component for Editor {
             writing: busy,
           },
         ),
-        _ => super::inspector::panel(ctx, &self.state, locked),
+        _ => super::inspector::panel(ctx, &self.state, locked, busy),
       };
       Row::new()
         .width(Dimension::Pct(100.0))

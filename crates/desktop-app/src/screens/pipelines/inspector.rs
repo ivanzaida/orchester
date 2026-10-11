@@ -22,7 +22,7 @@ use crate::ui::{
   message::message_text,
 };
 
-pub fn panel(ctx: &mut Ctx, state: &State, busy: bool) -> Element {
+pub fn panel(ctx: &mut Ctx, state: &State, busy: bool, navigation_busy: bool) -> Element {
   let editing = state.get();
   let shown = editing.shown();
   if let Panel::Step(key) = &editing.panel
@@ -32,6 +32,7 @@ pub fn panel(ctx: &mut Ctx, state: &State, busy: bool) -> Element {
       state: state.clone(),
       step: step.clone(),
       locked: busy || editing.viewing.is_some(),
+      navigation_locked: navigation_busy || editing.viewing.is_some(),
     };
     return ctx.mount_keyed::<StepInspector>(&format!("step-inspector-{key}-{}", editing.epoch), props);
   }

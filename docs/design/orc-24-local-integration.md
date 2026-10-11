@@ -1,0 +1,74 @@
+# ORC-24: local checkout integration
+
+The person approved this feature design on 2026-10-11 and confirmed saving the native Pencil document with Ctrl+S.
+The source is `data/orchester2.pen`, section `zMOBO`, **ORC-24 · Local integration · editable feature design**.
+Read the encrypted document only through Pencil. The earlier browser prototype is not the design source.
+
+The feature lets a person finish local integration inside Orchester when their main checkout has local changes or
+the task merge needs conflict resolution. Existing Task, Summary and Delivery entry points lead into the reviewed
+flow. Confirmations are inline; new and editing surfaces are pages. Fixture names, paths, commits and task data in
+Pencil are examples, never defaults or shipped project data.
+
+## Reviewed native states
+
+| Node | State | Logical size |
+|---|---|---|
+| `YxF6B` | Local staged, unstaged and untracked files and diff | 1440 × 1080 |
+| `kexy4` | Selected commit review; excluded edits retained | 1440 × 1080 |
+| `UgHeC` | Named, verified temporary preservation | 1440 × 1080 |
+| `g4KepC` | Partial commit recorded; remaining blockers | 1440 × 1080 |
+| `g6ehAu` | Sync and fresh Check; safe stop request | 1440 × 1080 |
+| `OoP6s` | Separate approval of the exact checked result | 1440 × 1080 |
+| `loXXi` | Task text conflict selector, versions and editable result | 1440 × 1300 |
+| `i0tWhP` | Binary, rename and delete decisions | 1440 × 1300 |
+| `o6ktb4` | Already merged; local restore conflicts and staging choice | 1440 × 1440 |
+| `AdLRF` | Recorded merge and verified restoration; recovery retained | 1440 × 1080 |
+| `TnpfP` | Restart reconciliation before safe continuation | 1440 × 1080 |
+| `MrnFV` | Commit hook failed; checkout and index intact | 1440 × 1080 |
+| `i6Cx4` | External checkout change or foreign Git operation | 1440 × 1080 |
+| `MBZu9` | Unsaved result: save and pause, keep editing or discard draft | 1440 × 1300 |
+| `TfJls` | Scoped task merge abort confirmation | 1440 × 1080 |
+| `It5Lh` | Preservation removal after verified restoration | 1440 × 1080 |
+| `s4gj9` | Narrow local selection and diff | 960 × 1400 |
+| `Ol3sv` | Narrow task text resolver with stacked versions | 960 × 1600 |
+| `CJjYl` | Narrow restoration and editable binary destination | 960 × 1900 |
+| `M0iuzM` | Narrow exact-result approval | 960 × 1200 |
+
+These are extended page compositions. They do not imply that all controls fit a 900-pixel-high window: long resolver
+and restoration content needs app-local scrolling. Keep the main review and approval actions near the top.
+
+## Behavior that implementation must preserve
+
+1. Review real staged, unstaged and untracked content, with explicit ignored-file boundaries. Selected-index commit
+   review compares HEAD with the selected index. Preserve excluded staged and working-copy changes exactly.
+2. Give temporary preservation a name and verified identity, including tracked/untracked content and staging.
+   Keep originals until restoration is verified. Do not blindly pop a stash or stage the entire checkout.
+3. Sync first, run a real fresh Check, then request separate approval of the exact checked merge result. Relevant
+   checkout or result changes invalidate that approval. Waiting for approval must not hold the queue.
+4. Resolve task conflicts in the app: multiple-file selection, source versions, editable text results, deliberate
+   binary/rename/delete choices and editable keep-both destinations. Save and resolved gates reflect actual state.
+5. Distinguish a task merge conflict from restoration of local edits after an already recorded merge. Restoration
+   offers explicit Stage or Leave unstaged. A restore failure or restart must never repeat a successful merge.
+6. Persist operation ownership and recovery state. Reconcile actual Git state after restart before choosing a safe
+   continuation. Refuse unrelated or foreign Git operations. Cancellation and abort affect only the owned operation.
+7. Commit hook failures preserve content/index and return to review without reporting a successful commit. Unsaved
+   editor decisions, scoped abort and irreversible preservation removal remain explicit person decisions.
+8. Show progress and success only for work that occurred. Keep retained recovery records until verified cleanup.
+   Secret values must not appear in previews, logs, prompts, copied content or MCP output.
+
+Domain rules stay independent of the desktop. Use the existing core/workspace, execution and store boundaries;
+provide equivalent Windows and macOS behavior or an explicit visible unsupported state. UI uses the existing native
+theme roles and i18n. Independent source review, meaningful filtered tests, `tools/check.ps1`, and independent live
+app/Pencil comparison are required. Protected person-only replies are answered by the person.
+
+## Design review and remaining runtime evidence
+
+Independent native design review found no blocking or major issue in all twenty final frames after corrections.
+It did not verify working Git behavior, durable journal atomicity, live scrolling/focus, accessibility, large files,
+light theme, macOS chrome or every dropdown/error variant. Queue/Summary entry wiring and sensitive-preview behavior
+need implementation evidence. Align illustrative filenames across states when preparing QA fixtures.
+
+The design-only exports, frame index and independent review are retained locally under
+`.tmp/orchestrator/integration-design/pencil/`. Their earlier notes said the disk save and human approval were pending;
+the person's subsequent approval and Ctrl+S confirmation supersede those persistence limits. Neither drawn controls
+nor design approval constitute runtime verification or authorization to bypass protected input guards.
