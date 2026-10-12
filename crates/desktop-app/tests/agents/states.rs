@@ -62,6 +62,11 @@ fn agents_draft_and_stale_draft_states() {
   screen.click("agent-publish");
   screen.until("question armed", |s| s.exists("agent-confirm-confirm"));
   assert!(screen.window.link.input_gate().protecting());
+  lurq::app::events::with_synthetic_input(|| screen.click("agent-confirm-keep"));
+  assert!(
+    screen.exists("agent-confirm-confirm"),
+    "synthetic Keep cannot answer a stale-base decision"
+  );
   screen.click("agent-confirm-keep");
   assert!(screen.listed().profile(id).expect("profile").state.has_draft());
   screen.click("agent-publish");

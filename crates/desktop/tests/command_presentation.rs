@@ -1,5 +1,7 @@
 //! Shared command controls retain the source while presenting a compact preview.
 
+extern crate lurq_legacy as lurq;
+
 use lurq::{
   app::{App, Tree, component::Component, ctx::Ctx, events::ScrollPhase},
   clipboard::{copy_to_clipboard, read_from_clipboard},

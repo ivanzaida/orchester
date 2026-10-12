@@ -111,6 +111,8 @@ impl ListedData {
 #[derive(Clone)]
 pub struct Workspace {
   db: Arc<Mutex<AppDb>>,
+  permission_consent: Arc<Mutex<Consent>>,
+  approval_consent: Arc<Mutex<Consent>>,
 }
 
 impl PartialEq for Workspace {
@@ -123,6 +125,8 @@ impl Workspace {
   pub fn new(db: AppDb) -> Self {
     Self {
       db: Arc::new(Mutex::new(db)),
+      permission_consent: Arc::default(),
+      approval_consent: Arc::default(),
     }
   }
 
@@ -207,21 +211,70 @@ impl Workspace {
   /// Whether automation may answer waiting tool requests through Orchester's MCP server (*Let
   /// automation answer approvals*); off until a person turns it on.
   pub fn automation_answers_approvals(&self) -> Result<bool, StoreError> {
-    self.db.lock().automation_answers_approvals()
+    self.approval_consent.lock().begin();
+    let db = self.db.lock();
+    let result = db.automation_answers_approvals();
+    self.approval_consent.lock().finish(matches!(&result, Ok(true)));
+    result
   }
 
   pub fn set_automation_answers_approvals(&self, allowed: bool) -> Result<(), StoreError> {
-    self.db.lock().set_automation_answers_approvals(allowed)
+    self.approval_consent.lock().begin();
+    let mut db = self.db.lock();
+    let result = db.set_automation_answers_approvals(allowed);
+    self.approval_consent.lock().finish(allowed && result.is_ok());
+    result
   }
 
   /// Whether automation may widen what agents may do through Orchester's MCP server (*Let automation
   /// change agent permissions*); off until a person turns it on in the window, and no tool changes it.
   pub fn automation_changes_permissions(&self) -> Result<bool, StoreError> {
-    self.db.lock().automation_changes_permissions()
+    self.permission_consent.lock().begin();
+    let db = self.db.lock();
+    let result = db.automation_changes_permissions();
+    let mut consent = self.permission_consent.lock();
+    consent.finish(matches!(&result, Ok(true)));
+    result.map(|_| consent.allowed)
   }
 
   pub fn set_automation_changes_permissions(&self, allowed: bool) -> Result<(), StoreError> {
-    self.db.lock().set_automation_changes_permissions(allowed)
+    let revision = {
+      let mut consent = self.permission_consent.lock();
+      if !allowed {
+        consent.revoke();
+      }
+      consent.begin();
+      consent.revision
+    };
+    let mut db = self.db.lock();
+    let result = db.set_automation_changes_permissions(allowed);
+    let mut consent = self.permission_consent.lock();
+    if result.is_ok() && consent.revision == revision {
+      consent.revoked = !allowed;
+    }
+    consent.finish(allowed && result.is_ok());
+    result
+  }
+
+  /// The last verified consent, without SQLite work on the UI thread; unknown/error/pending is false.
+  pub fn automation_permission_consent(&self) -> bool {
+    self.permission_consent.lock().allowed
+  }
+
+  /// The approvals opt-in remains separate from permission changes.
+  pub fn automation_approval_consent(&self) -> bool {
+    self.approval_consent.lock().allowed
+  }
+
+  /// A human revocation stops window widening before its asynchronous save is polled.
+  pub fn revoke_automation_permission_consent(&self) {
+    self.permission_consent.lock().revoke();
+  }
+
+  /// A failed or uncompleted authority read never retains an earlier grant.
+  pub fn invalidate_automation_consent(&self) {
+    self.permission_consent.lock().allowed = false;
+    self.approval_consent.lock().allowed = false;
   }
 
   /// Where Usage › Plan limits draws its warning line, for every project; 80 % until it is changed.
@@ -272,5 +325,33 @@ impl Workspace {
 
   pub(crate) fn end_session(&self, session: SessionId, end: SessionEnd) -> Result<(), StoreError> {
     self.db.lock().end_session(session, end, Timestamp::now())
+  }
+}
+
+/// Published under the database lock; any pending read/write keeps an earlier value from authorizing the window.
+#[derive(Default)]
+struct Consent {
+  allowed: bool,
+  /// A human revocation survives canceled/failed dispatch and every old stored read.
+  revoked: bool,
+  revision: u64,
+  pending: usize,
+}
+impl Consent {
+  fn refresh(&mut self, allowed: bool) {
+    self.allowed = self.pending == 0 && !self.revoked && allowed;
+  }
+  fn revoke(&mut self) {
+    self.revision += 1;
+    self.revoked = true;
+    self.allowed = false;
+  }
+  fn begin(&mut self) {
+    self.pending += 1;
+    self.allowed = false;
+  }
+  fn finish(&mut self, allowed: bool) {
+    self.pending -= 1;
+    self.refresh(allowed);
   }
 }

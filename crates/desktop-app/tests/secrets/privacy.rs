@@ -86,33 +86,56 @@ impl Client {
 
 #[test]
 fn secrets_mcp_tree_masks_values_and_refuses_automated_replacement_confirmation() {
-  let mut s = Secrets::new();
-  let secret = s.seed("DOCS_TOKEN", Environment::Development);
-  s.bind(&secret);
-  s.list();
-  s.click("secret-replace");
-  s.set("secret-value", NEXT);
-  let client = Client::new(&mut s);
-  let tree = client.call(&mut s, "lurq_read_tree", &json!({}));
-  assert!(!tree["isError"].as_bool().unwrap_or(false), "tree read succeeds");
-  let text = tree.to_string();
-  assert!(!text.contains(VALUE), "the stored value never reaches the MCP tree");
-  assert!(!text.contains(NEXT), "the entered value never reaches the MCP tree");
-  let asked = client.click(&mut s, "secret-save");
-  assert!(
-    !asked["isError"].as_bool().unwrap_or(false),
-    "automation may request the question"
-  );
-  s.until("person-only question", |s| {
-    s.exists("secret-confirm-replacement-confirm")
-  });
-  let refused = client.click(&mut s, "secret-confirm-replacement-confirm");
-  assert!(refused["isError"].as_bool().unwrap_or(false));
-  let error: Value = serde_json::from_str(refused["content"][0]["text"].as_str().expect("error")).expect("JSON error");
-  assert_eq!(error["code"], "person_only");
-  assert!(error["message"].as_str().expect("message").contains("Secrets page"));
-  s.click("secret-confirm-replacement-keep");
-  assert!(!s.window.link.input_gate().protecting());
+  for allowed in [false, true] {
+    let mut s = Secrets::new();
+    s.window
+      .launch
+      .workspace()
+      .expect("private session")
+      .set_automation_changes_permissions(allowed)
+      .expect("private human opt-in fixture");
+    let secret = s.seed("DOCS_TOKEN", Environment::Development);
+    s.bind(&secret);
+    s.list();
+    s.click("secret-replace");
+    s.set("secret-value", NEXT);
+    let client = Client::new(&mut s);
+    let tree = client.call(&mut s, "lurq_read_tree", &json!({}));
+    assert!(!tree["isError"].as_bool().unwrap_or(false), "tree read succeeds");
+    let text = tree.to_string();
+    assert!(!text.contains(VALUE), "the stored value never reaches the MCP tree");
+    assert!(!text.contains(NEXT), "the entered value never reaches the MCP tree");
+    let asked = client.click(&mut s, "secret-save");
+    assert!(
+      !asked["isError"].as_bool().unwrap_or(false),
+      "automation may request the question"
+    );
+    s.until("person-only question", |s| {
+      s.exists("secret-confirm-replacement-confirm")
+    });
+    lurq::app::events::with_synthetic_input(|| s.click("secret-confirm-replacement-confirm"));
+    assert!(
+      s.exists("secret-confirm-replacement-confirm"),
+      "non-MCP synthetic input cannot confirm Secrets"
+    );
+    assert!(s.vault.contains(
+      &orchester_core::secret::VaultKey::new(super::support::project_id(), secret.id()),
+      VALUE
+    ));
+    lurq::app::events::with_synthetic_input(|| s.click("secret-confirm-replacement-keep"));
+    assert!(
+      s.exists("secret-confirm-replacement-confirm"),
+      "synthetic Keep cannot answer Secrets"
+    );
+    let refused = client.click(&mut s, "secret-confirm-replacement-confirm");
+    assert!(refused["isError"].as_bool().unwrap_or(false));
+    let error: Value =
+      serde_json::from_str(refused["content"][0]["text"].as_str().expect("error")).expect("JSON error");
+    assert_eq!(error["code"], "person_only");
+    assert!(error["message"].as_str().expect("message").contains("Secrets page"));
+    s.click("secret-confirm-replacement-keep");
+    assert!(!s.window.link.input_gate().protecting());
+  }
 }
 
 #[test]

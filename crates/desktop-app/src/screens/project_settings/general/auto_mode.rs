@@ -45,6 +45,7 @@ impl DevtoolsInspectable for Asked {}
 
 #[derive(Clone)]
 pub struct AutoMode {
+  save: Save,
   connection: Signal<String>,
   model: Signal<String>,
   effort: Signal<String>,
@@ -60,6 +61,7 @@ impl Component for AutoMode {
     let settings = ctx.props::<Props>().settings.clone();
     let (connection, model, effort) = values(&settings);
     let tab = Self {
+      save: work::action(ctx),
       connection: ctx.signal(connection),
       model: ctx.signal(model),
       effort: ctx.signal(effort),
@@ -69,7 +71,7 @@ impl Component for AutoMode {
       attempted: ctx.signal(Asked(None)),
       failed: ctx.signal(false),
     };
-    let save = work::action(ctx);
+    let save = tab.save.clone();
     tab.follow(ctx, &save);
     let after = tab.clone();
     ctx.watch(&tab.connection, move |connection| {
@@ -92,7 +94,7 @@ impl Component for AutoMode {
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    let save = work::action(ctx);
+    let save = self.save.clone();
     self.refresh(&props.settings, save.state().get().is_pending());
     let outside = self.outside();
     if !outside {
@@ -253,6 +255,7 @@ impl AutoMode {
       WidenProps {
         id: "settings-auto-question",
         card: false,
+        automation: crate::mcp::input_gate::Guarded::ApprovalWidening,
         title: ctx.t("project_settings.confirmAuto"),
         reasons: vec![ctx.t("project_settings.confirmAutoDetail")].into(),
         keep: ctx.t("project_settings.keep"),

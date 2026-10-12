@@ -58,6 +58,7 @@ type Save = FutureAction<(PathBuf, Requested), Stored, Message>;
 
 #[derive(Clone)]
 pub(super) struct Environment {
+  save: Save,
   text: Signal<String>,
   stored: Signal<Option<Stored>>,
   asking: Signal<Asking>,
@@ -68,13 +69,14 @@ impl Component for Environment {
   type Props = TabProps;
   fn create(ctx: &mut Ctx) -> Self {
     let tab = Self {
+      save: action(ctx),
       text: ctx.signal(String::new()),
       stored: ctx.signal(None),
       asking: ctx.signal(Asking(None)),
       revision: ctx.signal(0),
       reloading: ctx.signal(false),
     };
-    let save = action(ctx);
+    let save = tab.save.clone();
     let (after, status, feed) = (
       tab.clone(),
       ctx.props::<TabProps>().status.clone(),
@@ -99,7 +101,7 @@ impl Component for Environment {
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
-    let save = action(ctx);
+    let save = self.save.clone();
     let state = self.read(ctx, &props);
     self.finish_reload(&state, &save);
     if self.stored.get_untracked().is_none() && state.is_pending() {
@@ -310,6 +312,7 @@ impl Environment {
       WidenProps {
         id: "settings-environment-question",
         card: false,
+        automation: crate::mcp::input_gate::Guarded::PermissionWidening,
         title: ctx.t("project_settings.confirmEnvironment"),
         reasons: reasons.into(),
         keep: ctx.t("project_settings.keep"),

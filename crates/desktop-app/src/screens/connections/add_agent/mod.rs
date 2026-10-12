@@ -86,6 +86,7 @@ impl DevtoolsInspectable for Found {}
 type SaveAction = FutureAction<ConnectionDraft, Saved, Message>;
 
 pub struct AddAgent {
+  save: SaveAction,
   kind: Signal<Kind>,
   name: Signal<String>,
   /// The name the page last suggested: while the field holds it, or nothing, choosing another CLI
@@ -103,45 +104,14 @@ impl Component for AddAgent {
 
   fn create(ctx: &mut Ctx) -> Self {
     let page = Self {
+      save: save_action(ctx),
       kind: ctx.signal(Kind(AgentProvider::CodexCli)),
       name: ctx.signal(String::new()),
       suggested: ctx.signal(String::new()),
       program: ctx.signal(String::new()),
       recheck: ctx.signal(0),
     };
-    let save = save_action(ctx);
-    // The reading and the search at their places of every render, so the choice follows what is found.
-    let props = ctx.props::<AddAgentProps>().clone();
-    let read = data::reading(ctx, props.project.open.repo_root.clone(), 0);
-    let (i18n, name, suggested, kind) = (
-      ctx.i18n().clone(),
-      page.name.clone(),
-      page.suggested.clone(),
-      page.kind.clone(),
-    );
-    ctx.watch(&read.state(), move |state| {
-      if let Some(listed) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
-        let project = props.project.open.project.name().as_str();
-        let new = suggested_name(&i18n, listed, kind.get_untracked().0, project);
-        suggest(&name, &suggested, new);
-      }
-    });
-    let copies = found(ctx, AgentProvider::CodexCli, 0);
-    let program = page.program.clone();
-    ctx.watch(&copies.state(), move |state| {
-      if !state.is_fulfilled() {
-        return;
-      }
-      let copies = state.data.as_ref().map_or(&[][..], |copies| copies.0.as_slice());
-      let chosen = program.get_untracked();
-      if !copies.iter().any(|copy| copy.display().to_string() == chosen) {
-        program.set(
-          copies
-            .first()
-            .map_or_else(String::new, |copy| copy.display().to_string()),
-        );
-      }
-    });
+    let save = page.save.clone();
     let project = ctx.props::<AddAgentProps>().project.open.project.id();
     let navigation = Navigation::of(ctx);
     ctx.watch(&save.state(), move |state| {
@@ -155,10 +125,11 @@ impl Component for AddAgent {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<AddAgentProps>().clone();
-    let save = save_action(ctx);
+    let save = self.save.clone();
     let listed = data::load(ctx, props.project.open.repo_root.clone(), 0);
     let provider = self.kind.get().0;
     let found = found(ctx, provider, self.recheck.get()).state().get();
+    self.follow_sources(ctx, &props, provider, &listed, &found);
     let program = self.chosen(found.data.as_ref().map(|copies| copies.0.as_slice()));
     let checked = checked(ctx, (provider, program.clone()), self.recheck.get());
     let state = Checked::of(&found, program.as_ref(), &checked);
@@ -175,6 +146,32 @@ impl Component for AddAgent {
 }
 
 impl AddAgent {
+  fn follow_sources(
+    &self,
+    ctx: &Ctx,
+    props: &AddAgentProps,
+    provider: AgentProvider,
+    listed: &FutureState<ProjectConnections, Message>,
+    found: &FutureState<Copies, Message>,
+  ) {
+    if let Some(listed) = listed.fulfilled_data() {
+      let project = props.project.open.project.name().as_str();
+      let new = suggested_name(ctx.i18n(), listed, provider, project);
+      suggest(&self.name, &self.suggested, new);
+    }
+    if let Some(copies) = found.fulfilled_data() {
+      let chosen = self.program.get_untracked();
+      if !copies.0.iter().any(|copy| copy.display().to_string() == chosen) {
+        let first = copies
+          .0
+          .first()
+          .map_or_else(String::new, |copy| copy.display().to_string());
+        if chosen != first {
+          self.program.set(first);
+        }
+      }
+    }
+  }
   /// The copy to check: the one chosen, else the first found.
   fn chosen(&self, found: Option<&[PathBuf]>) -> Option<PathBuf> {
     let chosen = self.program.get();
@@ -400,10 +397,13 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
 /// Puts `new` in the name while it holds the last suggestion or nothing: a name the person typed stays.
 fn suggest(name: &Signal<String>, suggested: &Signal<String>, new: String) {
   let current = name.get_untracked();
-  if current.is_empty() || current == suggested.get_untracked() {
+  let previous = suggested.get_untracked();
+  if (current.is_empty() || current == previous) && current != new {
     name.set(new.clone());
   }
-  suggested.set(new);
+  if previous != new {
+    suggested.set(new);
+  }
 }
 
 fn suggested_name(i18n: &I18n, listed: &ProjectConnections, provider: AgentProvider, project: &str) -> String {

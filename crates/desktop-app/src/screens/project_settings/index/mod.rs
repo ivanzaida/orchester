@@ -51,6 +51,8 @@ impl DevtoolsInspectable for Checked {}
 type Rebuild = FutureAction<(PathBuf, Revision), (), Message>;
 
 pub(super) struct CodeIndex {
+  save: Save,
+  rebuild: Rebuild,
   stored: Signal<Option<Read>>,
   revision: Signal<u64>,
   list_revision: Signal<u64>,
@@ -63,6 +65,8 @@ impl Component for CodeIndex {
   type Props = TabProps;
   fn create(ctx: &mut Ctx) -> Self {
     let tab = Self {
+      save: work::action(ctx),
+      rebuild: rebuild_action(ctx),
       stored: ctx.signal(None),
       revision: ctx.signal(0),
       list_revision: ctx.signal(0),
@@ -71,8 +75,8 @@ impl Component for CodeIndex {
       watching: Arc::new(AtomicBool::new(false)),
       after_install: Arc::new(AtomicBool::new(false)),
     };
-    let save = work::action(ctx);
-    let rebuild = rebuild_action(ctx);
+    let save = tab.save.clone();
+    let rebuild = tab.rebuild.clone();
     work::follow(
       ctx,
       &save,
@@ -87,8 +91,8 @@ impl Component for CodeIndex {
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
-    let save = work::action(ctx);
-    let rebuild = rebuild_action(ctx);
+    let save = self.save.clone();
+    let rebuild = self.rebuild.clone();
     self.tick.get();
     let state = work::load(
       ctx,

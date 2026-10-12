@@ -35,6 +35,7 @@ use crate::{
 struct Folder(WritableFolder);
 impl DevtoolsInspectable for Folder {}
 pub struct Lists {
+  add: lurq::app::ctx::FutureAction<(PathBuf, String), Folder, Message>,
   command: Signal<String>,
   folder: Signal<String>,
   error: Signal<Option<Message>>,
@@ -45,12 +46,13 @@ impl Component for Lists {
   fn create(ctx: &mut Ctx) -> Self {
     let fields = ctx.props::<Props>().fields.clone();
     let component = Self {
+      add: folder_action(ctx),
       command: ctx.signal(String::new()),
       folder: ctx.signal(String::new()),
       error: ctx.signal(None),
       folder_error: ctx.signal(None),
     };
-    let add = folder_action(ctx);
+    let add = component.add.clone();
     let typed = component.folder.clone();
     let error = component.folder_error.clone();
     ctx.watch(&add.state(), move |state| {
@@ -74,7 +76,7 @@ impl Component for Lists {
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    let add = folder_action(ctx);
+    let add = self.add.clone();
     let folder_state = add.state().get();
     let mut folder_input = FieldInput::new("agent-folder", ctx.t("agents.folderPath"), self.folder.clone())
       .placeholder(ctx.t("agents.folderPath"))

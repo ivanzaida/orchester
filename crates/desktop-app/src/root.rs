@@ -141,6 +141,7 @@ impl Component for SessionWindow {
     let gate = ctx.props::<SessionProps>().link.input_gate();
     // Provided on every render: a render from the root replaces the inherited context.
     ctx.provide(services.clone());
+    gate.bind_permissions(services.workspace.clone());
     ctx.provide(gate);
     ctx.provide(self.navigation.clone());
     ctx.provide(self.projects.clone());

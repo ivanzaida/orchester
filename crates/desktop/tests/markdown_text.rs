@@ -3,6 +3,8 @@
 //! rendered; laid out, its long code lines scroll inside their block and its tables share the
 //! text's width; hundreds of messages lay out, and a growing one moves nothing above it.
 
+extern crate lurq_legacy as lurq;
+
 use std::{sync::Arc, time::Instant};
 
 use lurq::{

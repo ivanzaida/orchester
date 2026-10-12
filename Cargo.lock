@@ -2125,6 +2125,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "lurq"
+version = "0.43.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34de5500166079afb4da10b6ac7de0aa325fc249d76132949a10eb0b39f775ce"
+dependencies = [
+ "arboard",
+ "base64 0.22.1",
+ "bytemuck",
+ "core-foundation-sys 0.8.7",
+ "core-video-sys",
+ "cosmic-text",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "image",
+ "libc",
+ "lurq_macros",
+ "objc2 0.6.4",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "objc2-metal 0.3.2",
+ "parking_lot",
+ "paste",
+ "pollster",
+ "pulldown-cmark",
+ "raw-window-handle",
+ "rfd",
+ "rmcp",
+ "serde_json",
+ "swash",
+ "tokio",
+ "tokio-util",
+ "tower-service",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "wgpu",
+ "wgpu-hal",
+ "windows 0.62.2",
+ "winit",
+]
+
+[[package]]
 name = "lurq_macros"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2753,7 +2796,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "image",
- "lurq",
+ "lurq 0.43.0",
  "orchester-core",
  "orchester-exec",
  "orchester-ipc",
@@ -2799,7 +2842,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "image",
- "lurq",
+ "lurq 0.42.0",
  "orchester-api",
  "orchester-core",
  "orchester-exec",
@@ -2958,7 +3001,8 @@ name = "orchester-workspace"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "lurq",
+ "lurq 0.42.0",
+ "lurq 0.43.0",
  "orchester-api",
  "orchester-core",
  "orchester-exec",

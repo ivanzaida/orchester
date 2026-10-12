@@ -1,3 +1,5 @@
+extern crate lurq_legacy as lurq;
+
 use std::{fs, path::Path};
 
 use orchester_core::{

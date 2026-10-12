@@ -2,6 +2,8 @@
 //! continuous zoom, the range it is held in, fitting a pipeline into view, zooming around a
 //! point and panning within the zoomed content.
 
+extern crate lurq_legacy as lurq;
+
 use orchester_core::id::ResourceId;
 use orchester_desktop::pipelines::zoom::{SessionZooms, Size, View, Zoom};
 

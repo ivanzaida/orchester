@@ -64,6 +64,7 @@ impl DevtoolsInspectable for EditorProps {}
 struct Asking(Option<Edit>);
 impl DevtoolsInspectable for Asking {}
 pub struct ToolEditor {
+  action: Work,
   fields: Fields,
   baseline: Option<ToolEntry>,
   text: CommandText,
@@ -81,13 +82,14 @@ impl Component for ToolEditor {
       .unwrap_or_else(CommandText::new_tool);
     let name = props.entry.as_ref().map_or("", |e| &*e.name);
     let editor = Self {
+      action: work::action(ctx),
       fields: Fields::new(ctx, name, &text),
       baseline: props.entry.clone(),
       text,
       asking: ctx.signal(Asking(None)),
       busy: ctx.signal(false),
     };
-    let action = work::action(ctx);
+    let action = editor.action.clone();
     let (revision, busy) = (props.revision.clone(), editor.busy.clone());
     let navigation = Navigation::of(ctx);
     let project = props.project.open.project.id();
@@ -109,7 +111,7 @@ impl Component for ToolEditor {
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let p = ctx.props::<EditorProps>().clone();
-    let action = work::action(ctx);
+    let action = self.action.clone();
     let (checked, checking) = super::validation::checked(ctx, &self.fields, self.baseline.as_ref(), &p);
     let unchanged = self.fields.text() == self.text && self.baseline.is_some();
     let changed = self.baseline != p.entry;
@@ -271,6 +273,7 @@ impl ToolEditor {
       WidenProps {
         id: "tool-confirm",
         card: true,
+        automation: crate::mcp::input_gate::Guarded::PermissionWidening,
         title: ctx.t("tools.confirmTitle"),
         reasons: words.into(),
         confirm: ctx.t("tools.confirm"),

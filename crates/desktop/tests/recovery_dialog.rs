@@ -2,6 +2,8 @@
 //! nothing, with no action per run; uncommitted changes link to the run's Changes tab. The
 //! fixtures are test data only.
 
+extern crate lurq_legacy as lurq;
+
 use std::{
   path::PathBuf,
   sync::{

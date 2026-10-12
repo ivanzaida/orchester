@@ -29,7 +29,7 @@ fn connections_cli_is_added_from_the_search_path_and_checked() {
     return;
   }
   let folder = tempfile::tempdir().expect("a temporary folder");
-  write_codex(folder.path());
+  write_codex(folder.path(), VERSION);
   let mut path = vec![folder.path().to_path_buf()];
   path.extend(env::split_paths(&env::var_os("PATH").unwrap_or_default()));
   let status = Command::new(env::current_exe().expect("the test binary"))
@@ -55,8 +55,27 @@ fn add_codex() {
     seeded.text("connection-check-detail"),
     format!("Codex CLI {VERSION} · signed in")
   );
+  seeded.until("the completed check leaves the window settled", |s| {
+    !s.window.tree.needs_redraw()
+  });
   // The suggested name is numbered: the project has a Codex · Kontur.
   assert_eq!(value(&mut seeded, "connection-name"), "Codex · Kontur 2");
+  seeded.click("connection-kind-claude");
+  seeded.click("connection-kind-codex");
+  seeded.until("the current provider's check", |seeded| {
+    seeded.text("connection-check-detail") == format!("Codex CLI {VERSION} · signed in")
+  });
+  assert_eq!(value(&mut seeded, "connection-name"), "Codex · Kontur 2");
+  seeded.until("the selected provider settles", |s| !s.window.tree.needs_redraw());
+  let folder = env::split_paths(&env::var_os("PATH").expect("the child's search path"))
+    .next()
+    .expect("the stand-in directory");
+  write_codex(&folder, "999.0.1");
+  seeded.click("connection-recheck");
+  seeded.until("the refreshed program's actual version", |seeded| {
+    seeded.text("connection-check-detail") == "Codex CLI 999.0.1 · signed in"
+  });
+  seeded.until("Recheck leaves the window settled", |s| !s.window.tree.needs_redraw());
   seeded.set("connection-name", "Claude · Kontur");
   assert!(seeded.text("connection-form-reason").contains("already has this name"));
   seeded.set("connection-name", "Codex · local");
@@ -94,10 +113,10 @@ fn value(seeded: &mut Seeded, id: &str) -> String {
 
 /// A stand-in Codex in `folder`.
 #[cfg(windows)]
-fn write_codex(folder: &Path) -> PathBuf {
+fn write_codex(folder: &Path, version: &str) -> PathBuf {
   let program = folder.join("codex.cmd");
   let script = format!(
-    "@echo off\r\nif \"%1\"==\"--version\" (echo codex-cli {VERSION}& exit /b 0)\r\nif \"%1\"==\"login\" (echo Logged in using ChatGPT& exit /b 0)\r\nexit /b 1\r\n"
+    "@echo off\r\nif \"%1\"==\"--version\" (echo codex-cli {version}& exit /b 0)\r\nif \"%1\"==\"login\" (echo Logged in using ChatGPT& exit /b 0)\r\nexit /b 1\r\n"
   );
   std::fs::write(&program, script).expect("the stand-in is written");
   program
@@ -105,11 +124,11 @@ fn write_codex(folder: &Path) -> PathBuf {
 
 /// A stand-in Codex in `folder`.
 #[cfg(not(windows))]
-fn write_codex(folder: &Path) -> PathBuf {
+fn write_codex(folder: &Path, version: &str) -> PathBuf {
   use std::os::unix::fs::PermissionsExt;
   let program = folder.join("codex");
   let script = format!(
-    "#!/bin/sh\ncase \"$1\" in\n  --version) echo \"codex-cli {VERSION}\" ;;\n  login) echo \"Logged in using ChatGPT\" ;;\n  *) exit 1 ;;\nesac\n"
+    "#!/bin/sh\ncase \"$1\" in\n  --version) echo \"codex-cli {version}\" ;;\n  login) echo \"Logged in using ChatGPT\" ;;\n  *) exit 1 ;;\nesac\n"
   );
   std::fs::write(&program, script).expect("the stand-in is written");
   std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).expect("the stand-in runs");

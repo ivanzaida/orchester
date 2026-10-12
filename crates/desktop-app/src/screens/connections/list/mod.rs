@@ -73,6 +73,7 @@ impl DevtoolsInspectable for Asking {}
 
 pub struct ConnectionsScreen {
   /// Counts the readings asked for: each piece of work done, and Try again.
+  work: WorkAction,
   revision: Signal<u64>,
   running: Signal<Running>,
   /// The connection the last work ran on, whose failure its inspector says.
@@ -86,6 +87,7 @@ impl Component for ConnectionsScreen {
 
   fn create(ctx: &mut Ctx) -> Self {
     let screen = Self {
+      work: work::action(ctx),
       revision: ctx.signal(0),
       running: ctx.signal(Running(None)),
       last: ctx.signal(LastOn(None)),
@@ -95,15 +97,14 @@ impl Component for ConnectionsScreen {
         anchor: ctx.element_ref(),
       },
     };
-    let work = work::action(ctx);
+    let work = screen.work.clone();
     screen.follow(ctx, &work);
     screen
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let ListProps { project, view } = ctx.props::<ListProps>().clone();
-    // The work first, then the reading: the same places in every render.
-    let work = work::action(ctx);
+    let work = self.work.clone();
     // Read again after a Try again press, and when automation changed the project's connections.
     let revision = self.revision.get() + project.feed.outside.get().of(Outside::Connections);
     let loaded = data::load(ctx, project.open.repo_root.clone(), revision);

@@ -1,19 +1,8 @@
-//! Keeps MCP clients' window input away from a person-only control (*Let automation change agent
-//! permissions*, and the Connections page's question that confirms what a change widens). lurq's synthetic input
-//! reaches the same handlers as a person's, so the control cannot tell them apart; the app can, because every synthetic
-//! input arrives as a call of one of lurq's input tools. Three locks:
-//!
-//! - While a protected control is mounted, lurq itself denies its input tools ([`INPUT`]), checked on the event loop
-//!   when a call runs: a call queued before the control mounted, or one whose answer timed out and runs later, is
-//!   refused there too. The control denies them as it is created and allows them again when it is dropped.
-//! - The app's server refuses every `lurq_*` tool but those that only look ([`LOOKING`]) with `person_only` while a
-//!   protected control is mounted, whatever its target (an element, coordinates, keys to the focused control), so a
-//!   client reads why; a lurq tool this list does not know counts as input.
-//! - While a forwarded input call is in flight, a protected control takes no change that widens (turning its switch
-//!   off, which narrows, is always taken), and it takes none before it lived through one pass.
-//!
-//! Looking stays allowed, and so do the app's own tools: `navigate` can show Settings, but nothing can
-//! press its switch.
+//! Window input and application-owned permission consent are separate authorizations. Settings and unrelated
+//! sensitive confirmations always remain person-only; a classified setup widening may be answered under the
+//! stored permission opt-in (automatic approvals also need their separate opt-in). The server re-reads consent
+//! off the UI thread before forwarding input; lurq's event-loop denial and confirmation handlers recheck it.
+//! Looking stays allowed. Neither consent nor this gate grants window-control scopes or provider permissions.
 
 use std::sync::{
   Arc,
@@ -67,6 +56,10 @@ pub enum Guarded {
   PermissionsSetting,
   /// A Connections page's question that confirms what saving or turning on a server widens.
   WideningQuestion,
+  /// A domain setup widening covered by the human permission opt-in.
+  PermissionWidening,
+  /// Automatic approvals additionally require the separate approvals opt-in.
+  ApprovalWidening,
 }
 
 /// lurq's tools that send the window input or change it, which lurq denies while a protected control is
@@ -87,14 +80,20 @@ pub fn sends_input(tool: &str) -> bool {
 
 #[derive(Default)]
 struct Counts {
-  /// Protected controls mounted.
-  protected: AtomicUsize,
-  /// Of them, Connections pages' questions ([`Guarded::WideningQuestion`]).
-  questions: AtomicUsize,
+  controls: Mutex<Controls>,
+  workspace: Mutex<Option<orchester_workspace::workspace::Workspace>>,
   /// Window-input calls the server forwarded that have not answered.
   in_flight: AtomicUsize,
   /// lurq's control of its tools once the server started, and the tools the gate denied through it.
   tools: Mutex<Option<(McpHandle, Vec<&'static str>)>>,
+}
+
+#[derive(Default)]
+struct Controls {
+  settings: usize,
+  questions: usize,
+  permissions: usize,
+  approvals: usize,
 }
 
 /// Shared between the app's MCP server and the window. Clones share the same counts.
@@ -114,31 +113,94 @@ impl InputGate {
   /// Lets the gate deny lurq's input tools through `tools` while a protected control is mounted.
   pub fn attach(&self, tools: McpHandle) {
     *self.0.tools.lock() = Some((tools, Vec::new()));
+    self.refresh_tools();
   }
 
   /// Marks the protected control `what` as mounted until the returned guard is dropped; the first one makes lurq
   /// deny its input tools. Called on the event loop, which runs lurq's tool calls.
   pub fn protect(&self, what: Guarded) -> Protected {
-    if what == Guarded::WideningQuestion {
-      self.0.questions.fetch_add(1, Ordering::SeqCst);
+    self.count(what, true);
+    self.refresh_tools();
+    Protected(self.clone(), what)
+  }
+
+  /// Connects the session's stored authority without broadening window-control scopes.
+  pub fn bind_permissions(&self, workspace: orchester_workspace::workspace::Workspace) {
+    *self.0.workspace.lock() = Some(workspace);
+    self.refresh_tools();
+  }
+
+  /// Rechecked at delivery, so a forwarded call cannot widen after consent was revoked.
+  pub fn widening_allowed(&self, what: Guarded) -> bool {
+    let workspace = self.0.workspace.lock();
+    let Some(workspace) = workspace.as_ref() else {
+      return false;
+    };
+    match what {
+      Guarded::PermissionWidening => workspace.automation_permission_consent(),
+      Guarded::ApprovalWidening => workspace.automation_permission_consent() && workspace.automation_approval_consent(),
+      Guarded::PermissionsSetting | Guarded::WideningQuestion => false,
     }
-    if self.0.protected.fetch_add(1, Ordering::SeqCst) == 0
-      && let Some((tools, denied)) = self.0.tools.lock().as_mut()
-    {
-      for tool in INPUT {
-        if !denied.contains(tool) {
-          tools.deny_tool(*tool);
-          denied.push(tool);
+  }
+
+  fn count(&self, what: Guarded, add: bool) {
+    let mut controls = self.0.controls.lock();
+    let count = match what {
+      Guarded::PermissionsSetting => &mut controls.settings,
+      Guarded::WideningQuestion => &mut controls.questions,
+      Guarded::PermissionWidening => &mut controls.permissions,
+      Guarded::ApprovalWidening => &mut controls.approvals,
+    };
+    if add {
+      *count += 1;
+    } else {
+      *count -= 1;
+    }
+  }
+
+  /// Applies current consent to lurq's event-loop tool denial too, including already queued calls.
+  pub fn refresh_tools(&self) {
+    let protecting = self.protecting();
+    if let Some((tools, denied)) = self.0.tools.lock().as_mut() {
+      if protecting {
+        for tool in INPUT {
+          if !denied.contains(tool) {
+            tools.deny_tool(*tool);
+            denied.push(tool);
+          }
+        }
+      } else {
+        for tool in denied.drain(..) {
+          tools.allow_tool(tool);
         }
       }
     }
-    Protected(self.clone(), what)
+  }
+
+  async fn refresh_consent(&self) {
+    let workspace = self.0.workspace.lock().clone();
+    if let Some(workspace) = workspace {
+      let read = workspace.clone();
+      let result = orchester_workspace::background::run(move || {
+        workspace.automation_changes_permissions()?;
+        workspace.automation_answers_approvals()?;
+        Ok::<(), orchester_store::StoreError>(())
+      })
+      .await;
+      if !matches!(result, Ok(Ok(()))) {
+        read.invalidate_automation_consent();
+        // Failed background work also invalidates an earlier successful authority read.
+        tracing::warn!("automation consent read failed; window widening remains protected");
+      }
+    }
+    self.refresh_tools();
   }
 
   /// Why window input is refused now: the protected controls mounted, in words for the client.
   fn refusal(&self) -> String {
-    let questions = self.0.questions.load(Ordering::SeqCst);
-    let settings = self.0.protected.load(Ordering::SeqCst).saturating_sub(questions);
+    let controls = self.0.controls.lock();
+    let questions = controls.questions + controls.permissions + controls.approvals;
+    let settings = controls.settings;
     let mut words: Vec<&str> = Vec::new();
     if settings > 0 {
       words.push(SETTING_REFUSAL);
@@ -152,7 +214,11 @@ impl InputGate {
 
   /// Whether a protected control is mounted.
   pub fn protecting(&self) -> bool {
-    self.0.protected.load(Ordering::SeqCst) > 0
+    let controls = self.0.controls.lock();
+    controls.settings > 0
+      || controls.questions > 0
+      || (controls.permissions > 0 && !self.widening_allowed(Guarded::PermissionWidening))
+      || (controls.approvals > 0 && !self.widening_allowed(Guarded::ApprovalWidening))
   }
 
   /// Whether an MCP client's window input is being applied now: a change a protected control hears now
@@ -175,19 +241,8 @@ pub struct Protected(InputGate, Guarded);
 
 impl Drop for Protected {
   fn drop(&mut self) {
-    if self.1 == Guarded::WideningQuestion {
-      self.0.0.questions.fetch_sub(1, Ordering::SeqCst);
-    }
-    // Only what the gate denied is allowed again. lurq cannot say which tools are denied otherwise; the
-    // app's configuration denies none (its scopes decide), and the gate is the only one that denies at run
-    // time.
-    if self.0.0.protected.fetch_sub(1, Ordering::SeqCst) == 1
-      && let Some((tools, denied)) = self.0.0.tools.lock().as_mut()
-    {
-      for tool in denied.drain(..) {
-        tools.allow_tool(tool);
-      }
-    }
+    self.0.count(self.1, false);
+    self.0.refresh_tools();
   }
 }
 
@@ -228,6 +283,7 @@ impl ServerHandler for GuardedTools {
     if !sends_input(&request.name) {
       return self.tools.call_tool(request, context).await;
     }
+    self.gate.refresh_consent().await;
     if self.gate.protecting() {
       tracing::info!(tool = %request.name, "window input refused while a person-only control shows");
       let refusal = serde_json::json!({ "code": "person_only", "message": self.gate.refusal() });

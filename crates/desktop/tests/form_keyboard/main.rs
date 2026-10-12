@@ -5,6 +5,8 @@
 //! when the form can be submitted. The mouse's side buttons and the history shortcuts go back
 //! and forward through the screens.
 
+extern crate lurq_legacy as lurq;
+
 mod agent_permissions;
 mod agent_slots;
 mod agents;

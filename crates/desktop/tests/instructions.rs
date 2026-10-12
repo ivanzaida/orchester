@@ -2,6 +2,8 @@
 //! choices, and the preview of the prompt a rule takes part in, with its draft in place of its
 //! published version.
 
+extern crate lurq_legacy as lurq;
+
 use std::{collections::BTreeSet, fs, time::Duration};
 
 use orchester_core::{

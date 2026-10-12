@@ -3,6 +3,8 @@
 //! the port Orchester's own MCP server bound, or that it did not start, and its hint where lurq's
 //! server for the window listens, never a token.
 
+extern crate lurq_legacy as lurq;
+
 use std::{
   path::PathBuf,
   time::{Instant, SystemTime},
