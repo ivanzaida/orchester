@@ -63,3 +63,72 @@ fn skills_window_repository_files_confirmation_locks_window_input() {
   s.click_by_person("skill-files-confirm-confirm");
   s.until("enabled", |_| db.repository_agent_files().expect("setting").is_on());
 }
+
+#[test]
+fn skills_window_publish_retry_reasks_a_person_and_publishes_after_the_failure_is_resolved() {
+  let (mut s, project, repo) = controlled();
+  s.launch
+    .as_ref()
+    .expect("launch")
+    .workspace()
+    .expect("workspace")
+    .set_automation_changes_permissions(true)
+    .expect("opt in");
+  let body = Skill::new(
+    "Check code".into(),
+    "# Check code".into(),
+    Vec::new(),
+    InstructionScope::Project,
+  )
+  .expect("body");
+  let entry = editor::save_in(&repo, None, "checks", &body).expect("draft");
+  s.ok(
+    "navigate",
+    &json!({"route":"skills","project":project.to_string(),"skill":entry.id.to_string()}),
+  );
+  s.until("editor", |s| s.shows("skill-publish"));
+  s.click_by_client("skill-publish").expect("may ask");
+  s.until("question", |s| s.shows("skill-confirm-confirm"));
+  let changed = Skill::new(
+    "Changed outside".into(),
+    "# Changed outside".into(),
+    Vec::new(),
+    InstructionScope::Project,
+  )
+  .expect("body");
+  let outside = editor::save_in(&repo, Some(&entry), "checks", &changed).expect("competing save");
+  s.click_by_person("skill-confirm-confirm");
+  s.until("publication failed", |s| s.shows("skill-save-error"));
+  let db = ProjectDb::open(&repo).expect("db");
+  assert!(db.latest_version::<Skill>(entry.id).expect("version").is_none());
+  assert_eq!(
+    db.draft::<Skill>(entry.id).expect("draft").expect("kept").body(),
+    &changed
+  );
+  editor::save_in(&repo, Some(&outside), "checks", &body).expect("resolve failure");
+  s.click_by_client("skill-retry").expect("retry may ask");
+  s.until("retry confirmation", |s| s.shows("skill-confirm-confirm"));
+  assert!(db.latest_version::<Skill>(entry.id).expect("version").is_none());
+  assert_eq!(
+    s.click_by_client("skill-confirm-confirm")
+      .expect_err("retry is person only")["code"],
+    "person_only"
+  );
+  s.click_by_person("skill-confirm-keep");
+  s.until("keep draft", |s| !s.shows("skill-confirm-confirm"));
+  assert!(db.latest_version::<Skill>(entry.id).expect("version").is_none());
+  s.click_by_client("skill-retry").expect("retry may ask again");
+  s.until("another retry confirmation", |s| s.shows("skill-confirm-confirm"));
+  s.click_by_person("skill-confirm-confirm");
+  s.until("retry publishes a version", |_| {
+    db.latest_version::<Skill>(entry.id).expect("version").is_some()
+  });
+  s.until("failure cleared", |s| !s.shows("skill-save-error"));
+  let version = db
+    .latest_version::<Skill>(entry.id)
+    .expect("version")
+    .expect("published");
+  assert_eq!(version.number().get(), 1);
+  assert_eq!(version.body(), &body);
+  assert!(db.draft::<Skill>(entry.id).expect("draft").is_none());
+}

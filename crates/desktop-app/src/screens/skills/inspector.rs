@@ -84,7 +84,7 @@ impl Component for Inspector {
           &format!("skill-remove-file-{i}"),
           file.path.as_str(),
           &ctx.t("skills.removeFile"),
-          move || files.update(|f| f.0.retain(|f| f.path != path)),
+          (!p.busy && !state.is_pending()).then_some(move || files.update(|f| f.0.retain(|f| f.path != path))),
         );
         Column::new().width(Dimension::Pct(100.0)).child(row).child(
           Text::new(&message_text(ctx, &orchester_workspace::display::byte_size(file.size)))

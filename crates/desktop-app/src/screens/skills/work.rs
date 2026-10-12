@@ -25,6 +25,12 @@ pub enum Change {
   },
   Publish(SkillEntry),
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Operation {
+  Save,
+  Publish,
+}
+impl DevtoolsInspectable for Operation {}
 pub type Work = FutureAction<(OpenProject, Change), Saved, Message>;
 pub fn action(ctx: &mut Ctx) -> Work {
   let activity = Services::of(ctx).activity;

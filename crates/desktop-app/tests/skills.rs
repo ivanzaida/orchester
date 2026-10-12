@@ -269,8 +269,29 @@ fn skills_removing_a_reference_changes_only_the_draft() {
   )
   .expect("body");
   let saved = editor::save_in(&s.repo, Some(&before), "checks", &body).expect("save");
-  editor::publish_in(&s.repo, &saved, true).expect("publish");
   s.go(ProjectPage::Skill(id));
+  s.click("skill-publish");
+  s.window.until("publish confirmation", |w| {
+    w.tree.get_element_by_id("skill-confirm-confirm").is_some()
+  });
+  s.click("skill-confirm-confirm");
+  s.click("skill-remove-file-0");
+  assert!(
+    s.text("skill-files").contains("notes.md"),
+    "removal stays locked during the write"
+  );
+  let root = s.repo.clone();
+  s.window.until("reference published", move |_| {
+    ProjectSkills::load_in(&root)
+      .expect("skills")
+      .entry(id)
+      .is_some_and(|e| e.state.published().is_some())
+  });
+  s.window.until("publication acknowledged", |w| {
+    w.texts("skill-save-status")
+      .is_some_and(|t| t.join(" ").contains("Published"))
+  });
+  assert_eq!(s.entry(id).body, saved.body);
   s.click("skill-remove-file-0");
   let root = s.repo.clone();
   s.window.until("reference removal saved", move |_| {
@@ -362,8 +383,95 @@ fn skills_grouped_scope_picker_saves_an_agent_step_and_filters_the_library() {
   });
   s.settle(id, "Run checks before handing over.");
   s.go(ProjectPage::Skills);
+  s.window.until("library reflects the saved scope", |w| {
+    w.texts("skills-list").is_some_and(|t| t.join(" ").contains("Delivery"))
+  });
   s.click("skills-tab-Project");
   assert!(s.text("skills-list").contains("No skills in this scope"));
   s.click("skills-tab-Pipelines");
   assert!(s.text("skills-list").contains("Delivery"));
+}
+
+#[test]
+fn skills_new_scope_without_a_name_asks_before_leaving_and_reverting_clears_the_guard() {
+  use orchester_core::{
+    name::Name,
+    resource::{Pipeline, Slug},
+    time::Timestamp,
+  };
+  let mut s = Skills::new();
+  let mut db = ProjectDb::open(&s.repo).expect("db");
+  db.create_resource(
+    Slug::new("delivery").expect("slug"),
+    Name::new("Delivery").expect("name"),
+    &Pipeline::new(Vec::new()).expect("pipeline"),
+    Timestamp::now(),
+  )
+  .expect("pipeline");
+  s.go(ProjectPage::NewSkill);
+  s.click("skill-scope");
+  s.click("skill-scope-option-1");
+  s.window
+    .navigation()
+    .go(Route::Project(project_id(), ProjectPage::Skills));
+  s.window.pass();
+  assert!(s.text("skill-leave-question").contains("unsaved"));
+  assert!(ProjectSkills::load_in(&s.repo).expect("skills").entries.is_empty());
+  s.click("skill-leave-keep");
+  assert!(s.text("skill-scope").contains("Delivery"));
+  s.click("skill-scope");
+  s.click("skill-scope-option-0");
+  s.go(ProjectPage::Skills);
+  assert!(s.window.tree.get_element_by_id("skills-empty").is_some());
+  assert!(s.window.tree.get_element_by_id("skill-leave-question").is_none());
+}
+#[test]
+fn skills_clearing_all_existing_fields_still_asks_before_leaving() {
+  let mut s = Skills::new();
+  let id = s.seed("checks", false);
+  s.go(ProjectPage::Skill(id));
+  s.set("skill-name", "");
+  s.set("skill-description", "");
+  s.set("skill-body", "");
+  s.window
+    .navigation()
+    .go(Route::Project(project_id(), ProjectPage::Skills));
+  s.window.pass();
+  assert!(s.text("skill-leave-question").contains("unsaved"));
+  assert_eq!(s.entry(id).name.as_ref(), "checks");
+  s.click("skill-leave-keep");
+  assert!(s.window.tree.get_element_by_id("skill-editor").is_some());
+  s.window
+    .navigation()
+    .go(Route::Project(project_id(), ProjectPage::Skills));
+  s.window.pass();
+  s.click("skill-leave-confirm");
+  s.window
+    .until("library", |w| w.tree.get_element_by_id("skills-list").is_some());
+}
+
+#[test]
+fn skills_save_retry_saves_the_local_draft_without_a_publish_question() {
+  let mut s = Skills::new();
+  let id = s.seed("checks", false);
+  s.go(ProjectPage::Skill(id));
+  let before = s.entry(id);
+  let changed = Skill::new(
+    "Outside".into(),
+    "# Outside".into(),
+    Vec::new(),
+    InstructionScope::Project,
+  )
+  .expect("body");
+  let outside = editor::save_in(&s.repo, Some(&before), "checks", &changed).expect("competing save");
+  s.set("skill-description", "My local draft.");
+  s.window.until("save failed", |w| {
+    w.tree.get_element_by_id("skill-save-error").is_some()
+  });
+  editor::save_in(&s.repo, Some(&outside), "checks", &before.body).expect("resolve conflict");
+  s.click("skill-retry");
+  assert!(s.window.tree.get_element_by_id("skill-confirm-confirm").is_none());
+  s.settle(id, "My local draft.");
+  assert!(s.window.tree.get_element_by_id("skill-save-error").is_none());
+  assert!(s.entry(id).state.published().is_none());
 }

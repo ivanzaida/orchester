@@ -66,6 +66,7 @@ pub struct Editor {
   pub files: Signal<Files>,
   baseline: Signal<Baseline>,
   action: Work,
+  operation: Signal<work::Operation>,
   asking: Signal<bool>,
   submitted: Signal<bool>,
   dirty: Signal<bool>,
@@ -92,6 +93,7 @@ impl Component for Editor {
       leave,
       baseline: ctx.signal(Baseline(p.entry.clone())),
       action: work::action(ctx),
+      operation: ctx.signal(work::Operation::Save),
       asking: ctx.signal(false),
       submitted: ctx.signal(false),
     };
@@ -127,7 +129,7 @@ impl Component for Editor {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let p = ctx.props::<Props>().clone();
     let baseline = self.baseline.get().0;
-    let parsed = self.parsed(&p);
+    let (parsed, edits) = self.form_state(&p);
     let state = self.action.state().get();
     let dirty = parsed.as_ref().is_ok_and(|body| {
       baseline
@@ -147,9 +149,7 @@ impl Component for Editor {
       self.save(&p, parsed.as_ref().expect("dirty means parsing passed").clone());
     }
     let busy = self.submitted.get() || state.is_pending();
-    let invalid_edits = parsed.is_err()
-      && (!self.name.get().is_empty() || !self.description.get().is_empty() || !self.body.get().is_empty());
-    let dirty_or_invalid = dirty || invalid_edits || busy;
+    let dirty_or_invalid = edits || busy;
     if self.dirty.get_untracked() != dirty_or_invalid {
       self.dirty.set(dirty_or_invalid);
     }
@@ -194,17 +194,20 @@ impl Component for Editor {
   }
 }
 impl Editor {
-  fn parsed(&self, p: &Props) -> Result<Skill, Message> {
-    orchester_workspace::skills::editor::SkillForm {
+  fn form_state(&self, p: &Props) -> (Result<Skill, Message>, bool) {
+    let form = orchester_workspace::skills::editor::SkillForm {
       name: &self.name.get(),
       description: &self.description.get(),
       body: &self.body.get(),
       files: self.files.get().0,
       scope: self.scope.get().0,
-    }
-    .skill(&p.page.data, self.baseline.get().0.as_ref().map(|e| e.id))
+    };
+    let baseline = self.baseline.get().0;
+    let edits = form.has_edits(baseline.as_ref());
+    (form.skill(&p.page.data, baseline.as_ref().map(|e| e.id)), edits)
   }
   fn save(&self, p: &Props, body: Skill) {
+    self.operation.set(work::Operation::Save);
     self.submitted.set(true);
     self.action.run((
       p.page.project.open.clone(),
@@ -248,7 +251,7 @@ impl Editor {
         button.on_click(move || asking.set(true))
       }
     } else {
-      let body = self.parsed(p);
+      let body = self.form_state(p).0;
       let editor = self.action.clone();
       let open = p.page.project.open.clone();
       let name = self.name.get();
@@ -384,6 +387,7 @@ impl Editor {
     let open = p.page.project.open.clone();
     let entry = entry.cloned();
     let submitted = self.submitted.clone();
+    let operation = self.operation.clone();
     ctx.mount_keyed::<WidenConfirm>(
       "skill-confirm",
       WidenProps {
@@ -403,6 +407,7 @@ impl Editor {
         on_keep: Arc::new(move || keep.set(false)),
         on_confirm: Arc::new(move || {
           if let Some(entry) = &entry {
+            operation.set(work::Operation::Publish);
             submitted.set(true);
             confirm.set(false);
             action.run((open.clone(), Change::Publish(entry.clone())));
@@ -443,14 +448,20 @@ impl Editor {
     let state = self.action.state().get();
     let error = state.error.as_ref().filter(|_| !state.is_pending())?;
     let baseline = self.baseline.get().0;
-    let parsed = self.parsed(p);
+    let parsed = self.form_state(p).0;
     let action = self.action.clone();
     let before = baseline;
     let name = self.name.get();
     let body = parsed;
     let open = p.page.project.open.clone();
     let submitted = self.submitted.clone();
+    let operation = self.operation.clone();
+    let asking = self.asking.clone();
     let retry = ActionButton::new("skill-retry", ButtonKind::Secondary, ctx.t("skills.retry")).on_click(move || {
+      if operation.get_untracked() == work::Operation::Publish {
+        asking.set(true);
+        return;
+      }
       if let Ok(body) = &body {
         submitted.set(true);
         action.run((

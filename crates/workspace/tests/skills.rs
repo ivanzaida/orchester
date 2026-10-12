@@ -140,3 +140,48 @@ fn skills_tool_step_scopes_are_visible_but_cannot_be_selected() {
     "skills.editorErrors.scopeUnavailable"
   );
 }
+
+#[test]
+fn skills_unsaved_fields_are_detected_before_name_validation() {
+  use editor::SkillForm;
+  let (repo, _db) = project();
+  let data = EditorData::load_in(repo.path()).expect("data");
+  let path = repo.path().join("notes.md");
+  fs::write(&path, "Reference text").expect("file");
+  let added = editor::add_file_in(repo.path(), &path, &[]).expect("reference");
+  let mut form = SkillForm {
+    name: "",
+    description: "",
+    body: "",
+    files: Vec::new(),
+    scope: InstructionScope::Project,
+  };
+  assert!(!form.has_edits(None));
+  form.files.push(added);
+  assert!(form.has_edits(None), "reference-only changes must be kept");
+  assert_eq!(
+    form.skill(&data, None).expect_err("blank name").key,
+    "skills.editorErrors.nameRequired"
+  );
+  let mut form = SkillForm {
+    name: "",
+    description: "",
+    body: "",
+    files: Vec::new(),
+    scope: InstructionScope::Pipeline {
+      pipeline: orchester_core::id::ResourceId::generate(),
+    },
+  };
+  assert!(form.has_edits(None), "scope-only changes must be kept");
+  form.scope = InstructionScope::Project;
+  assert!(!form.has_edits(None), "reverting every field clears the leave guard");
+  let before = editor::save_in(repo.path(), None, "checks", &skill("Check", "Run checks")).expect("draft");
+  assert!(
+    form.has_edits(Some(&before)),
+    "clearing an existing form remains an edit"
+  );
+  form.name = &before.name;
+  form.description = before.body.description();
+  form.body = before.body.body();
+  assert!(!form.has_edits(Some(&before)));
+}

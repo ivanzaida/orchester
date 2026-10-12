@@ -231,6 +231,22 @@ pub struct SkillForm<'a> {
   pub scope: InstructionScope,
 }
 impl SkillForm<'_> {
+  /// Compare all raw fields before validation, including a new skill's files and scope.
+  pub fn has_edits(&self, before: Option<&SkillEntry>) -> bool {
+    if let Some(before) = before {
+      self.name != before.name.as_ref()
+        || self.description != before.body.description()
+        || self.body != before.body.body()
+        || self.files != before.body.files()
+        || &self.scope != before.body.scope()
+    } else {
+      !self.name.is_empty()
+        || !self.description.is_empty()
+        || !self.body.is_empty()
+        || !self.files.is_empty()
+        || self.scope != InstructionScope::Project
+    }
+  }
   pub fn skill(self, data: &EditorData, id: Option<ResourceId>) -> Result<Skill, Message> {
     data.validate_name(id, self.name)?;
     Skill::new(
