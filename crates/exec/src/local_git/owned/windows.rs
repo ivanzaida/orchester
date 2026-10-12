@@ -18,8 +18,8 @@ use windows_sys::Win32::{
   Foundation::{GENERIC_READ, GENERIC_WRITE},
   Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, DELETE, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
-    FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, FileDispositionInfo,
-    GetFileInformationByHandle, SetFileInformationByHandle,
+    FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_READ, FILE_SHARE_WRITE, FileDispositionInfo, GetFileInformationByHandle,
+    SetFileInformationByHandle,
   },
 };
 
@@ -68,7 +68,7 @@ impl Directory {
 
   fn at(path: &Path, parent: Option<Arc<Self>>) -> Result<Arc<Self>, LocalGitError> {
     let file = OpenOptions::new()
-      .access_mode(FILE_READ_ATTRIBUTES)
+      .access_mode(GENERIC_READ)
       .share_mode(FILE_SHARE_READ)
       .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
       .open(path)
@@ -192,7 +192,7 @@ pub(super) fn pin_store_entry(directory: &Arc<Directory>, name: &OsStr, create: 
   let path = directory.path.join(name);
   let open = || {
     OpenOptions::new()
-      .access_mode(FILE_READ_ATTRIBUTES)
+      .access_mode(GENERIC_READ)
       .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
       .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
       .open(&path)
@@ -203,7 +203,7 @@ pub(super) fn pin_store_entry(directory: &Arc<Directory>, name: &OsStr, create: 
       match OpenOptions::new()
         .write(true)
         .create_new(true)
-        .access_mode(FILE_READ_ATTRIBUTES)
+        .access_mode(GENERIC_READ)
         .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
         .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
         .open(&path)

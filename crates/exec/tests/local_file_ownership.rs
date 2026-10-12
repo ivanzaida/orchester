@@ -161,3 +161,15 @@ fn local_integration_sqlite_parent_database_and_sidecars_are_pinned_before_the_v
   drop(guard);
   fs::rename(metadata.join("orchester.db"), metadata.join("released.db")).expect("pin releases normally");
 }
+
+#[cfg(windows)]
+#[test]
+fn local_integration_parent_chain_alone_prevents_rename_or_removal_before_git_or_store_opens() {
+  let dir = directory();
+  fs::create_dir_all(dir.path().join("parent/child")).expect("private directory");
+  let guard = orchester_exec::local_git::owned::Directory::open(&dir.path().join("parent/child")).expect("held chain");
+  assert!(fs::rename(dir.path().join("parent"), dir.path().join("replacement")).is_err());
+  assert!(fs::remove_dir(dir.path().join("parent/child")).is_err());
+  drop(guard);
+  fs::rename(dir.path().join("parent"), dir.path().join("released")).expect("ownership releases normally");
+}
