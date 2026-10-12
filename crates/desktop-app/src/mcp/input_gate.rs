@@ -44,7 +44,7 @@ pub const LOOKING: &[&str] = &[
 const SETTING_REFUSAL: &str = "A person changes this setting in the window: while Settings shows Let automation \
   change agent permissions, window input from MCP clients (clicks, keys, values, resizing, menus) is refused.";
 /// What a refused client reads while a Connections page asks a person to confirm what a change widens.
-const QUESTION_REFUSAL: &str = "A person answers this in the window: while a Connections page, Agents page, Tools page, Secrets page, Project settings or Pipelines page asks to \
+const QUESTION_REFUSAL: &str = "A person answers this in the window: while Local integration, a Connections page, Agents page, Tools page, Secrets page, Project settings or Pipelines page asks to \
   confirm what a change lets agents do (in any tab, until it is answered or the page is left), \
   window input from MCP clients (clicks, keys, values, resizing, menus) is refused.";
 const STILL_AVAILABLE: &str = "Looking at the window and the app's own tools stay available.";
@@ -56,6 +56,8 @@ pub enum Guarded {
   PermissionsSetting,
   /// A Connections page's question that confirms what saving or turning on a server widens.
   WideningQuestion,
+  /// Exact-result merge, checkout preparation, abort and recovery removal always belong to a person.
+  LocalIntegrationQuestion,
   /// A domain setup widening covered by the human permission opt-in.
   PermissionWidening,
   /// Automatic approvals additionally require the separate approvals opt-in.
@@ -139,7 +141,7 @@ impl InputGate {
     match what {
       Guarded::PermissionWidening => workspace.automation_permission_consent(),
       Guarded::ApprovalWidening => workspace.automation_permission_consent() && workspace.automation_approval_consent(),
-      Guarded::PermissionsSetting | Guarded::WideningQuestion => false,
+      Guarded::PermissionsSetting | Guarded::WideningQuestion | Guarded::LocalIntegrationQuestion => false,
     }
   }
 
@@ -147,7 +149,7 @@ impl InputGate {
     let mut controls = self.0.controls.lock();
     let count = match what {
       Guarded::PermissionsSetting => &mut controls.settings,
-      Guarded::WideningQuestion => &mut controls.questions,
+      Guarded::WideningQuestion | Guarded::LocalIntegrationQuestion => &mut controls.questions,
       Guarded::PermissionWidening => &mut controls.permissions,
       Guarded::ApprovalWidening => &mut controls.approvals,
     };

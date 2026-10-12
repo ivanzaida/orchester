@@ -1,0 +1,266 @@
+//! ORC-24 native local integration (zMOBO): one page, inline decisions, app-local scrolling.
+
+mod controls;
+mod fields;
+mod files;
+mod resolver;
+mod words;
+mod work;
+
+use std::{
+  sync::{Arc, atomic::AtomicBool},
+  time::Duration,
+};
+
+use lurq::{
+  app::{
+    component::{Component, DevtoolsInspectable},
+    ctx::{Ctx, Interval},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
+  },
+  components::{Column, Row, ScrollVertical, Text},
+  core::Signal,
+  node::{Element, dimension::Dimension},
+};
+use orchester_core::{
+  integration::local::{LocalPath, LocalPhase},
+  run::RunStatus,
+};
+use orchester_workspace::{
+  background,
+  tasks::local_integration::{IntegrationView, Preview},
+};
+use work::{Outcome, Problem, Work};
+
+use super::TaskContext;
+use crate::{
+  services::Services,
+  ui::{
+    notice::{Notice, NoticeTone},
+    state::loading,
+  },
+};
+
+/// Action inspector of YxF6B / OoP6s; at 960 it remains beside evidence as s4gj9 draws.
+const INSPECTOR_WIDTH: f32 = 336.0;
+const NARROW_INSPECTOR_WIDTH: f32 = 256.0;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Mode {
+  Review,
+  Commit { tree: String, preview: Preview },
+  Preserve,
+  Abort,
+  Cleanup,
+  Cancel,
+}
+impl DevtoolsInspectable for Mode {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Shown(Arc<IntegrationView>);
+impl DevtoolsInspectable for Shown {}
+
+pub fn tab(ctx: &mut Ctx, task: &TaskContext) -> Element {
+  if task
+    .detail
+    .run
+    .as_ref()
+    .is_none_or(|run| run.run.status() != &RunStatus::Succeeded)
+  {
+    return Notice::new(
+      "local-not-ready",
+      NoticeTone::Warning,
+      ctx.t("local_integration.notReady"),
+    )
+    .into();
+  }
+  ctx.mount_keyed::<LocalPage>("task-local-integration", task.clone())
+}
+
+struct LocalPage {
+  revision: Signal<u64>,
+  reading: Signal<bool>,
+  editor_dirty: Signal<bool>,
+  selected: Signal<Vec<LocalPath>>,
+  shown_file: Signal<Option<LocalPath>>,
+  mode: Signal<Mode>,
+  message: Signal<String>,
+  name: Signal<String>,
+  work: Work,
+  stop: Arc<AtomicBool>,
+  _poll: Interval,
+}
+
+impl Component for LocalPage {
+  type Props = TaskContext;
+
+  fn create(ctx: &mut Ctx) -> Self {
+    let revision = ctx.signal(0);
+    let changes = revision.clone();
+    let reading = ctx.signal(false);
+    let pending = reading.clone();
+    let poll = ctx.create_interval(Duration::from_secs(2), move || {
+      if !pending.get_untracked() {
+        changes.update(|value| *value += 1);
+      }
+    });
+    let mode = ctx.signal(Mode::Review);
+    let action = work::action(ctx);
+    let (completed_mode, completed_revision) = (mode.clone(), revision.clone());
+    ctx.watch(&action.state(), move |state| {
+      if !state.is_pending()
+        && state.error.is_none()
+        && let Some(outcome) = &state.data
+      {
+        completed_mode.set(match outcome {
+          Outcome::CommitReview { tree, preview } => Mode::Commit {
+            tree: tree.clone(),
+            preview: preview.clone(),
+          },
+          Outcome::Changed => Mode::Review,
+        });
+        completed_revision.update(|value| *value += 1);
+      }
+    });
+    Self {
+      revision,
+      reading,
+      editor_dirty: ctx.signal(false),
+      selected: ctx.signal(Vec::new()),
+      shown_file: ctx.signal(None),
+      mode,
+      message: Signal::new(String::new()),
+      name: Signal::new(String::new()),
+      work: action,
+      stop: Arc::new(AtomicBool::new(false)),
+      _poll: poll,
+    }
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let task = ctx.props::<TaskContext>().clone();
+    let Some(run) = &task.detail.run else {
+      return Element::from(Column::new());
+    };
+    let root = task.project.open.repo_root.clone();
+    let vault = Services::of(ctx).vault;
+    let read = ctx
+      .future(
+        (root, run.id(), self.revision.get(), self.shown_file.get()),
+        move |(root, run, _, selected)| {
+          let vault = vault.clone();
+          async move {
+            background::run(move || {
+              orchester_workspace::tasks::local_integration::read(&root, run, selected.as_ref(), vault.get())
+                .map(|view| Shown(Arc::new(view)))
+                .map_err(work::problem)
+            })
+            .await
+            .map_err(|_| Problem("local_integration.error.io"))?
+          }
+        },
+      )
+      .state()
+      .get();
+    self.reading.set(read.is_pending());
+    let Some(shown) = read.data else {
+      return match read.error {
+        Some(reason) => Element::from(Notice::new("local-read-error", NoticeTone::Danger, ctx.t(reason.0))),
+        None => loading("local-loading", &ctx.t("local_integration.loading")).into(),
+      };
+    };
+    let view = &shown.0;
+    let busy = self.work.state().get().is_pending() || task.jobs.run(run.id()).busy();
+    let narrow = ctx.breakpoint().is_none();
+    let body = self.body(ctx, &task, view, busy, narrow);
+    Element::from(
+      ScrollVertical::new(body)
+        .id("local-integration-scroll")
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Pct(100.0))
+        .flex(1.0),
+    )
+  }
+}
+
+impl LocalPage {
+  fn body(&self, ctx: &mut Ctx, task: &TaskContext, view: &IntegrationView, busy: bool, narrow: bool) -> Element {
+    let run = task
+      .detail
+      .run
+      .as_ref()
+      .expect("the mounted local page has a succeeded run");
+    let identities = ctx.t_args(
+      "local_integration.identities",
+      [
+        ("source", run.run.branch().as_str()),
+        ("target", view.checkout.branch.as_str()),
+        ("path", view.checkout.root.as_str()),
+        ("head", view.checkout.head.as_str()),
+      ],
+    );
+    let phase = view.operation.as_ref().map_or(LocalPhase::Review, |op| op.phase());
+    let mut left = Column::new()
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .spacing(SpacingSize::Md)
+      .child(
+        Notice::new("local-phase", phase_tone(phase), ctx.t(controls::phase_title(phase)))
+          .body(ctx.t(controls::phase_body(phase))),
+      );
+    if let Some(problem) = self.work.state().get().error {
+      left = left.child(Notice::new("local-work-error", NoticeTone::Danger, ctx.t(problem.0)));
+    }
+    if busy {
+      left = left.child(loading(
+        "local-working",
+        &ctx.t(if self.stop.load(std::sync::atomic::Ordering::Acquire) {
+          "local_integration.stopping"
+        } else {
+          "local_integration.busy"
+        }),
+      ));
+    }
+    left = if matches!(phase, LocalPhase::TaskConflicts | LocalPhase::RestoreConflicts) {
+      left.child(resolver::mount(ctx, self, task, view, busy, narrow))
+    } else {
+      left.child(files::content(ctx, self, view, busy))
+    };
+    let side = controls::inspector(ctx, self, task, view, busy).width(Dimension::Px(if narrow {
+      NARROW_INSPECTOR_WIDTH
+    } else {
+      INSPECTOR_WIDTH
+    }));
+    Column::new()
+      .id("task-local-integration")
+      .width(Dimension::Pct(100.0))
+      .padding(if narrow { SpacingSize::Xl } else { SpacingSize::Section })
+      .spacing(SpacingSize::Md)
+      .child(
+        Text::new(&identities)
+          .variant(TypographyStyle::Mono)
+          .color(PaletteColor::TextMuted),
+      )
+      .child(Text::new(&ctx.t("local_integration.phases")).variant(TypographyStyle::Description))
+      .child(
+        Row::new()
+          .width(Dimension::Pct(100.0))
+          .spacing(SpacingSize::Xl)
+          .child(left)
+          .child(side),
+      )
+      .into()
+  }
+}
+fn phase_tone(phase: LocalPhase) -> NoticeTone {
+  match phase {
+    LocalPhase::Complete | LocalPhase::RestorationVerified => NoticeTone::Success,
+    LocalPhase::TaskConflicts => NoticeTone::Danger,
+    LocalPhase::Review
+    | LocalPhase::RestoreConflicts
+    | LocalPhase::MergedAwaitingRestore
+    | LocalPhase::Paused
+    | LocalPhase::NeedsReconciliation => NoticeTone::Warning,
+    _ => NoticeTone::Info,
+  }
+}

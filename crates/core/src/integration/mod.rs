@@ -8,6 +8,7 @@
 mod cleanup;
 mod forgotten;
 mod git;
+pub mod local;
 mod merge;
 mod recorded;
 

@@ -226,18 +226,12 @@ changed by hand
   )
   .expect("an uncommitted change");
   let dirty = served.refused("merge_run", &run_one);
-  assert_eq!(dirty["code"], "merge_failed", "{dirty}");
-  git(&repo, &["checkout", "--", "README.md"]);
-  let merged = served.ok("merge_run", &run_one);
-  assert_eq!(merged["merge"]["into"], "main", "{merged}");
-  assert_eq!(merged["merge"]["kind"], "fast_forward");
-  let readme = git(&repo, &["show", "main:README.md"]);
+  assert_eq!(dirty["code"], "person_required", "{dirty}");
   assert_eq!(
-    readme, "hi\nescalated\nhello\n",
-    "main holds the agent's work, the approved command's included"
+    git(&repo, &["show", "main:README.md"]),
+    "hi\n",
+    "MCP leaves main unchanged"
   );
-  let again = served.refused("merge_run", &json!({ "project": "Kontur", "run": "1" }));
-  assert_eq!(again["code"], "already_merged");
 }
 
 #[test]

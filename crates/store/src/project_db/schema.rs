@@ -12,6 +12,7 @@ mod conversation;
 mod import;
 mod invocation_permissions;
 mod joining;
+mod local_integration;
 mod mcp;
 mod memory;
 mod native_commands;
@@ -536,4 +537,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   step_progress::MIGRATION,
   optional_limits::MIGRATION,
   optional_daily_budget::MIGRATION,
+  local_integration::MIGRATION,
 ];

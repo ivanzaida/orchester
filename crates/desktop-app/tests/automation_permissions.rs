@@ -89,3 +89,23 @@ fn automation_policy_failed_stored_read_cannot_reuse_a_prior_grant() {
     "failed authority read must not retain a successful grant"
   );
 }
+#[test]
+fn local_integration_decisions_remain_person_only_with_all_automation_grants() {
+  let scratch = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
+  std::fs::create_dir_all(&scratch).expect("scratch");
+  let dir = tempfile::tempdir_in(scratch).expect("private policy directory");
+  let workspace = Workspace::new(AppDb::open(&dir.path().join("app.db")).expect("database"));
+  workspace
+    .set_automation_changes_permissions(true)
+    .expect("permission consent");
+  workspace
+    .set_automation_answers_approvals(true)
+    .expect("approval consent");
+  let gate = InputGate::default();
+  gate.bind_permissions(workspace);
+  let protected = gate.protect(Guarded::LocalIntegrationQuestion);
+  assert!(gate.protecting());
+  assert!(!gate.widening_allowed(Guarded::LocalIntegrationQuestion));
+  drop(protected);
+  assert!(!gate.protecting());
+}

@@ -16,7 +16,6 @@ use orchester_app::{
 };
 use orchester_core::{id::ProjectId, time::Timestamp};
 use support::{Data, Window};
-use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
 /// Why a decision waits: no runner is connected to carry it out (the header's own words).
@@ -31,7 +30,9 @@ struct Page {
 
 impl Page {
   fn seeded(scenario: &str) -> Self {
-    let dir = TempDir::new().expect("a temporary folder");
+    let scratch = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
+    std::fs::create_dir_all(&scratch).expect("scratch");
+    let dir = tempfile::tempdir_in(scratch).expect("a temporary folder");
     let request = kontur::SeedRequest {
       data_dir: dir.path().to_path_buf(),
       repo: dir.path().join(format!("repo-{scenario}")),
@@ -301,7 +302,7 @@ fn decision_after_retries_allows_a_retry_returns_with_a_note_and_stops() {
 }
 
 #[test]
-fn decision_ready_for_review_merges_into_main() {
+fn decision_ready_for_review_opens_local_integration_before_any_merge() {
   let mut page = Page::seeded("decisions");
   page.open("ready for review, merges cleanly", "task-merge");
   assert_eq!(page.text("task-notice-title"), "Ready for your review");
@@ -315,26 +316,40 @@ fn decision_ready_for_review_merges_into_main() {
   assert!(page.has("task-ready-check-review"), "Review verified the work");
   assert!(page.has("task-run-details"));
   page.click("task-merge");
-  page.until_says("task-notice-title", "Merged into main");
-  let body = page.text("task-notice");
-  assert!(body.contains("main got merge commit"), "{body}");
-  assert!(!page.has("task-merge"), "a merged run has nothing to merge");
+  page.window.until("local checkout review", |window| {
+    window.tree.get_element_by_id("task-local-integration").is_some()
+  });
+  assert!(
+    page
+      .window
+      .navigation()
+      .route_now()
+      .path()
+      .ends_with("/local-integration")
+  );
+  assert!(!page.has("local-confirm"), "no merge approval before a fresh Check");
 }
 
 #[test]
-fn decision_merge_stops_at_a_conflict_and_says_why() {
+fn decision_merge_opens_local_review_for_a_task_that_will_conflict() {
   let mut page = Page::seeded("decisions");
   page.open("ready for review, conflicts with main", "task-merge");
   page.click("task-merge");
-  page.until_says("task-notice-title", "Not merged into main");
-  let body = page.text("task-notice");
-  assert!(body.contains("conflict with your branch"), "{body}");
-  assert_eq!(
-    page.text("task-merge-conflicts"),
-    "src/webhooks/sender.rs src/webhooks/settings.rs"
+  page.window.until("local checkout review", |window| {
+    window.tree.get_element_by_id("task-local-integration").is_some()
+  });
+  assert!(
+    page
+      .window
+      .navigation()
+      .route_now()
+      .path()
+      .ends_with("/local-integration")
   );
-  assert_eq!(page.text("task-merge-conflicts-head"), "Conflicting files 2");
-  assert!(!page.locked("task-merge"), "it can be merged again");
+  assert!(
+    !page.has("local-result-editor"),
+    "sync has not begun from an entry click"
+  );
 }
 
 #[test]

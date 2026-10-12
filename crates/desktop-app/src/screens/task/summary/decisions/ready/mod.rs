@@ -9,6 +9,7 @@
 
 mod card;
 mod changed;
+mod local;
 
 use lurq::{
   app::{component::Component, ctx::Ctx},
@@ -39,7 +40,7 @@ impl Component for ReadyForReview {
     let job = props.jobs.run(run.id());
     // A merge git made shows as soon as it is made, also while the task is not read again with it.
     let made = props.detail.merge.as_ref().or(job.merged.as_ref());
-    let parts: Vec<Element> = match (made, &job.merge) {
+    let mut parts: Vec<Element> = match (made, &job.merge) {
       (Some(merge), JobState::Failed(problem)) if props.detail.merge.is_none() => {
         card::not_merged(ctx, &props, run, (problem, Some(merge)), &job.conflicts)
       }
@@ -57,6 +58,9 @@ impl Component for ReadyForReview {
       .chain(runs_section(ctx, &props))
       .collect(),
     };
+    if let Some(reminder) = local::reminder(ctx, &props) {
+      parts.insert(0, reminder);
+    }
     let side = run_details(ctx, &props, run);
     arranged(ctx, parts, None, Some(side))
   }

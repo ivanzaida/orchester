@@ -19,15 +19,11 @@ use orchester_core::integration::{Leftovers, MergeKind, RunMerge};
 use orchester_workspace::{
   display,
   messages::Message,
-  tasks::{
-    detail::RunView,
-    integration_jobs::{JobState, MergeArgs},
-  },
+  tasks::{detail::RunView, integration_jobs::JobState},
 };
 
 use super::super::{super::section_head, TaskContext};
 use crate::{
-  services::Services,
   theme::{DecisionSpacing, DecisionText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -252,32 +248,10 @@ fn merge_button(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> (ActionButt
   if job.busy() {
     return (button.disabled(), Some(ctx.t("decisions.ready.mergeWaits")));
   }
-  let (jobs, args) = (
-    Services::of(ctx).jobs.of(task.project.open.project.id()).of(run.id()),
-    merge_args(ctx, task, run, branch.as_str()),
+  let navigation = crate::navigation::Navigation::of(ctx);
+  let route = crate::routes::Route::Project(
+    task.project.open.project.id(),
+    crate::routes::ProjectPage::Task(task.key.clone(), crate::routes::TaskView::LocalIntegration),
   );
-  // A merge that does not begin (another one took the project meanwhile) leaves the job's state, which
-  // the card shows, as it is.
-  let start = move || {
-    jobs.start_merge(args.clone());
-  };
-  (button.on_click(start), None)
-}
-
-/// The merge of `run` into `branch`, reported in the status bar; once it ends the task is read again.
-fn merge_args(ctx: &mut Ctx, task: &TaskContext, run: &RunView, branch: &str) -> MergeArgs {
-  let services = Services::of(ctx);
-  let feed = task.project.feed.clone();
-  MergeArgs {
-    open: task.project.open.clone(),
-    task: task.detail.task.id(),
-    key: task.detail.task.key().to_string(),
-    number: run.run.number().get(),
-    branch: branch.to_owned(),
-    run: run.id(),
-    programs: services.programs,
-    activity: services.activity,
-    separator: ctx.t("task.listSeparator"),
-    changed: Arc::new(move || feed.saved()),
-  }
+  (button.on_click(move || navigation.go(route.clone())), None)
 }

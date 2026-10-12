@@ -233,6 +233,12 @@ pub fn merge_in(repo_root: &Path, programs: &Programs, run: RunId) -> Result<Mer
     return Err(IntegrationProblem::AlreadyMerged);
   }
   let task = db.task(run.task())?.ok_or(StoreError::TaskNotFound(run.task()))?;
+  use orchester_core::integration::local::LocalIntegrationStore;
+  if db.local_operation(run.id())?.is_some() {
+    return Err(IntegrationProblem::Store(Message::new(
+      "localIntegration.personRequired",
+    )));
+  }
   let git = programs.git_work();
   let merge = merge_run(&git, Path::new(GIT), repo_root, (&run, task.key()), Timestamp::now())
     .map_err(IntegrationProblem::Merge)?;

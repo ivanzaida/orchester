@@ -4,6 +4,8 @@
 //! ([`IntegrationJobs::subscribe`]); what a window adds to it (a dialog, a button's width) is the
 //! app's.
 
+mod local;
+
 use std::{
   collections::HashMap,
   panic::{AssertUnwindSafe, catch_unwind},
@@ -39,6 +41,7 @@ pub enum JobState {
 enum Active {
   Idle,
   Merge,
+  Local,
   Remove,
 }
 
@@ -111,7 +114,7 @@ impl ProjectJobState {
     self
       .runs
       .iter()
-      .find(|(_, state)| state.active == Active::Merge)
+      .find(|(_, state)| matches!(state.active, Active::Merge | Active::Local))
       .map(|(run, _)| *run)
   }
 
@@ -249,7 +252,8 @@ impl RunJobs {
     // the run idle again before its operation's success. Merges share the project's checkout: a merge
     // while another run's merge goes on is refused, and says why.
     self.jobs.0.send_modify(|project| {
-      let other_merge = operation == Active::Merge && project.merging().is_some_and(|run| run != self.run);
+      let other_merge =
+        matches!(operation, Active::Merge | Active::Local) && project.merging().is_some_and(|run| run != self.run);
       let state = project.runs.entry(self.run).or_default();
       let completed = (operation == Active::Merge && state.merge == JobState::Succeeded)
         || (operation == Active::Remove && state.remove == JobState::Succeeded);

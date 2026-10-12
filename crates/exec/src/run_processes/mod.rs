@@ -3,6 +3,7 @@
 //! outside it is never closed or ended, only named in the report.
 
 mod app;
+pub mod identity;
 #[cfg(target_os = "macos")]
 mod macos;
 mod stop;
