@@ -43,7 +43,12 @@ impl LocalProcessStore for ProjectDb {
         |row| Ok((row.get(0)?, row.get(1)?)),
       )
       .optional()?;
-    if previous.is_some_and(|(_, finished)| !finished) {
+    let unfinished: bool = transaction.query_row(
+      "SELECT EXISTS(SELECT 1 FROM local_integration_process WHERE finished = 0)",
+      [],
+      |row| row.get(0),
+    )?;
+    if unfinished {
       return Err(corrupt("local process", "an earlier execution has not ended"));
     }
     let sequence = previous
@@ -71,7 +76,7 @@ impl LocalProcessStore for ProjectDb {
       .map_err(|error| corrupt("local process", error))?;
     let sequence = i64::try_from(sequence).map_err(|_| StoreError::Unrepresentable("process sequence"))?;
     let changed = self.connection.execute(
-      "UPDATE local_integration_process SET identity = ?3 WHERE run_id = ?1 AND sequence = ?2 AND finished = 0",
+      "UPDATE local_integration_process SET identity = ?3 WHERE run_id = ?1 AND sequence = ?2 AND finished = 0 AND identity IS NULL",
       params![run.to_string(), sequence, identity],
     )?;
     if changed != 1 {

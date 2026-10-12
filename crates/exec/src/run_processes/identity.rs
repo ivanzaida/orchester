@@ -9,6 +9,8 @@ pub fn capture(pid: u32) -> io::Result<Option<ProcessIdentity>> {
   let process = platform::Process::open(Entry::pid(pid), false)?;
   Ok(process.map(|process| ProcessIdentity {
     pid,
+    containment: None,
+    executor: None,
     started: process.info.started,
     executable: crate::local_git::digest(process.info.path.to_string_lossy().as_bytes()),
   }))

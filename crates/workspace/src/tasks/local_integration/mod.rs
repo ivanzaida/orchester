@@ -2,7 +2,9 @@
 
 mod cancel;
 mod checks;
+mod drafts;
 mod external;
+mod metadata;
 mod preserve;
 mod process;
 mod recover;
@@ -15,6 +17,7 @@ mod view;
 use std::path::Path;
 
 pub use external::external_integration;
+pub use metadata::metadata_allowed;
 use orchester_core::{
   id::RunId,
   integration::local::{LocalError, LocalIntegrationStore, LocalOperation},
@@ -26,7 +29,7 @@ use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 pub use view::{ConflictView, EditorPolicy, IntegrationView, Preview, pending_restoration, read};
 
-#[derive(Debug, Error)]
+#[derive(Error)]
 pub enum IntegrationError {
   #[error(transparent)]
   State(#[from] LocalError),
@@ -34,14 +37,22 @@ pub enum IntegrationError {
   Git(#[from] LocalGitError),
   #[error("the local integration journal could not be read or written")]
   Store(#[from] StoreError),
+  #[error("sensitive checkout metadata cannot be exposed")]
+  SensitiveMetadata,
   #[error("this run is not ready for local integration")]
   Run,
-  #[error("Git contains the task branch; external integration cannot be recorded without a scoped mapping")]
+  #[error("External integration evidence requires a reviewed scoped mapping; duplicate integration is unavailable")]
   AlreadyIntegrated,
   #[error("the pinned pipeline has no executable Check tool")]
   NoCheck,
   #[error("fresh Check failed; the result remains unapproved")]
   CheckFailed,
+}
+
+impl std::fmt::Debug for IntegrationError {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{self}")
+  }
 }
 
 /// Holds a lease only while executing an operation; waiting for a person holds no queue slot.
@@ -52,10 +63,12 @@ pub struct LocalIntegration {
   task: Option<LocalGit>,
   operation: LocalOperation,
   _lease: IntegrationLease,
+  _store_owner: std::sync::Arc<orchester_exec::local_git::owned::StoreOwnership>,
 }
 
 impl LocalIntegration {
   pub fn open(root: &Path, run_id: RunId) -> Result<Self, IntegrationError> {
+    let store_owner = orchester_exec::local_git::owned::StoreOwnership::acquire(root)?;
     let lease = IntegrationLease::acquire(root)?;
     let db = ProjectDb::open(root)?;
     let run = db
@@ -119,6 +132,7 @@ impl LocalIntegration {
       task,
       operation,
       _lease: lease,
+      _store_owner: store_owner,
     };
     if session.db.local_operation(run_id)?.is_none() && !session.db.save_local_operation(&session.operation, None)? {
       return Err(LocalError::Stale.into());

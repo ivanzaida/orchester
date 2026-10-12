@@ -56,13 +56,32 @@ impl LocalGit {
     Ok(directory)
   }
 
-  pub(super) fn add_untracked_in_copy(&self, index: &Path, path: &super::LocalPath) -> Result<(), LocalGitError> {
+  pub(super) fn add_untracked_in_copy(
+    &self,
+    index: &Path,
+    path: &super::LocalPath,
+    executable: bool,
+  ) -> Result<(), LocalGitError> {
     let directory = self.commit_copy(index)?;
-    let bytes = self.file(path)?.ok_or(LocalError::Stale)?;
-    super::write_regular(directory.path(), path, None, Some(&bytes))?;
+    let hash = super::copy_untracked_file(&self.root, directory.path(), path, executable)?;
     let output = self.scoped_raw(&["add", "--", path.as_str()], None, Some(index), Some(directory.path()))?;
     if output.code != Some(0) {
       return Err(LocalGitError::Refused);
+    }
+    let chmod = if cfg!(unix) && executable {
+      "--chmod=+x"
+    } else {
+      "--chmod=-x"
+    };
+    self.index_command(&["update-index", chmod, "--", path.as_str()], None, index)?;
+    let tree = self.index_command(&["write-tree"], None, index)?;
+    let copied = self.tree_entries(&tree)?;
+    let mode = if cfg!(unix) && executable { 0o100755 } else { 0o100644 };
+    if copied.get(path).is_none_or(|entry| entry.mode != mode)
+      || super::file_hash(directory.path(), path)?.as_ref() != Some(&hash)
+      || super::executable(directory.path(), path)? != (cfg!(unix) && executable)
+    {
+      return Err(LocalError::Reconcile.into());
     }
     Ok(())
   }

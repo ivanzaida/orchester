@@ -235,6 +235,15 @@ impl Component for StatusBarView {
 /// the name is cut, the tooltip says both.
 fn project_item(ctx: &mut Ctx, project: &ProjectFacts) -> Element {
   let folder = project.repo_root.display().to_string();
+  let revision = Projects::of(ctx).feed(project.id).revision.get();
+  if !crate::ui::local_metadata::allowed(
+    ctx,
+    Some(project.repo_root.clone()),
+    vec![folder.clone(), project.name.clone()],
+    revision,
+  ) {
+    return label(&ctx.t("local_integration.hiddenMetadata"), PaletteColor::TextMuted).into();
+  }
   let both = ctx.t_args(
     "shell.status.projectCut",
     [("name", project.name.as_str()), ("folder", folder.as_str())],

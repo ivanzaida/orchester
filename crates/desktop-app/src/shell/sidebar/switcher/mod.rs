@@ -195,12 +195,22 @@ impl Switcher {
   /// The switcher itself: the shown project's initial, name and folder, or that none is open.
   fn button(&self, ctx: &mut Ctx, project: Option<ProjectId>) -> Element {
     let known = project.and_then(|project| Projects::of(ctx).state(project));
-    let listed = known.as_ref().and_then(|state| {
+    let mut listed = known.as_ref().and_then(|state| {
       Some((
         state.name()?.as_str().to_owned(),
         state.repo_root()?.display().to_string(),
       ))
     });
+    let root = known
+      .as_ref()
+      .and_then(|state| state.repo_root().map(std::path::Path::to_path_buf));
+    let values = listed
+      .as_ref()
+      .map_or_else(Vec::new, |(name, folder)| vec![name.clone(), folder.clone()]);
+    let revision = project.map_or(0, |id| Projects::of(ctx).feed(id).revision.get());
+    if !crate::ui::local_metadata::allowed(ctx, root, values, revision) {
+      listed = None;
+    }
     let (name, detail, tile) = match (project, listed) {
       (Some(_), Some((name, folder))) => {
         let tile = Text::new(&initial(&name))

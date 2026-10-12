@@ -1,5 +1,8 @@
+pub mod candidate;
+mod state;
 use std::sync::Arc;
 
+use candidate::CandidateState;
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -11,13 +14,14 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::integration::local::{LocalPath, LocalPhase, Placement, Resolution};
+use orchester_core::integration::local::{Checkout, EditorCandidate, LocalPath, LocalPhase, Placement, Resolution};
 use orchester_workspace::tasks::local_integration::{ConflictView, IntegrationView, Preview};
+pub(super) use state::EditorState;
 
 use super::{
   LocalPage, TaskContext,
   files::preview,
-  work::{Action, Request, Work},
+  work::{Action, Outcome, Request, Work},
 };
 use crate::{
   navigation::{Navigation, guard::LeaveGuard},
@@ -37,6 +41,7 @@ struct Props {
   busy: bool,
   narrow: bool,
   editor_dirty: Signal<bool>,
+  state: EditorState,
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
@@ -63,78 +68,97 @@ pub(super) fn mount(
       busy,
       narrow,
       editor_dirty: page.editor_dirty.clone(),
+      state: page.resolver.clone(),
     },
   )
 }
 
 struct Resolver {
   selected: Signal<String>,
-  draft: Signal<String>,
-  saved: Signal<String>,
-  destination: Signal<String>,
-  placement: Signal<String>,
-  seeded: parking_lot::Mutex<String>,
+  editor: CandidateState,
+  seeded: state::Seeded,
   leave: LeaveGuard,
-  leave_after_save: Signal<bool>,
   shared_dirty: Signal<bool>,
 }
 
 impl Component for Resolver {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
-    let draft = Signal::new(String::new());
-    let saved = Signal::new(String::new());
-    let (drafts, original) = (draft.clone(), saved.clone());
-    let leave = Navigation::of(ctx).guard(move || drafts.get_untracked() != original.get_untracked());
+    let state = ctx.props::<Props>().state.clone();
+    let editor = state.editor;
     let action = ctx.props::<Props>().work.clone();
-    let (saved_after, draft_after) = (saved.clone(), draft.clone());
+    let completed = editor.clone();
     ctx.watch(&action.state(), move |state| {
-      if !state.is_pending() && state.error.is_none() && state.data.is_some() {
-        saved_after.set(draft_after.get_untracked());
+      if !state.is_pending()
+        && state.error.is_none()
+        && let Some(Outcome::DraftSaved(captured) | Outcome::Resolved(captured)) = &state.data
+      {
+        completed.saved(captured);
       }
     });
     Self {
-      selected: ctx.signal(String::new()),
-      draft,
-      saved,
-      destination: Signal::new(String::new()),
-      placement: ctx.signal(String::from("unstaged")),
-      seeded: parking_lot::Mutex::new(String::new()),
-      leave,
-      leave_after_save: ctx.signal(false),
+      selected: state.selected,
+      editor,
+      seeded: state.seeded,
+      leave: state.leave,
       shared_dirty: ctx.props::<Props>().editor_dirty.clone(),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    self.shared_dirty.set(self.draft.get() != self.saved.get());
+    self.shared_dirty.set(self.editor.dirty());
     let files = &props.view.conflicts;
     let selected = self.selected.get();
+    if self.editor.dirty() && !files.iter().any(|file| file.file.path.as_str() == selected) {
+      return self.retained_notice(ctx, props.busy);
+    }
     let Some(file) = files
       .iter()
       .find(|file| file.file.path.as_str() == selected)
       .or_else(|| files.first())
     else {
+      if self.editor.dirty() {
+        return self.retained_notice(ctx, props.busy);
+      }
       return Element::from(Text::new(&ctx.t("local_integration.markers")).variant(TypographyStyle::Description));
     };
-    self.seed(file);
+    let identity = (
+      file.clone(),
+      props.view.checkout.clone(),
+      props.view.operation.as_ref().map(|op| op.version()),
+    );
+    if self.editor.dirty() && self.seeded.lock().as_ref() != Some(&identity) {
+      return self.retained_notice(ctx, props.busy);
+    }
+    self.seed(file, identity);
+    self.shared_dirty.set(self.editor.dirty());
+    self.editor_body(ctx, &props, file, files)
+  }
+}
+
+impl Resolver {
+  fn editor_body(&self, ctx: &mut Ctx, props: &Props, file: &ConflictView, files: &[ConflictView]) -> Element {
     let picker = SelectField::new(
       "local-conflict-picker",
       ctx.t("local_integration.conflicts"),
-      self.selected.clone(),
+      if self.editor.dirty() || props.busy {
+        Signal::new(self.selected.get())
+      } else {
+        self.selected.clone()
+      },
       files
         .iter()
         .map(|file| SelectOption::new(file.file.path.to_string(), file.file.path.as_str()))
         .collect(),
     );
-    let picker = if self.draft.get() != self.saved.get() || props.busy {
+    let picker = if self.editor.dirty() || props.busy {
       picker.locked()
     } else {
       picker
     };
     let picker = picker.render(ctx);
-    let versions = self.versions(ctx, &props, file);
+    let versions = self.versions(ctx, props, file);
     let mut result = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)
@@ -147,7 +171,14 @@ impl Component for Resolver {
         &file.ancestor,
       ))
       .child(versions);
-    let sensitive_draft = props.view.editor_policy.sensitive(&self.draft.get());
+    if file.draft_stale {
+      result = result.child(Notice::new(
+        "local-saved-draft-stale",
+        NoticeTone::Warning,
+        ctx.t("local_integration.error.draftStale"),
+      ));
+    }
+    let sensitive_draft = props.view.editor_policy.sensitive(&self.editor.text.get());
     let editable = !sensitive_draft
       && matches!(file.result, Preview::Text(_) | Preview::Absent)
       && matches!(file.ancestor, Preview::Text(_) | Preview::Absent)
@@ -164,7 +195,7 @@ impl Component for Resolver {
       let input = FieldInput::new(
         "local-result-editor",
         ctx.t("local_integration.result"),
-        self.draft.clone(),
+        self.editor.text.clone(),
       )
       .text_area()
       .mono();
@@ -172,24 +203,55 @@ impl Component for Resolver {
       result = result.child(input.render(ctx));
       result = result.child(self.save_button(
         ctx,
-        &props,
+        props,
         file,
         ("local-save-result", "local_integration.save"),
-        (Resolution::Text(self.draft.get()), props.busy),
+        (Resolution::Text(self.editor.text.get()), props.busy),
       ));
     }
     result = result
-      .child(self.choice_controls(ctx, &props, file))
+      .child(self.choice_controls(ctx, props, file))
       .child(Text::new(&ctx.t("local_integration.markers")).variant(TypographyStyle::Description));
-    if self.leave.requested() || self.draft.get() != self.saved.get() {
-      result = result.child(self.leave_controls(ctx, &props, file, editable));
+    if self.leave.requested() || self.editor.dirty() {
+      result = result.child(self.leave_controls(ctx, props, file, editable));
     }
-    self.finish_saved_leave(ctx, &props);
     Element::from(result)
   }
-}
 
-impl Resolver {
+  fn retained_notice(&self, ctx: &Ctx, busy: bool) -> Element {
+    let editor = self.editor.clone();
+    let props = ctx.props::<Props>();
+    let work = props.work.clone();
+    let refused = Request {
+      task: props.task.clone(),
+      action: Action::Refused,
+      stop: props.stop.clone(),
+    };
+    let button = ActionButton::new(
+      "local-discard-editor",
+      ButtonKind::Danger,
+      ctx.t("local_integration.discard"),
+    );
+    let button = if busy {
+      button.disabled()
+    } else {
+      button.on_click(move || {
+        if input_source() == InputSource::Synthetic {
+          work.run_if_idle(refused.clone());
+        } else {
+          editor.discard();
+        }
+      })
+    };
+    Notice::new(
+      "local-retained-candidate",
+      NoticeTone::Warning,
+      ctx.t("local_integration.unsaved"),
+    )
+    .body(ctx.t("local_integration.error.draftStale"))
+    .action(button)
+    .into()
+  }
   fn versions(&self, ctx: &mut Ctx, props: &Props, file: &ConflictView) -> Element {
     let current = preview(
       ctx,
@@ -220,19 +282,21 @@ impl Resolver {
     }
   }
 
-  fn seed(&self, file: &ConflictView) {
+  fn seed(&self, file: &ConflictView, identity: (ConflictView, Checkout, Option<u64>)) {
     let mut seeded = self.seeded.lock();
     let path = file.file.path.to_string();
-    if *seeded != path && self.draft.get_untracked() == self.saved.get_untracked() {
+    if seeded.as_ref() != Some(&identity) && !self.editor.dirty() {
       let text = match &file.result {
         Preview::Text(text) => text.clone(),
         _ => String::new(),
       };
-      self.draft.set(text.clone());
-      self.saved.set(text);
-      self.selected.set(path.clone());
-      self.destination.set(String::new());
-      *seeded = path;
+      let candidate = file
+        .draft
+        .clone()
+        .unwrap_or_else(|| EditorCandidate::new(text, String::new(), Placement::LeaveUnstaged));
+      self.editor.seed(&candidate);
+      self.selected.set(path);
+      *seeded = Some(identity);
     }
   }
 
@@ -248,7 +312,8 @@ impl Resolver {
       file: file.file.clone(),
       expected: file.expected.clone(),
       resolution,
-      placement: if self.placement.get() == "stage" {
+      candidate: self.editor.current(),
+      placement: if self.editor.placement.get() == "stage" {
         Placement::Stage
       } else {
         Placement::LeaveUnstaged
@@ -270,16 +335,29 @@ impl Resolver {
       return button.disabled();
     }
     button.on_click(move || {
+      let mut request = request.clone();
       if input_source() == InputSource::Synthetic {
-        return;
+        request.action = Action::Refused;
       }
       request.stop.store(false, std::sync::atomic::Ordering::Release);
-      work.run_if_idle(request.clone());
+      work.run_if_idle(request);
     })
   }
 
   fn choice_controls(&self, ctx: &mut Ctx, props: &Props, file: &ConflictView) -> Element {
-    let dirty = self.draft.get() != self.saved.get();
+    let dirty = self.editor.text.get() != self.editor.baseline_text();
+    let destination = FieldInput::new(
+      "local-destination",
+      ctx.t("local_integration.destination"),
+      self.editor.destination.clone(),
+    )
+    .mono();
+    let destination = if props.busy { destination.locked() } else { destination };
+    let destination = if props.view.editor_policy.sensitive(&self.editor.destination.get()) {
+      Element::from(Text::new(&ctx.t("local_integration.sensitiveDraft")).variant(TypographyStyle::Description))
+    } else {
+      destination.render(ctx)
+    };
     let mut choices = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
@@ -304,15 +382,7 @@ impl Resolver {
         ("local-delete", "local_integration.delete"),
         (Resolution::Delete, props.busy || dirty),
       ))
-      .child(
-        FieldInput::new(
-          "local-destination",
-          ctx.t("local_integration.destination"),
-          self.destination.clone(),
-        )
-        .mono()
-        .render(ctx),
-      );
+      .child(destination);
     choices = choices.with_children(self.destination_controls(ctx, props, file));
     if props
       .view
@@ -320,25 +390,31 @@ impl Resolver {
       .as_ref()
       .is_some_and(|op| op.phase() == LocalPhase::RestoreConflicts)
     {
-      choices = choices.child(
-        SelectField::new(
-          "local-staging-choice",
-          ctx.t("local_integration.placement"),
-          self.placement.clone(),
-          vec![
-            SelectOption::new(String::from("unstaged"), ctx.t("local_integration.leaveUnstaged")),
-            SelectOption::new(String::from("stage"), ctx.t("local_integration.stage")),
-          ],
-        )
-        .render(ctx),
+      let staging = SelectField::new(
+        "local-staging-choice",
+        ctx.t("local_integration.placement"),
+        if props.busy {
+          Signal::new(self.editor.placement.get())
+        } else {
+          self.editor.placement.clone()
+        },
+        vec![
+          SelectOption::new(String::from("unstaged"), ctx.t("local_integration.leaveUnstaged")),
+          SelectOption::new(String::from("stage"), ctx.t("local_integration.stage")),
+        ],
       );
+      let staging = if props.busy { staging.locked() } else { staging };
+      choices = choices.child(staging.render(ctx));
     }
     choices.into()
   }
 
   fn destination_controls(&self, ctx: &Ctx, props: &Props, file: &ConflictView) -> Vec<Element> {
-    let dirty = self.draft.get() != self.saved.get();
-    match LocalPath::new(&self.destination.get()) {
+    let dirty = self.editor.text.get() != self.editor.baseline_text();
+    if props.view.editor_policy.sensitive(&self.editor.destination.get()) {
+      return Vec::new();
+    }
+    match LocalPath::new(&self.editor.destination.get()) {
       Ok(destination) => vec![
         self
           .save_button(
@@ -384,58 +460,60 @@ impl Resolver {
     }
   }
 
-  fn leave_controls(&self, ctx: &mut Ctx, props: &Props, file: &ConflictView, editable: bool) -> Element {
-    let leave = self.leave.clone();
+  fn leave_controls(&self, ctx: &mut Ctx, props: &Props, file: &ConflictView, _editable: bool) -> Element {
+    let busy = props.busy;
     let keep = self.leave.clone();
+    let leave = self.leave.clone();
     let navigation = Navigation::of(ctx);
-    let draft = self.draft.clone();
-    let saved = self.saved.clone();
-    let flag = self.leave_after_save.clone();
-    let save = self.save_button(
-      ctx,
-      props,
-      file,
-      ("local-save-pause", "local_integration.savePause"),
-      (Resolution::Text(self.draft.get()), props.busy || !editable),
+    let editor = self.editor.clone();
+    let captured = self.editor.current();
+    let request = Request {
+      task: props.task.clone(),
+      action: Action::SaveDraft {
+        file: file.file.clone(),
+        expected: file.expected.clone(),
+        candidate: captured,
+        generation: props.view.operation.as_ref().map_or(0, |op| op.version()),
+      },
+      stop: props.stop.clone(),
+    };
+    let work = props.work.clone();
+    let discard_work = work.clone();
+    let mut refused = request.clone();
+    refused.action = Action::Refused;
+    let mut save = ActionButton::new(
+      "local-save-pause",
+      ButtonKind::Secondary,
+      ctx.t("local_integration.savePause"),
     );
+    if props.busy {
+      save = save.disabled();
+    } else {
+      save = save.on_click(move || {
+        let mut request = request.clone();
+        if input_source() == InputSource::Synthetic {
+          request.action = Action::Refused;
+          work.run_if_idle(request);
+          return;
+        }
+        request.stop.store(true, std::sync::atomic::Ordering::Release);
+        work.run_if_idle(request);
+      });
+    }
     Notice::new("local-unsaved", NoticeTone::Warning, ctx.t("local_integration.unsaved"))
       .body(ctx.t("local_integration.unsavedBody"))
-      .action(save.on_click({
-        let work = props.work.clone();
-        let request = Request {
-          task: props.task.clone(),
-          action: Action::Save {
-            file: file.file.clone(),
-            expected: file.expected.clone(),
-            resolution: Resolution::Text(self.draft.get()),
-            placement: if self.placement.get() == "stage" {
-              Placement::Stage
-            } else {
-              Placement::LeaveUnstaged
-            },
-            restore: props
-              .view
-              .operation
-              .as_ref()
-              .is_some_and(|op| op.phase() == LocalPhase::RestoreConflicts),
-          },
-          stop: props.stop.clone(),
-        };
-        move || {
-          if input_source() != InputSource::Synthetic {
-            flag.set(true);
-            request.stop.store(true, std::sync::atomic::Ordering::Release);
-            work.run_if_idle(request.clone());
-          }
-        }
-      }))
+      .action(save)
       .action(
         ActionButton::new(
           "local-keep-editing",
           ButtonKind::Secondary,
           ctx.t("local_integration.keepEditing"),
         )
-        .on_click(move || keep.keep_editing()),
+        .on_click(move || {
+          if !busy {
+            keep.keep_editing();
+          }
+        }),
       )
       .action(
         ActionButton::new(
@@ -444,32 +522,17 @@ impl Resolver {
           ctx.t("local_integration.discard"),
         )
         .on_click(move || {
-          if input_source() == InputSource::Synthetic {
+          if busy {
             return;
           }
-          draft.set(saved.get_untracked());
+          if input_source() == InputSource::Synthetic {
+            discard_work.run_if_idle(refused.clone());
+            return;
+          }
+          editor.discard();
           leave.leave(&navigation);
         }),
       )
       .into()
-  }
-
-  fn finish_saved_leave(&self, ctx: &mut Ctx, props: &Props) {
-    if !self.leave_after_save.get() {
-      return;
-    }
-    let state = props.work.state().get();
-    if !state.is_pending() {
-      self.leave_after_save.set(false);
-      if state.error.is_none() && state.data.is_some() {
-        self.saved.set(self.draft.get_untracked());
-        self.leave.leave(&Navigation::of(ctx));
-      }
-    }
-  }
-}
-impl Drop for Resolver {
-  fn drop(&mut self) {
-    self.shared_dirty.set(false);
   }
 }

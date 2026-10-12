@@ -412,7 +412,7 @@ fn decision_external_git_evidence_replaces_ready_without_a_historical_merge_reco
   assert!(
     page
       .text("task-external-integration")
-      .contains("Git already contains the task branch")
+      .contains("Integration result needs reconciliation")
   );
   assert!(db.run_merge(run.id()).expect("record").is_none());
   assert!(db.local_operation(run.id()).expect("operation").is_none());

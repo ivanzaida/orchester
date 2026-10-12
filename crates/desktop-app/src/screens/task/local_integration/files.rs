@@ -57,8 +57,8 @@ pub(super) fn content(ctx: &mut Ctx, page: &LocalPage, view: &IntegrationView, b
 
 fn file_row(
   ctx: &Ctx,
-  selected_paths: &Signal<Vec<orchester_core::integration::local::LocalPath>>,
-  shown_file: &Signal<Option<orchester_core::integration::local::LocalPath>>,
+  selected_paths: &Signal<super::Selection>,
+  shown_file: &Signal<super::ShownFile>,
   file: &LocalFile,
   busy: bool,
   group: &str,
@@ -89,7 +89,7 @@ fn file_row(
     ButtonKind::Ghost,
     file.path.to_string(),
   )
-  .on_click(move || show.set(Some(path.clone())));
+  .on_click(move || show.set(super::ShownFile(Some(path.clone()))));
   Column::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(56.0))
@@ -130,8 +130,8 @@ enum FileItem {
 #[derive(Clone)]
 struct FileProps {
   item: FileItem,
-  selected: Signal<Vec<orchester_core::integration::local::LocalPath>>,
-  shown: Signal<Option<orchester_core::integration::local::LocalPath>>,
+  selected: Signal<super::Selection>,
+  shown: Signal<super::ShownFile>,
   busy: bool,
 }
 impl PartialEq for FileProps {

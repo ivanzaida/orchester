@@ -11,6 +11,7 @@ use super::{IntegrationError, LocalIntegration};
 struct Journal {
   root: PathBuf,
   run: RunId,
+  _store_owner: Arc<orchester_exec::local_git::owned::StoreOwnership>,
 }
 
 impl ProcessJournal for Journal {
@@ -37,15 +38,16 @@ impl LocalIntegration {
       && !process.finished
     {
       let identity = process.identity.ok_or(LocalError::Reconcile)?;
-      if orchester_exec::run_processes::identity::still_running(&identity).map_err(|_| LocalError::Reconcile)? {
-        return Err(LocalError::ForeignOperation.into());
+      if !orchester_exec::local_git::family::reconcile_stopped(&identity)? {
+        return Err(LocalError::ProcessUncertain.into());
       }
-      // Only the recorded birth identity is reconciled. A reused PID is never signalled or adopted.
+      // Parent absence alone never reconciles descendants. Legacy receipts stay visibly uncertain.
       self.db.finish_local_process(self.run.id(), process.sequence)?;
     }
     let journal: Arc<dyn ProcessJournal> = Arc::new(Journal {
       root: self.main.root().to_path_buf(),
       run: self.run.id(),
+      _store_owner: self._store_owner.clone(),
     });
     self.main.bind_journal(journal.clone());
     if let Some(task) = &mut self.task {

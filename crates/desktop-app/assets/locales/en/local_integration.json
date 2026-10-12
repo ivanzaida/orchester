@@ -3,9 +3,14 @@
     "title": "Local integration",
     "notReady": "Local integration is available after the run succeeds.",
     "loading": "Reading local checkout…",
-    "externalTitle": "Git already contains the task branch",
+    "externalTitle": "Integration result needs reconciliation",
     "externalBody": "Integration is blocked to avoid repeating work. Orchester has no historical merge record for this result. Recording an external merge, squash or cherry-pick needs an accepted scoped mapping; automatic reconciliation is unsupported.",
-    "externalEvidence": "Observed task {{source}} is an ancestor of target {{target}}. This is Git evidence, not a recorded Orchester merge. Review the local integration page for current identities; external merge recording is unsupported.",
+    "fullAncestry": "Observed source {{source}} is fully contained in destination {{target}}. No historical merge is recorded; repeated integration is blocked.",
+    "partialAncestry": "Destination {{target}} contains only part of source {{source}}. Complete or scoped integration is unproven; an accepted mapping is required.",
+    "equivalentPatches": "Destination {{target}} has equivalent patches from source {{source}}, without complete ancestry. Scoped integration is ambiguous and cannot be recorded automatically.",
+    "equivalentTree": "Source {{source}} and destination {{target}} have matching trees, without complete ancestry. Recording external integration requires an accepted scoped mapping.",
+    "unknownSource": "The relevant source scope {{source}} cannot be established for destination {{target}}. Integration is unavailable until its identity is reconciled.",
+    "externalEvidence": "Observed result {{source}} and destination {{target}} have external integration evidence. Complete ancestry, partial ancestry and equivalent patches are distinct; no historical merge is recorded. Review current evidence before continuing.",
     "identities": "{{source}} → {{target}} · {{path}} · {{head}}",
     "phases": "Review local → Preserve / commit → Sync + Check → Merge → Restore",
     "review": "Review local changes",
@@ -108,6 +113,8 @@
     "cancelAgree": "I reviewed the unchanged base and restoration scope.",
     "canceled": "Integration canceled · local originals restored",
     "error": {
+      "draftStale": "The saved candidate belongs to an earlier file/source identity. It remains retained; it cannot resolve a different file or newer checkout.",
+      "metadata": "Sensitive checkout metadata cannot be displayed. File names, branches, paths and original content remain unchanged.",
       "stale": "Checkout or result changed after review. No stale approval can authorize it.",
       "foreign": "Another Git operation or client owns this checkout. Orchester cannot abort or take ownership of it.",
       "phase": "Reconcile the operation before continuing.",
@@ -115,6 +122,7 @@
       "approval": "A person must approve this exact checked result.",
       "unverified": "Recovery content has not been verified; it remains retained.",
       "unknown": "The outcome is uncertain. Reconcile actual Git state before choosing a safe continuation.",
+      "conditionalRemoval": "Conditional file removal cannot be performed safely on this platform. Originals remain retained and no replacement is deleted.",
       "unsupported": "This path, file type or repository format is unsupported. Originals remain untouched.",
       "collision": "The reviewed destination already exists. Choose a non-colliding path.",
       "unresolved": "Resolve all files and conflict markers before continuing.",
@@ -124,7 +132,11 @@
       "storage": "The journal could not be read or written.",
       "run": "This run is not ready for local integration.",
       "checkMissing": "Unverified: the pinned Check requires the runner or has no supported command tool. Merge approval is unavailable.",
-      "checkFailed": "Fresh Check failed. The result remains unapproved."
-    }
+      "checkFailed": "Fresh Check failed. The result remains unapproved.",
+      "containment": "Local integration cannot prove ownership of child processes on this platform. No command was started.",
+      "storageOwnership": "Local integration cannot bind recovery storage to owned objects on this platform. The checkout and retained recovery have not been changed.",
+      "processUncertain": "Child processes or pipes have an uncertain outcome. Retained recovery has not been removed. Inspect the recorded operation before continuing."
+    },
+    "hiddenMetadata": "Sensitive metadata hidden"
   }
 }

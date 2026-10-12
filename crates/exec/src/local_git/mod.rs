@@ -5,15 +5,19 @@ mod capture;
 mod commit;
 mod commit_copy;
 mod execute;
+pub mod family;
 mod files;
 mod lease;
+mod merge_receipt;
+pub mod owned;
 mod process;
 mod resolve;
 
 use std::path::{Path, PathBuf};
 
 pub use files::{
-  executable, file_hash, owned_directory, owned_store, prepare_scratch, read_regular, set_executable, write_regular,
+  copy_untracked_file, executable, file_hash, owned_directory, owned_store, prepare_scratch, read_regular,
+  set_executable, write_regular,
 };
 pub use lease::IntegrationLease;
 use orchester_core::{
@@ -42,11 +46,16 @@ pub enum LocalGitError {
 pub struct LocalGit {
   root: PathBuf,
   scratch: PathBuf,
+  ref_action: Option<String>,
+  _root_owner: std::sync::Arc<owned::Directory>,
+  _scratch_owner: std::sync::Arc<owned::Directory>,
   journal: Option<std::sync::Arc<dyn orchester_core::integration::local::ProcessJournal>>,
 }
 
 impl LocalGit {
   pub fn new(root: &Path, scratch: &Path) -> Result<Self, LocalGitError> {
+    let root_owner = owned::Directory::open(root)?;
+    let scratch_owner = owned::Directory::open(scratch)?;
     let root = root.canonicalize().map_err(|_| LocalGitError::Io)?;
     let scratch = scratch.canonicalize().map_err(|_| LocalGitError::Io)?;
     if !scratch.starts_with(&root) {
@@ -55,7 +64,10 @@ impl LocalGit {
     let git = Self {
       root,
       scratch,
+      ref_action: None,
       journal: None,
+      _root_owner: root_owner,
+      _scratch_owner: scratch_owner,
     };
     let top = git.text(&["rev-parse", "--show-toplevel"])?;
     if Path::new(&top).canonicalize().map_err(|_| LocalGitError::Io)? != git.root {

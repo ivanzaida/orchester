@@ -115,6 +115,10 @@ impl Window {
 
   /// The window `launch` opens on `data`.
   pub fn of(data: Data, launch: Launch) -> Self {
+    let start = launch.start();
+    Self::of_start(data, launch, start)
+  }
+  pub fn of_start(data: Data, launch: Launch, start: orchester_app::root::Start) -> Self {
     let mut app = App::new();
     app.set_tokio_handle(data.runtime.handle().clone());
     theme::install(&mut app, Mode::Dark);
@@ -127,7 +131,7 @@ impl Window {
       RootProps {
         link: link.clone(),
         mcp: McpStatus::Unavailable,
-        start: launch.start(),
+        start,
       },
     );
     tree.pass_headless(&mut app);

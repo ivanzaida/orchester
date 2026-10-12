@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::LocalError;
 
 /// Portable repository-relative path. Git metadata, parent traversal and Windows aliases are refused on both hosts.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct LocalPath(String);
 
@@ -57,5 +57,11 @@ impl TryFrom<String> for LocalPath {
 impl From<LocalPath> for String {
   fn from(value: LocalPath) -> Self {
     value.0
+  }
+}
+
+impl fmt::Debug for LocalPath {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.write_str("LocalPath(<private>)")
   }
 }

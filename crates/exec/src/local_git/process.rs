@@ -26,6 +26,8 @@ impl LocalGit {
     index: Option<&Path>,
     worktree: Option<&Path>,
   ) -> Result<GitOutput, LocalGitError> {
+    self._root_owner.ensure_current()?;
+    self._scratch_owner.ensure_current()?;
     let mut command = Command::new(
       Path::new("git"),
       ["-c", "core.fsmonitor=false"].into_iter().chain(args.iter().copied()),
@@ -35,6 +37,9 @@ impl LocalGit {
     .with_env("GIT_TERMINAL_PROMPT", "0")
     .with_env("GIT_LITERAL_PATHSPECS", "1")
     .with_env("GIT_OPTIONAL_LOCKS", "0");
+    if let Some(action) = &self.ref_action {
+      command = command.with_env("GIT_REFLOG_ACTION", action);
+    }
     for name in [
       "GIT_DIR",
       "GIT_WORK_TREE",

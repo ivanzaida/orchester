@@ -29,6 +29,8 @@ pub struct ConflictView {
   pub current: Preview,
   pub incoming: Preview,
   pub result: Preview,
+  pub draft: Option<orchester_core::integration::local::EditorCandidate>,
+  pub draft_stale: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -51,6 +53,7 @@ pub fn read(
 ) -> Result<IntegrationView, IntegrationError> {
   let scratch =
     orchester_exec::local_git::prepare_scratch(root, &[".orchester", "local-integration", &run.to_string()])?;
+  let _store_owner = orchester_exec::local_git::owned::StoreOwnership::acquire(root)?;
   let db = ProjectDb::open(root)?;
   let main = LocalGit::new(root, &scratch)?;
   super::ensure_project_git(&main)?;
@@ -63,58 +66,15 @@ pub fn read(
     .ok_or(IntegrationError::Run)?;
   let external = super::external::contained_result(&db, &main, &checkout, &saved_run, operation.as_ref())?;
   let redact = Redaction::load(&db, vault)?;
-  let task_root = orchester_exec::local_git::owned_directory(root, &[".orchester", "worktrees", &run.to_string()])?;
-  let mut conflicts = Vec::new();
-  if let Some(operation) = &operation {
-    let files = match operation.phase() {
-      LocalPhase::TaskConflicts => {
-        let task_root = task_root.as_ref().ok_or(IntegrationError::Run)?;
-        let task_scratch = orchester_exec::local_git::prepare_scratch(task_root, &[".orchester", "local-integration"])?;
-        let task = LocalGit::new(task_root, &task_scratch)?;
-        for file in task.conflicts()? {
-          conflicts.push(conflict(&task, file, &redact)?);
-        }
-        Vec::new()
-      }
-      LocalPhase::RestoreConflicts => {
-        let session = LocalIntegration::open(root, run)?;
-        session.restore_conflicts()?
-      }
-      _ => Vec::new(),
-    };
-    for file in files {
-      conflicts.push(conflict(&main, file, &redact)?);
-    }
+  redact.ensure_metadata(&checkout)?;
+  redact.ensure_metadata(&operation)?;
+  redact.ensure_text_metadata(saved_run.branch().as_str())?;
+  if let Some(path) = selected {
+    redact.ensure_text_metadata(path.as_str())?;
   }
-  let diff = if let Some(exact) = operation.as_ref().and_then(LocalOperation::checked) {
-    let diff = main.text(&[
-      "diff",
-      "--no-color",
-      "--no-ext-diff",
-      "--no-textconv",
-      &exact.base.head,
-      &exact.result.head,
-      "--",
-    ])?;
-    preview(Some(diff.as_bytes()), &LocalPath::new("checked-result")?, &redact)
-  } else {
-    match selected {
-      Some(path) => {
-        if checkout
-          .files
-          .iter()
-          .any(|file| file.path == *path && file.head.is_none())
-        {
-          preview(main.file(path)?.as_deref(), path, &redact)
-        } else {
-          let diff = main.diff(true, std::slice::from_ref(path))?;
-          let working = main.diff(false, std::slice::from_ref(path))?;
-          preview(Some(format!("{diff}\n{working}").as_bytes()), path, &redact)
-        }
-      }
-      None => Preview::Absent,
-    }
-  };
+  let task_root = orchester_exec::local_git::owned_directory(root, &[".orchester", "worktrees", &run.to_string()])?;
+  let conflicts = read_conflicts(&db, operation.as_ref(), &checkout, &main, task_root.as_deref(), &redact)?;
+  let diff = read_diff(&main, &checkout, operation.as_ref(), selected, &redact)?;
   let checked_current = checked_current(root, &checkout, operation.as_ref(), task_root.as_deref())?;
   Ok(IntegrationView {
     editor_policy: EditorPolicy(std::sync::Arc::new(redact)),
@@ -125,6 +85,84 @@ pub fn read(
     conflicts,
     diff,
   })
+}
+
+fn read_conflicts(
+  db: &ProjectDb,
+  operation: Option<&LocalOperation>,
+  checkout: &Checkout,
+  main: &LocalGit,
+  task_root: Option<&Path>,
+  redact: &Redaction,
+) -> Result<Vec<ConflictView>, IntegrationError> {
+  let mut conflicts = Vec::new();
+  if let Some(operation) = operation {
+    let files = match operation.phase() {
+      LocalPhase::TaskConflicts => {
+        let task_root = task_root.ok_or(IntegrationError::Run)?;
+        let task_scratch = orchester_exec::local_git::prepare_scratch(task_root, &[".orchester", "local-integration"])?;
+        let task = LocalGit::new(task_root, &task_scratch)?;
+        let snapshot = task.snapshot()?;
+        for file in task.conflicts()? {
+          redact.ensure_metadata(&file)?;
+          let mut shown = conflict(&task, file, redact)?;
+          attach_draft(db, operation.run(), operation, checkout, Some(&snapshot), &mut shown)?;
+          conflicts.push(shown);
+        }
+        Vec::new()
+      }
+      LocalPhase::RestoreConflicts => super::restore::restoration_files(db, operation, main)?,
+      _ => Vec::new(),
+    };
+    for file in files {
+      redact.ensure_metadata(&file)?;
+      let mut shown = conflict(main, file, redact)?;
+      attach_draft(db, operation.run(), operation, checkout, None, &mut shown)?;
+      conflicts.push(shown);
+    }
+  }
+
+  Ok(conflicts)
+}
+fn read_diff(
+  main: &LocalGit,
+  checkout: &Checkout,
+  operation: Option<&LocalOperation>,
+  selected: Option<&LocalPath>,
+  redact: &Redaction,
+) -> Result<Preview, IntegrationError> {
+  let diff = if let Some(exact) = operation.and_then(LocalOperation::checked) {
+    redact.ensure_tree_metadata(main, &exact.result.head)?;
+    let diff = main.text(&[
+      "diff",
+      "--no-color",
+      "--no-ext-diff",
+      "--no-textconv",
+      &exact.base.head,
+      &exact.result.head,
+      "--",
+    ])?;
+    preview(Some(diff.as_bytes()), &LocalPath::new("checked-result")?, redact)
+  } else {
+    match selected {
+      Some(path) => {
+        if checkout
+          .files
+          .iter()
+          .any(|file| file.path == *path && file.head.is_none())
+        {
+          preview(main.file(path)?.as_deref(), path, redact)
+        } else {
+          let diff = main.diff(true, std::slice::from_ref(path))?;
+          let working = main.diff(false, std::slice::from_ref(path))?;
+          preview(Some(format!("{diff}\n{working}").as_bytes()), path, redact)
+        }
+      }
+      None => Preview::Absent,
+    }
+  };
+
+  Ok(diff)
 }
 
 fn conflict(git: &LocalGit, file: LocalConflict, redact: &Redaction) -> Result<ConflictView, IntegrationError> {
@@ -140,16 +178,41 @@ fn conflict(git: &LocalGit, file: LocalConflict, redact: &Redaction) -> Result<C
     result: preview(result.as_deref(), &file.path, redact),
     expected: result.as_deref().map(orchester_exec::local_git::digest),
     file,
+    draft: None,
+    draft_stale: false,
   })
 }
 
-struct Redaction {
+pub(super) struct Redaction {
   secrets: Vec<orchester_core::secret::SecretValue>,
   available: bool,
 }
 
 impl Redaction {
-  fn load(db: &ProjectDb, vault: &dyn SecretVault) -> Result<Self, IntegrationError> {
+  fn ensure_tree_metadata(&self, git: &LocalGit, tree: &str) -> Result<(), IntegrationError> {
+    for path in git.tree_entries(tree)?.keys() {
+      self.ensure_text_metadata(path.as_str())?;
+    }
+    Ok(())
+  }
+
+  fn ensure_metadata(&self, value: &impl serde::Serialize) -> Result<(), IntegrationError> {
+    let text = serde_json::to_string(value).map_err(|_| IntegrationError::SensitiveMetadata)?;
+    self.ensure_text_metadata(&text)
+  }
+
+  pub(super) fn ensure_text_metadata(&self, text: &str) -> Result<(), IntegrationError> {
+    if !self.available
+      || self.secrets.iter().any(|value| {
+        !value.expose().is_empty() && (text.contains(value.expose()) || escaped_secret(text, value.expose()))
+      })
+    {
+      return Err(IntegrationError::SensitiveMetadata);
+    }
+    Ok(())
+  }
+
+  pub(super) fn load(db: &ProjectDb, vault: &dyn SecretVault) -> Result<Self, IntegrationError> {
     let mut redact = Self {
       secrets: Vec::new(),
       available: true,
@@ -205,6 +268,8 @@ impl LocalIntegration {
       "--",
     ])?;
     let redact = Redaction::load(&self.db, vault)?;
+    redact.ensure_metadata(&self.operation)?;
+    redact.ensure_tree_metadata(&self.main, tree)?;
     Ok(preview(
       Some(diff.as_bytes()),
       &LocalPath::new("selected-index")?,
@@ -223,6 +288,8 @@ impl LocalIntegration {
       "--",
     ])?;
     let redact = Redaction::load(&self.db, vault)?;
+    redact.ensure_metadata(&self.operation)?;
+    redact.ensure_tree_metadata(&self.main, &exact.result.head)?;
     Ok(preview(
       Some(diff.as_bytes()),
       &LocalPath::new("checked-result")?,
@@ -245,6 +312,7 @@ fn escaped_secret(text: &str, secret: &str) -> bool {
 }
 pub fn pending_restoration(root: &Path, run: RunId) -> Result<Option<LocalPhase>, IntegrationError> {
   orchester_exec::local_git::owned_store(root)?;
+  let _store_owner = orchester_exec::local_git::owned::StoreOwnership::acquire(root)?;
   let saved = ProjectDb::open(root)?.local_operation(run)?;
   Ok(
     saved
@@ -299,4 +367,40 @@ fn checked_current(
   } else {
     true
   })
+}
+
+fn attach_draft(
+  db: &ProjectDb,
+  run: RunId,
+  operation: &LocalOperation,
+  main: &Checkout,
+  task: Option<&Checkout>,
+  shown: &mut ConflictView,
+) -> Result<(), IntegrationError> {
+  use orchester_core::integration::local::{ConflictKind, DraftIdentity};
+  let kind = if task.is_some() {
+    ConflictKind::Task
+  } else {
+    ConflictKind::Restoration
+  };
+  let identity = DraftIdentity {
+    kind,
+    main: main.clone(),
+    task: task.cloned(),
+    file: shown.file.clone(),
+    expected: shown.expected.clone(),
+  };
+  if let Some(saved) = operation
+    .editor_drafts()
+    .iter()
+    .find(|saved| saved.identity == identity)
+  {
+    shown.draft = Some(super::drafts::read_candidate(db, run, saved)?);
+  } else {
+    shown.draft_stale = operation
+      .editor_drafts()
+      .iter()
+      .any(|saved| saved.identity.kind == kind && saved.identity.file.path == shown.file.path);
+  }
+  Ok(())
 }

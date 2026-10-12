@@ -45,7 +45,7 @@ pub(super) fn notice(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
       ctx.t("local_integration.externalTitle"),
     )
     .body(ctx.t_args(
-      "local_integration.externalEvidence",
+      crate::screens::task::local_integration::words::evidence_body(evidence.kind),
       [
         ("source", evidence.source.as_str()),
         ("target", evidence.target.as_str()),

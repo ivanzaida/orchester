@@ -27,10 +27,13 @@ pub struct Fixture {
 
 impl Fixture {
   pub fn new(check_fails: bool) -> Self {
+    Self::named(check_fails, "workspace-")
+  }
+  pub fn named(check_fails: bool, prefix: &str) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
     fs::create_dir_all(&scratch).expect("scratch");
     let repo = tempfile::Builder::new()
-      .prefix("workspace-")
+      .prefix(prefix)
       .tempdir_in(scratch)
       .expect("repo");
     git(repo.path(), &["init", "-b", "main"]);

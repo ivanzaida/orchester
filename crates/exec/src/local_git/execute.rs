@@ -1,14 +1,14 @@
 use std::{
   io::{self, Read, Write},
   process::{Child, Stdio},
+  sync::mpsc,
   thread,
-  time::Duration,
+  time::{Duration, Instant},
 };
 
 use orchester_core::{command::Command, integration::local::ProcessJournal};
 
-use super::{LocalError, LocalGitError, process::GitOutput};
-
+use super::{LocalError, LocalGitError, family::Family, process::GitOutput};
 const MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 pub(super) fn invoke(
@@ -18,73 +18,135 @@ pub(super) fn invoke(
   capture: bool,
   journal: Option<&dyn ProcessJournal>,
 ) -> Result<GitOutput, LocalGitError> {
+  let family = Family::create()?;
   let sequence = journal.map(ProcessJournal::begin).transpose()?;
-  let mut child = spawn(command, input.is_some(), journal.zip(sequence))?;
+  let mut child = spawn(command, input.is_some(), &family, journal.zip(sequence))?;
   let stdout = child.stdout.take().ok_or(LocalGitError::Process)?;
   let stderr = child.stderr.take().ok_or(LocalGitError::Process)?;
-  let reader = thread::spawn(move || bounded(stdout, capture));
-  let errors = thread::spawn(move || io::copy(&mut { stderr }, &mut io::sink()));
+  let output = worker(move || bounded(stdout, capture));
+  let errors = worker(move || {
+    io::copy(&mut { stderr }, &mut io::sink())
+      .map(|_| ())
+      .map_err(|_| LocalGitError::Io)
+  });
   let writer = input.map(|input| {
     let bytes = input.to_owned();
     let pipe = child.stdin.take();
-    thread::spawn(move || match pipe {
-      Some(mut pipe) => pipe.write_all(&bytes),
-      None => Err(io::Error::other("no input pipe")),
+    worker(move || match pipe {
+      Some(mut pipe) => match pipe.write_all(&bytes) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => Ok(()),
+        Err(_) => Err(LocalGitError::Io),
+      },
+      None => Err(LocalGitError::Process),
     })
   });
-  let result = crate::wait(&mut child, command, timeout);
+  let status = finish_family(&mut child, &family, timeout);
+  let deadline = Instant::now() + Duration::from_secs(2);
+  let bytes = receive(&output, deadline)?;
+  receive(&errors, deadline)?;
   if let Some(writer) = writer {
-    match writer.join().map_err(|_| LocalGitError::Process)? {
-      Ok(()) => {}
-      Err(error) if error.kind() == io::ErrorKind::BrokenPipe => {}
-      Err(_) => return Err(LocalGitError::Process),
-    }
+    receive(&writer, deadline)?;
   }
-  errors
-    .join()
-    .map_err(|_| LocalGitError::Process)?
-    .map_err(|_| LocalGitError::Process)?;
-  let bytes = reader.join().map_err(|_| LocalGitError::Process)?;
+  if !family.empty()? {
+    return Err(LocalError::ProcessUncertain.into());
+  }
   if let Some((journal, sequence)) = journal.zip(sequence) {
-    // wait has observed exit, or stopped this owned child on timeout. No other PID is signalled.
-    if child.try_wait().map_err(|_| LocalGitError::Process)?.is_some() {
-      journal.finished(sequence)?;
-    } else {
-      return Err(LocalError::Reconcile.into());
-    }
+    journal.finished(sequence)?;
   }
   Ok(GitOutput {
-    code: result.map_err(|_| LocalGitError::Process)?.code(),
-    bytes: bytes?,
+    code: status?.code(),
+    bytes,
   })
 }
 
-fn spawn(command: &Command, input: bool, journal: Option<(&dyn ProcessJournal, u64)>) -> Result<Child, LocalGitError> {
+fn spawn(
+  command: &Command,
+  input: bool,
+  family: &Family,
+  journal: Option<(&dyn ProcessJournal, u64)>,
+) -> Result<Child, LocalGitError> {
   let mut process = crate::prepare(command).map_err(|_| LocalGitError::Process)?;
   process.stdin(if input { Stdio::piped() } else { Stdio::null() });
-  let mut child = match process.spawn() {
+  let child = match family.spawn(&mut process) {
     Ok(child) => child,
-    Err(_) => {
-      if let Some((journal, sequence)) = journal {
+    Err(error) => {
+      if family.empty()?
+        && let Some((journal, sequence)) = journal
+      {
         journal.finished(sequence)?;
       }
-      return Err(LocalGitError::Process);
+      return Err(error);
     }
   };
-  if let Some((journal, sequence)) = journal {
-    let recorded = crate::run_processes::identity::capture(child.id())
-      .map_err(|_| LocalError::Reconcile)
-      .and_then(|identity| journal.started(sequence, identity.as_ref()));
-    if let Err(error) = recorded {
-      crate::stop(&mut child).map_err(|_| LocalGitError::Process)?;
-      child.wait().map_err(|_| LocalGitError::Process)?;
-      journal.finished(sequence)?;
-      return Err(error.into());
+  let recorded = family.identity(&child).and_then(|identity| {
+    if let Some((journal, sequence)) = journal {
+      journal.started(sequence, Some(&identity))?;
     }
+    family.resume(&child)
+  });
+  if let Err(error) = recorded {
+    family.stop()?;
+    return Err(error);
   }
   Ok(child)
 }
 
+fn finish_family(
+  child: &mut Child,
+  family: &Family,
+  timeout: Duration,
+) -> Result<std::process::ExitStatus, LocalGitError> {
+  let deadline = Instant::now() + timeout;
+  loop {
+    let status = child.try_wait().map_err(|_| LocalError::ProcessUncertain)?;
+    if let Some(status) = status {
+      let settle = Instant::now() + Duration::from_millis(200);
+      while Instant::now() < settle {
+        if family.empty()? {
+          return Ok(status);
+        }
+        thread::sleep(Duration::from_millis(10));
+      }
+      // A detached writer remains part of our job. Stop it, but do not call its interrupted work a success.
+      family.stop()?;
+      await_empty(family)?;
+      return Err(LocalError::ProcessUncertain.into());
+    }
+    if Instant::now() >= deadline {
+      family.stop()?;
+      await_empty(family)?;
+      child.wait().map_err(|_| LocalError::ProcessUncertain)?;
+      return Err(LocalGitError::Process);
+    }
+    thread::sleep(Duration::from_millis(10));
+  }
+}
+fn await_empty(family: &Family) -> Result<(), LocalGitError> {
+  let deadline = Instant::now() + Duration::from_secs(2);
+  while !family.empty()? {
+    if Instant::now() >= deadline {
+      return Err(LocalError::ProcessUncertain.into());
+    }
+    thread::sleep(Duration::from_millis(10));
+  }
+  Ok(())
+}
+fn worker<T: Send + 'static>(
+  work: impl FnOnce() -> Result<T, LocalGitError> + Send + 'static,
+) -> mpsc::Receiver<Result<T, LocalGitError>> {
+  let (send, receive) = mpsc::channel();
+  thread::spawn(move || {
+    // The receiver may have returned an explicit uncertain outcome. Losing delivery cannot claim success.
+    if send.send(work()).is_err() {}
+  });
+  receive
+}
+fn receive<T>(pipe: &mpsc::Receiver<Result<T, LocalGitError>>, deadline: Instant) -> Result<T, LocalGitError> {
+  pipe
+    .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+    .map_err(|_| LocalError::ProcessUncertain)?
+}
 fn bounded(mut pipe: impl Read, capture: bool) -> Result<Vec<u8>, LocalGitError> {
   let mut bytes = Vec::new();
   if capture {

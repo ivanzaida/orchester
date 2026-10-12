@@ -33,3 +33,13 @@ pub(super) fn phase_body(phase: LocalPhase) -> &'static str {
     _ => "local_integration.recoveryBody",
   }
 }
+pub(crate) fn evidence_body(kind: orchester_core::integration::local::ResultEvidenceKind) -> &'static str {
+  use orchester_core::integration::local::ResultEvidenceKind;
+  match kind {
+    ResultEvidenceKind::CompleteAncestry => "local_integration.fullAncestry",
+    ResultEvidenceKind::PartialAncestry => "local_integration.partialAncestry",
+    ResultEvidenceKind::EquivalentPatches => "local_integration.equivalentPatches",
+    ResultEvidenceKind::EquivalentTree => "local_integration.equivalentTree",
+    ResultEvidenceKind::UnknownSource => "local_integration.unknownSource",
+  }
+}

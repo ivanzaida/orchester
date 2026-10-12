@@ -71,6 +71,10 @@ impl LocalIntegration {
   fn reconcile_merge(&mut self, actual: &Checkout) -> Result<(), IntegrationError> {
     let checked = self.operation.checked().ok_or(LocalError::Reconcile)?.clone();
     if actual.head == checked.result.head && actual.clean() {
+      let action = self.operation.merge_action().ok_or(LocalError::Reconcile)?;
+      if !self.main.has_merge_receipt(&checked, action)? {
+        return Err(LocalError::Reconcile.into());
+      }
       self.operation.record_merge(actual.head.clone())?;
       self.save()?;
       return self.record_known_merge(&actual.head);

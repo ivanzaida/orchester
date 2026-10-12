@@ -11,6 +11,7 @@ pub enum RecoveryLayer {
   TaskIncoming,
   WorkingBase,
   Result,
+  EditorDraft,
 }
 
 impl RecoveryLayer {
@@ -24,6 +25,7 @@ impl RecoveryLayer {
       Self::TaskIncoming => "task_incoming",
       Self::WorkingBase => "working_base",
       Self::Result => "result",
+      Self::EditorDraft => "editor_draft",
     }
   }
 }

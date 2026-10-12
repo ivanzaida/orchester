@@ -4,7 +4,8 @@ mod controls;
 mod fields;
 mod files;
 mod resolver;
-mod words;
+mod selection;
+pub(crate) mod words;
 mod work;
 
 use std::{
@@ -22,14 +23,12 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{
-  integration::local::{LocalPath, LocalPhase},
-  run::RunStatus,
-};
+use orchester_core::{integration::local::LocalPhase, run::RunStatus};
 use orchester_workspace::{
   background,
   tasks::local_integration::{IntegrationView, Preview},
 };
+use selection::{Selection, ShownFile};
 use work::{Outcome, Problem, Work};
 
 use super::TaskContext;
@@ -81,8 +80,9 @@ struct LocalPage {
   revision: Signal<u64>,
   reading: Signal<bool>,
   editor_dirty: Signal<bool>,
-  selected: Signal<Vec<LocalPath>>,
-  shown_file: Signal<Option<LocalPath>>,
+  resolver: resolver::EditorState,
+  selected: Signal<Selection>,
+  shown_file: Signal<ShownFile>,
   mode: Signal<Mode>,
   message: Signal<String>,
   name: Signal<String>,
@@ -106,6 +106,10 @@ impl Component for LocalPage {
     });
     let mode = ctx.signal(Mode::Review);
     let action = work::action(ctx);
+    let resolver = resolver::EditorState::new(ctx);
+    let completed_editor = resolver.editor.clone();
+    let completed_leave = resolver.leave.clone();
+    let navigation = crate::navigation::Navigation::of(ctx);
     let (completed_mode, completed_revision) = (mode.clone(), revision.clone());
     ctx.watch(&action.state(), move |state| {
       if !state.is_pending()
@@ -117,17 +121,24 @@ impl Component for LocalPage {
             tree: tree.clone(),
             preview: preview.clone(),
           },
-          Outcome::Changed => Mode::Review,
+          Outcome::Changed | Outcome::DraftSaved(_) | Outcome::Resolved(_) => Mode::Review,
         });
         completed_revision.update(|value| *value += 1);
+        if let Outcome::DraftSaved(captured) = outcome {
+          completed_editor.saved(captured);
+          if !completed_editor.dirty() {
+            completed_leave.leave(&navigation);
+          }
+        }
       }
     });
     Self {
       revision,
       reading,
       editor_dirty: ctx.signal(false),
-      selected: ctx.signal(Vec::new()),
-      shown_file: ctx.signal(None),
+      resolver,
+      selected: ctx.signal(Selection(Vec::new())),
+      shown_file: ctx.signal(ShownFile(None)),
       mode,
       message: Signal::new(String::new()),
       name: Signal::new(String::new()),
@@ -138,6 +149,7 @@ impl Component for LocalPage {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    self.editor_dirty.set(self.resolver.editor.dirty());
     let task = ctx.props::<TaskContext>().clone();
     let Some(run) = &task.detail.run else {
       return Element::from(Column::new());
@@ -146,12 +158,18 @@ impl Component for LocalPage {
     let vault = Services::of(ctx).vault;
     let read = ctx
       .future(
-        (root, run.id(), self.revision.get(), self.shown_file.get()),
-        move |(root, run, _, selected)| {
+        (
+          root,
+          run.id(),
+          self.revision.get(),
+          task.project.feed.revision.get(),
+          self.shown_file.get(),
+        ),
+        move |(root, run, _, _, selected)| {
           let vault = vault.clone();
           async move {
             background::run(move || {
-              orchester_workspace::tasks::local_integration::read(&root, run, selected.as_ref(), vault.get())
+              orchester_workspace::tasks::local_integration::read(&root, run, selected.0.as_ref(), vault.get())
                 .map(|view| Shown(Arc::new(view)))
                 .map_err(work::problem)
             })
@@ -163,6 +181,9 @@ impl Component for LocalPage {
       .state()
       .get();
     self.reading.set(read.is_pending());
+    if let Some(reason) = read.error {
+      return Notice::new("local-read-error", NoticeTone::Danger, ctx.t(reason.0)).into();
+    }
     let Some(shown) = read.data else {
       return match read.error {
         Some(reason) => Element::from(Notice::new("local-read-error", NoticeTone::Danger, ctx.t(reason.0))),
@@ -222,7 +243,7 @@ impl LocalPage {
         }),
       ));
     }
-    left = if matches!(phase, LocalPhase::TaskConflicts | LocalPhase::RestoreConflicts) {
+    left = if matches!(phase, LocalPhase::TaskConflicts | LocalPhase::RestoreConflicts) || self.editor_dirty.get() {
       left.child(resolver::mount(ctx, self, task, view, busy, narrow))
     } else {
       left.child(files::content(ctx, self, view, busy))
@@ -275,7 +296,7 @@ fn external_notice(ctx: &Ctx, view: &IntegrationView) -> Option<Element> {
       ctx.t("local_integration.externalTitle"),
     )
     .body(ctx.t_args(
-      "local_integration.externalEvidence",
+      words::evidence_body(evidence.kind),
       [
         ("source", evidence.source.as_str()),
         ("target", evidence.target.as_str()),

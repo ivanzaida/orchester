@@ -8,6 +8,17 @@ pub struct ProcessIdentity {
   pub pid: u32,
   pub started: u64,
   pub executable: ContentHash,
+  /// A private kill-on-close Windows job; absence never proves descendant completion.
+  #[serde(default)]
+  pub containment: Option<ContentHash>,
+  #[serde(default)]
+  pub executor: Option<ExecutorIdentity>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecutorIdentity {
+  pub pid: u32,
+  pub started: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

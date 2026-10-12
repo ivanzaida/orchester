@@ -1,32 +1,36 @@
-//! A non-blocking OS-held lease shared by integration clients. A crash releases it without deleting recovery data.
+//! An OS-held project lease plus stable ownership of its metadata parent chain.
 
-use std::{fs::File, path::Path};
+use std::{fs::File, path::Path, sync::Arc};
 
-use super::LocalGitError;
+use orchester_core::integration::local::LocalPath;
 
-#[cfg(unix)]
-mod unix;
-#[cfg(windows)]
-mod windows;
+use super::{
+  LocalError, LocalGitError,
+  owned::{Directory, OwnedFile},
+};
 
 pub struct IntegrationLease {
   _file: File,
+  _directory: Arc<Directory>,
 }
 
 impl IntegrationLease {
   pub fn acquire(root: &Path) -> Result<Self, LocalGitError> {
+    let directory = super::files::hold_directory(root, &[".orchester"], true)?.ok_or(LocalGitError::Io)?;
     super::files::owned_store(root)?;
-    let path = root.join(".orchester/local-integration.lock");
-    if std::fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
-      return Err(super::LocalError::Unsupported.into());
-    }
-    #[cfg(windows)]
-    let file = windows::acquire(&path)?;
+    let path = LocalPath::new("local-integration.lock")?;
+    let opened = match OwnedFile::open(directory.path(), &path, true) {
+      Ok(Some(file)) => file,
+      Ok(None) => OwnedFile::create(directory.path(), &path).map_err(|_| LocalError::ForeignOperation)?,
+      Err(_) => return Err(LocalError::ForeignOperation.into()),
+    };
+    let file = opened.into_file();
     #[cfg(unix)]
-    let file = unix::acquire(&path)?;
-    #[cfg(not(any(windows, unix)))]
-    return Err(super::LocalError::Unsupported.into());
-    #[cfg(any(windows, unix))]
-    Ok(Self { _file: file })
+    rustix::fs::flock(&file, rustix::fs::FlockOperation::NonBlockingLockExclusive)
+      .map_err(|_| LocalError::ForeignOperation)?;
+    Ok(Self {
+      _file: file,
+      _directory: directory,
+    })
   }
 }

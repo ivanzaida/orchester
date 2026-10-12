@@ -30,7 +30,7 @@ impl LocalGit {
       } else if file.head.is_some() {
         self.set_index(path, None, Some(&index))?;
       } else {
-        self.add_untracked_in_copy(&index, path)?;
+        self.add_untracked_in_copy(&index, path, file.executable)?;
       }
     }
     let tree = self.index_command(&["write-tree"], None, &index)?;
@@ -170,18 +170,15 @@ impl LocalGit {
       {
         return Err(LocalError::Stale.into());
       }
-      if file.head.is_some() {
-        self.text(&[
-          "restore",
-          "--source=HEAD",
-          "--staged",
-          "--worktree",
-          "--",
-          file.path.as_str(),
-        ])?;
+      if let Some(entry) = &file.head {
+        let bytes = self.checkout_blob(&reviewed.head, &file.path)?;
+        super::write_regular(&self.root, &file.path, file.working.as_ref(), Some(&bytes))?;
+        let hash = super::digest(&bytes);
+        super::set_executable(&self.root, &file.path, &hash, entry.mode == 0o100755)?;
+        self.set_index(&file.path, Some(entry), None)?;
       } else {
-        self.set_index(&file.path, None, None)?;
         super::write_regular(&self.root, &file.path, file.working.as_ref(), None)?;
+        self.set_index(&file.path, None, None)?;
       }
     }
     let clean = self.snapshot()?;

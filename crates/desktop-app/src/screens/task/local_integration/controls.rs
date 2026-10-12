@@ -1,7 +1,9 @@
+mod acknowledgement;
 mod preparation;
 
 use std::sync::{Arc, atomic::Ordering};
 
+use acknowledgement::ReviewIdentity;
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -35,7 +37,7 @@ struct Props {
   task: TaskContext,
   view: Arc<IntegrationView>,
   mode: Signal<Mode>,
-  selected: Signal<Vec<orchester_core::integration::local::LocalPath>>,
+  selected: Signal<super::Selection>,
   message: Signal<String>,
   name: Signal<String>,
   work: Work,
@@ -78,7 +80,7 @@ struct Inspector {
   gate: Option<InputGate>,
   protected: parking_lot::Mutex<Option<Protected>>,
   agree: Signal<bool>,
-  identity: parking_lot::Mutex<String>,
+  identity: parking_lot::Mutex<Option<ReviewIdentity>>,
 }
 impl Component for Inspector {
   type Props = Props;
@@ -87,7 +89,7 @@ impl Component for Inspector {
       gate: ctx.use_context(),
       protected: parking_lot::Mutex::new(None),
       agree: ctx.signal(false),
-      identity: parking_lot::Mutex::new(String::new()),
+      identity: parking_lot::Mutex::new(None),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -113,25 +115,11 @@ impl Component for Inspector {
       *protected = None;
     }
     drop(protected);
-    let mode_key = match &mode {
-      Mode::Review => "review",
-      Mode::Commit { tree, .. } => tree.as_str(),
-      Mode::Preserve => "preserve",
-      Mode::Abort => "abort",
-      Mode::Cleanup => "cleanup",
-      Mode::Cancel => "cancel",
-    };
-    let identity = format!(
-      "{:?}:{}:{}:{:?}",
-      phase,
-      mode_key,
-      props.view.checkout.head,
-      (&props.view.checkout, props.selected.get())
-    );
+    let identity = ReviewIdentity::of(&props, &mode);
     let mut prior = self.identity.lock();
-    if *prior != identity {
+    if prior.as_ref() != Some(&identity) {
       self.agree.set(false);
-      *prior = identity;
+      *prior = Some(identity);
     }
     drop(prior);
     let panel = self.actions(ctx, &props, &mode, phase);
@@ -396,7 +384,7 @@ fn decision(props: &Props, mode: &Mode, phase: LocalPhase) -> Option<Decision> {
       "local_integration.commitBody",
       "local_integration.commit",
       Action::Commit {
-        paths: props.selected.get(),
+        paths: props.selected.get().0,
         tree: tree.clone(),
         message: props.message.get(),
       },
@@ -408,7 +396,7 @@ fn decision(props: &Props, mode: &Mode, phase: LocalPhase) -> Option<Decision> {
       "local_integration.preserve",
       Action::Preserve {
         name: props.name.get(),
-        paths: props.selected.get(),
+        paths: props.selected.get().0,
       },
     ),
     Mode::Cancel => (
@@ -438,7 +426,10 @@ fn decision(props: &Props, mode: &Mode, phase: LocalPhase) -> Option<Decision> {
         "local_integration.checkedBody",
         "local_integration.approval",
         "local_integration.merge",
-        Action::Merge(Box::new(props.view.operation.as_ref()?.checked()?.clone())),
+        Action::Merge {
+          exact: Box::new(props.view.operation.as_ref()?.checked()?.clone()),
+          generation: props.view.operation.as_ref()?.version(),
+        },
       ),
       LocalPhase::TaskConflicts => (
         "local_integration.continue",
@@ -474,11 +465,12 @@ fn button(ctx: &Ctx, props: &Props, id: &str, label: &str, action: Option<Action
   };
   let work = props.work.clone();
   button.on_click(move || {
-    if input_source() == InputSource::Synthetic {
-      return;
+    let mut request = request.clone();
+    if input_source() == InputSource::Synthetic && !matches!(request.action, Action::Inspect | Action::Refresh) {
+      request.action = Action::Refused;
     }
     request.stop.store(false, Ordering::Release);
-    work.run_if_idle(request.clone());
+    work.run_if_idle(request);
   })
 }
 

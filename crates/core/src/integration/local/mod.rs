@@ -1,13 +1,15 @@
 //! Durable local checkout integration. Editing a result and approving its checked identity are separate decisions.
 
+mod draft;
 mod path;
 mod process;
 mod record;
 mod recovery;
 mod resolution;
 
+pub use draft::{ConflictKind, DraftIdentity, DraftRecord, EditorCandidate};
 pub use path::LocalPath;
-pub use process::{LocalProcess, LocalProcessStore, ProcessIdentity, ProcessJournal};
+pub use process::{ExecutorIdentity, LocalProcess, LocalProcessStore, ProcessIdentity, ProcessJournal};
 pub use record::{CheckedResult, LocalOperation, LocalPhase, Preservation};
 pub use recovery::{LocalRecoveryStore, RecoveryLayer};
 pub use resolution::{PendingResolution, ResolutionWrite};
@@ -34,6 +36,14 @@ pub enum LocalError {
   Reconcile,
   #[error("this path or file format is unsupported")]
   Unsupported,
+  #[error("conditional file removal is unsupported on this platform; originals remain retained")]
+  ConditionalRemovalUnsupported,
+  #[error("owned process containment is unsupported on this platform")]
+  ProcessContainmentUnsupported,
+  #[error("owned recovery storage is unsupported on this platform")]
+  StoreOwnershipUnsupported,
+  #[error("owned descendants or pipes have not been proved stopped; recovery remains retained")]
+  ProcessUncertain,
   #[error("the destination already exists")]
   Collision,
   #[error("unresolved files or conflict markers remain")]
@@ -45,8 +55,18 @@ pub enum LocalError {
 /// Read-only Git evidence, not a historical Orchester merge record or approval.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ContainedResult {
+  pub kind: ResultEvidenceKind,
   pub source: crate::revision::Revision,
   pub target: crate::revision::Revision,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResultEvidenceKind {
+  CompleteAncestry,
+  PartialAncestry,
+  EquivalentPatches,
+  EquivalentTree,
+  UnknownSource,
 }
 
 /// A regular file's Git representation; absent entries represent deletion.
@@ -69,7 +89,7 @@ pub struct LocalFile {
 }
 
 /// Every relevant identity is compared before a mutation, including Git operation markers.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Checkout {
   pub root: String,
   pub git_dir: String,
@@ -122,7 +142,7 @@ pub struct LocalConflict {
   pub incoming: Option<IndexEntry>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Resolution {
   Text(String),
   Current,
@@ -138,4 +158,28 @@ pub trait LocalIntegrationStore {
 
   fn local_operation(&self, run: RunId) -> Result<Option<LocalOperation>, Self::Error>;
   fn save_local_operation(&mut self, operation: &LocalOperation, expected: Option<u64>) -> Result<bool, Self::Error>;
+}
+
+impl std::fmt::Debug for Checkout {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("Checkout")
+      .field("head", &self.head)
+      .field("index", &self.index)
+      .field("files", &self.files.len())
+      .field("metadata", &"<private>")
+      .finish()
+  }
+}
+
+impl std::fmt::Debug for Resolution {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str(match self {
+      Self::Text(_) => "Resolution::Text(<private>)",
+      Self::Current => "Resolution::Current",
+      Self::Incoming => "Resolution::Incoming",
+      Self::Delete => "Resolution::Delete",
+      Self::KeepBoth(_) => "Resolution::KeepBoth(<private>)",
+      Self::AtPath { .. } => "Resolution::AtPath(<private>)",
+    })
+  }
 }

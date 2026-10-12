@@ -8,8 +8,8 @@ use orchester_core::integration::local::{LocalError, LocalPath, Resolution};
 use orchester_exec::local_git::{LocalGit, LocalGitError};
 
 struct Repo {
-  dir: tempfile::TempDir,
   git: LocalGit,
+  dir: tempfile::TempDir,
 }
 
 impl Repo {

@@ -1,7 +1,13 @@
+#[path = "local_integration/drafts.rs"]
+mod drafts;
 #[path = "local_integration/external.rs"]
 mod external;
+#[path = "local_integration/metadata.rs"]
+mod metadata;
 #[path = "local_integration/privacy.rs"]
 mod privacy;
+#[path = "local_integration/schema.rs"]
+mod schema;
 #[path = "local_integration/selection.rs"]
 mod selection;
 #[path = "local_integration/support.rs"]
@@ -218,7 +224,13 @@ fn local_integration_reconciles_git_merge_before_journal_write_without_repeating
       .expect("save intent")
   );
   drop(session);
-  git(fixture.root(), &["merge", "--ff-only", &exact.result.head]);
+  let merge = std::process::Command::new("git")
+    .args(["merge", "--ff-only", &exact.result.head])
+    .env("GIT_REFLOG_ACTION", operation.merge_action().expect("owned action"))
+    .current_dir(fixture.root())
+    .output()
+    .expect("owned private merge");
+  assert!(merge.status.success());
   let mut session = fixture.open();
   assert!(matches!(
     session.refresh(),

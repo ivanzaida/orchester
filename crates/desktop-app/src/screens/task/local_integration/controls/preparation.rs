@@ -60,7 +60,7 @@ impl Inspector {
         props,
         "local-review-commit",
         "local_integration.commitReview",
-        Some(Action::ReviewCommit(props.selected.get())),
+        Some(Action::ReviewCommit(props.selected.get().0)),
         props.selected.get().is_empty()
           || props.selected.get().iter().any(|path| {
             props

@@ -16,6 +16,9 @@ impl LocalIntegration {
     self.ensure_latest_run()?;
     let base = self.main.snapshot()?;
     let task = self.task_git()?.snapshot()?;
+    if self.operation.owned_task().is_some() {
+      self.operation.ensure_task_owned(&task)?;
+    }
     if super::external::contained_result(&self.db, &self.main, &base, &self.run, Some(&self.operation))?.is_some() {
       return Err(IntegrationError::AlreadyIntegrated);
     }
@@ -119,6 +122,13 @@ impl LocalIntegration {
   }
 
   pub fn approve_and_merge(&mut self, reviewed: &CheckedResult) -> Result<(), IntegrationError> {
+    self.approve_and_merge_at(reviewed, self.operation.version())
+  }
+
+  pub fn approve_and_merge_at(&mut self, reviewed: &CheckedResult, generation: u64) -> Result<(), IntegrationError> {
+    if self.operation.version() != generation {
+      return Err(LocalError::Stale.into());
+    }
     self.ensure_latest_run()?;
     let actual = CheckedResult {
       base: self.main.snapshot()?,
@@ -132,13 +142,15 @@ impl LocalIntegration {
     self.save()?;
     self.task_git()?.ensure(&actual.result)?;
     self.main.ensure(&actual.base)?;
-    let merge = self
-      .main
-      .text(&["merge", "--ff-only", "--no-overwrite-ignore", &actual.result.head]);
+    let action = self.operation.merge_action().ok_or(LocalError::Reconcile)?.to_owned();
+    let merge = self.main.merge_result(&actual, &action);
     let current = self.main.snapshot()?;
     // A failed post-merge hook must not cause a completed merge to be repeated.
     if current.head != actual.result.head {
       merge?;
+      return Err(LocalError::Reconcile.into());
+    }
+    if !self.main.has_merge_receipt(&actual, &action)? {
       return Err(LocalError::Reconcile.into());
     }
     self.operation.record_merge(current.head.clone())?;

@@ -107,3 +107,172 @@ fn local_integration_restart_cleanup_rechecks_restoration_and_retains_originals_
     b"external work after cleanup intent\n"
   );
 }
+
+#[test]
+fn local_integration_partial_ancestry_is_ambiguous_and_creates_no_extra_commit() {
+  use orchester_core::integration::local::ResultEvidenceKind;
+  let fixture = Fixture::new(false);
+  let first = git(&fixture.task_root, &["rev-parse", "HEAD"]);
+  fs::write(fixture.task_root.join("remaining.txt"), "not delivered\n").expect("edit");
+  git(&fixture.task_root, &["add", "remaining.txt"]);
+  git(&fixture.task_root, &["commit", "-m", "second result"]);
+  let source = git(&fixture.task_root, &["rev-parse", "HEAD"]);
+  git(fixture.root(), &["merge", "--ff-only", &first]);
+  let before = git(fixture.root(), &["rev-parse", "HEAD"]);
+  let evidence = external_integration(fixture.root(), fixture.run)
+    .expect("evidence")
+    .expect("partial");
+  assert_eq!(evidence.kind, ResultEvidenceKind::PartialAncestry);
+  assert_eq!(evidence.source.as_str(), source);
+  assert!(matches!(
+    LocalIntegration::open(fixture.root(), fixture.run),
+    Err(IntegrationError::AlreadyIntegrated)
+  ));
+  assert_eq!(git(fixture.root(), &["rev-parse", "HEAD"]), before);
+  assert!(!fixture.root().join("remaining.txt").exists());
+  assert!(
+    ProjectDb::open(fixture.root())
+      .expect("db")
+      .run_merge(fixture.run)
+      .expect("record")
+      .is_none()
+  );
+}
+
+#[test]
+fn local_integration_cherry_picked_scoped_result_is_ambiguous_not_full_ancestry() {
+  use orchester_core::integration::local::ResultEvidenceKind;
+  let fixture = Fixture::new(false);
+  let source = git(&fixture.task_root, &["rev-parse", "HEAD"]);
+  fs::write(fixture.root().join("unrelated.txt"), "main unrelated\n").expect("main");
+  git(fixture.root(), &["add", "unrelated.txt"]);
+  git(fixture.root(), &["commit", "-m", "unrelated"]);
+  git(fixture.root(), &["cherry-pick", &source]);
+  let before = git(fixture.root(), &["rev-parse", "HEAD"]);
+  let evidence = external_integration(fixture.root(), fixture.run)
+    .expect("read")
+    .expect("equivalent");
+  assert_eq!(evidence.kind, ResultEvidenceKind::EquivalentPatches);
+  assert!(matches!(
+    LocalIntegration::open(fixture.root(), fixture.run),
+    Err(IntegrationError::AlreadyIntegrated)
+  ));
+  assert_eq!(git(fixture.root(), &["rev-parse", "HEAD"]), before);
+}
+
+#[test]
+fn local_integration_incomplete_unrelated_main_does_not_claim_integration() {
+  let fixture = Fixture::new(false);
+  fs::write(fixture.root().join("unrelated.txt"), "main unrelated\n").expect("main");
+  git(fixture.root(), &["add", "unrelated.txt"]);
+  git(fixture.root(), &["commit", "-m", "unrelated"]);
+  let before = git(fixture.root(), &["rev-parse", "HEAD"]);
+  assert!(
+    external_integration(fixture.root(), fixture.run)
+      .expect("read")
+      .is_none()
+  );
+  let session = fixture.open();
+  assert!(session.operation().merged().is_none());
+  assert_eq!(git(fixture.root(), &["rev-parse", "HEAD"]), before);
+}
+
+fn cleanup_intent(fixture: &Fixture) -> String {
+  let mut session = fixture.open();
+  session.preserve("Retained cleanup").expect("preserve");
+  session.sync().expect("check");
+  let exact = session.operation().checked().expect("result").clone();
+  session.approve_and_merge(&exact).expect("merge");
+  session.restore().expect("restore");
+  let mut intent = session.operation().clone();
+  intent.begin_cleanup().expect("intent");
+  intent.advance_version();
+  assert!(
+    ProjectDb::open(fixture.root())
+      .expect("db")
+      .save_local_operation(&intent, Some(session.operation().version()))
+      .expect("save")
+  );
+  exact.result.head
+}
+
+#[test]
+fn local_integration_crash_before_delete_rechecks_index_without_repeating_merge() {
+  let fixture = Fixture::new(false);
+  fs::write(fixture.root().join("local.txt"), "selected staging\n").expect("edit");
+  git(fixture.root(), &["add", "local.txt"]);
+  fs::write(fixture.root().join("local.txt"), "original working\n").expect("edit");
+  let merged = cleanup_intent(&fixture);
+  git(fixture.root(), &["reset", "HEAD", "--", "local.txt"]);
+  let mut session = fixture.open();
+  assert!(session.reconcile().is_err());
+  let db = ProjectDb::open(fixture.root()).expect("db");
+  assert!(
+    db.local_content(
+      fixture.run,
+      &LocalPath::new("local.txt").expect("path"),
+      RecoveryLayer::Working
+    )
+    .expect("content")
+    .is_some()
+  );
+  assert_eq!(git(fixture.root(), &["rev-parse", "HEAD"]), merged);
+  assert_eq!(session.operation().phase(), LocalPhase::RemovingPreservation);
+}
+
+#[test]
+fn local_integration_delete_before_final_journal_save_finishes_only_after_actual_verification() {
+  let fixture = Fixture::new(false);
+  fs::write(fixture.root().join("local.txt"), "original retained\n").expect("edit");
+  let merged = cleanup_intent(&fixture);
+  ProjectDb::open(fixture.root())
+    .expect("db")
+    .remove_local_content(fixture.run)
+    .expect("simulated already deleted");
+  let mut session = fixture.open();
+  session.reconcile().expect("verify and finish journal");
+  assert_eq!(session.operation().phase(), LocalPhase::Complete);
+  assert_eq!(git(fixture.root(), &["rev-parse", "HEAD"]), merged);
+  assert_eq!(
+    fs::read(fixture.root().join("local.txt")).expect("working"),
+    b"original retained\n"
+  );
+  session.reconcile().expect("repeat reconciliation");
+  assert_eq!(git(fixture.root(), &["rev-parse", "HEAD"]), merged);
+}
+
+#[test]
+fn local_integration_external_completion_after_owned_intent_does_not_forge_a_merge_record() {
+  let fixture = Fixture::new(false);
+  let mut session = fixture.open();
+  session.prepare_clean().expect("prepare");
+  session.sync().expect("check");
+  let exact = session.operation().checked().expect("checked").clone();
+  let mut pending = session.operation().clone();
+  pending.approve(&exact).expect("private reviewed intent");
+  pending.begin_merge(&exact).expect("intent before execution");
+  pending.advance_version();
+  let mut db = ProjectDb::open(fixture.root()).expect("db");
+  assert!(
+    db.save_local_operation(&pending, Some(session.operation().version()))
+      .expect("save intent")
+  );
+  drop(session);
+  let output = std::process::Command::new("git")
+    .args(["merge", "--ff-only", &exact.result.head])
+    .env("GIT_REFLOG_ACTION", "external-private-regression")
+    .current_dir(fixture.root())
+    .output()
+    .expect("external private merge");
+  assert!(output.status.success());
+  let mut session = fixture.open();
+  assert!(
+    session.reconcile().is_err(),
+    "same HEAD without our actual write receipt is ambiguous"
+  );
+  assert!(session.operation().merged().is_none());
+  assert!(db.run_merge(fixture.run).expect("historical record").is_none());
+  assert!(session.refresh().is_err());
+  assert!(session.sync().is_err());
+  assert_eq!(git(fixture.root(), &["rev-parse", "HEAD"]), exact.result.head);
+}

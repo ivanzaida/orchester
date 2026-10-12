@@ -132,36 +132,7 @@ impl LocalIntegration {
   }
 
   pub fn restore_conflicts(&self) -> Result<Vec<LocalConflict>, IntegrationError> {
-    let Some(saved) = self.operation.preservation() else {
-      return Ok(Vec::new());
-    };
-    let heads = self.main.tree_entries("HEAD")?;
-    saved
-      .original
-      .files
-      .iter()
-      .filter(|file| !self.operation.restored().iter().any(|done| done.path == file.path))
-      .map(|file| {
-        let local = self
-          .db
-          .local_content(self.run.id(), &file.path, RecoveryLayer::Working)?;
-        let incoming = local
-          .as_deref()
-          .map(|bytes| {
-            self.main.put_blob(bytes).map(|object| IndexEntry {
-              mode: if file.executable { 0o100755 } else { 0o100644 },
-              object,
-            })
-          })
-          .transpose()?;
-        Ok(LocalConflict {
-          path: file.path.clone(),
-          ancestor: file.head.clone(),
-          current: heads.get(&file.path).cloned(),
-          incoming,
-        })
-      })
-      .collect()
+    restoration_files(&self.db, &self.operation, &self.main)
   }
 
   pub fn save_restore_resolution(
@@ -318,3 +289,37 @@ impl LocalIntegration {
 }
 
 type RestoreResult = Option<(Option<Vec<u8>>, Option<IndexEntry>)>;
+pub(super) fn restoration_files(
+  db: &orchester_store::ProjectDb,
+  operation: &orchester_core::integration::local::LocalOperation,
+  main: &orchester_exec::local_git::LocalGit,
+) -> Result<Vec<LocalConflict>, IntegrationError> {
+  let Some(saved) = operation.preservation() else {
+    return Ok(Vec::new());
+  };
+  let heads = main.tree_entries("HEAD")?;
+  saved
+    .original
+    .files
+    .iter()
+    .filter(|file| !operation.restored().iter().any(|done| done.path == file.path))
+    .map(|file| {
+      let local = db.local_content(operation.run(), &file.path, RecoveryLayer::Working)?;
+      let incoming = local
+        .as_deref()
+        .map(|bytes| {
+          main.put_blob(bytes).map(|object| IndexEntry {
+            mode: if file.executable { 0o100755 } else { 0o100644 },
+            object,
+          })
+        })
+        .transpose()?;
+      Ok(LocalConflict {
+        path: file.path.clone(),
+        ancestor: file.head.clone(),
+        current: heads.get(&file.path).cloned(),
+        incoming,
+      })
+    })
+    .collect()
+}

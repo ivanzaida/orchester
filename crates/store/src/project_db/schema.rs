@@ -9,6 +9,7 @@ mod automation_answers;
 mod code_index;
 mod command_approvals;
 mod conversation;
+mod editor_drafts;
 mod import;
 mod invocation_permissions;
 mod joining;
@@ -538,4 +539,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   optional_limits::MIGRATION,
   optional_daily_budget::MIGRATION,
   local_integration::MIGRATION,
+  editor_drafts::MIGRATION,
 ];

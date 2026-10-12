@@ -11,7 +11,7 @@ use orchester_workspace::tasks::local_integration::{Preview, read};
 
 use super::{Fixture, LocalPath, git};
 
-struct Vault(Option<&'static str>);
+pub(super) struct Vault(pub(super) Option<&'static str>);
 impl SecretVault for Vault {
   fn store(&self, _: &VaultKey, _: &SecretValue) -> Result<(), VaultError> {
     Err(VaultError::Unsupported)
@@ -65,12 +65,10 @@ fn local_integration_previews_hide_sensitive_names_known_values_and_json_escaped
     session.selected_commit_preview(&tree, &vault).expect("preview"),
     Preview::Sensitive
   );
-  assert_eq!(
-    session
-      .selected_commit_preview(&tree, &Vault(None))
-      .expect("unavailable vault"),
-    Preview::Sensitive
-  );
+  assert!(matches!(
+    session.selected_commit_preview(&tree, &Vault(None)),
+    Err(orchester_workspace::tasks::local_integration::IntegrationError::SensitiveMetadata)
+  ));
 }
 #[test]
 fn local_integration_checked_review_detects_external_changes_in_the_task_checkout() {
