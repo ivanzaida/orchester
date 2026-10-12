@@ -185,6 +185,14 @@ pub enum ImportFailure {
   #[error(transparent)]
   Draft(#[from] RepositoryDraftError),
 }
+impl ImportFailure {
+  pub fn message(&self) -> crate::messages::Message {
+    match self {
+      Self::Store(e) => crate::messages::store_error(e),
+      Self::Draft(_) => crate::messages::Message::new("skills.library.loadFailed"),
+    }
+  }
+}
 
 /// What an import made of one chosen item.
 #[derive(Clone, Debug, PartialEq, Eq)]

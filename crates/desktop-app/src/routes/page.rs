@@ -27,6 +27,9 @@ pub enum ProjectPage {
   Agent(ResourceId),
   Instructions,
   Skills,
+  NewSkill,
+  Skill(ResourceId),
+  ImportSkills,
   Tools,
   NewTool,
   Tool(ResourceId, ToolTab),
@@ -75,7 +78,7 @@ impl ProjectPage {
       Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(_) => Screen::Pipelines,
       Self::Agents | Self::Agent(_) => Screen::Agents,
       Self::Instructions => Screen::Instructions,
-      Self::Skills => Screen::Skills,
+      Self::Skills | Self::NewSkill | Self::Skill(_) | Self::ImportSkills => Screen::Skills,
       Self::Tools | Self::NewTool | Self::Tool(..) => Screen::Tools,
       Self::Secrets => Screen::Secrets,
       Self::Connections(_) => Screen::Connections,
@@ -97,6 +100,9 @@ impl ProjectPage {
       Self::NewTask => format!("{tasks}/{NEW}"),
       Self::EditTask(key) => format!("{tasks}/{key}/{EDIT}"),
       Self::Task(key, view) => view.path(&format!("{tasks}/{key}")),
+      Self::NewSkill => with_query(format!("{project_root}/skills"), &[("skill", Some("new"))]),
+      Self::Skill(id) => with_query(format!("{project_root}/skills"), &[("skill", Some(&id.to_string()))]),
+      Self::ImportSkills => with_query(format!("{project_root}/skills"), &[("skill", Some("import"))]),
       Self::NewTool => with_query(format!("{project_root}/tools"), &[("tool", Some("new"))]),
       Self::Tool(id, tab) => with_query(
         format!("{project_root}/tools"),
@@ -126,6 +132,12 @@ impl ProjectPage {
           rest => TaskView::parse(rest, params).map(|view| Self::Task(key, view)),
         }
       }
+      ["skills"] => match params.take("skill")?.as_deref() {
+        None => Ok(Self::Skills),
+        Some("new") => Ok(Self::NewSkill),
+        Some("import") => Ok(Self::ImportSkills),
+        Some(id) => id.parse().map(Self::Skill).map_err(|_| RouteError::NoScreen),
+      },
       ["tools"] => match params.take("tool")?.as_deref() {
         None => Ok(Self::Tools),
         Some("new") => Ok(Self::NewTool),

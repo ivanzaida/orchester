@@ -1,0 +1,142 @@
+//! Skills screen rules are independent of rendering.
+use std::fs;
+
+use orchester_core::{
+  agent_files::RepositoryAgentFiles,
+  id::ProjectId,
+  name::Name,
+  project::{Project, ProjectKey},
+  resource::{InstructionScope, Skill},
+  store::SettingsStore,
+};
+use orchester_store::ProjectDb;
+use orchester_workspace::skills::editor::{self, EditorData};
+fn project() -> (tempfile::TempDir, ProjectDb) {
+  let repo = tempfile::tempdir().expect("project");
+  fs::create_dir(repo.path().join(".git")).expect("git");
+  let db = ProjectDb::create(
+    repo.path(),
+    Project::new(
+      ProjectId::generate(),
+      ProjectKey::new("ORC").expect("key"),
+      Name::new("Skills").expect("name"),
+    ),
+  )
+  .expect("db");
+  (repo, db)
+}
+fn skill(description: &str, body: &str) -> Skill {
+  Skill::new(description.into(), body.into(), Vec::new(), InstructionScope::Project).expect("skill")
+}
+#[test]
+fn skills_name_validation_and_competing_edits_preserve_the_stored_draft() {
+  let (repo, _db) = project();
+  let before = editor::save_in(repo.path(), None, "checks", &skill("Check", "Check first")).expect("created");
+  let name_taken = editor::save_in(repo.path(), None, "CHECKS", &skill("Other", "Other")).expect_err("name taken");
+  assert_eq!(name_taken.key, "skills.editorErrors.nameTaken");
+  let newer =
+    editor::save_in(repo.path(), Some(&before), "checks", &skill("Check", "Changed outside")).expect("other edit");
+  let stale = editor::save_in(repo.path(), Some(&before), "renamed", &skill("New", "Overwrite")).expect_err("stale");
+  assert_eq!(stale.key, "errors.draftChanged");
+  let current = EditorData::load_in(repo.path())
+    .expect("read")
+    .listed
+    .entry(before.id)
+    .expect("entry")
+    .clone();
+  assert_eq!(current, newer);
+  let renamed = editor::save_in(repo.path(), Some(&newer), "renamed", &newer.body).expect("rename");
+  assert_eq!(renamed.name.as_ref(), "renamed");
+  assert_eq!(renamed.slug, before.slug);
+}
+#[test]
+fn skills_publish_requires_person_and_complete_saved_content() {
+  let (repo, _db) = project();
+  let blank = editor::save_in(repo.path(), None, "checks", &skill("", "")).expect("draft");
+  assert_eq!(
+    editor::publish_reason(&blank).expect("not publishable").key,
+    "skills.editorErrors.descriptionRequired"
+  );
+  assert_eq!(
+    editor::publish_in(repo.path(), &blank, false).expect_err("person").key,
+    "skills.editorErrors.personOnly"
+  );
+  let draft = editor::save_in(repo.path(), Some(&blank), "checks", &skill("Check", "Check first")).expect("saved");
+  let outside = editor::save_in(
+    repo.path(),
+    Some(&draft),
+    "checks",
+    &skill("Check", "Changed since review"),
+  )
+  .expect("outside");
+  assert_eq!(
+    editor::publish_in(repo.path(), &draft, true).expect_err("stale").key,
+    "errors.draftChanged"
+  );
+  let published = editor::publish_in(repo.path(), &outside, true).expect("published");
+  assert!(!published.state.has_draft());
+  assert_eq!(published.state.published().expect("version").get(), 1);
+}
+#[test]
+fn skills_repository_files_require_person_only_when_enabled() {
+  let (repo, mut db) = project();
+  editor::set_agent_files_in(repo.path(), false, false).expect("off needs no widening");
+  assert_eq!(db.repository_agent_files().expect("setting"), RepositoryAgentFiles::Off);
+  assert_eq!(
+    editor::set_agent_files_in(repo.path(), true, false)
+      .expect_err("needs person")
+      .key,
+    "skills.editorErrors.personOnly"
+  );
+  assert_eq!(db.repository_agent_files().expect("setting"), RepositoryAgentFiles::Off);
+  editor::set_agent_files_in(repo.path(), true, true).expect("person");
+  assert_eq!(db.repository_agent_files().expect("setting"), RepositoryAgentFiles::On);
+  db.save_repository_agent_files(RepositoryAgentFiles::Off)
+    .expect("fixture");
+}
+#[test]
+fn skills_reference_files_are_stored_and_duplicate_paths_are_refused() {
+  use orchester_core::store::BlobStore;
+  let (repo, db) = project();
+  let file = repo.path().join("checks.md");
+  fs::write(&file, "Read the check output.").expect("reference");
+  let added = editor::add_file_in(repo.path(), &file, &[]).expect("add file");
+  assert_eq!(db.blob(&added.content).expect("blob"), b"Read the check output.");
+  assert_eq!(
+    editor::add_file_in(repo.path(), &file, &[added])
+      .expect_err("duplicate")
+      .key,
+    "skills.editorErrors.duplicateFile"
+  );
+}
+#[test]
+fn skills_tool_step_scopes_are_visible_but_cannot_be_selected() {
+  use orchester_core::{
+    resource::{Pipeline, PipelineEdit, Slug, StepKind},
+    store::ResourceStore,
+    time::Timestamp,
+  };
+  let (repo, mut db) = project();
+  let mut edit = PipelineEdit::new(Pipeline::new(vec![]).expect("empty draft"));
+  let key = edit.add_step(Name::new("Checks").expect("name"), None);
+  edit.update(&key, |step| step.kind = StepKind::Tool { tool: None });
+  let pipeline = db
+    .create_resource(
+      Slug::new("delivery").expect("slug"),
+      Name::new("Delivery").expect("name"),
+      &edit.validate().expect("draft"),
+      Timestamp::now(),
+    )
+    .expect("pipeline");
+  let data = EditorData::load_in(repo.path()).expect("data");
+  let scope = InstructionScope::Step {
+    pipeline: pipeline.id(),
+    step: key,
+  };
+  let option = data.scopes.iter().find(|o| o.scope == scope).expect("shown");
+  assert!(!option.available);
+  assert_eq!(
+    data.validate_scope(&scope).expect_err("no agent").key,
+    "skills.editorErrors.scopeUnavailable"
+  );
+}
