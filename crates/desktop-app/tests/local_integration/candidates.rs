@@ -99,7 +99,10 @@ fn local_integration_read_refusal_keeps_raw_candidate_and_leave_guard_until_its_
     "a read error cannot drop the editor's leave guard"
   );
   fs::remove_file(page.root().join(&name)).expect("remove only our private error fixture");
-  let project = orchester_store::ProjectDb::open(page.root()).expect("db").project().id();
+  let project = orchester_store::ProjectDb::open(page.root())
+    .expect("db")
+    .project()
+    .id();
   page.window.projects().feed(project).saved();
   page.ready("local-destination");
   assert_eq!(page.value("local-destination"), "../still unfinished/");
