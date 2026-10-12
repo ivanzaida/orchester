@@ -1,6 +1,8 @@
 //! The close dialog rendered headlessly from fixture work (02.C `Xz30C`, 02.D `a0tTV`). The
 //! fixtures are test data only.
 
+extern crate lurq_legacy as lurq;
+
 use std::sync::{
   Arc,
   atomic::{AtomicUsize, Ordering},

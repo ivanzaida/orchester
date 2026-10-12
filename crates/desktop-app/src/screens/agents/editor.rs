@@ -56,6 +56,7 @@ impl PartialEq for Props {
 }
 impl DevtoolsInspectable for Props {}
 pub struct Editor {
+  work: actions::Work,
   fields: Fields,
   original: Option<ProfileEntry>,
   tab: Signal<usize>,
@@ -68,6 +69,7 @@ impl Component for Editor {
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<Props>().clone();
     let editor = Self {
+      work: actions::work(ctx),
       fields: Fields::new(ctx, &props.listed, props.entry.as_ref()),
       original: props.entry.clone(),
       tab: ctx.signal(0),
@@ -78,7 +80,7 @@ impl Component for Editor {
     editor
       .fields
       .watch_changes(ctx, props.listed.clone(), editor.pending.clone());
-    let work = actions::work(ctx);
+    let work = editor.work.clone();
     actions::follow(ctx, &work, editor.pending.clone(), editor.busy.clone());
     editor
   }
@@ -86,7 +88,7 @@ impl Component for Editor {
     let mut props = ctx.props::<Props>().clone();
     let changed_outside = props.entry != self.original;
     props.entry = self.original.clone();
-    let work = actions::work(ctx);
+    let work = self.work.clone();
     let checked = self.fields.profile(&props.listed);
     let dirty = props
       .entry

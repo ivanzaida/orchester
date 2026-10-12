@@ -62,7 +62,7 @@ fn tools_window_confirmation_is_person_only_for_save_and_publish() {
     db.latest_version::<Tool>(id).expect("version").is_some()
   });
 }
-fn text(s: &mut super::Served, id: &str) -> String {
+pub(super) fn text(s: &mut super::Served, id: &str) -> String {
   fn collect(e: lurq::node::element::ElementRef<'_>, texts: &mut Vec<String>) {
     texts.extend(e.text_content().map(str::to_owned));
     for child in e.children() {

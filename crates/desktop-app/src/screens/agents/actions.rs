@@ -75,6 +75,17 @@ pub fn confirm(ctx: &mut Ctx, pending: &Signal<Pending>, busy: &Signal<bool>, wo
   let question = WidenProps {
     id: "agent-confirm",
     card: false,
+    automation: if stale {
+      crate::mcp::input_gate::Guarded::WideningQuestion
+    } else if request
+      .allowed
+      .iter()
+      .any(|reason| reason.key == "appMcp.widens.autoApprove")
+    {
+      crate::mcp::input_gate::Guarded::ApprovalWidening
+    } else {
+      crate::mcp::input_gate::Guarded::PermissionWidening
+    },
     title: ctx.t(if stale { "agents.keepTitle" } else { "agents.widenTitle" }),
     reasons: reasons.into(),
     confirm: ctx.t(if stale { "agents.keepConfirm" } else { "agents.confirm" }),

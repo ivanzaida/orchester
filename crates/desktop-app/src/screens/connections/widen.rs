@@ -1,9 +1,8 @@
 //! What a save or Turn on widens, asked in place before it is done (the form's action bar, the inspector's footer,
 //! as `Confirm · Turn off` `D2FVJJ` asks): the reasons, `connections::mcp::widenings`' words, and a way back first.
-//! Only a person confirms it. While it shows, the window takes no MCP client's input (`InputGate::protect`: lurq
-//! denies its input tools, also a call queued earlier or one whose answer timed out, and the server refuses them
-//! with `person_only`), it takes no press before it lived through one pass, and none while a client's input is
-//! being applied. Automation widens through the domain tools, which a person lets it do in Settings.
+//! Each caller explicitly classifies its consent: domain setup permissions, automatic approvals, or always
+//! person-only. The stored human opt-in permits only its matching app-owned question, never Settings itself.
+//! No press is taken before one rendered pass; forwarded input rechecks live consent when the handler runs.
 
 use std::sync::Arc;
 
@@ -11,6 +10,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
+    events::{InputSource, input_source},
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Row, Spacer, Text},
@@ -34,6 +34,7 @@ type Handler = Arc<dyn Fn() + Send + Sync>;
 pub struct WidenProps {
   pub id: &'static str,
   pub card: bool,
+  pub automation: Guarded,
   pub title: Arc<str>,
   pub reasons: Arc<[Arc<str>]>,
   pub confirm: Arc<str>,
@@ -47,6 +48,7 @@ impl PartialEq for WidenProps {
   fn eq(&self, other: &Self) -> bool {
     (
       self.card,
+      self.automation,
       self.id,
       &self.title,
       &self.reasons,
@@ -54,6 +56,7 @@ impl PartialEq for WidenProps {
       &self.keep,
     ) == (
       other.card,
+      other.automation,
       other.id,
       &other.title,
       &other.reasons,
@@ -67,8 +70,8 @@ impl DevtoolsInspectable for WidenProps {}
 
 pub struct WidenConfirm {
   gate: Option<InputGate>,
-  /// While the question shows, the window takes no MCP client's input.
-  _protected: Option<Protected>,
+  /// The mounted question carries its exact consent classification.
+  protected: parking_lot::Mutex<Option<(Guarded, Protected)>>,
 }
 
 impl Component for WidenConfirm {
@@ -76,14 +79,27 @@ impl Component for WidenConfirm {
 
   fn create(ctx: &mut Ctx) -> Self {
     let gate = ctx.use_context::<InputGate>();
+    let policy = ctx.props::<WidenProps>().automation;
     Self {
-      _protected: gate.as_ref().map(|gate| gate.protect(Guarded::WideningQuestion)),
+      protected: parking_lot::Mutex::new(gate.as_ref().map(|gate| (policy, gate.protect(policy)))),
       gate,
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<WidenProps>().clone();
+    if let Some(gate) = &self.gate {
+      let mut protected = self.protected.lock();
+      if protected
+        .as_ref()
+        .is_some_and(|(policy, _)| *policy != props.automation)
+      {
+        *protected = None;
+        *protected = Some((props.automation, gate.protect(props.automation)));
+      }
+    }
+    consent(ctx, &self.gate);
+
     // No press before the question lived through one pass: input meant for what showed before cannot land on it.
     let armed = ctx
       .future((), |()| async { Ok::<(), Message>(()) })
@@ -92,7 +108,7 @@ impl Component for WidenConfirm {
       .data
       .is_some();
     let keep = ActionButton::new(format!("{}-keep", props.id), ButtonKind::Secondary, props.keep.clone()).on_click({
-      let keep = props.on_keep.clone();
+      let keep = guarded_handler(self.gate.clone(), props.automation, props.on_keep.clone());
       move || keep()
     });
     let confirm = ActionButton::new(
@@ -101,14 +117,8 @@ impl Component for WidenConfirm {
       props.confirm.clone(),
     );
     let confirm = if armed {
-      let (gate, go) = (self.gate.clone(), props.on_confirm.clone());
-      confirm.on_click(move || {
-        if gate.as_ref().is_some_and(InputGate::input_in_flight) {
-          tracing::warn!("an MCP client's window input reached a widening's confirmation; not taken");
-          return;
-        }
-        go();
-      })
+      let handler = guarded_handler(self.gate.clone(), props.automation, props.on_confirm.clone());
+      confirm.on_click(move || handler())
     } else {
       confirm.disabled()
     };
@@ -117,6 +127,48 @@ impl Component for WidenConfirm {
     } else {
       question(&props, (keep, confirm))
     }
+  }
+}
+
+fn guarded_handler(gate: Option<InputGate>, policy: Guarded, handler: Handler) -> Handler {
+  Arc::new(move || {
+    if input_source() == InputSource::Synthetic {
+      if gate
+        .as_ref()
+        .is_none_or(|gate| gate.protecting() || !gate.widening_allowed(policy))
+      {
+        tracing::warn!("synthetic input reached a protected permission decision; not taken");
+        return;
+      }
+      tracing::info!("automation answered application permission review under stored consent");
+    }
+    handler();
+  })
+}
+
+fn consent(ctx: &mut Ctx, gate: &Option<InputGate>) {
+  let Some(services) = ctx.use_context::<crate::services::Services>() else {
+    return;
+  };
+  let read = ctx.future((), move |()| {
+    let workspace = services.workspace.clone();
+    async move {
+      let read = workspace.clone();
+      let result = orchester_workspace::background::run(move || {
+        workspace.automation_changes_permissions()?;
+        workspace.automation_answers_approvals()?;
+        Ok::<(), orchester_store::StoreError>(())
+      })
+      .await;
+      if !matches!(&result, Ok(Ok(()))) {
+        read.invalidate_automation_consent();
+      }
+      result?.map_err(|error| orchester_workspace::messages::store_error(&error))
+    }
+  });
+  read.state().get();
+  if let Some(gate) = gate {
+    gate.refresh_tools();
   }
 }
 

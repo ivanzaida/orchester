@@ -2,6 +2,8 @@
 //! paths that name nothing lead to the nearest place that exists; the start screen, a created
 //! project and the way back to the start take the history entries they should.
 
+extern crate lurq_legacy as lurq;
+
 use std::{fs, num::NonZeroU32, path::Path, sync::Arc};
 
 use lurq::{

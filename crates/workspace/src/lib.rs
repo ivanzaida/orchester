@@ -20,7 +20,7 @@ pub mod environment;
 pub mod highlight;
 pub mod i18n;
 pub mod import;
-#[cfg(feature = "devtools-inspect")]
+#[cfg(any(feature = "devtools-inspect", feature = "devtools-inspect-legacy"))]
 mod inspect;
 pub mod instructions;
 pub mod messages;
