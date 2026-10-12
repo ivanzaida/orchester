@@ -34,6 +34,7 @@ fn local_integration_retained_inspector_clears_acknowledgement_for_same_main_new
       .expect("scope"),
     &check
   ));
+  unchanged_refresh_keeps_scope(&mut page, &check);
   fs::write(page.fixture.task_root.join("task.txt"), "different exact result\n").expect("private change");
   git(
     &page.fixture.task_root,
@@ -75,14 +76,12 @@ fn local_integration_retained_inspector_clears_acknowledgement_for_same_main_new
   );
   let project = ProjectDb::open(page.root()).expect("db").project().id();
   page.window.projects().feed(project).saved();
-  page
-    .window
-    .until("same retained inspector clears old checkbox", |window| {
-      window
-        .tree
-        .get_element_by_id("local-confirm-scope")
-        .is_some_and(|element| !contains(element, &check))
-    });
+  page.until("same retained inspector clears old checkbox", |window| {
+    window
+      .tree
+      .get_element_by_id("local-confirm-scope")
+      .is_some_and(|element| !contains(element, &check))
+  });
   assert!(page.has("local-confirm-scope"));
   assert!(
     ProjectDb::open(page.root())
@@ -90,5 +89,23 @@ fn local_integration_retained_inspector_clears_acknowledgement_for_same_main_new
       .run_merge(page.run())
       .expect("no merge")
       .is_none()
+  );
+}
+fn unchanged_refresh_keeps_scope(page: &mut Page, check: &str) {
+  let project = ProjectDb::open(page.root()).expect("db").project().id();
+  page.window.projects().feed(project).saved();
+  page.window.pass();
+  assert!(
+    !page.has("local-confirm-scope"),
+    "the old projection is actually hidden before replacement"
+  );
+  page.until(
+    "unchanged reviewed result keeps its exact acknowledgement through remount",
+    |window| {
+      window
+        .tree
+        .get_element_by_id("local-confirm-scope")
+        .is_some_and(|element| contains(element, check))
+    },
   );
 }

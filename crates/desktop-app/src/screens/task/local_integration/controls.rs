@@ -3,6 +3,7 @@ mod preparation;
 
 use std::sync::{Arc, atomic::Ordering};
 
+pub(super) use acknowledgement::AcknowledgementState;
 use acknowledgement::ReviewIdentity;
 use lurq::{
   app::{
@@ -44,6 +45,7 @@ struct Props {
   stop: Arc<std::sync::atomic::AtomicBool>,
   busy: bool,
   editor_dirty: Signal<bool>,
+  acknowledgement: AcknowledgementState,
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
@@ -70,6 +72,7 @@ pub(super) fn inspector(
     stop: page.stop.clone(),
     busy,
     editor_dirty: page.editor_dirty.clone(),
+    acknowledgement: page.acknowledgement.clone(),
   };
   Column::new()
     .spacing(SpacingSize::Md)
@@ -80,7 +83,7 @@ struct Inspector {
   gate: Option<InputGate>,
   protected: parking_lot::Mutex<Option<Protected>>,
   agree: Signal<bool>,
-  identity: parking_lot::Mutex<Option<ReviewIdentity>>,
+  identity: Arc<parking_lot::Mutex<Option<ReviewIdentity>>>,
 }
 impl Component for Inspector {
   type Props = Props;
@@ -88,8 +91,8 @@ impl Component for Inspector {
     Self {
       gate: ctx.use_context(),
       protected: parking_lot::Mutex::new(None),
-      agree: ctx.signal(false),
-      identity: parking_lot::Mutex::new(None),
+      agree: ctx.props::<Props>().acknowledgement.agree.clone(),
+      identity: ctx.props::<Props>().acknowledgement.identity.clone(),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {

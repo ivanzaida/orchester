@@ -26,3 +26,17 @@ impl ReviewIdentity {
     }
   }
 }
+
+#[derive(Clone)]
+pub(in crate::screens::task::local_integration) struct AcknowledgementState {
+  pub agree: lurq::core::Signal<bool>,
+  pub(super) identity: std::sync::Arc<parking_lot::Mutex<Option<ReviewIdentity>>>,
+}
+impl AcknowledgementState {
+  pub fn new(ctx: &mut lurq::app::ctx::Ctx) -> Self {
+    Self {
+      agree: ctx.signal(false),
+      identity: std::sync::Arc::new(parking_lot::Mutex::new(None)),
+    }
+  }
+}
