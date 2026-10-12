@@ -768,6 +768,33 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-3 · Pipelines page and editor · branch `codex/orc3-integration` (accepted 2026-10-12, merged `39f945d2`).
+Independent source review accepted final union `7668c94a` / tree `f7e145f2`; eight named-filter groups /
+83 executions and `tools/check.ps1` passed. Pipeline writes retain same-snapshot CAS, immutable published
+versions, reload locking, dirty/error preservation, and actual-resource links to Agents. The actual
+publication receipt no longer obscures in-place decisions. Independent native/Pencil verification found
+no blocking or major mismatch in reached action/recovery regions at 1440 dark. Final Publish v3,
+Ask-off Save decline/confirm, Agent-to-Tool Save decline/confirm, Leave+Keep and History Restore outcomes
+were permitted automation under the person's actual saved opt-in, with full read-only storage checks;
+historical human checks keep their original revision boundaries. Explicit Restore settled through normal
+checked autosave; a later stale element-ref Save error is retained, not reported as a successful click.
+Post-merge workspace/all-targets/all-features cargo check and check.ps1 passed. Recorded visual minors
+remain; native races/fault timing, separate Ask publication, other screens, macOS, 960/light, actual CLI/
+runner execution and installed-version verification remain Unverified. Full test suites were not run.
+The original run's exhausted Verify history is retained; domain workflow completion awaits the installed app.
+Evidence: `.tmp/orchestrator/orc3/` and `.tmp/verify/orc3-policy-union-f7e145f2/report.md`.
+
+Automation permissions switch (accepted 2026-10-12, merged `d50b240f`, source `4a55abd5`).
+Native setup widening decisions now honor the person's saved permission opt-in, using the same policy as
+domain writes and rechecking consent at execution time. Synchronous revocation and request attribution
+remain enforced. Settings opt-ins, stale Agents publication and Secrets replacement remain human-only;
+Auto mode/profile changes also require the independent approvals opt-in. Official modern lurq 0.43 is used;
+the deprecated app retains 0.42 until its separate migration. Independent source and scoped native/Pencil
+reviews passed, with actual Tool Save decline/confirm readback; nine named-filter groups /121 executions,
+check.ps1 and post-merge all-target/all-feature cargo/check gates passed. macOS, full suites, other native
+editors and per-invocation relay coverage were not performed. This completes the focused consent bug fix,
+not every unrelated A4 follow-up. Evidence: `.tmp/orchestrator/automation-permissions/`.
+
 ORC-2 · Agents page · branch `orchester/orc-2-run-4` (done 2026-10-11, merged `500f9965`).
 Independent source review accepted integration tree `4a0021f3`; 23 filtered groups / 134 executions passed
 on its unchanged production predecessor, followed by six inventory-correction checks and `tools/check.ps1`.
