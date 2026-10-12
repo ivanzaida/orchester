@@ -78,3 +78,48 @@ pub fn saved_at(ctx: &Ctx, entry: &orchester_workspace::skills::data::SkillEntry
     },
   )
 }
+
+pub fn types(ctx: &Ctx, instructions: usize, skills: usize) -> Arc<str> {
+  ctx.t_args(
+    "skills.typeTotals",
+    [
+      (
+        "instructions",
+        ctx.t_args(
+          if instructions == 1 {
+            "skills.instructionOne"
+          } else {
+            "skills.instructionMany"
+          },
+          [("count", instructions.to_string())],
+        ),
+      ),
+      (
+        "skills",
+        ctx.t_args(
+          if skills == 1 {
+            "skills.skillOne"
+          } else {
+            "skills.skillMany"
+          },
+          [("count", skills.to_string())],
+        ),
+      ),
+    ],
+  )
+}
+
+/// Presentation of a reference path; selection and supported-file rules stay in workspace.
+pub fn file_type(path: &str) -> &'static str {
+  match std::path::Path::new(path)
+    .extension()
+    .and_then(|e| e.to_str())
+    .map(str::to_ascii_lowercase)
+    .as_deref()
+  {
+    Some("md" | "markdown") => "skills.fileMarkdown",
+    Some("sh" | "ps1" | "py" | "js" | "ts" | "rb") => "skills.fileScript",
+    Some("txt" | "json" | "yaml" | "yml" | "toml") => "skills.fileText",
+    _ => "skills.fileOther",
+  }
+}

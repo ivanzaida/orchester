@@ -29,7 +29,19 @@ pub fn cell_spacing() -> SpacingSize {
 pub fn heading() -> TypographyStyle {
   TypographyStyle::extra("skills_heading")
 }
+pub fn file_inset() -> SpacingSize {
+  SpacingSize::extra("skills_file_inset")
+}
+pub fn result_header_bottom() -> SpacingSize {
+  SpacingSize::extra("skills_result_header_bottom")
+}
+pub fn result_spacing() -> SpacingSize {
+  SpacingSize::extra("skills_result_spacing")
+}
 pub(super) fn install(theme: &Theme) {
+  theme.set_spacing_value(file_inset(), 7.0);
+  theme.set_spacing_value(result_header_bottom(), 18.0);
+  theme.set_spacing_value(result_spacing(), 22.0);
   theme.set_spacing_value(source_line(), 20.0);
   theme.set_spacing_value(form_inset(), 28.0);
   theme.set_spacing_value(section_spacing(), 20.0);

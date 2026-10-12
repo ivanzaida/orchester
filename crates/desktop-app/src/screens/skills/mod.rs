@@ -1,6 +1,8 @@
 //! Skills library and editor, Skills layer TOntf in orchester2.pen.
 mod editor;
+mod guidance;
 mod import_preview;
+mod import_result;
 mod inspector;
 mod library;
 mod repository;

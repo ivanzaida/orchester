@@ -5,7 +5,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Text},
   core::Signal,
@@ -22,8 +22,8 @@ use crate::{
     field::field_error,
     icon::Icon,
     inspector::{PropertyValue, note, property, section_title},
-    list_entry::removable,
     message::message_text,
+    reference_file::removable,
   },
 };
 #[derive(Clone)]
@@ -89,24 +89,29 @@ impl Component for Inspector {
       .map(|(i, file)| {
         let files = p.files.clone();
         let path = file.path.clone();
-        let row = removable(
+        removable(
           ctx,
           &format!("skill-remove-file-{i}"),
           file.path.as_str(),
+          &ctx.t_args(
+            "skills.fileMetadata",
+            [
+              ("type", ctx.t(super::words::file_type(file.path.as_str())).to_string()),
+              (
+                "size",
+                message_text(ctx, &orchester_workspace::display::byte_size(file.size)).to_string(),
+              ),
+            ],
+          ),
           &ctx.t("skills.removeFile"),
           (!p.busy && !state.is_pending()).then_some(move || files.update(|f| f.0.retain(|f| f.path != path))),
-        );
-        Column::new().width(Dimension::Pct(100.0)).child(row).child(
-          Text::new(&message_text(ctx, &orchester_workspace::display::byte_size(file.size)))
-            .variant(TypographyStyle::Caption)
-            .padding(Padding::new().left(SpacingSize::Md)),
         )
       })
       .collect::<Vec<_>>();
     let add = self.add.clone();
     let root = p.page.project.open.repo_root.clone();
     let title = ctx.t("skills.chooseFile");
-    let button = ActionButton::new("skill-add-file", ButtonKind::Ghost, ctx.t("skills.addFile")).icon(Icon::Plus);
+    let button = ActionButton::new("skill-add-file", ButtonKind::Secondary, ctx.t("skills.addFile")).icon(Icon::Plus);
     let button = if p.busy || state.is_pending() {
       button.disabled()
     } else {

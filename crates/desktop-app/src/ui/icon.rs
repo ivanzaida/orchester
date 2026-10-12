@@ -184,6 +184,7 @@ icons! {
   Square => '\u{e167}',
   SquarePlus => '\u{e173}',
   Tag => '\u{e17f}',
+  Target => '\u{e180}',
   Tags => '\u{e35c}',
   Terminal => '\u{e181}',
   TextCursorInput => '\u{e265}',
@@ -241,4 +242,23 @@ pub const fn screen_icon(screen: Screen) -> Icon {
     Screen::EditConnection => Icon::Pencil,
     Screen::ProjectSettings => Icon::SlidersHorizontal,
   }
+}
+
+/// Outlined raised icon tile in Skills guidance, empty states and reference rows.
+pub fn marker(mark: Icon, side: f32) -> lurq::components::Row {
+  use lurq::{
+    app::theme::{BorderSize, RadiusSize},
+    layout::{Alignment, layout_kind::Justify},
+    node::dimension::Dimension,
+  };
+  lurq::components::Row::new()
+    .width(Dimension::Px(side))
+    .height(Dimension::Px(side))
+    .flex_shrink(0.0)
+    .align_items(Alignment::Center)
+    .justify(Justify::Center)
+    .background(PaletteColor::SurfaceRaised)
+    .border_inside(BorderSize::Sm, PaletteColor::Border)
+    .rounded(RadiusSize::Md)
+    .child(icon(mark, IconSize::Base, PaletteColor::TextMuted))
 }

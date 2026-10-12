@@ -145,7 +145,10 @@ impl ScopePicker {
       };
       list = list.child(heading(&ctx.t_args(
         "skills.scopeMenu.steps",
-        [("pipeline", pipeline.pipeline.as_deref().unwrap_or_default())],
+        [(
+          "pipeline",
+          pipeline.pipeline.as_deref().unwrap_or_default().to_uppercase(),
+        )],
       )));
       for option in p
         .page

@@ -228,3 +228,64 @@ fn skills_publication_rejects_reviewed_snapshot_after_same_content_version_chang
   assert_eq!(final_entry.state.published().expect("published").get(), 3);
   assert!(!final_entry.state.has_draft());
 }
+
+#[test]
+fn skills_import_result_metadata_matches_actual_initial_drafts_and_origins() {
+  use orchester_core::{
+    id::IdempotencyKey,
+    resource::{Instruction, ResourceKind, VersionNumber},
+    store::{RepositoryImportStore, ResourceStore},
+  };
+  use orchester_workspace::skills::repository;
+  let (repo, db) = project();
+  let folder = repo.path().join(".claude/skills/write-migration");
+  fs::create_dir_all(&folder).expect("private folder");
+  fs::write(
+    folder.join("SKILL.md"),
+    "---\nname: write-migration\ndescription: Migrate storage\n---\n# Plan",
+  )
+  .expect("source");
+  fs::write(folder.join("notes.md"), "Private reference").expect("reference");
+  fs::write(repo.path().join("AGENTS.md"), "Project instructions").expect("source");
+  let scan = repository::scan(repo.path()).expect("discovery");
+  let result = repository::create_drafts_in(repo.path(), IdempotencyKey::generate(), &scan.items).expect("import");
+  assert_eq!(result.len(), 2);
+  for item in result {
+    assert_eq!(item.version, VersionNumber::FIRST);
+    assert_eq!(
+      db.repository_origin(item.resource.id())
+        .expect("origin")
+        .expect("stored")
+        .source,
+      item.source
+    );
+    match item.resource.kind() {
+      ResourceKind::Skill => {
+        let draft = db.draft::<Skill>(item.resource.id()).expect("draft").expect("stored");
+        assert_eq!(draft.based_on(), None);
+        assert!(
+          db.latest_version::<Skill>(item.resource.id())
+            .expect("version")
+            .is_none()
+        );
+        assert_eq!(item.files, draft.body().files().len());
+      }
+      ResourceKind::Instruction => {
+        assert_eq!(
+          db.draft::<Instruction>(item.resource.id())
+            .expect("draft")
+            .expect("stored")
+            .based_on(),
+          None
+        );
+        assert!(
+          db.latest_version::<Instruction>(item.resource.id())
+            .expect("version")
+            .is_none()
+        );
+        assert_eq!(item.files, 0);
+      }
+      _ => panic!("an import returns only skill and instruction drafts"),
+    }
+  }
+}

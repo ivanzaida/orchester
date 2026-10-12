@@ -1,33 +1,29 @@
 //! Skill editor gJurA and the save/publish states bQqDC; no modal.
 
+mod form;
+mod header;
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Spacer, Text},
   core::Signal,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::resource::{InstructionScope, Skill, SkillFile};
-use orchester_workspace::{
-  messages::Message,
-  skills::{data::SkillEntry, editor::publish_reason},
-};
+use orchester_workspace::{messages::Message, skills::data::SkillEntry};
 
 use super::{
-  PageProps, inspector,
-  state::Panel,
-  words,
+  PageProps, inspector, words,
   work::{self, Change, Saved, Work},
 };
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography},
+  theme::ExtraTypography,
   ui::{
-    breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     button::{ActionButton, ButtonKind},
-    field::{FieldInput, field},
     message::message_text,
     notice::{Notice, NoticeTone},
   },
@@ -225,173 +221,6 @@ impl Editor {
         body,
       },
     ));
-  }
-  fn header(
-    &self,
-    ctx: &mut Ctx,
-    p: &Props,
-    entry: Option<&SkillEntry>,
-    title: &str,
-    (dirty, busy): (bool, bool),
-  ) -> Row {
-    let back = p.page.view.panel.clone();
-    let crumbs = breadcrumb(
-      ctx,
-      "skill-crumb",
-      CrumbSeparator::Chevron,
-      vec![
-        Crumb::link(ctx.t("skills.title"), move || back.set(Panel::Library)),
-        Crumb::here(title).mono(),
-      ],
-    );
-    let action = if let Some(entry) = entry {
-      let asking = self.asking.clone();
-      let button = ActionButton::new(
-        "skill-publish",
-        ButtonKind::Primary,
-        ctx.t_args("skills.publish", [("version", words::next(entry.state).to_string())]),
-      );
-      if busy || dirty {
-        button.unavailable(ctx.t("skills.publishWaiting"))
-      } else if let Some(reason) = publish_reason(entry) {
-        button.unavailable(message_text(ctx, &reason))
-      } else {
-        button.on_click(move || asking.set(true))
-      }
-    } else {
-      let body = self.form_state(p).0;
-      let editor = self.action.clone();
-      let open = p.page.project.open.clone();
-      let name = self.name.get();
-      let submitted = self.submitted.clone();
-      let choosing = self.choosing_file.clone();
-      let button = ActionButton::new("skill-create", ButtonKind::Primary, ctx.t("skills.create"));
-      if body.is_err() || busy || self.choosing_file.get() {
-        button.disabled()
-      } else {
-        button.on_click(move || {
-          if let Ok(body) = &body {
-            if submitted.get_untracked() || choosing.get_untracked() {
-              return;
-            }
-            submitted.set(true);
-            editor.run((
-              open.clone(),
-              Change::Save {
-                before: None,
-                name: name.clone(),
-                body: body.clone(),
-              },
-            ));
-          }
-        })
-      }
-    };
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(HEADER_HEIGHT))
-      .padding(SpacingSize::Md)
-      .spacing(SpacingSize::Md)
-      .align_items(lurq::layout::Alignment::Center)
-      .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(crumbs)
-      .child(
-        Text::new(&if p.page.reloading {
-          ctx.t("skills.reading")
-        } else if busy && self.operation.get() == work::Operation::Publish {
-          ctx.t("skills.publishing")
-        } else if busy {
-          ctx.t("skills.saving")
-        } else if dirty {
-          ctx.t("skills.notSaved")
-        } else {
-          entry.map_or_else(|| ctx.t("skills.newNote"), |e| words::version(ctx, e.state))
-        })
-        .id("skill-save-status")
-        .variant(TypographyStyle::Description),
-      )
-      .child(Spacer::new().flex(1.0))
-      .child(action)
-  }
-  fn form(&self, ctx: &mut Ctx, p: &Props, error: Option<&Message>) -> Element {
-    let locked = (self.baseline.get().0.is_none() && self.submitted.get()) || p.page.reloading;
-    let name_label = ctx.t("skills.name");
-    let mut name = FieldInput::new("skill-name", name_label.clone(), self.name.clone()).mono();
-    if let Some(error) = error {
-      name = name.error(message_text(ctx, error));
-    }
-    if locked {
-      name = name.locked();
-    }
-    let name = name.render(ctx);
-    let scope_label = ctx.t("skills.scope");
-    let scope = ctx.mount_keyed::<super::scope::ScopePicker>(
-      "skill-scope-picker",
-      super::scope::Props {
-        page: p.page.clone(),
-        value: self.scope.clone(),
-        locked,
-      },
-    );
-    let description_label = ctx.t("skills.descriptionLabel");
-    let description = FieldInput::new("skill-description", description_label.clone(), self.description.clone())
-      .text_area()
-      .area_height(DESCRIPTION_HEIGHT)
-      .placeholder(ctx.t("skills.descriptionPlaceholder"));
-    let description = if locked { description.locked() } else { description };
-    let description = description.render(ctx);
-    let body = crate::ui::code_editor::CodeEditor::new("skill-body", ctx.t("skills.body"), self.body.clone())
-      .locked(locked)
-      .render(ctx);
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .min_height(Dimension::Px(0.0))
-      .padding(
-        Padding::new()
-          .left(crate::theme::skills::form_inset())
-          .right(crate::theme::skills::form_inset())
-          .top(ExtraSpacing::Tabs.role())
-          .bottom(SpacingSize::Md),
-      )
-      .spacing(SpacingSize::Md)
-      .child(
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Md)
-          .child(
-            field(
-              "skill-name-field",
-              Some(&name_label),
-              name,
-              Some(&ctx.t("skills.nameHint")),
-            )
-            .flex(1.0),
-          )
-          .child(field("skill-scope-field", Some(&scope_label), scope, None).width(Dimension::Px(SCOPE_WIDTH))),
-      )
-      .child(field(
-        "skill-description-field",
-        Some(&description_label),
-        description,
-        Some(&ctx.t("skills.descriptionHint")),
-      ))
-      .child(
-        Column::new()
-          .flex(1.0)
-          .min_height(Dimension::Px(0.0))
-          .width(Dimension::Pct(100.0))
-          .spacing(ExtraSpacing::Snug.role())
-          .child(
-            Row::new()
-              .width(Dimension::Pct(100.0))
-              .child(Text::new(&ctx.t("skills.body")).variant(TypographyStyle::FieldLabel))
-              .child(Spacer::new().flex(1.0))
-              .child(Text::new(&ctx.t("skills.bodyFormat")).variant(TypographyStyle::Caption)),
-          )
-          .child(body),
-      )
-      .into()
   }
   fn question(&self, ctx: &mut Ctx, p: &Props, entry: Option<&SkillEntry>) -> Element {
     let keep = self.asking.clone();

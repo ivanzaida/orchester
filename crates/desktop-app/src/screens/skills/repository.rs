@@ -28,7 +28,7 @@ use orchester_workspace::{
 use super::{PageProps, state::Panel};
 use crate::{
   services::Services,
-  theme::{ConnectionsSpacing, ExtraSpacing, ExtraTypography},
+  theme::{ExtraSpacing, ExtraTypography},
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     button::{ActionButton, ButtonKind},
@@ -109,7 +109,7 @@ impl Component for Import {
     let p = ctx.props::<PageProps>().clone();
     let state = self.work.state().get();
     if let Some(Created(created)) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
-      return result(ctx, &p, created);
+      return super::import_result::result(ctx, &p, created);
     }
     let items = p.data.repository.items.clone();
     let header = self.review_header(ctx, &p);
@@ -134,54 +134,51 @@ impl Component for Import {
               .border_right(lurq::node::border::Border::inside(BorderSize::Sm, PaletteColor::Border)),
           )
           .with_children(preview),
+      )
+      .child(self.review_footer(ctx, &p, &items, state.is_pending()))
+      .child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding(
+            Padding::new()
+              .left(SpacingSize::Lg)
+              .right(SpacingSize::Lg)
+              .bottom(crate::theme::skills::cell_spacing()),
+          )
+          .child(
+            Notice::new("skill-import-notice", NoticeTone::Info, ctx.t("skills.importNotice"))
+              .body(ctx.t("skills.importNoticeDetail")),
+          ),
       );
-    page = page.child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .padding(
-          Padding::new()
-            .left(SpacingSize::Lg)
-            .right(SpacingSize::Lg)
-            .bottom(crate::theme::skills::cell_spacing()),
-        )
-        .child(
-          Notice::new("skill-import-notice", NoticeTone::Info, ctx.t("skills.importNotice"))
-            .body(ctx.t("skills.importNoticeDetail")),
-        ),
-    );
-    page = page.child(self.review_footer(ctx, &p, &items, state.is_pending()));
     if let Some(error) = state.error.as_ref().filter(|_| !state.is_pending()) {
       page = page.child(field_error("skill-import-error", &message_text(ctx, error)));
     }
     page.into()
   }
 }
-fn page() -> Column {
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .padding(ConnectionsSpacing::Page.role())
-    .spacing(SpacingSize::Md)
-}
-fn back(ctx: &Ctx, p: &PageProps) -> ActionButton {
-  let panel = p.view.panel.clone();
-  ActionButton::new("skills-back", ButtonKind::Ghost, ctx.t("skills.back")).on_click(move || panel.set(Panel::Library))
-}
 pub fn item_summary(ctx: &Ctx, item: &ImportItem) -> Arc<str> {
   match &item.outcome {
-    Ok(candidate) => {
-      let (name, kind, files) = match candidate {
-        Candidate::Instruction { name, .. } => (name.as_str(), "skills.instruction", 0),
-        Candidate::Skill { name, files, .. } => (name.as_str(), "skills.skill", files.len()),
-      };
-      ctx.t_args(
-        "skills.importDraft",
-        [
-          ("name", name.to_owned()),
-          ("kind", ctx.t(kind).to_string()),
-          ("files", files.to_string()),
-        ],
-      )
-    }
+    Ok(Candidate::Instruction { name, .. }) => ctx.t_args(
+      "skills.importInstructionSummary",
+      [
+        ("name", name.to_string()),
+        (
+          "lines",
+          item.text.as_deref().unwrap_or_default().lines().count().to_string(),
+        ),
+      ],
+    ),
+    Ok(Candidate::Skill { name, files, .. }) => ctx.t_args(
+      if files.is_empty() {
+        "skills.importSkillSummary"
+      } else {
+        "skills.importSkillFilesSummary"
+      },
+      [
+        ("name", name.to_string()),
+        ("files", super::words::files(ctx, files.len()).to_string()),
+      ],
+    ),
     Err(Unimportable::OnlyImports { targets }) => ctx.t_args("skills.onlyImports", [("targets", targets.join(", "))]),
     Err(Unimportable::Empty) => ctx.t("skills.emptyFile"),
     Err(Unimportable::NotText) => ctx.t("skills.notText"),
@@ -191,80 +188,17 @@ pub fn item_summary(ctx: &Ctx, item: &ImportItem) -> Arc<str> {
     }
   }
 }
-fn result(ctx: &Ctx, p: &PageProps, created: &[CreatedDraft]) -> Element {
-  let mut page = page()
-    .id("skills-import-result")
-    .child(back(ctx, p))
-    .child(
-      Text::new(&ctx.t_args("skills.importDone", [("count", created.len().to_string())]))
-        .variant(ExtraTypography::Display.role()),
-    )
-    .child(Text::new(&ctx.t("skills.importNoticeDetail")).variant(TypographyStyle::Description))
-    .child(Text::new(&ctx.t("skills.created")).variant(ExtraTypography::ColumnHeading.role()));
-  for (i, draft) in created.iter().enumerate() {
-    let panel = p.view.panel.clone();
-    let id = draft.resource.id();
-    let row = Row::new().width(Dimension::Pct(100.0)).spacing(SpacingSize::Md).child(
-      Column::new()
-        .flex(1.0)
-        .child(Text::new(draft.resource.name().as_str()).variant(TypographyStyle::Mono))
-        .child(Text::new(&draft.source).variant(TypographyStyle::Caption)),
-    );
-    page = page.child(
-      if draft.resource.kind() == orchester_core::resource::ResourceKind::Skill {
-        row.child(
-          ActionButton::new(
-            format!("skill-import-open-{i}"),
-            ButtonKind::Ghost,
-            ctx.t("skills.openDraft"),
-          )
-          .on_click(move || panel.set(Panel::Edit(id))),
-        )
-      } else {
-        row.child(Text::new(&ctx.t("skills.instructionEditorUnavailable")).variant(ExtraTypography::Note.role()))
-      },
-    );
-  }
-  page = page.child(Text::new(&ctx.t("skills.notImported")).variant(ExtraTypography::ColumnHeading.role()));
-  for item in p
-    .data
-    .repository
-    .items
-    .iter()
-    .filter(|item| !created.iter().any(|d| d.source == item.source))
-  {
-    page = page
-      .child(Text::new(&item.source).variant(TypographyStyle::Mono))
-      .child(
-        Text::new(&if item.outcome.is_err() {
-          item_summary(ctx, item)
-        } else {
-          ctx.t("skills.notSelected")
-        })
-        .variant(TypographyStyle::Caption),
-      );
-  }
-  ScrollVertical::new(page.child(note(
-    "skill-import-result-note",
-    crate::ui::icon::Icon::Info,
-    &ctx.t("skills.resultNote"),
-  )))
-  .width(Dimension::Pct(100.0))
-  .height(Dimension::Pct(100.0))
-  .into()
-}
 pub fn found(ctx: &mut Ctx, p: &PageProps) -> Element {
   ctx.mount_keyed::<Found>("skills-repository-found", p.clone())
 }
 struct Found {
   asking: Signal<bool>,
-  save: FutureAction<(PathBuf, bool), bool, Message>,
+  save: FutureAction<(std::path::PathBuf, bool), bool, Message>,
 }
-use std::path::PathBuf;
 impl Component for Found {
   type Props = PageProps;
   fn create(ctx: &mut Ctx) -> Self {
-    let save = ctx.future_action(|(root, on): (PathBuf, bool)| async move {
+    let save = ctx.future_action(|(root, on): (std::path::PathBuf, bool)| async move {
       background::run(move || editor::set_agent_files_in(&root, on)).await??;
       Ok(on)
     });
@@ -283,25 +217,14 @@ impl Component for Found {
     let p = ctx.props::<PageProps>().clone();
     let on = p.data.agent_files.is_on();
     let mut panel = Column::new()
+      .id("skills-repository-settings")
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
-      .child(Text::new(&ctx.t("skills.repositoryTitle")).variant(ExtraTypography::Strong.role()));
-    let items = p
-      .data
-      .repository
-      .items
-      .iter()
-      .enumerate()
-      .map(|(index, item)| (index, item.clone()))
-      .collect();
-    panel = panel.child(super::repository_list::listed(
-      ctx,
-      "skills-found-items",
-      items,
-      None,
-      None,
-      false,
-    ));
+      .child(
+        Text::new(&ctx.t("skills.repositorySettings"))
+          .width(Dimension::Pct(100.0))
+          .variant(ExtraTypography::Strong.role()),
+      );
     let asking = self.asking.clone();
     let save = self.save.clone();
     let root = p.project.open.repo_root.clone();
@@ -385,19 +308,41 @@ impl Import {
     let open = p.project.open.clone();
     let action = self.work.clone();
     let key = self.key;
-    let button = ActionButton::new("skill-import-create", ButtonKind::Primary, ctx.t("skills.importAction"));
+    let button = ActionButton::new(
+      "skill-import-create",
+      ButtonKind::Primary,
+      ctx.t_args("skills.importAction", [("count", chosen.len().to_string())]),
+    )
+    .icon(crate::ui::icon::Icon::FilePlus);
     let button = if chosen.is_empty() || pending {
       button.disabled()
     } else {
       button.on_click(move || action.run((open.clone(), key, chosen.clone())))
     };
-    let count = Text::new(&ctx.t_args(
-      "skills.importSelected",
-      [
-        ("selected", self.selected.get().0.len().to_string()),
-        ("total", items.len().to_string()),
-      ],
-    ))
+    let count = Text::new(
+      &ctx.t_args(
+        "skills.importSelected",
+        [
+          ("selected", self.selected.get().0.len().to_string()),
+          ("total", items.len().to_string()),
+          (
+            "types",
+            super::words::types(
+              ctx,
+              items
+                .iter()
+                .filter(|i| self.selected.get().0.contains(&i.source) && i.kind == ItemKind::Instruction)
+                .count(),
+              items
+                .iter()
+                .filter(|i| self.selected.get().0.contains(&i.source) && i.kind == ItemKind::Skill)
+                .count(),
+            )
+            .to_string(),
+          ),
+        ],
+      ),
+    )
     .variant(TypographyStyle::Caption);
     let back = p.view.panel.clone();
     let cancel = ActionButton::new("skills-back", ButtonKind::Secondary, ctx.t("skills.cancel"))
@@ -435,17 +380,19 @@ impl Import {
           .bottom(SpacingSize::Md),
       )
       .spacing(ExtraSpacing::Loose.role())
+      .border_bottom(lurq::node::border::Border::inside(BorderSize::Sm, PaletteColor::Border))
       .child(crumbs)
       .child(
         Column::new()
           .width(Dimension::Pct(100.0))
           .spacing(SpacingSize::Xs)
-          .child(Text::new(&ctx.t("skills.import")).variant(ExtraTypography::Display.role()))
+          .child(Text::new(&ctx.t("skills.import")).variant(TypographyStyle::Heading))
           .child(
             Text::new(&ctx.t_args(
               "skills.importDetail",
               [("folder", p.project.open.repo_root.display().to_string())],
             ))
+            .width(Dimension::Pct(100.0))
             .variant(TypographyStyle::Description),
           ),
       )
@@ -483,4 +430,57 @@ impl Import {
 
     list
   }
+}
+
+/// WMT1W's discovered sources are separate from the actual repository setting.
+pub fn inventory(ctx: &mut Ctx, p: &PageProps) -> Element {
+  let items = p
+    .data
+    .repository
+    .items
+    .iter()
+    .enumerate()
+    .map(|(i, item)| (i, item.clone()))
+    .collect();
+  let rows = super::repository_list::listed(ctx, "skills-found-items", items, None, None, false);
+  Column::new()
+    .id("skills-found")
+    .width(Dimension::Pct(100.0))
+    .background(PaletteColor::SurfaceRaised)
+    .border_inside(BorderSize::Sm, PaletteColor::Border)
+    .rounded(crate::theme::ExtraRadius::Tile.role())
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .min_height(Dimension::Px(40.0))
+        .padding(Padding::horizontal(crate::theme::skills::cell_spacing()))
+        .spacing(SpacingSize::Sm)
+        .child(crate::ui::icon::icon(
+          crate::ui::icon::Icon::FolderSearch,
+          crate::theme::IconSize::Md,
+          PaletteColor::TextMuted,
+        ))
+        .child(Text::new(&ctx.t("skills.repositoryTitle")).variant(ExtraTypography::Strong.role()))
+        .child(
+          Text::new(&ctx.t_args(
+            "skills.repositoryCount",
+            [("count", p.data.repository.items.len().to_string())],
+          ))
+          .variant(ExtraTypography::Note.role()),
+        )
+        .child(
+          Text::new(&p.project.open.repo_root.display().to_string())
+            .flex(1.0)
+            .min_width(Dimension::Px(0.0))
+            .variant(ExtraTypography::MonoNote.role()),
+        ),
+    )
+    .child(rows)
+    .child(
+      Text::new(&ctx.t("skills.repositoryPreviewNote"))
+        .width(Dimension::Pct(100.0))
+        .variant(ExtraTypography::Note.role())
+        .padding(crate::theme::skills::cell_spacing()),
+    )
+    .into()
 }

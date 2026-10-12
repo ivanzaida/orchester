@@ -10,7 +10,7 @@ use std::path::Path;
 use orchester_core::{
   agent_files::import::{Candidate, ImportItem, RepositoryDraftError},
   id::IdempotencyKey,
-  resource::{Resource, ResourceKind, SkillFile, Slug},
+  resource::{Resource, ResourceKind, SkillFile, Slug, VersionNumber},
   store::{RepositoryImportStore, ResourceStore},
   time::Timestamp,
 };
@@ -47,6 +47,8 @@ pub struct CreatedDraft {
   pub source: String,
   /// Reference files of a skill; none for an instruction.
   pub files: usize,
+  /// The initial draft version stored by this import, rather than a UI fixture.
+  pub version: VersionNumber,
 }
 
 /// Creates a draft for each of `chosen`, each reference file stored among the project's blobs
@@ -107,6 +109,7 @@ pub fn create_drafts_in(
         resource,
         source,
         files,
+        version: VersionNumber::FIRST,
       })
       .collect(),
   )

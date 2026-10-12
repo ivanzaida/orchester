@@ -12,7 +12,7 @@ use lurq::{
 use orchester_core::resource::InstructionScope;
 
 use super::{
-  PageProps, repository,
+  PageProps, guidance, repository,
   state::{Filter, Panel},
   words,
 };
@@ -20,7 +20,7 @@ use crate::{
   theme::{ConnectionsSpacing, ConnectionsText, ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
-    icon::Icon,
+    icon::{Icon, marker},
     inspector::note,
     skill_row,
     tabs::{PageTab, counted, page_tabs},
@@ -29,6 +29,8 @@ use crate::{
 /// Tv2Ei columns and its two-line row.
 const ROW_HEIGHT: f32 = skill_row::ROW_HEIGHT;
 const HOW_WIDTH: f32 = 300.0;
+/// F8mJNd's first-skill card; sources grow the found variant from its content.
+const EMPTY_HEIGHT: f32 = 216.0;
 pub struct Library {
   filter: Signal<Filter>,
 }
@@ -60,9 +62,17 @@ impl Component for Library {
       let empty = empty(ctx, &p);
       Row::new()
         .width(Dimension::Pct(100.0))
+        .align_items(lurq::layout::Alignment::Start)
         .spacing(SpacingSize::Lg)
         .child(empty)
-        .child(Column::new().width(Dimension::Px(HOW_WIDTH)).child(how(ctx, true)))
+        .child(
+          Column::new()
+            .width(Dimension::Px(HOW_WIDTH))
+            .spacing(crate::theme::skills::cell_spacing())
+            .child(guidance::how(ctx, true))
+            .child(ownership(ctx, &p, true))
+            .child(repository::found(ctx, &p)),
+        )
         .into()
     } else {
       let tabs = self.tabs(ctx, &p);
@@ -72,23 +82,14 @@ impl Component for Library {
         .spacing(crate::theme::skills::cell_spacing())
         .child(tabs)
         .child(table)
-        .child(how(ctx, false))
+        .child(guidance::how(ctx, false))
+        .child(ownership(ctx, &p, false))
+        .child(repository::found(ctx, &p))
         .into()
     };
-    ScrollVertical::new(page.child(content).child(note(
-      "skills-ownership",
-      Icon::FolderGit2,
-      &ctx.t_args(
-        if p.data.repository.items.is_empty() {
-          "skills.noRepository"
-        } else {
-          "skills.ownership"
-        },
-        [("project", p.project.open.project.name().as_str())],
-      ),
-    )))
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Pct(100.0))
+    ScrollVertical::new(page.child(content))
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Pct(100.0))
   }
 }
 fn accepts(filter: Filter, scope: &InstructionScope) -> bool {
@@ -203,71 +204,63 @@ fn header(ctx: &Ctx, p: &PageProps) -> Row {
     )
 }
 fn empty(ctx: &mut Ctx, p: &PageProps) -> Column {
-  let new = p.view.panel.clone();
-  let found = repository::found(ctx, p);
-  Column::new()
+  let found = !p.data.repository.items.is_empty();
+  let mut card = Column::new()
     .id("skills-empty")
+    .min_height(Dimension::Px(if found { 0.0 } else { EMPTY_HEIGHT }))
     .flex(1.0)
+    .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Md)
     .padding(ExtraSpacing::Roomy.role())
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .rounded(crate::theme::ExtraRadius::Tile.role())
+    .child(marker(Icon::GraduationCap, 36.0))
     .child(
-      Text::new(&ctx.t_args(
-        "skills.emptyTitle",
-        [("project", p.project.open.project.name().as_str())],
-      ))
-      .variant(ExtraTypography::Strong.role()),
-    )
-    .child(Text::new(&ctx.t("skills.emptyDetail")).variant(TypographyStyle::Description))
-    .child(found)
-    .child(
-      ActionButton::new("skills-empty-new", ButtonKind::Primary, ctx.t("skills.new"))
-        .icon(Icon::Plus)
-        .on_click(move || new.set(Panel::New)),
-    )
-}
-pub fn how(ctx: &Ctx, vertical: bool) -> Element {
-  let items = [
-    ("skills.howScopeTitle", "skills.howScope"),
-    ("skills.howPublishTitle", "skills.howPublish"),
-    ("skills.howKeepTitle", "skills.howKeep"),
-  ]
-  .map(|(title, body)| {
-    Column::new()
-      .flex(1.0)
-      .spacing(ExtraSpacing::Fine.role())
-      .child(Text::new(&ctx.t(title)).variant(ExtraTypography::Strong.role()))
-      .child(Text::new(&ctx.t(body)).variant(ExtraTypography::Note.role()))
-  });
-  let content: Element = if vertical {
-    Column::new().spacing(SpacingSize::Lg).with_children(items).into()
-  } else {
-    Row::new().spacing(SpacingSize::Lg).with_children(items).into()
-  };
-  let title = Text::new(&ctx.t("skills.how")).variant(ExtraTypography::Strong.role());
-  if vertical {
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .padding(SpacingSize::Md)
-      .spacing(SpacingSize::Md)
-      .background(PaletteColor::SurfaceRaised)
-      .rounded(crate::theme::ExtraRadius::Tile.role())
-      .child(title)
-      .child(content)
-      .into()
-  } else {
-    // Syllb's how strip places its title in a 170px column.
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .padding(SpacingSize::Md)
-      .spacing(SpacingSize::Lg)
-      .background(PaletteColor::SurfaceRaised)
-      .rounded(crate::theme::ExtraRadius::Tile.role())
-      .child(Column::new().width(Dimension::Px(170.0)).child(title))
-      .child(Column::new().flex(1.0).child(content))
-      .into()
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Snug.role())
+        .child(
+          Text::new(&ctx.t_args(
+            "skills.emptyTitle",
+            [("project", p.project.open.project.name().as_str())],
+          ))
+          .width(Dimension::Pct(100.0))
+          .variant(ExtraTypography::Strong.role()),
+        )
+        .child(
+          Text::new(&ctx.t_args(
+            if found {
+              "skills.emptyDetail"
+            } else {
+              "skills.emptyFirstDetail"
+            },
+            [("project", p.project.open.project.name().as_str())],
+          ))
+          .width(Dimension::Pct(100.0))
+          .variant(TypographyStyle::Description),
+        ),
+    );
+  if found {
+    card = card.child(repository::inventory(ctx, p));
   }
+  card.child(empty_actions(ctx, p))
+}
+fn ownership(ctx: &Ctx, p: &PageProps, empty: bool) -> Element {
+  note(
+    "skills-ownership",
+    Icon::FolderGit2,
+    &ctx.t_args(
+      if empty && p.data.repository.items.is_empty() {
+        "skills.noRepository"
+      } else if empty {
+        "skills.emptyOwnership"
+      } else {
+        "skills.ownership"
+      },
+      [("project", p.project.open.project.name().as_str())],
+    ),
+  )
+  .into()
 }
 #[derive(Clone)]
 struct RowProps {
@@ -326,4 +319,42 @@ impl Component for SkillRow {
     )
     .marks(version_mark, scope_mark)
   }
+}
+fn empty_actions(ctx: &Ctx, p: &PageProps) -> Row {
+  let found = !p.data.repository.items.is_empty();
+  let new = p.view.panel.clone();
+  let import = p.view.panel.clone();
+  let mut actions = Row::new().width(Dimension::Pct(100.0)).spacing(SpacingSize::Sm);
+  if found {
+    actions = actions.child(
+      ActionButton::new("skills-empty-import", ButtonKind::Primary, ctx.t("skills.import"))
+        .icon(Icon::Download)
+        .on_click(move || import.set(Panel::Import)),
+    );
+  }
+  actions = actions.child(
+    ActionButton::new(
+      "skills-empty-new",
+      if found {
+        ButtonKind::Secondary
+      } else {
+        ButtonKind::Primary
+      },
+      ctx.t("skills.new"),
+    )
+    .icon(Icon::Plus)
+    .on_click(move || new.set(Panel::New)),
+  );
+  if !found {
+    actions = actions.child(
+      Text::new(&ctx.t_args(
+        "skills.emptyNewNote",
+        [("project", p.project.open.project.name().as_str())],
+      ))
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .variant(ExtraTypography::Note.role()),
+    );
+  }
+  actions
 }

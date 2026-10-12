@@ -2,6 +2,8 @@
 #[path = "skills/recovery.rs"]
 mod recovery;
 mod support;
+#[path = "skills/visual.rs"]
+mod visual;
 use std::{fs, path::PathBuf};
 
 use orchester_app::routes::{ProjectPage, Route};
@@ -369,7 +371,7 @@ fn skills_grouped_scope_picker_saves_an_agent_step_and_filters_the_library() {
   s.click("skill-scope");
   s.window
     .until("scope menu", |w| w.tree.get_element_by_id("skill-scope-menu").is_some());
-  assert!(s.text("skill-scope-menu").contains("STEPS · Delivery"));
+  assert!(s.text("skill-scope-menu").contains("STEPS · DELIVERY"));
   s.click("skill-scope-option-3");
   assert_eq!(s.entry(id).body.scope(), &InstructionScope::Project);
   s.click("skill-scope-option-2");
@@ -422,6 +424,7 @@ fn skills_new_scope_without_a_name_asks_before_leaving_and_reverting_clears_the_
   assert!(ProjectSkills::load_in(&s.repo).expect("skills").entries.is_empty());
   s.click("skill-leave-keep");
   assert!(s.text("skill-scope").contains("Delivery"));
+  assert!(!s.text("skill-editor").contains("for the whole project"));
   s.click("skill-scope");
   s.click("skill-scope-option-0");
   s.go(ProjectPage::Skills);
