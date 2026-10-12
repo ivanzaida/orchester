@@ -1,6 +1,7 @@
 //! ORC-24 native local integration (zMOBO): one page, inline decisions, app-local scrolling.
 
 mod controls;
+mod draft_controls;
 mod fields;
 mod files;
 mod resolver;
@@ -184,7 +185,7 @@ impl Component for LocalPage {
       .get();
     self.reading.set(read.is_pending());
     if let Some(reason) = read.error {
-      return Notice::new("local-read-error", NoticeTone::Danger, ctx.t(reason.0)).into();
+      return self.read_error(ctx, &task, &reason);
     }
     let Some(shown) = read.data else {
       return match read.error {
@@ -211,6 +212,41 @@ impl Component for LocalPage {
 }
 
 impl LocalPage {
+  fn read_error(&self, ctx: &mut Ctx, task: &TaskContext, reason: &Problem) -> Element {
+    let mut body = Column::new().spacing(SpacingSize::Md).child(Notice::new(
+      "local-read-error",
+      NoticeTone::Danger,
+      ctx.t(reason.0),
+    ));
+    if let Some(error) = self.work.state().get().error {
+      body = body.child(Notice::new("local-work-error", NoticeTone::Danger, ctx.t(error.0)));
+    }
+    if self.resolver.editor.dirty() {
+      let source = self.resolver.seeded.lock().clone();
+      let request = source.and_then(|(file, _, generation)| {
+        generation.map(|generation| work::Request {
+          task: task.clone(),
+          action: work::Action::SaveDraft {
+            file: file.file,
+            expected: file.expected,
+            candidate: self.resolver.editor.current(),
+            generation,
+          },
+          stop: self.stop.clone(),
+        })
+      });
+      body = body.child(draft_controls::inline(
+        ctx,
+        &self.work,
+        &self.resolver,
+        request,
+        self.work.state().get().is_pending(),
+        task,
+      ));
+    }
+    body.into()
+  }
+
   fn body(&self, ctx: &mut Ctx, task: &TaskContext, view: &IntegrationView, busy: bool, narrow: bool) -> Element {
     let run = task
       .detail

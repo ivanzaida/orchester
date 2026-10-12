@@ -24,7 +24,7 @@ use super::{
   work::{Action, Outcome, Request, Work},
 };
 use crate::{
-  navigation::{Navigation, guard::LeaveGuard},
+  navigation::guard::LeaveGuard,
   ui::{
     button::{ActionButton, ButtonKind},
     field::{FieldInput, SelectField},
@@ -461,78 +461,16 @@ impl Resolver {
   }
 
   fn leave_controls(&self, ctx: &mut Ctx, props: &Props, file: &ConflictView, _editable: bool) -> Element {
-    let busy = props.busy;
-    let keep = self.leave.clone();
-    let leave = self.leave.clone();
-    let navigation = Navigation::of(ctx);
-    let editor = self.editor.clone();
-    let captured = self.editor.current();
     let request = Request {
       task: props.task.clone(),
       action: Action::SaveDraft {
         file: file.file.clone(),
         expected: file.expected.clone(),
-        candidate: captured,
+        candidate: self.editor.current(),
         generation: props.view.operation.as_ref().map_or(0, |op| op.version()),
       },
       stop: props.stop.clone(),
     };
-    let work = props.work.clone();
-    let discard_work = work.clone();
-    let mut refused = request.clone();
-    refused.action = Action::Refused;
-    let mut save = ActionButton::new(
-      "local-save-pause",
-      ButtonKind::Secondary,
-      ctx.t("local_integration.savePause"),
-    );
-    if props.busy {
-      save = save.disabled();
-    } else {
-      save = save.on_click(move || {
-        let mut request = request.clone();
-        if input_source() == InputSource::Synthetic {
-          request.action = Action::Refused;
-          work.run_if_idle(request);
-          return;
-        }
-        request.stop.store(true, std::sync::atomic::Ordering::Release);
-        work.run_if_idle(request);
-      });
-    }
-    Notice::new("local-unsaved", NoticeTone::Warning, ctx.t("local_integration.unsaved"))
-      .body(ctx.t("local_integration.unsavedBody"))
-      .action(save)
-      .action(
-        ActionButton::new(
-          "local-keep-editing",
-          ButtonKind::Secondary,
-          ctx.t("local_integration.keepEditing"),
-        )
-        .on_click(move || {
-          if !busy {
-            keep.keep_editing();
-          }
-        }),
-      )
-      .action(
-        ActionButton::new(
-          "local-discard-editor",
-          ButtonKind::Danger,
-          ctx.t("local_integration.discard"),
-        )
-        .on_click(move || {
-          if busy {
-            return;
-          }
-          if input_source() == InputSource::Synthetic {
-            discard_work.run_if_idle(refused.clone());
-            return;
-          }
-          editor.discard();
-          leave.leave(&navigation);
-        }),
-      )
-      .into()
+    super::draft_controls::inline(ctx, &props.work, &props.state, Some(request), props.busy, &props.task)
   }
 }
