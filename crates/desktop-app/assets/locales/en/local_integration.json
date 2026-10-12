@@ -123,7 +123,7 @@
       "unverified": "Recovery content has not been verified; it remains retained.",
       "unknown": "The outcome is uncertain. Reconcile actual Git state before choosing a safe continuation.",
       "conditionalRemoval": "Conditional file removal cannot be performed safely on this platform. Originals remain retained and no replacement is deleted.",
-      "unsupported": "This path, file type or repository format is unsupported. Originals remain untouched.",
+      "unsupported": "This path, file type or repository format is unsupported. Review the recorded operation and retained recovery before continuing.",
       "collision": "The reviewed destination already exists. Choose a non-colliding path.",
       "unresolved": "Resolve all files and conflict markers before continuing.",
       "blank": "Enter a message or preservation name.",
