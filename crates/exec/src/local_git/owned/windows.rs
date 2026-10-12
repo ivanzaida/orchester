@@ -120,9 +120,13 @@ impl Directory {
       .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
       .open(&self.path)
       .map_err(map)?;
+    ensure_location(&file, &self.path)?;
     let metadata = file.metadata().map_err(map)?;
     if !metadata.is_dir() || metadata.file_attributes() & 0x400 != 0 {
       return Err(LocalError::Unsupported.into());
+    }
+    if object_identity(&file)? != object_identity(&self.file)? {
+      return Err(LocalError::Stale.into());
     }
     Ok(file)
   }
@@ -263,4 +267,13 @@ fn ensure_location(file: &File, expected: &Path) -> Result<(), LocalGitError> {
     return Err(LocalError::Stale.into());
   }
   Ok(())
+}
+fn object_identity(file: &File) -> Result<(u32, u32, u32), LocalGitError> {
+  // SAFETY: this C record accepts zero initialization; the live handle fills it on success.
+  let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { mem::zeroed() };
+  // SAFETY: file owns a live handle and info is a correctly-sized writable C record.
+  if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &raw mut info) } == 0 {
+    return Err(LocalGitError::Io);
+  }
+  Ok((info.dwVolumeSerialNumber, info.nFileIndexHigh, info.nFileIndexLow))
 }
