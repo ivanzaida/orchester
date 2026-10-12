@@ -37,7 +37,7 @@ pub struct InstructionEntry {
 
 impl InstructionEntry {
   /// `None` for a resource with neither a draft nor a version, which the store never creates.
-  fn new(
+  pub(super) fn new(
     id: ResourceId,
     (name, slug): (Arc<str>, Arc<str>),
     draft: Option<Draft<Instruction>>,
@@ -135,6 +135,15 @@ impl ProjectInstructions {
   pub fn pipeline(&self, id: ResourceId) -> Option<&PipelineChoice> {
     self.pipelines.iter().find(|pipeline| pipeline.id == id)
   }
+}
+
+/// Reads one instruction for an explicit editor reload.
+pub fn entry_in(repo_root: &Path, id: ResourceId) -> Result<InstructionEntry, StoreError> {
+  let db = ProjectDb::open(repo_root)?;
+  let resource = db.resource(id)?.ok_or(StoreError::ResourceNotFound(id))?;
+  let latest = db.latest_version::<Instruction>(id)?;
+  let names = (resource.name().as_str().into(), resource.slug().as_str().into());
+  InstructionEntry::new(id, names, db.draft(id)?, latest.as_ref()).ok_or(StoreError::NoDraft(id))
 }
 
 /// The project's instructions, ordered by slug.

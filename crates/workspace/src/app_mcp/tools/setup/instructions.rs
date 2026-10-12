@@ -144,6 +144,9 @@ pub async fn save_instruction_draft(services: &Services, args: SaveInstructionDr
       }
     };
     save_draft_in(&root, id, body)?;
+    services
+      .changes
+      .record(open.project.id(), crate::tasks::outside::Outside::Instructions);
     let data = ProjectInstructions::load_in(&root)?;
     let entry = data
       .entry(id)
@@ -160,6 +163,9 @@ pub async fn publish_instruction(services: &Services, args: InInstruction) -> Re
     let data = ProjectInstructions::load_in(&open.repo_root)?;
     let id = entry_named(&data, &args.instruction)?.id;
     publish_in(&open.repo_root, id).map_err(|error| publish_error(&error))?;
+    services
+      .changes
+      .record(open.project.id(), crate::tasks::outside::Outside::Instructions);
     let data = ProjectInstructions::load_in(&open.repo_root)?;
     let entry = data
       .entry(id)

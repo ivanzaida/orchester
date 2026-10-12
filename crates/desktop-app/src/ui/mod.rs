@@ -29,6 +29,7 @@ pub mod notice;
 pub mod option_card;
 pub mod popover;
 pub mod pressable;
+pub mod rule_item;
 pub mod state;
 pub mod status;
 pub mod table;

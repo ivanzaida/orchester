@@ -27,6 +27,8 @@ use crate::theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
 
 /// An empty state's glyph tile (`q4tTW`) and the widest its explanation runs (`bKD3G`).
 const GLYPH_TILE: f32 = 36.0;
+// Instructions empty state glyph yxIJ7.
+const INSTRUCTIONS_GLYPH_TILE: f32 = 40.0;
 const EXPLANATION_WIDTH: f32 = 620.0;
 /// Explanation of GE9ao/ImhCU in Secrets.
 const SECRETS_EXPLANATION_WIDTH: f32 = 640.0;
@@ -41,6 +43,8 @@ pub struct EmptyState {
   wide: bool,
   compact: bool,
   secrets: bool,
+  unframed: bool,
+  note: Option<Arc<str>>,
 }
 
 impl EmptyState {
@@ -60,6 +64,8 @@ impl EmptyState {
       wide: false,
       compact: false,
       secrets: false,
+      unframed: false,
+      note: None,
     }
   }
 
@@ -81,6 +87,35 @@ impl EmptyState {
     self
   }
 
+  /// The bare Instructions empty state sG2xi, with its repository findings below.
+  pub fn unframed(mut self) -> Self {
+    self.unframed = true;
+    self
+  }
+
+  /// A supporting note under the explanation, before the actions.
+  pub fn note(mut self, note: impl Into<Arc<str>>) -> Self {
+    self.note = Some(note.into());
+    self
+  }
+
+  fn glyph_tile(&self) -> Row {
+    let tile_size = if self.unframed {
+      INSTRUCTIONS_GLYPH_TILE
+    } else {
+      GLYPH_TILE
+    };
+    Row::new()
+      .width(Dimension::Px(tile_size))
+      .height(Dimension::Px(tile_size))
+      .align_items(Alignment::Center)
+      .justify(Justify::Center)
+      .rounded(ExtraRadius::Tile.role())
+      .background(PaletteColor::SurfaceRaised)
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+      .child(icon(self.glyph, IconSize::Xl, PaletteColor::TextSecondary))
+      .id(format!("{}-glyph", self.id))
+  }
   /// An action in the row under the explanation.
   pub fn action(mut self, action: impl Into<Element>) -> Self {
     self.actions.push(action.into());
@@ -96,16 +131,7 @@ impl EmptyState {
 
 impl From<EmptyState> for Element {
   fn from(empty: EmptyState) -> Self {
-    let tile = Row::new()
-      .width(Dimension::Px(GLYPH_TILE))
-      .height(Dimension::Px(GLYPH_TILE))
-      .align_items(Alignment::Center)
-      .justify(Justify::Center)
-      .rounded(ExtraRadius::Tile.role())
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(icon(empty.glyph, IconSize::Xl, PaletteColor::TextSecondary))
-      .id(format!("{}-glyph", empty.id));
+    let tile = empty.glyph_tile();
     let text = Column::new()
       .width(if empty.wide {
         Dimension::Pct(100.0)
@@ -146,28 +172,39 @@ impl From<EmptyState> for Element {
             Dimension::Px(EXPLANATION_WIDTH)
           }),
       );
+    let text = text.with_children(empty.note.map(|note| {
+      Text::new(&note)
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextMuted)
+    }));
     let actions = (!empty.actions.is_empty()).then(|| {
       Row::new()
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
         .with_children(empty.actions)
     });
-    Column::new()
+    let frame = Column::new()
       .id(empty.id.clone())
       .width(Dimension::Pct(100.0))
-      .padding(if empty.compact {
-        ExtraSpacing::Tabs.role()
-      } else {
-        ExtraSpacing::Roomy.role()
-      })
       .spacing(if empty.compact {
         SpacingSize::Md
       } else {
         ExtraSpacing::Inset.role()
-      })
-      .background(PaletteColor::SurfacePanel)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .rounded(RadiusSize::Lg)
+      });
+    let frame = if empty.unframed {
+      frame
+    } else {
+      frame
+        .padding(if empty.compact {
+          ExtraSpacing::Tabs.role()
+        } else {
+          ExtraSpacing::Roomy.role()
+        })
+        .background(PaletteColor::SurfacePanel)
+        .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+        .rounded(RadiusSize::Lg)
+    };
+    frame
       .describe("state", "empty")
       .child(tile)
       .child(text)
