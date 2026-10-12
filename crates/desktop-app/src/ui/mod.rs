@@ -3,6 +3,7 @@
 //! Clickable surfaces are pointer-only unless they are form controls (`pressable`); anything that cannot
 //! be used stays in place, visibly unavailable with a reason (`unavailable`).
 
+pub mod add_slot;
 pub mod avatar;
 pub mod breadcrumb;
 pub mod button;

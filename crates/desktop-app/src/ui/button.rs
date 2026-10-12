@@ -37,6 +37,8 @@ pub enum ButtonKind {
   Danger,
   /// Destructive text on the ghost button (Secrets inspector, Emd0h).
   DangerGhost,
+  /// A field-like menu trigger with a trailing chevron (LWah7, Runs after).
+  Select,
 }
 
 impl ButtonKind {
@@ -47,6 +49,7 @@ impl ButtonKind {
       Self::Ghost => "ghost",
       Self::Danger => "danger",
       Self::DangerGhost => "danger-ghost",
+      Self::Select => "select",
     }
   }
 
@@ -54,7 +57,7 @@ impl ButtonKind {
   fn content(self) -> PaletteColor {
     match self {
       Self::Primary => ExtraColor::OnAccent.role(),
-      Self::Secondary => PaletteColor::TextPrimary,
+      Self::Secondary | Self::Select => PaletteColor::TextPrimary,
       Self::Ghost => PaletteColor::TextSecondary,
       Self::Danger | Self::DangerGhost => PaletteColor::Danger,
     }
@@ -67,6 +70,9 @@ impl ButtonKind {
         .background(PaletteColor::SurfaceRaised)
         .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong)),
       Self::Ghost | Self::DangerGhost => button,
+      Self::Select => button
+        .background(PaletteColor::SurfaceInput)
+        .border(Border::inside(BorderSize::Sm, PaletteColor::Border)),
       Self::Danger => button.background(PaletteColor::DangerMuted),
     }
   }
@@ -79,7 +85,7 @@ impl ButtonKind {
       Self::Primary => button
         .hovered_style(fill(PaletteColor::AccentHover))
         .active_style(fill(PaletteColor::AccentHover)),
-      Self::Secondary => button
+      Self::Secondary | Self::Select => button
         .hovered_style(fill(PaletteColor::Border))
         .active_style(fill(PaletteColor::BorderStrong)),
       Self::Ghost | Self::DangerGhost => button
@@ -114,6 +120,7 @@ pub struct ActionButton {
   /// As wide as its parent, its icon and label centered (`Allow retry` `ae0Pi`).
   fill: bool,
   compact: bool,
+  bounded: bool,
   element: Option<ElementRef>,
 }
 
@@ -130,6 +137,7 @@ impl ActionButton {
       focus: Focus::Pointer,
       fill: false,
       compact: false,
+      bounded: false,
       element: None,
     }
   }
@@ -174,6 +182,12 @@ impl ActionButton {
   /// A 22-high helper action with a 12 icon and note-size label (ZdkB0).
   pub fn compact(mut self) -> Self {
     self.compact = true;
+    self
+  }
+
+  /// Keep a long label within the available width; the full accessible name is retained.
+  pub fn bounded_label(mut self) -> Self {
+    self.bounded = true;
     self
   }
 
@@ -231,19 +245,36 @@ impl From<ActionButton> for Element {
       .describe("kind", button.kind.name())
       .describe("state", button.state())
       .describe("a11y_name", button.label.clone());
-    if button.fill {
+    if button.fill || button.kind == ButtonKind::Select {
       frame = frame.width(Dimension::Pct(100.0));
+    }
+    if button.bounded {
+      frame = frame.max_width(Dimension::Pct(100.0)).min_width(Dimension::Px(0.0));
     }
     if let Some(lead) = button.lead() {
       frame = frame.child(icon(lead, glyph, color.clone()).id(format!("{}-icon", button.id)));
     }
-    frame = button.kind.dressed(frame).child(
-      Text::new(&button.label)
-        .id(format!("{}-label", button.id))
-        .variant(label)
-        .color(color)
-        .nowrap(),
-    );
+    let label = Text::new(&button.label)
+      .id(format!("{}-label", button.id))
+      .variant(label)
+      .color(color)
+      .nowrap();
+    let label = if button.bounded {
+      label
+        .flex_shrink(1.0)
+        .min_width(Dimension::Px(0.0))
+        .text_overflow(lurq::components::TextOverflow::Elipsis)
+    } else {
+      label
+    };
+    frame = button.kind.dressed(frame).child(if button.kind == ButtonKind::Select {
+      label.flex(1.0).min_width(Dimension::Px(0.0))
+    } else {
+      label
+    });
+    if button.kind == ButtonKind::Select {
+      frame = frame.child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted));
+    }
     if let Some(element) = button.element {
       frame = frame.ref_element(element);
     }

@@ -74,6 +74,7 @@ pub struct Notice {
   title: Arc<str>,
   body: Option<Arc<str>>,
   actions: Vec<Element>,
+  inspector: bool,
 }
 
 impl Notice {
@@ -86,6 +87,7 @@ impl Notice {
       title: title.into(),
       body: None,
       actions: Vec::new(),
+      inspector: false,
     }
   }
 
@@ -108,6 +110,12 @@ impl Notice {
     self
   }
 
+  /// Compact vertical notice in a 340px inspector (adK4e / A0a2p).
+  pub fn inspector(mut self) -> Self {
+    self.inspector = true;
+    self
+  }
+
   /// An action at the notice's end, after the ones added before it.
   pub fn action(mut self, action: impl Into<Element>) -> Self {
     self.actions.push(action.into());
@@ -117,6 +125,9 @@ impl Notice {
 
 impl From<Notice> for Element {
   fn from(notice: Notice) -> Self {
+    if notice.inspector {
+      return inspector_notice(notice);
+    }
     let (fill, stroke, mark) = notice.tone.colors();
     let mark = notice.mark.unwrap_or(mark);
     let text = Column::new()
@@ -155,6 +166,42 @@ impl From<Notice> for Element {
       .with_children(actions)
       .into()
   }
+}
+
+fn inspector_notice(notice: Notice) -> Element {
+  let (fill, stroke, mark) = notice.tone.colors();
+  Column::new()
+    .id(notice.id.clone())
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
+    .spacing(ExtraSpacing::Snug.role())
+    .background(fill)
+    .border(Border::inside(BorderSize::Sm, stroke))
+    .rounded(ExtraRadius::Tile.role())
+    .describe("tone", notice.tone.name())
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Snug.role())
+        .align_items(Alignment::Start)
+        .child(icon(notice.icon, IconSize::Base, mark))
+        .child(
+          Text::new(&notice.title)
+            .variant(lurq::app::theme::TypographyStyle::Label)
+            .flex(1.0)
+            .min_width(Dimension::Px(0.0)),
+        ),
+    )
+    .with_children(notice.body.map(|body| {
+      Text::new(&body)
+        .variant(ExtraTypography::Note.role())
+        .color(PaletteColor::TextSecondary)
+        .width(Dimension::Pct(100.0))
+    }))
+    .with_children(
+      (!notice.actions.is_empty()).then(|| Row::new().wrap().spacing(SpacingSize::Sm).with_children(notice.actions)),
+    )
+    .into()
 }
 
 /// A handling notice: `text` beside `glyph`.

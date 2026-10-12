@@ -43,6 +43,7 @@ impl DevtoolsInspectable for View {}
 #[derive(Clone, PartialEq)]
 pub struct Props {
   pub project: ShownProject,
+  pub selected: Option<ResourceId>,
 }
 impl DevtoolsInspectable for Props {}
 
@@ -51,11 +52,12 @@ pub struct AgentsScreen {
   revision: Signal<u64>,
   retry: Signal<u64>,
 }
-pub fn screen(ctx: &mut Ctx, project: &ShownProject) -> Element {
+pub fn screen(ctx: &mut Ctx, project: &ShownProject, selected: Option<ResourceId>) -> Element {
   ctx.mount_keyed::<AgentsScreen>(
-    &format!("agents-{}", project.open.project.id()),
+    &format!("agents-{}-{selected:?}", project.open.project.id()),
     Props {
       project: project.clone(),
+      selected,
     },
   )
 }
@@ -64,7 +66,7 @@ impl Component for AgentsScreen {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
     Self {
-      view: ctx.signal(View::List),
+      view: ctx.signal(ctx.props::<Props>().selected.map_or(View::List, View::Edit)),
       revision: ctx.signal(0),
       retry: ctx.signal(0),
     }

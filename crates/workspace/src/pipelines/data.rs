@@ -36,6 +36,14 @@ pub struct ProfileChoice {
   pub mcp: McpServerSelection,
 }
 
+/// Display-only draft profile. It is never returned by the published-profile lookup.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DraftProfileChoice {
+  pub id: ResourceId,
+  pub name: Arc<str>,
+  pub model: ModelId,
+}
+
 /// A published tool a step can call.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ToolChoice {
@@ -53,6 +61,7 @@ pub struct ToolChoice {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Assignables {
   pub profiles: Vec<ProfileChoice>,
+  pub draft_profiles: Vec<DraftProfileChoice>,
   pub tools: Vec<ToolChoice>,
   /// The project's MCP servers, which say what the profiles' servers run without asking.
   pub mcp_servers: Vec<McpServer>,
@@ -62,6 +71,7 @@ impl Assignables {
   pub fn load(store: &ProjectDb) -> Result<Self, StoreError> {
     let connections = store.connections()?;
     let mut profiles = Vec::new();
+    let mut draft_profiles = Vec::new();
     for resource in store.resources(ResourceKind::AgentProfile)? {
       if let Some(version) = store.latest_version::<AgentProfile>(resource.id())? {
         let connection = connections
@@ -81,6 +91,12 @@ impl Assignables {
           version: version.number(),
           model: version.body().model().clone(),
           mcp: version.body().mcp_servers().clone(),
+        });
+      } else if let Some(draft) = store.draft::<AgentProfile>(resource.id())? {
+        draft_profiles.push(DraftProfileChoice {
+          id: resource.id(),
+          name: resource.name().as_str().into(),
+          model: draft.body().model().clone(),
         });
       }
     }
@@ -103,6 +119,7 @@ impl Assignables {
     }
     Ok(Self {
       profiles,
+      draft_profiles,
       tools,
       mcp_servers: store.mcp_servers()?,
     })

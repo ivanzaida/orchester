@@ -3,6 +3,7 @@
 //! has the router show the active tab's route; the router keeps no history of its own (it is always
 //! replaced), so Back and Forward are the active tab's.
 
+pub mod guard;
 pub mod input;
 pub mod shortcuts;
 pub mod tabs;
@@ -18,12 +19,17 @@ use crate::routes::Route;
 pub struct Navigation {
   tabs: Signal<TabSet>,
   router: RouterHandle,
+  guard: std::sync::Arc<parking_lot::Mutex<std::sync::Weak<guard::PendingLeave>>>,
 }
 
 impl Navigation {
   /// Tabs in `tabs`, shown by `router`, which goes to the active tab's route now.
   pub fn new(tabs: Signal<TabSet>, router: RouterHandle) -> Self {
-    let navigation = Self { tabs, router };
+    let navigation = Self {
+      tabs,
+      router,
+      guard: Default::default(),
+    };
     navigation.show();
     navigation
   }
@@ -98,14 +104,30 @@ impl Navigation {
     self.change(|tabs| tabs.close(tabs.active().id()));
   }
 
-  /// Applies `change` to the tabs in place; when it changed them, shows the active route. A change
-  /// that changed nothing still notifies the tabs' readers, which then render the same tabs.
+  /// Holds departures while a mounted editor has work it must not lose.
+  pub fn guard(&self, holds_edits: impl Fn() -> bool + Send + Sync + 'static) -> guard::LeaveGuard {
+    let guard = guard::LeaveGuard::new(holds_edits);
+    *self.guard.lock() = guard.downgrade();
+    guard
+  }
+
   fn change(&self, change: impl FnOnce(&mut TabSet) -> bool) {
-    let mut changed = false;
-    self.tabs.update(|tabs| changed = change(tabs));
-    if changed {
-      self.show();
+    let before = self.tabs_now();
+    let mut next = before.clone();
+    if !change(&mut next) {
+      return;
     }
+    let leaving = before.active().id() != next.active().id() || before.active().route() != next.active().route();
+    let guard = self.guard.lock().upgrade();
+    if leaving && guard.is_some_and(|guard| guard.hold(next.clone())) {
+      return;
+    }
+    self.apply(next);
+  }
+
+  fn apply(&self, tabs: TabSet) {
+    self.tabs.set(tabs);
+    self.show();
   }
 
   fn show(&self) {

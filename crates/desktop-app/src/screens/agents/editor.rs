@@ -139,7 +139,7 @@ impl Component for Editor {
     let body = if self.busy.get() {
       crate::ui::state::loading("agent-saving", &ctx.t("agents.saving")).into()
     } else {
-      self.body(ctx, &props)
+      self.body(ctx, &props, self.pipeline_link_blocked(&props, dirty, changed_outside))
     };
     page.child(
       ScrollVertical::new(body)
@@ -164,15 +164,12 @@ impl Editor {
     } else {
       role.as_str().into()
     };
-    let view = props.view.clone();
+    let list = agents_crumb(ctx, props);
     let crumbs = breadcrumb(
       ctx,
       "agent-crumbs",
       CrumbSeparator::Chevron,
-      vec![
-        Crumb::link(ctx.t("agents.title"), move || view.set(View::List)),
-        Crumb::here(title.clone()),
-      ],
+      vec![list, Crumb::here(title.clone())],
     );
     let state = props
       .entry
@@ -346,7 +343,18 @@ impl Editor {
       }
     })
   }
-  fn body(&self, ctx: &mut Ctx, props: &Props) -> Element {
+  fn pipeline_link_blocked(&self, props: &Props, dirty: bool, changed_outside: bool) -> Option<&'static str> {
+    if self.pending.get().0.is_some() || self.busy.get() {
+      Some("agents.pipelineWait")
+    } else if dirty {
+      Some("agents.pipelineSaveFirst")
+    } else if props.reading || props.load_error.is_some() || changed_outside {
+      Some("agents.pipelineRefreshFirst")
+    } else {
+      None
+    }
+  }
+  fn body(&self, ctx: &mut Ctx, props: &Props, pipeline_blocked: Option<&str>) -> Element {
     let body = match self.tab.get() {
       1 => {
         let form = ctx.mount_keyed::<super::permissions::PermissionsForm>(
@@ -364,7 +372,7 @@ impl Editor {
           .child(super::policy_panel::enforcement(ctx, &self.fields, &props.listed))
           .into()
       }
-      2 => super::uses::render(ctx, props),
+      2 => super::uses::render(ctx, props, pipeline_blocked),
       _ => Row::new()
         .width(Dimension::Pct(100.0))
         .spacing(SpacingSize::Section)
@@ -390,6 +398,25 @@ impl Editor {
       .into()
   }
 }
+fn agents_crumb(ctx: &mut Ctx, props: &Props) -> Crumb {
+  let view = props.view.clone();
+  let navigation = crate::navigation::Navigation::of(ctx);
+  let project = props.project.open.project.id();
+  Crumb::link(ctx.t("agents.title"), move || {
+    if matches!(
+      navigation.route_now(),
+      crate::routes::Route::Project(_, crate::routes::ProjectPage::Agent(_))
+    ) {
+      navigation.go(crate::routes::Route::Project(
+        project,
+        crate::routes::ProjectPage::Agents,
+      ));
+    } else {
+      view.set(View::List);
+    }
+  })
+}
+
 fn save_status(status: &str, state: VersionState, dirty: bool) -> Row {
   let stale = matches!(state, VersionState::StaleDraft { .. });
   Row::new()

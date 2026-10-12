@@ -214,3 +214,8 @@ pub fn starter_assignments<'a>(
     pull_request: tool(StarterStep::CreatePullRequest),
   }
 }
+/// The library pipeline whose slug the entered name would use, for creation feedback.
+pub fn matching_name<'a>(entries: &'a [LibraryEntry], name: &str) -> Option<&'a LibraryEntry> {
+  let slug = Slug::from_name(name)?;
+  entries.iter().find(|entry| entry.slug.as_ref() == slug.as_str())
+}

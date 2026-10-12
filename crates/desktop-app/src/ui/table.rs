@@ -79,6 +79,8 @@ pub struct TableRow {
   highlighted: bool,
   selected: bool,
   secret: bool,
+  height: f32,
+  spacing: SpacingSize,
 }
 
 impl TableRow {
@@ -91,6 +93,8 @@ impl TableRow {
       highlighted: false,
       selected: false,
       secret: false,
+      height: ROW_HEIGHT,
+      spacing: SpacingSize::Md,
     }
   }
 
@@ -103,6 +107,17 @@ impl TableRow {
   /// The inspected row is inert and takes the accent-muted fill (Secrets, aio2p).
   pub fn selected(mut self) -> Self {
     self.selected = true;
+    self
+  }
+
+  /// The pipeline library's taller two-line rows (DSUqE).
+  pub fn height(mut self, height: f32) -> Self {
+    self.height = height;
+    self
+  }
+  /// Gap between this table's columns.
+  pub fn spacing(mut self, spacing: SpacingSize) -> Self {
+    self.spacing = spacing;
     self
   }
 
@@ -139,7 +154,7 @@ impl From<TableRow> for Element {
       .cells
       .into_iter()
       .map(|(width, content)| width.sized(Row::new()).align_items(Alignment::Center).child(content));
-    let content = line(Row::new(), ROW_HEIGHT).with_children(cells);
+    let content = line(Row::new(), row.height).spacing(row.spacing).with_children(cells);
     let content = if row.secret {
       content
         .height(Dimension::Px(SECRET_ROW_HEIGHT))

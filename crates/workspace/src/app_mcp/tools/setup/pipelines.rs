@@ -139,7 +139,7 @@ pub async fn publish_pipeline(
     let latest = db.latest_version::<Pipeline>(id)?;
     widening::check_pipeline(&services, latest.as_ref().map(Version::body), draft.body())?;
     // Published only while the draft is the one just checked.
-    db.publish_draft_matching(id, draft.body(), Timestamp::now())
+    db.publish_draft_matching_version(id, draft.body(), latest.as_ref().map(Version::number), Timestamp::now())
       .map_err(|error| refused(publish_code(&error), publish_error(&error)))?;
     // The library lists the version, and the task form offers it.
     services.changes.record(open.project.id(), Outside::Pipelines);

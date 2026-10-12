@@ -56,6 +56,18 @@ pub fn property_of(id: &str, label: &str, value: impl Into<Element>) -> Row {
     Text::new(label).variant(ExtraTypography::Property.role()),
     value,
   )
+  .padding(Padding::vertical(ExtraSpacing::Snug.role()))
+}
+
+/// Compact editable property (LC20M), with the control owning its vertical inset.
+pub fn control(id: &str, label: &str, value: impl Into<Element>) -> Row {
+  framed(
+    id,
+    label,
+    Text::new(label).variant(ExtraTypography::Property.role()),
+    value,
+  )
+  .align_items(Alignment::Center)
 }
 
 fn value_text(id: &str, value: &str, kind: PropertyValue) -> Text {
@@ -71,7 +83,7 @@ fn value_text(id: &str, value: &str, kind: PropertyValue) -> Text {
     .id(format!("{id}-value"))
     .variant(style)
     .color(color)
-    .flex(1.0)
+    .width(Dimension::Pct(100.0))
     .min_width(Dimension::Px(0.0))
 }
 
@@ -81,7 +93,6 @@ fn framed(id: &str, name: &str, label: Text, value: impl Into<Element>) -> Row {
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .min_height(Dimension::Px(ControlHeight::Md.value()))
-    .padding(Padding::vertical(ExtraSpacing::Snug.role()))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
     .describe("property", name.to_owned())
@@ -91,7 +102,7 @@ fn framed(id: &str, name: &str, label: Text, value: impl Into<Element>) -> Row {
         .width(Dimension::Px(LABEL_WIDTH))
         .flex_shrink(0.0),
     )
-    .child(value)
+    .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(value))
 }
 
 /// A variable as a property: its name in Geist Mono 11.5 (`Variable · DOCS_INDEX` in `XRCed`), its value as
@@ -100,7 +111,7 @@ pub fn variable(id: &str, name: &str, value: &str, kind: PropertyValue) -> Row {
   let label = Text::new(name)
     .variant(ExtraTypography::MonoKey.role())
     .color(PaletteColor::TextSecondary);
-  framed(id, name, label, value_text(id, value, kind))
+  framed(id, name, label, value_text(id, value, kind)).padding(Padding::vertical(ExtraSpacing::Snug.role()))
 }
 
 /// A section's title with what it counts at its end, if anything.

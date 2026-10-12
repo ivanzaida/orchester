@@ -12,6 +12,8 @@ use orchester_workspace::agents::usage::PipelineUse;
 
 use super::{editor::Props, words};
 use crate::{
+  navigation::Navigation,
+  routes::{ProjectPage, Route},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
@@ -26,7 +28,7 @@ const PERMISSIONS: f32 = 210.0;
 const RUNS: f32 = 130.0;
 const ROW_HEIGHT: f32 = 56.0;
 
-pub fn render(ctx: &mut Ctx, props: &Props) -> Element {
+pub fn render(ctx: &mut Ctx, props: &Props, blocked: Option<&str>) -> Element {
   let profile = props.entry.as_ref().map(|e| e.id);
   let steps: Vec<_> = props
     .listed
@@ -39,6 +41,9 @@ pub fn render(ctx: &mut Ctx, props: &Props) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Lg)
     .child(words::note(&ctx.t("agents.usesNote")));
+  if let Some(reason) = blocked {
+    page = page.child(words::note(&ctx.t(reason)));
+  }
   if steps.is_empty() {
     page = page.child(words::note(&ctx.t("agents.noUses")));
   } else {
@@ -70,7 +75,8 @@ pub fn render(ctx: &mut Ctx, props: &Props) -> Element {
         true,
       ));
     for (index, step) in steps.iter().enumerate() {
-      table = table.child(use_row(ctx, index, step));
+      let open = open_pipeline(ctx, props, index, step, blocked);
+      table = table.child(use_row(ctx, index, step, open));
     }
     let counts = ctx.t_args(
       "agents.useCounts",
@@ -98,7 +104,7 @@ pub fn render(ctx: &mut Ctx, props: &Props) -> Element {
   }
   page.child(super::active::render(ctx, props)).into()
 }
-fn use_row(ctx: &mut Ctx, index: usize, step: &PipelineUse) -> Element {
+fn use_row(ctx: &mut Ctx, index: usize, step: &PipelineUse, open: Element) -> Element {
   let model = step
     .model
     .as_ref()
@@ -146,16 +152,24 @@ fn use_row(ctx: &mut Ctx, index: usize, step: &PipelineUse) -> Element {
         }))),
     )
     .child(Column::new().width(Dimension::Px(RUNS)).child(words::note(&state)))
-    .child(
-      IconButton::new(
-        format!("agent-use-open-{index}"),
-        Icon::ChevronRight,
-        ctx.t("agents.pipelineUnavailable"),
-      )
-      .small()
-      .render(ctx),
-    )
+    .child(open)
     .into()
+}
+fn open_pipeline(ctx: &mut Ctx, props: &Props, index: usize, step: &PipelineUse, blocked: Option<&str>) -> Element {
+  let button = IconButton::new(
+    format!("agent-use-open-{index}"),
+    Icon::ChevronRight,
+    ctx.t(blocked.unwrap_or("agents.openPipeline")),
+  )
+  .small();
+  let button = if blocked.is_some() {
+    button
+  } else {
+    let navigation = Navigation::of(ctx);
+    let route = Route::Project(props.project.open.project.id(), ProjectPage::Pipeline(step.pipeline));
+    button.on_click(move || navigation.go(route.clone()))
+  };
+  button.render(ctx)
 }
 fn pipeline_cell(ctx: &Ctx, step: &PipelineUse) -> Column {
   let version = ctx.t_args(
