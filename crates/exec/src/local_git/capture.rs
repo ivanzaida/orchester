@@ -119,8 +119,13 @@ impl LocalGit {
       let path = Path::new(&path);
       let parent = path.parent().ok_or(LocalError::Unsupported)?;
       let _parent_owner = super::owned::Directory::open(parent)?;
-      // Foreign markers are always refused; their contents are never needed or read.
+      // Only a merge head participates in owned recovery; other markers are refused by name.
       match fs::symlink_metadata(path) {
+        Ok(_) if marker == "MERGE_HEAD" => {
+          let local = LocalPath::new(marker)?;
+          let bytes = super::read_regular(parent, &local)?.ok_or(LocalError::Stale)?;
+          return Ok(Some(format!("{marker}:{}", digest(&bytes))));
+        }
         Ok(_) => return Ok(Some(marker.to_owned())),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(_) => return Err(LocalGitError::Io),
