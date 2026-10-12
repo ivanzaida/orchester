@@ -302,8 +302,11 @@ impl LocalIntegration {
   pub fn remove_preservation(&mut self) -> Result<(), IntegrationError> {
     if self.operation.merged().is_some() {
       self.ensure_merged_checkout()?;
-    } else if self.main.snapshot()?.head != self.operation.reviewed().head {
-      return Err(LocalError::Stale.into());
+    } else {
+      let actual = self.main.snapshot()?;
+      if actual.head != self.operation.reviewed().head || actual.operation.is_some() {
+        return Err(LocalError::Stale.into());
+      }
     }
     self.verify_restored()?;
     self.operation.begin_cleanup()?;

@@ -39,7 +39,12 @@ pub(super) fn content(ctx: &mut Ctx, page: &LocalPage, view: &IntegrationView, b
     ));
   } else {
     column = column.child(Text::new(&ctx.t("local_integration.files")).variant(TypographyStyle::Title));
-    column = column.child(file_list(ctx, page, view, busy));
+    column = column.child(file_list(
+      ctx,
+      page,
+      view,
+      busy || page.mode.get() != Mode::Review || view.external.is_some(),
+    ));
     column = column.child(diff_preview(
       ctx,
       "local-file-diff",
@@ -58,7 +63,7 @@ fn file_row(
   busy: bool,
   group: &str,
 ) -> Element {
-  let selected = group != "local_integration.unstaged" && selected_paths.get().contains(&file.path);
+  let selected = selected_paths.get().contains(&file.path);
   let select = selected_paths.clone();
   let path = file.path.clone();
   let mut choice = Toggle::new(
@@ -67,7 +72,7 @@ fn file_row(
     selected,
     path.to_string(),
   );
-  if !busy && group != "local_integration.unstaged" && (file.staged != file.head || file.head.is_none()) {
+  if !busy {
     choice = choice.on_change(move |on| {
       select.update(|paths| {
         paths.retain(|value| value != &path);

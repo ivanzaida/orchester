@@ -1,5 +1,6 @@
 //! Typed local Git execution. Raw bytes stay inside this boundary; errors never include Git or hook output.
 
+mod ancestry;
 mod capture;
 mod commit;
 mod commit_copy;

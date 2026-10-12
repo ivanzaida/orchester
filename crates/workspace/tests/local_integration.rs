@@ -1,5 +1,9 @@
+#[path = "local_integration/external.rs"]
+mod external;
 #[path = "local_integration/privacy.rs"]
 mod privacy;
+#[path = "local_integration/selection.rs"]
+mod selection;
 #[path = "local_integration/support.rs"]
 mod support;
 
@@ -216,6 +220,10 @@ fn local_integration_reconciles_git_merge_before_journal_write_without_repeating
   drop(session);
   git(fixture.root(), &["merge", "--ff-only", &exact.result.head]);
   let mut session = fixture.open();
+  assert!(matches!(
+    session.refresh(),
+    Err(IntegrationError::State(LocalError::WrongPhase))
+  ));
   session.reconcile().expect("reconcile");
   assert_eq!(session.operation().merged(), Some(exact.result.head.as_str()));
   assert!(session.approve_and_merge(&exact).is_err());

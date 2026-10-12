@@ -55,6 +55,7 @@ impl LocalIntegration {
     self.record_known_merge(commit)?;
     match self.operation.phase() {
       LocalPhase::RemovingPreservation => {
+        self.verify_restored()?;
         self.db.remove_local_content(self.run.id())?;
         self.operation.cleanup_finished()?;
         self.save()
@@ -112,18 +113,30 @@ impl LocalIntegration {
 
   fn reconcile_preservation(&mut self, actual: &Checkout) -> Result<(), IntegrationError> {
     let saved = self.operation.preservation().ok_or(LocalError::NotVerified)?.clone();
+    let reviewed = self.operation.reviewed().clone();
+    let paths = self.operation.preservation_selection();
     if !saved.verified {
-      if actual != &saved.original {
+      if actual != &reviewed {
         return Err(LocalError::Stale.into());
       }
-      return self.complete_preservation(&saved.original);
+      return self.complete_preservation(&reviewed);
     }
-    if actual.head != saved.original.head {
+    if actual.head != reviewed.head || actual.ignored != reviewed.ignored {
       return Err(LocalError::Reconcile.into());
     }
-    for file in &actual.files {
-      let original = saved
-        .original
+    let excluded = |checkout: &Checkout| {
+      checkout
+        .files
+        .iter()
+        .filter(|file| !paths.contains(&file.path))
+        .cloned()
+        .collect::<Vec<_>>()
+    };
+    if excluded(actual) != excluded(&reviewed) {
+      return Err(LocalError::Stale.into());
+    }
+    for file in actual.files.iter().filter(|file| paths.contains(&file.path)) {
+      let original = reviewed
         .files
         .iter()
         .find(|original| original.path == file.path)
@@ -137,13 +150,18 @@ impl LocalIntegration {
         return Err(LocalError::Stale.into());
       }
     }
-    // Only a verified subset of the original paths is still dirty after an interrupted clear.
-    let clean = if actual.clean() {
+    let remaining = actual
+      .files
+      .iter()
+      .filter(|file| paths.contains(&file.path))
+      .map(|file| file.path.clone())
+      .collect::<Vec<_>>();
+    let current = if remaining.is_empty() {
       actual.clone()
     } else {
-      self.main.clear_preserved(actual)?
+      self.main.clear_preserved_selected(actual, &remaining)?
     };
-    self.operation.prepared(clean)?;
+    self.operation.preservation_finished(current)?;
     self.save()
   }
 

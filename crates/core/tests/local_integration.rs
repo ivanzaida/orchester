@@ -82,3 +82,29 @@ fn local_integration_preservation_removal_requires_completed_verified_restoratio
     Err(LocalError::Stale)
   );
 }
+
+#[test]
+fn local_integration_refresh_cannot_erase_pending_merge_intent_after_interruption() {
+  let base = checkout('a');
+  let mut operation = LocalOperation::new(RunId::generate(), base.clone()).expect("operation");
+  operation.prepared(base.clone()).expect("prepare");
+  operation.begin_sync(&base).expect("sync");
+  operation.begin_check().expect("check");
+  let exact = CheckedResult {
+    base,
+    result: checkout('b'),
+  };
+  operation.checked_result(exact.clone()).expect("checked");
+  operation.approve(&exact).expect("approve");
+  operation.begin_merge(&exact).expect("intent");
+  operation.needs_reconciliation();
+  assert!(operation.merge_pending());
+  assert_eq!(operation.refresh(checkout('b')), Err(LocalError::WrongPhase));
+  operation.resume_saved_phase();
+  assert_eq!(operation.phase(), LocalPhase::Merging);
+  assert_eq!(operation.refresh(checkout('b')), Err(LocalError::WrongPhase));
+  operation
+    .record_merge(exact.result.head)
+    .expect("reconciled completion");
+  assert!(!operation.merge_pending());
+}

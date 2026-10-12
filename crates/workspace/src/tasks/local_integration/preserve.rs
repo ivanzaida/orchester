@@ -33,8 +33,19 @@ impl LocalIntegration {
   }
 
   pub fn preserve(&mut self, name: &str) -> Result<(), IntegrationError> {
+    let paths = self
+      .operation
+      .reviewed()
+      .files
+      .iter()
+      .map(|file| file.path.clone())
+      .collect::<Vec<_>>();
+    self.preserve_selected(name, &paths)
+  }
+
+  pub fn preserve_selected(&mut self, name: &str, paths: &[LocalPath]) -> Result<(), IntegrationError> {
     let current = self.main.snapshot()?;
-    self.operation.begin_preserve(&current, name)?;
+    self.operation.begin_preserve_selected(&current, name, paths.to_vec())?;
     self.save()?;
     self.complete_preservation(&current)
   }
@@ -44,7 +55,8 @@ impl LocalIntegration {
     current: &orchester_core::integration::local::Checkout,
   ) -> Result<(), IntegrationError> {
     self.main.ensure(current)?;
-    for file in &current.files {
+    let paths = self.operation.preservation_selection();
+    for file in current.files.iter().filter(|file| paths.contains(&file.path)) {
       for (layer, entry) in [(RecoveryLayer::Head, &file.head), (RecoveryLayer::Staged, &file.staged)] {
         if let Some(entry) = entry {
           if !matches!(entry.mode, 0o100644 | 0o100755) {
@@ -82,8 +94,8 @@ impl LocalIntegration {
     self.main.ensure(current)?;
     self.operation.preservation_verified()?;
     self.save()?;
-    let clean = self.main.clear_preserved(current)?;
-    self.operation.prepared(clean)?;
+    let remaining = self.main.clear_preserved_selected(current, &paths)?;
+    self.operation.preservation_finished(remaining)?;
     self.save()
   }
 

@@ -16,6 +16,9 @@ impl LocalIntegration {
     self.ensure_latest_run()?;
     let base = self.main.snapshot()?;
     let task = self.task_git()?.snapshot()?;
+    if super::external::contained_result(&self.db, &self.main, &base, &self.run, Some(&self.operation))?.is_some() {
+      return Err(IntegrationError::AlreadyIntegrated);
+    }
     let main_entries = self.main.tree_entries(&base.head)?;
     let task_entries = self.task_git()?.tree_entries(&task.head)?;
     if main_entries

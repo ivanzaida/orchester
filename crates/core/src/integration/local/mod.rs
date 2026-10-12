@@ -42,6 +42,13 @@ pub enum LocalError {
   Blank,
 }
 
+/// Read-only Git evidence, not a historical Orchester merge record or approval.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ContainedResult {
+  pub source: crate::revision::Revision,
+  pub target: crate::revision::Revision,
+}
+
 /// A regular file's Git representation; absent entries represent deletion.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IndexEntry {

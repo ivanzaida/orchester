@@ -1,3 +1,5 @@
+mod preparation;
+
 use std::sync::{Arc, atomic::Ordering};
 
 use lurq::{
@@ -121,7 +123,10 @@ impl Component for Inspector {
     };
     let identity = format!(
       "{:?}:{}:{}:{:?}",
-      phase, mode_key, props.view.checkout.head, props.view.checkout.index
+      phase,
+      mode_key,
+      props.view.checkout.head,
+      (&props.view.checkout, props.selected.get())
     );
     let mut prior = self.identity.lock();
     if *prior != identity {
@@ -140,6 +145,12 @@ impl Component for Inspector {
 
 impl Inspector {
   fn actions(&self, ctx: &mut Ctx, props: &Props, mode: &Mode, phase: LocalPhase) -> Element {
+    if props.view.external.is_some() {
+      return action_panel()
+        .child(Text::new(&ctx.t("local_integration.externalTitle")).variant(TypographyStyle::Title))
+        .child(Text::new(&ctx.t("local_integration.externalBody")).variant(TypographyStyle::Description))
+        .into();
+    }
     if props.busy {
       let stop = props.stop.clone();
       return action_panel()
@@ -203,7 +214,11 @@ impl Inspector {
         Mode::Commit { .. } => {
           !props.message.get().trim().is_empty() && !props.view.editor_policy.sensitive(&props.message.get())
         }
-        Mode::Preserve => !props.name.get().trim().is_empty() && !props.view.editor_policy.sensitive(&props.name.get()),
+        Mode::Preserve => {
+          !props.selected.get().is_empty()
+            && !props.name.get().trim().is_empty()
+            && !props.view.editor_policy.sensitive(&props.name.get())
+        }
         _ => true,
       };
     let stale = phase == LocalPhase::AwaitingApproval && !props.view.checked_current;
@@ -360,92 +375,6 @@ impl Inspector {
       panel
     }
   }
-
-  fn prepared(&self, ctx: &Ctx, props: &Props) -> Vec<Element> {
-    let mut actions = vec![
-      button(
-        ctx,
-        props,
-        "local-sync",
-        "local_integration.sync",
-        Some(Action::Sync),
-        false,
-      )
-      .into(),
-    ];
-    if props
-      .view
-      .operation
-      .as_ref()
-      .is_some_and(|operation| operation.preservation().is_some())
-    {
-      actions.push(
-        mode_button(
-          ctx,
-          props,
-          "local-review-cancel",
-          "local_integration.cancelPreservation",
-          Mode::Cancel,
-        )
-        .into(),
-      );
-    }
-    actions
-  }
-
-  fn preparation(&self, ctx: &Ctx, props: &Props) -> Vec<Element> {
-    let mut actions: Vec<Element> = vec![
-      button(
-        ctx,
-        props,
-        "local-inspect",
-        "local_integration.inspect",
-        Some(Action::Inspect),
-        false,
-      )
-      .into(),
-      button(
-        ctx,
-        props,
-        "local-refresh",
-        "local_integration.refresh",
-        Some(Action::Refresh),
-        false,
-      )
-      .into(),
-      button(
-        ctx,
-        props,
-        "local-review-commit",
-        "local_integration.commitReview",
-        Some(Action::ReviewCommit(props.selected.get())),
-        props.selected.get().is_empty(),
-      )
-      .into(),
-      mode_button(
-        ctx,
-        props,
-        "local-review-preserve",
-        "local_integration.preserveReview",
-        Mode::Preserve,
-      )
-      .into(),
-    ];
-    if props.view.checkout.clean() {
-      actions.push(
-        button(
-          ctx,
-          props,
-          "local-sync",
-          "local_integration.sync",
-          Some(Action::Sync),
-          false,
-        )
-        .into(),
-      );
-    }
-    actions
-  }
 }
 
 fn action_panel() -> Column {
@@ -477,7 +406,10 @@ fn decision(props: &Props, mode: &Mode, phase: LocalPhase) -> Option<Decision> {
       "local_integration.preserveBody",
       "local_integration.preserveBody",
       "local_integration.preserve",
-      Action::Preserve(props.name.get()),
+      Action::Preserve {
+        name: props.name.get(),
+        paths: props.selected.get(),
+      },
     ),
     Mode::Cancel => (
       "local_integration.cancelTitle",

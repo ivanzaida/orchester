@@ -39,6 +39,7 @@ pub struct IntegrationView {
   pub diff: Preview,
   pub checked_current: bool,
   pub editor_policy: EditorPolicy,
+  pub external: Option<orchester_core::integration::local::ContainedResult>,
 }
 
 /// Reads actual checkout and retained journal independently of any worker lease, so progress stays observable.
@@ -55,6 +56,12 @@ pub fn read(
   super::ensure_project_git(&main)?;
   let checkout = main.snapshot()?;
   let operation = db.local_operation(run)?;
+  use orchester_core::store::RunStore;
+  let saved_run = db
+    .run(run)
+    .map_err(|_| IntegrationError::Run)?
+    .ok_or(IntegrationError::Run)?;
+  let external = super::external::contained_result(&db, &main, &checkout, &saved_run, operation.as_ref())?;
   let redact = Redaction::load(&db, vault)?;
   let task_root = orchester_exec::local_git::owned_directory(root, &[".orchester", "worktrees", &run.to_string()])?;
   let mut conflicts = Vec::new();
@@ -108,20 +115,11 @@ pub fn read(
       None => Preview::Absent,
     }
   };
-  let checked_current = if let Some(exact) = operation.as_ref().and_then(LocalOperation::checked) {
-    if let Some(task_root) = task_root {
-      orchester_exec::local_git::owned_store(root)?;
-      let scratch = orchester_exec::local_git::prepare_scratch(&task_root, &[".orchester", "local-integration"])?;
-      LocalGit::new(&task_root, &scratch)?.snapshot()? == exact.result && checkout == exact.base
-    } else {
-      false
-    }
-  } else {
-    true
-  };
+  let checked_current = checked_current(root, &checkout, operation.as_ref(), task_root.as_deref())?;
   Ok(IntegrationView {
     editor_policy: EditorPolicy(std::sync::Arc::new(redact)),
     checked_current,
+    external,
     operation,
     checkout,
     conflicts,
@@ -282,4 +280,23 @@ impl EditorPolicy {
         !value.expose().is_empty() && (text.contains(value.expose()) || escaped_secret(text, value.expose()))
       })
   }
+}
+
+fn checked_current(
+  root: &Path,
+  checkout: &Checkout,
+  operation: Option<&LocalOperation>,
+  task_root: Option<&Path>,
+) -> Result<bool, IntegrationError> {
+  Ok(if let Some(exact) = operation.and_then(LocalOperation::checked) {
+    if let Some(task_root) = task_root {
+      orchester_exec::local_git::owned_store(root)?;
+      let scratch = orchester_exec::local_git::prepare_scratch(task_root, &[".orchester", "local-integration"])?;
+      LocalGit::new(task_root, &scratch)?.snapshot()? == exact.result && *checkout == exact.base
+    } else {
+      false
+    }
+  } else {
+    true
+  })
 }

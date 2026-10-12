@@ -60,6 +60,8 @@ pub struct LocalOperation {
   paused_from: Option<LocalPhase>,
   #[serde(default)]
   pending_resolution: Option<super::PendingResolution>,
+  #[serde(default)]
+  preservation_selection: Vec<super::LocalPath>,
 }
 
 impl LocalOperation {
@@ -83,6 +85,7 @@ impl LocalOperation {
       commit_tree: None,
       paused_from: None,
       pending_resolution: None,
+      preservation_selection: Vec::new(),
     })
   }
 
@@ -107,6 +110,12 @@ impl LocalOperation {
   pub fn merged(&self) -> Option<&str> {
     self.merged.as_deref()
   }
+  pub fn merge_pending(&self) -> bool {
+    self.phase == LocalPhase::Merging
+      || (matches!(self.phase, LocalPhase::Paused | LocalPhase::NeedsReconciliation)
+        && self.paused_from == Some(LocalPhase::Merging))
+  }
+
   pub fn restored(&self) -> &[RestoredFile] {
     &self.restored
   }
@@ -177,7 +186,7 @@ impl LocalOperation {
   }
 
   pub fn refresh(&mut self, checkout: Checkout) -> Result<(), LocalError> {
-    if self.merged.is_some() || self.preservation.as_ref().is_some_and(|saved| saved.retained) {
+    if self.merged.is_some() || self.merge_pending() || self.preservation.as_ref().is_some_and(|saved| saved.retained) {
       return Err(LocalError::WrongPhase);
     }
     if checkout.operation.is_some() {
@@ -217,17 +226,84 @@ impl LocalOperation {
   }
 
   pub fn begin_preserve(&mut self, current: &Checkout, name: &str) -> Result<(), LocalError> {
+    let paths = current.files.iter().map(|file| file.path.clone()).collect();
+    self.begin_preserve_selected(current, name, paths)
+  }
+
+  pub fn begin_preserve_selected(
+    &mut self,
+    current: &Checkout,
+    name: &str,
+    paths: Vec<super::LocalPath>,
+  ) -> Result<(), LocalError> {
     self.prepare_phase(current)?;
-    if name.trim().is_empty() {
+    if name.trim().is_empty() || paths.is_empty() {
       return Err(LocalError::Blank);
     }
-    self.preservation = Some(Preservation {
-      name: name.trim().to_owned(),
-      original: current.clone(),
-      verified: false,
-      retained: true,
-    });
+    if paths.iter().collect::<std::collections::BTreeSet<_>>().len() != paths.len() {
+      return Err(LocalError::Stale);
+    }
+    let files = paths
+      .iter()
+      .map(|path| {
+        current
+          .files
+          .iter()
+          .find(|file| file.path == *path)
+          .cloned()
+          .ok_or(LocalError::Stale)
+      })
+      .collect::<Result<Vec<_>, _>>()?;
+    if let Some(saved) = &mut self.preservation {
+      if !saved.verified || !saved.retained || saved.original.head != current.head {
+        return Err(LocalError::WrongPhase);
+      }
+      if files
+        .iter()
+        .any(|file| saved.original.files.iter().any(|original| original.path == file.path))
+      {
+        return Err(LocalError::WrongPhase);
+      }
+      saved.original.files.extend(files);
+      saved.name = name.trim().to_owned();
+      saved.verified = false;
+    } else {
+      let mut original = current.clone();
+      original.files = files;
+      self.preservation = Some(Preservation {
+        name: name.trim().to_owned(),
+        original,
+        verified: false,
+        retained: true,
+      });
+    }
+    self.preservation_selection = paths;
     self.phase = LocalPhase::Preserving;
+    Ok(())
+  }
+
+  pub fn preservation_selection(&self) -> Vec<super::LocalPath> {
+    if self.preservation_selection.is_empty() {
+      // Journals written before selected preservation retained every original path.
+      self.preservation.as_ref().map_or_else(Vec::new, |saved| {
+        saved.original.files.iter().map(|file| file.path.clone()).collect()
+      })
+    } else {
+      self.preservation_selection.clone()
+    }
+  }
+
+  pub fn preservation_finished(&mut self, current: Checkout) -> Result<(), LocalError> {
+    if self.phase != LocalPhase::Preserving || !self.preservation.as_ref().is_some_and(|saved| saved.verified) {
+      return Err(LocalError::NotVerified);
+    }
+    self.reviewed = current;
+    self.preservation_selection.clear();
+    self.phase = if self.reviewed.clean() {
+      LocalPhase::Prepared
+    } else {
+      LocalPhase::Review
+    };
     Ok(())
   }
 
@@ -430,10 +506,9 @@ impl LocalOperation {
 
   pub fn begin_cancel(&mut self, current: &Checkout) -> Result<(), LocalError> {
     if self.merged.is_some()
-      || !current.clean()
       || !matches!(
         self.phase,
-        LocalPhase::Prepared | LocalPhase::AwaitingApproval | LocalPhase::Canceling
+        LocalPhase::Review | LocalPhase::Prepared | LocalPhase::AwaitingApproval | LocalPhase::Canceling
       )
     {
       return Err(LocalError::WrongPhase);

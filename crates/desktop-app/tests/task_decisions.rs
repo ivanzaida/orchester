@@ -369,6 +369,61 @@ fn decision_merge_is_unavailable_without_a_branch_and_merged_says_where() {
   assert!(!page.has("task-review-pull-request"));
 }
 
+#[test]
+fn decision_external_git_evidence_replaces_ready_without_a_historical_merge_record() {
+  use orchester_core::{
+    integration::local::LocalIntegrationStore,
+    store::{MergeStore, RunStore, TaskStore},
+  };
+  use orchester_store::ProjectDb;
+
+  let mut page = Page::seeded("decisions");
+  let root = page.window.data.dir.path().join("repo-decisions");
+  let db = ProjectDb::open(&root).expect("project");
+  let key = key_of(&page, "ready for review, merges cleanly");
+  let task = db
+    .tasks()
+    .expect("tasks")
+    .into_iter()
+    .find(|task| task.key().to_string() == key)
+    .expect("task");
+  let run = db
+    .runs_of_task(task.id())
+    .expect("runs")
+    .into_iter()
+    .filter_map(Result::ok)
+    .max_by_key(|run| run.number().get())
+    .expect("run");
+  let output = std::process::Command::new("git")
+    .args([
+      "merge",
+      "--no-ff",
+      "-m",
+      "External QA integration",
+      run.branch().as_str(),
+    ])
+    .current_dir(&root)
+    .output()
+    .expect("git");
+  assert!(output.status.success(), "external merge completes");
+  page.open("ready for review, merges cleanly", "task-external-integration");
+  assert!(!page.has("task-merge"));
+  assert!(!page.has("task-notice-title"));
+  assert!(
+    page
+      .text("task-external-integration")
+      .contains("Git already contains the task branch")
+  );
+  assert!(db.run_merge(run.id()).expect("record").is_none());
+  assert!(db.local_operation(run.id()).expect("operation").is_none());
+  page.click("task-inspect-external-integration");
+  page.window.until("current external Git evidence", |window| {
+    window.tree.get_element_by_id("local-external-integration").is_some()
+  });
+  assert!(!page.has("local-sync"));
+  assert!(!page.has("local-confirm"));
+}
+
 /// The key of the task seeded in `state`.
 fn key_of(page: &Page, state: &str) -> String {
   page

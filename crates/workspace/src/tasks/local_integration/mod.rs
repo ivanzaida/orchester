@@ -2,6 +2,7 @@
 
 mod cancel;
 mod checks;
+mod external;
 mod preserve;
 mod process;
 mod recover;
@@ -13,6 +14,7 @@ mod view;
 
 use std::path::Path;
 
+pub use external::external_integration;
 use orchester_core::{
   id::RunId,
   integration::local::{LocalError, LocalIntegrationStore, LocalOperation},
@@ -34,6 +36,8 @@ pub enum IntegrationError {
   Store(#[from] StoreError),
   #[error("this run is not ready for local integration")]
   Run,
+  #[error("Git contains the task branch; external integration cannot be recorded without a scoped mapping")]
+  AlreadyIntegrated,
   #[error("the pinned pipeline has no executable Check tool")]
   NoCheck,
   #[error("fresh Check failed; the result remains unapproved")]
@@ -74,15 +78,7 @@ impl LocalIntegration {
     } else {
       None
     };
-    if let Some(task) = &task {
-      let common = |git: &LocalGit| -> Result<_, IntegrationError> {
-        let name = git.text(&["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
-        Ok(Path::new(&name).canonicalize().map_err(|_| LocalGitError::Io)?)
-      };
-      if common(&main)? != common(task)? {
-        return Err(LocalError::Unsupported.into());
-      }
-    }
+    ensure_linked_task(&main, task.as_ref())?;
     let checkout = main.snapshot()?;
     if run
       .base_branch()
@@ -110,6 +106,11 @@ impl LocalIntegration {
       && db.run_merge(run_id)?.is_none()
     {
       return Err(IntegrationError::Run);
+    }
+    if db.local_operation(run_id)?.is_none()
+      && external::contained_result(&db, &main, &operation.reviewed().clone(), &run, None)?.is_some()
+    {
+      return Err(IntegrationError::AlreadyIntegrated);
     }
     let mut session = Self {
       db,
@@ -187,6 +188,19 @@ pub(super) fn ensure_project_git(git: &LocalGit) -> Result<(), IntegrationError>
   }
   if !directory.starts_with(git.root()) {
     return Err(LocalError::Unsupported.into());
+  }
+  Ok(())
+}
+
+fn ensure_linked_task(main: &LocalGit, task: Option<&LocalGit>) -> Result<(), IntegrationError> {
+  if let Some(task) = task {
+    let common = |git: &LocalGit| -> Result<_, IntegrationError> {
+      let name = git.text(&["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
+      Ok(Path::new(&name).canonicalize().map_err(|_| LocalGitError::Io)?)
+    };
+    if common(main)? != common(task)? {
+      return Err(LocalError::Unsupported.into());
+    }
   }
   Ok(())
 }

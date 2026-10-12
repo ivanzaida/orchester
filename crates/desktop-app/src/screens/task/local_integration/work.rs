@@ -29,7 +29,10 @@ pub enum Action {
     tree: String,
     message: String,
   },
-  Preserve(String),
+  Preserve {
+    name: String,
+    paths: Vec<LocalPath>,
+  },
   Sync,
   Merge(Box<CheckedResult>),
   Save {
@@ -119,7 +122,7 @@ fn execute(
       return Ok(Outcome::CommitReview { tree, preview });
     }
     Action::Commit { paths, tree, message } => session.commit(&paths, &tree, &message)?,
-    Action::Preserve(name) => session.preserve(&name)?,
+    Action::Preserve { name, paths } => session.preserve_selected(&name, &paths)?,
     Action::Sync => {
       session.prepare_if_clean()?;
       session.sync()?;
@@ -169,6 +172,7 @@ pub fn problem(error: IntegrationError) -> Problem {
     IntegrationError::Git(_) => "io",
     IntegrationError::Store(_) => "storage",
     IntegrationError::Run => "run",
+    IntegrationError::AlreadyIntegrated => "external",
     IntegrationError::NoCheck => "checkMissing",
     IntegrationError::CheckFailed => "checkFailed",
   };
@@ -187,6 +191,7 @@ pub fn problem(error: IntegrationError) -> Problem {
     "git" => "local_integration.error.git",
     "storage" => "local_integration.error.storage",
     "run" => "local_integration.error.run",
+    "external" => "local_integration.externalBody",
     "checkMissing" => "local_integration.error.checkMissing",
     "checkFailed" => "local_integration.error.checkFailed",
     _ => "local_integration.error.io",

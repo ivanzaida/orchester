@@ -148,8 +148,20 @@ impl LocalGit {
 
   /// Clears only reviewed paths after their originals have been durably retained and verified.
   pub fn clear_preserved(&self, reviewed: &Checkout) -> Result<Checkout, LocalGitError> {
+    let paths = reviewed.files.iter().map(|file| file.path.clone()).collect::<Vec<_>>();
+    self.clear_preserved_selected(reviewed, &paths)
+  }
+
+  pub fn clear_preserved_selected(&self, reviewed: &Checkout, paths: &[LocalPath]) -> Result<Checkout, LocalGitError> {
     self.ensure(reviewed)?;
-    for file in &reviewed.files {
+    if paths.is_empty()
+      || paths
+        .iter()
+        .any(|path| !reviewed.files.iter().any(|file| file.path == *path))
+    {
+      return Err(LocalError::Stale.into());
+    }
+    for file in reviewed.files.iter().filter(|file| paths.contains(&file.path)) {
       if self.text(&["rev-parse", "HEAD"])? != reviewed.head
         || self.operation()?.is_some()
         || super::file_hash(&self.root, &file.path)? != file.working
@@ -173,7 +185,13 @@ impl LocalGit {
       }
     }
     let clean = self.snapshot()?;
-    if !clean.clean() || clean.head != reviewed.head || clean.ignored != reviewed.ignored {
+    let excluded = reviewed
+      .files
+      .iter()
+      .filter(|file| !paths.contains(&file.path))
+      .cloned()
+      .collect::<Vec<_>>();
+    if clean.files != excluded || clean.head != reviewed.head || clean.ignored != reviewed.ignored {
       return Err(LocalError::Reconcile.into());
     }
     Ok(clean)

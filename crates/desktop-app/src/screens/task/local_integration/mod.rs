@@ -208,6 +208,7 @@ impl LocalPage {
         Notice::new("local-phase", phase_tone(phase), ctx.t(controls::phase_title(phase)))
           .body(ctx.t(controls::phase_body(phase))),
       );
+    left = left.with_children(external_notice(ctx, view));
     if let Some(problem) = self.work.state().get().error {
       left = left.child(Notice::new("local-work-error", NoticeTone::Danger, ctx.t(problem.0)));
     }
@@ -263,4 +264,23 @@ fn phase_tone(phase: LocalPhase) -> NoticeTone {
     | LocalPhase::NeedsReconciliation => NoticeTone::Warning,
     _ => NoticeTone::Info,
   }
+}
+
+fn external_notice(ctx: &Ctx, view: &IntegrationView) -> Option<Element> {
+  let evidence = view.external.as_ref()?;
+  Some(
+    Notice::new(
+      "local-external-integration",
+      NoticeTone::Warning,
+      ctx.t("local_integration.externalTitle"),
+    )
+    .body(ctx.t_args(
+      "local_integration.externalEvidence",
+      [
+        ("source", evidence.source.as_str()),
+        ("target", evidence.target.as_str()),
+      ],
+    ))
+    .into(),
+  )
 }
