@@ -57,7 +57,8 @@ pub struct Props {
   pub project: ShownProject,
   pub entry: Option<InstructionEntry>,
   pub valid: bool,
-  pub text: Signal<String>,
+  pub input: crate::ui::prompt_input::PromptInput,
+  pub unavailable: Signal<super::fields::MissingVariables>,
   pub events: Signal<Events>,
   pub panel: Signal<Panel>,
   pub data: ProjectInstructions,
@@ -118,6 +119,7 @@ impl Component for Panels {
       )
       .state()
       .get();
+    self.update_availability(catalog.data.as_ref(), &props);
     if panel == Panel::Hidden {
       return Column::new().into();
     }
@@ -170,6 +172,22 @@ impl Component for Panels {
   }
 }
 impl Panels {
+  fn update_availability(&self, catalog: Option<&PreviewCatalog>, props: &Props) {
+    let missing = catalog
+      .and_then(|catalog| catalog.resolve(&self.choice.get()).ok())
+      .map_or_else(
+        || Variable::ALL.to_vec(),
+        |resolved| {
+          Variable::ALL
+            .into_iter()
+            .filter(|variable| resolved.value(*variable).is_none())
+            .collect()
+        },
+      );
+    if props.unavailable.get_untracked().0 != missing {
+      props.unavailable.set(super::fields::MissingVariables(missing));
+    }
+  }
   fn search_field(&self, ctx: &mut Ctx) -> Element {
     FieldInput::new(
       "instruction-variable-search",

@@ -165,6 +165,11 @@
     "found": "Found in this repository · {{count}} items",
     "importDraftsOnly": "Creates drafts only: nothing is published and no repository file changes",
     "readOnly": "Read only",
+    "insertPrevented": "The editor prevented this insertion. Try again when it is ready.",
+    "insertNotMounted": "The prompt editor is unavailable. Reopen it before inserting a variable.",
+    "insertMasked": "A variable cannot be inserted into a masked field.",
+    "insertComposing": "Finish the input-method composition before inserting a variable.",
+    "insertInvalidSelection": "The editor selection is invalid. Choose a position in the prompt and try again.",
     "foundSkills": "{{count}} skill folders · creates draft skills"
   }
 }

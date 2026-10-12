@@ -30,7 +30,7 @@ pub use self::{
     PipelineSourcesError, RepositoryAccess, StarterAssignments, StarterStep, StarterStepText, Step, StepChange,
     StepKey, StepKind, Weaker, changes, feature_delivery, weaker_than,
   },
-  prompt::{PromptError, PromptText, Rendered},
+  prompt::{PromptError, PromptReference, PromptText, Rendered, prompt_references},
   skill::{SKILL_FILE, Skill, SkillError, SkillFile, SkillFilePath},
   tool::{
     AccessPolicy, AccessPolicyError, AccessWindow, AllowedSteps, ApprovalMode, CommandAction, CommandArg,

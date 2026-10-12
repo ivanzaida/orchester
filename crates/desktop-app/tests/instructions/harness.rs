@@ -85,6 +85,26 @@ impl Instructions {
       .set_value(value);
     self.window.pass();
   }
+  pub fn focus_prompt(&mut self) {
+    let bounds = self
+      .window
+      .tree
+      .get_element_by_id_mut("instruction-prompt")
+      .and_then(|element| element.bounds())
+      .expect("prompt laid out");
+    let (x, y) = (bounds.x + 5.0, bounds.y + 5.0);
+    self.window.tree.mouse_move(x, y);
+    self.window.tree.mouse_down(x, y, lurq::app::events::MouseButton::Left);
+    self.window.tree.mouse_up(x, y, lurq::app::events::MouseButton::Left);
+    self.window.pass();
+  }
+  pub fn key(&mut self, key: &str, code: &str, shift: bool, control: bool) {
+    self
+      .window
+      .tree
+      .key_down(key.into(), code.into(), shift, control, false);
+    self.window.pass();
+  }
   pub fn choose(&mut self, id: &str, label: &str) {
     let mut select = self
       .window

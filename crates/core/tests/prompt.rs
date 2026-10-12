@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use orchester_core::resource::{PromptError, PromptText, Variable, VariableGroup, VariableType};
+use orchester_core::resource::{PromptError, PromptText, Variable, VariableGroup, VariableType, prompt_references};
 
 #[test]
 fn prompt_lists_catalog_variables_in_first_use_order() {
@@ -78,6 +78,36 @@ fn prompt_marked_rendering_keeps_placeholders_without_values() {
   );
   assert_eq!(rendered.unavailable, [Variable::RunBranch]);
   assert_eq!(prompt.render(|_| None), Err(Variable::RunBranch));
+}
+
+#[test]
+fn prompt_reference_ranges_preserve_unicode_whitespace_and_duplicates() {
+  let raw = "é😀 {{ task.title }}\r\n{{task.title}} \\{{run.branch}}";
+  let references = prompt_references(raw)
+    .collect::<Result<Vec<_>, _>>()
+    .expect("valid prompt grammar");
+  assert_eq!(references.len(), 2);
+  assert_eq!(&raw[references[0].range.clone()], "{{ task.title }}");
+  assert_eq!(references[0].range.start, "é😀 ".len());
+  assert_eq!(references[0].variable, Variable::TaskTitle);
+  assert_eq!(&raw[references[1].range.clone()], "{{task.title}}");
+}
+#[test]
+fn prompt_reference_scanner_retains_known_references_but_construction_rejects_errors() {
+  let raw = "{{task.title}} {{secret.token}} {{run.branch}} {{unfinished";
+  let scanned = prompt_references(raw).collect::<Vec<_>>();
+  assert_eq!(scanned.len(), 4);
+  assert_eq!(
+    scanned[0].as_ref().expect("catalog variable").variable,
+    Variable::TaskTitle
+  );
+  assert!(matches!(&scanned[1], Err(PromptError::UnknownVariable { .. })));
+  assert_eq!(
+    scanned[2].as_ref().expect("catalog variable").variable,
+    Variable::RunBranch
+  );
+  assert!(matches!(&scanned[3], Err(PromptError::UnclosedPlaceholder { .. })));
+  assert!(PromptText::new(raw).is_err());
 }
 
 #[test]

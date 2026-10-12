@@ -7,19 +7,21 @@ use crate::{
     field::{FieldInput, SelectField, field, field_error, select_style},
     icon::{Icon, icon},
     message::message_text,
+    prompt_input::{EditFeedback, PromptInput},
   },
 };
 use lurq::{
   app::{
+    component::DevtoolsInspectable,
     ctx::Ctx,
     theme::{BorderSize, FormTextRole, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Select, SelectOption, Text, TextInput},
+  components::{Column, InputEditError, InputToken, InputTokens, Row, ScrollVertical, Select, SelectOption, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::resource::Instruction;
+use orchester_core::resource::{Instruction, Variable};
 use orchester_workspace::instructions::{
   data::{InstructionEntry, ProjectInstructions},
   form::{Events, FormErrors, InstructionForm, ScopeChoice, Target},
@@ -29,10 +31,16 @@ use orchester_workspace::instructions::{
 const PROMPT_TOOLBAR_HEIGHT: f32 = 34.0;
 const GUTTER_WIDTH: f32 = 36.0;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MissingVariables(pub Vec<Variable>);
+impl DevtoolsInspectable for MissingVariables {}
+
 #[derive(Clone)]
 pub struct Fields {
   pub name: Signal<String>,
   pub text: Signal<String>,
+  pub input: PromptInput,
+  pub unavailable: Signal<MissingVariables>,
   pub targets: Signal<Vec<Target>>,
   pub events: Signal<Events>,
   pub scope: Signal<ScopeChoice>,
@@ -62,9 +70,13 @@ impl Fields {
         changed.set(normalized);
       }
     });
+    let text = ctx.signal(entry.map_or_else(String::new, |e| e.body.text().as_str().to_owned()));
+    let input = PromptInput::new(ctx, text.clone());
     Self {
+      input,
+      unavailable: ctx.signal(MissingVariables(Variable::ALL.to_vec())),
       name: ctx.signal(entry.map_or_else(String::new, |e| e.name.to_string())),
-      text: ctx.signal(entry.map_or_else(String::new, |e| e.body.text().as_str().to_owned())),
+      text,
       targets,
       scope: ctx.signal(scope),
       events: ctx.signal(entry.map_or(Events::Start, |e| Events::of(e.body.events()))),
@@ -265,10 +277,12 @@ impl Fields {
       color: PaletteColor::TextSecondary,
     }
     .resolve(&theme.typography(), &theme.palette());
-    let mut input = TextInput::styled(self.text.clone(), text_style)
+    let raw = self.text.get();
+    let mut input = self
+      .input
+      .field(ctx, text_style, self.tokens(&raw))
       .id("instruction-prompt")
       .describe("a11y_name", ctx.t("instructions.prompt"))
-      .multiline()
       .rows(1, usize::MAX)
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
@@ -315,7 +329,35 @@ impl Fields {
           .and_then(|e| e.text.as_ref())
           .map(|error| field_error("instruction-text-error", &message_text(ctx, error))),
       )
+      .with_children(self.input_error(ctx))
       .into()
+  }
+  fn tokens(&self, raw: &str) -> InputTokens {
+    let unavailable = self.unavailable.get().0;
+    let tokens = orchester_workspace::instructions::tokens::inline_references(raw)
+      .into_iter()
+      .map(|reference| {
+        InputToken::new(
+          reference.range,
+          instructions::token_style(unavailable.contains(&reference.variable)),
+        )
+      })
+      .collect();
+    InputTokens::new(raw, tokens).expect("domain ranges are nonoverlapping UTF-8 boundaries without line endings")
+  }
+  fn input_error(&self, ctx: &Ctx) -> Option<Element> {
+    let feedback = self.input.feedback.get();
+    let key = match &feedback {
+      EditFeedback::Clear => return None,
+      EditFeedback::Prevented => "instructions.insertPrevented",
+      EditFeedback::Failed(error) => match **error {
+        InputEditError::NotMounted => "instructions.insertNotMounted",
+        InputEditError::Masked => "instructions.insertMasked",
+        InputEditError::Composing => "instructions.insertComposing",
+        InputEditError::InvalidSelection => "instructions.insertInvalidSelection",
+      },
+    };
+    Some(field_error("instruction-insert-error", &ctx.t(key)).into())
   }
   fn prompt_toolbar(&self, ctx: &Ctx, panel: Signal<super::panels::Panel>) -> Row {
     Row::new()

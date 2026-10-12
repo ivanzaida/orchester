@@ -123,28 +123,54 @@ impl From<PromptText> for String {
   }
 }
 
+/// A catalog reference and its exact range in the unmodified UTF-8 prompt.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PromptReference {
+  pub range: std::ops::Range<usize>,
+  pub variable: Variable,
+}
+
+/// Scan the prompt grammar, retaining valid references around invalid expressions during editing.
+/// Strict prompt construction collects the same scanner and rejects its first error.
+pub fn prompt_references(text: &str) -> impl Iterator<Item = Result<PromptReference, PromptError>> + '_ {
+  let mut start = 0;
+  std::iter::from_fn(move || {
+    loop {
+      let offset = start + text[start..].find(OPEN)?;
+      let inner_start = offset + OPEN.len();
+      if text[..offset].ends_with(ESCAPE) {
+        start = inner_start;
+        continue;
+      }
+      let Some(inner_len) = text[inner_start..].find(CLOSE) else {
+        start = text.len();
+        return Some(Err(PromptError::UnclosedPlaceholder { offset }));
+      };
+      start = inner_start + inner_len + CLOSE.len();
+      let name = text[inner_start..inner_start + inner_len].trim();
+      return Some(
+        name
+          .parse::<Variable>()
+          .map(|variable| PromptReference {
+            range: offset..start,
+            variable,
+          })
+          .map_err(|_| PromptError::UnknownVariable {
+            name: name.to_owned(),
+            offset,
+          }),
+      );
+    }
+  })
+}
+
 fn placeholders(text: &str) -> Result<Vec<Variable>, PromptError> {
   let mut variables = Vec::new();
-  let mut start = 0;
-  while let Some(open) = text[start..].find(OPEN) {
-    let offset = start + open;
-    let inner_start = offset + OPEN.len();
-    if text[..offset].ends_with(ESCAPE) {
-      start = inner_start;
-      continue;
-    }
-    let inner_len = text[inner_start..]
-      .find(CLOSE)
-      .ok_or(PromptError::UnclosedPlaceholder { offset })?;
-    let name = text[inner_start..inner_start + inner_len].trim();
-    let variable = name.parse::<Variable>().map_err(|_| PromptError::UnknownVariable {
-      name: name.to_owned(),
-      offset,
-    })?;
+  for reference in prompt_references(text) {
+    let variable = reference?.variable;
     if !variables.contains(&variable) {
       variables.push(variable);
     }
-    start = inner_start + inner_len + CLOSE.len();
   }
   Ok(variables)
 }

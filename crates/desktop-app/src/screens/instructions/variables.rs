@@ -104,14 +104,14 @@ pub fn catalog(ctx: &Ctx, state: &Panels, props: &Props, resolved: Option<&Resol
 }
 fn detail(ctx: &Ctx, props: &Props, variable: Variable, resolved: Option<&Resolved<'_>>) -> Element {
   let value = resolved.and_then(|r| r.value(variable));
-  let text = props.text.clone();
+  let input = props.input.clone();
   let expression = format!("{{{{{}}}}}", variable.name());
   let insert = ActionButton::new(
     "instruction-variable-insert",
     ButtonKind::Secondary,
     ctx.t_args("instructions.insert", [("expression", expression.as_str())]),
   )
-  .on_click(move || text.update(|text| text.push_str(&expression)));
+  .on_click(move || input.report(input.insert(&expression)));
   let mut detail = Column::new()
     .id("instruction-variable-detail")
     .width(Dimension::Pct(100.0))
