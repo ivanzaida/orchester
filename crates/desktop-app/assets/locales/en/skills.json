@@ -173,7 +173,7 @@
     "instructionType": "Instruction",
     "skillType": "Skill",
     "importResultDetail": "Nothing is published and no repository file changed. No agent gets a draft: review each one and publish it when it is ready.",
-    "importedTotals": "IMPORTED · {{types}}",
+    "importedTotals": "{{imported}} of {{total}} items imported · {{types}}",
     "resultFrom": "from {{source}}",
     "resultInstruction": "Draft project instruction v{{version}}",
     "resultSkill": "Draft skill v{{version}}",
@@ -193,6 +193,7 @@
     "instructionOne": "1 instruction",
     "instructionMany": "{{count}} instructions",
     "skillOne": "1 skill",
-    "skillMany": "{{count}} skills"
+    "skillMany": "{{count}} skills",
+    "savedUnpublished": "Draft saved · Not published"
   }
 }

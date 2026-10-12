@@ -130,6 +130,10 @@ fn skills_empty_states_list_repository_sources_and_import_preview_and_result() {
     w.tree.get_element_by_id("skills-import-result").is_some()
   });
   assert!(s.text("skills-import-result").contains("2 drafts created"));
+  assert!(
+    s.text("skill-result-footer")
+      .contains("2 of 3 items imported · 1 instruction, 1 skill")
+  );
   let entries = ProjectSkills::load_in(&s.repo).expect("read");
   assert_eq!(entries.entries.len(), 1);
   assert_eq!(entries.entries[0].body.files().len(), 1);

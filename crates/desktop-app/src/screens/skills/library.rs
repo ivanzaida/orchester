@@ -17,7 +17,7 @@ use super::{
   words,
 };
 use crate::{
-  theme::{ConnectionsSpacing, ConnectionsText, ExtraSpacing, ExtraTypography},
+  theme::{ConnectionsSpacing, ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, marker},
@@ -184,13 +184,14 @@ fn header(ctx: &Ctx, p: &PageProps) -> Row {
   let new = p.view.panel.clone();
   Row::new()
     .width(Dimension::Pct(100.0))
+    .padding(Padding::new().bottom(SpacingSize::Xs))
     .spacing(SpacingSize::Md)
     .child(
       Column::new()
         .flex(1.0)
         .spacing(ExtraSpacing::Snug.role())
         .child(Text::new(&ctx.t("skills.title")).variant(ExtraTypography::Display.role()))
-        .child(Text::new(&ctx.t("skills.description")).variant(ConnectionsText::Lead.role())),
+        .child(Text::new(&ctx.t("skills.description")).variant(crate::theme::skills::library_lead())),
     )
     .child(
       ActionButton::new("skills-import-open", ButtonKind::Secondary, ctx.t("skills.import"))

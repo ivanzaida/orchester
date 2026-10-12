@@ -43,13 +43,17 @@ use crate::{
 pub(super) struct Chosen(pub BTreeSet<String>);
 impl DevtoolsInspectable for Chosen {}
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Created(Vec<CreatedDraft>);
+struct Created {
+  drafts: Vec<CreatedDraft>,
+  total: usize,
+}
 impl DevtoolsInspectable for Created {}
 type Work = FutureAction<
   (
     orchester_workspace::workspace::OpenProject,
     IdempotencyKey,
     Vec<ImportItem>,
+    usize,
   ),
   Created,
   Message,
@@ -65,10 +69,11 @@ impl Component for Import {
   fn create(ctx: &mut Ctx) -> Self {
     let activity = Services::of(ctx).activity;
     let work = ctx.future_action(
-      move |(open, key, chosen): (
+      move |(open, key, chosen, total): (
         orchester_workspace::workspace::OpenProject,
         IdempotencyKey,
         Vec<ImportItem>,
+        usize,
       )| {
         let activity = activity.clone();
         async move {
@@ -76,7 +81,7 @@ impl Component for Import {
             .track(skill_operations::repository_import(&open, chosen.len()), async move {
               background::run(move || repository::create_drafts_in(&open.repo_root, key, &chosen))
                 .await?
-                .map(Created)
+                .map(|drafts| Created { drafts, total })
                 .map_err(|error| error.message())
             })
             .await
@@ -108,8 +113,8 @@ impl Component for Import {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let p = ctx.props::<PageProps>().clone();
     let state = self.work.state().get();
-    if let Some(Created(created)) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
-      return super::import_result::result(ctx, &p, created);
+    if let Some(created) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
+      return super::import_result::result(ctx, &p, &created.drafts, created.total);
     }
     let items = p.data.repository.items.clone();
     let header = self.review_header(ctx, &p);
@@ -117,7 +122,7 @@ impl Component for Import {
     let preview = items
       .get(self.preview.get())
       .map(|item| super::import_preview::panel(ctx, item));
-    let mut page = Column::new()
+    let page = Column::new()
       .id("skills-import-review")
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
@@ -135,14 +140,20 @@ impl Component for Import {
           )
           .with_children(preview),
       )
-      .child(self.review_footer(ctx, &p, &items, state.is_pending()))
+      .with_children(
+        state
+          .error
+          .as_ref()
+          .filter(|_| !state.is_pending())
+          .map(|error| field_error("skill-import-error", &message_text(ctx, error))),
+      )
       .child(
         Column::new()
           .width(Dimension::Pct(100.0))
           .padding(
             Padding::new()
-              .left(SpacingSize::Lg)
-              .right(SpacingSize::Lg)
+              .left(SpacingSize::Xl)
+              .right(SpacingSize::Xl)
               .bottom(crate::theme::skills::cell_spacing()),
           )
           .child(
@@ -150,10 +161,9 @@ impl Component for Import {
               .body(ctx.t("skills.importNoticeDetail")),
           ),
       );
-    if let Some(error) = state.error.as_ref().filter(|_| !state.is_pending()) {
-      page = page.child(field_error("skill-import-error", &message_text(ctx, error)));
-    }
-    page.into()
+    page
+      .child(self.review_footer(ctx, &p, &items, state.is_pending()))
+      .into()
   }
 }
 pub fn item_summary(ctx: &Ctx, item: &ImportItem) -> Arc<str> {
@@ -308,6 +318,7 @@ impl Import {
     let open = p.project.open.clone();
     let action = self.work.clone();
     let key = self.key;
+    let total = items.len();
     let button = ActionButton::new(
       "skill-import-create",
       ButtonKind::Primary,
@@ -317,7 +328,7 @@ impl Import {
     let button = if chosen.is_empty() || pending {
       button.disabled()
     } else {
-      button.on_click(move || action.run((open.clone(), key, chosen.clone())))
+      button.on_click(move || action.run((open.clone(), key, chosen.clone(), total)))
     };
     let count = Text::new(
       &ctx.t_args(
@@ -349,9 +360,11 @@ impl Import {
       .on_click(move || back.set(Panel::Library));
     let cancel = if pending { cancel.disabled() } else { cancel };
     Row::new()
+      .id("skill-import-footer")
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(56.0))
-      .padding(Padding::horizontal(SpacingSize::Lg))
+      .align_items(lurq::layout::Alignment::Center)
+      .padding(Padding::horizontal(SpacingSize::Xl))
       .spacing(SpacingSize::Sm)
       .border_top(lurq::node::border::Border::inside(BorderSize::Sm, PaletteColor::Border))
       .child(count)
@@ -374,10 +387,10 @@ impl Import {
       .width(Dimension::Pct(100.0))
       .padding(
         Padding::new()
-          .left(SpacingSize::Lg)
-          .right(SpacingSize::Lg)
+          .left(SpacingSize::Xl)
+          .right(SpacingSize::Xl)
           .top(ExtraSpacing::Inset.role())
-          .bottom(SpacingSize::Md),
+          .bottom(SpacingSize::Lg),
       )
       .spacing(ExtraSpacing::Loose.role())
       .border_bottom(lurq::node::border::Border::inside(BorderSize::Sm, PaletteColor::Border))
@@ -400,7 +413,7 @@ impl Import {
   fn items(&self, ctx: &mut Ctx, items: &[ImportItem], pending: bool) -> Column {
     let mut list = Column::new()
       .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Inset.role()))
+      .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
       .spacing(SpacingSize::Sm);
     for kind in [ItemKind::Instruction, ItemKind::Skill] {
       list = list.child(
@@ -409,7 +422,7 @@ impl Import {
         } else {
           "skills.importInstructions"
         }))
-        .variant(ExtraTypography::ColumnHeading.role()),
+        .variant(crate::theme::skills::import_caption()),
       );
 
       let entries = items

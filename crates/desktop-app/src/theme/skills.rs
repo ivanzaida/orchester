@@ -5,6 +5,18 @@ use lurq::{
   app::theme::{SpacingSize, Theme, ThemePalette, TypographyStyle},
   layout::text_style::{FontWeight, TextStyle},
 };
+/// TmfIL/ng3rc, f30K2 and XNgaG/l2Qrl0: compact mono section captions.
+pub fn import_caption() -> TypographyStyle {
+  TypographyStyle::extra("skills_import_caption")
+}
+/// TmfIL/OLgEc/XfKrO: repository path with a compact 16px line box.
+pub fn import_path() -> TypographyStyle {
+  TypographyStyle::extra("skills_import_path")
+}
+/// F8mJNd/NKAjl: 13px screen explanation, line height 1.45.
+pub fn library_lead() -> TypographyStyle {
+  TypographyStyle::extra("skills_library_lead")
+}
 pub fn source_line() -> SpacingSize {
   SpacingSize::extra("skills_source_line")
 }
@@ -50,39 +62,61 @@ pub(super) fn install(theme: &Theme) {
 pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<str>, TextStyle)> {
   [
     (
-      Arc::from("skills_source"),
-      super::typography::mono(super::typography::style(
-        12.0,
-        FontWeight::Normal,
-        20.0 / 12.0,
-        0.0,
-        palette.text_primary,
-      )),
+      "skills_import_caption",
+      10.5,
+      FontWeight::Normal,
+      1.3,
+      true,
+      palette.text_muted,
     ),
     (
-      Arc::from("skills_gutter"),
-      super::typography::mono(super::typography::style(
-        11.0,
-        FontWeight::Normal,
-        20.0 / 11.0,
-        0.0,
-        palette.text_muted,
-      )),
+      "skills_import_path",
+      12.0,
+      FontWeight::Normal,
+      1.3,
+      true,
+      palette.text_primary,
     ),
     (
-      Arc::from("skills_name"),
-      super::typography::mono(super::typography::style(
-        13.0,
-        FontWeight::Medium,
-        1.3,
-        0.0,
-        palette.text_primary,
-      )),
+      "skills_library_lead",
+      13.0,
+      FontWeight::Normal,
+      1.45,
+      false,
+      palette.text_secondary,
     ),
     (
-      Arc::from("skills_heading"),
-      super::typography::style(11.0, FontWeight::Medium, 1.3, 0.0, palette.text_muted),
+      "skills_source",
+      12.0,
+      FontWeight::Normal,
+      20.0 / 12.0,
+      true,
+      palette.text_primary,
+    ),
+    (
+      "skills_gutter",
+      11.0,
+      FontWeight::Normal,
+      20.0 / 11.0,
+      true,
+      palette.text_muted,
+    ),
+    ("skills_name", 13.0, FontWeight::Medium, 1.3, true, palette.text_primary),
+    (
+      "skills_heading",
+      11.0,
+      FontWeight::Medium,
+      1.3,
+      false,
+      palette.text_muted,
     ),
   ]
   .into_iter()
+  .map(|(name, size, weight, line, mono, color)| {
+    let style = super::typography::style(size, weight, line, 0.0, color);
+    (
+      Arc::from(name),
+      if mono { super::typography::mono(style) } else { style },
+    )
+  })
 }

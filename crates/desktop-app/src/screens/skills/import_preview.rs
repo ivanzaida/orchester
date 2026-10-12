@@ -25,7 +25,7 @@ pub fn panel(ctx: &Ctx, item: &ImportItem) -> Element {
     .spacing(ExtraSpacing::Inset.role())
     .child(
       Text::new(&ctx.t_args("skills.preview", [("source", item.source.as_str())]))
-        .variant(ExtraTypography::ColumnHeading.role()),
+        .variant(crate::theme::skills::import_caption()),
     );
   panel = panel.child(details(ctx, item));
   let filename = if item.kind == ItemKind::Skill {

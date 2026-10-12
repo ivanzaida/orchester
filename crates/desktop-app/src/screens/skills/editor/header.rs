@@ -56,23 +56,37 @@ impl Editor {
           .height(Dimension::Px(16.0))
           .background(PaletteColor::Border),
       )
-      .child(crate::ui::icon::icon(
-        if dirty {
-          crate::ui::icon::Icon::CircleAlert
-        } else if busy {
-          crate::ui::icon::Icon::LoaderCircle
-        } else if entry.is_some_and(|e| e.state.has_draft()) {
-          crate::ui::icon::Icon::Save
-        } else {
-          crate::ui::icon::Icon::CircleCheck
-        },
-        crate::theme::IconSize::Base,
-        PaletteColor::TextMuted,
-      ))
+      .child(
+        crate::ui::icon::icon(
+          if dirty {
+            crate::ui::icon::Icon::CircleAlert
+          } else if busy {
+            crate::ui::icon::Icon::LoaderCircle
+          } else if entry.is_some_and(|e| e.state.has_draft() && e.state.published().is_some()) {
+            crate::ui::icon::Icon::CloudCheck
+          } else if entry.is_some_and(|e| e.state.has_draft()) {
+            crate::ui::icon::Icon::FilePenLine
+          } else {
+            crate::ui::icon::Icon::CircleCheck
+          },
+          crate::theme::IconSize::Base,
+          if dirty && self.form_state(p).0.is_err() {
+            PaletteColor::Danger
+          } else {
+            PaletteColor::TextSecondary
+          },
+        )
+        .id("skill-save-icon"),
+      )
       .child(
         Text::new(&self.status(ctx, p, entry, (dirty, busy)))
           .id("skill-save-status")
-          .variant(TypographyStyle::Description),
+          .variant(TypographyStyle::Description)
+          .color(if dirty && self.form_state(p).0.is_err() {
+            PaletteColor::Danger
+          } else {
+            PaletteColor::TextSecondary
+          }),
       )
       .child(Spacer::new().flex(1.0))
       .child(action)
@@ -97,9 +111,9 @@ impl Editor {
       )
       .icon(crate::ui::icon::Icon::Upload);
       if busy || dirty {
-        button.unavailable(ctx.t("skills.publishWaiting"))
+        button.unavailable_with_icon(ctx.t("skills.publishWaiting"))
       } else if let Some(reason) = publish_reason(entry) {
-        button.unavailable(message_text(ctx, &reason))
+        button.unavailable_with_icon(message_text(ctx, &reason))
       } else {
         button.on_click(move || asking.set(true))
       }
@@ -167,7 +181,7 @@ impl Editor {
           {
             ctx.t_args("skills.savedPublished", [("version", version.get().to_string())])
           } else if e.state.has_draft() {
-            ctx.t("skills.saved")
+            ctx.t("skills.savedUnpublished")
           } else {
             words::version(ctx, e.state)
           }

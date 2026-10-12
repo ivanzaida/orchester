@@ -3,11 +3,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Row, Text, VirtualizedList},
   core::Signal,
-  node::{Element, dimension::Dimension},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::agent_files::import::{ImportItem, ItemKind};
 
@@ -21,7 +21,9 @@ use crate::{
   },
 };
 /// Repository item line TJ0Cb with its explanatory second line.
-const ROW_HEIGHT: f32 = 54.0;
+const ROW_HEIGHT: f32 = 50.0;
+/// TmfIL/OLgEc/HjGPE: the widest type label is Instruction (55px).
+const TYPE_WIDTH: f32 = 55.0;
 const SOURCE_WIDTH: f32 = 230.0;
 #[derive(Clone)]
 struct Props {
@@ -53,9 +55,20 @@ impl Component for ItemRow {
       .width(Dimension::Pct(100.0))
       .id(format!("skill-source-row-{}", p.index))
       .min_height(Dimension::Px(if reviewing { ROW_HEIGHT } else { 34.0 }))
-      .border_bottom(lurq::node::border::Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .spacing(SpacingSize::Sm)
-      .padding(SpacingSize::Sm);
+      .spacing(crate::theme::ExtraSpacing::Loose.role())
+      .align_items(if reviewing {
+        lurq::layout::Alignment::Start
+      } else {
+        lurq::layout::Alignment::Center
+      })
+      .padding(if reviewing {
+        Padding::symmetric(crate::theme::ExtraSpacing::Loose.role(), SpacingSize::Sm)
+      } else {
+        Padding::horizontal(crate::theme::skills::cell_spacing())
+      });
+    if !reviewing {
+      row = row.border_bottom(lurq::node::border::Border::inside(BorderSize::Sm, PaletteColor::Border));
+    }
     row = row.with_children(selection(&p)).child(content(ctx, &p));
     if let Some(preview) = p.preview {
       let chosen = preview.get() == p.index;
@@ -133,7 +146,7 @@ fn content(ctx: &Ctx, p: &Props) -> Element {
   let source = Text::new(&p.item.source)
     .id(format!("skill-source-{}", p.index))
     .width(Dimension::Pct(100.0))
-    .variant(TypographyStyle::Mono);
+    .variant(crate::theme::skills::import_path());
   let summary = Text::new(&item_summary(ctx, &p.item))
     .id(format!("skill-source-summary-{}", p.index))
     .width(Dimension::Pct(100.0))
@@ -141,14 +154,14 @@ fn content(ctx: &Ctx, p: &Props) -> Element {
   let row = Row::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
-    .spacing(SpacingSize::Sm);
+    .spacing(crate::theme::ExtraSpacing::Loose.role());
   let row = if p.selected.is_some() {
     row
       .child(
         Column::new()
           .flex(1.0)
           .min_width(Dimension::Px(0.0))
-          .spacing(crate::theme::ExtraSpacing::Fine.role())
+          .spacing(crate::theme::ExtraSpacing::Tight.role())
           .child(source)
           .child(summary),
       )
@@ -159,14 +172,14 @@ fn content(ctx: &Ctx, p: &Props) -> Element {
           "skills.instructionType"
         }))
         .id(format!("skill-source-type-{}", p.index))
-        .width(Dimension::Px(65.0))
+        .width(Dimension::Px(TYPE_WIDTH))
         .variant(ExtraTypography::Note.role()),
       )
   } else {
     row
       .child(icon(
         if p.item.kind == ItemKind::Skill {
-          Icon::GraduationCap
+          Icon::Folder
         } else {
           Icon::FileText
         },
