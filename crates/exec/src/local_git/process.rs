@@ -28,6 +28,12 @@ impl LocalGit {
   ) -> Result<GitOutput, LocalGitError> {
     self._root_owner.ensure_current()?;
     self._scratch_owner.ensure_current()?;
+    #[cfg(windows)]
+    self._execution_owner.ensure_current()?;
+    #[cfg(windows)]
+    let _private_owner = worktree
+      .map(|root| super::owned::ExecutionOwnership::private_copy(root, &self.scratch))
+      .transpose()?;
     let mut command = Command::new(
       Path::new("git"),
       ["-c", "core.fsmonitor=false"].into_iter().chain(args.iter().copied()),

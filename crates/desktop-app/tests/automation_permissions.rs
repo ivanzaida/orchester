@@ -5,7 +5,7 @@ use orchester_workspace::workspace::Workspace;
 
 #[test]
 fn automation_policy_unknown_off_on_and_revoked_are_distinct() {
-  let dir = tempfile::tempdir().expect("private policy directory");
+  let dir = private_directory();
   let workspace = Workspace::new(AppDb::open(&dir.path().join("app.db")).expect("private database"));
   let gate = InputGate::default();
   gate.bind_permissions(workspace.clone());
@@ -29,7 +29,7 @@ fn automation_policy_unknown_off_on_and_revoked_are_distinct() {
 
 #[test]
 fn automation_policy_settings_and_sensitive_questions_ignore_permission_opt_in() {
-  let dir = tempfile::tempdir().expect("private policy directory");
+  let dir = private_directory();
   let workspace = Workspace::new(AppDb::open(&dir.path().join("app.db")).expect("private database"));
   workspace
     .set_automation_changes_permissions(true)
@@ -70,7 +70,7 @@ fn automation_policy_settings_and_sensitive_questions_ignore_permission_opt_in()
 
 #[test]
 fn automation_policy_failed_stored_read_cannot_reuse_a_prior_grant() {
-  let dir = tempfile::tempdir().expect("private policy directory");
+  let dir = private_directory();
   let path = dir.path().join("app.db");
   let workspace = Workspace::new(AppDb::open(&path).expect("private database"));
   workspace
@@ -108,4 +108,9 @@ fn local_integration_decisions_remain_person_only_with_all_automation_grants() {
   assert!(!gate.widening_allowed(Guarded::LocalIntegrationQuestion));
   drop(protected);
   assert!(!gate.protecting());
+}
+fn private_directory() -> tempfile::TempDir {
+  let scratch = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-policy-tests");
+  std::fs::create_dir_all(&scratch).expect("private worktree scratch");
+  tempfile::tempdir_in(scratch).expect("private policy directory")
 }

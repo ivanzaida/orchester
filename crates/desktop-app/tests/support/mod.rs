@@ -52,8 +52,10 @@ pub struct Data {
 
 impl Data {
   pub fn new() -> Self {
+    let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-app-tests");
+    fs::create_dir_all(&scratch).expect("worktree scratch");
     Self {
-      dir: TempDir::new().expect("temporary directory"),
+      dir: tempfile::tempdir_in(scratch).expect("private worktree directory"),
       runtime: Runtime::new().expect("tokio runtime"),
     }
   }

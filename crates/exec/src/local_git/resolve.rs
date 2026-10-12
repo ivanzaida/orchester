@@ -168,12 +168,22 @@ impl LocalGit {
       let mut file = tempfile::NamedTempFile::new_in(&self.scratch).map_err(|_| LocalGitError::Io)?;
       file.write_all(bytes).map_err(|_| LocalGitError::Io)?;
       file.as_file().sync_all().map_err(|_| LocalGitError::Io)?;
-      versions.push(file);
+      let path = file.into_temp_path();
+      let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or(LocalError::Unsupported)?;
+      let local = LocalPath::new(name)?;
+      let mut owned = super::owned::OwnedFile::open(&self.scratch, &local, false)?.ok_or(LocalError::Stale)?;
+      if owned.read()? != *bytes {
+        return Err(LocalError::Stale.into());
+      }
+      versions.push((owned, path));
     }
     let names = versions
       .iter()
-      .map(|file| {
-        let path = file.path().to_str().ok_or(LocalGitError::Data)?;
+      .map(|(_, file)| {
+        let path = file.to_str().ok_or(LocalGitError::Data)?;
         Ok(path.strip_prefix(r"\\?\").unwrap_or(path))
       })
       .collect::<Result<Vec<_>, LocalGitError>>()?;

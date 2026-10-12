@@ -20,12 +20,13 @@ impl LocalGit {
     input: Option<&[u8]>,
     index: Option<&Path>,
   ) -> Result<super::process::GitOutput, LocalGitError> {
-    let hooks = tempfile::Builder::new()
-      .prefix("index-hooks-")
-      .tempdir_in(&self.scratch)
-      .map_err(|_| LocalGitError::Io)?;
-    let setting = format!("core.hooksPath={}", git_name(hooks.path())?);
-    let mut configured = vec!["-c", setting.as_str()];
+    // A null device cannot be replaced with a hook directory. Actual commit hooks use hook_directory().
+    let setting = if cfg!(windows) {
+      "core.hooksPath=NUL"
+    } else {
+      "core.hooksPath=/dev/null"
+    };
+    let mut configured = vec!["-c", setting];
     configured.extend_from_slice(args);
     self.raw(&configured, input, index)
   }

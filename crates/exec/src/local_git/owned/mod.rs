@@ -16,7 +16,11 @@ use std::{
 };
 
 use orchester_core::{blob::ContentHash, integration::local::LocalPath};
+#[cfg(windows)]
+mod execution;
 mod store;
+#[cfg(windows)]
+pub use execution::ExecutionOwnership;
 pub use platform::Directory;
 pub use store::StoreOwnership;
 #[cfg(unix)]

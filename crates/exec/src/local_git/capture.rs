@@ -86,12 +86,13 @@ impl LocalGit {
 
   fn fresh_status(&self, entries: &[u8]) -> Result<super::process::GitOutput, LocalGitError> {
     // Rebuild cache metadata in an owned index so external timestamp-preserving writes cannot hide edits.
-    let index = tempfile::Builder::new()
+    let scope = tempfile::Builder::new()
       .prefix("inspect-")
-      .tempfile_in(&self.scratch)
-      .map_err(|_| LocalGitError::Io)?
-      .into_temp_path();
-    fs::remove_file(&index).map_err(|_| LocalGitError::Io)?;
+      .tempdir_in(&self.scratch)
+      .map_err(|_| LocalGitError::Io)?;
+    let index = scope.path().join("index");
+    #[cfg(windows)]
+    let _scope_owner = super::owned::ExecutionOwnership::private_copy(scope.path(), &self.scratch)?;
     self.index_command(&["read-tree", "--empty"], None, &index)?;
     let copied = self.quiet_index(&["update-index", "-z", "--index-info"], Some(entries), &index)?;
     if copied.code != Some(0) {
@@ -116,13 +117,13 @@ impl LocalGit {
     ] {
       let path = self.text(&["rev-parse", "--path-format=absolute", "--git-path", marker])?;
       let path = Path::new(&path);
-      if path.exists() {
-        let identity = if path.is_file() {
-          digest(&fs::read(path).map_err(|_| LocalGitError::Io)?).to_string()
-        } else {
-          String::new()
-        };
-        return Ok(Some(format!("{marker}:{identity}")));
+      let parent = path.parent().ok_or(LocalError::Unsupported)?;
+      let _parent_owner = super::owned::Directory::open(parent)?;
+      // Foreign markers are always refused; their contents are never needed or read.
+      match fs::symlink_metadata(path) {
+        Ok(_) => return Ok(Some(marker.to_owned())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err(LocalGitError::Io),
       }
     }
     Ok(None)

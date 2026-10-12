@@ -56,7 +56,7 @@ enum Mode {
 impl DevtoolsInspectable for Mode {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Shown(Arc<IntegrationView>);
+struct Shown(Arc<IntegrationView>, u64);
 impl DevtoolsInspectable for Shown {}
 
 pub fn tab(ctx: &mut Ctx, task: &TaskContext) -> Element {
@@ -165,12 +165,12 @@ impl Component for LocalPage {
           task.project.feed.revision.get(),
           self.shown_file.get(),
         ),
-        move |(root, run, _, _, selected)| {
+        move |(root, run, _, policy_revision, selected)| {
           let vault = vault.clone();
           async move {
             background::run(move || {
               orchester_workspace::tasks::local_integration::read(&root, run, selected.0.as_ref(), vault.get())
-                .map(|view| Shown(Arc::new(view)))
+                .map(|view| Shown(Arc::new(view), policy_revision))
                 .map_err(work::problem)
             })
             .await
@@ -190,6 +190,10 @@ impl Component for LocalPage {
         None => loading("local-loading", &ctx.t("local_integration.loading")).into(),
       };
     };
+    if shown.1 != task.project.feed.revision.get() {
+      // A project/secret change cannot reuse a previously safe metadata or content projection.
+      return loading("local-loading", &ctx.t("local_integration.loading")).into();
+    }
     let view = &shown.0;
     let busy = self.work.state().get().is_pending() || task.jobs.run(run.id()).busy();
     let narrow = ctx.breakpoint().is_none();

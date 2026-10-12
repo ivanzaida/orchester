@@ -88,3 +88,38 @@ fn local_integration_known_secret_root_is_hidden_from_shell_caption_tooltip_and_
     PRIVATE_VALUE
   ));
 }
+
+#[test]
+fn local_integration_new_secret_policy_hides_cached_safe_projection_before_fresh_read_finishes() {
+  let fixture = Fixture::new(false);
+  let name = format!("notes-{PRIVATE_VALUE}.txt");
+  fs::write(fixture.root().join(&name), b"ordinary private fixture bytes").expect("private filename");
+  let mut page = Page::new(fixture);
+  page.ready("local-files");
+  assert!(contains(
+    page.window.tree.get_element_by_id("app-window").expect("window"),
+    PRIVATE_VALUE
+  ));
+  let mut db = ProjectDb::open(page.root()).expect("private db");
+  db.create_secret(&Secret::new(
+    SecretId::generate(),
+    NewSecret {
+      name: SecretName::new("PRIVATE_FIXTURE").expect("name"),
+      kind: SecretKind::ApiKey,
+      environment: Environment::Development,
+    },
+    Timestamp::now(),
+  ))
+  .expect("new known private fixture");
+  page.window.projects().feed(db.project().id()).saved();
+  page.window.pass(); // Do not wait for the asynchronous replacement projection.
+  assert!(!contains(
+    page.window.tree.get_element_by_id("app-window").expect("window"),
+    PRIVATE_VALUE
+  ));
+  page.ready("local-read-error");
+  assert_eq!(
+    fs::read(page.root().join(&name)).expect("original"),
+    b"ordinary private fixture bytes"
+  );
+}

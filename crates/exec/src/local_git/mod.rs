@@ -47,6 +47,8 @@ pub struct LocalGit {
   root: PathBuf,
   scratch: PathBuf,
   ref_action: Option<String>,
+  #[cfg(windows)]
+  _execution_owner: std::sync::Arc<owned::ExecutionOwnership>,
   _root_owner: std::sync::Arc<owned::Directory>,
   _scratch_owner: std::sync::Arc<owned::Directory>,
   journal: Option<std::sync::Arc<dyn orchester_core::integration::local::ProcessJournal>>,
@@ -61,10 +63,14 @@ impl LocalGit {
     if !scratch.starts_with(&root) {
       return Err(LocalError::Unsupported.into());
     }
+    #[cfg(windows)]
+    let execution_owner = owned::ExecutionOwnership::acquire(&root_owner, &scratch_owner)?;
     let git = Self {
       root,
       scratch,
       ref_action: None,
+      #[cfg(windows)]
+      _execution_owner: execution_owner,
       journal: None,
       _root_owner: root_owner,
       _scratch_owner: scratch_owner,

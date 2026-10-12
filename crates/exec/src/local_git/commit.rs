@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::path::Path;
 
 use orchester_core::integration::local::{Checkout, IndexEntry, LocalError, LocalPath};
 
@@ -12,8 +12,10 @@ impl LocalGit {
       return Err(LocalError::Blank.into());
     }
     let index = self.scratch.join("selected.index");
-    if index.exists() {
-      fs::remove_file(&index).map_err(|_| LocalGitError::Io)?;
+    let path = LocalPath::new("selected.index")?;
+    if let Some(mut old) = super::owned::OwnedFile::open(&self.scratch, &path, true)? {
+      let expected = super::digest(&old.read()?);
+      old.remove(&expected)?;
     }
     self.index_command(&["read-tree", "HEAD"], None, &index)?;
     for path in paths {

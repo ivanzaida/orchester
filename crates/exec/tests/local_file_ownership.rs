@@ -173,3 +173,68 @@ fn local_integration_parent_chain_alone_prevents_rename_or_removal_before_git_or
   drop(guard);
   fs::rename(dir.path().join("parent"), dir.path().join("released")).expect("ownership releases normally");
 }
+
+#[cfg(windows)]
+#[path = "support/local_reparse.rs"]
+mod local_reparse;
+
+#[cfg(windows)]
+#[test]
+fn local_integration_execution_root_anchors_refuse_in_place_reparse_substitution_of_scratch_and_git_directory() {
+  use orchester_exec::local_git::owned::{Directory, ExecutionOwnership};
+  let dir = directory();
+  let target = dir.path().join("private-target");
+  let control = dir.path().join("empty-control");
+  fs::create_dir(&target).expect("private target");
+  fs::write(target.join("private.txt"), b"unrelated private fixture").expect("private bytes");
+  fs::create_dir(&control).expect("empty control");
+  local_reparse::set_junction(&control, &target).expect("actual unguarded private junction control");
+  fs::remove_dir(&control).expect("remove only our junction entry");
+  let root = dir.path().join("repo");
+  fs::create_dir_all(root.join(".git")).expect("private Git directory");
+  fs::create_dir(root.join("scratch")).expect("scratch");
+  let root_owner = Directory::open(&root).expect("root");
+  let scratch = Directory::open(&root.join("scratch")).expect("scratch");
+  let ownership = ExecutionOwnership::acquire(&root_owner, &scratch).expect("owned children");
+  assert!(local_reparse::set_junction(&root.join("scratch"), &target).is_err());
+  assert!(local_reparse::set_junction(&root.join(".git"), &target).is_err());
+  ownership.ensure_current().expect("actual original chain remains");
+  assert_eq!(
+    fs::read(target.join("private.txt")).expect("unrelated fixture"),
+    b"unrelated private fixture"
+  );
+}
+
+#[cfg(windows)]
+#[test]
+fn local_integration_foreign_marker_is_refused_without_reading_linked_private_bytes() {
+  use std::{os::windows::fs::OpenOptionsExt, process::Command};
+
+  use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_WRITE;
+  let dir = directory();
+  let root = dir.path().join("repo");
+  fs::create_dir(&root).expect("private repo");
+  assert!(
+    Command::new("git")
+      .args(["init", "-b", "main"])
+      .current_dir(&root)
+      .output()
+      .expect("git")
+      .status
+      .success()
+  );
+  fs::create_dir(root.join("scratch")).expect("scratch");
+  let git = orchester_exec::local_git::LocalGit::new(&root, &root.join("scratch")).expect("owned Git");
+  let private = dir.path().join("unrelated-private-fixture");
+  fs::write(&private, b"private fixture must never be read as an operation marker").expect("fixture");
+  fs::hard_link(&private, root.join(".git/index.lock")).expect("private linked marker");
+  let _no_read = fs::OpenOptions::new()
+    .write(true)
+    .share_mode(FILE_SHARE_WRITE)
+    .open(&private)
+    .expect("deny reads of actual private object");
+  assert_eq!(
+    git.operation().expect("metadata-only foreign refusal"),
+    Some("index.lock".into())
+  );
+}

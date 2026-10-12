@@ -19,7 +19,7 @@ use windows_sys::Win32::{
   Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, DELETE, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
     FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_READ, FILE_SHARE_WRITE, FileDispositionInfo, GetFileInformationByHandle,
-    SetFileInformationByHandle,
+    GetFinalPathNameByHandleW, SetFileInformationByHandle,
   },
 };
 
@@ -69,7 +69,7 @@ impl Directory {
   fn at(path: &Path, parent: Option<Arc<Self>>) -> Result<Arc<Self>, LocalGitError> {
     let file = OpenOptions::new()
       .access_mode(GENERIC_READ)
-      .share_mode(FILE_SHARE_READ)
+      .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
       .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
       .open(path)
       .map_err(map)?;
@@ -77,6 +77,7 @@ impl Directory {
     if !metadata.is_dir() || metadata.file_attributes() & 0x400 != 0 {
       return Err(LocalError::Unsupported.into());
     }
+    ensure_location(&file, path)?;
     Ok(Arc::new(Self {
       file,
       path: path.to_owned(),
@@ -94,7 +95,7 @@ impl Directory {
     {
       return Err(LocalError::Unsupported.into());
     }
-    self.ensure_current()?;
+    let _freeze = self.freeze()?;
     let path = self.path.join(name);
     match Self::at(&path, Some(self.clone())) {
       Ok(directory) => Ok(Some(directory)),
@@ -111,7 +112,26 @@ impl Directory {
     }
   }
 
+  pub(super) fn freeze(&self) -> Result<File, LocalGitError> {
+    self.ensure_current()?;
+    let file = OpenOptions::new()
+      .access_mode(GENERIC_READ)
+      .share_mode(FILE_SHARE_READ)
+      .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
+      .open(&self.path)
+      .map_err(map)?;
+    let metadata = file.metadata().map_err(map)?;
+    if !metadata.is_dir() || metadata.file_attributes() & 0x400 != 0 {
+      return Err(LocalError::Unsupported.into());
+    }
+    Ok(file)
+  }
+
   pub fn ensure_current(&self) -> Result<(), LocalGitError> {
+    if let Some(parent) = &self._parent {
+      parent.ensure_current()?;
+    }
+    ensure_location(&self.file, &self.path)?;
     let metadata = self.file.metadata().map_err(map)?;
     if !metadata.is_dir() || metadata.file_attributes() & 0x400 != 0 {
       return Err(LocalError::Unsupported.into());
@@ -125,6 +145,7 @@ impl Directory {
   }
 
   pub(super) fn open_regular(&self, name: &OsStr, writing: bool, create: bool) -> Result<Option<File>, LocalGitError> {
+    let _freeze = self.freeze()?;
     let rights = GENERIC_READ | if writing { GENERIC_WRITE | DELETE } else { 0 };
     let mut options = OpenOptions::new();
     options
@@ -137,7 +158,10 @@ impl Directory {
       options.create_new(true);
     }
     match options.open(self.path.join(name)) {
-      Ok(file) => Ok(Some(file)),
+      Ok(file) => {
+        ensure_location(&file, &self.path.join(name))?;
+        Ok(Some(file))
+      }
       Err(error) if error.kind() == io::ErrorKind::NotFound && !create => Ok(None),
       Err(error) if error.kind() == io::ErrorKind::AlreadyExists => Err(LocalError::Collision.into()),
       Err(error) => Err(map(error)),
@@ -188,7 +212,7 @@ pub(super) fn remove(file: &File) -> Result<(), LocalGitError> {
 }
 
 pub(super) fn pin_store_entry(directory: &Arc<Directory>, name: &OsStr, create: bool) -> Result<File, LocalGitError> {
-  directory.ensure_current()?;
+  let _freeze = directory.freeze()?;
   let path = directory.path.join(name);
   let open = || {
     OpenOptions::new()
@@ -216,6 +240,27 @@ pub(super) fn pin_store_entry(directory: &Arc<Directory>, name: &OsStr, create: 
     Err(error) => return Err(map(error)),
   };
   validate_regular(&file)?;
+  ensure_location(&file, &path)?;
   directory.ensure_current()?;
   Ok(file)
+}
+// Verify the opened object came from our pinned chain, including any transient ancestor reparse.
+fn ensure_location(file: &File, expected: &Path) -> Result<(), LocalGitError> {
+  let mut buffer = vec![0u16; 32768];
+  // SAFETY: file owns a live handle; the buffer holds the stated UTF-16 capacity, flags select normalized DOS names.
+  let length = unsafe { GetFinalPathNameByHandleW(file.as_raw_handle(), buffer.as_mut_ptr(), 32768, 0) };
+  if length == 0 || length >= 32768 {
+    return Err(LocalError::Unsupported.into());
+  }
+  let actual = String::from_utf16(&buffer[..length as usize]).map_err(|_| LocalError::Unsupported)?;
+  let actual = actual.strip_prefix("\\\\?\\").unwrap_or(&actual);
+  let expected = expected.to_str().ok_or(LocalError::Unsupported)?.replace('/', "\\");
+  let expected = expected.strip_prefix(r"\\?\").unwrap_or(&expected);
+  if !actual
+    .trim_end_matches('\\')
+    .eq_ignore_ascii_case(expected.trim_end_matches('\\'))
+  {
+    return Err(LocalError::Stale.into());
+  }
+  Ok(())
 }
