@@ -40,7 +40,7 @@ fn local_integration_known_secret_filename_never_reaches_actual_window_tree_ids_
     !contains(scope, PRIVATE_VALUE),
     "display, IDs and text cannot expose the known private filename"
   );
-  assert!(!page.has("local-files"));
+  assert!(!page.has(&format!("local-file-local_integration.untracked-{name}")));
   assert!(
     page
       .window
@@ -95,7 +95,7 @@ fn local_integration_new_secret_policy_hides_cached_safe_projection_before_fresh
   let name = format!("notes-{PRIVATE_VALUE}.txt");
   fs::write(fixture.root().join(&name), b"ordinary private fixture bytes").expect("private filename");
   let mut page = Page::new(fixture);
-  page.ready("local-files");
+  page.ready(&format!("local-file-local_integration.untracked-{name}"));
   assert!(contains(
     page.window.tree.get_element_by_id("app-window").expect("window"),
     PRIVATE_VALUE
