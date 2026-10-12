@@ -52,7 +52,7 @@ pub fn action(ctx: &mut Ctx) -> Work {
         .track(spec, async move {
           background::run(move || match change {
             Change::Save { before, name, body } => editor::save_in(&open.repo_root, before.as_ref(), &name, &body),
-            Change::Publish(entry) => editor::publish_in(&open.repo_root, &entry, true),
+            Change::Publish(entry) => editor::publish_in(&open.repo_root, &entry),
           })
           .await?
           .map(Saved)

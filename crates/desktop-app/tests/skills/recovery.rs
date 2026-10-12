@@ -195,11 +195,32 @@ fn skills_failed_reload_preserves_raw_fields_errors_and_leave_guard_until_confir
   s.click("skill-leave-keep");
   db.execute("UPDATE resource_drafts SET body = ?1", [&saved])
     .expect("repair fixture");
-  s.click("skills-refresh-error-retry");
+  s.set("skill-body", "# Edited after rejected reload");
+  seed_refresh_marker(&s);
+  let feed = s.window.projects().feed(project_id());
+  feed.outside.update(|counts| counts.pipelines += 1);
+  s.click("skill-scope");
+  s.window
+    .until("successful passive read includes the new stored pipeline", |w| {
+      w.texts("skill-scope-menu")
+        .is_some_and(|t| t.join(" ").contains("Passive refresh marker"))
+    });
+  assert!(s.window.tree.get_element_by_id("skills-refresh-error").is_none());
+  s.click("skill-scope");
+  assert_eq!(value(&mut s, "skill-name"), "");
+  assert_eq!(value(&mut s, "skill-body"), "# Edited after rejected reload");
+  assert!(s.text("skill-files").contains("private-reference.md"));
+  assert!(s.window.tree.get_element_by_id("skill-save-error").is_some());
+  assert!(s.window.tree.get_element_by_id("skill-name-note").is_some());
+  assert_eq!(s.entry(id).body.body(), "# External body");
+  leave(&mut s);
+  assert!(s.text("skill-leave-question").contains("unsaved"));
+  s.click("skill-leave-keep");
+  s.click("skill-reload");
   assert!(s.window.tree.get_element_by_id("skill-reload-question").is_some());
   s.click("skill-reload-keep");
-  assert_eq!(value(&mut s, "skill-body"), "# My unsaved body");
-  s.click("skills-refresh-error-retry");
+  assert_eq!(value(&mut s, "skill-body"), "# Edited after rejected reload");
+  s.click("skill-reload");
   s.click("skill-reload-confirm");
   s.window.until("accepted reload", |w| {
     w.tree
@@ -312,4 +333,85 @@ fn skills_pending_reference_picker_blocks_reload_until_its_real_result_arrives()
     changed,
     "no resource write while the failed candidate remains local"
   );
+}
+
+#[test]
+fn skills_failed_initial_create_retry_waits_for_actual_reference_selection() {
+  let (send, receive) = tokio::sync::oneshot::channel::<PathBuf>();
+  let receive = Arc::new(parking_lot::Mutex::new(Some(receive)));
+  let picker = ReferencePicker::new(move |_| {
+    let receive = receive.lock().take().expect("one picker call");
+    Box::pin(async move { Some(receive.await.expect("private selection")) })
+  });
+  let mut s = with_picker(picker);
+  s.go(ProjectPage::NewSkill);
+  s.set("skill-name", "checks");
+  s.set("skill-description", "Chosen reference");
+  s.set("skill-body", "# Keep chosen reference");
+  // The form validated before a real competing write took its name.
+  let taken = s.seed("checks", false);
+  s.click("skill-create");
+  s.window.until("create failed", |w| {
+    w.tree.get_element_by_id("skill-save-error").is_some()
+  });
+  assert!(matches!(
+    s.window.navigation().route_now(),
+    Route::Project(_, ProjectPage::NewSkill)
+  ));
+  s.set("skill-name", "selected-checks");
+  s.click("skill-add-file");
+  s.click("skill-retry");
+  for _ in 0..8 {
+    s.window.tree.tick_futures();
+    s.window.pass();
+  }
+  assert!(matches!(
+    s.window.navigation().route_now(),
+    Route::Project(_, ProjectPage::NewSkill)
+  ));
+  assert_eq!(ProjectSkills::load_in(&s.repo).expect("skills").entries.len(), 1);
+  let selected = s.repo.parent().expect("fixture").join("withheld.md");
+  fs::write(&selected, "Exact withheld selection").expect("private file");
+  send.send(selected.clone()).expect("deliver actual selection");
+  s.window.until("selection arrives", |w| {
+    w.texts("skill-files")
+      .is_some_and(|t| t.join(" ").contains("withheld.md"))
+  });
+  s.click("skill-retry");
+  s.window.until(
+    "created by retry",
+    |w| matches!(w.navigation().route_now(), Route::Project(_, ProjectPage::Skill(id)) if id != taken),
+  );
+  let listed = ProjectSkills::load_in(&s.repo).expect("skills");
+  let created = listed.entries.iter().find(|e| e.id != taken).expect("created");
+  assert_eq!(created.name.as_ref(), "selected-checks");
+  assert_eq!(created.body.files().len(), 1);
+  assert_eq!(created.body.files()[0].path.as_str(), "withheld.md");
+  use orchester_core::store::BlobStore;
+  let db = orchester_store::ProjectDb::open(&s.repo).expect("db");
+  assert_eq!(
+    db.blob(&created.body.files()[0].content).expect("blob"),
+    b"Exact withheld selection"
+  );
+  assert_eq!(
+    fs::read_to_string(selected).expect("source"),
+    "Exact withheld selection"
+  );
+}
+
+fn seed_refresh_marker(s: &Skills) {
+  use orchester_core::{
+    name::Name,
+    resource::{Pipeline, Slug},
+    store::ResourceStore,
+    time::Timestamp,
+  };
+  let mut db = orchester_store::ProjectDb::open(&s.repo).expect("db");
+  db.create_resource(
+    Slug::new("passive-refresh").expect("slug"),
+    Name::new("Passive refresh marker").expect("name"),
+    &Pipeline::new(Vec::new()).expect("draft"),
+    Timestamp::now(),
+  )
+  .expect("stored marker observable only after a successful read");
 }

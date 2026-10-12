@@ -882,7 +882,6 @@
       "stale": "A newer version was published since this draft was started. Reload and review it.",
       "descriptionRequired": "Write a description first. Agents choose a skill by it.",
       "bodyRequired": "Write the skill body before publishing.",
-      "personOnly": "Only a person can publish skills or enable repository agent files.",
       "fileRead": "The reference file could not be read.",
       "duplicateFile": "A reference file already has this path."
     }

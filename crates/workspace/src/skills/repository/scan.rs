@@ -1,7 +1,6 @@
-//! Read-only repository discovery. Resolve ownership before traversing or reading any entry.
+//! Bounded discovery through held owned objects; canonical links are resolved before no-follow opens.
 use std::{
   collections::HashSet,
-  fs::{self, File},
   io::{self, Read},
   path::{Path, PathBuf},
   sync::Arc,
@@ -14,6 +13,8 @@ use orchester_core::{
   resource::{SKILL_FILE, SkillFilePath},
 };
 use thiserror::Error;
+
+use super::owned::{Directory, Entry};
 
 const MAX_DEPTH: usize = 8;
 const MAX_ENTRIES: usize = 4096;
@@ -74,87 +75,112 @@ fn scope(root: &Path) -> Result<FileScope, ScanError> {
   .map_err(|error| scope_error(root, &error))
 }
 
-struct Scan {
+/// Private-fixture synchronization points before opening, reading or enumerating an owned object.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AccessPoint {
+  Open,
+  Read,
+  Enumerate,
+  ListedEntry,
+}
+struct Scan<'a> {
   project: FileScope,
+  root: Directory,
+  observer: AccessObserver<'a>,
   entries: usize,
   bytes: u64,
 }
 struct Collected {
-  scope: FileScope,
+  root: Directory,
   base: PathBuf,
   visited: HashSet<PathBuf>,
   files: Vec<FoundFile>,
   unsupported: Vec<String>,
 }
-impl Scan {
-  fn resolve(&self, path: &Path, skill: Option<&FileScope>) -> Result<PathBuf, ScanError> {
-    let text = path.to_string_lossy();
+impl Scan<'_> {
+  fn observe(&self, point: AccessPoint, path: &Path) {
+    if let Some(observer) = self.observer {
+      observer(point, path);
+    }
+  }
+  fn resolve(&self, path: &Path, skill: Option<&Directory>) -> Result<PathBuf, ScanError> {
     let resolved = self
       .project
-      .repository_readable(&text)
+      .repository_readable(&path.to_string_lossy())
       .map_err(|e| scope_error(path, &e))?;
-    if let Some(skill) = skill {
-      skill.readable(&text).map_err(|e| scope_error(path, &e))?;
+    if skill.is_some_and(|root| !resolved.starts_with(root.path())) {
+      return Err(ScanError::Outside(path.to_owned()));
     }
     Ok(resolved)
   }
-  fn metadata(&self, path: &Path, skill: Option<&FileScope>) -> Result<Option<(PathBuf, fs::Metadata)>, ScanError> {
+  fn entry(&self, path: &Path, skill: Option<&Directory>) -> Result<Option<Entry>, ScanError> {
     let resolved = self.resolve(path, skill)?;
-    match fs::metadata(&resolved) {
-      Ok(metadata) => Ok(Some((resolved, metadata))),
+    self.observe(AccessPoint::Open, path);
+    match skill.unwrap_or(&self.root).open(&resolved) {
+      Ok(entry) => Ok(Some(entry)),
       Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+      Err(error) if error.kind() == io::ErrorKind::InvalidData => Err(ScanError::NotRegular(path.to_owned())),
       Err(error) => Err(read_error(path)(error)),
     }
   }
-  fn read(&mut self, path: &Path, skill: Option<&FileScope>) -> Result<Option<Vec<u8>>, ScanError> {
-    let Some((resolved, metadata)) = self.metadata(path, skill)? else {
+  fn read(&mut self, path: &Path, skill: Option<&Directory>) -> Result<Option<Vec<u8>>, ScanError> {
+    let Some(entry) = self.entry(path, skill)? else {
       return Ok(None);
     };
-    if !metadata.is_file() {
-      return Err(ScanError::NotRegular(path.to_path_buf()));
+    if !entry.metadata.is_file() {
+      return Err(ScanError::NotRegular(path.to_owned()));
     }
     let limit = MAX_FILE_BYTES.min(MAX_SCAN_BYTES - self.bytes);
-    if metadata.len() > limit {
-      return Err(ScanError::Bounds(path.to_path_buf()));
+    if entry.metadata.len() > limit {
+      return Err(ScanError::Bounds(path.to_owned()));
     }
+    self.observe(AccessPoint::Read, path);
     let mut content = Vec::new();
-    File::open(&resolved)
-      .and_then(|file| file.take(limit + 1).read_to_end(&mut content))
+    entry
+      .file
+      .as_ref()
+      .take(limit + 1)
+      .read_to_end(&mut content)
       .map_err(read_error(path))?;
     if content.len() as u64 > limit {
-      return Err(ScanError::Bounds(path.to_path_buf()));
+      return Err(ScanError::Bounds(path.to_owned()));
     }
     self.bytes += content.len() as u64;
     Ok(Some(content))
   }
-  fn children(&mut self, path: &Path, skill: Option<&FileScope>, depth: usize) -> Result<Vec<PathBuf>, ScanError> {
+  fn children(&mut self, path: &Path, skill: Option<&Directory>, depth: usize) -> Result<Vec<PathBuf>, ScanError> {
     if depth > MAX_DEPTH {
-      return Err(ScanError::Bounds(path.to_path_buf()));
+      return Err(ScanError::Bounds(path.to_owned()));
     }
-    let Some((resolved, metadata)) = self.metadata(path, skill)? else {
+    let Some(entry) = self.entry(path, skill)? else {
       return Ok(Vec::new());
     };
-    if !metadata.is_dir() {
-      return Err(ScanError::NotRegular(path.to_path_buf()));
-    }
-    let mut children = Vec::new();
-    for entry in fs::read_dir(&resolved).map_err(read_error(path))? {
-      self.entries += 1;
-      if self.entries > MAX_ENTRIES {
-        return Err(ScanError::Bounds(path.to_path_buf()));
+    let directory = Directory::from_entry(entry).map_err(|_| ScanError::NotRegular(path.to_owned()))?;
+    self.observe(AccessPoint::Enumerate, path);
+    let names = directory.names(MAX_ENTRIES - self.entries).map_err(|error| {
+      if error.kind() == io::ErrorKind::FileTooLarge {
+        ScanError::Bounds(path.to_owned())
+      } else {
+        read_error(path)(error)
       }
-      let name = entry.map_err(read_error(path))?.file_name();
-      children.push(path.join(name));
+    })?;
+    self.entries += names.len();
+    for name in &names {
+      self.observe(AccessPoint::ListedEntry, &path.join(name));
     }
+    let mut children = names.into_iter().map(|name| path.join(name)).collect::<Vec<_>>();
     children.sort();
     Ok(children)
   }
   fn skill(&mut self, source: String, folder: &Path) -> Result<Found, ScanError> {
-    let root = self.resolve(folder, None)?;
-    let skill = scope(&root)?;
+    let Some(entry) = self.entry(folder, None)? else {
+      return Err(read_error(folder)(io::ErrorKind::NotFound.into()));
+    };
+    let skill = Directory::from_entry(entry).map_err(|_| ScanError::NotRegular(folder.to_owned()))?;
     let markdown = self.read(&folder.join(SKILL_FILE), Some(&skill))?;
     let mut collected = Collected {
-      scope: skill,
+      root: skill,
       base: folder.to_path_buf(),
       visited: HashSet::new(),
       files: Vec::new(),
@@ -169,14 +195,14 @@ impl Scan {
     })
   }
   fn collect(&mut self, folder: &Path, depth: usize, collected: &mut Collected) -> Result<(), ScanError> {
-    if !collected.visited.insert(self.resolve(folder, Some(&collected.scope))?) {
+    if !collected.visited.insert(self.resolve(folder, Some(&collected.root))?) {
       return Ok(());
     }
-    for path in self.children(folder, Some(&collected.scope), depth)? {
-      let Some((_, metadata)) = self.metadata(&path, Some(&collected.scope))? else {
+    for path in self.children(folder, Some(&collected.root), depth)? {
+      let Some(entry) = self.entry(&path, Some(&collected.root))? else {
         continue;
       };
-      if metadata.is_dir() {
+      if entry.metadata.is_dir() {
         self.collect(&path, depth + 1, collected)?;
         continue;
       }
@@ -188,12 +214,12 @@ impl Scan {
       if relative == SKILL_FILE {
         continue;
       }
-      if !metadata.is_file() {
+      if !entry.metadata.is_file() {
         return Err(ScanError::NotRegular(path));
       }
       match SkillFilePath::new(&relative) {
         Ok(file_path) => {
-          if let Some(content) = self.read(&path, Some(&collected.scope))? {
+          if let Some(content) = self.read(&path, Some(&collected.root))? {
             collected.files.push(FoundFile {
               path: file_path,
               content: Arc::from(content),
@@ -209,8 +235,25 @@ impl Scan {
 
 /// Reads only bounded, regular files owned by the canonical repository and each canonical skill.
 pub fn scan(repo_root: &Path) -> Result<RepositoryScan, ScanError> {
+  scan_observing(repo_root, None)
+}
+/// Synchronizes deterministic disposable swaps without replacing filesystem reads or their outcomes.
+#[cfg(feature = "test-support")]
+#[doc(hidden)]
+pub fn scan_with_access_observer(
+  repo_root: &Path,
+  observer: &dyn Fn(AccessPoint, &Path),
+) -> Result<RepositoryScan, ScanError> {
+  scan_observing(repo_root, Some(observer))
+}
+type AccessObserver<'a> = Option<&'a dyn Fn(AccessPoint, &Path)>;
+fn scan_observing(repo_root: &Path, observer: AccessObserver<'_>) -> Result<RepositoryScan, ScanError> {
+  let project = scope(repo_root)?;
+  let root = Directory::root(project.worktree()).map_err(read_error(repo_root))?;
   let mut scan = Scan {
-    project: scope(repo_root)?,
+    project,
+    root,
+    observer,
     entries: 0,
     bytes: 0,
   };
@@ -227,13 +270,13 @@ pub fn scan(repo_root: &Path) -> Result<RepositoryScan, ScanError> {
   for folder in SKILL_FOLDERS {
     let container = root.join(folder);
     for path in scan.children(&container, None, 0)? {
-      let Some((_, metadata)) = scan.metadata(&path, None)? else {
+      let Some(entry) = scan.entry(&path, None)? else {
         continue;
       };
-      if metadata.is_dir() {
+      if entry.metadata.is_dir() {
         let name = path.file_name().expect("directory entry has a name").to_string_lossy();
         found.push(scan.skill(format!("{folder}/{name}"), &path)?);
-      } else if !metadata.is_file() {
+      } else if !entry.metadata.is_file() {
         return Err(ScanError::NotRegular(path));
       }
     }

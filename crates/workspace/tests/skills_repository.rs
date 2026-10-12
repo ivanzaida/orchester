@@ -102,10 +102,13 @@ fn skills_repository_refuses_external_directories_before_traversal() {
 }
 #[test]
 fn skills_repository_refuses_external_skill_reference_and_agent_file_links() {
-  for relative in [
-    ".claude/skills/checks/SKILL.md",
-    ".claude/skills/checks/notes.md",
-    "AGENTS.md",
+  for (relative, swap) in [
+    (".claude/skills/checks/SKILL.md", false),
+    (".claude/skills/checks/notes.md", false),
+    ("AGENTS.md", false),
+    (".claude/skills/checks/SKILL.md", true),
+    (".claude/skills/checks/notes.md", true),
+    ("AGENTS.md", true),
   ] {
     let f = Fixture::new();
     let skill = f.skill();
@@ -114,8 +117,28 @@ fn skills_repository_refuses_external_skill_reference_and_agent_file_links() {
     }
     let target = f.outside.join("private.md");
     write(&target, "PRIVATE FIXTURE: not repository content");
-    file_link(&target, &f.root.join(relative));
-    assert!(matches!(f.refusal(), ScanError::Outside(_)));
+    let link = f.root.join(relative);
+    if !swap {
+      file_link(&target, &link);
+      assert!(matches!(f.refusal(), ScanError::Outside(_)));
+    } else {
+      write(&link, "Admitted regular file before substitution");
+      let swapped = std::cell::Cell::new(false);
+      let accessed = std::cell::Cell::new(false);
+      let error = repository::scan_with_access_observer(&f.root, &|point, path| {
+        if point == repository::AccessPoint::Read && path == link {
+          accessed.set(true);
+        }
+        if point == repository::AccessPoint::Open && path == link && !swapped.replace(true) {
+          fs::remove_file(&link).expect("replace disposable fixture");
+          file_link(&target, &link);
+        }
+      })
+      .expect_err("never read the replacement external target");
+      assert!(swapped.get());
+      assert!(!accessed.get(), "a post-read ownership check would already be too late");
+      assert!(matches!(error, ScanError::NotRegular(_) | ScanError::Read { .. }));
+    }
   }
 }
 #[test]
@@ -254,3 +277,6 @@ fn skills_repository_accepts_in_project_reference_file_links() {
     && files.iter().all(|file| file.content.as_ref() == b"Allowed linked reference"))
   );
 }
+
+#[path = "skills_repository/swaps.rs"]
+mod swaps;

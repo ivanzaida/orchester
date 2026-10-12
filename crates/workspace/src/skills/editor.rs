@@ -196,11 +196,8 @@ pub fn save_in(root: &Path, before: Option<&SkillEntry>, name: &str, body: &Skil
     .cloned()
     .ok_or_else(|| Message::new("skills.library.loadFailed"))
 }
-/// Publishing arbitrary instructions is a person's decision, even when permission automation is enabled.
-pub fn publish_in(root: &Path, entry: &SkillEntry, confirmed: bool) -> Result<SkillEntry, Message> {
-  if !confirmed {
-    return Err(Message::new("skills.editorErrors.personOnly"));
-  }
+/// Publishes only the reviewed saved draft and published version, checked atomically against storage.
+pub fn publish_in(root: &Path, entry: &SkillEntry) -> Result<SkillEntry, Message> {
   if let Some(reason) = publish_reason(entry) {
     return Err(reason);
   }
@@ -215,11 +212,7 @@ pub fn publish_in(root: &Path, entry: &SkillEntry, confirmed: bool) -> Result<Sk
     .cloned()
     .ok_or_else(|| Message::new("skills.library.loadFailed"))
 }
-pub fn set_agent_files_in(root: &Path, enabled: bool, confirmed: bool) -> Result<(), Message> {
-  let current = project_settings::load_in(root).map_err(|e| messages::store_error(&e))?;
-  if enabled && !current.agent_files.is_on() && !confirmed {
-    return Err(Message::new("skills.editorErrors.personOnly"));
-  }
+pub fn set_agent_files_in(root: &Path, enabled: bool) -> Result<(), Message> {
   project_settings::save_agent_files_in(root, enabled).map_err(|e| messages::store_error(&e))
 }
 /// Editable skill content is validated here, including reference-file paths and duplicates.

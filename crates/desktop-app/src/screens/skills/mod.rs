@@ -35,6 +35,8 @@ pub struct Props {
 impl DevtoolsInspectable for Props {}
 struct SkillsScreen {
   view: View,
+  accepted_reset: lurq::core::Signal<u64>,
+  rejected_reset: lurq::core::Signal<u64>,
 }
 impl Component for SkillsScreen {
   type Props = Props;
@@ -49,6 +51,8 @@ impl Component for SkillsScreen {
         reset: ctx.signal(0),
         reload_requested: ctx.signal(false),
       },
+      accepted_reset: ctx.signal(0),
+      rejected_reset: ctx.signal(0),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -61,7 +65,12 @@ impl Component for SkillsScreen {
     let Some((data, read_reset)) = reading.data.clone() else {
       return frame.child(self.awaiting(ctx, reading.error.as_ref().filter(|_| !reading.is_pending()), false));
     };
+    if reading.is_fulfilled() && !reading.is_pending() {
+      self.accepted_reset.set(read_reset);
+    }
     if let Some(error) = reading.error.as_ref().filter(|_| !reading.is_pending()) {
+      // Unlocking after rejection ends this discard decision. Later feed reads are passive.
+      self.rejected_reset.set(self.view.reset.get_untracked());
       let revision = self.view.revision.clone();
       let reload = self.view.reload_requested.clone();
       let replacing = read_reset != self.view.reset.get();
@@ -78,7 +87,8 @@ impl Component for SkillsScreen {
         },
       ));
     }
-    let reloading = read_reset != self.view.reset.get() && reading.is_pending();
+    let requested = self.view.reset.get();
+    let reloading = requested > self.rejected_reset.get_untracked() && requested != read_reset && reading.is_pending();
     if reloading {
       frame = frame.child(loading("skill-reloading", &ctx.t("skills.reading")));
     }
@@ -125,6 +135,8 @@ impl SkillsScreen {
     let root = project.open.repo_root.clone();
     let outside = project.feed.outside.get();
     let hold = crate::services::Services::of(ctx).hold;
+    let accepted = self.accepted_reset.get_untracked();
+    let rejected = self.rejected_reset.get_untracked();
     ctx
       .future(
         (
@@ -138,12 +150,13 @@ impl SkillsScreen {
           project.feed.tasks.get(),
         ),
         move |(root, _, reset, ..)| {
+          let generation = if reset > rejected { reset } else { accepted };
           let hold = hold.clone();
           async move {
             hold.released().await;
             background::run(move || EditorData::load_in(&root))
               .await?
-              .map(|data| (data, reset))
+              .map(|data| (data, generation))
           }
         },
       )

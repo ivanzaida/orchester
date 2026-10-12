@@ -1,5 +1,4 @@
 //! Skill editor gJurA and the save/publish states bQqDC; no modal.
-use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -24,8 +23,6 @@ use super::{
   work::{self, Change, Saved, Work},
 };
 use crate::{
-  mcp::input_gate::Guarded,
-  screens::connections::widen::{WidenConfirm, WidenProps},
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
@@ -267,13 +264,14 @@ impl Editor {
       let open = p.page.project.open.clone();
       let name = self.name.get();
       let submitted = self.submitted.clone();
+      let choosing = self.choosing_file.clone();
       let button = ActionButton::new("skill-create", ButtonKind::Primary, ctx.t("skills.create"));
       if body.is_err() || busy || self.choosing_file.get() {
         button.disabled()
       } else {
         button.on_click(move || {
           if let Ok(body) = &body {
-            if submitted.get_untracked() {
+            if submitted.get_untracked() || choosing.get_untracked() {
               return;
             }
             submitted.set(true);
@@ -403,24 +401,25 @@ impl Editor {
     let entry = entry.cloned();
     let submitted = self.submitted.clone();
     let operation = self.operation.clone();
-    ctx.mount_keyed::<WidenConfirm>(
-      "skill-confirm",
-      WidenProps {
-        id: "skill-confirm",
-        card: false,
-        automation: Guarded::WideningQuestion,
-        title: ctx.t("skills.publishQuestion"),
-        reasons: Arc::from([ctx.t("skills.publishReason")]),
-        confirm: ctx.t_args(
-          "skills.publish",
-          [(
-            "version",
-            entry.as_ref().map_or(1, |e| words::next(e.state)).to_string(),
-          )],
-        ),
-        keep: ctx.t("skills.keepDraft"),
-        on_keep: Arc::new(move || keep.set(false)),
-        on_confirm: Arc::new(move || {
+    Notice::new("skill-confirm", NoticeTone::Warning, ctx.t("skills.publishQuestion"))
+      .body(ctx.t("skills.publishReason"))
+      .action(
+        ActionButton::new("skill-confirm-keep", ButtonKind::Secondary, ctx.t("skills.keepDraft"))
+          .on_click(move || keep.set(false)),
+      )
+      .action(
+        ActionButton::new(
+          "skill-confirm-confirm",
+          ButtonKind::Primary,
+          ctx.t_args(
+            "skills.publish",
+            [(
+              "version",
+              entry.as_ref().map_or(1, |e| words::next(e.state)).to_string(),
+            )],
+          ),
+        )
+        .on_click(move || {
           if let Some(entry) = &entry {
             operation.set(work::Operation::Publish);
             submitted.set(true);
@@ -428,8 +427,8 @@ impl Editor {
             action.run((open.clone(), Change::Publish(entry.clone())));
           }
         }),
-      },
-    )
+      )
+      .into()
   }
 }
 impl Editor {
@@ -482,7 +481,11 @@ impl Editor {
     let submitted = self.submitted.clone();
     let operation = self.operation.clone();
     let asking = self.asking.clone();
+    let choosing = self.choosing_file.clone();
     let retry = ActionButton::new("skill-retry", ButtonKind::Secondary, ctx.t("skills.retry")).on_click(move || {
+      if submitted.get_untracked() || (before.is_none() && choosing.get_untracked()) {
+        return;
+      }
       if operation.get_untracked() == work::Operation::Publish {
         asking.set(true);
         return;
@@ -507,7 +510,11 @@ impl Editor {
     } else {
       reload
     };
-    let retry = if p.page.reloading { retry.disabled() } else { retry };
+    let retry = if p.page.reloading || (self.baseline.get().0.is_none() && self.choosing_file.get()) {
+      retry.disabled()
+    } else {
+      retry
+    };
     Some(
       Notice::new("skill-save-error", NoticeTone::Danger, title)
         .body(message_text(ctx, error))

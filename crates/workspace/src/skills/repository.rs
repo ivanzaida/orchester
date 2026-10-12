@@ -3,6 +3,7 @@
 //! and turning the chosen items into drafts. The repository is only read. Every function blocks on
 //! the disk or SQLite; the UI calls them off the UI thread.
 
+mod owned;
 mod scan;
 use std::path::Path;
 
@@ -14,6 +15,9 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
+#[cfg(feature = "test-support")]
+#[doc(hidden)]
+pub use scan::{AccessPoint, scan_with_access_observer};
 pub use scan::{RepositoryScan, ScanError, scan};
 use thiserror::Error;
 

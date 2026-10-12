@@ -65,7 +65,7 @@ impl Skills {
     .expect("skill");
     let e = editor::save_in(&self.repo, None, name, &body).expect("create");
     if published {
-      editor::publish_in(&self.repo, &e, true).expect("publish");
+      editor::publish_in(&self.repo, &e).expect("publish");
     }
     e.id
   }

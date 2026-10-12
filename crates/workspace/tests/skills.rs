@@ -50,7 +50,7 @@ fn skills_name_validation_and_competing_edits_preserve_the_stored_draft() {
   assert_eq!(renamed.slug, before.slug);
 }
 #[test]
-fn skills_publish_requires_person_and_complete_saved_content() {
+fn skills_publish_requires_complete_reviewed_saved_content() {
   let (repo, _db) = project();
   let blank = editor::save_in(repo.path(), None, "checks", &skill("", "")).expect("draft");
   assert_eq!(
@@ -58,8 +58,10 @@ fn skills_publish_requires_person_and_complete_saved_content() {
     "skills.editorErrors.descriptionRequired"
   );
   assert_eq!(
-    editor::publish_in(repo.path(), &blank, false).expect_err("person").key,
-    "skills.editorErrors.personOnly"
+    editor::publish_in(repo.path(), &blank)
+      .expect_err("invalid content")
+      .key,
+    "skills.editorErrors.descriptionRequired"
   );
   let draft = editor::save_in(repo.path(), Some(&blank), "checks", &skill("Check", "Check first")).expect("saved");
   let outside = editor::save_in(
@@ -70,29 +72,23 @@ fn skills_publish_requires_person_and_complete_saved_content() {
   )
   .expect("outside");
   assert_eq!(
-    editor::publish_in(repo.path(), &draft, true).expect_err("stale").key,
+    editor::publish_in(repo.path(), &draft).expect_err("stale").key,
     "errors.draftChanged"
   );
-  let published = editor::publish_in(repo.path(), &outside, true).expect("published");
+  let published = editor::publish_in(repo.path(), &outside).expect("published");
   assert!(!published.state.has_draft());
   assert_eq!(published.state.published().expect("version").get(), 1);
 }
 #[test]
-fn skills_repository_files_require_person_only_when_enabled() {
-  let (repo, mut db) = project();
-  editor::set_agent_files_in(repo.path(), false, false).expect("off needs no widening");
+fn skills_repository_files_match_ordinary_project_settings_semantics() {
+  let (repo, db) = project();
+  editor::set_agent_files_in(repo.path(), false).expect("ordinary off");
   assert_eq!(db.repository_agent_files().expect("setting"), RepositoryAgentFiles::Off);
-  assert_eq!(
-    editor::set_agent_files_in(repo.path(), true, false)
-      .expect_err("needs person")
-      .key,
-    "skills.editorErrors.personOnly"
-  );
-  assert_eq!(db.repository_agent_files().expect("setting"), RepositoryAgentFiles::Off);
-  editor::set_agent_files_in(repo.path(), true, true).expect("person");
+  orchester_workspace::project_settings::save_agent_files_in(repo.path(), true).expect("accepted setting API");
   assert_eq!(db.repository_agent_files().expect("setting"), RepositoryAgentFiles::On);
-  db.save_repository_agent_files(RepositoryAgentFiles::Off)
-    .expect("fixture");
+  editor::set_agent_files_in(repo.path(), false).expect("ordinary off");
+  editor::set_agent_files_in(repo.path(), true).expect("ordinary on");
+  assert_eq!(db.repository_agent_files().expect("setting"), RepositoryAgentFiles::On);
 }
 #[test]
 fn skills_reference_files_are_stored_and_duplicate_paths_are_refused() {
@@ -184,4 +180,51 @@ fn skills_unsaved_fields_are_detected_before_name_validation() {
   form.description = before.body.description();
   form.body = before.body.body();
   assert!(!form.has_edits(Some(&before)));
+}
+
+#[test]
+fn skills_publication_rejects_reviewed_snapshot_after_same_content_version_changed() {
+  use orchester_core::store::ResourceStore;
+  use orchester_workspace::skills::data;
+  let (repo, db) = project();
+  let body = skill("Check", "Check first");
+  let first = editor::save_in(repo.path(), None, "checks", &body).expect("draft");
+  let first = editor::publish_in(repo.path(), &first).expect("ordinary v1");
+  let reviewed_body = skill("Reviewed", "Reviewed saved content");
+  let reviewed = editor::save_in(repo.path(), Some(&first), "checks", &reviewed_body).expect("reviewed saved draft");
+  let outside_body = skill("Outside", "A different published version");
+  editor::save_in(repo.path(), Some(&reviewed), "checks", &outside_body).expect("outside saved draft");
+  assert_eq!(
+    data::publish_in(repo.path(), reviewed.id)
+      .expect("accepted direct v2")
+      .get(),
+    2
+  );
+  let outside = data::ProjectSkills::load_in(repo.path())
+    .expect("skills")
+    .entry(reviewed.id)
+    .expect("entry")
+    .clone();
+  let fresh = editor::save_in(repo.path(), Some(&outside), "checks", &reviewed_body).expect("fresh v3 draft");
+  assert_eq!(
+    editor::publish_in(repo.path(), &reviewed)
+      .expect_err("old publication snapshot")
+      .key,
+    "errors.draftChanged"
+  );
+  assert_eq!(
+    db.latest_version::<Skill>(reviewed.id)
+      .expect("version")
+      .expect("published")
+      .number()
+      .get(),
+    2
+  );
+  assert_eq!(
+    db.draft::<Skill>(reviewed.id).expect("draft").expect("retained").body(),
+    &reviewed_body
+  );
+  let final_entry = editor::publish_in(repo.path(), &fresh).expect("fresh reviewed snapshot");
+  assert_eq!(final_entry.state.published().expect("published").get(), 3);
+  assert!(!final_entry.state.has_draft());
 }

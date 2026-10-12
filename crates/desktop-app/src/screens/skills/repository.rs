@@ -27,8 +27,6 @@ use orchester_workspace::{
 
 use super::{PageProps, state::Panel};
 use crate::{
-  mcp::input_gate::Guarded,
-  screens::connections::widen::{WidenConfirm, WidenProps},
   services::Services,
   theme::{ConnectionsSpacing, ExtraSpacing, ExtraTypography},
   ui::{
@@ -267,7 +265,7 @@ impl Component for Found {
   type Props = PageProps;
   fn create(ctx: &mut Ctx) -> Self {
     let save = ctx.future_action(|(root, on): (PathBuf, bool)| async move {
-      background::run(move || editor::set_agent_files_in(&root, on, true)).await??;
+      background::run(move || editor::set_agent_files_in(&root, on)).await??;
       Ok(on)
     });
     let revision = ctx.props::<PageProps>().view.revision.clone();
@@ -334,32 +332,46 @@ impl Component for Found {
       &ctx.t("skills.repositoryExplain"),
     ));
     if self.asking.get() {
-      let keep = self.asking.clone();
-      let confirm = self.asking.clone();
-      let save = self.save.clone();
-      let root = p.project.open.repo_root;
-      panel = panel.child(ctx.mount_keyed::<WidenConfirm>(
-        "skill-files-confirm",
-        WidenProps {
-          id: "skill-files-confirm",
-          card: true,
-          automation: Guarded::WideningQuestion,
-          title: ctx.t("skills.filesQuestion"),
-          reasons: Arc::from([ctx.t("skills.filesReason")]),
-          confirm: ctx.t("skills.turnOn"),
-          keep: ctx.t("skills.keepOff"),
-          on_keep: Arc::new(move || keep.set(false)),
-          on_confirm: Arc::new(move || {
-            confirm.set(false);
-            save.run((root.clone(), true));
-          }),
-        },
-      ));
+      panel = panel.child(self.question(ctx, &p));
     }
     if let Some(error) = self.save.state().get().error {
       panel = panel.child(field_error("skill-files-setting-error", &message_text(ctx, &error)));
     }
     panel
+  }
+}
+impl Found {
+  fn question(&self, ctx: &Ctx, p: &PageProps) -> Element {
+    let keep = self.asking.clone();
+    let confirm = self.asking.clone();
+    let save = self.save.clone();
+    let root = p.project.open.repo_root.clone();
+    Notice::new(
+      "skill-files-confirm",
+      NoticeTone::Warning,
+      ctx.t("skills.filesQuestion"),
+    )
+    .body(ctx.t("skills.filesReason"))
+    .action(
+      ActionButton::new(
+        "skill-files-confirm-confirm",
+        ButtonKind::Primary,
+        ctx.t("skills.turnOn"),
+      )
+      .on_click(move || {
+        confirm.set(false);
+        save.run((root.clone(), true));
+      }),
+    )
+    .action(
+      ActionButton::new(
+        "skill-files-confirm-keep",
+        ButtonKind::Secondary,
+        ctx.t("skills.keepOff"),
+      )
+      .on_click(move || keep.set(false)),
+    )
+    .into()
   }
 }
 impl Import {
