@@ -2,4 +2,6 @@
 //! agents as drafts.
 
 pub mod data;
+pub mod editor;
 pub mod repository;
+pub mod uses;
