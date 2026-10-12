@@ -1,15 +1,4 @@
 //! Empty project B5A4Ux, including real repository findings T1w9U.
-use super::state::{Selection, Tab, View};
-use crate::{
-  project::ShownProject,
-  theme::{ExtraSpacing, ExtraTypography},
-  ui::{
-    button::{ActionButton, ButtonKind},
-    field::field_error,
-    icon::Icon,
-    state::EmptyState,
-  },
-};
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -24,6 +13,18 @@ use orchester_workspace::{
   background,
   messages::Message,
   skills::repository::{self, RepositoryScan},
+};
+
+use super::state::{Selection, Tab, View};
+use crate::{
+  project::ShownProject,
+  theme::{ExtraSpacing, ExtraTypography},
+  ui::{
+    button::{ActionButton, ButtonKind},
+    field::field_error,
+    icon::Icon,
+    state::EmptyState,
+  },
 };
 // Empty state sG2xi and its top inset within the Instructions body.
 const EMPTY_WIDTH: f32 = 600.0;

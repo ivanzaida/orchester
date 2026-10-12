@@ -1,12 +1,6 @@
 //! Variable catalog and its expanded detail jNHQ3; unavailable values stay explicit (J7EgbM).
-use super::panels::{Panels, Props};
-use crate::{
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, instructions},
-  ui::{
-    button::{ActionButton, ButtonKind},
-    pressable::pressable,
-  },
-};
+use std::sync::Arc;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -20,7 +14,15 @@ use orchester_workspace::instructions::{
   form::{Events, Picked},
   preview::Resolved,
 };
-use std::sync::Arc;
+
+use super::panels::{Panels, Props};
+use crate::{
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, instructions},
+  ui::{
+    button::{ActionButton, ButtonKind},
+    pressable::pressable,
+  },
+};
 pub fn catalog(ctx: &Ctx, state: &Panels, props: &Props, resolved: Option<&Resolved<'_>>) -> Element {
   let search = state.search.get().to_lowercase();
   let selected = state.selected.get().0;

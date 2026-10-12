@@ -1,14 +1,4 @@
 //! Header p6Bsv, scope tabs p7ztk and empty state B5A4Ux.
-use super::state::{Selection, Tab, View};
-use crate::{
-  project::ShownProject,
-  theme::{ExtraSpacing, instructions},
-  ui::{
-    button::{ActionButton, ButtonKind},
-    icon::Icon,
-    tabs::{PageTab, counted, page_tabs},
-  },
-};
 use lurq::{
   app::{
     ctx::Ctx,
@@ -19,6 +9,17 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::instructions::data::ProjectInstructions;
+
+use super::state::{Selection, Tab, View};
+use crate::{
+  project::ShownProject,
+  theme::{ExtraSpacing, instructions},
+  ui::{
+    button::{ActionButton, ButtonKind},
+    icon::Icon,
+    tabs::{PageTab, counted, page_tabs},
+  },
+};
 
 pub fn header(
   ctx: &mut Ctx,

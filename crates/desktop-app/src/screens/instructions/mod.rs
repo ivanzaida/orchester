@@ -14,13 +14,6 @@ mod variables;
 mod words;
 mod work;
 
-use crate::{
-  project::ShownProject,
-  ui::{
-    message::message_text,
-    state::{load_error, loading},
-  },
-};
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -32,6 +25,14 @@ use lurq::{
 };
 use orchester_workspace::{background, instructions::data::ProjectInstructions, messages, tasks::outside::Outside};
 use state::{Selection, Tab, View};
+
+use crate::{
+  project::ShownProject,
+  ui::{
+    message::message_text,
+    state::{load_error, loading},
+  },
+};
 
 #[derive(Clone, PartialEq)]
 pub struct Props(pub ShownProject);

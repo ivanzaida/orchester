@@ -1,5 +1,6 @@
 //! Localized scope, timing and lifecycle labels.
-use super::state::Tab;
+use std::sync::Arc;
+
 use lurq::app::ctx::Ctx;
 use orchester_core::{
   resource::{AgentTargets, Exclusion},
@@ -9,7 +10,8 @@ use orchester_workspace::{
   agents::data::VersionState,
   instructions::{data::ProjectInstructions, form::Events},
 };
-use std::sync::Arc;
+
+use super::state::Tab;
 
 pub fn version(ctx: &Ctx, state: VersionState) -> Arc<str> {
   let number = state.published().map_or(1, |v| v.get().saturating_add(1));

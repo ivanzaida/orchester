@@ -1,22 +1,4 @@
 //! Editor ilieH: debounced serial autosaves and publication of the saved draft.
-use super::{
-  fields::Fields,
-  library,
-  panels::{self, Panel},
-  state::{Saved, Selection, Tab, View},
-  words,
-  work::{self, Write},
-};
-use crate::{
-  project::ShownProject,
-  theme::ExtraSpacing,
-  ui::{
-    button::{ActionButton, ButtonKind},
-    field::field_error,
-    icon::Icon,
-    message::message_text,
-  },
-};
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -36,6 +18,25 @@ use orchester_workspace::{
     form::FormErrors,
   },
   messages::{self, Message},
+};
+
+use super::{
+  fields::Fields,
+  library,
+  panels::{self, Panel},
+  state::{Saved, Selection, Tab, View},
+  words,
+  work::{self, Write},
+};
+use crate::{
+  project::ShownProject,
+  theme::ExtraSpacing,
+  ui::{
+    button::{ActionButton, ButtonKind},
+    field::field_error,
+    icon::Icon,
+    message::message_text,
+  },
 };
 
 // Editor header f4Slyn.

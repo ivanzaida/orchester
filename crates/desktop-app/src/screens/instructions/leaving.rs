@@ -1,14 +1,15 @@
 //! Keep unsaved text when changing instructions or leaving the page.
+use lurq::{
+  app::ctx::Ctx,
+  components::{Column, Row, Text},
+  node::Element,
+};
+
 use super::state::Selection;
 use crate::{
   navigation::{Navigation, guard::LeaveGuard},
   theme::{ExtraSpacing, ExtraTypography},
   ui::button::{ActionButton, ButtonKind},
-};
-use lurq::{
-  app::ctx::Ctx,
-  components::{Column, Row, Text},
-  node::Element,
 };
 
 pub fn question(ctx: &mut Ctx, selection: &Selection, guard: &LeaveGuard) -> Option<Element> {

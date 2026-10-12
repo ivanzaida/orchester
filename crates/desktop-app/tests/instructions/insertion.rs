@@ -1,5 +1,6 @@
-use super::{harness::Instructions, preview::seed_preview};
 use orchester_core::resource::InstructionScope;
+
+use super::{harness::Instructions, preview::seed_preview};
 
 #[test]
 fn instructions_variable_picker_replaces_selection_and_autosaves_exact_raw_bytes() {

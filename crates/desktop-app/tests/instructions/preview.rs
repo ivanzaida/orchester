@@ -1,4 +1,3 @@
-use super::harness::Instructions;
 use orchester_core::{
   id::{ConnectionId, IdempotencyKey},
   name::Name,
@@ -9,6 +8,8 @@ use orchester_core::{
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
 };
+
+use super::harness::Instructions;
 
 pub(super) fn seed_preview(screen: &Instructions) -> orchester_core::id::ResourceId {
   let mut db = orchester_store::ProjectDb::open(&screen.root).expect("valid instruction fixture");

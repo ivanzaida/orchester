@@ -1,4 +1,6 @@
 //! Checked editor writes preserve the shared instruction lifecycle and reject outside changes.
+use std::{collections::BTreeSet, path::PathBuf};
+
 use orchester_core::{
   id::ProjectId,
   name::Name,
@@ -12,7 +14,6 @@ use orchester_workspace::{
   agents::data::VersionState,
   instructions::{data::ProjectInstructions, editor},
 };
-use std::{collections::BTreeSet, path::PathBuf};
 
 fn project() -> tempfile::TempDir {
   let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/instructions/workspace");

@@ -1,5 +1,6 @@
 //! Prompt insertion uses the real retained input, its on_input path, focus and history.
-use crate::harness::Kit;
+use std::sync::Arc;
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -18,7 +19,8 @@ use orchester_app::{
   },
 };
 use parking_lot::Mutex;
-use std::sync::Arc;
+
+use crate::harness::Kit;
 
 #[derive(Clone)]
 struct Props {

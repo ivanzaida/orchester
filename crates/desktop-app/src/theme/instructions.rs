@@ -1,9 +1,10 @@
 //! Instructions fePhH: the editor, library and variable catalog's type and spacing.
+use std::sync::Arc;
+
 use lurq::{
   app::theme::{PaletteColor, RadiusSize, SpacingSize, Theme, ThemePalette, TypographyStyle},
   layout::text_style::{FontWeight, TextStyle},
 };
-use std::sync::Arc;
 
 pub fn head_top() -> SpacingSize {
   SpacingSize::extra("instructions_head_top")

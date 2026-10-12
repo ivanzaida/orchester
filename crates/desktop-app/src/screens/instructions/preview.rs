@@ -1,15 +1,4 @@
 //! Effective prompt preview ShcL9 and full viewer fTuZZ, built from workspace composition.
-use super::{
-  panels::{Panel, Panels, Props},
-  sources,
-};
-use crate::{
-  theme::{ExtraSpacing, instructions},
-  ui::{
-    button::{ActionButton, ButtonKind},
-    field::{SelectField, field, field_error},
-  },
-};
 use lurq::{
   app::{
     ctx::Ctx,
@@ -26,6 +15,18 @@ use orchester_core::{
 use orchester_workspace::instructions::{
   form::Picked,
   preview::{EditedInstruction, PreviewCatalog, PreviewProblem, Resolved},
+};
+
+use super::{
+  panels::{Panel, Panels, Props},
+  sources,
+};
+use crate::{
+  theme::{ExtraSpacing, instructions},
+  ui::{
+    button::{ActionButton, ButtonKind},
+    field::{SelectField, field, field_error},
+  },
 };
 
 // Full prompt header CKzcD and source index IAt1E.

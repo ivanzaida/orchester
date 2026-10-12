@@ -1,17 +1,4 @@
 //! Variables and effective prompt panels r8Ipz; full prompt viewer fTuZZ.
-use super::{preview, variables};
-use crate::{
-  project::ShownProject,
-  theme::ExtraSpacing,
-  ui::{
-    field::{FieldInput, field_error},
-    icon::Icon,
-    icon_button::IconButton,
-    message::message_text,
-    pressable::Focus,
-    tabs::{Segment, SegmentFace, segmented},
-  },
-};
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -32,6 +19,20 @@ use orchester_workspace::{
   },
   messages,
   tasks::outside::Outside,
+};
+
+use super::{preview, variables};
+use crate::{
+  project::ShownProject,
+  theme::ExtraSpacing,
+  ui::{
+    field::{FieldInput, field_error},
+    icon::Icon,
+    icon_button::IconButton,
+    message::message_text,
+    pressable::Focus,
+    tabs::{Segment, SegmentFace, segmented},
+  },
 };
 
 // Variables panel r8Ipz and prompt viewer's sources rail.

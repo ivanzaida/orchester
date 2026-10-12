@@ -1,12 +1,6 @@
 //! Virtualized scope library b1i8f, using the shared rule item zmP3o.
-use super::{
-  state::{Selection, Tab, View},
-  words,
-};
-use crate::{
-  theme::{ExtraSpacing, instructions},
-  ui::rule_item::RuleItem,
-};
+use std::sync::Arc;
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -18,7 +12,15 @@ use lurq::{
 };
 use orchester_core::resource::InstructionScope;
 use orchester_workspace::instructions::data::{InstructionEntry, ProjectInstructions};
-use std::sync::Arc;
+
+use super::{
+  state::{Selection, Tab, View},
+  words,
+};
+use crate::{
+  theme::{ExtraSpacing, instructions},
+  ui::rule_item::RuleItem,
+};
 // Rule list b1i8f.
 const LIST_WIDTH: f32 = 248.0;
 

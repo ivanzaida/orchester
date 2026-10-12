@@ -1,4 +1,3 @@
-use super::harness::{Instructions, body};
 use orchester_core::{
   resource::{Draft, Instruction, InstructionScope},
   store::ResourceStore,
@@ -6,6 +5,8 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 use orchester_workspace::instructions::editor;
+
+use super::harness::{Instructions, body};
 
 #[test]
 fn instructions_empty_and_new_draft_publish() {

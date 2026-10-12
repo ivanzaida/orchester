@@ -1,11 +1,12 @@
 //! Source-backed prompt control (kov6Z). Its keyed host retains this controller across renders.
+use std::sync::Arc;
+
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx},
   components::{InputEditError, InputTokens, TextInput, TextInputController},
   core::Signal,
   layout::text_style::TextStyle,
 };
-use std::sync::Arc;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EditFeedback {

@@ -1,4 +1,5 @@
-use super::support::{Data, Window, project_id};
+use std::{path::PathBuf, time::Duration};
+
 use orchester_app::routes::{ProjectPage, Route};
 use orchester_core::{
   id::ResourceId,
@@ -9,7 +10,8 @@ use orchester_workspace::instructions::{
   data::{InstructionEntry, ProjectInstructions},
   editor,
 };
-use std::{path::PathBuf, time::Duration};
+
+use super::support::{Data, Window, project_id};
 
 pub struct Instructions {
   pub window: Window,

@@ -1,12 +1,14 @@
 //! Rule item zmP3o: name, version and timing in one selected or openable widget.
-use super::pressable::pressable;
-use crate::theme::{ExtraColor, ExtraSpacing, instructions};
+use std::sync::Arc;
+
 use lurq::{
   app::theme::{RadiusSize, SpacingSize, TypographyStyle},
   components::{Column, Text},
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
-use std::sync::Arc;
+
+use super::pressable::pressable;
+use crate::theme::{ExtraColor, ExtraSpacing, instructions};
 
 pub struct RuleItem {
   id: Arc<str>,

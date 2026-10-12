@@ -1,6 +1,4 @@
 //! Prompt sources BYHVZ and excluded rules S9rsK, read in core assembly order.
-use super::words;
-use crate::theme::ExtraSpacing;
 use lurq::{
   app::{
     ctx::Ctx,
@@ -10,6 +8,9 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::run::{Composition, PromptSource};
+
+use super::words;
+use crate::theme::ExtraSpacing;
 
 pub fn list(ctx: &Ctx, composition: &Composition) -> Element {
   let mut list = Column::new()

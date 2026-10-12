@@ -1,15 +1,4 @@
 //! Editor fields qSn5T: name, scope, agents, injection timing and prompt.
-use super::{state::Tab, words};
-use crate::{
-  theme::{ExtraRadius, ExtraSpacing, IconSize, instructions},
-  ui::{
-    button::{ActionButton, ButtonKind},
-    field::{FieldInput, SelectField, field, field_error, select_style},
-    icon::{Icon, icon},
-    message::message_text,
-    prompt_input::{EditFeedback, PromptInput},
-  },
-};
 use lurq::{
   app::{
     component::DevtoolsInspectable,
@@ -25,6 +14,18 @@ use orchester_core::resource::{Instruction, Variable};
 use orchester_workspace::instructions::{
   data::{InstructionEntry, ProjectInstructions},
   form::{Events, FormErrors, InstructionForm, ScopeChoice, Target},
+};
+
+use super::{state::Tab, words};
+use crate::{
+  theme::{ExtraRadius, ExtraSpacing, IconSize, instructions},
+  ui::{
+    button::{ActionButton, ButtonKind},
+    field::{FieldInput, SelectField, field, field_error, select_style},
+    icon::{Icon, icon},
+    message::message_text,
+    prompt_input::{EditFeedback, PromptInput},
+  },
 };
 
 // Prompt toolbar Un13s and line number gutter blqcd.

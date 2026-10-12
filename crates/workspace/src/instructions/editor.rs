@@ -1,6 +1,6 @@
 //! Checked instruction writes return the exact committed candidate, never a later writer's draft.
-use super::data::InstructionEntry;
-use crate::messages::{self, Message};
+use std::{path::Path, sync::Arc};
+
 use orchester_core::{
   id::ResourceId,
   name::Name,
@@ -9,7 +9,9 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
-use std::{path::Path, sync::Arc};
+
+use super::data::InstructionEntry;
+use crate::messages::{self, Message};
 
 /// Creates the first draft with its complete validated body in a single store operation.
 pub fn create_in(root: &Path, name: Name, body: &Instruction) -> Result<InstructionEntry, Message> {
