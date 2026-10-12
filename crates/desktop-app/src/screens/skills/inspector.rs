@@ -31,6 +31,7 @@ struct Props {
   page: PageProps,
   entry: Option<SkillEntry>,
   files: Signal<Files>,
+  choosing: Signal<bool>,
   busy: bool,
 }
 impl PartialEq for Props {
@@ -49,17 +50,26 @@ struct Inspector {
 impl Component for Inspector {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
-    let add = ctx.future_action(|(root, title, files): (PathBuf, Arc<str>, Vec<SkillFile>)| async move {
-      let Some(file) = rfd::AsyncFileDialog::new().set_title(title.as_ref()).pick_file().await else {
-        return Ok(Added(None));
-      };
-      let path = file.path().to_path_buf();
-      let added =
-        background::run(move || orchester_workspace::skills::editor::add_file_in(&root, &path, &files)).await??;
-      Ok(Added(Some(added)))
+    let picker = ctx
+      .use_context::<crate::services::reference_picker::ReferencePicker>()
+      .unwrap_or_else(crate::services::reference_picker::ReferencePicker::system);
+    let add = ctx.future_action(move |(root, title, files): (PathBuf, Arc<str>, Vec<SkillFile>)| {
+      let picker = picker.clone();
+      async move {
+        let Some(path) = picker.pick(title).await else {
+          return Ok(Added(None));
+        };
+        let added =
+          background::run(move || orchester_workspace::skills::editor::add_file_in(&root, &path, &files)).await??;
+        Ok(Added(Some(added)))
+      }
     });
     let files = ctx.props::<Props>().files.clone();
+    let choosing = ctx.props::<Props>().choosing.clone();
     ctx.watch(&add.state(), move |state| {
+      if !state.is_pending() {
+        choosing.set(false);
+      }
       if state.is_fulfilled()
         && !state.is_pending()
         && let Some(Added(Some(file))) = state.data.as_ref()
@@ -100,7 +110,11 @@ impl Component for Inspector {
     let button = if p.busy || state.is_pending() {
       button.disabled()
     } else {
-      button.on_click(move || add.run((root.clone(), title.clone(), files.clone())))
+      let choosing = p.choosing.clone();
+      button.on_click(move || {
+        choosing.set(true);
+        add.run((root.clone(), title.clone(), files.clone()));
+      })
     };
     let mut panel = Column::new()
       .id("skill-inspector")
@@ -202,13 +216,21 @@ fn group() -> Column {
     .padding(Padding::new().top(SpacingSize::Md))
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
 }
-pub fn panel(ctx: &mut Ctx, page: &PageProps, entry: Option<&SkillEntry>, files: Signal<Files>, busy: bool) -> Element {
+pub fn panel(
+  ctx: &mut Ctx,
+  page: &PageProps,
+  entry: Option<&SkillEntry>,
+  files: Signal<Files>,
+  choosing: Signal<bool>,
+  busy: bool,
+) -> Element {
   ctx.mount_keyed::<Inspector>(
     "skill-inspector",
     Props {
       page: page.clone(),
       entry: entry.cloned(),
       files,
+      choosing,
       busy,
     },
   )

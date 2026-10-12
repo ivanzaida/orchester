@@ -64,6 +64,7 @@ pub struct Editor {
   body: Signal<String>,
   scope: Signal<orchester_workspace::instructions::form::Picked<InstructionScope>>,
   pub files: Signal<Files>,
+  choosing_file: Signal<bool>,
   baseline: Signal<Baseline>,
   action: Work,
   operation: Signal<work::Operation>,
@@ -89,6 +90,7 @@ impl Component for Editor {
       body: ctx.signal(entry.map_or(String::new(), |e| e.body.body().to_owned())),
       scope: ctx.signal(scope),
       files: ctx.signal(Files(entry.map_or(Vec::new(), |e| e.body.files().to_vec()))),
+      choosing_file: ctx.signal(false),
       dirty,
       leave,
       baseline: ctx.signal(Baseline(p.entry.clone())),
@@ -136,7 +138,7 @@ impl Component for Editor {
         .as_ref()
         .is_none_or(|e| e.body != *body || e.name.as_ref() != self.name.get().trim())
     });
-    if self.asking.get() && (dirty || parsed.is_err()) {
+    if self.asking.get() && (dirty || parsed.is_err() || p.page.reloading) {
       self.asking.set(false);
     }
     if baseline.is_some()
@@ -145,10 +147,11 @@ impl Component for Editor {
       && state.error.is_none()
       && !self.submitted.get()
       && !self.asking.get()
+      && !p.page.reloading
     {
       self.save(&p, parsed.as_ref().expect("dirty means parsing passed").clone());
     }
-    let busy = self.submitted.get() || state.is_pending();
+    let busy = self.submitted.get() || state.is_pending() || p.page.reloading;
     let dirty_or_invalid = edits || busy;
     if self.dirty.get_untracked() != dirty_or_invalid {
       self.dirty.set(dirty_or_invalid);
@@ -158,7 +161,14 @@ impl Component for Editor {
       .map_or_else(|| ctx.t("skills.new"), |e| e.name.clone());
     let header = self.header(ctx, &p, baseline.as_ref(), &title, (dirty || parsed.is_err(), busy));
     let form = self.form(ctx, &p, parsed.as_ref().err());
-    let details = inspector::panel(ctx, &p.page, baseline.as_ref(), self.files.clone(), busy);
+    let details = inspector::panel(
+      ctx,
+      &p.page,
+      baseline.as_ref(),
+      self.files.clone(),
+      self.choosing_file.clone(),
+      busy,
+    );
     let leave = self.leave_question(ctx, busy);
     let mut frame = Column::new()
       .id("skill-editor")
@@ -167,6 +177,7 @@ impl Component for Editor {
       .child(header)
       .with_children(leave);
     frame = frame.with_children(self.failure(ctx, &p));
+    frame = frame.with_children(self.reload_question(ctx, &p, busy));
     frame = frame.child(
       Row::new()
         .flex(1.0)
@@ -178,7 +189,7 @@ impl Component for Editor {
             .height(Dimension::Pct(100.0))
             .min_width(Dimension::Px(0.0))
             .child(form)
-            .child(self.footer(ctx, baseline.as_ref(), busy)),
+            .child(self.footer(ctx, baseline.as_ref(), (busy, p.page.reloading))),
         )
         .child(
           ScrollVertical::new(details)
@@ -257,7 +268,7 @@ impl Editor {
       let name = self.name.get();
       let submitted = self.submitted.clone();
       let button = ActionButton::new("skill-create", ButtonKind::Primary, ctx.t("skills.create"));
-      if body.is_err() || busy {
+      if body.is_err() || busy || self.choosing_file.get() {
         button.disabled()
       } else {
         button.on_click(move || {
@@ -287,7 +298,11 @@ impl Editor {
       .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .child(crumbs)
       .child(
-        Text::new(&if busy {
+        Text::new(&if p.page.reloading {
+          ctx.t("skills.reading")
+        } else if busy && self.operation.get() == work::Operation::Publish {
+          ctx.t("skills.publishing")
+        } else if busy {
           ctx.t("skills.saving")
         } else if dirty {
           ctx.t("skills.notSaved")
@@ -301,7 +316,7 @@ impl Editor {
       .child(action)
   }
   fn form(&self, ctx: &mut Ctx, p: &Props, error: Option<&Message>) -> Element {
-    let locked = self.baseline.get().0.is_none() && self.submitted.get();
+    let locked = (self.baseline.get().0.is_none() && self.submitted.get()) || p.page.reloading;
     let name_label = ctx.t("skills.name");
     let mut name = FieldInput::new("skill-name", name_label.clone(), self.name.clone()).mono();
     if let Some(error) = error {
@@ -448,6 +463,16 @@ impl Editor {
     let state = self.action.state().get();
     let error = state.error.as_ref().filter(|_| !state.is_pending())?;
     let baseline = self.baseline.get().0;
+    let title = match (self.operation.get(), baseline.as_ref()) {
+      (work::Operation::Publish, Some(entry)) => ctx.t_args(
+        "skills.publishFailed",
+        [
+          ("name", entry.name.to_string()),
+          ("version", words::next(entry.state).to_string()),
+        ],
+      ),
+      _ => ctx.t("skills.notSaved"),
+    };
     let parsed = self.form_state(p).0;
     let action = self.action.clone();
     let before = baseline;
@@ -474,11 +499,17 @@ impl Editor {
         ));
       }
     });
-    let reset = p.page.view.reset.clone();
+    let request = p.page.view.reload_requested.clone();
     let reload = ActionButton::new("skill-reload", ButtonKind::Secondary, ctx.t("skills.reload"))
-      .on_click(move || reset.update(|r| *r += 1));
+      .on_click(move || request.set(true));
+    let reload = if p.page.reloading || self.choosing_file.get() {
+      reload.disabled()
+    } else {
+      reload
+    };
+    let retry = if p.page.reloading { retry.disabled() } else { retry };
     Some(
-      Notice::new("skill-save-error", NoticeTone::Danger, ctx.t("skills.notSaved"))
+      Notice::new("skill-save-error", NoticeTone::Danger, title)
         .body(message_text(ctx, error))
         .action(retry)
         .action(reload)
@@ -487,7 +518,7 @@ impl Editor {
   }
 }
 impl Editor {
-  fn footer(&self, ctx: &Ctx, entry: Option<&SkillEntry>, busy: bool) -> Row {
+  fn footer(&self, ctx: &Ctx, entry: Option<&SkillEntry>, (busy, reloading): (bool, bool)) -> Row {
     let effect = entry.and_then(|e| e.state.published()).map_or_else(
       || ctx.t("skills.publishFirst"),
       |v| ctx.t_args("skills.publishEffect", [("version", v.get().to_string())]),
@@ -501,12 +532,50 @@ impl Editor {
       .child(Text::new(&effect).variant(TypographyStyle::Description))
       .child(Spacer::new().flex(1.0))
       .child(
-        Text::new(&if busy {
+        Text::new(&if reloading {
+          ctx.t("skills.reading")
+        } else if busy && self.operation.get() == work::Operation::Publish {
+          ctx.t("skills.publishing")
+        } else if busy {
           ctx.t("skills.saving")
         } else {
           entry.map_or_else(|| ctx.t("skills.newNote"), |e| words::saved_at(ctx, e))
         })
         .variant(ExtraTypography::Note.role()),
       )
+  }
+}
+
+impl Editor {
+  fn reload_question(&self, ctx: &Ctx, p: &Props, busy: bool) -> Option<Element> {
+    if !p.page.view.reload_requested.get() {
+      return None;
+    }
+    let keep = p.page.view.reload_requested.clone();
+    let confirm = keep.clone();
+    let reset = p.page.view.reset.clone();
+    let button =
+      ActionButton::new("skill-reload-confirm", ButtonKind::Primary, ctx.t("skills.reloadSaved")).on_click(move || {
+        confirm.set(false);
+        reset.update(|r| *r += 1);
+      });
+    Some(
+      Notice::new(
+        "skill-reload-question",
+        NoticeTone::Warning,
+        ctx.t("skills.reloadQuestion"),
+      )
+      .body(ctx.t("skills.reloadDetail"))
+      .action(if busy || self.choosing_file.get() {
+        button.disabled()
+      } else {
+        button
+      })
+      .action(
+        ActionButton::new("skill-reload-keep", ButtonKind::Secondary, ctx.t("skills.keepEditing"))
+          .on_click(move || keep.set(false)),
+      )
+      .into(),
+    )
   }
 }

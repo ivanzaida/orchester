@@ -184,3 +184,33 @@ fn native_scope_unix_names_are_plain() {
     assert_eq!(scope.writable(name), Ok(layout.worktree.join(name)), "{name}");
   }
 }
+
+#[test]
+fn native_scope_repository_discovery_excludes_state_and_other_readable_roots() {
+  let layout = Layout::new();
+  let scope = layout.scope(RepositoryAccess::Write);
+  assert_eq!(
+    scope.repository_readable("src/main.rs"),
+    Ok(layout.worktree.join("src/main.rs"))
+  );
+  for path in [".git", "vendor/lib/.git/config", ".orchester/private.md"] {
+    assert!(
+      matches!(scope.repository_readable(path), Err(ScopeError::Protected(_))),
+      "{path}"
+    );
+  }
+  for path in [
+    layout.index.join("map.md"),
+    layout.skills.join("SKILL.md"),
+    layout.cache.join("file.md"),
+  ] {
+    assert!(
+      scope.readable(&text(&path)).is_ok(),
+      "a native agent may read its granted root"
+    );
+    assert!(matches!(
+      scope.repository_readable(&text(&path)),
+      Err(ScopeError::NotReadable(_))
+    ));
+  }
+}

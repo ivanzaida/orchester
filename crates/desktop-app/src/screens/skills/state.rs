@@ -52,6 +52,7 @@ pub struct View {
   pub panel: PanelNav,
   pub revision: Signal<u64>,
   pub reset: Signal<u64>,
+  pub reload_requested: Signal<bool>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Filter {

@@ -1,4 +1,6 @@
 //! Skills in the real headless app, with isolated project data and no agent process.
+#[path = "skills/recovery.rs"]
+mod recovery;
 mod support;
 use std::{fs, path::PathBuf};
 
@@ -331,6 +333,7 @@ fn skills_competing_edit_can_be_reloaded_after_save_fails() {
     w.tree.get_element_by_id("skill-save-error").is_some()
   });
   s.click("skill-reload");
+  s.click("skill-reload-confirm");
   s.window.until("reloaded editor", |w| {
     w.tree
       .get_element_by_id_mut("skill-body")
@@ -424,6 +427,24 @@ fn skills_new_scope_without_a_name_asks_before_leaving_and_reverting_clears_the_
   s.go(ProjectPage::Skills);
   assert!(s.window.tree.get_element_by_id("skills-empty").is_some());
   assert!(s.window.tree.get_element_by_id("skill-leave-question").is_none());
+  s.go(ProjectPage::NewSkill);
+  s.click("skill-scope");
+  s.click("skill-scope-option-1");
+  s.window
+    .navigation()
+    .go(Route::Project(project_id(), ProjectPage::Skills));
+  s.window.pass();
+  s.click("skill-leave-keep");
+  assert!(s.text("skill-scope").contains("Delivery"));
+  s.window
+    .navigation()
+    .go(Route::Project(project_id(), ProjectPage::Skills));
+  s.window.pass();
+  s.click("skill-leave-confirm");
+  s.window.until("left scope-only form", |w| {
+    w.tree.get_element_by_id("skills-empty").is_some()
+  });
+  assert!(ProjectSkills::load_in(&s.repo).expect("skills").entries.is_empty());
 }
 #[test]
 fn skills_clearing_all_existing_fields_still_asks_before_leaving() {
