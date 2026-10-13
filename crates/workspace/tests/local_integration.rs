@@ -8,6 +8,8 @@ mod external;
 mod metadata;
 #[path = "local_integration/privacy.rs"]
 mod privacy;
+#[path = "local_integration/release_regressions.rs"]
+mod release_regressions;
 #[path = "local_integration/review_regressions.rs"]
 mod review_regressions;
 #[path = "local_integration/schema.rs"]

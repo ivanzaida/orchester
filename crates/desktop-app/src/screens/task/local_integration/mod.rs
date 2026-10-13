@@ -6,6 +6,7 @@ mod fields;
 mod files;
 mod resolver;
 mod selection;
+mod target;
 pub(crate) mod words;
 mod work;
 
@@ -61,6 +62,10 @@ struct Shown(Arc<IntegrationView>, u64);
 impl DevtoolsInspectable for Shown {}
 
 pub fn tab(ctx: &mut Ctx, task: &TaskContext) -> Element {
+  ctx.mount_keyed::<target::Target>("local-integration-target", task.clone())
+}
+
+fn page(ctx: &mut Ctx, task: &TaskContext) -> Element {
   if task
     .detail
     .run
@@ -74,7 +79,12 @@ pub fn tab(ctx: &mut Ctx, task: &TaskContext) -> Element {
     )
     .into();
   }
-  ctx.mount_keyed::<LocalPage>("task-local-integration", task.clone())
+  let run = task
+    .detail
+    .run
+    .as_ref()
+    .expect("the local page requires a succeeded run");
+  ctx.mount_keyed::<LocalPage>(&format!("task-local-integration-{}", run.id()), task.clone())
 }
 
 struct LocalPage {

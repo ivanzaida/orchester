@@ -216,7 +216,7 @@ fn local_integration_restart_records_completed_sync_commit_without_repeating_it(
   assert_eq!(git(&fixture.task_root, &["rev-parse", "HEAD"]), merged);
 }
 
-fn second_run(fixture: &Fixture, supersedes: bool) -> RunId {
+pub(super) fn second_run(fixture: &Fixture, supersedes: bool) -> RunId {
   let mut db = ProjectDb::open(fixture.root()).expect("db");
   let first = db.run(fixture.run).expect("run").expect("exists");
   let now = Timestamp::now();

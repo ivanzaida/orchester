@@ -137,3 +137,47 @@ fn local_integration_only_read_only_reviews_release_checkout_reservation() {
     "retained commit originals still reserve the checkout"
   );
 }
+
+#[test]
+fn local_integration_completed_commit_release_retains_audit_and_requires_current_checkout() {
+  let base = checkout('a');
+  let mut operation = LocalOperation::new(RunId::generate(), base.clone()).expect("review");
+  operation.begin_commit(&base, "selected").expect("intent");
+  operation.commit_intent(Vec::new(), "b".repeat(40)).expect("tree");
+  assert!(!operation.can_cancel(), "pending mutation must reconcile");
+  assert_eq!(operation.begin_cancel(&base), Err(LocalError::WrongPhase));
+  let committed = checkout('b');
+  operation.commit_finished(committed.clone()).expect("completed");
+  assert!(operation.can_cancel());
+  assert_eq!(operation.begin_cancel(&base), Err(LocalError::Stale));
+  operation.begin_cancel(&committed).expect("release intent");
+  operation.cancellation_verified().expect("release");
+  assert!(!operation.reserves_checkout());
+  assert_eq!(operation.commit_tree(), Some("b".repeat(40).as_str()));
+  assert_eq!(operation.reviewed(), &committed);
+}
+
+#[test]
+fn local_integration_checked_release_invalidates_approval_and_cannot_cancel_pending_merge() {
+  let base = checkout('a');
+  let mut operation = LocalOperation::new(RunId::generate(), base.clone()).expect("review");
+  operation.prepared(base.clone()).expect("prepare");
+  operation.begin_sync(&base).expect("sync");
+  operation.own_task(checkout('b'));
+  operation.begin_check().expect("check");
+  let exact = CheckedResult {
+    base: base.clone(),
+    result: checkout('b'),
+  };
+  operation.checked_result(exact.clone()).expect("passed");
+  operation.approve(&exact).expect("private domain decision");
+  let mut pending = operation.clone();
+  pending.begin_merge(&exact).expect("merge intent");
+  assert!(!pending.can_cancel());
+  assert_eq!(pending.begin_cancel(&base), Err(LocalError::WrongPhase));
+  operation.begin_cancel(&base).expect("cancel checked preparation");
+  operation.cancellation_verified().expect("release");
+  assert!(operation.checked().is_none());
+  assert_eq!(operation.begin_merge(&exact), Err(LocalError::Stale));
+  assert!(!operation.reserves_checkout());
+}

@@ -477,20 +477,26 @@ impl LocalOperation {
     Ok(())
   }
 
-  pub fn begin_cancel(&mut self, current: &Checkout) -> Result<(), LocalError> {
-    if self.merged.is_some()
-      || !matches!(
+  /// Completed preparation can be canceled without undoing commits or removing retained originals.
+  pub fn can_cancel(&self) -> bool {
+    self.merged.is_none()
+      && matches!(
         self.phase,
         LocalPhase::Review | LocalPhase::Prepared | LocalPhase::AwaitingApproval | LocalPhase::Canceling
       )
-    {
+      && self.pending_resolution.is_none()
+  }
+
+  pub fn begin_cancel(&mut self, current: &Checkout) -> Result<(), LocalError> {
+    if !self.can_cancel() {
       return Err(LocalError::WrongPhase);
     }
-    let saved = self.preservation.as_ref().ok_or(LocalError::NotVerified)?;
-    if !saved.verified || !saved.retained || current.head != saved.original.head {
+    self.reviewed.ensure_current(current)?;
+    if let Some(saved) = &self.preservation
+      && (!saved.verified || !saved.retained || current.head != saved.original.head)
+    {
       return Err(LocalError::Stale);
     }
-    self.reviewed.ensure_current(current)?;
     self.checked = None;
     self.approved = None;
     self.phase = LocalPhase::Canceling;

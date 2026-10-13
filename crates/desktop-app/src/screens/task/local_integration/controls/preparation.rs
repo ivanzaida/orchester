@@ -15,23 +15,7 @@ impl Inspector {
       )
       .into(),
     ];
-    if props
-      .view
-      .operation
-      .as_ref()
-      .is_some_and(|operation| operation.preservation().is_some())
-    {
-      actions.push(
-        mode_button(
-          ctx,
-          props,
-          "local-review-cancel",
-          "local_integration.cancelPreservation",
-          Mode::Cancel,
-        )
-        .into(),
-      );
-    }
+    actions.extend(self.cancellation(ctx, props, "local-review-cancel"));
     actions
   }
 
@@ -95,24 +79,19 @@ impl Inspector {
         .into(),
       );
     }
-    if props
-      .view
-      .operation
-      .as_ref()
-      .and_then(|operation| operation.preservation())
-      .is_some_and(|saved| saved.retained)
-    {
-      actions.push(
-        mode_button(
-          ctx,
-          props,
-          "local-review-cancel-partial",
-          "local_integration.cancelPreservation",
-          Mode::Cancel,
-        )
-        .into(),
-      );
-    }
+    actions.extend(self.cancellation(ctx, props, "local-review-cancel-partial"));
     actions
+  }
+  pub(super) fn cancellation(&self, ctx: &Ctx, props: &Props, id: &str) -> Option<Element> {
+    let operation = props.view.operation.as_ref()?;
+    if !operation.can_cancel() || !operation.reserves_checkout() {
+      return None;
+    }
+    let label = if operation.preservation().is_some() {
+      "local_integration.cancelPreservation"
+    } else {
+      "local_integration.release"
+    };
+    Some(mode_button(ctx, props, id, label, Mode::Cancel).into())
   }
 }

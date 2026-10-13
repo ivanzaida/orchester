@@ -3,9 +3,21 @@ use orchester_core::integration::local::{LocalError, LocalPhase, LocalRecoverySt
 use super::{IntegrationError, LocalIntegration};
 
 impl LocalIntegration {
-  /// Cancel before merge restores verified originals to the exact unchanged base. No task commit is merged.
+  /// Restore preserved originals, or release completed preparation without changing either checkout.
   pub fn cancel_preservation(&mut self) -> Result<(), IntegrationError> {
     let actual = self.main.snapshot()?;
+    if self.operation.preservation().is_none() {
+      if self.operation.owned_task().is_some() {
+        let task = self.task_git()?.snapshot()?;
+        self.operation.ensure_task_owned(&task)?;
+        if !task.clean() {
+          return Err(LocalError::ForeignOperation.into());
+        }
+      }
+      self.operation.begin_cancel(&actual)?;
+      self.operation.cancellation_verified()?;
+      return self.save();
+    }
     if self.operation.phase() != LocalPhase::Canceling {
       self.operation.begin_cancel(&actual)?;
       self.save()?;

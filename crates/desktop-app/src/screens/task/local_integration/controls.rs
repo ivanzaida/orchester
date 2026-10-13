@@ -231,7 +231,7 @@ impl Inspector {
         }
         _ => true,
       };
-    let stale = phase == LocalPhase::AwaitingApproval && !props.view.checked_current;
+    let stale = matches!(action, Action::Merge { .. }) && !props.view.checked_current;
     let unresolved = matches!(action, Action::Continue | Action::FinishRestore) && !props.view.conflicts.is_empty();
     panel = panel.child(button(
       ctx,
@@ -260,6 +260,9 @@ impl Inspector {
 
   fn additional_decisions(&self, ctx: &Ctx, props: &Props, (mode, phase): (&Mode, LocalPhase)) -> Vec<Element> {
     let mut actions = Vec::new();
+    if phase == LocalPhase::AwaitingApproval && *mode == Mode::Review {
+      actions.extend(self.cancellation(ctx, props, "local-review-cancel"));
+    }
     if phase == LocalPhase::TaskConflicts && *mode == Mode::Review {
       actions.push(mode_button(ctx, props, "local-review-abort", "local_integration.abort", Mode::Abort).into());
     }
@@ -448,6 +451,13 @@ fn decision(props: &Props, mode: &Mode, phase: LocalPhase) -> Option<Decision> {
         name: props.name.get(),
         paths: props.selected.get().0,
       },
+    ),
+    Mode::Cancel if props.view.operation.as_ref()?.preservation().is_none() => (
+      "local_integration.releaseTitle",
+      "local_integration.releaseBody",
+      "local_integration.releaseAgree",
+      "local_integration.release",
+      Action::Cancel,
     ),
     Mode::Cancel => (
       "local_integration.cancelTitle",

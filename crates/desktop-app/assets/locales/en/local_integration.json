@@ -112,7 +112,12 @@
     "cancelTitle": "Restore preserved local changes before merge?",
     "cancelBody": "Restore verified originals and staging to this unchanged base. The task is not merged; recovery stays retained until cleanup.",
     "cancelAgree": "I reviewed the unchanged base and restoration scope.",
-    "canceled": "Integration canceled · local originals restored",
+    "canceled": "Integration canceled",
+    "release": "Cancel integration",
+    "releaseTitle": "Cancel this integration?",
+    "releaseBody": "Release this operation's checkout reservation. Completed commits and all checkout content stay in place. The task is not merged; retained commit originals and journal metadata remain.",
+    "releaseAgree": "I reviewed the cancellation scope. Completed commits and checkout content will be retained.",
+    "priorOperation": "Run #{{run}} still reserves this checkout. Cancel or recover its local integration before continuing the latest run.",
     "error": {
       "draftStale": "The saved candidate belongs to an earlier file/source identity. It remains retained; it cannot resolve a different file or newer checkout.",
       "metadata": "Sensitive checkout metadata cannot be displayed. File names, branches, paths and original content remain unchanged.",
