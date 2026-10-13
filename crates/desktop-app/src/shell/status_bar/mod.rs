@@ -14,7 +14,9 @@ mod approvals;
 mod counts;
 mod facts;
 mod item;
+mod mcp;
 mod operations;
+mod plan_limits;
 mod runner;
 
 use lurq::{
@@ -24,25 +26,34 @@ use lurq::{
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Row, Spacer},
+  core::ElementRef,
   layout::{Alignment, layout_kind::ShrinkLimit},
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::ProjectId;
+use orchester_core::{connection::plan_limits::PlanReadings, id::ProjectId};
 use orchester_workspace::activity::{
   Activity, ActivityLog,
   bar::{self, ActivitySlot},
 };
 
-pub use self::facts::{BarAction, BarFacts, Dispatch, ProjectFacts, ReadFailure, RunnerFacts, Stopping};
 use self::{
   act::Stopper,
   item::{frame, give_way, glyph, item, label},
 };
+pub use self::{
+  facts::{AccountLimits, BarAction, BarFacts, Dispatch, ProjectFacts, ReadFailure, RunnerFacts, Stopping},
+  item::dot,
+  mcp::from_scratch,
+};
 use crate::{
-  mcp::McpStatus,
+  mcp::{McpLink, McpStatus},
   project::{ProjectFeed, ProjectState, Projects, TasksState},
   routes::Route,
-  services::Services,
+  services::{
+    Services,
+    accounts::{self, Accounts},
+    plan_limits as readings,
+  },
   theme::ExtraColor,
   ui::{icon::Icon, tooltip::Truncated},
 };
@@ -68,10 +79,11 @@ impl Component for StatusBar {
     // First, before the render's streams: lurq keeps a component's futures by the order it asks for them.
     let stop = self.stopper.action(ctx);
     let services = Services::of(ctx);
-    let mcp = ctx
-      .use_context::<McpStatus>()
-      .expect("the root provides the MCP status before mounting the shell");
+    let link = ctx
+      .use_context::<McpLink>()
+      .expect("the root provides the MCP server's link before mounting the shell");
     let log = log(ctx, &services.activity);
+    let mcp = mcp_status(ctx, &link);
     let projects = Projects::of(ctx);
     let shown = Route::parse(&ctx.route_path())
       .ok()
@@ -89,8 +101,14 @@ impl Component for StatusBar {
         .unwrap_or_default();
       self.stopper.stopping(&stop, &facts.repo_root, &runs)
     });
+    let readings = readings::readings(ctx);
+    let listed = accounts::listed(ctx);
+    let used = used_accounts(ctx, shown.as_ref().map(|(facts, _)| facts.repo_root.clone()));
     let facts = BarFacts {
-      project: shown.map(|(facts, _)| facts),
+      project: shown.map(|(mut facts, _)| {
+        facts.limits = limits(&listed, &readings, &used);
+        facts
+      }),
       log,
       mcp,
       stopping,
@@ -120,8 +138,55 @@ fn shown(projects: &Projects, project: ProjectId) -> Option<(ProjectFacts, Proje
     tasks,
     usage: feed.usage.get(),
     read_failure,
+    limits: Vec::new(),
   };
   Some((facts, feed))
+}
+
+/// The accounts the project's connections run on, by id, read when the project shows.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Used(Vec<orchester_core::id::AgentAccountId>);
+
+impl DevtoolsInspectable for Used {}
+
+fn used_accounts(ctx: &mut Ctx, repo_root: Option<std::path::PathBuf>) -> Used {
+  ctx
+    .future(repo_root, |repo_root| async move {
+      let Some(repo_root) = repo_root else {
+        return Ok(Used::default());
+      };
+      orchester_workspace::background::run(move || {
+        let connections = orchester_workspace::connections::data::ProjectConnections::load_in(&repo_root)
+          .map_err(|error| orchester_workspace::messages::store_error(&error))?;
+        let mut used: Vec<_> = connections
+          .connections
+          .iter()
+          .filter_map(|connection| connection.account().id(connection.provider()))
+          .collect();
+        used.dedup();
+        Ok::<_, orchester_workspace::messages::Message>(Used(used))
+      })
+      .await?
+    })
+    .state()
+    .get()
+    .data
+    .unwrap_or_default()
+}
+
+/// The used accounts' readings, in the order the accounts are listed (by CLI, Default first).
+fn limits(listed: &Accounts, readings: &PlanReadings, used: &Used) -> Vec<AccountLimits> {
+  listed
+    .0
+    .iter()
+    .filter(|account| used.0.contains(&account.id()))
+    .filter_map(|account| {
+      Some(AccountLimits {
+        account: account.clone(),
+        reading: readings.of_account(account.id())?.clone(),
+      })
+    })
+    .collect()
 }
 
 /// The session's activity, whenever it changes.
@@ -141,6 +206,20 @@ fn log(ctx: &mut Ctx, activity: &Activity) -> ActivityLog {
   stream.state().get().data.unwrap_or_default()
 }
 
+/// The app's MCP server's status, whenever it changes.
+pub fn mcp_status(ctx: &mut Ctx, link: &McpLink) -> McpStatus {
+  let stream = ctx.stream(link.clone(), |link, emitter: StreamEmitter<McpStatus, ()>| async move {
+    let mut changes = link.changes();
+    loop {
+      let status = changes.borrow_and_update().clone();
+      if !emitter.emit(status) || changes.changed().await.is_err() {
+        return;
+      }
+    }
+  });
+  stream.state().get().data.unwrap_or_else(|| link.status())
+}
+
 /// What [`StatusBarView`] shows and where its actions go.
 #[derive(Clone)]
 pub struct BarProps {
@@ -158,13 +237,16 @@ impl PartialEq for BarProps {
 impl DevtoolsInspectable for BarProps {}
 
 /// The status bar as `BarProps` says.
-pub struct StatusBarView;
+pub struct StatusBarView {
+  /// The bar, which the MCP item's popover opens over.
+  bar: ElementRef,
+}
 
 impl Component for StatusBarView {
   type Props = BarProps;
 
-  fn create(_ctx: &mut Ctx) -> Self {
-    Self
+  fn create(ctx: &mut Ctx) -> Self {
+    Self { bar: ctx.element_ref() }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -209,9 +291,13 @@ impl Component for StatusBarView {
         &dispatch,
       ));
     }
-    right.extend(counts::app(ctx, facts.mcp));
+    if let Some(project) = project {
+      right.extend(plan_limits::item(ctx, &project.limits, &self.bar));
+    }
+    right.extend(counts::app(ctx, (&facts.mcp, &self.bar), &dispatch));
     Row::new()
       .id("status-bar")
+      .ref_element(self.bar.clone())
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(STATUS_BAR_HEIGHT))
       .padding(Padding::horizontal(SpacingSize::Sm))

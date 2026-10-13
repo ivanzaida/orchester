@@ -221,6 +221,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(icons)
       .chain(super::startup::typography(palette))
       .chain(super::settings::typography(palette))
+      .chain(super::accounts::typography(palette))
       .chain(super::task::typography(palette))
       .chain(super::decisions::typography(palette))
       .chain(super::shell::typography(palette))
@@ -233,6 +234,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::connections::typography(palette))
       .chain(super::secrets::typography(palette))
       .chain(super::agents::typography(palette))
+      .chain(super::skills::typography(palette))
       .collect(),
   }
 }

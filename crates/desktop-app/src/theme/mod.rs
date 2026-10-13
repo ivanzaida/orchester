@@ -9,6 +9,7 @@
 //! selection, scrim, conversation, code and diff colors, `display` type, `radius_full`): the screens
 //! that need them come next and must find them here rather than add near-duplicates.
 
+mod accounts;
 pub mod agents;
 mod cards;
 mod code;
@@ -27,6 +28,7 @@ mod secrets;
 mod settings;
 mod shadow;
 mod shell;
+pub mod skills;
 mod startup;
 mod task;
 mod task_form;
@@ -41,12 +43,14 @@ use lurq::{
 };
 
 pub use self::{
+  accounts::{AccountsSpacing, AccountsText},
   cards::{CardsSpacing, CardsText},
   code::{CodeText, token_color},
   composer::{ComposerColor, ComposerRadius, ComposerText},
   connections::{ConnectionsSpacing, ConnectionsText},
   conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText},
   decisions::{DecisionSpacing, DecisionText},
+  fonts::mono_space,
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   palette::{ExtraColor, Mode},
@@ -81,6 +85,7 @@ pub fn install(app: &mut App, mode: Mode) {
   agents::install(theme);
   startup::install(theme);
   settings::install(theme);
+  accounts::install(theme);
   task::install(theme);
   decisions::install(theme);
   task_form::install(theme);
@@ -88,6 +93,7 @@ pub fn install(app: &mut App, mode: Mode) {
   connections::install(theme);
   secrets::install(theme);
   shell::install(theme);
+  skills::install(theme);
   lifecycle::install(theme);
   conversation::install(theme);
   cards::install(theme);

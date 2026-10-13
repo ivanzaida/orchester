@@ -51,6 +51,9 @@ fn every_route() -> Vec<Route> {
         .with_search("  spaced  ")
         .with_highlight(key("KON-13")),
     )),
+    at(ProjectPage::NewSkill),
+    at(ProjectPage::Skill(PROJECT.parse().expect("a skill id"))),
+    at(ProjectPage::ImportSkills),
     at(ProjectPage::NewPipeline),
     at(ProjectPage::NewEmptyPipeline),
     at(ProjectPage::Pipeline(PROJECT.parse().expect("a resource id"))),

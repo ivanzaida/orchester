@@ -32,6 +32,7 @@ fn limits_readings(percent: f64, extra: bool, expired: bool) -> orchester_core::
   for provider in AgentProvider::CLI {
     readings.observe(LimitReading {
       provider,
+      account: None,
       at: now,
       limits: PlanLimits {
         windows: vec![
@@ -219,6 +220,7 @@ fn status_bar_plan_limits_partial_claude_keeps_window_ages() {
   for (minutes, percent, at) in [(10080, 42.0, old), (300, 12.0, now)] {
     readings.observe(LimitReading {
       provider: AgentProvider::ClaudeCodeCli,
+      account: None,
       at,
       limits: PlanLimits {
         windows: vec![LimitWindow::new(minutes, Some(percent), None, LimitState::Normal, false).expect("window")],
@@ -256,6 +258,7 @@ fn status_bar_plan_limits_headers_order_and_combined_account_rows() {
   let mut readings = PlanReadings::default();
   readings.observe(LimitReading {
     provider: AgentProvider::ClaudeCodeCli,
+    account: None,
     at: now,
     limits: PlanLimits {
       windows: vec![LimitWindow::new(10080, Some(96.0), None, LimitState::Near, false).expect("window")],
@@ -296,6 +299,7 @@ fn status_bar_plan_limits_headers_order_and_combined_account_rows() {
   ] {
     readings.observe(LimitReading {
       provider,
+      account: None,
       at: now,
       limits: PlanLimits {
         windows: vec![LimitWindow::new(minutes, Some(percent), None, LimitState::Normal, extra).expect("window")],
@@ -340,6 +344,7 @@ fn status_bar_plan_limits_credit_block_names_its_reason_without_a_reset() {
   let mut readings = PlanReadings::default();
   readings.observe(LimitReading {
     provider: AgentProvider::CodexCli,
+    account: None,
     at: now,
     limits: PlanLimits {
       windows: vec![LimitWindow::new(300, Some(40.0), Some(reset), LimitState::Normal, false).expect("window")],
@@ -377,6 +382,7 @@ fn status_bar_plan_limits_reached_without_its_use_shows_no_percentage() {
   let mut readings = PlanReadings::default();
   readings.observe(LimitReading {
     provider: AgentProvider::ClaudeCodeCli,
+    account: None,
     at: now,
     limits: PlanLimits {
       windows: vec![LimitWindow::new(300, None, Some(reset), LimitState::Reached, false).expect("window")],
@@ -409,6 +415,7 @@ fn status_bar_plan_limits_percent_column_and_short_reset() {
   let mut readings = PlanReadings::default();
   readings.observe(LimitReading {
     provider: AgentProvider::ClaudeCodeCli,
+    account: None,
     at: now,
     limits: PlanLimits {
       windows: vec![LimitWindow::new(300, Some(7.0), Some(reset), LimitState::Normal, false).expect("window")],
@@ -438,6 +445,7 @@ fn status_bar_plan_limits_block_without_its_window_names_no_reset() {
   let mut readings = PlanReadings::default();
   readings.observe(LimitReading {
     provider: AgentProvider::ClaudeCodeCli,
+    account: None,
     at: now,
     limits: PlanLimits {
       windows: vec![LimitWindow::new(10080, Some(40.0), Some(reset), LimitState::Normal, false).expect("window")],
@@ -474,6 +482,7 @@ fn status_bar_plan_limits_whole_hours_reset_reads_without_minutes() {
   let mut readings = PlanReadings::default();
   readings.observe(LimitReading {
     provider: AgentProvider::CodexCli,
+    account: None,
     at: now,
     limits: PlanLimits {
       windows: vec![LimitWindow::new(300, Some(7.0), Some(reset), LimitState::Normal, false).expect("window")],
@@ -502,6 +511,7 @@ fn status_bar_plan_limits_reached_hint_names_the_reset_day() {
   let mut readings = PlanReadings::default();
   readings.observe(LimitReading {
     provider: AgentProvider::CodexCli,
+    account: None,
     at: now,
     limits: PlanLimits {
       windows: vec![LimitWindow::new(10080, Some(100.0), Some(reset), LimitState::Normal, false).expect("window")],
@@ -537,6 +547,7 @@ fn status_bar_plan_limits_refusal_without_a_window_shows_its_own_time() {
   let mut readings = PlanReadings::default();
   readings.observe(LimitReading {
     provider: AgentProvider::ClaudeCodeCli,
+    account: None,
     at: earlier,
     limits: PlanLimits {
       windows: vec![LimitWindow::new(10080, Some(100.0), Some(reset), LimitState::Reached, false).expect("window")],
@@ -547,6 +558,7 @@ fn status_bar_plan_limits_refusal_without_a_window_shows_its_own_time() {
   });
   readings.observe(LimitReading {
     provider: AgentProvider::ClaudeCodeCli,
+    account: None,
     at: now,
     limits: PlanLimits {
       windows: Vec::new(),

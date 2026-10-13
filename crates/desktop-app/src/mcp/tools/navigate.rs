@@ -59,7 +59,8 @@ fn schema() -> Value {
       },
       "selected": { "type": "string", "description": "connections: the id of the connection its inspector shows." },
       "kind": { "type": "string", "enum": kinds, "description": "new_connection: what it adds." },
-      "connection": { "type": "string", "description": "edit_connection: the MCP server's id." },
+      "connection": { "type": "string", "description": "edit_connection: the connection's id: an MCP server's form, or an agent CLI connection's account." },
+      "skill": { "type": "string", "description": "skills: the skill id, new, or import; omitted opens the library." },
       "tool": { "type": "string", "description": "tools: the tool’s id, or new for a command draft; omitted opens the library." },
       "from": {
         "type": "string",
@@ -110,7 +111,7 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
     Screen::Pipelines => ProjectPage::Pipelines,
     Screen::Agents => ProjectPage::Agents,
     Screen::Instructions => ProjectPage::Instructions,
-    Screen::Skills => ProjectPage::Skills,
+    Screen::Skills => skills_page(args)?,
     Screen::Tools => tools_page(args)?,
     Screen::Secrets => ProjectPage::Secrets,
     Screen::Connections => ProjectPage::Connections(connections_view(args)?),
@@ -131,6 +132,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Task => &["project", "key", "tab", "file", "from"],
     Screen::Connections => &["project", "tab", "selected"],
     Screen::Tools => &["project", "tool", "tab"],
+    Screen::Skills => &["project", "skill"],
     Screen::NewConnection => &["project", "kind"],
     Screen::EditConnection => &["project", "connection"],
     Screen::NewTask
@@ -139,7 +141,6 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     | Screen::Pipelines
     | Screen::Agents
     | Screen::Instructions
-    | Screen::Skills
     | Screen::Secrets
     | Screen::ProjectSettings => &["project"],
   }
@@ -279,4 +280,18 @@ fn task_view(args: &Map<String, Value>) -> Result<TaskView, ToolError> {
     reason: "the path is empty".to_owned(),
   })?;
   Ok(TaskView::Changes(Some(file)))
+}
+fn skills_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
+  match string(args, "skill")? {
+    None => Ok(ProjectPage::Skills),
+    Some("new") => Ok(ProjectPage::NewSkill),
+    Some("import") => Ok(ProjectPage::ImportSkills),
+    Some(id) => id
+      .parse()
+      .map(ProjectPage::Skill)
+      .map_err(|e: uuid::Error| ToolError::InvalidParam {
+        param: "skill",
+        reason: e.to_string(),
+      }),
+  }
 }

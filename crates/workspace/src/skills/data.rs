@@ -37,6 +37,7 @@ pub struct SkillEntry {
   pub body: Skill,
   pub state: VersionState,
   pub last_published: Option<Timestamp>,
+  pub draft_saved_at: Option<Timestamp>,
   /// Where it was imported from, if it was made from the repository.
   pub origin: Option<RepositoryOrigin>,
 }
@@ -50,6 +51,7 @@ impl SkillEntry {
     origin: Option<RepositoryOrigin>,
   ) -> Option<Self> {
     let published = latest.map(Version::number);
+    let draft_saved_at = draft.as_ref().map(Draft::updated_at);
     let (body, state) = match (draft, latest) {
       (Some(draft), _) if draft.based_on() == published => (draft.body().clone(), VersionState::Draft { published }),
       (Some(draft), _) => (
@@ -69,6 +71,7 @@ impl SkillEntry {
       body,
       state,
       last_published: latest.map(Version::published_at),
+      draft_saved_at,
       origin,
     })
   }

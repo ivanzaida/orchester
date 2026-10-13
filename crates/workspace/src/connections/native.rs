@@ -209,6 +209,8 @@ fn connection_failure(error: &ConnectionError) -> Message {
     | ConnectionError::NotAgent(_)
     | ConnectionError::NotGitHub(_)
     | ConnectionError::CheckKindMismatch(_)
-    | ConnectionError::EndpointMismatch(_) => Message::new("errors.storage"),
+    | ConnectionError::EndpointMismatch(_)
+    | ConnectionError::NoAccounts(_)
+    | ConnectionError::AccountOfOtherCli => Message::new("errors.storage"),
   }
 }

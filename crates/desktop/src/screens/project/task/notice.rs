@@ -266,6 +266,14 @@ fn stopped_at_step_budget(ctx: &Ctx, run: &RunView, execution: StepExecutionId) 
 /// "Stopped at the token limit · checkpoint 7c1e9f2" (`EzWLg`): what was used, and whether the
 /// work at the limit was committed.
 fn stopped_at_limit(ctx: &Ctx, run: &RunView, limit: RunLimit) -> (Icon, Arc<str>, Arc<str>) {
+  // This app knows no accounts: a run stopped at an account's plan limit reads as paused.
+  if matches!(limit, RunLimit::PlanLimit { .. }) {
+    return (
+      Icon::OctagonPause,
+      ctx.t("runs.summary.notice.pausedNoCheckpointTitle"),
+      ctx.t("runs.summary.notice.pausedDetail"),
+    );
+  }
   if limit == RunLimit::GroupBudget {
     return (
       Icon::OctagonPause,
@@ -275,10 +283,8 @@ fn stopped_at_limit(ctx: &Ctx, run: &RunView, limit: RunLimit) -> (Icon, Arc<str
   }
   let checkpoint = saved_checkpoint(run);
   let (title, titled) = match limit {
-    RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => {
-      ("runs.limit.tokenTitle", "runs.limit.tokenTitleCheckpoint")
-    }
     RunLimit::Time => ("runs.limit.timeTitle", "runs.limit.timeTitleCheckpoint"),
+    _ => ("runs.limit.tokenTitle", "runs.limit.tokenTitleCheckpoint"),
   };
   let title = match &checkpoint {
     Some(checkpoint) => ctx.t_args(titled, [("checkpoint", checkpoint.as_str())]),
@@ -290,7 +296,11 @@ fn stopped_at_limit(ctx: &Ctx, run: &RunView, limit: RunLimit) -> (Icon, Arc<str
     .and_then(|step| step.agent.clone())
     .unwrap_or_else(|| ctx.t("runs.limit.theAgent"));
   let (used, of) = match limit {
-    RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => (
+    RunLimit::Tokens
+    | RunLimit::GroupBudget
+    | RunLimit::DailyBudget
+    | RunLimit::StepBudget { .. }
+    | RunLimit::PlanLimit { .. } => (
       compact_tokens(run.run.used().get()),
       // Only the run's own token or time limit gets this far: the group's budget is answered above,
       // and the daily budget and a step's budget have notices of their own. No runner stops a run
@@ -313,16 +323,12 @@ fn stopped_at_limit(ctx: &Ctx, run: &RunView, limit: RunLimit) -> (Icon, Arc<str
   // The time limit's count decides the plural: "of its 1 minute", "of its 30 minutes".
   let one = of == "1";
   let key = match (limit, checkpoint.is_some(), one) {
-    (RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::StepBudget { .. }, true, _) => {
-      "runs.limit.tokenDetail"
-    }
-    (RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::StepBudget { .. }, false, _) => {
-      "runs.limit.tokenDetailUnsaved"
-    }
     (RunLimit::Time, true, true) => "runs.limit.timeDetail.one",
     (RunLimit::Time, true, false) => "runs.limit.timeDetail.other",
     (RunLimit::Time, false, true) => "runs.limit.timeDetailUnsaved.one",
     (RunLimit::Time, false, false) => "runs.limit.timeDetailUnsaved.other",
+    (_, true, _) => "runs.limit.tokenDetail",
+    (_, false, _) => "runs.limit.tokenDetailUnsaved",
   };
   let text = ctx.t_args(
     key,

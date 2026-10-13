@@ -3,7 +3,9 @@
 //! Must stay free of UI and transport dependencies: the desktop app uses it
 //! directly today, and a future server will share it.
 
+pub mod account;
 pub mod agent_files;
+pub mod app_mcp;
 pub mod appearance;
 pub mod blob;
 pub mod code_index;

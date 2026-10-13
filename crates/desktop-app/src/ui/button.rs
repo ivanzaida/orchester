@@ -12,7 +12,7 @@ use lurq::{
     events::mouse_event::MouseEvent,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Text},
+  components::{Button, Row, Text},
   core::ElementRef,
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
@@ -107,6 +107,8 @@ enum Hold {
   Disabled,
   /// Its feature is not built or not allowed, for this reason.
   Unavailable(Arc<str>),
+  /// An unavailable action whose design retains its ordinary glyph (Skills Publish).
+  UnavailableWithIcon(Arc<str>),
 }
 
 pub struct ActionButton {
@@ -120,6 +122,8 @@ pub struct ActionButton {
   /// As wide as its parent, its icon and label centered (`Allow retry` `ae0Pi`).
   fill: bool,
   compact: bool,
+  /// 24 high instead of 28, as a Copy inside a command row (`PEnj5`).
+  small: bool,
   bounded: bool,
   element: Option<ElementRef>,
 }
@@ -137,6 +141,7 @@ impl ActionButton {
       focus: Focus::Pointer,
       fill: false,
       compact: false,
+      small: false,
       bounded: false,
       element: None,
     }
@@ -173,6 +178,13 @@ impl ActionButton {
     self
   }
 
+  /// Preserve the action glyph while keeping the same unavailable reason and inert behavior.
+  /// Skills header p4RJw keeps its upload mark when publication cannot be used.
+  pub fn unavailable_with_icon(mut self, reason: impl Into<Arc<str>>) -> Self {
+    self.hold = Some(Hold::UnavailableWithIcon(reason.into()));
+    self
+  }
+
   /// As wide as its parent, its icon and label centered.
   pub fn fill_width(mut self) -> Self {
     self.fill = true;
@@ -182,6 +194,12 @@ impl ActionButton {
   /// A 22-high helper action with a 12 icon and note-size label (ZdkB0).
   pub fn compact(mut self) -> Self {
     self.compact = true;
+    self
+  }
+
+  /// 24 high, its icon and label as a button's: an action inside a command row (`Command row` `PEnj5`).
+  pub fn small(mut self) -> Self {
+    self.small = true;
     self
   }
 
@@ -206,7 +224,7 @@ impl ActionButton {
   const fn state(&self) -> &'static str {
     match (&self.hold, &self.action) {
       (Some(Hold::Loading), _) => "loading",
-      (Some(Hold::Unavailable(_)), _) => "unavailable",
+      (Some(Hold::Unavailable(_) | Hold::UnavailableWithIcon(_)), _) => "unavailable",
       (Some(Hold::Disabled), _) | (None, None) => "disabled",
       (None, Some(_)) => "enabled",
     }
@@ -217,23 +235,47 @@ impl ActionButton {
     match self.hold {
       Some(Hold::Loading) => Some(Icon::LoaderCircle),
       Some(Hold::Unavailable(_)) => Some(Icon::Lock),
-      Some(Hold::Disabled) | None => self.icon,
+      Some(Hold::Disabled | Hold::UnavailableWithIcon(_)) | None => self.icon,
     }
+  }
+}
+
+impl ActionButton {
+  /// Its height, and the sizes of its icon and label.
+  fn metrics(&self) -> (ControlHeight, IconSize, TypographyStyle) {
+    if self.compact {
+      (
+        ControlHeight::Helper,
+        IconSize::Sm,
+        crate::theme::ExtraTypography::Note.role(),
+      )
+    } else if self.small {
+      (ControlHeight::Sm, IconSize::Md, TypographyStyle::Button)
+    } else {
+      (ControlHeight::Md, IconSize::Md, TypographyStyle::Button)
+    }
+  }
+
+  /// The room the button takes, laid out as it is but as plain words: no role, name, focus or pointer. An unseen
+  /// sizer for a slot two labels share (Show and Hide). lurq cannot leave an element out of the accessibility tree,
+  /// so the sizer's words are there as plain text.
+  pub fn room(self) -> Row {
+    let (height, glyph, label) = self.metrics();
+    let color = self.kind.content();
+    Row::new()
+      .height(Dimension::Px(height.value()))
+      .padding(Padding::horizontal(SpacingSize::Md))
+      .spacing(ExtraSpacing::Snug.role())
+      .align_items(Alignment::Center)
+      .with_children(self.lead().map(|lead| icon(lead, glyph, color.clone())))
+      .child(Text::new(&self.label).variant(label).color(color).nowrap())
   }
 }
 
 impl From<ActionButton> for Element {
   fn from(button: ActionButton) -> Self {
     let color = button.kind.content();
-    let (height, glyph, label) = if button.compact {
-      (
-        ControlHeight::Helper,
-        IconSize::Sm,
-        crate::theme::ExtraTypography::Note.role(),
-      )
-    } else {
-      (ControlHeight::Md, IconSize::Md, TypographyStyle::Button)
-    };
+    let (height, glyph, label) = button.metrics();
     let mut frame = Button::empty()
       .id(button.id.clone())
       .height(Dimension::Px(height.value()))
@@ -278,7 +320,7 @@ impl From<ActionButton> for Element {
     if let Some(element) = button.element {
       frame = frame.ref_element(element);
     }
-    if let Some(Hold::Unavailable(reason)) = &button.hold {
+    if let Some(Hold::Unavailable(reason) | Hold::UnavailableWithIcon(reason)) = &button.hold {
       frame = frame.describe("reason", reason.clone());
     }
     match (button.hold, button.action) {

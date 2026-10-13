@@ -9,7 +9,7 @@ use std::{
 };
 
 use orchester_core::{
-  id::{IdempotencyKey, ResourceId, RunId, TaskId},
+  id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
   integration::checked_out_branch,
   resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, Tool, Version},
   revision::Revision,
@@ -37,6 +37,9 @@ pub(super) struct Prepared {
   pub(super) worktree: PathBuf,
   /// `false` when an earlier request with the same key already started the run.
   pub(super) execute: bool,
+  /// A step a person asked to start on its account now, though the account's last reading says its plan limit
+  /// holds: it starts once, and stops again if the CLI refuses.
+  pub(super) try_at_plan_limit: Option<StepExecutionId>,
 }
 
 pub(super) fn prepare_first(
@@ -176,6 +179,7 @@ fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) ->
       task,
       worktree,
       execute: false,
+      try_at_plan_limit: None,
     });
   }
   check_readiness(db, run.task())?;
@@ -196,6 +200,7 @@ fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) ->
     task,
     worktree,
     execute: true,
+    try_at_plan_limit: None,
   })
 }
 
@@ -234,7 +239,14 @@ impl Prepared {
       task,
       worktree,
       execute: true,
+      try_at_plan_limit: None,
     })
+  }
+
+  /// This continuation starting `execution` on its account once, though its plan limit was last reported reached.
+  pub(super) const fn trying_at_plan_limit(mut self, execution: StepExecutionId) -> Self {
+    self.try_at_plan_limit = Some(execution);
+    self
   }
 }
 

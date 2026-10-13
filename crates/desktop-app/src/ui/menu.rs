@@ -76,6 +76,8 @@ pub struct MenuItem {
   icon: Option<Icon>,
   shortcut: Option<Arc<str>>,
   detail: Option<Arc<str>>,
+  /// The detail says what is wrong with the choice.
+  warning: bool,
   chosen: bool,
   focus: Focus,
   choice: Choice,
@@ -99,6 +101,7 @@ impl MenuItem {
       icon: None,
       shortcut: None,
       detail: None,
+      warning: false,
       chosen: false,
       focus: Focus::Pointer,
       choice,
@@ -119,6 +122,12 @@ impl MenuItem {
   /// What the row is, under its label.
   pub fn detail(mut self, detail: impl Into<Arc<str>>) -> Self {
     self.detail = Some(detail.into());
+    self
+  }
+
+  /// The detail says what is wrong with the choice: in `warning`.
+  pub fn warning_detail(mut self) -> Self {
+    self.warning = true;
     self
   }
 
@@ -149,7 +158,14 @@ impl MenuItem {
         .color(PaletteColor::TextPrimary)
         .render(ctx),
       )
-      .with_children(detail.map(|detail| Text::new(detail).variant(TypographyStyle::Caption)))
+      .with_children(detail.map(|detail| {
+        let detail = Text::new(detail).variant(TypographyStyle::Caption);
+        if self.warning {
+          detail.color(PaletteColor::Warning)
+        } else {
+          detail
+        }
+      }))
   }
 
   fn trailing(&self) -> Option<Element> {

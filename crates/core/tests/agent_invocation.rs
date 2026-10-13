@@ -11,7 +11,7 @@ use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   connection::{
     AgentProvider, compare_versions,
-    invocation::{CODEX_ISOLATION, CodexAgentFiles, CodexInvocation, Platform, agent_environment},
+    invocation::{CODEX_ISOLATION, CodexAgentFiles, CodexInvocation, Platform, agent_environment, is_agent_variable},
     rank_installed,
   },
   permission::NetworkAccess,
@@ -360,5 +360,40 @@ fn tokens_compact_follows_the_display_rule() {
   ];
   for (count, text) in cases {
     assert_eq!(compact_tokens(count), text, "{count}");
+  }
+}
+
+/// The token of the app's own MCP server (`docs/design/app-mcp-connection.md`, Security › Agents in runs) and
+/// the variable naming a QA copy's discovery folder stay with the person: a Codex agent starts without them,
+/// in any spelling Windows would match, on either platform.
+#[test]
+fn app_mcp_variables_are_not_passed_to_codex() {
+  let environment = [
+    ("PATH", "/usr/bin"),
+    ("ORCHESTER_APP_MCP_TOKEN", "app-token"),
+    ("Orchester_App_Mcp_Token", "app-token"),
+    ("ORCHESTER_APP_MCP_DISCOVERY", "/repo/.tmp/qa/task/mcp"),
+    ("CODEX_HOME", "/home/me/.codex"),
+  ];
+  for name in [
+    "ORCHESTER_APP_MCP_TOKEN",
+    "orchester_app_mcp_token",
+    "ORCHESTER_APP_MCP_DISCOVERY",
+  ] {
+    assert!(!is_agent_variable(name), "{name}");
+  }
+  for platform in [Platform::Windows, Platform::MacOs] {
+    let command = invocation(RepositoryAccess::Write, platform)
+      .command(
+        environment.map(|(name, value)| (OsString::from(name), OsString::from(value))),
+        &CommandEnvironment::default(),
+      )
+      .expect("unicode worktree");
+    let names: Vec<&str> = command.env().iter().map(|(name, _)| name.as_str()).collect();
+    assert_eq!(names, ["PATH", "CODEX_HOME"], "{platform:?}");
+    assert!(
+      !command.env().iter().any(|(_, value)| value == "app-token"),
+      "{platform:?}"
+    );
   }
 }

@@ -62,7 +62,8 @@ fn limits_optional_daily_migration_preserves_existing_finite_limits() {
     .expect("save finite limits");
   drop(db);
   let database = repo.path().join(".orchester").join("orchester.db");
-  let before = schema_version(&database) - 1;
+  // Before `optional_daily_budget`, which `agent_accounts` follows.
+  let before = schema_version(&database) - 2;
   let old = copied_at_version(&database, before);
   assert!(
     ProjectDb::create_at_version(&repo.path().join("empty-old"), before)
@@ -396,4 +397,68 @@ fn limits_update_changes_what_is_stored_in_one_transaction() {
   assert_eq!(db.update_project_limits(|_| None).expect("update"), None);
   let reopened = ProjectDb::open(repo.path()).expect("open");
   assert_eq!(reopened.project_limits().expect("limits"), changed.1);
+}
+
+#[test]
+fn limits_agent_accounts_migration_keeps_runs_and_stores_a_stop_at_a_plan_limit() {
+  let (repo, mut db, mut run, execution) = started_run();
+  drop(db);
+  let database = repo.path().join(".orchester").join("orchester.db");
+  let old = copied_at_version(&database, schema_version(&database) - 1);
+  db = ProjectDb::open(old.path()).expect("migrate");
+  assert_eq!(
+    db.run(run.id()).expect("read").expect("kept"),
+    run,
+    "the run comes through the rebuild"
+  );
+  let events = run
+    .stop_at_limit(RunLimit::PlanLimit { execution }, at(9_000))
+    .expect("stops");
+  db.append_events(&run, &events).expect("stored");
+  let stored = db.run(run.id()).expect("read").expect("stored");
+  assert_eq!(
+    stored.status(),
+    &RunStatus::Paused(PauseReason::LimitReached(RunLimit::PlanLimit { execution }))
+  );
+  assert_eq!(db.runs_at_plan_limit().expect("listed").len(), 1);
+}
+
+#[test]
+fn limits_a_reading_without_an_account_counts_for_the_default_of_its_own_cli_only() {
+  use orchester_core::{
+    account::AccountCli,
+    connection::{
+      AgentProvider,
+      plan_limits::{LimitReading, LimitState, LimitWindow, PlanLimits},
+    },
+  };
+  let (_repo, mut db, run, _) = started_run();
+  // A Claude Code reading from before accounts: it names no account.
+  let reading = LimitReading {
+    provider: AgentProvider::ClaudeCodeCli,
+    account: None,
+    at: at(5_000),
+    limits: PlanLimits {
+      windows: vec![
+        LimitWindow::new(300, Some(100.0), Some(at(90_000_000)), LimitState::Reached, false).expect("a window"),
+      ],
+      plan: None,
+      credits: None,
+      blocked: None,
+    },
+  };
+  db.save_limit_snapshot(run.id(), &reading).expect("stored");
+  let claude = db
+    .last_account_reading(AccountCli::ClaudeCode.default_account())
+    .expect("read");
+  assert_eq!(
+    claude.map(|reading| reading.provider),
+    Some(AgentProvider::ClaudeCodeCli)
+  );
+  assert_eq!(
+    db.last_account_reading(AccountCli::Codex.default_account())
+      .expect("read"),
+    None,
+    "never Codex's Default"
+  );
 }

@@ -85,6 +85,8 @@ pub(super) struct Pending {
 }
 
 pub(super) struct RunTask {
+  /// A step a person asked to start on its account now ([`Prepared::try_at_plan_limit`]), taken when it starts.
+  pub(super) try_at_plan_limit: Option<orchester_core::id::StepExecutionId>,
   pub(super) root: PathBuf,
   pub(super) db: ProjectDb,
   pub(super) run: Run,
@@ -137,6 +139,7 @@ impl RunTask {
       listening: true,
       settled: context.settled,
       pending: Pending::default(),
+      try_at_plan_limit: prepared.try_at_plan_limit,
       agents: HashMap::new(),
       code_index: IndexState::NotBuilt,
       index_build: None,
@@ -157,8 +160,12 @@ impl RunTask {
     // A run that waits for a person, or whose task failed, is no longer executed either.
     self.settled.store(true, Ordering::Release);
     if let Err(error) = &result {
-      self.end_agents().await;
+      self.end_agents(error).await;
       self.interrupt_broken(error);
+      self.controls.close();
+      while let Ok(control) = self.controls.try_recv() {
+        control.reject(error.to_string());
+      }
     }
     self.end_waiting_approvals();
     self.end_waiting_questions();
@@ -244,8 +251,8 @@ impl RunTask {
   fn on_worker_event(&mut self, event: WorkerEvent) -> Result<(), ExecutionError> {
     match event {
       WorkerEvent::Usage { execution, tokens } => self.on_usage(execution, tokens),
-      WorkerEvent::Ended { execution, end } => self.on_ended(execution, &end?),
-      WorkerEvent::CommandEnded { execution, end } => self.on_command_ended(execution, &end?),
+      WorkerEvent::Ended { execution, end } => self.on_ended(execution, end),
+      WorkerEvent::CommandEnded { execution, end } => self.on_command_ended(execution, end),
     }
   }
 
@@ -289,18 +296,31 @@ impl RunTask {
   }
 
   /// Ends every agent after the runner itself failed, and waits for them to end.
-  async fn end_agents(&mut self) {
+  async fn end_agents(&mut self, error: &ExecutionError) {
+    tracing::warn!(run = %self.run.id(), %error, "ending workers after runner failure");
     self.stop_agents(Stop::Now(StopCause::Requested));
     while !self.agents.is_empty() {
-      let Some(event) = self.events.recv().await else {
-        return;
-      };
-      if let WorkerEvent::Ended { execution, .. } | WorkerEvent::CommandEnded { execution, .. } = event
-        && self.agents.remove(&execution).is_some()
-      {
-        self.board.release(execution);
+      tokio::select! {
+        Some(event) = self.events.recv() => {
+          if let WorkerEvent::Ended { execution, .. } | WorkerEvent::CommandEnded { execution, .. } = event {
+            drop(self.retire_worker(execution));
+          }
+        }
+        control = self.controls.recv(), if self.listening => match control {
+          Some(control) => control.reject(error.to_string()),
+          None => self.listening = false,
+        },
       }
     }
+  }
+
+  /// An end event is sent only once, even when recording it failed. Retire its worker before
+  /// propagating that error so cleanup never waits for a second event from the same worker.
+  pub(super) fn retire_worker(&mut self, execution: StepExecutionId) -> Option<Active> {
+    let active = self.agents.remove(&execution)?;
+    self.board.release(execution);
+    self.release_steered(execution);
+    Some(active)
   }
 
   /// Applies a transition, stores its events with the new state and announces the change. After

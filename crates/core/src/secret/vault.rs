@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 use super::SecretValue;
-use crate::id::{ProjectId, SecretId, ServerId};
+use crate::id::{InstallationId, ProjectId, SecretId, ServerId};
 
 /// Where a secret's value is kept in the OS keychain: the service `orchester:<project id>` and the
 /// account `<secret id>`. Both ids are UUIDs that never change, so a project whose folder moves
@@ -17,6 +17,7 @@ impl VaultKey {
   const SERVICE_PREFIX: &str = "orchester:";
   const SERVER_PREFIX: &str = "orchester-server:";
   const TOKEN_ACCOUNT: &str = "token";
+  const APP_MCP_SERVICE: &str = "orchester-app-mcp";
 
   pub fn new(project: ProjectId, secret: SecretId) -> Self {
     Self {
@@ -31,6 +32,16 @@ impl VaultKey {
     Self {
       service: format!("{}{server}", Self::SERVER_PREFIX),
       account: Self::TOKEN_ACCOUNT.to_owned(),
+    }
+  }
+
+  /// The bearer token of `orchester-app`'s MCP server for one installation: the service `orchester-app-mcp`
+  /// and the account `<installation id>` (`docs/design/app-mcp-connection.md`, "Security"), so a development
+  /// build and the installed app never share a token.
+  pub fn app_mcp_token(installation: InstallationId) -> Self {
+    Self {
+      service: Self::APP_MCP_SERVICE.to_owned(),
+      account: installation.to_string(),
     }
   }
 

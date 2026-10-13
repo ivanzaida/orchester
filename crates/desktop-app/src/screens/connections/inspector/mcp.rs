@@ -357,7 +357,7 @@ fn plain_footer(
   let edit = if busy {
     edit.disabled()
   } else {
-    let open = actions.edit_mcp.clone();
+    let open = actions.edit.clone();
     edit.on_click(move || open(id))
   };
   let remove =

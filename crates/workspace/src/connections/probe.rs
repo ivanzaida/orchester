@@ -9,8 +9,9 @@ use std::{
 
 use orchester_core::{
   connection::{
-    self, AgentProvider, Connection, ConnectionCheck, ConnectionKind, GitHubCheck, GitHubHost, LastCheck,
-    invocation::agent_environment,
+    self, AgentProvider, Connection, ConnectionAccount, ConnectionCheck, ConnectionKind, GitHubCheck, GitHubHost,
+    LastCheck,
+    invocation::{account_environment, agent_environment},
   },
   repository::{self, DetectRequest, Detection},
   time::Timestamp,
@@ -21,9 +22,25 @@ use orchester_exec::ProcessRunner;
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 const RUNNER: ProcessRunner = ProcessRunner::new(COMMAND_TIMEOUT);
 
-/// Checks the agent CLI at `executable` now; `None` for a native provider, which has no CLI.
+/// Checks the agent CLI at `executable` on its Default account now; `None` for a native provider, which has no CLI.
 pub fn check(provider: AgentProvider, executable: &Path) -> Option<ConnectionCheck> {
-  let environment = agent_environment(std::env::vars_os());
+  check_on(provider, executable, &ConnectionAccount::Default)
+}
+
+/// Checks the agent CLI at `executable` on `account` now, with the account's folder variable set as agents get it;
+/// `None` for a native provider, which has no CLI.
+pub fn check_on(provider: AgentProvider, executable: &Path, account: &ConnectionAccount) -> Option<ConnectionCheck> {
+  let environment = match account_environment(agent_environment(std::env::vars_os()), account, provider) {
+    Ok(environment) => environment,
+    // A folder whose path can't reach the CLI is one it can't run with.
+    Err(error) => {
+      tracing::warn!(%error, "an account's folder cannot be passed to its CLI");
+      return Some(ConnectionCheck {
+        at: Timestamp::now(),
+        result: connection::CheckResult::CouldNotRun,
+      });
+    }
+  };
   connection::check(provider, executable, &RUNNER, &environment, Timestamp::now())
 }
 
@@ -42,7 +59,7 @@ pub fn detect_repository(request: &DetectRequest<'_>) -> Detection {
 pub fn recheck(connection: &Connection) -> Option<LastCheck> {
   let executable = connection.executable()?;
   Some(match connection.kind() {
-    ConnectionKind::Agent(provider) => LastCheck::Agent(check(*provider, executable)?),
+    ConnectionKind::Agent(provider) => LastCheck::Agent(check_on(*provider, executable, connection.account())?),
     ConnectionKind::GitHub { host } => LastCheck::GitHub(check_github(host, executable)),
   })
 }

@@ -107,12 +107,12 @@ impl Component for Lists {
         &format!("agent-remove-folder-{}", entries.len()),
         &text,
         &remove_label,
-        move || {
+        Some(move || {
           signal.update(|p| {
             p.0
               .set_writable_folders(folders::without_folder(p.0.writable_folders(), &entry))
           });
-        },
+        }),
       ));
     }
     let mut folder_rows = Column::new().width(Dimension::Pct(100.0)).spacing(SpacingSize::Sm);

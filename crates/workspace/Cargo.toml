@@ -47,9 +47,13 @@ toml.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
-# The computer's name a shared server lists this computer's session under (`sharing::device`).
-[target.'cfg(target_os = "macos")'.dependencies]
-rustix.workspace = true
+# Handle-relative repository discovery; the OS computer name also uses rustix on macOS.
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, features = ["fs"] }
+
+# Inspect the actually opened object before repository byte access, without following reparse points.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO"] }
 
 [dev-dependencies]
 orchester-workspace = { workspace = true, features = ["test-support"] }

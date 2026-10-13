@@ -45,6 +45,25 @@ pub(super) enum Control {
   Interrupt(InterruptCause),
 }
 
+impl Control {
+  /// Cleanup cannot carry out new requests after a runner failure. Callers get its cause
+  /// instead of waiting for the remaining workers to stop or retrying an uncertain request.
+  pub(super) fn reject(self, detail: String) {
+    let ack = match self {
+      Self::Pause(ack)
+      | Self::Cancel(ack)
+      | Self::ChangePermissions(_, ack)
+      | Self::KeepPermissions(_, ack)
+      | Self::DecidePlan(_, ack)
+      | Self::DeliverMessages(ack)
+      | Self::DecideToolApproval { ack, .. }
+      | Self::AnswerQuestion { ack, .. } => ack,
+      Self::Interrupt(_) => return,
+    };
+    answer(ack, Err(Rejection::Failed { detail }));
+  }
+}
+
 /// Answers `ack`; the requester may have stopped waiting, and then the answer is not needed.
 pub(super) fn answer(ack: Ack, result: Result<(), Rejection>) {
   if ack.send(result).is_err() {

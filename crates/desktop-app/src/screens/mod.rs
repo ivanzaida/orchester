@@ -42,7 +42,8 @@ pub fn screen(ctx: &mut Ctx) -> Element {
   let path = ctx.route_path();
   match Route::parse(&path) {
     Ok(Route::AllProjects) => all_projects::screen(ctx),
-    Ok(Route::Settings) => settings::screen(ctx),
+    Ok(Route::Settings) => settings::screen(ctx, settings::SettingsTab::Automation),
+    Ok(Route::Accounts(view)) => settings::screen(ctx, settings::SettingsTab::Accounts(view)),
     Ok(Route::Project(project, page)) => project_screen(ctx, project, &page),
     Err(error) => not_found::screen(ctx, &path, &error),
   }
@@ -85,7 +86,9 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Agents => agents::screen(ctx, project, None),
     ProjectPage::Agent(id) => agents::screen(ctx, project, Some(*id)),
     ProjectPage::Instructions => instructions::screen(ctx, project),
-    ProjectPage::Skills => skills::screen(ctx, project),
+    ProjectPage::Skills | ProjectPage::NewSkill | ProjectPage::Skill(_) | ProjectPage::ImportSkills => {
+      skills::screen(ctx, project, page)
+    }
     ProjectPage::Tools | ProjectPage::NewTool | ProjectPage::Tool(..) => tools::screen(ctx, project, page),
     ProjectPage::Secrets => secrets::screen(ctx, project),
     ProjectPage::Connections(view) => connections::screen(ctx, project, *view),

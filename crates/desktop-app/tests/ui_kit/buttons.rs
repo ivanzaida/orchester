@@ -279,3 +279,19 @@ fn controls_that_cannot_be_pressed_or_flip_do_not_open_the_row_around_them() {
   kit.click("row");
   assert_eq!(opened.load(Ordering::SeqCst), 1, "a press on the row itself opens it");
 }
+
+#[test]
+fn an_unavailable_upload_keeps_its_glyph_and_cannot_press_a_handler() {
+  let (presses, press) = counter();
+  let mut kit = Kit::show(move |_| {
+    ActionButton::new("publish", ButtonKind::Primary, "Publish")
+      .icon(Icon::Upload)
+      .unavailable_with_icon("There is no saved draft to publish.")
+      .on_click(press.clone())
+      .into()
+  });
+  assert!(kit.texts("publish").contains(&Icon::Upload.glyph().to_string()));
+  assert!(!kit.texts("publish").contains(&Icon::Lock.glyph().to_string()));
+  kit.click("publish");
+  assert_eq!(presses.load(Ordering::SeqCst), 0);
+}

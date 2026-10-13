@@ -18,7 +18,7 @@ use lurq::{
 };
 use orchester_app::{
   app_log, i18n,
-  mcp::{APP_NAME, AppMcp, DiscoveryFolder, InputGate, McpSettings},
+  mcp::{APP_NAME, AppMcp, InputGate, McpMode, McpSettings},
   theme::{self, Mode},
   ui::loader,
 };
@@ -41,18 +41,20 @@ fn main() {
   loader::install(&mut tree);
   let settings = McpSettings::of_build().with_environment();
   let config = McpConfig::new().app_name(APP_NAME).scopes(settings.scopes());
-  // The gallery shows no person-only control, so nothing is protected.
+  // The gallery shows no person-only control, so nothing is protected. It has no settings of its own: a free port
+  // and its discovery file, in the folder ORCHESTER_APP_MCP_DISCOVERY names or the user's.
+  let mode = McpMode::of_build(None).unwrap_or(McpMode::Development);
   let server = AppMcp::start(
     &mut tree,
     runtime.handle(),
-    &DiscoveryFolder::User,
-    config,
+    mode,
+    (config, settings),
     &InputGate::default(),
   );
-  match &server {
-    Some(server) => tracing::info!(
+  match server.discovery_path() {
+    Some(discovery) => tracing::info!(
       pid = std::process::id(),
-      discovery = %server.discovery_path().display(),
+      discovery = %discovery.display(),
       "the UI kit's gallery is open"
     ),
     None => tracing::warn!(
@@ -68,5 +70,5 @@ fn main() {
     .with_size(1440, 900)
     .with_start_without_focus(without_focus)
     .run();
-  drop(server);
+  server.shutdown();
 }

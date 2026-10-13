@@ -4,16 +4,19 @@
 //! fails closed and the person decides; the hard rules still come first either way. A review that asked a
 //! model records what it cost ([`ReviewLedger`]).
 
-use std::{path::PathBuf, time::Duration};
+use std::{
+  path::{Path, PathBuf},
+  time::Duration,
+};
 
 use orchester_agent::AnthropicClient;
 use orchester_core::{
   connection::{
-    AgentProvider, ApiEndpoint,
-    invocation::agent_environment,
+    AgentProvider, ApiEndpoint, ConnectionKind,
+    invocation::{Platform, account_environment, agent_environment},
     reviewer::{ClaudeReviewer, CodexReviewer},
   },
-  id::SecretId,
+  id::{AgentAccountId, SecretId},
   permission::AgentPermissions,
   resource::ModelId,
   run::{
@@ -44,6 +47,8 @@ pub(super) enum ReviewerSetup {
   Cli {
     kind: ReviewerKind,
     executable: PathBuf,
+    /// The account of the reviewer's connection, whose plan limits it reports.
+    account: Option<AgentAccountId>,
     model: ModelId,
     effort: Option<String>,
     environment: Vec<(String, String)>,
@@ -129,17 +134,17 @@ impl ReviewerSetup {
     let started_at = Timestamp::now();
     let provider = self.provider();
     let done = self.judge(job);
-    if let Some(provider) = provider {
-      ledger.record(provider, started_at, &done);
+    if let Some(spent) = provider {
+      ledger.record(spent, started_at, &done);
     }
     done.review
   }
 
-  /// The provider a review with this reviewer is spent on; `None` when it asks no model.
-  const fn provider(&self) -> Option<AgentProvider> {
+  /// The provider and account a review with this reviewer is spent on; `None` when it asks no model.
+  const fn provider(&self) -> Option<(AgentProvider, Option<AgentAccountId>)> {
     match self {
-      Self::Cli { kind, .. } => Some(kind.provider()),
-      Self::Native { .. } => Some(AgentProvider::AnthropicApi),
+      Self::Cli { kind, account, .. } => Some((kind.provider(), *account)),
+      Self::Native { .. } => Some((AgentProvider::AnthropicApi, None)),
       Self::Unreachable { .. } | Self::Missing => None,
     }
   }
@@ -184,6 +189,7 @@ impl ReviewerSetup {
       Self::Cli {
         kind,
         executable,
+        account: _,
         model,
         effort,
         environment,
@@ -247,11 +253,29 @@ impl Worker {
     let Some(executable) = connection.executable() else {
       return Ok(ReviewerSetup::Missing);
     };
+    let ConnectionKind::Agent(provider) = *connection.kind() else {
+      return Ok(ReviewerSetup::Missing);
+    };
+    if let Some(reason) = connection
+      .account()
+      .start_problem(provider, Platform::current(), Path::is_dir)
+    {
+      tracing::warn!(%reason, "the reviewer's connection cannot run on its account");
+      return Ok(ReviewerSetup::Missing);
+    }
     let mut environment = agent_environment(std::env::vars_os());
     watch.db.project_environment()?.add_to(&mut environment);
+    let environment = match account_environment(environment, connection.account(), provider) {
+      Ok(environment) => environment,
+      Err(error) => {
+        tracing::warn!(%error, "the reviewer's account folder cannot reach its CLI");
+        return Ok(ReviewerSetup::Missing);
+      }
+    };
     Ok(ReviewerSetup::Cli {
       kind,
       executable: executable.to_path_buf(),
+      account: connection.account().id(provider),
       model,
       effort,
       environment,

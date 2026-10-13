@@ -1,6 +1,7 @@
 //! Project database migrations. Append only: never edit a migration that has shipped. Later
 //! migrations live in modules of their own, named after what they add.
 
+mod agent_accounts;
 mod agent_files;
 mod agent_slots;
 mod approval_choices;
@@ -538,6 +539,10 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   step_progress::MIGRATION,
   optional_limits::MIGRATION,
   optional_daily_budget::MIGRATION,
+<<<<<<< HEAD
   local_integration::MIGRATION,
   editor_drafts::MIGRATION,
+=======
+  agent_accounts::MIGRATION,
+>>>>>>> 8754a60874f27100ec9bc2d4df91f0d70cca074c
 ];

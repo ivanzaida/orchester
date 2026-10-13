@@ -8,8 +8,9 @@ use std::{
 };
 
 use orchester_core::{
+  app_mcp::McpPort,
   appearance::ThemeSetting,
-  id::{ProjectId, ServerId},
+  id::{InstallationId, ProjectId, ServerId},
   project::Project,
   run::TaskPhase,
   time::Timestamp,
@@ -110,7 +111,11 @@ impl ListedData {
 /// Shared handle to the application database.
 #[derive(Clone)]
 pub struct Workspace {
-  db: Arc<Mutex<AppDb>>,
+  pub(crate) db: Arc<Mutex<AppDb>>,
+  /// Where Orchester creates new agent accounts' folders; `None` where it has none on this platform.
+  pub(crate) account_root: Option<Arc<Path>>,
+  /// Where removed accounts' folders go when the person asks; none until the app gives one.
+  pub(crate) trash: crate::accounts::trash::SharedTrash,
   permission_consent: Arc<Mutex<Consent>>,
   approval_consent: Arc<Mutex<Consent>>,
 }
@@ -125,9 +130,24 @@ impl Workspace {
   pub fn new(db: AppDb) -> Self {
     Self {
       db: Arc::new(Mutex::new(db)),
+      account_root: account_root().map(Arc::from),
+      trash: crate::accounts::trash::SharedTrash::default(),
       permission_consent: Arc::default(),
       approval_consent: Arc::default(),
     }
+  }
+
+  /// Gives this workspace and its clones `trash` for removed accounts' folders: the system's in the app's window
+  /// only, a folder of its own in a QA copy or a test.
+  pub fn use_trash(&self, trash: Arc<dyn crate::accounts::trash::Trash>) {
+    self.trash.set(trash);
+  }
+
+  /// This workspace with new agent accounts' folders created in `root` instead of Orchester's application data.
+  #[must_use]
+  pub fn with_account_root(mut self, root: &Path) -> Self {
+    self.account_root = Some(Arc::from(root));
+    self
   }
 
   pub fn landing(&self) -> Result<Landing, StoreError> {
@@ -170,6 +190,10 @@ impl Workspace {
     let db = ProjectDb::open(repo_root)?;
     let project = db.project().clone();
     self.db.lock().register_project(&project, repo_root, Timestamp::now())?;
+    // The project opens all the same; its connections follow the removal the next time it opens.
+    if let Err(error) = self.follow_accounts(repo_root) {
+      tracing::warn!(%error, "cannot move a project's connections off removed accounts");
+    }
     Ok(OpenProject {
       project,
       repo_root: repo_root.to_path_buf(),
@@ -315,6 +339,29 @@ impl Workspace {
     self.db.lock().mcp_window_control()
   }
 
+  /// Whether the installed app's MCP server listens; on until a person turns it off in Settings.
+  pub fn mcp_server_enabled(&self) -> Result<bool, StoreError> {
+    self.db.lock().mcp_server_enabled()
+  }
+
+  pub fn set_mcp_server_enabled(&self, enabled: bool) -> Result<(), StoreError> {
+    self.db.lock().set_mcp_server_enabled(enabled)
+  }
+
+  /// The port the installed app's MCP server listens on.
+  pub fn mcp_port(&self) -> Result<McpPort, StoreError> {
+    self.db.lock().mcp_port()
+  }
+
+  pub fn set_mcp_port(&self, port: McpPort) -> Result<(), StoreError> {
+    self.db.lock().set_mcp_port(port)
+  }
+
+  /// This installation's id, which names its secrets of its own in the keychain (the app's MCP token).
+  pub fn installation_id(&self) -> Result<InstallationId, StoreError> {
+    self.db.lock().installation_id()
+  }
+
   /// The shared servers, in the order they were added.
   pub fn servers(&self) -> Result<Vec<StoredServer>, StoreError> {
     self.db.lock().servers()
@@ -367,5 +414,27 @@ impl Consent {
   fn finish(&mut self, allowed: bool) {
     self.pending -= 1;
     self.refresh(allowed);
+  }
+}
+
+/// Where new agent accounts' folders go: `ORCHESTER_ACCOUNTS_DIR` when a QA copy or a test names one, so it never
+/// writes the person's own account folders, else Orchester's application data (`location::accounts_dir`). The
+/// installed app ignores the variable ([`crate::build::Build`]); one that is not a plain full path gives no folder.
+fn account_root() -> Option<std::path::PathBuf> {
+  let named = std::env::var_os("ORCHESTER_ACCOUNTS_DIR").filter(|folder| !folder.is_empty());
+  if let Some(folder) = named.filter(|_| crate::build::Build::this() == crate::build::Build::Other) {
+    let folder = std::path::PathBuf::from(folder);
+    if orchester_core::account::plain_full_path(&folder) {
+      return Some(folder);
+    }
+    tracing::error!(folder = %folder.display(), "ORCHESTER_ACCOUNTS_DIR is not a plain full path; no folder for new agent accounts");
+    return None;
+  }
+  match orchester_store::location::accounts_dir() {
+    Ok(folder) => Some(folder),
+    Err(error) => {
+      tracing::warn!(%error, "no folder for new agent accounts");
+      None
+    }
   }
 }

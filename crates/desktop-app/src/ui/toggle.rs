@@ -58,6 +58,7 @@ pub struct Toggle {
   /// What the control sets: its label beside it and its name for tools.
   label: Arc<str>,
   label_shown: bool,
+  wrap_label: bool,
   change: Option<Arc<dyn Fn(bool) + Send + Sync>>,
   element: Option<ElementRef>,
   /// Room after the label, so the focus ring around the control clears its last letter.
@@ -74,6 +75,7 @@ impl Toggle {
       on,
       label: label.into(),
       label_shown: true,
+      wrap_label: false,
       change: None,
       element: None,
       ring_room: false,
@@ -97,6 +99,13 @@ impl Toggle {
   /// `element` refers to the control, e.g. so a screen can move the focus to it.
   pub fn element_ref(mut self, element: ElementRef) -> Self {
     self.element = Some(element);
+    self
+  }
+
+  /// The label wraps onto more lines within the parent's width, the mark beside its first line: a label that may be
+  /// long, such as one that names a folder.
+  pub fn wrap_label(mut self) -> Self {
+    self.wrap_label = true;
     self
   }
 
@@ -161,12 +170,17 @@ impl From<Toggle> for Element {
   fn from(toggle: Toggle) -> Self {
     let mark = toggle.mark().id(format!("{}-mark", toggle.id));
     let label = toggle.label_shown.then(|| {
-      Text::new(&toggle.label)
+      let label = Text::new(&toggle.label)
         .id(format!("{}-label", toggle.id))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextPrimary)
-        .nowrap()
+        .color(PaletteColor::TextPrimary);
+      if toggle.wrap_label {
+        label.flex(1.0).min_width(Dimension::Px(0.0))
+      } else {
+        label.nowrap()
+      }
     });
+    let wraps = toggle.wrap_label;
     let wanted = toggle.kind == ToggleKind::Radio || !toggle.on;
     let button = match toggle.change {
       Some(change) => Focus::Form
@@ -185,10 +199,14 @@ impl From<Toggle> for Element {
     } else {
       button
     };
+    let button = if wraps {
+      button.width(Dimension::Pct(100.0)).align_items(Alignment::Start)
+    } else {
+      button.align_items(Alignment::Center)
+    };
     button
       .id(toggle.id)
       .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
       .rounded(RadiusSize::Sm)
       .describe("kind", toggle.kind.name())
       .describe("a11y_name", toggle.label.clone())

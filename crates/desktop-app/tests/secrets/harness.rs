@@ -12,7 +12,7 @@ use std::{
 use lurq::app::{App, Tree};
 use orchester_app::{
   i18n,
-  mcp::{McpStatus, WindowLink},
+  mcp::{McpKind, McpLink, McpSettings, McpStatus, WindowLink},
   root::{Root, RootProps, Start},
   routes::{ProjectPage, Route},
   theme::{self, Mode},
@@ -135,7 +135,7 @@ impl Secrets {
       &mut app,
       RootProps {
         link: link.clone(),
-        mcp: McpStatus::Unavailable,
+        mcp: McpLink::without_server(McpStatus::unavailable(McpKind::Installation, McpSettings::of_build())),
         start,
       },
     );

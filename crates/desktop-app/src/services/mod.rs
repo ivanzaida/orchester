@@ -28,6 +28,10 @@ use orchester_workspace::{
 };
 use tokio::{runtime::Handle, task::JoinHandle};
 
+pub mod accounts;
+pub mod plan_limits;
+pub mod reference_picker;
+
 use crate::project::hold::ReadHold;
 
 /// The session's services. Every field is a handle: clones share the same workspace, runners and

@@ -20,7 +20,7 @@ use orchester_workspace::{connections::data::sign_in_command, display};
 
 use super::{Actions, Inspecting, Parts, check_button, footer, header, last_checked, shown, used_by};
 use crate::{
-  screens::connections::words::{agent_glyph, agent_status, checked_version, provider_key},
+  screens::connections::words::{agent_glyph, checked_version, connection_status, provider_key},
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -47,7 +47,7 @@ pub(super) fn parts(
 ) -> Parts {
   let status = shown(
     inspecting,
-    agent_status(connection.status_with(&inspecting.listed.secrets)),
+    connection_status(connection, connection.status_with(&inspecting.listed.secrets)),
   );
   let header = header(
     ctx,
@@ -83,11 +83,54 @@ fn cli(
 ) -> Parts {
   let mut body: Vec<Element> = too_old(ctx, connection).into_iter().collect();
   body.push(properties(ctx, connection, inspecting).into());
+  body.push(super::super::account::inspector_rows(
+    ctx,
+    inspecting.accounts,
+    connection,
+  ));
   body.push(models(ctx, connection, inspecting, actions));
   body.push(used);
   let status = connection.status_with(&inspecting.listed.secrets);
+  let account = inspecting
+    .accounts
+    .of_connection(connection.account(), connection.provider());
+  // Edit connection chooses the connection's account (`M42rM`); its name and program are not edited here yet.
+  let (edit, id) = (actions.edit.clone(), connection.id());
+  let edit = ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.edit"))
+    .icon(Icon::Pencil)
+    .on_click(move || edit(id));
+  // On no account: a check would run the CLI on Default's folder and say nothing of this connection; Edit connection
+  // chooses one.
+  if connection.account() == &orchester_core::connection::ConnectionAccount::Unassigned {
+    let sentence = ctx.t("connections.detail.noAccount");
+    return Parts {
+      header,
+      body,
+      footer: Some(footer(
+        ctx,
+        inspecting,
+        (&sentence, Vec::new()),
+        (vec![vec![edit.into()]], Vec::new()),
+      )),
+    };
+  }
+  // Signed out on one of the person's accounts: the fix is in Settings › Accounts, not a command here (`M42rM`).
+  if let Some(account) = account.filter(|_| status == ConnectionStatus::SignInRequired) {
+    let sentence = signed_out_sentence(ctx, account);
+    let buttons = vec![open_in_settings(ctx, account).into(), edit.into()];
+    return Parts {
+      header,
+      body,
+      footer: Some(footer(
+        ctx,
+        inspecting,
+        (&sentence, Vec::new()),
+        (vec![buttons], Vec::new()),
+      )),
+    };
+  }
   let command = (status == ConnectionStatus::SignInRequired)
-    .then(|| sign_in_command(connection.provider()))
+    .then(|| sign_in_command(connection.provider()).map(str::to_owned))
     .flatten()
     .map(|command| {
       CodeBox::new(
@@ -97,16 +140,12 @@ fn cli(
       )
       .render(ctx)
     });
-  let reason = ctx.t("connections.editCliUnavailable");
   let buttons = vec![
     check_button(inspecting, ("connection-test", ctx.t("connections.test")), actions).into(),
-    ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.edit"))
-      .icon(Icon::Pencil)
-      .unavailable(reason.clone())
-      .into(),
+    edit.into(),
   ];
   let more = command.into_iter().collect();
-  let reasons = vec![reason_line("connection-edit-reason", &reason).into()];
+  let reasons = Vec::new();
   let sentence = ctx.t(detail_key(status, connection.provider()));
   Parts {
     header,
@@ -446,4 +485,38 @@ const fn detail_key(status: ConnectionStatus, provider: AgentProvider) -> &'stat
     | ConnectionStatus::BillingProblem
     | ConnectionStatus::EndpointUnreachable => "connections.detail.couldNotRun",
   }
+}
+
+/// What a connection signed out on `account` means and where to fix it (`M42rM`).
+fn signed_out_sentence(ctx: &Ctx, account: &orchester_core::account::AgentAccount) -> std::sync::Arc<str> {
+  let name = crate::services::accounts::account_name(ctx, account);
+  let expired = account.state(orchester_core::connection::invocation::Platform::current())
+    == orchester_core::account::AccountState::Expired;
+  match account.email().filter(|_| expired) {
+    Some(email) => ctx.t_args(
+      "connections.account.signedOutSentence",
+      [("account", name.as_str()), ("email", email)],
+    ),
+    None => ctx.t_args("connections.account.notSignedInSentence", [("account", name.as_str())]),
+  }
+}
+
+/// *Open … in Settings*: the account's page in Settings › Accounts, where it signs in.
+fn open_in_settings(ctx: &mut Ctx, account: &orchester_core::account::AgentAccount) -> ActionButton {
+  let navigation = crate::navigation::Navigation::of(ctx);
+  let id = account.id();
+  let name = crate::services::accounts::account_name(ctx, account);
+  ActionButton::new(
+    "connection-open-account",
+    ButtonKind::Secondary,
+    ctx.t_args("connections.account.openInSettings", [("account", name.as_str())]),
+  )
+  .icon(Icon::ArrowUpRight)
+  .bounded_label()
+  .on_click(move || {
+    navigation.go(crate::routes::Route::Accounts(crate::routes::AccountsView::of(
+      id,
+      crate::routes::AccountsPanel::Account,
+    )));
+  })
 }

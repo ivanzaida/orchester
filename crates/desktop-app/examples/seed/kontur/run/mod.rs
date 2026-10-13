@@ -3,6 +3,8 @@
 //! agent (or of its tool's program) with a short transcript and its usage, a write step commits its work
 //! as a checkpoint, and the run ends where the scenario leaves it.
 
+mod plan_limit;
+
 use std::collections::BTreeMap;
 
 use orchester_core::{

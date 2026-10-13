@@ -16,7 +16,7 @@ use lurq::{
 };
 use orchester_app::{
   i18n,
-  mcp::McpStatus,
+  mcp::{McpKind, McpSettings, McpStatus, ServerState},
   routes::{OverviewTab, ProjectPage, Route, TaskView},
   shell::status_bar::{BarAction, BarFacts, BarProps, ProjectFacts, ReadFailure, RunnerFacts, StatusBarView, Stopping},
   theme::{self, Mode},
@@ -51,6 +51,8 @@ mod items;
   reason = "the seed reports what it wrote; these tests read the window instead"
 )]
 mod kontur;
+mod mcp;
+mod plan_limits;
 #[path = "../support/mod.rs"]
 mod support;
 mod window;
@@ -146,10 +148,13 @@ fn project_id() -> ProjectId {
   "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b".parse().expect("a project id")
 }
 
+/// The installed app's server listening on 52341, agents allowed to control the window.
 fn listening() -> McpStatus {
-  McpStatus::Listening {
-    port: NonZeroU16::new(52341).expect("a port"),
-    window_control: true,
+  McpStatus {
+    server: ServerState::Listening {
+      port: NonZeroU16::new(52341).expect("a port"),
+    },
+    ..McpStatus::unavailable(McpKind::Installation, McpSettings::with_window_control(true))
   }
 }
 
@@ -173,6 +178,7 @@ fn kontur(runner: RunnerFacts, tasks: ProjectTasks) -> ProjectFacts {
       today: TokensUsed::new(3_800_000),
     }),
     read_failure: None,
+    limits: Vec::new(),
   }
 }
 
