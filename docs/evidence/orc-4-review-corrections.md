@@ -1,6 +1,6 @@
 # ORC-4 returned-review corrections
 
-This report covers source freeze 5d1d536c0078dbf9b5c3cede5eeebd42262721e9, tree affdcd693143f2d6f6a774c735b7dd6c49de0154. The report-only descendant and final HEAD/tree/disk manifest are recorded in .tmp/instructions/review-corrections/final-manifest.json. source-freeze-manifest.json binds all 110 combined changed paths against base 934b85b92f05296b7e30552073eea438136010f0; every normalized disk blob matches HEAD. No source edit followed this freeze. Temporary Skills diagnostic assertions were restored exactly before the final Instructions test and clippy completion.
+This report covers source freeze 5d1d536c0078dbf9b5c3cede5eeebd42262721e9, tree affdcd693143f2d6f6a774c735b7dd6c49de0154. The report-only descendant and final HEAD/tree/disk manifest are recorded in .tmp/instructions/review-corrections/final-manifest.json. source-freeze-manifest.json binds all 110 combined changed paths against base 934b85b92f05296b7e30552073eea438136010f0; every normalized disk blob matches HEAD. No source delta remains after this freeze. Temporary Skills diagnostic assertions were restored exactly before the final Instructions test and clippy completion.
 
 ## Corrections and provenance
 
