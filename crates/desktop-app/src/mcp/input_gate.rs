@@ -81,6 +81,8 @@ pub enum Guarded {
   ApprovalWidening,
   /// Settings' *Orchester MCP server*: the server switch, the port, the token's Show, Copy and Rotate, the scope.
   McpServer,
+  /// Settings › Accounts: adding, renaming and removing an account and signing it in are a person's.
+  Accounts,
 }
 
 /// lurq's tools that send the window input or change it, which lurq denies while a protected control is
@@ -163,14 +165,14 @@ impl InputGate {
     match what {
       Guarded::PermissionWidening => workspace.automation_permission_consent(),
       Guarded::ApprovalWidening => workspace.automation_permission_consent() && workspace.automation_approval_consent(),
-      Guarded::PermissionsSetting | Guarded::WideningQuestion | Guarded::McpServer => false,
+      Guarded::PermissionsSetting | Guarded::WideningQuestion | Guarded::McpServer | Guarded::Accounts => false,
     }
   }
 
   fn count(&self, what: Guarded, add: bool) {
     let mut controls = self.0.controls.lock();
     let count = match what {
-      Guarded::PermissionsSetting => &mut controls.settings,
+      Guarded::PermissionsSetting | Guarded::Accounts => &mut controls.settings,
       Guarded::WideningQuestion => &mut controls.questions,
       Guarded::PermissionWidening => &mut controls.permissions,
       Guarded::ApprovalWidening => &mut controls.approvals,
