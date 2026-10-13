@@ -155,4 +155,6 @@ fn call(port: u16, token: &str, session: &str, tool: &str) -> Response {
 
 mod address;
 mod clients;
+mod mode;
+mod race;
 mod token;

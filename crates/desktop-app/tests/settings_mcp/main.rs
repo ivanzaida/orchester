@@ -50,12 +50,18 @@ struct Shown {
 impl Shown {
   /// The installed app's server on `port`, its token in `vault`.
   fn installed(port: u16, vault: Arc<MemoryVault>) -> Self {
+    Self::installed_as(port, vault, true)
+  }
+
+  /// [`Shown::installed`], its server turned on or off before it first starts.
+  fn installed_as(port: u16, vault: Arc<MemoryVault>, enabled: bool) -> Self {
     let data = Data::new();
     let launch = data.launch();
     let workspace = launch.workspace().expect("a session").clone();
     workspace
       .set_mcp_port(McpPort::new(u32::from(port)).expect("a port the OS gives is 1024 or more"))
       .expect("the port is kept");
+    workspace.set_mcp_server_enabled(enabled).expect("kept");
     let mode = McpMode::Installation {
       workspace,
       vault: Vault::with(vault),

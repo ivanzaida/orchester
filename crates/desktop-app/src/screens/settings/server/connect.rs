@@ -18,8 +18,9 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 
-use super::{copy::copy_for_a_minute, enabled::refused, outcome};
+use super::{enabled::refused, outcome};
 use crate::{
+  clipboard::copy_for_a_minute,
   mcp::{
     AppMcp,
     connect::{self, ClaudeScope},

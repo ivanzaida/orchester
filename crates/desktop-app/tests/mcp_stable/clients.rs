@@ -54,3 +54,21 @@ fn wait_until(done: impl Fn() -> bool) -> bool {
   }
   done()
 }
+
+#[test]
+fn app_mcp_lists_the_20_clients_that_asked_last() {
+  let installed = Installed::start(free_port());
+  let (port, token) = (installed.port(), installed.token());
+  for client in 0..25 {
+    initialize(port, &token, (&format!("client-{client}"), "1"));
+  }
+  let names: Vec<String> = installed
+    .server
+    .status()
+    .clients
+    .into_iter()
+    .map(|client| client.name)
+    .collect();
+  let kept: Vec<String> = (5..25).map(|client| format!("client-{client}")).collect();
+  assert_eq!(names, kept, "the oldest went");
+}

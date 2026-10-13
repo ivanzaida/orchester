@@ -8,7 +8,7 @@ use lurq::app::{App, Tree, WindowCornerRadius, wgpu_render::WgpuRenderEngine, wi
 use orchester_app::{
   app_log,
   appearance::{Appearance, ThemeSetting, system},
-  brand, i18n,
+  brand, clipboard, i18n,
   mcp::{self, AppMcp, McpKind, McpLink, McpMode, McpSettings, McpStatus, WindowLink},
   root::{Root, RootProps},
   startup::Launch,
@@ -105,6 +105,7 @@ fn main() {
   if let Some(server) = server {
     server.shutdown();
   }
+  clipboard::clear_at_exit();
   launch.end();
 }
 

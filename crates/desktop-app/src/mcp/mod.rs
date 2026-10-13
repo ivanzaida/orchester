@@ -12,6 +12,7 @@
 //! discovery file ([`McpMode`], `discovery`). [`AppMcp`] runs it and publishes [`McpStatus`], which names the
 //! address and where the token is kept, never the token; only a person's click in Settings shows or copies it.
 
+mod bind;
 mod clients;
 pub mod connect;
 mod control;
@@ -35,7 +36,7 @@ pub use self::{
   discovery::DiscoveryFolder,
   input_gate::InputGate,
   link::WindowLink,
-  mode::{DISCOVERY_VARIABLE, McpMode},
+  mode::{Build, DISCOVERY_VARIABLE, INSTALLED_BUILD_VARIABLE, McpMode},
   server::{address, endpoint},
   settings::{McpSettings, WindowControlSource},
   status::{McpKind, McpStatus, SeenClient, ServerState},

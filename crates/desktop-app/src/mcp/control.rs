@@ -71,6 +71,9 @@ struct Inner {
   running: Mutex<Running>,
   /// The token in use; apart from `running`, so reading it never waits on the keychain.
   token: Mutex<Option<BearerToken>>,
+  /// Held while the stored token is read, made or replaced, so a read that started before a rotation cannot put the
+  /// old token back in `token`, and two first uses cannot make two tokens. Taken after `running`, never before.
+  creation: Mutex<()>,
   status: watch::Sender<McpStatus>,
 }
 
@@ -121,6 +124,7 @@ impl AppMcp {
       source,
       running: Mutex::new(Running::default()),
       token: Mutex::new(None),
+      creation: Mutex::new(()),
       status,
     }));
     let mut running = server.0.running.lock();
@@ -195,9 +199,13 @@ impl AppMcp {
   pub fn rotate_token(&self) -> Result<(), ControlError> {
     let tokens = self.0.token_store()?;
     let mut running = self.0.running.lock();
-    let token = tokens.replace()?;
+    let token = {
+      let _creating = self.0.creation.lock();
+      let token = tokens.replace()?;
+      *self.0.token.lock() = Some(token.clone());
+      token
+    };
     tracing::info!("the app's MCP token was replaced");
-    *self.0.token.lock() = Some(token.clone());
     self.0.serving.clients.start_again();
     self.0.status.send_modify(|status| status.rotated = true);
     match running.listening.as_ref() {
@@ -212,6 +220,7 @@ impl AppMcp {
   pub fn try_again(&self) {
     let mut running = self.0.running.lock();
     if running.listening.is_none() {
+      let _creating = self.0.creation.lock();
       *self.0.token.lock() = None;
     }
     self.0.down(&mut running);
@@ -341,10 +350,12 @@ impl Inner {
 
   /// The token in use; read from the secret store, or a first one stored there, when there is none yet.
   fn token_or_read(&self) -> Result<BearerToken, ControlError> {
+    let _creating = self.creation.lock();
     if let Some(token) = self.token.lock().clone() {
       return Ok(token);
     }
     let token = self.token_store()?.read_or_create()?;
+    // Still none: a rotation takes the same lock, so nothing filled it meanwhile.
     *self.token.lock() = Some(token.clone());
     Ok(token)
   }

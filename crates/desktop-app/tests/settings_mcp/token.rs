@@ -95,6 +95,15 @@ fn settings_mcp_token_field_and_buttons_keep_their_place_when_shown() {
     assert_eq!(hidden, revealed, "{id} moved or changed width when the token showed");
   }
   let field = revealed[0];
+  for label in [
+    "settings-mcp-token-show-sizer-show",
+    "settings-mcp-token-show-sizer-hide",
+  ] {
+    assert!(
+      revealed[1][2] >= shown.bounds(label)[2],
+      "Show and Hide share a slot as wide as the wider of them: {label}"
+    );
+  }
   assert!(
     field[2] > 400.0,
     "the field takes the room the buttons leave (lye6f: about 430): {field:?}"
@@ -104,4 +113,54 @@ fn settings_mcp_token_field_and_buttons_keep_their_place_when_shown() {
     text[0] + text[2] <= field[0] + field[2],
     "the token stays inside its field: {text:?} in {field:?}"
   );
+}
+
+#[test]
+fn settings_mcp_hidden_token_keeps_clients_out_until_the_window_no_longer_draws_it() {
+  const MASK: &str = "•••• •••• •••• •••• •••• •••• •••• ••••";
+  let mut shown = Shown::installed(free_port(), Arc::default());
+  shown.until("listening", |shown| shown.says("settings-mcp-state", "Listening"));
+  let gate = shown.link.input_gate();
+  shown.click("settings-mcp-token-show");
+  let start = std::time::Instant::now();
+  // The row's timer counts down and hides the token at 0; at every step, a window that draws it keeps clients out.
+  for second in 1..=30 {
+    shown
+      .tree
+      .tick_timers_at(start + std::time::Duration::from_millis(second * 1050));
+    let drawn = !shown.says("settings-mcp-token-value", MASK);
+    assert!(
+      !drawn || gate.token_shown(),
+      "second {second}: drawn while clients may look"
+    );
+    shown.pass();
+  }
+  assert!(shown.says("settings-mcp-token-value", MASK), "hidden after 30 s");
+  assert!(
+    !gate.token_shown(),
+    "the window no longer draws it: clients may look again"
+  );
+}
+
+#[test]
+fn settings_mcp_token_that_cannot_be_read_while_off_is_said_with_try_again() {
+  let vault = Arc::new(MemoryVault::default());
+  vault.refuse_reads(true);
+  let mut shown = Shown::installed_as(free_port(), vault.clone(), false);
+  shown.until("the read's failure", |shown| {
+    shown.texts("settings-mcp-token-not-read").is_some()
+  });
+  assert!(shown.says(
+    "settings-mcp-token-not-read",
+    &format!(
+      "The token can't be read from {STORE}: The system keychain refused access. Unlock it and try again. Show and \
+       Copy need it."
+    )
+  ));
+  vault.refuse_reads(false);
+  shown.click("settings-mcp-token-read-again");
+  shown.until("the token read", |shown| {
+    shown.texts("settings-mcp-token-not-read").is_none()
+  });
+  assert!(shown.server.token().is_some(), "read on Try again");
 }

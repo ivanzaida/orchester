@@ -27,6 +27,7 @@ use lurq::mcp::{
 use tokio::{runtime::Handle, sync::mpsc, task::JoinSet};
 
 use super::{
+  bind,
   clients::Clients,
   guard::{self, Admission},
   input_gate::InputGate,
@@ -93,8 +94,9 @@ impl Listening {
     serving: Serving,
     token: BearerToken,
   ) -> Result<Self, BindError> {
-    let listener = TcpListener::bind((LOOPBACK, port.map_or(0, NonZeroU16::get))).map_err(|error| {
-      if error.kind() == io::ErrorKind::AddrInUse {
+    let address = SocketAddr::from((LOOPBACK, port.map_or(0, NonZeroU16::get)));
+    let listener = bind::listen(address).map_err(|error| {
+      if bind::taken(&error) {
         BindError::Taken
       } else {
         BindError::Other(error)

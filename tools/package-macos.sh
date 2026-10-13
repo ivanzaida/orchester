@@ -52,8 +52,10 @@ version=$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' "$
 [ -n "$version" ] || fail "cannot read the version from [workspace.package] in Cargo.toml"
 
 # cargo build for the host, or for `$1` when given. Every build includes the embedded MCP servers.
+# ORCHESTER_APP_INSTALLED_BUILD makes this orchester-app the installed app: the fixed MCP address and the token in the
+# secret store (docs/stable-build.md). Only this script and tools/install.ps1 set it.
 build() {
-  (cd "$repo" && cargo build --release --locked --target-dir "$build_dir" \
+  (cd "$repo" && ORCHESTER_APP_INSTALLED_BUILD=1 cargo build --release --locked --target-dir "$build_dir" \
     -p orchester-desktop -p orchester-app -p orchester-runner ${1:+--target "$1"})
 }
 

@@ -231,15 +231,21 @@ which a release build grants only when its settings or `ORCHESTER_APP_MCP_WINDOW
 
 | Started as | Address | Token | Discovery file |
 | --- | --- | --- | --- |
-| The installed app (`tools/install.ps1`, `Orchester App.app`) | Fixed, from Settings › Automation; `http://127.0.0.1:47821/mcp` until you change it | Kept in the OS secret store | None |
-| With `ORCHESTER_APP_MCP_DISCOVERY=<folder>` (QA copies, test harnesses) | A free port on each start | A new one on each start, in memory only | `<folder>/<pid>.json` |
-| A debug build (`tools/run.ps1 app`) without that variable | A free port on each start | A new one on each start | `%LOCALAPPDATA%\orchester-app-mcp\<pid>.json`, macOS `~/Library/Application Support/orchester-app-mcp/<pid>.json` |
+| The installed app: built by `tools/install.ps1` or `tools/package-macos.sh` (`Orchester App.app`) | Fixed, from Settings › Automation; `http://127.0.0.1:47821/mcp` until you change it | Kept in the OS secret store | None |
+| Any other build with `ORCHESTER_APP_MCP_DISCOVERY=<folder>` (QA copies, test harnesses) | A free port on each start | A new one on each start, in memory only | `<folder>/<pid>.json` |
+| Any other build without that variable: debug (`tools/run.ps1 app`), `cargo run --release`, an example | A free port on each start | A new one on each start | `%LOCALAPPDATA%\orchester-app-mcp\<pid>.json`, macOS `~/Library/Application Support/orchester-app-mcp/<pid>.json` |
+
+What makes the installed app is how it was built, not where it runs: `tools/install.ps1` and
+`tools/package-macos.sh` set `ORCHESTER_APP_INSTALLED_BUILD=1` while they compile it, and nothing else does. So a
+build of your own, release or debug, never takes the installed app's port or leaves a credential in your secret
+store. The installed app refuses `ORCHESTER_APP_MCP_DISCOVERY`: started with it, it runs without its MCP server and
+the log says why, so a program that starts it cannot get a token for your data in a file it can read.
 
 A discovery file holds `url` (`http://127.0.0.1:<port>/mcp`), `port` and `token`, with the same rules as the
 deprecated desktop's above: only you can read it, a `<pid>.lock` beside it, removed when the app closes.
-`tools/qa-app.ps1` sets the variable to `.tmp/qa/<task>/mcp/` in the worktree and prints that folder. While it is
-set, the fixed address and the stored token are not used. A debug build and a QA copy therefore never take the
-installed app's port, and both can run beside it.
+`tools/qa-app.ps1` sets the variable to `.tmp/qa/<task>/mcp/` in the worktree and prints that folder. Other builds
+therefore never take the installed app's port, and they can run beside it. The runs' `call_run_app` relay drives
+only an app whose program is inside the run's worktree, whatever discovery file it finds.
 
 **The installed app's address.** Settings › Automation › *Orchester MCP server*. *Let agents connect to Orchester*
 is on by default. Off, nothing listens, the status bar shows *MCP off*, and the token stays stored for when you turn
@@ -257,7 +263,7 @@ the database, a log or the MCP tree: on Windows as a generic credential in Crede
 the install never share a token. As with project secrets, macOS may ask once more after an update before the app
 reads it (see *Signing* above). In Settings, *Show* shows it for 30 seconds at most, and while it shows the server
 refuses screenshots and the window's text (`token_shown`). *Copy* puts it on the clipboard and clears the clipboard
-after 60 seconds if it still holds what Orchester put there. *Rotate token* asks in place, stores a new token and
+after 60 seconds, or when the app closes before then, if it still holds what Orchester put there. *Rotate token* asks in place, stores a new token and
 ends the open sessions: register every agent again, and for Codex set `ORCHESTER_APP_MCP_TOKEN` again. If the
 secret store refuses the new token, the old one stays in use. Show, Copy, Rotate token, *Use port* and the switch
 take only a person's click in the window; a change brought by automation is not taken. If the token cannot be read,
@@ -318,7 +324,9 @@ the computer can connect to the port but cannot read the token.
 **Port squatting.** With a fixed port, a program that listens on it while Orchester is not running receives the
 token from the agents that try to connect. On a computer only you use, such a program already runs as you; on a
 shared one, another user could do it. Settings shows the port as taken whenever the app starts and finds it held.
-This is an accepted risk for now.
+This is an accepted risk for now. While Orchester listens, no other socket can share the port: on Windows the server holds it with
+`SO_EXCLUSIVEADDRUSE`, and on macOS a listening port is shared only by sockets that all set `SO_REUSEPORT`, which
+Orchester's does not.
 
 **Let automation change agent permissions.** Any client with the token may set a project up, so the setup
 tools only narrow what agents may do unless a person allows more. Widening it is refused with

@@ -135,3 +135,17 @@ fn app_mcp_control_of_a_qa_copy_is_refused() {
   server.shutdown();
   launch.end();
 }
+
+#[test]
+fn app_mcp_no_other_socket_shares_the_port() {
+  use socket2::{Domain, Socket, Type};
+  let installed = Installed::start(free_port());
+  let port = installed.port();
+  let other = Socket::new(Domain::IPV4, Type::STREAM, None).expect("a socket");
+  other.set_reuse_address(true).expect("SO_REUSEADDR");
+  let address = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+  assert!(
+    other.bind(&address.into()).is_err(),
+    "a socket with SO_REUSEADDR cannot bind the port the server listens on"
+  );
+}

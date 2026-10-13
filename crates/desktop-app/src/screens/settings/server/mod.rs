@@ -11,7 +11,6 @@
 mod address;
 mod connect;
 mod connected;
-mod copy;
 mod enabled;
 mod token;
 

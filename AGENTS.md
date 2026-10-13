@@ -93,6 +93,7 @@ Hard requirements:
    starts with `#![allow(unsafe_code)]`, explains why at the top, keeps each `unsafe` block minimal and precedes it
    with a `// SAFETY:` comment stating the invariants (today: `crates/ipc/src/pipe_owner.rs`,
    `crates/desktop-app/src/system_icon/windows.rs`, `crates/desktop-app/src/startup/front/windows.rs`,
+   `crates/desktop-app/src/mcp/bind/windows.rs`,
    `crates/agent/src/files/entry/windows.rs`, `crates/core/src/permission/remote_drive.rs`,
    `crates/exec/src/run_processes/windows.rs`, `crates/exec/src/run_processes/macos.rs`,
    `crates/exec/src/run_processes/macos/identity.rs`, and the tests `crates/desktop-app/tests/system_icon.rs`,
