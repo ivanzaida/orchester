@@ -54,6 +54,15 @@ pub struct ProjectFacts {
   pub usage: Option<ProjectUsage>,
   /// Why the project's tasks could not be read, when they could not.
   pub read_failure: Option<ReadFailure>,
+  /// The accounts the project's connections run on that reported plan limits, by CLI.
+  pub limits: Vec<AccountLimits>,
+}
+
+/// An account a project's connection runs on, with the newest plan reading its CLI reported.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AccountLimits {
+  pub account: orchester_core::account::AgentAccount,
+  pub reading: orchester_core::connection::plan_limits::LimitReading,
 }
 
 /// The project's tasks could not be read, and why.

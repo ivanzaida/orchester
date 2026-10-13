@@ -3,24 +3,17 @@
 //! its plan limits (`Plan window row` `B9myCE`), what runs on it get, and that Orchester never reads a token.
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
-  },
+  app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Row, Spacer, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   account::{AccountCli, AccountState, AgentAccount, same_sign_in},
-  connection::plan_limits::{LimitReading, LimitState, LimitWindow},
+  connection::plan_limits::{LimitReading, LimitWindow},
   time::Timestamp,
 };
-use orchester_workspace::{
-  accounts::sign_in,
-  display::{self, MONTH_KEYS},
-  messages::Message,
-};
+use orchester_workspace::{accounts::sign_in, display};
 
 use super::{
   Parts, Work,
@@ -35,14 +28,10 @@ use crate::{
     icon::Icon,
     inspector::{self, PropertyValue, property},
     message::message_text,
-    meter::{MeterTone, meter},
+    plan_window::{PlanWindow, plan_window, share, when},
   },
 };
 
-/// The widths of a plan window's name, meter and share (`oNPEn`, `a4M4r`, `TK5Br` in `B9myCE`).
-const WINDOW_NAME_WIDTH: f32 = 72.0;
-const METER_WIDTH: f32 = 200.0;
-const USED_WIDTH: f32 = 40.0;
 /// A five-hour window and a weekly one, in minutes.
 const FIVE_HOURS: u64 = 300;
 const WEEK: u64 = 10_080;
@@ -332,7 +321,10 @@ fn folder_actions(ctx: &Ctx, parts: &Parts, work: &Work, account: &AgentAccount)
 fn limits(ctx: &Ctx, account: &AgentAccount, reading: Option<&LimitReading>) -> Element {
   let now = Timestamp::now();
   let program = account.cli().program();
-  let meta = reading.map(|reading| ta(ctx, "accounts.planLimits.meta", [("time", when(ctx, reading.at, now))]));
+  let meta = reading.map(|reading| {
+    let at = when(ctx, reading.at, now, ("accounts.time.today", "accounts.time.day"));
+    ta(ctx, "accounts.planLimits.meta", [("time", at)])
+  });
   let head = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
@@ -390,60 +382,23 @@ fn window_row(ctx: &Ctx, window: &LimitWindow, reading: &LimitReading, now: Time
       [("hours", (minutes / 60).to_string())],
     ),
   };
-  let reached = reading.window_state(window, now) == LimitState::Reached;
-  let percent = window.percent().unwrap_or(if reached { 100.0 } else { 0.0 });
-  // A share of at most a few hundred; whole percents are what the row shows.
-  let used = percent.clamp(0.0, 100.0).round() as u64;
-  let resets = window.resets().map(|resets| when(ctx, resets, now));
+  let (used, reached) = share(window, reading, now);
+  let resets = window
+    .resets()
+    .map(|resets| when(ctx, resets, now, ("accounts.time.today", "accounts.time.day")));
   let resets = match (reached, resets) {
     (true, Some(time)) => ta(ctx, "accounts.planLimits.reached", [("time", time)]),
     (false, Some(time)) => ta(ctx, "accounts.planLimits.resets", [("time", time)]),
     (_, None) => String::new(),
   };
-  let id = format!("account-window-{}", window.minutes());
-  Row::new()
-    .id(id.clone())
-    .width(Dimension::Pct(100.0))
-    .padding_vertical(crate::theme::ExtraSpacing::Snug.role())
-    .spacing(AccountsSpacing::Cell.role())
-    .align_items(Alignment::Center)
-    .child(
-      Text::new(&name)
-        .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
-        .width(Dimension::Px(WINDOW_NAME_WIDTH)),
-    )
-    .child(Row::new().width(Dimension::Px(METER_WIDTH)).child(meter(
-      &format!("{id}-meter"),
-      (used, 100),
-      if reached { MeterTone::Reached } else { MeterTone::Plain },
-    )))
-    .child(
-      Text::new(&format!("{used}%"))
-        .variant(ExtraTypography::MonoKey.role())
-        .color(if reached {
-          PaletteColor::Warning
-        } else {
-          PaletteColor::TextPrimary
-        })
-        .width(Dimension::Px(USED_WIDTH)),
-    )
-    .child(Text::new(&resets).variant(ExtraTypography::Note.role()).flex(1.0))
-    .into()
-}
-
-/// A time as the plan limits read it: `today, 16:40`, or `Oct 14, 09:00` on another day.
-pub(super) fn when(ctx: &Ctx, at: Timestamp, now: Timestamp) -> String {
-  let time = display::clock(at);
-  if display::calendar_date(at) == display::calendar_date(now) {
-    return ta(ctx, "accounts.time.today", [("time", time)]);
-  }
-  let (month, day) = display::month_day(at);
-  let month = message_text(ctx, &Message::new(MONTH_KEYS[month]));
-  ta(
-    ctx,
-    "accounts.time.day",
-    [("month", month.to_string()), ("day", day.to_string()), ("time", time)],
+  plan_window(
+    &format!("account-window-{}", window.minutes()),
+    &PlanWindow {
+      name: &name,
+      used,
+      reached,
+      resets: &resets,
+    },
   )
 }
 
