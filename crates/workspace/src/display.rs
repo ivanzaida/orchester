@@ -94,6 +94,22 @@ pub fn duration(elapsed: Duration) -> Message {
   }
 }
 
+/// How long something has waited since `since`, in its largest whole unit (`41 min`, `3 h`, `2 d`); under a
+/// minute, and for a clock that went backwards, under a minute.
+pub fn waited(now: Timestamp, since: Timestamp) -> Message {
+  let millis = now.unix_millis() - since.unix_millis();
+  let (key, count) = if millis >= DAY_MILLIS {
+    ("time.days", millis / DAY_MILLIS)
+  } else if millis >= HOUR_MILLIS {
+    ("time.hours", millis / HOUR_MILLIS)
+  } else if millis >= MINUTE_MILLIS {
+    ("time.minutes", millis / MINUTE_MILLIS)
+  } else {
+    return Message::new("time.underMinute");
+  };
+  Message::new(key).with("count", count.to_string())
+}
+
 /// Local wall-clock time of `at`, e.g. `14:32`, as the status bar shows event times.
 pub fn clock_time(at: SystemTime) -> String {
   chrono::DateTime::<chrono::Local>::from(at).format("%H:%M").to_string()

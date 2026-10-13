@@ -9,6 +9,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
+    events::{InputSource, input_source},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Button, Column, Row, Spacer, Text},
@@ -34,6 +35,7 @@ use super::{
   words,
 };
 use crate::{
+  mcp::input_gate::{Guarded, InputGate},
   theme::{DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -54,8 +56,8 @@ pub(super) const fn approval_answer(given: Given) -> ApprovalAnswer {
 }
 
 /// What the answers act on: the card's key and element id, the request, its choices once read, the run's
-/// number, the open project its runner takes the answer for, the tab's answers, and *Approve once*, which
-/// takes the focus when the tab opens on the card.
+/// number, the open project its runner takes the answer for, the tab's answers, *Approve once*, which
+/// takes the focus when the tab opens on the card, and the window's input gate, which the wider answers ask.
 pub(super) struct Answering<'a> {
   pub(super) card: (RunId, &'a Arc<str>),
   pub(super) id: &'a str,
@@ -65,6 +67,7 @@ pub(super) struct Answering<'a> {
   pub(super) open: Option<OpenProject>,
   pub(super) decisions: &'a Decisions,
   pub(super) once: &'a ElementRef,
+  pub(super) gate: Option<InputGate>,
 }
 
 impl Answering<'_> {
@@ -265,7 +268,7 @@ fn tile(
         .into();
     }
   };
-  let press = answering.press(given, open);
+  let press = person_only(answering.gate.clone(), answering.press(given, open));
   Focus::Form
     .apply(tile_frame(&id, glyph, (&ctx.t(title), &covers)))
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
@@ -273,6 +276,21 @@ fn tile(
     .describe("state", "enabled")
     .on_click(move |_| press())
     .into()
+}
+
+/// A wider answer lets the run's agents do more: input from an MCP client takes it only under the person's
+/// stored consent to let automation answer approvals (`docs/stable-build.md`), checked as it lands.
+fn person_only(gate: Option<InputGate>, press: impl Fn() + Send + Sync + 'static) -> impl Fn() + Send + Sync + 'static {
+  move || {
+    let allowed = gate
+      .as_ref()
+      .is_some_and(|gate| gate.widening_allowed(Guarded::ApprovalWidening));
+    if input_source() == InputSource::Synthetic && !allowed {
+      tracing::warn!("synthetic input reached a wider approval answer; not taken");
+      return;
+    }
+    press();
+  }
 }
 
 /// A tile for an answer that is not offered: faded, a lock for its glyph, and why.

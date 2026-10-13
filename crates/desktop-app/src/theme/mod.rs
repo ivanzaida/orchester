@@ -21,6 +21,7 @@ mod form;
 mod lifecycle;
 mod markdown;
 mod metrics;
+mod needs_you;
 mod palette;
 pub mod pipelines;
 mod secrets;
@@ -50,6 +51,7 @@ pub use self::{
   decisions::{DecisionSpacing, DecisionText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
+  needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
   palette::{ExtraColor, Mode},
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
   settings::{SettingsSpacing, SettingsText},
@@ -94,6 +96,7 @@ pub fn install(app: &mut App, mode: Mode) {
   conversation::install(theme);
   cards::install(theme);
   composer::install(theme);
+  needs_you::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

@@ -73,7 +73,7 @@ fn tab_labels_mark_a_project_that_needs_you() {
 }
 
 #[test]
-fn tab_labels_pill_stays_at_zero_and_opens_the_overviews_needs_you() {
+fn tab_labels_pill_stays_at_zero_and_opens_the_needs_you_panel() {
   let mut window = Window::open();
   let navigation = window.navigation();
   assert!(
@@ -104,6 +104,7 @@ fn tab_labels_pill_stays_at_zero_and_opens_the_overviews_needs_you() {
   );
   navigation.open_tab();
   window.pass();
+  let before = navigation.route_now();
   let bounds = window
     .tree
     .get_element_by_id_mut("needs-you-pill")
@@ -113,12 +114,13 @@ fn tab_labels_pill_stays_at_zero_and_opens_the_overviews_needs_you() {
   window.tree.mouse_move(x, y);
   window.tree.mouse_down(x, y, MouseButton::Left);
   window.tree.mouse_up(x, y, MouseButton::Left);
-  window.pass();
+  window.until("the panel", |window| window.texts("needs-you-panel").is_some());
   assert_eq!(
-    navigation.route_now(),
-    Route::Project(project_id(), ProjectPage::Overview(OverviewTab::NeedsYou)),
-    "from a tab without a project, the pill opens the first project's Needs you"
+    window.texts("needs-you-empty-title"),
+    Some(vec!["Nothing needs you".to_owned()]),
+    "from a tab without a project, the pill opens the panel, empty at 0"
   );
+  assert_eq!(navigation.route_now(), before, "opening the panel goes nowhere");
 }
 
 #[test]

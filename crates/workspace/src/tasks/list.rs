@@ -91,6 +91,9 @@ pub struct LatestRun {
   pub decision: Option<AwaitedDecision>,
   /// The step its agent is on, or the one it stopped at.
   pub step: Option<CurrentStep>,
+  /// It reads interrupted only because no runner looks after it ([`LatestRun::without_runner`]); a runner
+  /// records it once one does.
+  pub lost_runner: bool,
 }
 
 /// What a run waiting for a person's decision stopped at (02.B6 `Np9kc`): the step, by name, and
@@ -190,6 +193,7 @@ impl LatestRun {
       question: awaited.question,
       decision: AwaitedDecision::of(run),
       step: CurrentStep::of(run),
+      lost_runner: false,
     }
   }
 
@@ -201,6 +205,7 @@ impl LatestRun {
     Self {
       phase,
       pausing: self.pausing && phase == TaskPhase::Running,
+      lost_runner: self.lost_runner || phase != self.phase,
       ..self.clone()
     }
   }

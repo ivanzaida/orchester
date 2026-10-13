@@ -21,6 +21,7 @@ pub mod index_use;
 pub mod integration;
 pub mod integration_jobs;
 pub mod list;
+pub mod needs_you;
 pub mod outside;
 pub mod overview;
 pub mod permissions;

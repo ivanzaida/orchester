@@ -623,6 +623,9 @@
     "daysAgo": "{{count}}d ago",
     "seconds": "{{count}} s",
     "minutes": "{{count}} min",
+    "hours": "{{count}} h",
+    "days": "{{count}} d",
+    "underMinute": "under a minute",
     "month": {
       "jan": "Jan",
       "feb": "Feb",

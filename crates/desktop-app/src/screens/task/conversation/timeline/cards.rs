@@ -17,6 +17,7 @@ pub(super) fn card(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
     step: timeline.step_of(ctx, item.execution),
     step_label,
     links: links(),
+    in_panel: false,
   };
   cards::card(ctx, place, item)
 }

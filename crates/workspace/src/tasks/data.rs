@@ -6,6 +6,7 @@ use std::{collections::BTreeMap, path::Path, sync::Arc};
 use orchester_core::{
   conversation::{Message, latest_question},
   id::{IdempotencyKey, ResourceId, RunId, TaskId},
+  question::AskedQuestions,
   resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
   run::{Run, RunEvent, RunNumber, StepExecutor, TaskPhase},
   sharing::TaskRevision,
@@ -20,8 +21,7 @@ use thiserror::Error;
 use super::{
   approvals::{self, ShownApproval},
   detail::run_store_error,
-  list::{Awaited, AwaitedPlan, AwaitedQuestion, Latest, LatestRun, Phases, phase_of},
-  overview::OverviewTab,
+  list::{Awaited, AwaitedPlan, AwaitedQuestion, Latest, LatestRun, Phases},
   run_approvals,
   unreadable::Unreadable,
 };
@@ -91,6 +91,8 @@ pub struct ProjectTasks {
   /// Tool requests auto mode's reviewer is judging: they wait without asking the person (no dialog, no
   /// *Needs you*) until the review ends, and only their card says so.
   pub reviewing_tool_approvals: Arc<Vec<ShownApproval>>,
+  /// Questions with suggested answers waiting for the person anywhere in this project.
+  pub asked: Arc<Vec<AskedQuestions>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
   pub phases: Arc<Phases>,
   /// How many runs of each task were started and can be read.
@@ -185,11 +187,8 @@ impl ProjectTasks {
     let (reviewing, pending): (Vec<_>, Vec<_>) = approvals::pending(&db, repo_root)?
       .into_iter()
       .partition(|shown| under_review.contains(&shown.approval.id));
-    let asking: Vec<RunId> = db
-      .waiting_questions()?
-      .iter()
-      .map(|asked| asked.request.run())
-      .collect();
+    let asked = db.waiting_questions()?;
+    let asking: Vec<RunId> = asked.iter().map(|asked| asked.request.run()).collect();
     let (mut group_holds, grouped) = group_holds(&db)?;
     let mut phases = Phases::new();
     let mut counts = BTreeMap::new();
@@ -252,27 +251,12 @@ impl ProjectTasks {
       missing_pipelines: Arc::new(db.missing_pipelines()?),
       pending_tool_approvals: Arc::new(pending),
       reviewing_tool_approvals: Arc::new(reviewing),
+      asked: Arc::new(asked),
       phases: Arc::new(phases),
       runs: Arc::new(counts),
       lost_to_runner: 0,
       auto_approving: Arc::new(auto_approving),
     })
-  }
-
-  /// What *Needs you* counts: each request waiting for a decision, and each other task waiting for a
-  /// person (a plan, a question). Whether the dialog is open changes nothing.
-  pub fn needs_you(&self) -> usize {
-    let asking: Vec<TaskId> = self
-      .pending_tool_approvals
-      .iter()
-      .filter_map(|shown| shown.task_id)
-      .collect();
-    let other_waiting = self
-      .tasks
-      .iter()
-      .filter(|task| OverviewTab::NeedsYou.includes(phase_of(task, &self.phases)) && !asking.contains(&task.id()))
-      .count();
-    other_waiting + self.pending_tool_approvals.len()
   }
 
   /// The tasks as they stand while no runner is connected: runs recorded as running are

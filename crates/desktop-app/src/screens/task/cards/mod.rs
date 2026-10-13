@@ -52,6 +52,9 @@ pub struct Place {
   pub step_label: StepLabel,
   /// What a press on a link in what an agent wrote does.
   pub links: LinkHandler,
+  /// Shown in the title bar's Needs you panel, whose item frames a waiting card and says what it is: the card
+  /// leaves out its own frame and head there (`YDJsC` in `zwuZt`).
+  pub in_panel: bool,
 }
 
 impl PartialEq for Place {
@@ -61,6 +64,7 @@ impl PartialEq for Place {
       && self.detail == other.detail
       && self.key == other.key
       && self.step == other.step
+      && self.in_panel == other.in_panel
       && Arc::ptr_eq(&self.links, &other.links)
   }
 }
