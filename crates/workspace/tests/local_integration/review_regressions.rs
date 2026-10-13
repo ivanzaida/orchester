@@ -6,7 +6,9 @@ use std::{
 
 use orchester_core::{
   id::{IdempotencyKey, RunId},
-  integration::local::{LocalError, LocalIntegrationStore, LocalPhase, PendingResolution, Resolution, ResolutionWrite},
+  integration::local::{
+    LocalError, LocalIntegrationStore, LocalPhase, LocalProcessStore, PendingResolution, Resolution, ResolutionWrite,
+  },
   name::Name,
   revision::Revision,
   run::{BranchName, NewRun},
@@ -214,12 +216,14 @@ fn local_integration_restart_records_completed_sync_commit_without_repeating_it(
   assert_eq!(git(&fixture.task_root, &["rev-parse", "HEAD"]), merged);
 }
 
-fn second_run(fixture: &Fixture) -> RunId {
+fn second_run(fixture: &Fixture, supersedes: bool) -> RunId {
   let mut db = ProjectDb::open(fixture.root()).expect("db");
   let first = db.run(fixture.run).expect("run").expect("exists");
   let now = Timestamp::now();
-  let task = db
-    .create_tasks(
+  let task = if supersedes {
+    db.task(first.task()).expect("task").expect("exists")
+  } else {
+    db.create_tasks(
       IdempotencyKey::generate(),
       vec![TaskDetails {
         title: Name::new("Second task").expect("name"),
@@ -231,7 +235,8 @@ fn second_run(fixture: &Fixture) -> RunId {
       now,
     )
     .expect("task")
-    .remove(0);
+    .remove(0)
+  };
   let mut run = db
     .create_run(
       IdempotencyKey::generate(),
@@ -276,7 +281,7 @@ fn local_integration_another_run_cannot_advance_checkout_before_restoration_and_
   session.approve_and_merge(&checked).expect("merge");
   let first_head = git(fixture.root(), &["rev-parse", "HEAD"]);
   drop(session);
-  let second = second_run(&fixture);
+  let second = second_run(&fixture, false);
   assert!(matches!(
     LocalIntegration::open(fixture.root(), second),
     Err(IntegrationError::State(LocalError::ForeignOperation))
@@ -371,4 +376,88 @@ fn local_integration_resolution_replay_refuses_foreign_stages_of_another_unresol
   assert!(session.abort_task().is_err());
   assert_eq!(git(&fixture.task_root, &["ls-files", "--stage"]), foreign_index);
   assert_eq!(fs::read(fixture.task_root.join("task.txt")).expect("retained"), working);
+}
+
+#[test]
+fn local_integration_superseded_refresh_releases_checkout_without_preservation_or_cancellation() {
+  superseded_review(false);
+}
+
+#[test]
+fn local_integration_superseded_selected_commit_review_releases_checkout_and_retains_edits() {
+  superseded_review(true);
+}
+
+fn superseded_review(selected_commit: bool) {
+  let fixture = Fixture::new(false);
+  let path = orchester_core::integration::local::LocalPath::new("local.txt").expect("path");
+  if selected_commit {
+    fs::write(fixture.root().join("local.txt"), b"selected staged\n").expect("staged edit");
+    git(fixture.root(), &["add", "local.txt"]);
+    fs::write(fixture.root().join("local.txt"), b"excluded working\n").expect("working edit");
+    fs::write(fixture.root().join("untracked.txt"), b"excluded untracked\n").expect("untracked");
+  }
+  let mut first = fixture.open();
+  first.refresh().expect("read-only refresh");
+  if selected_commit {
+    first.selected_commit_tree(&[path]).expect("selected review");
+  }
+  assert!(!first.operation().reserves_checkout());
+  let original = first.operation().reviewed().clone();
+  drop(first);
+  let second = second_run(&fixture, true);
+  let mut first = fixture.open();
+  assert!(matches!(first.sync(), Err(IntegrationError::Run)));
+  drop(first);
+  let mut second = LocalIntegration::open(fixture.root(), second).expect("latest run remains usable");
+  assert_eq!(second.operation().reviewed(), &original);
+  if selected_commit {
+    second.preserve("Latest run recovery").expect("preserve exact edits");
+  } else {
+    second.prepare_clean().expect("prepare clean");
+  }
+  second.sync().expect("fresh real Check on latest run");
+  assert_eq!(second.operation().phase(), LocalPhase::AwaitingApproval);
+  assert_eq!(git(fixture.root(), &["rev-parse", "HEAD"]), original.head);
+  if selected_commit {
+    second.cancel_preservation().expect("restore without merging");
+    assert_eq!(git(fixture.root(), &["show", ":local.txt"]), "selected staged");
+    assert_eq!(
+      fs::read(fixture.root().join("local.txt")).expect("working"),
+      b"excluded working\n"
+    );
+    assert_eq!(
+      fs::read(fixture.root().join("untracked.txt")).expect("untracked"),
+      b"excluded untracked\n"
+    );
+  }
+}
+
+#[test]
+fn local_integration_read_only_review_with_unfinished_process_keeps_checkout_reserved() {
+  let fixture = Fixture::new(false);
+  let mut first = fixture.open();
+  first.refresh().expect("review");
+  assert!(!first.operation().reserves_checkout());
+  drop(first);
+  let second = second_run(&fixture, true);
+  let mut db = ProjectDb::open(fixture.root()).expect("db");
+  let sequence = db.begin_local_process(fixture.run).expect("uncertain process");
+  assert!(matches!(
+    LocalIntegration::open(fixture.root(), second),
+    Err(IntegrationError::State(LocalError::ForeignOperation))
+  ));
+  assert!(db.local_operation(second).expect("no new journal").is_none());
+  assert!(
+    !db
+      .local_process(fixture.run)
+      .expect("receipt")
+      .expect("exists")
+      .finished
+  );
+  // The private fixture has no running process; mark only its synthetic receipt complete.
+  db.finish_local_process(fixture.run, sequence)
+    .expect("finished receipt");
+  let latest = LocalIntegration::open(fixture.root(), second).expect("finished review releases checkout");
+  assert_eq!(latest.operation().phase(), LocalPhase::Review);
 }

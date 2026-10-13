@@ -149,11 +149,19 @@ impl LocalOperation {
     self.commit_tree.as_deref()
   }
 
-  /// Unfinished journals reserve the shared checkout until recovery and cleanup finish.
+  /// Read-only reviews release the checkout; mutation and retained recovery keep it reserved.
   pub fn reserves_checkout(&self) -> bool {
     match self.phase {
       LocalPhase::Complete => false,
       LocalPhase::Canceled => self.preservation.as_ref().is_some_and(|saved| saved.retained),
+      LocalPhase::Review | LocalPhase::Prepared => {
+        self.preservation.is_some()
+          || self.merged.is_some()
+          || self.commit_tree.is_some()
+          || self.owned_task.is_some()
+          || self.pending_resolution.is_some()
+          || !self.editor_drafts.is_empty()
+      }
       _ => true,
     }
   }

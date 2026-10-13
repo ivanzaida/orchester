@@ -108,3 +108,32 @@ fn local_integration_refresh_cannot_erase_pending_merge_intent_after_interruptio
     .expect("reconciled completion");
   assert!(!operation.merge_pending());
 }
+
+#[test]
+fn local_integration_only_read_only_reviews_release_checkout_reservation() {
+  let base = checkout('a');
+  let mut review = LocalOperation::new(RunId::generate(), base.clone()).expect("review");
+  assert!(!review.reserves_checkout());
+  review.prepared(base.clone()).expect("read-only preparation");
+  assert!(!review.reserves_checkout());
+  review.begin_sync(&base).expect("pending mutation");
+  assert!(review.reserves_checkout());
+  review.own_task(base.clone());
+  review.refresh(base.clone()).expect("review again");
+  assert!(
+    review.reserves_checkout(),
+    "owned task recovery cannot be released by refresh"
+  );
+
+  let mut commit = LocalOperation::new(RunId::generate(), base.clone()).expect("review");
+  commit.begin_commit(&base, "selected commit").expect("intent");
+  assert!(commit.reserves_checkout());
+  commit
+    .commit_intent(vec![LocalPath::new("local.txt").expect("path")], "b".repeat(40))
+    .expect("selection");
+  commit.commit_finished(base).expect("commit completed");
+  assert!(
+    commit.reserves_checkout(),
+    "retained commit originals still reserve the checkout"
+  );
+}

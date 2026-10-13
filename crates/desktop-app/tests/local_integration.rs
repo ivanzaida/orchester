@@ -1,4 +1,6 @@
 //! Private behavioral UI regressions, not human consent outcomes or native Pencil verification.
+#[path = "local_integration/abort.rs"]
+mod abort;
 #[path = "local_integration/acknowledgement.rs"]
 mod acknowledgement;
 #[path = "local_integration/candidates.rs"]

@@ -232,8 +232,7 @@ impl Inspector {
         _ => true,
       };
     let stale = phase == LocalPhase::AwaitingApproval && !props.view.checked_current;
-    let unresolved =
-      matches!(phase, LocalPhase::TaskConflicts | LocalPhase::RestoreConflicts) && !props.view.conflicts.is_empty();
+    let unresolved = matches!(action, Action::Continue | Action::FinishRestore) && !props.view.conflicts.is_empty();
     panel = panel.child(button(
       ctx,
       props,

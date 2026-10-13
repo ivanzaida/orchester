@@ -26,7 +26,7 @@ pub(crate) use legacy::managed_checkout;
 pub use metadata::metadata_allowed;
 use orchester_core::{
   id::RunId,
-  integration::local::{LocalError, LocalIntegrationStore, LocalOperation},
+  integration::local::{LocalError, LocalIntegrationStore, LocalOperation, LocalProcessStore},
   run::{Run, RunStatus},
   store::{MergeStore, RunStore},
 };
@@ -108,13 +108,7 @@ impl LocalIntegration {
     if run.status() != &RunStatus::Succeeded {
       return Err(IntegrationError::Run);
     }
-    if db
-      .local_operations()?
-      .iter()
-      .any(|operation| operation.run() != run_id && operation.reserves_checkout())
-    {
-      return Err(LocalError::ForeignOperation.into());
-    }
+    ensure_checkout_available(&db, run_id)?;
     let scratch =
       orchester_exec::local_git::prepare_scratch(root, &[".orchester", "local-integration", &run_id.to_string()])?;
     let main = LocalGit::new(root, &scratch)?;
@@ -235,6 +229,20 @@ impl LocalIntegration {
     self.save()
   }
 }
+fn ensure_checkout_available(db: &ProjectDb, run: RunId) -> Result<(), IntegrationError> {
+  for operation in db.local_operations()? {
+    if operation.run() != run
+      && (operation.reserves_checkout()
+        || db
+          .local_process(operation.run())?
+          .is_some_and(|process| !process.finished))
+    {
+      return Err(LocalError::ForeignOperation.into());
+    }
+  }
+  Ok(())
+}
+
 pub(super) fn ensure_project_git(git: &LocalGit) -> Result<(), IntegrationError> {
   let common = git.text(&["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
   let directory = Path::new(&common).canonicalize().map_err(|_| LocalGitError::Io)?;
