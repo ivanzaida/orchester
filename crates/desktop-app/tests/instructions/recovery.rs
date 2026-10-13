@@ -325,3 +325,30 @@ fn instructions_delayed_reload_keeps_invalid_post_request_raw_text_without_false
   assert_eq!(screen.entry(id).body.text().as_str(), "Outside");
   assert_eq!(screen.entry(id).state.published().expect("original version").get(), 1);
 }
+
+#[test]
+fn instructions_create_completion_keeps_new_rule_identity_while_catalog_refresh_waits() {
+  let mut screen = Instructions::new();
+  let old = screen.rule("Existing agreement", "Existing text", InstructionScope::Project, true);
+  screen.go();
+  screen.click("instructions-new");
+  screen.set("instruction-name", "New agreement");
+  screen.set("instruction-prompt", "Created text");
+  let hold = hold(&screen);
+  hold.set(true);
+  screen.click("instruction-create");
+  screen.until("new resource committed", |s| {
+    s.listed().entries.len() == 2 && s.exists("instruction-publish")
+  });
+  assert_eq!(screen.text("instruction-prompt"), "Created text");
+  screen.click("instruction-publish");
+  screen.until("new resource published", |s| {
+    s.listed()
+      .entries
+      .iter()
+      .any(|e| &*e.name == "New agreement" && e.state.published().is_some())
+  });
+  assert_eq!(screen.entry(old).state.published().expect("old version").get(), 1);
+  assert_eq!(screen.entry(old).body.text().as_str(), "Existing text");
+  hold.set(false);
+}

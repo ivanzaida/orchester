@@ -108,6 +108,7 @@ impl Component for Editor {
         revision.update(|v| *v += 1);
         // Opening the newly created resource preserves the complete body just saved.
         if matches!(selection.view.get_untracked(), View::New(_)) {
+          selection.created.set(Saved(Some(done.entry.clone())));
           selection.dirty.set(false);
           selection
             .view

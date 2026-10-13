@@ -45,6 +45,7 @@ impl DevtoolsInspectable for Saved {}
 pub struct Selection {
   pub view: Signal<View>,
   pub pending: Signal<Option<View>>,
+  pub created: Signal<Saved>,
   pub dirty: Signal<bool>,
   pub busy: Signal<bool>,
   pub full: Signal<bool>,

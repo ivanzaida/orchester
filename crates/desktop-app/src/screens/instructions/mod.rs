@@ -60,6 +60,7 @@ impl Component for InstructionsScreen {
       selection: Selection {
         view: ctx.signal(View::Rule(Tab::Project, None)),
         pending: ctx.signal(None),
+        created: ctx.signal(state::Saved::default()),
         dirty,
         busy,
         full: ctx.signal(false),
@@ -140,9 +141,17 @@ impl InstructionsScreen {
           View::Rule(tab, _) | View::New(tab) => tab,
           View::Import => unreachable!(),
         };
+        let created = self.selection.created.get().0;
+        if created.as_ref().is_some_and(|entry| data.entry(entry.id).is_some()) {
+          self.selection.created.set(state::Saved::default());
+        }
         let entry = match view {
           View::Rule(_, selected) => selected
-            .and_then(|id| data.entry(id))
+            .and_then(|id| {
+              data
+                .entry(id)
+                .or_else(|| created.as_ref().filter(|entry| entry.id == id))
+            })
             .or_else(|| data.entries.iter().find(|entry| Tab::of(entry.body.scope()) == tab))
             .cloned(),
           _ => None,
