@@ -292,6 +292,9 @@ async fn answer(
     Command::PauseRun { run } => return later.answer(run, async move { handle.pause_run(run).await }),
     Command::CancelRun { run } => return later.answer(run, async move { handle.cancel_run(run).await }),
     Command::ResumeRun { run } => return later.answer(run, async move { handle.resume_run(run).await }),
+    Command::ContinueOnConnection { run, connection } => {
+      return later.answer(run, async move { handle.continue_on_connection(run, connection).await });
+    }
     Command::RaiseLimit {
       run,
       budget,

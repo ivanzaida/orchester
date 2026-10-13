@@ -144,6 +144,38 @@
       "commit": "commit {{revision}}",
       "noChecks": "No step ran after the work was made.",
       "passed": "Passed"
+    },
+    "planLimit": {
+      "noticeTitle": "Stopped at {{account}}'s plan limit · checkpoint {{checkpoint}}",
+      "noticeTitleUnsaved": "Stopped at {{account}}'s plan limit",
+      "noticeBody": "The CLI refused {{step}}'s next turn: account {{account}} reached its plan limit, which resets {{time}}. {{agent}}'s session is kept in {{account}}'s folder.",
+      "noticeBodyNoReset": "The CLI refused {{step}}'s next turn: account {{account}} reached its plan limit, and did not say when it resets. {{agent}}'s session is kept in {{account}}'s folder.",
+      "title": "Continue this run",
+      "plan": "{{plan}} plan",
+      "defaultAccount": "Default",
+      "wait": "Wait for {{account}}, then continue",
+      "waitDetail": "At {{time}} Orchester resumes {{agent}}'s own session on {{account}}, where it stopped. Later steps stay on their own accounts.",
+      "waitDetailNoReset": "The CLI did not say when {{account}}'s limit resets. Try again later to resume {{agent}}'s own session on {{account}}, where it stopped.",
+      "other": "Continue now on another account",
+      "otherDetail": "A new {{agent}} session on {{connection}} starts from checkpoint {{checkpoint}}; the stopped session's conversation stays with {{account}}.",
+      "noOther": "No other {{cli}} connection runs on another account that can start now. Add one with another account in Connections.",
+      "otherConnection": "Other connection for {{step}}",
+      "otherNote": "Only connections of the same CLI on other accounts are offered. The step's code and brief then go to that account's provider.",
+      "continueAt": "Continue at {{time}}",
+      "continueAtReason": "Orchester continues the run by itself {{time}}.",
+      "tryNow": "Try again now",
+      "continueNow": "Continue now on {{connection}}",
+      "waitNote": "Until then the run stays stopped and holds no agent slot. You can change the choice at any time.",
+      "fiveHour": "5-hour",
+      "weekly": "Weekly",
+      "window": "{{hours}}-hour",
+      "reached": "limit reached · resets {{time}}",
+      "resets": "resets {{time}}",
+      "today": "today, {{time}}",
+      "day": "{{month}} {{day}}, {{time}}",
+      "accountsTitle": "Accounts in this run",
+      "accountsRow": "{{agent}} · account {{account}}",
+      "accountsStopped": "{{agent}} · account {{account}} · stopped at its plan limit"
     }
   }
 }

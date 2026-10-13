@@ -33,6 +33,15 @@ const PERMISSIONS_SCHEMA: u32 = 1;
 const EVENT_SCHEMA: u32 = 2;
 
 impl ProjectDb {
+  /// Runs stopped at their account's plan limit, ordered by number; each waits for the limit's reset or a person.
+  pub fn runs_at_plan_limit(&self) -> Result<Vec<ListedRun<RunStoreError>>, RunStoreError> {
+    Ok(load_runs(
+      &self.connection,
+      "WHERE status = 'paused' AND status_reason = 'plan_limit' ORDER BY number",
+      [],
+    )?)
+  }
+
   /// [`RunStore::create_run`] for a task the caller found queued: the task must still be queued
   /// when the run is recorded, in the same transaction. A person may have taken it back to the
   /// drafts since the caller checked it (a held group's task), and a draft never has a run.

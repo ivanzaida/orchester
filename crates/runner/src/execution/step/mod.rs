@@ -236,6 +236,7 @@ impl RunTask {
     }
     let workspace = Workspace::of(&self.root, &self.run, &self.worktree, execution, start);
     let mut continuation = self.begin_step(execution)?;
+    self.keep_session_on_its_account(execution, &mut continuation)?;
     let model = self.model(execution)?;
     let mut invocation = self
       .db

@@ -74,7 +74,7 @@ impl<'a> Stop<'a> {
   pub fn field(&self) -> Option<Unit> {
     match self.limit {
       RunLimit::Time => Some(Unit::Minutes),
-      RunLimit::GroupBudget | RunLimit::DailyBudget => None,
+      RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::PlanLimit { .. } => None,
       RunLimit::Tokens | RunLimit::StepBudget { .. } => self.tokens.map(|_| Unit::Tokens),
     }
   }

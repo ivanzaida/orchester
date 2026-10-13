@@ -8,7 +8,7 @@ use orchester_core::{
   time::Timestamp,
   usage::limits::{LimitSnapshot, SnapshotSource, retained_since},
 };
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 
 use super::{
   ProjectDb,
@@ -97,4 +97,39 @@ pub(super) fn run_number(number: i64) -> Result<RunNumber, StoreError> {
     .and_then(std::num::NonZeroU32::new)
     .map(RunNumber::new)
     .ok_or_else(|| corrupt("run number", number))
+}
+
+impl ProjectDb {
+  /// The last report of `run`'s CLIs' limits, with the account it came from: what a run stopped at a plan limit
+  /// waits for.
+  pub fn last_limit_reading(&self, run: RunId) -> Result<Option<LimitReading>, StoreError> {
+    let row = self
+      .connection
+      .query_row(
+        "SELECT provider, at, body, account_id FROM plan_limit_snapshots WHERE run_id = ?1 \
+         ORDER BY at DESC, id DESC LIMIT 1",
+        [run.to_string()],
+        |row| {
+          Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, i64>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, Option<String>>(3)?,
+          ))
+        },
+      )
+      .optional()?;
+    row
+      .map(|(provider, at, body, account)| {
+        Ok(LimitReading {
+          provider: parse_provider(&provider)?,
+          account: account
+            .map(|account| parse("plan limits account", &account))
+            .transpose()?,
+          at: Timestamp::from_unix_millis(at),
+          limits: decode_json::<PlanLimits>(WHAT, SCHEMA, &body)?,
+        })
+      })
+      .transpose()
+  }
 }

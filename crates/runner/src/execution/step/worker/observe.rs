@@ -6,16 +6,17 @@
 use orchester_core::{
   connection::{
     AgentProvider,
-    plan_limits::{LimitReading, PlanLimits},
-    stream::AgentEvent,
+    plan_limits::{LimitReading, LimitState, PlanLimits},
+    stream::{AgentEvent, InvocationOutcome},
   },
+  run::RunLimit,
   store::ActivityStore,
   time::Timestamp,
 };
 use orchester_ipc::Event;
 use orchester_store::StoreError;
 
-use super::{Driver, FLUSH_BATCH, Transport, Watch, Worker, WorkerEvent};
+use super::{Driver, FLUSH_BATCH, StopCause, Transport, Watch, Worker, WorkerEvent};
 
 impl Worker {
   /// Takes in one event: a turn's usage goes to the run, and a new turn after a used-up budget
@@ -89,11 +90,26 @@ impl Worker {
       at: Timestamp::now(),
       limits,
     };
+    watch.plan_reached = reading.state(reading.at) == LimitState::Reached;
     // The history only lacks this report, which its chart shows as a gap; the agent works on.
     if let Err(error) = watch.db.save_limit_snapshot(watch.invocation.run, &reading) {
       tracing::warn!(%error, "cannot store the plan limits the agent's CLI reported");
     }
     self.notifier.send(Event::PlanLimits(reading));
+  }
+
+  /// Why the agent stopped: the run's own stop, or its account's plan limit when its turn failed while the CLI said
+  /// the limit is reached (`docs/design/agent-accounts.md`): the step then waits for the reset or another account
+  /// instead of failing. A running agent never moves to another account by itself.
+  pub(super) fn stopped(watch: &Watch, outcome: &InvocationOutcome) -> Option<StopCause> {
+    match (watch.stop, outcome) {
+      (None, InvocationOutcome::TurnFailed { .. }) if watch.plan_reached => {
+        Some(StopCause::Limit(RunLimit::PlanLimit {
+          execution: watch.invocation.execution,
+        }))
+      }
+      (stop, _) => stop,
+    }
   }
 
   pub(super) fn flush(&self, watch: &mut Watch) -> Result<(), StoreError> {

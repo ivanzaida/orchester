@@ -10,7 +10,7 @@ use orchester_core::{
   permission::{FolderBounds, ResolvedFolder, capability::EnforcedPermissions},
   resource::{AgentProfile, ModelId, Step, StepKey, StepKind},
   run::{PinnedVersion, StepExecutor},
-  store::{ConnectionStore, ResourceStore},
+  store::{ActivityStore, ConnectionStore, ResourceStore},
 };
 
 use super::{super::super::run::RunTask, problem};
@@ -89,10 +89,12 @@ impl RunTask {
       .collect()
   }
 
-  /// The pinned profile version and the agent connection it runs on.
+  /// The pinned profile version and the agent connection `step` runs it on: the one a person chose for this run
+  /// when the step stopped at its account's plan limit, else the profile's own.
   pub(in super::super) fn profile_and_connection(
     &self,
     profile: &PinnedVersion,
+    step: &StepKey,
   ) -> Result<(AgentProfile, AgentConnection), RunnerProblem> {
     let body: AgentProfile = self
       .db
@@ -101,13 +103,57 @@ impl RunTask {
       .ok_or_else(|| problem(format!("agent profile version {} is missing", profile.number)))?
       .body()
       .clone();
+    let chosen = self
+      .db
+      .step_connection(self.run.id(), step)
+      .map_err(|error| problem(error.to_string()))?;
     let connection = self
       .db
-      .connection(body.connection())
+      .connection(chosen.unwrap_or(body.connection()))
       .map_err(|error| problem(error.to_string()))?
       .ok_or_else(|| problem("the agent profile's connection no longer exists".to_owned()))?;
     let connection =
       AgentConnection::try_from(connection).map_err(|_| problem("the connection is not an agent CLI".to_owned()))?;
     Ok((body, connection))
+  }
+}
+
+impl RunTask {
+  /// Forgets the CLI session `continuation` resumes when `execution`'s agent now starts on another account than the
+  /// session's: a session lives in its account's folder, so the step starts a new session there from the checkpoint
+  /// (`docs/design/agent-accounts.md`, a step continued on another account after a plan limit).
+  pub(in super::super) fn keep_session_on_its_account(
+    &self,
+    execution: StepExecutionId,
+    continuation: &mut super::super::Continuation,
+  ) -> Result<(), orchester_store::StoreError> {
+    let Some(session) = continuation.session.as_deref() else {
+      return Ok(());
+    };
+    let Ok((step, profile, _)) = self.agent_step(execution) else {
+      return Ok(());
+    };
+    let Ok((_, connection)) = self.profile_and_connection(profile, &step.key) else {
+      return Ok(());
+    };
+    let invocations = self.db.invocations(self.run.id())?;
+    let Some(last) = invocations
+      .iter()
+      .rev()
+      .find(|invocation| invocation.execution == execution && invocation.session.as_deref() == Some(session))
+    else {
+      return Ok(());
+    };
+    let recorded = self
+      .db
+      .invocation_accounts(self.run.id())?
+      .into_iter()
+      .find(|(invocation, _)| *invocation == last.id)
+      .map(|(_, account)| account);
+    let now = connection.account().id(connection.provider());
+    if recorded.is_some() && recorded != now {
+      continuation.session = None;
+    }
+    Ok(())
   }
 }

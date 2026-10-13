@@ -34,6 +34,7 @@ mod repository_import;
 mod resources;
 mod reviewer_usage;
 mod revision_diffs;
+mod run_connections;
 mod runs;
 mod schema;
 mod secrets;

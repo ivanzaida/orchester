@@ -411,7 +411,8 @@
       "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue.",
       "notInterrupted": "The run is not interrupted.",
       "notWaiting": "The run does not wait for your decision any more.",
-      "failed": "The runner could not do this; its log has the details."
+      "failed": "The runner could not do this; its log has the details.",
+      "notAnotherAccount": "Choose a connection of the same CLI that runs on another account and can start now."
     },
     "conversation": {
       "group": {

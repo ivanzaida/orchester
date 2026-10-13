@@ -221,7 +221,7 @@ impl RunTask {
     index: AgentIndex,
   ) -> Result<AgentStart, RunnerProblem> {
     let (step, profile, model) = self.agent_step(execution)?;
-    let (body, connection) = self.profile_and_connection(profile)?;
+    let (body, connection) = self.profile_and_connection(profile, &step.key)?;
     let agent = StepAgent {
       step,
       profile,

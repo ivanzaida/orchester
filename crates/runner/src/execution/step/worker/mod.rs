@@ -243,6 +243,9 @@ pub(super) struct Watch {
   /// Continuations since a decision was settled or a call returned that Codex waited for after its turn
   /// (`process::MAX_IDLE_CONTINUATIONS`).
   pub(super) idle_continuations: u8,
+  /// The agent's account is at its plan limit, as its CLI's last plan reading said: a turn that fails now stops at
+  /// that limit instead of failing the step.
+  pub(super) plan_reached: bool,
 }
 
 impl Watch {
@@ -267,6 +270,7 @@ impl Watch {
       tools_after_turn: false,
       returns_continued: 0,
       idle_continuations: 0,
+      plan_reached: false,
     })
   }
 

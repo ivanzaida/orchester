@@ -29,6 +29,7 @@ mod handoff;
 mod idle;
 mod permissions;
 mod plan;
+mod plan_limit;
 mod prepare;
 mod question;
 mod record;
@@ -53,7 +54,7 @@ use std::{
 };
 
 use orchester_core::{
-  id::{IdempotencyKey, RunId, TaskId},
+  id::{ConnectionId, IdempotencyKey, RunId, TaskId},
   integration::Leftovers,
   run::{InterruptCause, RaisedLimits, RunStatus},
   secret::SecretVault,
@@ -126,6 +127,8 @@ struct Inner {
   /// Read when the scheduler is made, as the runner starts, before the desktop connects.
   earlier_groups: task_groups::EarlierGroups,
   blocked_runs: blocked_runs::BlockedRuns,
+  /// Runs stopped at their account's plan limit that a timer continues at its reset.
+  plan_waits: plan_limit::PlanWaits,
 }
 
 impl Scheduler {
@@ -142,8 +145,13 @@ impl Scheduler {
         group_retries: task_groups::GroupRetries::default(),
         earlier_groups: task_groups::EarlierGroups::read(project_root),
         blocked_runs: blocked_runs::BlockedRuns::default(),
+        plan_waits: plan_limit::PlanWaits::default(),
       }),
     }
+  }
+
+  fn plan_waits(&self) -> &plan_limit::PlanWaits {
+    &self.inner.plan_waits
   }
 
   /// Runs being executed right now. A run its task settled is not, even while the task still
@@ -326,6 +334,14 @@ impl Scheduler {
     self.continue_settled(run, |db, root| idle::resume(db, root, run)).await
   }
 
+  /// Continues `run`, stopped at its account's plan limit, now on `connection`, another account's connection of
+  /// the same CLI, as a new session for the stopped step and this run only.
+  pub async fn continue_on_connection(&self, run: RunId, connection: ConnectionId) -> Result<(), Rejection> {
+    self
+      .continue_settled(run, |db, root| plan_limit::continue_on(db, root, run, connection))
+      .await
+  }
+
   /// Raises the limits of `run`, stopped at a limit, and continues it.
   pub async fn raise_limit(&self, run: RunId, limits: RaisedLimits) -> Result<(), Rejection> {
     self
@@ -501,7 +517,12 @@ impl Scheduler {
       controls,
       settled: settled.clone(),
     };
-    let task = tokio::spawn(RunTask::new(db, prepared, context).drive());
+    let scheduler = self.clone();
+    let task = tokio::spawn(async move {
+      RunTask::new(db, prepared, context).drive().await;
+      // A run its task stopped at a plan limit continues at the reset.
+      scheduler.wait_for_plan_resets();
+    });
     active.insert(run, ActiveRun { control, task, settled });
     Ok(())
   }

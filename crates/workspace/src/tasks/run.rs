@@ -328,6 +328,7 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::RunNotFound
       | Rejection::RunNotRunning
       | Rejection::RunNotPaused
+      | Rejection::NotAnotherAccount
       | Rejection::RunEnded
       | Rejection::WorktreeRemoved
       | Rejection::LimitNotRaised { .. }
@@ -398,6 +399,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Request(RequestError::Lost) => Message::new("runs.control.lost"),
     RunRequestError::Rejected(Rejection::RunNotRunning) => Message::new("runs.control.notRunning"),
     RunRequestError::Rejected(Rejection::RunNotPaused) => Message::new("runs.control.notPaused"),
+    RunRequestError::Rejected(Rejection::NotAnotherAccount) => Message::new("runs.control.notAnotherAccount"),
     RunRequestError::Rejected(Rejection::RunEnded) => Message::new("runs.control.ended"),
     RunRequestError::Rejected(Rejection::WorktreeRemoved) => Message::new("runs.control.worktreeRemoved"),
     RunRequestError::Rejected(Rejection::RunNotInterrupted) => Message::new("runs.control.notInterrupted"),
@@ -420,6 +422,10 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Rejected(Rejection::LimitNotAboveUsed {
       limit: RunLimit::StepBudget { .. },
     }) => Message::new("runs.limit.stepNotAboveUsed"),
+    // An account's plan limit is not raised by Orchester; no runner refuses it for being too low.
+    RunRequestError::Rejected(Rejection::LimitNotAboveUsed {
+      limit: RunLimit::PlanLimit { .. },
+    }) => Message::new("runs.control.failed"),
     RunRequestError::Rejected(Rejection::PermissionsNotEnforceable { step, .. }) => {
       Message::new("runs.permissions.errors.notEnforceable").with("step", step.to_string())
     }

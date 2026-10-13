@@ -6,7 +6,12 @@
 use std::collections::BTreeMap;
 
 use orchester_core::{
-  connection::stream::{AgentEvent, InvocationOutcome, ToolCommandResult},
+  account::AccountCli,
+  connection::{
+    AgentProvider,
+    plan_limits::{Blocked, LimitBlock, LimitReading, LimitState, LimitWindow, PlanLimits},
+    stream::{AgentEvent, InvocationOutcome, ToolCommandResult},
+  },
   conversation::{AgentMessage, Message, MessageBody},
   id::{IdempotencyKey, StepExecutionId},
   resource::{ModelId, RepositoryAccess, StepKey, StepKind},
@@ -476,6 +481,47 @@ impl<'k> Drive<'k> {
       self.record(&events)?;
     }
     let events = self.run.stop_at_limit(limit, at)?;
+    self.record(&events)?;
+    Ok(self)
+  }
+
+  /// Stops at the plan limit of the account `step` runs on: its CLI reported the five-hour window used up, resetting
+  /// two hours after the seed's now, and refused the turn, as the runner stops it.
+  pub fn stop_at_plan_limit(&mut self, step: &str) -> Result<&mut Self, SeedError> {
+    let execution = self.execution(step)?;
+    if let Some(invocation) = self.open.get(&Self::key(step)) {
+      let id = invocation.id;
+      self
+        .kontur
+        .db
+        .save_invocation_account(id, AccountCli::Codex.default_account())?;
+    }
+    self.stop_open()?;
+    let at = self.tick();
+    let window = LimitWindow::new(
+      300,
+      Some(100.0),
+      Some(self.kontur.ago(-120)),
+      LimitState::Reached,
+      false,
+    )
+    .expect("a five-hour window used up is valid");
+    let reading = LimitReading {
+      provider: AgentProvider::CodexCli,
+      account: None,
+      at,
+      limits: PlanLimits {
+        windows: vec![window],
+        plan: None,
+        credits: None,
+        blocked: Some(Blocked {
+          reason: LimitBlock::Window,
+          window: Some(300),
+        }),
+      },
+    };
+    self.kontur.db.save_limit_snapshot(self.run.id(), &reading)?;
+    let events = self.run.stop_at_limit(RunLimit::PlanLimit { execution }, at)?;
     self.record(&events)?;
     Ok(self)
   }

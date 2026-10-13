@@ -51,7 +51,11 @@ pub(super) fn cancel(db: &mut ProjectDb, run: RunId) -> Result<Run, Rejection> {
 pub(super) fn resume(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Prepared, Rejection> {
   let mut run = load(db, run)?;
   match run.status() {
-    RunStatus::Paused(PauseReason::Requested | PauseReason::LimitReached(RunLimit::DailyBudget)) => {}
+    // At its account's plan limit the same session continues on the same account: at the reset, or when a person
+    // asks to try again.
+    RunStatus::Paused(
+      PauseReason::Requested | PauseReason::LimitReached(RunLimit::DailyBudget | RunLimit::PlanLimit { .. }),
+    ) => {}
     RunStatus::Paused(PauseReason::LimitReached(limit)) => return Err(Rejection::LimitNotRaised { limit: *limit }),
     _ => return Err(Rejection::RunNotPaused),
   }

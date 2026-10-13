@@ -166,6 +166,10 @@ fn limit_words(ctx: &Ctx, run: &RunView) -> Option<Arc<str>> {
         ],
       ))
     }
+    RunLimit::PlanLimit { execution } => {
+      let step = run.step_of(execution)?;
+      Some(ctx.t_args("composer.context.stoppedPlanLimit", [("step", &*step.name)]))
+    }
     RunLimit::DailyBudget | RunLimit::GroupBudget => None,
   }
 }

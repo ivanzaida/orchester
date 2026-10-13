@@ -240,6 +240,18 @@ impl LimitReading {
     (!blocked.reason.lifts_at_reset() || window.is_none()).then_some(blocked.reason)
   }
 
+  /// When the limit the account reached lifts: the reset of the window it reached; `None` when it reached none, or
+  /// the CLI did not say when that window resets.
+  pub fn resets_at(&self, now: Timestamp) -> Option<Timestamp> {
+    if self.block_beyond_reset().is_some() {
+      return None;
+    }
+    self
+      .limiting(now)
+      .filter(|window| self.window_state(window, now) == LimitState::Reached)
+      .and_then(LimitWindow::resets)
+  }
+
   /// The account's state: a block no reset lifts holds; otherwise the limiting window decides.
   pub fn state(&self, now: Timestamp) -> LimitState {
     if self.block_beyond_reset().is_some() {

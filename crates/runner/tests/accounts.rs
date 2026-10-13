@@ -11,7 +11,7 @@ use orchester_core::{
   connection::{AccountStartProblem, AgentConnection, AgentProvider, ConnectionAccount, ConnectionCheck, LastCheck},
   id::{AgentAccountId, IdempotencyKey},
   resource::StepKey,
-  run::{PreflightProblem, RunStatus},
+  run::{PauseReason, PreflightProblem, RunLimit, RunStatus},
   store::ConnectionStore,
   time::Timestamp,
 };
@@ -164,4 +164,112 @@ async fn accounts_plan_limits_and_invocations_name_the_account() {
   let invocations = db.invocation_accounts(id).expect("accounts");
   assert_eq!(invocations.len(), 1);
   assert_eq!(invocations[0].1, account);
+}
+
+/// A Claude Code project on account `Work` whose folder has no room left, and a second connection of the CLI on
+/// `Personal`, whose folder has.
+fn at_the_limit() -> (TestProject, TempDir, TempDir, orchester_core::id::ConnectionId) {
+  let project = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    ..Setup::new("Hit the plan limit")
+  });
+  let root = project.repo.path();
+  let work = tempfile::tempdir().expect("Work's folder");
+  let personal = tempfile::tempdir().expect("Personal's folder");
+  std::fs::write(personal.path().join("plan-room"), "").expect("Personal has room");
+  choose(
+    root,
+    ConnectionAccount::Account {
+      id: AgentAccountId::generate(),
+      folder: work.path().to_path_buf(),
+    },
+  );
+  let mut other =
+    AgentConnection::try_from(support::agent_connection_of(AgentProvider::ClaudeCodeCli)).expect("an agent connection");
+  other.rename(orchester_core::name::Name::new("Claude · Personal").expect("a name"));
+  other
+    .set_account(ConnectionAccount::Account {
+      id: AgentAccountId::generate(),
+      folder: personal.path().to_path_buf(),
+    })
+    .expect("an agent CLI");
+  other
+    .record_check(ConnectionCheck {
+      at: Timestamp::now(),
+      result: orchester_core::connection::CheckResult::Available {
+        version: "2.1.89".into(),
+        sign_in: orchester_core::connection::SignIn::SignedIn,
+        catalog: orchester_core::connection::ModelCatalog::new(
+          orchester_core::connection::CatalogSource::Provider,
+          Vec::new(),
+        ),
+      },
+    })
+    .expect("its kind");
+  let id = other.id();
+  ProjectDb::open(root)
+    .expect("open")
+    .create_connection(&other.into_connection())
+    .expect("created");
+  (project, work, personal, id)
+}
+
+fn stopped_at_plan_limit(run: &orchester_core::run::Run) -> bool {
+  matches!(
+    run.status(),
+    RunStatus::Paused(PauseReason::LimitReached(RunLimit::PlanLimit { .. }))
+  )
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn accounts_a_run_stops_at_its_accounts_plan_limit_and_waits_for_the_same_session() {
+  let (project, work, _personal, _) = at_the_limit();
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  wait_for(root, &mut events, id, stopped_at_plan_limit).await;
+  let db = ProjectDb::open(root).expect("open");
+  let reading = db.last_limit_reading(id).expect("read").expect("the refusal's reading");
+  assert!(
+    reading.resets_at(Timestamp::now()).is_some(),
+    "the run knows when to continue"
+  );
+  std::fs::write(work.path().join("plan-room"), "").expect("the window reset");
+  scheduler.resume_run(id).await.expect("the run continues");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let argv = reported(&ProjectDb::open(root).expect("open"), id, "argv: ");
+  assert!(
+    argv.last().is_some_and(|argv| argv.contains("--resume")),
+    "the same session continues: {argv:?}"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn accounts_a_person_continues_a_stopped_step_on_another_account_as_a_new_session() {
+  let (project, _work, personal, other) = at_the_limit();
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  wait_for(root, &mut events, id, stopped_at_plan_limit).await;
+  scheduler
+    .continue_on_connection(id, other)
+    .await
+    .expect("the step continues on Personal");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let db = ProjectDb::open(root).expect("open");
+  let argv = reported(&db, id, "argv: ");
+  assert!(
+    argv.last().is_some_and(|argv| !argv.contains("--resume")),
+    "a new session: {argv:?}"
+  );
+  let folders = reported(&db, id, "account folder: ");
+  assert_eq!(folders.last(), Some(&personal.path().display().to_string()));
 }

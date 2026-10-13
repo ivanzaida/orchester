@@ -191,6 +191,9 @@ impl Fake {
     if prompt.contains("Refuse the model") {
       return self.refuse_the_model();
     }
+    if prompt.contains("Hit the plan limit") && !account_has_room() {
+      return self.hit_the_plan_limit();
+    }
     if prompt.contains(fake_claude_background::PROMPT) {
       return self.structured_output(step);
     }
@@ -241,6 +244,11 @@ fn started_prompt(args: &[String], prompt: &str) -> Option<fake_permission_promp
     return None;
   }
   fake_permission_prompt::Prompt::open(args)
+}
+
+/// Whether the account the fake runs on has room left: its folder holds `plan-room`.
+fn account_has_room() -> bool {
+  std::env::var_os("CLAUDE_CONFIG_DIR").is_some_and(|folder| Path::new(&folder).join("plan-room").exists())
 }
 
 /// "Report plan limits": prints the `rate_limit_event` Claude Code 2.1.89 printed.
@@ -427,6 +435,26 @@ impl Fake {
       "usage": {"input_tokens": 0, "output_tokens": 0}, "permission_denials": [],
     });
     println!("{result}");
+    ExitCode::from(1)
+  }
+
+  /// "Hit the plan limit": reports its account's five-hour window reached, resetting in an hour, and refuses the
+  /// turn as Claude Code does, unless its account folder holds `plan-room`.
+  fn hit_the_plan_limit(&self) -> ExitCode {
+    let resets = std::time::SystemTime::now()
+      .duration_since(std::time::UNIX_EPOCH)
+      .map_or(0, |now| now.as_secs() + 3600);
+    println!(
+      r#"{{"type":"rate_limit_event","rate_limit_info":{{"status":"rejected","resetsAt":{resets},"rateLimitType":"five_hour","utilization":1.0,"isUsingOverage":false}}}}"#
+    );
+    let refusal = "Claude AI usage limit reached";
+    println!(
+      "{}",
+      serde_json::json!({
+        "type": "result", "subtype": "success", "is_error": true, "result": refusal, "session_id": self.session,
+        "usage": {"input_tokens": 0, "output_tokens": 0}, "permission_denials": [],
+      })
+    );
     ExitCode::from(1)
   }
 

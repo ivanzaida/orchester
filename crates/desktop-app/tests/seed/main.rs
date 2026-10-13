@@ -327,6 +327,7 @@ fn seed_task_states_leaves_one_task_in_each_state() {
     Some(Merged),
     None,
     Some(Draft),
+    Some(StoppedAtLimit),
   ];
   let phases: Vec<Option<TaskPhase>> = (1..=want.len())
     .map(|number| phase(&db, &format!("KON-{number}")))
