@@ -232,7 +232,8 @@
     "openConnection": "Open connection",
     "cliTooOld": "CLI {{installed}} is too old for {{model}}",
     "cliTooOldHint": "Update the CLI to {{required}} or newer and check the connection again, or choose another model.",
-    "connectionWithAccount": "{{connection}} · account {{account}}",
+    "connectionDetail": "{{cli}} · account {{account}}, {{detail}}",
+    "connectionProblem": "{{cli}} · account {{account}} · {{problem}}, runs won't start",
     "defaultAccount": "Default"
   }
 }

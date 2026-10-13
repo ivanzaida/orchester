@@ -292,12 +292,9 @@ async fn answer(
     Command::PauseRun { run } => return later.answer(run, async move { handle.pause_run(run).await }),
     Command::CancelRun { run } => return later.answer(run, async move { handle.cancel_run(run).await }),
     Command::ResumeRun { run } => return later.answer(run, async move { handle.resume_run(run).await }),
-    Command::ContinueOnConnection { run, connection } => {
-      return later.answer(run, async move { handle.continue_on_connection(run, connection).await });
-    }
-    Command::WaitForPlanReset { run } => {
-      return later.answer(run, async move { handle.wait_for_plan_reset(run) });
-    }
+    Command::ContinueOnConnection { run, connection } => return at_plan_limit(&later, handle, run, Some(connection)),
+    Command::TryAtPlanLimit { run } => return at_plan_limit(&later, handle, run, None),
+    Command::WaitForPlanReset { run } => return later.answer(run, async move { handle.wait_for_plan_reset(run) }),
     Command::RaiseLimit {
       run,
       budget,
@@ -348,6 +345,20 @@ async fn answer(
     Command::CheckConnection { provider, ref api } => return answer_check(&later, handle, provider, api.clone()),
   };
   Answer::Reply(Event::Reply { id, reply })
+}
+
+/// Continues `run`, stopped at its account's plan limit: on `connection`, another account's
+/// ([`Command::ContinueOnConnection`]), or without one on the same account now ([`Command::TryAtPlanLimit`]).
+fn at_plan_limit(
+  later: &Later<'_>,
+  handle: Scheduler,
+  run: RunId,
+  connection: Option<orchester_core::id::ConnectionId>,
+) -> Answer {
+  match connection {
+    Some(connection) => later.answer(run, async move { handle.continue_on_connection(run, connection).await }),
+    None => later.answer(run, async move { handle.try_at_plan_limit(run).await }),
+  }
 }
 
 /// The reply to [`Command::Attach`].

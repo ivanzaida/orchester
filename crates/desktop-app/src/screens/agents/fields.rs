@@ -1,7 +1,7 @@
 //! Editor field values and Profile tab gTrvs.
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx, theme::SpacingSize},
-  components::{Column, SelectOption},
+  components::Column,
   core::Signal,
   node::{Element, dimension::Dimension},
 };
@@ -17,7 +17,7 @@ use orchester_workspace::agents::{
 
 use super::words;
 use crate::ui::{
-  field::{FieldInput, SelectField},
+  field::FieldInput,
   form_section::{self, Label, Place},
 };
 
@@ -38,6 +38,7 @@ pub struct Fields {
   pub custom: Signal<String>,
   pub effort: Signal<String>,
   model_open: Signal<bool>,
+  connection_open: Signal<bool>,
   effort_open: Signal<bool>,
   pub permissions: Signal<Permissions>,
   pub servers: Signal<Servers>,
@@ -75,6 +76,7 @@ impl Fields {
       custom: ctx.signal(String::new()),
       changed_connection: ctx.signal(false),
       model_open: ctx.signal(false),
+      connection_open: ctx.signal(false),
       effort_open: ctx.signal(false),
       effort: ctx.signal(profile.and_then(stored_effort).unwrap_or_default()),
       permissions: ctx.signal(Permissions(permissions)),
@@ -299,35 +301,40 @@ impl Fields {
       }))
       .into()
   }
-  /// The project's connections, each with the account it runs on (`M42rM`): the profile has no account of its own.
+  /// The project's connections, each with its CLI and the account it runs on, who is signed in there and the week's
+  /// use, or in `warning` what keeps runs from starting (`M42rM`): the profile has no account of its own.
   fn connection_select(&self, ctx: &mut Ctx, listed: &ProjectAgents) -> Element {
-    let accounts = crate::services::accounts::listed(ctx);
-    let label = |c: &AgentConnection| -> String {
-      let Some(account) = accounts.of_connection(c.account(), c.provider()) else {
-        return c.name().as_str().to_owned();
-      };
-      let account = account.name().map_or_else(
-        || ctx.t("agents.defaultAccount").to_string(),
-        |name| name.as_str().to_owned(),
-      );
-      ctx
-        .t_args(
-          "agents.connectionWithAccount",
-          [("connection", c.name().as_str()), ("account", &account)],
-        )
-        .to_string()
+    use crate::ui::{
+      choice_field::{Choice, ChoiceField},
+      icon::Icon,
     };
-    SelectField::new(
-      "agent-connection",
-      ctx.t("agents.connection"),
-      self.connection.clone(),
-      listed
-        .connections
-        .iter()
-        .map(|c| SelectOption::new(c.id().to_string(), label(c)))
-        .collect(),
-    )
-    .width(Dimension::Px(CONTROL_WIDTH))
+    let accounts = crate::services::accounts::listed(ctx);
+    let readings = crate::services::plan_limits::account_readings(ctx);
+    let choices = listed
+      .connections
+      .iter()
+      .map(|c| {
+        let (detail, warning) = connection_detail(ctx, c, &accounts, &readings);
+        Choice {
+          value: c.id().to_string(),
+          label: c.name().as_str().into(),
+          icon: Icon::Bot,
+          detail: (!detail.is_empty()).then(|| detail.into()),
+          separator: false,
+          warning,
+          trigger: None,
+        }
+      })
+      .collect();
+    ChoiceField {
+      id: "agent-connection".into(),
+      name: ctx.t("agents.connection"),
+      value: self.connection.clone(),
+      open: self.connection_open.clone(),
+      choices,
+      width: CONTROL_WIDTH,
+      icon_in_field: false,
+    }
     .render(ctx)
   }
   fn input(&self, ctx: &mut Ctx, id: &str, key: &str, signal: Signal<String>) -> Element {
@@ -439,4 +446,42 @@ impl Fields {
 }
 pub fn label(ctx: &Ctx, id: &str, title: &str, hint: &str) -> Label {
   Label::new(id, ctx.t(title)).description(ctx.t(hint))
+}
+
+/// What a connection's choice says under its name (`M42rM`): its CLI and account with who is signed in there and the
+/// week's use, or, in `warning`, what keeps runs from starting on it.
+fn connection_detail(
+  ctx: &Ctx,
+  connection: &AgentConnection,
+  accounts: &crate::services::accounts::Accounts,
+  readings: &orchester_core::connection::plan_limits::PlanReadings,
+) -> (String, bool) {
+  use crate::services::accounts::{account_name, identity_detail, short_state};
+  let (Some(cli), Some(account)) = (
+    orchester_core::account::AccountCli::of(connection.provider()),
+    accounts.of_connection(connection.account(), connection.provider()),
+  ) else {
+    // A native connection runs on no account of the person's: its name says it.
+    return (String::new(), false);
+  };
+  let cli = ctx
+    .t(match cli {
+      orchester_core::account::AccountCli::ClaudeCode => "accounts.cli.claudeCode",
+      orchester_core::account::AccountCli::Codex => "accounts.cli.codex",
+    })
+    .to_string();
+  let name = account_name(ctx, account);
+  if let Some(problem) = short_state(ctx, account) {
+    let text = ctx.t_args(
+      "agents.connectionProblem",
+      [("cli", cli), ("account", name), ("problem", problem)],
+    );
+    return (text.to_string(), true);
+  }
+  let detail = identity_detail(ctx, account, accounts, readings.of_account(account.id()));
+  let text = ctx.t_args(
+    "agents.connectionDetail",
+    [("cli", cli), ("account", name), ("detail", detail)],
+  );
+  (text.to_string(), false)
 }

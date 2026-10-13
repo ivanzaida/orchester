@@ -51,14 +51,16 @@ pub fn account_folder_name(program: &str, name: &str, taken: impl Fn(&str) -> bo
     .expect("an unbounded range always has a free name")
 }
 
-/// What is wrong with `folder` as a brought folder of an account of `accounts`' CLI, if anything. `repository` is
-/// the repository or project folder that holds it, as the caller found on disk; `own` the CLI's own folder; `home`
-/// the home folder. `found` gives a path as the file system resolves it ([`resolved`]); every path is compared as
-/// found, `folder` itself only once it is a plain full path.
+/// What is wrong with `folder` as a brought folder of an account, if anything. `repository` is the repository or
+/// project folder that holds it, as the caller found on disk; `accounts` every account of every CLI, beside which it
+/// may neither be, lie inside one nor hold one (removing either would take the other along, and two CLIs would mix
+/// their sign-ins); `own` each CLI's own folder, Default's; `home` the home folder. `found` gives a path as the file
+/// system resolves it ([`resolved`]); every path is compared as found, `folder` itself only once it is a plain full
+/// path.
 pub fn brought_folder_problem(
   folder: &Path,
   repository: Option<&Path>,
-  (accounts, own): (&[AgentAccount], Option<&Path>),
+  (accounts, own): (&[AgentAccount], &dyn Fn(super::AccountCli) -> Option<PathBuf>),
   home: Option<&Path>,
   found: &dyn Fn(&Path) -> PathBuf,
 ) -> Option<FolderProblem> {
@@ -70,12 +72,13 @@ pub fn brought_folder_problem(
   }
   let folder = found(folder);
   if let Some(account) = accounts.iter().find(|account| {
-    let path = account
-      .folder()
-      .path()
-      .or(if account.is_default() { own } else { None });
+    let path = match account.folder().path() {
+      Some(path) => Some(path.to_path_buf()),
+      None if account.is_default() => own(account.cli()),
+      None => None,
+    };
     path
-      .map(found)
+      .map(|path| found(&path))
       .is_some_and(|path| within(&folder, &path) || within(&path, &folder))
   }) {
     return Some(FolderProblem::Taken(account.id()));

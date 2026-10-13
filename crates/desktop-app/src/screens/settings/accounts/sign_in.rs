@@ -11,15 +11,15 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::account::{AccountState, AgentAccount, same_sign_in};
+use orchester_core::account::{AccountCli, AccountState, AgentAccount, same_sign_in};
 use orchester_workspace::{accounts::sign_in::command, display};
 
 use super::{
   Parts, Work,
   add::step,
   details::{frame, glyph, header_row},
-  facts::command_row,
-  words::{Shown, cli_key, login_command, name, status_command, t, ta},
+  state::{command_row, copy_folder},
+  words::{Shown, cli_key, login_command, method_key, name, plan, status_command, t, ta},
 };
 use crate::{
   navigation::Navigation,
@@ -277,6 +277,48 @@ fn outcome(id: &str, (glyph, color): (Icon, PaletteColor), title: &str, body: &s
     )
 }
 
+/// Signed in as the same person as `other`: said plainly, with *Keep both* and *Remove* the new one (`GE7a3`).
+fn same_person(ctx: &mut Ctx, account: &AgentAccount, other: &AgentAccount, email: String) -> Element {
+  let navigation = Navigation::of(ctx);
+  let id = account.id();
+  let shown = name(ctx, account);
+  let to = navigation.clone();
+  let remove = navigation;
+  outcome(
+    "account-sign-in-same",
+    (Icon::Users, PaletteColor::TextSecondary),
+    &ta(
+      ctx,
+      "accounts.signIn.sameTitle",
+      [("email", email), ("account", name(ctx, other))],
+    ),
+    &t(ctx, "accounts.signIn.sameBody"),
+  )
+  .child(
+    Row::new()
+      .spacing(SpacingSize::Sm)
+      .child(
+        ActionButton::new(
+          "account-sign-in-keep-both",
+          ButtonKind::Secondary,
+          t(ctx, "accounts.signIn.keepBoth"),
+        )
+        .icon(Icon::Check)
+        .on_click(move || to.replace(Route::Accounts(AccountsView::of(id, AccountsPanel::Account)))),
+      )
+      .child(
+        ActionButton::new(
+          "account-sign-in-remove",
+          ButtonKind::Ghost,
+          ta(ctx, "accounts.signIn.removeIt", [("account", shown)]),
+        )
+        .icon(Icon::Trash2)
+        .on_click(move || remove.replace(Route::Accounts(AccountsView::of(id, AccountsPanel::Remove)))),
+      ),
+  )
+  .into()
+}
+
 /// Signed in: who, and *Done*; the same person as another account says so and offers to remove the new one.
 fn signed_in(ctx: &mut Ctx, parts: &Parts, account: &AgentAccount) -> Element {
   let navigation = Navigation::of(ctx);
@@ -288,66 +330,48 @@ fn signed_in(ctx: &mut Ctx, parts: &Parts, account: &AgentAccount) -> Element {
     .map(|check| display::clock(check.at))
     .unwrap_or_default();
   if let (Some(other), Some(email)) = (same_sign_in(account, &parts.accounts), email.clone()) {
-    let to = navigation.clone();
-    let remove = navigation;
-    return outcome(
-      "account-sign-in-same",
-      (Icon::Users, PaletteColor::TextSecondary),
-      &ta(
-        ctx,
-        "accounts.signIn.sameTitle",
-        [("email", email), ("account", name(ctx, other))],
-      ),
-      &t(ctx, "accounts.signIn.sameBody"),
-    )
-    .child(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .child(
-          ActionButton::new(
-            "account-sign-in-keep-both",
-            ButtonKind::Secondary,
-            t(ctx, "accounts.signIn.keepBoth"),
-          )
-          .icon(Icon::Check)
-          .on_click(move || to.replace(Route::Accounts(AccountsView::of(id, AccountsPanel::Account)))),
-        )
-        .child(
-          ActionButton::new(
-            "account-sign-in-remove",
-            ButtonKind::Ghost,
-            ta(ctx, "accounts.signIn.removeIt", [("account", shown)]),
-          )
-          .icon(Icon::Trash2)
-          .on_click(move || remove.replace(Route::Accounts(AccountsView::of(id, AccountsPanel::Remove)))),
-        ),
-    )
-    .into();
+    return same_person(ctx, account, other, email);
   }
   let title = email.map_or_else(
     || t(ctx, "accounts.signIn.signedInNoEmail"),
     |email| ta(ctx, "accounts.signIn.signedIn", [("email", email)]),
   );
+  let facts = identity_facts(ctx, account);
+  let body = if facts.is_empty() {
+    ta(
+      ctx,
+      "accounts.signIn.signedInBody",
+      [("time", checked), ("account", shown.clone())],
+    )
+  } else {
+    ta(
+      ctx,
+      "accounts.signIn.signedInFactsBody",
+      [("facts", facts), ("time", checked), ("account", shown.clone())],
+    )
+  };
+  // A Claude Code folder is what a person points their own claude at (`GE7a3`).
+  let copy =
+    (account.cli() == AccountCli::ClaudeCode).then(|| copy_folder(ctx, account, "account-sign-in-copy-folder"));
   outcome(
     "account-sign-in-done",
     (Icon::CircleCheck, PaletteColor::Success),
     &title,
-    &ta(
-      ctx,
-      "accounts.signIn.signedInBody",
-      [("time", checked), ("account", shown.clone())],
-    ),
+    &body,
   )
   .child(
-    Row::new().child(
-      ActionButton::new(
-        "account-sign-in-finish",
-        ButtonKind::Primary,
-        t(ctx, "accounts.signIn.done"),
+    Row::new()
+      .spacing(SpacingSize::Sm)
+      .child(
+        ActionButton::new(
+          "account-sign-in-finish",
+          ButtonKind::Primary,
+          t(ctx, "accounts.signIn.done"),
+        )
+        .icon(Icon::ArrowRight)
+        .on_click(move || navigation.replace(Route::Accounts(AccountsView::of(id, AccountsPanel::Account)))),
       )
-      .icon(Icon::ArrowRight)
-      .on_click(move || navigation.replace(Route::Accounts(AccountsView::of(id, AccountsPanel::Account)))),
-    ),
+      .with_children(copy),
   )
   .child(
     Text::new(&ta(
@@ -359,6 +383,26 @@ fn signed_in(ctx: &mut Ctx, parts: &Parts, account: &AgentAccount) -> Element {
     .width(Dimension::Pct(100.0)),
   )
   .into()
+}
+
+/// The plan and how the account signed in, as its CLI reported them (`Claude Pro plan · signed in with claude.ai`);
+/// empty when it reported neither.
+fn identity_facts(ctx: &Ctx, account: &AgentAccount) -> String {
+  let identity = account.last_check().and_then(|check| check.known_identity());
+  let plan = identity.and_then(|identity| identity.plan.as_deref()).map(plan);
+  let method = identity
+    .and_then(|identity| identity.method)
+    .map(|method| t(ctx, method_key(method)));
+  match (plan, method) {
+    (Some(plan), Some(method)) => ta(
+      ctx,
+      "accounts.signIn.planAndMethod",
+      [("plan", plan), ("method", method)],
+    ),
+    (Some(plan), None) => ta(ctx, "accounts.signIn.planFact", [("plan", plan)]),
+    (None, Some(method)) => ta(ctx, "accounts.signIn.methodFact", [("method", method)]),
+    (None, None) => String::new(),
+  }
 }
 
 fn open_button(ctx: &Ctx, work: &Work, id: orchester_core::id::AgentAccountId, again: bool) -> ActionButton {

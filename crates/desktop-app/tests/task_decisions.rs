@@ -319,6 +319,11 @@ fn decision_plan_limit_offers_the_reset_and_no_other_account_without_one() {
   // Waiting is the default: *Continue at …* confirms it, the time alone when the reset is today.
   let continue_at = page.text("plan-limit-continue");
   assert!(continue_at.starts_with("Continue at "), "{continue_at}");
+  let wait_detail = page.text("plan-limit-wait");
+  assert!(
+    wait_detail.contains("Orchester resumes") && !wait_detail.contains("At today"),
+    "{wait_detail}"
+  );
   assert!(
     !page.locked("plan-limit-continue"),
     "a person's confirmation, not a locked label"
@@ -330,6 +335,11 @@ fn decision_plan_limit_offers_the_reset_and_no_other_account_without_one() {
     "{accounts}"
   );
   assert!(page.text("task-status").contains("Stopped at plan limit"));
+  assert_eq!(
+    page.text("plan-limit-try-now"),
+    "Try again now",
+    "the same account may be tried now"
+  );
   assert!(page.text("task-this-run-account-value").ends_with("limit reached"));
 }
 
@@ -352,6 +362,13 @@ fn decision_plan_limit_a_new_run_waits_for_its_accounts_reset_before_its_agent_s
     "no other account's connection to start on"
   );
   assert!(!page.has("plan-limit-choice"), "not a stop of a running agent");
+  let status = page.text("task-status");
+  assert!(status.contains("Waiting for plan reset"), "{status}");
+  assert_eq!(
+    page.text("plan-limit-try-now"),
+    "Try now on Default",
+    "the way out with only Default"
+  );
 }
 
 #[test]

@@ -105,6 +105,11 @@ pub enum Command {
   /// wait is set, or [`Rejection::RunNotPaused`] when the run is not stopped at a plan limit whose reset its CLI
   /// reported.
   WaitForPlanReset { run: RunId },
+  /// Continues run `run`, stopped at its account's plan limit, on the same account now, as a person asked (protocol
+  /// 24): a step whose agent waited for the reset starts once, a stopped agent continues its session; if the CLI
+  /// still refuses, the run stops there again. Answered with [`Reply::Accepted`] once it runs again, or
+  /// [`Rejection::RunNotPaused`] when it is not stopped at a plan limit.
+  TryAtPlanLimit { run: RunId },
   /// Cancels run `run`: its agent's process tree is ended, its worktree and branch stay. Answered
   /// with [`Reply::Accepted`] once the run is recorded as cancelled.
   CancelRun { run: RunId },

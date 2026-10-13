@@ -120,28 +120,26 @@ impl ProjectDb {
     let Some(account) = self.execution_account(execution)?.or(step_account) else {
       return self.last_limit_reading(run);
     };
-    // A reading that names no account is Default's (`LimitReading::account_id`).
-    let default = AccountCli::ALL.iter().any(|cli| cli.default_account() == account);
     let of_run = self.last_reading_where(
-      "run_id = ?1 AND (account_id = ?2 OR (?3 AND account_id IS NULL))",
-      &[&run.to_string() as &dyn rusqlite::ToSql, &account.to_string(), &default],
+      "run_id = ?1 AND (account_id = ?2 OR (account_id IS NULL AND provider = ?3))",
+      &[
+        &run.to_string() as &dyn rusqlite::ToSql,
+        &account.to_string(),
+        &default_provider(account),
+      ],
     )?;
     match of_run {
       Some(reading) => Ok(Some(reading)),
-      None => self.last_account_reading(account, default),
+      None => self.last_account_reading(account),
     }
   }
 
-  /// The last report of `account`'s limits in this project, from any run; one that names no account counts as
-  /// Default's when `default` says `account` is a CLI's Default.
-  pub fn last_account_reading(
-    &self,
-    account: AgentAccountId,
-    default: bool,
-  ) -> Result<Option<LimitReading>, StoreError> {
+  /// The last report of `account`'s limits in this project, from any run. One that names no account, from before
+  /// accounts, counts as the Default of its own CLI only (`LimitReading::account_id`).
+  pub fn last_account_reading(&self, account: AgentAccountId) -> Result<Option<LimitReading>, StoreError> {
     self.last_reading_where(
-      "(account_id = ?1 OR (?2 AND account_id IS NULL))",
-      &[&account.to_string() as &dyn rusqlite::ToSql, &default],
+      "(account_id = ?1 OR (account_id IS NULL AND provider = ?2))",
+      &[&account.to_string() as &dyn rusqlite::ToSql, &default_provider(account)],
     )
   }
 
@@ -182,4 +180,13 @@ impl ProjectDb {
       })
       .transpose()
   }
+}
+
+/// The provider whose readings without an account are `account`'s: its CLI's, when `account` is that CLI's Default;
+/// `None` (no reading matches) for any other account.
+fn default_provider(account: AgentAccountId) -> Option<&'static str> {
+  AccountCli::ALL
+    .into_iter()
+    .find(|cli| cli.default_account() == account)
+    .map(|cli| provider_text(cli.provider()))
 }

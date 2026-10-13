@@ -13,20 +13,19 @@ use lurq::{
   node::Element,
 };
 use orchester_core::{
-  account::{AccountState, AgentAccount, same_sign_in},
+  account::{AccountState, AgentAccount},
   connection::{
     AgentProvider, ConnectionAccount,
     invocation::Platform,
     plan_limits::{LimitReading, PlanReadings},
   },
-  time::Timestamp,
 };
 
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
   navigation::Navigation,
   routes::{AccountsView, Route},
-  services::accounts::{Accounts, plan_name},
+  services::accounts::{Accounts, identity_detail, short_state},
   ui::{
     choice_field::{Choice, ChoiceField},
     icon::Icon,
@@ -35,8 +34,8 @@ use crate::{
 
 /// The choice that opens Settings › Accounts instead of choosing an account.
 pub(super) const MANAGE: &str = "manage";
-/// A week, in minutes: the window a choice's use is read from.
-const WEEK: u64 = 10_080;
+/// How much of a folder's path a choice's problem shows, its start cut (`WaKJN`).
+const PROBLEM_PATH_CHARS: usize = 44;
 
 /// The account's name as a connection shows it: the one given, or *Default*.
 pub(super) fn name(ctx: &Ctx, account: &AgentAccount) -> String {
@@ -86,7 +85,7 @@ fn detail(ctx: &Ctx, account: &AgentAccount, accounts: &Accounts, reading: Optio
       .path()
       .map(Path::to_path_buf)
       .or_else(|| orchester_workspace::accounts::own_folder(account.cli()))
-      .map(|folder| folder.display().to_string())
+      .map(|folder| orchester_workspace::display::shorten_path(&folder, PROBLEM_PATH_CHARS))
       .unwrap_or_default();
     let text = ctx.t_args(
       "connections.account.problem",
@@ -94,49 +93,7 @@ fn detail(ctx: &Ctx, account: &AgentAccount, accounts: &Accounts, reading: Optio
     );
     return (text.to_string(), true);
   }
-  if account.state(Platform::current()) == AccountState::NotChecked {
-    return (ctx.t("connections.account.notChecked").to_string(), false);
-  }
-  let identity = account.last_check().and_then(|check| check.known_identity());
-  let email = identity.and_then(|identity| identity.email.clone());
-  if let (Some(other), Some(email)) = (same_sign_in(account, &accounts.0), email.clone()) {
-    let text = ctx.t_args(
-      "connections.account.same",
-      [("email", email), ("account", name(ctx, other))],
-    );
-    return (text.to_string(), false);
-  }
-  let mut parts: Vec<String> = email.into_iter().collect();
-  if let Some(plan) = identity.and_then(|identity| identity.plan.as_deref()) {
-    parts.push(
-      ctx
-        .t_args("connections.account.plan", [("plan", plan_name(plan))])
-        .to_string(),
-    );
-  }
-  if let Some(used) = weekly_use(reading) {
-    parts.push(
-      ctx
-        .t_args("connections.account.weekly", [("used", used.to_string())])
-        .to_string(),
-    );
-  }
-  if parts.is_empty() {
-    parts.push(ctx.t("connections.account.signedIn").to_string());
-  }
-  (parts.join(&*ctx.t("connections.account.separator")), false)
-}
-
-/// The share of the account's weekly window used, in whole percent, as its CLI last reported it.
-fn weekly_use(reading: Option<&LimitReading>) -> Option<u64> {
-  let now = Timestamp::now();
-  let weekly = reading?
-    .limits
-    .windows
-    .iter()
-    .find(|window| window.minutes() == WEEK && !window.expired(now))?;
-  // A share of at most a few hundred percent: whole ones are what the menu shows.
-  weekly.percent().map(|used| used.round() as u64)
+  (identity_detail(ctx, account, accounts, reading), false)
 }
 
 /// The choices of the accounts of `provider`'s CLI (Default last), then *Add or manage accounts…*. The field shows
@@ -258,7 +215,7 @@ impl Component for AccountPicker {
 /// The *Account* row of Add connection, after *Program*: the accounts of `provider`'s CLI, `chosen` by id (empty:
 /// Default).
 pub(super) fn add_row(ctx: &mut Ctx, accounts: &Accounts, provider: AgentProvider, chosen: &Signal<String>) -> Element {
-  let readings = crate::services::plan_limits::readings(ctx);
+  let readings = crate::services::plan_limits::account_readings(ctx);
   let current =
     chosen_account(accounts, provider, &chosen.get()).map_or_else(String::new, |account| account.id().to_string());
   let setter = chosen.clone();
@@ -293,18 +250,20 @@ pub(super) fn chosen_account<'a>(
     .or_else(|| accounts.of_provider(provider).find(|account| account.is_default()))
 }
 
-/// The *Account* row of a CLI connection's inspector (`M42rM`): the account and who is signed in, or what is wrong
-/// with it, as a link that opens it in Settings › Accounts. Choosing another account is Edit connection's.
-pub(super) fn inspector_row(
+/// The *Account* row of a CLI connection's inspector (`M42rM`): the account and who is signed in, or what keeps runs
+/// from starting on it, as a link that opens it in Settings › Accounts; and *Plan limits*, its windows' use as its
+/// CLI last reported it. Choosing another account is Edit connection's.
+pub(super) fn inspector_rows(
   ctx: &mut Ctx,
   accounts: &Accounts,
   connection: &orchester_core::connection::AgentConnection,
 ) -> Element {
   let provider = connection.provider();
+  let readings = crate::services::plan_limits::account_readings(ctx);
   let account = accounts.of_connection(connection.account(), provider);
   let shown = match account {
     Some(account) => {
-      let detail = state_words(ctx, account).or_else(|| account.email().map(str::to_owned));
+      let detail = short_state(ctx, account).or_else(|| account.email().map(str::to_owned));
       match detail {
         Some(detail) => ctx
           .t_args(
@@ -321,19 +280,78 @@ pub(super) fn inspector_row(
   let view = account.map_or_else(AccountsView::default, |account| {
     AccountsView::of(account.id(), crate::routes::AccountsPanel::Account)
   });
+  // The words wrap within the row; the arrow stays at their end.
   let link = crate::ui::pressable::pressable(move || navigation.go(Route::Accounts(view)))
     .id("connection-account-link")
+    .flex(1.0)
+    .min_width(lurq::node::dimension::Dimension::Px(0.0))
     .spacing(crate::theme::ExtraSpacing::Snug.role())
-    .align_items(lurq::layout::Alignment::Center)
+    .align_items(lurq::layout::Alignment::Start)
     .child(
       lurq::components::Text::new(&shown)
         .variant(lurq::app::theme::TypographyStyle::Description)
-        .color(lurq::app::theme::PaletteColor::TextPrimary),
+        .color(lurq::app::theme::PaletteColor::TextPrimary)
+        .flex_shrink(1.0)
+        .min_width(lurq::node::dimension::Dimension::Px(0.0)),
     )
-    .child(crate::ui::icon::icon(
-      Icon::ArrowUpRight,
-      crate::theme::IconSize::Sm,
-      lurq::app::theme::PaletteColor::TextSecondary,
-    ));
-  crate::ui::inspector::property_of("connection-account-row", &ctx.t("connections.account.label"), link).into()
+    .child(
+      crate::ui::icon::icon(
+        Icon::ArrowUpRight,
+        crate::theme::IconSize::Sm,
+        lurq::app::theme::PaletteColor::TextSecondary,
+      )
+      .flex_shrink(0.0),
+    );
+  let limits = account
+    .and_then(|account| readings.of_account(account.id()))
+    .map(|reading| window_use(ctx, reading))
+    .filter(|words| !words.is_empty());
+  lurq::components::Column::new()
+    .width(lurq::node::dimension::Dimension::Pct(100.0))
+    .child(crate::ui::inspector::property_of(
+      "connection-account-row",
+      &ctx.t("connections.account.label"),
+      link,
+    ))
+    .with_children(limits.map(|words| {
+      crate::ui::inspector::property(
+        "connection-plan-limits",
+        &ctx.t("connections.account.planLimits"),
+        &words,
+        crate::ui::inspector::PropertyValue::Plain,
+      )
+    }))
+    .into()
+}
+
+/// The windows of `reading` that have not reset, and how much of each is used: "5-hour 12% · weekly 41%".
+fn window_use(ctx: &Ctx, reading: &LimitReading) -> String {
+  let now = orchester_core::time::Timestamp::now();
+  reading
+    .limits
+    .windows
+    .iter()
+    .filter(|window| !window.expired(now))
+    .filter_map(|window| {
+      let used = window.percent()?;
+      let name = match window.minutes() {
+        300 => ctx.t("connections.account.window.fiveHour").to_string(),
+        10_080 => ctx.t("connections.account.window.weekly").to_string(),
+        minutes => ctx
+          .t_args(
+            "connections.account.window.hours",
+            [("hours", (minutes / 60).to_string())],
+          )
+          .to_string(),
+      };
+      // A share of at most a few hundred percent: whole ones are what the row shows.
+      let used = (used.round() as u64).to_string();
+      Some(
+        ctx
+          .t_args("connections.account.windowUse", [("window", name), ("used", used)])
+          .to_string(),
+      )
+    })
+    .collect::<Vec<_>>()
+    .join(&*ctx.t("connections.account.separator"))
 }

@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 use lurq::app::{ctx::Ctx, theme::PaletteColor};
-use orchester_core::account::{AccountCli, AccountIdentity, AccountState, AgentAccount, same_sign_in};
+use orchester_core::account::{AccountCli, AccountIdentity, AccountState, AgentAccount, SignInMethod, same_sign_in};
 use orchester_workspace::{accounts::own_folder, display::shorten_path};
 
 use crate::ui::icon::Icon;
@@ -119,6 +119,16 @@ pub(super) fn cli_key(cli: AccountCli) -> &'static str {
 /// The plan as the CLI names it (`max`), as a word (`Max`).
 pub(super) fn plan(plan: &str) -> String {
   crate::services::accounts::plan_name(plan)
+}
+
+/// The words for how the CLI signed in.
+pub(super) const fn method_key(method: SignInMethod) -> &'static str {
+  match method {
+    SignInMethod::ClaudeAi => "accounts.method.claudeAi",
+    SignInMethod::Console => "accounts.method.console",
+    SignInMethod::ChatGpt => "accounts.method.chatGpt",
+    SignInMethod::ApiKey => "accounts.method.apiKey",
+  }
 }
 
 /// The CLI's status command as the person would type it.

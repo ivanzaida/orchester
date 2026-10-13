@@ -54,6 +54,11 @@ impl SharedTrash {
     *self.0.write() = Some(trash);
   }
 
+  /// Whether this workspace has a trash.
+  pub(crate) fn is_set(&self) -> bool {
+    self.0.read().is_some()
+  }
+
   /// Takes `folder` to the trash; an explicit error when this workspace has none.
   pub(crate) fn take(&self, folder: &Path) -> io::Result<()> {
     let trash = self.0.read().clone().ok_or_else(|| {

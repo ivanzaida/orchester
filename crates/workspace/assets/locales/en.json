@@ -1338,7 +1338,9 @@
       "moveTarget": "Choose another account of the same CLI for its connections, or No account.",
       "notCreated": "Orchester didn't create this folder, so it stays where it is.",
       "projectsUnreadable": "{{projects}} could not be read, so a run there may be on this account. Remove it once they open.",
-      "trash": "The account was removed, but its folder could not be moved to the Recycle Bin or Trash. The log has the system's reason.",
+      "trashFailed": "Removed. Its folder stays at {{folder}} because the system could not move it to the Recycle Bin or Trash; the log has the system's reason.",
+      "noTrash": "This window can't move folders to the Recycle Bin or Trash. Untick it to remove the account and keep its folder.",
+      "holdsAnotherAccount": "This folder holds another account's folder, which would go with it, so it can't be moved to the Recycle Bin or Trash.",
       "cliMissing": "The CLI isn't on the PATH. Install it, then check again.",
       "folderMissing": "The account's folder {{folder}} no longer exists.",
       "terminal": "The terminal could not be opened. Run the command in a terminal of your own."

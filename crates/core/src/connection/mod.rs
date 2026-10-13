@@ -286,6 +286,20 @@ impl Connection {
     Ok(())
   }
 
+  /// Follows the account the connection runs on to `account`: the same account in the folder it has now keeps the
+  /// last check, which read the same sign-in; another account is [`Self::set_account`]'s, its check dropped.
+  pub fn follow_account(&mut self, account: ConnectionAccount) -> Result<(), ConnectionError> {
+    let ConnectionKind::Agent(provider) = self.kind else {
+      return Err(ConnectionError::NoAccounts(self.id));
+    };
+    let same = account.id(provider).is_some() && account.id(provider) == self.account.id(provider);
+    if same {
+      self.account = account;
+      return Ok(());
+    }
+    self.set_account(account)
+  }
+
   /// Runs the connection's CLI on `account`, which must be an account of that CLI.
   pub fn choose_account(&mut self, account: &crate::account::AgentAccount) -> Result<(), ConnectionError> {
     if self.kind != ConnectionKind::Agent(account.cli().provider()) {

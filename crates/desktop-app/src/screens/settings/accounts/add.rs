@@ -359,11 +359,12 @@ fn folder_problem(ctx: &mut Ctx, draft: &Draft, cli: AccountCli) -> Option<Messa
   }
   let workspace = Services::of(ctx).workspace;
   ctx
-    .future((cli, path), move |(cli, path)| {
+    // Asked again when the CLI changes too: the account's CLI is part of what the person chose.
+    .future((cli, path), move |(_, path)| {
       let workspace = workspace.clone();
       async move {
         let folder = PathBuf::from(path.trim());
-        let problem: Option<FolderProblem> = background::run(move || workspace.brought_folder_problem(cli, &folder))
+        let problem: Option<FolderProblem> = background::run(move || workspace.brought_folder_problem(&folder))
           .await?
           .map_err(|error| orchester_workspace::messages::store_error(&error))?;
         Ok::<_, Message>(problem.map(|problem| AccountsError::Folder(problem).message()))

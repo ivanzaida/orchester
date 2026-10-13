@@ -366,6 +366,23 @@
       "changeNote": "Takes effect at each agent's next start: a paused or stopped step continues on the new account as a new session.",
       "plan": "{{plan}} plan",
       "weekly": "weekly {{used}}% used",
+      "planLimits": "Plan limits",
+      "signedOutSentence": "{{account}} was signed in as {{email}}; its CLI now says it is not. Sign in again from its page in Settings › Accounts, or choose another account for this connection.",
+      "notSignedInSentence": "{{account}} is not signed in. Sign in from its page in Settings › Accounts, or choose another account for this connection.",
+      "openInSettings": "Open {{account}} in Settings",
+      "windowUse": "{{window}} {{used}}%",
+      "window": {
+        "fiveHour": "5-hour",
+        "weekly": "weekly",
+        "hours": "{{hours}}-hour"
+      },
+      "short": {
+        "notSignedIn": "not signed in",
+        "expired": "sign-in expired",
+        "cliMissing": "CLI not found",
+        "folderMissing": "folder missing",
+        "unsupported": "not supported on macOS yet"
+      },
       "state": {
         "notSignedIn": "not signed in · sign in from Settings",
         "expired": "sign-in expired · runs won't start · sign in from Settings",

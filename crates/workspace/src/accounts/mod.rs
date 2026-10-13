@@ -75,11 +75,12 @@ impl Workspace {
     })))
   }
 
-  /// What is wrong with `folder` as a brought folder of an account of `cli`, if anything.
-  pub fn brought_folder_problem(&self, cli: AccountCli, folder: &Path) -> Result<Option<FolderProblem>, StoreError> {
-    let accounts = self.cli_accounts(cli)?;
+  /// What is wrong with `folder` as a brought folder of an account, if anything: it is checked beside every
+  /// account of every CLI and each CLI's own folder, which it may neither be, lie in nor hold.
+  pub fn brought_folder_problem(&self, folder: &Path) -> Result<Option<FolderProblem>, StoreError> {
+    let accounts = self.agent_accounts()?;
     let projects = self.projects()?;
-    Ok(folders::brought_problem(cli, folder, &accounts, &projects))
+    Ok(folders::brought_problem(folder, &accounts, &projects))
   }
 
   /// Adds an account, creating its folder or taking the person's, not checked yet: *Add account* checks a brought
@@ -100,7 +101,7 @@ impl Workspace {
         AccountFolder::Created(folder)
       }
       NewFolder::Bring(folder) => {
-        if let Some(problem) = self.brought_folder_problem(new.cli, &folder)? {
+        if let Some(problem) = self.brought_folder_problem(&folder)? {
           return Err(AccountsError::Folder(problem));
         }
         AccountFolder::Brought(folders::found(&folder))
@@ -172,10 +173,8 @@ impl Workspace {
     // A folder that is gone leaves nothing to move to the bin; one that is no longer the folder Orchester made
     // there (a link or a junction now, or reached through one) is not moved.
     let trash = removal.trash().filter(|folder| folder.exists());
-    if trash.is_some_and(|folder| !folders::still_created_here(folder)) {
-      return Err(AccountsError::Removal(
-        orchester_core::account::RemovalError::FolderNotCreated,
-      ));
+    if let Some(folder) = trash {
+      self.trashable(&account, folder, &accounts)?;
     }
     let target = match removal.move_to() {
       MoveTo::Account(target) => accounts
@@ -191,8 +190,42 @@ impl Workspace {
       MoveTo::NoAccount => None,
     };
     self.db.lock().remove_agent_account(id, moved_to, Timestamp::now())?;
-    if let Some(folder) = trash {
-      self.trash.take(folder).map_err(AccountsError::Trash)?;
+    // The account is removed by now: a refusal says so and where its folder stays.
+    if let Some(folder) = trash
+      && let Err(error) = self.trash.take(folder)
+    {
+      return Err(AccountsError::TrashFailed {
+        folder: folder.to_path_buf(),
+        error,
+      });
+    }
+    Ok(())
+  }
+
+  /// Refused unless `folder`, `account`'s, may go to the trash: this window has one, it is still the folder Orchester
+  /// made there (not a link or a junction now, nor reached through one), and it holds no other account's folder nor a
+  /// CLI's own folder. Checked before anything is removed.
+  fn trashable(&self, account: &AgentAccount, folder: &Path, accounts: &[AgentAccount]) -> Result<(), AccountsError> {
+    if !self.trash.is_set() {
+      return Err(AccountsError::NoTrash);
+    }
+    if !folders::still_created_here(folder) {
+      return Err(AccountsError::Removal(
+        orchester_core::account::RemovalError::FolderNotCreated,
+      ));
+    }
+    let others = accounts
+      .iter()
+      .filter(|other| other.id() != account.id())
+      .filter_map(|other| match other.folder().path() {
+        Some(path) => Some(path.to_path_buf()),
+        None => folders::own_folder(other.cli()),
+      });
+    if others
+      .map(|other| folders::found(&other))
+      .any(|other| orchester_core::account::within(&other, &folders::found(folder)))
+    {
+      return Err(AccountsError::HoldsAnotherAccount);
     }
     Ok(())
   }
@@ -203,12 +236,12 @@ impl Workspace {
   pub fn choose_agent_account_folder(&self, id: AgentAccountId, folder: &Path) -> Result<AgentAccount, AccountsError> {
     let mut account = self.agent_account(id)?.ok_or(StoreError::AgentAccountNotFound(id))?;
     let others: Vec<AgentAccount> = self
-      .cli_accounts(account.cli())?
+      .agent_accounts()?
       .into_iter()
       .filter(|other| other.id() != id)
       .collect();
     let projects = self.projects()?;
-    if let Some(problem) = folders::brought_problem(account.cli(), folder, &others, &projects) {
+    if let Some(problem) = folders::brought_problem(folder, &others, &projects) {
       return Err(AccountsError::Folder(problem));
     }
     account
@@ -222,11 +255,9 @@ impl Workspace {
   /// The last report of the account's plan limits in any listed project, as its CLI gave it during a run: what the
   /// account's details show before this session's runs report. A project that can't be read is passed over.
   pub fn last_plan_reading(&self, id: AgentAccountId) -> Result<Option<LimitReading>, AccountsError> {
-    let default = AccountCli::ALL.iter().any(|cli| cli.default_account() == id);
     let mut last: Option<LimitReading> = None;
     for project in self.projects()?.iter().filter(|project| !project.folder_missing()) {
-      let reading =
-        orchester_store::ProjectDb::open(&project.repo_root).and_then(|db| db.last_account_reading(id, default));
+      let reading = orchester_store::ProjectDb::open(&project.repo_root).and_then(|db| db.last_account_reading(id));
       match reading {
         Ok(Some(reading)) if last.as_ref().is_none_or(|known| known.at < reading.at) => last = Some(reading),
         Ok(_) => {}
@@ -238,6 +269,15 @@ impl Workspace {
     Ok(last)
   }
 
+  /// [`Self::last_plan_reading`] of every account that has one.
+  pub fn last_plan_readings(&self) -> Result<Vec<LimitReading>, AccountsError> {
+    let mut readings = Vec::new();
+    for account in self.agent_accounts()? {
+      readings.extend(self.last_plan_reading(account.id())?);
+    }
+    Ok(readings)
+  }
+
   /// Brings the connections of `repo_root` up to date with the accounts: one on a removed account goes where its
   /// removal sent the others, one on an account whose folder moved gets the new folder. For a project that could not
   /// be reached then; called when a project opens.
@@ -245,16 +285,6 @@ impl Workspace {
     let removed = self.db.lock().removed_agent_accounts()?;
     let accounts = self.agent_accounts()?;
     uses::follow_accounts(repo_root, &removed, &accounts)
-  }
-
-  fn cli_accounts(&self, cli: AccountCli) -> Result<Vec<AgentAccount>, StoreError> {
-    Ok(
-      self
-        .agent_accounts()?
-        .into_iter()
-        .filter(|account| account.cli() == cli)
-        .collect(),
-    )
   }
 }
 

@@ -9,22 +9,22 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  account::{AccountCheckResult, AccountCli, AccountState, AgentAccount, SignInMethod, same_sign_in},
+  account::{AccountCheckResult, AccountCli, AccountState, AgentAccount},
   connection::plan_limits::{LimitReading, LimitWindow},
   time::Timestamp,
 };
-use orchester_workspace::{accounts::sign_in, display};
+use orchester_workspace::display;
 
 use super::{
   Parts, Work,
-  words::{Shown, folder, name, plan, status_command, t, ta},
+  state::{copy_folder, paragraph, sign_in_button, state_sentence},
+  words::{Shown, folder, method_key, plan, status_command, t, ta},
 };
 use crate::{
   services::plan_limits,
   theme::{AccountsSpacing, ExtraTypography, SettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
-    command_row::CommandRow,
     icon::Icon,
     inspector::{self, PropertyValue, property},
     message::message_text,
@@ -95,162 +95,6 @@ fn last_reading(ctx: &mut Ctx, account: &AgentAccount) -> Option<LimitReading> {
     (Some(session), _) => Some(session),
     (None, stored) => stored,
   }
-}
-
-/// What the account's state means for runs and what to do, for every state but signed in alone.
-fn state_sentence(
-  ctx: &mut Ctx,
-  (parts, work): (&Parts, &Work),
-  account: &AgentAccount,
-  shown: Shown,
-) -> Option<Element> {
-  let cli = account.cli();
-  let program = cli.program().to_owned();
-  let shown_name = name(ctx, account);
-  let email = account.email().map(str::to_owned);
-  let folder_text = folder(account)
-    .map(|folder| folder.display().to_string())
-    .unwrap_or_default();
-  let version = account
-    .last_check()
-    .and_then(|check| check.program())
-    .map(|checked| checked.version.clone())
-    .unwrap_or_default();
-  let text = match shown {
-    Shown::Checking => ta(ctx, "accounts.state.checking", [("statusCommand", status_command(cli))]),
-    Shown::SigningIn => return None,
-    Shown::State(state) => match state {
-      AccountState::SignedIn => {
-        let other = same_sign_in(account, &parts.accounts)?;
-        ta(
-          ctx,
-          "accounts.state.same",
-          [("email", email.unwrap_or_default()), ("account", name(ctx, other))],
-        )
-      }
-      AccountState::NotSignedIn => {
-        let sentence = ta(
-          ctx,
-          "accounts.state.notSignedIn",
-          [("program", program), ("folder", folder_text)],
-        );
-        return Some(with_command(ctx, account, &sentence));
-      }
-      AccountState::Expired => match email {
-        Some(email) => ta(
-          ctx,
-          "accounts.state.expired",
-          [("email", email), ("program", program), ("account", shown_name)],
-        ),
-        None => ta(
-          ctx,
-          "accounts.state.expiredUnknown",
-          [("program", program), ("account", shown_name)],
-        ),
-      },
-      AccountState::CliMissing => ta(
-        ctx,
-        "accounts.state.cliMissing",
-        [("program", program), ("account", shown_name)],
-      ),
-      AccountState::Unknown => ta(
-        ctx,
-        "accounts.state.unknown",
-        [("program", program), ("version", version), ("account", shown_name)],
-      ),
-      AccountState::FolderMissing => {
-        let sentence = ta(
-          ctx,
-          "accounts.state.folderMissing",
-          [("folder", folder_text), ("account", shown_name)],
-        );
-        return Some(folder_missing(ctx, work, account, &sentence));
-      }
-      AccountState::Unsupported => t(ctx, "accounts.state.unsupported"),
-      AccountState::NotChecked => ta(
-        ctx,
-        "accounts.state.notChecked",
-        [("statusCommand", status_command(cli))],
-      ),
-    },
-  };
-  Some(paragraph("account-state-sentence", &text).into())
-}
-
-/// A sentence with the login command to copy under it (`Not signed in` in `E96CI`).
-fn with_command(ctx: &mut Ctx, account: &AgentAccount, sentence: &str) -> Element {
-  let command = sign_in::command(account);
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .child(paragraph("account-state-sentence", sentence))
-    .child(command_row(ctx, "account-sign-in-command", &command.text))
-    .into()
-}
-
-/// The sentence of a folder that is gone, with *Choose folder…* (a folder the person already has, by the rules of a
-/// brought folder) and *Remove* (`Folder missing` in `E96CI`).
-fn folder_missing(ctx: &mut Ctx, work: &Work, account: &AgentAccount, sentence: &str) -> Element {
-  let id = account.id();
-  let choose = ActionButton::new(
-    "account-choose-folder",
-    ButtonKind::Secondary,
-    t(ctx, "accounts.actions.chooseFolder"),
-  )
-  .icon(Icon::FolderOpen);
-  let choose = if work.choose.state().get().is_pending() || work.change.state().get().is_pending() {
-    choose.loading()
-  } else {
-    let pick = work.choose.clone();
-    choose.on_click(move || pick.run(id))
-  };
-  let navigation = crate::navigation::Navigation::of(ctx);
-  let remove = ActionButton::new(
-    "account-folder-missing-remove",
-    ButtonKind::Ghost,
-    t(ctx, "accounts.actions.remove"),
-  )
-  .icon(Icon::Trash2)
-  .on_click(move || {
-    navigation.replace(crate::routes::Route::Accounts(crate::routes::AccountsView::of(
-      id,
-      crate::routes::AccountsPanel::Remove,
-    )));
-  });
-  let error = work
-    .change_error()
-    .map(|error| crate::ui::field::field_error("account-choose-folder-error", &message_text(ctx, &error)));
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .child(paragraph("account-state-sentence", sentence))
-    .child(
-      Row::new()
-        .id("account-folder-missing-actions")
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(choose)
-        .child(remove),
-    )
-    .with_children(error)
-    .into()
-}
-
-/// A command in its box with Copy (`Command row` `PEnj5`); Copy puts it on the clipboard.
-pub(super) fn command_row(ctx: &mut Ctx, id: &str, text: &str) -> Element {
-  let copied = text.to_owned();
-  CommandRow::new(id.to_owned(), text.to_owned(), t(ctx, "common.copy"), move || {
-    lurq::clipboard::copy_to_clipboard(&copied)
-  })
-  .prompt()
-  .render(ctx)
-}
-
-fn paragraph(id: &str, text: &str) -> Text {
-  Text::new(text)
-    .id(id.to_owned())
-    .variant(ExtraTypography::Prose.role())
-    .width(Dimension::Pct(100.0))
 }
 
 /// Who is signed in, the plan, how, the folder, the program that checked and when (`U4FViO`).
@@ -358,22 +202,7 @@ fn fact(ctx: &Ctx, id: &str, key: &str, value: Result<String, String>) -> Row {
 /// *Copy folder path*, *Open folder* and *Sign in (again) in a terminal* (`mn3FG`).
 fn folder_actions(ctx: &Ctx, parts: &Parts, work: &Work, account: &AgentAccount) -> Element {
   let path = folder(account);
-  let copy = {
-    let text = path.as_ref().map(|path| path.display().to_string());
-    ActionButton::new(
-      "account-copy-folder",
-      ButtonKind::Secondary,
-      t(ctx, "accounts.actions.copyFolder"),
-    )
-    .icon(Icon::Copy)
-    .on_click(move || {
-      if let Some(text) = &text
-        && !lurq::clipboard::copy_to_clipboard(text)
-      {
-        tracing::warn!("the folder path could not be put on the clipboard");
-      }
-    })
-  };
+  let copy = copy_folder(ctx, account, "account-copy-folder");
   let open = {
     ActionButton::new(
       "account-open-folder",
@@ -387,29 +216,11 @@ fn folder_actions(ctx: &Ctx, parts: &Parts, work: &Work, account: &AgentAccount)
       }
     })
   };
+  // Not signed in and expired have the sign-in under their sentence (`E96CI`).
   let state = account.state(orchester_core::connection::invocation::Platform::current());
-  let again = matches!(state, AccountState::SignedIn | AccountState::Expired);
-  let key = if again {
-    "accounts.actions.signInAgain"
-  } else {
-    "accounts.actions.signIn"
-  };
-  let sign_in = ActionButton::new("account-sign-in", ButtonKind::Secondary, t(ctx, key)).icon(Icon::SquareTerminal);
-  let id = account.id();
-  let sign_in = match state {
-    AccountState::Unsupported => None,
-    AccountState::CliMissing => Some(sign_in.unavailable(ta(
-      ctx,
-      "accounts.signIn.cliMissing",
-      [("program", account.cli().program())],
-    ))),
-    _ if parts.signing_in == Some(id) => Some(sign_in.loading()),
-    _ if work.another_signing_in(id) => Some(sign_in.unavailable(t(ctx, "accounts.signIn.another"))),
-    _ => {
-      let work = work.clone();
-      Some(sign_in.on_click(move || work.open_sign_in(id)))
-    }
-  };
+  let sign_in = (!matches!(state, AccountState::NotSignedIn | AccountState::Expired))
+    .then(|| sign_in_button(ctx, parts, work, account))
+    .flatten();
   Row::new()
     .id("account-folder-actions")
     .width(Dimension::Pct(100.0))
@@ -547,15 +358,5 @@ fn open(folder: std::path::PathBuf) {
     });
   if let Err(error) = opening {
     tracing::error!(%error, "cannot start opening an account's folder");
-  }
-}
-
-/// The words for how the CLI signed in.
-const fn method_key(method: SignInMethod) -> &'static str {
-  match method {
-    SignInMethod::ClaudeAi => "accounts.method.claudeAi",
-    SignInMethod::Console => "accounts.method.console",
-    SignInMethod::ChatGpt => "accounts.method.chatGpt",
-    SignInMethod::ApiKey => "accounts.method.apiKey",
   }
 }

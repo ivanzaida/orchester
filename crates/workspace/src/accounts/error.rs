@@ -30,8 +30,15 @@ pub enum AccountsError {
   /// Listed projects that could not be read: a run there may be on the account.
   #[error("projects could not be read: {}", .0.iter().map(Name::as_str).collect::<Vec<_>>().join(", "))]
   ProjectsUnreadable(Vec<Name>),
-  #[error("the folder could not be moved to the Recycle Bin or Trash: {0}")]
-  Trash(io::Error),
+  /// The account was removed; its folder stays where it is.
+  #[error("the account was removed; its folder {} could not be moved to the Recycle Bin or Trash: {error}", folder.display())]
+  TrashFailed { folder: PathBuf, error: io::Error },
+  /// This window has no Recycle Bin or Trash to move folders to (a test, a QA copy without one).
+  #[error("no Recycle Bin or Trash to move the folder to")]
+  NoTrash,
+  /// The folder holds another account's folder, or a CLI's own folder, which would go to the bin with it.
+  #[error("the folder holds another account's folder")]
+  HoldsAnotherAccount,
   /// Claude Code accounts other than Default on macOS (decision 10).
   #[error("accounts other than Default are not supported for this CLI on this platform yet")]
   Unsupported,
@@ -72,7 +79,11 @@ impl AccountsError {
         "projects",
         projects.iter().map(Name::as_str).collect::<Vec<_>>().join(", "),
       ),
-      Self::Trash(_) => Message::new("accounts.errors.trash"),
+      Self::TrashFailed { folder, .. } => {
+        Message::new("accounts.errors.trashFailed").with("folder", folder.display().to_string())
+      }
+      Self::NoTrash => Message::new("accounts.errors.noTrash"),
+      Self::HoldsAnotherAccount => Message::new("accounts.errors.holdsAnotherAccount"),
       Self::CliMissing => Message::new("accounts.errors.cliMissing"),
       Self::FolderMissing(folder) => {
         Message::new("accounts.errors.folderMissing").with("folder", folder.display().to_string())

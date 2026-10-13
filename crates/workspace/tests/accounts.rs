@@ -124,9 +124,7 @@ fn accounts_a_brought_folder_inside_a_repository_is_refused() {
   let (repo, _) = project(&workspace, "KON");
   let inside = repo.path().join(".claude-ci");
   fs::create_dir(&inside).expect("a folder");
-  let problem = workspace
-    .brought_folder_problem(AccountCli::ClaudeCode, &inside)
-    .expect("checked");
+  let problem = workspace.brought_folder_problem(&inside).expect("checked");
   assert_eq!(
     problem,
     Some(FolderProblem::InsideRepository(repo.path().to_path_buf()))
@@ -367,11 +365,7 @@ fn accounts_a_brought_folder_is_judged_as_the_file_system_resolves_it() {
   let (repo, _) = project(&workspace, "KON");
   let work = add(&workspace, "Work");
   let created = work.folder().path().expect("a folder").to_path_buf();
-  let problem = |folder: &Path| {
-    workspace
-      .brought_folder_problem(AccountCli::ClaudeCode, folder)
-      .expect("checked")
-  };
+  let problem = |folder: &Path| workspace.brought_folder_problem(folder).expect("checked");
   assert_eq!(
     problem(&created.join("..").join("elsewhere")),
     Some(FolderProblem::NotAbsolute),
@@ -457,6 +451,14 @@ fn accounts_a_workspace_without_a_trash_says_so_and_keeps_the_folder() {
   let workspace = Workspace::new(db).with_account_root(&data.path().join("accounts"));
   let work = add(&workspace, "Work");
   let refused = workspace.remove_agent_account(work.id(), MoveTo::NoAccount, true);
-  assert!(matches!(refused, Err(AccountsError::Trash(_))), "{refused:?}");
+  assert!(matches!(refused, Err(AccountsError::NoTrash)), "{refused:?}");
   assert!(work.folder().path().expect("a folder").is_dir());
+  assert!(
+    workspace
+      .agent_accounts()
+      .expect("listed")
+      .iter()
+      .any(|account| account.id() == work.id()),
+    "refused before anything is removed"
+  );
 }

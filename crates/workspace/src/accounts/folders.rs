@@ -26,10 +26,9 @@ pub fn own_folder(cli: AccountCli) -> Option<PathBuf> {
     .or_else(|| Some(home()?.join(cli.own_folder_name())))
 }
 
-/// What is wrong with `folder` as a brought folder of an account of `cli` beside `accounts`, if anything; every
-/// path is compared as the file system resolves it.
+/// What is wrong with `folder` as a brought folder of an account beside `accounts` (every CLI's) and each CLI's own
+/// folder, if anything; every path is compared as the file system resolves it.
 pub fn brought_problem(
-  cli: AccountCli,
   folder: &Path,
   accounts: &[AgentAccount],
   projects: &[RegisteredProject],
@@ -37,11 +36,10 @@ pub fn brought_problem(
   let repository = plain_full_path(folder)
     .then(|| repository_of(&found(folder), projects))
     .flatten();
-  let own = own_folder(cli);
   brought_folder_problem(
     folder,
     repository.as_deref(),
-    (accounts, own.as_deref()),
+    (accounts, &own_folder),
     home().as_deref(),
     &found,
   )

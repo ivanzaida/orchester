@@ -68,3 +68,14 @@ pub(super) fn continue_on(
   let events = run.resume(Timestamp::now()).map_err(rejection)?;
   store_continuation(db, root, run, &events)
 }
+
+/// Continues `run`, stopped at its account's plan limit, on the same account now, as a person asked: a step whose
+/// agent waited starts once though the account's last reading says the limit holds, and a stopped agent continues its
+/// session. If the CLI refuses at the limit, the run stops there again.
+pub(super) fn try_now(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Prepared, Rejection> {
+  let current = load(db, run)?;
+  let RunStatus::Paused(PauseReason::LimitReached(RunLimit::PlanLimit { execution })) = *current.status() else {
+    return Err(Rejection::RunNotPaused);
+  };
+  super::idle::resume(db, root, run).map(|prepared| prepared.trying_at_plan_limit(execution))
+}

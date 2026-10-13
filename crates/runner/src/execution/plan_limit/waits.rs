@@ -99,6 +99,17 @@ impl Scheduler {
     Ok(())
   }
 
+  /// Whether `run` is no longer at `stop`: it stopped again elsewhere, or a person continued or ended it.
+  fn stop_changed(&self, run: RunId, stop: Stop) -> bool {
+    let current = self
+      .open()
+      .and_then(|db| idle::load(&db, run).map(|current| (db, current)))
+      .ok()
+      .and_then(|(db, current)| stop_of(&db, &current).ok());
+    // A run that can't be read now keeps its timer as it is: nothing new to wait for.
+    current.is_some_and(|current| current != Some(stop))
+  }
+
   /// A timer that continues `run` at `stop`'s reset, if it is still stopped there then.
   fn continue_at_reset(&self, run: RunId, stop: Stop) -> AbortHandle {
     let scheduler = self.clone();
@@ -117,8 +128,15 @@ impl Scheduler {
         .await;
       match continued {
         Ok(()) => tracing::info!(%run, "continued a run at its account's plan limit reset"),
-        // A person continued, paused or ended it meanwhile, or the runner cannot take it now: it stays as it is.
-        Err(rejection) => tracing::info!(%run, ?rejection, "a run waiting for a plan limit's reset was not continued"),
+        // A person continued, paused or ended it meanwhile, or it stopped again elsewhere (another account after its
+        // connection changed): it stays as it is, and a stop it is at now gets its own timer.
+        // Only a different stop: the same one refused again would fire again at once.
+        Err(rejection) => {
+          tracing::info!(%run, ?rejection, "a run waiting for a plan limit's reset was not continued");
+          if scheduler.stop_changed(run, stop) {
+            scheduler.wait_for_plan_resets();
+          }
+        }
       }
     })
     .abort_handle()

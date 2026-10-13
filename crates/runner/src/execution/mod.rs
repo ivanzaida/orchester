@@ -362,6 +362,17 @@ impl Scheduler {
     continued
   }
 
+  /// Continues `run`, stopped at its account's plan limit, on the same account now, as a person asked; it stops there
+  /// again if the CLI still refuses.
+  pub async fn try_at_plan_limit(&self, run: RunId) -> Result<(), Rejection> {
+    self.plan_waits().clear(run);
+    let tried = self
+      .continue_settled(run, |db, root| plan_limit::try_now(db, root, run))
+      .await;
+    self.wait_again_if_refused(&tried);
+    tried
+  }
+
   /// Raises the limits of `run`, stopped at a limit, and continues it.
   pub async fn raise_limit(&self, run: RunId, limits: RaisedLimits) -> Result<(), Rejection> {
     self

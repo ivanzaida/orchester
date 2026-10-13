@@ -176,6 +176,8 @@
       "waitingTitle": "Waiting for {{account}}'s plan limit · starts at {{time}}",
       "waitingTitleNoReset": "Waiting for {{account}}'s plan limit",
       "waitingBody": "Run {{run}} starts {{step}} on {{connection}}, whose account has used up its window. It holds no agent slot while it waits.",
+      "tryNowOn": "Try now on {{account}}",
+      "tryNowNote": "Starts it on {{account}} once; if the limit still holds, the run waits again.",
       "startOn": "Or start {{step}} now on",
       "startNow": "Start now on {{account}}",
       "startNote": "This run only: the profile keeps {{connection}}. Later steps wait for their own accounts the same way.",

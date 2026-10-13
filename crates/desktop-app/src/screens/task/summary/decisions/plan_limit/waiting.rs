@@ -16,7 +16,7 @@ use lurq::{
 use orchester_core::{account::AgentAccount, connection::AgentConnection, time::Timestamp};
 use orchester_workspace::tasks::{
   detail::RunView,
-  plan_limit::{PlanStop, continue_on},
+  plan_limit::{PlanStop, continue_on, try_now},
 };
 
 use super::{
@@ -72,9 +72,12 @@ impl WaitingCard<'_> {
     let title = match resets {
       Some(resets) => ctx.t_args(
         "decisions.planLimit.waitingTitle",
-        [("account", account), ("time", reset_time(ctx, resets, now))],
+        [("account", account.clone()), ("time", reset_time(ctx, resets, now))],
       ),
-      None => ctx.t_args("decisions.planLimit.waitingTitleNoReset", [("account", account)]),
+      None => ctx.t_args(
+        "decisions.planLimit.waitingTitleNoReset",
+        [("account", account.clone())],
+      ),
     };
     let body = ctx.t_args(
       "decisions.planLimit.waitingBody",
@@ -103,11 +106,52 @@ impl WaitingCard<'_> {
           .variant(ExtraTypography::Prose.role())
           .width(Dimension::Pct(100.0)),
       );
+    let try_row = self.try_here(ctx, &account);
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)
       .child(head)
+      .child(try_row)
       .child(self.elsewhere(ctx, &step))
+      .into()
+  }
+
+  /// *Try now on …*: the step starts on its own account once, a person's decision, for a limit lifted early or a
+  /// stale reading; if the CLI still refuses, the run waits again.
+  fn try_here(&self, ctx: &Ctx, account: &str) -> Element {
+    let (pending, _) = state(self.action, self.asked.get());
+    let button = ActionButton::new(
+      "plan-limit-try-now",
+      ButtonKind::Secondary,
+      ctx.t_args("decisions.planLimit.tryNowOn", [("account", account)]),
+    )
+    .icon(Icon::RotateCcw);
+    let button = if pending.is_some() {
+      button.loading()
+    } else if !self.online {
+      button.disabled()
+    } else {
+      let (run, gate) = (self.run.id(), self.gate.cloned());
+      let (asked, action) = (self.asked.clone(), self.action.clone());
+      button.on_click(move || {
+        if input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
+          asked.set(Some(Continuing));
+          action.run((Continuing, try_now(run)));
+        } else {
+          tracing::warn!("synthetic input tried a waiting run now; not taken");
+        }
+      })
+    };
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Md)
+      .align_items(Alignment::Center)
+      .child(button)
+      .child(
+        Text::new(&ctx.t_args("decisions.planLimit.tryNowNote", [("account", account)]))
+          .variant(ExtraTypography::Note.role())
+          .flex(1.0),
+      )
       .into()
   }
 

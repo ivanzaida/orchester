@@ -72,6 +72,14 @@ fn settings_accounts_shows_why_an_account_does_not_run_and_the_login_to_copy() {
       });
       let command = joined(&mut window, "account-sign-in-command").replace(' ', "");
       assert!(command.contains("claudeauthlogin"), "{command}");
+      // The sign-in and Check again sit under the sentence (`E96CI`), not among the folder's actions.
+      let actions = joined(&mut window, "account-state-actions");
+      assert!(
+        actions.contains("Sign in in a terminal") && actions.contains("Check again"),
+        "{actions}"
+      );
+      let folder = joined(&mut window, "account-folder-actions");
+      assert!(!folder.contains("Sign in"), "{folder}");
       let remove = joined(&mut window, "account-remove");
       assert!(remove.contains("Remove"));
       click(&mut window, "account-remove");
@@ -326,4 +334,29 @@ fn settings_accounts_sign_in_step_ends_at_signed_in() {
       assert!(!shown(&mut window, hidden), "{hidden} is gone once signed in");
     }
   });
+}
+
+#[test]
+#[cfg_attr(
+  target_os = "macos",
+  ignore = "Claude Code accounts other than Default are not supported on macOS yet"
+)]
+fn settings_accounts_sign_in_step_says_the_claude_plan_and_offers_the_folder() {
+  in_child(
+    "settings_accounts_sign_in_step_says_the_claude_plan_and_offers_the_folder",
+    |root| {
+      let mut window = Window::open();
+      let folder = root.join("accounts").join("claude-freelance");
+      let freelance = add_account(&window, AccountCli::ClaudeCode, "Freelance", &folder);
+      sign_in(&folder);
+      go(&mut window, Some(freelance.id()), AccountsPanel::SignIn);
+      window.until("the signed-in outcome", |window| shown(window, "account-sign-in-done"));
+      let done = joined(&mut window, "account-sign-in-done");
+      assert!(
+        done.contains("Max plan") && done.contains("signed in with claude.ai") && done.contains("Runs on Freelance"),
+        "{done}"
+      );
+      assert!(joined(&mut window, "account-sign-in-copy-folder").contains("Copy folder path"));
+    },
+  );
 }

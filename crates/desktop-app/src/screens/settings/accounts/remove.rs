@@ -130,9 +130,13 @@ pub(super) fn confirmation(
     .child(note(
       "account-remove-connections",
       Icon::Plug,
-      &connections_line(ctx, &shown, uses),
+      &connections_line(ctx, &shown, uses, running.is_some()),
     ))
-    .with_children(running.is_none().then(|| move_select(ctx, work, &others)));
+    // Where the connections go, while nothing runs on the account and some connection uses it.
+    .with_children(
+      (running.is_none() && uses.is_some_and(|uses| !uses.connections.is_empty()))
+        .then(|| move_select(ctx, work, &others)),
+    );
   if running.is_none() {
     question = question.child(note(
       "account-remove-finished",
@@ -168,7 +172,9 @@ pub(super) fn confirmation(
 }
 
 /// How many connections in which projects use the account.
-fn connections_line(ctx: &Ctx, shown: &str, uses: Option<&AccountUses>) -> String {
+/// Which connections use the account and where they go: to the account the person chooses, or, while a run is on
+/// it, where the person chooses once nothing runs on it (`yEJPZ`).
+fn connections_line(ctx: &Ctx, shown: &str, uses: Option<&AccountUses>, blocked: bool) -> String {
   let Some(uses) = uses.filter(|uses| !uses.connections.is_empty()) else {
     return ta(ctx, "accounts.remove.none", [("account", shown.to_owned())]);
   };
@@ -179,16 +185,20 @@ fn connections_line(ctx: &Ctx, shown: &str, uses: Option<&AccountUses>) -> Strin
     .collect();
   projects.dedup();
   let projects = projects.join(", ");
-  if uses.connections.len() == 1 {
-    ta(
-      ctx,
-      "accounts.remove.connectionsOne",
-      [("projects", projects), ("account", shown.to_owned())],
+  let (one, many) = if blocked {
+    (
+      "accounts.remove.connectionsOneBlocked",
+      "accounts.remove.connectionsBlocked",
     )
+  } else {
+    ("accounts.remove.connectionsOne", "accounts.remove.connections")
+  };
+  if uses.connections.len() == 1 {
+    ta(ctx, one, [("projects", projects), ("account", shown.to_owned())])
   } else {
     ta(
       ctx,
-      "accounts.remove.connections",
+      many,
       [
         ("count", uses.connections.len().to_string()),
         ("projects", projects),

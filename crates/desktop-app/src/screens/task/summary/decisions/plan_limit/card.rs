@@ -23,7 +23,7 @@ use orchester_workspace::{
   display,
   tasks::{
     detail::RunView,
-    plan_limit::{PlanStop, continue_on},
+    plan_limit::{PlanStop, continue_on, try_now},
   },
 };
 
@@ -163,7 +163,7 @@ impl ChoiceCard<'_> {
       Some(resets) => ctx.t_args(
         "decisions.planLimit.waitDetail",
         [
-          ("time", when(ctx, resets, now, TIMES)),
+          ("time", reset_time(ctx, resets, now)),
           ("agent", agent.clone()),
           ("account", account.clone()),
         ],
@@ -284,13 +284,8 @@ impl ChoiceCard<'_> {
       )
       .icon(Icon::Clock)
       .on_click(move || send(Command::WaitForPlanReset { run })),
-      (Choice::Wait, None) => ActionButton::new(
-        "plan-limit-continue",
-        ButtonKind::Primary,
-        ctx.t("decisions.planLimit.tryNow"),
-      )
-      .icon(Icon::RotateCcw)
-      .on_click(move || send(Command::ResumeRun { run })),
+      // No reset to wait for: trying again now is the way on.
+      (Choice::Wait, None) => self.try_again(ctx, "plan-limit-continue", ButtonKind::Primary),
       (Choice::Other, _) => {
         let chosen = self.chosen_other().cloned();
         let name = chosen
@@ -324,11 +319,17 @@ impl ChoiceCard<'_> {
     } else {
       button
     };
+    // Waiting for a reset, the person may still try the same account now: a limit lifted early, or a stale reading.
+    let try_again = (self.choice.get() == Choice::Wait && resets.is_some()).then(|| {
+      let button = self.try_again(ctx, "plan-limit-try-now", ButtonKind::Secondary);
+      if pending || offline { button.disabled() } else { button }
+    });
     Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
       .child(button)
+      .with_children(try_again)
       .child(
         Text::new(&self.wait_note(ctx, resets, now))
           .id("plan-limit-note")
@@ -336,6 +337,23 @@ impl ChoiceCard<'_> {
           .flex(1.0),
       )
       .into()
+  }
+
+  /// *Try again now*: the stopped step continues on its own account at once, a person's decision; if the CLI still
+  /// refuses, the run stops there again.
+  fn try_again(&self, ctx: &Ctx, id: &str, kind: ButtonKind) -> ActionButton {
+    let (run, gate) = (self.run.id(), self.gate.cloned());
+    let (asked, action) = (self.asked.clone(), self.action.clone());
+    ActionButton::new(id.to_owned(), kind, ctx.t("decisions.planLimit.tryNow"))
+      .icon(Icon::RotateCcw)
+      .on_click(move || {
+        if input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
+          asked.set(Some(Continuing));
+          action.run((Continuing, try_now(run)));
+        } else {
+          tracing::warn!("synthetic input tried a run at its plan limit; not taken");
+        }
+      })
   }
 
   /// What waiting means, or that the runner took the person's *Continue at …*.

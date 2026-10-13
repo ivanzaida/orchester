@@ -107,16 +107,17 @@ fn status(detail: &TaskDetail, lost: bool) -> (Status, Option<&StepView>) {
       | TaskPhase::Interrupted
       | TaskPhase::Failed
   );
-  let plan_limit = detail.run.as_ref().is_some_and(|run| {
-    matches!(
-      run.run.status(),
-      RunStatus::Paused(PauseReason::LimitReached(RunLimit::PlanLimit { .. }))
-    )
+  // A step whose agent never started waits for its account's reset (`XPjSc`); one that started stopped at the limit.
+  let plan_limit = detail.run.as_ref().and_then(|run| match run.run.status() {
+    RunStatus::Paused(PauseReason::LimitReached(RunLimit::PlanLimit { execution })) => {
+      Some(run.invocations_of(*execution).next().is_some())
+    }
+    _ => None,
   });
-  let status = if plan_limit {
-    Status::StoppedAtPlanLimit
-  } else {
-    Status::of_run(phase)
+  let status = match plan_limit {
+    Some(true) => Status::StoppedAtPlanLimit,
+    Some(false) => Status::WaitingForPlanReset,
+    None => Status::of_run(phase),
   };
   (status, step.filter(|_| with_step))
 }

@@ -5,9 +5,10 @@ use std::sync::Arc;
 
 use lurq::app::{component::DevtoolsInspectable, ctx::Ctx};
 use orchester_core::{
-  account::AgentAccount,
-  connection::{AgentProvider, ConnectionAccount},
+  account::{AccountState, AgentAccount, same_sign_in},
+  connection::{AgentProvider, ConnectionAccount, invocation::Platform, plan_limits::LimitReading},
   id::AgentAccountId,
+  time::Timestamp,
 };
 use orchester_workspace::{background, messages};
 
@@ -66,4 +67,82 @@ pub fn listed(ctx: &mut Ctx) -> Accounts {
     .get()
     .data
     .unwrap_or_default()
+}
+
+/// A week, in minutes: the window an account's use is read from.
+const WEEK: u64 = 10_080;
+
+/// The account's name as people read it: the one given, or *Default*.
+pub fn account_name(ctx: &Ctx, account: &AgentAccount) -> String {
+  account.name().map_or_else(
+    || ctx.t("connections.account.default").to_string(),
+    |name| name.as_str().to_owned(),
+  )
+}
+
+/// What keeps runs from starting on `account`, in a few words (`M42rM`: "sign-in expired"); `None` when nothing does.
+pub fn short_state(ctx: &Ctx, account: &AgentAccount) -> Option<String> {
+  let key = match account.state(Platform::current()) {
+    AccountState::SignedIn | AccountState::Unknown | AccountState::NotChecked => return None,
+    AccountState::NotSignedIn => "connections.account.short.notSignedIn",
+    AccountState::Expired => "connections.account.short.expired",
+    AccountState::CliMissing => "connections.account.short.cliMissing",
+    AccountState::FolderMissing => "connections.account.short.folderMissing",
+    AccountState::Unsupported => "connections.account.short.unsupported",
+  };
+  Some(ctx.t(key).to_string())
+}
+
+/// Who is signed in to `account`, its plan and the week's use (`WaKJN`): or the account it shares a sign-in with, or
+/// that no check has read it yet. `reading` is the account's last plan reading.
+pub fn identity_detail(
+  ctx: &Ctx,
+  account: &AgentAccount,
+  accounts: &Accounts,
+  reading: Option<&LimitReading>,
+) -> String {
+  if account.state(Platform::current()) == AccountState::NotChecked {
+    return ctx.t("connections.account.notChecked").to_string();
+  }
+  let identity = account.last_check().and_then(|check| check.known_identity());
+  let email = identity.and_then(|identity| identity.email.clone());
+  if let (Some(other), Some(email)) = (same_sign_in(account, &accounts.0), email.clone()) {
+    return ctx
+      .t_args(
+        "connections.account.same",
+        [("email", email), ("account", account_name(ctx, other))],
+      )
+      .to_string();
+  }
+  let mut parts: Vec<String> = email.into_iter().collect();
+  if let Some(plan) = identity.and_then(|identity| identity.plan.as_deref()) {
+    parts.push(
+      ctx
+        .t_args("connections.account.plan", [("plan", plan_name(plan))])
+        .to_string(),
+    );
+  }
+  if let Some(used) = weekly_use(reading) {
+    parts.push(
+      ctx
+        .t_args("connections.account.weekly", [("used", used.to_string())])
+        .to_string(),
+    );
+  }
+  if parts.is_empty() {
+    parts.push(ctx.t("connections.account.signedIn").to_string());
+  }
+  parts.join(&*ctx.t("connections.account.separator"))
+}
+
+/// The share of the account's weekly window used, in whole percent, as its CLI last reported it.
+pub fn weekly_use(reading: Option<&LimitReading>) -> Option<u64> {
+  let now = Timestamp::now();
+  let weekly = reading?
+    .limits
+    .windows
+    .iter()
+    .find(|window| window.minutes() == WEEK && !window.expired(now))?;
+  // A share of at most a few hundred percent: whole ones are what a menu shows.
+  weekly.percent().map(|used| used.round() as u64)
 }

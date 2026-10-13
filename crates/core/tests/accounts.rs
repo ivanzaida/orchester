@@ -181,7 +181,7 @@ fn accounts_folders_inside_a_repository_or_taken_or_elsewhere_are_refused() {
   let repository = home.join("projects").join("kontur");
   let inside = repository.join(".claude-ci");
   assert_eq!(
-    brought_folder_problem(&inside, Some(&repository), (&[], None), Some(&home), &as_written),
+    brought_folder_problem(&inside, Some(&repository), (&[], &no_own), Some(&home), &as_written),
     Some(FolderProblem::InsideRepository(repository.clone()))
   );
   let personal = account(
@@ -193,7 +193,7 @@ fn accounts_folders_inside_a_repository_or_taken_or_elsewhere_are_refused() {
     brought_folder_problem(
       &home.join(".claude-personal"),
       None,
-      (std::slice::from_ref(&personal), None),
+      (std::slice::from_ref(&personal), &no_own),
       Some(&home),
       &as_written
     ),
@@ -205,7 +205,7 @@ fn accounts_folders_inside_a_repository_or_taken_or_elsewhere_are_refused() {
     brought_folder_problem(
       &own,
       None,
-      (std::slice::from_ref(&default), Some(&own)),
+      (std::slice::from_ref(&default), &|_| Some(own.clone())),
       Some(&home),
       &as_written
     ),
@@ -215,21 +215,21 @@ fn accounts_folders_inside_a_repository_or_taken_or_elsewhere_are_refused() {
     brought_folder_problem(
       &home.join("Documents").join("claude"),
       None,
-      (&[], None),
+      (&[], &no_own),
       Some(&home),
       &as_written
     ),
     Some(FolderProblem::OutsideCredentialPlaces)
   );
   assert_eq!(
-    brought_folder_problem(Path::new("relative"), None, (&[], None), Some(&home), &as_written),
+    brought_folder_problem(Path::new("relative"), None, (&[], &no_own), Some(&home), &as_written),
     Some(FolderProblem::NotAbsolute)
   );
   assert_eq!(
     brought_folder_problem(
       &home.join(".claude-freelance"),
       None,
-      (std::slice::from_ref(&personal), None),
+      (std::slice::from_ref(&personal), &no_own),
       Some(&home),
       &as_written
     ),
@@ -247,7 +247,7 @@ fn accounts_folders_with_dots_or_nested_with_another_accounts_are_refused() {
   );
   let dotted = home.join(".claude-personal").join("..").join("Documents").join("creds");
   assert_eq!(
-    brought_folder_problem(&dotted, None, (&[], None), Some(&home), &as_written),
+    brought_folder_problem(&dotted, None, (&[], &no_own), Some(&home), &as_written),
     Some(FolderProblem::NotAbsolute),
     "`..` is refused, not resolved past the rules"
   );
@@ -258,7 +258,7 @@ fn accounts_folders_with_dots_or_nested_with_another_accounts_are_refused() {
     let problem = brought_folder_problem(
       &nested,
       None,
-      (std::slice::from_ref(&personal), None),
+      (std::slice::from_ref(&personal), &no_own),
       Some(&home),
       &as_written,
     );
@@ -278,13 +278,18 @@ fn accounts_folders_with_dots_or_nested_with_another_accounts_are_refused() {
     brought_folder_problem(
       &home.join(".agents"),
       None,
-      (std::slice::from_ref(&created), None),
+      (std::slice::from_ref(&created), &no_own),
       Some(&home),
       &as_written
     ),
     Some(FolderProblem::Taken(created.id())),
     "a folder holding another account's"
   );
+}
+
+/// No CLI's own folder is known.
+fn no_own(_: AccountCli) -> Option<PathBuf> {
+  None
 }
 
 /// Paths as written: these rules read no file system.

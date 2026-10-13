@@ -23,6 +23,11 @@ impl RunTask {
     &mut self,
     execution: StepExecutionId,
   ) -> Result<bool, crate::execution::step::ExecutionError> {
+    // A person asked to try it now: it starts once; the CLI says whether the limit still holds.
+    if self.try_at_plan_limit == Some(execution) {
+      self.try_at_plan_limit = None;
+      return Ok(false);
+    }
     if self.last_invocation(execution)?.is_some() || !self.account_at_plan_limit(execution) {
       return Ok(false);
     }
@@ -52,10 +57,7 @@ impl RunTask {
     let Some(account) = connection.account().id(connection.provider()) else {
       return false;
     };
-    let default = orchester_core::account::AccountCli::ALL
-      .iter()
-      .any(|cli| cli.default_account() == account);
-    match self.db.last_account_reading(account, default) {
+    match self.db.last_account_reading(account) {
       Ok(reading) => reading.is_some_and(|reading| reading.resets_at(orchester_core::time::Timestamp::now()).is_some()),
       Err(error) => {
         tracing::warn!(%error, "cannot read an account's plan limits; the step starts");

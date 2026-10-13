@@ -119,7 +119,8 @@ fn project_uses(
         .unwrap_or_default();
       found.running.push(RunUse {
         project_name: project.name.clone(),
-        label: format!("{key} #{}", run.number()),
+        // A run's number reads with its `#` already (`#2`).
+        label: format!("{key} {}", run.number()),
       });
     }
   }
@@ -168,7 +169,7 @@ pub(super) fn move_connections(
   for project in projects.iter().filter(|project| !project.folder_missing()) {
     let mut db = match ProjectDb::open(&project.repo_root) {
       Ok(db) => db,
-      // Its connections follow the removal when it opens again (`follow_removals`).
+      // Its connections follow when it opens again (`follow_accounts`).
       Err(error) => {
         tracing::warn!(%error, project = %project.repo_root.display(), "a project's connections move when it opens");
         continue;
@@ -176,12 +177,24 @@ pub(super) fn move_connections(
     };
     for mut connection in db.connections()? {
       if runs_on(&connection, account) {
-        connection
-          .set_account(target.clone())
-          .map_err(AccountsError::Connection)?;
+        follow(&mut connection, target.clone())?;
         db.save_connection(&connection)?;
       }
     }
+  }
+  Ok(())
+}
+
+/// Moves `connection` to `target` ([`Connection::follow_account`]); on another account it is checked there at once, as
+/// choosing an account in Edit connection does, so it stays usable when the CLI is signed in there.
+fn follow(connection: &mut Connection, target: ConnectionAccount) -> Result<(), AccountsError> {
+  connection.follow_account(target).map_err(AccountsError::Connection)?;
+  if connection.last_check().is_none()
+    && let Some(check) = crate::connections::probe::recheck(connection)
+  {
+    connection
+      .record_check(check)
+      .expect("the check was made for the connection's own kind");
   }
   Ok(())
 }
@@ -210,7 +223,7 @@ pub(super) fn follow_accounts(
     if target == *connection.account() {
       continue;
     }
-    connection.set_account(target).map_err(AccountsError::Connection)?;
+    follow(&mut connection, target)?;
     db.save_connection(&connection)?;
   }
   Ok(())

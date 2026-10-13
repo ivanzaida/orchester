@@ -369,7 +369,8 @@ fn another_task(root: &Path) -> orchester_core::id::TaskId {
     .number();
   let details = TaskDetails {
     title: orchester_core::name::Name::new("Say hello again").expect("a title"),
-    brief: "Say hello once more.".to_owned(),
+    // As the first task's: the fake Claude hits its account's plan limit unless the account has room.
+    brief: "Hit the plan limit".to_owned(),
     acceptance_criteria: vec!["It says hello".to_owned()],
     pipeline: Some(pipeline),
     limits: TaskLimits::new(None, None).expect("limits"),
@@ -412,4 +413,54 @@ async fn accounts_a_new_run_waits_for_its_accounts_reset_without_an_agent_and_st
   assert_eq!(run.status(), &RunStatus::Succeeded);
   let folders = reported(&ProjectDb::open(root).expect("open"), second, "account folder: ");
   assert_eq!(folders.last(), Some(&personal.path().display().to_string()));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn accounts_a_person_tries_a_waiting_run_on_its_own_account_now() {
+  let (project, work, _personal, _) = at_the_limit();
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let first = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the first run starts");
+  wait_for(root, &mut events, first, stopped_at_plan_limit).await;
+  let second = scheduler
+    .start_run(IdempotencyKey::generate(), another_task(root))
+    .await
+    .expect("the second run starts");
+  wait_for(root, &mut events, second, stopped_at_plan_limit).await;
+  let started = |root: &Path| {
+    ProjectDb::open(root)
+      .expect("open")
+      .invocations(second)
+      .expect("read")
+      .len()
+  };
+  assert_eq!(started(root), 0, "it waits without an agent");
+  try_now(&scheduler, second).await;
+  wait_for(root, &mut events, second, |run| {
+    stopped_at_plan_limit(run) && started(root) == 1
+  })
+  .await;
+  std::fs::write(work.path().join("plan-room"), "").expect("Work's limit lifted early");
+  try_now(&scheduler, second).await;
+  let run = wait_for(root, &mut events, second, |run| run.status().is_terminal()).await;
+  assert_eq!(
+    run.status(),
+    &RunStatus::Succeeded,
+    "tried on Work again, now with room"
+  );
+}
+
+/// Tries `run` on its own account now once its task settled the stop.
+async fn try_now(scheduler: &orchester_runner::execution::Scheduler, run: orchester_core::id::RunId) {
+  for _ in 0..50 {
+    match scheduler.try_at_plan_limit(run).await {
+      Ok(()) => return,
+      Err(Rejection::RunNotPaused) => tokio::time::sleep(std::time::Duration::from_millis(100)).await,
+      Err(other) => panic!("the run is not tried: {other:?}"),
+    }
+  }
+  panic!("the run's task never settled its stop");
 }

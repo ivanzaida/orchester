@@ -197,21 +197,7 @@ fn title(ctx: &Ctx, parts: &Parts, account: &AgentAccount) -> Element {
 fn actions(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount) -> Element {
   let navigation = Navigation::of(ctx);
   let id = account.id();
-  let check = {
-    let work = work.clone();
-    ActionButton::new(
-      "account-check-again",
-      ButtonKind::Secondary,
-      t(ctx, "accounts.actions.checkAgain"),
-    )
-    .icon(Icon::RefreshCw)
-    .on_click(move || work.check_again(vec![id]))
-  };
-  let check = if parts.checking.contains(&id) {
-    check.loading()
-  } else {
-    check
-  };
+  let check = super::state::check_again(ctx, parts, work, id, "account-check-again");
   let to = |panel: AccountsPanel| {
     let navigation = navigation.clone();
     move || navigation.replace(Route::Accounts(AccountsView::of(id, panel)))
@@ -219,8 +205,13 @@ fn actions(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount) ->
   let rename = ActionButton::new("account-rename", ButtonKind::Ghost, t(ctx, "accounts.actions.rename"))
     .icon(Icon::Pencil)
     .on_click(to(AccountsPanel::Rename));
-  let remove =
-    ActionButton::new("account-remove", ButtonKind::Ghost, t(ctx, "accounts.actions.remove")).icon(Icon::Trash2);
+  // Pressed while its question is open (`HzJSR`).
+  let remove_kind = if parts.view.panel == AccountsPanel::Remove {
+    ButtonKind::Secondary
+  } else {
+    ButtonKind::Ghost
+  };
+  let remove = ActionButton::new("account-remove", remove_kind, t(ctx, "accounts.actions.remove")).icon(Icon::Trash2);
   // Why Default can't be removed shows under the actions.
   let remove = if account.is_default() {
     remove.disabled()

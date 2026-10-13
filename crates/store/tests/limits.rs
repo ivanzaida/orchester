@@ -422,3 +422,43 @@ fn limits_agent_accounts_migration_keeps_runs_and_stores_a_stop_at_a_plan_limit(
   );
   assert_eq!(db.runs_at_plan_limit().expect("listed").len(), 1);
 }
+
+#[test]
+fn limits_a_reading_without_an_account_counts_for_the_default_of_its_own_cli_only() {
+  use orchester_core::{
+    account::AccountCli,
+    connection::{
+      AgentProvider,
+      plan_limits::{LimitReading, LimitState, LimitWindow, PlanLimits},
+    },
+  };
+  let (_repo, mut db, run, _) = started_run();
+  // A Claude Code reading from before accounts: it names no account.
+  let reading = LimitReading {
+    provider: AgentProvider::ClaudeCodeCli,
+    account: None,
+    at: at(5_000),
+    limits: PlanLimits {
+      windows: vec![
+        LimitWindow::new(300, Some(100.0), Some(at(90_000_000)), LimitState::Reached, false).expect("a window"),
+      ],
+      plan: None,
+      credits: None,
+      blocked: None,
+    },
+  };
+  db.save_limit_snapshot(run.id(), &reading).expect("stored");
+  let claude = db
+    .last_account_reading(AccountCli::ClaudeCode.default_account())
+    .expect("read");
+  assert_eq!(
+    claude.map(|reading| reading.provider),
+    Some(AgentProvider::ClaudeCodeCli)
+  );
+  assert_eq!(
+    db.last_account_reading(AccountCli::Codex.default_account())
+      .expect("read"),
+    None,
+    "never Codex's Default"
+  );
+}

@@ -85,3 +85,8 @@ impl PlanStop {
 pub const fn continue_on(run: RunId, connection: ConnectionId) -> Command {
   Command::ContinueOnConnection { run, connection }
 }
+
+/// The command that tries `run`'s stopped step on its own account now, though its limit was last reported reached.
+pub const fn try_now(run: RunId) -> Command {
+  Command::TryAtPlanLimit { run }
+}
