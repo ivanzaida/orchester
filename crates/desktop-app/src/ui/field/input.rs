@@ -19,7 +19,7 @@ use lurq::{
     theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Button, Column, Row, Text, TextInput},
-  core::Signal,
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::{CursorIcon, Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -71,9 +71,12 @@ pub struct FieldInput {
   invalid: bool,
   masked: bool,
   on_leave: Option<Arc<dyn Fn() + Send + Sync>>,
+  /// The input, for its owner to focus.
+  element: Option<ElementRef>,
 }
 
-/// Compared by what it shows; the value by its signal.
+/// Compared by what it shows; the value by its signal. The input's element ref is its owner's, kept for
+/// the owner's life.
 impl PartialEq for FieldInput {
   fn eq(&self, other: &Self) -> bool {
     self.id == other.id
@@ -123,6 +126,7 @@ impl FieldInput {
       invalid: false,
       masked: false,
       on_leave: None,
+      element: None,
     }
   }
 
@@ -239,6 +243,12 @@ impl FieldInput {
   /// Commits an autosaving field after its edit and grouping have landed.
   pub fn on_leave(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
     self.on_leave = Some(Arc::new(handler));
+    self
+  }
+
+  /// `element` finds the input, e.g. to focus it with `Ctx::focus`.
+  pub fn element(mut self, element: ElementRef) -> Self {
+    self.element = Some(element);
     self
   }
 
@@ -366,6 +376,9 @@ impl FieldBox {
       });
     if props.masked {
       input = input.mask();
+    }
+    if let Some(element) = &props.element {
+      input = input.ref_element(element.clone());
     }
     if let Some(placeholder) = &props.placeholder {
       input = input.placeholder(placeholder);

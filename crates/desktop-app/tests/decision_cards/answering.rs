@@ -8,7 +8,7 @@ use orchester_app::{
   ui::icon::Icon,
 };
 
-use super::{card_of, click, glyphs, locked, opened, text};
+use super::{card_of, click, glyphs, laid_out, locked, opened, text};
 use crate::support::Window;
 
 /// Types `keys` into the element that has the focus, one key at a time.
@@ -106,14 +106,11 @@ fn card_approval_takes_one_answer_at_a_time_and_says_why_it_did_not_go() {
   assert!(window.tree.get_element_by_id(&deny).is_some());
 }
 
-/// Presses each of `ids` in turn with no frame between them, as a quick double click or Enter held does.
+/// Presses each of `ids` in turn with no frame between them, as a quick double click or Enter held does; the
+/// frames before the first press only wait for every one to be laid out.
 fn press_together(window: &mut Window, ids: &[&str]) {
-  for id in ids {
-    let bounds = window
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|element| element.bounds())
-      .unwrap_or_else(|| panic!("{id} is laid out"));
+  let places: Vec<_> = ids.iter().map(|id| laid_out(window, id)).collect();
+  for bounds in places {
     let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
     window.tree.mouse_move(x, y);
     window.tree.mouse_down(x, y, MouseButton::Left);

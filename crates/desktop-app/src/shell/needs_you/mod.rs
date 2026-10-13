@@ -9,6 +9,7 @@
 mod in_place;
 mod item;
 mod panel;
+mod pinned;
 mod words;
 
 use lurq::{
@@ -33,7 +34,7 @@ use crate::{
   theme::{ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon},
-    pressable::pressable,
+    pressable::{in_title_bar, pressable},
     tooltip::Tooltip,
   },
 };
@@ -176,7 +177,7 @@ impl NeedsYouPill {
       PaletteColor::TextMuted
     };
     let toggle = self.open.clone();
-    let pill = pressable(move || toggle.update(|open| *open = !*open))
+    let pill = in_title_bar(pressable(move || toggle.update(|open| *open = !*open)))
       .id("needs-you-pill")
       .ref_element(self.anchor.clone())
       .describe("count", total.to_string())

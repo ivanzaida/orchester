@@ -47,6 +47,7 @@
     "noTask": "Its task can't be read",
     "projectMemory": "Project memory",
     "memoryUnavailable": "Reviewing memory records isn't built in this app yet.",
+    "taskUnavailable": "Its task can't be read, so there is nothing to open.",
     "stepLabel": "{{number}} {{step}}",
     "where": {
       "run": "Run {{run}}",

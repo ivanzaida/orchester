@@ -102,8 +102,14 @@ impl Component for ApprovalView {
     let head = request::head(ctx, &id, request);
     let body = request::body(ctx, &id, (&place, request), (shown.as_ref(), reviewing));
     let padding = Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role());
+    // In the panel its parts are 10 apart, as the item's own (`YDJsC`).
+    let gap = if place.in_panel {
+      ExtraSpacing::Loose.role()
+    } else {
+      SpacingSize::Md
+    };
     waiting_frame(&place, id.clone(), padding, || head)
-      .spacing(SpacingSize::Md)
+      .spacing(gap)
       .with_children(body)
       .child(answers::answers(ctx, &answering))
       .with_children(failed)

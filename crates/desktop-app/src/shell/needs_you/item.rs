@@ -34,7 +34,7 @@ const INITIAL_TILE: f32 = 20.0;
 type Press = Arc<dyn Fn() + Send + Sync>;
 
 /// A project's header: its initial, its name, whether the active tab shows it, and how many wait in it.
-pub(super) fn group(ctx: &Ctx, id: &str, (name, this_tab): (&str, bool), count: usize) -> Element {
+pub(super) fn group(ctx: &Ctx, id: &str, (name, this_tab): (&str, bool), count: usize) -> Row {
   let initial: String = name
     .chars()
     .next()
@@ -85,7 +85,6 @@ pub(super) fn group(ctx: &Ctx, id: &str, (name, this_tab): (&str, bool), count: 
         .child(icon(Icon::Hand, IconSize::Sm, PaletteColor::Warning))
         .child(Text::new(&count.to_string()).variant(NeedsYouText::Tally.role())),
     )
-    .into()
 }
 
 /// What it is and since when it waits: *Approval · waiting 6 min*.

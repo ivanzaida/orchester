@@ -2,14 +2,16 @@
 //! `VnLOT`, its states in `R1AZc` and answering in place in `zwuZt`): a popover anchored to the pill, not a
 //! modal; Esc or a press outside closes it. Its head (`mxdKm`) says how many wait and in which projects; its
 //! list (`RZz9r`) groups what waits by project, in the order of the tabs, oldest first in each, and scrolls
-//! once the panel reaches the window's height; its footer (`mG6gL`) opens the active project's Overview.
+//! once the panel reaches the window's height, with the header of the project it is in pinned over it (`o1BDj`,
+//! `uioh2`); its footer (`mG6gL`) opens the active project's Overview.
 //!
 //! What waits is `tasks::needs_you`'s, so the panel lists exactly what every Needs you counts. Approvals and
 //! questions with suggested answers expand in place around the conversation's own card (`in_place`), one at a
-//! time; the others open their task: a plan, a decision after retries and an interrupted run its Summary, an
-//! agent's question its Conversation, where the composer answers it. The project's memory records are listed
-//! with their action unavailable, and why, as no screen of this app reviews them yet. An item expanded here
-//! keeps its place once it no longer waits, quiet, until the panel closes, so nothing moves under the pointer.
+//! time; the others open their task: a plan, a limit, a decision after retries and an interrupted run its
+//! Summary, pointing at the plan's, the limit's or the decision's card (`icGHG`), an agent's question its
+//! Conversation, where the composer answers it. The project's memory records, and an item whose task can't be
+//! read, are listed with their action unavailable, and why. An item expanded here keeps its place once it no
+//! longer waits, quiet, until the panel closes, so nothing moves under the pointer.
 
 use std::{sync::Arc, time::Duration};
 
@@ -20,8 +22,8 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Spacer, Text},
-  core::Signal,
-  layout::{Alignment, text_style::TextAlign},
+  core::{ElementRef, Signal},
+  layout::{Alignment, layout_kind::ScrollState, text_style::TextAlign},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
@@ -35,10 +37,14 @@ use super::{
   Waiting,
   in_place::{InPlaceCard, InPlaceProps},
   item::{self, Action},
+  pinned::{self, Pinned},
   waiting, words,
 };
 use crate::{
-  navigation::Navigation,
+  navigation::{
+    Navigation,
+    pointed::{Pointed, PointedCard},
+  },
   project::Projects,
   routes::{OverviewTab, ProjectPage, Route, TaskView},
   screens::task::cards::Decisions,
@@ -91,6 +97,9 @@ pub(super) struct NeedsYouPanel {
   expanded: Signal<Option<(ProjectId, Arc<str>)>>,
   /// Items expanded since the panel opened, which keep their place once they no longer wait.
   kept: Mutex<Vec<Shown>>,
+  /// The list's scroll, and the project whose header is pinned over it.
+  scroll: ScrollState,
+  pinned: Signal<Pinned>,
   tick: Signal<u64>,
   interval: Interval,
 }
@@ -107,6 +116,8 @@ impl Component for NeedsYouPanel {
       decisions,
       expanded: ctx.signal(None),
       kept: Mutex::new(Vec::new()),
+      scroll: ScrollState::new(),
+      pinned: ctx.signal(Pinned::default()),
       tick,
       interval,
     }
@@ -129,7 +140,7 @@ impl Component for NeedsYouPanel {
       .iter()
       .map(|group| Arc::from(group.waiting.name.as_str()))
       .collect();
-    let height = ctx.window().info().resolved_height - WINDOW_ROOM;
+    let height = ctx.window().info().logical_height() - WINDOW_ROOM;
     let list = if groups.iter().all(|group| group.items.is_empty()) {
       empty(ctx)
     } else {
@@ -187,6 +198,8 @@ impl NeedsYouPanel {
       .collect()
   }
 
+  /// The list: the header of the project its top is in, pinned, over what waits, which scrolls. A later
+  /// project's header scrolls with its items and is pinned in its turn once it has passed under the pinned one.
   fn list(
     &self,
     ctx: &mut Ctx,
@@ -194,16 +207,28 @@ impl NeedsYouPanel {
     active: Option<ProjectId>,
     (navigation, open): (&Navigation, &Signal<bool>),
   ) -> Element {
-    let mut rows: Vec<Element> = Vec::new();
-    for group in groups.iter().filter(|group| !group.items.is_empty()) {
+    let shown: Vec<&Group> = groups.iter().filter(|group| !group.items.is_empty()).collect();
+    let header = |ctx: &Ctx, group: &Group, id: String| {
       let project = group.waiting.project;
-      let this_tab = active == Some(project);
-      rows.push(item::group(
+      item::group(
         ctx,
-        &format!("needs-you-group-{project}"),
-        (group.waiting.name.as_str(), this_tab),
+        &id,
+        (group.waiting.name.as_str(), active == Some(project)),
         group.waiting.count,
-      ));
+      )
+    };
+    let content = ElementRef::new();
+    let mut heads: Vec<(ProjectId, ElementRef)> = Vec::new();
+    let mut rows: Vec<Element> = Vec::new();
+    for (index, group) in shown.iter().enumerate() {
+      let project = group.waiting.project;
+      // The first project's header is the pinned one until a later one passes under it.
+      if index > 0 {
+        let head = ElementRef::new();
+        let id = format!("needs-you-list-group-{project}");
+        rows.push(header(ctx, group, id).ref_element(head.clone()).into());
+        heads.push((project, head));
+      }
       let waiting: Arc<[Arc<str>]> = group
         .items
         .iter()
@@ -214,12 +239,18 @@ impl NeedsYouPanel {
         rows.push(self.row(ctx, shown, &waiting, (navigation, open)));
       }
     }
-    ScrollVertical::new(
+    let Pinned(pinned) = self.pinned.get();
+    let pinned = shown
+      .iter()
+      .find(|group| Some(group.waiting.project) == pinned)
+      .or(shown.first())
+      .map(|group| header(ctx, group, format!("needs-you-group-{}", group.waiting.project)));
+    let list = ScrollVertical::new(
       Column::new()
+        .ref_element(content.clone())
         .width(Dimension::Pct(100.0))
         .padding(
           Padding::new()
-            .top(SpacingSize::Xs)
             .left(SpacingSize::Sm)
             .right(SpacingSize::Sm)
             .bottom(SpacingSize::Sm),
@@ -227,12 +258,20 @@ impl NeedsYouPanel {
         .spacing(ExtraSpacing::Tight.role())
         .with_children(rows),
     )
+    .with_scroll_state(self.scroll.clone())
     .id("needs-you-list")
     .width(Dimension::Pct(100.0))
     .flex_shrink(1.0)
     .min_height(Dimension::Px(0.0))
-    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .into()
+    .on_scroll(pinned::on_scroll(&self.scroll, &self.pinned, content, heads));
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .flex_shrink(1.0)
+      .min_height(Dimension::Px(0.0))
+      .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+      .child(pinned::slot(pinned))
+      .child(list)
+      .into()
   }
 
   /// One item, collapsed or expanded around the card that answers it.
@@ -249,11 +288,12 @@ impl NeedsYouPanel {
     let expanded = self.expanded.get().as_ref() == Some(&at);
     let in_place = item.kind.card_key().zip(item.task.as_ref()).zip(item.run);
     let Some(((key, task), _)) = in_place else {
-      let action = match item.kind {
+      let action = match (&item.kind, route_of(shown)) {
         // No screen reviews memory records yet, so the action says so in place of leading nowhere.
-        WaitingKind::Memory { .. } => Action::Unavailable(ctx.t("needs_you.memoryUnavailable")),
-        WaitingKind::Question(_) => Action::Press(Icon::MessageCircle, go(navigation, open, route_of(shown))),
-        _ => Action::Press(Icon::ArrowUpRight, go(navigation, open, route_of(shown))),
+        (WaitingKind::Memory { .. }, _) => Action::Unavailable(ctx.t("needs_you.memoryUnavailable")),
+        (_, None) => Action::Unavailable(ctx.t("needs_you.taskUnavailable")),
+        (WaitingKind::Question(_), route) => Action::Press(Icon::MessageCircle, go(navigation, open, route)),
+        (_, Some(route)) => Action::Press(Icon::ArrowUpRight, open_at(navigation, open, route, pointed_of(shown))),
       };
       return item::collapsed(ctx, &id, item, action);
     };
@@ -333,6 +373,23 @@ fn task_route(project: ProjectId, key: &str, view: TaskView) -> Option<Route> {
   Some(Route::Project(project, ProjectPage::Task(key, view)))
 }
 
+/// The decision card of the task's Summary an item points at, which the page brings into view and rings
+/// (`icGHG`): the plan under review, raising the limit, the decision after retries.
+fn pointed_of(shown: &Shown) -> Option<Pointed> {
+  let card = match shown.item.kind {
+    WaitingKind::Plan(_) => PointedCard::Plan,
+    WaitingKind::StoppedAtLimit { .. } => PointedCard::RaiseLimit,
+    WaitingKind::Decision(_) => PointedCard::Retries,
+    _ => return None,
+  };
+  let task = shown.item.task.as_ref()?.key.parse().ok()?;
+  Some(Pointed {
+    project: shown.project,
+    task,
+    card,
+  })
+}
+
 /// Goes to `route` and closes the panel, which the page opening takes the place of.
 fn go(navigation: &Navigation, open: &Signal<bool>, route: Option<Route>) -> Arc<dyn Fn() + Send + Sync> {
   let (navigation, open) = (navigation.clone(), open.clone());
@@ -340,6 +397,23 @@ fn go(navigation: &Navigation, open: &Signal<bool>, route: Option<Route>) -> Arc
     if let Some(route) = route.clone() {
       navigation.go(route);
     }
+    open.set(false);
+  })
+}
+
+/// Goes to `route`, pointing at `card` on it, and closes the panel.
+fn open_at(
+  navigation: &Navigation,
+  open: &Signal<bool>,
+  route: Route,
+  card: Option<Pointed>,
+) -> Arc<dyn Fn() + Send + Sync> {
+  let Some(card) = card else {
+    return go(navigation, open, Some(route));
+  };
+  let (navigation, open) = (navigation.clone(), open.clone());
+  Arc::new(move || {
+    navigation.go_to_card(&route, card.clone());
     open.set(false);
   })
 }

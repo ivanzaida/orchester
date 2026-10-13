@@ -69,7 +69,7 @@ const BUILT: &[Screen] = &[
 /// it, under `tests/`.
 const BUILT_SURFACES: &[(&str, &str)] = &[
   // The title bar's Needs you panel (`eBhFg`), which its pill opens over any screen.
-  ("needs-you-panel", "needs_you_panel.rs"),
+  ("needs-you-panel", "needs_you_panel/main.rs"),
 ];
 
 /// Where the test root leaves its router, and the services it provides.

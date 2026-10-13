@@ -6,7 +6,10 @@ use std::sync::{
 };
 
 use lurq::{
-  app::theme::{RadiusSize, SpacingSize},
+  app::{
+    events::{MouseButton, mouse_event::MouseEvent},
+    theme::{RadiusSize, SpacingSize},
+  },
   components::{Column, Row},
   node::{Element, dimension::Dimension},
 };
@@ -14,7 +17,7 @@ use orchester_app::ui::{
   button::{ActionButton, ButtonKind},
   icon::Icon,
   icon_button::IconButton,
-  pressable::Focus,
+  pressable::{Focus, in_title_bar, pressable},
   table::{ColumnWidth, TableRow},
   tabs::{Segment, SegmentFace, segmented},
   toggle::{Toggle, ToggleKind},
@@ -294,4 +297,55 @@ fn an_unavailable_upload_keeps_its_glyph_and_cannot_press_a_handler() {
   assert!(!kit.texts("publish").contains(&Icon::Lock.glyph().to_string()));
   kit.click("publish");
   assert_eq!(presses.load(Ordering::SeqCst), 0);
+}
+
+/// A title bar's control keeps its press from the bar, which hands a press it receives to the OS to move the
+/// window (lurq's `ChromeTitleBar`), and the OS move loop takes the release, so no click would follow. The
+/// bar's empty room still takes the press.
+#[test]
+fn a_title_bar_control_keeps_its_press_from_the_bars_window_move() {
+  let (moves, mv) = counter();
+  let (presses, press) = counter();
+  let (plain_presses, plain_press) = counter();
+  let mut kit = Kit::show(move |_| {
+    let mv = mv.clone();
+    Row::new()
+      .id("bar")
+      .on_mouse_down(move |event: MouseEvent| {
+        if event.button == MouseButton::Left {
+          mv();
+        }
+      })
+      .child(
+        in_title_bar(pressable(press.clone()))
+          .id("control")
+          .width(Dimension::Px(60.0))
+          .height(Dimension::Px(28.0)),
+      )
+      .child(
+        pressable(plain_press.clone())
+          .id("plain")
+          .width(Dimension::Px(60.0))
+          .height(Dimension::Px(28.0)),
+      )
+      .child(
+        Row::new()
+          .id("room")
+          .width(Dimension::Px(200.0))
+          .height(Dimension::Px(28.0)),
+      )
+      .into()
+  });
+  kit.click("control");
+  assert_eq!(presses.load(Ordering::SeqCst), 1, "the control is pressed");
+  assert_eq!(moves.load(Ordering::SeqCst), 0, "and the bar does not move the window");
+  kit.click("plain");
+  assert_eq!(plain_presses.load(Ordering::SeqCst), 1);
+  assert_eq!(
+    moves.load(Ordering::SeqCst),
+    1,
+    "a press a control lets through reaches the bar"
+  );
+  kit.click("room");
+  assert_eq!(moves.load(Ordering::SeqCst), 2, "the bar's empty room moves the window");
 }

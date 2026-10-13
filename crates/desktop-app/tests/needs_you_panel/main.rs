@@ -2,15 +2,22 @@
 //! QA seed's scenarios: what waits, grouped by project and oldest first, with the same count as the pill; a
 //! plan that opens its task and closes the panel; an approval and a question with suggested answers answered in
 //! place through the conversation's own cards, with the same rules (no runner here, so an answer says why it did
-//! not go); a wider answer that synthetic input does not take; Esc and the close. Needs `git`.
+//! not go); a wider answer that synthetic input does not take; Esc and the close, and the pill opening it again
+//! after each way it closes ([`closing`]); an expanded approval's layout and the pinned project header
+//! ([`expanded`]). Needs `git`.
 
-#[path = "../examples/seed/kontur/mod.rs"]
+mod closing;
+mod expanded;
+#[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(
   dead_code,
   reason = "the seed reports what it wrote; these tests read the window instead"
 )]
 mod kontur;
+#[path = "../support/mod.rs"]
 mod support;
+
+use std::time::{Duration, Instant};
 
 use kontur::{SeedRequest, Seeded, scenarios};
 use lurq::{
@@ -56,7 +63,8 @@ fn seeded_with(scenario: &str, more: impl FnOnce(&Seeded)) -> (Window, Seeded) {
   (window, seeded)
 }
 
-/// Scrolls `id` into view, as a person would to reach it, and clicks its middle.
+/// Scrolls `id` into view, as a person would to reach it, and clicks its middle. Bounds are logical, the
+/// pointer's position in the window's pixels.
 fn click(window: &mut Window, id: &str) {
   if let Some(mut element) = window.tree.get_element_by_id_mut(id) {
     element.scroll_into_view();
@@ -67,7 +75,11 @@ fn click(window: &mut Window, id: &str) {
     .get_element_by_id_mut(id)
     .and_then(|element| element.bounds())
     .unwrap_or_else(|| panic!("{id} is laid out"));
-  let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
+  let scale = window.tree.scale_factor();
+  let (x, y) = (
+    (bounds.x + bounds.width / 2.0) * scale,
+    (bounds.y + bounds.height / 2.0) * scale,
+  );
   window.tree.mouse_move(x, y);
   window.tree.mouse_down(x, y, MouseButton::Left);
   window.tree.mouse_up(x, y, MouseButton::Left);
@@ -181,6 +193,25 @@ fn needs_you_panel_lists_what_waits_by_project_oldest_first() {
   assert_eq!(text(&mut window, "needs-you-show-all"), "Show all in Kontur's Overview");
 }
 
+/// The element `id` is ringed as the card a navigation pointed at.
+fn pointed(window: &mut Window, id: &str) -> bool {
+  window
+    .tree
+    .get_element_by_id(id)
+    .is_some_and(|element| element.has_class("pointed"))
+}
+
+/// The Summary route of the seeded task titled `title`.
+fn summary_of(seeded: &Seeded, title: &str) -> Route {
+  let key = seeded
+    .tasks
+    .iter()
+    .find(|task| task.title == title)
+    .map(|task| task.key.parse().expect("a task key"))
+    .expect("the seeded task");
+  Route::Project(seeded.project, ProjectPage::Task(key, TaskView::of(TaskTab::Summary)))
+}
+
 #[test]
 fn needs_you_panel_opens_a_plan_on_its_task_and_closes() {
   let (mut window, seeded) = seeded("tasks");
@@ -189,17 +220,72 @@ fn needs_you_panel_opens_a_plan_on_its_task_and_closes() {
   assert_eq!(text(&mut window, &format!("{plan}-kind")), "Plan review");
   assert_eq!(text(&mut window, &format!("{plan}-action")), "Review plan");
   click(&mut window, &format!("{plan}-action"));
-  let key = seeded
-    .tasks
-    .iter()
-    .find(|task| task.title == "Plan the GitHub app permissions")
-    .map(|task| task.key.parse().expect("a task key"))
-    .expect("the seeded task");
   assert_eq!(
     window.navigation().route_now(),
-    Route::Project(seeded.project, ProjectPage::Task(key, TaskView::of(TaskTab::Summary)))
+    summary_of(&seeded, "Plan the GitHub app permissions")
   );
   window.until("the panel to close", |window| window.texts("needs-you-panel").is_none());
+  window.until("the plan's card ringed", |window| pointed(window, "plan-review"));
+  window
+    .tree
+    .tick_timers_at(Instant::now() + Duration::from_millis(2_050));
+  window.pass();
+  assert!(!pointed(&mut window, "plan-review"), "the ring fades after its moment");
+  assert!(window.tree.get_element_by_id("plan-review").is_some());
+}
+
+#[test]
+fn needs_you_panel_opens_a_limit_at_its_card_with_the_new_limit_focused() {
+  let (mut window, seeded) = seeded("tasks");
+  open(&mut window);
+  let title = "Explain an expired GitHub token in the status bar";
+  let limit = item_of(&mut window, title);
+  click(&mut window, &format!("{limit}-action"));
+  assert_eq!(window.navigation().route_now(), summary_of(&seeded, title));
+  window.until("the limit's card ringed", |window| pointed(window, "raise-limit"));
+  window.until("the new limit focused", |window| {
+    window.tree.focused_element().and_then(|element| element.id()) == Some("raise-limit-input")
+  });
+  // The pointer was taken: going to the same page again by other means rings nothing.
+  window
+    .navigation()
+    .go(Route::Project(seeded.project, ProjectPage::Tasks(Default::default())));
+  window.pass();
+  window.navigation().go(summary_of(&seeded, title));
+  window.until("the card again", |window| {
+    window.tree.get_element_by_id("raise-limit").is_some()
+  });
+  assert!(!pointed(&mut window, "raise-limit"));
+}
+
+#[test]
+fn needs_you_panel_keeps_under_the_pill_on_a_scaled_window() {
+  let (mut window, _) = seeded("tasks");
+  // 1440 × 900 at 150 %: the panel's room is the window's logical height, not its pixels.
+  window.tree.set_scale_factor(1.5);
+  window.tree.resize(2160, 1350);
+  window.pass();
+  open(&mut window);
+  let (item, _) = expand_approval(&mut window, "Add retry to webhook sender");
+  settle(&mut window);
+  let bounds = |window: &mut Window, id: &str| {
+    window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  let pill = bounds(&mut window, "needs-you-pill");
+  let panel = bounds(&mut window, "needs-you-panel");
+  assert!(
+    panel.y >= pill.y + pill.height,
+    "the panel opens under the pill: {panel:?} under {pill:?}"
+  );
+  assert!(
+    panel.y + panel.height <= 900.0 - 32.0 + 0.5,
+    "and ends above the status bar's room: {panel:?}"
+  );
+  assert!(window.tree.get_element_by_id(&item).is_some());
 }
 
 #[test]
