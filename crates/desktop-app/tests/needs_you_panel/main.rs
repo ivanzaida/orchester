@@ -2,14 +2,19 @@
 //! QA seed's scenarios: what waits, grouped by project and oldest first, with the same count as the pill; a
 //! plan that opens its task and closes the panel; an approval and a question with suggested answers answered in
 //! place through the conversation's own cards, with the same rules (no runner here, so an answer says why it did
-//! not go); a wider answer that synthetic input does not take; Esc and the close. Needs `git`.
+//! not go); a wider answer that synthetic input does not take; Esc and the close, and the pill opening it again
+//! after each way it closes ([`closing`]); an expanded approval's layout and the pinned project header
+//! ([`expanded`]). Needs `git`.
 
-#[path = "../examples/seed/kontur/mod.rs"]
+mod closing;
+mod expanded;
+#[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(
   dead_code,
   reason = "the seed reports what it wrote; these tests read the window instead"
 )]
 mod kontur;
+#[path = "../support/mod.rs"]
 mod support;
 
 use std::time::{Duration, Instant};

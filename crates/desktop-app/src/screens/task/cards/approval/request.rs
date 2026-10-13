@@ -57,22 +57,26 @@ pub(super) fn head(ctx: &Ctx, id: &str, request: &PendingToolApproval) -> Elemen
   .into()
 }
 
-/// Everything between the head and the answers.
+/// Everything between the head and the answers. In the Needs you panel the item already says what the agent
+/// asks, so the card starts at its subject (`YDJsC`).
 pub(super) fn body(
   ctx: &mut Ctx,
   id: &str,
   (place, request): (&Place, &PendingToolApproval),
   (shown, reviewing): (Option<&ShownApproval>, bool),
 ) -> Vec<Element> {
-  let explain = words::explanation(ctx, shown, request);
-  let mut body: Vec<Element> = vec![
-    Text::new(&explain)
-      .id(format!("{id}-explain"))
-      .variant(ExtraTypography::Prose.role())
-      .width(Dimension::Pct(100.0))
-      .into(),
-    subject(ctx, id, request, shown),
-  ];
+  let mut body: Vec<Element> = Vec::new();
+  if !place.in_panel {
+    let explain = words::explanation(ctx, shown, request);
+    body.push(
+      Text::new(&explain)
+        .id(format!("{id}-explain"))
+        .variant(ExtraTypography::Prose.role())
+        .width(Dimension::Pct(100.0))
+        .into(),
+    );
+  }
+  body.push(subject(ctx, id, request, shown));
   let reason = match words::own_reach(request) {
     Some(reach) => Some(words::own_reason(ctx, reach)),
     None => shown

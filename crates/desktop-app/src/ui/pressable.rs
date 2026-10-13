@@ -28,6 +28,13 @@ pub fn pressable(on_click: impl Fn() + Send + Sync + 'static) -> Button {
     })
 }
 
+/// `button`, a control in the custom title bar. The bar hands a press that reaches it to the OS to move
+/// the window, and the OS move loop takes the release, so the control would never be clicked: its press
+/// stops here, and only the bar's empty room moves the window.
+pub fn in_title_bar(button: Button) -> Button {
+  button.on_mouse_down(|event: MouseEvent| event.stop_propagation())
+}
+
 /// How a control takes a press.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Focus {

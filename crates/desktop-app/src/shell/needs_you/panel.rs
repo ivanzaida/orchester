@@ -2,7 +2,8 @@
 //! `VnLOT`, its states in `R1AZc` and answering in place in `zwuZt`): a popover anchored to the pill, not a
 //! modal; Esc or a press outside closes it. Its head (`mxdKm`) says how many wait and in which projects; its
 //! list (`RZz9r`) groups what waits by project, in the order of the tabs, oldest first in each, and scrolls
-//! once the panel reaches the window's height; its footer (`mG6gL`) opens the active project's Overview.
+//! once the panel reaches the window's height, with the header of the project it is in pinned over it (`o1BDj`,
+//! `uioh2`); its footer (`mG6gL`) opens the active project's Overview.
 //!
 //! What waits is `tasks::needs_you`'s, so the panel lists exactly what every Needs you counts. Approvals and
 //! questions with suggested answers expand in place around the conversation's own card (`in_place`), one at a
@@ -21,8 +22,8 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Spacer, Text},
-  core::Signal,
-  layout::{Alignment, text_style::TextAlign},
+  core::{ElementRef, Signal},
+  layout::{Alignment, layout_kind::ScrollState, text_style::TextAlign},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
@@ -36,6 +37,7 @@ use super::{
   Waiting,
   in_place::{InPlaceCard, InPlaceProps},
   item::{self, Action},
+  pinned::{self, Pinned},
   waiting, words,
 };
 use crate::{
@@ -95,6 +97,9 @@ pub(super) struct NeedsYouPanel {
   expanded: Signal<Option<(ProjectId, Arc<str>)>>,
   /// Items expanded since the panel opened, which keep their place once they no longer wait.
   kept: Mutex<Vec<Shown>>,
+  /// The list's scroll, and the project whose header is pinned over it.
+  scroll: ScrollState,
+  pinned: Signal<Pinned>,
   tick: Signal<u64>,
   interval: Interval,
 }
@@ -111,6 +116,8 @@ impl Component for NeedsYouPanel {
       decisions,
       expanded: ctx.signal(None),
       kept: Mutex::new(Vec::new()),
+      scroll: ScrollState::new(),
+      pinned: ctx.signal(Pinned::default()),
       tick,
       interval,
     }
@@ -191,6 +198,8 @@ impl NeedsYouPanel {
       .collect()
   }
 
+  /// The list: the header of the project its top is in, pinned, over what waits, which scrolls. A later
+  /// project's header scrolls with its items and is pinned in its turn once it has passed under the pinned one.
   fn list(
     &self,
     ctx: &mut Ctx,
@@ -198,16 +207,28 @@ impl NeedsYouPanel {
     active: Option<ProjectId>,
     (navigation, open): (&Navigation, &Signal<bool>),
   ) -> Element {
-    let mut rows: Vec<Element> = Vec::new();
-    for group in groups.iter().filter(|group| !group.items.is_empty()) {
+    let shown: Vec<&Group> = groups.iter().filter(|group| !group.items.is_empty()).collect();
+    let header = |ctx: &Ctx, group: &Group, id: String| {
       let project = group.waiting.project;
-      let this_tab = active == Some(project);
-      rows.push(item::group(
+      item::group(
         ctx,
-        &format!("needs-you-group-{project}"),
-        (group.waiting.name.as_str(), this_tab),
+        &id,
+        (group.waiting.name.as_str(), active == Some(project)),
         group.waiting.count,
-      ));
+      )
+    };
+    let content = ElementRef::new();
+    let mut heads: Vec<(ProjectId, ElementRef)> = Vec::new();
+    let mut rows: Vec<Element> = Vec::new();
+    for (index, group) in shown.iter().enumerate() {
+      let project = group.waiting.project;
+      // The first project's header is the pinned one until a later one passes under it.
+      if index > 0 {
+        let head = ElementRef::new();
+        let id = format!("needs-you-list-group-{project}");
+        rows.push(header(ctx, group, id).ref_element(head.clone()).into());
+        heads.push((project, head));
+      }
       let waiting: Arc<[Arc<str>]> = group
         .items
         .iter()
@@ -218,12 +239,18 @@ impl NeedsYouPanel {
         rows.push(self.row(ctx, shown, &waiting, (navigation, open)));
       }
     }
-    ScrollVertical::new(
+    let Pinned(pinned) = self.pinned.get();
+    let pinned = shown
+      .iter()
+      .find(|group| Some(group.waiting.project) == pinned)
+      .or(shown.first())
+      .map(|group| header(ctx, group, format!("needs-you-group-{}", group.waiting.project)));
+    let list = ScrollVertical::new(
       Column::new()
+        .ref_element(content.clone())
         .width(Dimension::Pct(100.0))
         .padding(
           Padding::new()
-            .top(SpacingSize::Xs)
             .left(SpacingSize::Sm)
             .right(SpacingSize::Sm)
             .bottom(SpacingSize::Sm),
@@ -231,12 +258,20 @@ impl NeedsYouPanel {
         .spacing(ExtraSpacing::Tight.role())
         .with_children(rows),
     )
+    .with_scroll_state(self.scroll.clone())
     .id("needs-you-list")
     .width(Dimension::Pct(100.0))
     .flex_shrink(1.0)
     .min_height(Dimension::Px(0.0))
-    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .into()
+    .on_scroll(pinned::on_scroll(&self.scroll, &self.pinned, content, heads));
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .flex_shrink(1.0)
+      .min_height(Dimension::Px(0.0))
+      .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+      .child(pinned::slot(pinned))
+      .child(list)
+      .into()
   }
 
   /// One item, collapsed or expanded around the card that answers it.
