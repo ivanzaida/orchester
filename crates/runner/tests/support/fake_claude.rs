@@ -273,6 +273,9 @@ fn read_prompt(args: &[String]) -> Option<String> {
     eprintln!("json-schema: {schema}");
   }
   eprintln!("env: {}", names.join(","));
+  if let Some(folder) = std::env::var_os("CLAUDE_CONFIG_DIR") {
+    eprintln!("account folder: {}", folder.to_string_lossy());
+  }
   eprintln!(
     "path: {}",
     std::env::var_os("PATH").unwrap_or_default().to_string_lossy()

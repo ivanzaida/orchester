@@ -28,12 +28,13 @@ pub enum ConnectionAccount {
 }
 
 /// Why a run can't start on a connection's account.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, thiserror::Error, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AccountStartProblem {
   #[error("the connection has no account; choose one in its settings")]
   NoAccount,
-  #[error("the account's folder {0} is gone")]
-  FolderMissing(PathBuf),
+  #[error("the account's folder {folder} is gone", folder = folder.display())]
+  FolderMissing { folder: PathBuf },
   #[error("accounts other than Default are not supported for this CLI on this platform yet")]
   Unsupported,
 }
@@ -94,7 +95,7 @@ impl ConnectionAccount {
         } else if folder_exists(folder) {
           None
         } else {
-          Some(AccountStartProblem::FolderMissing(folder.clone()))
+          Some(AccountStartProblem::FolderMissing { folder: folder.clone() })
         }
       }
     }

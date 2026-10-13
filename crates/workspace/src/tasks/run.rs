@@ -7,6 +7,7 @@
 use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
+  connection::AccountStartProblem,
   id::ResourceId,
   resource::{AgentProfile, Pipeline, ResourceBody, ResourceKind, Tool, ToolKind, Version, VersionNumber},
   run::{AutoAsk, PreflightInput, PreflightProblem, RunLimit, preflight},
@@ -286,6 +287,13 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
     PreflightProblem::UnsupportedProvider { step: key } => step("runs.preflight.unsupportedProvider", key),
     PreflightProblem::NativeNotAvailable { step: key } => step("runs.preflight.nativeNotAvailable", key),
     PreflightProblem::ConnectionNotUsable { step: key, .. } => step("runs.preflight.connectionNotUsable", key),
+    PreflightProblem::AccountUnavailable { step: key, reason } => match reason {
+      AccountStartProblem::NoAccount => step("runs.preflight.account.none", key),
+      AccountStartProblem::FolderMissing { folder } => {
+        step("runs.preflight.account.folderMissing", key).with("folder", folder.display().to_string())
+      }
+      AccountStartProblem::Unsupported => step("runs.preflight.account.unsupported", key),
+    },
     PreflightProblem::PermissionsNotEnforceable { step: key, .. } => {
       step("runs.preflight.permissionsNotEnforceable", key)
     }

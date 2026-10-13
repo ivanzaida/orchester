@@ -308,7 +308,7 @@ fn accounts_a_run_does_not_start_without_an_account_or_its_folder_or_on_an_unsup
   );
   assert!(matches!(
     work.start_problem(AgentProvider::ClaudeCodeCli, Platform::Windows, |_| false),
-    Some(AccountStartProblem::FolderMissing(_))
+    Some(AccountStartProblem::FolderMissing { .. })
   ));
   assert_eq!(
     work.start_problem(AgentProvider::ClaudeCodeCli, Platform::MacOs, |_| true),

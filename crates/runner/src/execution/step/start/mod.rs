@@ -283,6 +283,7 @@ impl RunTask {
     let checks = tools.checks().to_vec();
     let cli = Cli {
       executable,
+      account: connection.account(),
       model,
       effort: reasoning_effort(body),
       enforced: &enforced,

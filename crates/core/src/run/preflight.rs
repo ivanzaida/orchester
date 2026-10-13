@@ -13,7 +13,9 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-  connection::{AgentProvider, Connection, ConnectionKind, ConnectionStatus, invocation::Platform},
+  connection::{
+    AccountStartProblem, AgentProvider, Connection, ConnectionKind, ConnectionStatus, invocation::Platform,
+  },
   id::{ConnectionId, ResourceId},
   permission::{CommandPermission, StepCommands, capability::PermissionProblem},
   resource::{AgentProfile, Pipeline, Step, StepKey, StepKind, Tool, ToolKind, Version},
@@ -47,6 +49,8 @@ pub enum PreflightProblem {
   NativeNotAvailable { step: StepKey },
   /// The connection's last check says its CLI cannot be used (not signed in, missing, …).
   ConnectionNotUsable { step: StepKey, status: ConnectionStatus },
+  /// The connection's account can't run agents: it has none, its folder is gone, or it is not supported here.
+  AccountUnavailable { step: StepKey, reason: AccountStartProblem },
   /// The connection's CLI cannot enforce the step's effective permissions (profile ∩ step) on this
   /// platform; a step never runs with permissions that are not enforced.
   PermissionsNotEnforceable { step: StepKey, reason: PermissionProblem },
@@ -174,6 +178,12 @@ fn usable_provider(
   };
   if !provider.runs_agents() {
     return Err(PreflightProblem::NativeNotAvailable { step });
+  }
+  if let Some(problem) = connection
+    .account()
+    .start_problem(*provider, Platform::current(), std::path::Path::is_dir)
+  {
+    return Err(PreflightProblem::AccountUnavailable { step, reason: problem });
   }
   let status = connection.status();
   if !status.is_usable() {

@@ -4,13 +4,16 @@
 //! fails closed and the person decides; the hard rules still come first either way. A review that asked a
 //! model records what it cost ([`ReviewLedger`]).
 
-use std::{path::PathBuf, time::Duration};
+use std::{
+  path::{Path, PathBuf},
+  time::Duration,
+};
 
 use orchester_agent::AnthropicClient;
 use orchester_core::{
   connection::{
-    AgentProvider, ApiEndpoint,
-    invocation::agent_environment,
+    AgentProvider, ApiEndpoint, ConnectionKind,
+    invocation::{Platform, account_environment, agent_environment},
     reviewer::{ClaudeReviewer, CodexReviewer},
   },
   id::SecretId,
@@ -247,8 +250,25 @@ impl Worker {
     let Some(executable) = connection.executable() else {
       return Ok(ReviewerSetup::Missing);
     };
+    let ConnectionKind::Agent(provider) = *connection.kind() else {
+      return Ok(ReviewerSetup::Missing);
+    };
+    if let Some(reason) = connection
+      .account()
+      .start_problem(provider, Platform::current(), Path::is_dir)
+    {
+      tracing::warn!(%reason, "the reviewer's connection cannot run on its account");
+      return Ok(ReviewerSetup::Missing);
+    }
     let mut environment = agent_environment(std::env::vars_os());
     watch.db.project_environment()?.add_to(&mut environment);
+    let environment = match account_environment(environment, connection.account(), provider) {
+      Ok(environment) => environment,
+      Err(error) => {
+        tracing::warn!(%error, "the reviewer's account folder cannot reach its CLI");
+        return Ok(ReviewerSetup::Missing);
+      }
+    };
     Ok(ReviewerSetup::Cli {
       kind,
       executable: executable.to_path_buf(),
