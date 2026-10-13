@@ -38,6 +38,13 @@ Without it, a debug build of the new app and the deprecated desktop write theirs
 none: it listens on the fixed address in Settings › Automation (`docs/stable-build.md`), and runs never
 drive it. Keep QA profiles under the worktree's `.tmp/` when overriding the app's data location.
 
+Settings › Automation › *Orchester MCP server* as the installed app shows it has a harness of its own, since a QA
+copy shows its one line there instead: `cargo run -p orchester-app --example mcp_settings_qa --
+[listening|port-taken|off|token-unreadable]`. It opens on Settings with a throwaway data folder and a token in memory
+under `.tmp/qa/mcp-settings/`, and prints `pid` and `mcp <folder>`; connect through that folder (its own QA server,
+apart from the one Settings shows). States that need a person's click there (the Codex tab, *Rotate the token?*,
+the token shown, Copied) cannot be reached through MCP, by design; `tests/settings_mcp` covers them.
+
 Build and copy programs into a run-owned folder before launch so concurrent builds cannot change
 the running candidate, and enable its no-focus startup option. Drive only the app you started.
 Close it through the embedded close button, or use `mcp__Orchester__stop_run_process(pid)`.
