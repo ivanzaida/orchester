@@ -76,7 +76,9 @@ pub enum WaitingKind {
   /// A decision after the step's retries ran out or it broke again.
   Decision(AwaitedDecision),
   /// A run recorded interrupted, with its last checkpoint.
-  Interrupted { checkpoint: Option<Arc<str>> },
+  Interrupted {
+    checkpoint: Option<Arc<str>>,
+  },
 }
 
 impl WaitingKind {
@@ -113,7 +115,13 @@ impl ProjectTasks {
       .iter()
       .map(|shown| self.approval_item(shown))
       .collect();
-    items.extend(self.asked.iter().filter(|asked| asked.waits()).filter_map(|asked| self.choice_item(asked)));
+    items.extend(
+      self
+        .asked
+        .iter()
+        .filter(|asked| asked.waits())
+        .filter_map(|asked| self.choice_item(asked)),
+    );
     let answered_in_place: Vec<TaskId> = items.iter().filter_map(|item| Some(item.task.as_ref()?.id)).collect();
     items.extend(
       self

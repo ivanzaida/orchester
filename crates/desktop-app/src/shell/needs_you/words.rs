@@ -86,15 +86,24 @@ pub(super) fn title(ctx: &Ctx, item: &WaitingItem) -> Arc<str> {
     WaitingKind::Decision(decision) => message_text(ctx, &decision.title()),
     WaitingKind::Interrupted { .. } => ctx.t_args(
       "needs_you.interrupted",
-      [("run", item.run.map(|(_, number)| number.get().to_string()).unwrap_or_default())],
+      [(
+        "run",
+        item.run.map(|(_, number)| number.get().to_string()).unwrap_or_default(),
+      )],
     ),
   }
 }
 
 /// *Explorer asks: index the vendored crates?*, the question's first line.
 fn asks(ctx: &Ctx, agent: &str, question: &str) -> Arc<str> {
-  let first = question.lines().find(|line| !line.trim().is_empty()).unwrap_or_default();
-  ctx.t_args("needs_you.asks.question", [("agent", agent), ("question", first.trim())])
+  let first = question
+    .lines()
+    .find(|line| !line.trim().is_empty())
+    .unwrap_or_default();
+  ctx.t_args(
+    "needs_you.asks.question",
+    [("agent", agent), ("question", first.trim())],
+  )
 }
 
 /// *KON-42 · Export task list as JSON*.
@@ -117,7 +126,10 @@ pub(super) fn place(ctx: &Ctx, item: &WaitingItem) -> Option<Arc<str>> {
   let step = ctx
     .t_args(
       "needs_you.stepLabel",
-      [("number", format!("{:02}", step.number)), ("step", step.name.to_string())],
+      [
+        ("number", format!("{:02}", step.number)),
+        ("step", step.name.to_string()),
+      ],
     )
     .to_string();
   let agent = match &item.kind {
@@ -168,7 +180,11 @@ fn projects(ctx: &Ctx, names: &[Arc<str>]) -> String {
       .to_string(),
     [rest @ .., last] => {
       let separator = ctx.t("needs_you.projects.separator");
-      let list = rest.iter().map(|name| name.to_string()).collect::<Vec<_>>().join(&separator);
+      let list = rest
+        .iter()
+        .map(|name| name.to_string())
+        .collect::<Vec<_>>()
+        .join(&separator);
       ctx
         .t_args("needs_you.projects.many", [("list", list), ("last", last.to_string())])
         .to_string()

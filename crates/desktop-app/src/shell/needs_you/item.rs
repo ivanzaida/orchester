@@ -34,7 +34,11 @@ type Press = Arc<dyn Fn() + Send + Sync>;
 
 /// A project's header: its initial, its name, whether the active tab shows it, and how many wait in it.
 pub(super) fn group(ctx: &Ctx, id: &str, (name, this_tab): (&str, bool), count: usize) -> Element {
-  let initial: String = name.chars().next().map(|first| first.to_uppercase().collect()).unwrap_or_default();
+  let initial: String = name
+    .chars()
+    .next()
+    .map(|first| first.to_uppercase().collect())
+    .unwrap_or_default();
   let tile = Row::new()
     .width(Dimension::Px(INITIAL_TILE))
     .height(Dimension::Px(INITIAL_TILE))
@@ -54,7 +58,13 @@ pub(super) fn group(ctx: &Ctx, id: &str, (name, this_tab): (&str, bool), count: 
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
-    .padding(Padding::new().top(SpacingSize::Md).left(SpacingSize::Md).right(SpacingSize::Md).bottom(SpacingSize::Xs))
+    .padding(
+      Padding::new()
+        .top(SpacingSize::Md)
+        .left(SpacingSize::Md)
+        .right(SpacingSize::Md)
+        .bottom(SpacingSize::Xs),
+    )
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(tile)
@@ -131,9 +141,13 @@ pub(super) fn collapsed(ctx: &Ctx, id: &str, item: &WaitingItem, (glyph, press):
     .child(top(ctx, id, item, false))
     .with_children(ask(ctx, id, item))
     .with_children(place);
-  let action = ActionButton::new(format!("{id}-action"), ButtonKind::Secondary, words::action(ctx, &item.kind))
-    .icon(glyph)
-    .on_click(move || press());
+  let action = ActionButton::new(
+    format!("{id}-action"),
+    ButtonKind::Secondary,
+    words::action(ctx, &item.kind),
+  )
+  .icon(glyph)
+  .on_click(move || press());
   Row::new()
     .id(id.to_owned())
     .describe("state", "collapsed")
@@ -156,10 +170,14 @@ pub(super) fn expanded(
   (collapse, conversation): (Press, Press),
   card: Element,
 ) -> Element {
-  let collapse = IconButton::new(format!("{id}-collapse"), Icon::ChevronUp, ctx.t("needs_you.action.collapse"))
-    .small()
-    .on_click(move || collapse())
-    .render(ctx);
+  let collapse = IconButton::new(
+    format!("{id}-collapse"),
+    Icon::ChevronUp,
+    ctx.t("needs_you.action.collapse"),
+  )
+  .small()
+  .on_click(move || collapse())
+  .render(ctx);
   let open = ActionButton::new(
     format!("{id}-conversation"),
     ButtonKind::Ghost,

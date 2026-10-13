@@ -96,7 +96,11 @@ fn text(window: &mut Window, id: &str) -> String {
 fn item_of(window: &mut Window, title: &str) -> String {
   items(window)
     .into_iter()
-    .find(|id| window.texts(&format!("{id}-task")).is_some_and(|texts| texts.join(" ").ends_with(title)))
+    .find(|id| {
+      window
+        .texts(&format!("{id}-task"))
+        .is_some_and(|texts| texts.join(" ").ends_with(title))
+    })
     .unwrap_or_else(|| panic!("an item of {title}"))
 }
 
@@ -125,7 +129,10 @@ fn needs_you_panel_lists_what_waits_by_project_oldest_first() {
   assert_eq!(text(&mut window, &group), "K Kontur this tab's project 4");
   let items = items(&mut window);
   assert_eq!(items.len(), 4, "{items:?}");
-  let kinds: Vec<String> = items.iter().map(|id| text(&mut window, &format!("{id}-kind"))).collect();
+  let kinds: Vec<String> = items
+    .iter()
+    .map(|id| text(&mut window, &format!("{id}-kind")))
+    .collect();
   let mut sorted = kinds.clone();
   sorted.sort();
   assert_eq!(sorted, ["Approval", "Decision", "Plan review", "Question"], "{kinds:?}");
@@ -138,10 +145,7 @@ fn needs_you_panel_lists_what_waits_by_project_oldest_first() {
   assert!(text(&mut window, &format!("{approval}-waiting")).starts_with("waiting "));
   assert!(text(&mut window, &format!("{approval}-where")).starts_with("Run "));
   assert_eq!(text(&mut window, &format!("{approval}-action")), "Review");
-  assert_eq!(
-    text(&mut window, "needs-you-show-all"),
-    "Show all in Kontur's Overview"
-  );
+  assert_eq!(text(&mut window, "needs-you-show-all"), "Show all in Kontur's Overview");
 }
 
 #[test]
@@ -198,7 +202,10 @@ fn needs_you_panel_answers_an_approval_in_place_through_its_card() {
     "the item says what it is: the card leaves out its head"
   );
   assert!(text(&mut window, &format!("{item}-waiting")).starts_with("waiting since "));
-  assert_eq!(text(&mut window, &format!("{card}-value")), "cargo add serde --features derive");
+  assert_eq!(
+    text(&mut window, &format!("{card}-value")),
+    "cargo add serde --features derive"
+  );
   assert_eq!(text(&mut window, &format!("{card}-approve")), "Approve once");
   click(&mut window, &format!("{card}-approve"));
   // No runner here: the answer reaches none, and the card says why, as in the conversation.
@@ -223,19 +230,27 @@ fn needs_you_panel_takes_no_wider_answer_from_synthetic_input() {
   let mut cards = ids_under(&mut window, &item, "cards-approval-");
   cards.sort_by_key(String::len);
   let similar = format!("{}-similar", cards[0]);
-  window.until("Approve similar", |window| window.tree.get_element_by_id(&similar).is_some());
+  window.until("Approve similar", |window| {
+    window.tree.get_element_by_id(&similar).is_some()
+  });
   with_synthetic_input(|| click(&mut window, &similar));
   for _ in 0..20 {
     window.tree.tick_futures();
     window.pass();
   }
   assert!(
-    window.tree.get_element_by_id(&format!("{}-refused", cards[0])).is_none(),
+    window
+      .tree
+      .get_element_by_id(&format!("{}-refused", cards[0]))
+      .is_none(),
     "an MCP client's press on a wider answer is not taken without the person's consent"
   );
   click(&mut window, &similar);
   window.until("a person's press to go to the runner", |window| {
-    window.tree.get_element_by_id(&format!("{}-refused", cards[0])).is_some()
+    window
+      .tree
+      .get_element_by_id(&format!("{}-refused", cards[0]))
+      .is_some()
   });
 }
 

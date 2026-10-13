@@ -123,7 +123,10 @@ impl Component for NeedsYouPanel {
     let active = tabs.active().route().project();
     let groups = self.groups(&projects, waiting(&projects, &tabs));
     let total: usize = groups.iter().map(|group| group.waiting.count).sum();
-    let names: Vec<Arc<str>> = groups.iter().map(|group| Arc::from(group.waiting.name.as_str())).collect();
+    let names: Vec<Arc<str>> = groups
+      .iter()
+      .map(|group| Arc::from(group.waiting.name.as_str()))
+      .collect();
     let height = ctx.window().info().resolved_height - WINDOW_ROOM;
     let list = if groups.iter().all(|group| group.items.is_empty()) {
       empty(ctx)
@@ -199,7 +202,12 @@ impl NeedsYouPanel {
         (group.waiting.name.as_str(), this_tab),
         group.waiting.count,
       ));
-      let waiting: Arc<[Arc<str>]> = group.items.iter().filter(|shown| shown.waits).map(|shown| shown.key.clone()).collect();
+      let waiting: Arc<[Arc<str>]> = group
+        .items
+        .iter()
+        .filter(|shown| shown.waits)
+        .map(|shown| shown.key.clone())
+        .collect();
       for shown in &group.items {
         rows.push(self.row(ctx, shown, &waiting, (navigation, open)));
       }
@@ -207,7 +215,13 @@ impl NeedsYouPanel {
     ScrollVertical::new(
       Column::new()
         .width(Dimension::Pct(100.0))
-        .padding(Padding::new().top(SpacingSize::Xs).left(SpacingSize::Sm).right(SpacingSize::Sm).bottom(SpacingSize::Sm))
+        .padding(
+          Padding::new()
+            .top(SpacingSize::Xs)
+            .left(SpacingSize::Sm)
+            .right(SpacingSize::Sm)
+            .bottom(SpacingSize::Sm),
+        )
         .spacing(ExtraSpacing::Tight.role())
         .with_children(rows),
     )
@@ -249,7 +263,10 @@ impl NeedsYouPanel {
     }
     {
       let mut kept = self.kept.lock();
-      if !kept.iter().any(|kept| kept.project == shown.project && kept.key == shown.key) {
+      if !kept
+        .iter()
+        .any(|kept| kept.project == shown.project && kept.key == shown.key)
+      {
         kept.push(shown.clone());
       }
     }
@@ -344,7 +361,11 @@ fn head(ctx: &mut Ctx, total: usize, sub: &str, open: &Signal<bool>) -> Element 
         .spacing(NeedsYouSpacing::TitleRow.role())
         .align_items(Alignment::Center)
         .child(icon(Icon::Hand, IconSize::Nav, color.clone()))
-        .child(Text::new(&ctx.t("needs_you.title")).id("needs-you-title").variant(NeedsYouText::Title.role()))
+        .child(
+          Text::new(&ctx.t("needs_you.title"))
+            .id("needs-you-title")
+            .variant(NeedsYouText::Title.role()),
+        )
         .child(
           Text::new(&total.to_string())
             .id("needs-you-count")
@@ -364,7 +385,13 @@ fn empty(ctx: &Ctx) -> Element {
     .id("needs-you-empty")
     .width(Dimension::Pct(100.0))
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .padding(Padding::new().top(SpacingSize::Xs).left(SpacingSize::Sm).right(SpacingSize::Sm).bottom(SpacingSize::Sm))
+    .padding(
+      Padding::new()
+        .top(SpacingSize::Xs)
+        .left(SpacingSize::Sm)
+        .right(SpacingSize::Sm)
+        .bottom(SpacingSize::Sm),
+    )
     .child(
       Column::new()
         .width(Dimension::Pct(100.0))
@@ -375,7 +402,11 @@ fn empty(ctx: &Ctx) -> Element {
         .spacing(crate::theme::ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
         .child(icon(Icon::Hand, IconSize::Xl, PaletteColor::TextMuted))
-        .child(Text::new(&ctx.t("needs_you.empty.title")).id("needs-you-empty-title").variant(ExtraTypography::Strong.role()))
+        .child(
+          Text::new(&ctx.t("needs_you.empty.title"))
+            .id("needs-you-empty-title")
+            .variant(ExtraTypography::Strong.role()),
+        )
         .child(
           Text::new(&ctx.t("needs_you.empty.text"))
             .id("needs-you-empty-text")
@@ -425,6 +456,10 @@ fn footer(
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .with_children(show_all)
     .child(Spacer::new().flex(1.0))
-    .child(Text::new(&ctx.t("needs_you.escCloses")).variant(TypographyStyle::Caption).nowrap())
+    .child(
+      Text::new(&ctx.t("needs_you.escCloses"))
+        .variant(TypographyStyle::Caption)
+        .nowrap(),
+    )
     .into()
 }

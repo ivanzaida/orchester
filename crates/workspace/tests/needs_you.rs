@@ -33,7 +33,11 @@ fn kinds(items: &[WaitingItem]) -> Vec<&'static str> {
 }
 
 /// `run`'s first step execution, with an invocation of its agent started at `now`.
-fn invoked(fixture: &mut Fixture, run: &Run, now: i64) -> (orchester_core::id::StepExecutionId, orchester_core::id::InvocationId) {
+fn invoked(
+  fixture: &mut Fixture,
+  run: &Run,
+  now: i64,
+) -> (orchester_core::id::StepExecutionId, orchester_core::id::InvocationId) {
   let execution = run.current_attempt().expect("attempt").executions()[0].id();
   let invocation = fixture
     .db
@@ -81,7 +85,10 @@ fn project() -> (Fixture, ProjectTasks) {
   let choosing = fixture.task("Place the docs button", at(100));
   let run = fixture.started_run(choosing, at(110));
   let (execution, invocation) = invoked(&mut fixture, &run, 111);
-  let options = vec![QuestionOption::new("Top bar", None), QuestionOption::new("Sidebar", None)];
+  let options = vec![
+    QuestionOption::new("Top bar", None),
+    QuestionOption::new("Sidebar", None),
+  ];
   let asked = QuestionRequest::new(
     "ask-1".to_owned(),
     (run.id(), execution, invocation),
@@ -109,10 +116,7 @@ fn project() -> (Fixture, ProjectTasks) {
 fn needs_you_lists_each_waiting_object_oldest_first() {
   let (_fixture, tasks) = project();
   let items = tasks.waiting();
-  assert_eq!(
-    kinds(&items),
-    ["plan", "question", "approval", "choice", "interrupted"]
-  );
+  assert_eq!(kinds(&items), ["plan", "question", "approval", "choice", "interrupted"]);
   assert_eq!(tasks.needs_you(), 5, "every Needs you counts the panel's items");
   let titles: Vec<_> = items
     .iter()
