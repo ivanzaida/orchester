@@ -19,7 +19,10 @@ use orchester_core::{
 };
 use orchester_workspace::{display, tasks::plan::PlanReview};
 
-use super::{super::divider, Shown};
+use super::{
+  super::{divider, pointing::Pointing},
+  Shown,
+};
 use crate::{
   theme::{DecisionText, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
@@ -41,20 +44,22 @@ pub struct PlanCard<'a> {
   /// The task as its run was asked: its key and acceptance criteria.
   pub task: &'a Task,
   pub on_link: &'a LinkHandler,
+  /// Rings the card when the Needs you panel opened the page at it.
+  pub pointing: &'a Pointing,
 }
 
 impl PlanCard<'_> {
   pub fn render(&self, ctx: &mut Ctx, shown: &Signal<Shown>) -> Element {
     let text = self.plan_text(ctx);
-    card("plan-review", CardSurface::Decision)
+    let card = card("plan-review", CardSurface::Decision)
       .spacing(ExtraSpacing::Loose.role())
       .child(self.head(ctx, shown))
       .child(divider())
       .child(text)
       .with_children(self.change_line(ctx))
       .child(divider())
-      .child(self.criteria(ctx))
-      .into()
+      .child(self.criteria(ctx));
+    self.pointing.ring(card).into()
   }
 
   /// "Plan v2 · Add retry to webhook sender", "by Planner · 16:14", and the version choice.

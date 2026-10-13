@@ -6,10 +6,11 @@
 //!
 //! What waits is `tasks::needs_you`'s, so the panel lists exactly what every Needs you counts. Approvals and
 //! questions with suggested answers expand in place around the conversation's own card (`in_place`), one at a
-//! time; the others open their task: a plan, a decision after retries and an interrupted run its Summary, an
-//! agent's question its Conversation, where the composer answers it. The project's memory records are listed
-//! with their action unavailable, and why, as no screen of this app reviews them yet. An item expanded here
-//! keeps its place once it no longer waits, quiet, until the panel closes, so nothing moves under the pointer.
+//! time; the others open their task: a plan, a limit, a decision after retries and an interrupted run its
+//! Summary, pointing at the plan's, the limit's or the decision's card (`icGHG`), an agent's question its
+//! Conversation, where the composer answers it. The project's memory records, and an item whose task can't be
+//! read, are listed with their action unavailable, and why. An item expanded here keeps its place once it no
+//! longer waits, quiet, until the panel closes, so nothing moves under the pointer.
 
 use std::{sync::Arc, time::Duration};
 
@@ -38,7 +39,10 @@ use super::{
   waiting, words,
 };
 use crate::{
-  navigation::Navigation,
+  navigation::{
+    Navigation,
+    pointed::{Pointed, PointedCard},
+  },
   project::Projects,
   routes::{OverviewTab, ProjectPage, Route, TaskView},
   screens::task::cards::Decisions,
@@ -129,7 +133,7 @@ impl Component for NeedsYouPanel {
       .iter()
       .map(|group| Arc::from(group.waiting.name.as_str()))
       .collect();
-    let height = ctx.window().info().resolved_height - WINDOW_ROOM;
+    let height = ctx.window().info().logical_height() - WINDOW_ROOM;
     let list = if groups.iter().all(|group| group.items.is_empty()) {
       empty(ctx)
     } else {
@@ -249,11 +253,12 @@ impl NeedsYouPanel {
     let expanded = self.expanded.get().as_ref() == Some(&at);
     let in_place = item.kind.card_key().zip(item.task.as_ref()).zip(item.run);
     let Some(((key, task), _)) = in_place else {
-      let action = match item.kind {
+      let action = match (&item.kind, route_of(shown)) {
         // No screen reviews memory records yet, so the action says so in place of leading nowhere.
-        WaitingKind::Memory { .. } => Action::Unavailable(ctx.t("needs_you.memoryUnavailable")),
-        WaitingKind::Question(_) => Action::Press(Icon::MessageCircle, go(navigation, open, route_of(shown))),
-        _ => Action::Press(Icon::ArrowUpRight, go(navigation, open, route_of(shown))),
+        (WaitingKind::Memory { .. }, _) => Action::Unavailable(ctx.t("needs_you.memoryUnavailable")),
+        (_, None) => Action::Unavailable(ctx.t("needs_you.taskUnavailable")),
+        (WaitingKind::Question(_), route) => Action::Press(Icon::MessageCircle, go(navigation, open, route)),
+        (_, Some(route)) => Action::Press(Icon::ArrowUpRight, open_at(navigation, open, route, pointed_of(shown))),
       };
       return item::collapsed(ctx, &id, item, action);
     };
@@ -333,6 +338,23 @@ fn task_route(project: ProjectId, key: &str, view: TaskView) -> Option<Route> {
   Some(Route::Project(project, ProjectPage::Task(key, view)))
 }
 
+/// The decision card of the task's Summary an item points at, which the page brings into view and rings
+/// (`icGHG`): the plan under review, raising the limit, the decision after retries.
+fn pointed_of(shown: &Shown) -> Option<Pointed> {
+  let card = match shown.item.kind {
+    WaitingKind::Plan(_) => PointedCard::Plan,
+    WaitingKind::StoppedAtLimit { .. } => PointedCard::RaiseLimit,
+    WaitingKind::Decision(_) => PointedCard::Retries,
+    _ => return None,
+  };
+  let task = shown.item.task.as_ref()?.key.parse().ok()?;
+  Some(Pointed {
+    project: shown.project,
+    task,
+    card,
+  })
+}
+
 /// Goes to `route` and closes the panel, which the page opening takes the place of.
 fn go(navigation: &Navigation, open: &Signal<bool>, route: Option<Route>) -> Arc<dyn Fn() + Send + Sync> {
   let (navigation, open) = (navigation.clone(), open.clone());
@@ -340,6 +362,23 @@ fn go(navigation: &Navigation, open: &Signal<bool>, route: Option<Route>) -> Arc
     if let Some(route) = route.clone() {
       navigation.go(route);
     }
+    open.set(false);
+  })
+}
+
+/// Goes to `route`, pointing at `card` on it, and closes the panel.
+fn open_at(
+  navigation: &Navigation,
+  open: &Signal<bool>,
+  route: Route,
+  card: Option<Pointed>,
+) -> Arc<dyn Fn() + Send + Sync> {
+  let Some(card) = card else {
+    return go(navigation, open, Some(route));
+  };
+  let (navigation, open) = (navigation.clone(), open.clone());
+  Arc::new(move || {
+    navigation.go_to_card(&route, card.clone());
     open.set(false);
   })
 }

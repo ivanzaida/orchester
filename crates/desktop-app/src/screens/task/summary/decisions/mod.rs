@@ -9,6 +9,7 @@
 mod action;
 mod limit;
 mod plan;
+mod pointing;
 mod ready;
 mod retries;
 mod stages;
