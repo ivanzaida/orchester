@@ -438,12 +438,18 @@ impl Fake {
     ExitCode::from(1)
   }
 
-  /// "Hit the plan limit": reports its account's five-hour window reached, resetting in an hour, and refuses the
-  /// turn as Claude Code does, unless its account folder holds `plan-room`.
+  /// "Hit the plan limit": reports its account's five-hour window reached, resetting in an hour (or in the seconds
+  /// its account folder's `plan-reset` says), and refuses the turn as Claude Code does, unless its account folder
+  /// holds `plan-room`.
   fn hit_the_plan_limit(&self) -> ExitCode {
+    // Without a readable `plan-reset` the window resets in an hour.
+    let after = std::env::var_os("CLAUDE_CONFIG_DIR")
+      .and_then(|folder| std::fs::read_to_string(Path::new(&folder).join("plan-reset")).ok())
+      .and_then(|seconds| seconds.trim().parse::<u64>().ok())
+      .unwrap_or(3600);
     let resets = std::time::SystemTime::now()
       .duration_since(std::time::UNIX_EPOCH)
-      .map_or(0, |now| now.as_secs() + 3600);
+      .map_or(0, |now| now.as_secs() + after);
     println!(
       r#"{{"type":"rate_limit_event","rate_limit_info":{{"status":"rejected","resetsAt":{resets},"rateLimitType":"five_hour","utilization":1.0,"isUsingOverage":false}}}}"#
     );

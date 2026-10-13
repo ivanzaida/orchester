@@ -144,13 +144,21 @@ pub(super) fn confirmation(
   if let Some(error) = work.change_error() {
     question = question.child(field_error("account-remove-error", &message_text(ctx, &error)));
   }
-  question = question.child(buttons(ctx, work, account, &shown, running.is_some()));
-  let reason = running.map(|run| {
-    reason_line(
-      "account-remove-reason",
-      &ta(ctx, "accounts.remove.runningReason", [("run", run.label.clone())]),
-    )
-  });
+  let unreadable: Vec<String> = uses
+    .map(|uses| uses.unreadable.iter().map(ToString::to_string).collect())
+    .unwrap_or_default();
+  let blocked = match running {
+    Some(run) => Some(ta(ctx, "accounts.remove.runningReason", [("run", run.label.clone())])),
+    // A run in a project that can't be read may be on the account.
+    None if !unreadable.is_empty() => Some(ta(
+      ctx,
+      "accounts.remove.unreadableReason",
+      [("projects", unreadable.join(", "))],
+    )),
+    None => None,
+  };
+  question = question.child(buttons(ctx, work, account, &shown, blocked.is_some()));
+  let reason = blocked.map(|reason| reason_line("account-remove-reason", &reason));
   lurq::components::Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
@@ -263,7 +271,7 @@ fn folder_lines(ctx: &Ctx, work: &Work, account: &AgentAccount) -> Element {
   }
 }
 
-fn buttons(ctx: &mut Ctx, work: &Work, account: &AgentAccount, shown: &str, running: bool) -> Element {
+fn buttons(ctx: &mut Ctx, work: &Work, account: &AgentAccount, shown: &str, blocked: bool) -> Element {
   let navigation = Navigation::of(ctx);
   let id = account.id();
   let confirm = ActionButton::new(
@@ -272,7 +280,7 @@ fn buttons(ctx: &mut Ctx, work: &Work, account: &AgentAccount, shown: &str, runn
     ta(ctx, "accounts.remove.confirm", [("account", shown.to_owned())]),
   )
   .icon(Icon::Trash2);
-  let confirm = if running {
+  let confirm = if blocked {
     confirm.disabled()
   } else if work.change.state().get().is_pending() {
     confirm.loading()

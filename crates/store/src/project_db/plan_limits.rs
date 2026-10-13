@@ -2,8 +2,9 @@
 //! 90 days.
 
 use orchester_core::{
+  account::AccountCli,
   connection::plan_limits::{LimitReading, PlanLimits},
-  id::RunId,
+  id::{RunId, StepExecutionId},
   run::RunNumber,
   time::Timestamp,
   usage::limits::{LimitSnapshot, SnapshotSource, retained_since},
@@ -103,12 +104,38 @@ impl ProjectDb {
   /// The last report of `run`'s CLIs' limits, with the account it came from: what a run stopped at a plan limit
   /// waits for.
   pub fn last_limit_reading(&self, run: RunId) -> Result<Option<LimitReading>, StoreError> {
+    self.last_reading_where("run_id = ?1", &[&run.to_string() as &dyn rusqlite::ToSql])
+  }
+
+  /// What `run` stopped at when `execution` reached its account's plan limit: the last report of `run`'s limits from
+  /// the account `execution`'s agent last started on (another step of the run may run on another account), else
+  /// the run's last report.
+  pub fn plan_stop_reading(&self, run: RunId, execution: StepExecutionId) -> Result<Option<LimitReading>, StoreError> {
+    let Some(account) = self.execution_account(execution)? else {
+      return self.last_limit_reading(run);
+    };
+    // A reading that names no account is Default's (`LimitReading::account_id`).
+    let default = AccountCli::ALL.iter().any(|cli| cli.default_account() == account);
+    self.last_reading_where(
+      "run_id = ?1 AND (account_id = ?2 OR (?3 AND account_id IS NULL))",
+      &[&run.to_string() as &dyn rusqlite::ToSql, &account.to_string(), &default],
+    )
+  }
+
+  /// The last report among the snapshots `condition` keeps.
+  fn last_reading_where(
+    &self,
+    condition: &str,
+    values: &[&dyn rusqlite::ToSql],
+  ) -> Result<Option<LimitReading>, StoreError> {
     let row = self
       .connection
       .query_row(
-        "SELECT provider, at, body, account_id FROM plan_limit_snapshots WHERE run_id = ?1 \
-         ORDER BY at DESC, id DESC LIMIT 1",
-        [run.to_string()],
+        &format!(
+          "SELECT provider, at, body, account_id FROM plan_limit_snapshots WHERE {condition} \
+           ORDER BY at DESC, id DESC LIMIT 1"
+        ),
+        values,
         |row| {
           Ok((
             row.get::<_, String>(0)?,

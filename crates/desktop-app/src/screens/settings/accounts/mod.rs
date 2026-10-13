@@ -129,8 +129,18 @@ impl Work {
       .map(|(_, at)| at)
   }
 
-  /// Opens the sign-in terminal of `account`.
+  /// Whether another account than `account` has a sign-in terminal open: one terminal at a time, so the check that
+  /// follows each one's close always reaches the tab.
+  pub fn another_signing_in(&self, account: AgentAccountId) -> bool {
+    self.sign_in.state().get().is_pending() && self.opened.get().0.is_some_and(|(opened, _)| opened != account)
+  }
+
+  /// Opens the sign-in terminal of `account`, unless another account's is open ([`Self::another_signing_in`]), which
+  /// its buttons then say.
   pub fn open_sign_in(&self, account: AgentAccountId) {
+    if self.another_signing_in(account) {
+      return;
+    }
     self.opened.set(Opened(Some((account, Timestamp::now()))));
     self.sign_in.run(account);
   }

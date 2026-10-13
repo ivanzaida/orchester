@@ -252,6 +252,12 @@ impl LimitReading {
       .and_then(LimitWindow::resets)
   }
 
+  /// When the limit the account had reached when the CLI reported this lifts, as it said then: also once that time
+  /// has passed, so a run stopped at the limit continues when a runner that was not running at the reset starts.
+  pub fn reached_limit_resets(&self) -> Option<Timestamp> {
+    self.resets_at(self.at)
+  }
+
   /// The account's state: a block no reset lifts holds; otherwise the limiting window decides.
   pub fn state(&self, now: Timestamp) -> LimitState {
     if self.block_beyond_reset().is_some() {

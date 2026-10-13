@@ -307,6 +307,13 @@ impl Scheduler {
   /// Cancels `run`: ends its agent, keeps its worktree and branch. Returns once the run is
   /// recorded as cancelled.
   pub async fn cancel_run(&self, run: RunId) -> Result<(), Rejection> {
+    self.plan_waits().clear(run);
+    let cancelled = self.cancel_now(run).await;
+    self.wait_again_if_refused(&cancelled);
+    cancelled
+  }
+
+  async fn cancel_now(&self, run: RunId) -> Result<(), Rejection> {
     loop {
       let one_at_a_time = self.inner.continuing.lock().await;
       if self.inner.board.is_stopping() {
@@ -331,15 +338,28 @@ impl Scheduler {
 
   /// Continues paused run `run`; a step it stopped in continues the agent's CLI session.
   pub async fn resume_run(&self, run: RunId) -> Result<(), Rejection> {
-    self.continue_settled(run, |db, root| idle::resume(db, root, run)).await
+    self.plan_waits().clear(run);
+    let resumed = self.continue_settled(run, |db, root| idle::resume(db, root, run)).await;
+    self.wait_again_if_refused(&resumed);
+    resumed
+  }
+
+  /// A run whose timer a person's refused request dropped gets it back.
+  fn wait_again_if_refused(&self, result: &Result<(), Rejection>) {
+    if result.is_err() {
+      self.wait_for_plan_resets();
+    }
   }
 
   /// Continues `run`, stopped at its account's plan limit, now on `connection`, another account's connection of
   /// the same CLI, as a new session for the stopped step and this run only.
   pub async fn continue_on_connection(&self, run: RunId, connection: ConnectionId) -> Result<(), Rejection> {
-    self
+    self.plan_waits().clear(run);
+    let continued = self
       .continue_settled(run, |db, root| plan_limit::continue_on(db, root, run, connection))
-      .await
+      .await;
+    self.wait_again_if_refused(&continued);
+    continued
   }
 
   /// Raises the limits of `run`, stopped at a limit, and continues it.

@@ -1,8 +1,8 @@
 //! The account each agent CLI invocation started on (`invocation_accounts`), written once by the runner before the
 //! CLI starts; a run reads back which accounts its steps ran on.
 
-use orchester_core::id::{AgentAccountId, InvocationId, RunId};
-use rusqlite::params;
+use orchester_core::id::{AgentAccountId, InvocationId, RunId, StepExecutionId};
+use rusqlite::{OptionalExtension, params};
 
 use super::ProjectDb;
 use crate::{StoreError, rows::parse};
@@ -19,6 +19,22 @@ impl ProjectDb {
       params![invocation.to_string(), account.to_string()],
     )?;
     Ok(())
+  }
+
+  /// The account the latest agent CLI invocation of `execution` started on, if it recorded one.
+  pub fn execution_account(&self, execution: StepExecutionId) -> Result<Option<AgentAccountId>, StoreError> {
+    self
+      .connection
+      .query_row(
+        "SELECT accounts.account_id FROM invocation_accounts AS accounts \
+         JOIN invocations ON invocations.id = accounts.invocation_id \
+         WHERE invocations.step_execution_id = ?1 ORDER BY invocations.started_at DESC, invocations.id DESC LIMIT 1",
+        [execution.to_string()],
+        |row| row.get::<_, String>(0),
+      )
+      .optional()?
+      .map(|account| parse("account id", &account))
+      .transpose()
   }
 
   /// The account of each agent CLI invocation of `run` that recorded one, in the order they started.

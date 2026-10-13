@@ -19,8 +19,46 @@ pub struct AccountIdentity {
   pub organization: Option<String>,
   /// The subscription as the CLI names it (`max`, `pro`, …).
   pub plan: Option<String>,
-  /// How the CLI signed in, as it names it (`claude.ai`, `ChatGPT`, …).
-  pub method: Option<String>,
+  /// How the CLI signed in, when it is a way Orchester knows.
+  #[serde(default, deserialize_with = "known_method")]
+  pub method: Option<SignInMethod>,
+}
+
+/// How a CLI signed in, among the ways Orchester knows. Never the CLI's own words: `codex login status` follows an
+/// API key login with part of the key.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SignInMethod {
+  /// Claude Code with a claude.ai subscription.
+  ClaudeAi,
+  /// Claude Code with an Anthropic Console account.
+  Console,
+  /// Codex with a ChatGPT account.
+  ChatGpt,
+  /// An API key.
+  ApiKey,
+}
+
+impl SignInMethod {
+  /// The method `text` names as `claude auth status` (`authMethod`) or `codex login status` (after `Logged in using`)
+  /// say it, or as Orchester stored it; `None` for any other words.
+  pub fn named(text: &str) -> Option<Self> {
+    let text = text.trim().to_ascii_lowercase();
+    match text.as_str() {
+      "claude.ai" | "claude_ai" | "claudeai" => Some(Self::ClaudeAi),
+      "console" | "console.anthropic.com" | "anthropic console" => Some(Self::Console),
+      "chatgpt" | "chat_gpt" => Some(Self::ChatGpt),
+      "api key" | "api_key" | "apikey" => Some(Self::ApiKey),
+      // `Logged in using an API key - sk-…`: only the words before the key count.
+      other if other.starts_with("an api key") => Some(Self::ApiKey),
+      _ => None,
+    }
+  }
+}
+
+/// A stored method, read as [`SignInMethod::named`] reads one: words it doesn't know are dropped.
+fn known_method<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<SignInMethod>, D::Error> {
+  Ok(Option::<String>::deserialize(deserializer)?.and_then(|text| SignInMethod::named(&text)))
 }
 
 /// The program a check ran.
@@ -193,6 +231,9 @@ fn ask(
     version,
   };
   let (sign_in, identity) = match cli {
+    // The CLI answered `--version`, so a status command that fails to run or times out leaves the sign-in unknown,
+    // which is what the account then shows (*Sign-in unknown*; runs still start): the error itself adds nothing a
+    // person could act on, so it is dropped.
     AccountCli::ClaudeCode => match runner.run(&command(&["auth", "status", "--json"])) {
       Ok(output) => (parse_claude_auth_status(&output), parse_claude_identity(&output.stdout)),
       Err(_) => (SignIn::Unknown, AccountIdentity::default()),
@@ -232,7 +273,7 @@ pub fn parse_claude_identity(stdout: &str) -> AccountIdentity {
     email: present(status.email),
     organization: present(status.org_name),
     plan: present(status.subscription_type),
-    method: present(status.auth_method),
+    method: status.auth_method.as_deref().and_then(SignInMethod::named),
   }
 }
 
@@ -242,8 +283,7 @@ fn codex_identity(stdout: &str) -> AccountIdentity {
   let method = stdout
     .lines()
     .find_map(|line| line.trim().strip_prefix("Logged in using "))
-    .map(|method| method.trim().to_owned())
-    .filter(|method| !method.is_empty());
+    .and_then(SignInMethod::named);
   AccountIdentity {
     method,
     ..AccountIdentity::default()

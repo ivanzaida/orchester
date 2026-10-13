@@ -35,7 +35,7 @@ use thiserror::Error;
 
 pub(crate) use self::github::gh_command;
 pub use self::{
-  account::{AccountStartProblem, ConnectionAccount},
+  account::{AccountStartProblem, ConnectionAccount, moves_to_another_account},
   adapter::{
     check, executable_candidates, parse_claude_auth_status, parse_codex_catalog, parse_codex_login_status,
     parse_version,

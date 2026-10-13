@@ -11,6 +11,7 @@ pub mod app_mcp;
 pub mod app_paths;
 pub mod background;
 pub mod budget;
+pub mod build;
 pub mod clock;
 pub mod close;
 pub mod code_index;

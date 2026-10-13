@@ -39,6 +39,19 @@ pub enum AccountStartProblem {
   Unsupported,
 }
 
+/// Whether an agent that ran on `before` (`None`: nothing ran yet) and now runs on `after` moves to another
+/// account: a person's decision (`docs/design/agent-accounts.md`), since another sign-in, and possibly another
+/// organisation's provider, gets the project's work. Keeping the account does not, nor does a CLI's Default, the
+/// CLI's own sign-in every connection ran on before accounts existed, nor no account, on which nothing runs.
+pub fn moves_to_another_account(before: Option<&ConnectionAccount>, after: &ConnectionAccount) -> bool {
+  match after {
+    ConnectionAccount::Account { id, .. } => {
+      !matches!(before, Some(ConnectionAccount::Account { id: was, .. }) if was == id)
+    }
+    ConnectionAccount::Default | ConnectionAccount::Unassigned => false,
+  }
+}
+
 impl ConnectionAccount {
   /// The connection's choice of `account`.
   pub fn of(account: &AgentAccount) -> Self {

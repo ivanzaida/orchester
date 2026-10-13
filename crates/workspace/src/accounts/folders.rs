@@ -1,12 +1,16 @@
-//! The file system side of account folders: the CLI's own folder, and whether a brought folder lies in a repository
-//! or a project. The rules themselves are `orchester_core::account`'s.
+//! The file system side of account folders: the CLI's own folder, whether a brought folder lies in a repository or
+//! a project, and whether a folder Orchester created is still a real folder where it was made. Folders are compared
+//! as the file system resolves them (links, junctions and case), so two spellings of one folder are one. The rules
+//! themselves are `orchester_core::account`'s.
 
 use std::{
-  env,
+  env, fs,
   path::{Path, PathBuf},
 };
 
-use orchester_core::account::{AccountCli, AgentAccount, FolderProblem, brought_folder_problem};
+use orchester_core::account::{
+  AccountCli, AgentAccount, FolderProblem, brought_folder_problem, plain_full_path, resolved, same_folder, within,
+};
 use orchester_store::RegisteredProject;
 
 /// The home folder, as the CLIs find it.
@@ -22,32 +26,51 @@ pub fn own_folder(cli: AccountCli) -> Option<PathBuf> {
     .or_else(|| Some(home()?.join(cli.own_folder_name())))
 }
 
-/// What is wrong with `folder` as a brought folder of an account of `cli` beside `accounts`, if anything.
+/// What is wrong with `folder` as a brought folder of an account of `cli` beside `accounts`, if anything; every
+/// path is compared as the file system resolves it.
 pub fn brought_problem(
   cli: AccountCli,
   folder: &Path,
   accounts: &[AgentAccount],
   projects: &[RegisteredProject],
 ) -> Option<FolderProblem> {
-  let repository = repository_of(folder, projects);
+  let repository = plain_full_path(folder)
+    .then(|| repository_of(&found(folder), projects))
+    .flatten();
   let own = own_folder(cli);
   brought_folder_problem(
     folder,
     repository.as_deref(),
-    accounts,
-    own.as_deref(),
+    (accounts, own.as_deref()),
     home().as_deref(),
+    &found,
   )
+}
+
+/// `path` as the file system resolves it, links and junctions followed; as written when it can't be resolved (a
+/// folder that is gone), which the rules still compare without regard to case where the system has none.
+pub fn found(path: &Path) -> PathBuf {
+  resolved(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// The project or git repository `folder` lies in: a listed project's folder, or the nearest folder above it (or
 /// itself) with a `.git` entry, which a worktree has as a file.
-fn repository_of(folder: &Path, projects: &[RegisteredProject]) -> Option<PathBuf> {
-  if let Some(project) = projects.iter().find(|project| folder.starts_with(&project.repo_root)) {
+pub(super) fn repository_of(folder: &Path, projects: &[RegisteredProject]) -> Option<PathBuf> {
+  if let Some(project) = projects
+    .iter()
+    .find(|project| within(folder, &found(&project.repo_root)))
+  {
     return Some(project.repo_root.clone());
   }
   folder
     .ancestors()
     .find(|ancestor| ancestor.join(".git").exists())
     .map(Path::to_path_buf)
+}
+
+/// Whether `folder`, which Orchester created, is still a folder of its own where it was made: not a link or a
+/// junction, and not reached through one, so moving it to the Recycle Bin or Trash takes only what Orchester made.
+pub fn still_created_here(folder: &Path) -> bool {
+  let real = fs::symlink_metadata(folder).is_ok_and(|found| found.is_dir() && !found.file_type().is_symlink());
+  real && resolved(folder).is_ok_and(|found| same_folder(&found, folder))
 }

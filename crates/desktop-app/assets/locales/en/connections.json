@@ -352,6 +352,7 @@
       "none": "No account",
       "manage": "Add or manage accounts…",
       "manageDetail": "Opens Settings › Accounts",
+      "changeNote": "Takes effect at each agent's next start: a paused or stopped step continues on the new account as a new session.",
       "plan": "{{plan}} plan",
       "weekly": "weekly {{used}}% used",
       "state": {

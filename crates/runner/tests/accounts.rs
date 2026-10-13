@@ -4,7 +4,7 @@
 
 mod support;
 
-use std::path::Path;
+use std::{num::NonZeroU32, path::Path};
 
 use orchester_core::{
   account::AccountCli,
@@ -12,10 +12,10 @@ use orchester_core::{
   id::{AgentAccountId, IdempotencyKey},
   resource::StepKey,
   run::{PauseReason, PreflightProblem, RunLimit, RunStatus},
-  store::ConnectionStore,
+  store::{ActivityStore, ConnectionStore, RunStore},
   time::Timestamp,
 };
-use orchester_ipc::{Event, Rejection};
+use orchester_ipc::{AttachSession, Event, Rejection};
 use orchester_store::ProjectDb;
 use tempfile::TempDir;
 
@@ -272,4 +272,72 @@ async fn accounts_a_person_continues_a_stopped_step_on_another_account_as_a_new_
   );
   let folders = reported(&db, id, "account folder: ");
   assert_eq!(folders.last(), Some(&personal.path().display().to_string()));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn accounts_a_run_whose_reset_passed_while_no_runner_ran_continues_when_one_starts() {
+  let (project, work, _personal, _) = at_the_limit();
+  std::fs::write(work.path().join("plan-reset"), "2").expect("Work's limit resets in two seconds");
+  let root = project.repo.path();
+  let (first, mut events) = scheduler(root);
+  let id = first
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  wait_for(root, &mut events, id, stopped_at_plan_limit).await;
+  // The first runner would continue it 30 s after the reset; another starts once the reset passed.
+  tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+  std::fs::write(work.path().join("plan-room"), "").expect("the window reset");
+  let (second, mut events) = scheduler(root);
+  second
+    .attach(AttachSession::Reconnect, NonZeroU32::new(2).expect("above zero"))
+    .await
+    .expect("attached");
+  let run = tokio::time::timeout(
+    std::time::Duration::from_secs(20),
+    wait_for(root, &mut events, id, |run| run.status().is_terminal()),
+  )
+  .await
+  .expect("the run continues as soon as the runner starts");
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn accounts_a_reset_timer_continues_only_the_stop_it_waits_for() {
+  let (project, work, personal, other) = at_the_limit();
+  std::fs::write(work.path().join("plan-reset"), "1").expect("Work's limit resets in a second");
+  std::fs::remove_file(personal.path().join("plan-room")).expect("Personal is at its limit too");
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  wait_for(root, &mut events, id, stopped_at_plan_limit).await;
+  let first_stop = std::time::Instant::now();
+  scheduler
+    .continue_on_connection(id, other)
+    .await
+    .expect("the step continues on Personal");
+  wait_for(root, &mut events, id, stopped_at_plan_limit).await;
+  let invocations = ProjectDb::open(root)
+    .expect("open")
+    .invocations(id)
+    .expect("read")
+    .len();
+  // Past Work's reset and the 30 s after it, when a timer for the first stop would continue the run.
+  tokio::time::sleep(
+    (first_stop + std::time::Duration::from_secs(34)).saturating_duration_since(std::time::Instant::now()),
+  )
+  .await;
+  let db = ProjectDb::open(root).expect("open");
+  assert!(
+    stopped_at_plan_limit(&db.run(id).expect("read").expect("the run")),
+    "it waits for Personal's reset"
+  );
+  assert_eq!(
+    db.invocations(id).expect("read").len(),
+    invocations,
+    "no agent started early"
+  );
 }

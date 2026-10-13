@@ -74,6 +74,12 @@
       "waiting": "Not signed in yet · waiting for the terminal",
       "adding": "{{cli}} · name it, then sign in"
     },
+    "method": {
+      "claudeAi": "claude.ai",
+      "console": "Anthropic Console",
+      "chatGpt": "ChatGPT",
+      "apiKey": "An API key"
+    },
     "details": {
       "factSeparator": "·",
       "account": "Account",
@@ -142,6 +148,7 @@
       "saved": "{{account}} is saved. You can also sign in later from its page.",
       "finishLater": "Finish later",
       "openAgain": "Open the terminal again",
+      "another": "Another account's sign-in terminal is open. Finish that sign-in or close its terminal first.",
       "open": "Open the terminal",
       "done": "Done",
       "signedIn": "Signed in as {{email}}",
@@ -178,6 +185,7 @@
       "keep": "Keep it",
       "running": "Run {{run}} is running on {{account}}. A run keeps its account to the end: its agents' sessions live in {{account}}'s folder.",
       "runningReason": "Remove after {{run}} ends, or stop that run first",
+      "unreadableReason": "{{projects}} can't be read, so a run there may be on this account. Remove it once they open",
       "defaultReason": "Default is {{program}}'s own folder, {{folder}}, which every {{program}} you start yourself uses. Orchester can't remove it; to stop runs using it, choose other accounts in your connections."
     },
     "usedBy": {

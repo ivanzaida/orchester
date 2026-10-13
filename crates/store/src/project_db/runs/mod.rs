@@ -34,6 +34,15 @@ const EVENT_SCHEMA: u32 = 2;
 
 impl ProjectDb {
   /// Runs stopped at their account's plan limit, ordered by number; each waits for the limit's reset or a person.
+  /// Runs that have not ended (succeeded, failed or cancelled), by number: each may still start an agent.
+  pub fn unfinished_runs(&self) -> Result<Vec<ListedRun<RunStoreError>>, RunStoreError> {
+    Ok(load_runs(
+      &self.connection,
+      "WHERE status NOT IN ('succeeded', 'failed', 'cancelled') ORDER BY number",
+      [],
+    )?)
+  }
+
   pub fn runs_at_plan_limit(&self) -> Result<Vec<ListedRun<RunStoreError>>, RunStoreError> {
     Ok(load_runs(
       &self.connection,

@@ -35,6 +35,7 @@ use super::{
   Choice, Continuing,
 };
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   theme::{DecisionText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -73,6 +74,8 @@ pub(super) struct ChoiceCard<'a> {
   pub action: &'a DecisionAction<Continuing>,
   /// The project's runner is online: continuing needs it.
   pub online: bool,
+  /// The window's input gate: continuing on another account is a person's decision.
+  pub gate: Option<&'a InputGate>,
 }
 
 impl ChoiceCard<'_> {
@@ -289,8 +292,16 @@ impl ChoiceCard<'_> {
           ctx.t_args("decisions.planLimit.continueNow", [("connection", name.as_str())]),
         )
         .icon(Icon::ArrowRight);
+        let gate = self.gate.cloned();
         match chosen {
-          Some(chosen) => button.on_click(move || send(continue_on(run, chosen.id()))),
+          // Which account the step's agent runs on is a person's decision, as the Account field's.
+          Some(chosen) => button.on_click(move || {
+            if input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
+              send(continue_on(run, chosen.id()));
+            } else {
+              tracing::warn!("synthetic input continued a run on another account; not taken");
+            }
+          }),
           None => button.disabled(),
         }
       }

@@ -85,6 +85,14 @@ pub enum Guarded {
   Accounts,
 }
 
+/// Whether the input being delivered may take a decision classified as `policy`: a person's (OS input) always; lurq's
+/// synthetic input only while no person-only control is mounted and the stored consent covers `policy`. Read in the
+/// handler, while lurq delivers the input.
+pub fn input_may_decide(gate: Option<&InputGate>, policy: Guarded) -> bool {
+  !lurq::app::events::is_synthetic_input()
+    || gate.is_some_and(|gate| !gate.protecting() && gate.widening_allowed(policy))
+}
+
 /// lurq's tools that send the window input or change it, which lurq denies while a protected control is
 /// mounted. `tests/mcp_tools.rs` checks that every lurq tool is in this list or in [`LOOKING`].
 pub const INPUT: &[&str] = &[

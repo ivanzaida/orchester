@@ -9,7 +9,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  account::{AccountCli, AccountState, AgentAccount, same_sign_in},
+  account::{AccountCli, AccountState, AgentAccount, SignInMethod, same_sign_in},
   connection::plan_limits::{LimitReading, LimitWindow},
   time::Timestamp,
 };
@@ -179,7 +179,9 @@ fn facts(ctx: &Ctx, account: &AgentAccount) -> Element {
         [("plan", plan(plan_name)), ("program", program.to_owned())],
       )
     });
-    let method = identity.and_then(|identity| identity.method.clone());
+    let method = identity
+      .and_then(|identity| identity.method)
+      .map(|method| t(ctx, method_key(method)));
     rows = rows
       .child(fact(
         ctx,
@@ -301,6 +303,7 @@ fn folder_actions(ctx: &Ctx, parts: &Parts, work: &Work, account: &AgentAccount)
       [("program", account.cli().program())],
     ))),
     _ if parts.signing_in == Some(id) => Some(sign_in.loading()),
+    _ if work.another_signing_in(id) => Some(sign_in.unavailable(t(ctx, "accounts.signIn.another"))),
     _ => {
       let work = work.clone();
       Some(sign_in.on_click(move || work.open_sign_in(id)))
@@ -443,5 +446,15 @@ fn open(folder: std::path::PathBuf) {
     });
   if let Err(error) = opening {
     tracing::error!(%error, "cannot start opening an account's folder");
+  }
+}
+
+/// The words for how the CLI signed in.
+const fn method_key(method: SignInMethod) -> &'static str {
+  match method {
+    SignInMethod::ClaudeAi => "accounts.method.claudeAi",
+    SignInMethod::Console => "accounts.method.console",
+    SignInMethod::ChatGpt => "accounts.method.chatGpt",
+    SignInMethod::ApiKey => "accounts.method.apiKey",
   }
 }

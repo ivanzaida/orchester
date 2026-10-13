@@ -11,6 +11,7 @@ use std::{
 use orchester_core::{
   account::{
     AccountCheck, AccountCheckResult, AccountCli, AccountFolder, AccountIdentity, AgentAccount, CheckedProgram,
+    SignInMethod,
   },
   connection::{
     AgentConnection, AgentProvider, CatalogSource, CheckResult, ConnectionAccount, ConnectionCheck, ModelCatalog,
@@ -68,6 +69,8 @@ pub struct Prepared {
   pub project: ProjectId,
   /// The key of the task stopped at its account's plan limit.
   pub task: String,
+  /// What the start prints: the scenario and that task's title.
+  pub shown: String,
 }
 
 /// Writes the stand-ins, seeds the project and adds the accounts and their connections.
@@ -85,13 +88,16 @@ pub fn prepare(folders: &Folders, without_codex: bool) -> Result<Prepared, Box<d
     fake_codex: Some(folders.programs().join(stand_ins::CODEX)),
     now: Timestamp::now(),
   })?;
-  let task = seeded
+  let scenario = kontur::scenarios::named("task-states").ok_or("the seed has task-states")?;
+  let stopped = seeded
     .tasks
     .iter()
     .find(|task| task.state == PLAN_LIMIT_STATE)
-    .ok_or("the seed stops a task at its account's plan limit")?
-    .key
-    .clone();
+    .ok_or("the seed stops a task at its account's plan limit")?;
+  let (task, shown) = (
+    stopped.key.clone(),
+    format!("{} · {} {}", scenario.name(), stopped.key, stopped.title),
+  );
   let accounts = add_accounts(folders, &seeded.app_database)?;
   let mut project = ProjectDb::open(&seeded.repo)?;
   for (name, provider, account) in [
@@ -108,6 +114,7 @@ pub fn prepare(folders: &Folders, without_codex: bool) -> Result<Prepared, Box<d
     database: seeded.app_database,
     project: seeded.project,
     task,
+    shown,
   })
 }
 
@@ -173,8 +180,8 @@ fn add_account(
 /// A check a day ago, when `email` was signed in with `cli`.
 fn signed_in_before(folders: &Folders, cli: AccountCli, email: &str) -> AccountCheck {
   let (program, version, method) = match cli {
-    AccountCli::ClaudeCode => (stand_ins::CLAUDE, "2.1.296", "claude.ai"),
-    AccountCli::Codex => (stand_ins::CODEX, "0.159.2", "ChatGPT"),
+    AccountCli::ClaudeCode => (stand_ins::CLAUDE, "2.1.296", SignInMethod::ClaudeAi),
+    AccountCli::Codex => (stand_ins::CODEX, "0.159.2", SignInMethod::ChatGpt),
   };
   AccountCheck {
     at: Timestamp::from_unix_millis(Timestamp::now().unix_millis() - 24 * 60 * 60 * 1000),
@@ -187,7 +194,7 @@ fn signed_in_before(folders: &Folders, cli: AccountCli, email: &str) -> AccountC
         email: Some(email.to_owned()),
         organization: None,
         plan: Some("pro".to_owned()),
-        method: Some(method.to_owned()),
+        method: Some(method),
       },
     },
   }

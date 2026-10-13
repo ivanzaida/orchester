@@ -3,10 +3,10 @@ use std::path::{Path, PathBuf};
 use orchester_core::{
   account::{
     AccountCheck, AccountCheckResult, AccountCli, AccountFolder, AccountIdentity, AccountState, AgentAccount,
-    CheckedProgram, FolderProblem, MoveTo, Removal, RemovalError, Shell, account_folder_name, brought_folder_problem,
-    parse_claude_identity, same_sign_in, sign_in_command,
+    CheckedProgram, FolderProblem, MoveTo, Removal, RemovalError, account_folder_name, brought_folder_problem,
+    same_sign_in,
   },
-  command::{Command, CommandError, CommandOutput, CommandRunner},
+  command::Command,
   connection::{
     AccountStartProblem, AgentConnection, AgentProvider, ConnectionAccount,
     invocation::{Platform, account_environment, on_account},
@@ -181,7 +181,7 @@ fn accounts_folders_inside_a_repository_or_taken_or_elsewhere_are_refused() {
   let repository = home.join("projects").join("kontur");
   let inside = repository.join(".claude-ci");
   assert_eq!(
-    brought_folder_problem(&inside, Some(&repository), &[], None, Some(&home)),
+    brought_folder_problem(&inside, Some(&repository), (&[], None), Some(&home), &as_written),
     Some(FolderProblem::InsideRepository(repository.clone()))
   );
   let personal = account(
@@ -193,30 +193,103 @@ fn accounts_folders_inside_a_repository_or_taken_or_elsewhere_are_refused() {
     brought_folder_problem(
       &home.join(".claude-personal"),
       None,
-      std::slice::from_ref(&personal),
-      None,
-      Some(&home)
+      (std::slice::from_ref(&personal), None),
+      Some(&home),
+      &as_written
     ),
     Some(FolderProblem::Taken(personal.id()))
   );
   let default = AgentAccount::default_of(AccountCli::ClaudeCode);
   let own = home.join(".claude");
   assert_eq!(
-    brought_folder_problem(&own, None, std::slice::from_ref(&default), Some(&own), Some(&home)),
+    brought_folder_problem(
+      &own,
+      None,
+      (std::slice::from_ref(&default), Some(&own)),
+      Some(&home),
+      &as_written
+    ),
     Some(FolderProblem::Taken(default.id()))
   );
   assert_eq!(
-    brought_folder_problem(&home.join("Documents").join("claude"), None, &[], None, Some(&home)),
+    brought_folder_problem(
+      &home.join("Documents").join("claude"),
+      None,
+      (&[], None),
+      Some(&home),
+      &as_written
+    ),
     Some(FolderProblem::OutsideCredentialPlaces)
   );
   assert_eq!(
-    brought_folder_problem(Path::new("relative"), None, &[], None, Some(&home)),
+    brought_folder_problem(Path::new("relative"), None, (&[], None), Some(&home), &as_written),
     Some(FolderProblem::NotAbsolute)
   );
   assert_eq!(
-    brought_folder_problem(&home.join(".claude-freelance"), None, &[personal], None, Some(&home)),
+    brought_folder_problem(
+      &home.join(".claude-freelance"),
+      None,
+      (std::slice::from_ref(&personal), None),
+      Some(&home),
+      &as_written
+    ),
     None
   );
+}
+
+#[test]
+fn accounts_folders_with_dots_or_nested_with_another_accounts_are_refused() {
+  let home = home();
+  let personal = account(
+    AccountCli::ClaudeCode,
+    "Personal",
+    AccountFolder::Brought(home.join(".claude-personal")),
+  );
+  let dotted = home.join(".claude-personal").join("..").join("Documents").join("creds");
+  assert_eq!(
+    brought_folder_problem(&dotted, None, (&[], None), Some(&home), &as_written),
+    Some(FolderProblem::NotAbsolute),
+    "`..` is refused, not resolved past the rules"
+  );
+  for nested in [
+    home.join(".claude-personal").join("inner"),
+    home.join(".CLAUDE-PERSONAL").join("inner"),
+  ] {
+    let problem = brought_folder_problem(
+      &nested,
+      None,
+      (std::slice::from_ref(&personal), None),
+      Some(&home),
+      &as_written,
+    );
+    let case_blind = cfg!(windows) || !nested.to_string_lossy().contains("CLAUDE");
+    assert_eq!(
+      problem == Some(FolderProblem::Taken(personal.id())),
+      case_blind,
+      "{nested:?}"
+    );
+  }
+  let created = account(
+    AccountCli::ClaudeCode,
+    "CI",
+    AccountFolder::Brought(home.join(".agents").join("claude-ci")),
+  );
+  assert_eq!(
+    brought_folder_problem(
+      &home.join(".agents"),
+      None,
+      (std::slice::from_ref(&created), None),
+      Some(&home),
+      &as_written
+    ),
+    Some(FolderProblem::Taken(created.id())),
+    "a folder holding another account's"
+  );
+}
+
+/// Paths as written: these rules read no file system.
+fn as_written(path: &Path) -> std::path::PathBuf {
+  path.to_path_buf()
 }
 
 #[test]
@@ -348,103 +421,6 @@ fn accounts_choosing_another_account_drops_the_connections_check_and_refuses_ano
     .set_account(ConnectionAccount::Unassigned)
     .expect("an agent CLI");
   assert_eq!(connection.account(), &ConnectionAccount::Unassigned);
-}
-
-#[test]
-fn accounts_sign_in_commands_set_the_folder_for_one_terminal() {
-  let base = home().join("AppData").join("Local");
-  let folder = base.join("Orchester").join("accounts").join("claude-freelance");
-  let text = sign_in_command(
-    AccountCli::ClaudeCode,
-    Some(&folder),
-    Shell::PowerShell,
-    Some((&base, "$env:LOCALAPPDATA")),
-  );
-  let separator = std::path::MAIN_SEPARATOR;
-  assert_eq!(
-    text,
-    format!(
-      "$env:CLAUDE_CONFIG_DIR=\"$env:LOCALAPPDATA\\Orchester{separator}accounts{separator}claude-freelance\"; claude auth login"
-    )
-  );
-  assert_eq!(
-    sign_in_command(AccountCli::Codex, None, Shell::Zsh, None),
-    "codex login"
-  );
-  let odd = sign_in_command(AccountCli::Codex, Some(Path::new("/a$b\"c")), Shell::Zsh, None);
-  assert_eq!(odd, "CODEX_HOME=\"/a\\$b\\\"c\" codex login");
-}
-
-#[test]
-fn accounts_claude_identity_is_read_where_reported_and_never_guessed() {
-  let identity = parse_claude_identity(
-    r#"{"loggedIn":true,"authMethod":"claude.ai","email":"ana@example.com","orgName":"Ana","subscriptionType":"max"}"#,
-  );
-  assert_eq!(identity.email.as_deref(), Some("ana@example.com"));
-  assert_eq!(identity.plan.as_deref(), Some("max"));
-  assert_eq!(identity.method.as_deref(), Some("claude.ai"));
-  let signed_out = parse_claude_identity(r#"{"loggedIn":false,"authMethod":"none"}"#);
-  assert_eq!(signed_out, AccountIdentity::default());
-}
-
-/// Answers `--version` and the status command as the CLI with the given status output would.
-struct Cli {
-  status: &'static str,
-  code: i32,
-}
-
-impl CommandRunner for Cli {
-  fn run(&self, command: &Command) -> Result<CommandOutput, CommandError> {
-    let stdout = if command.args().first().map(String::as_str) == Some("--version") {
-      "2.1.296 (Claude Code)".to_owned()
-    } else {
-      self.status.to_owned()
-    };
-    Ok(CommandOutput {
-      code: Some(if stdout.contains("Claude Code") { 0 } else { self.code }),
-      stdout,
-      stderr: String::new(),
-    })
-  }
-}
-
-#[test]
-fn accounts_a_check_reads_who_is_signed_in_with_the_clis_status_command() {
-  let program = Path::new("claude");
-  let signed = AccountCheck::run(
-    AccountCli::ClaudeCode,
-    Some(program),
-    &Cli {
-      status: r#"{"loggedIn":true,"email":"ana@example.com"}"#,
-      code: 0,
-    },
-    &[],
-    Timestamp::now(),
-  );
-  assert_eq!(signed.state(), AccountState::SignedIn);
-  assert_eq!(
-    signed.known_identity().and_then(|identity| identity.email.as_deref()),
-    Some("ana@example.com")
-  );
-  let out = AccountCheck::run(
-    AccountCli::ClaudeCode,
-    Some(program),
-    &Cli {
-      status: r#"{"loggedIn":false}"#,
-      code: 1,
-    },
-    &[],
-    Timestamp::now(),
-  );
-  assert_eq!(out.state(), AccountState::NotSignedIn);
-  let missing = AccountCheck::run(
-    AccountCli::ClaudeCode,
-    None,
-    &Cli { status: "", code: 0 },
-    &[],
-    Timestamp::now(),
-  );
-  assert_eq!(missing.state(), AccountState::CliMissing);
 }
 
 fn reading(account: Option<AgentAccountId>, at: i64, used: f64) -> LimitReading {

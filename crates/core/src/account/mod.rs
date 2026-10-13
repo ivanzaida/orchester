@@ -17,8 +17,13 @@ use thiserror::Error;
 use uuid::Uuid;
 
 pub use self::{
-  check::{AccountCheck, AccountCheckResult, AccountIdentity, AccountState, CheckedProgram, parse_claude_identity},
-  folder::{FolderProblem, account_folder_name, brought_folder_problem, same_folder},
+  check::{
+    AccountCheck, AccountCheckResult, AccountIdentity, AccountState, CheckedProgram, SignInMethod,
+    parse_claude_identity,
+  },
+  folder::{
+    FolderProblem, account_folder_name, brought_folder_problem, plain_full_path, resolved, same_folder, within,
+  },
   removal::{MoveTo, Removal, RemovalError},
   sign_in::{Shell, sign_in_command},
 };

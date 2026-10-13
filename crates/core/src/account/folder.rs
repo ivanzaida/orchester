@@ -11,10 +11,12 @@ use crate::id::AgentAccountId;
 /// Why a folder can't be an account's.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FolderProblem {
+  /// Not a full path, or one with `.` or `..` in it.
   NotAbsolute,
   /// Inside the repository or project at this root.
   InsideRepository(PathBuf),
-  /// Another account's folder, or the CLI's own folder, which is Default's.
+  /// Another account's folder, or the CLI's own folder, which is Default's; or a folder inside one or holding one,
+  /// which removing either account would take along.
   Taken(AgentAccountId),
   /// Neither in a dot folder of the home folder nor in the applications' data.
   OutsideCredentialPlaces,
@@ -51,64 +53,90 @@ pub fn account_folder_name(program: &str, name: &str, taken: impl Fn(&str) -> bo
 
 /// What is wrong with `folder` as a brought folder of an account of `accounts`' CLI, if anything. `repository` is
 /// the repository or project folder that holds it, as the caller found on disk; `own` the CLI's own folder; `home`
-/// the home folder.
+/// the home folder. `found` gives a path as the file system resolves it ([`resolved`]); every path is compared as
+/// found, `folder` itself only once it is a plain full path.
 pub fn brought_folder_problem(
   folder: &Path,
   repository: Option<&Path>,
-  accounts: &[AgentAccount],
-  own: Option<&Path>,
+  (accounts, own): (&[AgentAccount], Option<&Path>),
   home: Option<&Path>,
+  found: &dyn Fn(&Path) -> PathBuf,
 ) -> Option<FolderProblem> {
-  if !folder.is_absolute() {
+  if !plain_full_path(folder) {
     return Some(FolderProblem::NotAbsolute);
   }
   if let Some(repository) = repository {
     return Some(FolderProblem::InsideRepository(repository.to_path_buf()));
   }
+  let folder = found(folder);
   if let Some(account) = accounts.iter().find(|account| {
     let path = account
       .folder()
       .path()
       .or(if account.is_default() { own } else { None });
-    path.is_some_and(|path| same_folder(path, folder))
+    path
+      .map(found)
+      .is_some_and(|path| within(&folder, &path) || within(&path, &folder))
   }) {
     return Some(FolderProblem::Taken(account.id()));
   }
-  if !home.is_some_and(|home| in_credential_place(folder, home)) {
+  if !home.map(found).is_some_and(|home| in_credential_place(&folder, &home)) {
     return Some(FolderProblem::OutsideCredentialPlaces);
   }
   None
 }
 
+/// Whether `folder` is a full path without `.` or `..` in it.
+pub fn plain_full_path(folder: &Path) -> bool {
+  folder.is_absolute()
+    && folder
+      .components()
+      .all(|part| !matches!(part, Component::CurDir | Component::ParentDir))
+}
+
 /// Whether two folders are one, compared as Windows compares names (without regard to case) on Windows.
 pub fn same_folder(left: &Path, right: &Path) -> bool {
-  let parts = |path: &Path| -> Vec<String> {
-    path
-      .components()
-      .filter(|part| !matches!(part, Component::CurDir))
-      .map(|part| {
-        let text = part.as_os_str().to_string_lossy();
-        if cfg!(windows) {
-          text.to_lowercase()
-        } else {
-          text.into_owned()
-        }
-      })
-      .collect()
-  };
   parts(left) == parts(right)
+}
+
+/// Whether `folder` is `root` or lies inside it, compared as [`same_folder`] compares.
+pub fn within(folder: &Path, root: &Path) -> bool {
+  parts(folder).starts_with(&parts(root))
+}
+
+/// `folder` as the file system has it, links and junctions resolved as far as it exists, for the rules above to
+/// compare: two spellings of one folder become one path.
+pub fn resolved(folder: &Path) -> std::io::Result<PathBuf> {
+  crate::permission::canonical::existing(folder)
+    .map(|found| found.path)
+    .map_err(|failure| failure.error)
+}
+
+fn parts(path: &Path) -> Vec<String> {
+  path
+    .components()
+    .filter(|part| !matches!(part, Component::CurDir))
+    .map(|part| {
+      let text = part.as_os_str().to_string_lossy();
+      if cfg!(windows) {
+        text.to_lowercase()
+      } else {
+        text.into_owned()
+      }
+    })
+    .collect()
 }
 
 /// Whether `folder` lies in a dot folder of `home` or in its applications' data.
 fn in_credential_place(folder: &Path, home: &Path) -> bool {
-  let Ok(rest) = folder.strip_prefix(home) else {
+  if !within(folder, home) {
     return false;
-  };
-  let mut names = rest
-    .components()
-    .map(|part| part.as_os_str().to_string_lossy().to_lowercase());
-  match names.next() {
-    Some(first) => first.starts_with('.') || first == "appdata" || first == "library",
+  }
+  let skip = parts(home).len();
+  match parts(folder).get(skip) {
+    Some(first) => {
+      first.starts_with('.') || first.eq_ignore_ascii_case("appdata") || first.eq_ignore_ascii_case("library")
+    }
     None => false,
   }
 }

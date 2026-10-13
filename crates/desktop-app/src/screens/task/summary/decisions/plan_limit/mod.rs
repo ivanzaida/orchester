@@ -25,6 +25,7 @@ use orchester_workspace::{
 
 use super::{TaskContext, action::decision_action, arranged, stages::stages, task_notice, this_run_panel};
 use crate::{
+  mcp::input_gate::InputGate,
   services::{Services, accounts::listed as accounts_listed},
   ui::{notice::Notice, plan_window::when},
 };
@@ -53,6 +54,7 @@ struct Read(Option<PlanStop>);
 impl DevtoolsInspectable for Read {}
 
 pub struct PlanLimitDecision {
+  gate: Option<InputGate>,
   choice: Signal<Choice>,
   /// The other connection chosen, by id.
   other: Signal<String>,
@@ -64,6 +66,7 @@ impl Component for PlanLimitDecision {
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
+      gate: ctx.use_context::<InputGate>(),
       choice: ctx.signal(Choice::Wait),
       other: ctx.signal(String::new()),
       asked: ctx.signal(None),
@@ -79,12 +82,11 @@ impl Component for PlanLimitDecision {
     };
     let stop = read(ctx, &props, run);
     let now = Services::of(ctx).clock.now();
-    let account: Option<AgentAccount> = match &stop {
-      Some(stop) => listed
-        .of_connection(stop.connection.account(), stop.connection.provider())
-        .cloned(),
-      None => None,
-    };
+    // The account the stopped agent started on, as the runner recorded it.
+    let account: Option<AgentAccount> = stop
+      .as_ref()
+      .and_then(|stop| stop.account)
+      .and_then(|id| listed.of(id).cloned());
     let focus = run.stopped_step().map(|step| step.key.as_str().to_owned());
     let mut parts: Vec<Element> = vec![
       notice(
@@ -107,6 +109,7 @@ impl Component for PlanLimitDecision {
           asked: &self.asked,
           action: &action,
           online: props.online,
+          gate: self.gate.as_ref(),
         }
         .render(ctx),
       );

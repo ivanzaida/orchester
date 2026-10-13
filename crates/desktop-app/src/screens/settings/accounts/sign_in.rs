@@ -361,8 +361,7 @@ fn open_button(ctx: &Ctx, work: &Work, id: orchester_core::id::AgentAccountId, a
   } else {
     "accounts.signIn.open"
   };
-  let work = work.clone();
-  ActionButton::new(
+  let button = ActionButton::new(
     if again {
       "account-sign-in-open-again"
     } else {
@@ -371,8 +370,12 @@ fn open_button(ctx: &Ctx, work: &Work, id: orchester_core::id::AgentAccountId, a
     ButtonKind::Secondary,
     t(ctx, key),
   )
-  .icon(Icon::SquareTerminal)
-  .on_click(move || work.open_sign_in(id))
+  .icon(Icon::SquareTerminal);
+  if work.another_signing_in(id) {
+    return button.unavailable(t(ctx, "accounts.signIn.another"));
+  }
+  let work = work.clone();
+  button.on_click(move || work.open_sign_in(id))
 }
 
 /// What is saved, *Finish later* and *Open the terminal again*.

@@ -31,7 +31,10 @@ impl Shell {
 }
 
 /// The login of `cli` for `folder` (`None`: the CLI's own folder) in `shell`. A folder under `base`'s path is written
-/// with `base`'s variable (`$env:LOCALAPPDATA`, `$HOME`), so the command reads as the person's own.
+/// with `base`'s variable (`$env:LOCALAPPDATA`, `$HOME`), so the command reads as the person's own. A folder name with
+/// anything but letters, digits, spaces, `.`, `_`, `-`, `:` and separators is written as a single-quoted literal, so
+/// nothing in it is expanded or ends the quotes: PowerShell takes the typographic quotes `“ ” „` as `"` and
+/// `‘ ’ ‚ ‛` as `'`, and zsh expands `!` inside double quotes.
 pub fn sign_in_command(cli: AccountCli, folder: Option<&Path>, shell: Shell, base: Option<(&Path, &str)>) -> String {
   let login = std::iter::once(cli.program())
     .chain(cli.login_args().iter().copied())
@@ -41,36 +44,56 @@ pub fn sign_in_command(cli: AccountCli, folder: Option<&Path>, shell: Shell, bas
     return login;
   };
   let value = match base.and_then(|(path, variable)| Some((folder.strip_prefix(path).ok()?, variable))) {
+    Some((rest, variable)) if rest.as_os_str().is_empty() => match shell {
+      Shell::PowerShell => variable.to_owned(),
+      Shell::Zsh => format!("\"{variable}\""),
+    },
     Some((rest, variable)) => {
       let separator = if shell == Shell::PowerShell { '\\' } else { '/' };
-      let rest = escaped(&rest.to_string_lossy(), shell);
-      if rest.is_empty() {
-        variable.to_owned()
-      } else {
-        format!("{variable}{separator}{rest}")
+      let rest = format!("{separator}{}", rest.to_string_lossy());
+      match shell {
+        _ if plain(&rest) => format!("\"{variable}{rest}\""),
+        Shell::PowerShell => format!("{variable} + {}", literal(&rest, shell)),
+        Shell::Zsh => format!("\"{variable}\"{}", literal(&rest, shell)),
       }
     }
-    None => escaped(&folder.to_string_lossy(), shell),
+    None => {
+      let folder = folder.to_string_lossy();
+      if plain(&folder) {
+        format!("\"{folder}\"")
+      } else {
+        literal(&folder, shell)
+      }
+    }
   };
   let variable = cli.folder_variable();
   match shell {
-    Shell::PowerShell => format!("$env:{variable}=\"{value}\"; {login}"),
-    Shell::Zsh => format!("{variable}=\"{value}\" {login}"),
+    Shell::PowerShell => format!("$env:{variable}={value}; {login}"),
+    Shell::Zsh => format!("{variable}={value} {login}"),
   }
 }
 
-/// `text` inside double quotes of `shell`, with nothing in it expanded.
-fn escaped(text: &str, shell: Shell) -> String {
-  let (escape, special): (char, &[char]) = match shell {
-    Shell::PowerShell => ('`', &['`', '"', '$']),
-    Shell::Zsh => ('\\', &['\\', '"', '$', '`']),
-  };
-  let mut out = String::with_capacity(text.len());
+/// Whether `text` holds nothing a shell reads inside double quotes.
+fn plain(text: &str) -> bool {
+  text
+    .chars()
+    .all(|character| character.is_alphanumeric() || " ._-:\\/".contains(character))
+}
+
+/// `text` as a single-quoted literal of `shell`, in which nothing is expanded.
+fn literal(text: &str, shell: Shell) -> String {
+  let mut out = String::from("'");
   for character in text.chars() {
-    if special.contains(&character) {
-      out.push(escape);
+    match (shell, character) {
+      // PowerShell ends a single-quoted string at any of its single quotes; doubled, each stands for itself.
+      (Shell::PowerShell, '\'' | '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}') => {
+        out.push(character);
+        out.push(character);
+      }
+      (Shell::Zsh, '\'') => out.push_str("'\\''"),
+      _ => out.push(character),
     }
-    out.push(character);
   }
+  out.push('\'');
   out
 }

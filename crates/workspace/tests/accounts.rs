@@ -21,6 +21,8 @@ use orchester_workspace::{
 };
 use tempfile::TempDir;
 
+mod support;
+
 struct Setup {
   data: TempDir,
   workspace: Workspace,
@@ -108,6 +110,10 @@ fn accounts_a_new_account_gets_a_folder_orchester_creates() {
       _
     )))
   ));
+  assert!(
+    !data.path().join("accounts").join("codex-client-2").exists(),
+    "a refused account leaves no folder"
+  );
 }
 
 #[test]
@@ -226,4 +232,203 @@ fn accounts_a_project_out_of_reach_at_removal_follows_it_when_it_opens() {
   assert_eq!(account_of(repo.path(), connection), ConnectionAccount::of(&work));
   workspace.open(repo.path()).expect("opened");
   assert_eq!(account_of(repo.path(), connection), ConnectionAccount::Unassigned);
+}
+
+/// A connection called `name` on `account` in the fixture's project.
+fn connection_on(
+  fixture: &mut support::Fixture,
+  name_of: &str,
+  account: &orchester_core::account::AgentAccount,
+) -> ConnectionId {
+  let mut connection = AgentConnection::new(
+    ConnectionId::generate(),
+    name(name_of),
+    AgentProvider::ClaudeCodeCli,
+    fixture.repo.path().join("claude.exe"),
+    Timestamp::now(),
+  )
+  .expect("absolute");
+  connection
+    .set_account(ConnectionAccount::of(account))
+    .expect("a Claude Code account");
+  fixture.db.create_connection(&connection).expect("created");
+  connection.id()
+}
+
+fn add(workspace: &Workspace, account_name: &str) -> orchester_core::account::AgentAccount {
+  workspace
+    .add_agent_account(NewAccount {
+      cli: AccountCli::ClaudeCode,
+      name: name(account_name),
+      folder: NewFolder::Create,
+    })
+    .expect("added")
+}
+
+#[test]
+fn accounts_removal_is_refused_while_a_step_continues_on_the_account_for_its_run() {
+  let Setup { workspace, .. } = setup();
+  let work = add(&workspace, "Work");
+  let mut fixture = support::Fixture::new();
+  workspace.open(fixture.repo.path()).expect("listed");
+  let connection = connection_on(&mut fixture, "Claude · Work", &work);
+  let task = fixture.queued_task("Sign in", support::at(10));
+  let run = fixture.started_run(task, support::at(20));
+  let step = run.snapshot().steps()[0].key().clone();
+  fixture
+    .db
+    .set_step_connection(run.id(), &step, connection)
+    .expect("continued on Work");
+  let refused = workspace.remove_agent_account(work.id(), MoveTo::NoAccount, true);
+  assert!(
+    matches!(
+      refused,
+      Err(AccountsError::Removal(orchester_core::account::RemovalError::InUse))
+    ),
+    "{refused:?}"
+  );
+  assert!(
+    work.folder().path().expect("a folder").is_dir(),
+    "nothing went to the bin"
+  );
+}
+
+#[test]
+fn accounts_removal_is_refused_while_a_run_has_started_an_agent_on_the_account() {
+  let Setup { workspace, .. } = setup();
+  let (work, other) = (add(&workspace, "Work"), add(&workspace, "Other"));
+  let mut fixture = support::Fixture::new();
+  workspace.open(fixture.repo.path()).expect("listed");
+  // The connection is on Other now; the run's agent started on Work before it was switched.
+  connection_on(&mut fixture, "Claude", &other);
+  let task = fixture.queued_task("Sign in", support::at(10));
+  let run = fixture.started_run(task, support::at(20));
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let invocation = orchester_core::store::ActivityStore::start_invocation(
+    &mut fixture.db,
+    run.id(),
+    execution,
+    &orchester_core::resource::ModelId::new("claude-sonnet-5-5").expect("a model"),
+    support::at(21),
+  )
+  .expect("started");
+  fixture
+    .db
+    .save_invocation_account(invocation.id, work.id())
+    .expect("recorded");
+  let refused = workspace.remove_agent_account(work.id(), MoveTo::NoAccount, true);
+  assert!(
+    matches!(
+      refused,
+      Err(AccountsError::Removal(orchester_core::account::RemovalError::InUse))
+    ),
+    "{refused:?}"
+  );
+  assert!(work.folder().path().expect("a folder").is_dir());
+}
+
+#[test]
+fn accounts_removal_is_refused_while_a_listed_project_cannot_be_read() {
+  let Setup { workspace, .. } = setup();
+  let work = add(&workspace, "Work");
+  let fixture = support::Fixture::new();
+  workspace.open(fixture.repo.path()).expect("listed");
+  let repo = fixture.into_repo();
+  fs::remove_dir_all(repo.path().join(".orchester")).expect("its database is gone");
+  let refused = workspace.remove_agent_account(work.id(), MoveTo::NoAccount, true);
+  assert!(
+    matches!(refused, Err(AccountsError::ProjectsUnreadable(_))),
+    "{refused:?}"
+  );
+  assert!(work.folder().path().expect("a folder").is_dir());
+}
+
+/// Makes `link` lead to the folder `target`: a junction on Windows, a symbolic link elsewhere.
+fn link(link: &Path, target: &Path) {
+  #[cfg(windows)]
+  {
+    let made = std::process::Command::new("cmd")
+      .args(["/C", "mklink", "/J"])
+      .arg(link)
+      .arg(target)
+      .output()
+      .expect("mklink runs");
+    assert!(made.status.success(), "{made:?}");
+  }
+  #[cfg(not(windows))]
+  std::os::unix::fs::symlink(target, link).expect("a link");
+}
+
+#[test]
+fn accounts_a_brought_folder_is_judged_as_the_file_system_resolves_it() {
+  let Setup { data, workspace } = setup();
+  let (repo, _) = project(&workspace, "KON");
+  let work = add(&workspace, "Work");
+  let created = work.folder().path().expect("a folder").to_path_buf();
+  let problem = |folder: &Path| {
+    workspace
+      .brought_folder_problem(AccountCli::ClaudeCode, folder)
+      .expect("checked")
+  };
+  assert_eq!(
+    problem(&created.join("..").join("elsewhere")),
+    Some(FolderProblem::NotAbsolute),
+    "`..` is refused"
+  );
+  assert_eq!(
+    problem(&created.join("inner")),
+    Some(FolderProblem::Taken(work.id())),
+    "inside another account's folder"
+  );
+  let target = repo.path().join(".claude-ci");
+  fs::create_dir(&target).expect("a folder in the repository");
+  let through = data.path().join("through-a-link");
+  link(&through, &target);
+  assert!(
+    matches!(problem(&through), Some(FolderProblem::InsideRepository(_))),
+    "a link into the repository"
+  );
+}
+
+#[test]
+fn accounts_a_created_folder_that_became_a_link_is_not_moved_to_the_bin() {
+  let Setup { data, workspace } = setup();
+  let work = add(&workspace, "Work");
+  let created = work.folder().path().expect("a folder").to_path_buf();
+  let elsewhere = data.path().join("the-persons-files");
+  fs::create_dir(&elsewhere).expect("a folder of the person's");
+  fs::write(elsewhere.join("notes.txt"), "keep").expect("a file");
+  fs::remove_dir(&created).expect("the created folder goes");
+  link(&created, &elsewhere);
+  let refused = workspace.remove_agent_account(work.id(), MoveTo::NoAccount, true);
+  assert!(
+    matches!(
+      refused,
+      Err(AccountsError::Removal(
+        orchester_core::account::RemovalError::FolderNotCreated
+      ))
+    ),
+    "{refused:?}"
+  );
+  assert!(elsewhere.join("notes.txt").is_file(), "what the link leads to stays");
+}
+
+#[test]
+fn accounts_a_new_accounts_folder_is_never_made_inside_a_repository() {
+  let data = tempfile::tempdir().expect("temporary directory");
+  let db = AppDb::open(&data.path().join("orchester.db")).expect("the app database");
+  let probe = Workspace::new(db);
+  let (repo, _) = project(&probe, "KON");
+  let db = AppDb::open(&data.path().join("orchester.db")).expect("the app database");
+  let workspace = Workspace::new(db).with_account_root(&repo.path().join("accounts"));
+  let refused = workspace.add_agent_account(NewAccount {
+    cli: AccountCli::Codex,
+    name: name("Client"),
+    folder: NewFolder::Create,
+  });
+  assert!(
+    matches!(refused, Err(AccountsError::Folder(FolderProblem::InsideRepository(_)))),
+    "{refused:?}"
+  );
+  assert!(!repo.path().join("accounts").exists(), "nothing is made");
 }

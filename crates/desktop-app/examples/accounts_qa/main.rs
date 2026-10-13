@@ -13,7 +13,6 @@
 //! person's input only, so each of its states opens directly; outside Settings the window can be driven.
 
 #[path = "../seed/kontur/mod.rs"]
-#[allow(dead_code, reason = "the seed's helpers the other scenarios use")]
 mod kontur;
 
 mod data;
@@ -147,10 +146,11 @@ fn start(state: State) -> Result<(), Box<dyn Error>> {
     .spawn()?;
   writeln!(
     std::io::stdout().lock(),
-    "pid {}\nmcp {}\ndata {}",
+    "pid {}\nmcp {}\ndata {}\nseeded {}",
     child.id(),
     scratch.join("mcp").display(),
-    root.path().display()
+    root.path().display(),
+    prepared.shown
   )?;
   let status = child.wait()?;
   if !status.success() {

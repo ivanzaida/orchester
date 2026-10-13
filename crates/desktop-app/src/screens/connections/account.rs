@@ -23,6 +23,7 @@ use orchester_core::{
 };
 
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   navigation::Navigation,
   routes::{AccountsView, Route},
   services::accounts::Accounts,
@@ -149,6 +150,9 @@ impl PartialEq for PickerProps {
 impl DevtoolsInspectable for PickerProps {}
 
 /// The *Account* field: a menu of the accounts; choosing *Add or manage accounts…* opens Settings › Accounts.
+/// Which account a connection's agents run on is a person's decision: lurq's synthetic input (an MCP client driving
+/// the window) chooses one only under the stored consent to let automation change agent permissions, as
+/// `set_connection_account` does; otherwise the choice is not taken and the field shows the account again.
 pub(super) struct AccountPicker {
   value: Signal<String>,
   open: Signal<bool>,
@@ -167,6 +171,7 @@ impl Component for AccountPicker {
       current: ctx.signal(props.current.clone()),
     };
     let navigation = Navigation::of(ctx);
+    let gate = ctx.use_context::<InputGate>();
     let (value, current, on_choose) = (picker.value.clone(), picker.current.clone(), props.on_choose);
     ctx.watch(&picker.value, move |chosen| {
       let shown = current.get_untracked();
@@ -174,7 +179,12 @@ impl Component for AccountPicker {
         value.set(shown);
         navigation.go(Route::Accounts(AccountsView::default()));
       } else if *chosen != shown {
-        on_choose(chosen.clone());
+        if input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
+          on_choose(chosen.clone());
+        } else {
+          tracing::warn!("synthetic input chose a connection's account; not taken");
+          value.set(shown);
+        }
       }
     });
     picker
@@ -264,7 +274,19 @@ pub(super) fn inspector_row(
       }),
     },
   );
-  crate::ui::inspector::control("connection-account-row", &ctx.t("connections.account.label"), picker).into()
+  lurq::components::Column::new()
+    .width(lurq::node::dimension::Dimension::Pct(100.0))
+    .child(crate::ui::inspector::control(
+      "connection-account-row",
+      &ctx.t("connections.account.label"),
+      picker,
+    ))
+    .child(crate::ui::inspector::note(
+      "connection-account-note",
+      Icon::Info,
+      &ctx.t("connections.account.changeNote"),
+    ))
+    .into()
 }
 
 /// The picker's width in an inspector (`Account` row of `M42rM`).

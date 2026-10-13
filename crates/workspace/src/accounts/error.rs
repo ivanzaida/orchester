@@ -3,6 +3,7 @@ use std::{io, path::PathBuf};
 use orchester_core::{
   account::{AccountError, FolderProblem, RemovalError},
   connection::{ConnectionError, invocation::InvocationError},
+  name::Name,
 };
 use orchester_store::{RunStoreError, StoreError};
 use thiserror::Error;
@@ -26,6 +27,9 @@ pub enum AccountsError {
   NoFolderHere,
   #[error(transparent)]
   Removal(RemovalError),
+  /// Listed projects that could not be read: a run there may be on the account.
+  #[error("projects could not be read: {}", .0.iter().map(Name::as_str).collect::<Vec<_>>().join(", "))]
+  ProjectsUnreadable(Vec<Name>),
   #[error("the folder could not be moved to the Recycle Bin or Trash: {0}")]
   Trash(io::Error),
   /// Claude Code accounts other than Default on macOS (decision 10).
@@ -64,6 +68,10 @@ impl AccountsError {
       Self::Removal(RemovalError::InUse) => Message::new("accounts.errors.inUse"),
       Self::Removal(RemovalError::NotAnotherAccount) => Message::new("accounts.errors.moveTarget"),
       Self::Removal(RemovalError::FolderNotCreated) => Message::new("accounts.errors.notCreated"),
+      Self::ProjectsUnreadable(projects) => Message::new("accounts.errors.projectsUnreadable").with(
+        "projects",
+        projects.iter().map(Name::as_str).collect::<Vec<_>>().join(", "),
+      ),
       Self::Trash(_) => Message::new("accounts.errors.trash"),
       Self::CliMissing => Message::new("accounts.errors.cliMissing"),
       Self::FolderMissing(folder) => {

@@ -2,8 +2,11 @@
 //! run only (`run_step_connections`); the step's profile keeps its own connection.
 
 use orchester_core::{
+  connection::AgentConnection,
   id::{ConnectionId, RunId},
-  resource::StepKey,
+  resource::{AgentProfile, StepKey},
+  run::{Run, StepExecutor},
+  store::{ConnectionStore, ResourceStore},
 };
 use rusqlite::{OptionalExtension, params};
 
@@ -24,6 +27,28 @@ impl ProjectDb {
       params![run.to_string(), step.as_str(), connection.to_string()],
     )?;
     Ok(())
+  }
+
+  /// The agent connection `step` of `run` runs on now: one a person chose for this run, else its profile's as the
+  /// run pinned it; `None` when the step runs no agent, or the connection is gone or no agent CLI's.
+  pub fn step_agent_connection(&self, run: &Run, step: &StepKey) -> Result<Option<AgentConnection>, StoreError> {
+    let id = match self.step_connection(run.id(), step)? {
+      Some(id) => id,
+      None => {
+        let Some(StepExecutor::Agent { profile, .. }) = run.snapshot().step(step).map(|step| step.executor()) else {
+          return Ok(None);
+        };
+        let Some(version) = self.version::<AgentProfile>(profile.resource, profile.number)? else {
+          return Ok(None);
+        };
+        version.body().connection()
+      }
+    };
+    Ok(
+      self
+        .connection(id)?
+        .and_then(|connection| AgentConnection::try_from(connection).ok()),
+    )
   }
 
   /// The connection `step` of `run` runs on in place of its profile's, if a person chose one.

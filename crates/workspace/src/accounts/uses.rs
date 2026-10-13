@@ -11,7 +11,7 @@ use orchester_core::{
   name::Name,
   resource::AgentProfile,
   run::StepExecutor,
-  store::{ConnectionStore, ResourceStore, RunStore, TaskStore},
+  store::{ConnectionStore, ResourceStore, TaskStore},
 };
 use orchester_store::{ProjectDb, RegisteredProject, StoreError};
 
@@ -29,7 +29,7 @@ pub struct ConnectionUse {
   pub profiles: Vec<Arc<str>>,
 }
 
-/// A run on the account now.
+/// A run on the account: one that has not ended and started an agent on it, or has a step on a connection on it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunUse {
   pub project_name: Name,
@@ -90,10 +90,11 @@ fn project_uses(
     .into_iter()
     .filter(|connection| runs_on(connection, account))
     .collect();
-  if connections.is_empty() {
-    return Ok(());
-  }
-  let profiles = profiles(&db)?;
+  let profiles = if connections.is_empty() {
+    Vec::new()
+  } else {
+    profiles(&db)?
+  };
   for connection in &connections {
     found.connections.push(ConnectionUse {
       project: project.id,
@@ -108,10 +109,10 @@ fn project_uses(
     });
   }
   let ids: Vec<ConnectionId> = connections.iter().map(Connection::id).collect();
-  for run in db.running_runs()? {
-    // A run that cannot be read is listed as unreadable by the task screens; here it is not known to be on it.
-    let Ok(run) = run else { continue };
-    if runs_on_connections(&db, &run, &ids)? {
+  for run in db.unfinished_runs()? {
+    // A run that cannot be read may be on the account: the project counts as unreadable.
+    let run = run.map_err(|unreadable| unreadable.error)?;
+    if run_on_account(&db, &run, account, &ids)? {
       let key = db
         .task(run.task())?
         .map(|task| task.key().to_string())
@@ -125,19 +126,33 @@ fn project_uses(
   Ok(())
 }
 
-/// Whether a step of `run` runs an agent profile, as the run pinned it, on one of `connections`.
-fn runs_on_connections(
+/// Whether `run`, which has not ended, is on `account`: an agent of it started on the account (its session is kept
+/// in the account's folder), or a step runs on a connection on it (`connections`): one a person chose for this run,
+/// else its profile's as the run pinned it.
+fn run_on_account(
   db: &ProjectDb,
   run: &orchester_core::run::Run,
+  account: &AgentAccount,
   connections: &[ConnectionId],
 ) -> Result<bool, StoreError> {
+  if db
+    .invocation_accounts(run.id())?
+    .iter()
+    .any(|(_, started_on)| *started_on == account.id())
+  {
+    return Ok(true);
+  }
   for step in run.snapshot().steps() {
     let StepExecutor::Agent { profile, .. } = step.executor() else {
       continue;
     };
-    if let Some(version) = db.version::<AgentProfile>(profile.resource, profile.number)?
-      && connections.contains(&version.body().connection())
-    {
+    let connection = match db.step_connection(run.id(), step.key())? {
+      Some(chosen) => Some(chosen),
+      None => db
+        .version::<AgentProfile>(profile.resource, profile.number)?
+        .map(|version| version.body().connection()),
+    };
+    if connection.is_some_and(|connection| connections.contains(&connection)) {
       return Ok(true);
     }
   }

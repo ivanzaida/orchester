@@ -91,19 +91,37 @@ impl Workspace {
         let folder = self
           .planned_folder(new.cli, new.name.as_str())
           .ok_or(AccountsError::NoFolderHere)?;
-        std::fs::create_dir_all(&folder).map_err(AccountsError::CreateFolder)?;
+        // Where accounts' folders go may be named (`ORCHESTER_ACCOUNTS_DIR`): never inside a repository either.
+        if let Some(repository) = folders::repository_of(&folders::found(&folder), &self.projects()?) {
+          return Err(AccountsError::Folder(FolderProblem::InsideRepository(repository)));
+        }
         AccountFolder::Created(folder)
       }
       NewFolder::Bring(folder) => {
         if let Some(problem) = self.brought_folder_problem(new.cli, &folder)? {
           return Err(AccountsError::Folder(problem));
         }
-        AccountFolder::Brought(folder)
+        AccountFolder::Brought(folders::found(&folder))
       }
     };
     let account = AgentAccount::new(AgentAccountId::generate(), new.cli, new.name, folder, Timestamp::now())
       .map_err(AccountsError::Account)?;
-    self.db.lock().add_agent_account(&account)?;
+    let made = match account.folder() {
+      AccountFolder::Created(folder) => {
+        std::fs::create_dir_all(folder).map_err(AccountsError::CreateFolder)?;
+        Some(folder)
+      }
+      AccountFolder::Own | AccountFolder::Brought(_) => None,
+    };
+    if let Err(error) = self.db.lock().add_agent_account(&account) {
+      // The folder was made for this account only, and is empty: refused (a name taken), it goes again.
+      if let Some(folder) = made
+        && let Err(removed) = std::fs::remove_dir(folder)
+      {
+        tracing::warn!(%removed, folder = %folder.display(), "an unused account folder stays");
+      }
+      return Err(error.into());
+    }
     Ok(account)
   }
 
@@ -137,13 +155,26 @@ impl Workspace {
 
   /// Removes the account as `move_to` and `trash` say: its connections in every listed project move first, then
   /// the account leaves the list, then its folder goes to the Recycle Bin / Trash if asked. Refused for Default,
-  /// while a run is on it, and for a folder Orchester did not create.
+  /// while a run that has not ended is on it, while a listed project can't be read (a run there may be on it), and
+  /// for a folder Orchester did not create.
   pub fn remove_agent_account(&self, id: AgentAccountId, move_to: MoveTo, trash: bool) -> Result<(), AccountsError> {
     let account = self.agent_account(id)?.ok_or(StoreError::AgentAccountNotFound(id))?;
     let accounts = self.agent_accounts()?;
     let projects = self.projects()?;
-    let in_use = !uses::uses(&account, &projects).running.is_empty();
+    let uses = uses::uses(&account, &projects);
+    if !uses.unreadable.is_empty() {
+      return Err(AccountsError::ProjectsUnreadable(uses.unreadable));
+    }
+    let in_use = !uses.running.is_empty();
     let removal = Removal::plan(&account, move_to, trash, &accounts, in_use).map_err(AccountsError::Removal)?;
+    // A folder that is gone leaves nothing to move to the bin; one that is no longer the folder Orchester made
+    // there (a link or a junction now, or reached through one) is not moved.
+    let trash = removal.trash().filter(|folder| folder.exists());
+    if trash.is_some_and(|folder| !folders::still_created_here(folder)) {
+      return Err(AccountsError::Removal(
+        orchester_core::account::RemovalError::FolderNotCreated,
+      ));
+    }
     let target = match removal.move_to() {
       MoveTo::Account(target) => accounts
         .iter()
@@ -158,7 +189,7 @@ impl Workspace {
       MoveTo::NoAccount => None,
     };
     self.db.lock().remove_agent_account(id, moved_to, Timestamp::now())?;
-    if let Some(folder) = removal.trash() {
+    if let Some(folder) = trash {
       orchester_exec::trash::move_to_trash(folder).map_err(AccountsError::Trash)?;
     }
     Ok(())
