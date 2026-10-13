@@ -26,13 +26,21 @@ pub fn own_folder(cli: AccountCli) -> Option<PathBuf> {
     .or_else(|| Some(home()?.join(cli.own_folder_name())))
 }
 
-/// What is wrong with `folder` as a brought folder of an account beside `accounts` (every CLI's) and each CLI's own
-/// folder, if anything; every path is compared as the file system resolves it.
+/// What is wrong with `folder` as a brought folder of an account beside `accounts` (every CLI's), each CLI's own
+/// folder and `account_root`, where Orchester creates new accounts' folders, if anything; every path is compared as
+/// the file system resolves it.
 pub fn brought_problem(
   folder: &Path,
   accounts: &[AgentAccount],
   projects: &[RegisteredProject],
+  account_root: Option<&Path>,
 ) -> Option<FolderProblem> {
+  if let Some(root) = account_root.map(found)
+    && plain_full_path(folder)
+    && overlap(&found(folder), &root)
+  {
+    return Some(FolderProblem::AccountsFolder);
+  }
   let repository = plain_full_path(folder)
     .then(|| repository_of(&found(folder), projects))
     .flatten();
@@ -43,6 +51,11 @@ pub fn brought_problem(
     home().as_deref(),
     &found,
   )
+}
+
+/// Whether one of `left` and `right` is the other or lies inside it.
+pub(super) fn overlap(left: &Path, right: &Path) -> bool {
+  within(left, right) || within(right, left)
 }
 
 /// `path` as the file system resolves it, links and junctions followed; as written when it can't be resolved (a

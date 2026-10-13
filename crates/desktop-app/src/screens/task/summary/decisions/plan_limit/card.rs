@@ -366,6 +366,10 @@ impl ChoiceCard<'_> {
           [("time", reset_time(ctx, resets, now))],
         )
         .to_string(),
+      // Beside *Try again now* (waiting for a known reset) the note is short enough for one line at 1440.
+      None if self.choice.get() == Choice::Wait && resets.is_some() => {
+        ctx.t("decisions.planLimit.waitNoteShort").to_string()
+      }
       None => ctx.t("decisions.planLimit.waitNote").to_string(),
     }
   }

@@ -1331,6 +1331,7 @@
       "insideRepository": "This folder is inside the repository {{repository}}. Choose one outside every project and repository.",
       "folderNotAbsolute": "Choose a folder by its full path.",
       "folderOutside": "Choose a folder in your home folder's dot folders or in your applications' data, where agents ask before reading.",
+      "accountsFolder": "This is Orchester's folder for the accounts it creates, or lies in it or holds it. Choose a folder of your own outside it.",
       "createFolder": "The account's folder could not be created. The log has the system's reason.",
       "unsupported": "Accounts other than Default are not supported for this CLI on this computer yet.",
       "removeDefault": "Default is the CLI's own folder and can't be removed.",
@@ -1340,7 +1341,7 @@
       "projectsUnreadable": "{{projects}} could not be read, so a run there may be on this account. Remove it once they open.",
       "trashFailed": "Removed. Its folder stays at {{folder}} because the system could not move it to the Recycle Bin or Trash; the log has the system's reason.",
       "noTrash": "This window can't move folders to the Recycle Bin or Trash. Untick it to remove the account and keep its folder.",
-      "holdsAnotherAccount": "This folder holds another account's folder, which would go with it, so it can't be moved to the Recycle Bin or Trash.",
+      "holdsAnotherAccount": "This folder holds another account's folder or lies inside one, so moving it to the Recycle Bin or Trash would take part of that account. It can't be moved there.",
       "cliMissing": "The CLI isn't on the PATH. Install it, then check again.",
       "folderMissing": "The account's folder {{folder}} no longer exists.",
       "terminal": "The terminal could not be opened. Run the command in a terminal of your own."

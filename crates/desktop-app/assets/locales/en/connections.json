@@ -363,6 +363,8 @@
       "same": "{{email}}, same as {{account}} · shares its limits",
       "signedIn": "Signed in · the CLI doesn't say who",
       "notChecked": "Not checked yet · Settings › Accounts checks it",
+      "signedInInline": "signed in · the CLI doesn't say who",
+      "notCheckedInline": "not checked yet · Settings › Accounts checks it",
       "changeNote": "Takes effect at each agent's next start: a paused or stopped step continues on the new account as a new session.",
       "plan": "{{plan}} plan",
       "weekly": "weekly {{used}}% used",

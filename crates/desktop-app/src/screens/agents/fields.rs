@@ -456,7 +456,7 @@ fn connection_detail(
   accounts: &crate::services::accounts::Accounts,
   readings: &orchester_core::connection::plan_limits::PlanReadings,
 ) -> (String, bool) {
-  use crate::services::accounts::{account_name, identity_detail, short_state};
+  use crate::services::accounts::{DetailPlace, account_name, identity_detail, short_state};
   let (Some(cli), Some(account)) = (
     orchester_core::account::AccountCli::of(connection.provider()),
     accounts.of_connection(connection.account(), connection.provider()),
@@ -478,7 +478,12 @@ fn connection_detail(
     );
     return (text.to_string(), true);
   }
-  let detail = identity_detail(ctx, account, accounts, readings.of_account(account.id()));
+  let detail = identity_detail(
+    ctx,
+    (account, accounts),
+    readings.of_account(account.id()),
+    DetailPlace::AfterComma,
+  );
   let text = ctx.t_args(
     "agents.connectionDetail",
     [("cli", cli), ("account", name), ("detail", detail)],

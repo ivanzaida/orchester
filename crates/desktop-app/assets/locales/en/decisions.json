@@ -165,6 +165,7 @@
       "tryNow": "Try again now",
       "continueNow": "Continue now on {{connection}}",
       "waitNote": "Until then the run stays stopped and holds no agent slot. You can change the choice at any time.",
+      "waitNoteShort": "Until then the run stays stopped and holds no agent slot.",
       "waitConfirmed": "Waiting: Orchester continues the run at {{time}} by itself and holds no agent slot until then. You can still continue now on another account.",
       "fiveHour": "5-hour",
       "weekly": "Weekly",

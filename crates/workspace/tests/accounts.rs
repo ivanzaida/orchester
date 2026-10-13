@@ -373,8 +373,8 @@ fn accounts_a_brought_folder_is_judged_as_the_file_system_resolves_it() {
   );
   assert_eq!(
     problem(&created.join("inner")),
-    Some(FolderProblem::Taken(work.id())),
-    "inside another account's folder"
+    Some(FolderProblem::AccountsFolder),
+    "inside another account's folder, in the folder Orchester creates accounts' folders in"
   );
   let target = repo.path().join(".claude-ci");
   fs::create_dir(&target).expect("a folder in the repository");

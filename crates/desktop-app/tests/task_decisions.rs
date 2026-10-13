@@ -155,6 +155,15 @@ impl Page {
       .join(" ")
   }
 
+  fn bounds(&mut self, id: &str) -> lurq::core::ElementRect {
+    self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  }
+
   fn has(&mut self, id: &str) -> bool {
     self.window.tree.get_element_by_id(id).is_some()
   }
@@ -329,6 +338,13 @@ fn decision_plan_limit_offers_the_reset_and_no_other_account_without_one() {
     "a person's confirmation, not a locked label"
   );
   assert_eq!(page.text("plan-limit-offline"), OFFLINE);
+  // Beside *Continue at …* and *Try again now*, the note keeps to one line at 1440.
+  assert_eq!(
+    page.text("plan-limit-note"),
+    "Until then the run stays stopped and holds no agent slot."
+  );
+  let (note, button) = (page.bounds("plan-limit-note"), page.bounds("plan-limit-continue"));
+  assert!(note.height <= button.height, "{note:?} wraps beside {button:?}");
   let accounts = page.text("plan-limit-accounts");
   assert!(
     accounts.contains("account Default · stopped at its plan limit"),

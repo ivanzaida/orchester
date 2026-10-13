@@ -497,6 +497,7 @@ fn open_in_settings(ctx: &mut Ctx, account: &orchester_core::account::AgentAccou
     ctx.t_args("connections.account.openInSettings", [("account", name.as_str())]),
   )
   .icon(Icon::ArrowUpRight)
+  .bounded_label()
   .on_click(move || {
     navigation.go(crate::routes::Route::Accounts(crate::routes::AccountsView::of(
       id,

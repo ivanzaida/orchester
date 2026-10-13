@@ -185,13 +185,12 @@ pub(super) fn move_connections(
   Ok(())
 }
 
-/// Moves `connection` to `target` ([`Connection::follow_account`]); on another account it is checked there at once, as
-/// choosing an account in Edit connection does, so it stays usable when the CLI is signed in there.
+/// Moves `connection` to `target`, another account or the same one in another folder, and checks it there at once,
+/// as choosing an account in Edit connection does: the folder may be signed out, or signed in to someone else, and a
+/// check made in the old folder would let a run start that the CLI then refuses.
 fn follow(connection: &mut Connection, target: ConnectionAccount) -> Result<(), AccountsError> {
-  connection.follow_account(target).map_err(AccountsError::Connection)?;
-  if connection.last_check().is_none()
-    && let Some(check) = crate::connections::probe::recheck(connection)
-  {
+  connection.set_account(target).map_err(AccountsError::Connection)?;
+  if let Some(check) = crate::connections::probe::recheck(connection) {
     connection
       .record_check(check)
       .expect("the check was made for the connection's own kind");

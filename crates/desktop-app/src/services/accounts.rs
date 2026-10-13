@@ -93,16 +93,31 @@ pub fn short_state(ctx: &Ctx, account: &AgentAccount) -> Option<String> {
   Some(ctx.t(key).to_string())
 }
 
+/// Where an account's detail stands: on a line of its own, or after a comma in a sentence (`account Work, …`), where
+/// it starts in lower case.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum DetailPlace {
+  Line,
+  AfterComma,
+}
+
 /// Who is signed in to `account`, its plan and the week's use (`WaKJN`): or the account it shares a sign-in with, or
 /// that no check has read it yet. `reading` is the account's last plan reading.
 pub fn identity_detail(
   ctx: &Ctx,
-  account: &AgentAccount,
-  accounts: &Accounts,
+  (account, accounts): (&AgentAccount, &Accounts),
   reading: Option<&LimitReading>,
+  place: DetailPlace,
 ) -> String {
+  let (not_checked, signed_in) = match place {
+    DetailPlace::Line => ("connections.account.notChecked", "connections.account.signedIn"),
+    DetailPlace::AfterComma => (
+      "connections.account.notCheckedInline",
+      "connections.account.signedInInline",
+    ),
+  };
   if account.state(Platform::current()) == AccountState::NotChecked {
-    return ctx.t("connections.account.notChecked").to_string();
+    return ctx.t(not_checked).to_string();
   }
   let identity = account.last_check().and_then(|check| check.known_identity());
   let email = identity.and_then(|identity| identity.email.clone());
@@ -130,7 +145,7 @@ pub fn identity_detail(
     );
   }
   if parts.is_empty() {
-    parts.push(ctx.t("connections.account.signedIn").to_string());
+    parts.push(ctx.t(signed_in).to_string());
   }
   parts.join(&*ctx.t("connections.account.separator"))
 }

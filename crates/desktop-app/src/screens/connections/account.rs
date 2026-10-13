@@ -25,7 +25,7 @@ use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
   navigation::Navigation,
   routes::{AccountsView, Route},
-  services::accounts::{Accounts, identity_detail, short_state},
+  services::accounts::{Accounts, DetailPlace, identity_detail, short_state},
   ui::{
     choice_field::{Choice, ChoiceField},
     icon::Icon,
@@ -93,7 +93,10 @@ fn detail(ctx: &Ctx, account: &AgentAccount, accounts: &Accounts, reading: Optio
     );
     return (text.to_string(), true);
   }
-  (identity_detail(ctx, account, accounts, reading), false)
+  (
+    identity_detail(ctx, (account, accounts), reading, DetailPlace::Line),
+    false,
+  )
 }
 
 /// The choices of the accounts of `provider`'s CLI (Default last), then *Add or manage accounts…*. The field shows

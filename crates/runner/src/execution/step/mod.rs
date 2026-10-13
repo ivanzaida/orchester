@@ -237,6 +237,8 @@ impl RunTask {
     if !self.board.take(self.run.id(), execution, work) {
       return Ok(false);
     }
+    // A person's *Try now* holds until the agent has a slot: with every slot busy, the step tries again later.
+    self.try_at_plan_limit.take_if(|asked| *asked == execution);
     let workspace = Workspace::of(&self.root, &self.run, &self.worktree, execution, start);
     let mut continuation = self.begin_step(execution)?;
     self.keep_session_on_its_account(execution, &mut continuation)?;

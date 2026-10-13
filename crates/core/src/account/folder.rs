@@ -20,6 +20,9 @@ pub enum FolderProblem {
   Taken(AgentAccountId),
   /// Neither in a dot folder of the home folder nor in the applications' data.
   OutsideCredentialPlaces,
+  /// The folder Orchester creates new accounts' folders in, a folder inside it, or one holding it: a folder created
+  /// later would land in the brought one, and removing either account would take part of the other's.
+  AccountsFolder,
 }
 
 /// The name of a folder Orchester creates for an account of `program` named `name`: `<program>-<name>` in lower

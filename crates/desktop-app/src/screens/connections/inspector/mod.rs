@@ -206,11 +206,13 @@ fn footer(
     .with_children(more)
     .with_children(failure)
     .with_children(rows.into_iter().enumerate().map(|(index, actions)| {
+      // Buttons that don't fit side by side go on below (a long account name in *Open … in Settings*).
       Row::new()
         .id(format!("connection-inspector-actions-{index}"))
         .width(Dimension::Pct(100.0))
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
+        .wrap()
         .with_children(actions)
     }))
     .with_children(reasons)

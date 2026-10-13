@@ -88,12 +88,17 @@ fn connections_name_their_account_and_a_person_chooses_another_in_edit_connectio
 
 /// Freelance, a Codex account its CLI says is signed out, and a Codex connection on it.
 fn signed_out_freelance(seeded: &Seeded) -> (AgentAccount, ConnectionId) {
+  signed_out(seeded, "Freelance")
+}
+
+/// An account named `account` its CLI says is signed out, and a Codex connection on it.
+fn signed_out(seeded: &Seeded, account: &str) -> (AgentAccount, ConnectionId) {
   let folder = seeded.window.data.dir.path().join("codex-freelance");
   std::fs::create_dir_all(&folder).expect("the account's folder");
   let mut freelance = AgentAccount::new(
     AgentAccountId::generate(),
     AccountCli::Codex,
-    Name::new("Freelance").expect("a name"),
+    Name::new(account).expect("a name"),
     AccountFolder::Created(folder.clone()),
     Timestamp::now(),
   )
@@ -113,7 +118,7 @@ fn signed_out_freelance(seeded: &Seeded) -> (AgentAccount, ConnectionId) {
   app.save_agent_account(&freelance).expect("its check");
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
-    Name::new("Codex · Freelance").expect("a name"),
+    Name::new(&format!("Codex · {account}")).expect("a name"),
     AgentProvider::CodexCli,
     folder.join("codex.cmd"),
     Timestamp::now(),
@@ -197,4 +202,36 @@ fn connections_on_a_signed_out_account_send_the_person_to_settings_and_show_its_
       .text("connection-plan-limits")
       .contains("5-hour 12% · weekly 41%")
   );
+}
+
+/// The bounds of `id` as laid out.
+fn bounds(seeded: &mut Seeded, id: &str) -> lurq::core::ElementRect {
+  seeded
+    .window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"))
+}
+
+#[test]
+fn connections_signed_out_footer_keeps_both_buttons_inside_it_whatever_the_account_name() {
+  for account in [
+    "Freelance",
+    "Freelance work for the northern region clients and their many projects",
+  ] {
+    let mut seeded = Seeded::new("accounts");
+    let (_, id) = signed_out(&seeded, account);
+    let view = ConnectionsView::new(ConnectionsTab::AgentProviders).with_selected(id);
+    seeded.go(ProjectPage::Connections(view));
+    seeded.until("Open in Settings", |seeded| seeded.exists("connection-open-account"));
+    let row = bounds(&mut seeded, "connection-inspector-actions-0");
+    for button in ["connection-open-account", "connection-edit"] {
+      let inside = bounds(&mut seeded, button);
+      assert!(
+        inside.x >= row.x && inside.x + inside.width <= row.x + row.width + 0.5,
+        "{button} of {account} at {inside:?} runs past the footer's actions {row:?}"
+      );
+    }
+  }
 }

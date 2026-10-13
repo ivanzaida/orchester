@@ -337,6 +337,11 @@ fn agents_connection_menu_names_each_connections_cli_and_account() {
   screen.until("the connections", |s| s.exists("agent-connection-option-0"));
   let entry = screen.text("agent-connection-option-0");
   assert!(entry.contains("account Default"), "{entry}");
+  // What follows the comma goes on in lower case ("account Default, not checked yet · …").
+  let (_, detail) = entry
+    .split_once("account Default, ")
+    .expect("the account's detail after a comma");
+  assert!(detail.chars().next().is_some_and(char::is_lowercase), "{entry}");
   assert!(
     screen.exists("agent-connection-option-0-icon"),
     "each entry leads with its icon"

@@ -1,6 +1,6 @@
 //! Accounts that move and folders that go: a brought folder is checked beside every CLI's accounts; a removal never
-//! bins a folder that holds another account's; connections that follow an account stay checked; and a trash that
-//! fails says the account was removed and where its folder stays.
+//! bins a folder that holds another account's; connections that follow an account or its folder are checked again
+//! there; and a trash that fails says the account was removed and where its folder stays.
 
 use std::{fs, path::PathBuf, sync::Arc};
 
@@ -109,9 +109,14 @@ fn checked_at(repo: &std::path::Path, id: ConnectionId) -> Option<Timestamp> {
 
 #[test]
 fn account_moves_a_brought_folder_is_checked_beside_every_clis_accounts() {
-  let Setup { workspace, .. } = setup();
-  let work = add(&workspace, AccountCli::ClaudeCode, "Work");
-  let inside = work.folder().path().expect("a folder").join("codex");
+  let Setup { data, workspace } = setup();
+  let work = brought_as_before(
+    data.path(),
+    AccountCli::ClaudeCode,
+    "Work",
+    data.path().join("claude-work"),
+  );
+  let inside = data.path().join("claude-work").join("codex");
   let problem = workspace.brought_folder_problem(&inside).expect("checked");
   assert_eq!(
     problem,
@@ -149,7 +154,7 @@ fn account_moves_a_removal_never_bins_a_folder_that_holds_another_account() {
 }
 
 #[test]
-fn account_moves_connections_that_follow_a_folder_keep_their_check() {
+fn account_moves_connections_that_follow_a_folder_are_checked_again_there() {
   let Setup { data, workspace } = setup();
   let client = add(&workspace, AccountCli::Codex, "Client");
   let (repo, connection) = project_on(&workspace, &client);
@@ -164,17 +169,51 @@ fn account_moves_connections_that_follow_a_folder_keep_their_check() {
     .save_agent_account_folder(&moved)
     .expect("saved");
   workspace.open(repo.path()).expect("opened");
-  let stored = ProjectDb::open(repo.path())
-    .expect("open")
-    .connection(connection)
-    .expect("read")
-    .expect("stored");
+  let stored = AgentConnection::try_from(
+    ProjectDb::open(repo.path())
+      .expect("open")
+      .connection(connection)
+      .expect("read")
+      .expect("stored"),
+  )
+  .expect("an agent connection");
   assert_eq!(stored.account(), &ConnectionAccount::of(&moved));
-  assert_eq!(
-    checked_at(repo.path(), connection),
-    before,
-    "the same sign-in: its check stays"
+  assert!(
+    stored.last_check().map(|check| check.at) > before,
+    "checked again in the new folder, which may be signed in to someone else"
   );
+  assert!(
+    !stored.status().is_usable(),
+    "the old folder's \"signed in\" does not carry over"
+  );
+}
+
+#[test]
+fn account_moves_choosing_a_folder_checks_the_accounts_connections_there() {
+  let Setup { data, workspace } = setup();
+  let client = add(&workspace, AccountCli::Codex, "Client");
+  let (repo, connection) = project_on(&workspace, &client);
+  fs::remove_dir_all(client.folder().path().expect("a folder")).expect("the folder goes");
+  let chosen = data.path().join("codex-client-elsewhere");
+  fs::create_dir_all(&chosen).expect("the person's folder");
+  workspace
+    .choose_agent_account_folder(client.id(), &chosen)
+    .expect("chosen");
+  let stored = AgentConnection::try_from(
+    ProjectDb::open(repo.path())
+      .expect("open")
+      .connection(connection)
+      .expect("read")
+      .expect("stored"),
+  )
+  .expect("an agent connection");
+  assert!(
+    stored
+      .last_check()
+      .is_some_and(|check| check.at > Timestamp::from_unix_millis(1)),
+    "checked again in the chosen folder"
+  );
+  assert!(!stored.status().is_usable(), "not the old folder's sign-in");
 }
 
 #[test]
@@ -217,4 +256,72 @@ fn account_moves_a_trash_that_fails_says_the_account_was_removed() {
       .all(|account| account.id() != work.id()),
     "the account is removed"
   );
+}
+
+/// An account brought past the folder rules, as an older Orchester could, stored as is.
+fn brought_as_before(data: &std::path::Path, cli: AccountCli, account: &str, folder: PathBuf) -> AgentAccount {
+  fs::create_dir_all(&folder).expect("the folder");
+  let brought = AgentAccount::new(
+    AgentAccountId::generate(),
+    cli,
+    name(account),
+    AccountFolder::Brought(folder),
+    Timestamp::now(),
+  )
+  .expect("an account");
+  AppDb::open(&data.join("orchester.db"))
+    .expect("the app database")
+    .add_agent_account(&brought)
+    .expect("added");
+  brought
+}
+
+#[test]
+fn account_moves_the_accounts_folder_is_never_brought_nor_what_holds_or_lies_in_it() {
+  let Setup { data, workspace } = setup();
+  let root = data.path().join("accounts");
+  fs::create_dir_all(root.join("inner")).expect("the accounts' folder");
+  for folder in [root.clone(), root.join("inner"), data.path().to_path_buf()] {
+    assert_eq!(
+      workspace.brought_folder_problem(&folder).expect("checked"),
+      Some(FolderProblem::AccountsFolder),
+      "{}",
+      folder.display()
+    );
+  }
+}
+
+#[test]
+fn account_moves_a_new_folder_never_lands_in_a_brought_one() {
+  let Setup { data, workspace } = setup();
+  let old = brought_as_before(data.path(), AccountCli::Codex, "Old", data.path().join("accounts"));
+  let refused = workspace.add_agent_account(NewAccount {
+    cli: AccountCli::Codex,
+    name: name("Work"),
+    folder: NewFolder::Create,
+  });
+  assert!(
+    matches!(refused, Err(AccountsError::Folder(FolderProblem::Taken(id))) if id == old.id()),
+    "{refused:?}"
+  );
+}
+
+#[test]
+fn account_moves_a_removal_never_bins_a_folder_inside_another_accounts() {
+  let Setup { data, workspace } = setup();
+  let work = add(&workspace, AccountCli::Codex, "Work");
+  // Brought past the rules: the whole accounts' folder, Work's inside it.
+  brought_as_before(
+    data.path(),
+    AccountCli::ClaudeCode,
+    "Everything",
+    data.path().join("accounts"),
+  );
+  let folder = work.folder().path().expect("a folder").to_path_buf();
+  let refused = workspace.remove_agent_account(work.id(), MoveTo::NoAccount, true);
+  assert!(
+    matches!(refused, Err(AccountsError::HoldsAnotherAccount)),
+    "{refused:?}"
+  );
+  assert!(folder.is_dir(), "the folder stays, part of Everything's");
 }

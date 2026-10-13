@@ -36,8 +36,8 @@ pub enum AccountsError {
   /// This window has no Recycle Bin or Trash to move folders to (a test, a QA copy without one).
   #[error("no Recycle Bin or Trash to move the folder to")]
   NoTrash,
-  /// The folder holds another account's folder, or a CLI's own folder, which would go to the bin with it.
-  #[error("the folder holds another account's folder")]
+  /// The folder holds or lies in another account's folder, or a CLI's own folder: binning it takes part of that.
+  #[error("the folder holds or lies in another account's folder")]
   HoldsAnotherAccount,
   /// Claude Code accounts other than Default on macOS (decision 10).
   #[error("accounts other than Default are not supported for this CLI on this platform yet")]
@@ -69,6 +69,7 @@ impl AccountsError {
       }
       Self::Folder(FolderProblem::NotAbsolute) => Message::new("accounts.errors.folderNotAbsolute"),
       Self::Folder(FolderProblem::OutsideCredentialPlaces) => Message::new("accounts.errors.folderOutside"),
+      Self::Folder(FolderProblem::AccountsFolder) => Message::new("accounts.errors.accountsFolder"),
       Self::CreateFolder(_) => Message::new("accounts.errors.createFolder"),
       Self::NoFolderHere | Self::Unsupported => Message::new("accounts.errors.unsupported"),
       Self::Removal(RemovalError::Default) => Message::new("accounts.errors.removeDefault"),

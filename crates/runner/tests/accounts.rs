@@ -355,6 +355,12 @@ async fn accounts_a_reset_timer_continues_only_the_stop_it_waits_for() {
 
 /// A second task of the project, queued on its pipeline as the first is.
 fn another_task(root: &Path) -> orchester_core::id::TaskId {
+  // As the first task's: the fake Claude hits its account's plan limit unless the account has room.
+  task_with_brief(root, "Hit the plan limit")
+}
+
+/// A task of the project with `brief`, queued on its pipeline as the first is.
+fn task_with_brief(root: &Path, brief: &str) -> orchester_core::id::TaskId {
   use orchester_core::{
     resource::{Pipeline, ResourceKind},
     store::{ResourceStore, TaskStore},
@@ -369,8 +375,7 @@ fn another_task(root: &Path) -> orchester_core::id::TaskId {
     .number();
   let details = TaskDetails {
     title: orchester_core::name::Name::new("Say hello again").expect("a title"),
-    // As the first task's: the fake Claude hits its account's plan limit unless the account has room.
-    brief: "Hit the plan limit".to_owned(),
+    brief: brief.to_owned(),
     acceptance_criteria: vec!["It says hello".to_owned()],
     pipeline: Some(pipeline),
     limits: TaskLimits::new(None, None).expect("limits"),
@@ -451,6 +456,56 @@ async fn accounts_a_person_tries_a_waiting_run_on_its_own_account_now() {
     &RunStatus::Succeeded,
     "tried on Work again, now with room"
   );
+}
+
+/// A person's *Try now* holds until the step's agent has a slot: with every slot taken when the run continues, the
+/// step waits for one and then asks the CLI, rather than waiting for the reset again without asking.
+#[tokio::test(flavor = "multi_thread")]
+async fn accounts_a_try_now_waits_for_a_free_agent_slot_and_still_asks_the_cli() {
+  let (project, _work, _personal, _) = at_the_limit();
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let slots = |count: u32| NonZeroU32::new(count).expect("above zero");
+  scheduler
+    .attach(
+      AttachSession::Fresh {
+        previous_end: orchester_ipc::SessionEnd::Clean,
+      },
+      slots(2),
+    )
+    .await
+    .expect("attached");
+  // An agent that keeps working on Work, started before Work reached its limit.
+  let busy = scheduler
+    .start_run(IdempotencyKey::generate(), task_with_brief(root, "Keep working."))
+    .await
+    .expect("the busy run starts");
+  let invoked = |root: &Path, run| {
+    ProjectDb::open(root)
+      .expect("open")
+      .invocations(run)
+      .expect("read")
+      .len()
+  };
+  wait_for(root, &mut events, busy, |_| invoked(root, busy) == 1).await;
+  let first = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the first run starts");
+  wait_for(root, &mut events, first, stopped_at_plan_limit).await;
+  let second = scheduler
+    .start_run(IdempotencyKey::generate(), another_task(root))
+    .await
+    .expect("the second run starts");
+  wait_for(root, &mut events, second, stopped_at_plan_limit).await;
+  try_now(&scheduler, second).await;
+  // Every slot is taken now: the busy run's agent holds the only one.
+  scheduler.set_agent_slots(slots(1)).await.expect("lowered");
+  scheduler.cancel_run(busy).await.expect("cancelled");
+  wait_for(root, &mut events, second, |run| {
+    stopped_at_plan_limit(run) && invoked(root, second) == 1
+  })
+  .await;
 }
 
 /// Tries `run` on its own account now once its task settled the stop.

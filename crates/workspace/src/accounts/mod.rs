@@ -80,7 +80,12 @@ impl Workspace {
   pub fn brought_folder_problem(&self, folder: &Path) -> Result<Option<FolderProblem>, StoreError> {
     let accounts = self.agent_accounts()?;
     let projects = self.projects()?;
-    Ok(folders::brought_problem(folder, &accounts, &projects))
+    Ok(folders::brought_problem(
+      folder,
+      &accounts,
+      &projects,
+      self.account_root.as_deref(),
+    ))
   }
 
   /// Adds an account, creating its folder or taking the person's, not checked yet: *Add account* checks a brought
@@ -97,6 +102,13 @@ impl Workspace {
         // Where accounts' folders go may be named (`ORCHESTER_ACCOUNTS_DIR`): never inside a repository either.
         if let Some(repository) = folders::repository_of(&folders::found(&folder), &self.projects()?) {
           return Err(AccountsError::Folder(FolderProblem::InsideRepository(repository)));
+        }
+        // Nor in a folder brought before the rule that keeps them out of the accounts' folder, nor holding one.
+        if let Some(brought) = self.agent_accounts()?.iter().find(|account| {
+          matches!(account.folder(), AccountFolder::Brought(brought)
+            if folders::overlap(&folders::found(&folder), &folders::found(brought)))
+        }) {
+          return Err(AccountsError::Folder(FolderProblem::Taken(brought.id())));
         }
         AccountFolder::Created(folder)
       }
@@ -203,8 +215,8 @@ impl Workspace {
   }
 
   /// Refused unless `folder`, `account`'s, may go to the trash: this window has one, it is still the folder Orchester
-  /// made there (not a link or a junction now, nor reached through one), and it holds no other account's folder nor a
-  /// CLI's own folder. Checked before anything is removed.
+  /// made there (not a link or a junction now, nor reached through one), and it neither holds nor lies in another
+  /// account's folder or a CLI's own folder. Checked before anything is removed.
   fn trashable(&self, account: &AgentAccount, folder: &Path, accounts: &[AgentAccount]) -> Result<(), AccountsError> {
     if !self.trash.is_set() {
       return Err(AccountsError::NoTrash);
@@ -214,17 +226,14 @@ impl Workspace {
         orchester_core::account::RemovalError::FolderNotCreated,
       ));
     }
-    let others = accounts
+    let mut others = accounts
       .iter()
       .filter(|other| other.id() != account.id())
       .filter_map(|other| match other.folder().path() {
         Some(path) => Some(path.to_path_buf()),
         None => folders::own_folder(other.cli()),
       });
-    if others
-      .map(|other| folders::found(&other))
-      .any(|other| orchester_core::account::within(&other, &folders::found(folder)))
-    {
+    if others.any(|other| folders::overlap(&folders::found(&other), &folders::found(folder))) {
       return Err(AccountsError::HoldsAnotherAccount);
     }
     Ok(())
@@ -241,7 +250,7 @@ impl Workspace {
       .filter(|other| other.id() != id)
       .collect();
     let projects = self.projects()?;
-    if let Some(problem) = folders::brought_problem(folder, &others, &projects) {
+    if let Some(problem) = folders::brought_problem(folder, &others, &projects, self.account_root.as_deref()) {
       return Err(AccountsError::Folder(problem));
     }
     account
