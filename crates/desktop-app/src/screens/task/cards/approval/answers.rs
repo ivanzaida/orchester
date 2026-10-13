@@ -3,17 +3,21 @@
 //! *Or answer more widely* a tile each for *Approve similar in this run*, *Approve everything in this run* and
 //! *Always allow…*, saying what it covers before it is chosen. An answer the request does not offer stays in
 //! place, faded, with a lock and why. *Always allow…* and *Deny with a message* are not built (D6).
+//!
+//! A wider answer lets the run's agents do more, so it is a person's (`docs/stable-build.md`): its tile asks in
+//! place under the tiles, as a Connections page asks what a save widens (`In-place confirmation` `RWODj`), and
+//! only that question's confirm sends it. While the question shows, window input from MCP clients is refused
+//! unless the person let automation answer approvals.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    events::{InputSource, input_source},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Button, Column, Row, Spacer, Text},
-  core::ElementRef,
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -35,7 +39,8 @@ use super::{
   words,
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate},
+  mcp::input_gate::Guarded,
+  screens::connections::widen::{WidenConfirm, WidenProps},
   theme::{DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -57,7 +62,7 @@ pub(super) const fn approval_answer(given: Given) -> ApprovalAnswer {
 
 /// What the answers act on: the card's key and element id, the request, its choices once read, the run's
 /// number, the open project its runner takes the answer for, the tab's answers, *Approve once*, which
-/// takes the focus when the tab opens on the card, and the window's input gate, which the wider answers ask.
+/// takes the focus when the tab opens on the card, and the wider answer the card asks to confirm, if any.
 pub(super) struct Answering<'a> {
   pub(super) card: (RunId, &'a Arc<str>),
   pub(super) id: &'a str,
@@ -67,7 +72,7 @@ pub(super) struct Answering<'a> {
   pub(super) open: Option<OpenProject>,
   pub(super) decisions: &'a Decisions,
   pub(super) once: &'a ElementRef,
-  pub(super) gate: Option<InputGate>,
+  pub(super) asking: &'a Signal<Option<Given>>,
 }
 
 impl Answering<'_> {
@@ -120,7 +125,7 @@ impl Answering<'_> {
   }
 }
 
-pub(super) fn answers(ctx: &Ctx, answering: &Answering<'_>) -> Element {
+pub(super) fn answers(ctx: &mut Ctx, answering: &Answering<'_>) -> Element {
   let id = answering.id;
   let with_message = ActionButton::new(
     format!("{id}-deny-message"),
@@ -160,18 +165,20 @@ pub(super) fn answers(ctx: &Ctx, answering: &Answering<'_>) -> Element {
       [("agent", answering.request.agent.as_str())],
     ),
   );
+  let wider = wider(ctx, answering);
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .child(row)
     .with_children((answering.decisions.busy() && answering.sending().is_none()).then(|| held(ctx, id)))
     .child(reason)
-    .child(wider(ctx, answering))
+    .child(wider)
     .into()
 }
 
-/// *Or answer more widely*: Approve similar, Approve everything in this run, Always allow.
-fn wider(ctx: &Ctx, answering: &Answering<'_>) -> Element {
+/// *Or answer more widely*: Approve similar, Approve everything in this run, Always allow; then the question
+/// that confirms the one chosen.
+fn wider(ctx: &mut Ctx, answering: &Answering<'_>) -> Element {
   let id = answering.id;
   let run = answering.run.to_string();
   let similar = match answering.shown.map(|shown| &shown.choices.similar) {
@@ -213,6 +220,12 @@ fn wider(ctx: &Ctx, answering: &Answering<'_>) -> Element {
   } else {
     "cards.approval.alwaysTool"
   });
+  let asked = match answering.asking.get() {
+    Some(Given::ApproveSimilar) => similar.clone().ok().map(|covers| (Given::ApproveSimilar, covers)),
+    Some(Given::ApproveEverything) => everything.clone().ok().map(|covers| (Given::ApproveEverything, covers)),
+    _ => None,
+  };
+  let question = asked.and_then(|(given, covers)| confirm_wider(ctx, answering, given, covers));
   Column::new()
     .id(format!("{id}-wider"))
     .width(Dimension::Pct(100.0))
@@ -235,6 +248,7 @@ fn wider(ctx: &Ctx, answering: &Answering<'_>) -> Element {
       &ctx.t("cards.approval.always"),
       &always,
     ))
+    .with_children(question)
     .into()
 }
 
@@ -258,39 +272,61 @@ fn tile(
     Ok(covers) => covers,
     Err(reason) => return locked(&id, &ctx.t(title), &reason),
   };
-  let open = match answering.hold(given) {
-    Ok(open) => open,
-    Err(under_way) => {
-      let glyph = if under_way { Icon::LoaderCircle } else { glyph };
-      return inert(tile_frame(&id, glyph, (&ctx.t(title), &covers)))
-        .opacity(DISABLED_OPACITY)
-        .describe("state", if under_way { "loading" } else { "disabled" })
-        .into();
-    }
-  };
-  let press = person_only(answering.gate.clone(), answering.press(given, open));
+  if let Err(under_way) = answering.hold(given) {
+    let glyph = if under_way { Icon::LoaderCircle } else { glyph };
+    return inert(tile_frame(&id, glyph, (&ctx.t(title), &covers)))
+      .opacity(DISABLED_OPACITY)
+      .describe("state", if under_way { "loading" } else { "disabled" })
+      .into();
+  }
+  let asking = answering.asking.clone();
+  let asked = asking.get() == Some(given);
   Focus::Form
     .apply(tile_frame(&id, glyph, (&ctx.t(title), &covers)))
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .cursor(CursorIcon::Pointer)
-    .describe("state", "enabled")
-    .on_click(move |_| press())
+    .describe("state", if asked { "asking" } else { "enabled" })
+    .on_click(move |_| asking.set(Some(given)))
     .into()
 }
 
-/// A wider answer lets the run's agents do more: input from an MCP client takes it only under the person's
-/// stored consent to let automation answer approvals (`docs/stable-build.md`), checked as it lands.
-fn person_only(gate: Option<InputGate>, press: impl Fn() + Send + Sync + 'static) -> impl Fn() + Send + Sync + 'static {
-  move || {
-    let allowed = gate
-      .as_ref()
-      .is_some_and(|gate| gate.widening_allowed(Guarded::ApprovalWidening));
-    if input_source() == InputSource::Synthetic && !allowed {
-      tracing::warn!("synthetic input reached a wider approval answer; not taken");
-      return;
-    }
-    press();
-  }
+/// The question that confirms the wider answer the card asks about, under its tiles, while it can be sent: what
+/// it covers, confirm, and *Keep asking*, which takes the question back.
+fn confirm_wider(ctx: &mut Ctx, answering: &Answering<'_>, given: Given, covers: Arc<str>) -> Option<Element> {
+  let open = answering.hold(given).ok()?;
+  let (name, title, confirm) = match given {
+    Given::ApproveSimilar => (
+      "similar",
+      "cards.approval.confirm.similarTitle",
+      "cards.approval.confirm.similar",
+    ),
+    Given::ApproveEverything => (
+      "everything",
+      "cards.approval.confirm.everythingTitle",
+      "cards.approval.confirm.everything",
+    ),
+    Given::ApproveOnce | Given::Deny | Given::Answers | Given::ApprovePlan => return None,
+  };
+  let run = answering.run.to_string();
+  let press = answering.press(given, open);
+  let (sent, kept) = (answering.asking.clone(), answering.asking.clone());
+  Some(ctx.mount_keyed::<WidenConfirm>(
+    &format!("{}-widen-{name}", answering.id),
+    WidenProps {
+      id: format!("{}-widen", answering.id).into(),
+      card: true,
+      automation: Guarded::ApprovalWidening,
+      title: ctx.t_args(title, [("run", run.as_str())]),
+      reasons: vec![covers].into(),
+      confirm: ctx.t(confirm),
+      keep: ctx.t("cards.approval.confirm.keep"),
+      on_confirm: Arc::new(move || {
+        sent.set(None);
+        press();
+      }),
+      on_keep: Arc::new(move || kept.set(None)),
+    },
+  ))
 }
 
 /// A tile for an answer that is not offered: faded, a lock for its glyph, and why.

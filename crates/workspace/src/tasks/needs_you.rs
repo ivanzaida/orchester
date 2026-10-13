@@ -9,7 +9,7 @@
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
-  id::{RunId, TaskId},
+  id::{RunId, StepExecutionId, TaskId},
   question::AskedQuestions,
   run::{RunNumber, TaskPhase},
   task::Task,
@@ -22,7 +22,7 @@ use super::{
   conversation::Conversation,
   data::ProjectTasks,
   detail::TaskDetail,
-  list::{AwaitedDecision, AwaitedPlan, AwaitedQuestion, Latest, LatestRun},
+  list::{AwaitedDecision, AwaitedPlan, AwaitedQuestion, Latest, LatestRun, StepWait},
   standing::CurrentStep,
   timeline::{
     self, Item, Sources, approval_key,
@@ -115,21 +115,10 @@ impl ProjectTasks {
       .iter()
       .map(|shown| self.approval_item(shown))
       .collect();
-    items.extend(
-      self
-        .asked
-        .iter()
-        .filter(|asked| asked.waits())
-        .filter_map(|asked| self.choice_item(asked)),
-    );
-    let answered_in_place: Vec<TaskId> = items.iter().filter_map(|item| Some(item.task.as_ref()?.id)).collect();
-    items.extend(
-      self
-        .tasks
-        .iter()
-        .filter(|task| !answered_in_place.contains(&task.id()))
-        .filter_map(|task| self.run_item(task)),
-    );
+    items.extend(self.waiting_choices().filter_map(|asked| self.choice_item(asked)));
+    for task in self.tasks.iter() {
+      self.run_items(task, &mut items);
+    }
     items.sort_by_key(|item| item.since);
     items
   }
@@ -185,29 +174,64 @@ impl ProjectTasks {
     })
   }
 
-  /// What `task`'s latest run waits for from the person, if anything.
-  fn run_item(&self, task: &Task) -> Option<WaitingItem> {
+  fn waiting_choices(&self) -> impl Iterator<Item = &AskedQuestions> {
+    self.asked.iter().filter(|asked| asked.waits())
+  }
+
+  /// Adds to `items` what `task`'s latest run waits for from the person besides its tool requests and its
+  /// questions with suggested answers: being recorded interrupted, a decision after its retries, and each
+  /// step's plan and question. A step that ended with a question with suggested answers is that question,
+  /// listed once. A run that waits for a person without anything that can be read is one item still.
+  fn run_items(&self, task: &Task, items: &mut Vec<WaitingItem>) {
     let Some(Latest::Run(latest)) = self.phases.get(&task.id()) else {
-      return None;
+      return;
     };
-    let kind = match latest.phase {
-      TaskPhase::Interrupted if !latest.lost_runner => WaitingKind::Interrupted {
-        checkpoint: latest.checkpoint.clone(),
-      },
-      phase if phase.needs_you() => match (&latest.plan, &latest.decision) {
-        (Some(plan), _) => WaitingKind::Plan(plan.clone()),
-        (None, Some(decision)) => WaitingKind::Decision(decision.clone()),
-        (None, None) => WaitingKind::Question(latest.question.clone()),
-      },
-      _ => return None,
-    };
-    Some(WaitingItem {
+    let item = |step: Option<CurrentStep>, kind| WaitingItem {
       task: Some(WaitingTask::of(task)),
       run: Some((latest.id, latest.number)),
-      step: latest.step.clone(),
+      step,
       since: latest.updated_at,
       kind,
-    })
+    };
+    if latest.phase == TaskPhase::Interrupted && !latest.lost_runner {
+      items.push(item(
+        latest.step.clone(),
+        WaitingKind::Interrupted {
+          checkpoint: latest.checkpoint.clone(),
+        },
+      ));
+      return;
+    }
+    if !latest.phase.needs_you() {
+      return;
+    }
+    let before = items.len();
+    if let Some(decision) = &latest.decision {
+      items.push(item(latest.step.clone(), WaitingKind::Decision(decision.clone())));
+    }
+    for waiting in &latest.waiting {
+      let kind = match &waiting.wait {
+        StepWait::Plan(plan) => WaitingKind::Plan(plan.clone()),
+        StepWait::Answer(_) if self.chosen_at(latest.id, waiting.execution) => continue,
+        StepWait::Answer(question) => WaitingKind::Question(question.clone()),
+      };
+      items.push(item(waiting.step.clone(), kind));
+    }
+    let asks_elsewhere = self
+      .pending_tool_approvals
+      .iter()
+      .any(|shown| shown.approval.run == latest.id)
+      || self.waiting_choices().any(|asked| asked.request.run() == latest.id);
+    if items.len() == before && !asks_elsewhere {
+      items.push(item(latest.step.clone(), WaitingKind::Question(None)));
+    }
+  }
+
+  /// Whether `execution` of `run` waits on a question with suggested answers, which is listed for it.
+  fn chosen_at(&self, run: RunId, execution: StepExecutionId) -> bool {
+    self
+      .waiting_choices()
+      .any(|asked| asked.request.run() == run && asked.request.execution() == execution)
   }
 }
 

@@ -13,7 +13,7 @@ mod words;
 
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
-  core::ElementRef,
+  core::{ElementRef, Signal},
   node::{Element, padding::Padding},
 };
 use orchester_core::run::ToolApprovalDecision;
@@ -29,7 +29,6 @@ use super::{
   frame::waiting_frame,
 };
 use crate::{
-  mcp::input_gate::InputGate,
   project::{Projects, TasksState},
   theme::ExtraSpacing,
 };
@@ -54,14 +53,17 @@ pub(super) fn card(ctx: &mut Ctx, place: Place, card: &ApprovalCard) -> Element 
 
 struct ApprovalView {
   once: ElementRef,
+  /// The wider answer the card asks the person to confirm, if any.
+  asking: Signal<Option<Given>>,
 }
 
 impl Component for ApprovalView {
   type Props = ApprovalProps;
 
-  fn create(_ctx: &mut Ctx) -> Self {
+  fn create(ctx: &mut Ctx) -> Self {
     Self {
       once: ElementRef::new(),
+      asking: ctx.signal(None),
     }
   }
 
@@ -88,7 +90,7 @@ impl Component for ApprovalView {
       open: place.open(ctx),
       decisions: &decisions,
       once: &self.once,
-      gate: ctx.use_context::<InputGate>(),
+      asking: &self.asking,
     };
     if focus && answering.open.is_some() && !decisions.busy() {
       ctx.focus(&self.once);

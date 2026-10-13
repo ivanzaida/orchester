@@ -175,3 +175,109 @@ fn needs_you_leaves_out_a_run_that_only_lost_its_runner() {
   );
   assert_eq!(away.needs_you(), tasks.needs_you());
 }
+
+/// A run of the parallel pipeline with each of its three steps started at `now`, by key.
+fn parallel_run(fixture: &mut Fixture, title: &str, now: i64) -> (Run, [orchester_core::id::StepExecutionId; 3]) {
+  let task = fixture.task(title, at(now));
+  let mut run = fixture.started_run(task, at(now));
+  let execution = |run: &Run, key: &str| {
+    run
+      .current_attempt()
+      .expect("attempt")
+      .executions()
+      .iter()
+      .find(|execution| execution.step().as_str() == key)
+      .expect("the step runs")
+      .id()
+  };
+  let (research, docs) = (execution(&run, "research"), execution(&run, "docs"));
+  for step in [research, docs] {
+    let events = run.start_step(step, at(now)).expect("the step starts beside Implement");
+    fixture.record(&run, &events);
+  }
+  (run.clone(), [execution(&run, "implement"), research, docs])
+}
+
+#[test]
+fn needs_you_lists_each_step_that_waits_in_one_run() {
+  let mut fixture = Fixture::parallel();
+  let (mut run, [_, research, docs]) = parallel_run(&mut fixture, "Plan zoom", 10);
+  fixture.propose(&mut run, "1. Zoom.", at(20));
+  let events = run
+    .wait_step(research, WaitReason::Message, at(30))
+    .expect("Research waits for an answer");
+  fixture.record(&run, &events);
+  let invocation = fixture
+    .db
+    .start_invocation(run.id(), docs, &ModelId::new("gpt-5.5").expect("model"), at(40))
+    .expect("invocation")
+    .id;
+  let approval = PendingToolApproval {
+    id: format!("{invocation}:call_1"),
+    run: run.id(),
+    execution: docs,
+    invocation,
+    agent: "Builder".to_owned(),
+    command: true,
+    scope: None,
+    server: String::new(),
+    action: "cargo doc".to_owned(),
+    target: None,
+    requested_at: at(50),
+    native: None,
+  };
+  fixture.db.request_tool_approval(&approval).expect("the request waits");
+  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let items = tasks.waiting();
+  let mut listed = kinds(&items);
+  listed.sort_unstable();
+  assert_eq!(
+    listed,
+    ["approval", "plan", "question"],
+    "a request does not hide its run's other steps"
+  );
+  let steps: Vec<_> = items
+    .iter()
+    .filter(|item| !matches!(item.kind, WaitingKind::Approval(_)))
+    .map(|item| item.step.as_ref().map(|step| step.name.to_string()))
+    .collect();
+  assert_eq!(steps, [Some("Implement".to_owned()), Some("Research".to_owned())]);
+}
+
+#[test]
+fn needs_you_lists_a_step_end_question_with_options_once() {
+  let mut fixture = Fixture::parallel();
+  let (mut run, [_, research, docs]) = parallel_run(&mut fixture, "Place the docs button", 10);
+  for (step, now) in [(research, 20), (docs, 30)] {
+    let events = run
+      .wait_step(step, WaitReason::Message, at(now))
+      .expect("the step waits for an answer");
+    fixture.record(&run, &events);
+  }
+  let invocation = fixture
+    .db
+    .start_invocation(run.id(), research, &ModelId::new("gpt-5.5").expect("model"), at(15))
+    .expect("invocation")
+    .id;
+  let options = vec![
+    QuestionOption::new("Top bar", None),
+    QuestionOption::new("Sidebar", None),
+  ];
+  let asked = QuestionRequest::new(
+    "ask-1".to_owned(),
+    (run.id(), research, invocation),
+    "Designer".to_owned(),
+    vec![Question::new("Where should the docs button go?", None, options, false).expect("a question")],
+    (at(20), QuestionTurn::StepEnd),
+  )
+  .expect("a request");
+  fixture.db.ask_questions(&asked).expect("the question waits");
+  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let mut listed = kinds(&tasks.waiting());
+  listed.sort_unstable();
+  assert_eq!(
+    listed,
+    ["choice", "question"],
+    "Research's question is its card; Docs still waits for its own answer"
+  );
+}

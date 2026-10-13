@@ -20,7 +20,7 @@ use orchester_workspace::{background, messages, tasks::needs_you::InPlace};
 use crate::{
   project::Projects,
   screens::task::{
-    cards::{self, Place},
+    cards::{self, Decisions, Place},
     links, step_label,
   },
   services::Services,
@@ -96,6 +96,11 @@ impl Component for InPlaceCard {
       (None, None) => return loading(&format!("{}-reading", props.id), &ctx.t("needs_you.reading")).into(),
     };
     let lost = read.detail.lost_its_runner(online);
+    // The panel expands one item at a time, so its decisions follow that item's run, as a tab's follow its own.
+    ctx
+      .use_context::<Decisions>()
+      .expect("the Needs you panel provides its decisions before its cards")
+      .follow_runner(lost);
     let Some(item) = read.card(&props.key, lost) else {
       return lurq::components::Text::new(&ctx.t("needs_you.notHere"))
         .id(format!("{}-not-here", props.id))

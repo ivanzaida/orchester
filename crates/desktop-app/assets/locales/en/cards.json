@@ -167,7 +167,14 @@
       "firstLine": "{{line}} …",
       "denyTellsCodexLabel": "Deny declines it, and Codex tells {{agent}}:",
       "similarFolder": "Reads and searches outside the worktree in {{folder}} and below it, until Run {{run}} ends. Approves this one too.",
-      "similarCheck": "The check {{check}}, every call until Run {{run}} ends. Approves this one too."
+      "similarCheck": "The check {{check}}, every call until Run {{run}} ends. Approves this one too.",
+      "confirm": {
+        "similarTitle": "Approve similar requests until Run {{run}} ends?",
+        "everythingTitle": "Let Run {{run}} answer its requests itself?",
+        "similar": "Approve similar",
+        "everything": "Approve everything",
+        "keep": "Keep asking"
+      }
     },
     "held": "Another answer is on its way to the runner; this one can be given once it arrives."
   }

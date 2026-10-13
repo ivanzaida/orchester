@@ -218,39 +218,115 @@ fn needs_you_panel_answers_an_approval_in_place_through_its_card() {
   });
 }
 
-#[test]
-fn needs_you_panel_takes_no_wider_answer_from_synthetic_input() {
-  let (mut window, _) = seeded("cards");
-  open(&mut window);
-  let item = item_of(&mut window, "Add serde to the webhook payloads");
-  click(&mut window, &format!("{item}-action"));
+/// Expands the item of the task titled `title` around its approval card: the item and the card's id.
+fn expand_approval(window: &mut Window, title: &str) -> (String, String) {
+  let item = item_of(window, title);
+  click(window, &format!("{item}-action"));
   window.until("the card in place", |window| {
     !ids_under(window, &item, "cards-approval-").is_empty()
   });
-  let mut cards = ids_under(&mut window, &item, "cards-approval-");
+  let mut cards = ids_under(window, &item, "cards-approval-");
   cards.sort_by_key(String::len);
-  let similar = format!("{}-similar", cards[0]);
-  window.until("Approve similar", |window| {
-    window.tree.get_element_by_id(&similar).is_some()
-  });
-  with_synthetic_input(|| click(&mut window, &similar));
+  let card = cards[0].clone();
+  (item, card)
+}
+
+/// Lets a question that just showed live through its first passes, as a person's eye would.
+fn settle(window: &mut Window) {
   for _ in 0..20 {
     window.tree.tick_futures();
     window.pass();
   }
-  assert!(
-    window
-      .tree
-      .get_element_by_id(&format!("{}-refused", cards[0]))
-      .is_none(),
-    "an MCP client's press on a wider answer is not taken without the person's consent"
+}
+
+#[test]
+fn needs_you_panel_asks_a_person_to_confirm_a_wider_answer() {
+  let (mut window, _) = seeded("cards");
+  open(&mut window);
+  let (_, card) = expand_approval(&mut window, "Add serde to the webhook payloads");
+  let (similar, question, refused) = (
+    format!("{card}-similar"),
+    format!("{card}-widen"),
+    format!("{card}-refused"),
   );
+  window.until("Approve similar", |window| {
+    window.tree.get_element_by_id(&similar).is_some()
+  });
+  assert!(!window.link.input_gate().protecting());
   click(&mut window, &similar);
-  window.until("a person's press to go to the runner", |window| {
-    window
-      .tree
-      .get_element_by_id(&format!("{}-refused", cards[0]))
-      .is_some()
+  window.until("the question in place", |window| {
+    window.tree.get_element_by_id(&format!("{question}-confirm")).is_some()
+  });
+  let run = run_of(&mut window, &card);
+  assert_eq!(
+    text(&mut window, &format!("{question}-title")),
+    format!("Approve similar requests until Run {run} ends?")
+  );
+  assert!(
+    window.link.input_gate().protecting(),
+    "while the question shows, MCP clients' window input is refused"
+  );
+  settle(&mut window);
+  assert!(
+    window.tree.get_element_by_id(&refused).is_none(),
+    "choosing a wider answer sends nothing before it is confirmed"
+  );
+  with_synthetic_input(|| click(&mut window, &format!("{question}-confirm")));
+  settle(&mut window);
+  assert!(
+    window.tree.get_element_by_id(&refused).is_none(),
+    "an MCP client's confirm is not taken without the person's consent"
+  );
+  click(&mut window, &format!("{question}-keep"));
+  window.until("the question taken back", |window| {
+    window.tree.get_element_by_id(&question).is_none()
+  });
+  assert!(
+    !window.link.input_gate().protecting(),
+    "the lock lifts with the question"
+  );
+  assert!(window.tree.get_element_by_id(&refused).is_none());
+  click(&mut window, &similar);
+  window.until("the question again", |window| {
+    window.tree.get_element_by_id(&format!("{question}-confirm")).is_some()
+  });
+  settle(&mut window);
+  click(&mut window, &format!("{question}-confirm"));
+  // No runner here: the confirmed answer reaches none, and the card says why, as in the conversation.
+  window.until("a person's confirm to go to the runner", |window| {
+    window.tree.get_element_by_id(&refused).is_some()
+  });
+  assert!(window.tree.get_element_by_id(&question).is_none());
+  assert!(!window.link.input_gate().protecting());
+}
+
+/// The number of the run `card` belongs to, as its request says it.
+fn run_of(window: &mut Window, card: &str) -> String {
+  let covers = text(window, &format!("{card}-similar-covers"));
+  let after = covers.split("Run ").nth(1).expect("what it covers names the run");
+  after.chars().take_while(char::is_ascii_digit).collect()
+}
+
+#[test]
+fn needs_you_panel_shows_a_request_whose_run_lost_its_runner_as_the_conversation_does() {
+  let (mut window, _) = seeded("cards");
+  open(&mut window);
+  let (item, card) = expand_approval(&mut window, "Add jitter to the retries");
+  window.until("the request's state", |window| {
+    window.tree.get_element_by_id(&format!("{card}-decided")).is_some()
+  });
+  assert_eq!(
+    text(&mut window, &format!("{card}-decided")),
+    "Interrupted · Builder no longer waits for an answer"
+  );
+  assert!(
+    window.tree.get_element_by_id(&format!("{card}-approve")).is_none(),
+    "nothing answers a request no agent waits on"
+  );
+  click(&mut window, &format!("{item}-collapse"));
+  let (_, waiting) = expand_approval(&mut window, "Add serde to the webhook payloads");
+  window.until("a request its agent waits on to be answerable", |window| {
+    window.tree.get_element_by_id(&format!("{waiting}-approve")).is_some()
   });
 }
 

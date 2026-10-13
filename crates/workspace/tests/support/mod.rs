@@ -150,6 +150,63 @@ impl Fixture {
     fixture
   }
 
+  /// [`Fixture::gated`] whose pipeline runs Builder's steps Research and Docs beside its gated Implement, so
+  /// several steps of one run can wait at once.
+  pub fn parallel() -> Self {
+    let mut fixture = Self::gated();
+    let implement = fixture.snapshot.body().steps()[0].clone();
+    let StepKind::Agent {
+      profile: Some(builder), ..
+    } = &implement.kind
+    else {
+      panic!("the fixture's Implement step has a Builder profile");
+    };
+    let profiles = BTreeMap::from([(
+      *builder,
+      fixture
+        .db
+        .latest_version::<AgentProfile>(*builder)
+        .expect("read Builder")
+        .expect("Builder is published"),
+    )]);
+    let beside = |key: &str, title: &str| Step {
+      key: StepKey::new(key).expect("key"),
+      name: name(title),
+      approval_gate: false,
+      ..implement.clone()
+    };
+    let pipeline = Pipeline::new(vec![
+      implement.clone(),
+      beside("research", "Research"),
+      beside("docs", "Docs"),
+    ])
+    .expect("pipeline");
+    let delivery = fixture
+      .db
+      .create_resource(
+        Slug::new("parallel-delivery").expect("slug"),
+        name("Parallel delivery"),
+        &pipeline,
+        at(8),
+      )
+      .expect("pipeline")
+      .id();
+    let version = fixture.db.publish_draft::<Pipeline>(delivery, at(9)).expect("publish");
+    let (tools, instructions) = (BTreeMap::new(), BTreeMap::new());
+    fixture.snapshot = RunSnapshot::build(
+      delivery,
+      &version,
+      PublishedVersions {
+        profiles: &profiles,
+        tools: &tools,
+        instructions: &instructions,
+        skills: &BTreeMap::new(),
+      },
+    )
+    .expect("snapshot");
+    fixture
+  }
+
   fn with_gate(approval_gate: bool, key: &str) -> Self {
     let repo = tempfile::tempdir().expect("temporary directory");
     fs::create_dir(repo.path().join(".git")).expect("create .git");

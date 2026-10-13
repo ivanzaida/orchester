@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use orchester_core::{
+  id::StepExecutionId,
   run::{Run, StepStatus, TaskPhase},
   task_group::GroupHold,
 };
@@ -43,7 +44,12 @@ impl CurrentStep {
     let execution = last_with(StepStatus::Running)
       .or_else(|| last_with(StepStatus::Failed))
       .or_else(|| executions.last())?;
-    let key = execution.step();
+    Self::of_execution(run, execution.id())
+  }
+
+  /// The step `execution` of `run` executes.
+  pub fn of_execution(run: &Run, execution: StepExecutionId) -> Option<Self> {
+    let key = run.execution(execution)?.step();
     let snapshot = run.snapshot();
     let number = snapshot.steps().iter().position(|step| step.key() == key)? + 1;
     let name = snapshot
