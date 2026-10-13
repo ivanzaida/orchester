@@ -45,11 +45,18 @@ pub enum Panel {
   System,
   Full,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CopyReceipt {
+  pub composition: orchester_core::run::Composition,
+  pub choice: PreviewChoice,
+  pub event: InjectionEvent,
+  pub entry: Option<InstructionEntry>,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Copied {
   Not,
-  Done,
-  Failed,
+  Done(CopyReceipt),
+  Failed(CopyReceipt),
 }
 impl DevtoolsInspectable for Copied {}
 impl DevtoolsInspectable for Panel {}
@@ -59,6 +66,7 @@ pub struct Props {
   pub entry: Option<InstructionEntry>,
   pub valid: bool,
   pub input: crate::ui::prompt_input::PromptInput,
+  pub frozen: Signal<bool>,
   pub unavailable: Signal<super::fields::MissingVariables>,
   pub events: Signal<Events>,
   pub panel: Signal<Panel>,
@@ -75,6 +83,7 @@ impl PartialEq for Props {
 }
 impl DevtoolsInspectable for Props {}
 pub struct Panels {
+  pub clipboard: crate::ui::clipboard::Clipboard,
   pub choice: Signal<PreviewChoice>,
   pub event: Signal<Picked<InjectionEvent>>,
   pub search: Signal<String>,
@@ -86,6 +95,7 @@ impl Component for Panels {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
     Self {
+      clipboard: ctx.use_context::<crate::ui::clipboard::Clipboard>().unwrap_or_default(),
       choice: ctx.signal(PreviewChoice::default()),
       event: ctx.signal(Picked(InjectionEvent::Start)),
       search: ctx.signal(String::new()),

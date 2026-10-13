@@ -36,8 +36,18 @@ const GUTTER_WIDTH: f32 = 36.0;
 pub struct MissingVariables(pub Vec<Variable>);
 impl DevtoolsInspectable for MissingVariables {}
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Snapshot {
+  name: String,
+  text: String,
+  targets: Vec<Target>,
+  events: Events,
+  scope: ScopeChoice,
+}
+
 #[derive(Clone)]
 pub struct Fields {
+  pub frozen: Signal<bool>,
   pub name: Signal<String>,
   pub text: Signal<String>,
   pub input: PromptInput,
@@ -74,6 +84,7 @@ impl Fields {
     let text = ctx.signal(entry.map_or_else(String::new, |e| e.body.text().as_str().to_owned()));
     let input = PromptInput::new(ctx, text.clone());
     Self {
+      frozen: ctx.signal(false),
       input,
       unavailable: ctx.signal(MissingVariables(Variable::ALL.to_vec())),
       name: ctx.signal(entry.map_or_else(String::new, |e| e.name.to_string())),
@@ -83,12 +94,32 @@ impl Fields {
       events: ctx.signal(entry.map_or(Events::Start, |e| Events::of(e.body.events()))),
     }
   }
-  pub fn reset(&self, entry: &InstructionEntry) {
-    self.name.set(entry.name.to_string());
-    self.text.set(entry.body.text().as_str().to_owned());
-    self.targets.set(Target::of(entry.body.targets()));
-    self.events.set(Events::of(entry.body.events()));
-    self.scope.set(ScopeChoice::of(entry.body.scope()));
+  pub fn snapshot(&self) -> Snapshot {
+    Snapshot {
+      name: self.name.get_untracked(),
+      text: self.text.get_untracked(),
+      targets: self.targets.get_untracked(),
+      events: self.events.get_untracked(),
+      scope: self.scope.get_untracked(),
+    }
+  }
+  pub fn reload(&self, entry: &InstructionEntry, requested: &Snapshot) {
+    let current = self.snapshot();
+    if current.name == requested.name {
+      self.name.set(entry.name.to_string());
+    }
+    if current.text == requested.text {
+      self.text.set(entry.body.text().as_str().to_owned());
+    }
+    if current.targets == requested.targets {
+      self.targets.set(Target::of(entry.body.targets()));
+    }
+    if current.events == requested.events {
+      self.events.set(Events::of(entry.body.events()));
+    }
+    if current.scope == requested.scope {
+      self.scope.set(ScopeChoice::of(entry.body.scope()));
+    }
   }
   pub fn instruction(&self) -> Result<Instruction, FormErrors> {
     InstructionForm {
@@ -107,7 +138,7 @@ impl Fields {
     errors: Option<&FormErrors>,
   ) -> Element {
     let mut name = FieldInput::new("instruction-name", ctx.t("instructions.name"), self.name.clone());
-    if existing {
+    if existing || self.frozen.get() {
       name = name.locked();
     } else if !self.name.get().is_empty()
       && let Err(error) = orchester_core::name::Name::new(&self.name.get())
@@ -126,23 +157,12 @@ impl Fields {
       .align_items(Alignment::End)
       .with_children(self.scope_fields(ctx, data))
       .with_children((!matches!(self.scope.get(), ScopeChoice::AgentRole(_))).then(|| self.targets_field(ctx, data)))
-      .child(
-        Column::new().flex(1.0).child(field(
-          "instruction-event-field",
-          Some(&ctx.t("instructions.inject")),
-          SelectField::new(
-            "instruction-event",
-            ctx.t("instructions.inject"),
-            self.events.clone(),
-            Events::ALL
-              .into_iter()
-              .map(|event| SelectOption::new(event, words::event(ctx, event)))
-              .collect(),
-          )
-          .render(ctx),
-          None,
-        )),
-      );
+      .child(Column::new().flex(1.0).child(field(
+        "instruction-event-field",
+        Some(&ctx.t("instructions.inject")),
+        self.event_field(ctx),
+        None,
+      )));
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Inset.role())
@@ -155,19 +175,36 @@ impl Fields {
       )
       .into()
   }
+  fn event_field(&self, ctx: &Ctx) -> Element {
+    let mut select = SelectField::new(
+      "instruction-event",
+      ctx.t("instructions.inject"),
+      self.events.clone(),
+      Events::ALL
+        .into_iter()
+        .map(|event| SelectOption::new(event, words::event(ctx, event)).disabled(self.frozen.get()))
+        .collect(),
+    );
+    if self.frozen.get() {
+      select = select.locked();
+    }
+    select.render(ctx)
+  }
   fn scope_fields(&self, ctx: &Ctx, data: &ProjectInstructions) -> Vec<Element> {
     let scope = self.scope.get();
-    let control = |id: &str, key: &str, options| {
+    let control = |id: &str, key: &str, options: Vec<SelectOption<ScopeChoice>>| {
+      let options = options
+        .into_iter()
+        .map(|option| option.disabled(self.frozen.get()))
+        .collect();
+      let mut select =
+        SelectField::new(id, ctx.t(key), self.scope.clone(), options).placeholder(ctx.t("instructions.choose"));
+      if self.frozen.get() {
+        select = select.locked();
+      }
       Column::new()
         .flex(1.0)
-        .child(field(
-          id,
-          Some(&ctx.t(key)),
-          SelectField::new(id, ctx.t(key), self.scope.clone(), options)
-            .placeholder(ctx.t("instructions.choose"))
-            .render(ctx),
-          None,
-        ))
+        .child(field(id, Some(&ctx.t(key)), select.render(ctx), None))
         .into()
     };
     match scope {
@@ -233,7 +270,7 @@ impl Fields {
     }));
     let placeholder = ctx.t("instructions.addRole");
     let select = Select::multiple(self.targets.clone())
-      .options(options)
+      .options(options.into_iter().map(|option| option.disabled(self.frozen.get())))
       .style(select_style(ctx))
       .height(Dimension::Px(crate::theme::ControlHeight::Md.value()))
       .width(Dimension::Pct(100.0))
@@ -260,7 +297,14 @@ impl Fields {
       .child(field(
         "instruction-targets-field",
         Some(&ctx.t("instructions.apply")),
-        Element::from(select).id("instruction-targets"),
+        Row::new()
+          .width(Dimension::Pct(100.0))
+          .opacity(if self.frozen.get() {
+            crate::theme::DISABLED_OPACITY
+          } else {
+            1.0
+          })
+          .child(Element::from(select).id("instruction-targets")),
         None,
       ))
       .into()
@@ -279,6 +323,7 @@ impl Fields {
     }
     .resolve(&theme.typography(), &theme.palette());
     let raw = self.text.get();
+    let frozen = self.frozen.clone();
     let mut input = self
       .input
       .field(ctx, text_style, self.tokens(&raw))
@@ -287,11 +332,14 @@ impl Fields {
       .rows(1, usize::MAX)
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
-      .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()));
-    if locked {
-      input = input
-        .on_input(|event: lurq::app::events::TextInputEvent| event.prevent_default())
-        .focusable(false);
+      .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
+      .on_input(move |event: lurq::app::events::TextInputEvent| {
+        if locked || frozen.get_untracked() {
+          event.prevent_default();
+        }
+      });
+    if locked || self.frozen.get() {
+      input = input.focusable(false);
     }
     let toolbar = self.prompt_toolbar(ctx, panel);
     Column::new()

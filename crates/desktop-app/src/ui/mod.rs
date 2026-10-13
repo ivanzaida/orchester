@@ -10,6 +10,7 @@ pub mod button;
 pub mod card;
 pub mod chip;
 pub mod choice_field;
+pub mod clipboard;
 pub mod code_box;
 pub mod code_editor;
 pub mod detail_row;

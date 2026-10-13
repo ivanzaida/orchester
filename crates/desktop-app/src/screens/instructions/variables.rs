@@ -113,7 +113,15 @@ fn detail(ctx: &Ctx, props: &Props, variable: Variable, resolved: Option<&Resolv
     ButtonKind::Secondary,
     ctx.t_args("instructions.insert", [("expression", expression.as_str())]),
   )
-  .on_click(move || input.report(input.insert(&expression)));
+  .on_click({
+    let frozen = props.frozen.clone();
+    move || {
+      if !frozen.get_untracked() {
+        input.report(input.insert(&expression));
+      }
+    }
+  });
+  let insert = if props.frozen.get() { insert.disabled() } else { insert };
   let mut detail = Column::new()
     .id("instruction-variable-detail")
     .width(Dimension::Pct(100.0))
@@ -141,14 +149,20 @@ fn detail(ctx: &Ctx, props: &Props, variable: Variable, resolved: Option<&Resolv
     detail = detail.child(Text::new(&ctx.t("instructions.noEmptyValue")).variant(TypographyStyle::Caption));
     if variable == Variable::RunRevision {
       detail = detail
-        .child(
-          ActionButton::new(
+        .child({
+          let frozen = props.frozen.clone();
+          let resume = ActionButton::new(
             "instruction-variable-resume",
             ButtonKind::Secondary,
             ctx.t("instructions.injectResume"),
           )
-          .on_click(move || events.set(Events::Resume)),
-        )
+          .on_click(move || {
+            if !frozen.get_untracked() {
+              events.set(Events::Resume);
+            }
+          });
+          if props.frozen.get() { resume.disabled() } else { resume }
+        })
         .child(Text::new(&ctx.t("instructions.noFallback")).variant(TypographyStyle::Caption));
     }
   }

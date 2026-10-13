@@ -4,7 +4,6 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  clipboard::copy_to_clipboard,
   components::{Column, Row, Text},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -47,7 +46,7 @@ pub fn panel(ctx: &Ctx, state: &Panels, props: &Props, catalog: &PreviewCatalog)
   };
   let sources = sources::list(ctx, &composition);
   let open = props.panel.clone();
-  let copy_button = copy_button(ctx, state, &composition);
+  let copy_button = copy_button(ctx, state, props, &composition);
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
@@ -228,19 +227,32 @@ pub fn full(ctx: &mut Ctx, state: &Panels, props: &Props, catalog: &PreviewCatal
   }
   full_frame(ctx, state, props, &composition, contents)
 }
-fn copy_button(ctx: &Ctx, state: &Panels, composition: &Composition) -> ActionButton {
+fn copy_button(ctx: &Ctx, state: &Panels, props: &Props, composition: &Composition) -> ActionButton {
+  let receipt = super::panels::CopyReceipt {
+    composition: composition.clone(),
+    choice: state.choice.get(),
+    event: state.event.get().0,
+    entry: props.entry.clone(),
+  };
+  match state.copied.get() {
+    super::panels::Copied::Done(previous) | super::panels::Copied::Failed(previous) if previous != receipt => {
+      state.copied.set(super::panels::Copied::Not);
+    }
+    _ => {}
+  }
   let copy = composition.text().to_owned();
+  let clipboard = state.clipboard.clone();
   let copied = state.copied.clone();
   let label = ctx.t(match copied.get() {
     super::panels::Copied::Not => "instructions.copyPrompt",
-    super::panels::Copied::Done => "instructions.copied",
-    super::panels::Copied::Failed => "instructions.copyFailed",
+    super::panels::Copied::Done(_) => "instructions.copied",
+    super::panels::Copied::Failed(_) => "instructions.copyFailed",
   });
   let button = ActionButton::new("instruction-copy-prompt", ButtonKind::Secondary, label).on_click(move || {
-    copied.set(if copy_to_clipboard(&copy) {
-      super::panels::Copied::Done
+    copied.set(if clipboard.copy(&copy) {
+      super::panels::Copied::Done(receipt.clone())
     } else {
-      super::panels::Copied::Failed
+      super::panels::Copied::Failed(receipt.clone())
     })
   });
   if composition
@@ -281,7 +293,7 @@ fn event_field(ctx: &Ctx, state: &Panels) -> Element {
 }
 fn full_frame(ctx: &mut Ctx, state: &Panels, props: &Props, composition: &Composition, contents: Column) -> Element {
   let back = props.panel.clone();
-  let copy = copy_button(ctx, state, composition);
+  let copy = copy_button(ctx, state, props, composition);
   let entry_name = props
     .entry
     .as_ref()

@@ -17,7 +17,7 @@ use orchester_workspace::{
     data::{InstructionEntry, ProjectInstructions},
     form::FormErrors,
   },
-  messages::{self, Message},
+  messages::Message,
 };
 
 use super::{
@@ -76,10 +76,11 @@ impl Component for Editor {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<Props>().clone();
+    let fields = Fields::new(ctx, props.tab, props.entry.as_ref());
     let editor = Self {
-      fields: Fields::new(ctx, props.tab, props.entry.as_ref()),
+      fields: fields.clone(),
       saved: ctx.signal(Saved(props.entry.clone())),
-      work: work::action(ctx, &props.project.open),
+      work: work::action(ctx, &props.project.open, &fields),
       panel: ctx.signal(match props.tab {
         Tab::Roles => Panel::Hidden,
         Tab::Steps => Panel::Preview,
@@ -91,12 +92,15 @@ impl Component for Editor {
     let selection = props.selection.clone();
     let revision = props.revision.clone();
     let fields = editor.fields.clone();
-    ctx.watch(&editor.work.state(), move |result| {
+    ctx.watch(&editor.work.action.state(), move |result| {
       selection.busy.set(result.is_pending());
+      if !result.is_pending() {
+        fields.frozen.set(false);
+      }
       if let Some(done) = result.data.as_ref().filter(|_| result.is_fulfilled()) {
         saved.set(Saved(Some(done.entry.clone())));
-        if done.reloaded {
-          fields.reset(&done.entry);
+        if let Some(requested) = &done.reload {
+          fields.reload(&done.entry, requested);
         }
         if done.published {
           published.set(done.entry.state.published().map(|v| v.get()));
@@ -127,7 +131,7 @@ impl Component for Editor {
     if props.selection.dirty.get_untracked() != dirty {
       props.selection.dirty.set(dirty);
     }
-    let busy = self.work.state().get().is_pending();
+    let busy = self.work.action.state().get().is_pending();
     if props.selection.busy.get_untracked() != busy {
       props.selection.busy.set(busy);
     }
@@ -159,6 +163,7 @@ impl Component for Editor {
         entry: live,
         valid: parsed.is_ok(),
         input: self.fields.input.clone(),
+        frozen: self.fields.frozen.clone(),
         unavailable: self.fields.unavailable.clone(),
         events: self.fields.events.clone(),
         panel: self.panel.clone(),
@@ -191,7 +196,7 @@ impl Editor {
       })
       .state()
       .get();
-    let writing = self.work.state().get();
+    let writing = self.work.action.state().get();
     if ready.is_fulfilled()
       && !writing.is_pending()
       && !writing.is_rejected()
@@ -218,24 +223,14 @@ impl Editor {
       .child(header);
     if let Some(error) = self
       .work
+      .action
       .state()
       .get()
       .error
-      .filter(|_| self.work.state().get().is_rejected())
+      .filter(|_| self.work.action.state().get().is_rejected())
     {
       let retry = self.work.clone();
-      let candidate = self
-        .fields
-        .instruction()
-        .map(|body| match saved {
-          Some(entry) if dirty => Ok(Write::Save(entry.clone(), body)),
-          Some(entry) => Ok(Write::Publish(entry.clone())),
-          None => Name::new(&self.fields.name.get())
-            .map(|name| Write::Create(name, body))
-            .map_err(|e| messages::name_error(&e)),
-        })
-        .ok()
-        .and_then(Result::ok);
+      let candidate = self.work.retry(&self.fields);
       let valid = candidate.is_some();
       let retry = ActionButton::new("instruction-retry", ButtonKind::Secondary, ctx.t("instructions.retry")).on_click(
         move || {
@@ -281,21 +276,22 @@ impl Editor {
       return body;
     };
     if props.entry.as_ref() == Some(entry)
-      && !self.work.state().get().is_rejected()
+      && !self.work.action.state().get().is_rejected()
       && !matches!(entry.state, VersionState::StaleDraft { .. })
     {
       return body;
     }
     let work = self.work.clone();
     let id = entry.id;
+    let fields = self.fields.clone();
     let reload = ActionButton::new(
       "instruction-reload",
       ButtonKind::Secondary,
       ctx.t("instructions.reload"),
     )
     .on_click(move || {
-      if !work.state().get_untracked().is_pending() {
-        work.run(Write::Reload(id));
+      if !work.action.state().get_untracked().is_pending() {
+        work.run(Write::Reload(id, fields.snapshot()));
       }
     });
     body
@@ -352,7 +348,7 @@ impl Editor {
       )
       .icon(Icon::Upload)
       .on_click(move || {
-        if !work.state().get_untracked().is_pending() {
+        if !work.action.state().get_untracked().is_pending() {
           work.run(Write::Publish(entry.clone()));
         }
       });
@@ -377,7 +373,7 @@ impl Editor {
       )
       .icon(Icon::Save)
       .on_click(move || {
-        if !work.state().get_untracked().is_pending()
+        if !work.action.state().get_untracked().is_pending()
           && let Some((name, body)) = &candidate
         {
           work.run(Write::Create(name.clone(), body.clone()));
