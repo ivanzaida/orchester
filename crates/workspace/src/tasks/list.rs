@@ -10,6 +10,7 @@ use orchester_core::{
   run::{PauseReason, PinnedVersion, Plan, PlanVersion, Run, RunLimit, RunNumber, RunStatus, Stuck, TaskPhase},
   task::{MissingDetail, Task, TaskStatus},
   time::Timestamp,
+  tokens::TokenBudget,
 };
 
 pub use super::standing::{CurrentStep, ReadinessKind};
@@ -77,6 +78,8 @@ pub struct LatestRun {
   pub updated_at: Timestamp,
   /// Stopped by the project's daily budget rather than its own limit.
   pub daily_budget: bool,
+  /// The token budget it stopped at, when its own token limit stopped it.
+  pub token_limit: Option<u64>,
   /// Running, with a pause requested: it pauses at its next checkpoint.
   pub pausing: bool,
   /// Its last checkpoint, as people read a revision.
@@ -182,6 +185,9 @@ impl LatestRun {
       number: run.number(),
       updated_at,
       daily_budget: run.status() == &RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)),
+      token_limit: (run.status() == &RunStatus::Paused(PauseReason::LimitReached(RunLimit::Tokens)))
+        .then(|| run.budget().map(TokenBudget::get))
+        .flatten(),
       pausing: run.status() == &RunStatus::Running && run.pause_requested(),
       checkpoint: run
         .last_checkpoint()

@@ -10,15 +10,25 @@ use lurq::{
 
 use super::typography::style;
 
+/// The line height the design's texts without one of their own take: Geist's own, about 14 for 11 and
+/// 16 for 12.5.
+const NATURAL_LINE: f32 = 1.27;
+
 /// Text of the Overview.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OverviewText {
   /// 11.5/600 `warning`: what a *Needs you* card waits for (`Kind` `E4ZZK` in `rkhZ2`).
   Kind,
+  /// 11/500 `text_secondary` on its natural line: a figure's name (`Label` `Xw3m5` in `Metric card`).
+  FigureLabel,
+  /// 11 `text_muted` on its natural line: what a figure counts (`Detail` `Bf2Nx` in `Metric card`).
+  FigureDetail,
+  /// 12.5 `text_primary` on its natural line: what happened to a run (`Text` `eH2AE` in `Activity row`).
+  Event,
 }
 
 impl OverviewText {
-  pub const ALL: [Self; 1] = [Self::Kind];
+  pub const ALL: [Self; 4] = [Self::Kind, Self::FigureLabel, Self::FigureDetail, Self::Event];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -27,12 +37,18 @@ impl OverviewText {
   const fn name(self) -> &'static str {
     match self {
       Self::Kind => "overview_kind",
+      Self::FigureLabel => "overview_figure_label",
+      Self::FigureDetail => "overview_figure_detail",
+      Self::Event => "overview_event",
     }
   }
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
       Self::Kind => style(11.5, FontWeight::SemiBold, 1.3, 0.0, palette.warning),
+      Self::FigureLabel => style(11.0, FontWeight::Medium, NATURAL_LINE, 0.0, palette.text_secondary),
+      Self::FigureDetail => style(11.0, FontWeight::Normal, NATURAL_LINE, 0.0, palette.text_muted),
+      Self::Event => style(12.5, FontWeight::Normal, NATURAL_LINE, 0.0, palette.text_primary),
     }
   }
 }

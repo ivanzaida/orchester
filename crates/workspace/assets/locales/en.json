@@ -41,7 +41,7 @@
       "other": "{{active}} active tasks · {{completed}} completed"
     },
     "activity": {
-      "empty": "No runs yet. Runs appear here as they start and finish.",
+      "empty": "No activity yet.",
       "unreadable": {
         "one": "No run to show: the latest run of a task could not be read. The task list marks it.",
         "other": "No run to show: the latest runs of {{count}} tasks could not be read. The task list marks them."
@@ -118,6 +118,7 @@
         "question": "{{agent}} asks: {{question}}",
         "input": "Run #{{run}} needs your input",
         "stoppedAtLimit": "Run #{{run}} stopped at its limit",
+        "tokenLimit": "Run #{{run}} stopped at its {{limit}}-token limit",
         "dailyBudget": "Run #{{run}} stopped at the project's daily budget",
         "interrupted": "Run #{{run}} was interrupted",
         "readyToMerge": "{{task}} is ready to merge: every step passed"

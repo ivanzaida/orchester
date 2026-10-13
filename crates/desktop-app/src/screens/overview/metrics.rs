@@ -6,7 +6,7 @@
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize},
   },
   components::{Column, Row, Text},
   node::dimension::Dimension,
@@ -20,7 +20,7 @@ use orchester_workspace::tasks::{
 
 use crate::{
   project::ShownProject,
-  theme::ExtraTypography,
+  theme::{ExtraTypography, OverviewText},
   ui::{
     card::{CardSurface, card_frame},
     message::message_text,
@@ -141,11 +141,11 @@ fn card(metric: &Metric<'_>, unknown: &str) -> Column {
     .padding(SpacingSize::Lg)
     .spacing(SpacingSize::Xs)
     .describe("warning", if metric.warning { "true" } else { "false" })
-    .child(Text::new(metric.label).variant(TypographyStyle::FieldLabel))
+    .child(Text::new(metric.label).variant(OverviewText::FigureLabel.role()))
     .child(value)
     .child(
       Text::new(metric.detail)
         .id(format!("{}-detail", metric.id))
-        .variant(TypographyStyle::Caption),
+        .variant(OverviewText::FigureDetail.role()),
     )
 }

@@ -119,6 +119,7 @@ impl RecoveryNotice {
           ButtonKind::Secondary,
           ctx.t("lifecycle.recovery.reviewRuns"),
         )
+        .icon(Icon::ChevronDown)
         .on_click(move || open.set(true)),
       )
       .action(

@@ -22,7 +22,7 @@ use orchester_workspace::{
 use super::{open_task, tasks::reading};
 use crate::{
   routes::TaskTab,
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, IconSize, OverviewText},
   ui::{
     card::{CardSurface, card_frame},
     icon::icon,
@@ -82,10 +82,9 @@ fn entry(ctx: &mut Ctx, project: ProjectId, run: &RecentRun) -> Button {
     .child(icon(status.icon(), IconSize::Md, status.color()))
     .child(
       Text::new(&message_text(ctx, &run.title()))
-        .variant(ExtraTypography::Lead.role())
-        .color(PaletteColor::TextPrimary)
+        .variant(OverviewText::Event.role())
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )
-    .child(Text::new(&meta).variant(TypographyStyle::Caption).nowrap())
+    .child(Text::new(&meta).variant(OverviewText::FigureDetail.role()).nowrap())
 }

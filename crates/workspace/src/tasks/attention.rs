@@ -11,6 +11,7 @@ use orchester_core::{
   run::{RunNumber, TaskPhase},
   task::Task,
   time::Timestamp,
+  tokens::compact_tokens,
 };
 
 use super::{
@@ -211,7 +212,10 @@ fn run_title(kind: NeedKind, task: &Task, latest: &LatestRun) -> Message {
       |decision| decision.title(),
     ),
     NeedKind::StoppedAtLimit if latest.daily_budget => run("overview.needs.title.dailyBudget", latest.number),
-    NeedKind::StoppedAtLimit => run("overview.needs.title.stoppedAtLimit", latest.number),
+    NeedKind::StoppedAtLimit => match latest.token_limit {
+      Some(limit) => run("overview.needs.title.tokenLimit", latest.number).with("limit", compact_tokens(limit)),
+      None => run("overview.needs.title.stoppedAtLimit", latest.number),
+    },
     NeedKind::Interrupted => run("overview.needs.title.interrupted", latest.number),
     NeedKind::ReadyToMerge => Message::new("overview.needs.title.readyToMerge").with("task", task.key().to_string()),
     NeedKind::Approval | NeedKind::Question | NeedKind::PlanReview | NeedKind::Input => {

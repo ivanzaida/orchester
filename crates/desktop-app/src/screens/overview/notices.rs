@@ -88,7 +88,8 @@ pub(super) fn tasks(ctx: &mut Ctx, project: ProjectId, tasks: &ProjectTasks) -> 
           ctx.t_args("overview.notices.open", [("task", &*notice.key)]),
           "blocked",
         ),
-        NoticeKind::Unreadable => (Icon::FileWarning, ctx.t("overview.notices.openTask"), "unreadable"),
+        // `circle-help`, as the design draws it (`pS4Z3` in `Bq82T`).
+        NoticeKind::Unreadable => (Icon::CircleHelp, ctx.t("overview.notices.openTask"), "unreadable"),
       };
       let id = format!("overview-notice-{}-{kind}", notice.key);
       let open = ActionButton::new(format!("{id}-open"), ButtonKind::Secondary, label).on_click(open_task(

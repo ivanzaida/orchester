@@ -171,6 +171,31 @@ fn overview_names_a_task_whose_run_passed_every_step_ready_to_merge() {
 }
 
 #[test]
+fn overview_says_the_token_limit_a_run_stopped_at() {
+  let mut seeded = Seeded::overview("task-states", OverviewTab::Running);
+  let tasks = seeded.tasks();
+  let limited = attention::items(&tasks)
+    .into_iter()
+    .find(|item| item.title.key == "overview.needs.title.tokenLimit")
+    .expect("the seed has a run stopped at its token limit");
+  let limit = &limited
+    .title
+    .args
+    .iter()
+    .find(|(name, _)| *name == "limit")
+    .expect("the limit")
+    .1;
+  let key = &limited.task.as_ref().expect("its task").key;
+  let card = seeded
+    .ids("overview-need-")
+    .into_iter()
+    .find(|id| id.ends_with(&format!("-{key}-limit")))
+    .expect("the limit's card");
+  let said = seeded.text(&card);
+  assert!(said.contains(&format!("{limit}-token limit")), "{said}");
+}
+
+#[test]
 fn overview_while_the_tasks_are_read_shows_dashes_and_readers_never_an_empty_page() {
   let mut seeded = Seeded::reading("tasks", true);
   let hold = seeded
