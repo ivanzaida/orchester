@@ -138,7 +138,7 @@ impl From<EmptyState> for Element {
       } else {
         Dimension::Auto
       })
-      .spacing(if empty.secrets {
+      .spacing(if empty.secrets || empty.unframed {
         ExtraSpacing::Snug.role()
       } else {
         SpacingSize::Xs

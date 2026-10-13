@@ -3,7 +3,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Row, ScrollVertical, Text},
   layout::Alignment,
@@ -115,7 +115,7 @@ impl Component for Empty {
       .on_click(move || new.open(View::New(tab))),
     );
     if let Some(scan) = read.data.as_ref().filter(|scan| !scan.items.is_empty()) {
-      empty = empty.child(findings(ctx, scan));
+      empty = empty.child(findings(ctx, scan, &props.project.open.repo_root.to_string_lossy()));
     } else if read.is_rejected() {
       empty = empty.child(field_error(
         "instructions-repository-error",
@@ -134,39 +134,57 @@ impl Component for Empty {
     .min_height(Dimension::Px(0.0))
   }
 }
-fn finding(_: &Ctx, source: &str, detail: &str) -> Element {
+fn finding(glyph: Icon, source: &str, detail: &str) -> Element {
   Row::new()
+    .id(format!("instructions-finding-{source}"))
     .width(Dimension::Pct(100.0))
+    .align_items(Alignment::Center)
     .spacing(ExtraSpacing::Loose.role())
-    .padding_top(SpacingSize::Sm)
+    .padding(lurq::node::padding::Padding::vertical(SpacingSize::Sm))
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(crate::ui::icon::icon(
+      glyph,
+      crate::theme::IconSize::Base,
+      PaletteColor::TextMuted,
+    ))
     .child(
       Text::new(source)
-        .variant(TypographyStyle::Mono)
+        .variant(crate::theme::instructions::discovery_path())
         .width(Dimension::Px(FOUND_PATH_WIDTH)),
     )
-    .child(Text::new(detail).variant(TypographyStyle::Description).flex(1.0))
+    .child(
+      Text::new(detail)
+        .variant(crate::theme::instructions::discovery_detail())
+        .flex(1.0),
+    )
     .into()
 }
-fn findings(ctx: &Ctx, scan: &RepositoryScan) -> Element {
+fn findings(ctx: &mut Ctx, scan: &RepositoryScan, root: &str) -> Element {
   let mut found = Column::new()
     .id("instructions-repository-findings")
     .width(Dimension::Pct(100.0))
     .background(PaletteColor::SurfaceRaised)
     .rounded(lurq::app::theme::RadiusSize::Lg)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
-    .padding(SpacingSize::Lg)
+    .padding(
+      lurq::node::padding::Padding::new()
+        .top(SpacingSize::Md)
+        .left(SpacingSize::Lg)
+        .right(SpacingSize::Lg)
+        .bottom(SpacingSize::Sm),
+    )
     .spacing(ExtraSpacing::Snug.role())
-    .child(
-      Text::new(&ctx.t_args("instructions.found", [("count", scan.items.len().to_string())]))
-        .variant(ExtraTypography::Strong.role()),
-    );
+    .child(findings_head(ctx, scan.items.len(), root));
   for item in scan
     .items
     .iter()
     .filter(|item| item.kind == orchester_core::agent_files::import::ItemKind::Instruction)
   {
-    found = found.child(finding(ctx, &item.source, &super::import::item_detail(ctx, item)));
+    found = found.child(finding(
+      Icon::FileText,
+      &item.source,
+      &super::import::item_detail(ctx, item),
+    ));
   }
   for folder in orchester_core::agent_files::import::SKILL_FOLDERS {
     let count = scan
@@ -176,13 +194,62 @@ fn findings(ctx: &Ctx, scan: &RepositoryScan) -> Element {
       .count();
     if count > 0 {
       found = found.child(finding(
-        ctx,
+        Icon::Folder,
         folder,
         &ctx.t_args("instructions.foundSkills", [("count", count.to_string())]),
       ));
     }
   }
-  found
-    .child(Text::new(&ctx.t("instructions.importDraftsOnly")).variant(TypographyStyle::Caption))
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding_top(crate::theme::instructions::discovery_offset())
+    .child(found.child(findings_foot(ctx)))
+    .into()
+}
+fn findings_head(ctx: &mut Ctx, count: usize, root: &str) -> Element {
+  let path = crate::ui::tooltip::Truncated::new(
+    "instructions-repository-path",
+    root,
+    crate::theme::instructions::variable_value(),
+  )
+  .mono()
+  .render(ctx);
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .align_items(Alignment::Center)
+    .spacing(SpacingSize::Sm)
+    .padding_bottom(ExtraSpacing::Snug.role())
+    .child(crate::ui::icon::icon(
+      Icon::FolderGit2,
+      crate::theme::IconSize::Md,
+      PaletteColor::TextSecondary,
+    ))
+    .child(
+      Text::new(&ctx.t_args("instructions.found", [("count", count.to_string())]))
+        .variant(ExtraTypography::Strong.role()),
+    )
+    .child(
+      Row::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .justify(lurq::layout::layout_kind::Justify::End)
+        .child(path),
+    )
+    .into()
+}
+fn findings_foot(ctx: &Ctx) -> Element {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .align_items(Alignment::Center)
+    .spacing(ExtraSpacing::Snug.role())
+    .padding_top(SpacingSize::Sm)
+    .padding_bottom(SpacingSize::Xs)
+    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(crate::ui::icon::icon(
+      Icon::ShieldCheck,
+      crate::theme::IconSize::Sm,
+      PaletteColor::TextMuted,
+    ))
+    .child(Text::new(&ctx.t("instructions.importDraftsOnly")).variant(crate::theme::instructions::discovery_note()))
     .into()
 }

@@ -358,6 +358,20 @@ fn header(ctx: &mut Ctx, props: &Props) -> Element {
 }
 pub(super) fn item_detail(ctx: &Ctx, item: &ImportItem) -> std::sync::Arc<str> {
   match &item.outcome {
+    Err(Unimportable::OnlyImports { targets }) => ctx.t_args(
+      "instructions.importOnlyPoints",
+      [
+        ("targets", targets.join(", ")),
+        (
+          "references",
+          targets
+            .iter()
+            .map(|target| format!("@{target}"))
+            .collect::<Vec<_>>()
+            .join(", "),
+        ),
+      ],
+    ),
     Ok(Candidate::Instruction { name, text }) => ctx.t_args(
       "instructions.importInstruction",
       [
@@ -369,12 +383,9 @@ pub(super) fn item_detail(ctx: &Ctx, item: &ImportItem) -> std::sync::Arc<str> {
       "instructions.importSkill",
       [("name", name.as_str().to_owned()), ("files", files.len().to_string())],
     ),
-    Err(reason) => ctx.t(match reason {
-      Unimportable::OnlyImports { .. } => "instructions.importOnlyPoints",
-      Unimportable::Empty => "instructions.importBlank",
-      Unimportable::NotText => "instructions.importNotText",
-      Unimportable::NoSkillFile => "instructions.importNoSkill",
-      Unimportable::UnsupportedFiles { .. } => "instructions.importUnsupported",
-    }),
+    Err(Unimportable::Empty) => ctx.t("instructions.importBlank"),
+    Err(Unimportable::NotText) => ctx.t("instructions.importNotText"),
+    Err(Unimportable::NoSkillFile) => ctx.t("instructions.importNoSkill"),
+    Err(Unimportable::UnsupportedFiles { .. }) => ctx.t("instructions.importUnsupported"),
   }
 }

@@ -12,6 +12,19 @@ pub fn head_top() -> SpacingSize {
 pub fn empty_top() -> SpacingSize {
   SpacingSize::extra("instructions_empty_top")
 }
+/// T1w9U starts 32 below the actions: the empty state's 14 gap plus 18.
+pub fn discovery_offset() -> SpacingSize {
+  SpacingSize::extra("instructions_discovery_offset")
+}
+pub fn discovery_path() -> TypographyStyle {
+  TypographyStyle::extra("instructions_discovery_path")
+}
+pub fn discovery_detail() -> TypographyStyle {
+  TypographyStyle::extra("instructions_discovery_detail")
+}
+pub fn discovery_note() -> TypographyStyle {
+  TypographyStyle::extra("instructions_discovery_note")
+}
 pub fn prompt_text() -> TypographyStyle {
   TypographyStyle::extra("instructions_prompt")
 }
@@ -53,6 +66,7 @@ pub(super) fn install(theme: &Theme) {
   theme.set_spacing_value(empty_top(), 56.0);
   theme.set_spacing_value(token_padding(), 3.0);
   theme.set_radius_value(token_radius(), 3.0);
+  theme.set_spacing_value(discovery_offset(), 18.0);
 }
 pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<str>, TextStyle)> {
   use super::typography::{mono, style};
@@ -76,6 +90,19 @@ pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<st
     (
       Arc::from("instructions_overline"),
       mono(style(10.5, FontWeight::Normal, 1.4, 0.6, palette.text_muted)),
+    ),
+    // T1w9U: the rows' default 16px lines, and the 15px footer line.
+    (
+      Arc::from("instructions_discovery_path"),
+      mono(style(12.0, FontWeight::Normal, 4.0 / 3.0, 0.0, palette.text_primary)),
+    ),
+    (
+      Arc::from("instructions_discovery_detail"),
+      style(12.0, FontWeight::Normal, 4.0 / 3.0, 0.0, palette.text_secondary),
+    ),
+    (
+      Arc::from("instructions_discovery_note"),
+      style(11.5, FontWeight::Normal, 15.0 / 11.5, 0.0, palette.text_muted),
     ),
   ]
   .into_iter()
