@@ -13,7 +13,7 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 
-pub use super::standing::{CurrentStep, ReadinessKind};
+pub use super::standing::{CurrentStep, ReadinessKind, RunStage};
 use crate::{
   display,
   messages::Message,

@@ -13,7 +13,7 @@ use lurq::{
   node::{Style, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
-use orchester_workspace::tasks::list::TaskRow;
+use orchester_workspace::tasks::list::{RunStage, TaskRow};
 
 use super::open_task;
 use crate::{
@@ -109,17 +109,20 @@ fn sub_line(ctx: &mut Ctx, row: &TaskRow) -> Row {
     )
 }
 
-/// The run's status with the step it is at or stopped at (`Running · 03 Implement`); a task whose run
-/// passed every step is ready to merge.
+/// The run's status with where it stands (`Running · 03 Implement`, `Ready to merge · Deliver`).
 fn status(ctx: &mut Ctx, row: &TaskRow) -> lurq::node::Element {
   let status = row.phase.map_or(Status::Unreadable, Status::of_board);
   let mut chip = StatusChip::new(format!("overview-status-{}", row.key), status);
-  if let Some(step) = &row.step {
-    let number = format!("{:02}", step.number);
-    chip = chip.detail(ctx.t_args(
-      "overview.tasks.runStep",
-      [("number", number.as_str()), ("step", &*step.name)],
-    ));
+  match RunStage::of(row.phase, row.step.as_ref()) {
+    Some(RunStage::Step(step)) => {
+      let number = format!("{:02}", step.number);
+      chip = chip.detail(ctx.t_args(
+        "overview.tasks.runStep",
+        [("number", number.as_str()), ("step", &*step.name)],
+      ));
+    }
+    Some(RunStage::Deliver) => chip = chip.detail(ctx.t("overview.tasks.deliver")),
+    None => {}
   }
   chip.render(ctx)
 }

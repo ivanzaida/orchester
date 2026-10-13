@@ -98,6 +98,11 @@
           "other": "{{count}} runs interrupted · nothing runs until the runner starts"
         }
       },
+      "recovery": {
+        "one": "1 run interrupted when Orchester closed",
+        "other": "{{count}} runs interrupted when Orchester closed",
+        "review": "Review"
+      },
       "approvals": {
         "waiting": {
           "one": "approval waiting",

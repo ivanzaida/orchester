@@ -15,6 +15,7 @@ mod counts;
 mod facts;
 mod item;
 mod operations;
+mod recovery;
 mod runner;
 
 use lurq::{
@@ -28,9 +29,12 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
-use orchester_workspace::activity::{
-  Activity, ActivityLog,
-  bar::{self, ActivitySlot},
+use orchester_workspace::{
+  activity::{
+    Activity, ActivityLog,
+    bar::{self, ActivitySlot},
+  },
+  recovery::RecoveryState,
 };
 
 pub use self::facts::{BarAction, BarFacts, Dispatch, ProjectFacts, ReadFailure, RunnerFacts, Stopping};
@@ -39,6 +43,7 @@ use self::{
   item::{frame, give_way, glyph, item, label},
 };
 use crate::{
+  lifecycle,
   mcp::McpStatus,
   project::{ProjectFeed, ProjectState, Projects, TasksState},
   routes::Route,
@@ -72,11 +77,12 @@ impl Component for StatusBar {
       .use_context::<McpStatus>()
       .expect("the root provides the MCP status before mounting the shell");
     let log = log(ctx, &services.activity);
+    let recovery = lifecycle::recovery::follow(ctx, &services.recovery);
     let projects = Projects::of(ctx);
     let shown = Route::parse(&ctx.route_path())
       .ok()
       .and_then(|route| route.project())
-      .and_then(|project| shown(&projects, project));
+      .and_then(|project| shown(&projects, project, &recovery));
     let folder_and_feed = shown
       .as_ref()
       .map(|(facts, feed)| (facts.repo_root.clone(), feed.clone()));
@@ -99,8 +105,9 @@ impl Component for StatusBar {
   }
 }
 
-/// The open `project`'s facts and its feed, once it is open.
-fn shown(projects: &Projects, project: ProjectId) -> Option<(ProjectFacts, ProjectFeed)> {
+/// The open `project`'s facts and its feed, once it is open; `recovery` says which of its interrupted runs
+/// wait for the person's decision.
+fn shown(projects: &Projects, project: ProjectId, recovery: &RecoveryState) -> Option<(ProjectFacts, ProjectFeed)> {
   let Some(ProjectState::Open(open)) = projects.state(project) else {
     return None;
   };
@@ -120,6 +127,7 @@ fn shown(projects: &Projects, project: ProjectId) -> Option<(ProjectFacts, Proje
     tasks,
     usage: feed.usage.get(),
     read_failure,
+    undecided_runs: recovery.undecided(project),
   };
   Some((facts, feed))
 }
@@ -189,15 +197,19 @@ impl Component for StatusBarView {
     // activity gives way to them.
     let beside = waiting.is_empty() || slot.beside_approvals();
     // Tasks that could not be read are the project's own unresolved failure: they take the slot until a
-    // reading succeeds.
+    // reading succeeds. Then the runs the previous session left interrupted stay pinned until the person
+    // decides about them (`uZTnL`), also while the runner starts; only a runner problem comes first.
     let unread = project.and_then(|project| project.read_failure.as_ref());
-    match (unread, &slot) {
-      (_, ActivitySlot::RunnerProblem(_) | ActivitySlot::Hidden) => {}
-      (Some(failure), _) => left.extend(activity::read_failure(ctx, failure, &dispatch)),
-      (None, ActivitySlot::Activity(slot)) if beside => {
+    let recovering = project.filter(|project| project.undecided_runs > 0);
+    match (unread, recovering, &slot) {
+      (_, _, ActivitySlot::RunnerProblem(_)) => {}
+      (Some(failure), _, ActivitySlot::Activity(_)) => left.extend(activity::read_failure(ctx, failure, &dispatch)),
+      (None, Some(project), _) => left.extend(recovery::pinned(ctx, project, &dispatch)),
+      (_, _, ActivitySlot::Hidden) => {}
+      (None, None, ActivitySlot::Activity(slot)) if beside => {
         left.extend(activity::activity(ctx, (slot, &facts.log), project, &dispatch));
       }
-      (None, ActivitySlot::Activity(_)) => {}
+      (None, None, ActivitySlot::Activity(_)) => {}
     }
     // The requests and the runs that answer their own follow Tokens today (`xommZ`).
     right.extend(waiting);

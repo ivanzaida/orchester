@@ -20,7 +20,6 @@ use lurq::{
     theme::SpacingSize,
   },
   components::Column,
-  core::Signal,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{id::ProjectId, run::InterruptCause};
@@ -41,19 +40,15 @@ use crate::{
 /// The element id of the notice.
 pub const NOTICE_ID: &str = "recovery-notice";
 
-/// The notice of `project`'s interrupted runs, if it has any to offer.
-pub struct RecoveryNotice {
-  /// The list is open (*Review runs*), or closed again (*Hide*).
-  open: Signal<bool>,
-}
+/// The notice of `project`'s interrupted runs, if it has any to offer. Whether its list is open (*Review
+/// runs*, from it or from the status bar) is the session recovery's ([`RecoveryState::reviewing`]).
+pub struct RecoveryNotice;
 
 impl Component for RecoveryNotice {
   type Props = ShownProject;
 
-  fn create(ctx: &mut Ctx) -> Self {
-    Self {
-      open: ctx.signal(false),
-    }
+  fn create(_ctx: &mut Ctx) -> Self {
+    Self
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -95,7 +90,9 @@ impl RecoveryNotice {
         }
         unread(ctx, (&services.recovery, project), &lines)
       }
-      (Reading::Read { .. }, Decision::Undecided) if !self.open.get() => self.compact(ctx, project, &runs, &services),
+      (Reading::Read { .. }, Decision::Undecided) if !state.reviewing(project) => {
+        self.compact(ctx, project, &runs, &services)
+      }
       (Reading::Read { .. }, decision) => {
         let continuing = decision == Decision::Continuing;
         self.list(ctx, (&shown, &state), &runs, continuing)
@@ -105,7 +102,7 @@ impl RecoveryNotice {
   }
   /// *2 runs were interrupted when Orchester closed*, with *Review runs* and *Continue all*.
   fn compact(&self, ctx: &Ctx, project: ProjectId, runs: &[InterruptedRun], services: &Services) -> Element {
-    let open = self.open.clone();
+    let recovery = services.recovery.clone();
     let count = runs.len();
     Notice::new(NOTICE_ID, NoticeTone::Warning, title(ctx, count))
       .body(ctx.t(plural(
@@ -120,7 +117,7 @@ impl RecoveryNotice {
           ctx.t("lifecycle.recovery.reviewRuns"),
         )
         .icon(Icon::ChevronDown)
-        .on_click(move || open.set(true)),
+        .on_click(move || recovery.review(project, true)),
       )
       .action(
         ActionButton::new(
@@ -174,7 +171,7 @@ const fn plural(count: usize, one: &'static str, other: &'static str) -> &'stati
 }
 
 /// The session's recovery; reading it in a render renders again when it changes.
-fn follow(ctx: &mut Ctx, recovery: &Recovery) -> RecoveryState {
+pub fn follow(ctx: &mut Ctx, recovery: &Recovery) -> RecoveryState {
   let state = ctx.stream(
     recovery.clone(),
     |recovery, emitter: StreamEmitter<RecoveryState, ()>| async move {

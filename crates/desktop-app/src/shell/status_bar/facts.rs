@@ -54,6 +54,8 @@ pub struct ProjectFacts {
   pub usage: Option<ProjectUsage>,
   /// Why the project's tasks could not be read, when they could not.
   pub read_failure: Option<ReadFailure>,
+  /// How many runs the previous session left interrupted wait for the person to continue them or not.
+  pub undecided_runs: usize,
 }
 
 /// The project's tasks could not be read, and why.
@@ -125,6 +127,8 @@ pub enum BarAction {
   Resolve(OperationId),
   /// Read the active project's tasks again, after a reading failed.
   ReadAgain,
+  /// Open the list of this project's interrupted runs on its Overview.
+  ReviewInterrupted(ProjectId),
 }
 
 /// Where the bar's actions go.

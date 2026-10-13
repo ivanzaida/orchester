@@ -211,7 +211,7 @@ fn overview_names_a_task_whose_run_passed_every_step_ready_to_merge() {
     .expect("the seed has a task whose run passed every step among the newest waiting");
   let key = &merging.key;
   let status = seeded.text(&format!("overview-status-{key}"));
-  assert!(status.starts_with("Ready to merge"), "{key}: {status}");
+  assert_eq!(status, "Ready to merge · Deliver", "{key} (`XirGV`)");
   let item = items
     .iter()
     .find(|item| item.task.as_ref().is_some_and(|task| task.id == merging.id))
@@ -294,4 +294,26 @@ fn overview_keeps_the_recovery_notice_above_its_heading() {
   seeded.click("recovery-review");
   assert!(seeded.shows("recovery-notice"), "the list opens in place");
   assert!(seeded.top("recovery-notice") < seeded.top("overview-header"));
+}
+
+/// The status bar's *Review* (`uZTnL`) opens the list through the session's recovery, as the notice's own
+/// *Review runs* does; the bar's item itself is `status_bar`'s (this window has no runner, whose problem
+/// takes the bar's slot first, as `KGpMB` draws).
+#[test]
+fn overview_recovery_list_opens_from_the_session_as_the_status_bar_asks_and_hides_again() {
+  let mut seeded = Seeded::overview("interrupted", OverviewTab::Running);
+  seeded.until("the recovery notice", |seeded| seeded.shows("recovery-review"));
+  let services = seeded.window.launch.services().expect("the session started").clone();
+  assert_eq!(services.recovery.state().undecided(seeded.project), 3);
+  services.recovery.review(seeded.project, true);
+  seeded.until("the list", |seeded| seeded.shows("recovery-hide"));
+  assert!(!seeded.shows("recovery-review"));
+  seeded.click("recovery-hide");
+  seeded.until("the compact notice", |seeded| seeded.shows("recovery-review"));
+  assert!(!services.recovery.state().reviewing(seeded.project));
+  assert_eq!(
+    services.recovery.state().undecided(seeded.project),
+    3,
+    "the runs wait until the person decides"
+  );
 }

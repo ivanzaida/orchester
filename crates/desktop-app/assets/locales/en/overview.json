@@ -31,6 +31,7 @@
       "title": "Tasks",
       "reading": "Reading {{project}}'s tasks…",
       "runStep": "{{number}} {{step}}",
+      "deliver": "Deliver",
       "emptyTab": "No task is in {{tab}}.",
       "viewAll": "View all tasks"
     },
@@ -53,7 +54,7 @@
       "waiting": "waiting {{time}}",
       "since": "since {{time}}",
       "emptyTitle": "Nothing needs you right now.",
-      "emptyDetail": "Approvals, questions, plans, merges and interrupted runs appear here.",
+      "emptyDetail": "Approvals, questions, plans, merges, interrupted runs and memory records appear here.",
       "action": {
         "review": "Review",
         "answer": "Answer",

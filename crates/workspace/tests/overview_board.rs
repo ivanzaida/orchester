@@ -16,6 +16,7 @@ use orchester_workspace::tasks::{
   attention::{self, NeedKind, Waited},
   board::{self, BoardTab, Figures},
   data::ProjectTasks,
+  list::{CurrentStep, RunStage},
   ready_to_run::{CheckKind, ProjectReadiness},
 };
 
@@ -209,6 +210,48 @@ fn board_needs_you_rows_say_what_waits_as_their_items_do() {
     running.detail.key, "overview.needs.title.input",
     "other tabs keep their detail"
   );
+}
+
+#[test]
+fn board_rows_name_the_step_a_run_waits_at_not_one_still_to_come() {
+  let mut fixture = support::Fixture::reviewed();
+  let task = fixture.task("Write docs", support::at(10));
+  let mut run = fixture.started_run(task, support::at(20));
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let events = run
+    .wait_step(execution, WaitReason::Message, support::at(30))
+    .expect("the step waits for a message");
+  fixture.record(&run, &events);
+  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let rows = BoardTab::NeedsYou.rows(&tasks, 6, ", ");
+  let implement = CurrentStep {
+    number: 1,
+    name: "Implement".into(),
+  };
+  assert_eq!(
+    RunStage::of(rows[0].phase, rows[0].step.as_ref()),
+    Some(RunStage::Step(&implement)),
+    "Review has not started"
+  );
+}
+
+#[test]
+fn board_rows_say_a_run_ready_to_merge_is_at_delivery() {
+  let (_fixture, tasks) = project();
+  let stage = |row: &orchester_workspace::tasks::list::TaskRow| {
+    RunStage::of(row.phase, row.step.as_ref()).map(|stage| match stage {
+      RunStage::Step(step) => Some(step.number),
+      RunStage::Deliver => None,
+    })
+  };
+  let rows = BoardTab::NeedsYou.rows(&tasks, 6, ", ");
+  let done = rows
+    .iter()
+    .find(|row| &*row.key == "KON-1")
+    .expect("KON-1 waits to be merged");
+  assert_eq!(stage(done), Some(None), "delivery");
+  let running = &BoardTab::Running.rows(&tasks, 6, ", ")[0];
+  assert_eq!(stage(running), Some(Some(1)), "its one step");
 }
 
 #[test]
