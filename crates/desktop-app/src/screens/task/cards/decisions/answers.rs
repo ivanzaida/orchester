@@ -36,6 +36,8 @@ pub(in super::super) enum Given {
   ApprovePlan,
 }
 
+impl lurq::app::component::DevtoolsInspectable for Given {}
+
 /// Why an answer did not go through.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(in super::super) enum Refused {
