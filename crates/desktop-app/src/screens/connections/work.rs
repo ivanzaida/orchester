@@ -10,16 +10,17 @@ use lurq::app::{
   component::DevtoolsInspectable,
   ctx::{Ctx, FutureAction},
 };
-use orchester_core::id::ConnectionId;
+use orchester_core::id::{AgentAccountId, ConnectionId};
 use orchester_workspace::{
   activity::OperationSpec,
   background,
   connections::{
-    data::recheck_in,
+    data::{recheck_in, set_account_in},
     github::expect_active_account_in,
     mcp::{remove_in, set_enabled_in},
   },
   messages::{self, Message},
+  workspace::Workspace,
 };
 
 use crate::services::Services;
@@ -32,6 +33,8 @@ pub(super) enum Work {
   /// Turn the MCP server on (`true`) or off for every profile that chooses it.
   SetEnabled(bool),
   Remove,
+  /// Run the agent connection on this account from now on, checked there.
+  SetAccount(AgentAccountId),
 }
 
 /// One piece of work as started.
@@ -56,9 +59,11 @@ pub(super) type WorkAction = FutureAction<Start, Done, Message>;
 
 /// The connection work of the screen; created at the same place in every render.
 pub(super) fn action(ctx: &mut Ctx) -> WorkAction {
-  let activity = Services::of(ctx).activity;
+  let Services {
+    activity, workspace, ..
+  } = Services::of(ctx);
   ctx.future_action(move |start: Start| {
-    let activity = activity.clone();
+    let (activity, workspace) = (activity.clone(), workspace.clone());
     async move {
       let Start {
         repo_root,
@@ -66,14 +71,24 @@ pub(super) fn action(ctx: &mut Ctx) -> WorkAction {
         work,
         spec,
       } = start;
-      let run = async move { background::run(move || run(&repo_root, (id, work))).await? };
+      let run = async move { background::run(move || run(&workspace, &repo_root, (id, work))).await? };
       activity.track(spec, run).await.map(|()| Done { id, work })
     }
   })
 }
 
-fn run(repo_root: &Path, (id, work): (ConnectionId, Work)) -> Result<(), Message> {
+fn run(workspace: &Workspace, repo_root: &Path, (id, work): (ConnectionId, Work)) -> Result<(), Message> {
   match work {
+    Work::SetAccount(account) => {
+      let account = workspace
+        .agent_account(account)
+        .map_err(|error| messages::store_error(&error))?
+        .ok_or_else(|| messages::store_error(&orchester_store::StoreError::AgentAccountNotFound(account)))?;
+      set_account_in(repo_root, id, &account).map_err(|error| {
+        tracing::error!(%error, "cannot run the connection on another account");
+        error.message()
+      })
+    }
     Work::Check => recheck_in(repo_root, id).map_err(|error| {
       tracing::error!(%error, "cannot store the connection check");
       error.message()

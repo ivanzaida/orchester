@@ -24,6 +24,7 @@ use crate::{
       GITHUB_GLYPH, Shown, agent_glyph, agent_line, agent_status, github_status, mcp_glyph, mcp_status, program_name,
     },
   },
+  services::accounts::Accounts,
   theme::{ConnectionsText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
@@ -43,7 +44,7 @@ const OPEN_WIDTH: f32 = 14.0;
 /// The rows of `entries`, `selected` inspected; a press on a row runs `open` with its connection.
 pub(super) fn table(
   ctx: &Ctx,
-  listed: &ProjectConnections,
+  (listed, accounts): (&ProjectConnections, &Accounts),
   entries: &[Entry<'_>],
   (selected, open): (
     Option<ConnectionId>,
@@ -60,7 +61,7 @@ pub(super) fn table(
     .with_children(entries.iter().map(|entry| {
       let id = entry.id();
       let open = open.clone();
-      row(ctx, listed, *entry, Some(id) == selected, move || open(id))
+      row(ctx, (listed, accounts), *entry, Some(id) == selected, move || open(id))
     }))
 }
 
@@ -97,7 +98,7 @@ struct Shape {
   status: Shown,
 }
 
-fn shape(ctx: &Ctx, listed: &ProjectConnections, entry: Entry<'_>) -> Shape {
+fn shape(ctx: &Ctx, (listed, accounts): (&ProjectConnections, &Accounts), entry: Entry<'_>) -> Shape {
   let agents = |count: usize| match count {
     1 => ctx.t("connections.usage.one"),
     _ => ctx.t_args("connections.usage.other", [("count", count.to_string())]),
@@ -106,7 +107,15 @@ fn shape(ctx: &Ctx, listed: &ProjectConnections, entry: Entry<'_>) -> Shape {
     Entry::Agent(connection) => Shape {
       glyph: agent_glyph(connection.provider()),
       name: connection.name().as_str().to_owned(),
-      line: agent_line(ctx, connection),
+      line: match super::super::account::named(ctx, accounts, connection.account(), connection.provider()) {
+        Some(account) => ctx
+          .t_args(
+            "connections.row.withAccount",
+            [("line", agent_line(ctx, connection)), ("account", account)],
+          )
+          .to_string(),
+        None => agent_line(ctx, connection),
+      },
       kind: ctx.t(if connection.provider().is_native() {
         "connections.type.native"
       } else {
@@ -165,7 +174,7 @@ fn mcp_line(ctx: &Ctx, server: &orchester_core::connection::mcp::McpServer) -> S
 
 fn row(
   ctx: &Ctx,
-  listed: &ProjectConnections,
+  listed: (&ProjectConnections, &Accounts),
   entry: Entry<'_>,
   selected: bool,
   open: impl Fn() + Send + Sync + 'static,

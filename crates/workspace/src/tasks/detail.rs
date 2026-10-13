@@ -88,6 +88,8 @@ pub struct RunView {
   pub version: VersionNumber,
   pub steps: Vec<StepView>,
   pub invocations: Vec<Invocation>,
+  /// The account each agent CLI invocation started on, in the order they started.
+  pub accounts: Vec<(orchester_core::id::InvocationId, orchester_core::id::AgentAccountId)>,
   /// What auto mode's reviews of its requests cost, in the order they ended.
   pub reviews: Vec<ReviewRecord>,
   /// When a paused run paused or stopped at its limit.
@@ -436,6 +438,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       .into_iter()
       .filter(AskedQuestions::waits)
       .collect(),
+    accounts: db.invocation_accounts(run.id())?,
     index: IndexUses::read(db, &invocations)?,
     invocations,
     reviews: db.reviewer_usage(run.id())?,

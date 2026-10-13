@@ -46,7 +46,8 @@
       "agentUnchecked": "{{vendor}} · {{program}}",
       "native": "{{provider}} · {{host}}",
       "github": "gh · {{host}}",
-      "githubSignedIn": "gh · {{host}} · signed in as {{account}}"
+      "githubSignedIn": "gh · {{host}} · signed in as {{account}}",
+      "withAccount": "{{line}} · account {{account}}"
     },
     "notice": {
       "providers": "Each agent can use a different provider. Choose the connection and model in each agent profile; one pipeline can mix providers.",
@@ -342,6 +343,23 @@
       "confirmOn": {
         "title": "Turn on {{name}}?",
         "keep": "Keep it off"
+      }
+    },
+    "account": {
+      "label": "Account",
+      "description": "Whose sign-in this connection runs on. Accounts are yours and shared by every project; add one or sign in to it in Settings › Accounts.",
+      "default": "Default",
+      "none": "No account",
+      "manage": "Add or manage accounts…",
+      "manageDetail": "Opens Settings › Accounts",
+      "plan": "{{plan}} plan",
+      "weekly": "weekly {{used}}% used",
+      "state": {
+        "notSignedIn": "not signed in · sign in from Settings",
+        "expired": "sign-in expired · runs won't start",
+        "cliMissing": "CLI not found",
+        "folderMissing": "folder missing · runs won't start",
+        "unsupported": "not supported on macOS yet"
       }
     }
   }

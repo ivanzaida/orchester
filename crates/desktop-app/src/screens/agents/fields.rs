@@ -299,7 +299,24 @@ impl Fields {
       }))
       .into()
   }
+  /// The project's connections, each with the account it runs on (`M42rM`): the profile has no account of its own.
   fn connection_select(&self, ctx: &mut Ctx, listed: &ProjectAgents) -> Element {
+    let accounts = crate::services::accounts::listed(ctx);
+    let label = |c: &AgentConnection| -> String {
+      let Some(account) = accounts.of_connection(c.account(), c.provider()) else {
+        return c.name().as_str().to_owned();
+      };
+      let account = account.name().map_or_else(
+        || ctx.t("agents.defaultAccount").to_string(),
+        |name| name.as_str().to_owned(),
+      );
+      ctx
+        .t_args(
+          "agents.connectionWithAccount",
+          [("connection", c.name().as_str()), ("account", &account)],
+        )
+        .to_string()
+    };
     SelectField::new(
       "agent-connection",
       ctx.t("agents.connection"),
@@ -307,7 +324,7 @@ impl Fields {
       listed
         .connections
         .iter()
-        .map(|c| SelectOption::new(c.id().to_string(), c.name().as_str()))
+        .map(|c| SelectOption::new(c.id().to_string(), label(c)))
         .collect(),
     )
     .width(Dimension::Px(CONTROL_WIDTH))

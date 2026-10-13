@@ -83,11 +83,24 @@ fn cli(
 ) -> Parts {
   let mut body: Vec<Element> = too_old(ctx, connection).into_iter().collect();
   body.push(properties(ctx, connection, inspecting).into());
+  let (start, id) = (actions.start.clone(), connection.id());
+  body.push(super::super::account::inspector_row(
+    ctx,
+    inspecting.accounts,
+    connection,
+    Arc::new(move |account| start(id, super::super::work::Work::SetAccount(account))),
+  ));
   body.push(models(ctx, connection, inspecting, actions));
   body.push(used);
   let status = connection.status_with(&inspecting.listed.secrets);
+  let account = inspecting
+    .accounts
+    .of_connection(connection.account(), connection.provider());
   let command = (status == ConnectionStatus::SignInRequired)
-    .then(|| sign_in_command(connection.provider()))
+    .then(|| match account {
+      Some(account) => Some(orchester_workspace::accounts::sign_in::command(account).text),
+      None => sign_in_command(connection.provider()).map(str::to_owned),
+    })
     .flatten()
     .map(|command| {
       CodeBox::new(

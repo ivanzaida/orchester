@@ -176,7 +176,11 @@
       "worktree": "Worktree",
       "worktreeRemoved": "Removed at {{time}}",
       "notChosen": "Not chosen yet",
-      "noCheckpoint": "None yet"
+      "noCheckpoint": "None yet",
+      "account": "Account",
+      "accountValue": "{{account}} · {{email}}",
+      "accountUnknown": "An account no longer known",
+      "defaultAccount": "Default"
     },
     "thisTask": {
       "title": "This task"

@@ -231,6 +231,8 @@
     "chooseModel": "Choose another model",
     "openConnection": "Open connection",
     "cliTooOld": "CLI {{installed}} is too old for {{model}}",
-    "cliTooOldHint": "Update the CLI to {{required}} or newer and check the connection again, or choose another model."
+    "cliTooOldHint": "Update the CLI to {{required}} or newer and check the connection again, or choose another model.",
+    "connectionWithAccount": "{{connection}} · account {{account}}",
+    "defaultAccount": "Default"
   }
 }

@@ -58,6 +58,8 @@ impl lurq::app::component::DevtoolsInspectable for Confirm {}
 /// What the inspector shows about the work on its connection.
 pub(super) struct Inspecting<'a> {
   pub listed: &'a ProjectConnections,
+  /// The person's agent accounts, which a CLI connection runs on one of.
+  pub accounts: &'a crate::services::accounts::Accounts,
   pub entry: Entry<'a>,
   pub project: &'a str,
   /// The work running on the connection now.

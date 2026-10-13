@@ -8,6 +8,7 @@
 //! account or access, editing an agent CLI connection or choosing a program file other than the copies on
 //! the search path, native connections (adding, testing, their models), and listing an MCP server's tools.
 
+mod account;
 mod add_agent;
 mod data;
 mod inspector;

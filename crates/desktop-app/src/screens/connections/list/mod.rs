@@ -34,7 +34,10 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{ConnectionsTab, ConnectionsView, NewConnection, ProjectPage, Route, Screen},
-  services::Services,
+  services::{
+    Services,
+    accounts::{self, Accounts},
+  },
   theme::{ConnectionsSpacing, ExtraSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -108,6 +111,7 @@ impl Component for ConnectionsScreen {
     // Read again after a Try again press, and when automation changed the project's connections.
     let revision = self.revision.get() + project.feed.outside.get().of(Outside::Connections);
     let loaded = data::load(ctx, project.open.repo_root.clone(), revision);
+    let accounts = accounts::listed(ctx);
     let id = project.open.project.id();
     let page = Column::new()
       .id(format!("screen-{}", Screen::Connections.name()))
@@ -134,7 +138,7 @@ impl Component for ConnectionsScreen {
     if counts[0] == 0 && view.tab() == ConnectionsTab::All {
       return page.child(no_connections(ctx, &project));
     }
-    page.child(self.body(ctx, (&project, view), &listed, &work))
+    page.child(self.body(ctx, (&project, view), (&listed, &accounts), &work))
   }
 }
 
@@ -177,7 +181,7 @@ impl ConnectionsScreen {
     &self,
     ctx: &mut Ctx,
     (project, view): (&ShownProject, ConnectionsView),
-    listed: &ProjectConnections,
+    (listed, accounts): (&ProjectConnections, &Accounts),
     work: &WorkAction,
   ) -> Element {
     let entries = data::entries(listed, view.tab());
@@ -194,11 +198,16 @@ impl ConnectionsScreen {
       .min_width(Dimension::Px(0.0))
       .height(Dimension::Pct(100.0))
       .spacing(ConnectionsSpacing::List.role())
-      .child(table::table(ctx, listed, &entries, (Some(chosen.id()), &open)))
+      .child(table::table(
+        ctx,
+        (listed, accounts),
+        &entries,
+        (Some(chosen.id()), &open),
+      ))
       .child(tab_notice(ctx, view.tab(), project))
       .child(Spacer::new().flex(1.0))
       .child(ownership(ctx, project));
-    let inspector = self.inspector(ctx, project, listed, chosen, work);
+    let inspector = self.inspector(ctx, project, (listed, accounts), chosen, work);
     Row::new()
       .id("connections-body")
       .width(Dimension::Pct(100.0))
@@ -230,7 +239,7 @@ impl ConnectionsScreen {
     &self,
     ctx: &mut Ctx,
     project: &ShownProject,
-    listed: &ProjectConnections,
+    (listed, accounts): (&ProjectConnections, &Accounts),
     entry: Entry<'_>,
     work: &WorkAction,
   ) -> Element {
@@ -249,6 +258,7 @@ impl ConnectionsScreen {
       .map(|(_, confirm)| confirm);
     let inspecting = Inspecting {
       listed,
+      accounts,
       entry,
       project: project.open.project.name().as_str(),
       running,
@@ -283,6 +293,7 @@ impl ConnectionsScreen {
         Work::Check | Work::UseActiveAccount => operations::connection_check(&open, name),
         Work::SetEnabled(enabled) => operations::mcp_server_switch(&open, name, enabled),
         Work::Remove => operations::mcp_server_remove(&open, name),
+        Work::SetAccount(_) => operations::connection_save(&open, name),
       };
       running.set(Running(Some((id, piece))));
       last.set(LastOn(Some(id)));

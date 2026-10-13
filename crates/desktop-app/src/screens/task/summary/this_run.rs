@@ -103,9 +103,13 @@ pub fn this_run(ctx: &mut Ctx, run: &RunView, root: &Path, lost: bool, lead: Opt
     row(ctx, "summary.thisRun.base", &base_value(ctx, run), DetailValue::Mono),
     checkpoint_row(ctx, run),
     row(ctx, "summary.thisRun.model", &model(ctx, run), DetailValue::Text),
-    budget_row(ctx, run),
-    cached_row(ctx, run),
   ];
+  if let Some((_, account)) = run.accounts.last() {
+    rows.push(
+      ctx.mount_keyed::<super::run_account::RunAccount>("task-this-run-account", super::run_account::Props(*account)),
+    );
+  }
+  rows.extend([budget_row(ctx, run), cached_row(ctx, run)]);
   rows.push(row(
     ctx,
     "summary.thisRun.timeLimit",
