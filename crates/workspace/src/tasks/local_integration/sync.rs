@@ -44,7 +44,8 @@ impl LocalIntegration {
 
   pub(super) fn execute_sync(&mut self) -> Result<(), IntegrationError> {
     let base = self.operation.reviewed().head.clone();
-    self.operation.ensure_task_owned(&self.task_git()?.snapshot()?)?;
+    let original = self.task_git()?.snapshot()?;
+    self.operation.ensure_task_owned(&original)?;
     let merged = self.task_git()?.text(&[
       "-c",
       "merge.conflictStyle=merge",
@@ -55,6 +56,14 @@ impl LocalIntegration {
       &base,
     ]);
     let actual = self.task_git()?.snapshot()?;
+    let merged = match merged {
+      Err(error) if actual == original => {
+        self.operation.sync_not_started(&self.main.snapshot()?, &actual)?;
+        self.save()?;
+        return Err(error.into());
+      }
+      result => result,
+    };
     if self.operation.sync_result() != Some(&actual) {
       return Err(LocalError::Reconcile.into());
     }

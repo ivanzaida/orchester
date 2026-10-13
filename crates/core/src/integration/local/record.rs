@@ -332,6 +332,23 @@ impl LocalOperation {
     Ok(())
   }
 
+  /// Release a sync intent only when neither checkout changed and no task merge started.
+  pub fn sync_not_started(&mut self, base: &Checkout, task: &Checkout) -> Result<(), LocalError> {
+    if self.phase != LocalPhase::Syncing || self.sync_result.is_none() || self.merged.is_some() {
+      return Err(LocalError::WrongPhase);
+    }
+    self.reviewed.ensure_current(base)?;
+    self.ensure_task_owned(task)?;
+    if !base.clean() || !task.clean() {
+      return Err(LocalError::ForeignOperation);
+    }
+    self.sync_result = None;
+    self.checked = None;
+    self.approved = None;
+    self.phase = LocalPhase::Prepared;
+    Ok(())
+  }
+
   pub fn task_conflicts(&mut self) -> Result<(), LocalError> {
     if self.phase != LocalPhase::Syncing {
       return Err(LocalError::WrongPhase);

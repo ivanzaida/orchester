@@ -181,8 +181,10 @@ impl LocalIntegration {
     let expected = self.operation.sync_result().ok_or(LocalError::Reconcile)?.clone();
     let original = self.operation.owned_task().ok_or(LocalError::Reconcile)?.clone();
     if task == original && task != expected {
-      self.main.ensure(self.operation.reviewed())?;
-      return self.execute_sync();
+      // An absent merge cannot distinguish an unexecuted intent from a refused Git command.
+      // Return to preparation; a new person action may sync again or cancel retained work.
+      self.operation.sync_not_started(&self.main.snapshot()?, &task)?;
+      return self.save();
     }
     if task == expected && task.operation.is_some() {
       self.operation.task_conflicts()?;

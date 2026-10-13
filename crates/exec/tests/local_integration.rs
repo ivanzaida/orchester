@@ -1,3 +1,6 @@
+#[path = "local_integration/case_collisions.rs"]
+mod case_collisions;
+
 use std::{
   fs,
   path::{Path, PathBuf},

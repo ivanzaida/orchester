@@ -12,6 +12,7 @@ mod ignore_preview;
 mod lease;
 mod merge_receipt;
 pub mod owned;
+mod path_collision;
 mod process;
 mod resolve;
 mod sync_preview;

@@ -20,14 +20,12 @@ impl LocalGit {
     }
     let entries = self.tree_entries(tree)?;
     // Sync uses --no-overwrite-ignore. Refuse collisions before it can start an owned merge.
-    if paths.iter().any(|path| {
-      let path = std::path::Path::new(path.as_str());
-      entries.keys().any(|tracked| {
-        let tracked = std::path::Path::new(tracked.as_str());
-        path.starts_with(tracked) || tracked.starts_with(path)
-      })
-    }) {
-      return Err(LocalError::Unsupported.into());
+    for path in &paths {
+      for tracked in entries.keys() {
+        if super::path_collision::collides(&self._root_owner, path, tracked)? {
+          return Err(LocalError::Unsupported.into());
+        }
+      }
     }
     let scope = tempfile::Builder::new()
       .prefix("ignore-preview-")

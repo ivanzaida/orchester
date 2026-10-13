@@ -22,6 +22,8 @@ mod schema;
 mod selection;
 #[path = "local_integration/support.rs"]
 mod support;
+#[path = "local_integration/sync_refusal.rs"]
+mod sync_refusal;
 #[path = "local_integration/worktree_removal.rs"]
 mod worktree_removal;
 

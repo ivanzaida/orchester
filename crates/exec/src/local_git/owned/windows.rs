@@ -153,6 +153,21 @@ impl Directory {
     Ok(())
   }
 
+  pub(crate) fn aliases(&self, left: &OsStr, right: &OsStr) -> Result<bool, LocalGitError> {
+    let Some(left) = self.open_regular(left, false, false)? else {
+      return Ok(false);
+    };
+    let Some(right) = self.open_regular(right, false, false)? else {
+      return Ok(false);
+    };
+    for file in [&left, &right] {
+      if file.metadata().map_err(map)?.file_attributes() & 0x400 != 0 {
+        return Err(LocalError::Unsupported.into());
+      }
+    }
+    Ok(object_identity(&left)? == object_identity(&right)?)
+  }
+
   pub(super) fn same_entry(&self, _name: &OsStr, _file: &File) -> Result<(), LocalGitError> {
     // File and every ancestor deny sharing deletion; their entries cannot be substituted.
     self.ensure_current()

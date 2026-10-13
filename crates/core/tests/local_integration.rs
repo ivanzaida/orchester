@@ -228,3 +228,44 @@ fn local_integration_abort_intent_survives_serialization_and_only_finishes_at_th
   assert!(recovered.checked().is_none());
   assert!(recovered.merged().is_none());
 }
+
+#[test]
+fn local_integration_unchanged_sync_intent_releases_only_exact_clean_checkouts() {
+  let base = checkout('a');
+  let task = checkout('b');
+  let mut operation = LocalOperation::new(RunId::generate(), base.clone()).expect("operation");
+  operation.prepared(base.clone()).expect("prepare");
+  operation.begin_sync(&base).expect("sync intent");
+  operation.own_task(task.clone());
+  let mut predicted = task.clone();
+  predicted.operation = Some("MERGE_HEAD:owned".into());
+  operation.plan_sync_result(predicted).expect("prediction");
+  assert!(!operation.can_cancel());
+  assert_eq!(
+    operation.sync_not_started(&checkout('c'), &task),
+    Err(LocalError::Stale)
+  );
+  assert_eq!(
+    operation.sync_not_started(&base, &checkout('c')),
+    Err(LocalError::ForeignOperation)
+  );
+  let mut foreign = task.clone();
+  foreign.operation = Some("MERGE_HEAD:foreign".into());
+  assert_eq!(
+    operation.sync_not_started(&base, &foreign),
+    Err(LocalError::ForeignOperation)
+  );
+  assert_eq!(operation.phase(), LocalPhase::Syncing);
+  let encoded = serde_json::to_vec(&operation).expect("journal");
+  let mut recovered: LocalOperation = serde_json::from_slice(&encoded).expect("restart");
+  recovered.resume_saved_phase();
+  recovered.sync_not_started(&base, &task).expect("safe release");
+  assert_eq!(recovered.phase(), LocalPhase::Prepared);
+  assert!(recovered.sync_result().is_none());
+  assert!(recovered.checked().is_none());
+  assert!(recovered.merged().is_none());
+  assert!(recovered.can_cancel());
+  recovered.begin_cancel(&base).expect("cancel");
+  recovered.cancellation_verified().expect("verified release");
+  assert!(!recovered.reserves_checkout());
+}

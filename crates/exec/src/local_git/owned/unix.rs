@@ -79,6 +79,19 @@ impl Directory {
     Ok(())
   }
 
+  pub(crate) fn aliases(&self, left: &OsStr, right: &OsStr) -> Result<bool, LocalGitError> {
+    let Some(left) = self.open_regular(left, false, false)? else {
+      return Ok(false);
+    };
+    let Some(right) = self.open_regular(right, false, false)? else {
+      return Ok(false);
+    };
+    let left = rustix::fs::fstat(&left).map_err(map)?;
+    let right = rustix::fs::fstat(&right).map_err(map)?;
+    self.ensure_current()?;
+    Ok(left.st_dev == right.st_dev && left.st_ino == right.st_ino)
+  }
+
   pub(super) fn same_entry(&self, name: &OsStr, file: &File) -> Result<(), LocalGitError> {
     let stat = statat(&self.file, name, AtFlags::SYMLINK_NOFOLLOW).map_err(map)?;
     let opened = rustix::fs::fstat(file).map_err(map)?;
