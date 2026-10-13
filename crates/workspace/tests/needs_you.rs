@@ -8,14 +8,16 @@ mod support;
 
 use orchester_core::{
   id::ResourceId,
+  integration::{MergeKind, RunMerge},
   memory::{
     AgentProvenance, AgentWrite, Confidence, Memory, MemoryContent, MemoryKind, MemoryScope, MemorySettings,
     MemoryStore, SecretScreen,
   },
   question::{Question, QuestionOption, QuestionRequest, QuestionTurn},
   resource::{ModelId, StepKey},
-  run::{InterruptCause, PendingToolApproval, Run, RunLimit, WaitReason},
-  store::ActivityStore,
+  revision::Revision,
+  run::{BranchName, InterruptCause, PendingToolApproval, Run, RunLimit, WaitReason},
+  store::{ActivityStore, MergeStore},
 };
 use orchester_workspace::tasks::{
   data::ProjectTasks,
@@ -326,6 +328,17 @@ fn needs_you_lists_a_limit_stop_work_ready_to_merge_and_the_memory_waiting_as_on
   let passed = fixture.task("Write docs", at(40));
   let mut done = fixture.started_run(passed, at(50));
   fixture.succeed(&mut done, at(60));
+  let shipped = fixture.task("Add sign-out", at(61));
+  let mut merged = fixture.started_run(shipped, at(62));
+  fixture.succeed(&mut merged, at(63));
+  let receipt = RunMerge {
+    run: merged.id(),
+    into: BranchName::new("main").expect("a branch"),
+    revision: Revision::new(&"b".repeat(40)).expect("a revision"),
+    kind: MergeKind::FastForward,
+    merged_at: at(64),
+  };
+  fixture.db.save_run_merge(&receipt).expect("record the merge");
   let records = [
     proposed(&run, "Index with tree-sitter.", 80),
     proposed(&done, "Docs live in docs/.", 90),
@@ -336,7 +349,16 @@ fn needs_you_lists_a_limit_stop_work_ready_to_merge_and_the_memory_waiting_as_on
     .expect("the records wait for approval");
   let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
   let items = tasks.waiting();
-  assert_eq!(kinds(&items), ["limit", "merge", "memory"]);
+  assert_eq!(
+    kinds(&items),
+    ["limit", "merge", "memory"],
+    "work whose merge was recorded waits for nothing"
+  );
+  assert_eq!(
+    items[1].task.as_ref().map(|task| &*task.title),
+    Some("Write docs"),
+    "only the run that passed every step and has no merge receipt is ready to merge"
+  );
   assert_eq!(items[0].kind, WaitingKind::StoppedAtLimit { daily_budget: false });
   assert_eq!(
     items[2].kind,
