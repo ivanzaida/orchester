@@ -877,7 +877,9 @@
       "blankDescription": "Write a description first: agents choose a skill by it",
       "blankBody": "Write the body first: it is what an agent loads"
     },
-    "library": { "loadFailed": "Skills and repository agent files could not be read." },
+    "library": {
+      "loadFailed": "Skills and repository agent files could not be read."
+    },
     "editorErrors": {
       "nameRequired": "Enter a skill name.",
       "nameTaken": "{{name}} is already a skill in this project. Choose another name.",
@@ -1311,6 +1313,25 @@
       "heldStale": "{{holder}} has taken this task and their claim has gone stale; nothing started. Take it over from the task page once that is possible.",
       "heldUnknown": "Someone else has taken this task, so nothing started.",
       "merged": "This task was merged; nobody takes it into work again."
+    }
+  },
+  "accounts": {
+    "errors": {
+      "nameTaken": "Another account of this CLI is already named {{name}}. Each account of a CLI has its own name.",
+      "folderTaken": "Another account already uses this folder. Two accounts can't share one.",
+      "insideRepository": "This folder is inside the repository {{repository}}. Choose one outside every project and repository.",
+      "folderNotAbsolute": "Choose a folder by its full path.",
+      "folderOutside": "Choose a folder in your home folder's dot folders or in your applications' data, where agents ask before reading.",
+      "createFolder": "The account's folder could not be created. The log has the system's reason.",
+      "unsupported": "Accounts other than Default are not supported for this CLI on this computer yet.",
+      "removeDefault": "Default is the CLI's own folder and can't be removed.",
+      "inUse": "A run is on this account. Remove it after the run ends, or stop that run first.",
+      "moveTarget": "Choose another account of the same CLI for its connections, or No account.",
+      "notCreated": "Orchester didn't create this folder, so it stays where it is.",
+      "trash": "The account was removed, but its folder could not be moved to the Recycle Bin or Trash. The log has the system's reason.",
+      "cliMissing": "The CLI isn't on the PATH. Install it, then check again.",
+      "folderMissing": "The account's folder {{folder}} no longer exists.",
+      "terminal": "The terminal could not be opened. Run the command in a terminal of your own."
     }
   }
 }

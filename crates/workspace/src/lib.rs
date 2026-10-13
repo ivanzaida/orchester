@@ -4,6 +4,7 @@
 //! change it, and the tools of Orchester's own MCP server. Results that a person reads carry
 //! [`messages::Message`] keys of this crate's locale files ([`i18n`]); no UI toolkit is used here.
 
+pub mod accounts;
 pub mod activity;
 pub mod agents;
 pub mod app_mcp;

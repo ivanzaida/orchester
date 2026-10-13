@@ -111,7 +111,9 @@ impl ListedData {
 /// Shared handle to the application database.
 #[derive(Clone)]
 pub struct Workspace {
-  db: Arc<Mutex<AppDb>>,
+  pub(crate) db: Arc<Mutex<AppDb>>,
+  /// Where Orchester creates new agent accounts' folders; `None` where it has none on this platform.
+  pub(crate) account_root: Option<Arc<Path>>,
   permission_consent: Arc<Mutex<Consent>>,
   approval_consent: Arc<Mutex<Consent>>,
 }
@@ -126,9 +128,17 @@ impl Workspace {
   pub fn new(db: AppDb) -> Self {
     Self {
       db: Arc::new(Mutex::new(db)),
+      account_root: account_root().map(Arc::from),
       permission_consent: Arc::default(),
       approval_consent: Arc::default(),
     }
+  }
+
+  /// This workspace with new agent accounts' folders created in `root` instead of Orchester's application data.
+  #[must_use]
+  pub fn with_account_root(mut self, root: &Path) -> Self {
+    self.account_root = Some(Arc::from(root));
+    self
   }
 
   pub fn landing(&self) -> Result<Landing, StoreError> {
@@ -171,6 +181,10 @@ impl Workspace {
     let db = ProjectDb::open(repo_root)?;
     let project = db.project().clone();
     self.db.lock().register_project(&project, repo_root, Timestamp::now())?;
+    // The project opens all the same; its connections follow the removal the next time it opens.
+    if let Err(error) = self.follow_removed_accounts(repo_root) {
+      tracing::warn!(%error, "cannot move a project's connections off removed accounts");
+    }
     Ok(OpenProject {
       project,
       repo_root: repo_root.to_path_buf(),
@@ -377,5 +391,20 @@ impl Consent {
   fn finish(&mut self, allowed: bool) {
     self.pending -= 1;
     self.refresh(allowed);
+  }
+}
+
+/// Where new agent accounts' folders go: `ORCHESTER_ACCOUNTS_DIR` when a QA copy names one, so it never writes the
+/// person's own account folders, else Orchester's application data (`location::accounts_dir`).
+fn account_root() -> Option<std::path::PathBuf> {
+  if let Some(folder) = std::env::var_os("ORCHESTER_ACCOUNTS_DIR").filter(|folder| !folder.is_empty()) {
+    return Some(folder.into());
+  }
+  match orchester_store::location::accounts_dir() {
+    Ok(folder) => Some(folder),
+    Err(error) => {
+      tracing::warn!(%error, "no folder for new agent accounts");
+      None
+    }
   }
 }

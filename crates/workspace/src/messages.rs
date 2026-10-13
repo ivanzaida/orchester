@@ -64,6 +64,8 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::UnrepresentablePath(_) => Message::new("errors.unsupportedPath"),
     StoreError::Unrepresentable(_) => Message::new("errors.unstorableValue"),
     StoreError::DuplicateConnectionName(_) => Message::new("errors.connectionNameTaken"),
+    StoreError::DuplicateAccountName(name) => Message::new("accounts.errors.nameTaken").with("name", name.clone()),
+    StoreError::AccountFolderTaken => Message::new("accounts.errors.folderTaken"),
     StoreError::DuplicateSecretName { .. } => Message::new("errors.secretNameTaken"),
     StoreError::AlreadyMerged(_) => Message::new("runs.merge.failure.alreadyMerged"),
     StoreError::TaskNotEditable { source, .. } => edit_error(source),
@@ -94,6 +96,7 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::InvocationPermissionsNotRecordable(_)
     | StoreError::SecretNotFound(_)
     | StoreError::ServerNotFound(_)
+    | StoreError::AgentAccountNotFound(_)
     | StoreError::MemoryNotFound(_)
     | StoreError::MemoryExists(_)
     | StoreError::MemoryConflict(_)

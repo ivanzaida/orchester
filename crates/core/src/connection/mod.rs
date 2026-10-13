@@ -7,6 +7,7 @@
 //! API instead ([`AgentEndpoint::Api`]), with its key in a project secret; this version stores and shows
 //! such connections but runs no agent on them.
 
+mod account;
 mod adapter;
 mod agent;
 pub mod app_server;
@@ -34,6 +35,7 @@ use thiserror::Error;
 
 pub(crate) use self::github::gh_command;
 pub use self::{
+  account::{AccountStartProblem, ConnectionAccount},
   adapter::{
     check, executable_candidates, parse_claude_auth_status, parse_codex_catalog, parse_codex_login_status,
     parse_version,
@@ -95,6 +97,11 @@ pub enum ConnectionError {
   PresetNotOffered,
   #[error("provider fallback is offered on the official Anthropic API only")]
   FallbackNotOffered,
+  /// Only an agent CLI connection runs on an account.
+  #[error("connection {0} runs no agent CLI, so it has no account")]
+  NoAccounts(ConnectionId),
+  #[error("the account is not one of this connection's CLI")]
+  AccountOfOtherCli,
 }
 
 /// Whether the CLI is signed in, as far as its own status command tells.
@@ -213,6 +220,8 @@ pub struct Connection {
   created_at: Timestamp,
   /// The CLI versions models need, as refusals said ([`ModelRequirements`]); agent CLIs only.
   model_requirements: ModelRequirements,
+  /// Whose sign-in an agent CLI connection runs on; Default for every other kind.
+  account: ConnectionAccount,
 }
 
 impl Connection {
@@ -233,6 +242,7 @@ impl Connection {
       last_check: None,
       created_at,
       model_requirements: ModelRequirements::default(),
+      account: ConnectionAccount::Default,
     })
   }
 
@@ -245,6 +255,43 @@ impl Connection {
 
   pub const fn model_requirements(&self) -> &ModelRequirements {
     &self.model_requirements
+  }
+
+  /// This connection on the account it had recorded, with the check made on it.
+  pub fn with_account(mut self, account: ConnectionAccount) -> Result<Self, ConnectionError> {
+    let check = self.last_check.take();
+    self.set_account(account)?;
+    self.last_check = check;
+    Ok(self)
+  }
+
+  pub const fn account(&self) -> &ConnectionAccount {
+    &self.account
+  }
+
+  /// Runs the connection's CLI on `account`. Another account drops the last check: it read the sign-in of the
+  /// previous one. Only an agent CLI connection has an account other than Default.
+  pub fn set_account(&mut self, account: ConnectionAccount) -> Result<(), ConnectionError> {
+    if account == self.account {
+      return Ok(());
+    }
+    let ConnectionKind::Agent(provider) = self.kind else {
+      return Err(ConnectionError::NoAccounts(self.id));
+    };
+    if crate::account::AccountCli::of(provider).is_none() {
+      return Err(ConnectionError::NoAccounts(self.id));
+    }
+    self.account = account;
+    self.last_check = None;
+    Ok(())
+  }
+
+  /// Runs the connection's CLI on `account`, which must be an account of that CLI.
+  pub fn choose_account(&mut self, account: &crate::account::AgentAccount) -> Result<(), ConnectionError> {
+    if self.kind != ConnectionKind::Agent(account.cli().provider()) {
+      return Err(ConnectionError::AccountOfOtherCli);
+    }
+    self.set_account(ConnectionAccount::of(account))
   }
 
   pub fn from_stored(
