@@ -264,8 +264,8 @@ fn locales_fill_their_placeholders() {
   let title = app.i18n().t_args("shell.app.windowTitle", [("tab", "Tasks")]);
   assert_eq!(&*title, "Tasks — Orchester");
   assert_eq!(
-    &*app.i18n().t_args("shell.status.mcpListening", [("port", 52341)]),
-    "MCP on :52341"
+    &*app.i18n().t_args("shell.status.mcpListening", [("address", "127.0.0.1:47821")]),
+    "MCP 127.0.0.1:47821"
   );
   assert_eq!(&*app.i18n().t("task.tabs.summary"), "Summary");
   assert_eq!(&*app.i18n().t("common.newTab"), "New tab");

@@ -14,7 +14,7 @@ fn status_items_without_a_project_are_the_apps_own() {
   ] {
     assert!(bar.texts(id).is_none(), "{id} shows only with a project");
   }
-  assert_eq!(bar.texts("status-mcp"), Some(vec!["MCP on :52341".to_owned()]));
+  assert_eq!(bar.texts("status-mcp"), Some(vec!["MCP 127.0.0.1:52341".to_owned()]));
   assert_eq!(
     bar.texts("status-window-control"),
     Some(vec!["Agents can control this window".to_owned()])
@@ -24,7 +24,7 @@ fn status_items_without_a_project_are_the_apps_own() {
     Some(vec![format!("v{}", env!("CARGO_PKG_VERSION"))])
   );
   let mut unavailable = Bar::of(BarFacts {
-    mcp: McpStatus::Unavailable,
+    mcp: McpStatus::unavailable(McpKind::Installation, McpSettings::with_window_control(true)),
     ..facts(None)
   });
   assert_eq!(

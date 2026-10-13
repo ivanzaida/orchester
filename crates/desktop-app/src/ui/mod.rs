@@ -12,6 +12,7 @@ pub mod chip;
 pub mod choice_field;
 pub mod code_box;
 pub mod code_editor;
+pub mod command_row;
 pub mod detail_row;
 pub mod field;
 pub mod form_section;

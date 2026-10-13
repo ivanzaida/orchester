@@ -134,8 +134,12 @@
       },
       "tokens": "{{used}} / {{budget}} today",
       "unknown": "—",
-      "mcpListening": "MCP on :{{port}}",
+      "mcpListening": "MCP {{address}}",
+      "mcpPortTaken": "MCP port {{port}} taken",
+      "mcpOff": "MCP off",
       "mcpUnavailable": "MCP unavailable",
+      "mcpQa": "MCP :{{port}} · QA",
+      "mcpDevelopment": "MCP :{{port}}",
       "windowControl": "Agents can control this window",
       "version": "v{{version}}",
       "unread": {
@@ -200,6 +204,35 @@
       "recent": "RECENT",
       "where": "{{project}} · {{place}}",
       "escCloses": "Esc closes"
+    },
+    "mcp": {
+      "title": "Orchester MCP server",
+      "listening": "Listening on {{address}}",
+      "portTaken": "Port {{port}} taken",
+      "off": "Off",
+      "unavailable": "Not running",
+      "body": {
+        "listeningWindows": "Agents you registered reach Orchester here, with the app's own rules. The token is kept in Windows Credential Manager; Orchester shows it only in Settings › Automation, on your click.",
+        "listeningMacos": "Agents you registered reach Orchester here, with the app's own rules. The token is kept in your login keychain; Orchester shows it only in Settings › Automation, on your click.",
+        "portTaken": "Another program uses port {{port}}, so Orchester isn't listening and your agents can't reach it. Orchester doesn't move to another port on its own. Choose another port in Settings › Automation.",
+        "off": "You turned the server off in Settings › Automation, so nothing listens. The address and the token stay as they are for when you turn it on.",
+        "unavailable": "The server is not running, so your agents can't reach Orchester. Settings › Automation says why.",
+        "qa": "This copy was started for QA. It listens on a new port on each start; clients find the address and its token in its discovery file:",
+        "development": "This development build listens on a new port on each start; clients find the address and its token in its discovery file:"
+      },
+      "clients": {
+        "one": "{{count}} agent connected: {{names}}",
+        "other": "{{count}} agents connected: {{names}}"
+      },
+      "windowControl": {
+        "title": "Agents can control this window",
+        "on": "On",
+        "off": "Off",
+        "build": "The build's default: off in release builds, on in development builds.",
+        "stored": "Set in this installation's settings; a change applies when Orchester starts again.",
+        "environment": "For this run: ORCHESTER_APP_MCP_WINDOW_CONTROL is set."
+      },
+      "openSettings": "Open Automation settings"
     }
   }
 }

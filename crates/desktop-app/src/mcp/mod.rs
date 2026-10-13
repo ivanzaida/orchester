@@ -5,37 +5,41 @@
 //! event-loop thread with the window's state, and Orchester's domain tools (`domain`), which work on project
 //! data off the event loop. What agents may do is [`McpSettings`].
 //!
-//! It listens on `127.0.0.1` on a port the OS picks and requires its own bearer token on every request
-//! (`server`, `guard`). The port and the token are written to this process's discovery file in a folder
-//! of the app's own ([`DiscoveryFolder`]), which only the user can read and which is removed when the
-//! server stops; files of processes that ended without removing theirs are removed when the next
-//! server starts. [`McpStatus`] carries the port only, so nothing in the window can show, copy or log
-//! the token.
+//! It listens on `127.0.0.1` only and requires a bearer token and a loopback `Host` on every request (`server`,
+//! `guard`). The installed app listens on the fixed port set in Settings › Automation and keeps its token in the OS
+//! secret store (`token`), so an agent registered once keeps connecting (`docs/design/app-mcp-connection.md`); a QA
+//! copy, a test or a development build takes a free port and a new token on each start and writes both to its
+//! discovery file ([`McpMode`], `discovery`). [`AppMcp`] runs it and publishes [`McpStatus`], which names the
+//! address and where the token is kept, never the token; only a person's click in Settings shows or copies it.
 
+mod clients;
+mod control;
 mod discovery;
 pub mod domain;
 mod guard;
 pub mod input_gate;
 mod link;
+mod mode;
 mod server;
 pub mod settings;
+mod status;
+mod token;
 pub mod tools;
+mod view;
 
-use std::{num::NonZeroU16, path::Path};
+use lurq::{app::i18n::I18n, mcp::McpConfig};
 
-use lurq::{
-  app::{Tree, i18n::I18n},
-  mcp::McpConfig,
-};
-use tokio::runtime::Handle;
-
-use self::{discovery::DiscoveryFile, server::Listening};
 pub use self::{
+  control::{AppMcp, ControlError},
   discovery::DiscoveryFolder,
   input_gate::InputGate,
   link::WindowLink,
-  server::{BearerToken, endpoint},
+  mode::{DISCOVERY_VARIABLE, McpMode},
+  server::{address, endpoint},
   settings::{McpSettings, WindowControlSource},
+  status::{McpKind, McpStatus, SeenClient, ServerState},
+  token::BearerToken,
+  view::McpLink,
 };
 use crate::{appearance::Appearance, services::Services};
 
@@ -61,29 +65,6 @@ const INSTRUCTIONS: &str = "Orchester is a desktop app that orchestrates coding 
   person_only unless a person turned on Let automation change agent permissions in Settings › What automation may do. \
   Narrowing is always allowed, and no tool takes or returns a secret's value.";
 
-/// Whether the server listens, decided once at startup.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum McpStatus {
-  Listening {
-    port: NonZeroU16,
-    /// Whether agents may control the window, which the status bar shows while they may.
-    window_control: bool,
-  },
-  /// It did not start; the log says why.
-  Unavailable,
-}
-
-impl lurq::app::component::DevtoolsInspectable for McpStatus {}
-
-impl McpStatus {
-  pub fn of(server: Option<&AppMcp>, settings: McpSettings) -> Self {
-    server.map_or(Self::Unavailable, |server| Self::Listening {
-      port: server.port(),
-      window_control: settings.window_control(),
-    })
-  }
-}
-
 /// lurq's tools for `settings`, the app's tools on `link` and `appearance`, and, for a started session,
 /// the domain tools on its `services` (refusals worded by `i18n`) with `hold_reads` in debug builds.
 pub fn config(
@@ -105,56 +86,4 @@ pub fn config(
         .scopes(settings.scopes()),
       McpConfig::tool,
     )
-}
-
-/// The running server and its discovery file; dropping it stops the server, then removes the file.
-pub struct AppMcp {
-  listening: Listening,
-  discovery: DiscoveryFile,
-}
-
-impl AppMcp {
-  /// Hosts the tools of `config` on `tree`, the window's root tree, and serves them on `runtime`,
-  /// writing the discovery file in `folder`. `None` when the server cannot listen or write its file,
-  /// which the log says; the window runs without MCP then.
-  pub fn start(
-    tree: &mut Tree,
-    runtime: &Handle,
-    folder: &DiscoveryFolder,
-    config: McpConfig,
-    gate: &InputGate,
-  ) -> Option<Self> {
-    let tools = tree.enable_mcp(config.hosted());
-    gate.attach(tools.clone());
-    let folder = folder.path()?;
-    let token = BearerToken::generate();
-    let listening = match Listening::start(runtime, gate.clone(), tools, token.clone()) {
-      Ok(listening) => listening,
-      Err(error) => {
-        tracing::error!(%error, "the app's MCP server did not start");
-        return None;
-      }
-    };
-    let discovery = match DiscoveryFile::write(&folder, listening.port(), token.expose()) {
-      Ok(discovery) => discovery,
-      Err(error) => {
-        tracing::error!(%error, folder = %folder.display(), "the app's MCP server wrote no discovery file");
-        return None;
-      }
-    };
-    tracing::info!(
-      endpoint = %endpoint(listening.port()),
-      discovery = %discovery.path().display(),
-      "the app's MCP server is listening"
-    );
-    Some(Self { listening, discovery })
-  }
-
-  pub const fn port(&self) -> NonZeroU16 {
-    self.listening.port()
-  }
-
-  pub fn discovery_path(&self) -> &Path {
-    self.discovery.path()
-  }
 }

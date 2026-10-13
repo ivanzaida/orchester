@@ -18,7 +18,7 @@ use lurq::{
 };
 use orchester_app::{
   i18n,
-  mcp::{McpStatus, WindowLink},
+  mcp::{McpKind, McpLink, McpSettings, McpStatus, WindowLink},
   navigation::Navigation,
   project::Projects,
   root::{Root, RootProps},
@@ -126,7 +126,7 @@ impl Window {
       &mut app,
       RootProps {
         link: link.clone(),
-        mcp: McpStatus::Unavailable,
+        mcp: McpLink::without_server(McpStatus::unavailable(McpKind::Installation, McpSettings::of_build())),
         start: launch.start(),
       },
     );
