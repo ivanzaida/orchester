@@ -1346,5 +1346,26 @@
       "folderMissing": "The account's folder {{folder}} no longer exists.",
       "terminal": "The terminal could not be opened. Run the command in a terminal of your own."
     }
+  },
+  "orchestrator": {
+    "settings": {
+      "connectionGone": "The Orchestrator's connection was removed. Choose another one.",
+      "claudeCodeOnly": "The Orchestrator runs on Claude Code connections in this version."
+    },
+    "send": {
+      "blank": "Write a message first.",
+      "notReady": "Choose a connection and model in Orchestrator settings before you send.",
+      "runnerUnavailable": "Not sent · the runner didn't answer",
+      "lost": "The runner's answer was lost · your message is kept",
+      "busy": "The Orchestrator is still answering your last message.",
+      "shuttingDown": "Not sent · the runner is stopping",
+      "failed": "Not sent · the runner refused the message"
+    },
+    "stop": {
+      "failed": "The answer couldn't be stopped: the runner didn't answer."
+    },
+    "tools": {
+      "otherProject": "The Orchestrator acts only in its own project."
+    }
   }
 }

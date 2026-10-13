@@ -20,6 +20,7 @@ mod memory;
 mod merges;
 mod messages;
 mod native;
+mod orchestrator;
 mod organization;
 mod organized_drafts;
 mod phases;
@@ -67,6 +68,7 @@ pub use self::{
   auto_mode::AutoModeSave,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
   joining::{JoinedKey, ReturnedTask},
+  orchestrator::{ChatListing, ChatTurn},
   read_only::ReadOnlyProjectDb,
   resources::ResourceUpdate,
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},

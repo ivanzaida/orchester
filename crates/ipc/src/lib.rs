@@ -9,6 +9,7 @@
 //! The transport is a Windows named pipe or a macOS Unix domain socket (see `transport`); the
 //! rest of the crate is written against `AsyncRead`/`AsyncWrite`, so both carry the same frames.
 
+mod chat;
 mod client;
 pub mod daily_log;
 mod error;
@@ -24,6 +25,7 @@ mod pipe_owner;
 mod transport;
 mod work;
 
+pub use chat::{ChatToken, ChatTools};
 pub use client::{CommandSender, EventReceiver, LaunchError, RunnerClient, RunnerProcess};
 pub use error::{FrameError, IpcError};
 pub use exit_code::EXIT_PROJECT_LOCKED;

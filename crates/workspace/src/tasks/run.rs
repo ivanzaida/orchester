@@ -342,6 +342,9 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::ToolApprovalAnswered
       | Rejection::AutomationWider
       | Rejection::PersonOnly { .. }
+      | Rejection::ChatMessageNotFound
+      | Rejection::ChatBusy
+      | Rejection::NoOrchestrator
       | Rejection::QuestionNotAwaited
       | Rejection::QuestionAnswered
       | Rejection::InvalidAnswer { .. }
@@ -453,6 +456,9 @@ pub fn control_message(error: &RunRequestError) -> Message {
       | Rejection::LimitNotAboveUsed {
         limit: RunLimit::DailyBudget | RunLimit::GroupBudget,
       }
+      | Rejection::ChatMessageNotFound
+      | Rejection::ChatBusy
+      | Rejection::NoOrchestrator
       | Rejection::TaskNotFound
       | Rejection::TaskNotQueued
       | Rejection::Preflight { .. }

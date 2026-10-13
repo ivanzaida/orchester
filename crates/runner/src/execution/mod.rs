@@ -18,6 +18,7 @@ mod attach;
 mod blocked_runs;
 mod board;
 mod broken;
+mod chat;
 mod checkpoint;
 mod codebase_index;
 mod connection_check;
@@ -129,6 +130,8 @@ struct Inner {
   blocked_runs: blocked_runs::BlockedRuns,
   /// Runs stopped at their account's plan limit that a timer continues at its reset.
   plan_waits: plan_limit::PlanWaits,
+  /// The turns of the Orchestrator chat under way.
+  chats: chat::Chats,
 }
 
 impl Scheduler {
@@ -146,6 +149,7 @@ impl Scheduler {
         earlier_groups: task_groups::EarlierGroups::read(project_root),
         blocked_runs: blocked_runs::BlockedRuns::default(),
         plan_waits: plan_limit::PlanWaits::default(),
+        chats: chat::Chats::default(),
       }),
     }
   }
@@ -186,7 +190,7 @@ impl Scheduler {
   /// request is changing a run under the scheduler lock. The server separately tracks requests
   /// awaiting a task's answer.
   pub fn is_idle(&self) -> bool {
-    if !self.active_runs().is_empty() || self.inner.continuing.try_lock().is_err() {
+    if !self.active_runs().is_empty() || self.inner.continuing.try_lock().is_err() || !self.inner.chats.idle() {
       return false;
     }
     match self

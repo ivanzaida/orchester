@@ -26,6 +26,7 @@ pub mod import;
 mod inspect;
 pub mod instructions;
 pub mod messages;
+pub mod orchestrator;
 pub mod pipelines;
 pub mod plan_limits;
 pub mod project_settings;

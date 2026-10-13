@@ -8,7 +8,7 @@ use std::{fmt, num::NonZeroU32};
 
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
-  id::{ConnectionId, IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
+  id::{ChatId, ChatMessageId, ConnectionId, IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
   integration::Leftovers,
   permission::{AgentPermissions, capability::PermissionProblem},
   question::{AnswerError, GivenAnswer},
@@ -21,7 +21,7 @@ use orchester_core::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::work::WorkSummary;
+use crate::{chat::ChatTools, work::WorkSummary};
 
 /// Identifies a request within one connection, so its reply can be matched.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -206,6 +206,17 @@ pub enum Command {
   /// [`Reply::ConnectionChecked`], or [`Rejection::Failed`] when the key cannot be read or the provider
   /// runs no agent in this version.
   CheckConnection { provider: AgentProvider, api: ApiEndpoint },
+  /// Answers the person's message `message` of the project's Orchestrator chat, which the desktop kept: one turn
+  /// of the agent CLI on the Orchestrator's connection and model, read-only in the project folder, with the
+  /// domain tools at `tools` (`orchester_core::orchestrator`). Answered with [`Reply::ChatAnswering`] once the turn
+  /// is under way, or was already, or ended; how it ends is kept with the message and told with
+  /// [`Event::ChatChanged`], a turn that could not start included. [`Rejection::ChatMessageNotFound`] when the
+  /// message is not kept, [`Rejection::ChatBusy`] while another turn of its conversation thinks, and
+  /// [`Rejection::NoOrchestrator`] when nothing was chosen to run it on.
+  AnswerInChat { message: ChatMessageId, tools: ChatTools },
+  /// Stops the answer under way in conversation `chat`: its agent CLI ends, and what it did until then stays.
+  /// Answered with [`Reply::ChatStopped`], whether an answer was under way or not.
+  StopChat { chat: ChatId },
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -275,6 +286,9 @@ pub enum Event {
   RunChanged { run: RunId, task: TaskId },
   /// A reviewed queue group's waiting reason changed; reread the task list.
   TaskGroupChanged { key: IdempotencyKey },
+  /// Conversation `chat` of the Orchestrator chat changed (a reply, its session, how a turn ended); read it from
+  /// the database.
+  ChatChanged { chat: ChatId },
   /// Run `run`'s transcript grew to `sequence` entries. Coalesced: one notification can stand
   /// for many entries.
   AgentActivity { run: RunId, sequence: u64 },
@@ -364,6 +378,14 @@ pub enum Reply {
   ConnectionChecked {
     result: CheckResult,
     models: Vec<NativeModel>,
+  },
+  /// The answer to [`Command::AnswerInChat`]: the turn of `message` is under way, or was already, or ended.
+  ChatAnswering {
+    message: ChatMessageId,
+  },
+  /// The answer to [`Command::StopChat`].
+  ChatStopped {
+    chat: ChatId,
   },
   Rejected(Rejection),
 }
@@ -480,6 +502,12 @@ pub enum Rejection {
   PersonOnly {
     ask: AutoAsk,
   },
+  /// The Orchestrator chat's message is not kept in the project's database.
+  ChatMessageNotFound,
+  /// Another turn of the conversation is under way; a conversation answers one message at a time.
+  ChatBusy,
+  /// No connection and model were chosen for the project's Orchestrator.
+  NoOrchestrator,
   /// The runner is stopping and starts no work.
   ShuttingDown,
   /// [`Command::StopIfIdle`] while the runner has work.

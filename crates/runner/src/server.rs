@@ -14,13 +14,13 @@ use std::{
 
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint},
-  id::{RunId, StepExecutionId},
+  id::{ChatId, ChatMessageId, RunId, StepExecutionId},
   question::GivenAnswer,
   run::{Answerer, ApprovalAnswer, InterruptCause, PlanDecision, PlanVersion, RaisedLimits, StuckDecision},
   tokens::TokenBudget,
 };
 use orchester_ipc::{
-  AttachSession, Command, Endpoint, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
+  AttachSession, ChatTools, Command, Endpoint, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
   frame::{FrameReader, FrameWriter},
   handshake,
 };
@@ -343,8 +343,24 @@ async fn answer(
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
     Command::CheckConnection { provider, ref api } => return answer_check(&later, handle, provider, api.clone()),
+    Command::AnswerInChat { message, ref tools } => chat_answering(scheduler, message, tools.clone()).await,
+    Command::StopChat { chat } => chat_stopped(scheduler, chat),
   };
   Answer::Reply(Event::Reply { id, reply })
+}
+
+/// The reply to [`Command::AnswerInChat`].
+async fn chat_answering(scheduler: &Scheduler, message: ChatMessageId, tools: ChatTools) -> Reply {
+  match scheduler.answer_in_chat(message, tools).await {
+    Ok(()) => Reply::ChatAnswering { message },
+    Err(rejection) => Reply::Rejected(rejection),
+  }
+}
+
+/// The reply to [`Command::StopChat`].
+fn chat_stopped(scheduler: &Scheduler, chat: ChatId) -> Reply {
+  scheduler.stop_chat(chat);
+  Reply::ChatStopped { chat }
 }
 
 /// Continues `run`, stopped at its account's plan limit: on `connection`, another account's
