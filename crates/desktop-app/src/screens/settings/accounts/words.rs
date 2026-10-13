@@ -191,11 +191,15 @@ pub(super) fn identity(ctx: &Ctx, account: &AgentAccount, accounts: &[AgentAccou
         |email| ta(ctx, "accounts.identity.was", [("email", email)]),
       ),
       AccountState::CliMissing => email.map_or_else(
-        || t(ctx, "accounts.identity.notChecked"),
+        || t(ctx, "accounts.identity.noCli"),
         |email| ta(ctx, "accounts.identity.lastKnown", [("email", email)]),
       ),
-      AccountState::Unknown | AccountState::FolderMissing => email.map_or_else(
-        || t(ctx, "accounts.identity.notChecked"),
+      AccountState::Unknown => email.map_or_else(
+        || t(ctx, "accounts.identity.unread"),
+        |email| ta(ctx, "accounts.identity.whenLastRead", [("email", email)]),
+      ),
+      AccountState::FolderMissing => email.map_or_else(
+        || t(ctx, "accounts.identity.folderGone"),
         |email| ta(ctx, "accounts.identity.whenLastRead", [("email", email)]),
       ),
       AccountState::Unsupported => ta(

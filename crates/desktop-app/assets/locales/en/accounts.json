@@ -68,6 +68,9 @@
       "same": "{{email}} · same account as {{account}}",
       "unsupported": "Default is used for {{cli}} on this Mac",
       "notChecked": "Not checked yet",
+      "noCli": "Nothing to check who is signed in with",
+      "unread": "The CLI's answer about who is signed in can't be read",
+      "folderGone": "Its folder is gone · runs on it don't start",
       "waiting": "Not signed in yet · waiting for the terminal",
       "adding": "{{cli}} · name it, then sign in"
     },
