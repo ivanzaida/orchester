@@ -5,6 +5,8 @@
 //! the agents connected, whether agents may control the window, and *Open Automation settings*. It names where the
 //! token is kept, never the token.
 
+use std::path::{Path, PathBuf};
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -30,7 +32,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     command_row::CommandRow,
     icon::Icon,
-    popover::{PopoverSide, popover, popover_panel},
+    popover::{bar_popover, popover_panel},
   },
 };
 
@@ -41,9 +43,11 @@ const POPOVER_WIDTH: f32 = 464.0;
 pub struct McpItemProps {
   pub status: McpStatus,
   pub dispatch: Dispatch,
+  /// The status bar, which the popover opens over.
+  pub bar: ElementRef,
 }
 
-/// Props are compared by what the item shows; the dispatch goes to the same window.
+/// Props are compared by what the item shows; the dispatch goes to the same window, the bar is the window's one.
 impl PartialEq for McpItemProps {
   fn eq(&self, other: &Self) -> bool {
     self.status == other.status
@@ -53,18 +57,18 @@ impl PartialEq for McpItemProps {
 impl DevtoolsInspectable for McpItemProps {}
 
 /// The item, and its popover while it is open.
-pub fn mcp_item(ctx: &mut Ctx, status: &McpStatus, dispatch: &Dispatch) -> Element {
+pub fn mcp_item(ctx: &mut Ctx, status: &McpStatus, dispatch: &Dispatch, bar: &ElementRef) -> Element {
   ctx.mount_keyed::<McpItem>(
     "status-mcp-item",
     McpItemProps {
       status: status.clone(),
       dispatch: dispatch.clone(),
+      bar: bar.clone(),
     },
   )
 }
 
 pub struct McpItem {
-  anchor: ElementRef,
   open: Signal<bool>,
 }
 
@@ -73,7 +77,6 @@ impl Component for McpItem {
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
-      anchor: ctx.element_ref(),
       open: ctx.signal(false),
     }
   }
@@ -84,7 +87,6 @@ impl Component for McpItem {
     let toggle = self.open.clone();
     let open = self.open.get();
     let mut item = pressed("status-mcp", move || toggle.update(|open| *open = !*open))
-      .ref_element(self.anchor.clone())
       .describe("state", state_name(&props.status.server))
       .child(glyph(Icon::RadioTower, color.clone()))
       .child(label(&words, color).id("status-mcp-text"));
@@ -94,12 +96,7 @@ impl Component for McpItem {
     let mut row = Row::new().child(item);
     if open {
       let panel = panel(ctx, &props, &self.open);
-      row = row.child(popover(
-        self.anchor.clone(),
-        self.open.clone(),
-        PopoverSide::AboveEnd,
-        panel,
-      ));
+      row = row.child(bar_popover(ctx, props.bar.clone(), self.open.clone(), panel));
     }
     row
   }
@@ -234,21 +231,34 @@ fn body(ctx: &Ctx, status: &McpStatus) -> String {
   ctx.t(key).to_string()
 }
 
-/// Where clients find the server, with Copy: the address of the installed app, the discovery file of a copy.
+/// Where clients find the server, with Copy: the address of the installed app, the discovery file of a copy, on one
+/// line and from the worktree's `.tmp` on (`QqBCj`); Copy copies the whole path.
 fn where_to(ctx: &mut Ctx, status: &McpStatus) -> Option<Element> {
   let port = status.listening_port()?;
-  let shown = match &status.kind {
-    McpKind::Installation => endpoint(port),
-    McpKind::Qa { folder } => folder.display().to_string(),
-    McpKind::Development { file } => file.as_ref()?.display().to_string(),
+  let (shown, copied) = match &status.kind {
+    McpKind::Installation => (endpoint(port), endpoint(port)),
+    McpKind::Qa { file, .. } | McpKind::Development { file } => {
+      let file = file.as_ref()?;
+      (from_scratch(file), file.display().to_string())
+    }
   };
-  let copied = shown.clone();
   Some(
     CommandRow::new("status-mcp-where", shown, ctx.t("common.copy"), move || {
       copy_to_clipboard(&copied)
     })
+    .one_line()
     .render(ctx),
   )
+}
+
+/// `path` from its `.tmp` folder on, as a worktree's QA copy names it (`.tmp\qa\orc-31\mcp\53880.json`); a path
+/// outside one in full.
+fn from_scratch(path: &Path) -> String {
+  let parts: Vec<_> = path.components().collect();
+  match parts.iter().rposition(|part| part.as_os_str() == ".tmp") {
+    Some(start) => parts[start..].iter().collect::<PathBuf>().display().to_string(),
+    None => path.display().to_string(),
+  }
 }
 
 /// *2 agents connected: claude-code, codex-mcp-client*, as the clients connected now name themselves.

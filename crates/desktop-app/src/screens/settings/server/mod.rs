@@ -69,7 +69,7 @@ impl Component for ServerSection {
     let server = link.server().cloned();
     match &status.kind {
       McpKind::Installation => installation(ctx, &status, server),
-      McpKind::Qa { folder } => {
+      McpKind::Qa { folder, .. } => {
         let folder = folder.display().to_string();
         let note = ctx.t_args("settings.automation.server.copy.qaNote", [("folder", folder)]);
         let keys = (
@@ -174,7 +174,9 @@ fn listening_on(ctx: &Ctx, port: NonZeroU16) -> Element {
   dotted(
     "settings-mcp-state",
     PaletteColor::Success,
-    Text::new(&words).variant(ExtraTypography::MonoKey.role()),
+    Text::new(&words)
+      .variant(ExtraTypography::MonoKey.role())
+      .color(PaletteColor::TextPrimary),
   )
 }
 

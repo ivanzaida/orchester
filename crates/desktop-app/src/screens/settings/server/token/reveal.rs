@@ -20,7 +20,7 @@ use crate::{
     AppMcp, BearerToken, ServerState,
     input_gate::{InputGate, TokenShown},
   },
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraSpacing, ExtraTypography, IconSize, SecretsText},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -111,7 +111,8 @@ pub(super) fn value(ctx: &Ctx, shown: Option<&BearerToken>) -> Element {
       Icon::Eye,
     ),
     None => (
-      Text::new(&ctx.t("settings.automation.server.token.mask")).variant(ExtraTypography::MonoKey.role()),
+      // The masked value of a secret (`Masked value` `DShSq`), as Secrets shows one.
+      Text::new(&ctx.t("settings.automation.server.token.mask")).variant(SecretsText::Mask.role()),
       Icon::LockKeyhole,
     ),
   };

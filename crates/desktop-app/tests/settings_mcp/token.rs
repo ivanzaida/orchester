@@ -152,10 +152,7 @@ fn settings_mcp_token_that_cannot_be_read_while_off_is_said_with_try_again() {
   });
   assert!(shown.says(
     "settings-mcp-token-not-read",
-    &format!(
-      "The token can't be read from {STORE}: The system keychain refused access. Unlock it and try again. Show and \
-       Copy need it."
-    )
+    &format!("The token can't be read from {STORE}: {DENIED} Show and Copy need it.")
   ));
   vault.refuse_reads(false);
   shown.click("settings-mcp-token-read-again");

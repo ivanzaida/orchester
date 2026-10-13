@@ -13,6 +13,7 @@ use lurq::{
     theme::{PaletteColor, SpacingSize},
   },
   components::{Button, Row},
+  core::ElementRef,
   layout::{Alignment, layout_kind::ShrinkLimit},
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -188,7 +189,7 @@ fn tokens(ctx: &Ctx, project: &ProjectFacts, unknown: &str, press: impl Fn() + S
 
 /// The app's MCP server (it never gives way), whether agents may control the window, and the version
 /// (the first to drop out).
-pub fn app(ctx: &mut Ctx, mcp: &McpStatus, dispatch: &Dispatch) -> Vec<Element> {
+pub fn app(ctx: &mut Ctx, (mcp, bar): (&McpStatus, &ElementRef), dispatch: &Dispatch) -> Vec<Element> {
   let mut items = Vec::new();
   if mcp.window_control() {
     items.push(
@@ -201,7 +202,7 @@ pub fn app(ctx: &mut Ctx, mcp: &McpStatus, dispatch: &Dispatch) -> Vec<Element> 
         .into(),
     );
   }
-  items.push(mcp_item(ctx, mcp, dispatch));
+  items.push(mcp_item(ctx, mcp, dispatch, bar));
   items.push(version(ctx));
   items
 }

@@ -148,6 +148,26 @@ pub fn vault_error(error: &VaultError) -> Message {
   }
 }
 
+/// Why the secret store did not give or keep the app's MCP token, in its own short words: the store is named beside
+/// them (*The token can't be read from Windows Credential Manager*, `eTrCO`).
+pub fn secret_store_error(error: &VaultError) -> Message {
+  match error {
+    VaultError::AccessDenied(_) => Message::new(secret_store::DENIED),
+    VaultError::Unsupported => Message::new("errors.keychainUnsupported"),
+    VaultError::TooLong { max } => Message::new("errors.secretTooLong").with("max", max.to_string()),
+    VaultError::Failed(_) | VaultError::NotFound => Message::new("errors.secretStoreFailed"),
+  }
+}
+
+/// How each platform's secret store refuses: Windows Credential Manager says access is denied; the macOS keychain is
+/// locked, or the person did not allow the app.
+mod secret_store {
+  #[cfg(target_os = "macos")]
+  pub const DENIED: &str = "errors.secretStoreDeniedMacos";
+  #[cfg(not(target_os = "macos"))]
+  pub const DENIED: &str = "errors.secretStoreDenied";
+}
+
 /// A change only the installed app's MCP server takes (a fixed address, a stored token) was asked of a copy that
 /// takes a new port and token on each start.
 pub fn app_mcp_not_installation() -> Message {

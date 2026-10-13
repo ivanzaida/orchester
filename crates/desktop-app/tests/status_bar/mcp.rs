@@ -38,6 +38,7 @@ fn status_mcp_item_names_the_address_or_why_agents_cannot_reach_it() {
   };
   let qa = McpKind::Qa {
     folder: PathBuf::from(".tmp/qa/orc-31/mcp"),
+    file: None,
   };
   let development = McpKind::Development { file: None };
   for (server, kind, words) in [
@@ -110,15 +111,23 @@ fn status_mcp_popover_says_why_agents_cannot_reach_it() {
 }
 
 #[test]
-fn status_mcp_popover_of_a_qa_copy_names_its_discovery_folder() {
-  let folder = PathBuf::from(".tmp").join("qa").join("orc-31").join("mcp");
+fn status_mcp_popover_of_a_qa_copy_names_its_discovery_file_from_tmp_on() {
+  let folder = PathBuf::from(ROOT).join(".tmp").join("qa").join("orc-31").join("mcp");
   let mut bar = Bar::of(with(
     ServerState::Listening { port: port(53122) },
-    McpKind::Qa { folder: folder.clone() },
+    McpKind::Qa {
+      folder: folder.clone(),
+      file: Some(folder.join("53880.json")),
+    },
   ));
   bar.press("status-mcp");
   let popover = bar.texts("status-mcp-popover").expect("the popover opens");
-  for words in ["Listening on 127.0.0.1:53122", folder.display().to_string().as_str()] {
+  let file = PathBuf::from(".tmp")
+    .join("qa")
+    .join("orc-31")
+    .join("mcp")
+    .join("53880.json");
+  for words in ["Listening on 127.0.0.1:53122", file.display().to_string().as_str()] {
     assert!(popover.iter().any(|text| text == words), "{words} in {popover:?}");
   }
 }

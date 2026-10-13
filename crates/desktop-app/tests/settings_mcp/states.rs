@@ -100,6 +100,13 @@ fn settings_mcp_unreadable_token_says_why_and_tries_again() {
     &format!("The token can't be read from {STORE}")
   ));
   assert!(shown.says("status-mcp", "MCP unavailable"));
+  let body = shown
+    .texts("settings-mcp-unreadable")
+    .expect("the notice")
+    .into_iter()
+    .find(|text| text.ends_with("rotate the token to store a new one."))
+    .expect("its body");
+  assert!(body.starts_with(DENIED), "the store's own short words: {body}");
   assert!(shown.says("settings-mcp", "No address while the server is not running."));
   vault.refuse_reads(false);
   shown.click("settings-mcp-unreadable-again");
@@ -148,4 +155,34 @@ fn settings_mcp_unreadable_token_offers_no_commands() {
     "settings-mcp-connect-unavailable",
     "The commands need the access token, which can't be read now."
   ));
+}
+
+#[test]
+fn settings_mcp_status_popover_opens_over_the_bar_at_the_window_end() {
+  let mut shown = Shown::installed(free_port(), Arc::default());
+  shown.until("listening", |shown| shown.says("settings-mcp-state", "Listening"));
+  shown.click("status-mcp");
+  let [x, y, width, height] = shown.bounds("status-mcp-popover");
+  let [bar_x, bar_y, bar_width, _] = shown.bounds("status-bar");
+  assert_eq!(bar_y - (y + height), 9.0, "9 above the bar (QqBCj)");
+  assert_eq!(
+    (bar_x + bar_width) - (x + width),
+    12.0,
+    "its end 12 from the window's (QqBCj)"
+  );
+}
+
+#[test]
+fn settings_mcp_address_copy_is_unavailable_while_nothing_listens() {
+  let holder = TcpListener::bind(("127.0.0.1", 0)).expect("another program's port");
+  let port = holder.local_addr().expect("its address").port();
+  let mut shown = Shown::installed(port, Arc::default());
+  shown.until("port taken", |shown| shown.texts("settings-mcp-port-taken").is_some());
+  // An available Copy would put the address on the clipboard and say Copied; this one is muted and does nothing.
+  shown.click("settings-mcp-address-value-copy");
+  assert!(
+    shown.says("settings-mcp-address-value-copy", "Copy"),
+    "unavailable (eTrCO)"
+  );
+  drop(holder);
 }

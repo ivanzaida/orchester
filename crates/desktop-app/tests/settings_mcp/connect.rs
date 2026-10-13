@@ -16,21 +16,34 @@ fn settings_mcp_connect_shows_the_commands_with_the_token_masked() {
     "claude mcp add --transport http --scope user orchester http://127.0.0.1:{port}/mcp --header \"Authorization: \
      Bearer ••••••••••••••••\""
   );
-  assert!(shown.says("settings-mcp-connect-claude-command", &claude));
+  assert_eq!(shown.joined("settings-mcp-connect-claude-command"), claude);
+  let words = shown.texts("settings-mcp-connect-claude-command").expect("the command");
+  assert!(
+    words.iter().any(|word| word == "--header "),
+    "a word is laid out whole, so the command breaks only at spaces: {words:?}"
+  );
+  let [_, _, _, two_lines] = shown.bounds("settings-mcp-connect-claude-command-box");
+  let [_, _, _, one_line] = shown.bounds("settings-mcp-address-value-box");
+  assert!(
+    (two_lines - 44.0).abs() < 0.5,
+    "two lines of mono 11.5 at 1.4, 6 over and under them (PEnj5): {two_lines}"
+  );
+  assert!(
+    (one_line - 36.0).abs() < 0.5,
+    "one line beside a 24-high Copy, 6 over and under (PEnj5): {one_line}"
+  );
   shown.click("settings-mcp-connect-codex");
   shown.until("the Codex tab", |shown| {
     shown.texts("settings-mcp-connect-codex-command").is_some()
   });
-  assert!(shown.says(
-    "settings-mcp-connect-codex-command",
-    &format!(
-      "codex mcp add orchester --url http://127.0.0.1:{port}/mcp --bearer-token-env-var ORCHESTER_APP_MCP_TOKEN"
-    )
-  ));
-  assert!(shown.says(
-    "settings-mcp-connect-codex-variable",
-    &connect::codex_variable("••••••••••••••••")
-  ));
+  assert_eq!(
+    shown.joined("settings-mcp-connect-codex-command"),
+    format!("codex mcp add orchester --url http://127.0.0.1:{port}/mcp --bearer-token-env-var ORCHESTER_APP_MCP_TOKEN")
+  );
+  assert_eq!(
+    shown.joined("settings-mcp-connect-codex-variable"),
+    connect::codex_variable("••••••••••••••••")
+  );
   assert!(shown.texts("settings-mcp-connect-codex-config").is_some());
   let token = shown.token();
   assert!(!shown.everything().iter().any(|text| text.contains(&token)));

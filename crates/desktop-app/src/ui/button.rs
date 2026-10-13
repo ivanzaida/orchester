@@ -122,6 +122,8 @@ pub struct ActionButton {
   /// As wide as its parent, its icon and label centered (`Allow retry` `ae0Pi`).
   fill: bool,
   compact: bool,
+  /// 24 high instead of 28, as a Copy inside a command row (`PEnj5`).
+  small: bool,
   bounded: bool,
   element: Option<ElementRef>,
 }
@@ -139,6 +141,7 @@ impl ActionButton {
       focus: Focus::Pointer,
       fill: false,
       compact: false,
+      small: false,
       bounded: false,
       element: None,
     }
@@ -194,6 +197,12 @@ impl ActionButton {
     self
   }
 
+  /// 24 high, its icon and label as a button's: an action inside a command row (`Command row` `PEnj5`).
+  pub fn small(mut self) -> Self {
+    self.small = true;
+    self
+  }
+
   /// Keep a long label within the available width; the full accessible name is retained.
   pub fn bounded_label(mut self) -> Self {
     self.bounded = true;
@@ -240,6 +249,8 @@ impl From<ActionButton> for Element {
         IconSize::Sm,
         crate::theme::ExtraTypography::Note.role(),
       )
+    } else if button.small {
+      (ControlHeight::Sm, IconSize::Md, TypographyStyle::Button)
     } else {
       (ControlHeight::Md, IconSize::Md, TypographyStyle::Button)
     };

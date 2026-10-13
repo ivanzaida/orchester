@@ -5,7 +5,10 @@
 //! above.
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize},
+  app::{
+    ctx::Ctx,
+    theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize},
+  },
   components::{Column, Placement, Popup},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension, padding::Padding},
@@ -13,13 +16,11 @@ use lurq::{
 
 use crate::theme::ExtraSpacing;
 
-/// Where a popover opens: under its control or over it, from the control's start; or over it, ending at the
-/// control's end, for a control at the window's end (the status bar's MCP item, `QqBCj`).
+/// Where a popover opens: under its control or over it, from the control's start.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PopoverSide {
   Below,
   Above,
-  AboveEnd,
 }
 
 /// The panel of a popover `width` wide with the element id `id`; add its content as children.
@@ -41,10 +42,20 @@ pub fn popover(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel:
   let (placement, offset) = match side {
     PopoverSide::Below => (Placement::BottomStart, gap),
     PopoverSide::Above => (Placement::TopStart, -gap),
-    PopoverSide::AboveEnd => (Placement::TopEnd, -gap),
   };
   Popup::new(anchor, panel)
     .open(open)
     .placement(placement)
     .offset(0.0, offset)
+}
+
+/// `panel` over the status bar `bar` while `open` holds, for an item at the bar's end (the MCP item's popover,
+/// `QqBCj`): 9 above the bar and its end 12 from the bar's, so it stays inside the window.
+pub fn bar_popover(ctx: &Ctx, bar: ElementRef, open: Signal<bool>, panel: impl Into<Element>) -> Popup {
+  let inset = ctx.theme().spacing_value(SpacingSize::Md).to_px();
+  Popup::new(bar, panel)
+    .open(open)
+    .placement(Placement::TopEnd)
+    // Over its anchor, lurq counts the offset away from it.
+    .offset(-inset, ExtraSpacing::Inline.value())
 }

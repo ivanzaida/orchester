@@ -73,7 +73,7 @@ fn app_mcp_unreadable_token_keeps_the_server_off_until_it_can_be_read() {
   };
   assert_eq!(
     reason,
-    orchester_workspace::messages::Message::new("errors.keychainDenied")
+    orchester_workspace::messages::secret_store_error(&VaultError::AccessDenied(String::new()))
   );
   assert_eq!(installed.server.port(), None);
   vault.refuse_reads(false);

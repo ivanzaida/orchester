@@ -78,7 +78,7 @@ pub enum McpKind {
   /// The installed app: the address set in Settings, the token in the secret store.
   Installation,
   /// A QA copy or a test harness: a new port and token on each start, its discovery file in `folder`.
-  Qa { folder: PathBuf },
+  Qa { folder: PathBuf, file: Option<PathBuf> },
   /// A development build: a new port and token on each start, its discovery file in the user's folder.
   Development { file: Option<PathBuf> },
 }

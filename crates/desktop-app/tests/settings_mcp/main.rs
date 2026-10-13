@@ -36,6 +36,12 @@ const STORE: &str = if cfg!(target_os = "macos") {
 } else {
   "Windows Credential Manager"
 };
+/// How this platform's store says it refused, after its name (`eTrCO`: *Access denied.*).
+const DENIED: &str = if cfg!(target_os = "macos") {
+  "Access denied: the keychain is locked, or Orchester was not allowed to use it."
+} else {
+  "Access denied."
+};
 
 /// The window on Settings, its server and the store its token is in.
 struct Shown {
@@ -148,6 +154,11 @@ impl Shown {
     collect(element, &mut all);
     all.retain(|text| !text.chars().all(|glyph| ('\u{e000}'..='\u{f8ff}').contains(&glyph)));
     Some(all)
+  }
+
+  /// The texts inside the element `id` read as one: a command laid out word by word.
+  fn joined(&mut self, id: &str) -> String {
+    self.texts(id).unwrap_or_default().concat()
   }
 
   /// Whether the element `id` says `words`.

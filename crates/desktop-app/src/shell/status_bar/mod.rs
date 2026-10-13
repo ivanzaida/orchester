@@ -25,6 +25,7 @@ use lurq::{
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Row, Spacer},
+  core::ElementRef,
   layout::{Alignment, layout_kind::ShrinkLimit},
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -177,13 +178,16 @@ impl PartialEq for BarProps {
 impl DevtoolsInspectable for BarProps {}
 
 /// The status bar as `BarProps` says.
-pub struct StatusBarView;
+pub struct StatusBarView {
+  /// The bar, which the MCP item's popover opens over.
+  bar: ElementRef,
+}
 
 impl Component for StatusBarView {
   type Props = BarProps;
 
-  fn create(_ctx: &mut Ctx) -> Self {
-    Self
+  fn create(ctx: &mut Ctx) -> Self {
+    Self { bar: ctx.element_ref() }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -228,9 +232,10 @@ impl Component for StatusBarView {
         &dispatch,
       ));
     }
-    right.extend(counts::app(ctx, &facts.mcp, &dispatch));
+    right.extend(counts::app(ctx, (&facts.mcp, &self.bar), &dispatch));
     Row::new()
       .id("status-bar")
+      .ref_element(self.bar.clone())
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(STATUS_BAR_HEIGHT))
       .padding(Padding::horizontal(SpacingSize::Sm))

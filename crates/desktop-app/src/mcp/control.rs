@@ -45,7 +45,7 @@ impl ControlError {
   pub fn message(&self) -> Message {
     match self {
       Self::Store(error) => messages::store_error(error),
-      Self::Vault(error) => messages::vault_error(error),
+      Self::Vault(error) => messages::secret_store_error(error),
       Self::NotInstallation => messages::app_mcp_not_installation(),
     }
   }
@@ -104,7 +104,10 @@ impl AppMcp {
     let (kind, source) = match mode {
       McpMode::Installation { workspace, vault } => (McpKind::Installation, Source::Installation { workspace, vault }),
       McpMode::Qa(folder) => (
-        McpKind::Qa { folder: folder.clone() },
+        McpKind::Qa {
+          folder: folder.clone(),
+          file: None,
+        },
         Source::Discovery(DiscoveryFolder::At(folder)),
       ),
       McpMode::Development => (
@@ -285,7 +288,7 @@ impl Inner {
       Err(ControlError::Vault(error)) => {
         tracing::error!(%error, "the app's MCP token cannot be read from the secret store");
         return ServerState::TokenUnreadable {
-          reason: messages::vault_error(&error),
+          reason: messages::secret_store_error(&error),
         };
       }
       Err(error) => {
@@ -339,7 +342,7 @@ impl Inner {
     tracing::info!(discovery = %discovery.path().display(), "the app's MCP discovery file");
     let file = discovery.path().to_owned();
     self.status.send_modify(|status| {
-      if let McpKind::Development { file: shown } = &mut status.kind {
+      if let McpKind::Development { file: shown } | McpKind::Qa { file: shown, .. } = &mut status.kind {
         *shown = Some(file);
       }
     });
