@@ -25,6 +25,7 @@ pub enum Missing {
   Instruction,
   Tool,
   McpServer,
+  Account,
 }
 
 impl Missing {
@@ -42,6 +43,7 @@ impl Missing {
       Self::Instruction => "instruction_not_found",
       Self::Tool => "tool_not_found",
       Self::McpServer => "mcp_server_not_found",
+      Self::Account => "account_not_found",
     }
   }
 }

@@ -964,7 +964,8 @@
       "mcpArgument": "An argument is empty or holds a line break: {{value}}",
       "mcpVariable": "A variable is empty or holds a line break: {{value}}",
       "mcpExemptTool": "A tool name is empty or holds a line break: {{value}}",
-      "mcpFieldNotApplicable": "{{field}} is not a field of this server's transport: a program has args, working_directory and environment, a remote server bearer_secret."
+      "mcpFieldNotApplicable": "{{field}} is not a field of this server's transport: a program has args, working_directory and environment, a remote server bearer_secret.",
+      "accountChoice": "Choosing the account a connection runs on: it decides whose sign-in, and which organisation's provider, gets the project's work."
     },
     "githubConnectionName": "GitHub · {{host}}",
     "projectTools": {
