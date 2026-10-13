@@ -13,11 +13,13 @@ use lurq::{
 
 use crate::theme::ExtraSpacing;
 
-/// Where a popover opens: under its control or over it, from the control's start.
+/// Where a popover opens: under its control or over it, from the control's start; or over it, ending at the
+/// control's end, for a control at the window's end (the status bar's MCP item, `QqBCj`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PopoverSide {
   Below,
   Above,
+  AboveEnd,
 }
 
 /// The panel of a popover `width` wide with the element id `id`; add its content as children.
@@ -39,6 +41,7 @@ pub fn popover(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel:
   let (placement, offset) = match side {
     PopoverSide::Below => (Placement::BottomStart, gap),
     PopoverSide::Above => (Placement::TopStart, -gap),
+    PopoverSide::AboveEnd => (Placement::TopEnd, -gap),
   };
   Popup::new(anchor, panel)
     .open(open)

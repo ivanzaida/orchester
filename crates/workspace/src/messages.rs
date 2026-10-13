@@ -148,6 +148,12 @@ pub fn vault_error(error: &VaultError) -> Message {
   }
 }
 
+/// A change only the installed app's MCP server takes (a fixed address, a stored token) was asked of a copy that
+/// takes a new port and token on each start.
+pub fn app_mcp_not_installation() -> Message {
+  Message::new("errors.appMcpNotInstallation")
+}
+
 /// Work that ran on a background thread panicked or was cancelled; the cause is logged.
 pub fn interrupted() -> Message {
   Message::new("errors.interrupted")

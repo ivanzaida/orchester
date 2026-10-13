@@ -34,10 +34,13 @@ use orchester_workspace::activity::{
   bar::{self, ActivitySlot},
 };
 
-pub use self::facts::{BarAction, BarFacts, Dispatch, ProjectFacts, ReadFailure, RunnerFacts, Stopping};
 use self::{
   act::Stopper,
   item::{frame, give_way, glyph, item, label},
+};
+pub use self::{
+  facts::{BarAction, BarFacts, Dispatch, ProjectFacts, ReadFailure, RunnerFacts, Stopping},
+  item::dot,
 };
 use crate::{
   mcp::{McpLink, McpStatus},

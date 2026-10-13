@@ -8,7 +8,11 @@ use std::{num::NonZeroU16, path::PathBuf, sync::Arc};
 use lurq::{app::Tree, mcp::McpConfig};
 use orchester_core::{app_mcp::McpPort, secret::VaultError};
 use orchester_store::StoreError;
-use orchester_workspace::{messages, secrets::Vault, workspace::Workspace};
+use orchester_workspace::{
+  messages::{self, Message},
+  secrets::Vault,
+  workspace::Workspace,
+};
 use parking_lot::Mutex;
 use tokio::{runtime::Handle, sync::watch};
 
@@ -34,6 +38,17 @@ pub enum ControlError {
   /// Only the installed app's server has a fixed address and a stored token.
   #[error("this copy's MCP server takes a new port and token on each start")]
   NotInstallation,
+}
+
+impl ControlError {
+  /// What the window says about it.
+  pub fn message(&self) -> Message {
+    match self {
+      Self::Store(error) => messages::store_error(error),
+      Self::Vault(error) => messages::vault_error(error),
+      Self::NotInstallation => messages::app_mcp_not_installation(),
+    }
+  }
 }
 
 /// The app's MCP server; clones control the same one. Stopped by [`AppMcp::shutdown`], or when the last clone goes.
@@ -144,6 +159,12 @@ impl AppMcp {
     self.0.token.lock().clone()
   }
 
+  /// The token in use, read from the secret store (or a first one stored there) when the server has not read it
+  /// yet, e.g. while it is off; for Show and Copy on a person's click. Blocks.
+  pub fn read_token(&self) -> Result<BearerToken, ControlError> {
+    self.0.token_or_read()
+  }
+
   /// Turns the installed app's server on or off and keeps the choice. Blocks.
   pub fn set_enabled(&self, enabled: bool) -> Result<(), ControlError> {
     let workspace = self.0.installation()?;
@@ -236,8 +257,15 @@ impl Inner {
       .mcp_server_enabled()
       .and_then(|enabled| Ok((enabled, workspace.mcp_port()?)));
     let port = match settings {
-      Ok((false, _)) => return ServerState::Off,
-      Ok((true, port)) => port,
+      Ok((enabled, port)) => {
+        self
+          .status
+          .send_if_modified(|status| status.port.replace(port) != Some(port));
+        if !enabled {
+          return ServerState::Off;
+        }
+        port
+      }
       Err(error) => {
         tracing::error!(%error, "the app's MCP server settings cannot be read");
         return ServerState::Unavailable;

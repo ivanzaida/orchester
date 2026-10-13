@@ -13,6 +13,9 @@ use super::settings::McpSettings;
 pub struct McpStatus {
   pub server: ServerState,
   pub kind: McpKind,
+  /// The installed app's port as its settings hold it, whether or not the server listens there; `None` before
+  /// they were read, and for a copy that takes a new port on each start.
+  pub port: Option<McpPort>,
   /// What agents may do with the window, which the status bar shows while they may control it.
   pub settings: McpSettings,
   /// The clients seen since the app started, or since the token changed.
@@ -29,6 +32,7 @@ impl McpStatus {
     Self {
       server: ServerState::Unavailable,
       kind,
+      port: None,
       settings,
       clients: Vec::new(),
       rotated: false,

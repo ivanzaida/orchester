@@ -97,7 +97,7 @@ impl Component for McpItem {
       row = row.child(popover(
         self.anchor.clone(),
         self.open.clone(),
-        PopoverSide::Above,
+        PopoverSide::AboveEnd,
         panel,
       ));
     }

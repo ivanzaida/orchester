@@ -682,6 +682,7 @@
     "keychainUnsupported": "Storing secrets in the system keychain is not supported on this platform yet.",
     "keychainDenied": "The system keychain refused access. Unlock it and try again.",
     "keychainFailed": "The system keychain could not store the change. The log has the details.",
+    "appMcpNotInstallation": "Only the installed app's MCP server has a fixed address and a stored token; this copy takes a new port and token on each start.",
     "roleRequired": "Enter a profile name to save the draft.",
     "connectionRequired": "Choose a connection.",
     "modelRequired": "Choose a model or enter a model id.",
