@@ -6,6 +6,7 @@ mod harness;
 mod insertion;
 mod library;
 mod preview;
+mod publication_layout;
 mod recovery;
 mod repository;
 mod states;

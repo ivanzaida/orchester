@@ -45,30 +45,7 @@ pub(super) fn items(ctx: &Ctx, data: &ProjectInstructions, tab: Tab, entries: Ve
       items.extend(rules.into_iter().map(Item::Rule));
       continue;
     }
-    for step in &pipeline.steps {
-      items.push(Item::Step {
-        name: ctx
-          .t_args(
-            "instructions.stepLabel",
-            [
-              ("number", format!("{:02}", step.ordinal)),
-              ("name", step.name.to_string()),
-            ],
-          )
-          .to_string(),
-        role: step.role.as_ref().map(ToString::to_string),
-      });
-      items.extend(
-        rules
-          .iter()
-          .filter(|entry| {
-            matches!(entry.body.scope(),
-        InstructionScope::Step { step: key, .. } if key == &step.key)
-          })
-          .cloned()
-          .map(Item::Rule),
-      );
-    }
+    items.extend(steps(ctx, pipeline, &rules));
     // A pipeline draft can remove a step while its instructions still need reassignment.
     items.extend(
       rules
@@ -83,6 +60,37 @@ pub(super) fn items(ctx: &Ctx, data: &ProjectInstructions, tab: Tab, entries: Ve
   // Deleted scope owners still have instructions that the person must be able to open.
   items.extend(entries.into_iter().filter(|e| matches!(e.body.scope(),
     InstructionScope::Pipeline { pipeline } | InstructionScope::Step { pipeline, .. } if data.pipeline(*pipeline).is_none())).map(Item::Rule));
+  items
+}
+fn steps(
+  ctx: &Ctx,
+  pipeline: &orchester_workspace::instructions::data::PipelineChoice,
+  rules: &[InstructionEntry],
+) -> Vec<Item> {
+  let mut items = Vec::new();
+  for step in &pipeline.steps {
+    let rules = rules
+      .iter()
+      .filter(|entry| matches!(entry.body.scope(), InstructionScope::Step { step: key, .. } if key == &step.key))
+      .cloned()
+      .collect::<Vec<_>>();
+    if rules.is_empty() {
+      continue;
+    }
+    items.push(Item::Step {
+      name: ctx
+        .t_args(
+          "instructions.stepLabel",
+          [
+            ("number", format!("{:02}", step.ordinal)),
+            ("name", step.name.to_string()),
+          ],
+        )
+        .to_string(),
+      role: step.role.as_ref().map(ToString::to_string),
+    });
+    items.extend(rules.into_iter().map(Item::Rule));
+  }
   items
 }
 fn count(ctx: &Ctx, count: usize, overrides: bool) -> String {

@@ -280,16 +280,23 @@ impl Editor {
           retry.run(candidate.clone());
         }
       });
-    body.child(
-      crate::ui::notice::Notice::new(
-        "instruction-write-error",
-        crate::ui::notice::NoticeTone::Danger,
-        ctx.t("instructions.writeFailed"),
-      )
-      .inspector()
-      .body(message_text(ctx, &error))
-      .action(if valid { retry } else { retry.disabled() }),
+    let notice = crate::ui::notice::Notice::new(
+      "instruction-write-error",
+      crate::ui::notice::NoticeTone::Danger,
+      ctx.t("instructions.writeFailed"),
     )
+    .body(message_text(ctx, &error))
+    .action(if valid { retry } else { retry.disabled() });
+    if self.work.publication_failed() {
+      body.child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding(Padding::symmetric(ExtraSpacing::Tabs.role(), SpacingSize::Md))
+          .child(notice.stacked()),
+      )
+    } else {
+      body.child(notice.inspector())
+    }
   }
   fn published_notice(&self, ctx: &mut Ctx, body: Column) -> Column {
     let Some(version) = self.published.get() else {
@@ -315,8 +322,18 @@ impl Editor {
     let Some(entry) = saved else {
       return body;
     };
+    let rejected = self.work.action.state().get().is_rejected();
+    let conflict = self
+      .work
+      .action
+      .state()
+      .get()
+      .error
+      .is_some_and(|error| error.key == "errors.draftChanged");
+    let retry_keeps_draft =
+      self.work.publication_failed() && !conflict && matches!(self.work.retry(&self.fields), Some(Write::Publish(..)));
     if props.entry.as_ref() == Some(entry)
-      && !self.work.action.state().get().is_rejected()
+      && (!rejected || retry_keeps_draft)
       && !matches!(entry.state, VersionState::StaleDraft { .. })
     {
       return body;
@@ -354,6 +371,7 @@ impl Editor {
     };
     let button = self.action_button(ctx, saved, dirty, busy);
     Row::new()
+      .id("instruction-editor-header")
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(EDITOR_HEADER_HEIGHT))
       .padding(Padding::horizontal(ExtraSpacing::Tabs.role()))

@@ -65,6 +65,13 @@ impl NoticeTone {
   }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NoticeLayout {
+  Inline,
+  Inspector,
+  Stacked,
+}
+
 pub struct Notice {
   id: Arc<str>,
   tone: NoticeTone,
@@ -74,7 +81,7 @@ pub struct Notice {
   title: Arc<str>,
   body: Option<Arc<str>>,
   actions: Vec<Element>,
-  inspector: bool,
+  layout: NoticeLayout,
 }
 
 impl Notice {
@@ -87,7 +94,7 @@ impl Notice {
       title: title.into(),
       body: None,
       actions: Vec::new(),
-      inspector: false,
+      layout: NoticeLayout::Inline,
     }
   }
 
@@ -112,7 +119,13 @@ impl Notice {
 
   /// Compact vertical notice in a 340px inspector (adK4e / A0a2p).
   pub fn inspector(mut self) -> Self {
-    self.inspector = true;
+    self.layout = NoticeLayout::Inspector;
+    self
+  }
+
+  /// Actions below the explanation, aligned with its text (SSbRV in GxmNs).
+  pub fn stacked(mut self) -> Self {
+    self.layout = NoticeLayout::Stacked;
     self
   }
 
@@ -125,32 +138,46 @@ impl Notice {
 
 impl From<Notice> for Element {
   fn from(notice: Notice) -> Self {
-    if notice.inspector {
+    if notice.layout == NoticeLayout::Inspector {
       return inspector_notice(notice);
     }
     let (fill, stroke, mark) = notice.tone.colors();
     let mark = notice.mark.unwrap_or(mark);
     let text = Column::new()
       .id(format!("{}-text", notice.id))
-      .flex(1.0)
-      .spacing(ExtraSpacing::Tight.role())
+      .spacing(if notice.layout == NoticeLayout::Stacked {
+        ExtraSpacing::Fine.role()
+      } else {
+        ExtraSpacing::Tight.role()
+      })
       .child(
         Text::new(&notice.title)
           .id(format!("{}-title", notice.id))
           .variant(ExtraTypography::Strong.role()),
       )
-      .with_children(
-        notice
-          .body
-          .as_deref()
-          .map(|body| Text::new(body).variant(ExtraTypography::Prose.role())),
-      );
+      .with_children(notice.body.as_deref().map(|body| {
+        Text::new(body)
+          .id(format!("{}-body", notice.id))
+          .variant(ExtraTypography::Prose.role())
+      }));
     let actions = (!notice.actions.is_empty()).then(|| {
       Row::new()
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
         .with_children(notice.actions)
     });
+    let (text, actions) = if notice.layout == NoticeLayout::Stacked {
+      (
+        Column::new()
+          .flex(1.0)
+          .spacing(ExtraSpacing::Loose.role())
+          .child(text)
+          .with_children(actions),
+        None,
+      )
+    } else {
+      (text.flex(1.0), actions)
+    };
     Row::new()
       .id(notice.id.clone())
       .width(Dimension::Pct(100.0))
