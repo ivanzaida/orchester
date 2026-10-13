@@ -81,15 +81,16 @@ fn nothing_waits(ctx: &Ctx) -> Column {
     )
 }
 
-/// One thing waiting, the `index`th: its kind and wait, what it is, its task, and its action.
+/// One thing waiting, the `index`th: its kind and wait, what it is, its task, and its action. A request
+/// whose task cannot be read says so and has no action: there is no task to open.
 fn need_card(ctx: &mut Ctx, project: ProjectId, (index, item): (usize, &NeedItem), now: Timestamp) -> Column {
   let (glyph, action, tab) = look(item.kind);
-  let id = format!("overview-need-{index}-{}-{}", item.key, kind_name(item.kind));
+  let key = item.task.as_ref().map_or("unknown", |task| &task.key);
+  let id = format!("overview-need-{index}-{key}-{}", kind_name(item.kind));
   let waited = match item.waited(now) {
     Waited::For(time) => ctx.t_args("overview.needs.waiting", [("time", message_text(ctx, &time))]),
     Waited::Since(time) => ctx.t_args("overview.needs.since", [("time", time)]),
   };
-  let open = open_task(ctx, project, &item.key, tab);
   let top = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Pair.role())
@@ -98,7 +99,7 @@ fn need_card(ctx: &mut Ctx, project: ProjectId, (index, item): (usize, &NeedItem
     .child(Text::new(&message_text(ctx, &item.kind.label())).variant(OverviewText::Kind.role()))
     .child(Spacer::new().flex(1.0))
     .child(Text::new(&waited).variant(TypographyStyle::Caption).nowrap());
-  card_frame(&id, CardSurface::Raised)
+  let card = card_frame(&id, CardSurface::Raised)
     .padding(ExtraSpacing::Inset.role())
     .spacing(SpacingSize::Sm)
     .describe("kind", kind_name(item.kind))
@@ -108,14 +109,18 @@ fn need_card(ctx: &mut Ctx, project: ProjectId, (index, item): (usize, &NeedItem
         .variant(ExtraTypography::Strong.role())
         .width(Dimension::Pct(100.0)),
     )
-    .child(Text::new(&message_text(ctx, &item.context())).variant(ExtraTypography::Note.role()))
-    .child(
-      Row::new().child(
-        ActionButton::new(format!("{id}-action"), ButtonKind::Secondary, ctx.t(action))
-          .icon(Icon::ArrowUpRight)
-          .on_click(open),
-      ),
-    )
+    .child(Text::new(&message_text(ctx, &item.context())).variant(ExtraTypography::Note.role()));
+  let Some(task) = &item.task else {
+    return card;
+  };
+  let open = open_task(ctx, project, &task.key, tab);
+  card.child(
+    Row::new().child(
+      ActionButton::new(format!("{id}-action"), ButtonKind::Secondary, ctx.t(action))
+        .icon(Icon::ArrowUpRight)
+        .on_click(open),
+    ),
+  )
 }
 
 /// A kind's mark (`Kind icon` `y6Zq0D`), the key of its action's words, and the tab of its task where it

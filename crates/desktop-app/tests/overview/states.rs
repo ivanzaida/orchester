@@ -65,6 +65,17 @@ fn overview_shows_its_sections_from_the_project_feed() {
       .collect::<Vec<_>>()
   );
   assert!(seeded.text("overview-footer-count").contains("completed"));
+  let notices = seeded.ids("overview-notice-");
+  assert!(
+    notices.iter().any(|id| id.ends_with("-unreadable")),
+    "the seed's unreadable run has its notice: {notices:?}"
+  );
+  assert!(
+    notices
+      .iter()
+      .all(|id| id.contains("-unreadable") || id.contains("-blocked")),
+    "a notice's id names its kind, so a task's two notices stay apart: {notices:?}"
+  );
 }
 
 #[test]

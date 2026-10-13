@@ -2,7 +2,7 @@
 //! read off it. No runner serves the project (its program does not exist), so a run recorded as running
 //! reads as interrupted, and the tasks the page counts are the project's as they stand without one.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use lurq::app::events::MouseButton;
 use orchester_app::routes::{OverviewTab, ProjectPage, Route};
@@ -26,6 +26,11 @@ pub struct Seeded {
 impl Seeded {
   /// `scenario` seeded into a new data folder, and its window, its feeds' readings held while `held`.
   pub fn reading(scenario: &str, held: bool) -> Self {
+    Self::prepared(scenario, held, |_| {})
+  }
+
+  /// `scenario` seeded, then changed by `prepare` in its repository before the app opens it.
+  fn prepared(scenario: &str, held: bool, prepare: impl FnOnce(&Path)) -> Self {
     let data = Data::new();
     let request = SeedRequest {
       data_dir: data.dir.path().to_path_buf(),
@@ -35,6 +40,7 @@ impl Seeded {
       now: Timestamp::now(),
     };
     let seeded = kontur::seed(&request).expect("the scenario seeds");
+    prepare(&seeded.repo);
     let launch = data.launch();
     launch.services().expect("the session started").hold.set(held);
     let mut window = Window::of(data, launch);
@@ -48,7 +54,30 @@ impl Seeded {
 
   /// `scenario` with its Overview shown on `tab` once its tasks are read.
   pub fn overview(scenario: &str, tab: OverviewTab) -> Self {
-    let mut seeded = Self::reading(scenario, false);
+    Self::shown(Self::reading(scenario, false), tab)
+  }
+
+  /// `scenario`'s Overview, after the run of its oldest pending tool request was damaged so that it cannot
+  /// be read, as an edit outside Orchester would leave it.
+  pub fn damaging_approval_run(scenario: &str) -> Self {
+    let seeded = Self::prepared(scenario, false, |repo| {
+      let db = rusqlite::Connection::open(repo.join(".orchester").join("orchester.db")).expect("the project database");
+      let run: String = db
+        .query_row(
+          "SELECT run_id FROM tool_approvals WHERE state = 'pending' ORDER BY requested_at LIMIT 1",
+          [],
+          |row| row.get(0),
+        )
+        .expect("a pending tool request");
+      let changed = db
+        .execute("UPDATE runs SET snapshot = 'not json' WHERE id = ?1", [run])
+        .expect("damage the run");
+      assert_eq!(changed, 1);
+    });
+    Self::shown(seeded, OverviewTab::Running)
+  }
+
+  fn shown(mut seeded: Self, tab: OverviewTab) -> Self {
     seeded.go(tab);
     seeded.until("the tasks", |seeded| {
       seeded.shows("overview-footer") || seeded.shows("overview-empty")

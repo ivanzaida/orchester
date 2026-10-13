@@ -1,9 +1,14 @@
 //! The new Overview as data (`tasks::board`, `tasks::attention`): what waits for the person, the oldest
-//! first, interrupted runs among it; the tabs and their tasks; the figures; and the notices.
+//! first, interrupted runs among it, and tool requests whose run cannot be read; the tabs and their tasks;
+//! the figures; and the notices.
 
 mod support;
 
-use orchester_core::{run::WaitReason, store::RunStore};
+use orchester_core::{
+  resource::ModelId,
+  run::{PendingToolApproval, WaitReason},
+  store::{ActivityStore, RunStore},
+};
 use orchester_workspace::tasks::{
   attention::{self, NeedKind, Waited},
   board::{self, BoardTab, Figures},
@@ -36,7 +41,7 @@ fn board_needs_you_lists_what_waits_oldest_first() {
   let items = attention::items(&tasks);
   let kinds: Vec<NeedKind> = items.iter().map(|item| item.kind).collect();
   assert_eq!(kinds, [NeedKind::ReadyToMerge, NeedKind::Input]);
-  assert_eq!(&*items[0].key, "KON-1");
+  assert_eq!(items[0].task.as_ref().map(|task| &*task.key), Some("KON-1"));
   assert_eq!(items[0].context().args[1].1, "Add login");
   assert_eq!(attention::count(&tasks), 2);
   assert_eq!(BoardTab::NeedsYou.count(&tasks), 2);
@@ -47,15 +52,67 @@ fn board_needs_you_lists_what_waits_oldest_first() {
 }
 
 #[test]
+fn board_needs_you_keeps_a_tool_request_whose_run_cannot_be_read() {
+  let mut fixture = support::Fixture::keyed("KON");
+  let task = fixture.task("Add login", support::at(10));
+  let run = fixture.started_run(task, support::at(20));
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let invocation = fixture
+    .db
+    .start_invocation(
+      run.id(),
+      execution,
+      &ModelId::new("gpt-5.5").expect("model"),
+      support::at(21),
+    )
+    .expect("invocation")
+    .id;
+  let approval = PendingToolApproval {
+    id: format!("{invocation}:call_1"),
+    run: run.id(),
+    execution,
+    invocation,
+    agent: "Builder".to_owned(),
+    command: true,
+    scope: None,
+    server: String::new(),
+    action: "pnpm build".to_owned(),
+    target: None,
+    requested_at: support::at(22),
+    native: None,
+  };
+  fixture.db.request_tool_approval(&approval).expect("the request waits");
+  // The store has no API for a damaged record: an edit outside Orchester leaves it.
+  let changed = rusqlite::Connection::open(fixture.repo.path().join(".orchester").join("orchester.db"))
+    .expect("the project database")
+    .execute(
+      "UPDATE runs SET snapshot = 'not json' WHERE id = ?1",
+      [run.id().to_string()],
+    )
+    .expect("damage the run");
+  assert_eq!(changed, 1);
+
+  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  assert_eq!(tasks.pending_tool_approvals[0].task_id, None, "the run cannot be read");
+  let items = attention::items(&tasks);
+  let [item] = items.as_slice() else {
+    panic!("the request alone waits: {items:?}");
+  };
+  assert_eq!((item.kind, &item.task), (NeedKind::Approval, &None));
+  assert_eq!(item.title.args[0].1, "pnpm build");
+  assert_eq!(item.context().key, "overview.needs.contextUnread");
+  assert_eq!(attention::count(&tasks), 1);
+  assert_eq!(Figures::of(&tasks, support::at(0)).needs_you, 1);
+}
+
+#[test]
 fn board_counts_interrupted_runs_as_needing_the_person_and_as_running() {
   let (_fixture, tasks) = project();
   let away = tasks.without_runner();
   let items = attention::items(&away);
-  assert!(
-    items
-      .iter()
-      .any(|item| item.kind == NeedKind::Interrupted && &*item.key == "KON-2")
-  );
+  assert!(items.iter().any(|item| {
+    item.kind == NeedKind::Interrupted && item.task.as_ref().is_some_and(|task| &*task.key == "KON-2")
+  }));
   assert!(matches!(
     items
       .iter()

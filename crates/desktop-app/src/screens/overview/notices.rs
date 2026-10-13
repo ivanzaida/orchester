@@ -81,28 +81,27 @@ pub(super) fn tasks(ctx: &mut Ctx, project: ProjectId, tasks: &ProjectTasks) -> 
   let shown: Vec<Element> = notices
     .iter()
     .map(|notice| {
-      let (glyph, label) = match notice.kind {
+      // A task can be both blocked and unreadable: the kind keeps their ids apart.
+      let (glyph, label, kind) = match notice.kind {
         NoticeKind::Blocked => (
           Icon::OctagonPause,
           ctx.t_args("overview.notices.open", [("task", &*notice.key)]),
+          "blocked",
         ),
-        NoticeKind::Unreadable => (Icon::FileWarning, ctx.t("overview.notices.openTask")),
+        NoticeKind::Unreadable => (Icon::FileWarning, ctx.t("overview.notices.openTask"), "unreadable"),
       };
-      let open = ActionButton::new(
-        format!("overview-notice-{}-open", notice.key),
-        ButtonKind::Secondary,
-        label,
-      )
-      .on_click(open_task(ctx, project, &notice.key, TaskTab::Summary));
-      Notice::new(
-        format!("overview-notice-{}", notice.key),
-        NoticeTone::Info,
-        message_text(ctx, &notice.title),
-      )
-      .icon(glyph)
-      .body(message_text(ctx, &notice.body))
-      .action(open)
-      .into()
+      let id = format!("overview-notice-{}-{kind}", notice.key);
+      let open = ActionButton::new(format!("{id}-open"), ButtonKind::Secondary, label).on_click(open_task(
+        ctx,
+        project,
+        &notice.key,
+        TaskTab::Summary,
+      ));
+      Notice::new(id, NoticeTone::Info, message_text(ctx, &notice.title))
+        .icon(glyph)
+        .body(message_text(ctx, &notice.body))
+        .action(open)
+        .into()
     })
     .collect();
   Some(

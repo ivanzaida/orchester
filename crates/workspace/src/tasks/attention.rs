@@ -88,21 +88,32 @@ pub const fn waits(phase: Option<TaskPhase>) -> bool {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NeedItem {
   pub kind: NeedKind,
-  pub task: TaskId,
-  pub key: Arc<str>,
-  pub task_title: Arc<str>,
+  /// The task it is about; `None` for a tool request whose run or task cannot be read any more, which
+  /// still waits and still counts.
+  pub task: Option<NeedTask>,
   /// Since when it waits: when the request was made, or when the run last changed.
   pub since: Timestamp,
   /// What waits, in a line (`Plan v2 from Planner waits for your decision`).
   pub title: Message,
 }
 
+/// The task an item is about.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NeedTask {
+  pub id: TaskId,
+  pub key: Arc<str>,
+  pub title: Arc<str>,
+}
+
 impl NeedItem {
-  /// The task it is about: *KON-16 · Rate-limit messages from GitHub*.
+  /// The task it is about: *KON-16 · Rate-limit messages from GitHub*, or that it is not known.
   pub fn context(&self) -> Message {
-    Message::new("overview.needs.context")
-      .with("task", self.key.to_string())
-      .with("title", self.task_title.to_string())
+    match &self.task {
+      Some(task) => Message::new("overview.needs.context")
+        .with("task", task.key.to_string())
+        .with("title", task.title.to_string()),
+      None => Message::new("overview.needs.contextUnread"),
+    }
   }
 
   /// How long it waits at `now`; an interrupted run waits since it stopped.
@@ -131,9 +142,9 @@ pub fn items(tasks: &ProjectTasks) -> Vec<NeedItem> {
   let mut items: Vec<NeedItem> = tasks
     .pending_tool_approvals
     .iter()
-    .filter_map(|shown| approval(tasks, shown))
+    .map(|shown| approval(tasks, shown))
     .collect();
-  let asking: Vec<TaskId> = items.iter().map(|item| item.task).collect();
+  let asking: Vec<TaskId> = items.iter().filter_map(|item| Some(item.task.as_ref()?.id)).collect();
   items.extend(
     tasks
       .tasks
@@ -150,9 +161,9 @@ pub fn count(tasks: &ProjectTasks) -> usize {
   items(tasks).len()
 }
 
-/// A tool request as an item; `None` when its task cannot be read any more.
-fn approval(tasks: &ProjectTasks, shown: &ShownApproval) -> Option<NeedItem> {
-  let task = tasks.tasks.iter().find(|task| Some(task.id()) == shown.task_id)?;
+/// A tool request as an item, without its task when that cannot be read any more: the request still waits.
+fn approval(tasks: &ProjectTasks, shown: &ShownApproval) -> NeedItem {
+  let task = tasks.tasks.iter().find(|task| Some(task.id()) == shown.task_id);
   let request = &shown.approval;
   let title = if request.command {
     Message::new("overview.needs.title.command").with("command", shown.first_line().0.to_owned())
@@ -161,12 +172,12 @@ fn approval(tasks: &ProjectTasks, shown: &ShownApproval) -> Option<NeedItem> {
       .with("tool", request.action.to_string())
       .with("server", request.server.to_string())
   };
-  Some(item(
+  item(
     task,
     NeedKind::Approval,
     request.requested_at,
     title.with("agent", request.agent.to_string()),
-  ))
+  )
 }
 
 /// The task as an item, when its latest run waits for the person.
@@ -188,7 +199,7 @@ fn waiting_task(task: &Task, tasks: &ProjectTasks) -> Option<NeedItem> {
     ),
     (kind, ..) => (kind, run_title(kind, task, latest)),
   };
-  Some(item(task, kind, latest.updated_at, title))
+  Some(item(Some(task), kind, latest.updated_at, title))
 }
 
 /// What a run waits for, when no plan, question or request says it.
@@ -209,12 +220,14 @@ fn run_title(kind: NeedKind, task: &Task, latest: &LatestRun) -> Message {
   }
 }
 
-fn item(task: &Task, kind: NeedKind, since: Timestamp, title: Message) -> NeedItem {
+fn item(task: Option<&Task>, kind: NeedKind, since: Timestamp, title: Message) -> NeedItem {
   NeedItem {
     kind,
-    task: task.id(),
-    key: task.key().to_string().into(),
-    task_title: task.details().title.as_str().into(),
+    task: task.map(|task| NeedTask {
+      id: task.id(),
+      key: task.key().to_string().into(),
+      title: task.details().title.as_str().into(),
+    }),
     since,
     title,
   }

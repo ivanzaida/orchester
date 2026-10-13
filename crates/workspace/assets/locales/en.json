@@ -82,6 +82,7 @@
         "readyToMerge": "Ready to merge"
       },
       "context": "{{task}} · {{title}}",
+      "contextUnread": "Its run cannot be read, so its task is not known",
       "title": {
         "command": "{{agent}} asks to run {{command}}",
         "tool": "{{agent}} asks to use {{tool}} on {{server}}",

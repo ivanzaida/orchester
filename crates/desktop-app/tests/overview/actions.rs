@@ -74,7 +74,34 @@ fn overview_rows_runs_and_cards_open_their_task() {
     .find(|id| id.ends_with("-action"))
     .expect("the first card's action");
   seeded.click(&action);
-  assert_eq!(seeded.window.navigation().route_now(), task(&seeded, &first.key, tab));
+  let key = &first.task.as_ref().expect("the first card's task").key;
+  assert_eq!(seeded.window.navigation().route_now(), task(&seeded, key, tab));
+}
+
+#[test]
+fn overview_keeps_a_tool_request_whose_run_cannot_be_read_without_an_action() {
+  let mut seeded = Seeded::damaging_approval_run("task-states");
+  let tasks = seeded.tasks();
+  let items = attention::items(&tasks);
+  let unknown: Vec<usize> = items
+    .iter()
+    .enumerate()
+    .filter(|(_, item)| item.kind == NeedKind::Approval && item.task.is_none())
+    .map(|(index, _)| index)
+    .collect();
+  let [index] = unknown.as_slice() else {
+    panic!("one request without its task: {items:?}");
+  };
+  assert_eq!(seeded.text("overview-needs-count"), items.len().to_string());
+  let card = format!("overview-need-{index}-unknown-approval");
+  let said = seeded.texts(&card);
+  assert!(
+    said
+      .iter()
+      .any(|line| line == "Its run cannot be read, so its task is not known"),
+    "{said:?}"
+  );
+  assert!(!seeded.shows(&format!("{card}-action")), "there is no task to open");
 }
 
 #[test]
