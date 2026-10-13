@@ -367,6 +367,9 @@ pub enum InvocationOutcome {
   NotStarted,
   /// A command tool's program did not finish within the tool's timeout; it was ended.
   TimedOut,
+  /// The worker ended, but its result could not be recorded. A runner problem reports why;
+  /// neither a successful exit nor process termination can be inferred from this result.
+  Unrecorded,
 }
 
 impl InvocationOutcome {

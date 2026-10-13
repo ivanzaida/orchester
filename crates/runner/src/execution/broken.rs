@@ -5,13 +5,14 @@
 //! where retrying is safe, or cancels it.
 
 use orchester_core::{
-  connection::stream::{AgentEvent, RunnerProblem},
+  connection::stream::{AgentEvent, InvocationOutcome, RunnerProblem},
+  id::RunId,
   run::{InterruptCause, RunStatus},
   store::{ActivityStore, RunStore},
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, StoreError};
 
 use super::{
   record::record,
@@ -37,6 +38,15 @@ impl RunTask {
     if self.run.status() != &RunStatus::Running {
       return Ok(());
     }
+    // Recording an invocation or activity may still fail. Persist the interruption first so
+    // a writable run log never claims that the workers we already ended are still running.
+    let ended_at = Timestamp::now();
+    record(&mut self.db, &self.notifier, &mut self.run, |run, _| {
+      run.interrupt(InterruptCause::RunnerFailed, ended_at)
+    })?;
+    if let Err(error) = close_invocations(&mut self.db, run, ended_at) {
+      tracing::error!(%run, %error, "the ended invocations could not be recorded after runner failure");
+    }
     let problem = RunnerProblem::RunnerFailed {
       detail: error.to_string(),
     };
@@ -45,9 +55,22 @@ impl RunTask {
       let sequence = self.db.append_activity(invocation, &events)?;
       self.notifier.send(Event::AgentActivity { run, sequence });
     }
-    record(&mut self.db, &self.notifier, &mut self.run, |run, now| {
-      run.interrupt(InterruptCause::RunnerFailed, now)
-    })?;
     Ok(())
   }
+}
+
+/// All workers had ended by the recorded interruption. Close missing end records then, even
+/// if storage only becomes writable on an explicit continuation, preserving usage and sessions.
+pub(super) fn close_invocations(db: &mut ProjectDb, run: RunId, ended_at: Timestamp) -> Result<(), StoreError> {
+  for mut invocation in db
+    .invocations(run)?
+    .into_iter()
+    .filter(|invocation| invocation.ended_at.is_none())
+  {
+    invocation.ended_at = Some(ended_at);
+    invocation.outcome = Some(InvocationOutcome::Unrecorded);
+    invocation.timing.resume(ended_at);
+    db.save_invocation(&invocation)?;
+  }
+  Ok(())
 }

@@ -5,7 +5,10 @@ use std::path::Path;
 
 use orchester_core::{
   id::RunId,
-  run::{PauseReason, RaisedLimits, Run, RunError, RunEvent, RunLimit, RunStatus, active_time, execution_tokens},
+  run::{
+    InterruptCause, PauseReason, RaisedLimits, Run, RunError, RunEvent, RunEventKind, RunLimit, RunStatus, active_time,
+    execution_tokens,
+  },
   store::{ActivityStore, RunStore, SettingsStore},
   time::Timestamp,
   tokens::TokenBudget,
@@ -103,6 +106,19 @@ pub(super) fn continue_interrupted(db: &mut ProjectDb, root: &Path, run: RunId) 
   let mut run = load(db, run)?;
   if !matches!(run.status(), RunStatus::Interrupted(_)) {
     return Err(Rejection::RunNotInterrupted);
+  }
+  if run.status() == &RunStatus::Interrupted(InterruptCause::RunnerFailed) {
+    let history = db
+      .events(run.id())
+      .map_err(|error| failed("cannot read interruption", &error))?;
+    let ended_at = history
+      .iter()
+      .rev()
+      .find(|event| matches!(event.kind(), RunEventKind::Interrupted { .. }))
+      .expect("an interrupted run has a recorded interruption")
+      .at();
+    super::broken::close_invocations(db, run.id(), ended_at)
+      .map_err(|error| failed("cannot record the ended invocations before continuing", &error))?;
   }
   let events = run.continue_run(Timestamp::now()).map_err(rejection)?;
   store_continuation(db, root, run, &events)

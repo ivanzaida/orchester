@@ -113,6 +113,10 @@ name = "store_refusal"
 required-features = ["test-agent"]
 
 [[test]]
+name = "worker_failure_controls"
+required-features = ["test-agent"]
+
+[[test]]
 name = "mcp"
 required-features = ["test-agent"]
 
