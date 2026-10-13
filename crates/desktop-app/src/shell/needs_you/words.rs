@@ -12,7 +12,7 @@ use orchester_workspace::{
 
 use crate::ui::{icon::Icon, message::message_text};
 
-/// What an item is: its glyph and word (`x4f2I`, `pdnV7`).
+/// What an item is: its glyph and word (`x4f2I`, `pdnV7`; `fEuoK`, `mYdJV`, `HcUnV` in the notes).
 pub(super) fn kind(ctx: &Ctx, kind: &WaitingKind) -> (Icon, Arc<str>) {
   let (glyph, key) = match kind {
     WaitingKind::Approval(_) => (Icon::ShieldAlert, "needs_you.kind.approval"),
@@ -20,11 +20,14 @@ pub(super) fn kind(ctx: &Ctx, kind: &WaitingKind) -> (Icon, Arc<str>) {
     WaitingKind::Plan(_) => (Icon::Map, "needs_you.kind.plan"),
     WaitingKind::Decision(_) => (Icon::CircleAlert, "needs_you.kind.decision"),
     WaitingKind::Interrupted { .. } => (Icon::CirclePause, "needs_you.kind.interrupted"),
+    WaitingKind::StoppedAtLimit { .. } => (Icon::Gauge, "needs_you.kind.limit"),
+    WaitingKind::ReadyToMerge => (Icon::GitMerge, "needs_you.kind.merge"),
+    WaitingKind::Memory { .. } => (Icon::BookOpen, "needs_you.kind.memory"),
   };
   (glyph, ctx.t(key))
 }
 
-/// The item's action: *Review* and *Answer* open it in place; the others open its task.
+/// The item's action: *Review* and *Answer* open it in place; the others open its task, or the project's.
 pub(super) fn action(ctx: &Ctx, kind: &WaitingKind) -> Arc<str> {
   ctx.t(match kind {
     WaitingKind::Approval(_) => "needs_you.action.review",
@@ -32,6 +35,9 @@ pub(super) fn action(ctx: &Ctx, kind: &WaitingKind) -> Arc<str> {
     WaitingKind::Plan(_) => "needs_you.action.reviewPlan",
     WaitingKind::Decision(_) => "needs_you.action.decide",
     WaitingKind::Interrupted { .. } => "needs_you.action.open",
+    WaitingKind::StoppedAtLimit { .. } => "needs_you.action.raiseLimit",
+    WaitingKind::ReadyToMerge => "needs_you.action.merge",
+    WaitingKind::Memory { .. } => "needs_you.action.memory",
   })
 }
 
@@ -84,14 +90,24 @@ pub(super) fn title(ctx: &Ctx, item: &WaitingItem) -> Arc<str> {
       [("version", plan.version.to_string()), ("agent", plan.agent.to_string())],
     ),
     WaitingKind::Decision(decision) => message_text(ctx, &decision.title()),
-    WaitingKind::Interrupted { .. } => ctx.t_args(
-      "needs_you.interrupted",
-      [(
-        "run",
-        item.run.map(|(_, number)| number.get().to_string()).unwrap_or_default(),
-      )],
-    ),
+    WaitingKind::Interrupted { .. } => of_run(ctx, "needs_you.interrupted", item),
+    WaitingKind::StoppedAtLimit { daily_budget: true } => of_run(ctx, "needs_you.stoppedDaily", item),
+    WaitingKind::StoppedAtLimit { daily_budget: false } => of_run(ctx, "needs_you.stoppedAtLimit", item),
+    WaitingKind::ReadyToMerge => of_run(ctx, "needs_you.readyToMerge", item),
+    WaitingKind::Memory { count: 1 } => ctx.t("needs_you.memory.one"),
+    WaitingKind::Memory { count } => ctx.t_args("needs_you.memory.other", [("count", count.to_string())]),
   }
+}
+
+/// *Run 142 was interrupted*: `key`'s words about the item's run.
+fn of_run(ctx: &Ctx, key: &str, item: &WaitingItem) -> Arc<str> {
+  ctx.t_args(
+    key,
+    [(
+      "run",
+      item.run.map(|(_, number)| number.get().to_string()).unwrap_or_default(),
+    )],
+  )
 }
 
 /// *Explorer asks: index the vendored crates?*, the question's first line.
@@ -106,14 +122,15 @@ fn asks(ctx: &Ctx, agent: &str, question: &str) -> Arc<str> {
   )
 }
 
-/// *KON-42 · Export task list as JSON*.
+/// *KON-42 · Export task list as JSON*; *Project memory* for the project's records.
 pub(super) fn task(ctx: &Ctx, item: &WaitingItem) -> Arc<str> {
-  match &item.task {
-    Some(task) => ctx.t_args(
+  match (&item.task, &item.kind) {
+    (Some(task), _) => ctx.t_args(
       "needs_you.task",
       [("key", task.key.to_string()), ("title", task.title.to_string())],
     ),
-    None => ctx.t("needs_you.noTask"),
+    (None, WaitingKind::Memory { .. }) => ctx.t("needs_you.projectMemory"),
+    (None, _) => ctx.t("needs_you.noTask"),
   }
 }
 
@@ -145,7 +162,11 @@ pub(super) fn place(ctx: &Ctx, item: &WaitingItem) -> Option<Arc<str>> {
         [("run", run), ("step", step), ("checkpoint", checkpoint.to_string())],
       ));
     }
-    WaitingKind::Decision(_) | WaitingKind::Interrupted { .. } => None,
+    WaitingKind::Decision(_)
+    | WaitingKind::Interrupted { .. }
+    | WaitingKind::StoppedAtLimit { .. }
+    | WaitingKind::ReadyToMerge
+    | WaitingKind::Memory { .. } => None,
   };
   Some(match agent {
     Some(agent) => ctx.t_args(

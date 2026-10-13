@@ -6,6 +6,7 @@ use std::{collections::BTreeMap, path::Path, sync::Arc};
 use orchester_core::{
   conversation::{Message, latest_question},
   id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
+  memory::{Memory, MemoryFilter, MemoryStatus, MemoryStore, ScopeFilter},
   question::AskedQuestions,
   resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
   run::{Run, RunEvent, RunNumber, StepExecutor, TaskPhase},
@@ -93,6 +94,8 @@ pub struct ProjectTasks {
   pub reviewing_tool_approvals: Arc<Vec<ShownApproval>>,
   /// Questions with suggested answers waiting for the person anywhere in this project.
   pub asked: Arc<Vec<AskedQuestions>>,
+  /// When each memory record of the project and of its tasks that waits for a person's approval was written.
+  pub proposed_memory: Arc<Vec<Timestamp>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
   pub phases: Arc<Phases>,
   /// How many runs of each task were started and can be read.
@@ -241,6 +244,7 @@ impl ProjectTasks {
           .map(|task| db.unfinished_blocking_tasks(task.id()).map(|links| (task.id(), links)))
           .collect::<Result<_, _>>()?,
       ),
+      proposed_memory: Arc::new(proposed_memory(&db, &tasks)?),
       tasks: Arc::new(tasks),
       not_shared: Arc::new(not_shared),
       kept_tags: Arc::new(kept_tags),
@@ -300,6 +304,29 @@ fn group_holds(
     }
   }
   Ok((holds, grouped))
+}
+
+/// When each record of the project's memory and of `tasks`' memories that waits for a person's approval was
+/// written.
+fn proposed_memory(db: &ProjectDb, tasks: &[Task]) -> Result<Vec<Timestamp>, StoreError> {
+  let proposed = |scope| MemoryFilter {
+    scope,
+    status: Some(MemoryStatus::Proposed),
+    pinned_only: false,
+  };
+  let mut written: Vec<Timestamp> = db
+    .memories(&proposed(ScopeFilter::Project))?
+    .iter()
+    .map(Memory::created_at)
+    .collect();
+  for task in tasks {
+    written.extend(
+      db.memories(&proposed(ScopeFilter::Task(task.id())))?
+        .iter()
+        .map(Memory::created_at),
+    );
+  }
+  Ok(written)
 }
 
 /// `latest`, a run of `task`, with when it last changed and what it waits for.

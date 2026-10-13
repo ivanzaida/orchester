@@ -1,14 +1,20 @@
 //! What waits for the person in a project, item by item (the Needs you panel `eBhFg`), and the count every
 //! Needs you shows: a tool request, a question with suggested answers, a plan, an agent's question, a run
-//! recorded interrupted; oldest first. A run that reads interrupted only because no runner looks after it
+//! recorded interrupted, a run stopped at its limit, work ready to merge and the project's memory records
+//! waiting for approval; oldest first. A run that reads interrupted only because no runner looks after it
 //! is not one.
 
 mod support;
 
 use orchester_core::{
+  id::ResourceId,
+  memory::{
+    AgentProvenance, AgentWrite, Confidence, Memory, MemoryContent, MemoryKind, MemoryScope, MemorySettings,
+    MemoryStore, SecretScreen,
+  },
   question::{Question, QuestionOption, QuestionRequest, QuestionTurn},
-  resource::ModelId,
-  run::{InterruptCause, PendingToolApproval, Run, WaitReason},
+  resource::{ModelId, StepKey},
+  run::{InterruptCause, PendingToolApproval, Run, RunLimit, WaitReason},
   store::ActivityStore,
 };
 use orchester_workspace::tasks::{
@@ -28,6 +34,9 @@ fn kinds(items: &[WaitingItem]) -> Vec<&'static str> {
       WaitingKind::Plan(_) => "plan",
       WaitingKind::Decision(_) => "decision",
       WaitingKind::Interrupted { .. } => "interrupted",
+      WaitingKind::StoppedAtLimit { .. } => "limit",
+      WaitingKind::ReadyToMerge => "merge",
+      WaitingKind::Memory { .. } => "memory",
     })
     .collect()
 }
@@ -280,4 +289,61 @@ fn needs_you_lists_a_step_end_question_with_options_once() {
     ["choice", "question"],
     "Research's question is its card; Docs still waits for its own answer"
   );
+}
+
+/// A record `run`'s agent writes to the project's memory at `now`, which waits for approval.
+fn proposed(run: &Run, text: &str, now: i64) -> Memory {
+  let write = AgentWrite {
+    provenance: AgentProvenance {
+      profile: ResourceId::generate(),
+      run: run.id(),
+      step: StepKey::new("implement").expect("key"),
+      execution: run.current_attempt().expect("attempt").executions()[0].id(),
+    },
+    confidence: Confidence::Medium,
+    sources: Vec::new(),
+  };
+  let content = MemoryContent::new(MemoryKind::Fact, text).expect("content");
+  let screened = SecretScreen::new(Vec::new()).check(content).expect("no secrets");
+  Memory::by_agent(
+    MemoryScope::Project,
+    write,
+    screened,
+    &MemorySettings::default(),
+    at(now),
+  )
+}
+
+#[test]
+fn needs_you_lists_a_limit_stop_work_ready_to_merge_and_the_memory_waiting_as_one_item() {
+  let mut fixture = Fixture::new();
+  let limited = fixture.task("Index the repo", at(10));
+  let mut run = fixture.started_run(limited, at(20));
+  let events = run
+    .stop_at_limit(RunLimit::Tokens, at(30))
+    .expect("stopped at its limit");
+  fixture.record(&run, &events);
+  let passed = fixture.task("Write docs", at(40));
+  let mut done = fixture.started_run(passed, at(50));
+  fixture.succeed(&mut done, at(60));
+  let records = [
+    proposed(&run, "Index with tree-sitter.", 80),
+    proposed(&done, "Docs live in docs/.", 90),
+  ];
+  fixture
+    .db
+    .add_memories(&records)
+    .expect("the records wait for approval");
+  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let items = tasks.waiting();
+  assert_eq!(kinds(&items), ["limit", "merge", "memory"]);
+  assert_eq!(items[0].kind, WaitingKind::StoppedAtLimit { daily_budget: false });
+  assert_eq!(
+    items[2].kind,
+    WaitingKind::Memory { count: 2 },
+    "the records are one item"
+  );
+  assert_eq!(items[2].since, at(80), "it waits since its oldest record");
+  assert!(items[2].task.is_none());
+  assert_eq!(tasks.needs_you(), 3);
 }

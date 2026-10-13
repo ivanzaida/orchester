@@ -1,10 +1,13 @@
 //! What waits for a person in one project, one item per waiting object, as the title bar's Needs you panel
-//! lists it (layer `Needs you` `eBhFg`) and every Needs you count counts it (the pill, the status bar, a tab's
-//! mark): a tool request waiting for a decision, a question with suggested answers, a run waiting on a plan,
-//! on an agent's question or on a decision after its retries, and a run recorded interrupted. A run that reads
-//! interrupted only because no runner looks after it is none: a runner records it once one does. Approvals and
-//! questions with suggested answers are answered in place, through their cards in the run's timeline
-//! ([`WaitingKind::card_key`], [`InPlace`]); the others open their task.
+//! lists it (layer `Needs you` `eBhFg`, note `zJR9O`) and every Needs you count counts it (the pill, the status
+//! bar, a tab's mark): a tool request waiting for a decision (also one whose task cannot be read), a question
+//! with suggested answers, each step of a run waiting on a plan or on an agent's question, a decision after a
+//! step's retries, a run stopped at its limit, a run whose every step passed and whose work waits to be merged,
+//! a run recorded interrupted, and the project's memory records waiting for approval, together one item. A run
+//! that reads interrupted only because no runner looks after it is none: a runner records it once one does.
+//! A merge that stopped at conflicts is known only to the session that tried it, so it is not counted here.
+//! Approvals and questions with suggested answers are answered in place, through their cards in the run's
+//! timeline ([`WaitingKind::card_key`], [`InPlace`]); the others open their task, or the project's memory.
 
 use std::{path::Path, sync::Arc};
 
@@ -79,6 +82,16 @@ pub enum WaitingKind {
   Interrupted {
     checkpoint: Option<Arc<str>>,
   },
+  /// A run that reached its token or time limit, or the project's daily budget, and waits for it to be raised.
+  StoppedAtLimit {
+    daily_budget: bool,
+  },
+  /// A run whose every step passed: its work waits for review and to be merged.
+  ReadyToMerge,
+  /// The project's memory records waiting for a person's approval, this many.
+  Memory {
+    count: usize,
+  },
 }
 
 impl WaitingKind {
@@ -88,7 +101,13 @@ impl WaitingKind {
     match self {
       Self::Approval(shown) => Some(approval_key(&shown.approval.id)),
       Self::Choice(choice) => Some(card_key(&choice.request)),
-      Self::Question(_) | Self::Plan(_) | Self::Decision(_) | Self::Interrupted { .. } => None,
+      Self::Question(_)
+      | Self::Plan(_)
+      | Self::Decision(_)
+      | Self::Interrupted { .. }
+      | Self::StoppedAtLimit { .. }
+      | Self::ReadyToMerge
+      | Self::Memory { .. } => None,
     }
   }
 }
@@ -96,7 +115,7 @@ impl WaitingKind {
 /// One object waiting for the person.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WaitingItem {
-  /// Its task, while it can be read.
+  /// Its task, while it can be read; none for the project's memory.
   pub task: Option<WaitingTask>,
   /// Its run and the run's number, while they can be read.
   pub run: Option<(RunId, RunNumber)>,
@@ -118,6 +137,17 @@ impl ProjectTasks {
     items.extend(self.waiting_choices().filter_map(|asked| self.choice_item(asked)));
     for task in self.tasks.iter() {
       self.run_items(task, &mut items);
+    }
+    if let Some(oldest) = self.proposed_memory.iter().min() {
+      items.push(WaitingItem {
+        task: None,
+        run: None,
+        step: None,
+        since: *oldest,
+        kind: WaitingKind::Memory {
+          count: self.proposed_memory.len(),
+        },
+      });
     }
     items.sort_by_key(|item| item.since);
     items
@@ -193,13 +223,18 @@ impl ProjectTasks {
       since: latest.updated_at,
       kind,
     };
-    if latest.phase == TaskPhase::Interrupted && !latest.lost_runner {
-      items.push(item(
-        latest.step.clone(),
-        WaitingKind::Interrupted {
-          checkpoint: latest.checkpoint.clone(),
-        },
-      ));
+    let settled = match latest.phase {
+      TaskPhase::Interrupted if !latest.lost_runner => Some(WaitingKind::Interrupted {
+        checkpoint: latest.checkpoint.clone(),
+      }),
+      TaskPhase::StoppedAtLimit => Some(WaitingKind::StoppedAtLimit {
+        daily_budget: latest.daily_budget,
+      }),
+      TaskPhase::Succeeded => Some(WaitingKind::ReadyToMerge),
+      _ => None,
+    };
+    if let Some(kind) = settled {
+      items.push(item(latest.step.clone(), kind));
       return;
     }
     if !latest.phase.needs_you() {

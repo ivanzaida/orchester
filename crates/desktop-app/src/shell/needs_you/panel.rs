@@ -294,18 +294,38 @@ impl NeedsYouPanel {
   }
 }
 
-/// How an item is told from the others while the panel shows: its card's key when it is answered in place,
-/// else its task's.
+/// How an item is told from the others while the panel shows: its card's key when it is answered in place;
+/// else its task's, what it is and its step, as several steps of one run may wait at once; `memory` for the
+/// project's memory records.
 fn key_of(item: &WaitingItem) -> Arc<str> {
-  item.kind.card_key().unwrap_or_else(|| {
-    let task = item.task.as_ref().map_or_else(String::new, |task| task.id.to_string());
-    Arc::from(format!("task-{task}"))
-  })
+  if let Some(key) = item.kind.card_key() {
+    return key;
+  }
+  let kind = match item.kind {
+    WaitingKind::Memory { .. } => return Arc::from("memory"),
+    WaitingKind::Question(_) => "question",
+    WaitingKind::Plan(_) => "plan",
+    WaitingKind::Decision(_) => "decision",
+    WaitingKind::Interrupted { .. } => "interrupted",
+    WaitingKind::StoppedAtLimit { .. } => "limit",
+    WaitingKind::ReadyToMerge => "merge",
+    WaitingKind::Approval(_) | WaitingKind::Choice(_) => "card",
+  };
+  let task = item.task.as_ref().map_or_else(String::new, |task| task.id.to_string());
+  let step = item.step.as_ref().map_or(0, |step| step.number);
+  Arc::from(format!("task-{task}-{kind}-{step}"))
 }
 
 /// Where an item that is not answered in place leads: an agent's question to the task's Conversation, where
-/// the composer answers it; the others to its Summary.
+/// the composer answers it; the project's memory records to its Overview, as no Memory screen is built yet; the
+/// others to the task's Summary.
 fn route_of(shown: &Shown) -> Option<Route> {
+  if matches!(shown.item.kind, WaitingKind::Memory { .. }) {
+    return Some(Route::Project(
+      shown.project,
+      ProjectPage::Overview(OverviewTab::NeedsYou),
+    ));
+  }
   let task = shown.item.task.as_ref()?;
   let view = match shown.item.kind {
     WaitingKind::Question(_) => TaskView::Conversation,

@@ -122,20 +122,31 @@ fn ids_under(window: &mut Window, id: &str, prefix: &str) -> Vec<String> {
 fn needs_you_panel_lists_what_waits_by_project_oldest_first() {
   let (mut window, seeded) = seeded("tasks");
   open(&mut window);
-  assert_eq!(text(&mut window, "needs-you-count"), "4", "as the pill counts");
-  assert_eq!(window.texts("needs-you-pill"), Some(vec!["4 need you".to_owned()]));
+  assert_eq!(text(&mut window, "needs-you-count"), "6", "as the pill counts");
+  assert_eq!(window.texts("needs-you-pill"), Some(vec!["6 need you".to_owned()]));
   assert_eq!(text(&mut window, "needs-you-sub"), "Kontur · oldest first");
   let group = format!("needs-you-group-{}", seeded.project);
-  assert_eq!(text(&mut window, &group), "K Kontur this tab's project 4");
+  assert_eq!(text(&mut window, &group), "K Kontur this tab's project 6");
   let items = items(&mut window);
-  assert_eq!(items.len(), 4, "{items:?}");
+  assert_eq!(items.len(), 6, "{items:?}");
   let kinds: Vec<String> = items
     .iter()
     .map(|id| text(&mut window, &format!("{id}-kind")))
     .collect();
   let mut sorted = kinds.clone();
   sorted.sort();
-  assert_eq!(sorted, ["Approval", "Decision", "Plan review", "Question"], "{kinds:?}");
+  assert_eq!(
+    sorted,
+    [
+      "Approval",
+      "Decision",
+      "Plan review",
+      "Question",
+      "Ready to merge",
+      "Stopped at limit"
+    ],
+    "{kinds:?}"
+  );
   let approval = item_of(&mut window, "Add retry to webhook sender");
   assert_eq!(
     text(&mut window, &format!("{approval}-title")),
@@ -145,6 +156,12 @@ fn needs_you_panel_lists_what_waits_by_project_oldest_first() {
   assert!(text(&mut window, &format!("{approval}-waiting")).starts_with("waiting "));
   assert!(text(&mut window, &format!("{approval}-where")).starts_with("Run "));
   assert_eq!(text(&mut window, &format!("{approval}-action")), "Review");
+  let merge = item_of(&mut window, "Show the signed-in account");
+  assert!(text(&mut window, &format!("{merge}-title")).ends_with("passed every step; its work waits to be merged"));
+  assert_eq!(text(&mut window, &format!("{merge}-action")), "Review & merge");
+  let limit = item_of(&mut window, "Explain an expired GitHub token in the status bar");
+  assert!(text(&mut window, &format!("{limit}-title")).ends_with("stopped at its limit"));
+  assert_eq!(text(&mut window, &format!("{limit}-action")), "Raise the limit");
   assert_eq!(text(&mut window, "needs-you-show-all"), "Show all in Kontur's Overview");
 }
 
