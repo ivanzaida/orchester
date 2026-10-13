@@ -38,13 +38,44 @@ Git blob identities for this saved source:
 | git rev-parse HEAD | PASS, exit 0; parent HEAD above |
 | git hash-object crates/desktop-app/src/screens/instructions/preview.rs crates/desktop-app/tests/instructions/preview.rs | PASS, exit 0; identities above |
 
-## Remaining blocker and checks not run
+## Approved Skills fixture correction
 
-Skills coverage is still failing. Its OS-temp fixture reaches a scanner access denial. No
-scanner bypass, elevation, permission change or alternate-context retry was attempted.
-Requested explicit approval to place the private Skills test fixtures under this worktree's
-.tmp/skills/ (matching the scratch-file rule) and rerun the same assertions. That fixture
-change has not been made pending the person's answer.
+The person answered "yes" to moving the private Skills fixtures into this worktree's
+.tmp/skills/ and rerunning the same filtered test. On resumption, Orchester had checkpointed
+the preview correction and this report at HEAD 03ce342c57c53fdcc4cd5e8b45672755331037a1.
+The only additional Rust change is Skills::new: it now constructs the same real headless
+Window/session/project using a unique tempfile directory under .tmp/skills/ instead of OS
+temp. It uses the existing Data and Window::of APIs; no shared support helper, assertion,
+scanner, permission, production Skills source or platform-specific rule changed.
+
+The requested skills_empty_states_ test now passes: 1 passed, 0 failed, 19 filtered out.
+The earlier timeout and OS5 failures above remain historical failures, not passing evidence.
+No elevation, permission change or scanner bypass was attempted.
+
+Final additional source blob:
+- crates/desktop-app/tests/skills.rs: d245144c5cee3e3e616153f579132516c78194c0
+
+## Commands after the person's approval
+
+| Command | Outcome |
+| --- | --- |
+| git status --short | PASS, exit 0; clean on resumption; later only Skills fixture and evidence report modified |
+| cargo test -p orchester-app --test skills skills_empty_states_ --locked | PASS, exit 0; 1 passed, 19 filtered out |
+| git rev-parse HEAD | PASS, exit 0; 03ce342c57c53fdcc4cd5e8b45672755331037a1 |
+| cargo +nightly fmt -p orchester-app -- --check | PASS, exit 0 |
+| git diff --check | PASS, exit 0; repeated after the evidence update |
+| git diff -- crates/desktop-app/tests/skills.rs | PASS, exit 0; fixture constructor only |
+| git hash-object crates/desktop-app/src/screens/instructions/preview.rs crates/desktop-app/tests/instructions/preview.rs crates/desktop-app/tests/skills.rs | PASS, exit 0; exact source identities above |
+| cargo clippy -p orchester-app --all-targets --all-features --locked -- -D warnings | PASS, exit 0 |
+| cargo test -p orchester-app --test skills skills_ --locked | PASS, exit 0; all 20 named Skills regressions passed |
+
+Instructions coverage (30 passed) is reused only for its unchanged production and test inputs:
+both preview blob identities were checked again after the fixture change. The Skills fixture
+constructor belongs only to the separate Skills integration-test binary. This Implement step
+has corrected both returned Review findings; authoritative Check, independent Review and
+Verify still assess the saved candidate.
+
+## Checks not run
 
 No check.ps1: the Implement-step override reserves it for authoritative pipeline Check.
 No unfiltered Cargo tests, new workspace/scanner runs, Apple cross-check, macOS execution,
