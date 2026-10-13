@@ -16,7 +16,7 @@ fn main_git(fixture: &Fixture) -> LocalGit {
   LocalGit::new(fixture.root(), &fixture.root().join(".orchester/local-integration")).expect("main Git")
 }
 
-fn completed_commit(fixture: &Fixture, partial: bool) {
+pub(super) fn completed_commit(fixture: &Fixture, partial: bool) {
   fs::write(fixture.root().join("local.txt"), b"selected staged\n").expect("selected");
   git(fixture.root(), &["add", "local.txt"]);
   if partial {

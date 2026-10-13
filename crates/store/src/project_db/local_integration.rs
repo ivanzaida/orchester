@@ -9,7 +9,7 @@ use orchester_core::{
     LocalIntegrationStore, LocalOperation, LocalPath, LocalPhase, LocalRecoveryStore, RecoveryLayer,
   },
 };
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params};
 
 use super::ProjectDb;
 use crate::{StoreError, rows::corrupt};
@@ -18,15 +18,7 @@ impl LocalIntegrationStore for ProjectDb {
   type Error = StoreError;
 
   fn local_operation(&self, run: RunId) -> Result<Option<LocalOperation>, StoreError> {
-    let body: Option<(i64, String)> = self
-      .connection
-      .query_row(
-        "SELECT version, body FROM local_integrations WHERE run_id = ?1",
-        [run.to_string()],
-        |row| Ok((row.get(0)?, row.get(1)?)),
-      )
-      .optional()?;
-    body.map(|(version, body)| decode(run, version, &body)).transpose()
+    read_operation(&self.connection, run)
   }
 
   fn local_operations(&self) -> Result<Vec<LocalOperation>, StoreError> {
@@ -54,8 +46,18 @@ impl LocalIntegrationStore for ProjectDb {
   fn save_local_operation(&mut self, operation: &LocalOperation, expected: Option<u64>) -> Result<bool, StoreError> {
     let body = serde_json::to_string(operation).map_err(|error| corrupt("local integration", error))?;
     let version = i64::try_from(operation.version()).map_err(|_| StoreError::Unrepresentable("operation version"))?;
+    let transaction = self.connection.transaction()?;
+    let saved = read_operation(&transaction, operation.run())?;
+    // Once cleanup is admitted, a previously opened review cannot acquire the worktree.
+    // Existing reservations can still reconcile recovery if an external removal was recorded.
+    if operation.reserves_checkout()
+      && !saved.as_ref().is_some_and(LocalOperation::reserves_checkout)
+      && super::worktree_removals::removal(&transaction, operation.run())?.is_some()
+    {
+      return Ok(false);
+    }
     let changed = match expected {
-      None => self.connection.execute(
+      None => transaction.execute(
         "INSERT INTO local_integrations (run_id, version, body) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
         params![operation.run().to_string(), version, body],
       )?,
@@ -63,7 +65,7 @@ impl LocalIntegrationStore for ProjectDb {
         if previous.checked_add(1) != Some(operation.version()) {
           return Err(corrupt("local integration version", "updates advance by exactly one"));
         }
-        if let Some(saved) = self.local_operation(operation.run())? {
+        if let Some(saved) = saved {
           if saved.version() != previous {
             return Ok(false);
           }
@@ -80,12 +82,13 @@ impl LocalIntegrationStore for ProjectDb {
           }
         }
         let previous = i64::try_from(previous).map_err(|_| StoreError::Unrepresentable("operation version"))?;
-        self.connection.execute(
+        transaction.execute(
           "UPDATE local_integrations SET version = ?2, body = ?3 WHERE run_id = ?1 AND version = ?4",
           params![operation.run().to_string(), version, body, previous],
         )?
       }
     };
+    transaction.commit()?;
     Ok(changed == 1)
   }
 }
@@ -164,4 +167,27 @@ fn decode(run: RunId, version: i64, body: &str) -> Result<LocalOperation, StoreE
     return Err(corrupt("local integration", "record identity differs from its row"));
   }
   Ok(operation)
+}
+
+fn read_operation(connection: &Connection, run: RunId) -> Result<Option<LocalOperation>, StoreError> {
+  let body: Option<(i64, String)> = connection
+    .query_row(
+      "SELECT version, body FROM local_integrations WHERE run_id = ?1",
+      [run.to_string()],
+      |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .optional()?;
+  body.map(|(version, body)| decode(run, version, &body)).transpose()
+}
+
+/// Cleanup and reservation acquisition use the same immediate transaction as run continuation.
+pub(super) fn reserves_worktree(connection: &Connection, run: RunId) -> Result<bool, StoreError> {
+  if read_operation(connection, run)?.is_some_and(|operation| operation.reserves_checkout()) {
+    return Ok(true);
+  }
+  Ok(connection.query_row(
+    "SELECT EXISTS(SELECT 1 FROM local_integration_process WHERE run_id = ?1 AND finished = 0)",
+    [run.to_string()],
+    |row| row.get(0),
+  )?)
 }

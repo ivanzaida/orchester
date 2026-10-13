@@ -14,3 +14,5 @@ mod privacy;
 #[path = "local_integration/release.rs"]
 mod release;
 mod support;
+#[path = "local_integration/worktree_removal.rs"]
+mod worktree_removal;

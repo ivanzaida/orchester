@@ -18,6 +18,8 @@ mod schema;
 mod selection;
 #[path = "local_integration/support.rs"]
 mod support;
+#[path = "local_integration/worktree_removal.rs"]
+mod worktree_removal;
 
 use std::fs;
 

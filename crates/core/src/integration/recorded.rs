@@ -23,6 +23,8 @@ pub enum RemovalStart {
   AlreadyRecorded,
   /// The run has live work: nothing was recorded.
   LiveWork,
+  /// Local integration or an unfinished Git process still needs this worktree.
+  LocalIntegration,
 }
 
 #[derive(Debug, Error)]
@@ -47,6 +49,9 @@ pub fn clean_up_recorded<S: WorktreeStore>(
     .map_err(RecordedCleanupError::Store)?;
   if start == RemovalStart::LiveWork {
     return Err(CleanupError::LiveWork.into());
+  }
+  if start == RemovalStart::LocalIntegration {
+    return Err(CleanupError::LocalIntegration.into());
   }
   let cleanup = clean_up(runner, git, repo, run, confirmed);
   // A clean-up fails only before it removes anything (`clean_up`): nothing was touched.

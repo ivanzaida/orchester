@@ -36,6 +36,15 @@ impl LocalProcessStore for ProjectDb {
 
   fn begin_local_process(&mut self, run: RunId) -> Result<u64, StoreError> {
     let transaction = self.connection.transaction()?;
+    if super::super::worktree_removals::removal(&transaction, run)?.is_some()
+      && super::read_operation(&transaction, run)?
+        .is_none_or(|operation| operation.merged().is_none() && operation.preservation().is_none())
+    {
+      return Err(corrupt(
+        "local process",
+        "the task worktree was removed without retained recovery",
+      ));
+    }
     let previous: Option<(i64, bool)> = transaction
       .query_row(
         "SELECT sequence, finished FROM local_integration_process WHERE run_id = ?1",

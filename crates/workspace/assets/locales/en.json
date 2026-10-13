@@ -350,6 +350,7 @@
     "worktree": {
       "failure": {
         "notFinished": "Only a run that ended or was interrupted can have its worktrees removed.",
+        "localIntegration": "This worktree is reserved by local integration or an unfinished Git process. Open Local integration to reconcile or cancel the operation before removing it.",
         "newChanges": "Nothing was removed from {{path}}: changes appeared in it after this dialog listed them. Look at them, then remove it again.",
         "notRemoved": "Git didn’t remove {{path}}: {{detail}}",
         "folderUnreadable": "Couldn’t read {{path}}: {{detail}}"
