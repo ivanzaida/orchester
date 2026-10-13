@@ -69,6 +69,16 @@ pub(super) fn items(ctx: &Ctx, data: &ProjectInstructions, tab: Tab, entries: Ve
           .map(Item::Rule),
       );
     }
+    // A pipeline draft can remove a step while its instructions still need reassignment.
+    items.extend(
+      rules
+        .into_iter()
+        .filter(|entry| {
+          matches!(entry.body.scope(),
+          InstructionScope::Step { step, .. } if !pipeline.steps.iter().any(|choice| &choice.key == step))
+        })
+        .map(Item::Rule),
+    );
   }
   // Deleted scope owners still have instructions that the person must be able to open.
   items.extend(entries.into_iter().filter(|e| matches!(e.body.scope(),

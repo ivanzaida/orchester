@@ -3,6 +3,7 @@ mod clipboard;
 mod design_states;
 mod harness;
 mod insertion;
+mod library;
 mod preview;
 mod recovery;
 mod repository;
