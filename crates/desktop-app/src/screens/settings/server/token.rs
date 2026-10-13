@@ -13,7 +13,7 @@ use lurq::{
     ctx::{Ctx, Interval},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, Text, TextOverflow},
   core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
@@ -44,6 +44,9 @@ use crate::{
 const SHOWN_FOR: u32 = 30;
 /// The masked value's height (`DShSq`).
 const MASK_HEIGHT: f32 = 32.0;
+/// The slot *Show* and *Hide* share, as wide as the wider of the two (`lye6f`, `eM8tB`), so neither the field nor
+/// the buttons after it move when the token shows.
+const SHOW_HIDE_WIDTH: f32 = 76.0;
 
 /// Where this platform keeps the token, as Settings names it.
 #[cfg(target_os = "macos")]
@@ -196,18 +199,28 @@ fn value(ctx: &Ctx, shown: Option<&BearerToken>) -> Element {
       Icon::LockKeyhole,
     ),
   };
+  // Both grow from no width at all, so the field takes the room the buttons leave whatever it shows; a token longer
+  // than the field ends in an ellipsis.
   Row::new()
     .id("settings-mcp-token-value")
+    .width(Dimension::Px(0.0))
     .flex(1.0)
-    .min_width(Dimension::Px(0.0))
     .height(Dimension::Px(MASK_HEIGHT))
+    .clip()
     .align_items(Alignment::Center)
     .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
     .spacing(SpacingSize::Sm)
     .background(PaletteColor::SurfaceInput)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
-    .child(text.id("settings-mcp-token-text").flex(1.0).nowrap())
+    .child(
+      text
+        .id("settings-mcp-token-text")
+        .width(Dimension::Px(0.0))
+        .flex(1.0)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
+    )
     .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
     .into()
 }
@@ -221,47 +234,8 @@ impl TokenRow {
     (gate, runtime): (&InputGate, &tokio::runtime::Handle),
     (shown, readable, rotate): (bool, bool, &Change<()>),
   ) -> Vec<Element> {
+    let show = self.show_button(ctx, props.server.clone().filter(|_| readable), gate, shown);
     let server = props.server.clone();
-    let show = if shown {
-      let (reveal, left) = (self.reveal.clone(), self.left.clone());
-      ActionButton::new(
-        "settings-mcp-token-show",
-        ButtonKind::Ghost,
-        ctx.t("settings.automation.server.token.hide"),
-      )
-      .icon(Icon::EyeOff)
-      .on_click(move || {
-        reveal.lock().take();
-        left.set(0);
-      })
-    } else {
-      let button = ActionButton::new(
-        "settings-mcp-token-show",
-        ButtonKind::Ghost,
-        ctx.t("settings.automation.server.token.show"),
-      )
-      .icon(Icon::Eye);
-      match server.clone().filter(|_| readable) {
-        Some(server) => {
-          let (reveal, left, blocked, gate) = (
-            self.reveal.clone(),
-            self.left.clone(),
-            self.blocked.clone(),
-            gate.clone(),
-          );
-          button.on_click(move || {
-            if refused(&blocked) {
-              return;
-            }
-            let Some(token) = token_of(&server) else { return };
-            // Clients stop reading the window before the token is drawn.
-            *reveal.lock() = Some((token, gate.show_token()));
-            left.set(SHOWN_FOR);
-          })
-        }
-        None => button.disabled(),
-      }
-    };
     let copy = ActionButton::new(
       "settings-mcp-token-copy",
       ButtonKind::Ghost,
@@ -298,7 +272,57 @@ impl TokenRow {
         }
       })
     };
-    vec![show.into(), copy.into(), rotate_button.into()]
+    vec![show, copy.into(), rotate_button.into()]
+  }
+
+  /// *Show*, or *Hide* while the token shows, in a slot of one width for both; `server` is the one to read the
+  /// token from, when it can be read.
+  fn show_button(&self, ctx: &Ctx, server: Option<AppMcp>, gate: &InputGate, shown: bool) -> Element {
+    let show = if shown {
+      let (reveal, left) = (self.reveal.clone(), self.left.clone());
+      ActionButton::new(
+        "settings-mcp-token-show",
+        ButtonKind::Ghost,
+        ctx.t("settings.automation.server.token.hide"),
+      )
+      .icon(Icon::EyeOff)
+      .on_click(move || {
+        reveal.lock().take();
+        left.set(0);
+      })
+    } else {
+      let button = ActionButton::new(
+        "settings-mcp-token-show",
+        ButtonKind::Ghost,
+        ctx.t("settings.automation.server.token.show"),
+      )
+      .icon(Icon::Eye);
+      match server {
+        Some(server) => {
+          let (reveal, left, blocked, gate) = (
+            self.reveal.clone(),
+            self.left.clone(),
+            self.blocked.clone(),
+            gate.clone(),
+          );
+          button.on_click(move || {
+            if refused(&blocked) {
+              return;
+            }
+            let Some(token) = token_of(&server) else { return };
+            // Clients stop reading the window before the token is drawn.
+            *reveal.lock() = Some((token, gate.show_token()));
+            left.set(SHOWN_FOR);
+          })
+        }
+        None => button.disabled(),
+      }
+    };
+    Row::new()
+      .id("settings-mcp-token-show-slot")
+      .width(Dimension::Px(SHOW_HIDE_WIDTH))
+      .child(show.fill_width())
+      .into()
   }
 
   /// What came of the last *Copy*.

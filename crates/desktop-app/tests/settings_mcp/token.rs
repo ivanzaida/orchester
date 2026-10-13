@@ -76,3 +76,32 @@ fn settings_mcp_leaving_settings_hides_the_token() {
   assert!(!gate.token_shown(), "the token went with the page");
   assert!(!gate.protecting(), "and so did the person-only controls");
 }
+
+#[test]
+fn settings_mcp_token_field_and_buttons_keep_their_place_when_shown() {
+  const PARTS: [&str; 4] = [
+    "settings-mcp-token-value",
+    "settings-mcp-token-show",
+    "settings-mcp-token-copy",
+    "settings-mcp-token-rotate",
+  ];
+  let mut shown = Shown::installed(free_port(), Arc::default());
+  shown.until("listening", |shown| shown.says("settings-mcp-state", "Listening"));
+  let hidden = PARTS.map(|id| shown.bounds(id));
+  shown.click("settings-mcp-token-show");
+  assert!(shown.link.input_gate().token_shown());
+  let revealed = PARTS.map(|id| shown.bounds(id));
+  for ((id, hidden), revealed) in PARTS.iter().zip(hidden).zip(revealed) {
+    assert_eq!(hidden, revealed, "{id} moved or changed width when the token showed");
+  }
+  let field = revealed[0];
+  assert!(
+    field[2] > 400.0,
+    "the field takes the room the buttons leave (lye6f: about 430): {field:?}"
+  );
+  let text = shown.bounds("settings-mcp-token-text");
+  assert!(
+    text[0] + text[2] <= field[0] + field[2],
+    "the token stays inside its field: {text:?} in {field:?}"
+  );
+}

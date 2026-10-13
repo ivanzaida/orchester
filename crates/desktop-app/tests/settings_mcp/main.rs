@@ -164,6 +164,16 @@ impl Shown {
     self.pass();
   }
 
+  /// Where the element `id` is laid out: x, y, width and height.
+  fn bounds(&mut self, id: &str) -> [f32; 4] {
+    let bounds = self
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"));
+    [bounds.x, bounds.y, bounds.width, bounds.height]
+  }
+
   fn token(&self) -> String {
     self.server.token().expect("a token is in use").expose().to_owned()
   }
