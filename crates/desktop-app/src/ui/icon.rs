@@ -72,6 +72,7 @@ icons! {
   Clock => '\u{e087}',
   Clock3 => '\u{e250}',
   ClockAlert => '\u{e62a}',
+  CloudCheck => '\u{e66e}',
   CodeXml => '\u{e206}',
   Coins => '\u{e097}',
   Compass => '\u{e09b}',
@@ -185,6 +186,7 @@ icons! {
   SquarePlus => '\u{e173}',
   Tag => '\u{e17f}',
   Tags => '\u{e35c}',
+  Target => '\u{e180}',
   Terminal => '\u{e181}',
   TextCursorInput => '\u{e265}',
   Timer => '\u{e1e0}',
@@ -241,4 +243,23 @@ pub const fn screen_icon(screen: Screen) -> Icon {
     Screen::EditConnection => Icon::Pencil,
     Screen::ProjectSettings => Icon::SlidersHorizontal,
   }
+}
+
+/// Outlined raised icon tile in Skills guidance, empty states and reference rows.
+pub fn marker(mark: Icon, side: f32) -> lurq::components::Row {
+  use lurq::{
+    app::theme::{BorderSize, RadiusSize},
+    layout::{Alignment, layout_kind::Justify},
+    node::dimension::Dimension,
+  };
+  lurq::components::Row::new()
+    .width(Dimension::Px(side))
+    .height(Dimension::Px(side))
+    .flex_shrink(0.0)
+    .align_items(Alignment::Center)
+    .justify(Justify::Center)
+    .background(PaletteColor::SurfaceRaised)
+    .border_inside(BorderSize::Sm, PaletteColor::Border)
+    .rounded(RadiusSize::Md)
+    .child(icon(mark, IconSize::Base, PaletteColor::TextMuted))
 }

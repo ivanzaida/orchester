@@ -28,6 +28,7 @@ mod secrets;
 mod settings;
 mod shadow;
 mod shell;
+pub mod skills;
 mod startup;
 mod task;
 mod task_form;
@@ -90,6 +91,7 @@ pub fn install(app: &mut App, mode: Mode) {
   connections::install(theme);
   secrets::install(theme);
   shell::install(theme);
+  skills::install(theme);
   lifecycle::install(theme);
   conversation::install(theme);
   cards::install(theme);

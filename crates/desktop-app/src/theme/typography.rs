@@ -234,6 +234,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::secrets::typography(palette))
       .chain(super::agents::typography(palette))
       .chain(super::instructions::typography(palette))
+      .chain(super::skills::typography(palette))
       .collect(),
   }
 }

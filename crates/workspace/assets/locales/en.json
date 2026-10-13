@@ -872,6 +872,18 @@
     "errors": {
       "blankDescription": "Write a description first: agents choose a skill by it",
       "blankBody": "Write the body first: it is what an agent loads"
+    },
+    "library": { "loadFailed": "Skills and repository agent files could not be read." },
+    "editorErrors": {
+      "nameRequired": "Enter a skill name.",
+      "nameTaken": "{{name}} is already a skill in this project. Choose another name.",
+      "scopeUnavailable": "This scope no longer has an agent that can load a skill. Choose another scope.",
+      "noDraft": "Nothing to publish. Editing saves a draft, which no agent gets until you publish it.",
+      "stale": "A newer version was published since this draft was started. Reload and review it.",
+      "descriptionRequired": "Write a description first. Agents choose a skill by it.",
+      "bodyRequired": "Write the skill body before publishing.",
+      "fileRead": "The reference file could not be read.",
+      "duplicateFile": "A reference file already has this path."
     }
   },
   "appMcp": {

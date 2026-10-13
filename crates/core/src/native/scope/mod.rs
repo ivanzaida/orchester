@@ -144,6 +144,18 @@ impl FileScope {
     }
   }
 
+  /// Resolves a repository discovery path, excluding state and git files even for reads.
+  pub fn repository_readable(&self, path: &str) -> Result<PathBuf, ScopeError> {
+    let resolved = self.readable(path)?;
+    if !within(&resolved, &self.worktree) {
+      return Err(ScopeError::NotReadable(resolved));
+    }
+    if protected(&resolved, &self.worktree, true) {
+      return Err(ScopeError::Protected(resolved));
+    }
+    Ok(resolved)
+  }
+
   /// Where a tool writes `path`, or why it may not. The executor resolves it again just before it
   /// writes, since commands can change the file system in between.
   pub fn writable(&self, path: &str) -> Result<PathBuf, ScopeError> {

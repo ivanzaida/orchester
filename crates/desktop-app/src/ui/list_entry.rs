@@ -31,13 +31,15 @@ pub fn removable(
   id: &str,
   text: &str,
   remove_label: &str,
-  remove: impl Fn() + Send + Sync + 'static,
+  remove: Option<impl Fn() + Send + Sync + 'static>,
 ) -> Element {
-  let button = IconButton::new(id.to_owned(), Icon::X, remove_label)
-    .small()
-    .in_form()
-    .on_click(remove)
-    .render(ctx);
+  let button = IconButton::new(id.to_owned(), Icon::X, remove_label).small().in_form();
+  let button = if let Some(remove) = remove {
+    button.on_click(remove)
+  } else {
+    button
+  }
+  .render(ctx);
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(ROW_HEIGHT))

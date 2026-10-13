@@ -60,6 +60,7 @@ const BUILT: &[Screen] = &[
   Screen::Pipelines,
   Screen::ProjectSettings,
   Screen::Secrets,
+  Screen::Skills,
   Screen::Tasks,
   Screen::Tools,
 ];

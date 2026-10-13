@@ -19,6 +19,7 @@ mod live;
 mod mcp_servers;
 mod merge;
 mod pipeline_permissions;
+mod skills_window;
 mod tools;
 mod tools_window;
 mod window;

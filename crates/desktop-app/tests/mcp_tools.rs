@@ -352,3 +352,21 @@ fn hold_reads_holds_and_releases_the_feeds_reads() {
   let error = hold_reads(&hold, &json!({})).expect_err("no flag");
   assert_eq!(error.to_json()["code"], "missing_param");
 }
+#[test]
+fn navigate_skills_forms_round_trip_their_parameters() {
+  let window = Window::open();
+  let navigation = window.navigation();
+  for skill in ["new", "import", PROJECT] {
+    let args = json!({ "route": "skills", "project": PROJECT, "skill": skill });
+    let answer = navigate(&navigation, &args).expect("Skills route");
+    assert_eq!(
+      answer["route"]["path"],
+      format!("/project/{PROJECT}/skills?skill={skill}")
+    );
+    assert_eq!(answer["route"]["params"], json!({ "project": PROJECT, "skill": skill }));
+    assert_eq!(
+      orchester_app::routes::Route::parse(&navigation.route_now().path()),
+      Ok(navigation.route_now())
+    );
+  }
+}

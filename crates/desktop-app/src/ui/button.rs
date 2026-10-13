@@ -107,6 +107,8 @@ enum Hold {
   Disabled,
   /// Its feature is not built or not allowed, for this reason.
   Unavailable(Arc<str>),
+  /// An unavailable action whose design retains its ordinary glyph (Skills Publish).
+  UnavailableWithIcon(Arc<str>),
 }
 
 pub struct ActionButton {
@@ -173,6 +175,13 @@ impl ActionButton {
     self
   }
 
+  /// Preserve the action glyph while keeping the same unavailable reason and inert behavior.
+  /// Skills header p4RJw keeps its upload mark when publication cannot be used.
+  pub fn unavailable_with_icon(mut self, reason: impl Into<Arc<str>>) -> Self {
+    self.hold = Some(Hold::UnavailableWithIcon(reason.into()));
+    self
+  }
+
   /// As wide as its parent, its icon and label centered.
   pub fn fill_width(mut self) -> Self {
     self.fill = true;
@@ -206,7 +215,7 @@ impl ActionButton {
   const fn state(&self) -> &'static str {
     match (&self.hold, &self.action) {
       (Some(Hold::Loading), _) => "loading",
-      (Some(Hold::Unavailable(_)), _) => "unavailable",
+      (Some(Hold::Unavailable(_) | Hold::UnavailableWithIcon(_)), _) => "unavailable",
       (Some(Hold::Disabled), _) | (None, None) => "disabled",
       (None, Some(_)) => "enabled",
     }
@@ -217,7 +226,7 @@ impl ActionButton {
     match self.hold {
       Some(Hold::Loading) => Some(Icon::LoaderCircle),
       Some(Hold::Unavailable(_)) => Some(Icon::Lock),
-      Some(Hold::Disabled) | None => self.icon,
+      Some(Hold::Disabled | Hold::UnavailableWithIcon(_)) | None => self.icon,
     }
   }
 }
@@ -278,7 +287,7 @@ impl From<ActionButton> for Element {
     if let Some(element) = button.element {
       frame = frame.ref_element(element);
     }
-    if let Some(Hold::Unavailable(reason)) = &button.hold {
+    if let Some(Hold::Unavailable(reason) | Hold::UnavailableWithIcon(reason)) = &button.hold {
       frame = frame.describe("reason", reason.clone());
     }
     match (button.hold, button.action) {
