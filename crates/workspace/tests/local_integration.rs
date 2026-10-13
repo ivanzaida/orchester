@@ -6,6 +6,8 @@ mod authority;
 mod drafts;
 #[path = "local_integration/external.rs"]
 mod external;
+#[path = "local_integration/ignore_transitions.rs"]
+mod ignore_transitions;
 #[path = "local_integration/metadata.rs"]
 mod metadata;
 #[path = "local_integration/privacy.rs"]

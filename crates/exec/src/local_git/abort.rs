@@ -18,9 +18,11 @@ impl LocalGit {
     if entries.code != Some(0) {
       return Err(LocalGitError::Refused);
     }
+    let ignored = self.preview_ignored(&before.head)?;
     self.ensure_task_abort(before)?;
     let mut result = before.clone();
     result.index = digest(&entries.bytes);
+    result.ignored = ignored;
     result.files.clear();
     result.operation = None;
     Ok(result)

@@ -24,7 +24,6 @@ impl LocalOperation {
       || result.git_dir != before.git_dir
       || result.branch != before.branch
       || result.head != before.head
-      || result.ignored != before.ignored
     {
       return Err(LocalError::Stale);
     }

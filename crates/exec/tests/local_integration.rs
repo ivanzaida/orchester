@@ -397,3 +397,65 @@ fn local_integration_effective_worktree_stays_bound_after_core_worktree_redirect
   assert_eq!(git(external.root(), &["ls-files", "--stage"]), outside_index);
   assert_eq!(git(external.root(), &["rev-parse", "HEAD"]), outside_head);
 }
+
+#[test]
+fn local_integration_ignore_transition_nested_exposure_is_refused_before_sync() {
+  let repo = Repo::new();
+  fs::create_dir(repo.root().join("nested")).expect("directory");
+  fs::write(repo.root().join("nested/.gitignore"), b"secret.bin\n").expect("ignore");
+  git(repo.root(), &["add", "nested/.gitignore"]);
+  git(repo.root(), &["commit", "-m", "nested ignore"]);
+  git(repo.root(), &["checkout", "-b", "task"]);
+  fs::write(repo.root().join("selected.txt"), b"task result\n").expect("task");
+  git(repo.root(), &["commit", "-am", "task"]);
+  git(repo.root(), &["checkout", "main"]);
+  fs::write(repo.root().join("nested/.gitignore"), b"").expect("expose nested file");
+  git(repo.root(), &["commit", "-am", "expose nested"]);
+  let base = git(repo.root(), &["rev-parse", "HEAD"]);
+  git(repo.root(), &["checkout", "task"]);
+  fs::write(repo.root().join("nested/secret.bin"), [0, 255, 1]).expect("ignored binary");
+  let before = repo.git.snapshot().expect("before");
+  let preview = repo.git.preview_sync(&before, &base);
+  assert!(
+    matches!(preview, Err(LocalGitError::State(LocalError::Unsupported))),
+    "expected pre-mutation refusal: {preview:?}"
+  );
+  assert_eq!(repo.git.snapshot().expect("unchanged"), before);
+  assert_eq!(
+    fs::read(repo.root().join("nested/secret.bin")).expect("retained"),
+    [0, 255, 1]
+  );
+}
+
+#[test]
+fn local_integration_ignore_transition_sync_refuses_ignored_file_and_directory_collisions() {
+  for directory in [false, true] {
+    let repo = Repo::new();
+    fs::write(repo.root().join(".gitignore"), b".orchester/\nignored.txt\ncache/\n").expect("ignore");
+    git(repo.root(), &["commit", "-am", "ignore cache"]);
+    git(repo.root(), &["checkout", "-b", "task"]);
+    fs::write(repo.root().join("selected.txt"), b"task result\n").expect("task");
+    git(repo.root(), &["commit", "-am", "task"]);
+    git(repo.root(), &["checkout", "main"]);
+    let path = if directory { "cache" } else { "ignored.txt" };
+    fs::write(repo.root().join(path), b"incoming tracked file\n").expect("incoming");
+    git(repo.root(), &["add", "-f", path]);
+    git(repo.root(), &["commit", "-m", "incoming tracked"]);
+    let base = git(repo.root(), &["rev-parse", "HEAD"]);
+    git(repo.root(), &["checkout", "task"]);
+    let path = if directory {
+      fs::create_dir(repo.root().join("cache")).expect("cache");
+      "cache/ignored.bin"
+    } else {
+      "ignored.txt"
+    };
+    fs::write(repo.root().join(path), [0, 255, 1]).expect("ignored original");
+    let before = repo.git.snapshot().expect("before");
+    assert!(matches!(
+      repo.git.preview_sync(&before, &base),
+      Err(LocalGitError::State(LocalError::Unsupported))
+    ));
+    assert_eq!(repo.git.snapshot().expect("unchanged"), before);
+    assert_eq!(fs::read(repo.root().join(path)).expect("retained"), [0, 255, 1]);
+  }
+}

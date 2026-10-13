@@ -61,10 +61,12 @@ impl LocalGit {
     }
     let index = encode_index(&entries);
     let files = self.sync_files(tree, &heads, &working, &conflicts)?;
+    let ignored = self.preview_ignored(tree)?;
     self.ensure(before)?;
     let mut result = before.clone();
     result.files = files;
     result.index = digest(&index);
+    result.ignored = ignored;
     result.operation = Some(format!("MERGE_HEAD:{}", digest(format!("{base}\n").as_bytes())));
     Ok(result)
   }

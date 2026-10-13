@@ -188,6 +188,8 @@ fn local_integration_abort_intent_survives_serialization_and_only_finishes_at_th
   let task = checkout('b');
   let mut conflicts = task.clone();
   conflicts.operation = Some("MERGE_HEAD:owned".into());
+  // Resolving .gitignore can expose a retained file; abort restores HEAD's classification.
+  conflicts.ignored = ContentHash::new(&"c".repeat(64)).expect("resolved ignore identity");
   let mut operation = LocalOperation::new(RunId::generate(), base.clone()).expect("operation");
   operation.prepared(base.clone()).expect("prepared");
   operation.begin_sync(&base).expect("sync");
@@ -206,6 +208,12 @@ fn local_integration_abort_intent_survives_serialization_and_only_finishes_at_th
   assert_eq!(recovered.ensure_task_owned(&conflicts), Err(LocalError::Reconcile));
   assert_eq!(recovered.plan_task_commit(), Err(LocalError::WrongPhase));
   assert_eq!(recovered.begin_check(), Err(LocalError::WrongPhase));
+  let mut stale_classification = task.clone();
+  stale_classification.ignored.clone_from(&conflicts.ignored);
+  assert_eq!(
+    recovered.task_abort_finished(base.clone(), stale_classification),
+    Err(LocalError::Reconcile)
+  );
   assert_eq!(
     recovered.task_abort_finished(base.clone(), checkout('c')),
     Err(LocalError::Reconcile)

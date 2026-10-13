@@ -8,6 +8,7 @@ mod commit_copy;
 mod execute;
 pub mod family;
 mod files;
+mod ignore_preview;
 mod lease;
 mod merge_receipt;
 pub mod owned;
