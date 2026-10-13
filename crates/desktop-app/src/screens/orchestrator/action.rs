@@ -1,0 +1,200 @@
+//! An action the Orchestrator took through one of Orchester's tools, in its answer (`Action card` `nQIhx`): on
+//! `surface_raised` in a `border` stroke, radius 10, 12 over and under and 14 at its sides, 10 apart: a 14 icon and
+//! what was done (12.5/600), and at its end whether it was done (`circle-check` in `success`, *Confirmed* and when)
+//! or refused (`ban`, *Refused* and when); what it did, or the tool's own reason it refused (13/1.5); that it was
+//! checked like the same action in the app (a 12 `shield-check` and 11.5 `text_muted`); and *Open* the task it
+//! names.
+
+use std::sync::Arc;
+
+use lurq::{
+  app::{
+    ctx::Ctx,
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+  },
+  components::{Column, Row, Spacer, Text},
+  layout::Alignment,
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+};
+use orchester_core::{
+  id::ProjectId,
+  orchestrator::{ActionOutcome, ChatAction},
+  project::TaskKey,
+  time::Timestamp,
+};
+use orchester_workspace::display;
+
+use crate::{
+  navigation::Navigation,
+  routes::{ProjectPage, Route, TaskTab, TaskView},
+  theme::{ConversationText, ExtraSpacing, ExtraTypography, IconSize},
+  ui::{
+    button::{ActionButton, ButtonKind},
+    icon::{Icon, icon},
+  },
+};
+
+/// What the card says of a tool, by its name: its icon and keys.
+struct Words {
+  glyph: Icon,
+  done: &'static str,
+  refused: &'static str,
+  effect: Option<&'static str>,
+}
+
+fn words(tool: &str) -> Words {
+  let (glyph, done, refused, effect) = match tool {
+    "create_task" => (
+      Icon::FilePlus,
+      "orchestrator.action.createTask.done",
+      "orchestrator.action.createTask.refused",
+      Some("orchestrator.action.createTask.effect"),
+    ),
+    "update_task" => (
+      Icon::Pencil,
+      "orchestrator.action.updateTask.done",
+      "orchestrator.action.updateTask.refused",
+      Some("orchestrator.action.updateTask.effect"),
+    ),
+    "run_task" => (
+      Icon::Play,
+      "orchestrator.action.runTask.done",
+      "orchestrator.action.runTask.refused",
+      Some("orchestrator.action.runTask.effect"),
+    ),
+    "pause_run" => (
+      Icon::CirclePause,
+      "orchestrator.action.pauseRun.done",
+      "orchestrator.action.pauseRun.refused",
+      Some("orchestrator.action.pauseRun.effect"),
+    ),
+    "resume_run" => (
+      Icon::Play,
+      "orchestrator.action.resumeRun.done",
+      "orchestrator.action.resumeRun.refused",
+      Some("orchestrator.action.resumeRun.effect"),
+    ),
+    _ => (
+      Icon::Wrench,
+      "orchestrator.action.other.done",
+      "orchestrator.action.other.refused",
+      None,
+    ),
+  };
+  Words {
+    glyph,
+    done,
+    refused,
+    effect,
+  }
+}
+
+/// The card of `action`, taken at `at` in project `project` (`name`); `id` names it.
+pub(super) fn card(
+  ctx: &mut Ctx,
+  id: &str,
+  (action, at): (&ChatAction, Timestamp),
+  (project, name): (ProjectId, &str),
+) -> Element {
+  let words = words(&action.tool);
+  let task = action.task.as_deref().unwrap_or_default();
+  let args = [("task", task), ("tool", action.tool.as_str())];
+  let time = display::clock(at);
+  let (title, glyph, state, state_glyph, state_color, effect) = match &action.outcome {
+    ActionOutcome::Done => (
+      ctx.t_args(words.done, args),
+      words.glyph,
+      ctx.t_args("orchestrator.action.confirmed", [("time", time.as_str())]),
+      Icon::CircleCheck,
+      PaletteColor::Success,
+      words.effect.map(|key| ctx.t(key)),
+    ),
+    ActionOutcome::Refused { reason, .. } => (
+      ctx.t_args(words.refused, args),
+      Icon::Ban,
+      ctx.t_args("orchestrator.action.refusedState", [("time", time.as_str())]),
+      Icon::Ban,
+      PaletteColor::TextSecondary,
+      Some(Arc::from(reason.as_str())),
+    ),
+  };
+  let head = Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary))
+    .child(
+      Text::new(&title)
+        .id(format!("{id}-title"))
+        .variant(ConversationText::ResultTitle.role())
+        .flex_shrink(1.0),
+    )
+    .child(Spacer::new().flex(1.0))
+    .child(
+      Row::new()
+        .id(format!("{id}-state"))
+        .spacing(ExtraSpacing::Pair.role())
+        .align_items(Alignment::Center)
+        .child(icon(state_glyph, IconSize::Sm, state_color))
+        .child(
+          Text::new(&state)
+            .variant(ExtraTypography::Note.role())
+            .color(PaletteColor::TextSecondary)
+            .nowrap(),
+        ),
+    );
+  let checked = Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Start)
+    .child(icon(Icon::ShieldCheck, IconSize::Sm, PaletteColor::TextMuted))
+    .child(
+      Text::new(&ctx.t_args("orchestrator.action.checked", [("project", name)]))
+        .variant(ExtraTypography::Note.role())
+        .flex(1.0),
+    );
+  let open = open_task(ctx, id, project, action.task.as_deref());
+  Column::new()
+    .id(id.to_owned())
+    .describe("outcome", outcome_name(&action.outcome))
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(ExtraSpacing::Section.role(), SpacingSize::Md))
+    .spacing(ExtraSpacing::Loose.role())
+    .background(PaletteColor::SurfaceRaised)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Lg)
+    .child(head)
+    .with_children(effect.map(|effect| {
+      Text::new(&effect)
+        .id(format!("{id}-effect"))
+        .variant(TypographyStyle::Body)
+        .width(Dimension::Pct(100.0))
+    }))
+    .child(checked)
+    .with_children(open)
+    .into()
+}
+
+/// *Open* the task the action names, when it names one people can read.
+fn open_task(ctx: &mut Ctx, id: &str, project: ProjectId, task: Option<&str>) -> Option<Element> {
+  let key: TaskKey = task?.parse().ok()?;
+  let navigation = Navigation::of(ctx);
+  let label = ctx.t_args("orchestrator.action.openTask", [("task", key.to_string().as_str())]);
+  let route = Route::Project(project, ProjectPage::Task(key, TaskView::of(TaskTab::Summary)));
+  Some(
+    Row::new()
+      .child(
+        ActionButton::new(format!("{id}-open"), ButtonKind::Ghost, label)
+          .icon(Icon::ArrowUpRight)
+          .on_click(move || navigation.go(route.clone())),
+      )
+      .into(),
+  )
+}
+
+const fn outcome_name(outcome: &ActionOutcome) -> &'static str {
+  match outcome {
+    ActionOutcome::Done => "done",
+    ActionOutcome::Refused { .. } => "refused",
+  }
+}

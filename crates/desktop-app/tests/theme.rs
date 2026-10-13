@@ -1,6 +1,8 @@
 //! The theme's roles resolve to the variables and type roles of `data/orchester2.pen` (accent graphite),
 //! in dark and light mode, and the mode switches while the app runs.
 
+#[path = "theme/orchestrator.rs"]
+mod orchestrator;
 #[path = "theme/skills.rs"]
 mod skills;
 
@@ -21,8 +23,8 @@ use orchester_app::{
   },
   theme::{
     self, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography,
-    IconSize, Mode, SHORTCUT_OPACITY, SettingsSpacing, SettingsText, ShellSpacing, ShellText, StartupSpacing,
-    StartupText,
+    IconSize, Mode, OrchestratorSpacing, OrchestratorText, SHORTCUT_OPACITY, SettingsSpacing, SettingsText,
+    ShellSpacing, ShellText, StartupSpacing, StartupText,
   },
 };
 use orchester_store::AppDb;

@@ -26,8 +26,8 @@ use orchester_app::{
   project::{ProjectState, Projects},
   root::Start,
   routes::{
-    ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, NewConnection, OverviewTab, ProjectPage, Route, Screen,
-    TaskList, TaskListTab, TaskTab, TaskView, routes,
+    ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, NewConnection, OrchestratorChat, OverviewTab,
+    ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
   },
   services::Services,
   startup::Launch,
@@ -56,6 +56,8 @@ const BUILT: &[Screen] = &[
   Screen::EditTask,
   Screen::NewConnection,
   Screen::NewTask,
+  Screen::Orchestrator,
+  Screen::OrchestratorSettings,
   Screen::Pipelines,
   Screen::ProjectSettings,
   Screen::Secrets,
@@ -197,6 +199,14 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
   let mut all = vec![(Route::AllProjects, placeholder("All projects"))];
   all.extend([
     (at(ProjectPage::Overview(OverviewTab::Failed)), placeholder("Overview")),
+    (
+      at(ProjectPage::Orchestrator(OrchestratorChat::New)),
+      placeholder("Orchestrator"),
+    ),
+    (
+      at(ProjectPage::OrchestratorSettings),
+      placeholder("Orchestrator settings"),
+    ),
     (
       at(ProjectPage::Tasks(
         TaskList::new(TaskListTab::Done)

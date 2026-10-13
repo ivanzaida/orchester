@@ -1,24 +1,21 @@
 //! The row inside the composer's box (`Bar` `keqaj` in `QQ2ZM`), 6 apart: *Attach*, not built, at half
 //! strength with a lock (`Attach · unavailable` in `mZIqi`: a 15 plus and a 9 lock in a 26 square); the
-//! recipient as a pill (`Recipient` `AOjdU`: 24 high, `surface_raised` in a `border` stroke, radius 6, a 12
-//! `bot` and the words in 11.5 `text_secondary`, 5 apart, 8 in from its sides; a lock at its end while the
-//! recipient is fixed); and at the end the send button: `accent`, radius 6, 28 high, its icon in `on_accent`
-//! — alone in a 28 square while an agent works (`Send button/split` `wPMDa`), else with its words in 12/500,
-//! 10 in from its sides and 6 from the icon (`I4yc5z` in `YhiGC`). Where sending has two ways, a line and a
+//! recipient as a pill (`Recipient` `AOjdU`, `ui::composer::recipient_pill`: a 12 `bot` and the words; a lock at
+//! its end while the recipient is fixed); and at the end the send button: `accent`, radius 6, 28 high, its icon in
+//! `on_accent` — alone in a 28 square while an agent works (`Send button/split` `wPMDa`), else with its words in
+//! 12/500, 10 in from its sides and 6 from the icon (`I4yc5z` in `YhiGC`). Where sending has two ways, a line and a
 //! chevron split the button (`KkfI8`, `ZFD5V`: 1 by 16, then 20 wide, a 12 chevron) and open the send menu
 //! over it. The permissions chip and the recipient menu are not part of this build (D4).
-
-use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, TypographyStyle},
   },
   components::{Button, Column, Placement, Popup, Row, Spacer, Text},
   core::{ElementRef, Signal},
   layout::{Alignment, layout_kind::Justify},
-  node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  node::{CursorIcon, Element, Style, dimension::Dimension, padding::Padding},
 };
 use orchester_core::conversation::Recipient;
 use orchester_workspace::tasks::conversation::{Conversation, composer::ComposerMode};
@@ -28,10 +25,9 @@ use super::{
   words::{self, Way},
 };
 use crate::{
-  theme::{
-    ComposerColor, ComposerText, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize,
-  },
+  theme::{ComposerColor, ComposerText, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, IconSize},
   ui::{
+    composer::recipient_pill,
     icon::{Icon, glyph, icon},
     menu::{MenuItem, menu_panel},
     pressable::{inert, pressable},
@@ -113,40 +109,6 @@ const fn recipient_icon(mode: &ComposerMode) -> Icon {
   match mode {
     ComposerMode::NotStarted => Icon::Compass,
     _ => Icon::Bot,
-  }
-}
-
-/// The recipient pill: who gets the message and what it does with it; while it is fixed, a lock, and
-/// why in its tooltip.
-fn recipient_pill(ctx: &mut Ctx, (words, glyph): (&str, Icon), fixed: Option<Arc<str>>) -> Element {
-  let pill = Row::new()
-    .id("composer-recipient")
-    .describe("fixed", fixed.is_some().to_string())
-    .height(Dimension::Px(ControlHeight::Sm.value()))
-    .flex_shrink(1.0)
-    .min_width(Dimension::Px(0.0))
-    .padding(Padding::horizontal(SpacingSize::Sm))
-    .spacing(ExtraSpacing::Pair.role())
-    .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Md)
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextSecondary))
-    .child(
-      Text::new(words)
-        .id("composer-recipient-text")
-        .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextSecondary)
-        .nowrap(),
-    )
-    .with_children(
-      fixed
-        .is_some()
-        .then(|| icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted)),
-    );
-  match fixed {
-    Some(reason) => Tooltip::new("composer-recipient", reason.clone()).wrap(ctx, pill.describe("reason", reason)),
-    None => pill.into(),
   }
 }
 

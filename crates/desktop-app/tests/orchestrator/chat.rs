@@ -1,0 +1,195 @@
+//! A conversation with the Orchestrator's agent: a message answered and kept, the agent's actions through the
+//! domain tools done or refused exactly as for a client of the app's MCP server, a stopped answer and one the CLI
+//! could not give.
+
+use orchester_app::routes::{OrchestratorChat, ProjectPage, Route};
+use orchester_core::{
+  orchestrator::{ActionOutcome, EntryKind, TurnState},
+  store::TaskStore,
+};
+
+use super::{
+  harness::{Orchestrator, Setup},
+  support::project_id,
+};
+
+/// The id of the newest turn shown, from its row's element id.
+fn newest_turn(screen: &mut Orchestrator) -> String {
+  let chat = screen.db().chats().expect("chats").remove(0).chat.id();
+  let entries = screen.db().chat_entries(chat).expect("entries");
+  entries
+    .iter()
+    .rev()
+    .find_map(|entry| match &entry.kind {
+      EntryKind::Person { message, .. } => Some(message.to_string()),
+      _ => None,
+    })
+    .expect("a message")
+}
+
+#[test]
+fn orchestrator_answers_a_message_and_keeps_the_new_conversation() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  screen.go(OrchestratorChat::New);
+  screen.send("What is running?");
+  screen.until("the answer", |screen| {
+    screen
+      .text("orchestrator-conversation")
+      .contains("Noted: What is running?")
+  });
+  let turn = newest_turn(&mut screen);
+  screen.until("the turn's end", |screen| {
+    !screen.exists("orchestrator-thinking")
+      && screen
+        .text(&format!("orchestrator-turn-{turn}"))
+        .contains("Delivered ·")
+  });
+  let chats = screen.db().chats().expect("chats");
+  assert_eq!(chats.len(), 1);
+  let chat = chats[0].chat.id();
+  assert_eq!(
+    screen.route(),
+    Route::Project(project_id(), ProjectPage::Orchestrator(OrchestratorChat::Chat(chat))),
+    "the route names the conversation once it is kept"
+  );
+  assert_eq!(screen.text("orchestrator-title"), "What is running?");
+  assert!(
+    screen
+      .text("orchestrator-meta")
+      .starts_with("Project conversation · started")
+  );
+  assert_eq!(
+    screen.text("orchestrator-input"),
+    "Message Orchestrator…",
+    "the draft is done with: the field shows its placeholder"
+  );
+  let answer = screen.text(&format!("orchestrator-answer-{turn}"));
+  assert!(answer.starts_with("Orchestrator haiku ·"), "{answer}");
+  let log = std::fs::read_to_string(screen.root.join(".orchester").join("fake-chat.log")).expect("the agent ran");
+  assert!(
+    log.contains("--tools Read,Glob,Grep --allowedTools Read Glob Grep mcp__orchester"),
+    "read-only, with only the chat's tools: {log}"
+  );
+}
+
+#[test]
+fn orchestrator_acts_through_the_tools_as_any_client_of_the_app() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  screen.go(OrchestratorChat::New);
+  screen.send(r#"Call create_task {"project":"Kontur","title":"Record every delivery attempt"}"#);
+  screen.until("the created task's card", |screen| {
+    screen
+      .text("orchestrator-conversation")
+      .contains("Created KON-1 as a draft")
+  });
+  let task = screen.db().tasks().expect("tasks").remove(0);
+  assert_eq!(task.key().to_string(), "KON-1");
+  assert!(
+    screen
+      .text("orchestrator-conversation")
+      .contains("Checked like the same action in the app")
+  );
+  screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
+
+  // A draft without a pipeline does not run: the tool refuses it as it refuses any client, with its reasons.
+  screen.send(r#"Call run_task {"project":"Kontur","key":"KON-1"}"#);
+  screen.until("the refused start", |screen| {
+    screen
+      .text("orchestrator-conversation")
+      .contains("Start KON-1 · not done")
+  });
+  screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
+  let chat = screen.db().chats().expect("chats").remove(0).chat.id();
+  let outcomes: Vec<ActionOutcome> = screen
+    .db()
+    .chat_entries(chat)
+    .expect("entries")
+    .into_iter()
+    .filter_map(|entry| match entry.kind {
+      EntryKind::Action(action) => Some(action.outcome),
+      _ => None,
+    })
+    .collect();
+  assert_eq!(outcomes[0], ActionOutcome::Done);
+  assert!(
+    matches!(&outcomes[1], ActionOutcome::Refused { reason, .. } if !reason.is_empty()),
+    "{outcomes:?}"
+  );
+
+  // Another project's work and the window are not the Orchestrator's.
+  screen.send(r#"Call list_tasks {"project":"Atlas"}"#);
+  screen.until("the other project's refusal", |screen| {
+    screen.text("orchestrator-conversation").contains("other_project")
+  });
+  screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
+  screen.send(r#"Call lurq_screenshot {}"#);
+  screen.until("no window tool", |screen| {
+    screen
+      .text("orchestrator-conversation")
+      .contains("no tool is named lurq_screenshot")
+  });
+}
+
+#[test]
+fn orchestrator_stops_an_answer_and_asks_again() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  screen.go(OrchestratorChat::New);
+  screen.send("Keep thinking about the queue.");
+  screen.until("the working line", |screen| {
+    screen.exists("orchestrator-stop")
+      && screen
+        .text("orchestrator-conversation")
+        .contains("Let me look at the queue.")
+  });
+  assert!(
+    screen
+      .text("orchestrator-thinking")
+      .contains("Orchestrator is thinking")
+  );
+  assert!(screen.text("orchestrator-stop-note").contains("ends this answer only"));
+  screen.click("orchestrator-stop");
+  screen.until("the stopped answer", |screen| screen.exists("orchestrator-stopped"));
+  assert_eq!(
+    screen.text("orchestrator-stopped-label"),
+    "Response stopped by you · nothing was created or changed"
+  );
+  let turn = newest_turn(&mut screen);
+  let chat = screen.db().chats().expect("chats").remove(0).chat.id();
+  let stopped = screen
+    .db()
+    .chat_turn(turn.parse().expect("id"))
+    .expect("read")
+    .expect("kept");
+  assert_eq!(stopped.turn, TurnState::Stopped);
+  screen.click("orchestrator-ask-again");
+  screen.until("the message sent once more", |screen| {
+    screen
+      .db()
+      .chat_entries(chat)
+      .expect("entries")
+      .iter()
+      .filter(|entry| matches!(entry.kind, EntryKind::Person { .. }))
+      .count()
+      == 2
+  });
+  screen.until("its working line", |screen| screen.exists("orchestrator-stop"));
+  screen.click("orchestrator-stop");
+  screen.until("stopped again", |screen| screen.exists("orchestrator-ask-again"));
+}
+
+#[test]
+fn orchestrator_names_a_cli_that_is_not_signed_in_and_where_to_fix_it() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  screen.go(OrchestratorChat::New);
+  screen.send("Please sign in first.");
+  screen.until("the failure", |screen| screen.exists("orchestrator-failure"));
+  let failure = screen.text("orchestrator-failure");
+  assert!(
+    failure.contains("Orchestrator can't reach Claude · Kontur"),
+    "{failure}"
+  );
+  assert!(failure.contains("isn't signed in on this computer"), "{failure}");
+  assert!(screen.exists("orchestrator-retry"));
+  screen.click("orchestrator-open-connections");
+  screen.until("Connections", |screen| screen.exists("screen-connections"));
+}

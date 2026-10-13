@@ -4,8 +4,8 @@ use orchester_core::{
 };
 
 use super::{
-  CONNECTIONS, ConnectionsView, EDIT, NEW, NewConnection, OverviewTab, RouteError, Screen, TAB, TASKS, TaskList,
-  TaskView, ToolTab, project_screen_path,
+  CONNECTIONS, ConnectionsView, EDIT, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, RouteError,
+  SETTINGS, Screen, TAB, TASKS, TaskList, TaskView, ToolTab, project_screen_path,
   query::{Params, with_query},
 };
 
@@ -13,6 +13,8 @@ use super::{
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ProjectPage {
   Overview(OverviewTab),
+  Orchestrator(OrchestratorChat),
+  OrchestratorSettings,
   Tasks(TaskList),
   NewTask,
   EditTask(TaskKey),
@@ -50,6 +52,8 @@ impl ProjectPage {
         return None;
       }
       Screen::Overview => Self::Overview(OverviewTab::default()),
+      Screen::Orchestrator => Self::Orchestrator(OrchestratorChat::default()),
+      Screen::OrchestratorSettings => Self::OrchestratorSettings,
       Screen::Tasks => Self::Tasks(TaskList::default()),
       Screen::NewTask => Self::NewTask,
       Screen::PullRequests => Self::PullRequests,
@@ -69,6 +73,8 @@ impl ProjectPage {
   pub const fn screen(&self) -> Screen {
     match self {
       Self::Overview(_) => Screen::Overview,
+      Self::Orchestrator(_) => Screen::Orchestrator,
+      Self::OrchestratorSettings => Screen::OrchestratorSettings,
       Self::Tasks(_) => Screen::Tasks,
       Self::NewTask => Screen::NewTask,
       Self::EditTask(_) => Screen::EditTask,
@@ -96,6 +102,8 @@ impl ProjectPage {
         let tab = (*tab != OverviewTab::default()).then(|| tab.name());
         with_query(project_root.to_owned(), &[(TAB, tab)])
       }
+      Self::Orchestrator(chat) => chat.path(format!("{project_root}/{ORCHESTRATOR}")),
+      Self::OrchestratorSettings => format!("{project_root}/{ORCHESTRATOR}/{SETTINGS}"),
       Self::Tasks(list) => list.path(tasks),
       Self::NewTask => format!("{tasks}/{NEW}"),
       Self::EditTask(key) => format!("{tasks}/{key}/{EDIT}"),
@@ -123,6 +131,8 @@ impl ProjectPage {
   pub(super) fn parse(segments: &[&str], params: &mut Params) -> Result<Self, RouteError> {
     match segments {
       [] => Ok(Self::Overview(params.take_or_default(TAB, OverviewTab::from_name)?)),
+      [ORCHESTRATOR] => OrchestratorChat::take(params).map(Self::Orchestrator),
+      [ORCHESTRATOR, SETTINGS] => Ok(Self::OrchestratorSettings),
       [TASKS] => TaskList::take(params).map(Self::Tasks),
       [TASKS, NEW] => Ok(Self::NewTask),
       [TASKS, key, rest @ ..] => {

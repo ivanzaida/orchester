@@ -32,7 +32,7 @@ pub mod accounts;
 pub mod plan_limits;
 pub mod reference_picker;
 
-use crate::project::hold::ReadHold;
+use crate::{mcp::chat::ChatServers, project::hold::ReadHold};
 
 /// The session's services. Every field is a handle: clones share the same workspace, runners and
 /// operations.
@@ -65,6 +65,8 @@ pub struct Services {
   pub close: CloseFlow,
   /// The runs the previous session left interrupted, and what the person decided for them.
   pub recovery: Recovery,
+  /// The servers of the Orchestrator chat's domain tools, one per conversation that sent a message.
+  pub chat_tools: ChatServers,
 }
 
 /// Services are the session's: two are equal when they share its workspace.
@@ -108,6 +110,7 @@ impl Services {
       runtime,
       previous_end: session.previous_end(),
       session_start: session.started_at(),
+      chat_tools: ChatServers::default(),
     }
   }
 

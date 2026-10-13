@@ -22,6 +22,7 @@ mod form;
 mod lifecycle;
 mod markdown;
 mod metrics;
+mod orchestrator;
 mod palette;
 pub mod pipelines;
 mod secrets;
@@ -53,6 +54,7 @@ pub use self::{
   fonts::mono_space,
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
+  orchestrator::{OrchestratorSpacing, OrchestratorText},
   palette::{ExtraColor, Mode},
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
   settings::{SettingsSpacing, SettingsText},
@@ -98,6 +100,7 @@ pub fn install(app: &mut App, mode: Mode) {
   conversation::install(theme);
   cards::install(theme);
   composer::install(theme);
+  orchestrator::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }
