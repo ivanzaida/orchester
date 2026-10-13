@@ -56,6 +56,15 @@ const WEEK: u64 = 10_080;
 /// The other connection's select (`Other connection for 03 Implement` in `EwAhH`).
 const SELECT_WIDTH: f32 = 340.0;
 
+/// When the run continues: the time alone today (`16:40`), the day too otherwise.
+pub(super) fn reset_time(ctx: &Ctx, resets: Timestamp, now: Timestamp) -> String {
+  if resets.local_day_start() == now.local_day_start() {
+    orchester_workspace::display::clock(resets)
+  } else {
+    when(ctx, resets, now, TIMES)
+  }
+}
+
 /// The account's name: the one given, or *Default*.
 pub(super) fn account_name(ctx: &Ctx, account: &AgentAccount) -> String {
   account.name().map_or_else(
@@ -215,10 +224,11 @@ impl ChoiceCard<'_> {
     {
       self.other.set(first.id().to_string());
     }
+    // "03 Implement", as the run's stages name it.
     let step = self
       .run
       .stopped_step()
-      .map(|step| step.name.to_string())
+      .map(|step| super::super::step_label(ctx, step).to_string())
       .unwrap_or_default();
     let options = self
       .stop
@@ -263,16 +273,17 @@ impl ChoiceCard<'_> {
       action.run((Continuing, command));
     };
     let button = match (self.choice.get(), resets) {
-      (Choice::Wait, Some(resets)) => {
-        let time = when(ctx, resets, now, TIMES);
-        ActionButton::new(
-          "plan-limit-continue",
-          ButtonKind::Primary,
-          ctx.t_args("decisions.planLimit.continueAt", [("time", time.as_str())]),
-        )
-        .icon(Icon::Clock)
-        .unavailable(ctx.t_args("decisions.planLimit.continueAtReason", [("time", time.as_str())]))
-      }
+      // The person's confirmation of waiting: the runner keeps the run's reset timer and continues it then.
+      (Choice::Wait, Some(resets)) => ActionButton::new(
+        "plan-limit-continue",
+        ButtonKind::Primary,
+        ctx.t_args(
+          "decisions.planLimit.continueAt",
+          [("time", reset_time(ctx, resets, now))],
+        ),
+      )
+      .icon(Icon::Clock)
+      .on_click(move || send(Command::WaitForPlanReset { run })),
       (Choice::Wait, None) => ActionButton::new(
         "plan-limit-continue",
         ButtonKind::Primary,
@@ -319,11 +330,26 @@ impl ChoiceCard<'_> {
       .align_items(Alignment::Center)
       .child(button)
       .child(
-        Text::new(&ctx.t("decisions.planLimit.waitNote"))
+        Text::new(&self.wait_note(ctx, resets, now))
+          .id("plan-limit-note")
           .variant(ExtraTypography::Note.role())
           .flex(1.0),
       )
       .into()
+  }
+
+  /// What waiting means, or that the runner took the person's *Continue at …*.
+  fn wait_note(&self, ctx: &Ctx, resets: Option<Timestamp>, now: Timestamp) -> String {
+    let confirmed = self.choice.get() == Choice::Wait && self.action.state().get().is_fulfilled();
+    match resets.filter(|_| confirmed) {
+      Some(resets) => ctx
+        .t_args(
+          "decisions.planLimit.waitConfirmed",
+          [("time", reset_time(ctx, resets, now))],
+        )
+        .to_string(),
+      None => ctx.t("decisions.planLimit.waitNote").to_string(),
+    }
   }
 
   fn chosen_other(&self) -> Option<&AgentConnection> {

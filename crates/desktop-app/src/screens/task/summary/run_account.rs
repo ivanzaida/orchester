@@ -1,21 +1,29 @@
 //! *This run › Account* (`EwAhH`): the account the run's latest agent invocation started on, as the runner recorded
-//! it, by its name and who was signed in. A removed account still names it: the run ran on it.
+//! it, by its name and who was signed in; in `warning`, saying its limit is reached, while the run is stopped at it.
+//! A removed account still names it: the run ran on it.
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
+    theme::PaletteColor,
   },
+  components::Text,
   node::Element,
 };
 use orchester_core::{account::AgentAccount, id::AgentAccountId};
 use orchester_workspace::{background, messages};
 
 use super::this_run::row;
-use crate::{services::Services, ui::detail_row::DetailValue};
+use crate::{
+  services::Services,
+  theme::ExtraTypography,
+  ui::detail_row::{DetailValue, detail_row_of},
+};
 
+/// The account, and whether the run is stopped at its plan limit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct Props(pub AgentAccountId);
+pub(super) struct Props(pub AgentAccountId, pub bool);
 
 impl DevtoolsInspectable for Props {}
 
@@ -35,7 +43,7 @@ impl Component for RunAccount {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let Props(id) = *ctx.props::<Props>();
+    let Props(id, at_limit) = *ctx.props::<Props>();
     let workspace = Services::of(ctx).workspace;
     let read = ctx
       .future(id, move |id| {
@@ -67,6 +75,20 @@ impl Component for RunAccount {
       }
       None => ctx.t("summary.thisRun.accountUnknown").to_string(),
     };
-    row(ctx, "summary.thisRun.account", &value, DetailValue::Text)
+    if !at_limit {
+      return row(ctx, "summary.thisRun.account", &value, DetailValue::Text);
+    }
+    let value = ctx.t_args("summary.thisRun.accountAtLimit", [("account", value.as_str())]);
+    detail_row_of(
+      "task-this-run-account",
+      &ctx.t("summary.thisRun.account"),
+      Text::new(&value)
+        .id("task-this-run-account-value")
+        .variant(ExtraTypography::Prose.role())
+        .color(PaletteColor::Warning)
+        .flex(1.0)
+        .min_width(lurq::node::dimension::Dimension::Px(0.0)),
+    )
+    .into()
   }
 }

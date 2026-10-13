@@ -4,13 +4,15 @@
 //! server (`mcp_form`), each a page in the Connections tab; adding is a person's action in the window, and
 //! the domain rules are `orchester_workspace::connections`', which the MCP setup tools share.
 //!
-//! Not built in this app yet, and visibly unavailable: adding or editing a GitHub connection and changing its
-//! account or access, editing an agent CLI connection or choosing a program file other than the copies on
-//! the search path, native connections (adding, testing, their models), and listing an MCP server's tools.
+//! Edit connection of an agent CLI connection chooses its account (`edit_agent`). Not built in this app yet, and
+//! visibly unavailable: adding or editing a GitHub connection and changing its account or access, renaming an agent
+//! CLI connection or choosing a program file other than the copies on the search path, native connections (adding,
+//! testing, their models), and listing an MCP server's tools.
 
 mod account;
 mod add_agent;
 mod data;
+mod edit_agent;
 mod inspector;
 mod list;
 mod mcp_form;
@@ -24,6 +26,7 @@ use orchester_core::id::ConnectionId;
 
 use self::{
   add_agent::{AddAgent, AddAgentProps},
+  edit_agent::{EditConnection, EditProps},
   list::{ConnectionsScreen, ListProps},
   mcp_form::{McpForm, McpFormProps},
 };
@@ -62,12 +65,13 @@ pub fn new_connection(ctx: &mut Ctx, project: &ShownProject, kind: NewConnection
   }
 }
 
-pub fn edit_connection(ctx: &mut Ctx, project: &ShownProject, server: ConnectionId) -> Element {
-  ctx.mount_keyed::<McpForm>(
-    &format!("connection-edit-mcp-{}-{server}", project.open.project.id()),
-    McpFormProps {
+/// Edit connection: an MCP server's form, or the account of an agent CLI connection.
+pub fn edit_connection(ctx: &mut Ctx, project: &ShownProject, connection: ConnectionId) -> Element {
+  ctx.mount_keyed::<EditConnection>(
+    &format!("connection-edit-{}-{connection}", project.open.project.id()),
+    EditProps {
       project: project.clone(),
-      server: Some(server),
+      connection,
     },
   )
 }

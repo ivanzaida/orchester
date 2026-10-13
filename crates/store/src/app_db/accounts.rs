@@ -110,6 +110,21 @@ impl AppDb {
     Ok(())
   }
 
+  /// Saves the account's folder, after the person chose where its folder is now (*Choose folder…*), and its last
+  /// check. Default's folder is the CLI's own and never moves.
+  pub fn save_agent_account_folder(&mut self, account: &AgentAccount) -> Result<(), StoreError> {
+    let (folder, kind) = folder_columns(account.folder())?;
+    let result = self.connection.execute(
+      "UPDATE agent_accounts SET folder = ?2, folder_kind = ?3, checked_at = NULL, last_check = NULL \
+       WHERE id = ?1 AND removed_at IS NULL AND folder_kind <> 'own'",
+      params![account.id().to_string(), folder, kind],
+    );
+    if constraint_errors(result, account)? == 0 {
+      return Err(StoreError::AgentAccountNotFound(account.id()));
+    }
+    Ok(())
+  }
+
   /// Marks the account removed: it leaves the list, its name and folder are free again, and runs that used it still
   /// name it. `moved_to` is where its connections went (`None`: no account), for a project that could not be reached
   /// then. Default is never removed.

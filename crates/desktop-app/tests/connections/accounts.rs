@@ -1,5 +1,6 @@
 //! A connection's account (`docs/design/agent-accounts.md`, `M42rM`): the list and the inspector name the account a
-//! CLI connection runs on, and choosing another one in the inspector stores it and checks the connection there.
+//! CLI connection runs on, the inspector as a link to it in Settings, and choosing another one in Edit connection
+//! stores it and checks the connection there.
 
 use orchester_app::routes::{ConnectionsTab, ConnectionsView, ProjectPage};
 use orchester_core::{
@@ -15,7 +16,7 @@ use orchester_store::AppDb;
 use super::harness::Seeded;
 
 #[test]
-fn connections_name_their_account_and_a_person_chooses_another_in_the_inspector() {
+fn connections_name_their_account_and_a_person_chooses_another_in_edit_connection() {
   let mut seeded = Seeded::new("connections");
   let folder = seeded.window.data.dir.path().join("codex-client");
   std::fs::create_dir_all(&folder).expect("the account's folder");
@@ -47,12 +48,27 @@ fn connections_name_their_account_and_a_person_chooses_another_in_the_inspector(
       .text(&format!("connection-row-{}", codex.id()))
       .contains("account Default")
   );
+  assert!(
+    seeded.exists("connection-account-link"),
+    "the account opens in Settings"
+  );
+  seeded.click("connection-edit");
+  seeded.until("Edit connection", |seeded| seeded.exists("connection-account"));
   seeded.click("connection-account");
   seeded.until("the accounts menu", |seeded| {
-    seeded.exists("connection-account-option-1")
+    seeded.exists("connection-account-option-0")
   });
-  assert!(seeded.text("connection-account-option-1").contains("Client"));
-  seeded.click("connection-account-option-1");
+  let client_option = (0..4)
+    .map(|index| format!("connection-account-option-{index}"))
+    .find(|id| seeded.exists(id) && seeded.text(id).contains("Client"))
+    .expect("Client is offered");
+  assert!(
+    seeded.text("connection-account-option-0").contains("Client"),
+    "Default comes last"
+  );
+  seeded.click(&client_option);
+  seeded.until("Save", |seeded| seeded.exists("connection-edit-save"));
+  seeded.click("connection-edit-save");
   seeded.until("the connection on Client", |seeded| {
     seeded
       .db()

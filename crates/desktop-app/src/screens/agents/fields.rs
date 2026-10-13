@@ -348,6 +348,8 @@ impl Fields {
       icon: Icon::Sparkles,
       detail: connection.map(|c| c.name().as_str().into()),
       separator: false,
+      warning: false,
+      trigger: None,
     };
     let mut models: Vec<_> = connection
       .into_iter()
@@ -364,6 +366,8 @@ impl Fields {
       icon: Icon::TextCursorInput,
       detail: Some(ctx.t("agents.otherModelHint")),
       separator: true,
+      warning: false,
+      trigger: None,
     });
     let model = ChoiceField {
       id: "agent-model".into(),
@@ -372,6 +376,7 @@ impl Fields {
       choices: models,
       open: self.model_open.clone(),
       width: CONTROL_WIDTH,
+      icon_in_field: false,
     }
     .render(ctx);
     let mut model = Column::new()
@@ -396,6 +401,8 @@ impl Fields {
       icon: Icon::SlidersHorizontal,
       detail: Some(ctx.t("agents.defaultEffortHint")),
       separator: false,
+      warning: false,
+      trigger: None,
     }];
     if let Some(c) = connection
       && let Ok(id) = orchester_core::resource::ModelId::new(&self.model_value())
@@ -413,6 +420,8 @@ impl Fields {
           icon,
           detail: None,
           separator: false,
+          warning: false,
+          trigger: None,
         }
       }));
     }
@@ -423,6 +432,7 @@ impl Fields {
       choices: efforts,
       open: self.effort_open.clone(),
       width: CONTROL_WIDTH,
+      icon_in_field: false,
     }
     .render(ctx)
   }

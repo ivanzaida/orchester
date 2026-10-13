@@ -1,6 +1,6 @@
-//! With window control on, an MCP client can open a connection's *Account* field, but choosing another account there
-//! is a person's decision: a client's choice is not taken unless a person lets automation widen, as
-//! `set_connection_account` is not. A person's choice is.
+//! With window control on, an MCP client can open Edit connection's *Account* field, but choosing another account
+//! there is a person's decision: a client's choice is not taken unless a person lets automation widen, as
+//! `set_connection_account` is not. A person's choice is, and *Save* runs the connection on it.
 
 use orchester_core::{
   account::{AccountCli, AccountFolder, AgentAccount},
@@ -67,8 +67,7 @@ fn domain_window_input_cannot_choose_a_connections_account() {
   served.ok(
     "navigate",
     &json!({
-      "route": "connections", "project": seeded.project.to_string(), "tab": "agent_providers",
-      "selected": connection.id().to_string(),
+      "route": "edit_connection", "project": seeded.project.to_string(), "connection": connection.id().to_string(),
     }),
   );
   served.until("the account field", |served| served.shows("connection-account"));
@@ -90,6 +89,11 @@ fn domain_window_input_cannot_choose_a_connections_account() {
   served.until("the menu", |served| served.shows("connection-account-option-0"));
   let choice = option(&mut served, "Client");
   served.click_by_person(&choice);
+  served.until("Save", |served| served.shows("connection-edit-save"));
+  for _ in 0..3 {
+    served.pass();
+  }
+  served.click_by_person("connection-edit-save");
   served.until("the person's choice", |_| {
     codex(&seeded.repo).account().id(
       AgentConnection::try_from(codex(&seeded.repo))

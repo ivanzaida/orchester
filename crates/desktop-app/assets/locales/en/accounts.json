@@ -93,11 +93,14 @@
       "planValue": "{{plan}}, as {{program}} reports it",
       "notReported": "Not reported by {{program}}",
       "checkedWithValue": "{{program}} {{version}} on the PATH",
+      "checkedWithNoCli": "Nothing: no {{program}} on the PATH",
+      "checkedWithNoFolder": "Nothing: the folder is gone",
       "neverChecked": "Not checked yet",
       "ownFolder": "{{folder}} (the CLI's own)",
       "planFact": "{{plan}} plan"
     },
     "actions": {
+      "chooseFolder": "Choose folder…",
       "checkAgain": "Check again",
       "rename": "Rename",
       "remove": "Remove",
@@ -132,7 +135,7 @@
       "expiredUnknown": "{{program}} now says it is not logged in. New runs on {{account}} don't start until you sign in again.",
       "cliMissing": "Orchester found no {{program}} on the PATH, so it can't check {{account}} here. A connection with its own program file still checks {{account}} with that program when it is tested.",
       "unknown": "{{program}} {{version}} answered its status command in a form Orchester doesn't know. Runs on {{account}} still start; if the CLI refuses them, the run says so.",
-      "folderMissing": "{{folder}} no longer exists, so runs on {{account}} don't start. Remove the account, or add the folder again as a folder you already use.",
+      "folderMissing": "{{folder}} no longer exists, so runs on {{account}} don't start. Choose where it is now, or remove the account.",
       "same": "Signed in as {{email}}, like {{account}}. Both draw on one plan: their limits are shared, and moving runs between them adds nothing.",
       "unsupported": "On macOS claude keeps its sign-in in the Keychain. Until Orchester has checked that each folder gets its own, Claude Code accounts other than Default are unavailable here.",
       "notChecked": "Not checked yet. Check again asks {{statusCommand}} who is signed in."

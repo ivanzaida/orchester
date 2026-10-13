@@ -2,6 +2,8 @@
 //! removes an account, and opens a sign-in terminal and waits for it to close, then checks again. Orchester never sees
 //! what is typed in that terminal.
 
+use std::path::PathBuf;
+
 use lurq::app::{
   component::DevtoolsInspectable,
   ctx::{Ctx, FutureAction},
@@ -26,6 +28,8 @@ pub(super) enum Change {
     move_to: MoveTo,
     trash: bool,
   },
+  /// Keeps the account in a folder the person chose after its own went missing.
+  ChooseFolder(AgentAccountId, PathBuf),
 }
 
 /// What a change did.
@@ -35,6 +39,7 @@ pub(super) enum Changed {
   Added(AgentAccountId, bool),
   Renamed(AgentAccountId),
   Removed,
+  FolderChosen(AgentAccountId),
 }
 
 impl DevtoolsInspectable for Changed {}
@@ -42,6 +47,18 @@ impl DevtoolsInspectable for Changed {}
 pub(super) type ChangeAction = FutureAction<Change, Changed, Message>;
 pub(super) type CheckAction = FutureAction<Vec<AgentAccountId>, (), Message>;
 pub(super) type SignInAction = FutureAction<AgentAccountId, (), Message>;
+/// The folder the system's picker gave for an account, if it gave one.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct ChosenFolder(pub Option<(AgentAccountId, PathBuf)>);
+impl DevtoolsInspectable for ChosenFolder {}
+pub(super) type ChooseAction = FutureAction<AgentAccountId, ChosenFolder, Message>;
+
+/// Asks the system's folder picker where an account's folder is now.
+pub(super) fn choose_folder(ctx: &mut Ctx) -> ChooseAction {
+  ctx.future_action(|account: AgentAccountId| async move {
+    background::run(move || ChosenFolder(rfd::FileDialog::new().pick_folder().map(|folder| (account, folder)))).await
+  })
+}
 
 /// Adds, renames or removes an account.
 pub(super) fn change(ctx: &mut Ctx) -> ChangeAction {
@@ -80,6 +97,10 @@ fn apply(workspace: &Workspace, change: Change) -> Result<Changed, Message> {
     } => workspace
       .remove_agent_account(account, move_to, trash)
       .map(|()| Changed::Removed)
+      .map_err(failed),
+    Change::ChooseFolder(account, folder) => workspace
+      .choose_agent_account_folder(account, &folder)
+      .map(|account| Changed::FolderChosen(account.id()))
       .map_err(failed),
   }
 }

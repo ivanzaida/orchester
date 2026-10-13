@@ -5,6 +5,12 @@
     "add": "Add connection",
     "addAgent": "Add agent provider",
     "cancel": "Cancel",
+    "editAgent": {
+      "title": "Edit {{connection}}",
+      "description": "Which account this connection's CLI runs on. Its name and program stay as they are.",
+      "saved": "Saved",
+      "save": "Save connection"
+    },
     "reading": "Reading the connections…",
     "loadFailed": "Connections could not be read",
     "tabs": {
@@ -54,7 +60,7 @@
       "github": "Pull requests and the Create pull request tool reach GitHub only through gh. Its accounts are shared by every project on this computer; {{project}} records the one it expects.",
       "mcp": "Agents run without your own CLI configuration, so the MCP servers they get are the ones {{project}} adds here. Each agent profile chooses which of them its agents get."
     },
-    "ownership": "Connections belong to {{project}}. CLI connections use the account the CLI is signed in to on this computer; {{project}} records which account it expects.",
+    "ownership": "Connections belong to {{project}}. A CLI connection runs on one of your accounts, which every project shares; {{project}} records which account each connection runs on.",
     "emptyTitle": "No connections yet",
     "emptyDetail": "A connection is how {{project}} reaches an agent provider (a CLI on this computer or a model API with a project key), GitHub through gh, or an MCP server. Add the Codex or Claude Code CLI installed on this computer; each agent profile then chooses its connection and model.",
     "emptyProvidersTitle": "No agent providers yet",
@@ -86,7 +92,7 @@
     },
     "detail": {
       "notChecked": "This connection has not been checked yet.",
-      "connected": "The CLI answers and is signed in. Orchester runs it with the account it is signed in to.",
+      "connected": "The CLI answers and its account is signed in. Orchester runs it with that account's folder.",
       "signInCodex": "The Codex CLI is not signed in. Run codex login in a terminal, then check again. Orchester never signs in for you.",
       "signInClaude": "The Claude Code CLI is not signed in. Run claude auth login in a terminal, then check again. Orchester never signs in for you.",
       "signInUnknown": "The CLI answers, but whether it is signed in could not be determined. Agents may fail to start until it is.",
@@ -135,7 +141,6 @@
     "notUsed": "No agent profile uses this connection yet.",
     "test": "Test connection",
     "edit": "Edit connection",
-    "editCliUnavailable": "Editing a CLI connection is not built in this app yet.",
     "checkAgain": "Check again",
     "recheck": "Recheck",
     "runInTerminal": "Run this in a terminal, then check again.",
@@ -196,7 +201,7 @@
       "notRecognized": "The program did not answer as the {{program}}.",
       "runToSignIn": "Run this in a terminal, then recheck.",
       "authTitle": "Uses the {{program}} sign-in",
-      "authDetail": "Orchester runs the CLI on this computer with the account it is signed in to and stores no credentials. This connection belongs to {{project}}; other projects need their own.",
+      "authDetail": "Orchester runs the CLI on this computer with the chosen account's folder and stores no credentials. This connection belongs to {{project}}; other projects need their own.",
       "nextStep": "After saving, select this connection in an agent profile and choose its model.",
       "waitForCheck": "Save is available once the program has been checked.",
       "save": "Save connection",
@@ -351,15 +356,21 @@
       "default": "Default",
       "none": "No account",
       "manage": "Add or manage accounts…",
-      "manageDetail": "Opens Settings › Accounts",
+      "manageDetail": "Opens Settings › Accounts; this form keeps what you entered",
+      "linkValue": "{{account}} · {{detail}}",
+      "separator": " · ",
+      "problem": "{{folder}} · {{problem}}",
+      "same": "{{email}}, same as {{account}} · shares its limits",
+      "signedIn": "Signed in · the CLI doesn't say who",
+      "notChecked": "Not checked yet · Settings › Accounts checks it",
       "changeNote": "Takes effect at each agent's next start: a paused or stopped step continues on the new account as a new session.",
       "plan": "{{plan}} plan",
       "weekly": "weekly {{used}}% used",
       "state": {
         "notSignedIn": "not signed in · sign in from Settings",
-        "expired": "sign-in expired · runs won't start",
-        "cliMissing": "CLI not found",
-        "folderMissing": "folder missing · runs won't start",
+        "expired": "sign-in expired · runs won't start · sign in from Settings",
+        "cliMissing": "CLI not found · install it, then check again in Settings",
+        "folderMissing": "folder missing · runs won't start · choose it in Settings",
         "unsupported": "not supported on macOS yet"
       }
     }

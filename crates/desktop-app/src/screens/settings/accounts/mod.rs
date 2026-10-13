@@ -104,6 +104,7 @@ struct Work {
   pub change: ChangeAction,
   pub check: CheckAction,
   pub sign_in: SignInAction,
+  pub choose: work::ChooseAction,
   /// The account whose sign-in terminal opened last, and when.
   opened: Signal<Opened>,
   checking: Signal<Ids>,
@@ -171,6 +172,7 @@ impl Component for AccountsTab {
       change: work::change(ctx),
       check: work::check(ctx),
       sign_in: work::sign_in(ctx),
+      choose: work::choose_folder(ctx),
       opened: ctx.signal(Opened::default()),
       checking: ctx.signal(Ids::default()),
       draft: add::Draft::new(ctx),
@@ -201,7 +203,12 @@ impl Component for AccountsTab {
       .view
       .account
       .filter(|id| props.accounts.iter().any(|account| account.id() == *id))
-      .or_else(|| props.accounts.first().map(AgentAccount::id));
+      .or_else(|| {
+        // An account the person added before the CLIs' own Default ones, as the list shows them.
+        let mut accounts: Vec<&AgentAccount> = props.accounts.iter().collect();
+        accounts.sort_by_key(|account| (account.cli().as_str(), account.is_default()));
+        accounts.first().map(|account| account.id())
+      });
     let check = self.work.check.state().get();
     let sign_in = self.work.sign_in.state().get();
     let parts = Parts {
@@ -276,7 +283,9 @@ fn follow(ctx: &mut Ctx, work: &Work) {
         sign_in.open_sign_in(account);
         AccountsView::of(account, AccountsPanel::SignIn)
       }
-      Changed::Added(account, false) | Changed::Renamed(account) => AccountsView::of(account, AccountsPanel::Account),
+      Changed::Added(account, false) | Changed::Renamed(account) | Changed::FolderChosen(account) => {
+        AccountsView::of(account, AccountsPanel::Account)
+      }
       Changed::Removed => AccountsView::default(),
     };
     navigation.replace(Route::Accounts(view));
@@ -285,6 +294,12 @@ fn follow(ctx: &mut Ctx, work: &Work) {
   ctx.watch(&work.check.state(), move |state| {
     if !state.is_pending() {
       bump.update(|revision| *revision += 1);
+    }
+  });
+  let change = work.change.clone();
+  ctx.watch(&work.choose.state(), move |state| {
+    if let Some(work::ChosenFolder(Some((account, folder)))) = state.data.clone().filter(|_| state.is_fulfilled()) {
+      change.run(work::Change::ChooseFolder(account, folder));
     }
   });
   ctx.watch(&work.sign_in.state(), move |state| {

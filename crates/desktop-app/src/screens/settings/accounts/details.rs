@@ -32,6 +32,7 @@ use crate::{
     icon::{Icon, icon},
     message::message_text,
     tabs::{PageTab, page_tabs},
+    unavailable::reason_line,
   },
 };
 
@@ -97,27 +98,58 @@ pub(super) fn glyph(glyph: Icon) -> Row {
     .child(icon(glyph, IconSize::Nav, PaletteColor::TextSecondary))
 }
 
-/// The header's row (`jCbMF`).
+/// The header's row (`jCbMF`), with the hairline under it.
 pub(super) fn header_row(id: &str) -> Row {
+  header_line(id).border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+}
+
+/// The header's row without its hairline, for a header with a line under it.
+fn header_line(id: &str) -> Row {
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(AccountsSpacing::Panel.role(), SpacingSize::Md))
+    .padding(Padding::symmetric(AccountsSpacing::Panel.role(), SpacingSize::Lg))
     .spacing(AccountsSpacing::Cell.role())
     .align_items(Alignment::Start)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
 }
 
+/// The header: the name and the actions, or while renaming only the name's field with *Save* and *Cancel*
+/// (`yEJPZ`). Default's *Remove* is locked, and why shows in place under the actions.
 fn header(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount) -> Element {
-  let text = if parts.view.panel == AccountsPanel::Rename {
-    rename_field(ctx, work, account)
+  if parts.view.panel == AccountsPanel::Rename {
+    return header_row("account-header")
+      .child(glyph(Icon::User))
+      .child(rename_field(ctx, work, account))
+      .into();
+  }
+  let (title, actions) = (title(ctx, parts, account), actions(ctx, parts, work, account));
+  let line = if account.is_default() {
+    header_line("account-header")
   } else {
-    title(ctx, parts, account)
+    header_row("account-header")
   };
-  header_row("account-header")
-    .child(glyph(Icon::User))
-    .child(text)
-    .child(actions(ctx, parts, work, account))
+  let row = line.child(glyph(Icon::User)).child(title).child(actions);
+  if !account.is_default() {
+    return row.into();
+  }
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .child(row)
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .padding(
+          Padding::new()
+            .left(AccountsSpacing::Panel.role())
+            .right(AccountsSpacing::Panel.role())
+            .bottom(SpacingSize::Md),
+        )
+        .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+        .child(reason_line(
+          "account-remove-default",
+          &remove::default_reason(ctx, account),
+        )),
+    )
     .into()
 }
 
@@ -189,8 +221,9 @@ fn actions(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount) ->
     .on_click(to(AccountsPanel::Rename));
   let remove =
     ActionButton::new("account-remove", ButtonKind::Ghost, t(ctx, "accounts.actions.remove")).icon(Icon::Trash2);
+  // Why Default can't be removed shows under the actions.
   let remove = if account.is_default() {
-    remove.unavailable(remove::default_reason(ctx, account))
+    remove.disabled()
   } else {
     remove.on_click(to(AccountsPanel::Remove))
   };
@@ -217,7 +250,7 @@ fn rename_field(ctx: &mut Ctx, work: &Work, account: &AgentAccount) -> Element {
     let change = work.change.clone();
     let save = ActionButton::new(
       "account-rename-save",
-      ButtonKind::Secondary,
+      ButtonKind::Primary,
       t(ctx, "accounts.rename.save"),
     )
     .icon(Icon::Check);
@@ -248,6 +281,7 @@ fn rename_field(ctx: &mut Ctx, work: &Work, account: &AgentAccount) -> Element {
     .map(|error| field_error("account-rename-error", &message_text(ctx, &error)));
   Column::new()
     .flex(1.0)
+    .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Sm)
     .child(
       Row::new()

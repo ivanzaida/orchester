@@ -116,7 +116,7 @@ impl Component for SettingsScreen {
       .padding_top(SettingsSpacing::PanelTop.role())
       .padding_horizontal(SettingsSpacing::PanelSide.role())
       .padding_bottom(SpacingSize::Lg)
-      .spacing(SpacingSize::Md)
+      .spacing(SpacingSize::Lg)
       .child(page::header(ctx, tab, count))
       .child(body)
   }

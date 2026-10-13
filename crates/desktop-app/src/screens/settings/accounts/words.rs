@@ -118,11 +118,7 @@ pub(super) fn cli_key(cli: AccountCli) -> &'static str {
 
 /// The plan as the CLI names it (`max`), as a word (`Max`).
 pub(super) fn plan(plan: &str) -> String {
-  let mut letters = plan.chars();
-  letters
-    .next()
-    .map(|first| first.to_uppercase().chain(letters).collect())
-    .unwrap_or_default()
+  crate::services::accounts::plan_name(plan)
 }
 
 /// The CLI's status command as the person would type it.

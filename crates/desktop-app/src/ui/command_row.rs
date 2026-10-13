@@ -1,11 +1,11 @@
 //! A command or an address with Copy at its end (`Command row` `PEnj5`): the value in Geist Mono 11.5 at 1.4 on
 //! `code_bg` inside a `border` stroke, radius 6, 6 over and under it, 10 before it and 4 after Copy, and a 24-high
 //! ghost Copy beside it that says Copied, or that it could not copy, for a moment. A command breaks into lines only
-//! at its spaces, never inside a word such as `--header`, and a line takes every word that fits without the space
-//! after it; its own line breaks are kept. What it shows may differ from
-//! what Copy puts on the clipboard: a command shows its token masked, and Copy copies the full text the caller
-//! supplies. A faded row (a server that does not listen) shows its value in `text_muted`, and its Copy is unavailable.
-//! A one-line row (a path) ends in an ellipsis when it is too long.
+//! at its spaces, never inside a word such as `--header` (a path too long for a line also after its separators),
+//! and a line takes every word that fits without the space after it; its own line breaks are kept. What it shows may
+//! differ from what Copy puts on the clipboard: a command shows its token masked, and Copy copies the full text the
+//! caller supplies. A faded row (a server that does not listen) shows its value in `text_muted`, and its Copy is
+//! unavailable. A one-line row (a path) ends in an ellipsis when it is too long.
 
 use std::{sync::Arc, time::Duration};
 
@@ -23,9 +23,9 @@ use lurq::{
 
 use super::{
   button::{ActionButton, ButtonKind},
-  icon::Icon,
+  icon::{Icon, icon},
 };
-use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography, mono_space};
+use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, mono_space};
 
 /// How long Copy says what happened before it offers to copy again.
 const COPY_FEEDBACK: Duration = Duration::from_secs(2);
@@ -41,13 +41,27 @@ pub struct CommandRow {
   copy: Copy,
   faded: bool,
   one_line: bool,
+  prompt: bool,
 }
 
 /// Rows are compared by what they show; Copy goes to the same place.
 impl PartialEq for CommandRow {
   fn eq(&self, other: &Self) -> bool {
-    (&self.id, &self.shown, &self.copy_label, self.faded, self.one_line)
-      == (&other.id, &other.shown, &other.copy_label, other.faded, other.one_line)
+    (
+      &self.id,
+      &self.shown,
+      &self.copy_label,
+      self.faded,
+      self.one_line,
+      self.prompt,
+    ) == (
+      &other.id,
+      &other.shown,
+      &other.copy_label,
+      other.faded,
+      other.one_line,
+      other.prompt,
+    )
   }
 }
 
@@ -69,12 +83,19 @@ impl CommandRow {
       copy: Arc::new(copy),
       faded: false,
       one_line: false,
+      prompt: false,
     }
   }
 
   /// The value in `text_muted` and Copy unavailable: what it names is not in use now.
   pub fn faded(mut self) -> Self {
     self.faded = true;
+    self
+  }
+
+  /// A prompt mark before the command, as a terminal shows one: a command to run.
+  pub fn prompt(mut self) -> Self {
+    self.prompt = true;
     self
   }
 
@@ -173,6 +194,11 @@ impl Component for CommandRowView {
       .background(ExtraColor::CodeBackground.role())
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Md)
+      .with_children(
+        props
+          .prompt
+          .then(|| icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::TextMuted).flex_shrink(0.0)),
+      )
       .child(
         Row::new()
           .id(props.id.to_string())
@@ -185,25 +211,59 @@ impl Component for CommandRowView {
 }
 
 /// `text` line by line, each line laid out word by word so it breaks only at its spaces; a word keeps the space
-/// after it, so the words read as the text itself.
+/// after it, so the words read as the text itself. A word longer than [`LONG_WORD`] characters (a path) may also
+/// break after its `\` and `/`, so it never runs past the box.
 fn words(id: &str, text: &str, color: &PaletteColor) -> Element {
   let lines = text.split('\n').enumerate().map(|(number, line)| {
     let count = line.split(' ').count();
     Row::new()
       .width(Dimension::Pct(100.0))
       .wrap()
-      .with_children(line.split(' ').enumerate().map(|(index, word)| {
+      .with_children(line.split(' ').enumerate().flat_map(|(index, word)| {
         let word = if index + 1 < count {
           format!("{word} ")
         } else {
           word.to_owned()
         };
-        Text::new(&word)
-          .id(format!("{id}-word-{number}-{index}"))
-          .variant(ExtraTypography::MonoKey.role())
-          .color(color.clone())
-          .nowrap()
+        pieces(&word)
+          .into_iter()
+          .enumerate()
+          .map(|(piece, text)| {
+            let piece_id = if piece == 0 {
+              format!("{id}-word-{number}-{index}")
+            } else {
+              format!("{id}-word-{number}-{index}-{piece}")
+            };
+            Text::new(&text)
+              .id(piece_id)
+              .variant(ExtraTypography::MonoKey.role())
+              .color(color.clone())
+              .nowrap()
+          })
+          .collect::<Vec<_>>()
       }))
   });
   Column::new().width(Dimension::Pct(100.0)).with_children(lines).into()
+}
+
+/// A word longer than this many characters may break after its path separators.
+const LONG_WORD: usize = 32;
+
+/// `word` as the pieces a line may break between: itself, or a long word cut after each `\` and `/`.
+fn pieces(word: &str) -> Vec<String> {
+  if word.chars().count() <= LONG_WORD {
+    return vec![word.to_owned()];
+  }
+  let mut pieces = Vec::new();
+  let mut piece = String::new();
+  for character in word.chars() {
+    piece.push(character);
+    if matches!(character, '\\' | '/') {
+      pieces.push(std::mem::take(&mut piece));
+    }
+  }
+  if !piece.is_empty() {
+    pieces.push(piece);
+  }
+  pieces
 }

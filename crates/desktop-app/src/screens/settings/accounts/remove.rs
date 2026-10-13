@@ -243,6 +243,7 @@ fn folder_lines(ctx: &Ctx, work: &Work, account: &AgentAccount) -> Element {
       };
       let trash = work.removal.trash.clone();
       lurq::components::Column::new()
+        .width(Dimension::Pct(100.0))
         .spacing(SpacingSize::Sm)
         .child(note(
           "account-remove-folder",
@@ -250,15 +251,19 @@ fn folder_lines(ctx: &Ctx, work: &Work, account: &AgentAccount) -> Element {
           &t(ctx, "accounts.remove.createdFolder"),
         ))
         .child(
-          Row::new().padding_left(AccountsSpacing::NoteIndent.role()).child(
-            Toggle::new(
-              "account-remove-trash",
-              ToggleKind::Checkbox,
-              work.removal.trash.get(),
-              ta(ctx, key, [("folder", path)]),
-            )
-            .on_change(move |on| trash.set(on)),
-          ),
+          Row::new()
+            .width(Dimension::Pct(100.0))
+            .padding_left(AccountsSpacing::NoteIndent.role())
+            .child(
+              Toggle::new(
+                "account-remove-trash",
+                ToggleKind::Checkbox,
+                work.removal.trash.get(),
+                ta(ctx, key, [("folder", path)]),
+              )
+              .wrap_label()
+              .on_change(move |on| trash.set(on)),
+            ),
         )
         .into()
     }

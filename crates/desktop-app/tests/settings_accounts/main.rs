@@ -242,3 +242,88 @@ fn settings_accounts_removes_an_account_and_moves_its_connections() {
     },
   );
 }
+
+#[test]
+fn settings_accounts_rename_header_holds_only_the_field_save_and_cancel() {
+  in_child(
+    "settings_accounts_rename_header_holds_only_the_field_save_and_cancel",
+    |root| {
+      let mut window = Window::open();
+      let work = add_account(
+        &window,
+        AccountCli::Codex,
+        "Work",
+        &root.join("accounts").join("codex-work"),
+      );
+      go(&mut window, Some(work.id()), AccountsPanel::Rename);
+      window.until("the name field", |window| shown(window, "account-rename-field"));
+      assert!(shown(&mut window, "account-rename-save") && shown(&mut window, "account-rename-cancel"));
+      for hidden in ["account-check-again", "account-rename", "account-remove"] {
+        assert!(
+          !shown(&mut window, hidden),
+          "{hidden} is not in the header while renaming"
+        );
+      }
+    },
+  );
+}
+
+#[test]
+fn settings_accounts_says_in_place_why_default_cant_be_removed() {
+  in_child("settings_accounts_says_in_place_why_default_cant_be_removed", |_| {
+    let mut window = Window::open();
+    go(
+      &mut window,
+      Some(AccountCli::ClaudeCode.default_account()),
+      AccountsPanel::Account,
+    );
+    window.until("Default's reason", |window| shown(window, "account-remove-default"));
+    assert!(joined(&mut window, "account-remove-default").contains("can't remove it"));
+  });
+}
+
+#[test]
+fn settings_accounts_offers_choose_folder_for_a_folder_that_is_gone() {
+  in_child(
+    "settings_accounts_offers_choose_folder_for_a_folder_that_is_gone",
+    |root| {
+      let mut window = Window::open();
+      let folder = root.join("accounts").join("codex-archive");
+      let archive = add_account(&window, AccountCli::Codex, "Archive", &folder);
+      fs::remove_dir(&folder).expect("the folder goes");
+      go(&mut window, Some(archive.id()), AccountsPanel::Account);
+      window.until("Folder missing", |window| shown(window, "account-choose-folder"));
+      assert!(shown(&mut window, "account-folder-missing-remove"));
+      for hidden in ["account-open-folder", "account-sign-in", "account-copy-folder"] {
+        assert!(!shown(&mut window, hidden), "{hidden} needs a folder that is there");
+      }
+      let found = home().join(".codex-archive");
+      fs::create_dir_all(&found).expect("where it is now");
+      sign_in(&found);
+      let workspace = window.launch.workspace().expect("the session").clone();
+      let moved = workspace
+        .choose_agent_account_folder(archive.id(), &found)
+        .expect("chosen");
+      assert_eq!(moved.state(Platform::current()), AccountState::SignedIn);
+      assert!(matches!(
+        moved.folder(),
+        orchester_core::account::AccountFolder::Brought(_)
+      ));
+    },
+  );
+}
+
+#[test]
+fn settings_accounts_sign_in_step_ends_at_signed_in() {
+  in_child("settings_accounts_sign_in_step_ends_at_signed_in", |root| {
+    let mut window = Window::open();
+    let folder = root.join("accounts").join("codex-client");
+    let client = add_account(&window, AccountCli::Codex, "Client", &folder);
+    sign_in(&folder);
+    go(&mut window, Some(client.id()), AccountsPanel::SignIn);
+    window.until("the signed-in outcome", |window| shown(window, "account-sign-in-done"));
+    for hidden in ["account-sign-in-own", "account-sign-in-later"] {
+      assert!(!shown(&mut window, hidden), "{hidden} is gone once signed in");
+    }
+  });
+}

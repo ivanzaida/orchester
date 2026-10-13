@@ -181,6 +181,7 @@
       "noCheckpoint": "None yet",
       "account": "Account",
       "accountValue": "{{account}} · {{email}}",
+      "accountAtLimit": "{{account}} · limit reached",
       "accountUnknown": "An account no longer known",
       "defaultAccount": "Default"
     },

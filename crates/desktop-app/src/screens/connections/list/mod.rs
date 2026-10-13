@@ -310,7 +310,7 @@ impl ConnectionsScreen {
     Actions {
       start,
       confirm: Arc::new(move |confirm| asking.set(Asking(confirm.map(|confirm| (inspected, confirm))))),
-      edit_mcp: Arc::new(move |id| edit.go(Route::Project(project_id, ProjectPage::EditConnection(id)))),
+      edit: Arc::new(move |id| edit.go(Route::Project(project_id, ProjectPage::EditConnection(id)))),
       agents: Arc::new(move || navigation.go(Route::Project(project_id, ProjectPage::Agents))),
     }
   }

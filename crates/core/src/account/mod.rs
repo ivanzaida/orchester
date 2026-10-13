@@ -267,6 +267,21 @@ impl AgentAccount {
     self.name = Some(name);
   }
 
+  /// Keeps the account in `folder`, a folder the person chose after its own went missing (*Choose folder…*):
+  /// Orchester did not create it, so removing the account leaves it. Its check is dropped: it read the folder before.
+  /// Default's folder is the CLI's own and never moves.
+  pub fn move_to_folder(&mut self, folder: PathBuf) -> Result<(), AccountError> {
+    if self.is_default() {
+      return Err(AccountError::OwnFolder);
+    }
+    if !folder.is_absolute() {
+      return Err(AccountError::RelativeFolder(folder));
+    }
+    self.folder = AccountFolder::Brought(folder);
+    self.last_check = None;
+    Ok(())
+  }
+
   /// Takes in a new check. A sign-out after a sign-in keeps who was signed in (*Sign-in expired · was …*), and a
   /// check that could not ask the CLI keeps the identity known before.
   pub fn record_check(&mut self, check: AccountCheck) {

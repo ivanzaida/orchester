@@ -14,7 +14,7 @@ use orchester_core::{
 };
 use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::{
-  accounts::{AccountsError, NewAccount, NewFolder},
+  accounts::{AccountsError, NewAccount, NewFolder, trash::FolderTrash},
   connections::data::set_account_in,
   project_setup::NewProject,
   workspace::Workspace,
@@ -32,6 +32,8 @@ fn setup() -> Setup {
   let data = tempfile::tempdir().expect("temporary directory");
   let db = AppDb::open(&data.path().join("orchester.db")).expect("the app database");
   let workspace = Workspace::new(db).with_account_root(&data.path().join("accounts"));
+  // Never the person's Recycle Bin: a folder of the test's own.
+  workspace.use_trash(std::sync::Arc::new(FolderTrash::new(&data.path().join("trash"))));
   Setup { data, workspace }
 }
 
@@ -431,4 +433,30 @@ fn accounts_a_new_accounts_folder_is_never_made_inside_a_repository() {
     "{refused:?}"
   );
   assert!(!repo.path().join("accounts").exists(), "nothing is made");
+}
+
+#[test]
+fn accounts_removal_moves_a_created_folder_to_the_trash_when_asked() {
+  let Setup { data, workspace } = setup();
+  let work = add(&workspace, "Work");
+  let created = work.folder().path().expect("a folder").to_path_buf();
+  workspace
+    .remove_agent_account(work.id(), MoveTo::NoAccount, true)
+    .expect("removed");
+  assert!(!created.exists(), "the folder left its place");
+  assert!(
+    data.path().join("trash").join("claude-work").is_dir(),
+    "it went to the test's own trash"
+  );
+}
+
+#[test]
+fn accounts_a_workspace_without_a_trash_says_so_and_keeps_the_folder() {
+  let data = tempfile::tempdir().expect("temporary directory");
+  let db = AppDb::open(&data.path().join("orchester.db")).expect("the app database");
+  let workspace = Workspace::new(db).with_account_root(&data.path().join("accounts"));
+  let work = add(&workspace, "Work");
+  let refused = workspace.remove_agent_account(work.id(), MoveTo::NoAccount, true);
+  assert!(matches!(refused, Err(AccountsError::Trash(_))), "{refused:?}");
+  assert!(work.folder().path().expect("a folder").is_dir());
 }

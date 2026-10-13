@@ -49,7 +49,9 @@ pub(super) fn column(ctx: &mut Ctx, parts: &Parts, adding: Option<&Adding>) -> E
     .rounded(RadiusSize::Lg)
     .clip();
   for cli in AccountCli::ALL {
-    let accounts: Vec<&AgentAccount> = parts.accounts.iter().filter(|account| account.cli() == cli).collect();
+    // Default last (`t098v`): the accounts the person added come first.
+    let mut accounts: Vec<&AgentAccount> = parts.accounts.iter().filter(|account| account.cli() == cli).collect();
+    accounts.sort_by_key(|account| account.is_default());
     let adding = adding.filter(|adding| adding.cli == cli);
     card = card.child(group_head(ctx, cli, accounts.len()));
     for account in accounts {
@@ -218,7 +220,7 @@ fn lines(id: &str, (name, identity, folder): (&str, &str, &str), state: Row) -> 
     .with_children((!folder.is_empty()).then(|| {
       Text::new(folder)
         .id(format!("{id}-folder"))
-        .variant(ExtraTypography::MonoNote.role())
+        .variant(AccountsText::Folder.role())
         .nowrap()
     }))
 }

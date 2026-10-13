@@ -83,12 +83,10 @@ fn cli(
 ) -> Parts {
   let mut body: Vec<Element> = too_old(ctx, connection).into_iter().collect();
   body.push(properties(ctx, connection, inspecting).into());
-  let (start, id) = (actions.start.clone(), connection.id());
   body.push(super::super::account::inspector_row(
     ctx,
     inspecting.accounts,
     connection,
-    Arc::new(move |account| start(id, super::super::work::Work::SetAccount(account))),
   ));
   body.push(models(ctx, connection, inspecting, actions));
   body.push(used);
@@ -110,16 +108,17 @@ fn cli(
       )
       .render(ctx)
     });
-  let reason = ctx.t("connections.editCliUnavailable");
+  // Edit connection chooses the connection's account (`M42rM`); its name and program are not edited here yet.
+  let (edit, id) = (actions.edit.clone(), connection.id());
   let buttons = vec![
     check_button(inspecting, ("connection-test", ctx.t("connections.test")), actions).into(),
     ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.edit"))
       .icon(Icon::Pencil)
-      .unavailable(reason.clone())
+      .on_click(move || edit(id))
       .into(),
   ];
   let more = command.into_iter().collect();
-  let reasons = vec![reason_line("connection-edit-reason", &reason).into()];
+  let reasons = Vec::new();
   let sentence = ctx.t(detail_key(status, connection.provider()));
   Parts {
     header,

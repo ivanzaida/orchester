@@ -230,6 +230,9 @@ impl RunTask {
     if self.is_tool_step(execution) {
       return self.start_command(execution, start);
     }
+    if self.waits_for_plan_reset(execution)? {
+      return Ok(true);
+    }
     let work = self.work(execution)?;
     if !self.board.take(self.run.id(), execution, work) {
       return Ok(false);

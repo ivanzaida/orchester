@@ -9,7 +9,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  account::{AccountCli, AccountState, AgentAccount, SignInMethod, same_sign_in},
+  account::{AccountCheckResult, AccountCli, AccountState, AgentAccount, SignInMethod, same_sign_in},
   connection::plan_limits::{LimitReading, LimitWindow},
   time::Timestamp,
 };
@@ -38,14 +38,16 @@ const WEEK: u64 = 10_080;
 
 pub(super) fn body(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount) -> Element {
   let shown = parts.shown(account);
-  let readings = plan_limits::readings(ctx);
-  let reading = readings.of_account(account.id()).cloned();
+  let reading = last_reading(ctx, account);
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(AccountsSpacing::Parts.role())
-    .with_children(state_sentence(ctx, parts, account, shown))
+    .with_children(state_sentence(ctx, (parts, work), account, shown))
     .child(facts(ctx, account))
-    .child(folder_actions(ctx, parts, work, account))
+    // A folder that is gone can't be opened or signed in to: *Choose folder…* and *Remove* are under its sentence.
+    .with_children(
+      (shown != Shown::State(AccountState::FolderMissing)).then(|| folder_actions(ctx, parts, work, account)),
+    )
     .with_children((shown != Shown::State(AccountState::Unsupported)).then(|| limits(ctx, account, reading.as_ref())))
     .child(runs_get(ctx, account))
     .child(inspector::note(
@@ -63,8 +65,45 @@ pub(super) fn body(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAcc
     .into()
 }
 
+/// A reading of the account's plan limits stored by a project, as read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Stored(Option<LimitReading>);
+
+impl lurq::app::component::DevtoolsInspectable for Stored {}
+
+/// The account's last plan reading: this session's, or the last one a project stored, whichever is newer.
+fn last_reading(ctx: &mut Ctx, account: &AgentAccount) -> Option<LimitReading> {
+  let id = account.id();
+  let session = plan_limits::readings(ctx).of_account(id).cloned();
+  let workspace = crate::services::Services::of(ctx).workspace;
+  let stored = ctx
+    .future(id, move |id| {
+      let workspace = workspace.clone();
+      async move {
+        orchester_workspace::background::run(move || workspace.last_plan_reading(id))
+          .await?
+          .map(Stored)
+          .map_err(|error| error.message())
+      }
+    })
+    .state()
+    .get()
+    .data
+    .and_then(|stored| stored.0);
+  match (session, stored) {
+    (Some(session), Some(stored)) if stored.at > session.at => Some(stored),
+    (Some(session), _) => Some(session),
+    (None, stored) => stored,
+  }
+}
+
 /// What the account's state means for runs and what to do, for every state but signed in alone.
-fn state_sentence(ctx: &mut Ctx, parts: &Parts, account: &AgentAccount, shown: Shown) -> Option<Element> {
+fn state_sentence(
+  ctx: &mut Ctx,
+  (parts, work): (&Parts, &Work),
+  account: &AgentAccount,
+  shown: Shown,
+) -> Option<Element> {
   let cli = account.cli();
   let program = cli.program().to_owned();
   let shown_name = name(ctx, account);
@@ -119,11 +158,14 @@ fn state_sentence(ctx: &mut Ctx, parts: &Parts, account: &AgentAccount, shown: S
         "accounts.state.unknown",
         [("program", program), ("version", version), ("account", shown_name)],
       ),
-      AccountState::FolderMissing => ta(
-        ctx,
-        "accounts.state.folderMissing",
-        [("folder", folder_text), ("account", shown_name)],
-      ),
+      AccountState::FolderMissing => {
+        let sentence = ta(
+          ctx,
+          "accounts.state.folderMissing",
+          [("folder", folder_text), ("account", shown_name)],
+        );
+        return Some(folder_missing(ctx, work, account, &sentence));
+      }
       AccountState::Unsupported => t(ctx, "accounts.state.unsupported"),
       AccountState::NotChecked => ta(
         ctx,
@@ -146,12 +188,61 @@ fn with_command(ctx: &mut Ctx, account: &AgentAccount, sentence: &str) -> Elemen
     .into()
 }
 
+/// The sentence of a folder that is gone, with *Choose folder…* (a folder the person already has, by the rules of a
+/// brought folder) and *Remove* (`Folder missing` in `E96CI`).
+fn folder_missing(ctx: &mut Ctx, work: &Work, account: &AgentAccount, sentence: &str) -> Element {
+  let id = account.id();
+  let choose = ActionButton::new(
+    "account-choose-folder",
+    ButtonKind::Secondary,
+    t(ctx, "accounts.actions.chooseFolder"),
+  )
+  .icon(Icon::FolderOpen);
+  let choose = if work.choose.state().get().is_pending() || work.change.state().get().is_pending() {
+    choose.loading()
+  } else {
+    let pick = work.choose.clone();
+    choose.on_click(move || pick.run(id))
+  };
+  let navigation = crate::navigation::Navigation::of(ctx);
+  let remove = ActionButton::new(
+    "account-folder-missing-remove",
+    ButtonKind::Ghost,
+    t(ctx, "accounts.actions.remove"),
+  )
+  .icon(Icon::Trash2)
+  .on_click(move || {
+    navigation.replace(crate::routes::Route::Accounts(crate::routes::AccountsView::of(
+      id,
+      crate::routes::AccountsPanel::Remove,
+    )));
+  });
+  let error = work
+    .change_error()
+    .map(|error| crate::ui::field::field_error("account-choose-folder-error", &message_text(ctx, &error)));
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .child(paragraph("account-state-sentence", sentence))
+    .child(
+      Row::new()
+        .id("account-folder-missing-actions")
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(choose)
+        .child(remove),
+    )
+    .with_children(error)
+    .into()
+}
+
 /// A command in its box with Copy (`Command row` `PEnj5`); Copy puts it on the clipboard.
 pub(super) fn command_row(ctx: &mut Ctx, id: &str, text: &str) -> Element {
   let copied = text.to_owned();
   CommandRow::new(id.to_owned(), text.to_owned(), t(ctx, "common.copy"), move || {
     lurq::clipboard::copy_to_clipboard(&copied)
   })
+  .prompt()
   .render(ctx)
 }
 
@@ -210,16 +301,7 @@ fn facts(ctx: &Ctx, account: &AgentAccount) -> Element {
   } else {
     folder_text
   };
-  let checked_with = check.and_then(|check| check.program()).map_or_else(
-    || t(ctx, "accounts.details.neverChecked"),
-    |checked| {
-      ta(
-        ctx,
-        "accounts.details.checkedWithValue",
-        [("program", program.to_owned()), ("version", checked.version.clone())],
-      )
-    },
-  );
+  let checked_with = checked_with(ctx, account);
   let last_checked = check.map_or_else(
     || t(ctx, "accounts.details.neverChecked"),
     |check| message_text(ctx, &display::elapsed(Timestamp::now(), check.at)).to_string(),
@@ -244,6 +326,25 @@ fn facts(ctx: &Ctx, account: &AgentAccount) -> Element {
       PropertyValue::Plain,
     ))
     .into()
+}
+
+/// The program the last check ran, or why it ran none: no CLI on the PATH, or no folder to check.
+fn checked_with(ctx: &Ctx, account: &AgentAccount) -> String {
+  let program = account.cli().program();
+  match account.last_check() {
+    None => t(ctx, "accounts.details.neverChecked"),
+    Some(check) => match (check.program(), &check.result) {
+      (Some(checked), _) => ta(
+        ctx,
+        "accounts.details.checkedWithValue",
+        [("program", program.to_owned()), ("version", checked.version.clone())],
+      ),
+      (None, AccountCheckResult::CliMissing { .. }) => {
+        ta(ctx, "accounts.details.checkedWithNoCli", [("program", program)])
+      }
+      (None, _) => t(ctx, "accounts.details.checkedWithNoFolder"),
+    },
+  }
 }
 
 /// A fact the CLI may not report: muted when it does not.

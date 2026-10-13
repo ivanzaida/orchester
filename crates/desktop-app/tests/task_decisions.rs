@@ -50,7 +50,12 @@ impl Page {
   /// `task-states` with its Codex connection (on Default, its program a file that is never run) and, with
   /// `other_account`, a second Codex connection, *Codex · Work*, on account Work, whose folder exists.
   fn with_codex(other_account: bool) -> Self {
-    Self::seeded_with("task-states", |dir, repo| {
+    Self::with_codex_in("task-states", other_account)
+  }
+
+  /// [`Self::with_codex`] on `scenario`.
+  fn with_codex_in(scenario: &str, other_account: bool) -> Self {
+    Self::seeded_with(scenario, |dir, repo| {
       let Some(repo) = repo else {
         let program = dir.join("codex.exe");
         std::fs::write(&program, "").expect("the stand-in program");
@@ -311,14 +316,51 @@ fn decision_plan_limit_offers_the_reset_and_no_other_account_without_one() {
      Connections."
   );
   assert!(!page.has("plan-limit-connection"));
-  // Waiting is the default: the runner continues by itself at the reset.
-  assert!(page.text("plan-limit-continue").starts_with("Continue at "));
+  // Waiting is the default: *Continue at …* confirms it, the time alone when the reset is today.
+  let continue_at = page.text("plan-limit-continue");
+  assert!(continue_at.starts_with("Continue at "), "{continue_at}");
+  assert!(
+    !page.locked("plan-limit-continue"),
+    "a person's confirmation, not a locked label"
+  );
   assert_eq!(page.text("plan-limit-offline"), OFFLINE);
   let accounts = page.text("plan-limit-accounts");
   assert!(
     accounts.contains("account Default · stopped at its plan limit"),
     "{accounts}"
   );
+  assert!(page.text("task-status").contains("Stopped at plan limit"));
+  assert!(page.text("task-this-run-account-value").ends_with("limit reached"));
+}
+
+#[test]
+fn decision_plan_limit_a_new_run_waits_for_its_accounts_reset_before_its_agent_starts() {
+  let mut page = Page::with_codex_in("accounts", false);
+  page.open("waiting for its account's plan limit", "plan-limit-waiting");
+  let title = page.text("plan-limit-waiting-title");
+  assert!(
+    title.starts_with("Waiting for Default's plan limit · starts at "),
+    "{title}"
+  );
+  let body = page.text("plan-limit-waiting-body");
+  assert!(
+    body.contains("starts 01 Research") && body.contains("holds no agent slot"),
+    "{body}"
+  );
+  assert!(
+    page.has("plan-limit-waiting-none"),
+    "no other account's connection to start on"
+  );
+  assert!(!page.has("plan-limit-choice"), "not a stop of a running agent");
+}
+
+#[test]
+fn decision_plan_limit_a_waiting_run_offers_start_now_on_another_account() {
+  let mut page = Page::with_codex_in("accounts", true);
+  page.open("waiting for its account's plan limit", "plan-limit-waiting");
+  assert_eq!(page.options("plan-limit-waiting-connection"), ["Codex · Work"]);
+  // Work is not among this window's accounts, so the connection names it.
+  assert_eq!(page.text("plan-limit-start-now"), "Start now on Codex · Work");
 }
 
 #[test]

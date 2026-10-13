@@ -285,7 +285,7 @@ fn folder_choice(ctx: &mut Ctx, draft: &Draft, cli: AccountCli, problem: Option<
       move || signal.set(FolderChoice::New),
     );
     if planned.is_some() {
-      card
+      card.mono_description()
     } else {
       card.unavailable(t(ctx, "accounts.add.noFolderHere"))
     }

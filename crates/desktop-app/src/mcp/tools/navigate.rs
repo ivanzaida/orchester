@@ -59,7 +59,7 @@ fn schema() -> Value {
       },
       "selected": { "type": "string", "description": "connections: the id of the connection its inspector shows." },
       "kind": { "type": "string", "enum": kinds, "description": "new_connection: what it adds." },
-      "connection": { "type": "string", "description": "edit_connection: the MCP server's id." },
+      "connection": { "type": "string", "description": "edit_connection: the connection's id: an MCP server's form, or an agent CLI connection's account." },
       "skill": { "type": "string", "description": "skills: the skill id, new, or import; omitted opens the library." },
       "tool": { "type": "string", "description": "tools: the tool’s id, or new for a command draft; omitted opens the library." },
       "from": {

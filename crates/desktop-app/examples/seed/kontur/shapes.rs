@@ -42,6 +42,8 @@ pub enum Shape {
   AtLimit(&'static str, RunLimit),
   /// The step's account reached its plan limit; the run waits for the reset or another account.
   AtPlanLimit(&'static str),
+  /// The step's account was at its plan limit before its agent started: a new run waits for the reset.
+  WaitsForPlanLimit(&'static str),
   /// The app ended while the run worked.
   Interrupted(&'static str),
   Cancelled(&'static str),
@@ -73,6 +75,7 @@ impl Shape {
       Self::AtLimit(_, RunLimit::DailyBudget) => "stopped by the daily budget",
       Self::AtLimit(..) => "stopped at its token limit",
       Self::AtPlanLimit(_) => "stopped at its account's plan limit",
+      Self::WaitsForPlanLimit(_) => "waiting for its account's plan limit",
       Self::Interrupted(_) => "interrupted",
       Self::Cancelled(_) => "cancelled",
       Self::Stuck(_) => "waits after retries",
@@ -156,6 +159,9 @@ fn drive_to(drive: &mut Drive<'_>, shape: Shape) -> Result<(), SeedError> {
         .begin(step)?
         .save_work(step)?
         .stop_at_plan_limit(step)?;
+    }
+    Shape::WaitsForPlanLimit(step) => {
+      drive.pass_before(step)?.wait_at_plan_limit(step)?;
     }
     Shape::Interrupted(step) => {
       drive.pass_before(step)?.begin(step)?.save_work(step)?.interrupt()?;

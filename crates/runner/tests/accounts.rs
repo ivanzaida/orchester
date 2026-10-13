@@ -214,6 +214,23 @@ fn at_the_limit() -> (TestProject, TempDir, TempDir, orchester_core::id::Connect
   (project, work, personal, id)
 }
 
+/// Continues `run` on `connection` once its task settled the stop: right after the stop is recorded its task may still
+/// be ending, and the runner refuses a run it still executes.
+async fn continue_on(
+  scheduler: &orchester_runner::execution::Scheduler,
+  run: orchester_core::id::RunId,
+  connection: orchester_core::id::ConnectionId,
+) {
+  for _ in 0..50 {
+    match scheduler.continue_on_connection(run, connection).await {
+      Ok(()) => return,
+      Err(Rejection::RunNotPaused) => tokio::time::sleep(std::time::Duration::from_millis(100)).await,
+      Err(other) => panic!("the step does not continue: {other:?}"),
+    }
+  }
+  panic!("the run's task never settled its stop");
+}
+
 fn stopped_at_plan_limit(run: &orchester_core::run::Run) -> bool {
   matches!(
     run.status(),
@@ -258,10 +275,7 @@ async fn accounts_a_person_continues_a_stopped_step_on_another_account_as_a_new_
     .await
     .expect("the run starts");
   wait_for(root, &mut events, id, stopped_at_plan_limit).await;
-  scheduler
-    .continue_on_connection(id, other)
-    .await
-    .expect("the step continues on Personal");
+  continue_on(&scheduler, id, other).await;
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   let db = ProjectDb::open(root).expect("open");
@@ -315,10 +329,7 @@ async fn accounts_a_reset_timer_continues_only_the_stop_it_waits_for() {
     .expect("the run starts");
   wait_for(root, &mut events, id, stopped_at_plan_limit).await;
   let first_stop = std::time::Instant::now();
-  scheduler
-    .continue_on_connection(id, other)
-    .await
-    .expect("the step continues on Personal");
+  continue_on(&scheduler, id, other).await;
   wait_for(root, &mut events, id, stopped_at_plan_limit).await;
   let invocations = ProjectDb::open(root)
     .expect("open")
@@ -340,4 +351,65 @@ async fn accounts_a_reset_timer_continues_only_the_stop_it_waits_for() {
     invocations,
     "no agent started early"
   );
+}
+
+/// A second task of the project, queued on its pipeline as the first is.
+fn another_task(root: &Path) -> orchester_core::id::TaskId {
+  use orchester_core::{
+    resource::{Pipeline, ResourceKind},
+    store::{ResourceStore, TaskStore},
+    task::{TaskDetails, TaskLimits},
+  };
+  let mut db = ProjectDb::open(root).expect("open");
+  let pipeline = db.resources(ResourceKind::Pipeline).expect("pipelines")[0].id();
+  let version = db
+    .latest_version::<Pipeline>(pipeline)
+    .expect("read")
+    .expect("published")
+    .number();
+  let details = TaskDetails {
+    title: orchester_core::name::Name::new("Say hello again").expect("a title"),
+    brief: "Say hello once more.".to_owned(),
+    acceptance_criteria: vec!["It says hello".to_owned()],
+    pipeline: Some(pipeline),
+    limits: TaskLimits::new(None, None).expect("limits"),
+  };
+  let mut task = db
+    .create_tasks(IdempotencyKey::generate(), vec![details], Timestamp::now())
+    .expect("task")
+    .remove(0);
+  task.queue(version).expect("a complete draft queues");
+  db.save_task(&task).expect("saved").saved().expect("no conflict").id()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn accounts_a_new_run_waits_for_its_accounts_reset_without_an_agent_and_starts_elsewhere_when_asked() {
+  let (project, _work, personal, other) = at_the_limit();
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let first = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the first run starts");
+  wait_for(root, &mut events, first, stopped_at_plan_limit).await;
+  let task = another_task(root);
+  let second = scheduler
+    .start_run(IdempotencyKey::generate(), task)
+    .await
+    .expect("the second run starts");
+  wait_for(root, &mut events, second, stopped_at_plan_limit).await;
+  let db = ProjectDb::open(root).expect("open");
+  assert!(
+    db.invocations(second).expect("read").is_empty(),
+    "no agent started on Work while its limit holds"
+  );
+  assert!(
+    scheduler.wait_for_plan_reset(second).is_ok(),
+    "it waits for Work's reset"
+  );
+  continue_on(&scheduler, second, other).await;
+  let run = wait_for(root, &mut events, second, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let folders = reported(&ProjectDb::open(root).expect("open"), second, "account folder: ");
+  assert_eq!(folders.last(), Some(&personal.path().display().to_string()));
 }

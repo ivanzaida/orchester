@@ -4,7 +4,7 @@
 use orchester_core::{
   account::AccountCli,
   connection::plan_limits::{LimitReading, PlanLimits},
-  id::{RunId, StepExecutionId},
+  id::{AgentAccountId, RunId, StepExecutionId},
   run::RunNumber,
   time::Timestamp,
   usage::limits::{LimitSnapshot, SnapshotSource, retained_since},
@@ -107,18 +107,41 @@ impl ProjectDb {
     self.last_reading_where("run_id = ?1", &[&run.to_string() as &dyn rusqlite::ToSql])
   }
 
-  /// What `run` stopped at when `execution` reached its account's plan limit: the last report of `run`'s limits from
-  /// the account `execution`'s agent last started on (another step of the run may run on another account), else
-  /// the run's last report.
-  pub fn plan_stop_reading(&self, run: RunId, execution: StepExecutionId) -> Result<Option<LimitReading>, StoreError> {
-    let Some(account) = self.execution_account(execution)? else {
+  /// What `run` stopped at when `execution` reached its account's plan limit: the last report of the limits of the
+  /// account `execution`'s agent last started on (another step of the run may run on another account), or, for a
+  /// step that waits before its agent starts, of `step_account`, the account its connection runs on now. `run`'s own
+  /// reports come first; a step that never started has none, so the project's last report of the account counts.
+  pub fn plan_stop_reading(
+    &self,
+    run: RunId,
+    execution: StepExecutionId,
+    step_account: Option<AgentAccountId>,
+  ) -> Result<Option<LimitReading>, StoreError> {
+    let Some(account) = self.execution_account(execution)?.or(step_account) else {
       return self.last_limit_reading(run);
     };
     // A reading that names no account is Default's (`LimitReading::account_id`).
     let default = AccountCli::ALL.iter().any(|cli| cli.default_account() == account);
-    self.last_reading_where(
+    let of_run = self.last_reading_where(
       "run_id = ?1 AND (account_id = ?2 OR (?3 AND account_id IS NULL))",
       &[&run.to_string() as &dyn rusqlite::ToSql, &account.to_string(), &default],
+    )?;
+    match of_run {
+      Some(reading) => Ok(Some(reading)),
+      None => self.last_account_reading(account, default),
+    }
+  }
+
+  /// The last report of `account`'s limits in this project, from any run; one that names no account counts as
+  /// Default's when `default` says `account` is a CLI's Default.
+  pub fn last_account_reading(
+    &self,
+    account: AgentAccountId,
+    default: bool,
+  ) -> Result<Option<LimitReading>, StoreError> {
+    self.last_reading_where(
+      "(account_id = ?1 OR (?2 AND account_id IS NULL))",
+      &[&account.to_string() as &dyn rusqlite::ToSql, &default],
     )
   }
 

@@ -1,6 +1,7 @@
 //! The stand-in `claude` and `codex` the QA window checks its accounts with, so no real CLI is asked and no real
 //! sign-in is read. They answer `--version` and their status command: signed in when the folder their variable names
-//! holds a `signed-in` file; the stand-in `claude` answers in a way Orchester can't read when it holds `garbled`.
+//! holds a `signed-in` file, the stand-in `claude` as the email and plan written in it; the stand-in `claude` answers
+//! in a way Orchester can't read when the folder holds `garbled`.
 
 use std::{fs, io, path::Path};
 
@@ -24,9 +25,9 @@ pub fn write(folder: &Path, without_codex: bool) -> io::Result<()> {
   Ok(())
 }
 
-/// Marks `folder` signed in for the stand-ins.
-pub fn sign_in(folder: &Path) -> io::Result<()> {
-  fs::write(folder.join("signed-in"), "")
+/// Marks `folder` signed in for the stand-ins, as `email` on `plan` for the stand-in `claude`.
+pub fn sign_in(folder: &Path, (email, plan): (&str, &str)) -> io::Result<()> {
+  fs::write(folder.join("signed-in"), format!("{email} {plan}\n"))
 }
 
 /// Makes the stand-in `claude` answer `folder`'s status in a way Orchester can't read.
@@ -35,64 +36,72 @@ pub fn garble(folder: &Path) -> io::Result<()> {
 }
 
 #[cfg(windows)]
-const CLAUDE_SCRIPT: &str = "@echo off\r\n\
-  if \"%1\"==\"--version\" goto version\r\n\
-  if \"%1\"==\"auth\" if \"%2\"==\"status\" goto status\r\n\
-  exit /b 1\r\n\
-  :version\r\n\
-  echo 2.1.296 ^(Claude Code^)\r\n\
-  exit /b 0\r\n\
-  :status\r\n\
-  if exist \"%CLAUDE_CONFIG_DIR%\\garbled\" goto garbled\r\n\
-  if exist \"%CLAUDE_CONFIG_DIR%\\signed-in\" goto in\r\n\
-  echo {\"loggedIn\":false,\"authMethod\":\"none\"}\r\n\
-  exit /b 1\r\n\
-  :garbled\r\n\
-  echo Welcome back.\r\n\
-  exit /b 0\r\n\
-  :in\r\n\
-  echo {\"loggedIn\":true,\"authMethod\":\"claude.ai\",\"email\":\"ana@example.com\",\"subscriptionType\":\"max\"}\r\n\
-  exit /b 0\r\n";
+const CLAUDE_SCRIPT: &str = r#"@echo off
+if "%1"=="--version" goto version
+if "%1"=="auth" if "%2"=="status" goto status
+exit /b 1
+:version
+echo 2.1.296 ^(Claude Code^)
+exit /b 0
+:status
+if exist "%CLAUDE_CONFIG_DIR%\garbled" goto garbled
+if exist "%CLAUDE_CONFIG_DIR%\signed-in" goto in
+echo {"loggedIn":false,"authMethod":"none"}
+exit /b 1
+:garbled
+echo Welcome back.
+exit /b 0
+:in
+set /p WHO=<"%CLAUDE_CONFIG_DIR%\signed-in"
+for /f "tokens=1,2" %%a in ("%WHO%") do echo {"loggedIn":true,"authMethod":"claude.ai","email":"%%a","subscriptionType":"%%b"}
+exit /b 0
+"#;
 
 #[cfg(windows)]
-const CODEX_SCRIPT: &str = "@echo off\r\n\
-  if \"%1\"==\"--version\" goto version\r\n\
-  if \"%1\"==\"login\" goto login\r\n\
-  exit /b 1\r\n\
-  :version\r\n\
-  echo codex-cli 0.159.2\r\n\
-  exit /b 0\r\n\
-  :login\r\n\
-  if exist \"%CODEX_HOME%\\signed-in\" goto in\r\n\
-  echo Not logged in\r\n\
-  exit /b 1\r\n\
-  :in\r\n\
-  echo Logged in using ChatGPT\r\n\
-  exit /b 0\r\n";
+const CODEX_SCRIPT: &str = r#"@echo off
+if "%1"=="--version" goto version
+if "%1"=="login" goto login
+exit /b 1
+:version
+echo codex-cli 0.159.2
+exit /b 0
+:login
+if exist "%CODEX_HOME%\signed-in" goto in
+echo Not logged in
+exit /b 1
+:in
+echo Logged in using ChatGPT
+exit /b 0
+"#;
 
 #[cfg(not(windows))]
-const CLAUDE_SCRIPT: &str = "#!/bin/sh\n\
-  case \"$1 $2\" in\n\
-    --version*) echo '2.1.296 (Claude Code)' ;;\n\
-    'auth status') if [ -e \"$CLAUDE_CONFIG_DIR/garbled\" ]; then echo 'Welcome back.'; \
-      elif [ -e \"$CLAUDE_CONFIG_DIR/signed-in\" ]; then \
-      echo '{\"loggedIn\":true,\"authMethod\":\"claude.ai\",\"email\":\"ana@example.com\",\"subscriptionType\":\"max\"}'; \
-      else echo '{\"loggedIn\":false,\"authMethod\":\"none\"}'; exit 1; fi ;;\n\
-    *) exit 1 ;;\n\
-  esac\n";
+const CLAUDE_SCRIPT: &str = r#"#!/bin/sh
+case "$1 $2" in
+  --version*) echo '2.1.296 (Claude Code)' ;;
+  'auth status')
+    if [ -e "$CLAUDE_CONFIG_DIR/garbled" ]; then echo 'Welcome back.'
+    elif [ -e "$CLAUDE_CONFIG_DIR/signed-in" ]; then
+      read -r email plan < "$CLAUDE_CONFIG_DIR/signed-in"
+      printf '{"loggedIn":true,"authMethod":"claude.ai","email":"%s","subscriptionType":"%s"}\n' "$email" "$plan"
+    else echo '{"loggedIn":false,"authMethod":"none"}'; exit 1; fi ;;
+  *) exit 1 ;;
+esac
+"#;
 
 #[cfg(not(windows))]
-const CODEX_SCRIPT: &str = "#!/bin/sh\n\
-  case \"$1\" in\n\
-    --version) echo 'codex-cli 0.159.2' ;;\n\
-    login) if [ -e \"$CODEX_HOME/signed-in\" ]; then echo 'Logged in using ChatGPT'; \
-      else echo 'Not logged in'; exit 1; fi ;;\n\
-    *) exit 1 ;;\n\
-  esac\n";
+const CODEX_SCRIPT: &str = r#"#!/bin/sh
+case "$1" in
+  --version) echo 'codex-cli 0.159.2' ;;
+  login) if [ -e "$CODEX_HOME/signed-in" ]; then echo 'Logged in using ChatGPT';
+    else echo 'Not logged in'; exit 1; fi ;;
+  *) exit 1 ;;
+esac
+"#;
 
 #[cfg(windows)]
 fn write_program(path: &Path, script: &str) -> io::Result<()> {
-  fs::write(path, script)
+  // cmd reads a batch file's lines ended with CRLF.
+  fs::write(path, script.replace('\n', "\r\n"))
 }
 
 #[cfg(not(windows))]

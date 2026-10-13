@@ -9,7 +9,7 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::style;
+use super::typography::{mono, style};
 
 /// Text of Settings › Accounts. The rest reuses the kit's roles: a row's name `OptionTitle`, its folder `MonoNote`,
 /// a count `Caption`, a note `Note`, a paragraph `Prose`, a plan window's name `Description`.
@@ -23,10 +23,12 @@ pub enum AccountsText {
   Identity,
   /// 15/600 `text_primary`: the shown account's name (`yyjVB` in `t098v`).
   Title,
+  /// Geist Mono 11, 14 high, `text_muted`: a row's folder (`q8bz5` in `LW6D5`).
+  Folder,
 }
 
 impl AccountsText {
-  pub const ALL: [Self; 4] = [Self::GroupName, Self::State, Self::Identity, Self::Title];
+  pub const ALL: [Self; 5] = [Self::GroupName, Self::State, Self::Identity, Self::Title, Self::Folder];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -38,6 +40,7 @@ impl AccountsText {
       Self::State => "accounts_state",
       Self::Identity => "accounts_identity",
       Self::Title => "accounts_title",
+      Self::Folder => "accounts_folder",
     }
   }
 
@@ -47,6 +50,7 @@ impl AccountsText {
       Self::State => style(11.5, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
       Self::Identity => style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
       Self::Title => style(15.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
+      Self::Folder => mono(style(11.0, FontWeight::Normal, 14.0 / 11.0, 0.0, palette.text_muted)),
     }
   }
 }

@@ -295,6 +295,9 @@ async fn answer(
     Command::ContinueOnConnection { run, connection } => {
       return later.answer(run, async move { handle.continue_on_connection(run, connection).await });
     }
+    Command::WaitForPlanReset { run } => {
+      return later.answer(run, async move { handle.wait_for_plan_reset(run) });
+    }
     Command::RaiseLimit {
       run,
       budget,

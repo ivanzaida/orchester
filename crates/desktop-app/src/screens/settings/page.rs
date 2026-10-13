@@ -33,7 +33,9 @@ pub(super) fn header(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>) -
         .variant(SettingsText::Lead.role())
         .width(Dimension::Pct(100.0)),
     );
-  let action = matches!(tab, SettingsTab::Accounts(_)).then(|| {
+  // While adding an account the panel is the way on (`IOyJl`): no second *Add account*.
+  let adding = matches!(tab, SettingsTab::Accounts(view) if view.panel == AccountsPanel::Add);
+  let action = (matches!(tab, SettingsTab::Accounts(_)) && !adding).then(|| {
     let navigation = navigation.clone();
     ActionButton::new(
       "settings-add-account",
@@ -57,7 +59,7 @@ pub(super) fn header(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>) -
     .with_children(action);
   Column::new()
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Md)
+    .spacing(SpacingSize::Lg)
     .child(head)
     .child(tabs(ctx, tab, accounts, &navigation))
     .into()

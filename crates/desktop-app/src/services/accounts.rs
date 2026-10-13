@@ -29,13 +29,21 @@ impl Accounts {
     self.of(account.id(provider)?)
   }
 
-  /// The accounts of `provider`'s CLI, Default first.
+  /// The accounts of `provider`'s CLI, Default last (`hgOl2`).
   pub fn of_provider(&self, provider: AgentProvider) -> impl Iterator<Item = &AgentAccount> {
-    self
-      .0
-      .iter()
-      .filter(move |account| account.cli().provider() == provider)
+    let of = move |account: &&AgentAccount| account.cli().provider() == provider;
+    let added = self.0.iter().filter(of).filter(|account| !account.is_default());
+    added.chain(self.0.iter().filter(of).filter(|account| account.is_default()))
   }
+}
+
+/// A plan as the CLI names it (`max`, `pro`), as people read it: `Max`, `Pro`.
+pub fn plan_name(plan: &str) -> String {
+  let mut letters = plan.chars();
+  letters
+    .next()
+    .map(|first| first.to_uppercase().chain(letters).collect())
+    .unwrap_or_default()
 }
 
 /// The accounts, read when the calling screen shows.

@@ -48,6 +48,27 @@ pub(super) fn panel(ctx: &mut Ctx, parts: &Parts, work: &Work) -> Element {
     .get()
     .error
     .map(|error| field_error("account-sign-in-error", &message_text(ctx, &error)));
+  // Signed in, or without the CLI, there is nothing left to run in a terminal: no command, no footer (`GE7a3`).
+  let done = matches!(
+    parts.shown(account),
+    Shown::State(AccountState::SignedIn | AccountState::CliMissing)
+  );
+  let own_terminal = (!done).then(|| {
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .child(
+        Text::new(&ta(ctx, "accounts.signIn.ownTerminal", [("shell", own.shell)]))
+          .variant(ExtraTypography::Note.role())
+          .color(PaletteColor::TextSecondary),
+      )
+      .child(command_row(ctx, "account-sign-in-own", &own.text))
+      .child(
+        Text::new(&ta(ctx, "accounts.signIn.ownNote", [("program", program.clone())]))
+          .variant(ExtraTypography::Note.role())
+          .width(Dimension::Pct(100.0)),
+      )
+  });
   let body = Column::new()
     .width(Dimension::Pct(100.0))
     .padding(Padding::all(AccountsSpacing::Panel.role()))
@@ -55,22 +76,7 @@ pub(super) fn panel(ctx: &mut Ctx, parts: &Parts, work: &Work) -> Element {
     .child(steps(ctx, account, &shown))
     .child(status(ctx, parts, work, account))
     .with_children(error)
-    .child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Sm)
-        .child(
-          Text::new(&ta(ctx, "accounts.signIn.ownTerminal", [("shell", own.shell)]))
-            .variant(ExtraTypography::Note.role())
-            .color(PaletteColor::TextSecondary),
-        )
-        .child(command_row(ctx, "account-sign-in-own", &own.text))
-        .child(
-          Text::new(&ta(ctx, "accounts.signIn.ownNote", [("program", program.clone())]))
-            .variant(ExtraTypography::Note.role())
-            .width(Dimension::Pct(100.0)),
-        ),
-    )
+    .with_children(own_terminal)
     .child(note(
       "account-sign-in-privacy",
       Icon::ShieldCheck,
@@ -99,7 +105,7 @@ pub(super) fn panel(ctx: &mut Ctx, parts: &Parts, work: &Work) -> Element {
       ),
     )
     .child(ScrollVertical::new(body).id("account-sign-in-scroll").flex(1.0))
-    .child(footer(ctx, parts, work, account, &shown))
+    .with_children((!done).then(|| footer(ctx, parts, work, account, &shown)))
     .into()
 }
 

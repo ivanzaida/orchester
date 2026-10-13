@@ -105,9 +105,16 @@ pub fn this_run(ctx: &mut Ctx, run: &RunView, root: &Path, lost: bool, lead: Opt
     row(ctx, "summary.thisRun.model", &model(ctx, run), DetailValue::Text),
   ];
   if let Some((_, account)) = run.accounts.last() {
-    rows.push(
-      ctx.mount_keyed::<super::run_account::RunAccount>("task-this-run-account", super::run_account::Props(*account)),
+    let at_limit = matches!(
+      run.run.status(),
+      orchester_core::run::RunStatus::Paused(orchester_core::run::PauseReason::LimitReached(
+        orchester_core::run::RunLimit::PlanLimit { .. }
+      ))
     );
+    rows.push(ctx.mount_keyed::<super::run_account::RunAccount>(
+      "task-this-run-account",
+      super::run_account::Props(*account, at_limit),
+    ));
   }
   rows.extend([budget_row(ctx, run), cached_row(ctx, run)]);
   rows.push(row(

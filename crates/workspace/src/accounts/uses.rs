@@ -186,9 +186,10 @@ pub(super) fn move_connections(
   Ok(())
 }
 
-/// Moves the connections of the project at `repo_root` that are still on a `removed` account (with where its
-/// connections went) to that account, through removals made since, or to no account.
-pub(super) fn follow_removals(
+/// Brings the connections of the project at `repo_root` up to date: one still on a `removed` account (with where
+/// its connections went) moves to that account, through removals made since, or to no account; one on a listed
+/// account whose folder moved takes the folder it has now.
+pub(super) fn follow_accounts(
   repo_root: &Path,
   removed: &[(AgentAccountId, Option<AgentAccountId>)],
   accounts: &[AgentAccount],
@@ -198,10 +199,17 @@ pub(super) fn follow_removals(
     let ConnectionAccount::Account { id, .. } = connection.account() else {
       continue;
     };
-    if !removed.iter().any(|(gone, _)| gone == id) {
+    let target = if removed.iter().any(|(gone, _)| gone == id) {
+      destination(*id, removed, accounts)
+    } else {
+      match accounts.iter().find(|account| account.id() == *id) {
+        Some(account) => ConnectionAccount::of(account),
+        None => continue,
+      }
+    };
+    if target == *connection.account() {
       continue;
     }
-    let target = destination(*id, removed, accounts);
     connection.set_account(target).map_err(AccountsError::Connection)?;
     db.save_connection(&connection)?;
   }

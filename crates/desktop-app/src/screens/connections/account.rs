@@ -2,7 +2,7 @@
 //! runs on, chosen among the person's accounts of that CLI, each with who is signed in, the plan and its weekly use,
 //! or its state; *Add or manage accounts…* opens Settings › Accounts. Accounts are app-wide: a project only picks one.
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use lurq::{
   app::{
@@ -13,7 +13,7 @@ use lurq::{
   node::Element,
 };
 use orchester_core::{
-  account::{AccountState, AgentAccount},
+  account::{AccountState, AgentAccount, same_sign_in},
   connection::{
     AgentProvider, ConnectionAccount,
     invocation::Platform,
@@ -26,7 +26,7 @@ use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
   navigation::Navigation,
   routes::{AccountsView, Route},
-  services::accounts::Accounts,
+  services::accounts::{Accounts, plan_name},
   ui::{
     choice_field::{Choice, ChoiceField},
     icon::Icon,
@@ -63,60 +63,104 @@ pub(super) fn named(
   }
 }
 
-/// What an account choice says under its name: who, the plan and the week's use, or what is wrong.
-fn detail(ctx: &Ctx, account: &AgentAccount, reading: Option<&LimitReading>) -> String {
-  let state = account.state(Platform::current());
-  let state_key = match state {
-    AccountState::SignedIn | AccountState::Unknown | AccountState::NotChecked => None,
-    AccountState::NotSignedIn => Some("connections.account.state.notSignedIn"),
-    AccountState::Expired => Some("connections.account.state.expired"),
-    AccountState::CliMissing => Some("connections.account.state.cliMissing"),
-    AccountState::FolderMissing => Some("connections.account.state.folderMissing"),
-    AccountState::Unsupported => Some("connections.account.state.unsupported"),
+/// What is wrong with `account` for a connection, if anything: the words a menu choice and the inspector use.
+fn state_words(ctx: &Ctx, account: &AgentAccount) -> Option<String> {
+  let key = match account.state(Platform::current()) {
+    AccountState::SignedIn | AccountState::Unknown | AccountState::NotChecked => return None,
+    AccountState::NotSignedIn => "connections.account.state.notSignedIn",
+    AccountState::Expired => "connections.account.state.expired",
+    AccountState::CliMissing => "connections.account.state.cliMissing",
+    AccountState::FolderMissing => "connections.account.state.folderMissing",
+    AccountState::Unsupported => "connections.account.state.unsupported",
   };
+  Some(ctx.t(key).to_string())
+}
+
+/// What an account's choice says under its name (`WaKJN`), and whether it says what is wrong: who is signed in,
+/// the plan and the week's use; the account it shares a sign-in with; or its folder, what is wrong and where to fix
+/// it, in `warning`. An account no check has read yet says so.
+fn detail(ctx: &Ctx, account: &AgentAccount, accounts: &Accounts, reading: Option<&LimitReading>) -> (String, bool) {
+  if let Some(problem) = state_words(ctx, account) {
+    let folder = account
+      .folder()
+      .path()
+      .map(Path::to_path_buf)
+      .or_else(|| orchester_workspace::accounts::own_folder(account.cli()))
+      .map(|folder| folder.display().to_string())
+      .unwrap_or_default();
+    let text = ctx.t_args(
+      "connections.account.problem",
+      [("folder", folder), ("problem", problem)],
+    );
+    return (text.to_string(), true);
+  }
+  if account.state(Platform::current()) == AccountState::NotChecked {
+    return (ctx.t("connections.account.notChecked").to_string(), false);
+  }
   let identity = account.last_check().and_then(|check| check.known_identity());
-  let mut parts: Vec<String> = identity
-    .and_then(|identity| identity.email.clone())
-    .into_iter()
-    .collect();
-  if let Some(key) = state_key {
-    parts.push(ctx.t(key).to_string());
-    return parts.join(" · ");
+  let email = identity.and_then(|identity| identity.email.clone());
+  if let (Some(other), Some(email)) = (same_sign_in(account, &accounts.0), email.clone()) {
+    let text = ctx.t_args(
+      "connections.account.same",
+      [("email", email), ("account", name(ctx, other))],
+    );
+    return (text.to_string(), false);
   }
+  let mut parts: Vec<String> = email.into_iter().collect();
   if let Some(plan) = identity.and_then(|identity| identity.plan.as_deref()) {
-    parts.push(ctx.t_args("connections.account.plan", [("plan", plan)]).to_string());
+    parts.push(
+      ctx
+        .t_args("connections.account.plan", [("plan", plan_name(plan))])
+        .to_string(),
+    );
   }
-  let now = Timestamp::now();
-  let weekly = reading.and_then(|reading| {
-    reading
-      .limits
-      .windows
-      .iter()
-      .find(|window| window.minutes() == WEEK && !window.expired(now))
-  });
-  if let Some(used) = weekly.and_then(orchester_core::connection::plan_limits::LimitWindow::percent) {
-    // A share of at most a few hundred percent: whole ones are what the menu shows.
-    let used = used.round() as u64;
+  if let Some(used) = weekly_use(reading) {
     parts.push(
       ctx
         .t_args("connections.account.weekly", [("used", used.to_string())])
         .to_string(),
     );
   }
-  parts.join(" · ")
+  if parts.is_empty() {
+    parts.push(ctx.t("connections.account.signedIn").to_string());
+  }
+  (parts.join(&*ctx.t("connections.account.separator")), false)
 }
 
-/// The choices of the accounts of `provider`'s CLI, then *Add or manage accounts…*.
+/// The share of the account's weekly window used, in whole percent, as its CLI last reported it.
+fn weekly_use(reading: Option<&LimitReading>) -> Option<u64> {
+  let now = Timestamp::now();
+  let weekly = reading?
+    .limits
+    .windows
+    .iter()
+    .find(|window| window.minutes() == WEEK && !window.expired(now))?;
+  // A share of at most a few hundred percent: whole ones are what the menu shows.
+  weekly.percent().map(|used| used.round() as u64)
+}
+
+/// The choices of the accounts of `provider`'s CLI (Default last), then *Add or manage accounts…*. The field shows
+/// the chosen account with who is signed in.
 pub(super) fn choices(ctx: &Ctx, accounts: &Accounts, readings: &PlanReadings, provider: AgentProvider) -> Vec<Choice> {
   let mut choices: Vec<Choice> = accounts
     .of_provider(provider)
-    .map(|account| Choice {
-      value: account.id().to_string(),
-      label: name(ctx, account).into(),
-      icon: Icon::User,
-      detail: Some(detail(ctx, account, readings.of_account(account.id())).into())
-        .filter(|detail: &Arc<str>| !detail.is_empty()),
-      separator: false,
+    .map(|account| {
+      let (detail, warning) = detail(ctx, account, accounts, readings.of_account(account.id()));
+      let trigger = account.email().map(|email| {
+        ctx.t_args(
+          "connections.account.linkValue",
+          [("account", name(ctx, account)), ("detail", email.to_owned())],
+        )
+      });
+      Choice {
+        value: account.id().to_string(),
+        label: name(ctx, account).into(),
+        icon: Icon::User,
+        detail: Some(detail.into()),
+        separator: false,
+        warning,
+        trigger,
+      }
     })
     .collect();
   choices.push(Choice {
@@ -125,6 +169,8 @@ pub(super) fn choices(ctx: &Ctx, accounts: &Accounts, readings: &PlanReadings, p
     icon: Icon::Settings,
     detail: Some(ctx.t("connections.account.manageDetail")),
     separator: true,
+    warning: false,
+    trigger: None,
   });
   choices
 }
@@ -203,6 +249,7 @@ impl Component for AccountPicker {
       open: self.open.clone(),
       choices: props.choices.clone(),
       width: props.width,
+      icon_in_field: true,
     }
     .render(ctx)
   }
@@ -246,48 +293,47 @@ pub(super) fn chosen_account<'a>(
     .or_else(|| accounts.of_provider(provider).find(|account| account.is_default()))
 }
 
-/// The *Account* row of a CLI connection's inspector (`M42rM`): the account it runs on, which the person can change;
-/// another account is saved and the connection checked there.
+/// The *Account* row of a CLI connection's inspector (`M42rM`): the account and who is signed in, or what is wrong
+/// with it, as a link that opens it in Settings › Accounts. Choosing another account is Edit connection's.
 pub(super) fn inspector_row(
   ctx: &mut Ctx,
   accounts: &Accounts,
   connection: &orchester_core::connection::AgentConnection,
-  choose: Arc<dyn Fn(orchester_core::id::AgentAccountId) + Send + Sync>,
 ) -> Element {
   let provider = connection.provider();
-  let readings = crate::services::plan_limits::readings(ctx);
-  let current = accounts
-    .of_connection(connection.account(), provider)
-    .map_or_else(String::new, |account| account.id().to_string());
-  let picker = ctx.mount_keyed::<AccountPicker>(
-    &format!("connection-account-picker-{}", connection.id()),
-    PickerProps {
-      id: "connection-account".into(),
-      name: ctx.t("connections.account.label"),
-      choices: choices(ctx, accounts, &readings, provider),
-      current,
-      width: INSPECTOR_PICKER_WIDTH,
-      on_choose: Arc::new(move |chosen| {
-        if let Ok(account) = chosen.parse() {
-          choose(account);
-        }
-      }),
-    },
-  );
-  lurq::components::Column::new()
-    .width(lurq::node::dimension::Dimension::Pct(100.0))
-    .child(crate::ui::inspector::control(
-      "connection-account-row",
-      &ctx.t("connections.account.label"),
-      picker,
-    ))
-    .child(crate::ui::inspector::note(
-      "connection-account-note",
-      Icon::Info,
-      &ctx.t("connections.account.changeNote"),
-    ))
-    .into()
+  let account = accounts.of_connection(connection.account(), provider);
+  let shown = match account {
+    Some(account) => {
+      let detail = state_words(ctx, account).or_else(|| account.email().map(str::to_owned));
+      match detail {
+        Some(detail) => ctx
+          .t_args(
+            "connections.account.linkValue",
+            [("account", name(ctx, account)), ("detail", detail)],
+          )
+          .to_string(),
+        None => name(ctx, account),
+      }
+    }
+    None => named(ctx, accounts, connection.account(), provider).unwrap_or_default(),
+  };
+  let navigation = Navigation::of(ctx);
+  let view = account.map_or_else(AccountsView::default, |account| {
+    AccountsView::of(account.id(), crate::routes::AccountsPanel::Account)
+  });
+  let link = crate::ui::pressable::pressable(move || navigation.go(Route::Accounts(view)))
+    .id("connection-account-link")
+    .spacing(crate::theme::ExtraSpacing::Snug.role())
+    .align_items(lurq::layout::Alignment::Center)
+    .child(
+      lurq::components::Text::new(&shown)
+        .variant(lurq::app::theme::TypographyStyle::Description)
+        .color(lurq::app::theme::PaletteColor::TextPrimary),
+    )
+    .child(crate::ui::icon::icon(
+      Icon::ArrowUpRight,
+      crate::theme::IconSize::Sm,
+      lurq::app::theme::PaletteColor::TextSecondary,
+    ));
+  crate::ui::inspector::property_of("connection-account-row", &ctx.t("connections.account.label"), link).into()
 }
-
-/// The picker's width in an inspector (`Account` row of `M42rM`).
-const INSPECTOR_PICKER_WIDTH: f32 = 220.0;

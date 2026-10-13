@@ -75,7 +75,7 @@ pub(super) struct Inspecting<'a> {
 pub(super) struct Actions {
   pub start: Arc<dyn Fn(ConnectionId, Work) + Send + Sync>,
   pub confirm: Arc<dyn Fn(Option<Confirm>) + Send + Sync>,
-  pub edit_mcp: Arc<dyn Fn(ConnectionId) + Send + Sync>,
+  pub edit: Arc<dyn Fn(ConnectionId) + Send + Sync>,
   /// Opens the Agents screen, where a profile chooses its connection and servers.
   pub agents: Arc<dyn Fn() + Send + Sync>,
 }

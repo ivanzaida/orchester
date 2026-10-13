@@ -15,6 +15,7 @@
 #[path = "../seed/kontur/mod.rs"]
 mod kontur;
 
+mod accounts;
 mod data;
 mod stand_ins;
 
@@ -40,7 +41,7 @@ use orchester_app::{
   ui::loader,
 };
 use orchester_core::{account::AccountCli, id::AgentAccountId};
-use orchester_workspace::workspace::Workspace;
+use orchester_workspace::{accounts::trash::FolderTrash, workspace::Workspace};
 use tokio::runtime::Runtime;
 
 /// Set in the window's process: the QA folder, the application database, the project and the stopped task.
@@ -191,6 +192,9 @@ fn window(state: State, account: Option<&str>) -> Result<(), Box<dyn Error>> {
     .join(format!("orchester-runner{}", env::consts::EXE_SUFFIX));
   let launch = Launch::begin_at(&database, runner, runtime.handle(), None);
   let workspace = launch.workspace().ok_or("the QA session did not start")?.clone();
+  // Removed accounts' folders go to the QA folder's own trash, never the person's Recycle Bin.
+  let root = PathBuf::from(variable(CHILD)?);
+  workspace.use_trash(std::sync::Arc::new(FolderTrash::new(&root.join("trash"))));
   let route = match state {
     State::Task => Route::Project(
       project,

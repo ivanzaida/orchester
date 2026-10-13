@@ -100,6 +100,11 @@ pub enum Command {
   /// [`Rejection::RunNotPaused`] when the run is not stopped at a plan limit, or
   /// [`Rejection::NotAnotherAccount`] when `connection` is not another account's connection of that CLI.
   ContinueOnConnection { run: RunId, connection: ConnectionId },
+  /// Keeps run `run`, stopped at its account's plan limit, waiting for the limit's reset, as the person confirmed:
+  /// the runner continues the same session there by itself (protocol 24). Answered with [`Reply::Accepted`] once the
+  /// wait is set, or [`Rejection::RunNotPaused`] when the run is not stopped at a plan limit whose reset its CLI
+  /// reported.
+  WaitForPlanReset { run: RunId },
   /// Cancels run `run`: its agent's process tree is ended, its worktree and branch stay. Answered
   /// with [`Reply::Accepted`] once the run is recorded as cancelled.
   CancelRun { run: RunId },

@@ -12,7 +12,7 @@ use std::{
 
 use orchester_core::{
   id::{RunId, StepExecutionId},
-  run::{PauseReason, RunLimit, RunStatus},
+  run::{PauseReason, Run, RunLimit, RunStatus},
   time::Timestamp,
 };
 use orchester_ipc::Rejection;
@@ -86,6 +86,19 @@ impl Scheduler {
     }
   }
 
+  /// Keeps `run`, stopped at its account's plan limit, waiting for the reset, as the person confirmed: its timer is
+  /// set (or kept). Refused when it is not stopped at a plan limit whose reset its CLI reported.
+  pub fn wait_for_plan_reset(&self, run: RunId) -> Result<(), Rejection> {
+    let db = self.open()?;
+    let current = idle::load(&db, run)?;
+    let stop = stop_of(&db, &current).map_err(|error| failed("cannot read the run's stop", &error))?;
+    if stop.is_none() {
+      return Err(Rejection::RunNotPaused);
+    }
+    self.wait_for_plan_resets();
+    Ok(())
+  }
+
   /// A timer that continues `run` at `stop`'s reset, if it is still stopped there then.
   fn continue_at_reset(&self, run: RunId, stop: Stop) -> AbortHandle {
     let scheduler = self.clone();
@@ -117,20 +130,27 @@ fn stops(db: &ProjectDb) -> Result<HashMap<RunId, Stop>, orchester_store::RunSto
   let mut stops = HashMap::new();
   // A run that cannot be read is shown as unreadable by the task screens; it waits for a person.
   for run in db.runs_at_plan_limit()?.into_iter().filter_map(Result::ok) {
-    if let Some(stop) = stop_of(db, run.id(), run.status())? {
+    if let Some(stop) = stop_of(db, &run)? {
       stops.insert(run.id(), stop);
     }
   }
   Ok(stops)
 }
 
-/// The stop of a run in `status`: `None` unless it is stopped at a plan limit whose reset the CLI reported.
-fn stop_of(db: &ProjectDb, run: RunId, status: &RunStatus) -> Result<Option<Stop>, orchester_store::StoreError> {
-  let RunStatus::Paused(PauseReason::LimitReached(RunLimit::PlanLimit { execution })) = *status else {
+/// The stop of `run`: `None` unless it is stopped at a plan limit whose reset the CLI reported. A step that waits
+/// before its agent starts waits for the account its connection runs on.
+fn stop_of(db: &ProjectDb, run: &Run) -> Result<Option<Stop>, orchester_store::StoreError> {
+  let RunStatus::Paused(PauseReason::LimitReached(RunLimit::PlanLimit { execution })) = *run.status() else {
     return Ok(None);
   };
+  let step_account = match run.execution(execution) {
+    Some(stopped) => db
+      .step_agent_connection(run, stopped.step())?
+      .and_then(|connection| connection.account().id(connection.provider())),
+    None => None,
+  };
   let reset = db
-    .plan_stop_reading(run, execution)?
+    .plan_stop_reading(run.id(), execution, step_account)?
     .and_then(|reading| reading.reached_limit_resets());
   Ok(reset.map(|reset| Stop { execution, reset }))
 }
@@ -138,7 +158,7 @@ fn stop_of(db: &ProjectDb, run: RunId, status: &RunStatus) -> Result<Option<Stop
 /// Resumes `run` if it is still at `stop`: the same session continues on the same account.
 fn resume_at_reset(db: &mut ProjectDb, root: &Path, run: RunId, stop: Stop) -> Result<Prepared, Rejection> {
   let current = idle::load(db, run)?;
-  let still = stop_of(db, run, current.status()).map_err(|error| failed("cannot read the run's stop", &error))?;
+  let still = stop_of(db, &current).map_err(|error| failed("cannot read the run's stop", &error))?;
   if still != Some(stop) {
     return Err(Rejection::RunNotPaused);
   }

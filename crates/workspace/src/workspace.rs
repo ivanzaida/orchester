@@ -114,6 +114,8 @@ pub struct Workspace {
   pub(crate) db: Arc<Mutex<AppDb>>,
   /// Where Orchester creates new agent accounts' folders; `None` where it has none on this platform.
   pub(crate) account_root: Option<Arc<Path>>,
+  /// Where removed accounts' folders go when the person asks; none until the app gives one.
+  pub(crate) trash: crate::accounts::trash::SharedTrash,
   permission_consent: Arc<Mutex<Consent>>,
   approval_consent: Arc<Mutex<Consent>>,
 }
@@ -129,9 +131,16 @@ impl Workspace {
     Self {
       db: Arc::new(Mutex::new(db)),
       account_root: account_root().map(Arc::from),
+      trash: crate::accounts::trash::SharedTrash::default(),
       permission_consent: Arc::default(),
       approval_consent: Arc::default(),
     }
+  }
+
+  /// Gives this workspace and its clones `trash` for removed accounts' folders: the system's in the app's window
+  /// only, a folder of its own in a QA copy or a test.
+  pub fn use_trash(&self, trash: Arc<dyn crate::accounts::trash::Trash>) {
+    self.trash.set(trash);
   }
 
   /// This workspace with new agent accounts' folders created in `root` instead of Orchester's application data.
@@ -182,7 +191,7 @@ impl Workspace {
     let project = db.project().clone();
     self.db.lock().register_project(&project, repo_root, Timestamp::now())?;
     // The project opens all the same; its connections follow the removal the next time it opens.
-    if let Err(error) = self.follow_removed_accounts(repo_root) {
+    if let Err(error) = self.follow_accounts(repo_root) {
       tracing::warn!(%error, "cannot move a project's connections off removed accounts");
     }
     Ok(OpenProject {

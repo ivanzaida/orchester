@@ -7,6 +7,7 @@
 
 mod accounts;
 mod card;
+mod waiting;
 
 use lurq::{
   app::{
@@ -88,6 +89,28 @@ impl Component for PlanLimitDecision {
       .and_then(|stop| stop.account)
       .and_then(|id| listed.of(id).cloned());
     let focus = run.stopped_step().map(|step| step.key.as_str().to_owned());
+    // A step that waits before its agent starts is said by its own card (`XPjSc`), not as a stop.
+    if let Some(stop) = stop.as_ref().filter(|stop| !stop.started) {
+      let waiting = waiting::WaitingCard {
+        run,
+        stop,
+        account: account.as_ref(),
+        accounts: &listed,
+        other: &self.other,
+        asked: &self.asked,
+        action: &action,
+        online: props.online,
+        gate: self.gate.as_ref(),
+      }
+      .render(ctx);
+      let parts = vec![
+        stages(run, focus.as_deref(), now),
+        waiting,
+        accounts::section(ctx, run, &listed),
+      ];
+      let side = this_run_panel(ctx, &props, None);
+      return arranged(ctx, parts, None, side);
+    }
     let mut parts: Vec<Element> = vec![
       notice(
         ctx,

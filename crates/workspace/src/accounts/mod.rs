@@ -7,6 +7,7 @@
 mod error;
 mod folders;
 pub mod sign_in;
+pub mod trash;
 mod uses;
 
 use std::path::{Path, PathBuf};
@@ -18,6 +19,7 @@ use orchester_core::{
   connection::{
     ConnectionAccount,
     invocation::{Platform, account_environment, agent_environment},
+    plan_limits::LimitReading,
   },
   id::AgentAccountId,
   name::Name,
@@ -190,20 +192,59 @@ impl Workspace {
     };
     self.db.lock().remove_agent_account(id, moved_to, Timestamp::now())?;
     if let Some(folder) = trash {
-      orchester_exec::trash::move_to_trash(folder).map_err(AccountsError::Trash)?;
+      self.trash.take(folder).map_err(AccountsError::Trash)?;
     }
     Ok(())
   }
 
-  /// Moves the connections of `repo_root` still on a removed account to where its removal sent the others: a
-  /// project that could not be reached when the account was removed. Called when a project opens.
-  pub fn follow_removed_accounts(&self, repo_root: &Path) -> Result<(), AccountsError> {
-    let removed = self.db.lock().removed_agent_accounts()?;
-    if removed.is_empty() {
-      return Ok(());
+  /// Keeps the account in `folder`, a folder the person already has, after its own went missing (*Choose folder…*,
+  /// `E96CI`): the folder rules of a brought folder apply (beside every other account), the connections of every
+  /// listed project follow (a project out of reach follows when it opens), and the account is checked there.
+  pub fn choose_agent_account_folder(&self, id: AgentAccountId, folder: &Path) -> Result<AgentAccount, AccountsError> {
+    let mut account = self.agent_account(id)?.ok_or(StoreError::AgentAccountNotFound(id))?;
+    let others: Vec<AgentAccount> = self
+      .cli_accounts(account.cli())?
+      .into_iter()
+      .filter(|other| other.id() != id)
+      .collect();
+    let projects = self.projects()?;
+    if let Some(problem) = folders::brought_problem(account.cli(), folder, &others, &projects) {
+      return Err(AccountsError::Folder(problem));
     }
+    account
+      .move_to_folder(folders::found(folder))
+      .map_err(AccountsError::Account)?;
+    self.db.lock().save_agent_account_folder(&account)?;
+    uses::move_connections(&account, &ConnectionAccount::of(&account), &projects)?;
+    self.check_agent_account(id)
+  }
+
+  /// The last report of the account's plan limits in any listed project, as its CLI gave it during a run: what the
+  /// account's details show before this session's runs report. A project that can't be read is passed over.
+  pub fn last_plan_reading(&self, id: AgentAccountId) -> Result<Option<LimitReading>, AccountsError> {
+    let default = AccountCli::ALL.iter().any(|cli| cli.default_account() == id);
+    let mut last: Option<LimitReading> = None;
+    for project in self.projects()?.iter().filter(|project| !project.folder_missing()) {
+      let reading =
+        orchester_store::ProjectDb::open(&project.repo_root).and_then(|db| db.last_account_reading(id, default));
+      match reading {
+        Ok(Some(reading)) if last.as_ref().is_none_or(|known| known.at < reading.at) => last = Some(reading),
+        Ok(_) => {}
+        Err(error) => {
+          tracing::warn!(%error, project = %project.repo_root.display(), "cannot read an account's plan limits")
+        }
+      }
+    }
+    Ok(last)
+  }
+
+  /// Brings the connections of `repo_root` up to date with the accounts: one on a removed account goes where its
+  /// removal sent the others, one on an account whose folder moved gets the new folder. For a project that could not
+  /// be reached then; called when a project opens.
+  pub fn follow_accounts(&self, repo_root: &Path) -> Result<(), AccountsError> {
+    let removed = self.db.lock().removed_agent_accounts()?;
     let accounts = self.agent_accounts()?;
-    uses::follow_removals(repo_root, &removed, &accounts)
+    uses::follow_accounts(repo_root, &removed, &accounts)
   }
 
   fn cli_accounts(&self, cli: AccountCli) -> Result<Vec<AgentAccount>, StoreError> {

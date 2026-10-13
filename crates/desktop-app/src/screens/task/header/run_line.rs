@@ -13,7 +13,7 @@ use lurq::{
 };
 use orchester_core::{
   integration::MergeError,
-  run::{PauseReason, RunStatus, TaskPhase},
+  run::{PauseReason, RunLimit, RunStatus, TaskPhase},
 };
 use orchester_workspace::{
   display,
@@ -107,7 +107,18 @@ fn status(detail: &TaskDetail, lost: bool) -> (Status, Option<&StepView>) {
       | TaskPhase::Interrupted
       | TaskPhase::Failed
   );
-  (Status::of_run(phase), step.filter(|_| with_step))
+  let plan_limit = detail.run.as_ref().is_some_and(|run| {
+    matches!(
+      run.run.status(),
+      RunStatus::Paused(PauseReason::LimitReached(RunLimit::PlanLimit { .. }))
+    )
+  });
+  let status = if plan_limit {
+    Status::StoppedAtPlanLimit
+  } else {
+    Status::of_run(phase)
+  };
+  (status, step.filter(|_| with_step))
 }
 
 /// "03 Implement".

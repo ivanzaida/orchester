@@ -22,7 +22,7 @@ param(
     # The seed's scenarios (crates/desktop-app/examples/seed/kontur/scenarios/mod.rs), checked before
     # anything under .tmp/qa/<task>/ is replaced.
     [Parameter(Mandatory = $true)]
-    [ValidateSet("empty", "tasks", "task-states", "conversation", "changes", "cards", "decisions", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty")]
+    [ValidateSet("empty", "tasks", "task-states", "conversation", "changes", "cards", "decisions", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts")]
     [string]$Scenario,
     [switch]$FakeAgents,
     [switch]$NoRunner

@@ -9,7 +9,7 @@ use orchester_core::{
   connection::{AgentConnection, invocation::Platform, plan_limits::LimitReading},
   id::{AgentAccountId, ConnectionId, RunId},
   run::{PauseReason, RunLimit, RunStatus},
-  store::{ConnectionStore, RunStore},
+  store::{ActivityStore, ConnectionStore, RunStore},
 };
 use orchester_ipc::Command;
 use orchester_store::{ProjectDb, StoreError};
@@ -28,6 +28,9 @@ pub struct PlanStop {
   pub reading: Option<LimitReading>,
   /// The connections of the same CLI on other accounts that can start now.
   pub others: Vec<AgentConnection>,
+  /// Whether the stopped step's agent started: `false` for a step that waits for its account's reset before its
+  /// agent starts (a new run on an account at its limit, `XPjSc`).
+  pub started: bool,
 }
 
 impl PlanStop {
@@ -64,8 +67,13 @@ impl PlanStop {
             .is_none()
       })
       .collect();
+    let started = db
+      .invocations(run.id())?
+      .iter()
+      .any(|invocation| invocation.execution == execution);
     Ok(Some(Self {
-      reading: db.plan_stop_reading(run.id(), execution)?,
+      started,
+      reading: db.plan_stop_reading(run.id(), execution, connection.account().id(provider))?,
       connection,
       account,
       others,
