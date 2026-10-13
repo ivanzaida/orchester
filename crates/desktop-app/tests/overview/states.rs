@@ -5,10 +5,12 @@
 use std::{thread, time::Duration};
 
 use orchester_app::routes::OverviewTab;
+use orchester_core::run::TaskPhase;
 use orchester_workspace::tasks::{
   attention,
   board::{BoardTab, Figures},
   overview::recent_runs,
+  ready_to_run::ProjectReadiness,
 };
 
 use crate::harness::Seeded;
@@ -118,6 +120,54 @@ fn overview_of_a_project_without_tasks_says_what_a_task_is() {
   assert!(seeded.shows("overview-activity-empty"));
   assert!(!seeded.shows("overview-task-list"), "no tabs over nothing");
   assert_eq!(seeded.text("overview-metric-completed-value"), "0");
+}
+
+#[test]
+fn overview_of_a_project_without_tasks_lists_what_is_ready_to_run() {
+  let mut seeded = Seeded::overview("empty", OverviewTab::Running);
+  seeded.until("the readiness", |seeded| seeded.shows("overview-ready-agents"));
+  let readiness = ProjectReadiness::load_in(&seeded.repo).expect("the readiness reads");
+  assert_eq!(seeded.texts("overview-ready")[0], "Ready to run");
+  let agents = readiness.agents.join(", ");
+  assert!(!agents.is_empty(), "the seed publishes its agents");
+  assert_eq!(seeded.text("overview-ready-agents-detail"), agents);
+  for (check, name) in readiness.checks(", ").iter().zip(["agents", "pipeline", "connection"]) {
+    let line = seeded.texts(&format!("overview-ready-{name}"));
+    assert_eq!(line.len(), 2, "{name}: its name and what was found: {line:?}");
+    let detail = seeded.text(&format!("overview-ready-{name}-detail"));
+    assert!(!detail.is_empty() && !detail.contains("overview."), "{name}: {detail}");
+    let state = if check.ready { "ready" } else { "missing" };
+    assert!(
+      seeded.shows(&format!("overview-ready-{name}-{state}")),
+      "{name} is {state}"
+    );
+  }
+  assert!(
+    seeded.top("overview-ready") > seeded.top("overview-empty-new-task"),
+    "the list is under the card's actions"
+  );
+}
+
+#[test]
+fn overview_names_a_task_whose_run_passed_every_step_ready_to_merge() {
+  let mut seeded = Seeded::overview("task-states", OverviewTab::NeedsYou);
+  let tasks = seeded.tasks();
+  let items = attention::items(&tasks);
+  let rows = BoardTab::NeedsYou.rows(&tasks, 6, ", ");
+  let merging = rows
+    .iter()
+    .find(|row| row.phase == Some(TaskPhase::Succeeded))
+    .expect("the seed has a task whose run passed every step among the newest waiting");
+  let key = &merging.key;
+  let status = seeded.text(&format!("overview-status-{key}"));
+  assert!(status.starts_with("Ready to merge"), "{key}: {status}");
+  let item = items
+    .iter()
+    .find(|item| item.task.as_ref().is_some_and(|task| task.id == merging.id))
+    .expect("the task waits in Needs you");
+  assert_eq!(merging.detail, item.title, "the row says what waits, as its card does");
+  let detail = seeded.text(&format!("overview-detail-{key}"));
+  assert!(detail.contains("ready to merge"), "{key}: {detail}");
 }
 
 #[test]

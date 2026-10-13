@@ -1,11 +1,14 @@
-//! The new Overview as data (`tasks::board`, `tasks::attention`): what waits for the person, the oldest
-//! first, interrupted runs among it, and tool requests whose run cannot be read; the tabs and their tasks;
-//! the figures; and the notices.
+//! The new Overview as data (`tasks::board`, `tasks::attention`, `tasks::ready_to_run`): what waits for
+//! the person, the oldest first, interrupted runs among it, and tool requests whose run cannot be read; the
+//! tabs and their tasks; the figures; the notices; and what an empty project is ready to run with.
 
 mod support;
 
+use std::num::NonZeroU32;
+
 use orchester_core::{
-  resource::ModelId,
+  connection::ConnectionStatus,
+  resource::{ModelId, VersionNumber},
   run::{PendingToolApproval, WaitReason},
   store::{ActivityStore, RunStore},
 };
@@ -13,6 +16,7 @@ use orchester_workspace::tasks::{
   attention::{self, NeedKind, Waited},
   board::{self, BoardTab, Figures},
   data::ProjectTasks,
+  ready_to_run::{CheckKind, ProjectReadiness},
 };
 
 /// A completed task, a running one, one whose run waits for an answer and a draft.
@@ -164,6 +168,62 @@ fn board_tabs_hold_their_tasks_newest_first() {
   assert!(keys(BoardTab::Queued).is_empty());
   assert!(keys(BoardTab::Failed).is_empty());
   assert_eq!(BoardTab::NeedsYou.rows(&tasks, 1, ", ").len(), 1);
+}
+
+#[test]
+fn board_needs_you_rows_say_what_waits_as_their_items_do() {
+  let (_fixture, tasks) = project();
+  let items = attention::items(&tasks);
+  for row in BoardTab::NeedsYou.rows(&tasks, 6, ", ") {
+    let item = items
+      .iter()
+      .find(|item| item.task.as_ref().is_some_and(|task| task.id == row.id))
+      .expect("each waiting task is an item");
+    assert_eq!(row.detail, item.title, "{}", row.key);
+  }
+  let running = &BoardTab::Running.rows(&tasks, 6, ", ")[0];
+  assert_ne!(
+    running.detail.key, "overview.needs.title.input",
+    "other tabs keep their detail"
+  );
+}
+
+#[test]
+fn ready_to_run_reads_the_published_agents_and_pipelines_and_wants_a_connection() {
+  let (fixture, _tasks) = project();
+  let readiness = ProjectReadiness::load_in(fixture.repo.path()).expect("read the readiness");
+  let checks = readiness.checks(", ");
+  let kinds: Vec<CheckKind> = checks.iter().map(|check| check.kind).collect();
+  assert_eq!(kinds, CheckKind::ALL);
+  assert!(checks[0].ready && checks[1].ready);
+  assert_eq!(checks[0].detail.args, [("agents", "Builder".to_owned())]);
+  assert_eq!(checks[1].detail.key, "overview.ready.pipeline.one");
+  assert_eq!(checks[1].detail.args[0].1, "Delivery");
+  assert!(!checks[2].ready);
+  assert_eq!(checks[2].detail.key, "overview.ready.connection.none");
+}
+
+#[test]
+fn ready_to_run_wants_a_signed_in_connection_and_says_why_one_is_not() {
+  let version = |number| VersionNumber::new(NonZeroU32::new(number).expect("nonzero"));
+  let mut readiness = ProjectReadiness {
+    agents: Vec::new(),
+    pipelines: vec![("Delivery".into(), version(3)), ("Hotfix".into(), version(1))],
+    connections: vec![("Codex".into(), ConnectionStatus::SignInRequired)],
+  };
+  let checks = readiness.checks(", ");
+  assert!(!checks[0].ready);
+  assert_eq!(checks[0].detail.key, "overview.ready.agents.none");
+  assert_eq!(checks[1].detail.key, "overview.ready.pipeline.several");
+  assert!(!checks[2].ready);
+  assert_eq!(checks[2].detail.key, "overview.ready.connection.signInRequired");
+  assert_eq!(checks[2].detail.args, [("connection", "Codex".to_owned())]);
+  readiness
+    .connections
+    .push(("Claude".into(), ConnectionStatus::Connected));
+  let connection = &readiness.checks(", ")[2];
+  assert!(connection.ready);
+  assert_eq!(connection.detail.args, [("connections", "Claude".to_owned())]);
 }
 
 #[test]

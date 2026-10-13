@@ -6,7 +6,8 @@
 //! The vocabulary and its icons come from the boards: Draft `circle-dashed`, Queued `clock`, Running and
 //! Working `loader-circle` (turning), Needs input `hand`, Stopped at limit `gauge`, Interrupted and
 //! Interrupted · can't continue `circle-pause`, Completed, Complete and Ready for review `circle-check`, Merged
-//! `git-merge`, Not merged `triangle-alert` (`kxMAN`), Failed `circle-x`, Unreadable `circle-help`, Waiting `clock`,
+//! `git-merge`, Ready to merge `git-merge` in `warning` (`mEvfK`), Not merged `triangle-alert` (`kxMAN`), Failed
+//! `circle-x`, Unreadable `circle-help`, Waiting `clock`,
 //! Not started `circle-dashed`, Blocked `ban`, Paused `circle-pause` in `warning` (Usage `Q1gYMm`); Backlog
 //! `circle-dashed`, Todo `circle` (`AiCwO`), In progress `circle-dot-dashed`, In review `eye`, Done
 //! `circle-check`; High, Medium and Low `signal-*`, No priority `minus`. The boards draw no Canceled,
@@ -49,6 +50,9 @@ pub enum Status {
   /// A run whose every step passed, as its own page and its row in *Runs of this task* name it
   /// (`F2LtFn`); task lists say Completed.
   ReadyForReview,
+  /// A task whose run passed every step and waits to be merged, as the Overview's rows name it
+  /// (`Row · KON-19` in `mEvfK`).
+  ReadyToMerge,
   /// A run ready for review whose merge failed and left its base branch as it was.
   NotMerged,
   Merged,
@@ -87,7 +91,7 @@ impl Tone {
 }
 
 impl Status {
-  pub const ALL: [Self; 21] = [
+  pub const ALL: [Self; 22] = [
     Self::Draft,
     Self::Queued,
     Self::Running,
@@ -97,6 +101,7 @@ impl Status {
     Self::Interrupted,
     Self::Completed,
     Self::ReadyForReview,
+    Self::ReadyToMerge,
     Self::NotMerged,
     Self::Merged,
     Self::Failed,
@@ -138,6 +143,16 @@ impl Status {
     }
   }
 
+  /// The label of a task in `phase` on the Overview, which lists what waits for the person: as
+  /// [`Self::of_phase`], but a task whose run passed every step waits to be merged (`Row · KON-19` in
+  /// `mEvfK`).
+  pub const fn of_board(phase: TaskPhase) -> Self {
+    match phase {
+      TaskPhase::Succeeded => Self::ReadyToMerge,
+      phase => Self::of_phase(phase),
+    }
+  }
+
   pub const fn icon(self) -> Icon {
     match self {
       Self::Draft | Self::NotStarted => Icon::CircleDashed,
@@ -147,7 +162,7 @@ impl Status {
       Self::Paused | Self::Interrupted | Self::CantContinue => Icon::CirclePause,
       Self::StoppedAtLimit => Icon::Gauge,
       Self::Completed | Self::Complete | Self::ReadyForReview => Icon::CircleCheck,
-      Self::Merged => Icon::GitMerge,
+      Self::Merged | Self::ReadyToMerge => Icon::GitMerge,
       Self::NotMerged => Icon::TriangleAlert,
       Self::Failed => Icon::CircleX,
       Self::Canceled => Icon::CircleSlash,
@@ -168,6 +183,7 @@ impl Status {
       | Self::StoppedAtLimit
       | Self::Interrupted
       | Self::CantContinue
+      | Self::ReadyToMerge
       | Self::NotMerged => Tone::Warning,
       Self::Completed | Self::Complete | Self::ReadyForReview => Tone::Success,
       Self::Failed | Self::Unreadable => Tone::Danger,
@@ -191,6 +207,7 @@ impl Status {
       Self::Interrupted => "ui.status.interrupted",
       Self::Completed => "ui.status.completed",
       Self::ReadyForReview => "ui.status.readyForReview",
+      Self::ReadyToMerge => "ui.status.readyToMerge",
       Self::NotMerged => "ui.status.notMerged",
       Self::Merged => "ui.status.merged",
       Self::Failed => "ui.status.failed",

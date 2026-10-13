@@ -38,6 +38,10 @@
       "title": "No tasks yet",
       "detail": "A task is a brief with acceptance criteria. Its pipeline runs it step by step in a worktree of its own; you answer what the agents ask."
     },
+    "ready": {
+      "title": "Ready to run",
+      "reading": "Reading the agents, pipelines and connections…"
+    },
     "activity": {
       "title": "Recent activity",
       "reading": "Reading activity…",

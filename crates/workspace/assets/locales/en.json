@@ -70,6 +70,34 @@
         "body": "The latest run of {{task}} could not be read. The task list marks it; its worktree is untouched."
       }
     },
+    "ready": {
+      "agents": {
+        "label": "Agents",
+        "published": "{{agents}}",
+        "none": "No agent is published yet"
+      },
+      "pipeline": {
+        "label": "Pipeline",
+        "one": "{{pipeline}} v{{version}} published",
+        "several": "{{count}} pipelines published",
+        "none": "No pipeline is published yet"
+      },
+      "connection": {
+        "label": "Connection",
+        "signedIn": "{{connections}} signed in",
+        "none": "No agent connection yet",
+        "notChecked": "{{connection}} has not been checked yet",
+        "signInRequired": "{{connection}} is not signed in",
+        "signInUnknown": "{{connection}} answers, but its sign-in could not be confirmed",
+        "executableMissing": "{{connection}}: its program file does not exist",
+        "notRecognized": "{{connection}}: its program is not the expected CLI",
+        "couldNotRun": "{{connection}} could not run",
+        "keyMissing": "{{connection}}: its key is missing",
+        "keyRejected": "{{connection}}: its key was rejected",
+        "billingProblem": "{{connection}}: the provider refuses it for billing",
+        "endpointUnreachable": "{{connection}}: its endpoint cannot be reached"
+      }
+    },
     "needs": {
       "kind": {
         "approval": "Approval",

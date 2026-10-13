@@ -109,9 +109,10 @@ fn sub_line(ctx: &mut Ctx, row: &TaskRow) -> Row {
     )
 }
 
-/// The run's status with the step it is at or stopped at (`Running · 03 Implement`).
+/// The run's status with the step it is at or stopped at (`Running · 03 Implement`); a task whose run
+/// passed every step is ready to merge.
 fn status(ctx: &mut Ctx, row: &TaskRow) -> lurq::node::Element {
-  let status = row.phase.map_or(Status::Unreadable, Status::of_phase);
+  let status = row.phase.map_or(Status::Unreadable, Status::of_board);
   let mut chip = StatusChip::new(format!("overview-status-{}", row.key), status);
   if let Some(step) = &row.step {
     let number = format!("{:02}", step.number);

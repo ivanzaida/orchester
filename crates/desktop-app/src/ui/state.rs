@@ -41,6 +41,7 @@ pub struct EmptyState {
   wide: bool,
   compact: bool,
   secrets: bool,
+  measure: Option<f32>,
 }
 
 impl EmptyState {
@@ -60,6 +61,7 @@ impl EmptyState {
       wide: false,
       compact: false,
       secrets: false,
+      measure: None,
     }
   }
 
@@ -78,6 +80,12 @@ impl EmptyState {
   /// The Secrets empty panels (GE9ao/ImhCU) use a wider explanation and six-pixel text gap.
   pub fn secrets(mut self) -> Self {
     self.secrets = true;
+    self
+  }
+
+  /// The widest the explanation runs, where a design sets its own (520 in the Overview's `F7LdL`).
+  pub fn measure(mut self, width: f32) -> Self {
+    self.measure = Some(width);
     self
   }
 
@@ -140,6 +148,8 @@ impl From<EmptyState> for Element {
           })
           .max_width(if empty.wide {
             Dimension::Auto
+          } else if let Some(measure) = empty.measure {
+            Dimension::Px(measure)
           } else if empty.secrets {
             Dimension::Px(SECRETS_EXPLANATION_WIDTH)
           } else {

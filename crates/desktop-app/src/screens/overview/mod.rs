@@ -16,6 +16,7 @@ mod header;
 mod metrics;
 mod needs;
 mod notices;
+mod ready;
 mod row;
 mod tasks;
 
@@ -122,7 +123,7 @@ fn main(ctx: &mut Ctx, project: &ShownProject, tab: OverviewTab, tasks: Option<&
   let id = project.open.project.id();
   let name = project.open.project.name().as_str();
   let work = match tasks {
-    Some(tasks) if tasks.tasks.is_empty() => header::empty_project(ctx, id),
+    Some(tasks) if tasks.tasks.is_empty() => header::empty_project(ctx, project),
     tasks => tasks::section(ctx, (id, name), tab, tasks).into(),
   };
   let now = Timestamp::now();

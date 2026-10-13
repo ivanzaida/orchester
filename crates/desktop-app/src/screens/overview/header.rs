@@ -1,7 +1,7 @@
 //! The Overview's heading (`Header` `PCFyu`): the project's key over its name and what the page shows,
 //! with Import resources, not built yet and so locked with why under it, and New task. A project without
-//! tasks says what a task is, with the same actions (`Empty project` `h2DTY7`); the checklist of what is
-//! ready to run under it is not shown, as on the Tasks list: nothing reads that readiness yet.
+//! tasks says what a task is, with the same actions and what is ready to run under them (`Empty project`
+//! `h2DTY7`, its list in [`super::ready`]).
 
 use lurq::{
   app::{
@@ -61,16 +61,22 @@ pub(super) fn header(ctx: &mut Ctx, project: &ShownProject) -> Row {
     .child(actions(ctx, id, "overview", true))
 }
 
-/// No task yet: what a task is, and the heading's actions.
-pub(super) fn empty_project(ctx: &mut Ctx, project: ProjectId) -> Element {
-  let mut empty = EmptyState::new(
+/// The explanation's measure in the empty project's card (`F7LdL`).
+const EMPTY_MEASURE: f32 = 520.0;
+
+/// No task yet: what a task is, the heading's actions and what is ready to run.
+pub(super) fn empty_project(ctx: &mut Ctx, project: &ShownProject) -> Element {
+  let actions = actions(ctx, project.open.project.id(), "overview-empty", false);
+  EmptyState::new(
     "overview-empty",
     Icon::ListPlus,
     ctx.t("overview.empty.title"),
     ctx.t("overview.empty.detail"),
-  );
-  empty = empty.action(actions(ctx, project, "overview-empty", false));
-  empty.into()
+  )
+  .measure(EMPTY_MEASURE)
+  .action(actions)
+  .child(super::ready::ready(ctx, project))
+  .into()
 }
 
 /// Import resources, locked with why under it, and New task, under the element ids `<id>-*`; New task

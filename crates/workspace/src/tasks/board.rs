@@ -49,8 +49,14 @@ impl BoardTab {
   }
 
   /// The newest `limit` tasks of the tab, newest first, with their tags and what blocks them, blocking
-  /// tasks' keys joined by `separator`.
+  /// tasks' keys joined by `separator`. In *Needs you* a row says what waits, as its item in
+  /// [`attention::items`] does (*Plan v2 from Planner waits for your decision*).
   pub fn rows(self, tasks: &ProjectTasks, limit: usize, separator: &str) -> Vec<TaskRow> {
+    let waiting = if self == Self::NeedsYou {
+      attention::items(tasks)
+    } else {
+      Vec::new()
+    };
     tasks
       .tasks
       .iter()
@@ -58,10 +64,17 @@ impl BoardTab {
       .filter(|task| self.includes(phase_of(task, &tasks.phases)))
       .take(limit)
       .map(|task| {
-        tasks.decorate_row(
+        let mut row = tasks.decorate_row(
           TaskRow::new(task, &tasks.pipelines, tasks.phases.get(&task.id())),
           separator,
-        )
+        );
+        if let Some(item) = waiting
+          .iter()
+          .find(|item| item.task.as_ref().is_some_and(|waits| waits.id == task.id()))
+        {
+          row.detail = item.title.clone();
+        }
+        row
       })
       .collect()
   }
