@@ -78,7 +78,15 @@ if ($ImportDevData) { Assert-CanImportDevData }
 Push-Location $repositoryRoot
 try {
     # One build of all three: the apps share the application database and the runner, so they must match.
-    cargo build --release --locked --target-dir $BuildDir -p orchester-desktop -p orchester-app -p orchester-runner
+    # ORCHESTER_APP_INSTALLED_BUILD makes this orchester-app the installed app: the fixed MCP address and the token
+    # in the secret store (docs/stable-build.md). Only this script and package-macos.sh set it.
+    $env:ORCHESTER_APP_INSTALLED_BUILD = "1"
+    try {
+        cargo build --release --locked --target-dir $BuildDir -p orchester-desktop -p orchester-app -p orchester-runner
+    }
+    finally {
+        Remove-Item Env:ORCHESTER_APP_INSTALLED_BUILD
+    }
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     $commit = git rev-parse --short HEAD
     if (git status --porcelain) { $commit = "$commit with uncommitted changes" }

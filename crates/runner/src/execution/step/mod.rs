@@ -53,6 +53,14 @@ use super::{
   workspace::{Start, Workspace},
 };
 
+/// What a started agent's worker gets besides its driver: the invocation's permissions, the secrets kept out of
+/// its activity, the agent's role and the account its CLI runs on.
+type AgentParts = (
+  LaunchPermissions,
+  Vec<SecretVariable>,
+  (String, Option<orchester_core::id::AgentAccountId>),
+);
+
 /// How an execution's next invocation continues it: the CLI session it resumes, if its last
 /// invocation reported one, when that invocation started, and the people's messages it delivers.
 #[derive(Default)]
@@ -222,12 +230,18 @@ impl RunTask {
     if self.is_tool_step(execution) {
       return self.start_command(execution, start);
     }
+    if self.waits_for_plan_reset(execution)? {
+      return Ok(true);
+    }
     let work = self.work(execution)?;
     if !self.board.take(self.run.id(), execution, work) {
       return Ok(false);
     }
+    // A person's *Try now* holds until the agent has a slot: with every slot busy, the step tries again later.
+    self.try_at_plan_limit.take_if(|asked| *asked == execution);
     let workspace = Workspace::of(&self.root, &self.run, &self.worktree, execution, start);
     let mut continuation = self.begin_step(execution)?;
+    self.keep_session_on_its_account(execution, &mut continuation)?;
     let model = self.model(execution)?;
     let mut invocation = self
       .db
@@ -262,6 +276,9 @@ impl RunTask {
     if let Some(engine) = &start.engine {
       self.db.save_invocation_engine(invocation.id, engine)?;
     }
+    if let Some(account) = start.account {
+      self.db.save_invocation_account(invocation.id, account)?;
+    }
     self.db.save_invocation_prompt(invocation.id, &start.prompt)?;
     self.db.save_invocation_code_index(invocation.id, &start.code_index)?;
     self.db.save_edit_progress(invocation.id, &EditProgress::default())?;
@@ -286,7 +303,7 @@ impl RunTask {
       std::mem::take(&mut continuation.messages),
       arrival,
     )?;
-    let agent = (start.permissions, start.secrets, start.agent);
+    let agent = (start.permissions, start.secrets, (start.agent, start.account));
     self.spawn(execution, invocation, (driven, agent), workspace)?;
     Ok(true)
   }
@@ -323,7 +340,7 @@ impl RunTask {
     &mut self,
     execution: StepExecutionId,
     invocation: Invocation,
-    (driven, (permissions, secrets, agent)): (Driven, (LaunchPermissions, Vec<SecretVariable>, String)),
+    (driven, (permissions, secrets, (agent, account))): (Driven, AgentParts),
     workspace: Workspace,
   ) -> Result<(), ExecutionError> {
     let (invocations, reviews) = (
@@ -361,6 +378,7 @@ impl RunTask {
       tool_relay,
       secrets,
       agent,
+      account,
       task: self.task.id(),
       decisions,
       answers,

@@ -123,6 +123,7 @@ impl RunTask {
       code_index: index.used,
       secrets: vec![SecretVariable::new("API key", key)],
       agent: body.role().as_str().to_owned(),
+      account: None,
       memory: recalled.injected(),
       permissions: enforced.launch(),
       engine: Some(InvocationEngine {

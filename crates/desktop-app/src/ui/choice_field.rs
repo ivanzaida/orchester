@@ -28,6 +28,10 @@ pub struct Choice {
   pub icon: Icon,
   pub detail: Option<Arc<str>>,
   pub separator: bool,
+  /// The detail says what is wrong with the choice, in `warning`.
+  pub warning: bool,
+  /// What the field shows while the choice is chosen; its label when `None`.
+  pub trigger: Option<Arc<str>>,
 }
 
 #[derive(Clone)]
@@ -38,6 +42,8 @@ pub struct ChoiceField {
   pub open: Signal<bool>,
   pub choices: Vec<Choice>,
   pub width: f32,
+  /// The field shows the chosen choice's icon before its words.
+  pub icon_in_field: bool,
 }
 impl PartialEq for ChoiceField {
   fn eq(&self, other: &Self) -> bool {
@@ -47,6 +53,7 @@ impl PartialEq for ChoiceField {
       && self.open.id() == other.open.id()
       && self.choices == other.choices
       && self.width == other.width
+      && self.icon_in_field == other.icon_in_field
   }
 }
 impl DevtoolsInspectable for ChoiceField {}
@@ -70,13 +77,54 @@ impl Component for Picker {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<ChoiceField>().clone();
     let chosen = props.value.get();
-    let label = props
-      .choices
-      .iter()
-      .find(|choice| choice.value == chosen)
-      .map_or(props.name.clone(), |choice| choice.label.clone());
+    let trigger = self.trigger(&props, &chosen);
+    let mut rows = Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Hair.role());
+    for (index, choice) in props.choices.iter().enumerate() {
+      if choice.separator {
+        rows = rows.child(separator(ctx));
+      }
+      let (value, selected) = (props.value.clone(), choice.value.clone());
+      let mut item = MenuItem::new(
+        format!("{}-option-{index}", props.id),
+        choice.label.clone(),
+        move || value.set(selected.clone()),
+      )
+      .icon(choice.icon)
+      .chosen(choice.value == chosen)
+      .in_form();
+      if let Some(detail) = &choice.detail {
+        item = item.detail(detail.clone());
+      }
+      if choice.warning {
+        item = item.warning_detail();
+      }
+      rows = rows.child(item.render(ctx, &props.open));
+    }
+    let panel = menu_panel(&format!("{}-menu", props.id))
+      .width(Dimension::Px(props.width))
+      .child(ScrollVertical::new(rows).max_height(Dimension::Px(MENU_MAX_HEIGHT)));
+    Row::new().width(Dimension::Px(props.width)).child(trigger).child(menu(
+      self.anchor.clone(),
+      props.open.clone(),
+      panel,
+    ))
+  }
+}
+
+impl Picker {
+  /// The field: the chosen choice's words (and icon), and the chevron.
+  fn trigger(&self, props: &ChoiceField, chosen: &str) -> lurq::components::Button {
+    let current = props.choices.iter().find(|choice| choice.value == chosen);
+    let label = current.map_or(props.name.clone(), |choice| {
+      choice.trigger.clone().unwrap_or_else(|| choice.label.clone())
+    });
+    let leading = current
+      .filter(|_| props.icon_in_field)
+      .map(|choice| icon(choice.icon, IconSize::Md, PaletteColor::TextSecondary));
     let open = props.open.clone();
-    let trigger = Focus::Form
+    Focus::Form
       .apply(pressable(move || open.update(|open| *open = !*open)))
       .id(props.id.clone())
       .ref_element(self.anchor.clone())
@@ -97,6 +145,7 @@ impl Component for Picker {
         },
       )
       .hovered_style(Style::new().border_inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .with_children(leading)
       .child(
         Text::new(&label)
           .variant(TypographyStyle::Description)
@@ -114,35 +163,6 @@ impl Component for Picker {
         },
         IconSize::Md,
         PaletteColor::TextMuted,
-      ));
-    let mut rows = Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Hair.role());
-    for (index, choice) in props.choices.iter().enumerate() {
-      if choice.separator {
-        rows = rows.child(separator(ctx));
-      }
-      let (value, selected) = (props.value.clone(), choice.value.clone());
-      let mut item = MenuItem::new(
-        format!("{}-option-{index}", props.id),
-        choice.label.clone(),
-        move || value.set(selected.clone()),
-      )
-      .icon(choice.icon)
-      .chosen(choice.value == chosen)
-      .in_form();
-      if let Some(detail) = &choice.detail {
-        item = item.detail(detail.clone());
-      }
-      rows = rows.child(item.render(ctx, &props.open));
-    }
-    let panel = menu_panel(&format!("{}-menu", props.id))
-      .width(Dimension::Px(props.width))
-      .child(ScrollVertical::new(rows).max_height(Dimension::Px(MENU_MAX_HEIGHT)));
-    Row::new().width(Dimension::Px(props.width)).child(trigger).child(menu(
-      self.anchor.clone(),
-      props.open.clone(),
-      panel,
-    ))
+      ))
   }
 }

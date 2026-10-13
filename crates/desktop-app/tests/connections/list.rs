@@ -47,14 +47,14 @@ fn connections_tabs_list_and_count_each_kind() {
 fn connections_inspector_shows_the_chosen_connection_of_each_kind() {
   let mut seeded = Seeded::new("connections");
   seeded.list(ConnectionsTab::All);
-  // The tab's first connection until one is chosen: Claude, not signed in, with its command to copy.
+  // The tab's first connection until one is chosen: Claude, its account not signed in, the fix in Settings.
   let inspector = seeded.text("connection-inspector");
   for words in [
     "Claude · Kontur",
     "Sign-in required",
     "Claude Code CLI",
     "claude-opus-5-5",
-    "claude auth login",
+    "Open Default in Settings",
   ] {
     assert!(inspector.contains(words), "{words} in {inspector}");
   }

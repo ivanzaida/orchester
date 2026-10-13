@@ -1,5 +1,6 @@
 //! The scenarios the seed writes, one file each, and their registry ([`ALL`]): one line per scenario.
 
+mod accounts;
 mod agents;
 mod agents_cases;
 mod cards;
@@ -60,7 +61,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 19] = [
+pub const ALL: [Scenario; 20] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-empty", agents::empty),
   Scenario::of("agents-no-connections", agents::no_connections),
@@ -80,6 +81,7 @@ pub const ALL: [Scenario; 19] = [
   Scenario::of("connections", connections::seed),
   Scenario::of("pipelines", pipelines::seed),
   Scenario::of("pipelines-empty", pipelines::empty),
+  Scenario::of("accounts", accounts::seed),
 ];
 
 /// The scenario called `name`.

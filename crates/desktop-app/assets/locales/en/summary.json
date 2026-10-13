@@ -62,7 +62,9 @@
       "readyTitle": "Draft · ready to run",
       "readyBody": "Run queues it and starts its first run.",
       "tokenLimitCheckpointTitle": "Stopped at the token limit · checkpoint {{checkpoint}}",
-      "planBodyNext": "{{agent}} wrote a plan. Approving it starts {{next}} with {{nextAgent}}; nothing runs until you decide."
+      "planBodyNext": "{{agent}} wrote a plan. Approving it starts {{next}} with {{nextAgent}}; nothing runs until you decide.",
+      "planLimitTitle": "Stopped at plan limit",
+      "planLimitBody": "The CLI refused {{step}}'s next turn: its account reached its plan limit. {{agent}}'s session is kept in the account's folder. {{kept}}"
     },
     "steps": {
       "title": "Steps",
@@ -176,7 +178,12 @@
       "worktree": "Worktree",
       "worktreeRemoved": "Removed at {{time}}",
       "notChosen": "Not chosen yet",
-      "noCheckpoint": "None yet"
+      "noCheckpoint": "None yet",
+      "account": "Account",
+      "accountValue": "{{account}} · {{email}}",
+      "accountAtLimit": "{{account}} · limit reached",
+      "accountUnknown": "An account no longer known",
+      "defaultAccount": "Default"
     },
     "thisTask": {
       "title": "This task"

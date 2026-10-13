@@ -277,6 +277,9 @@
     "toolModelUnused": "Not used by tools",
     "databaseUnavailable": "Database actions cannot run as pipeline steps yet. Pick a command tool without access rules or an agent profile.",
     "httpUnavailable": "HTTP actions cannot run as pipeline steps yet. Pick a command tool without access rules or an agent profile.",
-    "toolAccessUnavailable": "Pipeline steps cannot run command tools with access rules yet. Pick a command tool without access rules or an agent profile."
+    "toolAccessUnavailable": "Pipeline steps cannot run command tools with access rules yet. Pick a command tool without access rules or an agent profile.",
+    "runsOn": "Runs on",
+    "runsOnValue": "{{connection}} · account {{account}}",
+    "defaultAccount": "Default"
   }
 }

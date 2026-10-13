@@ -14,7 +14,8 @@
       "planChanges": "Changes to plan v{{version}} · {{agent}} writes plan v{{next}} from your note",
       "stoppedStep": "Stopped at the step budget of {{step}} · used {{used}} of {{limit}} tokens",
       "stoppedTime": "Stopped at the time limit · used {{used}} of {{limit}} min of active agent time",
-      "stoppedTokens": "Stopped at the token limit · used {{used}} of {{limit}} tokens"
+      "stoppedTokens": "Stopped at the token limit · used {{used}} of {{limit}} tokens",
+      "stoppedPlanLimit": "Stopped at the plan limit of {{step}}'s account"
     },
     "failed": "Your message was not sent: {{reason}} It stays here.",
     "keys": {

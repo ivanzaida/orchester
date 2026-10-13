@@ -5,6 +5,9 @@
 
 macro_rules! markers {
   ($inspect:path) => {
+    impl $inspect for crate::accounts::AccountUses {}
+    impl $inspect for crate::accounts::NewAccount {}
+    impl $inspect for crate::tasks::plan_limit::PlanStop {}
     impl $inspect for crate::activity::Activity {}
     impl $inspect for crate::activity::ActivityLog {}
     impl $inspect for crate::activity::OperationSpec {}

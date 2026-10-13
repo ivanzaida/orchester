@@ -5,9 +5,11 @@
 //! lets automation answer approvals, and a run's switch only while the project has a reviewer.
 
 use orchester_core::{
-  connection::{AgentConnection, Connection},
+  connection::{AgentConnection, Connection, moves_to_another_account},
   resource::ModelId,
-  run::review::{AutoModeSettings, ReviewerChoice, ReviewerUnavailable, default_review_model, reviewer_kind},
+  run::review::{
+    AutoModeSettings, ReviewerChoice, ReviewerUnavailable, default_review_model, resolve_reviewer, reviewer_kind,
+  },
   store::ConnectionStore,
 };
 use orchester_store::ProjectDb;
@@ -15,7 +17,7 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::runs::find_run;
+use super::{runs::find_run, setup::widening::allowed};
 use crate::{
   agents::form::effort_options,
   app_mcp::{
@@ -124,10 +126,21 @@ pub async fn set_auto_mode(services: &Services, args: SetAutoMode) -> Result<Val
     gate(&services)?;
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
+    let connections = db.connections()?;
     let reviewer = match &args.reviewer {
-      Some(reviewer) => Some(chosen(&db.connections()?, reviewer)?),
+      Some(reviewer) => Some(chosen(&connections, reviewer)?),
       None => None,
     };
+    if let Some(reviewer) = &reviewer {
+      let current = db.auto_mode_settings()?;
+      let next = AutoModeSettings {
+        new_runs: current.new_runs,
+        reviewer: reviewer.clone(),
+      };
+      if moves_reviewer_account(&connections, &current, &next) {
+        allowed(&services, vec![Message::new("appMcp.widens.reviewerAccount")])?;
+      }
+    }
     // Read and written in one transaction: a person's save in the window cannot slip in between.
     db.update_auto_mode_settings(|current| AutoModeSettings {
       new_runs: args.new_runs.unwrap_or(current.new_runs),
@@ -137,6 +150,17 @@ pub async fn set_auto_mode(services: &Services, args: SetAutoMode) -> Result<Val
     settings_json(&db)
   })
   .await
+}
+
+/// Whether the reviewer `next` resolves to runs on another account than the one `current` resolves to
+/// ([`moves_to_another_account`]): a person's decision, as for an agent profile.
+fn moves_reviewer_account(connections: &[Connection], current: &AutoModeSettings, next: &AutoModeSettings) -> bool {
+  let account = |settings| {
+    resolve_reviewer(settings, connections)
+      .ok()
+      .map(|resolved| resolved.connection.account().clone())
+  };
+  account(next).is_some_and(|after| moves_to_another_account(account(current).as_ref(), &after))
 }
 
 /// The reviewer `argument` names among `connections`; `None` for the default one.

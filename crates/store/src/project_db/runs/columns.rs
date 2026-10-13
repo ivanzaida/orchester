@@ -32,6 +32,9 @@ pub(super) fn run_status_columns(status: &RunStatus) -> StatusColumns<'_> {
     RunStatus::Paused(PauseReason::LimitReached(RunLimit::StepBudget { execution })) => {
       ("paused", Some(STEP_BUDGET), None, Some(execution.to_string()))
     }
+    RunStatus::Paused(PauseReason::LimitReached(RunLimit::PlanLimit { execution })) => {
+      ("paused", Some(PLAN_LIMIT), None, Some(execution.to_string()))
+    }
     RunStatus::Paused(reason) => ("paused", Some(pause_reason_text(*reason)), None, None),
     RunStatus::Interrupted(cause) => (INTERRUPTED, Some(interrupt_cause_text(*cause)), None, None),
     RunStatus::WaitingForPerson(Stuck::RetriesExhausted(step)) => {
@@ -68,6 +71,11 @@ pub(super) fn parse_run_status(
         execution: parse("step execution id", execution)?,
       }))
     }
+    ("paused", Some(PLAN_LIMIT), None, Some(execution)) => {
+      RunStatus::Paused(PauseReason::LimitReached(RunLimit::PlanLimit {
+        execution: parse("step execution id", execution)?,
+      }))
+    }
     ("paused", Some(reason), None, None) => RunStatus::Paused(parse_pause_reason(reason)?),
     (INTERRUPTED, Some(cause), None, None) => RunStatus::Interrupted(parse_interrupt_cause(cause)?),
     (WAITING, Some(RETRIES_EXHAUSTED), Some(step), None) => {
@@ -91,6 +99,8 @@ pub(super) fn parse_run_status(
 
 /// The pause reason of a run stopped at a step's budget; the execution has a column of its own.
 const STEP_BUDGET: &str = "step_budget";
+/// The pause reason of a run stopped at its account's plan limit; the execution has a column of its own.
+const PLAN_LIMIT: &str = "plan_limit";
 /// A run waiting for a person, and why: the step in `failed_step` used up its retries, or broke
 /// again after its restart. A run that failed for used-up retries has the same reason.
 const WAITING: &str = "waiting";
@@ -105,6 +115,7 @@ const fn pause_reason_text(reason: PauseReason) -> &'static str {
     PauseReason::LimitReached(RunLimit::DailyBudget) => "daily_budget",
     PauseReason::LimitReached(RunLimit::GroupBudget) => "group_budget",
     PauseReason::LimitReached(RunLimit::StepBudget { .. }) => STEP_BUDGET,
+    PauseReason::LimitReached(RunLimit::PlanLimit { .. }) => PLAN_LIMIT,
   }
 }
 

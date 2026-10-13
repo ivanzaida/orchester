@@ -11,6 +11,8 @@
       "needsInput": "Needs input",
       "paused": "Paused",
       "stoppedAtLimit": "Stopped at limit",
+      "stoppedAtPlanLimit": "Stopped at plan limit",
+      "waitingForPlanReset": "Waiting for plan reset",
       "interrupted": "Interrupted",
       "completed": "Completed",
       "readyForReview": "Ready for review",

@@ -22,6 +22,7 @@
 //! by its key (`orchester_core::project::TaskKey`), as people read it. A path that names no route reads
 //! as a [`RouteError`] that says why.
 
+mod accounts;
 mod connections;
 mod error;
 mod overview;
@@ -37,6 +38,7 @@ use orchester_core::id::ProjectId;
 
 use self::query::Params;
 pub use self::{
+  accounts::{AccountsPanel, AccountsView},
   connections::{ConnectionsTab, ConnectionsView, NewConnection},
   error::RouteError,
   overview::OverviewTab,
@@ -56,6 +58,8 @@ const NEW: &str = "new";
 const EDIT: &str = "edit";
 /// The query parameter of a screen's tab.
 const TAB: &str = "tab";
+/// Settings' Accounts tab.
+const ACCOUNTS: &str = "accounts";
 /// A project's path with its identifier as the router's parameter.
 const PROJECT_PATTERN: &str = "/project/:project";
 const NEW_PIPELINE_PATTERN: &str = "/project/:project/pipelines/new";
@@ -67,6 +71,8 @@ const AGENT_PATTERN: &str = "/project/:project/agents/:agent";
 pub enum Route {
   AllProjects,
   Settings,
+  /// Settings › Accounts, with the account it shows and its panel.
+  Accounts(AccountsView),
   Project(ProjectId, ProjectPage),
 }
 
@@ -83,7 +89,7 @@ impl Route {
   pub const fn screen(&self) -> Screen {
     match self {
       Self::AllProjects => Screen::AllProjects,
-      Self::Settings => Screen::Settings,
+      Self::Settings | Self::Accounts(_) => Screen::Settings,
       Self::Project(_, page) => page.screen(),
     }
   }
@@ -91,7 +97,7 @@ impl Route {
   pub const fn project(&self) -> Option<ProjectId> {
     match self {
       Self::Project(project, _) => Some(*project),
-      Self::AllProjects | Self::Settings => None,
+      Self::AllProjects | Self::Settings | Self::Accounts(_) => None,
     }
   }
 
@@ -108,6 +114,7 @@ impl Route {
     match self {
       Self::AllProjects => "/".to_owned(),
       Self::Settings => format!("/{SETTINGS}"),
+      Self::Accounts(view) => view.path(format!("/{SETTINGS}"), (TAB, ACCOUNTS)),
       Self::Project(project, page) => page.path(&format!("/{PROJECT}/{project}")),
     }
   }
@@ -129,7 +136,7 @@ impl Route {
     }
     let route = match segments.as_slice() {
       [] => Self::AllProjects,
-      [SETTINGS] => Self::Settings,
+      [SETTINGS] => Self::settings(&mut params)?,
       [PROJECT, project, page @ ..] => {
         let project = project.parse().map_err(|_| RouteError::ProjectId {
           value: (*project).to_owned(),
@@ -140,6 +147,20 @@ impl Route {
     };
     params.finish()?;
     Ok(route)
+  }
+}
+
+impl Route {
+  /// Settings at the tab its query names: Automation, or Accounts with the account it shows.
+  fn settings(params: &mut Params) -> Result<Self, RouteError> {
+    match params.take(TAB)?.as_deref() {
+      None => Ok(Self::Settings),
+      Some(ACCOUNTS) => AccountsView::take(params).map(Self::Accounts),
+      Some(other) => Err(RouteError::InvalidParam {
+        param: TAB.to_owned(),
+        value: other.to_owned(),
+      }),
+    }
   }
 }
 

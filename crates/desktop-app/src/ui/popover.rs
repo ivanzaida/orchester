@@ -5,7 +5,10 @@
 //! above.
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize},
+  app::{
+    ctx::Ctx,
+    theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize},
+  },
   components::{Column, Placement, Popup},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension, padding::Padding},
@@ -44,4 +47,15 @@ pub fn popover(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel:
     .open(open)
     .placement(placement)
     .offset(0.0, offset)
+}
+
+/// `panel` over the status bar `bar` while `open` holds, for an item at the bar's end (the MCP item's popover,
+/// `QqBCj`): 9 above the bar and its end 12 from the bar's, so it stays inside the window.
+pub fn bar_popover(ctx: &Ctx, bar: ElementRef, open: Signal<bool>, panel: impl Into<Element>) -> Popup {
+  let inset = ctx.theme().spacing_value(SpacingSize::Md).to_px();
+  Popup::new(bar, panel)
+    .open(open)
+    .placement(Placement::TopEnd)
+    // Over its anchor, lurq counts the offset away from it.
+    .offset(-inset, ExtraSpacing::Inline.value())
 }

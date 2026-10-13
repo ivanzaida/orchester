@@ -64,6 +64,8 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::UnrepresentablePath(_) => Message::new("errors.unsupportedPath"),
     StoreError::Unrepresentable(_) => Message::new("errors.unstorableValue"),
     StoreError::DuplicateConnectionName(_) => Message::new("errors.connectionNameTaken"),
+    StoreError::DuplicateAccountName(name) => Message::new("accounts.errors.nameTaken").with("name", name.clone()),
+    StoreError::AccountFolderTaken => Message::new("accounts.errors.folderTaken"),
     StoreError::DuplicateSecretName { .. } => Message::new("errors.secretNameTaken"),
     StoreError::AlreadyMerged(_) => Message::new("runs.merge.failure.alreadyMerged"),
     StoreError::TaskNotEditable { source, .. } => edit_error(source),
@@ -94,6 +96,7 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::InvocationPermissionsNotRecordable(_)
     | StoreError::SecretNotFound(_)
     | StoreError::ServerNotFound(_)
+    | StoreError::AgentAccountNotFound(_)
     | StoreError::MemoryNotFound(_)
     | StoreError::MemoryExists(_)
     | StoreError::MemoryConflict(_)
@@ -146,6 +149,32 @@ pub fn vault_error(error: &VaultError) -> Message {
     VaultError::TooLong { max } => Message::new("errors.secretTooLong").with("max", max.to_string()),
     VaultError::Failed(_) | VaultError::NotFound => Message::new("errors.keychainFailed"),
   }
+}
+
+/// Why the secret store did not give or keep the app's MCP token, in its own short words: the store is named beside
+/// them (*The token can't be read from Windows Credential Manager*, `eTrCO`).
+pub fn secret_store_error(error: &VaultError) -> Message {
+  match error {
+    VaultError::AccessDenied(_) => Message::new(secret_store::DENIED),
+    VaultError::Unsupported => Message::new("errors.keychainUnsupported"),
+    VaultError::TooLong { max } => Message::new("errors.secretTooLong").with("max", max.to_string()),
+    VaultError::Failed(_) | VaultError::NotFound => Message::new("errors.secretStoreFailed"),
+  }
+}
+
+/// How each platform's secret store refuses: Windows Credential Manager says access is denied; the macOS keychain is
+/// locked, or the person did not allow the app.
+mod secret_store {
+  #[cfg(target_os = "macos")]
+  pub const DENIED: &str = "errors.secretStoreDeniedMacos";
+  #[cfg(not(target_os = "macos"))]
+  pub const DENIED: &str = "errors.secretStoreDenied";
+}
+
+/// A change only the installed app's MCP server takes (a fixed address, a stored token) was asked of a copy that
+/// takes a new port and token on each start.
+pub fn app_mcp_not_installation() -> Message {
+  Message::new("errors.appMcpNotInstallation")
 }
 
 /// Work that ran on a background thread panicked or was cancelled; the cause is logged.

@@ -419,6 +419,7 @@ fn usage_efficiency_has_the_cache_share_per_day_edit_tokens_by_index_and_failed_
 fn weekly(at: Timestamp, percent: f64, resets: Timestamp) -> LimitSnapshot {
   LimitSnapshot {
     provider: AgentProvider::CodexCli,
+    account: None,
     at,
     limits: PlanLimits {
       windows: vec![LimitWindow::new(10_080, Some(percent), Some(resets), LimitState::Normal, false).expect("window")],

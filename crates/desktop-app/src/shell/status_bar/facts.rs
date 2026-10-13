@@ -56,6 +56,15 @@ pub struct ProjectFacts {
   pub read_failure: Option<ReadFailure>,
   /// How many runs the previous session left interrupted wait for the person to continue them or not.
   pub undecided_runs: usize,
+  /// The accounts the project's connections run on that reported plan limits, by CLI.
+  pub limits: Vec<AccountLimits>,
+}
+
+/// An account a project's connection runs on, with the newest plan reading its CLI reported.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AccountLimits {
+  pub account: orchester_core::account::AgentAccount,
+  pub reading: orchester_core::connection::plan_limits::LimitReading,
 }
 
 /// The project's tasks could not be read, and why.

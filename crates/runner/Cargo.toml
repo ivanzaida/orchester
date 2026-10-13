@@ -37,6 +37,10 @@ name = "execution"
 required-features = ["test-agent"]
 
 [[test]]
+name = "accounts"
+required-features = ["test-agent"]
+
+[[test]]
 name = "tools"
 required-features = ["test-agent"]
 
@@ -110,6 +114,10 @@ required-features = ["test-agent"]
 
 [[test]]
 name = "store_refusal"
+required-features = ["test-agent"]
+
+[[test]]
+name = "worker_failure_controls"
 required-features = ["test-agent"]
 
 [[test]]

@@ -51,12 +51,22 @@ define_id!(
   SessionId
 );
 define_id!(
+  /// One installation of the app, i.e. one application database (`orchester.db`): what keeps the secrets of two
+  /// installations on one computer, e.g. a development build's and the installed app's, apart.
+  InstallationId
+);
+define_id!(
   /// A shared server in the desktop's list, given by the desktop when the server is added.
   ServerId
 );
 define_id!(
   /// A project, i.e. one repository managed by Orchester.
   ProjectId
+);
+define_id!(
+  /// An agent CLI account on this computer (`docs/design/agent-accounts.md`): a folder where the CLI keeps its own
+  /// sign-in, shared by every project.
+  AgentAccountId
 );
 define_id!(
   /// A versioned configuration resource (agent profile, instruction, pipeline, tool).
