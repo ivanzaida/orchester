@@ -38,11 +38,13 @@ fn start(worktree: &Path, app: &str) -> (App, PathBuf) {
     app.to_owned()
   });
   fs::copy(original, &program).expect("copy");
-  let discovery = folder.join("profile").join(if app == "orchester" {
-    "orchester-mcp"
+  // The new app's QA copy writes where ORCHESTER_APP_MCP_DISCOVERY points (`tools/qa-app.ps1`: `.tmp/qa/<task>/mcp`);
+  // the deprecated desktop's keeps its QA profile's user folder.
+  let discovery = if app == "orchester" {
+    folder.join("profile").join("orchester-mcp")
   } else {
-    "orchester-app-mcp"
-  });
+    folder.join("mcp")
+  };
   (start_program(&program, &discovery), discovery)
 }
 
