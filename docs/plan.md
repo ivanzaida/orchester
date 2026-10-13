@@ -375,7 +375,7 @@ Not done: Cancel run stays beside Continue run for an interrupted run (63.04/63.
 (separate agent) is outstanding.
 
 
-### Agent accounts · branch `claude/agent-accounts` (implemented 2026-10-13, waiting for review and design verification)
+### Agent accounts · branch `claude/agent-accounts` (implemented 2026-10-13; reviewed and design-verified 2026-10-13)
 
 Several Claude Code and Codex accounts per computer (`docs/design/agent-accounts.md`, decided 2026-10-12): app-wide in
 `orchester.db` (`agent_accounts`, a fixed Default per CLI, removed accounts kept as tombstones), a project's agent
@@ -386,14 +386,18 @@ place (`plan_limit`); the runner resumes the same session at the reset, or the p
 another account's connection as a new session for this run only. Desktop app: Settings › Accounts (list by CLI,
 add in place, sign-in through a visible terminal and Check again, details, Used by, rename, remove in place), the
 Account field in Connections, read-backs in agents, pipeline steps and runs, the plan limits per account in the status
-bar, the plan-limit choice on the task page. MCP: `list_accounts`, `set_connection_account`. QA:
-`cargo run -p orchester-app --example accounts_qa -- <state> [account]`. Tests: `-p orchester-core --test accounts`,
-`-p orchester-store --test accounts`, `--test limits limits`, `-p orchester-workspace --test accounts`,
+bar, the plan-limit choice on the task page with *Try again now*; a new run whose account is at its limit waits for the
+reset holding no agent slot, with *Try now on …* and *Start now on …*; *Choose folder…* for a missing folder. MCP:
+`list_accounts`, `set_connection_account`. QA: `cargo run -p orchester-app --example accounts_qa -- <state> [account]`.
+Tests: `-p orchester-core --test accounts`, `-p orchester-store --test accounts`, `--test limits limits`,
+`-p orchester-workspace --test accounts`, `--test account_moves`, `--test account_readings`,
 `-p orchester-runner --features test-agent --test accounts`, `-p orchester-app --test settings_accounts`,
 `--test connections accounts`, `--test status_bar plan_limits`, `--test mcp_domain accounts`,
-`--test task_decisions decision_plan_limit`. Left: a new run waiting for its account's reset with *Start now on …*,
-the Usage legend per account, Codex identity through App Server `account/read`, *Choose folder…* for a missing folder.
-**Done when** a separate review passes and a design verifier reports no blocking or major mismatches against `hgOl2`.
+`--test task_decisions decision_plan_limit`. Four code reviews (the last a final review) and three design
+verifications passed (report: `.tmp/accounts-run/report.md`). Open v1 work: the Usage page's legend per account waits
+for the Usage page port (`Workspace::last_plan_readings` and `plan_limits::account_readings_in` are ready for it); the
+status bar's plan cells are not design-verified, since they show only this session's live readings (ORC-17) and the QA
+window has none. Not in v1: Codex identity through App Server `account/read`.
 
 ### ORC-72 · Usage dashboard · branch `orchester/orc-72-run-1` (implemented 2026-10-06, waiting for design verification)
 
