@@ -3,7 +3,10 @@
 
 use std::collections::BTreeSet;
 
-use orchester_core::connection::app_server_config::{ConfigReadError, refuse_taken_names, repository_settings};
+use orchester_core::{
+  connection::app_server_config::{ConfigReadError, refuse_taken_names, repository_settings},
+  orchester_tools::SERVER,
+};
 use serde_json::json;
 
 fn user_layers() -> Vec<serde_json::Value> {
@@ -70,5 +73,25 @@ fn config_read_user_server_named_like_a_chosen_one_refuses_the_step() {
   assert_eq!(
     refuse_taken_names(&layers(json!({"docs": {"env": {"TOKEN": "user"}}})), &selected),
     Err(ConfigReadError::ServerNameTaken("docs".to_owned()))
+  );
+}
+
+/// The app's own MCP server, registered in the user's Codex as `orchester`, does not take the name of the runs'
+/// relay `Orchester`: Codex tells the two apart, so the step starts and turns the user's one off.
+#[test]
+fn config_read_app_mcp_user_orchester_server_does_not_take_the_relays_name() {
+  let selected = BTreeSet::from([SERVER.to_owned()]);
+  let layers = |name: &str| {
+    json!({"layers": [
+      {"name":{"type":"sessionFlags"},"config":{"mcp_servers":{SERVER:{"command":"orchester-runner"}}}},
+      {"name":{"type":"user","file":"config.toml"},"config":{"mcp_servers":{name:{
+        "url":"http://127.0.0.1:47821/mcp","bearer_token_env_var":"ORCHESTER_APP_MCP_TOKEN"
+      }}}}
+    ]})
+  };
+  assert_eq!(refuse_taken_names(&layers("orchester"), &selected), Ok(()));
+  assert_eq!(
+    refuse_taken_names(&layers(SERVER), &selected),
+    Err(ConfigReadError::ServerNameTaken(SERVER.to_owned()))
   );
 }

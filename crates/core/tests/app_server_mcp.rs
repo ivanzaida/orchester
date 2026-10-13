@@ -1,8 +1,11 @@
 use std::collections::BTreeSet;
 
-use orchester_core::connection::app_server_mcp::{
-  McpInventoryError, UnavailableServer, refuse_user_hooks, servers_to_turn_off, unavailable_selected,
-  verify_only_chosen_run, verify_selected_servers,
+use orchester_core::{
+  connection::app_server_mcp::{
+    McpInventoryError, UnavailableServer, refuse_user_hooks, servers_to_turn_off, thread_config, unavailable_selected,
+    verify_only_chosen_run, verify_selected_servers,
+  },
+  orchester_tools::SERVER,
 };
 use serde_json::json;
 
@@ -169,4 +172,52 @@ fn user_hooks_refuse_the_step() {
   assert_eq!(refuse_user_hooks(&json!({"config": {}})), Ok(()));
   let hooks = json!({"config": {"hooks": {"PreToolUse": [{"command": "audit.exe"}]}}});
   assert_eq!(refuse_user_hooks(&hooks), Err(McpInventoryError::UserHooks));
+}
+
+/// What `config/read` reports with the runs' relay [`SERVER`] from the process's overrides, a chosen `docs`, and the
+/// app's own MCP server registered in the user's Codex as `orchester`, as `codex mcp add` writes it or with a header.
+fn with_the_apps_server(orchester: &serde_json::Value) -> serde_json::Value {
+  json!({"config": {"mcp_servers": {
+    SERVER: {"command": "orchester-runner", "env_vars": ["ORCHESTER_TOOLS_TOKEN"]},
+    "docs": {"command": "npx"},
+    "orchester": orchester
+  }}})
+}
+
+/// The app's own server `orchester` in the user's Codex configuration is turned off for the thread by its own
+/// dotted key; the runs' relay `Orchester`, a different name to Codex, stays on.
+#[test]
+fn app_mcp_user_orchester_server_is_turned_off_beside_the_runs_relay() {
+  let selected = BTreeSet::from([SERVER.to_owned(), "docs".to_owned()]);
+  for orchester in [
+    json!({"url": "http://127.0.0.1:47821/mcp", "bearer_token_env_var": "ORCHESTER_APP_MCP_TOKEN"}),
+    json!({"url": "http://127.0.0.1:47821/mcp", "http_headers": {"Authorization": "Bearer app-token"}}),
+  ] {
+    let turned_off = servers_to_turn_off(&with_the_apps_server(&orchester), &selected).expect("no dotted name");
+    assert_eq!(turned_off, ["orchester"]);
+    let config = thread_config(&turned_off);
+    assert_eq!(
+      serde_json::Value::Object(config),
+      json!({"mcp_servers.orchester.enabled": false})
+    );
+  }
+}
+
+/// The thread's inventory must show the app's server turned off; running, it refuses the step, while the relay runs.
+#[test]
+fn app_mcp_user_orchester_server_must_show_turned_off() {
+  let selected = BTreeSet::from([SERVER.to_owned()]);
+  let inventory = |status: &str| {
+    json!({"data": [
+      {"name": SERVER, "runtimeStatus": "connected"},
+      {"name": "orchester", "runtimeStatus": status}
+    ]})
+  };
+  assert_eq!(verify_only_chosen_run(&inventory("disabled"), &selected), Ok(()));
+  for status in ["connected", "starting", "failed"] {
+    assert_eq!(
+      verify_only_chosen_run(&inventory(status), &selected),
+      Err(McpInventoryError::UnchosenServer("orchester".to_owned()))
+    );
+  }
 }
