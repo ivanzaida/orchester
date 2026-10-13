@@ -18,6 +18,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::Event;
+use orchester_store::StoreError;
 
 use super::{
   Active,
@@ -38,13 +39,13 @@ impl RunTask {
   pub(in super::super) fn on_ended(
     &mut self,
     execution: StepExecutionId,
-    finished: &Finished,
+    finished: Result<Finished, StoreError>,
   ) -> Result<(), ExecutionError> {
-    let Some(active) = self.agents.remove(&execution) else {
+    let active = self.retire_worker(execution);
+    let finished = finished?;
+    let Some(active) = active else {
       return Ok(());
     };
-    self.board.release(execution);
-    self.release_steered(execution);
     if active.abandoned {
       return Ok(());
     }
@@ -76,10 +77,15 @@ impl RunTask {
             self.report(&active.invocation, RunnerProblem::StepBudgetReached { budget })?;
             "the step budget"
           }
+          RunLimit::PlanLimit { .. } => {
+            // The worker stopped its agent there itself; the run stops at it once no agent works.
+            self.pending.limit.get_or_insert(limit);
+            "the account's plan limit"
+          }
         };
         self.save(execution, &active, &format!("work in progress at {label}"))
       }
-      None => self.finish(execution, &active, finished),
+      None => self.finish(execution, &active, &finished),
     }
   }
 

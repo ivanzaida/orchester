@@ -4,6 +4,7 @@
 //! ([`super::listed`]), so only the app that serves them offers them; no tool takes or returns a
 //! secret's value.
 
+mod accounts;
 mod connections;
 mod instructions;
 mod mcp_servers;
@@ -108,6 +109,29 @@ const SPECS: &[Spec] = &[
                   (it runs as not verified); an effort is kept only where the model lists it.",
     schema: schema_for_type::<connections::InConnection>,
     read_only: true,
+  },
+  Spec {
+    name: "list_accounts",
+    description: "The person's agent CLI accounts on this computer, which every project's connections can run on \
+                  (Settings › Accounts): id, cli (claude_code or codex), name (null for a Default nobody renamed), \
+                  whether it is the CLI's Default (its own folder), state (signed_in, not_signed_in, \
+                  sign_in_expired, sign_in_unknown, cli_not_found, folder_missing, not_supported, not_checked), \
+                  whether Orchester created its folder or the person brought it, and the account it shares a \
+                  sign-in with, if any. No email and no folder are listed. Adding, renaming and removing accounts \
+                  and signing them in are done by a person in the window.",
+    schema: schema_for_type::<accounts::NoArguments>,
+    read_only: true,
+  },
+  Spec {
+    name: "set_connection_account",
+    description: "Chooses which account an agent CLI connection runs on, as the connection's Account field does: \
+                  `account` is an account of the connection's CLI by id or name (list_accounts), `default` its \
+                  Default. Runs that start from now on use it; a running agent keeps its account. The connection is \
+                  checked again on that account. Choosing another account than the connection's is refused as \
+                  person_only unless a person turned on Let automation change agent permissions: it can send the \
+                  project's code to another organisation's provider.",
+    schema: schema_for_type::<accounts::SetConnectionAccount>,
+    read_only: false,
   },
   Spec {
     name: "add_mcp_server",
@@ -335,6 +359,8 @@ async fn dispatch(
     "add_cli_connection" => connections::add_cli_connection(services, parse(arguments)?).await,
     "check_connection" => connections::check_connection(services, parse(arguments)?).await,
     "list_models" => connections::list_models(services, parse(arguments)?).await,
+    "list_accounts" => accounts::list_accounts(services, parse(arguments)?).await,
+    "set_connection_account" => accounts::set_connection_account(services, parse(arguments)?).await,
     "add_mcp_server" => mcp_servers::add_mcp_server(services, parse(arguments)?).await,
     "update_mcp_server" => mcp_servers::update_mcp_server(services, parse(arguments)?).await,
     "remove_mcp_server" => mcp_servers::remove_mcp_server(services, parse(arguments)?).await,

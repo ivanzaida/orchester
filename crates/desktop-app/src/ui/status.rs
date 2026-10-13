@@ -44,6 +44,10 @@ pub enum Status {
   NeedsInput,
   Paused,
   StoppedAtLimit,
+  /// Stopped at its account's plan limit (`EwAhH`), as the task page's chip says it.
+  StoppedAtPlanLimit,
+  /// A run whose step waits for its account's plan reset before its agent starts (`XPjSc`).
+  WaitingForPlanReset,
   Interrupted,
   Completed,
   /// A run whose every step passed, as its own page and its row in *Runs of this task* name it
@@ -87,13 +91,15 @@ impl Tone {
 }
 
 impl Status {
-  pub const ALL: [Self; 21] = [
+  pub const ALL: [Self; 23] = [
     Self::Draft,
     Self::Queued,
     Self::Running,
     Self::NeedsInput,
     Self::Paused,
     Self::StoppedAtLimit,
+    Self::StoppedAtPlanLimit,
+    Self::WaitingForPlanReset,
     Self::Interrupted,
     Self::Completed,
     Self::ReadyForReview,
@@ -141,11 +147,11 @@ impl Status {
   pub const fn icon(self) -> Icon {
     match self {
       Self::Draft | Self::NotStarted => Icon::CircleDashed,
-      Self::Queued | Self::Waiting => Icon::Clock,
+      Self::Queued | Self::Waiting | Self::WaitingForPlanReset => Icon::Clock,
       Self::Running | Self::Working => Icon::LoaderCircle,
       Self::NeedsInput => Icon::Hand,
       Self::Paused | Self::Interrupted | Self::CantContinue => Icon::CirclePause,
-      Self::StoppedAtLimit => Icon::Gauge,
+      Self::StoppedAtLimit | Self::StoppedAtPlanLimit => Icon::Gauge,
       Self::Completed | Self::Complete | Self::ReadyForReview => Icon::CircleCheck,
       Self::Merged => Icon::GitMerge,
       Self::NotMerged => Icon::TriangleAlert,
@@ -166,6 +172,8 @@ impl Status {
       Self::NeedsInput
       | Self::Paused
       | Self::StoppedAtLimit
+      | Self::StoppedAtPlanLimit
+      | Self::WaitingForPlanReset
       | Self::Interrupted
       | Self::CantContinue
       | Self::NotMerged => Tone::Warning,
@@ -188,6 +196,8 @@ impl Status {
       Self::NeedsInput => "ui.status.needsInput",
       Self::Paused => "ui.status.paused",
       Self::StoppedAtLimit => "ui.status.stoppedAtLimit",
+      Self::StoppedAtPlanLimit => "ui.status.stoppedAtPlanLimit",
+      Self::WaitingForPlanReset => "ui.status.waitingForPlanReset",
       Self::Interrupted => "ui.status.interrupted",
       Self::Completed => "ui.status.completed",
       Self::ReadyForReview => "ui.status.readyForReview",

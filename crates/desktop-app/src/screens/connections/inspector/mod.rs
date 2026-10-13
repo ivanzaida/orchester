@@ -58,6 +58,8 @@ impl lurq::app::component::DevtoolsInspectable for Confirm {}
 /// What the inspector shows about the work on its connection.
 pub(super) struct Inspecting<'a> {
   pub listed: &'a ProjectConnections,
+  /// The person's agent accounts, which a CLI connection runs on one of.
+  pub accounts: &'a crate::services::accounts::Accounts,
   pub entry: Entry<'a>,
   pub project: &'a str,
   /// The work running on the connection now.
@@ -73,7 +75,7 @@ pub(super) struct Inspecting<'a> {
 pub(super) struct Actions {
   pub start: Arc<dyn Fn(ConnectionId, Work) + Send + Sync>,
   pub confirm: Arc<dyn Fn(Option<Confirm>) + Send + Sync>,
-  pub edit_mcp: Arc<dyn Fn(ConnectionId) + Send + Sync>,
+  pub edit: Arc<dyn Fn(ConnectionId) + Send + Sync>,
   /// Opens the Agents screen, where a profile chooses its connection and servers.
   pub agents: Arc<dyn Fn() + Send + Sync>,
 }
@@ -204,11 +206,13 @@ fn footer(
     .with_children(more)
     .with_children(failure)
     .with_children(rows.into_iter().enumerate().map(|(index, actions)| {
+      // Buttons that don't fit side by side go on below (a long account name in *Open … in Settings*).
       Row::new()
         .id(format!("connection-inspector-actions-{index}"))
         .width(Dimension::Pct(100.0))
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
+        .wrap()
         .with_children(actions)
     }))
     .with_children(reasons)

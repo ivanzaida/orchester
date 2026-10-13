@@ -214,7 +214,10 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
     (RunStatus::Running, Some(_)) if working.len() > 1 => "runs.page.describe.workingParallel",
     (RunStatus::Running, Some(_)) => "runs.page.describe.working",
     (RunStatus::Running, None) => "runs.page.describe.starting",
-    (RunStatus::Paused(PauseReason::Requested), _) => "runs.page.describe.paused",
+    // This app knows no accounts: a run stopped at an account's plan limit reads as paused.
+    (RunStatus::Paused(PauseReason::Requested | PauseReason::LimitReached(RunLimit::PlanLimit { .. })), _) => {
+      "runs.page.describe.paused"
+    }
     (RunStatus::Paused(PauseReason::LimitReached(RunLimit::Tokens)), _) => "runs.page.describe.tokenLimit",
     (RunStatus::Paused(PauseReason::LimitReached(RunLimit::Time)), _) => "runs.page.describe.timeLimit",
     (RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)), _) => "runs.page.describe.dailyBudget",

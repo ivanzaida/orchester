@@ -15,7 +15,7 @@ use lurq::app::{App, Tree, WindowCornerRadius, wgpu_render::WgpuRenderEngine, wi
 use orchester_app::{
   appearance::{Appearance, ThemeSetting},
   brand, i18n,
-  mcp::{self, AppMcp, DiscoveryFolder, McpSettings, McpStatus, WindowLink},
+  mcp::{self, AppMcp, McpLink, McpMode, McpSettings, WindowLink},
   project::{Landing, ProjectState},
   root::{Ready, Root, RootProps, Start},
   routes::{ProjectPage, Route},
@@ -61,11 +61,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let server = AppMcp::start(
     &mut tree,
     runtime.handle(),
-    &DiscoveryFolder::At(discovery.clone()),
-    config,
+    McpMode::Qa(discovery.clone()),
+    (config, settings),
     &link.input_gate(),
   );
-  let status = McpStatus::of(server.as_ref(), settings);
+  let status = McpLink::new(&server);
   tree.mount_root::<Root>(
     &mut app,
     RootProps {
@@ -97,7 +97,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     .with_corner_radius(WindowCornerRadius::Rounded)
     .run();
   vault.configure(false, 0);
-  drop(server);
+  server.shutdown();
   session.end(SessionEnd::Clean)?;
   Ok(())
 }

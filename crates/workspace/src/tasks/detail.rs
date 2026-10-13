@@ -13,9 +13,8 @@ use orchester_core::{
   question::AskedQuestions,
   resource::{AgentProfile, StepKey, VersionNumber},
   run::{
-    ActiveClock, ActivityEntry, AttemptStart, Invocation, PauseReason, PinnedVersion, Plan, Run, RunEvent,
-    RunEventKind, RunLimit, RunStatus, StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage,
-    active_time, attempt_starts, execution_tokens,
+    ActiveClock, ActivityEntry, AttemptStart, Invocation, PauseReason, PinnedVersion, Plan, Run, RunLimit, RunStatus,
+    StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
     review::{ReviewRecord, reviews_usage},
   },
   store::{
@@ -35,6 +34,7 @@ use super::{
   index_use::IndexUses,
   permissions::run_permissions,
   run_approvals::RunApprovals,
+  run_times::{finished_at, paused_at, starts_of},
   unreadable::Unreadable,
 };
 
@@ -88,6 +88,8 @@ pub struct RunView {
   pub version: VersionNumber,
   pub steps: Vec<StepView>,
   pub invocations: Vec<Invocation>,
+  /// The account each agent CLI invocation started on, in the order they started.
+  pub accounts: Vec<(orchester_core::id::InvocationId, orchester_core::id::AgentAccountId)>,
   /// What auto mode's reviews of its requests cost, in the order they ended.
   pub reviews: Vec<ReviewRecord>,
   /// When a paused run paused or stopped at its limit.
@@ -188,10 +190,12 @@ impl RunView {
     self.steps.iter().find(|step| step.status == Some(StepStatus::Running))
   }
 
-  /// The execution whose step budget the run stopped at, if it did.
+  /// The execution whose step budget or account's plan limit the run stopped at, if it did.
   pub fn stopped_execution(&self) -> Option<StepExecutionId> {
     match self.run.status() {
-      RunStatus::Paused(PauseReason::LimitReached(RunLimit::StepBudget { execution })) => Some(*execution),
+      RunStatus::Paused(PauseReason::LimitReached(
+        RunLimit::StepBudget { execution } | RunLimit::PlanLimit { execution },
+      )) => Some(*execution),
       _ => None,
     }
   }
@@ -436,6 +440,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       .into_iter()
       .filter(AskedQuestions::waits)
       .collect(),
+    accounts: db.invocation_accounts(run.id())?,
     index: IndexUses::read(db, &invocations)?,
     invocations,
     reviews: db.reviewer_usage(run.id())?,
@@ -450,49 +455,6 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     steps,
     run,
   })
-}
-
-/// When a paused run paused or stopped at its limit, and whether its work was committed as a
-/// checkpoint right before.
-fn paused_at(db: &ProjectDb, run: &Run) -> Result<(Option<Timestamp>, bool), StoreError> {
-  if !matches!(run.status(), RunStatus::Paused(_)) {
-    return Ok((None, false));
-  }
-  let events = db.events(run.id()).map_err(run_store_error)?;
-  let paused = events
-    .iter()
-    .rposition(|event| matches!(event.kind(), RunEventKind::Paused { .. }));
-  let saved = paused
-    .is_some_and(|index| index > 0 && matches!(events[index - 1].kind(), RunEventKind::CheckpointRecorded { .. }));
-  Ok((paused.map(|index| events[index].at()), saved))
-}
-
-/// When each attempt of `run` started and who started it; nothing to read for a run of one attempt.
-fn starts_of(db: &ProjectDb, run: &Run) -> Result<Vec<AttemptStart>, StoreError> {
-  if run.attempts().len() < 2 {
-    return Ok(Vec::new());
-  }
-  Ok(attempt_starts(&db.events(run.id()).map_err(run_store_error)?))
-}
-
-/// When `run` ended, if it did: succeeded, failed or was cancelled.
-fn finished_at(db: &ProjectDb, run: &Run) -> Result<Option<Timestamp>, StoreError> {
-  if !run.status().is_terminal() {
-    return Ok(None);
-  }
-  let events = db.events(run.id()).map_err(run_store_error)?;
-  Ok(
-    events
-      .iter()
-      .rev()
-      .find(|event| {
-        matches!(
-          event.kind(),
-          RunEventKind::Succeeded | RunEventKind::Failed { .. } | RunEventKind::Cancelled
-        )
-      })
-      .map(RunEvent::at),
-  )
 }
 
 /// Who executes a step (its agent role, or its tool's name), what it reaches, its model and its

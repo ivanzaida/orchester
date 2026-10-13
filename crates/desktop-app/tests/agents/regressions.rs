@@ -134,19 +134,12 @@ fn agents_cli_to_native_transition_can_save_without_hidden_cli_values() {
     .with_mcp_servers(McpServerSelection::new(vec![ConnectionId::generate()]).expect("old selection"));
   data::apply_in(&screen.root, ProfileChange::SaveDraft(id, profile)).expect("fixture");
   screen.open(id);
-  let mut select = screen
-    .window
-    .tree
-    .get_element_by_id_mut("agent-connection")
-    .and_then(|element| element.as_select())
-    .expect("connection select");
-  let index = select
-    .labels()
-    .iter()
-    .position(|label| &**label == "Anthropic API")
+  screen.click("agent-connection");
+  let option = (0..8)
+    .map(|index| format!("agent-connection-option-{index}"))
+    .find(|id| screen.exists(id) && screen.text(&format!("{id}-label")).contains("Anthropic API"))
     .expect("API option");
-  select.commit(index);
-  screen.window.pass();
+  screen.click(&option);
   screen.set("agent-custom-model", "claude-test");
   screen.click("agent-tab-permissions");
   assert!(
@@ -333,4 +326,24 @@ fn agents_delayed_folder_add_preserves_removal_and_saved_permissions() {
     .map(|folder| folder.as_str())
     .collect();
   assert_eq!(folders, [".orchester/build-b"]);
+}
+
+#[test]
+fn agents_connection_menu_names_each_connections_cli_and_account() {
+  let mut screen = Agents::new(true);
+  let id = screen.profile(false);
+  screen.open(id);
+  screen.click("agent-connection");
+  screen.until("the connections", |s| s.exists("agent-connection-option-0"));
+  let entry = screen.text("agent-connection-option-0");
+  assert!(entry.contains("account Default"), "{entry}");
+  // What follows the comma goes on in lower case ("account Default, not checked yet · …").
+  let (_, detail) = entry
+    .split_once("account Default, ")
+    .expect("the account's detail after a comma");
+  assert!(detail.chars().next().is_some_and(char::is_lowercase), "{entry}");
+  assert!(
+    screen.exists("agent-connection-option-0-icon"),
+    "each entry leads with its icon"
+  );
 }

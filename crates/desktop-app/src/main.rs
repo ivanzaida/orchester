@@ -8,8 +8,8 @@ use lurq::app::{App, Tree, WindowCornerRadius, wgpu_render::WgpuRenderEngine, wi
 use orchester_app::{
   app_log,
   appearance::{Appearance, ThemeSetting, system},
-  brand, i18n,
-  mcp::{self, AppMcp, DiscoveryFolder, McpSettings, McpStatus, WindowLink},
+  brand, clipboard, i18n,
+  mcp::{self, AppMcp, McpKind, McpLink, McpMode, McpSettings, McpStatus, WindowLink},
   root::{Root, RootProps},
   startup::Launch,
   system_icon, theme,
@@ -31,6 +31,11 @@ fn main() {
   // where the window opens, or why there is no session.
   let launch = Launch::begin(runtime.handle(), log);
   let workspace = launch.workspace();
+  // Only this window moves a removed account's folder to the person's Recycle Bin / Trash; tests and QA copies have
+  // a trash of their own.
+  if let Some(workspace) = workspace {
+    workspace.use_trash(std::sync::Arc::new(orchester_workspace::accounts::trash::SystemTrash));
+  }
   let appearance = appearance(&runtime, workspace);
   let mut app = App::new();
   app.set_tokio_handle(runtime.handle().clone());
@@ -48,16 +53,22 @@ fn main() {
     source = mcp_settings.source().name(),
     "agents' control of the window"
   );
-  // Started before the root mounts, so the status bar shows its port from the first frame.
-  let config = mcp::config(mcp_settings, &link, &appearance, launch.services(), app.i18n());
-  let server = AppMcp::start(
-    &mut tree,
-    runtime.handle(),
-    &DiscoveryFolder::User,
-    config,
-    &link.input_gate(),
+  // Started before the root mounts, so the status bar shows its address from the first frame.
+  let server = McpMode::of_build(workspace).map(|mode| {
+    let config = mcp::config(mcp_settings, &link, &appearance, launch.services(), app.i18n());
+    AppMcp::start(
+      &mut tree,
+      runtime.handle(),
+      mode,
+      (config, mcp_settings),
+      &link.input_gate(),
+    )
+  });
+  let mcp = server.as_ref().map_or_else(
+    // `McpMode::of_build` logged why there is none.
+    || McpLink::without_server(McpStatus::unavailable(McpKind::Installation, mcp_settings)),
+    McpLink::new,
   );
-  let mcp = McpStatus::of(server.as_ref(), mcp_settings);
   let start = launch.start();
   tree.mount_root::<Root>(&mut app, RootProps { link, mcp, start });
 
@@ -94,7 +105,10 @@ fn main() {
 
   // `run` returns once the window has closed: the server stops and its discovery file goes, then the
   // runners stop and the session records its end.
-  drop(server);
+  if let Some(server) = server {
+    server.shutdown();
+  }
+  clipboard::clear_at_exit();
   launch.end();
 }
 

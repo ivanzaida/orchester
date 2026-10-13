@@ -113,6 +113,9 @@ serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 # Content addresses of project blobs (`docs/architecture/storage.md`, "Blobs"); pure Rust.
 sha2 = "0.11"
+# A socket set up before it binds: `orchester-app`'s MCP server takes its port with SO_EXCLUSIVEADDRUSE on Windows,
+# which std's one-call bind cannot set (`mcp::bind`). Already built for tokio.
+socket2 = "0.6"
 # Pull request syntax highlighting with Sublime grammars. Without default features and with
 # `regex-fancy` it needs no C regex library (onig), so it builds the same on Windows and macOS;
 # `default-syntaxes` bundles the grammars, and no themes or HTML output are compiled in.

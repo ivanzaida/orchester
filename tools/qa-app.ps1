@@ -8,20 +8,21 @@
 # 2. Copies the programs into .tmp/qa/<task>/bin/, which keeps its own orchester.db beside them.
 # 3. Seeds a new repository .tmp/qa/<task>/repo-<scenario> (examples/seed; -FakeAgents points the
 #    project's Codex connection at the copied fake) and registers it in that orchester.db.
-# 4. Starts the copied app with ORCHESTER_APP_MCP_START_WITHOUT_FOCUS=1 and window control on, and
-#    prints its pid and its MCP discovery file. Stop it by that pid when done.
+# 4. Starts the copied app with ORCHESTER_APP_MCP_START_WITHOUT_FOCUS=1, window control on and
+#    ORCHESTER_APP_MCP_DISCOVERY=.tmp/qa/<task>/mcp/ (a free port and a new token on each start, written
+#    to <pid>.json there; never the installed app's fixed address or stored token), and prints its pid,
+#    that folder and its MCP discovery file. Stop it by that pid when done.
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
-# only cargo's target folder and the app's MCP discovery file in the user's discovery folder: never the
-# user's install (E:\projects\orchester) nor a real repository. The app's console output goes to
-# .tmp/qa/<task>/app.log and app.err.log.
+# only cargo's target folder: never the user's install (E:\projects\orchester), the user's discovery
+# folder nor a real repository. The app's console output goes to .tmp/qa/<task>/app.log and app.err.log.
 param(
     [Parameter(Mandatory = $true)][string]$Name,
     # The seed's scenarios (crates/desktop-app/examples/seed/kontur/scenarios/mod.rs), checked before
     # anything under .tmp/qa/<task>/ is replaced.
     [Parameter(Mandatory = $true)]
-    [ValidateSet("empty", "tasks", "task-states", "conversation", "changes", "cards", "decisions", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty")]
+    [ValidateSet("empty", "tasks", "task-states", "conversation", "changes", "cards", "decisions", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts")]
     [string]$Scenario,
     [switch]$FakeAgents,
     [switch]$NoRunner
@@ -42,10 +43,12 @@ $qaRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot ".tmp/qa"))
 $qa = Join-Path $qaRoot $Name
 $bin = Join-Path $qa "bin"
 $repo = Join-Path $qa "repo-$Scenario"
+# The QA copy's MCP discovery folder (ORCHESTER_APP_MCP_DISCOVERY).
+$mcp = Join-Path $qa "mcp"
 
 # Only .tmp/qa/<task>/ of this checkout, and never inside the user's install.
 $install = [System.IO.Path]::GetFullPath("E:\projects\orchester")
-foreach ($path in @($qa, $bin, $repo)) {
+foreach ($path in @($qa, $bin, $repo, $mcp)) {
     $full = [System.IO.Path]::GetFullPath($path)
     if (-not $full.StartsWith($qaRoot + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "refusing ${full}: QA data stays under $qaRoot"
@@ -57,7 +60,7 @@ foreach ($path in @($qa, $bin, $repo)) {
 
 # A junction or link on the way would send the removal and the copies somewhere else.
 $tmp = Join-Path $repositoryRoot ".tmp"
-foreach ($folder in @($repositoryRoot, $tmp, $qaRoot, $qa, $bin, $repo)) {
+foreach ($folder in @($repositoryRoot, $tmp, $qaRoot, $qa, $bin, $repo, $mcp)) {
     $item = Get-Item -Force -LiteralPath $folder -ErrorAction SilentlyContinue
     if ($item -and ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
         throw "refusing ${folder}: it is a junction or a link"
@@ -97,6 +100,7 @@ if (Test-Path $qa) {
     Remove-Item -Recurse -Force $qa
 }
 New-Item -ItemType Directory -Force -Path $bin | Out-Null
+New-Item -ItemType Directory -Force -Path $mcp | Out-Null
 $programs = @("orchester-app")
 if (-not $NoRunner) { $programs += "orchester-runner" }
 if ($FakeAgents) { $programs += @("orchester-fake-codex", "orchester-fake-claude") }
@@ -111,6 +115,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 $env:ORCHESTER_APP_MCP_START_WITHOUT_FOCUS = "1"
 $env:ORCHESTER_APP_MCP_WINDOW_CONTROL = "on"
+$env:ORCHESTER_APP_MCP_DISCOVERY = $mcp
 $appProgram = Join-Path $bin "orchester-app$exe"
 $appLog = Join-Path $qa "app.log"
 $appErrors = Join-Path $qa "app.err.log"
@@ -134,13 +139,7 @@ else {
         -RedirectStandardOutput $appLog -RedirectStandardError $appErrors
 }
 
-$discoveryFolder = if ($onWindows) {
-    Join-Path $env:LOCALAPPDATA "orchester-app-mcp"
-}
-else {
-    Join-Path $HOME "Library/Application Support/orchester-app-mcp"
-}
-$discovery = Join-Path $discoveryFolder "$($app.Id).json"
+$discovery = Join-Path $mcp "$($app.Id).json"
 $deadline = (Get-Date).AddSeconds(60)
 while (-not (Test-Path $discovery) -and -not $app.HasExited -and (Get-Date) -lt $deadline) {
     Start-Sleep -Milliseconds 250
@@ -149,6 +148,7 @@ if ($app.HasExited) {
     throw "orchester-app (pid $($app.Id)) exited; see $appLog and $appErrors"
 }
 Write-Output "pid $($app.Id)"
+Write-Output "mcp $mcp"
 Write-Output "discovery $discovery"
 if (-not (Test-Path $discovery)) {
     Write-Output "the discovery file is not there yet after 60 s; the app may still be starting"

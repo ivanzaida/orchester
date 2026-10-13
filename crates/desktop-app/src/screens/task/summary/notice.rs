@@ -277,6 +277,13 @@ fn stopped(ctx: &Ctx, run: &RunView, limit: RunLimit) -> Said {
       ctx.t("summary.notice.groupBudgetTitle"),
       ctx.t_args("summary.notice.groupBudgetBody", [("kept", &*kept)]),
     ),
+    RunLimit::PlanLimit { .. } => (
+      ctx.t("summary.notice.planLimitTitle"),
+      ctx.t_args(
+        "summary.notice.planLimitBody",
+        [("step", step.as_str()), ("agent", agent.as_str()), ("kept", &*kept)],
+      ),
+    ),
     RunLimit::DailyBudget => (
       ctx.t("summary.notice.dailyBudgetTitle"),
       ctx.t_args(

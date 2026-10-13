@@ -21,7 +21,7 @@ use lurq::{
 };
 use orchester_app::{
   i18n,
-  mcp::McpStatus,
+  mcp::{McpKind, McpLink, McpSettings, McpStatus},
   navigation::{Navigation, tabs::TabSet},
   project::{ProjectState, Projects},
   root::Start,
@@ -104,7 +104,10 @@ impl Component for ScreensRoot {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     ctx.provide(ctx.props::<RouterSlot>().1.clone());
-    ctx.provide(McpStatus::Unavailable);
+    ctx.provide(McpLink::without_server(McpStatus::unavailable(
+      McpKind::Installation,
+      McpSettings::of_build(),
+    )));
     ctx.provide(self.navigation.clone());
     ctx.provide(self.projects.clone());
     Router::mount(ctx, self.router.clone())

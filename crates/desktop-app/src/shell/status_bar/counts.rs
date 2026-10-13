@@ -13,6 +13,7 @@ use lurq::{
     theme::{PaletteColor, SpacingSize},
   },
   components::{Button, Row},
+  core::ElementRef,
   layout::{Alignment, layout_kind::ShrinkLimit},
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -22,6 +23,7 @@ use orchester_workspace::{runner::state::RunnerState, tasks::data::ProjectTasks}
 use super::{
   facts::{BarAction, Dispatch, ProjectFacts},
   item::{ITEM_HEIGHT, dropping, give_way, glyph, item, label, pressed},
+  mcp::mcp_item,
 };
 use crate::{
   mcp::McpStatus,
@@ -187,12 +189,9 @@ fn tokens(ctx: &Ctx, project: &ProjectFacts, unknown: &str, press: impl Fn() + S
 
 /// The app's MCP server (it never gives way), whether agents may control the window, and the version
 /// (the first to drop out).
-pub fn app(ctx: &Ctx, mcp: McpStatus) -> Vec<Element> {
+pub fn app(ctx: &mut Ctx, (mcp, bar): (&McpStatus, &ElementRef), dispatch: &Dispatch) -> Vec<Element> {
   let mut items = Vec::new();
-  if let McpStatus::Listening {
-    window_control: true, ..
-  } = mcp
-  {
+  if mcp.window_control() {
     items.push(
       item("status-window-control")
         .flex_shrink(1.0)
@@ -203,16 +202,7 @@ pub fn app(ctx: &Ctx, mcp: McpStatus) -> Vec<Element> {
         .into(),
     );
   }
-  let mcp = match mcp {
-    McpStatus::Listening { port, .. } => ctx.t_args("shell.status.mcpListening", [("port", port)]),
-    McpStatus::Unavailable => ctx.t("shell.status.mcpUnavailable"),
-  };
-  items.push(
-    item("status-mcp")
-      .child(glyph(Icon::RadioTower, PaletteColor::TextMuted))
-      .child(label(&mcp, PaletteColor::TextMuted))
-      .into(),
-  );
+  items.push(mcp_item(ctx, mcp, dispatch, bar));
   items.push(version(ctx));
   items
 }

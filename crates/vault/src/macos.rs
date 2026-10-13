@@ -1,6 +1,7 @@
 //! The macOS login keychain: one generic password per secret, with the service
 //! `orchester:<project id>` and the account `<secret id>` (a shared server's token: the service
-//! `orchester-server:<server id>` and the account `token`). Keychain Access lists it under the
+//! `orchester-server:<server id>` and the account `token`; the app's MCP token: the service `orchester-app-mcp`
+//! and the account `<installation id>`). Keychain Access lists it under the
 //! service. Values are stored as their UTF-8 bytes.
 
 use apple_native_keyring_store::keychain::Store;

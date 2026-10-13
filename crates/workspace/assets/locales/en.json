@@ -376,7 +376,12 @@
       "nativeNotAvailable": "Step “{{step}}” runs on a native agent connection. Native agents are not available in this version yet; choose a Codex or Claude Code connection for its agent profile.",
       "notAGitRepository": "The project folder is not a git repository.",
       "noCommits": "The repository has no commit to start the run from.",
-      "commandListNotOffered": "Step “{{step}}” lists the commands it may run, but its agent profile now asks before commands. This step's command list doesn't fit its profile any more; a person updates the step."
+      "commandListNotOffered": "Step “{{step}}” lists the commands it may run, but its agent profile now asks before commands. This step's command list doesn't fit its profile any more; a person updates the step.",
+      "account": {
+        "none": "Step “{{step}}” runs on a connection that has no account. Choose one for the connection in Connections.",
+        "folderMissing": "Step “{{step}}” runs on an account whose folder {{folder}} no longer exists. Remove the account or choose another one for the connection.",
+        "unsupported": "Step “{{step}}” runs on an account that is not supported on this computer yet; only Default is used for this CLI here."
+      }
     },
     "start": {
       "incomplete": "Add the missing details before running the task.",
@@ -406,7 +411,8 @@
       "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue.",
       "notInterrupted": "The run is not interrupted.",
       "notWaiting": "The run does not wait for your decision any more.",
-      "failed": "The runner could not do this; its log has the details."
+      "failed": "The runner could not do this; its log has the details.",
+      "notAnotherAccount": "Choose a connection of the same CLI that runs on another account and can start now."
     },
     "conversation": {
       "group": {
@@ -682,6 +688,10 @@
     "keychainUnsupported": "Storing secrets in the system keychain is not supported on this platform yet.",
     "keychainDenied": "The system keychain refused access. Unlock it and try again.",
     "keychainFailed": "The system keychain could not store the change. The log has the details.",
+    "secretStoreDenied": "Access denied.",
+    "secretStoreDeniedMacos": "Access denied: the keychain is locked, or Orchester was not allowed to use it.",
+    "secretStoreFailed": "The secret store failed. The log has the details.",
+    "appMcpNotInstallation": "Only the installed app's MCP server has a fixed address and a stored token; this copy takes a new port and token on each start.",
     "roleRequired": "Enter a profile name to save the draft.",
     "connectionRequired": "Choose a connection.",
     "modelRequired": "Choose a model or enter a model id.",
@@ -874,7 +884,9 @@
       "blankDescription": "Write a description first: agents choose a skill by it",
       "blankBody": "Write the body first: it is what an agent loads"
     },
-    "library": { "loadFailed": "Skills and repository agent files could not be read." },
+    "library": {
+      "loadFailed": "Skills and repository agent files could not be read."
+    },
     "editorErrors": {
       "nameRequired": "Enter a skill name.",
       "nameTaken": "{{name}} is already a skill in this project. Choose another name.",
@@ -954,7 +966,8 @@
       "mcpArgument": "An argument is empty or holds a line break: {{value}}",
       "mcpVariable": "A variable is empty or holds a line break: {{value}}",
       "mcpExemptTool": "A tool name is empty or holds a line break: {{value}}",
-      "mcpFieldNotApplicable": "{{field}} is not a field of this server's transport: a program has args, working_directory and environment, a remote server bearer_secret."
+      "mcpFieldNotApplicable": "{{field}} is not a field of this server's transport: a program has args, working_directory and environment, a remote server bearer_secret.",
+      "accountChoice": "Choosing the account a connection runs on: it decides whose sign-in, and which organisation's provider, gets the project's work."
     },
     "githubConnectionName": "GitHub · {{host}}",
     "projectTools": {
@@ -984,6 +997,8 @@
       "toolCallsUnasked": "Tool calls no longer asked about, which the latest version asks about.",
       "autoApprove": "Approving automatically, where the latest version asks a person.",
       "mcpServers": "MCP servers the latest version does not give its agents.",
+      "reviewerAccount": "Auto mode's reviewer would run on another account: another sign-in, and possibly another organisation's provider, would read the runs' requests.",
+      "account": "Its agents would run on another account than the latest version's: another sign-in, and possibly another organisation's provider, would get the project's work.",
       "program": "{{program}} is not a copy of the CLI found on the search path.",
       "variable": "{{name}} would change: a variable can change what programs load, where they connect, what they trust or where tools keep their configuration.",
       "approvalGate": "Step {{step}} would no longer wait for a person's approval.",
@@ -1308,6 +1323,29 @@
       "heldStale": "{{holder}} has taken this task and their claim has gone stale; nothing started. Take it over from the task page once that is possible.",
       "heldUnknown": "Someone else has taken this task, so nothing started.",
       "merged": "This task was merged; nobody takes it into work again."
+    }
+  },
+  "accounts": {
+    "errors": {
+      "nameTaken": "Another account of this CLI is already named {{name}}. Each account of a CLI has its own name.",
+      "folderTaken": "Another account already uses this folder. Two accounts can't share one.",
+      "insideRepository": "This folder is inside the repository {{repository}}. Choose one outside every project and repository.",
+      "folderNotAbsolute": "Choose a folder by its full path.",
+      "folderOutside": "Choose a folder in your home folder's dot folders or in your applications' data, where agents ask before reading.",
+      "accountsFolder": "This is Orchester's folder for the accounts it creates, or lies in it or holds it. Choose a folder of your own outside it.",
+      "createFolder": "The account's folder could not be created. The log has the system's reason.",
+      "unsupported": "Accounts other than Default are not supported for this CLI on this computer yet.",
+      "removeDefault": "Default is the CLI's own folder and can't be removed.",
+      "inUse": "A run is on this account. Remove it after the run ends, or stop that run first.",
+      "moveTarget": "Choose another account of the same CLI for its connections, or No account.",
+      "notCreated": "Orchester didn't create this folder, so it stays where it is.",
+      "projectsUnreadable": "{{projects}} could not be read, so a run there may be on this account. Remove it once they open.",
+      "trashFailed": "Removed. Its folder stays at {{folder}} because the system could not move it to the Recycle Bin or Trash; the log has the system's reason.",
+      "noTrash": "This window can't move folders to the Recycle Bin or Trash. Untick it to remove the account and keep its folder.",
+      "holdsAnotherAccount": "This folder holds another account's folder or lies inside one, so moving it to the Recycle Bin or Trash would take part of that account. It can't be moved there.",
+      "cliMissing": "The CLI isn't on the PATH. Install it, then check again.",
+      "folderMissing": "The account's folder {{folder}} no longer exists.",
+      "terminal": "The terminal could not be opened. Run the command in a terminal of your own."
     }
   }
 }

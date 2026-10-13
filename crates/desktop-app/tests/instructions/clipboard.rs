@@ -9,7 +9,7 @@ use lurq::{
   node::Element,
 };
 use orchester_app::{
-  mcp::McpStatus,
+  mcp::{McpKind, McpLink, McpSettings, McpStatus},
   root::{Root, RootProps},
   ui::clipboard::Clipboard,
 };
@@ -55,7 +55,7 @@ fn instructions_copied_receipt_resets_for_new_event_and_draft_without_rewriting_
     HostProps {
       root: RootProps {
         link: screen.window.link.clone(),
-        mcp: McpStatus::Unavailable,
+        mcp: McpLink::without_server(McpStatus::unavailable(McpKind::Installation, McpSettings::of_build())),
         start: screen.window.launch.start(),
       },
       clipboard,

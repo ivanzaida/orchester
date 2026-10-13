@@ -166,6 +166,11 @@ impl AgentConnection {
     self.connection.set_executable(executable)
   }
 
+  /// See [`Connection::set_account`].
+  pub fn set_account(&mut self, account: super::ConnectionAccount) -> Result<(), ConnectionError> {
+    self.connection.set_account(account)
+  }
+
   /// The model API of a native connection.
   pub const fn api(&self) -> Option<&ApiEndpoint> {
     self.connection.endpoint.api()

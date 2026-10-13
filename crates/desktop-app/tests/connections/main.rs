@@ -12,6 +12,7 @@ mod kontur;
 #[path = "../support/mod.rs"]
 mod support;
 
+mod accounts;
 mod add_cli;
 mod harness;
 mod list;

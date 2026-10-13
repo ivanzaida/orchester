@@ -15,6 +15,7 @@ use orchester_workspace::{
   agents::data::VersionState,
   instructions::{
     data::{InstructionEntry, ProjectInstructions},
+    editor,
     form::FormErrors,
   },
   messages::Message,
@@ -329,7 +330,7 @@ impl Editor {
       .state()
       .get()
       .error
-      .is_some_and(|error| error.key == "errors.draftChanged");
+      .is_some_and(|error| editor::needs_reload(&error));
     let retry_keeps_draft =
       self.work.publication_failed() && !conflict && matches!(self.work.retry(&self.fields), Some(Write::Publish(..)));
     if props.entry.as_ref() == Some(entry)

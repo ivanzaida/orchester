@@ -7,8 +7,10 @@ use std::{
 };
 
 use orchester_core::{
+  account::AgentAccount,
   connection::{
-    AgentConnection, AgentProvider, Connection, ConnectionCheck, ConnectionError, GitHubConnection, mcp::McpServer,
+    AgentConnection, AgentProvider, Connection, ConnectionAccount, ConnectionCheck, ConnectionError, GitHubConnection,
+    mcp::McpServer,
   },
   id::{ConnectionId, ResourceId},
   name::Name,
@@ -205,7 +207,9 @@ impl SaveError {
         | ConnectionError::NotGitHub(_)
         | ConnectionError::CheckKindMismatch(_)
         | ConnectionError::PresetNotOffered
-        | ConnectionError::FallbackNotOffered,
+        | ConnectionError::FallbackNotOffered
+        | ConnectionError::NoAccounts(_)
+        | ConnectionError::AccountOfOtherCli,
       ) => Message::new("errors.storage"),
       // Only a native connection has no program to point at.
       Self::Connection(ConnectionError::EndpointMismatch(_)) | Self::NativeNotAvailable => {
@@ -216,8 +220,31 @@ impl SaveError {
   }
 }
 
-/// Adds or updates the connection in `draft` with its check.
+/// Adds or updates the connection in `draft` with its check. An edited connection keeps its account; a new one is on
+/// Default.
 pub fn save<S>(store: &mut S, draft: ConnectionDraft, now: Timestamp) -> Result<ConnectionId, SaveError>
+where
+  S: ConnectionStore<Error = StoreError>,
+{
+  save_with(store, draft, None, now)
+}
+
+/// Adds or updates the connection in `draft` on `account`, with its check, which was made on that account
+/// (`probe::check_on`).
+pub fn save_on_account_in(
+  repo_root: &Path,
+  draft: ConnectionDraft,
+  account: ConnectionAccount,
+) -> Result<ConnectionId, SaveError> {
+  save_with(&mut ProjectDb::open(repo_root)?, draft, Some(account), Timestamp::now())
+}
+
+fn save_with<S>(
+  store: &mut S,
+  draft: ConnectionDraft,
+  account: Option<ConnectionAccount>,
+  now: Timestamp,
+) -> Result<ConnectionId, SaveError>
 where
   S: ConnectionStore<Error = StoreError>,
 {
@@ -232,6 +259,9 @@ where
       draft.executable,
       now,
     )?;
+    if let Some(account) = account.clone() {
+      connection.set_account(account)?;
+    }
     connection.record_check(draft.check)?;
     store.create_connection(&connection)?;
     return Ok(connection.id());
@@ -240,9 +270,27 @@ where
   let mut connection = AgentConnection::try_from(stored)?;
   connection.rename(draft.name);
   connection.set_executable(draft.executable)?;
+  if let Some(account) = account {
+    connection.set_account(account)?;
+  }
   connection.record_check(draft.check)?;
   store.save_connection(&connection)?;
   Ok(id)
+}
+
+/// Runs connection `id` of the project at `repo_root` on `account`, an account of its CLI, and checks it there: the
+/// check of the previous account read another sign-in.
+pub fn set_account_in(repo_root: &Path, id: ConnectionId, account: &AgentAccount) -> Result<(), SaveError> {
+  let mut db = ProjectDb::open(repo_root)?;
+  let mut connection = db.connection(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
+  connection.choose_account(account)?;
+  if let Some(check) = probe::recheck(&connection) {
+    connection
+      .record_check(check)
+      .expect("the check was made for the connection's own kind");
+  }
+  db.save_connection(&connection)?;
+  Ok(())
 }
 
 pub fn save_in(repo_root: &Path, draft: ConnectionDraft) -> Result<ConnectionId, SaveError> {

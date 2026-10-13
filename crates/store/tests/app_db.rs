@@ -1,6 +1,7 @@
 use std::{fs, path::Path};
 
 use orchester_core::{
+  app_mcp::{InvalidPort, McpPort},
   appearance::ThemeSetting,
   id::{ProjectId, ServerId, UserId},
   name::Name,
@@ -383,4 +384,49 @@ fn the_apps_theme_and_window_control_start_unset_and_are_kept_through_the_migrat
   assert_eq!(db.mcp_window_control().expect("read"), Some(true));
   db.set_mcp_window_control(None).expect("back to the build's choice");
   assert_eq!(db.mcp_window_control().expect("read"), None);
+}
+
+#[test]
+fn app_mcp_server_starts_on_at_the_default_port_and_keeps_what_is_set() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let mut db = AppDb::open(&path).expect("create");
+  assert!(db.mcp_server_enabled().expect("read"), "on until turned off");
+  assert_eq!(db.mcp_port().expect("read"), McpPort::DEFAULT);
+  assert_eq!(McpPort::DEFAULT.get(), 47821);
+  db.set_mcp_server_enabled(false).expect("save");
+  db.set_mcp_port(McpPort::new(47822).expect("a valid port"))
+    .expect("save");
+  drop(db);
+  let db = AppDb::open(&path).expect("reopen");
+  assert!(!db.mcp_server_enabled().expect("read"));
+  assert_eq!(db.mcp_port().expect("read").get(), 47822);
+}
+
+#[test]
+fn app_mcp_installation_id_is_given_once_and_kept() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let mut db = AppDb::open(&path).expect("create");
+  let first = db.installation_id().expect("given");
+  assert_eq!(db.installation_id().expect("read"), first);
+  drop(db);
+  let mut db = AppDb::open(&path).expect("reopen");
+  assert_eq!(db.installation_id().expect("read"), first, "kept across starts");
+  let other = tempfile::tempdir().expect("temporary directory");
+  let mut elsewhere = AppDb::open(&other.path().join("orchester.db")).expect("create");
+  assert_ne!(
+    elsewhere.installation_id().expect("given"),
+    first,
+    "each installation has its own"
+  );
+}
+
+#[test]
+fn app_mcp_port_outside_1024_to_65535_is_refused() {
+  assert_eq!(McpPort::parse(" 47821 ").map(McpPort::get), Ok(47821));
+  for typed in ["", "0", "80", "1023", "65536", "4782a", "-1", "123456"] {
+    assert_eq!(McpPort::parse(typed), Err(InvalidPort), "{typed:?}");
+  }
+  assert_eq!(McpPort::new(1024).map(McpPort::get), Ok(1024));
 }

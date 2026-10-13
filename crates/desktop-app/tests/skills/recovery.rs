@@ -9,7 +9,7 @@ use lurq::{
   node::Element,
 };
 use orchester_app::{
-  mcp::McpStatus,
+  mcp::{McpKind, McpLink, McpSettings, McpStatus},
   root::{Root, RootProps},
   routes::{ProjectPage, Route},
   services::reference_picker::ReferencePicker,
@@ -47,7 +47,7 @@ fn with_picker(picker: ReferencePicker) -> Skills {
   let props = HostProps {
     root: RootProps {
       link: s.window.link.clone(),
-      mcp: McpStatus::Unavailable,
+      mcp: McpLink::without_server(McpStatus::unavailable(McpKind::Installation, McpSettings::of_build())),
       start: s.window.launch.start(),
     },
     picker,

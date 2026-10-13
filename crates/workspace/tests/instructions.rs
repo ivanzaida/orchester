@@ -90,18 +90,12 @@ fn instructions_delayed_save_and_publish_refuse_another_writers_draft() {
   )
   .expect("valid instruction fixture");
   let outside = editor::save_in(root.path(), &original, body("Outside")).expect("valid instruction fixture");
-  assert_eq!(
-    editor::save_in(root.path(), &original, body("Delayed"))
-      .expect_err("an outside change is refused")
-      .key,
-    "errors.draftChanged"
-  );
-  assert_eq!(
-    editor::publish_in(root.path(), &original)
-      .expect_err("an outside change is refused")
-      .key,
-    "errors.draftChanged"
-  );
+  let save_error = editor::save_in(root.path(), &original, body("Delayed")).expect_err("an outside change is refused");
+  assert_eq!(save_error.key, "errors.draftChanged");
+  assert!(editor::needs_reload(&save_error));
+  let publish_error = editor::publish_in(root.path(), &original).expect_err("an outside change is refused");
+  assert_eq!(publish_error.key, "errors.draftChanged");
+  assert!(editor::needs_reload(&publish_error));
   assert_eq!(
     ProjectInstructions::load_in(root.path())
       .expect("valid instruction fixture")
@@ -118,7 +112,8 @@ fn instructions_stale_and_blank_drafts_remain_saved_after_publication_is_refused
     &body(""),
   )
   .expect("valid instruction fixture");
-  assert!(editor::publish_in(root.path(), &blank).is_err());
+  let blank_error = editor::publish_in(root.path(), &blank).expect_err("blank publication is refused");
+  assert!(!editor::needs_reload(&blank_error));
   let initial = editor::create_in(
     root.path(),
     Name::new("Standards").expect("valid instruction fixture"),

@@ -29,6 +29,7 @@ mod handoff;
 mod idle;
 mod permissions;
 mod plan;
+mod plan_limit;
 mod prepare;
 mod question;
 mod record;
@@ -53,7 +54,7 @@ use std::{
 };
 
 use orchester_core::{
-  id::{IdempotencyKey, RunId, TaskId},
+  id::{ConnectionId, IdempotencyKey, RunId, TaskId},
   integration::Leftovers,
   run::{InterruptCause, RaisedLimits, RunStatus},
   secret::SecretVault,
@@ -126,6 +127,8 @@ struct Inner {
   /// Read when the scheduler is made, as the runner starts, before the desktop connects.
   earlier_groups: task_groups::EarlierGroups,
   blocked_runs: blocked_runs::BlockedRuns,
+  /// Runs stopped at their account's plan limit that a timer continues at its reset.
+  plan_waits: plan_limit::PlanWaits,
 }
 
 impl Scheduler {
@@ -142,8 +145,13 @@ impl Scheduler {
         group_retries: task_groups::GroupRetries::default(),
         earlier_groups: task_groups::EarlierGroups::read(project_root),
         blocked_runs: blocked_runs::BlockedRuns::default(),
+        plan_waits: plan_limit::PlanWaits::default(),
       }),
     }
+  }
+
+  fn plan_waits(&self) -> &plan_limit::PlanWaits {
+    &self.inner.plan_waits
   }
 
   /// Runs being executed right now. A run its task settled is not, even while the task still
@@ -299,6 +307,13 @@ impl Scheduler {
   /// Cancels `run`: ends its agent, keeps its worktree and branch. Returns once the run is
   /// recorded as cancelled.
   pub async fn cancel_run(&self, run: RunId) -> Result<(), Rejection> {
+    self.plan_waits().clear(run);
+    let cancelled = self.cancel_now(run).await;
+    self.wait_again_if_refused(&cancelled);
+    cancelled
+  }
+
+  async fn cancel_now(&self, run: RunId) -> Result<(), Rejection> {
     loop {
       let one_at_a_time = self.inner.continuing.lock().await;
       if self.inner.board.is_stopping() {
@@ -323,7 +338,39 @@ impl Scheduler {
 
   /// Continues paused run `run`; a step it stopped in continues the agent's CLI session.
   pub async fn resume_run(&self, run: RunId) -> Result<(), Rejection> {
-    self.continue_settled(run, |db, root| idle::resume(db, root, run)).await
+    self.plan_waits().clear(run);
+    let resumed = self.continue_settled(run, |db, root| idle::resume(db, root, run)).await;
+    self.wait_again_if_refused(&resumed);
+    resumed
+  }
+
+  /// A run whose timer a person's refused request dropped gets it back.
+  fn wait_again_if_refused(&self, result: &Result<(), Rejection>) {
+    if result.is_err() {
+      self.wait_for_plan_resets();
+    }
+  }
+
+  /// Continues `run`, stopped at its account's plan limit, now on `connection`, another account's connection of
+  /// the same CLI, as a new session for the stopped step and this run only.
+  pub async fn continue_on_connection(&self, run: RunId, connection: ConnectionId) -> Result<(), Rejection> {
+    self.plan_waits().clear(run);
+    let continued = self
+      .continue_settled(run, |db, root| plan_limit::continue_on(db, root, run, connection))
+      .await;
+    self.wait_again_if_refused(&continued);
+    continued
+  }
+
+  /// Continues `run`, stopped at its account's plan limit, on the same account now, as a person asked; it stops there
+  /// again if the CLI still refuses.
+  pub async fn try_at_plan_limit(&self, run: RunId) -> Result<(), Rejection> {
+    self.plan_waits().clear(run);
+    let tried = self
+      .continue_settled(run, |db, root| plan_limit::try_now(db, root, run))
+      .await;
+    self.wait_again_if_refused(&tried);
+    tried
   }
 
   /// Raises the limits of `run`, stopped at a limit, and continues it.
@@ -501,7 +548,12 @@ impl Scheduler {
       controls,
       settled: settled.clone(),
     };
-    let task = tokio::spawn(RunTask::new(db, prepared, context).drive());
+    let scheduler = self.clone();
+    let task = tokio::spawn(async move {
+      RunTask::new(db, prepared, context).drive().await;
+      // A run its task stopped at a plan limit continues at the reset.
+      scheduler.wait_for_plan_resets();
+    });
     active.insert(run, ActiveRun { control, task, settled });
     Ok(())
   }

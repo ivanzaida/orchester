@@ -83,7 +83,7 @@ impl Run {
       RunEventKind::Paused { reason } => {
         self.expect_status(kind, self.status == RunStatus::Running)?;
         match reason {
-          PauseReason::LimitReached(RunLimit::StepBudget { execution }) => {
+          PauseReason::LimitReached(RunLimit::StepBudget { execution } | RunLimit::PlanLimit { execution }) => {
             self.expect_step(kind, *execution, StepStatus::is_open)
           }
           _ => Ok(()),
@@ -93,7 +93,10 @@ impl Run {
       RunEventKind::Resumed => match self.status {
         // The daily project budget is shared; a run stopped by it continues once the day has
         // room again, which the runner checks, not with limits of its own.
-        RunStatus::Paused(PauseReason::Requested | PauseReason::LimitReached(RunLimit::DailyBudget)) => Ok(()),
+        // An account's plan limit is not the run's either: the run continues at its reset, or on another account.
+        RunStatus::Paused(
+          PauseReason::Requested | PauseReason::LimitReached(RunLimit::DailyBudget | RunLimit::PlanLimit { .. }),
+        ) => Ok(()),
         RunStatus::Paused(PauseReason::LimitReached(limit)) => Err(RunError::LimitNotRaised(limit)),
         _ => self.expect_status(kind, false),
       },

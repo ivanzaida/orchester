@@ -20,6 +20,7 @@ pub use self::{
 };
 use crate::{
   command::{Command, SecretVariable},
+  connection::{AgentProvider, ConnectionAccount},
   resource::CommandEnvironment,
 };
 
@@ -109,6 +110,47 @@ pub fn agent_environment(environment: impl IntoIterator<Item = (OsString, OsStri
 /// without regard to case).
 pub fn is_agent_variable(name: &str) -> bool {
   ALLOWED.iter().any(|allowed| allowed.eq_ignore_ascii_case(name))
+}
+
+/// `command`, an agent CLI's of `provider`, on the connection's `account`: with the CLI's folder variable
+/// (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) set to the account's folder, over whatever the environment or the project set,
+/// so the CLI uses that folder's sign-in, settings and sessions. Default leaves the variable as it is.
+pub fn on_account(
+  command: Command,
+  account: &ConnectionAccount,
+  provider: AgentProvider,
+) -> Result<Command, InvocationError> {
+  Ok(match account_variable(account, provider)? {
+    Some((name, folder)) => command.with_env_replaced(name, folder),
+    None => command,
+  })
+}
+
+/// `variables`, an agent CLI's environment, on the connection's `account` ([`on_account`]).
+pub fn account_environment(
+  mut variables: Vec<(String, String)>,
+  account: &ConnectionAccount,
+  provider: AgentProvider,
+) -> Result<Vec<(String, String)>, InvocationError> {
+  if let Some((name, folder)) = account_variable(account, provider)? {
+    variables.retain(|(variable, _)| !variable.eq_ignore_ascii_case(name));
+    variables.push((name.to_owned(), folder.to_owned()));
+  }
+  Ok(variables)
+}
+
+/// The account's folder variable and its value, which must be Unicode to reach the CLI unmangled.
+fn account_variable(
+  account: &ConnectionAccount,
+  provider: AgentProvider,
+) -> Result<Option<(&'static str, &str)>, InvocationError> {
+  let Some((name, folder)) = account.variable(provider) else {
+    return Ok(None);
+  };
+  let value = folder
+    .to_str()
+    .ok_or_else(|| InvocationError::NotUnicode(folder.to_path_buf()))?;
+  Ok(Some((name, value)))
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]

@@ -4,7 +4,9 @@
 use std::path::Path;
 
 use lurq::app::{ctx::Ctx, theme::PaletteColor};
-use orchester_core::connection::{AgentConnection, AgentProvider, ConnectionStatus, GitHubState, mcp::McpServer};
+use orchester_core::connection::{
+  AgentConnection, AgentProvider, ConnectionAccount, ConnectionStatus, GitHubState, mcp::McpServer,
+};
 
 use crate::ui::icon::Icon;
 
@@ -57,6 +59,19 @@ impl Shown {
 
 /// While a check runs (`Checking…` in `uBsQM`).
 pub(super) const CHECKING: Shown = Shown::of(Icon::LoaderCircle, Tone::Busy, "connections.status.checking");
+
+/// A CLI connection on no account (its account was removed with *No account*): runs on it don't start, whatever its
+/// last check said, until a person chooses one.
+const NO_ACCOUNT: Shown = Shown::of(Icon::CircleAlert, Tone::Warning, "connections.status.noAccount");
+
+/// The status of `connection`, whose last check says `status`: *No account* first for a CLI connection without one.
+pub(crate) fn connection_status(connection: &AgentConnection, status: ConnectionStatus) -> Shown {
+  if connection.account() == &ConnectionAccount::Unassigned {
+    NO_ACCOUNT
+  } else {
+    agent_status(status)
+  }
+}
 
 pub(crate) const fn agent_status(status: ConnectionStatus) -> Shown {
   use ConnectionStatus as S;

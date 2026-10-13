@@ -86,6 +86,10 @@ pub fn publish_for_in(
   publish_in(root, expected)
 }
 
+/// A conflicting write whose saved draft must be read again before retrying publication.
+pub fn needs_reload(message: &Message) -> bool {
+  message.key == "errors.draftChanged"
+}
 fn ensure_same(
   expected: &InstructionEntry,
   draft: Option<Draft<Instruction>>,

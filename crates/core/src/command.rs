@@ -117,6 +117,15 @@ impl Command {
     self
   }
 
+  /// Sets `key` for the program only, replacing a variable of the same name (compared without regard to case, as
+  /// Windows does).
+  #[must_use]
+  pub fn with_env_replaced(mut self, key: &str, value: &str) -> Self {
+    self.env.retain(|(name, _)| !name.eq_ignore_ascii_case(key));
+    self.env.push((key.to_owned(), value.to_owned()));
+    self
+  }
+
   /// Hides `key` of the calling process from the program.
   #[must_use]
   pub fn without_env(mut self, key: &str) -> Self {
