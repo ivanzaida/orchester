@@ -236,6 +236,7 @@ fn agent_json(connection: &AgentConnection, secrets: &[Secret]) -> Value {
     "version": version,
     "checked_at": check.map(|check| wire::time(check.at)),
     "models": connection.models().len(),
+    "account": connection.account().id(connection.provider()).map(|account| account.to_string()),
   })
 }
 

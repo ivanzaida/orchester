@@ -16,6 +16,7 @@ mod facts;
 mod item;
 mod mcp;
 mod operations;
+mod plan_limits;
 mod runner;
 
 use lurq::{
@@ -29,7 +30,7 @@ use lurq::{
   layout::{Alignment, layout_kind::ShrinkLimit},
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::ProjectId;
+use orchester_core::{connection::plan_limits::PlanReadings, id::ProjectId};
 use orchester_workspace::activity::{
   Activity, ActivityLog,
   bar::{self, ActivitySlot},
@@ -40,7 +41,7 @@ use self::{
   item::{frame, give_way, glyph, item, label},
 };
 pub use self::{
-  facts::{BarAction, BarFacts, Dispatch, ProjectFacts, ReadFailure, RunnerFacts, Stopping},
+  facts::{AccountLimits, BarAction, BarFacts, Dispatch, ProjectFacts, ReadFailure, RunnerFacts, Stopping},
   item::dot,
   mcp::from_scratch,
 };
@@ -48,7 +49,11 @@ use crate::{
   mcp::{McpLink, McpStatus},
   project::{ProjectFeed, ProjectState, Projects, TasksState},
   routes::Route,
-  services::Services,
+  services::{
+    Services,
+    accounts::{self, Accounts},
+    plan_limits as readings,
+  },
   theme::ExtraColor,
   ui::{icon::Icon, tooltip::Truncated},
 };
@@ -96,8 +101,14 @@ impl Component for StatusBar {
         .unwrap_or_default();
       self.stopper.stopping(&stop, &facts.repo_root, &runs)
     });
+    let readings = readings::readings(ctx);
+    let listed = accounts::listed(ctx);
+    let used = used_accounts(ctx, shown.as_ref().map(|(facts, _)| facts.repo_root.clone()));
     let facts = BarFacts {
-      project: shown.map(|(facts, _)| facts),
+      project: shown.map(|(mut facts, _)| {
+        facts.limits = limits(&listed, &readings, &used);
+        facts
+      }),
       log,
       mcp,
       stopping,
@@ -127,8 +138,55 @@ fn shown(projects: &Projects, project: ProjectId) -> Option<(ProjectFacts, Proje
     tasks,
     usage: feed.usage.get(),
     read_failure,
+    limits: Vec::new(),
   };
   Some((facts, feed))
+}
+
+/// The accounts the project's connections run on, by id, read when the project shows.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Used(Vec<orchester_core::id::AgentAccountId>);
+
+impl DevtoolsInspectable for Used {}
+
+fn used_accounts(ctx: &mut Ctx, repo_root: Option<std::path::PathBuf>) -> Used {
+  ctx
+    .future(repo_root, |repo_root| async move {
+      let Some(repo_root) = repo_root else {
+        return Ok(Used::default());
+      };
+      orchester_workspace::background::run(move || {
+        let connections = orchester_workspace::connections::data::ProjectConnections::load_in(&repo_root)
+          .map_err(|error| orchester_workspace::messages::store_error(&error))?;
+        let mut used: Vec<_> = connections
+          .connections
+          .iter()
+          .filter_map(|connection| connection.account().id(connection.provider()))
+          .collect();
+        used.dedup();
+        Ok::<_, orchester_workspace::messages::Message>(Used(used))
+      })
+      .await?
+    })
+    .state()
+    .get()
+    .data
+    .unwrap_or_default()
+}
+
+/// The used accounts' readings, in the order the accounts are listed (by CLI, Default first).
+fn limits(listed: &Accounts, readings: &PlanReadings, used: &Used) -> Vec<AccountLimits> {
+  listed
+    .0
+    .iter()
+    .filter(|account| used.0.contains(&account.id()))
+    .filter_map(|account| {
+      Some(AccountLimits {
+        account: account.clone(),
+        reading: readings.of_account(account.id())?.clone(),
+      })
+    })
+    .collect()
 }
 
 /// The session's activity, whenever it changes.
@@ -232,6 +290,9 @@ impl Component for StatusBarView {
         &facts.stopping,
         &dispatch,
       ));
+    }
+    if let Some(project) = project {
+      right.extend(plan_limits::item(ctx, &project.limits, &self.bar));
     }
     right.extend(counts::app(ctx, (&facts.mcp, &self.bar), &dispatch));
     Row::new()

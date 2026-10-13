@@ -181,7 +181,7 @@ fn empty_connections(ctx: &Ctx, project: &ShownProject, listed: &ProjectAgents) 
       .variant(TypographyStyle::Caption),
     );
   for connection in listed.connections.iter() {
-    let shown = crate::screens::connections::words::agent_status(connection.status());
+    let shown = crate::screens::connections::words::connection_status(connection, connection.status());
     let detail = ctx.t_args(
       "agents.connectionState",
       [

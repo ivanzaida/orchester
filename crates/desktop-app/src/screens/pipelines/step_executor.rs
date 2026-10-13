@@ -42,6 +42,7 @@ pub(super) fn draft_profile(props: &Props) -> Option<DraftProfileChoice> {
 }
 
 pub fn executor(ctx: &mut Ctx, props: &Props, value: Signal<Executor>) -> Element {
+  let accounts = crate::services::accounts::listed(ctx);
   let editing = props.state.get();
   let draft = draft_profile(props);
   let options = executor_options(ctx, props, draft.as_ref());
@@ -108,7 +109,41 @@ pub fn executor(ctx: &mut Ctx, props: &Props, value: Signal<Executor>) -> Elemen
       .body(ctx.t(reason)),
     );
   }
-  body.into()
+  body.with_children(runs_on(ctx, props, &accounts)).into()
+}
+
+/// What the step's profile runs on, read back (`M42rM`): its connection and that connection's account, so a pipeline
+/// whose steps run on different accounts shows it at a glance.
+fn runs_on(ctx: &Ctx, props: &Props, accounts: &crate::services::accounts::Accounts) -> Option<Element> {
+  let StepKind::Agent { profile: Some(id), .. } = props.step.kind else {
+    return None;
+  };
+  let editing = props.state.get();
+  let profile = editing
+    .opened
+    .assignables
+    .profiles
+    .iter()
+    .find(|profile| profile.id == id)?;
+  let connection = profile.agent.as_ref()?;
+  let account = accounts.of_connection(connection.account(), connection.provider())?;
+  let account = account.name().map_or_else(
+    || ctx.t("pipelines.defaultAccount").to_string(),
+    |name| name.as_str().to_owned(),
+  );
+  let text = ctx.t_args(
+    "pipelines.runsOnValue",
+    [("connection", connection.name().as_str()), ("account", &account)],
+  );
+  Some(
+    crate::ui::inspector::property(
+      "step-runs-on",
+      &ctx.t("pipelines.runsOn"),
+      &text,
+      crate::ui::inspector::PropertyValue::Plain,
+    )
+    .into(),
+  )
 }
 
 fn profile_action(ctx: &mut Ctx, props: &Props, profile: &DraftProfileChoice) -> Element {

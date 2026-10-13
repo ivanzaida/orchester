@@ -77,6 +77,11 @@ impl RunTask {
             self.report(&active.invocation, RunnerProblem::StepBudgetReached { budget })?;
             "the step budget"
           }
+          RunLimit::PlanLimit { .. } => {
+            // The worker stopped its agent there itself; the run stops at it once no agent works.
+            self.pending.limit.get_or_insert(limit);
+            "the account's plan limit"
+          }
         };
         self.save(execution, &active, &format!("work in progress at {label}"))
       }

@@ -147,7 +147,28 @@
         "again": "Tasks shown as last read · {{reason}}",
         "tryAgain": "Try again"
       },
-      "mcpPortRefused": "MCP port {{port}} refused"
+      "mcpPortRefused": "MCP port {{port}} refused",
+      "planLimits": {
+        "cli": "{{cli}} {{share}}",
+        "cliAccount": "{{cli}} · {{account}} {{share}}",
+        "account": "{{account}} {{share}}",
+        "separator": "·",
+        "used": "{{used}}%",
+        "reached": "limit reached · resets {{time}}",
+        "reachedNoReset": "limit reached",
+        "claude": "Claude",
+        "codex": "Codex",
+        "default": "Default",
+        "title": "{{cli}} · {{account}}",
+        "plan": "{{plan}} plan",
+        "fiveHour": "5-hour",
+        "weekly": "Weekly",
+        "window": "{{hours}}-hour",
+        "resets": "resets {{time}}",
+        "today": "today, {{time}}",
+        "day": "{{month}} {{day}}, {{time}}",
+        "note": "Limits are per account and shared by every project that uses it. Claude windows are as of the last run on the account."
+      }
     },
     "needsYou": {
       "one": "{{count}} needs you",

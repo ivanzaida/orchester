@@ -10,39 +10,12 @@
 
 use std::{ffi::OsString, path::PathBuf};
 
+pub use orchester_workspace::build::{Build, INSTALLED_BUILD_VARIABLE};
 use orchester_workspace::{secrets::Vault, workspace::Workspace};
 
 /// Names the folder a QA copy writes its discovery file to; `tools/qa-app.ps1` sets it to the worktree's
 /// `.tmp/qa/<task>/mcp/`.
 pub const DISCOVERY_VARIABLE: &str = "ORCHESTER_APP_MCP_DISCOVERY";
-/// Set while compiling the installed app, by `tools/install.ps1` and `tools/package-macos.sh` only.
-pub const INSTALLED_BUILD_VARIABLE: &str = "ORCHESTER_APP_INSTALLED_BUILD";
-
-/// What kind of program this is, as it was built.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Build {
-  /// The installed app.
-  Installed,
-  /// Any other build.
-  Other,
-}
-
-impl Build {
-  /// This program's kind: a release build compiled with [`INSTALLED_BUILD_VARIABLE`] set to `1`.
-  pub fn this() -> Self {
-    Self::of(option_env!("ORCHESTER_APP_INSTALLED_BUILD"), cfg!(debug_assertions))
-  }
-
-  /// The kind of a build compiled with [`INSTALLED_BUILD_VARIABLE`] as `flag`, as a `debug` build or not. Only the
-  /// exact `1` in a release build counts: a variable left in a shell (`0`, empty) or a debug build that inherited it
-  /// never becomes the installed app, takes its port or stores a token.
-  pub fn of(flag: Option<&str>, debug: bool) -> Self {
-    match (flag, debug) {
-      (Some("1"), false) => Self::Installed,
-      _ => Self::Other,
-    }
-  }
-}
 
 pub enum McpMode {
   /// The installed app: the port and on/off in `workspace`'s settings, the token in `vault`.

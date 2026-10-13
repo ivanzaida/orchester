@@ -9,6 +9,7 @@
 //! selection, scrim, conversation, code and diff colors, `display` type, `radius_full`): the screens
 //! that need them come next and must find them here rather than add near-duplicates.
 
+mod accounts;
 pub mod agents;
 mod cards;
 mod code;
@@ -42,6 +43,7 @@ use lurq::{
 };
 
 pub use self::{
+  accounts::{AccountsSpacing, AccountsText},
   cards::{CardsSpacing, CardsText},
   code::{CodeText, token_color},
   composer::{ComposerColor, ComposerRadius, ComposerText},
@@ -83,6 +85,7 @@ pub fn install(app: &mut App, mode: Mode) {
   agents::install(theme);
   startup::install(theme);
   settings::install(theme);
+  accounts::install(theme);
   task::install(theme);
   decisions::install(theme);
   task_form::install(theme);

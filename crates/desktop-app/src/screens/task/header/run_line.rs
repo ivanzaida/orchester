@@ -13,7 +13,7 @@ use lurq::{
 };
 use orchester_core::{
   integration::MergeError,
-  run::{PauseReason, RunStatus, TaskPhase},
+  run::{PauseReason, RunLimit, RunStatus, TaskPhase},
 };
 use orchester_workspace::{
   display,
@@ -107,7 +107,19 @@ fn status(detail: &TaskDetail, lost: bool) -> (Status, Option<&StepView>) {
       | TaskPhase::Interrupted
       | TaskPhase::Failed
   );
-  (Status::of_run(phase), step.filter(|_| with_step))
+  // A step whose agent never started waits for its account's reset (`XPjSc`); one that started stopped at the limit.
+  let plan_limit = detail.run.as_ref().and_then(|run| match run.run.status() {
+    RunStatus::Paused(PauseReason::LimitReached(RunLimit::PlanLimit { execution })) => {
+      Some(run.invocations_of(*execution).next().is_some())
+    }
+    _ => None,
+  });
+  let status = match plan_limit {
+    Some(true) => Status::StoppedAtPlanLimit,
+    Some(false) => Status::WaitingForPlanReset,
+    None => Status::of_run(phase),
+  };
+  (status, step.filter(|_| with_step))
 }
 
 /// "03 Implement".

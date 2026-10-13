@@ -15,10 +15,12 @@ use super::typography::style;
 pub enum SettingsText {
   /// 13/600 `text_primary`: a form section's title (`Form section title` `De1nE`).
   SectionTitle,
+  /// 13 `text_secondary`: what Settings holds, under its title (`Sub` `mQJGo` in `t098v`).
+  Lead,
 }
 
 impl SettingsText {
-  pub const ALL: [Self; 1] = [Self::SectionTitle];
+  pub const ALL: [Self; 2] = [Self::SectionTitle, Self::Lead];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -27,12 +29,14 @@ impl SettingsText {
   const fn name(self) -> &'static str {
     match self {
       Self::SectionTitle => "settings_section_title",
+      Self::Lead => "settings_lead",
     }
   }
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
       Self::SectionTitle => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
+      Self::Lead => style(13.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
     }
   }
 }

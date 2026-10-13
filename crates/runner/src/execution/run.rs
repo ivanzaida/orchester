@@ -85,6 +85,8 @@ pub(super) struct Pending {
 }
 
 pub(super) struct RunTask {
+  /// A step a person asked to start on its account now ([`Prepared::try_at_plan_limit`]), taken when it starts.
+  pub(super) try_at_plan_limit: Option<orchester_core::id::StepExecutionId>,
   pub(super) root: PathBuf,
   pub(super) db: ProjectDb,
   pub(super) run: Run,
@@ -137,6 +139,7 @@ impl RunTask {
       listening: true,
       settled: context.settled,
       pending: Pending::default(),
+      try_at_plan_limit: prepared.try_at_plan_limit,
       agents: HashMap::new(),
       code_index: IndexState::NotBuilt,
       index_build: None,

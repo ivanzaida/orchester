@@ -15,6 +15,8 @@ pub mod programs;
 pub mod ripgrep;
 pub mod run_processes;
 pub mod search_path;
+pub mod sign_in_terminal;
+pub mod trash;
 pub mod verifier_app;
 
 use std::{

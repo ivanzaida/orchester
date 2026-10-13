@@ -132,6 +132,14 @@
         "now": "connected now",
         "lastSeen": "last request at {{time}}"
       }
+    },
+    "sub": "Orchester on this computer, in every project. Each change is saved as you make it.",
+    "tabs": {
+      "general": "General",
+      "automation": "Automation",
+      "accounts": "Accounts",
+      "servers": "Servers",
+      "notBuilt": "Not in this version of the app yet"
     }
   }
 }

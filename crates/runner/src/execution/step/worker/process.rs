@@ -458,8 +458,8 @@ impl Worker {
       .as_ref()
       .is_some_and(|closed| matches!(&outcome, InvocationOutcome::TurnFailed { message } if message == closed));
     Ok(Finished {
+      stopped: Self::stopped(&watch, &outcome),
       outcome,
-      stopped: watch.stop,
       final_message: watch.tracker.last_message().map(str::to_owned),
       approval_interrupted,
       closed_after_result,

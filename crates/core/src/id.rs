@@ -64,6 +64,11 @@ define_id!(
   ProjectId
 );
 define_id!(
+  /// An agent CLI account on this computer (`docs/design/agent-accounts.md`): a folder where the CLI keeps its own
+  /// sign-in, shared by every project.
+  AgentAccountId
+);
+define_id!(
   /// A versioned configuration resource (agent profile, instruction, pipeline, tool).
   ResourceId
 );

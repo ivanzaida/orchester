@@ -4,6 +4,8 @@
 //! each with a stable code. `live` sets a project up end to end through the tools alone and works a
 //! task with the real runner and the fake Codex. Needs `git`.
 
+mod accounts;
+mod accounts_window;
 mod automation_permissions;
 mod connections_window;
 mod gates;

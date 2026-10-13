@@ -152,6 +152,7 @@ fn usage_facts_leave_out_invocations_that_ended_before_the_start_and_keep_runnin
 fn reading(provider: AgentProvider, at: Timestamp, percent: f64) -> LimitReading {
   LimitReading {
     provider,
+    account: None,
     at,
     limits: PlanLimits {
       windows: vec![

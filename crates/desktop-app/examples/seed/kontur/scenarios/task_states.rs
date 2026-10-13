@@ -9,7 +9,7 @@ use crate::kontur::{
   shapes::{self, Shape},
 };
 
-const STATES: [(&str, &str, Shape); 18] = [
+const STATES: [(&str, &str, Shape); 19] = [
   (
     "Rotate API keys from settings",
     "Let an admin rotate the API key without downtime.",
@@ -96,6 +96,11 @@ const STATES: [(&str, &str, Shape); 18] = [
     Shape::Unreadable("implement"),
   ),
   ("Docs: connecting GitHub", "", Shape::Draft),
+  (
+    "Batch webhook deliveries",
+    "Send webhook deliveries to one endpoint in batches.",
+    Shape::AtPlanLimit("implement"),
+  ),
 ];
 
 const DAILY_BUDGET: Shape = Shape::AtLimit("implement", RunLimit::DailyBudget);

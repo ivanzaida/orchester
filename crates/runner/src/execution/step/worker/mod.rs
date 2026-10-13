@@ -24,7 +24,7 @@ use orchester_core::{
   command::SecretVariable,
   connection::stream::{AgentEvent, ClaudeStream, InvocationOutcome, InvocationTracker},
   conversation::Message,
-  id::{ResourceId, StepExecutionId, TaskId},
+  id::{AgentAccountId, ResourceId, StepExecutionId, TaskId},
   native::session::StopMode,
   orchester_tools::ProjectTool,
   permission::category::CommandScope,
@@ -177,6 +177,8 @@ pub(in super::super) struct Worker {
   /// invocation's MCP servers, a native agent's API key.
   pub(in super::super) secrets: Vec<SecretVariable>,
   pub(in super::super) agent: String,
+  /// The account the agent's CLI runs on, whose plan limits it reports; `None` for a native agent.
+  pub(in super::super) account: Option<AgentAccountId>,
   pub(in super::super) task: TaskId,
   pub(in super::super) decisions: mpsc::UnboundedReceiver<ApprovalDecision>,
   /// Answers to the question the agent waits on in its turn.
@@ -241,6 +243,9 @@ pub(super) struct Watch {
   /// Continuations since a decision was settled or a call returned that Codex waited for after its turn
   /// (`process::MAX_IDLE_CONTINUATIONS`).
   pub(super) idle_continuations: u8,
+  /// The agent's account is at its plan limit, as its CLI's last plan reading said: a turn that fails now stops at
+  /// that limit instead of failing the step.
+  pub(super) plan_reached: bool,
 }
 
 impl Watch {
@@ -265,6 +270,7 @@ impl Watch {
       tools_after_turn: false,
       returns_continued: 0,
       idle_continuations: 0,
+      plan_reached: false,
     })
   }
 

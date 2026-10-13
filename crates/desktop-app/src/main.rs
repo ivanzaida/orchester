@@ -31,6 +31,11 @@ fn main() {
   // where the window opens, or why there is no session.
   let launch = Launch::begin(runtime.handle(), log);
   let workspace = launch.workspace();
+  // Only this window moves a removed account's folder to the person's Recycle Bin / Trash; tests and QA copies have
+  // a trash of their own.
+  if let Some(workspace) = workspace {
+    workspace.use_trash(std::sync::Arc::new(orchester_workspace::accounts::trash::SystemTrash));
+  }
   let appearance = appearance(&runtime, workspace);
   let mut app = App::new();
   app.set_tokio_handle(runtime.handle().clone());

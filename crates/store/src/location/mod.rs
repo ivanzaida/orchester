@@ -72,3 +72,31 @@ pub fn app_database_beside(executable: &Path) -> PathBuf {
 pub fn log_dir() -> io::Result<PathBuf> {
   Ok(app_data_location()?.log_dir)
 }
+
+/// Where Orchester creates the folders of the agent accounts it makes (`docs/design/agent-accounts.md`, "Folders"):
+/// `%LOCALAPPDATA%\Orchester\accounts` on Windows. It is in the applications' data, which agents' reads treat as a
+/// credential location, and outside every repository; it is not beside the executable, where the stable install
+/// keeps its database, because that folder is neither.
+#[cfg(target_os = "windows")]
+pub fn accounts_dir() -> io::Result<PathBuf> {
+  let local =
+    env::var_os("LOCALAPPDATA").ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "LOCALAPPDATA is not set"))?;
+  Ok(PathBuf::from(local).join("Orchester").join("accounts"))
+}
+
+/// Where Orchester creates the folders of the agent accounts it makes: `~/Library/Application
+/// Support/Orchester/accounts`, for every build, in the Library like a bundled build's database.
+#[cfg(target_os = "macos")]
+pub fn accounts_dir() -> io::Result<PathBuf> {
+  let home = env::var_os("HOME").ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "HOME is not set"))?;
+  Ok(PathBuf::from(home).join("Library/Application Support/Orchester/accounts"))
+}
+
+/// No other platform has an application data folder for accounts yet.
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+pub fn accounts_dir() -> io::Result<PathBuf> {
+  Err(io::Error::new(
+    io::ErrorKind::Unsupported,
+    "agent account folders are not supported on this platform yet",
+  ))
+}

@@ -51,7 +51,13 @@ impl RunTask {
       return Ok(());
     };
     // The run already says what the model needs; without the connection only its warning is missing.
-    let connection = match self.profile_and_connection(&profile) {
+    let step = self
+      .run
+      .execution(execution)
+      .expect("an agent works on an execution of the run")
+      .step()
+      .clone();
+    let connection = match self.profile_and_connection(&profile, &step) {
       Ok((_, connection)) => connection.id(),
       Err(problem) => {
         tracing::warn!(?problem, "cannot record the CLI version a model needs");

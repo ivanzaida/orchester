@@ -118,6 +118,9 @@ fn report_start(args: &[String]) {
   names.sort();
   eprintln!("argv: {}", args.join(" "));
   eprintln!("env: {}", names.join(","));
+  if let Some(folder) = std::env::var_os("CODEX_HOME") {
+    eprintln!("account folder: {}", folder.to_string_lossy());
+  }
   eprintln!(
     "path: {}",
     std::env::var_os("PATH").unwrap_or_default().to_string_lossy()

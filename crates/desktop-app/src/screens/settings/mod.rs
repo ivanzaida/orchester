@@ -1,44 +1,150 @@
-//! The app's settings (`Settings · Automation · MCP server · stable address · dark` `lye6f`): *Orchester MCP server*
-//! (`server`) and, of *What automation may do*, only *Let automation change agent permissions*: the person's own
-//! switch for what automation may widen through the MCP server, which no tool can change. The page tabs and the
-//! other rows of the design come with the Settings screen's own task.
+//! The app's settings: a header with its tabs (`General · Automation · Accounts · Servers`, `t098v` and `lye6f`) over
+//! the open tab. *Automation* (`lye6f`) holds *Orchester MCP server* (`server`) and, of *What automation may do*,
+//! *Let automation change agent permissions*: the person's own switch for what automation may widen through the MCP
+//! server, which no tool can change. *Accounts* (`accounts`, layer `hgOl2`) holds the person's agent CLI accounts.
+//! *General* and *Servers* are not built in this app yet and say so.
 
+mod accounts;
 mod automation;
+mod page;
 mod server;
 
+use std::sync::Arc;
+
 use lurq::{
-  app::{ctx::Ctx, theme::SpacingSize},
-  components::{Column, Text},
+  app::{
+    component::{Component, DevtoolsInspectable},
+    ctx::Ctx,
+    theme::SpacingSize,
+  },
+  components::Column,
+  core::Signal,
   node::{Element, dimension::Dimension},
+};
+use orchester_core::account::AgentAccount;
+use orchester_workspace::{
+  background,
+  messages::{self, Message},
 };
 
 use crate::{
-  routes::Screen,
-  theme::{ExtraTypography, SettingsSpacing},
+  routes::{AccountsView, Screen},
+  services::Services,
+  theme::SettingsSpacing,
+  ui::{
+    message::message_text,
+    state::{load_error, loading},
+  },
 };
+
+/// The accounts as read, shared with the tab.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Listed(Arc<Vec<AgentAccount>>);
+
+impl DevtoolsInspectable for Listed {}
 
 /// The form's width (`Form` `dpkR7`).
 const FORM_WIDTH: f32 = 720.0;
 
-pub fn screen(ctx: &mut Ctx) -> Element {
-  let title = ctx.t(Screen::Settings.title_key());
-  Column::new()
-    .id(format!("screen-{}", Screen::Settings.name()))
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Pct(100.0))
-    .padding_top(SettingsSpacing::PanelTop.role())
-    .padding_horizontal(SettingsSpacing::PanelSide.role())
-    .padding_bottom(SpacingSize::Xl)
-    .spacing(SpacingSize::Lg)
-    .child(Text::new(&title).variant(ExtraTypography::Display.role()))
-    .child(
-      Column::new()
-        .id("settings-form")
-        .width(Dimension::Px(FORM_WIDTH))
-        .padding_top(SpacingSize::Sm)
-        .spacing(SpacingSize::Xl)
-        .child(ctx.mount_keyed::<server::ServerSection>("mcp-server", ()))
-        .child(ctx.mount_keyed::<automation::ChangePermissions>("change-permissions", automation::NoProps)),
+/// The open tab of Settings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SettingsTab {
+  Automation,
+  Accounts(AccountsView),
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct Props {
+  tab: SettingsTab,
+}
+
+impl DevtoolsInspectable for Props {}
+
+pub fn screen(ctx: &mut Ctx, tab: SettingsTab) -> Element {
+  ctx.mount_keyed::<SettingsScreen>("settings", Props { tab })
+}
+
+struct SettingsScreen {
+  /// Counts the changes to the accounts, each of which reads them again.
+  revision: Signal<u64>,
+}
+
+impl Component for SettingsScreen {
+  type Props = Props;
+
+  fn create(ctx: &mut Ctx) -> Self {
+    Self {
+      revision: ctx.signal(0),
+    }
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let tab = ctx.props::<Props>().tab;
+    let workspace = Services::of(ctx).workspace;
+    let loaded = ctx
+      .future(self.revision.get(), move |_| {
+        let workspace = workspace.clone();
+        async move {
+          background::run(move || workspace.agent_accounts())
+            .await?
+            .map(|accounts| Listed(Arc::new(accounts)))
+            .map_err(|error| messages::store_error(&error))
+        }
+      })
+      .state()
+      .get();
+    let count = loaded.data.as_ref().map(|accounts| accounts.0.len());
+    let body = match tab {
+      SettingsTab::Automation => automation(ctx),
+      SettingsTab::Accounts(view) => match (&loaded.data, &loaded.error) {
+        (_, Some(error)) if !loaded.is_pending() => self.failed(ctx, error),
+        (Some(accounts), _) => ctx.mount_keyed::<accounts::AccountsTab>(
+          "settings-accounts",
+          accounts::Props {
+            view,
+            accounts: Arc::clone(&accounts.0),
+            revision: self.revision.clone(),
+          },
+        ),
+        _ => loading("settings-accounts-loading", &ctx.t("accounts.reading")).into(),
+      },
+    };
+    Column::new()
+      .id(format!("screen-{}", Screen::Settings.name()))
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Pct(100.0))
+      .padding_top(SettingsSpacing::PanelTop.role())
+      .padding_horizontal(SettingsSpacing::PanelSide.role())
+      .padding_bottom(SpacingSize::Lg)
+      .spacing(SpacingSize::Lg)
+      .child(page::header(ctx, tab, count))
+      .child(body)
+  }
+}
+
+impl SettingsScreen {
+  fn failed(&self, ctx: &Ctx, error: &Message) -> Element {
+    let revision = self.revision.clone();
+    load_error(
+      ctx,
+      "settings-accounts-load-error",
+      (
+        &ctx.t("accounts.loadFailed"),
+        &ctx.t_args("accounts.loadFailureDetail", [("reason", message_text(ctx, error))]),
+      ),
+      move || revision.update(|revision| *revision += 1),
     )
+  }
+}
+
+/// *Orchester MCP server* and *What automation may do*.
+fn automation(ctx: &mut Ctx) -> Element {
+  Column::new()
+    .id("settings-form")
+    .width(Dimension::Px(FORM_WIDTH))
+    .padding_top(SpacingSize::Sm)
+    .spacing(SpacingSize::Xl)
+    .child(ctx.mount_keyed::<server::ServerSection>("mcp-server", ()))
+    .child(ctx.mount_keyed::<automation::ChangePermissions>("change-permissions", automation::NoProps))
     .into()
 }

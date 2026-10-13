@@ -9,7 +9,7 @@ use std::{convert::Infallible, path::PathBuf};
 
 use orchester_core::{
   connection::{AgentProvider, plan_limits::LimitReading},
-  id::{InvocationId, RunId, StepExecutionId},
+  id::{AgentAccountId, InvocationId, RunId, StepExecutionId},
   run::review::{AutoReview, ReviewEnd, ReviewRecord},
   time::Timestamp,
 };
@@ -35,8 +35,13 @@ pub(super) struct ReviewLedger {
 }
 
 impl ReviewLedger {
-  /// Records what the review by `provider` that started at `started_at` cost, when it asked a model.
-  pub(super) fn record(&self, provider: AgentProvider, started_at: Timestamp, done: &AutoReview) {
+  /// Records what the review by `provider` on `account` that started at `started_at` cost, when it asked a model.
+  pub(super) fn record(
+    &self,
+    (provider, account): (AgentProvider, Option<AgentAccountId>),
+    started_at: Timestamp,
+    done: &AutoReview,
+  ) {
     let (Some(cost), Some(end)) = (&done.cost, ReviewEnd::of(&done.review)) else {
       return;
     };
@@ -57,6 +62,7 @@ impl ReviewLedger {
       .iter()
       .map(|limits| LimitReading {
         provider,
+        account,
         at: record.ended_at,
         limits: limits.clone(),
       })

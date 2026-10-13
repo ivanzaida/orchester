@@ -52,6 +52,7 @@ mod items;
 )]
 mod kontur;
 mod mcp;
+mod plan_limits;
 #[path = "../support/mod.rs"]
 mod support;
 mod window;
@@ -177,6 +178,7 @@ fn kontur(runner: RunnerFacts, tasks: ProjectTasks) -> ProjectFacts {
       today: TokensUsed::new(3_800_000),
     }),
     read_failure: None,
+    limits: Vec::new(),
   }
 }
 

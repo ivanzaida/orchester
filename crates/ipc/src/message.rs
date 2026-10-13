@@ -8,7 +8,7 @@ use std::{fmt, num::NonZeroU32};
 
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
-  id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
+  id::{ConnectionId, IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
   integration::Leftovers,
   permission::{AgentPermissions, capability::PermissionProblem},
   question::{AnswerError, GivenAnswer},
@@ -94,6 +94,22 @@ pub enum Command {
   /// Continues paused run `run`; a step it stopped in continues the agent's CLI session.
   /// Answered with [`Reply::Accepted`] once it runs again.
   ResumeRun { run: RunId },
+  /// Continues run `run`, stopped at its account's plan limit, now: the stopped step runs on `connection`, another
+  /// account of the same CLI, for this run only, as a new session from the run's checkpoint; the stopped session
+  /// stays with its account (protocol 23). Answered with [`Reply::Accepted`] once it runs again,
+  /// [`Rejection::RunNotPaused`] when the run is not stopped at a plan limit, or
+  /// [`Rejection::NotAnotherAccount`] when `connection` is not another account's connection of that CLI.
+  ContinueOnConnection { run: RunId, connection: ConnectionId },
+  /// Keeps run `run`, stopped at its account's plan limit, waiting for the limit's reset, as the person confirmed:
+  /// the runner continues the same session there by itself (protocol 24). Answered with [`Reply::Accepted`] once the
+  /// wait is set, or [`Rejection::RunNotPaused`] when the run is not stopped at a plan limit whose reset its CLI
+  /// reported.
+  WaitForPlanReset { run: RunId },
+  /// Continues run `run`, stopped at its account's plan limit, on the same account now, as a person asked (protocol
+  /// 24): a step whose agent waited for the reset starts once, a stopped agent continues its session; if the CLI
+  /// still refuses, the run stops there again. Answered with [`Reply::Accepted`] once it runs again, or
+  /// [`Rejection::RunNotPaused`] when it is not stopped at a plan limit.
+  TryAtPlanLimit { run: RunId },
   /// Cancels run `run`: its agent's process tree is ended, its worktree and branch stay. Answered
   /// with [`Reply::Accepted`] once the run is recorded as cancelled.
   CancelRun { run: RunId },
@@ -385,6 +401,9 @@ pub enum Rejection {
   /// Resume and a raised limit need a paused run; a raised step budget one stopped at a step's
   /// budget.
   RunNotPaused,
+  /// A step stopped at its account's plan limit continues only on an agent connection of the same CLI that runs on
+  /// another account and can start now.
+  NotAnotherAccount,
   /// Continuing from a checkpoint needs an interrupted run.
   RunNotInterrupted,
   /// A decision on a stuck run needs a run that waits for a person.

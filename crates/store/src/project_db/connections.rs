@@ -5,8 +5,8 @@ use std::path::PathBuf;
 
 use orchester_core::{
   connection::{
-    AgentConnection, AgentEndpoint, AgentProvider, ApiEndpoint, CheckResult, Connection, ConnectionCheck,
-    ConnectionKind, GitHubCheck, GitHubCheckResult, GitHubHost, LastCheck, ModelRequirements,
+    AgentConnection, AgentEndpoint, AgentProvider, ApiEndpoint, CheckResult, Connection, ConnectionAccount,
+    ConnectionCheck, ConnectionKind, GitHubCheck, GitHubCheckResult, GitHubHost, LastCheck, ModelRequirements,
   },
   id::ConnectionId,
   name::Name,
@@ -38,6 +38,9 @@ struct ProviderSettings {
   /// Absent before model requirements were recorded, and while none is.
   #[serde(default, skip_serializing_if = "ModelRequirements::is_empty")]
   model_requirements: ModelRequirements,
+  /// Absent for Default: every connection made before accounts existed runs on it.
+  #[serde(default, skip_serializing_if = "ConnectionAccount::is_default")]
+  account: ConnectionAccount,
 }
 
 /// Settings of a native agent connection: its model API.
@@ -169,6 +172,7 @@ impl Columns {
         let settings = ProviderSettings {
           executable: path_text("connection executable", executable)?.to_owned(),
           model_requirements: connection.model_requirements().clone(),
+          account: connection.account().clone(),
         };
         (
           AGENT_PROVIDER,
@@ -250,9 +254,13 @@ impl StoredRow {
   }
 
   fn into_connection(self) -> Result<Connection, StoreError> {
-    let ((kind, endpoint, last_check), requirements) = match self.kind.as_str() {
+    let ((kind, endpoint, last_check), requirements, account) = match self.kind.as_str() {
       AGENT_PROVIDER => self.agent_parts()?,
-      GITHUB => (self.github_parts()?, ModelRequirements::default()),
+      GITHUB => (
+        self.github_parts()?,
+        ModelRequirements::default(),
+        ConnectionAccount::Default,
+      ),
       other => return Err(corrupt("connection kind", other)),
     };
     Connection::from_stored(
@@ -263,11 +271,11 @@ impl StoredRow {
       last_check,
       Timestamp::from_unix_millis(self.created_at),
     )
-    .map(|connection| connection.with_model_requirements(requirements))
+    .and_then(|connection| connection.with_model_requirements(requirements).with_account(account))
     .map_err(|error| corrupt("connection", error))
   }
 
-  fn agent_parts(&self) -> Result<(Parts, ModelRequirements), StoreError> {
+  fn agent_parts(&self) -> Result<(Parts, ModelRequirements, ConnectionAccount), StoreError> {
     let provider = parse_provider(&self.provider)?;
     let last_check = self
       .check::<CheckResult>()?
@@ -278,11 +286,16 @@ impl StoredRow {
       return Ok((
         (kind, AgentEndpoint::Api(settings.api), last_check),
         ModelRequirements::default(),
+        ConnectionAccount::Default,
       ));
     }
     let settings: ProviderSettings = decode_json("connection settings", SETTINGS_SCHEMA, &self.settings)?;
     let endpoint = AgentEndpoint::Program(PathBuf::from(settings.executable));
-    Ok(((kind, endpoint, last_check), settings.model_requirements))
+    Ok((
+      (kind, endpoint, last_check),
+      settings.model_requirements,
+      settings.account,
+    ))
   }
 
   fn github_parts(&self) -> Result<Parts, StoreError> {
