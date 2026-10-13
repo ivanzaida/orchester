@@ -69,3 +69,48 @@ fn local_integration_draft_migration_preserves_earlier_retained_originals_and_jo
     Some(original.to_vec())
   );
 }
+
+#[test]
+fn local_integration_master_account_schema_upgrade_keeps_runs_and_adds_durable_journal() {
+  use orchester_core::{integration::local::LocalPhase, store::RunStore};
+
+  let fixture = Fixture::new(false);
+  let before = ProjectDb::open(fixture.root())
+    .expect("project")
+    .run(fixture.run)
+    .expect("run")
+    .expect("recorded run");
+  let connection = rusqlite::Connection::open(fixture.root().join(".orchester/orchester.db")).expect("private db");
+  let version: u32 = connection
+    .pragma_query_value(None, "user_version", |row| row.get(0))
+    .expect("version");
+  // Master has the account migration; these two unshipped integration migrations follow it.
+  connection
+    .execute_batch(
+      "DROP TABLE local_integration_process;
+       DROP TABLE local_recovery_content;
+       DROP TABLE local_integrations;",
+    )
+    .expect("master schema without integration tables");
+  connection
+    .pragma_update(None, "user_version", version - 2)
+    .expect("master schema version");
+  drop(connection);
+
+  let db = ProjectDb::open(fixture.root()).expect("upgrade from master");
+  assert_eq!(db.run(fixture.run).expect("run"), Some(before.clone()));
+  assert!(db.local_operation(fixture.run).expect("journal").is_none());
+  drop(db);
+  let mut session = fixture.open();
+  session.prepare_clean().expect("prepare real checkout");
+  let operation = session.operation().clone();
+  assert_eq!(operation.phase(), LocalPhase::Prepared);
+  drop(session);
+
+  let db = ProjectDb::open(fixture.root()).expect("restart");
+  assert_eq!(db.run(fixture.run).expect("run"), Some(before));
+  assert_eq!(
+    db.local_operation(fixture.run).expect("durable journal"),
+    Some(operation)
+  );
+}

@@ -50,11 +50,7 @@ pub const LOOKING: &[&str] = &[
 const SETTING_REFUSAL: &str = "A person changes this setting in the window: while Settings shows Let automation \
   change agent permissions, window input from MCP clients (clicks, keys, values, resizing, menus) is refused.";
 /// What a refused client reads while a Connections page asks a person to confirm what a change widens.
-<<<<<<< HEAD
-const QUESTION_REFUSAL: &str = "A person answers this in the window: while Local integration, a Connections page, Agents page, Tools page, Secrets page, Project settings or Pipelines page asks to \
-=======
-const QUESTION_REFUSAL: &str = "A person answers this in the window: while a Connections page, Agents page, Tools page, Secrets page, Skills page, Project settings or Pipelines page asks to \
->>>>>>> 8754a60874f27100ec9bc2d4df91f0d70cca074c
+const QUESTION_REFUSAL: &str = "A person answers this in the window: while Local integration, a Connections page, Agents page, Tools page, Secrets page, Skills page, Project settings or Pipelines page asks to \
   confirm what a change lets agents do (in any tab, until it is answered or the page is left), \
   window input from MCP clients (clicks, keys, values, resizing, menus) is refused.";
 const STILL_AVAILABLE: &str = "Looking at the window and the app's own tools stay available.";
@@ -184,24 +180,19 @@ impl InputGate {
     match what {
       Guarded::PermissionWidening => workspace.automation_permission_consent(),
       Guarded::ApprovalWidening => workspace.automation_permission_consent() && workspace.automation_approval_consent(),
-<<<<<<< HEAD
-      Guarded::PermissionsSetting | Guarded::WideningQuestion | Guarded::LocalIntegrationQuestion => false,
-=======
-      Guarded::PermissionsSetting | Guarded::WideningQuestion | Guarded::McpServer | Guarded::Accounts => false,
->>>>>>> 8754a60874f27100ec9bc2d4df91f0d70cca074c
+      Guarded::PermissionsSetting
+      | Guarded::WideningQuestion
+      | Guarded::LocalIntegrationQuestion
+      | Guarded::McpServer
+      | Guarded::Accounts => false,
     }
   }
 
   fn count(&self, what: Guarded, add: bool) {
     let mut controls = self.0.controls.lock();
     let count = match what {
-<<<<<<< HEAD
-      Guarded::PermissionsSetting => &mut controls.settings,
-      Guarded::WideningQuestion | Guarded::LocalIntegrationQuestion => &mut controls.questions,
-=======
       Guarded::PermissionsSetting | Guarded::Accounts => &mut controls.settings,
-      Guarded::WideningQuestion => &mut controls.questions,
->>>>>>> 8754a60874f27100ec9bc2d4df91f0d70cca074c
+      Guarded::WideningQuestion | Guarded::LocalIntegrationQuestion => &mut controls.questions,
       Guarded::PermissionWidening => &mut controls.permissions,
       Guarded::ApprovalWidening => &mut controls.approvals,
       Guarded::McpServer => &mut controls.server,

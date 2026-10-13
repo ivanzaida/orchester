@@ -539,10 +539,7 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   step_progress::MIGRATION,
   optional_limits::MIGRATION,
   optional_daily_budget::MIGRATION,
-<<<<<<< HEAD
+  agent_accounts::MIGRATION,
   local_integration::MIGRATION,
   editor_drafts::MIGRATION,
-=======
-  agent_accounts::MIGRATION,
->>>>>>> 8754a60874f27100ec9bc2d4df91f0d70cca074c
 ];

@@ -103,11 +103,17 @@ fn local_integration_decisions_remain_person_only_with_all_automation_grants() {
     .expect("approval consent");
   let gate = InputGate::default();
   gate.bind_permissions(workspace);
-  let protected = gate.protect(Guarded::LocalIntegrationQuestion);
-  assert!(gate.protecting());
-  assert!(!gate.widening_allowed(Guarded::LocalIntegrationQuestion));
-  drop(protected);
-  assert!(!gate.protecting());
+  for master_control in [Guarded::Accounts, Guarded::McpServer] {
+    let master = gate.protect(master_control);
+    let local = gate.protect(Guarded::LocalIntegrationQuestion);
+    assert!(gate.protecting());
+    assert!(!gate.widening_allowed(Guarded::LocalIntegrationQuestion));
+    assert!(!gate.widening_allowed(master_control));
+    drop(local);
+    assert!(gate.protecting(), "local release cannot unlock a master control");
+    drop(master);
+    assert!(!gate.protecting());
+  }
 }
 fn private_directory() -> tempfile::TempDir {
   let scratch = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-policy-tests");

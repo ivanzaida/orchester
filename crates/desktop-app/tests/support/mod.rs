@@ -132,13 +132,8 @@ impl Window {
       &mut app,
       RootProps {
         link: link.clone(),
-<<<<<<< HEAD
-        mcp: McpStatus::Unavailable,
-        start,
-=======
         mcp: McpLink::without_server(McpStatus::unavailable(McpKind::Installation, McpSettings::of_build())),
-        start: launch.start(),
->>>>>>> 8754a60874f27100ec9bc2d4df91f0d70cca074c
+        start,
       },
     );
     tree.pass_headless(&mut app);
