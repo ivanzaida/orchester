@@ -1,3 +1,5 @@
+use orchester_core::project::TaskKey;
+
 use super::{Active, BusyJob, RunJobs};
 use crate::{messages::Message, workspace::OpenProject};
 
@@ -33,14 +35,14 @@ impl RunJobs {
     }
   }
 
-  pub fn local_work(&self, open: &OpenProject, what: Message) -> Option<LocalWork> {
+  pub fn local_work(&self, open: &OpenProject, task: &TaskKey) -> Option<LocalWork> {
     if !self.begin(Active::Local) {
       return None;
     }
     self.update(|state| {
       state.busy_with = Some(BusyJob {
         project: open.project.name().as_str().into(),
-        what,
+        what: Message::new("localIntegration.running").with("task", task.to_string()),
         merge: true,
       })
     });

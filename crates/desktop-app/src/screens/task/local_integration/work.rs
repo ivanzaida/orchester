@@ -143,11 +143,9 @@ pub fn action(ctx: &mut Ctx) -> Work {
       let open = task.project.open.clone();
       let feed = task.project.feed.clone();
       let vault = services.vault.clone();
-      let busy =
-        orchester_workspace::messages::Message::new("localIntegration.running").with("task", task.key.to_string());
       let result = background::run(move || {
         let _working = jobs
-          .local_work(&open, busy)
+          .local_work(&open, &task.key)
           .ok_or(Problem("local_integration.error.foreign"))?;
         let origin = request.authorize()?;
         if matches!(request.action, Action::Inspect) {
