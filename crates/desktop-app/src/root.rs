@@ -17,7 +17,7 @@ use lurq::{
 
 use crate::{
   chrome, lifecycle,
-  mcp::{McpStatus, WindowLink},
+  mcp::{McpLink, WindowLink},
   navigation::{Navigation, input::window_input, tabs::TabSet},
   project::{Landing, Projects, ProjectsHost},
   routes,
@@ -50,8 +50,8 @@ pub struct Ready {
 pub struct RootProps {
   /// Where the root leaves the window's navigation and projects for the app's MCP tools.
   pub link: WindowLink,
-  /// Whether the app's MCP server listens, for the status bar.
-  pub mcp: McpStatus,
+  /// The app's MCP server, for the status bar and Settings.
+  pub mcp: McpLink,
   pub start: Start,
 }
 

@@ -2,7 +2,9 @@
 //! sensitive confirmations always remain person-only; a classified setup widening may be answered under the
 //! stored permission opt-in (automatic approvals also need their separate opt-in). The server re-reads consent
 //! off the UI thread before forwarding input; lurq's event-loop denial and confirmation handlers recheck it.
-//! Looking stays allowed. Neither consent nor this gate grants window-control scopes or provider permissions.
+//! Looking stays allowed, except while the app's MCP token shows in the window: then screenshots and the window's
+//! text are refused too, so no client reads it. Neither consent nor this gate grants window-control scopes or
+//! provider permissions.
 
 use std::sync::{
   Arc,
@@ -14,13 +16,15 @@ use lurq::mcp::{
   rmcp::{
     ErrorData as McpError, RoleServer, ServerHandler,
     model::{
-      CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ListToolsResult, PaginatedRequestParams,
-      ServerConfig,
+      CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, InitializeRequestParams, InitializeResult,
+      ListToolsResult, PaginatedRequestParams, ServerConfig,
     },
     service::RequestContext,
   },
 };
 use parking_lot::Mutex;
+
+use super::clients::SessionMark;
 
 /// lurq's tools that only look at the window; every other `lurq_*` tool sends it input or changes it.
 pub const LOOKING: &[&str] = &[
@@ -48,6 +52,21 @@ const QUESTION_REFUSAL: &str = "A person answers this in the window: while a Con
   confirm what a change lets agents do (in any tab, until it is answered or the page is left), \
   window input from MCP clients (clicks, keys, values, resizing, menus) is refused.";
 const STILL_AVAILABLE: &str = "Looking at the window and the app's own tools stay available.";
+/// What a refused client reads while the access token shows in Settings › Automation.
+const TOKEN_REFUSAL: &str = "The access token of Orchester's MCP server shows in the window: while a person reads \
+  it in Settings › Automation (30 seconds at most), screenshots and the window's text are refused, so no client \
+  reads it. Try again once it is hidden; the app's own tools stay available.";
+
+/// lurq's tools that read what the window shows, which are refused while the access token shows in it.
+pub const WINDOW_TEXT: &[&str] = &[
+  "lurq_find",
+  "lurq_find_by_class",
+  "lurq_find_by_id",
+  "lurq_inspect",
+  "lurq_read_tree",
+  "lurq_screenshot",
+  "lurq_wait",
+];
 
 /// Which person-only control is mounted, for the words a refused client reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -60,6 +79,8 @@ pub enum Guarded {
   PermissionWidening,
   /// Automatic approvals additionally require the separate approvals opt-in.
   ApprovalWidening,
+  /// Settings' *Orchester MCP server*: the server switch, the port, the token's Show, Copy and Rotate, the scope.
+  McpServer,
 }
 
 /// lurq's tools that send the window input or change it, which lurq denies while a protected control is
@@ -94,6 +115,9 @@ struct Controls {
   questions: usize,
   permissions: usize,
   approvals: usize,
+  server: usize,
+  /// Times the access token shows in the window now.
+  token_shown: usize,
 }
 
 /// Shared between the app's MCP server and the window. Clones share the same counts.
@@ -139,7 +163,7 @@ impl InputGate {
     match what {
       Guarded::PermissionWidening => workspace.automation_permission_consent(),
       Guarded::ApprovalWidening => workspace.automation_permission_consent() && workspace.automation_approval_consent(),
-      Guarded::PermissionsSetting | Guarded::WideningQuestion => false,
+      Guarded::PermissionsSetting | Guarded::WideningQuestion | Guarded::McpServer => false,
     }
   }
 
@@ -150,6 +174,7 @@ impl InputGate {
       Guarded::WideningQuestion => &mut controls.questions,
       Guarded::PermissionWidening => &mut controls.permissions,
       Guarded::ApprovalWidening => &mut controls.approvals,
+      Guarded::McpServer => &mut controls.server,
     };
     if add {
       *count += 1;
@@ -158,23 +183,45 @@ impl InputGate {
     }
   }
 
-  /// Applies current consent to lurq's event-loop tool denial too, including already queued calls.
+  /// Applies current consent, and whether the token shows, to lurq's event-loop tool denial too, including already
+  /// queued calls.
   pub fn refresh_tools(&self) {
     let protecting = self.protecting();
+    let token_shown = self.token_shown();
     if let Some((tools, denied)) = self.0.tools.lock().as_mut() {
-      if protecting {
-        for tool in INPUT {
-          if !denied.contains(tool) {
-            tools.deny_tool(*tool);
-            denied.push(tool);
-          }
-        }
-      } else {
-        for tool in denied.drain(..) {
+      let deny: Vec<&'static str> = INPUT
+        .iter()
+        .filter(|_| protecting)
+        .chain(WINDOW_TEXT.iter().filter(|_| token_shown))
+        .copied()
+        .collect();
+      denied.retain(|tool| {
+        let keep = deny.contains(tool);
+        if !keep {
           tools.allow_tool(tool);
+        }
+        keep
+      });
+      for tool in deny {
+        if !denied.contains(&tool) {
+          tools.deny_tool(tool);
+          denied.push(tool);
         }
       }
     }
+  }
+
+  /// Marks the access token as shown in the window until the returned guard is dropped: screenshots and the
+  /// window's text are refused meanwhile. Called on the event loop before the token is drawn.
+  pub fn show_token(&self) -> TokenShown {
+    self.0.controls.lock().token_shown += 1;
+    self.refresh_tools();
+    TokenShown(self.clone())
+  }
+
+  /// Whether the access token shows in the window now.
+  pub fn token_shown(&self) -> bool {
+    self.0.controls.lock().token_shown > 0
   }
 
   async fn refresh_consent(&self) {
@@ -200,7 +247,7 @@ impl InputGate {
   fn refusal(&self) -> String {
     let controls = self.0.controls.lock();
     let questions = controls.questions + controls.permissions + controls.approvals;
-    let settings = controls.settings;
+    let settings = controls.settings + controls.server;
     let mut words: Vec<&str> = Vec::new();
     if settings > 0 {
       words.push(SETTING_REFUSAL);
@@ -216,6 +263,7 @@ impl InputGate {
   pub fn protecting(&self) -> bool {
     let controls = self.0.controls.lock();
     controls.settings > 0
+      || controls.server > 0
       || controls.questions > 0
       || (controls.permissions > 0 && !self.widening_allowed(Guarded::PermissionWidening))
       || (controls.approvals > 0 && !self.widening_allowed(Guarded::ApprovalWidening))
@@ -227,11 +275,22 @@ impl InputGate {
     self.0.in_flight.load(Ordering::SeqCst) > 0
   }
 
-  /// lurq's tools for one client session, behind this gate.
+  /// lurq's tools for one client session, behind this gate, e.g. over an in-process transport.
   pub fn guard(&self, tools: McpService) -> GuardedTools {
     GuardedTools {
       tools,
       gate: self.clone(),
+      session: None,
+    }
+  }
+
+  /// [`guard`](Self::guard) for a session of the app's server, whose client `session` names in the list of
+  /// clients.
+  pub(super) fn guard_listed(&self, tools: McpService, session: SessionMark) -> GuardedTools {
+    GuardedTools {
+      tools,
+      gate: self.clone(),
+      session: Some(session),
     }
   }
 }
@@ -242,6 +301,16 @@ pub struct Protected(InputGate, Guarded);
 impl Drop for Protected {
   fn drop(&mut self) {
     self.0.count(self.1, false);
+    self.0.refresh_tools();
+  }
+}
+
+/// The access token showing in the window; dropping it, when it is hidden, lets clients look again.
+pub struct TokenShown(InputGate);
+
+impl Drop for TokenShown {
+  fn drop(&mut self) {
+    self.0.0.controls.lock().token_shown -= 1;
     self.0.refresh_tools();
   }
 }
@@ -260,6 +329,7 @@ impl Drop for InFlight {
 pub struct GuardedTools {
   tools: McpService,
   gate: InputGate,
+  session: Option<SessionMark>,
 }
 
 impl ServerHandler for GuardedTools {
@@ -267,11 +337,25 @@ impl ServerHandler for GuardedTools {
     self.tools.get_info()
   }
 
+  async fn initialize(
+    &self,
+    request: InitializeRequestParams,
+    context: RequestContext<RoleServer>,
+  ) -> Result<InitializeResult, McpError> {
+    if let Some(session) = &self.session {
+      session.initialized(&request.client_info.name, &request.client_info.version);
+    }
+    self.tools.initialize(request, context).await
+  }
+
   async fn list_tools(
     &self,
     request: Option<PaginatedRequestParams>,
     context: RequestContext<RoleServer>,
   ) -> Result<ListToolsResult, McpError> {
+    if let Some(session) = &self.session {
+      session.requested();
+    }
     self.tools.list_tools(request, context).await
   }
 
@@ -280,6 +364,14 @@ impl ServerHandler for GuardedTools {
     request: CallToolRequestParams,
     context: RequestContext<RoleServer>,
   ) -> Result<CallToolResponse, McpError> {
+    if let Some(session) = &self.session {
+      session.requested();
+    }
+    if self.gate.token_shown() && WINDOW_TEXT.contains(&request.name.as_ref()) {
+      tracing::info!(tool = %request.name, "a look at the window refused while the access token shows");
+      let refusal = serde_json::json!({ "code": "token_shown", "message": TOKEN_REFUSAL });
+      return Ok(CallToolResult::error(vec![ContentBlock::text(refusal.to_string())]).into());
+    }
     if !sends_input(&request.name) {
       return self.tools.call_tool(request, context).await;
     }

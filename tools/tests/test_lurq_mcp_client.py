@@ -136,8 +136,14 @@ class ExactPidClientTest(unittest.TestCase):
         }
         (Path(self.directory.name) / f"{PID}.json").write_text(json.dumps(data), encoding="utf-8")
 
-    def client(self, *, env=None, tool="lurq_windows", image_out=None):
-        command = [sys.executable, str(CLIENT), str(PID), tool, "--discovery-dir", self.directory.name]
+    def client(self, *, env=None, tool="lurq_windows", image_out=None, discovery=True, app=None):
+        command = [sys.executable, str(CLIENT), str(PID), tool]
+        if discovery is True:
+            command.extend(("--discovery-dir", self.directory.name))
+        elif discovery is not None:
+            command.extend(("--discovery", discovery))
+        if app is not None:
+            command.extend(("--app", app))
         if image_out is not None:
             command.extend(("--image-out", str(image_out)))
         return subprocess.run(
@@ -160,6 +166,41 @@ class ExactPidClientTest(unittest.TestCase):
             ["initialize", "notifications/initialized", "tools/call"],
         )
         self.assertTrue(all(auth == f"Bearer {TOKEN}" for _method, auth in McpHandler.calls))
+
+    def environment(self, variable):
+        """This process's environment with the user folders and the QA variable under test control."""
+        user = tempfile.TemporaryDirectory(dir=REPO_TMP, prefix="d7-user-")
+        self.addCleanup(user.cleanup)
+        env = {key: value for key, value in os.environ.items() if key != "ORCHESTER_APP_MCP_DISCOVERY"}
+        env["LOCALAPPDATA"] = user.name
+        env["HOME"] = user.name
+        if variable is not None:
+            env["ORCHESTER_APP_MCP_DISCOVERY"] = variable
+        return env
+
+    def test_discovery_variable_names_the_new_apps_folder(self):
+        self.discovery(app="orchester-app")
+        result = self.client(env=self.environment(self.directory.name), discovery=None, app="orchester-app")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn(TOKEN, result.stdout + result.stderr)
+
+    def test_discovery_option_wins_over_the_variable(self):
+        self.discovery(app="orchester-app")
+        other = tempfile.TemporaryDirectory(dir=REPO_TMP, prefix="d7-other-")
+        self.addCleanup(other.cleanup)
+        result = self.client(
+            env=self.environment(other.name), discovery=self.directory.name, app="orchester-app"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn(TOKEN, result.stdout + result.stderr)
+
+    def test_discovery_variable_is_only_for_the_new_app(self):
+        self.discovery()
+        result = self.client(env=self.environment(self.directory.name), discovery=None)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Cannot read MCP discovery", result.stderr)
+        self.assertEqual(McpHandler.calls, [])
+        self.assertNotIn(TOKEN, result.stdout + result.stderr)
 
     def test_mismatched_pid_is_rejected_before_network(self):
         self.discovery(pid=PID + 1)

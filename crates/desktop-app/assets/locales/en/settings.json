@@ -8,6 +8,129 @@
         "unreadable": "This setting can't be read: {{reason}}",
         "notSaved": "Not saved: {{reason}}",
         "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
+      },
+      "server": {
+        "section": "Orchester MCP server",
+        "meta": {
+          "installation": "This installation",
+          "qa": "This QA copy",
+          "development": "This development build"
+        },
+        "enabled": {
+          "title": "Let agents connect to Orchester",
+          "description": "Agents and tools on this computer reach Orchester at a fixed address, each with the access token. What they may do is set below, in What automation may do. Off: nothing listens.",
+          "off": "Agents and tools on this computer reach Orchester at a fixed address, each with the access token. Off: nothing listens; agents you registered can't reach Orchester until you turn this on."
+        },
+        "state": {
+          "listening": "Listening",
+          "portTaken": "Port {{port}} taken",
+          "off": "Off",
+          "notRunning": "Not running",
+          "portRefused": "Port {{port}} refused"
+        },
+        "address": {
+          "title": "Address",
+          "description": "Fixed, so an agent you register once keeps connecting after Orchester restarts. If the port is taken, Orchester says so here and doesn't move to another one.",
+          "off": "Nothing listens while the server is off. The address and the token stay as they are.",
+          "none": "No address while the server is not running.",
+          "copy": "Copy",
+          "dash": "—"
+        },
+        "port": {
+          "label": "Port",
+          "use": "Use port",
+          "invalid": "Use a port from 1024 to 65535.",
+          "taken": "Port {{port}} is in use by another program, so Orchester isn't listening. It doesn't move to another port on its own: agents registered with this address would reach nothing. Choose another port, then register your agents again.",
+          "changed": "Now listening on port {{port}}. Agents registered with port {{old}} need registering again.",
+          "notSaved": "The port was not changed: {{reason}}",
+          "refused": "Windows refuses port {{port}}, so Orchester isn't listening: it keeps the port for itself (Hyper-V, WSL or Docker reserve ranges of ports), or another program holds it exclusively. It doesn't move to another port on its own. Choose another port, then register your agents again."
+        },
+        "token": {
+          "title": "Access token",
+          "whereWindows": "Kept in Windows Credential Manager, never in a file. Agents send it with every request. Only you can show, copy or rotate it, here in the window.",
+          "whereMacos": "Kept in your login keychain, never in a file. Agents send it with every request. Only you can show, copy or rotate it, here in the window.",
+          "mask": "•••• •••• •••• •••• •••• •••• •••• ••••",
+          "show": "Show",
+          "hide": "Hide",
+          "shownFor": "Hidden again in {{seconds}} s. While it shows, the MCP server refuses screenshots and the window's text, so no agent reads it.",
+          "copy": "Copy",
+          "copied": "Copied. Orchester clears it from the clipboard in 1 minute if it's still there.",
+          "copyFailed": "The token could not be put on the clipboard.",
+          "rotate": "Rotate token",
+          "rotateConfirm": {
+            "title": "Rotate the token?",
+            "agents": "Every agent registered with the current token stops connecting until you register it again with the new one.",
+            "sessions": "Open sessions end now. The new token replaces the old one in {{store}}.",
+            "confirm": "Rotate token",
+            "cancel": "Keep current token"
+          },
+          "rotated": "New token in use. Register your agents again with the commands below; for Codex, set ORCHESTER_APP_MCP_TOKEN again.",
+          "notRotated": "The new token couldn't be stored in {{store}}: {{reason}} The current token stays in use.",
+          "unreadable": "The token can't be read from {{store}}",
+          "unreadableBody": "{{reason}} The server is off until it can be read; agents keep their registration. Try again, or rotate the token to store a new one.",
+          "tryAgain": "Try again",
+          "notRead": "The token can't be read from {{store}}: {{reason}} Show and Copy need it."
+        },
+        "store": {
+          "windows": "Windows Credential Manager",
+          "macos": "your login keychain"
+        },
+        "blocked": "A change brought by automation was not taken: only you change the MCP server's settings, here in the window.",
+        "notChanged": "Not changed: {{reason}}",
+        "unavailable": "The server did not start. The log says why.",
+        "copy": {
+          "title": "Server",
+          "qa": "This copy listens on a new port on each start, with a token of its own for this run. Clients find both in its discovery file.",
+          "development": "This development build listens on a new port on each start, with a token of its own for this run. Clients find both in its discovery file.",
+          "listening": "Listening on {{address}}",
+          "qaNote": "This copy was started for QA: a new port on each start; its discovery file is in {{folder}}. The address and token settings apply to normal starts.",
+          "developmentNote": "Development build: its discovery file is {{file}}. The installed app keeps its fixed address, so both can run at once.",
+          "developmentNoFile": "Development build: it writes no discovery file while it is not listening. The installed app keeps its fixed address, so both can run at once."
+        }
+      },
+      "connect": {
+        "title": "Connect an agent",
+        "description": "Register Orchester once in your agent's configuration. The agent then has Orchester's tools in every session, as mcp__orchester__…: no process id, no file to read.",
+        "tab": {
+          "claude": "Claude Code",
+          "codex": "Codex"
+        },
+        "scope": {
+          "label": "Available",
+          "user": "In every folder (user)",
+          "local": "In one folder only (local)"
+        },
+        "claude": {
+          "user": "Copy puts the command with the token on the clipboard; Orchester clears it after 1 minute. Run it in a terminal, then check with claude mcp get orchester. Never put the token in a repository's .mcp.json.",
+          "local": "Run it in that folder. Claude Code keeps it in ~/.claude.json, outside the repository. There's no project option: it would write the token into the repository's .mcp.json.",
+          "copied": "Copied with the token. Orchester clears it from the clipboard in 1 minute if it's still there. Run it in a terminal, then check with claude mcp get orchester."
+        },
+        "codex": {
+          "step1": "Register Orchester in Codex. Codex reads the token from a variable, not from its configuration:",
+          "step2Windows": "Set the variable for your user. It reaches programs started after this, so restart Codex, your terminal or your IDE:",
+          "step2Macos": "Set the variable for your user. launchctl setenv reaches apps started from the Dock or Finder until you sign out; add the same export to ~/.zshrc for terminals:",
+          "readersWindows": "setx keeps the variable in your Windows user profile, and every program you start from then on gets it, so other programs running as you can read the token. Agents in Orchester's runs never get it: their environment is cleaned. After Rotate token, set it again. Check with codex mcp get orchester.",
+          "readersMacos": "The variable is in the environment of every program you start from then on, so other programs running as you can read the token. Agents in Orchester's runs never get it: their environment is cleaned. After Rotate token, set it again. Check with codex mcp get orchester.",
+          "alternative": "Or put the token in ~/.codex/config.toml instead (no variable; any program running as you can read that file):",
+          "copied": "Copied with the token. Orchester clears it from the clipboard in 1 minute if it's still there.",
+          "number1": "1.",
+          "number2": "2."
+        },
+        "mask": "••••••••••••••••",
+        "copy": "Copy",
+        "copied": "Copied",
+        "copyFailed": "Not copied",
+        "unavailable": "The commands need the access token, which can't be read now."
+      },
+      "connected": {
+        "title": "Agents connected",
+        "description": "Since Orchester started. Names and versions are what each client says it is.",
+        "descriptionRotated": "Since the token changed. Names and versions are what each client says it is.",
+        "none": "No agent connected since Orchester started.",
+        "noneRotated": "No agent connected since the token changed.",
+        "client": "{{name}} {{version}}",
+        "now": "connected now",
+        "lastSeen": "last request at {{time}}"
       }
     }
   }

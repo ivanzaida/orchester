@@ -8,8 +8,9 @@ use std::{
 };
 
 use orchester_core::{
+  app_mcp::McpPort,
   appearance::ThemeSetting,
-  id::{ProjectId, ServerId},
+  id::{InstallationId, ProjectId, ServerId},
   project::Project,
   run::TaskPhase,
   time::Timestamp,
@@ -299,6 +300,29 @@ impl Workspace {
   /// set, when the build decides.
   pub fn mcp_window_control(&self) -> Result<Option<bool>, StoreError> {
     self.db.lock().mcp_window_control()
+  }
+
+  /// Whether the installed app's MCP server listens; on until a person turns it off in Settings.
+  pub fn mcp_server_enabled(&self) -> Result<bool, StoreError> {
+    self.db.lock().mcp_server_enabled()
+  }
+
+  pub fn set_mcp_server_enabled(&self, enabled: bool) -> Result<(), StoreError> {
+    self.db.lock().set_mcp_server_enabled(enabled)
+  }
+
+  /// The port the installed app's MCP server listens on.
+  pub fn mcp_port(&self) -> Result<McpPort, StoreError> {
+    self.db.lock().mcp_port()
+  }
+
+  pub fn set_mcp_port(&self, port: McpPort) -> Result<(), StoreError> {
+    self.db.lock().set_mcp_port(port)
+  }
+
+  /// This installation's id, which names its secrets of its own in the keychain (the app's MCP token).
+  pub fn installation_id(&self) -> Result<InstallationId, StoreError> {
+    self.db.lock().installation_id()
   }
 
   /// The shared servers, in the order they were added.

@@ -2,15 +2,19 @@
 //! requests through Orchester's MCP server (off until a person turns it on), the warning threshold the
 //! Usage dashboard draws in Plan limits (limits belong to accounts, so every project shows the same
 //! line; 80 % until it is changed), and `orchester-app`'s theme (dark until changed) and whether agents
-//! may control its window through its MCP server (the build decides until it is set), and whether
+//! may control its window through its MCP server (the build decides until it is set), whether
 //! automation may widen what agents may do through Orchester's MCP server (off until a person turns it on
-//! in the window).
+//! in the window), and the installed app's own MCP server: whether it listens, on which port, and the id of
+//! this installation that names its token in the keychain.
 
-use orchester_core::{appearance::ThemeSetting, usage::limits::WarningThreshold};
+use orchester_core::{app_mcp::McpPort, appearance::ThemeSetting, id::InstallationId, usage::limits::WarningThreshold};
 use rusqlite::params;
 
 use super::AppDb;
-use crate::{StoreError, rows::corrupt};
+use crate::{
+  StoreError,
+  rows::{corrupt, parse},
+};
 
 pub(super) const MIGRATION: &str = r"
 CREATE TABLE app_settings (
@@ -36,6 +40,14 @@ pub(super) const AUTOMATION_PERMISSIONS_MIGRATION: &str = r"
 -- Let automation change agent permissions: off until a person turns it on in the window.
 ALTER TABLE app_settings ADD COLUMN automation_changes_permissions INTEGER NOT NULL DEFAULT 0
   CHECK (automation_changes_permissions IN (0, 1));
+";
+
+pub(super) const APP_MCP_MIGRATION: &str = r"
+-- orchester-app's MCP server at a fixed address (docs/design/app-mcp-connection.md): on until turned off, the
+-- port set in Settings, and this installation's id, given on first use, which names its token in the keychain.
+ALTER TABLE app_settings ADD COLUMN mcp_server_enabled INTEGER NOT NULL DEFAULT 1 CHECK (mcp_server_enabled IN (0, 1));
+ALTER TABLE app_settings ADD COLUMN mcp_port INTEGER NOT NULL DEFAULT 47821 CHECK (mcp_port BETWEEN 1024 AND 65535);
+ALTER TABLE app_settings ADD COLUMN installation_id TEXT;
 ";
 
 impl AppDb {
@@ -129,5 +141,59 @@ impl AppDb {
       params![allowed],
     )?;
     Ok(())
+  }
+
+  /// Whether the installed app's MCP server listens (*Let agents connect to Orchester*); on until turned off.
+  pub fn mcp_server_enabled(&self) -> Result<bool, StoreError> {
+    Ok(
+      self
+        .connection
+        .query_row("SELECT mcp_server_enabled FROM app_settings WHERE id = 1", [], |row| {
+          row.get(0)
+        })?,
+    )
+  }
+
+  pub fn set_mcp_server_enabled(&mut self, enabled: bool) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE app_settings SET mcp_server_enabled = ?1 WHERE id = 1",
+      params![enabled],
+    )?;
+    Ok(())
+  }
+
+  /// The port the installed app's MCP server listens on; [`McpPort::DEFAULT`] until it is changed.
+  pub fn mcp_port(&self) -> Result<McpPort, StoreError> {
+    let port: i64 = self
+      .connection
+      .query_row("SELECT mcp_port FROM app_settings WHERE id = 1", [], |row| row.get(0))?;
+    u32::try_from(port)
+      .ok()
+      .and_then(|port| McpPort::new(port).ok())
+      .ok_or_else(|| corrupt("MCP port", port))
+  }
+
+  pub fn set_mcp_port(&mut self, port: McpPort) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE app_settings SET mcp_port = ?1 WHERE id = 1",
+      params![port.get()],
+    )?;
+    Ok(())
+  }
+
+  /// This installation's id, given the first time it is asked for and the same from then on.
+  pub fn installation_id(&mut self) -> Result<InstallationId, StoreError> {
+    let given = InstallationId::generate().to_string();
+    // Only where none is yet: two callers at once keep the first id.
+    self.connection.execute(
+      "UPDATE app_settings SET installation_id = ?1 WHERE id = 1 AND installation_id IS NULL",
+      params![given],
+    )?;
+    let id: String = self
+      .connection
+      .query_row("SELECT installation_id FROM app_settings WHERE id = 1", [], |row| {
+        row.get(0)
+      })?;
+    parse("installation id", &id)
   }
 }

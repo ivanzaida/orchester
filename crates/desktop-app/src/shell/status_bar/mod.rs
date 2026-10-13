@@ -14,6 +14,7 @@ mod approvals;
 mod counts;
 mod facts;
 mod item;
+mod mcp;
 mod operations;
 mod runner;
 
@@ -24,6 +25,7 @@ use lurq::{
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Row, Spacer},
+  core::ElementRef,
   layout::{Alignment, layout_kind::ShrinkLimit},
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -33,13 +35,17 @@ use orchester_workspace::activity::{
   bar::{self, ActivitySlot},
 };
 
-pub use self::facts::{BarAction, BarFacts, Dispatch, ProjectFacts, ReadFailure, RunnerFacts, Stopping};
 use self::{
   act::Stopper,
   item::{frame, give_way, glyph, item, label},
 };
+pub use self::{
+  facts::{BarAction, BarFacts, Dispatch, ProjectFacts, ReadFailure, RunnerFacts, Stopping},
+  item::dot,
+  mcp::from_scratch,
+};
 use crate::{
-  mcp::McpStatus,
+  mcp::{McpLink, McpStatus},
   project::{ProjectFeed, ProjectState, Projects, TasksState},
   routes::Route,
   services::Services,
@@ -68,10 +74,11 @@ impl Component for StatusBar {
     // First, before the render's streams: lurq keeps a component's futures by the order it asks for them.
     let stop = self.stopper.action(ctx);
     let services = Services::of(ctx);
-    let mcp = ctx
-      .use_context::<McpStatus>()
-      .expect("the root provides the MCP status before mounting the shell");
+    let link = ctx
+      .use_context::<McpLink>()
+      .expect("the root provides the MCP server's link before mounting the shell");
     let log = log(ctx, &services.activity);
+    let mcp = mcp_status(ctx, &link);
     let projects = Projects::of(ctx);
     let shown = Route::parse(&ctx.route_path())
       .ok()
@@ -141,6 +148,20 @@ fn log(ctx: &mut Ctx, activity: &Activity) -> ActivityLog {
   stream.state().get().data.unwrap_or_default()
 }
 
+/// The app's MCP server's status, whenever it changes.
+pub fn mcp_status(ctx: &mut Ctx, link: &McpLink) -> McpStatus {
+  let stream = ctx.stream(link.clone(), |link, emitter: StreamEmitter<McpStatus, ()>| async move {
+    let mut changes = link.changes();
+    loop {
+      let status = changes.borrow_and_update().clone();
+      if !emitter.emit(status) || changes.changed().await.is_err() {
+        return;
+      }
+    }
+  });
+  stream.state().get().data.unwrap_or_else(|| link.status())
+}
+
 /// What [`StatusBarView`] shows and where its actions go.
 #[derive(Clone)]
 pub struct BarProps {
@@ -158,13 +179,16 @@ impl PartialEq for BarProps {
 impl DevtoolsInspectable for BarProps {}
 
 /// The status bar as `BarProps` says.
-pub struct StatusBarView;
+pub struct StatusBarView {
+  /// The bar, which the MCP item's popover opens over.
+  bar: ElementRef,
+}
 
 impl Component for StatusBarView {
   type Props = BarProps;
 
-  fn create(_ctx: &mut Ctx) -> Self {
-    Self
+  fn create(ctx: &mut Ctx) -> Self {
+    Self { bar: ctx.element_ref() }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -209,9 +233,10 @@ impl Component for StatusBarView {
         &dispatch,
       ));
     }
-    right.extend(counts::app(ctx, facts.mcp));
+    right.extend(counts::app(ctx, (&facts.mcp, &self.bar), &dispatch));
     Row::new()
       .id("status-bar")
+      .ref_element(self.bar.clone())
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(STATUS_BAR_HEIGHT))
       .padding(Padding::horizontal(SpacingSize::Sm))

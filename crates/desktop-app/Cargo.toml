@@ -77,9 +77,12 @@ zeroize.workspace = true
 
 # Gives lurq's window class and the window the executable's embedded icon (`system_icon`): neither lurq
 # nor winit loads icon resources or sets class icons. Brings the window of the app that has the data folder
-# open to the front (`startup::front`).
+# open to the front (`startup::front`). Holds the MCP server's port so no other socket can share it
+# (SO_EXCLUSIVEADDRUSE, `mcp::bind`), on a socket2 socket set up before it binds.
 [target.'cfg(windows)'.dependencies]
+socket2.workspace = true
 windows-sys = { workspace = true, features = [
+  "Win32_Networking_WinSock",
   "Win32_System_LibraryLoader",
   "Win32_System_Threading",
   "Win32_UI_WindowsAndMessaging",
@@ -95,6 +98,8 @@ rmcp = { workspace = true, features = ["client"] }
 # The QA seed (`examples/seed`) damages a run's record and sets a project database's schema version the way an
 # edit outside Orchester or a newer build would; the store has no API for either.
 rusqlite.workspace = true
+# Tries to share the MCP server's port the way another program would (`tests/mcp_stable`).
+socket2.workspace = true
 tempfile.workspace = true
 
 # Reads the running app's window and class icons (`tests/system_icon.rs`).

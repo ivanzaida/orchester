@@ -1,9 +1,10 @@
-//! The app's settings (`Settings · Automation · dark` `oD7hy`). Only *Let automation change agent
-//! permissions* is built: the person's own switch for what automation may widen through the MCP server,
-//! which no tool can change. The page tabs and the other rows of the design come with the Settings
-//! screen's own task.
+//! The app's settings (`Settings · Automation · MCP server · stable address · dark` `lye6f`): *Orchester MCP server*
+//! (`server`) and, of *What automation may do*, only *Let automation change agent permissions*: the person's own
+//! switch for what automation may widen through the MCP server, which no tool can change. The page tabs and the
+//! other rows of the design come with the Settings screen's own task.
 
 mod automation;
+mod server;
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
@@ -35,6 +36,8 @@ pub fn screen(ctx: &mut Ctx) -> Element {
         .id("settings-form")
         .width(Dimension::Px(FORM_WIDTH))
         .padding_top(SpacingSize::Sm)
+        .spacing(SpacingSize::Xl)
+        .child(ctx.mount_keyed::<server::ServerSection>("mcp-server", ()))
         .child(ctx.mount_keyed::<automation::ChangePermissions>("change-permissions", automation::NoProps)),
     )
     .into()

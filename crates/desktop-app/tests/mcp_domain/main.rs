@@ -37,7 +37,7 @@ use lurq::app::{App, Tree};
 use orchester_app::{
   appearance::{Appearance, ThemeSetting},
   i18n,
-  mcp::{self, AppMcp, DiscoveryFolder, McpSettings, McpStatus, WindowLink},
+  mcp::{self, AppMcp, McpLink, McpMode, McpSettings, WindowLink},
   project::{ProjectFeed, TasksState},
   root::{Root, RootProps},
   routes::{ProjectPage, Route, TaskList},
@@ -88,14 +88,20 @@ impl Served {
     let appearance = Appearance::new(ThemeSetting::Dark, Arc::default(), None);
     let settings = McpSettings::with_window_control(window_control);
     let config = mcp::config(settings, &link, &appearance, launch.services(), app.i18n());
-    let discovery = DiscoveryFolder::At(folder.path().join("discovery"));
-    let server =
-      AppMcp::start(&mut tree, runtime.handle(), &discovery, config, &link.input_gate()).expect("the server listens");
-    let file: Value = serde_json::from_str(&std::fs::read_to_string(server.discovery_path()).expect("discovery file"))
+    let discovery = McpMode::Qa(folder.path().join("discovery"));
+    let server = AppMcp::start(
+      &mut tree,
+      runtime.handle(),
+      discovery,
+      (config, settings),
+      &link.input_gate(),
+    );
+    let file = server.discovery_path().expect("the server listens");
+    let file: Value = serde_json::from_str(&std::fs::read_to_string(file).expect("discovery file"))
       .expect("the discovery file is JSON");
     let token = file["token"].as_str().expect("the file holds the token").to_owned();
-    let port = server.port().get();
-    let mcp = McpStatus::of(Some(&server), settings);
+    let port = server.port().expect("the server listens").get();
+    let mcp = McpLink::new(&server);
     tree.mount_root::<Root>(
       &mut app,
       RootProps {
@@ -258,7 +264,9 @@ impl Served {
 
 impl Drop for Served {
   fn drop(&mut self) {
-    drop(self.server.take());
+    if let Some(server) = self.server.take() {
+      server.shutdown();
+    }
     if let Some(launch) = self.launch.take() {
       launch.end();
     }
