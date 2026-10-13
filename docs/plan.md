@@ -375,6 +375,26 @@ Not done: Cancel run stays beside Continue run for an interrupted run (63.04/63.
 (separate agent) is outstanding.
 
 
+### Agent accounts · branch `claude/agent-accounts` (implemented 2026-10-13, waiting for review and design verification)
+
+Several Claude Code and Codex accounts per computer (`docs/design/agent-accounts.md`, decided 2026-10-12): app-wide in
+`orchester.db` (`agent_accounts`, a fixed Default per CLI, removed accounts kept as tombstones), a project's agent
+connection picks one and keeps its folder in the connection row (absent for Default, so existing connections are
+unchanged); the runner starts the CLI with `CLAUDE_CONFIG_DIR` / `CODEX_HOME` set to it and records each invocation's
+account. Plan readings and snapshots are per account. A turn refused at the account's plan limit stops the run in
+place (`plan_limit`); the runner resumes the same session at the reset, or the person continues the step now on
+another account's connection as a new session for this run only. Desktop app: Settings › Accounts (list by CLI,
+add in place, sign-in through a visible terminal and Check again, details, Used by, rename, remove in place), the
+Account field in Connections, read-backs in agents, pipeline steps and runs, the plan limits per account in the status
+bar, the plan-limit choice on the task page. MCP: `list_accounts`, `set_connection_account`. QA:
+`cargo run -p orchester-app --example accounts_qa -- <state> [account]`. Tests: `-p orchester-core --test accounts`,
+`-p orchester-store --test accounts`, `--test limits limits`, `-p orchester-workspace --test accounts`,
+`-p orchester-runner --features test-agent --test accounts`, `-p orchester-app --test settings_accounts`,
+`--test connections accounts`, `--test status_bar plan_limits`, `--test mcp_domain accounts`,
+`--test task_decisions decision_plan_limit`. Left: a new run waiting for its account's reset with *Start now on …*,
+the Usage legend per account, Codex identity through App Server `account/read`, *Choose folder…* for a missing folder.
+**Done when** a separate review passes and a design verifier reports no blocking or major mismatches against `hgOl2`.
+
 ### ORC-72 · Usage dashboard · branch `orchester/orc-72-run-1` (implemented 2026-10-06, waiting for design verification)
 
 The Usage page (sidebar item after Pull requests, `/usage`) and All projects › *Projects* | *Usage* (`/projects?tab=usage`)
