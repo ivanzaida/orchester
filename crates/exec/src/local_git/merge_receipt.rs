@@ -21,6 +21,17 @@ impl LocalGit {
     ])?;
     Ok(())
   }
+  /// Commit only the reviewed resolved index, with a durable action identifying this attempt.
+  pub fn commit_task_resolution(&self, message: &str, action: &str) -> Result<(), LocalGitError> {
+    let mut owned = self.clone();
+    owned.ref_action = Some(action.to_owned());
+    owned.finish_task_resolution(message)
+  }
+
+  pub fn has_task_commit_receipt(&self, head: &str, action: &str, message: &str) -> Result<bool, LocalGitError> {
+    let entry = self.text(&["reflog", "show", "-1", "--format=%H%x00%gs", "HEAD"])?;
+    Ok(entry == format!("{head}\0{action}: {message}"))
+  }
   pub fn has_merge_receipt(&self, exact: &CheckedResult, action: &str) -> Result<bool, LocalGitError> {
     let entry = self.text(&["reflog", "show", "-1", "--format=%H%x00%gs", "HEAD"])?;
     let Some((head, message)) = entry.split_once('\0') else {

@@ -134,7 +134,7 @@ impl LocalGit {
         return Err(LocalError::Unresolved.into());
       }
     }
-    self.text(&["commit", "-m", message])?;
+    self.text(&["-c", "core.logAllRefUpdates=true", "commit", "-m", message])?;
     Ok(())
   }
 

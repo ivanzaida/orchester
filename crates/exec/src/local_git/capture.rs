@@ -153,6 +153,26 @@ impl LocalGit {
     parse_entries(&output.bytes, true)
   }
 
+  /// Fingerprint every stage outside explicitly owned writes, including unresolved conflict entries.
+  pub fn index_fingerprint_excluding(
+    &self,
+    paths: &[LocalPath],
+  ) -> Result<orchester_core::blob::ContentHash, LocalGitError> {
+    let output = self.raw(&["ls-files", "--stage", "-z"], None, None)?;
+    if output.code != Some(0) {
+      return Err(LocalGitError::Refused);
+    }
+    let mut retained = Vec::new();
+    for entry in output.bytes.split(|byte| *byte == 0).filter(|entry| !entry.is_empty()) {
+      let text = std::str::from_utf8(entry).map_err(|_| LocalGitError::Data)?;
+      let (_, path) = text.split_once('\t').ok_or(LocalGitError::Data)?;
+      if !paths.contains(&LocalPath::new(path)?) {
+        retained.extend_from_slice(entry);
+        retained.push(0);
+      }
+    }
+    Ok(digest(&retained))
+  }
   pub fn tree_entries(&self, tree: &str) -> Result<BTreeMap<LocalPath, IndexEntry>, LocalGitError> {
     let output = self.raw(&["ls-tree", "-r", "-z", tree], None, None)?;
     if output.code != Some(0) {

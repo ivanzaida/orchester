@@ -8,6 +8,8 @@ mod external;
 mod metadata;
 #[path = "local_integration/privacy.rs"]
 mod privacy;
+#[path = "local_integration/review_regressions.rs"]
+mod review_regressions;
 #[path = "local_integration/schema.rs"]
 mod schema;
 #[path = "local_integration/selection.rs"]
@@ -308,12 +310,13 @@ fn local_integration_restart_completes_partially_written_task_resolution() {
     mode: 0o100644,
     object: task.put_path_blob(&conflict.path, bytes).expect("blob"),
   };
-  let mut untouched = task.index_entries().expect("index");
-  untouched.remove(&conflict.path);
+  let untouched = task
+    .index_fingerprint_excluding(std::slice::from_ref(&conflict.path))
+    .expect("index");
   let plan = PendingResolution {
     before,
     conflict: conflict.clone(),
-    untouched_index: orchester_exec::local_git::digest(&serde_json::to_vec(&untouched).expect("index")),
+    untouched_index: untouched,
     writes: vec![ResolutionWrite {
       path: conflict.path.clone(),
       before: expected.clone(),

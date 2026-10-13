@@ -14,6 +14,7 @@ mod resolution;
 mod restore;
 mod restore_writes;
 mod sync;
+mod task_commit;
 mod view;
 
 use std::path::Path;
@@ -106,6 +107,13 @@ impl LocalIntegration {
       .ok_or(IntegrationError::Run)?;
     if run.status() != &RunStatus::Succeeded {
       return Err(IntegrationError::Run);
+    }
+    if db
+      .local_operations()?
+      .iter()
+      .any(|operation| operation.run() != run_id && operation.reserves_checkout())
+    {
+      return Err(LocalError::ForeignOperation.into());
     }
     let scratch =
       orchester_exec::local_git::prepare_scratch(root, &[".orchester", "local-integration", &run_id.to_string()])?;

@@ -79,13 +79,11 @@ impl LegacyPolicy {
 }
 /// Historical finished records do not reserve the shared checkout forever.
 pub(crate) fn managed_checkout(db: &ProjectDb, run: RunId) -> Result<bool, orchester_store::StoreError> {
-  use orchester_core::integration::local::LocalPhase;
   Ok(
     db.local_operation(run)?.is_some()
-      || db.local_operations()?.iter().any(|operation| match operation.phase() {
-        LocalPhase::Complete => false,
-        LocalPhase::Canceled => operation.preservation().is_some_and(|saved| saved.retained),
-        _ => true,
-      }),
+      || db
+        .local_operations()?
+        .iter()
+        .any(|operation| operation.reserves_checkout()),
   )
 }

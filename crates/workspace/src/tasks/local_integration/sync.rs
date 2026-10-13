@@ -34,33 +34,43 @@ impl LocalIntegration {
     if !task.clean() {
       return Err(LocalError::ForeignOperation.into());
     }
+    let result = self.task_git()?.preview_sync(&task, &base.head)?;
     self.operation.begin_sync(&base)?;
     self.operation.own_task(task);
+    self.operation.plan_sync_result(result)?;
     self.save()?;
-    let merged = self
-      .task_git()?
-      .text(&["merge", "--no-ff", "--no-commit", "--no-overwrite-ignore", &base.head]);
+    self.execute_sync()
+  }
+
+  pub(super) fn execute_sync(&mut self) -> Result<(), IntegrationError> {
+    let base = self.operation.reviewed().head.clone();
+    self.operation.ensure_task_owned(&self.task_git()?.snapshot()?)?;
+    let merged = self.task_git()?.text(&[
+      "-c",
+      "merge.conflictStyle=merge",
+      "merge",
+      "--no-ff",
+      "--no-commit",
+      "--no-overwrite-ignore",
+      &base,
+    ]);
     let actual = self.task_git()?.snapshot()?;
-    if !self.task_git()?.conflicts()?.is_empty() {
-      if !actual
-        .operation
-        .as_ref()
-        .is_some_and(|marker| marker.starts_with("MERGE_HEAD:"))
-      {
-        return Err(LocalError::ForeignOperation.into());
-      }
+    if self.operation.sync_result() != Some(&actual) {
+      return Err(LocalError::Reconcile.into());
+    }
+    if actual.operation.is_some() {
+      // Save ownership before committing, including the clean merge whose commit hook can fail.
       self.operation.task_conflicts()?;
       self.operation.own_task(actual);
       self.save()?;
-      return Ok(());
+      if !self.task_git()?.conflicts()?.is_empty() {
+        return Ok(());
+      }
+      merged?;
+      return self.continue_task();
     }
     merged?;
-    if actual.operation.is_some() {
-      self
-        .task_git()?
-        .text(&["commit", "-m", "Sync base for local integration"])?;
-    }
-    self.operation.own_task(self.task_git()?.snapshot()?);
+    self.operation.own_task(actual);
     self.operation.begin_check()?;
     self.save()?;
     self.run_check()
@@ -112,13 +122,16 @@ impl LocalIntegration {
 
   pub fn continue_task(&mut self) -> Result<(), IntegrationError> {
     self.operation.ensure_task_owned(&self.task_git()?.snapshot()?)?;
+    if !self.task_git()?.conflicts()?.is_empty() {
+      return Err(LocalError::Unresolved.into());
+    }
+    self.operation.plan_task_commit()?;
+    self.save()?;
+    let action = self.operation.task_commit_action().ok_or(LocalError::Reconcile)?;
     self
       .task_git()?
-      .finish_task_resolution("Resolve task integration conflicts")?;
-    self.operation.own_task(self.task_git()?.snapshot()?);
-    self.operation.begin_check()?;
-    self.save()?;
-    self.run_check()
+      .commit_task_resolution(super::task_commit::MESSAGE, action)?;
+    self.reconcile_task_commit(&self.task_git()?.snapshot()?)
   }
 
   pub fn approve_and_merge(&mut self, reviewed: &CheckedResult) -> Result<(), IntegrationError> {

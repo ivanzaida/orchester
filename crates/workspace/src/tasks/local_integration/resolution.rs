@@ -85,10 +85,8 @@ impl LocalIntegration {
   }
 
   fn untouched_index(&self, writes: &[ResolutionWrite]) -> Result<orchester_core::blob::ContentHash, IntegrationError> {
-    let mut entries = self.task_git()?.index_entries()?;
-    entries.retain(|path, _| !writes.iter().any(|write| &write.path == path));
-    let encoded = serde_json::to_vec(&entries).map_err(|_| LocalError::Reconcile)?;
-    Ok(digest(&encoded))
+    let paths = writes.iter().map(|write| write.path.clone()).collect::<Vec<_>>();
+    Ok(self.task_git()?.index_fingerprint_excluding(&paths)?)
   }
 
   /// Complete only recorded before/after states. Unknown edits remain untouched and require review.
@@ -123,6 +121,9 @@ impl LocalIntegration {
     let conflicts = git.conflicts()?;
     let entries = git.index_entries()?;
     let is_original = conflicts.contains(&plan.conflict) && write.path == plan.conflict.path;
+    if !is_original && conflicts.iter().any(|file| file.path == write.path) {
+      return Err(LocalError::Stale.into());
+    }
     if actual != write.before && actual != write.working {
       return Err(LocalError::Stale.into());
     }

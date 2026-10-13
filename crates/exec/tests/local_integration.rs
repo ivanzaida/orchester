@@ -364,3 +364,36 @@ fn local_integration_timestamp_preserving_external_write_cannot_hide_behind_git_
     Err(LocalGitError::State(LocalError::Stale))
   ));
 }
+
+#[test]
+fn local_integration_effective_worktree_stays_bound_after_core_worktree_redirection() {
+  let repo = Repo::new();
+  let external = Repo::new();
+  fs::write(repo.root().join("selected.txt"), b"owned pending edit\n").expect("owned edit");
+  let reviewed = repo.git.snapshot().expect("owned snapshot");
+  let outside_index = git(external.root(), &["ls-files", "--stage"]);
+  let outside_head = git(external.root(), &["rev-parse", "HEAD"]);
+  git(
+    repo.root(),
+    &[
+      "config",
+      "core.worktree",
+      external.root().to_str().expect("external path"),
+    ],
+  );
+  assert_eq!(repo.git.snapshot().expect("still inspecting held root"), reviewed);
+  repo
+    .git
+    .text(&["restore", "--source=HEAD", "--worktree", "--", "selected.txt"])
+    .expect("owned restore");
+  assert_eq!(
+    fs::read(repo.root().join("selected.txt")).expect("owned file"),
+    b"original\n"
+  );
+  assert_eq!(
+    fs::read(external.root().join("selected.txt")).expect("external untouched"),
+    b"original\n"
+  );
+  assert_eq!(git(external.root(), &["ls-files", "--stage"]), outside_index);
+  assert_eq!(git(external.root(), &["rev-parse", "HEAD"]), outside_head);
+}

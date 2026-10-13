@@ -12,6 +12,7 @@ mod merge_receipt;
 pub mod owned;
 mod process;
 mod resolve;
+mod sync_preview;
 
 use std::path::{Path, PathBuf};
 
@@ -46,6 +47,8 @@ pub enum LocalGitError {
 pub struct LocalGit {
   root: PathBuf,
   scratch: PathBuf,
+  git_dir: Option<PathBuf>,
+  _git_owner: Option<std::sync::Arc<owned::Directory>>,
   ref_action: Option<String>,
   #[cfg(windows)]
   _execution_owner: std::sync::Arc<owned::ExecutionOwnership>,
@@ -65,9 +68,11 @@ impl LocalGit {
     }
     #[cfg(windows)]
     let execution_owner = owned::ExecutionOwnership::acquire(&root_owner, &scratch_owner)?;
-    let git = Self {
+    let mut git = Self {
       root,
       scratch,
+      git_dir: None,
+      _git_owner: None,
       ref_action: None,
       #[cfg(windows)]
       _execution_owner: execution_owner,
@@ -79,6 +84,10 @@ impl LocalGit {
     if Path::new(&top).canonicalize().map_err(|_| LocalGitError::Io)? != git.root {
       return Err(LocalError::Unsupported.into());
     }
+    let directory = git.text(&["rev-parse", "--absolute-git-dir"])?;
+    let directory = Path::new(&directory).canonicalize().map_err(|_| LocalGitError::Io)?;
+    git._git_owner = Some(owned::Directory::open(&directory)?);
+    git.git_dir = Some(directory);
     Ok(git)
   }
 

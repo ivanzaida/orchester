@@ -225,9 +225,6 @@ fn start(services: &Services, args: &InRun, separator: Arc<str>) -> Result<Start
 
 /// Refused unless the run is its task's latest, succeeded, and was not merged yet.
 fn ready(db: &ProjectDb, run: &Run) -> Result<(), ToolError> {
-  if db.run_merge(run.id())?.is_some() {
-    return Err(refused("already_merged", "appMcp.errors.alreadyMerged"));
-  }
   if !matches!(run.status(), RunStatus::Succeeded) {
     return Err(refused("run_not_ready", "appMcp.errors.runNotReady"));
   }
@@ -243,6 +240,9 @@ fn ready(db: &ProjectDb, run: &Run) -> Result<(), ToolError> {
     .max();
   if latest != Some(run.number().get()) {
     return Err(refused("not_latest_run", "appMcp.errors.notLatestRun"));
+  }
+  if db.run_merge(run.id())?.is_some() {
+    return Err(refused("already_merged", "appMcp.errors.alreadyMerged"));
   }
   Ok(())
 }

@@ -64,7 +64,15 @@ impl LocalGit {
       "GIT_OBJECT_DIRECTORY",
       "GIT_ALTERNATE_OBJECT_DIRECTORIES",
     ] {
-      command = command.without_env(name);
+      if self.git_dir.is_none() || !matches!(name, "GIT_DIR" | "GIT_WORK_TREE") {
+        command = command.without_env(name);
+      }
+    }
+    if let Some(directory) = &self.git_dir {
+      self._git_owner.as_ref().ok_or(LocalGitError::Data)?.ensure_current()?;
+      command = command
+        .with_env("GIT_DIR", &super::commit_copy::git_name(directory)?)
+        .with_env("GIT_WORK_TREE", &super::commit_copy::git_name(&self.root)?);
     }
     if index.is_none() {
       command = command.without_env("GIT_INDEX_FILE");

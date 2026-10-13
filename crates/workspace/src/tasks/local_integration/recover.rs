@@ -33,7 +33,11 @@ impl LocalIntegration {
         if self.operation.pending_resolution().is_some() {
           return self.apply_pending_resolution();
         }
-        self.operation.reconcile_task_conflicts(&self.task_git()?.snapshot()?)?;
+        let task = self.task_git()?.snapshot()?;
+        if task.clean() && self.operation.task_commit_action().is_some() {
+          return self.reconcile_task_commit(&task);
+        }
+        self.operation.reconcile_task_conflicts(&task)?;
         self.save()
       }
       LocalPhase::Checking => {
@@ -171,15 +175,18 @@ impl LocalIntegration {
 
   fn reconcile_sync(&mut self) -> Result<(), IntegrationError> {
     let task = self.task_git()?.snapshot()?;
-    if !task.clean() {
-      return Err(LocalError::Reconcile.into());
+    let expected = self.operation.sync_result().ok_or(LocalError::Reconcile)?.clone();
+    let original = self.operation.owned_task().ok_or(LocalError::Reconcile)?.clone();
+    if task == original && task != expected {
+      self.main.ensure(self.operation.reviewed())?;
+      return self.execute_sync();
     }
-    let base = self.operation.reviewed().head.clone();
-    if self
-      .task_git()?
-      .text(&["merge-base", "--is-ancestor", &base, &task.head])
-      .is_err()
-    {
+    if task == expected && task.operation.is_some() {
+      self.operation.task_conflicts()?;
+      self.operation.own_task(task);
+      return self.save();
+    }
+    if task != expected {
       return Err(LocalError::Reconcile.into());
     }
     self.operation.own_task(task);

@@ -61,6 +61,10 @@ pub struct LocalOperation {
   restored: Vec<RestoredFile>,
   sync_attempts: u64,
   owned_task: Option<Checkout>,
+  #[serde(default)]
+  sync_result: Option<Checkout>,
+  #[serde(default)]
+  task_commit_action: Option<String>,
   commit_selection: Vec<super::LocalPath>,
   commit_tree: Option<String>,
   paused_from: Option<LocalPhase>,
@@ -90,6 +94,8 @@ impl LocalOperation {
       restored: Vec::new(),
       sync_attempts: 0,
       owned_task: None,
+      sync_result: None,
+      task_commit_action: None,
       commit_selection: Vec::new(),
       commit_tree: None,
       paused_from: None,
@@ -143,6 +149,38 @@ impl LocalOperation {
     self.commit_tree.as_deref()
   }
 
+  /// Unfinished journals reserve the shared checkout until recovery and cleanup finish.
+  pub fn reserves_checkout(&self) -> bool {
+    match self.phase {
+      LocalPhase::Complete => false,
+      LocalPhase::Canceled => self.preservation.as_ref().is_some_and(|saved| saved.retained),
+      _ => true,
+    }
+  }
+
+  pub const fn sync_result(&self) -> Option<&Checkout> {
+    self.sync_result.as_ref()
+  }
+
+  /// Save the exact index, operation marker and working bytes expected from the pending sync.
+  pub fn plan_sync_result(&mut self, result: Checkout) -> Result<(), LocalError> {
+    if self.phase != LocalPhase::Syncing {
+      return Err(LocalError::WrongPhase);
+    }
+    self.sync_result = Some(result);
+    Ok(())
+  }
+  pub fn task_commit_action(&self) -> Option<&str> {
+    self.task_commit_action.as_deref()
+  }
+
+  pub fn plan_task_commit(&mut self) -> Result<(), LocalError> {
+    if self.phase != LocalPhase::TaskConflicts {
+      return Err(LocalError::WrongPhase);
+    }
+    self.task_commit_action = Some(format!("orchester-sync/{}", crate::id::IdempotencyKey::generate()));
+    Ok(())
+  }
   pub fn commit_intent(&mut self, paths: Vec<super::LocalPath>, tree: String) -> Result<(), LocalError> {
     if self.phase != LocalPhase::Committing {
       return Err(LocalError::WrongPhase);
@@ -269,6 +307,8 @@ impl LocalOperation {
     self.sync_attempts = self.sync_attempts.checked_add(1).ok_or(LocalError::Reconcile)?;
     self.checked = None;
     self.approved = None;
+    self.sync_result = None;
+    self.task_commit_action = None;
     self.phase = LocalPhase::Syncing;
     Ok(())
   }
