@@ -124,3 +124,95 @@ fn instructions_missing_run_variable_is_flagged_and_copy_is_disabled() {
       .contains(&orchester_core::resource::InjectionEvent::Resume)
   );
 }
+
+fn seed_unavailable_tasks(screen: &Instructions) {
+  let mut db = orchester_store::ProjectDb::open(&screen.root).expect("preview database");
+  let unpublished = db
+    .create_resource(
+      Slug::new("unpublished-delivery").expect("slug"),
+      Name::new("Unpublished delivery").expect("name"),
+      &Pipeline::new(Vec::new()).expect("pipeline"),
+      Timestamp::now(),
+    )
+    .expect("resource")
+    .id();
+  let mut pipeline = PipelineEdit::new(Pipeline::new(Vec::new()).expect("pipeline"));
+  let key = pipeline.add_step(Name::new("Check").expect("name"), None);
+  pipeline.update(&key, |step| {
+    step.kind = StepKind::Tool {
+      tool: Some(orchester_core::id::ResourceId::generate()),
+    };
+  });
+  let tools = db
+    .create_resource(
+      Slug::new("tool-delivery").expect("slug"),
+      Name::new("Tool delivery").expect("name"),
+      &pipeline.validate().expect("pipeline"),
+      Timestamp::now(),
+    )
+    .expect("resource")
+    .id();
+  db.publish_draft::<Pipeline>(tools, Timestamp::now()).expect("publish");
+  db.create_tasks(
+    IdempotencyKey::generate(),
+    [
+      ("No pipeline", None),
+      ("Unpublished pipeline", Some(unpublished)),
+      ("No agent steps", Some(tools)),
+    ]
+    .into_iter()
+    .map(|(title, pipeline)| TaskDetails {
+      title: Name::new(title).expect("task name"),
+      brief: String::new(),
+      acceptance_criteria: Vec::new(),
+      pipeline,
+      limits: TaskLimits::NONE,
+    })
+    .collect(),
+    Timestamp::now(),
+  )
+  .expect("tasks");
+}
+#[test]
+fn instructions_preview_keeps_task_selection_when_another_task_cannot_be_previewed() {
+  let mut screen = Instructions::new();
+  seed_unavailable_tasks(&screen);
+  seed_preview(&screen);
+  screen.rule(
+    "Standards",
+    "Working on {{task.title}}",
+    InstructionScope::Project,
+    true,
+  );
+  screen.go();
+  screen.click("instruction-panel-1");
+  screen.until("initial unavailable preview", |s| {
+    s.exists("instruction-preview-unavailable")
+  });
+  assert!(screen.exists("instruction-preview-task"));
+  screen.choose("instruction-preview-task", "KON-4 · Add retry to webhook sender");
+  screen.until("preview", |s| s.exists("instruction-full-prompt"));
+  for (label, problem) in [
+    ("KON-1 · No pipeline", "published pipeline"),
+    ("KON-2 · Unpublished pipeline", "published pipeline"),
+    ("KON-3 · No agent steps", "no step with a published agent profile"),
+  ] {
+    screen.choose("instruction-preview-task", label);
+    screen.until("unavailable preview", |s| s.exists("instruction-preview-unavailable"));
+    assert!(screen.text("instruction-preview-unavailable").contains(problem));
+    assert!(screen.exists("instruction-preview-task"));
+    assert!(!screen.exists("instruction-preview-step"));
+    assert!(!screen.exists("instruction-full-prompt"));
+    screen.choose("instruction-preview-task", "KON-4 · Add retry to webhook sender");
+    screen.until("recovered preview", |s| s.exists("instruction-full-prompt"));
+    assert!(screen.exists("instruction-preview-step"));
+    assert!(!screen.exists("instruction-preview-unavailable"));
+  }
+  screen.click("instruction-full-prompt");
+  screen.until("recovered full prompt", |s| s.exists("instruction-full-viewer"));
+  assert!(
+    screen
+      .text("instruction-full-viewer")
+      .contains("Working on Add retry to webhook sender")
+  );
+}

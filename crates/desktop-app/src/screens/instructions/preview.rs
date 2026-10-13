@@ -35,7 +35,15 @@ const SOURCE_INDEX_WIDTH: f32 = 300.0;
 pub fn panel(ctx: &Ctx, state: &Panels, props: &Props, catalog: &PreviewCatalog) -> Element {
   let resolved = match catalog.resolve(&state.choice.get()) {
     Ok(resolved) => resolved,
-    Err(problem) => return problem_text(ctx, problem),
+    Err(problem) => {
+      return Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Md)
+        .child(Text::new(&ctx.t("instructions.previewContext")).variant(instructions::overline()))
+        .with_children((!catalog.tasks().is_empty()).then(|| task_field(ctx, state, catalog)))
+        .child(problem_text(ctx, problem))
+        .into();
+    }
   };
   let controls = controls(ctx, state, catalog, &resolved);
   let Some(composition) = compose(props, state, &resolved) else {
@@ -99,14 +107,8 @@ pub fn compose(props: &Props, state: &Panels, resolved: &Resolved<'_>) -> Option
     state.event.get().0,
   ))
 }
-fn controls(ctx: &Ctx, state: &Panels, catalog: &PreviewCatalog, resolved: &Resolved<'_>) -> Element {
-  let mut current = state.choice.get();
-  current.task = Some(resolved.task.task.id());
-  current.step = Some(resolved.step.key.clone());
-  current.run = resolved.run.map(|run| run.id());
-  if state.choice.get_untracked() != current {
-    state.choice.set(current.clone());
-  }
+fn task_field(ctx: &Ctx, state: &Panels, catalog: &PreviewCatalog) -> Element {
+  let current = state.choice.get();
   let tasks = catalog
     .tasks()
     .iter()
@@ -123,6 +125,25 @@ fn controls(ctx: &Ctx, state: &Panels, catalog: &PreviewCatalog, resolved: &Reso
       )
     })
     .collect::<Vec<_>>();
+  let id = "instruction-preview-task";
+  field(
+    id,
+    Some(&ctx.t("instructions.task")),
+    SelectField::new(id, ctx.t("instructions.task"), state.choice.clone(), tasks)
+      .placeholder(ctx.t("instructions.choose"))
+      .render(ctx),
+    None,
+  )
+  .into()
+}
+fn controls(ctx: &Ctx, state: &Panels, catalog: &PreviewCatalog, resolved: &Resolved<'_>) -> Element {
+  let mut current = state.choice.get();
+  current.task = Some(resolved.task.task.id());
+  current.step = Some(resolved.step.key.clone());
+  current.run = resolved.run.map(|run| run.id());
+  if state.choice.get_untracked() != current {
+    state.choice.set(current.clone());
+  }
   let steps = resolved
     .steps
     .iter()
@@ -159,7 +180,7 @@ fn controls(ctx: &Ctx, state: &Panels, catalog: &PreviewCatalog, resolved: &Reso
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
-    .child(choose("instruction-preview-task", "instructions.task", tasks))
+    .child(task_field(ctx, state, catalog))
     .child(choose("instruction-preview-step", "instructions.agentStep", steps))
     .child(choose("instruction-preview-run", "instructions.runLabel", runs))
     .child(event_field(ctx, state))
