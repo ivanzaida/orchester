@@ -88,9 +88,11 @@
       "keyMissing": "Key missing",
       "keyRejected": "Key rejected",
       "billingProblem": "Billing problem",
-      "endpointUnreachable": "Endpoint unreachable"
+      "endpointUnreachable": "Endpoint unreachable",
+      "noAccount": "No account · choose one"
     },
     "detail": {
+      "noAccount": "This connection runs on no account, so runs on it don't start. Choose an account for it in Edit connection.",
       "notChecked": "This connection has not been checked yet.",
       "connected": "The CLI answers and its account is signed in. Orchester runs it with that account's folder.",
       "signInCodex": "The Codex CLI is not signed in. Run codex login in a terminal, then check again. Orchester never signs in for you.",

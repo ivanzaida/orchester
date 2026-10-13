@@ -188,9 +188,13 @@ pub(super) fn move_connections(
 /// Moves `connection` to `target`, another account or the same one in another folder, and checks it there at once,
 /// as choosing an account in Edit connection does: the folder may be signed out, or signed in to someone else, and a
 /// check made in the old folder would let a run start that the CLI then refuses.
+///
+/// A connection left on no account is not checked: without a folder the CLI would run on Default's and could read
+/// "Connected" for a connection no run can start on. It says *No account* until a person chooses one.
 fn follow(connection: &mut Connection, target: ConnectionAccount) -> Result<(), AccountsError> {
+  let unassigned = target == ConnectionAccount::Unassigned;
   connection.set_account(target).map_err(AccountsError::Connection)?;
-  if let Some(check) = crate::connections::probe::recheck(connection) {
+  if !unassigned && let Some(check) = crate::connections::probe::recheck(connection) {
     connection
       .record_check(check)
       .expect("the check was made for the connection's own kind");

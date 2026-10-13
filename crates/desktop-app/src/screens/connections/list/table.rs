@@ -21,7 +21,8 @@ use crate::{
     data::{Entry, github_state},
     inspector::status_line,
     words::{
-      GITHUB_GLYPH, Shown, agent_glyph, agent_line, agent_status, github_status, mcp_glyph, mcp_status, program_name,
+      GITHUB_GLYPH, Shown, agent_glyph, agent_line, connection_status, github_status, mcp_glyph, mcp_status,
+      program_name,
     },
   },
   services::accounts::Accounts,
@@ -122,7 +123,7 @@ fn shape(ctx: &Ctx, (listed, accounts): (&ProjectConnections, &Accounts), entry:
         "connections.type.provider"
       }),
       used: agents(listed.used_by(connection.id()).count()),
-      status: agent_status(connection.status_with(&listed.secrets)),
+      status: connection_status(connection, connection.status_with(&listed.secrets)),
     },
     Entry::GitHub(connection) => {
       let state = github_state(listed, connection);

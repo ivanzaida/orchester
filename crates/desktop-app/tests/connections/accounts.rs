@@ -235,3 +235,55 @@ fn connections_signed_out_footer_keeps_both_buttons_inside_it_whatever_the_accou
     }
   }
 }
+
+#[test]
+fn connections_on_no_account_say_so_whatever_their_last_check() {
+  let mut seeded = Seeded::new("accounts");
+  let mut connection = AgentConnection::new(
+    ConnectionId::generate(),
+    Name::new("Codex · Left").expect("a name"),
+    AgentProvider::CodexCli,
+    seeded.window.data.dir.path().join("codex.cmd"),
+    Timestamp::now(),
+  )
+  .expect("a connection");
+  connection
+    .set_account(ConnectionAccount::Unassigned)
+    .expect("a CLI connection");
+  // A check an older Orchester made on Default's folder after the account went.
+  connection
+    .record_check(ConnectionCheck {
+      at: Timestamp::now(),
+      result: CheckResult::Available {
+        version: "0.159.2".to_owned(),
+        sign_in: SignIn::SignedIn,
+        catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
+      },
+    })
+    .expect("its kind");
+  let id = connection.id();
+  seeded
+    .db()
+    .create_connection(&connection.into_connection())
+    .expect("created");
+  let view = ConnectionsView::new(ConnectionsTab::AgentProviders).with_selected(id);
+  seeded.go(ProjectPage::Connections(view));
+  seeded.until("the inspector", |seeded| seeded.exists("connection-inspector-footer"));
+  for shown in [format!("connection-row-{id}"), "connection-inspector".to_owned()] {
+    let text = seeded.text(&shown);
+    assert!(
+      text.contains("No account · choose one") && !text.contains("Connected"),
+      "{shown}: {text}"
+    );
+  }
+  assert!(
+    seeded
+      .text("connection-inspector-sentence")
+      .contains("runs on no account")
+  );
+  assert!(
+    !seeded.exists("connection-test"),
+    "a check would answer for Default's folder"
+  );
+  assert!(seeded.exists("connection-edit"));
+}

@@ -20,7 +20,7 @@ use orchester_workspace::{connections::data::sign_in_command, display};
 
 use super::{Actions, Inspecting, Parts, check_button, footer, header, last_checked, shown, used_by};
 use crate::{
-  screens::connections::words::{agent_glyph, agent_status, checked_version, provider_key},
+  screens::connections::words::{agent_glyph, checked_version, connection_status, provider_key},
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -47,7 +47,7 @@ pub(super) fn parts(
 ) -> Parts {
   let status = shown(
     inspecting,
-    agent_status(connection.status_with(&inspecting.listed.secrets)),
+    connection_status(connection, connection.status_with(&inspecting.listed.secrets)),
   );
   let header = header(
     ctx,
@@ -99,6 +99,21 @@ fn cli(
   let edit = ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.edit"))
     .icon(Icon::Pencil)
     .on_click(move || edit(id));
+  // On no account: a check would run the CLI on Default's folder and say nothing of this connection; Edit connection
+  // chooses one.
+  if connection.account() == &orchester_core::connection::ConnectionAccount::Unassigned {
+    let sentence = ctx.t("connections.detail.noAccount");
+    return Parts {
+      header,
+      body,
+      footer: Some(footer(
+        ctx,
+        inspecting,
+        (&sentence, Vec::new()),
+        (vec![vec![edit.into()]], Vec::new()),
+      )),
+    };
+  }
   // Signed out on one of the person's accounts: the fix is in Settings › Accounts, not a command here (`M42rM`).
   if let Some(account) = account.filter(|_| status == ConnectionStatus::SignInRequired) {
     let sentence = signed_out_sentence(ctx, account);

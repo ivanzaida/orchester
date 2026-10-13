@@ -325,3 +325,26 @@ fn account_moves_a_removal_never_bins_a_folder_inside_another_accounts() {
   );
   assert!(folder.is_dir(), "the folder stays, part of Everything's");
 }
+
+#[test]
+fn account_moves_connections_left_on_no_account_are_not_checked_on_defaults_folder() {
+  let Setup { workspace, .. } = setup();
+  let client = add(&workspace, AccountCli::Codex, "Client");
+  let (repo, connection) = project_on(&workspace, &client);
+  workspace
+    .remove_agent_account(client.id(), MoveTo::NoAccount, false)
+    .expect("removed");
+  let stored = AgentConnection::try_from(
+    ProjectDb::open(repo.path())
+      .expect("open")
+      .connection(connection)
+      .expect("read")
+      .expect("stored"),
+  )
+  .expect("an agent connection");
+  assert_eq!(stored.account(), &ConnectionAccount::Unassigned);
+  assert!(
+    stored.last_check().is_none(),
+    "not checked: without a folder the CLI would answer for Default"
+  );
+}
