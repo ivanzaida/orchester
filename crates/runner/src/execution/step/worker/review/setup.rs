@@ -16,7 +16,7 @@ use orchester_core::{
     invocation::{Platform, account_environment, agent_environment},
     reviewer::{ClaudeReviewer, CodexReviewer},
   },
-  id::SecretId,
+  id::{AgentAccountId, SecretId},
   permission::AgentPermissions,
   resource::ModelId,
   run::{
@@ -47,6 +47,8 @@ pub(super) enum ReviewerSetup {
   Cli {
     kind: ReviewerKind,
     executable: PathBuf,
+    /// The account of the reviewer's connection, whose plan limits it reports.
+    account: Option<AgentAccountId>,
     model: ModelId,
     effort: Option<String>,
     environment: Vec<(String, String)>,
@@ -132,17 +134,17 @@ impl ReviewerSetup {
     let started_at = Timestamp::now();
     let provider = self.provider();
     let done = self.judge(job);
-    if let Some(provider) = provider {
-      ledger.record(provider, started_at, &done);
+    if let Some(spent) = provider {
+      ledger.record(spent, started_at, &done);
     }
     done.review
   }
 
-  /// The provider a review with this reviewer is spent on; `None` when it asks no model.
-  const fn provider(&self) -> Option<AgentProvider> {
+  /// The provider and account a review with this reviewer is spent on; `None` when it asks no model.
+  const fn provider(&self) -> Option<(AgentProvider, Option<AgentAccountId>)> {
     match self {
-      Self::Cli { kind, .. } => Some(kind.provider()),
-      Self::Native { .. } => Some(AgentProvider::AnthropicApi),
+      Self::Cli { kind, account, .. } => Some((kind.provider(), *account)),
+      Self::Native { .. } => Some((AgentProvider::AnthropicApi, None)),
       Self::Unreachable { .. } | Self::Missing => None,
     }
   }
@@ -187,6 +189,7 @@ impl ReviewerSetup {
       Self::Cli {
         kind,
         executable,
+        account: _,
         model,
         effort,
         environment,
@@ -272,6 +275,7 @@ impl Worker {
     Ok(ReviewerSetup::Cli {
       kind,
       executable: executable.to_path_buf(),
+      account: connection.account().id(provider),
       model,
       effort,
       environment,

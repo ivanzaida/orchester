@@ -25,7 +25,7 @@ use orchester_core::{
     mcp::InvocationExemptions,
     stream::{AgentEvent, ClaudeStream, RunnerProblem},
   },
-  id::{InvocationId, StepExecutionId},
+  id::{AgentAccountId, InvocationId, StepExecutionId},
   memory::{InjectedMemory, RecalledMemory},
   orchester_tools::OrchesterTool,
   permission::LaunchPermissions,
@@ -76,6 +76,8 @@ pub(super) struct AgentStart {
   /// agent's API key.
   pub(super) secrets: Vec<SecretVariable>,
   pub(super) agent: String,
+  /// The account an agent CLI runs on, recorded with the invocation; `None` for a native agent.
+  pub(super) account: Option<AgentAccountId>,
   /// The task memory its prompt holds, to record with the invocation.
   pub(super) memory: Vec<InjectedMemory>,
   pub(super) permissions: LaunchPermissions,
@@ -317,6 +319,7 @@ impl RunTask {
       code_index: index.used,
       secrets,
       agent: body.role().as_str().to_owned(),
+      account: connection.account().id(provider),
       memory: recalled.injected(),
       permissions: enforced.launch(),
       engine: None,

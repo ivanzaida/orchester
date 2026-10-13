@@ -24,7 +24,7 @@ use orchester_core::{
   command::SecretVariable,
   connection::stream::{AgentEvent, ClaudeStream, InvocationOutcome, InvocationTracker},
   conversation::Message,
-  id::{ResourceId, StepExecutionId, TaskId},
+  id::{AgentAccountId, ResourceId, StepExecutionId, TaskId},
   native::session::StopMode,
   orchester_tools::ProjectTool,
   permission::category::CommandScope,
@@ -177,6 +177,8 @@ pub(in super::super) struct Worker {
   /// invocation's MCP servers, a native agent's API key.
   pub(in super::super) secrets: Vec<SecretVariable>,
   pub(in super::super) agent: String,
+  /// The account the agent's CLI runs on, whose plan limits it reports; `None` for a native agent.
+  pub(in super::super) account: Option<AgentAccountId>,
   pub(in super::super) task: TaskId,
   pub(in super::super) decisions: mpsc::UnboundedReceiver<ApprovalDecision>,
   /// Answers to the question the agent waits on in its turn.

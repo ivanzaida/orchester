@@ -47,6 +47,7 @@ fn parsed(provider: AgentProvider, line: &str, at: Timestamp) -> LimitReading {
   };
   LimitReading {
     provider,
+    account: None,
     at,
     limits: limits.clone(),
   }
@@ -127,6 +128,7 @@ fn plan_limits_warning_full_extra_and_expired_semantics() {
   );
   let reading = LimitReading {
     provider: AgentProvider::CodexCli,
+    account: None,
     at: now(),
     limits,
   };
@@ -203,6 +205,7 @@ fn plan_limits_codex_block_reasons_and_window_lifts() {
 fn plan_limits_fullest_percentage_is_separate_from_the_warning_window() {
   let reading = LimitReading {
     provider: AgentProvider::ClaudeCodeCli,
+    account: None,
     at: now(),
     limits: orchester_core::connection::plan_limits::PlanLimits {
       windows: vec![
@@ -309,6 +312,7 @@ fn plan_limits_claude_events_never_reach_the_transcript() {
   );
   let reading = LimitReading {
     provider: AgentProvider::ClaudeCodeCli,
+    account: None,
     at: now(),
     limits: unknown_window,
   };
@@ -350,6 +354,7 @@ fn plan_limits_malformed_newer_codex_event_preserves_state_age_and_expiry() {
       for limits in reported(AgentProvider::CodexCli, &codex_update(&payload)) {
         readings.observe(LimitReading {
           provider: AgentProvider::CodexCli,
+          account: None,
           at: later,
           limits,
         });

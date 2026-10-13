@@ -13,8 +13,9 @@ use orchester_core::{
   resource::StepKey,
   run::{PreflightProblem, RunStatus},
   store::ConnectionStore,
+  time::Timestamp,
 };
-use orchester_ipc::Rejection;
+use orchester_ipc::{Event, Rejection};
 use orchester_store::ProjectDb;
 use tempfile::TempDir;
 
@@ -123,4 +124,44 @@ async fn accounts_no_run_starts_without_an_account_or_its_folder() {
       }]
     })
   );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn accounts_plan_limits_and_invocations_name_the_account() {
+  let project = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    ..Setup::new("Report plan limits")
+  });
+  let root = project.repo.path();
+  let folder = tempfile::tempdir().expect("an account folder");
+  let account = AgentAccountId::generate();
+  choose(
+    root,
+    ConnectionAccount::Account {
+      id: account,
+      folder: folder.path().to_path_buf(),
+    },
+  );
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let reading = tokio::time::timeout(support::PATIENCE, async {
+    loop {
+      if let Some(Event::PlanLimits(reading)) = events.recv().await {
+        break reading;
+      }
+    }
+  })
+  .await
+  .expect("a reading");
+  assert_eq!(reading.account, Some(account));
+  wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  let db = ProjectDb::open(root).expect("open");
+  let history = db.limit_snapshots(Timestamp::from_unix_millis(0)).expect("history");
+  assert_eq!(history[0].account, Some(account));
+  let invocations = db.invocation_accounts(id).expect("accounts");
+  assert_eq!(invocations.len(), 1);
+  assert_eq!(invocations[0].1, account);
 }

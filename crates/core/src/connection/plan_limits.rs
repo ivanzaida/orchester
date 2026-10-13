@@ -6,7 +6,7 @@ pub use parse::{claude_limits, codex_limits};
 pub use readings::PlanReadings;
 use serde::{Deserialize, Serialize};
 
-use crate::{connection::AgentProvider, time::Timestamp};
+use crate::{connection::AgentProvider, id::AgentAccountId, time::Timestamp};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LimitState {
@@ -172,14 +172,26 @@ pub struct PlanLimits {
   pub blocked: Option<Blocked>,
 }
 
+/// What one account's CLI reported of its plan limits.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LimitReading {
   pub provider: AgentProvider,
+  /// The account the CLI ran on (`docs/design/agent-accounts.md`); `None` for a reading from before accounts, which
+  /// was Default's.
+  #[serde(default)]
+  pub account: Option<AgentAccountId>,
   pub at: Timestamp,
   pub limits: PlanLimits,
 }
 
 impl LimitReading {
+  /// The account the reading belongs to: Default's for one that names none.
+  pub fn account_id(&self) -> Option<AgentAccountId> {
+    self
+      .account
+      .or_else(|| crate::account::AccountCli::of(self.provider).map(crate::account::AccountCli::default_account))
+  }
+
   pub fn fullest(&self, now: Timestamp) -> Option<&LimitWindow> {
     self
       .limits

@@ -16,7 +16,7 @@ use super::{
 };
 use crate::{
   StoreError,
-  rows::{corrupt, decode_json, encode_json},
+  rows::{corrupt, decode_json, encode_json, parse},
 };
 
 const SCHEMA: u32 = 1;
@@ -28,12 +28,13 @@ impl ProjectDb {
   pub fn save_limit_snapshot(&mut self, run: RunId, reading: &LimitReading) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
     transaction.execute(
-      "INSERT INTO plan_limit_snapshots (provider, at, run_id, body) VALUES (?1, ?2, ?3, ?4)",
+      "INSERT INTO plan_limit_snapshots (provider, at, run_id, body, account_id) VALUES (?1, ?2, ?3, ?4, ?5)",
       params![
         provider_text(reading.provider),
         reading.at.unix_millis(),
         run.to_string(),
         encode_json(WHAT, SCHEMA, &reading.limits)?,
+        reading.account.map(|account| account.to_string()),
       ],
     )?;
     transaction.execute(
@@ -47,7 +48,7 @@ impl ProjectDb {
   /// The reports stored from `since` on, oldest first, each with the run that reported it.
   pub fn limit_snapshots(&self, since: Timestamp) -> Result<Vec<LimitSnapshot>, StoreError> {
     let mut statement = self.connection.prepare(
-      "SELECT snapshots.provider, snapshots.at, snapshots.body, runs.number, tasks.number \
+      "SELECT snapshots.provider, snapshots.at, snapshots.body, runs.number, tasks.number, snapshots.account_id \
        FROM plan_limit_snapshots AS snapshots \
        LEFT JOIN runs ON runs.id = snapshots.run_id LEFT JOIN tasks ON tasks.id = runs.task_id \
        WHERE snapshots.at >= ?1 ORDER BY snapshots.at, snapshots.id",
@@ -60,13 +61,14 @@ impl ProjectDb {
           row.get::<_, String>(2)?,
           row.get::<_, Option<i64>>(3)?,
           row.get::<_, Option<i64>>(4)?,
+          row.get::<_, Option<String>>(5)?,
         ))
       })?
       .collect::<Result<Vec<_>, _>>()?;
     let project = self.project();
     rows
       .into_iter()
-      .map(|(provider, at, body, run, task)| {
+      .map(|(provider, at, body, run, task, account)| {
         let source = match (run, task) {
           (Some(run), Some(task)) => Some(SnapshotSource {
             project: project.name().as_str().into(),
@@ -77,6 +79,9 @@ impl ProjectDb {
         };
         Ok(LimitSnapshot {
           provider: parse_provider(&provider)?,
+          account: account
+            .map(|account| parse("plan limits account", &account))
+            .transpose()?,
           at: Timestamp::from_unix_millis(at),
           limits: decode_json::<PlanLimits>(WHAT, SCHEMA, &body)?,
           source,

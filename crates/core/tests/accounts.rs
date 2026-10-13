@@ -10,6 +10,7 @@ use orchester_core::{
   connection::{
     AccountStartProblem, AgentConnection, AgentProvider, ConnectionAccount,
     invocation::{Platform, account_environment, on_account},
+    plan_limits::{LimitReading, LimitState, LimitWindow, PlanLimits, PlanReadings},
   },
   id::{AgentAccountId, ConnectionId},
   name::Name,
@@ -444,4 +445,45 @@ fn accounts_a_check_reads_who_is_signed_in_with_the_clis_status_command() {
     Timestamp::now(),
   );
   assert_eq!(missing.state(), AccountState::CliMissing);
+}
+
+fn reading(account: Option<AgentAccountId>, at: i64, used: f64) -> LimitReading {
+  LimitReading {
+    provider: AgentProvider::ClaudeCodeCli,
+    account,
+    at: Timestamp::from_unix_millis(at),
+    limits: PlanLimits {
+      windows: vec![LimitWindow::new(300, Some(used), None, LimitState::Normal, false).expect("a window")],
+      plan: None,
+      credits: None,
+      blocked: None,
+    },
+  }
+}
+
+#[test]
+fn accounts_plan_readings_are_kept_per_account() {
+  let work = AgentAccountId::generate();
+  let mut readings = PlanReadings::default();
+  assert!(readings.observe(reading(Some(work), 10, 42.0)));
+  assert!(readings.observe(reading(None, 20, 8.0)));
+  assert_eq!(readings.all().len(), 2, "Work and Default each keep their own");
+  let default = AccountCli::ClaudeCode.default_account();
+  assert_eq!(
+    readings
+      .of_account(default)
+      .and_then(|reading| reading.limits.windows[0].percent()),
+    Some(8.0)
+  );
+  assert_eq!(
+    readings
+      .of_account(work)
+      .and_then(|reading| reading.limits.windows[0].percent()),
+    Some(42.0)
+  );
+  assert_eq!(
+    readings.get(AgentProvider::ClaudeCodeCli).map(|reading| reading.at),
+    Some(Timestamp::from_unix_millis(20)),
+    "a view per CLI reads the newest"
+  );
 }

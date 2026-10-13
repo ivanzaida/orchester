@@ -85,6 +85,7 @@ impl Worker {
     };
     let reading = LimitReading {
       provider,
+      account: self.account,
       at: Timestamp::now(),
       limits,
     };
