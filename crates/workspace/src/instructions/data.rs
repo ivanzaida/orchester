@@ -11,7 +11,7 @@ use orchester_core::{
   name::Name,
   resource::{
     AgentProfile, AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, Pipeline, PromptText,
-    ResourceKind, Slug, StepKey, Version, VersionNumber,
+    ResourceKind, Slug, StepKey, StepKind, Version, VersionNumber,
   },
   store::ResourceStore,
   time::Timestamp,
@@ -92,6 +92,8 @@ pub struct ProfileChoice {
 pub struct StepChoice {
   pub key: StepKey,
   pub name: Arc<str>,
+  pub ordinal: usize,
+  pub role: Option<Name>,
 }
 
 /// A pipeline and its steps, as its draft or latest version has them.
@@ -100,6 +102,7 @@ pub struct PipelineChoice {
   pub id: ResourceId,
   pub name: Arc<str>,
   pub steps: Vec<StepChoice>,
+  pub version: Option<VersionNumber>,
 }
 
 /// Everything the instructions screen edits and chooses from, read together.
@@ -187,22 +190,33 @@ pub(crate) fn profiles(db: &ProjectDb) -> Result<Vec<ProfileChoice>, StoreError>
 /// The project's pipelines with the steps of their draft, or else of their latest version.
 pub(crate) fn pipelines(db: &ProjectDb) -> Result<Vec<PipelineChoice>, StoreError> {
   let mut pipelines = Vec::new();
+  let profiles = profiles(db)?;
   for resource in db.resources(ResourceKind::Pipeline)? {
     let id = resource.id();
+    let latest = db.latest_version::<Pipeline>(id)?;
     let body = match db.draft::<Pipeline>(id)? {
       Some(draft) => Some(draft.body().clone()),
-      None => db.latest_version::<Pipeline>(id)?.map(|version| version.body().clone()),
+      None => latest.as_ref().map(|version| version.body().clone()),
     };
     if let Some(body) = body {
       pipelines.push(PipelineChoice {
         id,
         name: resource.name().as_str().into(),
+        version: latest.map(|version| version.number()),
         steps: body
           .steps()
           .iter()
-          .map(|step| StepChoice {
+          .enumerate()
+          .map(|(index, step)| StepChoice {
             key: step.key.clone(),
             name: step.name.as_str().into(),
+            ordinal: index + 1,
+            role: match &step.kind {
+              StepKind::Agent { profile: Some(id), .. } => {
+                profiles.iter().find(|p| p.id == *id).map(|p| p.role.clone())
+              }
+              _ => None,
+            },
           })
           .collect(),
       });

@@ -15,6 +15,9 @@ pub fn empty_top() -> SpacingSize {
 pub fn prompt_text() -> TypographyStyle {
   TypographyStyle::extra("instructions_prompt")
 }
+pub fn variable_value() -> TypographyStyle {
+  TypographyStyle::extra("instructions_variable_value")
+}
 pub fn gutter_text() -> TypographyStyle {
   TypographyStyle::extra("instructions_gutter")
 }
@@ -54,6 +57,10 @@ pub(super) fn install(theme: &Theme) {
 pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<str>, TextStyle)> {
   use super::typography::{mono, style};
   [
+    (
+      Arc::from("instructions_variable_value"),
+      mono(style(11.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted)),
+    ),
     (
       Arc::from("instructions_prompt"),
       mono(style(12.0, FontWeight::Normal, 1.666667, 0.0, palette.text_secondary)),

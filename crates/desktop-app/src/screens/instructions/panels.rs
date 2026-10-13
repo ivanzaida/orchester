@@ -5,7 +5,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Text},
+  components::{Column, Row, Text},
   core::Signal,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -42,7 +42,6 @@ pub enum Panel {
   Hidden,
   Variables,
   Preview,
-  System,
   Full,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -69,6 +68,10 @@ pub struct Props {
   pub frozen: Signal<bool>,
   pub unavailable: Signal<super::fields::MissingVariables>,
   pub events: Signal<Events>,
+  pub preview_choice: Signal<Picked<PreviewChoice>>,
+  pub blocked: Signal<super::fields::MissingVariables>,
+  pub retained: Signal<super::fields::RetainedRuns>,
+  pub preview_context: Signal<super::fields::PreviewContext>,
   pub panel: Signal<Panel>,
   pub data: ProjectInstructions,
 }
@@ -90,6 +93,7 @@ pub struct Panels {
   pub selected: Signal<Picked<Variable>>,
   pub groups: Signal<Vec<String>>,
   pub copied: Signal<Copied>,
+  pub source: Signal<Picked<Option<usize>>>,
 }
 impl Component for Panels {
   type Props = Props;
@@ -102,34 +106,13 @@ impl Component for Panels {
       selected: ctx.signal(Picked(Variable::TaskTitle)),
       groups: ctx.signal(vec!["task".to_owned()]),
       copied: ctx.signal(Copied::Not),
+      source: ctx.signal(Picked(None)),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
     let panel = props.panel.get();
-    let changes = props.project.feed.outside.get();
-    let root = props.project.open.repo_root.clone();
-    let hold = crate::services::Services::of(ctx).hold;
-    let catalog = ctx
-      .future(
-        (
-          root,
-          props.data.clone(),
-          changes.of(Outside::Tasks),
-          changes.of(Outside::Instructions),
-        ),
-        move |(root, ..)| {
-          let hold = hold.clone();
-          async move {
-            hold.released().await;
-            background::run(move || PreviewCatalog::load_in(&root))
-              .await?
-              .map_err(|error| messages::store_error(&error))
-          }
-        },
-      )
-      .state()
-      .get();
+    let catalog = self.catalog(ctx, &props);
     self.update_availability(catalog.data.as_ref(), &props);
     if panel == Panel::Hidden {
       return Column::new().into();
@@ -157,33 +140,91 @@ impl Component for Panels {
         .into();
     };
     if panel == Panel::Full {
-      return preview::full(ctx, self, &props, &catalog);
+      return super::viewer::full(ctx, self, &props, &catalog);
     }
     let resolved = catalog.resolve(&self.choice.get());
     let content = match panel {
       Panel::Variables => {
-        let search = self.search_field(ctx);
-        frame = frame.child(search);
+        if let Ok(resolved) = &resolved {
+          frame = frame.child(variables::context(ctx, &props, resolved));
+        }
+        frame = frame.child(self.search_field(ctx));
         variables::catalog(ctx, self, &props, resolved.as_ref().ok())
       }
       Panel::Preview => preview::panel(ctx, self, &props, &catalog),
-      Panel::System => Text::new(&ctx.t("instructions.systemNote"))
-        .variant(TypographyStyle::Description)
-        .into(),
       Panel::Hidden | Panel::Full => Column::new().into(),
     };
     frame
+      .child(content)
       .child(
-        ScrollVertical::new(content)
-          .flex(1.0)
-          .min_height(Dimension::Px(0.0))
-          .width(Dimension::Pct(100.0)),
+        Row::new()
+          .width(Dimension::Pct(100.0))
+          .spacing(SpacingSize::Sm)
+          .child(crate::ui::icon::icon(
+            if panel == Panel::Preview {
+              Icon::ShieldCheck
+            } else {
+              Icon::Info
+            },
+            crate::theme::IconSize::Xs,
+            PaletteColor::TextMuted,
+          ))
+          .child(
+            Text::new(&ctx.t(if panel == Panel::Preview {
+              "instructions.secretNote"
+            } else if props.unavailable.get().0.contains(&self.selected.get().0) {
+              "instructions.noEmptyValue"
+            } else {
+              "instructions.missingNote"
+            }))
+            .variant(TypographyStyle::Caption)
+            .flex(1.0),
+          ),
       )
       .into()
   }
 }
 impl Panels {
+  fn catalog(
+    &self,
+    ctx: &mut Ctx,
+    props: &Props,
+  ) -> lurq::app::ctx::FutureState<PreviewCatalog, orchester_workspace::messages::Message> {
+    let changes = props.project.feed.outside.get();
+    let root = props.project.open.repo_root.clone();
+    let hold = crate::services::Services::of(ctx).hold;
+    ctx
+      .future(
+        (
+          root,
+          props.data.clone(),
+          changes.of(Outside::Tasks),
+          changes.of(Outside::Instructions),
+        ),
+        move |(root, ..)| {
+          let hold = hold.clone();
+          async move {
+            hold.released().await;
+            background::run(move || PreviewCatalog::load_in(&root))
+              .await?
+              .map_err(|error| messages::store_error(&error))
+          }
+        },
+      )
+      .state()
+      .get()
+  }
+
   fn update_availability(&self, catalog: Option<&PreviewCatalog>, props: &Props) {
+    let retained = catalog
+      .zip(props.entry.as_ref())
+      .map_or_else(Vec::new, |(catalog, entry)| {
+        orchester_workspace::instructions::publication::retained_runs(catalog, entry.id)
+      });
+    if props.retained.get_untracked().0 != retained {
+      props.retained.set(super::fields::RetainedRuns(retained));
+    }
+
     let missing = catalog
       .and_then(|catalog| catalog.resolve(&self.choice.get()).ok())
       .map_or_else(
@@ -197,6 +238,34 @@ impl Panels {
       );
     if props.unavailable.get_untracked().0 != missing {
       props.unavailable.set(super::fields::MissingVariables(missing));
+    }
+    let resolved = catalog.and_then(|catalog| catalog.resolve(&self.choice.get()).ok());
+    let blocked = props.entry.as_ref().map_or_else(Vec::new, |entry| {
+      orchester_workspace::instructions::publication::missing(&entry.body, resolved.as_ref())
+    });
+    if props.blocked.get_untracked().0 != blocked {
+      props.blocked.set(super::fields::MissingVariables(blocked));
+    }
+    let choice = resolved.as_ref().map_or_else(
+      || self.choice.get(),
+      |resolved| PreviewChoice {
+        task: Some(resolved.task.task.id()),
+        step: Some(resolved.step.key.clone()),
+        run: resolved.run.map(|run| run.id()),
+      },
+    );
+    if props.preview_choice.get_untracked().0 != choice {
+      props.preview_choice.set(Picked(choice));
+    }
+    if let Some(resolved) = resolved {
+      let context = super::fields::PreviewContext {
+        task: resolved.task.task.key().to_string(),
+        role: resolved.role().to_owned(),
+        step: resolved.step.name.to_string(),
+      };
+      if props.preview_context.get_untracked() != context {
+        props.preview_context.set(context);
+      }
     }
   }
   fn search_field(&self, ctx: &mut Ctx) -> Element {
@@ -213,7 +282,6 @@ impl Panels {
     let segments = [
       (Panel::Variables, "instructions.variables"),
       (Panel::Preview, "instructions.preview"),
-      (Panel::System, "instructions.system"),
     ]
     .into_iter()
     .enumerate()
@@ -235,7 +303,11 @@ impl Panels {
     Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Xs)
-      .child(segmented("instruction-panel-tabs", segments, Focus::Pointer))
+      .child(
+        Row::new()
+          .flex(1.0)
+          .child(segmented("instruction-panel-tabs", segments, Focus::Pointer)),
+      )
       .child(cross)
       .into()
   }

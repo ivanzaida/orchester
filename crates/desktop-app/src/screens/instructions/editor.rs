@@ -33,7 +33,6 @@ use crate::{
   theme::ExtraSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
-    field::field_error,
     icon::Icon,
     message::message_text,
   },
@@ -167,6 +166,10 @@ impl Component for Editor {
         frozen: self.fields.frozen.clone(),
         unavailable: self.fields.unavailable.clone(),
         events: self.fields.events.clone(),
+        preview_choice: self.fields.preview_choice.clone(),
+        blocked: self.fields.blocked.clone(),
+        retained: self.fields.retained.clone(),
+        preview_context: self.fields.preview_context.clone(),
         panel: self.panel.clone(),
         data: props.data.clone(),
       },
@@ -222,35 +225,8 @@ impl Editor {
       .min_width(Dimension::Px(0.0))
       .height(Dimension::Pct(100.0))
       .child(header);
-    if let Some(error) = self
-      .work
-      .action
-      .state()
-      .get()
-      .error
-      .filter(|_| self.work.action.state().get().is_rejected())
-    {
-      let retry = self.work.clone();
-      let candidate = self.work.retry(&self.fields);
-      let valid = candidate.is_some();
-      let retry = ActionButton::new("instruction-retry", ButtonKind::Secondary, ctx.t("instructions.retry")).on_click(
-        move || {
-          if let Some(candidate) = &candidate {
-            retry.run(candidate.clone());
-          }
-        },
-      );
-      body = body
-        .child(field_error("instruction-write-error", &message_text(ctx, &error)))
-        .child(if valid { retry } else { retry.disabled() });
-    }
-    if let Some(version) = self.published.get() {
-      body = body.child(
-        Text::new(&ctx.t_args("instructions.publishedNotice", [("version", version.to_string())]))
-          .id("instruction-published-notice")
-          .variant(TypographyStyle::Description),
-      );
-    }
+    body = self.write_error(ctx, body);
+    body = self.published_notice(ctx, body);
     body = self.reload(ctx, props, saved, busy, body);
     body
       .child(
@@ -261,17 +237,80 @@ impl Editor {
           .padding(Padding::symmetric(ExtraSpacing::Tabs.role(), SpacingSize::Md))
           .spacing(ExtraSpacing::Inset.role())
           .child(settings)
+          .with_children(super::editor_notes::scope(ctx, &self.fields, &props.data))
           .child(prompt)
+          .with_children(super::editor_notes::warning(ctx, &self.fields))
           .child(
-            Text::new(&saved.and_then(|entry| entry.state.published()).map_or_else(
-              || ctx.t("instructions.newPublishNote"),
-              |version| ctx.t_args("instructions.publishNote", [("version", version.get().to_string())]),
-            ))
-            .variant(TypographyStyle::Caption),
+            Row::new()
+              .spacing(SpacingSize::Sm)
+              .child(crate::ui::icon::icon(
+                Icon::Info,
+                crate::theme::IconSize::Xs,
+                PaletteColor::TextMuted,
+              ))
+              .child(
+                Text::new(&words::footer(
+                  ctx,
+                  props.tab,
+                  saved.and_then(|entry| entry.state.published()),
+                ))
+                .variant(TypographyStyle::Caption),
+              ),
           ),
       )
       .into()
   }
+  fn write_error(&self, ctx: &Ctx, body: Column) -> Column {
+    let Some(error) = self
+      .work
+      .action
+      .state()
+      .get()
+      .error
+      .filter(|_| self.work.action.state().get().is_rejected())
+    else {
+      return body;
+    };
+    let retry = self.work.clone();
+    let candidate = self.work.retry(&self.fields);
+    let valid = candidate.is_some();
+    let retry =
+      ActionButton::new("instruction-retry", ButtonKind::Secondary, ctx.t("instructions.retry")).on_click(move || {
+        if let Some(candidate) = &candidate {
+          retry.run(candidate.clone());
+        }
+      });
+    body.child(
+      crate::ui::notice::Notice::new(
+        "instruction-write-error",
+        crate::ui::notice::NoticeTone::Danger,
+        ctx.t("instructions.writeFailed"),
+      )
+      .inspector()
+      .body(message_text(ctx, &error))
+      .action(if valid { retry } else { retry.disabled() }),
+    )
+  }
+  fn published_notice(&self, ctx: &mut Ctx, body: Column) -> Column {
+    let Some(version) = self.published.get() else {
+      return body;
+    };
+    let dismiss = self.published.clone();
+    let dismiss = crate::ui::icon_button::IconButton::new(
+      "instruction-published-dismiss",
+      Icon::X,
+      ctx.t("instructions.closePanel"),
+    )
+    .small()
+    .on_click(move || dismiss.set(None))
+    .render(ctx);
+    body.child(crate::ui::notice::result_notice(
+      "instruction-published-notice",
+      &words::published_notice(ctx, version, &self.fields.retained.get().0),
+      dismiss,
+    ))
+  }
+
   fn reload(&self, ctx: &Ctx, props: &Props, saved: Option<&InstructionEntry>, busy: bool, body: Column) -> Column {
     let Some(entry) = saved else {
       return body;
@@ -311,7 +350,7 @@ impl Editor {
     } else if dirty {
       ctx.t("instructions.unsaved")
     } else {
-      words::version(ctx, state)
+      words::editor_version(ctx, state)
     };
     let button = self.action_button(ctx, saved, dirty, busy);
     Row::new()
@@ -324,14 +363,48 @@ impl Editor {
       .child(
         Column::new()
           .spacing(ExtraSpacing::Hair.role())
-          .child(Text::new(&words::scope(ctx, ctx.props::<Props>().tab)).variant(TypographyStyle::Caption))
+          .child(
+            Text::new(&words::editor_scope(
+              ctx,
+              ctx.props::<Props>().tab,
+              state.has_draft() || dirty,
+              state.published(),
+            ))
+            .variant(TypographyStyle::Caption),
+          )
           .child(Text::new(&self.fields.name.get()).variant(TypographyStyle::Title)),
       )
       .child(
-        Text::new(&status)
-          .id("instruction-save-status")
-          .variant(TypographyStyle::Description)
-          .flex(1.0),
+        Row::new()
+          .flex(1.0)
+          .spacing(ExtraSpacing::Snug.role())
+          .align_items(Alignment::Center)
+          .child(crate::ui::icon::icon(
+            if busy {
+              Icon::LoaderCircle
+            } else if self.fields.instruction().is_err() {
+              Icon::CircleAlert
+            } else if !dirty && !state.has_draft() {
+              Icon::CircleCheck
+            } else if state.published().is_none() {
+              Icon::CircleDashed
+            } else {
+              Icon::FilePen
+            },
+            crate::theme::IconSize::Sm,
+            if self.fields.instruction().is_err() {
+              PaletteColor::Danger
+            } else if !dirty && !state.has_draft() {
+              PaletteColor::Success
+            } else {
+              PaletteColor::TextMuted
+            },
+          ))
+          .child(
+            Text::new(&status)
+              .id("instruction-save-status")
+              .variant(TypographyStyle::Description),
+          ),
       )
       .child(button)
       .into()
@@ -340,7 +413,19 @@ impl Editor {
     let state = saved.map_or(VersionState::Draft { published: None }, |e| e.state);
     let number = state.published().map_or(1, |v| v.get().saturating_add(1));
     let work = self.work.clone();
+    let blocked = self.fields.blocked.clone();
+    let choice = self.fields.preview_choice.clone();
     if let Some(entry) = saved {
+      if !dirty && !state.has_draft() {
+        let panel = self.panel.clone();
+        return ActionButton::new(
+          "instruction-preview-prompt",
+          ButtonKind::Secondary,
+          ctx.t("instructions.previewPrompt"),
+        )
+        .icon(Icon::Eye)
+        .on_click(move || panel.set(Panel::Preview));
+      }
       let entry = entry.clone();
       let publish = ActionButton::new(
         "instruction-publish",
@@ -349,14 +434,16 @@ impl Editor {
       )
       .icon(Icon::Upload)
       .on_click(move || {
-        if !work.action.state().get_untracked().is_pending() {
-          work.run(Write::Publish(entry.clone()));
+        if !work.action.state().get_untracked().is_pending() && blocked.get_untracked().0.is_empty() {
+          work.run(Write::Publish(entry.clone(), choice.get_untracked().0));
         }
       });
       if busy {
         publish.loading()
       } else if dirty || !state.has_draft() || matches!(state, VersionState::StaleDraft { .. }) {
-        publish.disabled()
+        publish.unavailable(ctx.t("instructions.publishSaveWaiting"))
+      } else if !self.fields.blocked.get().0.is_empty() {
+        publish.unavailable(ctx.t("instructions.publishWaiting"))
       } else {
         publish
       }

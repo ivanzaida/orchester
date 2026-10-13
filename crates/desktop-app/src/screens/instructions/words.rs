@@ -87,3 +87,86 @@ pub fn excluded(ctx: &Ctx, reason: Exclusion) -> Arc<str> {
     Exclusion::OtherEvent => "instructions.excludedEvent",
   })
 }
+pub fn editor_version(ctx: &Ctx, state: VersionState) -> Arc<str> {
+  match state {
+    VersionState::Draft { published: Some(v) } => {
+      ctx.t_args("instructions.editorDraftSaved", [("version", v.get().to_string())])
+    }
+    VersionState::Draft { published: None } => ctx.t("instructions.editorNewDraft"),
+    _ => version(ctx, state),
+  }
+}
+pub fn editor_scope(
+  ctx: &Ctx,
+  tab: Tab,
+  draft: bool,
+  published: Option<orchester_core::resource::VersionNumber>,
+) -> Arc<str> {
+  let scope = scope(ctx, tab);
+  if draft {
+    ctx.t_args(
+      "instructions.scopeDraft",
+      [
+        ("scope", scope.to_string()),
+        (
+          "version",
+          published.map_or(1, |v| v.get().saturating_add(1)).to_string(),
+        ),
+      ],
+    )
+  } else {
+    scope
+  }
+}
+pub fn footer(ctx: &Ctx, tab: Tab, version: Option<orchester_core::resource::VersionNumber>) -> Arc<str> {
+  version.map_or_else(
+    || ctx.t("instructions.newPublishNote"),
+    |version| {
+      ctx.t_args(
+        if matches!(tab, Tab::Roles | Tab::Steps) {
+          "instructions.editingNote"
+        } else {
+          "instructions.publishNote"
+        },
+        [("version", version.get().to_string())],
+      )
+    },
+  )
+}
+pub fn published_notice(
+  ctx: &Ctx,
+  version: u32,
+  retained: &[orchester_workspace::instructions::publication::RetainedRun],
+) -> Arc<str> {
+  if retained.is_empty() {
+    return ctx.t_args("instructions.publishedNotice", [("version", version.to_string())]);
+  }
+  let runs = retained
+    .iter()
+    .map(|run| {
+      ctx
+        .t_args(
+          "instructions.retainedRun",
+          [
+            ("task", run.task.clone()),
+            ("number", run.number.get().to_string()),
+            ("version", run.version.to_string()),
+          ],
+        )
+        .to_string()
+    })
+    .collect::<Vec<_>>()
+    .join(", ");
+  ctx.t_args(
+    if retained.len() == 1 {
+      "instructions.publishedNoticeOne"
+    } else {
+      "instructions.publishedNoticeMany"
+    },
+    [
+      ("version", version.to_string()),
+      ("count", retained.len().to_string()),
+      ("runs", runs),
+    ],
+  )
+}

@@ -13,3 +13,19 @@ pub fn inline_references(raw: &str) -> Vec<PromptReference> {
     })
     .collect()
 }
+/// Replace actual grammar references only; escaped examples and unrelated text stay untouched.
+pub fn replace_variable(
+  raw: &str,
+  from: orchester_core::resource::Variable,
+  to: orchester_core::resource::Variable,
+) -> String {
+  let mut text = raw.to_owned();
+  let references = prompt_references(raw)
+    .filter_map(Result::ok)
+    .filter(|r| r.variable == from)
+    .collect::<Vec<_>>();
+  for reference in references.into_iter().rev() {
+    text.replace_range(reference.range, &format!("{{{{{}}}}}", to.name()));
+  }
+  text
+}

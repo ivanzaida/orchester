@@ -3,14 +3,15 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    theme::{SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Text, VirtualizedList},
+  components::{Column, Row, Text},
   core::Signal,
-  node::{Element, dimension::Dimension},
+  layout::Alignment,
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
-  agent_files::import::{Candidate, ImportItem, Unimportable},
+  agent_files::import::{Candidate, ImportItem, ItemKind, Unimportable},
   id::IdempotencyKey,
 };
 use orchester_workspace::{
@@ -25,8 +26,12 @@ use crate::{
   project::ShownProject,
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
+    breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     button::{ActionButton, ButtonKind},
     field::field_error,
+    icon::Icon,
+    icon_button::IconButton,
+    notice::{Notice, NoticeTone},
   },
 };
 #[derive(Clone)]
@@ -113,16 +118,7 @@ impl Component for Import {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .min_height(Dimension::Px(0.0))
-      .padding(ExtraSpacing::Tabs.role())
-      .spacing(SpacingSize::Md)
-      .child(Text::new(&ctx.t("instructions.import")).variant(TypographyStyle::Title))
-      .child(
-        Text::new(&ctx.t_args(
-          "instructions.importDetail",
-          [("folder", props.project.open.repo_root.to_string_lossy().as_ref())],
-        ))
-        .variant(TypographyStyle::Description),
-      );
+      .child(header(ctx, &props));
     if read.is_pending() && read.data.is_none() {
       return page.child(crate::ui::state::loading(
         "instruction-import-loading",
@@ -166,8 +162,26 @@ impl Import {
     }
     page
       .child(self.review(ctx, scan, state.is_pending()))
-      .child(Text::new(&ctx.t("instructions.importNote")).variant(TypographyStyle::Caption))
-      .child(self.create_button(ctx, scan, state.is_pending()))
+      .child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding(
+            Padding::new()
+              .left(SpacingSize::Xl)
+              .right(SpacingSize::Xl)
+              .bottom(SpacingSize::Md),
+          )
+          .child(
+            Notice::new(
+              "instruction-import-notice",
+              NoticeTone::Info,
+              ctx.t("instructions.importDraftsOnly"),
+            )
+            .icon(Icon::ShieldCheck)
+            .body(ctx.t("instructions.importNote")),
+          ),
+      )
+      .child(self.footer(ctx, props, scan, state.is_pending()))
   }
   fn created(&self, ctx: &Ctx, props: &Props, created: &[CreatedDraft], mut page: Column) -> Column {
     page = page.child(
@@ -192,50 +206,72 @@ impl Import {
     let rows = if scan.items.is_empty() {
       Element::from(Text::new(&ctx.t("instructions.importEmpty")).variant(TypographyStyle::Description))
     } else {
-      let (selected, preview) = (self.selected.clone(), self.preview.clone());
-      VirtualizedList::new_shared(
-        ctx,
-        std::sync::Arc::new(scan.items.iter().cloned().enumerate().collect::<Vec<_>>()),
-      )
-      .list_key("instruction-import-rows")
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .min_height(Dimension::Px(0.0))
-      .mount_keyed::<ImportRow, _, _, _>(
-        |(_, item)| item.source.clone(),
-        move |(index, item)| RowProps {
-          index: *index,
-          item: item.clone(),
-          busy,
-          selected: selected.clone(),
-          preview: preview.clone(),
-        },
-      )
+      super::import_rows::list(ctx, &scan.items, self.selected.clone(), self.preview.clone(), busy)
     };
-    let selected = scan.items.get(self.preview.get());
-    let preview = Column::new()
-      .flex(1.0)
-      .spacing(SpacingSize::Sm)
-      .child(Text::new(&ctx.t("instructions.importPreview")).variant(ExtraTypography::Strong.role()))
-      .with_children(selected.map(|item| Text::new(&item.source).variant(TypographyStyle::Mono)))
-      .with_children(selected.and_then(|item| item.text.as_ref()).map(|text| {
-        Text::new(text)
-          .variant(crate::theme::instructions::prompt_text())
-          .selectable(true)
-      }));
     Row::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .min_height(Dimension::Px(0.0))
-      .spacing(SpacingSize::Section)
       .child(
         Column::new()
           .width(Dimension::Px(IMPORT_LIST_WIDTH))
           .height(Dimension::Pct(100.0))
           .min_height(Dimension::Px(0.0))
+          .padding(Padding::horizontal(ExtraSpacing::Inset.role()))
+          .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
           .child(rows),
       )
-      .child(ScrollVertical::new(preview).flex(1.0).min_height(Dimension::Px(0.0)))
+      .child(
+        Column::new()
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0))
+          .height(Dimension::Pct(100.0))
+          .padding(Padding::symmetric(SpacingSize::Xl, ExtraSpacing::Inset.role()))
+          .child(super::import_preview::preview(ctx, scan.items.get(self.preview.get()))),
+      )
+      .into()
+  }
+  fn footer(&self, ctx: &Ctx, props: &Props, scan: &RepositoryScan, busy: bool) -> Element {
+    let chosen = self.selected.get();
+    let instructions = chosen
+      .iter()
+      .filter(|i| {
+        scan
+          .items
+          .get(**i)
+          .is_some_and(|item| item.kind == ItemKind::Instruction)
+      })
+      .count();
+    let cancel = props.selection.clone();
+    let cancel = ActionButton::new(
+      "instruction-import-cancel",
+      ButtonKind::Secondary,
+      ctx.t("instructions.cancel"),
+    )
+    .on_click(move || cancel.open(View::Rule(Tab::Project, None)));
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Px(IMPORT_FOOTER_HEIGHT))
+      .padding(Padding::horizontal(SpacingSize::Xl))
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+      .child(
+        Text::new(&ctx.t_args(
+          "instructions.importSelection",
+          [
+            ("selected", chosen.len().to_string()),
+            ("total", scan.items.len().to_string()),
+            ("instructions", instructions.to_string()),
+            ("skills", (chosen.len() - instructions).to_string()),
+          ],
+        ))
+        .id("instruction-import-selection")
+        .variant(TypographyStyle::Description)
+        .flex(1.0),
+      )
+      .child(if busy { cancel.disabled() } else { cancel })
+      .child(self.create_button(ctx, scan, busy))
       .into()
   }
   fn create_button(&self, ctx: &Ctx, scan: &RepositoryScan, busy: bool) -> ActionButton {
@@ -252,6 +288,7 @@ impl Import {
       ButtonKind::Primary,
       ctx.t_args("instructions.importCreate", [("count", chosen.len().to_string())]),
     )
+    .icon(Icon::FilePlus)
     .on_click(move || {
       if !action.state().get_untracked().is_pending() {
         action.run(chosen.clone());
@@ -266,69 +303,58 @@ impl Import {
     }
   }
 }
-/// Repository item list in U69ob.
-const IMPORT_LIST_WIDTH: f32 = 440.0;
-#[derive(Clone)]
-struct RowProps {
-  index: usize,
-  item: ImportItem,
-  busy: bool,
-  selected: Signal<Vec<usize>>,
-  preview: Signal<usize>,
-}
-impl PartialEq for RowProps {
-  fn eq(&self, other: &Self) -> bool {
-    self.index == other.index && self.item == other.item && self.busy == other.busy
-  }
-}
-impl DevtoolsInspectable for RowProps {}
-struct ImportRow;
-impl Component for ImportRow {
-  type Props = RowProps;
-  fn create(_: &mut Ctx) -> Self {
-    Self
-  }
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<RowProps>().clone();
-    let (index, item, busy) = (props.index, &props.item, props.busy);
-    let selected = props.selected.clone();
-    let checked = props.selected.get().contains(&index);
-    let toggle = crate::ui::toggle::Toggle::new(
-      format!("instruction-import-toggle-{index}"),
-      crate::ui::toggle::ToggleKind::Checkbox,
-      checked,
-      item.source.clone(),
+/// Items pane qNGoR and footer WLlV8 in the import review.
+const IMPORT_LIST_WIDTH: f32 = 460.0;
+const IMPORT_FOOTER_HEIGHT: f32 = 56.0;
+
+fn header(ctx: &mut Ctx, props: &Props) -> Element {
+  let back = props.selection.clone();
+  let crumbs = breadcrumb(
+    ctx,
+    "instruction-import-crumbs",
+    CrumbSeparator::Chevron,
+    vec![
+      Crumb::link(ctx.t("instructions.title"), move || {
+        back.open(View::Rule(Tab::Project, None))
+      }),
+      Crumb::here(ctx.t("instructions.import")),
+    ],
+  );
+  let back = props.selection.clone();
+  let back = IconButton::new(
+    "instruction-import-return",
+    Icon::ArrowLeft,
+    ctx.t("instructions.backInstructions"),
+  )
+  .small()
+  .on_click(move || back.open(View::Rule(Tab::Project, None)))
+  .render(ctx);
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(SpacingSize::Xl, ExtraSpacing::Inset.role()))
+    .spacing(ExtraSpacing::Loose.role())
+    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(
+      Row::new()
+        .spacing(SpacingSize::Xs)
+        .align_items(Alignment::Center)
+        .child(back)
+        .child(crumbs),
     )
-    .hide_label();
-    let toggle = if item.outcome.is_ok() && !busy {
-      toggle.on_change(move |on| {
-        selected.update(|chosen| {
-          if on && !chosen.contains(&index) {
-            chosen.push(index);
-          } else if !on {
-            chosen.retain(|i| *i != index);
-          }
-        })
-      })
-    } else {
-      toggle
-    };
-    let preview = props.preview.clone();
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Xs)
-      .child(
-        Row::new().width(Dimension::Pct(100.0)).child(toggle).child(
-          ActionButton::new(
-            format!("instruction-import-item-{index}"),
-            ButtonKind::Ghost,
-            item.source.clone(),
-          )
-          .on_click(move || preview.set(index)),
+    .child(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Xs)
+        .child(Text::new(&ctx.t("instructions.import")).variant(TypographyStyle::Heading))
+        .child(
+          Text::new(&ctx.t_args(
+            "instructions.importDetail",
+            [("folder", props.project.open.repo_root.to_string_lossy().as_ref())],
+          ))
+          .variant(TypographyStyle::Description),
         ),
-      )
-      .child(Text::new(&item_detail(ctx, item)).variant(TypographyStyle::Caption))
-  }
+    )
+    .into()
 }
 pub(super) fn item_detail(ctx: &Ctx, item: &ImportItem) -> std::sync::Arc<str> {
   match &item.outcome {

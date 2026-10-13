@@ -251,3 +251,16 @@ fn handling_notice_content(id: &str, glyph: Icon, text: &str, action: Option<Ele
         .with_children(action),
     )
 }
+/// Inline publication result below the editor header (GxmNs, state 7).
+pub fn result_notice(id: &str, text: &str, dismiss: Element) -> Row {
+  Row::new()
+    .id(id.to_owned())
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(ExtraSpacing::Tabs.role(), SpacingSize::Md))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(icon(Icon::CircleCheck, IconSize::Sm, PaletteColor::Success))
+    .child(Text::new(text).variant(TypographyStyle::Description).flex(1.0))
+    .child(dismiss)
+}

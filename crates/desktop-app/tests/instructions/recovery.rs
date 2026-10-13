@@ -201,7 +201,7 @@ fn instructions_delayed_autosave_acknowledges_baseline_without_resetting_newer_i
   db.execute_batch("COMMIT").expect("release private save");
   screen.until("newer saved", |s| {
     s.entry(id).body.text().as_str() == "Newer candidate"
-      && s.text("instruction-save-status").contains("Draft v2 saved")
+      && s.text("instruction-save-status").contains("Draft saved · Published v1")
   });
   let db = ProjectDb::open(&screen.root).expect("private db");
   assert_eq!(
@@ -242,7 +242,7 @@ fn instructions_delayed_step_create_keeps_selected_pipeline_and_step_locked() {
   screen.until("step form", |s| s.exists("instruction-step"));
   screen.set("instruction-name", "Step agreement");
   screen.choose("instruction-pipeline", "Feature delivery");
-  screen.choose("instruction-step", "Implement");
+  screen.choose("instruction-step", "01 Implement");
   screen.set("instruction-prompt", "Step candidate");
   let db = rusqlite::Connection::open(screen.root.join(".orchester/orchester.db")).expect("private db");
   db.execute_batch("BEGIN IMMEDIATE").expect("delay private create");

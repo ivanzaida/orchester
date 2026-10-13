@@ -39,7 +39,8 @@ fn instructions_autosave_retains_published_version_then_publishes_next() {
   screen.set("instruction-prompt", "New draft text");
   assert!(screen.text("instruction-save-status").contains("Unsaved"));
   screen.until("draft saved", |s| {
-    s.entry(id).body.text().as_str() == "New draft text" && s.text("instruction-save-status").contains("Draft v2 saved")
+    s.entry(id).body.text().as_str() == "New draft text"
+      && s.text("instruction-save-status").contains("Draft saved · Published v1")
   });
   let db = ProjectDb::open(&screen.root).expect("valid instruction fixture");
   assert_eq!(
@@ -183,7 +184,7 @@ fn instructions_all_scope_tabs_show_their_editor_and_save_timing() {
   assert!(screen.text("instruction-library").contains("Builder agreement"));
   screen.choose("instruction-event", "Start & resume");
   screen.until("timing saved", |s| {
-    s.entry(role).body.events().len() == 2 && s.text("instruction-save-status").contains("Draft v2 saved")
+    s.entry(role).body.events().len() == 2 && s.text("instruction-save-status").contains("Draft saved · Published v1")
   });
   screen.click("instruction-tab-2");
   screen.until("pipeline", |s| s.exists("instruction-pipeline"));
@@ -306,7 +307,7 @@ fn instructions_selecting_agents_saves_the_normalized_targets() {
     matches!(
       s.entry(id).body.targets(),
       orchester_core::resource::AgentTargets::Roles(_)
-    ) && s.text("instruction-save-status").contains("Draft v2 saved")
+    ) && s.text("instruction-save-status").contains("Draft saved · Published v1")
   });
   assert_eq!(
     screen.entry(id).body.targets(),

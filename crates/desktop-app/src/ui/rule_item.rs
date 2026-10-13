@@ -2,20 +2,30 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{RadiusSize, SpacingSize, TypographyStyle},
-  components::{Column, Text},
+  app::theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+  components::{Column, Row, Text},
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
 
-use super::pressable::pressable;
-use crate::theme::{ExtraColor, ExtraSpacing, instructions};
+use super::{
+  icon::{Icon, icon},
+  pressable::pressable,
+};
+use crate::theme::{ExtraColor, ExtraSpacing, IconSize, instructions};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RuleState {
+  Draft,
+  FirstDraft,
+  Published,
+}
 pub struct RuleItem {
   id: Arc<str>,
   name: Arc<str>,
   version: Arc<str>,
   meta: Arc<str>,
   selected: bool,
+  state: RuleState,
   open: Arc<dyn Fn() + Send + Sync>,
 }
 impl RuleItem {
@@ -33,8 +43,19 @@ impl RuleItem {
       version: version.into(),
       meta: meta.into(),
       selected,
+      state: RuleState::Draft,
       open: Arc::new(open),
     }
+  }
+  /// A published version has the green check of zmP3o; drafts use the editing glyph.
+  pub fn published(mut self) -> Self {
+    self.state = RuleState::Published;
+    self
+  }
+  /// A first draft has the unpublished dashed mark.
+  pub fn first_draft(mut self) -> Self {
+    self.state = RuleState::FirstDraft;
+    self
   }
 }
 impl From<RuleItem> for Element {
@@ -44,7 +65,27 @@ impl From<RuleItem> for Element {
       .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
       .spacing(ExtraSpacing::Fine.role())
       .child(Text::new(&item.name).variant(instructions::rule_name()))
-      .child(Text::new(&item.version).variant(TypographyStyle::Caption))
+      .child(
+        Row::new()
+          .spacing(ExtraSpacing::Fine.role())
+          .align_items(lurq::layout::Alignment::Center)
+          .child(icon(
+            if item.state == RuleState::Published {
+              Icon::CircleCheck
+            } else if item.state == RuleState::FirstDraft {
+              Icon::CircleDashed
+            } else {
+              Icon::FilePen
+            },
+            IconSize::Xs,
+            if item.state == RuleState::Published {
+              PaletteColor::Success
+            } else {
+              PaletteColor::TextMuted
+            },
+          ))
+          .child(Text::new(&item.version).variant(TypographyStyle::Caption)),
+      )
       .child(Text::new(&item.meta).variant(TypographyStyle::Caption));
     if item.selected {
       return body

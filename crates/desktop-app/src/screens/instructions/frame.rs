@@ -2,11 +2,11 @@
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   layout::Alignment,
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::instructions::data::ProjectInstructions;
 
@@ -82,15 +82,22 @@ pub fn header(
   let tabs = page_tabs(ctx, "instructions-tabs", tabs);
   Column::new()
     .width(Dimension::Pct(100.0))
-    .padding(
-      Padding::new()
-        .left(ExtraSpacing::Tabs.role())
-        .right(ExtraSpacing::Tabs.role())
-        .top(instructions::head_top()),
-    )
     .spacing(SpacingSize::Md)
-    .child(title)
-    .child(tabs)
+    .child(
+      title.padding(
+        Padding::new()
+          .left(ExtraSpacing::Tabs.role())
+          .right(ExtraSpacing::Tabs.role())
+          .top(instructions::head_top()),
+      ),
+    )
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .padding(Padding::horizontal(ExtraSpacing::Tabs.role()))
+        .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+        .child(tabs),
+    )
     .into()
 }
 

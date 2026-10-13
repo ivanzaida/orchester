@@ -138,6 +138,15 @@ pub struct FormErrors {
   pub text: Option<Message>,
   pub settings: Option<Message>,
 }
+impl FormErrors {
+  /// Whether the Apply to field needs a selection.
+  pub fn targets_invalid(&self) -> bool {
+    self
+      .settings
+      .as_ref()
+      .is_some_and(|message| message.key == "instructions.errors.targetsRequired")
+  }
+}
 
 impl InstructionForm<'_> {
   pub fn instruction(&self) -> Result<Instruction, FormErrors> {

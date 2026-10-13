@@ -22,7 +22,10 @@ use super::fields::{Fields, Snapshot};
 pub enum Write {
   Create(Name, Instruction),
   Save(InstructionEntry, Instruction),
-  Publish(InstructionEntry),
+  Publish(
+    InstructionEntry,
+    orchester_workspace::instructions::preview::PreviewChoice,
+  ),
   Reload(orchester_core::id::ResourceId, Snapshot),
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -55,11 +58,12 @@ impl Work {
     match self.last.get().0? {
       Write::Reload(id, _) => Some(Write::Reload(id, fields.snapshot())),
       Write::Save(expected, _) => fields.instruction().ok().map(|body| Write::Save(expected, body)),
-      Write::Publish(expected) => fields
+      Write::Publish(expected, _) => fields
         .instruction()
         .ok()
         .filter(|body| *body == expected.body)
-        .map(|_| Write::Publish(expected)),
+        .filter(|_| fields.blocked.get().0.is_empty())
+        .map(|_| Write::Publish(expected, fields.preview_choice.get().0)),
       Write::Create(..) => fields
         .instruction()
         .ok()
@@ -100,7 +104,7 @@ async fn record(project: &OpenProject, services: &crate::services::Services, wri
   let spec = match &write {
     Write::Create(name, _) => operations::instruction_create(project, name.as_str()),
     Write::Save(entry, _) => operations::instruction_draft(project, entry.id, &entry.name),
-    Write::Publish(entry) => operations::instruction_publish(
+    Write::Publish(entry, _) => operations::instruction_publish(
       project,
       entry.id,
       &entry.name,
@@ -109,12 +113,12 @@ async fn record(project: &OpenProject, services: &crate::services::Services, wri
     Write::Reload(..) => unreachable!("reload returns before recording a write"),
   };
   let activity = services.activity.start(spec);
-  let published = matches!(write, Write::Publish(_));
+  let published = matches!(write, Write::Publish(..));
   let root = project.repo_root.clone();
   let result = background::run(move || match write {
     Write::Create(name, body) => editor::create_in(&root, name, &body),
     Write::Save(entry, body) => editor::save_in(&root, &entry, body),
-    Write::Publish(entry) => editor::publish_in(&root, &entry),
+    Write::Publish(entry, choice) => editor::publish_for_in(&root, &entry, &choice),
     Write::Reload(..) => unreachable!("reload returns before a write"),
   })
   .await

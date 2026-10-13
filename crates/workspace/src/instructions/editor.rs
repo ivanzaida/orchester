@@ -76,6 +76,16 @@ pub fn publish_in(root: &Path, expected: &InstructionEntry) -> Result<Instructio
     Some(&version),
   ))
 }
+/// Publishes a saved draft after rechecking required values in the chosen preview.
+pub fn publish_for_in(
+  root: &Path,
+  expected: &InstructionEntry,
+  choice: &super::preview::PreviewChoice,
+) -> Result<InstructionEntry, Message> {
+  super::publication::ensure_in(root, expected, choice)?;
+  publish_in(root, expected)
+}
+
 fn ensure_same(
   expected: &InstructionEntry,
   draft: Option<Draft<Instruction>>,

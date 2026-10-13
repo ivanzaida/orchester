@@ -1,60 +1,103 @@
-//! Prompt sources BYHVZ and excluded rules S9rsK, read in core assembly order.
+//! Ordered sources in the preview and full viewer, using BYHVZ and S9rsK.
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{SpacingSize, TypographyStyle},
-  },
-  components::{Column, Row, Text},
+  app::{ctx::Ctx, theme::SpacingSize},
+  components::{Column, Text},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::run::{Composition, PromptSource};
+use orchester_core::{
+  id::ResourceId,
+  run::{Composition, PromptSource},
+};
 
-use super::words;
-use crate::theme::ExtraSpacing;
+use super::{panels::Panels, words};
+use crate::{
+  theme::instructions,
+  ui::prompt_source::{PromptSourceRow, excluded_source},
+};
 
-pub fn list(ctx: &Ctx, composition: &Composition) -> Element {
+pub fn edited_index(composition: &Composition, edited: Option<ResourceId>) -> Option<usize> {
+  composition.sections().iter().position(
+    |section| matches!(section.source, PromptSource::Instruction { resource, .. } if Some(resource) == edited),
+  )
+}
+pub fn list(ctx: &Ctx, state: &Panels, composition: &Composition, edited: Option<ResourceId>, full: bool) -> Element {
+  let selected = state
+    .source
+    .get()
+    .0
+    .or_else(|| edited_index(composition, edited))
+    .unwrap_or(0);
   let mut list = Column::new()
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
+    .spacing(crate::theme::ExtraSpacing::Hair.role())
     .child(
       Text::new(&ctx.t_args(
-        "instructions.sources",
+        if full {
+          "instructions.sourcesIncluded"
+        } else {
+          "instructions.sources"
+        },
         [("count", composition.sections().len().to_string())],
       ))
-      .variant(crate::theme::instructions::overline()),
+      .variant(instructions::overline())
+      .padding_bottom(SpacingSize::Sm),
     );
   for (index, section) in composition.sections().iter().enumerate() {
-    let version = match section.source {
-      PromptSource::AgentProfile { version, .. } | PromptSource::Step { version, .. } => {
-        ctx.t_args("instructions.version", [("version", version.get().to_string())])
-      }
-      PromptSource::Instruction { version, .. } => words::preview_version(ctx, version),
-      PromptSource::Task { .. } => ctx.t("instructions.taskContext"),
+    let this_rule = matches!(section.source, PromptSource::Instruction { resource, .. } if Some(resource) == edited);
+    let kind = words::part(ctx, section.source.part());
+    let kind = if this_rule {
+      ctx.t_args("instructions.thisRule", [("kind", kind)])
+    } else {
+      kind
     };
-    list = list.child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Snug.role())
-        .child(Text::new(&(index + 1).to_string()).variant(TypographyStyle::Caption))
-        .child(
-          Column::new()
-            .flex(1.0)
-            .child(Text::new(&words::part(ctx, section.source.part())).variant(TypographyStyle::Caption))
-            .child(Text::new(&section.name).variant(TypographyStyle::Description)),
-        )
-        .child(Text::new(&version).variant(TypographyStyle::Caption)),
-    );
+    let choose = state.source.clone();
+    let row = PromptSourceRow {
+      number: index + 1,
+      kind: kind.to_string(),
+      name: section.name.clone(),
+      version: version(ctx, &section.source).to_string(),
+      selected: selected == index,
+    };
+    list = list.child(row.render(&format!("instruction-source-{index}"), move || {
+      choose.set(orchester_workspace::instructions::form::Picked(Some(index)))
+    }));
   }
   for excluded in composition.excluded() {
-    list = list.child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .child(
-          Text::new(&ctx.t_args("instructions.excluded", [("name", excluded.name.as_str())]))
-            .variant(TypographyStyle::Description),
-        )
-        .child(Text::new(&words::excluded(ctx, excluded.reason)).variant(TypographyStyle::Caption)),
+    let title = ctx.t_args(
+      "instructions.excludedVersion",
+      [
+        ("name", excluded.name.clone()),
+        ("version", words::preview_version(ctx, excluded.version).to_string()),
+      ],
     );
+    let reason = if excluded.reason == orchester_core::resource::Exclusion::OtherRole {
+      match excluded.body.targets() {
+        orchester_core::resource::AgentTargets::Roles(roles) => ctx.t_args(
+          "instructions.excludedRoles",
+          [(
+            "roles",
+            roles.iter().map(|role| role.as_str()).collect::<Vec<_>>().join(", "),
+          )],
+        ),
+        _ => words::excluded(ctx, excluded.reason),
+      }
+    } else {
+      words::excluded(ctx, excluded.reason)
+    };
+    list = list.child(excluded_source(
+      &format!("instruction-excluded-{}", excluded.resource),
+      &title,
+      &reason,
+    ));
   }
   list.into()
+}
+pub fn version(ctx: &Ctx, source: &PromptSource) -> std::sync::Arc<str> {
+  match source {
+    PromptSource::AgentProfile { version, .. } | PromptSource::Step { version, .. } => {
+      ctx.t_args("instructions.version", [("version", version.get().to_string())])
+    }
+    PromptSource::Instruction { version, .. } => words::preview_version(ctx, *version),
+    PromptSource::Task { .. } => "".into(),
+  }
 }

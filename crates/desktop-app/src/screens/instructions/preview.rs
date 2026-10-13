@@ -2,10 +2,10 @@
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  components::{Column, Row, ScrollVertical, Text},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   resource::InjectionEvent,
@@ -24,13 +24,13 @@ use crate::{
   theme::{ExtraSpacing, instructions},
   ui::{
     button::{ActionButton, ButtonKind},
-    field::{SelectField, field, field_error},
+    field::{SelectField, field_error},
+    icon::Icon,
   },
 };
 
-// Full prompt header CKzcD and source index IAt1E.
-const VIEWER_HEADER_HEIGHT: f32 = 52.0;
-const SOURCE_INDEX_WIDTH: f32 = 300.0;
+// Compact labels in the context selectors of ShcL9.
+const CONTEXT_LABEL_WIDTH: f32 = 76.0;
 
 pub fn panel(ctx: &Ctx, state: &Panels, props: &Props, catalog: &PreviewCatalog) -> Element {
   let resolved = match catalog.resolve(&state.choice.get()) {
@@ -52,34 +52,46 @@ pub fn panel(ctx: &Ctx, state: &Panels, props: &Props, catalog: &PreviewCatalog)
       .child(Text::new(&ctx.t("instructions.fixBeforePreview")).variant(TypographyStyle::Description))
       .into();
   };
-  let sources = sources::list(ctx, &composition);
+  let sources = sources::list(
+    ctx,
+    state,
+    &composition,
+    props.entry.as_ref().map(|entry| entry.id),
+    false,
+  );
   let open = props.panel.clone();
   let copy_button = copy_button(ctx, state, props, &composition);
   Column::new()
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Md)
+    .height(Dimension::Pct(100.0))
+    .flex(1.0)
+    .min_height(Dimension::Px(0.0))
+    .spacing(SpacingSize::Sm)
     .child(Text::new(&ctx.t("instructions.previewContext")).variant(instructions::overline()))
     .child(controls)
-    .child(
-      Text::new(&ctx.t(if props.entry.as_ref().is_some_and(|e| e.state.has_draft()) {
-        "instructions.draftSubstituted"
-      } else {
-        "instructions.publishedOnly"
-      }))
-      .variant(TypographyStyle::Caption),
-    )
+    .child(status(ctx, props))
     .child(unavailable(ctx, &composition))
-    .child(sources)
     .child(
-      ActionButton::new(
-        "instruction-full-prompt",
-        ButtonKind::Secondary,
-        ctx.t("instructions.viewPrompt"),
-      )
-      .on_click(move || open.set(Panel::Full)),
+      ScrollVertical::new(sources)
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .min_height(Dimension::Px(0.0)),
     )
-    .child(copy_button)
-    .child(Text::new(&ctx.t("instructions.secretNote")).variant(TypographyStyle::Caption))
+    .child(
+      Row::new()
+        .spacing(SpacingSize::Sm)
+        .align_items(lurq::layout::Alignment::Center)
+        .child(
+          ActionButton::new(
+            "instruction-full-prompt",
+            ButtonKind::Secondary,
+            ctx.t("instructions.viewPrompt"),
+          )
+          .icon(Icon::Eye)
+          .on_click(move || open.set(Panel::Full)),
+        )
+        .child(copy_button),
+    )
     .into()
 }
 pub fn compose(props: &Props, state: &Panels, resolved: &Resolved<'_>) -> Option<Composition> {
@@ -126,13 +138,12 @@ fn task_field(ctx: &Ctx, state: &Panels, catalog: &PreviewCatalog) -> Element {
     })
     .collect::<Vec<_>>();
   let id = "instruction-preview-task";
-  field(
-    id,
-    Some(&ctx.t("instructions.task")),
+  context_row(
+    ctx,
+    "instructions.task",
     SelectField::new(id, ctx.t("instructions.task"), state.choice.clone(), tasks)
       .placeholder(ctx.t("instructions.choose"))
       .render(ctx),
-    None,
   )
   .into()
 }
@@ -170,11 +181,10 @@ fn controls(ctx: &Ctx, state: &Panels, catalog: &PreviewCatalog, resolved: &Reso
     )
   }));
   let choose = |id, key, options| {
-    field(
-      id,
-      Some(&ctx.t(key)),
+    context_row(
+      ctx,
+      key,
       SelectField::new(id, ctx.t(key), state.choice.clone(), options).render(ctx),
-      None,
     )
   };
   Column::new()
@@ -213,42 +223,7 @@ fn problem_text(ctx: &Ctx, problem: PreviewProblem) -> Element {
   .variant(TypographyStyle::Description)
   .into()
 }
-pub fn full(ctx: &mut Ctx, state: &Panels, props: &Props, catalog: &PreviewCatalog) -> Element {
-  let resolved = match catalog.resolve(&state.choice.get()) {
-    Ok(resolved) => resolved,
-    Err(problem) => return problem_text(ctx, problem),
-  };
-  let Some(composition) = compose(props, state, &resolved) else {
-    return Text::new(&ctx.t("instructions.fixBeforePreview")).into();
-  };
-  let mut contents = Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Md)
-    .child(Text::new(&ctx.t("instructions.effective")).variant(TypographyStyle::Title))
-    .child(Text::new(&ctx.t("instructions.viewerNote")).variant(TypographyStyle::Caption))
-    .child(unavailable(ctx, &composition));
-  for (index, section) in composition.sections().iter().enumerate() {
-    contents = contents.child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Xs)
-        .child(
-          Text::new(&ctx.t_args(
-            "instructions.sourceTitle",
-            [("number", (index + 1).to_string()), ("name", section.name.clone())],
-          ))
-          .variant(TypographyStyle::Label),
-        )
-        .child(
-          Text::new(&section.text)
-            .variant(instructions::prompt_text())
-            .selectable(true),
-        ),
-    );
-  }
-  full_frame(ctx, state, props, &composition, contents)
-}
-fn copy_button(ctx: &Ctx, state: &Panels, props: &Props, composition: &Composition) -> ActionButton {
+pub(super) fn copy_button(ctx: &Ctx, state: &Panels, props: &Props, composition: &Composition) -> ActionButton {
   let receipt = super::panels::CopyReceipt {
     composition: composition.clone(),
     choice: state.choice.get(),
@@ -269,7 +244,17 @@ fn copy_button(ctx: &Ctx, state: &Panels, props: &Props, composition: &Compositi
     super::panels::Copied::Done(_) => "instructions.copied",
     super::panels::Copied::Failed(_) => "instructions.copyFailed",
   });
-  let button = ActionButton::new("instruction-copy-prompt", ButtonKind::Secondary, label).on_click(move || {
+  let button = ActionButton::new(
+    "instruction-copy-prompt",
+    if props.panel.get() == Panel::Full {
+      ButtonKind::Secondary
+    } else {
+      ButtonKind::Ghost
+    },
+    label,
+  )
+  .icon(Icon::Copy)
+  .on_click(move || {
     copied.set(if clipboard.copy(&copy) {
       super::panels::Copied::Done(receipt.clone())
     } else {
@@ -287,9 +272,9 @@ fn copy_button(ctx: &Ctx, state: &Panels, props: &Props, composition: &Compositi
   }
 }
 fn event_field(ctx: &Ctx, state: &Panels) -> Element {
-  field(
-    "instruction-preview-event-field",
-    Some(&ctx.t("instructions.event")),
+  context_row(
+    ctx,
+    "instructions.event",
     SelectField::new(
       "instruction-preview-event",
       ctx.t("instructions.event"),
@@ -308,87 +293,42 @@ fn event_field(ctx: &Ctx, state: &Panels) -> Element {
         .collect(),
     )
     .render(ctx),
-    None,
   )
   .into()
 }
-fn full_frame(ctx: &mut Ctx, state: &Panels, props: &Props, composition: &Composition, contents: Column) -> Element {
-  let back = props.panel.clone();
-  let copy = copy_button(ctx, state, props, composition);
-  let entry_name = props
-    .entry
-    .as_ref()
-    .map_or_else(|| ctx.t("instructions.new"), |entry| entry.name.clone());
-  let panel = props.panel.clone();
-  let crumbs = crate::ui::breadcrumb::breadcrumb(
-    ctx,
-    "instruction-viewer-crumbs",
-    crate::ui::breadcrumb::CrumbSeparator::Chevron,
-    vec![
-      crate::ui::breadcrumb::Crumb::link(ctx.t("instructions.title"), move || panel.set(Panel::Preview)),
-      crate::ui::breadcrumb::Crumb::here(entry_name),
-    ],
-  );
-  let header = Row::new()
+
+fn context_row(ctx: &Ctx, label: &str, control: Element) -> Row {
+  Row::new()
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(VIEWER_HEADER_HEIGHT))
-    .padding(Padding::horizontal(ExtraSpacing::Tabs.role()))
-    .spacing(SpacingSize::Md)
+    .spacing(SpacingSize::Sm)
     .align_items(lurq::layout::Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(crumbs)
     .child(
-      Text::new(&ctx.t("instructions.effective"))
-        .variant(TypographyStyle::Title)
-        .flex(1.0),
+      Text::new(&ctx.t(label))
+        .variant(TypographyStyle::Description)
+        .width(Dimension::Px(CONTEXT_LABEL_WIDTH)),
     )
-    .child(Text::new(&ctx.t("instructions.readOnly")).variant(TypographyStyle::Caption))
-    .child(copy);
-  let sources = Column::new()
-    .width(Dimension::Px(SOURCE_INDEX_WIDTH))
-    .height(Dimension::Pct(100.0))
-    .padding(ExtraSpacing::Tabs.role())
-    .spacing(SpacingSize::Md)
-    .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(Text::new(&ctx.t("instructions.previewContext")).variant(instructions::overline()))
-    .child(sources::list(ctx, composition))
-    .child(Text::new(&ctx.t("instructions.viewerNote")).variant(TypographyStyle::Caption));
-  let footer = Row::new()
+    .child(Row::new().flex(1.0).min_width(Dimension::Px(0.0)).child(control))
+}
+fn status(ctx: &Ctx, props: &Props) -> Row {
+  Row::new()
     .width(Dimension::Pct(100.0))
-    .padding(SpacingSize::Md)
+    .spacing(SpacingSize::Sm)
+    .child(crate::ui::icon::icon(
+      if props.entry.as_ref().is_some_and(|e| e.state.has_draft()) {
+        Icon::FilePen
+      } else {
+        Icon::CircleCheck
+      },
+      crate::theme::IconSize::Xs,
+      lurq::app::theme::PaletteColor::TextMuted,
+    ))
     .child(
-      Text::new(&ctx.t("instructions.secretNote"))
-        .variant(TypographyStyle::Caption)
-        .flex(1.0),
+      Text::new(&ctx.t(if props.entry.as_ref().is_some_and(|e| e.state.has_draft()) {
+        "instructions.draftSubstituted"
+      } else {
+        "instructions.publishedOnly"
+      }))
+      .variant(TypographyStyle::Caption)
+      .flex(1.0),
     )
-    .child(
-      ActionButton::new("instruction-viewer-back", ButtonKind::Ghost, ctx.t("instructions.back"))
-        .on_click(move || back.set(Panel::Preview)),
-    );
-  Column::new()
-    .id("instruction-full-viewer")
-    .width(Dimension::Pct(100.0))
-    .flex(1.0)
-    .height(Dimension::Pct(100.0))
-    .child(header)
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .flex(1.0)
-        .min_height(Dimension::Px(0.0))
-        .child(sources)
-        .child(
-          Column::new()
-            .flex(1.0)
-            .min_width(Dimension::Px(0.0))
-            .height(Dimension::Pct(100.0))
-            .child(
-              lurq::components::ScrollVertical::new(contents.padding(ExtraSpacing::Tabs.role()))
-                .flex(1.0)
-                .min_height(Dimension::Px(0.0)),
-            )
-            .child(footer),
-        ),
-    )
-    .into()
 }

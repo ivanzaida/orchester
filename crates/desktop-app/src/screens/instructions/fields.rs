@@ -13,7 +13,7 @@ use lurq::{
 use orchester_core::resource::{Instruction, Variable};
 use orchester_workspace::instructions::{
   data::{InstructionEntry, ProjectInstructions},
-  form::{Events, FormErrors, InstructionForm, ScopeChoice, Target},
+  form::{Events, FormErrors, InstructionForm, Picked, ScopeChoice, Target},
 };
 
 use super::{state::Tab, words};
@@ -21,6 +21,7 @@ use crate::{
   theme::{ExtraRadius, ExtraSpacing, IconSize, instructions},
   ui::{
     button::{ActionButton, ButtonKind},
+    chip::TagChip,
     field::{FieldInput, SelectField, field, field_error, select_style},
     icon::{Icon, icon},
     message::message_text,
@@ -31,7 +32,21 @@ use crate::{
 // Prompt toolbar Un13s and line number gutter blqcd.
 const PROMPT_TOOLBAR_HEIGHT: f32 = 34.0;
 const GUTTER_WIDTH: f32 = 36.0;
+// Inject at fields in XMlEH, udfuB and w20Jf.
+const PROJECT_EVENT_WIDTH: f32 = 180.0;
+const ROLE_EVENT_WIDTH: f32 = 220.0;
+const STEP_EVENT_WIDTH: f32 = 150.0;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PreviewContext {
+  pub task: String,
+  pub role: String,
+  pub step: String,
+}
+impl DevtoolsInspectable for PreviewContext {}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RetainedRuns(pub Vec<orchester_workspace::instructions::publication::RetainedRun>);
+impl DevtoolsInspectable for RetainedRuns {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MissingVariables(pub Vec<Variable>);
 impl DevtoolsInspectable for MissingVariables {}
@@ -55,6 +70,10 @@ pub struct Fields {
   pub targets: Signal<Vec<Target>>,
   pub events: Signal<Events>,
   pub scope: Signal<ScopeChoice>,
+  pub preview_choice: Signal<Picked<orchester_workspace::instructions::preview::PreviewChoice>>,
+  pub blocked: Signal<MissingVariables>,
+  pub retained: Signal<RetainedRuns>,
+  pub preview_context: Signal<PreviewContext>,
 }
 impl Fields {
   pub fn new(ctx: &mut Ctx, tab: Tab, entry: Option<&InstructionEntry>) -> Self {
@@ -85,8 +104,20 @@ impl Fields {
     let input = PromptInput::new(ctx, text.clone());
     Self {
       frozen: ctx.signal(false),
+      retained: ctx.signal(RetainedRuns(Vec::new())),
       input,
       unavailable: ctx.signal(MissingVariables(Variable::ALL.to_vec())),
+      blocked: ctx.signal(MissingVariables(
+        entry.map_or_else(Vec::new, |entry| entry.body.text().variables().to_vec()),
+      )),
+      preview_context: ctx.signal(PreviewContext {
+        task: String::new(),
+        role: String::new(),
+        step: String::new(),
+      }),
+      preview_choice: ctx.signal(Picked(
+        orchester_workspace::instructions::preview::PreviewChoice::default(),
+      )),
       name: ctx.signal(entry.map_or_else(String::new, |e| e.name.to_string())),
       text,
       targets,
@@ -156,13 +187,24 @@ impl Fields {
       .spacing(SpacingSize::Md)
       .align_items(Alignment::End)
       .with_children(self.scope_fields(ctx, data))
-      .with_children((!matches!(self.scope.get(), ScopeChoice::AgentRole(_))).then(|| self.targets_field(ctx, data)))
-      .child(Column::new().flex(1.0).child(field(
-        "instruction-event-field",
-        Some(&ctx.t("instructions.inject")),
-        self.event_field(ctx),
-        None,
-      )));
+      .with_children(
+        (!matches!(self.scope.get(), ScopeChoice::AgentRole(_) | ScopeChoice::Step(..)))
+          .then(|| self.targets_field(ctx, data, errors.is_some_and(FormErrors::targets_invalid))),
+      )
+      .child(
+        Column::new()
+          .width(Dimension::Px(match self.scope.get() {
+            ScopeChoice::AgentRole(_) => ROLE_EVENT_WIDTH,
+            ScopeChoice::Step(..) => STEP_EVENT_WIDTH,
+            _ => PROJECT_EVENT_WIDTH,
+          }))
+          .child(field(
+            "instruction-event-field",
+            Some(&ctx.t("instructions.inject")),
+            self.event_field(ctx),
+            None,
+          )),
+      );
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Inset.role())
@@ -241,7 +283,15 @@ impl Fields {
         let steps = pipeline.and_then(|id| data.pipeline(id)).map_or_else(Vec::new, |p| {
           p.steps
             .iter()
-            .map(|s| SelectOption::new(ScopeChoice::Step(pipeline, Some(s.key.clone())), s.name.clone()))
+            .map(|s| {
+              SelectOption::new(
+                ScopeChoice::Step(pipeline, Some(s.key.clone())),
+                ctx.t_args(
+                  "instructions.stepLabel",
+                  [("number", format!("{:02}", s.ordinal)), ("name", s.name.to_string())],
+                ),
+              )
+            })
             .collect()
         });
         vec![
@@ -251,46 +301,51 @@ impl Fields {
       }
     }
   }
-  fn targets_field(&self, ctx: &Ctx, data: &ProjectInstructions) -> Element {
-    let mut options = vec![SelectOption::new(Target::All, ctx.t("instructions.all"))];
-    options.extend(
-      data
-        .roles()
-        .into_iter()
-        .map(|role| SelectOption::new(Target::Role(role.clone()), role.as_str())),
-    );
-    options.extend(data.profiles.iter().map(|p| {
-      SelectOption::new(
-        Target::Profile(p.id),
-        ctx.t_args(
-          "instructions.profileLabel",
-          [("role", p.role.as_str()), ("slug", &p.slug)],
-        ),
-      )
-    }));
+  fn targets_field(&self, ctx: &Ctx, data: &ProjectInstructions, invalid: bool) -> Element {
+    let choices = target_choices(ctx, data);
+    let remove_labels = choices
+      .iter()
+      .map(|(target, label)| {
+        (
+          label.to_string(),
+          (
+            target.clone(),
+            ctx.t_args("instructions.removeTarget", [("name", label.as_ref())]),
+          ),
+        )
+      })
+      .collect::<std::collections::BTreeMap<_, _>>();
+    let options = choices
+      .into_iter()
+      .map(|(target, label)| SelectOption::new(target, label));
     let placeholder = ctx.t("instructions.addRole");
+    let targets = self.targets.clone();
+    let frozen = self.frozen.clone();
     let select = Select::multiple(self.targets.clone())
-      .options(options.into_iter().map(|option| option.disabled(self.frozen.get())))
+      .options(options.map(|option| option.disabled(self.frozen.get())))
       .style(select_style(ctx))
       .height(Dimension::Px(crate::theme::ControlHeight::Md.value()))
       .width(Dimension::Pct(100.0))
       .trigger(move |state| {
-        let label = if state.selected_labels.is_empty() {
-          placeholder.to_string()
-        } else {
-          state.selected_labels.join(", ")
-        };
-        Row::new()
+        let mut chips = Row::new()
           .width(Dimension::Pct(100.0))
           .align_items(Alignment::Center)
-          .spacing(SpacingSize::Sm)
-          .child(
-            Text::new(&label)
-              .variant(TypographyStyle::Description)
-              .color(PaletteColor::TextPrimary)
-              .flex(1.0),
-          )
-          .child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted))
+          .spacing(SpacingSize::Xs);
+        for (index, label) in state.selected_labels.iter().enumerate() {
+          let mut chip = TagChip::new(format!("instruction-target-{index}"), label.as_ref());
+          if !frozen.get()
+            && let Some((target, remove_label)) = remove_labels.get(label.as_ref()).cloned()
+          {
+            let targets = targets.clone();
+            chip = chip.removable(remove_label, move || {
+              targets.update(|values| values.retain(|value| *value != target));
+            });
+          }
+          chips = chips.child(chip);
+        }
+        chips
+          .child(Text::new(&placeholder).variant(TypographyStyle::Caption).flex(1.0))
+          .child(icon(Icon::Bot, IconSize::Md, PaletteColor::TextMuted))
       });
     Column::new()
       .flex(1.0)
@@ -304,6 +359,15 @@ impl Fields {
           } else {
             1.0
           })
+          .border_inside(
+            BorderSize::Sm,
+            if invalid {
+              PaletteColor::Danger
+            } else {
+              PaletteColor::Border
+            },
+          )
+          .rounded(ExtraRadius::Tile.role())
           .child(Element::from(select).id("instruction-targets")),
         None,
       ))
@@ -364,8 +428,14 @@ impl Fields {
               )
               .id("instruction-line-numbers")
               .variant(instructions::gutter_text())
+              .nowrap()
               .width(Dimension::Px(GUTTER_WIDTH))
-              .padding(Padding::new().top(ExtraSpacing::Loose.role()).right(SpacingSize::Sm)),
+              .padding(
+                Padding::new()
+                  .top(ExtraSpacing::Loose.role())
+                  .left(SpacingSize::Lg)
+                  .right(SpacingSize::Sm),
+              ),
             )
             .child(input),
         )
@@ -428,11 +498,35 @@ impl Fields {
       .child(
         ActionButton::new(
           "instruction-variables",
-          ButtonKind::Ghost,
+          if panel.get() == super::panels::Panel::Variables {
+            ButtonKind::Secondary
+          } else {
+            ButtonKind::Ghost
+          },
           ctx.t("instructions.variables"),
         )
-        .icon(Icon::CodeXml)
+        .icon(Icon::Braces)
         .on_click(move || panel.set(super::panels::Panel::Variables)),
       )
   }
+}
+fn target_choices(ctx: &Ctx, data: &ProjectInstructions) -> Vec<(Target, std::sync::Arc<str>)> {
+  let mut choices = vec![(Target::All, ctx.t("instructions.all"))];
+  choices.extend(
+    data
+      .roles()
+      .into_iter()
+      .map(|role| (Target::Role(role.clone()), std::sync::Arc::from(role.as_str()))),
+  );
+  choices.extend(data.profiles.iter().map(|profile| {
+    (
+      Target::Profile(profile.id),
+      ctx.t_args(
+        "instructions.profileLabel",
+        [("role", profile.role.as_str()), ("slug", &profile.slug)],
+      ),
+    )
+  }));
+
+  choices
 }

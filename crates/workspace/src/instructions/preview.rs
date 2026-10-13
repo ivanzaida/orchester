@@ -10,10 +10,13 @@ use orchester_core::{
   id::{ResourceId, RunId, TaskId},
   project::Project,
   resource::{
-    AgentProfile, InjectionEvent, Instruction, Pipeline, ResourceBody, ResourceKind, Step, StepKey, StepKind, Variable,
-    Version,
+    AgentProfile, InjectionEvent, Instruction, Pipeline, PromptText, ResourceBody, ResourceKind, Step, StepKey,
+    StepKind, Variable, Version,
   },
-  run::{Composition, InstructionSource, InstructionVersion, PipelineInfo, ProfileInfo, PromptInput, Run, RunContext},
+  run::{
+    Composition, InstructionSource, InstructionVersion, PipelineInfo, ProfileInfo, PromptInput, PromptSection,
+    PromptSource, Run, RunContext,
+  },
   store::{ResourceStore, RunStore, TaskStore},
   task::Task,
 };
@@ -244,6 +247,42 @@ impl Resolved<'_> {
   /// The value `variable` has in this preview; `None` when it has none.
   pub fn value(&self, variable: Variable) -> Option<String> {
     self.input(&[]).value(variable)
+  }
+
+  /// Exact value ranges in a displayed source, including the profile's responsibilities prefix.
+  pub fn source_ranges(&self, section: &PromptSection, edited: EditedInstruction<'_>) -> Vec<std::ops::Range<usize>> {
+    let prompt: Option<&PromptText> = match &section.source {
+      PromptSource::Instruction { resource, .. } if *resource == edited.id => Some(edited.body.text()),
+      PromptSource::Instruction { resource, .. } => self
+        .catalog
+        .instructions
+        .iter()
+        .find(|source| source.id == *resource)
+        .map(|source| source.version.body().text()),
+      PromptSource::AgentProfile { .. } => Some(self.profile.1.body().instructions()),
+      PromptSource::Step { .. } => Some(&self.step.instructions),
+      PromptSource::Task { .. } => None,
+    };
+    let Some(prompt) = prompt else {
+      return Vec::new();
+    };
+    let (text, ranges) = super::preview_tokens::rendered_ranges(prompt, |variable| self.value(variable));
+    if text.is_empty() {
+      return Vec::new();
+    }
+    if text == section.text {
+      return ranges;
+    }
+    let trimmed = text.trim();
+    let Some(offset) = section.text.rfind(trimmed) else {
+      return Vec::new();
+    };
+    let leading = text.len() - text.trim_start().len();
+    ranges
+      .into_iter()
+      .filter(|range| range.start >= leading && range.end <= leading + trimmed.len())
+      .map(|range| (range.start - leading + offset)..(range.end - leading + offset))
+      .collect()
   }
 
   fn input<'b>(&'b self, instructions: &'b [InstructionSource<'b>]) -> PromptInput<'b> {

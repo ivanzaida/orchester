@@ -1,16 +1,22 @@
 //! Instructions fePhH: scope tabs, the library, editor and in-place preview.
 mod editor;
+mod editor_notes;
 mod empty;
 mod fields;
 mod frame;
 mod import;
+mod import_preview;
+mod import_rows;
 mod leaving;
 mod library;
+mod library_groups;
 mod panels;
 mod preview;
 mod sources;
 mod state;
+mod variable_detail;
 mod variables;
+mod viewer;
 mod words;
 mod work;
 
@@ -120,7 +126,10 @@ impl Component for InstructionsScreen {
       View::Import => Tab::Project,
     };
     page
-      .with_children((!self.selection.full.get()).then(|| frame::header(ctx, &project, &data, tab, &self.selection)))
+      .with_children(
+        (!self.selection.full.get() && !matches!(self.selection.view.get(), View::Import))
+          .then(|| frame::header(ctx, &project, &data, tab, &self.selection)),
+      )
       .with_children(leaving::question(ctx, &self.selection, &self.leave))
       .child(self.content(ctx, project, data, reading))
   }
