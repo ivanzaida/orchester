@@ -1,0 +1,108 @@
+//! *Agents connected*: the clients as they named themselves, connected while a session of theirs is open.
+
+use super::*;
+
+#[test]
+fn app_mcp_lists_clients_as_they_name_themselves_while_connected() {
+  let installed = Installed::start(free_port());
+  let (port, token) = (installed.port(), installed.token());
+  assert!(installed.server.status().clients.is_empty());
+  let claude = initialize(port, &token, ("claude-code", "2.1.296"));
+  let codex = initialize(port, &token, ("codex-mcp-client", "0.159.2"));
+  let again = initialize(port, &token, ("claude-code", "2.1.296"));
+  let clients = installed.server.status().clients;
+  let named: Vec<(&str, &str, bool)> = clients
+    .iter()
+    .map(|client| (client.name.as_str(), client.version.as_str(), client.connected))
+    .collect();
+  assert_eq!(
+    named,
+    [("claude-code", "2.1.296", true), ("codex-mcp-client", "0.159.2", true)],
+    "one entry per client and version"
+  );
+  let auth = bearer(&token);
+  for session in [&claude, &again] {
+    let ended = delete(port, &[("Authorization", &auth), ("Mcp-Session-Id", session)]);
+    assert!(ended.status < 300, "{}", ended.text);
+  }
+  let connected = wait_until(|| {
+    let clients = installed.server.status().clients;
+    clients
+      .iter()
+      .any(|client| client.name == "claude-code" && !client.connected)
+  });
+  assert!(connected, "claude-code is not connected once both its sessions ended");
+  assert!(
+    installed
+      .server
+      .status()
+      .clients
+      .iter()
+      .any(|client| client.name == "codex-mcp-client" && client.connected)
+  );
+  drop(codex);
+}
+
+/// Whether `done` holds within a few seconds: a session ends on the server's runtime.
+fn wait_until(done: impl Fn() -> bool) -> bool {
+  let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+  while std::time::Instant::now() < until {
+    if done() {
+      return true;
+    }
+    std::thread::sleep(std::time::Duration::from_millis(20));
+  }
+  done()
+}
+
+#[test]
+fn app_mcp_lists_the_20_clients_that_asked_last() {
+  let installed = Installed::start(free_port());
+  let (port, token) = (installed.port(), installed.token());
+  for client in 0..25 {
+    initialize(port, &token, (&format!("client-{client}"), "1"));
+  }
+  let names: Vec<String> = installed
+    .server
+    .status()
+    .clients
+    .into_iter()
+    .map(|client| client.name)
+    .collect();
+  let kept: Vec<String> = (5..25).map(|client| format!("client-{client}")).collect();
+  assert_eq!(names, kept, "the oldest went");
+}
+
+#[test]
+fn app_mcp_keeps_a_connected_client_over_those_that_left() {
+  let installed = Installed::start(free_port());
+  let (port, token) = (installed.port(), installed.token());
+  let _keeper = initialize(port, &token, ("keeper", "1"));
+  let auth = bearer(&token);
+  for client in 1..=20 {
+    let name = format!("gone-{client}");
+    let session = initialize(port, &token, (&name, "1"));
+    delete(port, &[("Authorization", &auth), ("Mcp-Session-Id", &session)]);
+    assert!(
+      wait_until(|| {
+        installed
+          .server
+          .status()
+          .clients
+          .iter()
+          .any(|seen| seen.name == name && !seen.connected)
+      }),
+      "{name} left"
+    );
+  }
+  let clients = installed.server.status().clients;
+  assert_eq!(clients.len(), 20);
+  assert!(
+    clients.iter().any(|seen| seen.name == "keeper" && seen.connected),
+    "the oldest, but connected"
+  );
+  assert!(
+    !clients.iter().any(|seen| seen.name == "gone-1"),
+    "the oldest of those that left went"
+  );
+}

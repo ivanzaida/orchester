@@ -3,6 +3,7 @@
 //! tool does not expect or a timeout fails the step for its failure route to handle.
 
 use orchester_core::{id::StepExecutionId, store::ActivityStore};
+use orchester_store::StoreError;
 
 use super::CommandFinished;
 use crate::execution::{
@@ -15,12 +16,13 @@ impl RunTask {
   pub(in super::super) fn on_command_ended(
     &mut self,
     execution: StepExecutionId,
-    finished: &CommandFinished,
+    finished: Result<CommandFinished, StoreError>,
   ) -> Result<(), ExecutionError> {
-    let Some(active) = self.agents.remove(&execution) else {
+    let active = self.retire_worker(execution);
+    let finished = finished?;
+    let Some(active) = active else {
       return Ok(());
     };
-    self.board.release(execution);
     if active.abandoned {
       return Ok(());
     }

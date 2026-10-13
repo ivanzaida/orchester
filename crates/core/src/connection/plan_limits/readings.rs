@@ -1,13 +1,29 @@
 use super::{Blocked, LimitBlock, LimitReading, LimitState, LimitWindow};
-use crate::{connection::AgentProvider, time::Timestamp};
+use crate::{connection::AgentProvider, id::AgentAccountId, time::Timestamp};
 
-/// Session-only newest readings, one account per CLI on this computer.
+/// Session-only newest readings, one per account: limits belong to an account and are shared by every project that
+/// uses it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PlanReadings(Vec<LimitReading>);
 
 impl PlanReadings {
+  /// The newest reading of any account of `provider`'s CLI, for a view with one entry per CLI.
   pub fn get(&self, provider: AgentProvider) -> Option<&LimitReading> {
-    self.0.iter().find(|reading| reading.provider == provider)
+    self
+      .0
+      .iter()
+      .filter(|reading| reading.provider == provider)
+      .max_by_key(|reading| reading.at)
+  }
+
+  /// The newest reading of `account`.
+  pub fn of_account(&self, account: AgentAccountId) -> Option<&LimitReading> {
+    self.0.iter().find(|reading| reading.account_id() == Some(account))
+  }
+
+  /// Every account's newest reading.
+  pub fn all(&self) -> &[LimitReading] {
+    &self.0
   }
 
   /// Takes in a newer reading; `false` when it is older or changes nothing.
@@ -15,7 +31,12 @@ impl PlanReadings {
     for window in &mut reading.limits.windows {
       window.at = Some(reading.at);
     }
-    let Some(old) = self.0.iter_mut().find(|old| old.provider == reading.provider) else {
+    let account = reading.account_id();
+    let Some(old) = self
+      .0
+      .iter_mut()
+      .find(|old| old.provider == reading.provider && old.account_id() == account)
+    else {
       self.0.push(reading);
       return true;
     };

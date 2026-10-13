@@ -22,14 +22,14 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
-  connection::{AgentProvider, ConnectionCheck},
+  connection::{AgentProvider, ConnectionAccount, ConnectionCheck},
   name::Name,
 };
 use orchester_workspace::{
   activity::operations,
   background,
   connections::{
-    data::{ConnectionDraft, ProjectConnections, save_in},
+    data::{ConnectionDraft, ProjectConnections, save_on_account_in},
     probe,
   },
   messages::{self, Message},
@@ -44,7 +44,10 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{ConnectionsTab, ConnectionsView, ProjectPage, Route, Screen},
-  services::Services,
+  services::{
+    Services,
+    accounts::{self, Accounts},
+  },
   theme::ExtraTypography,
   ui::{
     breadcrumb::Crumb,
@@ -83,7 +86,13 @@ struct Found(Option<ConnectionCheck>);
 
 impl DevtoolsInspectable for Found {}
 
-type SaveAction = FutureAction<ConnectionDraft, Saved, Message>;
+/// The account a check runs on, as a future's key.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Chosen(ConnectionAccount);
+
+impl DevtoolsInspectable for Chosen {}
+
+type SaveAction = FutureAction<(ConnectionDraft, ConnectionAccount), Saved, Message>;
 
 pub struct AddAgent {
   save: SaveAction,
@@ -97,6 +106,8 @@ pub struct AddAgent {
   program: Signal<String>,
   /// Counts Recheck presses: each looks for the program and checks it again.
   recheck: Signal<u64>,
+  /// The account chosen, by id; empty while it is the CLI's Default.
+  account: Signal<String>,
 }
 
 impl Component for AddAgent {
@@ -110,6 +121,7 @@ impl Component for AddAgent {
       suggested: ctx.signal(String::new()),
       program: ctx.signal(String::new()),
       recheck: ctx.signal(0),
+      account: ctx.signal(String::new()),
     };
     let save = page.save.clone();
     let project = ctx.props::<AddAgentProps>().project.open.project.id();
@@ -131,15 +143,18 @@ impl Component for AddAgent {
     let found = found(ctx, provider, self.recheck.get()).state().get();
     self.follow_sources(ctx, &props, provider, &listed, &found);
     let program = self.chosen(found.data.as_ref().map(|copies| copies.0.as_slice()));
-    let checked = checked(ctx, (provider, program.clone()), self.recheck.get());
+    let accounts = accounts::listed(ctx);
+    let account = super::account::chosen_account(&accounts, provider, &self.account.get())
+      .map_or(ConnectionAccount::Default, ConnectionAccount::of);
+    let checked = checked(ctx, (provider, program.clone(), account.clone()), self.recheck.get());
     let state = Checked::of(&found, program.as_ref(), &checked);
     let reason = self.reason(ctx, listed.data.as_ref(), &state, &save.state().get());
     let sections = vec![
       self.kind_section(ctx, listed.data.as_ref(), props.project.open.project.name().as_str()),
-      self.connection_section(ctx, listed.data.as_ref(), (&found, &state)),
+      self.connection_section(ctx, listed.data.as_ref(), (&found, &state), &accounts),
       after(ctx, provider, props.project.open.project.name().as_str()),
     ];
-    let bar = self.bar(ctx, &props, (&save, program, &state), reason.as_deref());
+    let bar = self.bar(ctx, &props, (&save, program, &state, account), reason.as_deref());
     let head = head(ctx, &props, &save.state().get());
     page(ctx, Screen::NewConnection, head, sections, bar)
   }
@@ -207,7 +222,7 @@ impl AddAgent {
     &self,
     ctx: &mut Ctx,
     props: &AddAgentProps,
-    (save, program, state): (&SaveAction, Option<PathBuf>, &Checked),
+    (save, program, state, account): (&SaveAction, Option<PathBuf>, &Checked, ConnectionAccount),
     reason: Option<&str>,
   ) -> Element {
     let navigation = Navigation::of(ctx);
@@ -234,7 +249,7 @@ impl AddAgent {
       (true, _) => button.loading(),
       (false, Some(draft)) => {
         let save = save.clone();
-        button.on_click(move || save.run(draft.clone()))
+        button.on_click(move || save.run((draft.clone(), account.clone())))
       }
       (false, None) => button.disabled(),
     };
@@ -324,6 +339,7 @@ impl AddAgent {
     ctx: &mut Ctx,
     listed: Option<&ProjectConnections>,
     (found, state): (&FutureState<Copies, Message>, &Checked),
+    accounts: &Accounts,
   ) -> Element {
     let provider = self.kind.get().0;
     let name_error = listed.and_then(|listed| name_problem(ctx, listed, &self.name.get()));
@@ -337,12 +353,13 @@ impl AddAgent {
       Place::Within,
     );
     let program = program_row(ctx, provider, (found, &self.program));
+    let account = super::account::add_row(ctx, accounts, provider, &self.account);
     let check = check_row(ctx, provider, state, &self.recheck);
     section(
       "connection-section",
       &ctx.t("connections.dialog.connection"),
       None,
-      vec![name, program, check],
+      vec![name, program, account, check],
     )
     .into()
   }
@@ -358,16 +375,16 @@ fn found(ctx: &mut Ctx, provider: AgentProvider, recheck: u64) -> FutureHandle<C
 /// The check of `program` as `provider`'s CLI, again at each Recheck; none without a program.
 fn checked(
   ctx: &mut Ctx,
-  (provider, program): (AgentProvider, Option<PathBuf>),
+  (provider, program, account): (AgentProvider, Option<PathBuf>, ConnectionAccount),
   recheck: u64,
 ) -> FutureState<Found, Message> {
   let read = ctx.future(
-    (Kind(provider), program, recheck),
-    |(Kind(provider), program, _)| async move {
+    (Kind(provider), program, Chosen(account), recheck),
+    |(Kind(provider), program, Chosen(account), _)| async move {
       let Some(program) = program else {
         return Ok(Found(None));
       };
-      background::run(move || Found(probe::check(provider, &program))).await
+      background::run(move || Found(probe::check_on(provider, &program, &account))).await
     },
   );
   read.state().get()
@@ -376,12 +393,12 @@ fn checked(
 fn save_action(ctx: &mut Ctx) -> SaveAction {
   let props = ctx.props::<AddAgentProps>().clone();
   let activity = Services::of(ctx).activity;
-  ctx.future_action(move |draft: ConnectionDraft| {
+  ctx.future_action(move |(draft, account): (ConnectionDraft, ConnectionAccount)| {
     let (activity, open) = (activity.clone(), props.project.open.clone());
     async move {
       let spec = operations::connection_save(&open, draft.name.as_str());
       let save = async move {
-        background::run(move || save_in(&open.repo_root, draft).map(Saved))
+        background::run(move || save_on_account_in(&open.repo_root, draft, account).map(Saved))
           .await?
           .map_err(|error| {
             tracing::error!(%error, "cannot save the connection");

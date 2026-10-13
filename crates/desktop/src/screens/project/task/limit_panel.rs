@@ -126,7 +126,11 @@ impl RaiseLimitProps {
     let current = self.max_duration?;
     let limit = match self.limit {
       RunLimit::Time => current + current / 2,
-      RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => current,
+      RunLimit::Tokens
+      | RunLimit::GroupBudget
+      | RunLimit::DailyBudget
+      | RunLimit::StepBudget { .. }
+      | RunLimit::PlanLimit { .. } => current,
     };
     let minutes = limit
       .as_secs()
@@ -232,9 +236,11 @@ impl RaiseLimitPanel {
     );
     self.minutes.set(minutes_text(props.suggested_time()));
     ctx.focus(match props.limit {
-      RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => {
-        &self.budget_input
-      }
+      RunLimit::Tokens
+      | RunLimit::GroupBudget
+      | RunLimit::DailyBudget
+      | RunLimit::StepBudget { .. }
+      | RunLimit::PlanLimit { .. } => &self.budget_input,
       RunLimit::Time => &self.time_input,
     });
   }

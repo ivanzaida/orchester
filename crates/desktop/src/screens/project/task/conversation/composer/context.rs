@@ -141,6 +141,8 @@ fn limit_text(ctx: &Ctx, run: &RunView) -> Option<Arc<str>> {
         ("limit", whole_minutes(run.run.max_duration()?).to_string().as_str()),
       ],
     )),
+    // This app knows no accounts; the new app words a run stopped at an account's plan limit.
+    RunLimit::PlanLimit { .. } => None,
     RunLimit::StepBudget { execution } => {
       let (used, budget) = run.step_budget_use(execution)?;
       let step = run.step_of(execution)?;

@@ -10,7 +10,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::{InputSource, input_source},
+    events::is_synthetic_input,
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Row, Spacer, Text},
@@ -20,7 +20,7 @@ use lurq::{
 use orchester_workspace::messages::Message;
 
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, Protected},
+  mcp::input_gate::{Guarded, InputGate, Protected, input_may_decide},
   theme::{ConnectionsText, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -132,14 +132,11 @@ impl Component for WidenConfirm {
 
 fn guarded_handler(gate: Option<InputGate>, policy: Guarded, handler: Handler) -> Handler {
   Arc::new(move || {
-    if input_source() == InputSource::Synthetic {
-      if gate
-        .as_ref()
-        .is_none_or(|gate| gate.protecting() || !gate.widening_allowed(policy))
-      {
-        tracing::warn!("synthetic input reached a protected permission decision; not taken");
-        return;
-      }
+    if !input_may_decide(gate.as_ref(), policy) {
+      tracing::warn!("synthetic input reached a protected permission decision; not taken");
+      return;
+    }
+    if is_synthetic_input() {
       tracing::info!("automation answered application permission review under stored consent");
     }
     handler();

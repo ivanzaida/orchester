@@ -38,11 +38,13 @@ fn start(worktree: &Path, app: &str) -> (App, PathBuf) {
     app.to_owned()
   });
   fs::copy(original, &program).expect("copy");
-  let discovery = folder.join("profile").join(if app == "orchester" {
-    "orchester-mcp"
+  // The new app's QA copy writes where ORCHESTER_APP_MCP_DISCOVERY points (`tools/qa-app.ps1`: `.tmp/qa/<task>/mcp`);
+  // the deprecated desktop's keeps its QA profile's user folder.
+  let discovery = if app == "orchester" {
+    folder.join("profile").join("orchester-mcp")
   } else {
-    "orchester-app-mcp"
-  });
+    folder.join("mcp")
+  };
   (start_program(&program, &discovery), discovery)
 }
 
@@ -232,7 +234,9 @@ fn refuse_outside_apps(worktree: &Path, folder: &Path, call: &mut impl FnMut(&st
   });
   fs::copy(&original, &other_program).expect("copy");
   for (index, program) in [&original, &other_program].into_iter().enumerate() {
-    let outside_folder = folder.join(format!("outside-{index}"));
+    // Its discovery file is where a QA copy's goes (`mcp/<pid>.json` under the worktree's `.tmp/`), which the relay
+    // reads for an app of this run; the program outside this run is refused before any discovery is read.
+    let outside_folder = folder.join(format!("outside-{index}")).join("mcp");
     let outside_app = start_program(program, &outside_folder);
     let refused = call(
       "call_run_app",

@@ -1,16 +1,17 @@
 //! Widenings shared by the profile editor and the domain tools.
 use orchester_core::{
-  connection::{AgentProvider, invocation::Platform},
+  connection::{AgentProvider, invocation::Platform, moves_to_another_account},
   id::ResourceId,
   permission::{AgentPermissions, widening::Widening},
   resource::AgentProfile,
-  store::ResourceStore,
+  store::{ConnectionStore, ResourceStore},
 };
 use orchester_store::{ProjectDb, StoreError};
 
 use crate::messages::Message;
 
-/// Compared with the latest published version, never an unapproved draft.
+/// Compared with the latest published version, never an unapproved draft. A profile whose connection now runs on
+/// another account than the latest version's widens too ([`moves_to_another_account`]).
 pub fn reasons(
   db: &ProjectDb,
   id: Option<ResourceId>,
@@ -31,6 +32,21 @@ pub fn reasons(
     .into_iter()
     .map(message)
     .collect();
+  let account = |connection| {
+    Ok::<_, StoreError>(
+      db.connection(connection)?
+        .map(|connection| connection.account().clone()),
+    )
+  };
+  let before = match &latest {
+    Some(version) => account(version.body().connection())?,
+    None => None,
+  };
+  if let Some(after) = account(profile.connection())?
+    && moves_to_another_account(before.as_ref(), &after)
+  {
+    reasons.push(Message::new("appMcp.widens.account"));
+  }
   if profile.mcp_servers().ids().iter().any(|server| {
     !latest
       .as_ref()

@@ -9,6 +9,7 @@
 mod action;
 mod limit;
 mod plan;
+mod plan_limit;
 mod pointing;
 mod ready;
 mod retries;
@@ -57,6 +58,10 @@ pub fn decisions(ctx: &mut Ctx, props: &TaskContext) -> Option<Element> {
     return Some(ctx.mount_keyed::<plan::PlanDecision>(&key, props.clone()));
   }
   match run.run.status() {
+    RunStatus::Paused(PauseReason::LimitReached(RunLimit::PlanLimit { .. })) => {
+      let key = format!("decision-plan-limit-{id}-{}", run.run.last_sequence().get());
+      Some(ctx.mount_keyed::<plan_limit::PlanLimitDecision>(&key, props.clone()))
+    }
     RunStatus::Paused(PauseReason::LimitReached(limit)) if *limit != RunLimit::DailyBudget => {
       let key = format!("decision-limit-{id}-{}", run.run.last_sequence().get());
       Some(ctx.mount_keyed::<limit::RaiseLimit>(&key, props.clone()))

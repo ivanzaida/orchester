@@ -19,9 +19,25 @@ pub struct Response {
 /// Posts `body` to `/mcp` on `port` with the extra `headers` (`Authorization`, `Mcp-Session-Id`,
 /// `Origin`).
 pub fn post(port: u16, headers: &[(&str, &str)], body: &Value) -> Response {
-  let body = body.to_string();
+  send("POST", (port, &format!("127.0.0.1:{port}")), headers, Some(body))
+}
+
+/// [`post`], naming `host` in the `Host` header.
+#[allow(dead_code, reason = "only the stable address's tests name another host")]
+pub fn post_as(port: u16, host: &str, headers: &[(&str, &str)], body: &Value) -> Response {
+  send("POST", (port, host), headers, Some(body))
+}
+
+/// Ends an MCP session: `DELETE /mcp` with its `Mcp-Session-Id` among `headers`.
+#[allow(dead_code, reason = "only the stable address's tests end sessions")]
+pub fn delete(port: u16, headers: &[(&str, &str)]) -> Response {
+  send("DELETE", (port, &format!("127.0.0.1:{port}")), headers, None)
+}
+
+fn send(method: &str, (port, host): (u16, &str), headers: &[(&str, &str)], body: Option<&Value>) -> Response {
+  let body = body.map(Value::to_string).unwrap_or_default();
   let mut request = format!(
-    "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\nAccept: application/json, \
+    "{method} /mcp HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\nAccept: application/json, \
      text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n",
     body.len()
   );

@@ -42,6 +42,8 @@ pub struct OptionCard {
   choice: Choice,
   content: Vec<Element>,
   inline_summary: bool,
+  /// The description is a path or a command: in mono.
+  mono: bool,
 }
 
 impl OptionCard {
@@ -61,6 +63,7 @@ impl OptionCard {
       chosen,
       content: Vec::new(),
       inline_summary: false,
+      mono: false,
       choice: Choice::Choose(Arc::new(choose)),
     }
   }
@@ -74,6 +77,12 @@ impl OptionCard {
   /// Compact starting-point card: summary beside its title, details below (Iewpp).
   pub fn inline_summary(mut self) -> Self {
     self.inline_summary = true;
+    self
+  }
+
+  /// The description is a path or a command, shown in mono (`A new folder Orchester creates` in `IOyJl`).
+  pub fn mono_description(mut self) -> Self {
+    self.mono = true;
     self
   }
 
@@ -100,9 +109,13 @@ impl OptionCard {
         SpacingSize::Xs
       })
       .child(title)
-      .with_children(
-        (!self.inline_summary).then(|| Text::new(&self.description).variant(ExtraTypography::Prose.role())),
-      )
+      .with_children((!self.inline_summary).then(|| {
+        Text::new(&self.description).variant(if self.mono {
+          ExtraTypography::MonoKey.role()
+        } else {
+          ExtraTypography::Prose.role()
+        })
+      }))
   }
 
   /// The choice cannot be made, for `reason`.

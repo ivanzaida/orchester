@@ -14,7 +14,7 @@ use lurq::app::{App, Tree};
 use orchester_app::{
   appearance::{Appearance, ThemeSetting},
   i18n,
-  mcp::{self, AppMcp, BearerToken, DiscoveryFolder, McpSettings, McpStatus, WindowLink},
+  mcp::{self, AppMcp, BearerToken, McpLink, McpMode, McpSettings, WindowLink},
   root::{Root, RootProps},
   startup::Launch,
   theme::{self, Mode},
@@ -63,15 +63,16 @@ impl Served {
       launch.services(),
       app.i18n(),
     );
-    let at = DiscoveryFolder::At(folder.path().to_path_buf());
-    let server = AppMcp::start(&mut tree, runtime, &at, config, &link.input_gate()).expect("the server listens");
-    let discovery = read_json(server.discovery_path());
+    let at = McpMode::Qa(folder.path().to_path_buf());
+    let settings = McpSettings::with_window_control(window_control);
+    let server = AppMcp::start(&mut tree, runtime, at, (config, settings), &link.input_gate());
+    let discovery = read_json(&server.discovery_path().expect("the server listens"));
     let token = discovery["token"]
       .as_str()
       .expect("the file holds the token")
       .to_owned();
-    let port = server.port().get();
-    let mcp = McpStatus::of(Some(&server), McpSettings::with_window_control(window_control));
+    let port = server.port().expect("the server listens").get();
+    let mcp = McpLink::new(&server);
     let start = launch.start();
     tree.mount_root::<Root>(&mut app, RootProps { link, mcp, start });
     tree.pass_headless(&mut app);
@@ -156,7 +157,7 @@ fn tool_value(response: &Response) -> (Value, bool) {
 fn the_discovery_file_names_the_app_and_goes_with_the_server() {
   let mut served = Served::start(true);
   let server = served.server.take().expect("the server runs");
-  let file = server.discovery_path().to_path_buf();
+  let file = server.discovery_path().expect("the server listens");
   assert_eq!(file, served.folder.path().join(format!("{}.json", std::process::id())));
   let contents = read_json(&file);
   assert_eq!(contents["app"], mcp::APP_NAME);
@@ -167,7 +168,7 @@ fn the_discovery_file_names_the_app_and_goes_with_the_server() {
     file.with_extension("lock").exists(),
     "the lock marks the process as alive"
   );
-  drop(server);
+  server.shutdown();
   assert!(
     !file.exists() && !file.with_extension("lock").exists(),
     "both go when the server stops"
@@ -272,7 +273,7 @@ fn tools_answer_from_the_window_without_revealing_the_token() {
   let (error, failed) = tool_value(&served.call(&session, "navigate", &json!({ "route": "nowhere" })));
   assert!(failed);
   assert_eq!(error["code"], "unknown_route");
-  let status = McpStatus::of(served.server.as_ref(), McpSettings::with_window_control(true));
+  let status = served.server.as_ref().expect("the server runs").status();
   let status_bar = served.tree.get_element_by_id("status-mcp").map(|item| {
     item
       .children()
@@ -292,7 +293,7 @@ fn tools_answer_from_the_window_without_revealing_the_token() {
     assert!(!text.contains(&token), "the token shows in {text}");
   }
   assert_eq!(format!("{:?}", BearerToken::generate()), "BearerToken(<redacted>)");
-  assert_eq!(status_bar, Some(vec![format!("MCP on :{}", served.port)]));
+  assert_eq!(status_bar, Some(vec![format!("MCP :{} · QA", served.port)]));
   assert!(
     served.tree.get_element_by_id("status-window-control").is_some(),
     "the status bar says agents can control the window"

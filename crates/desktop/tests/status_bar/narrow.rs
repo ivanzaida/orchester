@@ -26,6 +26,7 @@ fn reading(provider: AgentProvider, percent: f64, blocked: Option<LimitBlock>) -
   let reset = Timestamp::from_unix_millis(now.unix_millis() + 3 * 86_400_000);
   LimitReading {
     provider,
+    account: None,
     at: now,
     limits: PlanLimits {
       windows: vec![LimitWindow::new(10080, Some(percent), Some(reset), LimitState::Normal, false).expect("window")],

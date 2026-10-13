@@ -85,10 +85,12 @@ powershell -File tools/qa-app.ps1 -Name <task> -Scenario <scenario> [-FakeAgents
 It builds `orchester-app`, the seed example (`crates/desktop-app/examples/seed`) and
 `orchester-runner`, copies them into `.tmp/qa/<task>/bin/` (its own `orchester.db`), seeds a new
 repository `.tmp/qa/<task>/repo-<scenario>` with the project Kontur (KON) and registers it there,
-and starts the app with `ORCHESTER_APP_MCP_START_WITHOUT_FOCUS=1` and
-`ORCHESTER_APP_MCP_WINDOW_CONTROL=on`. It prints the seed's report — `project <id>` (the id
-`navigate` takes), the repository, and each task's key, title and state — then `pid <pid>` and
-`discovery <path>`, and returns while the app runs. It writes nothing outside `.tmp/qa/` (never
+and starts the app with `ORCHESTER_APP_MCP_START_WITHOUT_FOCUS=1`,
+`ORCHESTER_APP_MCP_WINDOW_CONTROL=on` and `ORCHESTER_APP_MCP_DISCOVERY=.tmp/qa/<task>/mcp/` (a free
+port and a new token on each start, in `<pid>.json` there; never the installed app's fixed address).
+It prints the seed's report — `project <id>` (the id `navigate` takes), the repository, and each
+task's key, title and state — then `pid <pid>`, `mcp <folder>` and `discovery <path>`, and returns
+while the app runs. It writes nothing outside `.tmp/qa/` (never
 the user's install `E:\projects\orchester` or a real repository), replaces `.tmp/qa/<task>/` on
 every start, and refuses to start while programs from `.tmp/qa/<task>/bin/` still run. The app's
 console output is in `.tmp/qa/<task>/app.log` and `app.err.log`. `-FakeAgents` builds the
@@ -118,7 +120,8 @@ static scenarios with `-NoRunner`; reach live states with `live`.
 It runs without asking only for an app whose resolved executable is inside this run's worktree,
 using the same process boundary as `stop_run_process`. The relay finds the exact-pid discovery file
 in the user's discovery folder or an isolated QA profile under the worktree's `.tmp/`, checks its
-pid and app name, and keeps the token private. Use it instead of running `tools/lurq-mcp-client.py`,
+pid and app name, and keeps the token private; a QA copy's file is the `.tmp/qa/<task>/mcp/<pid>.json`
+that `tools/qa-app.ps1` writes. Use it instead of running `tools/lurq-mcp-client.py`,
 reading discovery or escalating a script outside the sandbox.
 
 For example, call `call_run_app` with `{"pid":12345,"tool":"app_state","arguments":{}}`.

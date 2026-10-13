@@ -12,7 +12,7 @@ use lurq::{
     events::mouse_event::MouseEvent,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Text},
+  components::{Button, Row, Text},
   core::ElementRef,
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
@@ -122,6 +122,8 @@ pub struct ActionButton {
   /// As wide as its parent, its icon and label centered (`Allow retry` `ae0Pi`).
   fill: bool,
   compact: bool,
+  /// 24 high instead of 28, as a Copy inside a command row (`PEnj5`).
+  small: bool,
   bounded: bool,
   element: Option<ElementRef>,
 }
@@ -139,6 +141,7 @@ impl ActionButton {
       focus: Focus::Pointer,
       fill: false,
       compact: false,
+      small: false,
       bounded: false,
       element: None,
     }
@@ -194,6 +197,12 @@ impl ActionButton {
     self
   }
 
+  /// 24 high, its icon and label as a button's: an action inside a command row (`Command row` `PEnj5`).
+  pub fn small(mut self) -> Self {
+    self.small = true;
+    self
+  }
+
   /// Keep a long label within the available width; the full accessible name is retained.
   pub fn bounded_label(mut self) -> Self {
     self.bounded = true;
@@ -231,18 +240,42 @@ impl ActionButton {
   }
 }
 
-impl From<ActionButton> for Element {
-  fn from(button: ActionButton) -> Self {
-    let color = button.kind.content();
-    let (height, glyph, label) = if button.compact {
+impl ActionButton {
+  /// Its height, and the sizes of its icon and label.
+  fn metrics(&self) -> (ControlHeight, IconSize, TypographyStyle) {
+    if self.compact {
       (
         ControlHeight::Helper,
         IconSize::Sm,
         crate::theme::ExtraTypography::Note.role(),
       )
+    } else if self.small {
+      (ControlHeight::Sm, IconSize::Md, TypographyStyle::Button)
     } else {
       (ControlHeight::Md, IconSize::Md, TypographyStyle::Button)
-    };
+    }
+  }
+
+  /// The room the button takes, laid out as it is but as plain words: no role, name, focus or pointer. An unseen
+  /// sizer for a slot two labels share (Show and Hide). lurq cannot leave an element out of the accessibility tree,
+  /// so the sizer's words are there as plain text.
+  pub fn room(self) -> Row {
+    let (height, glyph, label) = self.metrics();
+    let color = self.kind.content();
+    Row::new()
+      .height(Dimension::Px(height.value()))
+      .padding(Padding::horizontal(SpacingSize::Md))
+      .spacing(ExtraSpacing::Snug.role())
+      .align_items(Alignment::Center)
+      .with_children(self.lead().map(|lead| icon(lead, glyph, color.clone())))
+      .child(Text::new(&self.label).variant(label).color(color).nowrap())
+  }
+}
+
+impl From<ActionButton> for Element {
+  fn from(button: ActionButton) -> Self {
+    let color = button.kind.content();
+    let (height, glyph, label) = button.metrics();
     let mut frame = Button::empty()
       .id(button.id.clone())
       .height(Dimension::Px(height.value()))

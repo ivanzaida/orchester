@@ -49,7 +49,7 @@ impl Raise {
 /// which no runner records.
 pub fn budget_use(run: &RunView, limit: RunLimit) -> Option<(TokensUsed, Option<TokenBudget>)> {
   match limit {
-    RunLimit::GroupBudget => None,
+    RunLimit::GroupBudget | RunLimit::PlanLimit { .. } => None,
     RunLimit::StepBudget { execution } => run
       .step_budget_use(execution)
       .map(|(used, budget)| (used, Some(budget))),

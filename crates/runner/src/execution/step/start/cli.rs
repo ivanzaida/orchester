@@ -12,9 +12,10 @@ use orchester_core::{
   agent_files::skills::RepositorySkills,
   command::Command,
   connection::{
-    AgentConnection, AgentProvider,
+    AgentConnection, AgentProvider, ConnectionAccount,
     invocation::{
-      ClaudeInvocation, ClaudeMcp, ClaudeSession, CodexAgentFiles, CodexInvocation, CodexMcp, InvocationError, Platform,
+      ClaudeInvocation, ClaudeMcp, ClaudeSession, CodexAgentFiles, CodexInvocation, CodexMcp, InvocationError,
+      Platform, on_account,
     },
     stream::RunnerProblem,
   },
@@ -49,6 +50,8 @@ pub(super) struct CliCommand {
 pub(super) struct Cli<'a> {
   /// The CLI's program.
   pub(super) executable: &'a Path,
+  /// Whose sign-in it runs on: the account's folder variable is set over the environment's and the project's.
+  pub(super) account: &'a ConnectionAccount,
   pub(super) model: &'a ModelId,
   pub(super) effort: Option<&'a str>,
   pub(super) enforced: &'a EnforcedPermissions,
@@ -70,8 +73,15 @@ pub(super) struct Cli<'a> {
 }
 
 /// The program of the agent CLI `connection` runs, or why no agent starts on it: this version runs
-/// no native agent.
+/// no native agent, and none starts without an account, on an account whose folder is gone, or on one this
+/// platform does not support yet (a connection changed after the run's preflight).
 pub(super) fn program(connection: &AgentConnection) -> Result<&Path, RunnerProblem> {
+  if let Some(reason) = connection
+    .account()
+    .start_problem(connection.provider(), Platform::current(), Path::is_dir)
+  {
+    return Err(problem(reason.to_string()));
+  }
   match connection.executable() {
     Some(executable) if connection.provider().runs_agents() => Ok(executable),
     _ => Err(problem(NATIVE_NOT_AVAILABLE.to_owned())),
@@ -166,6 +176,7 @@ impl RunTask {
     };
     let command = invocation
       .command(std::env::vars_os(), cli.environment)
+      .and_then(|command| on_account(command, cli.account, AgentProvider::CodexCli))
       .map_err(|error| problem(error.to_string()))?;
     let schema = (cli.resume.is_none()).then(|| {
       serde_json::from_str(orchester_core::run::STEP_RESULT_SCHEMA)
@@ -220,6 +231,7 @@ impl RunTask {
       checks: cli.checks,
     }
     .command(prompt, std::env::vars_os(), cli.environment)
+    .and_then(|command| on_account(command, cli.account, AgentProvider::ClaudeCodeCli))
     .map_err(|error: InvocationError| problem(error.to_string()))?;
     Ok((command, servers.map(|servers| servers.file)))
   }

@@ -67,6 +67,7 @@ impl Scheduler {
     if session == AttachSession::Reconnect {
       attached.continued = self.continue_after_reconnect(&db)?;
     }
+    self.wait_for_plan_resets();
     self.inner.board.announce();
     Ok(attached)
   }

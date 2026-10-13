@@ -1,8 +1,10 @@
 //! The application database next to the executable: known projects, the session log used to
 //! detect that the previous run of Orchester ended abnormally, the state of the window
 //! (`ui_state`) that outlives a session, such as its tabs, the shared servers ([`servers`]) and the
-//! application's own settings ([`settings`]), among them the Usage dashboard's warning threshold.
+//! application's own settings ([`settings`]), among them the Usage dashboard's warning threshold, and the person's
+//! agent CLI accounts ([`accounts`]).
 
+mod accounts;
 mod servers;
 mod settings;
 
@@ -46,6 +48,8 @@ CREATE TABLE ui_state (
   settings::THRESHOLD_MIGRATION,
   settings::APPEARANCE_MIGRATION,
   settings::AUTOMATION_PERMISSIONS_MIGRATION,
+  settings::APP_MCP_MIGRATION,
+  accounts::MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

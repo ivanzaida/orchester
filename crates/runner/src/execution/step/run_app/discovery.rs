@@ -1,4 +1,6 @@
-//! Exact-pid discovery in the user's folder or an isolated QA profile under .tmp/.
+//! Exact-pid discovery in the user's folder or an isolated QA profile under .tmp/. A QA copy of `orchester-app`
+//! writes its file to the folder `ORCHESTER_APP_MCP_DISCOVERY` names, which `tools/qa-app.ps1` sets to
+//! `.tmp/qa/<task>/mcp/`; a QA profile of the user's folders keeps it in `orchester-app-mcp/`.
 
 use std::{
   fs,
@@ -32,7 +34,11 @@ pub(super) fn find(worktree: &Path, pid: NonZeroU32, app: &str, tool: &str) -> R
     }
   }
   let root = fs::canonicalize(worktree).map_err(|_| AppError::ReadDiscovery)?;
-  let matches = qa_files(&root, folder, &name)?;
+  let mut suffixes = vec![Path::new(folder).join(&name)];
+  if app == "orchester-app" {
+    suffixes.push(Path::new("mcp").join(&name));
+  }
+  let matches = qa_files(&root, &suffixes, &name)?;
   match matches.as_slice() {
     [path] => read(path, pid, app),
     [] => Err(AppError::Missing),
@@ -68,8 +74,15 @@ fn read(path: &Path, pid: NonZeroU32, app: &str) -> Result<AppDiscovery, AppErro
   AppDiscovery::parse(&bytes, pid, app).map_err(AppError::from)
 }
 
-fn qa_files(root: &Path, server_folder: &str, name: &str) -> Result<Vec<PathBuf>, AppError> {
-  let suffix = Path::new(server_folder).join(name);
+/// The files under `root`'s `.tmp/` whose path ends in one of `suffixes`; lurq's own `lurq/mcp/<name>` only when
+/// it is asked for by name, never as a QA copy's `mcp/<name>`.
+fn qa_files(root: &Path, suffixes: &[PathBuf], name: &str) -> Result<Vec<PathBuf>, AppError> {
+  let lurq = Path::new("lurq/mcp").join(name);
+  let wanted = |path: &Path| {
+    suffixes
+      .iter()
+      .any(|suffix| path.ends_with(suffix) && (suffix.ends_with(&lurq) || !path.ends_with(&lurq)))
+  };
   let mut pending = vec![(root.join(".tmp"), 0)];
   let mut matches = Vec::new();
   let mut remaining = MAX_SEARCH_ENTRIES;
@@ -89,9 +102,9 @@ fn qa_files(root: &Path, server_folder: &str, name: &str) -> Result<Vec<PathBuf>
       if kind.is_symlink() {
         continue;
       }
-      if kind.is_file() && entry.path().ends_with(&suffix) {
+      if kind.is_file() && wanted(&entry.path()) {
         let path = fs::canonicalize(entry.path()).map_err(|_| AppError::ReadDiscovery)?;
-        if path.starts_with(root) && path.ends_with(&suffix) {
+        if path.starts_with(root) && wanted(&path) {
           matches.push(path);
         }
       } else if kind.is_dir() && depth < 12 {

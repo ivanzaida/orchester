@@ -40,6 +40,8 @@ pub struct SnapshotSource {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LimitSnapshot {
   pub provider: AgentProvider,
+  /// The account the CLI ran on; `None` for a report from before accounts, which was Default's.
+  pub account: Option<crate::id::AgentAccountId>,
   pub at: Timestamp,
   pub limits: PlanLimits,
   /// `None` when the run is no longer known.

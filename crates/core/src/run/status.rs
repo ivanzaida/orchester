@@ -54,13 +54,23 @@ pub enum RunLimit {
   StepBudget {
     execution: StepExecutionId,
   },
+  /// `execution`'s agent CLI refused its turn because its account reached its plan limit
+  /// (`docs/design/agent-accounts.md`). The run continues the same session on the same account at
+  /// the limit's reset, or the person continues the step now on another account of the same CLI as a
+  /// new session for this run; a running agent never moves to another account by itself.
+  PlanLimit {
+    execution: StepExecutionId,
+  },
 }
 
 impl RunLimit {
   /// Whether this is a limit of the whole run, which a raised run budget or time limit lifts, as
-  /// opposed to a step's budget.
+  /// opposed to a step's budget or an account's plan.
   pub const fn is_run_limit(self) -> bool {
-    !matches!(self, Self::StepBudget { .. } | Self::GroupBudget)
+    !matches!(
+      self,
+      Self::StepBudget { .. } | Self::GroupBudget | Self::PlanLimit { .. }
+    )
   }
 }
 
