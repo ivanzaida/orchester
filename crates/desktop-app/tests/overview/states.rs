@@ -9,6 +9,7 @@ use orchester_core::run::TaskPhase;
 use orchester_workspace::tasks::{
   attention,
   board::{BoardTab, Figures},
+  outside::Outside,
   overview::recent_runs,
   ready_to_run::ProjectReadiness,
 };
@@ -146,6 +147,37 @@ fn overview_of_a_project_without_tasks_lists_what_is_ready_to_run() {
     seeded.top("overview-ready") > seeded.top("overview-empty-new-task"),
     "the list is under the card's actions"
   );
+}
+
+#[test]
+fn overview_ready_to_run_keeps_its_lines_with_the_error_when_reading_again_fails() {
+  let mut seeded = Seeded::overview("empty", OverviewTab::Running);
+  seeded.until("the readiness", |seeded| seeded.shows("overview-ready-agents"));
+  let agents = seeded.text("overview-ready-agents-detail");
+  let db =
+    rusqlite::Connection::open(seeded.repo.join(".orchester").join("orchester.db")).expect("the project database");
+  let changes = seeded
+    .window
+    .launch
+    .services()
+    .expect("the session started")
+    .changes
+    .clone();
+  db.execute_batch("ALTER TABLE connections RENAME TO connections_hidden")
+    .expect("hide the connections");
+  changes.record(seeded.project, Outside::Connections);
+  seeded.until("the failed reading", |seeded| seeded.shows("overview-ready-error"));
+  assert_eq!(
+    seeded.text("overview-ready-agents-detail"),
+    agents,
+    "the lines read before stay"
+  );
+  assert!(seeded.top("overview-ready-error") > seeded.top("overview-ready-connection"));
+  db.execute_batch("ALTER TABLE connections_hidden RENAME TO connections")
+    .expect("restore the connections");
+  changes.record(seeded.project, Outside::Connections);
+  seeded.until("the reading again", |seeded| !seeded.shows("overview-ready-error"));
+  assert_eq!(seeded.text("overview-ready-agents-detail"), agents);
 }
 
 #[test]
