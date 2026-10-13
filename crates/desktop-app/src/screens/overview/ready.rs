@@ -84,8 +84,9 @@ impl Component for ReadyToRun {
           .variant(TypographyStyle::FieldLabel)
           .color(PaletteColor::TextMuted),
       );
-    match (state.data, state.error) {
-      (Some(readiness), _) => {
+    // A failed refresh keeps the lines read before, with the error under them so they don't pass for current.
+    let list = match state.data {
+      Some(readiness) => {
         let separator = ctx.t("overview.listSeparator");
         let lines: Vec<Element> = readiness
           .checks(&separator)
@@ -94,18 +95,22 @@ impl Component for ReadyToRun {
           .collect();
         list.with_children(lines)
       }
-      (None, Some(error)) => list.child(
-        Text::new(&message_text(ctx, &error))
-          .id("overview-ready-error")
-          .variant(TypographyStyle::Description)
-          .color(PaletteColor::Danger),
-      ),
-      (None, None) => list.child(
+      None if state.error.is_none() => list.child(
         Text::new(&ctx.t("overview.ready.reading"))
           .id("overview-ready-reading")
           .variant(TypographyStyle::Description)
           .color(PaletteColor::TextMuted),
       ),
+      None => list,
+    };
+    match state.error {
+      Some(error) => list.child(
+        Text::new(&message_text(ctx, &error))
+          .id("overview-ready-error")
+          .variant(TypographyStyle::Description)
+          .color(PaletteColor::Danger),
+      ),
+      None => list,
     }
   }
 }
