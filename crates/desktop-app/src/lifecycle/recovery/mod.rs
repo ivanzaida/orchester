@@ -17,9 +17,11 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, StreamEmitter},
+    theme::SpacingSize,
   },
+  components::Column,
   core::Signal,
-  node::Element,
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{id::ProjectId, run::InterruptCause};
 use orchester_workspace::recovery::{Decision, InterruptedRun, Reading, Recovery, RecoveryState};
@@ -55,14 +57,29 @@ impl Component for RecoveryNotice {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    // The Overview's sections stand 24 apart (`q9mf0k`); the notice keeps that room under it only while
+    // it shows.
+    self.shown(ctx).map_or_else(Element::new, |notice| {
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding(Padding::new().bottom(SpacingSize::Xl))
+        .child(notice)
+        .into()
+    })
+  }
+}
+
+impl RecoveryNotice {
+  /// The notice of what the session read and the person decided, if any.
+  fn shown(&self, ctx: &mut Ctx) -> Option<Element> {
     let shown = ctx.props::<ShownProject>().clone();
     let services = Services::of(ctx);
     let state = follow(ctx, &services.recovery);
     let project = shown.open.project.id();
     let runs = state.runs_of(project);
     let decision = state.decision(project);
-    match (&state.reading, decision) {
-      (_, Decision::Left) | (Reading::Nothing | Reading::Reading, _) => Element::new(),
+    let notice = match (&state.reading, decision) {
+      (_, Decision::Left) | (Reading::Nothing | Reading::Reading, _) => return None,
       (Reading::Failed(reason), _) => {
         let lines = [message_text(ctx, reason)];
         unread(ctx, (&services.recovery, project), &lines)
@@ -70,11 +87,11 @@ impl Component for RecoveryNotice {
       (Reading::Read { .. }, Decision::Continued(continuation)) if !continuation.not_continued.is_empty() => {
         not_continued(ctx, (&services.recovery, project), &continuation)
       }
-      (Reading::Read { .. }, Decision::Continued(_)) => Element::new(),
+      (Reading::Read { .. }, Decision::Continued(_)) => return None,
       (Reading::Read { .. }, decision) if runs.is_empty() => {
         let lines = notices::unread_lines(ctx, &state.unread_of(project));
         if lines.is_empty() || decision != Decision::Undecided {
-          return Element::new();
+          return None;
         }
         unread(ctx, (&services.recovery, project), &lines)
       }
@@ -83,11 +100,9 @@ impl Component for RecoveryNotice {
         let continuing = decision == Decision::Continuing;
         self.list(ctx, (&shown, &state), &runs, continuing)
       }
-    }
+    };
+    Some(notice)
   }
-}
-
-impl RecoveryNotice {
   /// *2 runs were interrupted when Orchester closed*, with *Review runs* and *Continue all*.
   fn compact(&self, ctx: &Ctx, project: ProjectId, runs: &[InterruptedRun], services: &Services) -> Element {
     let open = self.open.clone();

@@ -56,6 +56,43 @@
       "merged": "Run #{{run}} merged",
       "failed": "Run #{{run}} failed",
       "cancelled": "Run #{{run}} was canceled"
+    },
+    "board": {
+      "noRuns": "No runs yet",
+      "usageUnread": "Usage not read yet",
+      "ofBudget": "of {{budget}} daily project budget",
+      "noBudget": "No daily budget for {{project}}",
+      "blocked": {
+        "title": "Blocked · {{task}}"
+      },
+      "unreadable": {
+        "title": "No run to show for {{task}}",
+        "body": "The latest run of {{task}} could not be read. The task list marks it; its worktree is untouched."
+      }
+    },
+    "needs": {
+      "kind": {
+        "approval": "Approval",
+        "question": "Question",
+        "planReview": "Plan review",
+        "decision": "Decision",
+        "input": "Needs input",
+        "stoppedAtLimit": "Stopped at limit",
+        "interrupted": "Interrupted",
+        "readyToMerge": "Ready to merge"
+      },
+      "context": "{{task}} · {{title}}",
+      "title": {
+        "command": "{{agent}} asks to run {{command}}",
+        "tool": "{{agent}} asks to use {{tool}} on {{server}}",
+        "plan": "Plan v{{version}} from {{agent}} waits for your decision",
+        "question": "{{agent}} asks: {{question}}",
+        "input": "Run #{{run}} needs your input",
+        "stoppedAtLimit": "Run #{{run}} stopped at its limit",
+        "dailyBudget": "Run #{{run}} stopped at the project's daily budget",
+        "interrupted": "Run #{{run}} was interrupted",
+        "readyToMerge": "{{task}} is ready to merge: every step passed"
+      }
     }
   },
   "tasks": {

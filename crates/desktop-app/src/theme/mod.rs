@@ -21,6 +21,7 @@ mod form;
 mod lifecycle;
 mod markdown;
 mod metrics;
+mod overview;
 mod palette;
 pub mod pipelines;
 mod secrets;
@@ -50,6 +51,7 @@ pub use self::{
   decisions::{DecisionSpacing, DecisionText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
+  overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
   settings::{SettingsSpacing, SettingsText},
@@ -86,6 +88,7 @@ pub fn install(app: &mut App, mode: Mode) {
   decisions::install(theme);
   task_form::install(theme);
   tasks::install(theme);
+  overview::install(theme);
   connections::install(theme);
   secrets::install(theme);
   shell::install(theme);

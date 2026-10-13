@@ -276,13 +276,7 @@ impl StatusChip {
 /// A task's priority: its icon and word in `text_secondary`; Urgent in `warning`, No priority in
 /// `text_muted`.
 pub fn priority_chip(ctx: &Ctx, id: &str, priority: Priority) -> Row {
-  let (glyph, key, color) = match priority {
-    Priority::Urgent => (Icon::CircleAlert, "ui.priority.urgent", PaletteColor::Warning),
-    Priority::High => (Icon::SignalHigh, "ui.priority.high", PaletteColor::TextSecondary),
-    Priority::Medium => (Icon::SignalMedium, "ui.priority.medium", PaletteColor::TextSecondary),
-    Priority::Low => (Icon::SignalLow, "ui.priority.low", PaletteColor::TextSecondary),
-    Priority::None => (Icon::Minus, "ui.priority.none", PaletteColor::TextMuted),
-  };
+  let (glyph, key, color) = priority_look(priority);
   labelled(
     id,
     (glyph, IconSize::Base),
@@ -292,19 +286,26 @@ pub fn priority_chip(ctx: &Ctx, id: &str, priority: Priority) -> Row {
   )
 }
 
+/// A priority's icon, the i18n key of its word and its color.
+pub const fn priority_look(priority: Priority) -> (Icon, &'static str, PaletteColor) {
+  match priority {
+    Priority::Urgent => (Icon::CircleAlert, "ui.priority.urgent", PaletteColor::Warning),
+    Priority::High => (Icon::SignalHigh, "ui.priority.high", PaletteColor::TextSecondary),
+    Priority::Medium => (Icon::SignalMedium, "ui.priority.medium", PaletteColor::TextSecondary),
+    Priority::Low => (Icon::SignalLow, "ui.priority.low", PaletteColor::TextSecondary),
+    Priority::None => (Icon::Minus, "ui.priority.none", PaletteColor::TextMuted),
+  }
+}
+
 /// A task's workflow status: its icon and word in `text_secondary`; Done's icon in `success`.
 pub fn workflow_chip(ctx: &Ctx, id: &str, status: WorkflowStatus) -> Row {
-  let (glyph, key, tone) = match status {
-    WorkflowStatus::Backlog => (Icon::CircleDashed, "ui.workflow.backlog", PaletteColor::TextMuted),
-    WorkflowStatus::Todo => (Icon::Circle, "ui.workflow.todo", PaletteColor::TextSecondary),
-    WorkflowStatus::InProgress => (
-      Icon::CircleDotDashed,
-      "ui.workflow.inProgress",
-      PaletteColor::TextSecondary,
-    ),
-    WorkflowStatus::InReview => (Icon::Eye, "ui.workflow.inReview", PaletteColor::TextSecondary),
-    WorkflowStatus::Done => (Icon::CircleCheck, "ui.workflow.done", PaletteColor::Success),
-    WorkflowStatus::Canceled => (Icon::CircleSlash, "ui.workflow.canceled", PaletteColor::TextMuted),
+  let (glyph, tone) = match status {
+    WorkflowStatus::Backlog => (Icon::CircleDashed, PaletteColor::TextMuted),
+    WorkflowStatus::Todo => (Icon::Circle, PaletteColor::TextSecondary),
+    WorkflowStatus::InProgress => (Icon::CircleDotDashed, PaletteColor::TextSecondary),
+    WorkflowStatus::InReview => (Icon::Eye, PaletteColor::TextSecondary),
+    WorkflowStatus::Done => (Icon::CircleCheck, PaletteColor::Success),
+    WorkflowStatus::Canceled => (Icon::CircleSlash, PaletteColor::TextMuted),
   };
   Row::new()
     .id(id.to_owned())
@@ -312,11 +313,23 @@ pub fn workflow_chip(ctx: &Ctx, id: &str, status: WorkflowStatus) -> Row {
     .align_items(Alignment::Center)
     .child(icon(glyph, IconSize::Base, tone).id(format!("{id}-icon")))
     .child(
-      Text::new(&ctx.t(key))
+      Text::new(&ctx.t(workflow_key(status)))
         .id(format!("{id}-label"))
         .variant(TypographyStyle::Description)
         .nowrap(),
     )
+}
+
+/// The i18n key of a workflow status's word.
+pub const fn workflow_key(status: WorkflowStatus) -> &'static str {
+  match status {
+    WorkflowStatus::Backlog => "ui.workflow.backlog",
+    WorkflowStatus::Todo => "ui.workflow.todo",
+    WorkflowStatus::InProgress => "ui.workflow.inProgress",
+    WorkflowStatus::InReview => "ui.workflow.inReview",
+    WorkflowStatus::Done => "ui.workflow.done",
+    WorkflowStatus::Canceled => "ui.workflow.canceled",
+  }
 }
 
 fn labelled(
