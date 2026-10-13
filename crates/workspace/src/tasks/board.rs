@@ -1,15 +1,15 @@
 //! The new Overview (`Overview` `vgqpM`) as data, beside what [`super::overview`] counts for every
 //! overview: its task tabs and their rows, its figures (`Metrics` `anUOY`) and the notices under its
-//! heading (`Notices` `pk5Jk`). A task whose run waits for the person is in *Needs you* as
-//! [`super::attention`] lists it; a run interrupted is both in *Running*, where it was at work, and in
-//! *Needs you*, since it waits for the person to continue it.
+//! heading (`Notices` `pk5Jk`). A task is in *Needs you* while anything of it waits for the person, as
+//! [`ProjectTasks::waiting`] lists it and [`super::attention`] words it; a run interrupted is both in
+//! *Running*, where it was at work, and in *Needs you*, since it waits for the person to continue it.
 
 use std::{num::NonZeroU32, sync::Arc};
 
-use orchester_core::{id::TaskId, run::TaskPhase, time::Timestamp, tokens::compact_tokens};
+use orchester_core::{id::TaskId, run::TaskPhase, task::Task, time::Timestamp, tokens::compact_tokens};
 
 use super::{
-  attention,
+  attention::{self, NeedItem},
   data::ProjectTasks,
   list::{Latest, TaskRow, phase_of},
   overview::Pulse,
@@ -29,39 +29,49 @@ pub enum BoardTab {
 impl BoardTab {
   pub const ALL: [Self; 4] = [Self::Running, Self::NeedsYou, Self::Queued, Self::Failed];
 
-  /// Whether a task in `phase` is in the tab; one whose latest run cannot be read is in none.
-  pub const fn includes(self, phase: Option<TaskPhase>) -> bool {
+  /// Whether `task` is in the tab: in *Needs you* while one of `waiting` is about it, in the others by
+  /// its phase; one whose latest run cannot be read is in none of those.
+  fn holds(self, task: &Task, tasks: &ProjectTasks, waiting: &[NeedItem]) -> bool {
+    let phase = phase_of(task, &tasks.phases);
     match self {
       Self::Running => matches!(phase, Some(TaskPhase::Running | TaskPhase::Interrupted)),
-      Self::NeedsYou => attention::waits(phase),
+      Self::NeedsYou => waiting
+        .iter()
+        .any(|item| item.task.as_ref().is_some_and(|waits| waits.id == task.id())),
       Self::Queued => matches!(phase, Some(TaskPhase::Queued)),
       Self::Failed => matches!(phase, Some(TaskPhase::Failed)),
     }
   }
 
+  /// What waits for the person, when the tab needs it.
+  fn waiting(self, tasks: &ProjectTasks) -> Vec<NeedItem> {
+    if self == Self::NeedsYou {
+      attention::items(tasks)
+    } else {
+      Vec::new()
+    }
+  }
+
   /// Tasks in the tab.
   pub fn count(self, tasks: &ProjectTasks) -> usize {
+    let waiting = self.waiting(tasks);
     tasks
       .tasks
       .iter()
-      .filter(|task| self.includes(phase_of(task, &tasks.phases)))
+      .filter(|task| self.holds(task, tasks, &waiting))
       .count()
   }
 
   /// The newest `limit` tasks of the tab, newest first, with their tags and what blocks them, blocking
-  /// tasks' keys joined by `separator`. In *Needs you* a row says what waits, as its item in
+  /// tasks' keys joined by `separator`. In *Needs you* a row says what waits, as its oldest item in
   /// [`attention::items`] does (*Plan v2 from Planner waits for your decision*).
   pub fn rows(self, tasks: &ProjectTasks, limit: usize, separator: &str) -> Vec<TaskRow> {
-    let waiting = if self == Self::NeedsYou {
-      attention::items(tasks)
-    } else {
-      Vec::new()
-    };
+    let waiting = self.waiting(tasks);
     tasks
       .tasks
       .iter()
       .rev()
-      .filter(|task| self.includes(phase_of(task, &tasks.phases)))
+      .filter(|task| self.holds(task, tasks, &waiting))
       .take(limit)
       .map(|task| {
         let mut row = tasks.decorate_row(

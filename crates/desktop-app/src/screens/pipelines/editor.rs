@@ -355,7 +355,7 @@ impl Editor {
     ctx.mount_keyed::<WidenConfirm>(
       "pipeline-save-question",
       WidenProps {
-        id: "pipeline-save-question",
+        id: "pipeline-save-question".into(),
         card: false,
         automation: crate::mcp::input_gate::Guarded::PermissionWidening,
         title: ctx.t("pipelines.saveWeaker"),
@@ -416,7 +416,7 @@ impl Editor {
         Some(ctx.mount_keyed::<WidenConfirm>(
           "pipeline-publish-question",
           WidenProps {
-            id: "pipeline-publish-question",
+            id: "pipeline-publish-question".into(),
             card: false,
             automation: crate::mcp::input_gate::Guarded::PermissionWidening,
             title: ctx.t("pipelines.publishWeaker"),

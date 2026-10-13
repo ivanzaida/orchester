@@ -1,0 +1,78 @@
+{
+  "needs_you": {
+    "title": "Needs you",
+    "close": "Close",
+    "separator": "·",
+    "sub": {
+      "one": "{{projects}} · oldest first",
+      "each": "{{projects}} · oldest first in each project",
+      "none": "{{projects}}"
+    },
+    "projects": {
+      "two": "{{first}} and {{second}}",
+      "many": "{{list}} and {{last}}",
+      "separator": ", "
+    },
+    "thisTab": "this tab's project",
+    "kind": {
+      "approval": "Approval",
+      "question": "Question",
+      "plan": "Plan review",
+      "decision": "Decision",
+      "interrupted": "Interrupted",
+      "limit": "Stopped at limit",
+      "merge": "Ready to merge",
+      "memory": "Memory"
+    },
+    "waiting": "waiting {{time}}",
+    "waitingSince": "waiting since {{clock}} · {{time}}",
+    "asks": {
+      "command": "{{agent}} asks to run {{command}}",
+      "tool": "{{agent}} asks to use {{server}} · {{tool}}",
+      "question": "{{agent}} asks: {{question}}",
+      "questions": "{{agent}} asks {{count}} questions",
+      "unread": "The run waits for your answer",
+      "firstLineMore": "{{line}} …"
+    },
+    "plan": "Plan v{{version}} from {{agent}} waits for your decision",
+    "interrupted": "Run {{run}} was interrupted",
+    "stoppedAtLimit": "Run {{run}} stopped at its limit",
+    "stoppedDaily": "Run {{run}} stopped at the project's daily budget",
+    "readyToMerge": "Run {{run}} passed every step; its work waits to be merged",
+    "memory": {
+      "one": "1 memory record waits for your approval",
+      "other": "{{count}} memory records wait for your approval"
+    },
+    "task": "{{key}} · {{title}}",
+    "noTask": "Its task can't be read",
+    "projectMemory": "Project memory",
+    "memoryUnavailable": "Reviewing memory records isn't built in this app yet.",
+    "stepLabel": "{{number}} {{step}}",
+    "where": {
+      "run": "Run {{run}}",
+      "step": "Run {{run}} · {{step}}",
+      "agent": "Run {{run}} · {{step}} · {{agent}}",
+      "checkpoint": "Run {{run}} · {{step}} · checkpoint {{checkpoint}}"
+    },
+    "action": {
+      "review": "Review",
+      "answer": "Answer",
+      "reviewPlan": "Review plan",
+      "decide": "Decide",
+      "open": "Open task",
+      "raiseLimit": "Raise the limit",
+      "merge": "Review & merge",
+      "memory": "Review records",
+      "collapse": "Collapse",
+      "openConversation": "Open conversation"
+    },
+    "reading": "Reading the request…",
+    "notHere": "This request can't be answered here. Open the conversation to answer it.",
+    "empty": {
+      "title": "Nothing needs you",
+      "text": "Approvals, questions, plans and decisions from every open project appear here as they arrive."
+    },
+    "showAll": "Show all in {{project}}'s Overview",
+    "escCloses": "Esc closes"
+  }
+}

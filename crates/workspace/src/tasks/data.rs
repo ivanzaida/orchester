@@ -5,7 +5,9 @@ use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 use orchester_core::{
   conversation::{Message, latest_question},
-  id::{IdempotencyKey, ResourceId, RunId, TaskId},
+  id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
+  memory::{Memory, MemoryFilter, MemoryStatus, MemoryStore, ScopeFilter},
+  question::AskedQuestions,
   resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
   run::{Run, RunEvent, RunNumber, StepExecutor, TaskPhase},
   sharing::TaskRevision,
@@ -20,8 +22,7 @@ use thiserror::Error;
 use super::{
   approvals::{self, ShownApproval},
   detail::run_store_error,
-  list::{Awaited, AwaitedPlan, AwaitedQuestion, Latest, LatestRun, Phases, phase_of},
-  overview::OverviewTab,
+  list::{AwaitedPlan, AwaitedQuestion, AwaitedStep, CurrentStep, Latest, LatestRun, Phases, StepWait},
   run_approvals,
   unreadable::Unreadable,
 };
@@ -91,6 +92,10 @@ pub struct ProjectTasks {
   /// Tool requests auto mode's reviewer is judging: they wait without asking the person (no dialog, no
   /// *Needs you*) until the review ends, and only their card says so.
   pub reviewing_tool_approvals: Arc<Vec<ShownApproval>>,
+  /// Questions with suggested answers waiting for the person anywhere in this project.
+  pub asked: Arc<Vec<AskedQuestions>>,
+  /// When each memory record of the project and of its tasks that waits for a person's approval was written.
+  pub proposed_memory: Arc<Vec<Timestamp>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
   pub phases: Arc<Phases>,
   /// How many runs of each task were started and can be read.
@@ -185,11 +190,8 @@ impl ProjectTasks {
     let (reviewing, pending): (Vec<_>, Vec<_>) = approvals::pending(&db, repo_root)?
       .into_iter()
       .partition(|shown| under_review.contains(&shown.approval.id));
-    let asking: Vec<RunId> = db
-      .waiting_questions()?
-      .iter()
-      .map(|asked| asked.request.run())
-      .collect();
+    let asked = db.waiting_questions()?;
+    let asking: Vec<RunId> = asked.iter().map(|asked| asked.request.run()).collect();
     let (mut group_holds, grouped) = group_holds(&db)?;
     let mut phases = Phases::new();
     let mut counts = BTreeMap::new();
@@ -242,6 +244,7 @@ impl ProjectTasks {
           .map(|task| db.unfinished_blocking_tasks(task.id()).map(|links| (task.id(), links)))
           .collect::<Result<_, _>>()?,
       ),
+      proposed_memory: Arc::new(proposed_memory(&db, &tasks)?),
       tasks: Arc::new(tasks),
       not_shared: Arc::new(not_shared),
       kept_tags: Arc::new(kept_tags),
@@ -252,27 +255,12 @@ impl ProjectTasks {
       missing_pipelines: Arc::new(db.missing_pipelines()?),
       pending_tool_approvals: Arc::new(pending),
       reviewing_tool_approvals: Arc::new(reviewing),
+      asked: Arc::new(asked),
       phases: Arc::new(phases),
       runs: Arc::new(counts),
       lost_to_runner: 0,
       auto_approving: Arc::new(auto_approving),
     })
-  }
-
-  /// What *Needs you* counts: each request waiting for a decision, and each other task waiting for a
-  /// person (a plan, a question). Whether the dialog is open changes nothing.
-  pub fn needs_you(&self) -> usize {
-    let asking: Vec<TaskId> = self
-      .pending_tool_approvals
-      .iter()
-      .filter_map(|shown| shown.task_id)
-      .collect();
-    let other_waiting = self
-      .tasks
-      .iter()
-      .filter(|task| OverviewTab::NeedsYou.includes(phase_of(task, &self.phases)) && !asking.contains(&task.id()))
-      .count();
-    other_waiting + self.pending_tool_approvals.len()
   }
 
   /// The tasks as they stand while no runner is connected: runs recorded as running are
@@ -318,6 +306,29 @@ fn group_holds(
   Ok((holds, grouped))
 }
 
+/// When each record of the project's memory and of `tasks`' memories that waits for a person's approval was
+/// written.
+fn proposed_memory(db: &ProjectDb, tasks: &[Task]) -> Result<Vec<Timestamp>, StoreError> {
+  let proposed = |scope| MemoryFilter {
+    scope,
+    status: Some(MemoryStatus::Proposed),
+    pinned_only: false,
+  };
+  let mut written: Vec<Timestamp> = db
+    .memories(&proposed(ScopeFilter::Project))?
+    .iter()
+    .map(Memory::created_at)
+    .collect();
+  for task in tasks {
+    written.extend(
+      db.memories(&proposed(ScopeFilter::Task(task.id())))?
+        .iter()
+        .map(Memory::created_at),
+    );
+  }
+  Ok(written)
+}
+
 /// `latest`, a run of `task`, with when it last changed and what it waits for.
 pub(super) fn latest_run(db: &ProjectDb, task: &Task, latest: &Run) -> Result<LatestRun, StoreError> {
   let updated_at = db
@@ -330,13 +341,13 @@ pub(super) fn latest_run(db: &ProjectDb, task: &Task, latest: &Run) -> Result<La
   Ok(LatestRun::of(task, (latest, merge.as_ref()), updated_at, awaited))
 }
 
-/// The plan `run` waits on a decision for, or the question it waits for an answer to, with the agent
-/// role of the step that proposed or asked it; only such a run needs its plans or its conversation
-/// and its profiles read here.
-fn awaited(db: &ProjectDb, run: &Run) -> Result<Awaited, StoreError> {
-  let (plan_waits, question_waits) = (!run.awaiting_plan().is_empty(), !run.awaiting_answer().is_empty());
-  if !plan_waits && !question_waits {
-    return Ok(Awaited::default());
+/// Each step of `run` that waits on a decision on its plan or for an answer to its question, with the
+/// agent role of the step that proposed or asked it; only such a run needs its plans or its conversation
+/// and its profiles read here. A plan that cannot be read is left out.
+fn awaited(db: &ProjectDb, run: &Run) -> Result<Vec<AwaitedStep>, StoreError> {
+  let (plans, answers) = (run.awaiting_plan(), run.awaiting_answer());
+  if plans.is_empty() && answers.is_empty() {
+    return Ok(Vec::new());
   }
   let mut roles = BTreeMap::new();
   for step in run.snapshot().steps() {
@@ -347,26 +358,35 @@ fn awaited(db: &ProjectDb, run: &Run) -> Result<Awaited, StoreError> {
     }
   }
   let role = |step: &StepKey| roles.get(step).cloned();
-  let plan = if plan_waits {
-    AwaitedPlan::of(run, &db.plans(run.id()).map_err(run_store_error)?, role)
-  } else {
-    None
-  };
-  let question = if question_waits {
-    awaited_question(run, &db.messages(run.task())?, role)
-  } else {
-    None
-  };
-  Ok(Awaited { plan, question })
+  let mut waiting = Vec::new();
+  if !plans.is_empty() {
+    let stored = db.plans(run.id()).map_err(run_store_error)?;
+    waiting.extend(plans.into_iter().filter_map(|execution| {
+      Some(AwaitedStep {
+        execution,
+        step: CurrentStep::of_execution(run, execution),
+        wait: StepWait::Plan(AwaitedPlan::of(run, &stored, execution, role)?),
+      })
+    }));
+  }
+  if !answers.is_empty() {
+    let messages = db.messages(run.task())?;
+    waiting.extend(answers.into_iter().map(|execution| AwaitedStep {
+      execution,
+      step: CurrentStep::of_execution(run, execution),
+      wait: StepWait::Answer(awaited_question(run, &messages, execution, role)),
+    }));
+  }
+  Ok(waiting)
 }
 
-/// The question the first execution waiting for an answer asked, among `messages`, and who asks.
+/// The question `execution`, waiting for an answer, asked, among `messages`, and who asks.
 fn awaited_question(
   run: &Run,
   messages: &[Message],
+  execution: StepExecutionId,
   role: impl Fn(&StepKey) -> Option<Arc<str>>,
 ) -> Option<AwaitedQuestion> {
-  let execution = *run.awaiting_answer().first()?;
   let question = latest_question(messages, execution)?;
   let step = run.execution(execution)?.step();
   let agent = role(step).or_else(|| run.snapshot().body().step(step).map(|step| step.name.as_str().into()))?;

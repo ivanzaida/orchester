@@ -4,7 +4,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use orchester_core::{
-  id::{ResourceId, TaskId},
+  id::{ResourceId, StepExecutionId, TaskId},
   integration::RunMerge,
   resource::{StepKey, VersionNumber},
   run::{PauseReason, PinnedVersion, Plan, PlanVersion, Run, RunLimit, RunNumber, RunStatus, Stuck, TaskPhase},
@@ -84,16 +84,21 @@ pub struct LatestRun {
   pub pausing: bool,
   /// Its last checkpoint, as people read a revision.
   pub checkpoint: Option<Arc<str>>,
-  /// The plan it waits on a decision for, if it does.
+  /// The plan it waits on a decision for, if it does; the first in pipeline order when several do.
   pub plan: Option<AwaitedPlan>,
   /// The branch its work was merged into, once it was.
   pub merged_into: Option<Arc<str>>,
-  /// The question it waits for an answer to, if it does.
+  /// The question it waits for an answer to, if it does; the first that can be read when several do.
   pub question: Option<AwaitedQuestion>,
+  /// Each of its steps that waits on a plan or for an answer, plans first, each in pipeline order.
+  pub waiting: Vec<AwaitedStep>,
   /// The decision it waits for after its retries ran out or its step broke again, if it does.
   pub decision: Option<AwaitedDecision>,
   /// The step its agent is on, or the one it stopped at.
   pub step: Option<CurrentStep>,
+  /// It reads interrupted only because no runner looks after it ([`LatestRun::without_runner`]); a runner
+  /// records it once one does.
+  pub lost_runner: bool,
 }
 
 /// What a run waiting for a person's decision stopped at (02.B6 `Np9kc`): the step, by name, and
@@ -144,11 +149,22 @@ pub struct AwaitedQuestion {
   pub text: Arc<str>,
 }
 
-/// What a run waits for from a person, if anything: a plan decision or an answer.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Awaited {
-  pub plan: Option<AwaitedPlan>,
-  pub question: Option<AwaitedQuestion>,
+/// A step of a run that waits for a person: on its plan, or for the answer to its agent's question.
+/// Parallel steps may wait at the same time, each for its own.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AwaitedStep {
+  pub execution: StepExecutionId,
+  /// The step, as people name it.
+  pub step: Option<CurrentStep>,
+  pub wait: StepWait,
+}
+
+/// What a waiting step waits for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum StepWait {
+  Plan(AwaitedPlan),
+  /// An answer to its agent's question; `None` when no question of it can be read.
+  Answer(Option<AwaitedQuestion>),
 }
 
 /// A plan a run waits on a decision for (02.11): its version and who proposed it, the agent role
@@ -160,10 +176,13 @@ pub struct AwaitedPlan {
 }
 
 impl AwaitedPlan {
-  /// The plan `run` waits on, among its `plans`, proposed by `agent`'s step; the first in pipeline
-  /// order when several steps' plans wait.
-  pub fn of(run: &Run, plans: &[Plan], agent: impl Fn(&StepKey) -> Option<Arc<str>>) -> Option<Self> {
-    let execution = *run.awaiting_plan().first()?;
+  /// The plan `run`'s `execution` waits on, among its `plans`, proposed by `agent`'s step.
+  pub fn of(
+    run: &Run,
+    plans: &[Plan],
+    execution: StepExecutionId,
+    agent: impl Fn(&StepKey) -> Option<Arc<str>>,
+  ) -> Option<Self> {
     let plan = Plan::latest_of(plans, execution)?;
     let step = run.snapshot().body().step(&plan.step)?;
     Some(Self {
@@ -175,8 +194,21 @@ impl AwaitedPlan {
 
 impl LatestRun {
   /// `run`, the latest run of `task`, merged as `merge` records, whose last event was recorded at
-  /// `updated_at`, with the plan or the question it waits on, if any.
-  pub fn of(task: &Task, (run, merge): (&Run, Option<&RunMerge>), updated_at: Timestamp, awaited: Awaited) -> Self {
+  /// `updated_at`, with the steps that wait on a plan or a question, if any.
+  pub fn of(
+    task: &Task,
+    (run, merge): (&Run, Option<&RunMerge>),
+    updated_at: Timestamp,
+    waiting: Vec<AwaitedStep>,
+  ) -> Self {
+    let plan = waiting.iter().find_map(|step| match &step.wait {
+      StepWait::Plan(plan) => Some(plan.clone()),
+      StepWait::Answer(_) => None,
+    });
+    let question = waiting.iter().find_map(|step| match &step.wait {
+      StepWait::Answer(question) => question.clone(),
+      StepWait::Plan(_) => None,
+    });
     Self {
       id: run.id(),
       pipeline: run.snapshot().pipeline(),
@@ -192,10 +224,12 @@ impl LatestRun {
       checkpoint: run
         .last_checkpoint()
         .map(|checkpoint| display::short_revision(checkpoint.revision().as_str()).into()),
-      plan: awaited.plan,
-      question: awaited.question,
+      plan,
+      question,
+      waiting,
       decision: AwaitedDecision::of(run),
       step: CurrentStep::of(run),
+      lost_runner: false,
     }
   }
 
@@ -207,6 +241,7 @@ impl LatestRun {
     Self {
       phase,
       pausing: self.pausing && phase == TaskPhase::Running,
+      lost_runner: self.lost_runner || phase != self.phase,
       ..self.clone()
     }
   }

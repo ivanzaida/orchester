@@ -107,9 +107,11 @@
         "input": "Needs input",
         "stoppedAtLimit": "Stopped at limit",
         "interrupted": "Interrupted",
-        "readyToMerge": "Ready to merge"
+        "readyToMerge": "Ready to merge",
+        "memory": "Memory"
       },
       "context": "{{task}} · {{title}}",
+      "contextMemory": "Project memory",
       "contextUnread": "Its run cannot be read, so its task is not known",
       "title": {
         "command": "{{agent}} asks to run {{command}}",
@@ -121,7 +123,9 @@
         "tokenLimit": "Run #{{run}} stopped at its {{limit}}-token limit",
         "dailyBudget": "Run #{{run}} stopped at the project's daily budget",
         "interrupted": "Run #{{run}} was interrupted",
-        "readyToMerge": "{{task}} is ready to merge: every step passed"
+        "readyToMerge": "{{task}} is ready to merge: every step passed",
+        "memoryOne": "1 memory record waits for your approval",
+        "memoryOther": "{{count}} memory records wait for your approval"
       }
     }
   },
@@ -690,6 +694,9 @@
     "daysAgo": "{{count}}d ago",
     "seconds": "{{count}} s",
     "minutes": "{{count}} min",
+    "hours": "{{count}} h",
+    "days": "{{count}} d",
+    "underMinute": "under a minute",
     "month": {
       "jan": "Jan",
       "feb": "Feb",

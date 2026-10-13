@@ -32,7 +32,7 @@ type Handler = Arc<dyn Fn() + Send + Sync>;
 
 #[derive(Clone)]
 pub struct WidenProps {
-  pub id: &'static str,
+  pub id: Arc<str>,
   pub card: bool,
   pub automation: Guarded,
   pub title: Arc<str>,
@@ -49,7 +49,7 @@ impl PartialEq for WidenProps {
     (
       self.card,
       self.automation,
-      self.id,
+      &self.id,
       &self.title,
       &self.reasons,
       &self.confirm,
@@ -57,7 +57,7 @@ impl PartialEq for WidenProps {
     ) == (
       other.card,
       other.automation,
-      other.id,
+      &other.id,
       &other.title,
       &other.reasons,
       &other.confirm,
@@ -180,7 +180,7 @@ fn question(props: &WidenProps, (keep, confirm): (ActionButton, ActionButton)) -
       .width(Dimension::Pct(100.0))
   });
   Column::new()
-    .id(props.id)
+    .id(props.id.to_string())
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(SpacingSize::Lg, SpacingSize::Md))
     .spacing(ExtraSpacing::Loose.role())
@@ -229,7 +229,7 @@ fn card_question(props: &WidenProps, (keep, confirm): (ActionButton, ActionButto
       )
   });
   Column::new()
-    .id(props.id)
+    .id(props.id.to_string())
     .width(Dimension::Pct(100.0))
     .padding(SpacingSize::Lg)
     .spacing(ExtraSpacing::Loose.role())

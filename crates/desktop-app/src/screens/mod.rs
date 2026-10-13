@@ -18,7 +18,7 @@ mod pull_requests;
 mod secrets;
 mod settings;
 mod skills;
-mod task;
+pub(crate) mod task;
 mod task_form;
 mod tasks;
 mod tools;

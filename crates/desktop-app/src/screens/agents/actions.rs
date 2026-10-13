@@ -73,7 +73,7 @@ pub fn confirm(ctx: &mut Ctx, pending: &Signal<Pending>, busy: &Signal<bool>, wo
   let (keep, confirm, busy, work) = (pending.clone(), pending.clone(), busy.clone(), work.clone());
   // Editing a field dismisses the question; its fixed candidate can only be retried unchanged.
   let question = WidenProps {
-    id: "agent-confirm",
+    id: "agent-confirm".into(),
     card: false,
     automation: if stale {
       crate::mcp::input_gate::Guarded::WideningQuestion

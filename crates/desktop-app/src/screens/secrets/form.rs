@@ -183,7 +183,7 @@ impl SecretForm {
     ctx.mount_keyed::<WidenConfirm>(
       "secret-confirm-replacement",
       WidenProps {
-        id: "secret-confirm-replacement",
+        id: "secret-confirm-replacement".into(),
         card: false,
         automation: crate::mcp::input_gate::Guarded::WideningQuestion,
         title: ctx.t("secrets.rotation.question"),

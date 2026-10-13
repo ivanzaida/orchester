@@ -433,7 +433,7 @@ fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<
 }
 
 /// The key of the card of tool request `id`.
-fn approval_key(id: &str) -> Arc<str> {
+pub fn approval_key(id: &str) -> Arc<str> {
   format!("approval-{id}").into()
 }
 

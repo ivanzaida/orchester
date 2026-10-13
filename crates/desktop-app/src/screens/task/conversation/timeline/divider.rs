@@ -96,7 +96,7 @@ fn event(id: String, glyph: Icon, text: &str, link: Option<Link>) -> Element {
 }
 
 /// "03 Implement".
-pub(in super::super) fn step_label(ctx: &Ctx, number: usize, step: &str) -> Arc<str> {
+pub(crate) fn step_label(ctx: &Ctx, number: usize, step: &str) -> Arc<str> {
   ctx.t_args(
     "conversation.stepLabel",
     [("number", format!("{number:02}").as_str()), ("step", step)],

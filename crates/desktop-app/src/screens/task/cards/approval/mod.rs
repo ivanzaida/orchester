@@ -13,7 +13,7 @@ mod words;
 
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
-  core::ElementRef,
+  core::{ElementRef, Signal},
   node::{Element, padding::Padding},
 };
 use orchester_core::run::ToolApprovalDecision;
@@ -26,7 +26,7 @@ use self::{
 use super::{
   Place,
   decisions::{Decisions, Given, Outcome, Refused, Stage, refusal},
-  frame::frame,
+  frame::waiting_frame,
 };
 use crate::{
   project::{Projects, TasksState},
@@ -53,14 +53,17 @@ pub(super) fn card(ctx: &mut Ctx, place: Place, card: &ApprovalCard) -> Element 
 
 struct ApprovalView {
   once: ElementRef,
+  /// The wider answer the card asks the person to confirm, if any.
+  asking: Signal<Option<Given>>,
 }
 
 impl Component for ApprovalView {
   type Props = ApprovalProps;
 
-  fn create(_ctx: &mut Ctx) -> Self {
+  fn create(ctx: &mut Ctx) -> Self {
     Self {
       once: ElementRef::new(),
+      asking: ctx.signal(None),
     }
   }
 
@@ -87,6 +90,7 @@ impl Component for ApprovalView {
       open: place.open(ctx),
       decisions: &decisions,
       once: &self.once,
+      asking: &self.asking,
     };
     if focus && answering.open.is_some() && !decisions.busy() {
       ctx.focus(&self.once);
@@ -97,10 +101,9 @@ impl Component for ApprovalView {
     });
     let head = request::head(ctx, &id, request);
     let body = request::body(ctx, &id, (&place, request), (shown.as_ref(), reviewing));
-    frame(id.clone(), true)
-      .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
+    let padding = Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role());
+    waiting_frame(&place, id.clone(), padding, || head)
       .spacing(SpacingSize::Md)
-      .child(head)
       .with_children(body)
       .child(answers::answers(ctx, &answering))
       .with_children(failed)

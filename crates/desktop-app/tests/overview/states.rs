@@ -7,7 +7,7 @@ use std::{thread, time::Duration};
 use orchester_app::routes::OverviewTab;
 use orchester_core::run::TaskPhase;
 use orchester_workspace::tasks::{
-  attention,
+  attention::{self, NeedKind},
   board::{BoardTab, Figures},
   outside::Outside,
   overview::recent_runs,
@@ -90,18 +90,37 @@ fn overview_counts_interrupted_runs_as_needing_the_person() {
     figures.interrupted > 0,
     "without a runner, runs recorded as running are interrupted"
   );
+  // A run recorded interrupted waits for the person; one that reads interrupted only because no runner
+  // looks after it does not: a runner records it once one does.
+  let recorded = attention::items(&tasks)
+    .iter()
+    .filter(|item| item.kind == NeedKind::Interrupted)
+    .count();
   let interrupted = seeded
     .ids("overview-need-")
     .into_iter()
     .filter(|id| id.ends_with("-interrupted"))
     .count();
-  assert_eq!(interrupted, figures.interrupted);
+  assert_eq!(interrupted, recorded);
   assert_eq!(
     seeded.text("overview-metric-running-value"),
     (figures.running + figures.interrupted).to_string()
   );
   let detail = seeded.text("overview-metric-running-detail");
   assert!(detail.ends_with("interrupted"), "{detail}");
+}
+
+#[test]
+fn overview_needs_you_counts_what_the_title_bar_pill_counts() {
+  let mut seeded = Seeded::overview("tasks", OverviewTab::Running);
+  let tasks = seeded.tasks();
+  let count = tasks.needs_you();
+  assert!(count > 0, "the seed has things waiting for the person");
+  assert_eq!(seeded.text("overview-needs-count"), count.to_string());
+  assert_eq!(seeded.text("overview-metric-needs-value"), count.to_string());
+  seeded.until("the pill", |seeded| seeded.shows("needs-you-pill"));
+  let pill = seeded.text("needs-you-pill");
+  assert!(pill.starts_with(&format!("{count} ")), "{pill} against {count}");
 }
 
 #[test]

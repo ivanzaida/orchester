@@ -53,6 +53,7 @@ pub fn shadows() -> ThemeShadows {
       .into_iter()
       .map(|extra| (Arc::from(extra.name()), extra.shadows()))
       .chain(super::conversation::shadows())
+      .chain(super::needs_you::shadows())
       .collect::<HashMap<_, _>>(),
   }
 }

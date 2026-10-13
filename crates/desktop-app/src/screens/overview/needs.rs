@@ -124,7 +124,8 @@ fn need_card(ctx: &mut Ctx, project: ProjectId, (index, item): (usize, &NeedItem
 }
 
 /// A kind's mark (`Kind icon` `y6Zq0D`), the key of its action's words, and the tab of its task where it
-/// is decided: a request and a question are cards of the conversation, the rest is on Summary.
+/// is decided: a request and a question are cards of the conversation, the rest is on Summary. The
+/// project's memory has no task, so its card has no action until memory review is built.
 const fn look(kind: NeedKind) -> (Icon, &'static str, TaskTab) {
   match kind {
     NeedKind::Approval => (Icon::ShieldAlert, "overview.needs.action.review", TaskTab::Conversation),
@@ -139,6 +140,7 @@ const fn look(kind: NeedKind) -> (Icon, &'static str, TaskTab) {
     NeedKind::StoppedAtLimit => (Icon::Gauge, "overview.needs.action.raiseLimit", TaskTab::Summary),
     NeedKind::Interrupted => (Icon::CirclePause, "overview.needs.action.openTask", TaskTab::Summary),
     NeedKind::ReadyToMerge => (Icon::GitMerge, "overview.needs.action.reviewMerge", TaskTab::Summary),
+    NeedKind::Memory => (Icon::BookOpen, "overview.needs.action.openTask", TaskTab::Summary),
   }
 }
 
@@ -153,5 +155,6 @@ const fn kind_name(kind: NeedKind) -> &'static str {
     NeedKind::StoppedAtLimit => "limit",
     NeedKind::Interrupted => "interrupted",
     NeedKind::ReadyToMerge => "merge",
+    NeedKind::Memory => "memory",
   }
 }

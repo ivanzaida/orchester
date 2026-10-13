@@ -9,7 +9,7 @@ use std::num::NonZeroU32;
 use orchester_core::{
   connection::ConnectionStatus,
   resource::{ModelId, VersionNumber},
-  run::{PendingToolApproval, WaitReason},
+  run::{InterruptCause, PendingToolApproval, WaitReason},
   store::{ActivityStore, RunStore},
 };
 use orchester_workspace::tasks::{
@@ -111,31 +111,54 @@ fn board_needs_you_keeps_a_tool_request_whose_run_cannot_be_read() {
 
 #[test]
 fn board_counts_interrupted_runs_as_needing_the_person_and_as_running() {
-  let (_fixture, tasks) = project();
-  let away = tasks.without_runner();
-  let items = attention::items(&away);
-  assert!(items.iter().any(|item| {
-    item.kind == NeedKind::Interrupted && item.task.as_ref().is_some_and(|task| &*task.key == "KON-2")
-  }));
-  assert!(matches!(
-    items
-      .iter()
-      .find(|item| item.kind == NeedKind::Interrupted)
-      .map(|item| item.waited(support::at(0))),
-    Some(Waited::Since(_))
-  ));
+  let mut fixture = support::Fixture::keyed("KON");
+  let crashed = fixture.task("Fix zoom", support::at(40));
+  let mut run = fixture.started_run(crashed, support::at(50));
+  let events = run
+    .interrupt(InterruptCause::Crashed, support::at(60))
+    .expect("interrupted");
+  fixture.db.append_events(&run, &events).expect("append");
+  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let items = attention::items(&tasks);
+  let [item] = items.as_slice() else {
+    panic!("the interrupted run alone waits: {items:?}");
+  };
+  assert_eq!(item.kind, NeedKind::Interrupted);
+  assert_eq!(item.task.as_ref().map(|task| &*task.key), Some("KON-1"));
+  assert!(matches!(item.waited(support::at(0)), Waited::Since(_)));
   assert_eq!(
-    BoardTab::Running.count(&away),
+    BoardTab::Running.count(&tasks),
     1,
     "the interrupted run stays where it was at work"
   );
-  assert_eq!(BoardTab::NeedsYou.count(&away), 3);
-  let figures = Figures::of(&away, support::at(0));
-  assert_eq!((figures.running, figures.interrupted, figures.needs_you), (0, 1, 3));
+  assert_eq!(BoardTab::NeedsYou.count(&tasks), 1);
+  let figures = Figures::of(&tasks, support::at(0));
+  assert_eq!((figures.running, figures.interrupted, figures.needs_you), (0, 1, 1));
+  assert_eq!(figures.needs_you, tasks.needs_you(), "every Needs you counts the same");
   let running = figures.running_now(false, None);
   assert_eq!(running.count, Some(1));
   assert!(running.interrupted);
   assert_eq!(running.detail.key, "overview.metrics.interrupted.one");
+}
+
+#[test]
+fn board_needs_you_leaves_out_a_run_that_reads_interrupted_only_without_a_runner() {
+  let (_fixture, tasks) = project();
+  let away = tasks.without_runner();
+  let items = attention::items(&away);
+  assert!(
+    items.iter().all(|item| item.kind != NeedKind::Interrupted),
+    "a runner records it once one looks after it: {items:?}"
+  );
+  assert_eq!(
+    BoardTab::Running.count(&away),
+    1,
+    "it still reads interrupted where it was at work"
+  );
+  assert_eq!(BoardTab::NeedsYou.count(&away), 2);
+  let figures = Figures::of(&away, support::at(0));
+  assert_eq!((figures.running, figures.interrupted, figures.needs_you), (0, 1, 2));
+  assert_eq!(figures.needs_you, away.needs_you(), "every Needs you counts the same");
 }
 
 #[test]
