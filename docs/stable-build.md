@@ -115,10 +115,12 @@ Finder (`open` starts it the same way). Starting the program itself from a termi
 
 ## Embedded MCP server
 
-Every build, debug and release, on Windows and macOS, includes two MCP servers. Both listen on
-`127.0.0.1` only, on a free port the OS picks (never a fixed one), and both need a bearer token on
-every request, which the app writes, with the port, to a discovery file of its process in your
-user profile and removes when the app closes. Orchester never shows, copies or logs a token.
+Every build of the deprecated desktop (`orchester`), debug and release, on Windows and macOS,
+includes two MCP servers. Both listen on `127.0.0.1` only, on a free port the OS picks (never a
+fixed one), and both need a bearer token on every request, which the app writes, with the port, to
+a discovery file of its process in your user profile and removes when the app closes. It never
+shows, copies or logs a token. The new app runs one server, and the installed new app listens on a
+fixed address instead (see *The new app's MCP server* below).
 
 - **Orchester's MCP server** is how automation controls Orchester, the coordinator agent that
   develops Orchester through Orchester included. Its tools work on data and go through the same
@@ -175,7 +177,9 @@ user profile and removes when the app closes. Orchester never shows, copies or l
   (`http://127.0.0.1:<port>/mcp`, streamable HTTP), `port` and `token`. To connect a client, read
   the file of the running app's pid and send `Authorization: Bearer <token>`, e.g.
   `claude mcp add --transport http orchester http://127.0.0.1:<port>/mcp --header "Authorization: Bearer <token>"`.
-  When the app starts it removes the files of Orchester processes that were killed and could not
+  The new app's command registers its server under the same name `orchester`, and Claude Code
+  refuses a name it already has: if you registered the deprecated desktop's server this way, run
+  `claude mcp remove orchester` before you connect the new app. When the app starts it removes the files of Orchester processes that were killed and could not
   remove theirs (each running process holds a lock on `<pid>.lock` beside its file). The server
   refuses a request without the token, and one that a web page sends (an `Origin` other than
   loopback); it serves at most 32 connections, each with a 10-second deadline for a request's
@@ -205,9 +209,9 @@ install, a network command) is refused (`person_only`, with the reason), as are 
 (`automation_wider`). The run records automation's answers as such: the activity reads *approved by
 automation* or *denied by automation*, and the run's Approvals count them apart from yours.
 
-**The new app's MCP server.** `orchester-app` runs one MCP server of its own instead of two, discovery file
-`%LOCALAPPDATA%\orchester-app-mcp\<pid>.json` on Windows and `~/Library/Application Support/orchester-app-mcp/<pid>.json`
-on macOS, with the same loopback, token and connection rules. It hosts lurq's window tools, the app's
+**The new app's MCP server.** `orchester-app` runs one MCP server of its own instead of two. It listens on
+`127.0.0.1` only and needs a bearer token on every request; where it listens and where its token is kept depend on
+how the app was started (below). It hosts lurq's window tools, the app's
 own (`app_state`, `navigate`, `set_theme`, `hold_reads` in debug builds) and Orchester's domain tools:
 every tool of Orchester's MCP server above, and the setup tools that only this app serves, which set a
 project up end to end without its configuration screens: `add_project` and `get_project`;
@@ -224,6 +228,97 @@ input with the rules of the screen it stands for and takes only what that screen
 returns a secret's value. Tools that read are in lurq's Observe scope. Tools that change data are in a
 `data` scope that is always granted, apart from window control (`navigate`, `set_theme`, lurq's input),
 which a release build grants only when its settings or `ORCHESTER_APP_MCP_WINDOW_CONTROL=on` allow it.
+
+| Started as | Address | Token | Discovery file |
+| --- | --- | --- | --- |
+| The installed app (`tools/install.ps1`, `Orchester App.app`) | Fixed, from Settings › Automation; `http://127.0.0.1:47821/mcp` until you change it | Kept in the OS secret store | None |
+| With `ORCHESTER_APP_MCP_DISCOVERY=<folder>` (QA copies, test harnesses) | A free port on each start | A new one on each start, in memory only | `<folder>/<pid>.json` |
+| A debug build (`tools/run.ps1 app`) without that variable | A free port on each start | A new one on each start | `%LOCALAPPDATA%\orchester-app-mcp\<pid>.json`, macOS `~/Library/Application Support/orchester-app-mcp/<pid>.json` |
+
+A discovery file holds `url` (`http://127.0.0.1:<port>/mcp`), `port` and `token`, with the same rules as the
+deprecated desktop's above: only you can read it, a `<pid>.lock` beside it, removed when the app closes.
+`tools/qa-app.ps1` sets the variable to `.tmp/qa/<task>/mcp/` in the worktree and prints that folder. While it is
+set, the fixed address and the stored token are not used. A debug build and a QA copy therefore never take the
+installed app's port, and both can run beside it.
+
+**The installed app's address.** Settings › Automation › *Orchester MCP server*. *Let agents connect to Orchester*
+is on by default. Off, nothing listens, the status bar shows *MCP off*, and the token stays stored for when you turn
+it on again. *Address* shows the address with *Copy*. Enter another port (1024 to 65535) and choose *Use port*: the
+server moves there at once, without restarting the app, and agents registered with the old port need registering
+again. If another program holds the port, the server does not listen and does not move to another port, because an
+agent registered with the fixed address would reach nothing, or reach that program. Settings says *Port … taken*
+and the status bar *MCP port … taken*; choose another port, then register your agents again. Orchester does not name
+the program that holds the port yet. The port and the switch are kept in that installation's `orchester.db`.
+
+**The token.** The installed app makes it on its first start and keeps it in the OS secret store, never in a file,
+the database, a log or the MCP tree: on Windows as a generic credential in Credential Manager, target
+`orchester-app-mcp/<installation id>`; on macOS in the login keychain, service `orchester-app-mcp`, account
+`<installation id>`. The installation id is a random id in that installation's `orchester.db`, so a dev build and
+the install never share a token. As with project secrets, macOS may ask once more after an update before the app
+reads it (see *Signing* above). In Settings, *Show* shows it for 30 seconds at most, and while it shows the server
+refuses screenshots and the window's text (`token_shown`). *Copy* puts it on the clipboard and clears the clipboard
+after 60 seconds if it still holds what Orchester put there. *Rotate token* asks in place, stores a new token and
+ends the open sessions: register every agent again, and for Codex set `ORCHESTER_APP_MCP_TOKEN` again. If the
+secret store refuses the new token, the old one stays in use. Show, Copy, Rotate token, *Use port* and the switch
+take only a person's click in the window; a change brought by automation is not taken. If the token cannot be read,
+the server stays off, the status bar shows *MCP unavailable*, and Settings says why, with *Try again*.
+
+**Connect an agent.** Settings › Automation › *Connect an agent* gives the command for each CLI with the current
+address and the token masked; its *Copy* puts the whole command, token included, on the clipboard (cleared after 60
+seconds as above). Register the server once; the agent then has its tools in every session as
+`mcp__orchester__…`. The name is `orchester` in lower case, never `Orchester`: that is the name of the relay that runs
+give their agents, and in Codex a server of yours with that name would merge into it.
+
+Claude Code:
+
+```text
+claude mcp add --transport http --scope user orchester http://127.0.0.1:47821/mcp --header "Authorization: Bearer <token>"
+```
+
+`--scope user` makes it available in every folder; `--scope local` (Claude Code's default) only in the folder you
+run it in. Both keep it in `~/.claude.json`, outside any repository. Never use `--scope project`: it writes
+`.mcp.json` into the repository, and the token would be committed. Check with `claude mcp get orchester`.
+
+Codex reads the token from a variable, not from its configuration:
+
+```text
+codex mcp add orchester --url http://127.0.0.1:47821/mcp --bearer-token-env-var ORCHESTER_APP_MCP_TOKEN
+```
+
+Then set the variable for your user. On Windows, `setx ORCHESTER_APP_MCP_TOKEN <token>`; it reaches programs started
+after it, so restart Codex, your terminal or your IDE. On macOS, `launchctl setenv ORCHESTER_APP_MCP_TOKEN <token>`
+for apps started from the Dock or Finder (until you sign out), and `export ORCHESTER_APP_MCP_TOKEN=<token>` in
+`~/.zshrc` for terminals. Check with `codex mcp get orchester`. The alternative, without a variable, is an entry in
+`~/.codex/config.toml`:
+
+```toml
+[mcp_servers.orchester]
+url = "http://127.0.0.1:47821/mcp"
+http_headers = { Authorization = "Bearer <token>" }
+```
+
+Never put the token in a repository's `.mcp.json` or `AGENTS.md`. *Agents connected* lists the clients that
+connected since the app started (or since the token changed), named as each client names itself; nothing of it is
+stored.
+
+Agents in runs do not reach this server: Claude Code runs keep `--strict-mcp-config`, Codex runs turn your
+`orchester` server off, and neither gets `ORCHESTER_APP_MCP_TOKEN` or `ORCHESTER_APP_MCP_DISCOVERY` (their
+environment is cleaned).
+
+**What the server checks.** The `Host` of every request must be `127.0.0.1:<port>` or `localhost:<port>`, so a web
+page cannot reach the server through DNS rebinding, which a fixed port makes easier to aim. An `Origin` other than
+loopback is refused, and the bearer token is required either way.
+
+**Who can read the token.** Any program running as you can read a Credential Manager credential, the files of the
+clients you registered (`~/.claude.json`, and `~/.codex/config.toml` with the alternative), the variable
+`ORCHESTER_APP_MCP_TOKEN` (every program you start gets it, and on Windows it is also in `HKCU\Environment`) and the
+clipboard after *Copy*. That is the same exposure as a discovery file (see *What this means* below). Other users of
+the computer can connect to the port but cannot read the token.
+
+**Port squatting.** With a fixed port, a program that listens on it while Orchester is not running receives the
+token from the agents that try to connect. On a computer only you use, such a program already runs as you; on a
+shared one, another user could do it. Settings shows the port as taken whenever the app starts and finds it held.
+This is an accepted risk for now.
 
 **Let automation change agent permissions.** Any client with the token may set a project up, so the setup
 tools only narrow what agents may do unless a person allows more. Widening it is refused with
@@ -367,8 +462,8 @@ you*. `get_auto_mode` reads a project's setting and reviewer; `set_auto_mode` (n
 carries what auto mode did with each request and which model reviewed it.
 Not done yet: turning auto mode on while a request waits does not review that request.
 
-What this means: any program running as your user can read the discovery files and control the app's
-data through Orchester's server as you could: create and run tasks, whose agents work in your
+What this means: any program running as your user can read the discovery files and the installed new app's
+token (see *Who can read the token* above) and control the app's data through Orchester's server as you could: create and run tasks, whose agents work in your
 projects, and pause or cancel runs. Through lurq's server it can read what the window shows; in a
 debug build it can also click and type. Other users' programs can connect to the ports but cannot
 read the tokens, so the servers refuse them; other machines cannot connect at all. Secret values stay

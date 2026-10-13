@@ -1,7 +1,11 @@
 """Call one embedded lurq MCP tool for an exact app PID without printing discovery credentials.
 
-Example: python tools/lurq-mcp-client.py 12345 lurq_windows
-The app and this client must use the same LOCALAPPDATA (Windows) or HOME (macOS).
+Example: python tools/lurq-mcp-client.py 12345 app_state --app orchester-app --discovery .tmp/qa/<task>/mcp
+The discovery folder is --discovery when given. Else, for --app orchester-app, the folder named by
+ORCHESTER_APP_MCP_DISCOVERY (which tools/qa-app.ps1 sets for its QA copy) when that is set. Else the user
+folder: orchester-app-mcp for orchester-app, lurq/mcp otherwise, in LOCALAPPDATA (Windows) or
+~/Library/Application Support (macOS); the app and this client must then use the same LOCALAPPDATA or HOME.
+The installed orchester-app writes no discovery file: register it as Settings > Automation shows instead.
 """
 
 import argparse
@@ -28,9 +32,38 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def discovery_dir(override):
+# The new app's name in discovery, the variable naming a QA copy's discovery folder, and its user folder.
+NEW_APP = "orchester-app"
+DISCOVERY_VARIABLE = "ORCHESTER_APP_MCP_DISCOVERY"
+NEW_APP_FOLDER = "orchester-app-mcp"
+
+
+def discovery_dir(override, app):
     if override is not None:
         return Path(override)
+    if app == NEW_APP:
+        variable = os.environ.get(DISCOVERY_VARIABLE)
+        if variable:
+            return Path(variable)
+        return new_app_user_dir()
+    return lurq_user_dir()
+
+
+def new_app_user_dir():
+    if sys.platform == "win32":
+        base = os.environ.get("LOCALAPPDATA")
+        if base:
+            return Path(base) / NEW_APP_FOLDER
+    elif sys.platform == "darwin":
+        base = os.environ.get("HOME")
+        if base:
+            return Path(base) / "Library" / "Application Support" / NEW_APP_FOLDER
+    else:
+        raise ClientError(f"{NEW_APP} has no user discovery folder on this platform; pass --discovery")
+    raise ClientError(f"No {NEW_APP} discovery directory is configured; pass --discovery")
+
+
+def lurq_user_dir():
     if sys.platform == "win32":
         base = os.environ.get("LOCALAPPDATA")
         if base:
@@ -54,7 +87,9 @@ def load_discovery(pid, app, directory):
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ClientError(f"Cannot read MCP discovery for PID {pid} ({type(error).__name__})") from None
+        raise ClientError(
+            f"Cannot read MCP discovery for PID {pid} in {directory} ({type(error).__name__})"
+        ) from None
     if not isinstance(data, dict) or data.get("pid") != pid or data.get("app") != app:
         raise ClientError("MCP discovery does not match the requested PID and app")
     token = data.get("token")
@@ -290,7 +325,13 @@ def main(argv=None):
     parser.add_argument("tool", help="embedded lurq MCP tool name")
     parser.add_argument("--app", default="orchester", help="expected app name in discovery")
     parser.add_argument("--arguments", default="{}", help="JSON object of tool arguments; do not pass secrets")
-    parser.add_argument("--discovery-dir", help="directory containing the exact-PID discovery file")
+    parser.add_argument(
+        "--discovery",
+        "--discovery-dir",
+        dest="discovery",
+        help=f"folder containing the exact-PID discovery file (default for {NEW_APP}: ${DISCOVERY_VARIABLE}, "
+        "then the user folder)",
+    )
     parser.add_argument("--image-out", help="run-owned PNG output path for lurq_screenshot")
     args = parser.parse_args(argv)
     if args.pid <= 0:
@@ -301,7 +342,7 @@ def main(argv=None):
             raise ClientError("Tool arguments must be a JSON object")
         if args.image_out is not None and args.tool != "lurq_screenshot":
             raise ClientError("--image-out is only valid with lurq_screenshot")
-        directory = discovery_dir(args.discovery_dir)
+        directory = discovery_dir(args.discovery, args.app)
         url, token = load_discovery(args.pid, args.app, directory)
         result = call_tool(url, token, args.tool, arguments)
         if args.tool == "lurq_screenshot":

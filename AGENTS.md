@@ -36,8 +36,11 @@ Workspace layout:
 - `crates/desktop-app` (`orchester-app`, binary `orchester-app`): the new lurq app in the `orchester2.pen` design.
   Theme roles live in `crates/desktop-app/src/theme/`, strings in `crates/desktop-app/assets/locales/`. It keeps its
   settings in the application database (`orchester.db`, located by `orchester_store::location`) and runs one MCP
-  server of its own that hosts lurq's window tools and the app's tools (discovery file
-  `%LOCALAPPDATA%\orchester-app-mcp\<pid>.json`). Run it with `powershell -File tools/run.ps1 app`.
+  server of its own that hosts lurq's window tools and the app's tools. The installed app listens on the fixed
+  address set in Settings › Automation (default `http://127.0.0.1:47821/mcp`, token in the OS secret store, no
+  discovery file); a debug build writes a per-start discovery file `%LOCALAPPDATA%\orchester-app-mcp\<pid>.json`,
+  and a QA copy writes it to the folder `ORCHESTER_APP_MCP_DISCOVERY` names (`tools/qa-app.ps1`:
+  `.tmp/qa/<task>/mcp/`); see `docs/stable-build.md`. Run it with `powershell -File tools/run.ps1 app`.
 - `crates/runner` (`orchester-runner`): one process per open project, started by the desktop from the desktop's
   own directory (inside `Orchester.app` both are in `Contents/MacOS`). Run the app with
   `powershell -File tools/run.ps1` (extra arguments go to `cargo run`, e.g. `--features devtools`); plain
