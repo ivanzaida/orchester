@@ -133,7 +133,15 @@ impl Server {
   fn call(&self, call: &str) -> Result<String, String> {
     let (tool, arguments) = call.split_once(' ').unwrap_or((call, "{}"));
     let arguments: Value = serde_json::from_str(arguments).map_err(|error| error.to_string())?;
-    let client = reqwest::blocking::Client::new();
+    // Reqwest without a TLS provider of its own needs one installed, as the runner's clients do; one installed
+    // already is as good.
+    if rustls::crypto::ring::default_provider().install_default().is_err() {
+      eprintln!("a TLS provider was installed already");
+    }
+    let client = reqwest::blocking::Client::builder()
+      .no_proxy()
+      .build()
+      .map_err(|error| error.to_string())?;
     let initialize = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "fake-claude", "version": "1"}}});
     let (session, _) = self.post(&client, None, &initialize)?;
     let initialized = json!({"jsonrpc": "2.0", "method": "notifications/initialized"});

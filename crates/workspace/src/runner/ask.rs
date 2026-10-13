@@ -184,7 +184,7 @@ impl Runners {
   }
 
   /// Waits until the runner of `root` has attached (it reported its work), or gave up.
-  async fn attached(&self, root: &Path) -> Result<(), RequestError> {
+  pub(super) async fn attached(&self, root: &Path) -> Result<(), RequestError> {
     let Some(mut updates) = self
       .inner
       .projects

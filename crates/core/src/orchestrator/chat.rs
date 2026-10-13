@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
+  connection::AccountStartProblem,
   conversation::MessageBody,
   id::{ChatId, ChatMessageId, ConnectionId},
   resource::ModelId,
@@ -126,7 +127,11 @@ impl TurnState {
 pub enum TurnFailure {
   /// The CLI is not signed in on the connection's account.
   NotSignedIn,
-  /// The CLI could not be started: what was missing.
+  /// The Orchestrator's connection is gone, or is not one it runs on.
+  ConnectionGone,
+  /// The connection's account cannot start its CLI.
+  Account(AccountStartProblem),
+  /// The CLI could not be started, as `reason` tells the runner's log.
   CannotStart { reason: String },
   /// The CLI started and failed: what it or the runner said.
   Failed { reason: String },

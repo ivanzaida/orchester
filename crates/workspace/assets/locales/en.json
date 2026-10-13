@@ -1359,7 +1359,8 @@
       "lost": "The runner's answer was lost · your message is kept",
       "busy": "The Orchestrator is still answering your last message.",
       "shuttingDown": "Not sent · the runner is stopping",
-      "failed": "Not sent · the runner refused the message"
+      "failed": "Not sent · the runner refused the message",
+      "toolsUnavailable": "Not sent · the Orchestrator's tools couldn't be served on this computer"
     },
     "stop": {
       "failed": "The answer couldn't be stopped: the runner didn't answer."

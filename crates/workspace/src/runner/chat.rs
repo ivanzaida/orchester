@@ -11,6 +11,14 @@ use super::{RequestError, RunRequestError, Runners};
 use crate::workspace::OpenProject;
 
 impl Runners {
+  /// Starts `project`'s runner if needed and waits until it attached: a runner that attaches ends the turns still
+  /// thinking as interrupted, so a message is kept only once its runner is there to answer it.
+  pub async fn chat_runner(&self, project: &OpenProject) -> Result<(), RequestError> {
+    let root = project.repo_root.as_path();
+    self.ensure(root, project.project.name().as_str());
+    self.attached(root).await
+  }
+
   /// Asks `project`'s runner to answer the person's message `message` with the domain tools at `tools`, starting the
   /// runner if needed. `Ok` once the turn is under way, or was already, or ended.
   pub async fn answer_in_chat(

@@ -48,6 +48,9 @@ pub async fn send(
   outgoing: &Outgoing,
   tools: ChatTools,
 ) -> Result<(), SendError> {
+  if let Err(error) = runners.chat_runner(project).await {
+    return Err(SendError::NotSent(not_sent(&RunRequestError::Request(error))));
+  }
   let root = project.repo_root.clone();
   let kept = outgoing.clone();
   background::run(move || keep_in(&root, &kept))
@@ -73,6 +76,11 @@ pub async fn send(
   }
   runners.chat_changed(&project.repo_root);
   Err(SendError::NotSent(not_sent(&error)))
+}
+
+/// The app could not serve the conversation's tools, so nothing was sent.
+pub fn tools_unavailable() -> SendError {
+  SendError::NotSent(Message::new("orchestrator.send.toolsUnavailable"))
 }
 
 /// Asks `project`'s runner to stop the answer under way in `chat`.

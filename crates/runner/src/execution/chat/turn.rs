@@ -63,6 +63,9 @@ impl Turn {
       Ok(started) => self.drive(started, stop).await,
       Err(failure) => TurnState::Failed(failure),
     };
+    if let TurnState::Failed(TurnFailure::CannotStart { reason }) = &state {
+      tracing::warn!(chat = %self.chat.id(), %reason, "a turn of the Orchestrator chat could not start");
+    }
     self.record(|db| db.end_chat_turn(self.message, &state).map(drop));
   }
 
@@ -74,18 +77,14 @@ impl Turn {
       .connection(self.settings.connection())
       .map_err(|error| cannot(error.to_string()))?
       .and_then(|connection| AgentConnection::try_from(connection).ok())
-      .ok_or_else(|| cannot("the Orchestrator's connection is gone".to_owned()))?;
+      .filter(|connection| runs_orchestrator(connection.provider()))
+      .ok_or(TurnFailure::ConnectionGone)?;
     let provider = connection.provider();
-    if !runs_orchestrator(provider) {
-      return Err(cannot(
-        "the Orchestrator runs on Claude Code connections only".to_owned(),
-      ));
-    }
-    if let Some(reason) = connection
+    if let Some(problem) = connection
       .account()
       .start_problem(provider, Platform::current(), Path::is_dir)
     {
-      return Err(cannot(reason.to_string()));
+      return Err(TurnFailure::Account(problem));
     }
     let executable = connection
       .executable()
