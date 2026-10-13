@@ -75,6 +75,7 @@
       "adding": "{{cli}} · name it, then sign in"
     },
     "details": {
+      "factSeparator": "·",
       "account": "Account",
       "usedBy": "Used by {{count}}",
       "signedInAs": "Signed in as",

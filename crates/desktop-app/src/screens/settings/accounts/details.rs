@@ -132,12 +132,13 @@ fn title(ctx: &Ctx, parts: &Parts, account: &AgentAccount) -> Element {
         .map(|plan_name| ta(ctx, "accounts.details.planFact", [("plan", plan(plan_name))])),
     )
     .collect();
+  let separator = t(ctx, "accounts.details.factSeparator");
   let mut line = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center);
   for (index, fact) in facts.iter().enumerate() {
     if index > 0 {
-      line = line.child(Text::new("·").variant(ExtraTypography::Note.role()));
+      line = line.child(Text::new(&separator).variant(ExtraTypography::Note.role()));
     }
     line = line.child(Text::new(fact).variant(ExtraTypography::Note.role()).nowrap());
   }
