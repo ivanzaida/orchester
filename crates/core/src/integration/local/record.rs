@@ -1,3 +1,4 @@
+mod abort;
 mod drafts;
 mod preservation;
 mod privacy;
@@ -65,6 +66,8 @@ pub struct LocalOperation {
   sync_result: Option<Checkout>,
   #[serde(default)]
   task_commit_action: Option<String>,
+  #[serde(default)]
+  task_abort_result: Option<Checkout>,
   commit_selection: Vec<super::LocalPath>,
   commit_tree: Option<String>,
   paused_from: Option<LocalPhase>,
@@ -96,6 +99,7 @@ impl LocalOperation {
       owned_task: None,
       sync_result: None,
       task_commit_action: None,
+      task_abort_result: None,
       commit_selection: Vec::new(),
       commit_tree: None,
       paused_from: None,
@@ -183,7 +187,7 @@ impl LocalOperation {
   }
 
   pub fn plan_task_commit(&mut self) -> Result<(), LocalError> {
-    if self.phase != LocalPhase::TaskConflicts {
+    if self.phase != LocalPhase::TaskConflicts || self.task_abort_result.is_some() {
       return Err(LocalError::WrongPhase);
     }
     self.task_commit_action = Some(format!("orchester-sync/{}", crate::id::IdempotencyKey::generate()));
@@ -203,6 +207,9 @@ impl LocalOperation {
   }
 
   pub fn ensure_task_owned(&self, actual: &Checkout) -> Result<(), LocalError> {
+    if self.task_abort_result.is_some() {
+      return Err(LocalError::Reconcile);
+    }
     if self.owned_task.as_ref() != Some(actual) {
       return Err(LocalError::ForeignOperation);
     }
@@ -246,7 +253,11 @@ impl LocalOperation {
   }
 
   pub fn refresh(&mut self, checkout: Checkout) -> Result<(), LocalError> {
-    if self.merged.is_some() || self.merge_pending() || self.preservation.as_ref().is_some_and(|saved| saved.retained) {
+    if self.merged.is_some()
+      || self.merge_pending()
+      || self.task_abort_result.is_some()
+      || self.preservation.as_ref().is_some_and(|saved| saved.retained)
+    {
       return Err(LocalError::WrongPhase);
     }
     if checkout.operation.is_some() {
@@ -330,10 +341,12 @@ impl LocalOperation {
   }
 
   pub fn begin_check(&mut self) -> Result<(), LocalError> {
-    if !matches!(
-      self.phase,
-      LocalPhase::Syncing | LocalPhase::TaskConflicts | LocalPhase::Prepared | LocalPhase::Checking
-    ) {
+    if self.task_abort_result.is_some()
+      || !matches!(
+        self.phase,
+        LocalPhase::Syncing | LocalPhase::TaskConflicts | LocalPhase::Prepared | LocalPhase::Checking
+      )
+    {
       return Err(LocalError::WrongPhase);
     }
     self.checked = None;

@@ -186,32 +186,4 @@ impl LocalIntegration {
     })?;
     Ok(())
   }
-
-  /// Abort is confined to the recorded task worktree version. Additional edits make it unavailable.
-  pub fn abort_task(&mut self) -> Result<(), IntegrationError> {
-    if self.operation.merged().is_some() || self.operation.phase() != LocalPhase::TaskConflicts {
-      return Err(LocalError::WrongPhase.into());
-    }
-    let actual = self.task_git()?.snapshot()?;
-    self.operation.ensure_task_owned(&actual)?;
-    if !actual
-      .operation
-      .as_ref()
-      .is_some_and(|marker| marker.starts_with("MERGE_HEAD:"))
-    {
-      return Err(LocalError::ForeignOperation.into());
-    }
-    for file in &actual.files {
-      if let Some(bytes) = self.task_git()?.file(&file.path)? {
-        self.retain_result_bytes(&bytes)?;
-      }
-    }
-    self.operation.ensure_task_owned(&self.task_git()?.snapshot()?)?;
-    self.save()?;
-    self.task_git()?.text(&["merge", "--abort"])?;
-    self.operation.review_base(self.main.snapshot()?)?;
-    self.operation.own_task(self.task_git()?.snapshot()?);
-    self.operation.paused();
-    self.save()
-  }
 }

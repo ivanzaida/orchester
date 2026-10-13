@@ -17,6 +17,9 @@ impl LocalIntegration {
     if let Some(commit) = self.operation.merged().map(str::to_owned) {
       return self.reconcile_merged(&actual, &commit);
     }
+    if self.operation.task_abort_result().is_some() {
+      return self.reconcile_task_abort();
+    }
     match self.operation.phase() {
       LocalPhase::Canceling => self.cancel_preservation(),
       LocalPhase::Canceled => self.save(),

@@ -181,3 +181,42 @@ fn local_integration_checked_release_invalidates_approval_and_cannot_cancel_pend
   assert_eq!(operation.begin_merge(&exact), Err(LocalError::Stale));
   assert!(!operation.reserves_checkout());
 }
+
+#[test]
+fn local_integration_abort_intent_survives_serialization_and_only_finishes_at_the_exact_result() {
+  let base = checkout('a');
+  let task = checkout('b');
+  let mut conflicts = task.clone();
+  conflicts.operation = Some("MERGE_HEAD:owned".into());
+  let mut operation = LocalOperation::new(RunId::generate(), base.clone()).expect("operation");
+  operation.prepared(base.clone()).expect("prepared");
+  operation.begin_sync(&base).expect("sync");
+  operation.own_task(conflicts.clone());
+  operation.task_conflicts().expect("conflicts");
+  operation.plan_task_abort(task.clone()).expect("abort intent");
+  let encoded = serde_json::to_vec(&operation).expect("journal");
+  let mut recovered: LocalOperation = serde_json::from_slice(&encoded).expect("restart");
+  assert_eq!(recovered.phase(), LocalPhase::NeedsReconciliation);
+  assert_eq!(recovered.task_abort_result(), Some(&task));
+  assert!(recovered.reserves_checkout());
+  assert_eq!(recovered.refresh(base.clone()), Err(LocalError::WrongPhase));
+  recovered.paused();
+  recovered.resume_saved_phase();
+  assert_eq!(recovered.phase(), LocalPhase::NeedsReconciliation);
+  assert_eq!(recovered.ensure_task_owned(&conflicts), Err(LocalError::Reconcile));
+  assert_eq!(recovered.plan_task_commit(), Err(LocalError::WrongPhase));
+  assert_eq!(recovered.begin_check(), Err(LocalError::WrongPhase));
+  assert_eq!(
+    recovered.task_abort_finished(base.clone(), checkout('c')),
+    Err(LocalError::Reconcile)
+  );
+  assert_eq!(recovered.task_abort_result(), Some(&task));
+  recovered
+    .task_abort_finished(base, task.clone())
+    .expect("exact completion");
+  assert_eq!(recovered.phase(), LocalPhase::Paused);
+  assert_eq!(recovered.owned_task(), Some(&task));
+  assert!(recovered.task_abort_result().is_none());
+  assert!(recovered.checked().is_none());
+  assert!(recovered.merged().is_none());
+}

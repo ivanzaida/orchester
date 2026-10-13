@@ -1,3 +1,5 @@
+#[path = "local_integration/abort.rs"]
+mod abort;
 #[path = "local_integration/authority.rs"]
 mod authority;
 #[path = "local_integration/drafts.rs"]

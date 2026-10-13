@@ -1,5 +1,6 @@
 //! The in-app local integration application service. Each call takes a project lease and journals intent before Git.
 
+mod abort;
 mod authority;
 mod cancel;
 mod checks;
