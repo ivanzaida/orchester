@@ -8,7 +8,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Spacer, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -85,7 +85,9 @@ pub(super) fn header(ctx: &mut Ctx, view: &View, head: &Head<'_>) -> Element {
         .id("orchestrator-title")
         .variant(TypographyStyle::Heading)
         .flex_shrink(1.0)
-        .nowrap(),
+        .min_width(Dimension::Px(0.0))
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
     )
     .child(Spacer::new().flex(1.0))
     .child(

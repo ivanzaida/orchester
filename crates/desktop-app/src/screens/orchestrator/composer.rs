@@ -106,6 +106,7 @@ pub(super) fn keys(ctx: &Ctx) -> Row {
   });
   Row::new()
     .id("orchestrator-keys")
+    .flex_shrink(0.0)
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(

@@ -19,7 +19,7 @@ use super::{McpSettings, WindowLink};
 use crate::{
   appearance::Appearance,
   project::hold::ReadHold,
-  routes::{ProjectPage, Route},
+  routes::{OrchestratorChat, ProjectPage, Route},
 };
 
 /// Every app tool, for lurq's MCP configuration; `hold_reads` only in debug builds of a started session,
@@ -60,6 +60,8 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
   };
   match page {
     ProjectPage::Overview(tab) => insert("tab", tab.name()),
+    ProjectPage::Orchestrator(OrchestratorChat::New) => insert("chat", "new"),
+    ProjectPage::Orchestrator(OrchestratorChat::Chat(chat)) => insert("chat", &chat.to_string()),
     ProjectPage::Tasks(list) => {
       insert("tab", list.tab().name());
       if let Some(text) = list.search() {

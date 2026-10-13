@@ -15,7 +15,10 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Row, Spacer, Text, VirtualizedList},
-  layout::Alignment,
+  layout::{
+    Alignment,
+    scrollbar::{ScrollBarPlacement, ScrollBarStyle},
+  },
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -83,8 +86,14 @@ impl lurq::app::component::DevtoolsInspectable for TurnRow {}
 /// The list of `rows`, opening on the newest.
 pub(super) fn list(ctx: &mut Ctx, rows: Vec<TurnRow>) -> Element {
   let newest = rows.last().map(|row| row.turn.key());
+  // The thumb keeps a lane of its own, so it never covers a message's end.
+  let scrollbar = ScrollBarStyle {
+    placement: ScrollBarPlacement::Reserved,
+    ..ctx.theme().scrollbar().clone()
+  };
   VirtualizedList::new_shared(ctx, Arc::new(rows))
     .list_key("orchestrator-chat")
+    .scrollbar(scrollbar)
     .reveal_key(newest)
     .width(Dimension::Pct(100.0))
     .flex(1.0)

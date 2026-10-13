@@ -46,7 +46,7 @@
       "esc": "Esc"
     },
     "context": {
-      "line": "Each reply gets the Orchestrator's rules, this conversation and what it reads in {{project}}"
+      "line": "Each reply gets the Orchestrator's rules, this conversation and what it reads"
     },
     "suggestions": {
       "eyebrow": "SUGGESTIONS",

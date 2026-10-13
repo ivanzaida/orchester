@@ -14,7 +14,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text, VirtualizedList},
+  components::{Column, Row, Spacer, Text, TextOverflow, VirtualizedList},
   core::Signal,
   layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
@@ -305,13 +305,25 @@ fn chat_row(ctx: &mut Ctx, listing: &ChatListing, (current, today): (bool, bool)
             .child(
               Text::new(listing.chat.title())
                 .variant(OrchestratorText::Emphasis.role())
-                .flex_shrink(1.0)
-                .nowrap(),
+                .flex(1.0)
+                .min_width(Dimension::Px(0.0))
+                .nowrap()
+                .text_overflow(TextOverflow::Elipsis),
             )
-            .child(Spacer::new().flex(1.0))
-            .child(Text::new(&when).variant(TypographyStyle::Caption).nowrap()),
+            .child(
+              Text::new(&when)
+                .variant(TypographyStyle::Caption)
+                .flex_shrink(0.0)
+                .nowrap(),
+            ),
         )
-        .child(Text::new(&meta).variant(ExtraTypography::Note.role()).nowrap()),
+        .child(
+          Text::new(&meta)
+            .variant(ExtraTypography::Note.role())
+            .min_width(Dimension::Px(0.0))
+            .nowrap()
+            .text_overflow(TextOverflow::Elipsis),
+        ),
     )
     .into()
 }

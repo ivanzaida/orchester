@@ -1,0 +1,239 @@
+//! What the QA window shows: the seed's `tasks` project with a Claude Code connection to `orchester-fake-claude`
+//! (`Claude · Kontur`, its catalog Opus 5.5 and Sonnet 5.5) beside the seed's Codex one, the Orchestrator set to run on
+//! it, and conversations whose last turns ended in each way the chat shows (`conversations`). Every folder is under the
+//! QA folder.
+
+use std::{error::Error, path::PathBuf};
+
+use orchester_core::{
+  connection::{
+    AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
+  },
+  conversation::MessageBody,
+  id::{ChatId, ChatMessageId, ConnectionId, ProjectId},
+  name::Name,
+  orchestrator::{ActionOutcome, Chat, ChatAction, OrchestratorSettings, TurnFailure, TurnState},
+  resource::ModelId,
+  store::ConnectionStore,
+  time::Timestamp,
+};
+use orchester_store::ProjectDb;
+
+use super::kontur;
+
+/// The model the Orchestrator runs with, as the connection's catalog lists it.
+const MODEL: &str = "claude-opus-5-5";
+
+/// The seeded data the window opens, and the conversations by what their last turn shows.
+pub struct Prepared {
+  pub database: PathBuf,
+  pub project: ProjectId,
+  pub conversations: Conversations,
+  /// What the start prints: the scenario and the task the answered conversation created, with its state.
+  pub shown: String,
+}
+
+pub struct Conversations {
+  /// Answered turns with replies and two actions, one done and one refused.
+  pub answered: ChatId,
+  pub stopped: ChatId,
+  /// The CLI was not signed in.
+  pub failed: ChatId,
+  pub interrupted: ChatId,
+}
+
+/// What the QA folder `root` is seeded with: `claude` the fake CLI the connection runs; `orchestrator` whether the
+/// Orchestrator is set to run on it, and `claude_connection` whether the project has that connection at all.
+pub fn prepare(
+  root: &std::path::Path,
+  claude: PathBuf,
+  (orchestrator, claude_connection): (bool, bool),
+) -> Result<Prepared, Box<dyn Error>> {
+  let scenario = kontur::scenarios::named("tasks").ok_or("the seed has the tasks scenario")?;
+  let seeded = kontur::seed(&kontur::SeedRequest {
+    data_dir: root.join("app"),
+    repo: root.join("repo-kontur"),
+    scenario,
+    fake_codex: None,
+    now: Timestamp::now(),
+  })?;
+  let mut db = ProjectDb::open(&seeded.repo)?;
+  let connection = connection(claude)?;
+  if claude_connection {
+    db.create_connection(&connection)?;
+  }
+  if orchestrator {
+    let settings = OrchestratorSettings::new(connection.id(), ModelId::new(MODEL)?, Some("high".to_owned()));
+    db.save_orchestrator_settings(&settings)?;
+  }
+  let keys: Vec<String> = seeded.tasks.iter().map(|task| task.key.clone()).collect();
+  let shown = seeded.tasks.first().map_or_else(String::new, |task| {
+    format!("{} · {} {} ({})", scenario.name(), task.key, task.title, task.state)
+  });
+  let conversations = conversations(&mut db, (&keys, connection.id()))?;
+  Ok(Prepared {
+    database: seeded.app_database,
+    project: seeded.project,
+    conversations,
+    shown,
+  })
+}
+
+/// `Claude · Kontur`, checked and signed in, running `program`.
+fn connection(program: PathBuf) -> Result<AgentConnection, Box<dyn Error>> {
+  let now = Timestamp::now();
+  let mut connection = AgentConnection::new(
+    ConnectionId::generate(),
+    Name::new("Claude · Kontur")?,
+    AgentProvider::ClaudeCodeCli,
+    program,
+    now,
+  )?;
+  let model = |id: &str| -> Result<CatalogModel, Box<dyn Error>> {
+    Ok(CatalogModel::new(
+      ModelId::new(id)?,
+      vec!["medium".to_owned(), "high".to_owned()],
+    ))
+  };
+  connection.record_check(ConnectionCheck {
+    at: now,
+    result: CheckResult::Available {
+      version: "stand-in".to_owned(),
+      sign_in: SignIn::SignedIn,
+      catalog: ModelCatalog::new(
+        CatalogSource::Provider,
+        vec![model(MODEL)?, model("claude-sonnet-5-5")?],
+      ),
+    },
+  })?;
+  Ok(connection)
+}
+
+/// A minute `n` minutes ago.
+fn ago(minutes: i64) -> Timestamp {
+  Timestamp::from_unix_millis(Timestamp::now().unix_millis() - minutes * 60_000)
+}
+
+/// One turn of `chat`: the person's `text` at `at`, the answer's `parts`, and how it ended.
+struct Turn<'a> {
+  text: &'a str,
+  at: Timestamp,
+  parts: Vec<Part<'a>>,
+  end: TurnState,
+}
+
+enum Part<'a> {
+  Reply(&'a str),
+  Action(ChatAction),
+}
+
+fn keep(
+  db: &mut ProjectDb,
+  chat: ChatId,
+  connection: ConnectionId,
+  turns: Vec<Turn<'_>>,
+) -> Result<ChatId, Box<dyn Error>> {
+  let model = ModelId::new(MODEL)?;
+  for turn in turns {
+    let body = MessageBody::new(turn.text)?;
+    let message = ChatMessageId::generate();
+    let started = db.chat(chat)?.unwrap_or_else(|| Chat::start(chat, &body, turn.at));
+    db.keep_chat_message(&started, (message, &body), turn.at)?;
+    db.set_chat_session(chat, &format!("qa-{chat}"), connection)?;
+    for (offset, part) in (1_i64..).zip(turn.parts) {
+      let at = Timestamp::from_unix_millis(turn.at.unix_millis() + offset * 20_000);
+      match part {
+        Part::Reply(text) => db.add_chat_reply(chat, (text, &model), at)?,
+        Part::Action(action) => db.add_chat_action(chat, &action, at)?,
+      }
+    }
+    db.end_chat_turn(message, &turn.end)?;
+  }
+  Ok(chat)
+}
+
+fn conversations(
+  db: &mut ProjectDb,
+  (keys, connection): (&[String], ConnectionId),
+) -> Result<Conversations, Box<dyn Error>> {
+  let first = keys.first().cloned().unwrap_or_default();
+  let second = keys.get(1).cloned().unwrap_or_default();
+  let created = ChatAction {
+    tool: "create_task".to_owned(),
+    task: Some(first.clone()),
+    outcome: ActionOutcome::Done,
+  };
+  let refused = ChatAction {
+    tool: "run_task".to_owned(),
+    task: Some(second.clone()),
+    outcome: ActionOutcome::Refused {
+      code: "task_not_ready".to_owned(),
+      reason: "Needs a pipeline".to_owned(),
+    },
+  };
+  let reply = format!(
+    "I created **{first}** as a draft with its brief and acceptance criteria. Nothing is queued and no agent has \
+     started.\n\nI read the task list and the project's pipelines; I didn't read repository files."
+  );
+  let refusal = format!("I can't start **{second}** yet: it has no pipeline. Choose one in Tasks, then ask me again.");
+  let answered = keep(
+    db,
+    ChatId::generate(),
+    connection,
+    vec![
+      Turn {
+        text: "Draft a task for the delivery log on the endpoint page.",
+        at: ago(30),
+        parts: vec![Part::Reply(&reply), Part::Action(created)],
+        end: TurnState::Answered,
+      },
+      Turn {
+        text: &format!("Start {second} now."),
+        at: ago(24),
+        parts: vec![Part::Reply(&refusal), Part::Action(refused)],
+        end: TurnState::Answered,
+      },
+    ],
+  )?;
+  let stopped = keep(
+    db,
+    ChatId::generate(),
+    connection,
+    vec![Turn {
+      text: "Plan the webhook delivery work. Break it into tasks we can review.",
+      at: ago(26 * 60),
+      parts: vec![Part::Reply(
+        "I'm drafting tasks from the delivery work. So far: 01 Record every delivery attempt, 02 Delivery log on endpoint page",
+      )],
+      end: TurnState::Stopped,
+    }],
+  )?;
+  let failed = keep(
+    db,
+    ChatId::generate(),
+    connection,
+    vec![Turn {
+      text: "What's running, what's waiting and what's blocked right now?",
+      at: ago(50),
+      parts: Vec::new(),
+      end: TurnState::Failed(TurnFailure::NotSignedIn),
+    }],
+  )?;
+  let interrupted = keep(
+    db,
+    ChatId::generate(),
+    connection,
+    vec![Turn {
+      text: "Suggest an order for the Todo tasks and which can run in parallel.",
+      at: ago(9 * 24 * 60),
+      parts: vec![Part::Reply("Let me look at the queue.")],
+      end: TurnState::Failed(TurnFailure::Interrupted),
+    }],
+  )?;
+  Ok(Conversations {
+    answered,
+    stopped,
+    failed,
+    interrupted,
+  })
+}

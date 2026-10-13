@@ -11,7 +11,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Spacer, Text, TextOverflow},
   layout::Alignment,
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
@@ -72,10 +72,13 @@ pub(super) fn start(
     .child(Spacer::new().flex(1.0))
     .child(icon(Icon::Layers2, IconSize::Sm, PaletteColor::TextMuted))
     .child(
-      Text::new(&ctx.t_args("orchestrator.context.line", [("project", project)]))
+      Text::new(&ctx.t("orchestrator.context.line"))
+        .id("orchestrator-context-line")
         .variant(TypographyStyle::Caption)
         .flex_shrink(1.0)
-        .nowrap(),
+        .min_width(Dimension::Px(0.0))
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
     )
     .child(manage_context(ctx));
   let start = Column::new()
@@ -115,6 +118,7 @@ fn manage_context(ctx: &mut Ctx) -> Element {
   let reason = ctx.t("orchestrator.manageContextUnavailable");
   let link = inert(lurq::components::Button::empty())
     .id("orchestrator-context-link")
+    .flex_shrink(0.0)
     .describe("state", "unavailable")
     .describe("reason", reason.clone())
     .spacing(ExtraSpacing::Pair.role())
