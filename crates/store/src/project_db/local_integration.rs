@@ -26,16 +26,29 @@ impl LocalIntegrationStore for ProjectDb {
         |row| Ok((row.get(0)?, row.get(1)?)),
       )
       .optional()?;
-    body
-      .map(|(version, body)| {
-        let operation: LocalOperation =
-          serde_json::from_str(&body).map_err(|error| corrupt("local integration", error))?;
-        if operation.run() != run || i64::try_from(operation.version()).ok() != Some(version) {
-          return Err(corrupt("local integration", "record identity differs from its row"));
-        }
-        Ok(operation)
+    body.map(|(version, body)| decode(run, version, &body)).transpose()
+  }
+
+  fn local_operations(&self) -> Result<Vec<LocalOperation>, StoreError> {
+    let mut statement = self
+      .connection
+      .prepare("SELECT run_id, version, body FROM local_integrations ORDER BY run_id")?;
+    let rows = statement.query_map([], |row| {
+      Ok((
+        row.get::<_, String>(0)?,
+        row.get::<_, i64>(1)?,
+        row.get::<_, String>(2)?,
+      ))
+    })?;
+    rows
+      .map(|row| {
+        let (run, version, body) = row?;
+        let run = run
+          .parse()
+          .map_err(|_| corrupt("local integration", "invalid row identity"))?;
+        decode(run, version, &body)
       })
-      .transpose()
+      .collect()
   }
 
   fn save_local_operation(&mut self, operation: &LocalOperation, expected: Option<u64>) -> Result<bool, StoreError> {
@@ -144,4 +157,11 @@ fn verify(expected: &str, content: &[u8]) -> Result<(), StoreError> {
     ));
   }
   Ok(())
+}
+fn decode(run: RunId, version: i64, body: &str) -> Result<LocalOperation, StoreError> {
+  let operation: LocalOperation = serde_json::from_str(body).map_err(|error| corrupt("local integration", error))?;
+  if operation.run() != run || i64::try_from(operation.version()).ok() != Some(version) {
+    return Err(corrupt("local integration", "record identity differs from its row"));
+  }
+  Ok(operation)
 }

@@ -1,5 +1,5 @@
 use lurq::core::Signal;
-use orchester_core::integration::local::{EditorCandidate, Placement};
+use orchester_core::integration::local::{DraftChoice, EditorCandidate, Placement};
 
 /// Candidate editing and captured-save acknowledgement; no file is resolved by this UI state.
 #[derive(Clone)]
@@ -8,7 +8,15 @@ pub struct CandidateState {
   pub(super) destination: Signal<String>,
   pub(super) placement: Signal<String>,
   baseline: Signal<SavedCandidate>,
+  chosen: Signal<Chosen>,
 }
+
+#[derive(Clone)]
+struct Chosen {
+  choice: DraftChoice,
+  text: String,
+}
+impl lurq::app::component::DevtoolsInspectable for Chosen {}
 
 #[derive(Clone)]
 struct SavedCandidate(EditorCandidate);
@@ -20,6 +28,10 @@ impl CandidateState {
       text: Signal::new(String::new()),
       destination: Signal::new(String::new()),
       placement: Signal::new(String::from("unstaged")),
+      chosen: Signal::new(Chosen {
+        choice: DraftChoice::Text,
+        text: String::new(),
+      }),
       baseline: Signal::new(SavedCandidate(EditorCandidate::new(
         String::new(),
         String::new(),
@@ -28,7 +40,20 @@ impl CandidateState {
     }
   }
   pub fn current(&self) -> EditorCandidate {
-    EditorCandidate::new(self.text.get(), self.destination.get(), self.placement())
+    let chosen = self.chosen.get();
+    let text = self.text.get();
+    let choice = if chosen.text == text {
+      chosen.choice
+    } else {
+      DraftChoice::Text
+    };
+    EditorCandidate::new(text, self.destination.get(), self.placement()).with_choice(choice)
+  }
+  pub(super) fn select(&self, choice: DraftChoice) {
+    self.chosen.set(Chosen {
+      choice,
+      text: self.text.get(),
+    });
   }
   pub fn placement(&self) -> Placement {
     if self.placement.get() == "stage" {
@@ -57,6 +82,7 @@ impl CandidateState {
   fn set(&self, candidate: &EditorCandidate) {
     self.text.set(candidate.text().to_owned());
     self.destination.set(candidate.destination().to_owned());
+    self.select(candidate.choice());
     self.placement.set(
       if candidate.placement() == Placement::Stage {
         "stage"

@@ -276,3 +276,66 @@ fn local_integration_external_completion_after_owned_intent_does_not_forge_a_mer
   assert!(session.sync().is_err());
   assert_eq!(git(fixture.root(), &["rev-parse", "HEAD"]), exact.result.head);
 }
+
+#[test]
+fn local_integration_old_checkpoint_cannot_prove_a_changed_branch_was_fully_integrated() {
+  use orchester_core::{
+    id::IdempotencyKey,
+    integration::local::ResultEvidenceKind,
+    revision::Revision,
+    run::{BranchName, NewRun},
+    time::Timestamp,
+  };
+  let fixture = Fixture::new(false);
+  let first = git(&fixture.task_root, &["rev-parse", "HEAD"]);
+  git(fixture.root(), &["branch", "checkpoint-task", &first]);
+  let mut db = ProjectDb::open(fixture.root()).expect("db");
+  let original = db.run(fixture.run).expect("original run").expect("exists");
+  let at = Timestamp::from_unix_millis;
+  let mut run = db
+    .create_run(
+      IdempotencyKey::generate(),
+      NewRun {
+        task: original.task(),
+        snapshot: original.snapshot().clone(),
+        branch: BranchName::new("checkpoint-task").expect("branch"),
+        base: original.base().clone(),
+        base_branch: original.base_branch().cloned(),
+        budget: None,
+        max_duration: None,
+      },
+      at(10),
+    )
+    .expect("new private fixture run");
+  let events = run.start(at(11)).expect("start");
+  db.append_events(&run, &events).expect("start fact");
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let events = run.start_step(execution, at(12)).expect("step");
+  db.append_events(&run, &events).expect("step fact");
+  let events = run
+    .record_checkpoint(execution, Revision::new(&first).expect("first result"), at(13))
+    .expect("actual unfinished-run checkpoint");
+  db.append_events(&run, &events).expect("checkpoint fact");
+  let events = run.complete_step(execution, at(14)).expect("succeeded");
+  db.append_events(&run, &events).expect("succeeded fact");
+  let status = run.status().clone();
+  let snapshot = run.snapshot().clone();
+  git(fixture.root(), &["merge", "--ff-only", &first]);
+  std::fs::write(fixture.task_root.join("remaining.txt"), b"later undelivered work").expect("private edit");
+  git(&fixture.task_root, &["add", "remaining.txt"]);
+  git(&fixture.task_root, &["commit", "-m", "later result"]);
+  let before = git(fixture.root(), &["rev-parse", "HEAD"]);
+  let source = git(&fixture.task_root, &["rev-parse", "HEAD"]);
+  git(fixture.root(), &["update-ref", "refs/heads/checkpoint-task", &source]);
+  let evidence = external_integration(fixture.root(), run.id())
+    .expect("preflight")
+    .expect("ambiguous");
+  assert_eq!(evidence.kind, ResultEvidenceKind::UnknownSource);
+  assert_eq!(git(fixture.root(), &["rev-parse", "HEAD"]), before);
+  assert_eq!(git(fixture.root(), &["rev-parse", "checkpoint-task"]), source);
+  assert!(db.run_merge(run.id()).expect("no forged historical merge").is_none());
+  assert!(db.local_operation(run.id()).expect("no new operation").is_none());
+  let after = db.run(run.id()).expect("run").expect("exists");
+  assert_eq!(after.status(), &status);
+  assert_eq!(after.snapshot(), &snapshot);
+}

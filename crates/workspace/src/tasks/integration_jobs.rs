@@ -5,7 +5,6 @@
 //! app's.
 
 mod local;
-
 use std::{
   collections::HashMap,
   panic::{AssertUnwindSafe, catch_unwind},
@@ -13,6 +12,7 @@ use std::{
   thread,
 };
 
+pub use local::LocalDecision;
 use orchester_core::{
   id::{ProjectId, RunId},
   integration::{Leftovers, MergeError, RunMerge},
@@ -59,6 +59,7 @@ pub struct BusyJob {
 #[derive(Clone, Debug, PartialEq)]
 pub struct RunJobState {
   active: Active,
+  local_decisions: usize,
   /// The operation under way, as the closing panel names it.
   busy_with: Option<BusyJob>,
   pub merge: JobState,
@@ -75,6 +76,7 @@ impl Default for RunJobState {
   fn default() -> Self {
     Self {
       active: Active::Idle,
+      local_decisions: 0,
       busy_with: None,
       merge: JobState::Idle,
       remove: JobState::Idle,
@@ -88,6 +90,10 @@ impl RunJobState {
   /// Git merges the run or removes its worktrees.
   pub fn busy(&self) -> bool {
     self.active != Active::Idle
+  }
+
+  pub fn local_decision_pending(&self) -> bool {
+    self.local_decisions > 0
   }
 
   /// Git removes the run's worktrees, whoever asked: a person, or automation.
@@ -105,6 +111,10 @@ pub struct ProjectJobState {
 }
 
 impl ProjectJobState {
+  pub fn local_decision_pending(&self) -> bool {
+    self.runs.values().any(RunJobState::local_decision_pending)
+  }
+
   pub fn run(&self, run: RunId) -> RunJobState {
     self.runs.get(&run).cloned().unwrap_or_default()
   }
@@ -254,10 +264,11 @@ impl RunJobs {
     self.jobs.0.send_modify(|project| {
       let other_merge =
         matches!(operation, Active::Merge | Active::Local) && project.merging().is_some_and(|run| run != self.run);
+      let managed = operation == Active::Merge && project.local_decision_pending();
       let state = project.runs.entry(self.run).or_default();
       let completed = (operation == Active::Merge && state.merge == JobState::Succeeded)
         || (operation == Active::Remove && state.remove == JobState::Succeeded);
-      if state.active != Active::Idle || completed {
+      if state.active != Active::Idle || completed || managed {
         return;
       }
       if other_merge {
@@ -290,6 +301,14 @@ impl RunJobs {
   /// Starts merging the run on a thread of its own; whether it began, which it does not while another
   /// operation of the run works or once its merge succeeded.
   pub fn start_merge(&self, args: MergeArgs) -> bool {
+    self.start_merge_with(args, None)
+  }
+
+  pub fn start_legacy_merge(&self, args: MergeArgs, policy: super::local_integration::LegacyPolicy) -> bool {
+    self.start_merge_with(args, Some(policy))
+  }
+
+  fn start_merge_with(&self, args: MergeArgs, policy: Option<super::local_integration::LegacyPolicy>) -> bool {
     if !self.begin(Active::Merge) {
       return false;
     }
@@ -303,7 +322,7 @@ impl RunJobs {
     let job = self.clone();
     if let Err(error) = thread::Builder::new()
       .name("run-merge".into())
-      .spawn(move || job.merge_now(args))
+      .spawn(move || job.merge_now(args, policy.as_ref()))
     {
       tracing::error!(%error, "cannot start run merge thread");
       self.update(|state| state.merge = JobState::Failed(messages::interrupted()));
@@ -312,7 +331,7 @@ impl RunJobs {
     true
   }
 
-  fn merge_now(&self, args: MergeArgs) {
+  fn merge_now(&self, args: MergeArgs, policy: Option<&super::local_integration::LegacyPolicy>) {
     let MergeArgs {
       open,
       task,
@@ -329,7 +348,24 @@ impl RunJobs {
     let not_done = Message::new("statusBar.operations.runMerge.notDone")
       .with("task", key)
       .with("run", number.to_string());
-    let result = catch_unwind(AssertUnwindSafe(|| merge_in(&open.repo_root, &programs, run)));
+    let result = catch_unwind(AssertUnwindSafe(|| {
+      if let Some(policy) = &policy {
+        match policy.preflight() {
+          Ok(None) => {}
+          Ok(Some(_)) => {
+            return Err(IntegrationProblem::Store(Message::new(
+              "localIntegration.externalResult",
+            )));
+          }
+          Err(_) => {
+            return Err(IntegrationProblem::Store(Message::new(
+              "localIntegration.preflightFailed",
+            )));
+          }
+        }
+      }
+      merge_in(&open.repo_root, &programs, run)
+    }));
     let (mut conflicts, mut made) = (Vec::new(), None);
     let merged = match result {
       Ok(Ok(merged)) => {
@@ -338,13 +374,21 @@ impl RunJobs {
         JobState::Succeeded
       }
       Ok(Err(problem)) => {
-        let message = problem.message(&separator);
+        let raw = problem.message(&separator);
+        let message = match &policy {
+          Some(policy) => policy.safe_message(raw),
+          None => raw,
+        };
         match &problem {
           IntegrationProblem::Merge(MergeError::Conflict { files }) => conflicts.clone_from(files),
           IntegrationProblem::NotRecorded { merge, .. } => made = Some(merge.clone()),
           _ => {}
         }
-        problem.end(running, not_done);
+        if policy.is_some() {
+          running.fail(message.clone());
+        } else {
+          problem.end(running, not_done);
+        }
         JobState::Failed(message)
       }
       Err(_) => {
@@ -353,6 +397,9 @@ impl RunJobs {
         JobState::Failed(messages::interrupted())
       }
     };
+    if let Some(policy) = &policy {
+      conflicts = policy.safe_paths(conflicts);
+    }
     self.update(|state| {
       state.merge = merged;
       state.conflicts = conflicts;

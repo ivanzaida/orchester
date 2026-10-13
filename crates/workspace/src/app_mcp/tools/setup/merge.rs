@@ -2,27 +2,36 @@
 //! merged as the task Summary's *Merge into main* merges it, through the same job: one merge or
 //! removal at a time per task, the status bar's operation, the merge record and the screens told.
 
+use std::{path::PathBuf, sync::Arc};
+
 use orchester_core::{
   diff::{Diff, FileChange},
+  id::RunId,
+  integration::MergeKind,
   run::{Run, RunStatus},
-  store::{MergeStore, RunStore},
+  store::{MergeStore, RunStore, TaskStore},
 };
 use orchester_store::ProjectDb;
 use serde_json::{Value, json};
+use tokio::sync::watch;
 
 use super::super::{
   Translate,
   runs::{InRun, find_run},
+  wire,
 };
 use crate::{
   app_mcp::{
-    error::ToolError,
+    error::{Missing, ToolError},
     services::{Services, blocking},
   },
   messages::Message,
   tasks::{
     changes::{ChangesError, Checkpointed, NotCheckpointed, RunStage, checkpointed_in, not_checkpointed_in},
     detail::run_store_error,
+    integration_jobs::{JobState, MergeArgs, ProjectJobState},
+    local_integration::{LegacyPolicy, LocalIntent, LocalOrigin, managed_checkout},
+    outside::Outside,
   },
 };
 
@@ -104,29 +113,114 @@ fn diff_json(diff: &Diff) -> Value {
   json!({ "files": files, "additions": diff.additions(), "deletions": diff.deletions() })
 }
 
-/// MCP cannot answer the checkout and exact-result decisions reserved for a person.
-pub async fn merge_run(services: &Services, args: InRun, _translate: &Translate) -> Result<Value, ToolError> {
-  let services = services.clone();
+pub async fn merge_run(services: &Services, args: InRun, translate: &Translate) -> Result<Value, ToolError> {
+  let separator: Arc<str> = translate.text(&Message::new("common.listSeparator")).into();
+  let started = {
+    let services = services.clone();
+    blocking(move || start(&services, &args, separator)).await?
+  };
+  let (mut updates, run, root) = started;
+  let ended = updates
+    .wait_for(|state| {
+      let job = state.run(run);
+      !job.busy() && matches!(job.merge, JobState::Succeeded | JobState::Failed(_))
+    })
+    .await
+    .map(|state| state.run(run).merge)
+    .map_err(|_| ToolError::interrupted())?;
+  if let JobState::Failed(reason) = ended {
+    return Err(ToolError::refused("merge_failed", vec![reason]));
+  }
   blocking(move || {
-    let open = services.project(&args.project)?;
-    let db = ProjectDb::open(&open.repo_root)?;
-    let run = find_run(&db, &args.run)?;
-    ready(&db, &run)?;
-    let jobs = services.jobs.of(open.project.id());
-    let busy = db
-      .runs_of_task(run.task())
-      .map_err(run_store_error)?
-      .iter()
-      .any(|listed| {
-        let id = listed.as_ref().map_or_else(|unreadable| unreadable.id, Run::id);
-        jobs.of(id).busy()
-      });
-    if busy {
-      return Err(refused("merge_running", "appMcp.errors.integrationRunning"));
-    }
-    Err(refused("person_required", "localIntegration.personRequired"))
+    let merge = ProjectDb::open(&root)?
+      .run_merge(run)?
+      .ok_or_else(|| ToolError::refused("merge_failed", vec![Message::new("appMcp.errors.mergeNotRecorded")]))?;
+    let kind = match merge.kind {
+      MergeKind::FastForward => "fast_forward",
+      MergeKind::MergeCommit => "merge_commit",
+      MergeKind::AlreadyMerged => "already_merged",
+    };
+    Ok(json!({
+      "merge": {
+        "run": run.to_string(),
+        "into": merge.into.to_string(),
+        "revision": merge.revision.to_string(),
+        "kind": kind,
+        "merged_at": wire::time(merge.merged_at),
+      }
+    }))
   })
   .await
+}
+
+/// The project's merge and removal states to wait on, the run merging, and its repository.
+type Started = (watch::Receiver<ProjectJobState>, RunId, PathBuf);
+
+/// Checks that the Summary would offer *Merge into main* for the run, then starts the merge.
+fn start(services: &Services, args: &InRun, separator: Arc<str>) -> Result<Started, ToolError> {
+  let open = services.project(&args.project)?;
+  let db = ProjectDb::open(&open.repo_root)?;
+  let run = find_run(&db, &args.run)?;
+  ready(&db, &run)?;
+  let jobs = services.jobs.of(open.project.id());
+  if managed_checkout(&db, run.id())? || jobs.state().local_decision_pending() {
+    LocalOrigin::AuthenticatedDomain
+      .authorize(LocalIntent::ReviewedDecision)
+      .map_err(|_| refused("needs_decision", "localIntegration.personRequired"))?;
+    return Err(refused("needs_decision", "localIntegration.personRequired"));
+  }
+  let policy = LegacyPolicy::new(&open.repo_root, run.id(), services.vault.clone())
+    .map_err(|_| refused("integration_preflight_failed", "localIntegration.preflightFailed"))?;
+  if let Some(evidence) = policy
+    .preflight()
+    .map_err(|_| refused("integration_preflight_failed", "localIntegration.preflightFailed"))?
+  {
+    return Err(refused(
+      if evidence.kind == orchester_core::integration::local::ResultEvidenceKind::CompleteAncestry {
+        "already_integrated"
+      } else {
+        "scoped_integration_required"
+      },
+      "localIntegration.externalResult",
+    ));
+  }
+  let task_runs = db.runs_of_task(run.task()).map_err(run_store_error)?;
+  let busy = task_runs.iter().any(|listed| {
+    let id = listed.as_ref().map_or_else(|unreadable| unreadable.id, Run::id);
+    jobs.of(id).busy()
+  });
+  if busy {
+    return Err(refused("merge_running", "appMcp.errors.integrationRunning"));
+  }
+  let task = db
+    .task(run.task())?
+    .ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
+  let branch = run
+    .base_branch()
+    .ok_or_else(|| refused("no_base_branch", "appMcp.errors.noBaseBranch"))?
+    .to_string();
+  let updates = jobs.subscribe();
+  let (changes, project) = (services.changes.clone(), open.project.id());
+  let started = jobs.of(run.id()).start_legacy_merge(
+    MergeArgs {
+      open: open.clone(),
+      task: task.id(),
+      key: task.key().to_string(),
+      number: run.number().get(),
+      branch,
+      run: run.id(),
+      programs: services.programs.clone(),
+      activity: services.activity.clone(),
+      separator,
+      changed: Arc::new(move || changes.record(project, Outside::Tasks)),
+    },
+    policy,
+  );
+  // Another merge or removal of the run took it between the check above and now.
+  if !started {
+    return Err(refused("merge_running", "appMcp.errors.integrationRunning"));
+  }
+  Ok((updates, run.id(), open.repo_root))
 }
 
 /// Refused unless the run is its task's latest, succeeded, and was not merged yet.

@@ -6,6 +6,7 @@ use std::sync::{
 use lurq::app::{
   component::DevtoolsInspectable,
   ctx::{Ctx, FutureAction},
+  events::input_source,
 };
 use orchester_core::{
   blob::ContentHash,
@@ -13,15 +14,20 @@ use orchester_core::{
 };
 use orchester_workspace::{
   background,
-  tasks::local_integration::{IntegrationError, LocalIntegration, Preview},
+  tasks::local_integration::{IntegrationError, LocalIntegration, LocalIntent, LocalOrigin, Preview},
 };
 
 use super::TaskContext;
-use crate::services::Services;
+use crate::{
+  mcp::input_gate::{InputGate, LocalInput},
+  services::Services,
+};
 
 #[derive(Clone)]
 pub enum Action {
   Refused,
+  AuthorityRefused,
+  BusyRefused,
   Inspect,
   Refresh,
   ReviewCommit(Vec<LocalPath>),
@@ -67,6 +73,8 @@ pub struct Request {
   pub task: TaskContext,
   pub action: Action,
   pub stop: Arc<AtomicBool>,
+  pub input: Option<LocalInput>,
+  pub generation: Option<u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -78,17 +86,49 @@ pub enum Outcome {
 }
 impl DevtoolsInspectable for Outcome {}
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Problem(pub &'static str);
-impl DevtoolsInspectable for Problem {}
+pub use crate::ui::local_integration_error::{Problem, problem};
 
 pub type Work = FutureAction<Request, Outcome, Problem>;
+
+impl Request {
+  pub fn initiate(&mut self, gate: &InputGate) {
+    self.input = Some(gate.local_input(input_source()));
+  }
+  fn authorize(&self) -> Result<LocalOrigin, Problem> {
+    let input = self
+      .input
+      .as_ref()
+      .ok_or(Problem("local_integration.error.authority"))?;
+    if !input.recheck() {
+      return Err(Problem("local_integration.error.authority"));
+    }
+    let origin = input.origin();
+    origin
+      .authorize(self.action.intent())
+      .map_err(|_| Problem("local_integration.error.approval"))?;
+    Ok(origin)
+  }
+}
+impl Action {
+  fn intent(&self) -> LocalIntent {
+    match self {
+      Self::Inspect | Self::Refresh | Self::ReviewCommit(_) | Self::SaveDraft { .. } => LocalIntent::Candidate,
+      _ => LocalIntent::ReviewedDecision,
+    }
+  }
+}
 
 pub fn action(ctx: &mut Ctx) -> Work {
   let services = Services::of(ctx);
   ctx.future_action(move |request: Request| {
     let services = services.clone();
     async move {
+      if matches!(request.action, Action::BusyRefused) {
+        return Err(Problem("local_integration.error.foreign"));
+      }
+      if matches!(request.action, Action::AuthorityRefused) {
+        return Err(Problem("local_integration.error.authority"));
+      }
       if matches!(request.action, Action::Refused) {
         return Err(Problem("local_integration.error.approval"));
       }
@@ -109,12 +149,35 @@ pub fn action(ctx: &mut Ctx) -> Work {
         let _working = jobs
           .local_work(&open, busy)
           .ok_or(Problem("local_integration.error.foreign"))?;
+        let origin = request.authorize()?;
         if matches!(request.action, Action::Inspect) {
           orchester_workspace::tasks::local_integration::read(&open.repo_root, run, None, vault.get())
             .map_err(problem)?;
           return Ok(Outcome::Changed);
         }
-        let mut session = LocalIntegration::open(&open.repo_root, run).map_err(problem)?;
+        let input = request
+          .input
+          .clone()
+          .ok_or(Problem("local_integration.error.authority"))?;
+        let intent = request.action.intent();
+        let authorize = Arc::new(move || {
+          if !input.recheck() {
+            return Err(LocalError::AuthorityChanged);
+          }
+          input.origin().authorize(intent)
+        });
+        let mut session =
+          LocalIntegration::open_authorized_at(&open.repo_root, run, request.generation, authorize).map_err(problem)?;
+        session
+          .authorize(origin, request.action.intent(), request.generation)
+          .map_err(problem)?;
+        request.authorize()?;
+        if origin == LocalOrigin::WindowAutomation
+          && let Action::SaveDraft { candidate, .. } = &request.action
+          && session.candidate_sensitive(candidate, vault.get()).map_err(problem)?
+        {
+          return Err(Problem("local_integration.error.metadata"));
+        }
         let outcome = execute(&mut session, request.action, vault.get()).map_err(problem)?;
         if request.stop.load(Ordering::Acquire) {
           session.pause().map_err(problem)?;
@@ -137,6 +200,8 @@ fn execute(
   match action {
     Action::Inspect | Action::Refresh => session.refresh()?,
     Action::Refused => return Err(LocalError::ApprovalRequired.into()),
+    Action::AuthorityRefused => return Err(LocalError::AuthorityChanged.into()),
+    Action::BusyRefused => return Err(LocalError::ForeignOperation.into()),
     Action::ReviewCommit(paths) => {
       let tree = session.selected_commit_tree(&paths)?;
       let preview = session.selected_commit_preview(&tree, vault)?;
@@ -182,59 +247,4 @@ fn execute(
     Action::Cancel => session.cancel_preservation()?,
   }
   Ok(Outcome::Changed)
-}
-
-pub fn problem(error: IntegrationError) -> Problem {
-  use orchester_exec::local_git::LocalGitError;
-  let key = match error {
-    IntegrationError::State(state) | IntegrationError::Git(LocalGitError::State(state)) => match state {
-      LocalError::Stale => "stale",
-      LocalError::ForeignOperation => "foreign",
-      LocalError::WrongPhase => "phase",
-      LocalError::NotChecked => "unchecked",
-      LocalError::ApprovalRequired => "approval",
-      LocalError::NotVerified => "unverified",
-      LocalError::Reconcile => "unknown",
-      LocalError::Unsupported => "unsupported",
-      LocalError::ConditionalRemovalUnsupported => "conditionalRemoval",
-      LocalError::ProcessContainmentUnsupported => "containment",
-      LocalError::StoreOwnershipUnsupported => "storageOwnership",
-      LocalError::ProcessUncertain => "processUncertain",
-      LocalError::Collision => "collision",
-      LocalError::Unresolved => "unresolved",
-      LocalError::Blank => "blank",
-    },
-    IntegrationError::Git(LocalGitError::Refused) => "git",
-    IntegrationError::Git(_) => "io",
-    IntegrationError::Store(_) => "storage",
-    IntegrationError::Run => "run",
-    IntegrationError::SensitiveMetadata => "metadata",
-    IntegrationError::AlreadyIntegrated => "external",
-    IntegrationError::NoCheck => "checkMissing",
-    IntegrationError::CheckFailed => "checkFailed",
-  };
-  Problem(match key {
-    "stale" => "local_integration.error.stale",
-    "foreign" => "local_integration.error.foreign",
-    "phase" => "local_integration.error.phase",
-    "unchecked" => "local_integration.error.unchecked",
-    "approval" => "local_integration.error.approval",
-    "unverified" => "local_integration.error.unverified",
-    "unknown" => "local_integration.error.unknown",
-    "unsupported" => "local_integration.error.unsupported",
-    "conditionalRemoval" => "local_integration.error.conditionalRemoval",
-    "containment" => "local_integration.error.containment",
-    "processUncertain" => "local_integration.error.processUncertain",
-    "collision" => "local_integration.error.collision",
-    "unresolved" => "local_integration.error.unresolved",
-    "blank" => "local_integration.error.blank",
-    "git" => "local_integration.error.git",
-    "storage" => "local_integration.error.storage",
-    "run" => "local_integration.error.run",
-    "metadata" => "local_integration.error.metadata",
-    "external" => "local_integration.externalBody",
-    "checkMissing" => "local_integration.error.checkMissing",
-    "checkFailed" => "local_integration.error.checkFailed",
-    _ => "local_integration.error.io",
-  })
 }

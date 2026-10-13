@@ -18,6 +18,8 @@ use std::{
 use orchester_core::{blob::ContentHash, integration::local::LocalPath};
 #[cfg(windows)]
 mod execution;
+#[cfg(windows)]
+mod metadata;
 mod store;
 #[cfg(windows)]
 pub use execution::ExecutionOwnership;

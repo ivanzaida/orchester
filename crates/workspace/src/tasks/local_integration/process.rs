@@ -11,11 +11,15 @@ use super::{IntegrationError, LocalIntegration};
 struct Journal {
   root: PathBuf,
   run: RunId,
+  authorize: Option<super::LocalAuthorization>,
   _store_owner: Arc<orchester_exec::local_git::owned::StoreOwnership>,
 }
 
 impl ProcessJournal for Journal {
   fn begin(&self) -> Result<u64, LocalError> {
+    if let Some(authorize) = &self.authorize {
+      authorize()?;
+    }
     open_db(&self.root)
       .and_then(|mut db| db.begin_local_process(self.run))
       .map_err(|_| LocalError::Reconcile)
@@ -42,11 +46,13 @@ impl LocalIntegration {
         return Err(LocalError::ProcessUncertain.into());
       }
       // Parent absence alone never reconciles descendants. Legacy receipts stay visibly uncertain.
+      self.ensure_authorized()?;
       self.db.finish_local_process(self.run.id(), process.sequence)?;
     }
     let journal: Arc<dyn ProcessJournal> = Arc::new(Journal {
       root: self.main.root().to_path_buf(),
       run: self.run.id(),
+      authorize: self.authorization.clone(),
       _store_owner: self._store_owner.clone(),
     });
     self.main.bind_journal(journal.clone());

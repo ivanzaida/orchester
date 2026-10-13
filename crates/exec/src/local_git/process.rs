@@ -36,7 +36,16 @@ impl LocalGit {
       .transpose()?;
     let mut command = Command::new(
       Path::new("git"),
-      ["-c", "core.fsmonitor=false"].into_iter().chain(args.iter().copied()),
+      [
+        "-c",
+        "core.fsmonitor=false",
+        "-c",
+        "gc.auto=0",
+        "-c",
+        "maintenance.auto=false",
+      ]
+      .into_iter()
+      .chain(args.iter().copied()),
     )
     .with_current_dir(&self.root)
     .with_env("LC_ALL", "C")

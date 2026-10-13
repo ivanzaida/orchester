@@ -4,11 +4,13 @@
 //! off the UI thread before forwarding input; lurq's event-loop denial and confirmation handlers recheck it.
 //! Looking stays allowed. Neither consent nor this gate grants window-control scopes or provider permissions.
 
+mod local;
 use std::sync::{
   Arc,
-  atomic::{AtomicUsize, Ordering},
+  atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
+pub use local::LocalInput;
 use lurq::mcp::{
   McpHandle, McpService,
   rmcp::{
@@ -56,7 +58,7 @@ pub enum Guarded {
   PermissionsSetting,
   /// A Connections page's question that confirms what saving or turning on a server widens.
   WideningQuestion,
-  /// Exact-result merge, checkout preparation, abort and recovery removal always belong to a person.
+  /// A currently mounted reviewed integration decision requiring a native answer.
   LocalIntegrationQuestion,
   /// A domain setup widening covered by the human permission opt-in.
   PermissionWidening,
@@ -82,6 +84,8 @@ pub fn sends_input(tool: &str) -> bool {
 
 #[derive(Default)]
 struct Counts {
+  window_control: AtomicBool,
+  local_epoch: AtomicUsize,
   controls: Mutex<Controls>,
   workspace: Mutex<Option<orchester_workspace::workspace::Workspace>>,
   /// Window-input calls the server forwarded that have not answered.
@@ -121,6 +125,7 @@ impl InputGate {
   /// Marks the protected control `what` as mounted until the returned guard is dropped; the first one makes lurq
   /// deny its input tools. Called on the event loop, which runs lurq's tool calls.
   pub fn protect(&self, what: Guarded) -> Protected {
+    self.0.local_epoch.fetch_add(1, Ordering::AcqRel);
     self.count(what, true);
     self.refresh_tools();
     Protected(self.clone(), what)

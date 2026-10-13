@@ -46,7 +46,7 @@ pub enum IntegrationProblem {
     path: String,
     detail: String,
   },
-  /// Git merged the run, but the merge could not be recorded (`problem`); merging again records it.
+  /// Git merged the run, but saving its receipt failed; external evidence prevents a repeated merge.
   NotRecorded {
     merge: RunMerge,
     problem: Message,
@@ -223,6 +223,14 @@ pub struct Merged {
 /// Merges run `run` of the project at `repo_root`, records the merge and removes what the run left
 /// that is safe to remove: its clean worktrees and its merged branches.
 pub fn merge_in(repo_root: &Path, programs: &Programs, run: RunId) -> Result<Merged, IntegrationProblem> {
+  let _lease = orchester_exec::local_git::IntegrationLease::acquire(repo_root)
+    .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
+  let _store_owner = orchester_exec::local_git::owned::StoreOwnership::acquire(repo_root)
+    .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
+  let scratch = orchester_exec::local_git::prepare_scratch(repo_root, &[".orchester", "local-integration", "legacy"])
+    .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
+  let _git_owner = orchester_exec::local_git::LocalGit::new(repo_root, &scratch)
+    .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
   let mut db = ProjectDb::open(repo_root)?;
   // Runs are never deleted: a run the task page read is there.
   let run = db
@@ -233,17 +241,41 @@ pub fn merge_in(repo_root: &Path, programs: &Programs, run: RunId) -> Result<Mer
     return Err(IntegrationProblem::AlreadyMerged);
   }
   let task = db.task(run.task())?.ok_or(StoreError::TaskNotFound(run.task()))?;
-  use orchester_core::integration::local::LocalIntegrationStore;
-  if db.local_operation(run.id())?.is_some() {
+  if super::local_integration::managed_checkout(&db, run.id())? {
     return Err(IntegrationProblem::Store(Message::new(
       "localIntegration.personRequired",
     )));
   }
+  if super::local_integration::external_integration(repo_root, run.id())
+    .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?
+    .is_some()
+  {
+    return Err(IntegrationProblem::Store(Message::new(
+      "localIntegration.externalResult",
+    )));
+  }
+  let latest = db
+    .runs_of_task(run.task())
+    .map_err(run_store_error)?
+    .iter()
+    .filter_map(|listed| {
+      listed
+        .as_ref()
+        .map_or_else(|bad| bad.number.map(|n| n.get()), |run| Some(run.number().get()))
+    })
+    .max();
+  if latest != Some(run.number().get()) {
+    return Err(IntegrationProblem::Store(Message::new("appMcp.errors.notLatestRun")));
+  }
   let git = programs.git_work();
   let merge = merge_run(&git, Path::new(GIT), repo_root, (&run, task.key()), Timestamp::now())
     .map_err(IntegrationProblem::Merge)?;
-  // Should recording fail after git merged, merging again finds the work on the branch already
-  // and records it then (`MergeKind::AlreadyMerged`).
+  if merge.kind == orchester_core::integration::MergeKind::AlreadyMerged {
+    return Err(IntegrationProblem::Store(Message::new(
+      "localIntegration.externalResult",
+    )));
+  }
+  // An unrecorded completed merge remains external evidence on retry; ancestry cannot invent its historical event.
   if let Err(error) = db.save_run_merge(&merge) {
     return Err(match IntegrationProblem::from(error) {
       IntegrationProblem::Store(problem) => IntegrationProblem::NotRecorded { merge, problem },
@@ -252,8 +284,8 @@ pub fn merge_in(repo_root: &Path, programs: &Programs, run: RunId) -> Result<Mer
     });
   }
   let cleanup = clear(&mut db, programs, repo_root, &run, None);
-  if let Err(problem) = &cleanup {
-    tracing::warn!(?problem, "the run was merged, but what it left could not be cleared");
+  if cleanup.is_err() {
+    tracing::warn!("the run was merged, but what it left could not be cleared");
   }
   Ok(Merged { merge, cleanup })
 }
@@ -311,7 +343,7 @@ fn clear(
   let git = programs.git_work();
   let cleanup =
     clean_up_recorded(db, (&git, Path::new(GIT), repo_root), run, confirmed, Timestamp::now()).map_err(|error| {
-      tracing::warn!(%error, "cannot remove what the run left");
+      tracing::warn!("cannot remove what the run left");
       match error {
         RecordedCleanupError::Cleanup(error) => IntegrationProblem::Cleanup(error),
         RecordedCleanupError::Store(error) => IntegrationProblem::from(error),

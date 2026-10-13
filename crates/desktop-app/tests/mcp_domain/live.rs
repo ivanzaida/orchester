@@ -226,7 +226,7 @@ changed by hand
   )
   .expect("an uncommitted change");
   let dirty = served.refused("merge_run", &run_one);
-  assert_eq!(dirty["code"], "person_required", "{dirty}");
+  assert_eq!(dirty["code"], "merge_failed", "{dirty}");
   assert_eq!(
     git(&repo, &["show", "main:README.md"]),
     "hi\n",

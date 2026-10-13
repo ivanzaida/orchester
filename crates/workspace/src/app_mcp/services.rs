@@ -9,6 +9,7 @@ use crate::{
   activity::Activity,
   messages::Message,
   runner::Runners,
+  secrets::Vault,
   sharing::Servers,
   tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges},
   workspace::{OpenProject, Workspace},
@@ -20,6 +21,7 @@ pub struct Services {
   pub(super) runners: Runners,
   pub(super) servers: Servers,
   pub(super) programs: Programs,
+  pub(super) vault: Vault,
   /// Told what each tool changed in which project, so only the screens showing it read it again.
   pub(super) changes: OutsideChanges,
   /// The status bar's operations, which list a tool's git work as they list a person's.
@@ -41,10 +43,16 @@ impl Services {
       runners,
       servers,
       programs,
+      vault: Vault::keychain(),
       changes,
       activity,
       jobs,
     }
+  }
+
+  pub fn with_vault(mut self, vault: Vault) -> Self {
+    self.vault = vault;
+    self
   }
 
   /// The project `named` by its id or, ignoring case, its name, opened as the app opens it. Blocks on

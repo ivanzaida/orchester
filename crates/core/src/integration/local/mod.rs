@@ -7,7 +7,7 @@ mod record;
 mod recovery;
 mod resolution;
 
-pub use draft::{ConflictKind, DraftIdentity, DraftRecord, EditorCandidate};
+pub use draft::{ConflictKind, DraftChoice, DraftIdentity, DraftRecord, EditorCandidate};
 pub use path::LocalPath;
 pub use process::{ExecutorIdentity, LocalProcess, LocalProcessStore, ProcessIdentity, ProcessJournal};
 pub use record::{CheckedResult, LocalOperation, LocalPhase, Preservation};
@@ -22,6 +22,8 @@ use crate::{blob::ContentHash, id::RunId};
 pub enum LocalError {
   #[error("the checkout changed since it was reviewed")]
   Stale,
+  #[error("the initiating action authority changed or was revoked")]
+  AuthorityChanged,
   #[error("another Git operation owns this checkout")]
   ForeignOperation,
   #[error("this operation cannot run in the current phase")]
@@ -157,6 +159,7 @@ pub trait LocalIntegrationStore {
   type Error: std::error::Error + Send + Sync + 'static;
 
   fn local_operation(&self, run: RunId) -> Result<Option<LocalOperation>, Self::Error>;
+  fn local_operations(&self) -> Result<Vec<LocalOperation>, Self::Error>;
   fn save_local_operation(&mut self, operation: &LocalOperation, expected: Option<u64>) -> Result<bool, Self::Error>;
 }
 

@@ -87,8 +87,9 @@ impl Page {
       }
       assert!(
         std::time::Instant::now() < deadline,
-        "timed out waiting for {what}; operation errors: {:?}",
-        self.window.texts("local-work-error")
+        "timed out waiting for {what}; operation errors: {:?}; read errors: {:?}",
+        self.window.texts("local-work-error"),
+        self.window.texts("local-read-error")
       );
       std::thread::sleep(std::time::Duration::from_millis(5));
     }

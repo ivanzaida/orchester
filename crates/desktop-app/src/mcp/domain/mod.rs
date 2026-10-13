@@ -29,17 +29,20 @@ pub const DATA_SCOPE: &str = "data";
 
 /// Every domain tool on the session's `services`, explaining refusals in the words of `i18n`.
 pub fn tools(services: &Services, i18n: I18n) -> Vec<McpTool> {
-  let domain = Arc::new(app_mcp::Services::new(
-    services.workspace.clone(),
-    services.runners.clone(),
-    services.servers.clone(),
-    services.programs.clone(),
-    (
-      services.changes.clone(),
-      services.activity.clone(),
-      services.jobs.clone(),
-    ),
-  ));
+  let domain = Arc::new(
+    app_mcp::Services::new(
+      services.workspace.clone(),
+      services.runners.clone(),
+      services.servers.clone(),
+      services.programs.clone(),
+      (
+        services.changes.clone(),
+        services.activity.clone(),
+        services.jobs.clone(),
+      ),
+    )
+    .with_vault(services.vault.clone()),
+  );
   let translate = Arc::new(Translate::new(move |message| {
     let args = message.args.iter().map(|(name, value)| (*name, value.as_str()));
     i18n.t_ns_args(NAMESPACE, message.key, args).to_string()

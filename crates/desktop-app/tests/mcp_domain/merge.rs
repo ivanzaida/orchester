@@ -28,7 +28,9 @@ fn domain_merge_run_takes_only_the_latest_run_ready_for_review() {
     .find_map(Result::ok)
     .expect("its run");
   let merge = |run: &orchester_core::run::Run| json!({ "project": "Kontur", "run": run.id().to_string() });
-  assert_eq!(served.refused("merge_run", &merge(&ready))["code"], "person_required");
+  let answer = served.ok("merge_run", &merge(&ready));
+  assert_eq!(answer["merge"]["run"], ready.id().to_string());
+  assert_eq!(served.refused("merge_run", &merge(&ready))["code"], "already_merged");
   let later = db
     .create_run(
       IdempotencyKey::generate(),

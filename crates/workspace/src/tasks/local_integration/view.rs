@@ -87,6 +87,17 @@ pub fn read(
   })
 }
 
+impl LocalIntegration {
+  pub fn candidate_sensitive(
+    &self,
+    candidate: &orchester_core::integration::local::EditorCandidate,
+    vault: &dyn SecretVault,
+  ) -> Result<bool, IntegrationError> {
+    let policy = EditorPolicy(std::sync::Arc::new(Redaction::load(&self.db, vault)?));
+    Ok(policy.sensitive(candidate.text()) || policy.sensitive(candidate.destination()))
+  }
+}
+
 fn read_conflicts(
   db: &ProjectDb,
   operation: Option<&LocalOperation>,
@@ -189,14 +200,14 @@ pub(super) struct Redaction {
 }
 
 impl Redaction {
-  fn ensure_tree_metadata(&self, git: &LocalGit, tree: &str) -> Result<(), IntegrationError> {
+  pub(super) fn ensure_tree_metadata(&self, git: &LocalGit, tree: &str) -> Result<(), IntegrationError> {
     for path in git.tree_entries(tree)?.keys() {
       self.ensure_text_metadata(path.as_str())?;
     }
     Ok(())
   }
 
-  fn ensure_metadata(&self, value: &impl serde::Serialize) -> Result<(), IntegrationError> {
+  pub(super) fn ensure_metadata(&self, value: &impl serde::Serialize) -> Result<(), IntegrationError> {
     let text = serde_json::to_string(value).map_err(|_| IntegrationError::SensitiveMetadata)?;
     self.ensure_text_metadata(&text)
   }

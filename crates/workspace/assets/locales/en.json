@@ -1,5 +1,8 @@
 {
   "localIntegration": {
+    "sensitiveOutcome": "Integration details are unavailable under the current sensitive-data policy. Inspect the actual recorded outcome before continuing.",
+    "preflightFailed": "Local integration could not prove the current checkout and result identities. Nothing was merged.",
+    "externalResult": "Git contains all or part of this result already. Review the evidence in Local integration; no historical merge was recorded or repeated.",
     "personRequired": "A person reviews and approves the exact checked result in Local integration.",
     "running": "Integrating the local checkout for {{task}}"
   },

@@ -19,6 +19,7 @@ pub mod icon_button;
 pub mod inspector;
 pub mod list_entry;
 pub mod loader;
+pub mod local_integration_error;
 pub(crate) mod local_metadata;
 pub mod markdown;
 pub mod menu;

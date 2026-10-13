@@ -1,9 +1,11 @@
 //! The in-app local integration application service. Each call takes a project lease and journals intent before Git.
 
+mod authority;
 mod cancel;
 mod checks;
 mod drafts;
 mod external;
+mod legacy;
 mod metadata;
 mod preserve;
 mod process;
@@ -16,7 +18,10 @@ mod view;
 
 use std::path::Path;
 
+pub use authority::{LocalAuthorization, LocalIntent, LocalOrigin};
 pub use external::external_integration;
+pub use legacy::LegacyPolicy;
+pub(crate) use legacy::managed_checkout;
 pub use metadata::metadata_allowed;
 use orchester_core::{
   id::RunId,
@@ -62,12 +67,36 @@ pub struct LocalIntegration {
   main: LocalGit,
   task: Option<LocalGit>,
   operation: LocalOperation,
+  authorization: Option<LocalAuthorization>,
   _lease: IntegrationLease,
   _store_owner: std::sync::Arc<orchester_exec::local_git::owned::StoreOwnership>,
 }
 
 impl LocalIntegration {
   pub fn open(root: &Path, run_id: RunId) -> Result<Self, IntegrationError> {
+    Self::open_expected(root, run_id, None, None)
+  }
+
+  pub fn open_at(root: &Path, run_id: RunId, generation: Option<u64>) -> Result<Self, IntegrationError> {
+    Self::open_expected(root, run_id, Some(generation), None)
+  }
+
+  pub fn open_authorized_at(
+    root: &Path,
+    run_id: RunId,
+    generation: Option<u64>,
+    authorize: LocalAuthorization,
+  ) -> Result<Self, IntegrationError> {
+    authorize()?;
+    Self::open_expected(root, run_id, Some(generation), Some(authorize))
+  }
+
+  fn open_expected(
+    root: &Path,
+    run_id: RunId,
+    expected: Option<Option<u64>>,
+    authorization: Option<LocalAuthorization>,
+  ) -> Result<Self, IntegrationError> {
     let store_owner = orchester_exec::local_git::owned::StoreOwnership::acquire(root)?;
     let lease = IntegrationLease::acquire(root)?;
     let db = ProjectDb::open(root)?;
@@ -104,7 +133,11 @@ impl LocalIntegration {
     {
       return Err(LocalError::Stale.into());
     }
-    let operation = match db.local_operation(run_id)? {
+    let saved = db.local_operation(run_id)?;
+    if expected.is_some_and(|expected| saved.as_ref().map(|saved| saved.version()) != expected) {
+      return Err(LocalError::Stale.into());
+    }
+    let operation = match saved {
       Some(saved) => {
         if saved.reviewed().root != checkout.root || saved.reviewed().git_dir != checkout.git_dir {
           return Err(LocalError::Stale.into());
@@ -131,20 +164,27 @@ impl LocalIntegration {
       main,
       task,
       operation,
+      authorization,
       _lease: lease,
       _store_owner: store_owner,
     };
-    if session.db.local_operation(run_id)?.is_none() && !session.db.save_local_operation(&session.operation, None)? {
+    session.initialize_journal()?;
+    Ok(session)
+  }
+
+  fn initialize_journal(&mut self) -> Result<(), IntegrationError> {
+    self.ensure_authorized()?;
+    if self.db.local_operation(self.run.id())?.is_none() && !self.db.save_local_operation(&self.operation, None)? {
       return Err(LocalError::Stale.into());
     }
-    if let Some(merge) = session.db.run_merge(run_id)?
-      && session.operation.merged().is_none()
+    if let Some(merge) = self.db.run_merge(self.run.id())?
+      && self.operation.merged().is_none()
     {
-      session.operation.reconcile_recorded_merge(&merge)?;
-      session.save()?;
+      self.operation.reconcile_recorded_merge(&merge)?;
+      self.save()?;
     }
-    session.bind_process_journal()?;
-    Ok(session)
+    self.bind_process_journal()?;
+    Ok(())
   }
 
   pub const fn operation(&self) -> &LocalOperation {
@@ -173,6 +213,7 @@ impl LocalIntegration {
   }
 
   fn save(&mut self) -> Result<(), IntegrationError> {
+    self.ensure_authorized()?;
     let version = self.operation.version();
     self.operation.advance_version();
     if !self.db.save_local_operation(&self.operation, Some(version))? {

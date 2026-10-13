@@ -83,6 +83,7 @@ struct LocalPage {
   editor_dirty: Signal<bool>,
   resolver: resolver::EditorState,
   acknowledgement: controls::AcknowledgementState,
+  managed: controls::Managed,
   selected: Signal<Selection>,
   shown_file: Signal<ShownFile>,
   mode: Signal<Mode>,
@@ -140,6 +141,7 @@ impl Component for LocalPage {
       editor_dirty: ctx.signal(false),
       resolver,
       acknowledgement: controls::AcknowledgementState::new(ctx),
+      managed: Arc::new(parking_lot::Mutex::new(None)),
       selected: ctx.signal(Selection(Vec::new())),
       shown_file: ctx.signal(ShownFile(None)),
       mode,
@@ -233,6 +235,8 @@ impl LocalPage {
             generation,
           },
           stop: self.stop.clone(),
+          input: None,
+          generation: Some(generation),
         })
       });
       body = body.child(draft_controls::inline(
@@ -240,7 +244,7 @@ impl LocalPage {
         &self.work,
         &self.resolver,
         request,
-        self.work.state().get().is_pending(),
+        (self.work.state().get().is_pending(), false),
         task,
       ));
     }

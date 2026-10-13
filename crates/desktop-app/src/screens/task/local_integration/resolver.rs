@@ -1,4 +1,5 @@
 pub mod candidate;
+mod choices;
 mod state;
 use std::sync::Arc;
 
@@ -14,7 +15,7 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::integration::local::{Checkout, EditorCandidate, LocalPath, LocalPhase, Placement, Resolution};
+use orchester_core::integration::local::{Checkout, EditorCandidate, LocalPhase, Placement, Resolution};
 use orchester_workspace::tasks::local_integration::{ConflictView, IntegrationView, Preview};
 pub(super) use state::EditorState;
 
@@ -79,6 +80,7 @@ struct Resolver {
   seeded: state::Seeded,
   leave: LeaveGuard,
   shared_dirty: Signal<bool>,
+  gate: crate::mcp::input_gate::InputGate,
 }
 
 impl Component for Resolver {
@@ -102,6 +104,7 @@ impl Component for Resolver {
       seeded: state.seeded,
       leave: state.leave,
       shared_dirty: ctx.props::<Props>().editor_dirty.clone(),
+      gate: ctx.use_context().unwrap_or_default(),
     }
   }
 
@@ -210,7 +213,7 @@ impl Resolver {
       ));
     }
     result = result
-      .child(self.choice_controls(ctx, props, file))
+      .child(self.choice_controls(ctx, props, file, !editable))
       .child(Text::new(&ctx.t("local_integration.markers")).variant(TypographyStyle::Description));
     if self.leave.requested() || self.editor.dirty() {
       result = result.child(self.leave_controls(ctx, props, file, editable));
@@ -226,7 +229,12 @@ impl Resolver {
       task: props.task.clone(),
       action: Action::Refused,
       stop: props.stop.clone(),
+      input: None,
+      generation: props.view.operation.as_ref().map(|op| op.version()),
     };
+    let gate = self.gate.clone();
+    let safe = !props.view.editor_policy.sensitive(&editor.text.get())
+      && !props.view.editor_policy.sensitive(&editor.destination.get());
     let button = ActionButton::new(
       "local-discard-editor",
       ButtonKind::Danger,
@@ -236,8 +244,10 @@ impl Resolver {
       button.disabled()
     } else {
       button.on_click(move || {
-        if input_source() == InputSource::Synthetic {
-          work.run_if_idle(refused.clone());
+        if (input_source() == InputSource::Synthetic && !safe) || !gate.local_input(input_source()).allowed() {
+          let mut refused = refused.clone();
+          refused.initiate(&gate);
+          work.run_if_idle(refused);
         } else {
           editor.discard();
         }
@@ -308,6 +318,14 @@ impl Resolver {
     (id, label): (&str, &str),
     (resolution, disabled): (Resolution, bool),
   ) -> ActionButton {
+    let resolution = if id == "local-save-result" {
+      match self.editor.current().resolution() {
+        Ok(resolution) => resolution,
+        Err(_) => return ActionButton::new(id, ButtonKind::Secondary, ctx.t(label)).disabled(),
+      }
+    } else {
+      resolution
+    };
     let action = Action::Save {
       file: file.file.clone(),
       expected: file.expected.clone(),
@@ -328,136 +346,21 @@ impl Resolver {
       task: props.task.clone(),
       action,
       stop: props.stop.clone(),
+      input: None,
+      generation: props.view.operation.as_ref().map(|op| op.version()),
     };
     let work = props.work.clone();
     let button = ActionButton::new(id, ButtonKind::Secondary, ctx.t(label));
     if disabled {
       return button.disabled();
     }
+    let gate = self.gate.clone();
     button.on_click(move || {
       let mut request = request.clone();
-      if input_source() == InputSource::Synthetic {
-        request.action = Action::Refused;
-      }
+      request.initiate(&gate);
       request.stop.store(false, std::sync::atomic::Ordering::Release);
       work.run_if_idle(request);
     })
-  }
-
-  fn choice_controls(&self, ctx: &mut Ctx, props: &Props, file: &ConflictView) -> Element {
-    let dirty = self.editor.text.get() != self.editor.baseline_text();
-    let destination = FieldInput::new(
-      "local-destination",
-      ctx.t("local_integration.destination"),
-      self.editor.destination.clone(),
-    )
-    .mono();
-    let destination = if props.busy { destination.locked() } else { destination };
-    let destination = if props.view.editor_policy.sensitive(&self.editor.destination.get()) {
-      Element::from(Text::new(&ctx.t("local_integration.sensitiveDraft")).variant(TypographyStyle::Description))
-    } else {
-      destination.render(ctx)
-    };
-    let mut choices = Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .child(self.save_button(
-        ctx,
-        props,
-        file,
-        ("local-use-current", "local_integration.useCurrent"),
-        (Resolution::Current, props.busy || dirty),
-      ))
-      .child(self.save_button(
-        ctx,
-        props,
-        file,
-        ("local-use-incoming", "local_integration.useIncoming"),
-        (Resolution::Incoming, props.busy || dirty),
-      ))
-      .child(self.save_button(
-        ctx,
-        props,
-        file,
-        ("local-delete", "local_integration.delete"),
-        (Resolution::Delete, props.busy || dirty),
-      ))
-      .child(destination);
-    choices = choices.with_children(self.destination_controls(ctx, props, file));
-    if props
-      .view
-      .operation
-      .as_ref()
-      .is_some_and(|op| op.phase() == LocalPhase::RestoreConflicts)
-    {
-      let staging = SelectField::new(
-        "local-staging-choice",
-        ctx.t("local_integration.placement"),
-        if props.busy {
-          Signal::new(self.editor.placement.get())
-        } else {
-          self.editor.placement.clone()
-        },
-        vec![
-          SelectOption::new(String::from("unstaged"), ctx.t("local_integration.leaveUnstaged")),
-          SelectOption::new(String::from("stage"), ctx.t("local_integration.stage")),
-        ],
-      );
-      let staging = if props.busy { staging.locked() } else { staging };
-      choices = choices.child(staging.render(ctx));
-    }
-    choices.into()
-  }
-
-  fn destination_controls(&self, ctx: &Ctx, props: &Props, file: &ConflictView) -> Vec<Element> {
-    let dirty = self.editor.text.get() != self.editor.baseline_text();
-    if props.view.editor_policy.sensitive(&self.editor.destination.get()) {
-      return Vec::new();
-    }
-    match LocalPath::new(&self.editor.destination.get()) {
-      Ok(destination) => vec![
-        self
-          .save_button(
-            ctx,
-            props,
-            file,
-            ("local-keep-both", "local_integration.keepBoth"),
-            (Resolution::KeepBoth(destination.clone()), props.busy || dirty),
-          )
-          .into(),
-        self
-          .save_button(
-            ctx,
-            props,
-            file,
-            ("local-save-at-path", "local_integration.saveAtPath"),
-            (
-              Resolution::AtPath {
-                incoming: true,
-                destination,
-              },
-              props.busy || dirty,
-            ),
-          )
-          .into(),
-      ],
-      Err(_) => vec![
-        ActionButton::new(
-          "local-keep-both",
-          ButtonKind::Secondary,
-          ctx.t("local_integration.keepBoth"),
-        )
-        .disabled()
-        .into(),
-        ActionButton::new(
-          "local-save-at-path",
-          ButtonKind::Secondary,
-          ctx.t("local_integration.saveAtPath"),
-        )
-        .disabled()
-        .into(),
-      ],
-    }
   }
 
   fn leave_controls(&self, ctx: &mut Ctx, props: &Props, file: &ConflictView, _editable: bool) -> Element {
@@ -470,7 +373,18 @@ impl Resolver {
         generation: props.view.operation.as_ref().map_or(0, |op| op.version()),
       },
       stop: props.stop.clone(),
+      input: None,
+      generation: props.view.operation.as_ref().map(|op| op.version()),
     };
-    super::draft_controls::inline(ctx, &props.work, &props.state, Some(request), props.busy, &props.task)
+    let safe = !props.view.editor_policy.sensitive(&self.editor.text.get())
+      && !props.view.editor_policy.sensitive(&self.editor.destination.get());
+    super::draft_controls::inline(
+      ctx,
+      &props.work,
+      &props.state,
+      Some(request),
+      (props.busy, safe),
+      &props.task,
+    )
   }
 }

@@ -7,6 +7,7 @@ use super::{Directory, LocalError, LocalGitError, windows};
 pub struct ExecutionOwnership {
   directories: Vec<Arc<Directory>>,
   files: Vec<File>,
+  metadata: Option<super::metadata::MetadataOwnership>,
 }
 impl ExecutionOwnership {
   pub fn acquire(root: &Arc<Directory>, scratch: &Arc<Directory>) -> Result<Arc<Self>, LocalGitError> {
@@ -36,7 +37,12 @@ impl ExecutionOwnership {
       Ok(None) => return Err(LocalError::Unsupported.into()),
       Err(error) => return Err(error),
     }
-    let ownership = Arc::new(Self { directories, files });
+    let metadata = super::metadata::MetadataOwnership::acquire(root)?;
+    let ownership = Arc::new(Self {
+      directories,
+      files,
+      metadata: Some(metadata),
+    });
     ownership.ensure_current()?;
     Ok(ownership)
   }
@@ -56,11 +62,15 @@ impl ExecutionOwnership {
     let ownership = Arc::new(Self {
       directories: vec![root, metadata],
       files: vec![file],
+      metadata: None,
     });
     ownership.ensure_current()?;
     Ok(ownership)
   }
   pub fn ensure_current(&self) -> Result<(), LocalGitError> {
+    if let Some(metadata) = &self.metadata {
+      metadata.ensure_current()?;
+    }
     for directory in &self.directories {
       directory.ensure_current()?;
     }

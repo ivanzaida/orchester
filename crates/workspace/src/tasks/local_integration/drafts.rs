@@ -28,6 +28,7 @@ impl LocalIntegration {
     }
     let hash = digest(&bytes);
     let path = LocalPath::new(&format!("editor-drafts/{}", hash.as_str()))?;
+    self.ensure_authorized()?;
     self
       .db
       .retain_local_content(self.run.id(), &path, RecoveryLayer::EditorDraft, &hash, &bytes)?;

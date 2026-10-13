@@ -52,10 +52,15 @@ pub(super) fn contained_result(
     .and_then(|saved| saved.owned_task())
     .map(|saved| saved.head.clone());
   let recorded = run.last_checkpoint().map(|saved| saved.revision().as_str().to_owned());
+  let inconsistent = owned.is_none()
+    && recorded
+      .as_ref()
+      .zip(branch.as_ref())
+      .is_some_and(|(recorded, branch)| recorded != branch);
   let source = owned.clone().or(recorded).or(branch);
   let unknown = source.is_none();
   let source = source.unwrap_or_else(|| run.base().as_str().to_owned());
-  let kind = if unknown {
+  let kind = if unknown || inconsistent {
     ResultEvidenceKind::UnknownSource
   } else if main.is_ancestor(&source, &checkout.head)? {
     ResultEvidenceKind::CompleteAncestry

@@ -143,6 +143,16 @@ impl Directory {
     Ok(())
   }
 
+  /// Only execution metadata calls this after retaining a nonempty anchor and the complete parent chain.
+  /// No-delete sharing prevents rename; the held child prevents empty-directory reparse conversion.
+  pub(super) fn ensure_pinned(&self) -> Result<(), LocalGitError> {
+    let metadata = self.file.metadata().map_err(map)?;
+    if !metadata.is_dir() || metadata.file_attributes() & 0x400 != 0 {
+      return Err(LocalError::Unsupported.into());
+    }
+    Ok(())
+  }
+
   pub(super) fn same_entry(&self, _name: &OsStr, _file: &File) -> Result<(), LocalGitError> {
     // File and every ancestor deny sharing deletion; their entries cannot be substituted.
     self.ensure_current()

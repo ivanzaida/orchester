@@ -93,6 +93,7 @@ pub fn config(
   session: Option<&Services>,
   i18n: &I18n,
 ) -> McpConfig {
+  link.input_gate().bind_window_control(settings.window_control());
   let hold = session.map(|services| services.hold.clone());
   let domain = session.map(|services| domain::tools(services, i18n.clone()));
   tools::all(link, appearance, settings, hold)

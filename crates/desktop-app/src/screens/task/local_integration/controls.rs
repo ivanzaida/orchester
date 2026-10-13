@@ -9,7 +9,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::{InputSource, input_source},
+    events::input_source,
     theme::{SpacingSize, TypographyStyle},
   },
   components::{Column, Text},
@@ -33,6 +33,8 @@ use crate::{
   },
 };
 
+pub(super) type Managed = Arc<parking_lot::Mutex<Option<orchester_workspace::tasks::integration_jobs::LocalDecision>>>;
+
 #[derive(Clone)]
 struct Props {
   task: TaskContext,
@@ -46,6 +48,9 @@ struct Props {
   busy: bool,
   editor_dirty: Signal<bool>,
   acknowledgement: AcknowledgementState,
+  gate: InputGate,
+  managed: Managed,
+  job: Option<orchester_workspace::tasks::integration_jobs::RunJobs>,
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
@@ -61,6 +66,12 @@ pub(super) fn inspector(
   view: &IntegrationView,
   busy: bool,
 ) -> Column {
+  let services = crate::services::Services::of(ctx);
+  let job = task
+    .detail
+    .run
+    .as_ref()
+    .map(|run| services.jobs.of(task.project.open.project.id()).of(run.id()));
   let props = Props {
     task: task.clone(),
     view: Arc::new(view.clone()),
@@ -73,6 +84,9 @@ pub(super) fn inspector(
     busy,
     editor_dirty: page.editor_dirty.clone(),
     acknowledgement: page.acknowledgement.clone(),
+    gate: ctx.use_context().unwrap_or_default(),
+    managed: page.managed.clone(),
+    job,
   };
   Column::new()
     .spacing(SpacingSize::Md)
@@ -103,11 +117,15 @@ impl Component for Inspector {
       .as_ref()
       .map_or(LocalPhase::Review, |operation| operation.phase());
     let mode = props.mode.get();
-    let guarded = mode != Mode::Review
-      || matches!(
-        phase,
-        LocalPhase::AwaitingApproval | LocalPhase::TaskConflicts | LocalPhase::RestoreConflicts
-      );
+    let guarded = matches!(mode, Mode::Abort | Mode::Cancel | Mode::Cleanup) || phase == LocalPhase::AwaitingApproval;
+    let pending = decision(&props, &mode, phase).is_some();
+    let mut managed = props.managed.lock();
+    if pending && managed.is_none() {
+      *managed = props.job.as_ref().and_then(|job| job.local_decision());
+    } else if !pending {
+      *managed = None;
+    }
+    drop(managed);
     let mut protected = self.protected.lock();
     if guarded && protected.is_none() {
       *protected = self
@@ -187,6 +205,7 @@ impl Inspector {
     };
     panel = panel.with_children(field);
     let checked = self.agree.clone();
+    let gate = self.gate.clone().unwrap_or_default();
     panel = panel.child(
       Toggle::new(
         "local-confirm-scope",
@@ -195,7 +214,7 @@ impl Inspector {
         ctx.t(agree),
       )
       .on_change(move |on| {
-        if input_source() != InputSource::Synthetic {
+        if gate.local_input(input_source()).allowed() {
           checked.set(on);
         }
       }),
@@ -375,7 +394,36 @@ fn action_panel() -> Column {
 }
 fn mode_button(ctx: &Ctx, props: &Props, id: &str, label: &str, chosen: Mode) -> ActionButton {
   let mode = props.mode.clone();
-  ActionButton::new(id, ButtonKind::Secondary, ctx.t(label)).on_click(move || mode.set(chosen.clone()))
+  let managed = props.managed.clone();
+  let job = props.job.clone();
+  let gate = props.gate.clone();
+  let work = props.work.clone();
+  let refusal = Request {
+    task: props.task.clone(),
+    action: Action::BusyRefused,
+    stop: props.stop.clone(),
+    input: None,
+    generation: props.view.operation.as_ref().map(|operation| operation.version()),
+  };
+  ActionButton::new(id, ButtonKind::Secondary, ctx.t(label)).on_click(move || {
+    if !gate.local_input(input_source()).allowed() {
+      let mut refused = refusal.clone();
+      refused.action = Action::AuthorityRefused;
+      work.run_if_idle(refused);
+      return;
+    }
+    if chosen != Mode::Review {
+      let mut guard = managed.lock();
+      if guard.is_none() {
+        *guard = job.as_ref().and_then(|job| job.local_decision());
+        if guard.is_none() {
+          work.run_if_idle(refusal.clone());
+          return;
+        }
+      }
+    }
+    mode.set(chosen.clone());
+  })
 }
 
 type Decision = (&'static str, &'static str, &'static str, &'static str, Action);
@@ -465,13 +513,14 @@ fn button(ctx: &Ctx, props: &Props, id: &str, label: &str, action: Option<Action
     task: props.task.clone(),
     action,
     stop: props.stop.clone(),
+    input: None,
+    generation: props.view.operation.as_ref().map(|op| op.version()),
   };
   let work = props.work.clone();
+  let gate = props.gate.clone();
   button.on_click(move || {
     let mut request = request.clone();
-    if input_source() == InputSource::Synthetic && !matches!(request.action, Action::Inspect | Action::Refresh) {
-      request.action = Action::Refused;
-    }
+    request.initiate(&gate);
     request.stop.store(false, Ordering::Release);
     work.run_if_idle(request);
   })

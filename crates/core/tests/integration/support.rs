@@ -75,7 +75,9 @@ pub struct Repo {
 
 impl Repo {
   pub fn new() -> Self {
-    let dir = tempfile::tempdir().expect("temporary directory");
+    let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-core-integration-tests");
+    fs::create_dir_all(&scratch).expect("private worktree scratch");
+    let dir = tempfile::tempdir_in(scratch).expect("temporary directory");
     let root = dir.path().join("repo");
     fs::create_dir(&root).expect("repository folder");
     let repo = Self { _dir: dir, root };

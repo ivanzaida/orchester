@@ -6,7 +6,33 @@ pub struct LocalWork {
   job: RunJobs,
 }
 
+/// A mounted managed review cannot be bypassed through authenticated legacy merge.
+pub struct LocalDecision(RunJobs);
+impl Drop for LocalDecision {
+  fn drop(&mut self) {
+    self.0.update(|state| state.local_decisions -= 1);
+  }
+}
+
 impl RunJobs {
+  pub fn local_decision(&self) -> Option<LocalDecision> {
+    let mut started = false;
+    self.jobs.0.send_if_modified(|project| {
+      if project.runs.values().any(|run| run.active == Active::Merge) {
+        return false;
+      }
+      project.runs.entry(self.run).or_default().local_decisions += 1;
+      started = true;
+      true
+    });
+    if started {
+      self.jobs.changed();
+      Some(LocalDecision(self.clone()))
+    } else {
+      None
+    }
+  }
+
   pub fn local_work(&self, open: &OpenProject, what: Message) -> Option<LocalWork> {
     if !self.begin(Active::Local) {
       return None;
