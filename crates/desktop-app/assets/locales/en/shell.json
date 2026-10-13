@@ -146,7 +146,8 @@
         "first": "Tasks couldn't be read · {{reason}}",
         "again": "Tasks shown as last read · {{reason}}",
         "tryAgain": "Try again"
-      }
+      },
+      "mcpPortRefused": "MCP port {{port}} refused"
     },
     "needsYou": {
       "one": "{{count}} needs you",
@@ -218,7 +219,8 @@
         "off": "You turned the server off in Settings › Automation, so nothing listens. The address and the token stay as they are for when you turn it on.",
         "unavailable": "The server is not running, so your agents can't reach Orchester. Settings › Automation says why.",
         "qa": "This copy was started for QA. It listens on a new port on each start; clients find the address and its token in its discovery file:",
-        "development": "This development build listens on a new port on each start; clients find the address and its token in its discovery file:"
+        "development": "This development build listens on a new port on each start; clients find the address and its token in its discovery file:",
+        "portRefused": "Windows refuses port {{port}}: it keeps the port for itself (Hyper-V, WSL or Docker reserve ranges of ports), or another program holds it exclusively, so your agents can't reach Orchester. Orchester doesn't move to another port on its own. Choose another port in Settings › Automation."
       },
       "clients": {
         "one": "{{count}} agent connected: {{names}}",
@@ -232,7 +234,8 @@
         "stored": "Set in this installation's settings; a change applies when Orchester starts again.",
         "environment": "For this run: ORCHESTER_APP_MCP_WINDOW_CONTROL is set."
       },
-      "openSettings": "Open Automation settings"
+      "openSettings": "Open Automation settings",
+      "portRefused": "Port {{port}} refused"
     }
   }
 }

@@ -105,9 +105,12 @@ impl Component for McpItem {
 /// What the item says, and in which color.
 fn words(ctx: &Ctx, status: &McpStatus) -> (String, PaletteColor) {
   match (&status.kind, &status.server) {
-    (_, ServerState::PortTaken { port }) => (
+    (_, ServerState::PortTaken { port, how }) => (
       ctx
-        .t_args("shell.status.mcpPortTaken", [("port", port.get().to_string())])
+        .t_args(
+          how.pick("shell.status.mcpPortTaken", "shell.status.mcpPortRefused"),
+          [("port", port.get().to_string())],
+        )
         .to_string(),
       PaletteColor::Danger,
     ),
@@ -199,10 +202,13 @@ fn state_line(ctx: &Ctx, status: &McpStatus) -> (PaletteColor, Text) {
         .variant(TypographyStyle::Mono)
         .color(PaletteColor::TextSecondary),
     ),
-    ServerState::PortTaken { port } => (
+    ServerState::PortTaken { port, how } => (
       PaletteColor::Danger,
-      Text::new(&ctx.t_args("shell.mcp.portTaken", [("port", port.get().to_string())]))
-        .variant(ExtraTypography::Prose.role()),
+      Text::new(&ctx.t_args(
+        how.pick("shell.mcp.portTaken", "shell.mcp.portRefused"),
+        [("port", port.get().to_string())],
+      ))
+      .variant(ExtraTypography::Prose.role()),
     ),
     ServerState::Off => (
       PaletteColor::TextMuted,
@@ -217,9 +223,12 @@ fn state_line(ctx: &Ctx, status: &McpStatus) -> (PaletteColor, Text) {
 
 fn body(ctx: &Ctx, status: &McpStatus) -> String {
   let key = match (&status.kind, &status.server) {
-    (_, ServerState::PortTaken { port }) => {
+    (_, ServerState::PortTaken { port, how }) => {
       return ctx
-        .t_args("shell.mcp.body.portTaken", [("port", port.get().to_string())])
+        .t_args(
+          how.pick("shell.mcp.body.portTaken", "shell.mcp.body.portRefused"),
+          [("port", port.get().to_string())],
+        )
         .to_string();
     }
     (_, ServerState::Off) => "shell.mcp.body.off",
@@ -253,7 +262,7 @@ fn where_to(ctx: &mut Ctx, status: &McpStatus) -> Option<Element> {
 
 /// `path` from its `.tmp` folder on, as a worktree's QA copy names it (`.tmp\qa\orc-31\mcp\53880.json`); a path
 /// outside one in full.
-fn from_scratch(path: &Path) -> String {
+pub fn from_scratch(path: &Path) -> String {
   let parts: Vec<_> = path.components().collect();
   match parts.iter().rposition(|part| part.as_os_str() == ".tmp") {
     Some(start) => parts[start..].iter().collect::<PathBuf>().display().to_string(),

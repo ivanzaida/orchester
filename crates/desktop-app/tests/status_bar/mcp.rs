@@ -1,7 +1,7 @@
 //! The MCP item in each state of the app's server (`QqBCj`, `eTrCO`) and its popover: the address or why there is
 //! none, the agents connected, whether agents may control the window, and *Open Automation settings*.
 
-use orchester_app::mcp::SeenClient;
+use orchester_app::mcp::{SeenClient, Taken};
 use orchester_core::app_mcp::McpPort;
 
 use super::*;
@@ -32,7 +32,14 @@ fn client(name: &str, version: &str, connected: bool) -> SeenClient {
 
 #[test]
 fn status_mcp_item_names_the_address_or_why_agents_cannot_reach_it() {
-  let taken = ServerState::PortTaken { port: McpPort::DEFAULT };
+  let taken = ServerState::PortTaken {
+    port: McpPort::DEFAULT,
+    how: Taken::InUse,
+  };
+  let refused = ServerState::PortTaken {
+    port: McpPort::DEFAULT,
+    how: Taken::Refused,
+  };
   let unreadable = ServerState::TokenUnreadable {
     reason: Message::new("errors.keychainDenied"),
   };
@@ -48,6 +55,7 @@ fn status_mcp_item_names_the_address_or_why_agents_cannot_reach_it() {
       "MCP 127.0.0.1:47821",
     ),
     (taken, McpKind::Installation, "MCP port 47821 taken"),
+    (refused, McpKind::Installation, "MCP port 47821 refused"),
     (ServerState::Off, McpKind::Installation, "MCP off"),
     (unreadable, McpKind::Installation, "MCP unavailable"),
     (ServerState::Unavailable, McpKind::Installation, "MCP unavailable"),
@@ -93,7 +101,20 @@ fn status_mcp_popover_names_the_address_the_agents_and_window_control() {
 #[test]
 fn status_mcp_popover_says_why_agents_cannot_reach_it() {
   for (server, says) in [
-    (ServerState::PortTaken { port: McpPort::DEFAULT }, "Port 47821 taken"),
+    (
+      ServerState::PortTaken {
+        port: McpPort::DEFAULT,
+        how: Taken::InUse,
+      },
+      "Port 47821 taken",
+    ),
+    (
+      ServerState::PortTaken {
+        port: McpPort::DEFAULT,
+        how: Taken::Refused,
+      },
+      "Port 47821 refused",
+    ),
     (ServerState::Off, "Off"),
     (ServerState::Unavailable, "Not running"),
   ] {

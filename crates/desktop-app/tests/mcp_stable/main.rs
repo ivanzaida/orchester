@@ -16,7 +16,7 @@ use lurq::app::{App, Tree};
 use orchester_app::{
   appearance::{Appearance, ThemeSetting},
   i18n,
-  mcp::{self, AppMcp, ControlError, McpMode, McpSettings, ServerState, WindowLink},
+  mcp::{self, AppMcp, ControlError, McpMode, McpSettings, ServerState, Taken, WindowLink},
   startup::Launch,
   theme::{self, Mode},
 };

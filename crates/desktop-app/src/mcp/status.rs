@@ -58,9 +58,10 @@ pub enum ServerState {
   Listening {
     port: NonZeroU16,
   },
-  /// Another program holds the installed app's port, so it does not listen; it never moves to another port.
+  /// The installed app's port is kept from it, so it does not listen; it never moves to another port.
   PortTaken {
     port: McpPort,
+    how: Taken,
   },
   /// The person turned the server off in Settings.
   Off,
@@ -70,6 +71,26 @@ pub enum ServerState {
   },
   /// It did not start for another reason; the log says why.
   Unavailable,
+}
+
+/// How a port is kept from the server.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Taken {
+  /// Another program listens on it.
+  InUse,
+  /// Windows refuses it: it keeps the port for itself (Hyper-V, WSL or Docker reserve ranges of ports), or another
+  /// program holds it exclusively.
+  Refused,
+}
+
+impl Taken {
+  /// `in_use` or `refused`, as the port is kept: the words for each.
+  pub const fn pick(self, in_use: &'static str, refused: &'static str) -> &'static str {
+    match self {
+      Self::InUse => in_use,
+      Self::Refused => refused,
+    }
+  }
 }
 
 /// How the app was started, which decides the address and where the token is.

@@ -2,8 +2,8 @@
 //! each named itself in its `initialize` request: nothing is stored, and nothing is inferred beyond what the
 //! client sent (`docs/design/app-mcp-connection.md`, "Who is connected"). A client is connected while one of its
 //! MCP sessions is open; a session ends when its service is dropped (the client ended it, it expired, or the
-//! server stopped or changed its token). The list keeps the [`KEPT`] clients that asked something last, so clients
-//! that name themselves anew each time cannot grow it without end.
+//! server stopped or changed its token). The list keeps [`KEPT`] clients, connected ones before those that left, so
+//! clients that name themselves anew each time cannot grow it without end.
 
 use std::{sync::Arc, time::SystemTime};
 
@@ -44,8 +44,8 @@ impl Seen {
     self.clients.iter_mut().find(|client| client.id == id)
   }
 
-  /// A new client in the list, which drops the one that asked something longest ago once it holds more than
-  /// [`KEPT`].
+  /// A new client in the list, which drops one once it holds more than [`KEPT`]: the one that asked something
+  /// longest ago among those not connected, or among all when every one is connected.
   fn add(&mut self, name: &str, version: &str, now: SystemTime) -> u64 {
     let id = self.next;
     self.next += 1;
@@ -57,7 +57,8 @@ impl Seen {
       last_request: now,
     });
     if self.clients.len() > KEPT
-      && let Some(oldest) = (0..self.clients.len()).min_by_key(|index| self.clients[*index].last_request)
+      && let Some(oldest) =
+        (0..self.clients.len()).min_by_key(|index| (self.clients[*index].open > 0, self.clients[*index].last_request))
     {
       self.clients.remove(oldest);
     }

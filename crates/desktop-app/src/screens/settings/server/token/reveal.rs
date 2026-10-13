@@ -143,9 +143,10 @@ pub(super) fn value(ctx: &Ctx, shown: Option<&BearerToken>) -> Element {
 }
 
 impl TokenRow {
-  /// *Show*, or *Hide* while the token shows, in one slot as wide as the wider of the two as lurq lays them out: both
-  /// are laid out in it, flat, unseen and out of the pointer's way, and the one that acts fills its width, so the
-  /// field and the buttons after it never move. `server` is the one to read the token from, when it can be read.
+  /// *Show*, or *Hide* while the token shows, in one slot as wide as the wider of the two as lurq lays them out: the
+  /// room each takes is laid out in it as plain words, flat, unseen, out of the pointer's way and of the focus, and
+  /// the button that acts fills its width, so the field and the buttons after it never move. `server` is the one to
+  /// read the token from, when it can be read.
   pub(super) fn show_slot(&self, ctx: &Ctx, server: Option<AppMcp>, gate: &InputGate, shown: bool) -> Element {
     let button = |id: &str, hide: bool| {
       let (key, glyph) = if hide {
@@ -187,7 +188,7 @@ impl TokenRow {
         .clip()
         .opacity(0.0)
         .pointer_events_none()
-        .child(button(id, hide))
+        .child(button(id, hide).room().id(id.to_owned()))
     };
     Column::new()
       .id("settings-mcp-token-show-slot")

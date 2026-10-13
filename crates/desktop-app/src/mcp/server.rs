@@ -31,6 +31,7 @@ use super::{
   clients::Clients,
   guard::{self, Admission},
   input_gate::InputGate,
+  status::Taken,
   token::BearerToken,
 };
 
@@ -57,9 +58,9 @@ pub fn address(port: NonZeroU16) -> SocketAddr {
 /// Why the server could not listen.
 #[derive(Debug, thiserror::Error)]
 pub enum BindError {
-  /// Another program holds the port.
-  #[error("the port is in use by another program")]
-  Taken,
+  /// The port is kept from the server.
+  #[error("the port is kept from the server: {0:?}")]
+  Taken(Taken),
   #[error(transparent)]
   Other(#[from] io::Error),
 }
@@ -95,12 +96,9 @@ impl Listening {
     token: BearerToken,
   ) -> Result<Self, BindError> {
     let address = SocketAddr::from((LOOPBACK, port.map_or(0, NonZeroU16::get)));
-    let listener = bind::listen(address).map_err(|error| {
-      if bind::taken(&error) {
-        BindError::Taken
-      } else {
-        BindError::Other(error)
-      }
+    let listener = bind::listen(address).map_err(|error| match Taken::of_bind_error(&error) {
+      Some(how) => BindError::Taken(how),
+      None => BindError::Other(error),
     })?;
     listener.set_nonblocking(true)?;
     let port = NonZeroU16::new(listener.local_addr()?.port()).ok_or_else(|| io::Error::other("the OS bound port 0"))?;

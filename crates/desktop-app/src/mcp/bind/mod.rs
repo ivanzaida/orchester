@@ -15,6 +15,8 @@ use std::{
   net::{SocketAddr, TcpListener},
 };
 
+use super::status::Taken;
+
 /// A listener on `address` that no other socket shares.
 #[cfg(windows)]
 pub fn listen(address: SocketAddr) -> io::Result<TcpListener> {
@@ -27,8 +29,14 @@ pub fn listen(address: SocketAddr) -> io::Result<TcpListener> {
   TcpListener::bind(address)
 }
 
-/// Whether binding failed because another socket holds the port. On Windows a port held with
-/// `SO_EXCLUSIVEADDRUSE`, or in a range the system keeps for itself, answers "access denied".
-pub fn taken(error: &io::Error) -> bool {
-  error.kind() == io::ErrorKind::AddrInUse || (cfg!(windows) && error.kind() == io::ErrorKind::PermissionDenied)
+impl Taken {
+  /// How binding the port failed, when the port is kept from the server: another program listens on it, or (on
+  /// Windows, "access denied") the system reserves it or another program holds it with `SO_EXCLUSIVEADDRUSE`.
+  pub fn of_bind_error(error: &io::Error) -> Option<Self> {
+    match error.kind() {
+      io::ErrorKind::AddrInUse => Some(Self::InUse),
+      io::ErrorKind::PermissionDenied if cfg!(windows) => Some(Self::Refused),
+      _ => None,
+    }
+  }
 }

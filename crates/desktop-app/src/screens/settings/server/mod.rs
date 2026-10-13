@@ -34,7 +34,7 @@ use crate::{
     AppMcp, ControlError, McpKind, McpLink, McpStatus, ServerState, address as socket,
     input_gate::{Guarded, InputGate, Protected},
   },
-  shell::status_bar::mcp_status,
+  shell::status_bar::{from_scratch, mcp_status},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     form_section::{Label, Place, section, side_row},
@@ -70,7 +70,8 @@ impl Component for ServerSection {
     match &status.kind {
       McpKind::Installation => installation(ctx, &status, server),
       McpKind::Qa { folder, .. } => {
-        let folder = folder.display().to_string();
+        // From the worktree's `.tmp` on, as the status bar names it (`eTrCO`).
+        let folder = from_scratch(folder);
         let note = ctx.t_args("settings.automation.server.copy.qaNote", [("folder", folder)]);
         let keys = (
           "settings.automation.server.meta.qa",
@@ -187,10 +188,13 @@ fn state_label(ctx: &Ctx, state: &ServerState) -> Element {
       PaletteColor::Success,
       ctx.t("settings.automation.server.state.listening"),
     ),
-    ServerState::PortTaken { port } => (
+    ServerState::PortTaken { port, how } => (
       PaletteColor::Danger,
       ctx.t_args(
-        "settings.automation.server.state.portTaken",
+        how.pick(
+          "settings.automation.server.state.portTaken",
+          "settings.automation.server.state.portRefused",
+        ),
         [("port", port.get().to_string())],
       ),
     ),

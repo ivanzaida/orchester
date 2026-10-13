@@ -42,6 +42,7 @@ use self::{
 pub use self::{
   facts::{BarAction, BarFacts, Dispatch, ProjectFacts, ReadFailure, RunnerFacts, Stopping},
   item::dot,
+  mcp::from_scratch,
 };
 use crate::{
   mcp::{McpLink, McpStatus},

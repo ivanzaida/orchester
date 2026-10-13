@@ -41,6 +41,7 @@ fn app_mcp_taken_port_is_said_and_no_other_port_is_taken() {
     installed.server.status().server,
     ServerState::PortTaken {
       port: McpPort::new(u32::from(port)).expect("a port"),
+      how: Taken::InUse,
     }
   );
   assert_eq!(installed.server.port(), None, "it does not move to another port");
@@ -148,4 +149,24 @@ fn app_mcp_no_other_socket_shares_the_port() {
     other.bind(&address.into()).is_err(),
     "a socket with SO_REUSEADDR cannot bind the port the server listens on"
   );
+}
+
+#[test]
+fn app_mcp_a_port_windows_refuses_is_told_apart_from_one_in_use() {
+  use std::io::{Error, ErrorKind};
+  assert_eq!(
+    Taken::of_bind_error(&Error::from(ErrorKind::AddrInUse)),
+    Some(Taken::InUse)
+  );
+  let refused = Taken::of_bind_error(&Error::from(ErrorKind::PermissionDenied));
+  if cfg!(windows) {
+    assert_eq!(
+      refused,
+      Some(Taken::Refused),
+      "WSAEACCES: reserved, or held exclusively"
+    );
+  } else {
+    assert_eq!(refused, None, "macOS refuses no port from 1024 up this way");
+  }
+  assert_eq!(Taken::of_bind_error(&Error::from(ErrorKind::AddrNotAvailable)), None);
 }

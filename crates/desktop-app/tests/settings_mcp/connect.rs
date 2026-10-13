@@ -22,6 +22,12 @@ fn settings_mcp_connect_shows_the_commands_with_the_token_masked() {
     words.iter().any(|word| word == "--header "),
     "a word is laid out whole, so the command breaks only at spaces: {words:?}"
   );
+  // At 1440 the first line ends with --header and the second starts with "Authorization: (lye6f).
+  let word =
+    |shown: &mut Shown, index: usize| shown.bounds(&format!("settings-mcp-connect-claude-command-word-0-{index}"))[1];
+  let first = word(&mut shown, 0);
+  assert_eq!(word(&mut shown, 9), first, "--header ends the first line");
+  assert!(word(&mut shown, 10) > first, "\"Authorization: starts the second");
   let [_, _, _, two_lines] = shown.bounds("settings-mcp-connect-claude-command-box");
   let [_, _, _, one_line] = shown.bounds("settings-mcp-address-value-box");
   assert!(

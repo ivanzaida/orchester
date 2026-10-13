@@ -214,10 +214,13 @@ impl AddressRow {
       ));
     }
     match (&props.state, self.moved_from.get()) {
-      (ServerState::PortTaken { port }, _) => lines.push(field_error(
-        "settings-mcp-port-taken",
+      (ServerState::PortTaken { port, how }, _) => lines.push(field_error(
+        how.pick("settings-mcp-port-taken", "settings-mcp-port-refused"),
         &ctx.t_args(
-          "settings.automation.server.port.taken",
+          how.pick(
+            "settings.automation.server.port.taken",
+            "settings.automation.server.port.refused",
+          ),
           [("port", port.get().to_string())],
         ),
       )),

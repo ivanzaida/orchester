@@ -128,6 +128,12 @@ fn settings_mcp_qa_copy_says_where_its_discovery_file_is() {
       shown.texts("settings-mcp")
     );
   }
+  let folder = std::path::PathBuf::from(".tmp").join("qa").join("task").join("mcp");
+  let note = shown.joined("settings-mcp-discovery");
+  assert!(
+    note.contains(&format!("its discovery file is in {}.", folder.display())),
+    "the folder from .tmp on (eTrCO): {note}"
+  );
   assert!(shown.texts("settings-mcp-token-row").is_none(), "no token row");
   assert!(shown.texts("settings-mcp-enabled-switch").is_none(), "no switch");
   assert!(shown.says("status-mcp", &format!("MCP :{port} · QA")));

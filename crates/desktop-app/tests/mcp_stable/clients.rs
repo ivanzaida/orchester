@@ -72,3 +72,37 @@ fn app_mcp_lists_the_20_clients_that_asked_last() {
   let kept: Vec<String> = (5..25).map(|client| format!("client-{client}")).collect();
   assert_eq!(names, kept, "the oldest went");
 }
+
+#[test]
+fn app_mcp_keeps_a_connected_client_over_those_that_left() {
+  let installed = Installed::start(free_port());
+  let (port, token) = (installed.port(), installed.token());
+  let _keeper = initialize(port, &token, ("keeper", "1"));
+  let auth = bearer(&token);
+  for client in 1..=20 {
+    let name = format!("gone-{client}");
+    let session = initialize(port, &token, (&name, "1"));
+    delete(port, &[("Authorization", &auth), ("Mcp-Session-Id", &session)]);
+    assert!(
+      wait_until(|| {
+        installed
+          .server
+          .status()
+          .clients
+          .iter()
+          .any(|seen| seen.name == name && !seen.connected)
+      }),
+      "{name} left"
+    );
+  }
+  let clients = installed.server.status().clients;
+  assert_eq!(clients.len(), 20);
+  assert!(
+    clients.iter().any(|seen| seen.name == "keeper" && seen.connected),
+    "the oldest, but connected"
+  );
+  assert!(
+    !clients.iter().any(|seen| seen.name == "gone-1"),
+    "the oldest of those that left went"
+  );
+}

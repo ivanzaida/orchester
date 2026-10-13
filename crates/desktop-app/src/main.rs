@@ -60,10 +60,8 @@ fn main() {
     )
   });
   let mcp = server.as_ref().map_or_else(
-    || {
-      tracing::error!("no session, so no settings to read the MCP server's address from; it does not start");
-      McpLink::without_server(McpStatus::unavailable(McpKind::Installation, mcp_settings))
-    },
+    // `McpMode::of_build` logged why there is none.
+    || McpLink::without_server(McpStatus::unavailable(McpKind::Installation, mcp_settings)),
     McpLink::new,
   );
   let start = launch.start();

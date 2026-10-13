@@ -302,12 +302,13 @@ impl Inner {
         running.listening = Some(listening);
         ServerState::Listening { port: fixed }
       }
-      Err(BindError::Taken) => {
+      Err(BindError::Taken(how)) => {
         tracing::warn!(
           port = port.get(),
-          "the app's MCP port is taken; the server does not listen"
+          ?how,
+          "the app's MCP port is kept from it; the server does not listen"
         );
-        ServerState::PortTaken { port }
+        ServerState::PortTaken { port, how }
       }
       Err(BindError::Other(error)) => {
         tracing::error!(%error, port = port.get(), "the app's MCP server did not start");

@@ -45,3 +45,19 @@ fn app_mcp_only_the_installed_app_uses_the_fixed_address_and_never_a_discovery_f
   );
   launch.end();
 }
+
+#[test]
+fn app_mcp_only_a_release_build_with_the_flag_set_to_1_is_the_installed_app() {
+  assert_eq!(Build::of(Some("1"), false), Build::Installed);
+  for (flag, debug) in [
+    (Some("1"), true),
+    (Some("0"), false),
+    (Some(""), false),
+    (Some("true"), false),
+    (Some(" 1"), false),
+    (None, false),
+    (None, true),
+  ] {
+    assert_eq!(Build::of(flag, debug), Build::Other, "{flag:?}, debug {debug}");
+  }
+}

@@ -25,7 +25,8 @@
           "listening": "Listening",
           "portTaken": "Port {{port}} taken",
           "off": "Off",
-          "notRunning": "Not running"
+          "notRunning": "Not running",
+          "portRefused": "Port {{port}} refused"
         },
         "address": {
           "title": "Address",
@@ -41,7 +42,8 @@
           "invalid": "Use a port from 1024 to 65535.",
           "taken": "Port {{port}} is in use by another program, so Orchester isn't listening. It doesn't move to another port on its own: agents registered with this address would reach nothing. Choose another port, then register your agents again.",
           "changed": "Now listening on port {{port}}. Agents registered with port {{old}} need registering again.",
-          "notSaved": "The port was not changed: {{reason}}"
+          "notSaved": "The port was not changed: {{reason}}",
+          "refused": "Windows refuses port {{port}}, so Orchester isn't listening: it keeps the port for itself (Hyper-V, WSL or Docker reserve ranges of ports), or another program holds it exclusively. It doesn't move to another port on its own. Choose another port, then register your agents again."
         },
         "token": {
           "title": "Access token",

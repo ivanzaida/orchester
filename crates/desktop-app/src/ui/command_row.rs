@@ -1,7 +1,8 @@
 //! A command or an address with Copy at its end (`Command row` `PEnj5`): the value in Geist Mono 11.5 at 1.4 on
 //! `code_bg` inside a `border` stroke, radius 6, 6 over and under it, 10 before it and 4 after Copy, and a 24-high
 //! ghost Copy beside it that says Copied, or that it could not copy, for a moment. A command breaks into lines only
-//! at its spaces, never inside a word such as `--header`; its own line breaks are kept. What it shows may differ from
+//! at its spaces, never inside a word such as `--header`, and a line takes every word that fits without the space
+//! after it; its own line breaks are kept. What it shows may differ from
 //! what Copy puts on the clipboard: a command shows its token masked, and Copy copies the full text the caller
 //! supplies. A faded row (a server that does not listen) shows its value in `text_muted`, and its Copy is unavailable.
 //! A one-line row (a path) ends in an ellipsis when it is too long.
@@ -24,7 +25,7 @@ use super::{
   button::{ActionButton, ButtonKind},
   icon::Icon,
 };
-use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography};
+use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography, mono_space};
 
 /// How long Copy says what happened before it offers to copy again.
 const COPY_FEEDBACK: Duration = Duration::from_secs(2);
@@ -139,6 +140,12 @@ impl Component for CommandRowView {
     } else {
       PaletteColor::TextPrimary
     };
+    // Each word keeps the space after it, which lurq counts when it fills a line: the words may reach one space
+    // into the gap before Copy, where that space shows as nothing, so a line breaks as if it took no room.
+    let theme = ctx.theme();
+    let gap = theme.spacing_value(SpacingSize::Sm).to_px();
+    let space = mono_space(theme, ExtraTypography::MonoKey.role());
+    let gap = if props.one_line { gap } else { (gap - space).max(0.0) };
     let value = if props.one_line {
       Text::new(&props.shown)
         .variant(ExtraTypography::MonoKey.role())
@@ -149,7 +156,7 @@ impl Component for CommandRowView {
         .text_overflow(TextOverflow::Elipsis)
         .into()
     } else {
-      words(&props.shown, &color)
+      words(&props.id, &props.shown, &color)
     };
     Row::new()
       .id(format!("{}-box", props.id))
@@ -161,7 +168,7 @@ impl Component for CommandRowView {
           .left(ExtraSpacing::Loose.role())
           .right(SpacingSize::Xs),
       )
-      .spacing(SpacingSize::Sm)
+      .spacing(Dimension::Px(gap))
       .align_items(Alignment::Center)
       .background(ExtraColor::CodeBackground.role())
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
@@ -179,8 +186,8 @@ impl Component for CommandRowView {
 
 /// `text` line by line, each line laid out word by word so it breaks only at its spaces; a word keeps the space
 /// after it, so the words read as the text itself.
-fn words(text: &str, color: &PaletteColor) -> Element {
-  let lines = text.split('\n').map(|line| {
+fn words(id: &str, text: &str, color: &PaletteColor) -> Element {
+  let lines = text.split('\n').enumerate().map(|(number, line)| {
     let count = line.split(' ').count();
     Row::new()
       .width(Dimension::Pct(100.0))
@@ -192,6 +199,7 @@ fn words(text: &str, color: &PaletteColor) -> Element {
           word.to_owned()
         };
         Text::new(&word)
+          .id(format!("{id}-word-{number}-{index}"))
           .variant(ExtraTypography::MonoKey.role())
           .color(color.clone())
           .nowrap()

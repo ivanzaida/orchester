@@ -79,7 +79,8 @@ impl Shown {
   fn qa() -> Self {
     let data = Data::new();
     let launch = data.launch();
-    let mode = McpMode::Qa(data.dir.path().join("mcp"));
+    // Where tools/qa-app.ps1 puts it: the worktree's `.tmp/qa/<task>/mcp/`.
+    let mode = McpMode::Qa(data.dir.path().join(".tmp").join("qa").join("task").join("mcp"));
     Self::open(data, launch, mode)
   }
 

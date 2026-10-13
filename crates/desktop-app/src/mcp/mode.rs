@@ -28,11 +28,18 @@ pub enum Build {
 }
 
 impl Build {
-  /// This program's kind: [`INSTALLED_BUILD_VARIABLE`] was set when it was compiled.
-  pub const fn this() -> Self {
-    match option_env!("ORCHESTER_APP_INSTALLED_BUILD") {
-      Some(_) => Self::Installed,
-      None => Self::Other,
+  /// This program's kind: a release build compiled with [`INSTALLED_BUILD_VARIABLE`] set to `1`.
+  pub fn this() -> Self {
+    Self::of(option_env!("ORCHESTER_APP_INSTALLED_BUILD"), cfg!(debug_assertions))
+  }
+
+  /// The kind of a build compiled with [`INSTALLED_BUILD_VARIABLE`] as `flag`, as a `debug` build or not. Only the
+  /// exact `1` in a release build counts: a variable left in a shell (`0`, empty) or a debug build that inherited it
+  /// never becomes the installed app, takes its port or stores a token.
+  pub fn of(flag: Option<&str>, debug: bool) -> Self {
+    match (flag, debug) {
+      (Some("1"), false) => Self::Installed,
+      _ => Self::Other,
     }
   }
 }
@@ -64,10 +71,16 @@ impl McpMode {
         );
         None
       }
-      (Build::Installed, None) => workspace.map(|workspace| Self::Installation {
-        workspace: workspace.clone(),
-        vault: Vault::keychain(),
-      }),
+      (Build::Installed, None) => {
+        let installation = workspace.map(|workspace| Self::Installation {
+          workspace: workspace.clone(),
+          vault: Vault::keychain(),
+        });
+        if installation.is_none() {
+          tracing::error!("no session, so no settings to read the MCP server's address from; it does not start");
+        }
+        installation
+      }
       (Build::Other, Some(folder)) if !folder.is_empty() => Some(Self::Qa(PathBuf::from(folder))),
       (Build::Other, Some(_)) => {
         tracing::warn!(variable = DISCOVERY_VARIABLE, "empty; not a QA copy");
