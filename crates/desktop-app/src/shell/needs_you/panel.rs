@@ -7,8 +7,9 @@
 //! What waits is `tasks::needs_you`'s, so the panel lists exactly what every Needs you counts. Approvals and
 //! questions with suggested answers expand in place around the conversation's own card (`in_place`), one at a
 //! time; the others open their task: a plan, a decision after retries and an interrupted run its Summary, an
-//! agent's question its Conversation, where the composer answers it. An item expanded here keeps its place
-//! once it no longer waits, quiet, until the panel closes, so nothing moves under the pointer.
+//! agent's question its Conversation, where the composer answers it. The project's memory records are listed
+//! with their action unavailable, and why, as no screen of this app reviews them yet. An item expanded here
+//! keeps its place once it no longer waits, quiet, until the panel closes, so nothing moves under the pointer.
 
 use std::{sync::Arc, time::Duration};
 
@@ -33,7 +34,8 @@ use parking_lot::Mutex;
 use super::{
   Waiting,
   in_place::{InPlaceCard, InPlaceProps},
-  item, waiting, words,
+  item::{self, Action},
+  waiting, words,
 };
 use crate::{
   navigation::Navigation,
@@ -166,7 +168,7 @@ impl NeedsYouPanel {
           .into_iter()
           .map(|item| Shown {
             project,
-            key: key_of(&item),
+            key: key_of(project, &item),
             item,
             waits: true,
           })
@@ -247,19 +249,18 @@ impl NeedsYouPanel {
     let expanded = self.expanded.get().as_ref() == Some(&at);
     let in_place = item.kind.card_key().zip(item.task.as_ref()).zip(item.run);
     let Some(((key, task), _)) = in_place else {
-      let route = route_of(shown);
-      let press = go(navigation, open, route);
-      let glyph = if matches!(item.kind, WaitingKind::Question(_)) {
-        Icon::MessageCircle
-      } else {
-        Icon::ArrowUpRight
+      let action = match item.kind {
+        // No screen reviews memory records yet, so the action says so in place of leading nowhere.
+        WaitingKind::Memory { .. } => Action::Unavailable(ctx.t("needs_you.memoryUnavailable")),
+        WaitingKind::Question(_) => Action::Press(Icon::MessageCircle, go(navigation, open, route_of(shown))),
+        _ => Action::Press(Icon::ArrowUpRight, go(navigation, open, route_of(shown))),
       };
-      return item::collapsed(ctx, &id, item, (glyph, press));
+      return item::collapsed(ctx, &id, item, action);
     };
     if !expanded {
       let (signal, at) = (self.expanded.clone(), at);
       let press: Arc<dyn Fn() + Send + Sync> = Arc::new(move || signal.set(Some(at.clone())));
-      return item::collapsed(ctx, &id, item, (Icon::ChevronDown, press));
+      return item::collapsed(ctx, &id, item, Action::Press(Icon::ChevronDown, press));
     }
     {
       let mut kept = self.kept.lock();
@@ -294,15 +295,15 @@ impl NeedsYouPanel {
   }
 }
 
-/// How an item is told from the others while the panel shows: its card's key when it is answered in place;
-/// else its task's, what it is and its step, as several steps of one run may wait at once; `memory` for the
-/// project's memory records.
-fn key_of(item: &WaitingItem) -> Arc<str> {
+/// How an item is told from the others while the panel shows, and its element id's end: its card's key when
+/// it is answered in place; else its task's, what it is and its step, as several steps of one run may wait at
+/// once; `memory-<project>` for `project`'s memory records.
+fn key_of(project: ProjectId, item: &WaitingItem) -> Arc<str> {
   if let Some(key) = item.kind.card_key() {
     return key;
   }
   let kind = match item.kind {
-    WaitingKind::Memory { .. } => return Arc::from("memory"),
+    WaitingKind::Memory { .. } => return Arc::from(format!("memory-{project}")),
     WaitingKind::Question(_) => "question",
     WaitingKind::Plan(_) => "plan",
     WaitingKind::Decision(_) => "decision",
@@ -317,15 +318,8 @@ fn key_of(item: &WaitingItem) -> Arc<str> {
 }
 
 /// Where an item that is not answered in place leads: an agent's question to the task's Conversation, where
-/// the composer answers it; the project's memory records to its Overview, as no Memory screen is built yet; the
-/// others to the task's Summary.
+/// the composer answers it; the others to the task's Summary.
 fn route_of(shown: &Shown) -> Option<Route> {
-  if matches!(shown.item.kind, WaitingKind::Memory { .. }) {
-    return Some(Route::Project(
-      shown.project,
-      ProjectPage::Overview(OverviewTab::NeedsYou),
-    ));
-  }
   let task = shown.item.task.as_ref()?;
   let view = match shown.item.kind {
     WaitingKind::Question(_) => TaskView::Conversation,

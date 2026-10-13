@@ -293,6 +293,51 @@ fn needs_you_lists_a_step_end_question_with_options_once() {
   );
 }
 
+#[test]
+fn needs_you_lists_the_plans_and_questions_a_run_stopped_at_its_limit_or_interrupted_keeps() {
+  let mut fixture = Fixture::parallel();
+  let (mut limited, [_, research, _]) = parallel_run(&mut fixture, "Plan zoom", 10);
+  fixture.propose(&mut limited, "1. Zoom.", at(20));
+  let events = limited
+    .wait_step(research, WaitReason::Message, at(25))
+    .expect("Research waits for an answer");
+  fixture.record(&limited, &events);
+  let events = limited
+    .stop_at_limit(RunLimit::Tokens, at(30))
+    .expect("stopped at its limit");
+  fixture.record(&limited, &events);
+  let (mut crashed, _) = parallel_run(&mut fixture, "Fix zoom", 40);
+  fixture.propose(&mut crashed, "1. Fix.", at(50));
+  let events = crashed.interrupt(InterruptCause::Crashed, at(60)).expect("interrupted");
+  fixture.record(&crashed, &events);
+  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let items = tasks.waiting();
+  let listed: Vec<_> = items
+    .iter()
+    .map(|item| {
+      let task = item
+        .task
+        .as_ref()
+        .map_or_else(String::new, |task| task.title.to_string());
+      (task, kinds(std::slice::from_ref(item))[0])
+    })
+    .collect();
+  let mut listed: Vec<_> = listed.iter().map(|(task, kind)| (task.as_str(), *kind)).collect();
+  listed.sort_unstable();
+  assert_eq!(
+    listed,
+    [
+      ("Fix zoom", "interrupted"),
+      ("Fix zoom", "plan"),
+      ("Plan zoom", "limit"),
+      ("Plan zoom", "plan"),
+      ("Plan zoom", "question"),
+    ],
+    "the run-level stop does not hide the steps that still wait"
+  );
+  assert_eq!(tasks.needs_you(), 5);
+}
+
 /// A record `run`'s agent writes to the project's memory at `now`, which waits for approval.
 fn proposed(run: &Run, text: &str, now: i64) -> Memory {
   let write = AgentWrite {

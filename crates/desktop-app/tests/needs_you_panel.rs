@@ -18,11 +18,26 @@ use lurq::{
   node::element::ElementRef,
 };
 use orchester_app::routes::{ProjectPage, Route, TaskTab, TaskView};
-use orchester_core::time::Timestamp;
+use orchester_core::{
+  id::ResourceId,
+  memory::{
+    AgentProvenance, AgentWrite, Confidence, Memory, MemoryContent, MemoryKind, MemoryScope, MemorySettings,
+    MemoryStore, SecretScreen,
+  },
+  resource::StepKey,
+  store::{RunStore, TaskStore},
+  time::Timestamp,
+};
+use orchester_store::ProjectDb;
 use support::{Data, Window};
 
 /// The window on `scenario`, landed on its project once its tasks are read.
 fn seeded(scenario: &str) -> (Window, Seeded) {
+  seeded_with(scenario, |_| {})
+}
+
+/// The window on `scenario` with what `more` adds to it before the app starts.
+fn seeded_with(scenario: &str, more: impl FnOnce(&Seeded)) -> (Window, Seeded) {
   let data = Data::new();
   let request = SeedRequest {
     data_dir: data.dir.path().to_path_buf(),
@@ -32,6 +47,7 @@ fn seeded(scenario: &str) -> (Window, Seeded) {
     now: Timestamp::now(),
   };
   let seeded = kontur::seed(&request).expect("the scenario seeds");
+  more(&seeded);
   let launch = data.launch();
   let mut window = Window::of(data, launch);
   window.until("the project's tasks to be read", |window| {
@@ -197,6 +213,70 @@ fn needs_you_panel_closes_with_its_close_and_with_the_pill() {
   window.until("the panel to close again", |window| {
     window.texts("needs-you-panel").is_none()
   });
+}
+
+/// Two records an agent of the project's first run wrote to its memory, which wait for approval.
+fn propose_memory(seeded: &Seeded) {
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's database");
+  let run = db
+    .tasks()
+    .expect("the project's tasks")
+    .iter()
+    .flat_map(|task| db.runs_of_task(task.id()).expect("the task's runs"))
+    .find_map(|run| run.ok().filter(|run| run.current_attempt().is_some()))
+    .expect("a run");
+  let records: Vec<Memory> = ["Webhooks retry three times.", "Docs live in docs/."]
+    .into_iter()
+    .map(|text| {
+      let write = AgentWrite {
+        provenance: AgentProvenance {
+          profile: ResourceId::generate(),
+          run: run.id(),
+          step: StepKey::new("implement").expect("a step key"),
+          execution: run.current_attempt().expect("an attempt").executions()[0].id(),
+        },
+        confidence: Confidence::Medium,
+        sources: Vec::new(),
+      };
+      let content = MemoryContent::new(MemoryKind::Fact, text).expect("content");
+      let screened = SecretScreen::new(Vec::new()).check(content).expect("no secrets");
+      Memory::by_agent(
+        MemoryScope::Project,
+        write,
+        screened,
+        &MemorySettings::default(),
+        Timestamp::now(),
+      )
+    })
+    .collect();
+  db.add_memories(&records).expect("the records wait for approval");
+}
+
+#[test]
+fn needs_you_panel_lists_memory_records_with_their_review_unavailable() {
+  let (mut window, seeded) = seeded_with("tasks", propose_memory);
+  open(&mut window);
+  assert_eq!(text(&mut window, "needs-you-count"), "7", "the records are one item");
+  let item = format!("needs-you-item-memory-{}", seeded.project);
+  assert_eq!(text(&mut window, &format!("{item}-kind")), "Memory");
+  assert_eq!(
+    text(&mut window, &format!("{item}-title")),
+    "2 memory records wait for your approval"
+  );
+  assert_eq!(text(&mut window, &format!("{item}-task")), "Project memory");
+  assert_eq!(text(&mut window, &format!("{item}-action")), "Review records");
+  assert_eq!(
+    text(&mut window, &format!("{item}-reason-text")),
+    "Reviewing memory records isn't built in this app yet."
+  );
+  let before = window.navigation().route_now();
+  click(&mut window, &format!("{item}-action"));
+  assert_eq!(
+    window.navigation().route_now(),
+    before,
+    "an unavailable action goes nowhere"
+  );
+  assert!(window.texts("needs-you-panel").is_some(), "and leaves the panel open");
 }
 
 #[test]

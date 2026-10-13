@@ -24,6 +24,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     icon_button::IconButton,
+    unavailable::reason_line,
   },
 };
 
@@ -126,28 +127,42 @@ fn ask(ctx: &Ctx, id: &str, item: &WaitingItem) -> [Element; 2] {
   ]
 }
 
-/// The item collapsed: its body, and its action at the end, which `press` answers.
-pub(super) fn collapsed(ctx: &Ctx, id: &str, item: &WaitingItem, (glyph, press): (Icon, Press)) -> Element {
-  let place = words::place(ctx, item).map(|place| {
+/// What a collapsed item's action does: `Press` answers a press, with its glyph; `Unavailable` cannot be
+/// pressed, for its reason, which shows under the item's task.
+pub(super) enum Action {
+  Press(Icon, Press),
+  Unavailable(Arc<str>),
+}
+
+/// The item collapsed: its body, and its action at the end.
+pub(super) fn collapsed(ctx: &Ctx, id: &str, item: &WaitingItem, action: Action) -> Element {
+  let place = words::place(ctx, item).map(|place| -> Element {
     Text::new(&place)
       .id(format!("{id}-where"))
       .variant(TypographyStyle::Caption)
       .width(Dimension::Pct(100.0))
+      .into()
   });
+  let button = ActionButton::new(
+    format!("{id}-action"),
+    ButtonKind::Secondary,
+    words::action(ctx, &item.kind),
+  );
+  let (button, reason) = match action {
+    Action::Press(glyph, press) => (button.icon(glyph).on_click(move || press()), None),
+    Action::Unavailable(reason) => {
+      let line: Element = reason_line(&format!("{id}-reason"), &reason).into();
+      (button.unavailable(reason), Some(line))
+    }
+  };
   let body = Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .spacing(ExtraSpacing::Fine.role())
     .child(top(ctx, id, item, false))
     .with_children(ask(ctx, id, item))
-    .with_children(place);
-  let action = ActionButton::new(
-    format!("{id}-action"),
-    ButtonKind::Secondary,
-    words::action(ctx, &item.kind),
-  )
-  .icon(glyph)
-  .on_click(move || press());
+    .with_children(place)
+    .with_children(reason);
   Row::new()
     .id(id.to_owned())
     .describe("state", "collapsed")
@@ -157,7 +172,7 @@ pub(super) fn collapsed(ctx: &Ctx, id: &str, item: &WaitingItem, (glyph, press):
     .align_items(Alignment::Start)
     .rounded(ExtraRadius::Tile.role())
     .child(body)
-    .child(Row::new().flex_shrink(0.0).child(action))
+    .child(Row::new().flex_shrink(0.0).child(button))
     .into()
 }
 

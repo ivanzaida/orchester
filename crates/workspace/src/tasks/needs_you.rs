@@ -209,9 +209,10 @@ impl ProjectTasks {
   }
 
   /// Adds to `items` what `task`'s latest run waits for from the person besides its tool requests and its
-  /// questions with suggested answers: being recorded interrupted, a decision after its retries, and each
-  /// step's plan and question. A step that ended with a question with suggested answers is that question,
-  /// listed once. A run that waits for a person without anything that can be read is one item still.
+  /// questions with suggested answers: being recorded interrupted, stopped at its limit or ready to merge, a
+  /// decision after its retries, and each step's plan and question, which a run stopped at its limit or
+  /// recorded interrupted keeps waiting. A step that ended with a question with suggested answers is that
+  /// question, listed once. A run that waits for a person without anything that can be read is one item still.
   fn run_items(&self, task: &Task, items: &mut Vec<WaitingItem>) {
     let Some(Latest::Run(latest)) = self.phases.get(&task.id()) else {
       return;
@@ -233,14 +234,12 @@ impl ProjectTasks {
       TaskPhase::Succeeded => Some(WaitingKind::ReadyToMerge),
       _ => None,
     };
+    let before = items.len();
     if let Some(kind) = settled {
       items.push(item(latest.step.clone(), kind));
+    } else if !latest.phase.needs_you() {
       return;
     }
-    if !latest.phase.needs_you() {
-      return;
-    }
-    let before = items.len();
     if let Some(decision) = &latest.decision {
       items.push(item(latest.step.clone(), WaitingKind::Decision(decision.clone())));
     }

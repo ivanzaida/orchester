@@ -27,7 +27,8 @@ pub(super) fn kind(ctx: &Ctx, kind: &WaitingKind) -> (Icon, Arc<str>) {
   (glyph, ctx.t(key))
 }
 
-/// The item's action: *Review* and *Answer* open it in place; the others open its task, or the project's.
+/// The item's action: *Review* and *Answer* open it in place; the others open its task, except *Review
+/// records*, which is unavailable until memory review is built.
 pub(super) fn action(ctx: &Ctx, kind: &WaitingKind) -> Arc<str> {
   ctx.t(match kind {
     WaitingKind::Approval(_) => "needs_you.action.review",
