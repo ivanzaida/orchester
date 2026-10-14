@@ -94,12 +94,6 @@ impl DecideCard<'_> {
           .map(|reason| reason_line("task-retry-offline", reason)),
       )
       .with_children(refused.map(|refused| field_error("task-retry-refused", &message_text(ctx, &refused))))
-      .with_children(
-        self
-          .person_only
-          .get()
-          .then(|| field_error("task-accept-person-only", &ctx.t("decisions.retries.acceptPersonOnly"))),
-      )
       .child(stop);
     self.pointing.ring(card).into()
   }
@@ -168,13 +162,18 @@ impl DecideCard<'_> {
     .icon(Icon::Check)
     .in_form();
     let decision = StuckDecision::Accept { by: Answerer::Person };
-    vec![
-      self.button(accept, decision, pending).fill_width().into(),
-      meaning(
+    let refused = self
+      .person_only
+      .get()
+      .then(|| field_error("task-accept-person-only", &ctx.t("decisions.retries.acceptPersonOnly")).into());
+    std::iter::once(self.button(accept, decision, pending).fill_width().into())
+      // Right under the button it refused.
+      .chain(refused)
+      .chain(std::iter::once(meaning(
         "task-accept-meaning",
         &ctx.t_args("decisions.retries.acceptMeaning", [("step", step.as_str())]),
-      ),
-    ]
+      )))
+      .collect()
   }
 
   /// *Allow 1 retry & continue*, or for a step that waits unverified or unchanged, *Run … again*, which is the

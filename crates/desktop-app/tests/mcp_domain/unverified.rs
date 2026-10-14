@@ -92,6 +92,23 @@ fn domain_window_input_cannot_accept_an_unverified_step() {
     .click_by_client("task-accept-step")
     .expect("the press reaches the button, whose handler refuses it");
   served.until("the refusal", |served| served.shows("task-accept-person-only"));
+  // It shows right under the button it refused, before what accepting means.
+  let mut top = |id: &str| {
+    served
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  let (accept, refusal, meaning) = (
+    top("task-accept-step"),
+    top("task-accept-person-only"),
+    top("task-accept-meaning"),
+  );
+  assert!(
+    refusal.y >= accept.y + accept.height && refusal.y < meaning.y,
+    "{accept:?} {refusal:?} {meaning:?}"
+  );
   let shown = served.ok("get_run", &json!({ "project": "Kontur", "run": run }));
   assert_eq!(
     shown["status"]["reason"],
