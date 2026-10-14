@@ -311,6 +311,15 @@ Agents in runs do not reach this server: Claude Code runs keep `--strict-mcp-con
 `orchester` server off, and neither gets `ORCHESTER_APP_MCP_TOKEN` or `ORCHESTER_APP_MCP_DISCOVERY` (their
 environment is cleaned).
 
+The project's Orchestrator chat does not reach it either. Its agent (Claude Code, started read-only in the project
+folder by the project's runner for each message) gets a server of its own: one per conversation, on a free loopback
+port of the app, with a token made when the conversation's first message is sent, which the app hands only to the
+runner over its pipe and the runner writes only into the agent's MCP configuration file for the turn (removed when
+the CLI ends). That server offers part of the domain tools (`list_tasks`, `get_task`, `get_run`, `list_approvals`,
+`list_pipelines`, `create_task`, `update_task`, `run_task`, `pause_run`, `resume_run`), for the chat's project only,
+and no window tool. Each call is the same tool an MCP client calls here, so it is refused or carried out exactly as
+for such a client: what only a person decides stays `person_only`, approvals stay with people.
+
 **What the server checks.** The `Host` of every request must be `127.0.0.1:<port>` or `localhost:<port>`, so a web
 page cannot reach the server through DNS rebinding, which a fixed port makes easier to aim. An `Origin` other than
 loopback is refused, and the bearer token is required either way.
