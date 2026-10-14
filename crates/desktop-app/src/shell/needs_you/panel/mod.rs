@@ -185,11 +185,11 @@ impl NeedsYouPanel {
           .tasks
           .with(|tasks| tasks.ready().map(ProjectTasks::waiting))
           .unwrap_or_default()
-          .into_iter()
+          .iter()
           .map(|item| Shown {
             project,
-            key: key_of(project, &item),
-            item,
+            key: key_of(project, item),
+            item: item.clone(),
             waits: true,
           })
           .collect();

@@ -93,6 +93,16 @@ fn readable(
   Ok(memories)
 }
 
+impl ProjectDb {
+  /// The readable records with `status`, of the project and of every task, oldest first, in one query.
+  pub fn memories_with_status(&self, status: MemoryStatus) -> Result<Vec<Memory>, StoreError> {
+    let sql = format!("SELECT {COLUMNS} FROM memories m WHERE m.status = ?1 ORDER BY m.created_at, m.seq");
+    let mut statement = self.connection.prepare(&sql)?;
+    let rows = statement.query_map([status.name()], rows::read)?;
+    readable(rows)
+  }
+}
+
 impl MemoryStore for ProjectDb {
   type Error = StoreError;
 

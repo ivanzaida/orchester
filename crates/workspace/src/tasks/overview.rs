@@ -57,8 +57,8 @@ impl OverviewTab {
     let waiting: Option<BTreeSet<TaskId>> = (self == Self::NeedsYou).then(|| {
       tasks
         .waiting()
-        .into_iter()
-        .filter_map(|item| item.task.map(|task| task.id))
+        .iter()
+        .filter_map(|item| item.task.as_ref().map(|task| task.id))
         .collect()
     });
     tasks

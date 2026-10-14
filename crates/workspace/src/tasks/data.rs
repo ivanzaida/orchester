@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, path::Path, sync::Arc};
 use orchester_core::{
   conversation::{Message, latest_question},
   id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
-  memory::{Memory, MemoryFilter, MemoryStatus, MemoryStore, ScopeFilter},
+  memory::{Memory, MemoryScope, MemoryStatus},
   question::AskedQuestions,
   resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
   run::{Run, RunEvent, RunNumber, StepExecutor, TaskPhase},
@@ -24,6 +24,7 @@ use super::{
   detail::run_store_error,
   integration::merged_outside_in,
   list::{AwaitedPlan, AwaitedQuestion, AwaitedStep, CurrentStep, Latest, LatestRun, Phases, StepWait},
+  needs_you::WaitingOnce,
   run_approvals,
   unreadable::Unreadable,
 };
@@ -109,6 +110,8 @@ pub struct ProjectTasks {
   pub lost_to_runner: usize,
   /// The active runs that auto-approve their agents' requests, oldest task first.
   pub auto_approving: Arc<Vec<AutoApprovingRun>>,
+  /// What waits for the person, once asked for ([`Self::waiting`]).
+  pub waiting_once: WaitingOnce,
 }
 
 /// An active run that auto-approves, as the status bar names it.
@@ -182,6 +185,7 @@ impl ProjectTasks {
   pub fn not_shared_view(&self) -> Self {
     Self {
       tasks: self.not_shared.clone(),
+      waiting_once: WaitingOnce::default(),
       ..self.clone()
     }
   }
@@ -240,15 +244,7 @@ impl ProjectTasks {
       phases.insert(task.id(), latest);
     }
     Ok(Self {
-      updated: Arc::new(
-        tasks
-          .iter()
-          .map(|task| {
-            db.task_organization_updated_at(task.id())
-              .map(|updated| (task.id(), updated.unwrap_or(task.created_at())))
-          })
-          .collect::<Result<_, _>>()?,
-      ),
+      updated: Arc::new(updated(db, &tasks)?),
       tags: Arc::new(db.project_tags()?),
       blocking: Arc::new(
         tasks
@@ -273,6 +269,7 @@ impl ProjectTasks {
       runs: Arc::new(counts),
       lost_to_runner: 0,
       auto_approving: Arc::new(auto_approving),
+      waiting_once: WaitingOnce::default(),
     })
   }
 
@@ -297,9 +294,21 @@ impl ProjectTasks {
     Self {
       phases: Arc::new(phases),
       lost_to_runner,
+      waiting_once: WaitingOnce::default(),
       ..self.clone()
     }
   }
+}
+
+/// When each of `tasks` was last organized, else when it was created.
+fn updated(db: &ProjectDb, tasks: &[Task]) -> Result<std::collections::HashMap<TaskId, Timestamp>, StoreError> {
+  tasks
+    .iter()
+    .map(|task| {
+      db.task_organization_updated_at(task.id())
+        .map(|updated| (task.id(), updated.unwrap_or(task.created_at())))
+    })
+    .collect()
 }
 
 /// Why each task of a reviewed group that holds its work waits, and every task of a reviewed group.
@@ -320,26 +329,19 @@ fn group_holds(
 }
 
 /// When each record of the project's memory and of `tasks`' memories that waits for a person's approval was
-/// written.
+/// written, read in one query.
 fn proposed_memory(db: &ProjectDb, tasks: &[Task]) -> Result<Vec<Timestamp>, StoreError> {
-  let proposed = |scope| MemoryFilter {
-    scope,
-    status: Some(MemoryStatus::Proposed),
-    pinned_only: false,
-  };
-  let mut written: Vec<Timestamp> = db
-    .memories(&proposed(ScopeFilter::Project))?
-    .iter()
-    .map(Memory::created_at)
-    .collect();
-  for task in tasks {
-    written.extend(
-      db.memories(&proposed(ScopeFilter::Task(task.id())))?
-        .iter()
-        .map(Memory::created_at),
-    );
-  }
-  Ok(written)
+  let ids: std::collections::BTreeSet<TaskId> = tasks.iter().map(Task::id).collect();
+  Ok(
+    db.memories_with_status(MemoryStatus::Proposed)?
+      .iter()
+      .filter(|memory| match memory.scope() {
+        MemoryScope::Project => true,
+        MemoryScope::Task(task) => ids.contains(&task),
+      })
+      .map(Memory::created_at)
+      .collect(),
+  )
 }
 
 /// `latest`, a run of `task`, with when it last changed and what it waits for.

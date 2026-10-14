@@ -14,7 +14,10 @@
 //! Approvals and questions with suggested answers are answered in place, through their cards in the run's
 //! timeline ([`WaitingKind::card_key`], [`InPlace`]); the others open their task, or the project's memory.
 
-use std::{path::Path, sync::Arc};
+use std::{
+  path::Path,
+  sync::{Arc, OnceLock},
+};
 
 use orchester_core::{
   id::{RunId, StepExecutionId, TaskId},
@@ -117,6 +120,28 @@ impl WaitingKind {
   }
 }
 
+/// What waits in a project ([`ProjectTasks::waiting`]), worked out from the rest of its [`ProjectTasks`] the first
+/// time it is asked for and kept with it, so the pill, a tab's mark and the panel do not work it out again in each
+/// render. A reading of the tasks starts without it, and so does every [`ProjectTasks`] made from another
+/// ([`ProjectTasks::without_runner`], [`ProjectTasks::not_shared_view`]).
+#[derive(Clone, Default)]
+pub struct WaitingOnce(Arc<OnceLock<Arc<[WaitingItem]>>>);
+
+/// It follows from the other fields, so it never tells two [`ProjectTasks`] apart.
+impl PartialEq for WaitingOnce {
+  fn eq(&self, _: &Self) -> bool {
+    true
+  }
+}
+
+impl Eq for WaitingOnce {}
+
+impl std::fmt::Debug for WaitingOnce {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter.write_str("WaitingOnce")
+  }
+}
+
 /// One object waiting for the person.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WaitingItem {
@@ -133,8 +158,22 @@ pub struct WaitingItem {
 
 impl ProjectTasks {
   /// Everything that waits for the person in the project, oldest first: what the Needs you panel lists and every
-  /// Needs you counts ([`Self::needs_you`]).
-  pub fn waiting(&self) -> Vec<WaitingItem> {
+  /// Needs you counts ([`Self::needs_you`]). Worked out once for these tasks ([`WaitingOnce`]).
+  pub fn waiting(&self) -> Arc<[WaitingItem]> {
+    self
+      .waiting_once
+      .0
+      .get_or_init(|| self.work_out_waiting().into())
+      .clone()
+  }
+
+  /// What every *Needs you* counts: everything that waits for the person ([`Self::waiting`]). Whether a dialog or
+  /// the panel is open changes nothing.
+  pub fn needs_you(&self) -> usize {
+    self.waiting_once.0.get_or_init(|| self.work_out_waiting().into()).len()
+  }
+
+  fn work_out_waiting(&self) -> Vec<WaitingItem> {
     let mut items: Vec<WaitingItem> = self
       .pending_tool_approvals
       .iter()
@@ -158,12 +197,6 @@ impl ProjectTasks {
     items.retain(|item| item.task.as_ref().is_none_or(|task| !self.finished(task.id)));
     items.sort_by_key(|item| item.since);
     items
-  }
-
-  /// What every *Needs you* counts: everything that waits for the person ([`Self::waiting`]). Whether a dialog or
-  /// the panel is open changes nothing.
-  pub fn needs_you(&self) -> usize {
-    self.waiting().len()
   }
 
   fn task(&self, id: TaskId) -> Option<&Task> {

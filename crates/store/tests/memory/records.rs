@@ -164,4 +164,19 @@ fn memory_listings_filter_by_scope_status_and_pin() {
       .expect("list")
       .is_empty()
   );
+
+  // One query for every scope by status: the project's and the task's records, oldest first.
+  assert_eq!(
+    texts(&db.memories_with_status(MemoryStatus::Active).expect("list")),
+    ["Task fact.", "Pinned fact."]
+  );
+  assert_eq!(
+    texts(&db.memories_with_status(MemoryStatus::Deprecated).expect("list")),
+    ["Old fact."]
+  );
+  assert!(
+    db.memories_with_status(MemoryStatus::Proposed)
+      .expect("list")
+      .is_empty()
+  );
 }
