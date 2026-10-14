@@ -18,15 +18,23 @@ discovery file, checked again for links at each call. Starts of one turn run one
 for the first, then replaces its app and keeps the slot. When the agent's turn ends (the step passes, fails,
 asks, pauses or is stopped, or the runner fails), the runner stops the app with everything it started
 inside the worktree and frees the slot, off its async workers; it does the same while the turn waits for a
-person inside it (a tool approval, a question), so a person's wait never holds the computer's slot. The
-script runs in a process tree of its own (a kill-on-close Job Object on Windows, a process group on macOS):
-a start whose turn ends, whose run is stopped, that runs longer than 30 minutes, or whose script exits
-without naming its app ends the script and everything it started. The slot file names its latest holder's
-QA folder, so the next holder stops what a runner that died left running there (on macOS a runner killed
+person inside it (a tool approval, a question), so a person's wait never holds the computer's slot; a start
+that finishes during such a wait stops its app at once. The script runs in a process tree of its own (a
+kill-on-close Job Object on Windows, a process group on macOS): a start whose turn ends, whose run is
+stopped, that runs longer than 30 minutes (reading the script's output to its end included), or whose
+script exits without naming its app ends the script and everything it started. The slot file names its
+latest holder's QA folder and when that holder's run was created, so the next holder stops what a runner
+that died left running there; the file is untrusted input: a folder is looked at only when it is the QA
+folder of an Orchester worktree (`<repo>/.orchester/worktrees/<id>/.tmp/qa/run-<n>-<step>`) reached
+without any link, its `bin/` too, and only programs from that `bin/` that started since that run was
+created are stopped. A QA folder reached through a link refuses the start (on macOS a runner killed
 mid-script can still leave its script running). The call is offered only to a step that writes the
-worktree and has network access, and asks a person (or an *Approve similar* rule, kept to the script's git
-blob, so a changed `tools/qa-app.ps1` asks again) first, naming the build scripts changed since the run's
-base, as it builds and runs the worktree's code outside the sandbox; auto mode's reviewer never answers it.
+worktree and has network access, and asks a person first, naming the script's git blob and the `build.rs`
+files changed since the run's base, as it builds and runs the worktree's code outside the sandbox; auto
+mode's reviewer never answers it. The script runs only while it is still the blob the approval named; a
+changed script is refused and asks again. An *Approve similar* rule is kept to that blob only: it covers
+later starts while `tools/qa-app.ps1` is unchanged, whatever else the build compiles (`build.rs` and the
+rest of the worktree's code), which a person approving similar accepts for the run.
 No lease, ACK or hold notes between runs are needed.
 
 Outside a run, start the copy with `tools/qa-app.ps1` yourself:

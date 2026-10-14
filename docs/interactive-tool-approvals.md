@@ -243,8 +243,12 @@ by `read_external_file` and `search_external_file`.
   `stop_run_process` does) and frees the slot; a start still waiting gives up, and a script still running is ended
   with its process tree, as is one that names no app. It builds and runs the worktree's code outside every sandbox, so
   it is offered only to a step that writes the worktree and has network access, and it asks, like a check: a person
-  or an *Approve similar* rule decides, the rule kept to the script's git blob (a changed script asks again), and the
-  request names `tools/qa-app.ps1` and any `build.rs` changed since the run's base; auto-approval never answers it.
+  or an *Approve similar* rule decides, the rule kept to the script's git blob (a changed script asks again; the rule
+  does not cover changes to what the build compiles, `build.rs` and the rest, which approving similar accepts for the
+  run), and the request names `tools/qa-app.ps1` and any `build.rs` changed since the run's base; auto-approval never
+  answers it. The blob is read again right before the script runs: a script changed since its approval does not run.
+  The cleanup of what a dead runner left (named by the slot file, which is untrusted) and of the step's own QA folder
+  follows no link and stops only programs from that folder's `bin/` started since its run was created.
 - **Results that could not check everything.** A step's result may be `unverified` with an `unverified` list of
   `{check, reason}` (`orchester_core::run::STEP_RESULT_SCHEMA`): the step ran but could not check some of what it is
   for. The run waits for the person (`waiting_for_person`, reason `unverified`) without taking the step's failure
@@ -253,7 +257,9 @@ by `read_external_file` and `search_external_file`.
   `unverified`). Accepting passes the step in a person's place: `accept` is refused as `person_only`, and the task
   page's *Accept … as it is* takes no client's window input, unless a person turned on *Let automation answer
   approvals*; the event records who accepted. The accepted step then passes as a passed step does, in a new attempt
-  without an agent: its own worktree's work is merged and a gated step proposes its result as the plan. A step whose latest result was failed or unverified for the revision it would run on now is not run
+  without an agent: its own worktree's work is merged and a gated step proposes its result as the plan. Accepting is
+  refused, with why, when that work does not build on the revision the result was for or uncommitted changes lie
+  beside it, which passing would take as the step's. A step whose latest result was failed or unverified for the revision it would run on now is not run
   again unless a person asked for it: the run waits with reason `unchanged`, with the same choices.
 - **Schemas** are strict (`additionalProperties: false`, each property typed and bounded); a call is read into its
   type with unknown fields refused, and an invalid call is answered with an error result that says why.
