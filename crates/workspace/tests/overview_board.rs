@@ -256,7 +256,7 @@ fn board_rows_name_the_step_a_run_waits_at_not_one_still_to_come() {
     name: "Implement".into(),
   };
   assert_eq!(
-    RunStage::of(rows[0].phase, rows[0].step.as_ref()),
+    RunStage::of(rows[0].phase, rows[0].step.as_ref(), rows[0].nothing_to_merge),
     Some(RunStage::Step(&implement)),
     "Review has not started"
   );
@@ -266,7 +266,7 @@ fn board_rows_name_the_step_a_run_waits_at_not_one_still_to_come() {
 fn board_rows_say_a_run_ready_to_merge_is_at_delivery() {
   let (_fixture, tasks) = project();
   let stage = |row: &orchester_workspace::tasks::list::TaskRow| {
-    RunStage::of(row.phase, row.step.as_ref()).map(|stage| match stage {
+    RunStage::of(row.phase, row.step.as_ref(), row.nothing_to_merge).map(|stage| match stage {
       RunStage::Step(step) => Some(step.number),
       RunStage::Deliver => None,
     })

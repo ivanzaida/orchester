@@ -173,9 +173,14 @@ fn sub_line(ctx: &mut Ctx, row: &TaskRow) -> Row {
 
 /// The run's status with where it stands (`Running · 03 Implement`, `Ready to merge · Deliver`).
 fn status(ctx: &mut Ctx, row: &TaskRow) -> lurq::node::Element {
-  let status = row.phase.map_or(Status::Unreadable, Status::of_board);
+  let status = match row.phase {
+    None => Status::Unreadable,
+    // Nothing to merge: the run completed, and nothing of it waits to be merged.
+    Some(phase) if row.nothing_to_merge => Status::of_phase(phase),
+    Some(phase) => Status::of_board(phase),
+  };
   let mut chip = StatusChip::new(format!("overview-status-{}", row.key), status);
-  match RunStage::of(row.phase, row.step.as_ref()) {
+  match RunStage::of(row.phase, row.step.as_ref(), row.nothing_to_merge) {
     Some(RunStage::Step(step)) => {
       let number = format!("{:02}", step.number);
       chip = chip.detail(ctx.t_args(

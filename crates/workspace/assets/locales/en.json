@@ -264,6 +264,7 @@
       "interrupted": "Last checkpoint {{checkpoint}}",
       "interruptedNoCheckpoint": "No checkpoint yet",
       "succeeded": "Every step passed",
+      "nothingToMerge": "Nothing to merge: the run committed nothing",
       "merged": "Merged into {{branch}}",
       "failed": "Run failed",
       "cancelled": "Run canceled"

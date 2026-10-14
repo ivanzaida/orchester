@@ -22,9 +22,9 @@ use thiserror::Error;
 
 use super::{
   approvals::{self, ShownApproval},
+  delivery::Unmerged,
   detail::run_store_error,
   list::{AwaitedPlan, AwaitedQuestion, AwaitedStep, CurrentStep, Latest, LatestRun, Phases, StepWait},
-  merged_outside::Unmerged,
   run_approvals,
   unreadable::Unreadable,
 };
@@ -185,7 +185,7 @@ impl ProjectTasks {
   }
 
   /// Reads the tasks of the project at `repo_root`; git, through `programs`, tells the runs a person merged
-  /// outside Orchester ([`super::merged_outside`]).
+  /// outside Orchester ([`super::delivery`]).
   pub fn load(repo_root: &Path, programs: &Programs) -> Result<Self, StoreError> {
     Self::read(&ProjectDb::open(repo_root)?, repo_root, programs)
   }

@@ -84,9 +84,10 @@ pub enum RunStage<'a> {
 }
 
 impl<'a> RunStage<'a> {
-  /// Where the latest run of a task that stands at `phase` is, at `step`.
-  pub fn of(phase: Option<TaskPhase>, step: Option<&'a CurrentStep>) -> Option<Self> {
-    if phase == Some(TaskPhase::Succeeded) {
+  /// Where the latest run of a task that stands at `phase` is, at `step`; one that committed nothing has
+  /// `nothing_to_merge` and no work to deliver.
+  pub fn of(phase: Option<TaskPhase>, step: Option<&'a CurrentStep>, nothing_to_merge: bool) -> Option<Self> {
+    if phase == Some(TaskPhase::Succeeded) && !nothing_to_merge {
       return Some(Self::Deliver);
     }
     step.map(Self::Step)

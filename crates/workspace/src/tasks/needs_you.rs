@@ -3,7 +3,8 @@
 //! bar, a tab's mark): a tool request waiting for a decision (also one whose task cannot be read), a question
 //! with suggested answers, each step of a run waiting on a plan or on an agent's question, a decision after a
 //! step's retries, a run stopped at its limit, a run whose every step passed and whose work waits to be merged
-//! (not once its task is Done or Canceled, or its work reached its base branch without Orchester), a run
+//! (not once its task is Done or Canceled, its work reached its base branch without Orchester, or it committed
+//! nothing to merge, `tasks::delivery`), a run
 //! recorded interrupted, and the project's memory records waiting for approval, together one item. A run
 //! that reads interrupted only because no runner looks after it is none: a runner records it once one does.
 //! A merge that stopped at conflicts is known only to the session that tried it, so it is not counted here.
@@ -242,7 +243,7 @@ impl ProjectTasks {
       TaskPhase::StoppedAtLimit => Some(WaitingKind::StoppedAtLimit {
         daily_budget: latest.daily_budget,
       }),
-      TaskPhase::Succeeded if !settled_by_person(task) => Some(WaitingKind::ReadyToMerge),
+      TaskPhase::Succeeded if !latest.nothing_to_merge && !settled_by_person(task) => Some(WaitingKind::ReadyToMerge),
       _ => None,
     };
     let before = items.len();

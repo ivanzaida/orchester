@@ -1,6 +1,7 @@
 //! When work that passed every step stops waiting to be merged without a merge in Orchester: its task is
-//! Done or Canceled, or a person merged its branch into the branch it started from with git, against a real
-//! repository.
+//! Done or Canceled, a person merged its branch into the branch it started from with git, or the run
+//! committed nothing, so there is nothing to merge; the task list's rows and the task's page read it alike,
+//! against a real repository.
 
 mod support;
 
@@ -11,10 +12,17 @@ use orchester_core::{
   task::organization::{ChangeActor, TaskOrganization, WorkflowStatus},
 };
 use orchester_exec::programs::Programs;
-use orchester_workspace::tasks::{data::ProjectTasks, needs_you::WaitingKind};
+use orchester_workspace::tasks::{
+  data::ProjectTasks,
+  delivery::Delivery,
+  detail::TaskDetail,
+  list::{self, TaskTab},
+  needs_you::WaitingKind,
+};
 use support::{Fixture, at};
 
-fn git(repo: &Path, args: &[&str]) {
+/// `git <args>` in `repo`, which must succeed; its trimmed output.
+fn git(repo: &Path, args: &[&str]) -> String {
   let output = process::Command::new("git")
     .arg("-C")
     .arg(repo)
@@ -26,10 +34,11 @@ fn git(repo: &Path, args: &[&str]) {
     "git {args:?}: {}",
     String::from_utf8_lossy(&output.stderr)
   );
+  String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
-/// The fixture's folder as a repository on `main` with one commit.
-fn repository(fixture: &Fixture) {
+/// The fixture's folder as a repository on `main` with one commit, which it returns.
+fn repository(fixture: &Fixture) -> String {
   let repo = fixture.repo.path();
   fs::remove_dir_all(repo.join(".git")).expect("the fixture's stand-in .git");
   git(repo, &["init", "--quiet", "--initial-branch=main"]);
@@ -40,6 +49,7 @@ fn repository(fixture: &Fixture) {
   fs::write(repo.join("README.md"), "hello\n").expect("a file");
   git(repo, &["add", "--all"]);
   git(repo, &["commit", "--quiet", "-m", "initial"]);
+  git(repo, &["rev-parse", "HEAD"])
 }
 
 /// `run`'s branch with one commit of its own on top of `main`, as its agent leaves it.
@@ -94,13 +104,13 @@ fn ready_to_merge_leaves_out_tasks_done_or_canceled_by_hand() {
 #[test]
 fn ready_to_merge_counts_work_merged_with_git_as_merged() {
   let mut fixture = Fixture::new();
-  repository(&fixture);
+  let base = repository(&fixture);
   let by_hand = fixture.task("Write docs", at(10));
-  let mut merged = fixture.started_run_from(by_hand, "main", at(20));
+  let mut merged = fixture.started_run_from(by_hand, (&base, "main"), at(20));
   fixture.succeed(&mut merged, at(30));
   work_on_branch(&fixture, &merged, "docs.md");
   let waiting = fixture.task("Add sign-out", at(40));
-  let mut open = fixture.started_run_from(waiting, "main", at(50));
+  let mut open = fixture.started_run_from(waiting, (&base, "main"), at(50));
   fixture.succeed(&mut open, at(60));
   work_on_branch(&fixture, &open, "sign_out.rs");
   let programs = Programs::processes();
@@ -125,4 +135,46 @@ fn ready_to_merge_counts_work_merged_with_git_as_merged() {
     .expect("its run");
   assert_eq!(latest.phase, TaskPhase::Merged);
   assert_eq!(latest.merged_into.as_deref(), Some("main"));
+  let page = TaskDetail::load_settled(fixture.repo.path(), by_hand, &programs).expect("the task reads");
+  assert_eq!(
+    (page.phase(), page.delivery),
+    (TaskPhase::Merged, Delivery::MergedOutside("main".into())),
+    "its page says what its row says"
+  );
+}
+
+#[test]
+fn ready_to_merge_a_run_that_committed_nothing_is_neither_ready_nor_merged() {
+  let mut fixture = Fixture::new();
+  let base = repository(&fixture);
+  let review = fixture.task("Review the sign-in flow", at(10));
+  let mut run = fixture.started_run_from(review, (&base, "main"), at(20));
+  fixture.succeed(&mut run, at(30));
+  git(fixture.repo.path(), &["branch", run.branch().as_str(), &base]);
+  git(
+    fixture.repo.path(),
+    &["commit", "--quiet", "--allow-empty", "-m", "the person's own work"],
+  );
+  let programs = Programs::processes();
+  let tasks = ProjectTasks::load(fixture.repo.path(), &programs).expect("the tasks read");
+  assert!(ready_to_merge(&tasks).is_empty(), "there is nothing to merge");
+  let latest = tasks
+    .phases
+    .get(&review)
+    .and_then(|latest| latest.run())
+    .expect("its run");
+  assert_eq!(
+    (latest.phase, latest.nothing_to_merge, latest.merged_into.as_deref()),
+    (TaskPhase::Succeeded, true, None),
+    "main holds its tip, which is where it started: that is no merge"
+  );
+  let rows = list::rows(&tasks.tasks, &tasks, TaskTab::All);
+  assert_eq!(rows[0].detail.key, "tasks.progress.nothingToMerge");
+  assert!(rows[0].nothing_to_merge);
+  let page = TaskDetail::load_settled(fixture.repo.path(), review, &programs).expect("the task reads");
+  assert_eq!(
+    (page.phase(), page.delivery),
+    (TaskPhase::Succeeded, Delivery::NothingToMerge),
+    "its page says what its row says"
+  );
 }

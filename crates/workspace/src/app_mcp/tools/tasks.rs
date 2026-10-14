@@ -109,7 +109,7 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
     let tags = db.project_tags()?;
     let published = crate::tasks::data::published_pipelines(&db)?;
     let pipeline = PipelineLabel::of(task.details().pipeline, &published);
-    let detail = TaskDetail::load_in(&root, task.id())?;
+    let detail = TaskDetail::load_settled(&root, task.id(), &services.programs)?;
     let worktrees = detail
       .history
       .iter()

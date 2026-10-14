@@ -313,23 +313,24 @@ impl Fixture {
 
   /// A run of `task`, created at `now` and not started.
   pub fn pending_run(&mut self, task: TaskId, now: Timestamp) -> Run {
-    self.pending_run_into(task, None, now)
+    self.pending_run_into(task, (&"a".repeat(40), None), now)
   }
 
-  /// A run of `task` started at `now` from the checkout's branch `base_branch`, which merging it brings its
-  /// work into.
-  pub fn started_run_from(&mut self, task: TaskId, base_branch: &str, now: Timestamp) -> Run {
-    let run = self.pending_run_into(task, Some(BranchName::new(base_branch).expect("branch")), now);
+  /// A run of `task` started at `now` at the commit `base` of the checkout's branch `base_branch`, which
+  /// merging it brings its work into.
+  pub fn started_run_from(&mut self, task: TaskId, (base, base_branch): (&str, &str), now: Timestamp) -> Run {
+    let into = BranchName::new(base_branch).expect("branch");
+    let run = self.pending_run_into(task, (base, Some(into)), now);
     self.start(run, now)
   }
 
-  fn pending_run_into(&mut self, task: TaskId, base_branch: Option<BranchName>, now: Timestamp) -> Run {
+  fn pending_run_into(&mut self, task: TaskId, (base, base_branch): (&str, Option<BranchName>), now: Timestamp) -> Run {
     self.runs += 1;
     let new = NewRun {
       task,
       snapshot: self.snapshot.clone(),
       branch: BranchName::new(&format!("orchester/orc-run-{}", self.runs)).expect("branch"),
-      base: Revision::new(&"a".repeat(40)).expect("revision"),
+      base: Revision::new(base).expect("revision"),
       base_branch,
       budget: Some(budget(1_000_000)),
       max_duration: Some(Duration::from_secs(1_800)),

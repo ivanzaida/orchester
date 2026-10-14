@@ -1,6 +1,6 @@
 //! What the task page reads off the UI thread: the task with its latest run and its runs
-//! (`TaskDetail`), and what the task's runs without live work left in the repository (their worktrees
-//! and branches), for *Remove worktree* and Run again's removal.
+//! (`TaskDetail`, with what git tells of a run that passed every step), and what the task's runs without live work left
+//! in the repository (their worktrees and branches), for *Remove worktree* and Run again's removal.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -20,6 +20,8 @@ use orchester_workspace::{
     integration::{LeftBehind, leftovers_in},
   },
 };
+
+use crate::services::Services;
 
 /// The task as read, shared by the page's parts.
 #[derive(Clone, Debug, PartialEq)]
@@ -47,14 +49,18 @@ pub struct ReadAgain {
 
 /// Reads `task` of the project at `root`, again whenever `again` changes.
 pub fn task(ctx: &mut Ctx, root: PathBuf, task: TaskId, again: ReadAgain) -> TaskRead {
-  let load = ctx.future((root, task, again), |(root, task, _)| async move {
-    background::run(move || TaskDetail::load_in(&root, task))
-      .await?
-      .map(|detail| LoadedTask(Arc::new(detail)))
-      .map_err(|error| {
-        tracing::error!(%error, "cannot read the task");
-        messages::store_error(&error)
-      })
+  let programs = Services::of(ctx).programs;
+  let load = ctx.future((root, task, again), move |(root, task, _)| {
+    let programs = programs.clone();
+    async move {
+      background::run(move || TaskDetail::load_settled(&root, task, &programs))
+        .await?
+        .map(|detail| LoadedTask(Arc::new(detail)))
+        .map_err(|error| {
+          tracing::error!(%error, "cannot read the task");
+          messages::store_error(&error)
+        })
+    }
   });
   let state = load.state().get();
   let pending = state.is_pending();

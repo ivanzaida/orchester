@@ -102,8 +102,11 @@ pub struct LatestRun {
   pub checkpoint: Option<Arc<str>>,
   /// The plan it waits on a decision for, if it does; the first in pipeline order when several do.
   pub plan: Option<AwaitedPlan>,
-  /// The branch its work was merged into, once it was.
+  /// The branch its work was merged into, once it was, in Orchester or by a person
+  /// ([`super::delivery`]).
   pub merged_into: Option<Arc<str>>,
+  /// It passed every step and committed nothing, so there is nothing to merge ([`super::delivery`]).
+  pub nothing_to_merge: bool,
   /// The question it waits for an answer to, if it does; the first that can be read when several do.
   pub question: Option<AwaitedQuestion>,
   /// Each of its steps that waits on a plan or for an answer, plans first, each in pipeline order.
@@ -139,6 +142,7 @@ impl LatestRun {
       pipeline: run.snapshot().pipeline(),
       phase: TaskPhase::of(task, Some(run), merge),
       merged_into: merge.map(|merge| merge.into.as_str().into()),
+      nothing_to_merge: false,
       number: run.number(),
       updated_at,
       daily_budget: run.status() == &RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)),
@@ -187,6 +191,7 @@ impl LatestRun {
       TaskPhase::StoppedAtLimit if self.daily_budget => Message::new("tasks.progress.stoppedDaily"),
       TaskPhase::StoppedAtLimit => Message::new("tasks.progress.stoppedAtLimit"),
       TaskPhase::Interrupted => with_checkpoint("tasks.progress.interrupted", "tasks.progress.interruptedNoCheckpoint"),
+      TaskPhase::Succeeded if self.nothing_to_merge => Message::new("tasks.progress.nothingToMerge"),
       TaskPhase::Succeeded => Message::new("tasks.progress.succeeded"),
       TaskPhase::Merged => {
         Message::new("tasks.progress.merged").with("branch", self.merged_into.as_deref().unwrap_or_default().to_owned())
@@ -371,6 +376,8 @@ pub struct TaskRow {
   pub readiness: ReadinessKind,
   /// The step its latest run is on, or stopped at.
   pub step: Option<CurrentStep>,
+  /// Its latest run passed every step and committed nothing, so there is nothing to merge.
+  pub nothing_to_merge: bool,
 }
 
 /// The latest run of each task that has one; a task without one is a draft or queued.
@@ -415,6 +422,7 @@ impl TaskRow {
       not_shared: false,
       readiness,
       step: latest.and_then(|latest| latest.step.clone()),
+      nothing_to_merge: latest.is_some_and(|latest| latest.nothing_to_merge),
     }
   }
 }
