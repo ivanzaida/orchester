@@ -56,10 +56,8 @@ use std::{
 
 use orchester_core::{
   id::{ConnectionId, IdempotencyKey, RunId, TaskId},
-  integration::Leftovers,
   run::{InterruptCause, RaisedLimits, RunStatus},
   secret::SecretVault,
-  sharing::TaskRevision,
   store::RunStore,
   tokens::TokenBudget,
 };
@@ -242,61 +240,6 @@ impl Scheduler {
       self.spawn(db, prepared)?;
     }
     Ok(run)
-  }
-
-  /// Starts the next run of `task` after its latest run `after` failed or was cancelled (Run
-  /// again), removing `remove_worktrees`, what `after` left, first; or finds the run an earlier
-  /// request with `key` started, and then removes nothing. Returns once the new run is recorded as
-  /// started.
-  pub async fn run_again(
-    &self,
-    key: IdempotencyKey,
-    task: TaskId,
-    after: RunId,
-    remove_worktrees: Option<Leftovers>,
-  ) -> Result<RunId, Rejection> {
-    self.run_again_as(key, (task, after), remove_worktrees, None).await
-  }
-
-  /// [`Self::run_again`], only for the task at `revision` when it names one: a task changed since it was checked is
-  /// refused ([`Rejection::TaskChangedMeanwhile`]), read with the run's own check of the task.
-  pub async fn run_again_as(
-    &self,
-    key: IdempotencyKey,
-    (task, after): (TaskId, RunId),
-    remove_worktrees: Option<Leftovers>,
-    revision: Option<TaskRevision>,
-  ) -> Result<RunId, Rejection> {
-    // The run's task may still be ending its agents after it recorded the run's end. A run its
-    // task still executes has not ended, which the rule finds in the run's record below.
-    if let Err(executing) = self.settled(after).await {
-      tracing::debug!(%after, ?executing, "run again asked while the run is executed");
-    }
-    let _one_at_a_time = self.inner.continuing.lock().await;
-    let root = &self.inner.project_root;
-    let mut db = self.open()?;
-    let recorded = db
-      .run_with_key(key)
-      .map_err(|error| read_failed("cannot read runs", error))?;
-    if let Some(recorded) = recorded {
-      if recorded.status() == &RunStatus::Pending {
-        self.admit(&db)?;
-      }
-      let prepared = prepare::resume_recorded(&mut db, root, task, recorded)?;
-      return self.begin(db, prepared);
-    }
-    again::note_missing_worktrees(&mut db, root, task)?;
-    let previous = again::check(&db, task, after)?;
-    self.admit(&db)?;
-    let checked = prepare::check_again(&db, root, task)?;
-    if revision.is_some_and(|revision| checked.task().revision() != revision) {
-      return Err(Rejection::TaskChangedMeanwhile);
-    }
-    if let Some(confirmed) = &remove_worktrees {
-      again::remove_worktrees(&mut db, root, &previous, confirmed)?;
-    }
-    let prepared = prepare::record(&mut db, root, key, checked)?;
-    self.begin(db, prepared)
   }
 
   /// Pauses `run` at its next checkpoint. Returns once the request is recorded; the run is
