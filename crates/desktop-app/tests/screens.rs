@@ -57,8 +57,10 @@ const BUILT: &[Screen] = &[
   Screen::Connections,
   Screen::EditConnection,
   Screen::EditTask,
+  Screen::Instructions,
   Screen::NewConnection,
   Screen::NewTask,
+  Screen::Overview,
   Screen::Pipelines,
   Screen::ProjectSettings,
   Screen::Secrets,
@@ -215,6 +217,7 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
   let mut all = vec![(Route::AllProjects, Vec::new()), (Route::AddProject(None), Vec::new())];
   all.extend([
     (at(ProjectPage::Overview(OverviewTab::Failed)), placeholder("Overview")),
+    (at(ProjectPage::Orchestrator), placeholder("Orchestrator")),
     (
       at(ProjectPage::Tasks(
         TaskList::new(TaskListTab::Done)
@@ -230,11 +233,13 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
       vec![READING_TASK],
     ),
     (at(ProjectPage::Task(key("KON-12"), changes)), vec![READING_TASK]),
+    (at(ProjectPage::MergeQueue), placeholder("Merge queue")),
     (at(ProjectPage::PullRequests), placeholder("Pull requests")),
     (at(ProjectPage::Usage), placeholder("Usage")),
     (at(ProjectPage::Pipelines), placeholder("Pipelines")),
     (at(ProjectPage::Agents), placeholder("Agents")),
     (at(ProjectPage::Instructions), placeholder("Instructions")),
+    (at(ProjectPage::Memory), placeholder("Memory")),
     (at(ProjectPage::Skills), placeholder("Skills")),
     (at(ProjectPage::Tools), placeholder("Tools")),
     (at(ProjectPage::Secrets), placeholder("Secrets")),

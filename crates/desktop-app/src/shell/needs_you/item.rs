@@ -17,7 +17,7 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_workspace::tasks::needs_you::{WaitingItem, WaitingKind};
+use orchester_workspace::tasks::{attention::NeedItem, needs_you::WaitingKind};
 
 use super::words;
 use crate::{
@@ -90,8 +90,8 @@ pub(super) fn group(ctx: &Ctx, id: &str, (name, this_tab): (&str, bool), count: 
 }
 
 /// What it is and since when it waits: *Approval · waiting 6 min*.
-fn top(ctx: &Ctx, id: &str, item: &WaitingItem, clock: bool) -> Row {
-  let (glyph, word) = words::kind(ctx, &item.kind);
+fn top(ctx: &Ctx, id: &str, item: &NeedItem, clock: bool) -> Row {
+  let (glyph, word) = words::kind(ctx, item);
   Row::new()
     .id(format!("{id}-top"))
     .spacing(ExtraSpacing::Pair.role())
@@ -105,7 +105,7 @@ fn top(ctx: &Ctx, id: &str, item: &WaitingItem, clock: bool) -> Row {
     )
     .child(Text::new(&ctx.t("needs_you.separator")).variant(ExtraTypography::Note.role()))
     .child(
-      Text::new(&words::waiting(ctx, item.since, clock))
+      Text::new(&words::waiting(ctx, item, clock))
         .id(format!("{id}-waiting"))
         .variant(ExtraTypography::Note.role())
         .nowrap(),
@@ -113,7 +113,7 @@ fn top(ctx: &Ctx, id: &str, item: &WaitingItem, clock: bool) -> Row {
 }
 
 /// What it asks and its task, 3 apart (`NczSN`, `uTGip`).
-fn ask(ctx: &Ctx, id: &str, item: &WaitingItem) -> [Element; 2] {
+fn ask(ctx: &Ctx, id: &str, item: &NeedItem) -> [Element; 2] {
   [
     Text::new(&words::title(ctx, item))
       .id(format!("{id}-title"))
@@ -136,8 +136,8 @@ pub(super) enum Action {
 }
 
 /// Where its run stands: *Run 140 · 01 Research · Explorer* (`GdH68`, `a2DwV`).
-fn place(ctx: &Ctx, id: &str, item: &WaitingItem) -> Option<Element> {
-  words::place(ctx, item).map(|place| -> Element {
+fn place(ctx: &Ctx, id: &str, item: &NeedItem) -> Option<Element> {
+  words::place(ctx, &item.waiting).map(|place| -> Element {
     Text::new(&place)
       .id(format!("{id}-where"))
       .variant(TypographyStyle::Caption)
@@ -147,13 +147,9 @@ fn place(ctx: &Ctx, id: &str, item: &WaitingItem) -> Option<Element> {
 }
 
 /// The item collapsed: its body, and its action at the end.
-pub(super) fn collapsed(ctx: &Ctx, id: &str, item: &WaitingItem, action: Action) -> Element {
+pub(super) fn collapsed(ctx: &Ctx, id: &str, item: &NeedItem, action: Action) -> Element {
   let place = place(ctx, id, item);
-  let button = ActionButton::new(
-    format!("{id}-action"),
-    ButtonKind::Secondary,
-    words::action(ctx, &item.kind),
-  );
+  let button = ActionButton::new(format!("{id}-action"), ButtonKind::Secondary, words::action(ctx, item));
   let (button, reason) = match action {
     Action::Press(glyph, press) => (button.icon(glyph).on_click(move || press()), None),
     Action::Unavailable(reason) => {
@@ -188,7 +184,7 @@ pub(super) fn collapsed(ctx: &Ctx, id: &str, item: &WaitingItem, action: Action)
 pub(super) fn expanded(
   ctx: &mut Ctx,
   (id, element): (&str, ElementRef),
-  item: &WaitingItem,
+  item: &NeedItem,
   collapse: Press,
   card: Element,
 ) -> Element {
@@ -224,7 +220,7 @@ pub(super) fn expanded(
         .spacing(ExtraSpacing::Fine.role())
         .with_children(ask(ctx, id, item))
         // A question says where its run stands (`a2DwV` in `Z4HeE3`); a request's card says it (`YDJsC`).
-        .with_children(matches!(item.kind, WaitingKind::Choice(_)).then(|| place(ctx, id, item)).flatten()),
+        .with_children(matches!(item.waiting.kind, WaitingKind::Choice(_)).then(|| place(ctx, id, item)).flatten()),
     )
     .child(card)
     .into()

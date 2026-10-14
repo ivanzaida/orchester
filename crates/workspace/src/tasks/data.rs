@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, path::Path, sync::Arc};
 use orchester_core::{
   conversation::{Message, latest_question},
   id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
-  memory::{Memory, MemoryScope, MemoryStatus},
+  memory::{Memory, MemoryFilter, MemoryStatus, MemoryStore, ScopeFilter},
   question::AskedQuestions,
   resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
   run::{Run, RunEvent, RunNumber, StepExecutor, TaskPhase},
@@ -16,13 +16,14 @@ use orchester_core::{
   task_group::GroupHold,
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
 use super::{
   approvals::{self, ShownApproval},
+  delivery::Unmerged,
   detail::run_store_error,
-  integration::merged_outside_in,
   list::{AwaitedPlan, AwaitedQuestion, AwaitedStep, CurrentStep, Latest, LatestRun, Phases, StepWait},
   needs_you::WaitingOnce,
   run_approvals,
@@ -100,9 +101,6 @@ pub struct ProjectTasks {
   pub proposed_memory: Arc<Vec<Timestamp>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
   pub phases: Arc<Phases>,
-  /// Latest runs that passed every step and whose work is on their base branch already, merged outside the app:
-  /// nothing of theirs waits to be merged.
-  pub merged_outside: Arc<std::collections::BTreeSet<RunId>>,
   /// How many runs of each task were started and can be read.
   pub runs: Arc<BTreeMap<TaskId, usize>>,
   /// Runs recorded as running that lost their agent because no runner is connected; 0 while
@@ -190,12 +188,15 @@ impl ProjectTasks {
     }
   }
 
-  pub fn load(repo_root: &Path) -> Result<Self, StoreError> {
-    Self::read(&ProjectDb::open(repo_root)?, repo_root)
+  /// Reads the tasks of the project at `repo_root`; git, through `programs`, tells the runs a person merged
+  /// outside Orchester ([`super::delivery`]).
+  pub fn load(repo_root: &Path, programs: &Programs) -> Result<Self, StoreError> {
+    Self::read(&ProjectDb::open(repo_root)?, repo_root, programs)
   }
 
-  /// [`Self::load`] from `db`, the database of the project at `repo_root`, opened already; it only reads.
-  pub fn read(db: &ProjectDb, repo_root: &Path) -> Result<Self, StoreError> {
+  /// [`Self::load`] from `db`, the project database of `repo_root`, opened already: All projects reads a
+  /// project's tasks without migrating its data.
+  pub fn read(db: &ProjectDb, repo_root: &Path, programs: &Programs) -> Result<Self, StoreError> {
     let tasks = db.tasks()?;
     let (not_shared, kept_tags) = kept(db)?;
     let under_review = db.reviewing_tool_approvals()?;
@@ -205,46 +206,28 @@ impl ProjectTasks {
     let asked = db.waiting_questions()?;
     let asking: Vec<RunId> = asked.iter().map(|asked| asked.request.run()).collect();
     let (mut group_holds, grouped) = group_holds(db)?;
-    let mut phases = Phases::new();
-    let mut counts = BTreeMap::new();
-    let mut auto_approving = Vec::new();
-    let mut merged_outside = std::collections::BTreeSet::new();
-    for task in tasks.iter().chain(&not_shared) {
-      let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
-      counts.insert(task.id(), runs.iter().filter(|run| run.is_ok()).count());
-      let latest = match runs.last() {
-        Some(Ok(latest)) => {
-          if db.task_group_for_run(latest).map_err(run_store_error)?.is_none() {
-            group_holds.remove(&task.id());
-          }
-          let mut shown = latest_run(db, task, latest)?;
-          // A run whose agent waits for a tool decision or an answer in its turn waits for a person, as one
-          // at a plan does.
-          if shown.phase == TaskPhase::Running
-            && (pending.iter().any(|shown| shown.approval.run == latest.id()) || asking.contains(&latest.id()))
-          {
-            shown.phase = TaskPhase::Waiting;
-          }
-          if shown.phase == TaskPhase::Succeeded && merged_outside_in(repo_root, latest) {
-            merged_outside.insert(latest.id());
-          }
-          if shown.phase.is_active() && run_approvals::auto_approving(db, latest)? {
-            auto_approving.push(AutoApprovingRun {
-              run: latest.id(),
-              number: latest.number(),
-              task: task.id(),
-              key: task.key().to_string().into(),
-            });
-          }
-          Latest::Run(shown)
-        }
-        Some(Err(unreadable)) => Latest::Unreadable(Unreadable::of(unreadable)),
-        None => continue,
-      };
-      phases.insert(task.id(), latest);
-    }
+    let mut unmerged = Unmerged::default();
+    let LatestRuns {
+      mut phases,
+      counts,
+      auto_approving,
+    } = latest_runs(
+      db,
+      tasks.iter().chain(&not_shared),
+      (&pending, &asking),
+      (&mut group_holds, &mut unmerged),
+    )?;
+    unmerged.settle(programs, repo_root, &mut phases);
     Ok(Self {
-      updated: Arc::new(updated(db, &tasks)?),
+      updated: Arc::new(
+        tasks
+          .iter()
+          .map(|task| {
+            db.task_organization_updated_at(task.id())
+              .map(|updated| (task.id(), updated.unwrap_or(task.created_at())))
+          })
+          .collect::<Result<_, _>>()?,
+      ),
       tags: Arc::new(db.project_tags()?),
       blocking: Arc::new(
         tasks
@@ -252,7 +235,7 @@ impl ProjectTasks {
           .map(|task| db.unfinished_blocking_tasks(task.id()).map(|links| (task.id(), links)))
           .collect::<Result<_, _>>()?,
       ),
-      proposed_memory: Arc::new(proposed_memory(db, &tasks)?),
+      proposed_memory: Arc::new(proposed_memory(db)?),
       tasks: Arc::new(tasks),
       not_shared: Arc::new(not_shared),
       kept_tags: Arc::new(kept_tags),
@@ -265,7 +248,6 @@ impl ProjectTasks {
       reviewing_tool_approvals: Arc::new(reviewing),
       asked: Arc::new(asked),
       phases: Arc::new(phases),
-      merged_outside: Arc::new(merged_outside),
       runs: Arc::new(counts),
       lost_to_runner: 0,
       auto_approving: Arc::new(auto_approving),
@@ -300,15 +282,65 @@ impl ProjectTasks {
   }
 }
 
-/// When each of `tasks` was last organized, else when it was created.
-fn updated(db: &ProjectDb, tasks: &[Task]) -> Result<std::collections::HashMap<TaskId, Timestamp>, StoreError> {
-  tasks
-    .iter()
-    .map(|task| {
-      db.task_organization_updated_at(task.id())
-        .map(|updated| (task.id(), updated.unwrap_or(task.created_at())))
-    })
-    .collect()
+/// What one reading finds of the tasks' runs: the latest run of each task that has one, how many runs of each
+/// can be read, and the active runs that auto-approve.
+struct LatestRuns {
+  phases: Phases,
+  counts: BTreeMap<TaskId, usize>,
+  auto_approving: Vec<AutoApprovingRun>,
+}
+
+/// The latest run of each of `tasks`, a run waiting in its turn on one of the `pending` tool requests or on
+/// a question of the `asking` runs waiting for a person. A task whose latest run is no group's leaves
+/// `group_holds`; a latest run that succeeded and was not merged goes to `unmerged`.
+fn latest_runs<'a>(
+  db: &ProjectDb,
+  tasks: impl Iterator<Item = &'a Task>,
+  (pending, asking): (&[ShownApproval], &[RunId]),
+  (group_holds, unmerged): (&mut BTreeMap<TaskId, GroupHold>, &mut Unmerged),
+) -> Result<LatestRuns, StoreError> {
+  let mut found = LatestRuns {
+    phases: Phases::new(),
+    counts: BTreeMap::new(),
+    auto_approving: Vec::new(),
+  };
+  for task in tasks {
+    let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
+    found
+      .counts
+      .insert(task.id(), runs.iter().filter(|run| run.is_ok()).count());
+    let latest = match runs.last() {
+      Some(Ok(latest)) => {
+        if db.task_group_for_run(latest).map_err(run_store_error)?.is_none() {
+          group_holds.remove(&task.id());
+        }
+        let mut shown = latest_run(db, task, latest)?;
+        // A run whose agent waits for a tool decision or an answer in its turn waits for a person, as one at
+        // a plan does.
+        if shown.phase == TaskPhase::Running
+          && (pending.iter().any(|shown| shown.approval.run == latest.id()) || asking.contains(&latest.id()))
+        {
+          shown.phase = TaskPhase::Waiting;
+        }
+        if shown.phase == TaskPhase::Succeeded {
+          unmerged.add(task.id(), latest);
+        }
+        if shown.phase.is_active() && run_approvals::auto_approving(db, latest)? {
+          found.auto_approving.push(AutoApprovingRun {
+            run: latest.id(),
+            number: latest.number(),
+            task: task.id(),
+            key: task.key().to_string().into(),
+          });
+        }
+        Latest::Run(shown)
+      }
+      Some(Err(unreadable)) => Latest::Unreadable(Unreadable::of(unreadable)),
+      None => continue,
+    };
+    found.phases.insert(task.id(), latest);
+  }
+  Ok(found)
 }
 
 /// Why each task of a reviewed group that holds its work waits, and every task of a reviewed group.
@@ -328,20 +360,15 @@ fn group_holds(
   Ok((holds, grouped))
 }
 
-/// When each record of the project's memory and of `tasks`' memories that waits for a person's approval was
-/// written, read in one query.
-fn proposed_memory(db: &ProjectDb, tasks: &[Task]) -> Result<Vec<Timestamp>, StoreError> {
-  let ids: std::collections::BTreeSet<TaskId> = tasks.iter().map(Task::id).collect();
-  Ok(
-    db.memories_with_status(MemoryStatus::Proposed)?
-      .iter()
-      .filter(|memory| match memory.scope() {
-        MemoryScope::Project => true,
-        MemoryScope::Task(task) => ids.contains(&task),
-      })
-      .map(Memory::created_at)
-      .collect(),
-  )
+/// When each record of the project's memory and of its tasks' memories that waits for a person's approval was
+/// written, in one listing.
+fn proposed_memory(db: &ProjectDb) -> Result<Vec<Timestamp>, StoreError> {
+  let proposed = MemoryFilter {
+    scope: ScopeFilter::All,
+    status: Some(MemoryStatus::Proposed),
+    pinned_only: false,
+  };
+  Ok(db.memories(&proposed)?.iter().map(Memory::created_at).collect())
 }
 
 /// `latest`, a run of `task`, with when it last changed and what it waits for.

@@ -178,6 +178,7 @@ fn kontur(runner: RunnerFacts, tasks: ProjectTasks) -> ProjectFacts {
       today: TokensUsed::new(3_800_000),
     }),
     read_failure: None,
+    undecided_runs: 0,
     limits: Vec::new(),
   }
 }

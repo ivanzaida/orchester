@@ -1,8 +1,9 @@
-//! Where the window opens when QA asks for a place (`tools/qa-app.ps1 -WindowX -WindowY`), for example
-//! on a display other than the person's main one. Without the variable the system places the window, as
-//! always; the place is never stored. A QA copy or any other build that is not the installed app refuses a
-//! malformed value and does not start, so a QA run never gets a window elsewhere than it asked; the installed
-//! app ignores a malformed value with a log line, so a stray variable never keeps it from starting.
+//! Where the window opens when QA asks for a place (`tools/qa-app.ps1 -WindowX -WindowY`), for example on a
+//! display other than the person's main one. Without the variable the system places the window, as
+//! always; the place is never stored. The installed app ignores the variable, set or not, valid or not: a
+//! stray variable never keeps it from starting or moves its window. Every other build (QA copies, debug
+//! builds, tests) is held to it: a value that is not a place refuses the start, so a QA run that asked for a
+//! place never gets a window elsewhere.
 
 use std::ffi::OsStr;
 
@@ -19,7 +20,7 @@ pub struct WindowPosition {
   pub y: i32,
 }
 
-/// Why the requested place was refused; a build that is not the installed app does not open a window then.
+/// Why the requested place was refused; a build other than the installed app does not open a window then.
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum PositionError {
   #[error("{POSITION_VARIABLE} is not text")]
@@ -31,21 +32,26 @@ pub enum PositionError {
 }
 
 impl WindowPosition {
-  /// The place this process was asked for; `None` when it was not ([`Self::for_build`]).
+  /// The place this process was asked for; `None` when it was not, or it is the installed app
+  /// ([`Self::requested`]).
   pub fn from_environment() -> Result<Option<Self>, PositionError> {
-    Self::for_build(Build::this(), std::env::var_os(POSITION_VARIABLE).as_deref())
+    Self::requested(Build::this(), std::env::var_os(POSITION_VARIABLE).as_deref())
   }
 
-  /// The place `build` takes from a value of [`POSITION_VARIABLE`]: the installed app logs a malformed value and
-  /// lets the system place the window; every other build refuses it.
-  pub fn for_build(build: Build, value: Option<&OsStr>) -> Result<Option<Self>, PositionError> {
-    match (build, Self::of_variable(value)) {
-      (Build::Installed, Err(error)) => {
-        tracing::warn!(%error, "the requested window position is ignored; the system places the window");
-        Ok(None)
+  /// The place `value` asks a `build` for: none for the installed app, which logs a value it was given and
+  /// leaves the place to the system whatever it says; for any other build the place `value` names, refused
+  /// when it is not one.
+  pub fn requested(build: Build, value: Option<&OsStr>) -> Result<Option<Self>, PositionError> {
+    if build == Build::Installed {
+      if value.is_some() {
+        tracing::warn!(
+          variable = POSITION_VARIABLE,
+          "the installed app does not take a window position; the system places the window"
+        );
       }
-      (_, read) => read,
+      return Ok(None);
     }
+    Self::of_variable(value)
   }
 
   /// The place a value of `POSITION_VARIABLE` asks for; `None` when the variable is not set.

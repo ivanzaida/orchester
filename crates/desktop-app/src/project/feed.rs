@@ -19,6 +19,7 @@ use lurq::{
   node::Element,
 };
 use orchester_core::{id::ProjectId, time::Timestamp};
+use orchester_exec::programs::Programs;
 use orchester_workspace::{
   background,
   messages::{self, Message},
@@ -223,7 +224,7 @@ impl Component for FeedLoader {
     // Tasks automation saved count as the screens' own saves.
     let saved = self.feed.revision.get() + outside.tasks;
     let hold = services.hold;
-    let (tasks, stale) = tasks(ctx, (root.clone(), saved, states), &hold);
+    let (tasks, stale) = tasks(ctx, (root.clone(), saved, states), (&hold, &services.programs));
     publish(&self.feed.tasks, tasks);
     if let Some(stale) = stale {
       publish(&self.feed.stale, stale);
@@ -343,13 +344,17 @@ fn status(ctx: &mut Ctx, runners: &Runners, root: &Path) -> Option<RunnerStatus>
 /// reading failed: `None` while a reading of tasks already shown is under way, which keeps what the
 /// previous reading said until this one ends. A failed reading keeps the tasks last read, so no page or
 /// form showing them is replaced; only a failed first reading leaves no tasks to show.
-fn tasks(ctx: &mut Ctx, deps: (PathBuf, u64, u64), hold: &ReadHold) -> (TasksState, Option<Option<Message>>) {
-  let hold = hold.clone();
+fn tasks(
+  ctx: &mut Ctx,
+  deps: (PathBuf, u64, u64),
+  (hold, programs): (&ReadHold, &Programs),
+) -> (TasksState, Option<Option<Message>>) {
+  let (hold, programs) = (hold.clone(), programs.clone());
   let load = ctx.future(deps, move |(repo_root, ..)| {
-    let hold = hold.clone();
+    let (hold, programs) = (hold.clone(), programs.clone());
     async move {
       hold.released().await;
-      background::run(move || ProjectTasks::load(&repo_root))
+      background::run(move || ProjectTasks::load(&repo_root, &programs))
         .await?
         .map_err(|error| {
           tracing::error!(%error, "cannot read the project's tasks");

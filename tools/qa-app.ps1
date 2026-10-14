@@ -16,8 +16,7 @@
 #
 # -WindowX and -WindowY, always together, open the window with its top-left corner there, in physical
 # pixels of the virtual desktop (negative for a display left of or above the main one), instead of where
-# the system puts it: ORCHESTER_APP_WINDOW_POSITION=<x>,<y> for the QA app only, nothing stored. The QA
-# app refuses a malformed value and does not start; the installed app ignores one with a log line.
+# the system puts it: ORCHESTER_APP_WINDOW_POSITION=<x>,<y> for the QA app only, nothing stored.
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
@@ -28,7 +27,7 @@ param(
     # The seed's scenarios (crates/desktop-app/examples/seed/kontur/scenarios/mod.rs), checked before
     # anything under .tmp/qa/<task>/ is replaced.
     [Parameter(Mandatory = $true)]
-    [ValidateSet("empty", "tasks", "task-states", "conversation", "changes", "cards", "decisions", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts")]
+    [ValidateSet("empty", "tasks", "tasks-memory", "task-states", "conversation", "changes", "cards", "decisions", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts")]
     [string]$Scenario,
     [switch]$FakeAgents,
     [switch]$NoRunner,

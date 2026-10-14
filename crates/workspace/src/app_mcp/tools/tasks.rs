@@ -63,7 +63,13 @@ const SEPARATOR: &str = ", ";
 pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
   let project = args.project.clone();
-  let data = blocking(move || Ok(ProjectTasks::load(&services.project(&project)?.repo_root)?)).await?;
+  let data = blocking(move || {
+    Ok(ProjectTasks::load(
+      &services.project(&project)?.repo_root,
+      &services.programs,
+    )?)
+  })
+  .await?;
   let filter = TaskFilter {
     statuses: args.status.into_iter().map(Into::into).collect(),
     ..TaskFilter::default()
@@ -103,7 +109,7 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
     let tags = db.project_tags()?;
     let published = crate::tasks::data::published_pipelines(&db)?;
     let pipeline = PipelineLabel::of(task.details().pipeline, &published);
-    let detail = TaskDetail::load_in(&root, task.id())?;
+    let detail = TaskDetail::load_settled(&root, task.id(), &services.programs)?;
     let worktrees = detail
       .history
       .iter()

@@ -1,28 +1,33 @@
 //! All projects' rules: when a session welcomes the person, where each listed project stands with its
 //! runs, and removing a project from the list, which never touches its folder or its data.
 
+mod support;
+
 use std::{fs, path::PathBuf, sync::Arc};
 
 use orchester_core::{
   id::ProjectId,
   name::Name,
   project::{Project, ProjectKey},
-  run::{RunCounts, TaskPhase},
+  run::RunLimit,
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_ipc::SessionEnd;
 use orchester_store::{AppDb, RegisteredProject};
 use orchester_workspace::{
   activity::Activity,
   messages::Message,
-  project_list::{self, ListedProject, ListedRuns, Listing, RunnerShown, Standing},
+  project_list::{self, ListedProject, Listing, RunCounts, RunnerShown, Standing},
   project_setup::NewProject,
   runner::{
     Runners,
     state::{RunnerFailure, RunnerState},
   },
+  tasks::data::ProjectTasks,
   workspace::{ProjectData, ProjectEntry, Workspace},
 };
+use support::{Fixture, at};
 use tempfile::TempDir;
 
 fn workspace(dir: &TempDir) -> Workspace {
@@ -59,9 +64,23 @@ fn entry(folder_missing: bool) -> ProjectEntry {
   }
 }
 
-/// A project whose tasks' latest runs are in `phases`, and where two things wait for the person.
-fn readable(phases: &[TaskPhase]) -> ProjectData {
-  ProjectData::Readable(Some(ListedRuns::new(Arc::from(phases), (2, 2))))
+/// A project's data with a run at work, a plan waiting for a decision, a run stopped at its limit and a draft.
+fn readable() -> ProjectData {
+  let mut fixture = Fixture::gated();
+  let working = fixture.task("Write docs", at(10));
+  fixture.started_run(working, at(20));
+  let planning = fixture.task("Plan zoom", at(30));
+  let mut plan = fixture.started_run(planning, at(40));
+  fixture.propose(&mut plan, "1. Zoom.", at(50));
+  let limited = fixture.task("Index the repo", at(60));
+  let mut run = fixture.started_run(limited, at(70));
+  let events = run
+    .stop_at_limit(RunLimit::Tokens, at(80))
+    .expect("stopped at its limit");
+  fixture.record(&run, &events);
+  fixture.task("Add sign-out", at(90));
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("the tasks read");
+  ProjectData::Readable(Some(Arc::new(tasks)))
 }
 
 #[test]
@@ -84,33 +103,28 @@ fn project_list_welcomes_a_session_without_projects_until_it_listed_one() {
 
 #[test]
 fn project_list_rows_say_where_each_project_stands() {
-  let phases = [
-    TaskPhase::Running,
-    TaskPhase::Waiting,
-    TaskPhase::Stuck,
-    TaskPhase::Draft,
-  ];
-  let online = ListedProject::of(
-    &entry(false),
-    Some(&readable(&phases)),
-    Some((&RunnerState::Online, Some(1))),
-  );
+  let data = readable();
+  let online = ListedProject::of(&entry(false), Some(&data), Some((&RunnerState::Online, Some(1))));
   assert_eq!(online.standing, Standing::Opens(RunnerShown::Online));
   assert_eq!(
     online.counts,
     Some(RunCounts {
       active: 1,
       needs_you: 2
-    })
+    }),
+    "the plan and the limit stop wait, as every Needs you counts them"
   );
   assert!(online.opens());
 
-  let not_started = ListedProject::of(&entry(false), Some(&readable(&phases)), None);
+  let not_started = ListedProject::of(&entry(false), Some(&data), None);
   assert_eq!(not_started.standing, Standing::Opens(RunnerShown::NotStarted));
   assert_eq!(
-    not_started.counts.map(|counts| counts.active),
-    Some(0),
-    "no agent works without a runner online"
+    not_started.counts,
+    Some(RunCounts {
+      active: 0,
+      needs_you: 2
+    }),
+    "no agent works without a runner online, and a run that only lost it waits for nobody"
   );
 
   let failed = RunnerState::Failed {
@@ -124,7 +138,7 @@ fn project_list_rows_say_where_each_project_stands() {
     "a dash until the counts are read, never a made-up 0"
   );
 
-  let missing = ListedProject::of(&entry(true), Some(&readable(&phases)), None);
+  let missing = ListedProject::of(&entry(true), Some(&data), None);
   assert_eq!(missing.standing, Standing::FolderMissing);
   assert_eq!((missing.counts, missing.opens()), (None, false));
 

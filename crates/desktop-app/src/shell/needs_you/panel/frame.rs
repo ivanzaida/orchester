@@ -14,7 +14,7 @@ use orchester_core::id::ProjectId;
 
 use super::{Group, leads::go};
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, waiting::Destination},
   routes::{OverviewTab, ProjectPage, Route},
   theme::{ExtraTypography, IconSize, NeedsYouSpacing, NeedsYouText},
   ui::{
@@ -135,7 +135,7 @@ pub(super) fn footer(
   };
   let show_all = chosen.map(|waiting| {
     let route = Route::Project(waiting.project, ProjectPage::Overview(OverviewTab::NeedsYou));
-    let press = go(navigation, open, Some(route));
+    let press = go(navigation, open, Destination { route, pointed: None });
     ActionButton::new(
       "needs-you-show-all",
       ButtonKind::Ghost,

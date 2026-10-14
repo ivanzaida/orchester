@@ -25,10 +25,12 @@ use orchester_core::{
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, StoreError};
 
 pub use super::permissions::{ChangeState, RunPermissions};
 use super::{
+  delivery::{self, Delivery},
   engines,
   history::{self, RunRecord},
   index_use::IndexUses,
@@ -243,6 +245,9 @@ pub struct TaskDetail {
   pub run: Option<RunView>,
   /// The merge of the latest run into its base branch, once it was merged.
   pub merge: Option<RunMerge>,
+  /// What became of the latest run's work when it passed every step and Orchester did not merge it, as git
+  /// tells it ([`Self::load_settled`]); `Waiting` as far as [`Self::load_in`] knows.
+  pub delivery: Delivery,
   /// The task's conversation, oldest first.
   pub messages: Vec<Message>,
   /// The latest run, when it cannot be read (02.R `SUuwV`): `run` is `None`.
@@ -268,7 +273,25 @@ impl TaskDetail {
   /// Where the task stands, from its latest run; as for a task without runs while that run cannot
   /// be read.
   pub fn phase(&self) -> TaskPhase {
-    TaskPhase::of(&self.task, self.run.as_ref().map(|run| &run.run), self.merge.as_ref())
+    match (
+      TaskPhase::of(&self.task, self.run.as_ref().map(|run| &run.run), self.merge.as_ref()),
+      &self.delivery,
+    ) {
+      (TaskPhase::Succeeded, Delivery::MergedOutside(_)) => TaskPhase::Merged,
+      (phase, _) => phase,
+    }
+  }
+
+  /// [`Self::load_in`] with what git, through `programs`, tells of a latest run that passed every step and that
+  /// Orchester did not merge ([`super::delivery`]), as the task list's rows read it.
+  pub fn load_settled(repo_root: &Path, task: TaskId, programs: &Programs) -> Result<Self, StoreError> {
+    let mut detail = Self::load_in(repo_root, task)?;
+    if detail.phase() == TaskPhase::Succeeded
+      && let Some(run) = &detail.run
+    {
+      detail.delivery = delivery::of_run(programs, repo_root, &run.run);
+    }
+    Ok(detail)
   }
 
   /// Whether the task can be edited: a draft or a task with a recorded run, unless it was kept
@@ -349,6 +372,7 @@ impl TaskDetail {
       run_task: None,
       run: None,
       merge: None,
+      delivery: Delivery::Waiting,
       messages,
       latest_unreadable: None,
       history: Vec::new(),

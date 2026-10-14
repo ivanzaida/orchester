@@ -19,10 +19,12 @@ mod conversation;
 mod decisions;
 mod fonts;
 mod form;
+pub mod instructions;
 mod lifecycle;
 mod markdown;
 mod metrics;
 mod needs_you;
+mod overview;
 mod palette;
 pub mod pipelines;
 mod projects;
@@ -56,6 +58,7 @@ pub use self::{
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
+  overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
   projects::{ProjectsSpacing, ProjectsText},
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
@@ -87,6 +90,7 @@ pub fn install(app: &mut App, mode: Mode) {
   metrics::install(theme);
   pipelines::install(theme);
   agents::install(theme);
+  instructions::install(theme);
   startup::install(theme);
   settings::install(theme);
   accounts::install(theme);
@@ -94,6 +98,7 @@ pub fn install(app: &mut App, mode: Mode) {
   decisions::install(theme);
   task_form::install(theme);
   tasks::install(theme);
+  overview::install(theme);
   connections::install(theme);
   secrets::install(theme);
   projects::install(theme);

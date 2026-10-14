@@ -149,6 +149,7 @@ impl SkillsScreen {
           outside.pipelines,
           outside.project_settings,
           outside.runs,
+          outside.skills,
           project.feed.tasks.get(),
         ),
         move |(root, _, reset, ..)| {

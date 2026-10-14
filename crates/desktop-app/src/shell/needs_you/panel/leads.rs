@@ -1,19 +1,20 @@
-//! Where each item of the panel leads (`Needs you · where each item leads` `icGHG`), and how it is told from the
-//! others while the panel shows.
+//! Where each item of the panel leads, as the Overview's *Needs you* cards lead too
+//! (`navigation::waiting::Destination`, `Needs you · where each item leads` `icGHG`), and how it is told from
+//! the others while the panel shows.
 
 use std::sync::Arc;
 
-use lurq::core::Signal;
+use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::id::ProjectId;
-use orchester_workspace::tasks::needs_you::{WaitingItem, WaitingKind};
+use orchester_workspace::tasks::{
+  attention::{Decided, NeedItem},
+  needs_you::{WaitingItem, WaitingKind},
+};
 
-use super::Shown;
+use super::super::item::Action;
 use crate::{
-  navigation::{
-    Navigation,
-    pointed::{Pointed, PointedCard},
-  },
-  routes::{ProjectPage, Route, TaskView},
+  navigation::{Navigation, waiting::Destination},
+  ui::{icon::Icon, message::message_text},
 };
 
 /// How an item is told from the others while the panel shows, and its element id's end: its card's key when
@@ -38,63 +39,35 @@ pub(super) fn key_of(project: ProjectId, item: &WaitingItem) -> Arc<str> {
   Arc::from(format!("task-{task}-{kind}-{step}"))
 }
 
-/// Where an item that is not answered in place leads: an agent's question to the task's Conversation, where
-/// the composer answers it; the others to the task's Summary.
-pub(super) fn route_of(shown: &Shown) -> Option<Route> {
-  let task = shown.item.task.as_ref()?;
-  let view = match shown.item.kind {
-    WaitingKind::Question(_) => TaskView::Conversation,
-    _ => TaskView::of(crate::routes::TaskTab::Summary),
-  };
-  task_route(shown.project, &task.key, view)
-}
-
-pub(super) fn task_route(project: ProjectId, key: &str, view: TaskView) -> Option<Route> {
-  let key = key.parse().ok()?;
-  Some(Route::Project(project, ProjectPage::Task(key, view)))
-}
-
-/// The decision card of the task's Summary an item points at, which the page brings into view and rings
-/// (`icGHG`): the plan under review, raising the limit, the decision after retries.
-pub(super) fn pointed_of(shown: &Shown) -> Option<Pointed> {
-  let card = match shown.item.kind {
-    WaitingKind::Plan(_) => PointedCard::Plan,
-    WaitingKind::StoppedAtLimit { .. } => PointedCard::RaiseLimit,
-    WaitingKind::Decision(_) => PointedCard::Retries,
-    _ => return None,
-  };
-  let task = shown.item.task.as_ref()?.key.parse().ok()?;
-  Some(Pointed {
-    project: shown.project,
-    task,
-    card,
-  })
-}
-
-/// Goes to `route` and closes the panel, which the page opening takes the place of.
-pub(super) fn go(navigation: &Navigation, open: &Signal<bool>, route: Option<Route>) -> Arc<dyn Fn() + Send + Sync> {
-  let (navigation, open) = (navigation.clone(), open.clone());
-  Arc::new(move || {
-    if let Some(route) = route.clone() {
-      navigation.go(route);
+/// What the action of `need` of `project`, collapsed and not answered in place, does: opens where it leads and
+/// closes the panel, or, where it leads nowhere yet, says why.
+pub(super) fn action(
+  ctx: &Ctx,
+  (project, need): (ProjectId, &NeedItem),
+  (navigation, open): (&Navigation, &Signal<bool>),
+) -> Action {
+  match Destination::of(project, need) {
+    Err(reason) => Action::Unavailable(message_text(ctx, &reason)),
+    Ok(destination) => {
+      let glyph = if need.decided() == Decided::Conversation {
+        Icon::MessageCircle
+      } else {
+        Icon::ArrowUpRight
+      };
+      Action::Press(glyph, go(navigation, open, destination))
     }
-    open.set(false);
-  })
+  }
 }
 
-/// Goes to `route`, pointing at `card` on it, and closes the panel.
-pub(super) fn open_at(
+/// Goes to `destination`, pointing at its card, and closes the panel, which the page opening takes the place of.
+pub(super) fn go(
   navigation: &Navigation,
   open: &Signal<bool>,
-  route: Route,
-  card: Option<Pointed>,
+  destination: Destination,
 ) -> Arc<dyn Fn() + Send + Sync> {
-  let Some(card) = card else {
-    return go(navigation, open, Some(route));
-  };
   let (navigation, open) = (navigation.clone(), open.clone());
   Arc::new(move || {
-    navigation.go_to_card(&route, card.clone());
+    destination.go(&navigation);
     open.set(false);
   })
 }

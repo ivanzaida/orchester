@@ -122,13 +122,13 @@ impl Component for AllProjects {
 /// reports; the previous data stays on screen while it is read again. Held while QA holds reads
 /// (`hold_reads`).
 fn read_data(ctx: &mut Ctx, services: &Services, entries: Entries) -> ListedData {
-  let hold = services.hold.clone();
+  let (hold, programs) = (services.hold.clone(), services.programs.clone());
   ctx
     .future(entries, move |Entries(entries, _)| {
-      let hold = hold.clone();
+      let (hold, programs) = (hold.clone(), programs.clone());
       async move {
         hold.released().await;
-        background::run(move || ListedData::read(&entries)).await
+        background::run(move || ListedData::read(&entries, &programs)).await
       }
     })
     .state()

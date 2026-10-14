@@ -5,12 +5,13 @@
 //! instead (the plan revision). A new session of an attempt a failure sent back is told that
 //! failure ([`super::retry`]).
 
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, path::Path};
 
 use orchester_core::{
   connection::stream::RunnerProblem,
   id::StepExecutionId,
   resource::{InjectionEvent, Instruction, Step},
+  revision::Revision,
   run::{
     AssembledPrompt, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, PinnedVersion,
     PipelineInfo, Plan, PlanRevision, PromptAssemblyError, PromptInput, Run, RunContext, StepOutput,
@@ -19,7 +20,7 @@ use orchester_core::{
 };
 
 use super::{
-  super::{super::run::RunTask, Occasion},
+  super::{super::run::RunTask, Continuation, Occasion},
   PromptParts, problem,
 };
 
@@ -41,6 +42,7 @@ impl RunTask {
   ) -> Result<T, RunnerProblem> {
     let PromptParts {
       execution,
+      worktree,
       step,
       profile,
       continuation,
@@ -49,11 +51,7 @@ impl RunTask {
       memory,
       working,
     } = parts;
-    let event = if continuation.session.is_some() {
-      InjectionEvent::Resume
-    } else {
-      InjectionEvent::Start
-    };
+    let (event, checked_out) = injection(continuation, worktree);
     let pipeline = self.run.snapshot().pipeline();
     let pipeline_name = self.pipeline_name()?;
     let outputs = self
@@ -83,6 +81,7 @@ impl RunTask {
       run: Some(RunContext {
         run: &self.run,
         attempt: self.attempt_number(execution),
+        checked_out: checked_out.as_ref(),
       }),
       pipeline: PipelineInfo {
         id: pipeline.resource,
@@ -192,4 +191,29 @@ fn dependencies<'a>(
       })
     })
     .collect()
+}
+
+/// The event an invocation continuing as `continuation` is injected at: a new session's
+/// [`InjectionEvent::Start`], a resumed one's [`InjectionEvent::Resume`] with the commit its worktree
+/// has checked out.
+fn injection(continuation: &Continuation, worktree: &Path) -> (InjectionEvent, Option<Revision>) {
+  if continuation.session.is_some() {
+    (InjectionEvent::Resume, checked_out(worktree))
+  } else {
+    (InjectionEvent::Start, None)
+  }
+}
+
+/// The commit `worktree` has checked out, a resumed agent's `run.revision`: its latest checkpoint, or
+/// a commit it made or merged itself since, which a clean worktree leaves without a checkpoint.
+fn checked_out(worktree: &Path) -> Option<Revision> {
+  match super::super::super::checkpoint::head(worktree) {
+    Ok(revision) => Some(revision),
+    // The variable falls back to the latest checkpoint; before the first one the step then fails
+    // naming it, as at start.
+    Err(error) => {
+      tracing::warn!(%error, worktree = %worktree.display(), "the resumed agent's worktree head could not be read");
+      None
+    }
+  }
 }

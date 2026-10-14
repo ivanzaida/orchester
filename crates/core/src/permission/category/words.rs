@@ -4,12 +4,45 @@
 //! (a backslash is a plain character) for the script a `pwsh -Command` runs. Nothing is guessed: a
 //! variable, a substitution, a subshell or group, a here-document, a brace expansion or an unclosed
 //! quote leaves the part unread, and it is then classified as Unknown. The one variable read is one the
-//! line set to a plain literal before ([`Variables`]): its uses are its value.
+//! line set to a plain literal before ([`Variables`]): its uses are its value. The status an earlier
+//! command left (`$?`, `${PIPESTATUS[0]}`, PowerShell's `$?` and `$LASTEXITCODE`) is a number or a
+//! boolean whatever ran: it is kept as written and the part marked ([`RawPart::status`]), which only a
+//! program that prints it may hold.
 
 use super::{
   heredoc::Heredoc,
   variables::{Variables, is_assignment, name_char},
 };
+
+/// The longest status a `$` may start: `{PIPESTATUS[999]}`.
+const STATUS_LONGEST: usize = 17;
+
+/// The length of the bash status `ahead` starts with (after its `$`): `?`, `{?}` or `{PIPESTATUS[N]}`
+/// with one to three digits.
+fn bash_status(ahead: &str) -> Option<usize> {
+  if ahead.starts_with("{?}") {
+    return Some(3);
+  }
+  if ahead.starts_with('?') {
+    return Some(1);
+  }
+  let index = ahead.strip_prefix("{PIPESTATUS[")?;
+  let digits = index.chars().take_while(char::is_ascii_digit).count();
+  ((1..=3).contains(&digits) && index[digits..].starts_with("]}")).then_some("{PIPESTATUS[".len() + digits + 2)
+}
+
+/// The length of the PowerShell status `ahead` starts with (after its `$`): `?` or `LASTEXITCODE`, without
+/// case, with no name character, `?` or `:` (a drive or scope) after it.
+fn powershell_status(ahead: &str) -> Option<usize> {
+  ["?", "lastexitcode"].iter().find_map(|name| {
+    let (head, rest) = (ahead.get(..name.len())?, ahead.get(name.len()..)?);
+    let ends = rest
+      .chars()
+      .next()
+      .is_none_or(|next| !(name_char(next) || matches!(next, '?' | ':')));
+    (head.eq_ignore_ascii_case(name) && ends).then_some(name.len())
+  })
+}
 
 /// Whether a redirection's word names a file descriptor (`2`, `-`, `2-`) rather than a file.
 fn is_descriptor(word: &str) -> bool {
@@ -64,6 +97,9 @@ pub(super) struct RawPart {
   pub(super) heredoc: bool,
   /// Its first word has a quote or an escape before its first `=`: no assignment, whatever it reads.
   pub(super) quoted_name: bool,
+  /// A word of it holds the status an earlier command left; never a redirection's file, which is then
+  /// not read.
+  pub(super) status: bool,
 }
 
 impl RawPart {
@@ -112,6 +148,8 @@ struct Splitter {
   opened_by: Joiner,
   /// The word being collected has a quote or an escape before its first `=`.
   name_quoted: bool,
+  /// The word being collected holds the status an earlier command left.
+  status_word: bool,
   /// Here-documents whose bodies follow the current line, with the number of the part that reads each.
   heredocs: Vec<(usize, Heredoc)>,
 }
@@ -139,6 +177,7 @@ pub(super) fn split(command: &str, quoting: Quoting, homes: ShellHomes) -> Vec<R
     variables: Variables::default(),
     opened_by: Joiner::Edge,
     name_quoted: false,
+    status_word: false,
     heredocs: Vec::new(),
   };
   let mut chars = command.chars().peekable();
@@ -203,9 +242,15 @@ impl Splitter {
 
   fn end_word(&mut self) {
     let quoted = std::mem::take(&mut self.name_quoted);
+    let status = std::mem::take(&mut self.status_word);
     let Some(word) = self.word.take() else {
       return;
     };
+    if status {
+      // A file named by a status is no file the words name.
+      self.part.unread |= self.redirect.is_some();
+      self.part.status = true;
+    }
     match self.redirect.take() {
       Some(Redirect::Write) => self.part.writes.push(word),
       Some(Redirect::Read) => self.part.reads.push(word),
@@ -380,6 +425,9 @@ impl Splitter {
   /// that closes a double-quoted string. Anything else may expand (`$x`, `$(…)`, `$'…'`, `$"…"`,
   /// `$[…]`) and leaves the part unread; PowerShell's `$null` is kept as a word, the null device.
   fn dollar(&mut self, chars: &mut Chars<'_>, quoted: bool) {
+    if self.exit_status(chars) {
+      return;
+    }
     if self.quoting == Quoting::Bash && self.literal_variable(chars, quoted) {
       return;
     }
@@ -395,6 +443,25 @@ impl Splitter {
     } else {
       self.part.unread = true;
     }
+  }
+
+  /// Whether the status an earlier command left follows the `$`: bash's `?`, `{?}` and `{PIPESTATUS[N]}`,
+  /// PowerShell's `?` and `LASTEXITCODE` (without case, ending the name). It is taken, kept as written.
+  fn exit_status(&mut self, chars: &mut Chars<'_>) -> bool {
+    let ahead: String = chars.clone().take(STATUS_LONGEST + 1).collect();
+    let length = match self.quoting {
+      Quoting::Bash => bash_status(&ahead),
+      Quoting::PowerShell => powershell_status(&ahead),
+    };
+    let Some(length) = length else {
+      return false;
+    };
+    self.push('$');
+    for c in chars.take(length).collect::<Vec<_>>() {
+      self.push(c);
+    }
+    self.status_word = true;
+    true
   }
 
   /// Whether a variable set to a literal follows (`name` or `{name}`); its value is taken in its place.
@@ -414,7 +481,11 @@ impl Splitter {
       _ => None,
     }
     .filter(|home| quoted || !home.contains([' ', '\t', '*', '?', '[']));
-    let Some(value) = self.variables.value(&name).map(str::to_owned).or(home) else {
+    let value = self
+      .variables
+      .value(&name)
+      .filter(|value| quoted || !value.contains('\\'));
+    let Some(value) = value.map(str::to_owned).or(home) else {
       return false;
     };
     *chars = ahead;

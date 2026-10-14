@@ -12,7 +12,7 @@ use orchester_core::{
   id::RunId,
   integration::{
     Cleanup, CleanupError, FolderListing, GitError, KeepReason, LeftWorktree, Leftovers, MergeError,
-    RecordedCleanupError, RunMerge, clean_up_recorded, leftovers_of, merge_run, merged_outside,
+    RecordedCleanupError, RunMerge, clean_up_recorded, leftovers_of, merge_run,
   },
   run::Run,
   store::{MergeStore, RunStore, TaskStore},
@@ -210,15 +210,6 @@ pub fn file_list(files: &[String], separator: &str) -> String {
     list.push('…');
   }
   list
-}
-
-/// Whether the work of `run`, which passed every step, is on its base branch already, merged outside the app
-/// ([`merged_outside`]). A git that cannot run leaves it waiting to be merged; the log says why.
-pub(super) fn merged_outside_in(repo_root: &Path, run: &Run) -> bool {
-  merged_outside(&Programs::processes().runner(), Path::new(GIT), repo_root, run).unwrap_or_else(|error| {
-    tracing::warn!(%error, "cannot tell whether a run's work was merged outside the app");
-    false
-  })
 }
 
 /// A merged run and what clearing up after it did.

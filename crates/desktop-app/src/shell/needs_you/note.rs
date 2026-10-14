@@ -20,7 +20,10 @@ use orchester_core::{
 };
 use orchester_workspace::{
   display,
-  tasks::needs_you::{Settled, WaitingItem, WaitingKind},
+  tasks::{
+    attention::NeedItem,
+    needs_you::{Settled, WaitingKind},
+  },
 };
 
 use crate::{
@@ -34,7 +37,7 @@ use crate::{
 type Press = Arc<dyn Fn() + Send + Sync>;
 
 /// The note of `item`, element id `id`, which went as `settled`; *Open* does `open`.
-pub(super) fn note(ctx: &Ctx, id: &str, (item, settled): (&WaitingItem, &Settled), open: Press) -> Element {
+pub(super) fn note(ctx: &Ctx, id: &str, (item, settled): (&NeedItem, &Settled), open: Press) -> Element {
   let about = About::of(ctx, item);
   let (glyph, color) = glyph(settled);
   let link = ActionButton::new(format!("{id}-open"), ButtonKind::Ghost, ctx.t("needs_you.note.open"))
@@ -81,8 +84,8 @@ struct About {
 }
 
 impl About {
-  fn of(ctx: &Ctx, item: &WaitingItem) -> Self {
-    let (agent, subject): (Arc<str>, Arc<str>) = match &item.kind {
+  fn of(ctx: &Ctx, item: &NeedItem) -> Self {
+    let (agent, subject): (Arc<str>, Arc<str>) = match &item.waiting.kind {
       WaitingKind::Approval(shown) if !shown.approval.command => (
         shown.approval.agent.as_str().into(),
         ctx.t_args(
@@ -103,7 +106,7 @@ impl About {
       WaitingKind::Choice(choice) => (choice.agent.clone(), first_line(&choice.first).into()),
       _ => ("".into(), super::words::title(ctx, item)),
     };
-    let task = item.task.as_ref().map_or_else(|| "".into(), |task| task.key.clone());
+    let task = item.task().map_or_else(|| "".into(), |task| task.key.clone());
     Self { agent, subject, task }
   }
 }

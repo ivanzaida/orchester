@@ -8,6 +8,7 @@ pub mod input;
 pub mod pointed;
 pub mod shortcuts;
 pub mod tabs;
+pub mod waiting;
 
 use std::sync::{
   Arc,

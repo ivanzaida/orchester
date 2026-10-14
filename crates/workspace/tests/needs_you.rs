@@ -19,9 +19,16 @@ use orchester_core::{
   run::{BranchName, InterruptCause, PendingToolApproval, Run, RunLimit, WaitReason},
   store::{ActivityStore, MergeStore},
 };
-use orchester_workspace::tasks::{
-  data::ProjectTasks,
-  needs_you::{WaitingItem, WaitingKind},
+use orchester_exec::programs::Programs;
+use orchester_workspace::{
+  project_list::RunCounts,
+  tasks::{
+    attention::{self, Decided, NeedItem, NeedKind, SummaryCard},
+    board::{BoardTab, Figures},
+    data::ProjectTasks,
+    list::{self, TaskRow, TaskTab},
+    needs_you::{WaitingItem, WaitingKind},
+  },
 };
 use support::{Fixture, at};
 
@@ -119,7 +126,7 @@ fn project() -> (Fixture, ProjectTasks) {
 
   let working = fixture.task("Write docs", at(160));
   fixture.started_run(working, at(170));
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   (fixture, tasks)
 }
 
@@ -238,7 +245,7 @@ fn needs_you_lists_each_step_that_waits_in_one_run() {
     native: None,
   };
   fixture.db.request_tool_approval(&approval).expect("the request waits");
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   let items = tasks.waiting();
   let mut listed = kinds(&items);
   listed.sort_unstable();
@@ -253,6 +260,18 @@ fn needs_you_lists_each_step_that_waits_in_one_run() {
     .map(|item| item.step.as_ref().map(|step| step.name.to_string()))
     .collect();
   assert_eq!(steps, [Some("Implement".to_owned()), Some("Research".to_owned())]);
+  assert_eq!(BoardTab::NeedsYou.rows(&tasks, 6, ", ").len(), 1, "one task waits");
+  let counts = [
+    BoardTab::NeedsYou.count(&tasks),
+    Figures::of(&tasks, at(0)).needs_you,
+    attention::items(&tasks).len(),
+  ];
+  assert_eq!(
+    counts,
+    [tasks.needs_you(); 3],
+    "the tab, the figure and the cards count each waiting object, as the pill does"
+  );
+  assert_eq!(tasks.needs_you(), 3);
 }
 
 #[test]
@@ -283,7 +302,7 @@ fn needs_you_lists_a_step_end_question_with_options_once() {
   )
   .expect("a request");
   fixture.db.ask_questions(&asked).expect("the question waits");
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   let mut listed = kinds(&tasks.waiting());
   listed.sort_unstable();
   assert_eq!(
@@ -310,7 +329,7 @@ fn needs_you_lists_the_plans_and_questions_a_run_stopped_at_its_limit_or_interru
   fixture.propose(&mut crashed, "1. Fix.", at(50));
   let events = crashed.interrupt(InterruptCause::Crashed, at(60)).expect("interrupted");
   fixture.record(&crashed, &events);
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   let items = tasks.waiting();
   let listed: Vec<_> = items
     .iter()
@@ -361,8 +380,9 @@ fn proposed(run: &Run, text: &str, now: i64) -> Memory {
   )
 }
 
-#[test]
-fn needs_you_lists_a_limit_stop_work_ready_to_merge_and_the_memory_waiting_as_one_item() {
+/// A project where a run stopped at its limit, a run passed every step and waits to be merged, another's merge
+/// was recorded, and two memory records wait for approval.
+fn limit_merge_memory() -> ProjectTasks {
   let mut fixture = Fixture::new();
   let limited = fixture.task("Index the repo", at(10));
   let mut run = fixture.started_run(limited, at(20));
@@ -392,7 +412,12 @@ fn needs_you_lists_a_limit_stop_work_ready_to_merge_and_the_memory_waiting_as_on
     .db
     .add_memories(&records)
     .expect("the records wait for approval");
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks")
+}
+
+#[test]
+fn needs_you_lists_a_limit_stop_work_ready_to_merge_and_the_memory_waiting_as_one_item() {
+  let tasks = limit_merge_memory();
   let items = tasks.waiting();
   assert_eq!(
     kinds(&items),
@@ -415,66 +440,98 @@ fn needs_you_lists_a_limit_stop_work_ready_to_merge_and_the_memory_waiting_as_on
   assert_eq!(tasks.needs_you(), 3);
 }
 
-/// Runs `git` with `args` in `repo`, which must succeed.
-fn git(repo: &std::path::Path, args: &[&str]) {
-  let status = std::process::Command::new("git")
-    .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
-    .args(args)
-    .current_dir(repo)
-    .status()
-    .expect("git runs");
-  assert!(status.success(), "git {args:?}: {status}");
-}
-
-/// A task titled `title` whose run on `main` passed every step at `now`; with `commit`, its branch has a commit of
-/// its own, else it points at main's head, as once it was merged outside the app.
-fn passed(fixture: &mut Fixture, title: &str, (now, commit): (i64, bool)) -> orchester_core::id::TaskId {
-  let task = fixture.task(title, at(now));
-  let main = BranchName::new("main").expect("a branch");
-  let mut run = fixture.started_run_into(task, Some(main), at(now + 1));
-  fixture.succeed(&mut run, at(now + 2));
-  let repo = fixture.repo.path().to_path_buf();
-  let branch = run.branch().to_string();
-  git(&repo, &["branch", &branch, "main"]);
-  if commit {
-    git(&repo, &["checkout", "--quiet", &branch]);
-    git(&repo, &["commit", "--quiet", "--allow-empty", "-m", title]);
-    git(&repo, &["checkout", "--quiet", "main"]);
-  }
-  task
+#[test]
+fn needs_you_items_are_decided_at_the_card_the_panel_and_the_overview_open() {
+  let (_fixture, tasks) = project();
+  let decided: Vec<Decided> = attention::items(&tasks).iter().map(NeedItem::decided).collect();
+  assert!(
+    matches!(
+      decided.as_slice(),
+      [
+        Decided::Summary(Some(SummaryCard::Plan)),
+        Decided::Conversation,
+        Decided::Card(_),
+        Decided::Card(_),
+        Decided::Summary(None),
+      ]
+    ),
+    "the plan, the agent's question, the request, the question with answers, the interrupted run: {decided:?}"
+  );
+  let decided: Vec<Decided> = attention::items(&limit_merge_memory())
+    .iter()
+    .map(NeedItem::decided)
+    .collect();
+  assert!(
+    matches!(
+      decided.as_slice(),
+      [
+        Decided::Summary(Some(SummaryCard::RaiseLimit)),
+        Decided::Summary(None),
+        Decided::Unavailable(_),
+      ]
+    ),
+    "the limit, the work to merge, the memory: {decided:?}"
+  );
 }
 
 #[test]
-fn needs_you_leaves_out_finished_tasks_and_work_merged_outside_the_app() {
-  use orchester_core::task::organization::{ChangeActor, WorkflowStatus};
-
-  let mut fixture = Fixture::new();
-  let repo = fixture.repo.path().to_path_buf();
-  git(&repo, &["init", "--quiet", "--initial-branch=main"]);
-  git(&repo, &["commit", "--quiet", "--allow-empty", "-m", "base"]);
-  passed(&mut fixture, "Ready to merge", (10, true));
-  passed(&mut fixture, "Merged by hand", (20, false));
-  for (title, now, status) in [
-    ("Done by hand", 30, WorkflowStatus::Done),
-    ("Dropped", 40, WorkflowStatus::Canceled),
-  ] {
-    let task = passed(&mut fixture, title, (now, true));
-    fixture
-      .db
-      .update_task_organization(task, ChangeActor::Person, at(now + 3), |organization| {
-        organization.with_status(status)
-      })
-      .expect("the workflow status is saved");
+fn needs_you_counts_the_same_on_every_surface() {
+  let tasks = limit_merge_memory();
+  assert_eq!(tasks.needs_you(), 3, "the limit stop, the work to merge and the memory");
+  let counted = [
+    ("Overview column", attention::count(&tasks)),
+    ("Overview tab", BoardTab::NeedsYou.count(&tasks)),
+    ("Need your input", Figures::of(&tasks, at(0)).needs_you),
+    ("task list tab", TaskTab::NeedsYou.count(&tasks)),
+    ("All projects", RunCounts::of(&tasks, true).needs_you),
+    ("All projects offline", RunCounts::of(&tasks, false).needs_you),
+  ];
+  for (surface, count) in counted {
+    assert_eq!(count, tasks.needs_you(), "{surface} counts what the pill counts");
   }
-  let tasks = ProjectTasks::load(&repo).expect("load the project's tasks");
-  let items = tasks.waiting();
-  assert_eq!(kinds(&items), ["merge"], "{items:?}");
+  let titles = |rows: Vec<TaskRow>| rows.iter().map(|row| row.title.to_string()).collect::<Vec<_>>();
   assert_eq!(
-    items[0].task.as_ref().map(|task| &*task.title),
-    Some("Ready to merge"),
-    "only work not on main yet, of a task not finished, waits to be merged"
+    titles(list::rows(&tasks.tasks, &tasks, TaskTab::NeedsYou)),
+    ["Index the repo", "Write docs"],
+    "the task list's tab lists the tasks of what waits; the memory is no task's"
   );
-  assert_eq!(tasks.needs_you(), 1);
+}
+
+#[test]
+fn needs_you_tab_lists_the_memory_waiting_after_its_tasks_and_counts_it() {
+  let mut fixture = Fixture::new();
+  let passed = fixture.task("Write docs", at(10));
+  let mut done = fixture.started_run(passed, at(20));
+  fixture.succeed(&mut done, at(30));
+  let records = [
+    proposed(&done, "Index with tree-sitter.", 40),
+    proposed(&done, "Docs live in docs/.", 50),
+  ];
+  fixture
+    .db
+    .add_memories(&records)
+    .expect("the records wait for approval");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
+  assert_eq!(BoardTab::NeedsYou.rows(&tasks, 0, ", ").len(), 0);
+  let lines = BoardTab::NeedsYou.project_rows(&tasks, "Kontur");
+  let [line] = lines.as_slice() else {
+    panic!("the records are one line: {lines:?}");
+  };
+  assert_eq!(line.item.kind, NeedKind::Memory);
+  assert_eq!(line.item.title.key, "overview.needs.title.memoryOther");
+  assert_eq!(line.detail.key, "overview.board.memoryRow");
+  assert_eq!(line.detail.args, [("project", "Kontur".to_owned())]);
+  assert_eq!(
+    BoardTab::NeedsYou.count(&tasks),
+    tasks.needs_you(),
+    "the tab counts what every Needs you counts"
+  );
+  assert_eq!(
+    BoardTab::NeedsYou.count(&tasks),
+    2,
+    "the task ready to merge and the records"
+  );
+  assert!(BoardTab::Running.project_rows(&tasks, "Kontur").is_empty());
 }
 
 #[test]

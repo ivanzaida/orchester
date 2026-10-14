@@ -21,7 +21,10 @@ use orchester_core::id::{ProjectId, TaskId};
 use orchester_workspace::{
   background,
   messages::{self, Message},
-  tasks::needs_you::{InPlace, Settled, WaitingItem},
+  tasks::{
+    attention::NeedItem,
+    needs_you::{InPlace, Settled},
+  },
 };
 use parking_lot::Mutex;
 
@@ -50,7 +53,7 @@ pub(super) struct InPlaceProps {
   /// The project's waiting requests and questions, by id: a change reads the run's requests again.
   pub(super) waiting: Arc<[Arc<str>]>,
   /// The item, once it no longer waits: its note takes the card's place.
-  pub(super) gone: Option<WaitingItem>,
+  pub(super) gone: Option<NeedItem>,
   /// Opens the card in its task's conversation.
   pub(super) conversation: Press,
 }

@@ -31,15 +31,12 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
-use orchester_workspace::tasks::{
-  data::ProjectTasks,
-  needs_you::{WaitingItem, WaitingKind},
-};
+use orchester_workspace::tasks::attention::{self, NeedItem};
 use parking_lot::Mutex;
 
 use self::{
   frame::{empty, footer, head},
-  leads::{go, key_of, open_at, pointed_of, route_of, task_route},
+  leads::{action, go, key_of},
 };
 use super::{
   Waiting,
@@ -50,9 +47,8 @@ use super::{
   waiting, words,
 };
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, waiting::Destination},
   project::Projects,
-  routes::TaskView,
   screens::task::cards::Decisions,
   theme::{ExtraSpacing, NeedsYouShadow},
   ui::icon::Icon,
@@ -83,7 +79,7 @@ impl DevtoolsInspectable for PanelProps {}
 struct Shown {
   project: ProjectId,
   key: Arc<str>,
-  item: WaitingItem,
+  need: NeedItem,
   waits: bool,
 }
 
@@ -183,13 +179,13 @@ impl NeedsYouPanel {
         let mut items: Vec<Shown> = projects
           .feed(project)
           .tasks
-          .with(|tasks| tasks.ready().map(ProjectTasks::waiting))
+          .with(|tasks| tasks.ready().map(attention::items))
           .unwrap_or_default()
-          .iter()
-          .map(|item| Shown {
+          .into_iter()
+          .map(|need| Shown {
             project,
-            key: key_of(project, item),
-            item: item.clone(),
+            key: key_of(project, &need.waiting),
+            need,
             waits: true,
           })
           .collect();
@@ -201,7 +197,7 @@ impl NeedsYouPanel {
             });
           }
         }
-        items.sort_by_key(|shown| shown.item.since);
+        items.sort_by_key(|shown| shown.need.since());
         Group { waiting, items }
       })
       .collect()
@@ -299,19 +295,14 @@ impl NeedsYouPanel {
     (navigation, open): (&Navigation, &Signal<bool>),
   ) -> Element {
     let id = format!("needs-you-item-{}", shown.key);
-    let item = &shown.item;
+    let need = &shown.need;
+    let item = &need.waiting;
     let at = (shown.project, shown.key.clone());
     let expanded = self.expanded.get().as_ref() == Some(&at);
     let in_place = item.kind.card_key().zip(item.task.as_ref()).zip(item.run);
     let Some(((key, task), _)) = in_place else {
-      let action = match (&item.kind, route_of(shown)) {
-        // No screen reviews memory records yet, so the action says so in place of leading nowhere.
-        (WaitingKind::Memory { .. }, _) => Action::Unavailable(ctx.t("needs_you.memoryUnavailable")),
-        (_, None) => Action::Unavailable(ctx.t("needs_you.taskUnavailable")),
-        (WaitingKind::Question(_), route) => Action::Press(Icon::MessageCircle, go(navigation, open, route)),
-        (_, Some(route)) => Action::Press(Icon::ArrowUpRight, open_at(navigation, open, route, pointed_of(shown))),
-      };
-      return item::collapsed(ctx, &id, item, action);
+      let action = action(ctx, (shown.project, need), (navigation, open));
+      return item::collapsed(ctx, &id, need, action);
     };
     if !expanded && shown.waits {
       let (signal, reveal, at) = (self.expanded.clone(), self.reveal.clone(), at);
@@ -319,14 +310,11 @@ impl NeedsYouPanel {
         reveal.want(at.clone());
         signal.set(Some(at.clone()));
       });
-      return item::collapsed(ctx, &id, item, Action::Press(Icon::ChevronDown, press));
+      return item::collapsed(ctx, &id, need, Action::Press(Icon::ChevronDown, press));
     }
     self.keep(shown);
-    let conversation = go(
-      navigation,
-      open,
-      task_route(shown.project, &task.key, TaskView::Conversation),
-    );
+    let conversation = Destination::of(shown.project, need).expect("an item answered in place has its task to open");
+    let conversation = go(navigation, open, conversation);
     // One key whether it waits or not: the note reads on from what the card read.
     let card = ctx.mount_keyed::<InPlaceCard>(
       &format!("{id}-card"),
@@ -337,7 +325,7 @@ impl NeedsYouPanel {
         key,
         step: item.step.as_ref().map(|step| (step.number, step.name.clone())),
         waiting: waiting.clone(),
-        gone: (!shown.waits).then(|| item.clone()),
+        gone: (!shown.waits).then(|| need.clone()),
         conversation,
       },
     );
@@ -352,7 +340,7 @@ impl NeedsYouPanel {
         signal.set(None);
       })
     };
-    item::expanded(ctx, (&id, self.reveal.item()), item, collapse, card)
+    item::expanded(ctx, (&id, self.reveal.item()), need, collapse, card)
   }
 
   /// Keeps `shown`, expanded here, in its place once it no longer waits.

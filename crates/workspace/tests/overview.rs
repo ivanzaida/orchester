@@ -4,10 +4,13 @@
 mod support;
 
 use orchester_core::{
-  run::{PlanVersion, StepFailure, TaskPhase, WaitReason},
+  repository::RepositoryIdentity,
+  run::{BranchName, PlanVersion, StepFailure, TaskPhase, WaitReason},
   store::RunStore,
 };
+use orchester_exec::programs::Programs;
 use orchester_workspace::tasks::{
+  checkout::Checkout,
   data::ProjectTasks,
   list::AwaitedPlan,
   overview::{OverviewTab, Pulse, activity_empty, figure, footer, recent_runs},
@@ -22,7 +25,7 @@ fn project() -> (support::Fixture, ProjectTasks) {
   let running = fixture.task("Fix zoom", support::at(40));
   fixture.started_run(running, support::at(50));
   fixture.task("Write docs", support::at(60));
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   (fixture, tasks)
 }
 
@@ -60,12 +63,15 @@ fn overview_needs_you_counts_runs_waiting_for_the_user() {
   fixture.db.append_events(&run, &events).expect("append");
   let working = fixture.task("Fix zoom", support::at(40));
   fixture.started_run(working, support::at(50));
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
 
   let pulse = Pulse::of(&tasks.phases, support::at(0));
   assert_eq!(pulse.needs_input, 1);
   assert_eq!(pulse.running, 1);
-  assert_eq!(OverviewTab::NeedsYou.count(&tasks), pulse.needs_input);
+  assert_eq!(
+    OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases),
+    pulse.needs_input
+  );
 }
 
 /// A run that waits for a person's decision after its step broke again needs them as well.
@@ -87,7 +93,7 @@ fn overview_needs_you_counts_runs_waiting_for_a_decision_after_retries() {
       .expect("broke again"),
   );
   fixture.db.append_events(&run, &events).expect("append");
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   assert_eq!(
     tasks
       .phases
@@ -97,10 +103,10 @@ fn overview_needs_you_counts_runs_waiting_for_a_decision_after_retries() {
     [TaskPhase::Stuck]
   );
   assert_eq!(Pulse::of(&tasks.phases, support::at(0)).needs_input, 1);
-  assert_eq!(OverviewTab::NeedsYou.count(&tasks), 1);
-  assert_eq!(OverviewTab::Running.count(&tasks), 0);
+  assert_eq!(OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases), 1);
+  assert_eq!(OverviewTab::Running.count(&tasks.tasks, &tasks.phases), 0);
   // Its card names what stopped it (02.B6 `Np9kc`), "ORC-1 · Implement stopped again …".
-  let rows = OverviewTab::NeedsYou.rows(&tasks, 3);
+  let rows = OverviewTab::NeedsYou.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 3);
   let decision = rows[0].decision.as_ref().expect("the decision it waits for");
   assert!(decision.broke);
   assert_eq!(decision.title().key, "runs.retryLimit.brokeTitle");
@@ -137,17 +143,16 @@ fn overview_tabs_filter_newest_first_and_count() {
   let (_fixture, tasks) = project();
   let titles = |tab: OverviewTab| {
     tab
-      .rows(&tasks, 6)
+      .rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 6)
       .iter()
       .map(|row| row.title.to_string())
       .collect::<Vec<_>>()
   };
   assert_eq!(titles(OverviewTab::All), ["Write docs", "Fix zoom", "Add login"]);
   assert_eq!(titles(OverviewTab::Running), ["Fix zoom"]);
-  // Its work waits to be merged, as the pill and the panel count it.
-  assert_eq!(titles(OverviewTab::NeedsYou), ["Add login"]);
-  assert_eq!(OverviewTab::All.count(&tasks), 3);
-  assert_eq!(OverviewTab::Queued.count(&tasks), 0);
+  assert!(titles(OverviewTab::NeedsYou).is_empty());
+  assert_eq!(OverviewTab::All.count(&tasks.tasks, &tasks.phases), 3);
+  assert_eq!(OverviewTab::Queued.count(&tasks.tasks, &tasks.phases), 0);
   let footer = footer(&tasks.tasks, &tasks.phases);
   assert_eq!(footer.key, "overview.footer.one");
   assert_eq!(
@@ -192,15 +197,17 @@ fn overview_failed_tab_counts_and_lists_only_tasks_whose_latest_run_failed() {
   let mut rerun = fixture.started_run(first, support::at(60));
   fixture.succeed(&mut rerun, support::at(61));
 
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   let failed = OverviewTab::Failed;
-  assert_eq!(failed.count(&tasks), 2);
-  let rows = failed.rows(&tasks, 6);
+  assert_eq!(failed.count(&tasks.tasks, &tasks.phases), 2);
+  let rows = failed.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 6);
   assert_eq!(
     rows.iter().map(|row| row.title.as_ref()).collect::<Vec<_>>(),
     ["Third failure", "Second failure"]
   );
-  assert_eq!(failed.rows(&tasks, 1).len(), 1);
+  assert_eq!(failed.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 1).len(), 1);
+  assert!(!failed.includes(Some(TaskPhase::Cancelled)));
+  assert!(!failed.includes(None));
 }
 
 #[test]
@@ -224,9 +231,9 @@ fn overview_needs_you_names_the_plan_that_waits() {
   let task = fixture.task("Add login", support::at(10));
   let mut run = fixture.started_run(task, support::at(20));
   fixture.propose(&mut run, "1. Add the provider.", support::at(30));
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   assert_eq!(Pulse::of(&tasks.phases, support::at(0)).needs_input, 1);
-  let rows = OverviewTab::NeedsYou.rows(&tasks, 3);
+  let rows = OverviewTab::NeedsYou.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 3);
   assert_eq!(rows.len(), 1);
   assert_eq!(
     rows[0].plan,
@@ -239,7 +246,7 @@ fn overview_needs_you_names_the_plan_that_waits() {
   // No agent works for it, so it still waits while no runner is connected.
   let offline = tasks.without_runner();
   assert_eq!(offline.lost_to_runner, 0);
-  assert_eq!(OverviewTab::NeedsYou.count(&offline), 1);
+  assert_eq!(OverviewTab::NeedsYou.count(&offline.tasks, &offline.phases), 1);
 }
 
 /// A task whose run was merged into its branch reads as Merged and counts as completed, like one
@@ -264,7 +271,7 @@ fn overview_counts_a_merged_task_as_completed() {
     merged_at: support::at(95),
   };
   fixture.db.save_run_merge(&merge).expect("record the merge");
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   let latest = &tasks.phases[&merged];
   assert_eq!(latest.phase(), Some(TaskPhase::Merged));
   assert_eq!(latest.message().key, "tasks.progress.merged");
@@ -278,7 +285,51 @@ fn overview_counts_a_merged_task_as_completed() {
 fn overview_activity_without_runs_says_there_are_none_yet() {
   let mut fixture = support::Fixture::new();
   fixture.task("Write docs", support::at(10));
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   assert!(recent_runs(&tasks.tasks, &tasks.phases, 3).is_empty());
   assert_eq!(activity_empty(&tasks.phases).key, "overview.activity.empty");
+}
+
+/// The line over the title (`YVq5r`) names the repository and the branch only as far as git told them.
+#[test]
+fn overview_eyebrow_names_what_git_told_of_the_checkout() {
+  let repository = RepositoryIdentity::parse("github.com/example/kontur").expect("a repository");
+  let branch = BranchName::new("main").expect("a branch");
+  let cases = [
+    (
+      Some(repository.clone()),
+      Some(branch.clone()),
+      "overview.eyebrow.repositoryBranch",
+    ),
+    (Some(repository), None, "overview.eyebrow.repository"),
+    (None, Some(branch), "overview.eyebrow.branch"),
+    (None, None, "overview.eyebrow.key"),
+  ];
+  for (repository, branch, key) in cases {
+    let said = Checkout {
+      repository: repository.clone(),
+      branch: branch.clone(),
+    }
+    .eyebrow("KON");
+    assert_eq!(said.key, key);
+    assert!(said.args.contains(&("key", "KON".to_owned())), "{said:?}");
+    if let Some(repository) = repository {
+      assert!(
+        said.args.contains(&("repository", repository.as_str().to_owned())),
+        "{said:?}"
+      );
+    }
+    if let Some(branch) = branch {
+      assert!(said.args.contains(&("branch", branch.as_str().to_owned())), "{said:?}");
+    }
+  }
+}
+
+/// A folder with no git repository names neither: the line is the key alone.
+#[test]
+fn overview_eyebrow_of_a_folder_git_does_not_know_is_the_key() {
+  let folder = tempfile::tempdir().expect("a folder");
+  let checkout = Checkout::read(&Programs::processes(), folder.path());
+  assert_eq!(checkout, Checkout::default());
+  assert_eq!(checkout.eyebrow("KON").key, "overview.eyebrow.key");
 }

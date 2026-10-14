@@ -18,6 +18,7 @@ use orchester_core::{
 use orchester_workspace::{
   display,
   tasks::{
+    delivery::Delivery,
     detail::{RunView, StepView, TaskDetail},
     integration::IntegrationProblem,
     integration_jobs::JobState,
@@ -117,6 +118,8 @@ fn status(detail: &TaskDetail, lost: bool) -> (Status, Option<&StepView>) {
   let status = match plan_limit {
     Some(true) => Status::StoppedAtPlanLimit,
     Some(false) => Status::WaitingForPlanReset,
+    // A run that committed nothing completed: it waits for no review of work to merge.
+    None if detail.delivery == Delivery::NothingToMerge => Status::of_phase(phase),
     None => Status::of_run(phase),
   };
   (status, step.filter(|_| with_step))

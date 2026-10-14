@@ -15,6 +15,7 @@ use orchester_core::{
   time::Timestamp,
   usage::limits::WarningThreshold,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{
   AppDb, PreviousSession, ProjectDb, RegisteredProject, ServerAccount, SessionEnd, SessionId, StoreError, StoredServer,
 };
@@ -22,7 +23,6 @@ use parking_lot::Mutex;
 
 use crate::{
   messages::{self, Message},
-  project_list::ListedRuns,
   project_setup::NewProject,
   tasks::data::ProjectTasks,
 };
@@ -60,14 +60,15 @@ pub struct ProjectEntry {
 pub enum ProjectData {
   /// Its project data cannot be read, and why; it cannot be opened.
   Unreadable(Message),
-  /// It can be opened. Its runs as All projects counts them; `None` when they cannot be read before
-  /// the project is opened (its data waits for this version's migration) or reading them failed.
-  Readable(Option<ListedRuns>),
+  /// It can be opened. Its tasks, for its run counts (`project_list::RunCounts`); `None` when they cannot be
+  /// read before the project is opened (its data waits for this version's migration) or reading them failed.
+  Readable(Option<Arc<ProjectTasks>>),
 }
 
 impl ProjectData {
-  /// Reads the database of `project`, whose folder is there, without changing it.
-  fn read(project: &RegisteredProject) -> Self {
+  /// Reads the database of `project`, whose folder is there, without changing it; git, through `programs`,
+  /// tells the runs merged outside Orchester.
+  fn read(project: &RegisteredProject, programs: &Programs) -> Self {
     let db = match ProjectDb::open_read_only(&project.repo_root) {
       Ok(db) => db,
       // Opening the project migrates its data; until then its tasks cannot be read.
@@ -77,8 +78,8 @@ impl ProjectData {
         return Self::Unreadable(messages::store_error(&error));
       }
     };
-    match ProjectTasks::read(&db, &project.repo_root) {
-      Ok(tasks) => Self::Readable(Some(ListedRuns::of(&tasks))),
+    match ProjectTasks::read(&db, &project.repo_root, programs) {
+      Ok(tasks) => Self::Readable(Some(Arc::new(tasks))),
       // The project still opens; only its counts are unknown, and the log says why.
       Err(error) => {
         tracing::error!(%error, repo_root = %project.repo_root.display(), "cannot read a listed project's runs");
@@ -93,12 +94,12 @@ impl ProjectData {
 pub struct ListedData(HashMap<ProjectId, ProjectData>);
 
 impl ListedData {
-  pub fn read(entries: &[ProjectEntry]) -> Self {
+  pub fn read(entries: &[ProjectEntry], programs: &Programs) -> Self {
     Self(
       entries
         .iter()
         .filter(|entry| !entry.folder_missing)
-        .map(|entry| (entry.project.id, ProjectData::read(&entry.project)))
+        .map(|entry| (entry.project.id, ProjectData::read(&entry.project, programs)))
         .collect(),
     )
   }

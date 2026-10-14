@@ -5,8 +5,8 @@
 //! not go); a wider answer that synthetic input does not take, and an MCP client's answers ([`automation`]); Esc
 //! and the close, and the pill opening it again after each way it closes ([`closing`]); an expanded approval's
 //! layout and the pinned project header ([`expanded`]); a question's panel layout, the notes of what was answered
-//! while the panel is open and an expanded item kept in view ([`in_place`]); the same count wherever Needs you
-//! shows ([`counts`]). Needs `git`.
+//! while the panel is open and an expanded item kept in view ([`in_place`]); an item whose request cannot be read
+//! again ([`reread`]); the same count wherever Needs you shows ([`counts`]). Needs `git`.
 
 mod automation;
 mod closing;
@@ -19,6 +19,7 @@ mod in_place;
   reason = "the seed reports what it wrote; these tests read the window instead"
 )]
 mod kontur;
+mod reread;
 #[path = "../support/mod.rs"]
 mod support;
 
@@ -190,10 +191,16 @@ fn needs_you_panel_lists_what_waits_by_project_oldest_first() {
   assert!(text(&mut window, &format!("{approval}-where")).starts_with("Run "));
   assert_eq!(text(&mut window, &format!("{approval}-action")), "Review");
   let merge = item_of(&mut window, "Show the signed-in account");
-  assert!(text(&mut window, &format!("{merge}-title")).ends_with("passed every step; its work waits to be merged"));
+  assert!(
+    text(&mut window, &format!("{merge}-title")).ends_with("is ready to merge: every step passed"),
+    "worded as the Overview's card"
+  );
   assert_eq!(text(&mut window, &format!("{merge}-action")), "Review & merge");
   let limit = item_of(&mut window, "Explain an expired GitHub token in the status bar");
-  assert!(text(&mut window, &format!("{limit}-title")).ends_with("stopped at its limit"));
+  assert!(
+    text(&mut window, &format!("{limit}-title")).ends_with("-token limit"),
+    "with the limit it stopped at, as the Overview's card says it"
+  );
   assert_eq!(text(&mut window, &format!("{limit}-action")), "Raise the limit");
   assert_eq!(text(&mut window, "needs-you-show-all"), "Show all in Kontur's Overview");
 }
@@ -352,7 +359,8 @@ fn needs_you_panel_lists_memory_records_with_their_review_unavailable() {
   assert_eq!(text(&mut window, &format!("{item}-kind")), "Memory");
   assert_eq!(
     text(&mut window, &format!("{item}-title")),
-    "2 memory records wait for your approval"
+    "2 memory records wait for approval",
+    "worded as the Overview's card"
   );
   assert_eq!(text(&mut window, &format!("{item}-task")), "Project memory");
   assert_eq!(text(&mut window, &format!("{item}-action")), "Review records");
