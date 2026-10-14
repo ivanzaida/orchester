@@ -50,20 +50,8 @@
     "needs": {
       "title": "Needs you",
       "reading": "Reading…",
-      "waiting": "waiting {{time}}",
-      "since": "since {{time}}",
       "emptyTitle": "Nothing needs you right now.",
-      "emptyDetail": "Approvals, questions, plans, merges, interrupted runs and memory records appear here.",
-      "memoryUnavailable": "Reviewing memory records isn't built in this app yet.",
-      "action": {
-        "review": "Review",
-        "answer": "Answer",
-        "reviewPlan": "Review plan",
-        "raiseLimit": "Raise the limit",
-        "reviewMerge": "Review & merge",
-        "openTask": "Open task",
-        "reviewRecords": "Review records"
-      }
+      "emptyDetail": "Approvals, questions, plans, merges, interrupted runs and memory records appear here."
     },
     "notices": {
       "open": "Open {{task}}",

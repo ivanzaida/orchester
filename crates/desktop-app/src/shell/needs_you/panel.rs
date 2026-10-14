@@ -28,7 +28,7 @@ use lurq::{
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::tasks::{
-  data::ProjectTasks,
+  attention::{self, Decided, NeedItem},
   needs_you::{WaitingItem, WaitingKind},
 };
 use parking_lot::Mutex;
@@ -41,18 +41,16 @@ use super::{
   waiting, words,
 };
 use crate::{
-  navigation::{
-    Navigation,
-    pointed::{Pointed, PointedCard},
-  },
+  navigation::{Navigation, waiting::Destination},
   project::Projects,
-  routes::{OverviewTab, ProjectPage, Route, TaskView},
+  routes::{OverviewTab, ProjectPage, Route},
   screens::task::cards::Decisions,
   theme::{ExtraSpacing, ExtraTypography, IconSize, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     icon_button::IconButton,
+    message::message_text,
   },
 };
 
@@ -81,7 +79,7 @@ impl DevtoolsInspectable for PanelProps {}
 struct Shown {
   project: ProjectId,
   key: Arc<str>,
-  item: WaitingItem,
+  need: NeedItem,
   waits: bool,
 }
 
@@ -174,13 +172,13 @@ impl NeedsYouPanel {
         let mut items: Vec<Shown> = projects
           .feed(project)
           .tasks
-          .with(|tasks| tasks.ready().map(ProjectTasks::waiting))
+          .with(|tasks| tasks.ready().map(attention::items))
           .unwrap_or_default()
           .into_iter()
-          .map(|item| Shown {
+          .map(|need| Shown {
             project,
-            key: key_of(project, &item),
-            item,
+            key: key_of(project, &need.waiting),
+            need,
             waits: true,
           })
           .collect();
@@ -192,7 +190,7 @@ impl NeedsYouPanel {
             });
           }
         }
-        items.sort_by_key(|shown| shown.item.since);
+        items.sort_by_key(|shown| shown.need.since());
         Group { waiting, items }
       })
       .collect()
@@ -283,24 +281,30 @@ impl NeedsYouPanel {
     (navigation, open): (&Navigation, &Signal<bool>),
   ) -> Element {
     let id = format!("needs-you-item-{}", shown.key);
-    let item = &shown.item;
+    let need = &shown.need;
+    let item = &need.waiting;
     let at = (shown.project, shown.key.clone());
     let expanded = self.expanded.get().as_ref() == Some(&at);
     let in_place = item.kind.card_key().zip(item.task.as_ref()).zip(item.run);
     let Some(((key, task), _)) = in_place else {
-      let action = match (&item.kind, route_of(shown)) {
-        // No screen reviews memory records yet, so the action says so in place of leading nowhere.
-        (WaitingKind::Memory { .. }, _) => Action::Unavailable(ctx.t("needs_you.memoryUnavailable")),
-        (_, None) => Action::Unavailable(ctx.t("needs_you.taskUnavailable")),
-        (WaitingKind::Question(_), route) => Action::Press(Icon::MessageCircle, go(navigation, open, route)),
-        (_, Some(route)) => Action::Press(Icon::ArrowUpRight, open_at(navigation, open, route, pointed_of(shown))),
+      let action = match Destination::of(shown.project, need) {
+        // What leads nowhere yet says why in place of its action.
+        Err(reason) => Action::Unavailable(message_text(ctx, &reason)),
+        Ok(destination) => {
+          let glyph = if need.decided() == Decided::Conversation {
+            Icon::MessageCircle
+          } else {
+            Icon::ArrowUpRight
+          };
+          Action::Press(glyph, go(navigation, open, destination))
+        }
       };
-      return item::collapsed(ctx, &id, item, action);
+      return item::collapsed(ctx, &id, need, action);
     };
     if !expanded {
       let (signal, at) = (self.expanded.clone(), at);
       let press: Arc<dyn Fn() + Send + Sync> = Arc::new(move || signal.set(Some(at.clone())));
-      return item::collapsed(ctx, &id, item, Action::Press(Icon::ChevronDown, press));
+      return item::collapsed(ctx, &id, need, Action::Press(Icon::ChevronDown, press));
     }
     {
       let mut kept = self.kept.lock();
@@ -326,12 +330,9 @@ impl NeedsYouPanel {
       let signal = self.expanded.clone();
       Arc::new(move || signal.set(None))
     };
-    let conversation = go(
-      navigation,
-      open,
-      task_route(shown.project, &task.key, TaskView::Conversation),
-    );
-    item::expanded(ctx, &id, (item, shown.waits), (collapse, conversation), card)
+    let conversation = Destination::of(shown.project, need).expect("an item answered in place has its task to open");
+    let conversation = go(navigation, open, conversation);
+    item::expanded(ctx, &id, (need, shown.waits), (collapse, conversation), card)
   }
 }
 
@@ -357,63 +358,11 @@ fn key_of(project: ProjectId, item: &WaitingItem) -> Arc<str> {
   Arc::from(format!("task-{task}-{kind}-{step}"))
 }
 
-/// Where an item that is not answered in place leads: an agent's question to the task's Conversation, where
-/// the composer answers it; the others to the task's Summary.
-fn route_of(shown: &Shown) -> Option<Route> {
-  let task = shown.item.task.as_ref()?;
-  let view = match shown.item.kind {
-    WaitingKind::Question(_) => TaskView::Conversation,
-    _ => TaskView::of(crate::routes::TaskTab::Summary),
-  };
-  task_route(shown.project, &task.key, view)
-}
-
-fn task_route(project: ProjectId, key: &str, view: TaskView) -> Option<Route> {
-  let key = key.parse().ok()?;
-  Some(Route::Project(project, ProjectPage::Task(key, view)))
-}
-
-/// The decision card of the task's Summary an item points at, which the page brings into view and rings
-/// (`icGHG`): the plan under review, raising the limit, the decision after retries.
-fn pointed_of(shown: &Shown) -> Option<Pointed> {
-  let card = match shown.item.kind {
-    WaitingKind::Plan(_) => PointedCard::Plan,
-    WaitingKind::StoppedAtLimit { .. } => PointedCard::RaiseLimit,
-    WaitingKind::Decision(_) => PointedCard::Retries,
-    _ => return None,
-  };
-  let task = shown.item.task.as_ref()?.key.parse().ok()?;
-  Some(Pointed {
-    project: shown.project,
-    task,
-    card,
-  })
-}
-
-/// Goes to `route` and closes the panel, which the page opening takes the place of.
-fn go(navigation: &Navigation, open: &Signal<bool>, route: Option<Route>) -> Arc<dyn Fn() + Send + Sync> {
+/// Goes to `destination` and closes the panel, which the page opening takes the place of.
+fn go(navigation: &Navigation, open: &Signal<bool>, destination: Destination) -> Arc<dyn Fn() + Send + Sync> {
   let (navigation, open) = (navigation.clone(), open.clone());
   Arc::new(move || {
-    if let Some(route) = route.clone() {
-      navigation.go(route);
-    }
-    open.set(false);
-  })
-}
-
-/// Goes to `route`, pointing at `card` on it, and closes the panel.
-fn open_at(
-  navigation: &Navigation,
-  open: &Signal<bool>,
-  route: Route,
-  card: Option<Pointed>,
-) -> Arc<dyn Fn() + Send + Sync> {
-  let Some(card) = card else {
-    return go(navigation, open, Some(route));
-  };
-  let (navigation, open) = (navigation.clone(), open.clone());
-  Arc::new(move || {
-    navigation.go_to_card(&route, card.clone());
+    destination.go(&navigation);
     open.set(false);
   })
 }
@@ -520,7 +469,7 @@ fn footer(
     .map(|group| &group.waiting);
   let show_all = chosen.map(|waiting| {
     let route = Route::Project(waiting.project, ProjectPage::Overview(OverviewTab::NeedsYou));
-    let press = go(navigation, open, Some(route));
+    let press = go(navigation, open, Destination { route, pointed: None });
     ActionButton::new(
       "needs-you-show-all",
       ButtonKind::Ghost,

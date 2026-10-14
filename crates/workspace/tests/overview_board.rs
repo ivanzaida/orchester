@@ -13,12 +13,15 @@ use orchester_core::{
   store::{ActivityStore, RunStore},
 };
 use orchester_exec::programs::Programs;
-use orchester_workspace::tasks::{
-  attention::{self, NeedKind, Waited},
-  board::{self, BoardTab, Figures},
-  data::ProjectTasks,
-  list::{CurrentStep, RunStage},
-  ready_to_run::{CheckKind, ProjectReadiness},
+use orchester_workspace::{
+  messages::Message,
+  tasks::{
+    attention::{self, NeedKind, Waited},
+    board::{self, BoardTab, Figures},
+    data::ProjectTasks,
+    list::{CurrentStep, RunStage},
+    ready_to_run::{CheckKind, ProjectReadiness},
+  },
 };
 
 /// A completed task, a running one, one whose run waits for an answer and a draft.
@@ -47,14 +50,32 @@ fn board_needs_you_lists_what_waits_oldest_first() {
   let items = attention::items(&tasks);
   let kinds: Vec<NeedKind> = items.iter().map(|item| item.kind).collect();
   assert_eq!(kinds, [NeedKind::ReadyToMerge, NeedKind::Input]);
-  assert_eq!(items[0].task.as_ref().map(|task| &*task.key), Some("KON-1"));
+  assert_eq!(items[0].task().map(|task| &*task.key), Some("KON-1"));
   assert_eq!(items[0].context().args[1].1, "Add login");
   assert_eq!(attention::count(&tasks), 2);
   assert_eq!(BoardTab::NeedsYou.count(&tasks), 2);
   assert_eq!(
     items[1].waited(support::at(80 + 41 * 60_000)),
-    Waited::For(orchester_workspace::messages::Message::new("time.minutes").with("count", "41".to_owned()))
+    Waited::For(Message::new("time.minutes").with("count", "41".to_owned()))
   );
+}
+
+#[test]
+fn board_needs_you_waits_read_in_hours_and_days_as_the_panel_reads_them() {
+  let (_fixture, tasks) = project();
+  let items = attention::items(&tasks);
+  let asking = &items[1];
+  let after = |millis: i64| support::at(80 + millis);
+  let unit = |key: &'static str, count: &str| Waited::For(Message::new(key).with("count", count.to_owned()));
+  assert_eq!(asking.waited(after(3 * 3_600_000)), unit("time.hours", "3"));
+  assert_eq!(
+    asking.waited(after(3 * 86_400_000)),
+    unit("time.days", "3"),
+    "not 4320 min"
+  );
+  let line = asking.wait_line(after(3 * 86_400_000), |time| format!("{} d", time.args[0].1));
+  assert_eq!(line.key, "overview.needs.waiting");
+  assert_eq!(line.args, [("time", "3 d".to_owned())]);
 }
 
 #[test]
@@ -104,7 +125,7 @@ fn board_needs_you_keeps_a_tool_request_whose_run_cannot_be_read() {
   let [item] = items.as_slice() else {
     panic!("the request alone waits: {items:?}");
   };
-  assert_eq!((item.kind, &item.task), (NeedKind::Approval, &None));
+  assert_eq!((item.kind, item.task()), (NeedKind::Approval, None));
   assert_eq!(item.title.args[0].1, "pnpm build");
   assert_eq!(item.context().key, "overview.needs.contextUnread");
   assert_eq!(attention::count(&tasks), 1);
@@ -131,7 +152,7 @@ fn board_counts_interrupted_runs_as_needing_the_person_and_as_running() {
     panic!("the interrupted run alone waits: {items:?}");
   };
   assert_eq!(item.kind, NeedKind::Interrupted);
-  assert_eq!(item.task.as_ref().map(|task| &*task.key), Some("KON-1"));
+  assert_eq!(item.task().map(|task| &*task.key), Some("KON-1"));
   assert!(matches!(item.waited(support::at(0)), Waited::Since(_)));
   assert_eq!(
     BoardTab::Running.count(&tasks),
@@ -207,7 +228,7 @@ fn board_needs_you_rows_say_what_waits_as_their_items_do() {
   for row in BoardTab::NeedsYou.rows(&tasks, 6, ", ") {
     let item = items
       .iter()
-      .find(|item| item.task.as_ref().is_some_and(|task| task.id == row.id))
+      .find(|item| item.task().is_some_and(|task| task.id == row.id))
       .expect("each waiting task is an item");
     assert_eq!(row.detail, item.title, "{}", row.key);
   }

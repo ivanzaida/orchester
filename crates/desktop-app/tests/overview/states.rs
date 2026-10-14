@@ -216,7 +216,7 @@ fn overview_names_a_task_whose_run_passed_every_step_ready_to_merge() {
   assert_eq!(status, "Ready to merge · Deliver", "{key} (`XirGV`)");
   let item = items
     .iter()
-    .find(|item| item.task.as_ref().is_some_and(|task| task.id == merging.id))
+    .find(|item| item.task().is_some_and(|task| task.id == merging.id))
     .expect("the task waits in Needs you");
   assert_eq!(merging.detail, item.title, "the row says what waits, as its card does");
   let detail = seeded.text(&format!("overview-detail-{key}"));
@@ -238,7 +238,7 @@ fn overview_says_the_token_limit_a_run_stopped_at() {
     .find(|(name, _)| *name == "limit")
     .expect("the limit")
     .1;
-  let key = &limited.task.as_ref().expect("its task").key;
+  let key = &limited.task().expect("its task").key;
   let card = seeded
     .ids("overview-need-")
     .into_iter()

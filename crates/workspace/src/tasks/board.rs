@@ -37,7 +37,7 @@ impl BoardTab {
       Self::Running => matches!(phase, Some(TaskPhase::Running | TaskPhase::Interrupted)),
       Self::NeedsYou => waiting
         .iter()
-        .any(|item| item.task.as_ref().is_some_and(|waits| waits.id == task.id())),
+        .any(|item| item.task().is_some_and(|waits| waits.id == task.id())),
       Self::Queued => matches!(phase, Some(TaskPhase::Queued)),
       Self::Failed => matches!(phase, Some(TaskPhase::Failed)),
     }
@@ -95,7 +95,7 @@ impl BoardTab {
         );
         if let Some(item) = waiting
           .iter()
-          .find(|item| item.task.as_ref().is_some_and(|waits| waits.id == task.id()))
+          .find(|item| item.task().is_some_and(|waits| waits.id == task.id()))
         {
           row.detail = item.title.clone();
         }

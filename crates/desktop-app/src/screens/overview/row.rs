@@ -15,6 +15,7 @@ use lurq::{
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::tasks::{
+  attention::Decided,
   board::ProjectRow,
   list::{RunStage, TaskRow},
 };
@@ -43,9 +44,12 @@ const STATUS_WIDTH: f32 = 200.0;
 const PROJECT_ROW: &str = "overview-memory-row";
 
 /// The project's memory records waiting for approval, in the brain's `warning` (`S9Zgf`). No screen
-/// reviews memory records yet: *Review records* stays in place and says so, as the *Needs you* card's.
+/// reviews memory records yet: *Review records* stays in place and says why, as the *Needs you* card's.
 pub(super) fn project_row(ctx: &Ctx, row: &ProjectRow) -> Row {
-  let reason = ctx.t("overview.needs.memoryUnavailable");
+  let reason = match row.item.decided() {
+    Decided::Unavailable(reason) => Some(message_text(ctx, &reason)),
+    Decided::Card(_) | Decided::Conversation | Decided::Summary(_) => None,
+  };
   let text = Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
@@ -62,14 +66,21 @@ pub(super) fn project_row(ctx: &Ctx, row: &ProjectRow) -> Row {
         .variant(TypographyStyle::Caption)
         .width(Dimension::Pct(100.0)),
     )
-    .child(reason_line(&format!("{PROJECT_ROW}-reason"), &reason));
+    .with_children(
+      reason
+        .as_ref()
+        .map(|reason| reason_line(&format!("{PROJECT_ROW}-reason"), reason)),
+    );
   let review = ActionButton::new(
     format!("{PROJECT_ROW}-action"),
     ButtonKind::Ghost,
-    ctx.t("overview.needs.action.reviewRecords"),
+    message_text(ctx, &row.item.kind.action()),
   )
-  .icon(Icon::ArrowUpRight)
-  .unavailable(reason);
+  .icon(Icon::ArrowUpRight);
+  let review = match reason {
+    Some(reason) => review.unavailable(reason),
+    None => review,
+  };
   Row::new()
     .id(PROJECT_ROW)
     .width(Dimension::Pct(100.0))

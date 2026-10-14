@@ -23,7 +23,7 @@ use orchester_exec::programs::Programs;
 use orchester_workspace::{
   project_list::RunCounts,
   tasks::{
-    attention::{self, NeedKind},
+    attention::{self, Decided, NeedItem, NeedKind, SummaryCard},
     board::{BoardTab, Figures},
     data::ProjectTasks,
     list::{self, TaskRow, TaskTab},
@@ -438,6 +438,40 @@ fn needs_you_lists_a_limit_stop_work_ready_to_merge_and_the_memory_waiting_as_on
   assert_eq!(items[2].since, at(80), "it waits since its oldest record");
   assert!(items[2].task.is_none());
   assert_eq!(tasks.needs_you(), 3);
+}
+
+#[test]
+fn needs_you_items_are_decided_at_the_card_the_panel_and_the_overview_open() {
+  let (_fixture, tasks) = project();
+  let decided: Vec<Decided> = attention::items(&tasks).iter().map(NeedItem::decided).collect();
+  assert!(
+    matches!(
+      decided.as_slice(),
+      [
+        Decided::Summary(Some(SummaryCard::Plan)),
+        Decided::Conversation,
+        Decided::Card(_),
+        Decided::Card(_),
+        Decided::Summary(None),
+      ]
+    ),
+    "the plan, the agent's question, the request, the question with answers, the interrupted run: {decided:?}"
+  );
+  let decided: Vec<Decided> = attention::items(&limit_merge_memory())
+    .iter()
+    .map(NeedItem::decided)
+    .collect();
+  assert!(
+    matches!(
+      decided.as_slice(),
+      [
+        Decided::Summary(Some(SummaryCard::RaiseLimit)),
+        Decided::Summary(None),
+        Decided::Unavailable(_),
+      ]
+    ),
+    "the limit, the work to merge, the memory: {decided:?}"
+  );
 }
 
 #[test]

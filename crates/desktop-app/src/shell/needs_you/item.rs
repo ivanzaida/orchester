@@ -15,7 +15,7 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_workspace::tasks::needs_you::WaitingItem;
+use orchester_workspace::tasks::attention::NeedItem;
 
 use super::words;
 use crate::{
@@ -88,8 +88,8 @@ pub(super) fn group(ctx: &Ctx, id: &str, (name, this_tab): (&str, bool), count: 
 }
 
 /// What it is and since when it waits: *Approval · waiting 6 min*.
-fn top(ctx: &Ctx, id: &str, item: &WaitingItem, clock: bool) -> Row {
-  let (glyph, word) = words::kind(ctx, &item.kind);
+fn top(ctx: &Ctx, id: &str, item: &NeedItem, clock: bool) -> Row {
+  let (glyph, word) = words::kind(ctx, item);
   Row::new()
     .id(format!("{id}-top"))
     .spacing(ExtraSpacing::Pair.role())
@@ -103,7 +103,7 @@ fn top(ctx: &Ctx, id: &str, item: &WaitingItem, clock: bool) -> Row {
     )
     .child(Text::new(&ctx.t("needs_you.separator")).variant(ExtraTypography::Note.role()))
     .child(
-      Text::new(&words::waiting(ctx, item.since, clock))
+      Text::new(&words::waiting(ctx, item, clock))
         .id(format!("{id}-waiting"))
         .variant(ExtraTypography::Note.role())
         .nowrap(),
@@ -111,7 +111,7 @@ fn top(ctx: &Ctx, id: &str, item: &WaitingItem, clock: bool) -> Row {
 }
 
 /// What it asks and its task, 3 apart (`NczSN`, `uTGip`).
-fn ask(ctx: &Ctx, id: &str, item: &WaitingItem) -> [Element; 2] {
+fn ask(ctx: &Ctx, id: &str, item: &NeedItem) -> [Element; 2] {
   [
     Text::new(&words::title(ctx, item))
       .id(format!("{id}-title"))
@@ -134,19 +134,15 @@ pub(super) enum Action {
 }
 
 /// The item collapsed: its body, and its action at the end.
-pub(super) fn collapsed(ctx: &Ctx, id: &str, item: &WaitingItem, action: Action) -> Element {
-  let place = words::place(ctx, item).map(|place| -> Element {
+pub(super) fn collapsed(ctx: &Ctx, id: &str, item: &NeedItem, action: Action) -> Element {
+  let place = words::place(ctx, &item.waiting).map(|place| -> Element {
     Text::new(&place)
       .id(format!("{id}-where"))
       .variant(TypographyStyle::Caption)
       .width(Dimension::Pct(100.0))
       .into()
   });
-  let button = ActionButton::new(
-    format!("{id}-action"),
-    ButtonKind::Secondary,
-    words::action(ctx, &item.kind),
-  );
+  let button = ActionButton::new(format!("{id}-action"), ButtonKind::Secondary, words::action(ctx, item));
   let (button, reason) = match action {
     Action::Press(glyph, press) => (button.icon(glyph).on_click(move || press()), None),
     Action::Unavailable(reason) => {
@@ -180,7 +176,7 @@ pub(super) fn collapsed(ctx: &Ctx, id: &str, item: &WaitingItem, action: Action)
 pub(super) fn expanded(
   ctx: &mut Ctx,
   id: &str,
-  (item, waits): (&WaitingItem, bool),
+  (item, waits): (&NeedItem, bool),
   (collapse, conversation): (Press, Press),
   card: Element,
 ) -> Element {

@@ -15,13 +15,13 @@ use lurq::{
 };
 use orchester_core::{id::ProjectId, time::Timestamp};
 use orchester_workspace::tasks::{
-  attention::{NeedItem, NeedKind, Waited},
+  attention::{NeedItem, NeedKind},
   overview::figure,
 };
 
-use super::{open_task, tasks::reading};
+use super::tasks::reading;
 use crate::{
-  routes::TaskTab,
+  navigation::{Navigation, waiting::Destination},
   theme::{ExtraSpacing, ExtraTypography, IconSize, OverviewText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -82,21 +82,18 @@ fn nothing_waits(ctx: &Ctx) -> Column {
     )
 }
 
-/// One thing waiting, the `index`th: its kind and wait, what it is, its task, and its action. A request
-/// whose task cannot be read says so and has no action: there is no task to open.
+/// One thing waiting, the `index`th: its kind and wait, what it is, its task, and its action, which leads where
+/// the Needs you panel's does and points at the same card. What leads nowhere yet (the project's memory, a
+/// request whose task cannot be read) says why in place of its action.
 fn need_card(ctx: &mut Ctx, project: ProjectId, (index, item): (usize, &NeedItem), now: Timestamp) -> Column {
-  let (glyph, action, tab) = look(item.kind);
-  let key = item.task.as_ref().map_or("unknown", |task| &task.key);
+  let key = item.task().map_or("unknown", |task| &task.key);
   let id = format!("overview-need-{index}-{key}-{}", kind_name(item.kind));
-  let waited = match item.waited(now) {
-    Waited::For(time) => ctx.t_args("overview.needs.waiting", [("time", message_text(ctx, &time))]),
-    Waited::Since(time) => ctx.t_args("overview.needs.since", [("time", time)]),
-  };
+  let waited = message_text(ctx, &item.wait_line(now, |time| message_text(ctx, time).to_string()));
   let top = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Base, PaletteColor::Warning))
+    .child(icon(glyph(item.kind), IconSize::Base, PaletteColor::Warning))
     .child(Text::new(&message_text(ctx, &item.kind.label())).variant(OverviewText::Kind.role()))
     .child(Spacer::new().flex(1.0))
     .child(Text::new(&waited).variant(TypographyStyle::Caption).nowrap());
@@ -111,42 +108,37 @@ fn need_card(ctx: &mut Ctx, project: ProjectId, (index, item): (usize, &NeedItem
         .width(Dimension::Pct(100.0)),
     )
     .child(Text::new(&message_text(ctx, &item.context())).variant(ExtraTypography::Note.role()));
-  let button =
-    ActionButton::new(format!("{id}-action"), ButtonKind::Secondary, ctx.t(action)).icon(action_icon(item.kind));
-  match &item.task {
-    Some(task) => {
-      let open = open_task(ctx, project, &task.key, tab);
-      card.child(Row::new().child(button.on_click(open)))
+  let button = ActionButton::new(
+    format!("{id}-action"),
+    ButtonKind::Secondary,
+    message_text(ctx, &item.kind.action()),
+  )
+  .icon(action_icon(item.kind));
+  match Destination::of(project, item) {
+    Ok(destination) => {
+      let navigation = Navigation::of(ctx);
+      card.child(Row::new().child(button.on_click(move || destination.go(&navigation))))
     }
-    // No screen reviews memory records yet: the action stays in place and says so, as the Needs you panel's.
-    None if item.kind == NeedKind::Memory => {
-      let reason = ctx.t("overview.needs.memoryUnavailable");
+    Err(reason) => {
+      let reason = message_text(ctx, &reason);
       card
         .child(Row::new().child(button.unavailable(reason.clone())))
         .child(reason_line(&format!("{id}-reason"), &reason))
     }
-    None => card,
   }
 }
 
-/// A kind's mark (`Kind icon` `y6Zq0D`), the key of its action's words, and the tab of its task where it
-/// is decided: a request and a question are cards of the conversation, the rest is on Summary. The
-/// project's memory has no task: its tab is not used.
-const fn look(kind: NeedKind) -> (Icon, &'static str, TaskTab) {
+/// A kind's mark (`Kind icon` `y6Zq0D`).
+const fn glyph(kind: NeedKind) -> Icon {
   match kind {
-    NeedKind::Approval => (Icon::ShieldAlert, "overview.needs.action.review", TaskTab::Conversation),
-    NeedKind::Question => (
-      Icon::MessageCircleQuestion,
-      "overview.needs.action.answer",
-      TaskTab::Conversation,
-    ),
-    NeedKind::PlanReview => (Icon::Map, "overview.needs.action.reviewPlan", TaskTab::Summary),
-    NeedKind::Decision => (Icon::Hand, "overview.needs.action.openTask", TaskTab::Summary),
-    NeedKind::Input => (Icon::Hand, "overview.needs.action.openTask", TaskTab::Conversation),
-    NeedKind::StoppedAtLimit => (Icon::Gauge, "overview.needs.action.raiseLimit", TaskTab::Summary),
-    NeedKind::Interrupted => (Icon::CirclePause, "overview.needs.action.openTask", TaskTab::Summary),
-    NeedKind::ReadyToMerge => (Icon::GitMerge, "overview.needs.action.reviewMerge", TaskTab::Summary),
-    NeedKind::Memory => (Icon::Brain, "overview.needs.action.reviewRecords", TaskTab::Summary),
+    NeedKind::Approval => Icon::ShieldAlert,
+    NeedKind::Question => Icon::MessageCircleQuestion,
+    NeedKind::PlanReview => Icon::Map,
+    NeedKind::Decision | NeedKind::Input => Icon::Hand,
+    NeedKind::StoppedAtLimit => Icon::Gauge,
+    NeedKind::Interrupted => Icon::CirclePause,
+    NeedKind::ReadyToMerge => Icon::GitMerge,
+    NeedKind::Memory => Icon::Brain,
   }
 }
 

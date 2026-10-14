@@ -1,6 +1,8 @@
 //! Where the Overview's actions lead: a tab is the route's, a row and a run open their task's Summary, a
-//! *Needs you* card opens its task where it is decided, *View all tasks* the Tasks list and New task its
-//! form. Import resources and reviewing memory records are not built: they stay locked and go nowhere.
+//! *Needs you* card opens its task where it is decided, pointing at its decision card as the Needs you panel
+//! does, *View all tasks* the Tasks list and New task its form. Import resources and reviewing memory records
+//! are not built, and a request whose task cannot be read has nothing to open: they stay locked and go
+//! nowhere.
 
 use orchester_app::routes::{OverviewTab, ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView};
 use orchester_core::project::TaskKey;
@@ -74,19 +76,19 @@ fn overview_rows_runs_and_cards_open_their_task() {
     .find(|id| id.ends_with("-action"))
     .expect("the first card's action");
   seeded.click(&action);
-  let key = &first.task.as_ref().expect("the first card's task").key;
+  let key = &first.task().expect("the first card's task").key;
   assert_eq!(seeded.window.navigation().route_now(), task(&seeded, key, tab));
 }
 
 #[test]
-fn overview_keeps_a_tool_request_whose_run_cannot_be_read_without_an_action() {
+fn overview_keeps_a_tool_request_whose_run_cannot_be_read_with_its_action_locked() {
   let mut seeded = Seeded::damaging_approval_run("task-states");
   let tasks = seeded.tasks();
   let items = attention::items(&tasks);
   let unknown: Vec<usize> = items
     .iter()
     .enumerate()
-    .filter(|(_, item)| item.kind == NeedKind::Approval && item.task.is_none())
+    .filter(|(_, item)| item.kind == NeedKind::Approval && item.task().is_none())
     .map(|(index, _)| index)
     .collect();
   let [index] = unknown.as_slice() else {
@@ -101,7 +103,51 @@ fn overview_keeps_a_tool_request_whose_run_cannot_be_read_without_an_action() {
       .any(|line| line == "Its run cannot be read, so its task is not known"),
     "{said:?}"
   );
-  assert!(!seeded.shows(&format!("{card}-action")), "there is no task to open");
+  assert_eq!(
+    seeded.text(&format!("{card}-reason-text")),
+    "Its task can't be read, so there is nothing to open.",
+    "as the Needs you panel says it"
+  );
+  seeded.click(&format!("{card}-action"));
+  assert_eq!(
+    seeded.window.navigation().route_now(),
+    seeded.route(OverviewTab::Running),
+    "there is no task to open"
+  );
+}
+
+/// The element `id` is ringed as the card a navigation pointed at.
+fn pointed(seeded: &mut Seeded, id: &str) -> bool {
+  seeded
+    .window
+    .tree
+    .get_element_by_id(id)
+    .is_some_and(|element| element.has_class("pointed"))
+}
+
+#[test]
+fn overview_a_plan_and_a_limit_open_at_their_card_ringed_as_from_the_panel() {
+  for (kind, card) in [("plan", "plan-review"), ("limit", "raise-limit")] {
+    let mut seeded = Seeded::overview("tasks", OverviewTab::Running);
+    let action = seeded
+      .ids("overview-need-")
+      .into_iter()
+      .find(|id| id.ends_with(&format!("-{kind}-action")))
+      .unwrap_or_else(|| panic!("a {kind} waits in the seed"));
+    let key = action
+      .trim_start_matches("overview-need-")
+      .split('-')
+      .skip(1)
+      .take(2)
+      .collect::<Vec<_>>()
+      .join("-");
+    seeded.click(&action);
+    assert_eq!(
+      seeded.window.navigation().route_now(),
+      task(&seeded, &key, TaskTab::Summary)
+    );
+    seeded.until(&format!("the {kind}'s card ringed"), |seeded| pointed(seeded, card));
+  }
 }
 
 #[test]

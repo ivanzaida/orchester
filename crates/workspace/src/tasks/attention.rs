@@ -1,9 +1,10 @@
-//! What waits for the person in a project as the new Overview words it, one item each (its *Needs you*
-//! column `NbKDR`, its tab and its *Need your input* figure). What waits, and so what every *Needs you*
-//! counts, is [`ProjectTasks::waiting`]: this only names each object for the Overview's cards, in the same
-//! order, oldest wait first.
+//! What waits for the person in a project as people read it, one item each: the one wording of the new
+//! Overview's *Needs you* column (`NbKDR`), its tab and its *Need your input* figure, and of the title bar's
+//! Needs you panel (`bAeM6`). What waits, and so what every *Needs you* counts, is [`ProjectTasks::waiting`]:
+//! this names each object, says how long it waits and what its action is, and where it is decided, in the
+//! same order, oldest wait first.
 
-use std::time::Duration;
+use std::sync::Arc;
 
 use orchester_core::{run::RunNumber, time::Timestamp, tokens::compact_tokens};
 
@@ -37,7 +38,7 @@ pub enum NeedKind {
 }
 
 impl NeedKind {
-  /// The kind's word, over the item (`Kind` in `rkhZ2`).
+  /// The kind's word, over the item (`Kind` in `rkhZ2`, `x4f2I` in `bAeM6`).
   pub fn label(self) -> Message {
     Message::new(match self {
       Self::Approval => "overview.needs.kind.approval",
@@ -51,26 +52,83 @@ impl NeedKind {
       Self::Memory => "overview.needs.kind.memory",
     })
   }
+
+  /// The words of the item's action: *Review*, *Answer*, *Review plan*, *Raise the limit*.
+  pub fn action(self) -> Message {
+    Message::new(match self {
+      Self::Approval => "overview.needs.action.review",
+      Self::Question => "overview.needs.action.answer",
+      Self::PlanReview => "overview.needs.action.reviewPlan",
+      Self::Decision => "overview.needs.action.decide",
+      Self::Input | Self::Interrupted => "overview.needs.action.openTask",
+      Self::StoppedAtLimit => "overview.needs.action.raiseLimit",
+      Self::ReadyToMerge => "overview.needs.action.reviewMerge",
+      Self::Memory => "overview.needs.action.reviewRecords",
+    })
+  }
 }
 
-/// One thing waiting for the person.
+/// A decision card on a task's Summary that an item is decided at.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SummaryCard {
+  /// The plan under review.
+  Plan,
+  /// Raising the limit the run stopped at.
+  RaiseLimit,
+  /// The decision after a step's retries.
+  Retries,
+}
+
+/// Where an item is decided.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Decided {
+  /// At its card, keyed so, in the run's conversation: a tool request, a question with suggested answers. The
+  /// Needs you panel answers it there in place.
+  Card(Arc<str>),
+  /// In the task's conversation, where the composer answers its agent.
+  Conversation,
+  /// On the task's Summary, at its decision card when it has one.
+  Summary(Option<SummaryCard>),
+  /// Nowhere it can be opened, and why.
+  Unavailable(Message),
+}
+
+/// One thing waiting for the person, worded.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NeedItem {
   pub kind: NeedKind,
-  /// The task it is about; `None` for the project's memory, and for a tool request whose run or task
-  /// cannot be read any more, which still waits and still counts.
-  pub task: Option<WaitingTask>,
-  /// Since when it waits: when the request was made, or when the run last changed.
-  pub since: Timestamp,
   /// What waits, in a line (`Plan v2 from Planner waits for your decision`).
   pub title: Message,
+  /// The object itself.
+  pub waiting: WaitingItem,
 }
 
 impl NeedItem {
+  /// `item`, one of what waits in `tasks`, worded.
+  pub fn of(tasks: &ProjectTasks, item: WaitingItem) -> Self {
+    let (kind, title) = words(tasks, &item);
+    Self {
+      kind,
+      title,
+      waiting: item,
+    }
+  }
+
+  /// The task it is about; `None` for the project's memory, and for a tool request whose run or task cannot
+  /// be read any more, which still waits and still counts.
+  pub const fn task(&self) -> Option<&WaitingTask> {
+    self.waiting.task.as_ref()
+  }
+
+  /// Since when it waits: when the request was made, or when the run last changed.
+  pub const fn since(&self) -> Timestamp {
+    self.waiting.since
+  }
+
   /// The task it is about: *KON-16 · Rate-limit messages from GitHub*, the project's memory, or that it
   /// is not known.
   pub fn context(&self) -> Message {
-    match (&self.task, self.kind) {
+    match (self.task(), self.kind) {
       (Some(task), _) => Message::new("overview.needs.context")
         .with("task", task.key.to_string())
         .with("title", task.title.to_string()),
@@ -79,14 +137,43 @@ impl NeedItem {
     }
   }
 
-  /// How long it waits at `now`; an interrupted run waits since it stopped.
+  /// How long it waits at `now`, in its largest whole unit (*41 min*, *3 h*, *2 d*); an interrupted run
+  /// waits since it stopped.
   pub fn waited(&self, now: Timestamp) -> Waited {
     if self.kind == NeedKind::Interrupted {
-      return Waited::Since(display::clock(self.since));
+      return Waited::Since(display::clock(self.since()));
     }
-    // A clock that went backwards reads as no wait.
-    let millis = u64::try_from(now.unix_millis() - self.since.unix_millis()).unwrap_or_default();
-    Waited::For(display::duration(Duration::from_millis(millis)))
+    Waited::For(display::waited(now, self.since()))
+  }
+
+  /// [`Self::waited`] in words, *waiting 41 min* or *since 16:47*, with `read` giving the words of a wait.
+  pub fn wait_line(&self, now: Timestamp, read: impl FnOnce(&Message) -> String) -> Message {
+    match self.waited(now) {
+      Waited::For(time) => Message::new("overview.needs.waiting").with("time", read(&time)),
+      Waited::Since(clock) => Message::new("overview.needs.since").with("time", clock),
+    }
+  }
+
+  /// Where it is decided: a request at its card, an agent's question in the conversation, a plan, a limit
+  /// and a decision after retries at their card of the Summary, the rest on the Summary; the project's memory
+  /// records and what has no task to open nowhere yet.
+  pub fn decided(&self) -> Decided {
+    if self.kind == NeedKind::Memory {
+      return Decided::Unavailable(Message::new("overview.needs.unavailable.memory"));
+    }
+    if self.task().is_none() {
+      return Decided::Unavailable(Message::new("overview.needs.unavailable.task"));
+    }
+    if let Some(card) = self.waiting.kind.card_key() {
+      return Decided::Card(card);
+    }
+    match self.kind {
+      NeedKind::Question | NeedKind::Input => Decided::Conversation,
+      NeedKind::PlanReview => Decided::Summary(Some(SummaryCard::Plan)),
+      NeedKind::StoppedAtLimit => Decided::Summary(Some(SummaryCard::RaiseLimit)),
+      NeedKind::Decision => Decided::Summary(Some(SummaryCard::Retries)),
+      NeedKind::Approval | NeedKind::Interrupted | NeedKind::ReadyToMerge | NeedKind::Memory => Decided::Summary(None),
+    }
   }
 }
 
@@ -101,7 +188,11 @@ pub enum Waited {
 
 /// Everything waiting for the person in `tasks` ([`ProjectTasks::waiting`]), the oldest wait first.
 pub fn items(tasks: &ProjectTasks) -> Vec<NeedItem> {
-  tasks.waiting().into_iter().map(|item| need(tasks, item)).collect()
+  tasks
+    .waiting()
+    .into_iter()
+    .map(|item| NeedItem::of(tasks, item))
+    .collect()
 }
 
 /// How many things wait for the person in `tasks`: what every *Needs you* counts.
@@ -109,14 +200,20 @@ pub fn count(tasks: &ProjectTasks) -> usize {
   tasks.needs_you()
 }
 
-fn need(tasks: &ProjectTasks, item: WaitingItem) -> NeedItem {
+fn words(tasks: &ProjectTasks, item: &WaitingItem) -> (NeedKind, Message) {
   let number = item.run.map(|(_, number)| number);
   let run = |key: &'static str| run_message(key, number);
-  let (kind, title) = match &item.kind {
+  match &item.kind {
     WaitingKind::Approval(shown) => {
       let request = &shown.approval;
       let title = if request.command {
-        Message::new("overview.needs.title.command").with("command", shown.first_line().0.to_owned())
+        let (line, more) = shown.first_line();
+        let key = if more {
+          "overview.needs.title.commandMore"
+        } else {
+          "overview.needs.title.command"
+        };
+        Message::new(key).with("command", line.to_owned())
       } else {
         Message::new("overview.needs.title.tool")
           .with("tool", request.action.to_string())
@@ -124,6 +221,12 @@ fn need(tasks: &ProjectTasks, item: WaitingItem) -> NeedItem {
       };
       (NeedKind::Approval, title.with("agent", request.agent.to_string()))
     }
+    WaitingKind::Choice(choice) if choice.count > 1 => (
+      NeedKind::Question,
+      Message::new("overview.needs.title.questions")
+        .with("agent", choice.agent.to_string())
+        .with("count", choice.count.to_string()),
+    ),
     WaitingKind::Choice(choice) => (NeedKind::Question, question(&choice.agent, &choice.first)),
     WaitingKind::Question(Some(asked)) => (NeedKind::Question, question(&asked.agent, &asked.text)),
     WaitingKind::Question(None) => (NeedKind::Input, run("overview.needs.title.input")),
@@ -161,19 +264,15 @@ fn need(tasks: &ProjectTasks, item: WaitingItem) -> NeedItem {
       NeedKind::Memory,
       Message::new("overview.needs.title.memoryOther").with("count", count.to_string()),
     ),
-  };
-  NeedItem {
-    kind,
-    task: item.task,
-    since: item.since,
-    title,
   }
 }
 
+/// *Explorer asks: index the vendored crates?*, the question's first line.
 fn question(agent: &str, text: &str) -> Message {
+  let first = text.lines().find(|line| !line.trim().is_empty()).unwrap_or_default();
   Message::new("overview.needs.title.question")
     .with("agent", agent.to_owned())
-    .with("question", text.to_owned())
+    .with("question", first.trim().to_owned())
 }
 
 /// `key`'s words about the item's run, numbered `number` (*Run #142 was interrupted*).
