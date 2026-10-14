@@ -193,7 +193,7 @@ fn add_project_refuses_a_folder_the_list_holds() {
   window.until("the failure", |window| window.texts("add-project-error").is_some());
   assert_eq!(
     window.text("add-project-error"),
-    "The list holds Held in this folder already. Remove Held from All projects, then set the folder up again."
+    "Held in the list already uses this folder. Remove it from All projects first."
   );
   window.set("project-name", "Kontur 2");
   assert!(
@@ -222,12 +222,29 @@ fn add_project_opens_within_the_home_tab() {
   let (mut window, _stand_ins) = add_project();
   let tabs = window.navigation().tabs_now();
   assert_eq!(tabs.tabs().len(), 1);
-  let home = tabs.active().id();
-  assert!(!tabs.can_close(home), "the only home tab stays");
   let strip = window.texts("tab-strip").expect("the title bar's tabs");
   assert!(
     !strip.iter().any(|text| text == "Add project"),
     "the home tab shows its icon alone: {strip:?}"
+  );
+}
+
+#[test]
+fn add_project_in_the_only_tab_closes_into_all_projects() {
+  let (window, _stand_ins) = add_project();
+  let navigation = window.navigation();
+  let tab = navigation.tabs_now().active().id();
+  assert!(
+    navigation.tabs_now().can_close(tab),
+    "Add project is not the home itself"
+  );
+  navigation.close(tab);
+  let tabs = navigation.tabs_now();
+  assert_eq!(tabs.tabs().len(), 1);
+  assert_eq!(*tabs.active().route(), Route::AllProjects);
+  assert!(
+    !tabs.can_close(tabs.active().id()),
+    "All projects in the only tab stays"
   );
 }
 

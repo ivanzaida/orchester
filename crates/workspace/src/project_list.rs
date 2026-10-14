@@ -169,6 +169,7 @@ pub async fn remove(workspace: &Workspace, runners: &Runners, project: &Register
     .map_err(|refusal| match refusal {
       ForgetRefusal::Busy => Message::new("projects.removeRefused").with("name", name),
       ForgetRefusal::Unknown => Message::new("projects.removeUnknown").with("name", name),
+      ForgetRefusal::NoAnswer => Message::new("projects.removeNoAnswer").with("name", name),
     })?;
   let (workspace, id) = (workspace.clone(), project.id);
   background::run(move || workspace.forget(id)).await?.map_err(|error| {

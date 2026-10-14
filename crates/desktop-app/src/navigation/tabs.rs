@@ -188,10 +188,10 @@ impl TabSet {
     true
   }
 
-  /// Whether the tab `id` can be closed: every tab but the only one while it is the home tab (All projects,
-  /// or Add project opened from it).
+  /// Whether the tab `id` can be closed: every tab but the only one while it shows All projects. The only tab
+  /// on another place, Add project too, closes into a fresh tab at All projects.
   pub fn can_close(&self, id: TabId) -> bool {
-    self.position(id).is_some() && !(self.tabs.len() == 1 && self.tabs[0].route().is_home())
+    self.position(id).is_some() && !(self.tabs.len() == 1 && *self.tabs[0].route() == Route::AllProjects)
   }
 
   /// Closes the tab `id`. Closing the active tab activates the next one to the right, or the left one

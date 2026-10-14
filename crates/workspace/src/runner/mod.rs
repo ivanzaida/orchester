@@ -11,6 +11,7 @@
 mod ask;
 mod check;
 mod connection;
+mod idle;
 mod lifetime;
 mod report;
 mod requests;
@@ -23,13 +24,13 @@ use std::{
   path::{Path, PathBuf},
   sync::{
     Arc,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
   },
   time::{Duration, SystemTime},
 };
 
 use orchester_core::id::RunId;
-use orchester_ipc::{AttachSession, RefusedRun, Rejection, SessionEnd, WorkState, WorkSummary};
+use orchester_ipc::{AttachSession, RefusedRun, Rejection, SessionEnd, WorkState};
 use parking_lot::Mutex;
 use tokio::{runtime::Handle, sync::watch, task::JoinSet};
 
@@ -40,6 +41,7 @@ use self::{
   state::{RunnerEvent, RunnerState},
 };
 pub use self::{
+  idle::ForgetRefusal,
   report::RunnerStatus,
   requests::RequestError,
   work::{ActiveWork, ActiveWorkFields, SaveState},
@@ -77,15 +79,6 @@ pub struct Continued {
   pub refused: Vec<RefusedRun>,
 }
 
-/// Why a project's runner cannot be stopped to forget the project.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ForgetRefusal {
-  /// Agents are at work in the project.
-  Busy,
-  /// The runner is starting, reconnecting or stopping: whether agents are at work is not known.
-  Unknown,
-}
-
 /// Starts and stops the projects' runners and publishes the displayed project's status.
 #[derive(Clone)]
 pub struct Runners {
@@ -106,6 +99,8 @@ struct Inner {
   /// Held while a project's limits are stored and changed agent slots are handed to its runner, so
   /// the runner gets them in the order they were stored ([`Runners::store_agent_slots`]).
   slot_updates: Mutex<()>,
+  /// Hands out the generations of the projects' runners.
+  generations: AtomicU64,
 }
 
 /// One project's runner.
@@ -117,6 +112,12 @@ struct ProjectRunner {
   lingering: Option<Lingering>,
   /// Requests under way that give the runner work; it is not asked to stop meanwhile.
   pins: usize,
+  /// Which runner of the project this is: each start gets a new one.
+  generation: u64,
+  /// The question whether it is idle, while one is in flight (`idle`).
+  asking: Option<idle::IdleAnswer>,
+  /// The project is being removed from the list: once stopped, the runner is not started again.
+  forgetting: bool,
 }
 
 impl PartialEq for Runners {
@@ -150,6 +151,7 @@ impl Runners {
         tabbed: Mutex::new(HashSet::new()),
         closing: AtomicBool::new(false),
         slot_updates: Mutex::new(()),
+        generations: AtomicU64::new(0),
       }),
     }
   }
@@ -209,6 +211,9 @@ impl Runners {
         connection: Some(connection),
         lingering: None,
         pins: 0,
+        generation: self.inner.generations.fetch_add(1, Ordering::Relaxed),
+        asking: None,
+        forgetting: false,
       },
     );
   }
@@ -238,53 +243,6 @@ impl Runners {
       let outcome = connection.stop(Some(QUIET_STOP_TIMEOUT)).await;
       tracing::info!(project = %project.display(), ?outcome, "stopped the runner of a removed project");
     });
-  }
-
-  /// Stops project `root`'s runner only if it has no work, and forgets it once it stopped; nothing it does
-  /// is interrupted. A project without a running runner is forgotten at once. Until the runner's process
-  /// has ended its entry stays, so showing the project meanwhile does not start a second runner; a tab that
-  /// shows it then starts a new one.
-  pub async fn forget_if_idle(&self, root: &Path) -> Result<(), ForgetRefusal> {
-    let answer = {
-      let mut projects = self.inner.projects.lock();
-      let Some(entry) = projects.get_mut(root) else {
-        return Ok(());
-      };
-      let status = entry.status.borrow().clone();
-      match (status.state(), status.work().map(WorkSummary::agents_working)) {
-        (RunnerState::Stopped | RunnerState::Failed { .. }, _) => {
-          projects.remove(root);
-          return Ok(());
-        }
-        (RunnerState::Online, Some(0)) => {}
-        (RunnerState::Online, Some(_)) => return Err(ForgetRefusal::Busy),
-        // Starting, reconnecting or stopping, or online before its first report: its work is not known.
-        _ => return Err(ForgetRefusal::Unknown),
-      }
-      let Some(connection) = &entry.connection else {
-        return Err(ForgetRefusal::Unknown);
-      };
-      connection.stop_if_idle()
-    };
-    if answer.await != Ok(true) {
-      // A runner that lingered may have stopped meanwhile; one that is still there has work.
-      return match self.inner.projects.lock().contains_key(root) {
-        true => Err(ForgetRefusal::Busy),
-        false => Ok(()),
-      };
-    }
-    let connection = self
-      .inner
-      .projects
-      .lock()
-      .get_mut(root)
-      .and_then(|entry| entry.connection.take());
-    if let Some(connection) = connection {
-      let outcome = connection.stop(Some(QUIET_STOP_TIMEOUT)).await;
-      tracing::info!(project = %root.display(), ?outcome, "stopped the idle runner of a removed project");
-    }
-    self.stopped_idle(root);
-    Ok(())
   }
 
   /// Starts the displayed project's runner again after it failed; the reconnect attempts start

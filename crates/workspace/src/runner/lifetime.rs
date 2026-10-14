@@ -13,7 +13,7 @@ use std::{
 
 use tokio::task::JoinHandle;
 
-use super::Runners;
+use super::{Runners, idle::NotAsked};
 use crate::workspace::OpenProject;
 
 /// How long a lingering runner waits for a change before it asks again: its work usually ends
@@ -57,7 +57,7 @@ impl Runners {
   }
 
   /// Whether a window tab shows project `root`.
-  fn tabbed(&self, root: &Path) -> bool {
+  pub(super) fn tabbed(&self, root: &Path) -> bool {
     self.inner.tabbed.lock().contains(root)
   }
 
@@ -91,20 +91,18 @@ impl Runners {
     let mut work = self.work_changes();
     let mut runs = self.changes_of(&root);
     loop {
-      let answer = {
-        let projects = self.inner.projects.lock();
-        let Some(entry) = projects.get(&root) else {
-          return;
-        };
-        match &entry.connection {
-          Some(connection) if entry.pins == 0 => Some(connection.stop_if_idle()),
-          _ => None,
-        }
+      let asked = match self.ask_idle(&root) {
+        Ok(asked) => Some(asked),
+        Err(NotAsked::Gone) => return,
+        Err(NotAsked::Held) => None,
       };
-      if let Some(answer) = answer
-        && answer.await == Ok(true)
+      if let Some((generation, mut answer)) = asked
+        && matches!(
+          answer.wait_for(Option::is_some).await.map(|stopped| *stopped),
+          Ok(Some(true))
+        )
       {
-        self.stopped_idle(&root);
+        self.retire_idle(&root, generation).await;
         return;
       }
       tokio::select! {
@@ -112,19 +110,6 @@ impl Runners {
         _ = runs.changed() => {}
         () = tokio::time::sleep(LINGER_RECHECK) => {}
       }
-    }
-  }
-
-  /// Project `root`'s runner stopped without work: it is forgotten, so the project reads as not
-  /// started, and a tab that shows the project meanwhile starts a new one.
-  pub(super) fn stopped_idle(&self, root: &Path) {
-    let Some(entry) = self.inner.projects.lock().remove(root) else {
-      return;
-    };
-    tracing::info!(project = %root.display(), "stopped the runner of a project no tab shows");
-    self.inner.shared.work.send_modify(|revision| *revision += 1);
-    if self.tabbed(root) {
-      self.ensure(root, &entry.name);
     }
   }
 }
