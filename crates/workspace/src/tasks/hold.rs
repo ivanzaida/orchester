@@ -7,7 +7,9 @@ use std::path::Path;
 
 use orchester_core::{
   id::{IdempotencyKey, TaskId},
-  store::TaskStore,
+  orchestrator::HeldWork,
+  store::{RunStore, TaskStore},
+  task::TaskStatus,
   task_group::{HoldActor, HoldScope},
   time::Timestamp,
 };
@@ -55,6 +57,56 @@ pub fn held_in(db: &ProjectDb) -> Result<HeldQueue, StoreError> {
 /// Where a hold on `task`'s new starts would apply: the reviewed group it belongs to; `None` when it is in none.
 pub fn group_of(db: &ProjectDb, task: TaskId) -> Result<Option<IdempotencyKey>, StoreError> {
   Ok(db.task_group_for_task(task)?.map(|group| group.key()))
+}
+
+/// What a hold on new starts in `group` (the whole project when `None`) holds now: the tasks waiting to start, queued
+/// without a run, in its order (the group's reviewed order, else the project's).
+pub fn held_work(db: &ProjectDb, group: Option<IdempotencyKey>) -> Result<HeldWork, StoreError> {
+  let tasks = match group {
+    Some(key) => {
+      let ids = db
+        .task_group(key)?
+        .map(|group| group.tasks().to_vec())
+        .unwrap_or_default();
+      let mut tasks = Vec::new();
+      for id in ids {
+        tasks.extend(db.task(id)?);
+      }
+      tasks
+    }
+    None => db.tasks()?,
+  };
+  let mut waiting = Vec::new();
+  for task in tasks {
+    if task.status() == TaskStatus::Queued && db.runs_of_task(task.id()).map_err(run_store)?.is_empty() {
+      waiting.push(task.key().to_string());
+    }
+  }
+  Ok(HeldWork { group, waiting })
+}
+
+/// A run store error as the store error it is; one about a run itself is a corrupt record here.
+fn run_store(error: orchester_store::RunStoreError) -> StoreError {
+  match error {
+    orchester_store::RunStoreError::Store(error) => error,
+    other => StoreError::Corrupt {
+      what: "run",
+      detail: other.to_string(),
+    },
+  }
+}
+
+/// The reviewed group of the task named `named`, by its key or id; `None` when it is in none or is not found.
+pub fn group_of_named(db: &ProjectDb, named: &str) -> Result<Option<IdempotencyKey>, StoreError> {
+  let lowered = named.to_lowercase();
+  let task = db
+    .tasks()?
+    .into_iter()
+    .find(|task| task.key().to_string().to_lowercase() == lowered || task.id().to_string() == named);
+  match task {
+    Some(task) => group_of(db, task.id()),
+    None => Ok(None),
+  }
 }
 
 /// Why a hold was not changed.

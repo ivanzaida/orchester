@@ -156,25 +156,33 @@ fn keep(
   Ok(chat)
 }
 
+/// The agent created `first`, and could not start `second`.
+fn actions(first: &str, second: &str) -> (ChatAction, ChatAction) {
+  let created = ChatAction {
+    tool: "create_task".to_owned(),
+    task: Some(first.to_owned()),
+    outcome: ActionOutcome::Done,
+    held: None,
+  };
+  let refused = ChatAction {
+    tool: "run_task".to_owned(),
+    task: Some(second.to_owned()),
+    outcome: ActionOutcome::Refused {
+      code: "task_not_ready".to_owned(),
+      reason: "Needs a pipeline".to_owned(),
+    },
+    held: None,
+  };
+  (created, refused)
+}
+
 fn conversations(
   db: &mut ProjectDb,
   (keys, connection): (&[String], ConnectionId),
 ) -> Result<Conversations, Box<dyn Error>> {
   let first = keys.first().cloned().unwrap_or_default();
   let second = keys.get(1).cloned().unwrap_or_default();
-  let created = ChatAction {
-    tool: "create_task".to_owned(),
-    task: Some(first.clone()),
-    outcome: ActionOutcome::Done,
-  };
-  let refused = ChatAction {
-    tool: "run_task".to_owned(),
-    task: Some(second.clone()),
-    outcome: ActionOutcome::Refused {
-      code: "task_not_ready".to_owned(),
-      reason: "Needs a pipeline".to_owned(),
-    },
-  };
+  let (created, refused) = actions(&first, &second);
   let reply = format!(
     "I created **{first}** as a draft with its brief and acceptance criteria. Nothing is queued and no agent has \
      started.\n\nI read the task list and the project's pipelines; I didn't read repository files."

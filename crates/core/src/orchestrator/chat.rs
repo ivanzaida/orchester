@@ -7,7 +7,7 @@ use super::proposal::ProposedStart;
 use crate::{
   connection::AccountStartProblem,
   conversation::MessageBody,
-  id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId},
+  id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId, IdempotencyKey},
   resource::ModelId,
   time::Timestamp,
 };
@@ -183,6 +183,18 @@ pub struct ChatAction {
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub task: Option<String>,
   pub outcome: ActionOutcome,
+  /// What a hold on new starts held, when the action held them.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub held: Option<HeldWork>,
+}
+
+/// The new starts a hold held: in one reviewed group (its key), or in the whole project; and the keys of the tasks
+/// that waited to start then.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HeldWork {
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub group: Option<IdempotencyKey>,
+  pub waiting: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -65,8 +65,13 @@ fn orchestrator_releases_a_hold_it_set_itself() {
   screen.until("the release", |screen| !held(screen));
 }
 
-#[test]
-fn tasks_show_held_groups_under_the_tabs_and_keep_the_header() {
+/// Queues a reviewed group of `keys`' drafts on `delivery` while the project is held, so nothing of it starts; holds
+/// the group as `actor` and lets the project go on. The group's key.
+fn held_group(
+  screen: &Orchestrator,
+  delivery: orchester_core::id::ResourceId,
+  keys: &[String],
+) -> orchester_core::id::IdempotencyKey {
   use orchester_core::{
     id::IdempotencyKey,
     resource::Pipeline,
@@ -76,20 +81,6 @@ fn tasks_show_held_groups_under_the_tabs_and_keep_the_header() {
     tokens::TokenBudget,
   };
 
-  let mut screen = Orchestrator::new(Setup::Ready);
-  let project = screen.project;
-  let delivery = screen.delivery();
-  let keys = ["First", "Second"].map(|title| screen.draft_on(delivery, title));
-  screen
-    .window
-    .navigation()
-    .go(Route::Project(project, ProjectPage::Tasks(TaskList::default())));
-  screen.until("Tasks", |screen| {
-    screen.exists("tasks-queue-hold") && screen.exists("tasks-tab-all")
-  });
-  let tabs = screen.bounds("tasks-tab-all").y;
-
-  // Nothing of the group starts meanwhile: the project is held while it is queued.
   let mut db = screen.db();
   db.set_queue_hold((HoldScope::Project, HoldActor::Person), true, Timestamp::now())
     .expect("held");
@@ -133,6 +124,24 @@ fn tasks_show_held_groups_under_the_tabs_and_keep_the_header() {
   .expect("group held");
   db.set_queue_hold((HoldScope::Project, HoldActor::Person), false, Timestamp::now())
     .expect("project released");
+  group.key()
+}
+
+#[test]
+fn tasks_show_held_groups_under_the_tabs_and_keep_the_header() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  let project = screen.project;
+  let delivery = screen.delivery();
+  let keys = ["First", "Second"].map(|title| screen.draft_on(delivery, title));
+  screen
+    .window
+    .navigation()
+    .go(Route::Project(project, ProjectPage::Tasks(TaskList::default())));
+  screen.until("Tasks", |screen| {
+    screen.exists("tasks-queue-hold") && screen.exists("tasks-tab-all")
+  });
+  let tabs = screen.bounds("tasks-tab-all").y;
+  held_group(&screen, delivery, &keys);
 
   screen.until("the held group", |screen| screen.exists("tasks-queue-group-0"));
   assert_eq!(screen.bounds("tasks-tab-all").y, tabs, "the header keeps its layout");
@@ -144,5 +153,45 @@ fn tasks_show_held_groups_under_the_tabs_and_keep_the_header() {
   screen.click("tasks-queue-release-group-0");
   screen.until("released", |screen| {
     screen.db().queue_holds().expect("holds").groups.is_empty()
+  });
+}
+
+#[test]
+fn orchestrator_hold_card_names_the_group_its_tasks_and_resumes() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  let delivery = screen.delivery();
+  let keys = ["First", "Second"].map(|title| screen.draft_on(delivery, title));
+  let group = held_group(&screen, delivery, &keys);
+  screen.go(OrchestratorChat::New);
+  screen.send(r#"Call hold_queue {"project":"Kontur","task":"KON-1"}"#);
+  screen.until("the card", |screen| {
+    screen.text("orchestrator-conversation").contains("Resume new starts")
+  });
+  screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
+  let card = screen.text("orchestrator-conversation");
+  assert!(card.contains("New starts held · the group of KON-1"), "{card}");
+  assert!(
+    card.contains("2 waiting tasks held") && card.contains("KON-2"),
+    "{card}"
+  );
+  assert!(
+    !card.contains("New starts held in Kontur"),
+    "a group hold is not the project's: {card}"
+  );
+  let db = screen.db();
+  let chat = db.chats().expect("chats").remove(0).chat.id();
+  let turn = db
+    .chat_entries(chat)
+    .expect("entries")
+    .into_iter()
+    .find_map(|entry| match entry.kind {
+      EntryKind::Person { message, .. } => Some(message),
+      _ => None,
+    })
+    .expect("the message");
+  let resume = format!("orchestrator-action-{turn}-0-resume");
+  screen.click(&resume);
+  screen.until("resumed", |screen| {
+    !screen.db().queue_holds().expect("holds").groups.contains(&group)
   });
 }

@@ -106,6 +106,7 @@ fn a_turn_ends_once_and_its_chat_keeps_replies_actions_and_session_in_order() {
       code: "task_blocked".to_owned(),
       reason: "ORC-1 must be merged first.".to_owned(),
     },
+    held: None,
   };
   db.add_chat_action(chat, &action, at(30)).expect("action");
   assert!(db.end_chat_turn(message, &TurnState::Answered, at(35)).expect("ended"));

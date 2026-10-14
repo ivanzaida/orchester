@@ -160,6 +160,19 @@
       "connection": "The Orchestrator runs on another connection now: this answer starts a new session and doesn't remember the earlier messages.",
       "account": "The Orchestrator's connection is on another account now: this answer starts a new session and doesn't remember the earlier messages."
     },
+    "held": {
+      "projectTitle": "New starts held in {{project}}",
+      "projectEffect": "No waiting task in {{project}} starts until you resume. Running tasks keep running.",
+      "groupTitle": "New starts held · the group of {{task}}",
+      "groupEffect": "No waiting task in this group starts until you resume. Running tasks keep running.",
+      "waiting": {
+        "one": "1 waiting task held",
+        "other": "{{count}} waiting tasks held"
+      },
+      "checked": "Same action as Pause scheduling in the queue, checked against your permissions in {{project}}.",
+      "resume": "Resume new starts",
+      "openQueue": "Open queue"
+    },
     "proposal": {
       "title": "Start {{task}} on {{pipeline}}?",
       "waits": "Waits for you · {{time}}",

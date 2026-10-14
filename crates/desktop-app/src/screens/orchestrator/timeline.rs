@@ -24,11 +24,12 @@ use lurq::{
 use orchester_core::{
   connection::AccountStartProblem,
   id::ProjectId,
-  orchestrator::{ActionOutcome, ChatEvent, SessionChange, TurnFailure, TurnState},
+  orchestrator::{ActionOutcome, ChatEvent, HeldWork, SessionChange, TurnFailure, TurnState},
 };
 use orchester_workspace::{display, orchestrator::tools::ChatScope};
 
 use super::{
+  held::{HeldCard, HeldProps},
   proposal::{ProposalProps, StartProposal},
   turns::{Part, Turn},
 };
@@ -189,6 +190,20 @@ fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
               seq: *seq,
               task: action.task.clone().unwrap_or_default(),
               start: start.clone(),
+              at: *at,
+            },
+          ),
+          (ActionOutcome::Done, Some(scope)) if action.held.is_some() => ctx.mount_keyed::<HeldCard>(
+            &id,
+            HeldProps {
+              id: id.clone(),
+              project: (row.env.project, row.env.name.to_string()),
+              root: scope.root.clone(),
+              task: action.task.clone(),
+              held: action.held.clone().unwrap_or(HeldWork {
+                group: None,
+                waiting: Vec::new(),
+              }),
               at: *at,
             },
           ),

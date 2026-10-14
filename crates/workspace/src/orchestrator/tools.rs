@@ -22,6 +22,7 @@ use crate::{
   app_mcp::{self, Services, ToolError, Translate},
   messages::Message,
   runner::Runners,
+  tasks::hold,
 };
 
 /// The tools of the chat, by name: reading the project's work, task drafts, proposing a task's run to the person
@@ -113,7 +114,9 @@ pub async fn call(
       (Ok(_), None) => ActionOutcome::Done,
       (Err(error), _) => refusal(error, translate),
     };
-    keep(scope, name, named, outcome).await;
+    // A hold that held new starts keeps what it held, for its card.
+    let held = (name == HOLD_QUEUE && outcome == ActionOutcome::Done).then(|| arguments_task(&named));
+    keep(scope, (name, named, held), outcome).await;
     runners.chat_changed(&scope.root);
   }
   result
@@ -135,7 +138,10 @@ enum Named {
 
 fn named_task(arguments: &JsonObject) -> Option<Named> {
   let text = |name: &str| arguments.get(name).and_then(Value::as_str).map(str::to_owned);
-  text("key").map(Named::Task).or_else(|| text("run").map(Named::Run))
+  text("key")
+    .or_else(|| text("task"))
+    .map(Named::Task)
+    .or_else(|| text("run").map(Named::Run))
 }
 
 /// The key of the task a created task's result names.
@@ -162,14 +168,45 @@ pub(super) fn refusal(error: &ToolError, translate: &Translate) -> ActionOutcome
   }
 }
 
-/// Keeps the action of tool `tool`, with the key of the task it names, in the conversation; one that cannot be kept
-/// is logged.
-async fn keep(scope: &ChatScope, tool: &str, named: Option<Named>, outcome: ActionOutcome) {
+/// The tool whose action keeps what it held.
+const HOLD_QUEUE: &str = "hold_queue";
+
+/// The task a hold named, which names its group; `None` for the whole project.
+fn arguments_task(named: &Option<Named>) -> Option<String> {
+  match named {
+    Some(Named::Task(task)) => Some(task.clone()),
+    Some(Named::Run(_)) | None => None,
+  }
+}
+
+/// Keeps the action of tool `tool`, with the key of the task it names and, for a hold of new starts (`held`: the task
+/// that names its group, if any), what it held, in the conversation; one that cannot be kept is logged.
+async fn keep(
+  scope: &ChatScope,
+  (tool, named, held): (&str, Option<Named>, Option<Option<String>>),
+  outcome: ActionOutcome,
+) {
   let (root, chat, tool) = (scope.root.clone(), scope.chat, tool.to_owned());
   let kept = tokio::task::spawn_blocking(move || {
     let mut db = ProjectDb::open(&root)?;
     let task = named.and_then(|named| task_key(&db, named));
-    db.add_chat_action(chat, &ChatAction { tool, task, outcome }, Timestamp::now())
+    let held = match held {
+      Some(named) => {
+        let group = match named {
+          Some(named) => hold::group_of_named(&db, &named)?,
+          None => None,
+        };
+        Some(hold::held_work(&db, group)?)
+      }
+      None => None,
+    };
+    let action = ChatAction {
+      tool,
+      task,
+      outcome,
+      held,
+    };
+    db.add_chat_action(chat, &action, Timestamp::now())
   })
   .await;
   match kept {

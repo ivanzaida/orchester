@@ -13,8 +13,8 @@ pub mod settings;
 
 pub use self::{
   chat::{
-    ActionOutcome, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, SessionChange, TurnFailure,
-    TurnState,
+    ActionOutcome, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, HeldWork, SessionChange,
+    TurnFailure, TurnState,
   },
   settings::{OrchestratorSettings, codex_held_back, runs_orchestrator},
 };
