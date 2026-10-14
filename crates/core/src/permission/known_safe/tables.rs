@@ -51,12 +51,6 @@ const PWD: Options = Options {
   valued: "",
 };
 
-const ECHO: Options = Options {
-  long: &[],
-  flags: "neE",
-  valued: "",
-};
-
 /// `which` without `--read-alias` and `--read-functions`, which read input.
 const WHICH: Options = Options {
   long: &[&["all"]],
@@ -164,13 +158,12 @@ const RG: Options = Options {
   valued: "ABCdeEfgjmMrtT",
 };
 
-/// The programs read by [`Options`], with `git`, `head`, `tail`, `find` and `where` ruled separately.
-pub(super) const OPTION_PROGRAMS: [(&str, Options); 9] = [
+/// The programs read by [`Options`], with `git`, `head`, `tail`, `find`, `where` and `echo` ruled separately.
+pub(super) const OPTION_PROGRAMS: [(&str, Options); 8] = [
   ("ls", LS),
   ("cat", CAT),
   ("wc", WC),
   ("pwd", PWD),
-  ("echo", ECHO),
   ("which", WHICH),
   ("file", FILE),
   ("stat", STAT),

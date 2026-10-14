@@ -153,6 +153,8 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
         .editing()
     }),
     "find" => find(args),
+    // `tee` without a file only passes what it reads on (`… | tee | head`).
+    "tee" if args.is_empty() => Judged::of(Kind::ReadOnly).known_safe(),
     program if EDITS_ARGS.contains(&program) => Judged::writing(Kind::Writes, operands(args)).editing(),
     program if WRITES_ARGS.contains(&program) => Judged::writing(Kind::Writes, operands(args)),
     program if DELETES_ARGS.contains(&program) => Judged::writing(Kind::Writes, operands(args)).deleting().editing(),
