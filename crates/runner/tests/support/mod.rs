@@ -46,7 +46,7 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_ipc::Event;
-use orchester_runner::execution::{Notifier, Scheduler};
+use orchester_runner::execution::{Notifier, QaSlots, Scheduler};
 use orchester_store::ProjectDb;
 use tempfile::TempDir;
 use tokio::sync::mpsc;
@@ -407,11 +407,16 @@ pub fn scheduler(root: &Path) -> (Scheduler, mpsc::UnboundedReceiver<Event>) {
   scheduler_with(root, Arc::new(MemoryVault::default()))
 }
 
-/// A scheduler that reads secret values from `vault`.
+/// A scheduler that reads secret values from `vault`. Its QA apps take QA slots of the project's own, in
+/// `.orchester/qa-slots/`, never the computer's.
 pub fn scheduler_with(root: &Path, vault: Arc<MemoryVault>) -> (Scheduler, mpsc::UnboundedReceiver<Event>) {
   let (sender, events) = mpsc::unbounded_channel();
   let relay = PathBuf::from(env!("CARGO_BIN_EXE_orchester-runner"));
-  (Scheduler::new(root, Notifier::new(sender), vault, Some(relay)), events)
+  let slots = QaSlots::in_folder(&root.join(".orchester").join("qa-slots"));
+  (
+    Scheduler::new(root, Notifier::new(sender), vault, (Some(relay), slots)),
+    events,
+  )
 }
 
 /// Waits for the tasks currently executing runs to close their control receivers.

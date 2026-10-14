@@ -42,6 +42,10 @@ impl RunTask {
     finished: Result<Finished, StoreError>,
   ) -> Result<(), ExecutionError> {
     let active = self.retire_worker(execution);
+    // The agent's turn is over: its QA app stops and frees the QA slot, whatever comes next for the step.
+    if let Some(active) = &active {
+      self.qa.end(active.invocation.id);
+    }
     let finished = finished?;
     let Some(active) = active else {
       return Ok(());
@@ -152,7 +156,7 @@ impl RunTask {
     if let Some(failure) = failure {
       self.save(execution, active, "step failed")?;
       self.keep_handoff(execution, StepFate::Failed);
-      return self.fail(execution, failure);
+      return self.fail_judged(execution, failure, active.judged.clone());
     }
     self.pass(execution, active, output.text)
   }
@@ -256,7 +260,54 @@ impl RunTask {
     execution: StepExecutionId,
     failure: StepFailure,
   ) -> Result<(), ExecutionError> {
-    self.transition(|run, now| run.fail_step(execution, failure, now))?;
+    self.fail_judged(execution, failure, None)
+  }
+
+  /// [`RunTask::fail`] of a result that was for `judged`, the revision of the run's branch its agent started on.
+  fn fail_judged(
+    &mut self,
+    execution: StepExecutionId,
+    failure: StepFailure,
+    judged: Option<Revision>,
+  ) -> Result<(), ExecutionError> {
+    self.transition(|run, now| run.fail_judged(execution, (failure, judged), now))?;
+    self.end_attempt()
+  }
+
+  /// Takes an agent slot for `execution` and reads the revision of the run's branch it starts on, unless its step's
+  /// latest failed or unverified result was for that revision and nobody asked for it again
+  /// ([`orchester_core::run::Run::reruns_unchanged`]): then it is not started, and the run waits for a person. A
+  /// revision git cannot tell is logged, and the step starts as if it had not run on it before.
+  pub(super) fn take_slot(&mut self, execution: StepExecutionId) -> Result<Taken, ExecutionError> {
+    let work = self.work(execution)?;
+    if !self.board.take(self.run.id(), execution, work) {
+      return Ok(Taken::NoSlot);
+    }
+    let judged = checkpoint::head(&self.worktree)
+      .inspect_err(|error| tracing::warn!(run = %self.run.id(), %error, "the run's revision cannot be read"))
+      .ok();
+    if let Some(revision) = judged
+      .as_ref()
+      .filter(|revision| self.run.reruns_unchanged(execution, revision))
+    {
+      self.board.release(execution);
+      self.refuse_unchanged(execution, revision.clone())?;
+      return Ok(Taken::Refused);
+    }
+    Ok(Taken::On(judged))
+  }
+
+  /// Does not run `execution` again on `revision`, which its step's latest failed or unverified result was for
+  /// ([`orchester_core::run::Run::reruns_unchanged`]): the run waits for a person.
+  fn refuse_unchanged(&mut self, execution: StepExecutionId, revision: Revision) -> Result<(), ExecutionError> {
+    tracing::info!(run = %self.run.id(), %execution, %revision, "a step is not run again on an unchanged revision");
+    self.transition(|run, now| run.refuse_unchanged(execution, revision, now))?;
+    self.end_attempt()
+  }
+
+  /// After a failure ended the attempt: the desktop learns that the run waits, and the agents of executions the
+  /// failure ended are ended.
+  fn end_attempt(&mut self) -> Result<(), ExecutionError> {
     self.announce_waiting();
     let run = &self.run;
     for (id, active) in &mut self.agents {
@@ -304,6 +355,16 @@ impl RunTask {
       None => format!("{}: {step} (run {run})", self.task.key()),
     }
   }
+}
+
+/// Whether an agent step starts now ([`RunTask::take_slot`]).
+pub(super) enum Taken {
+  /// No agent slot is free: it starts later.
+  NoSlot,
+  /// It is not run again on an unchanged revision; the run waits for a person.
+  Refused,
+  /// It starts on this revision of the run's branch, when git could tell it.
+  On(Option<Revision>),
 }
 
 enum Integrated {

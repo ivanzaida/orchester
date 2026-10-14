@@ -1,7 +1,8 @@
-//! A person's decision on a run that waits for them after its retries ran out or its step broke
-//! again ([`orchester_core::run::StuckDecision`]). Its task ended when it began to wait, so the
-//! decision is carried out on the stored run: one more retry, or the work returned to an agent step,
-//! continues the run in a new task as any continued run does; a stop fails it.
+//! A person's decision on a run that waits for them after its retries ran out, its step broke again, reported
+//! unverified or was not run again on an unchanged revision ([`orchester_core::run::StuckDecision`]). Its task ended
+//! when it began to wait, so the decision is carried out on the stored run: one more retry, the work returned to an
+//! agent step, or an accepted step that leaves steps to run continues the run in a new task as any continued run does;
+//! a stop fails it, and an accepted last step succeeds it.
 
 use orchester_core::{
   id::RunId,
@@ -11,7 +12,7 @@ use orchester_core::{
 use orchester_ipc::{Event, Rejection};
 use orchester_store::ProjectDb;
 
-use super::{Scheduler, idle};
+use super::{Scheduler, idle, record::announce_ready};
 
 impl Scheduler {
   /// Carries out `decision` on `run`, which waits for a person. A run its task executes does not
@@ -21,7 +22,7 @@ impl Scheduler {
       Rejection::RunNotPaused => Rejection::RunNotWaiting,
       other => other,
     };
-    if decision != StuckDecision::Stop {
+    if !self.ends(run, &decision)? {
       return self
         .continue_settled(run, |db, root| {
           let mut stored = waiting(db, run)?;
@@ -45,7 +46,24 @@ impl Scheduler {
       run,
       task: stored.task(),
     });
+    announce_ready(&self.inner.notifier, &stored);
     Ok(())
+  }
+
+  /// Whether `decision` ends the run instead of continuing it: a stop, or the acceptance of a step after which every
+  /// step has passed.
+  fn ends(&self, run: RunId, decision: &StuckDecision) -> Result<bool, Rejection> {
+    match decision {
+      StuckDecision::Stop => Ok(true),
+      StuckDecision::Accept => {
+        let mut probe = waiting(&self.open()?, run)?;
+        probe
+          .decide_stuck(decision, Timestamp::now())
+          .map_err(idle::rejection)?;
+        Ok(probe.status().is_terminal())
+      }
+      StuckDecision::Retry | StuckDecision::ReturnTo { .. } => Ok(false),
+    }
   }
 }
 

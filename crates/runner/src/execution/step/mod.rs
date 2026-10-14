@@ -14,6 +14,7 @@ mod mcp;
 mod memory;
 mod native;
 mod orchester_tools;
+mod qa_app;
 pub(super) mod question;
 mod relay;
 mod relay_calls;
@@ -35,6 +36,7 @@ use orchester_core::{
   memory::MemoryStore,
   permission::{LaunchPermissions, category::CommandScope},
   resource::ModelId,
+  revision::Revision,
   run::{EditProgress, Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
   store::{ActivityStore, ConversationStore, RunStore},
   time::Timestamp,
@@ -43,7 +45,10 @@ use orchester_core::{
 use orchester_ipc::Event;
 use tokio::sync::mpsc;
 
+pub(super) use self::qa_app::QaApps;
+pub use self::qa_app::QaSlots;
 use self::{
+  end::Taken,
   start::Driven,
   worker::{Stop, Worker},
 };
@@ -126,6 +131,9 @@ pub(super) struct Active {
   /// Another step failed and ended the attempt; this agent is being ended and its end changes
   /// nothing.
   pub(super) abandoned: bool,
+  /// The revision of the run's branch the agent started on, which its result is for; `None` when it could not be
+  /// read, and for a command tool.
+  pub(super) judged: Option<Revision>,
 }
 
 impl Active {
@@ -146,6 +154,7 @@ impl Active {
       used: TokensUsed::ZERO,
       budget_reached: false,
       abandoned: false,
+      judged: None,
     }
   }
 
@@ -233,10 +242,11 @@ impl RunTask {
     if self.waits_for_plan_reset(execution)? {
       return Ok(true);
     }
-    let work = self.work(execution)?;
-    if !self.board.take(self.run.id(), execution, work) {
-      return Ok(false);
-    }
+    let judged = match self.take_slot(execution)? {
+      Taken::NoSlot => return Ok(false),
+      Taken::Refused => return Ok(true),
+      Taken::On(judged) => judged,
+    };
     // A person's *Try now* holds until the agent has a slot: with every slot busy, the step tries again later.
     self.try_at_plan_limit.take_if(|asked| *asked == execution);
     let workspace = Workspace::of(&self.root, &self.run, &self.worktree, execution, start);
@@ -304,7 +314,7 @@ impl RunTask {
       arrival,
     )?;
     let agent = (start.permissions, start.secrets, (start.agent, start.account));
-    self.spawn(execution, invocation, (driven, agent), workspace)?;
+    self.spawn(execution, invocation, (driven, agent), (workspace, judged))?;
     Ok(true)
   }
 
@@ -341,7 +351,7 @@ impl RunTask {
     execution: StepExecutionId,
     invocation: Invocation,
     (driven, (permissions, secrets, (agent, account))): (Driven, AgentParts),
-    workspace: Workspace,
+    (workspace, judged): (Workspace, Option<Revision>),
   ) -> Result<(), ExecutionError> {
     let (invocations, reviews) = (
       self.db.invocations(self.run.id())?,
@@ -410,6 +420,7 @@ impl RunTask {
         used,
         budget_reached: false,
         abandoned: false,
+        judged,
       },
     );
     Ok(())

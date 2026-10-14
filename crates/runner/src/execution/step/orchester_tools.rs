@@ -44,6 +44,7 @@ use super::{
   super::{handoff::provenance, run::RunTask},
   claude_approval::ClaudeApprovals,
   mcp::McpSetup,
+  qa_app::StepQa,
   relay::{Listening, Served, bind},
   run_records::RunRecords,
   start::problem,
@@ -107,6 +108,8 @@ pub(in super::super) struct ToolHost {
   secrets: Vec<SecretVariable>,
   /// Tools a person or a rule approved one call of, through the CLI's own prompt, not called yet.
   grants: Mutex<Vec<(OrchesterTool, Value)>>,
+  /// The invocation's QA app (`start_qa_app`); `None` while the host is being made.
+  qa: Option<StepQa>,
 }
 
 impl ToolHost {
@@ -126,6 +129,13 @@ impl ToolHost {
   /// The tools of the server's `tools/list` result.
   pub(super) fn listed(&self) -> Vec<Value> {
     self.tools.mcp_tools()
+  }
+
+  /// This host with the QA app tools of its invocation.
+  #[must_use]
+  fn with_qa(mut self, qa: StepQa) -> Self {
+    self.qa = Some(qa);
+    self
   }
 
   /// This host, also removing `secrets` from its answers.
@@ -159,6 +169,7 @@ impl ToolHost {
     let target = match (call, reach) {
       (_, Some(reach)) => Some(reach.folder.display().to_string()),
       (ToolCall::RunCheck { name }, None) => Some(name.clone()),
+      (ToolCall::StartQaApp(start), None) => Some(start.scenario().to_owned()),
       _ => None,
     };
     Ok(Looked {
@@ -221,7 +232,11 @@ impl ToolHost {
       Ok(ToolWork::Progress(progress)) => self.records.report_progress(&progress, &self.secrets),
       Ok(ToolWork::Symbols(query)) => self.files.symbols(&query, &context),
       Ok(ToolWork::Skill(call)) => self.skills.run(&call),
-      Ok(ToolWork::App(call)) => super::run_app::call(&self.processes, &self.worktree, &call),
+      Ok(ToolWork::App(call)) => super::run_app::call(&self.processes, &self.worktree, &call, self.qa.as_ref()),
+      Ok(ToolWork::QaApp(start)) => match &self.qa {
+        Some(qa) => qa.start(&start),
+        None => ToolResult::unavailable("this step cannot start a QA app"),
+      },
       Ok(ToolWork::Processes(call)) => self.processes.run(call),
       Ok(ToolWork::Run(program)) => program.finished(run_capped(program.command(), program.timeout(), program.cap())),
       Err(error) => ToolResult::refused(&error),
@@ -264,7 +279,8 @@ impl RunTask {
   ) -> Result<(Arc<ToolHost>, Option<ClaudeApprovals>), RunnerProblem> {
     let worktree = folders.worktree;
     let host = self.tool_host((permissions, skills), (execution, folders), environment)?;
-    let tools = Arc::new(host.with_secrets(setup.secrets()));
+    let qa = self.step_qa(execution, invocation, worktree)?;
+    let tools = Arc::new(host.with_secrets(setup.secrets()).with_qa(qa));
     let approvals = self.claude_approvals((permissions, setup, &tools), (invocation, worktree))?;
     Ok((tools, approvals))
   }
@@ -335,6 +351,7 @@ impl RunTask {
       },
       secrets: Vec::new(),
       grants: Mutex::new(Vec::new()),
+      qa: None,
     })
   }
 

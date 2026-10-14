@@ -145,6 +145,11 @@ pub fn report(server: Option<&mut Prompt>, worktree: &Path, prompt: &str) {
     fake_process_tools::exercise(worktree, |tool, arguments| report_call(server, tool, arguments));
     return;
   }
+  if prompt.contains("Start the QA app") {
+    report_call(server, "start_qa_app", &json!({"scenario": "tasks"}));
+    report_call(server, "call_run_app", &json!({"tool": "app_state", "arguments": {}}));
+    return;
+  }
   for (tool, arguments) in calls(prompt, worktree) {
     report_call(server, tool, &arguments);
   }

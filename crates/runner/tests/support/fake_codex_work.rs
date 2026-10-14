@@ -19,6 +19,11 @@
 //!   `interrupted`, keeping the message back as Codex does; "Die after a message" accepts it and exits with 1. A steer
 //!   while no turn waits for one is answered "no active turn to steer", as Codex answers it while no turn runs;
 //! - "Report failure": works as below, but its result says it failed;
+//! - "Report unverified": works as below, but its result says it could not check `Summary 02.B` (no fixture reaches
+//!   it);
+//! - "Change nothing": changes no file and reports no change, then ends with its result;
+//! - "Start the QA app": calls `start_qa_app` (scenario `tasks`), then `call_run_app` without a pid
+//!   (`fake_codex_tools`); with "Hold the QA app" it then waits while `fake-hold` lies next to the worktrees;
 //! - "Leave a handoff": works as below, and its step result hands off (`completed`, `decisions`, `open_questions`,
 //!   `next_agent_should_know`), with the decision "Greet in README.md from <step>";
 //! - "Fail once": the first time a step works on it, the result says it failed; later it works as below;
@@ -61,6 +66,8 @@ pub struct StepReport {
   own_file: bool,
   absolute_path: bool,
   handoff: bool,
+  unverified: bool,
+  unchanged: bool,
 }
 
 /// A turn that waits for a message sent now.
@@ -138,20 +145,20 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
     "Run the check twice",
     "Use the index tools",
     "Use the skill tools",
+    "Start the QA app",
   ]
   .iter()
   .any(|words| prompt.contains(words))
   {
     fake_codex_tools::report(session.orchester.as_mut(), &session.cwd, prompt);
   }
+  if prompt.contains("Hold the QA app") {
+    wait_while_held(&worktree);
+  }
   if let Some(step) = fake_app_server::start(session, prompt, structured) {
     return step;
   }
-  let mut result = report_of(prompt, structured);
-  result.failed = prompt.contains("Report failure") || (prompt.contains("Fail once") && first_time(&worktree, prompt));
-  result.own_file = prompt.contains("Write own file");
-  result.absolute_path = prompt.contains("Report the absolute path");
-  result.handoff = prompt.contains("Leave a handoff");
+  let result = asked_report(prompt, structured, &worktree);
   if session.resumed {
     wait_while_held(&worktree);
     return finish(session, "continued", &result);
@@ -266,6 +273,9 @@ fn first_time(worktree: &Path, prompt: &str) -> bool {
 /// Appends `line` to `README.md` (or writes the step's own file), reports it as a command and a file change, then
 /// the final message and the usage.
 pub fn finish(session: &mut Session, line: &str, result: &StepReport) -> Step {
+  if result.unchanged {
+    return report_result(session, result);
+  }
   let worktree = &session.cwd;
   let file = if result.own_file {
     format!("{}.txt", result.step.to_lowercase().replace(' ', "-"))
@@ -303,11 +313,24 @@ pub fn finish(session: &mut Session, line: &str, result: &StepReport) -> Step {
     "item/completed",
     json!({"item": {"id": "item_2", "type": "fileChange", "status": "completed", "changes": [{"path": reported, "kind": {"type": "update"}}]}}),
   );
+  report_result(session, result)
+}
+
+/// Ends the turn with the step's final message and the usage.
+fn report_result(session: &mut Session, result: &StepReport) -> Step {
   let text = if result.structured {
+    let outcome = match (result.failed, result.unverified) {
+      (true, _) => "failed",
+      (false, true) => "unverified",
+      (false, false) => "done",
+    };
     let mut report = json!({
-      "outcome": if result.failed { "failed" } else { "done" },
+      "outcome": outcome,
       "summary": format!("Finished {}", result.step),
     });
+    if result.unverified {
+      report["unverified"] = json!([{"check": "Summary 02.B", "reason": "no fixture reaches it"}]);
+    }
     if result.handoff {
       report["completed"] = json!(["Appended hello"]);
       report["decisions"] = json!([format!("Greet in README.md from {}", result.step)]);
@@ -420,6 +443,18 @@ pub fn wait_to_be_ended() -> ! {
 }
 
 /// What a turn with `prompt` reports when it finishes, unless the prompt asks for more.
+/// What the step's final message reports, as the prompt asks.
+fn asked_report(prompt: &str, structured: bool, worktree: &Path) -> StepReport {
+  let mut result = report_of(prompt, structured);
+  result.failed = prompt.contains("Report failure") || (prompt.contains("Fail once") && first_time(worktree, prompt));
+  result.own_file = prompt.contains("Write own file");
+  result.absolute_path = prompt.contains("Report the absolute path");
+  result.handoff = prompt.contains("Leave a handoff");
+  result.unverified = prompt.contains("Report unverified");
+  result.unchanged = prompt.contains("Change nothing");
+  result
+}
+
 pub fn report_of(prompt: &str, structured: bool) -> StepReport {
   StepReport {
     step: prompt
@@ -432,5 +467,7 @@ pub fn report_of(prompt: &str, structured: bool) -> StepReport {
     own_file: false,
     absolute_path: false,
     handoff: false,
+    unverified: false,
+    unchanged: false,
   }
 }
