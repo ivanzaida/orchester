@@ -802,10 +802,13 @@ background, reads outside the worktree or a credential, installs or is not read 
 Approve similar where the existing rules offer it. The step's prompt tells Claude Code and Codex agents how to work
 with the tools they have (*Files and commands*: Claude Code's file tools, the edit tools only in a writing step,
 one bare command per call; Codex's `apply_patch` in a writing step, no `cd`), so they rarely send such lines.
-Reads of the sources Cargo unpacks (`~/.cargo/registry/src`) and of the toolchains' library sources
-(`~/.rustup/toolchains/*/lib/rustlib/src`) are reads outside the worktree, not credential reads; the rest of
-`~/.cargo` and `~/.rustup` stays a credential location, and so does any path through a Windows share or a `\\?\`
-prefix, which can name the home folder under another name.
+Reads of the sources Cargo unpacks (`~/.cargo/registry/src`), its git checkouts (`~/.cargo/git/checkouts`) and the
+toolchains' library sources (`~/.rustup/toolchains/*/lib/rustlib/src`), also under `CARGO_HOME` and `RUSTUP_HOME`,
+are read like the worktree (decided 2026-10-14): a known-safe read there runs on its own, as Orchester's
+`read_external_file` and `search_external_file` do; a build, write or delete there is outside the worktree. The rest
+of a Cargo or rustup home stays a credential location, and so does any path through a Windows share or a `\\?\`
+prefix, which can name the home folder under another name. The status an earlier command left (`$?`,
+`${PIPESTATUS[N]}`, PowerShell's `$?` and `$LASTEXITCODE`) is read only as an argument of `echo`.
 
 `acceptEdits` would run `mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp` and `sed` in any form without a
 rule (a mode check after the deny, ask and allow rules, both 2.1.89 and 2.1.284), and a

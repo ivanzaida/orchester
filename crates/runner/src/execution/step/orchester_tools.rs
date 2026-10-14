@@ -97,7 +97,8 @@ pub(in super::super) struct ToolHost {
   pub(super) processes: RunProcesses,
   /// The skills `list_skills` and `read_skill` serve.
   skills: StepSkills,
-  /// The run's sources, resolved: a call outside the worktree that stays in one runs without asking.
+  /// The run's sources, resolved: a call outside the worktree that stays in one, or in the dependency sources of a
+  /// toolchain, runs without asking.
   sources: ResolvedSources,
   /// The checks `run_check` runs.
   checks: Vec<ProjectTool>,
@@ -155,7 +156,9 @@ impl ToolHost {
       .external_reach(&self.outside)
       .transpose()
       .map_err(|error| ToolCallError::from(error).to_string())?;
-    let in_sources = reach.as_ref().is_some_and(|reach| self.sources.covers(&reach.path));
+    let in_sources = reach
+      .as_ref()
+      .is_some_and(|reach| self.sources.covers(&reach.path) || self.outside.in_dependency_sources(&reach.path));
     let target = match (call, reach) {
       (_, Some(reach)) => Some(reach.folder.display().to_string()),
       (ToolCall::RunCheck { name }, None) => Some(name.clone()),

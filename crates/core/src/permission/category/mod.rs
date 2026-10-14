@@ -6,7 +6,8 @@
 //! `LD_PRELOAD=…`, `GIT_…=…`), a command in the background and anything not read to the end are
 //! Unknown, so they ask. A variable the line sets to a plain literal is read where it is used
 //! ([`variables`]), and a `cd` into the worktree is no part of its own: the parts after it are placed
-//! from every folder it may leave them in.
+//! from every folder it may leave them in. The status an earlier command left (`$?`,
+//! `${PIPESTATUS[0]}`) is read only as an argument of a program that prints it ([`STATUS_PRINTERS`]).
 //!
 //! Run temp (a temporary file this run created) is not told apart yet: a temporary file is outside
 //! the worktree like any other. Besides its category a part says whether it reads a credential
@@ -38,6 +39,7 @@ mod programs;
 mod reason;
 mod scripts;
 mod sed_script;
+mod toolchains;
 mod variables;
 mod words;
 
@@ -255,6 +257,14 @@ fn classify_part(
     )];
   };
   let program = program_key(first, quoting);
+  // The status an earlier command left is read only where it is printed (`echo "exit=$?"`).
+  if raw.status
+    && !program
+      .as_deref()
+      .is_some_and(|program| STATUS_PRINTERS.contains(&program))
+  {
+    return vec![unknown(words, raw, placing)];
+  }
   let inline = program
     .as_deref()
     .filter(|program| interpreters::script(program, args).is_none());
@@ -468,6 +478,9 @@ fn program_key(word: &str, quoting: Quoting) -> Option<String> {
 }
 
 const SHELLS: [&str; 5] = ["bash", "sh", "zsh", "pwsh", "powershell"];
+
+/// The programs that may print the status an earlier command left ([`RawPart::status`]).
+const STATUS_PRINTERS: [&str; 3] = ["echo", "write-output", "write-host"];
 
 /// For a shell, the script it runs and its quoting, or `Some(None)` when it runs one Orchester cannot
 /// read (a script file, an encoded command) or is started with an option that is not listed (a startup

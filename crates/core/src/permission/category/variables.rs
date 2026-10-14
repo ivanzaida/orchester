@@ -1,16 +1,17 @@
 //! Shell variables a command line sets to a plain literal before it uses them (`f=src/lib.rs; sed -n
 //! 1,20p $f`). Such a variable's uses are read as its value; anything else about variables stays
 //! unread. A value is taken only when bash would keep it as written and its expansion cannot split into
-//! other words or operators: no quote, space, `$`, backtick, backslash or shell operator in it. A name is
-//! taken only from an allow-list no shell treats specially: one letter, either case, with digits after
-//! it (`f`, `L`, `f2`). Every longer name could be special or tied to one (zsh's `path` is `PATH`,
-//! `cdpath`, `fpath`, bash's `IFS`, `BASH_ENV`, `PS4`) or exported to programs (`CC`, `http_proxy`,
-//! `GIT_DIR`, `LD_PRELOAD`), so its assignment stays unread. An assignment counts
+//! other words or operators: no quote, space, `$`, backtick or shell operator in it. A backslash (a Windows
+//! path, `L="$USERPROFILE/x"`) is kept in a value, which is then read only where it is used quoted: an
+//! unquoted use is a glob, where a backslash escapes. A name is taken only from an allow-list no shell
+//! treats specially: one letter, either case, with digits after it (`f`, `L`, `f2`). Every longer name could be special
+//! or tied to one (zsh's `path` is `PATH`, `cdpath`, `fpath`, bash's `IFS`, `BASH_ENV`, `PS4`) or exported to programs
+//! (`CC`, `http_proxy`, `GIT_DIR`, `LD_PRELOAD`), so its assignment stays unread. An assignment counts
 //! only where it surely runs in the shell itself: first in its list (after the start of the line, a `;`
 //! or a new line) and not in a pipeline or in the background.
 
 /// Characters a literal value may hold, besides ASCII letters and digits.
-const VALUE_CHARS: &str = "/._-:~+,@%=*?";
+const VALUE_CHARS: &str = "/._-:~+,@%=*?\\";
 
 /// The variables set so far, with their values.
 #[derive(Clone, Debug, Default)]

@@ -50,6 +50,8 @@ pub fn readable_arguments(argv: &[String]) -> Option<Vec<&str>> {
     "head" | "tail" => head_tail::readable(args),
     "find" => tables::find(args),
     "where" => tables::where_(args),
+    // `echo` prints its arguments, an option it does not know (`---`) as written; none reads or writes.
+    "echo" => Some(args.iter().map(String::as_str).collect()),
     name => tables::OPTION_PROGRAMS
       .iter()
       .find_map(|(known, options)| (*known == name).then_some(options))?

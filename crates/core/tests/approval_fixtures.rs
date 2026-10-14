@@ -3,7 +3,8 @@
 //! with Approve similar available, and how many ask without it. The runs' worktrees, Git Bash's
 //! `/h/…` and `H:/…` forms of them and the home folder are mapped onto a temporary folder; the profile
 //! lists the checks a builder runs. In a read-only step a line that writes files through the shell asks; in
-//! a step that edits files, one that writes only in the worktree runs, as the edit tools would.
+//! a step that edits files, one that writes only in the worktree runs, as the edit tools would. The reads of
+//! lurq's sources in Cargo's registry (23 of them) run like reads of the worktree.
 //! `cargo test -p orchester-core --test approval_fixtures approval_fixtures`.
 
 use std::path::{Path, PathBuf};
@@ -131,7 +132,7 @@ fn answered(repository: RepositoryAccess) -> Table {
 fn approval_fixtures_of_runs_22_to_25() {
   // On Windows a word that starts with `\` lies at the root of the drive: one `grep` pattern of the
   // fixture (`\.assemble(`) is then a path outside the worktree, which asks.
-  let runs = if cfg!(windows) { 5 } else { 6 };
+  let runs = if cfg!(windows) { 28 } else { 29 };
   assert_eq!(
     answered(RepositoryAccess::ReadOnly),
     Table {
@@ -143,7 +144,7 @@ fn approval_fixtures_of_runs_22_to_25() {
   );
   // A step that edits files runs the shell edits in the worktree and inline code (`python -c`, `python -`
   // with a here-document) too.
-  let runs = if cfg!(windows) { 34 } else { 35 };
+  let runs = if cfg!(windows) { 57 } else { 58 };
   assert_eq!(
     answered(RepositoryAccess::Write),
     Table {

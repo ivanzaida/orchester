@@ -1,7 +1,8 @@
 //! Command lines whose every part runs on its own run without a person (`run::permitted`): a leading
 //! `cd` into the worktree, literal variables, chains and pipes of known-safe reads and listed commands.
 //! Writes through the shell, redirections, background parts and what the parser cannot read still ask.
-//! Sources in Cargo's registry and the toolchains are read outside the worktree, not credentials.
+//! Sources in Cargo's registry and git checkouts and the toolchains are read like the worktree; a build or a
+//! write there, and the rest of `.cargo` and `.rustup`, still ask.
 //! `cargo test -p orchester-core --test command_sequences command_sequences`.
 
 use std::path::{Path, PathBuf};
@@ -184,7 +185,8 @@ fn command_sequences_with_a_part_that_would_ask_alone_ask() {
     "cat ~/.ssh/id_rsa",
     "f=~/.ssh/id_rsa; cat $f",
     "cat {HOME}/.cargo/credentials.toml",
-    "sed -n 1p {HOME}/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lurq-0.40.1/src/lib.rs",
+    "cd {HOME}/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lurq-0.40.1 && cargo test",
+    "sed -n 1p {HOME}/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lurq-0.40.1/src/lib.rs > {HOME}/x",
     "npm install && git status",
     "cargo metadata && git status",
     "python3 build.py",
@@ -227,7 +229,7 @@ fn command_sequences_offer_approve_similar_for_the_part_that_asks() {
 }
 
 #[test]
-fn command_sequences_read_published_sources_outside_and_keep_credentials() {
+fn command_sequences_read_published_sources_and_keep_credentials() {
   let fixture = Fixture::new();
   let reads = [
     "sed -n 4330,4600p \"{HOME}/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lurq-0.40.1/src/app/runtime.rs\"",
@@ -235,20 +237,32 @@ fn command_sequences_read_published_sources_outside_and_keep_credentials() {
     "L=\"{HOME}/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lurq-0.40.1/src\"; rg -n drag $L | head -40",
     "cd ~/.cargo/registry/src/*/lurq-0.40.1 && grep -rn interval src | head -50; ls docs 2>/dev/null",
     "cat ~/.rustup/toolchains/stable-x86_64-pc-windows-msvc/lib/rustlib/src/rust/library/core/src/lib.rs",
+    "cat ~/.cargo/git/checkouts/lurq-4f1c/0a1b2c3/src/lib.rs | head -20",
   ];
   for line in reads {
     let command = fixture.command(line);
     assert_eq!(command.category(), CommandCategory::ReadOnly, "`{line}`");
     assert!(!command.reads_secrets(), "`{line}` reads no credential");
-    assert!(
-      RuleScope::similar(&ApprovalSubject::Command(command)).is_ok(),
-      "`{line}` can be approved similarly"
+    assert_eq!(
+      fixture.permitted(line),
+      Some(CommandCategory::ReadOnly),
+      "`{line}` runs by itself"
     );
   }
+  // A write there is a write outside the worktree.
+  let written =
+    fixture.command("sed -i 1d ~/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lurq-0.40.1/src/lib.rs");
+  assert_eq!(written.category(), CommandCategory::OutsideWrite);
+  let removed = fixture.command("rm -rf ~/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lurq-0.40.1");
+  assert_eq!(removed.category(), CommandCategory::HistoryDestructive);
   let secrets = [
     "cat ~/.cargo/credentials.toml",
     "cat ~/.cargo/credentials",
     "cat ~/.cargo/config.toml",
+    "cat ~/.cargo/config",
+    "cat ~/.cargo/git/db/x",
+    "ls ~/.cargo/git",
+    "grep -r token ~/.cargo",
     "ls ~/.cargo/registry",
     "cat ~/.cargo/registry/index/x",
     "cat ~/.rustup/settings.toml",
