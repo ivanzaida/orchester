@@ -9,7 +9,7 @@
 
 use orchester_core::{
   id::{RunId, TaskId},
-  run::{PauseReason, RaisedLimits, ReviewNote, RunLimit, RunStatus, StuckDecision},
+  run::{Answerer, PauseReason, RaisedLimits, ReviewNote, RunLimit, RunStatus, StuckDecision},
   time::Timestamp,
 };
 use orchester_ipc::Command;
@@ -84,7 +84,8 @@ pub enum Choice {
   /// an earlier agent step (its key or name) with a note for its agent.
   ReturnTo { step: String, note: String },
   /// For a run whose step could not check everything (unverified), or was not run again on an unchanged
-  /// revision: accept the step as it is; the steps after it run.
+  /// revision: accept the step as it is; the steps after it run. It passes the step in a person's place: refused
+  /// as person_only unless a person turned on Let automation answer approvals, and recorded as automation's.
   Accept,
 }
 
@@ -98,6 +99,13 @@ enum Request {
 pub async fn continue_run(services: &Services, args: ContinueRun) -> Result<Value, ToolError> {
   let reading = services.clone();
   let (project, run, request) = blocking(move || {
+    // Accepting passes a step in a person's place, as approving does: only while a person lets automation answer.
+    if matches!(args.choice, Choice::Accept) && !reading.workspace.automation_answers_approvals()? {
+      return Err(ToolError::refused(
+        "person_only",
+        vec![Message::new("appMcp.errors.acceptPersonOnly")],
+      ));
+    }
     let project = reading.project(&args.project)?;
     let (run, request) = request(&project, &args)?;
     Ok((project, run, request))
@@ -219,7 +227,9 @@ fn decision(view: &RunView, choice: &Choice, number: &str) -> Result<StuckDecisi
   match choice {
     Choice::AllowRetry => Ok(StuckDecision::Retry),
     Choice::Accept if matches!(view.run.status(), RunStatus::WaitingForPerson(stuck) if stuck.can_accept()) => {
-      Ok(StuckDecision::Accept)
+      Ok(StuckDecision::Accept {
+        by: Answerer::Automation,
+      })
     }
     Choice::ReturnTo { step, note } => {
       let lowered = step.to_lowercase();

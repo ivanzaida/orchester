@@ -14,8 +14,8 @@ use orchester_core::{
   resource::{AgentProfile, StepKey, VersionNumber},
   run::{
     ActiveClock, ActivityEntry, AttemptStart, Invocation, PauseReason, PinnedVersion, Plan, Run, RunLimit, RunStatus,
-    StepExecutor, StepFailure, StepOutput, StepStatus, Stuck, TaskPhase, TokenUsage, UnverifiedCheck, active_time,
-    execution_tokens,
+    StepExecutor, StepFailure, StepOutcome, StepOutput, StepStatus, Stuck, TaskPhase, TokenUsage, UnverifiedCheck,
+    active_time, execution_tokens,
     review::{ReviewRecord, reviews_usage},
   },
   store::{
@@ -224,11 +224,23 @@ impl RunView {
       return &[];
     };
     self
-      .outputs
-      .iter()
-      .rev()
-      .find(|output| output.step == *stuck.step())
+      .latest_output(stuck.step())
       .map_or(&[], |output| output.unverified.as_slice())
+  }
+
+  /// For a run waiting unchanged, the earlier result its step was not run again for, when that was a failed verdict.
+  pub fn unchanged_verdict(&self) -> Option<&StepOutput> {
+    let RunStatus::WaitingForPerson(Stuck::Unchanged(step)) = self.run.status() else {
+      return None;
+    };
+    self
+      .latest_output(step)
+      .filter(|output| output.outcome == Some(StepOutcome::Failed))
+  }
+
+  /// The latest output `step` left, in any attempt.
+  pub fn latest_output(&self, step: &StepKey) -> Option<&StepOutput> {
+    self.outputs.iter().rev().find(|output| output.step == *step)
   }
 
   /// The output `execution` left, if any.

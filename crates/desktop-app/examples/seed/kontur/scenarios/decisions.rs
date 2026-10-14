@@ -2,8 +2,9 @@
 //! for review whose changes conflict with `main`, which moved on after the run started (`kxMAN`, merge
 //! conflict); one that merges cleanly into the moved `main`; one started from a detached HEAD, which has
 //! no branch to merge into; a run whose Review step reported a failure until its retries ran out
-//! (`DVuXu`); and a run whose Review could not check two states and waits unverified (no frame of its own
-//! yet: it reuses `DVuXu`'s parts).
+//! (`DVuXu`); a run whose Review could not check two states and waits unverified; and a Quick fix run whose
+//! Review failed, sent the work back, and was not run again on the unchanged work (neither has a frame of its own
+//! yet: both reuse `DVuXu`'s parts).
 
 use orchester_core::{
   resource::StepKey,
@@ -32,6 +33,8 @@ const REVIEW_REPORT: &str = concat!(
 /// What Review reported when it could not check everything.
 const UNVERIFIED_REPORT: &str =
   "Checked the task list and the empty project against the design. Two states could not be reached.";
+/// What Review reported when it failed the work it was then not run again on.
+const UNCHANGED_REPORT: &str = "The date header still shows the UTC day for runs that ended after local midnight.";
 /// What it could not check, and why.
 const UNVERIFIED_CHECKS: [(&str, &str); 2] = [
   (
@@ -106,6 +109,25 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     &run,
     "review",
     (Some(StepOutcome::Unverified), UNVERIFIED_REPORT, checks),
+  )?;
+  let quick_fix = &catalogue.quick_fix;
+  let task = queued(
+    kontur,
+    quick_fix,
+    ("Check the date header in review", "waits unchanged after Review failed"),
+  )?;
+  let at = kontur.ago(30);
+  let mut drive = Drive::start(kontur, &task, quick_fix, at)?;
+  drive
+    .pass_before("review")?
+    .fail("review", StepFailure::ReportedFailed)?;
+  let failed = drive.execution("review")?;
+  drive.pass_before("review")?.refuse_unchanged("review")?;
+  let run = drive.finish();
+  save_report(
+    kontur,
+    (&run, failed, "review"),
+    (Some(StepOutcome::Failed), UNCHANGED_REPORT, Vec::new()),
   )
 }
 
@@ -122,10 +144,19 @@ fn report(
     .latest_execution(&key)
     .ok_or_else(|| SeedError::NoSuchStep(step.to_owned()))?
     .id();
+  save_report(kontur, (run, execution, step), (outcome, text, unverified))
+}
+
+/// Records what `execution` of `step` in `run` reported.
+fn save_report(
+  kontur: &mut Kontur,
+  (run, execution, step): (&Run, orchester_core::id::StepExecutionId, &str),
+  (outcome, text, unverified): (Option<StepOutcome>, &str, Vec<UnverifiedCheck>),
+) -> Result<(), SeedError> {
   let output = StepOutput {
     run: run.id(),
     execution,
-    step: key,
+    step: StepKey::new(step).expect("scenarios name the catalogue's step keys"),
     outcome,
     text: text.to_owned(),
     unverified,

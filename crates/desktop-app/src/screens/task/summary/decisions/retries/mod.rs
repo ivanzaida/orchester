@@ -24,10 +24,15 @@ use orchester_core::{
   run::{RunStatus, Stuck, StuckDecision},
 };
 use orchester_workspace::tasks::detail::RunView;
+use parking_lot::Mutex;
 
 use self::decide::DecideCard;
 use super::{TaskContext, action::decision_action, arranged, stages::stages, step_label, task_notice, this_run_panel};
-use crate::{services::Services, ui::notice::Notice};
+use crate::{
+  mcp::input_gate::{Guarded, InputGate, Protected},
+  services::Services,
+  ui::notice::Notice,
+};
 
 /// Which decision was asked for, for the button that shows it under way.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,7 +48,7 @@ impl lurq::app::component::DevtoolsInspectable for Deciding {}
 impl Deciding {
   fn of(decision: &StuckDecision) -> Self {
     match decision {
-      StuckDecision::Accept => Self::Accept,
+      StuckDecision::Accept { .. } => Self::Accept,
       StuckDecision::Retry => Self::Retry,
       StuckDecision::ReturnTo { .. } => Self::Return,
       StuckDecision::Stop => Self::Stop,
@@ -125,6 +130,9 @@ pub struct RetryDecision {
   target: Signal<Target>,
   note: Signal<String>,
   asked: Signal<Option<Deciding>>,
+  gate: Option<InputGate>,
+  /// Held while *Accept … as it is* shows: it is a person's decision ([`Guarded::StepAccept`]).
+  accepting: Mutex<Option<Protected>>,
 }
 
 impl Component for RetryDecision {
@@ -135,6 +143,8 @@ impl Component for RetryDecision {
       target: ctx.signal(Target(None)),
       note: ctx.signal(String::new()),
       asked: ctx.signal(None),
+      gate: ctx.use_context::<InputGate>(),
+      accepting: Mutex::new(None),
     }
   }
 
@@ -147,6 +157,14 @@ impl Component for RetryDecision {
     let RunStatus::WaitingForPerson(stuck) = run.run.status() else {
       return Column::new().into();
     };
+    if let Some(gate) = &self.gate {
+      let mut accepting = self.accepting.lock();
+      match (stuck.can_accept(), accepting.is_some()) {
+        (true, false) => *accepting = Some(gate.protect(Guarded::StepAccept)),
+        (false, true) => *accepting = None,
+        _ => {}
+      }
+    }
     // The choice starts at the step one more retry resumes, else at the first the work can go back to.
     if self.target.get_untracked().0.is_none() {
       let targets = run.run.return_targets();
@@ -166,6 +184,7 @@ impl Component for RetryDecision {
       note: &self.note,
       asked: &self.asked,
       action: &action,
+      gate: self.gate.as_ref(),
       offline: (!props.online).then(|| ctx.t("task.controls.offline")),
     }
     .render(ctx);

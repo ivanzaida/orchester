@@ -5,10 +5,12 @@
 //! without a branch to merge into, and merged. No runner is connected here (its program does not exist):
 //! each decision the runner carries out comes back refused, in so many words. Needs `git`.
 
-#[path = "../examples/seed/kontur/mod.rs"]
+#[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers the other scenarios use")]
 mod kontur;
+#[path = "../support/mod.rs"]
 mod support;
+mod unverified;
 
 use std::path::{Path, PathBuf};
 
@@ -493,36 +495,6 @@ fn decision_after_retries_allows_a_retry_returns_with_a_note_and_stops() {
   // Each decision goes to the runner, which is not connected here: they wait, and say why.
   page.set("task-return-note", "Sample more than ten delays.");
   for button in ["task-allow-retry", "task-return-with-note", "task-stop-run"] {
-    assert!(page.locked(button), "{button}");
-  }
-  assert_eq!(page.text("task-retry-offline"), OFFLINE);
-}
-
-#[test]
-fn decision_unverified_lists_what_was_not_checked_and_offers_accept_run_again_and_return() {
-  let mut page = Page::seeded("decisions");
-  page.open("waits unverified after Review", "task-retry-decision");
-  assert_eq!(
-    page.text("task-notice-title"),
-    "Unverified: Review could not check 2 things"
-  );
-  assert!(page.text("task-notice").contains("no retry was used"));
-  assert_eq!(page.text("task-unverified-head"), "What Review could not check");
-  assert!(
-    page
-      .text("task-unverified-0")
-      .contains("Tasks · a filter that matches nothing")
-  );
-  assert!(
-    page
-      .text("task-unverified-1")
-      .contains("could not be started on a damaged run row")
-  );
-  assert_eq!(page.text("task-accept-step"), "Accept Review as it is");
-  assert_eq!(page.text("task-allow-retry"), "Run Review again");
-  assert!(page.has("task-return-with-note"));
-  // Each decision goes to the runner, which is not connected here: they wait, and say why.
-  for button in ["task-accept-step", "task-allow-retry", "task-stop-run"] {
     assert!(page.locked(button), "{button}");
   }
   assert_eq!(page.text("task-retry-offline"), OFFLINE);

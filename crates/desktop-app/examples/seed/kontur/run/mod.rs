@@ -112,7 +112,7 @@ impl<'k> Drive<'k> {
   }
 
   /// The latest execution of `step`.
-  fn execution(&self, step: &str) -> Result<StepExecutionId, SeedError> {
+  pub fn execution(&self, step: &str) -> Result<StepExecutionId, SeedError> {
     self
       .run
       .latest_execution(&Self::key(step))
@@ -404,6 +404,15 @@ impl<'k> Drive<'k> {
     while self.run.status() == &RunStatus::Running {
       self.pass_before(step)?.fail(step, verdict)?;
     }
+    Ok(self)
+  }
+
+  /// `step` is not run again: its latest result was for the revision it would run on now, which has not changed.
+  pub fn refuse_unchanged(&mut self, step: &str) -> Result<&mut Self, SeedError> {
+    let execution = self.execution(step)?;
+    let at = self.tick();
+    let events = self.run.refuse_unchanged(execution, self.run.base().clone(), at)?;
+    self.record(&events)?;
     Ok(self)
   }
 
