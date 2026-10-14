@@ -45,6 +45,16 @@ impl Copier {
   pub fn other(copy: impl Fn(&str) -> bool + Send + Sync + 'static) -> Self {
     Self(Arc::new(copy))
   }
+
+  /// The copier the context provides (a QA window's), else the system clipboard.
+  pub fn of(ctx: &mut lurq::app::ctx::Ctx) -> Self {
+    ctx.use_context::<Self>().unwrap_or_else(Self::clipboard)
+  }
+
+  /// Puts `text` where this copier puts it; `true` once it is there.
+  pub fn copy(&self, text: &str) -> bool {
+    (self.0)(text)
+  }
 }
 
 impl PartialEq for Copier {

@@ -188,7 +188,8 @@ impl TabSet {
     true
   }
 
-  /// Whether the tab `id` can be closed: every tab but the only one while it shows All projects.
+  /// Whether the tab `id` can be closed: every tab but the only one while it shows All projects. The only tab
+  /// on another place, Add project too, closes into a fresh tab at All projects.
   pub fn can_close(&self, id: TabId) -> bool {
     self.position(id).is_some() && !(self.tabs.len() == 1 && *self.tabs[0].route() == Route::AllProjects)
   }

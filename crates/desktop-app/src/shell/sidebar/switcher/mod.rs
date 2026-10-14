@@ -3,7 +3,7 @@
 //! A press opens the menu under it: *RECENT*, the five projects used last with the shown one checked
 //! (`recent`), then *All projects*, *Open folder…* — a folder that already keeps an Orchester project,
 //! chosen in the system's folder picker (`folder`), refused in place when it keeps none (`refusal`,
-//! `VrS47`) — and *Add project*, which this app cannot do yet and says so. While the project opens, or
+//! `VrS47`) — and *Add project*. While the project opens, or
 //! when no project in the list has its id, it says only that a project is shown; its id is never shown.
 
 mod folder;
@@ -280,11 +280,10 @@ impl Switcher {
     .detail(ctx.t("shell.switcher.openFolderDetail"))
     .render(ctx, &self.open);
     let found = refusal::block(ctx, &self.folder.get(), picks);
-    let add = MenuItem::unavailable(
-      "switcher-add-project",
-      ctx.t("shell.switcher.addProject"),
-      ctx.t("shell.switcher.addProjectUnavailable"),
-    )
+    let navigation = Navigation::of(ctx);
+    let add = MenuItem::new("switcher-add-project", ctx.t("shell.switcher.addProject"), move || {
+      navigation.go(Route::AddProject(None));
+    })
     .icon(Icon::Plus)
     .render(ctx, &self.open);
     menu_panel("project-switcher-menu")

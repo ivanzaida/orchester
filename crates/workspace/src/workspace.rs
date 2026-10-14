@@ -4,7 +4,7 @@
 use std::{
   collections::HashMap,
   path::{Path, PathBuf},
-  sync::Arc,
+  sync::{Arc, atomic::AtomicBool},
 };
 
 use orchester_core::{
@@ -118,6 +118,8 @@ pub struct Workspace {
   pub(crate) trash: crate::accounts::trash::SharedTrash,
   permission_consent: Arc<Mutex<Consent>>,
   approval_consent: Arc<Mutex<Consent>>,
+  /// Whether All projects listed a project in this session (`project_list`).
+  pub(crate) listed: Arc<AtomicBool>,
 }
 
 impl PartialEq for Workspace {
@@ -134,6 +136,7 @@ impl Workspace {
       trash: crate::accounts::trash::SharedTrash::default(),
       permission_consent: Arc::default(),
       approval_consent: Arc::default(),
+      listed: Arc::default(),
     }
   }
 

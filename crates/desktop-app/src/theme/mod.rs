@@ -24,6 +24,7 @@ mod markdown;
 mod metrics;
 mod palette;
 pub mod pipelines;
+mod projects;
 mod secrets;
 mod settings;
 mod shadow;
@@ -54,6 +55,7 @@ pub use self::{
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   palette::{ExtraColor, Mode},
+  projects::{ProjectsSpacing, ProjectsText},
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
   settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,
@@ -92,6 +94,7 @@ pub fn install(app: &mut App, mode: Mode) {
   tasks::install(theme);
   connections::install(theme);
   secrets::install(theme);
+  projects::install(theme);
   shell::install(theme);
   skills::install(theme);
   lifecycle::install(theme);

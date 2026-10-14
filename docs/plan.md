@@ -276,6 +276,20 @@ label) and five minor ones; all are fixed and wait for a re-check.
 
 ## U · Screens
 
+### ORC-16 · All projects and Add project in the new app · branch `claude/all-projects` (implemented 2026-10-14, waiting for review and design verification)
+
+All projects (`S5HDKf`, states `kwpO2`), the welcome of a first launch (`UQZRa`) and Add project as a page
+(`/add-project`, `kkGWj`, `W5PIR`, `vJTcd`, detection states `gh5wV`) in `crates/desktop-app`; rules in
+`orchester_workspace::project_list` and `project_setup` (`readiness`, `expected_account`, `create`). Neither page has
+a sidebar; the switcher's *Add project* and *Set it up* lead to Add project. Usage across projects stays a locked tab
+until the Usage dashboard comes to this app. Tests: `cargo test -p orchester-workspace --test project_list
+project_list`, `--test project_setup setup_`, `cargo test -p orchester-app --test all_projects all_projects`, `--test
+add_project add_project`. QA: `cargo run -p orchester-app --example projects_qa -- <state>`.
+
+**Done when** an independent design verifier reports no blocking or major mismatches against `CGlZY` (960 and light
+passes excluded); then move this entry to *Done*. The created project's Overview notice (`E5yOA`) waits for Overview
+(O1).
+
 ### ORC-61C · Conversation as a chat with the step rail, and the one-box composer · branch `claude/chat-impl` (UI)
 
 Design: `docs/design/orchester-workspace.md` on `claude/conv-chat` › *Decided: C with the rail on the right* (group

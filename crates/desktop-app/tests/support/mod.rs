@@ -37,6 +37,8 @@ use orchester_workspace::{
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
+pub mod stand_ins;
+
 /// Kontur's id, as the routes of the tests name it.
 pub const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 
@@ -172,6 +174,36 @@ impl Window {
       assert!(Instant::now() < deadline, "timed out waiting for {what}");
       thread::sleep(Duration::from_millis(5));
     }
+  }
+
+  /// Presses the middle of the element `id` with the pointer.
+  pub fn press(&mut self, id: &str) {
+    let bounds = self
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"));
+    let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
+    self.tree.mouse_move(x, y);
+    self.tree.mouse_down(x, y, lurq::app::events::MouseButton::Left);
+    self.tree.mouse_up(x, y, lurq::app::events::MouseButton::Left);
+    self.pass();
+  }
+
+  /// Types `value` into the text input `id`, in place of what it held.
+  pub fn set(&mut self, id: &str, value: &str) {
+    self
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.as_text_input())
+      .unwrap_or_else(|| panic!("{id} is a text input"))
+      .set_value(value);
+    self.pass();
+  }
+
+  /// The texts inside the element `id` on one line; panics when no element has the id.
+  pub fn text(&mut self, id: &str) -> String {
+    self.texts(id).unwrap_or_else(|| panic!("{id} is shown")).join(" ")
   }
 
   /// The texts inside the element `id`, icon glyphs left out; `None` when no element has the id.

@@ -7,9 +7,12 @@
 //! provider permissions.
 
 mod local;
-use std::sync::{
-  Arc,
-  atomic::{AtomicBool, AtomicUsize, Ordering},
+use std::{
+  borrow::Cow,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+  },
 };
 
 pub use local::LocalInput;
@@ -19,7 +22,7 @@ use lurq::mcp::{
     ErrorData as McpError, RoleServer, ServerHandler,
     model::{
       CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, InitializeRequestParams, InitializeResult,
-      ListToolsResult, PaginatedRequestParams, ServerConfig,
+      ListToolsResult, PaginatedRequestParams, ProtocolVersion, ServerConfig,
     },
     service::RequestContext,
   },
@@ -356,6 +359,13 @@ pub struct GuardedTools {
 impl ServerHandler for GuardedTools {
   fn get_info(&self) -> ServerConfig {
     self.tools.get_info()
+  }
+
+  /// The revisions up to 2025-11-25, which this server implements. rmcp would also advertise 2026-07-28, whose
+  /// stateless lifecycle (no `initialize`, no sessions, `ttlMs` and `cacheScope` on list results) it does not
+  /// speak: a client asking for it gets the unsupported-version error and falls back to `initialize`.
+  fn supported_protocol_versions(&self) -> Cow<'static, [ProtocolVersion]> {
+    Cow::Borrowed(ProtocolVersion::known_up_to(&ProtocolVersion::V_2025_11_25))
   }
 
   async fn initialize(

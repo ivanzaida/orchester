@@ -1,7 +1,8 @@
 //! Where the window can be: typed routes and the router paths they stand for. A path is all a tab's
 //! history keeps, so everything a person can go back to is part of it, its query included.
 //!
-//! Paths: `/` is All projects and `/settings` the app's settings. A project's screens start at
+//! Paths: `/` is All projects, `/add-project` Add project (`?folder=` the folder it starts with) and
+//! `/settings` the app's settings. A project's screens start at
 //! `/project/<id>`, its Overview (`?tab=` the tab of its task list), and add the screen's segment, e.g.
 //! `/project/<id>/pipelines`. The Tasks list is `/project/<id>/tasks` (`?tab=`, `?q=` the search,
 //! `?highlight=` the task a Create just added) and New task `/project/<id>/tasks/new`. A task's page is
@@ -34,9 +35,11 @@ mod task;
 mod tasks;
 mod tools;
 
+use std::path::{Path, PathBuf};
+
 use orchester_core::id::ProjectId;
 
-use self::query::Params;
+use self::query::{Params, with_query};
 pub use self::{
   accounts::{AccountsPanel, AccountsView},
   connections::{ConnectionsTab, ConnectionsView, NewConnection},
@@ -52,6 +55,9 @@ pub use self::{
 
 const PROJECT: &str = "project";
 const SETTINGS: &str = "settings";
+const ADD_PROJECT: &str = "add-project";
+/// The query parameter of the folder Add project starts with.
+const FOLDER: &str = "folder";
 const TASKS: &str = "tasks";
 const CONNECTIONS: &str = "connections";
 const NEW: &str = "new";
@@ -66,10 +72,32 @@ const NEW_PIPELINE_PATTERN: &str = "/project/:project/pipelines/new";
 const PIPELINE_PATTERN: &str = "/project/:project/pipelines/:pipeline";
 const AGENT_PATTERN: &str = "/project/:project/agents/:agent";
 
+/// A folder a route names. An address is text, so only a folder whose path is text can be named: the
+/// address then keeps it whole.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RouteFolder(String);
+
+impl RouteFolder {
+  /// `folder`, or `None` when its path is not text (possible on Windows and Unix file systems).
+  pub fn new(folder: &Path) -> Option<Self> {
+    folder.to_str().map(|path| Self(path.to_owned()))
+  }
+
+  pub fn path(&self) -> PathBuf {
+    PathBuf::from(&self.0)
+  }
+
+  fn as_str(&self) -> &str {
+    &self.0
+  }
+}
+
 /// A place in the window.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Route {
   AllProjects,
+  /// Add project, with the folder it starts with, e.g. one Open folder… found no project in.
+  AddProject(Option<RouteFolder>),
   Settings,
   /// Settings › Accounts, with the account it shows and its panel.
   Accounts(AccountsView),
@@ -89,15 +117,22 @@ impl Route {
   pub const fn screen(&self) -> Screen {
     match self {
       Self::AllProjects => Screen::AllProjects,
+      Self::AddProject(_) => Screen::AddProject,
       Self::Settings | Self::Accounts(_) => Screen::Settings,
       Self::Project(_, page) => page.screen(),
     }
   }
 
+  /// Whether the route is the window's home, which the home tab shows by its icon alone: All projects, and
+  /// Add project opened from it (`W5PIR`, `kkGWj`).
+  pub const fn is_home(&self) -> bool {
+    matches!(self, Self::AllProjects | Self::AddProject(_))
+  }
+
   pub const fn project(&self) -> Option<ProjectId> {
     match self {
       Self::Project(project, _) => Some(*project),
-      Self::AllProjects | Self::Settings | Self::Accounts(_) => None,
+      Self::AllProjects | Self::AddProject(_) | Self::Settings | Self::Accounts(_) => None,
     }
   }
 
@@ -113,6 +148,10 @@ impl Route {
   pub fn path(&self) -> String {
     match self {
       Self::AllProjects => "/".to_owned(),
+      Self::AddProject(folder) => with_query(
+        format!("/{ADD_PROJECT}"),
+        &[(FOLDER, folder.as_ref().map(RouteFolder::as_str))],
+      ),
       Self::Settings => format!("/{SETTINGS}"),
       Self::Accounts(view) => view.path(format!("/{SETTINGS}"), (TAB, ACCOUNTS)),
       Self::Project(project, page) => page.path(&format!("/{PROJECT}/{project}")),
@@ -136,6 +175,7 @@ impl Route {
     }
     let route = match segments.as_slice() {
       [] => Self::AllProjects,
+      [ADD_PROJECT] => Self::AddProject(params.take(FOLDER)?.map(RouteFolder)),
       [SETTINGS] => Self::settings(&mut params)?,
       [PROJECT, project, page @ ..] => {
         let project = project.parse().map_err(|_| RouteError::ProjectId {
