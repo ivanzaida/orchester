@@ -141,3 +141,74 @@ fn creation_failures_not_about_the_folder_stay_beside_create() {
   let failure = CreateFailure::from_store(&new, &StoreError::EmptyBatch);
   assert_eq!(failure.place, ErrorPlace::Form);
 }
+
+#[test]
+fn setup_readiness_needs_a_folder_that_is_a_repository() {
+  use orchester_core::{connection::GitHubLogin, repository::DetectionState};
+  use orchester_workspace::project_setup::{Readiness, readiness};
+  assert_eq!(readiness(false, None), Readiness::NoFolder);
+  assert_eq!(readiness(true, None), Readiness::Ready, "a detection still running never holds Create back");
+  assert_eq!(
+    readiness(true, Some(&DetectionState::NotAGitRepository)),
+    Readiness::NotARepository
+  );
+  let account = GitHubLogin::new("ivanzaida").expect("a login");
+  for state in [
+    DetectionState::NoRemote,
+    DetectionState::GhNotFound,
+    DetectionState::NotSignedIn,
+    DetectionState::NoAccess { account },
+  ] {
+    assert_eq!(readiness(true, Some(&state)), Readiness::Ready, "{state:?} is GitHub's, optional");
+  }
+}
+
+#[test]
+fn setup_keeps_the_account_a_project_expects() {
+  use orchester_core::{
+    connection::GitHubLogin,
+    repository::{Detection, RemoteName},
+  };
+  use orchester_workspace::project_setup::expected_account;
+  let local = Detection::NoRemote(RemoteName::origin());
+  assert_eq!(expected_account(None, &local), None);
+  let expected = GitHubLogin::new("ivanzaida").expect("a login");
+  assert_eq!(expected_account(Some(&expected), &local), Some(expected));
+}
+
+#[test]
+fn setup_creates_the_project_and_reports_a_second_one_in_the_folder() {
+  use orchester_store::AppDb;
+  use orchester_workspace::{
+    activity::Activity,
+    project_setup::{Creation, create},
+    workspace::Workspace,
+  };
+  let dir = tempfile::tempdir().expect("a folder");
+  let repo = dir.path().join("kontur");
+  std::fs::create_dir_all(repo.join(".git")).expect("a repository");
+  let workspace = Workspace::new(AppDb::open(&dir.path().join("orchester.db")).expect("a database"));
+  let creation = |name: &str| Creation {
+    new: ProjectDraft {
+      name,
+      repository: Some(&repo),
+    }
+    .validate()
+    .expect("a valid draft"),
+    detection: None,
+    expected: None,
+    connection_name: "GitHub".to_owned(),
+  };
+  let runtime = tokio::runtime::Runtime::new().expect("a runtime");
+  let activity = Activity::new();
+  let created = runtime
+    .block_on(create(&workspace, &activity, creation("Kontur")))
+    .expect("created");
+  assert_eq!(created.project.key().as_str(), "KON");
+  assert_eq!(workspace.projects().expect("the list").len(), 1);
+  let failure = runtime
+    .block_on(create(&workspace, &activity, creation("Kontur")))
+    .expect_err("one project per repository");
+  assert_eq!(failure.place, ErrorPlace::Repository);
+  assert_eq!(failure.message.key, "errors.alreadyInitialized");
+}

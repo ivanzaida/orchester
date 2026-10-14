@@ -1,17 +1,25 @@
 //! The local part of first project setup: turning what the user entered into a project and
-//! the repository it lives in. The rules themselves are `orchester_core`'s constructors.
+//! the repository it lives in, and creating it with the GitHub repository detected in its folder
+//! ([`create`]). The rules themselves are `orchester_core`'s constructors.
 
 use std::path::{Path, PathBuf};
 
 use orchester_core::{
+  connection::{GitHubHost, GitHubLogin},
   id::ProjectId,
   name::Name,
   project::{Project, ProjectKey},
-  repository::DetectionState,
+  repository::{Detection, DetectionState},
 };
 use orchester_store::StoreError;
 
-use crate::messages::{self, Message};
+use crate::{
+  activity::{Activity, operations},
+  background,
+  messages::{self, Message},
+  repository::adopt_in,
+  workspace::{OpenProject, Workspace},
+};
 
 /// Field values of the project form, as entered.
 pub struct ProjectDraft<'a> {
@@ -101,5 +109,108 @@ impl CreateFailure {
   /// Whether the failure still describes `draft`; editing the name or folder retires it.
   pub fn applies_to(&self, draft: &ProjectDraft<'_>) -> bool {
     draft.name.trim() == self.name && draft.repository == Some(self.repo_root.as_path())
+  }
+}
+
+/// How far the setup form is from Create: a folder must be chosen, and it must be a git repository.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Readiness {
+  NoFolder,
+  /// Detection found no git repository in the chosen folder (01.C9).
+  NotARepository,
+  /// Create may be pressed; a name the rules reject is said under the name field then.
+  Ready,
+}
+
+/// Where the form stands with `folder_chosen` and the folder's finished detection (`None` while it runs or
+/// before it ran, which never holds Create back).
+pub fn readiness(folder_chosen: bool, detection: Option<&DetectionState>) -> Readiness {
+  match (folder_chosen, detection) {
+    (false, _) => Readiness::NoFolder,
+    (true, Some(state)) if state.blocks_project() => Readiness::NotARepository,
+    (true, _) => Readiness::Ready,
+  }
+}
+
+/// The account a project being set up expects: the one it expects already, else the account `gh` acted as
+/// when `detection` ran. *Use this account* replaces it with the account `gh` acts as now.
+pub fn expected_account(expected: Option<&GitHubLogin>, detection: &Detection) -> Option<GitHubLogin> {
+  expected
+    .or_else(|| detection.github().and_then(|found| found.account()))
+    .cloned()
+}
+
+/// The name of the GitHub connection that setup adds for `host`.
+pub fn github_connection_name(host: &GitHubHost) -> Message {
+  Message::new("appMcp.githubConnectionName").with("host", host.to_string())
+}
+
+/// What Create makes: the project, and from the folder's detection the GitHub repository it links and the
+/// account it expects; the connection it adds for the repository's host is named `connection_name`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Creation {
+  pub new: NewProject,
+  pub detection: Option<Detection>,
+  pub expected: Option<GitHubLogin>,
+  pub connection_name: String,
+}
+
+/// Creates the project in its folder and adds it to the workspace, then records the GitHub repository
+/// detected in the folder, each as an operation of `activity`. A link that fails is reported there only:
+/// the project exists and opens either way, and can be linked from Project settings.
+pub async fn create(workspace: &Workspace, activity: &Activity, creation: Creation) -> Result<OpenProject, CreateFailure> {
+  let Creation {
+    new,
+    detection,
+    expected,
+    connection_name,
+  } = creation;
+  let attempted = new.clone();
+  let running = activity.start(operations::project_create(new.project.name().as_str(), &new.repo_root));
+  let workspace = workspace.clone();
+  let created = background::run(move || workspace.create(new))
+    .await
+    .map_err(|message| CreateFailure::new(&attempted, message, ErrorPlace::Form))
+    .and_then(|created| {
+      created.map_err(|error| {
+        tracing::error!(%error, "cannot create the project");
+        CreateFailure::from_store(&attempted, &error)
+      })
+    });
+  match &created {
+    Ok(_) => running.finish(),
+    Err(failure) => running.fail(failure.message.clone()),
+  }
+  if let (Ok(project), Some(detection)) = (&created, detection) {
+    link(activity, project, detection, expected, connection_name).await;
+  }
+  created
+}
+
+/// Records the GitHub connection and link of a created project; what failed is in `activity`.
+async fn link(
+  activity: &Activity,
+  project: &OpenProject,
+  detection: Detection,
+  expected: Option<GitHubLogin>,
+  name: String,
+) {
+  let Some(found) = detection.github() else {
+    return;
+  };
+  let repository = format!("{}/{}", found.repo().owner(), found.repo().name());
+  let spec = operations::repository_link(project.project.name().as_str(), &project.repo_root, &repository);
+  let repo_root = project.repo_root.clone();
+  let work = async move {
+    background::run(move || adopt_in(&repo_root, &detection, expected.as_ref(), &name))
+      .await?
+      .map_err(|error| {
+        tracing::error!(%error, "cannot record the detected GitHub repository");
+        error.message()
+      })
+  };
+  // The outcome is in the activity; the created project does not depend on it.
+  if let Err(reason) = activity.track(spec, work).await {
+    tracing::warn!(?reason, "the created project is not linked to its GitHub repository");
   }
 }

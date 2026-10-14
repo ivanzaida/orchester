@@ -25,7 +25,7 @@ use crate::{
     services::{Services, blocking},
   },
   messages::{self, Message},
-  project_setup::{ProjectDraft, creatable},
+  project_setup::{ProjectDraft, creatable, github_connection_name},
   repository::{self, DetectTarget, adopt_in},
   tools::form::variable_error,
   workspace::OpenProject,
@@ -108,10 +108,10 @@ pub async fn add_project(services: &Services, args: AddProject, translate: &Tran
 /// Links the new project to its GitHub repository as setup does; what failed is said, and the project
 /// stays either way.
 async fn link(open: &OpenProject, detection: Detection, translate: &Translate) -> Value {
-  let Some(host) = detection.github().map(|found| found.repo().host().to_string()) else {
+  let Some(found) = detection.github() else {
     return json!({ "linked": null, "problem": null });
   };
-  let name = translate.text(&Message::new("appMcp.githubConnectionName").with("host", host));
+  let name = translate.text(&github_connection_name(found.repo().host()));
   let root = open.repo_root.clone();
   let adopted = blocking(move || {
     adopt_in(&root, &detection, None, &name).map_err(|error| ToolError::refused("not_linked", vec![error.message()]))
