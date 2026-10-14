@@ -10,7 +10,8 @@ use orchester_core::{
     AgentProfile, AgentTargets, InjectionEvent, Instruction, InstructionScope, PromptText, ProviderSettings, Variable,
     VersionNumber,
   },
-  run::{InstructionSource, InstructionVersion, PromptAssemblyError, PromptSource},
+  revision::Revision,
+  run::{InstructionSource, InstructionVersion, PromptAssemblyError, PromptSource, RunContext},
 };
 
 use super::{
@@ -60,7 +61,7 @@ fn prompt_values_are_marked_where_they_were_put_in_not_where_the_words_repeat() 
 }
 
 #[test]
-fn prompt_values_give_a_resumed_agent_the_base_revision_until_the_first_checkpoint() {
+fn prompt_values_give_a_resumed_agent_the_commit_its_worktree_has_checked_out() {
   let mut prompt = Prompt::new(super::prompt::builder("Role."), step_with("Step."), task("Brief.", &[]));
   let body = Instruction::new(
     PromptText::new("Compare {{run.revision}}.").expect("valid prompt"),
@@ -70,7 +71,7 @@ fn prompt_values_give_a_resumed_agent_the_base_revision_until_the_first_checkpoi
   )
   .expect("valid instruction");
   let resource = ResourceId::generate();
-  let resumed = |prompt: &Prompt, event| {
+  let assembled = |prompt: &Prompt, event, checked_out: Option<&Revision>| {
     let sources = [InstructionSource {
       resource,
       name: "Compare",
@@ -79,25 +80,31 @@ fn prompt_values_give_a_resumed_agent_the_base_revision_until_the_first_checkpoi
       },
       body: &body,
     }];
-    prompt
-      .input(&sources, &[], true)
-      .assemble(event)
-      .map(|assembled| assembled.text)
+    let mut input = prompt.input(&sources, &[], true);
+    input.run = input.run.map(|context| RunContext { checked_out, ..context });
+    input.assemble(event).map(|assembled| assembled.text)
   };
-  let text = resumed(&prompt, InjectionEvent::Resume).expect("a resumed agent always has a revision");
-  assert!(text.contains(&format!("Compare {}.", revision('a').as_str())), "{text}");
-  assert!(matches!(
-    resumed(&prompt, InjectionEvent::Start),
-    Err(PromptAssemblyError::UnavailableVariable {
-      variable: Variable::RunRevision,
-      ..
-    })
-  ));
+  let unavailable = |result: Result<String, PromptAssemblyError>| {
+    matches!(
+      result,
+      Err(PromptAssemblyError::UnavailableVariable {
+        variable: Variable::RunRevision,
+        ..
+      })
+    )
+  };
+  // A commit the agent made itself, without a checkpoint, or the base while nothing moved its branch.
+  let own = revision('c');
+  let text = assembled(&prompt, InjectionEvent::Resume, Some(&own)).expect("the worktree's commit");
+  assert!(text.contains(&format!("Compare {}.", own.as_str())), "{text}");
+  // A new session names checkpoints only; a worktree the runner could not read leaves none to name.
+  assert!(unavailable(assembled(&prompt, InjectionEvent::Start, Some(&own))));
+  assert!(unavailable(assembled(&prompt, InjectionEvent::Resume, None)));
   let research = prompt.logged.exec("research");
   prompt.logged.apply(|run| run.start_step(research, at(12)));
   prompt
     .logged
     .apply(|run| run.record_checkpoint(research, revision('b'), at(13)));
-  let text = resumed(&prompt, InjectionEvent::Resume).expect("the run has a checkpoint");
+  let text = assembled(&prompt, InjectionEvent::Resume, None).expect("the latest checkpoint");
   assert!(text.contains(&format!("Compare {}.", revision('b').as_str())), "{text}");
 }

@@ -31,8 +31,8 @@ pub enum Variable {
   RunBranch,
   /// The revision the run started from.
   RunBaseRevision,
-  /// The run's latest checkpoint commit. Before its first checkpoint it has none in a new session, and a
-  /// resumed session gets the base revision ([`crate::run::PromptInput::value_at`]).
+  /// The run's latest checkpoint commit; none before its first checkpoint in a new session. A resumed
+  /// session gets the commit its worktree has checked out ([`crate::run::PromptInput::value_at`]).
   RunRevision,
   StepId,
   StepName,
@@ -123,8 +123,8 @@ impl Variable {
 
   /// Whether every agent given a prompt at `event` gets a value for the variable, so that a rule using
   /// it can be published for that event (05.A `m2WjL`). `run.revision` has none before the run's first
-  /// checkpoint, which an agent's start can precede; a resumed agent gets the run's base revision until
-  /// then ([`crate::run::PromptInput::value_at`]). A task's attachments and creation time and the
+  /// checkpoint, which an agent's start can precede; a resumed agent gets the commit its worktree has
+  /// checked out ([`crate::run::PromptInput::value_at`]). A task's attachments and creation time and the
   /// project's repository and default branch are not known to a run yet
   /// ([`crate::run::PromptInput::value`]).
   pub const fn has_value_at(self, event: InjectionEvent) -> bool {

@@ -263,6 +263,8 @@ impl Resolved<'_> {
     let (profile_id, profile) = self.profile;
     let run = self.run.map(|run| RunContext {
       run,
+      // A preview has no agent's worktree: a resumed agent's run.revision is its latest checkpoint.
+      checked_out: None,
       attempt: run.latest_execution(&self.step.key).and_then(|execution| {
         run
           .attempts()

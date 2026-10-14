@@ -91,6 +91,7 @@ impl RunTask {
     let recalled = self.recall_memory(step, info)?;
     let parts = PromptParts {
       execution,
+      worktree,
       step,
       profile: info,
       continuation,

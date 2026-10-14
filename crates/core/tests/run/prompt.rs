@@ -94,6 +94,7 @@ impl Prompt {
       run: run.then_some(RunContext {
         run: &self.logged.run,
         attempt: Some(NonZeroU32::MIN),
+        checked_out: None,
       }),
       pipeline: PipelineInfo {
         id: self.pipeline,
