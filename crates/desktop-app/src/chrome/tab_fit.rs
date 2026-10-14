@@ -6,7 +6,6 @@
 
 use crate::{
   navigation::tabs::{Tab, TabSet},
-  routes::Route,
   theme::ExtraSpacing,
 };
 
@@ -44,7 +43,7 @@ pub enum Fit {
 
 /// Whether a tab shows its icon alone.
 pub fn is_icon(tab: &Tab) -> bool {
-  *tab.route() == Route::AllProjects
+  tab.route().is_home()
 }
 
 /// How `tabs` fit a window `window_width` wide whose title bar ends in `trailing` (the *N need you* pill,

@@ -129,6 +129,9 @@ fn project_window_names_the_project_and_starts_its_runner() {
   );
   window.navigation().open_tab();
   window.pass();
+  assert!(window.texts("sidebar").is_none(), "All projects has no sidebar");
+  window.navigation().go(Route::Settings);
+  window.pass();
   assert_eq!(
     window.texts("project-switcher").map(|texts| texts[0].clone()),
     Some("No project open".to_owned())

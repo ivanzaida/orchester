@@ -28,6 +28,7 @@ pub mod instructions;
 pub mod messages;
 pub mod pipelines;
 pub mod plan_limits;
+pub mod project_list;
 pub mod project_settings;
 pub mod project_setup;
 pub mod pull_requests;

@@ -105,6 +105,7 @@ icons! {
   FlaskConical => '\u{e0d5}',
   Folder => '\u{e0d7}',
   FolderGit2 => '\u{e40a}',
+  FolderLock => '\u{e336}',
   FolderOpen => '\u{e247}',
   FolderPlus => '\u{e0d9}',
   FolderSearch => '\u{e339}',
@@ -236,6 +237,7 @@ pub fn glyph(icon: Icon) -> String {
 pub const fn screen_icon(screen: Screen) -> Icon {
   match screen {
     Screen::AllProjects => Icon::Folders,
+    Screen::AddProject => Icon::Plus,
     Screen::Settings => Icon::Settings,
     Screen::Overview => Icon::LayoutDashboard,
     Screen::Tasks | Screen::Task => Icon::ListChecks,

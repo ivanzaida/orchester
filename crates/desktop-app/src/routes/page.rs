@@ -46,7 +46,12 @@ impl ProjectPage {
   /// screens of a task.
   pub fn of(screen: Screen) -> Option<Self> {
     Some(match screen {
-      Screen::AllProjects | Screen::Settings | Screen::EditTask | Screen::Task | Screen::EditConnection => {
+      Screen::AllProjects
+      | Screen::AddProject
+      | Screen::Settings
+      | Screen::EditTask
+      | Screen::Task
+      | Screen::EditConnection => {
         return None;
       }
       Screen::Overview => Self::Overview(OverviewTab::default()),

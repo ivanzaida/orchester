@@ -4,7 +4,7 @@ mod discovery;
 mod images;
 mod transport;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use orchester_core::orchester_tools::{AppCall, AppDiscoveryError, ToolResult};
 use orchester_exec::run_processes::{RunAppProcessError, RunProcesses};
@@ -22,8 +22,12 @@ enum AppError {
   Ambiguous,
   #[error("refused: cannot read the app's MCP discovery file")]
   ReadDiscovery,
-  #[error("refused: app discovery search exceeds its bound")]
-  SearchBound,
+  #[error(
+    "refused: {} holds more than {} entries; app discovery reads only that many QA task folders",
+    folder.display(),
+    discovery::MAX_QA_ENTRIES
+  )]
+  SearchBound { folder: PathBuf },
   #[error("refused: this executable is not an Orchester app")]
   AppName,
   #[error("the app's MCP request failed")]

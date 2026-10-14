@@ -7,6 +7,7 @@
 mod http;
 #[path = "../support/mod.rs"]
 mod support;
+mod versions;
 
 use std::{fs, path::Path, sync::Arc, thread, time::Duration};
 
@@ -94,12 +95,19 @@ impl Served {
 
   /// A new MCP session, initialized.
   fn session(&self) -> String {
+    self.session_on("2025-06-18")
+  }
+
+  /// A new MCP session on protocol `version`, initialized.
+  fn session_on(&self, version: &str) -> String {
     let initialize = json!({
       "jsonrpc": "2.0", "id": 1, "method": "initialize",
-      "params": { "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "test", "version": "1" } },
+      "params": { "protocolVersion": version, "capabilities": {}, "clientInfo": { "name": "test", "version": "1" } },
     });
     let response = post(self.port, &[("Authorization", &self.bearer())], &initialize);
     assert_eq!(response.status, 200, "{}", response.text);
+    let agreed = &response.message.as_ref().expect("initialize answers")["result"]["protocolVersion"];
+    assert_eq!(agreed, version, "the server speaks {version}");
     let session = response.session.expect("the server opens a session");
     let initialized = json!({ "jsonrpc": "2.0", "method": "notifications/initialized" });
     post(

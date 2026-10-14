@@ -119,9 +119,10 @@ static scenarios with `-NoRunner`; reach live states with `live`.
 (Codex: `call_run_app` of the Orchester server). Pass the exact pid printed by the QA starter.
 It runs without asking only for an app whose resolved executable is inside this run's worktree,
 using the same process boundary as `stop_run_process`. The relay finds the exact-pid discovery file
-in the user's discovery folder or an isolated QA profile under the worktree's `.tmp/`, checks its
+in the user's discovery folder or a QA copy's folder `.tmp/qa/<task>/` in the worktree, checks its
 pid and app name, and keeps the token private; a QA copy's file is the `.tmp/qa/<task>/mcp/<pid>.json`
-that `tools/qa-app.ps1` writes. Use it instead of running `tools/lurq-mcp-client.py`,
+that `tools/qa-app.ps1` writes (or `.tmp/qa/<task>/profile/<folder>/<pid>.json` for a QA profile). It
+looks nowhere else under `.tmp/`. Use it instead of running `tools/lurq-mcp-client.py`,
 reading discovery or escalating a script outside the sandbox.
 
 For example, call `call_run_app` with `{"pid":12345,"tool":"app_state","arguments":{}}`.

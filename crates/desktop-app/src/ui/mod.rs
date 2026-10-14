@@ -17,6 +17,7 @@ pub mod command_row;
 pub mod detail_row;
 pub mod field;
 pub mod form_section;
+pub mod github_mark;
 pub mod icon;
 pub mod icon_button;
 pub mod inspector;

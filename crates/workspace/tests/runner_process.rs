@@ -15,7 +15,7 @@ use orchester_workspace::{
   app_paths::runner_beside,
   close::{CloseKind, session_end},
   runner::{
-    QUIET_STOP_TIMEOUT, RequestError, RunRequestError, RunnerStatus, Runners, ShutdownOutcome,
+    ForgetRefusal, QUIET_STOP_TIMEOUT, RequestError, RunRequestError, RunnerStatus, Runners, ShutdownOutcome,
     state::{RunnerFailure, RunnerState, reconnect_delay},
   },
   workspace::OpenProject,
@@ -240,4 +240,94 @@ fn orchester_runner_lock_held(project: &Path) -> bool {
     Err(fs::TryLockError::WouldBlock) => true,
     Err(fs::TryLockError::Error(error)) => panic!("cannot check the lock: {error}"),
   }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn runner_process_forget_if_idle_waits_for_a_known_idle_runner() {
+  let project = project();
+  let runners = Runners::new(runner_program(), Handle::current(), Activity::new(), Clean);
+  let mut updates = runners.subscribe();
+  runners.show(Some(&open(project.path())));
+  assert_eq!(
+    runners.forget_if_idle(project.path()).await,
+    Err(ForgetRefusal::Unknown),
+    "a starting runner has not said whether agents work"
+  );
+  let online = wait_for(&mut updates, project.path(), |state| *state != RunnerState::Starting).await;
+  assert_eq!(online, RunnerState::Online);
+  timeout(PATIENCE, async {
+    while runners
+      .status_of(project.path())
+      .and_then(|status| status.work().cloned())
+      .is_none()
+    {
+      updates.changed().await.expect("the runners outlive the test");
+    }
+  })
+  .await
+  .expect("the runner reports its work");
+  runners
+    .forget_if_idle(project.path())
+    .await
+    .expect("an idle runner stops");
+  assert!(
+    runners.status_of(project.path()).is_none(),
+    "the runner is forgotten once it stopped"
+  );
+}
+
+/// Waits until project `root`'s runner is online and reported its work.
+async fn online_and_reported(runners: &Runners, updates: &mut watch::Receiver<RunnerStatus>, root: &Path) {
+  let online = wait_for(updates, root, |state| *state != RunnerState::Starting).await;
+  assert_eq!(online, RunnerState::Online);
+  timeout(PATIENCE, async {
+    while runners
+      .status_of(root)
+      .and_then(|status| status.work().cloned())
+      .is_none()
+    {
+      updates.changed().await.expect("the runners outlive the test");
+    }
+  })
+  .await
+  .expect("the runner reports its work");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn runner_process_forget_if_idle_answers_every_asker_of_one_question() {
+  let project = project();
+  let runners = Runners::new(runner_program(), Handle::current(), Activity::new(), Clean);
+  let mut updates = runners.subscribe();
+  runners.show(Some(&open(project.path())));
+  online_and_reported(&runners, &mut updates, project.path()).await;
+  let (first, second) = tokio::join!(
+    runners.forget_if_idle(project.path()),
+    runners.forget_if_idle(project.path())
+  );
+  assert_eq!(
+    (first, second),
+    (Ok(()), Ok(())),
+    "neither asker is told that agents work"
+  );
+  assert!(runners.status_of(project.path()).is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn runner_process_forget_if_idle_starts_no_runner_for_a_removed_project_a_tab_shows() {
+  let project = project();
+  let runners = Runners::new(runner_program(), Handle::current(), Activity::new(), Clean);
+  let mut updates = runners.subscribe();
+  let shown = open(project.path());
+  runners.keep_open(std::slice::from_ref(&shown));
+  runners.show(Some(&shown));
+  online_and_reported(&runners, &mut updates, project.path()).await;
+  runners
+    .forget_if_idle(project.path())
+    .await
+    .expect("an idle runner stops");
+  tokio::time::sleep(Duration::from_millis(500)).await;
+  assert!(
+    runners.status_of(project.path()).is_none(),
+    "the removed project's runner is not started again"
+  );
 }
