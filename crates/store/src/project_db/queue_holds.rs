@@ -2,10 +2,10 @@
 
 use orchester_core::{
   id::IdempotencyKey,
-  task_group::{HoldActor, HoldScope, QueueHolds},
+  task_group::{HoldActor, HoldChange, HoldScope, QueueHolds},
   time::Timestamp,
 };
-use rusqlite::params;
+use rusqlite::{OptionalExtension, TransactionBehavior, params};
 
 use super::ProjectDb;
 use crate::{
@@ -47,34 +47,53 @@ impl ProjectDb {
     Ok(holds)
   }
 
-  /// Holds new starts in `scope` from `at` as `actor` (`held`), or lets them go on; returns whether that changed
-  /// anything. A person holding what automation held makes it the person's. Whether `actor` may release is the
-  /// caller's to check ([`QueueHolds::by_person`]).
+  /// Holds new starts in `scope` from `at` as `actor` (`held`), or lets them go on, in one transaction. A person
+  /// holding what automation held makes it the person's; automation does not release a hold a person set
+  /// ([`HoldChange::PersonOnly`]).
   pub fn set_queue_hold(
     &mut self,
     (scope, actor): (HoldScope, HoldActor),
     held: bool,
     at: Timestamp,
-  ) -> Result<bool, StoreError> {
+  ) -> Result<HoldChange, StoreError> {
     let scope = match scope {
       HoldScope::Project => "project".to_owned(),
       HoldScope::Group(key) => format!("{GROUP}{key}"),
     };
-    let changed = if held {
-      let set_by = match actor {
-        HoldActor::Person => "person",
-        HoldActor::Automation => "automation",
-      };
-      self.connection.execute(
-        "INSERT INTO queue_holds (scope, held_at, set_by) VALUES (?1, ?2, ?3)
-         ON CONFLICT (scope) DO UPDATE SET set_by = 'person' WHERE excluded.set_by = 'person' AND set_by <> 'person'",
-        params![scope, at.unix_millis(), set_by],
-      )?
-    } else {
-      self
-        .connection
-        .execute("DELETE FROM queue_holds WHERE scope = ?1", [scope])?
+    let set_by = match actor {
+      HoldActor::Person => "person",
+      HoldActor::Automation => "automation",
     };
-    Ok(changed == 1)
+    // Written at once, so no other writer comes between the read and the write.
+    let transaction = self
+      .connection
+      .transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let held_by: Option<String> = transaction
+      .query_row("SELECT set_by FROM queue_holds WHERE scope = ?1", [&scope], |row| {
+        row.get(0)
+      })
+      .optional()?;
+    let change = match (held, held_by.as_deref()) {
+      (false, Some("person")) if actor == HoldActor::Automation => HoldChange::PersonOnly,
+      (false, Some(_)) => {
+        transaction.execute("DELETE FROM queue_holds WHERE scope = ?1", [&scope])?;
+        HoldChange::Changed
+      }
+      (false, None) => HoldChange::Unchanged,
+      (true, None) => {
+        transaction.execute(
+          "INSERT INTO queue_holds (scope, held_at, set_by) VALUES (?1, ?2, ?3)",
+          params![scope, at.unix_millis(), set_by],
+        )?;
+        HoldChange::Changed
+      }
+      (true, Some("automation")) if actor == HoldActor::Person => {
+        transaction.execute("UPDATE queue_holds SET set_by = 'person' WHERE scope = ?1", [&scope])?;
+        HoldChange::Changed
+      }
+      (true, Some(_)) => HoldChange::Unchanged,
+    };
+    transaction.commit()?;
+    Ok(change)
   }
 }

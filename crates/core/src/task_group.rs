@@ -58,6 +58,16 @@ pub enum HoldActor {
   Automation,
 }
 
+/// What holding or releasing new starts did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HoldChange {
+  Changed,
+  /// They were held, or let go on, already.
+  Unchanged,
+  /// Automation tried to release a hold a person set: nothing changed.
+  PersonOnly,
+}
+
 /// The holds on new starts. Only first runs wait: running runs, resumes and runs again go on.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct QueueHolds {

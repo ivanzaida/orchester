@@ -9,6 +9,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
+    events::is_synthetic_input,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
@@ -63,6 +64,8 @@ struct Holding {
   root: PathBuf,
   scope: HoldScope,
   held: bool,
+  /// Who pressed: a person, or automation driving the window ([`actor_now`]).
+  actor: HoldActor,
 }
 
 impl DevtoolsInspectable for Holding {}
@@ -77,17 +80,24 @@ impl Component for QueueControls {
   fn create(ctx: &mut Ctx) -> Self {
     let services = Services::of(ctx);
     let project = ctx.props::<QueueProps>().project;
-    let hold = ctx.future_action(move |Holding { root, scope, held }: Holding| {
-      let changes = services.changes.clone();
-      async move {
-        let kept = background::run(move || hold_in(&root, (scope, HoldActor::Person), held)).await?;
-        // A person's hold is never refused as person-only; a store error says why.
-        kept.map_err(HoldRefused::message)?;
-        // The list reads the holds again, as after any change to its tasks.
-        changes.record(project, Outside::Tasks);
-        Ok(())
-      }
-    });
+    let hold = ctx.future_action(
+      move |Holding {
+              root,
+              scope,
+              held,
+              actor,
+            }: Holding| {
+        let changes = services.changes.clone();
+        async move {
+          let kept = background::run(move || hold_in(&root, (scope, actor), held)).await?;
+          // Automation driving the window does not release a person's hold; that says so, as a store error does.
+          kept.map_err(HoldRefused::message)?;
+          // The list reads the holds again, as after any change to its tasks.
+          changes.record(project, Outside::Tasks);
+          Ok(())
+        }
+      },
+    );
     Self { hold }
   }
 
@@ -102,6 +112,7 @@ impl Component for QueueControls {
           root: root.clone(),
           scope,
           held,
+          actor: actor_now(),
         });
       }
     };
@@ -170,6 +181,16 @@ where
     .id("tasks-queue-groups")
     .spacing(ExtraSpacing::Snug.role())
     .with_children(rows)
+}
+
+/// Who presses now: lurq's synthetic input (an MCP client driving the window) is automation, held to its rules — it
+/// does not release a hold a person set.
+pub(crate) fn actor_now() -> HoldActor {
+  if is_synthetic_input() {
+    HoldActor::Automation
+  } else {
+    HoldActor::Person
+  }
 }
 
 /// `button`, taking presses unless a hold is being kept.

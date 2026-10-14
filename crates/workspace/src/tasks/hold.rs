@@ -10,7 +10,7 @@ use orchester_core::{
   orchestrator::HeldWork,
   store::{RunStore, TaskStore},
   task::TaskStatus,
-  task_group::{HoldActor, HoldScope},
+  task_group::{HoldActor, HoldChange, HoldScope},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -132,8 +132,12 @@ impl HoldRefused {
 pub fn hold_in(root: &Path, (scope, actor): (HoldScope, HoldActor), held: bool) -> Result<bool, HoldRefused> {
   let store = |error: StoreError| HoldRefused::Store(messages::store_error(&error));
   let mut db = ProjectDb::open(root).map_err(store)?;
-  if !held && actor == HoldActor::Automation && db.queue_holds().map_err(store)?.by_person.contains(&scope) {
-    return Err(HoldRefused::PersonOnly);
+  match db
+    .set_queue_hold((scope, actor), held, Timestamp::now())
+    .map_err(store)?
+  {
+    HoldChange::Changed => Ok(true),
+    HoldChange::Unchanged => Ok(false),
+    HoldChange::PersonOnly => Err(HoldRefused::PersonOnly),
   }
-  db.set_queue_hold((scope, actor), held, Timestamp::now()).map_err(store)
 }

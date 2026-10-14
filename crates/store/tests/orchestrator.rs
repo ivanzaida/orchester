@@ -202,3 +202,47 @@ fn history_lists_the_latest_chat_first_and_stale_turns_end_as_interrupted() {
   );
   assert_eq!(db.interrupt_chat_turns(&[], Some(newer)).expect("stopped"), [newer]);
 }
+
+/// Who held new starts decides who releases them, read and written in one transaction.
+#[test]
+fn a_hold_a_person_set_is_released_only_by_a_person() {
+  use orchester_core::task_group::{HoldActor, HoldChange, HoldScope};
+
+  let (_repo, mut db, _run, _execution) = started_run();
+  let project = (HoldScope::Project, HoldActor::Automation);
+  assert_eq!(
+    db.set_queue_hold(project, true, at(1)).expect("held"),
+    HoldChange::Changed
+  );
+  assert_eq!(
+    db.set_queue_hold(project, true, at(2)).expect("again"),
+    HoldChange::Unchanged
+  );
+  assert_eq!(
+    db.set_queue_hold(project, false, at(3)).expect("released"),
+    HoldChange::Changed
+  );
+  assert_eq!(
+    db.set_queue_hold(project, false, at(4)).expect("not held"),
+    HoldChange::Unchanged
+  );
+
+  assert_eq!(
+    db.set_queue_hold(project, true, at(5)).expect("held"),
+    HoldChange::Changed
+  );
+  let person = (HoldScope::Project, HoldActor::Person);
+  assert_eq!(
+    db.set_queue_hold(person, true, at(6)).expect("the person's now"),
+    HoldChange::Changed
+  );
+  assert_eq!(
+    db.set_queue_hold(project, false, at(7)).expect("refused"),
+    HoldChange::PersonOnly
+  );
+  assert!(db.queue_holds().expect("read").project, "still held");
+  assert_eq!(
+    db.set_queue_hold(person, false, at(8)).expect("released"),
+    HoldChange::Changed
+  );
+}

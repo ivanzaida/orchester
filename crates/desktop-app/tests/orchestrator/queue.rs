@@ -43,6 +43,11 @@ fn orchestrator_holds_new_starts_and_tasks_releases_them() {
   screen.until("Hold new starts again", |screen| screen.exists("tasks-queue-hold"));
   screen.click("tasks-queue-hold");
   screen.until("held from Tasks", |screen| held(screen));
+  // Automation driving the window is held to automation's rule: it does not release the person's hold.
+  screen.until("Release", |screen| screen.exists("tasks-queue-release"));
+  lurq::app::events::with_synthetic_input(|| screen.click("tasks-queue-release"));
+  screen.until("the refusal", |screen| screen.exists("tasks-queue-error"));
+  assert!(held(&screen), "still held");
 
   // A person's hold is the person's to release: the agent's release is refused and changes nothing.
   screen.go(OrchestratorChat::Latest);
@@ -190,8 +195,27 @@ fn orchestrator_hold_card_names_the_group_its_tasks_and_resumes() {
     })
     .expect("the message");
   let resume = format!("orchestrator-action-{turn}-0-resume");
+  // Once a person holds it too, automation driving the window cannot resume it; the person can.
+  db_person_hold(&screen, group);
+  lurq::app::events::with_synthetic_input(|| screen.click(&resume));
+  screen.until("the refusal", |screen| {
+    screen.exists(&format!("orchestrator-action-{turn}-0-error"))
+  });
+  assert!(screen.db().queue_holds().expect("holds").groups.contains(&group));
   screen.click(&resume);
   screen.until("resumed", |screen| {
     !screen.db().queue_holds().expect("holds").groups.contains(&group)
   });
+}
+
+/// A person holds `group`'s new starts as well, which makes the hold the person's.
+fn db_person_hold(screen: &Orchestrator, group: orchester_core::id::IdempotencyKey) {
+  use orchester_core::{
+    task_group::{HoldActor, HoldScope},
+    time::Timestamp,
+  };
+  screen
+    .db()
+    .set_queue_hold((HoldScope::Group(group), HoldActor::Person), true, Timestamp::now())
+    .expect("held by a person");
 }

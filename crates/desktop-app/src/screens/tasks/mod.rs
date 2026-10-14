@@ -11,6 +11,8 @@
 mod header;
 mod query;
 mod queue;
+
+pub(crate) use self::queue::actor_now;
 mod readiness;
 mod row;
 mod states;

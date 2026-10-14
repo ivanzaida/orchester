@@ -59,6 +59,8 @@ impl DevtoolsInspectable for HeldProps {}
 struct Resuming {
   root: PathBuf,
   scope: HoldScope,
+  /// Who pressed: a person, or automation driving the window.
+  actor: HoldActor,
 }
 
 impl DevtoolsInspectable for Resuming {}
@@ -73,10 +75,10 @@ impl Component for HeldCard {
   fn create(ctx: &mut Ctx) -> Self {
     let services = Services::of(ctx);
     let project = ctx.props::<HeldProps>().project.0;
-    let resume = ctx.future_action(move |Resuming { root, scope }: Resuming| {
+    let resume = ctx.future_action(move |Resuming { root, scope, actor }: Resuming| {
       let changes = services.changes.clone();
       async move {
-        let released = background::run(move || hold_in(&root, (scope, HoldActor::Person), false)).await?;
+        let released = background::run(move || hold_in(&root, (scope, actor), false)).await?;
         released.map_err(HoldRefused::message)?;
         changes.record(project, orchester_workspace::tasks::outside::Outside::Tasks);
         Ok(())
@@ -177,6 +179,7 @@ impl HeldCard {
         action.run(Resuming {
           root: root.clone(),
           scope,
+          actor: crate::screens::tasks::actor_now(),
         });
       })
     };
