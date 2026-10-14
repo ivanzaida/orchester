@@ -6,6 +6,7 @@
 use std::{error::Error, path::PathBuf};
 
 use orchester_core::{
+  account::AccountCli,
   connection::{
     AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
   },
@@ -139,7 +140,8 @@ fn keep(
     let message = ChatMessageId::generate();
     let started = db.chat(chat)?.unwrap_or_else(|| Chat::start(chat, &body, turn.at));
     db.keep_chat_message(&started, (message, &body), turn.at)?;
-    db.set_chat_session(chat, &format!("qa-{chat}"), connection)?;
+    let account = AccountCli::ClaudeCode.default_account();
+    db.set_chat_session(chat, &format!("qa-{chat}"), (connection, account))?;
     for (offset, part) in (1_i64..).zip(turn.parts) {
       let at = Timestamp::from_unix_millis(turn.at.unix_millis() + offset * 20_000);
       match part {

@@ -5,8 +5,10 @@ mod support;
 
 use orchester_core::{
   conversation::MessageBody,
-  id::{ChatId, ChatMessageId, ConnectionId},
-  orchestrator::{ActionOutcome, Chat, ChatAction, EntryKind, OrchestratorSettings, TurnFailure, TurnState},
+  id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId},
+  orchestrator::{
+    ActionOutcome, Chat, ChatAction, ChatEvent, EntryKind, OrchestratorSettings, SessionChange, TurnFailure, TurnState,
+  },
 };
 use support::{at, model, started_run};
 
@@ -54,8 +56,9 @@ fn a_turn_ends_once_and_its_chat_keeps_replies_actions_and_session_in_order() {
   let started = Chat::start(chat, &body("What runs?"), at(10));
   db.keep_chat_message(&started, (message, &body("What runs?")), at(10))
     .expect("kept");
-  let connection = ConnectionId::generate();
-  db.set_chat_session(chat, "session-1", connection).expect("session");
+  let (connection, account) = (ConnectionId::generate(), AgentAccountId::generate());
+  db.set_chat_session(chat, "session-1", (connection, account))
+    .expect("session");
   db.add_chat_reply(chat, ("Two runs.", &model()), at(20)).expect("reply");
   let action = ChatAction {
     tool: "run_task".to_owned(),
@@ -73,11 +76,32 @@ fn a_turn_ends_once_and_its_chat_keeps_replies_actions_and_session_in_order() {
   );
 
   let kept = db.chat(chat).expect("read").expect("kept");
-  assert_eq!(kept.resumes_on(connection), Some("session-1"));
+  assert_eq!(kept.resumes_on(connection, account), Some("session-1"));
+  assert_eq!(kept.session_change(connection, account), None);
   assert_eq!(
-    kept.resumes_on(ConnectionId::generate()),
+    kept.resumes_on(ConnectionId::generate(), account),
     None,
     "another connection starts a session"
+  );
+  let elsewhere = AgentAccountId::generate();
+  assert_eq!(
+    kept.resumes_on(connection, elsewhere),
+    None,
+    "the connection on another account starts a session: the old one is in another CLI folder"
+  );
+  assert_eq!(kept.session_change(connection, elsewhere), Some(SessionChange::Account));
+  db.add_chat_event(
+    chat,
+    &ChatEvent::NewSession {
+      because: SessionChange::Account,
+    },
+    at(40),
+  )
+  .expect("event");
+  assert_eq!(
+    db.chats().expect("chats")[0].messages,
+    2,
+    "History counts what was said, not actions and events"
   );
   let kinds: Vec<EntryKind> = db
     .chat_entries(chat)
@@ -98,6 +122,9 @@ fn a_turn_ends_once_and_its_chat_keeps_replies_actions_and_session_in_order() {
         model: model()
       },
       EntryKind::Action(action),
+      EntryKind::Event(ChatEvent::NewSession {
+        because: SessionChange::Account
+      }),
     ]
   );
   db.forget_chat_message(message).expect("nothing to forget");

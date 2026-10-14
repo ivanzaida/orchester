@@ -24,7 +24,7 @@ use lurq::{
 use orchester_core::{
   connection::AccountStartProblem,
   id::ProjectId,
-  orchestrator::{ActionOutcome, TurnFailure, TurnState},
+  orchestrator::{ActionOutcome, ChatEvent, SessionChange, TurnFailure, TurnState},
 };
 use orchester_workspace::{display, orchestrator::tools::ChatScope};
 
@@ -194,6 +194,16 @@ fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
           ),
           _ => super::action::card(ctx, &id, (action, *at), (row.env.project, &row.env.name)),
         }
+      }
+      Part::Event {
+        event: ChatEvent::NewSession { because },
+        ..
+      } => {
+        let words = match because {
+          SessionChange::Connection => ctx.t("orchestrator.newSession.connection"),
+          SessionChange::Account => ctx.t("orchestrator.newSession.account"),
+        };
+        event(ctx, &format!("orchestrator-event-{key}-{index}"), Icon::History, &words)
       }
     })
     .collect();

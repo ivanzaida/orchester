@@ -8,10 +8,10 @@ mod support;
 use std::{fs, num::NonZeroU32, path::Path};
 
 use orchester_core::{
-  connection::AgentProvider,
+  connection::{AgentProvider, ConnectionAccount},
   conversation::MessageBody,
-  id::{ChatId, ChatMessageId},
-  orchestrator::{Chat, EntryKind, OrchestratorSettings, TurnFailure, TurnState},
+  id::{AgentAccountId, ChatId, ChatMessageId},
+  orchestrator::{Chat, ChatEvent, EntryKind, OrchestratorSettings, SessionChange, TurnFailure, TurnState},
   resource::ModelId,
   store::ConnectionStore,
   time::Timestamp,
@@ -170,6 +170,50 @@ async fn chat_answers_read_only_with_only_its_tools_and_resumes_its_session() {
   assert_eq!(
     replies(root, chat),
     ["Noted: What is running?", "Noted: And what waits?"]
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn chat_starts_a_new_session_when_its_connection_moved_to_another_account() {
+  let project = claude();
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let chat = ChatId::generate();
+  let message = keep(root, chat, "What is running?");
+  let mut db = ProjectDb::open(root).expect("open");
+  let connection = db.connections().expect("connections")[0].id();
+  // The conversation's session was kept while the connection ran on another account: its CLI folder holds it.
+  db.set_chat_session(chat, "session-elsewhere", (connection, AgentAccountId::generate()))
+    .expect("session");
+  scheduler.answer_in_chat(message, tools()).await.expect("the turn starts");
+  assert_eq!(ended(root, &mut events, message).await, TurnState::Answered);
+  let started = log(root);
+  assert!(
+    started.contains(" --session-id ") && !started.contains("--resume"),
+    "a new session: {started}"
+  );
+  let db = ProjectDb::open(root).expect("open");
+  let session = db.chat(chat).expect("read").expect("kept");
+  let session = session.session().expect("the new session is kept");
+  assert_ne!(session.id, "session-elsewhere");
+  assert_eq!(
+    Some(session.account),
+    ConnectionAccount::Default.id(AgentProvider::ClaudeCodeCli),
+    "with the account it lives on"
+  );
+  let said: Vec<EntryKind> = db
+    .chat_entries(chat)
+    .expect("entries")
+    .into_iter()
+    .map(|entry| entry.kind)
+    .filter(|kind| matches!(kind, EntryKind::Event(_)))
+    .collect();
+  assert_eq!(
+    said,
+    [EntryKind::Event(ChatEvent::NewSession {
+      because: SessionChange::Account
+    })],
+    "the conversation says the agent starts afresh"
   );
 }
 

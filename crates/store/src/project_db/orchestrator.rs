@@ -5,9 +5,9 @@
 
 use orchester_core::{
   conversation::MessageBody,
-  id::{ChatId, ChatMessageId, ConnectionId},
+  id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId},
   orchestrator::{
-    ActionOutcome, Chat, ChatAction, ChatEntry, ChatSession, EntryKind, OrchestratorSettings, TurnFailure, TurnState,
+    ActionOutcome, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, OrchestratorSettings, TurnFailure, TurnState,
   },
   resource::ModelId,
   time::Timestamp,
@@ -191,11 +191,16 @@ impl ProjectDb {
     Ok(chats)
   }
 
-  /// Sets the CLI session `chat`'s turns continue, on `connection`.
-  pub fn set_chat_session(&mut self, chat: ChatId, session: &str, connection: ConnectionId) -> Result<(), StoreError> {
+  /// Sets the CLI session `chat`'s turns continue, on `connection` and its `account`.
+  pub fn set_chat_session(
+    &mut self,
+    chat: ChatId,
+    session: &str,
+    (connection, account): (ConnectionId, AgentAccountId),
+  ) -> Result<(), StoreError> {
     self.connection.execute(
-      "UPDATE orchestrator_chats SET session = ?2, session_connection_id = ?3 WHERE id = ?1",
-      params![chat.to_string(), session, connection.to_string()],
+      "UPDATE orchestrator_chats SET session = ?2, session_connection_id = ?3, session_account_id = ?4 WHERE id = ?1",
+      params![chat.to_string(), session, connection.to_string(), account.to_string()],
     )?;
     Ok(())
   }
@@ -249,6 +254,16 @@ impl ProjectDb {
     Ok(Some(proposed))
   }
 
+  /// Keeps an event of the conversation.
+  pub fn add_chat_event(&mut self, chat: ChatId, event: &ChatEvent, at: Timestamp) -> Result<(), StoreError> {
+    let body = serde_json::to_string(event).map_err(|error| corrupt("chat event", error))?;
+    self.connection.execute(
+      "INSERT INTO orchestrator_entries (chat_id, kind, at, body) VALUES (?1, 'event', ?2, ?3)",
+      params![chat.to_string(), at.unix_millis(), body],
+    )?;
+    Ok(())
+  }
+
   /// Keeps an action the agent took through a tool.
   pub fn add_chat_action(&mut self, chat: ChatId, action: &ChatAction, at: Timestamp) -> Result<(), StoreError> {
     let body = serde_json::to_string(action).map_err(|error| corrupt("chat action", error))?;
@@ -264,7 +279,8 @@ impl ProjectDb {
     self
       .connection
       .query_row(
-        "SELECT id, title, started_at, session, session_connection_id FROM orchestrator_chats WHERE id = ?1",
+        "SELECT id, title, started_at, session, session_connection_id, session_account_id FROM orchestrator_chats
+         WHERE id = ?1",
         [chat.to_string()],
         raw_chat,
       )
@@ -276,13 +292,13 @@ impl ProjectDb {
   /// Every conversation, the one with the latest entry first.
   pub fn chats(&self) -> Result<Vec<ChatListing>, StoreError> {
     let mut statement = self.connection.prepare(
-      "SELECT c.id, c.title, c.started_at, c.session, c.session_connection_id,
-         COALESCE(MAX(e.at), c.started_at), COUNT(e.seq) FILTER (WHERE e.kind <> 'action')
+      "SELECT c.id, c.title, c.started_at, c.session, c.session_connection_id, c.session_account_id,
+         COALESCE(MAX(e.at), c.started_at), COUNT(e.seq) FILTER (WHERE e.kind IN ('person', 'reply'))
        FROM orchestrator_chats c LEFT JOIN orchestrator_entries e ON e.chat_id = c.id
-       GROUP BY c.id ORDER BY 6 DESC, c.id DESC",
+       GROUP BY c.id ORDER BY 7 DESC, c.id DESC",
     )?;
     let rows = statement.query_map([], |row| {
-      Ok((raw_chat(row)?, row.get::<_, i64>(5)?, row.get::<_, i64>(6)?))
+      Ok((raw_chat(row)?, row.get::<_, i64>(6)?, row.get::<_, i64>(7)?))
     })?;
     rows
       .map(|row| {
@@ -324,6 +340,7 @@ struct RawChat {
   started: i64,
   session: Option<String>,
   connection: Option<String>,
+  account: Option<String>,
 }
 
 fn raw_chat(row: &Row<'_>) -> rusqlite::Result<RawChat> {
@@ -333,15 +350,17 @@ fn raw_chat(row: &Row<'_>) -> rusqlite::Result<RawChat> {
     started: row.get(2)?,
     session: row.get(3)?,
     connection: row.get(4)?,
+    account: row.get(5)?,
   })
 }
 
 impl RawChat {
   fn into_chat(self) -> Result<Chat, StoreError> {
-    let session = match (self.session, self.connection) {
-      (Some(id), Some(connection)) => Some(ChatSession {
+    let session = match (self.session, self.connection, self.account) {
+      (Some(id), Some(connection), Some(account)) => Some(ChatSession {
         id,
         connection: parse("chat session connection", &connection)?,
+        account: parse("chat session account", &account)?,
       }),
       _ => None,
     };
@@ -380,6 +399,7 @@ impl RawEntry {
       ("action", ..) => {
         EntryKind::Action(serde_json::from_str(&self.body).map_err(|error| corrupt("chat action", error))?)
       }
+      ("event", ..) => EntryKind::Event(serde_json::from_str(&self.body).map_err(|error| corrupt("chat event", error))?),
       (kind, ..) => return Err(corrupt("chat entry kind", kind)),
     };
     Ok(ChatEntry {

@@ -143,6 +143,10 @@
       "checked": "Checked like the same action in the app, with your permissions in {{project}}.",
       "openTask": "Open {{task}}"
     },
+    "newSession": {
+      "connection": "The Orchestrator runs on another connection now: this answer starts a new session and doesn't remember the earlier messages.",
+      "account": "The Orchestrator's connection is on another account now: this answer starts a new session and doesn't remember the earlier messages."
+    },
     "proposal": {
       "title": "Start {{task}} on {{pipeline}}?",
       "waits": "Waits for you · {{time}}",

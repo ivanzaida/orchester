@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
   connection::AccountStartProblem,
   conversation::MessageBody,
-  id::{ChatId, ChatMessageId, ConnectionId},
+  id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId},
   resource::ModelId,
   time::Timestamp,
 };
@@ -14,12 +14,32 @@ use crate::{
 /// Characters a conversation's title keeps of its first message; History lists it by that.
 pub const TITLE_CHARS: usize = 80;
 
-/// The agent CLI session a conversation's turns continue, and the connection it lives on: a session is kept in the
-/// CLI's own folder of that connection's account, so another connection starts a new one.
+/// The agent CLI session a conversation's turns continue, and the connection and account it lives on: a session is
+/// kept in the CLI's own folder of the account, so another connection, or the connection on another account, starts
+/// a new one.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChatSession {
   pub id: String,
   pub connection: ConnectionId,
+  pub account: AgentAccountId,
+}
+
+/// Why a turn starts a new session where the conversation had one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionChange {
+  /// The Orchestrator runs on another connection now.
+  Connection,
+  /// Its connection runs on another account now.
+  Account,
+}
+
+/// Something that happened in a conversation besides what was said and done in it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ChatEvent {
+  /// The turn after it started a new session: the agent does not remember what was said before.
+  NewSession { because: SessionChange },
 }
 
 /// One conversation of a project's Orchestrator chat.
@@ -68,14 +88,27 @@ impl Chat {
     self.session.as_ref()
   }
 
-  /// The session a turn on `connection` resumes; `None` starts a new one, as the first turn does and a turn on
-  /// another connection must.
-  pub fn resumes_on(&self, connection: ConnectionId) -> Option<&str> {
+  /// The session a turn on `connection` and its `account` resumes; `None` starts a new one, as the first turn does
+  /// and a turn on another connection or account must.
+  pub fn resumes_on(&self, connection: ConnectionId, account: AgentAccountId) -> Option<&str> {
     self
       .session
       .as_ref()
-      .filter(|session| session.connection == connection)
+      .filter(|session| session.connection == connection && session.account == account)
       .map(|session| session.id.as_str())
+  }
+
+  /// Why a turn on `connection` and its `account` cannot resume the conversation's session; `None` when it has none
+  /// yet or resumes it.
+  pub fn session_change(&self, connection: ConnectionId, account: AgentAccountId) -> Option<SessionChange> {
+    let session = self.session.as_ref()?;
+    if session.connection != connection {
+      Some(SessionChange::Connection)
+    } else if session.account != account {
+      Some(SessionChange::Account)
+    } else {
+      None
+    }
   }
 }
 
@@ -187,6 +220,7 @@ pub enum EntryKind {
     model: ModelId,
   },
   Action(ChatAction),
+  Event(ChatEvent),
 }
 
 /// One entry of a conversation, in the order it was kept (`seq`).

@@ -9,6 +9,9 @@ pub mod instructions;
 pub mod settings;
 
 pub use self::{
-  chat::{ActionOutcome, Chat, ChatAction, ChatEntry, ChatSession, EntryKind, TurnFailure, TurnState},
+  chat::{
+    ActionOutcome, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, SessionChange, TurnFailure,
+    TurnState,
+  },
   settings::{OrchestratorSettings, runs_orchestrator},
 };

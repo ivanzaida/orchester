@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use orchester_core::{
   id::ChatMessageId,
-  orchestrator::{ChatAction, ChatEntry, EntryKind, TurnState},
+  orchestrator::{ChatAction, ChatEntry, ChatEvent, EntryKind, TurnState},
   resource::ModelId,
   time::Timestamp,
 };
@@ -24,12 +24,16 @@ pub(super) enum Part {
     /// Its entry in the conversation, which a proposed start is decided by.
     seq: i64,
   },
+  Event {
+    event: ChatEvent,
+    at: Timestamp,
+  },
 }
 
 impl Part {
   pub(super) const fn at(&self) -> Timestamp {
     match self {
-      Self::Reply { at, .. } | Self::Action { at, .. } => *at,
+      Self::Reply { at, .. } | Self::Action { at, .. } | Self::Event { at, .. } => *at,
     }
   }
 }
@@ -62,7 +66,7 @@ impl Turn {
   pub(super) fn model(&self) -> Option<&ModelId> {
     self.answer.iter().find_map(|part| match part {
       Part::Reply { model, .. } => Some(model),
-      Part::Action { .. } => None,
+      Part::Action { .. } | Part::Event { .. } => None,
     })
   }
 
@@ -117,6 +121,14 @@ pub(super) fn turns(entries: &[ChatEntry]) -> Vec<Turn> {
             action: action.clone(),
             at: entry.at,
             seq: entry.seq,
+          });
+        }
+      }
+      EntryKind::Event(event) => {
+        if let Some(turn) = turns.last_mut() {
+          turn.answer.push(Part::Event {
+            event: event.clone(),
+            at: entry.at,
           });
         }
       }

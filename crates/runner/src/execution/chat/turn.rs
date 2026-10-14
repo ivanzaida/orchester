@@ -10,15 +10,15 @@ use std::{
 use orchester_core::{
   account::AccountCli,
   connection::{
-    AgentConnection, AgentProvider, ConnectionAccount,
+    AccountStartProblem, AgentConnection, AgentProvider, ConnectionAccount,
     invocation::{ClaudeChat, ClaudeMcpConfig, ClaudeSession, McpLaunch, Platform, on_account},
     mcp::{McpServerName, McpUrl},
     stream::{AgentEvent, ClaudeStream, OutputStream},
   },
   conversation::MessageBody,
-  id::{ChatMessageId, ProjectId},
+  id::{AgentAccountId, ChatMessageId, ProjectId},
   orchestrator::{
-    Chat, OrchestratorSettings, TurnFailure, TurnState,
+    Chat, ChatEvent, OrchestratorSettings, TurnFailure, TurnState,
     instructions::{SERVER, system_prompt},
     runs_orchestrator,
   },
@@ -65,9 +65,10 @@ pub(super) struct Turn {
   pub(super) tools: ChatTools,
 }
 
-/// The CLI's command and the files it reads, which must outlive it.
+/// The CLI's command and the files it reads, which must outlive it, and the account it runs on.
 struct Started {
   command: orchester_core::command::Command,
+  account: AgentAccountId,
   _files: [PrivateFile; 2],
 }
 
@@ -87,7 +88,7 @@ impl Turn {
   /// The command that answers the message, or why none can start.
   fn prepare(&self) -> Result<Started, TurnFailure> {
     let cannot = |reason: String| TurnFailure::CannotStart { reason };
-    let db = ProjectDb::open(&self.root).map_err(|error| cannot(error.to_string()))?;
+    let mut db = ProjectDb::open(&self.root).map_err(|error| cannot(error.to_string()))?;
     let connection = db
       .connection(self.settings.connection())
       .map_err(|error| cannot(error.to_string()))?
@@ -104,6 +105,17 @@ impl Turn {
     let executable = connection
       .executable()
       .ok_or_else(|| cannot("the connection has no CLI program".to_owned()))?;
+    let account = connection
+      .account()
+      .id(provider)
+      .ok_or(TurnFailure::Account(AccountStartProblem::NoAccount))?;
+    let resumed = self.chat.resumes_on(self.settings.connection(), account);
+    if let Some(because) = self.chat.session_change(self.settings.connection(), account) {
+      // The session lives in another CLI folder: the agent starts afresh, and the conversation says so.
+      db.add_chat_event(self.chat.id(), &ChatEvent::NewSession { because }, Timestamp::now())
+        .map_err(|error| cannot(error.to_string()))?;
+      self.notifier.send(Event::ChatChanged { chat: self.chat.id() });
+    }
     let name = self.message.to_string();
     let prompt = PrivateFile::write(
       self.project,
@@ -124,7 +136,7 @@ impl Turn {
       model: self.settings.model().as_str(),
       effort: self.settings.effort(),
       folder: &self.root,
-      session: ClaudeSession::continuing(self.chat.resumes_on(self.settings.connection())),
+      session: ClaudeSession::continuing(resumed),
       system_prompt: prompt.path(),
       mcp_config: mcp.path(),
       denied: &denied,
@@ -134,6 +146,7 @@ impl Turn {
     .map_err(|error| cannot(error.to_string()))?;
     Ok(Started {
       command,
+      account,
       _files: [prompt, mcp],
     })
   }
@@ -168,7 +181,7 @@ impl Turn {
         event = process.next() => match event {
           Some(ProcessEvent::Output { stream: from, line }) => {
             for event in stream.parse(from, &line) {
-              self.keep(event, &mut seen);
+              self.keep(event, started.account, &mut seen);
             }
           }
           Some(ProcessEvent::Exited(exit)) => return seen.ended(&exit),
@@ -184,12 +197,12 @@ impl Turn {
     }
   }
 
-  /// Keeps what `event` says: the session, a reply, or how the turn goes.
-  fn keep(&self, event: AgentEvent, seen: &mut Seen) {
+  /// Keeps what `event` of the CLI on `account` says: the session, a reply, or how the turn goes.
+  fn keep(&self, event: AgentEvent, account: AgentAccountId, seen: &mut Seen) {
     match event {
       AgentEvent::SessionStarted { session } => {
         let connection = self.settings.connection();
-        self.record(|db| db.set_chat_session(self.chat.id(), &session, connection));
+        self.record(|db| db.set_chat_session(self.chat.id(), &session, (connection, account)));
       }
       AgentEvent::Message { text } if !text.trim().is_empty() => {
         self.record(|db| db.add_chat_reply(self.chat.id(), (&text, self.settings.model()), Timestamp::now()));
