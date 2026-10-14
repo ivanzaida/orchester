@@ -8,10 +8,7 @@ use orchester_core::{
   store::TaskStore,
 };
 
-use super::{
-  harness::{Orchestrator, Setup},
-  support::project_id,
-};
+use super::harness::{Orchestrator, Setup};
 
 /// The id of the newest turn shown, from its row's element id.
 fn newest_turn(screen: &mut Orchestrator) -> String {
@@ -49,7 +46,7 @@ fn orchestrator_answers_a_message_and_keeps_the_new_conversation() {
   let chat = chats[0].chat.id();
   assert_eq!(
     screen.route(),
-    Route::Project(project_id(), ProjectPage::Orchestrator(OrchestratorChat::Chat(chat))),
+    Route::Project(screen.project, ProjectPage::Orchestrator(OrchestratorChat::Chat(chat))),
     "the route names the conversation once it is kept"
   );
   assert_eq!(screen.text("orchestrator-title"), "What is running?");

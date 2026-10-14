@@ -18,7 +18,7 @@ use orchester_core::{
   connection::{
     AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
   },
-  id::ConnectionId,
+  id::{ConnectionId, ProjectId},
   name::Name,
   orchestrator::OrchestratorSettings,
   resource::ModelId,
@@ -28,7 +28,7 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 use orchester_workspace::app_paths::runner_beside;
 
-use super::support::{Data, Window, add_project, project_id};
+use super::support::{Data, Window, add_project};
 
 /// The runner and the fake Claude Code, built into this profile's folder once per test process.
 fn programs() -> (PathBuf, PathBuf) {
@@ -87,6 +87,9 @@ pub enum Setup {
 }
 
 pub struct Orchestrator {
+  /// A project id of the test's own: the runner keeps its private files by project, so tests running at once must
+  /// not share one.
+  pub project: ProjectId,
   pub window: Window,
   pub root: PathBuf,
   pub claude: ConnectionId,
@@ -115,12 +118,13 @@ impl Orchestrator {
       Setup::Ready | Setup::NotChosen => runner,
     };
     let launch = Launch::begin_at(&data.database(), runner, data.runtime.handle(), None);
-    let project = add_project(
+    let project = ProjectId::generate();
+    let open = add_project(
       launch.workspace().expect("the session started"),
-      (project_id(), "KON", "Kontur"),
+      (project, "KON", "Kontur"),
       &repo,
     );
-    let mut db = ProjectDb::open(&project.repo_root).expect("database");
+    let mut db = ProjectDb::open(&open.repo_root).expect("database");
     let claude = connection(AgentProvider::ClaudeCodeCli, "Claude · Kontur", &fake);
     db.create_connection(&claude).expect("Claude Code connection");
     let codex = connection(AgentProvider::CodexCli, "Codex · Kontur", &fake);
@@ -130,8 +134,9 @@ impl Orchestrator {
       db.save_orchestrator_settings(&settings).expect("settings");
     }
     Self {
+      project,
       window: Window::of(data, launch),
-      root: project.repo_root,
+      root: open.repo_root,
       claude: claude.id(),
     }
   }
@@ -140,7 +145,7 @@ impl Orchestrator {
     self
       .window
       .navigation()
-      .go(Route::Project(project_id(), ProjectPage::Orchestrator(chat)));
+      .go(Route::Project(self.project, ProjectPage::Orchestrator(chat)));
     // What it runs on is read: the composer sends from then on.
     self.until("the Orchestrator", |screen| {
       screen.exists("orchestrator-composer") && !screen.text("orchestrator-runs-on").is_empty()
@@ -151,7 +156,7 @@ impl Orchestrator {
     self
       .window
       .navigation()
-      .go(Route::Project(project_id(), ProjectPage::OrchestratorSettings));
+      .go(Route::Project(self.project, ProjectPage::OrchestratorSettings));
     self.until("its settings", |screen| screen.exists("orchestrator-settings-form"));
   }
 

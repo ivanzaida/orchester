@@ -10,10 +10,7 @@ use orchester_core::{
   time::Timestamp,
 };
 
-use super::{
-  harness::{Orchestrator, Setup},
-  support::project_id,
-};
+use super::harness::{Orchestrator, Setup};
 
 /// A conversation started with `text` at `at`, answered with `reply`.
 fn kept(screen: &Orchestrator, text: &str, at: Timestamp, reply: &str) -> ChatId {
@@ -64,7 +61,7 @@ fn orchestrator_history_lists_conversations_by_day_and_opens_one() {
   });
   assert_eq!(
     screen.route(),
-    Route::Project(project_id(), ProjectPage::Orchestrator(OrchestratorChat::Chat(older)))
+    Route::Project(screen.project, ProjectPage::Orchestrator(OrchestratorChat::Chat(older)))
   );
   assert!(
     screen.exists("orchestrator-history-panel"),
