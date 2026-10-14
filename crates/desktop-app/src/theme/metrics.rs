@@ -184,6 +184,8 @@ pub enum ControlHeight {
   Md,
   /// 26: an inspector's close (Secrets m1So5).
   Inspector,
+  /// 36: a large button, as the welcome's actions (`rDzhV`, `fZDtO`).
+  Lg,
 }
 
 impl ControlHeight {
@@ -193,6 +195,7 @@ impl ControlHeight {
       Self::Sm => 24.0,
       Self::Md => 28.0,
       Self::Inspector => 26.0,
+      Self::Lg => 36.0,
     }
   }
 }

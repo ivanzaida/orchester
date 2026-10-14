@@ -25,6 +25,7 @@ mod metrics;
 mod needs_you;
 mod palette;
 pub mod pipelines;
+mod projects;
 mod secrets;
 mod settings;
 mod shadow;
@@ -56,6 +57,7 @@ pub use self::{
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
   palette::{ExtraColor, Mode},
+  projects::{ProjectsSpacing, ProjectsText},
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
   settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,
@@ -94,6 +96,7 @@ pub fn install(app: &mut App, mode: Mode) {
   tasks::install(theme);
   connections::install(theme);
   secrets::install(theme);
+  projects::install(theme);
   shell::install(theme);
   skills::install(theme);
   lifecycle::install(theme);
