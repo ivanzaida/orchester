@@ -3,7 +3,7 @@
 
 use orchester_core::{
   resource::StepKey,
-  run::{RunStatus, StepOutcome, StepOutput, Stuck, UnverifiedCheck},
+  run::{RunStatus, StepFailure, StepOutcome, StepOutput, StepStatus, Stuck, UnverifiedCheck},
 };
 
 use super::detail::RunView;
@@ -29,6 +29,22 @@ impl RunView {
     self
       .latest_output(step)
       .filter(|output| output.outcome == Some(StepOutcome::Failed))
+  }
+
+  /// For a run waiting unchanged, how its step's result that it was not run again for ended: a failed verdict or
+  /// unverified.
+  pub fn unchanged_after(&self) -> Option<StepFailure> {
+    let RunStatus::WaitingForPerson(Stuck::Unchanged(step)) = self.run.status() else {
+      return None;
+    };
+    self
+      .run
+      .attempts()
+      .iter()
+      .rev()
+      .flat_map(|attempt| attempt.executions().iter().rev())
+      .filter(|execution| execution.step() == step && execution.status() == StepStatus::Failed)
+      .find_map(|execution| execution.failure().filter(|failure| *failure != StepFailure::Unchanged))
   }
 
   /// The latest output `step` left, in any attempt.
