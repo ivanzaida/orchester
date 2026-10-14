@@ -173,7 +173,10 @@ pub async fn propose_run(
       }
     }
     let published = published_pipelines(&db)?;
-    Ok((task.key().to_string(), PipelineLabel::of(task.details().pipeline, &published).message()))
+    Ok((
+      task.key().to_string(),
+      PipelineLabel::of(task.details().pipeline, &published).message(),
+    ))
   })
   .await?;
   Ok(Proposal {

@@ -53,7 +53,11 @@ fn orchestrator_settings_publish_the_first_version_then_draft_and_publish_the_ne
         .text("orchestrator-settings-summary")
         .contains("Claude · Kontur · haiku")
   });
-  assert!(screen.text("orchestrator-settings-publish-note").contains("No changes since v1."));
+  assert!(
+    screen
+      .text("orchestrator-settings-publish-note")
+      .contains("No changes since v1.")
+  );
 
   // A change waits for Save draft, and the chat stays on v1 until v2 is published.
   screen.choose("orchestrator-model", "opus");
@@ -62,7 +66,11 @@ fn orchestrator_settings_publish_the_first_version_then_draft_and_publish_the_ne
   screen.until("the unsaved change", |screen| {
     screen.text("orchestrator-settings-saved") == "Unsaved changes · Published v1"
   });
-  assert!(screen.text("orchestrator-settings-publish-note").contains("Save the draft before publishing."));
+  assert!(
+    screen
+      .text("orchestrator-settings-publish-note")
+      .contains("Save the draft before publishing.")
+  );
   screen.click("orchestrator-settings-save-draft");
   let second = OrchestratorSettings::new(screen.claude, model("opus"), Some("high".to_owned()));
   screen.until("the draft", |screen| kept(screen).1.is_some());
@@ -82,9 +90,13 @@ fn orchestrator_settings_take_a_model_the_list_does_not_have() {
     screen.text("orchestrator-settings-saved") == "Published v1"
   });
   screen.choose("orchestrator-model", "Other model id…");
-  screen.until("the model id field", |screen| screen.exists("orchestrator-model-custom"));
+  screen.until("the model id field", |screen| {
+    screen.exists("orchestrator-model-custom")
+  });
   screen.set("orchestrator-model-custom", "claude opus");
-  screen.until("why it isn't one", |screen| screen.exists("orchestrator-model-custom-error"));
+  screen.until("why it isn't one", |screen| {
+    screen.exists("orchestrator-model-custom-error")
+  });
   // Save draft takes nothing that is no model id.
   screen.click("orchestrator-settings-save-draft");
   for _ in 0..20 {
@@ -96,7 +108,9 @@ fn orchestrator_settings_take_a_model_the_list_does_not_have() {
   screen.until("a valid id", |screen| !screen.exists("orchestrator-model-custom-error"));
   screen.click("orchestrator-settings-save-draft");
   screen.until("the draft", |screen| {
-    kept(screen).1.is_some_and(|draft| draft.model().as_str() == "claude-opus-5-5")
+    kept(screen)
+      .1
+      .is_some_and(|draft| draft.model().as_str() == "claude-opus-5-5")
   });
 }
 
@@ -137,10 +151,7 @@ fn orchestrator_settings_head_is_laid_out_as_designed() {
   let foot = crumbs.y + crumbs.height;
   let summary = screen.bounds("orchestrator-settings-summary");
   let tabs = screen.bounds("orchestrator-settings-tabs");
-  assert_eq!(
-    (summary.y - foot, summary.height, tabs.y - foot),
-    (71.0, 24.0, 107.0)
-  );
+  assert_eq!((summary.y - foot, summary.height, tabs.y - foot), (71.0, 24.0, 107.0));
   assert!(
     screen
       .text("orchestrator-settings-head")

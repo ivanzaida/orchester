@@ -17,9 +17,7 @@ fn orchestrator_holds_new_starts_and_tasks_releases_them() {
   screen.go(OrchestratorChat::New);
   screen.send(r#"Call hold_queue {"project":"Kontur"}"#);
   screen.until("the held queue", |screen| {
-    screen
-      .text("orchestrator-conversation")
-      .contains("New starts held")
+    screen.text("orchestrator-conversation").contains("New starts held")
   });
   assert!(held(&screen));
   let chat = screen.db().chats().expect("chats").remove(0).chat.id();

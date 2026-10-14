@@ -5,7 +5,11 @@
 use std::path::{Path, PathBuf};
 
 use orchester_core::{
-  connection::{AccountStartProblem, AgentConnection, AgentProvider, ConnectionError, invocation::Platform, stream::{AgentEvent, OutputStream}},
+  connection::{
+    AccountStartProblem, AgentConnection, AgentProvider, ConnectionError,
+    invocation::Platform,
+    stream::{AgentEvent, OutputStream},
+  },
   conversation::MessageBody,
   id::{AgentAccountId, ChatMessageId, ProjectId},
   orchestrator::{Chat, ChatEvent, OrchestratorSettings, TurnFailure, TurnState, runs_orchestrator},
@@ -49,9 +53,7 @@ impl Turn {
   /// Runs the turn to its end, or until `stop` says so, and records how it ended.
   pub(super) async fn run(self, stop: oneshot::Receiver<()>) {
     let state = match self.prepare() {
-      Ok(prepared) if prepared.connection.provider() == AgentProvider::CodexCli => {
-        self.run_codex(prepared, stop).await
-      }
+      Ok(prepared) if prepared.connection.provider() == AgentProvider::CodexCli => self.run_codex(prepared, stop).await,
       Ok(prepared) => self.run_claude(prepared, stop).await,
       Err(failure) => TurnState::Failed(failure),
     };

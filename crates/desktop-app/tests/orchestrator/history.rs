@@ -76,18 +76,31 @@ fn orchestrator_history_lists_conversations_by_day_and_opens_one() {
 fn orchestrator_opening_a_conversation_never_looks_like_a_new_one() {
   let mut screen = Orchestrator::new(Setup::Ready);
   let older = kept(&screen, "Order of the auth work", Timestamp::now(), "Auth first.");
-  kept(&screen, "Why did KON-12 go back?", Timestamp::now(), "Its review failed.");
+  kept(
+    &screen,
+    "Why did KON-12 go back?",
+    Timestamp::now(),
+    "Its review failed.",
+  );
   screen.go(OrchestratorChat::Latest);
   screen.until("the latest conversation", |screen| {
     screen.text("orchestrator-conversation").contains("Its review failed.")
   });
   screen.click("orchestrator-history");
   screen.until("History", |screen| screen.exists("orchestrator-history-panel"));
-  let hold = screen.window.launch.services().expect("the session started").hold.clone();
+  let hold = screen
+    .window
+    .launch
+    .services()
+    .expect("the session started")
+    .hold
+    .clone();
   hold.set(true);
   screen.click(&format!("orchestrator-history-{older}"));
   screen.until("the conversation loading", |screen| {
-    screen.text("orchestrator-conversation-loading").contains("Loading conversation")
+    screen
+      .text("orchestrator-conversation-loading")
+      .contains("Loading conversation")
       || screen.text("screen-orchestrator").contains("Loading conversation")
   });
   assert_eq!(screen.text("orchestrator-title"), "Order of the auth work");

@@ -11,8 +11,8 @@ use orchester_core::{
   connection::{AgentProvider, ConnectionAccount},
   conversation::MessageBody,
   id::{AgentAccountId, ChatId, ChatMessageId},
-  orchestrator::{Chat, ChatEvent, EntryKind, OrchestratorSettings, SessionChange, TurnFailure, TurnState},
   limits::ProjectLimits,
+  orchestrator::{Chat, ChatEvent, EntryKind, OrchestratorSettings, SessionChange, TurnFailure, TurnState},
   resource::ModelId,
   store::{ActivityStore, ConnectionStore, SettingsStore},
   time::Timestamp,
@@ -124,13 +124,12 @@ async fn chat_answers_read_only_with_only_its_tools_and_resumes_its_session() {
     "{started}"
   );
   assert!(
-    started.contains(
-      " --tools Read,Glob,Grep --allowedTools mcp__orchester --disallowedTools Read("
-    ),
+    started.contains(" --tools Read,Glob,Grep --allowedTools mcp__orchester --disallowedTools Read("),
     "{started}"
   );
   assert!(
-    started.contains("/orchester-mcp/**) ") && started.contains(" --permission-mode default --max-turns 30 --session-id "),
+    started.contains("/orchester-mcp/**) ")
+      && started.contains(" --permission-mode default --max-turns 30 --session-id "),
     "the runner's private files are never read: {started}"
   );
   assert!(
@@ -187,7 +186,10 @@ async fn chat_starts_a_new_session_when_its_connection_moved_to_another_account(
   // The conversation's session was kept while the connection ran on another account: its CLI folder holds it.
   db.set_chat_session(chat, "session-elsewhere", (connection, AgentAccountId::generate()))
     .expect("session");
-  scheduler.answer_in_chat(message, tools()).await.expect("the turn starts");
+  scheduler
+    .answer_in_chat(message, tools())
+    .await
+    .expect("the turn starts");
   assert_eq!(ended(root, &mut events, message).await, TurnState::Answered);
   let started = log(root);
   assert!(
@@ -384,9 +386,7 @@ async fn chat_tokens_count_toward_the_daily_budget_and_a_used_one_refuses_a_turn
   let mut db = ProjectDb::open(root).expect("open");
   let spent = db.chat_turn_tokens(first).expect("read");
   assert!(spent > TokensUsed::ZERO, "the turn's usage is kept");
-  let today = db
-    .tokens_used_since(Timestamp::now().local_day_start())
-    .expect("read");
+  let today = db.tokens_used_since(Timestamp::now().local_day_start()).expect("read");
   assert_eq!(today, spent, "and counted with today's usage");
 
   // Today's budget is used: the next message is refused as a run would be, and nothing starts.
@@ -437,7 +437,10 @@ async fn chat_on_codex_answers_read_only_with_only_its_tools_and_resumes_its_thr
   let db = ProjectDb::open(root).expect("open");
   let kept = db.chat(chat).expect("read").expect("kept");
   assert_eq!(kept.session().expect("the thread is kept").id, "fake-thread-1");
-  assert!(db.chat_turn_tokens(first).expect("read") > TokensUsed::ZERO, "its usage is kept");
+  assert!(
+    db.chat_turn_tokens(first).expect("read") > TokensUsed::ZERO,
+    "its usage is kept"
+  );
   let started = log(root);
   assert!(started.contains("codex-argv: app-server --stdio"), "{started}");
   assert!(
@@ -448,12 +451,22 @@ async fn chat_on_codex_answers_read_only_with_only_its_tools_and_resumes_its_thr
     started.contains("prompt: You are the Orchestrator of the project \"Kontur\""),
     "a new thread opens with the system prompt: {started}"
   );
-  assert!(!started.contains(TOKEN), "the token is never on the command line: {started}");
+  assert!(
+    !started.contains(TOKEN),
+    "the token is never on the command line: {started}"
+  );
 
   let second = keep(root, chat, "And what waits?");
-  scheduler.answer_in_chat(second, tools()).await.expect("the turn starts");
+  scheduler
+    .answer_in_chat(second, tools())
+    .await
+    .expect("the turn starts");
   assert_eq!(ended(root, &mut events, second).await, TurnState::Answered);
-  assert!(log(root).contains("prompt: And what waits?"), "the thread goes on: {}", log(root));
+  assert!(
+    log(root).contains("prompt: And what waits?"),
+    "the thread goes on: {}",
+    log(root)
+  );
   assert_eq!(
     replies(root, chat),
     ["Noted: What is running?", "Noted: And what waits?"]

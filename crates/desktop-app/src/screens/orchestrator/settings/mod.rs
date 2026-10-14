@@ -192,7 +192,10 @@ impl Choices {
       return;
     }
     self.filled_for.set(connection.clone());
-    let chosen = connection.parse().ok().and_then(|connection| setup.choosing(connection));
+    let chosen = connection
+      .parse()
+      .ok()
+      .and_then(|connection| setup.choosing(connection));
     self.show(chosen.as_ref());
   }
 

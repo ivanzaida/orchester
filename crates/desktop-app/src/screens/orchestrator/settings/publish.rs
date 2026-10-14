@@ -111,7 +111,12 @@ pub(super) fn bar(ctx: &mut Ctx, save: &Save, publishing: &Publishing<'_>) -> El
 fn status(ctx: &Ctx, stand: Stand, version: Option<u32>) -> Row {
   let published = version.map_or_else(
     || ctx.t("orchestrator.settings.publish.notPublished"),
-    |version| ctx.t_args("orchestrator.settings.publish.published", [("version", version.to_string())]),
+    |version| {
+      ctx.t_args(
+        "orchestrator.settings.publish.published",
+        [("version", version.to_string())],
+      )
+    },
   );
   let (glyph, color, words) = match stand {
     Stand::First => (Icon::CircleDashed, PaletteColor::TextMuted, published),

@@ -58,7 +58,9 @@ pub(super) fn send_action(ctx: &mut Ctx) -> SendAction {
         root: project.repo_root.clone(),
         chat: outgoing.chat,
       };
-      let served = services.chat_tools.serve_turn(&services, i18n, (scope, outgoing.message));
+      let served = services
+        .chat_tools
+        .serve_turn(&services, i18n, (scope, outgoing.message));
       let tools = served.map_err(|error| {
         tracing::error!(%error, "the Orchestrator's tools could not be served");
         send::tools_unavailable()

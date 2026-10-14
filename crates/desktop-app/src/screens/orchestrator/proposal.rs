@@ -134,10 +134,13 @@ impl Component for StartProposal {
         .color(color)
         .width(Dimension::Pct(100.0))
     };
-    let refused = self
-      .refused
-      .get()
-      .then(|| note(&ctx.t("orchestrator.proposal.personOnly"), "person-only", PaletteColor::Warning));
+    let refused = self.refused.get().then(|| {
+      note(
+        &ctx.t("orchestrator.proposal.personOnly"),
+        "person-only",
+        PaletteColor::Warning,
+      )
+    });
     let failed = state
       .error
       .as_ref()

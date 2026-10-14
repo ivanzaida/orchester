@@ -68,9 +68,7 @@ impl OrchestratorSetup {
     let published = db
       .orchestrator_published()
       .map_err(|error| messages::store_error(&error))?;
-    let draft = db
-      .orchestrator_draft()
-      .map_err(|error| messages::store_error(&error))?;
+    let draft = db.orchestrator_draft().map_err(|error| messages::store_error(&error))?;
     let connections = db
       .connections()
       .map_err(|error| messages::store_error(&error))?

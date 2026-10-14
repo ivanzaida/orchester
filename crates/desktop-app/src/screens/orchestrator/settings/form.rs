@@ -98,7 +98,11 @@ fn limits(ctx: &Ctx, project: &str) -> Row {
     .child(
       Text::new(&ctx.t_args(
         "orchestrator.settings.limits",
-        [("project", project), ("turns", turns.as_str()), ("minutes", minutes.as_str())],
+        [
+          ("project", project),
+          ("turns", turns.as_str()),
+          ("minutes", minutes.as_str()),
+        ],
       ))
       .variant(TypographyStyle::Description)
       .color(PaletteColor::TextMuted),
@@ -188,14 +192,10 @@ fn effort_row(ctx: &mut Ctx, setup: &OrchestratorSetup, connection: ConnectionId
     String::new(),
     ctx.t("orchestrator.settings.effort.default"),
   ))
-  .chain(
-    efforts
-      .into_iter()
-      .map(|effort| {
-        let word = effort_word(ctx, &effort);
-        SelectOption::new(effort, word)
-      }),
-  )
+  .chain(efforts.into_iter().map(|effort| {
+    let word = effort_word(ctx, &effort);
+    SelectOption::new(effort, word)
+  }))
   .collect();
   let label = ctx.t("orchestrator.settings.effort.label");
   let select = SelectField::new("orchestrator-effort", label.clone(), choices.effort.clone(), options)
@@ -255,10 +255,14 @@ fn effort_word(ctx: &Ctx, effort: &str) -> Arc<str> {
 /// (`H8GYVZ`), saying so.
 fn locked_row(ctx: &mut Ctx, (id, label): (&str, &str)) -> Element {
   let label = ctx.t(label);
-  let locked = FieldInput::new(id.to_owned(), label.clone(), Signal::new(ctx.t("orchestrator.dash").to_string()))
-    .locked()
-    .trailing(Icon::Lock)
-    .width(Dimension::Px(SELECT_WIDTH));
+  let locked = FieldInput::new(
+    id.to_owned(),
+    label.clone(),
+    Signal::new(ctx.t("orchestrator.dash").to_string()),
+  )
+  .locked()
+  .trailing(Icon::Lock)
+  .width(Dimension::Px(SELECT_WIDTH));
   side_row(
     Label::new(id, label).description(ctx.t("orchestrator.settings.chooseConnectionFirst")),
     locked.render(ctx),

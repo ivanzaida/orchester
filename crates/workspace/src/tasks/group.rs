@@ -99,7 +99,10 @@ pub const fn held_line_keys(hold: &GroupHold) -> (&'static str, &'static str) {
     ),
     GroupHold::Blocked { .. } => ("tasks.bulk.heldLine.blocked.one", "tasks.bulk.heldLine.blocked.other"),
     GroupHold::Canceled => ("tasks.bulk.heldLine.canceled.one", "tasks.bulk.heldLine.canceled.other"),
-    GroupHold::QueueHeld => ("tasks.bulk.heldLine.queueHeld.one", "tasks.bulk.heldLine.queueHeld.other"),
+    GroupHold::QueueHeld => (
+      "tasks.bulk.heldLine.queueHeld.one",
+      "tasks.bulk.heldLine.queueHeld.other",
+    ),
     GroupHold::Paused => ("tasks.bulk.heldLine.paused.one", "tasks.bulk.heldLine.paused.other"),
   }
 }

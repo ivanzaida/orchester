@@ -92,8 +92,12 @@ impl Component for QueueControls {
       }
     };
     let project = if props.queue.project {
-      let release = ActionButton::new("tasks-queue-release", ButtonKind::Secondary, ctx.t("tasks.queue.release"))
-        .icon(Icon::Play);
+      let release = ActionButton::new(
+        "tasks-queue-release",
+        ButtonKind::Secondary,
+        ctx.t("tasks.queue.release"),
+      )
+      .icon(Icon::Play);
       Row::new()
         .id("tasks-queue-held")
         .spacing(SpacingSize::Sm)
@@ -101,8 +105,8 @@ impl Component for QueueControls {
         .child(held_note("tasks-queue-held-note", &ctx.t("tasks.queue.held")))
         .child(enabled(release, pending, press(HoldScope::Project, false)))
     } else {
-      let hold = ActionButton::new("tasks-queue-hold", ButtonKind::Secondary, ctx.t("tasks.queue.hold"))
-        .icon(Icon::CirclePause);
+      let hold =
+        ActionButton::new("tasks-queue-hold", ButtonKind::Secondary, ctx.t("tasks.queue.hold")).icon(Icon::CirclePause);
       Row::new().child(enabled(hold, pending, press(HoldScope::Project, true)))
     };
     let groups = props.queue.groups.iter().enumerate().map(|(index, group)| {
@@ -139,7 +143,11 @@ impl Component for QueueControls {
 
 /// `button`, taking presses unless a hold is being kept.
 fn enabled(button: ActionButton, pending: bool, press: impl Fn() + Send + Sync + 'static) -> ActionButton {
-  if pending { button.disabled() } else { button.on_click(press) }
+  if pending {
+    button.disabled()
+  } else {
+    button.on_click(press)
+  }
 }
 
 /// That new starts are held: a pause mark in `warning` and the words.
@@ -166,6 +174,9 @@ fn group_name(ctx: &Ctx, tasks: &[String]) -> String {
   }
   let more = (tasks.len() - SHOWN).to_string();
   ctx
-    .t_args("tasks.queue.groupMore", [("first", first.as_str()), ("more", more.as_str())])
+    .t_args(
+      "tasks.queue.groupMore",
+      [("first", first.as_str()), ("more", more.as_str())],
+    )
     .to_string()
 }

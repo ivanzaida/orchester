@@ -161,7 +161,9 @@ fn orchestrator_widens_only_while_the_person_lets_automation() {
   // On: the same call is done, as for any client of the app.
   screen.let_automation_widen(true);
   screen.send(&move_it);
-  screen.until("the change", |screen| outcomes(screen).get(1) == Some(&ActionOutcome::Done));
+  screen.until("the change", |screen| {
+    outcomes(screen).get(1) == Some(&ActionOutcome::Done)
+  });
   assert_ne!(pipeline_of(&screen), Some(delivery));
   screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
 }

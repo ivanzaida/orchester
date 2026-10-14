@@ -144,12 +144,25 @@ fn orchestrator_acts_in_its_own_project_after_another_takes_its_name() {
   screen.until("the call's answer", |screen| {
     screen.text("orchestrator-conversation").contains("Tool said") && !screen.exists("orchestrator-thinking")
   });
-  let theirs = ProjectDb::open(&another).expect("the other project").tasks().expect("tasks");
-  assert!(theirs.is_empty(), "the other project is not the Orchestrator's: {theirs:?}");
+  let theirs = ProjectDb::open(&another)
+    .expect("the other project")
+    .tasks()
+    .expect("tasks");
+  assert!(
+    theirs.is_empty(),
+    "the other project is not the Orchestrator's: {theirs:?}"
+  );
   let id = screen.project;
-  screen.send(&format!(r#"Call create_task {{"project":"{id}","title":"Lands here"}}"#));
+  screen.send(&format!(
+    r#"Call create_task {{"project":"{id}","title":"Lands here"}}"#
+  ));
   screen.until("the task in its own project", |screen| {
-    screen.db().tasks().expect("tasks").iter().any(|task| task.details().title.as_str() == "Lands here")
+    screen
+      .db()
+      .tasks()
+      .expect("tasks")
+      .iter()
+      .any(|task| task.details().title.as_str() == "Lands here")
   });
 }
 
@@ -161,7 +174,9 @@ fn orchestrator_keeps_what_the_person_wrote_while_a_message_was_being_sent() {
   // Written before the send finished: it is a new draft, not the message sent.
   screen.set("orchestrator-input", "Next, the review queue");
   screen.until("the answer", |screen| {
-    screen.text("orchestrator-conversation").contains("Noted: What is running?")
+    screen
+      .text("orchestrator-conversation")
+      .contains("Noted: What is running?")
       && !screen.exists("orchestrator-thinking")
   });
   assert_eq!(screen.text("orchestrator-input"), "Next, the review queue");

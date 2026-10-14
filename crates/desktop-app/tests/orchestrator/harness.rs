@@ -22,8 +22,8 @@ use orchester_core::{
   id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId},
   name::Name,
   orchestrator::OrchestratorSettings,
-  project::Project,
   permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
+  project::Project,
   resource::{
     AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
   },
@@ -310,7 +310,11 @@ the agent logged: {agent}"
     let key = self.db().project().key().clone();
     AppDb::open(&self.window.data.database())
       .expect("the app's database")
-      .register_project(&Project::new(self.project, key, named(name)), &self.root, Timestamp::now())
+      .register_project(
+        &Project::new(self.project, key, named(name)),
+        &self.root,
+        Timestamp::now(),
+      )
       .expect("renamed");
   }
 

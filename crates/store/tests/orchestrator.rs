@@ -31,7 +31,11 @@ fn orchestrator_settings_are_drafted_then_published_as_numbered_versions() {
     "a draft is not what the chat runs on"
   );
   assert_eq!(db.publish_orchestrator(&first, at(20)).expect("published"), 1);
-  assert_eq!(db.orchestrator_draft().expect("read"), None, "publishing is done with the draft");
+  assert_eq!(
+    db.orchestrator_draft().expect("read"),
+    None,
+    "publishing is done with the draft"
+  );
   let second = OrchestratorSettings::new(ConnectionId::generate(), model(), None);
   db.save_orchestrator_draft(&second, at(30)).expect("drafted");
   assert_eq!(db.orchestrator_settings().expect("read"), Some(first));

@@ -19,7 +19,9 @@ const GROUP: &str = "group:";
 impl ProjectDb {
   /// The holds on new starts.
   pub fn queue_holds(&self) -> Result<QueueHolds, StoreError> {
-    let mut statement = self.connection.prepare("SELECT scope FROM queue_holds ORDER BY held_at, scope")?;
+    let mut statement = self
+      .connection
+      .prepare("SELECT scope FROM queue_holds ORDER BY held_at, scope")?;
     let scopes = statement
       .query_map([], |row| row.get::<_, String>(0))?
       .collect::<Result<Vec<_>, _>>()?;

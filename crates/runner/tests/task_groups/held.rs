@@ -20,7 +20,12 @@ async fn task_group_held_queue_starts_nothing_until_released() {
   let fixture = project(&Setup::new("Append one line."));
   let root = fixture.repo.path();
   let mut db = ProjectDb::open(root).expect("db");
-  let group = reviewed_group(&mut db, fixture.task, Scheduling::Parallel(NonZeroU32::new(2).expect("two")), 3_000_000);
+  let group = reviewed_group(
+    &mut db,
+    fixture.task,
+    Scheduling::Parallel(NonZeroU32::new(2).expect("two")),
+    3_000_000,
+  );
   let first = group.tasks()[0];
   let (scheduler, _events) = scheduler(root);
   scheduler
