@@ -40,6 +40,15 @@ pub fn shorten_path(path: &Path, max_chars: usize) -> String {
   format!("{head}{separator}…{separator}{}", tail.join(&separator))
 }
 
+/// `path` as people type it: a Windows extended-length prefix (`\\?\H:\work`, `\\?\UNC\host\share`), which
+/// canonical paths carry, is left out (`H:\work`, `\\host\share`).
+pub fn plain_path(path: &str) -> String {
+  if let Some(share) = path.strip_prefix(r"\\?\UNC\") {
+    return format!(r"\\{share}");
+  }
+  path.strip_prefix(r"\\?\").unwrap_or(path).to_owned()
+}
+
 /// A remote URL as a short address, without scheme and `.git`: `https://gitlab.example.com/
 /// ivan/kontur.git` reads `gitlab.example.com/ivan/kontur`. Credentials were removed when the
 /// remote was read.

@@ -64,6 +64,8 @@ pub struct FieldInput {
   clear: Option<Arc<str>>,
   width: Dimension,
   area_height: f32,
+  /// A single line's box height when the design draws it taller than a control.
+  line_box: Option<f32>,
   locked: bool,
   /// A 14 `text_muted` glyph at the box's end, e.g. the lock of a locked select (`H8GYVZ`).
   trailing: Option<Icon>,
@@ -90,6 +92,7 @@ impl PartialEq for FieldInput {
       && self.clear == other.clear
       && self.width == other.width
       && self.area_height == other.area_height
+      && self.line_box == other.line_box
       && self.locked == other.locked
       && self.trailing == other.trailing
       && self.invalid == other.invalid
@@ -118,6 +121,7 @@ impl FieldInput {
       clear: None,
       width: Dimension::Pct(100.0),
       area_height: TEXT_AREA_HEIGHT,
+      line_box: None,
       locked: false,
       trailing: None,
       invalid: false,
@@ -189,6 +193,13 @@ impl FieldInput {
   }
 
   /// The value in Geist Mono, as identifiers and figures are (handover §5.2); the placeholder stays.
+  /// A single line in a box `height` high, where a design draws the field taller than a control, e.g. 38 for
+  /// a value 10 from each edge (`ys8f8` in Local integration).
+  pub fn line_box(mut self, height: f32) -> Self {
+    self.line_box = Some(height);
+    self
+  }
+
   pub fn mono(mut self) -> Self {
     self.mono = true;
     self
@@ -290,7 +301,7 @@ impl Component for FieldBox {
       Lines::One => dress(
         Row::new()
           .id(format!("{}-box", props.id))
-          .height(Dimension::Px(ControlHeight::Md.value()))
+          .height(Dimension::Px(props.line_box.unwrap_or(ControlHeight::Md.value())))
           .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
           .spacing(SpacingSize::Sm)
           .align_items(Alignment::Center),

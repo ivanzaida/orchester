@@ -1,265 +1,430 @@
+//! The changed paths of the checkout, one row per reviewed snapshot, in a radius 6 `border` frame under its title
+//! in 13 `text_primary` (`Local changes` `Q5DPgQ`, `Commit selection` `q43ZSk`, `Preservation selection`
+//! `CCvnb`). A group's label is 11.5 `text_muted` on `surface_raised`, 6 over and under and 10 at its sides
+//! (`Staged heading` `MJbQq`). A row is 8 over and under and 10 at its sides over a `border` line: its checkbox,
+//! then 8 on its change's letter and its path, which wraps where the row ends, and 2 under them what the
+//! snapshot holds in 11.5 `text_muted` (`juh4k`). In the review a press on the path shows its snapshot's diff;
+//! the commit and preservation reviews list only the selected snapshots, which cannot change there.
+
 use std::sync::Arc;
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text, VirtualizedList},
+  components::{Column, Row, Spacer, Text, VirtualizedList},
   core::Signal,
-  node::{Element, dimension::Dimension},
+  layout::Alignment,
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::integration::local::LocalFile;
-use orchester_workspace::tasks::local_integration::{IntegrationView, Preview};
-
-use super::{LocalPage, Mode};
-use crate::ui::{
-  button::{ActionButton, ButtonKind},
-  code_box::CodeBox,
-  toggle::{Toggle, ToggleKind},
+use orchester_core::integration::local::{LocalFile, LocalPath};
+use orchester_workspace::{
+  display,
+  tasks::local_integration::{IntegrationView, ShownSnapshot, Snapshot, SnapshotSize},
 };
 
-pub(super) fn content(ctx: &mut Ctx, page: &LocalPage, view: &IntegrationView, busy: bool) -> Element {
-  let mut column = Column::new().width(Dimension::Pct(100.0)).spacing(SpacingSize::Md);
-  if let Mode::Commit { preview: shown, .. } = page.mode.get() {
-    column = column.child(diff_preview(
-      ctx,
-      "local-selected-diff",
-      "local_integration.selected",
-      &shown,
-    ));
-    column = column.child(Text::new(&ctx.t("local_integration.excluded")).variant(TypographyStyle::Description));
-  } else if view.operation.as_ref().is_some_and(|op| op.checked().is_some()) {
-    column = column.child(preview(
-      ctx,
-      "local-checked-diff",
-      "local_integration.checked",
-      &view.diff,
-    ));
-  } else {
-    column = column.child(Text::new(&ctx.t("local_integration.files")).variant(TypographyStyle::Title));
-    column = column.child(file_list(
-      ctx,
-      page,
-      view,
-      busy || page.mode.get() != Mode::Review || view.external.is_some(),
-    ));
-    column = column.child(diff_preview(
-      ctx,
-      "local-file-diff",
-      "local_integration.review",
-      &view.diff,
-    ));
-  }
-  column.into()
+use super::{Selection, ShownFile};
+use crate::{
+  theme::{CodeText, ExtraSpacing, LocalText},
+  ui::{
+    message::message_text,
+    pressable::pressable,
+    toggle::{Toggle, ToggleKind},
+  },
+};
+
+/// Rows the list lays out in full; past them its rows scroll in a list `LIST_HEIGHT` high.
+const SHOWN_ROWS: usize = 60;
+const LIST_HEIGHT: f32 = 520.0;
+/// The column of a change's letter (`F1t7T` in `dAwTi`).
+const KIND_WIDTH: f32 = 12.0;
+
+/// Which list the page shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum List {
+  /// Every snapshot, to choose what to commit or preserve.
+  Review,
+  /// The selected index and new-file snapshots a commit takes.
+  Commit,
+  /// The selected snapshots a preservation keeps.
+  Preserve,
 }
 
-fn file_row(
-  ctx: &Ctx,
-  selected_paths: &Signal<super::Selection>,
-  shown_file: &Signal<super::ShownFile>,
-  file: &LocalFile,
+/// A group of rows; its key is its label and part of its rows' element ids.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Group {
+  Staged,
+  Unstaged,
+  Untracked,
+  CommitIndex,
+  CommitUntracked,
+}
+
+impl Group {
+  pub(super) const fn key(self) -> &'static str {
+    match self {
+      Self::Staged => "local_integration.staged",
+      Self::Unstaged => "local_integration.unstaged",
+      Self::Untracked => "local_integration.untracked",
+      Self::CommitIndex => "local_integration.commitIndex",
+      Self::CommitUntracked => "local_integration.commitUntracked",
+    }
+  }
+
+  const fn snapshot(self) -> Snapshot {
+    match self {
+      Self::Staged | Self::CommitIndex => Snapshot::Staged,
+      Self::Unstaged => Snapshot::Unstaged,
+      Self::Untracked | Self::CommitUntracked => Snapshot::Untracked,
+    }
+  }
+}
+
+/// One listed snapshot.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct Entry {
+  pub group: Group,
+  pub file: LocalFile,
+  size: Option<SnapshotSize>,
+}
+
+fn untracked(file: &LocalFile) -> bool {
+  file.head.is_none() && file.staged.is_none()
+}
+
+/// The snapshots `list` shows of `view`, in its order.
+pub(super) fn entries(view: &IntegrationView, selection: &[LocalPath], list: List) -> Vec<Entry> {
+  let groups: &[Group] = match list {
+    List::Review | List::Preserve => &[Group::Staged, Group::Unstaged, Group::Untracked],
+    List::Commit => &[Group::CommitIndex, Group::CommitUntracked],
+  };
+  let mut entries = Vec::new();
+  for &group in groups {
+    for file in &view.checkout.files {
+      let listed = match group {
+        Group::Staged | Group::CommitIndex => file.staged != file.head,
+        Group::Unstaged => file.unstaged,
+        Group::Untracked | Group::CommitUntracked => untracked(file),
+      };
+      let chosen = list == List::Review || selection.contains(&file.path);
+      if listed && chosen {
+        entries.push(Entry {
+          group,
+          file: file.clone(),
+          size: view.stats.of(&file.path, group.snapshot()),
+        });
+      }
+    }
+  }
+  entries
+}
+
+/// The snapshot the review shows first.
+pub(super) fn first(view: &IntegrationView) -> Option<ShownSnapshot> {
+  entries(view, &[], List::Review)
+    .into_iter()
+    .next()
+    .map(|entry| ShownSnapshot {
+      path: entry.file.path,
+      snapshot: entry.group.snapshot(),
+    })
+}
+
+/// Whether `shown` is still one of the review's snapshots.
+pub(super) fn listed(view: &IntegrationView, shown: &ShownSnapshot) -> bool {
+  entries(view, &[], List::Review)
+    .iter()
+    .any(|entry| entry.file.path == shown.path && entry.group.snapshot() == shown.snapshot)
+}
+
+/// The review's snapshots of `selection`.
+pub(super) fn selected_count(view: &IntegrationView, selection: &[LocalPath]) -> usize {
+  entries(view, selection, List::Preserve).len()
+}
+
+/// The snapshots a commit of `selection` leaves in the checkout, as the remaining notice names them.
+pub(super) fn excluded(ctx: &Ctx, view: &IntegrationView, selection: &[LocalPath]) -> Vec<String> {
+  entries(view, &[], List::Review)
+    .into_iter()
+    .filter(|entry| entry.group == Group::Unstaged || !selection.contains(&entry.file.path))
+    .map(|entry| {
+      ctx
+        .t_args(
+          "local_integration.excludedEntry",
+          [
+            ("group", &*ctx.t(entry.group.key())),
+            ("path", entry.file.path.as_str()),
+          ],
+        )
+        .to_string()
+    })
+    .collect()
+}
+
+/// The list `list` of `view` under `title`, with `actions` beside the title.
+pub(super) fn list(
+  ctx: &mut Ctx,
+  (view, list): (&IntegrationView, List),
+  (selected, shown): (&Signal<Selection>, &Signal<ShownFile>),
+  title: &str,
+  actions: Vec<Element>,
   busy: bool,
-  group: &str,
 ) -> Element {
-  let selected = selected_paths.get().contains(&file.path);
-  let select = selected_paths.clone();
-  let path = file.path.clone();
+  let entries = entries(view, &selected.get(), list);
+  let mut items = Vec::new();
+  for entry in entries {
+    if items.last().is_none_or(|item: &Item| item.group() != entry.group) {
+      items.push(Item::Group(entry.group));
+    }
+    items.push(Item::File(entry));
+  }
+  let (selected, shown) = (selected.clone(), shown.clone());
+  let props = move |item: Item| Props {
+    item,
+    list,
+    selected: selected.clone(),
+    shown: shown.clone(),
+    busy,
+  };
+  let rows: Element = if items.len() <= SHOWN_ROWS {
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .with_children(
+        items
+          .into_iter()
+          .map(|item| ctx.mount_keyed::<FileRow>(&format!("local-row-{}", item.key()), props(item))),
+      )
+      .into()
+  } else {
+    VirtualizedList::new_shared(ctx, Arc::new(items))
+      .list_key("local-files-rows")
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Px(LIST_HEIGHT))
+      .mount_keyed::<FileRow, _, _, _>(Item::key, move |item| props(item.clone()))
+  };
+  let head = Row::new()
+    .width(Dimension::Pct(100.0))
+    .align_items(Alignment::Center)
+    .child(Text::new(title).id("local-files-title").variant(TypographyStyle::Body))
+    .child(Spacer::new().flex(1.0))
+    .with_children(actions);
+  Column::new()
+    .id("local-files")
+    .width(Dimension::Pct(100.0))
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Md)
+    .clip()
+    .child(head)
+    .child(rows)
+    .into()
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum Item {
+  Group(Group),
+  File(Entry),
+}
+
+impl Item {
+  fn group(&self) -> Group {
+    match self {
+      Self::Group(group) => *group,
+      Self::File(entry) => entry.group,
+    }
+  }
+
+  fn key(&self) -> String {
+    match self {
+      Self::Group(group) => group.key().to_owned(),
+      Self::File(entry) => format!("{}-{}", entry.group.key(), entry.file.path),
+    }
+  }
+}
+
+#[derive(Clone)]
+struct Props {
+  item: Item,
+  list: List,
+  selected: Signal<Selection>,
+  shown: Signal<ShownFile>,
+  busy: bool,
+}
+
+impl PartialEq for Props {
+  fn eq(&self, other: &Self) -> bool {
+    self.item == other.item && self.list == other.list && self.busy == other.busy
+  }
+}
+
+impl DevtoolsInspectable for Props {}
+
+struct FileRow;
+
+impl Component for FileRow {
+  type Props = Props;
+
+  fn create(_: &mut Ctx) -> Self {
+    Self
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let props = ctx.props::<Props>().clone();
+    match &props.item {
+      Item::Group(group) => Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding(Padding::symmetric(
+          ExtraSpacing::Loose.role(),
+          ExtraSpacing::Snug.role(),
+        ))
+        .background(PaletteColor::SurfaceRaised)
+        .child(Text::new(&ctx.t(group.key())).variant(LocalText::Note.role()))
+        .into(),
+      Item::File(entry) => file_row(ctx, &props, entry),
+    }
+  }
+}
+
+fn file_row(ctx: &Ctx, props: &Props, entry: &Entry) -> Element {
+  let group = entry.group.key();
+  let path = entry.file.path.clone();
+  let on = props.selected.get().contains(&path);
   let mut choice = Toggle::new(
     format!("local-select-{group}-{path}"),
     ToggleKind::Checkbox,
-    selected,
+    on,
     path.to_string(),
-  );
-  if !busy {
+  )
+  .hide_label();
+  if props.list == List::Review && !props.busy {
+    let select = props.selected.clone();
+    let path = path.clone();
     choice = choice.on_change(move |on| {
       select.update(|paths| {
         paths.retain(|value| value != &path);
         if on {
           paths.push(path.clone());
         }
-      })
+      });
     });
   }
-  let show = shown_file.clone();
-  let path = file.path.clone();
-  let inspect = ActionButton::new(
-    format!("local-file-{group}-{path}"),
-    ButtonKind::Ghost,
-    file.path.to_string(),
-  )
-  .on_click(move || show.set(super::ShownFile(Some(path.clone()))));
-  Column::new()
+  let name = Row::new()
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(56.0))
-    .spacing(SpacingSize::Xs)
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Start)
     .child(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .child(choice.hide_label())
-        .child(inspect),
+      Text::new(kind(entry))
+        .variant(CodeText::ChangeType.role())
+        .width(Dimension::Px(KIND_WIDTH))
+        .flex_shrink(0.0),
     )
-    .child(Text::new(&ctx.t(group)).variant(TypographyStyle::Caption))
+    .child(
+      Text::new(path.as_str())
+        .id(format!("local-path-{group}-{path}"))
+        .variant(LocalText::Path.role())
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0)),
+    );
+  let name: Element = if props.list == List::Review {
+    let shown = props.shown.clone();
+    let snapshot = ShownSnapshot {
+      path: path.clone(),
+      snapshot: entry.group.snapshot(),
+    };
+    pressable(move || shown.set(ShownFile(Some(snapshot.clone()))))
+      .id(format!("local-file-{group}-{path}"))
+      .width(Dimension::Pct(100.0))
+      .child(name)
+      .into()
+  } else {
+    name.id(format!("local-file-{group}-{path}")).into()
+  };
+  Row::new()
+    .id(format!("local-row-{group}-{path}"))
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Start)
+    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(choice)
+    .child(
+      Column::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .spacing(ExtraSpacing::Tight.role())
+        .child(name)
+        .child(
+          Text::new(&caption(ctx, props.list, entry))
+            .id(format!("local-caption-{group}-{path}"))
+            .variant(LocalText::Note.role()),
+        ),
+    )
     .into()
 }
 
-pub(super) fn preview(ctx: &mut Ctx, id: &str, label: &str, shown: &Preview) -> Element {
-  match shown {
-    Preview::Text(text) => CodeBox::new(id, ctx.t(label), text.as_str()).render(ctx),
-    other => {
-      let key = match other {
-        Preview::Binary => "local_integration.binary",
-        Preview::Sensitive => "local_integration.sensitive",
-        _ => "local_integration.absent",
-      };
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Sm)
-        .child(Text::new(&ctx.t(label)).variant(TypographyStyle::Label))
-        .child(Text::new(&ctx.t(key)).variant(TypographyStyle::Description))
-        .into()
-    }
-  }
-}
-#[derive(Clone, PartialEq)]
-enum FileItem {
-  Group(&'static str),
-  File(LocalFile, &'static str),
-}
-#[derive(Clone)]
-struct FileProps {
-  item: FileItem,
-  selected: Signal<super::Selection>,
-  shown: Signal<super::ShownFile>,
-  busy: bool,
-}
-impl PartialEq for FileProps {
-  fn eq(&self, other: &Self) -> bool {
-    match (&self.item, &other.item) {
-      (FileItem::Group(a), FileItem::Group(b)) => a == b && self.busy == other.busy,
-      (FileItem::File(a, ga), FileItem::File(b, gb)) => a == b && ga == gb && self.busy == other.busy,
-      _ => false,
-    }
-  }
-}
-impl DevtoolsInspectable for FileProps {}
-struct FileRow;
-impl Component for FileRow {
-  type Props = FileProps;
-  fn create(_: &mut Ctx) -> Self {
-    Self
-  }
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<FileProps>();
-    match &props.item {
-      FileItem::Group(label) => Column::new()
-        .height(Dimension::Px(40.0))
-        .child(Text::new(&ctx.t(label)).variant(TypographyStyle::Label))
-        .into(),
-      FileItem::File(file, group) => file_row(ctx, &props.selected, &props.shown, file, props.busy, group),
-    }
-  }
-}
-fn file_list(ctx: &mut Ctx, page: &LocalPage, view: &IntegrationView, busy: bool) -> Element {
-  let mut rows = Vec::new();
-  for group in [
-    "local_integration.staged",
-    "local_integration.unstaged",
-    "local_integration.untracked",
-  ] {
-    let files = view
-      .checkout
-      .files
-      .iter()
-      .filter(|file| match group {
-        "local_integration.staged" => file.staged != file.head,
-        "local_integration.unstaged" => file.unstaged,
-        _ => file.head.is_none() && file.staged.is_none(),
-      })
-      .cloned()
-      .collect::<Vec<_>>();
-    if !files.is_empty() {
-      rows.push(FileItem::Group(group));
-      rows.extend(files.into_iter().map(|file| FileItem::File(file, group)));
-    }
-  }
-  let (selected, shown) = (page.selected.clone(), page.shown_file.clone());
-  let height = (rows.len() as f32 * 56.0).clamp(56.0, 320.0);
-  VirtualizedList::new_shared(ctx, Arc::new(rows))
-    .list_key("local-files")
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(height))
-    .mount_keyed::<FileRow, _, _, _>(
-      |item| match item {
-        FileItem::Group(label) => (*label).to_owned(),
-        FileItem::File(file, group) => format!("{group}:{}", file.path),
-      },
-      move |item| FileProps {
-        item: item.clone(),
-        selected: selected.clone(),
-        shown: shown.clone(),
-        busy,
-      },
-    )
-}
-fn diff_preview(ctx: &mut Ctx, id: &str, label: &str, shown: &Preview) -> Element {
-  let Preview::Text(text) = shown else {
-    return preview(ctx, id, label, shown);
+/// The letter of how the snapshot changes its path: modified, added, deleted, or untracked.
+fn kind(entry: &Entry) -> &'static str {
+  let file = &entry.file;
+  let (before, after) = match entry.group.snapshot() {
+    Snapshot::Untracked => return "?",
+    Snapshot::Staged => (file.head.is_some(), file.staged.is_some()),
+    Snapshot::Unstaged => (file.staged.is_some(), file.working.is_some()),
   };
-  let rows = Arc::new(
-    text
-      .lines()
-      .enumerate()
-      .map(|(index, text)| DiffLine {
-        index,
-        text: text.to_owned(),
-      })
-      .collect::<Vec<_>>(),
-  );
-  let height = (rows.len() as f32 * 20.0).clamp(40.0, 280.0);
-  let list = VirtualizedList::new_shared(ctx, rows)
-    .list_key(id)
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(height))
-    .mount_keyed::<DiffRow, _, _, _>(|row| row.index, Clone::clone);
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .child(Text::new(&ctx.t(label)).variant(TypographyStyle::Label))
-    .child(list)
-    .into()
-}
-#[derive(Clone, PartialEq)]
-struct DiffLine {
-  index: usize,
-  text: String,
-}
-impl DevtoolsInspectable for DiffLine {}
-struct DiffRow;
-impl Component for DiffRow {
-  type Props = DiffLine;
-  fn create(_: &mut Ctx) -> Self {
-    Self
+  match (before, after) {
+    (false, _) => "A",
+    (true, false) => "D",
+    (true, true) => "M",
   }
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    use crate::theme::ExtraColor;
-    let line = &ctx.props::<DiffLine>().text;
-    let background = if line.starts_with('+') && !line.starts_with("+++") {
-      ExtraColor::DiffAdded
-    } else if line.starts_with('-') && !line.starts_with("---") {
-      ExtraColor::DiffRemoved
-    } else {
-      ExtraColor::CodeBackground
-    };
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .background(background.role())
-      .child(
-        Text::new(line)
-          .variant(TypographyStyle::Mono)
-          .selectable(true)
-          .width(Dimension::Pct(100.0)),
-      )
+}
+
+fn caption(ctx: &Ctx, list: List, entry: &Entry) -> Arc<str> {
+  let new_file = |text: &str, binary: &str, sized: &str| match entry.size {
+    Some(SnapshotSize::Binary(Some(bytes))) => {
+      let size = message_text(ctx, &display::byte_size(bytes));
+      ctx.t_args(sized, [("size", &*size)])
+    }
+    Some(SnapshotSize::Binary(None)) => ctx.t(binary),
+    _ => ctx.t(text),
+  };
+  match (list, entry.group) {
+    (List::Commit, Group::CommitIndex) => ctx.t("local_integration.commitIndexCaption"),
+    (List::Commit, _) => ctx.t("local_integration.commitUntrackedCaption"),
+    (List::Preserve, Group::Staged) => ctx.t("local_integration.preserveStagedCaption"),
+    (List::Preserve, Group::Unstaged) => ctx.t("local_integration.preserveUnstagedCaption"),
+    (List::Preserve, _) => new_file(
+      "local_integration.preserveNewCaption",
+      "local_integration.preserveBinaryCaption",
+      "local_integration.preserveBinarySizeCaption",
+    ),
+    (_, Group::Staged | Group::Unstaged) => {
+      let (plain, sized) = if entry.group == Group::Staged {
+        ("local_integration.stagedCaption", "local_integration.stagedSizeCaption")
+      } else {
+        (
+          "local_integration.unstagedCaption",
+          "local_integration.unstagedSizeCaption",
+        )
+      };
+      match entry.size {
+        Some(SnapshotSize::Lines { added, removed }) => {
+          let change = ctx.t_args(
+            "local_integration.lines",
+            [
+              ("added", added.to_string().as_str()),
+              ("removed", removed.to_string().as_str()),
+            ],
+          );
+          ctx.t_args(sized, [("change", &*change)])
+        }
+        Some(SnapshotSize::Binary(_)) => ctx.t_args(sized, [("change", &*ctx.t("local_integration.binaryChange"))]),
+        _ => ctx.t(plain),
+      }
+    }
+    (..) => new_file(
+      "local_integration.newCaption",
+      "local_integration.newBinaryCaption",
+      "local_integration.newBinarySizeCaption",
+    ),
   }
 }

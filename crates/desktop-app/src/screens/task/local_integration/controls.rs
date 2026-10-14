@@ -1,16 +1,23 @@
+//! The inspector beside the evidence (`Action and recovery inspector` `atP1P`): the step that waits for the person
+//! in a `warning` stroke, its heading, what it explains, its full-width actions and a note under them
+//! (`Prepare checkout` `hULqu`), then the recovery record or how the queue stands (`qX5uF`).
+
 mod acknowledgement;
+mod confirmation;
 mod preparation;
+mod recovery;
 
 use std::sync::{Arc, atomic::Ordering};
 
 pub(super) use acknowledgement::AcknowledgementState;
 use acknowledgement::ReviewIdentity;
+use confirmation::decision;
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
     events::input_source,
-    theme::{SpacingSize, TypographyStyle},
+    theme::SpacingSize,
   },
   components::{Column, Text},
   core::Signal,
@@ -18,18 +25,19 @@ use lurq::{
 };
 use orchester_core::integration::local::LocalPhase;
 use orchester_workspace::tasks::local_integration::IntegrationView;
+pub(super) use recovery::aborted;
 
-pub(super) use super::words::{phase_body, phase_title};
 use super::{
   LocalPage, Mode, TaskContext,
+  words::phase_title,
   work::{Action, Request, Work},
 };
 use crate::{
   mcp::input_gate::{Guarded, InputGate, Protected},
+  theme::LocalText,
   ui::{
     button::{ActionButton, ButtonKind},
-    card::{CardSurface, card},
-    toggle::{Toggle, ToggleKind},
+    card::{CardSurface, card_frame},
   },
 };
 
@@ -37,35 +45,94 @@ pub(super) type Managed = Arc<parking_lot::Mutex<Option<orchester_workspace::tas
 
 #[derive(Clone)]
 struct Props {
-  task: TaskContext,
   view: Arc<IntegrationView>,
   mode: Signal<Mode>,
   selected: Signal<super::Selection>,
   message: Signal<String>,
   name: Signal<String>,
-  work: Work,
-  stop: Arc<std::sync::atomic::AtomicBool>,
+  trigger: Trigger,
   busy: bool,
+  narrow: bool,
   editor_dirty: Signal<bool>,
   acknowledgement: AcknowledgementState,
-  gate: InputGate,
   managed: Managed,
   job: Option<orchester_workspace::tasks::integration_jobs::RunJobs>,
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    self.task == other.task && self.view == other.view && self.busy == other.busy
+    self.trigger.task == other.trigger.task
+      && self.view == other.view
+      && self.busy == other.busy
+      && self.narrow == other.narrow
   }
 }
 impl DevtoolsInspectable for Props {}
 
+/// What starts the page's work: the task, the page's worker, its stop flag, the input gate and the operation's
+/// version the decision was made against.
+#[derive(Clone)]
+pub(super) struct Trigger {
+  task: TaskContext,
+  work: Work,
+  stop: Arc<std::sync::atomic::AtomicBool>,
+  gate: InputGate,
+  generation: Option<u64>,
+}
+
+impl Trigger {
+  pub(super) fn of(ctx: &mut Ctx, page: &LocalPage, task: &TaskContext, view: &IntegrationView) -> Self {
+    Self {
+      task: task.clone(),
+      work: page.work.clone(),
+      stop: page.stop.clone(),
+      gate: ctx.use_context().unwrap_or_default(),
+      generation: view.operation.as_ref().map(|operation| operation.version()),
+    }
+  }
+
+  fn request(&self, action: Action) -> Request {
+    Request {
+      task: self.task.clone(),
+      action,
+      stop: self.stop.clone(),
+      input: None,
+      generation: self.generation,
+    }
+  }
+
+  /// A button `id` of `kind` saying `label` that runs `action`, or that cannot be pressed.
+  pub(super) fn button(
+    &self,
+    ctx: &Ctx,
+    (id, kind, label): (&str, ButtonKind, &str),
+    action: Option<Action>,
+    disabled: bool,
+  ) -> ActionButton {
+    let button = ActionButton::new(id, kind, ctx.t(label));
+    if disabled {
+      return button.disabled();
+    }
+    let Some(action) = action else {
+      return button;
+    };
+    let request = self.request(action);
+    let (work, gate) = (self.work.clone(), self.gate.clone());
+    button.on_click(move || {
+      let mut request = request.clone();
+      request.initiate(&gate);
+      request.stop.store(false, Ordering::Release);
+      work.run_if_idle(request);
+    })
+  }
+}
+
 pub(super) fn inspector(
   ctx: &mut Ctx,
   page: &LocalPage,
-  task: &TaskContext,
-  view: &IntegrationView,
+  (task, view): (&TaskContext, &IntegrationView),
   busy: bool,
-) -> Column {
+  narrow: bool,
+) -> Element {
   let services = crate::services::Services::of(ctx);
   let job = task
     .detail
@@ -73,24 +140,20 @@ pub(super) fn inspector(
     .as_ref()
     .map(|run| services.jobs.of(task.project.open.project.id()).of(run.id()));
   let props = Props {
-    task: task.clone(),
     view: Arc::new(view.clone()),
     mode: page.mode.clone(),
     selected: page.selected.clone(),
     message: page.message.clone(),
     name: page.name.clone(),
-    work: page.work.clone(),
-    stop: page.stop.clone(),
+    trigger: Trigger::of(ctx, page, task, view),
     busy,
+    narrow,
     editor_dirty: page.editor_dirty.clone(),
     acknowledgement: page.acknowledgement.clone(),
-    gate: ctx.use_context().unwrap_or_default(),
     managed: page.managed.clone(),
     job,
   };
-  Column::new()
-    .spacing(SpacingSize::Md)
-    .child(ctx.mount_keyed::<Inspector>("local-inspector", props))
+  ctx.mount_keyed::<Inspector>("local-inspector", props)
 }
 
 struct Inspector {
@@ -145,24 +208,27 @@ impl Component for Inspector {
     drop(prior);
     let panel = self.actions(ctx, &props, &mode, phase);
     Column::new()
+      .id("local-side")
       .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Md)
+      .spacing(SpacingSize::Lg)
       .child(panel)
-      .child(recovery(ctx, &props.view))
+      .child(recovery::card(ctx, &props.view))
   }
 }
 
 impl Inspector {
   fn actions(&self, ctx: &mut Ctx, props: &Props, mode: &Mode, phase: LocalPhase) -> Element {
     if props.view.external.is_some() {
-      return action_panel()
-        .child(Text::new(&ctx.t("local_integration.externalTitle")).variant(TypographyStyle::Title))
-        .child(Text::new(&ctx.t("local_integration.externalBody")).variant(TypographyStyle::Description))
-        .into();
+      return action_panel(
+        ctx,
+        "local_integration.externalTitle",
+        Some("local_integration.externalBody"),
+      )
+      .into();
     }
     if props.busy {
-      let stop = props.stop.clone();
-      return action_panel()
+      let stop = props.trigger.stop.clone();
+      return action_panel(ctx, phase_title(phase), None)
         .child(
           button(ctx, props, "local-stop", "local_integration.pause", None, false)
             .on_click(move || stop.store(true, Ordering::Release)),
@@ -175,135 +241,18 @@ impl Inspector {
     }
   }
 
-  fn confirmation(
-    &self,
-    ctx: &mut Ctx,
-    props: &Props,
-    (mode, phase): (&Mode, LocalPhase),
-    decision: Decision,
-  ) -> Element {
-    let (title, body, agree, label, action) = decision;
-    let mut panel = action_panel()
-      .child(Text::new(&ctx.t(title)).variant(TypographyStyle::Title))
-      .child(Text::new(&ctx.t(body)).variant(TypographyStyle::Description));
-    let field = match mode {
-      Mode::Commit { .. } => Some(super::fields::input(
-        ctx,
-        ("local-commit-message", "local_integration.message"),
-        props.message.clone(),
-        &props.view.editor_policy,
-        true,
-      )),
-      Mode::Preserve => Some(super::fields::input(
-        ctx,
-        ("local-preservation-name", "local_integration.name"),
-        props.name.clone(),
-        &props.view.editor_policy,
-        false,
-      )),
-      _ => None,
-    };
-    panel = panel.with_children(field);
-    let checked = self.agree.clone();
-    let gate = self.gate.clone().unwrap_or_default();
-    panel = panel.child(
-      Toggle::new(
-        "local-confirm-scope",
-        ToggleKind::Checkbox,
-        self.agree.get(),
-        ctx.t(agree),
-      )
-      .on_change(move |on| {
-        if gate.local_input(input_source()).allowed() {
-          checked.set(on);
-        }
-      }),
-    );
-    let ready = self.agree.get()
-      && match mode {
-        Mode::Commit { .. } => {
-          !props.message.get().trim().is_empty() && !props.view.editor_policy.sensitive(&props.message.get())
-        }
-        Mode::Preserve => {
-          !props.selected.get().is_empty()
-            && !props.name.get().trim().is_empty()
-            && !props.view.editor_policy.sensitive(&props.name.get())
-        }
-        _ => true,
-      };
-    let stale = matches!(action, Action::Merge { .. }) && !props.view.checked_current;
-    let unresolved = matches!(action, Action::Continue | Action::FinishRestore) && !props.view.conflicts.is_empty();
-    panel = panel.child(button(
-      ctx,
-      props,
-      "local-confirm",
-      label,
-      Some(action),
-      !ready || stale || unresolved || (matches!(mode, Mode::Abort | Mode::Cancel) && props.editor_dirty.get()),
-    ));
-    if stale {
-      panel = panel
-        .child(Text::new(&ctx.t("local_integration.error.stale")).variant(TypographyStyle::Description))
-        .child(button(
-          ctx,
-          props,
-          "local-resync-review",
-          "local_integration.reconcile",
-          Some(Action::Reconcile),
-          false,
-        ));
-    }
-    panel
-      .with_children(self.additional_decisions(ctx, props, (mode, phase)))
-      .into()
-  }
-
-  fn additional_decisions(&self, ctx: &Ctx, props: &Props, (mode, phase): (&Mode, LocalPhase)) -> Vec<Element> {
-    let mut actions = Vec::new();
-    if phase == LocalPhase::AwaitingApproval && *mode == Mode::Review {
-      actions.extend(self.cancellation(ctx, props, "local-review-cancel"));
-    }
-    if phase == LocalPhase::TaskConflicts && *mode == Mode::Review {
-      actions.push(mode_button(ctx, props, "local-review-abort", "local_integration.abort", Mode::Abort).into());
-    }
-    if phase == LocalPhase::RestoreConflicts && *mode == Mode::Review {
-      actions.push(
-        button(
-          ctx,
-          props,
-          "local-resume-restore",
-          "local_integration.restore",
-          Some(Action::Restore),
-          false,
-        )
-        .into(),
-      );
-    }
-    actions.push(
-      mode_button(
-        ctx,
-        props,
-        "local-cancel-review",
-        "local_integration.cancel",
-        Mode::Review,
-      )
-      .into(),
-    );
-    actions
-  }
-
   fn available(&self, ctx: &Ctx, props: &Props, phase: LocalPhase) -> Element {
-    let panel = action_panel().child(Text::new(&ctx.t(phase_title(phase))).variant(TypographyStyle::Title));
+    if phase == LocalPhase::Review {
+      return self.preparation(ctx, props);
+    }
+    let panel = action_panel(ctx, phase_title(phase), None);
+    let action = |id: &str, label: &str, action: Action| button(ctx, props, id, label, Some(action), false);
     match phase {
-      LocalPhase::Review => panel.with_children(self.preparation(ctx, props)),
       LocalPhase::Prepared => panel.with_children(self.prepared(ctx, props)),
-      LocalPhase::Canceling => panel.child(button(
-        ctx,
-        props,
+      LocalPhase::Canceling => panel.child(action(
         "local-resume-cancel",
         "local_integration.reconcile",
-        Some(Action::Reconcile),
-        false,
+        Action::Reconcile,
       )),
       LocalPhase::Canceled => {
         if props
@@ -316,45 +265,30 @@ impl Inspector {
           panel.child(mode_button(
             ctx,
             props,
-            "local-cleanup-canceled",
+            ("local-cleanup-canceled", ButtonKind::Primary),
             "local_integration.cleanup",
             Mode::Cleanup,
           ))
         } else {
-          panel.child(button(
-            ctx,
-            props,
-            "local-restart",
-            "local_integration.refresh",
-            Some(Action::Refresh),
-            false,
-          ))
+          panel.child(action("local-restart", "local_integration.refresh", Action::Refresh))
         }
       }
-      LocalPhase::MergedAwaitingRestore => panel.child(button(
-        ctx,
-        props,
-        "local-restore",
-        "local_integration.restore",
-        Some(Action::Restore),
-        false,
-      )),
+      LocalPhase::MergedAwaitingRestore => {
+        panel.child(action("local-restore", "local_integration.restore", Action::Restore))
+      }
       LocalPhase::RestorationVerified => panel.child(mode_button(
         ctx,
         props,
-        "local-review-cleanup",
+        ("local-review-cleanup", ButtonKind::Primary),
         "local_integration.cleanup",
         Mode::Cleanup,
       )),
       LocalPhase::NeedsReconciliation => self.reconciliation(ctx, props, panel),
       LocalPhase::Complete => panel,
-      _ => panel.child(button(
-        ctx,
-        props,
+      _ => panel.child(action(
         "local-reconcile",
         "local_integration.reconcile",
-        Some(Action::Reconcile),
-        false,
+        Action::Reconcile,
       )),
     }
     .into()
@@ -375,199 +309,85 @@ impl Inspector {
       .as_ref()
       .is_some_and(|op| op.merged().is_none() && op.preservation().is_none())
     {
-      panel.child(button(
-        ctx,
-        props,
-        "local-review-current",
-        "local_integration.refresh",
-        Some(Action::Refresh),
-        false,
-      ))
+      panel.child(
+        props
+          .trigger
+          .button(
+            ctx,
+            (
+              "local-review-current",
+              ButtonKind::Secondary,
+              "local_integration.refresh",
+            ),
+            Some(Action::Refresh),
+            false,
+          )
+          .fill_width(),
+      )
     } else {
       panel
     }
   }
 }
 
-fn action_panel() -> Column {
-  card("local-actions", CardSurface::Decision)
-    .padding(SpacingSize::Md)
+/// The step's card: `title` and what `body` explains; add its actions and note.
+fn action_panel(ctx: &Ctx, title: &str, body: Option<&str>) -> Column {
+  card_frame("local-actions", CardSurface::Pending)
+    .padding(SpacingSize::Lg)
     .spacing(SpacingSize::Sm)
+    .child(
+      Text::new(&ctx.t(title))
+        .id("local-actions-title")
+        .variant(LocalText::Heading.role()),
+    )
+    .with_children(body.map(|body| {
+      Text::new(&ctx.t(body))
+        .id("local-actions-body")
+        .variant(LocalText::Explanation.role())
+    }))
 }
-fn mode_button(ctx: &Ctx, props: &Props, id: &str, label: &str, chosen: Mode) -> ActionButton {
+
+/// A note under the step's actions (`Person-only preparation` `Q1k8Vy`).
+fn guard_note(ctx: &Ctx, key: &str) -> Text {
+  Text::new(&ctx.t(key))
+    .id("local-actions-note")
+    .variant(LocalText::Note.role())
+}
+
+fn mode_button(ctx: &Ctx, props: &Props, (id, kind): (&str, ButtonKind), label: &str, chosen: Mode) -> ActionButton {
   let mode = props.mode.clone();
   let managed = props.managed.clone();
   let job = props.job.clone();
-  let gate = props.gate.clone();
-  let work = props.work.clone();
-  let refusal = Request {
-    task: props.task.clone(),
-    action: Action::BusyRefused,
-    stop: props.stop.clone(),
-    input: None,
-    generation: props.view.operation.as_ref().map(|operation| operation.version()),
-  };
-  ActionButton::new(id, ButtonKind::Secondary, ctx.t(label)).on_click(move || {
-    if !gate.local_input(input_source()).allowed() {
-      let mut refused = refusal.clone();
-      refused.action = Action::AuthorityRefused;
-      work.run_if_idle(refused);
-      return;
-    }
-    if chosen != Mode::Review {
-      let mut guard = managed.lock();
-      if guard.is_none() {
-        *guard = job.as_ref().and_then(|job| job.local_decision());
+  let gate = props.trigger.gate.clone();
+  let work = props.trigger.work.clone();
+  let refusal = props.trigger.request(Action::BusyRefused);
+  ActionButton::new(id, kind, ctx.t(label))
+    .fill_width()
+    .on_click(move || {
+      if !gate.local_input(input_source()).allowed() {
+        let mut refused = refusal.clone();
+        refused.action = Action::AuthorityRefused;
+        work.run_if_idle(refused);
+        return;
+      }
+      if chosen != Mode::Review {
+        let mut guard = managed.lock();
         if guard.is_none() {
-          work.run_if_idle(refusal.clone());
-          return;
+          *guard = job.as_ref().and_then(|job| job.local_decision());
+          if guard.is_none() {
+            work.run_if_idle(refusal.clone());
+            return;
+          }
         }
       }
-    }
-    mode.set(chosen.clone());
-  })
+      mode.set(chosen.clone());
+    })
 }
 
-type Decision = (&'static str, &'static str, &'static str, &'static str, Action);
-fn decision(props: &Props, mode: &Mode, phase: LocalPhase) -> Option<Decision> {
-  Some(match mode {
-    Mode::Commit { tree, .. } => (
-      "local_integration.commitTitle",
-      "local_integration.commitBody",
-      "local_integration.commitBody",
-      "local_integration.commit",
-      Action::Commit {
-        paths: props.selected.get().0,
-        tree: tree.clone(),
-        message: props.message.get(),
-      },
-    ),
-    Mode::Preserve => (
-      "local_integration.preserveTitle",
-      "local_integration.preserveBody",
-      "local_integration.preserveBody",
-      "local_integration.preserve",
-      Action::Preserve {
-        name: props.name.get(),
-        paths: props.selected.get().0,
-      },
-    ),
-    Mode::Cancel if props.view.operation.as_ref()?.preservation().is_none() => (
-      "local_integration.releaseTitle",
-      "local_integration.releaseBody",
-      "local_integration.releaseAgree",
-      "local_integration.release",
-      Action::Cancel,
-    ),
-    Mode::Cancel => (
-      "local_integration.cancelTitle",
-      "local_integration.cancelBody",
-      "local_integration.cancelAgree",
-      "local_integration.cancelPreservation",
-      Action::Cancel,
-    ),
-    Mode::Abort => (
-      "local_integration.abortTitle",
-      "local_integration.abortBody",
-      "local_integration.abortAgree",
-      "local_integration.abort",
-      Action::Abort,
-    ),
-    Mode::Cleanup => (
-      "local_integration.cleanupTitle",
-      "local_integration.cleanupBody",
-      "local_integration.cleanupAgree",
-      "local_integration.cleanup",
-      Action::Cleanup,
-    ),
-    Mode::Review => match phase {
-      LocalPhase::AwaitingApproval => (
-        "local_integration.checked",
-        "local_integration.checkedBody",
-        "local_integration.approval",
-        "local_integration.merge",
-        Action::Merge {
-          exact: Box::new(props.view.operation.as_ref()?.checked()?.clone()),
-          generation: props.view.operation.as_ref()?.version(),
-        },
-      ),
-      LocalPhase::TaskConflicts => (
-        "local_integration.continue",
-        "local_integration.markers",
-        "local_integration.resolved",
-        "local_integration.continue",
-        Action::Continue,
-      ),
-      LocalPhase::RestoreConflicts => (
-        "local_integration.finishRestore",
-        "local_integration.restoreBody",
-        "local_integration.restoreReviewed",
-        "local_integration.finishRestore",
-        Action::FinishRestore,
-      ),
-      _ => return None,
-    },
-  })
-}
-
+/// The step's primary action, as wide as its card.
 fn button(ctx: &Ctx, props: &Props, id: &str, label: &str, action: Option<Action>, disabled: bool) -> ActionButton {
-  let button = ActionButton::new(id, ButtonKind::Primary, ctx.t(label));
-  if disabled {
-    return button.disabled();
-  }
-  let Some(action) = action else {
-    return button;
-  };
-  let request = Request {
-    task: props.task.clone(),
-    action,
-    stop: props.stop.clone(),
-    input: None,
-    generation: props.view.operation.as_ref().map(|op| op.version()),
-  };
-  let work = props.work.clone();
-  let gate = props.gate.clone();
-  button.on_click(move || {
-    let mut request = request.clone();
-    request.initiate(&gate);
-    request.stop.store(false, Ordering::Release);
-    work.run_if_idle(request);
-  })
-}
-
-pub(super) fn aborted(ctx: &Ctx) -> Element {
-  card("local-recovery", CardSurface::Outline)
-    .padding(SpacingSize::Md)
-    .spacing(SpacingSize::Sm)
-    .child(Text::new(&ctx.t("local_integration.recovery")).variant(TypographyStyle::Title))
-    .child(Text::new(&ctx.t(phase_title(LocalPhase::Paused))).variant(TypographyStyle::Description))
-    .into()
-}
-
-fn recovery(ctx: &Ctx, view: &IntegrationView) -> Element {
-  let mut panel = card("local-recovery", CardSurface::Outline)
-    .padding(SpacingSize::Md)
-    .spacing(SpacingSize::Sm)
-    .child(Text::new(&ctx.t("local_integration.recovery")).variant(TypographyStyle::Title));
-  if let Some(operation) = &view.operation {
-    panel = panel.child(Text::new(&operation.run().to_string()).variant(TypographyStyle::Mono));
-    if let Some(saved) = operation.preservation() {
-      panel = panel
-        .child(Text::new(&saved.name).variant(TypographyStyle::Body))
-        .child(
-          Text::new(&ctx.t(if saved.retained {
-            "local_integration.retained"
-          } else {
-            "local_integration.removed"
-          }))
-          .variant(TypographyStyle::Description),
-        );
-    }
-    panel = panel
-      .child(
-        Text::new(operation.merged().unwrap_or(&ctx.t("local_integration.notRecorded"))).variant(TypographyStyle::Mono),
-      )
-      .child(Text::new(&ctx.t(phase_title(operation.phase()))).variant(TypographyStyle::Description));
-  }
-  panel.into()
+  props
+    .trigger
+    .button(ctx, (id, ButtonKind::Primary, label), action, disabled)
+    .fill_width()
 }

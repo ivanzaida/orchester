@@ -59,6 +59,8 @@ pub struct Toggle {
   label: Arc<str>,
   label_shown: bool,
   wrap_label: bool,
+  /// The label's text style in its own color, where a design sets it apart from a form's label.
+  label_style: Option<TypographyStyle>,
   change: Option<Arc<dyn Fn(bool) + Send + Sync>>,
   element: Option<ElementRef>,
   /// Room after the label, so the focus ring around the control clears its last letter.
@@ -76,6 +78,7 @@ impl Toggle {
       label: label.into(),
       label_shown: true,
       wrap_label: false,
+      label_style: None,
       change: None,
       element: None,
       ring_room: false,
@@ -106,6 +109,13 @@ impl Toggle {
   /// long, such as one that names a folder.
   pub fn wrap_label(mut self) -> Self {
     self.wrap_label = true;
+    self
+  }
+
+  /// The label in `style` and its color, e.g. an acknowledgement in an inspector's 11.5 `text_secondary`
+  /// (`sVbfo` in Local integration).
+  pub fn label_style(mut self, style: TypographyStyle) -> Self {
+    self.label_style = Some(style);
     self
   }
 
@@ -170,10 +180,13 @@ impl From<Toggle> for Element {
   fn from(toggle: Toggle) -> Self {
     let mark = toggle.mark().id(format!("{}-mark", toggle.id));
     let label = toggle.label_shown.then(|| {
-      let label = Text::new(&toggle.label)
-        .id(format!("{}-label", toggle.id))
-        .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextPrimary);
+      let label = Text::new(&toggle.label).id(format!("{}-label", toggle.id));
+      let label = match toggle.label_style {
+        Some(style) => label.variant(style),
+        None => label
+          .variant(TypographyStyle::Description)
+          .color(PaletteColor::TextPrimary),
+      };
       if toggle.wrap_label {
         label.flex(1.0).min_width(Dimension::Px(0.0))
       } else {

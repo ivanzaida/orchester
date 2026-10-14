@@ -11,7 +11,10 @@ use orchester_exec::local_git::LocalGit;
 use orchester_store::ProjectDb;
 use orchester_workspace::tasks::local_integration::{IntegrationError, read};
 
-use super::{privacy::Vault, support::Fixture};
+use super::{
+  privacy::{Vault, untracked},
+  support::Fixture,
+};
 
 #[test]
 fn local_integration_known_secret_metadata_is_refused_and_debug_preserves_actual_private_identity() {
@@ -43,7 +46,12 @@ fn local_integration_known_secret_metadata_is_refused_and_debug_preserves_actual
   assert!(!format!("{path:?} {checkout:?} {operation:?}").contains(private));
   assert_eq!(path.as_str(), name);
   assert!(matches!(
-    read(fixture.root(), fixture.run, Some(&path), &Vault(Some(private))),
+    read(
+      fixture.root(),
+      fixture.run,
+      Some(&untracked(&path)),
+      &Vault(Some(private))
+    ),
     Err(IntegrationError::SensitiveMetadata)
   ));
   assert_eq!(

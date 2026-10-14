@@ -7,7 +7,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use orchester_workspace::tasks::local_integration::{Preview, read};
+use orchester_workspace::tasks::local_integration::{Preview, ShownSnapshot, Snapshot, read};
 
 use super::{Fixture, LocalPath, git};
 
@@ -50,7 +50,7 @@ fn local_integration_previews_hide_sensitive_names_known_values_and_json_escaped
   ] {
     fs::write(fixture.root().join(filename), bytes).expect("fixture");
     let path = LocalPath::new(filename).expect("path");
-    let view = read(fixture.root(), fixture.run, Some(&path), &vault).expect("read");
+    let view = read(fixture.root(), fixture.run, Some(&untracked(&path)), &vault).expect("read");
     assert_eq!(view.diff, Preview::Sensitive);
     assert!(view.editor_policy.sensitive(value));
     assert!(!view.editor_policy.sensitive("ordinary reviewed result"));
@@ -91,4 +91,12 @@ fn local_integration_checked_review_detects_external_changes_in_the_task_checkou
   );
   let mut session = fixture.open();
   assert!(session.approve_and_merge(&exact).is_err());
+}
+
+/// The untracked snapshot of `path`, as the review shows a new file.
+pub(super) fn untracked(path: &LocalPath) -> ShownSnapshot {
+  ShownSnapshot {
+    path: path.clone(),
+    snapshot: Snapshot::Untracked,
+  }
 }

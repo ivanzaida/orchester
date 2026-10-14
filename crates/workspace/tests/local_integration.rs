@@ -20,6 +20,8 @@ mod review_regressions;
 mod schema;
 #[path = "local_integration/selection.rs"]
 mod selection;
+#[path = "local_integration/snapshots.rs"]
+mod snapshots;
 #[path = "local_integration/support.rs"]
 mod support;
 #[path = "local_integration/sync_refusal.rs"]

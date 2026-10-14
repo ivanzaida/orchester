@@ -3,7 +3,8 @@
 //! a result on `surface_panel` (`Result card` `T0uKNU`), a figure or a request on `surface_raised`
 //! (`Metric card` `Qhj0H`, `Needs-you card` `rkhZ2`), a list on the panel itself (`By step` `QuX1T`), a
 //! decision the person makes in a `border_strong` stroke (`xHs82`), and what waits for them on
-//! `surface_raised` in a `warning` stroke (`gwOaJ`, `Plan card` `Q5J0r`). Callers add the content, its
+//! `surface_raised` in a `warning` stroke (`gwOaJ`, `Plan card` `Q5J0r`), or on the page itself in a `warning`
+//! stroke where the page is the step (Local integration's `hULqu`). Callers add the content, its
 //! spacing, and other padding where the design gives it.
 
 use lurq::{
@@ -26,6 +27,8 @@ pub enum CardSurface {
   Decision,
   /// `surface_raised` in a `warning` stroke: something waits for the person.
   Attention,
+  /// No fill, in a `warning` stroke: the step of a page that waits for the person.
+  Pending,
 }
 
 impl CardSurface {
@@ -36,6 +39,7 @@ impl CardSurface {
       Self::Outline => (None, PaletteColor::Border),
       Self::Decision => (None, PaletteColor::BorderStrong),
       Self::Attention => (Some(PaletteColor::SurfaceRaised), PaletteColor::Warning),
+      Self::Pending => (None, PaletteColor::Warning),
     }
   }
 }

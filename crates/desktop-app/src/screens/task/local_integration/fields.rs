@@ -20,7 +20,7 @@ pub(super) fn input(
   (id, label): (&str, &str),
   value: Signal<String>,
   policy: &EditorPolicy,
-  multiline: bool,
+  line_box: f32,
 ) -> Element {
   if policy.sensitive(&value.get()) {
     return ctx.mount_keyed::<SensitiveField>(
@@ -31,12 +31,7 @@ pub(super) fn input(
       },
     );
   }
-  let field = FieldInput::new(id, ctx.t(label), value);
-  if multiline {
-    field.text_area().render(ctx)
-  } else {
-    field.render(ctx)
-  }
+  FieldInput::new(id, ctx.t(label), value).line_box(line_box).render(ctx)
 }
 
 #[derive(Clone)]

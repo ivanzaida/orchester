@@ -10,7 +10,10 @@ use orchester_core::{
 use orchester_exec::local_git::LocalGit;
 use orchester_store::ProjectDb;
 
-use super::{IntegrationError, LocalIntegration};
+use super::{
+  IntegrationError, LocalIntegration,
+  stats::{ShownSnapshot, Snapshot, SnapshotStats},
+};
 
 /// Only safe display content crosses into the visual layer. Sensitive content is unavailable for text editing.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -42,13 +45,14 @@ pub struct IntegrationView {
   pub checked_current: bool,
   pub editor_policy: EditorPolicy,
   pub external: Option<orchester_core::integration::local::ContainedResult>,
+  pub stats: SnapshotStats,
 }
 
 /// Reads actual checkout and retained journal independently of any worker lease, so progress stays observable.
 pub fn read(
   root: &Path,
   run: RunId,
-  selected: Option<&LocalPath>,
+  selected: Option<&ShownSnapshot>,
   vault: &dyn SecretVault,
 ) -> Result<IntegrationView, IntegrationError> {
   let scratch =
@@ -69,12 +73,19 @@ pub fn read(
   redact.ensure_metadata(&checkout)?;
   redact.ensure_metadata(&operation)?;
   redact.ensure_text_metadata(saved_run.branch().as_str())?;
-  if let Some(path) = selected {
-    redact.ensure_text_metadata(path.as_str())?;
+  if let Some(shown) = selected {
+    redact.ensure_text_metadata(shown.path.as_str())?;
   }
   let task_root = orchester_exec::local_git::owned_directory(root, &[".orchester", "worktrees", &run.to_string()])?;
   let conflicts = read_conflicts(&db, operation.as_ref(), &checkout, &main, task_root.as_deref(), &redact)?;
-  let diff = read_diff(&main, &checkout, operation.as_ref(), selected, &redact)?;
+  let diff = read_diff(&main, operation.as_ref(), selected, &redact)?;
+  // Sizes serve choosing what to commit or preserve; later phases skip the extra Git reads of each refresh.
+  let reviewing = operation.as_ref().is_none_or(|op| op.phase() == LocalPhase::Review);
+  let stats = if reviewing && !checkout.files.is_empty() {
+    SnapshotStats::read(&main, &checkout)?
+  } else {
+    SnapshotStats::default()
+  };
   let checked_current = checked_current(root, &checkout, operation.as_ref(), task_root.as_deref())?;
   Ok(IntegrationView {
     editor_policy: EditorPolicy(std::sync::Arc::new(redact)),
@@ -84,6 +95,7 @@ pub fn read(
     checkout,
     conflicts,
     diff,
+    stats,
   })
 }
 
@@ -137,12 +149,11 @@ fn read_conflicts(
 }
 fn read_diff(
   main: &LocalGit,
-  checkout: &Checkout,
   operation: Option<&LocalOperation>,
-  selected: Option<&LocalPath>,
+  selected: Option<&ShownSnapshot>,
   redact: &Redaction,
 ) -> Result<Preview, IntegrationError> {
-  let diff = if let Some(exact) = operation.and_then(LocalOperation::checked) {
+  if let Some(exact) = operation.and_then(LocalOperation::checked) {
     redact.ensure_tree_metadata(main, &exact.result.head)?;
     let diff = main.text(&[
       "diff",
@@ -153,27 +164,22 @@ fn read_diff(
       &exact.result.head,
       "--",
     ])?;
-    preview(Some(diff.as_bytes()), &LocalPath::new("checked-result")?, redact)
-  } else {
-    match selected {
-      Some(path) => {
-        if checkout
-          .files
-          .iter()
-          .any(|file| file.path == *path && file.head.is_none())
-        {
-          preview(main.file(path)?.as_deref(), path, redact)
-        } else {
-          let diff = main.diff(true, std::slice::from_ref(path))?;
-          let working = main.diff(false, std::slice::from_ref(path))?;
-          preview(Some(format!("{diff}\n{working}").as_bytes()), path, redact)
-        }
-      }
-      None => Preview::Absent,
-    }
+    return Ok(preview(
+      Some(diff.as_bytes()),
+      &LocalPath::new("checked-result")?,
+      redact,
+    ));
+  }
+  let Some(ShownSnapshot { path, snapshot }) = selected else {
+    return Ok(Preview::Absent);
   };
-
-  Ok(diff)
+  Ok(match snapshot {
+    Snapshot::Untracked => preview(main.file(path)?.as_deref(), path, redact),
+    Snapshot::Staged | Snapshot::Unstaged => {
+      let diff = main.diff(*snapshot == Snapshot::Staged, std::slice::from_ref(path))?;
+      preview(Some(diff.as_bytes()), path, redact)
+    }
+  })
 }
 
 fn conflict(git: &LocalGit, file: LocalConflict, redact: &Redaction) -> Result<ConflictView, IntegrationError> {

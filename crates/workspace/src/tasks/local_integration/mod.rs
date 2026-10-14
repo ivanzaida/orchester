@@ -14,6 +14,7 @@ mod recover;
 mod resolution;
 mod restore;
 mod restore_writes;
+mod stats;
 mod sync;
 mod target;
 mod task_commit;
@@ -34,6 +35,7 @@ use orchester_core::{
 };
 use orchester_exec::local_git::{IntegrationLease, LocalGit, LocalGitError};
 use orchester_store::{ProjectDb, StoreError};
+pub use stats::{ShownSnapshot, Snapshot, SnapshotSize, SnapshotStats};
 pub use target::recovery_run;
 use thiserror::Error;
 pub use view::{ConflictView, EditorPolicy, IntegrationView, Preview, pending_restoration, read};

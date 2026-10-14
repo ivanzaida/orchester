@@ -1,6 +1,8 @@
 //! The theme's roles resolve to the variables and type roles of `data/orchester2.pen` (accent graphite),
 //! in dark and light mode, and the mode switches while the app runs.
 
+#[path = "theme/local_integration.rs"]
+mod local_integration;
 #[path = "theme/skills.rs"]
 mod skills;
 

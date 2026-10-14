@@ -1,0 +1,166 @@
+//! The evidence side of the page, 16 between its parts (`Evidence and working area` `W6q37U`): what the page is
+//! about now, then the review's snapshots with the shown one's diff and where ignored files stand; a commit's
+//! selected snapshots, its diff and what it leaves (`kexy4`); a preservation's selection and that it discards
+//! nothing (`UgHeC`); the checked result's diff; or the resolver while conflicts wait.
+
+use lurq::{
+  app::{ctx::Ctx, theme::SpacingSize},
+  components::Column,
+  node::{Element, dimension::Dimension},
+};
+use orchester_core::integration::local::LocalPhase;
+use orchester_workspace::tasks::local_integration::{IntegrationView, Snapshot};
+
+use super::{
+  LocalPage, Mode, TaskContext,
+  controls::Trigger,
+  diff::{self, Source},
+  files::{self, List},
+  notes, resolver, words,
+  work::Action,
+};
+use crate::ui::{
+  button::ButtonKind,
+  notice::{Notice, NoticeTone},
+  state::loading,
+};
+
+pub(super) fn column(
+  ctx: &mut Ctx,
+  page: &LocalPage,
+  task: &TaskContext,
+  view: &IntegrationView,
+  busy: bool,
+  narrow: bool,
+) -> Column {
+  let phase = view.operation.as_ref().map_or(LocalPhase::Review, |op| op.phase());
+  let mode = page.mode.get();
+  let mut column = Column::new()
+    .id("local-evidence")
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .spacing(SpacingSize::Lg)
+    .child(notes::phase(ctx, phase, &mode, narrow))
+    .with_children(external_notice(ctx, view));
+  if let Some(problem) = page.work.state().get().error {
+    column = column.child(Notice::new("local-work-error", NoticeTone::Danger, ctx.t(problem.0)));
+  }
+  if busy {
+    let stopping = page.stop.load(std::sync::atomic::Ordering::Acquire);
+    column = column.child(loading(
+      "local-working",
+      &ctx.t(if stopping {
+        "local_integration.stopping"
+      } else {
+        "local_integration.busy"
+      }),
+    ));
+  }
+  if matches!(phase, LocalPhase::TaskConflicts | LocalPhase::RestoreConflicts) || page.editor_dirty.get() {
+    return column.child(resolver::mount(ctx, page, task, view, busy, narrow));
+  }
+  column.with_children(content(ctx, page, task, view, (busy, narrow)))
+}
+
+fn content(
+  ctx: &mut Ctx,
+  page: &LocalPage,
+  task: &TaskContext,
+  view: &IntegrationView,
+  (busy, narrow): (bool, bool),
+) -> Vec<Element> {
+  let signals = (&page.selected, &page.shown_file);
+  match page.mode.get() {
+    Mode::Commit { preview, .. } => {
+      let selection = page.selected.get();
+      let count = files::entries(view, &selection, List::Commit).len().to_string();
+      let title = ctx.t_args("local_integration.commitSelection", [("count", count.as_str())]);
+      let mut parts = vec![files::list(
+        ctx,
+        (view, List::Commit),
+        signals,
+        &title,
+        Vec::new(),
+        busy,
+      )];
+      parts.extend(diff::cards(ctx, "local-selected-diff", &preview, Source::Diff, None));
+      parts.push(notes::remaining(ctx, &files::excluded(ctx, view, &selection)));
+      parts
+    }
+    Mode::Preserve => {
+      let title = ctx.t("local_integration.preservationSelection");
+      vec![
+        files::list(ctx, (view, List::Preserve), signals, &title, Vec::new(), busy),
+        notes::no_discard(ctx),
+      ]
+    }
+    _ if view.operation.as_ref().is_some_and(|op| op.checked().is_some()) => {
+      diff::cards(ctx, "local-checked-diff", &view.diff, Source::Diff, None)
+    }
+    mode => {
+      let locked = busy || mode != Mode::Review || view.external.is_some();
+      let preparing = view
+        .operation
+        .as_ref()
+        .is_none_or(|op| op.phase() == LocalPhase::Review);
+      let actions = if locked || !preparing {
+        Vec::new()
+      } else {
+        review_actions(ctx, page, task, view)
+      };
+      let title = ctx.t("local_integration.files");
+      let mut parts = vec![files::list(ctx, (view, List::Review), signals, &title, actions, locked)];
+      if let Some(shown) = page.shown_file.get().0 {
+        let source = match shown.snapshot {
+          Snapshot::Untracked => Source::NewFile(shown.path.as_str()),
+          Snapshot::Staged | Snapshot::Unstaged => Source::Diff,
+        };
+        parts.extend(diff::cards(
+          ctx,
+          "local-file-diff",
+          &view.diff,
+          source,
+          Some(shown.path.as_str()),
+        ));
+      }
+      parts.push(notes::ignored(ctx, narrow));
+      parts
+    }
+  }
+}
+
+/// Reading the checkout again and recording its current identities, beside the list's title.
+fn review_actions(ctx: &mut Ctx, page: &LocalPage, task: &TaskContext, view: &IntegrationView) -> Vec<Element> {
+  let trigger = Trigger::of(ctx, page, task, view);
+  [
+    ("local-inspect", "local_integration.inspect", Action::Inspect),
+    ("local-refresh", "local_integration.refresh", Action::Refresh),
+  ]
+  .into_iter()
+  .map(|(id, label, action)| {
+    trigger
+      .button(ctx, (id, ButtonKind::Ghost, label), Some(action), false)
+      .small()
+      .into()
+  })
+  .collect()
+}
+
+fn external_notice(ctx: &Ctx, view: &IntegrationView) -> Option<Element> {
+  let evidence = view.external.as_ref()?;
+  Some(
+    Notice::new(
+      "local-external-integration",
+      NoticeTone::Warning,
+      ctx.t("local_integration.externalTitle"),
+    )
+    .body(ctx.t_args(
+      words::evidence_body(evidence.kind),
+      [
+        ("source", evidence.source.as_str()),
+        ("target", evidence.target.as_str()),
+      ],
+    ))
+    .into(),
+  )
+}

@@ -236,6 +236,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::composer::typography(palette))
       .chain(super::cards::typography(palette))
       .chain(super::lifecycle::typography(palette))
+      .chain(super::local_integration::typography(palette))
       .chain(super::connections::typography(palette))
       .chain(super::secrets::typography(palette))
       .chain(super::projects::typography(palette))

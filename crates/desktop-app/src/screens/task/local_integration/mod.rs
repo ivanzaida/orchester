@@ -1,11 +1,15 @@
 //! ORC-24 native local integration (zMOBO): one page, inline decisions, app-local scrolling.
 
 mod controls;
+mod diff;
 mod draft_controls;
+mod evidence;
 mod fields;
 mod files;
+mod notes;
 mod resolver;
 mod selection;
+mod strip;
 mod target;
 pub(crate) mod words;
 mod work;
@@ -19,13 +23,14 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, Interval},
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::{Breakpoint, SpacingSize},
   },
-  components::{Column, Row, ScrollVertical, Text},
+  components::{Column, Row, ScrollVertical},
   core::Signal,
-  node::{Element, dimension::Dimension},
+  layout::Alignment,
+  node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{integration::local::LocalPhase, run::RunStatus};
+use orchester_core::run::RunStatus;
 use orchester_workspace::{
   background,
   tasks::local_integration::{IntegrationView, Preview},
@@ -42,9 +47,10 @@ use crate::{
   },
 };
 
-/// Action inspector of YxF6B / OoP6s; at 960 it remains beside evidence as s4gj9 draws.
+/// The inspector beside the evidence (`atP1P` in YxF6B); in a window narrower than the `xl` breakpoint it keeps the
+/// width s4gj9 draws at 960 (`vdY0R`).
 const INSPECTOR_WIDTH: f32 = 336.0;
-const NARROW_INSPECTOR_WIDTH: f32 = 256.0;
+const NARROW_INSPECTOR_WIDTH: f32 = 248.0;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Mode {
@@ -216,8 +222,9 @@ impl Component for LocalPage {
       return self.pending(ctx);
     }
     let view = &shown.0;
+    self.keep_shown_listed(view);
     let busy = self.work.state().get().is_pending() || task.jobs.run(run.id()).busy();
-    let narrow = ctx.breakpoint().is_none();
+    let narrow = ctx.breakpoint() < Some(Breakpoint::Xl);
     let body = self.body(ctx, &task, view, busy, narrow);
     Element::from(
       ScrollVertical::new(body)
@@ -282,103 +289,57 @@ impl LocalPage {
     body.into()
   }
 
+  /// The review shows a listed snapshot's diff: the first one until the person picks another, and the first
+  /// again once the picked one is no longer listed (committed, preserved or reverted).
+  fn keep_shown_listed(&self, view: &IntegrationView) {
+    let shown = self.shown_file.get_untracked().0;
+    if shown.as_ref().is_some_and(|shown| files::listed(view, shown)) {
+      return;
+    }
+    let first = files::first(view);
+    if first != shown {
+      self.shown_file.set(ShownFile(first));
+    }
+  }
+
   fn body(&self, ctx: &mut Ctx, task: &TaskContext, view: &IntegrationView, busy: bool, narrow: bool) -> Element {
     let run = task
       .detail
       .run
       .as_ref()
       .expect("the mounted local page has a succeeded run");
-    let identities = ctx.t_args(
-      "local_integration.identities",
-      [
-        ("source", run.run.branch().as_str()),
-        ("target", view.checkout.branch.as_str()),
-        ("path", view.checkout.root.as_str()),
-        ("head", view.checkout.head.as_str()),
-      ],
-    );
-    let phase = view.operation.as_ref().map_or(LocalPhase::Review, |op| op.phase());
-    let mut left = Column::new()
-      .flex(1.0)
-      .min_width(Dimension::Px(0.0))
-      .spacing(SpacingSize::Md)
-      .child(
-        Notice::new("local-phase", phase_tone(phase), ctx.t(controls::phase_title(phase)))
-          .body(ctx.t(controls::phase_body(phase))),
-      );
-    left = left.with_children(external_notice(ctx, view));
-    if let Some(problem) = self.work.state().get().error {
-      left = left.child(Notice::new("local-work-error", NoticeTone::Danger, ctx.t(problem.0)));
-    }
-    if busy {
-      left = left.child(loading(
-        "local-working",
-        &ctx.t(if self.stop.load(std::sync::atomic::Ordering::Acquire) {
-          "local_integration.stopping"
-        } else {
-          "local_integration.busy"
-        }),
-      ));
-    }
-    left = if matches!(phase, LocalPhase::TaskConflicts | LocalPhase::RestoreConflicts) || self.editor_dirty.get() {
-      left.child(resolver::mount(ctx, self, task, view, busy, narrow))
-    } else {
-      left.child(files::content(ctx, self, view, busy))
-    };
-    let side = controls::inspector(ctx, self, task, view, busy).width(Dimension::Px(if narrow {
-      NARROW_INSPECTOR_WIDTH
-    } else {
-      INSPECTOR_WIDTH
-    }));
+    let mode = self.mode.get();
+    let left = evidence::column(ctx, self, task, view, busy, narrow);
+    let side = Column::new()
+      .width(Dimension::Px(if narrow {
+        NARROW_INSPECTOR_WIDTH
+      } else {
+        INSPECTOR_WIDTH
+      }))
+      .flex_shrink(0.0)
+      .child(controls::inspector(ctx, self, (task, view), busy, narrow));
     Column::new()
       .id("task-local-integration")
       .width(Dimension::Pct(100.0))
-      .padding(if narrow { SpacingSize::Xl } else { SpacingSize::Section })
-      .spacing(SpacingSize::Md)
-      .child(
-        Text::new(&identities)
-          .variant(TypographyStyle::Mono)
-          .color(PaletteColor::TextMuted),
+      .padding(
+        Padding::new()
+          .top(SpacingSize::Lg)
+          .left(SpacingSize::Section)
+          .right(SpacingSize::Section)
+          .bottom(SpacingSize::Section),
       )
-      .child(Text::new(&ctx.t("local_integration.phases")).variant(TypographyStyle::Description))
+      .spacing(SpacingSize::Lg)
+      .child(strip::identities(ctx, run.run.branch().as_str(), view))
+      .child(strip::trail(ctx, view, &mode))
       .child(
         Row::new()
+          .id("local-columns")
           .width(Dimension::Pct(100.0))
           .spacing(SpacingSize::Xl)
+          .align_items(Alignment::Start)
           .child(left)
           .child(side),
       )
       .into()
   }
-}
-fn phase_tone(phase: LocalPhase) -> NoticeTone {
-  match phase {
-    LocalPhase::Complete | LocalPhase::RestorationVerified => NoticeTone::Success,
-    LocalPhase::TaskConflicts => NoticeTone::Danger,
-    LocalPhase::Review
-    | LocalPhase::RestoreConflicts
-    | LocalPhase::MergedAwaitingRestore
-    | LocalPhase::Paused
-    | LocalPhase::NeedsReconciliation => NoticeTone::Warning,
-    _ => NoticeTone::Info,
-  }
-}
-
-fn external_notice(ctx: &Ctx, view: &IntegrationView) -> Option<Element> {
-  let evidence = view.external.as_ref()?;
-  Some(
-    Notice::new(
-      "local-external-integration",
-      NoticeTone::Warning,
-      ctx.t("local_integration.externalTitle"),
-    )
-    .body(ctx.t_args(
-      words::evidence_body(evidence.kind),
-      [
-        ("source", evidence.source.as_str()),
-        ("target", evidence.target.as_str()),
-      ],
-    ))
-    .into(),
-  )
 }

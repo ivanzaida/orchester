@@ -20,6 +20,7 @@ mod decisions;
 mod fonts;
 mod form;
 mod lifecycle;
+mod local_integration;
 mod markdown;
 mod metrics;
 mod palette;
@@ -53,6 +54,7 @@ pub use self::{
   decisions::{DecisionSpacing, DecisionText},
   fonts::mono_space,
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
+  local_integration::LocalText,
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   palette::{ExtraColor, Mode},
   projects::{ProjectsSpacing, ProjectsText},

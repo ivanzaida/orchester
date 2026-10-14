@@ -21,13 +21,13 @@ pub(super) use state::EditorState;
 
 use super::{
   LocalPage, TaskContext,
-  files::preview,
   work::{Action, Outcome, Request, Work},
 };
 use crate::{
   navigation::guard::LeaveGuard,
   ui::{
     button::{ActionButton, ButtonKind},
+    code_box::CodeBox,
     field::{FieldInput, SelectField},
     notice::{Notice, NoticeTone},
   },
@@ -387,4 +387,20 @@ impl Resolver {
       &props.task,
     )
   }
+}
+
+/// A conflict's version under `label`: its text in a code box, or why it has none to show.
+fn preview(ctx: &mut Ctx, id: &str, label: &str, shown: &Preview) -> Element {
+  let key = match shown {
+    Preview::Text(text) => return CodeBox::new(id, ctx.t(label), text.as_str()).render(ctx),
+    Preview::Binary => "local_integration.binary",
+    Preview::Sensitive => "local_integration.sensitive",
+    Preview::Absent => "local_integration.absent",
+  };
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .child(Text::new(&ctx.t(label)).variant(TypographyStyle::Label))
+    .child(Text::new(&ctx.t(key)).variant(TypographyStyle::Description))
+    .into()
 }

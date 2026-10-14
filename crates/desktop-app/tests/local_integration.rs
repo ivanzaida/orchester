@@ -9,6 +9,8 @@ mod candidates;
 mod domain_support;
 #[path = "local_integration/support.rs"]
 mod integration_support;
+#[path = "local_integration/layout.rs"]
+mod layout;
 #[path = "local_integration/privacy.rs"]
 mod privacy;
 #[path = "local_integration/release.rs"]
