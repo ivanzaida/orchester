@@ -146,15 +146,17 @@ impl Component for TurnView {
     } else {
       Vec::new()
     };
-    Column::new()
-      .id(format!("orchestrator-turn-{key}"))
-      .describe("turn", turn_name(&row.turn.state))
-      .width(Dimension::Pct(100.0))
-      .padding_vertical(SpacingSize::Sm)
-      .spacing(SpacingSize::Lg)
-      .child(message)
-      .with_children(answer)
-      .with_children(end)
+    super::body::turn_room(
+      Column::new()
+        .id(format!("orchestrator-turn-{key}"))
+        .describe("turn", turn_name(&row.turn.state))
+        .width(Dimension::Pct(100.0))
+        .padding_vertical(SpacingSize::Sm)
+        .spacing(SpacingSize::Lg)
+        .child(message)
+        .with_children(answer)
+        .with_children(end),
+    )
   }
 }
 

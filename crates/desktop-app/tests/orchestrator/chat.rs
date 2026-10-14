@@ -298,3 +298,28 @@ fn orchestrator_on_codex_is_held_back_with_why() {
   });
   assert!(!screen.exists("orchestrator-thinking"));
 }
+
+#[test]
+fn orchestrator_turns_scroll_across_the_whole_chat_area() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  screen.go(OrchestratorChat::New);
+  screen.send("What is running?");
+  screen.until("the answer", |screen| {
+    screen
+      .text("orchestrator-conversation")
+      .contains("Noted: What is running?")
+  });
+  let main = screen.bounds("orchestrator-main");
+  let scroll = screen.bounds("orchestrator-scroll");
+  // The scroll container spans the chat area, so its thumb is at the area's right edge, as on the other screens.
+  assert_eq!((scroll.x, scroll.width), (main.x, main.width));
+  let turn = newest_turn(&mut screen);
+  let row = screen.bounds(&format!("orchestrator-turn-{turn}"));
+  assert!(row.width <= 800.0, "a turn keeps to the column: {row:?}");
+  let centre = |x: f32, width: f32| x + width / 2.0;
+  assert!(
+    // Centred in what the scrollbar's own lane leaves, a few pixels left of the area's middle.
+    (centre(row.x, row.width) - centre(main.x, main.width)).abs() < 8.0,
+    "the column is centred: {row:?} in {main:?}"
+  );
+}

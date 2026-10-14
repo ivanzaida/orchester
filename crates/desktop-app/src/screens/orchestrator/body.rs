@@ -11,7 +11,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Row, Spacer, Text},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ChatId;
@@ -193,16 +193,52 @@ fn conversation(
     focused: &view.focused,
   };
   let foot = composer(ctx, view, &boxed).child(keys(ctx));
+  // The turns scroll across the whole chat area, so the thumb sits at its right edge; each turn, the notices and
+  // the composer keep to the column, centred (`ZJzV0`).
+  let below = Column::new()
+    .width(Dimension::Pct(100.0))
+    .max_width(Dimension::Px(COLUMN_WIDTH))
+    .spacing(SpacingSize::Sm)
+    .with_children(notices.into_iter().flatten())
+    .child(foot);
   let column = Column::new()
     .id("orchestrator-conversation")
     .width(Dimension::Pct(100.0))
-    .max_width(Dimension::Px(COLUMN_WIDTH))
     .height(Dimension::Pct(100.0))
-    .child(list(ctx, rows))
-    .with_children(notices.into_iter().flatten())
-    .child(foot)
-    .spacing(SpacingSize::Sm);
-  frame(column.into())
+    .align_items(Alignment::Center)
+    .spacing(SpacingSize::Sm)
+    .child(
+      Column::new()
+        .id("orchestrator-scroll")
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .min_height(Dimension::Px(0.0))
+        .child(list(ctx, rows)),
+    )
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .padding(Padding::new().left(SpacingSize::Section).right(SpacingSize::Section))
+        .justify(Justify::Center)
+        .child(below),
+    );
+  Column::new()
+    .id("orchestrator-main")
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .height(Dimension::Pct(100.0))
+    .padding(Padding::new().bottom(ExtraSpacing::Section.role()))
+    .child(column)
+    .into()
+}
+
+/// A turn's room in the scrolling turns: 32 in from the chat area's sides, the column's width at most, centred.
+pub(super) fn turn_room(turn: Column) -> Row {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::new().left(SpacingSize::Section).right(SpacingSize::Section))
+    .justify(Justify::Center)
+    .child(turn.max_width(Dimension::Px(COLUMN_WIDTH)))
 }
 
 /// The chat's room: 32 in from its sides, its foot 14 over the panel's, its content centered.
