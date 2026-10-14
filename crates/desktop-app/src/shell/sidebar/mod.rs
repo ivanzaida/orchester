@@ -1,7 +1,8 @@
 //! The sidebar (`Sidebar` `ev8rR`): the project switcher, the project's screens with the Configure
 //! section, the runs under way (`running`), and All projects, Settings and Project settings at the
-//! bottom. Tasks shows how many tasks the project has, a dash while they are read. Outside a project
-//! (Settings) only the switcher and the bottom group show; All projects and Add project have no sidebar.
+//! bottom. Tasks shows how many tasks the project has, a dash while they are read, and Memory how many
+//! records wait for approval. Outside a project (Settings) only the switcher and the bottom group show;
+//! All projects and Add project have no sidebar.
 
 pub mod running;
 pub mod switcher;
@@ -62,12 +63,12 @@ impl Component for Sidebar {
       .child(switcher);
     let mut bottom = vec![Screen::AllProjects, Screen::Settings];
     if let Some(project) = project {
-      let tasks = tasks_count(ctx, project);
+      let counts = counts(ctx, project);
       let items = Items {
         project: Some(project),
         selected,
         navigation: &navigation,
-        tasks: tasks.as_deref(),
+        counts: &counts,
       };
       sidebar = sidebar
         // `Gap` (`Eo8Zf`): 8 between the switcher and the screens, with the sidebar's gap on each side.
@@ -82,23 +83,32 @@ impl Component for Sidebar {
       project,
       selected,
       navigation: &navigation,
-      tasks: None,
+      counts: &[],
     };
     sidebar.child(Column::new().flex(1.0)).child(items.group(ctx, &bottom))
   }
 }
 
-/// How many tasks `project` has, a dash while they are read; nothing when it has none, when they cannot
-/// be read or the project is not open.
-fn tasks_count(ctx: &mut Ctx, project: ProjectId) -> Option<String> {
+/// The counts beside the project's screens: how many tasks `project` has, a dash while they are read,
+/// and how many memory records wait for approval (`Nav · Memory` in `q9mf0k`). A count of none is left
+/// out, and so are both when the tasks cannot be read or the project is not open.
+fn counts(ctx: &mut Ctx, project: ProjectId) -> Vec<(Screen, String)> {
   let projects = Projects::of(ctx);
-  projects.state(project)?.open()?;
+  if projects.state(project).is_none_or(|state| state.open().is_none()) {
+    return Vec::new();
+  }
   match projects.feed(project).tasks.get() {
-    // A project without tasks shows no count (`a5CcQx`).
-    TasksState::Ready(tasks) if tasks.tasks.is_empty() => None,
-    TasksState::Ready(tasks) => Some(tasks.tasks.len().to_string()),
-    TasksState::Loading => Some(ctx.t("shell.sidebar.unknownCount").to_string()),
-    TasksState::Failed(_) => None,
+    TasksState::Ready(tasks) => [
+      // A project without tasks shows no count (`a5CcQx`).
+      (Screen::Tasks, tasks.tasks.len()),
+      (Screen::Memory, tasks.proposed_memory.len()),
+    ]
+    .into_iter()
+    .filter(|(_, count)| *count > 0)
+    .map(|(screen, count)| (screen, count.to_string()))
+    .collect(),
+    TasksState::Loading => vec![(Screen::Tasks, ctx.t("shell.sidebar.unknownCount").to_string())],
+    TasksState::Failed(_) => Vec::new(),
   }
 }
 
@@ -122,12 +132,12 @@ fn running(ctx: &mut Ctx, project: ProjectId) -> Option<Element> {
 }
 
 /// What every navigation item of the sidebar needs: the project its screens belong to, the selected
-/// screen, the navigation that goes there, and the count Tasks shows.
+/// screen, the navigation that goes there, and the counts beside the screens that show one.
 struct Items<'a> {
   project: Option<ProjectId>,
   selected: Option<Screen>,
   navigation: &'a Navigation,
-  tasks: Option<&'a str>,
+  counts: &'a [(Screen, String)],
 }
 
 impl Items<'_> {
@@ -159,7 +169,11 @@ impl Items<'_> {
       id: format!("nav-{}", screen.name()),
       icon: screen_icon(screen),
       label: &label,
-      count: self.tasks.filter(|_| screen == Screen::Tasks),
+      count: self
+        .counts
+        .iter()
+        .find(|(counted, _)| *counted == screen)
+        .map(|(_, count)| count.as_str()),
       selected: self.selected == Some(screen),
     }
     .on_click(move || navigation.go(route.clone()))

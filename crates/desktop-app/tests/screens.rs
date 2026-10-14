@@ -3,7 +3,8 @@
 //! `screen-not-found`, which says why. The paths go straight to the router, as a tab's history would hand them over, so
 //! a path no route prints is shown too. The project the paths name is known to be open; what the window does until a
 //! project opens, and for one that cannot, is `tests/projects.rs`. The shell around the screens works with a session's
-//! services, from a data folder of the test's own.
+//! services, from a data folder of the test's own. What is built without a route, a popover such as the Needs you
+//! panel, is listed too (`BUILT_SURFACES`), with the tests that open it.
 
 mod support;
 
@@ -59,12 +60,19 @@ const BUILT: &[Screen] = &[
   Screen::Instructions,
   Screen::NewConnection,
   Screen::NewTask,
+  Screen::Overview,
   Screen::Pipelines,
   Screen::ProjectSettings,
   Screen::Secrets,
   Screen::Skills,
   Screen::Tasks,
   Screen::Tools,
+];
+/// What is built without a route of its own, a popover the shell opens: its element and the tests that check
+/// it, under `tests/`.
+const BUILT_SURFACES: &[(&str, &str)] = &[
+  // The title bar's Needs you panel (`eBhFg`), which its pill opens over any screen.
+  ("needs-you-panel", "needs_you_panel/main.rs"),
 ];
 
 /// Where the test root leaves its router, and the services it provides.
@@ -209,6 +217,7 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
   let mut all = vec![(Route::AllProjects, Vec::new()), (Route::AddProject(None), Vec::new())];
   all.extend([
     (at(ProjectPage::Overview(OverviewTab::Failed)), placeholder("Overview")),
+    (at(ProjectPage::Orchestrator), placeholder("Orchestrator")),
     (
       at(ProjectPage::Tasks(
         TaskList::new(TaskListTab::Done)
@@ -224,11 +233,13 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
       vec![READING_TASK],
     ),
     (at(ProjectPage::Task(key("KON-12"), changes)), vec![READING_TASK]),
+    (at(ProjectPage::MergeQueue), placeholder("Merge queue")),
     (at(ProjectPage::PullRequests), placeholder("Pull requests")),
     (at(ProjectPage::Usage), placeholder("Usage")),
     (at(ProjectPage::Pipelines), placeholder("Pipelines")),
     (at(ProjectPage::Agents), placeholder("Agents")),
     (at(ProjectPage::Instructions), placeholder("Instructions")),
+    (at(ProjectPage::Memory), placeholder("Memory")),
     (at(ProjectPage::Skills), placeholder("Skills")),
     (at(ProjectPage::Tools), placeholder("Tools")),
     (at(ProjectPage::Secrets), placeholder("Secrets")),
@@ -275,6 +286,18 @@ fn screens_each_route_mounts_its_own_placeholder() {
       screens.tree.get_element_by_id("screen-not-found").is_none(),
       "{}",
       route.path()
+    );
+  }
+}
+
+#[test]
+fn screens_each_built_surface_without_a_route_has_tests_that_open_it() {
+  let tests = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
+  for (id, file) in BUILT_SURFACES {
+    let source = std::fs::read_to_string(tests.join(file)).unwrap_or_else(|error| panic!("{file}: {error}"));
+    assert!(
+      source.contains(&format!("\"{id}\"")),
+      "{file} checks {id}, the surface it is listed for"
     );
   }
 }

@@ -224,7 +224,7 @@ impl TasksScreen {
     let tabs = TaskTab::ALL.into_iter().map(|tab| {
       Tab::new(tab_id(tab), ctx.t(tab.label_key()), Dimension::Px(TAB_ROW_HEIGHT))
         .min_width(Dimension::Px(tab_width(tab)))
-        .count(tasks.map(|tasks| list::rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, tab).len()))
+        .count(tasks.map(|tasks| tab.count(tasks)))
         .selected(tab == selected)
         .link(self.nav.link(Page::Tasks(tab)))
     });

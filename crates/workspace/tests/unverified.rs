@@ -50,7 +50,7 @@ fn unverified_run_lists_what_its_step_could_not_check() {
   );
   assert_eq!(view.unverified(), [check()]);
 
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &orchester_exec::programs::Programs::processes()).expect("tasks");
   assert_eq!(
     tasks
       .phases

@@ -109,6 +109,62 @@ fn status_unread_tasks_take_the_slot_with_try_again() {
 }
 
 #[test]
+fn status_recovery_stays_pinned_with_review_until_the_person_decides() {
+  let mut log = ActivityLog::default();
+  log.record(
+    Some("Kontur".into()),
+    Message::new("statusBar.activity.runnerReconnected"),
+    Target::Nothing,
+    SystemTime::now(),
+  );
+  let recovering = |count| ProjectFacts {
+    undecided_runs: count,
+    ..kontur(runner(RunnerState::Online), ProjectTasks::default())
+  };
+  let mut bar = Bar::of(BarFacts {
+    log: log.clone(),
+    ..facts(Some(recovering(2)))
+  });
+  assert_eq!(
+    bar.texts("status-recovery-text").map(|texts| texts.join("")).as_deref(),
+    Some("2 runs interrupted when Orchester closed")
+  );
+  assert!(
+    bar.texts("status-activity-text").is_none(),
+    "it takes the activity slot"
+  );
+  bar.press("status-recovery-review");
+  assert_eq!(
+    bar.asked(),
+    [
+      BarAction::ReviewInterrupted(project_id()),
+      BarAction::Go(Route::Project(
+        project_id(),
+        ProjectPage::Overview(OverviewTab::default())
+      )),
+    ]
+  );
+  let mut one = Bar::of(facts(Some(recovering(1))));
+  assert_eq!(
+    one.texts("status-recovery-text").map(|texts| texts.join("")).as_deref(),
+    Some("1 run interrupted when Orchester closed")
+  );
+  let mut decided = Bar::of(BarFacts {
+    log,
+    ..facts(Some(recovering(0)))
+  });
+  assert!(decided.texts("status-recovery").is_none());
+  assert_eq!(
+    decided
+      .texts("status-activity-text")
+      .map(|texts| texts.join(""))
+      .as_deref(),
+    Some("Runner reconnected"),
+    "once decided the slot shows the activity again"
+  );
+}
+
+#[test]
 fn status_stop_waits_while_it_stops_and_says_why_it_could_not() {
   let tasks = ProjectTasks {
     auto_approving: Arc::new(vec![auto_approving()]),

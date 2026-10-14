@@ -19,8 +19,10 @@ use orchester_core::run::PlanVersion;
 use orchester_workspace::tasks::plan::PlanReview;
 
 use self::bar::{Choice, DecisionBar};
-use super::{TaskContext, action::decision_action, arranged, stages::stages, task_notice, this_run_panel};
-use crate::{services::Services, ui::markdown::LinkHandler};
+use super::{
+  TaskContext, action::decision_action, arranged, pointing::Pointing, stages::stages, task_notice, this_run_panel,
+};
+use crate::{navigation::pointed::PointedCard, services::Services, ui::markdown::LinkHandler};
 
 /// The version the card shows; `None` is the one that waits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,6 +37,7 @@ pub struct PlanDecision {
   /// Opens a link of the plan in the browser; kept so the plan's Markdown is laid out only when its text
   /// changes.
   on_link: LinkHandler,
+  pointing: Pointing,
 }
 
 impl Component for PlanDecision {
@@ -50,6 +53,7 @@ impl Component for PlanDecision {
           tracing::warn!(%error, "the plan's link was not opened");
         }
       }),
+      pointing: Pointing::new(ctx),
     }
   }
 
@@ -62,6 +66,7 @@ impl Component for PlanDecision {
     let Some(review) = PlanReview::of(run) else {
       return Column::new().into();
     };
+    self.pointing.arrived(ctx, &props, PointedCard::Plan);
     let gated = run
       .run
       .awaiting_plan()
@@ -76,6 +81,7 @@ impl Component for PlanDecision {
       shown: &shown,
       task,
       on_link: &self.on_link,
+      pointing: &self.pointing,
     };
     let parts: Vec<Element> = vec![
       task_notice(ctx, &props).notice().into(),

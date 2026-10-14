@@ -27,9 +27,13 @@ use orchester_workspace::tasks::detail::RunView;
 use parking_lot::Mutex;
 
 use self::decide::DecideCard;
-use super::{TaskContext, action::decision_action, arranged, stages::stages, step_label, task_notice, this_run_panel};
+use super::{
+  TaskContext, action::decision_action, arranged, pointing::Pointing, stages::stages, step_label, task_notice,
+  this_run_panel,
+};
 use crate::{
   mcp::input_gate::{Guarded, InputGate, Protected},
+  navigation::pointed::PointedCard,
   services::Services,
   ui::notice::Notice,
 };
@@ -133,6 +137,7 @@ pub struct RetryDecision {
   gate: Option<InputGate>,
   /// Held while *Accept … as it is* shows: it is a person's decision ([`Guarded::StepAccept`]).
   accepting: Mutex<Option<Protected>>,
+  pointing: Pointing,
 }
 
 impl Component for RetryDecision {
@@ -145,6 +150,7 @@ impl Component for RetryDecision {
       asked: ctx.signal(None),
       gate: ctx.use_context::<InputGate>(),
       accepting: Mutex::new(None),
+      pointing: Pointing::new(ctx),
     }
   }
 
@@ -176,6 +182,7 @@ impl Component for RetryDecision {
         .cloned();
       self.target.set(Target(start));
     }
+    self.pointing.arrived(ctx, &props, PointedCard::Retries);
     let now = Services::of(ctx).clock.now();
     let decide = DecideCard {
       run,
@@ -186,6 +193,7 @@ impl Component for RetryDecision {
       action: &action,
       gate: self.gate.as_ref(),
       offline: (!props.online).then(|| ctx.t("task.controls.offline")),
+      pointing: &self.pointing,
     }
     .render(ctx);
     let parts: Vec<Element> = std::iter::once(notice(ctx, &props, run, stuck).into())

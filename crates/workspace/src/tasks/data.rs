@@ -5,7 +5,9 @@ use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 use orchester_core::{
   conversation::{Message, latest_question},
-  id::{IdempotencyKey, ResourceId, RunId, TaskId},
+  id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
+  memory::{Memory, MemoryFilter, MemoryStatus, MemoryStore, ScopeFilter},
+  question::AskedQuestions,
   resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
   run::{Run, RunEvent, RunNumber, StepExecutor, TaskPhase},
   sharing::TaskRevision,
@@ -14,14 +16,15 @@ use orchester_core::{
   task_group::GroupHold,
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
 use super::{
   approvals::{self, ShownApproval},
+  delivery::Unmerged,
   detail::run_store_error,
-  list::{Awaited, AwaitedPlan, AwaitedQuestion, Latest, LatestRun, Phases, phase_of},
-  overview::OverviewTab,
+  list::{AwaitedPlan, AwaitedQuestion, AwaitedStep, CurrentStep, Latest, LatestRun, Phases, StepWait},
   run_approvals,
   unreadable::Unreadable,
 };
@@ -91,6 +94,10 @@ pub struct ProjectTasks {
   /// Tool requests auto mode's reviewer is judging: they wait without asking the person (no dialog, no
   /// *Needs you*) until the review ends, and only their card says so.
   pub reviewing_tool_approvals: Arc<Vec<ShownApproval>>,
+  /// Questions with suggested answers waiting for the person anywhere in this project.
+  pub asked: Arc<Vec<AskedQuestions>>,
+  /// When each memory record of the project and of its tasks that waits for a person's approval was written.
+  pub proposed_memory: Arc<Vec<Timestamp>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
   pub phases: Arc<Phases>,
   /// How many runs of each task were started and can be read.
@@ -177,54 +184,36 @@ impl ProjectTasks {
     }
   }
 
-  pub fn load(repo_root: &Path) -> Result<Self, StoreError> {
-    let db = ProjectDb::open(repo_root)?;
+  /// Reads the tasks of the project at `repo_root`; git, through `programs`, tells the runs a person merged
+  /// outside Orchester ([`super::delivery`]).
+  pub fn load(repo_root: &Path, programs: &Programs) -> Result<Self, StoreError> {
+    Self::read(&ProjectDb::open(repo_root)?, repo_root, programs)
+  }
+
+  /// [`Self::load`] from `db`, the project database of `repo_root`, opened already: All projects reads a
+  /// project's tasks without migrating its data.
+  pub fn read(db: &ProjectDb, repo_root: &Path, programs: &Programs) -> Result<Self, StoreError> {
     let tasks = db.tasks()?;
-    let (not_shared, kept_tags) = kept(&db)?;
+    let (not_shared, kept_tags) = kept(db)?;
     let under_review = db.reviewing_tool_approvals()?;
-    let (reviewing, pending): (Vec<_>, Vec<_>) = approvals::pending(&db, repo_root)?
+    let (reviewing, pending): (Vec<_>, Vec<_>) = approvals::pending(db, repo_root)?
       .into_iter()
       .partition(|shown| under_review.contains(&shown.approval.id));
-    let asking: Vec<RunId> = db
-      .waiting_questions()?
-      .iter()
-      .map(|asked| asked.request.run())
-      .collect();
-    let (mut group_holds, grouped) = group_holds(&db)?;
-    let mut phases = Phases::new();
-    let mut counts = BTreeMap::new();
-    let mut auto_approving = Vec::new();
-    for task in tasks.iter().chain(&not_shared) {
-      let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
-      counts.insert(task.id(), runs.iter().filter(|run| run.is_ok()).count());
-      let latest = match runs.last() {
-        Some(Ok(latest)) => {
-          if db.task_group_for_run(latest).map_err(run_store_error)?.is_none() {
-            group_holds.remove(&task.id());
-          }
-          let mut shown = latest_run(&db, task, latest)?;
-          // A run whose agent waits for a tool decision or an answer in its turn waits for a person, as one
-          // at a plan does.
-          if shown.phase == TaskPhase::Running
-            && (pending.iter().any(|shown| shown.approval.run == latest.id()) || asking.contains(&latest.id()))
-          {
-            shown.phase = TaskPhase::Waiting;
-          }
-          if shown.phase.is_active() && run_approvals::auto_approving(&db, latest)? {
-            auto_approving.push(AutoApprovingRun {
-              run: latest.id(),
-              number: latest.number(),
-              task: task.id(),
-              key: task.key().to_string().into(),
-            });
-          }
-          Latest::Run(shown)
-        }
-        Some(Err(unreadable)) => Latest::Unreadable(Unreadable::of(unreadable)),
-        None => continue,
-      };
-      phases.insert(task.id(), latest);
-    }
+    let asked = db.waiting_questions()?;
+    let asking: Vec<RunId> = asked.iter().map(|asked| asked.request.run()).collect();
+    let (mut group_holds, grouped) = group_holds(db)?;
+    let mut unmerged = Unmerged::default();
+    let LatestRuns {
+      mut phases,
+      counts,
+      auto_approving,
+    } = latest_runs(
+      db,
+      tasks.iter().chain(&not_shared),
+      (&pending, &asking),
+      (&mut group_holds, &mut unmerged),
+    )?;
+    unmerged.settle(programs, repo_root, &mut phases);
     Ok(Self {
       updated: Arc::new(
         tasks
@@ -242,37 +231,23 @@ impl ProjectTasks {
           .map(|task| db.unfinished_blocking_tasks(task.id()).map(|links| (task.id(), links)))
           .collect::<Result<_, _>>()?,
       ),
+      proposed_memory: Arc::new(proposed_memory(db)?),
       tasks: Arc::new(tasks),
       not_shared: Arc::new(not_shared),
       kept_tags: Arc::new(kept_tags),
       former_keys: Arc::new(db.former_keys()?),
       group_holds: Arc::new(group_holds),
       grouped: Arc::new(grouped),
-      pipelines: Arc::new(published_pipelines(&db)?),
+      pipelines: Arc::new(published_pipelines(db)?),
       missing_pipelines: Arc::new(db.missing_pipelines()?),
       pending_tool_approvals: Arc::new(pending),
       reviewing_tool_approvals: Arc::new(reviewing),
+      asked: Arc::new(asked),
       phases: Arc::new(phases),
       runs: Arc::new(counts),
       lost_to_runner: 0,
       auto_approving: Arc::new(auto_approving),
     })
-  }
-
-  /// What *Needs you* counts: each request waiting for a decision, and each other task waiting for a
-  /// person (a plan, a question). Whether the dialog is open changes nothing.
-  pub fn needs_you(&self) -> usize {
-    let asking: Vec<TaskId> = self
-      .pending_tool_approvals
-      .iter()
-      .filter_map(|shown| shown.task_id)
-      .collect();
-    let other_waiting = self
-      .tasks
-      .iter()
-      .filter(|task| OverviewTab::NeedsYou.includes(phase_of(task, &self.phases)) && !asking.contains(&task.id()))
-      .count();
-    other_waiting + self.pending_tool_approvals.len()
   }
 
   /// The tasks as they stand while no runner is connected: runs recorded as running are
@@ -301,6 +276,67 @@ impl ProjectTasks {
   }
 }
 
+/// What one reading finds of the tasks' runs: the latest run of each task that has one, how many runs of each
+/// can be read, and the active runs that auto-approve.
+struct LatestRuns {
+  phases: Phases,
+  counts: BTreeMap<TaskId, usize>,
+  auto_approving: Vec<AutoApprovingRun>,
+}
+
+/// The latest run of each of `tasks`, a run waiting in its turn on one of the `pending` tool requests or on
+/// a question of the `asking` runs waiting for a person. A task whose latest run is no group's leaves
+/// `group_holds`; a latest run that succeeded and was not merged goes to `unmerged`.
+fn latest_runs<'a>(
+  db: &ProjectDb,
+  tasks: impl Iterator<Item = &'a Task>,
+  (pending, asking): (&[ShownApproval], &[RunId]),
+  (group_holds, unmerged): (&mut BTreeMap<TaskId, GroupHold>, &mut Unmerged),
+) -> Result<LatestRuns, StoreError> {
+  let mut found = LatestRuns {
+    phases: Phases::new(),
+    counts: BTreeMap::new(),
+    auto_approving: Vec::new(),
+  };
+  for task in tasks {
+    let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
+    found
+      .counts
+      .insert(task.id(), runs.iter().filter(|run| run.is_ok()).count());
+    let latest = match runs.last() {
+      Some(Ok(latest)) => {
+        if db.task_group_for_run(latest).map_err(run_store_error)?.is_none() {
+          group_holds.remove(&task.id());
+        }
+        let mut shown = latest_run(db, task, latest)?;
+        // A run whose agent waits for a tool decision or an answer in its turn waits for a person, as one at
+        // a plan does.
+        if shown.phase == TaskPhase::Running
+          && (pending.iter().any(|shown| shown.approval.run == latest.id()) || asking.contains(&latest.id()))
+        {
+          shown.phase = TaskPhase::Waiting;
+        }
+        if shown.phase == TaskPhase::Succeeded {
+          unmerged.add(task.id(), latest);
+        }
+        if shown.phase.is_active() && run_approvals::auto_approving(db, latest)? {
+          found.auto_approving.push(AutoApprovingRun {
+            run: latest.id(),
+            number: latest.number(),
+            task: task.id(),
+            key: task.key().to_string().into(),
+          });
+        }
+        Latest::Run(shown)
+      }
+      Some(Err(unreadable)) => Latest::Unreadable(Unreadable::of(unreadable)),
+      None => continue,
+    };
+    found.phases.insert(task.id(), latest);
+  }
+  Ok(found)
+}
+
 /// Why each task of a reviewed group that holds its work waits, and every task of a reviewed group.
 fn group_holds(
   db: &ProjectDb,
@@ -318,6 +354,17 @@ fn group_holds(
   Ok((holds, grouped))
 }
 
+/// When each record of the project's memory and of its tasks' memories that waits for a person's approval was
+/// written, in one listing.
+fn proposed_memory(db: &ProjectDb) -> Result<Vec<Timestamp>, StoreError> {
+  let proposed = MemoryFilter {
+    scope: ScopeFilter::All,
+    status: Some(MemoryStatus::Proposed),
+    pinned_only: false,
+  };
+  Ok(db.memories(&proposed)?.iter().map(Memory::created_at).collect())
+}
+
 /// `latest`, a run of `task`, with when it last changed and what it waits for.
 pub(super) fn latest_run(db: &ProjectDb, task: &Task, latest: &Run) -> Result<LatestRun, StoreError> {
   let updated_at = db
@@ -330,13 +377,13 @@ pub(super) fn latest_run(db: &ProjectDb, task: &Task, latest: &Run) -> Result<La
   Ok(LatestRun::of(task, (latest, merge.as_ref()), updated_at, awaited))
 }
 
-/// The plan `run` waits on a decision for, or the question it waits for an answer to, with the agent
-/// role of the step that proposed or asked it; only such a run needs its plans or its conversation
-/// and its profiles read here.
-fn awaited(db: &ProjectDb, run: &Run) -> Result<Awaited, StoreError> {
-  let (plan_waits, question_waits) = (!run.awaiting_plan().is_empty(), !run.awaiting_answer().is_empty());
-  if !plan_waits && !question_waits {
-    return Ok(Awaited::default());
+/// Each step of `run` that waits on a decision on its plan or for an answer to its question, with the
+/// agent role of the step that proposed or asked it; only such a run needs its plans or its conversation
+/// and its profiles read here. A plan that cannot be read is left out.
+fn awaited(db: &ProjectDb, run: &Run) -> Result<Vec<AwaitedStep>, StoreError> {
+  let (plans, answers) = (run.awaiting_plan(), run.awaiting_answer());
+  if plans.is_empty() && answers.is_empty() {
+    return Ok(Vec::new());
   }
   let mut roles = BTreeMap::new();
   for step in run.snapshot().steps() {
@@ -347,26 +394,35 @@ fn awaited(db: &ProjectDb, run: &Run) -> Result<Awaited, StoreError> {
     }
   }
   let role = |step: &StepKey| roles.get(step).cloned();
-  let plan = if plan_waits {
-    AwaitedPlan::of(run, &db.plans(run.id()).map_err(run_store_error)?, role)
-  } else {
-    None
-  };
-  let question = if question_waits {
-    awaited_question(run, &db.messages(run.task())?, role)
-  } else {
-    None
-  };
-  Ok(Awaited { plan, question })
+  let mut waiting = Vec::new();
+  if !plans.is_empty() {
+    let stored = db.plans(run.id()).map_err(run_store_error)?;
+    waiting.extend(plans.into_iter().filter_map(|execution| {
+      Some(AwaitedStep {
+        execution,
+        step: CurrentStep::of_execution(run, execution),
+        wait: StepWait::Plan(AwaitedPlan::of(run, &stored, execution, role)?),
+      })
+    }));
+  }
+  if !answers.is_empty() {
+    let messages = db.messages(run.task())?;
+    waiting.extend(answers.into_iter().map(|execution| AwaitedStep {
+      execution,
+      step: CurrentStep::of_execution(run, execution),
+      wait: StepWait::Answer(awaited_question(run, &messages, execution, role)),
+    }));
+  }
+  Ok(waiting)
 }
 
-/// The question the first execution waiting for an answer asked, among `messages`, and who asks.
+/// The question `execution`, waiting for an answer, asked, among `messages`, and who asks.
 fn awaited_question(
   run: &Run,
   messages: &[Message],
+  execution: StepExecutionId,
   role: impl Fn(&StepKey) -> Option<Arc<str>>,
 ) -> Option<AwaitedQuestion> {
-  let execution = *run.awaiting_answer().first()?;
   let question = latest_question(messages, execution)?;
   let step = run.execution(execution)?.step();
   let agent = role(step).or_else(|| run.snapshot().body().step(step).map(|step| step.name.as_str().into()))?;

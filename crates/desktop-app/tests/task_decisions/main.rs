@@ -2,12 +2,14 @@
 //! `decisions` scenarios: the plan review with its versions and the note Request changes needs, raising
 //! the limit with its read-back, a daily budget's stop that only Resume continues, the decision after a
 //! step's retries, and Ready for review with Merge into main merging, refused at a conflict, unavailable
-//! without a branch to merge into, and merged. No runner is connected here (its program does not exist):
-//! each decision the runner carries out comes back refused, in so many words. Needs `git`.
+//! without a branch to merge into, and merged, or settled without Orchester ([`merge`]). No runner is connected here
+//! (its program does not exist): each decision the runner carries out comes back refused, in so many words. Needs
+//! `git`.
 
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers the other scenarios use")]
 mod kontur;
+mod merge;
 #[path = "../support/mod.rs"]
 mod support;
 mod unverified;
@@ -41,6 +43,8 @@ const OFFLINE: &str = "The runner is not connected; the run's controls return on
 struct Page {
   window: Window,
   project: ProjectId,
+  /// The seeded project's repository.
+  repo: PathBuf,
   tasks: Vec<(String, &'static str)>,
 }
 
@@ -130,6 +134,7 @@ impl Page {
     Self {
       window,
       project: seeded.project,
+      repo: seeded.repo,
       tasks,
     }
   }
@@ -498,60 +503,6 @@ fn decision_after_retries_allows_a_retry_returns_with_a_note_and_stops() {
     assert!(page.locked(button), "{button}");
   }
   assert_eq!(page.text("task-retry-offline"), OFFLINE);
-}
-
-#[test]
-fn decision_ready_for_review_merges_into_main() {
-  let mut page = Page::seeded("decisions");
-  page.open("ready for review, merges cleanly", "task-merge");
-  assert_eq!(page.text("task-notice-title"), "Ready for your review");
-  assert!(page.locked("task-review-pull-request"));
-  assert_eq!(
-    page.text("task-review-pull-request-reason"),
-    "Review PR needs a pull request, which no pipeline step opens yet."
-  );
-  assert!(page.locked("task-ask-agent"), "Ask agent waits for the composer");
-  page.until_says("task-ready-changes-figure", "1 file");
-  assert!(page.has("task-ready-check-review"), "Review verified the work");
-  assert!(page.has("task-run-details"));
-  page.click("task-merge");
-  page.until_says("task-notice-title", "Merged into main");
-  let body = page.text("task-notice");
-  assert!(body.contains("main got merge commit"), "{body}");
-  assert!(!page.has("task-merge"), "a merged run has nothing to merge");
-}
-
-#[test]
-fn decision_merge_stops_at_a_conflict_and_says_why() {
-  let mut page = Page::seeded("decisions");
-  page.open("ready for review, conflicts with main", "task-merge");
-  page.click("task-merge");
-  page.until_says("task-notice-title", "Not merged into main");
-  let body = page.text("task-notice");
-  assert!(body.contains("conflict with your branch"), "{body}");
-  assert_eq!(
-    page.text("task-merge-conflicts"),
-    "src/webhooks/sender.rs src/webhooks/settings.rs"
-  );
-  assert_eq!(page.text("task-merge-conflicts-head"), "Conflicting files 2");
-  assert!(!page.locked("task-merge"), "it can be merged again");
-}
-
-#[test]
-fn decision_merge_is_unavailable_without_a_branch_and_merged_says_where() {
-  let mut page = Page::seeded("decisions");
-  page.open("ready for review, no branch to merge into", "task-merge");
-  assert!(page.locked("task-merge"));
-  assert_eq!(
-    page.text("task-merge-reason"),
-    "Merge needs the branch your checkout had when the run started, which this run didn't record."
-  );
-  let mut page = Page::seeded("task-states");
-  page.open("merged", "task-notice");
-  assert_eq!(page.text("task-notice-title"), "Merged into main");
-  assert!(page.has("task-stages"));
-  assert!(!page.has("task-merge"));
-  assert!(!page.has("task-review-pull-request"));
 }
 
 /// The key of the task seeded in `state`.

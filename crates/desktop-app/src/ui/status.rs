@@ -6,7 +6,8 @@
 //! The vocabulary and its icons come from the boards: Draft `circle-dashed`, Queued `clock`, Running and
 //! Working `loader-circle` (turning), Needs input `hand`, Stopped at limit `gauge`, Interrupted and
 //! Interrupted · can't continue `circle-pause`, Completed, Complete and Ready for review `circle-check`, Merged
-//! `git-merge`, Not merged `triangle-alert` (`kxMAN`), Failed `circle-x`, Unreadable `circle-help`, Waiting `clock`,
+//! `git-merge`, Ready to merge `git-merge` in `warning` (`mEvfK`), Not merged `triangle-alert` (`kxMAN`), Failed
+//! `circle-x`, Unreadable `circle-help`, Waiting `clock`,
 //! Not started `circle-dashed`, Blocked `ban`, Paused `circle-pause` in `warning` (Usage `Q1gYMm`); Backlog
 //! `circle-dashed`, Todo `circle` (`AiCwO`), In progress `circle-dot-dashed`, In review `eye`, Done
 //! `circle-check`; High, Medium and Low `signal-*`, No priority `minus`. The boards draw no Canceled,
@@ -53,6 +54,9 @@ pub enum Status {
   /// A run whose every step passed, as its own page and its row in *Runs of this task* name it
   /// (`F2LtFn`); task lists say Completed.
   ReadyForReview,
+  /// A task whose run passed every step and waits to be merged, as the Overview's rows name it
+  /// (`Row · KON-19` in `mEvfK`).
+  ReadyToMerge,
   /// A run ready for review whose merge failed and left its base branch as it was.
   NotMerged,
   Merged,
@@ -91,7 +95,7 @@ impl Tone {
 }
 
 impl Status {
-  pub const ALL: [Self; 23] = [
+  pub const ALL: [Self; 24] = [
     Self::Draft,
     Self::Queued,
     Self::Running,
@@ -103,6 +107,7 @@ impl Status {
     Self::Interrupted,
     Self::Completed,
     Self::ReadyForReview,
+    Self::ReadyToMerge,
     Self::NotMerged,
     Self::Merged,
     Self::Failed,
@@ -144,6 +149,16 @@ impl Status {
     }
   }
 
+  /// The label of a task in `phase` on the Overview, which lists what waits for the person: as
+  /// [`Self::of_phase`], but a task whose run passed every step waits to be merged (`Row · KON-19` in
+  /// `mEvfK`).
+  pub const fn of_board(phase: TaskPhase) -> Self {
+    match phase {
+      TaskPhase::Succeeded => Self::ReadyToMerge,
+      phase => Self::of_phase(phase),
+    }
+  }
+
   pub const fn icon(self) -> Icon {
     match self {
       Self::Draft | Self::NotStarted => Icon::CircleDashed,
@@ -153,7 +168,7 @@ impl Status {
       Self::Paused | Self::Interrupted | Self::CantContinue => Icon::CirclePause,
       Self::StoppedAtLimit | Self::StoppedAtPlanLimit => Icon::Gauge,
       Self::Completed | Self::Complete | Self::ReadyForReview => Icon::CircleCheck,
-      Self::Merged => Icon::GitMerge,
+      Self::Merged | Self::ReadyToMerge => Icon::GitMerge,
       Self::NotMerged => Icon::TriangleAlert,
       Self::Failed => Icon::CircleX,
       Self::Canceled => Icon::CircleSlash,
@@ -176,6 +191,7 @@ impl Status {
       | Self::WaitingForPlanReset
       | Self::Interrupted
       | Self::CantContinue
+      | Self::ReadyToMerge
       | Self::NotMerged => Tone::Warning,
       Self::Completed | Self::Complete | Self::ReadyForReview => Tone::Success,
       Self::Failed | Self::Unreadable => Tone::Danger,
@@ -201,6 +217,7 @@ impl Status {
       Self::Interrupted => "ui.status.interrupted",
       Self::Completed => "ui.status.completed",
       Self::ReadyForReview => "ui.status.readyForReview",
+      Self::ReadyToMerge => "ui.status.readyToMerge",
       Self::NotMerged => "ui.status.notMerged",
       Self::Merged => "ui.status.merged",
       Self::Failed => "ui.status.failed",
@@ -286,13 +303,7 @@ impl StatusChip {
 /// A task's priority: its icon and word in `text_secondary`; Urgent in `warning`, No priority in
 /// `text_muted`.
 pub fn priority_chip(ctx: &Ctx, id: &str, priority: Priority) -> Row {
-  let (glyph, key, color) = match priority {
-    Priority::Urgent => (Icon::CircleAlert, "ui.priority.urgent", PaletteColor::Warning),
-    Priority::High => (Icon::SignalHigh, "ui.priority.high", PaletteColor::TextSecondary),
-    Priority::Medium => (Icon::SignalMedium, "ui.priority.medium", PaletteColor::TextSecondary),
-    Priority::Low => (Icon::SignalLow, "ui.priority.low", PaletteColor::TextSecondary),
-    Priority::None => (Icon::Minus, "ui.priority.none", PaletteColor::TextMuted),
-  };
+  let (glyph, key, color) = priority_look(priority);
   labelled(
     id,
     (glyph, IconSize::Base),
@@ -302,19 +313,26 @@ pub fn priority_chip(ctx: &Ctx, id: &str, priority: Priority) -> Row {
   )
 }
 
+/// A priority's icon, the i18n key of its word and its color.
+pub const fn priority_look(priority: Priority) -> (Icon, &'static str, PaletteColor) {
+  match priority {
+    Priority::Urgent => (Icon::CircleAlert, "ui.priority.urgent", PaletteColor::Warning),
+    Priority::High => (Icon::SignalHigh, "ui.priority.high", PaletteColor::TextSecondary),
+    Priority::Medium => (Icon::SignalMedium, "ui.priority.medium", PaletteColor::TextSecondary),
+    Priority::Low => (Icon::SignalLow, "ui.priority.low", PaletteColor::TextSecondary),
+    Priority::None => (Icon::Minus, "ui.priority.none", PaletteColor::TextMuted),
+  }
+}
+
 /// A task's workflow status: its icon and word in `text_secondary`; Done's icon in `success`.
 pub fn workflow_chip(ctx: &Ctx, id: &str, status: WorkflowStatus) -> Row {
-  let (glyph, key, tone) = match status {
-    WorkflowStatus::Backlog => (Icon::CircleDashed, "ui.workflow.backlog", PaletteColor::TextMuted),
-    WorkflowStatus::Todo => (Icon::Circle, "ui.workflow.todo", PaletteColor::TextSecondary),
-    WorkflowStatus::InProgress => (
-      Icon::CircleDotDashed,
-      "ui.workflow.inProgress",
-      PaletteColor::TextSecondary,
-    ),
-    WorkflowStatus::InReview => (Icon::Eye, "ui.workflow.inReview", PaletteColor::TextSecondary),
-    WorkflowStatus::Done => (Icon::CircleCheck, "ui.workflow.done", PaletteColor::Success),
-    WorkflowStatus::Canceled => (Icon::CircleSlash, "ui.workflow.canceled", PaletteColor::TextMuted),
+  let (glyph, tone) = match status {
+    WorkflowStatus::Backlog => (Icon::CircleDashed, PaletteColor::TextMuted),
+    WorkflowStatus::Todo => (Icon::Circle, PaletteColor::TextSecondary),
+    WorkflowStatus::InProgress => (Icon::CircleDotDashed, PaletteColor::TextSecondary),
+    WorkflowStatus::InReview => (Icon::Eye, PaletteColor::TextSecondary),
+    WorkflowStatus::Done => (Icon::CircleCheck, PaletteColor::Success),
+    WorkflowStatus::Canceled => (Icon::CircleSlash, PaletteColor::TextMuted),
   };
   Row::new()
     .id(id.to_owned())
@@ -322,11 +340,23 @@ pub fn workflow_chip(ctx: &Ctx, id: &str, status: WorkflowStatus) -> Row {
     .align_items(Alignment::Center)
     .child(icon(glyph, IconSize::Base, tone).id(format!("{id}-icon")))
     .child(
-      Text::new(&ctx.t(key))
+      Text::new(&ctx.t(workflow_key(status)))
         .id(format!("{id}-label"))
         .variant(TypographyStyle::Description)
         .nowrap(),
     )
+}
+
+/// The i18n key of a workflow status's word.
+pub const fn workflow_key(status: WorkflowStatus) -> &'static str {
+  match status {
+    WorkflowStatus::Backlog => "ui.workflow.backlog",
+    WorkflowStatus::Todo => "ui.workflow.todo",
+    WorkflowStatus::InProgress => "ui.workflow.inProgress",
+    WorkflowStatus::InReview => "ui.workflow.inReview",
+    WorkflowStatus::Done => "ui.workflow.done",
+    WorkflowStatus::Canceled => "ui.workflow.canceled",
+  }
 }
 
 fn labelled(

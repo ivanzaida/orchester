@@ -10,7 +10,6 @@ mod answer;
 mod apply;
 mod attempt;
 mod branch;
-mod counts;
 mod error;
 mod event;
 mod first_edit;
@@ -50,7 +49,6 @@ pub use self::{
   },
   attempt::{Attempt, Checkpoint, StepExecution},
   branch::{BranchName, BranchNameError},
-  counts::RunCounts,
   error::RunError,
   event::{EventSequence, PlannedExecution, RunCreated, RunEvent, RunEventKind},
   first_edit::{EditProgress, FirstEdit, FirstEditTracker},

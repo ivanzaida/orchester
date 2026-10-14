@@ -148,6 +148,28 @@ pub struct TaskScreen {
   scrolls: TaskScrolls,
 }
 
+/// The task of `props`, read again when it was saved or `reload` asks; git tells what became of a run that
+/// passed every step, as the task list's rows read it.
+fn read_task(ctx: &mut Ctx, props: &TaskProps, reload: u64) -> lurq::app::ctx::FutureState<LoadedTask, Message> {
+  let deps = (props.project.repo_root.clone(), props.task, props.revision, reload);
+  let programs = ctx
+    .use_context::<crate::programs::Programs>()
+    .expect("the root provides Programs before mounting screens");
+  let load = ctx.future(deps, move |(repo_root, task, ..)| {
+    let programs = programs.clone();
+    async move {
+      background::run(move || TaskDetail::load_settled(&repo_root, task, &programs))
+        .await?
+        .map(|detail| LoadedTask(Arc::new(detail)))
+        .map_err(|error| {
+          tracing::error!(%error, "cannot read the task");
+          messages::store_error(&error)
+        })
+    }
+  });
+  load.state().get()
+}
+
 impl Component for TaskScreen {
   type Props = TaskProps;
 
@@ -185,22 +207,7 @@ impl Component for TaskScreen {
     }
     let control = control_action(ctx);
     let first_run = first_run::first_run_action(ctx);
-    let deps = (
-      props.project.repo_root.clone(),
-      props.task,
-      props.revision,
-      self.reload.get(),
-    );
-    let load = ctx.future(deps, |(repo_root, task, ..)| async move {
-      background::run(move || TaskDetail::load_in(&repo_root, task))
-        .await?
-        .map(|detail| LoadedTask(Arc::new(detail)))
-        .map_err(|error| {
-          tracing::error!(%error, "cannot read the task");
-          messages::store_error(&error)
-        })
-    });
-    let state = load.state().get();
+    let state = read_task(ctx, &props, self.reload.get());
     let column = Column::new()
       .id("task-page")
       .width(Dimension::Pct(100.0))

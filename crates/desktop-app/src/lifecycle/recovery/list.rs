@@ -36,8 +36,8 @@ impl RecoveryNotice {
   ) -> Element {
     let services = Services::of(ctx);
     let project = shown.open.project.id();
-    let open = self.open.clone();
-    let head = list_head(ctx, runs).child(hide(ctx, move || open.set(false)));
+    let recovery = services.recovery.clone();
+    let head = list_head(ctx, runs).child(hide(ctx, move || recovery.review(project, false)));
     let table = table::runs(ctx, project, runs);
     let unread = unread_lines(ctx, &state.unread_of(project));
     let note = Text::new(&ctx.t("lifecycle.recovery.note"))

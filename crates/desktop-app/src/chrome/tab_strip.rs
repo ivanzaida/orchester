@@ -43,7 +43,7 @@ use crate::{
   theme::{CLOSING_TABS_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon, screen_icon},
-    pressable::pressable,
+    pressable::{in_title_bar, pressable},
     tooltip::Tooltip,
   },
 };
@@ -223,7 +223,7 @@ fn tab_button(
   let (select, close) = (navigation.clone(), navigation.clone());
   let closable = tabs.can_close(id);
   let label = label(ctx, projects, tab.route());
-  let button = pressable(move || select.select(id))
+  let button = in_title_bar(pressable(move || select.select(id)))
     .id(format!("tab-{id}"))
     .describe("state", if active { "active" } else { "inactive" })
     .describe("route", tab.route().screen().name())
@@ -367,7 +367,7 @@ fn labelled_tab(
 /// projects, so it can always be closed.
 fn close_button(ctx: &mut Ctx, navigation: Navigation, tab: &Tab) -> Element {
   let id = tab.id();
-  Button::empty()
+  in_title_bar(Button::empty())
     .id(format!("tab-{id}-close"))
     .describe("a11y_name", ctx.t("shell.tabs.close"))
     .focusable(false)
@@ -415,7 +415,7 @@ fn label(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
 
 /// *New tab* (`New tab` `w204x`): a tab at All projects, right of the active one.
 fn new_tab(ctx: &mut Ctx, navigation: Navigation) -> Element {
-  pressable(move || navigation.open_tab())
+  in_title_bar(pressable(move || navigation.open_tab()))
     .id("new-tab")
     .describe("a11y_name", ctx.t("common.newTab"))
     .width(Dimension::Px(NEW_TAB_WIDTH))

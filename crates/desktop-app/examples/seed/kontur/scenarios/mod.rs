@@ -15,6 +15,7 @@ mod live;
 mod pipelines;
 mod task_states;
 mod tasks;
+mod tasks_memory;
 mod tasks_unreadable;
 mod unreadable_db;
 
@@ -61,13 +62,14 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 20] = [
+pub const ALL: [Scenario; 21] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-empty", agents::empty),
   Scenario::of("agents-no-connections", agents::no_connections),
   Scenario::of("agents-unreadable", agents::unreadable),
   Scenario::of("empty", empty::seed),
   Scenario::of("tasks", tasks::seed),
+  Scenario::of("tasks-memory", tasks_memory::seed),
   Scenario::of("task-states", task_states::seed),
   Scenario::of("conversation", conversation::seed),
   Scenario::of("changes", changes::seed),

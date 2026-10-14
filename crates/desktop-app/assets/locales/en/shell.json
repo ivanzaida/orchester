@@ -35,16 +35,19 @@
       "addProject": "Add project",
       "settings": "Settings",
       "overview": "Overview",
+      "orchestrator": "Orchestrator",
       "tasks": "Tasks",
       "newTask": "New task",
       "editTask": "Edit task",
       "editTaskOf": "Edit {{key}}",
       "task": "Task",
+      "mergeQueue": "Merge queue",
       "pullRequests": "Pull requests",
       "usage": "Usage",
       "pipelines": "Pipelines",
       "agents": "Agents",
       "instructions": "Instructions",
+      "memory": "Memory",
       "skills": "Skills",
       "tools": "Tools",
       "secrets": "Secrets",
@@ -98,6 +101,11 @@
           "one": "1 run interrupted · nothing runs until the runner starts",
           "other": "{{count}} runs interrupted · nothing runs until the runner starts"
         }
+      },
+      "recovery": {
+        "one": "1 run interrupted when Orchester closed",
+        "other": "{{count}} runs interrupted when Orchester closed",
+        "review": "Review"
       },
       "approvals": {
         "waiting": {

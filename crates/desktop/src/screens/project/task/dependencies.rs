@@ -62,10 +62,16 @@ impl Component for TaskDependencies {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<DependencyProps>().clone();
     let action = action(ctx, &props);
-    let load = ctx.future((props.root.clone(), props.revision), |(root, _)| async move {
-      background::run(move || ProjectTasks::load(&root))
-        .await?
-        .map_err(|error| crate::messages::store_error(&error))
+    let programs = ctx
+      .use_context::<crate::programs::Programs>()
+      .expect("the root provides Programs before mounting screens");
+    let load = ctx.future((props.root.clone(), props.revision), move |(root, _)| {
+      let programs = programs.clone();
+      async move {
+        background::run(move || ProjectTasks::load(&root, &programs))
+          .await?
+          .map_err(|error| crate::messages::store_error(&error))
+      }
     });
     let nav = ctx.use_context::<ProjectNav>().expect("shell provides navigation");
     // A queued task is past readiness and Run (its topbar has Retry run): only its links remain.
@@ -122,19 +128,23 @@ impl Component for TaskDependencies {
 /// action, pointed at the task as last shown.
 fn action(ctx: &mut Ctx, props: &DependencyProps) -> lurq::app::ctx::FutureAction<(), Started, Problems> {
   let runners = ctx.use_context::<Runners>().expect("root provides runners");
+  let programs = ctx
+    .use_context::<crate::programs::Programs>()
+    .expect("the root provides Programs before mounting screens");
   let servers = crate::sharing::feed::ServerFeed::of(ctx).servers;
   let root = props.root.clone();
   let task = props.task.clone();
   ctx.future_action(move |()| {
     let root = root.clone();
     let runners = runners.clone();
+    let programs = programs.clone();
     let task = task.clone();
     let servers = servers.clone();
     async move {
       let claims = (servers.clone(), root.clone());
       let queued = background::run(move || {
-        let tasks =
-          ProjectTasks::load(&root).map_err(|error| Problems(vec![crate::messages::store_error(&error)].into()))?;
+        let tasks = ProjectTasks::load(&root, &programs)
+          .map_err(|error| Problems(vec![crate::messages::store_error(&error)].into()))?;
         let version = tasks
           .pipelines
           .iter()

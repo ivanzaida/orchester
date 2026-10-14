@@ -310,7 +310,7 @@ impl Environment {
     ctx.mount_keyed::<WidenConfirm>(
       "settings-environment-confirm",
       WidenProps {
-        id: "settings-environment-question",
+        id: "settings-environment-question".into(),
         card: false,
         automation: crate::mcp::input_gate::Guarded::PermissionWidening,
         title: ctx.t("project_settings.confirmEnvironment"),

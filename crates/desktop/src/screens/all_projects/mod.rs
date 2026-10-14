@@ -244,8 +244,12 @@ impl AllProjects {
   /// What each listed project's database says, read after the list is shown and again when a
   /// runner reports; the previous data stays on screen while it is read again.
   fn data(&self, ctx: &mut Ctx, entries: Vec<ProjectEntry>, work: u64) -> ListedData {
-    let load = ctx.future((entries, work), |(entries, _)| async move {
-      background::run(move || ListedData::read(&entries)).await
+    let programs = ctx
+      .use_context::<crate::programs::Programs>()
+      .expect("the root provides Programs before mounting screens");
+    let load = ctx.future((entries, work), move |(entries, _)| {
+      let programs = programs.clone();
+      async move { background::run(move || ListedData::read(&entries, &programs)).await }
     });
     load.state().get().data.unwrap_or_default()
   }

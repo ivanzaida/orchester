@@ -1,0 +1,38 @@
+{
+  "needs_you": {
+    "title": "Needs you",
+    "close": "Close",
+    "separator": "·",
+    "sub": {
+      "one": "{{projects}} · oldest first",
+      "each": "{{projects}} · oldest first in each project",
+      "none": "{{projects}}"
+    },
+    "projects": {
+      "two": "{{first}} and {{second}}",
+      "many": "{{list}} and {{last}}",
+      "separator": ", "
+    },
+    "thisTab": "this tab's project",
+    "waitingSince": "waiting since {{clock}} · {{time}}",
+    "stepLabel": "{{number}} {{step}}",
+    "where": {
+      "run": "Run {{run}}",
+      "step": "Run {{run}} · {{step}}",
+      "agent": "Run {{run}} · {{step}} · {{agent}}",
+      "checkpoint": "Run {{run}} · {{step}} · checkpoint {{checkpoint}}"
+    },
+    "action": {
+      "collapse": "Collapse",
+      "openConversation": "Open conversation"
+    },
+    "reading": "Reading the request…",
+    "notHere": "This request can't be answered here. Open the conversation to answer it.",
+    "empty": {
+      "title": "Nothing needs you",
+      "text": "Approvals, questions, plans and decisions from every open project appear here as they arrive."
+    },
+    "showAll": "Show all in {{project}}'s Overview",
+    "escCloses": "Esc closes"
+  }
+}
