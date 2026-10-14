@@ -14,9 +14,11 @@ use std::{
 
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint},
-  id::{ChatId, ChatMessageId, RunId, StepExecutionId},
+  id::{ChatId, ChatMessageId, IdempotencyKey, RunId, StepExecutionId, TaskId},
+  integration::Leftovers,
   question::GivenAnswer,
   run::{Answerer, ApprovalAnswer, InterruptCause, PlanDecision, PlanVersion, RaisedLimits, StuckDecision},
+  sharing::TaskRevision,
   tokens::TokenBudget,
 };
 use orchester_ipc::{
@@ -289,11 +291,7 @@ async fn answer(
       after,
       ref remove_worktrees,
       revision,
-    } => started(
-      scheduler
-        .run_again_as(key, (task, after), remove_worktrees.clone(), revision)
-        .await,
-    ),
+    } => run_again(scheduler, (key, task, after), (remove_worktrees, revision)).await,
     Command::PauseRun { run } => return later.answer(run, async move { handle.pause_run(run).await }),
     Command::CancelRun { run } => return later.answer(run, async move { handle.cancel_run(run).await }),
     Command::ResumeRun { run } => return later.answer(run, async move { handle.resume_run(run).await }),
@@ -363,6 +361,20 @@ async fn chat_answering(scheduler: &Scheduler, message: ChatMessageId, tools: Ch
 }
 
 /// The reply to [`Command::StopChat`].
+/// Starts the next run of `task` after `after` (Run again), removing `remove_worktrees` first, only for the task at
+/// `revision` when it names one.
+async fn run_again(
+  scheduler: &Scheduler,
+  (key, task, after): (IdempotencyKey, TaskId, RunId),
+  (remove_worktrees, revision): (&Option<Leftovers>, Option<TaskRevision>),
+) -> Reply {
+  started(
+    scheduler
+      .run_again_as(key, (task, after), remove_worktrees.clone(), revision)
+      .await,
+  )
+}
+
 fn chat_stopped(scheduler: &Scheduler, chat: ChatId) -> Reply {
   match scheduler.stop_chat(chat) {
     Ok(()) => Reply::ChatStopped { chat },
