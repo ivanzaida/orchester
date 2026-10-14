@@ -14,7 +14,8 @@ pub const fn runs_orchestrator(provider: AgentProvider) -> bool {
 /// private files with live tokens, and the user's own execpolicy `allow` rules run matching commands outside the
 /// sandbox without asking. Codex 0.159.2 has filesystem permission profiles with read denials, but they could not be
 /// shown to work on Windows (they need the elevated sandbox) or macOS, so the Orchestrator does not run unconfined on
-/// Codex. The runner's Codex turn (`orchester_runner`'s `chat::codex`) stays for when they can.
+/// Codex. The runner has no Codex turn; the one written before the hold (driving App Server as steps do) is in the
+/// branch's history for when they can be.
 pub const fn codex_held_back(provider: AgentProvider) -> bool {
   matches!(provider, AgentProvider::CodexCli)
 }

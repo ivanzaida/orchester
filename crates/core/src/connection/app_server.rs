@@ -442,11 +442,6 @@ impl AppServerStream {
     }
   }
 
-  /// What the running turn spent so far: the model responses Codex reported before the turn ended.
-  pub const fn usage_so_far(&self) -> TokenUsage {
-    self.usage
-  }
-
   /// A turn takes several model responses; each reports its own usage as `last`, and the thread's
   /// running `total` grows by it.
   fn count_usage(&mut self, token_usage: &Value) {

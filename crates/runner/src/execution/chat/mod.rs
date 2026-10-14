@@ -6,14 +6,9 @@
 //! whose answer was lost), and is recorded as interrupted.
 
 mod claude;
-mod codex;
 mod turn;
 
-use std::{
-  collections::HashMap,
-  sync::atomic::{AtomicU64, Ordering},
-  time::Duration,
-};
+use std::{collections::HashMap, time::Duration};
 
 use orchester_core::{
   id::{ChatId, ChatMessageId},
@@ -32,7 +27,8 @@ use super::{Scheduler, failed, idle::check_daily_budget};
 pub(super) struct Chats {
   running: Mutex<HashMap<ChatId, Running>>,
   /// How long one answer may run, in milliseconds, when the runner's tests set it shorter; 0: [`TIME_LIMIT`].
-  limit_ms: AtomicU64,
+  #[cfg(feature = "test-agent")]
+  limit_ms: std::sync::atomic::AtomicU64,
 }
 
 struct Running {
@@ -43,12 +39,20 @@ struct Running {
 }
 
 impl Chats {
-  /// How long one answer may run.
+  /// How long one answer may run: [`TIME_LIMIT`], or in the runner's own tests the limit they set.
+  #[cfg(feature = "test-agent")]
   fn time_limit(&self) -> Duration {
-    match self.limit_ms.load(Ordering::Relaxed) {
+    match self.limit_ms.load(std::sync::atomic::Ordering::Relaxed) {
       0 => TIME_LIMIT,
       ms => Duration::from_millis(ms),
     }
+  }
+
+  /// How long one answer may run.
+  #[cfg(not(feature = "test-agent"))]
+  #[expect(clippy::unused_self, reason = "the runner's own tests read their limit from it")]
+  fn time_limit(&self) -> Duration {
+    TIME_LIMIT
   }
 
   /// Whether no turn is under way.
@@ -121,7 +125,11 @@ impl Scheduler {
   #[cfg(feature = "test-agent")]
   pub fn limit_chat_turns(&self, limit: Duration) {
     let ms = u64::try_from(limit.as_millis()).unwrap_or(u64::MAX).max(1);
-    self.inner.chats.limit_ms.store(ms, Ordering::Relaxed);
+    self
+      .inner
+      .chats
+      .limit_ms
+      .store(ms, std::sync::atomic::Ordering::Relaxed);
   }
 
   /// Stops the turn under way in `chat`. A turn the conversation still shows thinking that this runner does not

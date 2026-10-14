@@ -1,5 +1,5 @@
 //! One turn of the Orchestrator chat: the agent CLI the Orchestrator runs on, started for the person's message
-//! (Claude Code, [`super::claude`]; Codex App Server, [`super::codex`]), its output kept as it comes (the session,
+//! (Claude Code, [`super::claude`]), its output kept as it comes (the session,
 //! each reply, what it spent), and how the turn ended.
 
 use std::{
@@ -9,7 +9,7 @@ use std::{
 
 use orchester_core::{
   connection::{
-    AccountStartProblem, AgentConnection, AgentProvider, ConnectionError,
+    AccountStartProblem, AgentConnection, ConnectionError,
     invocation::Platform,
     stream::{AgentEvent, OutputStream},
   },
@@ -58,7 +58,6 @@ impl Turn {
   /// Runs the turn to its end, or until `stop` says so, and records how it ended.
   pub(super) async fn run(self, stop: oneshot::Receiver<()>) {
     let state = match self.prepare() {
-      Ok(prepared) if prepared.connection.provider() == AgentProvider::CodexCli => self.run_codex(prepared, stop).await,
       Ok(prepared) => self.run_claude(prepared, stop).await,
       Err(failure) => TurnState::Failed(failure),
     };
@@ -167,8 +166,6 @@ pub(super) const fn cannot(reason: String) -> TurnFailure {
 pub(super) struct Seen {
   pub(super) answered: bool,
   pub(super) stopped: bool,
-  /// The runner ended the CLI once its turn was over: Codex App Server waits for more otherwise.
-  pub(super) finished: bool,
   pub(super) failure: Option<TurnFailure>,
   /// The last line of standard error.
   pub(super) stderr: Option<String>,
@@ -187,15 +184,6 @@ impl Seen {
     }
     if let Some(failure) = self.failure {
       return TurnState::Failed(failure);
-    }
-    if self.finished {
-      return if self.answered {
-        TurnState::Answered
-      } else {
-        TurnState::Failed(TurnFailure::Failed {
-          reason: "the turn ended before it answered".to_owned(),
-        })
-      };
     }
     match exit {
       ProcessExit::Exited { code: Some(0) } if self.answered => TurnState::Answered,

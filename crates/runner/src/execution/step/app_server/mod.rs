@@ -47,14 +47,14 @@ const REASON_CHARS: usize = 300;
 pub(super) const STEER_REQUEST: &str = "steer-";
 
 /// Codex's answer to a `turn/steer` request.
-pub(in crate::execution) struct SteerAnswer {
+pub(super) struct SteerAnswer {
   pub id: String,
   /// Codex's reason when it did not add the message to the turn.
   pub refused: Option<String>,
 }
 
 #[derive(Debug, Error)]
-pub(in crate::execution) enum AppServerFailure {
+pub(super) enum AppServerFailure {
   #[error("{0}")]
   Protocol(String),
   #[error("{0}")]
@@ -67,7 +67,7 @@ impl From<String> for AppServerFailure {
   }
 }
 
-pub(in crate::execution) struct AppServerSetup {
+pub(super) struct AppServerSetup {
   pub prompt: String,
   pub model: String,
   pub effort: Option<String>,
@@ -110,7 +110,7 @@ enum Phase {
   Complete,
 }
 
-pub(in crate::execution) struct AppServerSession {
+pub(super) struct AppServerSession {
   setup: AppServerSetup,
   phase: Phase,
   thread: Option<String>,
@@ -164,11 +164,6 @@ impl AppServerSession {
   pub fn runner_asks(&mut self, action: &str, arguments: &serde_json::Value) -> Option<String> {
     self.approval_results_to_collect = true;
     self.stream.runner_asks(action, arguments)
-  }
-
-  /// What the running turn spent so far, as Codex reported it; Codex gives it with the turn's end otherwise.
-  pub fn usage_so_far(&self) -> orchester_core::run::TokenUsage {
-    self.stream.usage_so_far()
   }
 
   pub fn complete(&self) -> bool {
