@@ -110,7 +110,7 @@ pub async fn call(
   if !read_only {
     let named = task.or_else(|| result.as_ref().ok().and_then(created_task));
     let outcome = match (&result, proposed) {
-      (Ok(_), Some(start)) => ActionOutcome::Proposed(start),
+      (Ok(_), Some(start)) => ActionOutcome::Proposed(Box::new(start)),
       (Ok(_), None) => ActionOutcome::Done,
       (Err(error), _) => refusal(error, translate),
     };

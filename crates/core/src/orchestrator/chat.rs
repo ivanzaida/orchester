@@ -208,7 +208,7 @@ pub enum ActionOutcome {
   },
   /// A start the agent proposed: nothing ran. It waits for a person to start it, as it was proposed, or to dismiss
   /// it; once started it is [`Self::Done`] or [`Self::Refused`].
-  Proposed(ProposedStart),
+  Proposed(Box<ProposedStart>),
   /// A person dismissed the proposed start: nothing ran.
   Dismissed,
 }

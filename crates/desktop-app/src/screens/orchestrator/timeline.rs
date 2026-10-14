@@ -189,7 +189,7 @@ fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
               scope: scope.clone(),
               seq: *seq,
               task: action.task.clone().unwrap_or_default(),
-              start: start.clone(),
+              start: (**start).clone(),
               at: *at,
             },
           ),
