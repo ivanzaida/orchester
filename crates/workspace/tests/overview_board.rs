@@ -108,6 +108,11 @@ fn board_needs_you_keeps_a_tool_request_whose_run_cannot_be_read() {
   assert_eq!(item.context().key, "overview.needs.contextUnread");
   assert_eq!(attention::count(&tasks), 1);
   assert_eq!(Figures::of(&tasks, support::at(0)).needs_you, 1);
+  assert_eq!(
+    BoardTab::NeedsYou.count(&tasks),
+    tasks.needs_you(),
+    "the tab counts the request though no task row shows it"
+  );
 }
 
 #[test]

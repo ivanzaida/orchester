@@ -52,15 +52,14 @@ impl BoardTab {
     }
   }
 
-  /// Tasks in the tab, and in *Needs you* the project's lines ([`Self::project_rows`]).
+  /// Tasks in the tab; in *Needs you* what every *Needs you* counts ([`attention::count`]): each waiting
+  /// object, so a task waiting on several steps and a request whose task cannot be read count as the pill
+  /// and the *Need your input* figure count them.
   pub fn count(self, tasks: &ProjectTasks) -> usize {
-    let waiting = self.waiting(tasks);
-    let held = tasks
-      .tasks
-      .iter()
-      .filter(|task| self.holds(task, tasks, &waiting))
-      .count();
-    held + waiting.iter().filter(|item| item.kind == NeedKind::Memory).count()
+    if self == Self::NeedsYou {
+      return attention::count(tasks);
+    }
+    tasks.tasks.iter().filter(|task| self.holds(task, tasks, &[])).count()
   }
 
   /// The tab's lines that are no task's, after its tasks and outside their limit: in *Needs you* the

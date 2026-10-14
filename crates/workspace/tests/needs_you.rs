@@ -20,8 +20,8 @@ use orchester_core::{
   store::{ActivityStore, MergeStore},
 };
 use orchester_workspace::tasks::{
-  attention::NeedKind,
-  board::BoardTab,
+  attention::{self, NeedKind},
+  board::{BoardTab, Figures},
   data::ProjectTasks,
   needs_you::{WaitingItem, WaitingKind},
 };
@@ -255,6 +255,18 @@ fn needs_you_lists_each_step_that_waits_in_one_run() {
     .map(|item| item.step.as_ref().map(|step| step.name.to_string()))
     .collect();
   assert_eq!(steps, [Some("Implement".to_owned()), Some("Research".to_owned())]);
+  assert_eq!(BoardTab::NeedsYou.rows(&tasks, 6, ", ").len(), 1, "one task waits");
+  let counts = [
+    BoardTab::NeedsYou.count(&tasks),
+    Figures::of(&tasks, at(0)).needs_you,
+    attention::items(&tasks).len(),
+  ];
+  assert_eq!(
+    counts,
+    [tasks.needs_you(); 3],
+    "the tab, the figure and the cards count each waiting object, as the pill does"
+  );
+  assert_eq!(tasks.needs_you(), 3);
 }
 
 #[test]
