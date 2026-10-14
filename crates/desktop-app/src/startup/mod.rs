@@ -11,6 +11,7 @@ mod failure;
 pub mod front;
 pub mod launch;
 mod parts;
+mod position;
 mod screen;
 
 use std::path::{Path, PathBuf};
@@ -20,6 +21,7 @@ use orchester_workspace::session::StartupError;
 
 pub use self::{
   launch::Launch,
+  position::{WindowPosition, WindowPositionError},
   screen::{StartupScreen, window},
 };
 

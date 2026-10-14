@@ -11,7 +11,7 @@ use orchester_app::{
   brand, clipboard, i18n,
   mcp::{self, AppMcp, McpKind, McpLink, McpMode, McpSettings, McpStatus, WindowLink},
   root::{Root, RootProps},
-  startup::Launch,
+  startup::{Launch, WindowPosition, WindowPositionError},
   system_icon, theme,
   ui::loader,
 };
@@ -23,7 +23,8 @@ use tokio::runtime::Runtime;
 /// window without taking the focus.
 const START_WITHOUT_FOCUS_VARIABLE: &str = "ORCHESTER_APP_MCP_START_WITHOUT_FOCUS";
 
-fn main() {
+fn main() -> Result<(), WindowPositionError> {
+  let position = WindowPosition::from_environment()?;
   let log = app_log::install();
 
   let runtime = Runtime::new().expect("the OS provides threads for the background runtime");
@@ -82,7 +83,7 @@ fn main() {
   let icon = brand::window_icon().expect("the bundled window icon is a valid PNG; covered by tests/brand.rs");
   let without_focus = std::env::var_os(START_WITHOUT_FOCUS_VARIABLE).is_some_and(|value| value == "1");
   let mut system_icon_pending = true;
-  WinitWindow::new(app, tree)
+  let window = WinitWindow::new(app, tree)
     .with_title(&title)
     .with_icon(icon)
     // The system's icons, once: the first frame is the first moment the UI thread has the window, which
@@ -100,8 +101,14 @@ fn main() {
     .with_min_size(960, 640)
     // The app draws its own title bar and frame (`chrome`); the OS keeps the rounded corners.
     .with_decorations(false)
-    .with_corner_radius(WindowCornerRadius::Rounded)
-    .run();
+    .with_corner_radius(WindowCornerRadius::Rounded);
+  let window = if let Some(position) = position {
+    let (x, y) = position.coordinates();
+    window.with_position(x, y)
+  } else {
+    window
+  };
+  window.run();
 
   // `run` returns once the window has closed: the server stops and its discovery file goes, then the
   // runners stop and the session records its end.
@@ -110,6 +117,7 @@ fn main() {
   }
   clipboard::clear_at_exit();
   launch.end();
+  Ok(())
 }
 
 /// The stored theme. The operating system's appearance is read on the runtime's blocking pool, never

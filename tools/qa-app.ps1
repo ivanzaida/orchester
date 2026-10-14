@@ -1,7 +1,7 @@
 # Starts orchester-app on a seeded QA project, isolated from the user's data, for QA and design
 # verification (.claude/skills/design-verification/SKILL.md):
 #
-#   powershell -File tools/qa-app.ps1 -Name <task> -Scenario <scenario> [-FakeAgents] [-NoRunner]
+#   powershell -File tools/qa-app.ps1 -Name <task> -Scenario <scenario> [-FakeAgents] [-NoRunner] [-WindowX <signed> -WindowY <signed>]
 #
 # 1. Builds orchester-app, the seed example and orchester-runner (-FakeAgents: the runner with its
 #    `test-agent` binaries, orchester-fake-codex among them; -NoRunner: no runner).
@@ -25,10 +25,16 @@ param(
     [ValidateSet("empty", "tasks", "task-states", "conversation", "changes", "cards", "decisions", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts")]
     [string]$Scenario,
     [switch]$FakeAgents,
-    [switch]$NoRunner
+    [switch]$NoRunner,
+    [int]$WindowX,
+    [int]$WindowY
 )
 $ErrorActionPreference = "Stop"
 
+# Signed physical coordinates are passed before window creation; neither means normal OS placement.
+if ($PSBoundParameters.ContainsKey('WindowX') -ne $PSBoundParameters.ContainsKey('WindowY')) {
+    throw "-WindowX and -WindowY must be supplied together"
+}
 if ($FakeAgents -and $NoRunner) {
     throw "-FakeAgents runs agents through the runner; it cannot go with -NoRunner"
 }
@@ -116,6 +122,15 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $env:ORCHESTER_APP_MCP_START_WITHOUT_FOCUS = "1"
 $env:ORCHESTER_APP_MCP_WINDOW_CONTROL = "on"
 $env:ORCHESTER_APP_MCP_DISCOVERY = $mcp
+if ($PSBoundParameters.ContainsKey('WindowX')) {
+    $env:ORCHESTER_APP_MCP_WINDOW_X = $WindowX.ToString([System.Globalization.CultureInfo]::InvariantCulture)
+    $env:ORCHESTER_APP_MCP_WINDOW_Y = $WindowY.ToString([System.Globalization.CultureInfo]::InvariantCulture)
+}
+else {
+    # Do not inherit stale coordinates from an earlier QA invocation.
+    $env:ORCHESTER_APP_MCP_WINDOW_X = $null
+    $env:ORCHESTER_APP_MCP_WINDOW_Y = $null
+}
 $appProgram = Join-Path $bin "orchester-app$exe"
 $appLog = Join-Path $qa "app.log"
 $appErrors = Join-Path $qa "app.err.log"
