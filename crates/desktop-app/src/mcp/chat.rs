@@ -1,12 +1,18 @@
 //! The Orchestrator chat's domain tools (`orchester_workspace::orchestrator::tools`), served to the chat's agent on
-//! a loopback server of their own: one per conversation, started when its first message is sent, with a bearer
-//! token of its own that only the project's runner is given, for the agent's MCP configuration. It serves none of
+//! a loopback server of their own: one per turn, started when its message is sent and stopped once the turn ended,
+//! with a bearer token of its own that only the project's runner is given, for the agent's MCP configuration; a
+//! token stops working with its turn. It serves none of
 //! the window's tools and none of the app's other tools, and its token is not the app server's, so the agent never
 //! reaches the app's own server. Each call goes through the same tool an MCP client of the app calls
-//! ([`super::domain`]), so it is refused or carried out exactly as for that client. The servers stop with the
-//! session.
+//! ([`super::domain`]), so it is refused or carried out exactly as for that client. The servers still under way
+//! stop with the session.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+  collections::HashMap,
+  path::{Path, PathBuf},
+  sync::Arc,
+  time::Duration,
+};
 
 use lurq::{
   app::i18n::I18n,
@@ -19,13 +25,14 @@ use lurq::{
     service::RequestContext,
   },
 };
-use orchester_core::id::ChatId;
+use orchester_core::{id::ChatMessageId, orchestrator::TurnState};
 use orchester_ipc::{ChatToken, ChatTools};
 use orchester_workspace::{
   app_mcp::{self, Translate},
   orchestrator::tools::{self, ChatScope},
   runner::Runners,
 };
+use orchester_store::ProjectDb;
 use parking_lot::Mutex;
 use serde_json::Value;
 
@@ -41,10 +48,13 @@ const INSTRUCTIONS: &str = "Orchester's tools for one project's Orchestrator cha
   approvals and pipelines, create and change task drafts, run a task, pause and resume a run. Name the project by \
   its id or name. A refusal is a tool error with a stable `code` and the app's own explanation in `reasons`.";
 
-/// The servers of the session's conversations.
+/// How long a served turn waits for a change before it is read once more: a runner that went away says nothing.
+const RECHECK: Duration = Duration::from_secs(5);
+
+/// The servers of the turns under way.
 #[derive(Clone, Default)]
 pub struct ChatServers {
-  running: Arc<Mutex<HashMap<ChatId, Running>>>,
+  running: Arc<Mutex<HashMap<ChatMessageId, Running>>>,
 }
 
 struct Running {
@@ -54,14 +64,19 @@ struct Running {
 }
 
 impl ChatServers {
-  /// Where the agent of `scope`'s conversation reaches its tools, and its token; the server starts when first
-  /// asked for. Tools explain a refusal in the words of `i18n`.
-  pub fn tools_for(&self, services: &Services, i18n: I18n, scope: ChatScope) -> Result<ChatTools, BindError> {
+  /// Serves the tools of the turn that answers `message` in `scope`'s conversation: a server and token of its own,
+  /// for as long as the turn runs ([`Self::end_with_turn`]); the same turn asked for again gets the same. Tools
+  /// explain a refusal in the words of `i18n`, in the locale it has at each call.
+  pub fn serve_turn(
+    &self,
+    services: &Services,
+    i18n: I18n,
+    (scope, message): (ChatScope, ChatMessageId),
+  ) -> Result<ChatTools, BindError> {
     let mut running = self.running.lock();
-    if let Some(running) = running.get(&scope.chat) {
+    if let Some(running) = running.get(&message) {
       return Ok(running.tools.clone());
     }
-    let chat = scope.chat;
     let handler = ChatHandler {
       services: Arc::new(domain::on(services)),
       translate: Arc::new(domain::translate(i18n)),
@@ -75,13 +90,52 @@ impl ChatServers {
       token: ChatToken::new(token.expose().to_owned()),
     };
     running.insert(
-      chat,
+      message,
       Running {
         _listening: listening,
         tools: tools.clone(),
       },
     );
     Ok(tools)
+  }
+
+  /// Stops serving the turn that answers `message` once it no longer thinks in the project at `root`: its token
+  /// stops working with it.
+  pub fn end_with_turn(&self, services: &Services, root: PathBuf, message: ChatMessageId) {
+    let (servers, runners) = (self.clone(), services.runners.clone());
+    services.runtime.spawn(async move {
+      let mut changes = runners.chats_of(&root);
+      while thinking(&root, message).await {
+        match tokio::time::timeout(RECHECK, changes.changed()).await {
+          Ok(Ok(())) | Err(_) => {}
+          // The project's counters went away with its runner's link: only the time says when to read again.
+          Ok(Err(_)) => tokio::time::sleep(RECHECK).await,
+        }
+      }
+      servers.end(message);
+    });
+  }
+
+  /// Stops serving the turn that answers `message` now: the runner never took it.
+  pub fn end(&self, message: ChatMessageId) {
+    self.running.lock().remove(&message);
+  }
+}
+
+/// Whether the turn that answers `message` still thinks in the project at `root`. One that cannot be read is taken
+/// as thinking: it is read again later.
+async fn thinking(root: &Path, message: ChatMessageId) -> bool {
+  let root = root.to_path_buf();
+  match tokio::task::spawn_blocking(move || ProjectDb::open(&root)?.chat_turn(message)).await {
+    Ok(Ok(turn)) => turn.is_some_and(|turn| turn.turn == TurnState::Thinking),
+    Ok(Err(error)) => {
+      tracing::warn!(%message, %error, "cannot read a turn of the Orchestrator chat; its tools stay served");
+      true
+    }
+    Err(error) => {
+      tracing::warn!(%message, %error, "reading a turn of the Orchestrator chat did not finish; its tools stay served");
+      true
+    }
   }
 }
 

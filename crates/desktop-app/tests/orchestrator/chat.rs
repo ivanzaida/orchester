@@ -153,6 +153,43 @@ fn orchestrator_acts_in_its_own_project_after_another_takes_its_name() {
   });
 }
 
+/// The addresses the agent was given its tools at, one per turn, in order.
+fn tool_addresses(screen: &Orchestrator) -> Vec<String> {
+  let log = std::fs::read_to_string(screen.root.join(".orchester").join("fake-chat.log")).unwrap_or_default();
+  log
+    .lines()
+    .filter_map(|line| line.strip_prefix("mcp-url: http://"))
+    .filter_map(|address| address.strip_suffix("/mcp"))
+    .map(str::to_owned)
+    .collect()
+}
+
+/// Whether something listens at `address` on loopback.
+fn listening(address: &str) -> bool {
+  let address: std::net::SocketAddr = address.parse().expect("a socket address");
+  std::net::TcpStream::connect_timeout(&address, std::time::Duration::from_millis(500)).is_ok()
+}
+
+#[test]
+fn orchestrator_tools_live_only_as_long_as_their_turn() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  screen.go(OrchestratorChat::New);
+  screen.send("What is running?");
+  screen.until("the first turn's end", |screen| {
+    tool_addresses(screen).len() == 1 && !screen.exists("orchestrator-thinking")
+  });
+  let first = tool_addresses(&screen).remove(0);
+  // The turn ended: its server, and the token only it accepted, are gone.
+  screen.until("the first turn's tools to stop", |_| !listening(&first));
+  screen.send("And what waits?");
+  screen.until("the second turn", |screen| tool_addresses(screen).len() == 2);
+  let second = tool_addresses(&screen).remove(1);
+  assert_ne!(first, second, "each turn gets a server and token of its own");
+  screen.until("the second turn's tools to stop", |screen| {
+    !screen.exists("orchestrator-thinking") && !listening(&second)
+  });
+}
+
 #[test]
 fn orchestrator_stops_an_answer_and_asks_again() {
   let mut screen = Orchestrator::new(Setup::Ready);

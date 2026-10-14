@@ -1,6 +1,6 @@
 //! Sending a message to the Orchestrator and stopping its answer, off the UI thread, through
-//! `orchester_workspace::orchestrator::send`. The chat's tools are served first (`mcp::chat`), so the runner is
-//! told where its agent reaches them.
+//! `orchester_workspace::orchestrator::send`. The turn's tools are served first (`mcp::chat`), so the runner is
+//! told where its agent reaches them, until the turn ends; a message the runner never took stops them at once.
 
 use lurq::app::{
   component::DevtoolsInspectable,
@@ -57,11 +57,21 @@ pub(super) fn send_action(ctx: &mut Ctx) -> SendAction {
         root: project.repo_root.clone(),
         chat: outgoing.chat,
       };
-      let tools = services.chat_tools.tools_for(&services, i18n, scope).map_err(|error| {
+      let served = services.chat_tools.serve_turn(&services, i18n, (scope, outgoing.message));
+      let tools = served.map_err(|error| {
         tracing::error!(%error, "the Orchestrator's tools could not be served");
         send::tools_unavailable()
       })?;
-      send::send(&services.runners, &project, &outgoing, tools).await?;
+      let sent = send::send(&services.runners, &project, &outgoing, tools).await;
+      match &sent {
+        Err(SendError::NotSent(_)) => services.chat_tools.end(outgoing.message),
+        Ok(()) | Err(SendError::Unconfirmed(_)) => {
+          services
+            .chat_tools
+            .end_with_turn(&services, project.repo_root.clone(), outgoing.message);
+        }
+      }
+      sent?;
       Ok(Sent {
         chat: outgoing.chat,
         from_draft,
