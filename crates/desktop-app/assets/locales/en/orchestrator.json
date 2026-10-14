@@ -241,7 +241,8 @@
       "connection": {
         "label": "Project connection",
         "description": "The agent CLI and sign-in the Orchestrator runs on.",
-        "none": "No usable connection"
+        "none": "No usable connection",
+        "why": "{{connection}}: {{reason}}"
       },
       "model": {
         "label": "Model",

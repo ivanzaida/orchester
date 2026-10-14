@@ -95,6 +95,8 @@ pub enum Setup {
   NotChosen,
   /// The project has no connection at all, so nothing is chosen either.
   NoConnection,
+  /// Only the Codex connection, which the Orchestrator does not run on: nothing is chosen.
+  CodexOnly,
   /// Chosen, but the project's runner cannot start: its program does not exist.
   NoRunner,
 }
@@ -128,7 +130,7 @@ impl Orchestrator {
     git(&repo, &["commit", "--quiet", "-m", "initial"]);
     let runner = match setup {
       Setup::NoRunner => data.dir.path().join("no-runner").join("orchester-runner"),
-      Setup::Ready | Setup::Codex | Setup::NotChosen | Setup::NoConnection => runner,
+      Setup::Ready | Setup::Codex | Setup::NotChosen | Setup::NoConnection | Setup::CodexOnly => runner,
     };
     let launch = Launch::begin_at(&data.database(), runner, data.runtime.handle(), None);
     let project = ProjectId::generate();
@@ -140,11 +142,13 @@ impl Orchestrator {
     let mut db = ProjectDb::open(&open.repo_root).expect("database");
     let claude = connection(AgentProvider::ClaudeCodeCli, "Claude · Kontur", &fake);
     let codex = connection(AgentProvider::CodexCli, "Codex · Kontur", &fake_codex);
-    if setup != Setup::NoConnection {
+    if !matches!(setup, Setup::NoConnection | Setup::CodexOnly) {
       db.create_connection(&claude).expect("Claude Code connection");
+    }
+    if setup != Setup::NoConnection {
       db.create_connection(&codex).expect("Codex connection");
     }
-    if !matches!(setup, Setup::NotChosen | Setup::NoConnection) {
+    if !matches!(setup, Setup::NotChosen | Setup::NoConnection | Setup::CodexOnly) {
       let on = if setup == Setup::Codex { codex.id() } else { claude.id() };
       let settings = OrchestratorSettings::new(on, ModelId::new("haiku").expect("model"), None);
       db.publish_orchestrator(&settings, Timestamp::now()).expect("settings");

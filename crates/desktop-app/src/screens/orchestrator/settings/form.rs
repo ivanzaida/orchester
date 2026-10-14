@@ -134,9 +134,36 @@ fn connection_row(ctx: &mut Ctx, connections: &[ConnectionChoice], choices: &Cho
   if connections.is_empty() {
     select = select.locked();
   }
+  // lurq's menu draws an option's detail on one line, cut to the menu's width; with none usable, each connection's
+  // whole reason is under the select too, wrapped.
+  let usable = connections.iter().any(|choice| choice.unavailable.is_none());
+  let reasons = connections
+    .iter()
+    .enumerate()
+    .filter(|_| !usable)
+    .filter_map(|(index, choice)| {
+      let reason = message_text(ctx, choice.unavailable.as_ref()?);
+      let text = ctx.t_args(
+        "orchestrator.settings.connection.why",
+        [("connection", &*choice.name), ("reason", &*reason)],
+      );
+      Some(
+        Text::new(&text)
+          .id(format!("orchestrator-connection-why-{index}"))
+          .variant(TypographyStyle::Caption)
+          .color(PaletteColor::TextMuted)
+          .width(Dimension::Px(SELECT_WIDTH)),
+      )
+    })
+    .collect::<Vec<_>>();
+  let control = Column::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::End)
+    .child(select.render(ctx))
+    .with_children(reasons);
   side_row(
     Label::new("orchestrator-connection", label).description(ctx.t("orchestrator.settings.connection.description")),
-    select.render(ctx),
+    control,
     Place::Within,
     false,
   )
