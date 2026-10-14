@@ -2,7 +2,8 @@
 //! the chat's project only. Each call goes through the same tool an MCP client of the app calls, so it is refused
 //! or carried out exactly as for that client: what only a person decides stays refused (`person_only`), approvals
 //! stay with people and runs start through the scheduling checks. A call that names another project is refused
-//! before it reaches the tool, and the tool is given the chat's project by its id, never by a name. What the agent changed, or tried to, is kept in its conversation as an action.
+//! before it reaches the tool, and the tool is given the chat's project by its id, never by a name. What the agent
+//! changed, or tried to, is kept in its conversation as an action.
 
 use std::path::PathBuf;
 
@@ -24,7 +25,8 @@ use crate::{
 };
 
 /// The tools of the chat, by name: reading the project's work, task drafts, proposing a task's run to the person
-/// ([`proposal`]), pausing and resuming a run, and holding and releasing new starts. Approvals, plans, questions, project setup and what removes work are not among them.
+/// ([`proposal`]), pausing and resuming a run, and holding and releasing new starts. Approvals, plans, questions,
+/// project setup and what removes work are not among them.
 pub const TOOLS: [&str; 12] = [
   "list_tasks",
   "get_task",

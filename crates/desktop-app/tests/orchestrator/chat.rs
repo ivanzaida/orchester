@@ -7,7 +7,6 @@ use orchester_core::{
   orchestrator::{ActionOutcome, EntryKind, TurnState},
   store::TaskStore,
 };
-
 use orchester_store::ProjectDb;
 
 use super::harness::{Orchestrator, Setup};

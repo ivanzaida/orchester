@@ -12,8 +12,8 @@
 //!
 //! - Read-only, in the project folder only: the only built-in tools it is offered are `Read`, `Glob` and `Grep`, so it
 //!   has no shell and no edit tool at all. They get no allow rule, since a bare tool name would allow every path the
-//!   person can read: in the `default` permission mode a read in the working folder runs, one outside it would ask,
-//!   and print mode denies what it would ask. The folders that hold secrets are denied by rule as well (`denied`: the
+//!   person can read: in the `default` permission mode a read in the working folder runs, one outside it would ask, and
+//!   print mode denies what it would ask. The folders that hold secrets are denied by rule as well (`denied`: the
 //!   runner's private files, which hold other invocations' MCP tokens, and the account's own CLI folder).
 //! - Its only MCP server is Orchester's domain tools for this project (`orchester`), from a file the runner writes for
 //!   the turn with the chat's bearer token in it ([`super::ClaudeMcpConfig`]); its tools run without asking: they check

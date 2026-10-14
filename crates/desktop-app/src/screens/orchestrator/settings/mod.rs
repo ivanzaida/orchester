@@ -28,7 +28,6 @@ use orchester_workspace::{
 };
 
 use self::publish::{Publishing, Save};
-
 use crate::{
   navigation::Navigation,
   project::ShownProject,
