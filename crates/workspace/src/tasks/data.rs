@@ -25,6 +25,7 @@ use super::{
   delivery::Unmerged,
   detail::run_store_error,
   list::{AwaitedPlan, AwaitedQuestion, AwaitedStep, CurrentStep, Latest, LatestRun, Phases, StepWait},
+  needs_you::WaitingOnce,
   run_approvals,
   unreadable::Unreadable,
 };
@@ -89,6 +90,8 @@ pub struct ProjectTasks {
   pub group_holds: Arc<BTreeMap<TaskId, GroupHold>>,
   /// The tasks of reviewed groups, which a group starts in its turn unless they are Canceled.
   pub grouped: Arc<std::collections::BTreeSet<TaskId>>,
+  /// Where a person holds new starts.
+  pub queue: Arc<super::hold::HeldQueue>,
   /// Tool requests awaiting a person's decision anywhere in this project, oldest first.
   pub pending_tool_approvals: Arc<Vec<ShownApproval>>,
   /// Tool requests auto mode's reviewer is judging: they wait without asking the person (no dialog, no
@@ -107,6 +110,8 @@ pub struct ProjectTasks {
   pub lost_to_runner: usize,
   /// The active runs that auto-approve their agents' requests, oldest task first.
   pub auto_approving: Arc<Vec<AutoApprovingRun>>,
+  /// What waits for the person, once asked for ([`Self::waiting`]).
+  pub waiting_once: WaitingOnce,
 }
 
 /// An active run that auto-approves, as the status bar names it.
@@ -180,6 +185,7 @@ impl ProjectTasks {
   pub fn not_shared_view(&self) -> Self {
     Self {
       tasks: self.not_shared.clone(),
+      waiting_once: WaitingOnce::default(),
       ..self.clone()
     }
   }
@@ -237,6 +243,7 @@ impl ProjectTasks {
       kept_tags: Arc::new(kept_tags),
       former_keys: Arc::new(db.former_keys()?),
       group_holds: Arc::new(group_holds),
+      queue: Arc::new(super::hold::held_in(db)?),
       grouped: Arc::new(grouped),
       pipelines: Arc::new(published_pipelines(db)?),
       missing_pipelines: Arc::new(db.missing_pipelines()?),
@@ -247,6 +254,7 @@ impl ProjectTasks {
       runs: Arc::new(counts),
       lost_to_runner: 0,
       auto_approving: Arc::new(auto_approving),
+      waiting_once: WaitingOnce::default(),
     })
   }
 
@@ -271,6 +279,7 @@ impl ProjectTasks {
     Self {
       phases: Arc::new(phases),
       lost_to_runner,
+      waiting_once: WaitingOnce::default(),
       ..self.clone()
     }
   }

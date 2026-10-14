@@ -242,6 +242,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::agents::typography(palette))
       .chain(super::instructions::typography(palette))
       .chain(super::skills::typography(palette))
+      .chain(super::orchestrator::typography(palette))
       .chain(super::overview::typography(palette))
       .chain(super::needs_you::typography(palette))
       .collect(),

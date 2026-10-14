@@ -17,6 +17,7 @@ fn bounds(window: &mut Window, id: &str) -> ElementRect {
 fn needs_you_panel_keeps_the_projects_header_over_its_list_while_it_scrolls() {
   let (mut window, seeded) = seeded("tasks");
   open(&mut window);
+  // Expanding the lowest item brings the list to its end, to show it whole.
   let (item, _) = expand_approval(&mut window, "Add retry to webhook sender");
   settle(&mut window);
   let group = format!("needs-you-group-{}", seeded.project);
@@ -24,15 +25,16 @@ fn needs_you_panel_keeps_the_projects_header_over_its_list_while_it_scrolls() {
   let list = bounds(&mut window, "needs-you-list");
   let item_before = bounds(&mut window, &item);
   let (x, y) = (list.x + list.width / 2.0, list.y + list.height / 2.0);
+  // A positive delta scrolls toward the list's start.
   for _ in 0..4 {
     window.tree.mouse_move(x, y);
-    window.tree.scroll(x, y, 0.0, -600.0, ScrollPhase::Scroll);
+    window.tree.scroll(x, y, 0.0, 600.0, ScrollPhase::Scroll);
     window.pass();
     window.pass();
   }
   assert!(
-    bounds(&mut window, &item).y < item_before.y,
-    "the list scrolled: {item_before:?}"
+    bounds(&mut window, &item).y > item_before.y,
+    "the list scrolled back: {item_before:?}"
   );
   let after = bounds(&mut window, &group);
   assert!(

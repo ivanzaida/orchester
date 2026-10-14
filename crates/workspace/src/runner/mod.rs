@@ -9,6 +9,7 @@
 //! object) exists only on Windows.
 
 mod ask;
+mod chat;
 mod check;
 mod connection;
 mod idle;

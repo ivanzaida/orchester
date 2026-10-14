@@ -37,6 +37,63 @@ pub enum GroupHold {
   },
   /// The task is Canceled: its group never starts it and goes on with the others.
   Canceled,
+  /// A person held new starts in the whole project ([`QueueHolds`]); running runs go on.
+  QueueHeld,
+  /// A person held new starts in this group; running runs go on.
+  Paused,
+}
+
+/// Where a person holds new starts: the whole project, or one reviewed group.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum HoldScope {
+  Project,
+  Group(IdempotencyKey),
+}
+
+/// Who held new starts: a person in the window, or automation (an MCP client of the app, the Orchestrator's agent).
+/// Automation may release only a hold automation set; a person's hold is a person's to release.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum HoldActor {
+  Person,
+  Automation,
+}
+
+/// What holding or releasing new starts did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HoldChange {
+  Changed,
+  /// They were held, or let go on, already.
+  Unchanged,
+  /// Automation tried to release a hold a person set: nothing changed.
+  PersonOnly,
+}
+
+/// The holds on new starts. Only first runs wait: running runs, resumes and runs again go on.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct QueueHolds {
+  /// New starts are held in the whole project.
+  pub project: bool,
+  /// The groups whose new starts are held.
+  pub groups: Vec<IdempotencyKey>,
+  /// The holds a person set, which only a person releases.
+  pub by_person: Vec<HoldScope>,
+}
+
+impl QueueHolds {
+  /// What holds a first run of a task in `group` (`None`: in no group), if anything does.
+  pub fn of(&self, group: Option<IdempotencyKey>) -> Option<GroupHold> {
+    if self.project {
+      Some(GroupHold::QueueHeld)
+    } else {
+      group
+        .filter(|group| self.groups.contains(group))
+        .map(|_| GroupHold::Paused)
+    }
+  }
+
+  pub fn is_empty(&self) -> bool {
+    !self.project && self.groups.is_empty()
+  }
 }
 
 impl GroupHold {
@@ -54,14 +111,15 @@ impl GroupHold {
   /// end on its own, and is not the reopened-project hold, which Start run releases instead; or
   /// the tasks wait for blocking tasks, which may never finish.
   pub const fn releases_unstarted(&self) -> bool {
-    matches!(self, Self::Blocked { .. }) || (!self.clears_on_its_own() && !matches!(self, Self::SessionEnded))
+    matches!(self, Self::Blocked { .. })
+      || (!self.clears_on_its_own() && !matches!(self, Self::SessionEnded | Self::QueueHeld | Self::Paused))
   }
 
-  /// Whether the hold stays when the project is reopened: a failed task or the spent cap holds
+  /// Whether the hold stays when the project is reopened: a failed task, the spent cap or a person's hold holds
   /// the group whatever the session. Every other hold of unstarted tasks becomes the session hold,
   /// so they start again only through an explicit Start run (a failed start included).
   pub const fn outlives_session(&self) -> bool {
-    matches!(self, Self::FailedTask | Self::GroupCap)
+    matches!(self, Self::FailedTask | Self::GroupCap | Self::QueueHeld | Self::Paused)
   }
 }
 

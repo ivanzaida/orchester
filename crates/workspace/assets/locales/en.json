@@ -160,6 +160,10 @@
     }
   },
   "tasks": {
+    "queue": {
+      "notInGroup": "{{task}} is in no reviewed group: hold new starts in the whole project instead.",
+      "personHeld": "A person held these new starts in Tasks: only a person releases them there."
+    },
     "bulk": {
       "reviewChanged": "A selected task’s pipeline changed. Close this review and review the selection again.",
       "hold": {
@@ -171,7 +175,9 @@
         "failure": "Held after a task failed or was canceled. Select the waiting tasks and choose Return to drafts to schedule them again.",
         "startFailed": "Start failed. Check the runner log and retry after resolving the problem.",
         "blocked": "Waiting for blocking tasks to finish. The group goes on with its other tasks.",
-        "canceled": "This task is Canceled, so its group does not start it. The group goes on with its other tasks."
+        "canceled": "This task is Canceled, so its group does not start it. The group goes on with its other tasks.",
+        "queueHeld": "New starts are held in this project. Release them in Tasks to start it; running runs go on.",
+        "paused": "New starts are held in this task's group. Release the group in Tasks to start it; running runs go on."
       },
       "heldLine": {
         "sessionEnded": {
@@ -217,6 +223,14 @@
         "canceled": {
           "one": "{{task}} is Canceled: its group does not start it",
           "other": "{{count}} tasks are Canceled: their group does not start them"
+        },
+        "queueHeld": {
+          "one": "{{task}} waits: new starts are held · Release in Tasks",
+          "other": "{{count}} tasks wait: new starts are held · Release in Tasks"
+        },
+        "paused": {
+          "one": "{{task}} waits: its group's new starts are held · Release in Tasks",
+          "other": "{{count}} tasks wait: their group's new starts are held · Release in Tasks"
         }
       },
       "held": {
@@ -230,7 +244,9 @@
         "preflight": "Held · cannot start yet",
         "startFailed": "Held · start failed",
         "blocked": "Waiting for blocking tasks",
-        "canceled": "Canceled · not started by its group"
+        "canceled": "Canceled · not started by its group",
+        "queueHeld": "Held · new starts held",
+        "paused": "Held · group's new starts held"
       },
       "notDraft": "This task is already queued.",
       "hasRun": "This task already has a run.",
@@ -1462,6 +1478,34 @@
       "cliMissing": "The CLI isn't on the PATH. Install it, then check again.",
       "folderMissing": "The account's folder {{folder}} no longer exists.",
       "terminal": "The terminal could not be opened. Run the command in a terminal of your own."
+    }
+  },
+  "orchestrator": {
+    "settings": {
+      "connectionGone": "The Orchestrator's connection was removed. Choose another one.",
+      "cliOnly": "The Orchestrator runs on Claude Code connections.",
+      "codexHeldBack": "Not for the Orchestrator yet: Codex's sandbox can't be shown to keep the agent's reads in the project folder, away from your sign-in and other projects' tokens."
+    },
+    "send": {
+      "blank": "Write a message first.",
+      "notReady": "Choose a connection and model in Orchestrator settings and publish them before you send.",
+      "runnerUnavailable": "Not sent · the runner didn't answer",
+      "lost": "The runner's answer was lost · your message is kept",
+      "busy": "The Orchestrator is still answering your last message.",
+      "shuttingDown": "Not sent · the runner is stopping",
+      "failed": "Not sent · the runner refused the message",
+      "toolsUnavailable": "Not sent · the Orchestrator's tools couldn't be served on this computer",
+      "dailyBudgetUsed": "Not sent · today's token budget is used. The Orchestrator's tokens count toward it: wait until tomorrow or raise it in Project settings › Limits."
+    },
+    "stop": {
+      "failed": "The answer couldn't be stopped: the runner didn't answer."
+    },
+    "proposal": {
+      "changed": "{{task}} changed after it was proposed: its details, its pipeline or the pipeline's version are not what you were asked to start. Nothing started; ask the Orchestrator to propose it again."
+    },
+    "tools": {
+      "otherProject": "The Orchestrator acts only in its own project.",
+      "startWaits": "Nothing started yet: starting {{task}} on {{pipeline}} waits for the person, who starts or dismisses it in the conversation. Tell them it is ready to start."
     }
   }
 }

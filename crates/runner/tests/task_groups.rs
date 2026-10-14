@@ -4,6 +4,8 @@ mod agent_slots;
 mod blocked;
 #[path = "task_groups/canceled.rs"]
 mod canceled;
+#[path = "task_groups/held.rs"]
+mod held;
 #[path = "task_groups/reopen.rs"]
 mod reopen;
 mod support;

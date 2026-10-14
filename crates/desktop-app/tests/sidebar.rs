@@ -121,8 +121,26 @@ fn sidebar_lists_the_project_screens_in_the_design_order_and_goes_to_them() {
     tops.windows(2).all(|pair| pair[0] < pair[1]),
     "{order:?} from the top: {tops:?}"
   );
+  // The Orchestrator is built (`tests/orchestrator/`): its entry opens the chat, not a placeholder.
+  assert_eq!(
+    window
+      .texts("nav-orchestrator")
+      .expect("the item shows")
+      .last()
+      .map(String::as_str),
+    Some("Orchestrator")
+  );
+  press(&mut window, "nav-orchestrator");
+  window.until("the Orchestrator", |window| {
+    window.texts("screen-orchestrator").is_some()
+  });
+  assert!(
+    window
+      .texts("screen-orchestrator")
+      .is_some_and(|texts| !texts.contains(&"This screen isn't built yet.".to_owned())),
+    "the Orchestrator is its own screen"
+  );
   for (item, screen, title) in [
-    ("nav-orchestrator", "screen-orchestrator", "Orchestrator"),
     ("nav-merge_queue", "screen-merge_queue", "Merge queue"),
     ("nav-memory", "screen-memory", "Memory"),
   ] {

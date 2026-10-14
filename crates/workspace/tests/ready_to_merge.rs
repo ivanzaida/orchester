@@ -65,9 +65,9 @@ fn work_on_branch(fixture: &Fixture, run: &Run, file: &str) {
 fn ready_to_merge(tasks: &ProjectTasks) -> Vec<String> {
   tasks
     .waiting()
-    .into_iter()
+    .iter()
     .filter(|item| item.kind == WaitingKind::ReadyToMerge)
-    .filter_map(|item| item.task.map(|task| task.title.to_string()))
+    .filter_map(|item| item.task.as_ref().map(|task| task.title.to_string()))
     .collect()
 }
 

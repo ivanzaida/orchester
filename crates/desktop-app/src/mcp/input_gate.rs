@@ -25,6 +25,7 @@ use lurq::mcp::{
     service::RequestContext,
   },
 };
+use orchester_core::run::Answerer;
 use parking_lot::Mutex;
 
 use super::clients::SessionMark;
@@ -98,6 +99,16 @@ pub enum Guarded {
 pub fn input_may_decide(gate: Option<&InputGate>, policy: Guarded) -> bool {
   !lurq::app::events::is_synthetic_input()
     || gate.is_some_and(|gate| !gate.protecting() && gate.widening_allowed(policy))
+}
+
+/// Who gives an answer classified as `policy` with the input being delivered: the person with OS input; automation
+/// with lurq's synthetic input (an MCP client's), where [`input_may_decide`] lets it; `None` when only a person gives
+/// it. Read in the handler, while lurq delivers the input.
+pub fn answerer(gate: Option<&InputGate>, policy: Guarded) -> Option<Answerer> {
+  if !lurq::app::events::is_synthetic_input() {
+    return Some(Answerer::Person);
+  }
+  input_may_decide(gate, policy).then_some(Answerer::Automation)
 }
 
 /// lurq's tools that send the window input or change it, which lurq denies while a protected control is

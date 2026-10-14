@@ -10,6 +10,9 @@
 
 mod header;
 mod query;
+mod queue;
+
+pub(crate) use self::queue::actor_now;
 mod readiness;
 mod row;
 mod states;
@@ -116,7 +119,7 @@ impl Component for TasksScreen {
           .right(TasksSpacing::Page.role()),
       )
       .spacing(SpacingSize::Md)
-      .child(header::header(ctx, id));
+      .child(header::header(ctx, id, queue(&project)));
     match project.feed.tasks.get() {
       TasksState::Ready(tasks) if tasks.tasks.is_empty() => page.child(states::empty_project(ctx, id)),
       TasksState::Ready(tasks) => {
@@ -166,6 +169,7 @@ impl TasksScreen {
     });
     let page = page
       .child(header::tabs(ctx, id, list, Some(counts)))
+      .with_children(held_groups(ctx, project, tasks))
       .child(query::query(ctx, &self.choices, Some(tasks)));
     if rows.is_empty() {
       // Rows that come back are placed afresh, at their top.
@@ -236,6 +240,35 @@ impl TasksScreen {
       search.set(String::new());
       pipeline.set(PipelineFilter::default());
     })
+  }
+}
+
+/// The groups whose new starts are held, under the tabs; nothing when none is.
+fn held_groups(ctx: &mut Ctx, project: &ShownProject, tasks: &ProjectTasks) -> Option<Element> {
+  let id = project.open.project.id();
+  (!tasks.queue.groups.is_empty()).then(|| {
+    ctx.mount_keyed::<queue::QueueControls>(
+      &format!("tasks-queue-groups-{id}"),
+      queue::QueueProps {
+        project: id,
+        root: project.open.repo_root.clone(),
+        queue: (*tasks.queue).clone(),
+        part: queue::QueuePart::Groups,
+      },
+    )
+  })
+}
+
+/// The holds on new starts, once the tasks are read.
+fn queue(project: &ShownProject) -> Option<queue::QueueProps> {
+  match project.feed.tasks.get() {
+    TasksState::Ready(tasks) => Some(queue::QueueProps {
+      project: project.open.project.id(),
+      root: project.open.repo_root.clone(),
+      queue: (*tasks.queue).clone(),
+      part: queue::QueuePart::Project,
+    }),
+    TasksState::Loading | TasksState::Failed(_) => None,
   }
 }
 

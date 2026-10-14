@@ -11,12 +11,16 @@
 //! Approvals and questions with suggested answers are answered in place, through their cards in the run's
 //! timeline ([`WaitingKind::card_key`], [`InPlace`]); the others open their task, or the project's memory.
 
-use std::{collections::HashSet, path::Path, sync::Arc};
+use std::{
+  collections::HashSet,
+  path::Path,
+  sync::{Arc, OnceLock},
+};
 
 use orchester_core::{
   id::{RunId, StepExecutionId, TaskId},
-  question::AskedQuestions,
-  run::{RunNumber, TaskPhase},
+  question::{Answer, AskedQuestions, QuestionState},
+  run::{Answerer, DecidedBy, RunNumber, TaskPhase, ToolApprovalDecision},
   task::{Task, organization::WorkflowStatus},
   time::Timestamp,
 };
@@ -30,7 +34,7 @@ use super::{
   list::{AwaitedDecision, AwaitedPlan, AwaitedQuestion, Latest, LatestRun, StepWait},
   standing::CurrentStep,
   timeline::{
-    self, Item, Sources, approval_key,
+    self, Item, ItemKind, Sources, approval_key,
     load::{Requests, requests_in},
     question::card_key,
   },
@@ -114,6 +118,28 @@ impl WaitingKind {
   }
 }
 
+/// What waits in a project ([`ProjectTasks::waiting`]), worked out from the rest of its [`ProjectTasks`] the first
+/// time it is asked for and kept with it, so the pill, a tab's mark and the panel do not work it out again in each
+/// render. A reading of the tasks starts without it, and so does every [`ProjectTasks`] made from another
+/// ([`ProjectTasks::without_runner`], [`ProjectTasks::not_shared_view`]).
+#[derive(Clone, Default)]
+pub struct WaitingOnce(Arc<OnceLock<Arc<[WaitingItem]>>>);
+
+/// It follows from the other fields, so it never tells two [`ProjectTasks`] apart.
+impl PartialEq for WaitingOnce {
+  fn eq(&self, _: &Self) -> bool {
+    true
+  }
+}
+
+impl Eq for WaitingOnce {}
+
+impl std::fmt::Debug for WaitingOnce {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter.write_str("WaitingOnce")
+  }
+}
+
 /// One object waiting for the person.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WaitingItem {
@@ -129,8 +155,33 @@ pub struct WaitingItem {
 }
 
 impl ProjectTasks {
-  /// Everything that waits for the person in the project, oldest first.
-  pub fn waiting(&self) -> Vec<WaitingItem> {
+  /// Everything that waits for the person in the project, oldest first: what the Needs you panel lists and every
+  /// Needs you counts ([`Self::needs_you`]). Worked out once for these tasks ([`WaitingOnce`]).
+  pub fn waiting(&self) -> Arc<[WaitingItem]> {
+    self
+      .waiting_once
+      .0
+      .get_or_init(|| self.work_out_waiting().into())
+      .clone()
+  }
+
+  /// What every *Needs you* counts — the pill, the status bar, a tab's mark, the Overview's figure, column and
+  /// tab, the task list's tab and All projects: everything that waits for the person ([`Self::waiting`]).
+  /// Whether a dialog or the panel is open changes nothing.
+  pub fn needs_you(&self) -> usize {
+    self.waiting_once.0.get_or_init(|| self.work_out_waiting().into()).len()
+  }
+
+  /// The tasks something of waits for the person ([`Self::waiting`]): those a *Needs you* tab lists.
+  pub fn waiting_tasks(&self) -> HashSet<TaskId> {
+    self
+      .waiting()
+      .iter()
+      .filter_map(|item| item.task.as_ref().map(|task| task.id))
+      .collect()
+  }
+
+  fn work_out_waiting(&self) -> Vec<WaitingItem> {
     let mut items: Vec<WaitingItem> = self
       .pending_tool_approvals
       .iter()
@@ -153,22 +204,6 @@ impl ProjectTasks {
     }
     items.sort_by_key(|item| item.since);
     items
-  }
-
-  /// What every *Needs you* counts — the pill, the status bar, a tab's mark, the Overview's figure, column and
-  /// tab, the task list's tab and All projects: everything that waits for the person ([`Self::waiting`]).
-  /// Whether a dialog or the panel is open changes nothing.
-  pub fn needs_you(&self) -> usize {
-    self.waiting().len()
-  }
-
-  /// The tasks something of waits for the person ([`Self::waiting`]): those a *Needs you* tab lists.
-  pub fn waiting_tasks(&self) -> HashSet<TaskId> {
-    self
-      .waiting()
-      .into_iter()
-      .filter_map(|item| item.task.map(|task| task.id))
-      .collect()
   }
 
   fn task(&self, id: TaskId) -> Option<&Task> {
@@ -328,4 +363,54 @@ impl InPlace {
     .into_iter()
     .find(|item| *item.key == *key)
   }
+
+  /// How the request keyed `key` went once it no longer waits, as the panel's note says it (`FETWe`), while
+  /// its run `lost` its runner or not.
+  pub fn settled(&self, key: &str, lost: bool) -> Settled {
+    let Some(item) = self.card(key, lost) else {
+      return Settled::Unknown;
+    };
+    match item.kind {
+      ItemKind::Approval(card) => match card.decided {
+        Some(Some(ToolApprovalDecision::Approved)) => Settled::Approved { by: card.decided_by },
+        Some(Some(ToolApprovalDecision::Denied)) => Settled::Denied { by: card.decided_by },
+        Some(None) => Settled::Ended { at: card.decided_at },
+        None if lost => Settled::Lost,
+        None => Settled::Unknown,
+      },
+      ItemKind::Choice(card) => match card.asked.state {
+        QuestionState::Answered { answers, by, at } => Settled::Answered {
+          answer: answers.into_iter().next(),
+          by,
+          at,
+        },
+        QuestionState::Interrupted { at } => Settled::Ended { at: Some(at) },
+        QuestionState::Waiting if lost => Settled::Lost,
+        QuestionState::Waiting => Settled::Unknown,
+      },
+      _ => Settled::Unknown,
+    }
+  }
+}
+
+/// How a request answered in place went, once it no longer waits.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Settled {
+  /// A tool request approved, by whom when that was recorded.
+  Approved { by: Option<DecidedBy> },
+  /// A tool request denied, by whom when that was recorded.
+  Denied { by: Option<DecidedBy> },
+  /// A question answered `by` at `at`; `answer` is its first question's.
+  Answered {
+    answer: Option<Answer>,
+    by: Answerer,
+    at: Timestamp,
+  },
+  /// The asking agent stopped waiting before an answer reached it, at `at` when that was recorded.
+  Ended { at: Option<Timestamp> },
+  /// Its run lost its runner: no agent waits for the answer now.
+  Lost,
+  /// It no longer waits, and what was read does not say how yet: it was settled after the read, or belongs
+  /// to an earlier run.
+  Unknown,
 }

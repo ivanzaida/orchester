@@ -11,6 +11,7 @@ mod all_projects;
 mod connections;
 mod instructions;
 mod not_found;
+mod orchestrator;
 mod overview;
 mod pipelines;
 mod placeholder;
@@ -77,8 +78,10 @@ fn project_screen(ctx: &mut Ctx, project: ProjectId, page: &ProjectPage) -> Elem
 fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Element {
   match page {
     ProjectPage::Overview(tab) => overview::screen(ctx, project, *tab),
+    ProjectPage::Orchestrator(chat) => orchestrator::screen(ctx, project, *chat),
+    ProjectPage::OrchestratorSettings => orchestrator::settings(ctx, project),
     // Listed in the sidebar as the design draws it (`q9mf0k`); their own tasks build them.
-    ProjectPage::Orchestrator | ProjectPage::MergeQueue | ProjectPage::Memory => placeholder(ctx, page.screen()),
+    ProjectPage::MergeQueue | ProjectPage::Memory => placeholder(ctx, page.screen()),
     ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),
     ProjectPage::NewTask => task_form::new_task(ctx, project),
     ProjectPage::EditTask(key) => task_form::edit_task(ctx, project, key),

@@ -16,7 +16,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use super::{ProjectDb, code_index, invocation_prompts, native, reviewer_usage, step_outputs};
+use super::{ProjectDb, code_index, invocation_prompts, native, orchestrator_usage, reviewer_usage, step_outputs};
 use crate::{
   StoreError,
   rows::{corrupt, decode_body, decode_document, decode_json, encode_json, parse},
@@ -279,6 +279,7 @@ impl ActivityStore for ProjectDb {
       .query_map([since.unix_millis()], |row| row.get::<_, String>(0))?
       .collect::<Result<Vec<_>, _>>()?;
     let mut used = reviewer_usage::counted_since(&self.connection, since)?;
+    used += orchestrator_usage::counted_since(&self.connection, since)?;
     for payload in payloads {
       match decode_json("agent event", EVENT_SCHEMA, &payload)? {
         AgentEvent::TurnCompleted { usage } => used += usage.counted_tokens(),

@@ -8,6 +8,7 @@ use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
   integration::Leftovers,
   limits::AgentSlots,
+  sharing::TaskRevision,
 };
 use orchester_ipc::{Command, Reply};
 use orchester_store::StoreError;
@@ -55,6 +56,7 @@ impl Runners {
       task,
       after,
       remove_worktrees,
+      revision: None,
     };
     run_started(self.ask(self.displayed().as_deref(), command).await?, "RunAgain")
   }
@@ -64,13 +66,14 @@ impl Runners {
     &self,
     project: &OpenProject,
     key: IdempotencyKey,
-    (task, after): (TaskId, RunId),
+    (task, after, revision): (TaskId, RunId, Option<TaskRevision>),
   ) -> Result<RunId, RunRequestError> {
     let command = Command::RunAgain {
       key,
       task,
       after,
       remove_worktrees: None,
+      revision,
     };
     run_started(self.ask_project(project, command).await?, "RunAgain")
   }
@@ -89,6 +92,7 @@ impl Runners {
       task,
       after,
       remove_worktrees,
+      revision: None,
     };
     run_started(self.ask_project(project, command).await?, "RunAgain")
   }
@@ -174,7 +178,7 @@ impl Runners {
 
   /// Asks `project`'s runner, starting it if needed and waiting for it to attach. A project no tab
   /// shows keeps its runner while the request is under way, then lets it stop once it has no work.
-  async fn ask_project(&self, project: &OpenProject, command: Command) -> Result<Reply, RequestError> {
+  pub(super) async fn ask_project(&self, project: &OpenProject, command: Command) -> Result<Reply, RequestError> {
     let root = project.repo_root.as_path();
     self.ensure(root, project.project.name().as_str());
     let _pin = self.pin(root);
@@ -184,7 +188,7 @@ impl Runners {
   }
 
   /// Waits until the runner of `root` has attached (it reported its work), or gave up.
-  async fn attached(&self, root: &Path) -> Result<(), RequestError> {
+  pub(super) async fn attached(&self, root: &Path) -> Result<(), RequestError> {
     let Some(mut updates) = self
       .inner
       .projects

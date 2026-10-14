@@ -1,4 +1,4 @@
-use super::{ADD_PROJECT, CONNECTIONS, EDIT, NEW, PROJECT_PATTERN, SETTINGS, TASKS, project_screen_path};
+use super::{ADD_PROJECT, CONNECTIONS, EDIT, NEW, ORCHESTRATOR, PROJECT_PATTERN, SETTINGS, TASKS, project_screen_path};
 
 /// A screen of the window, as the sidebar, the tabs and the app's MCP tools name it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -8,6 +8,7 @@ pub enum Screen {
   Settings,
   Overview,
   Orchestrator,
+  OrchestratorSettings,
   Tasks,
   NewTask,
   EditTask,
@@ -29,12 +30,13 @@ pub enum Screen {
 }
 
 impl Screen {
-  pub const ALL: [Self; 23] = [
+  pub const ALL: [Self; 24] = [
     Self::AllProjects,
     Self::AddProject,
     Self::Settings,
     Self::Overview,
     Self::Orchestrator,
+    Self::OrchestratorSettings,
     Self::Tasks,
     Self::NewTask,
     Self::EditTask,
@@ -83,6 +85,7 @@ impl Screen {
       Self::Settings => "settings",
       Self::Overview => "overview",
       Self::Orchestrator => "orchestrator",
+      Self::OrchestratorSettings => "orchestrator_settings",
       Self::Tasks => "tasks",
       Self::NewTask => "new_task",
       Self::EditTask => "edit_task",
@@ -116,6 +119,7 @@ impl Screen {
       Self::Settings => "shell.screens.settings",
       Self::Overview => "shell.screens.overview",
       Self::Orchestrator => "shell.screens.orchestrator",
+      Self::OrchestratorSettings => "shell.screens.orchestratorSettings",
       Self::Tasks => "shell.screens.tasks",
       Self::NewTask => "shell.screens.newTask",
       Self::EditTask => "shell.screens.editTask",
@@ -149,8 +153,9 @@ impl Screen {
       | Self::EditTask
       | Self::Task
       | Self::NewConnection
-      | Self::EditConnection => None,
-      Self::Orchestrator => Some("orchestrator"),
+      | Self::EditConnection
+      | Self::OrchestratorSettings => None,
+      Self::Orchestrator => Some(ORCHESTRATOR),
       Self::Tasks => Some(TASKS),
       Self::MergeQueue => Some("merge-queue"),
       Self::PullRequests => Some("pull-requests"),
@@ -181,6 +186,7 @@ impl Screen {
       Self::Task => format!("{tasks}/:key/:tab"),
       Self::NewConnection => format!("{PROJECT_PATTERN}/{CONNECTIONS}/{NEW}"),
       Self::EditConnection => format!("{PROJECT_PATTERN}/{CONNECTIONS}/:connection/{EDIT}"),
+      Self::OrchestratorSettings => format!("{PROJECT_PATTERN}/{ORCHESTRATOR}/{SETTINGS}"),
       screen => project_screen_path(PROJECT_PATTERN, screen),
     }
   }

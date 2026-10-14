@@ -26,7 +26,7 @@ pub const LIMITS: &str =
 
 /// Whether `args` start the reviewer rather than an agent: only the reviewer gets its system prompt as a file.
 pub fn is_review(args: &[String]) -> bool {
-  args.iter().any(|arg| arg == "--system-prompt-file")
+  args.iter().any(|arg| arg == "--system-prompt-file") && !args.iter().any(|arg| arg == "--mcp-config")
 }
 
 pub fn review(args: &[String]) -> ExitCode {

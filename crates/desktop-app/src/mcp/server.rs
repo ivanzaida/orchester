@@ -20,8 +20,11 @@ use hyper_util::{
 };
 use lurq::mcp::{
   McpHandle,
-  rmcp::transport::streamable_http_server::{
-    StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
+  rmcp::{
+    ServerHandler,
+    transport::streamable_http_server::{
+      StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
+    },
   },
 };
 use tokio::{runtime::Handle, sync::mpsc, task::JoinSet};
@@ -95,6 +98,23 @@ impl Listening {
     serving: Serving,
     token: BearerToken,
   ) -> Result<Self, BindError> {
+    let Serving { gate, tools, clients } = serving;
+    // One service per client session: input a client holds is released when its session ends.
+    let sessions = move || gate.guard_listed(tools.service(), clients.session());
+    Self::serve_sessions(runtime, port, sessions, token)
+  }
+
+  /// Binds `port` on loopback (`None`: one the OS picks) and serves each session of a client presenting `token`
+  /// with the service `sessions` makes for it, on `runtime`.
+  pub(super) fn serve_sessions<S>(
+    runtime: &Handle,
+    port: Option<NonZeroU16>,
+    sessions: impl Fn() -> S + Clone + Send + Sync + 'static,
+    token: BearerToken,
+  ) -> Result<Self, BindError>
+  where
+    S: ServerHandler,
+  {
     let address = SocketAddr::from((LOOPBACK, port.map_or(0, NonZeroU16::get)));
     let listener = bind::listen(address).map_err(|error| match Taken::of_bind_error(&error) {
       Some(how) => BindError::Taken(how),
@@ -105,7 +125,7 @@ impl Listening {
     let (control, controlled) = mpsc::unbounded_channel();
     // The server stops when told to, or when its owner is gone: it ends its sessions and drops the connections
     // open.
-    drop(runtime.spawn(serve(listener, port, serving, token, controlled)));
+    drop(runtime.spawn(serve(listener, port, sessions, token, controlled)));
     Ok(Self { port, control })
   }
 
@@ -132,13 +152,15 @@ impl Listening {
   }
 }
 
-async fn serve(
+async fn serve<S>(
   listener: TcpListener,
   port: NonZeroU16,
-  serving: Serving,
+  sessions: impl Fn() -> S + Clone + Send + Sync + 'static,
   token: BearerToken,
   mut controlled: mpsc::UnboundedReceiver<Control>,
-) {
+) where
+  S: ServerHandler,
+{
   let listener = match tokio::net::TcpListener::from_std(listener) {
     Ok(listener) => listener,
     Err(error) => {
@@ -146,7 +168,7 @@ async fn serve(
       return;
     }
   };
-  let (mut router, mut end_sessions) = routes(&serving, port, token);
+  let (mut router, mut end_sessions) = routes(sessions.clone(), port, token);
   let mut connections = JoinSet::new();
   let stopped = loop {
     tokio::select! {
@@ -154,7 +176,7 @@ async fn serve(
         Some(Control::Rotate(token)) => {
           end_sessions();
           connections.abort_all();
-          (router, end_sessions) = routes(&serving, port, token);
+          (router, end_sessions) = routes(sessions.clone(), port, token);
         }
         Some(Control::Stop(stopped)) => break Some(stopped),
         // Its owner is gone without saying so: the server stops.
@@ -192,23 +214,24 @@ async fn serve(
 type EndSessions = Box<dyn FnOnce() + Send>;
 
 /// The routes of one token: its sessions, behind the guard, and how to end them.
-fn routes(serving: &Serving, port: NonZeroU16, token: BearerToken) -> (Router, EndSessions) {
+fn routes<S>(
+  sessions: impl Fn() -> S + Send + Sync + 'static,
+  port: NonZeroU16,
+  token: BearerToken,
+) -> (Router, EndSessions)
+where
+  S: ServerHandler,
+{
   let config = StreamableHttpServerConfig::default();
-  let sessions = config.cancellation_token.clone();
-  let Serving { gate, tools, clients } = serving.clone();
-  // One service per client session: input a client holds is released when its session ends.
-  let service = StreamableHttpService::new(
-    move || Ok(gate.guard_listed(tools.service(), clients.session())),
-    Arc::new(LocalSessionManager::default()),
-    config,
-  );
+  let ending = config.cancellation_token.clone();
+  let service = StreamableHttpService::new(move || Ok(sessions()), Arc::new(LocalSessionManager::default()), config);
   let router = Router::new()
     .route_service(PATH, service)
     .layer(middleware::from_fn_with_state(
       Admission::new(token, port),
       guard::admit,
     ));
-  (router, Box::new(move || sessions.cancel()))
+  (router, Box::new(move || ending.cancel()))
 }
 
 /// Serves one connection. The header deadline starts on accept and again after each response, so it

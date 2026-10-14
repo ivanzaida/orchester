@@ -73,6 +73,10 @@ name = "claude"
 required-features = ["test-agent"]
 
 [[test]]
+name = "chat"
+required-features = ["test-agent"]
+
+[[test]]
 name = "send_now"
 required-features = ["test-agent"]
 

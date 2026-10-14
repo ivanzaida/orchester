@@ -7,22 +7,20 @@
 //! now, queued and until when, delivered mid-turn or at the end of a turn (`check-check` in `success`), or not
 //! delivered, kept, with the composer's actions under it (`composer::undelivered`).
 
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize},
   },
-  components::{Column, Row, Text},
-  layout::{Alignment, layout_kind::Justify},
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  components::Column,
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   conversation::{Arrival, Undelivered},
   time::Timestamp,
 };
-use orchester_exec::external;
 use orchester_workspace::{
   display,
   tasks::{
@@ -32,93 +30,11 @@ use orchester_workspace::{
 };
 
 use super::{Timeline, chips};
-use crate::{
-  theme::{ConversationText, ExtraColor, ExtraSpacing, IconSize},
-  ui::{
-    icon::{Icon, icon},
-    markdown::{LinkHandler, MarkdownView},
-  },
+pub(crate) use crate::ui::chat::links;
+use crate::ui::{
+  chat::{Avatar, chat_row, delivery_line, person_message as bubble, text},
+  icon::Icon,
 };
-
-/// The avatar's box (`HO4bJ`) and how wide a person's bubble may grow, of the chat's width.
-const AVATAR_SIZE: f32 = 24.0;
-const BUBBLE_WIDTH: f32 = 80.0;
-
-/// A press on a message's link opens it in the browser; one handler for every message, so a message is laid
-/// out again only when what it says changes.
-static OPEN_LINK: LazyLock<LinkHandler> = LazyLock::new(|| Arc::new(open_link));
-
-/// What a press on a link in the chat does.
-pub(crate) fn links() -> LinkHandler {
-  OPEN_LINK.clone()
-}
-
-fn open_link(destination: &str) {
-  if let Err(error) = external::open_url(destination) {
-    tracing::warn!(%error, "the message's link was not opened");
-  }
-}
-
-/// Who a row is from, as its avatar shows it: an agent, or a command tool that runs a step.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Avatar {
-  Agent,
-  Tool,
-}
-
-/// The avatar, then `name` and `meta` with `body` under them; `id` names the row.
-pub(super) fn chat_row(id: String, avatar: Avatar, (name, meta): (&str, &str), body: Vec<Element>) -> Element {
-  let glyph = match avatar {
-    Avatar::Agent => Icon::Bot,
-    Avatar::Tool => Icon::Terminal,
-  };
-  Row::new()
-    .id(id)
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Loose.role())
-    .align_items(Alignment::Start)
-    .child(
-      Row::new()
-        .size(Dimension::Px(AVATAR_SIZE), Dimension::Px(AVATAR_SIZE))
-        .flex_shrink(0.0)
-        .background(PaletteColor::SurfaceRaised)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-        .rounded(RadiusSize::Md)
-        .align_items(Alignment::Center)
-        .justify(Justify::Center)
-        .child(icon(glyph, IconSize::Base, PaletteColor::TextSecondary)),
-    )
-    .child(
-      Column::new()
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .spacing(ExtraSpacing::Fine.role())
-        .child(
-          Row::new()
-            .spacing(ExtraSpacing::Snug.role())
-            .align_items(Alignment::Center)
-            .child(
-              Text::new(name)
-                .id("conversation-message-name")
-                .variant(ConversationText::Name.role())
-                .nowrap(),
-            )
-            .child(
-              Text::new(meta)
-                .id("conversation-message-meta")
-                .variant(TypographyStyle::Caption)
-                .nowrap(),
-            ),
-        )
-        .with_children(body),
-    )
-    .into()
-}
-
-/// What a message says, its Markdown rendered; `id` names it.
-pub(super) fn text(ctx: &mut Ctx, id: &str, text: &Arc<str>) -> Element {
-  MarkdownView::new(id, text.clone(), links()).render(ctx)
-}
 
 /// An agent's row: its message, if it wrote one, then the tool groups after it at the chat's edge.
 pub(super) fn agent_row(ctx: &mut Ctx, timeline: &Timeline, row: &AgentRow) -> Element {
@@ -149,9 +65,10 @@ pub(super) fn agent_row(ctx: &mut Ctx, timeline: &Timeline, row: &AgentRow) -> E
 
 /// A person's message (`mr4lC`) at the right: *You*, its time, the bubble and its delivery line.
 pub(in super::super) fn person_message(ctx: &mut Ctx, entry: &Entry) -> Element {
-  let delivery = delivery_line(ctx, &entry.state);
+  let (glyph, color, words) = delivery(ctx, &entry.state);
+  let delivery = delivery_line("conversation-delivery", (glyph, color), &words);
   let undelivered = super::super::composer::undelivered(ctx, entry);
-  bubble_column(
+  bubble(
     ctx,
     &format!("conversation-message-{}", entry.id),
     (&entry.body, Some(entry.at)),
@@ -164,65 +81,7 @@ pub(in super::super) fn person_message(ctx: &mut Ctx, entry: &Entry) -> Element 
 
 /// A note the person returned the work with, as their message, without a delivery line.
 pub(super) fn person_note(ctx: &mut Ctx, id: &str, note: &Arc<str>, at: Option<Timestamp>) -> Element {
-  bubble_column(ctx, id, (note, at), None).into()
-}
-
-/// *You*, the time when it is known, the bubble and `delivery`.
-fn bubble_column(
-  ctx: &mut Ctx,
-  id: &str,
-  (body, at): (&Arc<str>, Option<Timestamp>),
-  delivery: Option<Element>,
-) -> Column {
-  let head = Row::new()
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(
-      Text::new(&ctx.t("conversation.you"))
-        .variant(TypographyStyle::FieldLabel)
-        .nowrap(),
-    )
-    .with_children(at.map(|at| {
-      Text::new(&display::clock(at))
-        .variant(TypographyStyle::Caption)
-        .nowrap()
-    }));
-  // As the person wrote it, so the bubble hugs its words up to its widest (`pCzqz`): lurq's Markdown always
-  // fills its parent's width.
-  let said = Text::new(body)
-    .id(format!("{id}-text"))
-    .variant(TypographyStyle::Body)
-    .selectable(true);
-  let bubble = Column::new()
-    .id(format!("{id}-bubble"))
-    .max_width(Dimension::Pct(BUBBLE_WIDTH))
-    .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
-    .background(ExtraColor::OwnMessage.role())
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Lg)
-    .child(said);
-  Column::new()
-    .id(id.to_owned())
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Xs)
-    .align_items(Alignment::End)
-    .child(head)
-    .child(bubble)
-    .with_children(delivery)
-}
-
-/// Where a person's message stands, with its icon.
-fn delivery_line(ctx: &Ctx, state: &EntryState) -> Element {
-  let (glyph, color, words) = delivery(ctx, state);
-  let strong = color == PaletteColor::TextPrimary;
-  let words = Text::new(&words).variant(TypographyStyle::Caption);
-  Row::new()
-    .id("conversation-delivery")
-    .spacing(ExtraSpacing::Pair.role())
-    .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Sm, color.clone()))
-    .child(if strong { words.color(color) } else { words })
-    .into()
+  bubble(ctx, id, (note, at), None).into()
 }
 
 /// The name `describe` reports a delivery by, for tests and QA.

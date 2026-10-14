@@ -533,3 +533,25 @@ fn needs_you_tab_lists_the_memory_waiting_after_its_tasks_and_counts_it() {
   );
   assert!(BoardTab::Running.project_rows(&tasks, "Kontur").is_empty());
 }
+
+#[test]
+fn needs_you_is_worked_out_once_per_reading_of_the_tasks() {
+  let (_fixture, tasks) = project();
+  let first = tasks.waiting();
+  assert!(
+    std::sync::Arc::ptr_eq(&first, &tasks.waiting()),
+    "asked again, the same items, not worked out again"
+  );
+  let copy = tasks.clone();
+  assert!(
+    std::sync::Arc::ptr_eq(&first, &copy.waiting()),
+    "a render's copy of the reading shares them"
+  );
+  drop(copy);
+  assert_eq!(tasks.needs_you(), first.len());
+  let away = tasks.without_runner();
+  assert!(
+    !std::sync::Arc::ptr_eq(&first, &away.waiting()),
+    "the tasks as they stand without a runner work it out for themselves"
+  );
+}
