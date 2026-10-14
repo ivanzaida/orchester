@@ -313,6 +313,12 @@ the agent logged: {agent}"
 
   /// A published Delivery pipeline whose one step's Builder reads on the Claude Code connection.
   pub fn delivery(&self) -> ResourceId {
+    let builder = self.builder();
+    self.pipeline(builder, ("delivery", "Delivery"))
+  }
+
+  /// The published Builder profile, on the Claude Code connection, reading only.
+  pub fn builder(&self) -> ResourceId {
     let mut db = self.db();
     let now = Timestamp::now();
     let profile = AgentProfile::new(
@@ -333,6 +339,13 @@ the agent logged: {agent}"
       .expect("profile")
       .id();
     db.publish_draft::<AgentProfile>(builder, now).expect("publish profile");
+    builder
+  }
+
+  /// A published pipeline `name` (`slug`) of one step by `builder`.
+  pub fn pipeline(&self, builder: ResourceId, (slug, name): (&str, &str)) -> ResourceId {
+    let mut db = self.db();
+    let now = Timestamp::now();
     let step = Step {
       key: StepKey::new("implement").expect("key"),
       name: named("Implement"),
@@ -349,12 +362,23 @@ the agent logged: {agent}"
       budget: None,
     };
     let pipeline = Pipeline::new(vec![step]).expect("pipeline");
-    let delivery = db
-      .create_resource(Slug::new("delivery").expect("slug"), named("Delivery"), &pipeline, now)
+    let created = db
+      .create_resource(Slug::new(slug).expect("slug"), named(name), &pipeline, now)
       .expect("pipeline")
       .id();
-    db.publish_draft::<Pipeline>(delivery, now).expect("publish pipeline");
-    delivery
+    db.publish_draft::<Pipeline>(created, now).expect("publish pipeline");
+    created
+  }
+
+  /// The person's *Let automation change agent permissions*.
+  pub fn let_automation_widen(&self, allowed: bool) {
+    self
+      .window
+      .launch
+      .workspace()
+      .expect("the session started")
+      .set_automation_changes_permissions(allowed)
+      .expect("the person's choice is kept");
   }
 
   /// A draft task titled `title` on `pipeline`, complete enough to run; its key.

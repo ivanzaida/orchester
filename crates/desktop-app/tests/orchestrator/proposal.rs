@@ -1,6 +1,6 @@
 //! A run the Orchestrator's agent asks for waits for the person: nothing starts, the conversation shows *Start <task>
 //! on <pipeline>?*, and only a person's Start starts it (automation's input is refused, visibly); Dismiss starts
-//! nothing.
+//! nothing. A widening the agent attempts is done exactly when the person lets automation widen.
 
 use lurq::app::events::with_synthetic_input;
 use orchester_app::routes::OrchestratorChat;
@@ -125,4 +125,43 @@ fn orchestrator_dismissed_start_starts_nothing() {
   });
   assert!(!screen.exists(&format!("{card}-start")));
   assert_eq!(runs(&screen, &key), 0);
+}
+
+#[test]
+fn orchestrator_widens_only_while_the_person_lets_automation() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  let builder = screen.builder();
+  let delivery = screen.pipeline(builder, ("delivery", "Delivery"));
+  screen.pipeline(builder, ("hotfix", "Hotfix"));
+  let key = screen.draft_on(delivery, "Read the readme");
+  let move_it = format!(r#"Call update_task {{"project":"Kontur","key":"{key}","pipeline":"Hotfix"}}"#);
+  let pipeline_of = |screen: &Orchestrator| {
+    screen
+      .db()
+      .tasks()
+      .expect("tasks")
+      .into_iter()
+      .find(|task| task.key().to_string() == key)
+      .expect("the task")
+      .details()
+      .pipeline
+  };
+  screen.go(OrchestratorChat::New);
+
+  // Off, as by default: moving a task to another pipeline is the person's.
+  screen.send(&move_it);
+  screen.until("the refusal", |screen| {
+    outcomes(screen)
+      .first()
+      .is_some_and(|outcome| matches!(outcome, ActionOutcome::Refused { code, .. } if code == "person_only"))
+  });
+  screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
+  assert_eq!(pipeline_of(&screen), Some(delivery));
+
+  // On: the same call is done, as for any client of the app.
+  screen.let_automation_widen(true);
+  screen.send(&move_it);
+  screen.until("the change", |screen| outcomes(screen).get(1) == Some(&ActionOutcome::Done));
+  assert_ne!(pipeline_of(&screen), Some(delivery));
+  screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
 }
