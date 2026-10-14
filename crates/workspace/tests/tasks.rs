@@ -254,13 +254,13 @@ fn stored_tasks() -> Vec<Task> {
 #[test]
 fn tabs_filter_and_count_tasks() {
   let tasks = stored_tasks();
-  let count = |tab| list::rows(&tasks, &[], &Default::default(), tab).len();
+  let count = |tab| list::rows(&tasks, &ProjectTasks::default(), tab).len();
   assert_eq!(count(TaskTab::All), 2);
   assert_eq!(count(TaskTab::Backlog), 2);
   for other in [TaskTab::Todo, TaskTab::InProgress, TaskTab::InReview, TaskTab::Done] {
     assert_eq!(count(other), 0);
   }
-  let drafts = list::rows(&tasks, &[], &Default::default(), TaskTab::Backlog);
+  let drafts = list::rows(&tasks, &ProjectTasks::default(), TaskTab::Backlog);
   assert_eq!(drafts.len(), 2);
   assert_eq!(&*drafts[0].title, "Incomplete");
   assert_eq!(drafts[0].phase, Some(orchester_core::run::TaskPhase::Draft));
@@ -331,7 +331,7 @@ fn task_list_keeps_task_order_and_overview_shows_newest_first() {
   let tasks = stored_tasks();
   let titles = |rows: Vec<list::TaskRow>| rows.iter().map(|row| row.title.to_string()).collect::<Vec<_>>();
   assert_eq!(
-    titles(list::rows(&tasks, &[], &Default::default(), TaskTab::All)),
+    titles(list::rows(&tasks, &ProjectTasks::default(), TaskTab::All)),
     ["Incomplete", "To queue"]
   );
   assert_eq!(
@@ -366,7 +366,7 @@ fn task_list_reads_run_counts_and_interrupts_running_runs_without_a_runner() {
   fixture.started_run(second, support::at(50));
   let loaded = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   assert_eq!((loaded.runs[&first], loaded.runs[&second]), (2, 1));
-  let rows = list::rows(&loaded.tasks, &loaded.pipelines, &loaded.phases, list::TaskTab::All);
+  let rows = list::rows(&loaded.tasks, &loaded, list::TaskTab::All);
   assert_eq!(
     list::footer(rows.len(), loaded.runs_of(&rows), false).key,
     "tasks.footer.runs.other"
@@ -416,15 +416,20 @@ fn task_list_shows_a_queued_task_whose_run_finished_as_ready_for_review() {
   assert_eq!(stored.status(), TaskStatus::Queued);
 
   let loaded = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
-  let rows = list::rows(&loaded.tasks, &loaded.pipelines, &loaded.phases, TaskTab::InReview);
+  let rows = list::rows(&loaded.tasks, &loaded, TaskTab::InReview);
   assert_eq!(rows.len(), 1);
   assert_eq!(rows[0].id, task);
   assert_eq!(rows[0].organization.status(), WorkflowStatus::InReview);
   assert_eq!(rows[0].phase, Some(TaskPhase::Succeeded));
   assert_eq!(rows[0].detail.key, "tasks.progress.succeeded");
-  for tab in [TaskTab::Todo, TaskTab::InProgress, TaskTab::NeedsYou] {
-    assert!(list::rows(&loaded.tasks, &loaded.pipelines, &loaded.phases, tab).is_empty());
+  for tab in [TaskTab::Todo, TaskTab::InProgress] {
+    assert!(list::rows(&loaded.tasks, &loaded, tab).is_empty());
   }
+  assert_eq!(
+    list::rows(&loaded.tasks, &loaded, TaskTab::NeedsYou).len(),
+    1,
+    "its work waits for the person to merge it, as every Needs you counts it"
+  );
   assert_eq!(list::queued(&loaded.tasks, &loaded.phases), 0);
   let detail = TaskDetail::load_in(fixture.repo.path(), task).expect("read the task");
   assert_eq!(detail.phase(), TaskPhase::Succeeded);
@@ -551,7 +556,7 @@ fn task_row_run_line_names_the_step_of_a_running_run_only() {
   let mut run = fixture.started_run(task, support::at(20));
   let row = |fixture: &support::Fixture| {
     let loaded = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
-    list::rows(&loaded.tasks, &loaded.pipelines, &loaded.phases, TaskTab::All)
+    list::rows(&loaded.tasks, &loaded, TaskTab::All)
       .into_iter()
       .find(|row| row.id == task)
       .expect("the task's row")

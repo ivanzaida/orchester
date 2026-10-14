@@ -44,7 +44,7 @@ fn unreadable_latest_run_keeps_the_task_list_and_its_counts() {
   };
   assert_eq!((unreadable.id, unreadable.number), (bad.id(), Some(bad.number())));
   assert_eq!(unreadable.detail.key, "runs.unreadable.detail.invalid");
-  let rows = list::rows(&loaded.tasks, &loaded.pipelines, &loaded.phases, TaskTab::All);
+  let rows = list::rows(&loaded.tasks, &loaded, TaskTab::All);
   let row = rows.iter().find(|row| row.id == first).expect("the task's row");
   assert_eq!(row.phase, None);
   assert_eq!(row.detail.key, "runs.unreadable.title");

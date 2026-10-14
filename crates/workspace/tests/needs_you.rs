@@ -20,11 +20,15 @@ use orchester_core::{
   store::{ActivityStore, MergeStore},
 };
 use orchester_exec::programs::Programs;
-use orchester_workspace::tasks::{
-  attention::{self, NeedKind},
-  board::{BoardTab, Figures},
-  data::ProjectTasks,
-  needs_you::{WaitingItem, WaitingKind},
+use orchester_workspace::{
+  project_list::RunCounts,
+  tasks::{
+    attention::{self, NeedKind},
+    board::{BoardTab, Figures},
+    data::ProjectTasks,
+    list::{self, TaskRow, TaskTab},
+    needs_you::{WaitingItem, WaitingKind},
+  },
 };
 use support::{Fixture, at};
 
@@ -376,8 +380,9 @@ fn proposed(run: &Run, text: &str, now: i64) -> Memory {
   )
 }
 
-#[test]
-fn needs_you_lists_a_limit_stop_work_ready_to_merge_and_the_memory_waiting_as_one_item() {
+/// A project where a run stopped at its limit, a run passed every step and waits to be merged, another's merge
+/// was recorded, and two memory records wait for approval.
+fn limit_merge_memory() -> ProjectTasks {
   let mut fixture = Fixture::new();
   let limited = fixture.task("Index the repo", at(10));
   let mut run = fixture.started_run(limited, at(20));
@@ -407,7 +412,12 @@ fn needs_you_lists_a_limit_stop_work_ready_to_merge_and_the_memory_waiting_as_on
     .db
     .add_memories(&records)
     .expect("the records wait for approval");
-  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
+  ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks")
+}
+
+#[test]
+fn needs_you_lists_a_limit_stop_work_ready_to_merge_and_the_memory_waiting_as_one_item() {
+  let tasks = limit_merge_memory();
   let items = tasks.waiting();
   assert_eq!(
     kinds(&items),
@@ -428,6 +438,29 @@ fn needs_you_lists_a_limit_stop_work_ready_to_merge_and_the_memory_waiting_as_on
   assert_eq!(items[2].since, at(80), "it waits since its oldest record");
   assert!(items[2].task.is_none());
   assert_eq!(tasks.needs_you(), 3);
+}
+
+#[test]
+fn needs_you_counts_the_same_on_every_surface() {
+  let tasks = limit_merge_memory();
+  assert_eq!(tasks.needs_you(), 3, "the limit stop, the work to merge and the memory");
+  let counted = [
+    ("Overview column", attention::count(&tasks)),
+    ("Overview tab", BoardTab::NeedsYou.count(&tasks)),
+    ("Need your input", Figures::of(&tasks, at(0)).needs_you),
+    ("task list tab", TaskTab::NeedsYou.count(&tasks)),
+    ("All projects", RunCounts::of(&tasks, true).needs_you),
+    ("All projects offline", RunCounts::of(&tasks, false).needs_you),
+  ];
+  for (surface, count) in counted {
+    assert_eq!(count, tasks.needs_you(), "{surface} counts what the pill counts");
+  }
+  let titles = |rows: Vec<TaskRow>| rows.iter().map(|row| row.title.to_string()).collect::<Vec<_>>();
+  assert_eq!(
+    titles(list::rows(&tasks.tasks, &tasks, TaskTab::NeedsYou)),
+    ["Index the repo", "Write docs"],
+    "the task list's tab lists the tasks of what waits; the memory is no task's"
+  );
 }
 
 #[test]

@@ -10,7 +10,7 @@
 //! Approvals and questions with suggested answers are answered in place, through their cards in the run's
 //! timeline ([`WaitingKind::card_key`], [`InPlace`]); the others open their task, or the project's memory.
 
-use std::{path::Path, sync::Arc};
+use std::{collections::HashSet, path::Path, sync::Arc};
 
 use orchester_core::{
   id::{RunId, StepExecutionId, TaskId},
@@ -154,10 +154,20 @@ impl ProjectTasks {
     items
   }
 
-  /// What *Needs you* counts: everything that waits for the person ([`Self::waiting`]). Whether a dialog or the
-  /// panel is open changes nothing.
+  /// What every *Needs you* counts — the pill, the status bar, a tab's mark, the Overview's figure, column and
+  /// tab, the task list's tab and All projects: everything that waits for the person ([`Self::waiting`]).
+  /// Whether a dialog or the panel is open changes nothing.
   pub fn needs_you(&self) -> usize {
     self.waiting().len()
+  }
+
+  /// The tasks something of waits for the person ([`Self::waiting`]): those a *Needs you* tab lists.
+  pub fn waiting_tasks(&self) -> HashSet<TaskId> {
+    self
+      .waiting()
+      .into_iter()
+      .filter_map(|item| item.task.map(|task| task.id))
+      .collect()
   }
 
   fn task(&self, id: TaskId) -> Option<&Task> {

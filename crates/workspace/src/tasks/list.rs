@@ -20,10 +20,14 @@ pub use super::{
 use crate::{
   display,
   messages::Message,
-  tasks::{data::PipelineChoice, unreadable::Unreadable},
+  tasks::{
+    data::{PipelineChoice, ProjectTasks},
+    unreadable::Unreadable,
+  },
 };
 
-/// Workflow tabs; Needs you remains a run-state view.
+/// Workflow tabs, and Needs you: the tasks something of waits for the person
+/// ([`ProjectTasks::waiting`](super::data::ProjectTasks::waiting)), whatever their workflow status.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskTab {
   All,
@@ -55,6 +59,15 @@ impl TaskTab {
       Self::Done => "tasks.workflow.done",
     }
   }
+  /// How many the tab holds of `data`'s tasks; Needs you counts what every *Needs you* counts
+  /// ([`ProjectTasks::needs_you`]), each waiting object, as the Overview's tab does.
+  pub fn count(self, data: &ProjectTasks) -> usize {
+    if self == Self::NeedsYou {
+      return data.needs_you();
+    }
+    data.tasks.iter().filter(|task| self.includes(task)).count()
+  }
+
   pub fn includes(self, task: &Task) -> bool {
     use orchester_core::task::organization::WorkflowStatus;
     match self {
@@ -430,14 +443,13 @@ fn task_pipeline_label(task: &Task, published: &[PipelineChoice], latest: Option
   label
 }
 
-/// Rows of `tab`, in task number order.
-pub fn rows(tasks: &[Task], published: &[PipelineChoice], phases: &Phases, tab: TaskTab) -> Vec<TaskRow> {
+/// Rows of `tab` among `tasks`, tasks of `data`, in task number order.
+pub fn rows(tasks: &[Task], data: &ProjectTasks, tab: TaskTab) -> Vec<TaskRow> {
+  let waiting = (tab == TaskTab::NeedsYou).then(|| data.waiting_tasks());
   tasks
     .iter()
-    .filter(|task| {
-      tab.includes(task) && (tab != TaskTab::NeedsYou || phase_of(task, phases).is_some_and(TaskPhase::needs_you))
-    })
-    .map(|task| TaskRow::new(task, published, phases.get(&task.id())))
+    .filter(|task| tab.includes(task) && waiting.as_ref().is_none_or(|waiting| waiting.contains(&task.id())))
+    .map(|task| TaskRow::new(task, &data.pipelines, data.phases.get(&task.id())))
     .collect()
 }
 
