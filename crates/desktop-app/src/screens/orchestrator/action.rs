@@ -96,28 +96,14 @@ pub(super) fn card(
   (action, at): (&ChatAction, Timestamp),
   (project, name): (ProjectId, &str),
 ) -> Element {
-  let words = words(&action.tool);
-  let task = action.task.as_deref().unwrap_or_default();
-  let args = [("task", task), ("tool", action.tool.as_str())];
-  let time = display::clock(at);
-  let (title, glyph, state, state_glyph, state_color, effect) = match &action.outcome {
-    ActionOutcome::Done => (
-      ctx.t_args(words.done, args),
-      words.glyph,
-      ctx.t_args("orchestrator.action.confirmed", [("time", time.as_str())]),
-      Icon::CircleCheck,
-      PaletteColor::Success,
-      words.effect.map(|key| ctx.t(key)),
-    ),
-    ActionOutcome::Refused { reason, .. } => (
-      ctx.t_args(words.refused, args),
-      Icon::Ban,
-      ctx.t_args("orchestrator.action.refusedState", [("time", time.as_str())]),
-      Icon::Ban,
-      PaletteColor::TextSecondary,
-      Some(Arc::from(reason.as_str())),
-    ),
-  };
+  let Shown {
+    title,
+    glyph,
+    state,
+    state_glyph,
+    state_color,
+    effect,
+  } = shown(ctx, action, at);
   let head = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
@@ -175,6 +161,69 @@ pub(super) fn card(
     .into()
 }
 
+/// What the card of `action`, taken at `at`, says and shows.
+struct Shown {
+  title: Arc<str>,
+  glyph: Icon,
+  state: Arc<str>,
+  state_glyph: Icon,
+  state_color: PaletteColor,
+  effect: Option<Arc<str>>,
+}
+
+fn shown(ctx: &Ctx, action: &ChatAction, at: Timestamp) -> Shown {
+  let words = words(&action.tool);
+  let task = action.task.as_deref().unwrap_or_default();
+  let args = [("task", task), ("tool", action.tool.as_str())];
+  let time = display::clock(at);
+  let (title, glyph, state, state_glyph, state_color, effect) = match &action.outcome {
+    ActionOutcome::Done => (
+      ctx.t_args(words.done, args),
+      words.glyph,
+      ctx.t_args("orchestrator.action.confirmed", [("time", time.as_str())]),
+      Icon::CircleCheck,
+      PaletteColor::Success,
+      words.effect.map(|key| ctx.t(key)),
+    ),
+    ActionOutcome::Refused { reason, .. } => (
+      ctx.t_args(words.refused, args),
+      Icon::Ban,
+      ctx.t_args("orchestrator.action.refusedState", [("time", time.as_str())]),
+      Icon::Ban,
+      PaletteColor::TextSecondary,
+      Some(Arc::from(reason.as_str())),
+    ),
+    // Shown with its Start and Dismiss in a kept conversation (`super::proposal`); this is its card without them.
+    ActionOutcome::Proposed { pipeline } => (
+      ctx.t_args(
+        "orchestrator.proposal.title",
+        [("task", task), ("pipeline", pipeline.as_str())],
+      ),
+      words.glyph,
+      ctx.t_args("orchestrator.proposal.waits", [("time", time.as_str())]),
+      Icon::Hourglass,
+      PaletteColor::Warning,
+      Some(ctx.t("orchestrator.proposal.effect")),
+    ),
+    ActionOutcome::Dismissed => (
+      ctx.t_args("orchestrator.proposal.dismissedTitle", args),
+      words.glyph,
+      ctx.t_args("orchestrator.proposal.dismissedState", [("time", time.as_str())]),
+      Icon::CircleX,
+      PaletteColor::TextSecondary,
+      Some(ctx.t("orchestrator.proposal.dismissedEffect")),
+    ),
+  };
+  Shown {
+    title,
+    glyph,
+    state,
+    state_glyph,
+    state_color,
+    effect,
+  }
+}
+
 /// *Open* the task the action names, when it names one people can read.
 fn open_task(ctx: &mut Ctx, id: &str, project: ProjectId, task: Option<&str>) -> Option<Element> {
   let key: TaskKey = task?.parse().ok()?;
@@ -196,5 +245,7 @@ const fn outcome_name(outcome: &ActionOutcome) -> &'static str {
   match outcome {
     ActionOutcome::Done => "done",
     ActionOutcome::Refused { .. } => "refused",
+    ActionOutcome::Proposed { .. } => "proposed",
+    ActionOutcome::Dismissed => "dismissed",
   }
 }

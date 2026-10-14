@@ -3,6 +3,7 @@
 //! Orchestrator.
 
 use std::{
+  collections::{BTreeMap, BTreeSet},
   env, fs,
   path::{Path, PathBuf},
   process::Command,
@@ -18,11 +19,15 @@ use orchester_core::{
   connection::{
     AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
   },
-  id::{ConnectionId, ProjectId},
+  id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId},
   name::Name,
   orchestrator::OrchestratorSettings,
-  resource::ModelId,
-  store::ConnectionStore,
+  permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
+  resource::{
+    AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
+  },
+  store::{ConnectionStore, ResourceStore, TaskStore},
+  task::{TaskDetails, TaskLimits},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -272,6 +277,73 @@ the agent logged: {agent}"
   pub fn db(&self) -> ProjectDb {
     ProjectDb::open(&self.root).expect("database")
   }
+
+  /// A published Delivery pipeline whose one step's Builder reads on the Claude Code connection.
+  pub fn delivery(&self) -> ResourceId {
+    let mut db = self.db();
+    let now = Timestamp::now();
+    let profile = AgentProfile::new(
+      named("Builder"),
+      "Implements tasks.".into(),
+      PromptText::new("Work carefully.").expect("prompt"),
+      self.claude,
+      ModelId::new("haiku").expect("model"),
+      ProviderSettings::new(BTreeMap::new()).expect("settings"),
+    )
+    .with_permissions(AgentPermissions::new(
+      RepositoryAccess::ReadOnly,
+      CommandPermission::AskBefore,
+      NetworkAccess::Off,
+    ));
+    let builder = db
+      .create_resource(Slug::new("builder").expect("slug"), named("Builder"), &profile, now)
+      .expect("profile")
+      .id();
+    db.publish_draft::<AgentProfile>(builder, now).expect("publish profile");
+    let step = Step {
+      key: StepKey::new("implement").expect("key"),
+      name: named("Implement"),
+      kind: StepKind::Agent {
+        profile: Some(builder),
+        repository: RepositoryAccess::ReadOnly,
+        model: None,
+        permissions: StepPermissions::default(),
+      },
+      instructions: PromptText::new("Read README.md.").expect("prompt"),
+      depends_on: BTreeSet::new(),
+      approval_gate: false,
+      on_failure: None,
+      budget: None,
+    };
+    let pipeline = Pipeline::new(vec![step]).expect("pipeline");
+    let delivery = db
+      .create_resource(Slug::new("delivery").expect("slug"), named("Delivery"), &pipeline, now)
+      .expect("pipeline")
+      .id();
+    db.publish_draft::<Pipeline>(delivery, now).expect("publish pipeline");
+    delivery
+  }
+
+  /// A draft task titled `title` on `pipeline`, complete enough to run; its key.
+  pub fn draft_on(&self, pipeline: ResourceId, title: &str) -> String {
+    let details = TaskDetails {
+      title: named(title),
+      brief: "Read the readme.".into(),
+      acceptance_criteria: vec!["The readme was read.".into()],
+      pipeline: Some(pipeline),
+      limits: TaskLimits::new(None, None).expect("no limits"),
+    };
+    self
+      .db()
+      .create_tasks(IdempotencyKey::generate(), vec![details], Timestamp::now())
+      .expect("task")[0]
+      .key()
+      .to_string()
+  }
+}
+
+fn named(value: &str) -> Name {
+  Name::new(value).expect("name")
 }
 
 /// A checked connection of `provider` named `name` to the fake CLI at `program`, listing `haiku` and `opus`.

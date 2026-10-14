@@ -3,6 +3,7 @@
 //! and the domain tools its agent gets. The project's runner runs the agent; the app serves its tools.
 
 pub mod chat;
+pub mod proposal;
 pub mod send;
 pub mod settings;
 pub mod tools;

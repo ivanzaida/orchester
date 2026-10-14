@@ -1366,7 +1366,8 @@
       "failed": "The answer couldn't be stopped: the runner didn't answer."
     },
     "tools": {
-      "otherProject": "The Orchestrator acts only in its own project."
+      "otherProject": "The Orchestrator acts only in its own project.",
+      "startWaits": "Nothing started yet: starting {{task}} on {{pipeline}} waits for the person, who starts or dismisses it in the conversation. Tell them it is ready to start."
     }
   }
 }

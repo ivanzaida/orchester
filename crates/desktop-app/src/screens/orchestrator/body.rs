@@ -15,7 +15,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ChatId;
-use orchester_workspace::orchestrator::{chat::ChatView, send::SendError, settings::Readiness};
+use orchester_workspace::orchestrator::{chat::ChatView, send::SendError, settings::Readiness, tools::ChatScope};
 
 use super::{
   View,
@@ -208,10 +208,17 @@ fn env(view: &View, project: &ShownProject, (chat, connection): (Option<ChatId>,
     // A new conversation's first message is still being sent: nothing ended there to ask again.
     None => Arc::new(|_: Arc<str>| {}),
   };
+  let scope = chat.map(|chat| ChatScope {
+    project: open.project.id(),
+    name: open.project.name().as_str().to_owned(),
+    root: open.repo_root.clone(),
+    chat,
+  });
   TurnEnv {
     project: open.project.id(),
     name: Arc::from(open.project.name().as_str()),
     connection,
+    scope,
     stop: Arc::new(move || {
       if let Some(chat) = chat {
         stop.run((open.clone(), chat));

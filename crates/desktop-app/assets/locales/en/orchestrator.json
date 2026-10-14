@@ -143,6 +143,17 @@
       "checked": "Checked like the same action in the app, with your permissions in {{project}}.",
       "openTask": "Open {{task}}"
     },
+    "proposal": {
+      "title": "Start {{task}} on {{pipeline}}?",
+      "waits": "Waits for you · {{time}}",
+      "effect": "Nothing has started. The Orchestrator asked to start this run; it starts only when you choose Start, after the queue's checks.",
+      "start": "Start",
+      "dismiss": "Dismiss",
+      "personOnly": "Only a person starts a run the Orchestrator proposed: input from automation is refused here.",
+      "dismissedTitle": "Start {{task}} · dismissed",
+      "dismissedState": "Dismissed · {{time}}",
+      "dismissedEffect": "You dismissed it. Nothing started."
+    },
     "historyPanel": {
       "title": "History",
       "close": "Close History",

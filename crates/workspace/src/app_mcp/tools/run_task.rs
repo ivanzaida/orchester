@@ -15,7 +15,7 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{task_write::write_error, tasks::find_task};
+use super::{Translate, task_write::write_error, tasks::find_task};
 use crate::{
   app_mcp::{
     error::ToolError,
@@ -24,9 +24,9 @@ use crate::{
   messages::Message,
   sharing::project::WorkClaim,
   tasks::{
-    data::SaveTarget,
+    data::{SaveTarget, published_pipelines},
     detail::run_store_error,
-    list::Readiness,
+    list::{PipelineLabel, Readiness},
     outside::Outside,
     run::{QueueFailure, preflight_message, queue_in, start_messages},
     run_again::{RunAgainCheck, block_message, request_messages},
@@ -120,25 +120,70 @@ fn prepare(services: &Services, project: &OpenProject, key: &str) -> Result<Star
         claim: queued.claim,
       })
     }
-    Some(Err(_)) => Err(ToolError::refused(
-      "run_unreadable",
-      vec![Message::new("runs.unreadable.rejected")],
-    )),
-    Some(Ok(latest)) => {
-      let check = RunAgainCheck::load_in(&project.repo_root, &services.programs, task.id(), latest.id())?;
-      if let Err(block) = check.next {
-        return Err(ToolError::refused(
-          block_code(block),
-          vec![block_message(block, &check.pipeline)],
-        ));
-      }
-      Ok(Start::Again {
-        task: task.id(),
-        after: latest.id(),
-        pipeline: check.pipeline.to_string(),
-      })
-    }
+    Some(Err(_)) => Err(unreadable()),
+    Some(Ok(latest)) => again(services, project, &task, latest.id()),
   }
+}
+
+/// How the task runs again after its latest run `after`; a refusal when core's rule does not allow it now.
+fn again(services: &Services, project: &OpenProject, task: &Task, after: RunId) -> Result<Start, ToolError> {
+  let check = RunAgainCheck::load_in(&project.repo_root, &services.programs, task.id(), after)?;
+  if let Err(block) = check.next {
+    return Err(ToolError::refused(
+      block_code(block),
+      vec![block_message(block, &check.pipeline)],
+    ));
+  }
+  Ok(Start::Again {
+    task: task.id(),
+    after,
+    pipeline: check.pipeline.to_string(),
+  })
+}
+
+/// A start of a task the Orchestrator's agent proposed: its key and the pipeline it would run.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Proposal {
+  pub key: String,
+  pub pipeline: String,
+}
+
+/// Checks that task `key` of `project` could run now as [`run_task`] would run it, without queuing or starting
+/// anything: the Orchestrator's agent proposes the start and a person takes it. The pipeline is named in the words
+/// of `translate`.
+pub async fn propose_run(
+  services: &Services,
+  translate: &Translate,
+  (project, key): (String, String),
+) -> Result<Proposal, ToolError> {
+  let services = services.clone();
+  let (key, label) = blocking(move || {
+    let project = services.project(&project)?;
+    let db = ProjectDb::open(&project.repo_root)?;
+    let task = find_task(&db, &key)?;
+    let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
+    match runs.last() {
+      None if task.status() == TaskStatus::Queued => {}
+      None => {
+        queue_version(&db, &task)?;
+      }
+      Some(Err(_)) => return Err(unreadable()),
+      Some(Ok(latest)) => {
+        again(&services, &project, &task, latest.id())?;
+      }
+    }
+    let published = published_pipelines(&db)?;
+    Ok((task.key().to_string(), PipelineLabel::of(task.details().pipeline, &published).message()))
+  })
+  .await?;
+  Ok(Proposal {
+    key,
+    pipeline: translate.text(&label),
+  })
+}
+
+fn unreadable() -> ToolError {
+  ToolError::refused("run_unreadable", vec![Message::new("runs.unreadable.rejected")])
 }
 
 /// The version a draft is queued with: its pipeline's latest published one, as the form offers it.

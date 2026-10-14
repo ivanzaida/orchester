@@ -16,14 +16,15 @@ use orchester_store::ProjectDb;
 use rmcp::model::{JsonObject, Tool};
 use serde_json::Value;
 
+use super::proposal;
 use crate::{
   app_mcp::{self, Services, ToolError, Translate},
   messages::Message,
   runner::Runners,
 };
 
-/// The tools of the chat, by name: reading the project's work, task drafts, starting a task's run, and pausing and
-/// resuming a run. Approvals, plans, questions, project setup and what removes work are not among them.
+/// The tools of the chat, by name: reading the project's work, task drafts, proposing a task's run to the person
+/// ([`proposal`]), and pausing and resuming a run. Approvals, plans, questions, project setup and what removes work are not among them.
 pub const TOOLS: [&str; 10] = [
   "list_tasks",
   "get_task",
@@ -42,8 +43,19 @@ pub fn listed() -> Vec<Tool> {
   app_mcp::listed()
     .into_iter()
     .filter(|tool| TOOLS.contains(&tool.name.as_ref()))
+    .map(|mut tool| {
+      if tool.name == proposal::RUN_TASK {
+        tool.description = Some(PROPOSE_RUN.into());
+      }
+      tool
+    })
     .collect()
 }
+
+/// What the agent reads of `run_task`: here it proposes the start.
+const PROPOSE_RUN: &str = "Proposes running a task to the person: checks that the task could run now (a draft is \
+  queued and started, a queued task starts, an ended one runs again) and starts nothing. The person starts or \
+  dismisses it in the conversation. Refusals name why.";
 
 /// Whose tools they are: the project's, for one conversation.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -73,15 +85,27 @@ pub async fn call(
     ));
   }
   let read_only = tool.annotations.and_then(|hints| hints.read_only_hint) == Some(true);
-  let task = named_task(&arguments);
-  let result = app_mcp::call(services, translate, name, arguments)
-    .await
-    .unwrap_or_else(|| Err(ToolError::InvalidArguments(format!("no tool is named {name}"))));
+  let mut task = named_task(&arguments);
+  let (result, proposed) = if name == proposal::RUN_TASK {
+    match proposal::propose((services, translate), scope, &arguments).await {
+      Ok((told, proposal)) => {
+        task = Some(Named::Task(proposal.key));
+        (Ok(told), Some(proposal.pipeline))
+      }
+      Err(error) => (Err(error), None),
+    }
+  } else {
+    let called = app_mcp::call(services, translate, name, arguments)
+      .await
+      .unwrap_or_else(|| Err(ToolError::InvalidArguments(format!("no tool is named {name}"))));
+    (called, None)
+  };
   if !read_only {
     let named = task.or_else(|| result.as_ref().ok().and_then(created_task));
-    let outcome = match &result {
-      Ok(_) => ActionOutcome::Done,
-      Err(error) => refusal(error, translate),
+    let outcome = match (&result, proposed) {
+      (Ok(_), Some(pipeline)) => ActionOutcome::Proposed { pipeline },
+      (Ok(_), None) => ActionOutcome::Done,
+      (Err(error), _) => refusal(error, translate),
     };
     keep(scope, name, named, outcome).await;
     runners.chat_changed(&scope.root);
@@ -116,7 +140,8 @@ fn created_task(result: &Value) -> Option<Named> {
     .map(|key| Named::Task(key.to_owned()))
 }
 
-fn refusal(error: &ToolError, translate: &Translate) -> ActionOutcome {
+/// The refusal `error` as the conversation keeps it, in the words of `translate`.
+pub(super) fn refusal(error: &ToolError, translate: &Translate) -> ActionOutcome {
   let refused = error.to_json(|message| translate.text(message));
   let text = |name: &str| {
     refused

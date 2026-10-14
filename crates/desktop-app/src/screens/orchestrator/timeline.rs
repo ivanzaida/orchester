@@ -24,11 +24,14 @@ use lurq::{
 use orchester_core::{
   connection::AccountStartProblem,
   id::ProjectId,
-  orchestrator::{TurnFailure, TurnState},
+  orchestrator::{ActionOutcome, TurnFailure, TurnState},
 };
-use orchester_workspace::display;
+use orchester_workspace::{display, orchestrator::tools::ChatScope};
 
-use super::turns::{Part, Turn};
+use super::{
+  proposal::{ProposalProps, StartProposal},
+  turns::{Part, Turn},
+};
 use crate::{
   navigation::Navigation,
   routes::{ConnectionsView, ProjectPage, Route},
@@ -49,6 +52,8 @@ pub(super) struct TurnEnv {
   pub(super) name: Arc<str>,
   /// The name of the connection the Orchestrator runs on, when it has one.
   pub(super) connection: Option<Arc<str>>,
+  /// The conversation's tools' scope, once it is kept: proposed starts are decided in it.
+  pub(super) scope: Option<ChatScope>,
   /// Stops the answer under way.
   pub(super) stop: Arc<dyn Fn() + Send + Sync>,
   /// Sends the words once more, as a new message.
@@ -78,6 +83,7 @@ impl PartialEq for TurnRow {
       && self.env.project == other.env.project
       && self.env.name == other.env.name
       && self.env.connection == other.env.connection
+      && self.env.scope == other.env.scope
   }
 }
 
@@ -172,12 +178,23 @@ fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
     .enumerate()
     .map(|(index, part)| match part {
       Part::Reply { text: said, .. } => text(ctx, &format!("orchestrator-reply-{key}-{index}"), said),
-      Part::Action { action, at } => super::action::card(
-        ctx,
-        &format!("orchestrator-action-{key}-{index}"),
-        (action, *at),
-        (row.env.project, &row.env.name),
-      ),
+      Part::Action { action, at, seq } => {
+        let id = format!("orchestrator-action-{key}-{index}");
+        match (&action.outcome, &row.env.scope) {
+          (ActionOutcome::Proposed { pipeline }, Some(scope)) => ctx.mount_keyed::<StartProposal>(
+            &id,
+            ProposalProps {
+              id: id.clone(),
+              scope: scope.clone(),
+              seq: *seq,
+              task: action.task.clone().unwrap_or_default(),
+              pipeline: pipeline.clone(),
+              at: *at,
+            },
+          ),
+          _ => super::action::card(ctx, &id, (action, *at), (row.env.project, &row.env.name)),
+        }
+      }
     })
     .collect();
   Some(chat_row(

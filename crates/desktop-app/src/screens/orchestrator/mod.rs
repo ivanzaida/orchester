@@ -12,6 +12,7 @@ mod composer;
 mod data;
 mod header;
 mod history;
+mod proposal;
 mod send;
 mod settings;
 mod start;

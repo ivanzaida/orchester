@@ -21,6 +21,8 @@ pub(super) enum Part {
   Action {
     action: ChatAction,
     at: Timestamp,
+    /// Its entry in the conversation, which a proposed start is decided by.
+    seq: i64,
   },
 }
 
@@ -114,6 +116,7 @@ pub(super) fn turns(entries: &[ChatEntry]) -> Vec<Turn> {
           turn.answer.push(Part::Action {
             action: action.clone(),
             at: entry.at,
+            seq: entry.seq,
           });
         }
       }
