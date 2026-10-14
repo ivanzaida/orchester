@@ -106,6 +106,41 @@ async fn qa_app_stops_while_its_turn_waits_for_a_person() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn qa_app_a_start_a_person_just_approved_runs_at_once() {
+  let project = qa_project(verify_step("Start the QA app. Then read outside. Then start again."));
+  let root = project.repo.path();
+  let deps = root.join("deps-a");
+  fs::create_dir_all(&deps).expect("deps");
+  fs::write(
+    deps.join("notes.txt"),
+    "outside line
+",
+  )
+  .expect("notes");
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("run");
+  // The first start, the read outside, then the second start, each answered by the person; the agent calls the
+  // second start at once after the read's answer, and its start runs as soon as the person approves it.
+  for _ in 0..3 {
+    approve(&scheduler, root, &mut events, id).await;
+  }
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let starts: Vec<String> = calls(root, id)
+    .into_iter()
+    .filter(|call| call.starts_with("start_qa_app"))
+    .collect();
+  assert_eq!(starts.len(), 2, "{starts:?}");
+  assert!(
+    starts.iter().all(|call| call.starts_with("start_qa_app ok")),
+    "{starts:?}"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn qa_app_a_script_that_names_no_app_has_what_it_started_ended() {
   let project = qa_project(verify_step("Start the QA app. QA scenario nopid."));
   let root = project.repo.path();

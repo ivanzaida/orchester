@@ -161,6 +161,9 @@ pub fn report(server: Option<&mut Prompt>, worktree: &Path, prompt: &str) {
         &json!({"filename": notes.to_string_lossy()}),
       );
       report_call(server, "call_run_app", &json!({"tool": "app_state", "arguments": {}}));
+      if prompt.contains("Then start again") {
+        report_call(server, "start_qa_app", &json!({"scenario": scenario}));
+      }
     }
     return;
   }

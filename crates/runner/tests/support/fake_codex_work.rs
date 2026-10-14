@@ -24,8 +24,8 @@
 //! - "Change nothing": changes no file and reports no change, then ends with its result;
 //! - "Start the QA app": calls `start_qa_app` (scenario `tasks`, or the one "QA scenario <name>." names), then
 //!   `call_run_app` without a pid (`fake_codex_tools`); with "Then read outside" it then reads `deps-a/notes.txt` of
-//!   the repository, which asks, and calls `call_run_app` again; with "Hold the QA app" it then waits while `fake-hold`
-//!   lies next to the worktrees;
+//!   the repository, which asks, and calls `call_run_app` again (and with "Then start again" `start_qa_app` again, at
+//!   once after that answer); with "Hold the QA app" it then waits while `fake-hold` lies next to the worktrees;
 //! - "Leave a handoff": works as below, and its step result hands off (`completed`, `decisions`, `open_questions`,
 //!   `next_agent_should_know`), with the decision "Greet in README.md from <step>";
 //! - "Fail once": the first time a step works on it, the result says it failed; later it works as below;
