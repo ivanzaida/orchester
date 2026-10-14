@@ -19,6 +19,7 @@ mod conversation;
 mod decisions;
 mod fonts;
 mod form;
+pub mod instructions;
 mod lifecycle;
 mod markdown;
 mod metrics;
@@ -89,6 +90,7 @@ pub fn install(app: &mut App, mode: Mode) {
   metrics::install(theme);
   pipelines::install(theme);
   agents::install(theme);
+  instructions::install(theme);
   startup::install(theme);
   settings::install(theme);
   accounts::install(theme);

@@ -981,7 +981,9 @@
       "pipelineRequired": "Choose the pipeline the rule applies in.",
       "stepRequired": "Choose the step the rule applies to.",
       "targetsRequired": "Choose the agents the rule applies to.",
-      "settingsInvalid": "These settings cannot be saved together."
+      "settingsInvalid": "These settings cannot be saved together.",
+      "variableUnavailableAtStart": "{{variable}} has no value when an agent starts, so the rule cannot be published for Agent start. Choose another event or another variable.",
+      "variableUnavailableAtResume": "{{variable}} has no value when an agent resumes, so the rule cannot be published for Agent resume. Choose another event or another variable."
     }
   },
   "skills": {

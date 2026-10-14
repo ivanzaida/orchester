@@ -1,7 +1,9 @@
-//! Where the window opens when QA asks for a place (`tools/qa-app.ps1 -WindowPosition`), for example on a
+//! Where the window opens when QA asks for a place (`tools/qa-app.ps1 -WindowX -WindowY`), for example on a
 //! display other than the person's main one. Without the variable the system places the window, as
-//! always; the place is never stored. A QA copy is held to the place it asked for; the installed app is never
-//! kept from starting by a stray variable.
+//! always; the place is never stored. The installed app ignores the variable, set or not, valid or not: a
+//! stray variable never keeps it from starting or moves its window. Every other build (QA copies, debug
+//! builds, tests) is held to it: a value that is not a place refuses the start, so a QA run that asked for a
+//! place never gets a window elsewhere.
 
 use std::ffi::OsStr;
 
@@ -30,22 +32,26 @@ pub enum PositionError {
 }
 
 impl WindowPosition {
-  /// The place this process was asked for; `None` when it was not ([`Self::for_build`]).
+  /// The place this process was asked for; `None` when it was not, or it is the installed app
+  /// ([`Self::requested`]).
   pub fn from_environment() -> Result<Option<Self>, PositionError> {
-    Self::for_build(Build::this(), std::env::var_os(POSITION_VARIABLE).as_deref())
+    Self::requested(Build::this(), std::env::var_os(POSITION_VARIABLE).as_deref())
   }
 
-  /// The place `build`, started with `value` of `POSITION_VARIABLE`, opens at. Any build but the installed app
-  /// refuses a malformed value: a QA run that asked for a place must not get a window elsewhere. The installed
-  /// app ignores it, logged, and the system places its window.
-  pub fn for_build(build: Build, value: Option<&OsStr>) -> Result<Option<Self>, PositionError> {
-    match (build, Self::of_variable(value)) {
-      (Build::Installed, Err(error)) => {
-        tracing::warn!(%error, "the installed app ignores the malformed window position; the system places it");
-        Ok(None)
+  /// The place `value` asks a `build` for: none for the installed app, which logs a value it was given and
+  /// leaves the place to the system whatever it says; for any other build the place `value` names, refused
+  /// when it is not one.
+  pub fn requested(build: Build, value: Option<&OsStr>) -> Result<Option<Self>, PositionError> {
+    if build == Build::Installed {
+      if value.is_some() {
+        tracing::warn!(
+          variable = POSITION_VARIABLE,
+          "the installed app does not take a window position; the system places the window"
+        );
       }
-      (_, place) => place,
+      return Ok(None);
     }
+    Self::of_variable(value)
   }
 
   /// The place a value of `POSITION_VARIABLE` asks for; `None` when the variable is not set.

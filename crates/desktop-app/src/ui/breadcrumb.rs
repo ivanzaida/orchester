@@ -38,7 +38,7 @@ pub enum CrumbSeparator {
 
 pub struct Crumb {
   label: Arc<str>,
-  mono: bool,
+  typography: TypographyStyle,
   open: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
@@ -47,7 +47,7 @@ impl Crumb {
   pub fn link(label: impl Into<Arc<str>>, open: impl Fn() + Send + Sync + 'static) -> Self {
     Self {
       label: label.into(),
-      mono: false,
+      typography: TypographyStyle::Description,
       open: Some(Arc::new(open)),
     }
   }
@@ -56,25 +56,29 @@ impl Crumb {
   pub fn here(label: impl Into<Arc<str>>) -> Self {
     Self {
       label: label.into(),
-      mono: false,
+      typography: TypographyStyle::Description,
       open: None,
     }
   }
 
   /// The label is an identifier, e.g. a task's key.
   pub fn mono(mut self) -> Self {
-    self.mono = true;
+    self.typography = TypographyStyle::Mono;
+    self
+  }
+
+  /// The page title in the last crumb (Effective instructions, c3yZoo).
+  pub fn title(mut self) -> Self {
+    self.typography = TypographyStyle::Title;
     self
   }
 
   /// The crumb, cut to its room with its whole label in a tooltip; a link's label is `<id>-label`.
   fn render(self, ctx: &mut Ctx, id: String, last: bool) -> Element {
-    let typography = if self.mono {
-      TypographyStyle::Mono
-    } else {
-      TypographyStyle::Description
-    };
-    let color = if last {
+    let typography = self.typography;
+    let color = if last && typography == TypographyStyle::Title {
+      PaletteColor::TextPrimary
+    } else if last {
       PaletteColor::TextSecondary
     } else {
       PaletteColor::TextMuted

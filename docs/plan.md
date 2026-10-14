@@ -806,6 +806,23 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+Command classifier: compound lines and dependency sources · branch `claude/command-classifier` (2026-10-14).
+From the analysis of 16 runs (106 of the person's 134 approvals were Claude Code's compound lines read as Unknown).
+`echo` of `$?` / `${PIPESTATUS[N]}` (PowerShell `$?` / `$LASTEXITCODE`) is read, and a status anywhere else stays
+Unknown. `echo` prints any argument. `tee` without a file is a filter. A literal variable may hold a backslash, read
+only where it is used quoted. Reads of Cargo's registry sources and git checkouts and of the toolchains' rust-src
+(also under `CARGO_HOME` / `RUSTUP_HOME`) are read like the worktree, as are `read_external_file` and
+`search_external_file` there; the rest of a Cargo or rustup home stays a credential location. Auto mode already
+reviewed Unknown lines (2026-10-06), and its hard rules are unchanged. Tests:
+`cargo test -p orchester-core --test command_compound command_compound`, plus `command_sequences`,
+`approval_fixtures` and `native known_safe`. Still Unknown by design: `$( )`, subshells, functions, `for … set --`,
+`**` globs, a loop that is not the whole line.
+Security review fix (same day): only plain readers (`cat`, `rg`, `grep -r`, `sed -n`, …) read the dependency
+sources like the worktree; a `cd` there, any other program, and a `.git` there do not. Programs that load settings
+or code from their folder (git, Cargo, package managers, build tools, Python, Node) are Unknown outside the worktree
+and its writable folders, which also closes `cd /any && git status` on master. `diff -r`, `tree -l` and `du -L` are
+Unknown. Tests: `cargo test -p orchester-core --test command_review_bypasses command_review`.
+
 ORC-3 · Pipelines page and editor · branch `codex/orc3-integration` (accepted 2026-10-12, merged `39f945d2`).
 Independent source review accepted final union `7668c94a` / tree `f7e145f2`; eight named-filter groups /
 83 executions and `tools/check.ps1` passed. Pipeline writes retain same-snapshot CAS, immutable published

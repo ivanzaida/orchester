@@ -11,7 +11,7 @@ use orchester_core::{
   name::Name,
   resource::{
     AgentProfile, AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, Pipeline, PromptText,
-    ResourceKind, Slug, StepKey, Version, VersionNumber,
+    ResourceKind, Slug, StepKey, StepKind, Version, VersionNumber,
   },
   store::ResourceStore,
   time::Timestamp,
@@ -37,7 +37,7 @@ pub struct InstructionEntry {
 
 impl InstructionEntry {
   /// `None` for a resource with neither a draft nor a version, which the store never creates.
-  fn new(
+  pub(super) fn new(
     id: ResourceId,
     (name, slug): (Arc<str>, Arc<str>),
     draft: Option<Draft<Instruction>>,
@@ -92,6 +92,8 @@ pub struct ProfileChoice {
 pub struct StepChoice {
   pub key: StepKey,
   pub name: Arc<str>,
+  pub ordinal: usize,
+  pub role: Option<Name>,
 }
 
 /// A pipeline and its steps, as its draft or latest version has them.
@@ -100,6 +102,7 @@ pub struct PipelineChoice {
   pub id: ResourceId,
   pub name: Arc<str>,
   pub steps: Vec<StepChoice>,
+  pub version: Option<VersionNumber>,
 }
 
 /// Everything the instructions screen edits and chooses from, read together.
@@ -135,6 +138,15 @@ impl ProjectInstructions {
   pub fn pipeline(&self, id: ResourceId) -> Option<&PipelineChoice> {
     self.pipelines.iter().find(|pipeline| pipeline.id == id)
   }
+}
+
+/// Reads one instruction for an explicit editor reload.
+pub fn entry_in(repo_root: &Path, id: ResourceId) -> Result<InstructionEntry, StoreError> {
+  let db = ProjectDb::open(repo_root)?;
+  let resource = db.resource(id)?.ok_or(StoreError::ResourceNotFound(id))?;
+  let latest = db.latest_version::<Instruction>(id)?;
+  let names = (resource.name().as_str().into(), resource.slug().as_str().into());
+  InstructionEntry::new(id, names, db.draft(id)?, latest.as_ref()).ok_or(StoreError::NoDraft(id))
 }
 
 /// The project's instructions, ordered by slug.
@@ -178,22 +190,33 @@ pub(crate) fn profiles(db: &ProjectDb) -> Result<Vec<ProfileChoice>, StoreError>
 /// The project's pipelines with the steps of their draft, or else of their latest version.
 pub(crate) fn pipelines(db: &ProjectDb) -> Result<Vec<PipelineChoice>, StoreError> {
   let mut pipelines = Vec::new();
+  let profiles = profiles(db)?;
   for resource in db.resources(ResourceKind::Pipeline)? {
     let id = resource.id();
+    let latest = db.latest_version::<Pipeline>(id)?;
     let body = match db.draft::<Pipeline>(id)? {
       Some(draft) => Some(draft.body().clone()),
-      None => db.latest_version::<Pipeline>(id)?.map(|version| version.body().clone()),
+      None => latest.as_ref().map(|version| version.body().clone()),
     };
     if let Some(body) = body {
       pipelines.push(PipelineChoice {
         id,
         name: resource.name().as_str().into(),
+        version: latest.map(|version| version.number()),
         steps: body
           .steps()
           .iter()
-          .map(|step| StepChoice {
+          .enumerate()
+          .map(|(index, step)| StepChoice {
             key: step.key.clone(),
             name: step.name.as_str().into(),
+            ordinal: index + 1,
+            role: match &step.kind {
+              StepKind::Agent { profile: Some(id), .. } => {
+                profiles.iter().find(|p| p.id == *id).map(|p| p.role.clone())
+              }
+              _ => None,
+            },
           })
           .collect(),
       });
@@ -231,10 +254,4 @@ pub fn create(db: &mut ProjectDb, new: NewInstruction, now: Timestamp) -> Result
 
 pub fn create_in(repo_root: &Path, new: NewInstruction) -> Result<ResourceId, StoreError> {
   create(&mut ProjectDb::open(repo_root)?, new, Timestamp::now())
-}
-
-/// Publishes the stored draft; the version it became.
-pub fn publish_in(repo_root: &Path, id: ResourceId) -> Result<(VersionNumber, Timestamp), StoreError> {
-  let version = ProjectDb::open(repo_root)?.publish_draft::<Instruction>(id, Timestamp::now())?;
-  Ok((version.number(), version.published_at()))
 }
