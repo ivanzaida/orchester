@@ -270,3 +270,37 @@ async fn unverified_accept_of_a_gated_step_proposes_its_result_as_the_plan() {
   assert_eq!(plans.len(), 1);
   assert_eq!(plans[0].text, "Finished Verify");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unverified_accept_is_refused_when_other_work_lies_beside_the_accepted() {
+  let mut started = Started::new(verify_after("Change README.md.", "Report unverified. Change nothing.")).await;
+  started.until(waits).await;
+  // Something uncommitted appears in the run's worktree, where Verify worked: passing would commit it as Verify's.
+  let worktree = started
+    .project
+    .repo
+    .path()
+    .join(".orchester/worktrees")
+    .join(started.id.to_string());
+  std::fs::write(
+    worktree.join("stray.txt"),
+    "not Verify's
+",
+  )
+  .expect("stray file");
+  let refused = started
+    .scheduler
+    .decide_stuck(started.id, StuckDecision::Accept { by: Answerer::Person })
+    .await
+    .expect_err("refused");
+  assert!(
+    matches!(&refused, orchester_ipc::Rejection::Failed { detail } if detail.contains("uncommitted")),
+    "{refused:?}"
+  );
+  let run = started.until(waits).await;
+  assert_eq!(
+    run.status(),
+    &RunStatus::WaitingForPerson(Stuck::Unverified(key("verify"))),
+    "it still waits"
+  );
+}

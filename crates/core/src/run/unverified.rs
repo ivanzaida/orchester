@@ -15,7 +15,7 @@ use super::{
   error::RunError,
   event::{PlannedExecution, RunEvent, RunEventKind},
   state::Run,
-  status::{AttemptReason, StepFailure, StepStatus, Stuck},
+  status::{AttemptReason, RunStatus, StepFailure, StepStatus, Stuck},
 };
 use crate::{
   id::{AttemptId, StepExecutionId},
@@ -171,8 +171,26 @@ impl Run {
     if attempt.execution(execution)?.step() != step {
       return None;
     }
-    // An execution refused as unchanged did no work: the one whose result held for the revision is accepted.
-    self.attempts()[..position]
+    self.judged_work(step, position).map(StepExecution::id)
+  }
+
+  /// The execution an acceptance of the run, which waits for a person unverified or unchanged, would accept the
+  /// work and result of; `None` for a run that does not wait so. The runner checks that work before it records the
+  /// acceptance.
+  pub fn acceptable(&self) -> Option<&StepExecution> {
+    let RunStatus::WaitingForPerson(stuck) = self.status() else {
+      return None;
+    };
+    if !stuck.can_accept() {
+      return None;
+    }
+    self.judged_work(stuck.step(), self.attempts().len())
+  }
+
+  /// The latest execution of `step` in the attempts before `before` whose result held for its revision. An execution
+  /// refused as unchanged did no work: the one whose result held for the revision is it.
+  fn judged_work(&self, step: &StepKey, before: usize) -> Option<&StepExecution> {
+    self.attempts()[..before]
       .iter()
       .rev()
       .filter(|earlier| earlier.counts())
@@ -180,6 +198,5 @@ impl Run {
       .filter(|candidate| candidate.step() == step && candidate.status() == StepStatus::Failed)
       .find(|candidate| candidate.failure() != Some(StepFailure::Unchanged))
       .filter(|accepted| accepted.failure().is_some_and(StepFailure::holds_for_revision))
-      .map(StepExecution::id)
   }
 }

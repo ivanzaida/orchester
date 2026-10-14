@@ -36,12 +36,16 @@ impl RunTask {
       .last_invocation(accepted)?
       .ok_or(ExecutionError::NotAnAgentStep(accepted))?;
     self.transition(|run, now| run.start_step(execution, now))?;
-    let workspace = match Workspace::of_accepted(&self.root, &self.run, &self.worktree, accepted) {
+    let judged = self
+      .run
+      .execution(accepted)
+      .cloned()
+      .ok_or(ExecutionError::NotAnAgentStep(accepted))?;
+    // Checked when the person accepted; checked again, as the work may have changed since.
+    let workspace = match Workspace::accepted_work(&self.root, (&self.run, &self.worktree), &judged) {
       Ok(workspace) => workspace,
-      Err(error) => {
-        let problem = RunnerProblem::CheckpointFailed {
-          detail: error.to_string(),
-        };
+      Err(detail) => {
+        let problem = RunnerProblem::CheckpointFailed { detail };
         self.report(&invocation, problem)?;
         self.keep_handoff(execution, StepFate::Failed);
         return self.fail(execution, StepFailure::CheckpointFailed);

@@ -26,6 +26,9 @@ impl Scheduler {
       return self
         .continue_settled(run, |db, root| {
           let mut stored = waiting(db, run)?;
+          if matches!(decision, StuckDecision::Accept { .. }) {
+            acceptable(root, &stored)?;
+          }
           let events = stored
             .decide_stuck(&decision, Timestamp::now())
             .map_err(idle::rejection)?;
@@ -48,6 +51,20 @@ impl Scheduler {
     });
     Ok(())
   }
+}
+
+/// Refuses accepting `run`'s waiting step when the work that would pass with it is not the work its result was for
+/// (`Workspace::accepted_work`): the person reads why.
+fn acceptable(root: &std::path::Path, run: &Run) -> Result<(), Rejection> {
+  let accepted = run.acceptable().ok_or(Rejection::RunNotWaiting)?;
+  let run_worktree = crate::worktree::Worktrees::new(root)
+    .map(|worktrees| worktrees.path(run.id()))
+    .map_err(|error| Rejection::Failed {
+      detail: error.to_string(),
+    })?;
+  super::workspace::Workspace::accepted_work(root, (run, &run_worktree), accepted)
+    .map(drop)
+    .map_err(|detail| Rejection::Failed { detail })
 }
 
 /// The stored run, if it waits for a person.

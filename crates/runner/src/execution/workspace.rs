@@ -16,10 +16,16 @@
 
 use std::path::{Path, PathBuf};
 
-use orchester_core::{id::StepExecutionId, run::Run};
+use orchester_core::{
+  id::StepExecutionId,
+  run::{Run, StepExecution},
+};
 
 use super::checkpoint;
-use crate::worktree::{WorktreeError, Worktrees};
+use crate::{
+  git::Git,
+  worktree::{WorktreeError, Worktrees},
+};
 
 /// How an execution starts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -93,6 +99,44 @@ impl Workspace {
       branch,
       owner: execution,
     })
+  }
+
+  /// Where the work of `accepted`, an execution a person accepted, is — its own worktree if it had one, which is
+  /// merged when the step passes, else the run's, where its work was committed already — when that work is what its
+  /// result was for: it builds on the revision the execution was judged on, and nothing uncommitted lies beside it
+  /// that passing would commit as the step's. Why not, otherwise, in words for the person.
+  pub(super) fn accepted_work(
+    root: &Path,
+    (run, run_worktree): (&Run, &Path),
+    accepted: &StepExecution,
+  ) -> Result<Self, String> {
+    let judged = accepted.judged().ok_or_else(|| {
+      "the revision the accepted result was for is not recorded, so Orchester cannot tell what work it covers; run the \
+       step again instead"
+        .to_owned()
+    })?;
+    let workspace = Self::of_accepted(root, run, run_worktree, accepted.id()).map_err(|error| error.to_string())?;
+    let git = Git::new(workspace.path());
+    let builds_on = git
+      .answer(&["merge-base", "--is-ancestor", judged.as_str(), "HEAD"])
+      .map_err(|error| error.to_string())?;
+    if !builds_on {
+      return Err(format!(
+        "the accepted step's work no longer builds on {}, the revision its result was for; run the step again instead",
+        &judged.as_str()[..12]
+      ));
+    }
+    let uncommitted = git
+      .stdout(&["status", "--porcelain", "--untracked-files=all"])
+      .map_err(|error| error.to_string())?;
+    if !uncommitted.trim().is_empty() {
+      return Err(
+        "uncommitted changes lie beside the accepted step's work, which accepting would pass as the step's; run the \
+         step again instead"
+          .to_owned(),
+      );
+    }
+    Ok(workspace)
   }
 
   /// Where the work of `accepted`, an execution a person accepted, is: its own worktree if it had one, which is
