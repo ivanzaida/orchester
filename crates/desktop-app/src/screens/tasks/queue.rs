@@ -15,12 +15,15 @@ use lurq::{
   layout::Alignment,
   node::Element,
 };
-use orchester_core::{id::ProjectId, task_group::HoldScope};
+use orchester_core::{
+  id::ProjectId,
+  task_group::{HoldActor, HoldScope},
+};
 use orchester_workspace::{
   background,
   messages::Message,
   tasks::{
-    hold::{HeldQueue, hold_in},
+    hold::{HeldQueue, HoldRefused, hold_in},
     outside::Outside,
   },
 };
@@ -68,7 +71,12 @@ impl Component for QueueControls {
     let hold = ctx.future_action(move |Holding { root, scope, held }: Holding| {
       let changes = services.changes.clone();
       async move {
-        background::run(move || hold_in(&root, scope, held)).await??;
+        let kept = background::run(move || hold_in(&root, (scope, HoldActor::Person), held)).await?;
+        // A person's hold is never refused as person-only; a store error says why.
+        kept.map_err(|refused| match refused {
+          HoldRefused::Store(message) => message,
+          HoldRefused::PersonOnly => Message::new("tasks.queue.personHeld"),
+        })?;
         // The list reads the holds again, as after any change to its tasks.
         changes.record(project, Outside::Tasks);
         Ok(())

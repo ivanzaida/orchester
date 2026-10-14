@@ -1,7 +1,8 @@
 //! `hold_queue` and `release_queue`: hold new starts in a project, or in the reviewed group a task belongs to, or
-//! let them go on, as Tasks does (`crate::tasks::hold`). Running runs go on either way.
+//! let them go on, as Tasks does (`crate::tasks::hold`). Running runs go on either way. These are automation's holds:
+//! a hold a person set in the window is the person's to release (`person_only`).
 
-use orchester_core::task_group::HoldScope;
+use orchester_core::task_group::{HoldActor, HoldScope};
 use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
@@ -14,7 +15,10 @@ use crate::{
     services::{Services, blocking},
   },
   messages::Message,
-  tasks::{hold, outside::Outside},
+  tasks::{
+    hold::{self, HoldRefused},
+    outside::Outside,
+  },
 };
 
 #[derive(Deserialize, JsonSchema)]
@@ -47,10 +51,14 @@ pub async fn set_queue_hold(services: &Services, args: QueueHold, held: bool) ->
         HoldScope::Group(group)
       }
     };
-    let changed = hold::hold_in(&project.repo_root, scope, held).map_err(|message| {
-      tracing::warn!(?message, "a hold on new starts could not be kept");
-      ToolError::refused("not_saved", vec![message])
-    })?;
+    let changed =
+      hold::hold_in(&project.repo_root, (scope, HoldActor::Automation), held).map_err(|refused| match refused {
+        HoldRefused::PersonOnly => ToolError::refused("person_only", vec![Message::new("tasks.queue.personHeld")]),
+        HoldRefused::Store(message) => {
+          tracing::warn!(?message, "a hold on new starts could not be kept");
+          ToolError::refused("not_saved", vec![message])
+        }
+      })?;
     services.changes.record(project.project.id(), Outside::Tasks);
     let now = hold::held_in(&ProjectDb::open(&project.repo_root)?)?;
     let groups: Vec<Value> = now.groups.iter().map(|group| json!({ "tasks": group.tasks })).collect();

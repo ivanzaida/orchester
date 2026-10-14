@@ -50,13 +50,23 @@ pub enum HoldScope {
   Group(IdempotencyKey),
 }
 
-/// The holds a person put on new starts. Only first runs wait: running runs, resumes and runs again go on.
+/// Who held new starts: a person in the window, or automation (an MCP client of the app, the Orchestrator's agent).
+/// Automation may release only a hold automation set; a person's hold is a person's to release.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum HoldActor {
+  Person,
+  Automation,
+}
+
+/// The holds on new starts. Only first runs wait: running runs, resumes and runs again go on.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct QueueHolds {
   /// New starts are held in the whole project.
   pub project: bool,
   /// The groups whose new starts are held.
   pub groups: Vec<IdempotencyKey>,
+  /// The holds a person set, which only a person releases.
+  pub by_person: Vec<HoldScope>,
 }
 
 impl QueueHolds {

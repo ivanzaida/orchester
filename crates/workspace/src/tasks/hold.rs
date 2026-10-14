@@ -8,7 +8,7 @@ use std::path::Path;
 use orchester_core::{
   id::{IdempotencyKey, TaskId},
   store::TaskStore,
-  task_group::HoldScope,
+  task_group::{HoldActor, HoldScope},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -57,10 +57,21 @@ pub fn group_of(db: &ProjectDb, task: TaskId) -> Result<Option<IdempotencyKey>, 
   Ok(db.task_group_for_task(task)?.map(|group| group.key()))
 }
 
-/// Holds new starts in `scope` of the project at `root` (`held`), or lets them go on; whether that changed anything.
-/// Blocks on SQLite.
-pub fn hold_in(root: &Path, scope: HoldScope, held: bool) -> Result<bool, Message> {
-  ProjectDb::open(root)
-    .and_then(|mut db| db.set_queue_hold(scope, held, Timestamp::now()))
-    .map_err(|error| messages::store_error(&error))
+/// Why a hold was not changed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HoldRefused {
+  /// A person held new starts there: only a person releases them.
+  PersonOnly,
+  Store(Message),
+}
+
+/// Holds new starts in `scope` of the project at `root` as `actor` (`held`), or lets them go on; whether that changed
+/// anything. Automation does not release a hold a person set. Blocks on SQLite.
+pub fn hold_in(root: &Path, (scope, actor): (HoldScope, HoldActor), held: bool) -> Result<bool, HoldRefused> {
+  let store = |error: StoreError| HoldRefused::Store(messages::store_error(&error));
+  let mut db = ProjectDb::open(root).map_err(store)?;
+  if !held && actor == HoldActor::Automation && db.queue_holds().map_err(store)?.by_person.contains(&scope) {
+    return Err(HoldRefused::PersonOnly);
+  }
+  db.set_queue_hold((scope, actor), held, Timestamp::now()).map_err(store)
 }

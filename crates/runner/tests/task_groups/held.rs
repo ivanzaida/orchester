@@ -4,7 +4,7 @@ use std::num::NonZeroU32;
 
 use orchester_core::{
   store::RunStore,
-  task_group::{GroupHold, HoldScope, Scheduling},
+  task_group::{GroupHold, HoldActor, HoldScope, Scheduling},
   time::Timestamp,
 };
 use orchester_ipc::{AttachSession, Rejection};
@@ -37,7 +37,10 @@ async fn task_group_held_queue_starts_nothing_until_released() {
     (HoldScope::Project, GroupHold::QueueHeld),
     (HoldScope::Group(group.key()), GroupHold::Paused),
   ] {
-    assert!(db.set_queue_hold(scope, true, Timestamp::now()).expect("held"));
+    assert!(
+      db.set_queue_hold((scope, HoldActor::Person), true, Timestamp::now())
+        .expect("held")
+    );
     scheduler.advance_task_groups().await.expect("advance");
     assert!(
       db.run_with_key(first.first_run_key()).expect("read").is_none(),
@@ -50,7 +53,10 @@ async fn task_group_held_queue_starts_nothing_until_released() {
       "nor on request"
     );
     becomes_idle(&scheduler).await;
-    assert!(db.set_queue_hold(scope, false, Timestamp::now()).expect("released"));
+    assert!(
+      db.set_queue_hold((scope, HoldActor::Person), false, Timestamp::now())
+        .expect("released")
+    );
   }
   scheduler.advance_task_groups().await.expect("advance");
   assert!(

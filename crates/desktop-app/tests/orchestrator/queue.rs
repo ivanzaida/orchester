@@ -43,4 +43,24 @@ fn orchestrator_holds_new_starts_and_tasks_releases_them() {
   screen.until("Hold new starts again", |screen| screen.exists("tasks-queue-hold"));
   screen.click("tasks-queue-hold");
   screen.until("held from Tasks", |screen| held(screen));
+
+  // A person's hold is the person's to release: the agent's release is refused and changes nothing.
+  screen.go(OrchestratorChat::Latest);
+  screen.send(r#"Call release_queue {"project":"Kontur"}"#);
+  screen.until("the refusal", |screen| {
+    screen.text("orchestrator-conversation").contains("person_only")
+  });
+  screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
+  assert!(held(&screen), "still held");
+}
+
+#[test]
+fn orchestrator_releases_a_hold_it_set_itself() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  screen.go(OrchestratorChat::New);
+  screen.send(r#"Call hold_queue {"project":"Kontur"}"#);
+  screen.until("the hold", |screen| held(screen));
+  screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
+  screen.send(r#"Call release_queue {"project":"Kontur"}"#);
+  screen.until("the release", |screen| !held(screen));
 }
