@@ -30,7 +30,7 @@ use orchester_workspace::{
 };
 
 use super::{Timeline, chips};
-pub(super) use crate::ui::chat::links;
+pub(crate) use crate::ui::chat::links;
 use crate::ui::{
   chat::{Avatar, chat_row, delivery_line, person_message as bubble, text},
   icon::Icon,

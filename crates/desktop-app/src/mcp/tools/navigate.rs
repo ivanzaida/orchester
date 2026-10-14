@@ -97,6 +97,7 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
   }
   let page = match screen {
     Screen::AllProjects => return Ok(Route::AllProjects),
+    Screen::AddProject => return Ok(Route::AddProject(None)),
     Screen::Settings => return Ok(Route::Settings),
     Screen::Overview => ProjectPage::Overview(tab(
       args,
@@ -109,11 +110,13 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
     Screen::NewTask => ProjectPage::NewTask,
     Screen::EditTask => ProjectPage::EditTask(key(args, "key")?),
     Screen::Task => ProjectPage::Task(key(args, "key")?, task_view(args)?),
+    Screen::MergeQueue => ProjectPage::MergeQueue,
     Screen::PullRequests => ProjectPage::PullRequests,
     Screen::Usage => ProjectPage::Usage,
     Screen::Pipelines => ProjectPage::Pipelines,
     Screen::Agents => ProjectPage::Agents,
     Screen::Instructions => ProjectPage::Instructions,
+    Screen::Memory => ProjectPage::Memory,
     Screen::Skills => skills_page(args)?,
     Screen::Tools => tools_page(args)?,
     Screen::Secrets => ProjectPage::Secrets,
@@ -128,7 +131,7 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
 /// The parameters besides `route` that `screen` takes.
 const fn params(screen: Screen) -> &'static [&'static str] {
   match screen {
-    Screen::AllProjects | Screen::Settings => &[],
+    Screen::AllProjects | Screen::AddProject | Screen::Settings => &[],
     Screen::Overview => &["project", "tab"],
     Screen::Tasks => &["project", "tab", "q", "highlight"],
     Screen::EditTask => &["project", "key"],
@@ -140,11 +143,13 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::NewConnection => &["project", "kind"],
     Screen::EditConnection => &["project", "connection"],
     Screen::NewTask
+    | Screen::MergeQueue
     | Screen::PullRequests
     | Screen::Usage
     | Screen::Pipelines
     | Screen::Agents
     | Screen::Instructions
+    | Screen::Memory
     | Screen::Secrets
     | Screen::OrchestratorSettings
     | Screen::ProjectSettings => &["project"],

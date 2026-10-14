@@ -35,7 +35,7 @@ pub async fn return_to_draft(services: &Services, args: ReturnToDraft) -> Result
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
-    let tasks = ProjectTasks::load(&open.repo_root)?;
+    let tasks = ProjectTasks::load(&open.repo_root, &services.programs)?;
     let lowered = args.key.to_lowercase();
     let task = tasks
       .tasks

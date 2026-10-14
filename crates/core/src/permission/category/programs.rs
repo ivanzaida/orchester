@@ -75,6 +75,8 @@ pub(super) struct Judged {
   pub(super) no_paths: bool,
   /// The repository `git -C <folder>` works in.
   pub(super) repository: Option<String>,
+  /// It loads settings or code from the folder it runs in ([`FOLDER_CODE`]).
+  pub(super) folder_code: bool,
 }
 
 impl Judged {
@@ -100,6 +102,7 @@ impl Judged {
       stdin_code: false,
       no_paths: false,
       repository: None,
+      folder_code: false,
     }
   }
 
@@ -275,8 +278,25 @@ const SECRET_STORES: [&str; 6] = [
   "get-storedcredential",
 ];
 
+/// Programs that load settings or code from the folder they run in and the folders above it: a repository's
+/// `.git/config` (`core.fsmonitor`, `diff.external`), `.cargo/config.toml` (`build.rustc-wrapper`),
+/// `rust-toolchain.toml`, `package.json`, `go.mod`, `Directory.Build.props`, a `Makefile`, the modules an
+/// interpreter imports from there. Run anywhere but the worktree or a writable folder, they run what that
+/// folder names.
+const FOLDER_CODE: [&str; 27] = [
+  "git", "gh", "cargo", "rustup", "rustc", "npm", "pnpm", "yarn", "bun", "npx", "pnpx", "bunx", "deno", "node",
+  "python", "python3", "py", "pip", "pip3", "pipx", "uv", "uvx", "poetry", "go", "dotnet", "bundle", "composer",
+];
+
 /// `program` (its name as [`super::program_key`] gives it) with `args`.
 pub(super) fn judge(program: &str, args: &[String]) -> Judged {
+  let mut judged = judge_words(program, args);
+  judged.folder_code = FOLDER_CODE.contains(&program) || BUILDS.contains(&program);
+  judged
+}
+
+/// What `program` with `args` does by its words alone.
+fn judge_words(program: &str, args: &[String]) -> Judged {
   if SECRET_STORES.contains(&program) {
     return Judged::unknown().secret();
   }
@@ -344,16 +364,23 @@ fn known_read(program: &str, args: &[String]) -> Judged {
 
 /// A program of [`READS`], Unknown with an option that writes a file (`tree -o`, `uniq in out`, `sort -o`),
 /// sets the system date or a shell variable (`date -s`, `printf -v`), starts a program (`sort
-/// --compress-program`), reads the files a file names (`sort --files0-from`), follows links (`grep -R`),
-/// or a `jq` program that reads the environment or a module.
+/// --compress-program`), reads the files a file names (`sort --files0-from`), follows links in the folders it
+/// walks (`grep -R`, `diff -r`, `tree -l`, `du -L`), or a `jq` program that reads the environment or a module.
 fn plain_read(program: &str, args: &[String]) -> Judged {
   let refused = match program {
-    "tree" => has_option(args, &["-o", "-R", "--output"]),
+    // `-l` follows links to folders.
+    "tree" => has_option(args, &["-o", "-R", "-l", "--output"]) || abbreviates(args, &["follow"]),
     "uniq" => operands(args).len() > 1,
     "date" => has_option(args, &["-s", "--set"]) || operands(args).iter().any(|operand| !operand.starts_with('+')),
     "printf" => has_option(args, &["-v"]),
     // `-R` follows links, also out of the folders it is given.
     "grep" | "egrep" | "fgrep" => has_option(args, &["-R"]) || abbreviates(args, &["dereference-recursive"]),
+    // A recursive `diff` follows the links in the folders it compares unless told not to.
+    "diff" => {
+      (has_option(args, &["-r"]) || abbreviates(args, &["recursive"]))
+        && !args.iter().any(|arg| arg == "--no-dereference")
+    }
+    "du" => has_option(args, &["-L"]) || abbreviates(args, &["dereference"]),
     "sort" => has_option(args, &["-o", "-T"]) || abbreviates(args, &SORT_REFUSED),
     // A module (`include`, `import`, `-L`) is read from folders the arguments do not name.
     "jq" => {

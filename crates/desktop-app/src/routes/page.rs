@@ -19,6 +19,7 @@ pub enum ProjectPage {
   NewTask,
   EditTask(TaskKey),
   Task(TaskKey, TaskView),
+  MergeQueue,
   PullRequests,
   Usage,
   Pipelines,
@@ -28,6 +29,7 @@ pub enum ProjectPage {
   Agents,
   Agent(ResourceId),
   Instructions,
+  Memory,
   Skills,
   NewSkill,
   Skill(ResourceId),
@@ -48,7 +50,12 @@ impl ProjectPage {
   /// screens of a task.
   pub fn of(screen: Screen) -> Option<Self> {
     Some(match screen {
-      Screen::AllProjects | Screen::Settings | Screen::EditTask | Screen::Task | Screen::EditConnection => {
+      Screen::AllProjects
+      | Screen::AddProject
+      | Screen::Settings
+      | Screen::EditTask
+      | Screen::Task
+      | Screen::EditConnection => {
         return None;
       }
       Screen::Overview => Self::Overview(OverviewTab::default()),
@@ -56,11 +63,13 @@ impl ProjectPage {
       Screen::OrchestratorSettings => Self::OrchestratorSettings,
       Screen::Tasks => Self::Tasks(TaskList::default()),
       Screen::NewTask => Self::NewTask,
+      Screen::MergeQueue => Self::MergeQueue,
       Screen::PullRequests => Self::PullRequests,
       Screen::Usage => Self::Usage,
       Screen::Pipelines => Self::Pipelines,
       Screen::Agents => Self::Agents,
       Screen::Instructions => Self::Instructions,
+      Screen::Memory => Self::Memory,
       Screen::Skills => Self::Skills,
       Screen::Tools => Self::Tools,
       Screen::Secrets => Self::Secrets,
@@ -79,11 +88,13 @@ impl ProjectPage {
       Self::NewTask => Screen::NewTask,
       Self::EditTask(_) => Screen::EditTask,
       Self::Task(..) => Screen::Task,
+      Self::MergeQueue => Screen::MergeQueue,
       Self::PullRequests => Screen::PullRequests,
       Self::Usage => Screen::Usage,
       Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(_) => Screen::Pipelines,
       Self::Agents | Self::Agent(_) => Screen::Agents,
       Self::Instructions => Screen::Instructions,
+      Self::Memory => Screen::Memory,
       Self::Skills | Self::NewSkill | Self::Skill(_) | Self::ImportSkills => Screen::Skills,
       Self::Tools | Self::NewTool | Self::Tool(..) => Screen::Tools,
       Self::Secrets => Screen::Secrets,

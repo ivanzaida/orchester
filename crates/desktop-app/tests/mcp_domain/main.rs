@@ -11,6 +11,7 @@ mod connections_window;
 mod gates;
 #[path = "../mcp_server/http.rs"]
 mod http;
+mod instructions;
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(
   dead_code,
@@ -423,7 +424,10 @@ fn domain_setup_tools_check_their_input_as_the_forms_do() {
   let (mut served, seeded) = Served::seeded("empty");
   let folder = seeded.repo.display().to_string();
   let again = served.refused("add_project", &json!({ "name": "Kontur again", "folder": folder }));
-  assert_eq!(again["code"], "already_initialized");
+  assert_eq!(
+    again["code"], "already_listed",
+    "the list holds Kontur in the folder: {again}"
+  );
   let relative = served.refused("add_project", &json!({ "name": "Elsewhere", "folder": "repo" }));
   assert_eq!(relative["code"], "folder_not_absolute");
   let blank = served.refused("add_project", &json!({ "name": " ", "folder": folder }));

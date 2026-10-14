@@ -23,7 +23,9 @@ use orchester_workspace::tasks::detail::RunView;
 use super::{
   super::{
     action::{DecisionAction, state},
-    divider, step_label,
+    divider,
+    pointing::Pointing,
+    step_label,
   },
   Deciding, Target,
 };
@@ -49,6 +51,8 @@ pub struct DecideCard<'a> {
   pub action: &'a DecisionAction<Deciding>,
   /// Why nothing can be decided now: no runner is connected to carry it out.
   pub offline: Option<Arc<str>>,
+  /// Rings the card when the Needs you panel opened the page at it.
+  pub pointing: &'a Pointing,
 }
 
 impl DecideCard<'_> {
@@ -76,7 +80,7 @@ impl DecideCard<'_> {
         pending,
       )
       .fill_width();
-    card("task-retry-decision", CardSurface::Attention)
+    let card = card("task-retry-decision", CardSurface::Attention)
       .spacing(ExtraSpacing::Loose.role())
       .child(
         Text::new(&ctx.t("decisions.retries.title"))
@@ -100,8 +104,8 @@ impl DecideCard<'_> {
           .map(|reason| reason_line("task-retry-offline", reason)),
       )
       .with_children(refused.map(|refused| field_error("task-retry-refused", &message_text(ctx, &refused))))
-      .child(stop)
-      .into()
+      .child(stop);
+    self.pointing.ring(card).into()
   }
 
   /// "Tokens used 1.1M", "Remaining budget No limit".

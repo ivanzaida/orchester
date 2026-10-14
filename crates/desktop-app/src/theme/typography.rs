@@ -55,10 +55,12 @@ pub enum ExtraTypography {
   FormSection,
   /// Geist Mono 12, 1.7: environment variables (uSWRr/IBFli).
   MonoArea,
+  /// 13/500, 1.2: a large button's label (`P8aXN` in `Create your first project` `rDzhV`).
+  ButtonLarge,
 }
 
 impl ExtraTypography {
-  pub const ALL: [Self; 18] = [
+  pub const ALL: [Self; 19] = [
     Self::Display,
     Self::Strong,
     Self::Note,
@@ -77,6 +79,7 @@ impl ExtraTypography {
     Self::PropertyMono,
     Self::FormSection,
     Self::MonoArea,
+    Self::ButtonLarge,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -103,6 +106,7 @@ impl ExtraTypography {
       Self::PropertyMono => "property_mono",
       Self::FormSection => "form_section",
       Self::MonoArea => "mono_area",
+      Self::ButtonLarge => "button_large",
     }
   }
 
@@ -128,6 +132,7 @@ impl ExtraTypography {
       Self::PropertyMono => self::mono(sans(12.0, FontWeight::Normal, 1.3, palette.text_primary)),
       Self::FormSection => sans(13.0, FontWeight::SemiBold, 1.3, palette.text_primary),
       Self::MonoArea => self::mono(sans(12.0, FontWeight::Normal, 1.7, palette.text_primary)),
+      Self::ButtonLarge => sans(13.0, FontWeight::Medium, 1.2, palette.text_primary),
     }
   }
 }
@@ -233,9 +238,13 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::lifecycle::typography(palette))
       .chain(super::connections::typography(palette))
       .chain(super::secrets::typography(palette))
+      .chain(super::projects::typography(palette))
       .chain(super::agents::typography(palette))
+      .chain(super::instructions::typography(palette))
       .chain(super::skills::typography(palette))
       .chain(super::orchestrator::typography(palette))
+      .chain(super::overview::typography(palette))
+      .chain(super::needs_you::typography(palette))
       .collect(),
   }
 }

@@ -61,6 +61,7 @@ use crate::{
   memory::RecalledMemory,
   project::Project,
   resource::{AgentProfile, InjectionEvent, Instruction, Step, Variable, VersionNumber},
+  revision::Revision,
   task::Task,
 };
 
@@ -132,6 +133,9 @@ pub struct RunContext<'a> {
   pub run: &'a Run,
   /// `None` before the step has an execution in the run.
   pub attempt: Option<NonZeroU32>,
+  /// The commit checked out in the agent's worktree as a resumed invocation starts, as the runner read
+  /// it; `None` for a new session, in a preview, or when it could not be read.
+  pub checked_out: Option<&'a Revision>,
 }
 
 /// The output of a step the prompt's step runs after, and the execution it came from.
@@ -246,6 +250,22 @@ impl PromptInput<'_> {
   /// Every section of the prompt at `event`, and the instructions left out and why.
   pub fn compose(&self, event: InjectionEvent) -> Composition {
     Composition::new(self, event, ResultDelivery::Message)
+  }
+
+  /// The value of `variable` in the prompt given at `event`. A resumed agent's `run.revision` is the
+  /// commit its worktree has checked out ([`RunContext::checked_out`]): its latest checkpoint, or a
+  /// commit it made or merged itself after it, or the base revision when nothing moved its branch
+  /// since the run started — so a rule injected at resume has one (05.A `m2WjL`). Without that commit
+  /// it is the latest checkpoint, and before the first one it has no value.
+  pub fn value_at(&self, variable: Variable, event: InjectionEvent) -> Option<String> {
+    match (variable, event) {
+      (Variable::RunRevision, InjectionEvent::Resume) => self
+        .run
+        .and_then(|context| context.checked_out)
+        .map(|revision| revision.as_str().to_owned())
+        .or_else(|| self.value(Variable::RunRevision)),
+      _ => self.value(variable),
+    }
   }
 
   /// The value of `variable` for this prompt; `None` when it has none.

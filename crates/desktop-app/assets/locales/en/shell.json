@@ -32,6 +32,7 @@
     },
     "screens": {
       "allProjects": "All projects",
+      "addProject": "Add project",
       "settings": "Settings",
       "overview": "Overview",
       "orchestrator": "Orchestrator",
@@ -41,11 +42,13 @@
       "editTask": "Edit task",
       "editTaskOf": "Edit {{key}}",
       "task": "Task",
+      "mergeQueue": "Merge queue",
       "pullRequests": "Pull requests",
       "usage": "Usage",
       "pipelines": "Pipelines",
       "agents": "Agents",
       "instructions": "Instructions",
+      "memory": "Memory",
       "skills": "Skills",
       "tools": "Tools",
       "secrets": "Secrets",
@@ -99,6 +102,11 @@
           "one": "1 run interrupted · nothing runs until the runner starts",
           "other": "{{count}} runs interrupted · nothing runs until the runner starts"
         }
+      },
+      "recovery": {
+        "one": "1 run interrupted when Orchester closed",
+        "other": "{{count}} runs interrupted when Orchester closed",
+        "review": "Review"
       },
       "approvals": {
         "waiting": {
@@ -197,7 +205,6 @@
       "openFolderDetail": "A folder that already has an Orchester project",
       "pickTitle": "Open a folder that has an Orchester project",
       "addProject": "Add project",
-      "addProjectUnavailable": "Not in this app yet: set up new projects in the previous Orchester app.",
       "openInNewTab": "Open in new tab",
       "folder": {
         "checking": "Opening folder…",
@@ -211,6 +218,7 @@
         "noProject": "No Orchester project here yet",
         "noProjectBody": "It is a git repository that Orchester hasn't set up. Nothing was changed.",
         "setUp": "Set it up",
+        "setUpUnavailable": "This folder’s path has characters an address can’t hold. Choose the folder in Add project instead.",
         "newer": "Written by a newer Orchester",
         "newerBody": "Its project data has version {{found}}; this build reads up to version {{supported}}. Nothing was changed.",
         "unreadable": "This folder can't be read",

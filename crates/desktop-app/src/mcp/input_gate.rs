@@ -6,9 +6,12 @@
 //! text are refused too, so no client reads it. Neither consent nor this gate grants window-control scopes or
 //! provider permissions.
 
-use std::sync::{
-  Arc,
-  atomic::{AtomicUsize, Ordering},
+use std::{
+  borrow::Cow,
+  sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+  },
 };
 
 use lurq::mcp::{
@@ -17,11 +20,12 @@ use lurq::mcp::{
     ErrorData as McpError, RoleServer, ServerHandler,
     model::{
       CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, InitializeRequestParams, InitializeResult,
-      ListToolsResult, PaginatedRequestParams, ServerConfig,
+      ListToolsResult, PaginatedRequestParams, ProtocolVersion, ServerConfig,
     },
     service::RequestContext,
   },
 };
+use orchester_core::run::Answerer;
 use parking_lot::Mutex;
 
 use super::clients::SessionMark;
@@ -91,6 +95,16 @@ pub enum Guarded {
 pub fn input_may_decide(gate: Option<&InputGate>, policy: Guarded) -> bool {
   !lurq::app::events::is_synthetic_input()
     || gate.is_some_and(|gate| !gate.protecting() && gate.widening_allowed(policy))
+}
+
+/// Who gives an answer classified as `policy` with the input being delivered: the person with OS input; automation
+/// with lurq's synthetic input (an MCP client's), where [`input_may_decide`] lets it; `None` when only a person gives
+/// it. Read in the handler, while lurq delivers the input.
+pub fn answerer(gate: Option<&InputGate>, policy: Guarded) -> Option<Answerer> {
+  if !lurq::app::events::is_synthetic_input() {
+    return Some(Answerer::Person);
+  }
+  input_may_decide(gate, policy).then_some(Answerer::Automation)
 }
 
 /// lurq's tools that send the window input or change it, which lurq denies while a protected control is
@@ -345,6 +359,13 @@ pub struct GuardedTools {
 impl ServerHandler for GuardedTools {
   fn get_info(&self) -> ServerConfig {
     self.tools.get_info()
+  }
+
+  /// The revisions up to 2025-11-25, which this server implements. rmcp would also advertise 2026-07-28, whose
+  /// stateless lifecycle (no `initialize`, no sessions, `ttlMs` and `cacheScope` on list results) it does not
+  /// speak: a client asking for it gets the unsupported-version error and falls back to `initialize`.
+  fn supported_protocol_versions(&self) -> Cow<'static, [ProtocolVersion]> {
+    Cow::Borrowed(ProtocolVersion::known_up_to(&ProtocolVersion::V_2025_11_25))
   }
 
   async fn initialize(

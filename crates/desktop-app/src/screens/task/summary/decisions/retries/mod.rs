@@ -21,8 +21,11 @@ use orchester_core::{
 use orchester_workspace::tasks::detail::RunView;
 
 use self::decide::DecideCard;
-use super::{TaskContext, action::decision_action, arranged, stages::stages, step_label, task_notice, this_run_panel};
-use crate::{services::Services, ui::notice::Notice};
+use super::{
+  TaskContext, action::decision_action, arranged, pointing::Pointing, stages::stages, step_label, task_notice,
+  this_run_panel,
+};
+use crate::{navigation::pointed::PointedCard, services::Services, ui::notice::Notice};
 
 /// Which decision was asked for, for the button that shows it under way.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -85,6 +88,7 @@ pub struct RetryDecision {
   target: Signal<Target>,
   note: Signal<String>,
   asked: Signal<Option<Deciding>>,
+  pointing: Pointing,
 }
 
 impl Component for RetryDecision {
@@ -95,6 +99,7 @@ impl Component for RetryDecision {
       target: ctx.signal(Target(None)),
       note: ctx.signal(String::new()),
       asked: ctx.signal(None),
+      pointing: Pointing::new(ctx),
     }
   }
 
@@ -118,6 +123,7 @@ impl Component for RetryDecision {
         .cloned();
       self.target.set(Target(start));
     }
+    self.pointing.arrived(ctx, &props, PointedCard::Retries);
     let now = Services::of(ctx).clock.now();
     let decide = DecideCard {
       run,
@@ -127,6 +133,7 @@ impl Component for RetryDecision {
       asked: &self.asked,
       action: &action,
       offline: (!props.online).then(|| ctx.t("task.controls.offline")),
+      pointing: &self.pointing,
     }
     .render(ctx);
     let parts: Vec<Element> = std::iter::once(notice(ctx, &props, run, stuck).into())

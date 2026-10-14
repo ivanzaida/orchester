@@ -17,9 +17,10 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, StreamEmitter},
+    theme::SpacingSize,
   },
-  core::Signal,
-  node::Element,
+  components::Column,
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{id::ProjectId, run::InterruptCause};
 use orchester_workspace::recovery::{Decision, InterruptedRun, Reading, Recovery, RecoveryState};
@@ -39,30 +40,41 @@ use crate::{
 /// The element id of the notice.
 pub const NOTICE_ID: &str = "recovery-notice";
 
-/// The notice of `project`'s interrupted runs, if it has any to offer.
-pub struct RecoveryNotice {
-  /// The list is open (*Review runs*), or closed again (*Hide*).
-  open: Signal<bool>,
-}
+/// The notice of `project`'s interrupted runs, if it has any to offer. Whether its list is open (*Review
+/// runs*, from it or from the status bar) is the session recovery's ([`RecoveryState::reviewing`]).
+pub struct RecoveryNotice;
 
 impl Component for RecoveryNotice {
   type Props = ShownProject;
 
-  fn create(ctx: &mut Ctx) -> Self {
-    Self {
-      open: ctx.signal(false),
-    }
+  fn create(_ctx: &mut Ctx) -> Self {
+    Self
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    // The Overview's sections stand 24 apart (`q9mf0k`); the notice keeps that room under it only while
+    // it shows.
+    self.shown(ctx).map_or_else(Element::new, |notice| {
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding(Padding::new().bottom(SpacingSize::Xl))
+        .child(notice)
+        .into()
+    })
+  }
+}
+
+impl RecoveryNotice {
+  /// The notice of what the session read and the person decided, if any.
+  fn shown(&self, ctx: &mut Ctx) -> Option<Element> {
     let shown = ctx.props::<ShownProject>().clone();
     let services = Services::of(ctx);
     let state = follow(ctx, &services.recovery);
     let project = shown.open.project.id();
     let runs = state.runs_of(project);
     let decision = state.decision(project);
-    match (&state.reading, decision) {
-      (_, Decision::Left) | (Reading::Nothing | Reading::Reading, _) => Element::new(),
+    let notice = match (&state.reading, decision) {
+      (_, Decision::Left) | (Reading::Nothing | Reading::Reading, _) => return None,
       (Reading::Failed(reason), _) => {
         let lines = [message_text(ctx, reason)];
         unread(ctx, (&services.recovery, project), &lines)
@@ -70,41 +82,38 @@ impl Component for RecoveryNotice {
       (Reading::Read { .. }, Decision::Continued(continuation)) if !continuation.not_continued.is_empty() => {
         not_continued(ctx, (&services.recovery, project), &continuation)
       }
-      (Reading::Read { .. }, Decision::Continued(_)) => Element::new(),
+      (Reading::Read { .. }, Decision::Continued(_)) => return None,
       (Reading::Read { .. }, decision) if runs.is_empty() => {
         let lines = notices::unread_lines(ctx, &state.unread_of(project));
         if lines.is_empty() || decision != Decision::Undecided {
-          return Element::new();
+          return None;
         }
         unread(ctx, (&services.recovery, project), &lines)
       }
-      (Reading::Read { .. }, Decision::Undecided) if !self.open.get() => self.compact(ctx, project, &runs, &services),
+      (Reading::Read { .. }, Decision::Undecided) if !state.reviewing(project) => {
+        self.compact(ctx, project, &runs, &services)
+      }
       (Reading::Read { .. }, decision) => {
         let continuing = decision == Decision::Continuing;
         self.list(ctx, (&shown, &state), &runs, continuing)
       }
-    }
+    };
+    Some(notice)
   }
-}
-
-impl RecoveryNotice {
-  /// *2 runs were interrupted when Orchester closed*, with *Review runs* and *Continue all*.
+  /// *2 runs were interrupted when Orchester closed*, why, with *Review runs* and *Continue all*.
   fn compact(&self, ctx: &Ctx, project: ProjectId, runs: &[InterruptedRun], services: &Services) -> Element {
-    let open = self.open.clone();
+    let recovery = services.recovery.clone();
     let count = runs.len();
     Notice::new(NOTICE_ID, NoticeTone::Warning, title(ctx, count))
-      .body(ctx.t(plural(
-        count,
-        "lifecycle.recovery.summary.one",
-        "lifecycle.recovery.summary.other",
-      )))
+      .body(ctx.t(summary_key(runs)))
       .action(
         ActionButton::new(
           "recovery-review",
           ButtonKind::Secondary,
           ctx.t("lifecycle.recovery.reviewRuns"),
         )
-        .on_click(move || open.set(true)),
+        .icon(Icon::ChevronDown)
+        .on_click(move || recovery.review(project, true)),
       )
       .action(
         ActionButton::new(
@@ -143,13 +152,27 @@ fn title(ctx: &Ctx, count: usize) -> Arc<str> {
 /// Why the runs were interrupted, as the list says it: the person's Quit now when that stopped all of
 /// them, otherwise that Orchester stopped unexpectedly.
 fn body_key(runs: &[InterruptedRun]) -> &'static str {
-  let quit = runs.iter().all(|run| run.cause == InterruptCause::QuitNow);
-  match (quit, runs.len()) {
+  match (quit_now(runs), runs.len()) {
     (true, 1) => "lifecycle.recovery.body.quitNow.one",
     (true, _) => "lifecycle.recovery.body.quitNow.other",
     (false, 1) => "lifecycle.recovery.body.crashed.one",
     (false, _) => "lifecycle.recovery.body.crashed.other",
   }
+}
+
+/// Why, as the compact notice says it (`xPTrL` in `JAIYi`), by the same rule as [`body_key`].
+fn summary_key(runs: &[InterruptedRun]) -> &'static str {
+  match (quit_now(runs), runs.len()) {
+    (true, 1) => "lifecycle.recovery.summary.quitNow.one",
+    (true, _) => "lifecycle.recovery.summary.quitNow.other",
+    (false, 1) => "lifecycle.recovery.summary.crashed.one",
+    (false, _) => "lifecycle.recovery.summary.crashed.other",
+  }
+}
+
+/// Whether the person's Quit now stopped all of `runs`.
+fn quit_now(runs: &[InterruptedRun]) -> bool {
+  runs.iter().all(|run| run.cause == InterruptCause::QuitNow)
 }
 
 /// `one` for one, `other` otherwise.
@@ -158,7 +181,7 @@ const fn plural(count: usize, one: &'static str, other: &'static str) -> &'stati
 }
 
 /// The session's recovery; reading it in a render renders again when it changes.
-fn follow(ctx: &mut Ctx, recovery: &Recovery) -> RecoveryState {
+pub fn follow(ctx: &mut Ctx, recovery: &Recovery) -> RecoveryState {
   let state = ctx.stream(
     recovery.clone(),
     |recovery, emitter: StreamEmitter<RecoveryState, ()>| async move {

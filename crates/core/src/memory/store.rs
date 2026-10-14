@@ -13,6 +13,8 @@ pub enum ScopeFilter {
   Project,
   /// What an agent of the task may get: the task's records and the project's.
   TaskAndProject(TaskId),
+  /// Every record: the project's and every task's.
+  All,
 }
 
 /// A listing's scopes, and the status and pin its records have, if it asks for one.

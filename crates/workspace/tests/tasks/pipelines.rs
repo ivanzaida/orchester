@@ -11,6 +11,7 @@ use orchester_core::{
   task::{TaskDetails, TaskLimits},
   tokens::TokenBudget,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 use orchester_workspace::tasks::{
   data::{ProjectTasks, SaveTarget, pinned_pipeline, published_pipelines},
@@ -94,7 +95,7 @@ fn only_published_pipelines_can_be_chosen() {
     PipelineLabel::Unavailable
   );
 
-  let loaded = ProjectTasks::load(repo.path()).expect("load the project's tasks");
+  let loaded = ProjectTasks::load(repo.path(), &Programs::processes()).expect("load the project's tasks");
   assert_eq!(loaded.pipelines.len(), 1);
   assert!(loaded.tasks.is_empty());
 }

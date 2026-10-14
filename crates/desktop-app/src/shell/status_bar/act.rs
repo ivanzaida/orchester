@@ -116,6 +116,7 @@ pub fn dispatch(
     BarAction::RestartRunner => services.runners.restart(),
     BarAction::Go(route) => navigation.go(route),
     BarAction::Resolve(id) => services.activity.resolve(id),
+    BarAction::ReviewInterrupted(project) => services.recovery.review(project, true),
     BarAction::ReadAgain => {
       if let Some((_, feed)) = &shown {
         feed.saved();

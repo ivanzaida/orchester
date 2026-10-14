@@ -216,9 +216,10 @@ by `read_external_file` and `search_external_file`.
   executables and unreadable identities are refused, without asking. The process identity is retained and checked
   before each request: a Windows process handle or macOS audit token. The executable must be `orchester-app` or
   `orchester`; discovery must name that app and exactly the requested pid. Discovery is found by pid in the
-  per-user data folder (`LOCALAPPDATA` on Windows; `~/Library/Application Support` on macOS), or a QA discovery
-  folder under this worktree's `.tmp/`. Links escaping the worktree, ambiguous QA discovery and non-loopback URLs
-  are refused. The new app uses `orchester-app-mcp`; the deprecated desktop uses `lurq/mcp` for `lurq_*` tools
+  per-user data folder (`LOCALAPPDATA` on Windows; `~/Library/Application Support` on macOS), or at the exact QA
+  paths `.tmp/qa/<task>/mcp/<pid>.json` (new app) and `.tmp/qa/<task>/profile/<folder>/<pid>.json` (QA profile)
+  of this worktree; only `.tmp/qa/` is read, one level and at most 1024 entries. Links, ambiguous QA discovery
+  and non-loopback URLs are refused. The new app uses `orchester-app-mcp`; the deprecated desktop uses `lurq/mcp` for `lurq_*` tools
   and `orchester-mcp` for domain tools.
   The relay initializes MCP and calls one tool using bounded JSON or SSE responses, without proxies or redirects.
   The token is held in a redacting secret type, put only in a sensitive authorization header and removed from
@@ -801,10 +802,18 @@ background, reads outside the worktree or a credential, installs or is not read 
 Approve similar where the existing rules offer it. The step's prompt tells Claude Code and Codex agents how to work
 with the tools they have (*Files and commands*: Claude Code's file tools, the edit tools only in a writing step,
 one bare command per call; Codex's `apply_patch` in a writing step, no `cd`), so they rarely send such lines.
-Reads of the sources Cargo unpacks (`~/.cargo/registry/src`) and of the toolchains' library sources
-(`~/.rustup/toolchains/*/lib/rustlib/src`) are reads outside the worktree, not credential reads; the rest of
-`~/.cargo` and `~/.rustup` stays a credential location, and so does any path through a Windows share or a `\\?\`
-prefix, which can name the home folder under another name.
+Reads of the sources Cargo unpacks (`~/.cargo/registry/src`), its git checkouts (`~/.cargo/git/checkouts`) and the
+toolchains' library sources (`~/.rustup/toolchains/*/lib/rustlib/src`), also under `CARGO_HOME` and `RUSTUP_HOME`,
+are read like the worktree by the plain readers only (decided 2026-10-14, narrowed after a security review): a
+known-safe `cat`, `head`, `rg`, `grep -r`, `sed -n`, … there runs on its own, as Orchester's `read_external_file` and
+`search_external_file` do. Any other program reads outside the worktree there, a `cd` there leaves the line outside
+it, and a write or delete there is outside it. A program that loads settings or code from the folder it runs in
+(git, Cargo, package managers, build tools, Python and Node) is Unknown anywhere but the worktree and its writable
+folders, and a reader that follows the links in a folder it walks (`diff -r`, `tree -l`, `du -L`) is Unknown
+everywhere. A `.git` folder in the dependency sources, and the rest of a Cargo or rustup home, stay credential
+locations, and so does any path through a Windows share or a `\\?\`
+prefix, which can name the home folder under another name. The status an earlier command left (`$?`,
+`${PIPESTATUS[N]}`, PowerShell's `$?` and `$LASTEXITCODE`) is read only as an argument of `echo`.
 
 `acceptEdits` would run `mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp` and `sed` in any form without a
 rule (a mode check after the deny, ask and allow rules, both 2.1.89 and 2.1.284), and a

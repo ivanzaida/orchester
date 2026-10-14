@@ -57,6 +57,7 @@ pub struct IconButton {
   size: IconButtonSize,
   action: Option<Arc<dyn Fn() + Send + Sync>>,
   focus: Focus,
+  active: bool,
 }
 
 impl IconButton {
@@ -70,6 +71,7 @@ impl IconButton {
       size: IconButtonSize::Regular,
       action: None,
       focus: Focus::Pointer,
+      active: false,
     }
   }
 
@@ -88,6 +90,12 @@ impl IconButton {
     self
   }
 
+  /// What it opened is open: `pressed` fill and a `text_primary` glyph (`Remove` `rDFim` in `mykcc`).
+  pub fn active(mut self) -> Self {
+    self.active = true;
+    self
+  }
+
   /// A button of a form: a Tab stop with the focus ring.
   pub fn in_form(mut self) -> Self {
     self.focus = Focus::Form;
@@ -97,6 +105,7 @@ impl IconButton {
   pub fn render(self, ctx: &mut Ctx) -> Element {
     let side = Dimension::Px(self.size.side());
     let (size, color) = self.size.glyph();
+    let color = if self.active { PaletteColor::TextPrimary } else { color };
     let button = Button::empty()
       .id(self.id.clone())
       .width(side)
@@ -106,6 +115,11 @@ impl IconButton {
       .rounded(RadiusSize::Md)
       .describe("a11y_name", self.label.clone())
       .child(icon(self.icon, size, color).id(format!("{}-icon", self.id)));
+    let button = if self.active {
+      button.background(ExtraColor::Pressed.role())
+    } else {
+      button
+    };
     let button = match self.action {
       Some(handler) => self
         .focus

@@ -83,7 +83,7 @@ pub fn rows(data: &ProjectTasks, tab: TaskTab, query: Query<'_>, sort: TaskSort)
     TaskSort::Status => sort_organized(data, &mut tasks, organization::TaskSort::Status),
     TaskSort::Priority => sort_organized(data, &mut tasks, organization::TaskSort::Priority),
   }
-  list::rows(&tasks, &data.pipelines, &data.phases, tab)
+  list::rows(&tasks, data, tab)
     .into_iter()
     .map(|row| {
       let mut row = data.decorate_row(row, query.separator);

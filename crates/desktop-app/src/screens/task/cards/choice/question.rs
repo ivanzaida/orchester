@@ -1,25 +1,26 @@
 //! One question of a waiting card: its number among several and its header, what it asks, the agent's
 //! options (radios, or checkboxes where several may be picked, each with its description under it) and the
-//! person's own answer.
+//! person's own answer. In the Needs you panel what it asks sits in a raised box and the own answer is 32
+//! high (`n5Y0d`, `g8q8p7` in `Z4HeE3`).
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
-  node::{Element, dimension::Dimension},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::question::Question;
 use orchester_workspace::tasks::{question::Draft, timeline::ChoiceCard};
 
 use super::super::{Place, decisions::Decisions};
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography},
+  theme::{CardsText, ExtraSpacing, ExtraTypography},
   ui::{
     chip::TagChip,
     field::FieldInput,
@@ -27,6 +28,9 @@ use crate::{
     toggle::{Toggle, ToggleKind},
   },
 };
+
+/// The own answer's height in the Needs you panel (`Own answer` `g8q8p7` in `Z4HeE3`).
+const PANEL_OWN_HEIGHT: f32 = 32.0;
 
 /// What a question of the card is shown from: the card, its questions, what is kept and picked, and the
 /// first option, which takes the focus when the tab opens on the card.
@@ -38,6 +42,8 @@ pub(super) struct Shown<'a> {
   pub(super) draft: &'a Draft,
   /// Each question's own answer, as its field holds it.
   pub(super) own: &'a Arc<[Signal<String>]>,
+  /// This question's own answer's input.
+  pub(super) input: ElementRef,
   pub(super) decisions: &'a Decisions,
   pub(super) first: &'a ElementRef,
 }
@@ -67,7 +73,7 @@ pub(super) fn question(ctx: &mut Ctx, shown: &Shown<'_>, index: usize) -> Elemen
           .map(|header| TagChip::new(format!("{id}-header-{index}"), header)),
       )
   });
-  let text = MarkdownView::new(format!("{id}-text-{index}"), question.text(), shown.place.links.clone()).render(ctx);
+  let text = asked(ctx, shown, index);
   let label = ctx.t_args(
     if question.multi_select() {
       "cards.choice.optionsSeveral"
@@ -82,7 +88,13 @@ pub(super) fn question(ctx: &mut Ctx, shown: &Shown<'_>, index: usize) -> Elemen
     shown.own[index].clone(),
   )
   .placeholder(ctx.t("cards.choice.ownPlaceholder"))
-  .render(ctx);
+  .element(shown.input.clone());
+  let field = if shown.place.in_panel {
+    field.box_height(PANEL_OWN_HEIGHT)
+  } else {
+    field
+  };
+  let field = field.render(ctx);
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Loose.role())
@@ -96,6 +108,27 @@ pub(super) fn question(ctx: &mut Ctx, shown: &Shown<'_>, index: usize) -> Elemen
         .child(options(shown, index)),
     )
     .child(field)
+    .into()
+}
+
+/// What question `index` asks, as the agent wrote it; in the panel in a raised box (`Question box` `n5Y0d`).
+fn asked(ctx: &mut Ctx, shown: &Shown<'_>, index: usize) -> Element {
+  let (id, question) = (shown.id, &shown.questions[index]);
+  let text = MarkdownView::new(format!("{id}-text-{index}"), question.text(), shown.place.links.clone());
+  if !shown.place.in_panel {
+    return text.render(ctx);
+  }
+  let text = text
+    .style(CardsText::Asked.role(), PaletteColor::TextPrimary)
+    .render(ctx);
+  Column::new()
+    .id(format!("{id}-asked-{index}"))
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
+    .background(PaletteColor::SurfaceRaised)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Sm)
+    .child(text)
     .into()
 }
 

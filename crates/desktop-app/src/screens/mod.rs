@@ -5,6 +5,7 @@
 //! each shows an honest placeholder (`placeholder`), and a path that names nothing says why
 //! (`not_found`).
 
+mod add_project;
 mod agents;
 mod all_projects;
 mod connections;
@@ -19,7 +20,7 @@ mod pull_requests;
 mod secrets;
 mod settings;
 mod skills;
-mod task;
+pub(crate) mod task;
 mod task_form;
 mod tasks;
 mod tools;
@@ -33,6 +34,7 @@ use lurq::{
 };
 use orchester_core::id::ProjectId;
 
+use self::placeholder::placeholder;
 use crate::{
   project::{ProjectState, Projects, ShownProject},
   routes::{ProjectPage, Route},
@@ -43,6 +45,7 @@ pub fn screen(ctx: &mut Ctx) -> Element {
   let path = ctx.route_path();
   match Route::parse(&path) {
     Ok(Route::AllProjects) => all_projects::screen(ctx),
+    Ok(Route::AddProject(folder)) => add_project::screen(ctx, folder.map(|folder| folder.path())),
     Ok(Route::Settings) => settings::screen(ctx, settings::SettingsTab::Automation),
     Ok(Route::Accounts(view)) => settings::screen(ctx, settings::SettingsTab::Accounts(view)),
     Ok(Route::Project(project, page)) => project_screen(ctx, project, &page),
@@ -77,6 +80,8 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Overview(tab) => overview::screen(ctx, project, *tab),
     ProjectPage::Orchestrator(chat) => orchestrator::screen(ctx, project, *chat),
     ProjectPage::OrchestratorSettings => orchestrator::settings(ctx, project),
+    // Listed in the sidebar as the design draws it (`q9mf0k`); their own tasks build them.
+    ProjectPage::MergeQueue | ProjectPage::Memory => placeholder(ctx, page.screen()),
     ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),
     ProjectPage::NewTask => task_form::new_task(ctx, project),
     ProjectPage::EditTask(key) => task_form::edit_task(ctx, project, key),

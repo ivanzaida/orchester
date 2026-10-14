@@ -17,6 +17,7 @@ use orchester_workspace::{
   runner::state::RunnerState,
   tasks::{
     approvals::ShownApproval,
+    delivery::Delivery,
     detail::{RunView, StepView, TaskDetail},
   },
 };
@@ -347,11 +348,32 @@ fn settled(ctx: &Ctx, detail: &TaskDetail, run: &RunView) -> Said {
       Icon::GitMerge,
       text("summary.notice.mergedTitle", "summary.notice.mergedBody"),
     ),
-    RunStatus::Succeeded => Said::new(
-      NoticeTone::Success,
-      Icon::CircleCheck,
-      text("summary.notice.succeededTitle", "summary.notice.succeededBody"),
-    ),
+    RunStatus::Succeeded => match &detail.delivery {
+      Delivery::MergedOutside(into) => Said::new(
+        NoticeTone::Success,
+        Icon::GitMerge,
+        (
+          ctx.t("summary.notice.mergedTitle"),
+          ctx.t_args(
+            "summary.notice.mergedOutsideBody",
+            [("branch", branch), ("into", into.as_ref())],
+          ),
+        ),
+      ),
+      Delivery::NothingToMerge => Said::new(
+        NoticeTone::Success,
+        Icon::CircleCheck,
+        text(
+          "summary.notice.nothingToMergeTitle",
+          "summary.notice.nothingToMergeBody",
+        ),
+      ),
+      Delivery::Waiting => Said::new(
+        NoticeTone::Success,
+        Icon::CircleCheck,
+        text("summary.notice.succeededTitle", "summary.notice.succeededBody"),
+      ),
+    },
     RunStatus::WaitingForPerson(Stuck::BrokeAgain(_)) => Said::new(
       NoticeTone::Warning,
       Icon::Hand,

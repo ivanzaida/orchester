@@ -36,3 +36,69 @@ fn icons_are_sorted_by_their_design_names_with_one_glyph_each() {
     "every glyph is in the font's private use area"
   );
 }
+
+fn word(bytes: &[u8], offset: usize) -> usize {
+  u16::from_be_bytes(bytes[offset..offset + 2].try_into().expect("font word")) as usize
+}
+fn table(font: &[u8], name: &[u8; 4]) -> usize {
+  (0..word(font, 4))
+    .map(|index| 12 + index * 16)
+    .find(|offset| &font[*offset..*offset + 4] == name)
+    .map(|offset| u32::from_be_bytes(font[offset + 8..offset + 12].try_into().expect("table offset")) as usize)
+    .expect("font table")
+}
+fn glyph_name(font: &[u8], glyph: usize) -> &str {
+  let post = table(font, b"post");
+  let count = word(font, post + 32);
+  let wanted = word(font, post + 34 + glyph * 2);
+  if wanted < 258 {
+    return "";
+  }
+  let mut cursor = post + 34 + count * 2;
+  for _ in 258..wanted {
+    cursor += 1 + usize::from(font[cursor]);
+  }
+  let size = usize::from(font[cursor]);
+  std::str::from_utf8(&font[cursor + 1..cursor + 1 + size]).expect("glyph name")
+}
+fn font_glyph(font: &[u8], codepoint: usize) -> usize {
+  let cmap = table(font, b"cmap");
+  let subtable = (0..word(font, cmap + 2))
+    .map(|index| cmap + 4 + index * 8)
+    .map(|offset| cmap + u32::from_be_bytes(font[offset + 4..offset + 8].try_into().expect("cmap offset")) as usize)
+    .find(|offset| word(font, *offset) == 4)
+    .expect("format 4 cmap");
+  let count = word(font, subtable + 6) / 2;
+  let end = subtable + 14;
+  let start = end + count * 2 + 2;
+  let delta = start + count * 2;
+  let range = delta + count * 2;
+  for index in 0..count {
+    if codepoint >= word(font, start + index * 2) && codepoint <= word(font, end + index * 2) {
+      let shift = word(font, delta + index * 2);
+      let range_offset = range + index * 2;
+      let distance = word(font, range_offset);
+      let glyph = if distance == 0 {
+        codepoint
+      } else {
+        word(
+          font,
+          range_offset + distance + (codepoint - word(font, start + index * 2)) * 2,
+        )
+      };
+      return (glyph + shift) % 65536;
+    }
+  }
+  0
+}
+#[test]
+fn instructions_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::Braces, "braces"),
+    (Icon::CalendarClock, "calendar-clock"),
+    (Icon::Replace, "replace"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}

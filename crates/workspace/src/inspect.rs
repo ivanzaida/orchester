@@ -53,7 +53,9 @@ macro_rules! markers {
     impl $inspect for crate::pipelines::problems::ProblemView {}
     impl $inspect for crate::plan_limits::Connections {}
     impl $inspect for crate::plan_limits::Readings {}
+    impl $inspect for crate::project_list::Listing {}
     impl $inspect for crate::project_setup::CreateFailure {}
+    impl $inspect for crate::project_setup::Creation {}
     impl $inspect for crate::pull_requests::Inbox {}
     impl $inspect for crate::pull_requests::detail::Detail {}
     impl $inspect for crate::recovery::InterruptedRun {}
@@ -107,6 +109,7 @@ macro_rules! markers {
     impl $inspect for crate::tasks::outside::OutsideCounts {}
     impl $inspect for crate::tasks::overview::OverviewTab {}
     impl $inspect for crate::tasks::plan::PlanReview {}
+    impl $inspect for crate::tasks::ready_to_run::ProjectReadiness {}
     impl $inspect for crate::tasks::question::Answering {}
     impl $inspect for crate::tasks::question::Draft {}
     impl $inspect for crate::tasks::run_again::RunAgainCheck {}

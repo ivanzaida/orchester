@@ -16,7 +16,7 @@ use std::time::Duration;
 use lurq::{
   app::{component::Component, ctx::Ctx},
   components::Column,
-  core::Signal,
+  core::{ElementRef, Signal},
   node::Element,
 };
 use orchester_core::{
@@ -35,8 +35,10 @@ use orchester_workspace::{
 };
 
 use self::card::RaiseCard;
-use super::{TaskContext, action::decision_action, arranged, stages::stages, task_notice, this_run_panel};
-use crate::{services::Services, ui::notice::Notice};
+use super::{
+  TaskContext, action::decision_action, arranged, pointing::Pointing, stages::stages, task_notice, this_run_panel,
+};
+use crate::{navigation::pointed::PointedCard, services::Services, ui::notice::Notice};
 
 /// A suggested budget is the current one and half again, rounded up to this.
 const SUGGESTION_STEP: u64 = 100_000;
@@ -185,6 +187,8 @@ pub struct RaiseLimit {
   text: Signal<String>,
   seeded: Signal<bool>,
   asked: Signal<Option<Raising>>,
+  pointing: Pointing,
+  input: ElementRef,
 }
 
 impl Component for RaiseLimit {
@@ -195,6 +199,8 @@ impl Component for RaiseLimit {
       text: ctx.signal(String::new()),
       seeded: ctx.signal(false),
       asked: ctx.signal(None),
+      pointing: Pointing::new(ctx),
+      input: ElementRef::new(),
     }
   }
 
@@ -214,6 +220,10 @@ impl Component for RaiseLimit {
       self.seeded.set(true);
       self.text.set(stop.suggestion(&separator));
     }
+    // Opened from the Needs you panel: the person is here to type the new limit (`krC4n`).
+    if self.pointing.arrived(ctx, &props, PointedCard::RaiseLimit) {
+      ctx.focus(&self.input);
+    }
     let focus = stop.stopped.map(|step| step.key.as_str().to_owned());
     let raise = RaiseCard {
       stop: &stop,
@@ -222,6 +232,8 @@ impl Component for RaiseLimit {
       action: &action,
       separator: &separator,
       online: props.online,
+      pointing: &self.pointing,
+      input: &self.input,
     }
     .render(ctx);
     let parts: Vec<Element> = vec![

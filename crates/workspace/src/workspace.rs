@@ -4,7 +4,7 @@
 use std::{
   collections::HashMap,
   path::{Path, PathBuf},
-  sync::Arc,
+  sync::{Arc, atomic::AtomicBool},
 };
 
 use orchester_core::{
@@ -12,10 +12,10 @@ use orchester_core::{
   appearance::ThemeSetting,
   id::{InstallationId, ProjectId, ServerId},
   project::Project,
-  run::TaskPhase,
   time::Timestamp,
   usage::limits::WarningThreshold,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{
   AppDb, PreviousSession, ProjectDb, RegisteredProject, ServerAccount, SessionEnd, SessionId, StoreError, StoredServer,
 };
@@ -24,6 +24,7 @@ use parking_lot::Mutex;
 use crate::{
   messages::{self, Message},
   project_setup::NewProject,
+  tasks::data::ProjectTasks,
 };
 
 /// A project whose database is open and readable.
@@ -59,15 +60,15 @@ pub struct ProjectEntry {
 pub enum ProjectData {
   /// Its project data cannot be read, and why; it cannot be opened.
   Unreadable(Message),
-  /// It can be opened. The phase of each task, for its run counts; `None` when they cannot be
-  /// read before the project is opened (its data waits for this version's migration) or reading
-  /// them failed.
-  Readable(Option<Arc<[TaskPhase]>>),
+  /// It can be opened. Its tasks, for its run counts (`project_list::RunCounts`); `None` when they cannot be
+  /// read before the project is opened (its data waits for this version's migration) or reading them failed.
+  Readable(Option<Arc<ProjectTasks>>),
 }
 
 impl ProjectData {
-  /// Reads the database of `project`, whose folder is there, without changing it.
-  fn read(project: &RegisteredProject) -> Self {
+  /// Reads the database of `project`, whose folder is there, without changing it; git, through `programs`,
+  /// tells the runs merged outside Orchester.
+  fn read(project: &RegisteredProject, programs: &Programs) -> Self {
     let db = match ProjectDb::open_read_only(&project.repo_root) {
       Ok(db) => db,
       // Opening the project migrates its data; until then its tasks cannot be read.
@@ -77,8 +78,8 @@ impl ProjectData {
         return Self::Unreadable(messages::store_error(&error));
       }
     };
-    match db.task_phases() {
-      Ok(phases) => Self::Readable(Some(phases.into())),
+    match ProjectTasks::read(&db, &project.repo_root, programs) {
+      Ok(tasks) => Self::Readable(Some(Arc::new(tasks))),
       // The project still opens; only its counts are unknown, and the log says why.
       Err(error) => {
         tracing::error!(%error, repo_root = %project.repo_root.display(), "cannot read a listed project's runs");
@@ -93,12 +94,12 @@ impl ProjectData {
 pub struct ListedData(HashMap<ProjectId, ProjectData>);
 
 impl ListedData {
-  pub fn read(entries: &[ProjectEntry]) -> Self {
+  pub fn read(entries: &[ProjectEntry], programs: &Programs) -> Self {
     Self(
       entries
         .iter()
         .filter(|entry| !entry.folder_missing)
-        .map(|entry| (entry.project.id, ProjectData::read(&entry.project)))
+        .map(|entry| (entry.project.id, ProjectData::read(&entry.project, programs)))
         .collect(),
     )
   }
@@ -118,6 +119,8 @@ pub struct Workspace {
   pub(crate) trash: crate::accounts::trash::SharedTrash,
   permission_consent: Arc<Mutex<Consent>>,
   approval_consent: Arc<Mutex<Consent>>,
+  /// Whether All projects listed a project in this session (`project_list`).
+  pub(crate) listed: Arc<AtomicBool>,
 }
 
 impl PartialEq for Workspace {
@@ -134,6 +137,7 @@ impl Workspace {
       trash: crate::accounts::trash::SharedTrash::default(),
       permission_consent: Arc::default(),
       approval_consent: Arc::default(),
+      listed: Arc::default(),
     }
   }
 

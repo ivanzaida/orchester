@@ -11,7 +11,7 @@ use lurq::{
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
-  core::Signal,
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
@@ -24,7 +24,9 @@ use orchester_workspace::{budget::whole_minutes, display, messages::Message, tas
 use super::{
   super::{
     action::{DecisionAction, state},
-    divider, step_label,
+    divider,
+    pointing::Pointing,
+    step_label,
   },
   Raising, Stop, Unit,
 };
@@ -53,6 +55,10 @@ pub struct RaiseCard<'a> {
   pub separator: &'a str,
   /// The project's runner is online: continuing needs it.
   pub online: bool,
+  /// Rings the card when the Needs you panel opened the page at it.
+  pub pointing: &'a Pointing,
+  /// The new limit's input, which the page focuses when the panel opened it at the card.
+  pub input: &'a ElementRef,
 }
 
 impl RaiseCard<'_> {
@@ -66,7 +72,8 @@ impl RaiseCard<'_> {
         RunLimit::StepBudget { .. } => ctx.t("decisions.limit.stepNoBudget"),
         _ => ctx.t("decisions.limit.groupReason"),
       };
-      return card.child(reason_line("raise-limit-unavailable", &reason)).into();
+      let card = card.child(reason_line("raise-limit-unavailable", &reason));
+      return self.pointing.ring(card).into();
     };
     let (pending, refused) = state(self.action, self.asked.get());
     let offline = (!self.online).then(|| ctx.t("task.controls.offline"));
@@ -82,14 +89,14 @@ impl RaiseCard<'_> {
       .id("raise-limit-remove-meaning")
       .variant(TypographyStyle::Description)
       .color(PaletteColor::TextMuted);
-    card
+    let card = card
       .child(divider())
       .child(self.input_row(ctx, unit, read.as_ref()))
       .child(self.actions(ctx, unit, read.ok(), (pending, offline.clone())))
       .child(removing)
       .with_children(offline.map(|reason| reason_line("raise-limit-offline", &reason)))
-      .with_children(refused.map(|refused| field_error("raise-limit-refused", &message_text(ctx, &refused))))
-      .into()
+      .with_children(refused.map(|refused| field_error("raise-limit-refused", &message_text(ctx, &refused))));
+    self.pointing.ring(card).into()
   }
 
   /// What the run used of its tokens, with the meter, and of its active agent time.
@@ -169,7 +176,9 @@ impl RaiseCard<'_> {
       (Unit::Tokens, _) => ctx.t("decisions.limit.newBudget"),
     };
     // The token field reads as tokens by its label and read-back (`C0Qk5`); minutes say their unit.
-    let input = FieldInput::new("raise-limit-input", label.clone(), self.text.clone()).mono();
+    let input = FieldInput::new("raise-limit-input", label.clone(), self.text.clone())
+      .mono()
+      .element(self.input.clone());
     let input = match unit {
       Unit::Minutes => input.unit(ctx.t("decisions.limit.minutes")),
       Unit::Tokens => input,

@@ -1,5 +1,6 @@
 //! Buttons (`Button/primary` `yJ2jo`, `Button/secondary` `Dswcx`, `Button/ghost` `cnlv1`, `Button/danger`
-//! `O3M8iH`): an optional 14 icon and a 12/500 label, 6 apart, 28 high, 12 at each side, radius 6.
+//! `O3M8iH`): an optional 14 icon and a 12/500 label, 6 apart, 28 high, 12 at each side, radius 6. A large one is
+//! 36 high with a 13/500 label, 16 at each side, 14 when it is not primary (the welcome's `rDzhV`, `fZDtO`).
 //! While its request is under way a button shows the turning loader in place of its icon and cannot be
 //! pressed. A button that cannot be pressed now is faded to half; one whose feature is not built or
 //! not allowed shows a lock in place of its icon as well (`Create multiple` `Q9aeZ`), and says why
@@ -124,6 +125,8 @@ pub struct ActionButton {
   compact: bool,
   /// 24 high instead of 28, as a Copy inside a command row (`PEnj5`).
   small: bool,
+  /// 36 high with a 13/500 label.
+  large: bool,
   bounded: bool,
   element: Option<ElementRef>,
 }
@@ -142,6 +145,7 @@ impl ActionButton {
       fill: false,
       compact: false,
       small: false,
+      large: false,
       bounded: false,
       element: None,
     }
@@ -203,6 +207,12 @@ impl ActionButton {
     self
   }
 
+  /// 36 high, its label 13/500: the welcome's actions (`rDzhV`, `fZDtO`).
+  pub fn large(mut self) -> Self {
+    self.large = true;
+    self
+  }
+
   /// Keep a long label within the available width; the full accessible name is retained.
   pub fn bounded_label(mut self) -> Self {
     self.bounded = true;
@@ -251,8 +261,23 @@ impl ActionButton {
       )
     } else if self.small {
       (ControlHeight::Sm, IconSize::Md, TypographyStyle::Button)
+    } else if self.large {
+      (
+        ControlHeight::Lg,
+        IconSize::Md,
+        crate::theme::ExtraTypography::ButtonLarge.role(),
+      )
     } else {
       (ControlHeight::Md, IconSize::Md, TypographyStyle::Button)
+    }
+  }
+
+  /// The room at each side of its content: 12, a large button's 16, or 14 when it is not primary.
+  fn side(&self) -> SpacingSize {
+    match (self.large, self.kind) {
+      (false, _) => SpacingSize::Md,
+      (true, ButtonKind::Primary) => SpacingSize::Lg,
+      (true, _) => ExtraSpacing::Inset.role(),
     }
   }
 
@@ -264,7 +289,7 @@ impl ActionButton {
     let color = self.kind.content();
     Row::new()
       .height(Dimension::Px(height.value()))
-      .padding(Padding::horizontal(SpacingSize::Md))
+      .padding(Padding::horizontal(self.side()))
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
       .with_children(self.lead().map(|lead| icon(lead, glyph, color.clone())))
@@ -279,7 +304,7 @@ impl From<ActionButton> for Element {
     let mut frame = Button::empty()
       .id(button.id.clone())
       .height(Dimension::Px(height.value()))
-      .padding(Padding::horizontal(SpacingSize::Md))
+      .padding(Padding::horizontal(button.side()))
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
       .justify(Justify::Center)

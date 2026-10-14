@@ -19,7 +19,7 @@ use lurq::{
     theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Button, Column, Row, Text, TextInput},
-  core::Signal,
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::{CursorIcon, Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -64,6 +64,8 @@ pub struct FieldInput {
   clear: Option<Arc<str>>,
   width: Dimension,
   area_height: f32,
+  /// A single-line box's height.
+  box_height: f32,
   locked: bool,
   /// A 14 `text_muted` glyph at the box's end, e.g. the lock of a locked select (`H8GYVZ`).
   trailing: Option<Icon>,
@@ -71,9 +73,12 @@ pub struct FieldInput {
   invalid: bool,
   masked: bool,
   on_leave: Option<Arc<dyn Fn() + Send + Sync>>,
+  /// The input, for its owner to focus.
+  element: Option<ElementRef>,
 }
 
-/// Compared by what it shows; the value by its signal.
+/// Compared by what it shows; the value by its signal. The input's element ref is its owner's, kept for
+/// the owner's life.
 impl PartialEq for FieldInput {
   fn eq(&self, other: &Self) -> bool {
     self.id == other.id
@@ -90,6 +95,7 @@ impl PartialEq for FieldInput {
       && self.clear == other.clear
       && self.width == other.width
       && self.area_height == other.area_height
+      && self.box_height == other.box_height
       && self.locked == other.locked
       && self.trailing == other.trailing
       && self.invalid == other.invalid
@@ -118,11 +124,13 @@ impl FieldInput {
       clear: None,
       width: Dimension::Pct(100.0),
       area_height: TEXT_AREA_HEIGHT,
+      box_height: ControlHeight::Md.value(),
       locked: false,
       trailing: None,
       invalid: false,
       masked: false,
       on_leave: None,
+      element: None,
     }
   }
 
@@ -188,6 +196,12 @@ impl FieldInput {
     self
   }
 
+  /// A single-line box `height` high, where the design draws it taller than a control.
+  pub fn box_height(mut self, height: f32) -> Self {
+    self.box_height = height;
+    self
+  }
+
   /// The value in Geist Mono, as identifiers and figures are (handover §5.2); the placeholder stays.
   pub fn mono(mut self) -> Self {
     self.mono = true;
@@ -242,6 +256,12 @@ impl FieldInput {
     self
   }
 
+  /// `element` finds the input, e.g. to focus it with `Ctx::focus`.
+  pub fn element(mut self, element: ElementRef) -> Self {
+    self.element = Some(element);
+    self
+  }
+
   pub fn render(self, ctx: &mut Ctx) -> Element {
     let key = format!("field-{}", self.id);
     ctx.mount_keyed::<FieldBox>(&key, self)
@@ -290,7 +310,7 @@ impl Component for FieldBox {
       Lines::One => dress(
         Row::new()
           .id(format!("{}-box", props.id))
-          .height(Dimension::Px(ControlHeight::Md.value()))
+          .height(Dimension::Px(props.box_height))
           .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
           .spacing(SpacingSize::Sm)
           .align_items(Alignment::Center),
@@ -366,6 +386,9 @@ impl FieldBox {
       });
     if props.masked {
       input = input.mask();
+    }
+    if let Some(element) = &props.element {
+      input = input.ref_element(element.clone());
     }
     if let Some(placeholder) = &props.placeholder {
       input = input.placeholder(placeholder);

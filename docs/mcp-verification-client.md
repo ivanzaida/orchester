@@ -22,11 +22,14 @@ installed app's fixed address or stored token). It prints `pid <pid>`, `mcp <fol
 The relay reuses `stop_run_process`'s resolved executable path, process age and protection rules.
 Executables outside this run's worktree are refused before any discovery or HTTP call: the person's
 installed app and another run's app are never driven. It finds discovery by pid in the per-user
-folder or an isolated QA profile under this worktree's `.tmp/`, validates the pid, app name and
-loopback URL, and keeps the discovery credential inside the host. Under `.tmp/` it takes, for the new
-app, the `.tmp/qa/<task>/mcp/<pid>.json` that `tools/qa-app.ps1` makes, or `orchester-app-mcp/<pid>.json`
-of a QA profile. Text and structured content are
-returned with the token redacted. PNG images are saved under `.tmp/run-app/`; open the relative
+folder or a QA copy's folder in this worktree's `.tmp/qa/<task>/`, validates the pid, app name and
+loopback URL, and keeps the discovery credential inside the host. It reads `.tmp/qa/` one level (at most
+1024 entries, else it refuses and names the folder) and in each task folder only these exact files: for the
+new app, the `mcp/<pid>.json` that `tools/qa-app.ps1` makes; for a QA profile (a copy whose user data folder is
+`.tmp/qa/<task>/profile/`), `profile/orchester-app-mcp/<pid>.json`, or the deprecated desktop's
+`profile/orchester-mcp/<pid>.json` and `profile/lurq/mcp/<pid>.json`. The rest of `.tmp/` (build output,
+scratch checkouts) is never searched, and a file reached through a link is not used. Text and structured
+content are returned with the token redacted. PNG images are saved under `.tmp/run-app/`; open the relative
 path returned by the tool and cite it as the app screenshot. No Python invocation, discovery read
 or sandbox exception is needed.
 

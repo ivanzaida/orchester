@@ -6,6 +6,7 @@
 //! interrupted: the working line and *Following live* need a live run (QA's `live` scenario). Needs `git`.
 
 mod denied;
+mod jump;
 #[allow(
   dead_code,
   reason = "the seed's report and its database path are the QA tool's; these tests read its tasks"

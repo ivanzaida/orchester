@@ -80,8 +80,14 @@
         "other": "{{count}} runs were interrupted when Orchester closed"
       },
       "summary": {
-        "one": "Its worktree and commits are kept. Continue it from its last checkpoint, or leave it stopped.",
-        "other": "Their worktrees and commits are kept. Continue them from their last checkpoint, or leave them stopped."
+        "crashed": {
+          "one": "Orchester stopped unexpectedly. Its worktree and commits are kept. Continue it from its last checkpoint, or leave it stopped.",
+          "other": "Orchester stopped unexpectedly. Their worktrees and commits are kept. Continue them from their last checkpoints, or leave them stopped."
+        },
+        "quitNow": {
+          "one": "You chose Quit now. Its worktree and commits are kept. Continue it from its last checkpoint, or leave it stopped.",
+          "other": "You chose Quit now. Their worktrees and commits are kept. Continue them from their last checkpoints, or leave them stopped."
+        }
       },
       "body": {
         "crashed": {

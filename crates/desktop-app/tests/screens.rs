@@ -3,7 +3,8 @@
 //! `screen-not-found`, which says why. The paths go straight to the router, as a tab's history would hand them over, so
 //! a path no route prints is shown too. The project the paths name is known to be open; what the window does until a
 //! project opens, and for one that cannot, is `tests/projects.rs`. The shell around the screens works with a session's
-//! services, from a data folder of the test's own.
+//! services, from a data folder of the test's own. What is built without a route, a popover such as the Needs you
+//! panel, is listed too (`BUILT_SURFACES`), with the tests that open it.
 
 mod support;
 
@@ -50,20 +51,30 @@ const READING_TASK: &str = "Reading the task…";
 /// The screens that show their own content, which their own tests check, in place of the placeholder.
 const BUILT: &[Screen] = &[
   // One per line, sorted, so each screen's task adds a line of its own.
+  Screen::AddProject,
   Screen::Agents,
+  Screen::AllProjects,
   Screen::Connections,
   Screen::EditConnection,
   Screen::EditTask,
+  Screen::Instructions,
   Screen::NewConnection,
   Screen::NewTask,
   Screen::Orchestrator,
   Screen::OrchestratorSettings,
+  Screen::Overview,
   Screen::Pipelines,
   Screen::ProjectSettings,
   Screen::Secrets,
   Screen::Skills,
   Screen::Tasks,
   Screen::Tools,
+];
+/// What is built without a route of its own, a popover the shell opens: its element and the tests that check
+/// it, under `tests/`.
+const BUILT_SURFACES: &[(&str, &str)] = &[
+  // The title bar's Needs you panel (`eBhFg`), which its pill opens over any screen.
+  ("needs-you-panel", "needs_you_panel/main.rs"),
 ];
 
 /// Where the test root leaves its router, and the services it provides.
@@ -152,7 +163,16 @@ impl Screens {
   /// no element has the id.
   fn show(&mut self, path: &str, id: &str) -> Option<Vec<String>> {
     self.router.replace(path);
-    self.tree.pass_headless(&mut self.app);
+    // A screen that reads its data first shows its element once the reading is delivered.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+      self.tree.tick_futures();
+      self.tree.pass_headless(&mut self.app);
+      if self.tree.get_element_by_id(id).is_some() || std::time::Instant::now() > deadline {
+        break;
+      }
+      std::thread::sleep(std::time::Duration::from_millis(5));
+    }
     let element = self.tree.get_element_by_id(id)?;
     let mut all = Vec::new();
     collect(element, &mut all);
@@ -196,7 +216,7 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
   ));
   let placeholder = |title| vec![title, NOT_BUILT];
   // Settings is built in part; `tests/settings.rs` shows it.
-  let mut all = vec![(Route::AllProjects, placeholder("All projects"))];
+  let mut all = vec![(Route::AllProjects, Vec::new()), (Route::AddProject(None), Vec::new())];
   all.extend([
     (at(ProjectPage::Overview(OverviewTab::Failed)), placeholder("Overview")),
     (
@@ -222,11 +242,13 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
       vec![READING_TASK],
     ),
     (at(ProjectPage::Task(key("KON-12"), changes)), vec![READING_TASK]),
+    (at(ProjectPage::MergeQueue), placeholder("Merge queue")),
     (at(ProjectPage::PullRequests), placeholder("Pull requests")),
     (at(ProjectPage::Usage), placeholder("Usage")),
     (at(ProjectPage::Pipelines), placeholder("Pipelines")),
     (at(ProjectPage::Agents), placeholder("Agents")),
     (at(ProjectPage::Instructions), placeholder("Instructions")),
+    (at(ProjectPage::Memory), placeholder("Memory")),
     (at(ProjectPage::Skills), placeholder("Skills")),
     (at(ProjectPage::Tools), placeholder("Tools")),
     (at(ProjectPage::Secrets), placeholder("Secrets")),
@@ -273,6 +295,18 @@ fn screens_each_route_mounts_its_own_placeholder() {
       screens.tree.get_element_by_id("screen-not-found").is_none(),
       "{}",
       route.path()
+    );
+  }
+}
+
+#[test]
+fn screens_each_built_surface_without_a_route_has_tests_that_open_it() {
+  let tests = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
+  for (id, file) in BUILT_SURFACES {
+    let source = std::fs::read_to_string(tests.join(file)).unwrap_or_else(|error| panic!("{file}: {error}"));
+    assert!(
+      source.contains(&format!("\"{id}\"")),
+      "{file} checks {id}, the surface it is listed for"
     );
   }
 }

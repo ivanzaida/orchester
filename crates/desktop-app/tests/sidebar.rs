@@ -38,6 +38,7 @@ use orchester_core::{
   run::{ActiveClock, TaskPhase},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_workspace::tasks::{data::ProjectTasks, integration_jobs::ProjectJobs};
 use support::{Data, Window, add_project, project_id};
 
@@ -82,6 +83,80 @@ fn sidebar_counts_the_tasks_with_a_dash_while_they_are_read_and_none_of_zero() {
     window.texts("running").is_none(),
     "no run under way, no Running section"
   );
+}
+
+/// The top of the element `id`.
+fn top(window: &mut Window, id: &str) -> f32 {
+  window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"))
+    .y
+}
+
+#[test]
+fn sidebar_lists_the_project_screens_in_the_design_order_and_goes_to_them() {
+  let mut window = Window::open();
+  window.navigation().go(overview(project_id()));
+  window.until("the project to open", |window| window.texts("nav-memory").is_some());
+  let order = [
+    "nav-overview",
+    "nav-orchestrator",
+    "nav-tasks",
+    "nav-merge_queue",
+    "nav-pull_requests",
+    "nav-usage",
+    "nav-pipelines",
+    "nav-agents",
+    "nav-instructions",
+    "nav-memory",
+    "nav-skills",
+    "nav-tools",
+    "nav-secrets",
+    "nav-connections",
+  ];
+  let tops: Vec<f32> = order.iter().map(|id| top(&mut window, id)).collect();
+  assert!(
+    tops.windows(2).all(|pair| pair[0] < pair[1]),
+    "{order:?} from the top: {tops:?}"
+  );
+  // The Orchestrator is built (`tests/orchestrator/`): its entry opens the chat, not a placeholder.
+  assert_eq!(
+    window
+      .texts("nav-orchestrator")
+      .expect("the item shows")
+      .last()
+      .map(String::as_str),
+    Some("Orchestrator")
+  );
+  press(&mut window, "nav-orchestrator");
+  window.until("the Orchestrator", |window| {
+    window.texts("screen-orchestrator").is_some()
+  });
+  assert!(
+    window
+      .texts("screen-orchestrator")
+      .is_some_and(|texts| !texts.contains(&"This screen isn't built yet.".to_owned())),
+    "the Orchestrator is its own screen"
+  );
+  for (item, screen, title) in [
+    ("nav-merge_queue", "screen-merge_queue", "Merge queue"),
+    ("nav-memory", "screen-memory", "Memory"),
+  ] {
+    assert_eq!(
+      window.texts(item).expect("the item shows").last().map(String::as_str),
+      Some(title)
+    );
+    press(&mut window, item);
+    window.until(screen, |window| window.texts(screen).is_some());
+    assert!(
+      window
+        .texts(screen)
+        .is_some_and(|texts| texts.contains(&"This screen isn't built yet.".to_owned())),
+      "{screen} says it is not built"
+    );
+  }
 }
 
 #[test]
@@ -133,11 +208,14 @@ fn sidebar_recent_lists_five_projects_with_the_shown_one_checked() {
   for item in ["switcher-all-projects", "switcher-open-folder", "switcher-add-project"] {
     assert!(window.texts(item).is_some(), "{item} follows RECENT");
   }
+  press(&mut window, "switcher-add-project");
+  window.until("Add project to open", |window| {
+    window.navigation().route_now() == orchester_app::routes::Route::AddProject(None)
+      && window.tree.get_element_by_id("screen-add_project").is_some()
+  });
   assert!(
-    window
-      .texts("switcher-add-project")
-      .is_some_and(|texts| texts.iter().any(|text| text.starts_with("Not in this app yet"))),
-    "Add project says why it is unavailable"
+    window.tree.get_element_by_id("sidebar").is_none(),
+    "Add project has no sidebar"
   );
 }
 
@@ -273,7 +351,7 @@ fn seeded() -> (Data, std::path::PathBuf) {
 #[test]
 fn sidebar_running_list_takes_the_runs_under_way_and_stops_them_without_a_runner() {
   let (_data, repo) = seeded();
-  let tasks = ProjectTasks::load(&repo).expect("the tasks read");
+  let tasks = ProjectTasks::load(&repo, &Programs::processes()).expect("the tasks read");
   let rows = |online| -> Vec<(String, RowState)> {
     under_way(&tasks, online)
       .into_iter()

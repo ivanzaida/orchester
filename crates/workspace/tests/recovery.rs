@@ -120,6 +120,19 @@ fn recovery_session_offers_the_runs_a_quit_now_interrupted_by_project() {
 }
 
 #[test]
+fn recovery_session_counts_undecided_runs_and_keeps_their_list_open_until_hidden() {
+  let (recovery, state, _, project) = recovery_after(SessionEnd::QuitNow);
+  assert_eq!(state.undecided(project), 1);
+  assert!(!state.reviewing(project));
+  recovery.review(project, true);
+  assert!(recovery.state().reviewing(project), "Review runs opens the list");
+  recovery.review(project, false);
+  assert!(!recovery.state().reviewing(project), "Hide closes it");
+  recovery.leave(project);
+  assert_eq!(recovery.state().undecided(project), 0, "a decided run no longer waits");
+}
+
+#[test]
 fn recovery_session_offers_nothing_after_wait_for_agents_to_save() {
   let (_, state, _, project) = recovery_after(SessionEnd::RunsPaused);
   assert_eq!(state.reading, Reading::Nothing);

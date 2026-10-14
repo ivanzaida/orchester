@@ -276,6 +276,20 @@ label) and five minor ones; all are fixed and wait for a re-check.
 
 ## U · Screens
 
+### ORC-16 · All projects and Add project in the new app · branch `claude/all-projects` (implemented 2026-10-14, waiting for review and design verification)
+
+All projects (`S5HDKf`, states `kwpO2`), the welcome of a first launch (`UQZRa`) and Add project as a page
+(`/add-project`, `kkGWj`, `W5PIR`, `vJTcd`, detection states `gh5wV`) in `crates/desktop-app`; rules in
+`orchester_workspace::project_list` and `project_setup` (`readiness`, `expected_account`, `create`). Neither page has
+a sidebar; the switcher's *Add project* and *Set it up* lead to Add project. Usage across projects stays a locked tab
+until the Usage dashboard comes to this app. Tests: `cargo test -p orchester-workspace --test project_list
+project_list`, `--test project_setup setup_`, `cargo test -p orchester-app --test all_projects all_projects`, `--test
+add_project add_project`. QA: `cargo run -p orchester-app --example projects_qa -- <state>`.
+
+**Done when** an independent design verifier reports no blocking or major mismatches against `CGlZY` (960 and light
+passes excluded); then move this entry to *Done*. The created project's Overview notice (`E5yOA`) waits for Overview
+(O1).
+
 ### ORC-61C · Conversation as a chat with the step rail, and the one-box composer · branch `claude/chat-impl` (UI)
 
 Design: `docs/design/orchester-workspace.md` on `claude/conv-chat` › *Decided: C with the rail on the right* (group
@@ -791,6 +805,23 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+Command classifier: compound lines and dependency sources · branch `claude/command-classifier` (2026-10-14).
+From the analysis of 16 runs (106 of the person's 134 approvals were Claude Code's compound lines read as Unknown).
+`echo` of `$?` / `${PIPESTATUS[N]}` (PowerShell `$?` / `$LASTEXITCODE`) is read, and a status anywhere else stays
+Unknown. `echo` prints any argument. `tee` without a file is a filter. A literal variable may hold a backslash, read
+only where it is used quoted. Reads of Cargo's registry sources and git checkouts and of the toolchains' rust-src
+(also under `CARGO_HOME` / `RUSTUP_HOME`) are read like the worktree, as are `read_external_file` and
+`search_external_file` there; the rest of a Cargo or rustup home stays a credential location. Auto mode already
+reviewed Unknown lines (2026-10-06), and its hard rules are unchanged. Tests:
+`cargo test -p orchester-core --test command_compound command_compound`, plus `command_sequences`,
+`approval_fixtures` and `native known_safe`. Still Unknown by design: `$( )`, subshells, functions, `for … set --`,
+`**` globs, a loop that is not the whole line.
+Security review fix (same day): only plain readers (`cat`, `rg`, `grep -r`, `sed -n`, …) read the dependency
+sources like the worktree; a `cd` there, any other program, and a `.git` there do not. Programs that load settings
+or code from their folder (git, Cargo, package managers, build tools, Python, Node) are Unknown outside the worktree
+and its writable folders, which also closes `cd /any && git status` on master. `diff -r`, `tree -l` and `du -L` are
+Unknown. Tests: `cargo test -p orchester-core --test command_review_bypasses command_review`.
 
 ORC-3 · Pipelines page and editor · branch `codex/orc3-integration` (accepted 2026-10-12, merged `39f945d2`).
 Independent source review accepted final union `7668c94a` / tree `f7e145f2`; eight named-filter groups /

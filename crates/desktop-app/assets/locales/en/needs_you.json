@@ -1,0 +1,70 @@
+{
+  "needs_you": {
+    "title": "Needs you",
+    "close": "Close",
+    "separator": "·",
+    "sub": {
+      "one": "{{projects}} · oldest first",
+      "each": "{{projects}} · oldest first in each project",
+      "none": "{{projects}}"
+    },
+    "projects": {
+      "two": "{{first}} and {{second}}",
+      "many": "{{list}} and {{last}}",
+      "separator": ", "
+    },
+    "thisTab": "this tab's project",
+    "waitingSince": "waiting since {{clock}} · {{time}}",
+    "stepLabel": "{{number}} {{step}}",
+    "where": {
+      "run": "Run {{run}}",
+      "step": "Run {{run}} · {{step}}",
+      "agent": "Run {{run}} · {{step}} · {{agent}}",
+      "checkpoint": "Run {{run}} · {{step}} · checkpoint {{checkpoint}}"
+    },
+    "action": {
+      "collapse": "Collapse",
+      "openConversation": "Open conversation"
+    },
+    "reading": "Reading the request…",
+    "notHere": "This request can't be answered here. Open the conversation to answer it.",
+    "empty": {
+      "title": "Nothing needs you",
+      "text": "Approvals, questions, plans and decisions from every open project appear here as they arrive."
+    },
+    "note": {
+      "open": "Open",
+      "tool": "{{server}} · {{tool}}",
+      "own": "“{{text}}”",
+      "answerSeparator": ", ",
+      "line": {
+        "once": "Approved once · {{subject}}",
+        "similar": "Approved similar in this run · {{subject}}",
+        "everything": "Approved everything in this run · {{subject}}",
+        "always": "Always allowed · {{subject}}",
+        "automation": "Approved once by automation · {{subject}}",
+        "reviewer": "Approved by auto mode · {{subject}}",
+        "approved": "Approved · {{subject}}",
+        "denied": "Denied · {{subject}}",
+        "deniedByAutomation": "Denied by automation · {{subject}}",
+        "answered": "Answer sent to {{agent}} · {{answer}}",
+        "answeredByAutomation": "Answered by automation · {{answer}}",
+        "ended": "Ended without an answer · {{subject}}",
+        "lost": "Interrupted · {{subject}}",
+        "gone": "No longer waits · {{subject}}"
+      },
+      "detail": {
+        "approved": "{{agent}} runs it now; an approval can't be taken back. Recorded in {{task}} › Conversation.",
+        "denied": "{{agent}} was told, and nothing ran. Recorded in {{task}} › Conversation.",
+        "answered": "{{agent}} resumed at {{time}}. Recorded in {{task}} › Conversation; follow up there.",
+        "ended": "{{agent}} stopped waiting at {{time}}, before an answer reached it. Recorded in {{task}} › Conversation.",
+        "endedNow": "{{agent}} stopped waiting before an answer reached it. Recorded in {{task}} › Conversation.",
+        "lost": "Its run was interrupted: {{agent}} no longer waits for an answer. Recorded in {{task}} › Conversation.",
+        "gone": "Recorded in {{task}} › Conversation."
+      }
+    },
+    "showAll": "Show all in {{project}}'s Overview",
+    "openOverview": "Open {{project}}'s Overview",
+    "escCloses": "Esc closes"
+  }
+}

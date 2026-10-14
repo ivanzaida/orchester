@@ -26,9 +26,11 @@ fn native_known_safe_unlisted_options_ask() {
     assert!(safe(&command), "{command} alone");
     for option in ["--orchester-unknown", "-Y", "--help"] {
       let with = format!("{command} {option}");
-      assert!(!safe(&with), "{with}");
+      // `echo` prints an option it does not know as written.
+      assert_eq!(safe(&with), command == "echo", "{with}");
     }
   }
+  assert!(safe("echo ---"));
 }
 
 #[test]
