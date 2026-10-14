@@ -227,7 +227,10 @@ fn ending(ctx: &mut Ctx, row: &TurnRow) -> Vec<Element> {
       } else {
         "orchestrator.stopped.nothing"
       };
-      again(ctx, row, event(ctx, "orchestrator-stopped", Icon::Square, &ctx.t(key)))
+      // When it was stopped; a turn kept before the time was recorded says when it was sent.
+      let time = row.turn.ended.or(row.turn.at).map(display::clock).unwrap_or_default();
+      let words = ctx.t_args(key, [("time", time.as_str())]);
+      again(ctx, row, event(ctx, "orchestrator-stopped", Icon::Square, &words))
     }
     TurnState::Failed(TurnFailure::Interrupted) => again(
       ctx,

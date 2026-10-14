@@ -46,6 +46,8 @@ pub(super) struct Turn {
   pub(super) text: Arc<str>,
   /// When it was kept; `None` while it is being sent.
   pub(super) at: Option<Timestamp>,
+  /// When its turn ended, when the runner said.
+  pub(super) ended: Option<Timestamp>,
   pub(super) state: TurnState,
   pub(super) answer: Vec<Part>,
 }
@@ -57,6 +59,7 @@ impl Turn {
       message: None,
       text: Arc::from(text),
       at: None,
+      ended: None,
       state: TurnState::Thinking,
       answer: Vec::new(),
     }
@@ -99,10 +102,16 @@ pub(super) fn turns(entries: &[ChatEntry]) -> Vec<Turn> {
   let mut turns: Vec<Turn> = Vec::new();
   for entry in entries {
     match &entry.kind {
-      EntryKind::Person { message, text, turn } => turns.push(Turn {
+      EntryKind::Person {
+        message,
+        text,
+        turn,
+        ended,
+      } => turns.push(Turn {
         message: Some(*message),
         text: Arc::from(text.as_str()),
         at: Some(entry.at),
+        ended: *ended,
         state: turn.clone(),
         answer: Vec::new(),
       }),

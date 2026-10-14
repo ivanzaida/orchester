@@ -226,6 +226,9 @@ impl SettingsScreen {
   }
 }
 
+/// The summary's height (`Permission summary` `c7khPh`).
+const SUMMARY_HEIGHT: f32 = 24.0;
+
 /// The head: the breadcrumb, the title with whether the changes are saved, the summary and the tabs.
 fn head(ctx: &mut Ctx, project: &ShownProject, (setup, save): (Option<&OrchestratorSetup>, &Save)) -> Element {
   let id = project.open.project.id();
@@ -338,6 +341,7 @@ fn summary(ctx: &Ctx, readiness: Option<&Readiness>) -> Element {
   let count = items.len();
   let mut row = Row::new()
     .id("orchestrator-settings-summary")
+    .height(Dimension::Px(SUMMARY_HEIGHT))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center);
   for (index, (glyph, color, words)) in items.into_iter().enumerate() {

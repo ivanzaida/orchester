@@ -82,7 +82,7 @@ impl Turn {
     if let TurnState::Failed(TurnFailure::CannotStart { reason }) = &state {
       tracing::warn!(chat = %self.chat.id(), %reason, "a turn of the Orchestrator chat could not start");
     }
-    self.record(|db| db.end_chat_turn(self.message, &state).map(drop));
+    self.record(|db| db.end_chat_turn(self.message, &state, Timestamp::now()).map(drop));
   }
 
   /// The command that answers the message, or why none can start.

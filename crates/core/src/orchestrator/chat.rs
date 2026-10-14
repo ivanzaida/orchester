@@ -216,6 +216,8 @@ pub enum EntryKind {
     message: ChatMessageId,
     text: MessageBody,
     turn: TurnState,
+    /// When its turn ended; `None` while it thinks, and for one cut short without a runner to say when.
+    ended: Option<Timestamp>,
   },
   Reply {
     text: String,

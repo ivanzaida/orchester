@@ -46,7 +46,7 @@
       "esc": "Esc"
     },
     "context": {
-      "line": "Each reply gets the Orchestrator's rules, this conversation and what it reads"
+      "line": "Each reply gets the Orchestrator's rules and this conversation"
     },
     "suggestions": {
       "eyebrow": "SUGGESTIONS",
@@ -66,8 +66,8 @@
     "stopNote": "Stop response ends this answer only. Tasks, runs and the queue are not touched.",
     "stopFailed": "The answer couldn't be stopped: {{reason}}",
     "stopped": {
-      "nothing": "Response stopped by you · nothing was created or changed",
-      "acted": "Response stopped by you · what it did before stays"
+      "nothing": "Response stopped by you · {{time}} · nothing was created or changed",
+      "acted": "Response stopped by you · {{time}} · what it did before stays"
     },
     "interrupted": "The answer was cut short when Orchester or its runner closed",
     "askAgain": "Ask again",
@@ -180,7 +180,7 @@
       "note": "Only conversations in {{project}}. Opening one keeps your draft; Esc closes History."
     },
     "settings": {
-      "description": "Plans work with you, drafts tasks and coordinates {{project}}'s work.",
+      "description": "Plans work with you, drafts tasks and coordinates {{project}}'s queue.",
       "saved": "All changes saved",
       "saving": "Saving…",
       "loading": "Reading the Orchestrator's settings…",
@@ -212,7 +212,13 @@
       "effort": {
         "label": "Reasoning effort",
         "description": "CLI default leaves it to the connection's own setting.",
-        "default": "CLI default"
+        "default": "CLI default",
+        "minimal": "Minimal",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "xhigh": "Extra high",
+        "max": "Max"
       },
       "chooseConnectionFirst": "Choose a connection first.",
       "note": "A reply already under way finishes on what it started with; a change applies from the next reply.",

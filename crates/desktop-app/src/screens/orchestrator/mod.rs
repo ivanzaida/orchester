@@ -39,7 +39,7 @@ use orchester_workspace::{display, orchestrator::send::Outgoing};
 
 use self::{
   data::Shown,
-  header::Head,
+  header::{Head, Named},
   send::{SendAction, Sending, Sent, StopAction},
 };
 use crate::{
@@ -150,8 +150,13 @@ impl Component for OrchestratorScreen {
     let reads = data::read(ctx, &props.project.open.repo_root, props.chat);
     let readiness = reads.setup.ready().map(|setup| setup.readiness());
     let chat = match &reads.shown {
-      Shown::Chat(shown) => Some(&shown.chat),
-      _ => None,
+      Shown::Chat(shown) => Named::Chat(&shown.chat),
+      Shown::Loading => Named::Opening(reads.target.and_then(|target| {
+        let chats = &reads.history.ready()?.chats;
+        let listing = chats.iter().find(|listing| listing.chat.id() == target)?;
+        Some(listing.chat.title())
+      })),
+      Shown::New | Shown::Failed(_) | Shown::Missing => Named::New,
     };
     let head = header::header(
       ctx,

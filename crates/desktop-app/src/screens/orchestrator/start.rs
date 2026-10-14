@@ -11,7 +11,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text, TextOverflow},
+  components::{Column, Row, Spacer, Text},
   layout::Alignment,
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
@@ -72,13 +72,12 @@ pub(super) fn start(
     .child(Spacer::new().flex(1.0))
     .child(icon(Icon::Layers2, IconSize::Sm, PaletteColor::TextMuted))
     .child(
+      // The whole sentence, on a second line when the column is narrow: never cut.
       Text::new(&ctx.t("orchestrator.context.line"))
         .id("orchestrator-context-line")
         .variant(TypographyStyle::Caption)
         .flex_shrink(1.0)
-        .min_width(Dimension::Px(0.0))
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis),
+        .min_width(Dimension::Px(0.0)),
     )
     .child(manage_context(ctx));
   let start = Column::new()

@@ -12,6 +12,7 @@ use lurq::{
     theme::{PaletteColor, TypographyStyle},
   },
   components::{Column, Row, SelectOption, Text},
+  core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
@@ -31,7 +32,7 @@ use crate::{
   theme::{ExtraSpacing, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
-    field::{SelectField, field_error},
+    field::{FieldInput, SelectField, field_error},
     form_section::{Label, Place, section, side_row},
     icon::{Icon, icon},
     message::message_text,
@@ -47,23 +48,15 @@ pub(super) fn form(ctx: &mut Ctx, project: &ShownProject, setup: &OrchestratorSe
   let connections = setup.connections();
   let usable = connections.iter().any(|choice| choice.unavailable.is_none());
   let chosen: Option<ConnectionId> = choices.connection.get().parse().ok();
-  let connection = connection_row(ctx, &connections, choices, usable);
+  let connection = connection_row(ctx, &connections, choices);
   let (model, effort) = match chosen {
     Some(chosen) => (
       model_row(ctx, setup, chosen, choices),
       effort_row(ctx, setup, chosen, choices),
     ),
     None => (
-      locked_row(
-        ctx,
-        ("orchestrator-model", "orchestrator.settings.model.label"),
-        &choices.model,
-      ),
-      locked_row(
-        ctx,
-        ("orchestrator-effort", "orchestrator.settings.effort.label"),
-        &choices.effort,
-      ),
+      locked_row(ctx, ("orchestrator-model", "orchestrator.settings.model.label")),
+      locked_row(ctx, ("orchestrator-effort", "orchestrator.settings.effort.label")),
     ),
   };
   let note = Row::new()
@@ -112,7 +105,7 @@ fn limits(ctx: &Ctx, project: &str) -> Row {
     )
 }
 
-fn connection_row(ctx: &mut Ctx, connections: &[ConnectionChoice], choices: &Choices, usable: bool) -> Element {
+fn connection_row(ctx: &mut Ctx, connections: &[ConnectionChoice], choices: &Choices) -> Element {
   let options = connections
     .iter()
     .map(|choice| {
@@ -124,7 +117,8 @@ fn connection_row(ctx: &mut Ctx, connections: &[ConnectionChoice], choices: &Cho
     })
     .collect();
   let label = ctx.t("orchestrator.settings.connection.label");
-  let mut select = SelectField::new(
+  // At full contrast even when none is usable: its menu says why each one is not (`jmyWu`).
+  let select = SelectField::new(
     "orchestrator-connection",
     label.clone(),
     choices.connection.clone(),
@@ -132,9 +126,6 @@ fn connection_row(ctx: &mut Ctx, connections: &[ConnectionChoice], choices: &Cho
   )
   .placeholder(ctx.t("orchestrator.settings.connection.none"))
   .width(Dimension::Px(SELECT_WIDTH));
-  if !usable {
-    select = select.locked();
-  }
   side_row(
     Label::new("orchestrator-connection", label).description(ctx.t("orchestrator.settings.connection.description")),
     select.render(ctx),
@@ -193,7 +184,10 @@ fn effort_row(ctx: &mut Ctx, setup: &OrchestratorSetup, connection: ConnectionId
   .chain(
     efforts
       .into_iter()
-      .map(|effort| SelectOption::new(effort.clone(), effort)),
+      .map(|effort| {
+        let word = effort_word(ctx, &effort);
+        SelectOption::new(effort, word)
+      }),
   )
   .collect();
   let label = ctx.t("orchestrator.settings.effort.label");
@@ -207,16 +201,31 @@ fn effort_row(ctx: &mut Ctx, setup: &OrchestratorSetup, connection: ConnectionId
   )
 }
 
-/// A row whose select waits for a connection: locked, empty, saying so.
-fn locked_row(ctx: &mut Ctx, (id, label): (&str, &str), value: &lurq::core::Signal<String>) -> Element {
+/// The word for reasoning effort `effort`, as the agent profile editor says it; an effort with no word of its own
+/// shows as the CLI names it.
+fn effort_word(ctx: &Ctx, effort: &str) -> Arc<str> {
+  match effort {
+    "minimal" => ctx.t("orchestrator.settings.effort.minimal"),
+    "low" => ctx.t("orchestrator.settings.effort.low"),
+    "medium" => ctx.t("orchestrator.settings.effort.medium"),
+    "high" => ctx.t("orchestrator.settings.effort.high"),
+    "xhigh" => ctx.t("orchestrator.settings.effort.xhigh"),
+    "max" => ctx.t("orchestrator.settings.effort.max"),
+    other => other.into(),
+  }
+}
+
+/// A row whose choice waits for a connection: a locked box with a dash and a lock, as a locked select shows
+/// (`H8GYVZ`), saying so.
+fn locked_row(ctx: &mut Ctx, (id, label): (&str, &str)) -> Element {
   let label = ctx.t(label);
-  let select = SelectField::new(id.to_owned(), label.clone(), value.clone(), Vec::new())
-    .placeholder(ctx.t("orchestrator.dash"))
-    .width(Dimension::Px(SELECT_WIDTH))
-    .locked();
+  let locked = FieldInput::new(id.to_owned(), label.clone(), Signal::new(ctx.t("orchestrator.dash").to_string()))
+    .locked()
+    .trailing(Icon::Lock)
+    .width(Dimension::Px(SELECT_WIDTH));
   side_row(
     Label::new(id, label).description(ctx.t("orchestrator.settings.chooseConnectionFirst")),
-    select.render(ctx),
+    locked.render(ctx),
     Place::Within,
     false,
   )
@@ -229,7 +238,7 @@ fn no_connection(ctx: &mut Ctx, project: &ShownProject) -> Element {
   let name = project.open.project.name().as_str();
   let open = ActionButton::new(
     "orchestrator-settings-open-connections",
-    ButtonKind::Secondary,
+    ButtonKind::Primary,
     ctx.t("orchestrator.settings.noConnection.open"),
   )
   .icon(Icon::Plug)

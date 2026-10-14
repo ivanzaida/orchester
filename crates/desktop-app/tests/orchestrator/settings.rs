@@ -50,8 +50,8 @@ fn orchestrator_settings_save_the_chosen_connection_with_its_first_model() {
       .as_str()
       == "opus"
   });
-  assert_eq!(screen.options("orchestrator-effort"), ["CLI default", "low", "high"]);
-  screen.choose("orchestrator-effort", "high");
+  assert_eq!(screen.options("orchestrator-effort"), ["CLI default", "Low", "High"]);
+  screen.choose("orchestrator-effort", "High");
   screen.until("the effort saved", |screen| {
     screen
       .db()
@@ -78,5 +78,31 @@ fn orchestrator_settings_tabs_not_built_say_why() {
     screen
       .text("orchestrator-settings-note")
       .contains("a change applies from the next reply")
+  );
+}
+
+#[test]
+fn orchestrator_settings_head_is_laid_out_as_designed() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  screen.settings();
+  screen.until("the summary", |screen| {
+    screen.text("orchestrator-settings-summary").contains("haiku")
+  });
+  // `Head` `b8gGj`, from the breadcrumb's foot: the title row (47) and the summary (24), 12 apart, then the tabs.
+  // The shared breadcrumb is 18 high where the design's is 16; the rest is measured from it.
+  let crumbs = screen.bounds("orchestrator-settings-crumbs");
+  let foot = crumbs.y + crumbs.height;
+  let summary = screen.bounds("orchestrator-settings-summary");
+  let tabs = screen.bounds("orchestrator-settings-tabs");
+  assert_eq!(
+    (summary.y - foot, summary.height, tabs.y - foot),
+    (71.0, 24.0, 107.0)
+  );
+  assert!(
+    screen
+      .text("orchestrator-settings-head")
+      .contains("coordinates Kontur's queue"),
+    "{}",
+    screen.text("orchestrator-settings-head")
   );
 }

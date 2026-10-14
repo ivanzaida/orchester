@@ -65,10 +65,12 @@ pub enum OrchestratorSpacing {
   Start,
   /// 40: the settings page's sides (`Head` `b8gGj`, `Page body` `WAGD4`).
   SettingsPage,
+  /// 18: over a day's label in History after the first (`kPs8W`: about 30 from the row before).
+  HistoryDay,
 }
 
 impl OrchestratorSpacing {
-  pub const ALL: [Self; 2] = [Self::Start, Self::SettingsPage];
+  pub const ALL: [Self; 3] = [Self::Start, Self::SettingsPage, Self::HistoryDay];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -78,6 +80,7 @@ impl OrchestratorSpacing {
     match self {
       Self::Start => "orchestrator_start",
       Self::SettingsPage => "orchestrator_settings_page",
+      Self::HistoryDay => "orchestrator_history_day",
     }
   }
 
@@ -85,6 +88,7 @@ impl OrchestratorSpacing {
     match self {
       Self::Start => 20.0,
       Self::SettingsPage => 40.0,
+      Self::HistoryDay => 18.0,
     }
   }
 }

@@ -29,7 +29,7 @@ use orchester_workspace::display;
 use crate::{
   navigation::Navigation,
   routes::{OrchestratorChat, ProjectPage, Route},
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography, OrchestratorText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, OrchestratorSpacing, OrchestratorText},
   ui::{field::FieldInput, icon::Icon, icon_button::IconButton, kbd::key_cap, pressable::pressable},
 };
 
@@ -68,7 +68,8 @@ impl Day {
 /// A row of the list: a day's heading or a conversation.
 #[derive(Clone, PartialEq)]
 enum Item {
-  Day(Day),
+  /// A day's label; the first sits close under the list's line (`kPs8W`).
+  Day { day: Day, first: bool },
   Chat {
     listing: ChatListing,
     current: bool,
@@ -82,7 +83,7 @@ impl lurq::app::component::DevtoolsInspectable for Item {}
 impl Item {
   fn key(&self) -> String {
     match self {
-      Self::Day(day) => format!("day-{day:?}"),
+      Self::Day { day, .. } => format!("day-{day:?}"),
       Self::Chat { listing, .. } => listing.chat.id().to_string(),
     }
   }
@@ -218,7 +219,10 @@ fn items(chats: &[ChatListing], (current, project): (Option<ChatId>, ProjectId),
     }
     let day = Day::of(listing.last, today);
     if last_day != Some(day) {
-      items.push(Item::Day(day));
+      items.push(Item::Day {
+        day,
+        first: items.is_empty(),
+      });
       last_day = Some(day);
     }
     items.push(Item::Chat {
@@ -242,13 +246,17 @@ impl Component for ItemView {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     match ctx.props::<Item>().clone() {
-      Item::Day(day) => Row::new()
+      Item::Day { day, first } => Row::new()
         .width(Dimension::Pct(100.0))
         .padding(
           Padding::new()
             .left(SpacingSize::Xs)
             .right(SpacingSize::Xs)
-            .top(ExtraSpacing::Loose.role())
+            .top(if first {
+              ExtraSpacing::Tight.role()
+            } else {
+              OrchestratorSpacing::HistoryDay.role()
+            })
             .bottom(SpacingSize::Xs),
         )
         .child(Text::new(&ctx.t(day.key())).variant(OrchestratorText::Eyebrow.role()))

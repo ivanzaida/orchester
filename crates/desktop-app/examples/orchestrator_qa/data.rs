@@ -149,7 +149,9 @@ fn keep(
         Part::Action(action) => db.add_chat_action(chat, &action, at)?,
       }
     }
-    db.end_chat_turn(message, &turn.end)?;
+    // It ended a minute after it was sent.
+    let ended = Timestamp::from_unix_millis(turn.at.unix_millis() + 60_000);
+    db.end_chat_turn(message, &turn.end, ended)?;
   }
   Ok(chat)
 }

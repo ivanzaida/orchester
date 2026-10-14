@@ -31,11 +31,20 @@ use crate::{
 /// The coordinator's avatar (`X8sblp`).
 const AVATAR_SIZE: f32 = 20.0;
 
+/// Which conversation the header names.
+#[derive(Clone, Copy)]
+pub(super) enum Named<'a> {
+  /// A new one, not kept yet.
+  New,
+  /// One being opened, with its title when History has it: loading never looks like a new conversation (`kDOn9`).
+  Opening(Option<&'a str>),
+  Chat(&'a Chat),
+}
+
 /// What the header shows.
 pub(super) struct Head<'a> {
   pub(super) project: &'a ShownProject,
-  /// The conversation shown; `None` for a new one.
-  pub(super) chat: Option<&'a Chat>,
+  pub(super) chat: Named<'a>,
   /// Where the chat stands with what the Orchestrator runs on; `None` until read.
   pub(super) readiness: Option<&'a Readiness>,
 }
@@ -55,9 +64,12 @@ pub(super) fn header(ctx: &mut Ctx, view: &View, head: &Head<'_>) -> Element {
       Crumb::here(ctx.t("orchestrator.title")),
     ],
   );
-  let title = head
-    .chat
-    .map_or_else(|| ctx.t("orchestrator.newTitle"), |chat| chat.title().into());
+  let title = match head.chat {
+    Named::New => ctx.t("orchestrator.newTitle"),
+    Named::Opening(Some(title)) => title.into(),
+    Named::Opening(None) => ctx.t("orchestrator.loading.title"),
+    Named::Chat(chat) => chat.title().into(),
+  };
   let history = view.history.clone();
   let new = navigation;
   let mut start_new = ActionButton::new(
@@ -67,13 +79,13 @@ pub(super) fn header(ctx: &mut Ctx, view: &View, head: &Head<'_>) -> Element {
   )
   .icon(Icon::MessageSquarePlus);
   start_new = match head.chat {
-    Some(_) => start_new.on_click(move || {
+    Named::Opening(_) | Named::Chat(_) => start_new.on_click(move || {
       new.go(Route::Project(
         project,
         ProjectPage::Orchestrator(OrchestratorChat::New),
       ));
     }),
-    None => start_new.disabled(),
+    Named::New => start_new.disabled(),
   };
   let title_row = Row::new()
     .id("orchestrator-title-row")
@@ -136,8 +148,9 @@ fn coordinator(ctx: &mut Ctx, head: &Head<'_>) -> Element {
   let project = head.project.open.project.id();
   let navigation = Navigation::of(ctx);
   let meta = match head.chat {
-    None => ctx.t("orchestrator.meta.unsaved"),
-    Some(chat) => started(ctx, chat.started()),
+    Named::New => ctx.t("orchestrator.meta.unsaved"),
+    Named::Opening(_) => ctx.t("orchestrator.loading.meta"),
+    Named::Chat(chat) => started(ctx, chat.started()),
   };
   Row::new()
     .id("orchestrator-coordinator")

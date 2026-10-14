@@ -262,15 +262,31 @@ the agent logged: {agent}"
     self.window.pass();
   }
 
+  /// Where `id` is laid out.
+  pub fn bounds(&mut self, id: &str) -> lurq::core::ElementRect {
+    self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  }
+
   /// The texts inside `id`, joined; empty when it is not shown.
   pub fn text(&mut self, id: &str) -> String {
     self.window.texts(id).unwrap_or_default().join(" ")
   }
 
-  /// Writes `text` and sends it with Ctrl+Enter.
+  /// Writes `text` and sends it with Ctrl+Enter, the focus in the field when the key is pressed.
   pub fn send(&mut self, text: &str) {
     self.set("orchestrator-input", text);
     self.click("orchestrator-input");
+    self
+      .window
+      .tree
+      .get_element_by_id_mut("orchestrator-input")
+      .expect("the message field")
+      .focus();
     self.key(("Enter", "Enter"), true);
   }
 

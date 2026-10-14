@@ -34,6 +34,8 @@ CREATE TABLE orchestrator_entries (
   body TEXT NOT NULL CHECK (body <> ''),
   message_id TEXT UNIQUE,
   turn TEXT CHECK (turn IS NULL OR turn IN ('thinking', 'answered', 'stopped', 'failed')),
+  -- When the runner ended the turn; NULL while it thinks, and for a turn interrupted without it.
+  ended_at INTEGER,
   failure TEXT,
   model TEXT,
   CHECK ((kind = 'person') = (message_id IS NOT NULL AND turn IS NOT NULL)),

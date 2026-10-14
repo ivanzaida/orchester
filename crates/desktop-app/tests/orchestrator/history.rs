@@ -21,7 +21,7 @@ fn kept(screen: &Orchestrator, text: &str, at: Timestamp, reply: &str) -> ChatId
     .expect("kept");
   db.add_chat_reply(chat, (reply, &ModelId::new("haiku").expect("model")), at)
     .expect("reply");
-  db.end_chat_turn(message, &TurnState::Answered).expect("ended");
+  db.end_chat_turn(message, &TurnState::Answered, at).expect("ended");
   chat
 }
 
@@ -38,9 +38,9 @@ fn orchestrator_history_lists_conversations_by_day_and_opens_one() {
   );
   screen.go(OrchestratorChat::Latest);
   screen.until("the latest conversation", |screen| {
-    screen.text("orchestrator-title") == "Why did KON-12 go back?"
+    screen.text("orchestrator-conversation").contains("Its review failed.")
   });
-  assert!(screen.text("orchestrator-conversation").contains("Its review failed."));
+  assert_eq!(screen.text("orchestrator-title"), "Why did KON-12 go back?");
   screen.click("orchestrator-history");
   screen.until("History", |screen| screen.exists("orchestrator-history-panel"));
   let listed = screen.text("orchestrator-history-panel");
@@ -57,7 +57,7 @@ fn orchestrator_history_lists_conversations_by_day_and_opens_one() {
   });
   screen.click(&format!("orchestrator-history-{older}"));
   screen.until("the older conversation", |screen| {
-    screen.text("orchestrator-title") == "Order of the auth work"
+    screen.text("orchestrator-conversation").contains("Auth first.")
   });
   assert_eq!(
     screen.route(),
@@ -70,4 +70,30 @@ fn orchestrator_history_lists_conversations_by_day_and_opens_one() {
   screen.click("orchestrator-input");
   screen.key(("Escape", "Escape"), false);
   assert!(!screen.exists("orchestrator-history-panel"), "Esc closes History");
+}
+
+#[test]
+fn orchestrator_opening_a_conversation_never_looks_like_a_new_one() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  let older = kept(&screen, "Order of the auth work", Timestamp::now(), "Auth first.");
+  kept(&screen, "Why did KON-12 go back?", Timestamp::now(), "Its review failed.");
+  screen.go(OrchestratorChat::Latest);
+  screen.until("the latest conversation", |screen| {
+    screen.text("orchestrator-conversation").contains("Its review failed.")
+  });
+  screen.click("orchestrator-history");
+  screen.until("History", |screen| screen.exists("orchestrator-history-panel"));
+  let hold = screen.window.launch.services().expect("the session started").hold.clone();
+  hold.set(true);
+  screen.click(&format!("orchestrator-history-{older}"));
+  screen.until("the conversation loading", |screen| {
+    screen.text("orchestrator-conversation-loading").contains("Loading conversation")
+      || screen.text("screen-orchestrator").contains("Loading conversation")
+  });
+  assert_eq!(screen.text("orchestrator-title"), "Order of the auth work");
+  assert_eq!(screen.text("orchestrator-meta"), "Opening from History");
+  hold.set(false);
+  screen.until("the older conversation", |screen| {
+    screen.text("orchestrator-conversation").contains("Auth first.")
+  });
 }

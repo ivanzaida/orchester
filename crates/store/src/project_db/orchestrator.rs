@@ -165,11 +165,16 @@ impl ProjectDb {
     }))
   }
 
-  /// Ends the turn of `message` as `state`, unless it ended already. Returns whether it changed.
-  pub fn end_chat_turn(&mut self, message: ChatMessageId, state: &TurnState) -> Result<bool, StoreError> {
+  /// Ends the turn of `message` as `state` at `at`, unless it ended already. Returns whether it changed.
+  pub fn end_chat_turn(
+    &mut self,
+    message: ChatMessageId,
+    state: &TurnState,
+    at: Timestamp,
+  ) -> Result<bool, StoreError> {
     let changed = self.connection.execute(
-      "UPDATE orchestrator_entries SET turn = ?2, failure = ?3 WHERE message_id = ?1 AND turn = 'thinking'",
-      params![message.to_string(), state.word(), failure_column(state)?],
+      "UPDATE orchestrator_entries SET turn = ?2, failure = ?3, ended_at = ?4 WHERE message_id = ?1 AND turn = 'thinking'",
+      params![message.to_string(), state.word(), failure_column(state)?, at.unix_millis()],
     )?;
     Ok(changed == 1)
   }
@@ -335,7 +340,7 @@ impl ProjectDb {
   /// The entries of `chat` in the order they were kept.
   pub fn chat_entries(&self, chat: ChatId) -> Result<Vec<ChatEntry>, StoreError> {
     let mut statement = self.connection.prepare(
-      "SELECT seq, kind, at, body, message_id, turn, failure, model FROM orchestrator_entries
+      "SELECT seq, kind, at, body, message_id, turn, failure, model, ended_at FROM orchestrator_entries
        WHERE chat_id = ?1 ORDER BY seq",
     )?;
     let rows = statement.query_map([chat.to_string()], |row| {
@@ -348,6 +353,7 @@ impl ProjectDb {
         turn: row.get(5)?,
         failure: row.get(6)?,
         model: row.get(7)?,
+        ended: row.get(8)?,
       })
     })?;
     rows.map(|row| row?.into_entry()).collect()
@@ -402,6 +408,7 @@ struct RawEntry {
   turn: Option<String>,
   failure: Option<String>,
   model: Option<String>,
+  ended: Option<i64>,
 }
 
 impl RawEntry {
@@ -411,6 +418,7 @@ impl RawEntry {
         message: parse("chat message id", &message)?,
         text: MessageBody::new(&self.body).map_err(|error| corrupt("chat message", error))?,
         turn: turn_state(&turn, self.failure.as_deref())?,
+        ended: self.ended.map(Timestamp::from_unix_millis),
       },
       ("reply", _, _, Some(model)) => EntryKind::Reply {
         text: self.body,

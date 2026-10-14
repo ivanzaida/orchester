@@ -26,6 +26,7 @@ fn orchestrator_roles_follow_the_design() {
   for (spacing, value) in [
     (OrchestratorSpacing::Start, 20.0),
     (OrchestratorSpacing::SettingsPage, 40.0),
+    (OrchestratorSpacing::HistoryDay, 18.0),
   ] {
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
   }

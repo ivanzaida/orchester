@@ -223,9 +223,14 @@ fn orchestrator_stops_an_answer_and_asks_again() {
   assert!(screen.text("orchestrator-stop-note").contains("ends this answer only"));
   screen.click("orchestrator-stop");
   screen.until("the stopped answer", |screen| screen.exists("orchestrator-stopped"));
-  assert_eq!(
-    screen.text("orchestrator-stopped-label"),
-    "Response stopped by you · nothing was created or changed"
+  let label = screen.text("orchestrator-stopped-label");
+  let time = label
+    .strip_prefix("Response stopped by you · ")
+    .and_then(|rest| rest.strip_suffix(" · nothing was created or changed"))
+    .unwrap_or_else(|| panic!("{label}"));
+  assert!(
+    time.len() == 5 && time.as_bytes()[2] == b':',
+    "it says when it was stopped: {label}"
   );
   let turn = newest_turn(&mut screen);
   let chat = screen.db().chats().expect("chats").remove(0).chat.id();

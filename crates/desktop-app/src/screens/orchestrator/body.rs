@@ -298,7 +298,7 @@ fn not_ready(ctx: &mut Ctx, project: &ShownProject, readiness: &Readiness) -> El
   };
   let open = ActionButton::new(
     "orchestrator-open-settings",
-    ButtonKind::Secondary,
+    ButtonKind::Primary,
     ctx.t("orchestrator.notReady.openSettings"),
   )
   .icon(Icon::Settings)

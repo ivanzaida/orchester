@@ -69,9 +69,9 @@ fn a_turn_ends_once_and_its_chat_keeps_replies_actions_and_session_in_order() {
     },
   };
   db.add_chat_action(chat, &action, at(30)).expect("action");
-  assert!(db.end_chat_turn(message, &TurnState::Answered).expect("ended"));
+  assert!(db.end_chat_turn(message, &TurnState::Answered, at(35)).expect("ended"));
   assert!(
-    !db.end_chat_turn(message, &TurnState::Stopped).expect("read"),
+    !db.end_chat_turn(message, &TurnState::Stopped, at(36)).expect("read"),
     "a turn ends once"
   );
 
@@ -115,7 +115,8 @@ fn a_turn_ends_once_and_its_chat_keeps_replies_actions_and_session_in_order() {
       EntryKind::Person {
         message,
         text: body("What runs?"),
-        turn: TurnState::Answered
+        turn: TurnState::Answered,
+        ended: Some(at(35))
       },
       EntryKind::Reply {
         text: "Two runs.".to_owned(),
