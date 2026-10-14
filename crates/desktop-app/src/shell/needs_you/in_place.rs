@@ -2,9 +2,10 @@
 //! (`tasks::needs_you::InPlace`), again as the project's runs and waiting requests change, and the card of the
 //! run's timeline that answers it is the conversation's own (`screens::task::cards`), shown bare inside the
 //! item: the same answers, rules and person gates, sent to the project's runner by whoever gave them. While it is
-//! read the item says so; when it cannot be read, why; when the request is not on the task's latest run, that
-//! it is answered in the conversation. *Open conversation* follows, unless the card carries it in its own
-//! answers row. Once the item no longer waits, a note takes the card's place and says how it went (`note`).
+//! read the item says so; when it cannot be read, why, also when reading it again failed: then nothing answers
+//! it until a reading succeeds, so no answer goes from what may no longer hold; when the request is not on the
+//! task's latest run, that it is answered in the conversation. *Open conversation* follows, unless the card carries it
+//! in its own answers row. Once the item no longer waits, a note takes the card's place and says how it went (`note`).
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -18,9 +19,11 @@ use lurq::{
 };
 use orchester_core::id::{ProjectId, TaskId};
 use orchester_workspace::{
-  background, messages,
+  background,
+  messages::{self, Message},
   tasks::needs_you::{InPlace, Settled, WaitingItem},
 };
+use parking_lot::Mutex;
 
 use super::{item::open_conversation, note::note};
 use crate::{
@@ -73,13 +76,18 @@ struct Read(Arc<InPlace>);
 
 impl DevtoolsInspectable for Read {}
 
-pub(super) struct InPlaceCard;
+pub(super) struct InPlaceCard {
+  /// Why the last reading that ended failed, until one succeeds; a reading under way keeps it.
+  failed: Mutex<Option<Message>>,
+}
 
 impl Component for InPlaceCard {
   type Props = InPlaceProps;
 
   fn create(_ctx: &mut Ctx) -> Self {
-    Self
+    Self {
+      failed: Mutex::new(None),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -118,16 +126,24 @@ impl Component for InPlaceCard {
       });
       return note(ctx, &props.id, (item, &settled), props.conversation.clone());
     }
-    let read = match (state.data, state.error) {
-      (Some(Read(read)), _) => read,
-      (None, Some(error)) => {
-        let error = field_error(&format!("{}-error", props.id), &message_text(ctx, &error));
-        return with_conversation(ctx, &props, error.into());
+    // A failed reading, also of what was read before, locks answering until a reading succeeds: what was
+    // read may no longer hold.
+    let failed = {
+      let mut failed = self.failed.lock();
+      if state.is_fulfilled() {
+        *failed = None;
+      } else if let Some(error) = &state.error {
+        *failed = Some(error.clone());
       }
-      (None, None) => {
-        let reading = loading(&format!("{}-reading", props.id), &ctx.t("needs_you.reading"));
-        return with_conversation(ctx, &props, reading.into());
-      }
+      failed.clone()
+    };
+    if let Some(error) = failed {
+      let error = field_error(&format!("{}-error", props.id), &message_text(ctx, &error));
+      return with_conversation(ctx, &props, error.into());
+    }
+    let Some(Read(read)) = state.data else {
+      let reading = loading(&format!("{}-reading", props.id), &ctx.t("needs_you.reading"));
+      return with_conversation(ctx, &props, reading.into());
     };
     let lost = read.detail.lost_its_runner(online);
     // The panel expands one item at a time, so its decisions follow that item's run, as a tab's follow its own.

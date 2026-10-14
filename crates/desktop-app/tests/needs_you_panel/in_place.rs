@@ -1,7 +1,8 @@
 //! Answering in place as the panel draws it: a question in its raised box, *Open conversation* and *Send
 //! answer* in one row and a line under it, and Enter in the own answer sending it (`Z4HeE3`); an approval and a
 //! question answered while the panel stays open, each turned into its note with nothing of its waiting left
-//! (`FETWe` in `HQ6Y1`); a lower item expanded scrolled into view under the pinned project header (`t7zhw`).
+//! (`FETWe` in `HQ6Y1`); a lower item expanded scrolled into view under the pinned project header (`t7zhw`);
+//! nothing answered in place while reading it again fails.
 
 use lurq::core::ElementRect;
 use orchester_app::routes::{ProjectPage, Route, TaskView};
@@ -270,4 +271,34 @@ fn needs_you_panel_keeps_a_lower_item_it_expands_in_view_under_the_pinned_header
     group.y + group.height <= list.y + 0.5,
     "under the pinned header: {group:?}"
   );
+}
+
+/// Renames the project's table of tool requests to `to` from `from`, so reading the requests fails, or works again.
+fn rename_requests(seeded: &Seeded, (from, to): (&str, &str)) {
+  let database = seeded.repo.join(".orchester").join("orchester.db");
+  rusqlite::Connection::open(database)
+    .expect("the project's database")
+    .execute(&format!("ALTER TABLE {from} RENAME TO {to}"), [])
+    .expect("a real unreadable fixture");
+}
+
+#[test]
+fn needs_you_panel_answers_nothing_in_place_once_reading_it_again_fails() {
+  let (mut window, seeded) = seeded("cards");
+  open(&mut window);
+  let (item, card) = expand_approval(&mut window, "Add serde to the webhook payloads");
+  let (approve, error) = (format!("{card}-approve"), format!("{item}-error"));
+  window.until("Approve once", |window| shows(window, &approve));
+  rename_requests(&seeded, ("tool_approvals", "tool_approvals_away"));
+  window.projects().feed(seeded.project).saved();
+  window.until("why it cannot be read", |window| shows(window, &error));
+  assert!(
+    !shows(&mut window, &approve),
+    "what was read before no longer answers once reading it again failed"
+  );
+  assert!(shows(&mut window, &format!("{item}-conversation")));
+  rename_requests(&seeded, ("tool_approvals_away", "tool_approvals"));
+  window.projects().feed(seeded.project).saved();
+  window.until("the card again", |window| shows(window, &approve));
+  assert!(!shows(&mut window, &error));
 }
