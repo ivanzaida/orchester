@@ -119,6 +119,15 @@ impl RunProcesses {
     })
   }
 
+  /// The executor of programs in `folder`, which resolved to `checked` when its caller looked
+  /// ([`RunProcessScope::checked`]): refused when it resolves elsewhere now.
+  pub fn checked(folder: &Path, checked: &Path, run_created: Timestamp) -> Result<Self, ProcessScopeError> {
+    Ok(Self {
+      scope: RunProcessScope::checked(folder, checked, run_created)?,
+      protected: Mutex::new(Vec::new()),
+    })
+  }
+
   /// Protects the runner or agent CLI by executable, including a copy launched from inside the worktree.
   pub fn protect_executable(&self, executable: &Path) -> io::Result<()> {
     self.protected.lock().push(std::fs::canonicalize(executable)?);

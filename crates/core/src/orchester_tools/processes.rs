@@ -33,6 +33,8 @@ pub enum ProcessScopeError {
   Unresolved { path: PathBuf, kind: io::ErrorKind },
   #[error("the run's worktree is not a directory: {}", .0.display())]
   NotDirectory(PathBuf),
+  #[error("{} now resolves to {}, not to the folder checked before", .path.display(), .resolved.display())]
+  Moved { path: PathBuf, resolved: PathBuf },
 }
 
 impl RunProcessScope {
@@ -53,6 +55,20 @@ impl RunProcessScope {
       // An instant before the epoch excludes nothing, as no process starts before it.
       run_created_micros: u64::try_from(run_created.unix_millis()).map_or(0, |millis| millis.saturating_mul(1000)),
     })
+  }
+
+  /// [`Self::new`] for `folder`, which a caller found to resolve to `checked` (its path with links resolved): refused
+  /// when it resolves elsewhere now, so a link swapped in between that check and this scope never moves the scope.
+  /// Once built, the scope's root stays the resolved path; it is not resolved again.
+  pub fn checked(folder: &Path, checked: &Path, run_created: Timestamp) -> Result<Self, ProcessScopeError> {
+    let scope = Self::new(folder, run_created)?;
+    if scope.root != canonical::plain(checked.to_path_buf()) {
+      return Err(ProcessScopeError::Moved {
+        path: folder.to_path_buf(),
+        resolved: scope.root,
+      });
+    }
+    Ok(scope)
   }
 
   /// Whether a process that started at `started_unix_micros` can be the run's. A program running since before the

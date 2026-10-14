@@ -7,7 +7,9 @@
 //! folder lies in a worktree an agent changes. So a folder is looked at only when it is the runner's QA folder of an
 //! Orchester worktree, `<repo>/.orchester/worktrees/<id>/.tmp/qa/run-<number>-<step>`, reached without any link: its
 //! path with links resolved is the path as written, and so is its `bin/`'s. Only programs whose executables lie in
-//! that `bin/` and that started since its run was created are stopped, with `stop_run_process`'s rules.
+//! that `bin/` and that started since its run was created are stopped, with `stop_run_process`'s rules. The scope that
+//! stops them must resolve to the `bin/` checked, so a link swapped in after the check refuses it, and once built its
+//! root is not resolved again.
 //!
 //! Known gap: on macOS a runner killed while its script still builds leaves the script running (no kill-on-close Job
 //! Object there); an app it starts after the next holder looked is not stopped by this.
@@ -84,7 +86,8 @@ fn stop_in(folder: &Path, since: Timestamp) {
     tracing::warn!(bin = %bin.display(), "a QA folder's bin is a link; nothing is stopped there");
     return;
   };
-  let processes = match RunProcesses::new(&bin, since) {
+  // `bin` resolved to itself just now; a link swapped in since refuses the scope rather than move it elsewhere.
+  let processes = match RunProcesses::checked(&bin, &bin, since) {
     Ok(processes) => processes,
     Err(error) => {
       tracing::warn!(%error, bin = %bin.display(), "a QA folder's programs cannot be looked at");
