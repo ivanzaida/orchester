@@ -38,7 +38,12 @@ fn file(path: &str, source: ChangeSource) -> ChangedFile {
 
 /// One route of every screen, and every tab, query and file a route can name.
 fn every_route() -> Vec<Route> {
-  let mut all = vec![Route::AllProjects, Route::Settings];
+  let mut all = vec![
+    Route::AllProjects,
+    Route::AddProject(None),
+    Route::AddProject(Some(std::path::PathBuf::from(AWKWARD))),
+    Route::Settings,
+  ];
   all.extend(Screen::ALL.into_iter().filter_map(ProjectPage::of).map(at));
   all.extend(OverviewTab::ALL.map(|tab| at(ProjectPage::Overview(tab))));
   all.extend(TaskListTab::ALL.map(|tab| at(ProjectPage::Tasks(TaskList::new(tab)))));
@@ -96,6 +101,11 @@ fn paths_are_the_documented_ones() {
   let root = format!("/project/{PROJECT}");
   let paths = [
     (Route::AllProjects, "/".to_owned()),
+    (Route::AddProject(None), "/add-project".to_owned()),
+    (
+      Route::AddProject(Some(std::path::PathBuf::from("C:/work/a b"))),
+      "/add-project?folder=C%3A/work/a%20b".to_owned(),
+    ),
     (Route::Settings, "/settings".to_owned()),
     (at(ProjectPage::Overview(OverviewTab::Running)), root.clone()),
     (

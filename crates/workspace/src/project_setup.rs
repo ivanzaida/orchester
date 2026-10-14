@@ -145,12 +145,18 @@ pub fn github_connection_name(host: &GitHubHost) -> Message {
   Message::new("appMcp.githubConnectionName").with("host", host.to_string())
 }
 
-/// What Create makes: the project, and from the folder's detection the GitHub repository it links and the
-/// account it expects; the connection it adds for the repository's host is named `connection_name`.
+/// What Create makes: the project, and the GitHub repository detected in its folder, if any.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Creation {
   pub new: NewProject,
-  pub detection: Option<Detection>,
+  pub link: Option<GitHubLink>,
+}
+
+/// The GitHub repository a detection found, which Create links: the account the project expects, and the
+/// name of the connection it adds for the repository's host ([`github_connection_name`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GitHubLink {
+  pub detection: Detection,
   pub expected: Option<GitHubLogin>,
   pub connection_name: String,
 }
@@ -158,13 +164,12 @@ pub struct Creation {
 /// Creates the project in its folder and adds it to the workspace, then records the GitHub repository
 /// detected in the folder, each as an operation of `activity`. A link that fails is reported there only:
 /// the project exists and opens either way, and can be linked from Project settings.
-pub async fn create(workspace: &Workspace, activity: &Activity, creation: Creation) -> Result<OpenProject, CreateFailure> {
-  let Creation {
-    new,
-    detection,
-    expected,
-    connection_name,
-  } = creation;
+pub async fn create(
+  workspace: &Workspace,
+  activity: &Activity,
+  creation: Creation,
+) -> Result<OpenProject, CreateFailure> {
+  let Creation { new, link: github } = creation;
   let attempted = new.clone();
   let running = activity.start(operations::project_create(new.project.name().as_str(), &new.repo_root));
   let workspace = workspace.clone();
@@ -181,20 +186,19 @@ pub async fn create(workspace: &Workspace, activity: &Activity, creation: Creati
     Ok(_) => running.finish(),
     Err(failure) => running.fail(failure.message.clone()),
   }
-  if let (Ok(project), Some(detection)) = (&created, detection) {
-    link(activity, project, detection, expected, connection_name).await;
+  if let (Ok(project), Some(github)) = (&created, github) {
+    link(activity, project, github).await;
   }
   created
 }
 
 /// Records the GitHub connection and link of a created project; what failed is in `activity`.
-async fn link(
-  activity: &Activity,
-  project: &OpenProject,
-  detection: Detection,
-  expected: Option<GitHubLogin>,
-  name: String,
-) {
+async fn link(activity: &Activity, project: &OpenProject, github: GitHubLink) {
+  let GitHubLink {
+    detection,
+    expected,
+    connection_name: name,
+  } = github;
   let Some(found) = detection.github() else {
     return;
   };

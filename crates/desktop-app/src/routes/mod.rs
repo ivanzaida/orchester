@@ -1,7 +1,8 @@
 //! Where the window can be: typed routes and the router paths they stand for. A path is all a tab's
 //! history keeps, so everything a person can go back to is part of it, its query included.
 //!
-//! Paths: `/` is All projects and `/settings` the app's settings. A project's screens start at
+//! Paths: `/` is All projects, `/add-project` Add project (`?folder=` the folder it starts with) and
+//! `/settings` the app's settings. A project's screens start at
 //! `/project/<id>`, its Overview (`?tab=` the tab of its task list), and add the screen's segment, e.g.
 //! `/project/<id>/pipelines`. The Tasks list is `/project/<id>/tasks` (`?tab=`, `?q=` the search,
 //! `?highlight=` the task a Create just added) and New task `/project/<id>/tasks/new`. A task's page is
@@ -34,9 +35,11 @@ mod task;
 mod tasks;
 mod tools;
 
+use std::path::PathBuf;
+
 use orchester_core::id::ProjectId;
 
-use self::query::Params;
+use self::query::{Params, with_query};
 pub use self::{
   accounts::{AccountsPanel, AccountsView},
   connections::{ConnectionsTab, ConnectionsView, NewConnection},
@@ -52,6 +55,9 @@ pub use self::{
 
 const PROJECT: &str = "project";
 const SETTINGS: &str = "settings";
+const ADD_PROJECT: &str = "add-project";
+/// The query parameter of the folder Add project starts with.
+const FOLDER: &str = "folder";
 const TASKS: &str = "tasks";
 const CONNECTIONS: &str = "connections";
 const NEW: &str = "new";
@@ -70,6 +76,8 @@ const AGENT_PATTERN: &str = "/project/:project/agents/:agent";
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Route {
   AllProjects,
+  /// Add project, with the folder it starts with, e.g. one Open folder… found no project in.
+  AddProject(Option<PathBuf>),
   Settings,
   /// Settings › Accounts, with the account it shows and its panel.
   Accounts(AccountsView),
@@ -89,6 +97,7 @@ impl Route {
   pub const fn screen(&self) -> Screen {
     match self {
       Self::AllProjects => Screen::AllProjects,
+      Self::AddProject(_) => Screen::AddProject,
       Self::Settings | Self::Accounts(_) => Screen::Settings,
       Self::Project(_, page) => page.screen(),
     }
@@ -97,7 +106,7 @@ impl Route {
   pub const fn project(&self) -> Option<ProjectId> {
     match self {
       Self::Project(project, _) => Some(*project),
-      Self::AllProjects | Self::Settings | Self::Accounts(_) => None,
+      Self::AllProjects | Self::AddProject(_) | Self::Settings | Self::Accounts(_) => None,
     }
   }
 
@@ -113,6 +122,10 @@ impl Route {
   pub fn path(&self) -> String {
     match self {
       Self::AllProjects => "/".to_owned(),
+      Self::AddProject(folder) => with_query(
+        format!("/{ADD_PROJECT}"),
+        &[(FOLDER, folder.as_deref().and_then(std::path::Path::to_str))],
+      ),
       Self::Settings => format!("/{SETTINGS}"),
       Self::Accounts(view) => view.path(format!("/{SETTINGS}"), (TAB, ACCOUNTS)),
       Self::Project(project, page) => page.path(&format!("/{PROJECT}/{project}")),
@@ -136,6 +149,7 @@ impl Route {
     }
     let route = match segments.as_slice() {
       [] => Self::AllProjects,
+      [ADD_PROJECT] => Self::AddProject(params.take(FOLDER)?.map(PathBuf::from)),
       [SETTINGS] => Self::settings(&mut params)?,
       [PROJECT, project, page @ ..] => {
         let project = project.parse().map_err(|_| RouteError::ProjectId {

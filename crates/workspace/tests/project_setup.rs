@@ -147,7 +147,11 @@ fn setup_readiness_needs_a_folder_that_is_a_repository() {
   use orchester_core::{connection::GitHubLogin, repository::DetectionState};
   use orchester_workspace::project_setup::{Readiness, readiness};
   assert_eq!(readiness(false, None), Readiness::NoFolder);
-  assert_eq!(readiness(true, None), Readiness::Ready, "a detection still running never holds Create back");
+  assert_eq!(
+    readiness(true, None),
+    Readiness::Ready,
+    "a detection still running never holds Create back"
+  );
   assert_eq!(
     readiness(true, Some(&DetectionState::NotAGitRepository)),
     Readiness::NotARepository
@@ -159,7 +163,11 @@ fn setup_readiness_needs_a_folder_that_is_a_repository() {
     DetectionState::NotSignedIn,
     DetectionState::NoAccess { account },
   ] {
-    assert_eq!(readiness(true, Some(&state)), Readiness::Ready, "{state:?} is GitHub's, optional");
+    assert_eq!(
+      readiness(true, Some(&state)),
+      Readiness::Ready,
+      "{state:?} is GitHub's, optional"
+    );
   }
 }
 
@@ -195,9 +203,7 @@ fn setup_creates_the_project_and_reports_a_second_one_in_the_folder() {
     }
     .validate()
     .expect("a valid draft"),
-    detection: None,
-    expected: None,
-    connection_name: "GitHub".to_owned(),
+    link: None,
   };
   let runtime = tokio::runtime::Runtime::new().expect("a runtime");
   let activity = Activity::new();

@@ -32,6 +32,7 @@
     },
     "screens": {
       "allProjects": "All projects",
+      "addProject": "Add project",
       "settings": "Settings",
       "overview": "Overview",
       "tasks": "Tasks",
@@ -195,7 +196,6 @@
       "openFolderDetail": "A folder that already has an Orchester project",
       "pickTitle": "Open a folder that has an Orchester project",
       "addProject": "Add project",
-      "addProjectUnavailable": "Not in this app yet: set up new projects in the previous Orchester app.",
       "openInNewTab": "Open in new tab",
       "folder": {
         "checking": "Opening folder…",

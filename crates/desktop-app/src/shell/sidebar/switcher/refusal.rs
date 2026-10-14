@@ -2,8 +2,8 @@
 //! in `VrS47`): on `surface_base`, radius 6, 8 over it, 10 under and at its sides; a 14 icon, then the
 //! title in 12.5/500, the folder in Geist Mono 11 and what it means in 11.5, 3 apart; the actions under
 //! them, 8 apart and indented past the icon. While the folder's data is read it says so; a refused
-//! folder says why and offers another folder, the repository's top folder, or the command that makes it
-//! a repository.
+//! folder says why and offers another folder, the repository's top folder, the command that makes it
+//! a repository, or setting a project up in it (Add project with the folder chosen).
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -21,13 +21,14 @@ use orchester_workspace::messages::Message;
 
 use super::{CheckAction, FolderRefusal, PickAction};
 use crate::{
+  navigation::Navigation,
+  routes::Route,
   theme::{ExtraSpacing, ExtraTypography, IconSize, ShellSpacing, ShellText},
   ui::{
     button::{ActionButton, ButtonKind},
     code_box::CodeBox,
     icon::{Icon, icon},
     message::message_text,
-    unavailable::with_reason,
   },
 };
 
@@ -93,7 +94,7 @@ pub fn block(ctx: &mut Ctx, step: &FolderStep, picks: &Picks) -> Option<Element>
         Icon::Info,
         title,
         body,
-        actions(ctx, Some(refusal), picks),
+        actions(ctx, Some((folder, refusal)), picks),
       )
     }
     FolderStep::PickFailed(reason) => (
@@ -184,11 +185,12 @@ fn words(ctx: &Ctx, refusal: &FolderRefusal) -> (Arc<str>, Option<String>) {
   }
 }
 
-/// What the person can do about `refusal` (none when the picker failed); another folder always.
-fn actions(ctx: &mut Ctx, refusal: Option<&FolderRefusal>, picks: &Picks) -> Vec<Element> {
+/// What the person can do about the `refusal` of a folder (none when the picker failed); another folder
+/// always.
+fn actions(ctx: &mut Ctx, refusal: Option<(&PathBuf, &FolderRefusal)>, picks: &Picks) -> Vec<Element> {
   let mut buttons: Vec<Element> = Vec::new();
   let mut extra: Option<Element> = None;
-  match refusal {
+  match refusal.map(|(_, refusal)| refusal) {
     Some(FolderRefusal::NotRepository) => {
       extra = Some(
         CodeBox::new(
@@ -211,18 +213,17 @@ fn actions(ctx: &mut Ctx, refusal: Option<&FolderRefusal>, picks: &Picks) -> Vec
       );
     }
     Some(FolderRefusal::NoProject) => {
-      let reason = ctx.t("shell.switcher.addProjectUnavailable");
+      let navigation = Navigation::of(ctx);
+      let folder = refusal.map(|(folder, _)| folder.clone());
       buttons.push(
-        with_reason(
-          ActionButton::new(
-            "switcher-folder-set-up",
-            ButtonKind::Primary,
-            ctx.t("shell.switcher.folder.setUp"),
-          )
-          .unavailable(reason.clone()),
-          "switcher-folder-set-up-reason",
-          &reason,
+        ActionButton::new(
+          "switcher-folder-set-up",
+          ButtonKind::Primary,
+          ctx.t("shell.switcher.folder.setUp"),
         )
+        .icon(Icon::Plus)
+        .in_form()
+        .on_click(move || navigation.go(Route::AddProject(folder.clone())))
         .into(),
       );
     }

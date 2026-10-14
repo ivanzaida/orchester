@@ -83,7 +83,12 @@ fn project_list_welcomes_a_session_without_projects_until_it_listed_one() {
 
 #[test]
 fn project_list_rows_say_where_each_project_stands() {
-  let phases = [TaskPhase::Running, TaskPhase::Waiting, TaskPhase::Stuck, TaskPhase::Draft];
+  let phases = [
+    TaskPhase::Running,
+    TaskPhase::Waiting,
+    TaskPhase::Stuck,
+    TaskPhase::Draft,
+  ];
   let online = ListedProject::of(&entry(false), Some(&readable(&phases)), Some((&RunnerState::Online, 1)));
   assert_eq!(online.standing, Standing::Opens(RunnerShown::Online));
   assert_eq!(
@@ -109,7 +114,10 @@ fn project_list_rows_say_where_each_project_stands() {
   };
   let offline = ListedProject::of(&entry(false), None, Some((&failed, 0)));
   assert_eq!(offline.standing, Standing::Opens(RunnerShown::Offline));
-  assert_eq!(offline.counts, None, "a dash until the counts are read, never a made-up 0");
+  assert_eq!(
+    offline.counts, None,
+    "a dash until the counts are read, never a made-up 0"
+  );
 
   let missing = ListedProject::of(&entry(true), Some(&readable(&phases)), None);
   assert_eq!(missing.standing, Standing::FolderMissing);
@@ -150,5 +158,8 @@ fn project_list_remove_forgets_only_the_list_entry() {
     kontur.repo_root.join(".orchester").is_dir(),
     "the project's data stays on disk"
   );
-  assert!(workspace.open(&kontur.repo_root).is_ok(), "opening the folder brings it back");
+  assert!(
+    workspace.open(&kontur.repo_root).is_ok(),
+    "opening the folder brings it back"
+  );
 }
