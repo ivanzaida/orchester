@@ -68,6 +68,7 @@
       "usageUnread": "Usage not read yet",
       "ofBudget": "of {{budget}} daily project budget",
       "noBudget": "No daily budget for {{project}}",
+      "memoryRow": "Not a task: {{project}} memory",
       "blocked": {
         "title": "Blocked · {{task}}"
       },

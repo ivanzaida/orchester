@@ -1,6 +1,6 @@
 //! Where the Overview's actions lead: a tab is the route's, a row and a run open their task's Summary, a
 //! *Needs you* card opens its task where it is decided, *View all tasks* the Tasks list and New task its
-//! form. Import resources is not built: it stays locked and goes nowhere.
+//! form. Import resources and reviewing memory records are not built: they stay locked and go nowhere.
 
 use orchester_app::routes::{OverviewTab, ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView};
 use orchester_core::project::TaskKey;
@@ -130,6 +130,40 @@ fn overview_memory_records_card_says_their_review_is_not_built_and_goes_nowhere(
     seeded.route(OverviewTab::Running),
     "an unavailable action goes nowhere"
   );
+}
+
+#[test]
+fn overview_needs_you_tab_lists_the_memory_records_after_its_tasks_and_counts_them() {
+  let mut seeded = Seeded::overview("tasks-memory", OverviewTab::NeedsYou);
+  let tasks = seeded.tasks();
+  let count = BoardTab::NeedsYou.count(&tasks);
+  assert_eq!(count, tasks.needs_you(), "the tab counts what every Needs you counts");
+  let label = seeded.text("overview-tab-needs_you-label");
+  assert!(label.ends_with(&format!(" {count}")), "{label}");
+  let rows = seeded.ids("overview-row-");
+  assert_eq!(rows.len(), BoardTab::NeedsYou.rows(&tasks, 6, ", ").len());
+  assert_eq!(
+    seeded.text("overview-memory-row-title"),
+    "2 memory records wait for approval"
+  );
+  assert_eq!(seeded.text("overview-memory-row-detail"), "Not a task: Kontur memory");
+  assert_eq!(seeded.text("overview-memory-row-action"), "Review records");
+  assert_eq!(
+    seeded.text("overview-memory-row-reason-text"),
+    "Reviewing memory records isn't built in this app yet."
+  );
+  seeded.click("overview-memory-row-action");
+  assert_eq!(
+    seeded.window.navigation().route_now(),
+    seeded.route(OverviewTab::NeedsYou),
+    "an unavailable action goes nowhere"
+  );
+}
+
+#[test]
+fn overview_other_tabs_have_no_memory_row() {
+  let mut seeded = Seeded::overview("tasks-memory", OverviewTab::Running);
+  assert!(!seeded.shows("overview-memory-row"));
 }
 
 #[test]

@@ -9,7 +9,7 @@ use std::{num::NonZeroU32, sync::Arc};
 use orchester_core::{id::TaskId, run::TaskPhase, task::Task, time::Timestamp, tokens::compact_tokens};
 
 use super::{
-  attention::{self, NeedItem},
+  attention::{self, NeedItem, NeedKind},
   data::ProjectTasks,
   list::{Latest, TaskRow, phase_of},
   overview::Pulse,
@@ -52,14 +52,30 @@ impl BoardTab {
     }
   }
 
-  /// Tasks in the tab.
+  /// Tasks in the tab, and in *Needs you* the project's lines ([`Self::project_rows`]).
   pub fn count(self, tasks: &ProjectTasks) -> usize {
     let waiting = self.waiting(tasks);
-    tasks
+    let held = tasks
       .tasks
       .iter()
       .filter(|task| self.holds(task, tasks, &waiting))
-      .count()
+      .count();
+    held + waiting.iter().filter(|item| item.kind == NeedKind::Memory).count()
+  }
+
+  /// The tab's lines that are no task's, after its tasks and outside their limit: in *Needs you* the
+  /// project's memory records waiting for approval (`Row · project memory` `S9Zgf`), *Not a task:
+  /// Kontur memory* with `project` the project's name.
+  pub fn project_rows(self, tasks: &ProjectTasks, project: &str) -> Vec<ProjectRow> {
+    self
+      .waiting(tasks)
+      .into_iter()
+      .filter(|item| item.kind == NeedKind::Memory)
+      .map(|item| ProjectRow {
+        detail: Message::new("overview.board.memoryRow").with("project", project.to_owned()),
+        item,
+      })
+      .collect()
   }
 
   /// The newest `limit` tasks of the tab, newest first, with their tags and what blocks them, blocking
@@ -88,6 +104,14 @@ impl BoardTab {
       })
       .collect()
   }
+}
+
+/// A line of a tab that is no task's: what waits, worded as its card ([`NeedItem::title`]), and what it
+/// is about.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProjectRow {
+  pub item: NeedItem,
+  pub detail: Message,
 }
 
 /// The Overview's figures, counted from the tasks' latest runs.

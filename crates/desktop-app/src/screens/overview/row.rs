@@ -1,7 +1,8 @@
 //! One task in the Overview's list (`Overview row` `XirGV`): its title with its first two tags, its key,
 //! workflow status and where it stands under them, its run's status with the step it is at, and its
 //! priority's icon; 10 over and under it and 14 at its sides, on a `border` line. A press opens the task's
-//! Summary; rows are pointer-only.
+//! Summary; rows are pointer-only. After the tasks, a line that is no task's (`Row · project memory`
+//! `S9Zgf`): what waits, what it is about and its action.
 
 use lurq::{
   app::{
@@ -13,19 +14,24 @@ use lurq::{
   node::{Style, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
-use orchester_workspace::tasks::list::{RunStage, TaskRow};
+use orchester_workspace::tasks::{
+  board::ProjectRow,
+  list::{RunStage, TaskRow},
+};
 
 use super::open_task;
 use crate::{
   routes::TaskTab,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
+    button::{ActionButton, ButtonKind},
     chip::TagChip,
-    icon::icon,
+    icon::{Icon, icon},
     message::message_text,
     pressable::pressable,
     status::{Status, StatusChip, priority_look, workflow_key},
     tooltip::Truncated,
+    unavailable::reason_line,
   },
 };
 
@@ -33,6 +39,51 @@ use crate::{
 const SHOWN_TAGS: usize = 2;
 /// The status column (`Status` `wqb5q`).
 const STATUS_WIDTH: f32 = 200.0;
+/// The project's line's id, apart from the tasks' `overview-row-<key>`.
+const PROJECT_ROW: &str = "overview-memory-row";
+
+/// The project's memory records waiting for approval, in the brain's `warning` (`S9Zgf`). No screen
+/// reviews memory records yet: *Review records* stays in place and says so, as the *Needs you* card's.
+pub(super) fn project_row(ctx: &Ctx, row: &ProjectRow) -> Row {
+  let reason = ctx.t("overview.needs.memoryUnavailable");
+  let text = Column::new()
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .spacing(ExtraSpacing::Tight.role())
+    .child(
+      Text::new(&message_text(ctx, &row.item.title))
+        .id(format!("{PROJECT_ROW}-title"))
+        .variant(ExtraTypography::Strong.role())
+        .width(Dimension::Pct(100.0)),
+    )
+    .child(
+      Text::new(&message_text(ctx, &row.detail))
+        .id(format!("{PROJECT_ROW}-detail"))
+        .variant(TypographyStyle::Caption)
+        .width(Dimension::Pct(100.0)),
+    )
+    .child(reason_line(&format!("{PROJECT_ROW}-reason"), &reason));
+  let review = ActionButton::new(
+    format!("{PROJECT_ROW}-action"),
+    ButtonKind::Ghost,
+    ctx.t("overview.needs.action.reviewRecords"),
+  )
+  .icon(Icon::ArrowUpRight)
+  .unavailable(reason);
+  Row::new()
+    .id(PROJECT_ROW)
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(
+      ExtraSpacing::Inset.role(),
+      ExtraSpacing::Loose.role(),
+    ))
+    .spacing(ExtraSpacing::Loose.role())
+    .align_items(Alignment::Center)
+    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(icon(Icon::Brain, IconSize::Md, PaletteColor::Warning))
+    .child(text)
+    .child(Row::new().flex_shrink(0.0).child(review))
+}
 
 pub(super) fn row(ctx: &mut Ctx, project: ProjectId, row: &TaskRow) -> Button {
   let key = &row.key;

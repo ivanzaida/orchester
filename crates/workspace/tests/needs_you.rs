@@ -20,6 +20,8 @@ use orchester_core::{
   store::{ActivityStore, MergeStore},
 };
 use orchester_workspace::tasks::{
+  attention::NeedKind,
+  board::BoardTab,
   data::ProjectTasks,
   needs_you::{WaitingItem, WaitingKind},
 };
@@ -413,4 +415,37 @@ fn needs_you_lists_a_limit_stop_work_ready_to_merge_and_the_memory_waiting_as_on
   assert_eq!(items[2].since, at(80), "it waits since its oldest record");
   assert!(items[2].task.is_none());
   assert_eq!(tasks.needs_you(), 3);
+}
+
+#[test]
+fn needs_you_tab_lists_the_memory_waiting_after_its_tasks_and_counts_it() {
+  let mut fixture = Fixture::new();
+  let passed = fixture.task("Write docs", at(10));
+  let mut done = fixture.started_run(passed, at(20));
+  fixture.succeed(&mut done, at(30));
+  let records = [
+    proposed(&done, "Index with tree-sitter.", 40),
+    proposed(&done, "Docs live in docs/.", 50),
+  ];
+  fixture
+    .db
+    .add_memories(&records)
+    .expect("the records wait for approval");
+  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  assert_eq!(BoardTab::NeedsYou.rows(&tasks, 0, ", ").len(), 0);
+  let lines = BoardTab::NeedsYou.project_rows(&tasks, "Kontur");
+  let [line] = lines.as_slice() else {
+    panic!("the records are one line: {lines:?}");
+  };
+  assert_eq!(line.item.kind, NeedKind::Memory);
+  assert_eq!(line.item.title.key, "overview.needs.title.memoryOther");
+  assert_eq!(line.detail.key, "overview.board.memoryRow");
+  assert_eq!(line.detail.args, [("project", "Kontur".to_owned())]);
+  assert_eq!(
+    BoardTab::NeedsYou.count(&tasks),
+    tasks.needs_you(),
+    "the tab counts what every Needs you counts"
+  );
+  assert_eq!(BoardTab::NeedsYou.count(&tasks), 2, "the task ready to merge and the records");
+  assert!(BoardTab::Running.project_rows(&tasks, "Kontur").is_empty());
 }

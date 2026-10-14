@@ -1,5 +1,6 @@
 //! The Overview's tasks (`Tasks` `xMAkd`): on a panel, the tabs Running, Needs you, Queued and Failed
-//! with how many tasks each holds, the newest tasks of the chosen one (`row`), and how many tasks are
+//! with how many lines each holds, the newest tasks of the chosen one (`row`) and after them the lines
+//! that are no task's (the memory records waiting, in Needs you `mEvfK`), and how many tasks are
 //! active and completed with the way to the whole list (`Footer` `nSuzk`). While the tasks are read the
 //! tabs count `—` over a reading line (`Reading` `X59I5`). A tab is the route's, so Back returns to it.
 
@@ -15,7 +16,7 @@ use lurq::{
 use orchester_core::id::ProjectId;
 use orchester_workspace::tasks::{board::BoardTab, data::ProjectTasks, overview::footer};
 
-use super::row::row;
+use super::row::{project_row, row};
 use crate::{
   navigation::Navigation,
   routes::{OverviewTab, ProjectPage, Route, TaskList, TaskListTab},
@@ -49,11 +50,12 @@ pub(super) fn section(
     Some(tasks) => {
       let separator = ctx.t("overview.listSeparator");
       let rows = board_tab(tab).rows(tasks, SHOWN, &separator);
-      let shown: Vec<Element> = if rows.is_empty() {
-        vec![empty_tab(ctx, tab).into()]
-      } else {
-        rows.iter().map(|shown| row(ctx, project, shown).into()).collect()
-      };
+      let others = board_tab(tab).project_rows(tasks, name);
+      let mut shown: Vec<Element> = rows.iter().map(|shown| row(ctx, project, shown).into()).collect();
+      shown.extend(others.iter().map(|other| project_row(ctx, other).into()));
+      if shown.is_empty() {
+        shown.push(empty_tab(ctx, tab).into());
+      }
       panel.with_children(shown).child(footer_row(ctx, project, tasks))
     }
   };
