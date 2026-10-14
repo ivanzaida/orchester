@@ -13,7 +13,7 @@ use orchester_core::{
   id::StepExecutionId,
   memory::StepFate,
   revision::Revision,
-  run::{Checkpoint, RunLimit, RunStatus, StepFailure, StepOutcome, StepOutput},
+  run::{Checkpoint, Invocation, RunLimit, RunStatus, StepFailure, StepOutcome, StepOutput},
   store::ActivityStore,
   time::Timestamp,
 };
@@ -42,10 +42,6 @@ impl RunTask {
     finished: Result<Finished, StoreError>,
   ) -> Result<(), ExecutionError> {
     let active = self.retire_worker(execution);
-    // The agent's turn is over: its QA app stops and frees the QA slot, whatever comes next for the step.
-    if let Some(active) = &active {
-      self.qa.end(active.invocation.id);
-    }
     let finished = finished?;
     let Some(active) = active else {
       return Ok(());
@@ -158,19 +154,19 @@ impl RunTask {
       self.keep_handoff(execution, StepFate::Failed);
       return self.fail_judged(execution, failure, active.judged.clone());
     }
-    self.pass(execution, active, output.text)
+    self.pass(execution, (&active.workspace, &active.invocation), output.text)
   }
 
-  /// A step its agent or command finished with `output`: its work joins the run's branch and the
-  /// step passes — a gated one proposes `output` as its next plan — or it fails when its work cannot
-  /// be committed or merged.
+  /// A step its agent or command finished with `output`, working in `workspace` (problems are reported around
+  /// `invocation`): its work joins the run's branch and the step passes — a gated one proposes `output` as its next
+  /// plan — or it fails when its work cannot be committed or merged.
   pub(in super::super) fn pass(
     &mut self,
     execution: StepExecutionId,
-    active: &Active,
+    (workspace, invocation): (&Workspace, &Invocation),
     output: String,
   ) -> Result<(), ExecutionError> {
-    match self.integrate(execution, active) {
+    match self.integrate(execution, workspace) {
       Ok(Integrated::Done) if self.run.is_gated(execution).map_err(RecordError::from)? => {
         self.propose(execution, output)
       }
@@ -179,7 +175,7 @@ impl RunTask {
         self.transition(|run, now| run.complete_step(execution, now))
       }
       Ok(Integrated::Conflict { branch, files }) => {
-        self.report(&active.invocation, RunnerProblem::MergeConflict { branch, files })?;
+        self.report(invocation, RunnerProblem::MergeConflict { branch, files })?;
         self.keep_handoff(execution, StepFate::Failed);
         self.fail(execution, StepFailure::MergeConflict)
       }
@@ -188,7 +184,7 @@ impl RunTask {
         let problem = RunnerProblem::CheckpointFailed {
           detail: error.to_string(),
         };
-        self.report(&active.invocation, problem)?;
+        self.report(invocation, problem)?;
         self.keep_handoff(execution, StepFate::Failed);
         self.fail(execution, StepFailure::CheckpointFailed)
       }
@@ -197,10 +193,10 @@ impl RunTask {
 
   /// Commits a passed step's work and brings it onto the run's branch: in the run's worktree it is
   /// there already; from a worktree of its own it is merged, and that worktree removed.
-  fn integrate(&mut self, execution: StepExecutionId, active: &Active) -> Result<Integrated, IntegrateError> {
+  fn integrate(&mut self, execution: StepExecutionId, workspace: &Workspace) -> Result<Integrated, IntegrateError> {
     let message = self.commit_message(execution, None);
-    let committed = checkpoint::commit(active.workspace.path(), &message)?;
-    let Workspace::Own { branch, owner, .. } = &active.workspace else {
+    let committed = checkpoint::commit(workspace.path(), &message)?;
+    let Workspace::Own { branch, owner, .. } = workspace else {
       if let Some(revision) = committed {
         self.checkpoint(execution, revision)?;
       }

@@ -1,20 +1,31 @@
 //! `start_qa_app` (`orchester_core::orchester_tools::QaAppStart`): the runner takes the computer's QA slot
-//! ([`slots`]), waiting while another run's QA app holds it, runs the worktree's `tools/qa-app.ps1` ([`script`]) and
-//! keeps the app it started for the invocation, so `call_run_app` without a pid reaches it through its exact
-//! discovery file. Starting again in the same invocation replaces the app and keeps the slot. When the invocation
-//! ends, its app is stopped with everything it started inside the worktree and the slot is freed; a start still
-//! waiting for the slot gives up.
+//! ([`slots`]), waiting while another run's QA app holds it, stops what a holder that died left running
+//! ([`leftover`]), runs the worktree's `tools/qa-app.ps1` ([`script`]) and keeps the app it started for the
+//! invocation, so `call_run_app` without a pid reaches it through its exact discovery file.
+//!
+//! Each invocation has its state ([`InvocationQa`]), shared by its tools and the runner: its starts run one at a time
+//! (a second waits for the first, then replaces its app and keeps the slot), and it ends once. When the invocation
+//! ends ([`QaApps::end`]) — its turn is over, its run stopped, paused or failed — its app is stopped with everything it
+//! started inside the worktree and the slot freed, off the async workers; a start still waiting for the slot, or
+//! whose script still runs, gives up and ends the script's tree. While the invocation waits for a person inside its
+//! turn (a tool approval, a question; [`QaApps::release`]) its app is stopped and the slot freed as well, so a person's
+//! wait never holds the computer's slot: the agent starts the app again once it goes on.
 
+mod leftover;
 mod script;
 mod slots;
 mod task;
+mod tree;
 
 use std::{
-  collections::{HashMap, HashSet},
+  collections::HashMap,
   fmt::Write as _,
   num::NonZeroU32,
   path::{Path, PathBuf},
-  sync::Arc,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
   thread,
   time::{Duration, Instant},
 };
@@ -33,12 +44,25 @@ pub use self::slots::QaSlots;
 /// How often a start that waits for the QA slot tries again.
 const SLOT_POLL: Duration = Duration::from_millis(500);
 
-/// The QA apps the runner's steps started, by the invocation that started each, and the computer's QA slots.
+/// The QA state of the runner's invocations that have not ended, and the computer's QA slots.
 pub(in crate::execution) struct QaApps {
   slots: QaSlots,
-  apps: Mutex<HashMap<InvocationId, QaApp>>,
-  /// Invocations that ended: a start of theirs still under way stops what it started and gives up.
-  ended: Mutex<HashSet<InvocationId>>,
+  invocations: Mutex<HashMap<InvocationId, Arc<InvocationQa>>>,
+}
+
+/// One invocation's QA app: its starts one at a time, the app it keeps, and whether it ended. Its tools hold it as long
+/// as they live, so a start after the end still sees the end; the runner forgets it once the invocation ended.
+#[derive(Default)]
+pub(in crate::execution::step) struct InvocationQa {
+  ended: AtomicBool,
+  starting: Mutex<()>,
+  app: Mutex<Option<QaApp>>,
+}
+
+impl InvocationQa {
+  fn ended(&self) -> bool {
+    self.ended.load(Ordering::Acquire)
+  }
 }
 
 /// A started QA app with the slot it holds; the app is stopped before the slot is freed.
@@ -50,6 +74,7 @@ struct QaApp {
 /// A QA app at work, stopped when dropped.
 struct Running {
   pid: NonZeroU32,
+  /// Its discovery file, with links resolved when it was started.
   discovery: PathBuf,
   processes: RunProcesses,
 }
@@ -73,28 +98,45 @@ impl QaApps {
   pub(in crate::execution) fn new(slots: QaSlots) -> Self {
     Self {
       slots,
-      apps: Mutex::new(HashMap::new()),
-      ended: Mutex::new(HashSet::new()),
+      invocations: Mutex::new(HashMap::new()),
     }
   }
 
-  /// `invocation` ended: its QA app is stopped and its slot freed.
-  pub(in crate::execution) fn end(&self, invocation: InvocationId) {
-    self.ended.lock().insert(invocation);
-    // Dropped outside the lock: stopping the app waits for it to close.
-    let app = self.apps.lock().remove(&invocation);
-    drop(app);
+  /// The QA state of `invocation`, which is starting.
+  fn register(&self, invocation: InvocationId) -> Arc<InvocationQa> {
+    Arc::clone(self.invocations.lock().entry(invocation).or_default())
   }
 
-  fn ended(&self, invocation: InvocationId) -> bool {
-    self.ended.lock().contains(&invocation)
+  /// `invocation` ended: its QA app stops and its slot is freed, and a start of its still under way gives up.
+  pub(in crate::execution) fn end(&self, invocation: InvocationId) {
+    let Some(state) = self.invocations.lock().remove(&invocation) else {
+      return;
+    };
+    state.ended.store(true, Ordering::Release);
+    stop_aside(state.app.lock().take());
+  }
+
+  /// `invocation` waits for a person inside its turn: its QA app stops and its slot is freed meanwhile.
+  pub(in crate::execution) fn release(&self, invocation: InvocationId) {
+    let state = self.invocations.lock().get(&invocation).cloned();
+    if let Some(state) = state {
+      stop_aside(state.app.lock().take());
+    }
+  }
+}
+
+/// Stops `app` and frees its slot on a thread of its own: closing an app takes up to a few seconds, which no async
+/// worker waits for.
+fn stop_aside(app: Option<QaApp>) {
+  if let Some(app) = app {
+    thread::spawn(move || drop(app));
   }
 }
 
 /// The QA app tools of one invocation.
 pub(in crate::execution::step) struct StepQa {
   pub(in crate::execution::step) apps: Arc<QaApps>,
-  pub(in crate::execution::step) invocation: InvocationId,
+  pub(in crate::execution::step) state: Arc<InvocationQa>,
   /// The QA folder's name, `.tmp/qa/<name>/` in the worktree.
   pub(in crate::execution::step) name: String,
   pub(in crate::execution::step) worktree: PathBuf,
@@ -106,27 +148,30 @@ pub(in crate::execution::step) struct StepQa {
 impl StepQa {
   /// The app `call_run_app` with `pid` reaches through its known discovery file: the invocation's QA app when `pid`
   /// is left out or is its pid; `None` for another pid, whose discovery is searched for. Refused without a pid when
-  /// the invocation started none.
+  /// the invocation runs no QA app.
   pub(in crate::execution::step) fn target(&self, pid: Option<NonZeroU32>) -> Result<Option<QaTarget>, String> {
-    let apps = self.apps.apps.lock();
-    let app = apps.get(&self.invocation).map(|app| QaTarget {
+    let app = self.state.app.lock().as_ref().map(|app| QaTarget {
       pid: app.running.pid,
       discovery: app.running.discovery.clone(),
     });
     match pid {
-      None => app
-        .map(Some)
-        .ok_or_else(|| "no QA app was started in this turn: call start_qa_app first, or give the app's pid".to_owned()),
+      None => app.map(Some).ok_or_else(|| {
+        "no QA app runs in this turn (none was started, or it was stopped while the turn waited for a person): call \
+         start_qa_app, or give the app's pid"
+          .to_owned()
+      }),
       Some(pid) => Ok(app.filter(|app| app.pid == pid)),
     }
   }
 
   /// Starts a QA copy for `start` once a QA slot is free and keeps it for the invocation, replacing the one it
-  /// started before. Blocks while it waits and while the script builds and starts the copy.
+  /// started before. Blocks while an earlier start of the invocation runs, while it waits for the slot and while the
+  /// script builds and starts the copy.
   pub(in crate::execution::step) fn start(&self, start: &QaAppStart) -> ToolResult {
+    let _one_at_a_time = self.state.starting.lock();
     let waited = Instant::now();
-    let earlier = self.apps.apps.lock().remove(&self.invocation);
-    let lease = match earlier {
+    let earlier = self.state.app.lock().take();
+    let mut lease = match earlier {
       Some(QaApp { running, lease }) => {
         drop(running);
         lease
@@ -137,7 +182,9 @@ impl StepQa {
       },
     };
     let waited = waited.elapsed();
-    match self.run_script(start) {
+    let folder = self.worktree.join(".tmp").join("qa").join(&self.name);
+    leftover::stop(&mut lease, &folder);
+    match self.run_script(start, &folder) {
       Ok(running) => self.keep(running, lease, start, waited),
       Err(refusal) => ToolResult::unavailable(&refusal),
     }
@@ -147,7 +194,7 @@ impl StepQa {
   fn take_slot(&self) -> Result<Lease, String> {
     let mut said = false;
     loop {
-      if self.apps.ended(self.invocation) {
+      if self.state.ended() {
         return Err("the turn ended before the QA slot was free".to_owned());
       }
       if let Some(lease) = self.apps.slots.try_take().map_err(|error| error.to_string())? {
@@ -161,42 +208,41 @@ impl StepQa {
     }
   }
 
-  fn run_script(&self, start: &QaAppStart) -> Result<Running, String> {
-    let folder = self.worktree.join(".tmp").join("qa").join(&self.name);
-    let output = script::run(&self.worktree, &start.script_args(&self.name))?;
-    let started = StartedQaApp::read(&output.stdout).ok_or_else(|| script::failure(&output))?;
+  /// Runs the script and checks the app it names: this run's, its discovery file in its own QA folder `folder`. A
+  /// script given up, failed or naming no app that passes ends with everything it started.
+  fn run_script(&self, start: &QaAppStart, folder: &Path) -> Result<Running, String> {
+    let state = Arc::clone(&self.state);
+    let ran = script::run(&self.worktree, &start.script_args(&self.name), &move || state.ended())?;
+    let started = StartedQaApp::read(&ran.output.stdout).ok_or_else(|| script::failure(&ran.output))?;
     let processes = RunProcesses::new(&self.worktree, self.run_created).map_err(|error| error.to_string())?;
-    let running = Running {
-      pid: started.pid,
-      discovery: started.discovery,
-      processes,
-    };
-    // The app must be this run's, and its discovery file in its own QA folder: anything else is stopped as far as
-    // the run's boundary lets it be, and refused.
-    running
-      .processes
-      .app(running.pid)
-      .map_err(|error| format!("the started QA app is refused: {error}"))?;
-    if !inside(&running.discovery, &folder) {
-      return Err(format!(
-        "the QA app's discovery file is not in {}; it is refused",
+    processes
+      .app(started.pid)
+      .map_err(|error| format!("the started QA app is refused, and what the script started was ended: {error}"))?;
+    let discovery = inside(&started.discovery, folder).ok_or_else(|| {
+      format!(
+        "the QA app's discovery file is not in {}; what the script started was ended",
         folder.display()
-      ));
-    }
-    Ok(running)
+      )
+    })?;
+    ran.keep()?;
+    Ok(Running {
+      pid: started.pid,
+      discovery,
+      processes,
+    })
   }
 
   /// Keeps `running` with `lease` for the invocation, or stops it when the invocation ended while it started.
   fn keep(&self, running: Running, lease: Lease, start: &QaAppStart, waited: Duration) -> ToolResult {
-    let mut apps = self.apps.apps.lock();
-    if self.apps.ended(self.invocation) {
-      drop(apps);
+    let mut app = self.state.app.lock();
+    if self.state.ended() {
+      drop(app);
       drop(running);
       return ToolResult::unavailable("the turn ended while the QA app started; it was stopped");
     }
     let mut text = format!(
       "QA app started on the {} scenario: pid {}. Call call_run_app without pid to drive it. Orchester stops it when \
-       your turn ends; starting again replaces it.",
+       your turn ends or waits for a person; starting again replaces it.",
       start.scenario(),
       running.pid
     );
@@ -204,15 +250,15 @@ impl StepQa {
       // Writing to a String cannot fail.
       let _ = write!(text, " It waited {:.1} s for the QA slot.", waited.as_secs_f32());
     }
-    apps.insert(self.invocation, QaApp { running, lease });
+    *app = Some(QaApp { running, lease });
     ToolResult::shown(text)
   }
 }
 
-/// Whether `path` lies in `folder`, both with links resolved.
-fn inside(path: &Path, folder: &Path) -> bool {
+/// `path` with links resolved, when it lies in `folder`.
+fn inside(path: &Path, folder: &Path) -> Option<PathBuf> {
   match (std::fs::canonicalize(path), std::fs::canonicalize(folder)) {
-    (Ok(path), Ok(folder)) => path.starts_with(folder),
-    _ => false,
+    (Ok(path), Ok(folder)) if path.starts_with(&folder) => Some(path),
+    _ => None,
   }
 }

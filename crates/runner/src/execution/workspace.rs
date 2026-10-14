@@ -94,6 +94,25 @@ impl Workspace {
       owner: execution,
     })
   }
+
+  /// Where the work of `accepted`, an execution a person accepted, is: its own worktree if it had one, which is
+  /// merged when the step passes; else the run's, where its work was committed already.
+  pub(super) fn of_accepted(
+    root: &Path,
+    run: &Run,
+    run_worktree: &Path,
+    accepted: StepExecutionId,
+  ) -> Result<Self, WorktreeError> {
+    let path = Worktrees::new(root)?.step_path(accepted);
+    if path.is_dir() {
+      return Ok(Self::Own {
+        path,
+        branch: branch(run, accepted),
+        owner: accepted,
+      });
+    }
+    Ok(Self::Run(run_worktree.to_path_buf()))
+  }
 }
 
 /// The branch of a step working beside others: `orchester/orc-12-run-1--review-2` for step

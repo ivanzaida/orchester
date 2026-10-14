@@ -32,7 +32,7 @@ impl RunTask {
     let (root, run, notifier) = (self.root.clone(), self.run.id(), self.notifier.clone());
     Ok(StepQa {
       apps: Arc::clone(&self.qa),
-      invocation,
+      state: self.qa.register(invocation),
       name: qa_name(self.run.number(), &step),
       worktree: worktree.to_path_buf(),
       run_created: self.run.created_at(),

@@ -87,7 +87,12 @@ fn run(processes: &RunProcesses, worktree: &Path, call: &AppCall, qa: Option<&St
     _ => return Err(AppError::AppName),
   };
   let discovery = match &target {
-    Some(target) => discovery::read(&target.discovery, pid, app)?,
+    // Checked again at each call: a link put in its place since the app started is never followed.
+    Some(target) => discovery::read(
+      &discovery::qa_file(&target.discovery)?.ok_or(AppError::Missing)?,
+      pid,
+      app,
+    )?,
     None => discovery::find(worktree, pid, app, call.tool())?,
   };
   let mut result = transport::Client::new(&process, &discovery)?.call(call)?;

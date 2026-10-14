@@ -320,10 +320,12 @@ impl RunTask {
 
   /// An end event is sent only once, even when recording it failed. Retire its worker before
   /// propagating that error so cleanup never waits for a second event from the same worker.
+  /// Its invocation is over, whatever ended it: its QA app stops and frees the QA slot.
   pub(super) fn retire_worker(&mut self, execution: StepExecutionId) -> Option<Active> {
     let active = self.agents.remove(&execution)?;
     self.board.release(execution);
     self.release_steered(execution);
+    self.qa.end(active.invocation.id);
     Some(active)
   }
 

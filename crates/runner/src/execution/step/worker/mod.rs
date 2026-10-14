@@ -198,6 +198,8 @@ pub(in super::super) struct Worker {
   pub(in crate::execution::step) reviewer_keys: review::ReviewerKeys,
   /// Held by each review until it has recorded what it cost; [`Worker::work`] waits for all of them.
   pub(in crate::execution::step) reviews_held: mpsc::Sender<Infallible>,
+  /// The run's QA apps: the invocation's stops while it waits for a person.
+  pub(in crate::execution::step) qa: std::sync::Arc<super::QaApps>,
 }
 
 /// Which call the relay held when it closed.

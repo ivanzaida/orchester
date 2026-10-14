@@ -29,8 +29,8 @@ use orchester_core::{
   },
   id::{InvocationId, StepExecutionId},
   orchester_tools::{
-    OrchesterTool, OutsideReads, ProjectTool, StepSkills, StepTools, ToolCall, ToolCallError, ToolContext, ToolResult,
-    ToolWork,
+    OrchesterTool, OutsideReads, ProjectTool, QA_APP_SCRIPT, QaAppStart, QaApproval, StepSkills, StepTools, ToolCall,
+    ToolCallError, ToolContext, ToolResult, ToolWork,
   },
   permission::{AgentPermissions, ResolvedFolder, category::CommandScope},
   resource::CommandEnvironment,
@@ -89,6 +89,8 @@ pub(in super::super) struct ToolHost {
   /// The project's repository, which holds the worktrees.
   repository: PathBuf,
   git_dir: PathBuf,
+  /// The run's base revision, which a QA app's approval names the build scripts changed since.
+  base: String,
   hooks: PathBuf,
   inherited: Vec<(OsString, OsString)>,
   project: CommandEnvironment,
@@ -172,7 +174,7 @@ impl ToolHost {
     let target = match (call, reach) {
       (_, Some(reach)) => Some(reach.folder.display().to_string()),
       (ToolCall::RunCheck { name }, None) => Some(name.clone()),
-      (ToolCall::StartQaApp(start), None) => Some(start.scenario().to_owned()),
+      (ToolCall::StartQaApp(start), None) => Some(self.qa_approval(start).target()),
       _ => None,
     };
     Ok(Looked {
@@ -243,6 +245,40 @@ impl ToolHost {
       Ok(ToolWork::Processes(call)) => self.processes.run(call),
       Ok(ToolWork::Run(program)) => program.finished(run_capped(program.command(), program.timeout(), program.cap())),
       Err(error) => ToolResult::refused(&error),
+    }
+  }
+}
+
+impl ToolHost {
+  /// What the approval of `start` names: the QA script's git blob and the build or start scripts changed since the
+  /// run's base revision, committed or not. What git cannot tell is left out, and the request says less.
+  fn qa_approval(&self, start: &QaAppStart) -> QaApproval {
+    let git = Git::new(&self.worktree);
+    let script = git
+      .stdout(&["hash-object", "--", QA_APP_SCRIPT])
+      .unwrap_or_else(|error| {
+        tracing::warn!(%error, "the QA script's blob cannot be read; its approval cannot be approved similar");
+        String::new()
+      });
+    let mut changed: Vec<String> = [
+      git.stdout(&["diff", "--name-only", &self.base, "--"]),
+      git.stdout(&["ls-files", "--others", "--exclude-standard"]),
+    ]
+    .into_iter()
+    .filter_map(|listed| {
+      listed
+        .inspect_err(|error| tracing::warn!(%error, "the changed build scripts cannot be listed"))
+        .ok()
+    })
+    .flat_map(|listed| listed.lines().map(str::to_owned).collect::<Vec<_>>())
+    .filter(|path| QaApproval::watches(path))
+    .collect();
+    changed.sort();
+    changed.dedup();
+    QaApproval {
+      script: script.trim().to_owned(),
+      scenario: start.scenario().to_owned(),
+      changed,
     }
   }
 }
@@ -335,6 +371,7 @@ impl RunTask {
       worktree: worktree.to_path_buf(),
       repository: self.root.clone(),
       git_dir: self.worktree_git_dir(worktree)?,
+      base: self.run.base().as_str().to_owned(),
       hooks,
       inherited: std::env::vars_os().collect(),
       project: environment.clone(),

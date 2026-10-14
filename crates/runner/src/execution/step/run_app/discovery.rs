@@ -107,7 +107,7 @@ fn qa_files(root: &Path, layouts: &[PathBuf]) -> Result<Vec<PathBuf>, AppError> 
 }
 
 /// `path` when it is a regular file reached without any link on the way from its task folder.
-fn qa_file(path: &Path) -> Result<Option<PathBuf>, AppError> {
+pub(super) fn qa_file(path: &Path) -> Result<Option<PathBuf>, AppError> {
   match fs::symlink_metadata(path) {
     Ok(metadata) if metadata.is_file() => {}
     Ok(_) => return Ok(None),

@@ -8,8 +8,8 @@ mod support;
 use orchester_core::{
   id::{IdempotencyKey, RunId},
   resource::StepKey,
-  run::{AttemptReason, ReviewNote, Run, RunStatus, StepFailure, StepOutcome, Stuck, StuckDecision},
-  store::ActivityStore,
+  run::{Answerer, AttemptReason, ReviewNote, Run, RunStatus, StepFailure, StepOutcome, Stuck, StuckDecision},
+  store::{ActivityStore, RunStore},
 };
 use orchester_ipc::Event;
 use orchester_store::ProjectDb;
@@ -111,7 +111,7 @@ async fn unverified_accept_passes_the_step_and_runs_the_rest() {
   started.until(waits).await;
   started
     .scheduler
-    .decide_stuck(started.id, StuckDecision::Accept)
+    .decide_stuck(started.id, StuckDecision::Accept { by: Answerer::Person })
     .await
     .expect("accepted");
   let run = started.until(|run| run.status().is_terminal()).await;
@@ -129,12 +129,17 @@ async fn unverified_accept_of_the_last_step_succeeds_the_run() {
   started.until(waits).await;
   started
     .scheduler
-    .decide_stuck(started.id, StuckDecision::Accept)
+    .decide_stuck(started.id, StuckDecision::Accept { by: Answerer::Person })
     .await
     .expect("accepted");
   let run = started.until(|run| run.status().is_terminal()).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
-  assert_eq!(run.attempts().len(), 1);
+  // The acceptance's attempt passed the step without running its agent again.
+  assert_eq!(
+    run.attempts()[1].reason(),
+    &AttemptReason::Accepted { step: key("verify") }
+  );
+  assert_eq!(started.invocations(), 2);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -180,7 +185,7 @@ async fn unverified_returned_work_that_changed_nothing_is_not_verified_again() {
   // The person may still accept it as it is.
   started
     .scheduler
-    .decide_stuck(started.id, StuckDecision::Accept)
+    .decide_stuck(started.id, StuckDecision::Accept { by: Answerer::Person })
     .await
     .expect("accepted");
   let run = started.until(|run| run.status().is_terminal()).await;
@@ -197,4 +202,71 @@ async fn unverified_a_failed_verdict_on_an_unchanged_revision_is_not_run_again()
   );
   assert_eq!(run.retries_taken(&key("verify")), 1, "one retry went back to Implement");
   assert_eq!(started.invocations(), 3, "Implement twice, Verify once");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unverified_accept_merges_the_work_of_a_step_that_worked_beside_others() {
+  let steps = vec![
+    StepSpec::new("implement", "Implement", "Change README.md.", &[]),
+    StepSpec::new("verify", "Verify", "Report unverified. Write own file.", &["implement"]),
+    StepSpec::new("review", "Review", "Write own file.", &["implement"]),
+  ];
+  let mut started = Started::new(steps).await;
+  let run = started.until(waits).await;
+  assert_eq!(
+    run.status(),
+    &RunStatus::WaitingForPerson(Stuck::Unverified(key("verify")))
+  );
+  started
+    .scheduler
+    .decide_stuck(started.id, StuckDecision::Accept { by: Answerer::Person })
+    .await
+    .expect("accepted");
+  let run = started.until(|run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  // Verify worked in a worktree of its own: accepting it merged its work into the run's branch, as a pass does.
+  let root = started.project.repo.path();
+  let files = support::git(root, &["ls-tree", "--name-only", run.branch().as_str()]);
+  assert!(files.lines().any(|file| file == "verify.txt"), "{files}");
+  assert!(files.lines().any(|file| file == "review.txt"), "{files}");
+  // The accepted step's result is its new execution's output; no agent ran for it.
+  let outputs = started.db().step_outputs(started.id).expect("outputs");
+  let latest = run.latest_execution(&key("verify")).expect("verify").id();
+  assert!(outputs.iter().any(|output| output.execution == latest));
+  let verify_turns = started
+    .db()
+    .invocations(started.id)
+    .expect("invocations")
+    .iter()
+    .filter(|invocation| {
+      run
+        .execution(invocation.execution)
+        .is_some_and(|execution| execution.step() == &key("verify"))
+    })
+    .count();
+  assert_eq!(verify_turns, 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unverified_accept_of_a_gated_step_proposes_its_result_as_the_plan() {
+  let steps = vec![
+    StepSpec::new("implement", "Implement", "Change README.md.", &[]),
+    StepSpec::new("verify", "Verify", "Report unverified.", &["implement"]).gate(),
+  ];
+  let mut started = Started::new(steps).await;
+  started.until(waits).await;
+  started
+    .scheduler
+    .decide_stuck(started.id, StuckDecision::Accept { by: Answerer::Person })
+    .await
+    .expect("accepted");
+  let run = started.until(|run| !run.awaiting_plan().is_empty()).await;
+  assert_eq!(
+    run.status(),
+    &RunStatus::Running,
+    "it waits for the plan decision, not done"
+  );
+  let plans = started.db().plans(started.id).expect("plans");
+  assert_eq!(plans.len(), 1);
+  assert_eq!(plans[0].text, "Finished Verify");
 }

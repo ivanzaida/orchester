@@ -136,6 +136,24 @@ impl RunProcesses {
     }
   }
 
+  /// The pids of the processes `list_run_processes` lists: started since the scope's start, their executables inside
+  /// it.
+  pub fn pids(&self) -> io::Result<Vec<NonZeroU32>> {
+    let mut pids = Vec::new();
+    for entry in platform::snapshot()? {
+      let Ok(Some(process)) = platform::Process::open(entry, false) else {
+        continue;
+      };
+      if self.scope.started_in_run(process.info.started)
+        && let Ok(Some(_)) = self.scope.relative_executable(&process.info.path)
+        && let Some(pid) = NonZeroU32::new(process.info.pid)
+      {
+        pids.push(pid);
+      }
+    }
+    Ok(pids)
+  }
+
   fn list(&self) -> Result<String, ProcessError> {
     let mut listed = Vec::new();
     for entry in platform::snapshot()? {

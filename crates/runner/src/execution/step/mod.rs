@@ -3,6 +3,7 @@
 //! [`native`]) in its worktree — a new session, or the step's earlier session continued — handed to a
 //! [`worker::Worker`] of its own.
 
+mod accepted;
 mod answer;
 mod app_server;
 mod approval;
@@ -239,7 +240,7 @@ impl RunTask {
     if self.is_tool_step(execution) {
       return self.start_command(execution, start);
     }
-    if self.waits_for_plan_reset(execution)? {
+    if self.passes_accepted(execution)? || self.waits_for_plan_reset(execution)? {
       return Ok(true);
     }
     let judged = match self.take_slot(execution)? {
@@ -399,6 +400,7 @@ impl RunTask {
         project: self.project.id(),
       },
       reviews_held,
+      qa: std::sync::Arc::clone(&self.qa),
     };
     tokio::spawn(worker.work(reviews_ended));
     // The budget in force: one raised for the run after it stopped at the step's limit, else the
