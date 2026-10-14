@@ -10,6 +10,7 @@ pub mod board;
 pub mod browse;
 pub mod cancel_run;
 pub mod changes;
+pub mod checkout;
 pub mod conflict;
 pub mod conversation;
 pub mod data;

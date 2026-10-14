@@ -8,7 +8,7 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::style;
+use super::typography::{mono, style};
 
 /// The line height the design's texts without one of their own take: Geist's own, about 14 for 11 and
 /// 16 for 12.5.
@@ -17,6 +17,11 @@ const NATURAL_LINE: f32 = 1.27;
 /// Text of the Overview.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OverviewText {
+  /// Mono 11 `text_muted`, spaced 0.6, on its natural line: the project's key, repository and branch
+  /// over its name (`Eyebrow` `YVq5r`).
+  Eyebrow,
+  /// 13 `text_secondary` on its natural line: what the page shows, under the project's name (`Sub` `sz0ks`).
+  Subtitle,
   /// 11.5/600 `warning`: what a *Needs you* card waits for (`Kind` `E4ZZK` in `rkhZ2`).
   Kind,
   /// 11/500 `text_secondary` on its natural line: a figure's name (`Label` `Xw3m5` in `Metric card`).
@@ -25,10 +30,26 @@ pub enum OverviewText {
   FigureDetail,
   /// 12.5 `text_primary` on its natural line: what happened to a run (`Text` `eH2AE` in `Activity row`).
   Event,
+  /// 11/500 `text_muted` on its natural line: *Ready to run* over its lines (`Ready to run` `Ib826`).
+  ReadyHeading,
+  /// 12/500 `text_primary` on its natural line: a ready line's name (`Agents` `PFyfe`).
+  ReadyLabel,
+  /// 12 `text_secondary` on its natural line: what a ready line found (`USdpn`).
+  ReadyDetail,
 }
 
 impl OverviewText {
-  pub const ALL: [Self; 4] = [Self::Kind, Self::FigureLabel, Self::FigureDetail, Self::Event];
+  pub const ALL: [Self; 9] = [
+    Self::Eyebrow,
+    Self::Subtitle,
+    Self::Kind,
+    Self::FigureLabel,
+    Self::FigureDetail,
+    Self::Event,
+    Self::ReadyHeading,
+    Self::ReadyLabel,
+    Self::ReadyDetail,
+  ];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -36,19 +57,29 @@ impl OverviewText {
 
   const fn name(self) -> &'static str {
     match self {
+      Self::Eyebrow => "overview_eyebrow",
+      Self::Subtitle => "overview_subtitle",
       Self::Kind => "overview_kind",
       Self::FigureLabel => "overview_figure_label",
       Self::FigureDetail => "overview_figure_detail",
       Self::Event => "overview_event",
+      Self::ReadyHeading => "overview_ready_heading",
+      Self::ReadyLabel => "overview_ready_label",
+      Self::ReadyDetail => "overview_ready_detail",
     }
   }
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
+      Self::Eyebrow => mono(style(11.0, FontWeight::Normal, NATURAL_LINE, 0.6, palette.text_muted)),
+      Self::Subtitle => style(13.0, FontWeight::Normal, NATURAL_LINE, 0.0, palette.text_secondary),
       Self::Kind => style(11.5, FontWeight::SemiBold, 1.3, 0.0, palette.warning),
       Self::FigureLabel => style(11.0, FontWeight::Medium, NATURAL_LINE, 0.0, palette.text_secondary),
       Self::FigureDetail => style(11.0, FontWeight::Normal, NATURAL_LINE, 0.0, palette.text_muted),
+      Self::ReadyHeading => style(11.0, FontWeight::Medium, NATURAL_LINE, 0.0, palette.text_muted),
       Self::Event => style(12.5, FontWeight::Normal, NATURAL_LINE, 0.0, palette.text_primary),
+      Self::ReadyLabel => style(12.0, FontWeight::Medium, NATURAL_LINE, 0.0, palette.text_primary),
+      Self::ReadyDetail => style(12.0, FontWeight::Normal, NATURAL_LINE, 0.0, palette.text_secondary),
     }
   }
 }

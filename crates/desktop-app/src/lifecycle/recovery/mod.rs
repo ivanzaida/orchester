@@ -100,16 +100,12 @@ impl RecoveryNotice {
     };
     Some(notice)
   }
-  /// *2 runs were interrupted when Orchester closed*, with *Review runs* and *Continue all*.
+  /// *2 runs were interrupted when Orchester closed*, why, with *Review runs* and *Continue all*.
   fn compact(&self, ctx: &Ctx, project: ProjectId, runs: &[InterruptedRun], services: &Services) -> Element {
     let recovery = services.recovery.clone();
     let count = runs.len();
     Notice::new(NOTICE_ID, NoticeTone::Warning, title(ctx, count))
-      .body(ctx.t(plural(
-        count,
-        "lifecycle.recovery.summary.one",
-        "lifecycle.recovery.summary.other",
-      )))
+      .body(ctx.t(summary_key(runs)))
       .action(
         ActionButton::new(
           "recovery-review",
@@ -156,13 +152,27 @@ fn title(ctx: &Ctx, count: usize) -> Arc<str> {
 /// Why the runs were interrupted, as the list says it: the person's Quit now when that stopped all of
 /// them, otherwise that Orchester stopped unexpectedly.
 fn body_key(runs: &[InterruptedRun]) -> &'static str {
-  let quit = runs.iter().all(|run| run.cause == InterruptCause::QuitNow);
-  match (quit, runs.len()) {
+  match (quit_now(runs), runs.len()) {
     (true, 1) => "lifecycle.recovery.body.quitNow.one",
     (true, _) => "lifecycle.recovery.body.quitNow.other",
     (false, 1) => "lifecycle.recovery.body.crashed.one",
     (false, _) => "lifecycle.recovery.body.crashed.other",
   }
+}
+
+/// Why, as the compact notice says it (`xPTrL` in `JAIYi`), by the same rule as [`body_key`].
+fn summary_key(runs: &[InterruptedRun]) -> &'static str {
+  match (quit_now(runs), runs.len()) {
+    (true, 1) => "lifecycle.recovery.summary.quitNow.one",
+    (true, _) => "lifecycle.recovery.summary.quitNow.other",
+    (false, 1) => "lifecycle.recovery.summary.crashed.one",
+    (false, _) => "lifecycle.recovery.summary.crashed.other",
+  }
+}
+
+/// Whether the person's Quit now stopped all of `runs`.
+fn quit_now(runs: &[InterruptedRun]) -> bool {
+  runs.iter().all(|run| run.cause == InterruptCause::QuitNow)
 }
 
 /// `one` for one, `other` otherwise.

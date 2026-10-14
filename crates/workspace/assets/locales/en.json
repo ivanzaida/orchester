@@ -19,6 +19,12 @@
     }
   },
   "overview": {
+    "eyebrow": {
+      "key": "PROJECT KEY {{key}}",
+      "repository": "PROJECT KEY {{key}} · {{repository}}",
+      "branch": "PROJECT KEY {{key}} · {{branch}}",
+      "repositoryBranch": "PROJECT KEY {{key}} · {{repository}} · {{branch}}"
+    },
     "metrics": {
       "agentsWorking": {
         "one": "{{count}} of {{slots}} agent working",

@@ -5,10 +5,12 @@
 use std::{thread, time::Duration};
 
 use orchester_app::routes::OverviewTab;
-use orchester_core::run::TaskPhase;
+use orchester_core::run::{InterruptCause, TaskPhase};
+use orchester_exec::programs::Programs;
 use orchester_workspace::tasks::{
   attention::{self, NeedKind},
   board::{BoardTab, Figures},
+  checkout::Checkout,
   outside::Outside,
   overview::recent_runs,
   ready_to_run::ProjectReadiness,
@@ -20,7 +22,7 @@ use crate::harness::Seeded;
 fn overview_shows_its_sections_from_the_project_feed() {
   let mut seeded = Seeded::overview("tasks", OverviewTab::Running);
   let tasks = seeded.tasks();
-  assert_eq!(seeded.text("overview-eyebrow"), "PROJECT KEY KON");
+  assert!(seeded.text("overview-eyebrow").starts_with("PROJECT KEY KON"));
   assert_eq!(seeded.text("overview-title"), "Kontur");
   for (tab, name) in [
     (BoardTab::Running, "running"),
@@ -294,6 +296,38 @@ fn overview_keeps_the_recovery_notice_above_its_heading() {
   seeded.click("recovery-review");
   assert!(seeded.shows("recovery-notice"), "the list opens in place");
   assert!(seeded.top("recovery-notice") < seeded.top("overview-header"));
+}
+
+/// The compact notice says why the runs stopped (`xPTrL` in `JAIYi`), as the open list does.
+#[test]
+fn overview_recovery_notice_says_why_the_runs_stopped() {
+  let mut seeded = Seeded::overview("interrupted", OverviewTab::Running);
+  seeded.until("the recovery notice", |seeded| seeded.shows("recovery-review"));
+  let services = seeded.window.launch.services().expect("the session started").clone();
+  let runs = services.recovery.state().runs_of(seeded.project);
+  let quit = runs.iter().all(|run| run.cause == InterruptCause::QuitNow);
+  let why = if quit {
+    "You chose Quit now."
+  } else {
+    "Orchester stopped unexpectedly."
+  };
+  let said = seeded.text("recovery-notice");
+  assert!(
+    said.contains(&format!("{why} Their worktrees and commits are kept.")),
+    "{said}"
+  );
+}
+
+/// The line over the title names what git tells of the checkout: the seed's repository has no network
+/// `origin`, so its branch follows the key.
+#[test]
+fn overview_names_the_checkouts_branch_over_the_title() {
+  let mut seeded = Seeded::overview("tasks", OverviewTab::Running);
+  let checkout = Checkout::read(&Programs::processes(), &seeded.repo);
+  assert_eq!(checkout.repository, None, "the seed has no network origin");
+  let branch = checkout.branch.expect("the seed checks out a branch");
+  let expected = format!("PROJECT KEY KON · {branch}");
+  seeded.until("git's branch", |seeded| seeded.text("overview-eyebrow") == expected);
 }
 
 /// The status bar's *Review* (`uZTnL`) opens the list through the session's recovery, as the notice's own

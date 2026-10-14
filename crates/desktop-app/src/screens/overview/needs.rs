@@ -117,7 +117,7 @@ fn need_card(ctx: &mut Ctx, project: ProjectId, (index, item): (usize, &NeedItem
   card.child(
     Row::new().child(
       ActionButton::new(format!("{id}-action"), ButtonKind::Secondary, ctx.t(action))
-        .icon(Icon::ArrowUpRight)
+        .icon(action_icon(item.kind))
         .on_click(open),
     ),
   )
@@ -141,6 +141,15 @@ const fn look(kind: NeedKind) -> (Icon, &'static str, TaskTab) {
     NeedKind::Interrupted => (Icon::CirclePause, "overview.needs.action.openTask", TaskTab::Summary),
     NeedKind::ReadyToMerge => (Icon::GitMerge, "overview.needs.action.reviewMerge", TaskTab::Summary),
     NeedKind::Memory => (Icon::BookOpen, "overview.needs.action.openTask", TaskTab::Summary),
+  }
+}
+
+/// The action's glyph: a chevron for a request and a question, answered in their card of the
+/// conversation (Review, Answer in `OuAbC`, `EO87l`), an arrow out to the task for the rest (`g35HoL`).
+const fn action_icon(kind: NeedKind) -> Icon {
+  match kind {
+    NeedKind::Approval | NeedKind::Question => Icon::ChevronDown,
+    _ => Icon::ArrowUpRight,
   }
 }
 

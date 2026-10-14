@@ -24,7 +24,7 @@ use orchester_workspace::{
 
 use crate::{
   project::ShownProject,
-  theme::{ExtraSpacing, IconSize},
+  theme::{ExtraSpacing, IconSize, OverviewText},
   ui::{
     icon::{Icon, icon},
     message::message_text,
@@ -79,11 +79,7 @@ impl Component for ReadyToRun {
       .padding(Padding::new().top(SpacingSize::Md))
       .spacing(ExtraSpacing::Snug.role())
       .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(
-        Text::new(&ctx.t("overview.ready.title"))
-          .variant(TypographyStyle::FieldLabel)
-          .color(PaletteColor::TextMuted),
-      );
+      .child(Text::new(&ctx.t("overview.ready.title")).variant(OverviewText::ReadyHeading.role()));
     // A failed refresh keeps the lines read before, with the error under them so they don't pass for current.
     let list = match state.data {
       Some(readiness) => {
@@ -132,14 +128,14 @@ fn line(ctx: &Ctx, check: &ReadyCheck) -> Row {
     .child(icon(glyph, IconSize::Base, tone).id(format!("{id}-{state}")))
     .child(
       Text::new(&message_text(ctx, &check.kind.label()))
-        .variant(TypographyStyle::Label)
+        .variant(OverviewText::ReadyLabel.role())
         .width(Dimension::Px(LABEL_WIDTH))
         .flex_shrink(0.0),
     )
     .child(
       Text::new(&message_text(ctx, &check.detail))
         .id(format!("{id}-detail"))
-        .variant(TypographyStyle::Description)
+        .variant(OverviewText::ReadyDetail.role())
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )

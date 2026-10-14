@@ -4,10 +4,13 @@
 mod support;
 
 use orchester_core::{
-  run::{PlanVersion, StepFailure, TaskPhase, WaitReason},
+  repository::RepositoryIdentity,
+  run::{BranchName, PlanVersion, StepFailure, TaskPhase, WaitReason},
   store::RunStore,
 };
+use orchester_exec::programs::Programs;
 use orchester_workspace::tasks::{
+  checkout::Checkout,
   data::ProjectTasks,
   list::AwaitedPlan,
   overview::{OverviewTab, Pulse, activity_empty, figure, footer, recent_runs},
@@ -285,4 +288,48 @@ fn overview_activity_without_runs_says_there_are_none_yet() {
   let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
   assert!(recent_runs(&tasks.tasks, &tasks.phases, 3).is_empty());
   assert_eq!(activity_empty(&tasks.phases).key, "overview.activity.empty");
+}
+
+/// The line over the title (`YVq5r`) names the repository and the branch only as far as git told them.
+#[test]
+fn overview_eyebrow_names_what_git_told_of_the_checkout() {
+  let repository = RepositoryIdentity::parse("github.com/example/kontur").expect("a repository");
+  let branch = BranchName::new("main").expect("a branch");
+  let cases = [
+    (
+      Some(repository.clone()),
+      Some(branch.clone()),
+      "overview.eyebrow.repositoryBranch",
+    ),
+    (Some(repository), None, "overview.eyebrow.repository"),
+    (None, Some(branch), "overview.eyebrow.branch"),
+    (None, None, "overview.eyebrow.key"),
+  ];
+  for (repository, branch, key) in cases {
+    let said = Checkout {
+      repository: repository.clone(),
+      branch: branch.clone(),
+    }
+    .eyebrow("KON");
+    assert_eq!(said.key, key);
+    assert!(said.args.contains(&("key", "KON".to_owned())), "{said:?}");
+    if let Some(repository) = repository {
+      assert!(
+        said.args.contains(&("repository", repository.as_str().to_owned())),
+        "{said:?}"
+      );
+    }
+    if let Some(branch) = branch {
+      assert!(said.args.contains(&("branch", branch.as_str().to_owned())), "{said:?}");
+    }
+  }
+}
+
+/// A folder with no git repository names neither: the line is the key alone.
+#[test]
+fn overview_eyebrow_of_a_folder_git_does_not_know_is_the_key() {
+  let folder = tempfile::tempdir().expect("a folder");
+  let checkout = Checkout::read(&Programs::processes(), folder.path());
+  assert_eq!(checkout, Checkout::default());
+  assert_eq!(checkout.eyebrow("KON").key, "overview.eyebrow.key");
 }
