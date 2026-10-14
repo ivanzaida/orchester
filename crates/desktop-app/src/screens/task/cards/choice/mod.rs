@@ -24,10 +24,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{
-  question::{Question, QuestionState},
-  run::Answerer,
-};
+use orchester_core::question::{Question, QuestionState};
 use orchester_workspace::{
   display,
   tasks::{
@@ -309,15 +306,15 @@ fn sender(
     return None;
   }
   let open = place.open(ctx)?;
-  let command = Answering {
+  let answering = Answering {
     run: card.asked.request.run(),
     request: card.asked.request.id().to_owned(),
     answers: draft.given(card.asked.request.questions()),
-  }
-  .command(Answerer::Person);
+  };
   let (decisions, run, key) = (decisions.clone(), place.run(), place.key.clone());
   Some(Arc::new(move || {
-    decisions.answer((run, &key), Given::Answers, (&open, command.clone()));
+    let command = |by| answering.clone().command(by);
+    decisions.answer((run, &key), Given::Answers, (&open, command));
   }))
 }
 

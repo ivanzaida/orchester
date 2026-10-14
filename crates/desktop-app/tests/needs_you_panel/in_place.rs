@@ -29,7 +29,7 @@ fn shows(window: &mut Window, id: &str) -> bool {
 }
 
 /// Expands the item of the task titled `title` around its question card: the item and the card's id.
-fn expand_question(window: &mut Window, title: &str) -> (String, String) {
+pub(super) fn expand_question(window: &mut Window, title: &str) -> (String, String) {
   let item = item_of(window, title);
   click(window, &format!("{item}-action"));
   window.until("the card in place", |window| {
@@ -40,7 +40,7 @@ fn expand_question(window: &mut Window, title: &str) -> (String, String) {
   (item, cards[0].clone())
 }
 
-fn press(window: &mut Window, key: &str, code: &str) {
+pub(super) fn press(window: &mut Window, key: &str, code: &str) {
   window
     .tree
     .key_down(key.to_owned(), code.to_owned(), false, false, false);

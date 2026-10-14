@@ -16,7 +16,9 @@
     "refused": {
       "ended": "{{agent}} no longer waits for an answer: it ended without one.",
       "answered": "It was answered already.",
-      "superseded": "This plan no longer waits for a decision: a later version came, or the run went on."
+      "superseded": "This plan no longer waits for a decision: a later version came, or the run went on.",
+      "personOnly": "Only a person answers this here: input from an MCP client answers only while you let automation answer approvals and change agent permissions.",
+      "widerPersonOnly": "Only a person gives a wider answer: automation approves a request once or denies it."
     },
     "question": {
       "asks": "{{agent}} asks you",

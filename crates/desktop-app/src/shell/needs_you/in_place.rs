@@ -1,7 +1,7 @@
 //! An item answered in place: its task with its latest run and the run's requests are read off the UI thread
 //! (`tasks::needs_you::InPlace`), again as the project's runs and waiting requests change, and the card of the
 //! run's timeline that answers it is the conversation's own (`screens::task::cards`), shown bare inside the
-//! item: the same answers, rules and person gates, sent to the project's runner as the person. While it is
+//! item: the same answers, rules and person gates, sent to the project's runner by whoever gave them. While it is
 //! read the item says so; when it cannot be read, why; when the request is not on the task's latest run, that
 //! it is answered in the conversation. *Open conversation* follows, unless the card carries it in its own
 //! answers row. Once the item no longer waits, a note takes the card's place and says how it went (`note`).

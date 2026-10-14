@@ -2,11 +2,12 @@
 //! QA seed's scenarios: what waits, grouped by project and oldest first, with the same count as the pill; a
 //! plan that opens its task and closes the panel; an approval and a question with suggested answers answered in
 //! place through the conversation's own cards, with the same rules (no runner here, so an answer says why it did
-//! not go); a wider answer that synthetic input does not take; Esc and the close, and the pill opening it again
-//! after each way it closes ([`closing`]); an expanded approval's layout and the pinned project header
-//! ([`expanded`]); a question's panel layout, the notes of what was answered while the panel is open and an
-//! expanded item kept in view ([`in_place`]). Needs `git`.
+//! not go); a wider answer that synthetic input does not take, and an MCP client's answers ([`automation`]); Esc
+//! and the close, and the pill opening it again after each way it closes ([`closing`]); an expanded approval's
+//! layout and the pinned project header ([`expanded`]); a question's panel layout, the notes of what was answered
+//! while the panel is open and an expanded item kept in view ([`in_place`]). Needs `git`.
 
+mod automation;
 mod closing;
 mod expanded;
 mod in_place;

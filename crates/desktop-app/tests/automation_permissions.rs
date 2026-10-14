@@ -89,3 +89,55 @@ fn automation_policy_failed_stored_read_cannot_reuse_a_prior_grant() {
     "failed authority read must not retain a successful grant"
   );
 }
+
+#[test]
+fn automation_policy_an_answer_is_the_persons_or_automations_only_under_both_grants() {
+  use lurq::app::events::with_synthetic_input;
+  use orchester_app::mcp::input_gate::answerer;
+  use orchester_core::run::Answerer;
+
+  let dir = tempfile::tempdir().expect("private policy directory");
+  let workspace = Workspace::new(AppDb::open(&dir.path().join("app.db")).expect("private database"));
+  let gate = InputGate::default();
+  gate.bind_permissions(workspace.clone());
+  let policy = Guarded::ApprovalWidening;
+  assert_eq!(
+    answerer(Some(&gate), policy),
+    Some(Answerer::Person),
+    "a person's own input answers as the person"
+  );
+  assert_eq!(
+    with_synthetic_input(|| answerer(Some(&gate), policy)),
+    None,
+    "an MCP client's input answers nothing without consent"
+  );
+  workspace
+    .set_automation_answers_approvals(true)
+    .expect("the approvals opt-in");
+  assert_eq!(
+    with_synthetic_input(|| answerer(Some(&gate), policy)),
+    None,
+    "the approvals opt-in alone is not the approval consent"
+  );
+  workspace
+    .set_automation_changes_permissions(true)
+    .expect("the permissions opt-in");
+  assert_eq!(
+    with_synthetic_input(|| answerer(Some(&gate), policy)),
+    Some(Answerer::Automation),
+    "under consent an MCP client's input answers as automation, never as the person"
+  );
+  let setting = gate.protect(Guarded::PermissionsSetting);
+  assert_eq!(
+    with_synthetic_input(|| answerer(Some(&gate), policy)),
+    None,
+    "nothing while a person-only control is mounted"
+  );
+  drop(setting);
+  assert_eq!(
+    with_synthetic_input(|| answerer(None, policy)),
+    None,
+    "no gate, no consent"
+  );
+  assert_eq!(answerer(None, policy), Some(Answerer::Person));
+}
