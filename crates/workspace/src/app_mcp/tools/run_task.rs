@@ -8,6 +8,7 @@ use orchester_core::{
   orchestrator::proposal::{ProposedStart, StartBasis, brief_excerpt, brief_is_cut},
   resource::{Pipeline, VersionNumber},
   run::{ListedRun, PreflightProblem, RunAgainBlock},
+  sharing::TaskRevision,
   store::{ResourceStore, RunStore},
   task::{Task, TaskStatus},
 };
@@ -49,11 +50,12 @@ pub struct RunTask {
 enum Start {
   /// Its first run, of the queued task; `claim` was taken while queuing it.
   First { task: TaskId, claim: WorkClaim },
-  /// Its next run after `after`, of the pipeline named `pipeline`.
+  /// Its next run after `after`, of the pipeline named `pipeline`, of the task at `revision` as it was checked.
   Again {
     task: TaskId,
     after: RunId,
     pipeline: String,
+    revision: TaskRevision,
   },
 }
 
@@ -93,10 +95,15 @@ async fn run_checked(services: &Services, args: RunTask, expected: Option<StartB
         .await
         .map_err(|error| ToolError::runner(&error, start_messages(&error))),
     ),
-    Start::Again { after, pipeline, .. } => (
+    Start::Again {
+      after,
+      pipeline,
+      revision,
+      ..
+    } => (
       claim,
       runners
-        .run_again_in(&project, IdempotencyKey::generate(), (task, after))
+        .run_again_in(&project, IdempotencyKey::generate(), (task, after, Some(revision)))
         .await
         .map_err(|error| ToolError::runner(&error, request_messages(&error, &pipeline))),
     ),
@@ -167,6 +174,7 @@ fn again(services: &Services, project: &OpenProject, task: &Task, after: RunId) 
     task: task.id(),
     after,
     pipeline: check.pipeline.to_string(),
+    revision: task.revision(),
   })
 }
 
@@ -190,9 +198,13 @@ fn basis(
     None if task.status() == TaskStatus::Queued => task.pipeline_version(),
     None => Some(queue_version(db, task)?),
     Some(Err(_)) => return Err(unreadable()),
+    // Run again takes the pipeline's latest published version.
     Some(Ok(latest)) => {
       again(services, project, task, latest.id())?;
-      task.pipeline_version()
+      match task.details().pipeline {
+        Some(pipeline) => db.latest_version::<Pipeline>(pipeline)?.map(|version| version.number()),
+        None => None,
+      }
     }
   };
   Ok(StartBasis {

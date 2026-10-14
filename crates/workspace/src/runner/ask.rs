@@ -8,6 +8,7 @@ use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
   integration::Leftovers,
   limits::AgentSlots,
+  sharing::TaskRevision,
 };
 use orchester_ipc::{Command, Reply};
 use orchester_store::StoreError;
@@ -55,6 +56,7 @@ impl Runners {
       task,
       after,
       remove_worktrees,
+      revision: None,
     };
     run_started(self.ask(self.displayed().as_deref(), command).await?, "RunAgain")
   }
@@ -64,13 +66,14 @@ impl Runners {
     &self,
     project: &OpenProject,
     key: IdempotencyKey,
-    (task, after): (TaskId, RunId),
+    (task, after, revision): (TaskId, RunId, Option<TaskRevision>),
   ) -> Result<RunId, RunRequestError> {
     let command = Command::RunAgain {
       key,
       task,
       after,
       remove_worktrees: None,
+      revision,
     };
     run_started(self.ask_project(project, command).await?, "RunAgain")
   }
@@ -89,6 +92,7 @@ impl Runners {
       task,
       after,
       remove_worktrees,
+      revision: None,
     };
     run_started(self.ask_project(project, command).await?, "RunAgain")
   }

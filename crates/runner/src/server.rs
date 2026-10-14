@@ -288,7 +288,12 @@ async fn answer(
       task,
       after,
       ref remove_worktrees,
-    } => started(scheduler.run_again(key, task, after, remove_worktrees.clone()).await),
+      revision,
+    } => started(
+      scheduler
+        .run_again_as(key, (task, after), remove_worktrees.clone(), revision)
+        .await,
+    ),
     Command::PauseRun { run } => return later.answer(run, async move { handle.pause_run(run).await }),
     Command::CancelRun { run } => return later.answer(run, async move { handle.cancel_run(run).await }),
     Command::ResumeRun { run } => return later.answer(run, async move { handle.resume_run(run).await }),

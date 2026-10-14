@@ -58,6 +58,13 @@ pub(super) struct Checked {
   new: NewRun,
 }
 
+impl Checked {
+  /// The task as it was read for the run.
+  pub(super) const fn task(&self) -> &Task {
+    &self.task
+  }
+}
+
 /// Run again takes the latest published pipeline; the queued first run takes its saved version.
 pub(super) fn check_again(db: &ProjectDb, root: &Path, task_id: TaskId) -> Result<Checked, Rejection> {
   check(db, root, task_id, PipelineSource::LatestPublished)

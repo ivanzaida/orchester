@@ -314,6 +314,7 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
     RunRequestError::Rejected(Rejection::Preflight { problems }) => problems.iter().map(preflight_message).collect(),
     RunRequestError::Rejected(Rejection::TaskNotFound) => vec![Message::new("runs.start.taskMissing")],
     RunRequestError::Rejected(Rejection::TaskNotQueued) => vec![Message::new("runs.start.notQueued")],
+    RunRequestError::Rejected(Rejection::TaskChangedMeanwhile) => vec![crate::messages::task_changed_meanwhile()],
     RunRequestError::Rejected(Rejection::TaskGroupWaiting { hold }) => super::group::hold_messages(hold),
     RunRequestError::Rejected(Rejection::RunUnreadable { .. }) => vec![Message::new("runs.unreadable.rejected")],
     RunRequestError::Rejected(
@@ -461,6 +462,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
       | Rejection::NoOrchestrator
       | Rejection::TaskNotFound
       | Rejection::TaskNotQueued
+      | Rejection::TaskChangedMeanwhile
       | Rejection::Preflight { .. }
       | Rejection::Failed { .. }
       | Rejection::RunAgainBlocked { .. }

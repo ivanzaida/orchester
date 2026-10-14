@@ -71,7 +71,7 @@ impl RunnerOf<'_> {
       Self::Displayed => runners.run_again(stored.key, stored.task, stored.run, None).await,
       Self::Project(project) => {
         runners
-          .run_again_in(project, stored.key, (stored.task, stored.run))
+          .run_again_in(project, stored.key, (stored.task, stored.run, None))
           .await
       }
     };

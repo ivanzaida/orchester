@@ -59,6 +59,7 @@ use orchester_core::{
   integration::Leftovers,
   run::{InterruptCause, RaisedLimits, RunStatus},
   secret::SecretVault,
+  sharing::TaskRevision,
   store::RunStore,
   tokens::TokenBudget,
 };
@@ -254,6 +255,18 @@ impl Scheduler {
     after: RunId,
     remove_worktrees: Option<Leftovers>,
   ) -> Result<RunId, Rejection> {
+    self.run_again_as(key, (task, after), remove_worktrees, None).await
+  }
+
+  /// [`Self::run_again`], only for the task at `revision` when it names one: a task changed since it was checked is
+  /// refused ([`Rejection::TaskChangedMeanwhile`]), read with the run's own check of the task.
+  pub async fn run_again_as(
+    &self,
+    key: IdempotencyKey,
+    (task, after): (TaskId, RunId),
+    remove_worktrees: Option<Leftovers>,
+    revision: Option<TaskRevision>,
+  ) -> Result<RunId, Rejection> {
     // The run's task may still be ending its agents after it recorded the run's end. A run its
     // task still executes has not ended, which the rule finds in the run's record below.
     if let Err(executing) = self.settled(after).await {
@@ -276,6 +289,9 @@ impl Scheduler {
     let previous = again::check(&db, task, after)?;
     self.admit(&db)?;
     let checked = prepare::check_again(&db, root, task)?;
+    if revision.is_some_and(|revision| checked.task().revision() != revision) {
+      return Err(Rejection::TaskChangedMeanwhile);
+    }
     if let Some(confirmed) = &remove_worktrees {
       again::remove_worktrees(&mut db, root, &previous, confirmed)?;
     }

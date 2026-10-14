@@ -86,6 +86,10 @@ pub enum Command {
     task: TaskId,
     after: RunId,
     remove_worktrees: Option<Leftovers>,
+    /// The task as it was checked: a run again of a task changed since is refused
+    /// ([`Rejection::TaskChangedMeanwhile`]); `None` runs it as it is.
+    #[serde(default)]
+    revision: Option<orchester_core::sharing::TaskRevision>,
   },
   /// Pauses run `run` at its next checkpoint: the active agent invocation finishes, its work is
   /// committed, then the run is paused ("Pausing…" until then, [`Event::RunChanged`] tells when).
@@ -404,6 +408,8 @@ pub enum Rejection {
   TaskNotFound,
   /// Only queued tasks start a run.
   TaskNotQueued,
+  /// The task changed since it was checked for this run: nothing started.
+  TaskChangedMeanwhile,
   /// A reviewed group's order, concurrency or shared cap holds this task.
   TaskGroupWaiting {
     hold: orchester_core::task_group::GroupHold,
