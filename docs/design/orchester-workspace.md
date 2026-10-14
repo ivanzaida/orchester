@@ -974,9 +974,9 @@ runs are changed); empty search results and non-fixture filter/sort combinations
 pending/error and queued-success states; one selected task; group waiting reasons for concurrency, previous task,
 agent capacity, daily/shared budgets, preflight or start failure. These reuse existing fields, buttons, notices and
 error text. Values are derived from real selections, never the illustrative ten-task defaults. Group caps stop
-agents at turn boundaries and can overshoot by already-running turns. Queue editing, pause scheduling and explicit
-task prerequisites remain separate backlog work; this change does not introduce those controls or claim dependency
-enforcement. Shared-cap recovery is unavailable in the per-run raise-limit panel because raising one run's limit
+agents at turn boundaries and can overshoot by already-running turns. Queue editing and explicit task prerequisites remain
+separate backlog work; this change does not introduce those controls or claim dependency enforcement (pause scheduling
+came later, with the Orchestrator chat: *Hold new starts* in Tasks). Shared-cap recovery is unavailable in the per-run raise-limit panel because raising one run's limit
 cannot raise a group cap. The independent verifier must compare J9467/W1Dq6/IyJ5a and these reachable states.
 **Held groups (implemented; drawn 2026-10-02 in 02.03D `IYlGK`, where Return to drafts sits left of Set pipeline as written here):** a failed or cancelled task, the
 spent group cap, or a start the person must fix (preflight problems, a failed start) holds a group's unstarted tasks
@@ -1172,7 +1172,31 @@ Proposed runtime states: preserve drafts on failed sends and show Retry; dedupli
 
 At narrower widths the task proposal becomes an on-demand panel above the composer, keeping chat usable; collapse project navigation first. Keyboard focus, panel transitions, persistence, response streaming and actual routing require runtime acceptance tests. [Project chat overview](previews/organization/I0Ij1T.png).
 
-Implemented, first version (OR1, 2026-10-14, the new app; `orchester_core::orchestrator`, `orchester_workspace::orchestrator`, `screens/orchestrator`). The sidebar's *Orchestrator* opens the conversation with the latest message, or a new one (`HvzWI`: the four suggestions fill the prompt and send nothing; the line under the composer says each reply gets the Orchestrator's rules, the conversation and what it reads). Each message a person sends is one turn of Claude Code, which the project's runner starts read-only in the project folder (`Read`, `Glob`, `Grep` only: no shell, no edit tool) with a system prompt of its own and only the chat's domain tools (`docs/stable-build.md`, "Embedded MCP server"); the next turn resumes the CLI's session while the Orchestrator stays on the same connection. Messages, replies, the actions the agent took through the tools (a card each: done, or refused with the tool's reason, *Open* the task it names) and how each turn ended are kept per project in its database. While it answers: the working line and *Stop response*, which ends the CLI only; a stopped or cut-short answer shows an event line and *Ask again*; a failed one a danger notice with *Retry* and *Open Connections* (not signed in, the account) or *Open settings* (the connection is gone); a message the runner never took is not kept, its draft stays with *Retry*, which sends it once. History lists the project's conversations by the day they last changed, with a search by title; Esc closes it. Orchestrator settings (`/orchestrator/settings`) choose the connection, model and reasoning effort, saved at once; in this version the Orchestrator runs on Claude Code connections only (a Codex connection is listed with why), and its Actions, Context and Conversations tabs are not built (locked, with why). Not built: proposals and the bulk editor, *Manage context* and attachments (shown unavailable), the draft/publish versions of its profile, role instructions and project memory, history compaction, pausing scheduling for a group (the queue has no such action yet), and the 960 and light passes.
+Implemented, first version (OR1, 2026-10-14, the new app; `orchester_core::orchestrator`, `orchester_workspace::orchestrator`, `screens/orchestrator`). The sidebar's *Orchestrator* opens the conversation with the latest message, or a new one (`HvzWI`: the four suggestions fill the prompt and send nothing; the line under the composer says each reply gets the Orchestrator's rules and the conversation). Opening one from History shows its title and *Opening from History* while it loads (`kDOn9`). Each message a person sends is one turn of the CLI the Orchestrator runs on, which the project's runner starts in the project folder with a system prompt of its own and only the chat's domain tools (`docs/stable-build.md`, "Embedded MCP server"):
+- Claude Code: only `Read`, `Glob` and `Grep`, with no allow rule, so reads stay in the project folder; the runner's private files and the account's CLI folder are denied by rule.
+- Codex: App Server in its `read-only` sandbox with no command left to a person. That sandbox does not keep reads in the project folder.
+
+The next turn resumes the session while the Orchestrator stays on the same connection and account. When either changes, a new session starts and the conversation says so. One answer takes at most 30 agentic turns and 10 minutes. The chat's tokens count toward the project's daily budget and today's usage: a used budget refuses a turn as it refuses runs. It takes no agent slot.
+
+The conversation keeps, per project in its database:
+- messages and replies;
+- the actions the agent took through the tools: a card each, done or refused with the tool's reason, with *Open* for the task it names;
+- how each turn ended.
+
+The agent's `run_task` starts nothing. It proposes the start, and the person takes it or not: *Start <task> on <pipeline>?* with *Start* (person-only; synthetic input is refused visibly) and *Dismiss*.
+
+While it answers, the screen shows the working line and *Stop response*, which ends the CLI only. How a turn ends shows as follows:
+- stopped, or cut short: an event line (*Response stopped by you · 14:33 · …*) and *Ask again*;
+- failed: a danger notice with *Retry*, and *Open Connections* (not signed in, the account) or *Open settings* (the connection is gone);
+- never taken by the runner: the message is not kept, and its draft stays with *Retry*, which sends it once.
+
+History lists the project's conversations by the day they last changed, with a search by title; Esc closes it.
+
+Orchestrator settings (`/orchestrator/settings`) choose a Claude Code or Codex connection, the model (with *Other model id…*) and the reasoning effort. They are versioned as agent profiles are (`qAq0z`): the first version is published from the form; after that a change is saved as a draft (*Save draft*) and published as the next version (*Publish vN*), which the chat answers on from its next reply. The Actions, Context and Conversations tabs are not built (locked, with why).
+
+New starts can be held from Tasks (*Hold new starts* / *Release*, and a *Release* for each held group), from Orchester's MCP server and from the chat (`hold_queue`, `release_queue`). A hold covers the project or one reviewed group. Running runs go on; only first runs wait. No frame draws this in Tasks, so it uses the header's controls.
+
+Not built: the bulk proposal editor, *Manage context* and attachments (shown unavailable), role instructions and project memory, history compaction, and the 960 and light passes.
 
 ## Task conversation
 
