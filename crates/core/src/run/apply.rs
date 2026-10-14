@@ -423,7 +423,8 @@ impl Run {
         reason,
         revision,
       } => self.current_execution_mut(*execution).fail(*reason, revision.clone()),
-      RunEventKind::StepAccepted { execution } => self.current_execution_mut(*execution).accept(),
+      // A record of the decision; the attempt that follows passes the step.
+      RunEventKind::StepAccepted { .. } => {}
       RunEventKind::StepSkipped { execution } => self.set_step(*execution, StepStatus::Skipped),
     }
   }

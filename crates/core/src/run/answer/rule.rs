@@ -47,7 +47,8 @@ pub enum RuleScope {
   SimilarCommand { command: SimilarCommand },
   /// Any call of `tool` of MCP server `server`, whatever its arguments. With a `folder` (Orchester's tools that read
   /// outside the worktree), any call of those tools that reads in it or below it; with a `check` (`run_check`), the
-  /// calls of that check. Rules made before folders were kept have neither.
+  /// calls of that check; for `start_qa_app`, `check` is the QA script's git blob, so a changed script asks again.
+  /// Rules made before folders were kept have neither.
   SimilarMcpTool {
     server: String,
     tool: String,
@@ -91,6 +92,8 @@ impl RuleScope {
           ToolReach::Folder { folder, .. } => (Some(folder.clone()), None),
           ToolReach::Check { every_call: true, .. } => return Err(SimilarUnavailable::EveryCall),
           ToolReach::Check { name, .. } => (None, Some(name.clone())),
+          ToolReach::Script { blob } if blob.is_empty() => return Err(SimilarUnavailable::EveryCall),
+          ToolReach::Script { blob } => (None, Some(blob.clone())),
         };
         Ok(Self::SimilarMcpTool {
           server: server.clone(),
@@ -201,8 +204,8 @@ pub fn answering<'a>(rules: &'a [ApprovalRule], subject: &ApprovalSubject) -> Op
           check: Some(check),
           ..
         },
-        ToolReach::Check { name, .. },
-      ) => s == server && t == tool && check == name,
+        ToolReach::Check { name: script, .. } | ToolReach::Script { blob: script },
+      ) => s == server && t == tool && check == script,
       _ => false,
     }),
     ApprovalSubject::Command(command) => {

@@ -10,6 +10,7 @@
 //! revision as well.
 
 use super::{
+  answer::Answerer,
   attempt::StepExecution,
   error::RunError,
   event::{PlannedExecution, RunEvent, RunEventKind},
@@ -84,9 +85,16 @@ impl Run {
     })
   }
 
-  /// [`super::StuckDecision::Accept`] of a run waiting for `stuck`: the step's latest execution passes, and the run
-  /// succeeds or runs the steps that have not passed.
-  pub(super) fn accept_stuck(&mut self, stuck: &Stuck, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
+  /// [`super::StuckDecision::Accept`] of a run waiting for `stuck`, decided `by` a person or by automation: the
+  /// acceptance is recorded, and a new attempt runs the step, then the steps after it and those that have not passed.
+  /// The step's new execution runs no agent: the runner passes it with the work and the result of the one accepted
+  /// ([`Run::accepted_execution`]), as a step passes, merging its work and proposing a gated step's plan.
+  pub(super) fn accept_stuck(
+    &mut self,
+    stuck: &Stuck,
+    by: Answerer,
+    now: Timestamp,
+  ) -> Result<Vec<RunEvent>, RunError> {
     let step = stuck.step().clone();
     if !stuck.can_accept() {
       return Err(RunError::NotAcceptable(step));
@@ -97,22 +105,19 @@ impl Run {
       .ok_or_else(|| RunError::NotAcceptable(step.clone()))?;
     self.transition(now, |transition| {
       transition.record(RunEventKind::RetryAllowed)?;
-      transition.record(RunEventKind::StepAccepted { execution })?;
-      if transition.run.all_passed() {
-        return transition.record(RunEventKind::Succeeded);
-      }
+      transition.record(RunEventKind::StepAccepted { execution, by })?;
       let attempt = RunEventKind::AttemptStarted {
         attempt: AttemptId::generate(),
         number: transition.run.next_attempt_number(),
-        executions: transition.run.unpassed_executions(),
+        executions: transition.run.retry_executions(&step),
         reason: AttemptReason::Accepted { step },
       };
       transition.record(attempt)
     })
   }
 
-  /// A person's acceptance passes the latest execution of its step, which failed unverified or unchanged, once the
-  /// attempt it ended has settled.
+  /// An acceptance names the latest execution of its step, which failed unverified or unchanged, once the attempt it
+  /// ended has settled. It changes no execution: the attempt after it passes the step.
   pub(super) fn check_accept(&self, kind: &RunEventKind, execution: StepExecutionId) -> Result<(), RunError> {
     self.expect_step(kind, execution, |status| status == StepStatus::Failed)?;
     self.expect_settled()?;
@@ -125,12 +130,18 @@ impl Run {
     }
   }
 
-  /// The attempt after an acceptance executes every step that has not passed, the accepted one passed.
+  /// The attempt after an acceptance executes the accepted step, which failed unverified or unchanged, its dependent
+  /// steps and every step that has not passed.
   pub(super) fn check_accepted(&self, step: &StepKey, executions: &[PlannedExecution]) -> Result<(), RunError> {
-    if self.latest_execution(step).map(StepExecution::status) != Some(StepStatus::Passed) {
-      return Err(RunError::InvalidAttempt("an acceptance passes its step first"));
+    let waited = self
+      .latest_execution(step)
+      .is_some_and(|execution| execution.failure().is_some_and(StepFailure::waits_for_person));
+    if !waited {
+      return Err(RunError::InvalidAttempt(
+        "an acceptance passes a step that waited for a person",
+      ));
     }
-    let expected = self.unpassed_executions();
+    let expected = self.retry_executions(step);
     if executions
       .iter()
       .map(|planned| &planned.step)
@@ -139,23 +150,36 @@ impl Run {
       Ok(())
     } else {
       Err(RunError::InvalidAttempt(
-        "the attempt after an acceptance executes the steps that have not passed",
+        "the attempt after an acceptance executes the accepted step, its dependent and its unfinished steps",
       ))
     }
   }
 
-  /// Fresh executions of every step whose latest execution has not passed, in pipeline order.
-  fn unpassed_executions(&self) -> Vec<PlannedExecution> {
-    self
-      .snapshot()
-      .steps()
+  /// The execution whose work and result a person accepted, when `execution` is the accepted step's execution in the
+  /// attempt the acceptance started: the step's latest execution that failed unverified, or for one that was not run
+  /// again on an unchanged revision, the one whose result held for it. The runner passes `execution` with that one's
+  /// work and result instead of starting an agent.
+  pub fn accepted_execution(&self, execution: StepExecutionId) -> Option<StepExecutionId> {
+    let position = self
+      .attempts()
       .iter()
-      .map(|step| step.key())
-      .filter(|key| self.latest_execution(key).map(StepExecution::status) != Some(StepStatus::Passed))
-      .map(|key| PlannedExecution {
-        id: StepExecutionId::generate(),
-        step: key.clone(),
-      })
-      .collect()
+      .position(|attempt| attempt.execution(execution).is_some())?;
+    let attempt = &self.attempts()[position];
+    let AttemptReason::Accepted { step } = attempt.reason() else {
+      return None;
+    };
+    if attempt.execution(execution)?.step() != step {
+      return None;
+    }
+    // An execution refused as unchanged did no work: the one whose result held for the revision is accepted.
+    self.attempts()[..position]
+      .iter()
+      .rev()
+      .filter(|earlier| earlier.counts())
+      .flat_map(|earlier| earlier.executions())
+      .filter(|candidate| candidate.step() == step && candidate.status() == StepStatus::Failed)
+      .find(|candidate| candidate.failure() != Some(StepFailure::Unchanged))
+      .filter(|accepted| accepted.failure().is_some_and(StepFailure::holds_for_revision))
+      .map(StepExecution::id)
   }
 }

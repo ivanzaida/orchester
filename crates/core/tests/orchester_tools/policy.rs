@@ -65,7 +65,6 @@ fn orchester_tools_policy_follows_the_table() {
       "list_run_processes",
       "stop_run_process",
       "call_run_app",
-      "start_qa_app",
       "get_task",
       "save_memory",
       "report_progress"
@@ -99,10 +98,23 @@ fn orchester_tools_policy_follows_the_table() {
       .all(|tool| tool["inputSchema"]["additionalProperties"] == json!(false))
   );
 }
-/// A QA copy builds and runs the worktree's code outside the sandbox: it asks, and auto-approval never answers.
+/// A QA copy builds and runs the worktree's code outside the sandbox: only a step that writes the worktree and reaches
+/// the network gets it, it asks, and auto-approval never answers it.
 #[test]
-fn orchester_tools_start_qa_app_asks() {
-  assert_eq!(reading().policy(OrchesterTool::StartQaApp), Some(ToolPolicy::Asks));
+fn orchester_tools_start_qa_app_asks_in_a_writing_step_with_network_only() {
+  assert_eq!(reading().policy(OrchesterTool::StartQaApp), None);
+  assert_eq!(writing().policy(OrchesterTool::StartQaApp), None, "network off");
+  let mut online = permissions(RepositoryAccess::ReadOnly);
+  online.set_network(NetworkAccess::On);
+  assert_eq!(
+    StepTools::for_step(&online, &[]).policy(OrchesterTool::StartQaApp),
+    None,
+    "read-only"
+  );
+  assert_eq!(
+    crate::qa_step().policy(OrchesterTool::StartQaApp),
+    Some(ToolPolicy::Asks)
+  );
   assert!(!orchester_core::orchester_tools::auto_approvable(
     "Orchester",
     "start_qa_app"
@@ -166,7 +178,6 @@ fn orchester_tools_tell_each_cli_what_runs_and_what_asks() {
       "list_run_processes",
       "stop_run_process",
       "call_run_app",
-      "start_qa_app",
       "get_task",
       "save_memory",
       "report_progress",

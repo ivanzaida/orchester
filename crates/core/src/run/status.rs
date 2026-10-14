@@ -275,8 +275,9 @@ pub enum AttemptReason {
     return_to: StepKey,
     note: ReviewNote,
   },
-  /// A person accepted `step`, which waited for them unverified or unchanged, as it is: it passed, and the
-  /// steps that had not passed run.
+  /// A person (or automation they let answer) accepted `step`, which waited for them unverified or unchanged, as
+  /// it is: the attempt passes it with the accepted execution's work and result, then runs the steps after it and
+  /// those that had not passed.
   Accepted {
     step: StepKey,
   },

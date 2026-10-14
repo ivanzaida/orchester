@@ -34,9 +34,9 @@ pub enum StuckDecision {
   /// One more attempt: the step's failure route again, or for a step that broke, waited unverified or was
   /// not run again on unchanged work, the step again.
   Retry,
-  /// For a step that waited unverified or unchanged: it passes as it is, and the steps that have not passed
-  /// run ([`AttemptReason::Accepted`]).
-  Accept,
+  /// For a step that waited unverified or unchanged: it passes as it is, and the steps after it and those that
+  /// have not passed run ([`AttemptReason::Accepted`]). `by`: a person, or automation a person let answer approvals.
+  Accept { by: super::answer::Answerer },
   /// A new attempt from agent step `step` (one of [`Run::return_targets`]), whose prompt carries
   /// `note` as the person's instruction.
   ReturnTo { step: StepKey, note: ReviewNote },
@@ -221,7 +221,7 @@ impl Run {
           })
         });
       }
-      StuckDecision::Accept => return self.accept_stuck(&stuck, now),
+      StuckDecision::Accept { by } => return self.accept_stuck(&stuck, *by, now),
       StuckDecision::Retry => match &stuck {
         Stuck::BrokeAgain(_) | Stuck::Unverified(_) | Stuck::Unchanged(_) => {
           (AttemptReason::Restart { step: step.clone() }, step)

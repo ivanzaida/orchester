@@ -49,7 +49,7 @@ pub use self::{
   outside::{MAX_LINE_BYTES, MAX_READ_BYTES, OutsideReadError, OutsideReads},
   policy::{StepTools, ToolPolicy, auto_approvable, decide},
   processes::{ProcessCall, ProcessScopeError, RunProcessScope},
-  qa::{QA_APP_SCRIPT, QaAppStart, StartedQaApp, qa_name},
+  qa::{QA_APP_SCRIPT, QaAppStart, QaApproval, StartedQaApp, qa_name},
   skills::{SkillCall, SkillOfferError, SkillReadError, SkillSource, StepSkills},
   task_view::TaskView,
   work::{ExternalReach, ProjectTool, ToolContext, ToolProgram, ToolWork},

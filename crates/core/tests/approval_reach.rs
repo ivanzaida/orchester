@@ -143,3 +143,36 @@ fn approval_reach_keys_a_checks_rule_to_the_check() {
   let unknown = ApprovalSubject::of(&request("run_check", "tests"), &scope);
   assert_eq!(RuleScope::similar(&unknown), Err(SimilarUnavailable::EveryCall));
 }
+
+#[test]
+fn approval_reach_keeps_a_qa_apps_rule_to_its_scripts_content() {
+  use orchester_core::orchester_tools::QaApproval;
+  let scope = CommandScope::new(&root().join("repo"), &[], None, None);
+  let target = |script: &str, changed: &[&str]| {
+    QaApproval {
+      script: script.to_owned(),
+      scenario: "tasks".to_owned(),
+      changed: changed.iter().map(|path| (*path).to_owned()).collect(),
+    }
+    .target()
+  };
+  let first = target("3b18e512dba79e4c8300dd08aeb37f8e728b8dad", &[]);
+  assert_eq!(
+    first,
+    "tools/qa-app.ps1 3b18e512dba79e4c8300dd08aeb37f8e728b8dad · scenario tasks"
+  );
+  let changed = target("9f2c", &["crates/app/build.rs", "tools/qa-app.ps1"]);
+  assert!(changed.ends_with(" · changed since the run's base: crates/app/build.rs, tools/qa-app.ps1"));
+  assert!(QaApproval::watches("tools/qa-app.ps1") && QaApproval::watches("crates/app/build.rs"));
+  assert!(!QaApproval::watches("src/build.rs.bak"));
+  let subject = |target: &str| ApprovalSubject::of(&request("start_qa_app", target), &scope).with_checks(&[]);
+  let rules = [rule(RuleScope::similar(&subject(&first)).expect("similar"))];
+  // Another scenario on the same script is covered; a changed script asks again.
+  assert!(answering(&rules, &subject(&first.replace("tasks", "decisions"))).is_some());
+  assert!(answering(&rules, &subject(&changed)).is_none());
+  // Without the script's content there is no rule to make.
+  assert_eq!(
+    RuleScope::similar(&subject("scenario tasks")),
+    Err(SimilarUnavailable::EveryCall)
+  );
+}

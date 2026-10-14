@@ -133,7 +133,7 @@ fn call_run_app_start_qa_app_input_is_strict_and_asks() {
     resource::StepKey,
     run::RunNumber,
   };
-  let step = reading();
+  let step = crate::qa_step();
   let call = ToolCall::parse("start_qa_app", &json!({"scenario":"task-states"}), &step).expect("call");
   assert_eq!(call.tool(), OrchesterTool::StartQaApp);
   assert!(step.call_asks(&call), "it runs the worktree's code outside the sandbox");

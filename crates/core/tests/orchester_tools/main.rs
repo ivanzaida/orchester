@@ -43,6 +43,13 @@ pub fn writing() -> StepTools {
   StepTools::for_step(&permissions(RepositoryAccess::Write), &[])
 }
 
+/// A step that writes the worktree and reaches the network: it is offered `start_qa_app`.
+pub fn qa_step() -> StepTools {
+  let mut online = permissions(RepositoryAccess::Write);
+  online.set_network(NetworkAccess::On);
+  StepTools::for_step(&online, &[])
+}
+
 pub fn reading() -> StepTools {
   StepTools::for_step(&permissions(RepositoryAccess::ReadOnly), &[])
 }

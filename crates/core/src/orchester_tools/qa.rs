@@ -77,6 +77,40 @@ impl QaAppStart {
   }
 }
 
+/// What a `start_qa_app` call's approval names, as its target: the script's git blob (what an *Approve similar* rule
+/// is kept to, so a rule never covers a call after the script changed), the scenario, and the build or start scripts
+/// that changed since the run's base revision, which the person should look at first.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QaApproval {
+  pub script: String,
+  pub scenario: String,
+  pub changed: Vec<String>,
+}
+
+impl QaApproval {
+  /// "tools/qa-app.ps1 <blob> · scenario <scenario>", then " · changed since the run's base: <files>" when any did.
+  pub fn target(&self) -> String {
+    let mut target = format!("{QA_APP_SCRIPT} {} · scenario {}", self.script, self.scenario);
+    if !self.changed.is_empty() {
+      target.push_str(" · changed since the run's base: ");
+      target.push_str(&self.changed.join(", "));
+    }
+    target
+  }
+
+  /// The script's blob a [`QaApproval::target`] names; `None` for any other text.
+  pub fn script_of(target: &str) -> Option<&str> {
+    let rest = target.strip_prefix(QA_APP_SCRIPT)?.strip_prefix(' ')?;
+    let blob = rest.split(' ').next()?;
+    (!blob.is_empty() && blob.chars().all(|c| c.is_ascii_hexdigit())).then_some(blob)
+  }
+
+  /// Whether `path`, relative to the worktree, is one whose change the approval names: the script, or a build script.
+  pub fn watches(path: &str) -> bool {
+    path == QA_APP_SCRIPT || path == "build.rs" || path.ends_with("/build.rs")
+  }
+}
+
 /// The QA folder name (`.tmp/qa/<name>/`) of `step` in run `run`: `run-<number>-<step>`, in the script's kebab-case.
 pub fn qa_name(run: RunNumber, step: &StepKey) -> String {
   let step: String = step

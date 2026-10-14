@@ -73,8 +73,21 @@ fn unverified_steps_round_trip_waiting_retried_unchanged_and_accepted() {
   );
   assert_eq!(reloaded(&db, &run), run);
 
-  let events = run.decide_stuck(&StuckDecision::Accept, at(30)).expect("accepted");
+  let decision = StuckDecision::Accept {
+    by: orchester_core::run::Answerer::Person,
+  };
+  let events = run.decide_stuck(&decision, at(30)).expect("accepted");
   db.append_events(&run, &events).expect("stored acceptance");
+  // The acceptance's attempt, which the runner passes the step in, round trips.
+  assert!(matches!(
+    run.current_attempt().map(|attempt| attempt.reason()),
+    Some(orchester_core::run::AttemptReason::Accepted { .. })
+  ));
+  assert_eq!(reloaded(&db, &run), run);
+  let accepted = run.current_attempt().expect("attempt").executions()[0].id();
+  let mut events = run.start_step(accepted, at(31)).expect("started");
+  events.extend(run.complete_step(accepted, at(32)).expect("passed"));
+  db.append_events(&run, &events).expect("stored pass");
   assert_eq!(run.status(), &RunStatus::Succeeded);
   assert_eq!(reloaded(&db, &run), run);
   assert_eq!(Run::replay(&db.events(run.id()).expect("events")), Ok(run));

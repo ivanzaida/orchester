@@ -6,6 +6,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use super::{
+  answer::Answerer,
   branch::BranchName,
   number::RunNumber,
   permissions::{PermissionsApply, PermissionsChangedBy},
@@ -220,10 +221,11 @@ pub enum RunEventKind {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     revision: Option<Revision>,
   },
-  /// A person accepted `execution`, which waited for them unverified or unchanged, as it is: it passes
-  /// ([`super::StuckDecision::Accept`]).
+  /// `by` accepted `execution`, which waited for a person unverified or unchanged, as it is
+  /// ([`super::StuckDecision::Accept`]); the attempt that follows passes its step.
   StepAccepted {
     execution: StepExecutionId,
+    by: Answerer,
   },
   StepSkipped {
     execution: StepExecutionId,
@@ -249,7 +251,7 @@ impl RunEventKind {
       | Self::PlanDecided { execution, .. }
       | Self::StepPassed { execution }
       | Self::StepFailed { execution, .. }
-      | Self::StepAccepted { execution }
+      | Self::StepAccepted { execution, .. }
       | Self::StepSkipped { execution }
       | Self::CheckpointRecorded { execution, .. }
       | Self::PermissionsApplied { execution, .. } => Some(*execution),

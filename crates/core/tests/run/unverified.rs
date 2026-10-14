@@ -6,8 +6,8 @@
 use orchester_core::{
   id::{RunId, StepExecutionId},
   run::{
-    AttemptReason, Run, RunError, RunStatus, StepFailure, StepOutcome, StepOutput, StepResult, StepStatus, Stuck,
-    StuckDecision, UnverifiedCheck,
+    Answerer, AttemptReason, Run, RunError, RunEventKind, RunStatus, StepFailure, StepOutcome, StepOutput, StepResult,
+    StepStatus, Stuck, StuckDecision, UnverifiedCheck,
   },
 };
 
@@ -54,16 +54,30 @@ fn unverified_waits_for_the_person_without_a_retry() {
   assert_eq!(Run::restore(stored(&logged.run)), Ok(logged.run));
 }
 
+fn accept(by: Answerer) -> StuckDecision {
+  StuckDecision::Accept { by }
+}
+
 #[test]
-fn unverified_accept_passes_the_step_and_runs_the_steps_that_have_not_passed() {
+fn unverified_accept_runs_the_step_again_to_pass_it_with_the_accepted_work() {
   let mut logged = unverified();
-  logged.apply(|run| run.decide_stuck(&StuckDecision::Accept, at(50)));
+  let accepted = logged.exec("checks");
+  logged.apply(|run| run.decide_stuck(&accept(Answerer::Automation), at(50)));
   assert_eq!(logged.run.status(), &RunStatus::Running);
-  assert_eq!(status(&logged, "checks"), StepStatus::Passed);
-  let accepted = logged.run.current_attempt().expect("an attempt");
-  assert_eq!(accepted.reason(), &AttemptReason::Accepted { step: key("checks") });
-  let steps: Vec<_> = accepted.executions().iter().map(|e| e.step().as_str()).collect();
-  assert_eq!(steps, ["review", "pr"]);
+  // The decision is recorded with who took it.
+  assert!(logged.log.iter().any(|event| matches!(
+    event.kind(),
+    RunEventKind::StepAccepted { execution, by: Answerer::Automation } if *execution == accepted
+  )));
+  let attempt = logged.run.current_attempt().expect("an attempt");
+  assert_eq!(attempt.reason(), &AttemptReason::Accepted { step: key("checks") });
+  let steps: Vec<_> = attempt.executions().iter().map(|e| e.step().as_str()).collect();
+  assert_eq!(steps, ["checks", "review", "pr"]);
+  // The runner passes the step's new execution with the accepted one's work, as a passed step.
+  let again = logged.exec("checks");
+  assert_eq!(logged.run.accepted_execution(again), Some(accepted));
+  assert_eq!(logged.run.accepted_execution(logged.exec("review")), None);
+  logged.pass("checks");
   logged.pass("review");
   logged.pass("pr");
   assert_eq!(logged.run.status(), &RunStatus::Succeeded);
@@ -79,9 +93,10 @@ fn unverified_accept_of_the_last_step_succeeds_the_run() {
   let pr = logged.exec("pr");
   logged.apply(|run| run.start_step(pr, at(60)));
   logged.apply(|run| run.fail_judged(pr, (StepFailure::Unverified, Some(revision('c'))), at(61)));
-  logged.apply(|run| run.decide_stuck(&StuckDecision::Accept, at(62)));
+  logged.apply(|run| run.decide_stuck(&accept(Answerer::Person), at(62)));
+  logged.pass("pr");
   assert_eq!(logged.run.status(), &RunStatus::Succeeded);
-  assert_eq!(logged.run.attempts().len(), 1);
+  assert_eq!(logged.run.attempts().len(), 2);
 }
 
 #[test]
@@ -125,8 +140,16 @@ fn unverified_return_to_implement_refuses_checks_on_the_unchanged_revision() {
     logged.run.latest_execution(&key("checks")).and_then(|e| e.failure()),
     Some(StepFailure::Unchanged)
   );
-  // The person may still accept it as it is.
-  logged.apply(|run| run.decide_stuck(&StuckDecision::Accept, at(61)));
+  // The person may still accept it as it is: the work accepted is the unverified execution's, not the refused one's.
+  let unverified = logged.run.attempts()[0]
+    .executions()
+    .iter()
+    .find(|execution| execution.step() == &key("checks"))
+    .expect("checks")
+    .id();
+  logged.apply(|run| run.decide_stuck(&accept(Answerer::Person), at(61)));
+  assert_eq!(logged.run.accepted_execution(logged.exec("checks")), Some(unverified));
+  logged.pass("checks");
   assert_eq!(status(&logged, "checks"), StepStatus::Passed);
   assert_eq!(Run::replay(&logged.log), Ok(logged.run.clone()));
 }
@@ -167,7 +190,7 @@ fn unverified_only_a_step_without_a_verdict_can_be_accepted() {
     &RunStatus::WaitingForPerson(Stuck::RetriesExhausted(key("checks")))
   );
   assert_eq!(
-    logged.run.decide_stuck(&StuckDecision::Accept, at(50)),
+    logged.run.decide_stuck(&accept(Answerer::Person), at(50)),
     Err(RunError::NotAcceptable(key("checks")))
   );
 }

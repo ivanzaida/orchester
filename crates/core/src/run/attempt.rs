@@ -76,13 +76,6 @@ impl StepExecution {
     self.failure = failure;
     self.judged = judged;
   }
-
-  /// A person accepted it as it is: it passed, with no failure left.
-  pub(super) fn accept(&mut self) {
-    self.status = StepStatus::Passed;
-    self.failure = None;
-    self.judged = None;
-  }
 }
 
 /// One pass through the pipeline. Attempt 1 executes every step; a retry attempt executes
