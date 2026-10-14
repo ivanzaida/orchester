@@ -7,11 +7,12 @@
 //!
 //! What waits is `tasks::needs_you`'s, so the panel lists exactly what every Needs you counts. Approvals and
 //! questions with suggested answers expand in place around the conversation's own card (`in_place`), one at a
-//! time; the others open their task: a plan, a limit, a decision after retries and an interrupted run its
-//! Summary, pointing at the plan's, the limit's or the decision's card (`icGHG`), an agent's question its
-//! Conversation, where the composer answers it. The project's memory records, and an item whose task can't be
-//! read, are listed with their action unavailable, and why. An item expanded here keeps its place once it no
-//! longer waits, quiet, until the panel closes, so nothing moves under the pointer.
+//! time, and the list keeps the expanded one in view (`reveal`); the others open their task: a plan, a limit, a
+//! decision after retries and an interrupted run its Summary, pointing at the plan's, the limit's or the
+//! decision's card (`icGHG`), an agent's question its Conversation, where the composer answers it. The
+//! project's memory records, and an item whose task can't be read, are listed with their action unavailable,
+//! and why. An item expanded here keeps its place once it no longer waits, as a note of how it went (`note`),
+//! until the panel closes, so nothing moves under the pointer.
 
 use std::{sync::Arc, time::Duration};
 
@@ -37,7 +38,8 @@ use super::{
   Waiting,
   in_place::{InPlaceCard, InPlaceProps},
   item::{self, Action},
-  pinned::{self, Pinned},
+  pinned::{self, Pin, Pinned},
+  reveal::{At, Reveal},
   waiting, words,
 };
 use crate::{
@@ -61,6 +63,8 @@ pub(super) const PANEL_WIDTH: f32 = 460.0;
 /// What the panel leaves of the window's height: 40 over it (the title bar and the gap under the pill) and 32
 /// under it, above the status bar (`BrP6i` in `VnLOT`, 828 high in a 900 window).
 const WINDOW_ROOM: f32 = 72.0;
+/// The measure of what the empty panel explains (`RAYK9` in `B95uP1`).
+const EMPTY_TEXT_WIDTH: f32 = 320.0;
 /// How often the waiting times move on while the panel shows.
 const TICK: Duration = Duration::from_secs(30);
 
@@ -94,12 +98,13 @@ struct Group {
 pub(super) struct NeedsYouPanel {
   decisions: Decisions,
   /// The item expanded in place, by project and key.
-  expanded: Signal<Option<(ProjectId, Arc<str>)>>,
+  expanded: Signal<Option<At>>,
   /// Items expanded since the panel opened, which keep their place once they no longer wait.
   kept: Mutex<Vec<Shown>>,
-  /// The list's scroll, and the project whose header is pinned over it.
+  /// The list's scroll, the project whose header is pinned over it, and the expanded item it keeps in view.
   scroll: ScrollState,
-  pinned: Signal<Pinned>,
+  pin: Pin,
+  reveal: Reveal,
   tick: Signal<u64>,
   interval: Interval,
 }
@@ -117,10 +122,16 @@ impl Component for NeedsYouPanel {
       expanded: ctx.signal(None),
       kept: Mutex::new(Vec::new()),
       scroll: ScrollState::new(),
-      pinned: ctx.signal(Pinned::default()),
+      pin: Pin::new(ctx),
+      reveal: Reveal::new(ctx),
       tick,
       interval,
     }
+  }
+
+  fn after_layout(&self) {
+    self.reveal.after_layout();
+    self.pin.after_layout(&self.scroll);
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -217,7 +228,6 @@ impl NeedsYouPanel {
         group.waiting.count,
       )
     };
-    let content = ElementRef::new();
     let mut heads: Vec<(ProjectId, ElementRef)> = Vec::new();
     let mut rows: Vec<Element> = Vec::new();
     for (index, group) in shown.iter().enumerate() {
@@ -239,15 +249,17 @@ impl NeedsYouPanel {
         rows.push(self.row(ctx, shown, &waiting, (navigation, open)));
       }
     }
-    let Pinned(pinned) = self.pinned.get();
+    self.pin.heads(heads);
+    let Pinned(pinned) = self.pin.get();
     let pinned = shown
       .iter()
       .find(|group| Some(group.waiting.project) == pinned)
       .or(shown.first())
       .map(|group| header(ctx, group, format!("needs-you-group-{}", group.waiting.project)));
+    let (pin, reveal) = (self.pin.on_scroll(&self.scroll), self.reveal.clone());
     let list = ScrollVertical::new(
       Column::new()
-        .ref_element(content.clone())
+        .ref_element(self.pin.content())
         .width(Dimension::Pct(100.0))
         .padding(
           Padding::new()
@@ -260,10 +272,15 @@ impl NeedsYouPanel {
     )
     .with_scroll_state(self.scroll.clone())
     .id("needs-you-list")
+    .ref_element(self.reveal.list())
     .width(Dimension::Pct(100.0))
     .flex_shrink(1.0)
     .min_height(Dimension::Px(0.0))
-    .on_scroll(pinned::on_scroll(&self.scroll, &self.pinned, content, heads));
+    .on_scroll(move |event| {
+      // The person scrolls: the expanded item no longer holds the list.
+      reveal.stop();
+      pin(event);
+    });
     Column::new()
       .width(Dimension::Pct(100.0))
       .flex_shrink(1.0)
@@ -274,7 +291,8 @@ impl NeedsYouPanel {
       .into()
   }
 
-  /// One item, collapsed or expanded around the card that answers it.
+  /// One item: collapsed, expanded around the card that answers it, or, answered in place and no longer
+  /// waiting, its note.
   fn row(
     &self,
     ctx: &mut Ctx,
@@ -297,20 +315,21 @@ impl NeedsYouPanel {
       };
       return item::collapsed(ctx, &id, item, action);
     };
-    if !expanded {
-      let (signal, at) = (self.expanded.clone(), at);
-      let press: Arc<dyn Fn() + Send + Sync> = Arc::new(move || signal.set(Some(at.clone())));
+    if !expanded && shown.waits {
+      let (signal, reveal, at) = (self.expanded.clone(), self.reveal.clone(), at);
+      let press: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+        reveal.want(at.clone());
+        signal.set(Some(at.clone()));
+      });
       return item::collapsed(ctx, &id, item, Action::Press(Icon::ChevronDown, press));
     }
-    {
-      let mut kept = self.kept.lock();
-      if !kept
-        .iter()
-        .any(|kept| kept.project == shown.project && kept.key == shown.key)
-      {
-        kept.push(shown.clone());
-      }
-    }
+    self.keep(shown);
+    let conversation = go(
+      navigation,
+      open,
+      task_route(shown.project, &task.key, TaskView::Conversation),
+    );
+    // One key whether it waits or not: the note reads on from what the card read.
     let card = ctx.mount_keyed::<InPlaceCard>(
       &format!("{id}-card"),
       InPlaceProps {
@@ -320,18 +339,33 @@ impl NeedsYouPanel {
         key,
         step: item.step.as_ref().map(|step| (step.number, step.name.clone())),
         waiting: waiting.clone(),
+        gone: (!shown.waits).then(|| item.clone()),
+        conversation,
       },
     );
+    if !shown.waits {
+      return card;
+    }
+    self.reveal.request(ctx, &at);
     let collapse: Arc<dyn Fn() + Send + Sync> = {
-      let signal = self.expanded.clone();
-      Arc::new(move || signal.set(None))
+      let (signal, reveal) = (self.expanded.clone(), self.reveal.clone());
+      Arc::new(move || {
+        reveal.stop();
+        signal.set(None);
+      })
     };
-    let conversation = go(
-      navigation,
-      open,
-      task_route(shown.project, &task.key, TaskView::Conversation),
-    );
-    item::expanded(ctx, &id, (item, shown.waits), (collapse, conversation), card)
+    item::expanded(ctx, (&id, self.reveal.item()), item, collapse, card)
+  }
+
+  /// Keeps `shown`, expanded here, in its place once it no longer waits.
+  fn keep(&self, shown: &Shown) {
+    let mut kept = self.kept.lock();
+    if !kept
+      .iter()
+      .any(|kept| kept.project == shown.project && kept.key == shown.key)
+    {
+      kept.push(shown.clone());
+    }
   }
 }
 
@@ -500,13 +534,14 @@ fn empty(ctx: &Ctx) -> Element {
             .id("needs-you-empty-text")
             .variant(NeedsYouText::Empty.role())
             .text_align(TextAlign::Center)
-            .width(Dimension::Pct(100.0)),
+            .width(Dimension::Px(EMPTY_TEXT_WIDTH)),
         ),
     )
     .into()
 }
 
-/// *Show all in Kontur's Overview*, of the active tab's project or the first listed, and *Esc closes*.
+/// *Show all in Kontur's Overview*, or with nothing listed *Open Kontur's Overview* (`k4VANT` in `B95uP1`), of
+/// the active tab's project or the first listed, and *Esc closes*.
 fn footer(
   ctx: &Ctx,
   groups: &[Group],
@@ -518,13 +553,18 @@ fn footer(
     .find(|group| Some(group.waiting.project) == active)
     .or_else(|| groups.first())
     .map(|group| &group.waiting);
+  let key = if groups.iter().all(|group| group.items.is_empty()) {
+    "needs_you.openOverview"
+  } else {
+    "needs_you.showAll"
+  };
   let show_all = chosen.map(|waiting| {
     let route = Route::Project(waiting.project, ProjectPage::Overview(OverviewTab::NeedsYou));
     let press = go(navigation, open, Some(route));
     ActionButton::new(
       "needs-you-show-all",
       ButtonKind::Ghost,
-      ctx.t_args("needs_you.showAll", [("project", waiting.name.as_str())]),
+      ctx.t_args(key, [("project", waiting.name.as_str())]),
     )
     .icon(Icon::LayoutDashboard)
     .on_click(move || press())

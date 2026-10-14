@@ -55,16 +55,24 @@ pub struct Place {
   /// Shown in the title bar's Needs you panel, whose item frames a waiting card and says what it is: the card
   /// leaves out its own frame and head there (`YDJsC` in `zwuZt`).
   pub in_panel: bool,
+  /// In the panel, what opens the card in its task's conversation: a waiting question's answers row carries
+  /// it (`Open conversation` `D4BZ8a` in `Z4HeE3`).
+  pub conversation: Option<Press>,
 }
 
+/// What a press does.
+pub type Press = Arc<dyn Fn() + Send + Sync>;
+
 impl PartialEq for Place {
-  /// The step label's function is the conversation's own, the same for every card.
+  /// The step label's function is the conversation's own, the same for every card; what opens the
+  /// conversation is the same for one card's place, so only whether there is one counts.
   fn eq(&self, other: &Self) -> bool {
     self.project == other.project
       && self.detail == other.detail
       && self.key == other.key
       && self.step == other.step
       && self.in_panel == other.in_panel
+      && self.conversation.is_some() == other.conversation.is_some()
       && Arc::ptr_eq(&self.links, &other.links)
   }
 }
@@ -123,4 +131,10 @@ pub fn card(ctx: &mut Ctx, place: Place, item: &Item) -> Element {
     ItemKind::Approval(card) => approval::card(ctx, place, card),
     _ => Column::new().into(),
   }
+}
+
+/// Whether the card of `item`, while its run `lost` its runner or not, carries the place's *Open
+/// conversation* in its own answers row: a question with suggested answers that waits.
+pub fn hosts_conversation(item: &Item, lost: bool) -> bool {
+  matches!(&item.kind, ItemKind::Choice(card) if choice::waits(card, lost))
 }

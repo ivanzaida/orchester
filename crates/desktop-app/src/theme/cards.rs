@@ -22,10 +22,18 @@ pub enum CardsText {
   PlanLines,
   /// 12.5/500 `text_primary`: what a decided request's row says (`EvLfP` in `E1En3`).
   Decided,
+  /// 12.5 `text_primary`, 1.5: what a question asks, in its box in the Needs you panel (`l53lO` in `Z4HeE3`).
+  Asked,
 }
 
 impl CardsText {
-  pub const ALL: [Self; 4] = [Self::Title, Self::ApprovalTitle, Self::PlanLines, Self::Decided];
+  pub const ALL: [Self; 5] = [
+    Self::Title,
+    Self::ApprovalTitle,
+    Self::PlanLines,
+    Self::Decided,
+    Self::Asked,
+  ];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -37,6 +45,7 @@ impl CardsText {
       Self::ApprovalTitle => "cards_approval_title",
       Self::PlanLines => "cards_plan_lines",
       Self::Decided => "cards_decided",
+      Self::Asked => "cards_asked",
     }
   }
 
@@ -46,6 +55,7 @@ impl CardsText {
       Self::ApprovalTitle => style(13.0, FontWeight::SemiBold, 1.35, 0.0, palette.text_primary),
       Self::PlanLines => style(12.5, FontWeight::Normal, 1.6, 0.0, palette.text_secondary),
       Self::Decided => style(12.5, FontWeight::Medium, 1.35, 0.0, palette.text_primary),
+      Self::Asked => style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_primary),
     }
   }
 }

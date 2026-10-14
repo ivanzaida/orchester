@@ -35,6 +35,8 @@ pub struct Tooltip {
   mono: bool,
   /// The anchor is this text, cut to its room: the tooltip shows only while it is cut.
   cut: Option<CutText>,
+  /// It shows nothing now.
+  silent: bool,
 }
 
 /// How a cut text is set, and what its tooltip says.
@@ -91,6 +93,7 @@ impl Tooltip {
       shortcut: None,
       mono: false,
       cut: None,
+      silent: false,
     }
   }
 
@@ -106,6 +109,12 @@ impl Tooltip {
     self
   }
 
+  /// While `silent` it shows nothing, e.g. while what its anchor opened is open under it.
+  pub fn silent(mut self, silent: bool) -> Self {
+    self.silent = silent;
+    self
+  }
+
   /// `anchor` with this tooltip.
   pub fn wrap(self, ctx: &mut Ctx, anchor: impl Into<Element>) -> Element {
     let key = format!("tooltip-{}", self.id);
@@ -116,6 +125,7 @@ impl Tooltip {
   /// words only while it is cut; its hint's words either way.
   fn words(&self, fits: bool) -> Option<&Arc<str>> {
     match &self.cut {
+      _ if self.silent => None,
       None => Some(&self.text),
       Some(CutText { hint: Some(hint), .. }) => Some(if fits { &hint.fits } else { &hint.cut }),
       Some(_) if fits => None,

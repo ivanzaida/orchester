@@ -120,6 +120,20 @@ fn tab_labels_pill_stays_at_zero_and_opens_the_needs_you_panel() {
     Some(vec!["Nothing needs you".to_owned()]),
     "from a tab without a project, the pill opens the panel, empty at 0"
   );
+  assert_eq!(
+    window.texts("needs-you-show-all"),
+    Some(vec!["Open Kontur's Overview".to_owned()]),
+    "with nothing listed there is nothing to show all of (`B95uP1`)"
+  );
+  // The pointer rests on the pill past the tooltip's delay.
+  window
+    .tree
+    .tick_timers_at(Instant::now() + TOOLTIP_DELAY + Duration::from_millis(50));
+  window.pass();
+  assert!(
+    window.tree.get_element_by_id("needs-you-pill-tooltip").is_none(),
+    "the open panel says it all: the pill's tooltip keeps silent"
+  );
   assert_eq!(navigation.route_now(), before, "opening the panel goes nowhere");
 }
 

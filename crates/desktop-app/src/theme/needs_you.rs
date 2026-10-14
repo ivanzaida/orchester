@@ -33,10 +33,14 @@ pub enum NeedsYouText {
   Task,
   /// 12 `text_muted`, 1.5: what the empty panel explains (`RAYK9`).
   Empty,
+  /// 12/500 `text_primary`: how a request that no longer waits went (`J8bQb` in `Needs you note` `FETWe`).
+  NoteLine,
+  /// 11 `text_muted`, 1.4: what followed, and where it is recorded (`sLi8n` in `FETWe`).
+  NoteDetail,
 }
 
 impl NeedsYouText {
-  pub const ALL: [Self; 9] = [
+  pub const ALL: [Self; 11] = [
     Self::Title,
     Self::Count,
     Self::Project,
@@ -46,6 +50,8 @@ impl NeedsYouText {
     Self::ItemTitle,
     Self::Task,
     Self::Empty,
+    Self::NoteLine,
+    Self::NoteDetail,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -63,6 +69,8 @@ impl NeedsYouText {
       Self::ItemTitle => "needs_you_item_title",
       Self::Task => "needs_you_task",
       Self::Empty => "needs_you_empty",
+      Self::NoteLine => "needs_you_note_line",
+      Self::NoteDetail => "needs_you_note_detail",
     }
   }
 
@@ -77,6 +85,8 @@ impl NeedsYouText {
       Self::ItemTitle => style(13.0, FontWeight::Medium, 1.4, 0.0, palette.text_primary),
       Self::Task => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
       Self::Empty => style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_muted),
+      Self::NoteLine => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
+      Self::NoteDetail => style(11.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
     }
   }
 }

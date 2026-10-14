@@ -45,7 +45,9 @@
       "byAutomation": "Asked at {{asked}} · answered by automation through Orchester's MCP server at {{time}} · the answer resumed {{agent}}",
       "interrupted": "Asked at {{asked}} · {{agent}} stopped waiting at {{time}}, before an answer reached it",
       "lost": "Asked at {{asked}} · the run was interrupted before an answer reached {{agent}}",
-      "missingOne": "Pick one of {{agent}}'s options or write your own answer"
+      "missingOne": "Pick one of {{agent}}'s options or write your own answer",
+      "enterSends": "{{agent}} resumes at once with your answer · Enter sends",
+      "openConversation": "Open conversation"
     },
     "plan": {
       "title": "Plan v{{version}} · {{task}}",

@@ -64,6 +64,8 @@ pub struct FieldInput {
   clear: Option<Arc<str>>,
   width: Dimension,
   area_height: f32,
+  /// A single-line box's height.
+  box_height: f32,
   locked: bool,
   /// A 14 `text_muted` glyph at the box's end, e.g. the lock of a locked select (`H8GYVZ`).
   trailing: Option<Icon>,
@@ -93,6 +95,7 @@ impl PartialEq for FieldInput {
       && self.clear == other.clear
       && self.width == other.width
       && self.area_height == other.area_height
+      && self.box_height == other.box_height
       && self.locked == other.locked
       && self.trailing == other.trailing
       && self.invalid == other.invalid
@@ -121,6 +124,7 @@ impl FieldInput {
       clear: None,
       width: Dimension::Pct(100.0),
       area_height: TEXT_AREA_HEIGHT,
+      box_height: ControlHeight::Md.value(),
       locked: false,
       trailing: None,
       invalid: false,
@@ -189,6 +193,12 @@ impl FieldInput {
   /// A text area with the design's least height, retaining growth and scrolling for longer input.
   pub fn area_height(mut self, height: f32) -> Self {
     self.area_height = height;
+    self
+  }
+
+  /// A single-line box `height` high, where the design draws it taller than a control.
+  pub fn box_height(mut self, height: f32) -> Self {
+    self.box_height = height;
     self
   }
 
@@ -300,7 +310,7 @@ impl Component for FieldBox {
       Lines::One => dress(
         Row::new()
           .id(format!("{}-box", props.id))
-          .height(Dimension::Px(ControlHeight::Md.value()))
+          .height(Dimension::Px(props.box_height))
           .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
           .spacing(SpacingSize::Sm)
           .align_items(Alignment::Center),

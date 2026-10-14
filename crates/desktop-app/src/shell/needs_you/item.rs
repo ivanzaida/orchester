@@ -2,7 +2,8 @@
 //! name, *this tab's project*, how many wait in it) and an item (`Needs you item` `bAeM6`: what it is and since
 //! when it waits, what it asks, its task, where its run stands, and its action), collapsed or, answered in
 //! place, expanded (`Item · Approval · expanded` `YDJsC`: the item's own frame in a `warning` stroke around
-//! the card that answers it). An item that no longer waits keeps its place, quiet, until the panel closes.
+//! the card that answers it). An item answered in place that no longer waits keeps its place as a note
+//! (`note`) until the panel closes.
 
 use std::sync::Arc;
 
@@ -12,10 +13,11 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text},
+  core::ElementRef,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_workspace::tasks::needs_you::WaitingItem;
+use orchester_workspace::tasks::needs_you::{WaitingItem, WaitingKind};
 
 use super::words;
 use crate::{
@@ -133,15 +135,20 @@ pub(super) enum Action {
   Unavailable(Arc<str>),
 }
 
-/// The item collapsed: its body, and its action at the end.
-pub(super) fn collapsed(ctx: &Ctx, id: &str, item: &WaitingItem, action: Action) -> Element {
-  let place = words::place(ctx, item).map(|place| -> Element {
+/// Where its run stands: *Run 140 · 01 Research · Explorer* (`GdH68`, `a2DwV`).
+fn place(ctx: &Ctx, id: &str, item: &WaitingItem) -> Option<Element> {
+  words::place(ctx, item).map(|place| -> Element {
     Text::new(&place)
       .id(format!("{id}-where"))
       .variant(TypographyStyle::Caption)
       .width(Dimension::Pct(100.0))
       .into()
-  });
+  })
+}
+
+/// The item collapsed: its body, and its action at the end.
+pub(super) fn collapsed(ctx: &Ctx, id: &str, item: &WaitingItem, action: Action) -> Element {
+  let place = place(ctx, id, item);
   let button = ActionButton::new(
     format!("{id}-action"),
     ButtonKind::Secondary,
@@ -175,13 +182,14 @@ pub(super) fn collapsed(ctx: &Ctx, id: &str, item: &WaitingItem, action: Action)
     .into()
 }
 
-/// The item expanded around `card`, which answers it: in a `warning` stroke while it `waits`, quiet once it no
-/// longer does; *Collapse* folds it, *Open conversation* opens its card in the task's conversation.
+/// The item expanded around `card`, which answers it, in a `warning` stroke; *Collapse* folds it. The card
+/// brings the item's *Open conversation* ([`open_conversation`]). `element` finds the item, to keep it in
+/// view.
 pub(super) fn expanded(
   ctx: &mut Ctx,
-  id: &str,
-  (item, waits): (&WaitingItem, bool),
-  (collapse, conversation): (Press, Press),
+  (id, element): (&str, ElementRef),
+  item: &WaitingItem,
+  collapse: Press,
   card: Element,
 ) -> Element {
   let collapse = IconButton::new(
@@ -192,27 +200,16 @@ pub(super) fn expanded(
   .small()
   .on_click(move || collapse())
   .render(ctx);
-  let open = ActionButton::new(
-    format!("{id}-conversation"),
-    ButtonKind::Ghost,
-    ctx.t("needs_you.action.openConversation"),
-  )
-  .icon(Icon::ArrowUpRight)
-  .on_click(move || conversation());
-  let frame = Column::new()
+  Column::new()
     .id(id.to_owned())
-    .describe("state", if waits { "expanded" } else { "settled" })
+    .ref_element(element)
+    .describe("state", "expanded")
     .width(Dimension::Pct(100.0))
     .padding(SpacingSize::Md)
     .spacing(ExtraSpacing::Loose.role())
     .background(PaletteColor::SurfacePanel)
-    .rounded(ExtraRadius::Tile.role());
-  let frame = if waits {
-    frame.border(Border::inside(BorderSize::Sm, PaletteColor::Warning))
-  } else {
-    frame
-  };
-  frame
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Warning))
+    .rounded(ExtraRadius::Tile.role())
     .child(
       Row::new()
         .width(Dimension::Pct(100.0))
@@ -225,9 +222,25 @@ pub(super) fn expanded(
       Column::new()
         .width(Dimension::Pct(100.0))
         .spacing(ExtraSpacing::Fine.role())
-        .with_children(ask(ctx, id, item)),
+        .with_children(ask(ctx, id, item))
+        // A question says where its run stands (`a2DwV` in `Z4HeE3`); a request's card says it (`YDJsC`).
+        .with_children(matches!(item.kind, WaitingKind::Choice(_)).then(|| place(ctx, id, item)).flatten()),
     )
     .child(card)
-    .child(Row::new().child(open))
+    .into()
+}
+
+/// *Open conversation*, which opens an expanded item's card in its task's conversation.
+pub(super) fn open_conversation(ctx: &Ctx, id: &str, conversation: Press) -> Element {
+  Row::new()
+    .child(
+      ActionButton::new(
+        format!("{id}-conversation"),
+        ButtonKind::Ghost,
+        ctx.t("needs_you.action.openConversation"),
+      )
+      .icon(Icon::ArrowUpRight)
+      .on_click(move || conversation()),
+    )
     .into()
 }

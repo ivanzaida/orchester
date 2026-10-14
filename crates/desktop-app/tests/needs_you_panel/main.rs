@@ -4,10 +4,12 @@
 //! place through the conversation's own cards, with the same rules (no runner here, so an answer says why it did
 //! not go); a wider answer that synthetic input does not take; Esc and the close, and the pill opening it again
 //! after each way it closes ([`closing`]); an expanded approval's layout and the pinned project header
-//! ([`expanded`]). Needs `git`.
+//! ([`expanded`]); a question's panel layout, the notes of what was answered while the panel is open and an
+//! expanded item kept in view ([`in_place`]). Needs `git`.
 
 mod closing;
 mod expanded;
+mod in_place;
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(
   dead_code,
