@@ -11,7 +11,7 @@ use orchester_app::{
   brand, clipboard, i18n,
   mcp::{self, AppMcp, McpKind, McpLink, McpMode, McpSettings, McpStatus, WindowLink},
   root::{Root, RootProps},
-  startup::Launch,
+  startup::{Launch, WindowPosition},
   system_icon, theme,
   ui::loader,
 };
@@ -25,6 +25,11 @@ const START_WITHOUT_FOCUS_VARIABLE: &str = "ORCHESTER_APP_MCP_START_WITHOUT_FOCU
 
 fn main() {
   let log = app_log::install();
+  // Refused before anything opens: a QA run that asked for a place must not get a window elsewhere.
+  let position = WindowPosition::from_environment().unwrap_or_else(|error| {
+    tracing::error!(%error, "the requested window position is refused; not starting");
+    std::process::exit(2);
+  });
 
   let runtime = Runtime::new().expect("the OS provides threads for the background runtime");
   // Started before the window exists: the data folder's lock, the session, the runners' client and
@@ -82,7 +87,7 @@ fn main() {
   let icon = brand::window_icon().expect("the bundled window icon is a valid PNG; covered by tests/brand.rs");
   let without_focus = std::env::var_os(START_WITHOUT_FOCUS_VARIABLE).is_some_and(|value| value == "1");
   let mut system_icon_pending = true;
-  WinitWindow::new(app, tree)
+  let window = WinitWindow::new(app, tree)
     .with_title(&title)
     .with_icon(icon)
     // The system's icons, once: the first frame is the first moment the UI thread has the window, which
@@ -100,8 +105,16 @@ fn main() {
     .with_min_size(960, 640)
     // The app draws its own title bar and frame (`chrome`); the OS keeps the rounded corners.
     .with_decorations(false)
-    .with_corner_radius(WindowCornerRadius::Rounded)
-    .run();
+    .with_corner_radius(WindowCornerRadius::Rounded);
+  // Part of the window's attributes, so it opens there rather than moving after it shows.
+  match position {
+    Some(WindowPosition { x, y }) => {
+      tracing::info!(x, y, "the window opens at the requested physical position");
+      window.with_position(x, y)
+    }
+    None => window,
+  }
+  .run();
 
   // `run` returns once the window has closed: the server stops and its discovery file goes, then the
   // runners stop and the session records its end.
