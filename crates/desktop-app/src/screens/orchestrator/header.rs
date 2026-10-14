@@ -71,22 +71,7 @@ pub(super) fn header(ctx: &mut Ctx, view: &View, head: &Head<'_>) -> Element {
     Named::Chat(chat) => chat.title().into(),
   };
   let history = view.history.clone();
-  let new = navigation;
-  let mut start_new = ActionButton::new(
-    "orchestrator-new",
-    ButtonKind::Secondary,
-    ctx.t("orchestrator.newConversation"),
-  )
-  .icon(Icon::MessageSquarePlus);
-  start_new = match head.chat {
-    Named::Opening(_) | Named::Chat(_) => start_new.on_click(move || {
-      new.go(Route::Project(
-        project,
-        ProjectPage::Orchestrator(OrchestratorChat::New),
-      ));
-    }),
-    Named::New => start_new.disabled(),
-  };
+  let start_new = new_conversation(ctx, head, navigation);
   let title_row = Row::new()
     .id("orchestrator-title-row")
     .width(Dimension::Pct(100.0))
@@ -133,6 +118,26 @@ pub(super) fn header(ctx: &mut Ctx, view: &View, head: &Head<'_>) -> Element {
     .child(title_row)
     .child(coordinator(ctx, head))
     .into()
+}
+
+/// *New conversation*: nothing to leave while the conversation shown is a new one.
+fn new_conversation(ctx: &Ctx, head: &Head<'_>, navigation: Navigation) -> ActionButton {
+  let project = head.project.open.project.id();
+  let button = ActionButton::new(
+    "orchestrator-new",
+    ButtonKind::Secondary,
+    ctx.t("orchestrator.newConversation"),
+  )
+  .icon(Icon::MessageSquarePlus);
+  match head.chat {
+    Named::Opening(_) | Named::Chat(_) => button.on_click(move || {
+      navigation.go(Route::Project(
+        project,
+        ProjectPage::Orchestrator(OrchestratorChat::New),
+      ));
+    }),
+    Named::New => button.disabled(),
+  }
 }
 
 /// The coordinator's line: who answers, on what, *Settings*, and the conversation's meta.

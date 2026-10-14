@@ -10,6 +10,7 @@ use orchester_core::{
     ActionOutcome, Chat, ChatAction, ChatEvent, EntryKind, OrchestratorSettings, SessionChange, TurnFailure, TurnState,
   },
 };
+use orchester_store::ProjectDb;
 use support::{at, model, started_run};
 
 fn body(text: &str) -> MessageBody {
@@ -49,6 +50,29 @@ fn a_chat_message_is_kept_once_and_forgotten_with_the_chat_it_alone_started() {
   assert_eq!(db.chat_turn(message).expect("read"), None);
 }
 
+/// The session of `chat`, kept on `connection` and `account`, is resumed only on both.
+fn sessions_resume_on_their_connection_and_account(
+  db: &ProjectDb,
+  chat: ChatId,
+  (connection, account): (ConnectionId, AgentAccountId),
+) {
+  let kept = db.chat(chat).expect("read").expect("kept");
+  assert_eq!(kept.resumes_on(connection, account), Some("session-1"));
+  assert_eq!(kept.session_change(connection, account), None);
+  assert_eq!(
+    kept.resumes_on(ConnectionId::generate(), account),
+    None,
+    "another connection starts a session"
+  );
+  let elsewhere = AgentAccountId::generate();
+  assert_eq!(
+    kept.resumes_on(connection, elsewhere),
+    None,
+    "the connection on another account starts a session: the old one is in another CLI folder"
+  );
+  assert_eq!(kept.session_change(connection, elsewhere), Some(SessionChange::Account));
+}
+
 #[test]
 fn a_turn_ends_once_and_its_chat_keeps_replies_actions_and_session_in_order() {
   let (_repo, mut db, _run, _execution) = started_run();
@@ -75,21 +99,7 @@ fn a_turn_ends_once_and_its_chat_keeps_replies_actions_and_session_in_order() {
     "a turn ends once"
   );
 
-  let kept = db.chat(chat).expect("read").expect("kept");
-  assert_eq!(kept.resumes_on(connection, account), Some("session-1"));
-  assert_eq!(kept.session_change(connection, account), None);
-  assert_eq!(
-    kept.resumes_on(ConnectionId::generate(), account),
-    None,
-    "another connection starts a session"
-  );
-  let elsewhere = AgentAccountId::generate();
-  assert_eq!(
-    kept.resumes_on(connection, elsewhere),
-    None,
-    "the connection on another account starts a session: the old one is in another CLI folder"
-  );
-  assert_eq!(kept.session_change(connection, elsewhere), Some(SessionChange::Account));
+  sessions_resume_on_their_connection_and_account(&db, chat, (connection, account));
   db.add_chat_event(
     chat,
     &ChatEvent::NewSession {
