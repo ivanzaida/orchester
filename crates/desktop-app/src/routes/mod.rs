@@ -26,6 +26,7 @@
 mod accounts;
 mod connections;
 mod error;
+mod orchestrator;
 mod overview;
 mod page;
 mod query;
@@ -44,6 +45,7 @@ pub use self::{
   accounts::{AccountsPanel, AccountsView},
   connections::{ConnectionsTab, ConnectionsView, NewConnection},
   error::RouteError,
+  orchestrator::OrchestratorChat,
   overview::OverviewTab,
   page::ProjectPage,
   screen::Screen,
@@ -60,6 +62,7 @@ const ADD_PROJECT: &str = "add-project";
 const FOLDER: &str = "folder";
 const TASKS: &str = "tasks";
 const CONNECTIONS: &str = "connections";
+const ORCHESTRATOR: &str = "orchestrator";
 const NEW: &str = "new";
 const EDIT: &str = "edit";
 /// The query parameter of a screen's tab.
@@ -141,6 +144,7 @@ impl Route {
     match self.screen() {
       Screen::Task | Screen::NewTask | Screen::EditTask => Screen::Tasks,
       Screen::NewConnection | Screen::EditConnection => Screen::Connections,
+      Screen::OrchestratorSettings => Screen::Orchestrator,
       screen => screen,
     }
   }

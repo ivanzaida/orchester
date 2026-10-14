@@ -450,6 +450,10 @@ impl Session {
         reporter.run_changed();
         true
       }
+      Some(Ok(Some(Event::ChatChanged { .. }))) => {
+        reporter.chat_changed();
+        true
+      }
       Some(Ok(Some(Event::AgentActivity { run, .. }))) => {
         reporter.event_of(run);
         reporter.transcript_grew();

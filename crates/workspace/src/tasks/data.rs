@@ -90,6 +90,8 @@ pub struct ProjectTasks {
   pub group_holds: Arc<BTreeMap<TaskId, GroupHold>>,
   /// The tasks of reviewed groups, which a group starts in its turn unless they are Canceled.
   pub grouped: Arc<std::collections::BTreeSet<TaskId>>,
+  /// Where a person holds new starts.
+  pub queue: Arc<super::hold::HeldQueue>,
   /// Tool requests awaiting a person's decision anywhere in this project, oldest first.
   pub pending_tool_approvals: Arc<Vec<ShownApproval>>,
   /// Tool requests auto mode's reviewer is judging: they wait without asking the person (no dialog, no
@@ -241,6 +243,7 @@ impl ProjectTasks {
       kept_tags: Arc::new(kept_tags),
       former_keys: Arc::new(db.former_keys()?),
       group_holds: Arc::new(group_holds),
+      queue: Arc::new(super::hold::held_in(db)?),
       grouped: Arc::new(grouped),
       pipelines: Arc::new(published_pipelines(db)?),
       missing_pipelines: Arc::new(db.missing_pipelines()?),

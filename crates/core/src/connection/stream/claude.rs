@@ -76,6 +76,8 @@ pub struct ClaudeStream {
   results: usize,
   /// The CLI printed back a user message: it took the prompt.
   prompt_taken: bool,
+  /// A turn of the Orchestrator chat, which asks for no step result.
+  chat: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -94,6 +96,14 @@ impl ClaudeStream {
   pub fn with_exemptions(exemptions: InvocationExemptions) -> Self {
     Self {
       exemptions,
+      ..Self::default()
+    }
+  }
+
+  /// A stream of the Orchestrator chat (`crate::orchestrator`): its turns end without a step result.
+  pub fn chat() -> Self {
+    Self {
+      chat: true,
       ..Self::default()
     }
   }
@@ -338,7 +348,9 @@ impl ClaudeStream {
         self.last_text = Some(said.clone());
         events.push(AgentEvent::Message { text: said });
       }
-      events.extend(self.step_result(value));
+      if !self.chat {
+        events.extend(self.step_result(value));
+      }
     }
     Some(events)
   }

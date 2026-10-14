@@ -36,6 +36,7 @@
       "settings": "Settings",
       "overview": "Overview",
       "orchestrator": "Orchestrator",
+      "orchestratorSettings": "Orchestrator settings",
       "tasks": "Tasks",
       "newTask": "New task",
       "editTask": "Edit task",

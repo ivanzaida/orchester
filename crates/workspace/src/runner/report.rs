@@ -162,6 +162,8 @@ pub(super) struct RunCounters {
   pub(super) states: watch::Sender<u64>,
   /// A run changed state or its transcript grew.
   pub(super) changes: watch::Sender<u64>,
+  /// A conversation of the Orchestrator chat changed.
+  pub(super) chats: watch::Sender<u64>,
 }
 
 impl Shared {
@@ -174,6 +176,7 @@ impl Shared {
       .or_insert_with(|| RunCounters {
         states: watch::Sender::new(0),
         changes: watch::Sender::new(0),
+        chats: watch::Sender::new(0),
       })
       .clone()
   }
@@ -239,6 +242,13 @@ impl Reporter {
   pub(super) fn transcript_grew(&self) {
     if let Some(counters) = self.counters() {
       counters.changes.send_modify(|revision| *revision += 1);
+    }
+  }
+
+  /// A conversation of the Orchestrator chat changed: the chat reads it again.
+  pub(super) fn chat_changed(&self) {
+    if let Some(counters) = self.counters() {
+      counters.chats.send_modify(|revision| *revision += 1);
     }
   }
 

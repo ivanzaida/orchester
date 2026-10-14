@@ -18,6 +18,7 @@ mod attach;
 mod blocked_runs;
 mod board;
 mod broken;
+mod chat;
 mod checkpoint;
 mod codebase_index;
 mod connection_check;
@@ -55,7 +56,6 @@ use std::{
 
 use orchester_core::{
   id::{ConnectionId, IdempotencyKey, RunId, TaskId},
-  integration::Leftovers,
   run::{InterruptCause, RaisedLimits, RunStatus},
   secret::SecretVault,
   store::RunStore,
@@ -129,6 +129,8 @@ struct Inner {
   blocked_runs: blocked_runs::BlockedRuns,
   /// Runs stopped at their account's plan limit that a timer continues at its reset.
   plan_waits: plan_limit::PlanWaits,
+  /// The turns of the Orchestrator chat under way.
+  chats: chat::Chats,
 }
 
 impl Scheduler {
@@ -146,6 +148,7 @@ impl Scheduler {
         earlier_groups: task_groups::EarlierGroups::read(project_root),
         blocked_runs: blocked_runs::BlockedRuns::default(),
         plan_waits: plan_limit::PlanWaits::default(),
+        chats: chat::Chats::default(),
       }),
     }
   }
@@ -186,7 +189,7 @@ impl Scheduler {
   /// request is changing a run under the scheduler lock. The server separately tracks requests
   /// awaiting a task's answer.
   pub fn is_idle(&self) -> bool {
-    if !self.active_runs().is_empty() || self.inner.continuing.try_lock().is_err() {
+    if !self.active_runs().is_empty() || self.inner.continuing.try_lock().is_err() || !self.inner.chats.idle() {
       return false;
     }
     match self
@@ -237,46 +240,6 @@ impl Scheduler {
       self.spawn(db, prepared)?;
     }
     Ok(run)
-  }
-
-  /// Starts the next run of `task` after its latest run `after` failed or was cancelled (Run
-  /// again), removing `remove_worktrees`, what `after` left, first; or finds the run an earlier
-  /// request with `key` started, and then removes nothing. Returns once the new run is recorded as
-  /// started.
-  pub async fn run_again(
-    &self,
-    key: IdempotencyKey,
-    task: TaskId,
-    after: RunId,
-    remove_worktrees: Option<Leftovers>,
-  ) -> Result<RunId, Rejection> {
-    // The run's task may still be ending its agents after it recorded the run's end. A run its
-    // task still executes has not ended, which the rule finds in the run's record below.
-    if let Err(executing) = self.settled(after).await {
-      tracing::debug!(%after, ?executing, "run again asked while the run is executed");
-    }
-    let _one_at_a_time = self.inner.continuing.lock().await;
-    let root = &self.inner.project_root;
-    let mut db = self.open()?;
-    let recorded = db
-      .run_with_key(key)
-      .map_err(|error| read_failed("cannot read runs", error))?;
-    if let Some(recorded) = recorded {
-      if recorded.status() == &RunStatus::Pending {
-        self.admit(&db)?;
-      }
-      let prepared = prepare::resume_recorded(&mut db, root, task, recorded)?;
-      return self.begin(db, prepared);
-    }
-    again::note_missing_worktrees(&mut db, root, task)?;
-    let previous = again::check(&db, task, after)?;
-    self.admit(&db)?;
-    let checked = prepare::check_again(&db, root, task)?;
-    if let Some(confirmed) = &remove_worktrees {
-      again::remove_worktrees(&mut db, root, &previous, confirmed)?;
-    }
-    let prepared = prepare::record(&mut db, root, key, checked)?;
-    self.begin(db, prepared)
   }
 
   /// Pauses `run` at its next checkpoint. Returns once the request is recorded; the run is

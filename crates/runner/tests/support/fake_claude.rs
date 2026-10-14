@@ -59,7 +59,8 @@
 //! continued session at work with it), it appends `continued` to `README.md` and ends the same way. A new
 //! session takes its id from `--session-id`.
 //!
-//! Started with `--system-prompt-file`, it is auto mode's reviewer instead (`fake_claude_review`).
+//! Started with `--system-prompt-file`, it is auto mode's reviewer instead (`fake_claude_review`), or with an
+//! `--mcp-config` too a turn of the Orchestrator chat (`fake_claude_chat`).
 //!
 //! On standard error it reports its arguments, the `--json-schema` value on its own line (`json-schema: `), the names
 //! of its environment variables and its `PATH`, the prompt (its first line, then each line), its process id and its MCP
@@ -73,10 +74,14 @@
 
 use std::{fs::OpenOptions, io::Write, path::Path, process::ExitCode, thread, time::Duration};
 
+#[path = "fake_chat_mcp.rs"]
+mod fake_chat_mcp;
 #[path = "fake_claude_ask.rs"]
 mod fake_claude_ask;
 #[path = "fake_claude_background.rs"]
 mod fake_claude_background;
+#[path = "fake_claude_chat.rs"]
+mod fake_claude_chat;
 #[path = "fake_claude_input.rs"]
 mod fake_claude_input;
 #[path = "fake_claude_review.rs"]
@@ -126,6 +131,9 @@ fn main() -> ExitCode {
     eprintln!("no session");
     return ExitCode::from(2);
   };
+  if fake_claude_chat::is_chat(&args) {
+    return fake_claude_chat::answer(&args, &session, &prompt);
+  }
   let Ok(worktree) = std::env::current_dir() else {
     eprintln!("no working directory");
     return ExitCode::from(2);

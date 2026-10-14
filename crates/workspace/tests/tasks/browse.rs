@@ -143,3 +143,32 @@ fn task_rows_say_what_their_readiness_is_about_wherever_its_words_are_chosen() {
     [ReadinessKind::Blocked, ReadinessKind::Held(GroupHold::FailedTask)]
   );
 }
+
+/// New starts held in the whole project hold every queued task, one in no group too.
+#[test]
+fn task_rows_under_a_project_hold_say_every_queued_task_is_held() {
+  use orchester_core::task_group::GroupHold;
+  use orchester_workspace::tasks::{hold::HeldQueue, list::ReadinessKind};
+
+  let data = ProjectTasks {
+    tasks: Arc::new(stored_tasks()),
+    queue: Arc::new(HeldQueue {
+      project: true,
+      groups: Vec::new(),
+    }),
+    ..ProjectTasks::default()
+  };
+  let kinds: Vec<ReadinessKind> = query(
+    &data,
+    TaskTab::All,
+    ("", PipelineFilter(None), &TaskFilter::default()),
+    TaskSort::Manual,
+  )
+  .into_iter()
+  .map(|row| row.readiness)
+  .collect();
+  assert_eq!(
+    kinds,
+    [ReadinessKind::Missing, ReadinessKind::Held(GroupHold::QueueHeld)]
+  );
+}

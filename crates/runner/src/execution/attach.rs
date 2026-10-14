@@ -6,7 +6,8 @@
 //! people's messages written meanwhile answer its agent's question. A run that succeeded while
 //! messages to its agents were written is followed up. A run whose record cannot be read back is left
 //! as it is: it is logged and nothing continues it. A tool request still waiting in a run this runner
-//! does not execute lost its agent: it ends without an answer.
+//! does not execute lost its agent: it ends without an answer. A turn of the Orchestrator chat still thinking was cut
+//! short too, and is recorded as interrupted.
 
 use std::num::NonZeroU32;
 
@@ -45,6 +46,8 @@ impl Scheduler {
     if matches!(session, AttachSession::Fresh { .. }) {
       self.hold_groups_after_session_end(&db)?;
     }
+    // A turn this runner answers is under way; any other still thinking was cut short.
+    self.interrupt_chat_turns(&mut db, None)?;
     self.inner.board.set_slots(slots);
     let cause = session.interrupt_cause();
     let stale = readable(

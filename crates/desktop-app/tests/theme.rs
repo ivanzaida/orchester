@@ -3,6 +3,8 @@
 
 #[path = "theme/instructions.rs"]
 mod instructions;
+#[path = "theme/orchestrator.rs"]
+mod orchestrator;
 #[path = "theme/skills.rs"]
 mod skills;
 
@@ -23,8 +25,8 @@ use orchester_app::{
   },
   theme::{
     self, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography,
-    IconSize, Mode, SHORTCUT_OPACITY, SettingsSpacing, SettingsText, ShellSpacing, ShellText, StartupSpacing,
-    StartupText,
+    IconSize, Mode, OrchestratorSpacing, OrchestratorText, SHORTCUT_OPACITY, SettingsSpacing, SettingsText,
+    ShellSpacing, ShellText, StartupSpacing, StartupText,
   },
 };
 use orchester_store::AppDb;

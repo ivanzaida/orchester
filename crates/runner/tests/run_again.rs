@@ -373,3 +373,35 @@ async fn run_again_follows_an_interrupted_run_whose_worktree_was_deleted_by_hand
   wait_for_turns(root, &mut events, again, 1).await;
   scheduler.stop_all(InterruptCause::QuitNow).await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn run_again_of_a_task_changed_since_it_was_checked_starts_nothing() {
+  let project = project(&Setup::new("Report failure."));
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let first = start(&scheduler, project.task).await;
+  wait_for(root, &mut events, first, |run| run.status().is_terminal()).await;
+  let mut db = ProjectDb::open(root).expect("open");
+  let checked = db.task(project.task).expect("read").expect("task").revision();
+  // The task is edited after it was checked for its next run.
+  let mut task = db.task(project.task).expect("read").expect("task");
+  let mut details = task.details().clone();
+  details.brief = "Delete the repository.".into();
+  task.edit(details, true).expect("edit");
+  db.save_task(&task).expect("save").saved().expect("saved");
+  assert_eq!(
+    scheduler
+      .run_again_as(IdempotencyKey::generate(), (project.task, first), None, Some(checked))
+      .await,
+    Err(Rejection::TaskChangedMeanwhile)
+  );
+  assert_eq!(db.runs_of_task(project.task).expect("runs").len(), 1, "nothing started");
+  let now = db.task(project.task).expect("read").expect("task").revision();
+  assert!(
+    scheduler
+      .run_again_as(IdempotencyKey::generate(), (project.task, first), None, Some(now))
+      .await
+      .is_ok(),
+    "the task as it is now runs"
+  );
+}

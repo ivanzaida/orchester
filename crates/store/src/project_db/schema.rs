@@ -19,11 +19,13 @@ mod native_commands;
 mod native_conversations;
 mod optional_daily_budget;
 mod optional_limits;
+mod orchestrator;
 mod organization;
 mod permitted_decisions;
 mod plan_decided_by;
 mod plan_limits;
 mod questions;
+mod queue_holds;
 mod recovery;
 mod reviewer_usage;
 mod sharing;
@@ -538,4 +540,6 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   optional_limits::MIGRATION,
   optional_daily_budget::MIGRATION,
   agent_accounts::MIGRATION,
+  orchestrator::MIGRATION,
+  queue_holds::MIGRATION,
 ];

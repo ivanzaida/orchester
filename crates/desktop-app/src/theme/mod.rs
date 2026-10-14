@@ -24,6 +24,7 @@ mod lifecycle;
 mod markdown;
 mod metrics;
 mod needs_you;
+mod orchestrator;
 mod overview;
 mod palette;
 pub mod pipelines;
@@ -58,6 +59,7 @@ pub use self::{
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
+  orchestrator::{OrchestratorSpacing, OrchestratorText},
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
   projects::{ProjectsSpacing, ProjectsText},
@@ -108,6 +110,7 @@ pub fn install(app: &mut App, mode: Mode) {
   conversation::install(theme);
   cards::install(theme);
   composer::install(theme);
+  orchestrator::install(theme);
   needs_you::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
