@@ -165,6 +165,27 @@ fn approval_reach_keeps_a_qa_apps_rule_to_its_scripts_content() {
   assert!(changed.ends_with(" · changed since the run's base: crates/app/build.rs, tools/qa-app.ps1"));
   assert!(QaApproval::watches("tools/qa-app.ps1") && QaApproval::watches("crates/app/build.rs"));
   assert!(!QaApproval::watches("src/build.rs.bak"));
+  // What else runs code while the app builds: manifests and the lock file, Cargo's configuration, the toolchain.
+  for path in [
+    "Cargo.toml",
+    "crates/app/Cargo.toml",
+    "Cargo.lock",
+    ".cargo/config.toml",
+    ".cargo/config",
+    "crates/app/.cargo/config.toml",
+    "rust-toolchain",
+    "rust-toolchain.toml",
+  ] {
+    assert!(QaApproval::watches(path), "{path}");
+  }
+  for path in [
+    "config.toml",
+    "docs/config.toml",
+    "src/cargo/config.toml",
+    "src/main.rs",
+  ] {
+    assert!(!QaApproval::watches(path), "{path}");
+  }
   let subject = |target: &str| ApprovalSubject::of(&request("start_qa_app", target), &scope).with_checks(&[]);
   let rules = [rule(RuleScope::similar(&subject(&first)).expect("similar"))];
   // Another scenario on the same script is covered; a changed script asks again.

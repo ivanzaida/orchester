@@ -224,7 +224,7 @@ impl Worker {
 
   fn end_question_wait(&self, watch: &mut Watch) -> Result<(), StoreError> {
     watch.invocation.timing.resume(Timestamp::now());
-    self.qa.resume(watch.invocation.id);
+    self.resume_qa(watch);
     watch.db.save_invocation(&watch.invocation)?;
     self.question_changed(watch);
     Ok(())

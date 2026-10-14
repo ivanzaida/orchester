@@ -406,9 +406,9 @@ impl Worker {
   pub(super) fn end_approval_wait(&self, watch: &mut Watch) -> Result<(), StoreError> {
     let waited = watch.invocation.timing.waiting_since().is_some();
     watch.invocation.timing.resume(Timestamp::now());
-    self.qa.resume(watch.invocation.id);
-    watch.db.save_invocation(&watch.invocation)?;
     watch.approval = None;
+    self.resume_qa(watch);
+    watch.db.save_invocation(&watch.invocation)?;
     if waited {
       self.notifier.send(Event::ToolApprovalChanged {
         run: watch.invocation.run,
@@ -416,6 +416,16 @@ impl Worker {
       });
     }
     Ok(())
+  }
+
+  /// A person's wait ended, or an answer settled: QA starts keep their apps again ([`QaApps::resume`](
+  /// super::qa_app::QaApps::resume)) once no person wait of the invocation remains — no question held in its turn and
+  /// no tool request that a person, not auto mode's reviewer, decides.
+  pub(super) fn resume_qa(&self, watch: &Watch) {
+    let person_waits = watch.question.is_some() || (watch.approval.is_some() && self.reviewing.is_none());
+    if !person_waits {
+      self.qa.resume(watch.invocation.id);
+    }
   }
 }
 

@@ -65,6 +65,18 @@ impl InvocationQa {
   fn ended(&self) -> bool {
     self.ended.load(Ordering::Acquire)
   }
+
+  /// Refused while the invocation waits for a person: a start then neither takes the slot nor builds, since the app
+  /// would be stopped once it started.
+  fn not_waiting(&self) -> Result<(), String> {
+    if self.waiting.load(Ordering::Acquire) {
+      return Err(
+        "the turn waits for a person, so no QA app is started meanwhile; call start_qa_app again once you go on"
+          .to_owned(),
+      );
+    }
+    Ok(())
+  }
 }
 
 /// A started QA app with the slot it holds; the app is stopped before the slot is freed.
@@ -201,6 +213,9 @@ impl StepQa {
       Err(refusal) => return ToolResult::unavailable(&refusal),
     };
     leftover::stop(&mut lease, &folder, self.run_created);
+    if let Err(refusal) = self.state.not_waiting() {
+      return ToolResult::unavailable(&refusal);
+    }
     let now = script_blob(&self.worktree);
     if approved.is_none_or(str::is_empty) || now.as_deref() != approved {
       return ToolResult::unavailable(&format!(
@@ -238,6 +253,7 @@ impl StepQa {
       if self.state.ended() {
         return Err("the turn ended before the QA slot was free".to_owned());
       }
+      self.state.not_waiting()?;
       if let Some(lease) = self.apps.slots.try_take().map_err(|error| error.to_string())? {
         return Ok(lease);
       }
@@ -310,7 +326,8 @@ impl StepQa {
 /// cannot tell.
 pub(in crate::execution::step) fn script_blob(worktree: &Path) -> Option<String> {
   crate::git::Git::new(worktree)
-    .stdout(&["hash-object", "--", QA_APP_SCRIPT])
+    // Of the file's exact bytes, which are what runs: no line-ending or other attribute filter applied first.
+    .stdout(&["hash-object", "--no-filters", "--", QA_APP_SCRIPT])
     .map(|blob| blob.trim().to_owned())
     .inspect_err(|error| tracing::warn!(%error, "the QA script's blob cannot be read"))
     .ok()

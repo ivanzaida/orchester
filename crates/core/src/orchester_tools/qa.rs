@@ -78,8 +78,9 @@ impl QaAppStart {
 }
 
 /// What a `start_qa_app` call's approval names, as its target: the script's git blob (what an *Approve similar* rule
-/// is kept to, so a rule never covers a call after the script changed), the scenario, and the build or start scripts
-/// that changed since the run's base revision, which the person should look at first.
+/// is kept to, so a rule never covers a call after the script changed), the scenario, and the files changed since the
+/// run's base revision that run code while the app builds ([`QaApproval::watches`]), which the person should look at
+/// first.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QaApproval {
   pub script: String,
@@ -105,9 +106,18 @@ impl QaApproval {
     (!blob.is_empty() && blob.chars().all(|c| c.is_ascii_hexdigit())).then_some(blob)
   }
 
-  /// Whether `path`, relative to the worktree, is one whose change the approval names: the script, or a build script.
+  /// Whether `path`, relative to the worktree, is one whose change the approval names, as it runs code while the app
+  /// builds: the script, a build script, a manifest or lock file (a new dependency or proc macro, a `build = …`), a
+  /// Cargo configuration (`rustc-wrapper`, runners, aliases) or a toolchain file.
   pub fn watches(path: &str) -> bool {
-    path == QA_APP_SCRIPT || path == "build.rs" || path.ends_with("/build.rs")
+    let name = path.rsplit('/').next().unwrap_or(path);
+    let folder = path.strip_suffix(name).unwrap_or_default();
+    path == QA_APP_SCRIPT
+      || matches!(
+        name,
+        "build.rs" | "Cargo.toml" | "Cargo.lock" | "rust-toolchain" | "rust-toolchain.toml"
+      )
+      || (matches!(name, "config" | "config.toml") && (folder == ".cargo/" || folder.ends_with("/.cargo/")))
   }
 }
 
