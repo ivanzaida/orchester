@@ -108,6 +108,11 @@ pub fn rows(data: &ProjectTasks, tab: TaskTab, query: Query<'_>, sort: TaskSort)
         (Some(GroupHold::GroupCap), Some(TaskPhase::StoppedAtLimit)) => {
           row.detail = Message::new("tasks.bulk.stoppedGroup");
         }
+        // New starts held in the whole project hold every queued task, in a group or not.
+        (None, Some(TaskPhase::Queued)) if data.queue.project => {
+          row.detail = hold_row_message(&GroupHold::QueueHeld);
+          row.readiness = ReadinessKind::Held(GroupHold::QueueHeld);
+        }
         _ => {}
       }
       row

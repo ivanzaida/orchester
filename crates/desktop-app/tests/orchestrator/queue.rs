@@ -64,3 +64,85 @@ fn orchestrator_releases_a_hold_it_set_itself() {
   screen.send(r#"Call release_queue {"project":"Kontur"}"#);
   screen.until("the release", |screen| !held(screen));
 }
+
+#[test]
+fn tasks_show_held_groups_under_the_tabs_and_keep_the_header() {
+  use orchester_core::{
+    id::IdempotencyKey,
+    resource::Pipeline,
+    store::{ResourceStore, TaskStore},
+    task_group::{HoldActor, HoldScope, ReviewedPipeline, Scheduling, TaskGroup},
+    time::Timestamp,
+    tokens::TokenBudget,
+  };
+
+  let mut screen = Orchestrator::new(Setup::Ready);
+  let project = screen.project;
+  let delivery = screen.delivery();
+  let keys = ["First", "Second"].map(|title| screen.draft_on(delivery, title));
+  screen
+    .window
+    .navigation()
+    .go(Route::Project(project, ProjectPage::Tasks(TaskList::default())));
+  screen.until("Tasks", |screen| {
+    screen.exists("tasks-queue-hold") && screen.exists("tasks-tab-all")
+  });
+  let tabs = screen.bounds("tasks-tab-all").y;
+
+  // Nothing of the group starts meanwhile: the project is held while it is queued.
+  let mut db = screen.db();
+  db.set_queue_hold((HoldScope::Project, HoldActor::Person), true, Timestamp::now())
+    .expect("held");
+  let tasks: Vec<_> = keys
+    .iter()
+    .map(|key| {
+      db.tasks()
+        .expect("tasks")
+        .into_iter()
+        .find(|task| task.key().to_string() == *key)
+        .expect("the draft")
+        .id()
+    })
+    .collect();
+  let version = db
+    .latest_version::<Pipeline>(delivery)
+    .expect("read")
+    .expect("published")
+    .number();
+  let group = TaskGroup::new(
+    IdempotencyKey::generate(),
+    tasks.clone(),
+    Scheduling::Sequential,
+    TokenBudget::new(1_000_000).expect("cap"),
+  )
+  .expect("group");
+  let reviewed: Vec<_> = tasks
+    .iter()
+    .map(|task| ReviewedPipeline {
+      task: *task,
+      pipeline: delivery,
+      version,
+    })
+    .collect();
+  db.queue_task_group(&group, None, &reviewed).expect("queued");
+  db.set_queue_hold(
+    (HoldScope::Group(group.key()), HoldActor::Automation),
+    true,
+    Timestamp::now(),
+  )
+  .expect("group held");
+  db.set_queue_hold((HoldScope::Project, HoldActor::Person), false, Timestamp::now())
+    .expect("project released");
+
+  screen.until("the held group", |screen| screen.exists("tasks-queue-group-0"));
+  assert_eq!(screen.bounds("tasks-tab-all").y, tabs, "the header keeps its layout");
+  assert!(
+    screen.bounds("tasks-queue-group-0").y > tabs,
+    "the group's line is under the tabs"
+  );
+  assert!(screen.text("tasks-queue-group-0").contains("KON-1, KON-2"));
+  screen.click("tasks-queue-release-group-0");
+  screen.until("released", |screen| {
+    screen.db().queue_holds().expect("holds").groups.is_empty()
+  });
+}

@@ -44,6 +44,15 @@ pub(super) struct QueueProps {
   pub(super) project: ProjectId,
   pub(super) root: PathBuf,
   pub(super) queue: HeldQueue,
+  pub(super) part: QueuePart,
+}
+
+/// Which part of the holds a mount shows: the whole project's, in the header's button row, or the held groups,
+/// under the tabs, so the header keeps its layout (`C2E5Po`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum QueuePart {
+  Project,
+  Groups,
 }
 
 impl DevtoolsInspectable for QueueProps {}
@@ -99,6 +108,15 @@ impl Component for QueueControls {
         });
       }
     };
+    let failed = state.error.as_ref().map(|error| {
+      field_error(
+        "tasks-queue-error",
+        &ctx.t_args("tasks.queue.failed", [("reason", &*message_text(ctx, error))]),
+      )
+    });
+    if props.part == QueuePart::Groups {
+      return groups(ctx, &props.queue, &press, pending).with_children(failed);
+    }
     let project = if props.queue.project {
       let release = ActionButton::new(
         "tasks-queue-release",
@@ -117,36 +135,44 @@ impl Component for QueueControls {
         ActionButton::new("tasks-queue-hold", ButtonKind::Secondary, ctx.t("tasks.queue.hold")).icon(Icon::CirclePause);
       Row::new().child(enabled(hold, pending, press(HoldScope::Project, true)))
     };
-    let groups = props.queue.groups.iter().enumerate().map(|(index, group)| {
-      let named = group_name(ctx, &group.tasks);
-      let words = ctx.t_args("tasks.queue.groupHeld", [("tasks", named.as_str())]);
-      let release = ActionButton::new(
-        format!("tasks-queue-release-group-{index}"),
-        ButtonKind::Ghost,
-        ctx.t("tasks.queue.release"),
-      )
-      .small();
-      Row::new()
-        .id(format!("tasks-queue-group-{index}"))
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(held_note(&format!("tasks-queue-group-{index}-note"), &words))
-        .child(enabled(release, pending, press(HoldScope::Group(group.key), false)))
-    });
-    let failed = state.error.as_ref().map(|error| {
-      field_error(
-        "tasks-queue-error",
-        &ctx.t_args("tasks.queue.failed", [("reason", &*message_text(ctx, error))]),
-      )
-    });
-    Column::new()
-      .id("tasks-queue")
-      .spacing(ExtraSpacing::Snug.role())
-      .align_items(Alignment::End)
-      .child(project)
-      .with_children(groups)
-      .with_children(failed)
+    // Its error shows in place of nothing: the header's row keeps one line.
+    match failed {
+      Some(failed) => Column::new()
+        .id("tasks-queue")
+        .align_items(Alignment::End)
+        .child(project)
+        .child(failed),
+      None => Column::new().id("tasks-queue").child(project),
+    }
   }
+}
+
+/// Each held group, named by its tasks, with its own *Release*.
+fn groups<F, P>(ctx: &Ctx, queue: &HeldQueue, press: &P, pending: bool) -> Column
+where
+  P: Fn(HoldScope, bool) -> F,
+  F: Fn() + Send + Sync + 'static,
+{
+  let rows = queue.groups.iter().enumerate().map(|(index, group)| {
+    let named = group_name(ctx, &group.tasks);
+    let words = ctx.t_args("tasks.queue.groupHeld", [("tasks", named.as_str())]);
+    let release = ActionButton::new(
+      format!("tasks-queue-release-group-{index}"),
+      ButtonKind::Ghost,
+      ctx.t("tasks.queue.release"),
+    )
+    .small();
+    Row::new()
+      .id(format!("tasks-queue-group-{index}"))
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .child(held_note(&format!("tasks-queue-group-{index}-note"), &words))
+      .child(enabled(release, pending, press(HoldScope::Group(group.key), false)))
+  });
+  Column::new()
+    .id("tasks-queue-groups")
+    .spacing(ExtraSpacing::Snug.role())
+    .with_children(rows)
 }
 
 /// `button`, taking presses unless a hold is being kept.
