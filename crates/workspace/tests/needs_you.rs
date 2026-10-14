@@ -446,6 +446,10 @@ fn needs_you_tab_lists_the_memory_waiting_after_its_tasks_and_counts_it() {
     tasks.needs_you(),
     "the tab counts what every Needs you counts"
   );
-  assert_eq!(BoardTab::NeedsYou.count(&tasks), 2, "the task ready to merge and the records");
+  assert_eq!(
+    BoardTab::NeedsYou.count(&tasks),
+    2,
+    "the task ready to merge and the records"
+  );
   assert!(BoardTab::Running.project_rows(&tasks, "Kontur").is_empty());
 }
