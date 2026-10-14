@@ -74,6 +74,18 @@ fn words(tool: &str) -> Words {
       "orchestrator.action.resumeRun.refused",
       Some("orchestrator.action.resumeRun.effect"),
     ),
+    "hold_queue" => (
+      Icon::CirclePause,
+      "orchestrator.action.holdQueue.done",
+      "orchestrator.action.holdQueue.refused",
+      Some("orchestrator.action.holdQueue.effect"),
+    ),
+    "release_queue" => (
+      Icon::Play,
+      "orchestrator.action.releaseQueue.done",
+      "orchestrator.action.releaseQueue.refused",
+      Some("orchestrator.action.releaseQueue.effect"),
+    ),
     _ => (
       Icon::Wrench,
       "orchestrator.action.other.done",

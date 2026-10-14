@@ -10,6 +10,7 @@ mod messages;
 mod pipeline_copy;
 mod plans;
 mod projects;
+mod queue_hold;
 mod questions;
 mod return_to_draft;
 mod run_task;
@@ -102,6 +103,18 @@ const SPECS: &[Spec] = &[
                   note, when and decided_by (person, or automation through this server).",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
+  },
+  Spec {
+    name: "hold_queue",
+    description: "Holds new starts: in the whole project, or, with a task, in the reviewed group it belongs to. Running runs go on; queued tasks wait, a start is refused, until release_queue lets them go on. Answers what holds now.",
+    schema: schema_for_type::<queue_hold::QueueHold>,
+    read_only: false,
+  },
+  Spec {
+    name: "release_queue",
+    description: "Lets new starts go on again: in the whole project, or, with a task, in the reviewed group it belongs to. A group's queued tasks then start as its scheduling allows. Answers what holds now.",
+    schema: schema_for_type::<queue_hold::QueueHold>,
+    read_only: false,
   },
   Spec {
     name: "pause_run",
@@ -262,6 +275,8 @@ async fn dispatch(
     "set_code_index" => projects::set_code_index(services, parse(arguments)?).await,
     "update_project_limits" => limits::update_project_limits(services, parse(arguments)?).await,
     "duplicate_pipeline" => pipeline_copy::duplicate_pipeline(services, parse(arguments)?, translate).await,
+    "hold_queue" => queue_hold::set_queue_hold(services, parse(arguments)?, true).await,
+    "release_queue" => queue_hold::set_queue_hold(services, parse(arguments)?, false).await,
     other => dispatch_answers(services, other, arguments).await,
   }
 }

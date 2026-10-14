@@ -4,6 +4,14 @@
     "description": "Workflow status describes your work. Run labels describe the agent.",
     "newTask": "New task",
     "createMultiple": "Create multiple",
+    "queue": {
+      "hold": "Hold new starts",
+      "held": "New starts held",
+      "release": "Release",
+      "groupHeld": "New starts held · {{tasks}}",
+      "groupMore": "{{first}} and {{more}} more",
+      "failed": "Not changed: {{reason}}"
+    },
     "createMultipleReason": "Creating several tasks at once is planned.",
     "tabs": {
       "all": "All",

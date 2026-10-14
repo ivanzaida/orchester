@@ -10,6 +10,7 @@
 
 mod header;
 mod query;
+mod queue;
 mod readiness;
 mod row;
 mod states;
@@ -116,7 +117,7 @@ impl Component for TasksScreen {
           .right(TasksSpacing::Page.role()),
       )
       .spacing(SpacingSize::Md)
-      .child(header::header(ctx, id));
+      .child(header::header(ctx, id, queue(&project)));
     match project.feed.tasks.get() {
       TasksState::Ready(tasks) if tasks.tasks.is_empty() => page.child(states::empty_project(ctx, id)),
       TasksState::Ready(tasks) => {
@@ -236,6 +237,18 @@ impl TasksScreen {
       search.set(String::new());
       pipeline.set(PipelineFilter::default());
     })
+  }
+}
+
+/// The holds on new starts, once the tasks are read.
+fn queue(project: &ShownProject) -> Option<queue::QueueProps> {
+  match project.feed.tasks.get() {
+    TasksState::Ready(tasks) => Some(queue::QueueProps {
+      project: project.open.project.id(),
+      root: project.open.repo_root.clone(),
+      queue: (*tasks.queue).clone(),
+    }),
+    TasksState::Loading | TasksState::Failed(_) => None,
   }
 }
 

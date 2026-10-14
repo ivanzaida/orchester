@@ -43,6 +43,8 @@ pub fn hold_messages(hold: &orchester_core::task_group::GroupHold) -> Vec<Messag
     GroupHold::StartFailed => "tasks.bulk.hold.startFailed",
     GroupHold::Blocked { .. } => "tasks.bulk.hold.blocked",
     GroupHold::Canceled => "tasks.bulk.hold.canceled",
+    GroupHold::QueueHeld => "tasks.bulk.hold.queueHeld",
+    GroupHold::Paused => "tasks.bulk.hold.paused",
     GroupHold::Preflight(problems) => return problems.iter().map(preflight_message).collect(),
   };
   vec![Message::new(key)]
@@ -62,6 +64,8 @@ pub const fn hold_row_message(hold: &GroupHold) -> Message {
     GroupHold::StartFailed => "tasks.bulk.held.startFailed",
     GroupHold::Blocked { .. } => "tasks.bulk.held.blocked",
     GroupHold::Canceled => "tasks.bulk.held.canceled",
+    GroupHold::QueueHeld => "tasks.bulk.held.queueHeld",
+    GroupHold::Paused => "tasks.bulk.held.paused",
   })
 }
 
@@ -95,6 +99,8 @@ pub const fn held_line_keys(hold: &GroupHold) -> (&'static str, &'static str) {
     ),
     GroupHold::Blocked { .. } => ("tasks.bulk.heldLine.blocked.one", "tasks.bulk.heldLine.blocked.other"),
     GroupHold::Canceled => ("tasks.bulk.heldLine.canceled.one", "tasks.bulk.heldLine.canceled.other"),
+    GroupHold::QueueHeld => ("tasks.bulk.heldLine.queueHeld.one", "tasks.bulk.heldLine.queueHeld.other"),
+    GroupHold::Paused => ("tasks.bulk.heldLine.paused.one", "tasks.bulk.heldLine.paused.other"),
   }
 }
 

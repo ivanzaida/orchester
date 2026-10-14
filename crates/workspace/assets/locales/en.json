@@ -59,6 +59,9 @@
     }
   },
   "tasks": {
+    "queue": {
+      "notInGroup": "{{task}} is in no reviewed group: hold new starts in the whole project instead."
+    },
     "bulk": {
       "reviewChanged": "A selected task’s pipeline changed. Close this review and review the selection again.",
       "hold": {
@@ -70,7 +73,9 @@
         "failure": "Held after a task failed or was canceled. Select the waiting tasks and choose Return to drafts to schedule them again.",
         "startFailed": "Start failed. Check the runner log and retry after resolving the problem.",
         "blocked": "Waiting for blocking tasks to finish. The group goes on with its other tasks.",
-        "canceled": "This task is Canceled, so its group does not start it. The group goes on with its other tasks."
+        "canceled": "This task is Canceled, so its group does not start it. The group goes on with its other tasks.",
+        "queueHeld": "New starts are held in this project. Release them in Tasks to start it; running runs go on.",
+        "paused": "New starts are held in this task's group. Release the group in Tasks to start it; running runs go on."
       },
       "heldLine": {
         "sessionEnded": {
@@ -116,6 +121,14 @@
         "canceled": {
           "one": "{{task}} is Canceled: its group does not start it",
           "other": "{{count}} tasks are Canceled: their group does not start them"
+        },
+        "queueHeld": {
+          "one": "{{task}} waits: new starts are held · Release in Tasks",
+          "other": "{{count}} tasks wait: new starts are held · Release in Tasks"
+        },
+        "paused": {
+          "one": "{{task}} waits: its group's new starts are held · Release in Tasks",
+          "other": "{{count}} tasks wait: their group's new starts are held · Release in Tasks"
         }
       },
       "held": {
@@ -129,7 +142,9 @@
         "preflight": "Held · cannot start yet",
         "startFailed": "Held · start failed",
         "blocked": "Waiting for blocking tasks",
-        "canceled": "Canceled · not started by its group"
+        "canceled": "Canceled · not started by its group",
+        "queueHeld": "Held · new starts held",
+        "paused": "Held · group's new starts held"
       },
       "notDraft": "This task is already queued.",
       "hasRun": "This task already has a run.",

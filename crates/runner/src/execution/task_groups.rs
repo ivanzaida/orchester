@@ -10,7 +10,7 @@ use orchester_core::{
   run::{Run, RunStatus},
   store::{RunStore, WorktreeStore},
   task::organization::WorkflowStatus,
-  task_group::{GroupHold, TaskGroup},
+  task_group::{GroupHold, QueueHolds, TaskGroup},
   tokens::TokensUsed,
 };
 use orchester_ipc::{Event, Rejection};
@@ -225,6 +225,11 @@ const fn retries_later(hold: &GroupHold) -> bool {
 }
 
 impl Scheduler {
+  fn queue_holds(db: &ProjectDb) -> Result<QueueHolds, Rejection> {
+    db.queue_holds()
+      .map_err(|e| super::failed("cannot read the holds on new starts", &e))
+  }
+
   fn stored_hold(db: &ProjectDb, group: &TaskGroup) -> Result<Option<GroupHold>, Rejection> {
     db.task_group_hold(group.key())
       .map_err(|e| super::failed("cannot read queue hold", &e))
@@ -237,6 +242,11 @@ impl Scheduler {
     task: TaskId,
     recorded: Option<&Run>,
   ) -> Result<(), Rejection> {
+    // A person's hold on new starts holds every first run in the project, in a group or not.
+    let holds = Self::queue_holds(db)?;
+    if let Some(hold) = holds.of(None) {
+      return Err(Rejection::TaskGroupWaiting { hold });
+    }
     if let Some(run) = recorded
       && db
         .task_group_for_run(run)
@@ -251,6 +261,9 @@ impl Scheduler {
     else {
       return Ok(());
     };
+    if let Some(hold) = holds.of(Some(group.key())) {
+      return Err(Rejection::TaskGroupWaiting { hold });
+    }
     if Self::stored_hold(db, &group)? == Some(GroupHold::SessionEnded) {
       return Err(Rejection::TaskGroupWaiting {
         hold: GroupHold::SessionEnded,
@@ -288,10 +301,15 @@ impl Scheduler {
   /// does not keep the runner busy.
   pub(super) fn has_pending_task_groups(&self) -> Result<bool, Rejection> {
     let db = self.open()?;
+    let holds = Self::queue_holds(&db)?;
     for group in db
       .unfinished_task_groups()
       .map_err(|error| super::failed("cannot read task groups", &error))?
     {
+      // A person's hold ends only when a person lets the group go on.
+      if holds.of(Some(group.key())).is_some() {
+        continue;
+      }
       let stored = Self::stored_hold(&db, &group)?;
       if stored.as_ref().is_some_and(|hold| !hold.clears_on_its_own()) {
         continue;
@@ -326,10 +344,16 @@ impl Scheduler {
       tracing::error!(?error, "cannot deliver messages that waited for blocking tasks");
     }
     let db = self.open()?;
+    let holds = Self::queue_holds(&db)?;
     for group in db
       .unfinished_task_groups()
       .map_err(|error| super::failed("cannot read task groups", &error))?
     {
+      // A held group starts nothing; its tasks show why until a person lets it go on.
+      if let Some(hold) = holds.of(Some(group.key())) {
+        self.group_hold(&db, &group, Some(&hold))?;
+        continue;
+      }
       // One group's failure leaves the others to go on; the next pass tries it again, and the
       // same failure again is not logged again.
       let outcome = self.advance_group(&db, &group).await;

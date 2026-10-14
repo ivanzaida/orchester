@@ -24,8 +24,8 @@ use crate::{
 };
 
 /// The tools of the chat, by name: reading the project's work, task drafts, proposing a task's run to the person
-/// ([`proposal`]), and pausing and resuming a run. Approvals, plans, questions, project setup and what removes work are not among them.
-pub const TOOLS: [&str; 10] = [
+/// ([`proposal`]), pausing and resuming a run, and holding and releasing new starts. Approvals, plans, questions, project setup and what removes work are not among them.
+pub const TOOLS: [&str; 12] = [
   "list_tasks",
   "get_task",
   "get_run",
@@ -36,6 +36,8 @@ pub const TOOLS: [&str; 10] = [
   "run_task",
   "pause_run",
   "resume_run",
+  "hold_queue",
+  "release_queue",
 ];
 
 /// The chat's tools as `tools/list` answers.

@@ -137,6 +137,16 @@
         "refused": "Resume a run · not done",
         "effect": "The run goes on from where it stopped."
       },
+      "holdQueue": {
+        "done": "New starts held",
+        "refused": "Hold new starts · not done",
+        "effect": "Running runs go on; queued tasks wait until you release them in Tasks."
+      },
+      "releaseQueue": {
+        "done": "New starts released",
+        "refused": "Release new starts · not done",
+        "effect": "Queued tasks start again as their groups allow."
+      },
       "other": {
         "done": "Used {{tool}}",
         "refused": "{{tool}} · not done"

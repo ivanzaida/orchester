@@ -33,6 +33,7 @@ mod steering;
 mod step_progress;
 mod stuck_runs;
 mod task_edits;
+mod queue_holds;
 mod task_groups;
 mod token_budgets;
 mod tool_approvals;
@@ -540,4 +541,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   optional_daily_budget::MIGRATION,
   agent_accounts::MIGRATION,
   orchestrator::MIGRATION,
+  queue_holds::MIGRATION,
 ];

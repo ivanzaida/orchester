@@ -22,6 +22,7 @@ mod messages;
 mod native;
 mod orchestrator;
 mod orchestrator_usage;
+mod queue_holds;
 mod organization;
 mod organized_drafts;
 mod phases;
