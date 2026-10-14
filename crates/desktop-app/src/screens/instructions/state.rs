@@ -38,6 +38,15 @@ pub enum View {
   Import,
 }
 impl DevtoolsInspectable for View {}
+impl View {
+  /// The scope tab a rule or a new rule is in; the import page has none.
+  pub const fn tab(self) -> Option<Tab> {
+    match self {
+      Self::Rule(tab, _) | Self::New(tab) => Some(tab),
+      Self::Import => None,
+    }
+  }
+}
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Saved(pub Option<InstructionEntry>);
 impl DevtoolsInspectable for Saved {}

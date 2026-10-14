@@ -121,14 +121,12 @@ impl Component for InstructionsScreen {
     let Some(data) = read.data else {
       return page;
     };
-    let tab = match self.selection.view.get() {
-      View::Rule(tab, _) | View::New(tab) => tab,
-      View::Import => Tab::Project,
-    };
+    let tab = self.selection.view.get().tab();
     page
       .with_children(
-        (!self.selection.full.get() && !matches!(self.selection.view.get(), View::Import))
-          .then(|| frame::header(ctx, &project, &data, tab, &self.selection)),
+        tab
+          .filter(|_| !self.selection.full.get())
+          .map(|tab| frame::header(ctx, &project, &data, tab, &self.selection)),
       )
       .with_children(leaving::question(ctx, &self.selection, &self.leave))
       .child(self.content(ctx, project, data, reading))
@@ -136,8 +134,9 @@ impl Component for InstructionsScreen {
 }
 impl InstructionsScreen {
   fn content(&self, ctx: &mut Ctx, project: ShownProject, data: ProjectInstructions, reading: bool) -> Element {
-    match self.selection.view.get() {
-      View::Import => ctx.mount_keyed::<import::Import>(
+    let view = self.selection.view.get();
+    match view.tab() {
+      None => ctx.mount_keyed::<import::Import>(
         "instruction-import",
         import::Props {
           project,
@@ -145,11 +144,7 @@ impl InstructionsScreen {
           revision: self.revision.clone(),
         },
       ),
-      view => {
-        let tab = match view {
-          View::Rule(tab, _) | View::New(tab) => tab,
-          View::Import => unreachable!(),
-        };
+      Some(tab) => {
         let created = self.selection.created.get().0;
         if created.as_ref().is_some_and(|entry| data.entry(entry.id).is_some()) {
           self.selection.created.set(state::Saved::default());
