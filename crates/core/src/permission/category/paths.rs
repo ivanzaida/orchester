@@ -1,10 +1,11 @@
 //! Where a path a command names lies: in the worktree or a writable folder, in the temporary folder,
-//! a secret-bearing location of the home folder, or elsewhere. Paths are resolved against the folder
-//! the command runs in, with `~` as the home folder and links followed as far as they exist.
+//! in the dependency sources of a toolchain ([`super::toolchains`]), a secret-bearing location of the home
+//! folder, or elsewhere. Paths are resolved against the folder the command runs in, with `~` as the home
+//! folder and links followed as far as they exist.
 
 use std::path::{Component, Path, PathBuf, Prefix};
 
-use super::glob;
+use super::{glob, toolchains::Toolchains};
 use crate::{
   native::scope::protected,
   permission::canonical::{existing, normalize},
@@ -21,19 +22,8 @@ const SECRET_HOME_FILES: [&str; 2] = ["_netrc", "ntuser.dat"];
 /// files and folders of the home folder (`.aws`, `.azure`, `.kube`, `.docker/config.json`,
 /// `.config/gh/hosts.yml`, `.config/gcloud`, `.npmrc`, `.yarnrc`, `.pypirc`, `.netrc`,
 /// `.cargo/credentials.toml`, `.git-credentials`, `.codex`, `.claude.json`), which are all credential
-/// locations too.
+/// locations too, but for the dependency sources in `.cargo` and `.rustup` ([`super::toolchains`]).
 const APPLICATION_DATA: [&str; 2] = ["appdata", "library"];
-
-/// Folders in the home folder's dot folders that hold sources published for everyone, not the user's
-/// credentials, by their names (in lower case; `*` is any one name): the crates' sources Cargo unpacks
-/// from its registries and the library sources of the Rust toolchains. What they hold is read like any
-/// folder outside the worktree; the rest of `.cargo` (`credentials.toml`, the registry's index and
-/// cache, `config.toml`) and of `.rustup` stays a credential location. A link in them is followed to
-/// where it leads first.
-const PUBLISHED_SOURCES: [&[&str]; 2] = [
-  &[".cargo", "registry", "src"],
-  &[".rustup", "toolchains", "*", "lib", "rustlib", "src"],
-];
 
 /// Where commands run and may write.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -47,6 +37,8 @@ pub struct CommandScope {
   shell_home: Option<PathBuf>,
   profile: Option<PathBuf>,
   temp: Option<PathBuf>,
+  /// The Cargo and rustup homes, whose dependency sources are read like the worktree.
+  toolchains: Toolchains,
 }
 
 impl CommandScope {
@@ -54,14 +46,29 @@ impl CommandScope {
   /// `home` and whose temporary folder is `temp`. Each is resolved as far as it exists.
   /// The shell's `HOME` and `USERPROFILE` are `home` too; [`Self::with_shell_homes`] sets them apart.
   pub fn new(worktree: &Path, writable: &[PathBuf], home: Option<&Path>, temp: Option<&Path>) -> Self {
-    Self {
+    let mut scope = Self {
       worktree: resolved(worktree),
       writable: writable.iter().map(|folder| resolved(folder)).collect(),
-      homes: home.map(resolved).into_iter().collect(),
+      homes: Vec::new(),
       shell_home: home.map(Path::to_path_buf),
       profile: home.map(Path::to_path_buf),
       temp: temp.map(resolved),
-    }
+      toolchains: Toolchains::default(),
+    };
+    scope.add_home(home);
+    scope
+  }
+
+  /// Adds `home` (as written) to the home folders, with its `.cargo` and `.rustup`.
+  fn add_home(&mut self, home: Option<&Path>) {
+    let Some(folder) = home.map(resolved).filter(|folder| !self.homes.contains(folder)) else {
+      return;
+    };
+    self.toolchains.add(
+      Some(resolved(&folder.join(".cargo"))),
+      Some(resolved(&folder.join(".rustup"))),
+    );
+    self.homes.push(folder);
   }
 
   /// This scope for a shell whose environment holds `HOME` as `home` and `USERPROFILE` as `profile`
@@ -71,21 +78,28 @@ impl CommandScope {
   pub fn with_shell_homes(mut self, home: Option<&Path>, profile: Option<&Path>) -> Self {
     self.shell_home = home.map(Path::to_path_buf);
     self.profile = profile.map(Path::to_path_buf);
-    for folder in [home, profile].into_iter().flatten().map(resolved) {
-      if !self.homes.contains(&folder) {
-        self.homes.push(folder);
-      }
-    }
+    self.add_home(home);
+    self.add_home(profile);
+    self
+  }
+
+  /// This scope for a shell whose environment names a Cargo home (`CARGO_HOME`) and a rustup home
+  /// (`RUSTUP_HOME`) besides the home folders' `.cargo` and `.rustup`; a relative one is not followed.
+  #[must_use]
+  pub fn with_toolchain_homes(mut self, cargo: Option<&Path>, rustup: Option<&Path>) -> Self {
+    let home = |folder: Option<&Path>| folder.filter(|folder| folder.is_absolute()).map(resolved);
+    self.toolchains.add(home(cargo), home(rustup));
     self
   }
 
   /// The scope of the host's user: their home folder and the system's temporary folder, for a shell
-  /// with the host's `HOME` and `USERPROFILE`, which the agent's CLI inherits.
+  /// with the host's `HOME`, `USERPROFILE`, `CARGO_HOME` and `RUSTUP_HOME`, which the agent's CLI inherits.
   pub fn on_host(worktree: &Path, writable: &[PathBuf]) -> Self {
     let variable = |name: &str| std::env::var_os(name).map(PathBuf::from);
     let home = variable(if cfg!(windows) { "USERPROFILE" } else { "HOME" });
     Self::new(worktree, writable, home.as_deref(), Some(&std::env::temp_dir()))
       .with_shell_homes(variable("HOME").as_deref(), variable("USERPROFILE").as_deref())
+      .with_toolchain_homes(variable("CARGO_HOME").as_deref(), variable("RUSTUP_HOME").as_deref())
   }
 
   /// The value of the shell's `HOME` or `USERPROFILE` (`name`); `None` for another name or when unset.
@@ -201,7 +215,15 @@ impl CommandScope {
     if path.starts_with(&self.worktree) || self.writable.iter().any(|folder| path.starts_with(folder)) {
       return Place::Granted;
     }
-    if self.secret(path) || self.homes.iter().any(|home| home.starts_with(path)) || unmapped(path) {
+    if self.homes.iter().any(|home| home.starts_with(path)) || unmapped(path) {
+      return Place::Secret;
+    }
+    match self.toolchains.sources(path) {
+      Some(true) => return Place::Sources,
+      Some(false) => return Place::Secret,
+      None => {}
+    }
+    if self.secret(path) {
       return Place::Secret;
     }
     if self.temp.as_ref().is_some_and(|temp| path.starts_with(temp)) {
@@ -280,7 +302,7 @@ impl CommandScope {
       [folder, ..] if APPLICATION_DATA.contains(folder) => {
         !self.temp.as_ref().is_some_and(|temp| path.starts_with(temp))
       }
-      [first, ..] => (first.starts_with('.') || SECRET_HOME_FILES.contains(first)) && !published_source(&names),
+      [first, ..] => first.starts_with('.') || SECRET_HOME_FILES.contains(first),
     }
   }
 }
@@ -292,6 +314,12 @@ impl CommandScope {
   pub fn holds_credentials(&self, path: &Path) -> bool {
     self.place(&resolved(path)) == Place::Secret
   }
+
+  /// Whether `path`, absolute, lies in the dependency sources of a toolchain ([`super::toolchains`]), which
+  /// are read like the worktree. Links are followed as far as they exist.
+  pub fn in_dependency_sources(&self, path: &Path) -> bool {
+    self.place(&resolved(path)) == Place::Sources
+  }
 }
 
 /// Where a path lies, from the most to the least granted.
@@ -301,6 +329,8 @@ pub(super) enum Place {
   Granted,
   /// The temporary folder.
   Temp,
+  /// The dependency sources of a toolchain: read like the worktree, written like anywhere else.
+  Sources,
   /// Anywhere else.
   Outside,
   /// A credential location of the home folder: its dot files and folders, and the applications' data
@@ -321,18 +351,6 @@ fn unmapped(path: &Path) -> bool {
 /// `path` with links followed as far as it exists, or as written when it cannot be read.
 fn resolved(path: &Path) -> PathBuf {
   existing(path).map_or_else(|_| normalize(path), |found| found.path)
-}
-
-/// Whether the components `names` (of a path in the home folder, in lower case) lie in one of the
-/// [`PUBLISHED_SOURCES`].
-fn published_source(names: &[String]) -> bool {
-  PUBLISHED_SOURCES.iter().any(|folder| {
-    names.len() >= folder.len()
-      && folder
-        .iter()
-        .zip(names)
-        .all(|(pattern, name)| *pattern == "*" || pattern == name)
-  })
 }
 
 /// The part of `word` before its first component with a glob character (empty when that is the first),
