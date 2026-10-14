@@ -99,7 +99,11 @@ fn introduction(ctx: &mut Ctx, open: &OpenAction) -> Column {
     .spacing(SpacingSize::Lg)
     .child(mark)
     .child(gap(MARK_GAP))
-    .child(Text::new(&ctx.t("projects.welcome.eyebrow")).variant(ProjectsText::Eyebrow.role()))
+    .child(
+      Text::new(&ctx.t("projects.welcome.eyebrow"))
+        .variant(ProjectsText::Eyebrow.role())
+        .nowrap(),
+    )
     .child(
       Text::new(&ctx.t("projects.welcome.title"))
         .id("welcome-title")
@@ -151,7 +155,11 @@ fn steps(ctx: &Ctx) -> Column {
     )
     .spacing(SpacingSize::Xs)
     .border_left(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(Text::new(&ctx.t("projects.welcome.stepsHeading")).variant(ProjectsText::Eyebrow.role()))
+    .child(
+      Text::new(&ctx.t("projects.welcome.stepsHeading"))
+        .variant(ProjectsText::Eyebrow.role())
+        .nowrap(),
+    )
     .child(gap(ACTIONS_GAP))
     .with_children(rows)
 }

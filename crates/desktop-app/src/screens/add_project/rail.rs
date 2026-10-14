@@ -60,7 +60,11 @@ pub(super) fn rail(ctx: &mut Ctx) -> Element {
             .bottom(ExtraSpacing::Loose.role())
             .left(ExtraSpacing::Loose.role()),
         )
-        .child(Text::new(&ctx.t("setup.rail.heading")).variant(ProjectsText::Eyebrow.role())),
+        .child(
+          Text::new(&ctx.t("setup.rail.heading"))
+            .variant(ProjectsText::Eyebrow.role())
+            .nowrap(),
+        ),
     )
     .child(step("add-project-step-project", &ctx.t("setup.rail.project"), None))
     .child(step(
