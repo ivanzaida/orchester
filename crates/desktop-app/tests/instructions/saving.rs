@@ -1,6 +1,7 @@
 //! M5: a private SQLite lock retains the actual draft-save operation for inspection.
-use super::harness::Instructions;
 use orchester_core::resource::InstructionScope;
+
+use super::harness::Instructions;
 
 #[test]
 fn instructions_saving_draft_keeps_publish_unavailable_and_explains_wait() {
