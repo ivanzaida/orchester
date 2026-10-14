@@ -4,7 +4,7 @@ use std::fs;
 use orchester_core::{resource::InstructionScope, store::ResourceStore};
 use orchester_store::ProjectDb;
 
-use super::harness::Instructions;
+use super::{harness::Instructions, support::project_id};
 
 fn directory_link(target: &std::path::Path, link: &std::path::Path) {
   #[cfg(windows)]
@@ -84,4 +84,27 @@ fn instructions_import_stays_drafts_only_with_both_screen_registrations() {
     fs::read_to_string(screen.root.join("AGENTS.md")).expect("source"),
     "Owned instruction"
   );
+}
+#[test]
+fn instructions_import_with_skills_tells_the_skills_screen() {
+  let mut screen = Instructions::new();
+  fs::write(screen.root.join("AGENTS.md"), "Keep changes small.").expect("private fixture");
+  let skill = screen.root.join(".claude/skills/checks");
+  fs::create_dir_all(&skill).expect("private fixture");
+  fs::write(skill.join("SKILL.md"), "# Run the checks").expect("private fixture");
+  let changes = screen
+    .window
+    .launch
+    .services()
+    .expect("the session started")
+    .changes
+    .subscribe();
+  screen.go();
+  screen.click("instructions-import");
+  screen.until("review", |s| s.exists("instruction-import-create"));
+  screen.click("instruction-import-create");
+  screen.until("imported", |s| s.exists("instruction-import-result"));
+  let counts = changes.borrow().get(&project_id()).copied().unwrap_or_default();
+  assert_eq!(counts.instructions, 1);
+  assert_eq!(counts.skills, 1);
 }

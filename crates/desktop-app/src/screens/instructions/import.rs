@@ -13,6 +13,7 @@ use lurq::{
 use orchester_core::{
   agent_files::import::{Candidate, ImportItem, ItemKind, Unimportable},
   id::IdempotencyKey,
+  resource::ResourceKind,
 };
 use orchester_workspace::{
   background,
@@ -21,7 +22,10 @@ use orchester_workspace::{
   tasks::outside::Outside,
 };
 
-use super::state::{Selection, Tab, View};
+use super::{
+  import_rows::{Unchosen, Viewed},
+  state::{Selection, Tab, View},
+};
 use crate::{
   project::ShownProject,
   theme::{ExtraSpacing, ExtraTypography},
@@ -58,9 +62,8 @@ enum ImportError {
 impl DevtoolsInspectable for ImportError {}
 type Action = FutureAction<Vec<ImportItem>, Imported, ImportError>;
 pub struct Import {
-  selected: Signal<Vec<usize>>,
-  preview: Signal<usize>,
-  seeded: Signal<bool>,
+  unchosen: Signal<Unchosen>,
+  viewed: Signal<Viewed>,
   action: Action,
 }
 impl Component for Import {
@@ -86,15 +89,18 @@ impl Component for Import {
     let id = props.project.open.project.id();
     ctx.watch(&action.state(), move |result| {
       props.selection.busy.set(result.is_pending());
-      if result.is_fulfilled() {
+      if let Some(Imported(created)) = result.data.as_ref().filter(|_| result.is_fulfilled()) {
         props.revision.update(|v| *v += 1);
         changes.record(id, Outside::Instructions);
+        // The Skills screen reads its library again when the import made skill drafts too.
+        if created.iter().any(|draft| draft.resource.kind() == ResourceKind::Skill) {
+          changes.record(id, Outside::Skills);
+        }
       }
     });
     Self {
-      selected: ctx.signal(Vec::new()),
-      preview: ctx.signal(0),
-      seeded: ctx.signal(false),
+      unchosen: ctx.signal(Unchosen::default()),
+      viewed: ctx.signal(Viewed::default()),
       action,
     }
   }
@@ -139,17 +145,6 @@ impl Component for Import {
 }
 impl Import {
   fn loaded(&self, ctx: &mut Ctx, props: &Props, scan: &RepositoryScan, mut page: Column) -> Column {
-    if !self.seeded.get() {
-      self.selected.set(
-        scan
-          .items
-          .iter()
-          .enumerate()
-          .filter_map(|(i, item)| item.outcome.is_ok().then_some(i))
-          .collect(),
-      );
-      self.seeded.set(true);
-    }
     let state = self.action.state().get();
     if let Some(Imported(created)) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
       return self.created(ctx, props, created, page);
@@ -206,7 +201,7 @@ impl Import {
     let rows = if scan.items.is_empty() {
       Element::from(Text::new(&ctx.t("instructions.importEmpty")).variant(TypographyStyle::Description))
     } else {
-      super::import_rows::list(ctx, &scan.items, self.selected.clone(), self.preview.clone(), busy)
+      super::import_rows::list(ctx, &scan.items, self.unchosen.clone(), self.viewed.clone(), busy)
     };
     Row::new()
       .width(Dimension::Pct(100.0))
@@ -227,21 +222,13 @@ impl Import {
           .min_width(Dimension::Px(0.0))
           .height(Dimension::Pct(100.0))
           .padding(Padding::symmetric(SpacingSize::Xl, ExtraSpacing::Inset.role()))
-          .child(super::import_preview::preview(ctx, scan.items.get(self.preview.get()))),
+          .child(super::import_preview::preview(ctx, self.viewed.get().item(&scan.items))),
       )
       .into()
   }
   fn footer(&self, ctx: &Ctx, props: &Props, scan: &RepositoryScan, busy: bool) -> Element {
-    let chosen = self.selected.get();
-    let instructions = chosen
-      .iter()
-      .filter(|i| {
-        scan
-          .items
-          .get(**i)
-          .is_some_and(|item| item.kind == ItemKind::Instruction)
-      })
-      .count();
+    let chosen = self.chosen(scan);
+    let instructions = chosen.iter().filter(|item| item.kind == ItemKind::Instruction).count();
     let cancel = props.selection.clone();
     let cancel = ActionButton::new(
       "instruction-import-cancel",
@@ -275,12 +262,7 @@ impl Import {
       .into()
   }
   fn create_button(&self, ctx: &Ctx, scan: &RepositoryScan, busy: bool) -> ActionButton {
-    let chosen = self
-      .selected
-      .get()
-      .iter()
-      .filter_map(|i| scan.items.get(*i).cloned())
-      .collect::<Vec<_>>();
+    let chosen = self.chosen(scan);
     let empty = chosen.is_empty();
     let action = self.action.clone();
     let button = ActionButton::new(
@@ -290,9 +272,7 @@ impl Import {
     )
     .icon(Icon::FilePlus)
     .on_click(move || {
-      if !action.state().get_untracked().is_pending() {
-        action.run(chosen.clone());
-      }
+      action.run_if_idle(chosen.clone());
     });
     if busy {
       button.loading()
@@ -301,6 +281,18 @@ impl Import {
     } else {
       button
     }
+  }
+}
+impl Import {
+  /// The items the import makes drafts of, in the scan's order.
+  fn chosen(&self, scan: &RepositoryScan) -> Vec<ImportItem> {
+    let unchosen = self.unchosen.get();
+    scan
+      .items
+      .iter()
+      .filter(|item| unchosen.chosen(item))
+      .cloned()
+      .collect()
   }
 }
 /// Items pane qNGoR and footer WLlV8 in the import review.

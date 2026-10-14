@@ -1,5 +1,6 @@
-//! Grouped, virtualized import list and row zNzKN.
-use std::sync::Arc;
+//! Grouped, virtualized import list and row zNzKN. Choices and the open preview are kept by each item's
+//! source, not by its place in the list.
+use std::{collections::BTreeSet, sync::Arc};
 
 use lurq::{
   app::{
@@ -23,6 +24,28 @@ use crate::{
   },
 };
 
+/// Importable items left out of the import, by source: every other importable item is chosen.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Unchosen(pub BTreeSet<String>);
+impl DevtoolsInspectable for Unchosen {}
+impl Unchosen {
+  pub fn chosen(&self, item: &ImportItem) -> bool {
+    item.outcome.is_ok() && !self.0.contains(&item.source)
+  }
+}
+/// The item whose preview is open, by source; none opens the first.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Viewed(pub Option<String>);
+impl DevtoolsInspectable for Viewed {}
+impl Viewed {
+  pub fn item<'a>(&self, items: &'a [ImportItem]) -> Option<&'a ImportItem> {
+    self
+      .0
+      .as_ref()
+      .and_then(|source| items.iter().find(|item| item.source == *source))
+      .or_else(|| items.first())
+  }
+}
 #[derive(Clone, PartialEq)]
 enum Item {
   Group(ItemKind),
@@ -32,12 +55,14 @@ enum Item {
 struct Props {
   item: Item,
   busy: bool,
-  selected: Signal<Vec<usize>>,
-  preview: Signal<usize>,
+  /// The source of the item whose preview is open.
+  shown: Option<String>,
+  unchosen: Signal<Unchosen>,
+  viewed: Signal<Viewed>,
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    self.item == other.item && self.busy == other.busy
+    self.item == other.item && self.busy == other.busy && self.shown == other.shown
   }
 }
 impl DevtoolsInspectable for Props {}
@@ -62,8 +87,9 @@ impl Component for ImportRow {
   }
 }
 fn row(ctx: &mut Ctx, props: &Props, index: usize, item: &ImportItem) -> Element {
-  let checked = props.selected.get().contains(&index);
-  let selected = props.selected.clone();
+  let checked = props.unchosen.get().chosen(item);
+  let unchosen = props.unchosen.clone();
+  let source = item.source.clone();
   let toggle = Toggle::new(
     format!("instruction-import-toggle-{index}"),
     ToggleKind::Checkbox,
@@ -73,20 +99,21 @@ fn row(ctx: &mut Ctx, props: &Props, index: usize, item: &ImportItem) -> Element
   .hide_label();
   let toggle = if item.outcome.is_ok() && !props.busy {
     toggle.on_change(move |on| {
-      selected.update(|chosen| {
-        if on && !chosen.contains(&index) {
-          chosen.push(index);
-        } else if !on {
-          chosen.retain(|i| *i != index);
+      unchosen.update(|Unchosen(left_out)| {
+        if on {
+          left_out.remove(&source);
+        } else {
+          left_out.insert(source.clone());
         }
-      })
+      });
     })
   } else {
     toggle
   };
-  let preview = props.preview.clone();
-  let current = preview.get() == index;
-  pressable(move || preview.set(index))
+  let viewed = props.viewed.clone();
+  let current = props.shown.as_deref() == Some(item.source.as_str());
+  let source = item.source.clone();
+  pressable(move || viewed.set(Viewed(Some(source.clone()))))
     .id(format!("instruction-import-item-{index}"))
     .width(Dimension::Pct(100.0))
     .align_items(Alignment::Start)
@@ -136,10 +163,11 @@ fn row(ctx: &mut Ctx, props: &Props, index: usize, item: &ImportItem) -> Element
 pub fn list(
   ctx: &mut Ctx,
   items: &[ImportItem],
-  selected: Signal<Vec<usize>>,
-  preview: Signal<usize>,
+  unchosen: Signal<Unchosen>,
+  viewed: Signal<Viewed>,
   busy: bool,
 ) -> Element {
+  let shown = viewed.get().item(items).map(|item| item.source.clone());
   let mut grouped = Vec::new();
   for kind in [ItemKind::Instruction, ItemKind::Skill] {
     let entries = items
@@ -170,8 +198,9 @@ pub fn list(
       move |item| Props {
         item: item.clone(),
         busy,
-        selected: selected.clone(),
-        preview: preview.clone(),
+        shown: shown.clone(),
+        unchosen: unchosen.clone(),
+        viewed: viewed.clone(),
       },
     )
 }

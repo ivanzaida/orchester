@@ -32,6 +32,8 @@ pub enum Outside {
   Profiles,
   /// A project instruction draft or published version changed.
   Instructions,
+  /// A skill draft or published version changed.
+  Skills,
 }
 
 /// How often each kind of a project's data changed outside the screens.
@@ -48,6 +50,7 @@ pub struct OutsideCounts {
   pub tools: u64,
   pub profiles: u64,
   pub instructions: u64,
+  pub skills: u64,
 }
 
 impl OutsideCounts {
@@ -65,6 +68,7 @@ impl OutsideCounts {
       Outside::Tools => self.tools,
       Outside::Profiles => self.profiles,
       Outside::Instructions => self.instructions,
+      Outside::Skills => self.skills,
     }
   }
 
@@ -81,6 +85,7 @@ impl OutsideCounts {
       Outside::Tools => &mut self.tools,
       Outside::Profiles => &mut self.profiles,
       Outside::Instructions => &mut self.instructions,
+      Outside::Skills => &mut self.skills,
     };
     *count += 1;
   }
