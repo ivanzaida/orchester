@@ -216,6 +216,10 @@ claude mcp add --transport http --scope user orchester http://127.0.0.1:47821/mc
 - Verified: `claude mcp add-json` accepts `{"type":"http","url":…,"headersHelper":"<command>"}`, a command whose
   output supplies the headers at connect time. **Unverified**: the helper's output format and when it runs. See
   open decision 4.
+- Verified 2026-10-14 against a QA copy: Claude Code 2.1.296 opens with a `server/discover` probe for MCP 2026-07-28.
+  The server speaks the revisions up to 2025-11-25 only and declines it (HTTP 400, JSON-RPC `-32022` listing them);
+  Claude Code then initializes a session on 2025-11-25 and lists the tools. Advertising 2026-07-28 made it take that
+  revision's stateless path and reject `tools/list` for lacking `ttlMs` and `cacheScope`.
 - **Unverified**: that the Claude desktop app's Code sessions on Windows read the same `~/.claude.json` and can reach
   `127.0.0.1` (a full-trust MSIX package can use loopback; AppData virtualization does not affect `~/.claude.json`).
   This must be checked once, with the desktop app, after implementation.
