@@ -14,17 +14,20 @@
 //! and why. An item expanded here keeps its place once it no longer waits, as a note of how it went (`note`),
 //! until the panel closes, so nothing moves under the pointer.
 
+mod frame;
+mod leads;
+
 use std::{sync::Arc, time::Duration};
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, Interval},
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Row, ScrollVertical, Spacer, Text},
+  components::{Column, ScrollVertical},
   core::{ElementRef, Signal},
-  layout::{Alignment, layout_kind::ScrollState, text_style::TextAlign},
+  layout::layout_kind::ScrollState,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
@@ -34,6 +37,10 @@ use orchester_workspace::tasks::{
 };
 use parking_lot::Mutex;
 
+use self::{
+  frame::{empty, footer, head},
+  leads::{go, key_of, open_at, pointed_of, route_of, task_route},
+};
 use super::{
   Waiting,
   in_place::{InPlaceCard, InPlaceProps},
@@ -43,19 +50,12 @@ use super::{
   waiting, words,
 };
 use crate::{
-  navigation::{
-    Navigation,
-    pointed::{Pointed, PointedCard},
-  },
+  navigation::Navigation,
   project::Projects,
-  routes::{OverviewTab, ProjectPage, Route, TaskView},
+  routes::TaskView,
   screens::task::cards::Decisions,
-  theme::{ExtraSpacing, ExtraTypography, IconSize, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
-  ui::{
-    button::{ActionButton, ButtonKind},
-    icon::{Icon, icon},
-    icon_button::IconButton,
-  },
+  theme::{ExtraSpacing, NeedsYouShadow},
+  ui::icon::Icon,
 };
 
 /// The panel's width (`BrP6i`).
@@ -63,8 +63,6 @@ pub(super) const PANEL_WIDTH: f32 = 460.0;
 /// What the panel leaves of the window's height: 40 over it (the title bar and the gap under the pill) and 32
 /// under it, above the status bar (`BrP6i` in `VnLOT`, 828 high in a 900 window).
 const WINDOW_ROOM: f32 = 72.0;
-/// The measure of what the empty panel explains (`RAYK9` in `B95uP1`).
-const EMPTY_TEXT_WIDTH: f32 = 320.0;
 /// How often the waiting times move on while the panel shows.
 const TICK: Duration = Duration::from_secs(30);
 
@@ -367,227 +365,4 @@ impl NeedsYouPanel {
       kept.push(shown.clone());
     }
   }
-}
-
-/// How an item is told from the others while the panel shows, and its element id's end: its card's key when
-/// it is answered in place; else its task's, what it is and its step, as several steps of one run may wait at
-/// once; `memory-<project>` for `project`'s memory records.
-fn key_of(project: ProjectId, item: &WaitingItem) -> Arc<str> {
-  if let Some(key) = item.kind.card_key() {
-    return key;
-  }
-  let kind = match item.kind {
-    WaitingKind::Memory { .. } => return Arc::from(format!("memory-{project}")),
-    WaitingKind::Question(_) => "question",
-    WaitingKind::Plan(_) => "plan",
-    WaitingKind::Decision(_) => "decision",
-    WaitingKind::Interrupted { .. } => "interrupted",
-    WaitingKind::StoppedAtLimit { .. } => "limit",
-    WaitingKind::ReadyToMerge => "merge",
-    WaitingKind::Approval(_) | WaitingKind::Choice(_) => "card",
-  };
-  let task = item.task.as_ref().map_or_else(String::new, |task| task.id.to_string());
-  let step = item.step.as_ref().map_or(0, |step| step.number);
-  Arc::from(format!("task-{task}-{kind}-{step}"))
-}
-
-/// Where an item that is not answered in place leads: an agent's question to the task's Conversation, where
-/// the composer answers it; the others to the task's Summary.
-fn route_of(shown: &Shown) -> Option<Route> {
-  let task = shown.item.task.as_ref()?;
-  let view = match shown.item.kind {
-    WaitingKind::Question(_) => TaskView::Conversation,
-    _ => TaskView::of(crate::routes::TaskTab::Summary),
-  };
-  task_route(shown.project, &task.key, view)
-}
-
-fn task_route(project: ProjectId, key: &str, view: TaskView) -> Option<Route> {
-  let key = key.parse().ok()?;
-  Some(Route::Project(project, ProjectPage::Task(key, view)))
-}
-
-/// The decision card of the task's Summary an item points at, which the page brings into view and rings
-/// (`icGHG`): the plan under review, raising the limit, the decision after retries.
-fn pointed_of(shown: &Shown) -> Option<Pointed> {
-  let card = match shown.item.kind {
-    WaitingKind::Plan(_) => PointedCard::Plan,
-    WaitingKind::StoppedAtLimit { .. } => PointedCard::RaiseLimit,
-    WaitingKind::Decision(_) => PointedCard::Retries,
-    _ => return None,
-  };
-  let task = shown.item.task.as_ref()?.key.parse().ok()?;
-  Some(Pointed {
-    project: shown.project,
-    task,
-    card,
-  })
-}
-
-/// Goes to `route` and closes the panel, which the page opening takes the place of.
-fn go(navigation: &Navigation, open: &Signal<bool>, route: Option<Route>) -> Arc<dyn Fn() + Send + Sync> {
-  let (navigation, open) = (navigation.clone(), open.clone());
-  Arc::new(move || {
-    if let Some(route) = route.clone() {
-      navigation.go(route);
-    }
-    open.set(false);
-  })
-}
-
-/// Goes to `route`, pointing at `card` on it, and closes the panel.
-fn open_at(
-  navigation: &Navigation,
-  open: &Signal<bool>,
-  route: Route,
-  card: Option<Pointed>,
-) -> Arc<dyn Fn() + Send + Sync> {
-  let Some(card) = card else {
-    return go(navigation, open, Some(route));
-  };
-  let (navigation, open) = (navigation.clone(), open.clone());
-  Arc::new(move || {
-    navigation.go_to_card(&route, card.clone());
-    open.set(false);
-  })
-}
-
-/// The head: the hand, *Needs you* and how many wait, the close, and the projects under them.
-fn head(ctx: &mut Ctx, total: usize, sub: &str, open: &Signal<bool>) -> Element {
-  let color = if total > 0 {
-    PaletteColor::Warning
-  } else {
-    PaletteColor::TextMuted
-  };
-  let close = {
-    let open = open.clone();
-    IconButton::new("needs-you-close", Icon::X, ctx.t("needs_you.close"))
-      .inspector()
-      .on_click(move || open.set(false))
-      .render(ctx)
-  };
-  Column::new()
-    .id("needs-you-head")
-    .width(Dimension::Pct(100.0))
-    .padding(
-      Padding::new()
-        .top(crate::theme::ExtraSpacing::Loose.role())
-        .bottom(crate::theme::ExtraSpacing::Loose.role())
-        .right(SpacingSize::Sm)
-        .left(SpacingSize::Lg),
-    )
-    .spacing(crate::theme::ExtraSpacing::Tight.role())
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(NeedsYouSpacing::TitleRow.role())
-        .align_items(Alignment::Center)
-        .child(icon(Icon::Hand, IconSize::Nav, color.clone()))
-        .child(
-          Text::new(&ctx.t("needs_you.title"))
-            .id("needs-you-title")
-            .variant(NeedsYouText::Title.role()),
-        )
-        .child(
-          Text::new(&total.to_string())
-            .id("needs-you-count")
-            .variant(NeedsYouText::Count.role())
-            .color(color),
-        )
-        .child(Spacer::new().flex(1.0))
-        .child(close),
-    )
-    .child(Text::new(sub).id("needs-you-sub").variant(ExtraTypography::Note.role()))
-    .into()
-}
-
-/// Nothing waits (`oMseR`): the hand, *Nothing needs you* and what appears here.
-fn empty(ctx: &Ctx) -> Element {
-  Column::new()
-    .id("needs-you-empty")
-    .width(Dimension::Pct(100.0))
-    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .padding(
-      Padding::new()
-        .top(SpacingSize::Xs)
-        .left(SpacingSize::Sm)
-        .right(SpacingSize::Sm)
-        .bottom(SpacingSize::Sm),
-    )
-    .child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .padding(Padding::symmetric(
-          NeedsYouSpacing::EmptySides.role(),
-          crate::theme::ExtraSpacing::Roomy.role(),
-        ))
-        .spacing(crate::theme::ExtraSpacing::Snug.role())
-        .align_items(Alignment::Center)
-        .child(icon(Icon::Hand, IconSize::Xl, PaletteColor::TextMuted))
-        .child(
-          Text::new(&ctx.t("needs_you.empty.title"))
-            .id("needs-you-empty-title")
-            .variant(ExtraTypography::Strong.role()),
-        )
-        .child(
-          Text::new(&ctx.t("needs_you.empty.text"))
-            .id("needs-you-empty-text")
-            .variant(NeedsYouText::Empty.role())
-            .text_align(TextAlign::Center)
-            .width(Dimension::Px(EMPTY_TEXT_WIDTH)),
-        ),
-    )
-    .into()
-}
-
-/// *Show all in Kontur's Overview*, or with nothing listed *Open Kontur's Overview* (`k4VANT` in `B95uP1`), of
-/// the active tab's project or the first listed, and *Esc closes*.
-fn footer(
-  ctx: &Ctx,
-  groups: &[Group],
-  active: Option<ProjectId>,
-  (navigation, open): (&Navigation, &Signal<bool>),
-) -> Element {
-  let chosen = groups
-    .iter()
-    .find(|group| Some(group.waiting.project) == active)
-    .or_else(|| groups.first())
-    .map(|group| &group.waiting);
-  let key = if groups.iter().all(|group| group.items.is_empty()) {
-    "needs_you.openOverview"
-  } else {
-    "needs_you.showAll"
-  };
-  let show_all = chosen.map(|waiting| {
-    let route = Route::Project(waiting.project, ProjectPage::Overview(OverviewTab::NeedsYou));
-    let press = go(navigation, open, Some(route));
-    ActionButton::new(
-      "needs-you-show-all",
-      ButtonKind::Ghost,
-      ctx.t_args(key, [("project", waiting.name.as_str())]),
-    )
-    .icon(Icon::LayoutDashboard)
-    .on_click(move || press())
-  });
-  Row::new()
-    .id("needs-you-footer")
-    .width(Dimension::Pct(100.0))
-    .padding(
-      Padding::new()
-        .top(crate::theme::ExtraSpacing::Snug.role())
-        .bottom(crate::theme::ExtraSpacing::Snug.role())
-        .right(SpacingSize::Md)
-        .left(SpacingSize::Sm),
-    )
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .with_children(show_all)
-    .child(Spacer::new().flex(1.0))
-    .child(
-      Text::new(&ctx.t("needs_you.escCloses"))
-        .variant(TypographyStyle::Caption)
-        .nowrap(),
-    )
-    .into()
 }
