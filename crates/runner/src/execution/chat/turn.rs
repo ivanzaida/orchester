@@ -8,8 +8,9 @@ use std::{
 };
 
 use orchester_core::{
+  account::AccountCli,
   connection::{
-    AgentConnection, AgentProvider,
+    AgentConnection, AgentProvider, ConnectionAccount,
     invocation::{ClaudeChat, ClaudeMcpConfig, ClaudeSession, McpLaunch, Platform, on_account},
     mcp::{McpServerName, McpUrl},
     stream::{AgentEvent, ClaudeStream, OutputStream},
@@ -31,9 +32,23 @@ use tokio::sync::oneshot;
 
 use crate::{
   notify::Notifier,
-  private_file::PrivateFile,
+  private_file::{self, PrivateFile},
   supervisor::{ProcessEvent, ProcessExit, Supervised},
 };
+
+/// The folders that hold secrets the chat's agent must not read: the runner's private files (every running
+/// agent's MCP configuration with its tokens, and other chats' tokens) and the account's CLI folder (its sign-in).
+fn denied_folders(account: &ConnectionAccount) -> Vec<PathBuf> {
+  let cli = AccountCli::ClaudeCode;
+  let own = || {
+    std::env::var_os(cli.folder_variable())
+      .filter(|value| !value.is_empty())
+      .map(PathBuf::from)
+      .or_else(|| std::env::home_dir().map(|home| home.join(cli.own_folder_name())))
+  };
+  let account = account.folder().map(Path::to_path_buf).or_else(own);
+  [Some(private_file::root()), account].into_iter().flatten().collect()
+}
 
 /// Characters of the CLI's standard error kept as the reason of a turn that failed without saying why.
 const REASON_CHARS: usize = 300;
@@ -103,6 +118,7 @@ impl Turn {
     )
     .map_err(|error| cannot(format!("cannot write the MCP configuration: {error}")))?;
     let environment = db.project_environment().map_err(|error| cannot(error.to_string()))?;
+    let denied = denied_folders(connection.account());
     let command = ClaudeChat {
       executable,
       model: self.settings.model().as_str(),
@@ -111,6 +127,7 @@ impl Turn {
       session: ClaudeSession::continuing(self.chat.resumes_on(self.settings.connection())),
       system_prompt: prompt.path(),
       mcp_config: mcp.path(),
+      denied: &denied,
     }
     .command(self.text.as_str(), std::env::vars_os(), &environment)
     .and_then(|command| on_account(command, connection.account(), AgentProvider::ClaudeCodeCli))

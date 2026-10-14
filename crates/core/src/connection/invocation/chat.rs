@@ -3,15 +3,18 @@
 //! `claude -p --input-format stream-json --output-format stream-json --verbose --replay-user-messages
 //!  --model <model> [--effort <e>]
 //!  --strict-mcp-config --setting-sources "" --disable-slash-commands --system-prompt-file <file>
-//!  --mcp-config <file> --tools Read,Glob,Grep --allowedTools Read Glob Grep mcp__orchester
-//!  --permission-mode default (--session-id <new uuid> | --resume <session>)`
+//!  --mcp-config <file> --tools Read,Glob,Grep --allowedTools mcp__orchester
+//!  --disallowedTools Read(//<denied folder>/**)… --permission-mode default
+//!  (--session-id <new uuid> | --resume <session>)`
 //!
 //! in the project folder, with the person's message as the one stream-json user message on standard input, which is
 //! then closed: the CLI exits once it has answered.
 //!
-//! - Read-only: the only built-in tools it is offered are `Read`, `Glob` and `Grep`, so it has no shell and no edit
-//!   tool at all; in the `default` permission mode a read outside the project folder would ask, and print mode denies
-//!   what it would ask.
+//! - Read-only, in the project folder only: the only built-in tools it is offered are `Read`, `Glob` and `Grep`, so it
+//!   has no shell and no edit tool at all. They get no allow rule, since a bare tool name would allow every path the
+//!   person can read: in the `default` permission mode a read in the working folder runs, one outside it would ask,
+//!   and print mode denies what it would ask. The folders that hold secrets are denied by rule as well (`denied`: the
+//!   runner's private files, which hold other invocations' MCP tokens, and the account's own CLI folder).
 //! - Its only MCP server is Orchester's domain tools for this project (`orchester`), from a file the runner writes for
 //!   the turn with the chat's bearer token in it ([`super::ClaudeMcpConfig`]); its tools run without asking: they check
 //!   every action themselves, as for any client of the app.
@@ -20,10 +23,15 @@
 //! - The system prompt (`crate::orchestrator::instructions`) is a file given on every turn, a resumed one too.
 //! - Sessions are kept on disk so that the next turn resumes them; no step result schema is asked for.
 
-use std::{ffi::OsString, path::Path};
+use std::{
+  ffi::OsString,
+  path::{Path, PathBuf},
+};
 
 use super::{ClaudeSession, InvocationError, agent_environment, input_line};
-use crate::{command::Command, orchestrator::instructions::SERVER, resource::CommandEnvironment};
+use crate::{
+  command::Command, orchestrator::instructions::SERVER, permission::claude::read_rule, resource::CommandEnvironment,
+};
 
 /// The built-in tools the Orchestrator's agent is offered: reading and searching, nothing that changes or runs.
 const READ_TOOLS: [&str; 3] = ["Read", "Glob", "Grep"];
@@ -42,6 +50,8 @@ pub struct ClaudeChat<'a> {
   pub system_prompt: &'a Path,
   /// The `--mcp-config` file of the domain tools.
   pub mcp_config: &'a Path,
+  /// Folders the agent must not read even where the CLI would ask: they hold secrets.
+  pub denied: &'a [PathBuf],
 }
 
 impl ClaudeChat<'_> {
@@ -75,9 +85,12 @@ impl ClaudeChat<'_> {
     args.extend(["--system-prompt-file".to_owned(), path_text(self.system_prompt)]);
     args.extend(["--mcp-config".to_owned(), path_text(self.mcp_config)]);
     args.extend(["--tools".to_owned(), READ_TOOLS.join(",")]);
-    args.push("--allowedTools".to_owned());
-    args.extend(READ_TOOLS.map(str::to_owned));
-    args.push(format!("mcp__{SERVER}"));
+    args.extend(["--allowedTools".to_owned(), format!("mcp__{SERVER}")]);
+    let denied: Vec<String> = self.denied.iter().filter_map(|folder| read_rule(folder)).collect();
+    if !denied.is_empty() {
+      args.push("--disallowedTools".to_owned());
+      args.extend(denied);
+    }
     args.extend(["--permission-mode".to_owned(), "default".to_owned()]);
     match self.session {
       ClaudeSession::New(id) => args.extend(["--session-id".to_owned(), id.to_string()]),

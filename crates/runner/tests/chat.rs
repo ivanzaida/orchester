@@ -123,9 +123,13 @@ async fn chat_answers_read_only_with_only_its_tools_and_resumes_its_session() {
   );
   assert!(
     started.contains(
-      " --tools Read,Glob,Grep --allowedTools Read Glob Grep mcp__orchester --permission-mode default --session-id "
+      " --tools Read,Glob,Grep --allowedTools mcp__orchester --disallowedTools Read("
     ),
     "{started}"
+  );
+  assert!(
+    started.contains("/orchester-mcp/**) ") && started.contains(" --permission-mode default --session-id "),
+    "the runner's private files are never read: {started}"
   );
   assert!(
     !started.contains("--json-schema"),

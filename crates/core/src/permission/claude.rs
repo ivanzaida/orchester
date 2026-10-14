@@ -157,7 +157,18 @@ pub fn edits_allowed_by_rule(folder: &Path) -> bool {
 /// (`\\server\share`), whose form in Claude Code's patterns is not documented: such a folder is kept
 /// from edits only by its files being read-only, and where edits need an allow rule it gets none.
 fn edit_rule(folder: &Path) -> Option<String> {
-  let text = folder.to_str()?.replace('\\', "/");
+  path_rule("Edit", folder).map(|rule| format!("{rule}/**)"))
+}
+
+/// `Read(//<folder>/**)`: as a deny rule it keeps Claude Code's reading tools (`Read`, and as far as the CLI
+/// applies Read rules to them, `Glob` and `Grep`) out of `folder`. `None` where [`edit_rule`] has none.
+pub fn read_rule(folder: &Path) -> Option<String> {
+  path_rule("Read", folder).map(|rule| format!("{rule}/**)"))
+}
+
+/// `<tool>(/<path>` without its end: `path` in the POSIX form Claude Code matches permission paths in.
+fn path_rule(tool: &str, path: &Path) -> Option<String> {
+  let text = path.to_str()?.replace('\\', "/");
   let text = text.strip_prefix("//?/").unwrap_or(&text);
   if text.starts_with("//") || text.starts_with("UNC/") {
     return None;
@@ -168,5 +179,5 @@ fn edit_rule(folder: &Path) -> Option<String> {
     }
     _ => text.to_owned(),
   };
-  Some(format!("Edit(/{}/**)", posix.trim_end_matches('/')))
+  Some(format!("{tool}(/{}", posix.trim_end_matches('/')))
 }

@@ -64,7 +64,7 @@ fn orchestrator_answers_a_message_and_keeps_the_new_conversation() {
   assert!(answer.starts_with("Orchestrator haiku ·"), "{answer}");
   let log = std::fs::read_to_string(screen.root.join(".orchester").join("fake-chat.log")).expect("the agent ran");
   assert!(
-    log.contains("--tools Read,Glob,Grep --allowedTools Read Glob Grep mcp__orchester"),
+    log.contains("--tools Read,Glob,Grep --allowedTools mcp__orchester --disallowedTools Read("),
     "read-only, with only the chat's tools: {log}"
   );
 }

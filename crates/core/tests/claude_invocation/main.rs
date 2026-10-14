@@ -21,6 +21,7 @@ use uuid::Uuid;
 
 mod app_mcp;
 mod code_index;
+mod orchestrator_chat;
 
 const SESSION: Uuid = Uuid::from_u128(0x0199_a0a0_0000_7000_8000_0000_0000_0001);
 const PLATFORMS: [Platform; 2] = [Platform::Windows, Platform::MacOs];
