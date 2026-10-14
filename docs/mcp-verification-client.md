@@ -14,11 +14,20 @@ when its holder ends), waiting while another run's QA app holds it; the transcri
 the QA slot*. It runs the worktree's `tools/qa-app.ps1` with `-Name run-<number>-<step>` (Windows PowerShell
 on Windows, `pwsh` on macOS), checks that the app it names is this run's and that its discovery file lies in
 its QA folder, and answers its pid. `call_run_app` without `pid` then calls that app through its exact
-discovery file. A second start in the same turn replaces the app and keeps the slot; when the agent's turn
-ends (the step passes, fails, asks, pauses or is stopped), the runner stops the app with everything it
-started inside the worktree and frees the slot. A start still waiting when the turn ends gives up. The call
-asks a person (or an *Approve similar* rule) first, as it builds and runs the worktree's code outside the
-sandbox; auto mode's reviewer never answers it. No lease, ACK or hold notes between runs are needed.
+discovery file, checked again for links at each call. Starts of one turn run one at a time: a second waits
+for the first, then replaces its app and keeps the slot. When the agent's turn ends (the step passes, fails,
+asks, pauses or is stopped, or the runner fails), the runner stops the app with everything it started
+inside the worktree and frees the slot, off its async workers; it does the same while the turn waits for a
+person inside it (a tool approval, a question), so a person's wait never holds the computer's slot. The
+script runs in a process tree of its own (a kill-on-close Job Object on Windows, a process group on macOS):
+a start whose turn ends, whose run is stopped, that runs longer than 30 minutes, or whose script exits
+without naming its app ends the script and everything it started. The slot file names its latest holder's
+QA folder, so the next holder stops what a runner that died left running there (on macOS a runner killed
+mid-script can still leave its script running). The call is offered only to a step that writes the
+worktree and has network access, and asks a person (or an *Approve similar* rule, kept to the script's git
+blob, so a changed `tools/qa-app.ps1` asks again) first, naming the build scripts changed since the run's
+base, as it builds and runs the worktree's code outside the sandbox; auto mode's reviewer never answers it.
+No lease, ACK or hold notes between runs are needed.
 
 Outside a run, start the copy with `tools/qa-app.ps1` yourself:
 

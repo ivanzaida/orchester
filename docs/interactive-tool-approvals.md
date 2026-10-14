@@ -172,7 +172,7 @@ by `read_external_file` and `search_external_file`.
 | `list_run_processes` | none | run processes | runs | runs |
 | `stop_run_process` | `pid` (positive integer) | run processes | runs | runs |
 | `call_run_app` | `pid?` (none: the turn's QA app), `tool` (embedded MCP name), `arguments` (object) | run processes | runs | runs |
-| `start_qa_app` | `scenario` (kebab-case, ≤ 64), `fake_agents?`, `no_runner?` | outside | asks | asks |
+| `start_qa_app` | `scenario` (kebab-case, ≤ 64), `fake_agents?`, `no_runner?` | outside | network on: asks (Approve similar kept to the QA script's blob); network off: not offered | not offered |
 | `run_check` (with checks) | `name` (one of the step's checks) | outside, network | by the check's access rules (network on only) | as a writing step |
 | `list_skills` (with skills) | none | read-only | runs | runs |
 | `read_skill` (with skills) | `name`, `file?` (a skill file path; none or `SKILL.md` for the skill's own), `offset?`, `limit?` (≤ 10 000, 2000) | read-only | runs | runs |
@@ -237,16 +237,23 @@ by `read_external_file` and `search_external_file`.
   runs the worktree's `tools/qa-app.ps1 -Name run-<number>-<step> -Scenario <scenario>` (Windows PowerShell; `pwsh`
   on macOS; a worktree without the script, or a platform without either, is told so), checks the app it names with
   `call_run_app`'s process rules and that its discovery file lies in its QA folder, and keeps it for the invocation:
-  `call_run_app` without `pid` reaches it through that exact file, without searching. A second start replaces it.
-  When the agent's turn ends the runner stops the app (as `stop_run_process` does) and frees the slot; a start still
-  waiting then gives up. It builds and runs the worktree's code outside every sandbox, so it asks, like a check: a
-  person or an *Approve similar* rule decides; auto-approval never answers it.
+  `call_run_app` without `pid` reaches it through that exact file (checked for links at each call), without
+  searching. Starts of one invocation run one at a time; a second replaces the first's app. When the invocation ends,
+  whatever ended it (the runner failing included), or waits for a person inside its turn, the runner stops the app (as
+  `stop_run_process` does) and frees the slot; a start still waiting gives up, and a script still running is ended
+  with its process tree, as is one that names no app. It builds and runs the worktree's code outside every sandbox, so
+  it is offered only to a step that writes the worktree and has network access, and it asks, like a check: a person
+  or an *Approve similar* rule decides, the rule kept to the script's git blob (a changed script asks again), and the
+  request names `tools/qa-app.ps1` and any `build.rs` changed since the run's base; auto-approval never answers it.
 - **Results that could not check everything.** A step's result may be `unverified` with an `unverified` list of
   `{check, reason}` (`orchester_core::run::STEP_RESULT_SCHEMA`): the step ran but could not check some of what it is
   for. The run waits for the person (`waiting_for_person`, reason `unverified`) without taking the step's failure
   route or using a retry; the person accepts the step as it is, runs it again, or returns the work to an agent step
   with a note (`continue_run` choices `accept`, `allow_retry`, `return_to`; `get_run` lists the checks under
-  `unverified`). A step whose latest result was failed or unverified for the revision it would run on now is not run
+  `unverified`). Accepting passes the step in a person's place: `accept` is refused as `person_only`, and the task
+  page's *Accept … as it is* takes no client's window input, unless a person turned on *Let automation answer
+  approvals*; the event records who accepted. The accepted step then passes as a passed step does, in a new attempt
+  without an agent: its own worktree's work is merged and a gated step proposes its result as the plan. A step whose latest result was failed or unverified for the revision it would run on now is not run
   again unless a person asked for it: the run waits with reason `unchanged`, with the same choices.
 - **Schemas** are strict (`additionalProperties: false`, each property typed and bounded); a call is read into its
   type with unknown fields refused, and an invalid call is answered with an error result that says why.

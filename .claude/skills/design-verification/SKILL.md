@@ -72,7 +72,8 @@ A state you cannot reach, a design node or app you cannot capture, a fixture tha
 check everything else, and end a pipeline step with the outcome `unverified`, listing each check you could
 not do in the result's `unverified` list (`{"check": "Summary 02.B", "reason": "no seed scenario reaches
 it"}`). That is no verdict on the work: the run waits for the person, nothing returns to Implement and no
-retry is used. The person accepts the step as it is, runs it again, or returns the work with a note. Use
+retry is used. The person accepts the step as it is (only a person, or automation they let answer approvals),
+runs it again, or returns the work with a note. Use
 `failed` only for mismatches you found (`blocking` or `major`), even when other checks were unverified, and
 `question` only for something the person can do now that lets you go on in this turn.
 
@@ -97,8 +98,11 @@ app and compare the rest.
 One QA app runs on the computer at a time: while another run's QA app holds the QA slot, the call waits
 and the run's transcript says *Waiting for the QA slot*; never write lease, ACK or hold notes, and never
 start the script yourself. Calling it again replaces your QA app; Orchester stops it, and frees the slot,
-when your turn ends. A person may be asked to approve the start, since it builds and runs the worktree's
-code outside the sandbox.
+when your turn ends, and also while your turn waits for a person (a tool approval, a question): start it
+again once you go on. A person is asked to approve the start (*Approve similar* covers later starts only
+while `tools/qa-app.ps1` is unchanged), since it builds and runs the worktree's code outside the sandbox;
+the request names the build scripts changed since the run's base. Only a step that may write the worktree
+and has network access is offered `start_qa_app`, so give the Verify step those.
 
 Outside a run (an agent session in a checkout of its own), start the copy in the implementation's worktree
 with the script:
