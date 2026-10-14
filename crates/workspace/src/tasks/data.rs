@@ -244,7 +244,7 @@ impl ProjectTasks {
           .map(|task| db.unfinished_blocking_tasks(task.id()).map(|links| (task.id(), links)))
           .collect::<Result<_, _>>()?,
       ),
-      proposed_memory: Arc::new(proposed_memory(&db, &tasks)?),
+      proposed_memory: Arc::new(proposed_memory(&db)?),
       tasks: Arc::new(tasks),
       not_shared: Arc::new(not_shared),
       kept_tags: Arc::new(kept_tags),
@@ -306,27 +306,15 @@ fn group_holds(
   Ok((holds, grouped))
 }
 
-/// When each record of the project's memory and of `tasks`' memories that waits for a person's approval was
-/// written.
-fn proposed_memory(db: &ProjectDb, tasks: &[Task]) -> Result<Vec<Timestamp>, StoreError> {
-  let proposed = |scope| MemoryFilter {
-    scope,
+/// When each record of the project's memory and of its tasks' memories that waits for a person's approval was
+/// written, in one listing.
+fn proposed_memory(db: &ProjectDb) -> Result<Vec<Timestamp>, StoreError> {
+  let proposed = MemoryFilter {
+    scope: ScopeFilter::All,
     status: Some(MemoryStatus::Proposed),
     pinned_only: false,
   };
-  let mut written: Vec<Timestamp> = db
-    .memories(&proposed(ScopeFilter::Project))?
-    .iter()
-    .map(Memory::created_at)
-    .collect();
-  for task in tasks {
-    written.extend(
-      db.memories(&proposed(ScopeFilter::Task(task.id())))?
-        .iter()
-        .map(Memory::created_at),
-    );
-  }
-  Ok(written)
+  Ok(db.memories(&proposed)?.iter().map(Memory::created_at).collect())
 }
 
 /// `latest`, a run of `task`, with when it last changed and what it waits for.

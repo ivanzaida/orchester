@@ -146,6 +146,10 @@ fn memory_listings_filter_by_scope_status_and_pin() {
     texts(&db.memories(&filter(ScopeFilter::TaskAndProject(task))).expect("list")),
     ["Task fact.", "Pinned fact.", "Old fact."]
   );
+  assert_eq!(
+    texts(&db.memories(&filter(ScopeFilter::All)).expect("list")),
+    ["Task fact.", "Pinned fact.", "Old fact."]
+  );
   let active = MemoryFilter {
     status: Some(MemoryStatus::Active),
     ..filter(ScopeFilter::TaskAndProject(task))
