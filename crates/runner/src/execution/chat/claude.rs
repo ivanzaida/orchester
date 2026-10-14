@@ -17,7 +17,7 @@ use orchester_core::{
   },
   id::AgentAccountId,
   orchestrator::{
-    TIME_LIMIT, TurnFailure, TurnState,
+    TurnFailure, TurnState,
     instructions::{SERVER, system_prompt},
   },
   secret::SecretValue,
@@ -138,7 +138,7 @@ impl Turn {
     };
     let mut seen = Seen::default();
     let mut stream = ClaudeStream::chat();
-    let limit = tokio::time::sleep(TIME_LIMIT);
+    let limit = tokio::time::sleep(self.time_limit);
     tokio::pin!(limit);
     loop {
       tokio::select! {
@@ -158,7 +158,7 @@ impl Turn {
           }
         }
         () = &mut limit, if !seen.stopped && seen.timed_out.is_none() => {
-          seen.timed_out = Some(TurnFailure::TimeLimit { minutes: TIME_LIMIT.as_secs() / 60 });
+          seen.timed_out = Some(TurnFailure::TimeLimit { minutes: self.time_limit.as_secs() / 60 });
           process.terminate();
         }
       }

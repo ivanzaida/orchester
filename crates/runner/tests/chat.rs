@@ -447,3 +447,43 @@ async fn chat_on_codex_is_held_back_until_its_reads_can_be_confined() {
     "Codex was never started"
   );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_turn_cut_at_the_time_limit_or_stopped_still_counts_what_it_spent() {
+  let project = claude();
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  scheduler.limit_chat_turns(std::time::Duration::from_secs(2));
+  let chat = ChatId::generate();
+  let cut = keep(root, chat, "Keep thinking about the queue.");
+  scheduler.answer_in_chat(cut, tools()).await.expect("the turn starts");
+  let ended_as = ended(root, &mut events, cut).await;
+  assert!(
+    matches!(ended_as, TurnState::Failed(TurnFailure::TimeLimit { .. })),
+    "{ended_as:?}"
+  );
+  let db = ProjectDb::open(root).expect("open");
+  assert!(
+    db.chat_turn_tokens(cut).expect("read") > TokensUsed::ZERO,
+    "what it spent before the limit counts"
+  );
+
+  scheduler.limit_chat_turns(std::time::Duration::from_secs(600));
+  let stopped = keep(root, chat, "Keep thinking once more.");
+  scheduler
+    .answer_in_chat(stopped, tools())
+    .await
+    .expect("the turn starts");
+  let wait = async {
+    while replies(root, chat).len() < 2 {
+      events.recv().await.expect("the scheduler notifies");
+    }
+  };
+  tokio::time::timeout(PATIENCE, wait).await.expect("the reply starts");
+  scheduler.stop_chat(chat).expect("stopped");
+  assert_eq!(ended(root, &mut events, stopped).await, TurnState::Stopped);
+  assert!(
+    db.chat_turn_tokens(stopped).expect("read") > TokensUsed::ZERO,
+    "what a stopped turn spent counts"
+  );
+}

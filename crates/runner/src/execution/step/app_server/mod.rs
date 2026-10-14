@@ -166,6 +166,11 @@ impl AppServerSession {
     self.stream.runner_asks(action, arguments)
   }
 
+  /// What the running turn spent so far, as Codex reported it; Codex gives it with the turn's end otherwise.
+  pub fn usage_so_far(&self) -> orchester_core::run::TokenUsage {
+    self.stream.usage_so_far()
+  }
+
   pub fn complete(&self) -> bool {
     self.phase == Phase::Complete
   }

@@ -21,14 +21,16 @@ use orchester_core::{
     app_server::Update,
     invocation::{CodexAgentFiles, CodexInvocation, CodexMcp, Platform, on_account},
     mcp::InvocationExemptions,
+    stream::AgentEvent,
   },
   id::AgentAccountId,
   orchestrator::{
-    TIME_LIMIT, TurnFailure, TurnState,
+    TurnFailure, TurnState,
     instructions::{SERVER, system_prompt},
   },
   permission::NetworkAccess,
   resource::RepositoryAccess,
+  run::TokenUsage,
 };
 use tokio::sync::oneshot;
 
@@ -116,7 +118,7 @@ impl Turn {
       return TurnState::Failed(cannot(format!("cannot initialize Codex App Server: {error}")));
     }
     let mut seen = Seen::default();
-    let limit = tokio::time::sleep(TIME_LIMIT);
+    let limit = tokio::time::sleep(self.time_limit);
     tokio::pin!(limit);
     loop {
       tokio::select! {
@@ -143,14 +145,24 @@ impl Turn {
         stopped = &mut stop, if !seen.stopped && !seen.finished => {
           if stopped.is_ok() {
             seen.stopped = true;
+            self.keep_spent(&session, started.account, &mut seen);
             process.terminate();
           }
         }
         () = &mut limit, if !seen.stopped && !seen.finished && seen.timed_out.is_none() => {
-          seen.timed_out = Some(TurnFailure::TimeLimit { minutes: TIME_LIMIT.as_secs() / 60 });
+          seen.timed_out = Some(TurnFailure::TimeLimit { minutes: self.time_limit.as_secs() / 60 });
+          self.keep_spent(&session, started.account, &mut seen);
           process.terminate();
         }
       }
+    }
+  }
+
+  /// Keeps what the turn spent so far, which Codex reports with its end only: a stopped or timed-out turn counts.
+  fn keep_spent(&self, session: &AppServerSession, account: AgentAccountId, seen: &mut Seen) {
+    let usage = session.usage_so_far();
+    if usage != TokenUsage::default() {
+      self.keep(AgentEvent::TurnCompleted { usage }, account, seen);
     }
   }
 

@@ -9,9 +9,16 @@ mod claude;
 mod codex;
 mod turn;
 
-use std::collections::HashMap;
+use std::{
+  collections::HashMap,
+  sync::atomic::{AtomicU64, Ordering},
+  time::Duration,
+};
 
-use orchester_core::id::{ChatId, ChatMessageId};
+use orchester_core::{
+  id::{ChatId, ChatMessageId},
+  orchestrator::TIME_LIMIT,
+};
 use orchester_ipc::{ChatTools, Event, Rejection};
 use orchester_store::ProjectDb;
 use parking_lot::Mutex;
@@ -24,6 +31,8 @@ use super::{Scheduler, failed, idle::check_daily_budget};
 #[derive(Default)]
 pub(super) struct Chats {
   running: Mutex<HashMap<ChatId, Running>>,
+  /// How long one answer may run, in milliseconds, when the runner's tests set it shorter; 0: [`TIME_LIMIT`].
+  limit_ms: AtomicU64,
 }
 
 struct Running {
@@ -34,6 +43,14 @@ struct Running {
 }
 
 impl Chats {
+  /// How long one answer may run.
+  fn time_limit(&self) -> Duration {
+    match self.limit_ms.load(Ordering::Relaxed) {
+      0 => TIME_LIMIT,
+      ms => Duration::from_millis(ms),
+    }
+  }
+
   /// Whether no turn is under way.
   pub(super) fn idle(&self) -> bool {
     self.held().is_empty()
@@ -86,6 +103,7 @@ impl Scheduler {
       text: kept.text,
       settings,
       tools,
+      time_limit: self.inner.chats.time_limit(),
     };
     let task = tokio::spawn(turn.run(stopped));
     running.insert(
@@ -97,6 +115,13 @@ impl Scheduler {
       },
     );
     Ok(())
+  }
+
+  /// Lets one answer run for `limit` only, so the runner's tests reach the time limit without waiting ten minutes.
+  #[cfg(feature = "test-agent")]
+  pub fn limit_chat_turns(&self, limit: Duration) {
+    let ms = u64::try_from(limit.as_millis()).unwrap_or(u64::MAX).max(1);
+    self.inner.chats.limit_ms.store(ms, Ordering::Relaxed);
   }
 
   /// Stops the turn under way in `chat`. A turn the conversation still shows thinking that this runner does not

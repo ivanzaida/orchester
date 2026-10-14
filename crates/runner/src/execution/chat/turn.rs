@@ -2,7 +2,10 @@
 //! (Claude Code, [`super::claude`]; Codex App Server, [`super::codex`]), its output kept as it comes (the session,
 //! each reply, what it spent), and how the turn ended.
 
-use std::path::{Path, PathBuf};
+use std::{
+  path::{Path, PathBuf},
+  time::Duration,
+};
 
 use orchester_core::{
   connection::{
@@ -36,6 +39,8 @@ pub(super) struct Turn {
   pub(super) text: MessageBody,
   pub(super) settings: OrchestratorSettings,
   pub(super) tools: ChatTools,
+  /// How long the answer may run before the runner ends it.
+  pub(super) time_limit: Duration,
 }
 
 /// What either CLI starts from: the connection, its program and account, the session the turn resumes and the
