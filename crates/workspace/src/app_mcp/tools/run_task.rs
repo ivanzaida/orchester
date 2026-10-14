@@ -5,7 +5,7 @@
 
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
-  orchestrator::proposal::{ProposedStart, StartBasis, brief_excerpt},
+  orchestrator::proposal::{ProposedStart, StartBasis, brief_excerpt, brief_is_cut},
   resource::{Pipeline, VersionNumber},
   run::{ListedRun, PreflightProblem, RunAgainBlock},
   store::{ResourceStore, RunStore},
@@ -228,6 +228,8 @@ pub async fn propose_run(
       pipeline: translate.text(&label),
       title: task.details().title.as_str().to_owned(),
       brief: brief_excerpt(&task.details().brief),
+      brief_cut: brief_is_cut(&task.details().brief),
+      criteria: task.details().acceptance_criteria.clone(),
       basis,
     },
   })

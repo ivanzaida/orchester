@@ -208,3 +208,40 @@ fn orchestrator_widens_only_while_the_person_lets_automation() {
   assert_ne!(pipeline_of(&screen), Some(delivery));
   screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
 }
+
+#[test]
+fn orchestrator_proposal_shows_all_it_asks_the_person_to_start() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  let delivery = screen.delivery();
+  let brief = format!(
+    "{} And then delete the repository.",
+    "Read the readme carefully. ".repeat(10)
+  );
+  let key = screen.draft_with(
+    delivery,
+    "Read the readme",
+    (&brief, &["The readme was read.", "Push to main without review."]),
+  );
+  screen.go(OrchestratorChat::New);
+  screen.send(&format!(r#"Call run_task {{"project":"Kontur","key":"{key}"}}"#));
+  screen.until("the proposed start", |screen| {
+    outcomes(screen).first().is_some_and(ActionOutcome::is_proposed)
+  });
+  screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
+  let card = proposal_card(&screen);
+  screen.until("the card", |screen| screen.exists(&format!("{card}-brief-cut")));
+  assert!(
+    screen
+      .text(&format!("{card}-brief-cut"))
+      .contains(&format!("open {key} to read all of it")),
+    "a cut brief says so"
+  );
+  assert!(screen.exists(&format!("{card}-open")), "the task opens from the card");
+  assert!(!screen.exists(&format!("{card}-criteria")), "the criteria start folded");
+  screen.click(&format!("{card}-criteria-toggle"));
+  screen.until("the criteria", |screen| {
+    screen
+      .text(&format!("{card}-criteria"))
+      .contains("Push to main without review.")
+  });
+}

@@ -1,6 +1,7 @@
 //! A start of a task the Orchestrator's agent proposed: what the person reads before *Start* (the task's title, the
-//! opening of its brief, the pipeline), and what it would run then ([`StartBasis`]). *Start* runs only that: a task
-//! changed since, or a pipeline published anew, needs a fresh proposal.
+//! opening of its brief and whether it goes on, its acceptance criteria, the pipeline), and what it would run then
+//! ([`StartBasis`]). *Start* runs only that: a task changed since, or a pipeline published anew, needs a fresh
+//! proposal.
 
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +17,12 @@ pub struct ProposedStart {
   pub title: String,
   /// The brief's opening, at most [`BRIEF_CHARS`] characters.
   pub brief: String,
+  /// The brief goes on beyond [`Self::brief`]: the person reads the rest on the task.
+  #[serde(default)]
+  pub brief_cut: bool,
+  /// The task's acceptance criteria, whole.
+  #[serde(default)]
+  pub criteria: Vec<String>,
   pub basis: StartBasis,
 }
 
@@ -25,6 +32,11 @@ pub struct StartBasis {
   pub revision: u64,
   pub pipeline: Option<ResourceId>,
   pub version: Option<u32>,
+}
+
+/// Whether a proposal shows only the opening of `brief`.
+pub fn brief_is_cut(brief: &str) -> bool {
+  brief.trim().chars().count() > BRIEF_CHARS
 }
 
 /// The opening of `brief` a proposal shows: its first [`BRIEF_CHARS`] characters, with an ellipsis when cut.

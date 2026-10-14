@@ -397,10 +397,15 @@ the agent logged: {agent}"
 
   /// A draft task titled `title` on `pipeline`, complete enough to run; its key.
   pub fn draft_on(&self, pipeline: ResourceId, title: &str) -> String {
+    self.draft_with(pipeline, title, ("Read the readme.", &["The readme was read."]))
+  }
+
+  /// A draft task titled `title` on `pipeline` with `brief` and `criteria`; its key.
+  pub fn draft_with(&self, pipeline: ResourceId, title: &str, (brief, criteria): (&str, &[&str])) -> String {
     let details = TaskDetails {
       title: named(title),
-      brief: "Read the readme.".into(),
-      acceptance_criteria: vec!["The readme was read.".into()],
+      brief: brief.into(),
+      acceptance_criteria: criteria.iter().map(|criterion| (*criterion).into()).collect(),
       pipeline: Some(pipeline),
       limits: TaskLimits::new(None, None).expect("no limits"),
     };

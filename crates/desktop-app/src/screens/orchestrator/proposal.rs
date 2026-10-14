@@ -67,6 +67,8 @@ pub(super) struct StartProposal {
   decide: DecideAction,
   /// Synthetic input tried *Start*.
   refused: Signal<bool>,
+  /// The acceptance criteria are shown.
+  criteria_open: Signal<bool>,
 }
 
 impl Component for StartProposal {
@@ -92,6 +94,7 @@ impl Component for StartProposal {
     Self {
       decide,
       refused: ctx.signal(false),
+      criteria_open: ctx.signal(false),
     }
   }
 
@@ -159,7 +162,14 @@ impl Component for StartProposal {
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Lg)
       .child(head)
-      .child(asked(id, &props.start))
+      .child(asked(ctx, id, (&props.task, &props.start)))
+      .with_children(self.criteria(ctx, id, &props.start.criteria))
+      .with_children(super::action::open_task(
+        ctx,
+        id,
+        props.scope.project,
+        Some(&props.task),
+      ))
       .child(
         Text::new(&ctx.t("orchestrator.proposal.effect"))
           .id(format!("{id}-effect"))
@@ -218,8 +228,52 @@ impl StartProposal {
   }
 }
 
-/// The task the person is asked to start: its title, and the opening of its brief when it has one.
-fn asked(id: &str, start: &ProposedStart) -> Column {
+impl StartProposal {
+  /// The task's acceptance criteria, behind *Show N acceptance criteria*; nothing when it has none.
+  fn criteria(&self, ctx: &Ctx, id: &str, criteria: &[String]) -> Option<Column> {
+    if criteria.is_empty() {
+      return None;
+    }
+    let open = self.criteria_open.get();
+    let count = criteria.len().to_string();
+    let key = if open {
+      "orchestrator.proposal.hideCriteria"
+    } else {
+      "orchestrator.proposal.showCriteria"
+    };
+    let toggle = self.criteria_open.clone();
+    let button = ActionButton::new(
+      format!("{id}-criteria-toggle"),
+      ButtonKind::Ghost,
+      ctx.t_args(key, [("count", count.as_str())]),
+    )
+    .icon(if open { Icon::ChevronUp } else { Icon::ChevronDown })
+    .small()
+    .on_click(move || toggle.update(|open| *open = !*open));
+    let listed = open.then(|| {
+      Column::new()
+        .id(format!("{id}-criteria"))
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Fine.role())
+        .with_children(criteria.iter().map(|criterion| {
+          Text::new(&ctx.t_args("orchestrator.proposal.criterion", [("criterion", criterion.as_str())]))
+            .variant(TypographyStyle::Description)
+            .width(Dimension::Pct(100.0))
+        }))
+    });
+    Some(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Fine.role())
+        .child(Row::new().child(button))
+        .with_children(listed),
+    )
+  }
+}
+
+/// The task the person is asked to start: its title, the opening of its brief when it has one, and that it goes on
+/// when it does.
+fn asked(ctx: &Ctx, id: &str, (task, start): (&str, &ProposedStart)) -> Column {
   Column::new()
     .id(format!("{id}-task"))
     .width(Dimension::Pct(100.0))
@@ -234,6 +288,13 @@ fn asked(id: &str, start: &ProposedStart) -> Column {
       Text::new(&start.brief)
         .id(format!("{id}-brief"))
         .variant(TypographyStyle::Description)
+        .width(Dimension::Pct(100.0))
+    }))
+    .with_children(start.brief_cut.then(|| {
+      Text::new(&ctx.t_args("orchestrator.proposal.briefCut", [("task", task)]))
+        .id(format!("{id}-brief-cut"))
+        .variant(ExtraTypography::Note.role())
+        .color(PaletteColor::Warning)
         .width(Dimension::Pct(100.0))
     }))
 }

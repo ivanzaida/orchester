@@ -241,7 +241,7 @@ fn shown(ctx: &Ctx, action: &ChatAction, at: Timestamp) -> Shown {
 }
 
 /// *Open* the task the action names, when it names one people can read.
-fn open_task(ctx: &mut Ctx, id: &str, project: ProjectId, task: Option<&str>) -> Option<Element> {
+pub(super) fn open_task(ctx: &mut Ctx, id: &str, project: ProjectId, task: Option<&str>) -> Option<Element> {
   let key: TaskKey = task?.parse().ok()?;
   let navigation = Navigation::of(ctx);
   let label = ctx.t_args("orchestrator.action.openTask", [("task", key.to_string().as_str())]);
