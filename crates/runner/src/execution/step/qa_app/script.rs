@@ -119,6 +119,12 @@ fn watch(mut child: Child, tree: Tree, ended: &dyn Fn() -> bool) -> Result<Ran, 
       return Err(refusal);
     }
   };
+  // Something the script started may hold its output open: reading it to its end waits no longer than the script may
+  // run, and not past its turn.
+  if let Err(refusal) = read_to_end(&[&stdout, &stderr], deadline, ended) {
+    drop(tree);
+    return Err(refusal);
+  }
   let (stdout, stdout_left) = joined(stdout);
   let (stderr, stderr_left) = joined(stderr);
   let output = ProgramOutput {
@@ -132,6 +138,28 @@ fn watch(mut child: Child, tree: Tree, ended: &dyn Fn() -> bool) -> Result<Ran, 
     return Err(failure(&output));
   }
   Ok(Ran { output, tree })
+}
+
+/// Waits until `readers` read their pipes to the end; refused when the turn ends or the deadline passes first.
+fn read_to_end(
+  readers: &[&thread::JoinHandle<(Vec<u8>, u64)>],
+  deadline: Instant,
+  ended: &dyn Fn() -> bool,
+) -> Result<(), String> {
+  while !readers.iter().all(|reader| reader.is_finished()) {
+    if ended() {
+      return Err("the turn ended while the QA script's output was still open; the script's tree was ended".to_owned());
+    }
+    if Instant::now() >= deadline {
+      return Err(format!(
+        "{QA_APP_SCRIPT} ended, but something it started kept its output open past {} minutes; it was ended with what \
+         the script started",
+        START_TIMEOUT.as_secs() / 60
+      ));
+    }
+    thread::sleep(POLL);
+  }
+  Ok(())
 }
 
 /// Ends the script itself and reaps it; a script that already exited needs nothing.

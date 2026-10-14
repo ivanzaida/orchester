@@ -32,7 +32,7 @@ use std::{
 
 use orchester_core::{
   id::InvocationId,
-  orchester_tools::{ProcessCall, QaAppStart, StartedQaApp, ToolResult},
+  orchester_tools::{ProcessCall, QA_APP_SCRIPT, QaAppStart, StartedQaApp, ToolResult},
   time::Timestamp,
 };
 use orchester_exec::run_processes::RunProcesses;
@@ -55,6 +55,8 @@ pub(in crate::execution) struct QaApps {
 #[derive(Default)]
 pub(in crate::execution::step) struct InvocationQa {
   ended: AtomicBool,
+  /// It waits for a person inside its turn: an app a start of its finishes now is stopped at once.
+  waiting: AtomicBool,
   starting: Mutex<()>,
   app: Mutex<Option<QaApp>>,
 }
@@ -116,11 +118,22 @@ impl QaApps {
     stop_aside(state.app.lock().take());
   }
 
-  /// `invocation` waits for a person inside its turn: its QA app stops and its slot is freed meanwhile.
+  /// `invocation` waits for a person inside its turn: its QA app stops and its slot is freed meanwhile, also the app
+  /// a start of its still under way would keep.
   pub(in crate::execution) fn release(&self, invocation: InvocationId) {
     let state = self.invocations.lock().get(&invocation).cloned();
     if let Some(state) = state {
-      stop_aside(state.app.lock().take());
+      let mut app = state.app.lock();
+      state.waiting.store(true, Ordering::Release);
+      stop_aside(app.take());
+    }
+  }
+
+  /// `invocation`'s wait for a person ended: its starts keep their apps again.
+  pub(in crate::execution) fn resume(&self, invocation: InvocationId) {
+    let state = self.invocations.lock().get(&invocation).cloned();
+    if let Some(state) = state {
+      state.waiting.store(false, Ordering::Release);
     }
   }
 }
@@ -167,7 +180,8 @@ impl StepQa {
   /// Starts a QA copy for `start` once a QA slot is free and keeps it for the invocation, replacing the one it
   /// started before. Blocks while an earlier start of the invocation runs, while it waits for the slot and while the
   /// script builds and starts the copy.
-  pub(in crate::execution::step) fn start(&self, start: &QaAppStart) -> ToolResult {
+  /// `approved` is the QA script's blob its approval named: the script runs only while it is still that one.
+  pub(in crate::execution::step) fn start(&self, start: &QaAppStart, approved: Option<&str>) -> ToolResult {
     let _one_at_a_time = self.state.starting.lock();
     let waited = Instant::now();
     let earlier = self.state.app.lock().take();
@@ -182,11 +196,38 @@ impl StepQa {
       },
     };
     let waited = waited.elapsed();
-    let folder = self.worktree.join(".tmp").join("qa").join(&self.name);
-    leftover::stop(&mut lease, &folder);
+    let folder = match self.qa_folder() {
+      Ok(folder) => folder,
+      Err(refusal) => return ToolResult::unavailable(&refusal),
+    };
+    leftover::stop(&mut lease, &folder, self.run_created);
+    let now = script_blob(&self.worktree);
+    if approved.is_none_or(str::is_empty) || now.as_deref() != approved {
+      return ToolResult::unavailable(&format!(
+        "{QA_APP_SCRIPT} is not the script this start's approval named (it changed since, or could not be read); \
+         call start_qa_app again to be asked about it as it is now"
+      ));
+    }
     match self.run_script(start, &folder) {
       Ok(running) => self.keep(running, lease, start, waited),
       Err(refusal) => ToolResult::unavailable(&refusal),
+    }
+  }
+
+  /// This step's QA folder, `.tmp/qa/<name>/` in the worktree, made if it is missing, with links resolved; refused
+  /// when a link lies on the way to it below the worktree, where the script and the cleanup would follow it.
+  fn qa_folder(&self) -> Result<PathBuf, String> {
+    let spelled = self.worktree.join(".tmp").join("qa").join(&self.name);
+    std::fs::create_dir_all(&spelled).map_err(|error| format!("the QA folder cannot be made: {error}"))?;
+    let worktree =
+      std::fs::canonicalize(&self.worktree).map_err(|error| format!("the worktree cannot be read: {error}"))?;
+    let expected = worktree.join(".tmp").join("qa").join(&self.name);
+    match leftover::link_free(&expected) {
+      Some(folder) => Ok(folder),
+      None => Err(format!(
+        "{} is reached through a link; no QA app is started from it",
+        spelled.display()
+      )),
     }
   }
 
@@ -240,6 +281,16 @@ impl StepQa {
       drop(running);
       return ToolResult::unavailable("the turn ended while the QA app started; it was stopped");
     }
+    // Checked under the app's lock, which `QaApps::release` takes too: a wait that began during the start sees the
+    // app stored, or the start sees the wait.
+    if self.state.waiting.load(Ordering::Acquire) {
+      drop(app);
+      drop((running, lease));
+      return ToolResult::unavailable(
+        "the turn waits for a person, so the QA app that just started was stopped and its slot freed; call \
+         start_qa_app again once you go on",
+      );
+    }
     let mut text = format!(
       "QA app started on the {} scenario: pid {}. Call call_run_app without pid to drive it. Orchester stops it when \
        your turn ends or waits for a person; starting again replaces it.",
@@ -253,6 +304,17 @@ impl StepQa {
     *app = Some(QaApp { running, lease });
     ToolResult::shown(text)
   }
+}
+
+/// The git blob of the worktree's QA script as it is now, which a start's approval names; `None`, logged, when git
+/// cannot tell.
+pub(in crate::execution::step) fn script_blob(worktree: &Path) -> Option<String> {
+  crate::git::Git::new(worktree)
+    .stdout(&["hash-object", "--", QA_APP_SCRIPT])
+    .map(|blob| blob.trim().to_owned())
+    .inspect_err(|error| tracing::warn!(%error, "the QA script's blob cannot be read"))
+    .ok()
+    .filter(|blob| !blob.is_empty())
 }
 
 /// `path` with links resolved, when it lies in `folder`.

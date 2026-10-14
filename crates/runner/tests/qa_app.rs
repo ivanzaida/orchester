@@ -127,3 +127,50 @@ async fn qa_app_a_script_that_names_no_app_has_what_it_started_ended() {
   );
   gone(&app, "the app a script started without naming it").await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn qa_app_a_script_changed_after_its_approval_does_not_run() {
+  let project = qa_project(verify_step("Start the QA app."));
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("run");
+  let request = support::pending_approval(root, &mut events, id).await;
+  let target = request.target.clone().unwrap_or_default();
+  assert!(
+    target.starts_with("tools/qa-app.ps1 ") && target.contains(" · scenario tasks"),
+    "{target}"
+  );
+  // The script changes while the person reads the request.
+  let script = root
+    .join(".orchester/worktrees")
+    .join(id.to_string())
+    .join("tools")
+    .join("qa-app.ps1");
+  let mut text = fs::read_to_string(&script).expect("the script");
+  text.push_str(
+    "# changed after the approval
+",
+  );
+  fs::write(&script, text).expect("change the script");
+  scheduler
+    .decide_tool_approval(
+      id,
+      request.id,
+      orchester_core::run::ApprovalAnswer::Once,
+      orchester_core::run::Answerer::Person,
+    )
+    .await
+    .expect("approved");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let answered = calls(root, id);
+  assert!(
+    answered
+      .iter()
+      .any(|call| call.starts_with("start_qa_app error") && call.contains("not the script this start's approval named")),
+    "{answered:?}"
+  );
+}

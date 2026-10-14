@@ -73,3 +73,20 @@ async fn qa_app_a_cancelled_run_ends_the_script_and_what_it_started() {
   gone(&script, "the QA script after its run was cancelled").await;
   gone(&app, "the app the cancelled script started").await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn qa_app_a_script_whose_output_stays_open_gives_up_with_its_turn() {
+  let project = qa_project(verify_step("Start the QA app. QA scenario holdpipe."));
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("run");
+  approve(&scheduler, root, &mut events, id).await;
+  let holder = reported_pid(root, "run-1-verify", "holder").await;
+  scheduler.cancel_run(id).await.expect("cancelled");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Cancelled);
+  gone(&holder, "the program that held the script's output open").await;
+}

@@ -406,6 +406,7 @@ impl Worker {
   pub(super) fn end_approval_wait(&self, watch: &mut Watch) -> Result<(), StoreError> {
     let waited = watch.invocation.timing.waiting_since().is_some();
     watch.invocation.timing.resume(Timestamp::now());
+    self.qa.resume(watch.invocation.id);
     watch.db.save_invocation(&watch.invocation)?;
     watch.approval = None;
     if waited {

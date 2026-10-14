@@ -1,13 +1,16 @@
 //! The QA slot: one QA app runs on the computer at a time ([`QA_SLOTS`]), whichever runner and project starts it. A
 //! slot is an OS lock on a file of the user's data folder, which every runner takes the same way; the OS releases it
 //! when its holder closes the file or ends, so a runner that died never keeps a slot. The file names the QA folder of
-//! its latest holder ([`Lease::claim`]), so the next holder can stop an app a holder that died left running there.
+//! its latest holder and when that holder's run was created ([`Lease::claim`]), so the next holder can stop an app a
+//! holder that died left running there; what it reads there is checked as untrusted input (`super::leftover`).
 
 use std::{
   fs::{self, File, OpenOptions, TryLockError},
   io::{self, Read, Seek, SeekFrom, Write},
   path::{Path, PathBuf},
 };
+
+use orchester_core::time::Timestamp;
 
 /// How many QA apps run on the computer at once.
 const QA_SLOTS: usize = 1;
@@ -61,17 +64,42 @@ pub(super) struct Lease {
   file: File,
 }
 
+/// Who holds a slot: the QA folder of its app and when its run was created, written as two lines, the creation in
+/// milliseconds since the Unix epoch first.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct Holder {
+  pub(super) folder: PathBuf,
+  pub(super) since: Timestamp,
+}
+
+impl Holder {
+  /// The holder `text` names; `None` for text that is not two such lines with an absolute folder.
+  fn read(text: &str) -> Option<Self> {
+    let (since, folder) = text.trim().split_once('\n')?;
+    let since = since.trim().parse::<i64>().ok().filter(|millis| *millis >= 0)?;
+    let folder = PathBuf::from(folder.trim());
+    folder.is_absolute().then(|| Self {
+      folder,
+      since: Timestamp::from_unix_millis(since),
+    })
+  }
+}
+
 impl Lease {
-  /// Names `folder` as the QA folder of the slot's app, and answers the one its previous holder named, if any.
-  pub(super) fn claim(&mut self, folder: &Path) -> io::Result<Option<PathBuf>> {
+  /// Names `holder` as the slot's, and answers the previous holder the file names, if it names one.
+  pub(super) fn claim(&mut self, holder: &Holder) -> io::Result<Option<Holder>> {
     let mut previous = String::new();
     self.file.seek(SeekFrom::Start(0))?;
     self.file.read_to_string(&mut previous)?;
     self.file.set_len(0)?;
     self.file.seek(SeekFrom::Start(0))?;
-    self.file.write_all(folder.to_string_lossy().as_bytes())?;
-    let previous = previous.trim();
-    Ok((!previous.is_empty()).then(|| PathBuf::from(previous)))
+    write!(
+      self.file,
+      "{}\n{}",
+      holder.since.unix_millis(),
+      holder.folder.to_string_lossy()
+    )?;
+    Ok(Holder::read(&previous))
   }
 }
 

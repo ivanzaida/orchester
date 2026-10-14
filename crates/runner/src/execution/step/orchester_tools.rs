@@ -29,8 +29,8 @@ use orchester_core::{
   },
   id::{InvocationId, StepExecutionId},
   orchester_tools::{
-    OrchesterTool, OutsideReads, ProjectTool, QA_APP_SCRIPT, QaAppStart, QaApproval, StepSkills, StepTools, ToolCall,
-    ToolCallError, ToolContext, ToolResult, ToolWork,
+    OrchesterTool, OutsideReads, ProjectTool, QaAppStart, QaApproval, StepSkills, StepTools, ToolCall, ToolCallError,
+    ToolContext, ToolResult, ToolWork,
   },
   permission::{AgentPermissions, ResolvedFolder, category::CommandScope},
   resource::CommandEnvironment,
@@ -44,7 +44,7 @@ use super::{
   super::{handoff::provenance, run::RunTask},
   claude_approval::ClaudeApprovals,
   mcp::McpSetup,
-  qa_app::StepQa,
+  qa_app::{StepQa, script_blob},
   relay::{Listening, Served, bind},
   run_records::RunRecords,
   start::problem,
@@ -111,6 +111,8 @@ pub(in super::super) struct ToolHost {
   secrets: Vec<SecretVariable>,
   /// Tools a person or a rule approved one call of, through the CLI's own prompt, not called yet.
   grants: Mutex<Vec<(OrchesterTool, Value)>>,
+  /// The QA starts looked at and the QA script's blob each one's approval named, not run yet.
+  qa_scripts: Mutex<Vec<(QaAppStart, String)>>,
   /// The invocation's QA app (`start_qa_app`); `None` while the host is being made.
   qa: Option<StepQa>,
 }
@@ -174,7 +176,12 @@ impl ToolHost {
     let target = match (call, reach) {
       (_, Some(reach)) => Some(reach.folder.display().to_string()),
       (ToolCall::RunCheck { name }, None) => Some(name.clone()),
-      (ToolCall::StartQaApp(start), None) => Some(self.qa_approval(start).target()),
+      (ToolCall::StartQaApp(start), None) => {
+        let approval = self.qa_approval(start);
+        // The start runs only the script this request names ([`StepQa::start`]).
+        self.qa_scripts.lock().push((start.clone(), approval.script.clone()));
+        Some(approval.target())
+      }
       _ => None,
     };
     Ok(Looked {
@@ -239,7 +246,17 @@ impl ToolHost {
       Ok(ToolWork::Skill(call)) => self.skills.run(&call),
       Ok(ToolWork::App(call)) => super::run_app::call(&self.processes, &self.worktree, &call, self.qa.as_ref()),
       Ok(ToolWork::QaApp(start)) => match &self.qa {
-        Some(qa) => qa.start(&start),
+        Some(qa) => {
+          // The latest look at this start is what was asked about; earlier ones were denied or never run.
+          let mut asked = self.qa_scripts.lock();
+          let script = asked
+            .iter()
+            .rposition(|(looked, _)| *looked == start)
+            .map(|at| asked[at].1.clone());
+          asked.retain(|(looked, _)| *looked != start);
+          drop(asked);
+          qa.start(&start, script.as_deref())
+        }
         None => ToolResult::unavailable("this step cannot start a QA app"),
       },
       Ok(ToolWork::Processes(call)) => self.processes.run(call),
@@ -254,12 +271,7 @@ impl ToolHost {
   /// run's base revision, committed or not. What git cannot tell is left out, and the request says less.
   fn qa_approval(&self, start: &QaAppStart) -> QaApproval {
     let git = Git::new(&self.worktree);
-    let script = git
-      .stdout(&["hash-object", "--", QA_APP_SCRIPT])
-      .unwrap_or_else(|error| {
-        tracing::warn!(%error, "the QA script's blob cannot be read; its approval cannot be approved similar");
-        String::new()
-      });
+    let script = script_blob(&self.worktree).unwrap_or_default();
     let mut changed: Vec<String> = [
       git.stdout(&["diff", "--name-only", &self.base, "--"]),
       git.stdout(&["ls-files", "--others", "--exclude-standard"]),
@@ -391,6 +403,7 @@ impl RunTask {
       },
       secrets: Vec::new(),
       grants: Mutex::new(Vec::new()),
+      qa_scripts: Mutex::new(Vec::new()),
       qa: None,
     })
   }

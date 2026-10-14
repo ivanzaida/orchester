@@ -2,7 +2,8 @@
 //! committed in the repository, which copies `orchester-test-command` into `.tmp/qa/<name>/bin/orchester-app.exe` and
 //! starts it as a stand-in app with its MCP discovery file. It writes the app's pid to `<repo>/.orchester/qa-report/
 //! <name>.app` and its own to `<name>.script`. By scenario it prints the real script's `pid` and `discovery` lines
-//! (any), never ends (`hang`), or ends without naming the app (`nopid`). It is a Windows PowerShell script.
+//! (any), never ends (`hang`), ends without naming the app (`nopid`), or leaves a program that holds its output open
+//! (`holdpipe`, its pid in `<name>.holder`). It is a Windows PowerShell script.
 
 use std::{
   fs,
@@ -49,6 +50,10 @@ $discovery = Join-Path $mcp "$($started.Id).json"
 $deadline = (Get-Date).AddSeconds(20)
 while (-not (Test-Path $discovery) -and (Get-Date) -lt $deadline) {{ Start-Sleep -Milliseconds 100 }}
 if ($Scenario -eq "hang") {{ Start-Sleep -Seconds 600 }}
+if ($Scenario -eq "holdpipe") {{
+  $holder = Start-Process -FilePath $app -ArgumentList "sleep 600" -NoNewWindow -PassThru
+  Set-Content -Path (Join-Path $report "$Name.holder") -Value $holder.Id
+}}
 if ($Scenario -eq "nopid") {{ Write-Output "started"; exit 0 }}
 Write-Output "scenario $Scenario"
 Write-Output "pid $($started.Id)"
