@@ -18,7 +18,27 @@ use crate::messages::Message;
 pub struct AwaitedDecision {
   pub step: Arc<str>,
   pub retries: u32,
-  pub stuck: Stuck,
+  pub why: DecisionWhy,
+}
+
+/// Why a run waits for a person's decision ([`Stuck`], without its step).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DecisionWhy {
+  RetriesExhausted,
+  BrokeAgain,
+  Unverified,
+  Unchanged,
+}
+
+impl DecisionWhy {
+  const fn of(stuck: &Stuck) -> Self {
+    match stuck {
+      Stuck::RetriesExhausted(_) => Self::RetriesExhausted,
+      Stuck::BrokeAgain(_) => Self::BrokeAgain,
+      Stuck::Unverified(_) => Self::Unverified,
+      Stuck::Unchanged(_) => Self::Unchanged,
+    }
+  }
 }
 
 impl AwaitedDecision {
@@ -35,19 +55,19 @@ impl AwaitedDecision {
         .step(step)
         .map_or_else(|| step.as_str().into(), |pinned| pinned.name.as_str().into()),
       retries: run.automatic_retries_taken(step),
-      stuck: stuck.clone(),
+      why: DecisionWhy::of(stuck),
     })
   }
 
   /// "Review still fails after 2 retries", "Implement stopped again without a result", "Verify could not
   /// check everything" or "Verify was not run again: nothing changed".
   pub fn title(&self) -> Message {
-    let key = match (&self.stuck, self.retries) {
-      (Stuck::BrokeAgain(_), _) => "runs.retryLimit.brokeTitle",
-      (Stuck::Unverified(_), _) => "runs.retryLimit.unverifiedTitle",
-      (Stuck::Unchanged(_), _) => "runs.retryLimit.unchangedTitle",
-      (Stuck::RetriesExhausted(_), 1) => "runs.retryLimit.title.one",
-      (Stuck::RetriesExhausted(_), _) => "runs.retryLimit.title.other",
+    let key = match (self.why, self.retries) {
+      (DecisionWhy::BrokeAgain, _) => "runs.retryLimit.brokeTitle",
+      (DecisionWhy::Unverified, _) => "runs.retryLimit.unverifiedTitle",
+      (DecisionWhy::Unchanged, _) => "runs.retryLimit.unchangedTitle",
+      (DecisionWhy::RetriesExhausted, 1) => "runs.retryLimit.title.one",
+      (DecisionWhy::RetriesExhausted, _) => "runs.retryLimit.title.other",
     };
     Message::new(key)
       .with("step", self.step.to_string())

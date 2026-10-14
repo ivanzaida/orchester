@@ -108,7 +108,7 @@ fn overview_needs_you_counts_runs_waiting_for_a_decision_after_retries() {
   // Its card names what stopped it (02.B6 `Np9kc`), "ORC-1 · Implement stopped again …".
   let rows = OverviewTab::NeedsYou.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 3);
   let decision = rows[0].decision.as_ref().expect("the decision it waits for");
-  assert!(matches!(decision.stuck, orchester_core::run::Stuck::BrokeAgain(_)));
+  assert_eq!(decision.why, orchester_workspace::tasks::list::DecisionWhy::BrokeAgain);
   assert_eq!(decision.title().key, "runs.retryLimit.brokeTitle");
 }
 

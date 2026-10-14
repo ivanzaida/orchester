@@ -332,6 +332,16 @@ fn lost(ctx: &Ctx, run: &RunView, runner: &RunnerState) -> Said {
 }
 
 /// A run that does not go on by itself: queued, ended, or waiting for the person's decision.
+/// The icon and title of a run that waits for the person's decision for `stuck`.
+const fn waiting_words(stuck: &Stuck) -> (Icon, &'static str) {
+  match stuck {
+    Stuck::BrokeAgain(_) => (Icon::Hand, "summary.notice.brokeAgainTitle"),
+    Stuck::Unverified(_) => (Icon::CircleDashed, "summary.notice.unverifiedTitle"),
+    Stuck::Unchanged(_) => (Icon::Hand, "summary.notice.unchangedTitle"),
+    Stuck::RetriesExhausted(_) => (Icon::Hand, "summary.notice.retriesTitle"),
+  }
+}
+
 fn settled(ctx: &Ctx, detail: &TaskDetail, run: &RunView) -> Said {
   let (step, agent) = step_words(ctx, run.current_step());
   let branch = run.run.branch().as_str();
@@ -374,26 +384,10 @@ fn settled(ctx: &Ctx, detail: &TaskDetail, run: &RunView) -> Said {
         text("summary.notice.succeededTitle", "summary.notice.succeededBody"),
       ),
     },
-    RunStatus::WaitingForPerson(Stuck::BrokeAgain(_)) => Said::new(
-      NoticeTone::Warning,
-      Icon::Hand,
-      text("summary.notice.brokeAgainTitle", "summary.notice.stuckBody"),
-    ),
-    RunStatus::WaitingForPerson(Stuck::Unverified(_)) => Said::new(
-      NoticeTone::Warning,
-      Icon::CircleDashed,
-      text("summary.notice.unverifiedTitle", "summary.notice.stuckBody"),
-    ),
-    RunStatus::WaitingForPerson(Stuck::Unchanged(_)) => Said::new(
-      NoticeTone::Warning,
-      Icon::Hand,
-      text("summary.notice.unchangedTitle", "summary.notice.stuckBody"),
-    ),
-    RunStatus::WaitingForPerson(_) => Said::new(
-      NoticeTone::Warning,
-      Icon::Hand,
-      text("summary.notice.retriesTitle", "summary.notice.stuckBody"),
-    ),
+    RunStatus::WaitingForPerson(stuck) => {
+      let (icon, title) = waiting_words(stuck);
+      Said::new(NoticeTone::Warning, icon, text(title, "summary.notice.stuckBody"))
+    }
     RunStatus::Failed(_) if run.current_step().is_some_and(|step| step.tool_step) => Said::new(
       NoticeTone::Danger,
       Icon::CircleX,
