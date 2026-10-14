@@ -535,6 +535,15 @@ fn button(ctx: &Ctx, props: &Props, id: &str, label: &str, action: Option<Action
   })
 }
 
+pub(super) fn aborted(ctx: &Ctx) -> Element {
+  card("local-recovery", CardSurface::Outline)
+    .padding(SpacingSize::Md)
+    .spacing(SpacingSize::Sm)
+    .child(Text::new(&ctx.t("local_integration.recovery")).variant(TypographyStyle::Title))
+    .child(Text::new(&ctx.t(phase_title(LocalPhase::Paused))).variant(TypographyStyle::Description))
+    .into()
+}
+
 fn recovery(ctx: &Ctx, view: &IntegrationView) -> Element {
   let mut panel = card("local-recovery", CardSurface::Outline)
     .padding(SpacingSize::Md)

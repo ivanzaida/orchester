@@ -58,6 +58,10 @@ fn local_integration_unresolved_task_conflicts_allow_acknowledged_scoped_abort()
       .texts("local-recovery")
       .is_some_and(|words| words.join(" ").contains("Paused"))
   });
+  if page.has("local-loading") {
+    assert!(!page.has("local-confirm"), "fresh evidence still gates decisions");
+    assert!(!page.has("local-confirm-scope"), "no stale approval control");
+  }
   assert!(task_git(&page).operation().expect("marker").is_none());
   assert_eq!(git(&page.fixture.task_root, &["status", "--porcelain"]), "");
   assert_eq!(git(&page.fixture.task_root, &["rev-parse", "HEAD"]), task);
@@ -126,4 +130,34 @@ fn local_integration_unresolved_task_abort_refuses_foreign_edits() {
     fs::read(page.fixture.task_root.join("foreign.txt")).expect("retained"),
     b"new foreign work\n"
   );
+}
+
+#[test]
+fn headless_timer_refresh_observes_completed_owned_abort_without_feed_notification() {
+  let mut page = conflict();
+  let main = git(page.root(), &["rev-parse", "HEAD"]);
+  let task = git(&page.fixture.task_root, &["rev-parse", "HEAD"]);
+  // The private worker completes without notifying this retained view.
+  let mut session = page.fixture.open();
+  session.abort_task().expect("actual owned abort");
+  assert_eq!(session.operation().phase(), LocalPhase::Paused);
+  drop(session);
+  page.until("timer refresh observes completed owned abort", |window| {
+    window
+      .texts("local-recovery")
+      .is_some_and(|words| words.join(" ").contains("Paused"))
+  });
+  page.until("retained projection settles between timer ticks", |window| {
+    !window.tree.needs_redraw()
+  });
+  assert!(task_git(&page).operation().expect("marker").is_none());
+  assert_eq!(git(&page.fixture.task_root, &["rev-parse", "HEAD"]), task);
+  assert_eq!(git(page.root(), &["rev-parse", "HEAD"]), main);
+  let operation = ProjectDb::open(page.root())
+    .expect("db")
+    .local_operation(page.run())
+    .expect("journal")
+    .expect("retained operation");
+  assert_eq!(operation.phase(), LocalPhase::Paused);
+  assert!(operation.preservation().expect("originals").retained);
 }

@@ -117,6 +117,7 @@ impl Component for LocalPage {
         changes.update(|value| *value += 1);
       }
     });
+    poll.start();
     let mode = ctx.signal(Mode::Review);
     let action = work::action(ctx);
     let resolver = resolver::EditorState::new(ctx);
@@ -134,7 +135,7 @@ impl Component for LocalPage {
             tree: tree.clone(),
             preview: preview.clone(),
           },
-          Outcome::Changed | Outcome::DraftSaved(_) | Outcome::Resolved(_) => Mode::Review,
+          Outcome::Changed | Outcome::Aborted | Outcome::DraftSaved(_) | Outcome::Resolved(_) => Mode::Review,
         });
         completed_revision.update(|value| *value += 1);
         if let Outcome::DraftSaved(captured) = outcome {
@@ -164,7 +165,10 @@ impl Component for LocalPage {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    self.editor_dirty.set(self.resolver.editor.dirty());
+    let dirty = self.resolver.editor.dirty();
+    if self.editor_dirty.get_untracked() != dirty {
+      self.editor_dirty.set(dirty);
+    }
     let task = ctx.props::<TaskContext>().clone();
     let Some(run) = &task.detail.run else {
       return Element::from(Column::new());
@@ -195,19 +199,21 @@ impl Component for LocalPage {
       )
       .state()
       .get();
-    self.reading.set(read.is_pending());
+    if self.reading.get_untracked() != read.is_pending() {
+      self.reading.set(read.is_pending());
+    }
     if let Some(reason) = read.error {
       return self.read_error(ctx, &task, &reason);
     }
     let Some(shown) = read.data else {
       return match read.error {
         Some(reason) => Element::from(Notice::new("local-read-error", NoticeTone::Danger, ctx.t(reason.0))),
-        None => loading("local-loading", &ctx.t("local_integration.loading")).into(),
+        None => self.pending(ctx),
       };
     };
     if shown.1 != task.project.feed.revision.get() {
       // A project/secret change cannot reuse a previously safe metadata or content projection.
-      return loading("local-loading", &ctx.t("local_integration.loading")).into();
+      return self.pending(ctx);
     }
     let view = &shown.0;
     let busy = self.work.state().get().is_pending() || task.jobs.run(run.id()).busy();
@@ -224,6 +230,21 @@ impl Component for LocalPage {
 }
 
 impl LocalPage {
+  fn pending(&self, ctx: &Ctx) -> Element {
+    let loading = loading("local-loading", &ctx.t("local_integration.loading"));
+    let state = self.work.state().get();
+    if !state.is_pending() && state.error.is_none() && matches!(state.data, Some(Outcome::Aborted)) {
+      // Report the verified worker outcome while fresh checkout evidence loads; offer no decisions yet.
+      Column::new()
+        .spacing(SpacingSize::Md)
+        .child(controls::aborted(ctx))
+        .child(loading)
+        .into()
+    } else {
+      loading.into()
+    }
+  }
+
   fn read_error(&self, ctx: &mut Ctx, task: &TaskContext, reason: &Problem) -> Element {
     let mut body = Column::new().spacing(SpacingSize::Md).child(Notice::new(
       "local-read-error",

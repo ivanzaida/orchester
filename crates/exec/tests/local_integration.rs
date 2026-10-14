@@ -1,5 +1,7 @@
 #[path = "local_integration/case_collisions.rs"]
 mod case_collisions;
+#[path = "local_integration/markers.rs"]
+mod markers;
 
 use std::{
   fs,

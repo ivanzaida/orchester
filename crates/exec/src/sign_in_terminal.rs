@@ -136,7 +136,7 @@ mod platform {
       thread::sleep(POLL);
     }
     // Both are this module's own scratch files; one already gone is what removing it was for.
-    for file in [&running.script, &running.done] {
+    for file in [running.script, running.done] {
       if let Err(error) = fs::remove_file(file)
         && error.kind() != io::ErrorKind::NotFound
       {

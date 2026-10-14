@@ -80,6 +80,7 @@ pub struct Request {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Outcome {
   Changed,
+  Aborted,
   DraftSaved(orchester_core::integration::local::EditorCandidate),
   Resolved(orchester_core::integration::local::EditorCandidate),
   CommitReview { tree: String, preview: Preview },
@@ -240,7 +241,10 @@ fn execute(
     Action::Restore => session.restore()?,
     Action::FinishRestore => session.finish_restore()?,
     Action::Reconcile => session.reconcile()?,
-    Action::Abort => session.abort_task()?,
+    Action::Abort => {
+      session.abort_task()?;
+      return Ok(Outcome::Aborted);
+    }
     Action::Cleanup => session.remove_preservation()?,
     Action::Cancel => session.cancel_preservation()?,
   }

@@ -106,7 +106,7 @@ impl LocalGit {
   }
 
   pub fn operation(&self) -> Result<Option<String>, LocalGitError> {
-    for marker in [
+    let markers = [
       "index.lock",
       "rebase-merge",
       "rebase-apply",
@@ -114,9 +114,19 @@ impl LocalGit {
       "REVERT_HEAD",
       "BISECT_START",
       "MERGE_HEAD",
-    ] {
-      let path = self.text(&["rev-parse", "--path-format=absolute", "--git-path", marker])?;
-      let path = Path::new(&path);
+    ];
+    // Resolve fixed metadata paths together; every marker still gets a fresh owned filesystem check.
+    let mut args = vec!["rev-parse", "--path-format=absolute"];
+    for marker in markers {
+      args.extend(["--git-path", marker]);
+    }
+    let output = self.text(&args)?;
+    let paths: Vec<_> = output.lines().collect();
+    if paths.len() != markers.len() {
+      return Err(LocalGitError::Data);
+    }
+    for (marker, path) in markers.into_iter().zip(paths) {
+      let path = Path::new(path);
       let parent = path.parent().ok_or(LocalError::Unsupported)?;
       let _parent_owner = super::owned::Directory::open(parent)?;
       // Only a merge head participates in owned recovery; other markers are refused by name.

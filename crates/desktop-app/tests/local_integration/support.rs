@@ -80,16 +80,23 @@ impl Page {
   pub fn until(&mut self, what: &str, mut done: impl FnMut(&mut Window) -> bool) {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
     loop {
+      // Match the native event pump: timers drive retained reads, and idle polls need no forced layout.
+      self.window.tree.tick_timers();
       self.window.tree.tick_futures();
-      self.window.pass();
+      if self.window.tree.needs_redraw() || self.window.tree.has_active_timeline() {
+        self.window.pass();
+      }
       if done(&mut self.window) {
         return;
       }
       assert!(
         std::time::Instant::now() < deadline,
-        "timed out waiting for {what}; operation errors: {:?}; read errors: {:?}",
+        "timed out waiting for {what}; operation errors: {:?}; read errors: {:?}; durable phase: {:?}; working: {}; loading: {}",
         self.window.texts("local-work-error"),
-        self.window.texts("local-read-error")
+        self.window.texts("local-read-error"),
+        self.durable_phase(),
+        self.has("local-working"),
+        self.has("local-loading")
       );
       std::thread::sleep(std::time::Duration::from_millis(5));
     }
@@ -152,6 +159,14 @@ impl Page {
       .expect("label");
     select.commit(index);
     self.window.pass();
+  }
+  fn durable_phase(&self) -> Option<orchester_core::integration::local::LocalPhase> {
+    use orchester_core::integration::local::LocalIntegrationStore;
+    ProjectDb::open(self.root())
+      .expect("diagnostic database")
+      .local_operation(self.run())
+      .expect("diagnostic journal")
+      .map(|operation| operation.phase())
   }
   pub fn has(&mut self, id: &str) -> bool {
     self.window.tree.get_element_by_id(id).is_some()
