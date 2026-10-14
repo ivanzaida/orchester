@@ -6,6 +6,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle, VerticalAlign},
 };
 
+/// Prompt body cCFTK: baseline inset below the toolbar.
+pub fn prompt_top() -> SpacingSize {
+  SpacingSize::extra("instructions_prompt_top")
+}
 pub fn head_top() -> SpacingSize {
   SpacingSize::extra("instructions_head_top")
 }
@@ -31,6 +35,20 @@ pub fn prompt_text() -> TypographyStyle {
 /// U69ob source lines retain their position, including leading and trailing blank lines.
 pub fn source_text() -> TypographyStyle {
   TypographyStyle::extra("instructions_source")
+}
+/// x5WE6i: mono variable names and values keep a 16/17px line rhythm.
+pub fn variable_name() -> TypographyStyle {
+  TypographyStyle::extra("instructions_variable_name")
+}
+pub fn detail_value() -> TypographyStyle {
+  TypographyStyle::extra("instructions_detail_value")
+}
+pub fn detail_description() -> TypographyStyle {
+  TypographyStyle::extra("instructions_detail_description")
+}
+/// nPUFf: the full viewer's outlined Esc keycap.
+pub fn viewer_keycap() -> TypographyStyle {
+  TypographyStyle::extra("instructions_viewer_keycap")
 }
 pub fn variable_value() -> TypographyStyle {
   TypographyStyle::extra("instructions_variable_value")
@@ -67,6 +85,7 @@ pub fn token_style(unavailable: bool) -> lurq::components::InputTokenStyle {
 pub(super) fn install(theme: &Theme) {
   // p6Bsv: 18 above the page heading.
   theme.set_spacing_value(head_top(), 18.0);
+  theme.set_spacing_value(prompt_top(), 16.0);
   theme.set_spacing_value(empty_top(), 56.0);
   theme.set_spacing_value(token_padding(), 3.0);
   theme.set_radius_value(token_radius(), 3.0);
@@ -75,6 +94,22 @@ pub(super) fn install(theme: &Theme) {
 pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<str>, TextStyle)> {
   use super::typography::{mono, style};
   [
+    (
+      Arc::from("instructions_viewer_keycap"),
+      mono(style(10.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
+    ),
+    (
+      Arc::from("instructions_variable_name"),
+      mono(style(12.0, FontWeight::Normal, 4.0 / 3.0, 0.0, palette.text_primary)),
+    ),
+    (
+      Arc::from("instructions_detail_value"),
+      mono(style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_primary)),
+    ),
+    (
+      Arc::from("instructions_detail_description"),
+      style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_secondary),
+    ),
     (
       Arc::from("instructions_variable_value"),
       mono(style(11.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted)),

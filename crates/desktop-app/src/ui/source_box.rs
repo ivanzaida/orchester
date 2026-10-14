@@ -33,12 +33,16 @@ pub fn source_box(id: &str, filename: &str, metadata: &str, source: &str) -> Ele
     )
     .child(
       ScrollVertical::new(
-        Text::new(source)
-          .id(format!("{id}-text"))
-          .variant(instructions::source_text())
-          .selectable(true)
+        Column::new()
           .width(Dimension::Pct(100.0))
-          .padding(ExtraSpacing::Inset.role()),
+          .padding(ExtraSpacing::Inset.role())
+          .child(
+            Text::new(source)
+              .id(format!("{id}-text"))
+              .variant(instructions::source_text())
+              .selectable(true)
+              .width(Dimension::Pct(100.0)),
+          ),
       )
       .width(Dimension::Pct(100.0))
       .flex(1.0)

@@ -205,6 +205,18 @@ pub struct Resolved<'a> {
 }
 
 impl Resolved<'_> {
+  /// Position in the published pipeline, including its non-agent steps.
+  pub fn step_ordinal(&self) -> usize {
+    self
+      .pipeline
+      .2
+      .body()
+      .steps()
+      .iter()
+      .position(|step| step.key == self.step.key)
+      .expect("resolved step belongs to the published pipeline")
+      + 1
+  }
   pub fn pipeline_name(&self) -> &str {
     self.pipeline.1
   }

@@ -113,7 +113,7 @@ impl Component for Panels {
     let props = ctx.props::<Props>().clone();
     let panel = props.panel.get();
     let catalog = self.catalog(ctx, &props);
-    self.update_availability(catalog.data.as_ref(), &props);
+    self.update_availability(ctx, catalog.data.as_ref(), &props);
     if panel == Panel::Hidden {
       return Column::new().into();
     }
@@ -215,7 +215,7 @@ impl Panels {
       .get()
   }
 
-  fn update_availability(&self, catalog: Option<&PreviewCatalog>, props: &Props) {
+  fn update_availability(&self, ctx: &Ctx, catalog: Option<&PreviewCatalog>, props: &Props) {
     let retained = catalog
       .zip(props.entry.as_ref())
       .map_or_else(Vec::new, |(catalog, entry)| {
@@ -261,7 +261,15 @@ impl Panels {
       let context = super::fields::PreviewContext {
         task: resolved.task.task.key().to_string(),
         role: resolved.role().to_owned(),
-        step: resolved.step.name.to_string(),
+        step: ctx
+          .t_args(
+            "instructions.stepLabel",
+            [
+              ("number", format!("{:02}", resolved.step_ordinal())),
+              ("name", resolved.step.name.to_string()),
+            ],
+          )
+          .to_string(),
       };
       if props.preview_context.get_untracked() != context {
         props.preview_context.set(context);

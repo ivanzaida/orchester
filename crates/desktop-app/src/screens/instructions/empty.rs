@@ -11,8 +11,8 @@ use lurq::{
 };
 use orchester_workspace::{
   background,
+  instructions::repository::{self, RepositoryScan},
   messages::Message,
-  skills::repository::{self, RepositoryScan},
 };
 
 use super::state::{Selection, Tab, View};

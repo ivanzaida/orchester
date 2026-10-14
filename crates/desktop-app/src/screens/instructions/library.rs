@@ -64,7 +64,7 @@ impl Component for LibraryItem {
         return Row::new()
           .width(Dimension::Pct(100.0))
           .spacing(SpacingSize::Sm)
-          .padding(Padding::new().top(SpacingSize::Md).bottom(SpacingSize::Xs))
+          .padding(Padding::new().top(SpacingSize::Sm).bottom(SpacingSize::Xs))
           .child(icon(
             if role { Icon::Bot } else { Icon::Workflow },
             IconSize::Md,
@@ -106,10 +106,14 @@ impl Component for LibraryItem {
         ),
       ],
     );
-    let meta = if matches!(entry.body.scope(), InstructionScope::AgentRole { .. }) {
-      words::event(
+    let meta = if matches!(
+      entry.body.scope(),
+      InstructionScope::AgentRole { .. } | InstructionScope::Step { .. }
+    ) {
+      words::scoped_event(
         ctx,
         orchester_workspace::instructions::form::Events::of(entry.body.events()),
+        matches!(entry.body.scope(), InstructionScope::AgentRole { .. }),
       )
     } else {
       meta
@@ -176,7 +180,18 @@ pub fn list(
     .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Md))
     .spacing(SpacingSize::Xs)
-    .child(Text::new(&ctx.t(tab.key()).to_uppercase()).variant(instructions::overline()))
+    .child(
+      Text::new(
+        &ctx
+          .t(if tab == Tab::Roles {
+            "instructions.agentRoleRules"
+          } else {
+            tab.key()
+          })
+          .to_uppercase(),
+      )
+      .variant(instructions::overline()),
+    )
     .child(rows)
     .into()
 }

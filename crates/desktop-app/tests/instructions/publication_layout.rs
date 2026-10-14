@@ -45,6 +45,12 @@ fn instructions_publication_failure_is_inset_with_retry_below_text_and_retains_d
     "failed publication keeps draft and published version"
   );
   assert_eq!(screen.text("instruction-prompt"), "Saved draft text");
+  assert_eq!(screen.text("instruction-write-error-title"), "v2 was not published");
+  assert!(
+    screen
+      .text("instruction-write-error-body")
+      .contains("Your draft v2 is kept, and new runs still get v1.")
+  );
   assert!(
     !screen.exists("instruction-reload"),
     "publication error has only its retry action"

@@ -16,8 +16,8 @@ use orchester_core::{
 };
 use orchester_workspace::{
   background,
+  instructions::repository::{self, CreatedDraft, RepositoryScan},
   messages::Message,
-  skills::repository::{self, CreatedDraft, RepositoryScan},
   tasks::outside::Outside,
 };
 
@@ -380,7 +380,11 @@ pub(super) fn item_detail(ctx: &Ctx, item: &ImportItem) -> std::sync::Arc<str> {
       ],
     ),
     Ok(Candidate::Skill { name, files, .. }) => ctx.t_args(
-      "instructions.importSkill",
+      match files.len() {
+        0 => "instructions.importSkillNone",
+        1 => "instructions.importSkillOne",
+        _ => "instructions.importSkill",
+      },
       [("name", name.as_str().to_owned()), ("files", files.len().to_string())],
     ),
     Err(Unimportable::Empty) => ctx.t("instructions.importBlank"),

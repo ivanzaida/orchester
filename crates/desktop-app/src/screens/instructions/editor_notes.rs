@@ -76,7 +76,7 @@ pub fn warning(ctx: &Ctx, fields: &Fields) -> Option<Element> {
     ],
   );
   let mut note = Notice::new("instruction-publication-warning", NoticeTone::Warning, title)
-    .inspector()
+    .stacked()
     .body(ctx.t_args(
       "instructions.unavailableDetail",
       [("role", context.role), ("step", context.step)],
@@ -89,7 +89,7 @@ pub fn warning(ctx: &Ctx, fields: &Fields) -> Option<Element> {
       ButtonKind::Secondary,
       ctx.t("instructions.injectResume"),
     )
-    .icon(Icon::Clock)
+    .icon(Icon::CalendarClock)
     .on_click(move || {
       if !frozen.get_untracked() {
         events.set(Events::Resume);
@@ -105,7 +105,7 @@ pub fn warning(ctx: &Ctx, fields: &Fields) -> Option<Element> {
         [("expression", "{{run.base_revision}}")],
       ),
     )
-    .icon(Icon::GitBranch)
+    .icon(Icon::Replace)
     .on_click(move || {
       if !frozen.get_untracked() {
         text.update(|raw| {

@@ -54,7 +54,7 @@ pub fn list(ctx: &Ctx, state: &Panels, composition: &Composition, edited: Option
     let row = PromptSourceRow {
       number: index + 1,
       kind: kind.to_string(),
-      name: section.name.clone(),
+      name: source_name(ctx, section),
       version: version(ctx, &section.source).to_string(),
       selected: selected == index,
     };
@@ -99,5 +99,32 @@ pub fn version(ctx: &Ctx, source: &PromptSource) -> std::sync::Arc<str> {
     }
     PromptSource::Instruction { version, .. } => words::preview_version(ctx, *version),
     PromptSource::Task { .. } => "".into(),
+  }
+}
+
+fn source_name(ctx: &Ctx, section: &orchester_core::run::PromptSection) -> String {
+  match &section.source {
+    PromptSource::Step { pipeline, version, .. } => {
+      let props = ctx.props::<super::panels::Props>();
+      props.data.pipeline(*pipeline).map_or_else(
+        || section.name.clone(),
+        |pipeline| {
+          ctx
+            .t_args(
+              "instructions.stepSource",
+              [
+                ("step", section.name.clone()),
+                ("pipeline", pipeline.name.to_string()),
+                ("version", version.get().to_string()),
+              ],
+            )
+            .to_string()
+        },
+      )
+    }
+    PromptSource::Task { .. } => ctx
+      .t_args("instructions.taskSource", [("task", section.name.clone())])
+      .to_string(),
+    _ => section.name.clone(),
   }
 }

@@ -9,6 +9,7 @@ mod preview;
 mod publication_layout;
 mod recovery;
 mod repository;
+mod saving;
 mod states;
 #[path = "../support/mod.rs"]
 mod support;

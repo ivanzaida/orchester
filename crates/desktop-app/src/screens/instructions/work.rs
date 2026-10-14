@@ -53,6 +53,9 @@ impl Work {
     self.last.set(Attempt(Some(write.clone())));
     self.action.run(write);
   }
+  pub fn publishing(&self) -> bool {
+    self.action.state().get().is_pending() && matches!(self.last.get().0, Some(Write::Publish(..)))
+  }
   pub fn publication_failed(&self) -> bool {
     self.action.state().get().is_rejected() && matches!(self.last.get().0, Some(Write::Publish(..)))
   }

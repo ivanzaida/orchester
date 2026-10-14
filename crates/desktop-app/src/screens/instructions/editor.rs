@@ -235,28 +235,35 @@ impl Editor {
           .width(Dimension::Pct(100.0))
           .flex(1.0)
           .min_height(Dimension::Px(0.0))
-          .padding(Padding::symmetric(ExtraSpacing::Tabs.role(), SpacingSize::Md))
+          .padding(Padding::symmetric(ExtraSpacing::Tabs.role(), SpacingSize::Lg))
           .spacing(ExtraSpacing::Inset.role())
           .child(settings)
           .with_children(super::editor_notes::scope(ctx, &self.fields, &props.data))
           .child(prompt)
           .with_children(super::editor_notes::warning(ctx, &self.fields))
-          .child(
-            Row::new()
-              .spacing(SpacingSize::Sm)
-              .child(crate::ui::icon::icon(
-                Icon::Info,
-                crate::theme::IconSize::Xs,
-                PaletteColor::TextMuted,
-              ))
-              .child(
-                Text::new(&words::footer(
-                  ctx,
-                  props.tab,
-                  saved.and_then(|entry| entry.state.published()),
+          .with_children(
+            (self.fields.blocked.get().0.is_empty() || (busy && !self.work.publishing())).then(|| {
+              Row::new()
+                .spacing(SpacingSize::Sm)
+                .child(crate::ui::icon::icon(
+                  if dirty || (busy && !self.work.publishing()) {
+                    Icon::Lock
+                  } else {
+                    Icon::Info
+                  },
+                  crate::theme::IconSize::Xs,
+                  PaletteColor::TextMuted,
                 ))
-                .variant(TypographyStyle::Caption),
-              ),
+                .child(
+                  Text::new(&if dirty || (busy && !self.work.publishing()) {
+                    ctx.t("instructions.publishSaveWaiting")
+                  } else {
+                    words::footer(ctx, props.tab, saved.and_then(|entry| entry.state.published()))
+                  })
+                  .id("instruction-publish-note")
+                  .variant(TypographyStyle::Caption),
+                )
+            }),
           ),
       )
       .into()
@@ -281,13 +288,19 @@ impl Editor {
           retry.run(candidate.clone());
         }
       });
-    let notice = crate::ui::notice::Notice::new(
-      "instruction-write-error",
-      crate::ui::notice::NoticeTone::Danger,
-      ctx.t("instructions.writeFailed"),
-    )
-    .body(message_text(ctx, &error))
-    .action(if valid { retry } else { retry.disabled() });
+    let (title, explanation) = if self.work.publication_failed() {
+      words::publication_failure(
+        ctx,
+        self.saved.get().0.as_ref().and_then(|entry| entry.state.published()),
+        &error,
+      )
+    } else {
+      (ctx.t("instructions.writeFailed"), message_text(ctx, &error))
+    };
+    let notice =
+      crate::ui::notice::Notice::new("instruction-write-error", crate::ui::notice::NoticeTone::Danger, title)
+        .body(explanation)
+        .action(if valid { retry } else { retry.disabled() });
     if self.work.publication_failed() {
       body.child(
         Column::new()
@@ -422,10 +435,15 @@ impl Editor {
           .child(
             Text::new(&status)
               .id("instruction-save-status")
-              .variant(TypographyStyle::Description),
+              .variant(TypographyStyle::Description)
+              .color(if self.fields.instruction().is_err() {
+                PaletteColor::Danger
+              } else {
+                PaletteColor::TextSecondary
+              }),
           ),
       )
-      .child(button)
+      .with_children((ctx.props::<Props>().tab != Tab::Steps || state.has_draft() || dirty).then_some(button))
       .into()
   }
   fn action_button(&self, ctx: &Ctx, saved: Option<&InstructionEntry>, dirty: bool, busy: bool) -> ActionButton {
@@ -457,9 +475,9 @@ impl Editor {
           work.run(Write::Publish(entry.clone(), choice.get_untracked().0));
         }
       });
-      if busy {
+      if self.work.publishing() {
         publish.loading()
-      } else if dirty || !state.has_draft() || matches!(state, VersionState::StaleDraft { .. }) {
+      } else if busy || dirty || !state.has_draft() || matches!(state, VersionState::StaleDraft { .. }) {
         publish.unavailable(ctx.t("instructions.publishSaveWaiting"))
       } else if !self.fields.blocked.get().0.is_empty() {
         publish.unavailable(ctx.t("instructions.publishWaiting"))

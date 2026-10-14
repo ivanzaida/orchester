@@ -31,6 +31,8 @@ use crate::{
 const HEADER_HEIGHT: f32 = 52.0;
 const INDEX_WIDTH: f32 = 300.0;
 const FOOTER_HEIGHT: f32 = 34.0;
+// Outlined shortcut nPUFf.
+const KEYCAP_HEIGHT: f32 = 18.0;
 
 pub fn full(ctx: &mut Ctx, state: &Panels, props: &Props, catalog: &PreviewCatalog) -> Element {
   let resolved = match catalog.resolve(&state.choice.get()) {
@@ -53,7 +55,10 @@ pub fn full(ctx: &mut Ctx, state: &Panels, props: &Props, catalog: &PreviewCatal
   let mut contents = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
-    .padding(ExtraSpacing::Tabs.role());
+    .padding(Padding::symmetric(
+      ExtraSpacing::Tabs.role(),
+      ExtraSpacing::Inset.role(),
+    ));
   for (index, section) in composition.sections().iter().enumerate() {
     contents = contents.child(block(
       ctx,
@@ -257,7 +262,8 @@ fn block(
 fn footer(ctx: &Ctx, props: &Props, resolved: &Resolved<'_>, composition: &Composition, selected: usize) -> Element {
   let variables = composition
     .sections()
-    .iter()
+    .get(selected)
+    .into_iter()
     .flat_map(|section| section.variables.iter())
     .filter(|variable| resolved.value(**variable).is_some())
     .copied()
@@ -298,7 +304,15 @@ fn footer(ctx: &Ctx, props: &Props, resolved: &Resolved<'_>, composition: &Compo
         .variant(TypographyStyle::Caption)
         .flex(1.0),
     )
-    .child(Text::new(&ctx.t("instructions.esc")).variant(TypographyStyle::Caption))
+    .child(
+      Row::new()
+        .height(Dimension::Px(KEYCAP_HEIGHT))
+        .align_items(Alignment::Center)
+        .padding(Padding::horizontal(ExtraSpacing::Pair.role()))
+        .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+        .rounded(lurq::app::theme::RadiusSize::Sm)
+        .child(Text::new(&ctx.t("instructions.esc")).variant(instructions::viewer_keycap())),
+    )
     .child(
       crate::ui::button::ActionButton::new(
         "instruction-viewer-back",

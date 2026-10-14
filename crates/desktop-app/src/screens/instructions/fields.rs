@@ -224,7 +224,13 @@ impl Fields {
       self.events.clone(),
       Events::ALL
         .into_iter()
-        .map(|event| SelectOption::new(event, words::event(ctx, event)).disabled(self.frozen.get()))
+        .map(|event| {
+          SelectOption::new(
+            event,
+            words::scoped_event(ctx, event, matches!(self.scope.get(), ScopeChoice::AgentRole(_))),
+          )
+          .disabled(self.frozen.get())
+        })
         .collect(),
     );
     if self.frozen.get() {
@@ -396,7 +402,7 @@ impl Fields {
       .rows(1, usize::MAX)
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
-      .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
+      .padding(Padding::symmetric(SpacingSize::Md, instructions::prompt_top()))
       .on_input(move |event: lurq::app::events::TextInputEvent| {
         if locked || frozen.get_untracked() {
           event.prevent_default();
@@ -420,22 +426,21 @@ impl Fields {
           Row::new()
             .width(Dimension::Pct(100.0))
             .child(
-              Text::new(
-                &(1..=self.text.get().split('\n').count())
-                  .map(|n| n.to_string())
-                  .collect::<Vec<_>>()
-                  .join("\n"),
-              )
-              .id("instruction-line-numbers")
-              .variant(instructions::gutter_text())
-              .nowrap()
-              .width(Dimension::Px(GUTTER_WIDTH))
-              .padding(
-                Padding::new()
-                  .top(ExtraSpacing::Loose.role())
-                  .left(SpacingSize::Lg)
-                  .right(SpacingSize::Sm),
-              ),
+              Row::new()
+                .width(Dimension::Px(GUTTER_WIDTH))
+                .padding(Padding::new().top(ExtraSpacing::Loose.role()).right(SpacingSize::Sm))
+                .justify(lurq::layout::layout_kind::Justify::End)
+                .child(
+                  Text::new(
+                    &(1..=self.text.get().split('\n').count())
+                      .map(|n| n.to_string())
+                      .collect::<Vec<_>>()
+                      .join("\n"),
+                  )
+                  .id("instruction-line-numbers")
+                  .variant(instructions::gutter_text())
+                  .nowrap(),
+                ),
             )
             .child(input),
         )
@@ -498,14 +503,12 @@ impl Fields {
       .child(
         ActionButton::new(
           "instruction-variables",
-          if panel.get() == super::panels::Panel::Variables {
-            ButtonKind::Secondary
-          } else {
-            ButtonKind::Ghost
-          },
+          ButtonKind::Ghost,
           ctx.t("instructions.variables"),
         )
         .icon(Icon::Braces)
+        .small()
+        .compact()
         .on_click(move || panel.set(super::panels::Panel::Variables)),
       )
   }

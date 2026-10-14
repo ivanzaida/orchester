@@ -16,7 +16,7 @@ fn instructions_import_is_a_dedicated_page_with_metadata_and_cancel() {
   assert!(!screen.exists("instructions-new"));
   let review = screen.text("instruction-import-review");
   assert!(review.contains("INSTRUCTIONS"));
-  assert!(review.contains("Draft project instruction AGENTS.md · v1"));
+  assert!(review.contains("Draft project instruction AGENTS · v1"));
   assert!(review.contains("Project · change it in the editor"));
   assert!(review.contains("All agents · Agent start"));
   assert!(review.contains("Reference files"));

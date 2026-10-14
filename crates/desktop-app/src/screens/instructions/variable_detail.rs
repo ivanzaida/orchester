@@ -41,7 +41,7 @@ pub fn detail(ctx: &Ctx, props: &Props, variable: Variable, resolved: Option<&Re
       },
     )
     .child(head)
-    .child(Text::new(&variables::description(ctx, variable)).variant(TypographyStyle::Description))
+    .child(Text::new(&variables::description(ctx, variable)).variant(instructions::detail_description()))
     .child(box_value);
   if missing {
     let note = if variable == Variable::RunRevision {
@@ -50,7 +50,19 @@ pub fn detail(ctx: &Ctx, props: &Props, variable: Variable, resolved: Option<&Re
         |r| {
           ctx.t_args(
             "instructions.revisionExplanation",
-            [("role", r.role()), ("step", r.step.name.as_str())],
+            [
+              ("role", r.role()),
+              (
+                "step",
+                &ctx.t_args(
+                  "instructions.stepLabel",
+                  [
+                    ("number", format!("{:02}", r.step_ordinal())),
+                    ("name", r.step.name.to_string()),
+                  ],
+                ),
+              ),
+            ],
           )
         },
       )
@@ -160,20 +172,37 @@ fn policy(ctx: &Ctx, props: &Props, variable: Variable) -> Element {
     )
     .child(resume)
     .child(Text::new(&ctx.t("instructions.resumePolicyNote")).variant(TypographyStyle::Caption))
-    .child(Toggle::new(
-      "instruction-variable-fallback",
-      ToggleKind::Radio,
-      false,
-      ctx.t("instructions.fallbackPolicy"),
-    ))
     .child(
       Row::new()
         .spacing(SpacingSize::Sm)
-        .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted))
         .child(
-          Text::new(&ctx.t("instructions.noFallback"))
-            .variant(TypographyStyle::Caption)
-            .flex(1.0),
+          Toggle::new(
+            "instruction-variable-fallback",
+            ToggleKind::Radio,
+            false,
+            ctx.t("instructions.fallbackPolicy"),
+          )
+          .hide_label(),
+        )
+        .child(
+          Column::new()
+            .flex(1.0)
+            .spacing(ExtraSpacing::Tight.role())
+            .child(
+              Text::new(&ctx.t("instructions.fallbackPolicy"))
+                .variant(TypographyStyle::Description)
+                .color(PaletteColor::TextPrimary),
+            )
+            .child(
+              Row::new()
+                .spacing(ExtraSpacing::Snug.role())
+                .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted))
+                .child(
+                  Text::new(&ctx.t("instructions.noFallback"))
+                    .variant(TypographyStyle::Caption)
+                    .flex(1.0),
+                ),
+            ),
         ),
     )
     .into()
@@ -185,7 +214,7 @@ fn head(ctx: &Ctx, variable: Variable) -> Row {
     .align_items(Alignment::Center)
     .child(
       Text::new(variable.name())
-        .variant(TypographyStyle::Mono)
+        .variant(instructions::variable_name())
         .color(PaletteColor::TextPrimary)
         .nowrap(),
     )
@@ -241,7 +270,7 @@ fn value_box(ctx: &Ctx, props: &Props, variable: Variable, value: Option<String>
             .variant(if missing {
               TypographyStyle::Description
             } else {
-              TypographyStyle::Mono
+              instructions::detail_value()
             })
             .color(if missing {
               PaletteColor::Warning

@@ -6,4 +6,5 @@ pub mod form;
 pub mod preview;
 pub mod preview_tokens;
 pub mod publication;
+pub mod repository;
 pub mod tokens;

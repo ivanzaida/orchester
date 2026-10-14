@@ -32,6 +32,13 @@ pub fn event(ctx: &Ctx, events: Events) -> Arc<str> {
     Events::StartAndResume => "instructions.startResume",
   })
 }
+pub fn scoped_event(ctx: &Ctx, events: Events, role: bool) -> Arc<str> {
+  if role && events == Events::StartAndResume {
+    ctx.t("instructions.roleStartResume")
+  } else {
+    event(ctx, events)
+  }
+}
 pub fn scope(ctx: &Ctx, tab: Tab) -> Arc<str> {
   ctx.t(match tab {
     Tab::Project => "instructions.projectRule",
@@ -169,4 +176,30 @@ pub fn published_notice(
       ("runs", runs),
     ],
   )
+}
+
+pub fn publication_failure(
+  ctx: &Ctx,
+  published: Option<orchester_core::resource::VersionNumber>,
+  error: &orchester_workspace::messages::Message,
+) -> (Arc<str>, Arc<str>) {
+  let draft = published.map_or(1, |version| version.get().saturating_add(1));
+  let title = ctx.t_args("instructions.publishFailed", [("version", draft.to_string())]);
+  let detail = crate::ui::message::message_text(ctx, error);
+  let body = if let Some(version) = published {
+    ctx.t_args(
+      "instructions.publishFailedRetained",
+      [
+        ("reason", detail.to_string()),
+        ("draft", draft.to_string()),
+        ("published", version.get().to_string()),
+      ],
+    )
+  } else {
+    ctx.t_args(
+      "instructions.publishFailedUnpublished",
+      [("reason", detail.to_string()), ("draft", draft.to_string())],
+    )
+  };
+  (title, body)
 }

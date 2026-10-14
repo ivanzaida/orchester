@@ -182,7 +182,7 @@ fn instructions_all_scope_tabs_show_their_editor_and_save_timing() {
   screen.click("instruction-tab-1");
   screen.until("role", |s| s.exists("instruction-role"));
   assert!(screen.text("instruction-library").contains("Builder agreement"));
-  screen.choose("instruction-event", "Start & resume");
+  screen.choose("instruction-event", "Agent start & resume");
   screen.until("timing saved", |s| {
     s.entry(role).body.events().len() == 2 && s.text("instruction-save-status").contains("Draft saved · Published v1")
   });
