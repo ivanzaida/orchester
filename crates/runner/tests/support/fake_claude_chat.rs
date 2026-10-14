@@ -17,6 +17,8 @@ use std::{fs, io::Write, path::Path, process::ExitCode, thread, time::Duration};
 
 use serde_json::{Value, json};
 
+use crate::fake_chat_mcp::ChatServer;
+
 const USAGE: &str = r#"{"input_tokens":12,"output_tokens":27}"#;
 
 /// Whether `args` start a turn of the Orchestrator chat.
@@ -80,20 +82,14 @@ fn flush() {
   }
 }
 
-/// The configured server: its address and bearer token.
-struct Server {
-  url: String,
-  token: Option<String>,
-}
-
 fn after<'a>(args: &'a [String], flag: &str) -> Option<&'a String> {
   args.iter().position(|arg| arg == flag).and_then(|at| args.get(at + 1))
 }
 
-fn server(args: &[String]) -> Option<Server> {
+fn server(args: &[String]) -> Option<ChatServer> {
   let config: Value = serde_json::from_str(&fs::read_to_string(after(args, "--mcp-config")?).ok()?).ok()?;
   let entry = config.pointer("/mcpServers/orchester")?;
-  Some(Server {
+  Some(ChatServer {
     url: entry.get("url")?.as_str()?.to_owned(),
     token: entry
       .pointer("/headers/Authorization")
@@ -103,7 +99,7 @@ fn server(args: &[String]) -> Option<Server> {
 }
 
 /// Appends how the fake was started to `.orchester/fake-chat.log`.
-fn log(args: &[String], server: Option<&Server>) {
+fn log(args: &[String], server: Option<&ChatServer>) {
   let prompt = after(args, "--system-prompt-file")
     .and_then(|path| fs::read_to_string(path).ok())
     .and_then(|text| text.lines().next().map(str::to_owned))
@@ -125,76 +121,5 @@ fn log(args: &[String], server: Option<&Server>) {
   });
   if let Err(error) = written {
     eprintln!("cannot write the chat log: {error}");
-  }
-}
-
-impl Server {
-  /// Calls the tool `call` names (`<tool> <JSON arguments>`) and returns the text of its result.
-  fn call(&self, call: &str) -> Result<String, String> {
-    let (tool, arguments) = call.split_once(' ').unwrap_or((call, "{}"));
-    let arguments: Value = serde_json::from_str(arguments).map_err(|error| error.to_string())?;
-    // Reqwest without a TLS provider of its own needs one installed, as the runner's clients do; one installed
-    // already is as good.
-    if rustls::crypto::ring::default_provider().install_default().is_err() {
-      eprintln!("a TLS provider was installed already");
-    }
-    let client = reqwest::blocking::Client::builder()
-      .no_proxy()
-      .build()
-      .map_err(|error| error.to_string())?;
-    let initialize = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "fake-claude", "version": "1"}}});
-    let (session, _) = self.post(&client, None, &initialize)?;
-    let initialized = json!({"jsonrpc": "2.0", "method": "notifications/initialized"});
-    self.post(&client, session.as_deref(), &initialized)?;
-    let called =
-      json!({"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": tool, "arguments": arguments}});
-    let (_, answer) = self.post(&client, session.as_deref(), &called)?;
-    let answer = answer.ok_or("no answer to the call")?;
-    let text = answer
-      .pointer("/result/content/0/text")
-      .and_then(Value::as_str)
-      .map_or_else(|| answer.to_string(), str::to_owned);
-    Ok(text)
-  }
-
-  /// Posts `body`: the session the server named and the JSON-RPC message it answered with, if any.
-  fn post(
-    &self,
-    client: &reqwest::blocking::Client,
-    session: Option<&str>,
-    body: &Value,
-  ) -> Result<(Option<String>, Option<Value>), String> {
-    let mut request = client
-      .post(&self.url)
-      .header("Content-Type", "application/json")
-      .header("Accept", "application/json, text/event-stream")
-      .body(body.to_string());
-    if let Some(token) = &self.token {
-      request = request.header("Authorization", token);
-    }
-    if let Some(session) = session {
-      request = request.header("Mcp-Session-Id", session);
-    }
-    let response = request.send().map_err(|error| error.to_string())?;
-    let status = response.status();
-    let session = response
-      .headers()
-      .get("mcp-session-id")
-      .and_then(|value| value.to_str().ok())
-      .map(str::to_owned);
-    let text = response.text().map_err(|error| error.to_string())?;
-    if !status.is_success() {
-      return Err(format!("HTTP {status}"));
-    }
-    let message = text
-      .lines()
-      .filter_map(|line| line.strip_prefix("data:"))
-      .chain(std::iter::once(text.as_str()))
-      .find_map(|data| {
-        serde_json::from_str::<Value>(data.trim())
-          .ok()
-          .filter(|value| value.get("id").is_some())
-      });
-    Ok((session, message))
   }
 }

@@ -3,11 +3,10 @@
 
 use crate::{connection::AgentProvider, id::ConnectionId, resource::ModelId};
 
-/// Whether the Orchestrator can run on a connection of `provider`. This version starts it as Claude Code only:
-/// Codex runs through its App Server, whose session the runner drives for a pipeline step and not yet for a chat,
-/// and a native connection has no CLI to start.
+/// Whether the Orchestrator can run on a connection of `provider`: Claude Code, or Codex through its App Server. A
+/// native connection has no CLI to start.
 pub const fn runs_orchestrator(provider: AgentProvider) -> bool {
-  matches!(provider, AgentProvider::ClaudeCodeCli)
+  matches!(provider, AgentProvider::ClaudeCodeCli | AgentProvider::CodexCli)
 }
 
 /// The connection, model and reasoning effort the Orchestrator's next turn starts with.

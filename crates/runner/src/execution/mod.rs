@@ -36,7 +36,7 @@ mod question;
 mod record;
 mod recovery;
 mod run;
-mod step;
+pub(super) mod step;
 mod stuck;
 mod task_groups;
 mod tool;

@@ -5,6 +5,8 @@
 //! not answer, when a desktop attaches or the person stops it, was cut short (by the runner before it, or a request
 //! whose answer was lost), and is recorded as interrupted.
 
+mod claude;
+mod codex;
 mod turn;
 
 use std::collections::HashMap;

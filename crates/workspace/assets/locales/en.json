@@ -1365,7 +1365,7 @@
   "orchestrator": {
     "settings": {
       "connectionGone": "The Orchestrator's connection was removed. Choose another one.",
-      "claudeCodeOnly": "The Orchestrator runs on Claude Code connections in this version."
+      "cliOnly": "The Orchestrator runs on Claude Code and Codex connections."
     },
     "send": {
       "blank": "Write a message first.",

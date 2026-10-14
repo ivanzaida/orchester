@@ -53,8 +53,12 @@ use serde_json::{Value, json};
 
 #[path = "fake_app_server.rs"]
 mod fake_app_server;
+#[path = "fake_chat_mcp.rs"]
+mod fake_chat_mcp;
 #[path = "fake_codex_cell.rs"]
 mod fake_codex_cell;
+#[path = "fake_codex_chat.rs"]
+mod fake_codex_chat;
 #[path = "fake_codex_check.rs"]
 mod fake_codex_check;
 #[path = "fake_codex_question.rs"]
@@ -426,6 +430,9 @@ impl Session {
       emit(&json!({"id": id, "result": {"turn": {"id": self.turn}}}));
     }
     emit(&json!({"method": "turn/started", "params": {"threadId": self.thread, "turn": {"id": self.turn}}}));
+    if fake_codex_chat::is_chat(&self.args) {
+      return fake_codex_chat::answer(self, &self.args, &prompt);
+    }
     let structured = !params["outputSchema"].is_null();
     fake_codex_work::work(self, &prompt, structured)
   }

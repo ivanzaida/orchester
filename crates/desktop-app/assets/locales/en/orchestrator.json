@@ -75,9 +75,9 @@
     "failure": {
       "unreachable": "Orchestrator can't reach {{connection}}",
       "unreachableUnknown": "The Orchestrator couldn't start",
-      "notSignedIn": "The Claude Code CLI isn't signed in on this computer. Your message and this conversation are kept; nothing else changed.",
-      "cannotStart": "Claude Code couldn't be started; the runner's log says why. Your message and this conversation are kept; nothing else changed.",
-      "connectionGone": "The Orchestrator's connection is gone or isn't a Claude Code connection. Choose another in Orchestrator settings; this conversation is kept.",
+      "notSignedIn": "The connection's CLI isn't signed in on this computer. Your message and this conversation are kept; nothing else changed.",
+      "cannotStart": "The connection's CLI couldn't be started; the runner's log says why. Your message and this conversation are kept; nothing else changed.",
+      "connectionGone": "The Orchestrator's connection is gone or can't run it. Choose another in Orchestrator settings; this conversation is kept.",
       "accountNone": "The connection has no account to sign in with; choose one in Connections. Your message and this conversation are kept.",
       "accountFolderMissing": "The account's folder {{folder}} is gone; choose another account in Connections. Your message and this conversation are kept.",
       "accountUnsupported": "This connection's account can't be used on this computer yet; choose Default in Connections. Your message and this conversation are kept.",
@@ -86,7 +86,7 @@
       "retry": "Retry",
       "openConnections": "Open Connections",
       "earlier": "This answer failed: {{reason}}",
-      "earlierNotSignedIn": "This answer failed: the Claude Code CLI wasn't signed in",
+      "earlierNotSignedIn": "This answer failed: the CLI wasn't signed in",
       "earlierUnreachable": "This answer failed: the Orchestrator couldn't start",
       "timeLimit": "It ran longer than {{minutes}} minutes, the most one answer may take, and was ended. What it did until then stays; ask again in smaller parts.",
       "earlierTimeLimit": "This answer was ended after {{minutes}} minutes"
@@ -98,7 +98,7 @@
     "setupFailed": "What the Orchestrator runs on couldn't be read",
     "notReady": {
       "title": "Choose what the Orchestrator runs on",
-      "body": "Pick a Claude Code connection and a model in Orchestrator settings and publish them. Conversations stay readable; new messages can't be sent until then.",
+      "body": "Pick a Claude Code or Codex connection and a model in Orchestrator settings and publish them. Conversations stay readable; new messages can't be sent until then.",
       "openSettings": "Open settings"
     },
     "loading": {
@@ -250,7 +250,7 @@
       "limits": "Its tokens count toward {{project}}'s daily budget; it takes no agent slot. One answer ends after {{turns}} steps or {{minutes}} minutes.",
       "noConnection": {
         "title": "No connection in {{project}} can run the Orchestrator",
-        "body": "It needs a Claude Code connection that answers and is signed in. Conversations stay readable; new messages can't be sent until one works.",
+        "body": "It needs an agent connection that answers and is signed in. Conversations stay readable; new messages can't be sent until one works.",
         "open": "Open connections"
       },
       "saveFailed": "Not saved: {{reason}}"

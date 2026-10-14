@@ -4,7 +4,7 @@
 //! [`worker::Worker`] of its own.
 
 mod answer;
-mod app_server;
+pub(super) mod app_server;
 mod approval;
 mod checks;
 mod claude_approval;

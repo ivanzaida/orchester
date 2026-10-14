@@ -47,14 +47,14 @@ const REASON_CHARS: usize = 300;
 pub(super) const STEER_REQUEST: &str = "steer-";
 
 /// Codex's answer to a `turn/steer` request.
-pub(super) struct SteerAnswer {
+pub(in crate::execution) struct SteerAnswer {
   pub id: String,
   /// Codex's reason when it did not add the message to the turn.
   pub refused: Option<String>,
 }
 
 #[derive(Debug, Error)]
-pub(super) enum AppServerFailure {
+pub(in crate::execution) enum AppServerFailure {
   #[error("{0}")]
   Protocol(String),
   #[error("{0}")]
@@ -67,7 +67,7 @@ impl From<String> for AppServerFailure {
   }
 }
 
-pub(super) struct AppServerSetup {
+pub(in crate::execution) struct AppServerSetup {
   pub prompt: String,
   pub model: String,
   pub effort: Option<String>,
@@ -110,7 +110,7 @@ enum Phase {
   Complete,
 }
 
-pub(super) struct AppServerSession {
+pub(in crate::execution) struct AppServerSession {
   setup: AppServerSetup,
   phase: Phase,
   thread: Option<String>,

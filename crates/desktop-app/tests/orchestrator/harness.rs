@@ -36,13 +36,13 @@ use orchester_workspace::app_paths::runner_beside;
 
 use super::support::{Data, Window, add_project};
 
-/// The runner and the fake Claude Code, built into this profile's folder once per test process.
-fn programs() -> (PathBuf, PathBuf) {
-  static BUILT: OnceLock<(PathBuf, PathBuf)> = OnceLock::new();
+/// The runner, the fake Claude Code and the fake Codex, built into this profile's folder once per test process.
+fn programs() -> (PathBuf, PathBuf, PathBuf) {
+  static BUILT: OnceLock<(PathBuf, PathBuf, PathBuf)> = OnceLock::new();
   BUILT.get_or_init(build_programs).clone()
 }
 
-fn build_programs() -> (PathBuf, PathBuf) {
+fn build_programs() -> (PathBuf, PathBuf, PathBuf) {
   let status = Command::new(env!("CARGO"))
     .args([
       "build",
@@ -61,10 +61,12 @@ fn build_programs() -> (PathBuf, PathBuf) {
     .parent()
     .and_then(Path::parent)
     .expect("tests live in <target>/<profile>/deps");
-  let fake = profile
-    .join("orchester-fake-claude")
-    .with_extension(env::consts::EXE_EXTENSION);
-  (runner_beside(&profile.join("orchester-app")), fake)
+  let fake = |name: &str| profile.join(name).with_extension(env::consts::EXE_EXTENSION);
+  (
+    runner_beside(&profile.join("orchester-app")),
+    fake("orchester-fake-claude"),
+    fake("orchester-fake-codex"),
+  )
 }
 
 fn git(repo: &Path, args: &[&str]) {
@@ -86,6 +88,8 @@ fn git(repo: &Path, args: &[&str]) {
 pub enum Setup {
   /// The Orchestrator runs on the Claude Code connection, on the built runner.
   Ready,
+  /// The Orchestrator runs on the Codex connection, on the built runner.
+  Codex,
   /// Nothing was chosen for the Orchestrator yet.
   NotChosen,
   /// Chosen, but the project's runner cannot start: its program does not exist.
@@ -103,7 +107,7 @@ pub struct Orchestrator {
 
 impl Orchestrator {
   pub fn new(setup: Setup) -> Self {
-    let (runner, fake) = programs();
+    let (runner, fake, fake_codex) = programs();
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orchestrator-tests");
     fs::create_dir_all(&scratch).expect("scratch directory");
     let data = Data {
@@ -121,7 +125,7 @@ impl Orchestrator {
     git(&repo, &["commit", "--quiet", "-m", "initial"]);
     let runner = match setup {
       Setup::NoRunner => data.dir.path().join("no-runner").join("orchester-runner"),
-      Setup::Ready | Setup::NotChosen => runner,
+      Setup::Ready | Setup::Codex | Setup::NotChosen => runner,
     };
     let launch = Launch::begin_at(&data.database(), runner, data.runtime.handle(), None);
     let project = ProjectId::generate();
@@ -133,10 +137,11 @@ impl Orchestrator {
     let mut db = ProjectDb::open(&open.repo_root).expect("database");
     let claude = connection(AgentProvider::ClaudeCodeCli, "Claude · Kontur", &fake);
     db.create_connection(&claude).expect("Claude Code connection");
-    let codex = connection(AgentProvider::CodexCli, "Codex · Kontur", &fake);
+    let codex = connection(AgentProvider::CodexCli, "Codex · Kontur", &fake_codex);
     db.create_connection(&codex).expect("Codex connection");
     if setup != Setup::NotChosen {
-      let settings = OrchestratorSettings::new(claude.id(), ModelId::new("haiku").expect("model"), None);
+      let on = if setup == Setup::Codex { codex.id() } else { claude.id() };
+      let settings = OrchestratorSettings::new(on, ModelId::new("haiku").expect("model"), None);
       db.publish_orchestrator(&settings, Timestamp::now()).expect("settings");
     }
     Self {

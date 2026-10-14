@@ -410,3 +410,52 @@ async fn chat_tokens_count_toward_the_daily_budget_and_a_used_one_refuses_a_turn
     "no turn ran: the desktop forgets the message"
   );
 }
+
+fn codex() -> TestProject {
+  let project = project(&Setup {
+    provider: AgentProvider::CodexCli,
+    ..Setup::new("Not used by the chat.")
+  });
+  let mut db = ProjectDb::open(project.repo.path()).expect("open");
+  let connection = db.connections().expect("connections")[0].id();
+  let model = ModelId::new("gpt-5.5").expect("model");
+  db.publish_orchestrator(&OrchestratorSettings::new(connection, model, None), Timestamp::now())
+    .expect("settings");
+  project
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn chat_on_codex_answers_read_only_with_only_its_tools_and_resumes_its_thread() {
+  let project = codex();
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let chat = ChatId::generate();
+  let first = keep(root, chat, "What is running?");
+  scheduler.answer_in_chat(first, tools()).await.expect("the turn starts");
+  assert_eq!(ended(root, &mut events, first).await, TurnState::Answered);
+  assert_eq!(replies(root, chat), ["Noted: What is running?"]);
+  let db = ProjectDb::open(root).expect("open");
+  let kept = db.chat(chat).expect("read").expect("kept");
+  assert_eq!(kept.session().expect("the thread is kept").id, "fake-thread-1");
+  assert!(db.chat_turn_tokens(first).expect("read") > TokensUsed::ZERO, "its usage is kept");
+  let started = log(root);
+  assert!(started.contains("codex-argv: app-server --stdio"), "{started}");
+  assert!(
+    started.contains("mcp-url: http://127.0.0.1:9/mcp\nmcp-token: present"),
+    "only the chat's tools, with the turn's token: {started}"
+  );
+  assert!(
+    started.contains("prompt: You are the Orchestrator of the project \"Kontur\""),
+    "a new thread opens with the system prompt: {started}"
+  );
+  assert!(!started.contains(TOKEN), "the token is never on the command line: {started}");
+
+  let second = keep(root, chat, "And what waits?");
+  scheduler.answer_in_chat(second, tools()).await.expect("the turn starts");
+  assert_eq!(ended(root, &mut events, second).await, TurnState::Answered);
+  assert!(log(root).contains("prompt: And what waits?"), "the thread goes on: {}", log(root));
+  assert_eq!(
+    replies(root, chat),
+    ["Noted: What is running?", "Noted: And what waits?"]
+  );
+}

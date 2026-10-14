@@ -78,6 +78,8 @@ use std::{fs::OpenOptions, io::Write, path::Path, process::ExitCode, thread, tim
 mod fake_claude_ask;
 #[path = "fake_claude_background.rs"]
 mod fake_claude_background;
+#[path = "fake_chat_mcp.rs"]
+mod fake_chat_mcp;
 #[path = "fake_claude_chat.rs"]
 mod fake_claude_chat;
 #[path = "fake_claude_input.rs"]

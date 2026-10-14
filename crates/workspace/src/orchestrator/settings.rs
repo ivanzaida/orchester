@@ -199,5 +199,5 @@ pub fn save_in(root: &Path, settings: &OrchestratorSettings, keep: Keep) -> Resu
 
 /// Why the Orchestrator cannot run on a connection of `provider`.
 fn unavailable(provider: AgentProvider) -> Option<Message> {
-  (!runs_orchestrator(provider)).then(|| Message::new("orchestrator.settings.claudeCodeOnly"))
+  (!runs_orchestrator(provider)).then(|| Message::new("orchestrator.settings.cliOnly"))
 }
