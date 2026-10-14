@@ -39,8 +39,8 @@ use orchester_workspace::tasks::{
   transcript::{Entry, EntryKind},
 };
 
+pub(crate) use self::{divider::step_label, message::links};
 pub(super) use self::{
-  divider::step_label,
   follow::Follow,
   message::person_message,
   working::{Wait, Working},

@@ -49,7 +49,7 @@ const BUBBLE_WIDTH: f32 = 80.0;
 static OPEN_LINK: LazyLock<LinkHandler> = LazyLock::new(|| Arc::new(open_link));
 
 /// What a press on a link in the chat does.
-pub(super) fn links() -> LinkHandler {
+pub(crate) fn links() -> LinkHandler {
   OPEN_LINK.clone()
 }
 

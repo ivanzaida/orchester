@@ -24,6 +24,12 @@
     }
   },
   "overview": {
+    "eyebrow": {
+      "key": "PROJECT KEY {{key}}",
+      "repository": "PROJECT KEY {{key}} · {{repository}}",
+      "branch": "PROJECT KEY {{key}} · {{branch}}",
+      "repositoryBranch": "PROJECT KEY {{key}} · {{repository}} · {{branch}}"
+    },
     "metrics": {
       "agentsWorking": {
         "one": "{{count}} of {{slots}} agent working",
@@ -46,7 +52,7 @@
       "other": "{{active}} active tasks · {{completed}} completed"
     },
     "activity": {
-      "empty": "No runs yet. Runs appear here as they start and finish.",
+      "empty": "No activity yet.",
       "unreadable": {
         "one": "No run to show: the latest run of a task could not be read. The task list marks it.",
         "other": "No run to show: the latest runs of {{count}} tasks could not be read. The task list marks them."
@@ -61,6 +67,96 @@
       "merged": "Run #{{run}} merged",
       "failed": "Run #{{run}} failed",
       "cancelled": "Run #{{run}} was canceled"
+    },
+    "board": {
+      "noRuns": "No runs yet",
+      "usageUnread": "Usage not read yet",
+      "ofBudget": "of {{budget}} daily project budget",
+      "noBudget": "No daily budget for {{project}}",
+      "memoryRow": "Not a task: {{project}} memory",
+      "blocked": {
+        "title": "Blocked · {{task}}"
+      },
+      "unreadable": {
+        "title": "No run to show for {{task}}",
+        "body": "The latest run of {{task}} could not be read. The task list marks it; its worktree is untouched."
+      }
+    },
+    "ready": {
+      "agents": {
+        "label": "Agents",
+        "published": "{{agents}}",
+        "none": "No agent is published yet"
+      },
+      "pipeline": {
+        "label": "Pipeline",
+        "one": "{{pipeline}} v{{version}} published",
+        "several": "{{count}} pipelines published",
+        "none": "No pipeline is published yet"
+      },
+      "connection": {
+        "label": "Connection",
+        "signedIn": "{{connections}} signed in",
+        "none": "No agent connection yet",
+        "notChecked": "{{connection}} has not been checked yet",
+        "signInRequired": "{{connection}} is not signed in",
+        "signInUnknown": "{{connection}} answers, but its sign-in could not be confirmed",
+        "executableMissing": "{{connection}}: its program file does not exist",
+        "notRecognized": "{{connection}}: its program is not the expected CLI",
+        "couldNotRun": "{{connection}} could not run",
+        "keyMissing": "{{connection}}: its key is missing",
+        "keyRejected": "{{connection}}: its key was rejected",
+        "billingProblem": "{{connection}}: the provider refuses it for billing",
+        "endpointUnreachable": "{{connection}}: its endpoint cannot be reached"
+      }
+    },
+    "needs": {
+      "kind": {
+        "approval": "Approval",
+        "question": "Question",
+        "planReview": "Plan review",
+        "decision": "Decision",
+        "input": "Needs input",
+        "stoppedAtLimit": "Stopped at limit",
+        "interrupted": "Interrupted",
+        "readyToMerge": "Ready to merge",
+        "memory": "Memory"
+      },
+      "context": "{{task}} · {{title}}",
+      "contextMemory": "Project memory",
+      "contextUnread": "Its run cannot be read, so its task is not known",
+      "title": {
+        "command": "{{agent}} asks to run {{command}}",
+        "commandMore": "{{agent}} asks to run {{command}} …",
+        "tool": "{{agent}} asks to use {{tool}} on {{server}}",
+        "plan": "Plan v{{version}} from {{agent}} waits for your decision",
+        "question": "{{agent}} asks: {{question}}",
+        "questions": "{{agent}} asks {{count}} questions",
+        "input": "Run #{{run}} needs your input",
+        "stoppedAtLimit": "Run #{{run}} stopped at its limit",
+        "tokenLimit": "Run #{{run}} stopped at its {{limit}}-token limit",
+        "dailyBudget": "Run #{{run}} stopped at the project's daily budget",
+        "interrupted": "Run #{{run}} was interrupted",
+        "readyToMerge": "{{task}} is ready to merge: every step passed",
+        "memoryOne": "1 memory record waits for approval",
+        "memoryOther": "{{count}} memory records wait for approval"
+      },
+      "waiting": "waiting {{time}}",
+      "since": "since {{time}}",
+      "action": {
+        "review": "Review",
+        "answer": "Answer",
+        "reviewPlan": "Review plan",
+        "decide": "Decide",
+        "raiseLimit": "Raise the limit",
+        "reviewMerge": "Review & merge",
+        "openTask": "Open task",
+        "reviewRecords": "Review records"
+      },
+      "unavailable": {
+        "memory": "Reviewing memory records isn't built in this app yet.",
+        "task": "Its task can't be read, so there is nothing to open."
+      }
     }
   },
   "tasks": {
@@ -168,6 +264,7 @@
       "interrupted": "Last checkpoint {{checkpoint}}",
       "interruptedNoCheckpoint": "No checkpoint yet",
       "succeeded": "Every step passed",
+      "nothingToMerge": "Nothing to merge: the run committed nothing",
       "merged": "Merged into {{branch}}",
       "failed": "Run failed",
       "cancelled": "Run canceled"
@@ -634,6 +731,9 @@
     "daysAgo": "{{count}}d ago",
     "seconds": "{{count}} s",
     "minutes": "{{count}} min",
+    "hours": "{{count}} h",
+    "days": "{{count}} d",
+    "underMinute": "under a minute",
     "month": {
       "jan": "Jan",
       "feb": "Feb",

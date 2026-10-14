@@ -6,20 +6,28 @@ use std::{collections::HashMap, sync::Arc};
 use orchester_core::{
   id::{ResourceId, TaskId},
   integration::RunMerge,
-  resource::{StepKey, VersionNumber},
-  run::{PauseReason, PinnedVersion, Plan, PlanVersion, Run, RunLimit, RunNumber, RunStatus, Stuck, TaskPhase},
+  resource::VersionNumber,
+  run::{PauseReason, PinnedVersion, Run, RunLimit, RunNumber, RunStatus, TaskPhase},
   task::{MissingDetail, Task, TaskStatus},
   time::Timestamp,
+  tokens::TokenBudget,
 };
 
-pub use super::standing::{CurrentStep, ReadinessKind};
+pub use super::{
+  awaited::{AwaitedDecision, AwaitedPlan, AwaitedQuestion, AwaitedStep, StepWait},
+  standing::{CurrentStep, ReadinessKind, RunStage},
+};
 use crate::{
   display,
   messages::Message,
-  tasks::{data::PipelineChoice, unreadable::Unreadable},
+  tasks::{
+    data::{PipelineChoice, ProjectTasks},
+    unreadable::Unreadable,
+  },
 };
 
-/// Workflow tabs; Needs you remains a run-state view.
+/// Workflow tabs, and Needs you: the tasks something of waits for the person
+/// ([`ProjectTasks::waiting`](super::data::ProjectTasks::waiting)), whatever their workflow status.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskTab {
   All,
@@ -51,6 +59,15 @@ impl TaskTab {
       Self::Done => "tasks.workflow.done",
     }
   }
+  /// How many the tab holds of `data`'s tasks; Needs you counts what every *Needs you* counts
+  /// ([`ProjectTasks::needs_you`]), each waiting object, as the Overview's tab does.
+  pub fn count(self, data: &ProjectTasks) -> usize {
+    if self == Self::NeedsYou {
+      return data.needs_you();
+    }
+    data.tasks.iter().filter(|task| self.includes(task)).count()
+  }
+
   pub fn includes(self, task: &Task) -> bool {
     use orchester_core::task::organization::WorkflowStatus;
     match self {
@@ -77,119 +94,71 @@ pub struct LatestRun {
   pub updated_at: Timestamp,
   /// Stopped by the project's daily budget rather than its own limit.
   pub daily_budget: bool,
+  /// The token budget it stopped at, when its own token limit stopped it.
+  pub token_limit: Option<u64>,
   /// Running, with a pause requested: it pauses at its next checkpoint.
   pub pausing: bool,
   /// Its last checkpoint, as people read a revision.
   pub checkpoint: Option<Arc<str>>,
-  /// The plan it waits on a decision for, if it does.
+  /// The plan it waits on a decision for, if it does; the first in pipeline order when several do.
   pub plan: Option<AwaitedPlan>,
-  /// The branch its work was merged into, once it was.
+  /// The branch its work was merged into, once it was, in Orchester or by a person
+  /// ([`super::delivery`]).
   pub merged_into: Option<Arc<str>>,
-  /// The question it waits for an answer to, if it does.
+  /// It passed every step and committed nothing, so there is nothing to merge ([`super::delivery`]).
+  pub nothing_to_merge: bool,
+  /// The question it waits for an answer to, if it does; the first that can be read when several do.
   pub question: Option<AwaitedQuestion>,
+  /// Each of its steps that waits on a plan or for an answer, plans first, each in pipeline order.
+  pub waiting: Vec<AwaitedStep>,
   /// The decision it waits for after its retries ran out or its step broke again, if it does.
   pub decision: Option<AwaitedDecision>,
   /// The step its agent is on, or the one it stopped at.
   pub step: Option<CurrentStep>,
-}
-
-/// What a run waiting for a person's decision stopped at (02.B6 `Np9kc`): the step, by name, and
-/// whether its retries ran out (how many it took) or it broke again.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AwaitedDecision {
-  pub step: Arc<str>,
-  pub retries: u32,
-  pub broke: bool,
-}
-
-impl AwaitedDecision {
-  /// What `run` waits for a decision on, if it does.
-  pub fn of(run: &Run) -> Option<Self> {
-    let RunStatus::WaitingForPerson(stuck) = run.status() else {
-      return None;
-    };
-    let step = stuck.step();
-    Some(Self {
-      step: run
-        .snapshot()
-        .body()
-        .step(step)
-        .map_or_else(|| step.as_str().into(), |pinned| pinned.name.as_str().into()),
-      retries: run.automatic_retries_taken(step),
-      broke: matches!(stuck, Stuck::BrokeAgain(_)),
-    })
-  }
-
-  /// "Review still fails after 2 retries", or "Implement stopped again without a result".
-  pub fn title(&self) -> Message {
-    let key = match (self.broke, self.retries) {
-      (true, _) => "runs.retryLimit.brokeTitle",
-      (false, 1) => "runs.retryLimit.title.one",
-      (false, _) => "runs.retryLimit.title.other",
-    };
-    Message::new(key)
-      .with("step", self.step.to_string())
-      .with("retries", self.retries.to_string())
-  }
-}
-
-/// A question an agent asked, which its run waits for an answer to: who asks (the agent role of
-/// its step, the step's name when its profile version is gone) and what.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AwaitedQuestion {
-  pub agent: Arc<str>,
-  pub text: Arc<str>,
-}
-
-/// What a run waits for from a person, if anything: a plan decision or an answer.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Awaited {
-  pub plan: Option<AwaitedPlan>,
-  pub question: Option<AwaitedQuestion>,
-}
-
-/// A plan a run waits on a decision for (02.11): its version and who proposed it, the agent role
-/// of its step (the step's name when its profile version is gone).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AwaitedPlan {
-  pub version: PlanVersion,
-  pub agent: Arc<str>,
-}
-
-impl AwaitedPlan {
-  /// The plan `run` waits on, among its `plans`, proposed by `agent`'s step; the first in pipeline
-  /// order when several steps' plans wait.
-  pub fn of(run: &Run, plans: &[Plan], agent: impl Fn(&StepKey) -> Option<Arc<str>>) -> Option<Self> {
-    let execution = *run.awaiting_plan().first()?;
-    let plan = Plan::latest_of(plans, execution)?;
-    let step = run.snapshot().body().step(&plan.step)?;
-    Some(Self {
-      version: plan.version,
-      agent: agent(&plan.step).unwrap_or_else(|| step.name.as_str().into()),
-    })
-  }
+  /// It reads interrupted only because no runner looks after it ([`LatestRun::without_runner`]); a runner
+  /// records it once one does.
+  pub lost_runner: bool,
 }
 
 impl LatestRun {
   /// `run`, the latest run of `task`, merged as `merge` records, whose last event was recorded at
-  /// `updated_at`, with the plan or the question it waits on, if any.
-  pub fn of(task: &Task, (run, merge): (&Run, Option<&RunMerge>), updated_at: Timestamp, awaited: Awaited) -> Self {
+  /// `updated_at`, with the steps that wait on a plan or a question, if any.
+  pub fn of(
+    task: &Task,
+    (run, merge): (&Run, Option<&RunMerge>),
+    updated_at: Timestamp,
+    waiting: Vec<AwaitedStep>,
+  ) -> Self {
+    let plan = waiting.iter().find_map(|step| match &step.wait {
+      StepWait::Plan(plan) => Some(plan.clone()),
+      StepWait::Answer(_) => None,
+    });
+    let question = waiting.iter().find_map(|step| match &step.wait {
+      StepWait::Answer(question) => question.clone(),
+      StepWait::Plan(_) => None,
+    });
     Self {
       id: run.id(),
       pipeline: run.snapshot().pipeline(),
       phase: TaskPhase::of(task, Some(run), merge),
       merged_into: merge.map(|merge| merge.into.as_str().into()),
+      nothing_to_merge: false,
       number: run.number(),
       updated_at,
       daily_budget: run.status() == &RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)),
+      token_limit: (run.status() == &RunStatus::Paused(PauseReason::LimitReached(RunLimit::Tokens)))
+        .then(|| run.budget().map(TokenBudget::get))
+        .flatten(),
       pausing: run.status() == &RunStatus::Running && run.pause_requested(),
       checkpoint: run
         .last_checkpoint()
         .map(|checkpoint| display::short_revision(checkpoint.revision().as_str()).into()),
-      plan: awaited.plan,
-      question: awaited.question,
+      plan,
+      question,
+      waiting,
       decision: AwaitedDecision::of(run),
       step: CurrentStep::of(run),
+      lost_runner: false,
     }
   }
 
@@ -201,6 +170,7 @@ impl LatestRun {
     Self {
       phase,
       pausing: self.pausing && phase == TaskPhase::Running,
+      lost_runner: self.lost_runner || phase != self.phase,
       ..self.clone()
     }
   }
@@ -221,6 +191,7 @@ impl LatestRun {
       TaskPhase::StoppedAtLimit if self.daily_budget => Message::new("tasks.progress.stoppedDaily"),
       TaskPhase::StoppedAtLimit => Message::new("tasks.progress.stoppedAtLimit"),
       TaskPhase::Interrupted => with_checkpoint("tasks.progress.interrupted", "tasks.progress.interruptedNoCheckpoint"),
+      TaskPhase::Succeeded if self.nothing_to_merge => Message::new("tasks.progress.nothingToMerge"),
       TaskPhase::Succeeded => Message::new("tasks.progress.succeeded"),
       TaskPhase::Merged => {
         Message::new("tasks.progress.merged").with("branch", self.merged_into.as_deref().unwrap_or_default().to_owned())
@@ -405,6 +376,8 @@ pub struct TaskRow {
   pub readiness: ReadinessKind,
   /// The step its latest run is on, or stopped at.
   pub step: Option<CurrentStep>,
+  /// Its latest run passed every step and committed nothing, so there is nothing to merge.
+  pub nothing_to_merge: bool,
 }
 
 /// The latest run of each task that has one; a task without one is a draft or queued.
@@ -449,6 +422,7 @@ impl TaskRow {
       not_shared: false,
       readiness,
       step: latest.and_then(|latest| latest.step.clone()),
+      nothing_to_merge: latest.is_some_and(|latest| latest.nothing_to_merge),
     }
   }
 }
@@ -477,14 +451,13 @@ fn task_pipeline_label(task: &Task, published: &[PipelineChoice], latest: Option
   label
 }
 
-/// Rows of `tab`, in task number order.
-pub fn rows(tasks: &[Task], published: &[PipelineChoice], phases: &Phases, tab: TaskTab) -> Vec<TaskRow> {
+/// Rows of `tab` among `tasks`, tasks of `data`, in task number order.
+pub fn rows(tasks: &[Task], data: &ProjectTasks, tab: TaskTab) -> Vec<TaskRow> {
+  let waiting = (tab == TaskTab::NeedsYou).then(|| data.waiting_tasks());
   tasks
     .iter()
-    .filter(|task| {
-      tab.includes(task) && (tab != TaskTab::NeedsYou || phase_of(task, phases).is_some_and(TaskPhase::needs_you))
-    })
-    .map(|task| TaskRow::new(task, published, phases.get(&task.id())))
+    .filter(|task| tab.includes(task) && waiting.as_ref().is_none_or(|waiting| waiting.contains(&task.id())))
+    .map(|task| TaskRow::new(task, &data.pipelines, data.phases.get(&task.id())))
     .collect()
 }
 

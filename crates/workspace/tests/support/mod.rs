@@ -150,6 +150,63 @@ impl Fixture {
     fixture
   }
 
+  /// [`Fixture::gated`] whose pipeline runs Builder's steps Research and Docs beside its gated Implement, so
+  /// several steps of one run can wait at once.
+  pub fn parallel() -> Self {
+    let mut fixture = Self::gated();
+    let implement = fixture.snapshot.body().steps()[0].clone();
+    let StepKind::Agent {
+      profile: Some(builder), ..
+    } = &implement.kind
+    else {
+      panic!("the fixture's Implement step has a Builder profile");
+    };
+    let profiles = BTreeMap::from([(
+      *builder,
+      fixture
+        .db
+        .latest_version::<AgentProfile>(*builder)
+        .expect("read Builder")
+        .expect("Builder is published"),
+    )]);
+    let beside = |key: &str, title: &str| Step {
+      key: StepKey::new(key).expect("key"),
+      name: name(title),
+      approval_gate: false,
+      ..implement.clone()
+    };
+    let pipeline = Pipeline::new(vec![
+      implement.clone(),
+      beside("research", "Research"),
+      beside("docs", "Docs"),
+    ])
+    .expect("pipeline");
+    let delivery = fixture
+      .db
+      .create_resource(
+        Slug::new("parallel-delivery").expect("slug"),
+        name("Parallel delivery"),
+        &pipeline,
+        at(8),
+      )
+      .expect("pipeline")
+      .id();
+    let version = fixture.db.publish_draft::<Pipeline>(delivery, at(9)).expect("publish");
+    let (tools, instructions) = (BTreeMap::new(), BTreeMap::new());
+    fixture.snapshot = RunSnapshot::build(
+      delivery,
+      &version,
+      PublishedVersions {
+        profiles: &profiles,
+        tools: &tools,
+        instructions: &instructions,
+        skills: &BTreeMap::new(),
+      },
+    )
+    .expect("snapshot");
+    fixture
+  }
+
   fn with_gate(approval_gate: bool, key: &str) -> Self {
     let repo = tempfile::tempdir().expect("temporary directory");
     fs::create_dir(repo.path().join(".git")).expect("create .git");
@@ -256,13 +313,25 @@ impl Fixture {
 
   /// A run of `task`, created at `now` and not started.
   pub fn pending_run(&mut self, task: TaskId, now: Timestamp) -> Run {
+    self.pending_run_into(task, (&"a".repeat(40), None), now)
+  }
+
+  /// A run of `task` started at `now` at the commit `base` of the checkout's branch `base_branch`, which
+  /// merging it brings its work into.
+  pub fn started_run_from(&mut self, task: TaskId, (base, base_branch): (&str, &str), now: Timestamp) -> Run {
+    let into = BranchName::new(base_branch).expect("branch");
+    let run = self.pending_run_into(task, (base, Some(into)), now);
+    self.start(run, now)
+  }
+
+  fn pending_run_into(&mut self, task: TaskId, (base, base_branch): (&str, Option<BranchName>), now: Timestamp) -> Run {
     self.runs += 1;
     let new = NewRun {
       task,
       snapshot: self.snapshot.clone(),
       branch: BranchName::new(&format!("orchester/orc-run-{}", self.runs)).expect("branch"),
-      base: Revision::new(&"a".repeat(40)).expect("revision"),
-      base_branch: None,
+      base: Revision::new(base).expect("revision"),
+      base_branch,
       budget: Some(budget(1_000_000)),
       max_duration: Some(Duration::from_secs(1_800)),
     };
@@ -271,7 +340,11 @@ impl Fixture {
 
   /// A run of `task`, started at `now`: running its one step.
   pub fn started_run(&mut self, task: TaskId, now: Timestamp) -> Run {
-    let mut run = self.pending_run(task, now);
+    let run = self.pending_run(task, now);
+    self.start(run, now)
+  }
+
+  fn start(&mut self, mut run: Run, now: Timestamp) -> Run {
     let events = run.start(now).expect("start");
     self.record(&run, &events);
     let execution = run.current_attempt().expect("attempt").executions()[0].id();

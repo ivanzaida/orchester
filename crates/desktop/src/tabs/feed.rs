@@ -331,13 +331,19 @@ fn status(ctx: &mut Ctx, runners: &Runners, root: &Path) -> Option<RunnerStatus>
 /// last reading failed. A failed reading keeps the tasks last read on screen, so no page or form
 /// showing them is replaced; only a failed first reading leaves no tasks to show.
 fn tasks(ctx: &mut Ctx, deps: (PathBuf, u64, u64)) -> (TasksState, Option<Message>) {
-  let load = ctx.future(deps, |(repo_root, ..)| async move {
-    background::run(move || ProjectTasks::load(&repo_root))
-      .await?
-      .map_err(|error| {
-        tracing::error!(%error, "cannot read the project's tasks");
-        messages::store_error(&error)
-      })
+  let programs = ctx
+    .use_context::<crate::programs::Programs>()
+    .expect("the root provides Programs before mounting screens");
+  let load = ctx.future(deps, move |(repo_root, ..)| {
+    let programs = programs.clone();
+    async move {
+      background::run(move || ProjectTasks::load(&repo_root, &programs))
+        .await?
+        .map_err(|error| {
+          tracing::error!(%error, "cannot read the project's tasks");
+          messages::store_error(&error)
+        })
+    }
   });
   let state = load.state().get();
   match (state.data, state.error) {

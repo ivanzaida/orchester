@@ -271,7 +271,7 @@ impl ToolEditor {
     ctx.mount_keyed::<WidenConfirm>(
       "tool-confirm",
       WidenProps {
-        id: "tool-confirm",
+        id: "tool-confirm".into(),
         card: true,
         automation: crate::mcp::input_gate::Guarded::PermissionWidening,
         title: ctx.t("tools.confirmTitle"),

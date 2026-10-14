@@ -25,7 +25,12 @@ const START_WITHOUT_FOCUS_VARIABLE: &str = "ORCHESTER_APP_MCP_START_WITHOUT_FOCU
 
 fn main() {
   let log = app_log::install();
-  let position = WindowPosition::from_environment();
+  // Refused before anything opens in a QA copy or a debug build: a run that asked for a place must not get
+  // a window elsewhere. The installed app ignores the variable (`WindowPosition::requested`).
+  let position = WindowPosition::from_environment().unwrap_or_else(|error| {
+    tracing::error!(%error, "the requested window position is refused; not starting");
+    std::process::exit(2);
+  });
 
   let runtime = Runtime::new().expect("the OS provides threads for the background runtime");
   // Started before the window exists: the data folder's lock, the session, the runners' client and

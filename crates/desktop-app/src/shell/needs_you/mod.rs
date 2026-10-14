@@ -1,11 +1,16 @@
 //! What waits for the person in the projects the tabs show, and the title bar's *N need you* pill
 //! (`Needs you` `O3eKK`, its states in `n6Nbi` of `eBhFg`). One thing waiting is what the project's
-//! *Needs you* counts: a request for a decision, a question, a plan, a run that waits after its retries
-//! (`ProjectTasks::needs_you`). The pill counts every project the tabs show and its tooltip splits the
-//! count by project; with nothing waiting it stays in place, quiet, at 0. The panel it opens in the design
-//! (layer `Needs you` `eBhFg`) comes later: until then it opens the Overview's *Needs you* list of the
-//! active tab's project, or of the first project that has something waiting when the active tab shows
-//! none.
+//! *Needs you* counts (`ProjectTasks::waiting`): a request for a decision, a question, a plan, a run that
+//! waits after its retries, a run recorded interrupted. The pill counts every project the tabs show and its
+//! tooltip splits the count by project; with nothing waiting it stays in place, quiet, at 0. A press opens the
+//! Needs you panel under it ([`panel`]), and a press again, Esc or a press outside closes it; while it is
+//! open the pill wears a `warning` stroke.
+
+mod in_place;
+mod item;
+mod panel;
+mod pinned;
+mod words;
 
 use lurq::{
   app::{
@@ -13,28 +18,32 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Row, Text},
+  components::{Placement, Popup, Row, Text},
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::{CursorIcon, Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{id::ProjectId, name::Name};
 use orchester_workspace::{runner::state::RunnerState, tasks::data::ProjectTasks};
 
+use self::panel::{NeedsYouPanel, PanelProps};
 use crate::{
   chrome::PillRef,
   navigation::{Navigation, tabs::TabSet},
   project::{Projects, TasksState},
-  routes::{OverviewTab, ProjectPage, Route},
   theme::{ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon},
-    pressable::pressable,
+    pressable::{in_title_bar, pressable},
     tooltip::Tooltip,
   },
 };
 
 /// `Needs you` (`O3eKK`) height.
 const PILL_HEIGHT: f32 = 26.0;
+/// From the pill's bottom to the panel's top: the pill ends 31 into the title bar, the panel starts at 40
+/// (`NSkXI` and `BrP6i` in `VnLOT`).
+const PANEL_GAP: f32 = 9.0;
 
 /// How many things wait for the person in one project the tabs show.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -110,33 +119,69 @@ pub fn count_words(ctx: &Ctx, count: usize) -> String {
   ctx.t_args(key, [("count", count.to_string())]).to_string()
 }
 
-/// The title bar's pill. Nothing while no project the tabs show has its tasks read.
-pub struct NeedsYouPill;
+/// The title bar's pill and the panel it opens. Nothing while no project the tabs show has its tasks read.
+pub struct NeedsYouPill {
+  open: Signal<bool>,
+  /// The pill itself, which the panel opens under.
+  anchor: ElementRef,
+}
 
 impl Component for NeedsYouPill {
   type Props = PillRef;
 
-  fn create(_ctx: &mut Ctx) -> Self {
-    Self
+  fn create(ctx: &mut Ctx) -> Self {
+    Self {
+      open: ctx.signal(false),
+      anchor: ElementRef::new(),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let navigation = Navigation::of(ctx);
     let tabs = navigation.tabs();
     let all = waiting(&Projects::of(ctx), &tabs);
-    let Some(target) = target(&all, tabs.active().route().project()) else {
+    if all.is_empty() {
       return Element::new();
-    };
+    }
     let total: usize = all.iter().map(|waiting| waiting.count).sum();
-    let split = per_project(ctx, &all);
+    let open = self.open.get();
+    let pill = self.pill(ctx, (&all, total), open);
+    // Mounted only while open, so what the panel expanded and kept goes when it closes.
+    let panel = if open {
+      ctx.mount_keyed::<NeedsYouPanel>("needs-you-panel", PanelProps(self.open.clone()))
+    } else {
+      Element::new()
+    };
+    let popup = Popup::new(self.anchor.clone(), panel)
+      .open(self.open.clone())
+      .placement(Placement::BottomEnd)
+      .offset(0.0, PANEL_GAP);
+    // `Trailing` (`AqLkT`): 8 between the pill and the window controls.
+    Row::new()
+      .ref_element(ctx.props::<PillRef>().0.clone())
+      .padding(Padding::new().right(SpacingSize::Sm))
+      .align_items(Alignment::Center)
+      .child(pill)
+      .child(popup)
+      .into()
+  }
+}
+
+impl NeedsYouPill {
+  /// The pill: amber while anything waits, a quiet outline at 0 (`UThn1`), a `warning` stroke while the panel
+  /// is open (`z2PFA6`); its tooltip splits the count by project.
+  fn pill(&self, ctx: &mut Ctx, (all, total): (&[Waiting], usize), open: bool) -> Element {
     let color = if total > 0 {
       PaletteColor::Warning
     } else {
       PaletteColor::TextMuted
     };
-    let pill = pressable(move || navigation.go(target.clone()))
+    let toggle = self.open.clone();
+    let pill = in_title_bar(pressable(move || toggle.update(|open| *open = !*open)))
       .id("needs-you-pill")
+      .ref_element(self.anchor.clone())
       .describe("count", total.to_string())
+      .describe("open", open.to_string())
       .describe("a11y_name", count_words(ctx, total))
       .cursor(CursorIcon::Pointer)
       .height(Dimension::Px(PILL_HEIGHT))
@@ -151,20 +196,17 @@ impl Component for NeedsYouPill {
           .color(color)
           .nowrap(),
       );
-    // Nothing waiting: no amber, a quiet outline (`UThn1`).
     let pill = if total > 0 {
       pill.background(PaletteColor::WarningMuted)
     } else {
-      pill.border_inside(BorderSize::Sm, PaletteColor::Border)
+      pill
     };
-    let pill = Tooltip::new("needs-you-pill", split).wrap(ctx, pill);
-    // `Trailing` (`AqLkT`): 8 between the pill and the window controls.
-    Row::new()
-      .ref_element(ctx.props::<PillRef>().0.clone())
-      .padding(Padding::new().right(SpacingSize::Sm))
-      .align_items(Alignment::Center)
-      .child(pill)
-      .into()
+    let pill = match (open, total > 0) {
+      (true, _) => pill.border_inside(BorderSize::Sm, PaletteColor::Warning),
+      (false, false) => pill.border_inside(BorderSize::Sm, PaletteColor::Border),
+      (false, true) => pill,
+    };
+    Tooltip::new("needs-you-pill", per_project(ctx, all)).wrap(ctx, pill)
   }
 }
 
@@ -186,18 +228,4 @@ fn per_project(ctx: &Ctx, all: &[Waiting]) -> String {
     })
     .collect::<Vec<_>>()
     .join(&separator)
-}
-
-/// Where the pill leads: the Overview's *Needs you* of the active tab's project when it is among `all`,
-/// else of the first project with something waiting, else of the first project.
-fn target(all: &[Waiting], active: Option<ProjectId>) -> Option<Route> {
-  let chosen = all
-    .iter()
-    .find(|waiting| Some(waiting.project) == active)
-    .or_else(|| all.iter().find(|waiting| waiting.count > 0))
-    .or_else(|| all.first())?;
-  Some(Route::Project(
-    chosen.project,
-    ProjectPage::Overview(OverviewTab::NeedsYou),
-  ))
 }

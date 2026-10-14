@@ -21,7 +21,7 @@ use crate::{
   ui::{
     icon::{Icon, icon},
     menu::{MenuItem, menu_panel, separator},
-    pressable::pressable,
+    pressable::{in_title_bar, pressable},
   },
 };
 
@@ -75,7 +75,7 @@ impl Component for AppMenu {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let open = self.open.clone();
-    let mut button = pressable(move || open.update(|open| *open = !*open))
+    let mut button = in_title_bar(pressable(move || open.update(|open| *open = !*open)))
       .id("app-menu")
       .describe("a11y_name", ctx.t("shell.menu.label"))
       .describe("state", if self.open.get() { "open" } else { "closed" })

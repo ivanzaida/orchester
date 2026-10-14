@@ -18,7 +18,7 @@ mod support;
 mod theme;
 
 use kontur::{SeedRequest, Seeded, scenarios};
-use lurq::{app::events::MouseButton, node::element::ElementRef};
+use lurq::{app::events::MouseButton, core::ElementRect, node::element::ElementRef};
 use orchester_app::{
   routes::{ProjectPage, Route, TaskView},
   ui::icon::Icon,
@@ -114,17 +114,30 @@ fn glyphs(window: &mut Window, id: &str) -> Vec<String> {
 
 /// Clicks the middle of `id`.
 fn click(window: &mut Window, id: &str) {
-  let bounds = window
-    .tree
-    .get_element_by_id_mut(id)
-    .and_then(|element| element.bounds())
-    .unwrap_or_else(|| panic!("{id} is laid out"));
+  let bounds = laid_out(window, id);
   let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
   window.tree.mouse_move(x, y);
   window.tree.mouse_down(x, y, MouseButton::Left);
   window.tree.mouse_up(x, y, MouseButton::Left);
   window.pass();
   window.pass();
+}
+
+/// Where `id` is, once a layout pass placed it. The chat's list builds a row again after the pass that measured
+/// it, so a part can stand in the tree a frame before any layout holds it; a person's press comes after that frame.
+fn laid_out(window: &mut Window, id: &str) -> ElementRect {
+  window.until(&format!("{id} laid out"), |window| {
+    window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .is_some()
+  });
+  window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"))
 }
 
 /// The id of the card of plan version `version`: `cards-plan-<execution>-<version>`, not one of its parts.

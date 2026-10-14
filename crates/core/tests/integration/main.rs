@@ -5,5 +5,6 @@
 mod cleanup;
 mod forgotten;
 mod merge;
+mod merged;
 mod recorded;
 mod support;

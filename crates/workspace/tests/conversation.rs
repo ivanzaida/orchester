@@ -17,6 +17,7 @@ use orchester_core::{
   store::{ActivityStore, ConversationStore},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_workspace::tasks::{
   conversation::{
     Author, Conversation, EntryState, PanelState, Queue,
@@ -339,7 +340,7 @@ fn conversation_a_question_waits_for_the_answer_and_needs_you() {
   assert_eq!(open.execution, Some(execution));
   assert_eq!(conversation.next_agent.as_deref(), Some("Builder"));
 
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   assert_eq!(OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases), 1);
   let rows = OverviewTab::NeedsYou.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 3);
   assert_eq!(

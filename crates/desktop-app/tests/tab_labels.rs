@@ -1,6 +1,6 @@
 //! Tab labels and what needs the person: a tab names its project and page, and a tab of a project where
 //! something waits ends in an amber hand; the title bar's pill counts what waits in every project the tabs
-//! show, 0 included. The project is the QA seed's `tasks` scenario (4 need you). Needs `git`.
+//! show, 0 included. The project is the QA seed's `tasks` scenario (6 need you). Needs `git`.
 
 #[path = "../examples/seed/kontur/mod.rs"]
 #[allow(
@@ -55,10 +55,10 @@ fn tab_labels_mark_a_project_that_needs_you() {
   assert_eq!(window.texts("tab-1"), Some(vec!["Kontur · Overview".to_owned()]));
   assert_eq!(
     tooltip(&mut window, "tab-1-attention"),
-    "Kontur · 4 need you",
-    "Kontur has 4 things waiting"
+    "Kontur · 6 need you",
+    "Kontur has 6 things waiting: an approval, a question, a plan, a decision, a limit stop and work to merge"
   );
-  assert_eq!(window.texts("needs-you-pill"), Some(vec!["4 need you".to_owned()]));
+  assert_eq!(window.texts("needs-you-pill"), Some(vec!["6 need you".to_owned()]));
   let navigation = window.navigation();
   navigation.open_tab();
   navigation.go(Route::Settings);
@@ -67,13 +67,13 @@ fn tab_labels_mark_a_project_that_needs_you() {
   assert!(window.texts("tab-2-attention").is_none(), "no project, no mark");
   assert_eq!(
     window.texts("needs-you-pill"),
-    Some(vec!["4 need you".to_owned()]),
+    Some(vec!["6 need you".to_owned()]),
     "the pill counts every project the tabs show"
   );
 }
 
 #[test]
-fn tab_labels_pill_stays_at_zero_and_opens_the_overviews_needs_you() {
+fn tab_labels_pill_stays_at_zero_and_opens_the_needs_you_panel() {
   let mut window = Window::open();
   let navigation = window.navigation();
   assert!(
@@ -104,6 +104,7 @@ fn tab_labels_pill_stays_at_zero_and_opens_the_overviews_needs_you() {
   );
   navigation.open_tab();
   window.pass();
+  let before = navigation.route_now();
   let bounds = window
     .tree
     .get_element_by_id_mut("needs-you-pill")
@@ -113,12 +114,13 @@ fn tab_labels_pill_stays_at_zero_and_opens_the_overviews_needs_you() {
   window.tree.mouse_move(x, y);
   window.tree.mouse_down(x, y, MouseButton::Left);
   window.tree.mouse_up(x, y, MouseButton::Left);
-  window.pass();
+  window.until("the panel", |window| window.texts("needs-you-panel").is_some());
   assert_eq!(
-    navigation.route_now(),
-    Route::Project(project_id(), ProjectPage::Overview(OverviewTab::NeedsYou)),
-    "from a tab without a project, the pill opens the first project's Needs you"
+    window.texts("needs-you-empty-title"),
+    Some(vec!["Nothing needs you".to_owned()]),
+    "from a tab without a project, the pill opens the panel, empty at 0"
   );
+  assert_eq!(navigation.route_now(), before, "opening the panel goes nowhere");
 }
 
 #[test]
@@ -132,8 +134,8 @@ fn tab_labels_pill_sums_every_open_project_and_splits_it_in_its_tooltip() {
     window.texts("tab-2").is_some_and(|texts| texts == ["Atlas · Overview"])
       && window.texts("tab-2-attention").is_some()
   });
-  assert_eq!(window.texts("needs-you-pill"), Some(vec!["4 need you".to_owned()]));
-  assert_eq!(tooltip(&mut window, "needs-you-pill"), "Kontur 4 · Atlas 0");
+  assert_eq!(window.texts("needs-you-pill"), Some(vec!["6 need you".to_owned()]));
+  assert_eq!(tooltip(&mut window, "needs-you-pill"), "Kontur 6 · Atlas 0");
 }
 
 /// The words of the tooltip of the element `id`, once the pointer rested on it.

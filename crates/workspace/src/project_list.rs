@@ -6,13 +6,14 @@
 
 use std::sync::atomic::Ordering;
 
-use orchester_core::run::RunCounts;
+use orchester_core::run::TaskPhase;
 use orchester_store::{RegisteredProject, StoreError};
 
 use crate::{
   background,
   messages::{self, Message},
   runner::{ForgetRefusal, Runners, state::RunnerState},
+  tasks::data::ProjectTasks,
   workspace::{ListedData, ProjectData, ProjectEntry, Workspace},
 };
 
@@ -80,6 +81,37 @@ impl RunnerShown {
   }
 }
 
+/// What All projects says about a project's runs without opening it: how many have an agent at work, and how
+/// many things wait for the person, as every *Needs you* counts them ([`ProjectTasks::needs_you`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RunCounts {
+  /// Runs with an agent at work.
+  pub active: usize,
+  pub needs_you: usize,
+}
+
+impl RunCounts {
+  /// Counts `tasks` as they stand with the runner online or not: without it no agent works, so a run recorded
+  /// as running is interrupted rather than active ([`ProjectTasks::without_runner`]).
+  pub fn of(tasks: &ProjectTasks, runner_online: bool) -> Self {
+    let offline;
+    let tasks = if runner_online {
+      tasks
+    } else {
+      offline = tasks.without_runner();
+      &offline
+    };
+    Self {
+      active: tasks
+        .phases
+        .values()
+        .filter(|latest| latest.phase() == Some(TaskPhase::Running))
+        .count(),
+      needs_you: tasks.needs_you(),
+    }
+  }
+}
+
 /// A row of All projects: the project, where it stands, its runs and the agents at work in it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListedProject {
@@ -102,9 +134,9 @@ impl ListedProject {
       _ if entry.folder_missing => (Standing::FolderMissing, None),
       Some(ProjectData::Unreadable(reason)) => (Standing::Unreadable(reason.clone()), None),
       // Active runs count only while the runner is online: without it no agent works.
-      Some(ProjectData::Readable(Some(phases))) => (
+      Some(ProjectData::Readable(Some(tasks))) => (
         Standing::Opens(shown),
-        Some(RunCounts::of(phases.iter().copied(), shown == RunnerShown::Online)),
+        Some(RunCounts::of(tasks, shown == RunnerShown::Online)),
       ),
       Some(ProjectData::Readable(None)) | None => (Standing::Opens(shown), None),
     };

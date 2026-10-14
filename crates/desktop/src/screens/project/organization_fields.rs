@@ -244,10 +244,16 @@ impl Component for DependencyFields {
     let shown = ctx
       .use_context::<super::pages::Shown>()
       .expect("shell provides project data");
-    let load = ctx.future((props.root.clone(), shown.revision), |(root, _)| async move {
-      crate::background::run(move || crate::tasks::data::ProjectTasks::load(&root))
-        .await?
-        .map_err(|error| crate::messages::store_error(&error))
+    let programs = ctx
+      .use_context::<crate::programs::Programs>()
+      .expect("the root provides Programs before mounting screens");
+    let load = ctx.future((props.root.clone(), shown.revision), move |(root, _)| {
+      let programs = programs.clone();
+      async move {
+        crate::background::run(move || crate::tasks::data::ProjectTasks::load(&root, &programs))
+          .await?
+          .map_err(|error| crate::messages::store_error(&error))
+      }
     });
     let state = load.state().get();
     let mut column = Column::new()

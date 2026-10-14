@@ -43,6 +43,7 @@ pub struct EmptyState {
   wide: bool,
   compact: bool,
   secrets: bool,
+  measure: Option<f32>,
   unframed: bool,
   note: Option<Arc<str>>,
 }
@@ -64,6 +65,7 @@ impl EmptyState {
       wide: false,
       compact: false,
       secrets: false,
+      measure: None,
       unframed: false,
       note: None,
     }
@@ -87,6 +89,12 @@ impl EmptyState {
     self
   }
 
+  /// The widest the explanation runs, where a design sets its own (520 in the Overview's `F7LdL`).
+  pub fn measure(mut self, width: f32) -> Self {
+    self.measure = Some(width);
+    self
+  }
+
   /// The bare Instructions empty state sG2xi, with its repository findings below.
   pub fn unframed(mut self) -> Self {
     self.unframed = true;
@@ -97,6 +105,19 @@ impl EmptyState {
   pub fn note(mut self, note: impl Into<Arc<str>>) -> Self {
     self.note = Some(note.into());
     self
+  }
+
+  /// The widest the explanation runs: all of the card when wide, else the design's own measure.
+  fn explanation_width(&self) -> Dimension {
+    if self.wide {
+      Dimension::Auto
+    } else if let Some(measure) = self.measure {
+      Dimension::Px(measure)
+    } else if self.secrets {
+      Dimension::Px(SECRETS_EXPLANATION_WIDTH)
+    } else {
+      Dimension::Px(EXPLANATION_WIDTH)
+    }
   }
 
   fn glyph_tile(&self) -> Row {
@@ -164,13 +185,7 @@ impl From<EmptyState> for Element {
           } else {
             ExtraTypography::Lead.role()
           })
-          .max_width(if empty.wide {
-            Dimension::Auto
-          } else if empty.secrets {
-            Dimension::Px(SECRETS_EXPLANATION_WIDTH)
-          } else {
-            Dimension::Px(EXPLANATION_WIDTH)
-          }),
+          .max_width(empty.explanation_width()),
       );
     let text = text.with_children(empty.note.map(|note| {
       Text::new(&note)

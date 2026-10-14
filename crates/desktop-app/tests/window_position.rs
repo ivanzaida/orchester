@@ -1,6 +1,6 @@
 //! The place QA asks the window to open at (`ORCHESTER_APP_WINDOW_POSITION`, set by `tools/qa-app.ps1
-//! -WindowX -WindowY`): a signed X,Y pair, not taken when it is incomplete or not numbers, nothing when it
-//! is not set, and never in the installed app.
+//! -WindowX -WindowY`): a signed X,Y pair, refused when it is incomplete or not numbers, nothing when it is
+//! not set; the installed app never takes it and never stops over it.
 
 use std::ffi::OsStr;
 
@@ -68,22 +68,23 @@ fn window_position_refuses_a_value_that_is_not_text() {
 }
 
 #[test]
-fn window_position_is_qa_only_and_a_bad_value_never_stops_the_start() {
+fn window_position_is_qa_only_and_never_stops_the_installed_app() {
   use orchester_workspace::build::Build;
-  assert_eq!(
-    WindowPosition::requested(Build::Installed, Some(OsStr::new("100,40"))),
-    None,
-    "the installed app leaves the place to the system"
-  );
-  assert_eq!(
-    WindowPosition::requested(Build::Other, Some(OsStr::new("100,40"))),
-    Some(WindowPosition { x: 100, y: 40 })
-  );
-  for value in ["", "x,40", "100"] {
+  for value in ["100,40", "", "x,40", "100"] {
     assert_eq!(
-      WindowPosition::requested(Build::Other, Some(OsStr::new(value))),
-      None,
-      "`{value}` is left out"
+      WindowPosition::requested(Build::Installed, Some(OsStr::new(value))),
+      Ok(None),
+      "the installed app leaves the place to the system for `{value}`"
     );
   }
+  assert_eq!(
+    WindowPosition::requested(Build::Other, Some(OsStr::new("100,40"))),
+    Ok(Some(WindowPosition { x: 100, y: 40 }))
+  );
+  assert_eq!(WindowPosition::requested(Build::Other, None), Ok(None));
+  assert_eq!(
+    WindowPosition::requested(Build::Other, Some(OsStr::new("left"))),
+    Err(PositionError::NotAPair("left".to_owned())),
+    "a QA copy is held to the place it asked for"
+  );
 }

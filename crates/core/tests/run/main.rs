@@ -5,7 +5,6 @@ mod again;
 mod agent;
 mod code_index;
 mod conversation;
-mod counts;
 mod failed_recovery;
 mod fixture;
 mod lifecycle;

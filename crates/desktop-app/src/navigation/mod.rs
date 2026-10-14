@@ -5,12 +5,17 @@
 
 pub mod guard;
 pub mod input;
+pub mod pointed;
 pub mod shortcuts;
 pub mod tabs;
+pub mod waiting;
 
 use lurq::{app::ctx::Ctx, core::Signal, router::RouterHandle};
 
-use self::tabs::{TabId, TabSet};
+use self::{
+  pointed::Pointed,
+  tabs::{TabId, TabSet},
+};
 use crate::routes::Route;
 
 /// The window's tabs and its router, shared by the shell, the shortcuts and the app's MCP tools. All of
@@ -20,6 +25,8 @@ pub struct Navigation {
   tabs: Signal<TabSet>,
   router: RouterHandle,
   guard: std::sync::Arc<parking_lot::Mutex<std::sync::Weak<guard::PendingLeave>>>,
+  /// The card the last navigation points at, until that card takes it.
+  pointed: Signal<Option<Pointed>>,
 }
 
 impl Navigation {
@@ -29,6 +36,7 @@ impl Navigation {
       tabs,
       router,
       guard: Default::default(),
+      pointed: Signal::new(None),
     };
     navigation.show();
     navigation
@@ -104,6 +112,25 @@ impl Navigation {
     self.change(|tabs| tabs.close(tabs.active().id()));
   }
 
+  /// Goes to `route` like [`go`](Self::go), pointing at `card` on the page it opens; also when the active
+  /// tab is there already. A departure an editor holds points at nothing.
+  pub fn go_to_card(&self, route: &Route, card: Pointed) {
+    self.go(route.clone());
+    if self.route_now() == *route {
+      self.pointed.set(Some(card));
+    }
+  }
+
+  /// Takes the pointer when it points at `card`: `true` once, for the card's first render after the
+  /// navigation. Reading it in a render re-renders it when a navigation points somewhere.
+  pub fn take_pointed(&self, card: &Pointed) -> bool {
+    if self.pointed.get().as_ref() != Some(card) {
+      return false;
+    }
+    self.pointed.set(None);
+    true
+  }
+
   /// Holds departures while a mounted editor has work it must not lose.
   pub fn guard(&self, holds_edits: impl Fn() -> bool + Send + Sync + 'static) -> guard::LeaveGuard {
     let guard = guard::LeaveGuard::new(holds_edits);
@@ -126,6 +153,9 @@ impl Navigation {
   }
 
   fn apply(&self, tabs: TabSet) {
+    if self.pointed.with_untracked(Option::is_some) {
+      self.pointed.set(None);
+    }
     self.tabs.set(tabs);
     self.show();
   }

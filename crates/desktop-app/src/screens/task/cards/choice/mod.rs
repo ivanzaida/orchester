@@ -38,7 +38,7 @@ use parking_lot::Mutex;
 use super::{
   Place,
   decisions::{Decisions, Given, Refused, Stage, refusal},
-  frame::{Stands, frame, head, held, note},
+  frame::{Stands, head, held, note, waiting_frame},
 };
 use crate::{
   theme::{CardsText, ExtraSpacing, IconSize},
@@ -96,15 +96,18 @@ impl Component for ChoiceView {
     let draft = decisions.draft((place.run(), &place.key), &questions);
     let own = self.own_fields(ctx, (&place, &questions), &draft);
     let stands = Stands::waiting(ctx.t("cards.state.waitingAnswer")).into_element(&id);
-    let mut body = frame(id.clone(), true)
-      .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
-      .spacing(ExtraSpacing::Loose.role())
-      .child(head(
+    let title = title(ctx, &card);
+    let padding = Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md);
+    let mut body = waiting_frame(&place, id.clone(), padding, || {
+      head(
         &id,
         (Icon::MessageCircleQuestion, IconSize::Md, PaletteColor::Warning),
-        (&title(ctx, &card), CardsText::Title.role()),
+        (&title, CardsText::Title.role()),
         stands,
-      ));
+      )
+      .into()
+    })
+    .spacing(ExtraSpacing::Loose.role());
     for index in 0..questions.len() {
       let shown = question::Shown {
         id: &id,

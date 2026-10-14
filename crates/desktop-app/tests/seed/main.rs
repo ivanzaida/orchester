@@ -25,6 +25,7 @@ use orchester_core::{
     git::{RevisionChanges, WorktreeRead, read_revision_diff, read_worktree_changes},
   },
   integration::WORKTREES_DIR,
+  memory::{MemoryAuthor, MemoryFilter, MemoryStatus, MemoryStore, ScopeFilter},
   resource::ResourceKind,
   run::{Run, TaskPhase},
   store::{
@@ -169,6 +170,7 @@ fn seed_names_every_scenario_once() {
       "agents-unreadable",
       "empty",
       "tasks",
+      "tasks-memory",
       "task-states",
       "conversation",
       "changes",
@@ -490,4 +492,33 @@ fn seed_tasks_unreadable_opens_but_its_task_list_cannot_be_read() {
     "{:?}",
     db.tasks().err()
   );
+}
+
+#[test]
+fn seed_tasks_memory_adds_two_records_for_approval_from_kon_12_and_kon_16() {
+  let seed = Seed::of("tasks-memory");
+  let db = seed.db();
+  assert_eq!(by_key(&db).len(), 24, "the tasks scenario's tasks");
+  let records = db
+    .memories(&MemoryFilter {
+      scope: ScopeFilter::Project,
+      status: None,
+      pinned_only: false,
+    })
+    .expect("the project's memory");
+  let runs: Vec<_> = records
+    .iter()
+    .map(|record| match record.author() {
+      MemoryAuthor::Agent(provenance) if record.status() == MemoryStatus::Proposed => provenance.run,
+      author => panic!(
+        "an agent's record waiting for approval: {author:?} {:?}",
+        record.status()
+      ),
+    })
+    .collect();
+  let latest_run = |key| latest(&db, key).expect("a run").expect("readable").id();
+  assert_eq!(runs.len(), 2, "{runs:?}");
+  for key in ["KON-12", "KON-16"] {
+    assert!(runs.contains(&latest_run(key)), "a record from {key}'s run: {runs:?}");
+  }
 }
