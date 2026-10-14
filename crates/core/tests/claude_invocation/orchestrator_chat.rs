@@ -3,7 +3,10 @@
 
 use std::path::{Path, PathBuf};
 
-use orchester_core::connection::invocation::{ClaudeChat, ClaudeSession};
+use orchester_core::{
+  connection::invocation::{ClaudeChat, ClaudeSession},
+  orchestrator::MAX_TURNS,
+};
 
 use super::SESSION;
 
@@ -51,6 +54,11 @@ fn orchestrator_chat_reads_only_in_the_project_folder_and_never_in_secret_folder
     ]
   );
   assert_eq!(after(&args, "--permission-mode"), ["default"]);
+  assert_eq!(
+    after(&args, "--max-turns"),
+    [MAX_TURNS.to_string().as_str()],
+    "one answer cannot run away"
+  );
 }
 
 #[test]

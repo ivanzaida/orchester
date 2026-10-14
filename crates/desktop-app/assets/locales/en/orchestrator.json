@@ -87,7 +87,9 @@
       "openConnections": "Open Connections",
       "earlier": "This answer failed: {{reason}}",
       "earlierNotSignedIn": "This answer failed: the Claude Code CLI wasn't signed in",
-      "earlierUnreachable": "This answer failed: the Orchestrator couldn't start"
+      "earlierUnreachable": "This answer failed: the Orchestrator couldn't start",
+      "timeLimit": "It ran longer than {{minutes}} minutes, the most one answer may take, and was ended. What it did until then stays; ask again in smaller parts.",
+      "earlierTimeLimit": "This answer was ended after {{minutes}} minutes"
     },
     "sendProblem": {
       "body": "Your draft is kept. Retry sends it once; it is never stored twice.",
@@ -214,6 +216,7 @@
       },
       "chooseConnectionFirst": "Choose a connection first.",
       "note": "A reply already under way finishes on what it started with; a change applies from the next reply.",
+      "limits": "Its tokens count toward {{project}}'s daily budget; it takes no agent slot. One answer ends after {{turns}} steps or {{minutes}} minutes.",
       "noConnection": {
         "title": "No connection in {{project}} can run the Orchestrator",
         "body": "It needs a Claude Code connection that answers and is signed in. Conversations stay readable; new messages can't be sent until one works.",

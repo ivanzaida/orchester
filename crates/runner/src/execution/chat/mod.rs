@@ -16,7 +16,7 @@ use parking_lot::Mutex;
 use tokio::{sync::oneshot, task::JoinHandle};
 
 use self::turn::Turn;
-use super::{Scheduler, failed};
+use super::{Scheduler, failed, idle::check_daily_budget};
 
 /// The turns under way, by conversation.
 #[derive(Default)]
@@ -64,6 +64,8 @@ impl Scheduler {
       .orchestrator_settings()
       .map_err(|error| failed("cannot read the Orchestrator's settings", &error))?
       .ok_or(Rejection::NoOrchestrator)?;
+    // The chat's tokens count toward the daily budget: a used one refuses a turn as it refuses a run.
+    check_daily_budget(&db)?;
     let chat = kept.chat.id();
     let mut running = self.inner.chats.running.lock();
     running.retain(|_, turn| !turn.task.is_finished());

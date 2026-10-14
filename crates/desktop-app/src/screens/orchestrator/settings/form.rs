@@ -15,7 +15,12 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{connection::ModelSupport, id::ConnectionId, resource::ModelId};
+use orchester_core::{
+  connection::ModelSupport,
+  id::ConnectionId,
+  orchestrator::{MAX_TURNS, TIME_LIMIT},
+  resource::ModelId,
+};
 use orchester_workspace::orchestrator::settings::{ConnectionChoice, OrchestratorSetup};
 
 use super::Choices;
@@ -85,7 +90,26 @@ pub(super) fn form(ctx: &mut Ctx, project: &ShownProject, setup: &OrchestratorSe
     .with_children((!usable).then(|| no_connection(ctx, project)))
     .child(section)
     .child(note)
+    .child(limits(ctx, project.open.project.name().as_str()))
     .into()
+}
+
+/// What the Orchestrator's answers count toward and how long one may run.
+fn limits(ctx: &Ctx, project: &str) -> Row {
+  let (turns, minutes) = (MAX_TURNS.to_string(), (TIME_LIMIT.as_secs() / 60).to_string());
+  Row::new()
+    .id("orchestrator-settings-limits")
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::Gauge, IconSize::Sm, PaletteColor::TextMuted))
+    .child(
+      Text::new(&ctx.t_args(
+        "orchestrator.settings.limits",
+        [("project", project), ("turns", turns.as_str()), ("minutes", minutes.as_str())],
+      ))
+      .variant(TypographyStyle::Description)
+      .color(PaletteColor::TextMuted),
+    )
 }
 
 fn connection_row(ctx: &mut Ctx, connections: &[ConnectionChoice], choices: &Choices, usable: bool) -> Element {

@@ -4,7 +4,7 @@
 //!  --model <model> [--effort <e>]
 //!  --strict-mcp-config --setting-sources "" --disable-slash-commands --system-prompt-file <file>
 //!  --mcp-config <file> --tools Read,Glob,Grep --allowedTools mcp__orchester
-//!  --disallowedTools Read(//<denied folder>/**)… --permission-mode default
+//!  --disallowedTools Read(//<denied folder>/**)… --permission-mode default --max-turns 30
 //!  (--session-id <new uuid> | --resume <session>)`
 //!
 //! in the project folder, with the person's message as the one stream-json user message on standard input, which is
@@ -30,7 +30,10 @@ use std::{
 
 use super::{ClaudeSession, InvocationError, agent_environment, input_line};
 use crate::{
-  command::Command, orchestrator::instructions::SERVER, permission::claude::read_rule, resource::CommandEnvironment,
+  command::Command,
+  orchestrator::{MAX_TURNS, instructions::SERVER},
+  permission::claude::read_rule,
+  resource::CommandEnvironment,
 };
 
 /// The built-in tools the Orchestrator's agent is offered: reading and searching, nothing that changes or runs.
@@ -92,6 +95,7 @@ impl ClaudeChat<'_> {
       args.extend(denied);
     }
     args.extend(["--permission-mode".to_owned(), "default".to_owned()]);
+    args.extend(["--max-turns".to_owned(), MAX_TURNS.to_string()]);
     match self.session {
       ClaudeSession::New(id) => args.extend(["--session-id".to_owned(), id.to_string()]),
       ClaudeSession::Resume(session) => args.extend(["--resume".to_owned(), session.to_owned()]),

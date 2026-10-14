@@ -7,7 +7,8 @@ use orchester_core::{
   conversation::MessageBody,
   id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId},
   orchestrator::{
-    ActionOutcome, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, OrchestratorSettings, TurnFailure, TurnState,
+    ActionOutcome, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, OrchestratorSettings, TurnFailure,
+    TurnState,
   },
   resource::ModelId,
   time::Timestamp,
@@ -418,7 +419,9 @@ impl RawEntry {
       ("action", ..) => {
         EntryKind::Action(serde_json::from_str(&self.body).map_err(|error| corrupt("chat action", error))?)
       }
-      ("event", ..) => EntryKind::Event(serde_json::from_str(&self.body).map_err(|error| corrupt("chat event", error))?),
+      ("event", ..) => {
+        EntryKind::Event(serde_json::from_str(&self.body).map_err(|error| corrupt("chat event", error))?)
+      }
       (kind, ..) => return Err(corrupt("chat entry kind", kind)),
     };
     Ok(ChatEntry {

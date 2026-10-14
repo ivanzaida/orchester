@@ -12,9 +12,11 @@ use orchester_core::{
   conversation::MessageBody,
   id::{AgentAccountId, ChatId, ChatMessageId},
   orchestrator::{Chat, ChatEvent, EntryKind, OrchestratorSettings, SessionChange, TurnFailure, TurnState},
+  limits::ProjectLimits,
   resource::ModelId,
-  store::ConnectionStore,
+  store::{ActivityStore, ConnectionStore, SettingsStore},
   time::Timestamp,
+  tokens::{TokenBudget, TokensUsed},
 };
 use orchester_ipc::{AttachSession, ChatToken, ChatTools, Event, Rejection, SessionEnd};
 use orchester_runner::execution::Scheduler;
@@ -128,7 +130,7 @@ async fn chat_answers_read_only_with_only_its_tools_and_resumes_its_session() {
     "{started}"
   );
   assert!(
-    started.contains("/orchester-mcp/**) ") && started.contains(" --permission-mode default --session-id "),
+    started.contains("/orchester-mcp/**) ") && started.contains(" --permission-mode default --max-turns 30 --session-id "),
     "the runner's private files are never read: {started}"
   );
   assert!(
@@ -368,4 +370,43 @@ async fn a_turn_no_runner_answers_is_interrupted_while_another_runs_and_stop_end
   assert!(turn(thinking).is_thinking());
   scheduler.stop_chat(thinking_chat).expect("stopped");
   assert_eq!(ended(root, &mut events, thinking).await, TurnState::Stopped);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn chat_tokens_count_toward_the_daily_budget_and_a_used_one_refuses_a_turn() {
+  let project = claude();
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let chat = ChatId::generate();
+  let first = keep(root, chat, "What is running?");
+  scheduler.answer_in_chat(first, tools()).await.expect("the turn starts");
+  assert_eq!(ended(root, &mut events, first).await, TurnState::Answered);
+  let mut db = ProjectDb::open(root).expect("open");
+  let spent = db.chat_turn_tokens(first).expect("read");
+  assert!(spent > TokensUsed::ZERO, "the turn's usage is kept");
+  let today = db
+    .tokens_used_since(Timestamp::now().local_day_start())
+    .expect("read");
+  assert_eq!(today, spent, "and counted with today's usage");
+
+  // Today's budget is used: the next message is refused as a run would be, and nothing starts.
+  let tight = ProjectLimits::new(None, TokenBudget::new(1).expect("above zero"), None).expect("limits");
+  db.save_project_limits(&tight).expect("save limits");
+  let second = keep(root, chat, "And what waits?");
+  assert_eq!(
+    scheduler.answer_in_chat(second, tools()).await,
+    Err(Rejection::DailyBudgetUsed {
+      budget: tight.daily_budget()
+    })
+  );
+  assert!(
+    ProjectDb::open(root)
+      .expect("open")
+      .chat_turn(second)
+      .expect("read")
+      .expect("kept")
+      .turn
+      .is_thinking(),
+    "no turn ran: the desktop forgets the message"
+  );
 }

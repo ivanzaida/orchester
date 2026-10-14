@@ -116,6 +116,7 @@ fn not_sent(error: &RunRequestError) -> Message {
     RunRequestError::Request(RequestError::Lost) => Message::new("orchestrator.send.lost"),
     RunRequestError::Rejected(Rejection::ChatBusy) => Message::new("orchestrator.send.busy"),
     RunRequestError::Rejected(Rejection::NoOrchestrator) => Message::new("orchestrator.send.notReady"),
+    RunRequestError::Rejected(Rejection::DailyBudgetUsed { .. }) => Message::new("orchestrator.send.dailyBudgetUsed"),
     RunRequestError::Rejected(Rejection::ShuttingDown) => Message::new("orchestrator.send.shuttingDown"),
     RunRequestError::Rejected(_) => Message::new("orchestrator.send.failed"),
   }

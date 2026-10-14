@@ -18,7 +18,7 @@ use orchester_core::{
   conversation::MessageBody,
   id::{AgentAccountId, ChatMessageId, ProjectId},
   orchestrator::{
-    Chat, ChatEvent, OrchestratorSettings, TurnFailure, TurnState,
+    Chat, ChatEvent, OrchestratorSettings, TIME_LIMIT, TurnFailure, TurnState,
     instructions::{SERVER, system_prompt},
     runs_orchestrator,
   },
@@ -176,6 +176,8 @@ impl Turn {
     };
     let mut seen = Seen::default();
     let mut stream = ClaudeStream::chat();
+    let limit = tokio::time::sleep(TIME_LIMIT);
+    tokio::pin!(limit);
     loop {
       tokio::select! {
         event = process.next() => match event {
@@ -193,6 +195,10 @@ impl Turn {
             process.terminate();
           }
         }
+        () = &mut limit, if !seen.stopped && seen.timed_out.is_none() => {
+          seen.timed_out = Some(TurnFailure::TimeLimit { minutes: TIME_LIMIT.as_secs() / 60 });
+          process.terminate();
+        }
       }
     }
   }
@@ -208,7 +214,11 @@ impl Turn {
         self.record(|db| db.add_chat_reply(self.chat.id(), (&text, self.settings.model()), Timestamp::now()));
         self.notifier.send(Event::ChatChanged { chat: self.chat.id() });
       }
-      AgentEvent::TurnCompleted { .. } => seen.answered = true,
+      AgentEvent::TurnCompleted { usage } => {
+        seen.answered = true;
+        let turn = (self.chat.id(), self.message);
+        self.record(|db| db.record_chat_usage(turn, usage, Timestamp::now()));
+      }
       AgentEvent::NotSignedIn { .. } => seen.failure = Some(TurnFailure::NotSignedIn),
       AgentEvent::TurnFailed { message } | AgentEvent::Error { message } => {
         seen.failure.get_or_insert(TurnFailure::Failed { reason: message });
@@ -239,11 +249,16 @@ struct Seen {
   failure: Option<TurnFailure>,
   /// The last line of standard error.
   stderr: Option<String>,
+  /// The runner ended it at the time limit.
+  timed_out: Option<TurnFailure>,
 }
 
 impl Seen {
   /// How the turn ended, once its CLI exited as `exit` says.
   fn ended(self, exit: &ProcessExit) -> TurnState {
+    if let Some(failure) = self.timed_out {
+      return TurnState::Failed(failure);
+    }
     if self.stopped {
       return TurnState::Stopped;
     }

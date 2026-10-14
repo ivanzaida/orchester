@@ -1360,7 +1360,8 @@
       "busy": "The Orchestrator is still answering your last message.",
       "shuttingDown": "Not sent · the runner is stopping",
       "failed": "Not sent · the runner refused the message",
-      "toolsUnavailable": "Not sent · the Orchestrator's tools couldn't be served on this computer"
+      "toolsUnavailable": "Not sent · the Orchestrator's tools couldn't be served on this computer",
+      "dailyBudgetUsed": "Not sent · today's token budget is used. The Orchestrator's tokens count toward it: wait until tomorrow or raise it in Project settings › Limits."
     },
     "stop": {
       "failed": "The answer couldn't be stopped: the runner didn't answer."

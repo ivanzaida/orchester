@@ -1,5 +1,5 @@
 //! The project's Orchestrator chat (`orchester_core::orchestrator`): the connection and model it runs on, its
-//! conversations, and what each holds in the order it was kept.
+//! conversations, what each holds in the order it was kept, and what its turns spent.
 
 pub(super) const MIGRATION: &str = r"
 -- One row once a person chose what the Orchestrator runs on. The connection is not a reference: a connection
@@ -42,4 +42,18 @@ CREATE TABLE orchestrator_entries (
 ) STRICT;
 
 CREATE INDEX orchestrator_entries_by_chat ON orchestrator_entries (chat_id, seq);
+
+-- What a turn's CLI reported it spent, one row per report: counted toward the project's daily budget.
+CREATE TABLE orchestrator_usage (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  chat_id TEXT NOT NULL REFERENCES orchestrator_chats (id),
+  message_id TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  input_tokens INTEGER NOT NULL CHECK (input_tokens >= 0),
+  cached_input_tokens INTEGER NOT NULL CHECK (cached_input_tokens >= 0),
+  output_tokens INTEGER NOT NULL CHECK (output_tokens >= 0)
+) STRICT;
+
+CREATE INDEX orchestrator_usage_by_time ON orchestrator_usage (at);
+CREATE INDEX orchestrator_usage_by_message ON orchestrator_usage (message_id);
 ";

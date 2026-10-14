@@ -170,6 +170,8 @@ pub enum TurnFailure {
   Failed { reason: String },
   /// The runner ended before the turn did (the app or the runner was closed).
   Interrupted,
+  /// The answer ran longer than one answer may ([`super::TIME_LIMIT`], `minutes`), and the runner ended it.
+  TimeLimit { minutes: u64 },
 }
 
 /// An action the agent took through one of Orchester's tools, and how it went. The task it names, when it names one,

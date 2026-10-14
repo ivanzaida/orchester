@@ -378,6 +378,11 @@ fn failure_notice(ctx: &mut Ctx, row: &TurnRow, failure: &TurnFailure) -> Elemen
       ctx.t("orchestrator.interrupted"),
       Fix::None,
     ),
+    TurnFailure::TimeLimit { minutes } => (
+      ctx.t("orchestrator.failure.failed"),
+      ctx.t_args("orchestrator.failure.timeLimit", [("minutes", minutes.to_string())]),
+      Fix::None,
+    ),
   };
   let mut notice = Notice::new("orchestrator-failure", NoticeTone::Danger, title)
     .icon(Icon::CloudOff)
@@ -452,6 +457,10 @@ fn earlier(ctx: &Ctx, failure: &TurnFailure) -> Arc<str> {
   match failure {
     TurnFailure::NotSignedIn => ctx.t("orchestrator.failure.earlierNotSignedIn"),
     TurnFailure::Failed { reason } => ctx.t_args("orchestrator.failure.earlier", [("reason", reason.as_str())]),
+    TurnFailure::TimeLimit { minutes } => ctx.t_args(
+      "orchestrator.failure.earlierTimeLimit",
+      [("minutes", minutes.to_string())],
+    ),
     TurnFailure::ConnectionGone
     | TurnFailure::Account(_)
     | TurnFailure::CannotStart { .. }

@@ -4,6 +4,8 @@
 //! resumes; the person's messages, the agent's replies and the actions it took through the tools are kept with the
 //! conversation in the project's database.
 
+use std::time::Duration;
+
 pub mod chat;
 pub mod instructions;
 pub mod settings;
@@ -15,3 +17,10 @@ pub use self::{
   },
   settings::{OrchestratorSettings, runs_orchestrator},
 };
+
+/// The agentic turns one answer may take at most (`--max-turns`): reading, searching and calling tools, each a
+/// turn. No setting: an answer that needs more is asked again in parts.
+pub const MAX_TURNS: u32 = 30;
+
+/// How long one answer may run at most; the runner ends its CLI then. No setting either.
+pub const TIME_LIMIT: Duration = Duration::from_secs(10 * 60);

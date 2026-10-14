@@ -162,10 +162,7 @@ fn history_lists_the_latest_chat_first_and_stale_turns_end_as_interrupted() {
   assert_eq!(listed, [(older, 2), (newer, 1)]);
 
   // A runner answers the newer conversation's turn: only the older one's is cut short.
-  assert_eq!(
-    db.interrupt_chat_turns(&[second], None).expect("interrupted"),
-    [older]
-  );
+  assert_eq!(db.interrupt_chat_turns(&[second], None).expect("interrupted"), [older]);
   assert_eq!(
     db.chat_turn(first).expect("read").expect("kept").turn,
     TurnState::Failed(TurnFailure::Interrupted)
