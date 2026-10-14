@@ -6,8 +6,8 @@
 use orchester_core::{
   id::{RunId, StepExecutionId},
   run::{
-    Answerer, AttemptReason, Run, RunError, RunEventKind, RunStatus, StepFailure, StepOutcome, StepOutput, StepResult,
-    StepStatus, Stuck, StuckDecision, UnverifiedCheck,
+    Answerer, AttemptReason, PlanDecision, Run, RunError, RunEventKind, RunStatus, StepFailure, StepOutcome,
+    StepOutput, StepResult, StepStatus, Stuck, StuckDecision, UnverifiedCheck,
   },
 };
 
@@ -50,6 +50,8 @@ fn unverified_waits_for_the_person_without_a_retry() {
   assert_eq!(failed.failure(), Some(StepFailure::Unverified));
   assert_eq!(failed.judged(), Some(&revision('b')));
   assert_eq!(logged.run.retry_from(), Some(&key("checks")));
+  // *Run again* already runs `checks`: returning the work starts at its failure route's target.
+  assert_eq!(logged.run.return_default(), Some(key("implement")));
   assert_eq!(Run::replay(&logged.log), Ok(logged.run.clone()));
   assert_eq!(Run::restore(stored(&logged.run)), Ok(logged.run));
 }
@@ -140,6 +142,8 @@ fn unverified_return_to_implement_refuses_checks_on_the_unchanged_revision() {
     logged.run.latest_execution(&key("checks")).and_then(|e| e.failure()),
     Some(StepFailure::Unchanged)
   );
+  // The work goes back where this attempt returned it, not to the step that was not run again.
+  assert_eq!(logged.run.return_default(), Some(key("implement")));
   // The person may still accept it as it is: the work accepted is the unverified execution's, not the refused one's.
   let unverified = logged.run.attempts()[0]
     .executions()
@@ -152,6 +156,23 @@ fn unverified_return_to_implement_refuses_checks_on_the_unchanged_revision() {
   logged.pass("checks");
   assert_eq!(status(&logged, "checks"), StepStatus::Passed);
   assert_eq!(Run::replay(&logged.log), Ok(logged.run.clone()));
+}
+
+#[test]
+fn unverified_returning_the_work_again_starts_where_this_attempt_returned_it() {
+  let mut logged = unverified();
+  let decision = StuckDecision::ReturnTo {
+    step: key("plan"),
+    note: note("Plan the missing fixture."),
+  };
+  logged.apply(|run| run.decide_stuck(&decision, at(50)));
+  let mut plan = logged.propose("plan", "1. Add the fixture.", &[]);
+  logged.apply(|run| run.decide_plan(&mut plan, PlanDecision::Approved, Answerer::Person, at(51)));
+  logged.pass("implement");
+  let checks = logged.exec("checks");
+  logged.apply(|run| run.refuse_unchanged(checks, revision('b'), at(60)));
+  assert_eq!(logged.run.return_default(), Some(key("plan")));
+  assert_eq!(logged.run.retry_from(), Some(&key("checks")));
 }
 
 #[test]

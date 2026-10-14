@@ -204,6 +204,43 @@ impl Run {
       .collect()
   }
 
+  /// The return target ([`Run::return_targets`]) a person's choice starts at. After used-up retries, the failure
+  /// route's target; after a breakage, the step itself. A step that waited unverified or was not run again is run
+  /// again by *Retry* already, so the choice starts elsewhere: at the step this attempt returned the work to (after
+  /// a review sent it back and nothing changed), else the step's failure route target, else the nearest agent step
+  /// before it; at the step itself only when no other is left. `None` for a run that does not wait or has no target.
+  pub fn return_default(&self) -> Option<StepKey> {
+    let RunStatus::WaitingForPerson(stuck) = self.status() else {
+      return None;
+    };
+    let targets = self.return_targets();
+    let step = stuck.step();
+    let preferred = match stuck {
+      Stuck::RetriesExhausted(_) | Stuck::BrokeAgain(_) => self.retry_from(),
+      Stuck::Unverified(_) | Stuck::Unchanged(_) => {
+        let returned = self.current_attempt().and_then(|attempt| match attempt.reason() {
+          AttemptReason::Retry { return_to, .. } | AttemptReason::Returned { return_to, .. } => Some(return_to),
+          _ => None,
+        });
+        let route = self
+          .snapshot()
+          .body()
+          .step(step)
+          .and_then(|pinned| pinned.on_failure.as_ref())
+          .map(|route| &route.return_to);
+        [returned, route]
+          .into_iter()
+          .flatten()
+          .find(|key| *key != step && targets.contains(key))
+          .or_else(|| targets.iter().rev().find(|key| *key != step))
+      }
+    };
+    preferred
+      .filter(|key| targets.contains(key))
+      .or_else(|| targets.first())
+      .cloned()
+  }
+
   /// Carries out a person's `decision` on a run that waits for them.
   pub fn decide_stuck(&mut self, decision: &StuckDecision, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
     let RunStatus::WaitingForPerson(stuck) = self.status().clone() else {
