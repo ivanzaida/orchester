@@ -1,5 +1,6 @@
 //! Instructions fePhH: scope tabs, the library, editor and in-place preview.
 mod autosave;
+mod availability;
 mod editor;
 mod editor_notes;
 mod empty;

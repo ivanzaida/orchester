@@ -10,18 +10,16 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::resource::{InjectionEvent, Variable};
-use orchester_workspace::{
-  background,
-  instructions::{
-    data::{InstructionEntry, ProjectInstructions},
-    form::{Events, Picked},
-    preview::{PreviewCatalog, PreviewChoice},
-  },
-  messages,
-  tasks::outside::Outside,
+use orchester_workspace::instructions::{
+  data::{InstructionEntry, ProjectInstructions},
+  form::{Events, Picked},
+  preview::PreviewChoice,
 };
 
-use super::{preview, variables};
+use super::{
+  availability::{Availability, CatalogState},
+  preview, variables,
+};
 use crate::{
   project::ShownProject,
   theme::ExtraSpacing,
@@ -66,10 +64,11 @@ pub struct Props {
   pub valid: bool,
   pub input: crate::ui::prompt_input::PromptInput,
   pub frozen: Signal<bool>,
-  pub unavailable: Signal<super::fields::MissingVariables>,
   pub events: Signal<Events>,
-  pub retained: Signal<super::fields::RetainedRuns>,
-  pub preview_context: Signal<super::fields::PreviewContext>,
+  /// What the preview is for; the editor resolves it too.
+  pub choice: Signal<PreviewChoice>,
+  pub catalog: CatalogState,
+  pub availability: Availability,
   pub panel: Signal<Panel>,
   pub data: ProjectInstructions,
 }
@@ -79,6 +78,8 @@ impl PartialEq for Props {
       && self.entry == other.entry
       && self.valid == other.valid
       && self.data == other.data
+      && self.catalog == other.catalog
+      && self.availability == other.availability
       && self.panel.id() == other.panel.id()
   }
 }
@@ -98,7 +99,7 @@ impl Component for Panels {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       clipboard: ctx.use_context::<crate::ui::clipboard::Clipboard>().unwrap_or_default(),
-      choice: ctx.signal(PreviewChoice::default()),
+      choice: ctx.props::<Props>().choice.clone(),
       event: ctx.signal(Picked(InjectionEvent::Start)),
       search: ctx.signal(String::new()),
       selected: ctx.signal(Picked(Variable::TaskTitle)),
@@ -110,10 +111,7 @@ impl Component for Panels {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
     let panel = props.panel.get();
-    let catalog = self.catalog(ctx, &props);
-    // A reload that failed keeps the previous catalog: nothing is shown or derived from it then.
-    let current = catalog.data.as_ref().filter(|_| !catalog.is_rejected());
-    self.update_availability(ctx, current, &props);
+    let catalog = props.catalog.clone();
     if panel == Panel::Hidden {
       return Column::new().into();
     }
@@ -172,7 +170,7 @@ impl Component for Panels {
           .child(
             Text::new(&ctx.t(if panel == Panel::Preview {
               "instructions.secretNote"
-            } else if props.unavailable.get().0.contains(&self.selected.get().0) {
+            } else if props.availability.unavailable.contains(&self.selected.get().0) {
               "instructions.noEmptyValue"
             } else {
               "instructions.missingNote"
@@ -185,78 +183,6 @@ impl Component for Panels {
   }
 }
 impl Panels {
-  fn catalog(
-    &self,
-    ctx: &mut Ctx,
-    props: &Props,
-  ) -> lurq::app::ctx::FutureState<PreviewCatalog, orchester_workspace::messages::Message> {
-    let changes = props.project.feed.outside.get();
-    let root = props.project.open.repo_root.clone();
-    let hold = crate::services::Services::of(ctx).hold;
-    ctx
-      .future(
-        (
-          root,
-          props.data.clone(),
-          changes.of(Outside::Tasks),
-          changes.of(Outside::Instructions),
-        ),
-        move |(root, ..)| {
-          let hold = hold.clone();
-          async move {
-            hold.released().await;
-            background::run(move || PreviewCatalog::load_in(&root))
-              .await?
-              .map_err(|error| messages::store_error(&error))
-          }
-        },
-      )
-      .state()
-      .get()
-  }
-
-  fn update_availability(&self, ctx: &Ctx, catalog: Option<&PreviewCatalog>, props: &Props) {
-    let retained = catalog
-      .zip(props.entry.as_ref())
-      .map_or_else(Vec::new, |(catalog, entry)| {
-        orchester_workspace::instructions::publication::retained_runs(catalog, entry.id)
-      });
-    if props.retained.get_untracked().0 != retained {
-      props.retained.set(super::fields::RetainedRuns(retained));
-    }
-
-    let resolved = catalog.and_then(|catalog| catalog.resolve(&self.choice.get()).ok());
-    let missing = resolved.as_ref().map_or_else(
-      || Variable::ALL.to_vec(),
-      |resolved| {
-        Variable::ALL
-          .into_iter()
-          .filter(|variable| resolved.value(*variable).is_none())
-          .collect()
-      },
-    );
-    if props.unavailable.get_untracked().0 != missing {
-      props.unavailable.set(super::fields::MissingVariables(missing));
-    }
-    if let Some(resolved) = resolved {
-      let context = super::fields::PreviewContext {
-        task: resolved.task.task.key().to_string(),
-        role: resolved.role().to_owned(),
-        step: ctx
-          .t_args(
-            "instructions.stepLabel",
-            [
-              ("number", format!("{:02}", resolved.step_ordinal())),
-              ("name", resolved.step.name.to_string()),
-            ],
-          )
-          .to_string(),
-      };
-      if props.preview_context.get_untracked() != context {
-        props.preview_context.set(context);
-      }
-    }
-  }
   fn search_field(&self, ctx: &mut Ctx) -> Element {
     FieldInput::new(
       "instruction-variable-search",

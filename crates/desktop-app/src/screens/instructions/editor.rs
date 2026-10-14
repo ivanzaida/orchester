@@ -16,12 +16,14 @@ use orchester_workspace::{
   instructions::{
     data::{InstructionEntry, ProjectInstructions},
     form::FormErrors,
-    publication,
+    preview::PreviewChoice,
+    publication::{self, RetainedRun},
   },
 };
 
 use super::{
   autosave::Autosave,
+  availability::{self, Availability},
   fields::Fields,
   library,
   panels::{self, Panel},
@@ -67,6 +69,8 @@ pub struct Editor {
   saved: Signal<Saved>,
   work: work::Work,
   autosave: Autosave,
+  /// What the preview is for: the panels choose it, the editor reads what it says about the variables.
+  choice: Signal<PreviewChoice>,
   panel: Signal<Panel>,
   published: Signal<Option<u32>>,
 }
@@ -84,6 +88,7 @@ impl Component for Editor {
       saved: saved.clone(),
       work,
       autosave: autosave.clone(),
+      choice: ctx.signal(PreviewChoice::default()),
       panel: ctx.signal(match props.tab {
         Tab::Roles => Panel::Hidden,
         Tab::Steps => Panel::Preview,
@@ -160,7 +165,9 @@ impl Component for Editor {
       props.project.open.project.name().as_str(),
       &props.selection,
     );
-    let body = self.body(ctx, &props, parsed.as_ref().err(), dirty, busy);
+    let catalog = availability::catalog(ctx, &props.project, &props.data);
+    let availability = Availability::of(ctx, &catalog, &self.choice.get(), live.as_ref());
+    let body = self.body(ctx, &props, parsed.as_ref().err(), (dirty, busy), &availability);
     let panel = ctx.mount_keyed::<panels::Panels>(
       "instruction-panels",
       panels::Props {
@@ -169,10 +176,10 @@ impl Component for Editor {
         valid: parsed.is_ok(),
         input: self.fields.input.clone(),
         frozen: self.fields.frozen.clone(),
-        unavailable: self.fields.unavailable.clone(),
         events: self.fields.events.clone(),
-        retained: self.fields.retained.clone(),
-        preview_context: self.fields.preview_context.clone(),
+        choice: self.choice.clone(),
+        catalog,
+        availability,
         panel: self.panel.clone(),
         data: props.data.clone(),
       },
@@ -192,19 +199,31 @@ impl Component for Editor {
   }
 }
 impl Editor {
-  fn body(&self, ctx: &mut Ctx, props: &Props, errors: Option<&FormErrors>, dirty: bool, busy: bool) -> Element {
+  fn body(
+    &self,
+    ctx: &mut Ctx,
+    props: &Props,
+    errors: Option<&FormErrors>,
+    (dirty, busy): (bool, bool),
+    availability: &Availability,
+  ) -> Element {
     let saved_value = self.saved.get().0;
     let saved = saved_value.as_ref();
     let header = self.header(ctx, saved, dirty, busy);
     let settings = self.fields.settings(ctx, &props.data, saved.is_some(), errors);
-    let prompt = self.fields.prompt(ctx, self.panel.clone(), errors, busy && !dirty);
+    let prompt = self.fields.prompt(
+      ctx,
+      self.panel.clone(),
+      errors,
+      (busy && !dirty, &availability.unavailable),
+    );
     let mut body = Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
       .height(Dimension::Pct(100.0))
       .child(header);
     body = self.write_error(ctx, body);
-    body = self.published_notice(ctx, body);
+    body = self.published_notice(ctx, &availability.retained, body);
     body = self.reload(ctx, props, saved, busy, body);
     body
       .child(
@@ -217,7 +236,7 @@ impl Editor {
           .child(settings)
           .with_children(super::editor_notes::scope(ctx, &self.fields, &props.data))
           .child(prompt)
-          .with_children(super::editor_notes::warning(ctx, &self.fields))
+          .with_children(super::editor_notes::warning(ctx, &self.fields, availability))
           .with_children(
             (self.fields.blocked().is_empty() || (busy && !self.work.publishing())).then(|| {
               Row::new()
@@ -289,7 +308,7 @@ impl Editor {
       body.child(notice.inspector())
     }
   }
-  fn published_notice(&self, ctx: &mut Ctx, body: Column) -> Column {
+  fn published_notice(&self, ctx: &mut Ctx, retained: &[RetainedRun], body: Column) -> Column {
     let Some(version) = self.published.get() else {
       return body;
     };
@@ -304,7 +323,7 @@ impl Editor {
     .render(ctx);
     body.child(crate::ui::notice::result_notice(
       "instruction-published-notice",
-      &words::published_notice(ctx, version, &self.fields.retained.get().0),
+      &words::published_notice(ctx, version, retained),
       dismiss,
     ))
   }

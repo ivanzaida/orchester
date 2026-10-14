@@ -1,7 +1,6 @@
 //! Editor fields qSn5T: name, scope, agents, injection timing and prompt.
 use lurq::{
   app::{
-    component::DevtoolsInspectable,
     ctx::Ctx,
     theme::{BorderSize, FormTextRole, PaletteColor, SpacingSize, TypographyStyle},
   },
@@ -39,20 +38,6 @@ const ROLE_EVENT_WIDTH: f32 = 220.0;
 const STEP_EVENT_WIDTH: f32 = 150.0;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PreviewContext {
-  pub task: String,
-  pub role: String,
-  pub step: String,
-}
-impl DevtoolsInspectable for PreviewContext {}
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RetainedRuns(pub Vec<orchester_workspace::instructions::publication::RetainedRun>);
-impl DevtoolsInspectable for RetainedRuns {}
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MissingVariables(pub Vec<Variable>);
-impl DevtoolsInspectable for MissingVariables {}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Snapshot {
   name: String,
   text: String,
@@ -67,12 +52,9 @@ pub struct Fields {
   pub name: Signal<String>,
   pub text: Signal<String>,
   pub input: PromptInput,
-  pub unavailable: Signal<MissingVariables>,
   pub targets: Signal<Vec<Target>>,
   pub events: Signal<Events>,
   pub scope: Signal<ScopeChoice>,
-  pub retained: Signal<RetainedRuns>,
-  pub preview_context: Signal<PreviewContext>,
 }
 impl Fields {
   pub fn new(ctx: &mut Ctx, tab: Tab, entry: Option<&InstructionEntry>) -> Self {
@@ -103,14 +85,7 @@ impl Fields {
     let input = PromptInput::new(ctx, text.clone());
     Self {
       frozen: ctx.signal(false),
-      retained: ctx.signal(RetainedRuns(Vec::new())),
       input,
-      unavailable: ctx.signal(MissingVariables(Variable::ALL.to_vec())),
-      preview_context: ctx.signal(PreviewContext {
-        task: String::new(),
-        role: String::new(),
-        step: String::new(),
-      }),
       name: ctx.signal(entry.map_or_else(String::new, |e| e.name.to_string())),
       text,
       targets,
@@ -384,7 +359,7 @@ impl Fields {
     ctx: &Ctx,
     panel: Signal<super::panels::Panel>,
     errors: Option<&FormErrors>,
-    locked: bool,
+    (locked, unavailable): (bool, &[Variable]),
   ) -> Element {
     let theme = ctx.theme();
     let text_style = FormTextRole {
@@ -396,7 +371,7 @@ impl Fields {
     let frozen = self.frozen.clone();
     let mut input = self
       .input
-      .field(ctx, text_style, self.tokens(&raw))
+      .field(ctx, text_style, tokens(&raw, unavailable))
       .id("instruction-prompt")
       .describe("a11y_name", ctx.t("instructions.prompt"))
       .rows(1, usize::MAX)
@@ -455,19 +430,6 @@ impl Fields {
       )
       .with_children(self.input_error(ctx))
       .into()
-  }
-  fn tokens(&self, raw: &str) -> InputTokens {
-    let unavailable = self.unavailable.get().0;
-    let tokens = orchester_workspace::instructions::tokens::inline_references(raw)
-      .into_iter()
-      .map(|reference| {
-        InputToken::new(
-          reference.range,
-          instructions::token_style(unavailable.contains(&reference.variable)),
-        )
-      })
-      .collect();
-    InputTokens::new(raw, tokens).expect("domain ranges are nonoverlapping UTF-8 boundaries without line endings")
   }
   fn input_error(&self, ctx: &Ctx) -> Option<Element> {
     let feedback = self.input.feedback.get();
@@ -532,4 +494,17 @@ fn target_choices(ctx: &Ctx, data: &ProjectInstructions) -> Vec<(Target, std::sy
   }));
 
   choices
+}
+/// The prompt's variables as pills, those without a value in the preview marked.
+fn tokens(raw: &str, unavailable: &[Variable]) -> InputTokens {
+  let tokens = orchester_workspace::instructions::tokens::inline_references(raw)
+    .into_iter()
+    .map(|reference| {
+      InputToken::new(
+        reference.range,
+        instructions::token_style(unavailable.contains(&reference.variable)),
+      )
+    })
+    .collect();
+  InputTokens::new(raw, tokens).expect("domain ranges are nonoverlapping UTF-8 boundaries without line endings")
 }

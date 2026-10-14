@@ -16,7 +16,7 @@ use orchester_workspace::instructions::{
   publication::Unavailable,
 };
 
-use super::{fields::Fields, words};
+use super::{availability::Availability, fields::Fields, words};
 use crate::{
   theme::IconSize,
   ui::{
@@ -67,9 +67,8 @@ pub fn scope(ctx: &Ctx, fields: &Fields, data: &ProjectInstructions) -> Option<E
       .into(),
   )
 }
-pub fn warning(ctx: &Ctx, fields: &Fields) -> Option<Element> {
+pub fn warning(ctx: &Ctx, fields: &Fields, availability: &Availability) -> Option<Element> {
   let Unavailable { variable, event } = fields.blocked().first().copied()?;
-  let context = fields.preview_context.get();
   let expression = format!("{{{{{}}}}}", variable.name());
   let title = ctx.t_args(
     "instructions.unavailableTitle",
@@ -82,13 +81,12 @@ pub fn warning(ctx: &Ctx, fields: &Fields) -> Option<Element> {
     ],
   );
   // Without a task to preview there is no role or step to name.
-  let detail = if context.role.is_empty() {
-    ctx.t("instructions.unavailableDetailAnyAgent")
-  } else {
-    ctx.t_args(
+  let detail = match &availability.context {
+    Some(context) => ctx.t_args(
       "instructions.unavailableDetail",
-      [("role", context.role), ("step", context.step)],
-    )
+      [("role", context.role.as_str()), ("step", context.step.as_str())],
+    ),
+    None => ctx.t("instructions.unavailableDetailAnyAgent"),
   };
   let mut note = Notice::new("instruction-publication-warning", NoticeTone::Warning, title)
     .stacked()
@@ -129,7 +127,7 @@ pub fn warning(ctx: &Ctx, fields: &Fields) -> Option<Element> {
         });
       }
     });
-    let base = if fields.frozen.get() || fields.unavailable.get().0.contains(&Variable::RunBaseRevision) {
+    let base = if fields.frozen.get() || availability.unavailable.contains(&Variable::RunBaseRevision) {
       base.disabled()
     } else {
       base
