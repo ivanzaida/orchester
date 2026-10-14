@@ -187,14 +187,15 @@ pub(super) fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Opt
     RunnerProblem::CodexSettingsIgnored { folder } => codex_settings_ignored(ctx, folder),
     RunnerProblem::StderrLeftOut { lines } => stderr_left_out(ctx, *lines),
     RunnerProblem::QuestionRefused { question, reason } => question_refused(ctx, question, *reason),
-    RunnerProblem::ContextCompacted { .. } | RunnerProblem::ModelRetrying { .. } | RunnerProblem::ThinkingStripped => {
-      native_problem(ctx, problem)
-    }
+    RunnerProblem::ContextCompacted { .. }
+    | RunnerProblem::ModelRetrying { .. }
+    | RunnerProblem::ThinkingStripped
+    | RunnerProblem::WaitingForQaSlot => native_problem(ctx, problem),
   }
 }
 
-/// What happened to a native agent's conversation with its model: a compaction, a retried request, its
-/// earlier reasoning dropped.
+/// What happened around the agent that is no failure: a native conversation with its model compacted, a request
+/// retried, its earlier reasoning dropped; or a start that waits for the QA slot.
 fn native_problem(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str>>) {
   match problem {
     RunnerProblem::ContextCompacted { before, after } => (
@@ -220,6 +221,10 @@ fn native_problem(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<s
         ],
       ),
       Some(error.as_str().into()),
+    ),
+    RunnerProblem::WaitingForQaSlot => (
+      ctx.t("runs.activity.problem.waitingForQaSlot"),
+      Some(ctx.t("runs.activity.problem.waitingForQaSlotDetail")),
     ),
     _ => (
       ctx.t("runs.activity.problem.thinkingStripped"),

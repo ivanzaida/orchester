@@ -83,6 +83,14 @@
         "one": "{{label}} sent the work back to {{target}} once and the pipeline’s retry limit is reached. The run waits for your decision; nothing runs until you choose.",
         "other": "{{label}} sent the work back to {{target}} {{count}} times and the pipeline’s retry limit is reached. The run waits for your decision; nothing runs until you choose."
       },
+      "unverifiedNoticeTitle": {
+        "one": "Unverified: {{step}} could not check 1 thing",
+        "other": "Unverified: {{step}} could not check {{count}} things"
+      },
+      "unverifiedNoticeBody": "{{label}} checked what it could and says below what it could not, and why. Nothing went back to an earlier step and no retry was used. The run waits for your decision; nothing runs until you choose.",
+      "unchangedNoticeTitle": "{{step}} was not run again",
+      "unchangedNoticeBody": "{{label}} last ended failed or unverified on this same revision, and nothing has changed since, so running it again would find the same. The run waits for your decision; nothing runs until you choose.",
+      "unverifiedHeading": "What {{step}} could not check",
       "latestAttempt": "Latest attempt",
       "reported": "What {{step}} reported",
       "reportedAt": "{{step}} · attempt {{attempt}} · {{time}}",
@@ -93,6 +101,10 @@
       "noLimit": "No limit",
       "tokens": "{{count}} tokens",
       "allow": "Allow 1 retry & continue",
+      "accept": "Accept {{step}} as it is",
+      "acceptMeaning": "{{step}} passes as it is; the steps after it run.",
+      "runAgain": "Run {{step}} again",
+      "runAgainMeaning": "Runs {{step}} again on the same revision, as you ask.",
       "retryMeaning": "Runs {{step}} once more, then {{failed}} again.",
       "restartMeaning": "Restarts {{step}} once more.",
       "returnTo": "Return the work to",

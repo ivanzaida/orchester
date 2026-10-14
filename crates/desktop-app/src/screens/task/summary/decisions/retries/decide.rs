@@ -2,7 +2,8 @@
 //! & continue* with what it runs, returning the work to an agent step (`Return the work to` `qrV0F`) with
 //! the note its agent reads (`Note for Builder · required` `wJTjt`), and *Stop and fail the run*. A
 //! decision under way holds the others; the runner's refusal is said above *Stop*. Without an agent step
-//! to return to, that part is left out.
+//! to return to, that part is left out. A step that waits unverified or unchanged is first offered
+//! *Accept … as it is*, and *Run … again* takes the retry's place.
 
 use std::sync::Arc;
 
@@ -54,19 +55,6 @@ pub struct DecideCard<'a> {
 impl DecideCard<'_> {
   pub fn render(&self, ctx: &mut Ctx) -> Element {
     let (pending, refused) = state(self.action, self.asked.get());
-    let retry = self
-      .button(
-        ActionButton::new(
-          "task-allow-retry",
-          ButtonKind::Primary,
-          ctx.t("decisions.retries.allow"),
-        )
-        .icon(Icon::RotateCcw)
-        .in_form(),
-        StuckDecision::Retry,
-        pending,
-      )
-      .fill_width();
     let stop = self
       .button(
         ActionButton::new("task-stop-run", ButtonKind::Danger, ctx.t("decisions.retries.stop"))
@@ -84,13 +72,9 @@ impl DecideCard<'_> {
           .variant(TaskText::SectionTitle.role()),
       )
       .child(self.facts(ctx))
-      .child(retry)
-      .child(
-        Text::new(&self.retry_meaning(ctx))
-          .id("task-retry-meaning")
-          .variant(ExtraTypography::Note.role())
-          .width(Dimension::Pct(100.0)),
-      )
+      .with_children(self.accepting(ctx, pending))
+      .child(self.retry(ctx, pending))
+      .child(meaning("task-retry-meaning", &self.retry_meaning(ctx)))
       .with_children(self.returning(ctx, pending))
       .child(divider())
       .with_children(
@@ -133,6 +117,49 @@ impl DecideCard<'_> {
       .into()
   }
 
+  /// *Accept … as it is* and what it means, for a step that waits unverified or unchanged; none otherwise.
+  fn accepting(&self, ctx: &Ctx, pending: Option<Deciding>) -> Vec<Element> {
+    if !self.stuck.can_accept() {
+      return Vec::new();
+    }
+    let step = self.short_name(self.stuck.step());
+    let accept = ActionButton::new(
+      "task-accept-step",
+      ButtonKind::Primary,
+      ctx.t_args("decisions.retries.accept", [("step", step.as_str())]),
+    )
+    .icon(Icon::Check)
+    .in_form();
+    vec![
+      self.button(accept, StuckDecision::Accept, pending).fill_width().into(),
+      meaning(
+        "task-accept-meaning",
+        &ctx.t_args("decisions.retries.acceptMeaning", [("step", step.as_str())]),
+      ),
+    ]
+  }
+
+  /// *Allow 1 retry & continue*, or for a step that waits unverified or unchanged, *Run … again*.
+  fn retry(&self, ctx: &Ctx, pending: Option<Deciding>) -> ActionButton {
+    let button = if self.stuck.can_accept() {
+      let step = self.short_name(self.stuck.step());
+      ActionButton::new(
+        "task-allow-retry",
+        ButtonKind::Secondary,
+        ctx.t_args("decisions.retries.runAgain", [("step", step.as_str())]),
+      )
+    } else {
+      ActionButton::new(
+        "task-allow-retry",
+        ButtonKind::Primary,
+        ctx.t("decisions.retries.allow"),
+      )
+    };
+    self
+      .button(button.icon(Icon::RotateCcw).in_form(), StuckDecision::Retry, pending)
+      .fill_width()
+  }
+
   /// What one more retry runs: the step it resumes, and the failing step after it.
   fn retry_meaning(&self, ctx: &Ctx) -> Arc<str> {
     let failed = self.name(ctx, self.stuck.step());
@@ -145,6 +172,9 @@ impl DecideCard<'_> {
         )
       }
       Stuck::BrokeAgain(_) => ctx.t_args("decisions.retries.restartMeaning", [("step", &*failed)]),
+      Stuck::Unverified(_) | Stuck::Unchanged(_) => {
+        ctx.t_args("decisions.retries.runAgainMeaning", [("step", &*failed)])
+      }
     }
   }
 
@@ -257,4 +287,13 @@ impl DecideCard<'_> {
       .find(|step| step.key == *key)
       .map_or_else(|| key.as_str().to_owned(), |step| step.name.to_string())
   }
+}
+
+/// What a choice above it does, under its button.
+fn meaning(id: &str, text: &str) -> Element {
+  Text::new(text)
+    .id(id)
+    .variant(ExtraTypography::Note.role())
+    .width(Dimension::Pct(100.0))
+    .into()
 }

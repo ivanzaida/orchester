@@ -357,6 +357,16 @@ fn settled(ctx: &Ctx, detail: &TaskDetail, run: &RunView) -> Said {
       Icon::Hand,
       text("summary.notice.brokeAgainTitle", "summary.notice.stuckBody"),
     ),
+    RunStatus::WaitingForPerson(Stuck::Unverified(_)) => Said::new(
+      NoticeTone::Warning,
+      Icon::CircleDashed,
+      text("summary.notice.unverifiedTitle", "summary.notice.stuckBody"),
+    ),
+    RunStatus::WaitingForPerson(Stuck::Unchanged(_)) => Said::new(
+      NoticeTone::Warning,
+      Icon::Hand,
+      text("summary.notice.unchangedTitle", "summary.notice.stuckBody"),
+    ),
     RunStatus::WaitingForPerson(_) => Said::new(
       NoticeTone::Warning,
       Icon::Hand,

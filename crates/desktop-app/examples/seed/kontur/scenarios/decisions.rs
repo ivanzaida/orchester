@@ -1,12 +1,13 @@
 //! `decisions`: what the Summary's decisions need beyond `task-states` (`Task page` `iwrwB`). A run ready
 //! for review whose changes conflict with `main`, which moved on after the run started (`kxMAN`, merge
 //! conflict); one that merges cleanly into the moved `main`; one started from a detached HEAD, which has
-//! no branch to merge into; and a run whose Review step reported a failure until its retries ran out
-//! (`DVuXu`).
+//! no branch to merge into; a run whose Review step reported a failure until its retries ran out
+//! (`DVuXu`); and a run whose Review could not check two states and waits unverified (no frame of its own
+//! yet: it reuses `DVuXu`'s parts).
 
 use orchester_core::{
   resource::StepKey,
-  run::{Run, StepOutput},
+  run::{Run, StepFailure, StepOutcome, StepOutput, UnverifiedCheck},
   store::ActivityStore,
   task::Task,
 };
@@ -28,6 +29,20 @@ const REVIEW_REPORT: &str = concat!(
   "Criterion 2 is still not met: when Retry-After is an HTTP date, the sender reads it as seconds and waits 0 s. ",
   "Same finding as the attempt before."
 );
+/// What Review reported when it could not check everything.
+const UNVERIFIED_REPORT: &str =
+  "Checked the task list and the empty project against the design. Two states could not be reached.";
+/// What it could not check, and why.
+const UNVERIFIED_CHECKS: [(&str, &str); 2] = [
+  (
+    "Tasks · a filter that matches nothing",
+    "No seed scenario has tasks that a filter leaves out entirely.",
+  ),
+  (
+    "Task page · unreadable run",
+    "The QA copy could not be started on a damaged run row.",
+  ),
+];
 
 /// How a ready run was made.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -69,11 +84,39 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let mut drive = Drive::start(kontur, &task, feature, at)?;
   drive.fail_until_stuck("review")?;
   let run = drive.finish();
-  report(kontur, &run, "review", REVIEW_REPORT)
+  report(kontur, &run, "review", (None, REVIEW_REPORT, Vec::new()))?;
+  let task = queued(
+    kontur,
+    feature,
+    ("Check the empty states on screen", "waits unverified after Review"),
+  )?;
+  let at = kontur.ago(40);
+  let mut drive = Drive::start(kontur, &task, feature, at)?;
+  drive.pass_before("review")?.fail("review", StepFailure::Unverified)?;
+  let run = drive.finish();
+  let checks = UNVERIFIED_CHECKS
+    .iter()
+    .map(|(check, reason)| UnverifiedCheck {
+      check: (*check).to_owned(),
+      reason: (*reason).to_owned(),
+    })
+    .collect();
+  report(
+    kontur,
+    &run,
+    "review",
+    (Some(StepOutcome::Unverified), UNVERIFIED_REPORT, checks),
+  )
 }
 
-/// Records what `step` of `run` reported last, as the runner records an agent's final message.
-fn report(kontur: &mut Kontur, run: &Run, step: &str, text: &str) -> Result<(), SeedError> {
+/// Records what `step` of `run` reported last, as the runner records an agent's final message: its outcome, its
+/// summary and what it could not check.
+fn report(
+  kontur: &mut Kontur,
+  run: &Run,
+  step: &str,
+  (outcome, text, unverified): (Option<StepOutcome>, &str, Vec<UnverifiedCheck>),
+) -> Result<(), SeedError> {
   let key = StepKey::new(step).expect("scenarios name the catalogue's step keys");
   let execution = run
     .latest_execution(&key)
@@ -83,8 +126,9 @@ fn report(kontur: &mut Kontur, run: &Run, step: &str, text: &str) -> Result<(), 
     run: run.id(),
     execution,
     step: key,
-    outcome: None,
+    outcome,
     text: text.to_owned(),
+    unverified,
     created_at: kontur.ago(45),
   };
   kontur.db.save_step_output(&output)?;

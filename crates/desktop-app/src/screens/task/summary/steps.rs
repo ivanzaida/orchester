@@ -268,5 +268,7 @@ const fn failure_key(failure: Option<StepFailure>) -> &'static str {
     Some(StepFailure::MergeConflict) => "summary.steps.failure.mergeConflict",
     Some(StepFailure::CheckpointFailed) => "summary.steps.failure.checkpointFailed",
     Some(StepFailure::CommandFailed) => "summary.steps.failure.commandFailed",
+    Some(StepFailure::Unverified) => "summary.steps.failure.unverified",
+    Some(StepFailure::Unchanged) => "summary.steps.failure.unchanged",
   }
 }

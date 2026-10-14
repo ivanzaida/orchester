@@ -310,6 +310,9 @@ fn retry_fields(ctx: &Ctx, props: &RetryDecisionProps) -> Element {
       [("step", &*props.retry_from_name), ("failed", &*props.failed)],
     ),
     Stuck::BrokeAgain(_) => ctx.t_args("runs.retryLimit.restartMeaning", [("step", &*props.failed)]),
+    Stuck::Unverified(_) | Stuck::Unchanged(_) => {
+      ctx.t_args("runs.retryLimit.runAgainMeaning", [("step", &*props.failed)])
+    }
   };
   let value = |label: &str, id: &'static str, value: &str| {
     Column::new()

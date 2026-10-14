@@ -129,6 +129,7 @@ fn meta(ctx: &Ctx, card: &ResultCard) -> std::sync::Arc<str> {
   let reported = match card.outcome {
     Some(StepOutcome::Done) => "conversation.result.reportedPassed",
     Some(StepOutcome::Failed) => "conversation.result.reportedFailed",
+    Some(StepOutcome::Unverified) => "conversation.result.reportedUnverified",
     Some(StepOutcome::Question) | None => return meta,
   };
   let reported = ctx.t_args(reported, [("agent", &**agent)]);
