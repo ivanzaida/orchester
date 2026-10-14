@@ -65,6 +65,16 @@ pub enum HoldRefused {
   Store(Message),
 }
 
+impl HoldRefused {
+  /// What the person or the client reads.
+  pub fn message(self) -> Message {
+    match self {
+      Self::PersonOnly => Message::new("tasks.queue.personHeld"),
+      Self::Store(message) => message,
+    }
+  }
+}
+
 /// Holds new starts in `scope` of the project at `root` as `actor` (`held`), or lets them go on; whether that changed
 /// anything. Automation does not release a hold a person set. Blocks on SQLite.
 pub fn hold_in(root: &Path, (scope, actor): (HoldScope, HoldActor), held: bool) -> Result<bool, HoldRefused> {

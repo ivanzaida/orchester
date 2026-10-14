@@ -82,10 +82,7 @@ impl Component for QueueControls {
       async move {
         let kept = background::run(move || hold_in(&root, (scope, HoldActor::Person), held)).await?;
         // A person's hold is never refused as person-only; a store error says why.
-        kept.map_err(|refused| match refused {
-          HoldRefused::Store(message) => message,
-          HoldRefused::PersonOnly => Message::new("tasks.queue.personHeld"),
-        })?;
+        kept.map_err(HoldRefused::message)?;
         // The list reads the holds again, as after any change to its tasks.
         changes.record(project, Outside::Tasks);
         Ok(())

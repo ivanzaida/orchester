@@ -53,7 +53,7 @@ pub async fn set_queue_hold(services: &Services, args: QueueHold, held: bool) ->
     };
     let changed =
       hold::hold_in(&project.repo_root, (scope, HoldActor::Automation), held).map_err(|refused| match refused {
-        HoldRefused::PersonOnly => ToolError::refused("person_only", vec![Message::new("tasks.queue.personHeld")]),
+        refused @ HoldRefused::PersonOnly => ToolError::refused("person_only", vec![refused.message()]),
         HoldRefused::Store(message) => {
           tracing::warn!(?message, "a hold on new starts could not be kept");
           ToolError::refused("not_saved", vec![message])
