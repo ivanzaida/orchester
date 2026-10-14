@@ -51,6 +51,17 @@ pub(super) struct Publishing<'a> {
   pub(super) root: &'a std::path::Path,
   pub(super) setup: &'a OrchestratorSetup,
   pub(super) chosen: Option<OrchestratorSettings>,
+  /// What the form lacks while it has no choice.
+  pub(super) incomplete: Option<Incomplete>,
+}
+
+/// What the form lacks for a choice that can be saved.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Incomplete {
+  /// No connection the Orchestrator can run on.
+  Connection,
+  /// The model id is missing or is none.
+  Model,
 }
 
 impl Publishing<'_> {
@@ -126,7 +137,7 @@ fn status(ctx: &Ctx, stand: Stand, version: Option<u32>) -> Row {
       ctx.t_args("orchestrator.settings.publish.unsaved", [("published", &*published)]),
     ),
     Stand::Drafted => (
-      Icon::CircleDot,
+      Icon::Check,
       PaletteColor::TextMuted,
       ctx.t_args("orchestrator.settings.publish.drafted", [("published", &*published)]),
     ),
@@ -149,7 +160,10 @@ fn status(ctx: &Ctx, stand: Stand, version: Option<u32>) -> Row {
 /// Why publishing waits, or what it does; `None` when there is nothing to say.
 fn note(ctx: &Ctx, publishing: &Publishing<'_>, stand: Stand) -> Option<std::sync::Arc<str>> {
   if publishing.chosen.is_none() {
-    return Some(ctx.t("orchestrator.settings.publish.needsConnection"));
+    return Some(match publishing.incomplete {
+      Some(Incomplete::Model) => ctx.t("orchestrator.settings.publish.needsModel"),
+      Some(Incomplete::Connection) | None => ctx.t("orchestrator.settings.publish.needsConnection"),
+    });
   }
   match stand {
     Stand::First => Some(ctx.t("orchestrator.settings.publish.firstNote")),
@@ -183,9 +197,15 @@ fn buttons(
       }
     }
   };
+  // While changes wait to be saved, Publish is the outlined button (`EPzaF`).
+  let kind = if stand == Stand::Unsaved {
+    ButtonKind::Secondary
+  } else {
+    ButtonKind::Primary
+  };
   let publish = ActionButton::new(
     "orchestrator-settings-publish",
-    ButtonKind::Primary,
+    kind,
     ctx.t_args("orchestrator.settings.publish.publishAs", [("version", next.as_str())]),
   )
   .icon(Icon::Upload);

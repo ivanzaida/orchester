@@ -21,13 +21,13 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{orchestrator::OrchestratorSettings, resource::ModelId};
+use orchester_core::{id::ConnectionId, orchestrator::OrchestratorSettings, resource::ModelId};
 use orchester_workspace::{
   background,
   orchestrator::settings::{OrchestratorSetup, Readiness, Saving, save_in},
 };
 
-use self::publish::{Publishing, Save};
+use self::publish::{Incomplete, Publishing, Save};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -140,6 +140,7 @@ impl Component for SettingsScreen {
       root: &root,
       setup,
       chosen: self.choices.chosen(setup),
+      incomplete: self.choices.incomplete(setup),
     });
     let head = head(ctx, &project, (publishing.as_ref(), &self.save));
     Column::new()
@@ -217,6 +218,23 @@ impl Choices {
   fn model_text(&self) -> String {
     let model = self.model.get();
     if model.is_empty() { self.custom.get() } else { model }
+  }
+
+  /// What the form still lacks for a choice: a connection the Orchestrator can run on, or then a model id.
+  fn incomplete(&self, setup: &OrchestratorSetup) -> Option<Incomplete> {
+    let usable = self.connection.get().parse().is_ok_and(|connection: ConnectionId| {
+      setup
+        .connections()
+        .into_iter()
+        .any(|choice| choice.id == connection && choice.unavailable.is_none())
+    });
+    if !usable {
+      Some(Incomplete::Connection)
+    } else if ModelId::new(self.model_text().trim()).is_err() {
+      Some(Incomplete::Model)
+    } else {
+      None
+    }
   }
 
   /// The form's choice, when it is complete and its connection one the Orchestrator can run on.

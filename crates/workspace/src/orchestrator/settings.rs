@@ -114,6 +114,23 @@ impl OrchestratorSetup {
       .unwrap_or_default()
   }
 
+  /// The reasoning efforts any model of `connection` lists, in their first order: what a model the connection does
+  /// not list may take, unchecked.
+  pub fn any_efforts(&self, connection: ConnectionId) -> Vec<String> {
+    let Some(found) = self.connection(connection) else {
+      return Vec::new();
+    };
+    let mut efforts: Vec<String> = Vec::new();
+    for model in found.models() {
+      for effort in effort_options(found, model.id()) {
+        if !efforts.contains(effort) {
+          efforts.push(effort.clone());
+        }
+      }
+    }
+    efforts
+  }
+
   /// What the draft, or else the published version, holds: what the form starts from.
   pub fn current(&self) -> Option<&OrchestratorSettings> {
     self.draft.as_ref().or(self.settings.as_ref())

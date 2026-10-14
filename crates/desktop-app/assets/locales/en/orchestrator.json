@@ -202,7 +202,8 @@
         "noChanges": "No changes since v{{version}}.",
         "saveFirst": "Save the draft before publishing.",
         "firstNote": "The project chat can send once v1 is published.",
-        "needsConnection": "Publishing needs a connection that can run the Orchestrator."
+        "needsConnection": "Publishing needs a connection that can run the Orchestrator.",
+        "needsModel": "Publishing needs a model: choose one, or type an id the connection accepts."
       },
       "loading": "Reading the Orchestrator's settings…",
       "summary": {
@@ -238,6 +239,7 @@
         "label": "Reasoning effort",
         "description": "CLI default leaves it to the connection's own setting.",
         "default": "CLI default",
+        "unchecked": "Not checked for this model: the connection lists no efforts for it, so these are its other models'.",
         "minimal": "Minimal",
         "low": "Low",
         "medium": "Medium",

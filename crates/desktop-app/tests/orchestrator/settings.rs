@@ -89,10 +89,24 @@ fn orchestrator_settings_take_a_model_the_list_does_not_have() {
   screen.until("Published v1", |screen| {
     screen.text("orchestrator-settings-saved") == "Published v1"
   });
+  screen.choose("orchestrator-effort", "High");
   screen.choose("orchestrator-model", "Other model id…");
   screen.until("the model id field", |screen| {
     screen.exists("orchestrator-model-custom")
   });
+  // Nothing typed yet: the head says the model is what publishing needs.
+  screen.until("the true reason", |screen| {
+    screen
+      .text("orchestrator-settings-publish-note")
+      .contains("Publishing needs a model")
+  });
+  // The chosen effort stays, among the efforts the connection's models list, unchecked for this one.
+  assert_eq!(screen.options("orchestrator-effort"), ["CLI default", "Low", "High"]);
+  assert!(
+    screen
+      .text("orchestrator-effort-row")
+      .contains("Not checked for this model")
+  );
   screen.set("orchestrator-model-custom", "claude opus");
   screen.until("why it isn't one", |screen| {
     screen.exists("orchestrator-model-custom-error")
@@ -110,7 +124,7 @@ fn orchestrator_settings_take_a_model_the_list_does_not_have() {
   screen.until("the draft", |screen| {
     kept(screen)
       .1
-      .is_some_and(|draft| draft.model().as_str() == "claude-opus-5-5")
+      .is_some_and(|draft| draft.model().as_str() == "claude-opus-5-5" && draft.effort() == Some("high"))
   });
 }
 

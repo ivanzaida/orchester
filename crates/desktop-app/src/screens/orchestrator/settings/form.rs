@@ -185,9 +185,22 @@ fn model_row(ctx: &mut Ctx, setup: &OrchestratorSetup, connection: ConnectionId,
 }
 
 fn effort_row(ctx: &mut Ctx, setup: &OrchestratorSetup, connection: ConnectionId, choices: &Choices) -> Element {
-  let efforts = ModelId::new(choices.model_text().trim())
-    .map(|model| setup.efforts(connection, &model))
+  // A model the connection does not list gets the efforts its other models list, and keeps the one chosen, unchecked.
+  let model = ModelId::new(choices.model_text().trim()).ok();
+  let listed = model
+    .as_ref()
+    .map(|model| setup.efforts(connection, model))
     .unwrap_or_default();
+  let unchecked = listed.is_empty();
+  let mut efforts = if unchecked {
+    setup.any_efforts(connection)
+  } else {
+    listed
+  };
+  let current = choices.effort.get();
+  if unchecked && !current.is_empty() && !efforts.contains(&current) {
+    efforts.push(current);
+  }
   let options = std::iter::once(SelectOption::new(
     String::new(),
     ctx.t("orchestrator.settings.effort.default"),
@@ -200,8 +213,13 @@ fn effort_row(ctx: &mut Ctx, setup: &OrchestratorSetup, connection: ConnectionId
   let label = ctx.t("orchestrator.settings.effort.label");
   let select = SelectField::new("orchestrator-effort", label.clone(), choices.effort.clone(), options)
     .width(Dimension::Px(SELECT_WIDTH));
+  let description = if unchecked {
+    ctx.t("orchestrator.settings.effort.unchecked")
+  } else {
+    ctx.t("orchestrator.settings.effort.description")
+  };
   side_row(
-    Label::new("orchestrator-effort", label).description(ctx.t("orchestrator.settings.effort.description")),
+    Label::new("orchestrator-effort", label).description(description),
     select.render(ctx),
     Place::Last,
     false,
