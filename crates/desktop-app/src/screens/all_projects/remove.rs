@@ -36,6 +36,8 @@ use crate::{
   },
 };
 
+/// Longest folder path shown in full; a longer one keeps its drive and last folders.
+const PATH_CHARS: usize = 72;
 /// The slot that keeps the problem's icon with its first line (`Icon slot` `OdFme`).
 const PROBLEM_SLOT: f32 = 18.0;
 
@@ -197,7 +199,7 @@ fn kept(ctx: &Ctx, project: &RegisteredProject) -> Column {
     .spacing(ExtraSpacing::Snug.role())
     .child(line(
       Icon::Folder,
-      &project.repo_root.display().to_string(),
+      &orchester_workspace::display::shorten_path(&project.repo_root, PATH_CHARS),
       &ctx.t("projects.removal.staysOnDisk"),
     ))
     .child(line(

@@ -97,34 +97,44 @@ pub(super) fn heading(ctx: &Ctx, state: Option<&DetectionState>, found: Option<&
   }
 }
 
-/// What the state means and what to do (`Note` `k8bJb`); `project` is the name the project will have.
+/// What the state means and what to do (`Note` `k8bJb`); `project` is the name the project will have, once
+/// one is entered.
 pub(super) fn note(
   ctx: &Ctx,
   state: Option<&DetectionState>,
   found: Option<&GitHubDetection>,
-  project: &str,
+  project: Option<&str>,
 ) -> Arc<str> {
   let host = found.map_or_else(String::new, |found| found.repo().host().to_string());
   let Some(state) = state else {
     return ctx.t("setup.github.note.detecting");
   };
   match state {
-    DetectionState::Detected { account } => ctx.t_args(
-      "setup.github.note.detected",
-      [("project", project), ("account", account.as_str())],
-    ),
+    DetectionState::Detected { account } => match project {
+      Some(project) => ctx.t_args(
+        "setup.github.note.detected",
+        [("project", project), ("account", account.as_str())],
+      ),
+      None => ctx.t_args("setup.github.note.detectedUnnamed", [("account", account.as_str())]),
+    },
     DetectionState::NoRemote => ctx.t("setup.github.note.noRemote"),
     DetectionState::NotGitHub => ctx.t("setup.github.note.notGitHub"),
     DetectionState::GhNotFound => ctx.t("setup.github.note.ghNotFound"),
     DetectionState::NotSignedIn => ctx.t("setup.github.note.notSignedIn"),
-    DetectionState::WrongAccount { active, expected } => ctx.t_args(
-      "setup.github.note.wrongAccount",
-      [
-        ("project", project),
-        ("active", active.as_str()),
-        ("expected", expected.as_str()),
-      ],
-    ),
+    DetectionState::WrongAccount { active, expected } => match project {
+      Some(project) => ctx.t_args(
+        "setup.github.note.wrongAccount",
+        [
+          ("project", project),
+          ("active", active.as_str()),
+          ("expected", expected.as_str()),
+        ],
+      ),
+      None => ctx.t_args(
+        "setup.github.note.wrongAccountUnnamed",
+        [("active", active.as_str()), ("expected", expected.as_str())],
+      ),
+    },
     DetectionState::NoAccess { .. } => ctx.t("setup.github.note.noAccess"),
     DetectionState::Unrecognized => match found.and_then(GitHubDetection::version) {
       Some(version) => ctx.t_args("setup.github.note.unrecognizedVersion", [("version", version)]),

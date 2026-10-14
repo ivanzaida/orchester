@@ -103,6 +103,7 @@ fn add_project_refuses_a_folder_that_is_not_a_repository() {
   assert_eq!(window.text("github-detection-status"), "Not a repository");
   let block = window.text("github-detection");
   assert!(block.contains("Run this in a terminal, then check again."), "{block}");
+  assert!(!block.contains("Optional"), "a repository is not optional: {block}");
   assert!(
     window.texts("git-init-command-box").is_some(),
     "the command to run: {block}"
@@ -214,6 +215,20 @@ fn add_project_starts_with_the_folder_the_route_names() {
   });
   let shown = window.text("project-folder-value");
   assert!(shown.ends_with("kontur"), "{shown}");
+}
+
+#[test]
+fn add_project_opens_within_the_home_tab() {
+  let (mut window, _stand_ins) = add_project();
+  let tabs = window.navigation().tabs_now();
+  assert_eq!(tabs.tabs().len(), 1);
+  let home = tabs.active().id();
+  assert!(!tabs.can_close(home), "the only home tab stays");
+  let strip = window.texts("tab-strip").expect("the title bar's tabs");
+  assert!(
+    !strip.iter().any(|text| text == "Add project"),
+    "the home tab shows its icon alone: {strip:?}"
+  );
 }
 
 #[test]

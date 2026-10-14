@@ -41,8 +41,21 @@ pub struct CommandRow {
   copy: Copy,
   faded: bool,
   one_line: bool,
-  prompt: bool,
+  prompt: Prompt,
 }
+
+/// The mark before a command to run, as a terminal shows one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Prompt {
+  None,
+  /// A chevron (`Command row` `PEnj5`).
+  Chevron,
+  /// A shell's `$` (`Prompt` `BtAzY` in Add project's commands, `Command` `l4sxi`).
+  Dollar,
+}
+
+/// The shell's prompt mark: a symbol, not words, so it is not translated.
+const DOLLAR: &str = "$";
 
 /// Rows are compared by what they show; Copy goes to the same place.
 impl PartialEq for CommandRow {
@@ -83,7 +96,7 @@ impl CommandRow {
       copy: Arc::new(copy),
       faded: false,
       one_line: false,
-      prompt: false,
+      prompt: Prompt::None,
     }
   }
 
@@ -95,7 +108,13 @@ impl CommandRow {
 
   /// A prompt mark before the command, as a terminal shows one: a command to run.
   pub fn prompt(mut self) -> Self {
-    self.prompt = true;
+    self.prompt = Prompt::Chevron;
+    self
+  }
+
+  /// A shell's `$` before the command: a command to run in a terminal (`BtAzY` in `l4sxi`).
+  pub fn dollar_prompt(mut self) -> Self {
+    self.prompt = Prompt::Dollar;
     self
   }
 
@@ -194,11 +213,21 @@ impl Component for CommandRowView {
       .background(ExtraColor::CodeBackground.role())
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Md)
-      .with_children(
-        props
-          .prompt
-          .then(|| icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::TextMuted).flex_shrink(0.0)),
-      )
+      .with_children(match props.prompt {
+        Prompt::None => None,
+        Prompt::Chevron => Some(Element::from(
+          icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::TextMuted).flex_shrink(0.0),
+        )),
+        // The row's gap leaves out the space the words keep after them; the mark keeps it, so it stands a gap
+        // before the command.
+        Prompt::Dollar => Some(
+          Row::new()
+            .flex_shrink(0.0)
+            .padding(Padding::new().right(Dimension::Px(space)))
+            .child(Text::new(DOLLAR).variant(ExtraTypography::MonoKey.role()))
+            .into(),
+        ),
+      })
       .child(
         Row::new()
           .id(props.id.to_string())

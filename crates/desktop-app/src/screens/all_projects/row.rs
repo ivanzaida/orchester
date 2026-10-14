@@ -42,6 +42,9 @@ const ACTIONS_WIDTH: f32 = 56.0;
 const TILE: f32 = 28.0;
 const OPEN_WIDTH: f32 = 20.0;
 const HEADINGS_HEIGHT: f32 = 32.0;
+/// Longest folder path shown in full in a row; a longer one keeps its drive and last folders, so the folder's
+/// own name stays in view.
+const PATH_CHARS: usize = 72;
 
 pub(super) fn headings(ctx: &Ctx) -> Row {
   let heading = |key: &str| {
@@ -147,7 +150,7 @@ fn identity(ctx: &Ctx, listed: &ListedProject) -> Row {
     .spacing(ExtraSpacing::Tight.role())
     .child(Text::new(name).variant(ExtraTypography::Strong.role()).nowrap())
     .child(
-      Text::new(&listed.project.repo_root.display().to_string())
+      Text::new(&display::shorten_path(&listed.project.repo_root, PATH_CHARS))
         .variant(ExtraTypography::MonoNote.role())
         .nowrap()
         .max_width(Dimension::Pct(100.0))

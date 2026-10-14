@@ -22,6 +22,7 @@ use lurq::{
 };
 use orchester_core::{
   connection::{GhAdvice, GitHubLogin},
+  name::Name,
   repository::{Detection, DetectionState, GitHubDetection},
 };
 use orchester_workspace::project_setup::ExpectedAccount;
@@ -35,6 +36,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     code_box::Copier,
     command_row::CommandRow,
+    github_mark::github_mark,
     icon::{Icon, icon},
     notice::{Notice, NoticeTone},
   },
@@ -47,8 +49,6 @@ const PROPERTY_HEIGHT: f32 = 28.0;
 const GLYPH_TILE: f32 = 28.0;
 /// The command that makes a folder a git repository (`git init` in `gutA8`). Orchester never runs it.
 const GIT_INIT: &str = "git init";
-/// The bundled icons have no GitHub mark, so GitHub shows its pull requests' glyph, as Connections does.
-const GITHUB_GLYPH: Icon = Icon::GitPullRequest;
 
 /// The block for the chosen folder, or the notice while none is chosen.
 pub(super) fn block(ctx: &mut Ctx, form: &Form, actions: &Actions, detection: Option<&Detection>) -> Option<Element> {
@@ -67,8 +67,9 @@ pub(super) fn block(ctx: &mut Ctx, form: &Form, actions: &Actions, detection: Op
   let expected = detection.and_then(|detection| form.expected_for(detection));
   let state = detection.map(|detection| detection.state(expected.as_ref()));
   let found = detection.and_then(Detection::github);
-  let project = form
-    .shown_name()
+  let name = form.shown_name();
+  let project = name
+    .as_ref()
     .map_or_else(|| ctx.t("setup.unnamed").to_string(), |name| name.as_str().to_owned());
   let properties = words::properties(ctx, detection, state.as_ref(), expected.as_ref(), &folder);
   let mut block = Column::new()
@@ -88,10 +89,15 @@ pub(super) fn block(ctx: &mut Ctx, form: &Form, actions: &Actions, detection: Op
         .with_children(properties.into_iter().map(property)),
     )
     .child(
-      Text::new(&words::note(ctx, state.as_ref(), found, &project))
-        .id("github-detection-note")
-        .variant(TypographyStyle::Description)
-        .width(Dimension::Pct(100.0)),
+      Text::new(&words::note(
+        ctx,
+        state.as_ref(),
+        found,
+        name.as_ref().map(Name::as_str),
+      ))
+      .id("github-detection-note")
+      .variant(TypographyStyle::Description)
+      .width(Dimension::Pct(100.0)),
     );
   let Some(state) = state else {
     // Detecting: the note alone, nothing to press yet.
@@ -122,7 +128,7 @@ fn head(ctx: &Ctx, state: Option<&DetectionState>, found: Option<&GitHubDetectio
     .rounded(RadiusSize::Md)
     .background(PaletteColor::SurfaceRaised)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(GITHUB_GLYPH, IconSize::Md, PaletteColor::TextSecondary));
+    .child(github_mark(ctx, IconSize::Md, PaletteColor::TextSecondary));
   let status = Row::new()
     .id("github-detection-status")
     .describe("status", key)
@@ -147,7 +153,11 @@ fn head(ctx: &Ctx, state: Option<&DetectionState>, found: Option<&GitHubDetectio
         )
         .child(status),
     )
-    .child(Text::new(&ctx.t("setup.github.optional")).variant(TypographyStyle::Caption))
+    // GitHub is optional, but a folder that is no repository is not (`gutA8`).
+    .with_children(
+      (!matches!(state, Some(DetectionState::NotAGitRepository)))
+        .then(|| Text::new(&ctx.t("setup.github.optional")).variant(TypographyStyle::Caption)),
+    )
 }
 
 /// What a property is, and its value (`Row · Repository` `Y7zqv`).
@@ -213,7 +223,7 @@ fn command_row(ctx: &mut Ctx, id: &str, command: &str) -> Element {
   CommandRow::new(id.to_owned(), command.to_owned(), ctx.t("common.copy"), move || {
     copier.copy(&copied)
   })
-  .prompt()
+  .dollar_prompt()
   .render(ctx)
 }
 
