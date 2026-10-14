@@ -37,6 +37,7 @@
       "tool": "{{server}} · {{tool}}",
       "own": "“{{text}}”",
       "answerSeparator": ", ",
+      "firstLineMore": "{{line}} …",
       "line": {
         "once": "Approved once · {{subject}}",
         "similar": "Approved similar in this run · {{subject}}",

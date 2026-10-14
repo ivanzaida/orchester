@@ -98,7 +98,7 @@ impl About {
       ),
       WaitingKind::Approval(shown) => {
         let subject = match shown.first_line() {
-          (line, true) => ctx.t_args("needs_you.asks.firstLineMore", [("line", line)]),
+          (line, true) => ctx.t_args("needs_you.note.firstLineMore", [("line", line)]),
           (line, false) => line.into(),
         };
         (shown.approval.agent.as_str().into(), subject)
