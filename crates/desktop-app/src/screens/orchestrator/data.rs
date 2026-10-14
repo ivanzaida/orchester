@@ -73,10 +73,12 @@ pub(super) fn read(ctx: &mut Ctx, root: &Path, chat: OrchestratorChat) -> Reads 
       .and_then(|history| history.chats.first())
       .map(|listing| listing.chat.id()),
   };
+  // Read on every pass, a new conversation's too, so the screen's hooks keep their order.
+  let read = conversation(ctx, (root.to_path_buf(), target, revision), &hold);
   let shown = match (chat, target) {
     (OrchestratorChat::Latest, None) if matches!(history, Read::Loading) => Shown::Loading,
     (_, None) => Shown::New,
-    (_, Some(id)) => conversation(ctx, (root.to_path_buf(), id, revision), &hold),
+    (_, Some(_)) => read,
   };
   Reads {
     setup,
@@ -104,7 +106,7 @@ fn revision(ctx: &mut Ctx, runners: &Runners, root: &Path) -> u64 {
 }
 
 /// `load` of the project at `root`, read off the UI thread again whenever `revision` changes; the value last read
-/// stays while it is read again.
+/// stays while it is read again, and a reading that failed says so even when an earlier one succeeded.
 fn read_with<T>(
   ctx: &mut Ctx,
   (root, revision): (PathBuf, u64),
@@ -125,20 +127,25 @@ where
     })
     .state()
     .get();
+  let rejected = state.is_rejected();
   match (state.data, state.error) {
+    (_, Some(error)) if rejected => Read::Failed(error),
     (Some(value), _) => Read::Ready(value),
     (None, Some(error)) => Read::Failed(error),
     (None, None) => Read::Loading,
   }
 }
 
-/// Conversation `id` of the project at `root`.
-fn conversation(ctx: &mut Ctx, (root, id, revision): (PathBuf, ChatId, u64), hold: &ReadHold) -> Shown {
+/// Conversation `id` of the project at `root`; nothing is read for a new one (`None`).
+fn conversation(ctx: &mut Ctx, (root, id, revision): (PathBuf, Option<ChatId>, u64), hold: &ReadHold) -> Shown {
   let hold = hold.clone();
   let state = ctx
     .future((root, id, revision), move |(root, id, _)| {
       let hold = hold.clone();
       async move {
+        let Some(id) = id else {
+          return Ok(None);
+        };
         hold.released().await;
         background::run(move || ChatView::load_in(&root, id))
           .await
@@ -147,11 +154,12 @@ fn conversation(ctx: &mut Ctx, (root, id, revision): (PathBuf, ChatId, u64), hol
     })
     .state()
     .get();
-  let pending = state.is_pending();
+  let (pending, rejected) = (state.is_pending(), state.is_rejected());
   match (state.data, state.error) {
+    (_, Some(error)) if rejected => Shown::Failed(error),
     // A conversation read before stays while it is read again; another one's does not.
-    (Some(Some(view)), _) if view.chat.id() == id => Shown::Chat(view),
-    (Some(None), _) if !pending => Shown::Missing,
+    (Some(Some(view)), _) if Some(view.chat.id()) == id => Shown::Chat(view),
+    (Some(None), _) if !pending && id.is_some() => Shown::Missing,
     (None, Some(error)) => Shown::Failed(error),
     _ => Shown::Loading,
   }

@@ -6,7 +6,7 @@ use lurq::app::{
   component::DevtoolsInspectable,
   ctx::{Ctx, FutureAction},
 };
-use orchester_core::id::ChatId;
+use orchester_core::id::{ChatId, ChatMessageId};
 use orchester_workspace::{
   messages::Message,
   orchestrator::{
@@ -28,10 +28,11 @@ pub(super) struct Sending {
 
 impl DevtoolsInspectable for Sending {}
 
-/// The conversation a message went to, and whether it was the draft's.
+/// The conversation a message went to, the message, and whether it was the draft's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct Sent {
   pub(super) chat: ChatId,
+  pub(super) message: ChatMessageId,
   pub(super) from_draft: bool,
 }
 
@@ -74,6 +75,7 @@ pub(super) fn send_action(ctx: &mut Ctx) -> SendAction {
       sent?;
       Ok(Sent {
         chat: outgoing.chat,
+        message: outgoing.message,
         from_draft,
       })
     }

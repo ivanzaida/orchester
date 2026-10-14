@@ -113,10 +113,18 @@ impl Component for OrchestratorScreen {
       if !state.is_fulfilled() {
         return;
       }
-      let Some(Sent { chat, from_draft }) = state.data else {
+      let Some(Sent {
+        chat,
+        message,
+        from_draft,
+      }) = state.data
+      else {
         return;
       };
-      if from_draft {
+      // The draft is done with only while it still is the message sent: what the person wrote since stays.
+      let sent = outgoing.get_untracked();
+      let unchanged = sent.is_some_and(|sent| sent.message == message && sent.text == draft.get_untracked());
+      if from_draft && unchanged {
         draft.set(String::new());
         outgoing.set(None);
       }

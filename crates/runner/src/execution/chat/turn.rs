@@ -10,7 +10,7 @@ use std::{
 use orchester_core::{
   account::AccountCli,
   connection::{
-    AccountStartProblem, AgentConnection, AgentProvider, ConnectionAccount,
+    AccountStartProblem, AgentConnection, AgentProvider, ConnectionAccount, ConnectionError,
     invocation::{ClaudeChat, ClaudeMcpConfig, ClaudeSession, McpLaunch, Platform, on_account},
     mcp::{McpServerName, McpUrl},
     stream::{AgentEvent, ClaudeStream, OutputStream},
@@ -89,12 +89,18 @@ impl Turn {
   fn prepare(&self) -> Result<Started, TurnFailure> {
     let cannot = |reason: String| TurnFailure::CannotStart { reason };
     let mut db = ProjectDb::open(&self.root).map_err(|error| cannot(error.to_string()))?;
-    let connection = db
+    let stored = db
       .connection(self.settings.connection())
       .map_err(|error| cannot(error.to_string()))?
-      .and_then(|connection| AgentConnection::try_from(connection).ok())
-      .filter(|connection| runs_orchestrator(connection.provider()))
       .ok_or(TurnFailure::ConnectionGone)?;
+    // A GitHub connection is not one the Orchestrator runs on, as the settings say; any other error says why.
+    let connection = AgentConnection::try_from(stored).map_err(|error| match error {
+      ConnectionError::NotAgent(_) => TurnFailure::ConnectionGone,
+      other => cannot(format!("cannot read the Orchestrator's connection: {other}")),
+    })?;
+    if !runs_orchestrator(connection.provider()) {
+      return Err(TurnFailure::ConnectionGone);
+    }
     let provider = connection.provider();
     if let Some(problem) = connection
       .account()

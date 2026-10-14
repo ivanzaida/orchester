@@ -153,6 +153,20 @@ fn orchestrator_acts_in_its_own_project_after_another_takes_its_name() {
   });
 }
 
+#[test]
+fn orchestrator_keeps_what_the_person_wrote_while_a_message_was_being_sent() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  screen.go(OrchestratorChat::New);
+  screen.send("What is running?");
+  // Written before the send finished: it is a new draft, not the message sent.
+  screen.set("orchestrator-input", "Next, the review queue");
+  screen.until("the answer", |screen| {
+    screen.text("orchestrator-conversation").contains("Noted: What is running?")
+      && !screen.exists("orchestrator-thinking")
+  });
+  assert_eq!(screen.text("orchestrator-input"), "Next, the review queue");
+}
+
 /// The addresses the agent was given its tools at, one per turn, in order.
 fn tool_addresses(screen: &Orchestrator) -> Vec<String> {
   let log = std::fs::read_to_string(screen.root.join(".orchester").join("fake-chat.log")).unwrap_or_default();
