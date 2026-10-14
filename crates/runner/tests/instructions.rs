@@ -254,3 +254,60 @@ async fn instructions_run_revision_before_the_first_checkpoint_fails_the_step_an
       .any(|entry| entry.event == problem)
   );
 }
+
+/// A run of "Keep working." killed while its agent works, with `then` done to its worktree before it
+/// continues; the prompt of the continued session.
+async fn resumed_prompt(then: impl FnOnce(&Path)) -> (String, String) {
+  let project = project(&Setup::new("Keep working."));
+  let root = project.repo.path();
+  publish(
+    root,
+    "compare",
+    "Compare",
+    &rule(
+      "Compare {{run.revision}}.",
+      AgentTargets::All,
+      &[InjectionEvent::Resume],
+    ),
+  );
+  let base = git(root, &["rev-parse", "HEAD"]);
+  let run = killed_mid_run(root, project.task).await;
+  let worktree = root.join(".orchester/worktrees").join(run.to_string());
+  then(&worktree);
+  let (scheduler, mut events) = scheduler(root);
+  scheduler
+    .attach(AttachSession::Reconnect, NonZeroU32::new(2).expect("above zero"))
+    .await
+    .expect("attached");
+  wait_for(root, &mut events, run, |run| run.status() == &RunStatus::Succeeded).await;
+  let db = ProjectDb::open(root).expect("open");
+  let invocations = db.invocations(run).expect("invocations");
+  let [_, continued] = invocations.as_slice() else {
+    panic!("two launches: {invocations:?}");
+  };
+  let continued = db.invocation_prompt(continued.id).expect("read").expect("stored");
+  assert_eq!(continued.event, InjectionEvent::Resume);
+  (prompts(&db, run), base)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn instructions_run_revision_at_resume_is_the_commit_the_agent_made_without_a_checkpoint() {
+  let mut head = String::new();
+  let (prompt, base) = resumed_prompt(|worktree| {
+    // The agent committed its work itself: the worktree is clean, so no checkpoint records it.
+    git(
+      worktree,
+      &["commit", "--allow-empty", "--quiet", "-m", "The agent's own commit"],
+    );
+    head = git(worktree, &["rev-parse", "HEAD"]);
+  })
+  .await;
+  assert_ne!(head, base);
+  assert!(prompt.contains(&format!("Compare {head}.")), "{prompt}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn instructions_run_revision_at_resume_is_the_base_while_nothing_moved_the_branch() {
+  let (prompt, base) = resumed_prompt(|_| {}).await;
+  assert!(prompt.contains(&format!("Compare {base}.")), "{prompt}");
+}

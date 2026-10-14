@@ -11,4 +11,5 @@ mod fields;
 mod harness;
 mod icons;
 mod labels;
+mod prompt_input;
 mod textarea_focus;

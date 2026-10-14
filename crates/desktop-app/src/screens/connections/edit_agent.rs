@@ -76,7 +76,10 @@ impl Component for EditConnection {
     let props = ctx.props::<EditProps>().clone();
     let listed = data::load(ctx, props.project.open.repo_root.clone(), 0).data;
     let Some(listed) = listed else {
-      return Column::new().width(Dimension::Pct(100.0)).into();
+      return Column::new()
+        .id(format!("screen-{}", Screen::EditConnection.name()))
+        .width(Dimension::Pct(100.0))
+        .into();
     };
     let Some(connection) = listed
       .connections

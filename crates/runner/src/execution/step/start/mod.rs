@@ -200,6 +200,8 @@ impl RunTask {
 #[derive(Clone, Copy)]
 struct PromptParts<'a> {
   execution: StepExecutionId,
+  /// Where the agent works: a resumed session's `run.revision` is the commit checked out there.
+  worktree: &'a Path,
   step: &'a Step,
   profile: ProfileInfo<'a>,
   continuation: &'a Continuation,
@@ -270,6 +272,7 @@ impl RunTask {
     placed.read_with = skill_tool(&tools, &setup, claude_approvals.is_some());
     let parts = PromptParts {
       execution,
+      worktree,
       step,
       profile: info,
       continuation,

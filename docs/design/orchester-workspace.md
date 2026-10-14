@@ -2385,13 +2385,13 @@ The count of 25 in the mockup refers to this proposed catalog, not a discovered 
 | Run | `run.budget` | integer, tokens | Run limits configured |
 | Run | `run.branch` | string | Working branch created |
 | Run | `run.base_revision` | string | Run created |
-| Run | `run.revision` | string | After the run's first checkpoint commit |
+| Run | `run.revision` | string | After the run's first checkpoint commit; at Agent resume the commit the agent's worktree is at |
 | Step | `step.id` | string | Step selected |
 | Step | `step.name` | string | Step selected |
 
 The sample syntax is `{{task.title}}`. Variables are evaluated as data, not executable expressions. Secret values are excluded from this catalog. Missing values must not silently become empty text: explain the unavailable phase and offer an appropriate injection point or an explicitly configured fallback.
 
-`run.base_revision` is the revision the run started from. `run.revision` is the run's latest checkpoint commit; a step's prompt gets the latest checkpoint at the time its invocation starts. Before the first checkpoint it has no value: an agent whose prompt uses it does not start, and its step fails naming the variable.
+`run.base_revision` is the revision the run started from. `run.revision` is the run's latest checkpoint commit; a step's prompt gets the latest checkpoint at the time its invocation starts. Before the first checkpoint it has no value at Agent start: an agent whose prompt uses it does not start, and its step fails naming the variable. At Agent resume it is the commit the agent's worktree has checked out as the invocation starts, which is the real current state: its latest checkpoint, or a commit the agent made or merged itself after it (a clean worktree records no checkpoint), or the base revision while nothing has moved its branch (user decision 2026-10-14). Only when git cannot read that commit does it fall back to the latest checkpoint, and before the first one the step fails naming the variable, as at Agent start. This is why *Inject at Agent resume* resolves the unavailable-variable frame, and an instruction using `run.revision` publishes only when it is injected at Agent resume alone.
 
 The unavailable-variable frame demonstrates `run.revision` before the first commit. Required policy blocks injection; the user can choose a later injection event or explicitly configure a fallback. The UI must not fabricate a revision or silently insert an empty string.
 
