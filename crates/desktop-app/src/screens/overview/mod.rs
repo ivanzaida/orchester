@@ -8,7 +8,8 @@
 //! What counts and how is `orchester_workspace::tasks::{board, attention, overview}`; the tasks are the
 //! feed's as they stand with the runner, so a run that lost its agent is interrupted. The line over the
 //! title names the repository and branch as git tells them (`orchester_workspace::tasks::checkout`, read
-//! off the UI thread). Not built here: Import resources and reviewing memory records (both visibly
+//! off the UI thread). How long each thing waits and *Completed today* are taken again every [`TICK`].
+//! Not built here: Import resources and reviewing memory records (both visibly
 //! unavailable), and answering a request or a question in place: each card opens its task where it is
 //! answered.
 
@@ -21,13 +22,16 @@ mod ready;
 mod row;
 mod tasks;
 
+use std::time::Duration;
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::Ctx,
+    ctx::{Ctx, Interval},
     theme::SpacingSize,
   },
   components::{Column, Row, ScrollVertical},
+  core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -45,6 +49,9 @@ use crate::{
 
 /// The *Needs you* column's width (`Needs you` `NbKDR`).
 const NEEDS_WIDTH: f32 = 360.0;
+/// How often the waits and *Completed today* move on while the Overview shows, as the Needs you panel's
+/// waits do; *today* rolls over at local midnight within one tick.
+const TICK: Duration = Duration::from_secs(30);
 
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, tab: OverviewTab) -> Element {
   let key = format!("overview-{}", project.open.project.id());
@@ -65,16 +72,25 @@ struct OverviewProps {
 
 impl DevtoolsInspectable for OverviewProps {}
 
-struct OverviewScreen;
+struct OverviewScreen {
+  tick: Signal<u64>,
+  interval: Interval,
+}
 
 impl Component for OverviewScreen {
   type Props = OverviewProps;
 
-  fn create(_ctx: &mut Ctx) -> Self {
-    Self
+  fn create(ctx: &mut Ctx) -> Self {
+    let tick = ctx.signal(0_u64);
+    let next = tick.clone();
+    let interval = ctx.create_interval(TICK, move || next.update(|tick| *tick += 1));
+    Self { tick, interval }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    // Read on every tick, so the times below are taken again.
+    self.tick.get();
+    self.interval.start();
     let OverviewProps { project, tab } = ctx.props::<OverviewProps>().clone();
     let recovery = ctx.mount_keyed::<RecoveryNotice>("recovery-notice", project.clone());
     let state = project.tasks();
