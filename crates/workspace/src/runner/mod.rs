@@ -11,6 +11,7 @@
 mod ask;
 mod check;
 mod connection;
+mod idle;
 mod lifetime;
 mod report;
 mod requests;
@@ -23,7 +24,7 @@ use std::{
   path::{Path, PathBuf},
   sync::{
     Arc,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
   },
   time::{Duration, SystemTime},
 };
@@ -40,6 +41,7 @@ use self::{
   state::{RunnerEvent, RunnerState},
 };
 pub use self::{
+  idle::ForgetRefusal,
   report::RunnerStatus,
   requests::RequestError,
   work::{ActiveWork, ActiveWorkFields, SaveState},
@@ -97,6 +99,8 @@ struct Inner {
   /// Held while a project's limits are stored and changed agent slots are handed to its runner, so
   /// the runner gets them in the order they were stored ([`Runners::store_agent_slots`]).
   slot_updates: Mutex<()>,
+  /// Hands out the generations of the projects' runners.
+  generations: AtomicU64,
 }
 
 /// One project's runner.
@@ -108,6 +112,12 @@ struct ProjectRunner {
   lingering: Option<Lingering>,
   /// Requests under way that give the runner work; it is not asked to stop meanwhile.
   pins: usize,
+  /// Which runner of the project this is: each start gets a new one.
+  generation: u64,
+  /// The question whether it is idle, while one is in flight (`idle`).
+  asking: Option<idle::IdleAnswer>,
+  /// The project is being removed from the list: once stopped, the runner is not started again.
+  forgetting: bool,
 }
 
 impl PartialEq for Runners {
@@ -141,6 +151,7 @@ impl Runners {
         tabbed: Mutex::new(HashSet::new()),
         closing: AtomicBool::new(false),
         slot_updates: Mutex::new(()),
+        generations: AtomicU64::new(0),
       }),
     }
   }
@@ -200,6 +211,9 @@ impl Runners {
         connection: Some(connection),
         lingering: None,
         pins: 0,
+        generation: self.inner.generations.fetch_add(1, Ordering::Relaxed),
+        asking: None,
+        forgetting: false,
       },
     );
   }

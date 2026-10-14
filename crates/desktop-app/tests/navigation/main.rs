@@ -196,13 +196,11 @@ fn cycling_wraps_around() {
 fn the_window_shows_the_active_tabs_route() {
   let mut window = Window::open();
   let navigation = window.navigation();
-  assert_eq!(
-    window.texts("screen-all_projects"),
-    Some(vec![
-      "All projects".to_owned(),
-      "This screen isn't built yet.".to_owned()
-    ])
-  );
+  window.until("All projects to be read", |window| {
+    window
+      .texts("all-projects-title")
+      .is_some_and(|title| title == ["All projects"])
+  });
   assert!(window.texts("nav-overview").is_none(), "no project, no project screens");
   // KON-1, a draft: its Changes tab says it has not run yet.
   let draft = TaskDetails {
@@ -230,11 +228,11 @@ fn the_window_shows_the_active_tabs_route() {
   let tasks = window.texts("nav-tasks").expect("Tasks shows");
   assert_eq!(tasks[0], "Tasks");
   navigation.open_tab();
-  window.pass();
-  assert_eq!(
-    window.texts("screen-all_projects").map(|texts| texts[0].clone()),
-    Some("All projects".to_owned())
-  );
+  window.until("the new tab's All projects", |window| {
+    window
+      .texts("all-projects-title")
+      .is_some_and(|title| title == ["All projects"])
+  });
   navigation.cycle(-1);
   navigation.back();
   window.pass();
