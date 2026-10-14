@@ -12,6 +12,14 @@ fn decision_unverified_lists_what_was_not_checked_and_offers_accept_run_again_an
     "Unverified: Review could not check 2 things"
   );
   assert!(page.text("task-notice").contains("no retry was used"));
+  // The header says why it waits, not that retries were used.
+  let status = page.text("task-status");
+  assert!(status.contains("could not check everything"), "{status}");
+  assert!(!status.contains("retries used"), "{status}");
+  // Running Review again is a choice of its own: returning the work starts at the step Review sends it back to.
+  let options = page.options("task-return-step");
+  assert!(options.contains(&"03 Implement · default".to_owned()), "{options:?}");
+  assert!(page.text("task-return-note-field-label").contains("Note for Builder"));
   assert_eq!(page.text("task-unverified-head"), "What Review could not check");
   assert!(
     page
@@ -38,6 +46,13 @@ fn decision_unchanged_after_a_failed_verdict_shows_it_and_runs_again_first() {
   let mut page = Page::seeded("decisions");
   page.open("waits unchanged after Review failed", "task-retry-decision");
   assert_eq!(page.text("task-notice-title"), "Review was not run again");
+  let notice = page.text("task-notice");
+  assert!(notice.contains("last failed on this same revision"), "{notice}");
+  assert!(page.text("task-status").contains("not run again"));
+  // Review sent the work back to Implement, which changed nothing: the work goes back there by default.
+  let options = page.options("task-return-step");
+  assert!(options.contains(&"03 Implement · default".to_owned()), "{options:?}");
+  assert!(page.text("task-return-note-field-label").contains("Note for Builder"));
   // The verdict it was not run again for is what Review reported.
   assert!(page.text("task-retry-report-text").contains("UTC day"));
   assert!(!page.has("task-unverified"));

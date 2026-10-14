@@ -21,22 +21,16 @@ use lurq::{
 };
 use orchester_core::{
   resource::StepKey,
-  run::{RunStatus, Stuck, StuckDecision},
+  run::{RunStatus, StepFailure, Stuck, StuckDecision},
 };
 use orchester_workspace::tasks::detail::RunView;
-use parking_lot::Mutex;
 
 use self::decide::DecideCard;
 use super::{
   TaskContext, action::decision_action, arranged, pointing::Pointing, stages::stages, step_label, task_notice,
   this_run_panel,
 };
-use crate::{
-  mcp::input_gate::{Guarded, InputGate, Protected},
-  navigation::pointed::PointedCard,
-  services::Services,
-  ui::notice::Notice,
-};
+use crate::{mcp::input_gate::InputGate, navigation::pointed::PointedCard, services::Services, ui::notice::Notice};
 
 /// Which decision was asked for, for the button that shows it under way.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -122,7 +116,11 @@ fn unverified_notice(ctx: &Ctx, run: &RunView, stuck: &Stuck, mut said: super::S
     ),
     _ => (
       "decisions.retries.unchangedNoticeTitle",
-      "decisions.retries.unchangedNoticeBody",
+      match run.unchanged_after() {
+        Some(StepFailure::Unverified) => "decisions.retries.unchangedNoticeBody.unverified",
+        Some(_) => "decisions.retries.unchangedNoticeBody.failed",
+        None => "decisions.retries.unchangedNoticeBody.ended",
+      },
     ),
   };
   said.title = ctx.t_args(title, args.clone());
@@ -134,9 +132,10 @@ pub struct RetryDecision {
   target: Signal<Target>,
   note: Signal<String>,
   asked: Signal<Option<Deciding>>,
+  /// Window input pressed *Accept … as it is*, which is a person's decision ([`Guarded::StepAccept`](
+  /// crate::mcp::input_gate::Guarded::StepAccept)), without their leave.
+  person_only: Signal<bool>,
   gate: Option<InputGate>,
-  /// Held while *Accept … as it is* shows: it is a person's decision ([`Guarded::StepAccept`]).
-  accepting: Mutex<Option<Protected>>,
   pointing: Pointing,
 }
 
@@ -148,8 +147,8 @@ impl Component for RetryDecision {
       target: ctx.signal(Target(None)),
       note: ctx.signal(String::new()),
       asked: ctx.signal(None),
+      person_only: ctx.signal(false),
       gate: ctx.use_context::<InputGate>(),
-      accepting: Mutex::new(None),
       pointing: Pointing::new(ctx),
     }
   }
@@ -163,24 +162,9 @@ impl Component for RetryDecision {
     let RunStatus::WaitingForPerson(stuck) = run.run.status() else {
       return Column::new().into();
     };
-    if let Some(gate) = &self.gate {
-      let mut accepting = self.accepting.lock();
-      match (stuck.can_accept(), accepting.is_some()) {
-        (true, false) => *accepting = Some(gate.protect(Guarded::StepAccept)),
-        (false, true) => *accepting = None,
-        _ => {}
-      }
-    }
-    // The choice starts at the step one more retry resumes, else at the first the work can go back to.
+    // The choice starts at the run's default return target ([`orchester_core::run::Run::return_default`]).
     if self.target.get_untracked().0.is_none() {
-      let targets = run.run.return_targets();
-      let start = run
-        .run
-        .retry_from()
-        .filter(|from| targets.contains(from))
-        .or_else(|| targets.first())
-        .cloned();
-      self.target.set(Target(start));
+      self.target.set(Target(run.run.return_default()));
     }
     self.pointing.arrived(ctx, &props, PointedCard::Retries);
     let now = Services::of(ctx).clock.now();
@@ -190,6 +174,7 @@ impl Component for RetryDecision {
       target: &self.target,
       note: &self.note,
       asked: &self.asked,
+      person_only: &self.person_only,
       action: &action,
       gate: self.gate.as_ref(),
       offline: (!props.online).then(|| ctx.t("task.controls.offline")),

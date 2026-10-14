@@ -54,9 +54,6 @@ const SETTING_REFUSAL: &str = "A person changes this setting in the window: whil
 const QUESTION_REFUSAL: &str = "A person answers this in the window: while a Connections page, Agents page, Tools page, Secrets page, Skills page, Project settings or Pipelines page asks to \
   confirm what a change lets agents do (in any tab, until it is answered or the page is left), \
   window input from MCP clients (clicks, keys, values, resizing, menus) is refused.";
-const ACCEPT_REFUSAL: &str = "A person decides this in the window: while a task's Summary offers to accept a step that \
-  could not check everything, window input from MCP clients is refused unless a person turned on Let automation \
-  answer approvals.";
 const STILL_AVAILABLE: &str = "Looking at the window and the app's own tools stay available.";
 /// What a refused client reads while the access token shows in Settings › Automation.
 const TOKEN_REFUSAL: &str = "The access token of Orchester's MCP server shows in the window: while a person reads \
@@ -90,7 +87,8 @@ pub enum Guarded {
   /// Settings › Accounts: adding, renaming and removing an account and signing it in are a person's.
   Accounts,
   /// A task Summary's *Accept … as it is*: it passes a step in a person's place, as approving does, so it needs the
-  /// approvals opt-in.
+  /// approvals opt-in. Only its handler refuses ([`input_may_decide`]); it is never protected, so the rest of the
+  /// window, its close button included, takes a client's input while it shows.
   StepAccept,
 }
 
@@ -137,7 +135,6 @@ struct Controls {
   server: usize,
   /// Times the access token shows in the window now.
   token_shown: usize,
-  accepts: usize,
 }
 
 /// Shared between the app's MCP server and the window. Clones share the same counts.
@@ -196,7 +193,8 @@ impl InputGate {
       Guarded::PermissionWidening => &mut controls.permissions,
       Guarded::ApprovalWidening => &mut controls.approvals,
       Guarded::McpServer => &mut controls.server,
-      Guarded::StepAccept => &mut controls.accepts,
+      // Only its handler refuses: accepting locks no window input, whoever marks it.
+      Guarded::StepAccept => return,
     };
     if add {
       *count += 1;
@@ -277,9 +275,6 @@ impl InputGate {
     if questions > 0 {
       words.push(QUESTION_REFUSAL);
     }
-    if controls.accepts > 0 && !self.widening_allowed(Guarded::StepAccept) {
-      words.push(ACCEPT_REFUSAL);
-    }
     words.push(STILL_AVAILABLE);
     words.join(" ")
   }
@@ -292,7 +287,6 @@ impl InputGate {
       || controls.questions > 0
       || (controls.permissions > 0 && !self.widening_allowed(Guarded::PermissionWidening))
       || (controls.approvals > 0 && !self.widening_allowed(Guarded::ApprovalWidening))
-      || (controls.accepts > 0 && !self.widening_allowed(Guarded::StepAccept))
   }
 
   /// Whether an MCP client's window input is being applied now: a change a protected control hears now

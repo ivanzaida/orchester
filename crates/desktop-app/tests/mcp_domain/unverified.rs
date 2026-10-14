@@ -1,7 +1,7 @@
 //! Accepting a step that could not check everything passes it in a person's place, as approving does: `continue_run`'s
-//! `accept` is refused as `person_only` until a person turns on *Let automation answer approvals*, and while the task
-//! page offers *Accept … as it is*, a client's window input is refused too. `get_run` lists what the step could not
-//! check.
+//! `accept` is refused as `person_only` until a person turns on *Let automation answer approvals*, and so is a client's
+//! press on *Accept … as it is* in the window, which the card says; the rest of the window takes the client's input.
+//! `get_run` lists what the step could not check.
 
 use orchester_core::{
   store::{RunStore, TaskStore},
@@ -73,25 +73,29 @@ fn domain_window_input_cannot_accept_an_unverified_step() {
     now: Timestamp::now(),
   })
   .expect("the scenario seeds");
-  let (key, _) = unverified_run(&seeded);
-  let runner = folder.path().join("no-runner").join("orchester-runner");
+  let (key, run) = unverified_run(&seeded);
+  // The real runner, so that the decision's buttons take presses (without one they are unavailable).
+  let (runner, _) = super::live::programs();
   let mut served = Served::start_with(folder, &seeded.app_database, runner, true);
   served.ok(
     "navigate",
     &json!({ "route": "task", "project": seeded.project.to_string(), "key": key }),
   );
-  served.until("Accept", |served| served.shows("task-accept-step"));
-  for _ in 0..3 {
-    served.pass();
-  }
-  let refused = served
+  served.until("Accept with the runner online", |served| {
+    served.shows("task-accept-step") && !served.shows("task-retry-offline")
+  });
+  // Only the Accept button refuses: the rest of the window, its close button included, takes a client's input.
+  served
+    .click_by_client("task-retry-decision-title")
+    .expect("window input is not refused while Accept shows");
+  served
     .click_by_client("task-accept-step")
-    .expect_err("a client's press is refused");
-  assert_eq!(refused["code"], "person_only", "{refused}");
-  assert!(
-    refused["message"]
-      .as_str()
-      .is_some_and(|message| message.contains("accept a step")),
-    "{refused}"
+    .expect("the press reaches the button, whose handler refuses it");
+  served.until("the refusal", |served| served.shows("task-accept-person-only"));
+  let shown = served.ok("get_run", &json!({ "project": "Kontur", "run": run }));
+  assert_eq!(
+    shown["status"]["reason"],
+    json!({ "unverified": "review" }),
+    "nothing was accepted: {shown}"
   );
 }

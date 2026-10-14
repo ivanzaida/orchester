@@ -5,19 +5,19 @@
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   layout::Alignment,
-  node::{Element, dimension::Dimension},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::resource::StepKey;
+use orchester_core::{resource::StepKey, run::UnverifiedCheck};
 use orchester_workspace::tasks::detail::RunView;
 
 use crate::{
-  theme::{DecisionText, ExtraSpacing, IconSize, TaskText},
+  theme::{DecisionSpacing, DecisionText, ExtraSpacing, IconSize, TaskText},
   ui::{
-    card::{CardSurface, card},
+    card::{CardSurface, card_frame},
     icon::{Icon, icon},
   },
 };
@@ -36,32 +36,9 @@ pub fn section(ctx: &Ctx, run: &RunView, step: &StepKey) -> Option<Element> {
   let head = Text::new(&ctx.t_args("decisions.retries.unverifiedHeading", [("step", name.as_str())]))
     .id("task-unverified-head")
     .variant(TaskText::SectionTitle.role());
-  let list = card("task-unverified", CardSurface::Raised)
-    .spacing(SpacingSize::Md)
-    .with_children(checks.iter().enumerate().map(|(index, check)| {
-      Row::new()
-        .id(format!("task-unverified-{index}").as_str())
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Start)
-        .child(icon(Icon::CircleDashed, IconSize::Sm, PaletteColor::TextSecondary))
-        .child(
-          Column::new()
-            .flex(1.0)
-            .child(
-              Text::new(&check.check)
-                .variant(DecisionText::Subhead.role())
-                .width(Dimension::Pct(100.0))
-                .selectable(true),
-            )
-            .child(
-              Text::new(&check.reason)
-                .variant(TypographyStyle::Description)
-                .width(Dimension::Pct(100.0))
-                .selectable(true),
-            ),
-        )
-    }));
+  // Rows a hairline apart, as the latest attempt's steps.
+  let list = card_frame("task-unverified", CardSurface::Raised)
+    .with_children(checks.iter().enumerate().map(|(index, check)| check_row(index, check)));
   Some(
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -70,4 +47,42 @@ pub fn section(ctx: &Ctx, run: &RunView, step: &StepKey) -> Option<Element> {
       .child(list)
       .into(),
   )
+}
+
+/// A check it could not do: the mark on the line of its name, and why under the name.
+fn check_row(index: usize, check: &UnverifiedCheck) -> Column {
+  let name = Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(icon(Icon::CircleDashed, IconSize::Sm, PaletteColor::TextSecondary))
+    .child(
+      Text::new(&check.check)
+        .variant(DecisionText::Subhead.role())
+        .flex(1.0)
+        .selectable(true),
+    );
+  let row = Column::new()
+    .id(format!("task-unverified-{index}").as_str())
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
+    .spacing(ExtraSpacing::Tight.role())
+    .child(name)
+    // A check listed without a reason has no line for one.
+    .with_children((!check.reason.is_empty()).then(|| {
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .padding_left(DecisionSpacing::CheckIndent.role())
+        .child(
+          Text::new(&check.reason)
+            .variant(TypographyStyle::Description)
+            .flex(1.0)
+            .selectable(true),
+        )
+    }));
+  if index > 0 {
+    row.border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+  } else {
+    row
+  }
 }

@@ -5,7 +5,9 @@
 //! to return to, that part is left out. A step that waits unverified or unchanged is first offered
 //! *Accept … as it is*, and *Run … again* takes the retry's place; after a failed verdict the work has not changed
 //! since, *Run … again* comes first and accepting second. Accepting is a person's decision: lurq's synthetic input
-//! takes it only while a person lets automation answer approvals, and it is recorded as automation's then.
+//! takes it only while a person lets automation answer approvals, and it is recorded as automation's then. A press
+//! it may not take is refused in the button's handler alone, and the card says so; the rest of the window takes
+//! window input as before.
 
 use std::sync::Arc;
 
@@ -52,6 +54,8 @@ pub struct DecideCard<'a> {
   pub target: &'a Signal<Target>,
   pub note: &'a Signal<String>,
   pub asked: &'a Signal<Option<Deciding>>,
+  /// Set when window input pressed *Accept … as it is* without a person's leave.
+  pub person_only: &'a Signal<bool>,
   pub action: &'a DecisionAction<Deciding>,
   pub gate: Option<&'a InputGate>,
   /// Why nothing can be decided now: no runner is connected to carry it out.
@@ -90,6 +94,12 @@ impl DecideCard<'_> {
           .map(|reason| reason_line("task-retry-offline", reason)),
       )
       .with_children(refused.map(|refused| field_error("task-retry-refused", &message_text(ctx, &refused))))
+      .with_children(
+        self
+          .person_only
+          .get()
+          .then(|| field_error("task-accept-person-only", &ctx.t("decisions.retries.acceptPersonOnly"))),
+      )
       .child(stop);
     self.pointing.ring(card).into()
   }
@@ -219,12 +229,12 @@ impl DecideCard<'_> {
     if targets.is_empty() {
       return Vec::new();
     }
-    let default = self.run.run.retry_from();
+    let default = self.run.run.return_default();
     let options: Vec<SelectOption<Target>> = targets
       .iter()
       .map(|key| {
         let name = self.name(ctx, key);
-        let label = if Some(key) == default {
+        let label = if Some(key) == default.as_ref() {
           ctx.t_args("decisions.retries.defaultTarget", [("step", &*name)])
         } else {
           name
@@ -284,7 +294,7 @@ impl DecideCard<'_> {
       Some(_) => button.disabled(),
       None => {
         let (action, asked, run) = (self.action.clone(), self.asked.clone(), self.run.id());
-        let gate = self.gate.cloned();
+        let (gate, person_only) = (self.gate.cloned(), self.person_only.clone());
         button.on_click(move || {
           // A second press while the first is under way would replace it (lurq's `FutureAction::run`).
           if action.state().get_untracked().is_pending() {
@@ -292,6 +302,7 @@ impl DecideCard<'_> {
           }
           let Some(decision) = decided(gate.as_ref(), &decision) else {
             tracing::warn!("synthetic input reached a step's acceptance; not taken");
+            person_only.set(true);
             return;
           };
           asked.set(Some(deciding));

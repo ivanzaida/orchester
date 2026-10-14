@@ -13,7 +13,7 @@ use lurq::{
 };
 use orchester_core::{
   integration::MergeError,
-  run::{PauseReason, RunLimit, RunStatus, TaskPhase},
+  run::{PauseReason, RunLimit, RunStatus, Stuck, TaskPhase},
 };
 use orchester_workspace::{
   display,
@@ -54,13 +54,14 @@ pub fn status_row(ctx: &mut Ctx, task: &TaskContext) -> Element {
     .into()
 }
 
-/// The task's status and what it is about: the step it stands at, that the step used up its retries
-/// ("retries used", as the design's chip says), or why a merge failed ("conflict").
+/// The task's status and what it is about: the step it stands at, why the run waits for the person's decision
+/// ([`stuck_words`]), or why a merge failed ("conflict").
 fn chip_words(ctx: &Ctx, task: &TaskContext) -> (Status, Option<Arc<str>>) {
   let detail = &task.detail;
   let lost = task.lost();
   if !lost && detail.phase() == TaskPhase::Stuck {
-    return (Status::NeedsInput, Some(ctx.t("task.status.retriesUsed")));
+    let words = detail.run.as_ref().and_then(|run| stuck_words(run.run.status()));
+    return (Status::NeedsInput, words.map(|key| ctx.t(key)));
   }
   // A request the run's agent waits on: the run needs the person, as its notice and steps say.
   if let Some(approval) = task.waiting_approval() {
@@ -76,6 +77,17 @@ fn chip_words(ctx: &Ctx, task: &TaskContext) -> (Status, Option<Arc<str>>) {
   }
   let (status, step) = status(detail, lost);
   (status, step.map(|step| step_label(ctx, step)))
+}
+
+/// Why a run waits for the person's decision: its step used up its retries or broke again ("retries used", as the
+/// design's chip says), could not check everything, or was not run again on an unchanged revision.
+const fn stuck_words(status: &RunStatus) -> Option<&'static str> {
+  match status {
+    RunStatus::WaitingForPerson(Stuck::RetriesExhausted(_) | Stuck::BrokeAgain(_)) => Some("task.status.retriesUsed"),
+    RunStatus::WaitingForPerson(Stuck::Unverified(_)) => Some("task.status.unverified"),
+    RunStatus::WaitingForPerson(Stuck::Unchanged(_)) => Some("task.status.unchanged"),
+    _ => None,
+  }
 }
 
 /// Whether merging the latest run failed in this session, and whether it failed on a conflict. The

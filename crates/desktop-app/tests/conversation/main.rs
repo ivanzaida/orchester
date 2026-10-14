@@ -238,6 +238,20 @@ fn timeline_steps_fold_returns_divide_and_results_close_a_step() {
 }
 
 #[test]
+fn timeline_an_unverified_result_says_it_could_not_check_everything() {
+  let (mut window, seeded) = seeded("decisions");
+  let key = key_of(&seeded, "Check the empty states on screen");
+  open(&mut window, &seeded, &key, "conversation");
+  window.until("the result card", |window| {
+    all_text(window).contains("Review could not check everything")
+  });
+  let result = with_text(&mut window, "conversation-result-", "Review could not check everything");
+  let card = window.texts(&result).expect("the result card").join(" ");
+  assert!(card.contains("Reviewer reported unverified"), "{card}");
+  assert!(!all_text(&mut window).contains("Review failed"));
+}
+
+#[test]
 fn timeline_problem_rows_stand_alone_and_show_what_happened() {
   let (mut window, _) = retry_webhooks();
   let problem = with_text(&mut window, "conversation-problem-", "The agent CLI reported an error");

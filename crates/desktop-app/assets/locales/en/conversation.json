@@ -361,6 +361,7 @@
       "summary": "Summary ↗",
       "toolMeta": "{{took}} · tool step, no tokens",
       "toolStep": "{{step}} · Tool",
+      "unverified": "{{step}} could not check everything",
       "withReport": "{{reported}} · {{meta}}"
     },
     "separator": " · ",
