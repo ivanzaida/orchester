@@ -215,7 +215,7 @@
     "requireValue": "Require value · block injection",
     "requireNote": "The step fails and names {{variable}}.",
     "resumePolicy": "Inject at Agent resume",
-    "resumePolicyNote": "Changes this rule’s Inject at. A resumed agent gets the latest checkpoint once the run has one.",
+    "resumePolicyNote": "Changes this rule’s Inject at. A resumed agent gets the latest checkpoint, or the base revision before the first one.",
     "fallbackPolicy": "Use a fallback value",
     "enter": "Enter",
     "esc": "Esc",

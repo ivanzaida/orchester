@@ -2385,13 +2385,13 @@ The count of 25 in the mockup refers to this proposed catalog, not a discovered 
 | Run | `run.budget` | integer, tokens | Run limits configured |
 | Run | `run.branch` | string | Working branch created |
 | Run | `run.base_revision` | string | Run created |
-| Run | `run.revision` | string | After the run's first checkpoint commit |
+| Run | `run.revision` | string | After the run's first checkpoint commit; at Agent resume always (the base revision before the first checkpoint) |
 | Step | `step.id` | string | Step selected |
 | Step | `step.name` | string | Step selected |
 
 The sample syntax is `{{task.title}}`. Variables are evaluated as data, not executable expressions. Secret values are excluded from this catalog. Missing values must not silently become empty text: explain the unavailable phase and offer an appropriate injection point or an explicitly configured fallback.
 
-`run.base_revision` is the revision the run started from. `run.revision` is the run's latest checkpoint commit; a step's prompt gets the latest checkpoint at the time its invocation starts. Before the first checkpoint it has no value: an agent whose prompt uses it does not start, and its step fails naming the variable.
+`run.base_revision` is the revision the run started from. `run.revision` is the run's latest checkpoint commit; a step's prompt gets the latest checkpoint at the time its invocation starts. Before the first checkpoint it has no value at Agent start: an agent whose prompt uses it does not start, and its step fails naming the variable. At Agent resume it always has one: before the first checkpoint (a run paused or stopped before it) the run's branch has not moved from where it started, so a resumed agent gets the base revision (user decision 2026-10-14). This is why *Inject at Agent resume* resolves the unavailable-variable frame, and an instruction using `run.revision` publishes only when it is injected at Agent resume alone.
 
 The unavailable-variable frame demonstrates `run.revision` before the first commit. Required policy blocks injection; the user can choose a later injection event or explicitly configure a fallback. The UI must not fabricate a revision or silently insert an empty string.
 

@@ -62,7 +62,7 @@ const BOTH: [InjectionEvent; 2] = [InjectionEvent::Start, InjectionEvent::Resume
 pub(crate) struct Prompt {
   project: orchester_core::project::Project,
   task: Task,
-  logged: Logged,
+  pub(crate) logged: Logged,
   pipeline: ResourceId,
   profile_id: ResourceId,
   profile: AgentProfile,

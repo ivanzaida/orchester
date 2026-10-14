@@ -127,7 +127,7 @@ impl Composition {
       match source.body.applies(target, event) {
         Ok(()) => {
           let part = PromptPart::of(source.body.scope());
-          included.push((part, instruction_section(input, source, part)));
+          included.push((part, instruction_section(input, source, (part, event))));
         }
         Err(reason) => excluded.push(ExcludedInstruction {
           resource: source.resource,
@@ -208,8 +208,8 @@ const fn is_base(source: &PromptSource) -> bool {
   !matches!(source, PromptSource::Instruction { .. })
 }
 
-fn render(input: &PromptInput<'_>, text: &PromptText) -> Rendered {
-  text.render_marked(|variable| input.value(variable))
+fn render(input: &PromptInput<'_>, text: &PromptText, event: InjectionEvent) -> Rendered {
+  text.render_marked(|variable| input.value_at(variable, event))
 }
 
 fn section(source: PromptSource, name: String, text: &PromptText, rendered: Rendered) -> PromptSection {
@@ -223,20 +223,24 @@ fn section(source: PromptSource, name: String, text: &PromptText, rendered: Rend
   }
 }
 
-fn instruction_section(input: &PromptInput<'_>, source: &InstructionSource<'_>, part: PromptPart) -> PromptSection {
+fn instruction_section(
+  input: &PromptInput<'_>,
+  source: &InstructionSource<'_>,
+  (part, event): (PromptPart, InjectionEvent),
+) -> PromptSection {
   let text = source.body.text();
   let prompt_source = PromptSource::Instruction {
     resource: source.resource,
     part,
     version: source.version,
   };
-  section(prompt_source, source.name.to_owned(), text, render(input, text))
+  section(prompt_source, source.name.to_owned(), text, render(input, text, event))
 }
 
 /// Responsibilities, then role instructions.
 fn profile_section(input: &PromptInput<'_>) -> PromptSection {
   let profile = input.profile.body;
-  let rendered = render(input, profile.instructions()).trimmed();
+  let rendered = render(input, profile.instructions(), InjectionEvent::Start).trimmed();
   let responsibilities = profile.responsibilities().trim();
   let rendered = match (responsibilities.is_empty(), rendered.text.is_empty()) {
     (true, _) => rendered,
@@ -266,7 +270,7 @@ fn step_section(input: &PromptInput<'_>) -> PromptSection {
     source,
     step.name.as_str().to_owned(),
     &step.instructions,
-    render(input, &step.instructions),
+    render(input, &step.instructions, InjectionEvent::Start),
   )
 }
 

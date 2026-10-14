@@ -248,6 +248,18 @@ impl PromptInput<'_> {
     Composition::new(self, event, ResultDelivery::Message)
   }
 
+  /// The value of `variable` in the prompt given at `event`. A resumed agent gets a `run.revision` even
+  /// before the run's first checkpoint: the run's base revision, which its branch has not moved from
+  /// yet, so a rule injected at resume always has one (05.A `m2WjL`).
+  pub fn value_at(&self, variable: Variable, event: InjectionEvent) -> Option<String> {
+    match (variable, event) {
+      (Variable::RunRevision, InjectionEvent::Resume) => self
+        .value(Variable::RunRevision)
+        .or_else(|| self.value(Variable::RunBaseRevision)),
+      _ => self.value(variable),
+    }
+  }
+
   /// The value of `variable` for this prompt; `None` when it has none.
   pub fn value(&self, variable: Variable) -> Option<String> {
     let details = self.task.details();
