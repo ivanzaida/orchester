@@ -32,6 +32,13 @@ use crate::{
 // Compact labels in the context selectors of ShcL9.
 const CONTEXT_LABEL_WIDTH: f32 = 76.0;
 
+pub fn mode_key(props: &Props) -> &'static str {
+  if props.entry.as_ref().is_some_and(|entry| entry.state.has_draft()) {
+    "instructions.previewDraftContext"
+  } else {
+    "instructions.previewContext"
+  }
+}
 pub fn panel(ctx: &Ctx, state: &Panels, props: &Props, catalog: &PreviewCatalog) -> Element {
   let resolved = match catalog.resolve(&state.choice.get()) {
     Ok(resolved) => resolved,
@@ -39,7 +46,7 @@ pub fn panel(ctx: &Ctx, state: &Panels, props: &Props, catalog: &PreviewCatalog)
       return Column::new()
         .width(Dimension::Pct(100.0))
         .spacing(SpacingSize::Md)
-        .child(Text::new(&ctx.t("instructions.previewContext")).variant(instructions::overline()))
+        .child(Text::new(&ctx.t(mode_key(props))).variant(instructions::overline()))
         .with_children((!catalog.tasks().is_empty()).then(|| task_field(ctx, state, catalog)))
         .child(problem_text(ctx, problem))
         .into();
@@ -67,7 +74,7 @@ pub fn panel(ctx: &Ctx, state: &Panels, props: &Props, catalog: &PreviewCatalog)
     .flex(1.0)
     .min_height(Dimension::Px(0.0))
     .spacing(SpacingSize::Sm)
-    .child(Text::new(&ctx.t("instructions.previewContext")).variant(instructions::overline()))
+    .child(Text::new(&ctx.t(mode_key(props))).variant(instructions::overline()))
     .child(controls)
     .child(status(ctx, props))
     .child(unavailable(ctx, &composition))

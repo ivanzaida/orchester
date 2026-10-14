@@ -12,3 +12,4 @@ mod repository;
 mod states;
 #[path = "../support/mod.rs"]
 mod support;
+mod verification_regressions;

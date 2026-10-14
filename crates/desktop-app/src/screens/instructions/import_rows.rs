@@ -19,6 +19,7 @@ use crate::{
   ui::{
     pressable::pressable,
     toggle::{Toggle, ToggleKind},
+    tooltip::Truncated,
   },
 };
 
@@ -60,7 +61,7 @@ impl Component for ImportRow {
     }
   }
 }
-fn row(ctx: &Ctx, props: &Props, index: usize, item: &ImportItem) -> Element {
+fn row(ctx: &mut Ctx, props: &Props, index: usize, item: &ImportItem) -> Element {
   let checked = props.selected.get().contains(&index);
   let selected = props.selected.clone();
   let toggle = Toggle::new(
@@ -105,15 +106,23 @@ fn row(ctx: &Ctx, props: &Props, index: usize, item: &ImportItem) -> Element {
         .min_width(Dimension::Px(0.0))
         .spacing(ExtraSpacing::Tight.role())
         .child(
-          Text::new(&item.source)
-            .variant(TypographyStyle::Mono)
-            .color(if item.outcome.is_ok() {
-              PaletteColor::TextPrimary
-            } else {
-              PaletteColor::TextMuted
-            }),
+          Truncated::new(
+            format!("instruction-import-path-{index}"),
+            item.source.clone(),
+            TypographyStyle::Mono,
+          )
+          .color(if item.outcome.is_ok() {
+            PaletteColor::TextPrimary
+          } else {
+            PaletteColor::TextMuted
+          })
+          .render(ctx),
         )
-        .child(Text::new(&super::import::item_detail(ctx, item)).variant(TypographyStyle::Description)),
+        .child(
+          Text::new(&super::import::item_detail(ctx, item))
+            .id(format!("instruction-import-detail-{index}"))
+            .variant(TypographyStyle::Description),
+        ),
     )
     .child(
       Text::new(&ctx.t(match item.kind {

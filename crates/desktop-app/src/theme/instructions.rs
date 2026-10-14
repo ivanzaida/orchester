@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use lurq::{
   app::theme::{PaletteColor, RadiusSize, SpacingSize, Theme, ThemePalette, TypographyStyle},
-  layout::text_style::{FontWeight, TextStyle},
+  layout::text_style::{FontWeight, TextStyle, VerticalAlign},
 };
 
 pub fn head_top() -> SpacingSize {
@@ -27,6 +27,10 @@ pub fn discovery_note() -> TypographyStyle {
 }
 pub fn prompt_text() -> TypographyStyle {
   TypographyStyle::extra("instructions_prompt")
+}
+/// U69ob source lines retain their position, including leading and trailing blank lines.
+pub fn source_text() -> TypographyStyle {
+  TypographyStyle::extra("instructions_source")
 }
 pub fn variable_value() -> TypographyStyle {
   TypographyStyle::extra("instructions_variable_value")
@@ -78,6 +82,13 @@ pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<st
     (
       Arc::from("instructions_prompt"),
       mono(style(12.0, FontWeight::Normal, 1.666667, 0.0, palette.text_secondary)),
+    ),
+    (
+      Arc::from("instructions_source"),
+      TextStyle {
+        vertical_align: VerticalAlign::LineBox,
+        ..mono(style(12.0, FontWeight::Normal, 1.666667, 0.0, palette.text_primary))
+      },
     ),
     (
       Arc::from("instructions_gutter"),

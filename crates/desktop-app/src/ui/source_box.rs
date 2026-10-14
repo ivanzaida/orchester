@@ -35,8 +35,7 @@ pub fn source_box(id: &str, filename: &str, metadata: &str, source: &str) -> Ele
       ScrollVertical::new(
         Text::new(source)
           .id(format!("{id}-text"))
-          .variant(instructions::prompt_text())
-          .color(PaletteColor::TextPrimary)
+          .variant(instructions::source_text())
           .selectable(true)
           .width(Dimension::Pct(100.0))
           .padding(ExtraSpacing::Inset.role()),

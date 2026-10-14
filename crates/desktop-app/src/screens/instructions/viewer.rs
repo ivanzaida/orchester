@@ -117,7 +117,7 @@ fn header(ctx: &mut Ctx, state: &Panels, props: &Props, composition: &Compositio
     vec![
       Crumb::link(ctx.t("instructions.title"), move || panel.set(Panel::Preview)),
       Crumb::link(name, move || rule.set(Panel::Preview)),
-      Crumb::here(ctx.t("instructions.effective")),
+      Crumb::here(ctx.t("instructions.effective")).title(),
     ],
   );
   Row::new()
@@ -141,7 +141,7 @@ fn sidebar(ctx: &Ctx, state: &Panels, props: &Props, resolved: &Resolved<'_>, co
     .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Inset.role()))
     .spacing(SpacingSize::Sm)
     .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(Text::new(&ctx.t("instructions.previewContext")).variant(instructions::overline()))
+    .child(Text::new(&ctx.t(preview::mode_key(props))).variant(instructions::overline()))
     .child(
       Text::new(&ctx.t_args(
         "instructions.viewerContext",
