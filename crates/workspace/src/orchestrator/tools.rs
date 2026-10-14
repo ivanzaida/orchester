@@ -2,7 +2,7 @@
 //! the chat's project only. Each call goes through the same tool an MCP client of the app calls, so it is refused
 //! or carried out exactly as for that client: what only a person decides stays refused (`person_only`), approvals
 //! stay with people and runs start through the scheduling checks. A call that names another project is refused
-//! before it reaches the tool. What the agent changed, or tried to, is kept in its conversation as an action.
+//! before it reaches the tool, and the tool is given the chat's project by its id, never by a name. What the agent changed, or tried to, is kept in its conversation as an action.
 
 use std::path::PathBuf;
 
@@ -73,7 +73,7 @@ pub async fn call(
   (services, translate, runners): (&Services, &Translate, &Runners),
   scope: &ChatScope,
   name: &str,
-  arguments: JsonObject,
+  mut arguments: JsonObject,
 ) -> Result<Value, ToolError> {
   let Some(tool) = listed().into_iter().find(|tool| tool.name == name) else {
     return Err(ToolError::InvalidArguments(format!("no tool is named {name}")));
@@ -84,6 +84,8 @@ pub async fn call(
       vec![Message::new("orchestrator.tools.otherProject")],
     ));
   }
+  // The tool finds a project by its id or its name; the name the call gave may be another project's by now.
+  arguments.insert("project".to_owned(), Value::String(scope.project.to_string()));
   let read_only = tool.annotations.and_then(|hints| hints.read_only_hint) == Some(true);
   let mut task = named_task(&arguments);
   let (result, proposed) = if name == proposal::RUN_TASK {

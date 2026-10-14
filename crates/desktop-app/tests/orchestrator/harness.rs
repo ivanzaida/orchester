@@ -22,6 +22,7 @@ use orchester_core::{
   id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId},
   name::Name,
   orchestrator::OrchestratorSettings,
+  project::Project,
   permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
   resource::{
     AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
@@ -30,7 +31,7 @@ use orchester_core::{
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::app_paths::runner_beside;
 
 use super::support::{Data, Window, add_project};
@@ -276,6 +277,22 @@ the agent logged: {agent}"
   /// The project's database.
   pub fn db(&self) -> ProjectDb {
     ProjectDb::open(&self.root).expect("database")
+  }
+
+  /// Kontur named `name` in the list of projects, as when its database names it differently.
+  pub fn rename(&self, name: &str) {
+    let key = self.db().project().key().clone();
+    AppDb::open(&self.window.data.database())
+      .expect("the app's database")
+      .register_project(&Project::new(self.project, key, named(name)), &self.root, Timestamp::now())
+      .expect("renamed");
+  }
+
+  /// Another project named `name`, in a repository of its own; its folder.
+  pub fn another(&self, name: &str) -> PathBuf {
+    let repo = self.window.data.repo("another");
+    let workspace = self.window.launch.workspace().expect("the session started");
+    add_project(workspace, (ProjectId::generate(), "OTH", name), &repo).repo_root
   }
 
   /// A published Delivery pipeline whose one step's Builder reads on the Claude Code connection.

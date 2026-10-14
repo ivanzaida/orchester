@@ -8,6 +8,8 @@ use orchester_core::{
   store::TaskStore,
 };
 
+use orchester_store::ProjectDb;
+
 use super::harness::{Orchestrator, Setup};
 
 /// The id of the newest turn shown, from its row's element id.
@@ -124,6 +126,30 @@ fn orchestrator_acts_through_the_tools_as_any_client_of_the_app() {
     screen
       .text("orchestrator-conversation")
       .contains("no tool is named lurq_screenshot")
+  });
+}
+
+#[test]
+fn orchestrator_acts_in_its_own_project_after_another_takes_its_name() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  screen.go(OrchestratorChat::New);
+  screen.send("What is running?");
+  screen.until("the first answer", |screen| {
+    screen.text("orchestrator-conversation").contains("Noted:") && !screen.exists("orchestrator-thinking")
+  });
+  // Kontur is renamed, and another project takes its old name.
+  screen.rename("Kontur Old");
+  let another = screen.another("Kontur");
+  screen.send(r#"Call create_task {"project":"Kontur","title":"Lands where?"}"#);
+  screen.until("the call's answer", |screen| {
+    screen.text("orchestrator-conversation").contains("Tool said") && !screen.exists("orchestrator-thinking")
+  });
+  let theirs = ProjectDb::open(&another).expect("the other project").tasks().expect("tasks");
+  assert!(theirs.is_empty(), "the other project is not the Orchestrator's: {theirs:?}");
+  let id = screen.project;
+  screen.send(&format!(r#"Call create_task {{"project":"{id}","title":"Lands here"}}"#));
+  screen.until("the task in its own project", |screen| {
+    screen.db().tasks().expect("tasks").iter().any(|task| task.details().title.as_str() == "Lands here")
   });
 }
 
