@@ -6,6 +6,7 @@
 mod approval_choices;
 pub mod approvals;
 pub mod attention;
+mod awaited;
 pub mod board;
 pub mod browse;
 pub mod cancel_run;

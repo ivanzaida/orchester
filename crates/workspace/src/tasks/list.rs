@@ -4,16 +4,19 @@
 use std::{collections::HashMap, sync::Arc};
 
 use orchester_core::{
-  id::{ResourceId, StepExecutionId, TaskId},
+  id::{ResourceId, TaskId},
   integration::RunMerge,
-  resource::{StepKey, VersionNumber},
-  run::{PauseReason, PinnedVersion, Plan, PlanVersion, Run, RunLimit, RunNumber, RunStatus, Stuck, TaskPhase},
+  resource::VersionNumber,
+  run::{PauseReason, PinnedVersion, Run, RunLimit, RunNumber, RunStatus, TaskPhase},
   task::{MissingDetail, Task, TaskStatus},
   time::Timestamp,
   tokens::TokenBudget,
 };
 
-pub use super::standing::{CurrentStep, ReadinessKind, RunStage};
+pub use super::{
+  awaited::{AwaitedDecision, AwaitedPlan, AwaitedQuestion, AwaitedStep, StepWait},
+  standing::{CurrentStep, ReadinessKind, RunStage},
+};
 use crate::{
   display,
   messages::Message,
@@ -99,97 +102,6 @@ pub struct LatestRun {
   /// It reads interrupted only because no runner looks after it ([`LatestRun::without_runner`]); a runner
   /// records it once one does.
   pub lost_runner: bool,
-}
-
-/// What a run waiting for a person's decision stopped at (02.B6 `Np9kc`): the step, by name, and
-/// whether its retries ran out (how many it took) or it broke again.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AwaitedDecision {
-  pub step: Arc<str>,
-  pub retries: u32,
-  pub broke: bool,
-}
-
-impl AwaitedDecision {
-  /// What `run` waits for a decision on, if it does.
-  pub fn of(run: &Run) -> Option<Self> {
-    let RunStatus::WaitingForPerson(stuck) = run.status() else {
-      return None;
-    };
-    let step = stuck.step();
-    Some(Self {
-      step: run
-        .snapshot()
-        .body()
-        .step(step)
-        .map_or_else(|| step.as_str().into(), |pinned| pinned.name.as_str().into()),
-      retries: run.automatic_retries_taken(step),
-      broke: matches!(stuck, Stuck::BrokeAgain(_)),
-    })
-  }
-
-  /// "Review still fails after 2 retries", or "Implement stopped again without a result".
-  pub fn title(&self) -> Message {
-    let key = match (self.broke, self.retries) {
-      (true, _) => "runs.retryLimit.brokeTitle",
-      (false, 1) => "runs.retryLimit.title.one",
-      (false, _) => "runs.retryLimit.title.other",
-    };
-    Message::new(key)
-      .with("step", self.step.to_string())
-      .with("retries", self.retries.to_string())
-  }
-}
-
-/// A question an agent asked, which its run waits for an answer to: who asks (the agent role of
-/// its step, the step's name when its profile version is gone) and what.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AwaitedQuestion {
-  pub agent: Arc<str>,
-  pub text: Arc<str>,
-}
-
-/// A step of a run that waits for a person: on its plan, or for the answer to its agent's question.
-/// Parallel steps may wait at the same time, each for its own.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AwaitedStep {
-  pub execution: StepExecutionId,
-  /// The step, as people name it.
-  pub step: Option<CurrentStep>,
-  pub wait: StepWait,
-}
-
-/// What a waiting step waits for.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum StepWait {
-  Plan(AwaitedPlan),
-  /// An answer to its agent's question; `None` when no question of it can be read.
-  Answer(Option<AwaitedQuestion>),
-}
-
-/// A plan a run waits on a decision for (02.11): its version and who proposed it, the agent role
-/// of its step (the step's name when its profile version is gone).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AwaitedPlan {
-  pub version: PlanVersion,
-  pub agent: Arc<str>,
-}
-
-impl AwaitedPlan {
-  /// The plan `run`'s `execution` waits on, among its `plans`, proposed by `agent`'s step.
-  pub fn of(
-    run: &Run,
-    plans: &[Plan],
-    execution: StepExecutionId,
-    agent: impl Fn(&StepKey) -> Option<Arc<str>>,
-  ) -> Option<Self> {
-    let plan = Plan::latest_of(plans, execution)?;
-    let step = run.snapshot().body().step(&plan.step)?;
-    Some(Self {
-      version: plan.version,
-      agent: agent(&plan.step).unwrap_or_else(|| step.name.as_str().into()),
-    })
-  }
 }
 
 impl LatestRun {
