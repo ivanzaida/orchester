@@ -96,6 +96,7 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
   }
   let page = match screen {
     Screen::AllProjects => return Ok(Route::AllProjects),
+    Screen::AddProject => return Ok(Route::AddProject(None)),
     Screen::Settings => return Ok(Route::Settings),
     Screen::Overview => ProjectPage::Overview(tab(
       args,
@@ -128,7 +129,7 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
 /// The parameters besides `route` that `screen` takes.
 const fn params(screen: Screen) -> &'static [&'static str] {
   match screen {
-    Screen::AllProjects | Screen::Settings => &[],
+    Screen::AllProjects | Screen::AddProject | Screen::Settings => &[],
     Screen::Overview => &["project", "tab"],
     Screen::Tasks => &["project", "tab", "q", "highlight"],
     Screen::EditTask => &["project", "key"],

@@ -189,11 +189,14 @@ fn sidebar_recent_lists_five_projects_with_the_shown_one_checked() {
   for item in ["switcher-all-projects", "switcher-open-folder", "switcher-add-project"] {
     assert!(window.texts(item).is_some(), "{item} follows RECENT");
   }
+  press(&mut window, "switcher-add-project");
+  window.until("Add project to open", |window| {
+    window.navigation().route_now() == orchester_app::routes::Route::AddProject(None)
+      && window.tree.get_element_by_id("screen-add_project").is_some()
+  });
   assert!(
-    window
-      .texts("switcher-add-project")
-      .is_some_and(|texts| texts.iter().any(|text| text.starts_with("Not in this app yet"))),
-    "Add project says why it is unavailable"
+    window.tree.get_element_by_id("sidebar").is_none(),
+    "Add project has no sidebar"
   );
 }
 

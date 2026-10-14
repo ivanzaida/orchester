@@ -26,6 +26,7 @@ mod needs_you;
 mod overview;
 mod palette;
 pub mod pipelines;
+mod projects;
 mod secrets;
 mod settings;
 mod shadow;
@@ -58,6 +59,7 @@ pub use self::{
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
+  projects::{ProjectsSpacing, ProjectsText},
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
   settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,
@@ -97,6 +99,7 @@ pub fn install(app: &mut App, mode: Mode) {
   overview::install(theme);
   connections::install(theme);
   secrets::install(theme);
+  projects::install(theme);
   shell::install(theme);
   skills::install(theme);
   lifecycle::install(theme);

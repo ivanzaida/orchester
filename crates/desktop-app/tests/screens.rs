@@ -51,7 +51,9 @@ const READING_TASK: &str = "Reading the task…";
 /// The screens that show their own content, which their own tests check, in place of the placeholder.
 const BUILT: &[Screen] = &[
   // One per line, sorted, so each screen's task adds a line of its own.
+  Screen::AddProject,
   Screen::Agents,
+  Screen::AllProjects,
   Screen::Connections,
   Screen::EditConnection,
   Screen::EditTask,
@@ -158,7 +160,16 @@ impl Screens {
   /// no element has the id.
   fn show(&mut self, path: &str, id: &str) -> Option<Vec<String>> {
     self.router.replace(path);
-    self.tree.pass_headless(&mut self.app);
+    // A screen that reads its data first shows its element once the reading is delivered.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+      self.tree.tick_futures();
+      self.tree.pass_headless(&mut self.app);
+      if self.tree.get_element_by_id(id).is_some() || std::time::Instant::now() > deadline {
+        break;
+      }
+      std::thread::sleep(std::time::Duration::from_millis(5));
+    }
     let element = self.tree.get_element_by_id(id)?;
     let mut all = Vec::new();
     collect(element, &mut all);
@@ -202,7 +213,7 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
   ));
   let placeholder = |title| vec![title, NOT_BUILT];
   // Settings is built in part; `tests/settings.rs` shows it.
-  let mut all = vec![(Route::AllProjects, placeholder("All projects"))];
+  let mut all = vec![(Route::AllProjects, Vec::new()), (Route::AddProject(None), Vec::new())];
   all.extend([
     (at(ProjectPage::Overview(OverviewTab::Failed)), placeholder("Overview")),
     (at(ProjectPage::Orchestrator), placeholder("Orchestrator")),

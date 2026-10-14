@@ -1,6 +1,8 @@
 //! The shell around every screen (`Body` and `Status bar` of `Overview · full page · dark` `q9mf0k` and
 //! `Tasks · dark` `jn2IT`): the sidebar, the rounded inset content panel that hosts the routed screen,
-//! and the status bar. The title bar belongs to the window chrome (`crate::chrome`).
+//! and the status bar. All projects and Add project have no sidebar: their panel is inset 8 on both sides
+//! (`Content wrap` `cV43B` in `S5HDKf`, `jJ0BM` in `kkGWj`). The title bar belongs to the window chrome
+//! (`crate::chrome`).
 
 mod clock;
 pub mod needs_you;
@@ -17,7 +19,10 @@ use lurq::{
 };
 
 use self::{sidebar::Sidebar, status_bar::StatusBar};
-use crate::theme::ExtraColor;
+use crate::{
+  routes::{Route, Screen},
+  theme::ExtraColor,
+};
 
 pub fn layout(ctx: &mut Ctx) -> Element {
   // `Content · Overview` (`B2Mbdt`): `surface_panel`, radius `radius_lg`, a `border_panel` stroke inside.
@@ -30,16 +35,21 @@ pub fn layout(ctx: &mut Ctx) -> Element {
     .border_inside(BorderSize::Sm, ExtraColor::PanelBorder.role())
     .clip()
     .child(Outlet::mount(ctx));
+  // A path that names no route keeps the sidebar; its screen says why it names none (`screens::not_found`).
+  let screen = Route::parse(&ctx.route_path()).ok().map(|route| route.screen());
+  let sidebar = !matches!(screen, Some(Screen::AllProjects | Screen::AddProject));
+  // `Content wrap` (`dHxPJ`): 8 between the panel and the window's right edge, and its left without a sidebar.
+  let wrap = Padding::new().right(SpacingSize::Sm);
+  let wrap = if sidebar { wrap } else { wrap.left(SpacingSize::Sm) };
   let body = Row::new()
     .width(Dimension::Pct(100.0))
     .flex(1.0)
-    .child(ctx.mount_keyed::<Sidebar>("sidebar", ()))
+    .with_children(sidebar.then(|| ctx.mount_keyed::<Sidebar>("sidebar", ())))
     .child(
-      // `Content wrap` (`dHxPJ`): 8 between the panel and the window's right edge.
       Column::new()
         .height(Dimension::Pct(100.0))
         .flex(1.0)
-        .padding(Padding::new().right(SpacingSize::Sm))
+        .padding(wrap)
         .child(content),
     );
   Column::new()

@@ -1,8 +1,8 @@
 //! The sidebar (`Sidebar` `ev8rR`): the project switcher, the project's screens with the Configure
 //! section, the runs under way (`running`), and All projects, Settings and Project settings at the
 //! bottom. Tasks shows how many tasks the project has, a dash while they are read, and Memory how many
-//! records wait for approval. Outside a project (All projects, Settings) only the switcher and the
-//! bottom group show.
+//! records wait for approval. Outside a project (Settings) only the switcher and the bottom group show;
+//! All projects and Add project have no sidebar.
 
 pub mod running;
 pub mod switcher;

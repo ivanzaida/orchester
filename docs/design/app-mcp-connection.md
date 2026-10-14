@@ -216,6 +216,10 @@ claude mcp add --transport http --scope user orchester http://127.0.0.1:47821/mc
 - Verified: `claude mcp add-json` accepts `{"type":"http","url":…,"headersHelper":"<command>"}`, a command whose
   output supplies the headers at connect time. **Unverified**: the helper's output format and when it runs. See
   open decision 4.
+- Verified 2026-10-14 against a QA copy: Claude Code 2.1.296 opens with a `server/discover` probe for MCP 2026-07-28.
+  The server speaks the revisions up to 2025-11-25 only and declines it (HTTP 400, JSON-RPC `-32022` listing them);
+  Claude Code then initializes a session on 2025-11-25 and lists the tools. Advertising 2026-07-28 made it take that
+  revision's stateless path and reject `tools/list` for lacking `ttlMs` and `cacheScope`.
 - **Unverified**: that the Claude desktop app's Code sessions on Windows read the same `~/.claude.json` and can reach
   `127.0.0.1` (a full-trust MSIX package can use loopback; AppData virtualization does not affect `~/.claude.json`).
   This must be checked once, with the desktop app, after implementation.
@@ -326,8 +330,8 @@ The registered name is **`orchester`**, never `Orchester`. Runs give Codex agent
    processes end. A stale file of a killed old process is removed by the next start in discovery mode (existing
    cleanup).
 2. **QA copies and tests:** `tools/qa-app.ps1` sets `ORCHESTER_APP_MCP_DISCOVERY` to `.tmp/qa/<task>/mcp/` and prints
-   that path. The runs' `call_run_app` relay already looks for discovery under the worktree's `.tmp/`
-   (`docs/mcp-verification-client.md`) and only needs the new folder. `tools/lurq-mcp-client.py` takes a discovery
+   that path. The runs' `call_run_app` relay reads exactly `.tmp/qa/<task>/mcp/<pid>.json` in the worktree
+   (`docs/mcp-verification-client.md`). `tools/lurq-mcp-client.py` takes a discovery
    folder argument (or reads the variable) besides the pid. Test harnesses pass `DiscoveryFolder::At` as today.
 3. **Docs:** `docs/stable-build.md` › *The new app's MCP server* is rewritten for the stable address, the secret
    store and *Connect an agent*. `docs/mcp-verification-client.md` keeps its QA flow with the new folder.

@@ -1,9 +1,10 @@
-use super::{CONNECTIONS, EDIT, NEW, PROJECT_PATTERN, SETTINGS, TASKS, project_screen_path};
+use super::{ADD_PROJECT, CONNECTIONS, EDIT, NEW, PROJECT_PATTERN, SETTINGS, TASKS, project_screen_path};
 
 /// A screen of the window, as the sidebar, the tabs and the app's MCP tools name it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Screen {
   AllProjects,
+  AddProject,
   Settings,
   Overview,
   Orchestrator,
@@ -28,8 +29,9 @@ pub enum Screen {
 }
 
 impl Screen {
-  pub const ALL: [Self; 22] = [
+  pub const ALL: [Self; 23] = [
     Self::AllProjects,
+    Self::AddProject,
     Self::Settings,
     Self::Overview,
     Self::Orchestrator,
@@ -77,6 +79,7 @@ impl Screen {
   pub const fn name(self) -> &'static str {
     match self {
       Self::AllProjects => "all_projects",
+      Self::AddProject => "add_project",
       Self::Settings => "settings",
       Self::Overview => "overview",
       Self::Orchestrator => "orchestrator",
@@ -109,6 +112,7 @@ impl Screen {
   pub const fn title_key(self) -> &'static str {
     match self {
       Self::AllProjects => "shell.screens.allProjects",
+      Self::AddProject => "shell.screens.addProject",
       Self::Settings => "shell.screens.settings",
       Self::Overview => "shell.screens.overview",
       Self::Orchestrator => "shell.screens.orchestrator",
@@ -138,6 +142,7 @@ impl Screen {
   pub(super) const fn segment(self) -> Option<&'static str> {
     match self {
       Self::AllProjects
+      | Self::AddProject
       | Self::Settings
       | Self::Overview
       | Self::NewTask
@@ -169,6 +174,7 @@ impl Screen {
     let tasks = format!("{PROJECT_PATTERN}/{TASKS}");
     match self {
       Self::AllProjects => "/".to_owned(),
+      Self::AddProject => format!("/{ADD_PROJECT}"),
       Self::Settings => format!("/{SETTINGS}"),
       Self::NewTask => format!("{tasks}/{NEW}"),
       Self::EditTask => format!("{tasks}/:key/{EDIT}"),
