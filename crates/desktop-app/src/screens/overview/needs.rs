@@ -28,6 +28,7 @@ use crate::{
     card::{CardSurface, card_frame},
     icon::{Icon, icon},
     message::message_text,
+    unavailable::reason_line,
   },
 };
 
@@ -110,22 +111,27 @@ fn need_card(ctx: &mut Ctx, project: ProjectId, (index, item): (usize, &NeedItem
         .width(Dimension::Pct(100.0)),
     )
     .child(Text::new(&message_text(ctx, &item.context())).variant(ExtraTypography::Note.role()));
-  let Some(task) = &item.task else {
-    return card;
-  };
-  let open = open_task(ctx, project, &task.key, tab);
-  card.child(
-    Row::new().child(
-      ActionButton::new(format!("{id}-action"), ButtonKind::Secondary, ctx.t(action))
-        .icon(action_icon(item.kind))
-        .on_click(open),
-    ),
-  )
+  let button =
+    ActionButton::new(format!("{id}-action"), ButtonKind::Secondary, ctx.t(action)).icon(action_icon(item.kind));
+  match &item.task {
+    Some(task) => {
+      let open = open_task(ctx, project, &task.key, tab);
+      card.child(Row::new().child(button.on_click(open)))
+    }
+    // No screen reviews memory records yet: the action stays in place and says so, as the Needs you panel's.
+    None if item.kind == NeedKind::Memory => {
+      let reason = ctx.t("overview.needs.memoryUnavailable");
+      card
+        .child(Row::new().child(button.unavailable(reason.clone())))
+        .child(reason_line(&format!("{id}-reason"), &reason))
+    }
+    None => card,
+  }
 }
 
 /// A kind's mark (`Kind icon` `y6Zq0D`), the key of its action's words, and the tab of its task where it
 /// is decided: a request and a question are cards of the conversation, the rest is on Summary. The
-/// project's memory has no task, so its card has no action until memory review is built.
+/// project's memory has no task: its tab is not used.
 const fn look(kind: NeedKind) -> (Icon, &'static str, TaskTab) {
   match kind {
     NeedKind::Approval => (Icon::ShieldAlert, "overview.needs.action.review", TaskTab::Conversation),
@@ -140,7 +146,7 @@ const fn look(kind: NeedKind) -> (Icon, &'static str, TaskTab) {
     NeedKind::StoppedAtLimit => (Icon::Gauge, "overview.needs.action.raiseLimit", TaskTab::Summary),
     NeedKind::Interrupted => (Icon::CirclePause, "overview.needs.action.openTask", TaskTab::Summary),
     NeedKind::ReadyToMerge => (Icon::GitMerge, "overview.needs.action.reviewMerge", TaskTab::Summary),
-    NeedKind::Memory => (Icon::BookOpen, "overview.needs.action.openTask", TaskTab::Summary),
+    NeedKind::Memory => (Icon::Brain, "overview.needs.action.reviewRecords", TaskTab::Summary),
   }
 }
 

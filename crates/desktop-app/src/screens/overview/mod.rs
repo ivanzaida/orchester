@@ -7,7 +7,7 @@
 //!
 //! What counts and how is `orchester_workspace::tasks::{board, attention, overview}`; the tasks are the
 //! feed's as they stand with the runner, so a run that lost its agent is interrupted. Not built here:
-//! Import resources (visibly unavailable), memory records (no memory in this app yet), the repository
+//! Import resources and reviewing memory records (both visibly unavailable), the repository
 //! and branch in the line over the title, and answering a request or a question in place: each card opens
 //! its task where it is answered.
 

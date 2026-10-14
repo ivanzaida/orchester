@@ -105,6 +105,34 @@ fn overview_keeps_a_tool_request_whose_run_cannot_be_read_without_an_action() {
 }
 
 #[test]
+fn overview_memory_records_card_says_their_review_is_not_built_and_goes_nowhere() {
+  let mut seeded = Seeded::overview("tasks-memory", OverviewTab::Running);
+  let tasks = seeded.tasks();
+  let items = attention::items(&tasks);
+  let index = items
+    .iter()
+    .position(|item| item.kind == NeedKind::Memory)
+    .expect("the records wait as one item");
+  assert_eq!(seeded.text("overview-needs-count"), items.len().to_string());
+  let card = format!("overview-need-{index}-unknown-memory");
+  let said = seeded.texts(&card);
+  for line in ["Memory", "2 memory records wait for approval"] {
+    assert!(said.iter().any(|said| said == line), "{line:?} in {said:?}");
+  }
+  assert_eq!(seeded.text(&format!("{card}-action")), "Review records");
+  assert_eq!(
+    seeded.text(&format!("{card}-reason-text")),
+    "Reviewing memory records isn't built in this app yet."
+  );
+  seeded.click(&format!("{card}-action"));
+  assert_eq!(
+    seeded.window.navigation().route_now(),
+    seeded.route(OverviewTab::Running),
+    "an unavailable action goes nowhere"
+  );
+}
+
+#[test]
 fn overview_view_all_and_new_task_lead_to_their_screens() {
   let mut seeded = Seeded::overview("tasks", OverviewTab::Running);
   seeded.click("overview-view-all");

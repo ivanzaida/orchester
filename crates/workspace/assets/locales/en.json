@@ -130,8 +130,8 @@
         "dailyBudget": "Run #{{run}} stopped at the project's daily budget",
         "interrupted": "Run #{{run}} was interrupted",
         "readyToMerge": "{{task}} is ready to merge: every step passed",
-        "memoryOne": "1 memory record waits for your approval",
-        "memoryOther": "{{count}} memory records wait for your approval"
+        "memoryOne": "1 memory record waits for approval",
+        "memoryOther": "{{count}} memory records wait for approval"
       }
     }
   },

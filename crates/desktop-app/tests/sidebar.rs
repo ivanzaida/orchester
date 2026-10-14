@@ -84,6 +84,62 @@ fn sidebar_counts_the_tasks_with_a_dash_while_they_are_read_and_none_of_zero() {
   );
 }
 
+/// The top of the element `id`.
+fn top(window: &mut Window, id: &str) -> f32 {
+  window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"))
+    .y
+}
+
+#[test]
+fn sidebar_lists_the_project_screens_in_the_design_order_and_goes_to_them() {
+  let mut window = Window::open();
+  window.navigation().go(overview(project_id()));
+  window.until("the project to open", |window| window.texts("nav-memory").is_some());
+  let order = [
+    "nav-overview",
+    "nav-orchestrator",
+    "nav-tasks",
+    "nav-merge_queue",
+    "nav-pull_requests",
+    "nav-usage",
+    "nav-pipelines",
+    "nav-agents",
+    "nav-instructions",
+    "nav-memory",
+    "nav-skills",
+    "nav-tools",
+    "nav-secrets",
+    "nav-connections",
+  ];
+  let tops: Vec<f32> = order.iter().map(|id| top(&mut window, id)).collect();
+  assert!(
+    tops.windows(2).all(|pair| pair[0] < pair[1]),
+    "{order:?} from the top: {tops:?}"
+  );
+  for (item, screen, title) in [
+    ("nav-orchestrator", "screen-orchestrator", "Orchestrator"),
+    ("nav-merge_queue", "screen-merge_queue", "Merge queue"),
+    ("nav-memory", "screen-memory", "Memory"),
+  ] {
+    assert_eq!(
+      window.texts(item).expect("the item shows").last().map(String::as_str),
+      Some(title)
+    );
+    press(&mut window, item);
+    window.until(screen, |window| window.texts(screen).is_some());
+    assert!(
+      window
+        .texts(screen)
+        .is_some_and(|texts| texts.contains(&"This screen isn't built yet.".to_owned())),
+      "{screen} says it is not built"
+    );
+  }
+}
+
 #[test]
 fn sidebar_recent_lists_five_projects_with_the_shown_one_checked() {
   let data = Data::new();

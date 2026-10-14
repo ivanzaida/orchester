@@ -102,15 +102,18 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
       OverviewTab::from_name,
       &OverviewTab::ALL.map(OverviewTab::name),
     )?),
+    Screen::Orchestrator => ProjectPage::Orchestrator,
     Screen::Tasks => ProjectPage::Tasks(task_list(args)?),
     Screen::NewTask => ProjectPage::NewTask,
     Screen::EditTask => ProjectPage::EditTask(key(args, "key")?),
     Screen::Task => ProjectPage::Task(key(args, "key")?, task_view(args)?),
+    Screen::MergeQueue => ProjectPage::MergeQueue,
     Screen::PullRequests => ProjectPage::PullRequests,
     Screen::Usage => ProjectPage::Usage,
     Screen::Pipelines => ProjectPage::Pipelines,
     Screen::Agents => ProjectPage::Agents,
     Screen::Instructions => ProjectPage::Instructions,
+    Screen::Memory => ProjectPage::Memory,
     Screen::Skills => skills_page(args)?,
     Screen::Tools => tools_page(args)?,
     Screen::Secrets => ProjectPage::Secrets,
@@ -135,12 +138,15 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Skills => &["project", "skill"],
     Screen::NewConnection => &["project", "kind"],
     Screen::EditConnection => &["project", "connection"],
-    Screen::NewTask
+    Screen::Orchestrator
+    | Screen::NewTask
+    | Screen::MergeQueue
     | Screen::PullRequests
     | Screen::Usage
     | Screen::Pipelines
     | Screen::Agents
     | Screen::Instructions
+    | Screen::Memory
     | Screen::Secrets
     | Screen::ProjectSettings => &["project"],
   }
