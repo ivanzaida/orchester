@@ -161,13 +161,20 @@ fn history_lists_the_latest_chat_first_and_stale_turns_end_as_interrupted() {
     .collect();
   assert_eq!(listed, [(older, 2), (newer, 1)]);
 
-  let mut interrupted = db.interrupt_chat_turns().expect("interrupted");
-  interrupted.sort();
-  let mut expected = vec![older, newer];
-  expected.sort();
-  assert_eq!(interrupted, expected);
+  // A runner answers the newer conversation's turn: only the older one's is cut short.
+  assert_eq!(
+    db.interrupt_chat_turns(&[second], None).expect("interrupted"),
+    [older]
+  );
   assert_eq!(
     db.chat_turn(first).expect("read").expect("kept").turn,
     TurnState::Failed(TurnFailure::Interrupted)
   );
+  assert!(db.chat_turn(second).expect("read").expect("kept").turn.is_thinking());
+  assert_eq!(
+    db.interrupt_chat_turns(&[], Some(older)).expect("nothing left"),
+    [],
+    "a stop in one conversation leaves the others"
+  );
+  assert_eq!(db.interrupt_chat_turns(&[], Some(newer)).expect("stopped"), [newer]);
 }

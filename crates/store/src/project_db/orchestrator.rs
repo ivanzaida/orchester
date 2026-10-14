@@ -173,21 +173,40 @@ impl ProjectDb {
     Ok(changed == 1)
   }
 
-  /// Ends every turn still thinking as interrupted, as a runner that starts finds them; returns their conversations.
-  pub fn interrupt_chat_turns(&mut self) -> Result<Vec<ChatId>, StoreError> {
-    let state = TurnState::Failed(TurnFailure::Interrupted);
-    let mut statement = self
-      .connection
-      .prepare("SELECT DISTINCT chat_id FROM orchestrator_entries WHERE turn = 'thinking'")?;
-    let chats = statement
-      .query_map([], |row| row.get::<_, String>(0))?
-      .map(|chat| parse("chat id", &chat?))
-      .collect::<Result<Vec<ChatId>, _>>()?;
-    drop(statement);
-    self.connection.execute(
-      "UPDATE orchestrator_entries SET turn = 'failed', failure = ?1 WHERE turn = 'thinking'",
-      [failure_column(&state)?],
-    )?;
+  /// Ends every turn still thinking as interrupted, but those of `held`, which a runner answers, and, when `only`
+  /// names a conversation, those of other conversations; returns the conversations it changed.
+  pub fn interrupt_chat_turns(
+    &mut self,
+    held: &[ChatMessageId],
+    only: Option<ChatId>,
+  ) -> Result<Vec<ChatId>, StoreError> {
+    let failure = failure_column(&TurnState::Failed(TurnFailure::Interrupted))?;
+    let transaction = self.connection.transaction()?;
+    let thinking = {
+      let mut statement =
+        transaction.prepare("SELECT message_id, chat_id FROM orchestrator_entries WHERE turn = 'thinking'")?;
+      statement
+        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+        .map(|row| {
+          let (message, chat) = row?;
+          Ok((parse("chat message id", &message)?, parse("chat id", &chat)?))
+        })
+        .collect::<Result<Vec<(ChatMessageId, ChatId)>, StoreError>>()?
+    };
+    let mut chats = Vec::new();
+    for (message, chat) in thinking {
+      if held.contains(&message) || only.is_some_and(|only| only != chat) {
+        continue;
+      }
+      transaction.execute(
+        "UPDATE orchestrator_entries SET turn = 'failed', failure = ?2 WHERE message_id = ?1 AND turn = 'thinking'",
+        params![message.to_string(), failure],
+      )?;
+      if !chats.contains(&chat) {
+        chats.push(chat);
+      }
+    }
+    transaction.commit()?;
     Ok(chats)
   }
 

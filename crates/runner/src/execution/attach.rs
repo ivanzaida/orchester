@@ -47,9 +47,7 @@ impl Scheduler {
       self.hold_groups_after_session_end(&db)?;
     }
     // A turn this runner answers is under way; any other still thinking was cut short.
-    if self.inner.chats.idle() {
-      self.interrupt_chat_turns(&mut db)?;
-    }
+    self.interrupt_chat_turns(&mut db, None)?;
     self.inner.board.set_slots(slots);
     let cause = session.interrupt_cause();
     let stale = readable(

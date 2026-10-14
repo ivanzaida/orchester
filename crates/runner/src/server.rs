@@ -359,8 +359,10 @@ async fn chat_answering(scheduler: &Scheduler, message: ChatMessageId, tools: Ch
 
 /// The reply to [`Command::StopChat`].
 fn chat_stopped(scheduler: &Scheduler, chat: ChatId) -> Reply {
-  scheduler.stop_chat(chat);
-  Reply::ChatStopped { chat }
+  match scheduler.stop_chat(chat) {
+    Ok(()) => Reply::ChatStopped { chat },
+    Err(rejection) => Reply::Rejected(rejection),
+  }
 }
 
 /// Continues `run`, stopped at its account's plan limit: on `connection`, another account's

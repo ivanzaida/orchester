@@ -245,7 +245,7 @@ async fn a_stopped_turn_keeps_what_it_said_and_a_failed_one_says_why() {
     "asking again is no second turn"
   );
   assert!(!scheduler.is_idle(), "a turn under way is work");
-  scheduler.stop_chat(chat);
+  scheduler.stop_chat(chat).expect("stopped");
   assert_eq!(ended(root, &mut events, thinking).await, TurnState::Stopped);
   assert_eq!(replies(root, chat), ["Let me look at the queue."]);
 
@@ -313,4 +313,59 @@ async fn a_turn_needs_a_kept_message_and_an_orchestrator_and_a_new_runner_ends_s
     .expect("kept")
     .turn;
   assert_eq!(turn, TurnState::Failed(TurnFailure::Interrupted));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_turn_no_runner_answers_is_interrupted_while_another_runs_and_stop_ends_it() {
+  let project = claude();
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let thinking_chat = ChatId::generate();
+  let thinking = keep(root, thinking_chat, "Keep thinking about the queue.");
+  scheduler
+    .answer_in_chat(thinking, tools())
+    .await
+    .expect("the turn starts");
+  let wait = async {
+    while replies(root, thinking_chat).is_empty() {
+      events.recv().await.expect("the scheduler notifies");
+    }
+  };
+  tokio::time::timeout(PATIENCE, wait).await.expect("the reply starts");
+  // Kept, but the runner never got it (its answer was lost): no runner answers it.
+  let (left, stopped) = (ChatId::generate(), ChatId::generate());
+  let left_message = keep(root, left, "Hello?");
+  let stopped_message = keep(root, stopped, "Hello again?");
+  scheduler
+    .attach(
+      AttachSession::Fresh {
+        previous_end: SessionEnd::Clean,
+      },
+      NonZeroU32::new(2).expect("above zero"),
+    )
+    .await
+    .expect("attached");
+  let turn = |message| {
+    ProjectDb::open(root)
+      .expect("open")
+      .chat_turn(message)
+      .expect("read")
+      .expect("kept")
+      .turn
+  };
+  assert_eq!(
+    turn(left_message),
+    TurnState::Failed(TurnFailure::Interrupted),
+    "a desktop attaching ends the turn no runner answers"
+  );
+  assert!(turn(thinking).is_thinking(), "the turn under way goes on");
+
+  // Kept after the attach and never answered: Stop ends it, since nothing else would.
+  let later = keep(root, stopped, "Still there?");
+  scheduler.stop_chat(stopped).expect("stopped");
+  assert_eq!(turn(later), TurnState::Failed(TurnFailure::Interrupted));
+  assert_eq!(turn(stopped_message), TurnState::Failed(TurnFailure::Interrupted));
+  assert!(turn(thinking).is_thinking());
+  scheduler.stop_chat(thinking_chat).expect("stopped");
+  assert_eq!(ended(root, &mut events, thinking).await, TurnState::Stopped);
 }
