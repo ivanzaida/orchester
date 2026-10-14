@@ -102,9 +102,13 @@ fn finish_family(
     let status = child.try_wait().map_err(|_| LocalError::ProcessUncertain)?;
     if let Some(status) = status {
       let settle = Instant::now() + Duration::from_millis(200);
-      while Instant::now() < settle {
+      loop {
+        // A delayed wake must observe the job before deciding that the settle bound expired.
         if family.empty()? {
           return Ok(status);
+        }
+        if Instant::now() >= settle {
+          break;
         }
         thread::sleep(Duration::from_millis(10));
       }
