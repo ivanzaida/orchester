@@ -54,6 +54,12 @@ const REPORT_PROGRESS: &str = r#"{"type":"object","properties":{
   "text":{"type":"string","maxLength":200,"description":"One short line on what the step is doing now."}
 },"required":["text"],"additionalProperties":false}"#;
 
+const START_QA_APP: &str = r#"{"type":"object","properties":{
+  "scenario":{"type":"string","pattern":"^[a-z0-9][a-z0-9-]*$","maxLength":64,"description":"The seed scenario the copy starts on, as tools/qa-app.ps1 lists them (tasks, task-states, decisions, ...)."},
+  "fake_agents":{"type":["boolean","null"],"description":"Run the copy's agents as Orchester's stand-ins; null for false."},
+  "no_runner":{"type":["boolean","null"],"description":"Start the copy without a runner; null for false."}
+},"required":["scenario"],"additionalProperties":false}"#;
+
 const CREATE_FILE: &str = r#"{"type":"object","properties":{
   "filename":{"type":"string","description":"Path of the new file, relative to the worktree root; missing folders are made."},
   "content":{"type":"string","description":"The file's whole content."}
@@ -69,8 +75,11 @@ impl OrchesterTool {
       Self::StopRunProcess => {
         "Stop a process and its children inside this run's worktree without asking: request close, wait briefly, then end survivors. Outside executables, the runner and agent CLIs are refused. Reports closed, ended or already gone."
       }
+      Self::StartQaApp => {
+        "Build and start a QA copy of the app from this worktree on a seeded scenario (tools/qa-app.ps1), off-screen and without focus, and make it the app call_run_app calls when you leave out its pid. One QA app runs on this computer at a time: while another run's QA app holds the slot, the call waits for it. Starting again replaces this step's QA app; Orchester stops it when your turn ends. A person may be asked first. Never start tools/qa-app.ps1 yourself."
+      }
       Self::CallRunApp => {
-        "Call one embedded MCP tool of an app started inside this run's worktree, without asking. Other executables and mismatched discovery files are refused. The relay keeps the token private; PNG images are saved under .tmp/ and returned as relative paths. Use this instead of tools/lurq-mcp-client.py."
+        "Call one embedded MCP tool of an app started inside this run's worktree, without asking. Leave out pid to call the QA app start_qa_app started in this step. Other executables and mismatched discovery files are refused. The relay keeps the token private; PNG images are saved under .tmp/ and returned as relative paths. Use this instead of tools/lurq-mcp-client.py."
       }
       Self::ReadFile => {
         "Read a text file of the worktree as numbered lines. Read a file before you edit it: edit_file needs this \
@@ -146,6 +155,7 @@ impl OrchesterTool {
         | Self::MoveFile
         | Self::StopRunProcess
         | Self::CallRunApp
+        | Self::StartQaApp
         | Self::RunCheck
         | Self::SaveMemory
         | Self::ReportProgress
@@ -185,10 +195,12 @@ pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String, boo
         "description":"The process id from list_run_processes. Only this run's executable paths may be stopped."}
     },"required":["pid"],"additionalProperties":false}),
     OrchesterTool::CallRunApp => json!({"type":"object","properties":{
-      "pid":{"type":"integer","minimum":1,"maximum":u32::MAX,"description":"The pid of the app this run started."},
+      "pid":{"type":["integer","null"],"minimum":1,"maximum":u32::MAX,
+        "description":"The pid of the app this run started; null for the QA app start_qa_app started in this step."},
       "tool":{"type":"string","minLength":1,"maxLength":200,"description":"The embedded MCP tool name, e.g. lurq_windows, navigate or lurq_screenshot."},
       "arguments":{"type":"object","description":"That tool's arguments; use {} for none. Never a discovery token."}
-    },"required":["pid","tool","arguments"],"additionalProperties":false}),
+    },"required":["tool","arguments"],"additionalProperties":false}),
+    OrchesterTool::StartQaApp => fixed(START_QA_APP),
     OrchesterTool::SaveMemory => fixed(SAVE_MEMORY),
     OrchesterTool::ReportProgress => fixed(REPORT_PROGRESS),
     OrchesterTool::FindSymbol => fixed(FIND_SYMBOL),

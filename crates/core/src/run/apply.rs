@@ -178,6 +178,7 @@ impl Run {
         self.expect_step(kind, execution, |status| status == Running)?;
         self.expect_gate(execution, false)
       }
+      RunEventKind::StepAccepted { .. } => self.check_accept(kind, execution),
       // StepFailed and CheckpointRecorded: an active execution.
       _ => self.expect_step(kind, execution, |status| matches!(status, Running | Waiting(_))),
     }
@@ -203,7 +204,7 @@ impl Run {
   }
 
   /// The execution must be in the current attempt with a status `allowed` accepts.
-  fn expect_step(
+  pub(super) fn expect_step(
     &self,
     kind: &RunEventKind,
     id: StepExecutionId,
@@ -313,6 +314,7 @@ impl Run {
       (false, AttemptReason::Recovery { step }) => self.check_recovery(step, executions),
       (false, AttemptReason::Restart { step }) => self.check_restart(step, executions),
       (false, AttemptReason::Returned { return_to, .. }) => self.check_returned(return_to, executions),
+      (false, AttemptReason::Accepted { step }) => self.check_accepted(step, executions),
       (false, AttemptReason::Initial) => Err(RunError::InvalidAttempt("only the first attempt is initial")),
     }
   }
@@ -416,7 +418,12 @@ impl Run {
         self.set_step(*execution, status);
       }
       RunEventKind::StepPassed { execution } => self.set_step(*execution, StepStatus::Passed),
-      RunEventKind::StepFailed { execution, reason } => self.current_execution_mut(*execution).fail(*reason),
+      RunEventKind::StepFailed {
+        execution,
+        reason,
+        revision,
+      } => self.current_execution_mut(*execution).fail(*reason, revision.clone()),
+      RunEventKind::StepAccepted { execution } => self.current_execution_mut(*execution).accept(),
       RunEventKind::StepSkipped { execution } => self.set_step(*execution, StepStatus::Skipped),
     }
   }

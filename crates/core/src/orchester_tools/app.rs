@@ -10,7 +10,8 @@ use crate::{command::SecretVariable, secret::SecretValue};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AppCall {
-  pid: NonZeroU32,
+  /// `None`: the QA app the step started.
+  pid: Option<NonZeroU32>,
   tool: String,
   arguments: Value,
 }
@@ -18,7 +19,8 @@ pub struct AppCall {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct AppInput {
-  pid: NonZeroU32,
+  #[serde(default)]
+  pid: Option<NonZeroU32>,
   tool: String,
   arguments: Value,
 }
@@ -26,7 +28,7 @@ struct AppInput {
 impl AppCall {
   pub(super) fn parse(arguments: Value) -> Result<Self, String> {
     let input: AppInput =
-      serde_json::from_value(arguments).map_err(|_| "expected pid, tool and arguments".to_owned())?;
+      serde_json::from_value(arguments).map_err(|_| "expected tool, arguments and an optional pid".to_owned())?;
     if input.tool.is_empty()
       || input.tool.len() > 200
       || input.tool.chars().any(|c| c.is_control() || c.is_whitespace())
@@ -43,7 +45,8 @@ impl AppCall {
     })
   }
 
-  pub const fn pid(&self) -> NonZeroU32 {
+  /// The app's pid; `None` for the QA app the step started.
+  pub const fn pid(&self) -> Option<NonZeroU32> {
     self.pid
   }
 

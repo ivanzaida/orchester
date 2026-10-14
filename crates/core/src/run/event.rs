@@ -215,6 +215,15 @@ pub enum RunEventKind {
     /// Logs written before failures had reasons have none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     reason: Option<StepFailure>,
+    /// The revision of the run's branch the execution started on, which its result was for; `None` when
+    /// the runner did not know it (the agent never started) and in logs written before it was recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    revision: Option<Revision>,
+  },
+  /// A person accepted `execution`, which waited for them unverified or unchanged, as it is: it passes
+  /// ([`super::StuckDecision::Accept`]).
+  StepAccepted {
+    execution: StepExecutionId,
   },
   StepSkipped {
     execution: StepExecutionId,
@@ -240,6 +249,7 @@ impl RunEventKind {
       | Self::PlanDecided { execution, .. }
       | Self::StepPassed { execution }
       | Self::StepFailed { execution, .. }
+      | Self::StepAccepted { execution }
       | Self::StepSkipped { execution }
       | Self::CheckpointRecorded { execution, .. }
       | Self::PermissionsApplied { execution, .. } => Some(*execution),
@@ -291,6 +301,7 @@ impl RunEventKind {
       Self::PlanDecided { .. } => "plan_decided",
       Self::StepPassed { .. } => "step_passed",
       Self::StepFailed { .. } => "step_failed",
+      Self::StepAccepted { .. } => "step_accepted",
       Self::StepSkipped { .. } => "step_skipped",
       Self::CheckpointRecorded { .. } => "checkpoint_recorded",
       Self::UsageRecorded { .. } => "usage_recorded",

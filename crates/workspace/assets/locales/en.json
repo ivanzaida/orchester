@@ -277,7 +277,9 @@
         "one": "{{step}} still fails after {{retries}} retry",
         "other": "{{step}} still fails after {{retries}} retries"
       },
-      "brokeTitle": "{{step}} stopped again without a result"
+      "brokeTitle": "{{step}} stopped again without a result",
+      "unverifiedTitle": "{{step}} could not check everything",
+      "unchangedTitle": "{{step}} was not run again: nothing changed"
     },
     "activity": {
       "exit": "exit {{code}}",

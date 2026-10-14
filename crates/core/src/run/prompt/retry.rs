@@ -96,8 +96,15 @@ pub(super) fn push(text: &mut String, input: &PromptInput<'_>) {
 fn report_text(failure: FailureReport<'_>) -> String {
   match failure {
     FailureReport::Result(result) => {
-      let text =
+      let mut text =
         Handoff::from_result(result).map_or_else(|| result.summary.clone(), |handoff| handoff.text(StepFate::Passed));
+      if !result.unverified.is_empty() {
+        text.push_str("\n\nIt could not check:");
+        for item in &result.unverified {
+          // Writing to a String cannot fail.
+          let _ = write!(text, "\n- {}: {}", item.check, item.reason);
+        }
+      }
       head(text.trim())
     }
     FailureReport::Message(message) if message.trim().is_empty() => "(no report)".to_owned(),

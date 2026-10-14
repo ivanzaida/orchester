@@ -228,7 +228,8 @@ fn load_attempts(connection: &Connection, run: &str) -> Result<Vec<Attempt>, Sto
 /// Executions in insertion order, which is pipeline order within an attempt.
 fn load_executions(connection: &Connection, attempt: &str) -> Result<Vec<StepExecution>, StoreError> {
   let mut statement = connection.prepare(
-    "SELECT id, step_key, status, wait_reason, failure FROM step_executions WHERE attempt_id = ?1 ORDER BY rowid",
+    "SELECT id, step_key, status, wait_reason, failure, judged_revision FROM step_executions WHERE attempt_id = ?1 \
+     ORDER BY rowid",
   )?;
   let rows = statement
     .query_map([attempt], |row| {
@@ -238,20 +239,27 @@ fn load_executions(connection: &Connection, attempt: &str) -> Result<Vec<StepExe
         row.get::<_, String>(2)?,
         row.get::<_, Option<String>>(3)?,
         row.get::<_, Option<String>>(4)?,
+        row.get::<_, Option<String>>(5)?,
       ))
     })?
     .collect::<Result<Vec<_>, _>>()?;
   rows
     .into_iter()
-    .map(|(id, step, status, wait_reason, failure)| {
+    .map(|(id, step, status, wait_reason, failure, judged)| {
       let failure = failure.as_deref().map(parse_step_failure).transpose()?;
+      let judged = judged
+        .as_deref()
+        .map(Revision::new)
+        .transpose()
+        .map_err(|error| corrupt("judged revision", error))?;
       Ok(
         StepExecution::new(
           parse("step execution id", &id)?,
           step_key(&step)?,
           parse_step_status(&status, wait_reason.as_deref())?,
         )
-        .with_failure(failure),
+        .with_failure(failure)
+        .with_judged(judged),
       )
     })
     .collect()

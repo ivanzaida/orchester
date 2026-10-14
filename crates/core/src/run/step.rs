@@ -9,7 +9,7 @@ use super::{
   state::Run,
   status::{StepFailure, StepStatus, WaitReason},
 };
-use crate::{id::StepExecutionId, resource::StepKey, time::Timestamp};
+use crate::{id::StepExecutionId, resource::StepKey, revision::Revision, time::Timestamp};
 
 impl Run {
   /// Starts a pending execution of the current attempt whose dependencies have passed.
@@ -120,11 +120,24 @@ impl Run {
     reason: StepFailure,
     now: Timestamp,
   ) -> Result<Vec<RunEvent>, RunError> {
+    self.fail_judged(execution, (reason, None), now)
+  }
+
+  /// [`Run::fail_step`] for a result that was for `revision` of the run's branch, the one the execution
+  /// started on: a step whose result holds for its revision is not run again on it
+  /// ([`Run::reruns_unchanged`]).
+  pub fn fail_judged(
+    &mut self,
+    execution: StepExecutionId,
+    (reason, revision): (StepFailure, Option<Revision>),
+    now: Timestamp,
+  ) -> Result<Vec<RunEvent>, RunError> {
     let follow_up = self.in_follow_up();
     self.transition(now, |transition| {
       transition.record(RunEventKind::StepFailed {
         execution,
         reason: Some(reason),
+        revision,
       })?;
       transition.skip_open()?;
       if follow_up {

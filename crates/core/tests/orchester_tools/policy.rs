@@ -65,6 +65,7 @@ fn orchester_tools_policy_follows_the_table() {
       "list_run_processes",
       "stop_run_process",
       "call_run_app",
+      "start_qa_app",
       "get_task",
       "save_memory",
       "report_progress"
@@ -98,6 +99,16 @@ fn orchester_tools_policy_follows_the_table() {
       .all(|tool| tool["inputSchema"]["additionalProperties"] == json!(false))
   );
 }
+/// A QA copy builds and runs the worktree's code outside the sandbox: it asks, and auto-approval never answers.
+#[test]
+fn orchester_tools_start_qa_app_asks() {
+  assert_eq!(reading().policy(OrchesterTool::StartQaApp), Some(ToolPolicy::Asks));
+  assert!(!orchester_core::orchester_tools::auto_approvable(
+    "Orchester",
+    "start_qa_app"
+  ));
+}
+
 /// A check whose access rules approve no call runs without asking; with one that asks, `run_check` asks for that one.
 #[test]
 fn orchester_tools_checks_ask_by_their_access_rules() {
@@ -155,6 +166,7 @@ fn orchester_tools_tell_each_cli_what_runs_and_what_asks() {
       "list_run_processes",
       "stop_run_process",
       "call_run_app",
+      "start_qa_app",
       "get_task",
       "save_memory",
       "report_progress",

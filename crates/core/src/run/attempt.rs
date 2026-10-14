@@ -15,6 +15,8 @@ pub struct StepExecution {
   step: StepKey,
   status: StepStatus,
   failure: Option<StepFailure>,
+  /// The revision of the run's branch a failed execution's result was for, when it is known.
+  judged: Option<Revision>,
 }
 
 impl StepExecution {
@@ -25,6 +27,7 @@ impl StepExecution {
       step,
       status,
       failure: None,
+      judged: None,
     }
   }
 
@@ -32,6 +35,13 @@ impl StepExecution {
   #[must_use]
   pub const fn with_failure(mut self, failure: Option<StepFailure>) -> Self {
     self.failure = failure;
+    self
+  }
+
+  /// A persisted failed execution with the revision its result was for.
+  #[must_use]
+  pub fn with_judged(mut self, judged: Option<Revision>) -> Self {
+    self.judged = judged;
     self
   }
 
@@ -52,13 +62,26 @@ impl StepExecution {
     self.failure
   }
 
+  /// The revision of the run's branch a failed execution's result was for, when it is known.
+  pub const fn judged(&self) -> Option<&Revision> {
+    self.judged.as_ref()
+  }
+
   pub(super) const fn set_status(&mut self, status: StepStatus) {
     self.status = status;
   }
 
-  pub(super) const fn fail(&mut self, failure: Option<StepFailure>) {
+  pub(super) fn fail(&mut self, failure: Option<StepFailure>, judged: Option<Revision>) {
     self.status = StepStatus::Failed;
     self.failure = failure;
+    self.judged = judged;
+  }
+
+  /// A person accepted it as it is: it passed, with no failure left.
+  pub(super) fn accept(&mut self) {
+    self.status = StepStatus::Passed;
+    self.failure = None;
+    self.judged = None;
   }
 }
 

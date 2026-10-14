@@ -31,8 +31,12 @@ use crate::{
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum StuckDecision {
-  /// One more attempt: the step's failure route again, or for a step that broke, the step again.
+  /// One more attempt: the step's failure route again, or for a step that broke, waited unverified or was
+  /// not run again on unchanged work, the step again.
   Retry,
+  /// For a step that waited unverified or unchanged: it passes as it is, and the steps that have not passed
+  /// run ([`AttemptReason::Accepted`]).
+  Accept,
   /// A new attempt from agent step `step` (one of [`Run::return_targets`]), whose prompt carries
   /// `note` as the person's instruction.
   ReturnTo { step: StepKey, note: ReviewNote },
@@ -58,6 +62,19 @@ pub const MAX_AUTOMATIC_ATTEMPTS: usize = 10;
 impl Run {
   /// What follows the failure of `step` for `reason` in an attempt that is not a follow-up.
   pub(super) fn after_failure(&self, step: &StepKey, reason: StepFailure) -> RunEventKind {
+    match reason {
+      StepFailure::Unverified => {
+        return RunEventKind::WaitingForPerson {
+          reason: Stuck::Unverified(step.clone()),
+        };
+      }
+      StepFailure::Unchanged => {
+        return RunEventKind::WaitingForPerson {
+          reason: Stuck::Unchanged(step.clone()),
+        };
+      }
+      _ => {}
+    }
     if !reason.is_verdict() {
       // The failure just recorded counts: a second breakage since the step last passed waits.
       return if self.breakages_since_passed(step) >= 2 || self.automatic_attempts() >= MAX_AUTOMATIC_ATTEMPTS {
@@ -108,7 +125,7 @@ impl Run {
       .filter(|execution| execution.step() == step)
       .fold(0, |broken, execution| match execution.status() {
         StepStatus::Passed => 0,
-        StepStatus::Failed if !execution.failure().is_some_and(StepFailure::is_verdict) => broken + 1,
+        StepStatus::Failed if execution.failure().is_none_or(StepFailure::is_breakage) => broken + 1,
         _ => broken,
       })
   }
@@ -154,7 +171,7 @@ impl Run {
         .step(step)
         .and_then(|pinned| pinned.on_failure.as_ref())
         .map_or(step, |route| &route.return_to),
-      Stuck::BrokeAgain(step) => step,
+      Stuck::BrokeAgain(step) | Stuck::Unverified(step) | Stuck::Unchanged(step) => step,
     })
   }
 
@@ -204,8 +221,11 @@ impl Run {
           })
         });
       }
+      StuckDecision::Accept => return self.accept_stuck(&stuck, now),
       StuckDecision::Retry => match &stuck {
-        Stuck::BrokeAgain(_) => (AttemptReason::Restart { step: step.clone() }, step),
+        Stuck::BrokeAgain(_) | Stuck::Unverified(_) | Stuck::Unchanged(_) => {
+          (AttemptReason::Restart { step: step.clone() }, step)
+        }
         Stuck::RetriesExhausted(_) => {
           let return_to = self
             .snapshot()
@@ -257,6 +277,7 @@ impl Run {
     let broke = self.latest_execution(step).is_some_and(|execution| {
       execution.status() == StepStatus::Failed && !execution.failure().is_some_and(StepFailure::is_verdict)
     });
+    // `Restart` also runs a step again that waited unverified or unchanged, when a person asks for it.
     if !broke {
       return Err(RunError::InvalidAttempt("a restart executes a step that broke"));
     }

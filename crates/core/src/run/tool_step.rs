@@ -181,6 +181,7 @@ impl ToolCommand<'_> {
       step: at.step,
       outcome: Some(outcome),
       text,
+      unverified: Vec::new(),
       created_at: at.now,
     })
   }

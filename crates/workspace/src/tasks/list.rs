@@ -93,13 +93,13 @@ pub struct LatestRun {
   pub step: Option<CurrentStep>,
 }
 
-/// What a run waiting for a person's decision stopped at (02.B6 `Np9kc`): the step, by name, and
-/// whether its retries ran out (how many it took) or it broke again.
+/// What a run waiting for a person's decision stopped at (02.B6 `Np9kc`): the step, by name, how many
+/// retries it took, and why it waits.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AwaitedDecision {
   pub step: Arc<str>,
   pub retries: u32,
-  pub broke: bool,
+  pub stuck: Stuck,
 }
 
 impl AwaitedDecision {
@@ -116,16 +116,19 @@ impl AwaitedDecision {
         .step(step)
         .map_or_else(|| step.as_str().into(), |pinned| pinned.name.as_str().into()),
       retries: run.automatic_retries_taken(step),
-      broke: matches!(stuck, Stuck::BrokeAgain(_)),
+      stuck: stuck.clone(),
     })
   }
 
-  /// "Review still fails after 2 retries", or "Implement stopped again without a result".
+  /// "Review still fails after 2 retries", "Implement stopped again without a result", "Verify could not
+  /// check everything" or "Verify was not run again: nothing changed".
   pub fn title(&self) -> Message {
-    let key = match (self.broke, self.retries) {
-      (true, _) => "runs.retryLimit.brokeTitle",
-      (false, 1) => "runs.retryLimit.title.one",
-      (false, _) => "runs.retryLimit.title.other",
+    let key = match (&self.stuck, self.retries) {
+      (Stuck::BrokeAgain(_), _) => "runs.retryLimit.brokeTitle",
+      (Stuck::Unverified(_), _) => "runs.retryLimit.unverifiedTitle",
+      (Stuck::Unchanged(_), _) => "runs.retryLimit.unchangedTitle",
+      (Stuck::RetriesExhausted(_), 1) => "runs.retryLimit.title.one",
+      (Stuck::RetriesExhausted(_), _) => "runs.retryLimit.title.other",
     };
     Message::new(key)
       .with("step", self.step.to_string())

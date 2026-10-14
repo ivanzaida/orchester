@@ -30,6 +30,7 @@ mod output;
 mod outside;
 mod policy;
 mod processes;
+mod qa;
 mod skills;
 mod task_view;
 mod work;
@@ -48,6 +49,7 @@ pub use self::{
   outside::{MAX_LINE_BYTES, MAX_READ_BYTES, OutsideReadError, OutsideReads},
   policy::{StepTools, ToolPolicy, auto_approvable, decide},
   processes::{ProcessCall, ProcessScopeError, RunProcessScope},
+  qa::{QA_APP_SCRIPT, QaAppStart, StartedQaApp, qa_name},
   skills::{SkillCall, SkillOfferError, SkillReadError, SkillSource, StepSkills},
   task_view::TaskView,
   work::{ExternalReach, ProjectTool, ToolContext, ToolProgram, ToolWork},
@@ -75,6 +77,7 @@ pub enum OrchesterTool {
   ListRunProcesses,
   StopRunProcess,
   CallRunApp,
+  StartQaApp,
   ListSkills,
   ReadSkill,
   GetTask,
@@ -98,7 +101,7 @@ pub enum AccessClass {
 }
 
 impl OrchesterTool {
-  pub const ALL: [Self; 20] = [
+  pub const ALL: [Self; 21] = [
     Self::ReadFile,
     Self::ListFiles,
     Self::SearchFile,
@@ -114,6 +117,7 @@ impl OrchesterTool {
     Self::ListRunProcesses,
     Self::StopRunProcess,
     Self::CallRunApp,
+    Self::StartQaApp,
     Self::ListSkills,
     Self::ReadSkill,
     Self::GetTask,
@@ -139,6 +143,7 @@ impl OrchesterTool {
       Self::ListRunProcesses => "list_run_processes",
       Self::StopRunProcess => "stop_run_process",
       Self::CallRunApp => "call_run_app",
+      Self::StartQaApp => "start_qa_app",
       Self::ListSkills => "list_skills",
       Self::ReadSkill => "read_skill",
       Self::GetTask => "get_task",
@@ -234,7 +239,8 @@ impl OrchesterTool {
       }
       Self::ListSkills | Self::ReadSkill | Self::GetTask => AccessClass::ReadOnly,
       Self::EditFile | Self::CreateFile | Self::DeleteFile | Self::MoveFile => AccessClass::WritesWorktree,
-      Self::SearchExternalFile | Self::ReadExternalFile | Self::RunCheck => AccessClass::Outside,
+      // Builds and runs the worktree's code outside every sandbox, as a check runs a program outside it.
+      Self::SearchExternalFile | Self::ReadExternalFile | Self::RunCheck | Self::StartQaApp => AccessClass::Outside,
       Self::SaveMemory | Self::ReportProgress => AccessClass::Records,
       Self::ListRunProcesses | Self::StopRunProcess | Self::CallRunApp => AccessClass::RunProcesses,
     }

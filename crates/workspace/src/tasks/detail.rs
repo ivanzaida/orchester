@@ -14,7 +14,8 @@ use orchester_core::{
   resource::{AgentProfile, StepKey, VersionNumber},
   run::{
     ActiveClock, ActivityEntry, AttemptStart, Invocation, PauseReason, PinnedVersion, Plan, Run, RunLimit, RunStatus,
-    StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
+    StepExecutor, StepFailure, StepOutput, StepStatus, Stuck, TaskPhase, TokenUsage, UnverifiedCheck, active_time,
+    execution_tokens,
     review::{ReviewRecord, reviews_usage},
   },
   store::{
@@ -213,6 +214,21 @@ impl RunView {
       .steps
       .iter()
       .filter(|step| matches!(step.status, Some(StepStatus::Running | StepStatus::Waiting(_))))
+  }
+
+  /// What a run waiting unverified or unchanged could not check: the checks its step's latest result listed, empty
+  /// for a result that listed none (an unchanged step whose earlier result failed) and for a run that does not wait
+  /// that way.
+  pub fn unverified(&self) -> &[UnverifiedCheck] {
+    let RunStatus::WaitingForPerson(stuck @ (Stuck::Unverified(_) | Stuck::Unchanged(_))) = self.run.status() else {
+      return &[];
+    };
+    self
+      .outputs
+      .iter()
+      .rev()
+      .find(|output| output.step == *stuck.step())
+      .map_or(&[], |output| output.unverified.as_slice())
   }
 
   /// The output `execution` left, if any.
