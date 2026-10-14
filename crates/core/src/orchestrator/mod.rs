@@ -16,7 +16,7 @@ pub use self::{
     ActionOutcome, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, SessionChange, TurnFailure,
     TurnState,
   },
-  settings::{OrchestratorSettings, runs_orchestrator},
+  settings::{OrchestratorSettings, codex_held_back, runs_orchestrator},
 };
 
 /// The agentic turns one answer may take at most (`--max-turns`): reading, searching and calling tools, each a

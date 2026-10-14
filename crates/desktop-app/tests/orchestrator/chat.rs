@@ -288,18 +288,13 @@ fn orchestrator_names_a_cli_that_is_not_signed_in_and_where_to_fix_it() {
 }
 
 #[test]
-fn orchestrator_on_codex_acts_through_the_same_tools() {
+fn orchestrator_on_codex_is_held_back_with_why() {
   let mut screen = Orchestrator::new(Setup::Codex);
   screen.go(OrchestratorChat::New);
-  assert!(screen.text("orchestrator-runs-on").contains("Codex · Kontur"));
-  screen.send(r#"Call create_task {"project":"Kontur","title":"Record every delivery attempt"}"#);
-  screen.until("the created task's card", |screen| {
+  screen.until("the reason", |screen| {
     screen
-      .text("orchestrator-conversation")
-      .contains("Created KON-1 as a draft")
+      .text("orchestrator-not-ready")
+      .contains("Codex's sandbox can't be shown to keep the agent's reads in the project folder")
   });
-  screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
-  let log = std::fs::read_to_string(screen.root.join(".orchester").join("fake-chat.log")).expect("the agent ran");
-  assert!(log.contains("codex-argv: app-server --stdio"), "{log}");
-  assert!(log.contains("mcp-token: present"), "{log}");
+  assert!(!screen.exists("orchestrator-thinking"));
 }

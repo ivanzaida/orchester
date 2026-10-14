@@ -427,50 +427,23 @@ fn codex() -> TestProject {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn chat_on_codex_answers_read_only_with_only_its_tools_and_resumes_its_thread() {
+async fn chat_on_codex_is_held_back_until_its_reads_can_be_confined() {
   let project = codex();
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
   let chat = ChatId::generate();
-  let first = keep(root, chat, "What is running?");
-  scheduler.answer_in_chat(first, tools()).await.expect("the turn starts");
-  assert_eq!(ended(root, &mut events, first).await, TurnState::Answered);
-  assert_eq!(replies(root, chat), ["Noted: What is running?"]);
-  let db = ProjectDb::open(root).expect("open");
-  let kept = db.chat(chat).expect("read").expect("kept");
-  assert_eq!(kept.session().expect("the thread is kept").id, "fake-thread-1");
-  assert!(
-    db.chat_turn_tokens(first).expect("read") > TokensUsed::ZERO,
-    "its usage is kept"
-  );
-  let started = log(root);
-  assert!(started.contains("codex-argv: app-server --stdio"), "{started}");
-  assert!(
-    started.contains("mcp-url: http://127.0.0.1:9/mcp\nmcp-token: present"),
-    "only the chat's tools, with the turn's token: {started}"
-  );
-  assert!(
-    started.contains("prompt: You are the Orchestrator of the project \"Kontur\""),
-    "a new thread opens with the system prompt: {started}"
-  );
-  assert!(
-    !started.contains(TOKEN),
-    "the token is never on the command line: {started}"
-  );
-
-  let second = keep(root, chat, "And what waits?");
+  let message = keep(root, chat, "What is running?");
   scheduler
-    .answer_in_chat(second, tools())
+    .answer_in_chat(message, tools())
     .await
-    .expect("the turn starts");
-  assert_eq!(ended(root, &mut events, second).await, TurnState::Answered);
-  assert!(
-    log(root).contains("prompt: And what waits?"),
-    "the thread goes on: {}",
-    log(root)
-  );
+    .expect("the turn is taken");
   assert_eq!(
-    replies(root, chat),
-    ["Noted: What is running?", "Noted: And what waits?"]
+    ended(root, &mut events, message).await,
+    TurnState::Failed(TurnFailure::ConnectionGone),
+    "a Codex connection does not run the Orchestrator"
+  );
+  assert!(
+    !root.join(".orchester").join("fake-chat.log").exists(),
+    "Codex was never started"
   );
 }

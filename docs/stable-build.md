@@ -312,14 +312,14 @@ Agents in runs do not reach this server: Claude Code runs keep `--strict-mcp-con
 environment is cleaned).
 
 The project's Orchestrator chat does not reach it either. Its agent gets a server of its own. The agent is Claude
-Code or Codex App Server, started read-only in the project folder by the project's runner for each message.
+Code, started read-only in the project folder by the project's runner for each message (Codex is held back: its
+sandbox does not keep reads in the project folder).
 
 - **One server per turn.** It runs on a free loopback port of the app, with a token made when the message is sent.
   It stops once the turn ends, or at once when the runner never took the message, so a token works only while its
   turn runs.
 - **Where the token goes.** The app hands it only to the runner, over its pipe. For Claude Code the runner writes it
-  only into the agent's MCP configuration file for the turn, which is removed when the CLI ends. For Codex it goes
-  only into the process environment.
+  only into the agent's MCP configuration file for the turn, which is removed when the CLI ends.
 - **What it serves.** Part of the domain tools: `list_tasks`, `get_task`, `get_run`, `list_approvals`,
   `list_pipelines`, `create_task`, `update_task`, `run_task`, `pause_run`, `resume_run`, `hold_queue` and
   `release_queue`. They act on the chat's project only, given by its id whatever name the call uses. No window tool.

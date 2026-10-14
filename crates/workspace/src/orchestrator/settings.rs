@@ -8,7 +8,7 @@ use std::{path::Path, sync::Arc};
 use orchester_core::{
   connection::{AgentConnection, AgentProvider},
   id::ConnectionId,
-  orchestrator::{OrchestratorSettings, runs_orchestrator},
+  orchestrator::{OrchestratorSettings, codex_held_back, runs_orchestrator},
   resource::ModelId,
   store::ConnectionStore,
   time::Timestamp,
@@ -197,5 +197,8 @@ pub fn save_in(root: &Path, settings: &OrchestratorSettings, keep: Keep) -> Resu
 
 /// Why the Orchestrator cannot run on a connection of `provider`.
 fn unavailable(provider: AgentProvider) -> Option<Message> {
+  if codex_held_back(provider) {
+    return Some(Message::new("orchestrator.settings.codexHeldBack"));
+  }
   (!runs_orchestrator(provider)).then(|| Message::new("orchestrator.settings.cliOnly"))
 }

@@ -7,8 +7,10 @@
 //! The system prompt opens a new thread's first message. Once the turn is over the runner ends App Server, which
 //! otherwise waits for more.
 //!
-//! Codex's `read-only` sandbox keeps the agent from writing, not from reading: unlike Claude Code's read rules, it
-//! does not keep reads to the project folder.
+//! Not offered yet (`orchester_core::orchestrator::codex_held_back`): Codex's `read-only` sandbox keeps the agent from
+//! writing, not from reading, and still gives it a sandboxed shell, so it could read `CODEX_HOME`, other repositories
+//! and the runner's private files; the user's own execpolicy `allow` rules would run matching commands outside the
+//! sandbox. `prepare` refuses a Codex connection, so this turn does not run until those reads can be denied.
 
 use std::collections::BTreeSet;
 

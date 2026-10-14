@@ -98,7 +98,7 @@
     "setupFailed": "What the Orchestrator runs on couldn't be read",
     "notReady": {
       "title": "Choose what the Orchestrator runs on",
-      "body": "Pick a Claude Code or Codex connection and a model in Orchestrator settings and publish them. Conversations stay readable; new messages can't be sent until then.",
+      "body": "Pick a Claude Code connection and a model in Orchestrator settings and publish them. Conversations stay readable; new messages can't be sent until then.",
       "openSettings": "Open settings"
     },
     "loading": {
