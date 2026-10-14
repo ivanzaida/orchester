@@ -45,29 +45,3 @@ fn instructions_recovery_replaces_only_actual_variable_references() {
     "\\{{run.revision}} {{run.base_revision}} {{run.base_revision}} {{run.base_revision}}"
   );
 }
-#[test]
-fn instructions_viewer_ranges_mark_actual_values_with_exact_utf8_offsets() {
-  let prompt =
-    PromptText::new("é\\{{task.title}}: {{ task.title }} / {{run.revision}} / {{project.name}}").expect("prompt");
-  let (text, ranges) =
-    orchester_workspace::instructions::preview_tokens::rendered_ranges(&prompt, |variable| match variable {
-      Variable::TaskTitle => Some("😀 retry".to_owned()),
-      Variable::ProjectName => Some("Kontur".to_owned()),
-      _ => None,
-    });
-  assert_eq!(text, "é{{task.title}}: 😀 retry / {{run.revision}} / Kontur");
-  assert_eq!(
-    ranges.iter().map(|range| &text[range.clone()]).collect::<Vec<_>>(),
-    ["😀 retry", "Kontur"]
-  );
-  assert_eq!(
-    text,
-    prompt
-      .render_marked(|variable| match variable {
-        Variable::TaskTitle => Some("😀 retry".to_owned()),
-        Variable::ProjectName => Some("Kontur".to_owned()),
-        _ => None,
-      })
-      .text
-  );
-}

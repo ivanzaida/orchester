@@ -16,6 +16,7 @@ mod outcome_prompt;
 mod permissions;
 mod plans;
 mod prompt;
+mod prompt_values;
 mod recovery;
 mod retry_prompt;
 mod schedule;

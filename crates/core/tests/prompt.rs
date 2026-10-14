@@ -123,3 +123,21 @@ fn prompt_catalog_groups_match_the_design() {
   assert_eq!(Variable::RunBudget.value_type(), VariableType::Tokens);
   assert_eq!(Variable::TaskAcceptanceCriteria.value_type(), VariableType::StringList);
 }
+
+#[test]
+fn prompt_marked_rendering_records_where_each_value_went() {
+  let prompt =
+    PromptText::new(r"é\{{task.title}}: {{ task.title }} / {{run.revision}} / {{project.name}}").expect("valid prompt");
+  let rendered = prompt.render_marked(|variable| match variable {
+    Variable::TaskTitle => Some("😀 retry".to_owned()),
+    Variable::ProjectName => Some("Kontur".to_owned()),
+    _ => None,
+  });
+  assert_eq!(rendered.text, "é{{task.title}}: 😀 retry / {{run.revision}} / Kontur");
+  let marked: Vec<&str> = rendered
+    .values
+    .iter()
+    .map(|range| &rendered.text[range.clone()])
+    .collect();
+  assert_eq!(marked, ["😀 retry", "Kontur"]);
+}

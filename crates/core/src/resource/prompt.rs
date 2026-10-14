@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -62,6 +64,7 @@ impl PromptText {
     let mut rendered = Rendered {
       text: String::with_capacity(text.len()),
       unavailable: Vec::new(),
+      values: Vec::new(),
     };
     let mut start = 0;
     while let Some(open) = text[start..].find(OPEN) {
@@ -83,7 +86,13 @@ impl PromptText {
         .expect("construction checked that every placeholder names a variable");
       rendered.text.push_str(&text[start..offset]);
       match value(variable) {
-        Some(value) => rendered.text.push_str(&value),
+        Some(value) => {
+          let from = rendered.text.len();
+          rendered.text.push_str(&value);
+          if !value.is_empty() {
+            rendered.values.push(from..rendered.text.len());
+          }
+        }
         None => {
           rendered.text.push_str(&text[offset..end]);
           if !rendered.unavailable.contains(&variable) {
@@ -104,6 +113,41 @@ pub struct Rendered {
   pub text: String,
   /// Variables without a value, in order of first use; their placeholders are left as written.
   pub unavailable: Vec<Variable>,
+  /// Where each value put in for a placeholder is in [`Self::text`], in order; empty values have none.
+  pub values: Vec<Range<usize>>,
+}
+
+impl Rendered {
+  /// The text without surrounding whitespace, each value's range cut to what is left of it.
+  pub fn trimmed(self) -> Self {
+    let start = self.text.len() - self.text.trim_start().len();
+    let end = start + self.text.trim().len();
+    let values = self
+      .values
+      .into_iter()
+      .map(|range| range.start.clamp(start, end) - start..range.end.clamp(start, end) - start)
+      .filter(|range| !range.is_empty())
+      .collect();
+    Self {
+      text: self.text[start..end].to_owned(),
+      unavailable: self.unavailable,
+      values,
+    }
+  }
+
+  /// The text after `prefix`, its values' ranges moved with it.
+  pub fn after(self, prefix: &str) -> Self {
+    let shift = prefix.len();
+    Self {
+      text: format!("{prefix}{}", self.text),
+      unavailable: self.unavailable,
+      values: self
+        .values
+        .into_iter()
+        .map(|range| range.start + shift..range.end + shift)
+        .collect(),
+    }
+  }
 }
 
 impl TryFrom<String> for PromptText {

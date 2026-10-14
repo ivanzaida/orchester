@@ -11,7 +11,7 @@ use lurq::{
 use orchester_core::run::{Composition, InstructionVersion, PromptSection, PromptSource};
 use orchester_workspace::instructions::{
   form::Events,
-  preview::{EditedInstruction, PreviewCatalog, Resolved},
+  preview::{PreviewCatalog, Resolved},
 };
 
 use super::{
@@ -60,14 +60,7 @@ pub fn full(ctx: &mut Ctx, state: &Panels, props: &Props, catalog: &PreviewCatal
       ExtraSpacing::Inset.role(),
     ));
   for (index, section) in composition.sections().iter().enumerate() {
-    contents = contents.child(block(
-      ctx,
-      (props, composition.event()),
-      &resolved,
-      section,
-      index,
-      selected == index,
-    ));
+    contents = contents.child(block(ctx, composition.event(), section, index, selected == index));
   }
   Column::new()
     .id("instruction-full-viewer")
@@ -197,30 +190,16 @@ fn note(ctx: &Ctx, mark: Icon, key: &str) -> Element {
 }
 fn block(
   ctx: &mut Ctx,
-  (props, event): (&Props, orchester_core::resource::InjectionEvent),
-  resolved: &Resolved<'_>,
+  event: orchester_core::resource::InjectionEvent,
   section: &PromptSection,
   index: usize,
   selected: bool,
 ) -> Element {
   let (title, meta) = block_heading(ctx, event, section, index);
-  let entry = props.entry.as_ref().expect("valid composition has an edited entry");
-  let ranges = resolved.source_ranges(
-    section,
-    EditedInstruction {
-      id: entry.id,
-      name: &entry.name,
-      slug: &entry.slug,
-      body: &entry.body,
-      version: InstructionVersion::Draft {
-        based_on: entry.based_on(),
-      },
-    },
-  );
   let text = ResolvedSource {
     id: format!("instruction-viewer-text-{index}").into(),
     text: section.text.clone().into(),
-    values: ranges,
+    values: section.values.clone(),
   }
   .render(ctx);
   let block = Column::new()
