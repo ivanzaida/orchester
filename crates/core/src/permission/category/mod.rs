@@ -7,7 +7,9 @@
 //! Unknown, so they ask. A variable the line sets to a plain literal is read where it is used
 //! ([`variables`]), and a `cd` into the worktree is no part of its own: the parts after it are placed
 //! from every folder it may leave them in. The status an earlier command left (`$?`,
-//! `${PIPESTATUS[0]}`) is read only as an argument of a program that prints it ([`STATUS_PRINTERS`]).
+//! `${PIPESTATUS[0]}`) is read only as an argument of a program that prints it ([`STATUS_PRINTERS`]). A
+//! program that loads settings or code from the folder it runs in (git, Cargo, a package manager) is Unknown
+//! anywhere but the worktree and its writable folders: that folder's settings name what it runs.
 //!
 //! Run temp (a temporary file this run created) is not told apart yet: a temporary file is outside
 //! the worktree like any other. Besides its category a part says whether it reads a credential
@@ -289,6 +291,10 @@ fn classify_part(
   }
   // A program may read the folder it runs in (`ls`, `rg ''`, `find`), wherever an earlier `cd` left it.
   placing.read(&mut part, ".");
+  // What a folder's settings name runs only where they are the agent's own.
+  if judged.folder_code {
+    placing.inside(&mut part, ".");
+  }
   place_arguments(&mut part, &judged, args, placing, line.folders.as_deref());
   for target in &judged.writes {
     placing.write(&mut part, target, judged.deletes);

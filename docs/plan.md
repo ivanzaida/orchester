@@ -817,6 +817,11 @@ reviewed Unknown lines (2026-10-06), and its hard rules are unchanged. Tests:
 `cargo test -p orchester-core --test command_compound command_compound`, plus `command_sequences`,
 `approval_fixtures` and `native known_safe`. Still Unknown by design: `$( )`, subshells, functions, `for … set --`,
 `**` globs, a loop that is not the whole line.
+Security review fix (same day): only plain readers (`cat`, `rg`, `grep -r`, `sed -n`, …) read the dependency
+sources like the worktree; a `cd` there, any other program, and a `.git` there do not. Programs that load settings
+or code from their folder (git, Cargo, package managers, build tools, Python, Node) are Unknown outside the worktree
+and its writable folders, which also closes `cd /any && git status` on master. `diff -r`, `tree -l` and `du -L` are
+Unknown. Tests: `cargo test -p orchester-core --test command_review_bypasses command_review`.
 
 ORC-3 · Pipelines page and editor · branch `codex/orc3-integration` (accepted 2026-10-12, merged `39f945d2`).
 Independent source review accepted final union `7668c94a` / tree `f7e145f2`; eight named-filter groups /

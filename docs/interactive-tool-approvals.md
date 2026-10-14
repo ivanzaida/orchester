@@ -804,9 +804,14 @@ with the tools they have (*Files and commands*: Claude Code's file tools, the ed
 one bare command per call; Codex's `apply_patch` in a writing step, no `cd`), so they rarely send such lines.
 Reads of the sources Cargo unpacks (`~/.cargo/registry/src`), its git checkouts (`~/.cargo/git/checkouts`) and the
 toolchains' library sources (`~/.rustup/toolchains/*/lib/rustlib/src`), also under `CARGO_HOME` and `RUSTUP_HOME`,
-are read like the worktree (decided 2026-10-14): a known-safe read there runs on its own, as Orchester's
-`read_external_file` and `search_external_file` do; a build, write or delete there is outside the worktree. The rest
-of a Cargo or rustup home stays a credential location, and so does any path through a Windows share or a `\\?\`
+are read like the worktree by the plain readers only (decided 2026-10-14, narrowed after a security review): a
+known-safe `cat`, `head`, `rg`, `grep -r`, `sed -n`, … there runs on its own, as Orchester's `read_external_file` and
+`search_external_file` do. Any other program reads outside the worktree there, a `cd` there leaves the line outside
+it, and a write or delete there is outside it. A program that loads settings or code from the folder it runs in
+(git, Cargo, package managers, build tools, Python and Node) is Unknown anywhere but the worktree and its writable
+folders, and a reader that follows the links in a folder it walks (`diff -r`, `tree -l`, `du -L`) is Unknown
+everywhere. A `.git` folder in the dependency sources, and the rest of a Cargo or rustup home, stay credential
+locations, and so does any path through a Windows share or a `\\?\`
 prefix, which can name the home folder under another name. The status an earlier command left (`$?`,
 `${PIPESTATUS[N]}`, PowerShell's `$?` and `$LASTEXITCODE`) is read only as an argument of `echo`.
 

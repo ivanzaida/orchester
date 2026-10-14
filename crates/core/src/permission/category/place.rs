@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::{CommandCategory, CommandScope, part::CommandPart, paths::Place};
+use super::{CommandCategory, CommandScope, part::CommandPart, paths::Place, toolchains};
 
 /// The folders a part may run in; `None` when one cannot be told.
 pub(super) type Folders = Option<Vec<PathBuf>>;
@@ -75,8 +75,8 @@ impl<'a> Placing<'a> {
   }
 
   /// `word`, a file the part reads or a word that may name one: a credential location is noted, a
-  /// folder outside the worktree kept. A part that only reads reads the dependency sources of a toolchain as
-  /// it reads the worktree; any other (a build run there) reaches outside.
+  /// folder outside the worktree kept. A plain reader reads the dependency sources of a toolchain as it reads
+  /// the worktree ([`toolchains::reads_sources`]); any other part there reaches outside.
   pub(super) fn read(&self, part: &mut CommandPart, word: &str) {
     if word.is_empty() || word == "-" {
       return;
@@ -89,7 +89,7 @@ impl<'a> Placing<'a> {
       if place == Place::Secret && part.secret_word.is_none() {
         part.secret_word = Some(word.to_owned());
       }
-      if !(place == Place::Sources && part.category() == CommandCategory::ReadOnly) {
+      if !(place == Place::Sources && toolchains::reads_sources(part)) {
         note(part, &path, place);
       }
     }

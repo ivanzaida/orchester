@@ -235,7 +235,6 @@ fn command_sequences_read_published_sources_and_keep_credentials() {
     "sed -n 4330,4600p \"{HOME}/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lurq-0.40.1/src/app/runtime.rs\"",
     "ls ~/.cargo/registry/src/*/ | rg lurq",
     "L=\"{HOME}/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lurq-0.40.1/src\"; rg -n drag $L | head -40",
-    "cd ~/.cargo/registry/src/*/lurq-0.40.1 && grep -rn interval src | head -50; ls docs 2>/dev/null",
     "cat ~/.rustup/toolchains/stable-x86_64-pc-windows-msvc/lib/rustlib/src/rust/library/core/src/lib.rs",
     "cat ~/.cargo/git/checkouts/lurq-4f1c/0a1b2c3/src/lib.rs | head -20",
   ];
@@ -249,6 +248,10 @@ fn command_sequences_read_published_sources_and_keep_credentials() {
       "`{line}` runs by itself"
     );
   }
+  // After a `cd` there, the folder the line works in is outside the worktree: it reads, but asks.
+  let moved = "cd ~/.cargo/registry/src/*/lurq-0.40.1 && grep -rn interval src | head -50; ls docs 2>/dev/null";
+  assert_eq!(fixture.command(moved).category(), CommandCategory::ReadOnly);
+  assert_eq!(fixture.permitted(moved), None);
   // A write there is a write outside the worktree.
   let written =
     fixture.command("sed -i 1d ~/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lurq-0.40.1/src/lib.rs");
