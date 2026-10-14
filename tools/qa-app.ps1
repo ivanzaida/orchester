@@ -16,7 +16,8 @@
 #
 # -WindowX and -WindowY, always together, open the window with its top-left corner there, in physical
 # pixels of the virtual desktop (negative for a display left of or above the main one), instead of where
-# the system puts it: ORCHESTER_APP_WINDOW_POSITION=<x>,<y> for the QA app only, nothing stored.
+# the system puts it: ORCHESTER_APP_WINDOW_POSITION=<x>,<y> for the QA app only, nothing stored. The QA
+# app refuses a malformed value and does not start; the installed app ignores one with a log line.
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes

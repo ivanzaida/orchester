@@ -1,6 +1,6 @@
 //! The place QA asks the window to open at (`ORCHESTER_APP_WINDOW_POSITION`, set by `tools/qa-app.ps1
 //! -WindowX -WindowY`): a signed X,Y pair, refused when it is incomplete or not numbers, and nothing when
-//! it is not set.
+//! it is not set; the installed app ignores a malformed value instead of refusing to start.
 
 use std::ffi::OsStr;
 
@@ -65,4 +65,31 @@ fn window_position_refuses_a_value_that_is_not_text() {
   use std::{ffi::OsString, os::windows::ffi::OsStringExt};
   let value = OsString::from_wide(&[0xD800, u16::from(b','), u16::from(b'0')]);
   assert_eq!(WindowPosition::of_variable(Some(&value)), Err(PositionError::NotText));
+}
+
+#[test]
+fn window_position_malformed_never_keeps_the_installed_app_from_starting() {
+  use orchester_workspace::build::Build;
+
+  let value = Some(OsStr::new("left,top"));
+  assert_eq!(
+    WindowPosition::for_build(Build::Installed, value),
+    Ok(None),
+    "the installed app lets the system place the window"
+  );
+  assert_eq!(
+    WindowPosition::for_build(Build::Other, value),
+    Err(PositionError::NotANumber {
+      axis: 'X',
+      value: "left".to_owned()
+    }),
+    "a QA copy stays strict"
+  );
+  let asked = Some(OsStr::new("-2500,40"));
+  for build in [Build::Installed, Build::Other] {
+    assert_eq!(
+      WindowPosition::for_build(build, asked),
+      Ok(Some(WindowPosition { x: -2500, y: 40 }))
+    );
+  }
 }
