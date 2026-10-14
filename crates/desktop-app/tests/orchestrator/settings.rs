@@ -1,7 +1,8 @@
 //! Orchestrator settings (`Xir64`): what the Orchestrator runs on is versioned as agent profiles are. The first
 //! version is published from the form; after that a change is saved as a draft and published as the next version,
 //! which the chat answers on. A connection it cannot run on is listed, not publishable; a model the list doesn't have
-//! is typed under *Other model id…*; the tabs not built say why.
+//! is typed under *Other model id…*, and with no connection at all the select has nothing to open; the tabs not built
+//! say why.
 
 use orchester_core::{orchestrator::OrchestratorSettings, resource::ModelId};
 
@@ -126,6 +127,30 @@ fn orchestrator_settings_take_a_model_the_list_does_not_have() {
       .1
       .is_some_and(|draft| draft.model().as_str() == "claude-opus-5-5" && draft.effort() == Some("high"))
   });
+}
+
+#[test]
+fn orchestrator_settings_connection_select_opens_only_with_connections_to_list() {
+  // Connections it cannot run on are listed with why (Codex is held back), so the menu opens on them.
+  let mut screen = Orchestrator::new(Setup::NotChosen);
+  screen.settings();
+  screen.until("the connections", |screen| {
+    screen.options("orchestrator-connection").len() == 2
+  });
+  screen.press("orchestrator-connection");
+  assert!(screen.is_open("orchestrator-connection"));
+
+  // With none at all there is nothing to list: the select does not open an empty menu.
+  let mut screen = Orchestrator::new(Setup::NoConnection);
+  screen.settings();
+  screen.until("the page", |screen| {
+    screen
+      .text("orchestrator-settings-connection")
+      .contains("No usable connection")
+  });
+  assert!(screen.options("orchestrator-connection").is_empty());
+  screen.press("orchestrator-connection");
+  assert!(!screen.is_open("orchestrator-connection"));
 }
 
 #[test]

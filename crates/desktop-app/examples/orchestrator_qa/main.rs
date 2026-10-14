@@ -3,8 +3,9 @@
 //! `cargo run -p orchester-app --example orchestrator_qa -- <state>`, `state` one of [`State::ALL`].
 //!
 //! Each start seeds a new folder under `.tmp/qa/orchestrator/` ([`data`]): the seed's `tasks` project, a Claude Code
-//! connection whose program is `orchester-fake-claude` from this build's target folder (a stand-in: no real CLI runs
-//! and no sign-in is read), and conversations in each state. The project's runner is this build's, so a message sent
+//! connection whose program is `orchester-fake-claude` and a Codex one whose program is `orchester-fake-codex`, both
+//! from this build's target folder (stand-ins: no real CLI runs and no sign-in is read), and conversations in each
+//! state. The project's runner is this build's, so a message sent
 //! in the window is answered by the stand-in: `Keep thinking …` keeps it thinking (Stop response), `Please sign in`
 //! fails as a CLI that is not signed in, `Fail now` fails with an error, `Call <tool> <JSON>` calls one of the chat's
 //! domain tools (e.g. `Call create_task {"project":"Kontur","title":"Delivery log"}`), anything else is answered
@@ -16,6 +17,7 @@
 mod kontur;
 
 mod data;
+mod refused;
 
 use std::{
   env,
@@ -52,6 +54,11 @@ enum State {
   Failed,
   /// A turn cut short when the runner before ended.
   Interrupted,
+  /// A start the agent proposed, of a task edited since: a person's *Start* is refused as changed since proposed
+  /// (synthetic input gets the person-only note instead).
+  ProposalChanged,
+  /// That proposal after a person's *Start* ([`refused`]): its card shows the refusal.
+  ProposalRefused,
   /// `kPs8W`: the latest conversation; press *History* to open the panel.
   History,
   /// `qAq0z` (chat side): nothing chosen for the Orchestrator yet, a new conversation that can't send.
@@ -60,17 +67,19 @@ enum State {
   NoRunner,
   /// `jmyWu` (Profile, Connection & model only): the Orchestrator's settings.
   Settings,
-  /// `qAq0z` *No connection can run the Orchestrator*: only the seed's Codex connection.
+  /// `qAq0z` *No connection can run the Orchestrator*: only the seed's Codex connection, which says why it can't.
   SettingsNoConnection,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 10] = [
+  const ALL: [(&'static str, Self); 12] = [
     ("new", Self::New),
     ("conversation", Self::Conversation),
     ("stopped", Self::Stopped),
     ("failed", Self::Failed),
     ("interrupted", Self::Interrupted),
+    ("proposal-changed", Self::ProposalChanged),
+    ("proposal-refused", Self::ProposalRefused),
     ("history", Self::History),
     ("not-ready", Self::NotReady),
     ("no-runner", Self::NoRunner),
@@ -98,15 +107,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     .ok_or("the example's folder is in the target folder")?
     .to_path_buf();
   let program = |name: &str| target.join(format!("{name}{}", env::consts::EXE_SUFFIX));
-  let fake = program("orchester-fake-claude");
-  if !fake.is_file() {
+  let fakes = (program("orchester-fake-claude"), program("orchester-fake-codex"));
+  if !fakes.0.is_file() || !fakes.1.is_file() {
     return Err("build the stand-ins first: cargo build -p orchester-runner --features test-agent --bins".into());
   }
   let scratch = qa_folder()?;
   std::fs::create_dir_all(&scratch)?;
   let root = tempfile::Builder::new().prefix("app-").tempdir_in(&scratch)?;
   let chosen = !matches!(state, State::NotReady | State::SettingsNoConnection);
-  let prepared = data::prepare(root.path(), fake, (chosen, state != State::SettingsNoConnection))?;
+  let prepared = data::prepare(root.path(), fakes, (chosen, state != State::SettingsNoConnection))?;
   let runner = if state == State::NoRunner {
     root.path().join("no-runner").join("orchester-runner")
   } else {
@@ -140,6 +149,9 @@ fn route(prepared: &data::Prepared, state: State) -> Route {
     State::Stopped => ProjectPage::Orchestrator(OrchestratorChat::Chat(chats.stopped)),
     State::Failed => ProjectPage::Orchestrator(OrchestratorChat::Chat(chats.failed)),
     State::Interrupted => ProjectPage::Orchestrator(OrchestratorChat::Chat(chats.interrupted)),
+    State::ProposalChanged | State::ProposalRefused => {
+      ProjectPage::Orchestrator(OrchestratorChat::Chat(chats.proposal_changed))
+    }
     State::History => ProjectPage::Orchestrator(OrchestratorChat::Latest),
     State::Settings | State::SettingsNoConnection => ProjectPage::OrchestratorSettings,
   };
@@ -162,6 +174,14 @@ fn window(prepared: &data::Prepared, (state, runner): (State, PathBuf), scratch:
   app.set_tokio_handle(runtime.handle().clone());
   theme::install(&mut app, Mode::Dark);
   i18n::install(&app)?;
+  if let (State::ProposalRefused, Some(services)) = (state, launch.services()) {
+    refused::start(
+      &runtime,
+      (services, app.i18n().clone()),
+      prepared,
+      prepared.conversations.proposal_changed,
+    )?;
+  }
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
   loader::install(&mut tree);

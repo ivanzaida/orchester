@@ -121,8 +121,9 @@ fn connection_row(ctx: &mut Ctx, connections: &[ConnectionChoice], choices: &Cho
     })
     .collect();
   let label = ctx.t("orchestrator.settings.connection.label");
-  // At full contrast even when none is usable: its menu says why each one is not (`jmyWu`).
-  let select = SelectField::new(
+  // At full contrast even when none is usable: its menu says why each one is not (`jmyWu`). With no connection at
+  // all it has nothing to list and does not open.
+  let mut select = SelectField::new(
     "orchestrator-connection",
     label.clone(),
     choices.connection.clone(),
@@ -130,6 +131,9 @@ fn connection_row(ctx: &mut Ctx, connections: &[ConnectionChoice], choices: &Cho
   )
   .placeholder(ctx.t("orchestrator.settings.connection.none"))
   .width(Dimension::Px(SELECT_WIDTH));
+  if connections.is_empty() {
+    select = select.locked();
+  }
   side_row(
     Label::new("orchestrator-connection", label).description(ctx.t("orchestrator.settings.connection.description")),
     select.render(ctx),

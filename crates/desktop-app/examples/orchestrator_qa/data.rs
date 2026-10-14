@@ -1,7 +1,8 @@
 //! What the QA window shows: the seed's `tasks` project with a Claude Code connection to `orchester-fake-claude`
-//! (`Claude · Kontur`, its catalog Opus 5.5 and Sonnet 5.5) beside the seed's Codex one, the Orchestrator set to run on
-//! it, and conversations whose last turns ended in each way the chat shows (`conversations`). Every folder is under the
-//! QA folder.
+//! (`Claude · Kontur`, its catalog Opus 5.5 and Sonnet 5.5) beside the seed's Codex one (`Codex · Kontur`, to
+//! `orchester-fake-codex`, which the Orchestrator does not run on yet), the Orchestrator set to run on the Claude one,
+//! and conversations whose last turns ended in each way the chat shows (`conversations`). Every folder is under the QA
+//! folder.
 
 use std::{error::Error, path::PathBuf};
 
@@ -13,9 +14,13 @@ use orchester_core::{
   conversation::MessageBody,
   id::{ChatId, ChatMessageId, ConnectionId, ProjectId},
   name::Name,
-  orchestrator::{ActionOutcome, Chat, ChatAction, OrchestratorSettings, TurnFailure, TurnState},
-  resource::ModelId,
-  store::ConnectionStore,
+  orchestrator::{
+    ActionOutcome, Chat, ChatAction, OrchestratorSettings, TurnFailure, TurnState,
+    proposal::{ProposedStart, StartBasis, brief_excerpt, brief_is_cut},
+  },
+  resource::{ModelId, Pipeline, ResourceKind},
+  store::{ConnectionStore, ResourceStore, TaskStore},
+  task::{Task, TaskStatus},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -28,6 +33,8 @@ const MODEL: &str = "claude-opus-5-5";
 /// The seeded data the window opens, and the conversations by what their last turn shows.
 pub struct Prepared {
   pub database: PathBuf,
+  /// The project's repository.
+  pub repo: PathBuf,
   pub project: ProjectId,
   pub conversations: Conversations,
   /// What the start prints: the scenario and the task the answered conversation created, with its state.
@@ -41,13 +48,16 @@ pub struct Conversations {
   /// The CLI was not signed in.
   pub failed: ChatId,
   pub interrupted: ChatId,
+  /// A start the agent proposed, of a task edited since: *Start* is refused as changed since proposed.
+  pub proposal_changed: ChatId,
 }
 
-/// What the QA folder `root` is seeded with: `claude` the fake CLI the connection runs; `orchestrator` whether the
-/// Orchestrator is set to run on it, and `claude_connection` whether the project has that connection at all.
+/// What the QA folder `root` is seeded with: `claude` the fake CLI the Claude connection runs, `codex` the one the
+/// seed's Codex connection runs; `orchestrator` whether the Orchestrator is set to run on the Claude one, and
+/// `claude_connection` whether the project has that connection at all.
 pub fn prepare(
   root: &std::path::Path,
-  claude: PathBuf,
+  (claude, codex): (PathBuf, PathBuf),
   (orchestrator, claude_connection): (bool, bool),
 ) -> Result<Prepared, Box<dyn Error>> {
   let scenario = kontur::scenarios::named("tasks").ok_or("the seed has the tasks scenario")?;
@@ -55,7 +65,7 @@ pub fn prepare(
     data_dir: root.join("app"),
     repo: root.join("repo-kontur"),
     scenario,
-    fake_codex: None,
+    fake_codex: Some(codex),
     now: Timestamp::now(),
   })?;
   let mut db = ProjectDb::open(&seeded.repo)?;
@@ -74,6 +84,7 @@ pub fn prepare(
   let conversations = conversations(&mut db, (&keys, connection.id()))?;
   Ok(Prepared {
     database: seeded.app_database,
+    repo: seeded.repo,
     project: seeded.project,
     conversations,
     shown,
@@ -231,6 +242,7 @@ fn conversations(
       end: TurnState::Failed(TurnFailure::NotSignedIn),
     }],
   )?;
+  let proposal_changed = changed_proposal(db, connection)?;
   let interrupted = keep(
     db,
     ChatId::generate(),
@@ -247,5 +259,77 @@ fn conversations(
     stopped,
     failed,
     interrupted,
+    proposal_changed,
+  })
+}
+
+/// The agent proposed starting the first draft with a pipeline and a brief, and the brief was edited after, as a person
+/// editing it in Tasks would: *Start* no longer runs what was proposed and is refused.
+fn changed_proposal(db: &mut ProjectDb, connection: ConnectionId) -> Result<ChatId, Box<dyn Error>> {
+  let task = db
+    .tasks()?
+    .into_iter()
+    .find(|task| {
+      let details = task.details();
+      task.status() == TaskStatus::Draft && details.pipeline.is_some() && !details.brief.is_empty()
+    })
+    .ok_or("the tasks scenario has a draft with a pipeline and a brief")?;
+  let start = proposed(db, &task)?;
+  let key = task.key().to_string();
+  let reply = format!(
+    "**{key}** can run now on {}. Start it below when you're ready.",
+    start.pipeline
+  );
+  let action = ChatAction {
+    tool: "run_task".to_owned(),
+    task: Some(key.clone()),
+    outcome: ActionOutcome::Proposed(Box::new(start)),
+    held: None,
+  };
+  let chat = keep(
+    db,
+    ChatId::generate(),
+    connection,
+    vec![Turn {
+      text: &format!("Start {key}."),
+      at: ago(12),
+      parts: vec![Part::Reply(&reply), Part::Action(action)],
+      end: TurnState::Answered,
+    }],
+  )?;
+  let mut details = task.details().clone();
+  details.brief.push_str(" Keep the last 50 attempts per endpoint.");
+  db.update_task(task.id(), task.revision(), details)?
+    .saved()
+    .ok_or("nothing else changed the task")?;
+  Ok(chat)
+}
+
+/// The start of draft `task` as the agent proposes it: on its pipeline's latest published version.
+fn proposed(db: &ProjectDb, task: &Task) -> Result<ProposedStart, Box<dyn Error>> {
+  let details = task.details();
+  let pipeline = details.pipeline.ok_or("the draft has a pipeline")?;
+  let name = db
+    .resources(ResourceKind::Pipeline)?
+    .into_iter()
+    .find(|resource| resource.id() == pipeline)
+    .ok_or("the draft's pipeline is in the catalogue")?
+    .name()
+    .as_str()
+    .to_owned();
+  let version = db
+    .latest_version::<Pipeline>(pipeline)?
+    .map(|version| version.number().get());
+  Ok(ProposedStart {
+    pipeline: name,
+    title: details.title.as_str().to_owned(),
+    brief: brief_excerpt(&details.brief),
+    brief_cut: brief_is_cut(&details.brief),
+    criteria: details.acceptance_criteria.clone(),
+    basis: StartBasis {
+      revision: task.revision().get(),
+      pipeline: Some(pipeline),
+      version,
+    },
   })
 }

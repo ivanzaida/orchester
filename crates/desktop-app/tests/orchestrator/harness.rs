@@ -11,6 +11,7 @@ use std::{
   time::{Duration, Instant},
 };
 
+use lurq::app::events::MouseButton;
 use orchester_app::{
   routes::{OrchestratorChat, ProjectPage, Route},
   startup::Launch,
@@ -92,6 +93,8 @@ pub enum Setup {
   Codex,
   /// Nothing was chosen for the Orchestrator yet.
   NotChosen,
+  /// The project has no connection at all, so nothing is chosen either.
+  NoConnection,
   /// Chosen, but the project's runner cannot start: its program does not exist.
   NoRunner,
 }
@@ -125,7 +128,7 @@ impl Orchestrator {
     git(&repo, &["commit", "--quiet", "-m", "initial"]);
     let runner = match setup {
       Setup::NoRunner => data.dir.path().join("no-runner").join("orchester-runner"),
-      Setup::Ready | Setup::Codex | Setup::NotChosen => runner,
+      Setup::Ready | Setup::Codex | Setup::NotChosen | Setup::NoConnection => runner,
     };
     let launch = Launch::begin_at(&data.database(), runner, data.runtime.handle(), None);
     let project = ProjectId::generate();
@@ -136,10 +139,12 @@ impl Orchestrator {
     );
     let mut db = ProjectDb::open(&open.repo_root).expect("database");
     let claude = connection(AgentProvider::ClaudeCodeCli, "Claude · Kontur", &fake);
-    db.create_connection(&claude).expect("Claude Code connection");
     let codex = connection(AgentProvider::CodexCli, "Codex · Kontur", &fake_codex);
-    db.create_connection(&codex).expect("Codex connection");
-    if setup != Setup::NotChosen {
+    if setup != Setup::NoConnection {
+      db.create_connection(&claude).expect("Claude Code connection");
+      db.create_connection(&codex).expect("Codex connection");
+    }
+    if !matches!(setup, Setup::NotChosen | Setup::NoConnection) {
       let on = if setup == Setup::Codex { codex.id() } else { claude.id() };
       let settings = OrchestratorSettings::new(on, ModelId::new("haiku").expect("model"), None);
       db.publish_orchestrator(&settings, Timestamp::now()).expect("settings");
@@ -224,6 +229,28 @@ the agent logged: {agent}"
       .and_then(|element| element.as_select())
       .unwrap_or_else(|| panic!("{id} is a select"));
     select.labels().iter().map(ToString::to_string).collect()
+  }
+
+  /// Whether the select `id`'s menu is open.
+  pub fn is_open(&mut self, id: &str) -> bool {
+    self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.as_select())
+      .unwrap_or_else(|| panic!("{id} is a select"))
+      .is_open()
+  }
+
+  /// Presses the pointer on the middle of `id`, as a person would: whatever takes presses there gets it.
+  pub fn press(&mut self, id: &str) {
+    let frame = self.bounds(id);
+    let (x, y) = (frame.x + frame.width / 2.0, frame.y + frame.height / 2.0);
+    let tree = &mut self.window.tree;
+    tree.mouse_move(x, y);
+    tree.mouse_down(x, y, MouseButton::Left);
+    tree.mouse_up(x, y, MouseButton::Left);
+    self.window.pass();
   }
 
   /// Chooses the option `label` of the select `id`.
