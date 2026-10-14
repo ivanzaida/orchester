@@ -64,3 +64,9 @@ fn unverified_run_lists_what_its_step_could_not_check() {
   let decision = rows[0].decision.as_ref().expect("the decision it waits for");
   assert_eq!(decision.title().key, "runs.retryLimit.unverifiedTitle");
 }
+
+#[test]
+fn unverified_the_orchestrator_chat_is_served_no_decision_on_a_waiting_run() {
+  // Accepting a step that could not check everything is `continue_run`'s, which the chat's agent is not served.
+  assert!(!orchester_workspace::orchestrator::tools::TOOLS.contains(&"continue_run"));
+}

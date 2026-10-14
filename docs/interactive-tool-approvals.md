@@ -263,7 +263,8 @@ by `read_external_file` and `search_external_file`.
   `unverified`). Accepting passes the step in a person's place: `accept` is refused as `person_only`, and the task
   page's *Accept … as it is* refuses a client's press (its handler does, and the card says a person accepts it; the
   rest of the window, its close button included, still takes the client's input), unless a person turned on *Let
-  automation answer approvals*; the event records who accepted. The accepted step then passes as a passed step does, in a new attempt
+  automation answer approvals*; the event records who accepted. The project's Orchestrator chat (ORC-17) cannot
+  accept one even then: its agent is served no `continue_run` (`orchester_workspace::orchestrator::tools::TOOLS`). The accepted step then passes as a passed step does, in a new attempt
   without an agent: its own worktree's work is merged and a gated step proposes its result as the plan. Accepting is
   refused, with why, when that work does not build on the revision the result was for (later commits on top of that
   revision do build on it, and pass with the step), when uncommitted changes lie beside it, which passing would take as
