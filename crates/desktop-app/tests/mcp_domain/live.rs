@@ -29,7 +29,7 @@ use super::Served;
 
 /// The runner and the fake Codex, built into this profile's folder once per test process, before a
 /// test starts them (Windows keeps a running program's file).
-fn programs() -> (PathBuf, PathBuf) {
+pub(super) fn programs() -> (PathBuf, PathBuf) {
   static BUILT: OnceLock<(PathBuf, PathBuf)> = OnceLock::new();
   BUILT.get_or_init(build_programs).clone()
 }

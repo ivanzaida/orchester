@@ -69,12 +69,13 @@ use tokio::{
   task::JoinHandle,
 };
 
-pub use self::attach::Attached;
+pub use self::{attach::Attached, step::QaSlots};
 use self::{
   board::Board,
   control::Control,
   prepare::Prepared,
   run::{RunTask, TaskContext},
+  step::QaApps,
 };
 pub use crate::notify::Notifier;
 
@@ -119,6 +120,8 @@ struct Inner {
   /// cannot be found, which keeps steps that ask a person on Claude Code from starting.
   relay: Option<PathBuf>,
   board: Arc<Board>,
+  /// The QA apps the runs' agents started, and the computer's QA slots they take.
+  qa: Arc<QaApps>,
   active: Mutex<HashMap<RunId, ActiveRun>>,
   /// Serializes requests that start a task or change a run while its task may end. A fallback
   /// must not change a stored run after another request has started its next task.
@@ -134,13 +137,21 @@ struct Inner {
 }
 
 impl Scheduler {
-  pub fn new(project_root: &Path, notifier: Notifier, vault: Arc<dyn SecretVault>, relay: Option<PathBuf>) -> Self {
+  /// The scheduler of the project at `project_root`; its agents' QA apps take `qa_slots` ([`QaSlots::machine`]
+  /// outside tests).
+  pub fn new(
+    project_root: &Path,
+    notifier: Notifier,
+    vault: Arc<dyn SecretVault>,
+    (relay, qa_slots): (Option<PathBuf>, QaSlots),
+  ) -> Self {
     Self {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),
         vault,
         relay,
         board: Arc::new(Board::new(notifier.clone())),
+        qa: Arc::new(QaApps::new(qa_slots)),
         notifier,
         active: Mutex::new(HashMap::new()),
         continuing: tokio::sync::Mutex::new(()),
@@ -508,6 +519,7 @@ impl Scheduler {
       vault: self.inner.vault.clone(),
       relay: self.inner.relay.clone(),
       board: self.inner.board.clone(),
+      qa: self.inner.qa.clone(),
       controls,
       settled: settled.clone(),
     };

@@ -21,6 +21,7 @@ fn output(run: &orchester_core::run::Run, text: &str, outcome: Option<StepOutcom
     step: StepKey::new("implement").expect("key"),
     outcome,
     text: text.to_owned(),
+    unverified: Vec::new(),
     created_at: at(millis),
   }
 }

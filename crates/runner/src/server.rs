@@ -30,7 +30,7 @@ use orchester_vault::KeychainVault;
 use tokio::sync::mpsc;
 
 use crate::{
-  execution::{Notifier, Scheduler},
+  execution::{Notifier, QaSlots, Scheduler},
   notify::coalesce,
   shutdown_signal::ShutdownSignal,
 };
@@ -58,7 +58,7 @@ pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal) -> Result<
     project_root,
     Notifier::new(notifications),
     Arc::new(KeychainVault),
-    relay,
+    (relay, QaSlots::machine()),
   );
   let endpoint = Endpoint::for_project(project_root)?;
   tracing::info!("listening on {}", endpoint.name());

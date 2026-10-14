@@ -358,10 +358,10 @@ fn write_attempts(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreE
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT (id) DO UPDATE SET status = excluded.status",
   )?;
   let mut execution_statement = transaction.prepare_cached(
-    "INSERT INTO step_executions (id, attempt_id, step_key, profile_version_id, model, status, wait_reason, failure) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) \
+    "INSERT INTO step_executions (id, attempt_id, step_key, profile_version_id, model, status, wait_reason, failure, \
+     judged_revision) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) \
      ON CONFLICT (id) DO UPDATE SET status = excluded.status, wait_reason = excluded.wait_reason, \
-     failure = excluded.failure",
+     failure = excluded.failure, judged_revision = excluded.judged_revision",
   )?;
   for attempt in run.attempts() {
     let reason = attempt_reason_columns(attempt.reason());
@@ -390,6 +390,7 @@ fn write_attempts(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreE
         status,
         wait_reason,
         execution.failure().map(step_failure_text),
+        execution.judged().map(|revision| revision.as_str()),
       ])?;
     }
   }

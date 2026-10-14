@@ -1,5 +1,6 @@
 //! A step's result card (`Result card` `T0uKNU`): on `surface_panel` in a `border` stroke, radius 10, 12 by
-//! 14 inside, its parts 8 apart: a 14 `circle-check` in `success` (`circle-x` in `danger` when it failed),
+//! 14 inside, its parts 8 apart: a 14 `circle-check` in `success` (`circle-x` in `danger` when it failed,
+//! `circle-dashed` in `warning` when it could not check everything, as the Summary's notice says it),
 //! *Review passed* in 12.5/600 and the step and agent at the end in 11.5 `text_muted`; what was reported in
 //! 12.5/1.5 `text_secondary`; how long it took and its tokens, and *Changes ↗* and *Summary ↗* in 11.5/500
 //! `accent_text`, 12 apart.
@@ -32,15 +33,16 @@ use crate::{
 
 pub(super) fn card(ctx: &mut Ctx, timeline: &Timeline, card: &ResultCard) -> Element {
   let id = format!("conversation-result-{}", card.execution);
-  let (glyph, color) = if card.passed {
-    (Icon::CircleCheck, PaletteColor::Success)
-  } else {
-    (Icon::CircleX, PaletteColor::Danger)
-  };
-  let title_key = match (card.passed, card.verdict) {
-    (true, true) => "conversation.result.passed",
-    (true, false) => "conversation.result.done",
-    (false, _) => "conversation.result.failed",
+  let unverified = !card.passed && card.outcome == Some(StepOutcome::Unverified);
+  let (glyph, color, title_key) = match (card.passed, card.verdict, unverified) {
+    (true, true, _) => (Icon::CircleCheck, PaletteColor::Success, "conversation.result.passed"),
+    (true, false, _) => (Icon::CircleCheck, PaletteColor::Success, "conversation.result.done"),
+    (false, _, true) => (
+      Icon::CircleDashed,
+      PaletteColor::Warning,
+      "conversation.result.unverified",
+    ),
+    (false, _, false) => (Icon::CircleX, PaletteColor::Danger, "conversation.result.failed"),
   };
   let step = step_label(ctx, card.number, &card.step);
   // A command tool runs a tool step: the card says so rather than repeat the step's name (`hep0l`).
@@ -129,6 +131,7 @@ fn meta(ctx: &Ctx, card: &ResultCard) -> std::sync::Arc<str> {
   let reported = match card.outcome {
     Some(StepOutcome::Done) => "conversation.result.reportedPassed",
     Some(StepOutcome::Failed) => "conversation.result.reportedFailed",
+    Some(StepOutcome::Unverified) => "conversation.result.reportedUnverified",
     Some(StepOutcome::Question) | None => return meta,
   };
   let reported = ctx.t_args(reported, [("agent", &**agent)]);

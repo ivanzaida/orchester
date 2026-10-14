@@ -66,6 +66,21 @@ what is actually on screen.
 6. The implementer fixes; the verifier repeats steps 2–5 on the new build. Done means the
    verifier reports no `blocking` or `major` findings.
 
+## What you could not check: `unverified`
+
+A state you cannot reach, a design node or app you cannot capture, a fixture that does not exist: say so,
+check everything else, and end a pipeline step with the outcome `unverified`, listing each check you could
+not do in the result's `unverified` list (`{"check": "Summary 02.B", "reason": "no seed scenario reaches
+it"}`). That is no verdict on the work: the run waits for the person, nothing returns to Implement and no
+retry is used. The person accepts the step as it is (only a person, or automation they let answer approvals),
+runs it again, or returns the work with a note. Use
+`failed` only for mismatches you found (`blocking` or `major`), even when other checks were unverified, and
+`question` only for something the person can do now that lets you go on in this turn.
+
+Orchester does not run a Verify again on the revision its last failed or unverified result was for: with
+nothing changed (no new commit, and so no new fixture either, since the seed lives in the repository), the
+run waits for the person instead, unless they ask for the step again.
+
 ## orchester-app: start, connect, reach the state
 
 **Design frames.** `data/orchester2.pen`, through the `pencil` MCP or, where the main checkout has
@@ -76,7 +91,21 @@ the whole window at 1440 × 900 (exports are 1442 × 902 with the frame's 1 px o
 `… · full page` frame shows the whole scroll height, so compare the window first, then scroll the
 app and compare the rest.
 
-**Start an isolated app.** In the implementation's worktree:
+**Start an isolated app.** As a step of an Orchester run, call
+`mcp__Orchester__start_qa_app` (Codex: `start_qa_app` of the Orchester server) with
+`{"scenario": "<scenario>", "fake_agents": null, "no_runner": null}`. Orchester runs the worktree's
+`tools/qa-app.ps1` for you on the scenario, in `.tmp/qa/run-<number>-<step>/`, and answers the copy's pid.
+One QA app runs on the computer at a time: while another run's QA app holds the QA slot, the call waits
+and the run's transcript says *Waiting for the QA slot*; never write lease, ACK or hold notes, and never
+start the script yourself. Calling it again replaces your QA app; Orchester stops it, and frees the slot,
+when your turn ends, and also while your turn waits for a person (a tool approval, a question): start it
+again once you go on. A person is asked to approve the start (*Approve similar* covers later starts only
+while `tools/qa-app.ps1` is unchanged), since it builds and runs the worktree's code outside the sandbox;
+the request names the build scripts changed since the run's base. Only a step that may write the worktree
+and has network access is offered `start_qa_app`, so give the Verify step those.
+
+Outside a run (an agent session in a checkout of its own), start the copy in the implementation's worktree
+with the script:
 
 ```text
 powershell -File tools/qa-app.ps1 -Name <task> -Scenario <scenario> [-FakeAgents] [-NoRunner]
@@ -109,6 +138,7 @@ name a Codex connection that is not stored, so nothing can run.
 | `interrupted` | `tasks` whose application database's last session never ended; KON-12, KON-16 and KON-21 lose their agents | Overview interrupted runs |
 | `unreadable-db` | A project database one schema version too new: opening it fails with `SchemaTooNew` | The project that cannot be opened |
 | `tasks-unreadable` | The project opens; its one task's stored status is unknown, so reading the task list fails with `Corrupt` | Tasks load error |
+| `decisions` | Runs ready for review (one conflicts with the moved `main`, one merges cleanly, one has no branch), one that waits after Review's retries, and *Check the empty states on screen*, whose Review could not check two states and waits unverified | Ready for review, merge conflict; waits after retries (`DVuXu`); waits unverified (no frame of its own: compare with `DVuXu`'s parts) |
 | `live` | Six drafts ready to run with the fake Codex (needs `-FakeAgents`): KON-1 ends ready for review, KON-2 asks to approve `cargo add serde`, KON-3 asks a question with options, KON-4 waits for its plan, KON-5 keeps working, KON-6 fails and waits for a person | Running, approval, question and plan states, live |
 
 Runs of the static scenarios are recorded, not executed: a runner that attaches records their
@@ -116,7 +146,9 @@ running runs interrupted and ends the approvals they waited for. Capture running
 static scenarios with `-NoRunner`; reach live states with `live`.
 
 **Connect.** Use the per-invocation relay tool `mcp__Orchester__call_run_app(pid, tool, arguments)`
-(Codex: `call_run_app` of the Orchester server). Pass the exact pid printed by the QA starter.
+(Codex: `call_run_app` of the Orchester server). Leave out `pid` to call the QA app `start_qa_app` started
+in this turn: the relay reads that app's own discovery file and searches nothing. For an app you started
+with the script, pass the exact pid it printed.
 It runs without asking only for an app whose resolved executable is inside this run's worktree,
 using the same process boundary as `stop_run_process`. The relay finds the exact-pid discovery file
 in the user's discovery folder or a QA copy's folder `.tmp/qa/<task>/` in the worktree, checks its
@@ -125,7 +157,8 @@ that `tools/qa-app.ps1` writes (or `.tmp/qa/<task>/profile/<folder>/<pid>.json` 
 looks nowhere else under `.tmp/`. Use it instead of running `tools/lurq-mcp-client.py`,
 reading discovery or escalating a script outside the sandbox.
 
-For example, call `call_run_app` with `{"pid":12345,"tool":"app_state","arguments":{}}`.
+For example, call `call_run_app` with `{"tool":"app_state","arguments":{}}` for the QA app, or
+`{"pid":12345,"tool":"app_state","arguments":{}}` for one the script started.
 Every embedded tool uses this same relay, including `navigate`, `lurq_resize` and `lurq_screenshot`.
 PNG images are saved under `.tmp/run-app/`; the answer gives a relative path to open and cite.
 
@@ -149,7 +182,8 @@ the route's params and answers the route the tab shows, for example:
 Then call `lurq_read_tree`, `lurq_interact`, `lurq_set_value`, `lurq_wait`, and `lurq_screenshot`
 through `call_run_app`. Open the returned PNG path and include it in the verification report.
 
-**Stop it.** Close the app gracefully with its own close button: `lurq_read_tree` lists it as
+**Stop it.** A QA app `start_qa_app` started is stopped by Orchester when your turn ends; stop it
+earlier only to free the QA slot for another run. Otherwise close the app gracefully with its own close button: `lurq_read_tree` lists it as
 `#window-close` with a `ref`, and `lurq_interact` `{"ref": "<ref>", "action": "click"}` clicks it; the
 app ends what it started and removes its discovery file. If that is not possible,
 use `mcp__Orchester__stop_run_process(pid)` to stop the app and its children inside the run's
@@ -164,12 +198,14 @@ and the light theme; approvals are answered only with the cards in the conversat
 dialog), and Always allow is shown unavailable with its reason. Data the seed cannot reproduce
 is not a mismatch either — run numbers (#128), the keys of `task-states`, clock times, counts
 such as runs started — but judge truncation and wrapping with the seeded text. A state no
-scenario or tool reaches yet (loading, runner could not restart) is reported as not reachable.
+scenario or tool reaches yet (loading, runner could not restart) is reported as not reachable,
+and listed in the step's `unverified` result.
 
 ## Rules for the verifier
 
-- Several agents may run Orchester at the same time. Use only the pid you started with
-  `mcp__Orchester__call_run_app`; never select the newest discovery file. Before each batch,
+- Several agents may run Orchester at the same time. Use only the app you started: the QA app of
+  `start_qa_app` (no pid) or the pid you started, with `mcp__Orchester__call_run_app`; never select the
+  newest discovery file. The QA slot is Orchester's to hand out: wait in `start_qa_app`, never in notes. Before each batch,
   call `lurq_windows` or `app_state` through the relay and confirm the intended app state.
 - The relay owns discovery credentials. Never read, print, log, paste or commit a discovery
   token, and never pass one as a tool argument.
@@ -185,5 +221,6 @@ scenario or tool reaches yet (loading, runner could not restart) is reported as 
   comparison is independent again.)
 - Do not accept "lurq cannot do this" without evidence; name the missing capability so it can
   be added to lurq.
-- If a state cannot be reached in the app, say so explicitly — never report it as matching.
+- If a state cannot be reached in the app, say so explicitly — never report it as matching — and
+  end with `unverified` listing it, not with `failed`.
 - Kill only the processes you started.

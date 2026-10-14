@@ -151,5 +151,7 @@ pub(super) const fn failure_key(failure: Option<StepFailure>) -> &'static str {
     Some(StepFailure::MergeConflict) => "runs.progress.failure.mergeConflict",
     Some(StepFailure::CheckpointFailed) => "runs.progress.failure.checkpointFailed",
     Some(StepFailure::CommandFailed) => "runs.progress.failure.commandFailed",
+    Some(StepFailure::Unverified) => "runs.progress.failure.unverified",
+    Some(StepFailure::Unchanged) => "runs.progress.failure.unchanged",
   }
 }

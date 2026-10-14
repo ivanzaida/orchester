@@ -98,6 +98,29 @@ fn orchester_tools_policy_follows_the_table() {
       .all(|tool| tool["inputSchema"]["additionalProperties"] == json!(false))
   );
 }
+/// A QA copy builds and runs the worktree's code outside the sandbox: only a step that writes the worktree and reaches
+/// the network gets it, it asks, and auto-approval never answers it.
+#[test]
+fn orchester_tools_start_qa_app_asks_in_a_writing_step_with_network_only() {
+  assert_eq!(reading().policy(OrchesterTool::StartQaApp), None);
+  assert_eq!(writing().policy(OrchesterTool::StartQaApp), None, "network off");
+  let mut online = permissions(RepositoryAccess::ReadOnly);
+  online.set_network(NetworkAccess::On);
+  assert_eq!(
+    StepTools::for_step(&online, &[]).policy(OrchesterTool::StartQaApp),
+    None,
+    "read-only"
+  );
+  assert_eq!(
+    crate::qa_step().policy(OrchesterTool::StartQaApp),
+    Some(ToolPolicy::Asks)
+  );
+  assert!(!orchester_core::orchester_tools::auto_approvable(
+    "Orchester",
+    "start_qa_app"
+  ));
+}
+
 /// A check whose access rules approve no call runs without asking; with one that asks, `run_check` asks for that one.
 #[test]
 fn orchester_tools_checks_ask_by_their_access_rules() {

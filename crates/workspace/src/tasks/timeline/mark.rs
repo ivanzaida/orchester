@@ -74,7 +74,11 @@ pub fn mark_of(run: &RunView, index: usize) -> Option<Mark> {
       to: name(return_to),
       note: note.as_str().into(),
     },
-    AttemptReason::Initial | AttemptReason::FollowUp { .. } | AttemptReason::Recovery { .. } => return None,
+    // An accepted step passed in the attempt before: what runs after it starts no return of its own.
+    AttemptReason::Initial
+    | AttemptReason::FollowUp { .. }
+    | AttemptReason::Recovery { .. }
+    | AttemptReason::Accepted { .. } => return None,
   };
   Some(Mark {
     attempt: attempt.number().get(),

@@ -12,6 +12,7 @@ mod kontur;
 mod merge;
 #[path = "../support/mod.rs"]
 mod support;
+mod unverified;
 
 use std::path::{Path, PathBuf};
 

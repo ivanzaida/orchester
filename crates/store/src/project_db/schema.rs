@@ -37,6 +37,7 @@ mod task_edits;
 mod task_groups;
 mod token_budgets;
 mod tool_approvals;
+mod unverified_steps;
 mod worktree_removals;
 
 pub(super) const MIGRATIONS: &[&str] = &[
@@ -542,4 +543,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   agent_accounts::MIGRATION,
   orchestrator::MIGRATION,
   queue_holds::MIGRATION,
+  unverified_steps::MIGRATION,
 ];

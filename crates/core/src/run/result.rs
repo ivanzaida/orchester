@@ -12,6 +12,10 @@
 //! (`crate::connection::stream::ClaudeStream`). A result's `outcome` and `summary` are read
 //! strictly; fields the schema does not name are tolerated.
 //!
+//! A step that ran but could not check part of what it is for (a state it could not reach, an app or tool it could
+//! not use) reports `unverified` and lists each such check with why ([`UnverifiedCheck`]): no verdict on the work, so
+//! the run waits for the person instead of taking the step's failure route.
+//!
 //! A result may also carry a handoff for the agents after it (what it completed, its decisions, the
 //! questions it left open and what the next agent should know), read leniently and kept by the
 //! runner as task memory ([`crate::memory::Handoff`]).
@@ -31,12 +35,25 @@ pub const STEP_RESULT_SCHEMA: &str = r#"{
   "properties":{
     "outcome":{
       "type":"string",
-      "enum":["done","failed","question"],
-      "description":"done: current step complete and required checks pass. A completed review or verification with a negative verdict or unresolved blocking or major findings is failed, even if its report is complete. question: waiting for the person's decision, permission, access, or clarification; resumes the same session after their answer. failed: failure handled by the pipeline, including checks requiring corrections by an earlier step, or failure that no decision or action by the person would let the step resolve. Incomplete work or a permission request alone is not failed."
+      "enum":["done","failed","unverified","question"],
+      "description":"done: current step complete and required checks pass. A completed review or verification with a negative verdict or unresolved blocking or major findings is failed, even if its report is complete. unverified: the step ran, but some of what it must check could not be checked (a state it could not reach, an app, tool or fixture it could not use); list each in unverified with why. It is no verdict on the work: the person decides, and nothing returns to an earlier step. Mismatches it did find make the step failed, not unverified. question: waiting for the person's decision, permission, access, or clarification; resumes the same session after their answer. failed: failure handled by the pipeline, including checks requiring corrections by an earlier step, or failure that no decision or action by the person would let the step resolve. Incomplete work or a permission request alone is not failed."
     },
     "summary":{
       "type":"string",
       "description":"For question, explain the blocker and saved progress and ask a concrete question with available options. Otherwise summarize the completed work or failure."
+    },
+    "unverified":{
+      "type":["array","null"],
+      "items":{
+        "type":"object",
+        "properties":{
+          "check":{"type":"string","description":"What could not be checked, such as a design state or frame."},
+          "reason":{"type":"string","description":"Why it could not be checked."}
+        },
+        "required":["check","reason"],
+        "additionalProperties":false
+      },
+      "description":"For unverified: each check that could not be done, with why; null otherwise."
     },
     "completed":{
       "type":["array","null"],
@@ -59,7 +76,7 @@ pub const STEP_RESULT_SCHEMA: &str = r#"{
       "description":"Handoff: what the next agent should know before it starts, such as pitfalls or where things are."
     }
   },
-  "required":["outcome","summary","completed","decisions","open_questions","next_agent_should_know"],
+  "required":["outcome","summary","unverified","completed","decisions","open_questions","next_agent_should_know"],
   "additionalProperties":false
 }"#;
 
@@ -71,6 +88,8 @@ pub enum StepOutcome {
   Done,
   /// Failed checks needing an earlier step's corrections, or an unresolvable step failure.
   Failed,
+  /// The step ran but could not check everything it is for; [`StepResult::unverified`] says what and why.
+  Unverified,
   /// It needs the person's decision, permission, access, or clarification; the summary asks for it.
   Question,
 }
@@ -84,6 +103,8 @@ pub enum StepOutcome {
 pub struct StepResult {
   pub outcome: StepOutcome,
   pub summary: String,
+  #[serde(default, deserialize_with = "checks")]
+  pub unverified: Vec<UnverifiedCheck>,
   #[serde(default, deserialize_with = "list")]
   pub completed: Vec<String>,
   #[serde(default, deserialize_with = "list")]
@@ -92,6 +113,37 @@ pub struct StepResult {
   pub open_questions: Vec<String>,
   #[serde(default, deserialize_with = "list")]
   pub next_agent_should_know: Vec<String>,
+}
+
+/// One check an `unverified` step could not do, and why.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct UnverifiedCheck {
+  pub check: String,
+  pub reason: String,
+}
+
+/// The unverified checks, read from whatever JSON the agent wrote for them as leniently as a handoff list: an item
+/// that is no object with a non-blank `check` is dropped, and a missing `reason` is empty.
+fn checks<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<UnverifiedCheck>, D::Error> {
+  let serde_json::Value::Array(items) = serde_json::Value::deserialize(deserializer)? else {
+    return Ok(Vec::new());
+  };
+  let text = |item: &serde_json::Value, field: &str| {
+    item
+      .get(field)
+      .and_then(serde_json::Value::as_str)
+      .map_or_else(String::new, |text| text.trim().to_owned())
+  };
+  Ok(
+    items
+      .iter()
+      .map(|item| UnverifiedCheck {
+        check: text(item, "check"),
+        reason: text(item, "reason"),
+      })
+      .filter(|item| !item.check.is_empty())
+      .collect(),
+  )
 }
 
 /// A handoff list, read from whatever JSON the agent wrote for it.
@@ -164,6 +216,8 @@ pub struct StepOutput {
   /// `None` when the final message was not a structured result.
   pub outcome: Option<StepOutcome>,
   pub text: String,
+  /// What an `unverified` result could not check; empty for any other.
+  pub unverified: Vec<UnverifiedCheck>,
   pub created_at: Timestamp,
 }
 
@@ -177,9 +231,12 @@ impl StepOutput {
     now: Timestamp,
   ) -> Self {
     let result = message.and_then(StepResult::parse);
-    let (outcome, text) = match result {
-      Some(result) => (Some(result.outcome), result.summary),
-      None => (None, message.unwrap_or_default().trim().to_owned()),
+    let (outcome, text, unverified) = match result {
+      Some(result) if result.outcome == StepOutcome::Unverified => {
+        (Some(result.outcome), result.summary, result.unverified)
+      }
+      Some(result) => (Some(result.outcome), result.summary, Vec::new()),
+      None => (None, message.unwrap_or_default().trim().to_owned(), Vec::new()),
     };
     Self {
       run,
@@ -187,6 +244,7 @@ impl StepOutput {
       step,
       outcome,
       text,
+      unverified,
       created_at: now,
     }
   }
@@ -194,12 +252,13 @@ impl StepOutput {
   /// Why the step of an agent that ended with this output fails, `None` when it does not;
   /// `turn_succeeded`: the CLI completed its turn and exited cleanly. A `failed` result decides,
   /// also when the turn failed after the agent delivered it: it is a verdict on the work even when a
-  /// permission prompt closed afterwards. Any other failed turn is a breakage. A `done` result does
-  /// not outweigh it: the turn may have failed because nothing could be approved, and a step never
-  /// passes as if a person had been asked.
+  /// permission prompt closed afterwards; an `unverified` result decides the same way, for the person.
+  /// Any other failed turn is a breakage. A `done` result does not outweigh it: the turn may have
+  /// failed because nothing could be approved, and a step never passes as if a person had been asked.
   pub const fn failure(&self, turn_succeeded: bool) -> Option<StepFailure> {
     match self.outcome {
       Some(StepOutcome::Failed) => Some(StepFailure::ReportedFailed),
+      Some(StepOutcome::Unverified) => Some(StepFailure::Unverified),
       _ if turn_succeeded => None,
       _ => Some(StepFailure::AgentFailed),
     }

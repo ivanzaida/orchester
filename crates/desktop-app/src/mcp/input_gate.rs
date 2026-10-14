@@ -87,6 +87,10 @@ pub enum Guarded {
   McpServer,
   /// Settings › Accounts: adding, renaming and removing an account and signing it in are a person's.
   Accounts,
+  /// A task Summary's *Accept … as it is*: it passes a step in a person's place, as approving does, so it needs the
+  /// approvals opt-in. Only its handler refuses ([`input_may_decide`]); it is never protected, so the rest of the
+  /// window, its close button included, takes a client's input while it shows.
+  StepAccept,
 }
 
 /// Whether the input being delivered may take a decision classified as `policy`: a person's (OS input) always; lurq's
@@ -187,6 +191,7 @@ impl InputGate {
     match what {
       Guarded::PermissionWidening => workspace.automation_permission_consent(),
       Guarded::ApprovalWidening => workspace.automation_permission_consent() && workspace.automation_approval_consent(),
+      Guarded::StepAccept => workspace.automation_approval_consent(),
       Guarded::PermissionsSetting | Guarded::WideningQuestion | Guarded::McpServer | Guarded::Accounts => false,
     }
   }
@@ -199,6 +204,8 @@ impl InputGate {
       Guarded::PermissionWidening => &mut controls.permissions,
       Guarded::ApprovalWidening => &mut controls.approvals,
       Guarded::McpServer => &mut controls.server,
+      // Only its handler refuses: accepting locks no window input, whoever marks it.
+      Guarded::StepAccept => return,
     };
     if add {
       *count += 1;

@@ -77,12 +77,18 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
     let reviewer = reviewer_tokens(&view.reviews);
     let run = &view.run;
     let steps: Vec<Value> = view.steps.iter().map(step).collect();
+    let unverified: Vec<Value> = view
+      .unverified()
+      .iter()
+      .map(|check| json!({ "check": check.check, "reason": check.reason }))
+      .collect();
     Ok(json!({
       "id": run.id().to_string(),
       "number": run.number().get(),
       "task": task.key().to_string(),
       "pipeline": { "name": &*view.pipeline, "version": view.version.get() },
       "status": wire::run_status(run.status()),
+      "unverified": unverified,
       "tokens": {
         "used": run.used().get(),
         "budget": run.budget().map(TokenBudget::get),

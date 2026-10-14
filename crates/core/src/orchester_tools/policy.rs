@@ -9,6 +9,8 @@
 //! | outside the worktree (`search_external_file`, `read_external_file`) | asks; runs without asking in the run's sources and Rust's dependency sources | asks; runs without asking in the run's sources and Rust's dependency sources |
 //! | the checks offered to the step (`run_check`), network on | runs a check whose access rules approve no call; asks for any other, once per run or at every call as they say | runs a check whose access rules approve no call; asks for any other, once per run or at every call as they say |
 //! | the checks, network off | not offered | not offered |
+//! | a QA copy of the app, built from the worktree (`start_qa_app`), network on | asks; Approve similar is kept to the script's content | not offered |
+//! | a QA copy of the app, network off | not offered | not offered |
 //!
 //! A call that asks reaches a person as any request outside the step's permissions does, and Orchester's
 //! own answers (a rule of Approve similar, auto-approval) apply to it as to an MCP call, but auto-approval
@@ -48,14 +50,21 @@ pub fn decide(tool: OrchesterTool, permissions: &AgentPermissions) -> Option<Too
     AccessClass::ReadOnly | AccessClass::Records | AccessClass::RunProcesses => Some(ToolPolicy::Runs),
     AccessClass::WritesWorktree => (permissions.repository() == RepositoryAccess::Write).then_some(ToolPolicy::Runs),
     AccessClass::Outside if tool == OrchesterTool::RunCheck && permissions.network() == NetworkAccess::Off => None,
+    // A QA copy builds the worktree's code: a step that may not write it or reach the network gets none.
+    AccessClass::Outside
+      if tool == OrchesterTool::StartQaApp
+        && (permissions.network() == NetworkAccess::Off || permissions.repository() != RepositoryAccess::Write) =>
+    {
+      None
+    }
     AccessClass::Outside => Some(ToolPolicy::Asks),
   }
 }
 
 /// Whether auto-approval may answer a call of `tool` of MCP server `server`: any call but one of Orchester's
-/// `run_check`.
+/// `run_check` or `start_qa_app`, which run programs outside every sandbox.
 pub fn auto_approvable(server: &str, tool: &str) -> bool {
-  server != SERVER || tool != OrchesterTool::RunCheck.as_str()
+  server != SERVER || (tool != OrchesterTool::RunCheck.as_str() && tool != OrchesterTool::StartQaApp.as_str())
 }
 
 /// The tools one step is offered, with their policy, the checks `run_check` runs, and the run's sources, which the
@@ -236,6 +245,15 @@ impl StepTools {
       OrchesterTool::StopRunProcess.called(claude),
       OrchesterTool::CallRunApp.called(claude),
     ));
+    if self.policy(OrchesterTool::StartQaApp).is_some() {
+      text.push_str(&format!(
+        " For a QA copy of the app, call {}(scenario) instead of running tools/qa-app.ps1: it waits for the \
+         computer's QA slot, starts the copy off-screen and returns its pid; {} without pid drives it, and \
+         Orchester stops it when your turn ends or waits for a person.",
+        OrchesterTool::StartQaApp.called(claude),
+        OrchesterTool::CallRunApp.called(claude),
+      ));
+    }
     text
   }
 }

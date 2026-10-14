@@ -126,7 +126,12 @@ impl ApprovalChoices {
       RuleScope::SimilarMcpTool {
         folder: Some(folder), ..
       } => Ok(SimilarShown::Folder { folder: folder.into() }),
-      RuleScope::SimilarMcpTool { check: Some(name), .. } => Ok(SimilarShown::Check { name: name.into() }),
+      // `start_qa_app`'s rule is kept to its script's content, which it names as `check`: shown as the tool's.
+      RuleScope::SimilarMcpTool {
+        check: Some(name),
+        tool,
+        ..
+      } if tool != orchester_tools::OrchesterTool::StartQaApp.as_str() => Ok(SimilarShown::Check { name: name.into() }),
       RuleScope::SimilarMcpTool { server, tool, .. } => Ok(SimilarShown::Tool {
         server: server.into(),
         tool: tool.into(),

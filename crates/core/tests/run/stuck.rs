@@ -273,6 +273,7 @@ fn stuck_a_failed_result_wins_over_a_failed_turn() {
     step: key("review"),
     outcome,
     text: "Two blocking findings.".into(),
+    unverified: Vec::new(),
     created_at: at(1),
   };
   // Run 19: Review returned `failed`, then its turn failed when the permission prompt closed.

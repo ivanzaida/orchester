@@ -41,6 +41,8 @@ pub(super) fn run_status_columns(status: &RunStatus) -> StatusColumns<'_> {
       (WAITING, Some(RETRIES_EXHAUSTED), Some(step.as_str()), None)
     }
     RunStatus::WaitingForPerson(Stuck::BrokeAgain(step)) => (WAITING, Some(BROKE_AGAIN), Some(step.as_str()), None),
+    RunStatus::WaitingForPerson(Stuck::Unverified(step)) => (WAITING, Some(UNVERIFIED), Some(step.as_str()), None),
+    RunStatus::WaitingForPerson(Stuck::Unchanged(step)) => (WAITING, Some(UNCHANGED), Some(step.as_str()), None),
     RunStatus::Succeeded => ("succeeded", None, None, None),
     RunStatus::Failed(RunFailure::StepFailed(step)) => ("failed", Some("step_failed"), Some(step.as_str()), None),
     RunStatus::Failed(RunFailure::RetriesExhausted(step)) => {
@@ -82,6 +84,8 @@ pub(super) fn parse_run_status(
       RunStatus::WaitingForPerson(Stuck::RetriesExhausted(step_key(step)?))
     }
     (WAITING, Some(BROKE_AGAIN), Some(step), None) => RunStatus::WaitingForPerson(Stuck::BrokeAgain(step_key(step)?)),
+    (WAITING, Some(UNVERIFIED), Some(step), None) => RunStatus::WaitingForPerson(Stuck::Unverified(step_key(step)?)),
+    (WAITING, Some(UNCHANGED), Some(step), None) => RunStatus::WaitingForPerson(Stuck::Unchanged(step_key(step)?)),
     ("succeeded", None, None, None) => RunStatus::Succeeded,
     ("failed", Some("step_failed"), Some(step), None) => RunStatus::Failed(RunFailure::StepFailed(step_key(step)?)),
     ("failed", Some(RETRIES_EXHAUSTED), Some(step), None) => {
@@ -101,11 +105,14 @@ pub(super) fn parse_run_status(
 const STEP_BUDGET: &str = "step_budget";
 /// The pause reason of a run stopped at its account's plan limit; the execution has a column of its own.
 const PLAN_LIMIT: &str = "plan_limit";
-/// A run waiting for a person, and why: the step in `failed_step` used up its retries, or broke
-/// again after its restart. A run that failed for used-up retries has the same reason.
+/// A run waiting for a person, and why: the step in `failed_step` used up its retries, broke
+/// again after its restart, reported unverified, or was not run again on an unchanged revision. A run
+/// that failed for used-up retries has the same reason.
 const WAITING: &str = "waiting";
 const RETRIES_EXHAUSTED: &str = "retries_exhausted";
 const BROKE_AGAIN: &str = "broke_again";
+const UNVERIFIED: &str = "unverified";
+const UNCHANGED: &str = "unchanged";
 
 const fn pause_reason_text(reason: PauseReason) -> &'static str {
   match reason {
@@ -166,6 +173,7 @@ pub(super) fn attempt_reason_columns(reason: &AttemptReason) -> AttemptReasonCol
     AttemptReason::FollowUp { step } => ("follow_up", None, Some(step.as_str()), None),
     AttemptReason::Recovery { step } => ("recovery", None, Some(step.as_str()), None),
     AttemptReason::Restart { step } => ("restart", None, Some(step.as_str()), None),
+    AttemptReason::Accepted { step } => ("accepted", None, Some(step.as_str()), None),
     AttemptReason::Returned {
       failed_step,
       return_to,
@@ -196,6 +204,7 @@ pub(super) fn parse_attempt_reason(columns: &AttemptReasonColumns<'_>) -> Result
     ("follow_up", None, Some(step), None) => Ok(AttemptReason::FollowUp { step: step_key(step)? }),
     ("recovery", None, Some(step), None) => Ok(AttemptReason::Recovery { step: step_key(step)? }),
     ("restart", None, Some(step), None) => Ok(AttemptReason::Restart { step: step_key(step)? }),
+    ("accepted", None, Some(step), None) => Ok(AttemptReason::Accepted { step: step_key(step)? }),
     ("returned", Some(failed_step), Some(return_to), Some(note)) => Ok(AttemptReason::Returned {
       failed_step: step_key(failed_step)?,
       return_to: step_key(return_to)?,
@@ -265,6 +274,8 @@ pub(super) const fn step_failure_text(failure: StepFailure) -> &'static str {
     StepFailure::MergeConflict => "merge_conflict",
     StepFailure::CheckpointFailed => "checkpoint_failed",
     StepFailure::CommandFailed => "command_failed",
+    StepFailure::Unverified => UNVERIFIED,
+    StepFailure::Unchanged => UNCHANGED,
   }
 }
 
@@ -277,6 +288,8 @@ pub(super) fn parse_step_failure(value: &str) -> Result<StepFailure, StoreError>
     "merge_conflict" => StepFailure::MergeConflict,
     "checkpoint_failed" => StepFailure::CheckpointFailed,
     "command_failed" => StepFailure::CommandFailed,
+    UNVERIFIED => StepFailure::Unverified,
+    UNCHANGED => StepFailure::Unchanged,
     other => return Err(corrupt("step failure", other)),
   })
 }

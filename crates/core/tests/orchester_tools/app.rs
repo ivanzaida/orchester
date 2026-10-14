@@ -125,3 +125,58 @@ fn call_run_app_redaction_preserves_the_structured_answer_limit() {
   assert!(result.is_error());
   assert!(result.mcp().to_string().len() < orchester_core::orchester_tools::MAX_ANSWER_BYTES);
 }
+
+#[test]
+fn call_run_app_start_qa_app_input_is_strict_and_asks() {
+  use orchester_core::{
+    orchester_tools::{StartedQaApp, qa_name},
+    resource::StepKey,
+    run::RunNumber,
+  };
+  let step = crate::qa_step();
+  let call = ToolCall::parse("start_qa_app", &json!({"scenario":"task-states"}), &step).expect("call");
+  assert_eq!(call.tool(), OrchesterTool::StartQaApp);
+  assert!(step.call_asks(&call), "it runs the worktree's code outside the sandbox");
+  let ToolCall::StartQaApp(start) = call else {
+    panic!("a QA app start");
+  };
+  let name = qa_name(
+    RunNumber::new(NonZeroU32::new(3).expect("number")),
+    &StepKey::new("verify").expect("key"),
+  );
+  assert_eq!(name, "run-3-verify");
+  assert_eq!(
+    start.script_args(&name),
+    ["-Name", "run-3-verify", "-Scenario", "task-states"]
+  );
+  let fake = json!({"scenario":"live","fake_agents":true,"no_runner":null});
+  let Ok(ToolCall::StartQaApp(fake)) = ToolCall::parse("start_qa_app", &fake, &step) else {
+    panic!("a QA app start with stand-in agents");
+  };
+  assert_eq!(
+    fake.script_args("run-3-verify").last().map(String::as_str),
+    Some("-FakeAgents")
+  );
+  for bad in [
+    json!({}),
+    json!({"scenario":""}),
+    json!({"scenario":"Tasks"}),
+    json!({"scenario":"../tasks"}),
+    json!({"scenario":"tasks","fake_agents":true,"no_runner":true}),
+    json!({"scenario":"tasks","name":"other"}),
+  ] {
+    assert!(ToolCall::parse("start_qa_app", &bad, &step).is_err(), "{bad}");
+  }
+  // Without a pid, call_run_app calls the step's QA app.
+  let call = ToolCall::parse("call_run_app", &json!({"tool":"app_state","arguments":{}}), &step).expect("call");
+  let ToolCall::App(call) = call else {
+    panic!("an app call");
+  };
+  assert_eq!(call.pid(), None);
+  let printed = "Compiling...\nscenario tasks\npid 4242\nmcp C:/repo/.tmp/qa/run-3-verify/mcp\n\
+                 discovery C:/repo/.tmp/qa/run-3-verify/mcp/4242.json\n";
+  let started = StartedQaApp::read(printed).expect("an app");
+  assert_eq!(started.pid.get(), 4242);
+  assert!(started.discovery.ends_with("4242.json"));
+  assert_eq!(StartedQaApp::read("pid nothing\n"), None);
+}

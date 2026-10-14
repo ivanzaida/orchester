@@ -35,6 +35,7 @@ mod tool_approval;
 mod tool_step;
 mod transition;
 mod unreadable;
+mod unverified;
 mod usage;
 
 pub use self::{
@@ -66,7 +67,7 @@ pub use self::{
     NativePrompt, NativeSetting, PipelineInfo, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, PromptPart,
     PromptSection, PromptSource, ResultDelivery, RetryReport, RunContext, SkillListing, WorkingTools,
   },
-  result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult},
+  result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult, UnverifiedCheck},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},
   state::{NewRun, Run, StoredRun},
   status::{
@@ -81,5 +82,6 @@ pub use self::{
   tool_step::{CapturedOutput, CommandEnd, OutputCapture, StepAt, ToolCommand},
   transition::RaisedLimits,
   unreadable::{ListedRun, UnreadableRun},
+  unverified::AcceptRefusal,
   usage::TokenUsage,
 };

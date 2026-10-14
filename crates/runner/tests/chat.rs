@@ -301,7 +301,10 @@ async fn a_turn_needs_a_kept_message_and_an_orchestrator_and_a_new_runner_ends_s
     root,
     orchester_runner::notify::Notifier::new(mpsc::unbounded_channel().0),
     std::sync::Arc::new(support::vault::MemoryVault::default()),
-    None,
+    (
+      None,
+      orchester_runner::execution::QaSlots::in_folder(&root.join(".orchester").join("qa-slots")),
+    ),
   );
   fresh
     .attach(

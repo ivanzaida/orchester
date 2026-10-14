@@ -96,6 +96,8 @@ impl Worker {
     .expect("Codex's question requests and the relay's ask_question calls each carry a question");
     watch.db.ask_questions(&request)?;
     watch.invocation.timing.wait_for_person(now);
+    // A person's wait never holds the computer's QA slot.
+    self.qa.release(watch.invocation.id);
     watch.db.save_invocation(&watch.invocation)?;
     self.question_changed(watch);
     watch.question = Some((request, awaiting));
@@ -222,6 +224,7 @@ impl Worker {
 
   fn end_question_wait(&self, watch: &mut Watch) -> Result<(), StoreError> {
     watch.invocation.timing.resume(Timestamp::now());
+    self.resume_qa(watch, None);
     watch.db.save_invocation(&watch.invocation)?;
     self.question_changed(watch);
     Ok(())

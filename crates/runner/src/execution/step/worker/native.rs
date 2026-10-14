@@ -131,6 +131,7 @@ impl Worker {
           Some(structured) => self.record_step_question(watch, call.as_str(), structured)?,
           None => question.question().to_owned(),
         },
+        unverified: Vec::new(),
         completed: Vec::new(),
         decisions: Vec::new(),
         open_questions: Vec::new(),

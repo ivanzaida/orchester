@@ -34,8 +34,13 @@ const RESULT_INSTRUCTIONS: &str = "Use `done` when your current step is complete
                                    failures are context, not a verdict on changed work: reproduce relevant \
                                    findings against the current candidate. Reuse a check only when its inputs \
                                    are unchanged, and state that limit. Preserve earlier evidence without \
-                                   relabeling it as evidence for a new build. If fresh verification needs a \
-                                   capability or action from the person, request it with `question`.\n\
+                                   relabeling it as evidence for a new build. If fresh verification needs an \
+                                   action from the person that lets you go on now, request it with `question`.\n\
+                                   Use `unverified` when you checked what you could but some checks cannot be \
+                                   done with what this step has (a state no fixture reaches, an app, tool or \
+                                   fixture you cannot use): list each in `unverified` with what it is and why. \
+                                   It goes to the person and sends nothing back to an earlier step. Mismatches \
+                                   you did find still require `failed`.\n\
                                    Use `question` when progress needs the person's decision, permission, access, \
                                    or clarification. This includes a proposed command outside the sandbox, an \
                                    unavailable capability, or conflicting requirements that the person can \
@@ -52,7 +57,8 @@ const RESULT_INSTRUCTIONS: &str = "Use `done` when your current step is complete
                                    because work is incomplete or needs permission. \
                                    If the person already answered the relevant question, apply their answer \
                                    within the effective permissions instead of asking again.\n\
-                                   With `done` or `failed`, hand off to the agents after you in the same object: \
+                                   With `done`, `failed` or `unverified`, hand off to the agents after you in the \
+                                   same object: \
                                    `completed` (what you completed), `decisions` (decisions later steps must \
                                    follow), `open_questions` and `next_agent_should_know`, each a list of short \
                                    strings, or null when you have nothing for it. Orchester keeps the handoff as \

@@ -2,19 +2,24 @@
 //! & continue* with what it runs, returning the work to an agent step (`Return the work to` `qrV0F`) with
 //! the note its agent reads (`Note for Builder · required` `wJTjt`), and *Stop and fail the run*. A
 //! decision under way holds the others; the runner's refusal is said above *Stop*. Without an agent step
-//! to return to, that part is left out.
+//! to return to, that part is left out. A step that waits unverified or unchanged is first offered
+//! *Accept … as it is*, and *Run … again* takes the retry's place; after a failed verdict the work has not changed
+//! since, *Run … again* comes first and accepting second. Accepting is a person's decision: lurq's synthetic input
+//! takes it only while a person lets automation answer approvals, and it is recorded as automation's then. A press
+//! it may not take is refused in the button's handler alone, and the card says so; the rest of the window takes
+//! window input as before.
 
 use std::sync::Arc;
 
 use lurq::{
-  app::ctx::Ctx,
+  app::{ctx::Ctx, events::is_synthetic_input},
   components::{Column, SelectOption, Text},
   core::Signal,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   resource::StepKey,
-  run::{ReviewNote, Stuck, StuckDecision},
+  run::{Answerer, ReviewNote, Stuck, StuckDecision},
   tokens::compact_tokens,
 };
 use orchester_ipc::Command;
@@ -30,6 +35,7 @@ use super::{
   Deciding, Target,
 };
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   theme::{ExtraSpacing, ExtraTypography, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -48,7 +54,10 @@ pub struct DecideCard<'a> {
   pub target: &'a Signal<Target>,
   pub note: &'a Signal<String>,
   pub asked: &'a Signal<Option<Deciding>>,
+  /// Set when window input pressed *Accept … as it is* without a person's leave.
+  pub person_only: &'a Signal<bool>,
   pub action: &'a DecisionAction<Deciding>,
+  pub gate: Option<&'a InputGate>,
   /// Why nothing can be decided now: no runner is connected to carry it out.
   pub offline: Option<Arc<str>>,
   /// Rings the card when the Needs you panel opened the page at it.
@@ -58,19 +67,6 @@ pub struct DecideCard<'a> {
 impl DecideCard<'_> {
   pub fn render(&self, ctx: &mut Ctx) -> Element {
     let (pending, refused) = state(self.action, self.asked.get());
-    let retry = self
-      .button(
-        ActionButton::new(
-          "task-allow-retry",
-          ButtonKind::Primary,
-          ctx.t("decisions.retries.allow"),
-        )
-        .icon(Icon::RotateCcw)
-        .in_form(),
-        StuckDecision::Retry,
-        pending,
-      )
-      .fill_width();
     let stop = self
       .button(
         ActionButton::new("task-stop-run", ButtonKind::Danger, ctx.t("decisions.retries.stop"))
@@ -88,13 +84,7 @@ impl DecideCard<'_> {
           .variant(TaskText::SectionTitle.role()),
       )
       .child(self.facts(ctx))
-      .child(retry)
-      .child(
-        Text::new(&self.retry_meaning(ctx))
-          .id("task-retry-meaning")
-          .variant(ExtraTypography::Note.role())
-          .width(Dimension::Pct(100.0)),
-      )
+      .with_children(self.choices(ctx, pending))
       .with_children(self.returning(ctx, pending))
       .child(divider())
       .with_children(
@@ -137,6 +127,82 @@ impl DecideCard<'_> {
       .into()
   }
 
+  /// The retry with what it means, and for a step that waits unverified or unchanged *Accept … as it is* with what it
+  /// means: first, or after the retry when the step's result was a failed verdict the work has not changed since.
+  fn choices(&self, ctx: &Ctx, pending: Option<Deciding>) -> Vec<Element> {
+    let verdict = self.run.unchanged_verdict().is_some();
+    let retry = vec![
+      self.retry(ctx, pending, !verdict).into(),
+      meaning("task-retry-meaning", &self.retry_meaning(ctx)),
+    ];
+    if !self.stuck.can_accept() {
+      return retry;
+    }
+    let accepting = self.accepting(ctx, pending, !verdict);
+    if verdict {
+      retry.into_iter().chain(accepting).collect()
+    } else {
+      accepting.into_iter().chain(retry).collect()
+    }
+  }
+
+  /// *Accept … as it is* and what it means; `first` makes it the primary action.
+  fn accepting(&self, ctx: &Ctx, pending: Option<Deciding>, first: bool) -> Vec<Element> {
+    let step = self.short_name(self.stuck.step());
+    let kind = if first {
+      ButtonKind::Primary
+    } else {
+      ButtonKind::Secondary
+    };
+    let accept = ActionButton::new(
+      "task-accept-step",
+      kind,
+      ctx.t_args("decisions.retries.accept", [("step", step.as_str())]),
+    )
+    .icon(Icon::Check)
+    .in_form();
+    let decision = StuckDecision::Accept { by: Answerer::Person };
+    let refused = self
+      .person_only
+      .get()
+      .then(|| field_error("task-accept-person-only", &ctx.t("decisions.retries.acceptPersonOnly")).into());
+    std::iter::once(self.button(accept, decision, pending).fill_width().into())
+      // Right under the button it refused.
+      .chain(refused)
+      .chain(std::iter::once(meaning(
+        "task-accept-meaning",
+        &ctx.t_args("decisions.retries.acceptMeaning", [("step", step.as_str())]),
+      )))
+      .collect()
+  }
+
+  /// *Allow 1 retry & continue*, or for a step that waits unverified or unchanged, *Run … again*, which is the
+  /// primary action unless accepting comes `before` it.
+  fn retry(&self, ctx: &Ctx, pending: Option<Deciding>, before: bool) -> ActionButton {
+    let button = if self.stuck.can_accept() {
+      let step = self.short_name(self.stuck.step());
+      let kind = if before {
+        ButtonKind::Secondary
+      } else {
+        ButtonKind::Primary
+      };
+      ActionButton::new(
+        "task-allow-retry",
+        kind,
+        ctx.t_args("decisions.retries.runAgain", [("step", step.as_str())]),
+      )
+    } else {
+      ActionButton::new(
+        "task-allow-retry",
+        ButtonKind::Primary,
+        ctx.t("decisions.retries.allow"),
+      )
+    };
+    self
+      .button(button.icon(Icon::RotateCcw).in_form(), StuckDecision::Retry, pending)
+      .fill_width()
+  }
+
   /// What one more retry runs: the step it resumes, and the failing step after it.
   fn retry_meaning(&self, ctx: &Ctx) -> Arc<str> {
     let failed = self.name(ctx, self.stuck.step());
@@ -149,6 +215,9 @@ impl DecideCard<'_> {
         )
       }
       Stuck::BrokeAgain(_) => ctx.t_args("decisions.retries.restartMeaning", [("step", &*failed)]),
+      Stuck::Unverified(_) | Stuck::Unchanged(_) => {
+        ctx.t_args("decisions.retries.runAgainMeaning", [("step", &*failed)])
+      }
     }
   }
 
@@ -159,12 +228,12 @@ impl DecideCard<'_> {
     if targets.is_empty() {
       return Vec::new();
     }
-    let default = self.run.run.retry_from();
+    let default = self.run.run.return_default();
     let options: Vec<SelectOption<Target>> = targets
       .iter()
       .map(|key| {
         let name = self.name(ctx, key);
-        let label = if Some(key) == default {
+        let label = if Some(key) == default.as_ref() {
           ctx.t_args("decisions.retries.defaultTarget", [("step", &*name)])
         } else {
           name
@@ -224,19 +293,19 @@ impl DecideCard<'_> {
       Some(_) => button.disabled(),
       None => {
         let (action, asked, run) = (self.action.clone(), self.asked.clone(), self.run.id());
+        let (gate, person_only) = (self.gate.cloned(), self.person_only.clone());
         button.on_click(move || {
           // A second press while the first is under way would replace it (lurq's `FutureAction::run`).
           if action.state().get_untracked().is_pending() {
             return;
           }
+          let Some(decision) = decided(gate.as_ref(), &decision) else {
+            tracing::warn!("synthetic input reached a step's acceptance; not taken");
+            person_only.set(true);
+            return;
+          };
           asked.set(Some(deciding));
-          action.run((
-            deciding,
-            Command::DecideStuckRun {
-              run,
-              decision: decision.clone(),
-            },
-          ));
+          action.run((deciding, Command::DecideStuckRun { run, decision }));
         })
       }
     }
@@ -261,4 +330,30 @@ impl DecideCard<'_> {
       .find(|step| step.key == *key)
       .map_or_else(|| key.as_str().to_owned(), |step| step.name.to_string())
   }
+}
+
+/// `decision` as the input being delivered may take it: an acceptance is a person's, or automation's under the
+/// approvals opt-in; `None` when the input may not take it.
+fn decided(gate: Option<&InputGate>, decision: &StuckDecision) -> Option<StuckDecision> {
+  if !matches!(decision, StuckDecision::Accept { .. }) {
+    return Some(decision.clone());
+  }
+  if !input_may_decide(gate, Guarded::StepAccept) {
+    return None;
+  }
+  let by = if is_synthetic_input() {
+    Answerer::Automation
+  } else {
+    Answerer::Person
+  };
+  Some(StuckDecision::Accept { by })
+}
+
+/// What a choice above it does, under its button.
+fn meaning(id: &str, text: &str) -> Element {
+  Text::new(text)
+    .id(id)
+    .variant(ExtraTypography::Note.role())
+    .width(Dimension::Pct(100.0))
+    .into()
 }

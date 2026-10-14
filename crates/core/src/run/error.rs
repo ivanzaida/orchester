@@ -76,6 +76,10 @@ pub enum RunError {
   NoFailureRoute(StepKey),
   #[error("the work cannot return to step `{0}`: it is no agent step the failed step runs after")]
   NotAReturnTarget(StepKey),
+  #[error(
+    "step `{0}` gave a verdict on the work; only a step that waits unverified or unchanged can be accepted as it is"
+  )]
+  NotAcceptable(StepKey),
   #[error("the stored run is inconsistent: {0}")]
   Inconsistent(&'static str),
 }

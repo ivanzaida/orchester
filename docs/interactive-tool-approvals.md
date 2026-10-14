@@ -171,7 +171,8 @@ by `read_external_file` and `search_external_file`.
 | `read_external_file` | `filename` (absolute), `start_line?`, `length?` | outside | asks; runs in the run's sources | asks; runs in the run's sources |
 | `list_run_processes` | none | run processes | runs | runs |
 | `stop_run_process` | `pid` (positive integer) | run processes | runs | runs |
-| `call_run_app` | `pid`, `tool` (embedded MCP name), `arguments` (object) | run processes | runs | runs |
+| `call_run_app` | `pid?` (none: the turn's QA app), `tool` (embedded MCP name), `arguments` (object) | run processes | runs | runs |
+| `start_qa_app` | `scenario` (kebab-case, ≤ 64), `fake_agents?`, `no_runner?` | outside | network on: asks (Approve similar kept to the QA script's blob); network off: not offered | not offered |
 | `run_check` (with checks) | `name` (one of the step's checks) | outside, network | by the check's access rules (network on only) | as a writing step |
 | `list_skills` (with skills) | none | read-only | runs | runs |
 | `read_skill` (with skills) | `name`, `file?` (a skill file path; none or `SKILL.md` for the skill's own), `offset?`, `limit?` (≤ 10 000, 2000) | read-only | runs | runs |
@@ -230,6 +231,45 @@ by `read_external_file` and `search_external_file`.
   MCP approval enabled. Fresh and continuing-session prompts steer agents to this tool instead of running
   `tools/lurq-mcp-client.py` outside the sandbox; the design-verification skill does too. This grants no access
   to the person's installed app, another run or arbitrary network endpoints.
+- **QA apps.** `start_qa_app(scenario)` replaces agents starting `tools/qa-app.ps1` themselves and negotiating a
+  shared QA slot in notes. The runner takes the computer's QA slot (one at a time, an OS file lock in the user's
+  data folder that every runner takes; a second start waits and the transcript says *Waiting for the QA slot*),
+  runs the worktree's `tools/qa-app.ps1 -Name run-<number>-<step> -Scenario <scenario>` (Windows PowerShell; `pwsh`
+  on macOS; a worktree without the script, or a platform without either, is told so), checks the app it names with
+  `call_run_app`'s process rules and that its discovery file lies in its QA folder, and keeps it for the invocation:
+  `call_run_app` without `pid` reaches it through that exact file (checked for links at each call), without
+  searching. Starts of one invocation run one at a time; a second replaces the first's app. When the invocation ends,
+  whatever ended it (the runner failing included), or waits for a person inside its turn, the runner stops the app (as
+  `stop_run_process` does) and frees the slot; a start still waiting gives up, and a script still running is ended
+  with its process tree, as is one that names no app. While the invocation waits for a person (until no such wait of
+  it remains), a start is refused before it takes the slot and before its script runs. It builds and runs the worktree's code outside every sandbox, so
+  it is offered only to a step that writes the worktree and has network access, and it asks, like a check: a person
+  or an *Approve similar* rule decides, the rule kept to the script's git blob (`git hash-object --no-filters`, the
+  file's exact bytes; a changed script asks again; the rule does not cover changes to what the build compiles or runs,
+  which approving similar accepts for the run), and the request names `tools/qa-app.ps1` and the files changed since
+  the run's base that run code while the app builds: `build.rs`, `Cargo.toml` and `Cargo.lock` (a new dependency or
+  proc macro), `.cargo/config*` (`rustc-wrapper`, runners) and `rust-toolchain*`. Other source changes are not named;
+  the build compiles them too, and approving accepts them. Auto-approval never answers it. The blob is read again right
+  before the script runs: a script changed since its approval does not run. A short window remains between that read
+  and PowerShell opening the file, in which a program of the agent's could still swap it.
+  The cleanup of what a dead runner left (named by the slot file, which is untrusted) and of the step's own QA folder
+  follows no link and stops only programs from that folder's `bin/` started since its run was created; the scope that
+  stops them must still resolve to the `bin/` it checked, so a link swapped in after the check refuses the cleanup.
+- **Results that could not check everything.** A step's result may be `unverified` with an `unverified` list of
+  `{check, reason}` (`orchester_core::run::STEP_RESULT_SCHEMA`): the step ran but could not check some of what it is
+  for. The run waits for the person (`waiting_for_person`, reason `unverified`) without taking the step's failure
+  route or using a retry; the person accepts the step as it is, runs it again, or returns the work to an agent step
+  with a note (`continue_run` choices `accept`, `allow_retry`, `return_to`; `get_run` lists the checks under
+  `unverified`). Accepting passes the step in a person's place: `accept` is refused as `person_only`, and the task
+  page's *Accept … as it is* refuses a client's press (its handler does, and the card says a person accepts it; the
+  rest of the window, its close button included, still takes the client's input), unless a person turned on *Let
+  automation answer approvals*; the event records who accepted. The project's Orchestrator chat (ORC-17) cannot
+  accept one even then: its agent is served no `continue_run` (`orchester_workspace::orchestrator::tools::TOOLS`). The accepted step then passes as a passed step does, in a new attempt
+  without an agent: its own worktree's work is merged and a gated step proposes its result as the plan. Accepting is
+  refused, with why, when that work does not build on the revision the result was for (later commits on top of that
+  revision do build on it, and pass with the step), when uncommitted changes lie beside it, which passing would take as
+  the step's, or when the step worked in a worktree of its own that was removed while its branch remains. A step whose latest result was failed or unverified for the revision it would run on now is not run
+  again unless a person asked for it: the run waits with reason `unchanged`, with the same choices.
 - **Schemas** are strict (`additionalProperties: false`, each property typed and bounded); a call is read into its
   type with unknown fields refused, and an invalid call is answered with an error result that says why.
 - **Worktree files** (`orchester_agent::FileTools`, confined to the step's `FileScope` as before: the worktree, the

@@ -96,13 +96,19 @@ pub enum Stuck {
   /// The step broke again in the attempt that restarted it: its agent's turn failed without a
   /// `failed` verdict, or the step could not be started, committed or merged.
   BrokeAgain(StepKey),
+  /// The step reported `unverified`: it could not check everything it is for, and its output lists what
+  /// and why. No verdict on the work, so no failure route is taken and no retry is used.
+  Unverified(StepKey),
+  /// The step was not run again: its latest result was failed or unverified on the revision it would run
+  /// on now, and nothing a person asked for changed since.
+  Unchanged(StepKey),
 }
 
 impl Stuck {
   /// The step that failed.
   pub const fn step(&self) -> &StepKey {
     match self {
-      Self::RetriesExhausted(step) | Self::BrokeAgain(step) => step,
+      Self::RetriesExhausted(step) | Self::BrokeAgain(step) | Self::Unverified(step) | Self::Unchanged(step) => step,
     }
   }
 
@@ -110,8 +116,14 @@ impl Stuck {
   pub fn failure(&self) -> RunFailure {
     match self {
       Self::RetriesExhausted(step) => RunFailure::RetriesExhausted(step.clone()),
-      Self::BrokeAgain(step) => RunFailure::StepFailed(step.clone()),
+      Self::BrokeAgain(step) | Self::Unverified(step) | Self::Unchanged(step) => RunFailure::StepFailed(step.clone()),
     }
+  }
+
+  /// Whether the person may accept the step as it is ([`super::StuckDecision::Accept`]): it gave no verdict on the
+  /// work, or one the work has not changed since.
+  pub const fn can_accept(&self) -> bool {
+    matches!(self, Self::Unverified(_) | Self::Unchanged(_))
   }
 }
 
@@ -200,14 +212,35 @@ pub enum StepFailure {
   /// A command tool's program exited with a code the tool does not expect, or did not finish
   /// within the tool's timeout.
   CommandFailed,
+  /// The agent finished and reported `unverified`: it could not check everything the step is for.
+  Unverified,
+  /// The step was not run again on a revision its latest failed or unverified result was for.
+  Unchanged,
 }
 
 impl StepFailure {
   /// Whether the step judged the work: its agent reported `failed`, or its command's exit code
   /// said so. Only a verdict follows the step's failure route; any other failure is a breakage,
-  /// which restarts the step itself once (user decision 2026-10-02).
+  /// which restarts the step itself once (user decision 2026-10-02), or goes to the person.
   pub const fn is_verdict(self) -> bool {
     matches!(self, Self::ReportedFailed | Self::CommandFailed)
+  }
+
+  /// Whether the failure goes straight to the person: the step could not check the work, or was not run
+  /// again on work that has not changed. Neither is a verdict nor a breakage.
+  pub const fn waits_for_person(self) -> bool {
+    matches!(self, Self::Unverified | Self::Unchanged)
+  }
+
+  /// Whether the failure is a breakage, which restarts the step once.
+  pub const fn is_breakage(self) -> bool {
+    !self.is_verdict() && !self.waits_for_person()
+  }
+
+  /// Whether a step that ended this way is not run again on the same revision: a verdict or a result its agent
+  /// reported that needs a change of the work, or the person, before it can come out differently.
+  pub const fn holds_for_revision(self) -> bool {
+    matches!(self, Self::ReportedFailed | Self::Unverified | Self::Unchanged)
   }
 }
 
@@ -241,6 +274,12 @@ pub enum AttemptReason {
     failed_step: StepKey,
     return_to: StepKey,
     note: ReviewNote,
+  },
+  /// A person (or automation they let answer) accepted `step`, which waited for them unverified or unchanged, as
+  /// it is: the attempt passes it with the accepted execution's work and result, then runs the steps after it and
+  /// those that had not passed.
+  Accepted {
+    step: StepKey,
   },
 }
 

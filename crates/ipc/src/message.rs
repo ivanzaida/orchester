@@ -14,8 +14,8 @@ use orchester_core::{
   question::{AnswerError, GivenAnswer},
   resource::StepKey,
   run::{
-    Answerer, ApprovalAnswer, AutoAsk, InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem,
-    RunAgainBlock, RunLimit, RunNumber, StuckDecision,
+    AcceptRefusal, Answerer, ApprovalAnswer, AutoAsk, InterruptCause, PermissionsApply, PlanDecision, PlanVersion,
+    PreflightProblem, RunAgainBlock, RunLimit, RunNumber, StuckDecision,
   },
   tokens::TokenBudget,
 };
@@ -514,6 +514,10 @@ pub enum Rejection {
   ChatBusy,
   /// No connection and model were chosen for the project's Orchestrator.
   NoOrchestrator,
+  /// Accepting the waiting step was refused: the work that would pass with it is not the work its result was for.
+  NotAcceptable {
+    why: AcceptRefusal,
+  },
   /// The runner is stopping and starts no work.
   ShuttingDown,
   /// [`Command::StopIfIdle`] while the runner has work.

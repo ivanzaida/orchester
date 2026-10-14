@@ -23,4 +23,11 @@ impl KillOnCloseJob {
     self.job.assign_process(process as isize)?;
     Ok(())
   }
+
+  /// Closes the job without ending what runs in it: kill-on-close is cleared first, so the processes left in it (an
+  /// app a script started to run on) outlive it.
+  pub fn release(self) -> io::Result<()> {
+    self.job.set_extended_limit_info(&ExtendedLimitInfo::new())?;
+    Ok(())
+  }
 }

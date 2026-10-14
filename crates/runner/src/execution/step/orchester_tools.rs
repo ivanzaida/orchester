@@ -29,8 +29,8 @@ use orchester_core::{
   },
   id::{InvocationId, StepExecutionId},
   orchester_tools::{
-    OrchesterTool, OutsideReads, ProjectTool, StepSkills, StepTools, ToolCall, ToolCallError, ToolContext, ToolResult,
-    ToolWork,
+    OrchesterTool, OutsideReads, ProjectTool, QaAppStart, QaApproval, StepSkills, StepTools, ToolCall, ToolCallError,
+    ToolContext, ToolResult, ToolWork,
   },
   permission::{AgentPermissions, ResolvedFolder, category::CommandScope},
   resource::CommandEnvironment,
@@ -44,6 +44,7 @@ use super::{
   super::{handoff::provenance, run::RunTask},
   claude_approval::ClaudeApprovals,
   mcp::McpSetup,
+  qa_app::{StepQa, script_blob},
   relay::{Listening, Served, bind},
   run_records::RunRecords,
   start::problem,
@@ -88,6 +89,8 @@ pub(in super::super) struct ToolHost {
   /// The project's repository, which holds the worktrees.
   repository: PathBuf,
   git_dir: PathBuf,
+  /// The run's base revision, which a QA app's approval names the build scripts changed since.
+  base: String,
   hooks: PathBuf,
   inherited: Vec<(OsString, OsString)>,
   project: CommandEnvironment,
@@ -108,6 +111,10 @@ pub(in super::super) struct ToolHost {
   secrets: Vec<SecretVariable>,
   /// Tools a person or a rule approved one call of, through the CLI's own prompt, not called yet.
   grants: Mutex<Vec<(OrchesterTool, Value)>>,
+  /// The QA starts looked at and the QA script's blob each one's approval named, not run yet.
+  qa_scripts: Mutex<Vec<(QaAppStart, String)>>,
+  /// The invocation's QA app (`start_qa_app`); `None` while the host is being made.
+  qa: Option<StepQa>,
 }
 
 impl ToolHost {
@@ -127,6 +134,13 @@ impl ToolHost {
   /// The tools of the server's `tools/list` result.
   pub(super) fn listed(&self) -> Vec<Value> {
     self.tools.mcp_tools()
+  }
+
+  /// This host with the QA app tools of its invocation.
+  #[must_use]
+  fn with_qa(mut self, qa: StepQa) -> Self {
+    self.qa = Some(qa);
+    self
   }
 
   /// This host, also removing `secrets` from its answers.
@@ -162,6 +176,12 @@ impl ToolHost {
     let target = match (call, reach) {
       (_, Some(reach)) => Some(reach.folder.display().to_string()),
       (ToolCall::RunCheck { name }, None) => Some(name.clone()),
+      (ToolCall::StartQaApp(start), None) => {
+        let approval = self.qa_approval(start);
+        // The start runs only the script this request names ([`StepQa::start`]).
+        self.qa_scripts.lock().push((start.clone(), approval.script.clone()));
+        Some(approval.target())
+      }
       _ => None,
     };
     Ok(Looked {
@@ -224,10 +244,53 @@ impl ToolHost {
       Ok(ToolWork::Progress(progress)) => self.records.report_progress(&progress, &self.secrets),
       Ok(ToolWork::Symbols(query)) => self.files.symbols(&query, &context),
       Ok(ToolWork::Skill(call)) => self.skills.run(&call),
-      Ok(ToolWork::App(call)) => super::run_app::call(&self.processes, &self.worktree, &call),
+      Ok(ToolWork::App(call)) => super::run_app::call(&self.processes, &self.worktree, &call, self.qa.as_ref()),
+      Ok(ToolWork::QaApp(start)) => match &self.qa {
+        Some(qa) => {
+          // The latest look at this start is what was asked about; earlier ones were denied or never run.
+          let mut asked = self.qa_scripts.lock();
+          let script = asked
+            .iter()
+            .rposition(|(looked, _)| *looked == start)
+            .map(|at| asked[at].1.clone());
+          asked.retain(|(looked, _)| *looked != start);
+          drop(asked);
+          qa.start(&start, script.as_deref())
+        }
+        None => ToolResult::unavailable("this step cannot start a QA app"),
+      },
       Ok(ToolWork::Processes(call)) => self.processes.run(call),
       Ok(ToolWork::Run(program)) => program.finished(run_capped(program.command(), program.timeout(), program.cap())),
       Err(error) => ToolResult::refused(&error),
+    }
+  }
+}
+
+impl ToolHost {
+  /// What the approval of `start` names: the QA script's git blob and the build or start scripts changed since the
+  /// run's base revision, committed or not. What git cannot tell is left out, and the request says less.
+  fn qa_approval(&self, start: &QaAppStart) -> QaApproval {
+    let git = Git::new(&self.worktree);
+    let script = script_blob(&self.worktree).unwrap_or_default();
+    let mut changed: Vec<String> = [
+      git.stdout(&["diff", "--name-only", &self.base, "--"]),
+      git.stdout(&["ls-files", "--others", "--exclude-standard"]),
+    ]
+    .into_iter()
+    .filter_map(|listed| {
+      listed
+        .inspect_err(|error| tracing::warn!(%error, "the changed build scripts cannot be listed"))
+        .ok()
+    })
+    .flat_map(|listed| listed.lines().map(str::to_owned).collect::<Vec<_>>())
+    .filter(|path| QaApproval::watches(path))
+    .collect();
+    changed.sort();
+    changed.dedup();
+    QaApproval {
+      script: script.trim().to_owned(),
+      scenario: start.scenario().to_owned(),
+      changed,
     }
   }
 }
@@ -267,7 +330,8 @@ impl RunTask {
   ) -> Result<(Arc<ToolHost>, Option<ClaudeApprovals>), RunnerProblem> {
     let worktree = folders.worktree;
     let host = self.tool_host((permissions, skills), (execution, folders), environment)?;
-    let tools = Arc::new(host.with_secrets(setup.secrets()));
+    let qa = self.step_qa(execution, invocation, worktree)?;
+    let tools = Arc::new(host.with_secrets(setup.secrets()).with_qa(qa));
     let approvals = self.claude_approvals((permissions, setup, &tools), (invocation, worktree))?;
     Ok((tools, approvals))
   }
@@ -319,6 +383,7 @@ impl RunTask {
       worktree: worktree.to_path_buf(),
       repository: self.root.clone(),
       git_dir: self.worktree_git_dir(worktree)?,
+      base: self.run.base().as_str().to_owned(),
       hooks,
       inherited: std::env::vars_os().collect(),
       project: environment.clone(),
@@ -338,6 +403,8 @@ impl RunTask {
       },
       secrets: Vec::new(),
       grants: Mutex::new(Vec::new()),
+      qa_scripts: Mutex::new(Vec::new()),
+      qa: None,
     })
   }
 

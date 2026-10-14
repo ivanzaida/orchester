@@ -14,7 +14,7 @@ use orchester_core::{
 };
 
 pub use super::{
-  awaited::{AwaitedDecision, AwaitedPlan, AwaitedQuestion, AwaitedStep, StepWait},
+  awaited::{AwaitedDecision, AwaitedPlan, AwaitedQuestion, AwaitedStep, DecisionWhy, StepWait},
   standing::{CurrentStep, ReadinessKind, RunStage},
 };
 use crate::{

@@ -3,12 +3,13 @@
 //! budget or time limit continues with a new budget and time limit (02.L), one stopped at a step's
 //! budget with a new budget for that step, one stopped by the project's daily budget resumes, and one
 //! whose step used up its retries or broke again gets one more retry or returns to an earlier agent
-//! step with a note (02.B). Every value is the caller's: nothing raises a limit by itself. While
-//! unfinished blocking tasks hold the task, nothing continues, as on the page.
+//! step with a note (02.B); one whose step could not check everything, or was not run again on an
+//! unchanged revision, also has its step accepted as it is. Every value is the caller's: nothing raises a limit by
+//! itself. While unfinished blocking tasks hold the task, nothing continues, as on the page.
 
 use orchester_core::{
   id::{RunId, TaskId},
-  run::{PauseReason, RaisedLimits, ReviewNote, RunLimit, RunStatus, StuckDecision},
+  run::{Answerer, PauseReason, RaisedLimits, ReviewNote, RunLimit, RunStatus, StuckDecision},
   time::Timestamp,
 };
 use orchester_ipc::Command;
@@ -76,11 +77,16 @@ pub enum Choice {
   /// For a run stopped by the project's daily budget: resume, as the page's Resume does. The runner
   /// refuses while today's budget is still used up.
   Resume,
-  /// For a run whose step used up its retries or broke again: Allow 1 retry & continue.
+  /// For a run whose step used up its retries or broke again: Allow 1 retry & continue. For one whose
+  /// step waits unverified or unchanged: run that step again.
   AllowRetry,
-  /// For a run whose step used up its retries or broke again: return to an earlier agent step (its
-  /// key or name) with a note for its agent.
+  /// For a run whose step used up its retries, broke again, or waits unverified or unchanged: return to
+  /// an earlier agent step (its key or name) with a note for its agent.
   ReturnTo { step: String, note: String },
+  /// For a run whose step could not check everything (unverified), or was not run again on an unchanged
+  /// revision: accept the step as it is; the steps after it run. It passes the step in a person's place: refused
+  /// as person_only unless a person turned on Let automation answer approvals, and recorded as automation's.
+  Accept,
 }
 
 /// What the runner is asked.
@@ -93,6 +99,13 @@ enum Request {
 pub async fn continue_run(services: &Services, args: ContinueRun) -> Result<Value, ToolError> {
   let reading = services.clone();
   let (project, run, request) = blocking(move || {
+    // Accepting passes a step in a person's place, as approving does: only while a person lets automation answer.
+    if matches!(args.choice, Choice::Accept) && !reading.workspace.automation_answers_approvals()? {
+      return Err(ToolError::refused(
+        "person_only",
+        vec![Message::new("appMcp.errors.acceptPersonOnly")],
+      ));
+    }
     let project = reading.project(&args.project)?;
     let (run, request) = request(&project, &args)?;
     Ok((project, run, request))
@@ -213,6 +226,11 @@ fn at_limit(view: &RunView, (limit, choice): (RunLimit, &Choice), number: &str) 
 fn decision(view: &RunView, choice: &Choice, number: &str) -> Result<StuckDecision, ToolError> {
   match choice {
     Choice::AllowRetry => Ok(StuckDecision::Retry),
+    Choice::Accept if matches!(view.run.status(), RunStatus::WaitingForPerson(stuck) if stuck.can_accept()) => {
+      Ok(StuckDecision::Accept {
+        by: Answerer::Automation,
+      })
+    }
     Choice::ReturnTo { step, note } => {
       let lowered = step.to_lowercase();
       let target = view

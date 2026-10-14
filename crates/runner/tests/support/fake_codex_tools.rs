@@ -145,6 +145,28 @@ pub fn report(server: Option<&mut Prompt>, worktree: &Path, prompt: &str) {
     fake_process_tools::exercise(worktree, |tool, arguments| report_call(server, tool, arguments));
     return;
   }
+  if prompt.contains("Start the QA app") {
+    let scenario = prompt
+      .split("QA scenario ")
+      .nth(1)
+      .and_then(|rest| rest.split('.').next())
+      .unwrap_or("tasks");
+    report_call(server, "start_qa_app", &json!({"scenario": scenario}));
+    report_call(server, "call_run_app", &json!({"tool": "app_state", "arguments": {}}));
+    if prompt.contains("Then read outside") {
+      let notes = fake_tool_calls::repository_folder(worktree, "deps-a").join("notes.txt");
+      report_call(
+        server,
+        "read_external_file",
+        &json!({"filename": notes.to_string_lossy()}),
+      );
+      report_call(server, "call_run_app", &json!({"tool": "app_state", "arguments": {}}));
+      if prompt.contains("Then start again") {
+        report_call(server, "start_qa_app", &json!({"scenario": scenario}));
+      }
+    }
+    return;
+  }
   for (tool, arguments) in calls(prompt, worktree) {
     report_call(server, tool, &arguments);
   }

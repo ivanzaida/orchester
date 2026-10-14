@@ -54,6 +54,8 @@
       "nothingToMergeBody": "Every step of the run passed. It committed nothing on {{branch}}, so there is no work to merge.",
       "retriesTitle": "{{step}} still fails after its retries",
       "brokeAgainTitle": "{{step}} broke again after its restart",
+      "unverifiedTitle": "Unverified: {{step}} could not check everything",
+      "unchangedTitle": "{{step}} was not run again: nothing changed",
       "stuckBody": "The run waits for your decision; nothing runs until you choose.",
       "failedTitle": "Failed at {{step}}",
       "failedBody": "{{agent}} could not finish the step. The conversation has its account.",
@@ -93,7 +95,9 @@
         "stepBudget": "Step budget reached",
         "mergeConflict": "Merge conflict",
         "checkpointFailed": "Checkpoint failed",
-        "commandFailed": "Command failed"
+        "commandFailed": "Command failed",
+        "unverified": "Unverified",
+        "unchanged": "Not run again"
       }
     },
     "runs": {

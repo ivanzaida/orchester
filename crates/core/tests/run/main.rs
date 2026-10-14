@@ -27,4 +27,5 @@ mod steps;
 mod stuck;
 mod stuck_loops;
 mod tool;
+mod unverified;
 mod working_prompt;

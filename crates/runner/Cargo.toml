@@ -252,6 +252,22 @@ required-features = ["test-agent"]
 name = "questions"
 required-features = ["test-agent"]
 
+[[test]]
+name = "unverified"
+required-features = ["test-agent"]
+
+[[test]]
+name = "qa_app"
+required-features = ["test-agent"]
+
+[[test]]
+name = "qa_app_stop"
+required-features = ["test-agent"]
+
+[[test]]
+name = "qa_app_links"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 

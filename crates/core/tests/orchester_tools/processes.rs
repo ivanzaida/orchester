@@ -7,7 +7,7 @@ use std::{
 };
 
 use orchester_core::{
-  orchester_tools::{OrchesterTool, ProcessCall, RunProcessScope, StepTools, ToolCall, ToolPolicy},
+  orchester_tools::{OrchesterTool, ProcessCall, ProcessScopeError, RunProcessScope, StepTools, ToolCall, ToolPolicy},
   resource::RepositoryAccess,
   time::Timestamp,
 };
@@ -191,4 +191,26 @@ fn run_processes_scope_refuses_processes_started_before_the_run() {
   assert!(!scope.started_in_run(1_699_999_999_999_999));
   assert!(scope.started_in_run(1_700_000_000_000_000));
   assert!(scope.started_in_run(1_700_000_000_000_001));
+}
+
+#[test]
+fn run_processes_checked_scope_refuses_a_folder_that_resolves_elsewhere_now() {
+  let folder = folders();
+  let bin = folder.path().join("bin");
+  let outside = folder.path().join("outside");
+  fs::create_dir(&bin).expect("bin");
+  fs::create_dir(&outside).expect("outside");
+  let checked = fs::canonicalize(&bin).expect("checked");
+  assert!(RunProcessScope::checked(&bin, &checked, Timestamp::now()).is_ok());
+  // Between the check and the scope, the folder becomes a link to another one.
+  fs::remove_dir(&bin).expect("swap");
+  link(&bin, &outside);
+  assert!(matches!(
+    RunProcessScope::checked(&bin, &checked, Timestamp::now()),
+    Err(ProcessScopeError::Moved { .. })
+  ));
+  // The unchecked constructor follows the link: the scope is the outside folder.
+  let moved = RunProcessScope::new(&bin, Timestamp::now()).expect("scope");
+  fs::write(outside.join("app"), "").expect("an outside program");
+  assert!(moved.relative_executable(&bin.join("app")).expect("path").is_some());
 }
