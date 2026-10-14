@@ -38,6 +38,7 @@ use orchester_core::{
   run::{ActiveClock, TaskPhase},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_workspace::tasks::{data::ProjectTasks, integration_jobs::ProjectJobs};
 use support::{Data, Window, add_project, project_id};
 
@@ -332,7 +333,7 @@ fn seeded() -> (Data, std::path::PathBuf) {
 #[test]
 fn sidebar_running_list_takes_the_runs_under_way_and_stops_them_without_a_runner() {
   let (_data, repo) = seeded();
-  let tasks = ProjectTasks::load(&repo).expect("the tasks read");
+  let tasks = ProjectTasks::load(&repo, &Programs::processes()).expect("the tasks read");
   let rows = |online| -> Vec<(String, RowState)> {
     under_way(&tasks, online)
       .into_iter()

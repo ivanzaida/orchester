@@ -2,8 +2,9 @@
 //! lists it (layer `Needs you` `eBhFg`, note `zJR9O`) and every Needs you count counts it (the pill, the status
 //! bar, a tab's mark): a tool request waiting for a decision (also one whose task cannot be read), a question
 //! with suggested answers, each step of a run waiting on a plan or on an agent's question, a decision after a
-//! step's retries, a run stopped at its limit, a run whose every step passed and whose work waits to be merged,
-//! a run recorded interrupted, and the project's memory records waiting for approval, together one item. A run
+//! step's retries, a run stopped at its limit, a run whose every step passed and whose work waits to be merged
+//! (not once its task is Done or Canceled, or its work reached its base branch without Orchester), a run
+//! recorded interrupted, and the project's memory records waiting for approval, together one item. A run
 //! that reads interrupted only because no runner looks after it is none: a runner records it once one does.
 //! A merge that stopped at conflicts is known only to the session that tried it, so it is not counted here.
 //! Approvals and questions with suggested answers are answered in place, through their cards in the run's
@@ -15,7 +16,7 @@ use orchester_core::{
   id::{RunId, StepExecutionId, TaskId},
   question::AskedQuestions,
   run::{RunNumber, TaskPhase},
-  task::Task,
+  task::{Task, organization::WorkflowStatus},
   time::Timestamp,
 };
 use orchester_store::StoreError;
@@ -231,7 +232,7 @@ impl ProjectTasks {
       TaskPhase::StoppedAtLimit => Some(WaitingKind::StoppedAtLimit {
         daily_budget: latest.daily_budget,
       }),
-      TaskPhase::Succeeded => Some(WaitingKind::ReadyToMerge),
+      TaskPhase::Succeeded if !settled_by_person(task) => Some(WaitingKind::ReadyToMerge),
       _ => None,
     };
     let before = items.len();
@@ -267,6 +268,14 @@ impl ProjectTasks {
       .waiting_choices()
       .any(|asked| asked.request.run() == run && asked.request.execution() == execution)
   }
+}
+
+/// Whether the person settled `task` themselves, Done or Canceled, so its work waits to be merged no more.
+fn settled_by_person(task: &Task) -> bool {
+  matches!(
+    task.organization().status(),
+    WorkflowStatus::Done | WorkflowStatus::Canceled
+  )
 }
 
 /// What answering an item in place reads: its task with its latest run, and that run's requests. The card it

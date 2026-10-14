@@ -2,6 +2,7 @@
 //! `tasks` scenario with one run auto-approving.
 
 use orchester_core::time::Timestamp;
+use orchester_exec::programs::Programs;
 use orchester_workspace::tasks::{
   data::ProjectTasks,
   run_approvals::{RunApprovalChange, apply_in},
@@ -25,7 +26,7 @@ fn status_stop_in_the_window_ends_auto_approval() {
     now: Timestamp::now(),
   };
   kontur::seed(&request).expect("the scenario seeds");
-  let tasks = ProjectTasks::load(&repo).expect("the tasks read");
+  let tasks = ProjectTasks::load(&repo, &Programs::processes()).expect("the tasks read");
   let running = tasks
     .tasks
     .iter()
@@ -35,7 +36,10 @@ fn status_stop_in_the_window_ends_auto_approval() {
     .id;
   apply_in(&repo, running, RunApprovalChange::AutoApprove(true)).expect("the run auto-approves");
   assert_eq!(
-    ProjectTasks::load(&repo).expect("the tasks read").auto_approving.len(),
+    ProjectTasks::load(&repo, &Programs::processes())
+      .expect("the tasks read")
+      .auto_approving
+      .len(),
     1
   );
   let launch = data.launch();
@@ -57,7 +61,7 @@ fn status_stop_in_the_window_ends_auto_approval() {
     window.texts("status-auto-approving").is_none()
   });
   assert!(
-    ProjectTasks::load(&repo)
+    ProjectTasks::load(&repo, &Programs::processes())
       .expect("the tasks read")
       .auto_approving
       .is_empty(),

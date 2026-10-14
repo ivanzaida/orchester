@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use lurq::app::events::MouseButton;
 use orchester_app::routes::{OverviewTab, ProjectPage, Route};
 use orchester_core::{id::ProjectId, time::Timestamp};
+use orchester_exec::programs::Programs;
 use orchester_workspace::tasks::data::ProjectTasks;
 
 use crate::{
@@ -96,7 +97,7 @@ impl Seeded {
 
   /// The project's tasks as the page counts them: read from its database, without a runner.
   pub fn tasks(&self) -> ProjectTasks {
-    ProjectTasks::load(&self.repo)
+    ProjectTasks::load(&self.repo, &Programs::processes())
       .expect("the project's tasks read")
       .without_runner()
   }

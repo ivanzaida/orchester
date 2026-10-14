@@ -12,6 +12,7 @@ use orchester_core::{
   run::{InterruptCause, PendingToolApproval, WaitReason},
   store::{ActivityStore, RunStore},
 };
+use orchester_exec::programs::Programs;
 use orchester_workspace::tasks::{
   attention::{self, NeedKind, Waited},
   board::{self, BoardTab, Figures},
@@ -36,7 +37,7 @@ fn project() -> (support::Fixture, ProjectTasks) {
     .expect("the step waits for a message");
   fixture.db.append_events(&run, &events).expect("append");
   fixture.task("Plan release", support::at(90));
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   (fixture, tasks)
 }
 
@@ -97,7 +98,7 @@ fn board_needs_you_keeps_a_tool_request_whose_run_cannot_be_read() {
     .expect("damage the run");
   assert_eq!(changed, 1);
 
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   assert_eq!(tasks.pending_tool_approvals[0].task_id, None, "the run cannot be read");
   let items = attention::items(&tasks);
   let [item] = items.as_slice() else {
@@ -124,7 +125,7 @@ fn board_counts_interrupted_runs_as_needing_the_person_and_as_running() {
     .interrupt(InterruptCause::Crashed, support::at(60))
     .expect("interrupted");
   fixture.db.append_events(&run, &events).expect("append");
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   let items = attention::items(&tasks);
   let [item] = items.as_slice() else {
     panic!("the interrupted run alone waits: {items:?}");
@@ -227,7 +228,7 @@ fn board_rows_name_the_step_a_run_waits_at_not_one_still_to_come() {
     .wait_step(execution, WaitReason::Message, support::at(30))
     .expect("the step waits for a message");
   fixture.record(&run, &events);
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   let rows = BoardTab::NeedsYou.rows(&tasks, 6, ", ");
   let implement = CurrentStep {
     number: 1,

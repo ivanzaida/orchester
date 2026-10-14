@@ -16,6 +16,7 @@ use orchester_core::{
   task_group::GroupHold,
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
@@ -23,6 +24,7 @@ use super::{
   approvals::{self, ShownApproval},
   detail::run_store_error,
   list::{AwaitedPlan, AwaitedQuestion, AwaitedStep, CurrentStep, Latest, LatestRun, Phases, StepWait},
+  merged_outside::Unmerged,
   run_approvals,
   unreadable::Unreadable,
 };
@@ -182,51 +184,36 @@ impl ProjectTasks {
     }
   }
 
-  pub fn load(repo_root: &Path) -> Result<Self, StoreError> {
-    let db = ProjectDb::open(repo_root)?;
+  /// Reads the tasks of the project at `repo_root`; git, through `programs`, tells the runs a person merged
+  /// outside Orchester ([`super::merged_outside`]).
+  pub fn load(repo_root: &Path, programs: &Programs) -> Result<Self, StoreError> {
+    Self::read(&ProjectDb::open(repo_root)?, repo_root, programs)
+  }
+
+  /// [`Self::load`] from `db`, the project database of `repo_root`, opened already: All projects reads a
+  /// project's tasks without migrating its data.
+  pub fn read(db: &ProjectDb, repo_root: &Path, programs: &Programs) -> Result<Self, StoreError> {
     let tasks = db.tasks()?;
-    let (not_shared, kept_tags) = kept(&db)?;
+    let (not_shared, kept_tags) = kept(db)?;
     let under_review = db.reviewing_tool_approvals()?;
-    let (reviewing, pending): (Vec<_>, Vec<_>) = approvals::pending(&db, repo_root)?
+    let (reviewing, pending): (Vec<_>, Vec<_>) = approvals::pending(db, repo_root)?
       .into_iter()
       .partition(|shown| under_review.contains(&shown.approval.id));
     let asked = db.waiting_questions()?;
     let asking: Vec<RunId> = asked.iter().map(|asked| asked.request.run()).collect();
-    let (mut group_holds, grouped) = group_holds(&db)?;
-    let mut phases = Phases::new();
-    let mut counts = BTreeMap::new();
-    let mut auto_approving = Vec::new();
-    for task in tasks.iter().chain(&not_shared) {
-      let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
-      counts.insert(task.id(), runs.iter().filter(|run| run.is_ok()).count());
-      let latest = match runs.last() {
-        Some(Ok(latest)) => {
-          if db.task_group_for_run(latest).map_err(run_store_error)?.is_none() {
-            group_holds.remove(&task.id());
-          }
-          let mut shown = latest_run(&db, task, latest)?;
-          // A run whose agent waits for a tool decision or an answer in its turn waits for a person, as one
-          // at a plan does.
-          if shown.phase == TaskPhase::Running
-            && (pending.iter().any(|shown| shown.approval.run == latest.id()) || asking.contains(&latest.id()))
-          {
-            shown.phase = TaskPhase::Waiting;
-          }
-          if shown.phase.is_active() && run_approvals::auto_approving(&db, latest)? {
-            auto_approving.push(AutoApprovingRun {
-              run: latest.id(),
-              number: latest.number(),
-              task: task.id(),
-              key: task.key().to_string().into(),
-            });
-          }
-          Latest::Run(shown)
-        }
-        Some(Err(unreadable)) => Latest::Unreadable(Unreadable::of(unreadable)),
-        None => continue,
-      };
-      phases.insert(task.id(), latest);
-    }
+    let (mut group_holds, grouped) = group_holds(db)?;
+    let mut unmerged = Unmerged::default();
+    let LatestRuns {
+      mut phases,
+      counts,
+      auto_approving,
+    } = latest_runs(
+      db,
+      tasks.iter().chain(&not_shared),
+      (&pending, &asking),
+      (&mut group_holds, &mut unmerged),
+    )?;
+    unmerged.settle(programs, repo_root, &mut phases);
     Ok(Self {
       updated: Arc::new(
         tasks
@@ -244,14 +231,14 @@ impl ProjectTasks {
           .map(|task| db.unfinished_blocking_tasks(task.id()).map(|links| (task.id(), links)))
           .collect::<Result<_, _>>()?,
       ),
-      proposed_memory: Arc::new(proposed_memory(&db)?),
+      proposed_memory: Arc::new(proposed_memory(db)?),
       tasks: Arc::new(tasks),
       not_shared: Arc::new(not_shared),
       kept_tags: Arc::new(kept_tags),
       former_keys: Arc::new(db.former_keys()?),
       group_holds: Arc::new(group_holds),
       grouped: Arc::new(grouped),
-      pipelines: Arc::new(published_pipelines(&db)?),
+      pipelines: Arc::new(published_pipelines(db)?),
       missing_pipelines: Arc::new(db.missing_pipelines()?),
       pending_tool_approvals: Arc::new(pending),
       reviewing_tool_approvals: Arc::new(reviewing),
@@ -287,6 +274,67 @@ impl ProjectTasks {
       ..self.clone()
     }
   }
+}
+
+/// What one reading finds of the tasks' runs: the latest run of each task that has one, how many runs of each
+/// can be read, and the active runs that auto-approve.
+struct LatestRuns {
+  phases: Phases,
+  counts: BTreeMap<TaskId, usize>,
+  auto_approving: Vec<AutoApprovingRun>,
+}
+
+/// The latest run of each of `tasks`, a run waiting in its turn on one of the `pending` tool requests or on
+/// a question of the `asking` runs waiting for a person. A task whose latest run is no group's leaves
+/// `group_holds`; a latest run that succeeded and was not merged goes to `unmerged`.
+fn latest_runs<'a>(
+  db: &ProjectDb,
+  tasks: impl Iterator<Item = &'a Task>,
+  (pending, asking): (&[ShownApproval], &[RunId]),
+  (group_holds, unmerged): (&mut BTreeMap<TaskId, GroupHold>, &mut Unmerged),
+) -> Result<LatestRuns, StoreError> {
+  let mut found = LatestRuns {
+    phases: Phases::new(),
+    counts: BTreeMap::new(),
+    auto_approving: Vec::new(),
+  };
+  for task in tasks {
+    let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
+    found
+      .counts
+      .insert(task.id(), runs.iter().filter(|run| run.is_ok()).count());
+    let latest = match runs.last() {
+      Some(Ok(latest)) => {
+        if db.task_group_for_run(latest).map_err(run_store_error)?.is_none() {
+          group_holds.remove(&task.id());
+        }
+        let mut shown = latest_run(db, task, latest)?;
+        // A run whose agent waits for a tool decision or an answer in its turn waits for a person, as one at
+        // a plan does.
+        if shown.phase == TaskPhase::Running
+          && (pending.iter().any(|shown| shown.approval.run == latest.id()) || asking.contains(&latest.id()))
+        {
+          shown.phase = TaskPhase::Waiting;
+        }
+        if shown.phase == TaskPhase::Succeeded {
+          unmerged.add(task.id(), latest);
+        }
+        if shown.phase.is_active() && run_approvals::auto_approving(db, latest)? {
+          found.auto_approving.push(AutoApprovingRun {
+            run: latest.id(),
+            number: latest.number(),
+            task: task.id(),
+            key: task.key().to_string().into(),
+          });
+        }
+        Latest::Run(shown)
+      }
+      Some(Err(unreadable)) => Latest::Unreadable(Unreadable::of(unreadable)),
+      None => continue,
+    };
+    found.phases.insert(task.id(), latest);
+  }
+  Ok(found)
 }
 
 /// Why each task of a reviewed group that holds its work waits, and every task of a reviewed group.

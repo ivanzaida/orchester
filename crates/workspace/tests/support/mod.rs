@@ -313,13 +313,24 @@ impl Fixture {
 
   /// A run of `task`, created at `now` and not started.
   pub fn pending_run(&mut self, task: TaskId, now: Timestamp) -> Run {
+    self.pending_run_into(task, None, now)
+  }
+
+  /// A run of `task` started at `now` from the checkout's branch `base_branch`, which merging it brings its
+  /// work into.
+  pub fn started_run_from(&mut self, task: TaskId, base_branch: &str, now: Timestamp) -> Run {
+    let run = self.pending_run_into(task, Some(BranchName::new(base_branch).expect("branch")), now);
+    self.start(run, now)
+  }
+
+  fn pending_run_into(&mut self, task: TaskId, base_branch: Option<BranchName>, now: Timestamp) -> Run {
     self.runs += 1;
     let new = NewRun {
       task,
       snapshot: self.snapshot.clone(),
       branch: BranchName::new(&format!("orchester/orc-run-{}", self.runs)).expect("branch"),
       base: Revision::new(&"a".repeat(40)).expect("revision"),
-      base_branch: None,
+      base_branch,
       budget: Some(budget(1_000_000)),
       max_duration: Some(Duration::from_secs(1_800)),
     };
@@ -328,7 +339,11 @@ impl Fixture {
 
   /// A run of `task`, started at `now`: running its one step.
   pub fn started_run(&mut self, task: TaskId, now: Timestamp) -> Run {
-    let mut run = self.pending_run(task, now);
+    let run = self.pending_run(task, now);
+    self.start(run, now)
+  }
+
+  fn start(&mut self, mut run: Run, now: Timestamp) -> Run {
     let events = run.start(now).expect("start");
     self.record(&run, &events);
     let execution = run.current_attempt().expect("attempt").executions()[0].id();

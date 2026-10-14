@@ -63,7 +63,13 @@ const SEPARATOR: &str = ", ";
 pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
   let project = args.project.clone();
-  let data = blocking(move || Ok(ProjectTasks::load(&services.project(&project)?.repo_root)?)).await?;
+  let data = blocking(move || {
+    Ok(ProjectTasks::load(
+      &services.project(&project)?.repo_root,
+      &services.programs,
+    )?)
+  })
+  .await?;
   let filter = TaskFilter {
     statuses: args.status.into_iter().map(Into::into).collect(),
     ..TaskFilter::default()

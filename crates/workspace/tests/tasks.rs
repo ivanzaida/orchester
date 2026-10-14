@@ -17,6 +17,7 @@ use orchester_core::{
   time::Timestamp,
   tokens::TokenBudget,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 use orchester_workspace::{
   display,
@@ -363,7 +364,7 @@ fn task_list_reads_run_counts_and_interrupts_running_runs_without_a_runner() {
   fixture.succeed(&mut earlier, support::at(30));
   fixture.started_run(first, support::at(40));
   fixture.started_run(second, support::at(50));
-  let loaded = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let loaded = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   assert_eq!((loaded.runs[&first], loaded.runs[&second]), (2, 1));
   let rows = list::rows(&loaded.tasks, &loaded.pipelines, &loaded.phases, list::TaskTab::All);
   assert_eq!(
@@ -414,7 +415,7 @@ fn task_list_shows_a_queued_task_whose_run_finished_as_ready_for_review() {
   let stored = fixture.db.task(task).expect("read the task").expect("the task exists");
   assert_eq!(stored.status(), TaskStatus::Queued);
 
-  let loaded = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let loaded = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   let rows = list::rows(&loaded.tasks, &loaded.pipelines, &loaded.phases, TaskTab::InReview);
   assert_eq!(rows.len(), 1);
   assert_eq!(rows[0].id, task);
@@ -439,7 +440,7 @@ fn task_list_and_page_read_a_run_cancelled_before_it_started() {
   let events = run.cancel(support::at(21)).expect("cancel the pending run");
   fixture.record(&run, &events);
 
-  let loaded = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let loaded = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   assert_eq!(loaded.runs.values().sum::<usize>(), 1);
   assert_eq!(loaded.phases[&task].phase(), Some(TaskPhase::Cancelled));
   let detail = TaskDetail::load_in(fixture.repo.path(), task).expect("read the task");
@@ -549,7 +550,7 @@ fn task_row_run_line_names_the_step_of_a_running_run_only() {
   let task = fixture.queued_task("Step named", support::at(10));
   let mut run = fixture.started_run(task, support::at(20));
   let row = |fixture: &support::Fixture| {
-    let loaded = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+    let loaded = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
     list::rows(&loaded.tasks, &loaded.pipelines, &loaded.phases, TaskTab::All)
       .into_iter()
       .find(|row| row.id == task)

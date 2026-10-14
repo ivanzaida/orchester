@@ -19,6 +19,7 @@ use orchester_core::{
   run::{BranchName, InterruptCause, PendingToolApproval, Run, RunLimit, WaitReason},
   store::{ActivityStore, MergeStore},
 };
+use orchester_exec::programs::Programs;
 use orchester_workspace::tasks::{
   attention::{self, NeedKind},
   board::{BoardTab, Figures},
@@ -121,7 +122,7 @@ fn project() -> (Fixture, ProjectTasks) {
 
   let working = fixture.task("Write docs", at(160));
   fixture.started_run(working, at(170));
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   (fixture, tasks)
 }
 
@@ -240,7 +241,7 @@ fn needs_you_lists_each_step_that_waits_in_one_run() {
     native: None,
   };
   fixture.db.request_tool_approval(&approval).expect("the request waits");
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   let items = tasks.waiting();
   let mut listed = kinds(&items);
   listed.sort_unstable();
@@ -297,7 +298,7 @@ fn needs_you_lists_a_step_end_question_with_options_once() {
   )
   .expect("a request");
   fixture.db.ask_questions(&asked).expect("the question waits");
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   let mut listed = kinds(&tasks.waiting());
   listed.sort_unstable();
   assert_eq!(
@@ -324,7 +325,7 @@ fn needs_you_lists_the_plans_and_questions_a_run_stopped_at_its_limit_or_interru
   fixture.propose(&mut crashed, "1. Fix.", at(50));
   let events = crashed.interrupt(InterruptCause::Crashed, at(60)).expect("interrupted");
   fixture.record(&crashed, &events);
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   let items = tasks.waiting();
   let listed: Vec<_> = items
     .iter()
@@ -406,7 +407,7 @@ fn needs_you_lists_a_limit_stop_work_ready_to_merge_and_the_memory_waiting_as_on
     .db
     .add_memories(&records)
     .expect("the records wait for approval");
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   let items = tasks.waiting();
   assert_eq!(
     kinds(&items),
@@ -443,7 +444,7 @@ fn needs_you_tab_lists_the_memory_waiting_after_its_tasks_and_counts_it() {
     .db
     .add_memories(&records)
     .expect("the records wait for approval");
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   assert_eq!(BoardTab::NeedsYou.rows(&tasks, 0, ", ").len(), 0);
   let lines = BoardTab::NeedsYou.project_rows(&tasks, "Kontur");
   let [line] = lines.as_slice() else {

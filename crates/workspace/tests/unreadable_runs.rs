@@ -4,6 +4,7 @@
 mod support;
 
 use orchester_core::{id::RunId, run::TaskPhase};
+use orchester_exec::programs::Programs;
 use orchester_workspace::tasks::{
   data::ProjectTasks,
   detail::TaskDetail,
@@ -36,7 +37,8 @@ fn unreadable_latest_run_keeps_the_task_list_and_its_counts() {
   // A started run has an attempt; a pending one never has.
   tamper(&fixture, bad.id(), "status = 'pending'");
 
-  let loaded = ProjectTasks::load(fixture.repo.path()).expect("one unreadable run does not fail the load");
+  let loaded =
+    ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("one unreadable run does not fail the load");
   let Latest::Unreadable(unreadable) = &loaded.phases[&first] else {
     panic!("the latest run of the task is unreadable");
   };
@@ -110,7 +112,7 @@ fn unreadable_earlier_run_is_named_on_the_page_of_the_latest_run() {
   let latest = fixture.started_run(task, at(40));
   tamper(&fixture, bad.id(), "snapshot = 'not json'");
 
-  let loaded = ProjectTasks::load(fixture.repo.path()).expect("the task list reads");
+  let loaded = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("the task list reads");
   assert_eq!(loaded.phases[&task].phase(), Some(TaskPhase::Running));
   assert_eq!(loaded.runs.values().sum::<usize>(), 1);
   let detail = TaskDetail::load_in(fixture.repo.path(), task).expect("the task page reads");
@@ -131,14 +133,16 @@ fn unreadable_latest_run_is_not_reported_as_no_runs_in_recent_activity() {
   let bad = fixture.started_run(task, at(40));
   tamper(&fixture, bad.id(), "status = 'pending'");
 
-  let loaded = ProjectTasks::load(fixture.repo.path()).expect("one unreadable run does not fail the load");
+  let loaded =
+    ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("one unreadable run does not fail the load");
   assert!(recent_runs(&loaded.tasks, &loaded.phases, 3).is_empty());
   assert_eq!(activity_empty(&loaded.phases).key, "overview.activity.unreadable.one");
 
   let other = fixture.task("Fix zoom", at(50));
   let bad = fixture.started_run(other, at(60));
   tamper(&fixture, bad.id(), "status = 'pending'");
-  let loaded = ProjectTasks::load(fixture.repo.path()).expect("unreadable runs do not fail the load");
+  let loaded =
+    ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("unreadable runs do not fail the load");
   let empty = activity_empty(&loaded.phases);
   assert_eq!(empty.key, "overview.activity.unreadable.other");
   assert_eq!(empty.args, [("count", "2".to_owned())]);

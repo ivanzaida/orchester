@@ -25,7 +25,7 @@ fn project() -> (support::Fixture, ProjectTasks) {
   let running = fixture.task("Fix zoom", support::at(40));
   fixture.started_run(running, support::at(50));
   fixture.task("Write docs", support::at(60));
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   (fixture, tasks)
 }
 
@@ -63,7 +63,7 @@ fn overview_needs_you_counts_runs_waiting_for_the_user() {
   fixture.db.append_events(&run, &events).expect("append");
   let working = fixture.task("Fix zoom", support::at(40));
   fixture.started_run(working, support::at(50));
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
 
   let pulse = Pulse::of(&tasks.phases, support::at(0));
   assert_eq!(pulse.needs_input, 1);
@@ -93,7 +93,7 @@ fn overview_needs_you_counts_runs_waiting_for_a_decision_after_retries() {
       .expect("broke again"),
   );
   fixture.db.append_events(&run, &events).expect("append");
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   assert_eq!(
     tasks
       .phases
@@ -197,7 +197,7 @@ fn overview_failed_tab_counts_and_lists_only_tasks_whose_latest_run_failed() {
   let mut rerun = fixture.started_run(first, support::at(60));
   fixture.succeed(&mut rerun, support::at(61));
 
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   let failed = OverviewTab::Failed;
   assert_eq!(failed.count(&tasks.tasks, &tasks.phases), 2);
   let rows = failed.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 6);
@@ -231,7 +231,7 @@ fn overview_needs_you_names_the_plan_that_waits() {
   let task = fixture.task("Add login", support::at(10));
   let mut run = fixture.started_run(task, support::at(20));
   fixture.propose(&mut run, "1. Add the provider.", support::at(30));
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   assert_eq!(Pulse::of(&tasks.phases, support::at(0)).needs_input, 1);
   let rows = OverviewTab::NeedsYou.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 3);
   assert_eq!(rows.len(), 1);
@@ -271,7 +271,7 @@ fn overview_counts_a_merged_task_as_completed() {
     merged_at: support::at(95),
   };
   fixture.db.save_run_merge(&merge).expect("record the merge");
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   let latest = &tasks.phases[&merged];
   assert_eq!(latest.phase(), Some(TaskPhase::Merged));
   assert_eq!(latest.message().key, "tasks.progress.merged");
@@ -285,7 +285,7 @@ fn overview_counts_a_merged_task_as_completed() {
 fn overview_activity_without_runs_says_there_are_none_yet() {
   let mut fixture = support::Fixture::new();
   fixture.task("Write docs", support::at(10));
-  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
   assert!(recent_runs(&tasks.tasks, &tasks.phases, 3).is_empty());
   assert_eq!(activity_empty(&tasks.phases).key, "overview.activity.empty");
 }
