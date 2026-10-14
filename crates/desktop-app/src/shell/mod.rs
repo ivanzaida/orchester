@@ -35,6 +35,7 @@ pub fn layout(ctx: &mut Ctx) -> Element {
     .border_inside(BorderSize::Sm, ExtraColor::PanelBorder.role())
     .clip()
     .child(Outlet::mount(ctx));
+  // A path that names no route keeps the sidebar; its screen says why it names none (`screens::not_found`).
   let screen = Route::parse(&ctx.route_path()).ok().map(|route| route.screen());
   let sidebar = !matches!(screen, Some(Screen::AllProjects | Screen::AddProject));
   // `Content wrap` (`dHxPJ`): 8 between the panel and the window's right edge, and its left without a sidebar.

@@ -10,7 +10,7 @@ use std::{
   process::Command,
 };
 
-use orchester_app::routes::{OverviewTab, ProjectPage, Route};
+use orchester_app::routes::{OverviewTab, ProjectPage, Route, RouteFolder};
 use support::{Data, Window, stand_ins::StandIns};
 use tempfile::TempDir;
 
@@ -174,7 +174,7 @@ fn add_project_says_a_remote_is_not_on_github() {
 }
 
 #[test]
-fn add_project_reports_a_folder_that_holds_a_project() {
+fn add_project_refuses_a_folder_the_list_holds() {
   let scratch = scratch();
   let repo = repository(&scratch, "kontur");
   let (mut window, stand_ins) = add_project();
@@ -192,7 +192,7 @@ fn add_project_reports_a_folder_that_holds_a_project() {
   window.until("the failure", |window| window.texts("add-project-error").is_some());
   assert_eq!(
     window.text("add-project-error"),
-    "This repository already contains an Orchester project."
+    "The list holds Held in this folder already. Remove Held from All projects, then set the folder up again."
   );
   window.set("project-name", "Kontur 2");
   assert!(
@@ -206,7 +206,7 @@ fn add_project_starts_with_the_folder_the_route_names() {
   let scratch = scratch();
   let repo = repository(&scratch, "kontur");
   let (mut window, _stand_ins) = Window::with_stand_ins(Data::new());
-  window.navigation().go(Route::AddProject(Some(repo)));
+  window.navigation().go(Route::AddProject(RouteFolder::new(&repo)));
   window.until("the folder's detection", |window| {
     window
       .texts("github-detection-status")

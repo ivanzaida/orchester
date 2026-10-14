@@ -19,7 +19,6 @@ use lurq::{
 use orchester_core::id::ProjectId;
 use orchester_store::RegisteredProject;
 use orchester_workspace::{
-  background,
   messages::Message,
   project_list::{self, ListedProject},
 };
@@ -276,8 +275,8 @@ fn remove_action(ctx: &mut Ctx) -> RemoveAction {
     let (workspace, runners) = (workspace.clone(), runners.clone());
     async move {
       let id = project.id;
-      background::run(move || project_list::remove(&workspace, &runners, &project))
-        .await?
+      project_list::remove(&workspace, &runners, &project)
+        .await
         .map(|()| Removed(id))
     }
   })

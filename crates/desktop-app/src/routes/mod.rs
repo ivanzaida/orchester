@@ -35,7 +35,7 @@ mod task;
 mod tasks;
 mod tools;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use orchester_core::id::ProjectId;
 
@@ -72,12 +72,32 @@ const NEW_PIPELINE_PATTERN: &str = "/project/:project/pipelines/new";
 const PIPELINE_PATTERN: &str = "/project/:project/pipelines/:pipeline";
 const AGENT_PATTERN: &str = "/project/:project/agents/:agent";
 
+/// A folder a route names. An address is text, so only a folder whose path is text can be named: the
+/// address then keeps it whole.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RouteFolder(String);
+
+impl RouteFolder {
+  /// `folder`, or `None` when its path is not text (possible on Windows and Unix file systems).
+  pub fn new(folder: &Path) -> Option<Self> {
+    folder.to_str().map(|path| Self(path.to_owned()))
+  }
+
+  pub fn path(&self) -> PathBuf {
+    PathBuf::from(&self.0)
+  }
+
+  fn as_str(&self) -> &str {
+    &self.0
+  }
+}
+
 /// A place in the window.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Route {
   AllProjects,
   /// Add project, with the folder it starts with, e.g. one Open folder… found no project in.
-  AddProject(Option<PathBuf>),
+  AddProject(Option<RouteFolder>),
   Settings,
   /// Settings › Accounts, with the account it shows and its panel.
   Accounts(AccountsView),
@@ -124,7 +144,7 @@ impl Route {
       Self::AllProjects => "/".to_owned(),
       Self::AddProject(folder) => with_query(
         format!("/{ADD_PROJECT}"),
-        &[(FOLDER, folder.as_deref().and_then(std::path::Path::to_str))],
+        &[(FOLDER, folder.as_ref().map(RouteFolder::as_str))],
       ),
       Self::Settings => format!("/{SETTINGS}"),
       Self::Accounts(view) => view.path(format!("/{SETTINGS}"), (TAB, ACCOUNTS)),
@@ -149,7 +169,7 @@ impl Route {
     }
     let route = match segments.as_slice() {
       [] => Self::AllProjects,
-      [ADD_PROJECT] => Self::AddProject(params.take(FOLDER)?.map(PathBuf::from)),
+      [ADD_PROJECT] => Self::AddProject(params.take(FOLDER)?.map(RouteFolder)),
       [SETTINGS] => Self::settings(&mut params)?,
       [PROJECT, project, page @ ..] => {
         let project = project.parse().map_err(|_| RouteError::ProjectId {

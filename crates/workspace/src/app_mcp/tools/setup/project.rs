@@ -6,7 +6,6 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 use orchester_core::{
   agent_files::RepositoryAgentFiles,
-  repository::Detection,
   resource::{CommandEnvironment, ResourceKind, VariableName},
   store::{ConnectionStore, RepositoryStore, ResourceStore, SettingsStore},
 };
@@ -25,8 +24,8 @@ use crate::{
     services::{Services, blocking},
   },
   messages::{self, Message},
-  project_setup::{ProjectDraft, creatable, github_connection_name},
-  repository::{self, DetectTarget, adopt_in},
+  project_setup::{self, Creation, ExpectedAccount, GitHubLink, ProjectDraft, creatable, github_connection_name},
+  repository::{self, DetectTarget},
   tools::form::variable_error,
   workspace::OpenProject,
 };
@@ -70,8 +69,7 @@ pub struct SetAgentFiles {
 }
 
 pub async fn add_project(services: &Services, args: AddProject, translate: &Translate) -> Result<Value, ToolError> {
-  let workspace = services.workspace.clone();
-  let (open, detection) = blocking(move || {
+  let (new, detection) = blocking(move || {
     let folder = PathBuf::from(&args.folder);
     if !folder.is_absolute() {
       return Err(refused(
@@ -97,30 +95,27 @@ pub async fn add_project(services: &Services, args: AddProject, translate: &Tran
     });
     let new = creatable(draft, Some(&detection.state(None)))
       .ok_or_else(|| store_refusal(&StoreError::NotAGitRepository(folder)))?;
-    let open = workspace.create(new).map_err(|error| store_refusal(&error))?;
-    Ok((open, detection))
+    Ok((new, detection))
   })
   .await?;
-  let github = link(&open, detection, translate).await;
-  Ok(json!({ "project": summary(&open), "github": github }))
-}
-
-/// Links the new project to its GitHub repository as setup does; what failed is said, and the project
-/// stays either way.
-async fn link(open: &OpenProject, detection: Detection, translate: &Translate) -> Value {
-  let Some(found) = detection.github() else {
-    return json!({ "linked": null, "problem": null });
+  // As setup does: the account gh acts as now is the one the project expects.
+  let link = detection.github().map(|found| GitHubLink {
+    connection_name: translate.text(&github_connection_name(found.repo().host())),
+    expected: ExpectedAccount::acting(&new.repo_root, &detection).map(|expected| expected.login().clone()),
+    detection: detection.clone(),
+  });
+  let created = project_setup::create(&services.workspace, &services.activity, Creation { new, link })
+    .await
+    .map_err(|failure| ToolError::refused(failure.cause.code(), vec![failure.message]))?;
+  let github = match created.link {
+    None => json!({ "linked": null, "problem": null }),
+    Some(Ok(link)) => json!({ "linked": link.map(|link| link.repo().to_string()), "problem": null }),
+    Some(Err(problem)) => {
+      let error = ToolError::refused("not_linked", vec![problem]);
+      json!({ "linked": null, "problem": error.to_json(|message| translate.text(message))["error"] })
+    }
   };
-  let name = translate.text(&github_connection_name(found.repo().host()));
-  let root = open.repo_root.clone();
-  let adopted = blocking(move || {
-    adopt_in(&root, &detection, None, &name).map_err(|error| ToolError::refused("not_linked", vec![error.message()]))
-  })
-  .await;
-  match adopted {
-    Ok(link) => json!({ "linked": link.map(|link| link.repo().to_string()), "problem": null }),
-    Err(error) => json!({ "linked": null, "problem": error.to_json(|message| translate.text(message))["error"] }),
-  }
+  Ok(json!({ "project": summary(&created.project), "github": github }))
 }
 
 fn summary(open: &OpenProject) -> Value {

@@ -4,7 +4,8 @@
     "changedOutside": "Changed outside this screen. Reload the stored variables and review your change again."
   },
   "projects": {
-    "removeRefused": "Agents are at work in {{name}}. Remove it once its runs are paused or finished."
+    "removeRefused": "Agents are at work in {{name}}. Remove it once its runs are paused or finished.",
+    "removeUnknown": "Orchester can’t tell yet whether agents are at work in {{name}}: its runner is starting or reconnecting. Remove it once the runner is online."
   },
   "common": {
     "listSeparator": ", "
@@ -712,7 +713,8 @@
       "other": "Enter more than the {{used}} minutes this run already used."
     },
     "olderSchema": "The data was written by an earlier version of Orchester and was not updated yet.",
-    "draftChanged": "The draft changed since it was read. Read it again before saving or publishing."
+    "draftChanged": "The draft changed since it was read. Read it again before saving or publishing.",
+    "alreadyListed": "The list holds {{name}} in this folder already. Remove {{name}} from All projects, then set the folder up again."
   },
   "number": {
     "bytes": "{{count}} bytes",

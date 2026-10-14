@@ -10,8 +10,9 @@ use orchester_core::run::RunCounts;
 use orchester_store::{RegisteredProject, StoreError};
 
 use crate::{
+  background,
   messages::{self, Message},
-  runner::{Runners, state::RunnerState},
+  runner::{ForgetRefusal, Runners, state::RunnerState},
   workspace::{ListedData, ProjectData, ProjectEntry, Workspace},
 };
 
@@ -87,14 +88,15 @@ pub struct ListedProject {
   /// Its active runs and the runs that need the person; `None` until its data is read, and for a project
   /// that cannot be opened.
   pub counts: Option<RunCounts>,
-  /// Agents at work in it, as its runner last reported.
-  pub agents_working: usize,
+  /// Agents at work in it, as its runner last reported; `None` while its runner is starting, reconnecting
+  /// or stopping, or has not reported yet, so whether agents work is not known.
+  pub agents_working: Option<usize>,
 }
 
 impl ListedProject {
   /// `entry` with what its data said (`None` while it is read) and its runner's state and agents at work
   /// (`None` when no runner was started for it).
-  pub fn of(entry: &ProjectEntry, data: Option<&ProjectData>, runner: Option<(&RunnerState, usize)>) -> Self {
+  pub fn of(entry: &ProjectEntry, data: Option<&ProjectData>, runner: Option<(&RunnerState, Option<usize>)>) -> Self {
     let shown = RunnerShown::of(runner.map(|(state, _)| state));
     let (standing, counts) = match data {
       _ if entry.folder_missing => (Standing::FolderMissing, None),
@@ -110,7 +112,7 @@ impl ListedProject {
       project: entry.project.clone(),
       standing,
       counts,
-      agents_working: runner.map_or(0, |(_, working)| working),
+      agents_working: runner.map_or(Some(0), |(_, working)| working),
     }
   }
 
@@ -119,10 +121,15 @@ impl ListedProject {
     matches!(self.standing, Standing::Opens(_))
   }
 
-  /// Why the project cannot be removed from the list now: agents are at work in it.
+  /// Why the project cannot be removed from the list now: agents are at work in it, or whether they are is
+  /// not known yet.
   pub fn removal_refused(&self) -> Option<Message> {
-    (self.agents_working > 0)
-      .then(|| Message::new("projects.removeRefused").with("name", self.project.name.to_string()))
+    let key = match self.agents_working {
+      Some(0) => return None,
+      Some(_) => "projects.removeRefused",
+      None => "projects.removeUnknown",
+    };
+    Some(Message::new(key).with("name", self.project.name.to_string()))
   }
 }
 
@@ -134,8 +141,13 @@ pub fn listed(entries: &[ProjectEntry], data: &ListedData, runners: &Runners) ->
       let root = &entry.project.repo_root;
       let status = runners.status_of(root);
       let runner = status.as_ref().map(|status| {
-        let working = status.work().map_or(0, |work| work.agents_working());
-        (status.state_for(root), working)
+        let state = status.state_for(root);
+        let working = match state {
+          RunnerState::Stopped | RunnerState::Failed { .. } => Some(0),
+          RunnerState::Online => status.work().map(|work| work.agents_working()),
+          RunnerState::Starting | RunnerState::Reconnecting { .. } | RunnerState::Stopping => None,
+        };
+        (state, working)
       });
       ListedProject::of(
         entry,
@@ -146,22 +158,21 @@ pub fn listed(entries: &[ProjectEntry], data: &ListedData, runners: &Runners) ->
     .collect()
 }
 
-/// Forgets `project`: the application database no longer lists it, and its runner, if it has one, stops at
-/// checkpoints. Its folder and its `.orchester` data stay. Refused while agents are at work in it, as its
-/// runner reports now. Blocks on SQLite.
-pub fn remove(workspace: &Workspace, runners: &Runners, project: &RegisteredProject) -> Result<(), Message> {
-  let entry = ProjectEntry {
-    project: project.clone(),
-    folder_missing: false,
-  };
-  let now = listed(std::slice::from_ref(&entry), &ListedData::default(), runners);
-  if let Some(refusal) = now.first().and_then(ListedProject::removal_refused) {
-    return Err(refusal);
-  }
-  workspace.forget(project.id).map_err(|error| {
+/// Forgets `project`: its runner, if it has one, stops once it answers that it has no work, then the
+/// application database no longer lists it. Its folder and its `.orchester` data stay. Refused while agents
+/// are at work in it, or while its runner cannot tell yet.
+pub async fn remove(workspace: &Workspace, runners: &Runners, project: &RegisteredProject) -> Result<(), Message> {
+  let name = project.name.to_string();
+  runners
+    .forget_if_idle(&project.repo_root)
+    .await
+    .map_err(|refusal| match refusal {
+      ForgetRefusal::Busy => Message::new("projects.removeRefused").with("name", name),
+      ForgetRefusal::Unknown => Message::new("projects.removeUnknown").with("name", name),
+    })?;
+  let (workspace, id) = (workspace.clone(), project.id);
+  background::run(move || workspace.forget(id)).await?.map_err(|error| {
     tracing::error!(%error, "cannot remove a project from the list");
     messages::store_error(&error)
-  })?;
-  runners.forget(&project.repo_root);
-  Ok(())
+  })
 }

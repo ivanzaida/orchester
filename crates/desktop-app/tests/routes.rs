@@ -4,7 +4,7 @@
 
 use orchester_app::routes::{
   ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, NewConnection, OverviewTab, ProjectPage, Route,
-  RouteError, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
+  RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
 };
 use orchester_core::{
   id::{ConnectionId, ProjectId},
@@ -41,7 +41,7 @@ fn every_route() -> Vec<Route> {
   let mut all = vec![
     Route::AllProjects,
     Route::AddProject(None),
-    Route::AddProject(Some(std::path::PathBuf::from(AWKWARD))),
+    Route::AddProject(RouteFolder::new(std::path::Path::new(AWKWARD))),
     Route::Settings,
   ];
   all.extend(Screen::ALL.into_iter().filter_map(ProjectPage::of).map(at));
@@ -103,7 +103,7 @@ fn paths_are_the_documented_ones() {
     (Route::AllProjects, "/".to_owned()),
     (Route::AddProject(None), "/add-project".to_owned()),
     (
-      Route::AddProject(Some(std::path::PathBuf::from("C:/work/a b"))),
+      Route::AddProject(RouteFolder::new(std::path::Path::new("C:/work/a b"))),
       "/add-project?folder=C%3A/work/a%20b".to_owned(),
     ),
     (Route::Settings, "/settings".to_owned()),
@@ -432,5 +432,27 @@ fn agents_pages_have_exact_current_resource_paths_and_select_agents() {
   assert_eq!(
     Route::parse(&format!("/project/{PROJECT}/agents/not-an-id")),
     Err(RouteError::NoScreen)
+  );
+}
+
+#[test]
+fn route_folder_keeps_a_folder_whole_or_names_none() {
+  let awkward = std::path::Path::new(AWKWARD);
+  let folder = RouteFolder::new(awkward).expect("a path that is text");
+  assert_eq!(folder.path(), awkward);
+  #[cfg(windows)]
+  let not_text = {
+    use std::os::windows::ffi::OsStringExt;
+    std::path::PathBuf::from(std::ffi::OsString::from_wide(&[0x0043, 0xD800]))
+  };
+  #[cfg(unix)]
+  let not_text = {
+    use std::os::unix::ffi::OsStrExt;
+    std::path::PathBuf::from(std::ffi::OsStr::from_bytes(&[0x43, 0xff]))
+  };
+  assert_eq!(
+    RouteFolder::new(&not_text),
+    None,
+    "a path that is not text is never cut short"
   );
 }

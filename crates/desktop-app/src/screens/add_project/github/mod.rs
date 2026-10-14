@@ -24,6 +24,7 @@ use orchester_core::{
   connection::{GhAdvice, GitHubLogin},
   repository::{Detection, DetectionState, GitHubDetection},
 };
+use orchester_workspace::project_setup::ExpectedAccount;
 
 use self::words::{Property, Value};
 use super::{Actions, Expected, Form};
@@ -63,7 +64,7 @@ pub(super) fn block(ctx: &mut Ctx, form: &Form, actions: &Actions, detection: Op
       .into(),
     );
   };
-  let expected = form.expected.get().0;
+  let expected = detection.and_then(|detection| form.expected_for(detection));
   let state = detection.map(|detection| detection.state(expected.as_ref()));
   let found = detection.and_then(Detection::github);
   let project = form
@@ -100,9 +101,11 @@ pub(super) fn block(ctx: &mut Ctx, form: &Form, actions: &Actions, detection: Op
     block = block.child(fix);
   }
   let asked = found.filter(|found| form.access.get() && found.check().is_some());
-  block = match asked {
-    Some(found) => block.child(access::panel(ctx, form, actions, found, &project)),
-    None => block.child(buttons(ctx, form, actions, &state, &folder)),
+  block = match (asked, detection) {
+    (Some(found), _) => block.child(access::panel(ctx, form, actions, found, (expected.as_ref(), &project))),
+    (None, Some(detection)) => block.child(buttons(ctx, form, actions, (&state, detection), &folder)),
+    // A state comes from a detection.
+    (None, None) => block,
   };
   Some(block.into())
 }
@@ -216,7 +219,13 @@ fn command_row(ctx: &mut Ctx, id: &str, command: &str) -> Element {
 
 /// *Check again*, then what the state offers (`Actions` `cUldA`, `yName`). While a detection or the program
 /// picker runs, they wait.
-fn buttons(ctx: &Ctx, form: &Form, actions: &Actions, state: &DetectionState, folder: &Path) -> Element {
+fn buttons(
+  ctx: &Ctx,
+  form: &Form,
+  actions: &Actions,
+  (state, detection): (&DetectionState, &Detection),
+  folder: &Path,
+) -> Element {
   let busy = actions.detect.state().get().is_pending() || actions.program.state().get().is_pending();
   let wait = |button: ActionButton, run: Arc<dyn Fn() + Send + Sync>| {
     if busy {
@@ -278,7 +287,12 @@ fn buttons(ctx: &Ctx, form: &Form, actions: &Actions, state: &DetectionState, fo
     }
     DetectionState::WrongAccount { active, .. } => {
       row.push(change().into());
-      row.push(use_account(ctx, form, active, busy));
+      row.push(use_account(
+        ctx,
+        form,
+        (active, ExpectedAccount::acting(folder, detection)),
+        busy,
+      ));
     }
     _ => {}
   }
@@ -293,7 +307,12 @@ fn buttons(ctx: &Ctx, form: &Form, actions: &Actions, state: &DetectionState, fo
 }
 
 /// *Use this account (ivan-work)*: the project will expect the account `gh` acts as now; `gh` is not changed.
-fn use_account(ctx: &Ctx, form: &Form, active: &GitHubLogin, busy: bool) -> Element {
+fn use_account(
+  ctx: &Ctx,
+  form: &Form,
+  (active, acting): (&GitHubLogin, Option<ExpectedAccount>),
+  busy: bool,
+) -> Element {
   let label = ctx.t_args("setup.github.useAccount", [("account", active.as_str())]);
   let button = ActionButton::new("github-use-account", ButtonKind::Secondary, label)
     .icon(Icon::UserRoundCheck)
@@ -301,10 +320,8 @@ fn use_account(ctx: &Ctx, form: &Form, active: &GitHubLogin, busy: bool) -> Elem
   if busy {
     return button.disabled().into();
   }
-  let (expected, active) = (form.expected.clone(), active.clone());
-  button
-    .on_click(move || expected.set(Expected(Some(active.clone()))))
-    .into()
+  let expected = form.expected.clone();
+  button.on_click(move || expected.set(Expected(acting.clone()))).into()
 }
 
 /// The name a test or a tool reads the state by.

@@ -117,7 +117,7 @@ impl Runners {
 
   /// Project `root`'s runner stopped without work: it is forgotten, so the project reads as not
   /// started, and a tab that shows the project meanwhile starts a new one.
-  fn stopped_idle(&self, root: &Path) {
+  pub(super) fn stopped_idle(&self, root: &Path) {
     let Some(entry) = self.inner.projects.lock().remove(root) else {
       return;
     };

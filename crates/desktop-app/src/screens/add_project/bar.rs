@@ -13,7 +13,7 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::repository::Detection;
+use orchester_core::{connection::GitHubLogin, repository::Detection};
 use orchester_workspace::project_setup::{self, Creation, GitHubLink, ProjectDraft, Readiness, github_connection_name};
 
 use super::{Actions, FORM_WIDTH, Form};
@@ -32,7 +32,7 @@ const ERROR_SLOT: f32 = 17.0;
 pub(super) fn bar(ctx: &mut Ctx, form: &Form, actions: &Actions, detection: Option<Detection>) -> Element {
   let folder = form.folder.get().0;
   let name = form.name.get();
-  let expected = form.expected.get().0;
+  let expected = detection.as_ref().and_then(|detection| form.expected_for(detection));
   let state = detection.as_ref().map(|detection| detection.state(expected.as_ref()));
   let readiness = project_setup::readiness(folder.is_some(), state.as_ref());
   let created = actions.create.state().get();
@@ -72,7 +72,7 @@ pub(super) fn bar(ctx: &mut Ctx, form: &Form, actions: &Actions, detection: Opti
     .in_form();
   let create = match (pending, readiness) {
     (true, _) => create.loading(),
-    (false, Readiness::Ready) => create.on_click(press(ctx, form, actions, detection)),
+    (false, Readiness::Ready) => create.on_click(press(ctx, form, actions, (detection, expected))),
     (false, Readiness::NoFolder | Readiness::NotARepository) => create.disabled(),
   };
   Row::new()
@@ -94,7 +94,12 @@ pub(super) fn bar(ctx: &mut Ctx, form: &Form, actions: &Actions, detection: Opti
 
 /// Create: the name is checked first and said under its field when the rules reject it; otherwise the project
 /// is made with the GitHub repository the folder's detection found.
-fn press(ctx: &Ctx, form: &Form, actions: &Actions, detection: Option<Detection>) -> impl Fn() + Send + Sync + 'static {
+fn press(
+  ctx: &Ctx,
+  form: &Form,
+  actions: &Actions,
+  (detection, expected): (Option<Detection>, Option<GitHubLogin>),
+) -> impl Fn() + Send + Sync + 'static {
   let connection_name = detection
     .as_ref()
     .and_then(Detection::github)
@@ -116,7 +121,7 @@ fn press(ctx: &Ctx, form: &Form, actions: &Actions, detection: Option<Detection>
       .zip(connection_name.clone())
       .map(|(detection, connection_name)| GitHubLink {
         detection,
-        expected: form.expected.get_untracked().0,
+        expected: expected.clone(),
         connection_name,
       });
     create.run(Creation { new, link });

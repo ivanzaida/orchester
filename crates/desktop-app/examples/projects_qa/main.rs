@@ -33,7 +33,7 @@ use orchester_app::{
   brand, i18n,
   mcp::{self, AppMcp, McpLink, McpMode, McpSettings, WindowLink},
   root::{RootProps, Start},
-  routes::Route,
+  routes::{Route, RouteFolder},
   startup::Launch,
   theme::{self, Mode},
   ui::loader,
@@ -195,7 +195,7 @@ fn window(state: State, folders: &Folders) -> Result<(), Box<dyn Error>> {
   prepare(state, &workspace, &database)?;
   let route = match state {
     State::Setup => Route::AddProject(None),
-    State::Detected(_) => Route::AddProject(Some(folders.folder(state.folder()))),
+    State::Detected(_) => Route::AddProject(RouteFolder::new(&folders.folder(state.folder()))),
     _ => Route::AllProjects,
   };
   let start = match launch.start() {

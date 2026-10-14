@@ -11,7 +11,10 @@ mod fields;
 mod github;
 mod rail;
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use lurq::{
   app::{
@@ -28,7 +31,7 @@ use orchester_core::{connection::GitHubLogin, name::Name, repository::Detection}
 use orchester_workspace::{
   background,
   messages::Message,
-  project_setup::{self, CreateFailure, Creation},
+  project_setup::{self, CreateFailure, Creation, ExpectedAccount, FolderDetection},
   repository::{DetectTarget, detect},
   workspace::OpenProject,
 };
@@ -57,9 +60,9 @@ struct Props(Option<PathBuf>);
 
 impl DevtoolsInspectable for Props {}
 
-/// A detection, as the page's futures hold it.
+/// A detection and the folder it was made for, as the page's futures hold it.
 #[derive(Clone, Debug, PartialEq)]
-struct Detected(Detection);
+struct Detected(FolderDetection);
 
 impl DevtoolsInspectable for Detected {}
 
@@ -69,9 +72,9 @@ struct Picked(Option<PathBuf>);
 
 impl DevtoolsInspectable for Picked {}
 
-/// The account the project will expect, if it expects one yet.
+/// The account the project will expect, with the folder and host it was taken for, if it expects one yet.
 #[derive(Clone, Debug, Default, PartialEq)]
-struct Expected(Option<GitHubLogin>);
+struct Expected(Option<ExpectedAccount>);
 
 impl DevtoolsInspectable for Expected {}
 
@@ -95,11 +98,16 @@ impl Actions {
     Self {
       folder: pick_action(ctx, &picker),
       program: pick_action(ctx, &picker),
-      detect: ctx
-        .future_action(|target: DetectTarget| async move { background::run(move || Detected(detect(&target))).await }),
+      detect: ctx.future_action(|target: DetectTarget| async move {
+        background::run(move || Detected(FolderDetection::new(target.repo_root.clone(), detect(&target)))).await
+      }),
       create: ctx.future_action(move |creation: Creation| {
         let (workspace, activity) = (services.workspace.clone(), services.activity.clone());
-        async move { project_setup::create(&workspace, &activity, creation).await }
+        async move {
+          project_setup::create(&workspace, &activity, creation)
+            .await
+            .map(|created| created.project)
+        }
       }),
     }
   }
@@ -113,11 +121,15 @@ impl Actions {
     });
   }
 
-  /// The finished detection; `None` while it runs and before it ran.
-  fn detection(&self) -> Option<Detection> {
+  /// The finished detection of `folder`; `None` while it runs, before it ran, when it failed, and for a
+  /// detection of another folder.
+  fn detection(&self, folder: Option<&Path>) -> Option<Detection> {
     let state = self.detect.state().get();
-    let pending = state.is_pending();
-    state.data.filter(|_| !pending).map(|detected| detected.0)
+    let finished = state.is_fulfilled() && !state.is_pending();
+    state
+      .data
+      .filter(|_| finished)
+      .and_then(|detected| detected.0.of(folder).cloned())
   }
 }
 
@@ -171,7 +183,7 @@ impl Component for AddProject {
     // First in every render: lurq keeps a component's futures by the order it asks for them.
     let actions = Actions::of(ctx);
     self.start(ctx, &actions);
-    let detection = actions.detection();
+    let detection = actions.detection(self.form.folder.get().0.as_deref());
     let form = Column::new()
       .id("add-project-form")
       .width(Dimension::Px(FORM_WIDTH))
@@ -221,9 +233,10 @@ impl AddProject {
       if state.is_pending() || !state.is_fulfilled() {
         return;
       }
-      if let Some(Detected(detection)) = &state.data {
+      // Another folder or host starts from the account gh acts as there.
+      if let Some(Detected(detected)) = &state.data {
         let current = expected.get_untracked().0;
-        let next = project_setup::expected_account(current.as_ref(), detection);
+        let next = project_setup::expected_account(current.as_ref(), detected.folder(), detected.detection());
         if next != current {
           expected.set(Expected(next));
         }
@@ -284,5 +297,17 @@ impl Form {
   /// The name the breadcrumb, the notes and the ownership say: the entered one once the rules accept it.
   fn shown_name(&self) -> Option<Name> {
     Name::new(&self.name.get()).ok()
+  }
+
+  /// The account the project expects in `detection` of the chosen folder, when it was taken for that folder
+  /// and host.
+  fn expected_for(&self, detection: &Detection) -> Option<GitHubLogin> {
+    let folder = self.folder.get().0?;
+    self
+      .expected
+      .get()
+      .0
+      .filter(|expected| expected.applies_to(&folder, detection))
+      .map(|expected| expected.login().clone())
   }
 }

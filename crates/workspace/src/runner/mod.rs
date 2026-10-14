@@ -29,7 +29,7 @@ use std::{
 };
 
 use orchester_core::id::RunId;
-use orchester_ipc::{AttachSession, RefusedRun, Rejection, SessionEnd, WorkState};
+use orchester_ipc::{AttachSession, RefusedRun, Rejection, SessionEnd, WorkState, WorkSummary};
 use parking_lot::Mutex;
 use tokio::{runtime::Handle, sync::watch, task::JoinSet};
 
@@ -75,6 +75,15 @@ pub enum RunRequestError {
 pub struct Continued {
   pub continued: Vec<RunId>,
   pub refused: Vec<RefusedRun>,
+}
+
+/// Why a project's runner cannot be stopped to forget the project.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ForgetRefusal {
+  /// Agents are at work in the project.
+  Busy,
+  /// The runner is starting, reconnecting or stopping: whether agents are at work is not known.
+  Unknown,
 }
 
 /// Starts and stops the projects' runners and publishes the displayed project's status.
@@ -229,6 +238,53 @@ impl Runners {
       let outcome = connection.stop(Some(QUIET_STOP_TIMEOUT)).await;
       tracing::info!(project = %project.display(), ?outcome, "stopped the runner of a removed project");
     });
+  }
+
+  /// Stops project `root`'s runner only if it has no work, and forgets it once it stopped; nothing it does
+  /// is interrupted. A project without a running runner is forgotten at once. Until the runner's process
+  /// has ended its entry stays, so showing the project meanwhile does not start a second runner; a tab that
+  /// shows it then starts a new one.
+  pub async fn forget_if_idle(&self, root: &Path) -> Result<(), ForgetRefusal> {
+    let answer = {
+      let mut projects = self.inner.projects.lock();
+      let Some(entry) = projects.get_mut(root) else {
+        return Ok(());
+      };
+      let status = entry.status.borrow().clone();
+      match (status.state(), status.work().map(WorkSummary::agents_working)) {
+        (RunnerState::Stopped | RunnerState::Failed { .. }, _) => {
+          projects.remove(root);
+          return Ok(());
+        }
+        (RunnerState::Online, Some(0)) => {}
+        (RunnerState::Online, Some(_)) => return Err(ForgetRefusal::Busy),
+        // Starting, reconnecting or stopping, or online before its first report: its work is not known.
+        _ => return Err(ForgetRefusal::Unknown),
+      }
+      let Some(connection) = &entry.connection else {
+        return Err(ForgetRefusal::Unknown);
+      };
+      connection.stop_if_idle()
+    };
+    if answer.await != Ok(true) {
+      // A runner that lingered may have stopped meanwhile; one that is still there has work.
+      return match self.inner.projects.lock().contains_key(root) {
+        true => Err(ForgetRefusal::Busy),
+        false => Ok(()),
+      };
+    }
+    let connection = self
+      .inner
+      .projects
+      .lock()
+      .get_mut(root)
+      .and_then(|entry| entry.connection.take());
+    if let Some(connection) = connection {
+      let outcome = connection.stop(Some(QUIET_STOP_TIMEOUT)).await;
+      tracing::info!(project = %root.display(), ?outcome, "stopped the idle runner of a removed project");
+    }
+    self.stopped_idle(root);
+    Ok(())
   }
 
   /// Starts the displayed project's runner again after it failed; the reconnect attempts start

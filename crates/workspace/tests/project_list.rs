@@ -89,7 +89,11 @@ fn project_list_rows_say_where_each_project_stands() {
     TaskPhase::Stuck,
     TaskPhase::Draft,
   ];
-  let online = ListedProject::of(&entry(false), Some(&readable(&phases)), Some((&RunnerState::Online, 1)));
+  let online = ListedProject::of(
+    &entry(false),
+    Some(&readable(&phases)),
+    Some((&RunnerState::Online, Some(1))),
+  );
   assert_eq!(online.standing, Standing::Opens(RunnerShown::Online));
   assert_eq!(
     online.counts,
@@ -112,7 +116,7 @@ fn project_list_rows_say_where_each_project_stands() {
     cause: RunnerFailure::StartFailed,
     attempts: 0,
   };
-  let offline = ListedProject::of(&entry(false), None, Some((&failed, 0)));
+  let offline = ListedProject::of(&entry(false), None, Some((&failed, Some(0))));
   assert_eq!(offline.standing, Standing::Opens(RunnerShown::Offline));
   assert_eq!(
     offline.counts, None,
@@ -131,13 +135,21 @@ fn project_list_rows_say_where_each_project_stands() {
 
 #[test]
 fn project_list_removal_is_refused_while_agents_work() {
-  let working = ListedProject::of(&entry(false), None, Some((&RunnerState::Online, 2)));
+  let working = ListedProject::of(&entry(false), None, Some((&RunnerState::Online, Some(2))));
   assert_eq!(
     working.removal_refused(),
     Some(Message::new("projects.removeRefused").with("name", "Kontur".to_owned()))
   );
-  let idle = ListedProject::of(&entry(false), None, Some((&RunnerState::Online, 0)));
+  let idle = ListedProject::of(&entry(false), None, Some((&RunnerState::Online, Some(0))));
   assert_eq!(idle.removal_refused(), None);
+  for unknown in [RunnerState::Starting, RunnerState::Online, RunnerState::Stopping] {
+    let row = ListedProject::of(&entry(false), None, Some((&unknown, None)));
+    assert_eq!(
+      row.removal_refused(),
+      Some(Message::new("projects.removeUnknown").with("name", "Kontur".to_owned())),
+      "{unknown:?} without a report of its work"
+    );
+  }
 }
 
 #[test]
@@ -152,7 +164,31 @@ fn project_list_remove_forgets_only_the_list_entry() {
     Activity::new(),
     SessionEnd::Clean,
   );
-  project_list::remove(&workspace, &runners, &kontur).expect("removed from the list");
+  runners.ensure(&kontur.repo_root, "Kontur");
+  // The runner program is missing: once it failed, nothing runs and the project can go.
+  runtime.block_on(async {
+    let mut updates = runners.work_changes();
+    let failed = async {
+      while !matches!(
+        runners
+          .status_of(&kontur.repo_root)
+          .map(|status| status.state().clone()),
+        Some(RunnerState::Failed { .. })
+      ) {
+        updates.changed().await.expect("the runners outlive the test");
+      }
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(20), failed)
+      .await
+      .expect("the runner fails in time");
+  });
+  runtime
+    .block_on(project_list::remove(&workspace, &runners, &kontur))
+    .expect("removed from the list");
+  assert!(
+    runners.status_of(&kontur.repo_root).is_none(),
+    "its runner is forgotten"
+  );
   assert!(workspace.projects().expect("the list reads").is_empty());
   assert!(
     kontur.repo_root.join(".orchester").is_dir(),

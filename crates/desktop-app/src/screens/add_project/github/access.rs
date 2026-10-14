@@ -15,7 +15,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  connection::{GhAdvice, GitHubCheckResult, GitHubHost, REQUIRED_SCOPE},
+  connection::{GhAdvice, GitHubCheckResult, GitHubHost, GitHubLogin, REQUIRED_SCOPE},
   repository::GitHubDetection,
 };
 
@@ -36,8 +36,14 @@ use crate::{
 /// The line between the commands and the actions (`Divider` `KU9Lf`).
 const DIVIDER: f32 = 1.0;
 
-/// The panel for the `gh` that `found` asked; `project` is the name the project will have.
-pub(super) fn panel(ctx: &mut Ctx, form: &Form, actions: &Actions, found: &GitHubDetection, project: &str) -> Element {
+/// The panel for the `gh` that `found` asked, with the account the project expects and the name it will have.
+pub(super) fn panel(
+  ctx: &mut Ctx,
+  form: &Form,
+  actions: &Actions,
+  found: &GitHubDetection,
+  expects: (Option<&GitHubLogin>, &str),
+) -> Element {
   let host = found.repo().host().clone();
   let close = form.access.clone();
   let head = Row::new()
@@ -84,7 +90,7 @@ pub(super) fn panel(ctx: &mut Ctx, form: &Form, actions: &Actions, found: &GitHu
     .child(
       Column::new()
         .width(Dimension::Pct(100.0))
-        .with_children(current(ctx, form, found, project).into_iter().map(property)),
+        .with_children(current(ctx, found, expects).into_iter().map(property)),
     )
     .child(other)
     .child(access)
@@ -99,7 +105,7 @@ pub(super) fn panel(ctx: &mut Ctx, form: &Form, actions: &Actions, found: &GitHu
 }
 
 /// The host, the account `gh` is signed in to, its scopes and the account the project expects (`Current` `Ikk1G`).
-fn current(ctx: &Ctx, form: &Form, found: &GitHubDetection, project: &str) -> Vec<Property> {
+fn current(ctx: &Ctx, found: &GitHubDetection, (expected, project): (Option<&GitHubLogin>, &str)) -> Vec<Property> {
   let result = found.check().map(|check| &check.result);
   let mut current = vec![
     Property {
@@ -121,7 +127,7 @@ fn current(ctx: &Ctx, form: &Form, found: &GitHubDetection, project: &str) -> Ve
       look: Value::Mono,
     },
   ];
-  if let Some(expected) = form.expected.get().0 {
+  if let Some(expected) = expected {
     current.push(Property {
       label: ctx.t_args("setup.github.access.projectExpects", [("project", project)]),
       value: expected.as_str().into(),

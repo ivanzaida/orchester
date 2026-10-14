@@ -9,9 +9,9 @@ use orchester_core::{
   id::ProjectId,
   name::Name,
   project::{Project, ProjectKey},
-  repository::{Detection, DetectionState},
+  repository::{Detection, DetectionState, RepositoryLink},
 };
-use orchester_store::StoreError;
+use orchester_store::{RegisteredProject, StoreError};
 
 use crate::{
   activity::{Activity, operations},
@@ -76,34 +76,71 @@ pub enum ErrorPlace {
   Form,
 }
 
+/// Why creating the project failed, as automation names it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CreateCause {
+  NotAGitRepository,
+  /// The folder keeps an Orchester project already.
+  AlreadyInitialized,
+  /// The list holds a project in the folder already, e.g. one whose data is gone.
+  AlreadyListed,
+  /// The project data could not be written, or the work stopped.
+  ProjectData,
+}
+
+impl CreateCause {
+  pub const fn code(self) -> &'static str {
+    match self {
+      Self::NotAGitRepository => "not_a_git_repository",
+      Self::AlreadyInitialized => "already_initialized",
+      Self::AlreadyListed => "already_listed",
+      Self::ProjectData => "project_data",
+    }
+  }
+}
+
 /// Creating the project failed. It stays relevant only while the name and folder it was
 /// raised for are unchanged.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateFailure {
   pub message: Message,
   pub place: ErrorPlace,
+  pub cause: CreateCause,
   name: String,
   repo_root: PathBuf,
 }
 
 impl CreateFailure {
   pub fn from_store(new: &NewProject, error: &StoreError) -> Self {
-    let place = match error {
-      StoreError::NotAGitRepository(_) | StoreError::AlreadyInitialized(_) | StoreError::UnrepresentablePath(_) => {
-        ErrorPlace::Repository
-      }
-      _ => ErrorPlace::Form,
+    let (place, cause) = match error {
+      StoreError::NotAGitRepository(_) => (ErrorPlace::Repository, CreateCause::NotAGitRepository),
+      StoreError::AlreadyInitialized(_) => (ErrorPlace::Repository, CreateCause::AlreadyInitialized),
+      StoreError::UnrepresentablePath(_) => (ErrorPlace::Repository, CreateCause::ProjectData),
+      _ => (ErrorPlace::Form, CreateCause::ProjectData),
     };
-    Self::new(new, messages::store_error(error), place)
+    Self::new(new, messages::store_error(error), place).caused_by(cause)
   }
 
   pub fn new(new: &NewProject, message: Message, place: ErrorPlace) -> Self {
     Self {
       message,
       place,
+      cause: CreateCause::ProjectData,
       name: new.project.name().as_str().to_owned(),
       repo_root: new.repo_root.clone(),
     }
+  }
+
+  #[must_use]
+  pub const fn caused_by(mut self, cause: CreateCause) -> Self {
+    self.cause = cause;
+    self
+  }
+
+  /// The list holds `listed` in the folder of `new` already: its entry has to go first.
+  fn listed(new: &NewProject, listed: &RegisteredProject) -> Self {
+    let message = Message::new("errors.alreadyListed").with("name", listed.name.to_string());
+    Self::new(new, message, ErrorPlace::Repository).caused_by(CreateCause::AlreadyListed)
   }
 
   /// Whether the failure still describes `draft`; editing the name or folder retires it.
@@ -132,12 +169,77 @@ pub fn readiness(folder_chosen: bool, detection: Option<&DetectionState>) -> Rea
   }
 }
 
-/// The account a project being set up expects: the one it expects already, else the account `gh` acted as
-/// when `detection` ran. *Use this account* replaces it with the account `gh` acts as now.
-pub fn expected_account(expected: Option<&GitHubLogin>, detection: &Detection) -> Option<GitHubLogin> {
-  expected
-    .or_else(|| detection.github().and_then(|found| found.account()))
+/// A detection and the folder it was made for: setup uses it only while that folder is the chosen one.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FolderDetection {
+  folder: PathBuf,
+  detection: Detection,
+}
+
+impl FolderDetection {
+  pub const fn new(folder: PathBuf, detection: Detection) -> Self {
+    Self { folder, detection }
+  }
+
+  /// The detection, when it was made for `folder`.
+  pub fn of(&self, folder: Option<&Path>) -> Option<&Detection> {
+    (folder == Some(self.folder.as_path())).then_some(&self.detection)
+  }
+
+  pub fn folder(&self) -> &Path {
+    &self.folder
+  }
+
+  pub const fn detection(&self) -> &Detection {
+    &self.detection
+  }
+}
+
+/// The account a project being set up expects, with the folder and GitHub host it was taken for: it applies
+/// only to them, so another folder or host starts from the account `gh` acts as there.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExpectedAccount {
+  login: GitHubLogin,
+  folder: PathBuf,
+  host: GitHubHost,
+}
+
+impl ExpectedAccount {
+  /// The account `gh` acted as when it detected `folder`, for that folder and host (*Use this account*);
+  /// `None` without one.
+  pub fn acting(folder: &Path, detection: &Detection) -> Option<Self> {
+    let found = detection.github()?;
+    Some(Self {
+      login: found.account()?.clone(),
+      folder: folder.to_path_buf(),
+      host: found.repo().host().clone(),
+    })
+  }
+
+  pub const fn login(&self) -> &GitHubLogin {
+    &self.login
+  }
+
+  /// Whether it was taken for `folder` and the GitHub host `detection` found there.
+  pub fn applies_to(&self, folder: &Path, detection: &Detection) -> bool {
+    self.folder == folder
+      && detection
+        .github()
+        .is_some_and(|found| found.repo().host() == &self.host)
+  }
+}
+
+/// The account the project expects after `detection` of `folder`: the one it expects already when that was
+/// taken for the same folder and host, else the account `gh` acted as.
+pub fn expected_account(
+  current: Option<&ExpectedAccount>,
+  folder: &Path,
+  detection: &Detection,
+) -> Option<ExpectedAccount> {
+  current
+    .filter(|current| current.applies_to(folder, detection))
     .cloned()
+    .or_else(|| ExpectedAccount::acting(folder, detection))
 }
 
 /// The name of the GitHub connection that setup adds for `host`.
@@ -161,47 +263,77 @@ pub struct GitHubLink {
   pub connection_name: String,
 }
 
+/// A created project, and what became of its GitHub link: `None` when nothing was to be linked, else the
+/// link (`None` when the account could not read the repository) or why recording it failed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Created {
+  pub project: OpenProject,
+  pub link: Option<Result<Option<RepositoryLink>, Message>>,
+}
+
 /// Creates the project in its folder and adds it to the workspace, then records the GitHub repository
-/// detected in the folder, each as an operation of `activity`. A link that fails is reported there only:
-/// the project exists and opens either way, and can be linked from Project settings.
-pub async fn create(
-  workspace: &Workspace,
-  activity: &Activity,
-  creation: Creation,
-) -> Result<OpenProject, CreateFailure> {
+/// detected in the folder, each as an operation of `activity`. A folder the list holds already is refused
+/// before anything is written. A link that fails does not undo the project, which can be linked from
+/// Project settings.
+pub async fn create(workspace: &Workspace, activity: &Activity, creation: Creation) -> Result<Created, CreateFailure> {
   let Creation { new, link: github } = creation;
   let attempted = new.clone();
   let running = activity.start(operations::project_create(new.project.name().as_str(), &new.repo_root));
   let workspace = workspace.clone();
-  let created = background::run(move || workspace.create(new))
+  let created = background::run(move || create_unlisted(&workspace, &new))
     .await
     .map_err(|message| CreateFailure::new(&attempted, message, ErrorPlace::Form))
-    .and_then(|created| {
-      created.map_err(|error| {
-        tracing::error!(%error, "cannot create the project");
-        CreateFailure::from_store(&attempted, &error)
-      })
-    });
+    .and_then(|created| created);
   match &created {
     Ok(_) => running.finish(),
     Err(failure) => running.fail(failure.message.clone()),
   }
-  if let (Ok(project), Some(github)) = (&created, github) {
-    link(activity, project, github).await;
-  }
-  created
+  let project = created?;
+  let link = match github {
+    Some(github) => link(activity, &project, github).await,
+    None => None,
+  };
+  Ok(Created { project, link })
 }
 
-/// Records the GitHub connection and link of a created project; what failed is in `activity`.
-async fn link(activity: &Activity, project: &OpenProject, github: GitHubLink) {
+/// Creates `new` unless the list holds a project in its folder. Blocks on SQLite and the file system.
+fn create_unlisted(workspace: &Workspace, new: &NewProject) -> Result<OpenProject, CreateFailure> {
+  let store = |error: &StoreError| {
+    tracing::error!(%error, "cannot create the project");
+    CreateFailure::from_store(new, error)
+  };
+  let listed = workspace.projects().map_err(|error| store(&error))?;
+  if let Some(listed) = listed
+    .iter()
+    .find(|listed| same_folder(&listed.repo_root, &new.repo_root))
+  {
+    return Err(CreateFailure::listed(new, listed));
+  }
+  workspace.create(new.clone()).map_err(|error| store(&error))
+}
+
+/// Whether `a` and `b` name one folder: the same path, or the same folder once both are resolved.
+fn same_folder(a: &Path, b: &Path) -> bool {
+  a == b
+    || matches!(
+      (std::fs::canonicalize(a), std::fs::canonicalize(b)),
+      (Ok(a), Ok(b)) if a == b
+    )
+}
+
+/// Records the GitHub connection and link of a created project, as an operation of `activity`; `None` when
+/// the detection found no GitHub repository.
+async fn link(
+  activity: &Activity,
+  project: &OpenProject,
+  github: GitHubLink,
+) -> Option<Result<Option<RepositoryLink>, Message>> {
   let GitHubLink {
     detection,
     expected,
     connection_name: name,
   } = github;
-  let Some(found) = detection.github() else {
-    return;
-  };
+  let found = detection.github()?;
   let repository = format!("{}/{}", found.repo().owner(), found.repo().name());
   let spec = operations::repository_link(project.project.name().as_str(), &project.repo_root, &repository);
   let repo_root = project.repo_root.clone();
@@ -213,8 +345,6 @@ async fn link(activity: &Activity, project: &OpenProject, github: GitHubLink) {
         error.message()
       })
   };
-  // The outcome is in the activity; the created project does not depend on it.
-  if let Err(reason) = activity.track(spec, work).await {
-    tracing::warn!(?reason, "the created project is not linked to its GitHub repository");
-  }
+  // The created project does not depend on the outcome, which the activity lists too.
+  Some(activity.track(spec, work).await)
 }

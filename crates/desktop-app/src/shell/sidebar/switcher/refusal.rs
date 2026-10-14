@@ -22,13 +22,14 @@ use orchester_workspace::messages::Message;
 use super::{CheckAction, FolderRefusal, PickAction};
 use crate::{
   navigation::Navigation,
-  routes::Route,
+  routes::{Route, RouteFolder},
   theme::{ExtraSpacing, ExtraTypography, IconSize, ShellSpacing, ShellText},
   ui::{
     button::{ActionButton, ButtonKind},
     code_box::CodeBox,
     icon::{Icon, icon},
     message::message_text,
+    unavailable::with_reason,
   },
 };
 
@@ -214,18 +215,27 @@ fn actions(ctx: &mut Ctx, refusal: Option<(&PathBuf, &FolderRefusal)>, picks: &P
     }
     Some(FolderRefusal::NoProject) => {
       let navigation = Navigation::of(ctx);
-      let folder = refusal.map(|(folder, _)| folder.clone());
-      buttons.push(
-        ActionButton::new(
-          "switcher-folder-set-up",
-          ButtonKind::Primary,
-          ctx.t("shell.switcher.folder.setUp"),
-        )
-        .icon(Icon::Plus)
-        .in_form()
-        .on_click(move || navigation.go(Route::AddProject(folder.clone())))
-        .into(),
-      );
+      let set_up = ActionButton::new(
+        "switcher-folder-set-up",
+        ButtonKind::Primary,
+        ctx.t("shell.switcher.folder.setUp"),
+      )
+      .icon(Icon::Plus)
+      .in_form();
+      buttons.push(match refusal.and_then(|(folder, _)| RouteFolder::new(folder)) {
+        Some(folder) => set_up
+          .on_click(move || navigation.go(Route::AddProject(Some(folder.clone()))))
+          .into(),
+        None => {
+          let reason = ctx.t("shell.switcher.folder.setUpUnavailable");
+          with_reason(
+            set_up.unavailable(reason.clone()),
+            "switcher-folder-set-up-reason",
+            &reason,
+          )
+          .into()
+        }
+      });
     }
     Some(FolderRefusal::Newer { .. } | FolderRefusal::Unreadable(_)) | None => {}
   }
