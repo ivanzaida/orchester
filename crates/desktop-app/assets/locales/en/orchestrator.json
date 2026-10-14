@@ -35,7 +35,7 @@
       "attach": "Attaching files isn't built yet.",
       "send": "Send",
       "sendEmpty": "Write a message first.",
-      "notReady": "Choose what the Orchestrator runs on in its settings first.",
+      "notReady": "Choose and publish what the Orchestrator runs on in its settings first.",
       "thinking": "The Orchestrator answers one message at a time.",
       "lines": "Enter adds a line ·",
       "sends": "sends"
@@ -95,9 +95,10 @@
       "body": "Your draft is kept. Retry sends it once; it is never stored twice.",
       "retry": "Retry"
     },
+    "setupFailed": "What the Orchestrator runs on couldn't be read",
     "notReady": {
       "title": "Choose what the Orchestrator runs on",
-      "body": "Pick a Claude Code connection and a model in Orchestrator settings. Conversations stay readable; new messages can't be sent until then.",
+      "body": "Pick a Claude Code connection and a model in Orchestrator settings and publish them. Conversations stay readable; new messages can't be sent until then.",
       "openSettings": "Open settings"
     },
     "loading": {
@@ -181,8 +182,18 @@
     },
     "settings": {
       "description": "Plans work with you, drafts tasks and coordinates {{project}}'s queue.",
-      "saved": "All changes saved",
-      "saving": "Saving…",
+      "publish": {
+        "published": "Published v{{version}}",
+        "notPublished": "Not published",
+        "unsaved": "Unsaved changes · {{published}}",
+        "drafted": "Draft saved · {{published}}",
+        "publishAs": "Publish v{{version}}",
+        "saveDraft": "Save draft",
+        "noChanges": "No changes since v{{version}}.",
+        "saveFirst": "Save the draft before publishing.",
+        "firstNote": "The project chat can send once v1 is published.",
+        "needsConnection": "Publishing needs a connection that can run the Orchestrator."
+      },
       "loading": "Reading the Orchestrator's settings…",
       "summary": {
         "runsOn": "{{connection}} · {{model}}",
@@ -206,7 +217,11 @@
       },
       "model": {
         "label": "Model",
-        "description": "From the connection's list.",
+        "description": "From the connection's list, or Other model id… for one that isn't listed.",
+        "other": "Other model id…",
+        "otherHint": "Enter an id the connection accepts",
+        "customLabel": "Model id",
+        "invalid": "A model id has no spaces and is at most {{max}} characters long.",
         "notListed": "Not in {{connection}}'s model list"
       },
       "effort": {
@@ -221,7 +236,7 @@
         "max": "Max"
       },
       "chooseConnectionFirst": "Choose a connection first.",
-      "note": "A reply already under way finishes on what it started with; a change applies from the next reply.",
+      "note": "A reply already under way finishes on the version it started with; a published change applies from the next reply.",
       "limits": "Its tokens count toward {{project}}'s daily budget; it takes no agent slot. One answer ends after {{turns}} steps or {{minutes}} minutes.",
       "noConnection": {
         "title": "No connection in {{project}} can run the Orchestrator",

@@ -137,7 +137,7 @@ impl Orchestrator {
     db.create_connection(&codex).expect("Codex connection");
     if setup != Setup::NotChosen {
       let settings = OrchestratorSettings::new(claude.id(), ModelId::new("haiku").expect("model"), None);
-      db.save_orchestrator_settings(&settings).expect("settings");
+      db.publish_orchestrator(&settings, Timestamp::now()).expect("settings");
     }
     Self {
       project,
@@ -277,8 +277,13 @@ the agent logged: {agent}"
     self.window.texts(id).unwrap_or_default().join(" ")
   }
 
-  /// Writes `text` and sends it with Ctrl+Enter, the focus in the field when the key is pressed.
+  /// Writes `text` and sends it with Ctrl+Enter, the focus in the field when the key is pressed, once the message
+  /// sent before is done with: the field shows its placeholder again.
   pub fn send(&mut self, text: &str) {
+    self.until("the composer to be free", |screen| {
+      let shown = screen.text("orchestrator-input");
+      shown.starts_with("Message Orchestrator") || shown.starts_with("Describe what you want")
+    });
     self.set("orchestrator-input", text);
     self.click("orchestrator-input");
     self

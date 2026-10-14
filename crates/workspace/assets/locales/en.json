@@ -1354,7 +1354,7 @@
     },
     "send": {
       "blank": "Write a message first.",
-      "notReady": "Choose a connection and model in Orchestrator settings before you send.",
+      "notReady": "Choose a connection and model in Orchestrator settings and publish them before you send.",
       "runnerUnavailable": "Not sent · the runner didn't answer",
       "lost": "The runner's answer was lost · your message is kept",
       "busy": "The Orchestrator is still answering your last message.",

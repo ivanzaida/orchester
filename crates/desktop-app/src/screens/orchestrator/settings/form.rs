@@ -140,10 +140,16 @@ fn model_row(ctx: &mut Ctx, setup: &OrchestratorSetup, connection: ConnectionId,
   let unlisted = models
     .iter()
     .any(|option| Some(&option.id) == current.as_ref() && option.support == ModelSupport::NotVerified);
+  // *Other model id…* for one the list doesn't have (the model hint in `qAq0z`), typed under the select.
   let options = models
     .iter()
     .map(|option| SelectOption::new(option.id.as_str().to_owned(), option.id.as_str()))
+    .chain(std::iter::once(
+      SelectOption::new(String::new(), ctx.t("orchestrator.settings.model.other"))
+        .detail(ctx.t("orchestrator.settings.model.otherHint")),
+    ))
     .collect();
+  let other = choices.model.get().is_empty().then(|| other_model(ctx, choices));
   let label = ctx.t("orchestrator.settings.model.label");
   let mut select = SelectField::new("orchestrator-model", label.clone(), choices.model.clone(), options)
     .width(Dimension::Px(SELECT_WIDTH));
@@ -159,6 +165,7 @@ fn model_row(ctx: &mut Ctx, setup: &OrchestratorSetup, connection: ConnectionId,
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::End)
     .child(select.render(ctx))
+    .with_children(other)
     .with_children(unlisted.then(|| {
       field_error(
         "orchestrator-model-error",
@@ -174,7 +181,7 @@ fn model_row(ctx: &mut Ctx, setup: &OrchestratorSetup, connection: ConnectionId,
 }
 
 fn effort_row(ctx: &mut Ctx, setup: &OrchestratorSetup, connection: ConnectionId, choices: &Choices) -> Element {
-  let efforts = ModelId::new(&choices.model.get())
+  let efforts = ModelId::new(choices.model_text().trim())
     .map(|model| setup.efforts(connection, &model))
     .unwrap_or_default();
   let options = std::iter::once(SelectOption::new(
@@ -199,6 +206,35 @@ fn effort_row(ctx: &mut Ctx, setup: &OrchestratorSetup, connection: ConnectionId
     Place::Last,
     false,
   )
+}
+
+/// The model id typed under *Other model id…*, and why it can't be one.
+fn other_model(ctx: &mut Ctx, choices: &Choices) -> Column {
+  let typed = choices.custom.get();
+  let invalid = !typed.trim().is_empty() && ModelId::new(typed.trim()).is_err();
+  let mut field = FieldInput::new(
+    "orchestrator-model-custom",
+    ctx.t("orchestrator.settings.model.customLabel"),
+    choices.custom.clone(),
+  )
+  .placeholder(ctx.t("orchestrator.settings.model.otherHint"))
+  .width(Dimension::Px(SELECT_WIDTH));
+  if invalid {
+    field = field.invalid();
+  }
+  Column::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::End)
+    .child(field.render(ctx))
+    .with_children(invalid.then(|| {
+      field_error(
+        "orchestrator-model-custom-error",
+        &ctx.t_args(
+          "orchestrator.settings.model.invalid",
+          [("max", ModelId::MAX_CHARS.to_string())],
+        ),
+      )
+    }))
 }
 
 /// The word for reasoning effort `effort`, as the agent profile editor says it; an effort with no word of its own

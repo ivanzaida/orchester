@@ -35,7 +35,7 @@ fn claude() -> TestProject {
   let mut db = ProjectDb::open(project.repo.path()).expect("open");
   let connection = db.connections().expect("connections")[0].id();
   let model = ModelId::new("haiku").expect("model");
-  db.save_orchestrator_settings(&OrchestratorSettings::new(connection, model, None))
+  db.publish_orchestrator(&OrchestratorSettings::new(connection, model, None), Timestamp::now())
     .expect("settings");
   project
 }

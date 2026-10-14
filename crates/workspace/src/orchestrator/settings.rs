@@ -1,6 +1,7 @@
 //! Orchestrator settings › Profile (`Xir64`): which of the project's agent connections the Orchestrator runs on, its
 //! model and reasoning effort, the choices each connection offers, and whether the chat can send with what is
-//! chosen.
+//! published. They are versioned as agent profiles are: a change is saved as a draft, and *Publish vN* makes it the
+//! version the chat answers on from its next reply.
 
 use std::{path::Path, sync::Arc};
 
@@ -10,6 +11,7 @@ use orchester_core::{
   orchestrator::{OrchestratorSettings, runs_orchestrator},
   resource::ModelId,
   store::ConnectionStore,
+  time::Timestamp,
 };
 use orchester_store::ProjectDb;
 
@@ -47,10 +49,15 @@ impl Readiness {
   }
 }
 
-/// What is chosen and what can be chosen.
+/// What is published, drafted and can be chosen.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OrchestratorSetup {
+  /// The latest published version, which the chat answers on.
   pub settings: Option<OrchestratorSettings>,
+  /// Its number.
+  pub version: Option<u32>,
+  /// The draft saved since.
+  pub draft: Option<OrchestratorSettings>,
   connections: Vec<AgentConnection>,
 }
 
@@ -58,8 +65,11 @@ impl OrchestratorSetup {
   /// Reads the project at `root`. Blocks on SQLite.
   pub fn load_in(root: &Path) -> Result<Self, Message> {
     let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
-    let settings = db
-      .orchestrator_settings()
+    let published = db
+      .orchestrator_published()
+      .map_err(|error| messages::store_error(&error))?;
+    let draft = db
+      .orchestrator_draft()
       .map_err(|error| messages::store_error(&error))?;
     let connections = db
       .connections()
@@ -67,7 +77,13 @@ impl OrchestratorSetup {
       .into_iter()
       .filter_map(|connection| AgentConnection::try_from(connection).ok())
       .collect();
-    Ok(Self { settings, connections })
+    let (version, settings) = published.unzip();
+    Ok(Self {
+      settings,
+      version,
+      draft,
+      connections,
+    })
   }
 
   /// The project's agent connections, by name, each with whether the Orchestrator can run on it.
@@ -100,14 +116,24 @@ impl OrchestratorSetup {
       .unwrap_or_default()
   }
 
-  /// What choosing `connection` saves: its first listed model and the CLI's own effort, or what was chosen on it
-  /// before. `None` when it offers no model to start with.
+  /// What the draft, or else the published version, holds: what the form starts from.
+  pub fn current(&self) -> Option<&OrchestratorSettings> {
+    self.draft.as_ref().or(self.settings.as_ref())
+  }
+
+  /// The first connection the Orchestrator can run on.
+  pub fn first_usable(&self) -> Option<ConnectionId> {
+    self
+      .connections
+      .iter()
+      .find(|connection| unavailable(connection.provider()).is_none())
+      .map(|connection| connection.id())
+  }
+
+  /// What choosing `connection` fills in: what the draft or published version holds on it, else its first listed
+  /// model and the CLI's own effort. `None` when it offers no model to start with.
   pub fn choosing(&self, connection: ConnectionId) -> Option<OrchestratorSettings> {
-    if let Some(settings) = self
-      .settings
-      .as_ref()
-      .filter(|settings| settings.connection() == connection)
-    {
+    if let Some(settings) = self.current().filter(|settings| settings.connection() == connection) {
       return Some(settings.clone());
     }
     let model = self.connection(connection)?.models().first()?.id().clone();
@@ -136,16 +162,24 @@ impl OrchestratorSetup {
   }
 }
 
-/// What to save, and where: the settings of the project at `root`.
+/// Whether settings are saved as the draft or published.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Keep {
+  Draft,
+  Publish,
+}
+
+/// What to save, how, and where: the settings of the project at `root`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Saving {
   pub root: std::path::PathBuf,
   pub settings: OrchestratorSettings,
+  pub keep: Keep,
 }
 
-/// Saves `settings` in the project at `root`, once its connection is one the Orchestrator can run on. Blocks on
-/// SQLite.
-pub fn save_in(root: &Path, settings: &OrchestratorSettings) -> Result<(), Message> {
+/// Saves `settings` in the project at `root` as `keep` says, once its connection is one the Orchestrator can run
+/// on: the published version's number when it was published. Blocks on SQLite.
+pub fn save_in(root: &Path, settings: &OrchestratorSettings, keep: Keep) -> Result<Option<u32>, Message> {
   let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
   let connection = db
     .connection(settings.connection())
@@ -155,8 +189,12 @@ pub fn save_in(root: &Path, settings: &OrchestratorSettings) -> Result<(), Messa
   if let Some(reason) = unavailable(connection.provider()) {
     return Err(reason);
   }
-  db.save_orchestrator_settings(settings)
-    .map_err(|error| messages::store_error(&error))
+  let now = Timestamp::now();
+  let saved = match keep {
+    Keep::Draft => db.save_orchestrator_draft(settings, now).map(|()| None),
+    Keep::Publish => db.publish_orchestrator(settings, now).map(Some),
+  };
+  saved.map_err(|error| messages::store_error(&error))
 }
 
 /// Why the Orchestrator cannot run on a connection of `provider`.

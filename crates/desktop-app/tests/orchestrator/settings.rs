@@ -1,65 +1,102 @@
-//! Orchestrator settings (`Xir64`): choosing what the Orchestrator runs on saves it at once with the connection's
-//! first model; a connection it cannot run on is listed, not chosen; the tabs not built say why.
+//! Orchestrator settings (`Xir64`): what the Orchestrator runs on is versioned as agent profiles are. The first
+//! version is published from the form; after that a change is saved as a draft and published as the next version,
+//! which the chat answers on. A connection it cannot run on is listed, not publishable; a model the list doesn't have
+//! is typed under *Other model id…*; the tabs not built say why.
 
-use orchester_core::resource::ModelId;
+use orchester_core::{orchestrator::OrchestratorSettings, resource::ModelId};
 
 use super::harness::{Orchestrator, Setup};
 
+/// The published version and the draft.
+fn kept(screen: &Orchestrator) -> (Option<(u32, OrchestratorSettings)>, Option<OrchestratorSettings>) {
+  let db = screen.db();
+  (
+    db.orchestrator_published().expect("published"),
+    db.orchestrator_draft().expect("draft"),
+  )
+}
+
+fn model(id: &str) -> ModelId {
+  ModelId::new(id).expect("model")
+}
+
 #[test]
-fn orchestrator_settings_save_the_chosen_connection_with_its_first_model() {
+fn orchestrator_settings_publish_the_first_version_then_draft_and_publish_the_next() {
   let mut screen = Orchestrator::new(Setup::NotChosen);
   screen.settings();
-  let summary = screen.text("orchestrator-settings-summary");
-  assert!(summary.contains("No connection"), "{summary}");
-  let model = screen.text("orchestrator-model-row");
-  assert!(model.contains("Choose a connection first."), "{model}");
+  // The first connection it can run on, with its first model, is in the form; nothing is kept yet.
+  screen.until("the first version to publish", |screen| {
+    screen.text("orchestrator-settings-saved") == "Not published"
+  });
+  assert!(screen.text("orchestrator-settings-summary").contains("No connection"));
+  assert!(
+    screen
+      .text("orchestrator-settings-publish-note")
+      .contains("can send once v1 is published")
+  );
+  assert!(!screen.exists("orchestrator-settings-save-draft"));
   assert_eq!(
     screen.options("orchestrator-connection"),
     ["Claude · Kontur", "Codex · Kontur"]
   );
-  // The Codex connection is listed but can't be chosen: choosing it saves nothing.
-  screen.choose("orchestrator-connection", "Codex · Kontur");
+  screen.until("Publish v1", |screen| {
+    screen.text("orchestrator-settings-publish") == "Publish v1"
+      && screen.text("orchestrator-settings-publish-note").contains("v1")
+  });
+  screen.click("orchestrator-settings-publish");
+  screen.until("v1", |screen| kept(screen).0.is_some());
+  let first = OrchestratorSettings::new(screen.claude, model("haiku"), None);
+  assert_eq!(kept(&screen), (Some((1, first.clone())), None));
+  screen.until("its state", |screen| {
+    screen.text("orchestrator-settings-saved") == "Published v1"
+      && screen
+        .text("orchestrator-settings-summary")
+        .contains("Claude · Kontur · haiku")
+  });
+  assert!(screen.text("orchestrator-settings-publish-note").contains("No changes since v1."));
+
+  // A change waits for Save draft, and the chat stays on v1 until v2 is published.
+  screen.choose("orchestrator-model", "opus");
+  assert_eq!(screen.options("orchestrator-effort"), ["CLI default", "Low", "High"]);
+  screen.choose("orchestrator-effort", "High");
+  screen.until("the unsaved change", |screen| {
+    screen.text("orchestrator-settings-saved") == "Unsaved changes · Published v1"
+  });
+  assert!(screen.text("orchestrator-settings-publish-note").contains("Save the draft before publishing."));
+  screen.click("orchestrator-settings-save-draft");
+  let second = OrchestratorSettings::new(screen.claude, model("opus"), Some("high".to_owned()));
+  screen.until("the draft", |screen| kept(screen).1.is_some());
+  assert_eq!(kept(&screen), (Some((1, first)), Some(second.clone())));
+  screen.until("Draft saved", |screen| {
+    screen.text("orchestrator-settings-saved") == "Draft saved · Published v1"
+  });
+  screen.click("orchestrator-settings-publish");
+  screen.until("v2", |screen| kept(screen) == (Some((2, second.clone())), None));
+}
+
+#[test]
+fn orchestrator_settings_take_a_model_the_list_does_not_have() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  screen.settings();
+  screen.until("Published v1", |screen| {
+    screen.text("orchestrator-settings-saved") == "Published v1"
+  });
+  screen.choose("orchestrator-model", "Other model id…");
+  screen.until("the model id field", |screen| screen.exists("orchestrator-model-custom"));
+  screen.set("orchestrator-model-custom", "claude opus");
+  screen.until("why it isn't one", |screen| screen.exists("orchestrator-model-custom-error"));
+  // Save draft takes nothing that is no model id.
+  screen.click("orchestrator-settings-save-draft");
   for _ in 0..20 {
     screen.window.tree.tick_futures();
     screen.window.pass();
   }
-  assert_eq!(screen.db().orchestrator_settings().expect("settings"), None);
-  screen.choose("orchestrator-connection", "Claude · Kontur");
-  screen.until("the saved choice", |screen| {
-    screen.db().orchestrator_settings().expect("settings").is_some()
-  });
-  let saved = screen.db().orchestrator_settings().expect("settings").expect("saved");
-  assert_eq!(saved.connection(), screen.claude);
-  assert_eq!(saved.model(), &ModelId::new("haiku").expect("model"));
-  assert_eq!(saved.effort(), None);
-  screen.until("its summary", |screen| {
-    screen
-      .text("orchestrator-settings-summary")
-      .contains("Claude · Kontur · haiku")
-  });
-  assert!(screen.text("orchestrator-settings-saved").contains("All changes saved"));
-
-  screen.choose("orchestrator-model", "opus");
-  screen.until("the other model saved", |screen| {
-    screen
-      .db()
-      .orchestrator_settings()
-      .expect("settings")
-      .expect("saved")
-      .model()
-      .as_str()
-      == "opus"
-  });
-  assert_eq!(screen.options("orchestrator-effort"), ["CLI default", "Low", "High"]);
-  screen.choose("orchestrator-effort", "High");
-  screen.until("the effort saved", |screen| {
-    screen
-      .db()
-      .orchestrator_settings()
-      .expect("settings")
-      .expect("saved")
-      .effort()
-      == Some("high")
+  assert_eq!(kept(&screen).1, None);
+  screen.set("orchestrator-model-custom", "claude-opus-5-5");
+  screen.until("a valid id", |screen| !screen.exists("orchestrator-model-custom-error"));
+  screen.click("orchestrator-settings-save-draft");
+  screen.until("the draft", |screen| {
+    kept(screen).1.is_some_and(|draft| draft.model().as_str() == "claude-opus-5-5")
   });
 }
 
@@ -77,7 +114,7 @@ fn orchestrator_settings_tabs_not_built_say_why() {
   assert!(
     screen
       .text("orchestrator-settings-note")
-      .contains("a change applies from the next reply")
+      .contains("a published change applies from the next reply")
   );
 }
 
@@ -87,6 +124,12 @@ fn orchestrator_settings_head_is_laid_out_as_designed() {
   screen.settings();
   screen.until("the summary", |screen| {
     screen.text("orchestrator-settings-summary").contains("haiku")
+  });
+  // As `jmyWu` draws it: a draft saved, Publish v2, no note under them.
+  screen.choose("orchestrator-model", "opus");
+  screen.click("orchestrator-settings-save-draft");
+  screen.until("the draft", |screen| {
+    screen.text("orchestrator-settings-saved") == "Draft saved · Published v1"
   });
   // `Head` `b8gGj`, from the breadcrumb's foot: the title row (47) and the summary (24), 12 apart, then the tabs.
   // The shared breadcrumb is 18 high where the design's is 16; the rest is measured from it.

@@ -42,8 +42,14 @@ const ATTACH_SIZE: f32 = 26.0;
 /// What sending does now.
 #[derive(Clone)]
 pub(super) enum Sending {
-  /// Nothing can be sent, and why: nothing is written, the Orchestrator has nothing to run on, or it answers.
+  /// Nothing can be sent, and why: the Orchestrator has nothing to run on, or it answers.
   Held(Arc<str>),
+  /// Nothing is written, as `why` says, as far as the screen last drew it. The keys still send: the words typed
+  /// just before them may not be drawn yet, and sending reads the draft as it is then.
+  Empty {
+    why: Arc<str>,
+    press: Arc<dyn Fn() + Send + Sync>,
+  },
   /// The message is being sent.
   Busy,
   Ready(Arc<dyn Fn() + Send + Sync>),
@@ -134,7 +140,7 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>) -> Element {
   };
   let (gained, lost) = (composer.focused.clone(), composer.focused.clone());
   let press = match composer.sending {
-    Sending::Ready(press) => Some(press.clone()),
+    Sending::Ready(press) | Sending::Empty { press, .. } => Some(press.clone()),
     Sending::Held(_) | Sending::Busy => None,
   };
   let first = if composer.start { START_LINES } else { 1 };
@@ -224,7 +230,7 @@ fn send(ctx: &mut Ctx, sending: &Sending) -> Element {
       (button, label.clone())
     }
     Sending::Busy => (inert(Button::empty()).describe("state", "loading"), label.clone()),
-    Sending::Held(why) => (
+    Sending::Held(why) | Sending::Empty { why, .. } => (
       inert(Button::empty())
         .describe("state", "disabled")
         .opacity(DISABLED_OPACITY),

@@ -15,12 +15,15 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ChatId;
-use orchester_workspace::orchestrator::{chat::ChatView, send::SendError, settings::Readiness, tools::ChatScope};
+use orchester_workspace::{
+  messages::Message,
+  orchestrator::{chat::ChatView, send::SendError, settings::Readiness, tools::ChatScope},
+};
 
 use super::{
   View,
   composer::{ComposerBox, Sending, composer, keys},
-  data::{Reads, Shown},
+  data::{Read, Reads, Shown},
   start::start,
   timeline::{TurnEnv, TurnRow, list},
   turns::{Turn, turns},
@@ -51,11 +54,16 @@ pub(super) fn main(
 ) -> Element {
   let sending = view.send.state().get();
   let thinking = matches!(&reads.shown, Shown::Chat(shown) if shown.thinking());
-  let held = held(ctx, view, (readiness, thinking));
+  let held = held(ctx, (readiness, thinking));
   let state = if sending.is_pending() {
     Sending::Busy
   } else if let Some(why) = held {
     Sending::Held(why)
+  } else if view.draft.get().trim().is_empty() {
+    Sending::Empty {
+      why: ctx.t("orchestrator.composer.sendEmpty"),
+      press: view.send_draft(project, reads.target),
+    }
   } else {
     Sending::Ready(view.send_draft(project, reads.target))
   };
@@ -64,9 +72,12 @@ pub(super) fn main(
     .error
     .as_ref()
     .map(|error| send_problem(ctx, view, project, reads.target, error));
-  let not_ready = readiness
-    .filter(|readiness| !readiness.is_ready())
-    .map(|readiness| not_ready(ctx, project, readiness));
+  let not_ready = match &reads.setup {
+    Read::Failed(error) => Some(setup_failed(ctx, project, error)),
+    _ => readiness
+      .filter(|readiness| !readiness.is_ready())
+      .map(|readiness| not_ready(ctx, project, readiness)),
+  };
   let pending = sending
     .is_pending()
     .then(|| view.outgoing.get())
@@ -111,21 +122,34 @@ pub(super) fn main(
   }
 }
 
-/// Why nothing can be sent now: the Orchestrator has nothing to run on, it is still answering, or nothing is
-/// written.
-fn held(ctx: &Ctx, view: &View, (readiness, thinking): (Option<&Readiness>, bool)) -> Option<Arc<str>> {
+/// What the Orchestrator runs on could not be read, so nothing can be sent: why, and *Retry*.
+fn setup_failed(ctx: &mut Ctx, project: &ShownProject, error: &Message) -> Element {
+  let runners = Services::of(ctx).runners;
+  let root = project.open.repo_root.clone();
+  let retry = ActionButton::new(
+    "orchestrator-setup-retry",
+    ButtonKind::Primary,
+    ctx.t("orchestrator.failure.retry"),
+  )
+  .icon(Icon::RotateCcw)
+  .on_click(move || runners.chat_changed(&root));
+  Notice::new(
+    "orchestrator-setup-failed",
+    NoticeTone::Danger,
+    ctx.t("orchestrator.setupFailed"),
+  )
+  .icon(Icon::CircleAlert)
+  .body(message_text(ctx, error))
+  .action(retry)
+  .into()
+}
+
+/// Why nothing can be sent now: the Orchestrator has nothing to run on, or it is still answering.
+fn held(ctx: &Ctx, (readiness, thinking): (Option<&Readiness>, bool)) -> Option<Arc<str>> {
   if !readiness.is_some_and(Readiness::is_ready) {
     return Some(ctx.t("orchestrator.composer.notReady"));
   }
-  if thinking {
-    return Some(ctx.t("orchestrator.composer.thinking"));
-  }
-  view
-    .draft
-    .get()
-    .trim()
-    .is_empty()
-    .then(|| ctx.t("orchestrator.composer.sendEmpty"))
+  thinking.then(|| ctx.t("orchestrator.composer.thinking"))
 }
 
 /// The turns of `shown` (none for a new conversation) and the one being sent, over the composer.
@@ -148,7 +172,7 @@ fn conversation(
     _ => None,
   };
   let env = Arc::new(env(view, project, (chat, connection)));
-  let can_ask = matches!(state, Sending::Ready(_) | Sending::Held(_)) && chat.is_some();
+  let can_ask = matches!(state, Sending::Ready(_) | Sending::Held(_) | Sending::Empty { .. }) && chat.is_some();
   let stopping = view.stop.state().get().is_pending();
   let count = all.len();
   let rows = all

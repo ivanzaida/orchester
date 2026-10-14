@@ -65,7 +65,7 @@ pub fn prepare(
   }
   if orchestrator {
     let settings = OrchestratorSettings::new(connection.id(), ModelId::new(MODEL)?, Some("high".to_owned()));
-    db.save_orchestrator_settings(&settings)?;
+    db.publish_orchestrator(&settings, Timestamp::now())?;
   }
   let keys: Vec<String> = seeded.tasks.iter().map(|task| task.key.clone()).collect();
   let shown = seeded.tasks.first().map_or_else(String::new, |task| {

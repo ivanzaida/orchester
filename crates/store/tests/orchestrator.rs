@@ -18,14 +18,25 @@ fn body(text: &str) -> MessageBody {
 }
 
 #[test]
-fn orchestrator_settings_are_none_until_saved_then_replaced() {
+fn orchestrator_settings_are_drafted_then_published_as_numbered_versions() {
   let (_repo, mut db, _run, _execution) = started_run();
   assert_eq!(db.orchestrator_settings().expect("read"), None);
+  assert_eq!(db.orchestrator_draft().expect("read"), None);
   let first = OrchestratorSettings::new(ConnectionId::generate(), model(), Some("high".to_owned()));
-  db.save_orchestrator_settings(&first).expect("saved");
+  db.save_orchestrator_draft(&first, at(10)).expect("drafted");
+  assert_eq!(db.orchestrator_draft().expect("read"), Some(first.clone()));
+  assert_eq!(
+    db.orchestrator_settings().expect("read"),
+    None,
+    "a draft is not what the chat runs on"
+  );
+  assert_eq!(db.publish_orchestrator(&first, at(20)).expect("published"), 1);
+  assert_eq!(db.orchestrator_draft().expect("read"), None, "publishing is done with the draft");
   let second = OrchestratorSettings::new(ConnectionId::generate(), model(), None);
-  db.save_orchestrator_settings(&second).expect("replaced");
-  assert_eq!(db.orchestrator_settings().expect("read"), Some(second));
+  db.save_orchestrator_draft(&second, at(30)).expect("drafted");
+  assert_eq!(db.orchestrator_settings().expect("read"), Some(first));
+  assert_eq!(db.publish_orchestrator(&second, at(40)).expect("published"), 2);
+  assert_eq!(db.orchestrator_published().expect("read"), Some((2, second)));
 }
 
 #[test]

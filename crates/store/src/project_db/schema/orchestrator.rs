@@ -1,14 +1,25 @@
-//! The project's Orchestrator chat (`orchester_core::orchestrator`): the connection and model it runs on, its
+//! The project's Orchestrator chat (`orchester_core::orchestrator`): the versions of the connection and model it
+//! runs on and their draft, its
 //! conversations, what each holds in the order it was kept, and what its turns spent.
 
 pub(super) const MIGRATION: &str = r"
--- One row once a person chose what the Orchestrator runs on. The connection is not a reference: a connection
--- removed later leaves the choice for the settings to show as gone.
-CREATE TABLE orchestrator_settings (
+-- What the Orchestrator runs on, as agent profiles are versioned: each version a person published, the chat on the
+-- latest, and at most one draft saved since. The connection is not a reference: a connection removed later leaves
+-- the choice for the settings to show as gone.
+CREATE TABLE orchestrator_versions (
+  version INTEGER PRIMARY KEY CHECK (version > 0),
+  connection_id TEXT NOT NULL,
+  model TEXT NOT NULL CHECK (model <> ''),
+  effort TEXT CHECK (effort IS NULL OR effort <> ''),
+  published_at INTEGER NOT NULL
+) STRICT;
+
+CREATE TABLE orchestrator_draft (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   connection_id TEXT NOT NULL,
   model TEXT NOT NULL CHECK (model <> ''),
-  effort TEXT CHECK (effort IS NULL OR effort <> '')
+  effort TEXT CHECK (effort IS NULL OR effort <> ''),
+  saved_at INTEGER NOT NULL
 ) STRICT;
 
 -- The agent CLI session the turns continue is set by the first turn that reports one, with its connection and
