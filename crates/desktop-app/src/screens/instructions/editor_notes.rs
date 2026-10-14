@@ -1,4 +1,6 @@
 //! Injection explanations and publication recovery in ilieH / J7EgbM.
+use std::collections::BTreeSet;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -11,6 +13,7 @@ use orchester_core::resource::Variable;
 use orchester_workspace::instructions::{
   data::ProjectInstructions,
   form::{Events, ScopeChoice},
+  publication::Unavailable,
 };
 
 use super::{fields::Fields, words};
@@ -65,22 +68,31 @@ pub fn scope(ctx: &Ctx, fields: &Fields, data: &ProjectInstructions) -> Option<E
   )
 }
 pub fn warning(ctx: &Ctx, fields: &Fields) -> Option<Element> {
-  let variable = fields.blocked.get().0.first().copied()?;
+  let Unavailable { variable, event } = fields.blocked().first().copied()?;
   let context = fields.preview_context.get();
   let expression = format!("{{{{{}}}}}", variable.name());
   let title = ctx.t_args(
     "instructions.unavailableTitle",
     [
       ("expression", expression),
-      ("event", words::event(ctx, fields.events.get()).to_string()),
+      (
+        "event",
+        words::event(ctx, Events::of(&BTreeSet::from([event]))).to_string(),
+      ),
     ],
   );
-  let mut note = Notice::new("instruction-publication-warning", NoticeTone::Warning, title)
-    .stacked()
-    .body(ctx.t_args(
+  // Without a task to preview there is no role or step to name.
+  let detail = if context.role.is_empty() {
+    ctx.t("instructions.unavailableDetailAnyAgent")
+  } else {
+    ctx.t_args(
       "instructions.unavailableDetail",
       [("role", context.role), ("step", context.step)],
-    ));
+    )
+  };
+  let mut note = Notice::new("instruction-publication-warning", NoticeTone::Warning, title)
+    .stacked()
+    .body(detail);
   if variable == Variable::RunRevision {
     let events = fields.events.clone();
     let frozen = fields.frozen.clone();

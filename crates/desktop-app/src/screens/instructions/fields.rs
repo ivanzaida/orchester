@@ -10,10 +10,11 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::resource::{Instruction, Variable};
+use orchester_core::resource::{Instruction, PromptText, Variable};
 use orchester_workspace::instructions::{
   data::{InstructionEntry, ProjectInstructions},
-  form::{Events, FormErrors, InstructionForm, Picked, ScopeChoice, Target},
+  form::{Events, FormErrors, InstructionForm, ScopeChoice, Target},
+  publication::{self, Unavailable},
 };
 
 use super::{state::Tab, words};
@@ -70,8 +71,6 @@ pub struct Fields {
   pub targets: Signal<Vec<Target>>,
   pub events: Signal<Events>,
   pub scope: Signal<ScopeChoice>,
-  pub preview_choice: Signal<Picked<orchester_workspace::instructions::preview::PreviewChoice>>,
-  pub blocked: Signal<MissingVariables>,
   pub retained: Signal<RetainedRuns>,
   pub preview_context: Signal<PreviewContext>,
 }
@@ -107,17 +106,11 @@ impl Fields {
       retained: ctx.signal(RetainedRuns(Vec::new())),
       input,
       unavailable: ctx.signal(MissingVariables(Variable::ALL.to_vec())),
-      blocked: ctx.signal(MissingVariables(
-        entry.map_or_else(Vec::new, |entry| entry.body.text().variables().to_vec()),
-      )),
       preview_context: ctx.signal(PreviewContext {
         task: String::new(),
         role: String::new(),
         step: String::new(),
       }),
-      preview_choice: ctx.signal(Picked(
-        orchester_workspace::instructions::preview::PreviewChoice::default(),
-      )),
       name: ctx.signal(entry.map_or_else(String::new, |e| e.name.to_string())),
       text,
       targets,
@@ -151,6 +144,13 @@ impl Fields {
     if current.scope == requested.scope {
       self.scope.set(ScopeChoice::of(entry.body.scope()));
     }
+  }
+  /// The prompt's variables without a value at one of the chosen events: publication waits for none.
+  pub fn blocked(&self) -> Vec<Unavailable> {
+    // A prompt that does not parse shows its own error and cannot be saved or published.
+    PromptText::new(&self.text.get())
+      .map(|text| publication::missing(&text, &self.events.get().set()))
+      .unwrap_or_default()
   }
   pub fn instruction(&self) -> Result<Instruction, FormErrors> {
     InstructionForm {
@@ -212,8 +212,8 @@ impl Fields {
       .child(row)
       .with_children(
         errors
-          .and_then(|e| e.settings.as_ref())
-          .map(|error| field_error("instruction-settings-error", &message_text(ctx, error))),
+          .and_then(|e| e.settings)
+          .map(|error| field_error("instruction-settings-error", &message_text(ctx, &error.message()))),
       )
       .into()
   }

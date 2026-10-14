@@ -1,6 +1,6 @@
 //! Behavioral and structural regressions for the returned fePhH findings.
 use orchester_core::resource::InstructionScope;
-use orchester_workspace::instructions::{editor, preview::PreviewChoice};
+use orchester_workspace::instructions::{editor, publication::Unavailable};
 
 use super::{harness::Instructions, preview::seed_preview};
 
@@ -28,7 +28,7 @@ fn instructions_import_is_a_dedicated_page_with_metadata_and_cancel() {
 }
 
 #[test]
-fn instructions_missing_value_locks_publication_and_rechecks_context_in_workspace() {
+fn instructions_missing_value_locks_publication_and_rechecks_the_event_in_workspace() {
   let mut screen = Instructions::new();
   seed_preview(&screen);
   let id = screen.rule(
@@ -47,12 +47,15 @@ fn instructions_missing_value_locks_publication_and_rechecks_context_in_workspac
   screen.click("instruction-publish");
   screen.pump();
   assert!(screen.entry(id).state.published().is_none());
-  assert_eq!(
-    editor::publish_for_in(&screen.root, &screen.entry(id), &PreviewChoice::default())
-      .expect_err("fresh publication check refuses unavailable revision")
-      .key,
-    "instructions.errors.variableUnavailable"
-  );
+  let refused = editor::publish_in(&screen.root, &screen.entry(id)).expect_err("the revision has no value at start");
+  assert!(matches!(
+    refused,
+    editor::WriteError::Unavailable(Unavailable {
+      variable: orchester_core::resource::Variable::RunRevision,
+      event: orchester_core::resource::InjectionEvent::Start,
+    })
+  ));
+  assert_eq!(refused.message().key, "instructions.errors.variableUnavailableAtStart");
   screen.set("instruction-prompt", "Working on {{task.title}}");
   screen.until("valid draft saved", |s| {
     s.entry(id).body.text().as_str() == "Working on {{task.title}}"

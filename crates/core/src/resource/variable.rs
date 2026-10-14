@@ -2,6 +2,8 @@ use std::str::FromStr;
 
 use thiserror::Error;
 
+use super::InjectionEvent;
+
 /// A value that prompt text can reference as `{{name}}`. This is the proposed catalog of the
 /// design ("Variable catalog proposal"); secret values are deliberately not part of it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -115,6 +117,19 @@ impl Variable {
       | Self::RunBaseRevision
       | Self::RunRevision => VariableGroup::Run,
       Self::StepId | Self::StepName => VariableGroup::Step,
+    }
+  }
+
+  /// Whether every agent given a prompt at `event` gets a value for the variable, so that a rule using
+  /// it can be published for that event (05.A `m2WjL`). `run.revision` has none before the run's first
+  /// checkpoint, which an agent's start can precede; the design names the resume as the later event
+  /// that has it. A task's attachments and creation time and the project's repository and default
+  /// branch are not known to a run yet ([`crate::run::PromptInput::value`]).
+  pub const fn has_value_at(self, event: InjectionEvent) -> bool {
+    match self {
+      Self::RunRevision => matches!(event, InjectionEvent::Resume),
+      Self::TaskAttachments | Self::TaskCreatedAt | Self::ProjectRepository | Self::ProjectDefaultBranch => false,
+      _ => true,
     }
   }
 

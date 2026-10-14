@@ -2,6 +2,7 @@
 mod clipboard;
 mod design_states;
 mod discovery;
+mod events;
 mod harness;
 mod insertion;
 mod library;

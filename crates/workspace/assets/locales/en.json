@@ -876,7 +876,8 @@
       "stepRequired": "Choose the step the rule applies to.",
       "targetsRequired": "Choose the agents the rule applies to.",
       "settingsInvalid": "These settings cannot be saved together.",
-      "variableUnavailable": "{{variable}} has no value in the selected context. Choose a run that has it, or another variable, before publishing."
+      "variableUnavailableAtStart": "{{variable}} has no value when an agent starts, so the rule cannot be published for Agent start. Choose another event or another variable.",
+      "variableUnavailableAtResume": "{{variable}} has no value when an agent resumes, so the rule cannot be published for Agent resume. Choose another event or another variable."
     }
   },
   "skills": {

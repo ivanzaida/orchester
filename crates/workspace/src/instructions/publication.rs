@@ -1,37 +1,33 @@
-//! Publication from an editor preview requires every referenced value in that context.
-use std::path::Path;
+//! Publication requires every variable a rule uses to have a value at each of its injection events
+//! (05.A `m2WjL`); which preview the person picked does not matter.
+use std::collections::BTreeSet;
 
-use orchester_core::resource::{Instruction, Variable};
+use orchester_core::resource::{InjectionEvent, PromptText, Variable};
 
-use super::{
-  data::InstructionEntry,
-  preview::{PreviewCatalog, PreviewChoice, Resolved},
-};
-use crate::messages::{self, Message};
+use super::preview::PreviewCatalog;
 
-/// Values required by this rule, never inferred from the other preview sources.
-pub fn missing(body: &Instruction, resolved: Option<&Resolved<'_>>) -> Vec<Variable> {
-  body
-    .text()
+/// A variable of a rule without a value at one of the rule's injection events.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Unavailable {
+  pub variable: Variable,
+  /// The first of the rule's events at which it has none.
+  pub event: InjectionEvent,
+}
+
+/// The variables of `text` that have no value at one of `events`, in order of first use.
+pub fn missing(text: &PromptText, events: &BTreeSet<InjectionEvent>) -> Vec<Unavailable> {
+  text
     .variables()
     .iter()
-    .copied()
-    .filter(|variable| resolved.is_none_or(|context| context.value(*variable).is_none()))
+    .filter_map(|&variable| {
+      events
+        .iter()
+        .find(|event| !variable.has_value_at(**event))
+        .map(|&event| Unavailable { variable, event })
+    })
     .collect()
 }
 
-/// Re-read context immediately before publishing; UI availability is only an affordance.
-pub fn ensure_in(root: &Path, entry: &InstructionEntry, choice: &PreviewChoice) -> Result<(), Message> {
-  if entry.body.text().variables().is_empty() {
-    return Ok(());
-  }
-  let catalog = PreviewCatalog::load_in(root).map_err(|error| messages::store_error(&error))?;
-  let resolved = catalog.resolve(choice);
-  if let Some(variable) = missing(&entry.body, resolved.as_ref().ok()).first() {
-    return Err(Message::new("instructions.errors.variableUnavailable").with("variable", variable.name().to_owned()));
-  }
-  Ok(())
-}
 /// An active run keeps the instruction version pinned when it started.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RetainedRun {

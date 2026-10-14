@@ -255,9 +255,3 @@ pub fn create(db: &mut ProjectDb, new: NewInstruction, now: Timestamp) -> Result
 pub fn create_in(repo_root: &Path, new: NewInstruction) -> Result<ResourceId, StoreError> {
   create(&mut ProjectDb::open(repo_root)?, new, Timestamp::now())
 }
-
-/// Publishes the stored draft; the version it became.
-pub fn publish_in(repo_root: &Path, id: ResourceId) -> Result<(VersionNumber, Timestamp), StoreError> {
-  let version = ProjectDb::open(repo_root)?.publish_draft::<Instruction>(id, Timestamp::now())?;
-  Ok((version.number(), version.published_at()))
-}

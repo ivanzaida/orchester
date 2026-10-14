@@ -68,8 +68,6 @@ pub struct Props {
   pub frozen: Signal<bool>,
   pub unavailable: Signal<super::fields::MissingVariables>,
   pub events: Signal<Events>,
-  pub preview_choice: Signal<Picked<PreviewChoice>>,
-  pub blocked: Signal<super::fields::MissingVariables>,
   pub retained: Signal<super::fields::RetainedRuns>,
   pub preview_context: Signal<super::fields::PreviewContext>,
   pub panel: Signal<Panel>,
@@ -113,7 +111,9 @@ impl Component for Panels {
     let props = ctx.props::<Props>().clone();
     let panel = props.panel.get();
     let catalog = self.catalog(ctx, &props);
-    self.update_availability(ctx, catalog.data.as_ref(), &props);
+    // A reload that failed keeps the previous catalog: nothing is shown or derived from it then.
+    let current = catalog.data.as_ref().filter(|_| !catalog.is_rejected());
+    self.update_availability(ctx, current, &props);
     if panel == Panel::Hidden {
       return Column::new().into();
     }
@@ -225,37 +225,18 @@ impl Panels {
       props.retained.set(super::fields::RetainedRuns(retained));
     }
 
-    let missing = catalog
-      .and_then(|catalog| catalog.resolve(&self.choice.get()).ok())
-      .map_or_else(
-        || Variable::ALL.to_vec(),
-        |resolved| {
-          Variable::ALL
-            .into_iter()
-            .filter(|variable| resolved.value(*variable).is_none())
-            .collect()
-        },
-      );
-    if props.unavailable.get_untracked().0 != missing {
-      props.unavailable.set(super::fields::MissingVariables(missing));
-    }
     let resolved = catalog.and_then(|catalog| catalog.resolve(&self.choice.get()).ok());
-    let blocked = props.entry.as_ref().map_or_else(Vec::new, |entry| {
-      orchester_workspace::instructions::publication::missing(&entry.body, resolved.as_ref())
-    });
-    if props.blocked.get_untracked().0 != blocked {
-      props.blocked.set(super::fields::MissingVariables(blocked));
-    }
-    let choice = resolved.as_ref().map_or_else(
-      || self.choice.get(),
-      |resolved| PreviewChoice {
-        task: Some(resolved.task.task.id()),
-        step: Some(resolved.step.key.clone()),
-        run: resolved.run.map(|run| run.id()),
+    let missing = resolved.as_ref().map_or_else(
+      || Variable::ALL.to_vec(),
+      |resolved| {
+        Variable::ALL
+          .into_iter()
+          .filter(|variable| resolved.value(*variable).is_none())
+          .collect()
       },
     );
-    if props.preview_choice.get_untracked().0 != choice {
-      props.preview_choice.set(Picked(choice));
+    if props.unavailable.get_untracked().0 != missing {
+      props.unavailable.set(super::fields::MissingVariables(missing));
     }
     if let Some(resolved) = resolved {
       let context = super::fields::PreviewContext {

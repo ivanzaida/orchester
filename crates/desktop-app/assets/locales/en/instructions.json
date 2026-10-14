@@ -223,6 +223,7 @@
     "attachmentsCount": "{{count}} attachments",
     "unavailableTitle": "{{expression}} has no value at {{event}}",
     "unavailableDetail": "{{role}} would not start with this rule, and {{step}} would fail naming the variable. Publishing waits until the variable has a value at the rule’s event.",
+    "unavailableDetailAnyAgent": "An agent would not start with this rule, and its step would fail naming the variable. Publishing waits until the variable has a value at the rule’s event.",
     "useBaseRevision": "Use {{expression}}",
     "thisRule": "{{kind}} · this rule",
     "viewerContext": "{{project}} / {{task}} · {{role}} · {{step}} · {{event}}",

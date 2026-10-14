@@ -1,33 +1,62 @@
-//! Checked instruction writes return the exact committed candidate, never a later writer's draft.
+//! Checked instruction writes return the exact committed candidate, never a later writer's draft. Every
+//! screen and tool that saves or publishes an instruction goes through them.
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   id::ResourceId,
   name::Name,
-  resource::{Draft, DraftSaved, Instruction, ResourceBody, Slug, Version},
+  resource::{Draft, DraftSaved, InjectionEvent, Instruction, ResourceBody, Slug, Version},
   store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use super::data::InstructionEntry;
+use super::{
+  data::InstructionEntry,
+  publication::{Unavailable, missing},
+};
 use crate::messages::{self, Message};
 
+/// Why a checked instruction write did not happen.
+#[derive(Debug, thiserror::Error)]
+pub enum WriteError {
+  #[error(transparent)]
+  Store(#[from] StoreError),
+  /// A variable of the rule has no value at one of its events; nothing was published.
+  #[error("{} has no value at {:?}", .0.variable.name(), .0.event)]
+  Unavailable(Unavailable),
+}
+
+impl WriteError {
+  pub fn message(&self) -> Message {
+    match self {
+      Self::Store(error) => messages::store_error(error),
+      Self::Unavailable(Unavailable { variable, event }) => Message::new(match event {
+        InjectionEvent::Start => "instructions.errors.variableUnavailableAtStart",
+        InjectionEvent::Resume => "instructions.errors.variableUnavailableAtResume",
+      })
+      .with("variable", format!("{{{{{}}}}}", variable.name())),
+    }
+  }
+
+  /// A conflicting write: the saved draft must be read again before a retry.
+  pub const fn needs_reload(&self) -> bool {
+    matches!(self, Self::Store(StoreError::DraftChanged(_)))
+  }
+}
+
 /// Creates the first draft with its complete validated body in a single store operation.
-pub fn create_in(root: &Path, name: Name, body: &Instruction) -> Result<InstructionEntry, Message> {
-  let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+pub fn create_in(root: &Path, name: Name, body: &Instruction) -> Result<InstructionEntry, WriteError> {
+  let mut db = ProjectDb::open(root)?;
   let taken = db
-    .resources(Instruction::KIND)
-    .map_err(|error| messages::store_error(&error))?
+    .resources(Instruction::KIND)?
     .iter()
     .map(|resource| resource.slug().clone())
     .collect::<Vec<_>>();
   let fallback = Slug::new("instruction").expect("the fallback slug is valid");
   let slug = Slug::unique_for(&name, &fallback, &taken);
   let now = Timestamp::now();
-  let resource = db
-    .create_resource(slug, name, body, now)
-    .map_err(|error| messages::store_error(&error))?;
+  let resource = db.create_resource(slug, name, body, now)?;
   Ok(committed(
     resource.id(),
     (resource.name().as_str().into(), resource.slug().as_str().into()),
@@ -36,18 +65,16 @@ pub fn create_in(root: &Path, name: Name, body: &Instruction) -> Result<Instruct
   ))
 }
 /// Saves only while the body, latest version and draft timestamp still match what was opened.
-pub fn save_in(root: &Path, expected: &InstructionEntry, body: Instruction) -> Result<InstructionEntry, Message> {
-  let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+pub fn save_in(root: &Path, expected: &InstructionEntry, body: Instruction) -> Result<InstructionEntry, WriteError> {
+  let mut db = ProjectDb::open(root)?;
   let now = Timestamp::now();
   let candidate = Draft::new(body, expected.based_on(), now);
   let mut matched_latest = None;
-  let outcome = db
-    .update_draft(expected.id, |draft, latest| {
-      ensure_same(expected, draft, latest.as_ref())?;
-      matched_latest = latest;
-      Ok(candidate.clone())
-    })
-    .map_err(|error| messages::store_error(&error))?;
+  let outcome = db.update_draft(expected.id, |draft, latest| {
+    ensure_same(expected, draft, latest.as_ref())?;
+    matched_latest = latest;
+    Ok(candidate.clone())
+  })?;
   let draft = if outcome == DraftSaved::Discarded {
     None
   } else {
@@ -60,15 +87,17 @@ pub fn save_in(root: &Path, expected: &InstructionEntry, body: Instruction) -> R
     matched_latest.as_ref(),
   ))
 }
-/// Publishes exactly the saved draft; a stale draft is refused by the shared lifecycle.
-pub fn publish_in(root: &Path, expected: &InstructionEntry) -> Result<InstructionEntry, Message> {
-  let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
-  let version = db
-    .publish_draft_with(expected.id, Timestamp::now(), |draft: Draft<Instruction>, latest| {
-      ensure_same(expected, Some(draft.clone()), latest.as_ref())?;
-      Ok(draft)
-    })
-    .map_err(|error| messages::store_error(&error))?;
+/// Publishes exactly the saved draft `expected`, if every variable it uses has a value at each of its
+/// events; a stale draft is refused by the shared lifecycle.
+pub fn publish_in(root: &Path, expected: &InstructionEntry) -> Result<InstructionEntry, WriteError> {
+  if let Some(unavailable) = missing(expected.body.text(), expected.body.events()).first() {
+    return Err(WriteError::Unavailable(*unavailable));
+  }
+  let mut db = ProjectDb::open(root)?;
+  let version = db.publish_draft_with(expected.id, Timestamp::now(), |draft: Draft<Instruction>, latest| {
+    ensure_same(expected, Some(draft.clone()), latest.as_ref())?;
+    Ok(draft)
+  })?;
   Ok(committed(
     expected.id,
     (expected.name.clone(), expected.slug.clone()),
@@ -76,20 +105,7 @@ pub fn publish_in(root: &Path, expected: &InstructionEntry) -> Result<Instructio
     Some(&version),
   ))
 }
-/// Publishes a saved draft after rechecking required values in the chosen preview.
-pub fn publish_for_in(
-  root: &Path,
-  expected: &InstructionEntry,
-  choice: &super::preview::PreviewChoice,
-) -> Result<InstructionEntry, Message> {
-  super::publication::ensure_in(root, expected, choice)?;
-  publish_in(root, expected)
-}
 
-/// A conflicting write whose saved draft must be read again before retrying publication.
-pub fn needs_reload(message: &Message) -> bool {
-  message.key == "errors.draftChanged"
-}
 fn ensure_same(
   expected: &InstructionEntry,
   draft: Option<Draft<Instruction>>,

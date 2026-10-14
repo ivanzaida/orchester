@@ -72,8 +72,8 @@ impl InstructionEditor {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .child(self.settings(ctx));
-    if let Some(error) = errors.and_then(|errors| errors.settings.as_ref()) {
-      settings = settings.child(field_error(&message_text(ctx, error)));
+    if let Some(error) = errors.and_then(|errors| errors.settings) {
+      settings = settings.child(field_error(&message_text(ctx, &error.message())));
     }
     Column::new()
       .id("instruction-editor")

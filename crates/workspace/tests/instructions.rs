@@ -5,14 +5,14 @@ use orchester_core::{
   id::ProjectId,
   name::Name,
   project::{Project, ProjectKey},
-  resource::{AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, PromptText},
+  resource::{AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, PromptText, Variable},
   store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
 use orchester_workspace::{
   agents::data::VersionState,
-  instructions::{data::ProjectInstructions, editor},
+  instructions::{data::ProjectInstructions, editor, publication::Unavailable},
 };
 
 fn project() -> tempfile::TempDir {
@@ -91,11 +91,11 @@ fn instructions_delayed_save_and_publish_refuse_another_writers_draft() {
   .expect("valid instruction fixture");
   let outside = editor::save_in(root.path(), &original, body("Outside")).expect("valid instruction fixture");
   let save_error = editor::save_in(root.path(), &original, body("Delayed")).expect_err("an outside change is refused");
-  assert_eq!(save_error.key, "errors.draftChanged");
-  assert!(editor::needs_reload(&save_error));
+  assert_eq!(save_error.message().key, "errors.draftChanged");
+  assert!(save_error.needs_reload());
   let publish_error = editor::publish_in(root.path(), &original).expect_err("an outside change is refused");
-  assert_eq!(publish_error.key, "errors.draftChanged");
-  assert!(editor::needs_reload(&publish_error));
+  assert_eq!(publish_error.message().key, "errors.draftChanged");
+  assert!(publish_error.needs_reload());
   assert_eq!(
     ProjectInstructions::load_in(root.path())
       .expect("valid instruction fixture")
@@ -113,7 +113,7 @@ fn instructions_stale_and_blank_drafts_remain_saved_after_publication_is_refused
   )
   .expect("valid instruction fixture");
   let blank_error = editor::publish_in(root.path(), &blank).expect_err("blank publication is refused");
-  assert!(!editor::needs_reload(&blank_error));
+  assert!(!blank_error.needs_reload());
   let initial = editor::create_in(
     root.path(),
     Name::new("Standards").expect("valid instruction fixture"),
@@ -137,4 +137,49 @@ fn instructions_stale_and_blank_drafts_remain_saved_after_publication_is_refused
       .entry(initial.id),
     Some(&stale)
   );
+}
+fn body_at(text: &str, events: &[InjectionEvent]) -> Instruction {
+  Instruction::new(
+    PromptText::new(text).expect("valid instruction fixture"),
+    AgentTargets::All,
+    events.iter().copied().collect(),
+    InstructionScope::Project,
+  )
+  .expect("valid instruction fixture")
+}
+#[test]
+fn instructions_publication_depends_on_the_rules_events_not_on_a_preview() {
+  // The project has no tasks and no runs: nothing could be previewed.
+  let root = project();
+  let create = |name: &str, body: &Instruction| {
+    editor::create_in(root.path(), Name::new(name).expect("valid instruction fixture"), body)
+      .expect("valid instruction fixture")
+  };
+  let task = create("Task", &body_at("Working on {{task.title}}", &[InjectionEvent::Start]));
+  let published = editor::publish_in(root.path(), &task).expect("a task's title has a value whenever an agent starts");
+  assert_eq!(published.state.published().map(|version| version.get()), Some(1));
+
+  let resume = create(
+    "Resume",
+    &body_at("Compare {{run.revision}}", &[InjectionEvent::Resume]),
+  );
+  editor::publish_in(root.path(), &resume).expect("a resumed agent has the run's latest checkpoint");
+
+  let both = body_at(
+    "Compare {{run.revision}}",
+    &[InjectionEvent::Start, InjectionEvent::Resume],
+  );
+  let start = create("Start", &both);
+  let refused = editor::publish_in(root.path(), &start).expect_err("no checkpoint before an agent's start");
+  assert!(matches!(
+    refused,
+    editor::WriteError::Unavailable(Unavailable {
+      variable: Variable::RunRevision,
+      event: InjectionEvent::Start,
+    })
+  ));
+  assert_eq!(refused.message().key, "instructions.errors.variableUnavailableAtStart");
+  assert!(!refused.needs_reload());
+  let unpublished = ProjectInstructions::load_in(root.path()).expect("valid instruction fixture");
+  assert_eq!(unpublished.entry(start.id), Some(&start), "the draft stays as it was");
 }

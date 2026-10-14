@@ -141,3 +141,28 @@ fn prompt_marked_rendering_records_where_each_value_went() {
     .collect();
   assert_eq!(marked, ["😀 retry", "Kontur"]);
 }
+
+#[test]
+fn prompt_variables_have_values_at_the_events_a_run_gives_them() {
+  use orchester_core::resource::InjectionEvent;
+  for variable in Variable::ALL {
+    let never = matches!(
+      variable,
+      Variable::TaskAttachments
+        | Variable::TaskCreatedAt
+        | Variable::ProjectRepository
+        | Variable::ProjectDefaultBranch
+    );
+    let at_start = !never && variable != Variable::RunRevision;
+    assert_eq!(
+      variable.has_value_at(InjectionEvent::Start),
+      at_start,
+      "{variable:?} at start"
+    );
+    assert_eq!(
+      variable.has_value_at(InjectionEvent::Resume),
+      !never,
+      "{variable:?} at resume"
+    );
+  }
+}

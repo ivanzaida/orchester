@@ -11,6 +11,7 @@ mod connections_window;
 mod gates;
 #[path = "../mcp_server/http.rs"]
 mod http;
+mod instructions;
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(
   dead_code,

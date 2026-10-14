@@ -6,11 +6,14 @@ use lurq::{
   },
   core::Signal,
 };
-use orchester_core::{name::Name, resource::Instruction};
+use orchester_core::{id::ResourceId, name::Name, resource::Instruction};
 use orchester_workspace::{
   activity::operations,
   background,
-  instructions::{data::InstructionEntry, editor},
+  instructions::{
+    data::InstructionEntry,
+    editor::{self, WriteError},
+  },
   messages::Message,
   tasks::outside::Outside,
   workspace::OpenProject,
@@ -20,13 +23,29 @@ use super::fields::{Fields, Snapshot};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Write {
+  Change(Box<Change>),
+  /// Reads the instruction again, keeping the fields edited since `Snapshot`.
+  Reload(ResourceId, Snapshot),
+}
+impl Write {
+  pub fn change(&self) -> Option<&Change> {
+    match self {
+      Self::Change(change) => Some(change),
+      Self::Reload(..) => None,
+    }
+  }
+}
+impl From<Change> for Write {
+  fn from(change: Change) -> Self {
+    Self::Change(Box::new(change))
+  }
+}
+/// A write to the instruction, recorded in the session's activity.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Change {
   Create(Name, Instruction),
   Save(InstructionEntry, Instruction),
-  Publish(
-    InstructionEntry,
-    orchester_workspace::instructions::preview::PreviewChoice,
-  ),
-  Reload(orchester_core::id::ResourceId, Snapshot),
+  Publish(InstructionEntry),
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Done {
@@ -35,46 +54,81 @@ pub struct Done {
   pub reload: Option<Snapshot>,
 }
 impl DevtoolsInspectable for Done {}
+/// Why an operation did not happen.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Failure {
+  /// The saved instruction changed since it was read: read it again before a retry.
+  Conflict(Message),
+  Other(Message),
+}
+impl Failure {
+  pub const fn message(&self) -> &Message {
+    match self {
+      Self::Conflict(message) | Self::Other(message) => message,
+    }
+  }
+}
+impl From<WriteError> for Failure {
+  fn from(error: WriteError) -> Self {
+    if error.needs_reload() {
+      Self::Conflict(error.message())
+    } else {
+      Self::Other(error.message())
+    }
+  }
+}
+impl DevtoolsInspectable for Failure {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Attempt(Option<Write>);
 impl DevtoolsInspectable for Attempt {}
 #[derive(Clone)]
 pub struct Work {
-  pub action: FutureAction<Write, Done, Message>,
+  pub action: FutureAction<Write, Done, Failure>,
   last: Signal<Attempt>,
   frozen: Signal<bool>,
 }
 impl Work {
+  /// Starts `write` unless an operation is in flight.
   pub fn run(&self, write: Write) {
-    if self.action.state().get_untracked().is_pending() {
-      return;
+    let creating = matches!(write.change(), Some(Change::Create(..)));
+    if self.action.run_if_idle(write.clone()) {
+      self.frozen.set(creating);
+      self.last.set(Attempt(Some(write)));
     }
-    self.frozen.set(matches!(write, Write::Create(..)));
-    self.last.set(Attempt(Some(write.clone())));
-    self.action.run(write);
   }
   pub fn publishing(&self) -> bool {
-    self.action.state().get().is_pending() && matches!(self.last.get().0, Some(Write::Publish(..)))
+    self.action.state().get().is_pending() && self.last_publishes()
   }
   pub fn publication_failed(&self) -> bool {
-    self.action.state().get().is_rejected() && matches!(self.last.get().0, Some(Write::Publish(..)))
+    self.action.state().get().is_rejected() && self.last_publishes()
+  }
+  fn last_publishes(&self) -> bool {
+    matches!(
+      self.last.get().0.as_ref().and_then(Write::change),
+      Some(Change::Publish(..))
+    )
   }
   pub fn retry(&self, fields: &Fields) -> Option<Write> {
     // Fields display parse errors; invalid current input disables a write retry.
-    match self.last.get().0? {
-      Write::Reload(id, _) => Some(Write::Reload(id, fields.snapshot())),
-      Write::Save(expected, _) => fields.instruction().ok().map(|body| Write::Save(expected, body)),
-      Write::Publish(expected, _) => fields
+    let last = match self.last.get().0? {
+      Write::Reload(id, _) => return Some(Write::Reload(id, fields.snapshot())),
+      Write::Change(change) => *change,
+    };
+    let change = match last {
+      Change::Save(expected, _) => fields.instruction().ok().map(|body| Change::Save(expected, body)),
+      Change::Publish(expected) => fields
         .instruction()
         .ok()
         .filter(|body| *body == expected.body)
-        .filter(|_| fields.blocked.get().0.is_empty())
-        .map(|_| Write::Publish(expected, fields.preview_choice.get().0)),
-      Write::Create(..) => fields
-        .instruction()
-        .ok()
-        .and_then(|body| Name::new(&fields.name.get()).ok().map(|name| Write::Create(name, body))),
-    }
+        .filter(|_| fields.blocked().is_empty())
+        .map(|_| Change::Publish(expected)),
+      Change::Create(..) => fields.instruction().ok().and_then(|body| {
+        Name::new(&fields.name.get())
+          .ok()
+          .map(|name| Change::Create(name, body))
+      }),
+    };
+    change.map(Write::from)
   }
 }
 
@@ -84,20 +138,10 @@ pub fn action(ctx: &mut Ctx, project: &OpenProject, fields: &Fields) -> Work {
   let action = ctx.future_action(move |write: Write| {
     let (project, services) = (project.clone(), services.clone());
     async move {
-      if let Write::Reload(id, requested) = write {
-        services.hold.released().await;
-        return background::run(move || {
-          let entry = orchester_workspace::instructions::data::entry_in(&project.repo_root, id)
-            .map_err(|error| orchester_workspace::messages::store_error(&error))?;
-          Ok(Done {
-            entry,
-            published: false,
-            reload: Some(requested),
-          })
-        })
-        .await?;
+      match write {
+        Write::Reload(id, requested) => reload(&project, &services, id, requested).await,
+        Write::Change(change) => record(&project, &services, *change).await,
       }
-      record(&project, &services, write).await
     }
   });
   Work {
@@ -106,32 +150,49 @@ pub fn action(ctx: &mut Ctx, project: &OpenProject, fields: &Fields) -> Work {
     frozen: fields.frozen.clone(),
   }
 }
-async fn record(project: &OpenProject, services: &crate::services::Services, write: Write) -> Result<Done, Message> {
-  let spec = match &write {
-    Write::Create(name, _) => operations::instruction_create(project, name.as_str()),
-    Write::Save(entry, _) => operations::instruction_draft(project, entry.id, &entry.name),
-    Write::Publish(entry, _) => operations::instruction_publish(
+async fn reload(
+  project: &OpenProject,
+  services: &crate::services::Services,
+  id: ResourceId,
+  requested: Snapshot,
+) -> Result<Done, Failure> {
+  services.hold.released().await;
+  let root = project.repo_root.clone();
+  let entry = background::run(move || orchester_workspace::instructions::data::entry_in(&root, id))
+    .await
+    .map_err(Failure::Other)?
+    .map_err(|error| Failure::Other(orchester_workspace::messages::store_error(&error)))?;
+  Ok(Done {
+    entry,
+    published: false,
+    reload: Some(requested),
+  })
+}
+async fn record(project: &OpenProject, services: &crate::services::Services, change: Change) -> Result<Done, Failure> {
+  let spec = match &change {
+    Change::Create(name, _) => operations::instruction_create(project, name.as_str()),
+    Change::Save(entry, _) => operations::instruction_draft(project, entry.id, &entry.name),
+    Change::Publish(entry) => operations::instruction_publish(
       project,
       entry.id,
       &entry.name,
       entry.state.published().map_or(1, |v| v.get().saturating_add(1)),
     ),
-    Write::Reload(..) => unreachable!("reload returns before recording a write"),
   };
   let activity = services.activity.start(spec);
-  let published = matches!(write, Write::Publish(..));
+  let published = matches!(change, Change::Publish(..));
   let root = project.repo_root.clone();
-  let result = background::run(move || match write {
-    Write::Create(name, body) => editor::create_in(&root, name, &body),
-    Write::Save(entry, body) => editor::save_in(&root, &entry, body),
-    Write::Publish(entry, choice) => editor::publish_for_in(&root, &entry, &choice),
-    Write::Reload(..) => unreachable!("reload returns before a write"),
+  let result = background::run(move || match change {
+    Change::Create(name, body) => editor::create_in(&root, name, &body),
+    Change::Save(entry, body) => editor::save_in(&root, &entry, body),
+    Change::Publish(entry) => editor::publish_in(&root, &entry),
   })
   .await
-  .and_then(|result| result);
+  .map_err(Failure::Other)
+  .and_then(|result| result.map_err(Failure::from));
   match &result {
     Ok(_) => activity.finish(),
-    Err(error) => activity.fail(error.clone()),
+    Err(error) => activity.fail(error.message().clone()),
   }
   result.map(|entry| {
     services.changes.record(project.project.id(), Outside::Instructions);

@@ -10,24 +10,24 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{name::Name, resource::Instruction};
+use orchester_core::name::Name;
 use orchester_workspace::{
   agents::data::VersionState,
   instructions::{
     data::{InstructionEntry, ProjectInstructions},
-    editor,
     form::FormErrors,
+    publication,
   },
-  messages::Message,
 };
 
 use super::{
+  autosave::Autosave,
   fields::Fields,
   library,
   panels::{self, Panel},
   state::{Saved, Selection, Tab, View},
   words,
-  work::{self, Write},
+  work::{self, Change, Failure, Write},
 };
 use crate::{
   project::ShownProject,
@@ -62,13 +62,11 @@ impl PartialEq for Props {
   }
 }
 impl DevtoolsInspectable for Props {}
-#[derive(Clone, PartialEq)]
-struct Snapshot(Option<Instruction>);
-impl DevtoolsInspectable for Snapshot {}
 pub struct Editor {
   fields: Fields,
   saved: Signal<Saved>,
   work: work::Work,
+  autosave: Autosave,
   panel: Signal<Panel>,
   published: Signal<Option<u32>>,
 }
@@ -77,18 +75,22 @@ impl Component for Editor {
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<Props>().clone();
     let fields = Fields::new(ctx, props.tab, props.entry.as_ref());
+    let saved = ctx.signal(Saved(props.entry.clone()));
+    let work = work::action(ctx, &props.project.open, &fields);
+    let published = ctx.signal(None);
+    let autosave = Autosave::new(ctx, &fields, saved.clone(), work.clone(), published.clone());
     let editor = Self {
       fields: fields.clone(),
-      saved: ctx.signal(Saved(props.entry.clone())),
-      work: work::action(ctx, &props.project.open, &fields),
+      saved: saved.clone(),
+      work,
+      autosave: autosave.clone(),
       panel: ctx.signal(match props.tab {
         Tab::Roles => Panel::Hidden,
         Tab::Steps => Panel::Preview,
         _ => Panel::Variables,
       }),
-      published: ctx.signal(None),
+      published: published.clone(),
     };
-    let (saved, published) = (editor.saved.clone(), editor.published.clone());
     let selection = props.selection.clone();
     let revision = props.revision.clone();
     let fields = editor.fields.clone();
@@ -106,6 +108,7 @@ impl Component for Editor {
           published.set(done.entry.state.published().map(|v| v.get()));
         }
         revision.update(|v| *v += 1);
+        autosave.again();
         // Opening the newly created resource preserves the complete body just saved.
         if matches!(selection.view.get_untracked(), View::New(_)) {
           selection.created.set(Saved(Some(done.entry.clone())));
@@ -136,7 +139,8 @@ impl Component for Editor {
     if props.selection.busy.get_untracked() != busy {
       props.selection.busy.set(busy);
     }
-    self.autosave(ctx, &props, parsed.as_ref().ok(), dirty);
+    // A plain cell, not a signal: the autosave reads it when its rest ends, and nothing renders from it.
+    self.autosave.reading.set(props.reading);
     let live = saved.as_ref().map(|entry| InstructionEntry {
       body: parsed.as_ref().map_or_else(|_| entry.body.clone(), Clone::clone),
       state: if dirty {
@@ -167,8 +171,6 @@ impl Component for Editor {
         frozen: self.fields.frozen.clone(),
         unavailable: self.fields.unavailable.clone(),
         events: self.fields.events.clone(),
-        preview_choice: self.fields.preview_choice.clone(),
-        blocked: self.fields.blocked.clone(),
         retained: self.fields.retained.clone(),
         preview_context: self.fields.preview_context.clone(),
         panel: self.panel.clone(),
@@ -190,31 +192,6 @@ impl Component for Editor {
   }
 }
 impl Editor {
-  fn autosave(&self, ctx: &mut Ctx, props: &Props, body: Option<&Instruction>, dirty: bool) {
-    let candidate = body
-      .filter(|_| dirty && self.saved.get().0.is_some() && !props.reading)
-      .cloned();
-    let ready = ctx
-      .future(candidate, |body| async move {
-        tokio::time::sleep(std::time::Duration::from_millis(700)).await;
-        Ok::<_, Message>(Snapshot(body))
-      })
-      .state()
-      .get();
-    let writing = self.work.action.state().get();
-    if ready.is_fulfilled()
-      && !writing.is_pending()
-      && !writing.is_rejected()
-      && let Some(Snapshot(Some(body))) = ready.data
-      && self.fields.instruction().as_ref() == Ok(&body)
-      && let Some(entry) = self.saved.get().0
-      && body != entry.body
-    {
-      props.selection.busy.set(true);
-      self.published.set(None);
-      self.work.run(Write::Save(entry, body));
-    }
-  }
   fn body(&self, ctx: &mut Ctx, props: &Props, errors: Option<&FormErrors>, dirty: bool, busy: bool) -> Element {
     let saved_value = self.saved.get().0;
     let saved = saved_value.as_ref();
@@ -242,7 +219,7 @@ impl Editor {
           .child(prompt)
           .with_children(super::editor_notes::warning(ctx, &self.fields))
           .with_children(
-            (self.fields.blocked.get().0.is_empty() || (busy && !self.work.publishing())).then(|| {
+            (self.fields.blocked().is_empty() || (busy && !self.work.publishing())).then(|| {
               Row::new()
                 .spacing(SpacingSize::Sm)
                 .child(crate::ui::icon::icon(
@@ -292,10 +269,10 @@ impl Editor {
       words::publication_failure(
         ctx,
         self.saved.get().0.as_ref().and_then(|entry| entry.state.published()),
-        &error,
+        error.message(),
       )
     } else {
-      (ctx.t("instructions.writeFailed"), message_text(ctx, &error))
+      (ctx.t("instructions.writeFailed"), message_text(ctx, error.message()))
     };
     let notice =
       crate::ui::notice::Notice::new("instruction-write-error", crate::ui::notice::NoticeTone::Danger, title)
@@ -337,15 +314,13 @@ impl Editor {
       return body;
     };
     let rejected = self.work.action.state().get().is_rejected();
-    let conflict = self
-      .work
-      .action
-      .state()
-      .get()
-      .error
-      .is_some_and(|error| editor::needs_reload(&error));
-    let retry_keeps_draft =
-      self.work.publication_failed() && !conflict && matches!(self.work.retry(&self.fields), Some(Write::Publish(..)));
+    let conflict = matches!(self.work.action.state().get().error, Some(Failure::Conflict(_)));
+    let retry_keeps_draft = self.work.publication_failed()
+      && !conflict
+      && matches!(
+        self.work.retry(&self.fields).as_ref().and_then(Write::change),
+        Some(Change::Publish(..))
+      );
     if props.entry.as_ref() == Some(entry)
       && (!rejected || retry_keeps_draft)
       && !matches!(entry.state, VersionState::StaleDraft { .. })
@@ -360,11 +335,7 @@ impl Editor {
       ButtonKind::Secondary,
       ctx.t("instructions.reload"),
     )
-    .on_click(move || {
-      if !work.action.state().get_untracked().is_pending() {
-        work.run(Write::Reload(id, fields.snapshot()));
-      }
-    });
+    .on_click(move || work.run(Write::Reload(id, fields.snapshot())));
     body
       .with_children(
         (props.entry.as_ref() != Some(entry))
@@ -450,8 +421,6 @@ impl Editor {
     let state = saved.map_or(VersionState::Draft { published: None }, |e| e.state);
     let number = state.published().map_or(1, |v| v.get().saturating_add(1));
     let work = self.work.clone();
-    let blocked = self.fields.blocked.clone();
-    let choice = self.fields.preview_choice.clone();
     if let Some(entry) = saved {
       if !dirty && !state.has_draft() {
         let panel = self.panel.clone();
@@ -471,15 +440,15 @@ impl Editor {
       )
       .icon(Icon::Upload)
       .on_click(move || {
-        if !work.action.state().get_untracked().is_pending() && blocked.get_untracked().0.is_empty() {
-          work.run(Write::Publish(entry.clone(), choice.get_untracked().0));
+        if publication::missing(entry.body.text(), entry.body.events()).is_empty() {
+          work.run(Change::Publish(entry.clone()).into());
         }
       });
       if self.work.publishing() {
         publish.loading()
       } else if busy || dirty || !state.has_draft() || matches!(state, VersionState::StaleDraft { .. }) {
         publish.unavailable(ctx.t("instructions.publishSaveWaiting"))
-      } else if !self.fields.blocked.get().0.is_empty() {
+      } else if !self.fields.blocked().is_empty() {
         publish.unavailable(ctx.t("instructions.publishWaiting"))
       } else {
         publish
@@ -498,10 +467,8 @@ impl Editor {
       )
       .icon(Icon::Save)
       .on_click(move || {
-        if !work.action.state().get_untracked().is_pending()
-          && let Some((name, body)) = &candidate
-        {
-          work.run(Write::Create(name.clone(), body.clone()));
+        if let Some((name, body)) = &candidate {
+          work.run(Change::Create(name.clone(), body.clone()).into());
         }
       });
       if busy {

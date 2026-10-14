@@ -74,7 +74,8 @@ impl Events {
     }
   }
 
-  fn set(self) -> BTreeSet<InjectionEvent> {
+  /// The events chosen.
+  pub fn set(self) -> BTreeSet<InjectionEvent> {
     match self {
       Self::Start => BTreeSet::from([InjectionEvent::Start]),
       Self::Resume => BTreeSet::from([InjectionEvent::Resume]),
@@ -103,22 +104,18 @@ impl ScopeChoice {
     }
   }
 
-  fn scope(&self) -> Result<InstructionScope, Message> {
+  fn scope(&self) -> Result<InstructionScope, SettingsError> {
     Ok(match self {
       Self::Project => InstructionScope::Project,
       Self::AgentRole(role) => InstructionScope::AgentRole {
-        role: role
-          .clone()
-          .ok_or_else(|| Message::new("instructions.errors.roleRequired"))?,
+        role: role.clone().ok_or(SettingsError::RoleRequired)?,
       },
       Self::Pipeline(pipeline) => InstructionScope::Pipeline {
-        pipeline: pipeline.ok_or_else(|| Message::new("instructions.errors.pipelineRequired"))?,
+        pipeline: pipeline.ok_or(SettingsError::PipelineRequired)?,
       },
       Self::Step(pipeline, step) => InstructionScope::Step {
-        pipeline: pipeline.ok_or_else(|| Message::new("instructions.errors.pipelineRequired"))?,
-        step: step
-          .clone()
-          .ok_or_else(|| Message::new("instructions.errors.stepRequired"))?,
+        pipeline: pipeline.ok_or(SettingsError::PipelineRequired)?,
+        step: step.clone().ok_or(SettingsError::StepRequired)?,
       },
     })
   }
@@ -136,15 +133,35 @@ pub struct InstructionForm<'a> {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FormErrors {
   pub text: Option<Message>,
-  pub settings: Option<Message>,
+  pub settings: Option<SettingsError>,
 }
 impl FormErrors {
   /// Whether the Apply to field needs a selection.
   pub fn targets_invalid(&self) -> bool {
-    self
-      .settings
-      .as_ref()
-      .is_some_and(|message| message.key == "instructions.errors.targetsRequired")
+    self.settings == Some(SettingsError::TargetsRequired)
+  }
+}
+
+/// What the settings other than the prompt are missing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SettingsError {
+  RoleRequired,
+  PipelineRequired,
+  StepRequired,
+  TargetsRequired,
+  /// A combination the editor does not offer.
+  Invalid,
+}
+
+impl SettingsError {
+  pub const fn message(self) -> Message {
+    Message::new(match self {
+      Self::RoleRequired => "instructions.errors.roleRequired",
+      Self::PipelineRequired => "instructions.errors.pipelineRequired",
+      Self::StepRequired => "instructions.errors.stepRequired",
+      Self::TargetsRequired => "instructions.errors.targetsRequired",
+      Self::Invalid => "instructions.errors.settingsInvalid",
+    })
   }
 }
 
@@ -201,13 +218,11 @@ impl InstructionForm<'_> {
   }
 }
 
-fn settings_error(error: &InstructionError) -> Message {
+const fn settings_error(error: &InstructionError) -> SettingsError {
   match error {
-    InstructionError::NoTargets => Message::new("instructions.errors.targetsRequired"),
+    InstructionError::NoTargets => SettingsError::TargetsRequired,
     // The editor offers events only in combinations that have at least one, and gives an agent
     // role instruction every agent of its role.
-    InstructionError::NoEvents | InstructionError::RoleScopeSelectsAgents => {
-      Message::new("instructions.errors.settingsInvalid")
-    }
+    InstructionError::NoEvents | InstructionError::RoleScopeSelectsAgents => SettingsError::Invalid,
   }
 }

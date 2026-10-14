@@ -1,8 +1,9 @@
 //! `list_instructions`, `save_instruction_draft` and `publish_instruction`: a project's instructions as
 //! Instructions lists them, one made (*New instruction*: a name and where it applies) and its draft
-//! saved as its editor saves it, checked with the editor's rules, and published as Publish does. Where
-//! an instruction applies and whom it reaches are chosen from what the editor offers: the roles of the
-//! project's profiles, its profiles, its pipelines and their steps.
+//! saved as its editor saves it, checked with the editor's rules, and published as Publish does, through
+//! the same checked writes (`instructions::editor`). Where an instruction applies and whom it reaches are
+//! chosen from what the editor offers: the roles of the project's profiles, its profiles, its pipelines
+//! and their steps.
 
 use std::collections::BTreeSet;
 
@@ -22,10 +23,10 @@ use crate::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
-  drafts::save_draft_in,
   instructions::{
-    data::{InstructionEntry, NewInstruction, PipelineChoice, ProjectInstructions, create_in, publish_in},
-    form::{Events, InstructionForm, ScopeChoice, Target},
+    data::{InstructionEntry, PipelineChoice, ProjectInstructions},
+    editor::{self, WriteError},
+    form::{Events, InstructionForm, ScopeChoice, SettingsError, Target},
   },
   messages::{self, Message},
 };
@@ -120,30 +121,24 @@ pub async fn save_instruction_draft(services: &Services, args: SaveInstructionDr
     let existing = args
       .instruction
       .as_deref()
-      .map(|named| entry_named(&data, named).map(|entry| entry.id))
+      .map(|named| entry_named(&data, named))
       .transpose()?;
     let body = instruction(&data, &args)?;
-    let id = match (existing, &args.name) {
+    let saved = match (existing, &args.name) {
       (Some(_), Some(_)) => {
         return Err(refused(
           "name_not_editable",
           Message::new("appMcp.errors.nameNotEditable"),
         ));
       }
-      (Some(id), None) => id,
+      (Some(entry), None) => editor::save_in(&root, entry, body),
       (None, name) => {
         let name = Name::new(name.as_deref().unwrap_or_default())
           .map_err(|error| refused("invalid_name", messages::name_error(&error)))?;
-        create_in(
-          &root,
-          NewInstruction {
-            name,
-            scope: body.scope().clone(),
-          },
-        )?
+        editor::create_in(&root, name, &body)
       }
     };
-    save_draft_in(&root, id, body)?;
+    let id = saved.map_err(|error| write_error(&error))?.id;
     services
       .changes
       .record(open.project.id(), crate::tasks::outside::Outside::Instructions);
@@ -161,8 +156,10 @@ pub async fn publish_instruction(services: &Services, args: InInstruction) -> Re
   blocking(move || {
     let open = services.project(&args.project)?;
     let data = ProjectInstructions::load_in(&open.repo_root)?;
-    let id = entry_named(&data, &args.instruction)?.id;
-    publish_in(&open.repo_root, id).map_err(|error| publish_error(&error))?;
+    let entry = entry_named(&data, &args.instruction)?;
+    let id = editor::publish_in(&open.repo_root, entry)
+      .map_err(|error| write_error(&error))?
+      .id;
     services
       .changes
       .record(open.project.id(), crate::tasks::outside::Outside::Instructions);
@@ -201,7 +198,10 @@ fn instruction(data: &ProjectInstructions, args: &SaveInstructionDraft) -> Resul
   }
   .instruction()
   .map_err(|errors| {
-    let reasons = [errors.text, errors.settings].into_iter().flatten().collect();
+    let reasons = [errors.text, errors.settings.map(SettingsError::message)]
+      .into_iter()
+      .flatten()
+      .collect();
     ToolError::refused("invalid_instruction", reasons)
   })
 }
@@ -339,15 +339,17 @@ fn entry_json(data: &ProjectInstructions, entry: &InstructionEntry) -> Value {
   })
 }
 
-fn publish_error(error: &StoreError) -> ToolError {
+fn write_error(error: &WriteError) -> ToolError {
   let code = match error {
-    StoreError::NoDraft(_) => return no_draft(),
-    StoreError::Publish(PublishError::BlankInstruction) => "blank_text",
-    StoreError::Publish(PublishError::StaleDraft { .. }) => "stale_draft",
-    StoreError::Publish(PublishError::VersionLimit) => "version_limit",
-    _ => "project_data",
+    WriteError::Unavailable(_) => "variable_unavailable",
+    WriteError::Store(StoreError::NoDraft(_)) => return no_draft(),
+    WriteError::Store(StoreError::DraftChanged(_)) => "draft_changed",
+    WriteError::Store(StoreError::Publish(PublishError::BlankInstruction)) => "blank_text",
+    WriteError::Store(StoreError::Publish(PublishError::StaleDraft { .. })) => "stale_draft",
+    WriteError::Store(StoreError::Publish(PublishError::VersionLimit)) => "version_limit",
+    WriteError::Store(_) => "project_data",
   };
-  ToolError::refused(code, vec![messages::store_error(error)])
+  ToolError::refused(code, vec![error.message()])
 }
 
 fn refused(code: &str, reason: Message) -> ToolError {
