@@ -136,6 +136,13 @@ impl OrchestratorSetup {
   }
 }
 
+/// What to save, and where: the settings of the project at `root`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Saving {
+  pub root: std::path::PathBuf,
+  pub settings: OrchestratorSettings,
+}
+
 /// Saves `settings` in the project at `root`, once its connection is one the Orchestrator can run on. Blocks on
 /// SQLite.
 pub fn save_in(root: &Path, settings: &OrchestratorSettings) -> Result<(), Message> {

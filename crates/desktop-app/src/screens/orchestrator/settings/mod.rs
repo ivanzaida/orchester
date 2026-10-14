@@ -23,7 +23,7 @@ use orchester_core::orchestrator::OrchestratorSettings;
 use orchester_workspace::{
   background,
   messages::Message,
-  orchestrator::settings::{OrchestratorSetup, Readiness, save_in},
+  orchestrator::settings::{OrchestratorSetup, Readiness, Saving, save_in},
 };
 use parking_lot::Mutex;
 
@@ -54,8 +54,8 @@ struct Props(ShownProject);
 
 impl DevtoolsInspectable for Props {}
 
-/// Saving what the Orchestrator runs on, in the project at the path.
-type Save = FutureAction<(std::path::PathBuf, OrchestratorSettings), OrchestratorSettings, Message>;
+/// Saving what the Orchestrator runs on.
+type Save = FutureAction<Saving, (), Message>;
 
 /// The choices as the selects hold them: the connection's id, the model and the effort (empty: the CLI's default).
 #[derive(Clone)]
@@ -87,15 +87,11 @@ impl Component for SettingsScreen {
       effort: ctx.signal(String::new()),
       seeded: ctx.signal(false),
     };
-    let save: Save = ctx.future_action(
-      |(root, settings): (std::path::PathBuf, OrchestratorSettings)| async move {
-        let saved = settings.clone();
-        background::run(move || save_in(&root, &settings))
-          .await
-          .and_then(|saved| saved)
-          .map(|()| saved)
-      },
-    );
+    let save: Save = ctx.future_action(|Saving { root, settings }: Saving| async move {
+      background::run(move || save_in(&root, &settings))
+        .await
+        .and_then(|saved| saved)
+    });
     let revision = ctx.signal(0);
     let kept = revision.clone();
     ctx.watch(&save.state(), move |state| {
@@ -223,7 +219,10 @@ impl SettingsScreen {
       return;
     }
     *asked = Some(wanted.clone());
-    self.save.run((root.to_path_buf(), wanted));
+    self.save.run(Saving {
+      root: root.to_path_buf(),
+      settings: wanted,
+    });
   }
 }
 

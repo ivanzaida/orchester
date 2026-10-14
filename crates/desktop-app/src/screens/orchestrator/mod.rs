@@ -156,7 +156,10 @@ impl Component for OrchestratorScreen {
     let main = body::main(ctx, view, (&props.project, &reads, readiness.as_ref()));
     let panel = view.history.get().then(|| {
       let open = &props.project.open.project;
-      let chats = reads.history.ready().map_or(&[][..], Vec::as_slice);
+      let chats = reads
+        .history
+        .ready()
+        .map_or(&[][..], |history| history.chats.as_slice());
       history::panel(
         ctx,
         (&view.history, &view.search),

@@ -10,10 +10,17 @@ use orchester_store::{ChatListing, ProjectDb};
 
 use crate::messages::{self, Message};
 
-/// Every conversation of the project at `root`, the one with the latest entry first. Blocks on SQLite.
-pub fn history_in(root: &Path) -> Result<Vec<ChatListing>, Message> {
+/// The project's conversations as History lists them, the one with the latest entry first.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct History {
+  pub chats: Vec<ChatListing>,
+}
+
+/// Every conversation of the project at `root`. Blocks on SQLite.
+pub fn history_in(root: &Path) -> Result<History, Message> {
   ProjectDb::open(root)
     .and_then(|db| db.chats())
+    .map(|chats| History { chats })
     .map_err(|error| messages::store_error(&error))
 }
 

@@ -5,12 +5,11 @@ use std::path::{Path, PathBuf};
 
 use lurq::app::ctx::{Ctx, StreamEmitter};
 use orchester_core::id::ChatId;
-use orchester_store::ChatListing;
 use orchester_workspace::{
   background,
   messages::Message,
   orchestrator::{
-    chat::{ChatView, history_in},
+    chat::{ChatView, History, history_in},
     settings::OrchestratorSetup,
   },
   runner::Runners,
@@ -51,7 +50,7 @@ pub(super) enum Shown {
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Reads {
   pub(super) setup: Read<OrchestratorSetup>,
-  pub(super) history: Read<Vec<ChatListing>>,
+  pub(super) history: Read<History>,
   /// The conversation the route names, or the latest when it names none; `None` for a new one.
   pub(super) target: Option<ChatId>,
   pub(super) shown: Shown,
@@ -71,7 +70,7 @@ pub(super) fn read(ctx: &mut Ctx, root: &Path, chat: OrchestratorChat) -> Reads 
     OrchestratorChat::Chat(id) => Some(id),
     OrchestratorChat::Latest => history
       .ready()
-      .and_then(|chats| chats.first())
+      .and_then(|history| history.chats.first())
       .map(|listing| listing.chat.id()),
   };
   let shown = match (chat, target) {
