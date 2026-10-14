@@ -10,6 +10,11 @@ pub mod shortcuts;
 pub mod tabs;
 pub mod waiting;
 
+use std::sync::{
+  Arc,
+  atomic::{AtomicU64, Ordering},
+};
+
 use lurq::{app::ctx::Ctx, core::Signal, router::RouterHandle};
 
 use self::{
@@ -25,8 +30,12 @@ pub struct Navigation {
   tabs: Signal<TabSet>,
   router: RouterHandle,
   guard: std::sync::Arc<parking_lot::Mutex<std::sync::Weak<guard::PendingLeave>>>,
-  /// The card the last navigation points at, until that card takes it.
-  pointed: Signal<Option<Pointed>>,
+  /// The card the last navigation points at, numbered among every pointing, until the next navigation.
+  pointed: Signal<Option<(u64, Pointed)>>,
+  /// How many navigations pointed at a card; the last one's number.
+  pointings: Arc<AtomicU64>,
+  /// The number of the last pointing a card took: a card takes each pointing once.
+  taken: Arc<AtomicU64>,
 }
 
 impl Navigation {
@@ -37,6 +46,8 @@ impl Navigation {
       router,
       guard: Default::default(),
       pointed: Signal::new(None),
+      pointings: Arc::default(),
+      taken: Arc::default(),
     };
     navigation.show();
     navigation
@@ -117,18 +128,19 @@ impl Navigation {
   pub fn go_to_card(&self, route: &Route, card: Pointed) {
     self.go(route.clone());
     if self.route_now() == *route {
-      self.pointed.set(Some(card));
+      let number = self.pointings.fetch_add(1, Ordering::Relaxed) + 1;
+      self.pointed.set(Some((number, card)));
     }
   }
 
   /// Takes the pointer when it points at `card`: `true` once, for the card's first render after the
-  /// navigation. Reading it in a render re-renders it when a navigation points somewhere.
+  /// navigation. Reading it in a render re-renders it when a navigation points somewhere; taking it writes
+  /// no signal, so the render that takes it is not made to run again.
   pub fn take_pointed(&self, card: &Pointed) -> bool {
-    if self.pointed.get().as_ref() != Some(card) {
+    let Some((number, pointed)) = self.pointed.get() else {
       return false;
-    }
-    self.pointed.set(None);
-    true
+    };
+    pointed == *card && self.taken.fetch_max(number, Ordering::Relaxed) < number
   }
 
   /// Holds departures while a mounted editor has work it must not lose.

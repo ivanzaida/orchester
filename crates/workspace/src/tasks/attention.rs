@@ -190,8 +190,8 @@ pub enum Waited {
 pub fn items(tasks: &ProjectTasks) -> Vec<NeedItem> {
   tasks
     .waiting()
-    .into_iter()
-    .map(|item| NeedItem::of(tasks, item))
+    .iter()
+    .map(|item| NeedItem::of(tasks, item.clone()))
     .collect()
 }
 

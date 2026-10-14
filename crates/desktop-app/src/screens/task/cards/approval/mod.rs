@@ -16,7 +16,7 @@ use lurq::{
   core::{ElementRef, Signal},
   node::{Element, padding::Padding},
 };
-use orchester_core::run::ToolApprovalDecision;
+use orchester_core::run::{Answerer, DecidedBy, ToolApprovalDecision};
 use orchester_workspace::tasks::{approvals::ShownApproval, timeline::ApprovalCard};
 
 use self::{
@@ -130,15 +130,21 @@ fn decided(card: &ApprovalCard, outcome: Option<&Outcome>) -> Option<Decided> {
   }
   match &outcome?.stage {
     Stage::Taken(at) => {
-      let given = outcome?.given;
-      let decision = if given == Given::Deny {
+      let Outcome { given, by, .. } = outcome?;
+      let decision = if *given == Given::Deny {
         ToolApprovalDecision::Denied
       } else {
         ToolApprovalDecision::Approved
       };
+      // Automation gives only Approve once and Deny ([`Decisions::answer`]).
+      let by = match by {
+        Answerer::Person => approval_answer(*given).decided_by(),
+        Answerer::Automation if *given == Given::Deny => DecidedBy::AutomationDeny,
+        Answerer::Automation => DecidedBy::Automation,
+      };
       Some(Decided::Recorded {
         decision: Some(decision),
-        by: Some(approval_answer(given).decided_by()),
+        by: Some(by),
         at: Some(*at),
       })
     }
@@ -148,7 +154,8 @@ fn decided(card: &ApprovalCard, outcome: Option<&Outcome>) -> Option<Decided> {
       at: None,
     }),
     Stage::Refused(Refused::Answered) => Some(Decided::AnsweredAlready),
-    Stage::Sending | Stage::Refused(Refused::Superseded | Refused::Failed(_)) => None,
+    Stage::Sending
+    | Stage::Refused(Refused::Superseded | Refused::PersonOnly | Refused::WiderPersonOnly | Refused::Failed(_)) => None,
   }
 }
 

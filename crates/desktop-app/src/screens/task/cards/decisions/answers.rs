@@ -9,7 +9,7 @@ use lurq::{
   app::ctx::{Ctx, FutureAction},
   node::Element,
 };
-use orchester_core::{id::RunId, time::Timestamp};
+use orchester_core::{id::RunId, run::Answerer, time::Timestamp};
 use orchester_ipc::{Command, Rejection};
 use orchester_workspace::{
   messages::{self, Message},
@@ -47,6 +47,10 @@ pub(in super::super) enum Refused {
   Answered,
   /// The plan no longer waits for a decision: a later version came, or the run went on.
   Superseded,
+  /// An MCP client's input gave it while automation may not answer: only a person answers here then.
+  PersonOnly,
+  /// An MCP client's input gave a wider answer, which only a person gives.
+  WiderPersonOnly,
   Failed(Message),
 }
 
@@ -59,19 +63,21 @@ pub(in super::super) enum Stage {
   Refused(Refused),
 }
 
-/// An answer of a card and where it stands.
+/// An answer of a card, who gave it and where it stands.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(in super::super) struct Outcome {
   pub(in super::super) given: Given,
+  pub(in super::super) by: Answerer,
   pub(in super::super) stage: Stage,
 }
 
-/// An answer to send: for the card `key` of `run`, `given` as `command`, to the runner of `project`.
+/// An answer to send: for the card `key` of `run`, `given` by `by` as `command`, to the runner of `project`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Sending {
   pub(super) run: RunId,
   pub(super) key: Arc<str>,
   pub(super) given: Given,
+  pub(super) by: Answerer,
   pub(super) project: OpenProject,
   pub(super) command: Command,
 }
@@ -94,6 +100,7 @@ pub(super) fn action(ctx: &mut Ctx) -> SendAnswer {
         run,
         key,
         given,
+        by,
         project,
         command,
       } = sending;
@@ -105,13 +112,13 @@ pub(super) fn action(ctx: &mut Ctx) -> SendAnswer {
             Ok(()) => Stage::Taken(clock.now()),
             Err(error) => Stage::Refused(refused(error)),
           };
-          kept::set_outcome((run, &card), Outcome { given, stage });
+          kept::set_outcome((run, &card), Outcome { given, by, stage });
         })
         .await;
       if let Err(error) = ended {
         tracing::error!(%error, "the answer did not finish");
         let stage = Stage::Refused(Refused::Failed(messages::interrupted()));
-        kept::set_outcome((run, &key), Outcome { given, stage });
+        kept::set_outcome((run, &key), Outcome { given, by, stage });
       }
       Ok(())
     }
@@ -136,6 +143,8 @@ pub(in super::super) fn refusal(ctx: &Ctx, id: &str, refused: &Refused, agent: &
     Refused::Ended => note(&id, &ctx.t_args("cards.refused.ended", [("agent", agent)])).into(),
     Refused::Answered => note(&id, &ctx.t("cards.refused.answered")).into(),
     Refused::Superseded => note(&id, &ctx.t("cards.refused.superseded")).into(),
+    Refused::PersonOnly => note(&id, &ctx.t("cards.refused.personOnly")).into(),
+    Refused::WiderPersonOnly => note(&id, &ctx.t("cards.refused.widerPersonOnly")).into(),
     Refused::Failed(message) => field_error(&id, &message_text(ctx, message)).into(),
   }
 }

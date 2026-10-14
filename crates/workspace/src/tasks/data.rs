@@ -25,6 +25,7 @@ use super::{
   delivery::Unmerged,
   detail::run_store_error,
   list::{AwaitedPlan, AwaitedQuestion, AwaitedStep, CurrentStep, Latest, LatestRun, Phases, StepWait},
+  needs_you::WaitingOnce,
   run_approvals,
   unreadable::Unreadable,
 };
@@ -107,6 +108,8 @@ pub struct ProjectTasks {
   pub lost_to_runner: usize,
   /// The active runs that auto-approve their agents' requests, oldest task first.
   pub auto_approving: Arc<Vec<AutoApprovingRun>>,
+  /// What waits for the person, once asked for ([`Self::waiting`]).
+  pub waiting_once: WaitingOnce,
 }
 
 /// An active run that auto-approves, as the status bar names it.
@@ -180,6 +183,7 @@ impl ProjectTasks {
   pub fn not_shared_view(&self) -> Self {
     Self {
       tasks: self.not_shared.clone(),
+      waiting_once: WaitingOnce::default(),
       ..self.clone()
     }
   }
@@ -247,6 +251,7 @@ impl ProjectTasks {
       runs: Arc::new(counts),
       lost_to_runner: 0,
       auto_approving: Arc::new(auto_approving),
+      waiting_once: WaitingOnce::default(),
     })
   }
 
@@ -271,6 +276,7 @@ impl ProjectTasks {
     Self {
       phases: Arc::new(phases),
       lost_to_runner,
+      waiting_once: WaitingOnce::default(),
       ..self.clone()
     }
   }

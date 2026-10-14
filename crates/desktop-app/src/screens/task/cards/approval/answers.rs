@@ -23,7 +23,7 @@ use lurq::{
 };
 use orchester_core::{
   id::RunId,
-  run::{Answerer, ApprovalAnswer, PendingToolApproval},
+  run::{ApprovalAnswer, PendingToolApproval},
 };
 use orchester_ipc::Command;
 use orchester_workspace::{
@@ -85,16 +85,20 @@ impl Answering<'_> {
       .map(|outcome| outcome.given)
   }
 
-  /// Sends `given`; nothing while another answer is on its way.
+  /// Sends `given`, by whoever's input pressed it ([`Decisions::answer`]); nothing while another answer is on its
+  /// way.
   fn press(&self, given: Given, open: OpenProject) -> impl Fn() + Send + Sync + 'static {
     let (decisions, (run, key)) = (self.decisions.clone(), (self.card.0, self.card.1.clone()));
-    let command = Command::DecideToolApproval {
-      run: self.request.run,
-      approval: self.request.id.clone(),
-      answer: approval_answer(given),
-      by: Answerer::Person,
-    };
-    move || decisions.answer((run, &key), given, (&open, command.clone()))
+    let (request, approval) = (self.request.run, self.request.id.clone());
+    move || {
+      let command = |by| Command::DecideToolApproval {
+        run: request,
+        approval: approval.clone(),
+        answer: approval_answer(given),
+        by,
+      };
+      decisions.answer((run, &key), given, (&open, command));
+    }
   }
 
   /// Whether `given` can be pressed now, and how: loading while it is on its way, held while another is.

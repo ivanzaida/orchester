@@ -8,8 +8,10 @@
 
 mod in_place;
 mod item;
+mod note;
 mod panel;
 mod pinned;
+mod reveal;
 mod words;
 
 use lurq::{
@@ -206,7 +208,10 @@ impl NeedsYouPill {
       (false, false) => pill.border_inside(BorderSize::Sm, PaletteColor::Border),
       (false, true) => pill,
     };
-    Tooltip::new("needs-you-pill", per_project(ctx, all)).wrap(ctx, pill)
+    // The panel under the pill says it all while it is open.
+    Tooltip::new("needs-you-pill", per_project(ctx, all))
+      .silent(open)
+      .wrap(ctx, pill)
   }
 }
 

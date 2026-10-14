@@ -1,6 +1,7 @@
 //! Answering on the cards that wait (the seed holds their steps waiting for the person, so they wait without a
 //! runner): a command's card with the request whole and every answer, one answer at a time, and why it did
-//! not go through; a question's options and own answer, *Send answer* and why it waits; the focus, once.
+//! not go through; a question's options and own answer, *Send answer* and why it waits; the focus, once; an MCP
+//! client's answer, refused until the person lets automation answer.
 
 use lurq::app::events::MouseButton;
 use orchester_app::{
@@ -304,4 +305,33 @@ fn card_question_own_answer_set_by_a_tool_counts_and_is_kept() {
     "Under the search box",
     "the own answer is kept"
   );
+}
+
+/// What the card says when input from an MCP client gives an answer while automation may not answer.
+const PERSON_ONLY: &str = "Only a person answers this here: input from an MCP client answers only while you let \
+                           automation answer approvals and change agent permissions.";
+
+#[test]
+fn card_approval_takes_an_mcp_clients_answer_only_as_automation_under_consent() {
+  let (mut window, card) = card_of("Add serde to the webhook payloads", "cards-approval-");
+  let (approve, refused) = (format!("{card}-approve"), format!("{card}-refused"));
+  lurq::app::events::with_synthetic_input(|| click(&mut window, &approve));
+  window.until("why the client's answer was not taken", |window| {
+    window.texts(&refused).is_some()
+  });
+  assert_eq!(text(&mut window, &refused), PERSON_ONLY);
+  let workspace = window.launch.workspace().expect("the session started");
+  workspace
+    .set_automation_answers_approvals(true)
+    .expect("the approvals opt-in");
+  workspace
+    .set_automation_changes_permissions(true)
+    .expect("the permissions opt-in");
+  lurq::app::events::with_synthetic_input(|| click(&mut window, &approve));
+  // No runner here: automation's answer reaches none, and the card says so instead.
+  window.until("the client's answer sent", |window| {
+    window
+      .texts(&refused)
+      .is_some_and(|texts| texts.join(" ") != PERSON_ONLY)
+  });
 }

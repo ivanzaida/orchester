@@ -18,6 +18,7 @@ pub(super) fn card(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
     step_label,
     links: links(),
     in_panel: false,
+    conversation: None,
   };
   cards::card(ctx, place, item)
 }
