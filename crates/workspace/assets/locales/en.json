@@ -1381,6 +1381,9 @@
     "stop": {
       "failed": "The answer couldn't be stopped: the runner didn't answer."
     },
+    "proposal": {
+      "changed": "{{task}} changed after it was proposed: its details, its pipeline or the pipeline's version are not what you were asked to start. Nothing started; ask the Orchestrator to propose it again."
+    },
     "tools": {
       "otherProject": "The Orchestrator acts only in its own project.",
       "startWaits": "Nothing started yet: starting {{task}} on {{pipeline}} waits for the person, who starts or dismisses it in the conversation. Tell them it is ready to start."

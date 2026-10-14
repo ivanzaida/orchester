@@ -12,5 +12,5 @@ mod tools;
 pub use self::{
   error::ToolError,
   services::Services,
-  tools::{Proposal, Translate, call, listed, propose_run, setup},
+  tools::{Proposal, Translate, call, listed, propose_run, run_proposed, setup},
 };

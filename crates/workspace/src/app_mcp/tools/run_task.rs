@@ -5,12 +5,13 @@
 
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
-  resource::Pipeline,
-  run::{PreflightProblem, RunAgainBlock},
+  orchestrator::proposal::{ProposedStart, StartBasis, brief_excerpt},
+  resource::{Pipeline, VersionNumber},
+  run::{ListedRun, PreflightProblem, RunAgainBlock},
   store::{ResourceStore, RunStore},
   task::{Task, TaskStatus},
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, RunStoreError};
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -57,10 +58,24 @@ enum Start {
 }
 
 pub async fn run_task(services: &Services, args: RunTask) -> Result<Value, ToolError> {
+  run_checked(services, args, None).await
+}
+
+/// Runs task `key` of `project` as [`run_task`] does, only as it was proposed: a task changed since, or a pipeline
+/// published anew, is refused (`changed_since_proposed`) and starts nothing.
+pub async fn run_proposed(
+  services: &Services,
+  (project, key): (String, String),
+  basis: StartBasis,
+) -> Result<Value, ToolError> {
+  run_checked(services, RunTask { project, key }, Some(basis)).await
+}
+
+async fn run_checked(services: &Services, args: RunTask, expected: Option<StartBasis>) -> Result<Value, ToolError> {
   let prepared = services.clone();
   let (project, start) = blocking(move || {
     let project = prepared.project(&args.project)?;
-    let start = prepare(&prepared, &project, &args.key)?;
+    let start = prepare(&prepared, &project, &args.key, expected)?;
     Ok((project, start))
   })
   .await?;
@@ -92,11 +107,25 @@ pub async fn run_task(services: &Services, args: RunTask) -> Result<Value, ToolE
   Ok(json!({ "run": { "id": started?.to_string() } }))
 }
 
-/// How the task named `key` runs; a refusal when the app would not let it run now.
-fn prepare(services: &Services, project: &OpenProject, key: &str) -> Result<Start, ToolError> {
+/// How the task named `key` runs; a refusal when the app would not let it run now, or, with `expected`, when it
+/// would not run what was proposed.
+fn prepare(
+  services: &Services,
+  project: &OpenProject,
+  key: &str,
+  expected: Option<StartBasis>,
+) -> Result<Start, ToolError> {
   let db = ProjectDb::open(&project.repo_root)?;
   let task = find_task(&db, key)?;
   let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
+  if let Some(expected) = expected
+    && basis(services, (project, &db), &task, runs.last())? != expected
+  {
+    return Err(ToolError::refused(
+      "changed_since_proposed",
+      vec![Message::new("orchestrator.proposal.changed").with("task", task.key().to_string())],
+    ));
+  }
   match runs.last() {
     None if task.status() == TaskStatus::Queued => Ok(Start::First {
       task: task.id(),
@@ -141,11 +170,36 @@ fn again(services: &Services, project: &OpenProject, task: &Task, after: RunId) 
   })
 }
 
-/// A start of a task the Orchestrator's agent proposed: its key and the pipeline it would run.
+/// A start of a task the Orchestrator's agent proposed: its key, and what the person reads and approves.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Proposal {
   pub key: String,
-  pub pipeline: String,
+  pub start: ProposedStart,
+}
+
+/// What task `task` of `project` would run now, its latest run `latest` read; a refusal when it could not run now,
+/// as [`run_task`] would refuse it. A draft takes its pipeline's latest published version, any other task the one it
+/// is pinned to.
+fn basis(
+  services: &Services,
+  (project, db): (&OpenProject, &ProjectDb),
+  task: &Task,
+  latest: Option<&ListedRun<RunStoreError>>,
+) -> Result<StartBasis, ToolError> {
+  let version = match latest {
+    None if task.status() == TaskStatus::Queued => task.pipeline_version(),
+    None => Some(queue_version(db, task)?),
+    Some(Err(_)) => return Err(unreadable()),
+    Some(Ok(latest)) => {
+      again(services, project, task, latest.id())?;
+      task.pipeline_version()
+    }
+  };
+  Ok(StartBasis {
+    revision: task.revision().get(),
+    pipeline: task.details().pipeline,
+    version: version.map(VersionNumber::get),
+  })
 }
 
 /// Checks that task `key` of `project` could run now as [`run_task`] would run it, without queuing or starting
@@ -157,31 +211,25 @@ pub async fn propose_run(
   (project, key): (String, String),
 ) -> Result<Proposal, ToolError> {
   let services = services.clone();
-  let (key, label) = blocking(move || {
+  let (task, basis, label) = blocking(move || {
     let project = services.project(&project)?;
     let db = ProjectDb::open(&project.repo_root)?;
     let task = find_task(&db, &key)?;
     let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
-    match runs.last() {
-      None if task.status() == TaskStatus::Queued => {}
-      None => {
-        queue_version(&db, &task)?;
-      }
-      Some(Err(_)) => return Err(unreadable()),
-      Some(Ok(latest)) => {
-        again(&services, &project, &task, latest.id())?;
-      }
-    }
+    let basis = basis(&services, (&project, &db), &task, runs.last())?;
     let published = published_pipelines(&db)?;
-    Ok((
-      task.key().to_string(),
-      PipelineLabel::of(task.details().pipeline, &published).message(),
-    ))
+    let label = PipelineLabel::of(task.details().pipeline, &published).message();
+    Ok((task, basis, label))
   })
   .await?;
   Ok(Proposal {
-    key,
-    pipeline: translate.text(&label),
+    key: task.key().to_string(),
+    start: ProposedStart {
+      pipeline: translate.text(&label),
+      title: task.details().title.as_str().to_owned(),
+      brief: brief_excerpt(&task.details().brief),
+      basis,
+    },
   })
 }
 

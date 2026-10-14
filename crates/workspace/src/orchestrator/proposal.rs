@@ -5,7 +5,7 @@
 //! same `run_task` tool any client of the app calls, or dismisses it. That only a person takes the start is the
 //! window's to enforce: synthetic input never reaches [`decide`].
 
-use orchester_core::orchestrator::{ActionOutcome, EntryKind};
+use orchester_core::orchestrator::{ActionOutcome, ChatAction, EntryKind, proposal::StartBasis};
 use orchester_store::ProjectDb;
 use rmcp::model::JsonObject;
 use serde_json::{Value, json};
@@ -42,20 +42,21 @@ pub(super) async fn propose(
   let proposal = app_mcp::propose_run(services, translate, (scope.project.to_string(), key.to_owned())).await?;
   let waits = Message::new("orchestrator.tools.startWaits")
     .with("task", proposal.key.clone())
-    .with("pipeline", proposal.pipeline.clone());
+    .with("pipeline", proposal.start.pipeline.clone());
   let told = json!({
     "started": false,
     "waits_for_person": true,
     "task": proposal.key,
-    "pipeline": proposal.pipeline,
+    "pipeline": proposal.start.pipeline,
     "message": translate.text(&waits),
   });
   Ok((told, proposal))
 }
 
-/// Takes the person's `decision` on the proposed start `seq` of `scope`'s conversation. A start runs Orchester's own
-/// `run_task` tool, refused or carried out as for any client, and the proposal shows how it went; a proposal that
-/// no longer waits is left as it is.
+/// Takes the person's `decision` on the proposed start `seq` of `scope`'s conversation. A start runs the task as
+/// Orchester's own `run_task` tool does, refused or carried out as for any client, but only as it was proposed: a
+/// task changed since, or a pipeline published anew, is refused and needs a fresh proposal. The proposal shows how
+/// it went; one that no longer waits is left as it is.
 pub async fn decide(
   (services, translate, runners): (&Services, &Translate, &Runners),
   scope: &ChatScope,
@@ -65,15 +66,10 @@ pub async fn decide(
   let outcome = match decision {
     Decision::Dismiss => ActionOutcome::Dismissed,
     Decision::Start => {
-      let Some(task) = proposed_task(scope, seq).await? else {
+      let Some((task, basis)) = proposed(scope, seq).await? else {
         return Ok(());
       };
-      let mut arguments = JsonObject::new();
-      arguments.insert("project".to_owned(), Value::String(scope.project.to_string()));
-      arguments.insert("key".to_owned(), Value::String(task));
-      let started = app_mcp::call(services, translate, RUN_TASK, arguments)
-        .await
-        .unwrap_or_else(|| Err(ToolError::InvalidArguments(format!("no tool is named {RUN_TASK}"))));
+      let started = app_mcp::run_proposed(services, (scope.project.to_string(), task), basis).await;
       match started {
         Ok(_) => ActionOutcome::Done,
         Err(error) => refusal(&error, translate),
@@ -88,14 +84,18 @@ pub async fn decide(
   Ok(())
 }
 
-/// The key of the task the proposal `seq` would start, while it waits for a person.
-async fn proposed_task(scope: &ChatScope, seq: i64) -> Result<Option<String>, Message> {
+/// The key of the task the proposal `seq` would start, and what it would run, while it waits for a person.
+async fn proposed(scope: &ChatScope, seq: i64) -> Result<Option<(String, StartBasis)>, Message> {
   let (root, chat) = (scope.root.clone(), scope.chat);
   let entries = background::run(move || ProjectDb::open(&root)?.chat_entries(chat))
     .await?
     .map_err(|error| store_error(&error))?;
   Ok(entries.into_iter().find_map(|entry| match entry.kind {
-    EntryKind::Action(action) if entry.seq == seq && action.outcome.is_proposed() => action.task,
+    EntryKind::Action(ChatAction {
+      task: Some(task),
+      outcome: ActionOutcome::Proposed(start),
+      ..
+    }) if entry.seq == seq => Some((task, start.basis)),
     _ => None,
   }))
 }

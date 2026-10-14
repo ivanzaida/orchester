@@ -181,14 +181,14 @@ fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
       Part::Action { action, at, seq } => {
         let id = format!("orchestrator-action-{key}-{index}");
         match (&action.outcome, &row.env.scope) {
-          (ActionOutcome::Proposed { pipeline }, Some(scope)) => ctx.mount_keyed::<StartProposal>(
+          (ActionOutcome::Proposed(start), Some(scope)) => ctx.mount_keyed::<StartProposal>(
             &id,
             ProposalProps {
               id: id.clone(),
               scope: scope.clone(),
               seq: *seq,
               task: action.task.clone().unwrap_or_default(),
-              pipeline: pipeline.clone(),
+              start: start.clone(),
               at: *at,
             },
           ),

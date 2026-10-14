@@ -16,7 +16,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::time::Timestamp;
+use orchester_core::{orchestrator::proposal::ProposedStart, time::Timestamp};
 use orchester_workspace::{
   display,
   messages::Message,
@@ -29,7 +29,7 @@ use orchester_workspace::{
 use crate::{
   mcp::domain,
   services::Services,
-  theme::{ConversationText, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ConversationText, ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -44,7 +44,8 @@ pub(super) struct ProposalProps {
   /// The proposal's entry in the conversation.
   pub(super) seq: i64,
   pub(super) task: String,
-  pub(super) pipeline: String,
+  /// What the person is asked to start: the task's title and brief's opening, the pipeline.
+  pub(super) start: ProposedStart,
   pub(super) at: Timestamp,
 }
 
@@ -98,7 +99,10 @@ impl Component for StartProposal {
     let props = ctx.props::<ProposalProps>().clone();
     let id = props.id.as_str();
     let state = self.decide.state().get();
-    let args = [("task", props.task.as_str()), ("pipeline", props.pipeline.as_str())];
+    let args = [
+      ("task", props.task.as_str()),
+      ("pipeline", props.start.pipeline.as_str()),
+    ];
     let head = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
@@ -155,6 +159,7 @@ impl Component for StartProposal {
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Lg)
       .child(head)
+      .child(asked(id, &props.start))
       .child(
         Text::new(&ctx.t("orchestrator.proposal.effect"))
           .id(format!("{id}-effect"))
@@ -168,7 +173,8 @@ impl Component for StartProposal {
 }
 
 impl StartProposal {
-  /// *Dismiss* and *Start*, at the card's end; neither while a decision is being taken.
+  /// *Start* and *Dismiss*, at the card's start as the action card's actions are; neither while a decision is being
+  /// taken.
   fn buttons(&self, ctx: &Ctx, props: &ProposalProps, pending: bool) -> Row {
     let id = props.id.as_str();
     let deciding = |decision| Deciding {
@@ -207,8 +213,27 @@ impl StartProposal {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(Spacer::new().flex(1.0))
-      .child(dismiss)
       .child(start)
+      .child(dismiss)
   }
+}
+
+/// The task the person is asked to start: its title, and the opening of its brief when it has one.
+fn asked(id: &str, start: &ProposedStart) -> Column {
+  Column::new()
+    .id(format!("{id}-task"))
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Fine.role())
+    .child(
+      Text::new(&start.title)
+        .id(format!("{id}-task-title"))
+        .variant(OrchestratorText::Emphasis.role())
+        .width(Dimension::Pct(100.0)),
+    )
+    .with_children((!start.brief.is_empty()).then(|| {
+      Text::new(&start.brief)
+        .id(format!("{id}-brief"))
+        .variant(TypographyStyle::Description)
+        .width(Dimension::Pct(100.0))
+    }))
 }

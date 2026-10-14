@@ -8,6 +8,7 @@ use std::time::Duration;
 
 pub mod chat;
 pub mod instructions;
+pub mod proposal;
 pub mod settings;
 
 pub use self::{

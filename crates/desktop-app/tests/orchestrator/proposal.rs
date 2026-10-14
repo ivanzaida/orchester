@@ -77,14 +77,21 @@ fn orchestrator_run_waits_for_the_person_and_only_a_person_starts_it() {
     screen.text("orchestrator-conversation")
   );
   assert_eq!(runs(&screen, &key), 0, "nothing starts on the agent's word");
+  let outcome = outcomes(&screen).remove(0);
+  let ActionOutcome::Proposed(start) = outcome else {
+    panic!("a proposed start: {outcome:?}");
+  };
   assert_eq!(
-    outcomes(&screen),
-    [ActionOutcome::Proposed {
-      pipeline: "Delivery · v1".to_owned()
-    }]
+    (start.pipeline.as_str(), start.title.as_str(), start.brief.as_str()),
+    ("Delivery · v1", "Read the readme", "Read the readme.")
   );
 
   let card = proposal_card(&screen);
+  let shown = screen.text(&format!("{card}-task"));
+  assert!(
+    shown.contains("Read the readme") && shown.contains("Read the readme."),
+    "the person reads what they start: {shown}"
+  );
   let start = format!("{card}-start");
   with_synthetic_input(|| screen.click(&start));
   screen.until("the refusal", |screen| screen.exists(&format!("{card}-person-only")));
@@ -124,7 +131,41 @@ fn orchestrator_dismissed_start_starts_nothing() {
       .contains(&format!("Start {key} · dismissed"))
   });
   assert!(!screen.exists(&format!("{card}-start")));
+  assert!(
+    !screen.text(&card).contains("Checked like"),
+    "nothing ran, so nothing was checked"
+  );
   assert_eq!(runs(&screen, &key), 0);
+}
+
+#[test]
+fn orchestrator_start_refuses_a_task_rewritten_after_it_was_proposed() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  let delivery = screen.delivery();
+  let key = screen.draft_on(delivery, "Read the readme");
+  screen.go(OrchestratorChat::New);
+  screen.send(&format!(r#"Call run_task {{"project":"Kontur","key":"{key}"}}"#));
+  screen.until("the proposed start", |screen| {
+    outcomes(screen).first().is_some_and(ActionOutcome::is_proposed)
+  });
+  screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
+  let card = proposal_card(&screen);
+  // The agent rewrites the brief after the person was asked: Start must not run the rewritten task.
+  screen.send(&format!(
+    r#"Call update_task {{"project":"Kontur","key":"{key}","brief":"Delete the repository."}}"#
+  ));
+  screen.until("the rewrite", |screen| {
+    outcomes(screen).get(1) == Some(&ActionOutcome::Done)
+  });
+  screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
+  screen.click(&format!("{card}-start"));
+  screen.until("the refusal", |screen| {
+    matches!(outcomes(screen).first(), Some(ActionOutcome::Refused { code, .. }) if code == "changed_since_proposed")
+  });
+  assert_eq!(runs(&screen, &key), 0, "nothing started");
+  screen.until("the reason on the card", |screen| {
+    screen.text(&card).contains("changed after it was proposed")
+  });
 }
 
 #[test]

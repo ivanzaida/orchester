@@ -141,16 +141,20 @@ pub(super) fn card(
             .nowrap(),
         ),
     );
-  let checked = Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Start)
-    .child(icon(Icon::ShieldCheck, IconSize::Sm, PaletteColor::TextMuted))
-    .child(
-      Text::new(&ctx.t_args("orchestrator.action.checked", [("project", name)]))
-        .variant(ExtraTypography::Note.role())
-        .flex(1.0),
-    );
+  // A proposal waiting or dismissed did nothing yet: no check to tell of.
+  let ran = !matches!(action.outcome, ActionOutcome::Proposed(_) | ActionOutcome::Dismissed);
+  let checked = ran.then(|| {
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Snug.role())
+      .align_items(Alignment::Start)
+      .child(icon(Icon::ShieldCheck, IconSize::Sm, PaletteColor::TextMuted))
+      .child(
+        Text::new(&ctx.t_args("orchestrator.action.checked", [("project", name)]))
+          .variant(ExtraTypography::Note.role())
+          .flex(1.0),
+      )
+  });
   let open = open_task(ctx, id, project, action.task.as_deref());
   Column::new()
     .id(id.to_owned())
@@ -168,7 +172,7 @@ pub(super) fn card(
         .variant(TypographyStyle::Body)
         .width(Dimension::Pct(100.0))
     }))
-    .child(checked)
+    .with_children(checked)
     .with_children(open)
     .into()
 }
@@ -206,10 +210,10 @@ fn shown(ctx: &Ctx, action: &ChatAction, at: Timestamp) -> Shown {
       Some(Arc::from(reason.as_str())),
     ),
     // Shown with its Start and Dismiss in a kept conversation (`super::proposal`); this is its card without them.
-    ActionOutcome::Proposed { pipeline } => (
+    ActionOutcome::Proposed(start) => (
       ctx.t_args(
         "orchestrator.proposal.title",
-        [("task", task), ("pipeline", pipeline.as_str())],
+        [("task", task), ("pipeline", start.pipeline.as_str())],
       ),
       words.glyph,
       ctx.t_args("orchestrator.proposal.waits", [("time", time.as_str())]),

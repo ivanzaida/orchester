@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::proposal::ProposedStart;
 use crate::{
   connection::AccountStartProblem,
   conversation::MessageBody,
@@ -193,11 +194,9 @@ pub enum ActionOutcome {
     code: String,
     reason: String,
   },
-  /// A start the agent proposed: nothing ran. It waits for a person to start it on `pipeline`, the pipeline's name
-  /// as the tool gave it, or to dismiss it; once started it is [`Self::Done`] or [`Self::Refused`].
-  Proposed {
-    pipeline: String,
-  },
+  /// A start the agent proposed: nothing ran. It waits for a person to start it, as it was proposed, or to dismiss
+  /// it; once started it is [`Self::Done`] or [`Self::Refused`].
+  Proposed(ProposedStart),
   /// A person dismissed the proposed start: nothing ran.
   Dismissed,
 }
