@@ -44,6 +44,21 @@ Environment variables, project MCP servers, tabs, and the installed stable build
 7. *Merge into main* merges into the user's checkout, which must be on `master` with no uncommitted changes. Do not
    merge from Orchester while another agent is merging branches into `master` by hand.
 
+### D2 · Verify that could not verify, and the QA slot · branch `claude/verify-flow` (implemented 2026-10-14, waiting for review and design verification)
+
+From `.tmp/analysis/agent-dev-blockers.md` §6, blockers 1 and 2. A step result may be `unverified` with what it could
+not check and why: the run waits for the person (reason `unverified`) without the failure route or a retry, and the
+person accepts the step, runs it again, or returns the work with a note (`continue_run` `accept`, `allow_retry`,
+`return_to`; `get_run` lists the checks). A step whose latest failed or unverified result was for the revision it would
+run on now is not run again unless a person asked: the run waits with reason `unchanged`. `start_qa_app(scenario)`
+runs the worktree's `tools/qa-app.ps1` for the agent, behind one QA slot per computer (an OS file lock every runner
+takes; a second start waits, noted in the transcript), keeps the app for the invocation (`call_run_app` without a pid
+reaches it) and stops it when the turn ends. The task page's Summary shows *Unverified: …* with the list, *Accept … as
+it is*, *Run … again*, the return with a note and *Stop* (the `decisions` seed scenario holds one).
+**Open:** design verification of the waits-unverified Summary (no Pencil frame of its own yet: it reuses `DVuXu`'s
+parts); the deprecated desktop shows the state but offers no *Accept*; the runner's macOS side is not cross-checked
+(its C dependencies need a macOS toolchain); the QA slot count is fixed at one.
+
 ## A · New app (`crates/desktop-app`) — the path to developing Orchester in it
 
 Merged on 2026-10-09/10 (see *Done*): F1, T1, F2, P1, N1, P2, C1, C2, C3, D1, I1, M1, LIM, M12 and its follow-ups. Still

@@ -1,8 +1,26 @@
 # Calling an app's embedded MCP inside a run
 
 Agents use `mcp__Orchester__call_run_app(pid, tool, arguments)` (Codex: `call_run_app` of the
-Orchester server), instead of running `tools/lurq-mcp-client.py` themselves. Start an isolated app
-with `tools/qa-app.ps1`:
+Orchester server), instead of running `tools/lurq-mcp-client.py` themselves. In a run, start an isolated
+app with `mcp__Orchester__start_qa_app(scenario, fake_agents?, no_runner?)` (Codex: `start_qa_app`):
+
+```json
+{"scenario":"decisions","fake_agents":null,"no_runner":null}
+```
+
+The runner takes the computer's QA slot (one QA app at a time, an OS lock on
+`<user data>/orchester-qa-slots/slot-0.lock` that every runner takes, whatever its project; the OS frees it
+when its holder ends), waiting while another run's QA app holds it; the transcript then says *Waiting for
+the QA slot*. It runs the worktree's `tools/qa-app.ps1` with `-Name run-<number>-<step>` (Windows PowerShell
+on Windows, `pwsh` on macOS), checks that the app it names is this run's and that its discovery file lies in
+its QA folder, and answers its pid. `call_run_app` without `pid` then calls that app through its exact
+discovery file. A second start in the same turn replaces the app and keeps the slot; when the agent's turn
+ends (the step passes, fails, asks, pauses or is stopped), the runner stops the app with everything it
+started inside the worktree and frees the slot. A start still waiting when the turn ends gives up. The call
+asks a person (or an *Approve similar* rule) first, as it builds and runs the worktree's code outside the
+sandbox; auto mode's reviewer never answers it. No lease, ACK or hold notes between runs are needed.
+
+Outside a run, start the copy with `tools/qa-app.ps1` yourself:
 
 ```text
 powershell -File tools/qa-app.ps1 -Name <task> -Scenario <scenario> [-FakeAgents] [-NoRunner]
@@ -11,7 +29,8 @@ powershell -File tools/qa-app.ps1 -Name <task> -Scenario <scenario> [-FakeAgents
 It starts the copy with `ORCHESTER_APP_MCP_DISCOVERY` set to the worktree's `.tmp/qa/<task>/mcp/`, so the
 copy takes a free port and a new token on each start and writes them to `<pid>.json` there (never the
 installed app's fixed address or stored token). It prints `pid <pid>`, `mcp <folder>` and
-`discovery <file>`. Retain the printed pid and pass that exact pid on every call:
+`discovery <file>`. Retain the printed pid and pass that exact pid on every call (leave it out for the QA
+app `start_qa_app` started):
 
 ```json
 {"pid":12345,"tool":"lurq_windows","arguments":{}}
@@ -50,7 +69,12 @@ the token shown, Copied) cannot be reached through MCP, by design; `tests/settin
 
 Build and copy programs into a run-owned folder before launch so concurrent builds cannot change
 the running candidate, and enable its no-focus startup option. Drive only the app you started.
-Close it through the embedded close button, or use `mcp__Orchester__stop_run_process(pid)`.
+Close it through the embedded close button, or use `mcp__Orchester__stop_run_process(pid)`; a QA app
+`start_qa_app` started is stopped by the runner when the turn ends.
+
+What a verification could not check (a state no scenario reaches, a capture that failed) goes into the
+step's result as the outcome `unverified` with its `unverified` list of `{check, reason}`: the run waits
+for the person without returning to Implement or using a retry (`.claude/skills/design-verification/SKILL.md`).
 
 `tools/lurq-mcp-client.py` remains a manual diagnostic helper. It is not the agent workflow: an
 unsandboxed approval would run whatever that worktree script currently says. For a QA copy, pass the

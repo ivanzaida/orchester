@@ -171,7 +171,8 @@ by `read_external_file` and `search_external_file`.
 | `read_external_file` | `filename` (absolute), `start_line?`, `length?` | outside | asks; runs in the run's sources | asks; runs in the run's sources |
 | `list_run_processes` | none | run processes | runs | runs |
 | `stop_run_process` | `pid` (positive integer) | run processes | runs | runs |
-| `call_run_app` | `pid`, `tool` (embedded MCP name), `arguments` (object) | run processes | runs | runs |
+| `call_run_app` | `pid?` (none: the turn's QA app), `tool` (embedded MCP name), `arguments` (object) | run processes | runs | runs |
+| `start_qa_app` | `scenario` (kebab-case, ≤ 64), `fake_agents?`, `no_runner?` | outside | asks | asks |
 | `run_check` (with checks) | `name` (one of the step's checks) | outside, network | by the check's access rules (network on only) | as a writing step |
 | `list_skills` (with skills) | none | read-only | runs | runs |
 | `read_skill` (with skills) | `name`, `file?` (a skill file path; none or `SKILL.md` for the skill's own), `offset?`, `limit?` (≤ 10 000, 2000) | read-only | runs | runs |
@@ -230,6 +231,23 @@ by `read_external_file` and `search_external_file`.
   MCP approval enabled. Fresh and continuing-session prompts steer agents to this tool instead of running
   `tools/lurq-mcp-client.py` outside the sandbox; the design-verification skill does too. This grants no access
   to the person's installed app, another run or arbitrary network endpoints.
+- **QA apps.** `start_qa_app(scenario)` replaces agents starting `tools/qa-app.ps1` themselves and negotiating a
+  shared QA slot in notes. The runner takes the computer's QA slot (one at a time, an OS file lock in the user's
+  data folder that every runner takes; a second start waits and the transcript says *Waiting for the QA slot*),
+  runs the worktree's `tools/qa-app.ps1 -Name run-<number>-<step> -Scenario <scenario>` (Windows PowerShell; `pwsh`
+  on macOS; a worktree without the script, or a platform without either, is told so), checks the app it names with
+  `call_run_app`'s process rules and that its discovery file lies in its QA folder, and keeps it for the invocation:
+  `call_run_app` without `pid` reaches it through that exact file, without searching. A second start replaces it.
+  When the agent's turn ends the runner stops the app (as `stop_run_process` does) and frees the slot; a start still
+  waiting then gives up. It builds and runs the worktree's code outside every sandbox, so it asks, like a check: a
+  person or an *Approve similar* rule decides; auto-approval never answers it.
+- **Results that could not check everything.** A step's result may be `unverified` with an `unverified` list of
+  `{check, reason}` (`orchester_core::run::STEP_RESULT_SCHEMA`): the step ran but could not check some of what it is
+  for. The run waits for the person (`waiting_for_person`, reason `unverified`) without taking the step's failure
+  route or using a retry; the person accepts the step as it is, runs it again, or returns the work to an agent step
+  with a note (`continue_run` choices `accept`, `allow_retry`, `return_to`; `get_run` lists the checks under
+  `unverified`). A step whose latest result was failed or unverified for the revision it would run on now is not run
+  again unless a person asked for it: the run waits with reason `unchanged`, with the same choices.
 - **Schemas** are strict (`additionalProperties: false`, each property typed and bounded); a call is read into its
   type with unknown fields refused, and an invalid call is answered with an error result that says why.
 - **Worktree files** (`orchester_agent::FileTools`, confined to the step's `FileScope` as before: the worktree, the
