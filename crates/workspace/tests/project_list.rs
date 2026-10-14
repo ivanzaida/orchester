@@ -15,7 +15,7 @@ use orchester_store::{AppDb, RegisteredProject};
 use orchester_workspace::{
   activity::Activity,
   messages::Message,
-  project_list::{self, ListedProject, Listing, RunnerShown, Standing},
+  project_list::{self, ListedProject, ListedRuns, Listing, RunnerShown, Standing},
   project_setup::NewProject,
   runner::{
     Runners,
@@ -59,8 +59,9 @@ fn entry(folder_missing: bool) -> ProjectEntry {
   }
 }
 
+/// A project whose tasks' latest runs are in `phases`, and where two things wait for the person.
 fn readable(phases: &[TaskPhase]) -> ProjectData {
-  ProjectData::Readable(Some(Arc::from(phases)))
+  ProjectData::Readable(Some(ListedRuns::new(Arc::from(phases), (2, 2))))
 }
 
 #[test]

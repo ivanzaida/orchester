@@ -414,3 +414,65 @@ fn needs_you_lists_a_limit_stop_work_ready_to_merge_and_the_memory_waiting_as_on
   assert!(items[2].task.is_none());
   assert_eq!(tasks.needs_you(), 3);
 }
+
+/// Runs `git` with `args` in `repo`, which must succeed.
+fn git(repo: &std::path::Path, args: &[&str]) {
+  let status = std::process::Command::new("git")
+    .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
+    .args(args)
+    .current_dir(repo)
+    .status()
+    .expect("git runs");
+  assert!(status.success(), "git {args:?}: {status}");
+}
+
+/// A task titled `title` whose run on `main` passed every step at `now`; with `commit`, its branch has a commit of
+/// its own, else it points at main's head, as once it was merged outside the app.
+fn passed(fixture: &mut Fixture, title: &str, (now, commit): (i64, bool)) -> orchester_core::id::TaskId {
+  let task = fixture.task(title, at(now));
+  let main = BranchName::new("main").expect("a branch");
+  let mut run = fixture.started_run_into(task, Some(main), at(now + 1));
+  fixture.succeed(&mut run, at(now + 2));
+  let repo = fixture.repo.path().to_path_buf();
+  let branch = run.branch().to_string();
+  git(&repo, &["branch", &branch, "main"]);
+  if commit {
+    git(&repo, &["checkout", "--quiet", &branch]);
+    git(&repo, &["commit", "--quiet", "--allow-empty", "-m", title]);
+    git(&repo, &["checkout", "--quiet", "main"]);
+  }
+  task
+}
+
+#[test]
+fn needs_you_leaves_out_finished_tasks_and_work_merged_outside_the_app() {
+  use orchester_core::task::organization::{ChangeActor, WorkflowStatus};
+
+  let mut fixture = Fixture::new();
+  let repo = fixture.repo.path().to_path_buf();
+  git(&repo, &["init", "--quiet", "--initial-branch=main"]);
+  git(&repo, &["commit", "--quiet", "--allow-empty", "-m", "base"]);
+  passed(&mut fixture, "Ready to merge", (10, true));
+  passed(&mut fixture, "Merged by hand", (20, false));
+  for (title, now, status) in [
+    ("Done by hand", 30, WorkflowStatus::Done),
+    ("Dropped", 40, WorkflowStatus::Canceled),
+  ] {
+    let task = passed(&mut fixture, title, (now, true));
+    fixture
+      .db
+      .update_task_organization(task, ChangeActor::Person, at(now + 3), |organization| {
+        organization.with_status(status)
+      })
+      .expect("the workflow status is saved");
+  }
+  let tasks = ProjectTasks::load(&repo).expect("load the project's tasks");
+  let items = tasks.waiting();
+  assert_eq!(kinds(&items), ["merge"], "{items:?}");
+  assert_eq!(
+    items[0].task.as_ref().map(|task| &*task.title),
+    Some("Ready to merge"),
+    "only work not on main yet, of a task not finished, waits to be merged"
+  );
+  assert_eq!(tasks.needs_you(), 1);
+}

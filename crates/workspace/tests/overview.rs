@@ -65,10 +65,7 @@ fn overview_needs_you_counts_runs_waiting_for_the_user() {
   let pulse = Pulse::of(&tasks.phases, support::at(0));
   assert_eq!(pulse.needs_input, 1);
   assert_eq!(pulse.running, 1);
-  assert_eq!(
-    OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases),
-    pulse.needs_input
-  );
+  assert_eq!(OverviewTab::NeedsYou.count(&tasks), pulse.needs_input);
 }
 
 /// A run that waits for a person's decision after its step broke again needs them as well.
@@ -100,10 +97,10 @@ fn overview_needs_you_counts_runs_waiting_for_a_decision_after_retries() {
     [TaskPhase::Stuck]
   );
   assert_eq!(Pulse::of(&tasks.phases, support::at(0)).needs_input, 1);
-  assert_eq!(OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases), 1);
-  assert_eq!(OverviewTab::Running.count(&tasks.tasks, &tasks.phases), 0);
+  assert_eq!(OverviewTab::NeedsYou.count(&tasks), 1);
+  assert_eq!(OverviewTab::Running.count(&tasks), 0);
   // Its card names what stopped it (02.B6 `Np9kc`), "ORC-1 · Implement stopped again …".
-  let rows = OverviewTab::NeedsYou.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 3);
+  let rows = OverviewTab::NeedsYou.rows(&tasks, 3);
   let decision = rows[0].decision.as_ref().expect("the decision it waits for");
   assert!(decision.broke);
   assert_eq!(decision.title().key, "runs.retryLimit.brokeTitle");
@@ -140,16 +137,17 @@ fn overview_tabs_filter_newest_first_and_count() {
   let (_fixture, tasks) = project();
   let titles = |tab: OverviewTab| {
     tab
-      .rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 6)
+      .rows(&tasks, 6)
       .iter()
       .map(|row| row.title.to_string())
       .collect::<Vec<_>>()
   };
   assert_eq!(titles(OverviewTab::All), ["Write docs", "Fix zoom", "Add login"]);
   assert_eq!(titles(OverviewTab::Running), ["Fix zoom"]);
-  assert!(titles(OverviewTab::NeedsYou).is_empty());
-  assert_eq!(OverviewTab::All.count(&tasks.tasks, &tasks.phases), 3);
-  assert_eq!(OverviewTab::Queued.count(&tasks.tasks, &tasks.phases), 0);
+  // Its work waits to be merged, as the pill and the panel count it.
+  assert_eq!(titles(OverviewTab::NeedsYou), ["Add login"]);
+  assert_eq!(OverviewTab::All.count(&tasks), 3);
+  assert_eq!(OverviewTab::Queued.count(&tasks), 0);
   let footer = footer(&tasks.tasks, &tasks.phases);
   assert_eq!(footer.key, "overview.footer.one");
   assert_eq!(
@@ -196,15 +194,13 @@ fn overview_failed_tab_counts_and_lists_only_tasks_whose_latest_run_failed() {
 
   let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
   let failed = OverviewTab::Failed;
-  assert_eq!(failed.count(&tasks.tasks, &tasks.phases), 2);
-  let rows = failed.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 6);
+  assert_eq!(failed.count(&tasks), 2);
+  let rows = failed.rows(&tasks, 6);
   assert_eq!(
     rows.iter().map(|row| row.title.as_ref()).collect::<Vec<_>>(),
     ["Third failure", "Second failure"]
   );
-  assert_eq!(failed.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 1).len(), 1);
-  assert!(!failed.includes(Some(TaskPhase::Cancelled)));
-  assert!(!failed.includes(None));
+  assert_eq!(failed.rows(&tasks, 1).len(), 1);
 }
 
 #[test]
@@ -230,7 +226,7 @@ fn overview_needs_you_names_the_plan_that_waits() {
   fixture.propose(&mut run, "1. Add the provider.", support::at(30));
   let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
   assert_eq!(Pulse::of(&tasks.phases, support::at(0)).needs_input, 1);
-  let rows = OverviewTab::NeedsYou.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 3);
+  let rows = OverviewTab::NeedsYou.rows(&tasks, 3);
   assert_eq!(rows.len(), 1);
   assert_eq!(
     rows[0].plan,
@@ -243,7 +239,7 @@ fn overview_needs_you_names_the_plan_that_waits() {
   // No agent works for it, so it still waits while no runner is connected.
   let offline = tasks.without_runner();
   assert_eq!(offline.lost_to_runner, 0);
-  assert_eq!(OverviewTab::NeedsYou.count(&offline.tasks, &offline.phases), 1);
+  assert_eq!(OverviewTab::NeedsYou.count(&offline), 1);
 }
 
 /// A task whose run was merged into its branch reads as Merged and counts as completed, like one

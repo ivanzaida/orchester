@@ -193,3 +193,13 @@ fn revision(sha: &str) -> Result<Revision, GitError> {
     detail: sha.to_owned(),
   })
 }
+
+/// Whether the work of `run` is on the branch it would merge into already, as when it was merged outside the app:
+/// its branch's head is reachable from that branch. `false` when it has no base branch or either branch is gone,
+/// which leaves nothing to compare.
+pub fn merged_outside(runner: &impl CommandRunner, git: &Path, repo: &Path, run: &Run) -> Result<bool, GitError> {
+  let Some(into) = run.base_branch() else {
+    return Ok(false);
+  };
+  Git::new(runner, git, repo).is_ancestor(&format!("refs/heads/{}", run.branch()), &format!("refs/heads/{into}"))
+}

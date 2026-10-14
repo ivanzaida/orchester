@@ -50,8 +50,8 @@ fn unreadable_latest_run_keeps_the_task_list_and_its_counts() {
 
   // Counts leave the unreadable run out; the task stays in All.
   assert_eq!(loaded.runs.values().sum::<usize>(), 2);
-  assert_eq!(OverviewTab::All.count(&loaded.tasks, &loaded.phases), 2);
-  assert_eq!(OverviewTab::Running.count(&loaded.tasks, &loaded.phases), 1);
+  assert_eq!(OverviewTab::All.count(&loaded), 2);
+  assert_eq!(OverviewTab::Running.count(&loaded), 1);
   assert_eq!(list::queued(&loaded.tasks, &loaded.phases), 0);
   assert_eq!(Pulse::of(&loaded.phases, at(0)).running, 1);
   let footer = footer(&loaded.tasks, &loaded.phases);

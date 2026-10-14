@@ -70,7 +70,7 @@ pub(super) fn attention(
     .filter_map(|shown| shown.task_id)
     .collect();
   let waiting: Vec<TaskRow> = OverviewTab::NeedsYou
-    .rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, SHOWN)
+    .rows(tasks, SHOWN)
     .into_iter()
     .filter(|row| !asking.contains(&row.id))
     .take(SHOWN.saturating_sub(requests.len()))

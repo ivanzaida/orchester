@@ -22,6 +22,7 @@ use thiserror::Error;
 use super::{
   approvals::{self, ShownApproval},
   detail::run_store_error,
+  integration::merged_outside_in,
   list::{AwaitedPlan, AwaitedQuestion, AwaitedStep, CurrentStep, Latest, LatestRun, Phases, StepWait},
   run_approvals,
   unreadable::Unreadable,
@@ -98,6 +99,9 @@ pub struct ProjectTasks {
   pub proposed_memory: Arc<Vec<Timestamp>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
   pub phases: Arc<Phases>,
+  /// Latest runs that passed every step and whose work is on their base branch already, merged outside the app:
+  /// nothing of theirs waits to be merged.
+  pub merged_outside: Arc<std::collections::BTreeSet<RunId>>,
   /// How many runs of each task were started and can be read.
   pub runs: Arc<BTreeMap<TaskId, usize>>,
   /// Runs recorded as running that lost their agent because no runner is connected; 0 while
@@ -183,19 +187,24 @@ impl ProjectTasks {
   }
 
   pub fn load(repo_root: &Path) -> Result<Self, StoreError> {
-    let db = ProjectDb::open(repo_root)?;
+    Self::read(&ProjectDb::open(repo_root)?, repo_root)
+  }
+
+  /// [`Self::load`] from `db`, the database of the project at `repo_root`, opened already; it only reads.
+  pub fn read(db: &ProjectDb, repo_root: &Path) -> Result<Self, StoreError> {
     let tasks = db.tasks()?;
-    let (not_shared, kept_tags) = kept(&db)?;
+    let (not_shared, kept_tags) = kept(db)?;
     let under_review = db.reviewing_tool_approvals()?;
-    let (reviewing, pending): (Vec<_>, Vec<_>) = approvals::pending(&db, repo_root)?
+    let (reviewing, pending): (Vec<_>, Vec<_>) = approvals::pending(db, repo_root)?
       .into_iter()
       .partition(|shown| under_review.contains(&shown.approval.id));
     let asked = db.waiting_questions()?;
     let asking: Vec<RunId> = asked.iter().map(|asked| asked.request.run()).collect();
-    let (mut group_holds, grouped) = group_holds(&db)?;
+    let (mut group_holds, grouped) = group_holds(db)?;
     let mut phases = Phases::new();
     let mut counts = BTreeMap::new();
     let mut auto_approving = Vec::new();
+    let mut merged_outside = std::collections::BTreeSet::new();
     for task in tasks.iter().chain(&not_shared) {
       let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
       counts.insert(task.id(), runs.iter().filter(|run| run.is_ok()).count());
@@ -204,7 +213,7 @@ impl ProjectTasks {
           if db.task_group_for_run(latest).map_err(run_store_error)?.is_none() {
             group_holds.remove(&task.id());
           }
-          let mut shown = latest_run(&db, task, latest)?;
+          let mut shown = latest_run(db, task, latest)?;
           // A run whose agent waits for a tool decision or an answer in its turn waits for a person, as one
           // at a plan does.
           if shown.phase == TaskPhase::Running
@@ -212,7 +221,10 @@ impl ProjectTasks {
           {
             shown.phase = TaskPhase::Waiting;
           }
-          if shown.phase.is_active() && run_approvals::auto_approving(&db, latest)? {
+          if shown.phase == TaskPhase::Succeeded && merged_outside_in(repo_root, latest) {
+            merged_outside.insert(latest.id());
+          }
+          if shown.phase.is_active() && run_approvals::auto_approving(db, latest)? {
             auto_approving.push(AutoApprovingRun {
               run: latest.id(),
               number: latest.number(),
@@ -244,19 +256,20 @@ impl ProjectTasks {
           .map(|task| db.unfinished_blocking_tasks(task.id()).map(|links| (task.id(), links)))
           .collect::<Result<_, _>>()?,
       ),
-      proposed_memory: Arc::new(proposed_memory(&db, &tasks)?),
+      proposed_memory: Arc::new(proposed_memory(db, &tasks)?),
       tasks: Arc::new(tasks),
       not_shared: Arc::new(not_shared),
       kept_tags: Arc::new(kept_tags),
       former_keys: Arc::new(db.former_keys()?),
       group_holds: Arc::new(group_holds),
       grouped: Arc::new(grouped),
-      pipelines: Arc::new(published_pipelines(&db)?),
+      pipelines: Arc::new(published_pipelines(db)?),
       missing_pipelines: Arc::new(db.missing_pipelines()?),
       pending_tool_approvals: Arc::new(pending),
       reviewing_tool_approvals: Arc::new(reviewing),
       asked: Arc::new(asked),
       phases: Arc::new(phases),
+      merged_outside: Arc::new(merged_outside),
       runs: Arc::new(counts),
       lost_to_runner: 0,
       auto_approving: Arc::new(auto_approving),

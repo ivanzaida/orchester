@@ -44,6 +44,11 @@ impl WorkflowStatus {
   pub fn can_change(self, run_not_ended: bool) -> bool {
     self != Self::Canceled || !run_not_ended
   }
+
+  /// Done or Canceled: nothing of the task waits for a person any more.
+  pub const fn finished(self) -> bool {
+    matches!(self, Self::Done | Self::Canceled)
+  }
 }
 
 /// Ordering is for task lists only, never runner scheduling.

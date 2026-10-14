@@ -1,11 +1,16 @@
 //! What waits for a person in one project, one item per waiting object, as the title bar's Needs you panel
-//! lists it (layer `Needs you` `eBhFg`, note `zJR9O`) and every Needs you count counts it (the pill, the status
-//! bar, a tab's mark): a tool request waiting for a decision (also one whose task cannot be read), a question
+//! lists it (layer `Needs you` `eBhFg`, note `zJR9O`) and every Needs you count counts it: the pill, the status
+//! bar, a tab's mark, the Overview's Needs you tab (`OverviewTab::count`) and All projects (`ListedRuns`) all
+//! count [`ProjectTasks::needs_you`], the one source. It is: a tool request waiting for a decision (also one
+//! whose task cannot be read), a question
 //! with suggested answers, each step of a run waiting on a plan or on an agent's question, a decision after a
 //! step's retries, a run stopped at its limit, a run whose every step passed and whose work waits to be merged,
 //! a run recorded interrupted, and the project's memory records waiting for approval, together one item. A run
 //! that reads interrupted only because no runner looks after it is none: a runner records it once one does.
 //! A merge that stopped at conflicts is known only to the session that tried it, so it is not counted here.
+//! Nothing of a task whose workflow status is Done or Canceled waits, and neither does a run that passed every
+//! step whose work is on its base branch already (merged outside the app), so finished work does not count
+//! forever.
 //! Approvals and questions with suggested answers are answered in place, through their cards in the run's
 //! timeline ([`WaitingKind::card_key`], [`InPlace`]); the others open their task, or the project's memory.
 
@@ -127,7 +132,8 @@ pub struct WaitingItem {
 }
 
 impl ProjectTasks {
-  /// Everything that waits for the person in the project, oldest first.
+  /// Everything that waits for the person in the project, oldest first: what the Needs you panel lists and every
+  /// Needs you counts ([`Self::needs_you`]).
   pub fn waiting(&self) -> Vec<WaitingItem> {
     let mut items: Vec<WaitingItem> = self
       .pending_tool_approvals
@@ -149,18 +155,26 @@ impl ProjectTasks {
         },
       });
     }
+    items.retain(|item| item.task.as_ref().is_none_or(|task| !self.finished(task.id)));
     items.sort_by_key(|item| item.since);
     items
   }
 
-  /// What *Needs you* counts: everything that waits for the person ([`Self::waiting`]). Whether a dialog or the
-  /// panel is open changes nothing.
+  /// What every *Needs you* counts: everything that waits for the person ([`Self::waiting`]). Whether a dialog or
+  /// the panel is open changes nothing.
   pub fn needs_you(&self) -> usize {
     self.waiting().len()
   }
 
   fn task(&self, id: TaskId) -> Option<&Task> {
     self.tasks.iter().find(|task| task.id() == id)
+  }
+
+  /// Whether task `id`'s workflow status is Done or Canceled, so nothing of it waits.
+  fn finished(&self, id: TaskId) -> bool {
+    self
+      .task(id)
+      .is_some_and(|task| task.organization().status().finished())
   }
 
   /// The latest run of a task that is `run`, with its task.
@@ -231,7 +245,7 @@ impl ProjectTasks {
       TaskPhase::StoppedAtLimit => Some(WaitingKind::StoppedAtLimit {
         daily_budget: latest.daily_budget,
       }),
-      TaskPhase::Succeeded => Some(WaitingKind::ReadyToMerge),
+      TaskPhase::Succeeded if !self.merged_outside.contains(&latest.id) => Some(WaitingKind::ReadyToMerge),
       _ => None,
     };
     let before = items.len();

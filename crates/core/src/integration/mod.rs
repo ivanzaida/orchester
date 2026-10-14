@@ -21,7 +21,7 @@ pub use self::{
     leftovers, leftovers_of,
   },
   forgotten::{FOLDER_ENTRIES_READ, FolderListing},
-  merge::{MergeError, MergeKind, RunMerge, merge_run},
+  merge::{MergeError, MergeKind, RunMerge, merge_run, merged_outside},
   recorded::{RecordedCleanupError, RemovalStart, clean_up_recorded},
 };
 use crate::{

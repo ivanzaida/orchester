@@ -4,17 +4,63 @@
 //! instead of showing an empty list ([`Listing::Welcome`]); once it has listed a project, an empty list
 //! stays a list.
 
-use std::sync::atomic::Ordering;
+use std::sync::{Arc, atomic::Ordering};
 
-use orchester_core::run::RunCounts;
+use orchester_core::run::{RunCounts, TaskPhase};
 use orchester_store::{RegisteredProject, StoreError};
 
 use crate::{
   background,
   messages::{self, Message},
   runner::{ForgetRefusal, Runners, state::RunnerState},
+  tasks::{data::ProjectTasks, list::Latest},
   workspace::{ListedData, ProjectData, ProjectEntry, Workspace},
 };
+
+/// A listed project's runs, read before it is opened: the phase of each task's latest run that can be read, for
+/// the runs at work, and what waits for the person as every Needs you counts it ([`ProjectTasks::needs_you`]),
+/// with its runner online and without one.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ListedRuns {
+  phases: Arc<[TaskPhase]>,
+  needs_you: usize,
+  needs_you_offline: usize,
+}
+
+impl ListedRuns {
+  /// The runs of a project with `phases`, where `needs_you` wait for the person with its runner online and
+  /// without one.
+  pub const fn new(phases: Arc<[TaskPhase]>, (needs_you, needs_you_offline): (usize, usize)) -> Self {
+    Self {
+      phases,
+      needs_you,
+      needs_you_offline,
+    }
+  }
+
+  /// The runs of the project whose tasks are `tasks`.
+  pub fn of(tasks: &ProjectTasks) -> Self {
+    Self::new(
+      tasks.phases.values().filter_map(Latest::phase).collect(),
+      (tasks.needs_you(), tasks.without_runner().needs_you()),
+    )
+  }
+
+  /// The phase of each task's latest run that can be read.
+  pub fn phases(&self) -> &[TaskPhase] {
+    &self.phases
+  }
+
+  /// Its runs at work and what waits for the person, with its runner online or not.
+  pub fn counts(&self, runner_online: bool) -> RunCounts {
+    let needs_you = if runner_online {
+      self.needs_you
+    } else {
+      self.needs_you_offline
+    };
+    RunCounts::of(self.phases.iter().copied(), runner_online, needs_you)
+  }
+}
 
 /// What All projects shows.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -102,10 +148,9 @@ impl ListedProject {
       _ if entry.folder_missing => (Standing::FolderMissing, None),
       Some(ProjectData::Unreadable(reason)) => (Standing::Unreadable(reason.clone()), None),
       // Active runs count only while the runner is online: without it no agent works.
-      Some(ProjectData::Readable(Some(phases))) => (
-        Standing::Opens(shown),
-        Some(RunCounts::of(phases.iter().copied(), shown == RunnerShown::Online)),
-      ),
+      Some(ProjectData::Readable(Some(runs))) => {
+        (Standing::Opens(shown), Some(runs.counts(shown == RunnerShown::Online)))
+      }
       Some(ProjectData::Readable(None)) | None => (Standing::Opens(shown), None),
     };
     Self {

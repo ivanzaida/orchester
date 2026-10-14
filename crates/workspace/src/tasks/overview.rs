@@ -1,8 +1,9 @@
 //! The project overview (02.08 `Twtqc`) as data: the project pulse (`C95Z93`), the task tabs
 //! (`i2uFe`) with their rows and footer (`WV44u`), what needs the user (`EKUWS`) and the recent
-//! run activity (`YJ8PV`). Everything is counted from the project's tasks and their latest runs.
+//! run activity (`YJ8PV`). Everything is counted from the project's tasks and their latest runs; the
+//! Needs you tab from what waits for the person, as every Needs you counts it ([`ProjectTasks::waiting`]).
 
-use std::{num::NonZeroU32, sync::Arc};
+use std::{collections::BTreeSet, num::NonZeroU32, sync::Arc};
 
 use orchester_core::{
   id::TaskId,
@@ -12,7 +13,7 @@ use orchester_core::{
 };
 
 use super::{
-  data::PipelineChoice,
+  data::ProjectTasks,
   list::{Latest, Phases, TaskRow, phase_of},
 };
 use crate::messages::Message;
@@ -40,35 +41,47 @@ impl OverviewTab {
     }
   }
 
-  /// Whether a task in `phase` is in the tab; one whose latest run cannot be read (`None`) is only
-  /// in All.
-  pub const fn includes(self, phase: Option<TaskPhase>) -> bool {
+  /// What the tab's label counts: Needs you what waits for the person, as every Needs you counts it
+  /// ([`ProjectTasks::needs_you`]: the pill, the panel and All projects show the same number); each other tab
+  /// its tasks.
+  pub fn count(self, tasks: &ProjectTasks) -> usize {
     match self {
-      Self::All => true,
-      Self::Running => matches!(phase, Some(TaskPhase::Running)),
-      Self::NeedsYou => matches!(phase, Some(phase) if phase.needs_you()),
-      Self::Queued => matches!(phase, Some(TaskPhase::Queued)),
-      Self::Failed => matches!(phase, Some(TaskPhase::Failed)),
+      Self::NeedsYou => tasks.needs_you(),
+      tab => tasks.tasks.iter().filter(|task| tab.holds(task, tasks, None)).count(),
     }
   }
 
-  /// Tasks in the tab.
-  pub fn count(self, tasks: &[Task], phases: &Phases) -> usize {
+  /// The newest `limit` tasks of the tab, newest first: in Needs you each task something waits on
+  /// ([`ProjectTasks::waiting`]).
+  pub fn rows(self, tasks: &ProjectTasks, limit: usize) -> Vec<TaskRow> {
+    let waiting: Option<BTreeSet<TaskId>> = (self == Self::NeedsYou).then(|| {
+      tasks
+        .waiting()
+        .into_iter()
+        .filter_map(|item| item.task.map(|task| task.id))
+        .collect()
+    });
     tasks
-      .iter()
-      .filter(|task| self.includes(phase_of(task, phases)))
-      .count()
-  }
-
-  /// The newest `limit` tasks of the tab, newest first.
-  pub fn rows(self, tasks: &[Task], published: &[PipelineChoice], phases: &Phases, limit: usize) -> Vec<TaskRow> {
-    tasks
+      .tasks
       .iter()
       .rev()
-      .filter(|task| self.includes(phase_of(task, phases)))
+      .filter(|task| self.holds(task, tasks, waiting.as_ref()))
       .take(limit)
-      .map(|task| TaskRow::new(task, published, phases.get(&task.id())))
+      .map(|task| TaskRow::new(task, &tasks.pipelines, tasks.phases.get(&task.id())))
       .collect()
+  }
+
+  /// Whether `task` is in the tab: in Needs you while something of it waits (`waiting`), else by its latest run's
+  /// phase; one whose latest run cannot be read is only in All.
+  fn holds(self, task: &Task, tasks: &ProjectTasks, waiting: Option<&BTreeSet<TaskId>>) -> bool {
+    let phase = phase_of(task, &tasks.phases);
+    match self {
+      Self::All => true,
+      Self::Running => matches!(phase, Some(TaskPhase::Running)),
+      Self::NeedsYou => waiting.is_some_and(|waiting| waiting.contains(&task.id())),
+      Self::Queued => matches!(phase, Some(TaskPhase::Queued)),
+      Self::Failed => matches!(phase, Some(TaskPhase::Failed)),
+    }
   }
 }
 

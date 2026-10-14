@@ -340,8 +340,8 @@ fn conversation_a_question_waits_for_the_answer_and_needs_you() {
   assert_eq!(conversation.next_agent.as_deref(), Some("Builder"));
 
   let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
-  assert_eq!(OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases), 1);
-  let rows = OverviewTab::NeedsYou.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 3);
+  assert_eq!(OverviewTab::NeedsYou.count(&tasks), 1);
+  let rows = OverviewTab::NeedsYou.rows(&tasks, 3);
   assert_eq!(
     rows[0].question,
     Some(AwaitedQuestion {

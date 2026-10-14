@@ -5,10 +5,12 @@
 //! not go); a wider answer that synthetic input does not take, and an MCP client's answers ([`automation`]); Esc
 //! and the close, and the pill opening it again after each way it closes ([`closing`]); an expanded approval's
 //! layout and the pinned project header ([`expanded`]); a question's panel layout, the notes of what was answered
-//! while the panel is open and an expanded item kept in view ([`in_place`]). Needs `git`.
+//! while the panel is open and an expanded item kept in view ([`in_place`]); the same count wherever Needs you
+//! shows ([`counts`]). Needs `git`.
 
 mod automation;
 mod closing;
+mod counts;
 mod expanded;
 mod in_place;
 #[path = "../../examples/seed/kontur/mod.rs"]

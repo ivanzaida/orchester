@@ -46,7 +46,7 @@ pub(super) fn task_list(
   let now = Timestamp::now();
   let separator = ctx.t("common.listSeparator");
   let rows: Vec<_> = selected
-    .rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, RECENT_TASKS)
+    .rows(tasks, RECENT_TASKS)
     .into_iter()
     .map(|row| tasks.decorate_row(row, &separator))
     .collect();
@@ -63,7 +63,7 @@ pub(super) fn task_list(
     None,
     OverviewTab::ALL.into_iter().map(|each| {
       Tab::new(tab_id(each), ctx.t(each.label_key()), Dimension::Px(TAB_HEIGHT))
-        .count(Some(each.count(&tasks.tasks, &tasks.phases)))
+        .count(Some(each.count(tasks)))
         .selected(each == selected)
         .link(nav.link(Page::Overview(each)))
     }),

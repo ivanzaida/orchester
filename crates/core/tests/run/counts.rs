@@ -1,4 +1,5 @@
-//! All projects' run counts: agents at work and runs waiting for a person, by task phase.
+//! All projects' run counts: agents at work by task phase, beside what waits for the person as every Needs you
+//! counts it.
 
 use orchester_core::run::{RunCounts, TaskPhase};
 
@@ -12,28 +13,28 @@ const PHASES: [TaskPhase; 6] = [
 ];
 
 #[test]
-fn counts_active_and_waiting_runs_while_the_runner_is_online() {
+fn counts_active_runs_while_the_runner_is_online_beside_what_waits() {
   assert_eq!(
-    RunCounts::of(PHASES, true),
+    RunCounts::of(PHASES, true, 3),
     RunCounts {
       active: 2,
-      needs_you: 1
+      needs_you: 3
     }
   );
 }
 
 #[test]
-fn counts_no_active_run_without_a_runner_but_still_the_waiting_ones() {
+fn counts_no_active_run_without_a_runner_but_still_what_waits() {
   assert_eq!(
-    RunCounts::of(PHASES, false),
+    RunCounts::of(PHASES, false, 3),
     RunCounts {
       active: 0,
-      needs_you: 1
+      needs_you: 3
     }
   );
 }
 
 #[test]
 fn counts_nothing_for_a_project_without_runs() {
-  assert_eq!(RunCounts::of([], true), RunCounts::default());
+  assert_eq!(RunCounts::of([], true, 0), RunCounts::default());
 }

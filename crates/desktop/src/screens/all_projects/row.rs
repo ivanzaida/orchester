@@ -12,10 +12,8 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension},
 };
-use orchester_core::{
-  run::{RunCounts, TaskPhase},
-  time::Timestamp,
-};
+use orchester_core::{run::RunCounts, time::Timestamp};
+use orchester_workspace::project_list::ListedRuns;
 
 use super::OpenAction;
 use crate::{
@@ -48,8 +46,8 @@ const HEADINGS_HEIGHT: f32 = 32.0;
 enum Standing<'a> {
   FolderMissing,
   Unreadable(&'a Message),
-  /// It opens; the phases of its tasks once they are read.
-  Openable(Option<&'a [TaskPhase]>),
+  /// It opens; its runs once they are read.
+  Openable(Option<&'a ListedRuns>),
 }
 
 impl<'a> Standing<'a> {
@@ -57,7 +55,7 @@ impl<'a> Standing<'a> {
     match data {
       _ if entry.folder_missing => Self::FolderMissing,
       Some(ProjectData::Unreadable(reason)) => Self::Unreadable(reason),
-      Some(ProjectData::Readable(phases)) => Self::Openable(phases.as_deref()),
+      Some(ProjectData::Readable(runs)) => Self::Openable(runs.as_ref()),
       None => Self::Openable(None),
     }
   }
@@ -121,7 +119,7 @@ pub(super) fn project_row(
   let standing = Standing::of(entry, data);
   // A dash until the counts are read: not known yet, never 0 (01.06 E `t8TEOZ`).
   let counts = match standing {
-    Standing::Openable(Some(phases)) => Some(RunCounts::of(phases.iter().copied(), online)),
+    Standing::Openable(Some(runs)) => Some(runs.counts(online)),
     Standing::Openable(None) | Standing::FolderMissing | Standing::Unreadable(_) => None,
   };
   let count = |value: fn(RunCounts) -> usize| {
