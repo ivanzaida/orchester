@@ -4,7 +4,7 @@
 //! place through the conversation's own cards, with the same rules (no runner here, so an answer says why it did
 //! not go); a wider answer that synthetic input does not take; Esc and the close, and the pill opening it again
 //! after each way it closes ([`closing`]); an expanded approval's layout and the pinned project header
-//! ([`expanded`]). Needs `git`.
+//! ([`expanded`]); an item whose request cannot be read again ([`reread`]). Needs `git`.
 
 mod closing;
 mod expanded;
@@ -14,6 +14,7 @@ mod expanded;
   reason = "the seed reports what it wrote; these tests read the window instead"
 )]
 mod kontur;
+mod reread;
 #[path = "../support/mod.rs"]
 mod support;
 

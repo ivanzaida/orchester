@@ -2,8 +2,8 @@
 //! (`tasks::needs_you::InPlace`), again as the project's runs and waiting requests change, and the card of the
 //! run's timeline that answers it is the conversation's own (`screens::task::cards`), shown bare inside the
 //! item: the same answers, rules and person gates, sent to the project's runner as the person. While it is
-//! read the item says so; when it cannot be read, why; when the request is not on the task's latest run, that
-//! it is answered in the conversation.
+//! read the item says so; when it cannot be read, or not read again, why, with no card to answer until it is;
+//! when the request is not on the task's latest run, that it is answered in the conversation.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -89,10 +89,12 @@ impl Component for InPlaceCard {
     });
     let state = read.state().get();
     let read = match (state.data, state.error) {
-      (Some(Read(read)), _) => read,
-      (None, Some(error)) => {
+      // A reading again that failed leaves a card that may no longer wait: it says why instead, and nothing is
+      // answered here until a reading succeeds.
+      (_, Some(error)) => {
         return field_error(&format!("{}-error", props.id), &message_text(ctx, &error)).into();
       }
+      (Some(Read(read)), None) => read,
       (None, None) => return loading(&format!("{}-reading", props.id), &ctx.t("needs_you.reading")).into(),
     };
     let lost = read.detail.lost_its_runner(online);
