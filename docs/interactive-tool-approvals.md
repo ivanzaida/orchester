@@ -241,14 +241,20 @@ by `read_external_file` and `search_external_file`.
   searching. Starts of one invocation run one at a time; a second replaces the first's app. When the invocation ends,
   whatever ended it (the runner failing included), or waits for a person inside its turn, the runner stops the app (as
   `stop_run_process` does) and frees the slot; a start still waiting gives up, and a script still running is ended
-  with its process tree, as is one that names no app. It builds and runs the worktree's code outside every sandbox, so
+  with its process tree, as is one that names no app. While the invocation waits for a person (until no such wait of
+  it remains), a start is refused before it takes the slot and before its script runs. It builds and runs the worktree's code outside every sandbox, so
   it is offered only to a step that writes the worktree and has network access, and it asks, like a check: a person
-  or an *Approve similar* rule decides, the rule kept to the script's git blob (a changed script asks again; the rule
-  does not cover changes to what the build compiles, `build.rs` and the rest, which approving similar accepts for the
-  run), and the request names `tools/qa-app.ps1` and any `build.rs` changed since the run's base; auto-approval never
-  answers it. The blob is read again right before the script runs: a script changed since its approval does not run.
+  or an *Approve similar* rule decides, the rule kept to the script's git blob (`git hash-object --no-filters`, the
+  file's exact bytes; a changed script asks again; the rule does not cover changes to what the build compiles or runs,
+  which approving similar accepts for the run), and the request names `tools/qa-app.ps1` and the files changed since
+  the run's base that run code while the app builds: `build.rs`, `Cargo.toml` and `Cargo.lock` (a new dependency or
+  proc macro), `.cargo/config*` (`rustc-wrapper`, runners) and `rust-toolchain*`. Other source changes are not named;
+  the build compiles them too, and approving accepts them. Auto-approval never answers it. The blob is read again right
+  before the script runs: a script changed since its approval does not run. A short window remains between that read
+  and PowerShell opening the file, in which a program of the agent's could still swap it.
   The cleanup of what a dead runner left (named by the slot file, which is untrusted) and of the step's own QA folder
-  follows no link and stops only programs from that folder's `bin/` started since its run was created.
+  follows no link and stops only programs from that folder's `bin/` started since its run was created; the scope that
+  stops them must still resolve to the `bin/` it checked, so a link swapped in after the check refuses the cleanup.
 - **Results that could not check everything.** A step's result may be `unverified` with an `unverified` list of
   `{check, reason}` (`orchester_core::run::STEP_RESULT_SCHEMA`): the step ran but could not check some of what it is
   for. The run waits for the person (`waiting_for_person`, reason `unverified`) without taking the step's failure
@@ -259,8 +265,9 @@ by `read_external_file` and `search_external_file`.
   rest of the window, its close button included, still takes the client's input), unless a person turned on *Let
   automation answer approvals*; the event records who accepted. The accepted step then passes as a passed step does, in a new attempt
   without an agent: its own worktree's work is merged and a gated step proposes its result as the plan. Accepting is
-  refused, with why, when that work does not build on the revision the result was for or uncommitted changes lie
-  beside it, which passing would take as the step's. A step whose latest result was failed or unverified for the revision it would run on now is not run
+  refused, with why, when that work does not build on the revision the result was for (later commits on top of that
+  revision do build on it, and pass with the step), when uncommitted changes lie beside it, which passing would take as
+  the step's, or when the step worked in a worktree of its own that was removed while its branch remains. A step whose latest result was failed or unverified for the revision it would run on now is not run
   again unless a person asked for it: the run waits with reason `unchanged`, with the same choices.
 - **Schemas** are strict (`additionalProperties: false`, each property typed and bounded); a call is read into its
   type with unknown fields refused, and an invalid call is answered with an error result that says why.

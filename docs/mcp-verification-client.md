@@ -29,9 +29,11 @@ folder of an Orchester worktree (`<repo>/.orchester/worktrees/<id>/.tmp/qa/run-<
 without any link, its `bin/` too, and only programs from that `bin/` that started since that run was
 created are stopped. A QA folder reached through a link refuses the start (on macOS a runner killed
 mid-script can still leave its script running). The call is offered only to a step that writes the
-worktree and has network access, and asks a person first, naming the script's git blob and the `build.rs`
-files changed since the run's base, as it builds and runs the worktree's code outside the sandbox; auto
-mode's reviewer never answers it. The script runs only while it is still the blob the approval named; a
+worktree and has network access, and asks a person first, naming the script's git blob (of its exact
+bytes) and the files changed since the run's base that run code at build (`build.rs`, `Cargo.toml`,
+`Cargo.lock`, `.cargo/config*`, `rust-toolchain*`), as it builds and runs the worktree's code outside the
+sandbox; other changed sources are not named, and approving accepts them too. Auto mode's reviewer never
+answers it. The script runs only while it is still the blob the approval named; a
 changed script is refused and asks again. An *Approve similar* rule is kept to that blob only: it covers
 later starts while `tools/qa-app.ps1` is unchanged, whatever else the build compiles (`build.rs` and the
 rest of the worktree's code), which a person approving similar accepts for the run.
