@@ -1,6 +1,8 @@
-//! Exact-pid discovery in the user's folder or an isolated QA profile under .tmp/. A QA copy of `orchester-app`
-//! writes its file to the folder `ORCHESTER_APP_MCP_DISCOVERY` names, which `tools/qa-app.ps1` sets to
-//! `.tmp/qa/<task>/mcp/`; a QA profile of the user's folders keeps it in `orchester-app-mcp/`.
+//! Exact-pid discovery in the user's folder or a QA copy's folder under `.tmp/qa/<task>/`. A QA copy of
+//! `orchester-app` writes its file to the folder `ORCHESTER_APP_MCP_DISCOVERY` names, which `tools/qa-app.ps1` sets to
+//! `.tmp/qa/<task>/mcp/`; a QA profile, a copy whose user data folder is `.tmp/qa/<task>/profile/`, keeps it in that
+//! folder's `orchester-app-mcp/`, `orchester-mcp/` or `lurq/mcp/`. Only those exact paths are read: agents keep build
+//! output and scratch checkouts in `.tmp/`, so it is never walked.
 
 use std::{
   fs,
@@ -14,7 +16,7 @@ use orchester_core::orchester_tools::AppDiscovery;
 use super::AppError;
 
 const MAX_DISCOVERY_BYTES: u64 = 16 * 1024;
-const MAX_SEARCH_ENTRIES: usize = 8192;
+pub(super) const MAX_QA_ENTRIES: usize = 1024;
 
 pub(super) fn find(worktree: &Path, pid: NonZeroU32, app: &str, tool: &str) -> Result<AppDiscovery, AppError> {
   let folder = if app == "orchester-app" {
@@ -34,11 +36,11 @@ pub(super) fn find(worktree: &Path, pid: NonZeroU32, app: &str, tool: &str) -> R
     }
   }
   let root = fs::canonicalize(worktree).map_err(|_| AppError::ReadDiscovery)?;
-  let mut suffixes = vec![Path::new(folder).join(&name)];
+  let mut layouts = vec![Path::new("profile").join(folder).join(&name)];
   if app == "orchester-app" {
-    suffixes.push(Path::new("mcp").join(&name));
+    layouts.push(Path::new("mcp").join(&name));
   }
-  let matches = qa_files(&root, &suffixes, &name)?;
+  let matches = qa_files(&root, &layouts)?;
   match matches.as_slice() {
     [path] => read(path, pid, app),
     [] => Err(AppError::Missing),
@@ -74,43 +76,43 @@ fn read(path: &Path, pid: NonZeroU32, app: &str) -> Result<AppDiscovery, AppErro
   AppDiscovery::parse(&bytes, pid, app).map_err(AppError::from)
 }
 
-/// The files under `root`'s `.tmp/` whose path ends in one of `suffixes`; lurq's own `lurq/mcp/<name>` only when
-/// it is asked for by name, never as a QA copy's `mcp/<name>`.
-fn qa_files(root: &Path, suffixes: &[PathBuf], name: &str) -> Result<Vec<PathBuf>, AppError> {
-  let lurq = Path::new("lurq/mcp").join(name);
-  let wanted = |path: &Path| {
-    suffixes
-      .iter()
-      .any(|suffix| path.ends_with(suffix) && (suffix.ends_with(&lurq) || !path.ends_with(&lurq)))
+/// The files `.tmp/qa/<task>/<layout>` of `root` for every task folder, reading `.tmp/qa/` one level only.
+fn qa_files(root: &Path, layouts: &[PathBuf]) -> Result<Vec<PathBuf>, AppError> {
+  // Resolve `.tmp/qa` first: a link there must not reach the install or another run.
+  let qa = match fs::canonicalize(root.join(".tmp/qa")) {
+    Ok(path) if path.starts_with(root) => path,
+    Ok(_) => return Ok(Vec::new()),
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+    Err(_) => return Err(AppError::ReadDiscovery),
   };
-  let mut pending = vec![(root.join(".tmp"), 0)];
   let mut matches = Vec::new();
-  let mut remaining = MAX_SEARCH_ENTRIES;
-  while let Some((folder, depth)) = pending.pop() {
-    // Resolve every folder before traversing: a QA profile link must not reach the install or another run.
-    let resolved = match fs::canonicalize(&folder) {
-      Ok(path) if path.starts_with(root) => path,
-      Ok(_) => continue,
-      Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-      Err(_) => return Err(AppError::ReadDiscovery),
-    };
-    let entries = fs::read_dir(&resolved).map_err(|_| AppError::ReadDiscovery)?;
-    for entry in entries {
-      remaining = remaining.checked_sub(1).ok_or(AppError::SearchBound)?;
-      let entry = entry.map_err(|_| AppError::ReadDiscovery)?;
-      let kind = entry.file_type().map_err(|_| AppError::ReadDiscovery)?;
-      if kind.is_symlink() {
-        continue;
-      }
-      if kind.is_file() && wanted(&entry.path()) {
-        let path = fs::canonicalize(entry.path()).map_err(|_| AppError::ReadDiscovery)?;
-        if path.starts_with(root) && wanted(&path) {
-          matches.push(path);
-        }
-      } else if kind.is_dir() && depth < 12 {
-        pending.push((entry.path(), depth + 1));
+  for (index, entry) in fs::read_dir(&qa).map_err(|_| AppError::ReadDiscovery)?.enumerate() {
+    if index == MAX_QA_ENTRIES {
+      return Err(AppError::SearchBound { folder: qa });
+    }
+    let entry = entry.map_err(|_| AppError::ReadDiscovery)?;
+    // A link or junction as a task folder is skipped, not followed.
+    if !entry.file_type().map_err(|_| AppError::ReadDiscovery)?.is_dir() {
+      continue;
+    }
+    let task = qa.join(entry.file_name());
+    for layout in layouts {
+      if let Some(path) = qa_file(&task.join(layout))? {
+        matches.push(path);
       }
     }
   }
   Ok(matches)
+}
+
+/// `path` when it is a regular file reached without any link on the way from its task folder.
+fn qa_file(path: &Path) -> Result<Option<PathBuf>, AppError> {
+  match fs::symlink_metadata(path) {
+    Ok(metadata) if metadata.is_file() => {}
+    Ok(_) => return Ok(None),
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+    Err(_) => return Err(AppError::ReadDiscovery),
+  }
+  let resolved = fs::canonicalize(path).map_err(|_| AppError::ReadDiscovery)?;
+  Ok((resolved == path).then_some(resolved))
 }

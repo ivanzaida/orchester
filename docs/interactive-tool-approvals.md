@@ -216,9 +216,10 @@ by `read_external_file` and `search_external_file`.
   executables and unreadable identities are refused, without asking. The process identity is retained and checked
   before each request: a Windows process handle or macOS audit token. The executable must be `orchester-app` or
   `orchester`; discovery must name that app and exactly the requested pid. Discovery is found by pid in the
-  per-user data folder (`LOCALAPPDATA` on Windows; `~/Library/Application Support` on macOS), or a QA discovery
-  folder under this worktree's `.tmp/`. Links escaping the worktree, ambiguous QA discovery and non-loopback URLs
-  are refused. The new app uses `orchester-app-mcp`; the deprecated desktop uses `lurq/mcp` for `lurq_*` tools
+  per-user data folder (`LOCALAPPDATA` on Windows; `~/Library/Application Support` on macOS), or at the exact QA
+  paths `.tmp/qa/<task>/mcp/<pid>.json` (new app) and `.tmp/qa/<task>/profile/<folder>/<pid>.json` (QA profile)
+  of this worktree; only `.tmp/qa/` is read, one level and at most 1024 entries. Links, ambiguous QA discovery
+  and non-loopback URLs are refused. The new app uses `orchester-app-mcp`; the deprecated desktop uses `lurq/mcp` for `lurq_*` tools
   and `orchester-mcp` for domain tools.
   The relay initializes MCP and calls one tool using bounded JSON or SSE responses, without proxies or redirects.
   The token is held in a redacting secret type, put only in a sensitive authorization header and removed from
