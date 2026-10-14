@@ -42,7 +42,10 @@ impl RunTask {
       .cloned()
       .ok_or(ExecutionError::NotAnAgentStep(accepted))?;
     // Checked when the person accepted; checked again, as the work may have changed since.
-    let workspace = match Workspace::accepted_work(&self.root, (&self.run, &self.worktree), &judged) {
+    let found = Workspace::accepted_work(&self.root, (&self.run, &self.worktree), &judged)
+      .map_err(|error| error.to_string())
+      .and_then(|found| found.map_err(|refusal| format!("{refusal}; run the step again instead")));
+    let workspace = match found {
       Ok(workspace) => workspace,
       Err(detail) => {
         let problem = RunnerProblem::CheckpointFailed { detail };

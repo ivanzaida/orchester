@@ -9,6 +9,9 @@
 //! The seed scenarios and fixtures a verification uses are files of the repository, so a change to them is a new
 //! revision as well.
 
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
 use super::{
   answer::Answerer,
   attempt::StepExecution,
@@ -23,6 +26,27 @@ use crate::{
   revision::Revision,
   time::Timestamp,
 };
+
+/// Why a step waiting unverified or unchanged cannot be accepted now: the work that would pass with it is not the work
+/// its result was for.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Error)]
+#[serde(tag = "reason", rename_all = "snake_case")]
+pub enum AcceptRefusal {
+  /// The revision the result was for is not recorded, so what work it covers is unknown.
+  #[error("the revision the accepted result was for is not recorded, so Orchester cannot tell what work it covers")]
+  NotJudged,
+  /// The work no longer builds on `revision`, the revision the result was for (its short form).
+  #[error("the accepted step's work no longer builds on {revision}, the revision its result was for")]
+  NotBuiltOn { revision: String },
+  /// Uncommitted changes lie beside the work, which passing would take as the step's.
+  #[error("uncommitted changes lie beside the accepted step's work, which accepting would pass as the step's")]
+  Uncommitted,
+  /// The step worked in a worktree of its own, which was removed while its branch remains: its work cannot be merged.
+  #[error(
+    "the accepted step's own worktree was removed while its branch {branch} remains, so its work cannot be merged"
+  )]
+  WorktreeRemoved { branch: String },
+}
 
 impl Run {
   /// Whether starting `execution`, pending in the current attempt, would run its step again on `revision` of the

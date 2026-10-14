@@ -1,11 +1,11 @@
 use std::num::NonZeroU32;
 
-use orchester_core::run::PreflightProblem;
+use orchester_core::run::{AcceptRefusal, PreflightProblem};
 use orchester_ipc::Rejection;
 use orchester_workspace::{
   i18n::{FALLBACK_LOCALE, LOCALES},
   runner::{RequestError, RunRequestError},
-  tasks::run::{StartOutcome, preflight_message},
+  tasks::run::{StartOutcome, control_message, preflight_message},
 };
 use serde_json::Value;
 
@@ -59,4 +59,38 @@ fn uncertain_start_copy_does_not_claim_the_run_never_started() {
   assert!(description.contains("whether its run started"));
   assert!(lost.contains("may have started"));
   assert!(!status.contains("run not started"));
+}
+
+#[test]
+fn preflight_a_refused_acceptance_says_why_in_the_persons_words() {
+  let (_, contents) = LOCALES
+    .iter()
+    .find(|(locale, _)| *locale == FALLBACK_LOCALE)
+    .expect("fallback locale");
+  let locale: Value = serde_json::from_str(contents).expect("locale JSON");
+  for (why, key) in [
+    (AcceptRefusal::NotJudged, "notJudged"),
+    (
+      AcceptRefusal::NotBuiltOn {
+        revision: "1c96380a2b4d".to_owned(),
+      },
+      "notBuiltOn",
+    ),
+    (AcceptRefusal::Uncommitted, "uncommitted"),
+    (
+      AcceptRefusal::WorktreeRemoved {
+        branch: "orchester/kon-5-run-1--review-1".to_owned(),
+      },
+      "worktreeRemoved",
+    ),
+  ] {
+    let message = control_message(&RunRequestError::Rejected(Rejection::NotAcceptable { why }));
+    assert_eq!(message.key, format!("runs.control.notAcceptable.{key}"));
+    assert!(
+      locale
+        .pointer(&format!("/runs/control/notAcceptable/{key}"))
+        .is_some_and(Value::is_string),
+      "{key} has words"
+    );
+  }
 }

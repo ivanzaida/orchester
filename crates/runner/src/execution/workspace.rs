@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 
 use orchester_core::{
   id::StepExecutionId,
-  run::{Run, StepExecution},
+  run::{AcceptRefusal, Run, StepExecution},
 };
 
 use super::checkpoint;
@@ -103,59 +103,59 @@ impl Workspace {
 
   /// Where the work of `accepted`, an execution a person accepted, is — its own worktree if it had one, which is
   /// merged when the step passes, else the run's, where its work was committed already — when that work is what its
-  /// result was for: it builds on the revision the execution was judged on, and nothing uncommitted lies beside it
-  /// that passing would commit as the step's. Why not, otherwise, in words for the person.
+  /// result was for: it builds on the revision the execution was judged on (later commits on top of it pass with it),
+  /// and nothing uncommitted lies beside it that passing would commit as the step's. Why not, otherwise; the outer
+  /// error when git or the worktrees cannot be read.
   pub(super) fn accepted_work(
     root: &Path,
     (run, run_worktree): (&Run, &Path),
     accepted: &StepExecution,
-  ) -> Result<Self, String> {
-    let judged = accepted.judged().ok_or_else(|| {
-      "the revision the accepted result was for is not recorded, so Orchester cannot tell what work it covers; run the \
-       step again instead"
-        .to_owned()
-    })?;
-    let workspace = Self::of_accepted(root, run, run_worktree, accepted.id()).map_err(|error| error.to_string())?;
+  ) -> Result<Result<Self, AcceptRefusal>, WorktreeError> {
+    let Some(judged) = accepted.judged() else {
+      return Ok(Err(AcceptRefusal::NotJudged));
+    };
+    let workspace = match Self::of_accepted(root, run, run_worktree, accepted.id())? {
+      Ok(workspace) => workspace,
+      Err(refusal) => return Ok(Err(refusal)),
+    };
     let git = Git::new(workspace.path());
-    let builds_on = git
-      .answer(&["merge-base", "--is-ancestor", judged.as_str(), "HEAD"])
-      .map_err(|error| error.to_string())?;
-    if !builds_on {
-      return Err(format!(
-        "the accepted step's work no longer builds on {}, the revision its result was for; run the step again instead",
-        &judged.as_str()[..12]
-      ));
+    if !git.answer(&["merge-base", "--is-ancestor", judged.as_str(), "HEAD"])? {
+      return Ok(Err(AcceptRefusal::NotBuiltOn {
+        revision: judged.as_str().chars().take(12).collect(),
+      }));
     }
-    let uncommitted = git
-      .stdout(&["status", "--porcelain", "--untracked-files=all"])
-      .map_err(|error| error.to_string())?;
-    if !uncommitted.trim().is_empty() {
-      return Err(
-        "uncommitted changes lie beside the accepted step's work, which accepting would pass as the step's; run the \
-         step again instead"
-          .to_owned(),
-      );
+    if !git
+      .stdout(&["status", "--porcelain", "--untracked-files=all"])?
+      .trim()
+      .is_empty()
+    {
+      return Ok(Err(AcceptRefusal::Uncommitted));
     }
-    Ok(workspace)
+    Ok(Ok(workspace))
   }
 
   /// Where the work of `accepted`, an execution a person accepted, is: its own worktree if it had one, which is
-  /// merged when the step passes; else the run's, where its work was committed already.
-  pub(super) fn of_accepted(
+  /// merged when the step passes; else the run's, where its work was committed already. Refused when it had one that
+  /// was removed while its branch remains: the run's worktree does not hold that work.
+  fn of_accepted(
     root: &Path,
     run: &Run,
     run_worktree: &Path,
     accepted: StepExecutionId,
-  ) -> Result<Self, WorktreeError> {
+  ) -> Result<Result<Self, AcceptRefusal>, WorktreeError> {
     let path = Worktrees::new(root)?.step_path(accepted);
+    let branch = branch(run, accepted);
     if path.is_dir() {
-      return Ok(Self::Own {
+      return Ok(Ok(Self::Own {
         path,
-        branch: branch(run, accepted),
+        branch,
         owner: accepted,
-      });
+      }));
     }
-    Ok(Self::Run(run_worktree.to_path_buf()))
+    if Git::new(root).answer(&["show-ref", "--verify", "--quiet", &format!("refs/heads/{branch}")])? {
+      return Ok(Err(AcceptRefusal::WorktreeRemoved { branch }));
+    }
+    Ok(Ok(Self::Run(run_worktree.to_path_buf())))
   }
 }
 

@@ -82,5 +82,6 @@ pub use self::{
   tool_step::{CapturedOutput, CommandEnd, OutputCapture, StepAt, ToolCommand},
   transition::RaisedLimits,
   unreadable::{ListedRun, UnreadableRun},
+  unverified::AcceptRefusal,
   usage::TokenUsage,
 };

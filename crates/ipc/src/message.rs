@@ -14,8 +14,8 @@ use orchester_core::{
   question::{AnswerError, GivenAnswer},
   resource::StepKey,
   run::{
-    Answerer, ApprovalAnswer, AutoAsk, InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem,
-    RunAgainBlock, RunLimit, RunNumber, StuckDecision,
+    AcceptRefusal, Answerer, ApprovalAnswer, AutoAsk, InterruptCause, PermissionsApply, PlanDecision, PlanVersion,
+    PreflightProblem, RunAgainBlock, RunLimit, RunNumber, StuckDecision,
   },
   tokens::TokenBudget,
 };
@@ -479,6 +479,10 @@ pub enum Rejection {
   /// only a person approves it (automation may deny it).
   PersonOnly {
     ask: AutoAsk,
+  },
+  /// Accepting the waiting step was refused: the work that would pass with it is not the work its result was for.
+  NotAcceptable {
+    why: AcceptRefusal,
   },
   /// The runner is stopping and starts no work.
   ShuttingDown,

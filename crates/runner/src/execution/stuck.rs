@@ -62,9 +62,13 @@ fn acceptable(root: &std::path::Path, run: &Run) -> Result<(), Rejection> {
     .map_err(|error| Rejection::Failed {
       detail: error.to_string(),
     })?;
-  super::workspace::Workspace::accepted_work(root, (run, &run_worktree), accepted)
-    .map(drop)
-    .map_err(|detail| Rejection::Failed { detail })
+  match super::workspace::Workspace::accepted_work(root, (run, &run_worktree), accepted) {
+    Ok(Ok(_)) => Ok(()),
+    Ok(Err(why)) => Err(Rejection::NotAcceptable { why }),
+    Err(error) => Err(Rejection::Failed {
+      detail: error.to_string(),
+    }),
+  }
 }
 
 /// The stored run, if it waits for a person.

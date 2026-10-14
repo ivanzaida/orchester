@@ -8,7 +8,9 @@ mod support;
 use orchester_core::{
   id::{IdempotencyKey, RunId},
   resource::StepKey,
-  run::{Answerer, AttemptReason, ReviewNote, Run, RunStatus, StepFailure, StepOutcome, Stuck, StuckDecision},
+  run::{
+    AcceptRefusal, Answerer, AttemptReason, ReviewNote, Run, RunStatus, StepFailure, StepOutcome, Stuck, StuckDecision,
+  },
   store::{ActivityStore, RunStore},
 };
 use orchester_ipc::Event;
@@ -294,7 +296,12 @@ async fn unverified_accept_is_refused_when_other_work_lies_beside_the_accepted()
     .await
     .expect_err("refused");
   assert!(
-    matches!(&refused, orchester_ipc::Rejection::Failed { detail } if detail.contains("uncommitted")),
+    matches!(
+      &refused,
+      orchester_ipc::Rejection::NotAcceptable {
+        why: AcceptRefusal::Uncommitted
+      }
+    ),
     "{refused:?}"
   );
   let run = started.until(waits).await;
@@ -302,5 +309,41 @@ async fn unverified_accept_is_refused_when_other_work_lies_beside_the_accepted()
     run.status(),
     &RunStatus::WaitingForPerson(Stuck::Unverified(key("verify"))),
     "it still waits"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unverified_accept_is_refused_when_the_steps_own_worktree_is_gone_but_its_branch_is_not() {
+  let steps = vec![
+    StepSpec::new("implement", "Implement", "Change README.md.", &[]),
+    StepSpec::new("verify", "Verify", "Report unverified. Write own file.", &["implement"]),
+    StepSpec::new("review", "Review", "Write own file.", &["implement"]),
+  ];
+  let mut started = Started::new(steps).await;
+  let run = started.until(waits).await;
+  // Verify worked beside Review in a worktree of its own; it is removed, its branch with Verify's work stays.
+  let verify = run.latest_execution(&key("verify")).expect("verify").id();
+  let root = started.project.repo.path();
+  let own = root.join(".orchester/worktrees").join(verify.to_string());
+  assert!(own.is_dir(), "Verify had a worktree of its own");
+  support::git(root, &["worktree", "remove", "--force", &own.to_string_lossy()]);
+  let refused = started
+    .scheduler
+    .decide_stuck(started.id, StuckDecision::Accept { by: Answerer::Person })
+    .await
+    .expect_err("refused: the run's worktree does not hold Verify's work");
+  assert!(
+    matches!(
+      &refused,
+      orchester_ipc::Rejection::NotAcceptable {
+        why: AcceptRefusal::WorktreeRemoved { .. }
+      }
+    ),
+    "{refused:?}"
+  );
+  let run = started.until(waits).await;
+  assert_eq!(
+    run.status(),
+    &RunStatus::WaitingForPerson(Stuck::Unverified(key("verify")))
   );
 }
