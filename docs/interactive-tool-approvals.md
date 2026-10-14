@@ -255,8 +255,9 @@ by `read_external_file` and `search_external_file`.
   route or using a retry; the person accepts the step as it is, runs it again, or returns the work to an agent step
   with a note (`continue_run` choices `accept`, `allow_retry`, `return_to`; `get_run` lists the checks under
   `unverified`). Accepting passes the step in a person's place: `accept` is refused as `person_only`, and the task
-  page's *Accept … as it is* takes no client's window input, unless a person turned on *Let automation answer
-  approvals*; the event records who accepted. The accepted step then passes as a passed step does, in a new attempt
+  page's *Accept … as it is* refuses a client's press (its handler does, and the card says a person accepts it; the
+  rest of the window, its close button included, still takes the client's input), unless a person turned on *Let
+  automation answer approvals*; the event records who accepted. The accepted step then passes as a passed step does, in a new attempt
   without an agent: its own worktree's work is merged and a gated step proposes its result as the plan. Accepting is
   refused, with why, when that work does not build on the revision the result was for or uncommitted changes lie
   beside it, which passing would take as the step's. A step whose latest result was failed or unverified for the revision it would run on now is not run
