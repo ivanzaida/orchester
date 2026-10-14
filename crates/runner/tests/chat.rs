@@ -124,7 +124,9 @@ async fn chat_answers_read_only_with_only_its_tools_and_resumes_its_session() {
     "{started}"
   );
   assert!(
-    started.contains(" --tools Read,Glob,Grep --allowedTools mcp__orchester --disallowedTools Read("),
+    started.contains(
+      r#" --settings {"permissions":{"blockReadsOutsideWorkingDirectories":true}} --tools Read,Glob,Grep --allowedTools mcp__orchester --disallowedTools Read("#
+    ),
     "{started}"
   );
   assert!(

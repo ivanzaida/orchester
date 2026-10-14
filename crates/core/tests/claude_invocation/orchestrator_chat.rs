@@ -11,6 +11,10 @@ use orchester_core::{
 use super::SESSION;
 
 fn chat_args(denied: &[PathBuf]) -> Vec<String> {
+  chat_args_with(denied, &[])
+}
+
+fn chat_args_with(denied: &[PathBuf], denied_files: &[PathBuf]) -> Vec<String> {
   ClaudeChat {
     executable: Path::new("C:/tools/claude.exe"),
     model: "haiku",
@@ -20,6 +24,7 @@ fn chat_args(denied: &[PathBuf]) -> Vec<String> {
     system_prompt: Path::new("C:/tmp/prompt.md"),
     mcp_config: Path::new("C:/tmp/mcp.json"),
     denied,
+    denied_files,
   }
   .args()
 }
@@ -37,11 +42,18 @@ fn after<'a>(args: &'a [String], flag: &str) -> Vec<&'a str> {
 
 #[test]
 fn orchestrator_chat_reads_only_in_the_project_folder_and_never_in_secret_folders() {
+  // The private folder as Windows may name it, short and long, and the Default account's own file.
   let denied = [
-    PathBuf::from(r"C:\Users\me\AppData\Local\Temp\orchester-mcp"),
+    PathBuf::from(r"C:\Users\ME~1\AppData\Local\Temp\orchester-mcp"),
+    PathBuf::from(r"\\?\C:\Users\me\AppData\Local\Temp\orchester-mcp"),
     PathBuf::from(r"C:\Users\me\.claude"),
   ];
-  let args = chat_args(&denied);
+  let args = chat_args_with(&denied, &[PathBuf::from(r"C:\Users\me\.claude.json")]);
+  assert_eq!(
+    after(&args, "--settings"),
+    [r#"{"permissions":{"blockReadsOutsideWorkingDirectories":true}}"#],
+    "the CLI's own block on reads outside the working folder"
+  );
   assert_eq!(after(&args, "--tools"), ["Read,Glob,Grep"]);
   // A bare `Read` would allow every path the person can read; without a rule a read outside the working folder
   // asks, which print mode denies.
@@ -49,8 +61,10 @@ fn orchestrator_chat_reads_only_in_the_project_folder_and_never_in_secret_folder
   assert_eq!(
     after(&args, "--disallowedTools"),
     [
+      "Read(//c/Users/ME~1/AppData/Local/Temp/orchester-mcp/**)",
       "Read(//c/Users/me/AppData/Local/Temp/orchester-mcp/**)",
-      "Read(//c/Users/me/.claude/**)"
+      "Read(//c/Users/me/.claude/**)",
+      "Read(//c/Users/me/.claude.json)"
     ]
   );
   assert_eq!(after(&args, "--permission-mode"), ["default"]);

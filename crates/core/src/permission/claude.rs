@@ -166,6 +166,12 @@ pub fn read_rule(folder: &Path) -> Option<String> {
   path_rule("Read", folder).map(|rule| format!("{rule}/**)"))
 }
 
+/// `Read(//<file>)`: as a deny rule it keeps Claude Code's reading tools from one file. `None` where [`edit_rule`]
+/// has none.
+pub fn read_file_rule(file: &Path) -> Option<String> {
+  path_rule("Read", file).map(|rule| format!("{rule})"))
+}
+
 /// `<tool>(/<path>` without its end: `path` in the POSIX form Claude Code matches permission paths in.
 fn path_rule(tool: &str, path: &Path) -> Option<String> {
   let text = path.to_str()?.replace('\\', "/");

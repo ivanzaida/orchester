@@ -3,8 +3,9 @@
 //! `claude -p --input-format stream-json --output-format stream-json --verbose --replay-user-messages
 //!  --model <model> [--effort <e>]
 //!  --strict-mcp-config --setting-sources "" --disable-slash-commands --system-prompt-file <file>
-//!  --mcp-config <file> --tools Read,Glob,Grep --allowedTools mcp__orchester
-//!  --disallowedTools Read(//<denied folder>/**)… --permission-mode default --max-turns 30
+//!  --mcp-config <file> --settings {"permissions":{"blockReadsOutsideWorkingDirectories":true}}
+//!  --tools Read,Glob,Grep --allowedTools mcp__orchester
+//!  --disallowedTools Read(//<denied folder>/**)… Read(//<denied file>)… --permission-mode default --max-turns 30
 //!  (--session-id <new uuid> | --resume <session>)`
 //!
 //! in the project folder, with the person's message as the one stream-json user message on standard input, which is
@@ -12,9 +13,14 @@
 //!
 //! - Read-only, in the project folder only: the only built-in tools it is offered are `Read`, `Glob` and `Grep`, so it
 //!   has no shell and no edit tool at all. They get no allow rule, since a bare tool name would allow every path the
-//!   person can read: in the `default` permission mode a read in the working folder runs, one outside it would ask, and
-//!   print mode denies what it would ask. The folders that hold secrets are denied by rule as well (`denied`: the
-//!   runner's private files, which hold other invocations' MCP tokens, and the account's own CLI folder).
+//!   person can read. Reads outside the working folder are blocked by the CLI's own
+//!   `permissions.blockReadsOutsideWorkingDirectories`, given with `--settings`, which `--setting-sources ""` does not
+//!   exclude (the same way steps get their ask rules, [`crate::permission::claude`]); Claude Code 2.1.296 has the
+//!   setting and denies such a read with "reads outside them are blocked". Without it, `default` mode would ask and
+//!   print mode deny what it asks. The places that hold secrets are denied by rule as well (`denied` folders: the
+//!   runner's private files, which hold other invocations' MCP tokens, and the account's own CLI folder;
+//!   `denied_files`: the CLI's `~/.claude.json` for the Default account). Whether a model turn is refused an outside
+//!   read is unverified: no signed-in throwaway account was at hand.
 //! - Its only MCP server is Orchester's domain tools for this project (`orchester`), from a file the runner writes for
 //!   the turn with the chat's bearer token in it ([`super::ClaudeMcpConfig`]); its tools run without asking: they check
 //!   every action themselves, as for any client of the app.
@@ -32,9 +38,12 @@ use super::{ClaudeSession, InvocationError, agent_environment, input_line};
 use crate::{
   command::Command,
   orchestrator::{MAX_TURNS, instructions::SERVER},
-  permission::claude::read_rule,
+  permission::claude::{read_file_rule, read_rule},
   resource::CommandEnvironment,
 };
+
+/// Settings that keep the built-in reading tools in the working folder.
+const BLOCK_OUTSIDE_READS: &str = r#"{"permissions":{"blockReadsOutsideWorkingDirectories":true}}"#;
 
 /// The built-in tools the Orchestrator's agent is offered: reading and searching, nothing that changes or runs.
 const READ_TOOLS: [&str; 3] = ["Read", "Glob", "Grep"];
@@ -55,6 +64,8 @@ pub struct ClaudeChat<'a> {
   pub mcp_config: &'a Path,
   /// Folders the agent must not read even where the CLI would ask: they hold secrets.
   pub denied: &'a [PathBuf],
+  /// Files the agent must not read either.
+  pub denied_files: &'a [PathBuf],
 }
 
 impl ClaudeChat<'_> {
@@ -87,9 +98,15 @@ impl ClaudeChat<'_> {
     );
     args.extend(["--system-prompt-file".to_owned(), path_text(self.system_prompt)]);
     args.extend(["--mcp-config".to_owned(), path_text(self.mcp_config)]);
+    args.extend(["--settings".to_owned(), BLOCK_OUTSIDE_READS.to_owned()]);
     args.extend(["--tools".to_owned(), READ_TOOLS.join(",")]);
     args.extend(["--allowedTools".to_owned(), format!("mcp__{SERVER}")]);
-    let denied: Vec<String> = self.denied.iter().filter_map(|folder| read_rule(folder)).collect();
+    let denied: Vec<String> = self
+      .denied
+      .iter()
+      .filter_map(|folder| read_rule(folder))
+      .chain(self.denied_files.iter().filter_map(|file| read_file_rule(file)))
+      .collect();
     if !denied.is_empty() {
       args.push("--disallowedTools".to_owned());
       args.extend(denied);

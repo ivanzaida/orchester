@@ -37,18 +37,37 @@ struct Started {
   _files: [PrivateFile; 2],
 }
 
-/// The folders that hold secrets the chat's agent must not read: the runner's private files (every running
-/// agent's MCP configuration with its tokens, and other chats' tokens) and the account's CLI folder (its sign-in).
-fn denied_folders(account: &ConnectionAccount) -> Vec<PathBuf> {
+/// The places that hold secrets the chat's agent must not read, as folders and files: the runner's private files
+/// (every running agent's MCP configuration with its tokens, and other chats' tokens), the account's CLI folder (its
+/// sign-in) and, for the Default account kept in the home folder, `~/.claude.json`. Each folder is named as it is
+/// given and as the file system resolves it, so a short (8.3) or linked spelling of it is denied too.
+fn denied(account: &ConnectionAccount) -> (Vec<PathBuf>, Vec<PathBuf>) {
   let cli = AccountCli::ClaudeCode;
+  let variable = std::env::var_os(cli.folder_variable()).filter(|value| !value.is_empty());
+  let home = std::env::home_dir();
   let own = || {
-    std::env::var_os(cli.folder_variable())
-      .filter(|value| !value.is_empty())
+    variable
+      .clone()
       .map(PathBuf::from)
-      .or_else(|| std::env::home_dir().map(|home| home.join(cli.own_folder_name())))
+      .or_else(|| home.as_ref().map(|home| home.join(cli.own_folder_name())))
   };
-  let account = account.folder().map(Path::to_path_buf).or_else(own);
-  [Some(private_file::root()), account].into_iter().flatten().collect()
+  let account_folder = account.folder().map(Path::to_path_buf).or_else(own);
+  let folders = [Some(private_file::root()), account_folder]
+    .into_iter()
+    .flatten()
+    .flat_map(|folder| {
+      // A folder that cannot be resolved (one not made yet) is denied as it is named.
+      let resolved = std::fs::canonicalize(&folder)
+        .ok()
+        .filter(|resolved| *resolved != folder);
+      std::iter::once(folder).chain(resolved)
+    })
+    .collect();
+  let files = match (account.folder(), &variable, &home) {
+    (None, None, Some(home)) => vec![home.join(format!("{}.json", cli.own_folder_name()))],
+    _ => Vec::new(),
+  };
+  (folders, files)
 }
 
 impl Turn {
@@ -74,7 +93,7 @@ impl Turn {
       self.claude_mcp_config()?.contents(),
     )
     .map_err(|error| cannot(format!("cannot write the MCP configuration: {error}")))?;
-    let denied = denied_folders(prepared.connection.account());
+    let (denied, denied_files) = denied(prepared.connection.account());
     let command = ClaudeChat {
       executable: &prepared.executable,
       model: self.settings.model().as_str(),
@@ -84,6 +103,7 @@ impl Turn {
       system_prompt: prompt.path(),
       mcp_config: mcp.path(),
       denied: &denied,
+      denied_files: &denied_files,
     }
     .command(self.text.as_str(), std::env::vars_os(), &prepared.environment)
     .and_then(|command| on_account(command, prepared.connection.account(), AgentProvider::ClaudeCodeCli))
