@@ -104,13 +104,15 @@ pub fn exercise(worktree: &Path, mut call: impl FnMut(&str, &Value) -> Value) {
     assert!(!folder.join("calls").exists(), "refusal made no request");
     eprintln!("app-relay: {field} refused");
   }
-  fs::write(&discovery_file, initial).expect("restore");
+  fs::write(&discovery_file, &initial).expect("restore");
+  crowd(worktree, &format!("{pid}.json"), &initial);
   let answer = call("call_run_app", &navigate);
   assert_eq!(answer["isError"], false);
   assert_eq!(answer["structuredContent"]["route"], "tasks");
   assert_eq!(answer["structuredContent"]["credential"], "<redacted>");
   assert!(!answer.to_string().contains("stand-in-app-private-token"));
   eprintln!("app-relay: navigate structured and redacted");
+  eprintln!("app-relay: crowded .tmp and other layouts ignored");
 
   let answer = call(
     "call_run_app",
@@ -191,7 +193,7 @@ fn exercise_deprecated(worktree: &Path, call: &mut impl FnMut(&str, &Value) -> V
   );
   eprintln!("app-relay: missing selected server refused");
   fs::write(&domain_file, &discovery).expect("restore domain discovery");
-  let duplicate = worktree.join(".tmp/qa/duplicate/orchester-mcp");
+  let duplicate = worktree.join(".tmp/qa/duplicate/profile/orchester-mcp");
   fs::create_dir_all(&duplicate).expect("duplicate folder");
   fs::write(duplicate.join(filename), discovery).expect("duplicate discovery");
   let refused = call("call_run_app", &navigate);
@@ -204,6 +206,18 @@ fn exercise_deprecated(worktree: &Path, call: &mut impl FnMut(&str, &Value) -> V
   );
   eprintln!("app-relay: duplicate selected server refused");
 
+  // `.tmp/qa/` already holds this test's task folders; these take it past the bound on the folders read.
+  for index in 0..1024 {
+    fs::create_dir_all(worktree.join(format!(".tmp/qa/many-{index}"))).expect("task folder");
+  }
+  let refused = call("call_run_app", &navigate);
+  assert_eq!(refused["isError"], true);
+  let text = refused["content"][0]["text"].as_str().expect("error");
+  assert!(text.contains("holds more than 1024 entries"), "{text}");
+  let qa = fs::canonicalize(worktree.join(".tmp/qa")).expect("QA folder");
+  assert!(text.contains(&qa.display().to_string()), "{text}");
+  eprintln!("app-relay: QA folder bound refused");
+
   assert_eq!(
     fs::read_to_string(domain.join("calls")).expect("domain calls"),
     "navigate\n"
@@ -212,6 +226,25 @@ fn exercise_deprecated(worktree: &Path, call: &mut impl FnMut(&str, &Value) -> V
     fs::read_to_string(windows.join("calls")).expect("UI calls"),
     "lurq_screenshot\n"
   );
+}
+
+/// A `.tmp/` like a real run's: a cargo target folder far larger than any search bound, and valid discovery files for
+/// `name` outside `.tmp/qa/<task>/mcp/`, none of which the relay may read or count as a second match.
+fn crowd(worktree: &Path, name: &str, discovery: &[u8]) {
+  let target = worktree.join(".tmp/orc-base-target/debug/deps");
+  fs::create_dir_all(&target).expect("target");
+  for index in 0..10_000 {
+    fs::write(target.join(format!("unit-{index}.o")), b"").expect("target file");
+  }
+  for folder in [
+    ".tmp/orc-base-target/mcp",
+    ".tmp/qa/orchester-app/nested/mcp",
+    ".tmp/qa/flat",
+  ] {
+    let folder = worktree.join(folder);
+    fs::create_dir_all(&folder).expect("decoy folder");
+    fs::write(folder.join(name), discovery).expect("decoy discovery");
+  }
 }
 
 fn refuse_outside_apps(worktree: &Path, folder: &Path, call: &mut impl FnMut(&str, &Value) -> Value) {

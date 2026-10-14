@@ -330,8 +330,8 @@ The registered name is **`orchester`**, never `Orchester`. Runs give Codex agent
    processes end. A stale file of a killed old process is removed by the next start in discovery mode (existing
    cleanup).
 2. **QA copies and tests:** `tools/qa-app.ps1` sets `ORCHESTER_APP_MCP_DISCOVERY` to `.tmp/qa/<task>/mcp/` and prints
-   that path. The runs' `call_run_app` relay already looks for discovery under the worktree's `.tmp/`
-   (`docs/mcp-verification-client.md`) and only needs the new folder. `tools/lurq-mcp-client.py` takes a discovery
+   that path. The runs' `call_run_app` relay reads exactly `.tmp/qa/<task>/mcp/<pid>.json` in the worktree
+   (`docs/mcp-verification-client.md`). `tools/lurq-mcp-client.py` takes a discovery
    folder argument (or reads the variable) besides the pid. Test harnesses pass `DiscoveryFolder::At` as today.
 3. **Docs:** `docs/stable-build.md` › *The new app's MCP server* is rewritten for the stable address, the secret
    store and *Connect an agent*. `docs/mcp-verification-client.md` keeps its QA flow with the new folder.
