@@ -78,7 +78,7 @@ pub async fn subscribe(
   let initial = auth.clone();
   let generation = server
     .snapshot(move |db, now| {
-      db::checked(db, &initial, now, false, false)?;
+      db::checked(db, &initial, now, false)?;
       if access::role(db, project, initial.user.id)?.is_none() {
         return Err(ErrorCode::Forbidden.into());
       }
@@ -259,7 +259,7 @@ fn stream_auth(
   generation: &str,
   now: i64,
 ) -> Result<Option<Authenticated>, ServerError> {
-  let current = match db::checked(db, auth, now, false, false) {
+  let current = match db::checked(db, auth, now, false) {
     Ok(current) => current,
     Err(ServerError::Api(ErrorCode::Unauthorized | ErrorCode::PasswordChangeRequired)) => return Ok(None),
     Err(error) => return Err(error),

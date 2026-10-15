@@ -1,67 +1,33 @@
-//! Signing in and out, the person's sessions and password, and the admin's users (10.01, 10.04 to
-//! 10.08). The token goes from the sign-in answer straight to the keychain; a session signed in with
-//! a first password is kept only in memory until the person chose their own password, since it can
-//! do nothing else (10.05 C).
+//! The person's account on a team server from this computer (`docs/architecture/server.md`, "Accounts and tokens"):
+//! signing out, the account's devices, and the admin's users. Since API 3 nobody has a password on a team server: a
+//! device joins with a code or a cloud identity ([`super::joining`]). The password calls below remain only because the
+//! frozen `crates/desktop` still calls them; they refuse at once and send nothing.
 
-use std::{fmt, sync::Arc};
+use std::convert::Infallible;
 
-use orchester_api::{
-  CreateUser, Credential, PasswordChange, PasswordReset, Session, SignIn, User, UserChanges, UserCreated,
-};
+use orchester_api::{CreateUser, Credential, PasswordReset, Session, User, UserChanges, UserCreated};
 use orchester_core::{
-  id::{ServerId, SessionId, UserId},
-  secret::SecretValue,
+  id::{SessionId, UserId},
   time::Timestamp,
 };
 use orchester_store::ServerAccount;
 
-use super::{ServerEntry, Servers, SharingError, device};
+use super::{ServerEntry, Servers, SharingError};
 use crate::background;
 
-/// How signing in ended.
+/// How signing in with a password ended, for the frozen `crates/desktop`; API 3 servers have no passwords, so it never
+/// ends at all.
 #[derive(Clone, Debug, PartialEq)]
 pub enum SignedIn {
-  /// The token is in the keychain and the account is recorded.
   Done,
-  /// The password was a first password from an admin: the person chooses their own first.
   PasswordChangeRequired(PendingPasswordChange),
 }
 
-/// A session signed in with a first password, waiting for the person's own password. Its token is
-/// held only here; `Debug` does not show it.
-#[derive(Clone)]
-pub struct PendingPasswordChange {
-  inner: Arc<Pending>,
-}
+/// A session that waited for its own password; no API 3 server makes one, so none exists.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PendingPasswordChange(Infallible);
 
-struct Pending {
-  server: ServerId,
-  token: SecretValue,
-  user: User,
-}
-
-impl PendingPasswordChange {
-  pub fn server(&self) -> ServerId {
-    self.inner.server
-  }
-}
-
-impl PartialEq for PendingPasswordChange {
-  fn eq(&self, other: &Self) -> bool {
-    Arc::ptr_eq(&self.inner, &other.inner)
-  }
-}
-
-impl fmt::Debug for PendingPasswordChange {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    f.debug_struct("PendingPasswordChange")
-      .field("server", &self.inner.server)
-      .field("user", &self.inner.user.username)
-      .finish_non_exhaustive()
-  }
-}
-
-fn account(user: &User) -> ServerAccount {
+pub(super) fn account(user: &User) -> ServerAccount {
   ServerAccount {
     user: user.id,
     username: user.username.clone(),
@@ -71,77 +37,31 @@ fn account(user: &User) -> ServerAccount {
   }
 }
 
-fn token_of(credential: &Credential) -> Result<SecretValue, SharingError> {
-  // The server issues `orc_` and 64 hex characters; a blank answer is not a token.
-  SecretValue::new(credential.expose().to_owned())
-    .map_err(|_| SharingError::Client(orchester_api::client::ClientError::NotOrchester { status: 201 }))
-}
-
 impl Servers {
-  /// Signs in to `server` with `username` and `password`.
+  /// Password sign-in, gone with API 3 (row 46): refused at once.
   pub async fn sign_in(
     &self,
-    server: &ServerEntry,
-    username: String,
-    password: Credential,
+    _server: &ServerEntry,
+    _username: String,
+    _password: Credential,
   ) -> Result<SignedIn, SharingError> {
-    let client = Self::client(server)?;
-    let request = SignIn {
-      username,
-      password,
-      device: device::this_computer(),
-    };
-    let answer = client.sign_in(&request).await;
-    self.record(server.stored.id, answer.as_ref().err()).await;
-    let signed = answer?;
-    let token = token_of(&signed.token)?;
-    if signed.password_change_required {
-      return Ok(SignedIn::PasswordChangeRequired(PendingPasswordChange {
-        inner: Arc::new(Pending {
-          server: server.stored.id,
-          token,
-          user: signed.user,
-        }),
-      }));
-    }
-    self.keep(server.stored.id, token, &signed.user).await?;
-    Ok(SignedIn::Done)
+    Err(SharingError::NoPasswords)
   }
 
-  /// The token goes to the keychain and the account to the list.
-  async fn keep(&self, server: ServerId, token: SecretValue, user: &User) -> Result<(), SharingError> {
-    self.store_token(server, token).await?;
-    let (workspace, account) = (self.inner.workspace.clone(), account(user));
-    background::run(move || workspace.set_server_account(server, Some(&account))).await??;
-    self.reached(server);
-    Ok(())
-  }
-
-  /// Chooses the person's own password for a session signed in with a first password; the session
-  /// then works and is kept.
+  /// Choosing a first password, gone with API 3: refused at once.
   pub async fn choose_password(
     &self,
-    server: &ServerEntry,
-    pending: &PendingPasswordChange,
-    current: Credential,
-    new: Credential,
+    _server: &ServerEntry,
+    _pending: &PendingPasswordChange,
+    _current: Credential,
+    _new: Credential,
   ) -> Result<(), SharingError> {
-    let client = Self::client(server)?;
-    let change = PasswordChange {
-      current_password: current,
-      new_password: new,
-    };
-    let answer = client.change_password(&pending.inner.token, &change).await;
-    self.record(server.stored.id, answer.as_ref().err()).await;
-    answer?;
-    let token = SecretValue::new(pending.inner.token.expose().to_owned()).map_err(|_| SharingError::SignedOut)?;
-    self.keep(server.stored.id, token, &pending.inner.user).await
+    Err(SharingError::NoPasswords)
   }
 
-  /// Signs out of a session that still waits for its own password.
-  pub async fn abandon(&self, server: &ServerEntry, pending: &PendingPasswordChange) -> Result<(), SharingError> {
-    Self::client(server)?.sign_out(&pending.inner.token).await?;
-    Ok(())
+  /// Abandoning a session that waits for its password; none exists since API 3.
+  pub async fn abandon(&self, _server: &ServerEntry, _pending: &PendingPasswordChange) -> Result<(), SharingError> {
+    Err(SharingError::NoPasswords)
   }
 
   /// Signs this computer out of `server`: the server ends the session if it can be reached, and the
@@ -153,7 +73,7 @@ impl Servers {
       .await
     {
       Ok(()) | Err(SharingError::SignedOut) => {}
-      // The session ends on the server by itself once unused for 30 days; this computer is
+      // The device token ends on the server by itself once unused for 90 days; this computer is
       // signed out regardless.
       Err(error) => tracing::warn!(%error, server = %id, "the server did not end the session"),
     }
@@ -184,22 +104,14 @@ impl Servers {
       .await
   }
 
-  /// Changes the person's password; their other sessions are signed out.
+  /// Changing a password, gone with API 3: refused at once.
   pub async fn change_password(
     &self,
-    server: &ServerEntry,
-    current: Credential,
-    new: Credential,
+    _server: &ServerEntry,
+    _current: Credential,
+    _new: Credential,
   ) -> Result<(), SharingError> {
-    let change = PasswordChange {
-      current_password: current,
-      new_password: new,
-    };
-    self
-      .with_token(server, |client, token| async move {
-        client.change_password(&token, &change).await
-      })
-      .await
+    Err(SharingError::NoPasswords)
   }
 
   pub async fn users(&self, server: &ServerEntry) -> Result<Vec<User>, SharingError> {
@@ -208,12 +120,10 @@ impl Servers {
       .await
   }
 
-  pub async fn create_user(&self, server: &ServerEntry, user: CreateUser) -> Result<UserCreated, SharingError> {
-    self
-      .with_token(server, |client, token| async move {
-        client.create_user(&token, &user).await
-      })
-      .await
+  /// Creating a user with a first password, gone with API 3 (accounts come from invites, in the server admin):
+  /// refused at once.
+  pub async fn create_user(&self, _server: &ServerEntry, _user: CreateUser) -> Result<UserCreated, SharingError> {
+    Err(SharingError::NoPasswords)
   }
 
   /// Disables or enables `user`.
@@ -229,11 +139,8 @@ impl Servers {
       .await
   }
 
-  pub async fn reset_password(&self, server: &ServerEntry, user: UserId) -> Result<PasswordReset, SharingError> {
-    self
-      .with_token(server, |client, token| async move {
-        client.reset_password(&token, user).await
-      })
-      .await
+  /// Resetting a password, gone with API 3 (an account code replaces it): refused at once.
+  pub async fn reset_password(&self, _server: &ServerEntry, _user: UserId) -> Result<PasswordReset, SharingError> {
+    Err(SharingError::NoPasswords)
   }
 }

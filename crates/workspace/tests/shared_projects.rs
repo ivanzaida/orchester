@@ -1,8 +1,8 @@
 //! Shared projects on the desktop (`docs/architecture/server.md`, phase S2b) against a real
-//! `orchester-server` on loopback: Share uploads every task with its number and writes the discovery
-//! file; `RemoteTaskStore` changes tasks under their revision, with only the fields that differ, a
-//! conflict as a result and the organization merged without asking; a pipeline this computer lacks
-//! stays on the server; starting work takes the run claim and names the holder when it cannot;
+//! `orchester-server` on loopback: the first checkout linked to an empty project at its address uploads
+//! every task with its number and writes the discovery file; `RemoteTaskStore` changes tasks under their revision, with
+//! only the fields that differ, a conflict as a result and the organization merged without asking; a pipeline this
+//! computer lacks stays on the server; starting work takes the run claim and names the holder when it cannot;
 //! heartbeats write lost claims to the cache; members and roles; a sync writes others' changes and
 //! notices a removed member; Make local keeps every task; offline nothing is sent.
 //!
@@ -29,7 +29,7 @@ use orchester_core::{
 use orchester_workspace::{
   sharing::{
     SharingError,
-    project::{MemberChange, WorkRefusal, discovery},
+    project::{LinkFirst, MemberChange, WorkRefusal, discovery},
   },
   tasks::{
     conflict::{Edit, EditSaved, save_edit},
@@ -55,18 +55,26 @@ fn shared_share_keeps_numbers_writes_the_discovery_file_and_caches_the_server_s_
       .all(|task| alice.db().shared_task_info(task.id()).expect("info").is_some()),
     "every task is the server's"
   );
+  let address = format!("{}/kontur", server.url());
+  assert_eq!(link.address.as_deref(), Some(address.as_str()));
+  assert!(matches!(
+    discovery::project(alice.root()),
+    discovery::ProjectDiscovery::Project(project) if project.to_text() == address
+  ));
   assert!(matches!(
     discovery::read(alice.root()),
-    discovery::Discovery::Server(address) if address.as_str() == server.url()
+    discovery::Discovery::Server(found) if found.as_str() == server.url()
   ));
-  // Sharing again is refused locally: the project is shared already.
-  let identity = orchester_core::repository::RepositoryIdentity::from_remote_url(support::REMOTE).expect("identity");
-  let again = alice.block_on(alice.servers.share(
+  // Linking again is refused locally: the project is shared already.
+  let again = alice.block_on(alice.servers.link_first(
     &alice.entry(),
     alice.root(),
-    identity,
-    orchester_core::id::IdempotencyKey::generate(),
-    false,
+    LinkFirst {
+      slug: "kontur".into(),
+      remote: None,
+      key: orchester_core::id::IdempotencyKey::generate(),
+      write_discovery: false,
+    },
   ));
   assert!(again.is_err());
 }
@@ -278,7 +286,7 @@ fn shared_a_heartbeat_keeps_claims_and_writes_the_lost_ones_to_the_cache() {
   );
 
   // Released from Alice's other computer: the next heartbeat reports it lost.
-  let token = server.sign_in_elsewhere("alice", "alice's own long password", "unused");
+  let token = server.device_of("alice");
   let project = alice.server().link().project;
   let client = Client::new(
     ServerAddress::parse(&server.url()).expect("address"),

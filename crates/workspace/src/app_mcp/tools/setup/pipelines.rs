@@ -138,6 +138,7 @@ pub async fn publish_pipeline(
     let draft = db.draft::<Pipeline>(id)?.ok_or(StoreError::NoDraft(id));
     let draft = draft.map_err(|error| refused(publish_code(&error), publish_error(&error)))?;
     let latest = db.latest_version::<Pipeline>(id)?;
+    services.draft_decided::<Pipeline>(&db, id)?;
     widening::check_pipeline(&services, latest.as_ref().map(Version::body), draft.body())?;
     // Published only while the draft is the one just checked.
     db.publish_draft_matching_version(id, draft.body(), latest.as_ref().map(Version::number), Timestamp::now())
@@ -157,9 +158,11 @@ pub async fn publish_pipeline(
 /// The project's pipeline named by its id or, ignoring case, its name, whether published or not.
 pub(super) fn pipeline_named(db: &ProjectDb, named: &str) -> Result<ResourceId, ToolError> {
   let lowered = named.to_lowercase();
-  library::library(db)?
-    .into_iter()
-    .find(|entry| entry.id.to_string() == named || entry.name.to_lowercase() == lowered)
+  let library = library::library(db)?;
+  // An id names one pipeline for certain; a name could also be another pipeline's id.
+  let by_id = library.iter().find(|entry| entry.id.to_string() == named);
+  by_id
+    .or_else(|| library.iter().find(|entry| entry.name.to_lowercase() == lowered))
     .map(|entry| entry.id)
     .ok_or_else(|| ToolError::not_found(Missing::Pipeline, named))
 }

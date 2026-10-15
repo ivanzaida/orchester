@@ -246,8 +246,9 @@ N8: one slice per phase from N4 on
 
 - **Scope.** Accepting a project invite (B: download, sign up on the web or sign in, accept) connects to the server
   when needed and opens the join review in the local project whose `origin` matches the project's hint, or asks which
-  local project or checkout to link; linking by address without an invite (member, or not a member: the owners' names
-  and *Ask for an invite*, which says whom to ask; the app sends nothing); the review page with similar titles and
+  local project or checkout to link; linking by address without an invite (member, or not a member: *No project you're a
+  member of here* and *Ask for an invite* from whoever shared it, since the server answers a non-member like no
+  project; the app sends nothing); the review page with similar titles and
   locked rows; *Join and upload N*; a failed join keeping the ticks; *Keys before joining*; the *Not shared* filter
   and rows; a Not shared task with *Share task*; *was KON-12*; search by former key.
 - **Files.** `screens/project_settings/sharing/join/` (new page and rows), `screens/tasks/` (filter, rows),

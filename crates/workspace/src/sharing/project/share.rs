@@ -1,6 +1,7 @@
-//! *Share* (`docs/architecture/server.md`, "Migration"; design 10.11, 10.12): the server project is
-//! made from the local one and every task is uploaded with its number, its organization (tags by
-//! name) and its pipeline's slug, in one request. Tasks with a run that has not ended are claimed for
+//! *Share* (`docs/architecture/server.md`, "Migration", rows 12 and 49; design 10.11, 10.12): an admin made the
+//! server project, empty, in the server admin; the first checkout linked to it uploads every task with its number,
+//! its organization (tags by name) and its pipeline's slug, in one request, and its `origin` becomes the project's
+//! remote hint when it has none. Tasks with a run that has not ended are claimed for
 //! the person. The cache then holds what the server confirmed, and the project shares its task list
 //! from here on. The request is idempotent by the key the confirmation was opened with, so a retry
 //! after a lost answer shares once. While it is under way the project's tasks take no change from
@@ -13,7 +14,7 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use orchester_api::{ErrorCode, Organization, ProjectCreate, SharingErrorDetails, UploadTask, UserRef};
+use orchester_api::{Organization, ProjectLink, SharedProject, UploadTask, UserRef};
 use orchester_core::{
   id::{IdempotencyKey, ProjectId, TaskId},
   project::TaskKey,
@@ -57,9 +58,9 @@ pub struct Shared {
 pub enum ShareError {
   #[error(transparent)]
   Sharing(#[from] SharingError),
-  /// The repository is shared on the server already (`409 remote_taken`): joining it is a Join,
-  /// never a second project.
-  #[error("the repository is shared on the server already")]
+  /// The server project has tasks already: linking this checkout to it is a Join, which gives the local tasks new
+  /// numbers.
+  #[error("the server project has tasks already")]
   Taken {
     project: ProjectId,
     member: bool,
@@ -125,9 +126,42 @@ pub fn plan(repo_root: &Path, identity: RepositoryIdentity) -> Result<SharePlan,
   })
 }
 
+/// What linking a local project to a server project as its first checkout needs.
+pub struct LinkFirst {
+  /// The project's slug on the server (the last segment of its address).
+  pub slug: String,
+  /// The checkout's `origin`, for the project's remote hint; `None` without a network one.
+  pub remote: Option<RepositoryIdentity>,
+  /// The upload's idempotency key, made when the confirmation opened: a retry links once.
+  pub key: IdempotencyKey,
+  /// Whether to write the discovery file naming the project's address.
+  pub write_discovery: bool,
+}
+
 impl Servers {
-  /// Shares the project at `repo_root` on `entry` as `identity` under `key`, and writes the
-  /// discovery file when `discovery` asks for it.
+  /// Links the project at `repo_root` to the empty server project at `request.slug` on `entry` as its first checkout:
+  /// every task is uploaded with its number.
+  pub async fn link_first(
+    &self,
+    entry: &ServerEntry,
+    repo_root: &Path,
+    request: LinkFirst,
+  ) -> Result<Shared, ShareError> {
+    let project = self.find_project(entry, &request.slug).await?;
+    self
+      .link_upload(
+        entry,
+        repo_root,
+        project,
+        (request.remote, request.key),
+        request.write_discovery,
+      )
+      .await
+  }
+
+  /// Shares the project at `repo_root` on `entry` into the person's empty project there that was set up for
+  /// `identity` (its remote hint), and writes the discovery file when `write_discovery` asks for it. Since API 3 a
+  /// project is found by its address ([`Self::link_first`]); this finds it by the hint.
   pub async fn share(
     &self,
     entry: &ServerEntry,
@@ -136,42 +170,64 @@ impl Servers {
     key: IdempotencyKey,
     write_discovery: bool,
   ) -> Result<Shared, ShareError> {
+    let project = self
+      .project_by_hint(entry, &identity)
+      .await?
+      .ok_or(SharingError::NoProject)?;
+    self
+      .link_upload(entry, repo_root, project, (Some(identity), key), write_discovery)
+      .await
+  }
+
+  async fn link_upload(
+    &self,
+    entry: &ServerEntry,
+    repo_root: &Path,
+    project: SharedProject,
+    (remote, key): (Option<RepositoryIdentity>, IdempotencyKey),
+    write_discovery: bool,
+  ) -> Result<Shared, ShareError> {
+    let id = project.id;
+    let on_server = self
+      .with_token(entry, |client, token| async move { client.tasks(&token, id).await })
+      .await?;
+    if !on_server.tasks.is_empty() {
+      return Err(ShareError::Taken {
+        project: id,
+        member: true,
+        owners: Vec::<UserRef>::new(),
+      });
+    }
     let _in_progress = InProgress::start(self, repo_root);
     let root = repo_root.to_owned();
-    let (create, uploaded) = background::run(move || upload(&root, &identity, key))
+    let (link, uploaded) = background::run(move || upload(&root, remote.as_ref(), key))
       .await
       .map_err(SharingError::from)??;
-    let answer = self
+    let linked = self
       .with_token(entry, |client, token| async move {
-        client.create_project(&token, &create).await
+        client.link_project(&token, id, &link).await
       })
-      .await;
-    let created = match answer {
-      Err(SharingError::Client(error)) if error.code() == Some(ErrorCode::RemoteTaken) => {
-        return Err(taken(error.details()));
-      }
-      answer => answer?,
-    };
-    let project = created.project.id;
+      .await?;
     let tags = self
-      .with_token(entry, |client, token| async move { client.tags(&token, project).await })
+      .with_token(entry, |client, token| async move { client.tags(&token, id).await })
       .await?;
     let link = SharingLink {
       server: entry.stored.id,
-      project,
-      key: orchester_core::project::ProjectKey::new(&created.project.key)
+      project: id,
+      key: orchester_core::project::ProjectKey::new(&project.key)
         .map_err(|_| SharingError::InvalidAnswer("project key"))?,
-      role: created.project.role,
+      role: project.role,
       joined_at: Timestamp::now(),
-      cursor: created.cursor,
+      cursor: linked.cursor,
       last_synced_at: Timestamp::now(),
       removed_at: None,
+      address: Some(project.address.clone()),
     };
-    let (root, stored, url) = (repo_root.to_owned(), link.clone(), entry.address.as_str().to_owned());
+    let (root, stored, address) = (repo_root.to_owned(), link.clone(), project.address);
     let servers = self.clone();
     let discovery = background::run(move || -> Result<_, SharingError> {
       let tags = tags.iter().map(tag).collect::<Result<Vec<_>, _>>()?;
-      let tasks = created
+      let tasks = linked
         .tasks
         .iter()
         .map(convert::cached)
@@ -180,27 +236,12 @@ impl Servers {
       if let Err(error) = reapply(&servers, &root, changed) {
         tracing::error!(%error, "a run's change made while the project was shared was not sent");
       }
-      Ok(write_discovery.then(|| discovery::write(&root, &url)))
+      Ok(write_discovery.then(|| discovery::write(&root, &address)))
     })
     .await
     .map_err(SharingError::from)??;
     self.shared_changed();
     Ok(Shared { link, discovery })
-  }
-}
-
-fn taken(details: Option<&SharingErrorDetails>) -> ShareError {
-  match details {
-    Some(SharingErrorDetails::Remote {
-      project,
-      member,
-      owners,
-    }) => ShareError::Taken {
-      project: *project,
-      member: *member,
-      owners: owners.clone(),
-    },
-    _ => ShareError::Sharing(SharingError::InvalidAnswer("remote taken")),
   }
 }
 
@@ -250,13 +291,12 @@ pub(super) fn reapply(servers: &Servers, root: &Path, changed: Vec<Task>) -> Res
   Ok(())
 }
 
-/// The request that creates the server project from the project at `repo_root`, with the revision
-/// of each task it uploads.
+/// The upload of every task of the project at `repo_root` with its number, with the revision of each.
 fn upload(
   repo_root: &Path,
-  identity: &RepositoryIdentity,
+  remote: Option<&RepositoryIdentity>,
   key: IdempotencyKey,
-) -> Result<(ProjectCreate, HashMap<TaskId, TaskRevision>), StoreError> {
+) -> Result<(ProjectLink, HashMap<TaskId, TaskRevision>), StoreError> {
   let db = ProjectDb::open(repo_root)?;
   let names: HashMap<_, _> = db
     .project_tags()?
@@ -269,14 +309,12 @@ fn upload(
     .iter()
     .map(|task| upload_task(&db, task, &names, UploadAs::Share))
     .collect::<Result<Vec<_>, _>>()?;
-  let create = ProjectCreate {
+  let link = ProjectLink {
     idempotency_key: key,
-    name: db.project().name().as_str().to_owned(),
-    key: db.project().key().as_str().to_owned(),
-    remote: identity.as_str().to_owned(),
     tasks,
+    remote: remote.map(|identity| identity.as_str().to_owned()),
   };
-  Ok((create, revisions))
+  Ok((link, revisions))
 }
 
 /// How a task goes to the server: with its number when the project is shared, or for a new number

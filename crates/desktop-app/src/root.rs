@@ -14,10 +14,11 @@ use lurq::{
   node::{Element, dimension::Dimension},
   router::RouterHandle,
 };
+use orchester_workspace::orchestrator::recover;
 
 use crate::{
   chrome, lifecycle,
-  mcp::{McpLink, WindowLink},
+  mcp::{self, McpLink, WindowLink},
   navigation::{
     Navigation,
     input::{FirstKeys, window_input},
@@ -135,6 +136,12 @@ impl Component for SessionWindow {
     let projects = Projects::new(landing.project, services.jobs);
     link.attach(navigation.clone(), projects.clone());
     lifecycle::hook(ctx, &services.close);
+    // The Orchestrator's decisions an earlier session left under way are settled by what happened, in its words.
+    services.runtime.spawn(recover::recover_all(
+      services.workspace.clone(),
+      (services.session_start, mcp::domain::translate(ctx.i18n().clone())),
+      services.runners.clone(),
+    ));
     Self {
       router,
       navigation,

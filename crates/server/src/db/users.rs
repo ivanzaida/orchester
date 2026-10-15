@@ -1,30 +1,36 @@
-use orchester_api::{CreateUser, ErrorCode, User, UserChanges};
+use orchester_api::{ErrorCode, User, UserChanges};
 use orchester_core::id::UserId;
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{
   audit, revoke_sessions,
-  rows::{StoredUser, USER_COLUMNS, user_row},
+  rows::{USER_COLUMNS, user_row},
 };
-use crate::{error::ServerError, passwords::PasswordHash};
+use crate::error::ServerError;
 
-pub(crate) fn validate_user(input: &CreateUser) -> Result<(), ServerError> {
-  // ASCII usernames give SQLite NOCASE and the rate limiter the same identity.
-  if input.username.is_empty()
-    || input.username.len() > 64
-    || !input
-      .username
-      .bytes()
-      .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
-    || input.display_name.trim().is_empty()
-    || input.display_name.chars().count() > 256
-  {
-    return Err(ErrorCode::Invalid.into());
-  }
-  Ok(())
+/// An account to create: from the setup code, an invite code or a cloud join.
+pub(crate) struct NewUser<'a> {
+  pub username: &'a str,
+  pub display_name: &'a str,
+  pub admin: bool,
+  /// The cloud account it is linked to.
+  pub cloud_subject: Option<&'a str>,
 }
 
-pub(crate) fn find_user(connection: &Connection, username: &str) -> Result<Option<StoredUser>, ServerError> {
+/// ASCII usernames give SQLite NOCASE and the rate limiter the same identity.
+pub(crate) fn valid_username(username: &str) -> bool {
+  !username.is_empty()
+    && username.len() <= 64
+    && username
+      .bytes()
+      .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+}
+
+pub(crate) fn valid_display_name(name: &str) -> bool {
+  !name.trim().is_empty() && name.chars().count() <= 256
+}
+
+pub(crate) fn find_user(connection: &Connection, username: &str) -> Result<Option<User>, ServerError> {
   Ok(
     connection
       .query_row(
@@ -36,28 +42,80 @@ pub(crate) fn find_user(connection: &Connection, username: &str) -> Result<Optio
   )
 }
 
+pub(crate) fn user_by_id(connection: &Connection, id: UserId) -> Result<Option<User>, ServerError> {
+  Ok(
+    connection
+      .query_row(
+        &format!("SELECT {USER_COLUMNS} FROM users WHERE id=?1"),
+        [id.to_string()],
+        user_row,
+      )
+      .optional()?,
+  )
+}
+
+/// The account linked to the cloud account `subject`.
+pub(crate) fn user_by_subject(connection: &Connection, subject: &str) -> Result<Option<User>, ServerError> {
+  Ok(
+    connection
+      .query_row(
+        &format!("SELECT {USER_COLUMNS} FROM users WHERE cloud_subject=?1"),
+        [subject],
+        user_row,
+      )
+      .optional()?,
+  )
+}
+
 pub(crate) fn create_user(
   connection: &Connection,
-  input: &CreateUser,
-  hash: &PasswordHash,
+  input: &NewUser<'_>,
   actor: Option<UserId>,
   now: i64,
 ) -> Result<User, ServerError> {
-  validate_user(input)?;
-  if find_user(connection, &input.username)?.is_some() {
+  if !valid_username(input.username) || !valid_display_name(input.display_name) {
+    return Err(ErrorCode::Invalid.into());
+  }
+  if find_user(connection, input.username)?.is_some() {
     return Err(ErrorCode::UsernameTaken.into());
   }
   let user = User {
     id: UserId::generate(),
-    username: input.username.clone(),
-    display_name: input.display_name.clone(),
+    username: input.username.to_owned(),
+    display_name: input.display_name.to_owned(),
     admin: input.admin,
     disabled: false,
+    cloud: input.cloud_subject.is_some(),
   };
-  connection.execute("INSERT INTO users(id,username,display_name,password_hash,admin,must_change_password,created_at,password_changed_at)
-    VALUES (?1,?2,?3,?4,?5,1,?6,?6)", params![user.id.to_string(), user.username, user.display_name, hash.expose(), user.admin, now])?;
-  audit(connection, actor, "user_created", &user.id.to_string(), None, now)?;
+  connection.execute(
+    "INSERT INTO users(id,username,display_name,admin,created_at,cloud_subject) VALUES (?1,?2,?3,?4,?5,?6)",
+    params![
+      user.id.to_string(),
+      user.username,
+      user.display_name,
+      user.admin,
+      now,
+      input.cloud_subject
+    ],
+  )?;
+  audit(
+    connection,
+    actor.or(Some(user.id)),
+    "user_created",
+    &user.id.to_string(),
+    None,
+    now,
+  )?;
   Ok(user)
+}
+
+/// Links an account to the cloud account `subject`.
+pub(crate) fn link_subject(connection: &Connection, user: UserId, subject: &str, now: i64) -> Result<(), ServerError> {
+  connection.execute(
+    "UPDATE users SET cloud_subject=?1 WHERE id=?2",
+    params![subject, user.to_string()],
+  )?;
+  audit(connection, Some(user), "cloud_linked", &user.to_string(), None, now)
 }
 
 pub(crate) fn patch_user(
@@ -67,18 +125,10 @@ pub(crate) fn patch_user(
   actor: UserId,
   now: i64,
 ) -> Result<User, ServerError> {
-  let stored = connection
-    .query_row(
-      &format!("SELECT {USER_COLUMNS} FROM users WHERE id=?1"),
-      [id.to_string()],
-      user_row,
-    )
-    .optional()?
-    .ok_or(ErrorCode::NotFound)?;
-  let mut user = stored.user;
+  let mut user = user_by_id(connection, id)?.ok_or(ErrorCode::NotFound)?;
   let original = user.clone();
   if let Some(name) = &changes.display_name {
-    if name.trim().is_empty() || name.chars().count() > 256 {
+    if !valid_display_name(name) {
       return Err(ErrorCode::Invalid.into());
     }
     user.display_name.clone_from(name);
@@ -116,20 +166,11 @@ fn stored_active_admin(connection: &Connection, id: UserId) -> Result<bool, Serv
   )?)
 }
 
-pub(crate) fn reset_password(
-  connection: &Connection,
-  id: UserId,
-  hash: &PasswordHash,
-  actor: Option<UserId>,
-  now: i64,
-) -> Result<(), ServerError> {
-  let changed = connection.execute(
-    "UPDATE users SET password_hash=?1,must_change_password=1,password_changed_at=?2 WHERE id=?3",
-    params![hash.expose(), now, id.to_string()],
-  )?;
-  if changed == 0 {
-    return Err(ErrorCode::NotFound.into());
-  }
-  revoke_sessions(connection, id, None, actor, now)?;
-  audit(connection, actor, "password_reset", &id.to_string(), None, now)
+/// Whether the server has an active admin; until it has, it prints a setup code.
+pub(crate) fn has_admin(connection: &Connection) -> Result<bool, ServerError> {
+  Ok(connection.query_row(
+    "SELECT EXISTS(SELECT 1 FROM users WHERE admin=1 AND disabled_at IS NULL)",
+    [],
+    |row| row.get(0),
+  )?)
 }

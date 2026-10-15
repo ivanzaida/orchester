@@ -1,71 +1,99 @@
-use orchester_api::{ApiError, Credential, ErrorCode, PasswordReset, SignedIn, UserCreated, UsersResponse};
+use orchester_api::{ApiError, ErrorCode, User, UserResponse, UsersResponse};
 use serde_json::json;
 
 use crate::support::TestServer;
 
-async fn create_bob(server: &TestServer, admin: &Credential) -> UserCreated {
-  let response = server
+#[tokio::test]
+async fn s1c_nonadmin_cannot_use_admin_endpoints_or_revoke_another_users_session() {
+  let server = TestServer::start(|_| {}).await;
+  let admin = server.bootstrap().await;
+  let bob = server.invited("bob", false).await;
+  for (method, path) in [
+    ("GET", "/admin/users".to_owned()),
+    ("PATCH", format!("/admin/users/{}", admin.user.id)),
+    ("DELETE", format!("/admin/users/{}/sessions", admin.user.id)),
+    ("GET", "/server/settings".into()),
+    ("GET", "/server/cloud".into()),
+  ] {
+    let body = (method == "PATCH").then(|| json!({"display_name":"Bob"}));
+    let response = server.request(method, &path, Some(&bob.token), body).await;
+    assert_eq!(response.status, 403, "{method} {path}");
+    assert_eq!(response.json::<ApiError>().error, ErrorCode::Forbidden);
+  }
+  let path = format!("/auth/sessions/{}", admin.session.id);
+  assert_eq!(
+    server.request("DELETE", &path, Some(&bob.token), None).await.status,
+    404
+  );
+  let invite = server
     .request(
       "POST",
-      "/admin/users",
-      Some(admin),
-      Some(json!({"username": "bob", "display_name": "Bob", "admin": false})),
+      "/invites",
+      Some(&bob.token),
+      Some(json!({"kind":"server","delivery":"code"})),
     )
     .await;
-  assert_eq!(response.status, 201);
-  response.json()
-}
-
-async fn sign_in_bob(server: &TestServer, bob: &UserCreated) -> SignedIn {
-  let signed = server.login("bob", &bob.initial_password).await;
-  let changed = server
-    .request(
-      "POST",
-      "/auth/password",
-      Some(&signed.token),
-      Some(json!({"current_password": bob.initial_password.expose(), "new_password": "secure bob password"})),
-    )
-    .await;
-  assert_eq!(changed.status, 204);
-  signed
+  assert_eq!(invite.status, 403);
+  assert_eq!(
+    server.request("GET", "/auth/me", Some(&admin.token), None).await.status,
+    200
+  );
+  server.finish().await;
 }
 
 #[tokio::test]
-async fn s1a_nonadmin_cannot_use_admin_endpoints_or_revoke_another_users_session() {
+async fn s1c_admin_lists_updates_disables_and_revokes_users() {
   let server = TestServer::start(|_| {}).await;
   let admin = server.bootstrap().await;
-  let bob = create_bob(&server, &admin.token).await;
-  let signed = sign_in_bob(&server, &bob).await;
+  let bob = server.invited("bob", false).await;
+  let bob_again = server.another_device(&bob.token).await;
+  let users: UsersResponse = server
+    .request("GET", "/admin/users", Some(&admin.token), None)
+    .await
+    .json();
+  let names: Vec<_> = users.users.iter().map(|user| user.username.as_str()).collect();
+  assert_eq!(names, ["alice", "bob"]);
   let path = format!("/admin/users/{}", bob.user.id);
-  for (method, path, body) in [
-    ("GET", "/admin/users".into(), None),
-    (
-      "POST",
-      "/admin/users".into(),
-      Some(json!({"username":"charlie", "display_name":"Charlie", "admin":false})),
-    ),
-    (
-      "POST",
-      "/admin/users".into(),
-      Some(json!({"username":"", "display_name":"", "admin":false})),
-    ),
-    ("PATCH", path.clone(), Some(json!({"display_name":"Robert"}))),
-    ("POST", format!("{path}/password"), None),
-    ("DELETE", format!("{path}/sessions"), None),
-  ] {
-    assert_eq!(
-      server.request(method, &path, Some(&signed.token), body).await.status,
-      403
-    );
-  }
+  let renamed: UserResponse = server
+    .request(
+      "PATCH",
+      &path,
+      Some(&admin.token),
+      Some(json!({"display_name":"Bob Smith","admin":true})),
+    )
+    .await
+    .json();
+  assert!(renamed.user.admin);
+  assert_eq!(renamed.user.display_name, "Bob Smith");
+  let sessions = format!("/admin/users/{}/sessions", bob.user.id);
   assert_eq!(
     server
-      .request(
-        "DELETE",
-        &format!("/auth/sessions/{}", admin.session.id),
-        Some(&signed.token),
-        None
-      )
+      .request("DELETE", &sessions, Some(&admin.token), None)
+      .await
+      .status,
+    204
+  );
+  assert_eq!(
+    server.request("GET", "/auth/me", Some(&bob.token), None).await.status,
+    401
+  );
+  assert_eq!(
+    server
+      .request("GET", "/auth/me", Some(&bob_again.token), None)
+      .await
+      .status,
+    401
+  );
+  let disabled: User = server
+    .request("PATCH", &path, Some(&admin.token), Some(json!({"disabled":true})))
+    .await
+    .json::<UserResponse>()
+    .user;
+  assert!(disabled.disabled);
+  let missing = format!("/admin/users/{}/sessions", orchester_core::id::UserId::generate());
+  assert_eq!(
+    server
+      .request("DELETE", &missing, Some(&admin.token), None)
       .await
       .status,
     404
@@ -74,160 +102,53 @@ async fn s1a_nonadmin_cannot_use_admin_endpoints_or_revoke_another_users_session
 }
 
 #[tokio::test]
-async fn s1a_admin_creates_lists_updates_and_revokes_users() {
-  let server = TestServer::start(|_| {}).await;
-  let admin = server.bootstrap().await;
-  let bob = create_bob(&server, &admin.token).await;
-  let signed = sign_in_bob(&server, &bob).await;
-  let path = format!("/admin/users/{}", bob.user.id);
-  let duplicate = server
-    .request(
-      "POST",
-      "/admin/users",
-      Some(&admin.token),
-      Some(json!({"username":"BOB", "display_name":"Duplicate", "admin":false})),
-    )
-    .await;
-  assert_eq!(duplicate.status, 409);
-  assert_eq!(duplicate.json::<ApiError>().error, ErrorCode::UsernameTaken);
-  let users = server
-    .request("GET", "/admin/users", Some(&admin.token), None)
-    .await
-    .json::<UsersResponse>();
-  assert_eq!(users.users.len(), 2);
-  assert_eq!(
-    server
-      .request(
-        "PATCH",
-        &path,
-        Some(&admin.token),
-        Some(json!({"display_name":"Robert"}))
-      )
-      .await
-      .status,
-    200
-  );
-  assert_eq!(
-    server
-      .request("DELETE", &format!("{path}/sessions"), Some(&admin.token), None)
-      .await
-      .status,
-    204
-  );
-  assert_eq!(
-    server
-      .request("GET", "/auth/me", Some(&signed.token), None)
-      .await
-      .status,
-    401
-  );
-  server.finish().await;
-}
-
-#[tokio::test]
-async fn s1a_admin_reset_disable_and_enable() {
-  let server = TestServer::start(|_| {}).await;
-  let admin = server.bootstrap().await;
-  let bob = create_bob(&server, &admin.token).await;
-  let signed = sign_in_bob(&server, &bob).await;
-  let path = format!("/admin/users/{}", bob.user.id);
-  let reset = server
-    .request("POST", &format!("{path}/password"), Some(&admin.token), None)
-    .await
-    .json::<PasswordReset>();
-  assert_eq!(
-    server
-      .request("GET", "/auth/me", Some(&signed.token), None)
-      .await
-      .status,
-    401
-  );
-  let restricted = server.login("bob", &reset.initial_password).await;
-  assert!(restricted.password_change_required);
-  assert_eq!(
-    server
-      .request("PATCH", &path, Some(&admin.token), Some(json!({"disabled":true})))
-      .await
-      .status,
-    200
-  );
-  assert_eq!(
-    server
-      .request("GET", "/auth/me", Some(&restricted.token), None)
-      .await
-      .status,
-    401
-  );
-  let denied = server
-    .request(
-      "POST",
-      "/auth/sessions",
-      None,
-      Some(json!({"username":"bob", "password":reset.initial_password.expose(), "device":"disabled"})),
-    )
-    .await;
-  assert_eq!(denied.status, 401);
-  assert_eq!(
-    server
-      .request("PATCH", &path, Some(&admin.token), Some(json!({"disabled":false})))
-      .await
-      .status,
-    200
-  );
-  assert!(
-    server
-      .login("bob", &reset.initial_password)
-      .await
-      .password_change_required
-  );
-  let database = server.database();
-  for action in ["user_changed", "password_reset", "session_revoked"] {
-    let found: bool = database
-      .query_row(
-        "SELECT EXISTS(SELECT 1 FROM audit_events WHERE action=?1)",
-        [action],
-        |row| row.get(0),
-      )
-      .expect("audit record");
-    assert!(found);
-  }
-  drop(database);
-  server.finish().await;
-}
-
-#[tokio::test]
-async fn s1a_last_admin_is_protected_even_for_concurrent_demotions() {
+async fn s1c_last_admin_is_protected() {
   let server = TestServer::start(|_| {}).await;
   let admin = server.bootstrap().await;
   let path = format!("/admin/users/{}", admin.user.id);
-  for change in [json!({"disabled":true}), json!({"admin":false})] {
+  for change in [json!({"admin":false}), json!({"disabled":true})] {
     let response = server.request("PATCH", &path, Some(&admin.token), Some(change)).await;
     assert_eq!(response.status, 409);
     assert_eq!(response.json::<ApiError>().error, ErrorCode::LastAdmin);
   }
-  let second = server
+  server.finish().await;
+}
+
+#[tokio::test]
+async fn s1c_password_endpoints_are_gone() {
+  let server = TestServer::start(|_| {}).await;
+  let admin = server.bootstrap().await;
+  let sign_in = server
+    .request(
+      "POST",
+      "/auth/sessions",
+      None,
+      Some(json!({"username":"alice","password":"a secure admin password","device":"test"})),
+    )
+    .await;
+  assert_eq!(sign_in.status, 405);
+  let password = server
+    .request(
+      "POST",
+      "/auth/password",
+      Some(&admin.token),
+      Some(json!({"current_password":"a","new_password":"b"})),
+    )
+    .await;
+  assert_eq!(password.status, 404);
+  let create = server
     .request(
       "POST",
       "/admin/users",
       Some(&admin.token),
-      Some(json!({"username":"second", "display_name":"Second", "admin":true})),
+      Some(json!({"username":"bob","display_name":"Bob","admin":false})),
     )
-    .await
-    .json::<UserCreated>();
-  let second_path = format!("/admin/users/{}", second.user.id);
-  let (first, second) = tokio::join!(
-    server.request("PATCH", &path, Some(&admin.token), Some(json!({"admin":false}))),
-    server.request("PATCH", &second_path, Some(&admin.token), Some(json!({"admin":false})))
+    .await;
+  assert_eq!(create.status, 405);
+  let reset = format!("/admin/users/{}/password", admin.user.id);
+  assert_eq!(
+    server.request("POST", &reset, Some(&admin.token), None).await.status,
+    404
   );
-  assert!(first.status == 200 || second.status == 200);
-  let admins: i64 = server
-    .database()
-    .query_row(
-      "SELECT COUNT(*) FROM users WHERE admin=1 AND disabled_at IS NULL",
-      [],
-      |row| row.get(0),
-    )
-    .expect("admin count");
-  assert_eq!(admins, 1);
   server.finish().await;
 }

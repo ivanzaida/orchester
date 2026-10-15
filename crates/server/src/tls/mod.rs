@@ -1,18 +1,14 @@
+pub(crate) mod certificate;
+
 use std::{io, net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::serve::Listener;
+use orchester_api::certificate::CertificatePin;
 use tokio::{
   net::{TcpListener, TcpStream},
   task::JoinSet,
 };
-use tokio_rustls::{
-  TlsAcceptor,
-  rustls::{
-    self,
-    pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject},
-  },
-  server::TlsStream,
-};
+use tokio_rustls::{TlsAcceptor, rustls, server::TlsStream};
 
 use crate::{
   addresses::TrustedProxy, config::Config, connection_limit::ConnectionLimit, error::ServerError,
@@ -24,24 +20,30 @@ type Stream = TlsStream<InitialRead<TcpStream>>;
 #[derive(Clone, Copy)]
 pub(crate) struct PeerAddr(pub SocketAddr);
 
-pub(crate) fn acceptor(config: &Config) -> Result<Option<TlsAcceptor>, ServerError> {
-  let (Some(cert), Some(key)) = (&config.tls_cert, &config.tls_key) else {
+/// The server's own TLS: the acceptor and the pin of the certificate it presents.
+#[derive(Clone)]
+pub(crate) struct Tls {
+  pub acceptor: TlsAcceptor,
+  pub pin: CertificatePin,
+}
+
+/// The TLS `config` asks for, the certificate generated first when the server has none yet; `None` for plain HTTP.
+pub(crate) fn load(config: &Config, now_ms: i64) -> Result<Option<Tls>, ServerError> {
+  let Some(material) = certificate::load(config, now_ms)? else {
     return Ok(None);
   };
-  let certificates = CertificateDer::pem_file_iter(cert)
-    .map_err(|_| ServerError::Tls)?
-    .collect::<Result<Vec<_>, _>>()
-    .map_err(|_| ServerError::Tls)?;
-  let key = PrivateKeyDer::from_pem_file(key).map_err(|_| ServerError::Tls)?;
   let provider = Arc::new(rustls::crypto::ring::default_provider());
   let mut tls = rustls::ServerConfig::builder_with_provider(provider)
     .with_safe_default_protocol_versions()
     .map_err(|_| ServerError::Tls)?
     .with_no_client_auth()
-    .with_single_cert(certificates, key)
+    .with_single_cert(material.chain, material.key)
     .map_err(|_| ServerError::Tls)?;
   tls.alpn_protocols = vec![b"http/1.1".to_vec()];
-  Ok(Some(TlsAcceptor::from(Arc::new(tls))))
+  Ok(Some(Tls {
+    acceptor: TlsAcceptor::from(Arc::new(tls)),
+    pin: material.pin,
+  }))
 }
 
 pub(crate) struct TlsListener {

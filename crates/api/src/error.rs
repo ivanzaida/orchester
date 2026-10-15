@@ -33,6 +33,22 @@ pub enum ErrorCode {
   ClaimChanged,
   TagExists,
   SameTag,
+  /// API 3: a cloud identity token that is malformed, forged, expired, used or for another server.
+  InvalidIdentity,
+  /// API 3: a valid identity with no account here and no open invite for it.
+  NotInvited,
+  /// API 3: the server does not accept cloud identities (not linked, or turned off).
+  CloudOff,
+  /// API 3: the server's copy of the cloud's keys expired; a newer key set is needed.
+  KeySetStale,
+  /// API 3: one answer for an unknown, used and expired code.
+  InvalidCode,
+  /// API 3: the server holds its maximum of open codes.
+  TooManyCodes,
+  /// API 3: another project has this slug, or the slug is reserved.
+  SlugTaken,
+  /// API 3: the join waited for approval and was refused.
+  ApprovalRefused,
   RateLimited,
   Internal,
 }

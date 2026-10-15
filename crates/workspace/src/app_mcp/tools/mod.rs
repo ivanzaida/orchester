@@ -36,9 +36,13 @@ use rmcp::{
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
+pub(crate) use self::pipeline_copy::duplicate_pipeline_draft;
 pub(super) use self::pull_request_reads::RecentReads;
-pub use self::run_task::{Proposal, propose_run, run_proposed};
 use self::runs::Control;
+pub use self::{
+  run_task::{Proposal, propose_run, run_proposed},
+  runs::find_run,
+};
 use super::{error::ToolError, services::Services};
 use crate::messages::Message;
 

@@ -188,9 +188,7 @@ async fn s1b_sse_retention_reset_at_explicit_clock_boundary() {
   let project = created.project.id;
   create_tasks(&server, &owner.token, project, 1).await;
   server.clock.advance(30 * 24 * 60 * 60 * 1000);
-  let fresh = server
-    .login("alice", &crate::support::credential("a secure admin password"))
-    .await;
+  let fresh = server.another_device(&owner.token).await;
   let mut boundary = Stream::open(&server, &fresh.token, project, 0).await;
   assert_ne!(boundary.next().await.kind.as_deref(), Some("reset"));
   drop(boundary);
@@ -219,7 +217,7 @@ async fn s1b_sse_retention_reset_at_explicit_clock_boundary() {
 async fn s1b_sse_session_revocation_and_membership_lifetime_close_streams() {
   let server = TestServer::start(|_| {}).await;
   let owner = server.bootstrap().await;
-  let bob = user(&server, "bob", false).await;
+  let bob = server.invited("bob", false).await;
   let created = project(&server, &owner.token, vec![]).await;
   let project = created.project.id;
   add_member(&server, &owner.token, project, "bob", "member").await;
@@ -286,7 +284,7 @@ async fn s1b_sse_keepalive_checks_idle_expiry_and_server_shutdown() {
     .expect("session timestamp");
   server
     .clock
-    .advance(persisted + 30 * 24 * 60 * 60 * 1000 - server.clock.now_ms());
+    .advance(persisted + orchester_server::clock::DEVICE_IDLE_MS - server.clock.now_ms());
   let event = tokio::time::timeout(Duration::from_secs(23), async {
     loop {
       let frame = stream.frame().await.expect("expiry event");
@@ -299,9 +297,12 @@ async fn s1b_sse_keepalive_checks_idle_expiry_and_server_shutdown() {
   .expect("expiry on keepalive");
   assert_eq!(event.kind.as_deref(), Some("revoked"));
   stream.closed().await;
-  let fresh = server
-    .login("alice", &crate::support::credential("a secure admin password"))
-    .await;
+  let code = server
+    .server
+    .host_account_code("alice".into())
+    .await
+    .expect("account code");
+  let fresh = server.join(&code, None, "rejoined laptop").await;
   let mut open = Stream::open(&server, &fresh.token, project, created.cursor).await;
   assert!(open.frame().await.expect("initial").comment);
   server.finish().await;

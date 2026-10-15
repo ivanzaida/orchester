@@ -89,9 +89,7 @@ async fn s1b_heartbeat_limit_expires_and_task_list_is_capped() {
   let server = TestServer::start(|_| {}).await;
   let owner = server.bootstrap().await;
   assert_eq!(heartbeat_burst(&server, &owner.token, 13).await, 12);
-  let second = server
-    .login("alice", &crate::support::credential("a secure admin password"))
-    .await;
+  let second = server.another_device(&owner.token).await;
   assert_eq!(heartbeat_burst(&server, &second.token, 1).await, 1);
   let task = orchester_core::id::TaskId::generate();
   error(
@@ -146,13 +144,9 @@ async fn s1b_stream_limits_per_session_and_user_release_on_disconnect_and_revoca
     TestServer::start(|config| config.trusted_proxies = vec!["127.0.0.1".parse().expect("trusted proxy")]).await;
   let owner = server.bootstrap().await;
   let created = project(&server, &owner.token, vec![]).await;
-  let second = server
-    .login("alice", &crate::support::credential("a secure admin password"))
-    .await;
-  let third = server
-    .login("alice", &crate::support::credential("a secure admin password"))
-    .await;
-  let bob = user(&server, "bob", false).await;
+  let second = server.another_device(&owner.token).await;
+  let third = server.another_device(&owner.token).await;
+  let bob = server.invited("bob", false).await;
   add_member(&server, &owner.token, created.project.id, "bob", "member").await;
   let endpoint = format!("{}/events", path(created.project.id));
   let mut first = Vec::new();
@@ -214,9 +208,7 @@ async fn s1b_retention_prunes_once_per_minute_and_indexes_expired_project_events
   let owner = server.bootstrap().await;
   let project = project(&server, &owner.token, vec![]).await.project.id;
   server.clock.advance(30 * 24 * 60 * 60 * 1000 + 1);
-  let fresh = server
-    .login("alice", &crate::support::credential("a secure admin password"))
-    .await;
+  let fresh = server.another_device(&owner.token).await;
   let database = server.database();
   database.execute_batch("CREATE TABLE prune_observations (at INTEGER); CREATE TRIGGER observe_prune AFTER UPDATE OF event_floor ON projects BEGIN INSERT INTO prune_observations VALUES (1); END;").expect("observe retention work");
   database.execute("WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i<300000) INSERT INTO events(project,kind,payload,at) SELECT ?1,'tags','[]',?2 FROM n",rusqlite::params![project.to_string(),server.clock.now_ms()]).expect("300k recent events");

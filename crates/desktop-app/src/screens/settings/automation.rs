@@ -1,9 +1,11 @@
-//! *What automation may do* with its one built row, *Let automation change agent permissions* (`Form row`
-//! `XaNIz` with a switch, under `Form section title` `De1nE`): an application setting that is off until a
-//! person turns it on here. While it is off, the MCP server's setup tools refuse whatever would widen what
-//! agents may do (`person_only`), including matching window confirmations. It is read and saved off the UI thread;
-//! while either runs, the switch cannot be flipped. While the row is mounted, the app's MCP server refuses window input
-//! (`mcp::input_gate`), so only a person flips it.
+//! *What automation may do* (`Form section title` `De1nE`) with a row (`Form row` `XaNIz` with a switch) per consent
+//! only a person gives: *Let automation change agent permissions*, and *Let the Orchestrator publish drafts* (the
+//! same row; `docs/design/orchestrator-toolset.md`, "Decisions" 3). Each is an application setting that is off until a
+//! person turns it on here. While the first is off, the MCP server's setup tools refuse whatever would widen what
+//! agents may do (`person_only`), including matching window confirmations; while the second is off, the Orchestrator
+//! chat proposes each publication to the person. A setting is read and saved off the UI thread; while either runs,
+//! its switch cannot be flipped. While a row is mounted, the app's MCP server refuses window input
+//! (`mcp::input_gate`), and the row refuses lurq's synthetic input, so only a person flips it.
 
 use lurq::{
   app::{
@@ -17,6 +19,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
+use orchester_store::StoreError;
 use orchester_workspace::{
   background,
   messages::{self, Message},
@@ -29,22 +32,100 @@ use crate::{
   theme::{ExtraSpacing, ExtraTypography, SettingsSpacing, SettingsText},
   ui::{
     field::field_error,
+    icon::Icon,
+    inspector::note,
     message::message_text,
     toggle::{Toggle, ToggleKind},
   },
 };
 
-const SWITCH_ID: &str = "settings-change-permissions";
+/// A consent of *What automation may do*.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Consent {
+  /// *Let automation change agent permissions*.
+  ChangePermissions,
+  /// *Let the Orchestrator publish drafts*.
+  PublishDrafts,
+}
 
-/// No props: the row reads and saves the session's own setting.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct NoProps;
+impl lurq::app::component::DevtoolsInspectable for Consent {}
 
-impl lurq::app::component::DevtoolsInspectable for NoProps {}
+/// The keys of what a consent's row says.
+struct Words {
+  title: &'static str,
+  description: &'static str,
+  unreadable: &'static str,
+  not_saved: &'static str,
+  blocked: &'static str,
+}
+
+impl Consent {
+  /// The switch's element id, which its row's parts extend.
+  const fn id(self) -> &'static str {
+    match self {
+      Self::ChangePermissions => "settings-change-permissions",
+      Self::PublishDrafts => "settings-publish-drafts",
+    }
+  }
+
+  const fn words(self) -> Words {
+    match self {
+      Self::ChangePermissions => Words {
+        title: "settings.automation.changePermissions.title",
+        description: "settings.automation.changePermissions.description",
+        unreadable: "settings.automation.changePermissions.unreadable",
+        not_saved: "settings.automation.changePermissions.notSaved",
+        blocked: "settings.automation.changePermissions.blocked",
+      },
+      Self::PublishDrafts => Words {
+        title: "settings.automation.publishDrafts.title",
+        description: "settings.automation.publishDrafts.description",
+        unreadable: "settings.automation.publishDrafts.unreadable",
+        not_saved: "settings.automation.publishDrafts.notSaved",
+        blocked: "settings.automation.publishDrafts.blocked",
+      },
+    }
+  }
+
+  /// Its name in the developer log.
+  const fn logged(self) -> &'static str {
+    match self {
+      Self::ChangePermissions => "Let automation change agent permissions",
+      Self::PublishDrafts => "Let the Orchestrator publish drafts",
+    }
+  }
+
+  /// Reads it. Blocks on SQLite.
+  fn read(self, workspace: &Workspace) -> Result<bool, StoreError> {
+    match self {
+      Self::ChangePermissions => workspace.automation_changes_permissions(),
+      Self::PublishDrafts => workspace.orchestrator_publishes_drafts(),
+    }
+  }
+
+  /// Saves it. Blocks on SQLite.
+  fn save(self, workspace: &Workspace, allowed: bool) -> Result<(), StoreError> {
+    match self {
+      Self::ChangePermissions => workspace.set_automation_changes_permissions(allowed),
+      Self::PublishDrafts => workspace.set_orchestrator_publishes_drafts(allowed),
+    }
+  }
+}
+
+/// The section: its title over a row per consent.
+pub fn section(ctx: &mut Ctx) -> Element {
+  Column::new()
+    .id("settings-automation")
+    .width(Dimension::Pct(100.0))
+    .child(section_title(&ctx.t("settings.automation.section")))
+    .child(ctx.mount_keyed::<ConsentRow>("change-permissions", Consent::ChangePermissions))
+    .child(ctx.mount_keyed::<ConsentRow>("publish-drafts", Consent::PublishDrafts))
+    .into()
+}
 
 type SaveAction = FutureAction<bool, bool, Message>;
 
-pub struct ChangePermissions {
+pub struct ConsentRow {
   /// The setting as the person last chose it; `None` until they do.
   saved: Signal<Option<bool>>,
   /// A change the row did not take because an MCP client's input brought it.
@@ -53,8 +134,8 @@ pub struct ChangePermissions {
   _protected: Protected,
 }
 
-impl Component for ChangePermissions {
-  type Props = NoProps;
+impl Component for ConsentRow {
+  type Props = Consent;
 
   fn create(ctx: &mut Ctx) -> Self {
     let gate = ctx
@@ -68,18 +149,20 @@ impl Component for ChangePermissions {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let consent = *ctx.props::<Consent>();
+    let (id, words) = (consent.id(), consent.words());
     let workspace = Services::of(ctx).workspace;
     // Hooks in the same order on every render: the action, then the read, which follows each save.
-    let save = save_action(ctx, &workspace);
+    let save = save_action(ctx, &workspace, consent);
     let state = save.state().get();
-    let read = stored(ctx, &workspace, state.data);
+    let read = stored(ctx, &workspace, (consent, state.data));
     let fixed = state.is_pending() || read.is_pending();
     // The person's choice once it saved; the stored value until then, or after a save failed.
     let shown = match (&state.error, self.saved.get()) {
       (None, Some(chosen)) => Some(chosen),
       _ => read.data,
     };
-    let problem = problem(ctx, &read.error, &state.error);
+    let problem = problem(ctx, consent, (&read.error, &state.error));
     // The row takes no change before it lived through one pass after mounting: an input meant for what
     // the window showed before cannot land on it.
     let armed = ctx
@@ -88,64 +171,91 @@ impl Component for ChangePermissions {
       .get()
       .data
       .is_some();
-    let title = ctx.t("settings.automation.changePermissions.title");
-    let switch = Toggle::new(SWITCH_ID, ToggleKind::Switch, shown.unwrap_or(false), title.clone()).hide_label();
+    let title = ctx.t(words.title);
+    let switch = Toggle::new(id, ToggleKind::Switch, shown.unwrap_or(false), title.clone()).hide_label();
     // Until the stored value is known, and while it is read or saved, the switch stays as it is.
     let switch = if shown.is_some() && !fixed && armed {
-      self.listen(switch, save, workspace.clone())
+      self.listen(switch, save, (workspace.clone(), consent))
     } else {
       switch
     };
-    let blocked = self.blocked.get().then(|| {
-      field_error(
-        "settings-change-permissions-blocked",
-        &ctx.t("settings.automation.changePermissions.blocked"),
-      )
+    let blocked = self
+      .blocked
+      .get()
+      .then(|| field_error(&format!("{id}-blocked"), &ctx.t(words.blocked)));
+    // What a switch that is on says beside it (`Hint · publishes directly` `Bj5aS` in `IJOOq`).
+    let on = (consent == Consent::PublishDrafts && shown == Some(true)).then(|| {
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding_bottom(ExtraSpacing::Snug.role())
+        .child(note(
+          &format!("{id}-on"),
+          Icon::MessagesSquare,
+          &ctx.t("settings.automation.publishDrafts.on"),
+        ))
     });
+    // Why it cannot be read, was not saved or did not take a change, under the row (`Error · not taken` `WYp6D`).
+    let errors = (problem.is_some() || blocked.is_some()).then(|| {
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding_bottom(SpacingSize::Sm)
+        .spacing(ExtraSpacing::Snug.role())
+        .with_children(problem)
+        .with_children(blocked)
+    });
+    let description = ctx.t(words.description);
     Column::new()
-      .id("settings-automation")
       .width(Dimension::Pct(100.0))
-      .child(section_title(&ctx.t("settings.automation.section")))
-      .child(
-        Row::new()
-          .id("settings-change-permissions-row")
-          .width(Dimension::Pct(100.0))
-          .padding(Padding::vertical(SpacingSize::Md))
-          .spacing(SpacingSize::Xl)
-          .align_items(Alignment::Center)
-          .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-          .child(
-            Column::new()
-              .flex(1.0)
-              .spacing(ExtraSpacing::Fine.role())
-              .child(Text::new(&title).variant(ExtraTypography::Strong.role()))
-              .child(
-                Text::new(&ctx.t("settings.automation.changePermissions.description"))
-                  .variant(ExtraTypography::Prose.role())
-                  .width(Dimension::Pct(100.0)),
-              )
-              .with_children(problem)
-              .with_children(blocked),
-          )
-          .child(switch),
-      )
+      .child(row(id, (&title, &description), switch))
+      .with_children(on)
+      .with_children(errors)
   }
 }
 
-impl ChangePermissions {
+/// The row of switch `id`: its title and description, and the switch at its end, over its line (`Form row` `XaNIz`).
+fn row(id: &str, (title, description): (&str, &str), switch: Toggle) -> Row {
+  Row::new()
+    .id(format!("{id}-row"))
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::vertical(SpacingSize::Md))
+    .spacing(SpacingSize::Xl)
+    .align_items(Alignment::Center)
+    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(
+      Column::new()
+        .flex(1.0)
+        .spacing(ExtraSpacing::Fine.role())
+        .child(Text::new(title).variant(ExtraTypography::Strong.role()))
+        .child(
+          Text::new(description)
+            .variant(ExtraTypography::Prose.role())
+            .width(Dimension::Pct(100.0)),
+        ),
+    )
+    .child(switch)
+}
+
+impl ConsentRow {
   /// `switch`, saving what a person chooses. Synthetic input never changes this human-only control; its source remains
   /// known even after the caller stops waiting.
-  fn listen(&self, switch: Toggle, save: SaveAction, workspace: Workspace) -> Toggle {
+  fn listen(&self, switch: Toggle, save: SaveAction, (workspace, consent): (Workspace, Consent)) -> Toggle {
     let (saved, blocked) = (self.saved.clone(), self.blocked.clone());
     switch.on_change(move |chosen| {
       if input_source() == InputSource::Synthetic {
-        tracing::warn!("synthetic input reached Let automation change agent permissions; not taken");
+        tracing::warn!(
+          setting = consent.logged(),
+          "synthetic input reached a person's setting; not taken"
+        );
         blocked.set(true);
         return;
       }
       blocked.set(false);
       if !chosen {
-        workspace.revoke_automation_permission_consent();
+        // Off holds from the person's click, before the save runs and if it fails.
+        match consent {
+          Consent::ChangePermissions => workspace.revoke_automation_permission_consent(),
+          Consent::PublishDrafts => workspace.revoke_orchestrator_publish_consent(),
+        }
       }
       saved.set(Some(chosen));
       save.run(chosen);
@@ -153,16 +263,17 @@ impl ChangePermissions {
   }
 }
 
-/// Why the setting cannot be read or was not saved, under the row's description.
-fn problem(ctx: &Ctx, read: &Option<Message>, save: &Option<Message>) -> Option<Row> {
+/// Why `consent` cannot be read or was not saved, under the row's description.
+fn problem(ctx: &Ctx, consent: Consent, (read, save): (&Option<Message>, &Option<Message>)) -> Option<Row> {
+  let words = consent.words();
   let (key, reason) = match (read, save) {
-    (Some(reason), _) => ("settings.automation.changePermissions.unreadable", reason),
-    (None, Some(reason)) => ("settings.automation.changePermissions.notSaved", reason),
+    (Some(reason), _) => (words.unreadable, reason),
+    (None, Some(reason)) => (words.not_saved, reason),
     (None, None) => return None,
   };
   let reason = message_text(ctx, reason);
   Some(field_error(
-    "settings-change-permissions-error",
+    &format!("{}-error", consent.id()),
     &ctx.t_args(key, [("reason", &*reason)]),
   ))
 }
@@ -176,33 +287,37 @@ fn section_title(title: &str) -> Row {
     .child(Text::new(title).variant(SettingsText::SectionTitle.role()))
 }
 
-/// Saves the setting the person chose.
-fn save_action(ctx: &mut Ctx, workspace: &Workspace) -> SaveAction {
+/// Saves the `consent` the person chose.
+fn save_action(ctx: &mut Ctx, workspace: &Workspace, consent: Consent) -> SaveAction {
   let workspace = workspace.clone();
   ctx.future_action(move |allowed: bool| {
     let workspace = workspace.clone();
     async move {
-      background::run(move || workspace.set_automation_changes_permissions(allowed))
+      background::run(move || consent.save(&workspace, allowed))
         .await?
         .map(|()| allowed)
         .map_err(|error| {
-          tracing::error!(%error, "Let automation change agent permissions was not saved");
+          tracing::error!(%error, setting = consent.logged(), "a person's setting was not saved");
           messages::store_error(&error)
         })
     }
   })
 }
 
-/// The setting as stored, read when the row shows and again after each save (`saved`).
-fn stored(ctx: &mut Ctx, workspace: &Workspace, saved: Option<bool>) -> FutureState<bool, Message> {
+/// The `consent` as stored, read when the row shows and again after each save (`saved`).
+fn stored(
+  ctx: &mut Ctx,
+  workspace: &Workspace,
+  (consent, saved): (Consent, Option<bool>),
+) -> FutureState<bool, Message> {
   let workspace = workspace.clone();
   let read = ctx.future(saved, move |_| {
     let workspace = workspace.clone();
     async move {
-      background::run(move || workspace.automation_changes_permissions())
+      background::run(move || consent.read(&workspace))
         .await?
         .map_err(|error| {
-          tracing::error!(%error, "Let automation change agent permissions cannot be read");
+          tracing::error!(%error, setting = consent.logged(), "a person's setting cannot be read");
           messages::store_error(&error)
         })
     }

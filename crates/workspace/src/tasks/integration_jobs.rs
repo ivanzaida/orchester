@@ -16,6 +16,7 @@ pub use local::LocalDecision;
 use orchester_core::{
   id::{ProjectId, RunId},
   integration::{Leftovers, MergeError, RunMerge},
+  revision::Revision,
 };
 use orchester_exec::programs::Programs;
 use parking_lot::Mutex;
@@ -301,14 +302,28 @@ impl RunJobs {
   /// Starts merging the run on a thread of its own; whether it began, which it does not while another
   /// operation of the run works or once its merge succeeded.
   pub fn start_merge(&self, args: MergeArgs) -> bool {
-    self.start_merge_with(args, None)
+    self.start_merge_with(args, (None, None))
   }
 
   pub fn start_legacy_merge(&self, args: MergeArgs, policy: super::local_integration::LegacyPolicy) -> bool {
-    self.start_merge_with(args, Some(policy))
+    self.start_merge_with(args, (Some(policy), None))
   }
 
-  fn start_merge_with(&self, args: MergeArgs, policy: Option<super::local_integration::LegacyPolicy>) -> bool {
+  /// [`Self::start_legacy_merge`], only while the run's branch is at `expected`, the commit a person reviewed.
+  pub fn start_legacy_merge_at(
+    &self,
+    args: MergeArgs,
+    policy: super::local_integration::LegacyPolicy,
+    expected: Revision,
+  ) -> bool {
+    self.start_merge_with(args, (Some(policy), Some(expected)))
+  }
+
+  fn start_merge_with(
+    &self,
+    args: MergeArgs,
+    (policy, expected): (Option<super::local_integration::LegacyPolicy>, Option<Revision>),
+  ) -> bool {
     if !self.begin(Active::Merge) {
       return false;
     }
@@ -322,7 +337,7 @@ impl RunJobs {
     let job = self.clone();
     if let Err(error) = thread::Builder::new()
       .name("run-merge".into())
-      .spawn(move || job.merge_now(args, policy.as_ref()))
+      .spawn(move || job.merge_now(args, (policy.as_ref(), expected.as_ref())))
     {
       tracing::error!(%error, "cannot start run merge thread");
       self.update(|state| state.merge = JobState::Failed(messages::interrupted()));
@@ -331,7 +346,11 @@ impl RunJobs {
     true
   }
 
-  fn merge_now(&self, args: MergeArgs, policy: Option<&super::local_integration::LegacyPolicy>) {
+  fn merge_now(
+    &self,
+    args: MergeArgs,
+    (policy, expected): (Option<&super::local_integration::LegacyPolicy>, Option<&Revision>),
+  ) {
     let MergeArgs {
       open,
       task,
@@ -364,7 +383,7 @@ impl RunJobs {
           }
         }
       }
-      merge_in(&open.repo_root, &programs, run)
+      merge_in(&open.repo_root, &programs, (run, expected))
     }));
     let (mut conflicts, mut made) = (Vec::new(), None);
     let merged = match result {

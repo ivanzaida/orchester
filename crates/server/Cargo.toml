@@ -10,13 +10,14 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-orchester-api.workspace = true
+orchester-api = { workspace = true, features = ["identity"] }
 orchester-core.workspace = true
-argon2.workspace = true
 axum.workspace = true
 hyper.workspace = true
 hyper-util.workspace = true
 parking_lot.workspace = true
+rcgen.workspace = true
+ring.workspace = true
 rusqlite = { workspace = true, features = ["backup"] }
 serde.workspace = true
 serde_json.workspace = true
@@ -29,4 +30,6 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+# Reads the payload of the link statement the server signs, to check what it tells the cloud.
+base64.workspace = true
 tempfile.workspace = true

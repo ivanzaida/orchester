@@ -4,7 +4,7 @@ use orchester_api::ServerInfo;
 use rusqlite::Connection;
 use tokio::process::Command;
 
-use crate::support::{TestServer, credential};
+use crate::support::TestServer;
 
 pub(super) async fn backup_command(server: &TestServer, path: &Path) -> std::process::Output {
   tokio::time::timeout(
@@ -45,11 +45,9 @@ async fn s1a_online_backup_cli_captures_wal_and_restores_without_overwriting_fil
     .expect("integrity check");
   assert_eq!(integrity, "ok");
   let audits: i64 = snapshot
-    .query_row(
-      "SELECT COUNT(*) FROM audit_events WHERE action='password_changed'",
-      [],
-      |row| row.get(0),
-    )
+    .query_row("SELECT COUNT(*) FROM audit_events WHERE action='joined'", [], |row| {
+      row.get(0)
+    })
     .expect("WAL audit copied");
   assert_eq!(audits, 1);
   drop(snapshot);
@@ -80,11 +78,14 @@ async fn s1a_online_backup_cli_captures_wal_and_restores_without_overwriting_fil
       .json::<ServerInfo>()
       .needs_bootstrap
   );
-  assert!(
-    !restored
-      .login("alice", &credential("a secure admin password"))
-      .await
-      .password_change_required
+  let code = restored
+    .server
+    .host_account_code("alice".into())
+    .await
+    .expect("account code");
+  assert_eq!(
+    restored.join(&code, None, "restored laptop").await.user.username,
+    "alice"
   );
   restored.finish().await;
   server.finish().await;

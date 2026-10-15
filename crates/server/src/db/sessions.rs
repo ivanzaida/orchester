@@ -1,4 +1,4 @@
-use orchester_api::{ErrorCode, User};
+use orchester_api::{ErrorCode, JoinedVia, User};
 use orchester_core::id::{SessionId, UserId};
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -6,13 +6,13 @@ use super::{
   audit,
   rows::{USER_COLUMNS, user_row},
 };
-use crate::{clock::SESSION_IDLE_MS, error::ServerError};
+use crate::{clock::DEVICE_IDLE_MS, error::ServerError};
 
+/// A request's device token, resolved to its account.
 #[derive(Clone)]
 pub(crate) struct Authenticated {
   pub user: User,
   pub session: SessionId,
-  pub must_change: bool,
   pub last_used_at: i64,
 }
 
@@ -20,7 +20,7 @@ pub(crate) fn authenticate(connection: &Connection, hash: &[u8], now: i64) -> Re
   let session: Option<String> = connection
     .query_row(
       "SELECT id FROM sessions WHERE token_hash=?1 AND revoked_at IS NULL AND last_used_at>?2",
-      params![hash, now - SESSION_IDLE_MS],
+      params![hash, now - DEVICE_IDLE_MS],
       |row| row.get(0),
     )
     .optional()?;
@@ -31,12 +31,13 @@ pub(crate) fn authenticate(connection: &Connection, hash: &[u8], now: i64) -> Re
   session_auth(connection, session, now)
 }
 
+/// Last use is written only when it moved by more than a minute.
 pub(crate) fn touch_session(
   connection: &Connection,
   auth: &Authenticated,
   now: i64,
 ) -> Result<Authenticated, ServerError> {
-  let mut current = checked(connection, auth, now, true, false)?;
+  let mut current = checked(connection, auth, now, false)?;
   if now - current.last_used_at <= 60_000 {
     return Ok(current);
   }
@@ -49,45 +50,83 @@ pub(crate) fn touch_session(
 }
 
 fn session_auth(connection: &Connection, session: SessionId, now: i64) -> Result<Authenticated, ServerError> {
-  let row: Option<(String, bool, i64)> = connection
+  let row: Option<(String, i64)> = connection
     .query_row(
-      "SELECT user_id,initial_password,last_used_at FROM sessions WHERE id=?1 AND revoked_at IS NULL AND last_used_at>?2",
-      params![session.to_string(), now - SESSION_IDLE_MS],
-      |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+      "SELECT user_id,last_used_at FROM sessions WHERE id=?1 AND revoked_at IS NULL AND last_used_at>?2",
+      params![session.to_string(), now - DEVICE_IDLE_MS],
+      |row| Ok((row.get(0)?, row.get(1)?)),
     )
     .optional()?;
-  let (user_id, initial, last_used_at) = row.ok_or(ErrorCode::Unauthorized)?;
+  let (user_id, last_used_at) = row.ok_or(ErrorCode::Unauthorized)?;
   let user = connection.query_row(
     &format!("SELECT {USER_COLUMNS} FROM users WHERE id=?1"),
     [user_id],
     user_row,
   )?;
-  if user.user.disabled {
+  if user.disabled {
     return Err(ErrorCode::Unauthorized.into());
   }
   Ok(Authenticated {
-    user: user.user,
+    user,
     session,
-    must_change: initial || user.must_change,
     last_used_at,
   })
 }
 
+/// The request's device token as it is now, inside the caller's transaction; `admin` requires an admin account.
 pub(crate) fn checked(
   connection: &Connection,
   auth: &Authenticated,
   now: i64,
-  allow_initial: bool,
   admin: bool,
 ) -> Result<Authenticated, ServerError> {
   let current = session_auth(connection, auth.session, now)?;
-  if current.must_change && !allow_initial {
-    return Err(ErrorCode::PasswordChangeRequired.into());
-  }
   if admin && !current.user.admin {
     return Err(ErrorCode::Forbidden.into());
   }
   Ok(current)
+}
+
+/// Records a device token, stored as its SHA-256 `hash`.
+pub(crate) struct NewSession<'a> {
+  pub id: SessionId,
+  pub user: UserId,
+  pub hash: &'a [u8],
+  pub device: &'a str,
+  pub via: JoinedVia,
+  /// The cloud signing key of the identity token it was issued for.
+  pub kid: Option<&'a str>,
+}
+
+pub(crate) fn insert_session(connection: &Connection, session: &NewSession<'_>, now: i64) -> Result<(), ServerError> {
+  connection.execute(
+    "INSERT INTO sessions(id,user_id,token_hash,device,created_at,last_used_at,via,kid) VALUES (?1,?2,?3,?4,?5,?5,?6,?7)",
+    params![
+      session.id.to_string(),
+      session.user.to_string(),
+      session.hash,
+      session.device,
+      now,
+      via_name(session.via),
+      session.kid
+    ],
+  )?;
+  Ok(())
+}
+
+pub(crate) const fn via_name(via: JoinedVia) -> &'static str {
+  match via {
+    JoinedVia::Cloud => "cloud",
+    JoinedVia::Code => "code",
+    JoinedVia::Before3 => "before_3",
+  }
+}
+
+pub(crate) fn parse_via(value: &str) -> Result<JoinedVia, ServerError> {
+  [JoinedVia::Cloud, JoinedVia::Code, JoinedVia::Before3]
+    .into_iter()
+    .find(|via| via_name(*via) == value)
+    .ok_or(ServerError::StoredData)
 }
 
 pub(crate) fn revoke_session(

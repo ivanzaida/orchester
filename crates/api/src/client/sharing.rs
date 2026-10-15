@@ -1,10 +1,9 @@
-//! The shared projects' endpoints (`docs/architecture/server.md`, "Endpoints"): finding and
-//! creating a project, its members and their roles, its tasks and their changes under a revision,
+//! The shared projects' endpoints (`docs/architecture/server.md`, "Endpoints"): finding a project
+//! by its slug and linking a checkout to it, its members and their roles, its tasks and their changes under a revision,
 //! claims, the heartbeat and the project's tags. Every call sends the token as the bearer.
 
 use orchester_core::{
   id::{ProjectId, TagId, TaskId, UserId},
-  repository::RepositoryIdentity,
   secret::SecretValue,
 };
 use reqwest::Method;
@@ -12,28 +11,43 @@ use reqwest::Method;
 use super::{Client, ClientError, bearer};
 use crate::{
   ClaimTake, Heartbeat, HeartbeatResponse, Member, MemberChanges, MemberCreate, MemberResponse, Members, ProjectCreate,
-  ProjectCreated, ProjectResponse, Projects, SharedProject, SharedTag, SharedTask, TagMerge, TagName, TagResponse,
-  Tags, TagsChanged, TaskPatch, TaskResponse, Tasks, TasksCreate, TasksCreated, TasksImport,
+  ProjectCreated, ProjectLink, ProjectLinked, ProjectResponse, Projects, SharedProject, SharedTag, SharedTask,
+  TagMerge, TagName, TagResponse, Tags, TagsChanged, TaskPatch, TaskResponse, Tasks, TasksCreate, TasksCreated,
+  TasksImport,
 };
 
 impl Client {
-  /// `GET /projects?remote=`: the project of the repository `remote` on the server, if there is one
-  /// and the person is a member; `403 not_member` names its owners otherwise. Without `remote`, the
-  /// projects the person is a member of.
-  pub async fn projects(
-    &self,
-    token: &SecretValue,
-    remote: Option<&RepositoryIdentity>,
-  ) -> Result<Vec<SharedProject>, ClientError> {
-    let mut url = self.address.endpoint("/projects")?;
-    if let Some(remote) = remote {
-      url.query_pairs_mut().append_pair("remote", remote.as_str());
-    }
-    let response: Projects = self.call(bearer(self.http.get(url), token)).await?;
+  /// `GET /projects`: the projects the person is a member of.
+  pub async fn projects(&self, token: &SecretValue) -> Result<Vec<SharedProject>, ClientError> {
+    let response: Projects = self
+      .call(bearer(self.request(Method::GET, "/projects")?, token))
+      .await?;
     Ok(response.projects)
   }
 
-  /// `POST /projects`: creates the project from the local one and uploads its tasks, numbers kept.
+  /// `GET /projects?slug=`: the project at the address ending in `slug`. `403 not_member` names the project and its
+  /// owners when the person is not a member; `404` when there is none.
+  pub async fn project_by_slug(&self, token: &SecretValue, slug: &str) -> Result<SharedProject, ClientError> {
+    let mut url = self.address.endpoint("/projects")?;
+    url.query_pairs_mut().append_pair("slug", slug);
+    let response: ProjectResponse = self.call(bearer(self.http.get(url), token)).await?;
+    Ok(response.project)
+  }
+
+  /// `POST /projects/{id}/link`: a checkout linked to the project uploads its tasks; into a project with no tasks they
+  /// keep their numbers. A repeated key returns the first answer.
+  pub async fn link_project(
+    &self,
+    token: &SecretValue,
+    project: ProjectId,
+    link: &ProjectLink,
+  ) -> Result<ProjectLinked, ClientError> {
+    let path = format!("/projects/{project}/link");
+    self.call(bearer(self.json(Method::POST, &path, link)?, token)).await
+  }
+
+  /// API 2's `POST /projects` by repository, which an API 3 server refuses with `400` (see [`ProjectCreate`]); kept
+  /// while the frozen `crates/desktop`'s tests call it.
   pub async fn create_project(
     &self,
     token: &SecretValue,

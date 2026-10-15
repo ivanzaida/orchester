@@ -8,8 +8,13 @@ use std::{
   time::Duration,
 };
 
-use orchester_api::{CreateUser, Credential, SignedIn};
-use orchester_server::{Server, clock::Clock, config::Config};
+use orchester_api::{Credential, Joined, PairingCode};
+use orchester_server::{
+  Server,
+  clock::Clock,
+  config::{Config, TlsMode},
+};
+use parking_lot::Mutex;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use tempfile::TempDir;
@@ -34,10 +39,15 @@ impl Clock for TestClock {
   }
 }
 
+pub mod cloud;
+mod pinned;
+
 pub struct TestServer {
   pub server: Server,
   pub directory: TempDir,
   pub clock: Arc<TestClock>,
+  /// The first admin's device token, once `bootstrap` made them; `user` invites people with it.
+  admin: Mutex<Option<String>>,
   address: SocketAddr,
   stop: Option<oneshot::Sender<()>>,
   task: Option<JoinHandle<Result<(), orchester_server::error::ServerError>>>,
@@ -51,9 +61,11 @@ impl TestServer {
       .prefix("s1a-")
       .tempdir_in(&scratch)
       .expect("temporary data");
+    // Plain HTTP unless a test asks for TLS: most tests speak HTTP to the server directly.
     let mut config = Config {
       data_dir: directory.path().into(),
       listen: "127.0.0.1:0".parse().expect("loopback"),
+      tls: TlsMode::Off,
       ..Config::default()
     };
     configure(&mut config);
@@ -72,6 +84,7 @@ impl TestServer {
       server,
       directory,
       clock,
+      admin: Mutex::new(None),
       address,
       stop: Some(stop),
       task: Some(task),
@@ -137,6 +150,33 @@ impl TestServer {
     exchange(self.tls_connect().await, "GET", "/server", None, None, &[]).await
   }
 
+  /// A request over TLS that trusts exactly the server's own certificate, as a pinned desktop does.
+  pub async fn tls_pinned_request(
+    &self,
+    method: &str,
+    path: &str,
+    token: Option<&Credential>,
+    body: Option<serde_json::Value>,
+  ) -> Response {
+    use tokio_rustls::rustls::{self, pki_types::ServerName};
+    let pin = self
+      .server
+      .check_code()
+      .expect("the server presents its own certificate");
+    let config = rustls::ClientConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
+      .with_safe_default_protocol_versions()
+      .expect("protocols")
+      .dangerous()
+      .with_custom_certificate_verifier(Arc::new(pinned::Pinned::new(pin)))
+      .with_no_client_auth();
+    let connector = tokio_rustls::TlsConnector::from(Arc::new(config));
+    let stream = connector
+      .connect(ServerName::try_from("localhost").expect("name"), self.connect().await)
+      .await
+      .expect("TLS handshake with the pinned certificate");
+    exchange(stream, method, path, token, body, &[]).await
+  }
+
   pub async fn tls_connect(&self) -> tokio_rustls::client::TlsStream<TcpStream> {
     self.tls_on(self.connect().await).await
   }
@@ -162,41 +202,68 @@ impl TestServer {
       .expect("TLS handshake")
   }
 
-  pub async fn bootstrap(&self) -> SignedIn {
-    let created = self
+  /// The first admin, `alice`, from the setup code the server prints while it has no admin.
+  pub async fn bootstrap(&self) -> Joined {
+    let code = self
       .server
-      .host_create_user(CreateUser {
-        username: "alice".into(),
-        display_name: "Alice".into(),
-        admin: true,
-      })
+      .host_setup_code()
       .await
-      .expect("bootstrap");
-    let signed = self.login("alice", &created.initial_password).await;
-    let password = credential("a secure admin password");
-    let changed = self
-      .request(
-        "POST",
-        "/auth/password",
-        Some(&signed.token),
-        Some(json!({"current_password": created.initial_password.expose(), "new_password": password.expose()})),
-      )
-      .await;
-    assert_eq!(changed.status, 204);
-    signed
+      .expect("setup code")
+      .expect("no admin yet");
+    let joined = self.join(&code, Some("alice"), "test computer").await;
+    *self.admin.lock() = Some(joined.token.expose().to_owned());
+    joined
   }
 
-  pub async fn login(&self, username: &str, password: &Credential) -> SignedIn {
+  /// Joins with `code`; `username` (also the display name) when the code makes an account.
+  pub async fn join(&self, code: &Credential, username: Option<&str>, device: &str) -> Joined {
+    let response = self.redeem(code, username, device).await;
+    assert_eq!(response.status, 201);
+    response.json()
+  }
+
+  pub async fn redeem(&self, code: &Credential, username: Option<&str>, device: &str) -> Response {
+    let mut body = json!({"code": code.expose(), "device": device});
+    if let Some(username) = username {
+      body["username"] = json!(username);
+      let mut display = username.to_owned();
+      display[..1].make_ascii_uppercase();
+      body["display_name"] = json!(display);
+    }
+    self.request("POST", "/auth/code", None, Some(body)).await
+  }
+
+  /// A person invited to the server by the first admin with a code, joined on their first device.
+  pub async fn invited(&self, username: &str, admin: bool) -> Joined {
+    let token = credential(self.admin.lock().as_deref().expect("bootstrap first"));
     let response = self
       .request(
         "POST",
-        "/auth/sessions",
-        None,
-        Some(json!({"username": username, "password": password.expose(), "device": "test computer"})),
+        "/invites",
+        Some(&token),
+        Some(json!({"kind":"server","delivery":"code","admin":admin})),
       )
       .await;
     assert_eq!(response.status, 201);
-    response.json()
+    let code = credential(
+      response.json::<serde_json::Value>()["code"]
+        .as_str()
+        .expect("invite code"),
+    );
+    self.join(&code, Some(username), "test computer").await
+  }
+
+  /// Another device of `token`'s account, joined with a pairing code.
+  pub async fn another_device(&self, token: &Credential) -> Joined {
+    let response = self.request("POST", "/auth/pairings", Some(token), None).await;
+    assert_eq!(response.status, 201);
+    let pairing: PairingCode = response.json();
+    self.join(&pairing.code, None, "second computer").await
+  }
+
+  /// The server's time in seconds, as the cloud's tokens and key sets count it.
+  pub fn seconds(&self) -> i64 {
+    self.clock.now_ms() / 1000
   }
 
   pub fn database(&self) -> rusqlite::Connection {

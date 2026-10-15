@@ -67,3 +67,6 @@ CREATE TABLE shared_automatic_status (
   server_status TEXT
 ) STRICT;
 ";
+
+/// API 3 (`docs/architecture/server.md`, row 49): the project's address, `<server>/<slug>`, is its identity.
+pub(super) const ADDRESS_MIGRATION: &str = "ALTER TABLE sharing ADD COLUMN project_address TEXT;";

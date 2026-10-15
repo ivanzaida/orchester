@@ -549,5 +549,6 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   unverified_steps::MIGRATION,
   local_integration::MIGRATION,
   editor_drafts::MIGRATION,
+  sharing::ADDRESS_MIGRATION,
   pull_request_syncs::MIGRATION,
 ];

@@ -5,6 +5,7 @@ mod approval_rules;
 mod auto_mode;
 mod automatic_status;
 mod blobs;
+mod chat_decisions;
 mod checks;
 mod code_index;
 mod connections;

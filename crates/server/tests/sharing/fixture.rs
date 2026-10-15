@@ -1,6 +1,5 @@
 use orchester_api::{
-  ApiError, CreateUser, Credential, ErrorCode, ProjectCreated, SharedTag, SharedTask, SignedIn, TagResponse,
-  TaskResponse, TasksCreated,
+  ApiError, Credential, ErrorCode, ProjectCreated, SharedTag, SharedTask, TagResponse, TaskResponse, TasksCreated,
 };
 use orchester_core::id::{IdempotencyKey, ProjectId};
 use serde_json::{Value, json};
@@ -24,31 +23,16 @@ pub fn upload(number: u32) -> Value {
   value
 }
 
-pub async fn user(server: &TestServer, name: &str, admin: bool) -> SignedIn {
-  let created = server
-    .server
-    .host_create_user(CreateUser {
-      username: name.into(),
-      display_name: name.into(),
-      admin,
-    })
-    .await
-    .expect("create user");
-  let signed = server.login(name, &created.initial_password).await;
+pub async fn project(server: &TestServer, token: &Credential, tasks: Vec<Value>) -> ProjectCreated {
+  let slug = format!("p-{}", key());
   let response = server
     .request(
       "POST",
-      "/auth/password",
-      Some(&signed.token),
-      Some(json!({"current_password":created.initial_password.expose(),"new_password":"secure test password"})),
+      "/projects",
+      Some(token),
+      Some(json!({"idempotency_key":key(),"name":"Shared project","slug":slug,"key":"ORC","remote_hint":"host.example/owner/repo","tasks":tasks})),
     )
     .await;
-  assert_eq!(response.status, 204);
-  signed
-}
-
-pub async fn project(server: &TestServer, token: &Credential, tasks: Vec<Value>) -> ProjectCreated {
-  let response=server.request("POST","/projects",Some(token),Some(json!({"idempotency_key":key(),"name":"Shared project","key":"ORC","remote":"host.example/owner/repo","tasks":tasks}))).await;
   assert_eq!(response.status, 201);
   response.json()
 }

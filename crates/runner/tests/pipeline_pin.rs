@@ -131,6 +131,7 @@ async fn shared_queued_task_runs_from_the_cache_unchanged() {
     cursor: 0,
     last_synced_at: now,
     removed_at: None,
+    address: None,
   };
   db.start_sharing(&link, &[], (&[cached], &Default::default()))
     .expect("share");

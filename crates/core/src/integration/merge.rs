@@ -71,6 +71,9 @@ pub enum MergeError {
   InProgress,
   #[error("the run's branch {0} does not exist")]
   BranchMissing(BranchName),
+  /// The run's branch is no longer at the commit the merge was asked for, e.g. the one a person reviewed.
+  #[error("the run's branch {branch} is no longer at {expected}")]
+  BranchMoved { branch: BranchName, expected: Revision },
   /// Both sides changed these files; the merge was undone.
   #[error("the run's branch conflicts with the base branch in {files:?}")]
   Conflict { files: Vec<String> },
@@ -90,7 +93,19 @@ pub fn merge_run(
   (run, task): (&Run, &TaskKey),
   now: Timestamp,
 ) -> Result<RunMerge, MergeError> {
-  let (revision, kind) = merge(runner, git, repo, run, task)?;
+  merge_run_at(runner, (git, repo), (run, task), None, now)
+}
+
+/// [`merge_run`], only while the run's branch is at `expected` when it names one: a branch that moved since is
+/// refused ([`MergeError::BranchMoved`]) and nothing is merged.
+pub fn merge_run_at(
+  runner: &impl CommandRunner,
+  (git, repo): (&Path, &Path),
+  (run, task): (&Run, &TaskKey),
+  expected: Option<&Revision>,
+  now: Timestamp,
+) -> Result<RunMerge, MergeError> {
+  let (revision, kind) = merge(runner, (git, repo), (run, task), expected)?;
   Ok(RunMerge {
     run: run.id(),
     into: run.base_branch().ok_or(MergeError::NoBaseBranch)?.clone(),
@@ -102,10 +117,9 @@ pub fn merge_run(
 
 fn merge(
   runner: &impl CommandRunner,
-  git: &Path,
-  repo: &Path,
-  run: &Run,
-  task: &TaskKey,
+  (git, repo): (&Path, &Path),
+  (run, task): (&Run, &TaskKey),
+  expected: Option<&Revision>,
 ) -> Result<(Revision, MergeKind), MergeError> {
   if run.status() != &RunStatus::Succeeded {
     return Err(MergeError::NotSucceeded);
@@ -117,6 +131,14 @@ fn merge(
   let head = git
     .commit(&format!("refs/heads/{branch}"))?
     .ok_or_else(|| MergeError::BranchMissing(branch.clone()))?;
+  if let Some(expected) = expected
+    && head != expected.as_str()
+  {
+    return Err(MergeError::BranchMoved {
+      branch: branch.clone(),
+      expected: expected.clone(),
+    });
+  }
   let base = git
     .commit("HEAD")?
     .ok_or_else(|| GitError::Failed("HEAD names no commit".to_owned()))?;

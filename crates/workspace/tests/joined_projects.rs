@@ -1,11 +1,12 @@
-//! Joining a repository that is shared already (`docs/architecture/server.md`, "Two people share
-//! one repository", phase S2c) against a real `orchester-server` on loopback, with two people: Alice
-//! shared Kontur as ORC; Bohdan has the same repository with local tasks KON-1 … KON-3. A person
-//! who is not a member learns the owners and nothing is uploaded; a Share that meets the project
-//! leads to Join; the review ticks every task, hints at similar titles and keeps a task with an
-//! unfinished run ticked; the join uploads the ticked tasks with new numbers, ids and former keys
-//! (the unfinished one claimed), drops a link to a task that stays here and names it, keeps the
-//! others *Not shared*, keeps local runs attached and names the next branch by the new key; *Share
+//! Joining a server project that has tasks already (`docs/architecture/server.md`, "Two people share
+//! one repository", phase S2c, rows 49–50) against a real `orchester-server` on loopback, with two
+//! people: Alice linked Kontur to the project at `<server>/kontur` as ORC; Bohdan has the same
+//! repository with local tasks KON-1 … KON-3. A person who is not a member learns nothing of the
+//! project and nothing is uploaded; a first-checkout link that meets tasks leads to Join; a
+//! checkout is found by the project's address, with the repository remote only a hint; the review ticks every task,
+//! hints at similar titles and keeps a task with an unfinished run ticked; the join uploads the ticked tasks with new
+//! numbers, ids and former keys (the unfinished one claimed), drops a link to a task that stays here and names it,
+//! keeps the others *Not shared*, keeps local runs attached and names the next branch by the new key; *Share
 //! task* uploads a kept task later; *Make local* returns the kept tasks with new numbers.
 //!
 //! `cargo test -p orchester-desktop --test joined_projects joined_`
@@ -30,8 +31,9 @@ use orchester_core::{
   },
 };
 use orchester_workspace::sharing::{
-  SharingError,
-  project::{JoinReview, ShareError, lookup::Lookup},
+  ProjectAddress, RemoteMatch, SharingError,
+  project::{JoinReview, LinkFirst, ShareError, lookup::Lookup},
+  remote_match,
 };
 use server_support::TestServer;
 use support::{Other, Person, REMOTE, member, shared};
@@ -44,7 +46,7 @@ fn identity() -> RepositoryIdentity {
 /// after sleep* (a run working on it) and KON-3 *Notes for the migration*; KON-1 is blocked by
 /// KON-3. Signed in to `server`; not yet a member of ORC.
 fn bohdan(server: &TestServer) -> (Person, [TaskId; 3]) {
-  let first = server.create_user("bohdan", "Bohdan Koval", false);
+  let code = server.code_for("bohdan", false);
   let mut kontur = fixture::Fixture::keyed("KON");
   let now = orchester_core::time::Timestamp::now();
   let tasks = [
@@ -88,7 +90,7 @@ fn bohdan(server: &TestServer) -> (Person, [TaskId; 3]) {
     .db
     .set_task_organization(tasks[0], &blocked, ChangeActor::Person, now)
     .expect("organize");
-  let person = Person::with_repo(server, ("bohdan", &first), kontur.into_repo());
+  let person = Person::with_repo(server, ("bohdan", "Bohdan Koval", &code), kontur.into_repo());
   (person, tasks)
 }
 
@@ -109,9 +111,10 @@ fn with_oleh(server: &TestServer) -> (Person, Other) {
   (alice, oleh)
 }
 
+/// What linking Bohdan's checkout to the project at `<server>/kontur` would do.
 fn review(bohdan: &Person) -> JoinReview {
   bohdan
-    .block_on(bohdan.servers.join_review(&bohdan.entry(), bohdan.root(), identity()))
+    .block_on(bohdan.servers.join_review_at(&bohdan.entry(), bohdan.root(), "kontur"))
     .expect("review")
 }
 
@@ -129,39 +132,88 @@ fn join(bohdan: &Person, tasks: &[TaskId; 3]) -> orchester_workspace::sharing::p
 }
 
 #[test]
-fn joined_a_person_who_is_not_a_member_learns_the_owners_and_uploads_nothing() {
+fn joined_a_person_who_is_not_a_member_learns_nothing_of_the_project_and_uploads_nothing() {
   let server = TestServer::start();
   let (alice, oleh) = with_oleh(&server);
   let (bohdan, _) = bohdan(&server);
-  let lookup = bohdan
-    .block_on(bohdan.servers.lookup(&bohdan.entry(), identity()))
-    .expect("lookup");
-  assert_eq!(
-    lookup,
-    Lookup::NotMember {
-      owners: vec!["Alice Moreau".into()]
-    }
-  );
-  // Share meets the project (`409 remote_taken`): nothing of Bohdan's goes up, Join comes next.
-  let shared = bohdan.block_on(bohdan.servers.share(
-    &bohdan.entry(),
-    bohdan.root(),
-    identity(),
-    IdempotencyKey::generate(),
-    false,
-  ));
-  assert!(matches!(shared, Err(ShareError::Taken { member: false, ref owners, .. }) if owners.len() == 1));
+  let found = bohdan.block_on(bohdan.servers.find_project(&bohdan.entry(), "kontur"));
+  assert!(matches!(&found, Err(SharingError::NoProject)), "{found:?}");
+  let missing = bohdan.block_on(bohdan.servers.find_project(&bohdan.entry(), "billing"));
+  assert!(matches!(missing, Err(SharingError::NoProject)));
+  // Neither the first-checkout link nor Join uploads anything of Bohdan's.
+  let request = LinkFirst {
+    slug: "kontur".into(),
+    remote: Some(identity()),
+    key: IdempotencyKey::generate(),
+    write_discovery: false,
+  };
+  let linked = bohdan.block_on(bohdan.servers.link_first(&bohdan.entry(), bohdan.root(), request));
+  assert!(matches!(linked, Err(ShareError::Sharing(SharingError::NoProject))));
   assert_eq!(bohdan.db().sharing().expect("link"), None);
-  let review = bohdan.block_on(bohdan.servers.join_review(&bohdan.entry(), bohdan.root(), identity()));
-  assert!(
-    matches!(review, Err(SharingError::Client(error)) if error.code() == Some(orchester_api::ErrorCode::NotMember))
+  let review = bohdan.block_on(bohdan.servers.join_review_at(&bohdan.entry(), bohdan.root(), "kontur"));
+  assert!(matches!(review, Err(SharingError::NoProject)));
+  assert_eq!(
+    bohdan
+      .block_on(bohdan.servers.lookup(&bohdan.entry(), identity()))
+      .expect("lookup"),
+    Lookup::NotShared,
+    "a lookup by repository sees only the person's projects"
   );
   member(&alice, "bohdan");
   let lookup = bohdan
     .block_on(bohdan.servers.lookup(&bohdan.entry(), identity()))
     .expect("check again");
   assert_eq!(lookup, Lookup::Shared { key: "ORC".into() });
+  // A member's checkout of a project with tasks joins it; it is not its first checkout.
+  let request = LinkFirst {
+    slug: "kontur".into(),
+    remote: Some(identity()),
+    key: IdempotencyKey::generate(),
+    write_discovery: false,
+  };
+  let linked = bohdan.block_on(bohdan.servers.link_first(&bohdan.entry(), bohdan.root(), request));
+  assert!(matches!(linked, Err(ShareError::Taken { member: true, .. })));
   assert_eq!(on_server(&alice, &oleh).len(), 3, "nothing was uploaded");
+}
+
+#[test]
+fn joined_a_checkout_is_linked_by_the_project_s_address_with_the_remote_as_a_hint() {
+  let server = TestServer::start();
+  let alice = shared(&server);
+  let (bohdan, _) = bohdan(&server);
+  member(&alice, "bohdan");
+  let address = ProjectAddress::parse(&format!("{}/kontur", server.url())).expect("project address");
+  assert_eq!(address.slug(), "kontur");
+  assert_eq!(address.server().as_str(), server.url());
+  assert!(
+    ProjectAddress::parse(&server.url()).is_err(),
+    "a server's address names no project"
+  );
+  let project = bohdan
+    .block_on(bohdan.servers.find_project(&bohdan.entry(), address.slug()))
+    .expect("the project at the address");
+  assert_eq!(project.address, address.to_text());
+  let hint = project.remote_hint;
+  assert_eq!(hint, Some(identity()));
+  assert_eq!(remote_match(Some(&identity()), hint.as_ref()), RemoteMatch::Same);
+  let fork = RepositoryIdentity::from_remote_url("git@github.com:bohdan/kontur-fork.git").expect("fork");
+  let mismatch = remote_match(Some(&fork), hint.as_ref());
+  assert!(mismatch.warns(), "another repository warns, and may still be linked");
+  assert_eq!(remote_match(None, hint.as_ref()), RemoteMatch::NoOrigin);
+  assert_eq!(remote_match(Some(&fork), None), RemoteMatch::NoHint);
+  let review = review(&bohdan);
+  assert_eq!(review.address, address.to_text());
+  let joined = bohdan
+    .block_on(bohdan.servers.join(
+      &bohdan.entry(),
+      bohdan.root(),
+      &review,
+      (Vec::new(), IdempotencyKey::generate()),
+    ))
+    .expect("join");
+  assert_eq!(joined.open.project.key().as_str(), "ORC");
+  let link = bohdan.db().sharing().expect("link").expect("linked");
+  assert_eq!(link.address.as_deref(), Some(address.to_text().as_str()));
 }
 
 #[test]
@@ -308,7 +360,7 @@ fn joined_a_join_after_a_lost_answer_does_not_upload_twice() {
   let alice = shared(&server);
   let (bohdan, tasks) = bohdan(&server);
   member(&alice, "bohdan");
-  let token = server.sign_in_elsewhere("bohdan", "bohdan's own long password", "unused");
+  let token = server.device_of("bohdan");
   let client = orchester_api::client::Client::new(
     orchester_api::client::ServerAddress::parse(&server.url()).expect("address"),
     orchester_api::client::PlainHttp::NotAllowed,
