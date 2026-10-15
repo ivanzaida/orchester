@@ -26,6 +26,7 @@ use crate::{
   project::{Landing, Projects, ProjectsHost},
   routes,
   services::Services,
+  shell::needs_you::PanelOpen,
   startup::{self, Problem},
 };
 
@@ -114,6 +115,7 @@ struct SessionWindow {
   router: RouterHandle,
   navigation: Navigation,
   projects: Projects,
+  needs_you: PanelOpen,
   /// The closing panel's choice the keyboard moved to.
   focus: Signal<Option<lifecycle::Choice>>,
   first_keys: FirstKeys,
@@ -137,6 +139,7 @@ impl Component for SessionWindow {
       router,
       navigation,
       projects,
+      needs_you: PanelOpen::new(ctx.signal(false)),
       focus: ctx.signal(None),
       first_keys: FirstKeys::default(),
     }
@@ -152,6 +155,7 @@ impl Component for SessionWindow {
     ctx.provide(self.navigation.clone());
     ctx.provide(self.projects.clone());
     ctx.provide(self.first_keys.clone());
+    ctx.provide(self.needs_you.clone());
     let phase = lifecycle::phase(ctx, &services.close);
     let closing = phase.holds_window();
     let projects = ctx.mount_keyed::<ProjectsHost>("projects", ());

@@ -26,7 +26,7 @@ fn tasks_tabs_count_each_workflow_status_and_canceled_only_under_all() {
       "In review 2",
       "Done 2"
     ],
-    "Needs you counts what the pill counts for the same scenario (6 need you)"
+    "Needs you counts the tasks it lists: here every one of the pill's 6 is a task's"
   );
   assert_eq!(seeded.keys().len(), 24, "All holds every task, the Canceled one too");
   let canceled = "Retry Slack notifications";

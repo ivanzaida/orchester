@@ -2,7 +2,9 @@
 //! `LeIOm`); while the tasks are read, the table's header stands over the loader (`Reading` `O8pgq`); when
 //! they cannot be read, why, with Try again (`Notice · Tasks cannot be read` `kXWCj`); and a tab whose
 //! rows the search or the pipeline filter hide says so, with Clear (`No matches` `WaehI`). Loading and a
-//! failure never look like an empty list.
+//! failure never look like an empty list. Under the search and over the Needs you tab's rows, or where they would
+//! be, a notice names what waits and is no task's, which the list cannot show, and opens the Needs you panel that
+//! lists it (where `Epiq5` and `oDyZB` put a notice).
 
 use lurq::{
   app::{
@@ -14,17 +16,23 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
-use orchester_workspace::messages::Message;
+use orchester_workspace::{
+  messages::Message,
+  tasks::{attention, data::ProjectTasks},
+};
 
 use super::{header::new_task, table};
 use crate::{
   navigation::Navigation,
   project::ProjectFeed,
+  routes::TaskListTab,
+  shell::needs_you::PanelOpen,
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     message::message_text,
+    notice::{Notice, NoticeTone},
     state::{EmptyState, load_error, loading},
   },
 };
@@ -100,6 +108,30 @@ pub(super) fn empty_tab(ctx: &Ctx, tab: &str, needs_you: bool) -> Column {
     ctx.t_args("tasks.emptyTab.detail", [("tab", tab)])
   };
   no_rows(ctx, (Icon::ListChecks, &ctx.t("tasks.emptyTab.title"), &detail), None)
+}
+
+/// On the Needs you tab, what waits for the person in `tasks` and is no task's ([`attention::outside_tasks`]),
+/// with *Open Needs you*, which opens the title bar's panel that lists it; `None` on another tab, or when
+/// everything that waits is a task's.
+pub(super) fn outside_tasks(ctx: &mut Ctx, tab: TaskListTab, tasks: &ProjectTasks) -> Option<Element> {
+  if tab != TaskListTab::NeedsYou {
+    return None;
+  }
+  let title = attention::outside_tasks(tasks)?;
+  let panel = PanelOpen::of(ctx);
+  let open = ActionButton::new(
+    "tasks-outside-tasks-open",
+    ButtonKind::Secondary,
+    ctx.t("tasks.outsideTasks.open"),
+  )
+  .on_click(move || panel.open());
+  Some(
+    Notice::new("tasks-outside-tasks", NoticeTone::Info, message_text(ctx, &title))
+      .icon(Icon::Hand)
+      .body(ctx.t("tasks.outsideTasks.body"))
+      .action(open)
+      .into(),
+  )
 }
 
 /// The table's header over the glyph, why there is no row, and what can be done about it.
