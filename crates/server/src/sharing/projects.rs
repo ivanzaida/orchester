@@ -65,8 +65,7 @@ pub fn list(db: &Connection, user: UserId, base: &str) -> Result<Vec<SharedProje
     .collect()
 }
 
-/// The project at `slug` when `user` is a member; `403 not_member` with its name and owners when they are not, `404`
-/// when there is none.
+/// The project at `slug` when `user` is a member; `404` both when there is none and when they are not a member.
 pub fn by_slug(db: &Connection, user: UserId, slug: &str, base: &str) -> Result<SharedProject, ServerError> {
   let found: Option<String> = db
     .query_row("SELECT id FROM projects WHERE slug=?1", [slug], |row| row.get(0))

@@ -122,3 +122,31 @@ async fn s1c_one_identity_token_joins_once_however_many_use_it_at_once() {
   );
   server.finish().await;
 }
+
+#[tokio::test]
+async fn s1c_an_admin_invite_by_an_inviter_who_lost_admin_gives_nothing() {
+  let (server, admin, cloud, audience) = linked().await;
+  let known = bob_joined(&server, &admin, &cloud, &audience).await;
+  let olena = server.invited("olena", true).await;
+  let body = json!({"kind":"server","delivery":"cloud","email":"bob@example.com","admin":true});
+  let invite = email_invite(&server, &olena.token, body).await;
+  let invite_id = invite.invite.id.to_string();
+  let demote = format!("/admin/users/{}", olena.user.id);
+  let demoted = server
+    .request("PATCH", &demote, Some(&admin.token), Some(json!({"admin": false})))
+    .await;
+  assert_eq!(demoted.status, 200);
+  refused(
+    &cloud_join(
+      &server,
+      &cloud.token(&bob(&audience, Some(&invite_id)), server.seconds()),
+      None,
+    )
+    .await,
+    403,
+    ErrorCode::Forbidden,
+  );
+  let me: UserResponse = server.request("GET", "/auth/me", Some(&known.token), None).await.json();
+  assert!(!me.user.admin);
+  server.finish().await;
+}

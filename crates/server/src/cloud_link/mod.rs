@@ -216,14 +216,15 @@ pub(crate) fn unlink(db: &Connection) -> Result<(), ServerError> {
   Ok(())
 }
 
-/// What the server signs at setup for the cloud to register it: its id, name, address, key and certificate.
+/// What the server signs at setup for the cloud to register it: its id, name, address, key, and the fingerprint of
+/// its own certificate (the SHA-256 of its DER in hex, which apps pin; `None` without one).
 #[derive(Serialize)]
 struct LinkStatement<'a> {
   server: String,
   name: &'a str,
   address: &'a str,
   public_key: String,
-  certificate: Option<String>,
+  fingerprint: Option<String>,
   issued_at: i64,
 }
 
@@ -231,7 +232,7 @@ pub(crate) fn statement(
   keys: &ServerKeys,
   name: &str,
   address: &str,
-  certificate: Option<String>,
+  fingerprint: Option<String>,
   now_ms: i64,
 ) -> Result<String, ServerError> {
   keys.sign(
@@ -241,7 +242,7 @@ pub(crate) fn statement(
       name,
       address,
       public_key: keys.public_key(),
-      certificate,
+      fingerprint,
       issued_at: now_ms.div_euclid(1000),
     },
   )

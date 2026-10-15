@@ -197,3 +197,74 @@ async fn s1c_admins_make_account_invites_only_for_accounts_that_are_not_admins()
   assert_eq!(created.status, 201);
   server.finish().await;
 }
+
+async fn set_admin(server: &TestServer, admin: &Credential, user: orchester_core::id::UserId, changes: Value) {
+  let path = format!("/admin/users/{user}");
+  assert_eq!(
+    server.request("PATCH", &path, Some(admin), Some(changes)).await.status,
+    200
+  );
+}
+
+#[tokio::test]
+async fn s1c_an_account_code_is_refused_once_its_account_became_an_admin() {
+  let server = TestServer::start(|_| {}).await;
+  let admin = server.bootstrap().await;
+  let bob = server.invited("bob", false).await;
+  let created: InviteCreated = invite(
+    &server,
+    &admin.token,
+    json!({"kind":"account","delivery":"code","user":bob.user.id}),
+  )
+  .await
+  .json();
+  let code = created.code.as_ref().expect("code");
+  set_admin(&server, &admin.token, bob.user.id, json!({"admin": true})).await;
+  let refused = server.redeem(code, None, "new laptop").await;
+  assert_eq!(refused.status, 403);
+  assert_eq!(refused.json::<ApiError>().error, ErrorCode::Forbidden);
+  // The code stays open: once Bob is no admin again it works.
+  set_admin(&server, &admin.token, bob.user.id, json!({"admin": false})).await;
+  assert_eq!(server.redeem(code, None, "new laptop").await.status, 201);
+  server.finish().await;
+}
+
+#[tokio::test]
+async fn s1c_an_admin_invite_is_refused_once_its_inviter_is_no_enabled_admin() {
+  let server = TestServer::start(|_| {}).await;
+  let admin = server.bootstrap().await;
+  let olena = server.invited("olena", true).await;
+  let mut codes = Vec::new();
+  for _ in 0..2 {
+    let created: InviteCreated = invite(
+      &server,
+      &olena.token,
+      json!({"kind":"server","delivery":"code","admin":true}),
+    )
+    .await
+    .json();
+    codes.push(created.code.expect("code"));
+  }
+  set_admin(&server, &admin.token, olena.user.id, json!({"admin": false})).await;
+  let refused = server.redeem(&codes[0], Some("mallory"), "laptop").await;
+  assert_eq!(refused.status, 403);
+  assert_eq!(refused.json::<ApiError>().error, ErrorCode::Forbidden);
+  set_admin(
+    &server,
+    &admin.token,
+    olena.user.id,
+    json!({"admin": true, "disabled": true}),
+  )
+  .await;
+  assert_eq!(server.redeem(&codes[1], Some("mallory"), "laptop").await.status, 403);
+  let made: i64 = server
+    .database()
+    .query_row("SELECT COUNT(*) FROM users WHERE username='mallory'", [], |row| {
+      row.get(0)
+    })
+    .expect("accounts");
+  assert_eq!(made, 0);
+  set_admin(&server, &admin.token, olena.user.id, json!({"disabled": false})).await;
+  assert_eq!(server.redeem(&codes[1], Some("mallory"), "laptop").await.status, 201);
+  server.finish().await;
+}

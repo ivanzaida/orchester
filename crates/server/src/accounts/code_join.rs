@@ -98,6 +98,7 @@ fn redeemed_account(
         .transpose()?
         .flatten()
         .ok_or(ErrorCode::InvalidCode)?;
+      invites::still_allowed(db, &invite)?;
       let user = new_account(db, input, invite.admin, now)?;
       let joined = invites::accept(db, &invite, user.id, now)?;
       Ok((user, joined))

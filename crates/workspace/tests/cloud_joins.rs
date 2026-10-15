@@ -14,7 +14,7 @@ mod support;
 use std::sync::Arc;
 
 use orchester_api::{
-  client::{CloudClient, ServerAddress},
+  client::{Client, CloudClient, ServerAddress},
   cloud::CloudServer,
 };
 use orchester_core::secret::SecretValue;
@@ -28,8 +28,8 @@ use server_support::{SERVER_NAME, TestServer};
 use support::MemoryVault;
 use tempfile::TempDir;
 
-#[test]
-fn cloud_join_sends_nothing_to_an_address_without_the_certificate_the_cloud_named() {
+/// A server with Alice as its admin, linked to a fake cloud that issues Bohdan tokens for an invite by email.
+fn linked() -> (TestServer, cloud::FakeCloud, String) {
   let server = TestServer::start();
   server.create_user("alice", "Alice Moreau", true);
   let invite = server.email_invite("bohdan@example.com");
@@ -41,11 +41,22 @@ fn cloud_join_sends_nothing_to_an_address_without_the_certificate_the_cloud_name
   });
   let audience = server.link_cloud(&fake.root_key, &fake.key_set);
   fake.serve_for(audience.clone());
+  (server, fake, audience)
+}
+
+/// The desktop's servers on a temporary application database and a keychain in memory.
+fn desktop(dir: &TempDir) -> Servers {
+  let workspace = Workspace::new(AppDb::open(&dir.path().join("orchester.db")).expect("database"));
+  Servers::new(workspace, Vault::with(Arc::new(MemoryVault::default())))
+}
+
+#[test]
+fn cloud_join_sends_nothing_to_an_address_without_the_certificate_the_cloud_named() {
+  let (server, fake, audience) = linked();
   // Another server, at another address, with a certificate of its own.
   let elsewhere = TestServer::start_tls();
   let dir = TempDir::new().expect("temporary directory");
-  let workspace = Workspace::new(AppDb::open(&dir.path().join("orchester.db")).expect("database"));
-  let servers = Servers::new(workspace, Vault::with(Arc::new(MemoryVault::default())));
+  let servers = desktop(&dir);
   let client = CloudClient::new(ServerAddress::parse(&fake.url()).expect("cloud")).expect("cloud client");
   let device = SecretValue::new("cloud device token".into()).expect("token");
   let identity = || CloudIdentity {
@@ -72,4 +83,41 @@ fn cloud_join_sends_nothing_to_an_address_without_the_certificate_the_cloud_name
     .expect("cloud join");
   assert!(matches!(joined, CloudJoined::Joined(_)), "{joined:?}");
   assert_eq!(fake.issued(), 1);
+}
+
+#[test]
+fn cloud_join_reaches_a_self_signed_server_by_the_fingerprint_the_cloud_has() {
+  let (mut server, fake, audience) = linked();
+  server.serve_self_signed();
+  let address = ServerAddress::parse(&server.url()).expect("address");
+  assert!(server.url().starts_with("https://"));
+  // The fingerprint the server signed into its link statement for the cloud: its certificate's SHA-256 in hex.
+  let fingerprint = server
+    .block_on(Client::presented_certificate(&address))
+    .expect("the server's own certificate")
+    .to_hex();
+  let dir = TempDir::new().expect("temporary directory");
+  let servers = desktop(&dir);
+  let client = CloudClient::new(ServerAddress::parse(&fake.url()).expect("cloud")).expect("cloud client");
+  let device = SecretValue::new("cloud device token".into()).expect("token");
+  let record = CloudServer {
+    id: audience.parse().expect("server id"),
+    name: SERVER_NAME.into(),
+    address: server.url(),
+    fingerprint: Some(fingerprint.clone()),
+  };
+  let identity = CloudIdentity {
+    cloud: &client,
+    device: &device,
+  };
+  let joined = server
+    .block_on(servers.join_with_cloud(&record, identity, None))
+    .expect("cloud join over the pinned certificate");
+  assert!(matches!(joined, CloudJoined::Joined(_)), "{joined:?}");
+  let entry = servers.entries().expect("entries").remove(0);
+  assert_eq!(entry.stored.certificate_pin.as_deref(), Some(fingerprint.as_str()));
+  let sessions = server
+    .block_on(servers.sessions(&entry))
+    .expect("sessions over the pinned certificate");
+  assert_eq!(sessions[0].via, orchester_api::JoinedVia::Cloud);
 }

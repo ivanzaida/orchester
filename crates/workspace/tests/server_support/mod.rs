@@ -61,26 +61,7 @@ impl TestServer {
       .prefix("server-")
       .tempdir_in(&scratch)
       .expect("temporary data");
-    let config = Config {
-      data_dir: directory.path().into(),
-      listen: "127.0.0.1:0".parse().expect("loopback"),
-      name: SERVER_NAME.into(),
-      tls,
-      ..Config::default()
-    };
-    let (server, listener) = runtime.block_on(async {
-      let server = Server::open(config.clone(), Arc::new(SystemClock))
-        .await
-        .expect("open server");
-      let listener = TcpListener::bind(config.listen).await.expect("listen");
-      (server, listener)
-    });
-    let address = listener.local_addr().expect("address");
-    let (stop, receiver) = oneshot::channel();
-    runtime.spawn(orchester_server::serve(server.clone(), listener, async {
-      // Both an explicit stop and dropping the fixture's sender shut the server down.
-      receiver.await.unwrap_or(());
-    }));
+    let (server, address, stop) = serve(&runtime, &directory, tls);
     Self {
       server,
       address,
@@ -90,6 +71,18 @@ impl TestServer {
       admin: Mutex::new((None, None)),
       _directory: directory,
     }
+  }
+
+  /// Starts the server again on the same data directory, at a new port, presenting its own generated certificate:
+  /// what was set up over plain HTTP (accounts, the cloud link, invites) stays. Set-up requests speak plain HTTP, so
+  /// a test sets up first.
+  pub fn serve_self_signed(&mut self) {
+    if let Some(stop) = self.stop.take() {
+      // The server may have stopped already; a new one takes its place either way.
+      let _ = stop.send(());
+    }
+    let (server, address, stop) = serve(&self.runtime, &self._directory, TlsMode::SelfSigned);
+    (self.server, self.address, self.stop, self.tls) = (server, address, Some(stop), true);
   }
 
   /// The address as a person types it.
@@ -262,6 +255,31 @@ impl TestServer {
     assert!((200..300).contains(&status), "{method} {path}: {status}");
     answer
   }
+}
+
+/// The server on `directory`, serving on a free loopback port until the returned sender stops it.
+fn serve(runtime: &Runtime, directory: &TempDir, tls: TlsMode) -> (Server, SocketAddr, oneshot::Sender<()>) {
+  let config = Config {
+    data_dir: directory.path().into(),
+    listen: "127.0.0.1:0".parse().expect("loopback"),
+    name: SERVER_NAME.into(),
+    tls,
+    ..Config::default()
+  };
+  let (server, listener) = runtime.block_on(async {
+    let server = Server::open(config.clone(), Arc::new(SystemClock))
+      .await
+      .expect("open server");
+    let listener = TcpListener::bind(config.listen).await.expect("listen");
+    (server, listener)
+  });
+  let address = listener.local_addr().expect("address");
+  let (stop, receiver) = oneshot::channel();
+  runtime.spawn(orchester_server::serve(server.clone(), listener, async {
+    // Both an explicit stop and dropping the fixture's sender shut the server down.
+    receiver.await.unwrap_or(());
+  }));
+  (server, address, stop)
 }
 
 impl Drop for TestServer {

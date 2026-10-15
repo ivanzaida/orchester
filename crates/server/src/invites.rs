@@ -231,13 +231,34 @@ pub(crate) fn open(db: &Connection, id: InviteId, now: i64) -> Result<Option<Sto
   )
 }
 
+/// Whether `invite` may still be accepted, checked again at acceptance: an account invite only while its account is
+/// not an admin, an admin invite only while its inviter is an enabled admin. Otherwise `403 forbidden`, and the invite
+/// stays open.
+pub(crate) fn still_allowed(db: &Connection, invite: &Stored) -> Result<(), ServerError> {
+  if invite.kind == InviteKind::Account {
+    let target = invite.user.map(|user| db::user_by_id(db, user)).transpose()?.flatten();
+    if target.is_some_and(|user| user.admin) {
+      return Err(ErrorCode::Forbidden.into());
+    }
+  }
+  if invite.admin {
+    let inviter = db::user_by_id(db, invite.made_by)?;
+    if !inviter.is_some_and(|inviter| inviter.admin && !inviter.disabled) {
+      return Err(ErrorCode::Forbidden.into());
+    }
+  }
+  Ok(())
+}
+
 /// Ends `invite` as accepted by `user` and gives what it grants: the project membership, unless `user` has it already.
+/// An invite that is no longer allowed ([`still_allowed`]) is refused.
 pub(crate) fn accept(
   db: &Connection,
   invite: &Stored,
   user: UserId,
   now: i64,
 ) -> Result<Option<JoinedProject>, ServerError> {
+  still_allowed(db, invite)?;
   db.execute(
     "UPDATE invites SET accepted_at=?1, accepted_by=?2, email=NULL WHERE id=?3",
     params![now, user.to_string(), invite.id.to_string()],

@@ -42,7 +42,7 @@ pub(super) async fn change_cloud(
 ) -> Result<Json<CloudLinkResponse>, ServerError> {
   let base = base_address(&server, &headers);
   let state = server.inner.clone();
-  let check_code = state.tls.as_ref().map(|tls| tls.pin.check_code());
+  let fingerprint = state.tls.as_ref().map(|tls| tls.pin.to_hex());
   let response = server
     .account_write(move |db, now| {
       let current = db::checked(db, &auth, now, true)?;
@@ -56,7 +56,7 @@ pub(super) async fn change_cloud(
           &state.keys,
           &state.config.name,
           &base,
-          check_code,
+          fingerprint,
           now,
         )?),
         other => {
