@@ -26,6 +26,7 @@ mod organization;
 mod permitted_decisions;
 mod plan_decided_by;
 mod plan_limits;
+mod pull_request_syncs;
 mod questions;
 mod queue_holds;
 mod recovery;
@@ -548,4 +549,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   unverified_steps::MIGRATION,
   local_integration::MIGRATION,
   editor_drafts::MIGRATION,
+  pull_request_syncs::MIGRATION,
 ];

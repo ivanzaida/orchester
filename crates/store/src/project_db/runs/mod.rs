@@ -32,7 +32,45 @@ const PERMISSIONS_SCHEMA: u32 = 1;
 /// Schema 2: token budgets. Schema 1 logs are upgraded when read (`legacy`).
 const EVENT_SCHEMA: u32 = 2;
 
+/// A run's task and the branch it works on, read without its record.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RunBranch {
+  pub run: RunId,
+  pub task: TaskId,
+  pub number: RunNumber,
+  pub branch: BranchName,
+}
+
 impl ProjectDb {
+  /// Every run's task and branch, by number: what names a pull request's head branch. Reads no run's record,
+  /// so a run whose record cannot be read is listed too.
+  pub fn run_branches(&self) -> Result<Vec<RunBranch>, StoreError> {
+    let mut statement = self
+      .connection
+      .prepare("SELECT id, task_id, number, branch FROM runs ORDER BY number")?;
+    let rows = statement
+      .query_map([], |row| {
+        Ok((
+          row.get::<_, String>(0)?,
+          row.get::<_, String>(1)?,
+          row.get::<_, i64>(2)?,
+          row.get::<_, String>(3)?,
+        ))
+      })?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(run, task, number, branch)| {
+        Ok(RunBranch {
+          run: crate::rows::parse("run id", &run)?,
+          task: crate::rows::parse("task id", &task)?,
+          number: run_number(number)?,
+          branch: BranchName::new(&branch).map_err(|error| corrupt("run branch", error))?,
+        })
+      })
+      .collect()
+  }
+
   /// Runs stopped at their account's plan limit, ordered by number; each waits for the limit's reset or a person.
   /// Runs that have not ended (succeeded, failed or cancelled), by number: each may still start an agent.
   pub fn unfinished_runs(&self) -> Result<Vec<ListedRun<RunStoreError>>, RunStoreError> {

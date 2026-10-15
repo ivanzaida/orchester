@@ -1,4 +1,4 @@
-//! The cache of a repository's open pull requests.
+//! The cache of a repository's pull requests, and how its latest sync went.
 
 use std::fs;
 
@@ -66,6 +66,9 @@ fn pull_request(repo: &GitHubRepo, number: u64, updated_at: i64) -> PullRequest 
       },
       review_decision: (number == 42).then_some(ReviewDecision::ChangesRequested),
       updated_at: Timestamp::from_unix_millis(updated_at),
+      merged_at: (number == 9).then(|| Timestamp::from_unix_millis(updated_at - 5)),
+      closed_at: (number == 9).then(|| Timestamp::from_unix_millis(updated_at - 5)),
+      cross_repository: number == 7,
     },
   )
   .expect("valid pull request")
@@ -134,4 +137,68 @@ fn damaged_pull_request_rows_are_reported() {
       ..
     })
   ));
+}
+
+#[test]
+fn pull_requests_keep_when_they_were_merged_and_whether_a_fork_opened_them() {
+  let (_dir, mut db) = project_repo();
+  let kontur = repo("kontur");
+  db.replace_pull_requests(
+    &kontur,
+    &[pull_request(&kontur, 9, 900), pull_request(&kontur, 7, 800)],
+    ms(1_000),
+  )
+  .expect("stored");
+  let read = db.pull_requests(&kontur).expect("read").expect("synced").pull_requests;
+  assert_eq!(read[0].merged_at(), Some(Timestamp::from_unix_millis(895)));
+  assert!(read[1].is_cross_repository());
+}
+
+#[test]
+fn pull_request_sync_attempts_keep_how_the_latest_went() {
+  use orchester_core::{
+    connection::{GitHubLogin, GitHubState},
+    pull_request::{SyncAttempt, SyncFailure},
+    repository::RepositoryError,
+  };
+  let (_dir, mut db) = project_repo();
+  let kontur = repo("kontur");
+  assert_eq!(db.pull_request_sync(&kontur).expect("read"), None);
+  let login = |name| GitHubLogin::new(name).expect("a login");
+  let failures = [
+    SyncFailure::RateLimited {
+      resets_at: Some(ms(5_000)),
+    },
+    SyncFailure::Account(GitHubState::WrongAccount {
+      active: login("sam-work"),
+      expected: login("ivanzaida"),
+    }),
+    SyncFailure::Account(GitHubState::MissingScope {
+      account: login("ivanzaida"),
+    }),
+    SyncFailure::Repository(RepositoryError::NotFound(kontur.clone())),
+    SyncFailure::Repository(RepositoryError::ServerError {
+      host: kontur.host().clone(),
+      status: Some(502),
+      detail: String::new(),
+    }),
+  ];
+  for failure in failures {
+    let attempt = SyncAttempt {
+      at: ms(2_000),
+      failure: Some(failure),
+    };
+    db.record_pull_request_sync(&kontur, &attempt).expect("recorded");
+    assert_eq!(db.pull_request_sync(&kontur).expect("read"), Some(attempt));
+  }
+  let read = SyncAttempt {
+    at: ms(3_000),
+    failure: None,
+  };
+  db.record_pull_request_sync(&kontur, &read).expect("recorded");
+  assert_eq!(db.pull_request_sync(&kontur).expect("read"), Some(read));
+}
+
+fn ms(millis: i64) -> Timestamp {
+  Timestamp::from_unix_millis(millis)
 }

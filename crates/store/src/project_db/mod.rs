@@ -27,6 +27,7 @@ mod organization;
 mod organized_drafts;
 mod plan_limits;
 mod plans;
+mod pull_request_attempts;
 mod pull_request_diffs;
 mod pull_requests;
 mod questions;
@@ -73,6 +74,7 @@ pub use self::{
   orchestrator::{ChatListing, ChatTurn},
   read_only::ReadOnlyProjectDb,
   resources::ResourceUpdate,
+  runs::RunBranch,
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
   sharing::SharingLink,
 };
