@@ -55,6 +55,11 @@ impl Services {
     self
   }
 
+  /// The session the tools work in, for the Orchestrator chat's own rules (`crate::orchestrator::tools`).
+  pub(crate) const fn workspace(&self) -> &Workspace {
+    &self.workspace
+  }
+
   /// The project `named` by its id or, ignoring case, its name, opened as the app opens it. Blocks on
   /// SQLite. It is not recorded as the most recently used project: only a person opening it is.
   pub(super) fn project(&self, named: &str) -> Result<OpenProject, ToolError> {
@@ -86,7 +91,7 @@ impl Services {
 }
 
 /// Runs `work`, which blocks on SQLite or git, on the blocking pool.
-pub(super) async fn blocking<T: Send + 'static>(
+pub(crate) async fn blocking<T: Send + 'static>(
   work: impl FnOnce() -> Result<T, ToolError> + Send + 'static,
 ) -> Result<T, ToolError> {
   tokio::task::spawn_blocking(work).await.map_err(|error| {

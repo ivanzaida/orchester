@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::proposal::ProposedStart;
+use super::{change::ProposedChange, proposal::ProposedStart};
 use crate::{
   connection::AccountStartProblem,
   conversation::MessageBody,
@@ -209,14 +209,17 @@ pub enum ActionOutcome {
   /// A start the agent proposed: nothing ran. It waits for a person to start it, as it was proposed, or to dismiss
   /// it; once started it is [`Self::Done`] or [`Self::Refused`].
   Proposed(Box<ProposedStart>),
-  /// A person dismissed the proposed start: nothing ran.
+  /// A publication, cancel or merge the agent proposed: nothing changed. It waits for a person to apply it, as it
+  /// was proposed, or to dismiss it; once applied it is [`Self::Done`] or [`Self::Refused`].
+  ProposedChange(Box<ProposedChange>),
+  /// A person dismissed the proposal: nothing ran or changed.
   Dismissed,
 }
 
 impl ActionOutcome {
   /// Whether it waits for a person.
   pub const fn is_proposed(&self) -> bool {
-    matches!(self, Self::Proposed { .. })
+    matches!(self, Self::Proposed(_) | Self::ProposedChange(_))
   }
 }
 

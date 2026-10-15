@@ -147,6 +147,41 @@
         "refused": "Release new starts · not done",
         "effect": "Queued tasks start again as their groups allow."
       },
+      "cancelRun": {
+        "done": "Canceled a run",
+        "refused": "Cancel a run · not done",
+        "effect": "The run stopped, as Cancel in its task stops it."
+      },
+      "mergeRun": {
+        "done": "Merged a run",
+        "refused": "Merge a run · not done",
+        "effect": "Its work is in its base branch, as Merge in its task merges it."
+      },
+      "publishPipeline": {
+        "done": "Published a pipeline",
+        "refused": "Publish a pipeline · not done",
+        "effect": "Its new version is what tasks run from now on."
+      },
+      "publishProfile": {
+        "done": "Published an agent profile",
+        "refused": "Publish an agent profile · not done",
+        "effect": "Its new version is what pipeline steps run from now on."
+      },
+      "publishInstruction": {
+        "done": "Published an instruction",
+        "refused": "Publish an instruction · not done",
+        "effect": "Agents get its new version from now on."
+      },
+      "publishSkill": {
+        "done": "Published a skill",
+        "refused": "Publish a skill · not done",
+        "effect": "Agents get its new version from now on."
+      },
+      "publishTool": {
+        "done": "Published a tool",
+        "refused": "Publish a tool · not done",
+        "effect": "Its new version is what pipeline steps call from now on."
+      },
       "other": {
         "done": "Used {{tool}}",
         "refused": "{{tool}} · not done"
@@ -186,7 +221,31 @@
       "personOnly": "Only a person starts a run the Orchestrator proposed: input from automation is refused here.",
       "dismissedTitle": "Start {{task}} · dismissed",
       "dismissedState": "Dismissed · {{time}}",
-      "dismissedEffect": "You dismissed it. Nothing started."
+      "dismissedEffect": "You dismissed it. Nothing started.",
+      "changeEffect": "Nothing has changed. The Orchestrator asked for this change; it happens only when you apply it.",
+      "changePersonOnly": "Only a person applies a change the Orchestrator proposed: input from automation is refused here.",
+      "publish": {
+        "pipeline": "Publish pipeline {{name}} as v{{version}}?",
+        "profile": "Publish agent profile {{name}} as v{{version}}?",
+        "instruction": "Publish instruction {{name}} as v{{version}}?",
+        "skill": "Publish skill {{name}} as v{{version}}?",
+        "tool": "Publish tool {{name}} as v{{version}}?",
+        "effect": "Nothing is published. The Orchestrator asked to publish this draft; agents get it only when you choose Publish, after the same checks as Publish in its editor.",
+        "accept": "Publish",
+        "dismissed": "Publish · dismissed"
+      },
+      "cancel": {
+        "title": "Cancel run #{{run}} of {{task}}?",
+        "effect": "The run goes on. The Orchestrator asked to cancel it; it stops only when you choose Cancel run.",
+        "accept": "Cancel run",
+        "dismissed": "Cancel a run · dismissed"
+      },
+      "merge": {
+        "title": "Merge run #{{run}} of {{task}}?",
+        "effect": "Nothing is merged. The Orchestrator asked to merge this run's work into its base branch; it merges only when you choose Merge, as Merge in the task merges it.",
+        "accept": "Merge",
+        "dismissed": "Merge a run · dismissed"
+      }
     },
     "historyPanel": {
       "title": "History",

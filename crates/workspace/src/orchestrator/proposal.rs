@@ -1,16 +1,18 @@
 //! A run the Orchestrator's agent asks for waits for a person (`docs/design/orchester-workspace.md`, "Project
-//! orchestrator conversation": review before work starts). The agent's `run_task` checks that the task could run
-//! now, as Orchester's own `run_task` tool checks it, and starts nothing: the conversation keeps a proposed start
-//! with the pipeline it would run, and the agent is told it waits for the person. The person starts it, through the
-//! same `run_task` tool any client of the app calls, or dismisses it. That only a person takes the start is the
-//! window's to enforce: synthetic input never reaches [`decide`].
+//! orchestrator conversation": review before work starts), unless auto mode is on for the project
+//! ([`super::tools`]). The agent's `run_task` checks that the task could run now, as Orchester's own `run_task` tool
+//! checks it, and starts nothing: the conversation keeps a proposed start with the pipeline it would run, and the
+//! agent is told it waits for the person. The person starts it, through the same `run_task` tool any client of the
+//! app calls, or dismisses it; the person applies or dismisses a proposed change ([`super::change`]) the same way.
+//! That only a person takes the start or applies the change is the window's to enforce: synthetic input never
+//! reaches [`decide`].
 
-use orchester_core::orchestrator::{ActionOutcome, ChatAction, EntryKind, proposal::StartBasis};
+use orchester_core::orchestrator::{ActionOutcome, ChatAction, EntryKind};
 use orchester_store::ProjectDb;
 use rmcp::model::JsonObject;
 use serde_json::{Value, json};
 
-use super::tools::{ChatScope, refusal};
+use super::{change, keep::refusal, tools::ChatScope};
 use crate::{
   app_mcp::{self, Proposal, Services, ToolError, Translate},
   background,
@@ -18,13 +20,11 @@ use crate::{
   runner::Runners,
 };
 
-/// The tool whose call is a proposal.
-pub const RUN_TASK: &str = "run_task";
-
-/// What the person did with a proposed start.
+/// What the person did with a proposal.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Decision {
-  Start,
+  /// Start the proposed run, or apply the proposed change.
+  Accept,
   Dismiss,
 }
 
@@ -53,10 +53,11 @@ pub(super) async fn propose(
   Ok((told, proposal))
 }
 
-/// Takes the person's `decision` on the proposed start `seq` of `scope`'s conversation. A start runs the task as
-/// Orchester's own `run_task` tool does, refused or carried out as for any client, but only as it was proposed: a
-/// task changed since, or a pipeline published anew, is refused and needs a fresh proposal. The proposal shows how
-/// it went; one that no longer waits is left as it is.
+/// Takes the person's `decision` on the proposal `seq` of `scope`'s conversation. A start runs the task as
+/// Orchester's own `run_task` tool does, and a change goes through the tool that carries it out, refused or carried
+/// out as for any client, but only as it was proposed: a task, draft or run changed since, or a pipeline published
+/// anew, is refused and needs a fresh proposal. The proposal shows how it went; one that no longer waits is left as
+/// it is.
 pub async fn decide(
   (services, translate, runners): (&Services, &Translate, &Runners),
   scope: &ChatScope,
@@ -65,12 +66,18 @@ pub async fn decide(
 ) -> Result<(), Message> {
   let outcome = match decision {
     Decision::Dismiss => ActionOutcome::Dismissed,
-    Decision::Start => {
-      let Some((task, basis)) = proposed(scope, seq).await? else {
+    Decision::Accept => {
+      let Some(action) = waiting(scope, seq).await? else {
         return Ok(());
       };
-      let started = app_mcp::run_proposed(services, (scope.project.to_string(), task), basis).await;
-      match started {
+      let carried = match (action.task, action.outcome) {
+        (Some(task), ActionOutcome::Proposed(start)) => {
+          app_mcp::run_proposed(services, (scope.project.to_string(), task), start.basis).await
+        }
+        (_, ActionOutcome::ProposedChange(proposed)) => change::apply((services, translate), scope, &proposed).await,
+        _ => return Ok(()),
+      };
+      match carried {
         Ok(_) => ActionOutcome::Done,
         Err(error) => refusal(&error, translate),
       }
@@ -84,18 +91,14 @@ pub async fn decide(
   Ok(())
 }
 
-/// The key of the task the proposal `seq` would start, and what it would run, while it waits for a person.
-async fn proposed(scope: &ChatScope, seq: i64) -> Result<Option<(String, StartBasis)>, Message> {
+/// The action `seq` of `scope`'s conversation while it waits for a person.
+async fn waiting(scope: &ChatScope, seq: i64) -> Result<Option<ChatAction>, Message> {
   let (root, chat) = (scope.root.clone(), scope.chat);
   let entries = background::run(move || ProjectDb::open(&root)?.chat_entries(chat))
     .await?
     .map_err(|error| store_error(&error))?;
   Ok(entries.into_iter().find_map(|entry| match entry.kind {
-    EntryKind::Action(ChatAction {
-      task: Some(task),
-      outcome: ActionOutcome::Proposed(start),
-      ..
-    }) if entry.seq == seq => Some((task, start.basis)),
+    EntryKind::Action(action) if entry.seq == seq && action.outcome.is_proposed() => Some(action),
     _ => None,
   }))
 }

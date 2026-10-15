@@ -30,7 +30,7 @@ use orchester_workspace::{display, orchestrator::tools::ChatScope};
 
 use super::{
   held::{HeldCard, HeldProps},
-  proposal::{ProposalProps, StartProposal},
+  proposal::{Asked, ProposalCard, ProposalProps},
   turns::{Part, Turn},
 };
 use crate::{
@@ -183,18 +183,20 @@ fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
       Part::Reply { text: said, .. } => text(ctx, &format!("orchestrator-reply-{key}-{index}"), said),
       Part::Action { action, at, seq } => {
         let id = format!("orchestrator-action-{key}-{index}");
-        match (&action.outcome, &row.env.scope) {
-          (ActionOutcome::Proposed(start), Some(scope)) => ctx.mount_keyed::<StartProposal>(
+        if let (Some(asked), Some(scope)) = (Asked::of(&action.outcome), &row.env.scope) {
+          return ctx.mount_keyed::<ProposalCard>(
             &id,
             ProposalProps {
               id: id.clone(),
               scope: scope.clone(),
               seq: *seq,
               task: action.task.clone().unwrap_or_default(),
-              start: (**start).clone(),
+              asked,
               at: *at,
             },
-          ),
+          );
+        }
+        match (&action.outcome, &row.env.scope) {
           (ActionOutcome::Done, Some(scope)) if action.held.is_some() => ctx.mount_keyed::<HeldCard>(
             &id,
             HeldProps {

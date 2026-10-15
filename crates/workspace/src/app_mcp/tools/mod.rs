@@ -30,8 +30,11 @@ use rmcp::{
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-pub use self::run_task::{Proposal, propose_run, run_proposed};
 use self::runs::Control;
+pub use self::{
+  run_task::{Proposal, propose_run, run_proposed},
+  runs::find_run,
+};
 use super::{error::ToolError, services::Services};
 use crate::messages::Message;
 

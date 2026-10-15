@@ -1,0 +1,283 @@
+//! Publishing a draft, canceling a run and merging one wait for the person when the Orchestrator's agent asks for
+//! them (`docs/design/orchestrator-toolset.md`, "Decisions" 3 and 4; publishing only while the person has not turned
+//! on *Let the Orchestrator publish drafts*). The agent's call checks what it names and changes nothing: the
+//! conversation keeps the proposed change and the agent is told it waits. The person applies it through the same
+//! tool any client of the app calls, or dismisses it ([`super::proposal::decide`]); a draft saved again or published
+//! meanwhile, or a run with a newer checkpoint, is refused and needs a fresh proposal.
+
+use std::path::Path;
+
+use orchester_core::{
+  id::{ResourceId, RunId},
+  orchestrator::change::{Change, ProposedChange, Publishing},
+  resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, Tool},
+  run::Run,
+  store::{ResourceStore, TaskStore},
+  time::Timestamp,
+};
+use orchester_store::{ProjectDb, StoreError};
+use rmcp::model::JsonObject;
+use serde_json::{Value, json};
+
+use super::tools::{CANCEL_RUN, ChatScope, MERGE_RUN, app_tool};
+use crate::{
+  app_mcp::{Missing, Services, ToolError, Translate, blocking, find_run},
+  messages::Message,
+};
+
+/// The agent's call of tool `name` with `arguments` in `scope`: the change it proposes, what the agent is told, and
+/// the key of the task it names; a refusal when there is nothing to change.
+pub(super) async fn propose(
+  translate: &Translate,
+  scope: &ChatScope,
+  name: &str,
+  arguments: &JsonObject,
+) -> Result<(Value, ProposedChange, Option<String>), ToolError> {
+  let text = |argument: &str| {
+    arguments
+      .get(argument)
+      .and_then(Value::as_str)
+      .map(str::to_owned)
+      .ok_or_else(|| ToolError::InvalidArguments(format!("{argument}: required")))
+  };
+  let root = scope.root.clone();
+  let (change, task) = match Publishing::of_tool(name) {
+    Some(kind) => {
+      let named = text(kind.argument())?;
+      (blocking(move || publication(&root, kind, &named)).await?, None)
+    }
+    None => {
+      let (named, cancel) = (text("run")?, name == CANCEL_RUN);
+      blocking(move || run_change(&root, cancel, &named)).await?
+    }
+  };
+  Ok((told(translate, &change), change, task))
+}
+
+/// Applies `change`, proposed in `scope`, through the tool that carries it out, refused as for any client; refused
+/// when what it names changed since it was proposed.
+pub(super) async fn apply(
+  (services, translate): (&Services, &Translate),
+  scope: &ChatScope,
+  change: &ProposedChange,
+) -> Result<Value, ToolError> {
+  let root = scope.root.clone();
+  let (tool, argument, named) = match change.change.clone() {
+    Change::Publish {
+      of,
+      resource,
+      version,
+      saved,
+    } => {
+      let subject = change.subject.clone();
+      blocking(move || unchanged_draft(&root, (of, resource), (saved, version), subject)).await?;
+      (of.tool(), of.argument(), resource.to_string())
+    }
+    Change::Cancel { run, .. } => (CANCEL_RUN, "run", run.to_string()),
+    Change::Merge {
+      run,
+      number,
+      checkpoint,
+    } => {
+      blocking(move || unchanged_run(&root, (run, number), checkpoint.as_deref())).await?;
+      (MERGE_RUN, "run", run.to_string())
+    }
+  };
+  let mut arguments = JsonObject::new();
+  arguments.insert("project".to_owned(), Value::String(scope.project.to_string()));
+  arguments.insert(argument.to_owned(), Value::String(named));
+  app_tool((services, translate), tool, arguments).await
+}
+
+/// The publication of the draft `named` of kind `kind` in the project at `root`. Blocks on SQLite.
+fn publication(root: &Path, kind: Publishing, named: &str) -> Result<ProposedChange, ToolError> {
+  let db = ProjectDb::open(root)?;
+  let (resource, subject) = draft_named(&db, kind, named)?;
+  let (saved, version) = mark(&db, kind, resource)?
+    .ok_or_else(|| ToolError::refused("no_draft", vec![Message::new("appMcp.errors.noDraft")]))?;
+  Ok(ProposedChange {
+    subject,
+    change: Change::Publish {
+      of: kind,
+      resource,
+      version,
+      saved,
+    },
+  })
+}
+
+/// Canceling (`cancel`) or merging the run `named` in the project at `root`, and the key of its task. A run that
+/// ended has nothing to cancel. Blocks on SQLite.
+fn run_change(root: &Path, cancel: bool, named: &str) -> Result<(ProposedChange, Option<String>), ToolError> {
+  let db = ProjectDb::open(root)?;
+  let run = find_run(&db, named)?;
+  let task = db.task(run.task())?;
+  let subject = task
+    .as_ref()
+    .map(|task| task.details().title.as_str().to_owned())
+    .unwrap_or_default();
+  let (id, number) = (run.id(), run.number().get());
+  let change = if cancel {
+    if run.status().is_terminal() {
+      return Err(ToolError::refused(
+        "run_ended",
+        vec![Message::new("runs.control.ended")],
+      ));
+    }
+    Change::Cancel { run: id, number }
+  } else {
+    Change::Merge {
+      run: id,
+      number,
+      checkpoint: checkpoint(&run),
+    }
+  };
+  Ok((
+    ProposedChange { subject, change },
+    task.map(|task| task.key().to_string()),
+  ))
+}
+
+/// Refused unless the draft of `resource` is still the one saved at `saved`, to be published as `version`.
+fn unchanged_draft(
+  root: &Path,
+  (kind, resource): (Publishing, ResourceId),
+  proposed: (Timestamp, u32),
+  subject: String,
+) -> Result<(), ToolError> {
+  if mark(&ProjectDb::open(root)?, kind, resource)? == Some(proposed) {
+    return Ok(());
+  }
+  Err(ToolError::refused(
+    "changed_since_proposed",
+    vec![Message::new("orchestrator.proposal.draftChanged").with("name", subject)],
+  ))
+}
+
+/// Refused unless run `run` (`#number`) still holds what its last checkpoint `proposed` held.
+fn unchanged_run(root: &Path, (run, number): (RunId, u32), proposed: Option<&str>) -> Result<(), ToolError> {
+  let run = find_run(&ProjectDb::open(root)?, &run.to_string())?;
+  if checkpoint(&run).as_deref() == proposed {
+    return Ok(());
+  }
+  Err(ToolError::refused(
+    "changed_since_proposed",
+    vec![Message::new("orchestrator.proposal.runChanged").with("run", number.to_string())],
+  ))
+}
+
+/// The commit of `run`'s last checkpoint.
+fn checkpoint(run: &Run) -> Option<String> {
+  run
+    .last_checkpoint()
+    .map(|checkpoint| checkpoint.revision().to_string())
+}
+
+/// What the agent is told of the proposed `change`.
+fn told(translate: &Translate, change: &ProposedChange) -> Value {
+  let subject = change.subject.clone();
+  let (message, proposed) = match &change.change {
+    Change::Publish { of, version, .. } => (
+      Message::new("orchestrator.tools.publishWaits")
+        .with("name", subject.clone())
+        .with("version", version.to_string()),
+      json!({ "publish": { "kind": of, "name": subject, "version": version } }),
+    ),
+    Change::Cancel { number, .. } => (
+      Message::new("orchestrator.tools.cancelWaits").with("run", number.to_string()),
+      json!({ "cancel": { "run": number, "task": subject } }),
+    ),
+    Change::Merge { number, .. } => (
+      Message::new("orchestrator.tools.mergeWaits").with("run", number.to_string()),
+      json!({ "merge": { "run": number, "task": subject } }),
+    ),
+  };
+  json!({
+    "done": false,
+    "waits_for_person": true,
+    "proposed": proposed,
+    "message": translate.text(&message),
+  })
+}
+
+/// The resource of kind `kind` named by its id or, ignoring case, its name (a profile also by its role), and its
+/// name as people read it (a profile's role).
+fn draft_named(db: &ProjectDb, kind: Publishing, named: &str) -> Result<(ResourceId, String), ToolError> {
+  let resources = db.resources(resource_kind(kind))?;
+  let lowered = named.to_lowercase();
+  let by_id = resources.iter().find(|resource| resource.id().to_string() == named);
+  let found = by_id.or_else(|| {
+    resources
+      .iter()
+      .find(|resource| resource.name().as_str().to_lowercase() == lowered)
+  });
+  if kind != Publishing::Profile {
+    return found
+      .map(|resource| (resource.id(), resource.name().as_str().to_owned()))
+      .ok_or_else(|| ToolError::not_found(missing(kind), named));
+  }
+  if let Some(resource) = found {
+    return Ok((resource.id(), role_of(db, resource.id())?));
+  }
+  for resource in &resources {
+    let role = role_of(db, resource.id())?;
+    if role.to_lowercase() == lowered {
+      return Ok((resource.id(), role));
+    }
+  }
+  Err(ToolError::not_found(Missing::Profile, named))
+}
+
+/// The role of profile `id`, as its draft or else its latest version holds it.
+fn role_of(db: &ProjectDb, id: ResourceId) -> Result<String, StoreError> {
+  let draft = db
+    .draft::<AgentProfile>(id)?
+    .map(|draft| draft.body().role().as_str().to_owned());
+  match draft {
+    Some(role) => Ok(role),
+    None => Ok(
+      db.latest_version::<AgentProfile>(id)?
+        .map(|version| version.body().role().as_str().to_owned())
+        .unwrap_or_default(),
+    ),
+  }
+}
+
+/// When the draft of `resource` was saved and the version it would be published as; `None` without a draft.
+fn mark(db: &ProjectDb, kind: Publishing, resource: ResourceId) -> Result<Option<(Timestamp, u32)>, StoreError> {
+  match kind {
+    Publishing::Pipeline => mark_of::<Pipeline>(db, resource),
+    Publishing::Profile => mark_of::<AgentProfile>(db, resource),
+    Publishing::Instruction => mark_of::<Instruction>(db, resource),
+    Publishing::Skill => mark_of::<Skill>(db, resource),
+    Publishing::Tool => mark_of::<Tool>(db, resource),
+  }
+}
+
+fn mark_of<B: ResourceBody>(db: &ProjectDb, resource: ResourceId) -> Result<Option<(Timestamp, u32)>, StoreError> {
+  let Some(draft) = db.draft::<B>(resource)? else {
+    return Ok(None);
+  };
+  let latest = db.latest_version::<B>(resource)?.map(|version| version.number().get());
+  Ok(Some((draft.updated_at(), latest.map_or(1, |number| number + 1))))
+}
+
+const fn resource_kind(kind: Publishing) -> ResourceKind {
+  match kind {
+    Publishing::Pipeline => ResourceKind::Pipeline,
+    Publishing::Profile => ResourceKind::AgentProfile,
+    Publishing::Instruction => ResourceKind::Instruction,
+    Publishing::Skill => ResourceKind::Skill,
+    Publishing::Tool => ResourceKind::Tool,
+  }
+}
+
+const fn missing(kind: Publishing) -> Missing {
+  match kind {
+    Publishing::Pipeline => Missing::Pipeline,
+    Publishing::Profile => Missing::Profile,
+    Publishing::Instruction => Missing::Instruction,
+    Publishing::Skill => Missing::Skill,
+    Publishing::Tool => Missing::Tool,
+  }
+}

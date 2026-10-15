@@ -9,8 +9,9 @@ mod error;
 mod services;
 mod tools;
 
+pub(crate) use self::services::blocking;
 pub use self::{
-  error::ToolError,
+  error::{Missing, ToolError},
   services::Services,
-  tools::{Proposal, Translate, call, listed, propose_run, run_proposed, setup},
+  tools::{Proposal, Translate, call, find_run, listed, propose_run, run_proposed, setup},
 };

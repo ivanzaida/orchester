@@ -1509,11 +1509,16 @@
       "failed": "The answer couldn't be stopped: the runner didn't answer."
     },
     "proposal": {
-      "changed": "{{task}} changed after it was proposed: its details, its pipeline or the pipeline's version are not what you were asked to start. Nothing started; ask the Orchestrator to propose it again."
+      "changed": "{{task}} changed after it was proposed: its details, its pipeline or the pipeline's version are not what you were asked to start. Nothing started; ask the Orchestrator to propose it again.",
+      "draftChanged": "The draft of {{name}} was saved again or published after it was proposed: it is not what you were asked to publish. Nothing was published; ask the Orchestrator to propose it again.",
+      "runChanged": "Run #{{run}} has newer work than when its merge was proposed: it is not what you were asked to merge. Nothing was merged; ask the Orchestrator to propose it again."
     },
     "tools": {
       "otherProject": "The Orchestrator acts only in its own project.",
-      "startWaits": "Nothing started yet: starting {{task}} on {{pipeline}} waits for the person, who starts or dismisses it in the conversation. Tell them it is ready to start."
+      "startWaits": "Nothing started yet: starting {{task}} on {{pipeline}} waits for the person, who starts or dismisses it in the conversation. Tell them it is ready to start.",
+      "publishWaits": "Nothing is published yet: publishing {{name}} as v{{version}} waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to publish.",
+      "cancelWaits": "Run #{{run}} goes on: canceling it waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to cancel.",
+      "mergeWaits": "Nothing is merged yet: merging run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to merge."
     }
   }
 }
