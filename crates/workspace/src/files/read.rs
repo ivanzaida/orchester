@@ -20,7 +20,7 @@ use super::{
 };
 
 /// The largest file the viewer shows.
-pub const MAX_VIEW_BYTES: u64 = 2 * 1024 * 1024;
+pub const MAX_VIEW_BYTES: u64 = 5 * 1024 * 1024;
 /// Bytes looked at for a NUL to tell a binary file.
 const BINARY_PROBE: usize = 8 * 1024;
 /// The mode git gives a symbolic link.

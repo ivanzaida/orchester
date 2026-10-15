@@ -62,9 +62,16 @@ pub(super) fn source(runner: &dyn CommandRunner, repo_root: &Path, version: &Ver
         branch: Some(branch),
       }),
       Ok(None) => Err(gone()),
-      Err(GitError::Run(error)) => Err(FilesError::from(error)),
-      Err(error) => Err(FilesError::Git(error.to_string())),
+      Err(error) => Err(git_error(error)),
     },
+  }
+}
+
+/// `error` of a git read: git not found, or what git said.
+pub(super) fn git_error(error: GitError) -> FilesError {
+  match error {
+    GitError::Run(error) => FilesError::from(error),
+    error => FilesError::Git(error.to_string()),
   }
 }
 

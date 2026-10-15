@@ -14,6 +14,8 @@ pub const MAX_MATCHES: usize = 10_000;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FileText {
   lines: Arc<[Arc<str>]>,
+  /// Bytes in the file.
+  size: u64,
 }
 
 impl FileText {
@@ -30,11 +32,18 @@ impl FileText {
         .map(|line| Arc::from(line.strip_suffix('\r').unwrap_or(line)))
         .collect()
     };
-    Self { lines: lines.into() }
+    Self {
+      lines: lines.into(),
+      size: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
+    }
   }
 
   pub fn lines(&self) -> &Arc<[Arc<str>]> {
     &self.lines
+  }
+
+  pub const fn size(&self) -> u64 {
+    self.size
   }
 
   /// The text of `range` as copied: its lines joined with `\n`, the part past the file's end left out.
@@ -48,10 +57,12 @@ impl FileText {
       .unwrap_or_default()
   }
 
-  /// Where `query` is found, ignoring case, in the lines as they are shown (tabs as spaces), line by
-  /// line, at most [`MAX_MATCHES`]. Positions count characters of the shown line.
-  pub fn find(&self, query: &str) -> Vec<TextMatch> {
-    let query: Vec<char> = query.chars().map(folded).collect();
+  /// Where `query` is found in the lines as they are shown (tabs as spaces), line by line, at most
+  /// [`MAX_MATCHES`]; with `match_case` only in the query's case. Positions count characters of the shown
+  /// line.
+  pub fn find(&self, query: &str, match_case: bool) -> Vec<TextMatch> {
+    let fold = |character: char| if match_case { character } else { folded(character) };
+    let query: Vec<char> = query.chars().map(fold).collect();
     if query.is_empty() {
       return Vec::new();
     }

@@ -1,6 +1,7 @@
 //! The code viewer's reads (`docs/design/code-viewer.md`): which paths open and which are refused with
 //! their reason, a file and the tree at the checkout, a run's worktree, a commit and the base branch,
-//! the versions a file has, binary and too large files, file-name search and search within a file.
+//! the versions a file has, binary and too large files, file-name search, search within a file, and what
+//! *Open in editor* opens.
 
 use std::{collections::BTreeSet, fs, path::Path, process, sync::Arc};
 
@@ -8,8 +9,8 @@ use orchester_core::{command::CommandRunner, id::RunId, revision::Revision};
 use orchester_exec::programs::Programs;
 use orchester_workspace::{
   files::{
-    EntryKind, FileList, FilePath, FileText, FileView, FilesError, LineRange, MAX_VIEW_BYTES, PathError, Version,
-    list_files, read_file, versions,
+    EntryKind, FileFacts, FileList, FilePath, FileText, FileView, FilesError, LineRange, MAX_VIEW_BYTES, OpenError,
+    PathError, Version, list_files, open_target, read_file, runs_when_opened, versions,
   },
   tasks::changes::run_worktree,
 };
@@ -126,12 +127,12 @@ fn files_text_copies_lines_and_finds_text_without_regard_to_case() {
   assert_eq!(&*text.lines()[0], "first Line");
   let range = LineRange::new(2, 9).expect("a range");
   assert_eq!(text.copied(range), "\tsecond line\nthird");
-  let found = text.find("LINE");
+  let found = text.find("LINE", false);
   assert_eq!(found.len(), 2);
   assert_eq!((found[0].line, found[0].start, found[0].end), (0, 6, 10));
   // The tab shows as four spaces, so the match starts after them.
   assert_eq!((found[1].line, found[1].start), (1, 11));
-  assert!(text.find("").is_empty());
+  assert!(text.find("", false).is_empty());
   assert!(FileText::parse(b"").lines().is_empty());
 }
 
@@ -195,7 +196,7 @@ fn files_name_search_puts_the_file_name_before_the_path() {
     ]
     .map(String::from),
   );
-  let found: Vec<String> = list.search("main", 10).iter().map(ToString::to_string).collect();
+  let found: Vec<String> = list.search("main", 10).paths.iter().map(ToString::to_string).collect();
   assert_eq!(
     found,
     [
@@ -205,10 +206,11 @@ fn files_name_search_puts_the_file_name_before_the_path() {
       "src/domain/mod.rs"
     ]
   );
-  let found: Vec<String> = list.search("SDM", 10).iter().map(ToString::to_string).collect();
+  let found: Vec<String> = list.search("SDM", 10).paths.iter().map(ToString::to_string).collect();
   assert_eq!(found, ["src/domain/mod.rs"]);
-  assert!(list.search("   ", 10).is_empty());
-  assert_eq!(list.search("s", 2).len(), 2);
+  assert!(list.search("   ", 10).paths.is_empty());
+  let some = list.search("s", 2);
+  assert_eq!((some.paths.len(), some.total), (2, 4));
 }
 
 #[test]
@@ -337,6 +339,9 @@ fn files_a_commit_and_the_base_branch_read_what_git_holds() {
   );
 }
 
+/// A version as the switch lists it: its branch, its commit and what the file is there.
+type Listed = (Version, Option<String>, Option<String>, Option<FileFacts>);
+
 #[test]
 fn files_a_runs_worktree_is_a_version_while_it_exists() {
   let (dir, first) = repository();
@@ -363,35 +368,69 @@ fn files_a_runs_worktree_is_a_version_while_it_exists() {
     Some(&path("README.md")),
   )
   .expect("versions");
-  let listed: Vec<(Version, Option<String>, Option<bool>)> = choices
+  let readme = Some(FileFacts::Text { lines: 1, size: 9 });
+  assert_eq!(choices.run, None, "the fixture has no project database to name the run");
+  let listed: Vec<Listed> = choices
+    .choices
     .iter()
     .map(|choice| {
       (
         choice.version.clone(),
         choice.branch.as_ref().map(ToString::to_string),
-        choice.has_file,
+        choice.commit.as_ref().map(ToString::to_string),
+        choice.file,
       )
     })
     .collect();
   assert_eq!(
     listed,
     [
-      (Version::Checkout, None, Some(true)),
-      (in_run.clone(), None, Some(true)),
-      (Version::Base, Some("main".to_owned()), Some(true)),
-      (at_first, None, Some(true)),
+      (Version::Checkout, Some("main".to_owned()), None, readme),
+      (in_run.clone(), None, None, readme),
+      (Version::Base, Some("main".to_owned()), Some(first.clone()), readme),
+      (at_first, None, Some(first), readme),
     ]
   );
+  let choices = versions(
+    programs.runner(),
+    repo,
+    (&Version::Checkout, None),
+    Some(&path("gone.md")),
+  )
+  .expect("versions");
+  assert_eq!(choices.choices[0].file, Some(FileFacts::Absent));
   git(repo, &["worktree", "remove", "--force", &shown]);
   assert_eq!(
     read(repo, &in_run, "README.md"),
     Err(FilesError::VersionGone(in_run.clone()))
   );
   let choices = versions(programs.runner(), repo, (&Version::Checkout, Some(run)), None).expect("versions");
-  let listed: Vec<&Version> = choices.iter().map(|choice| &choice.version).collect();
+  let listed: Vec<&Version> = choices.choices.iter().map(|choice| &choice.version).collect();
   assert_eq!(listed, [&Version::Checkout, &Version::Base]);
   assert_eq!(
     FilesError::VersionGone(in_run).message().key,
     "files.failure.worktreeGone"
   );
+}
+
+#[test]
+fn files_open_in_editor_opens_only_a_file_on_disk_the_system_shows() {
+  let (dir, first) = repository();
+  let repo = dir.path();
+  let programs = runner();
+  let main = path("src/main.rs");
+  let opened = open_target(programs.runner(), repo, &Version::Checkout, &main).expect("main.rs opens");
+  assert!(opened.ends_with(Path::new("src").join("main.rs")));
+  let at_first = Version::Revision(Revision::new(&first).expect("a commit"));
+  assert_eq!(
+    open_target(programs.runner(), repo, &at_first, &main),
+    Err(OpenError::NotOnDisk)
+  );
+  fs::write(repo.join("build.BAT"), "echo hi\r\n").expect("a script");
+  assert_eq!(
+    open_target(programs.runner(), repo, &Version::Checkout, &path("build.BAT")),
+    Err(OpenError::WouldRun(path("build.BAT")))
+  );
+  assert!(runs_when_opened(Path::new("tools/setup.ps1")));
+  assert!(runs_when_opened(Path::new("app.exe")));
 }

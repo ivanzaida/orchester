@@ -97,13 +97,13 @@ impl FileList {
     }
   }
 
-  /// At most `limit` files whose path holds `query`'s characters in order, ignoring case; best first: the
-  /// file's name is the query, starts with it, holds it; then the path holds it; then the characters in
-  /// order. Shorter paths first within each.
-  pub fn search(&self, query: &str, limit: usize) -> Vec<Arc<str>> {
+  /// The files whose path holds `query`'s characters in order, ignoring case, at most `limit` of them; best
+  /// first: the file's name is the query, starts with it, holds it; then the path holds it; then the
+  /// characters in order. Shorter paths first within each.
+  pub fn search(&self, query: &str, limit: usize) -> NameMatches {
     let query = query.trim().to_lowercase();
     if query.is_empty() {
-      return Vec::new();
+      return NameMatches::default();
     }
     let mut found: Vec<(u8, &Arc<str>)> = self
       .paths
@@ -111,8 +111,18 @@ impl FileList {
       .filter_map(|path| rank(path, &query).map(|rank| (rank, path)))
       .collect();
     found.sort_by(|(a_rank, a), (b_rank, b)| a_rank.cmp(b_rank).then(a.len().cmp(&b.len())).then(a.cmp(b)));
-    found.into_iter().take(limit).map(|(_, path)| path.clone()).collect()
+    NameMatches {
+      total: found.len(),
+      paths: found.into_iter().take(limit).map(|(_, path)| path.clone()).collect(),
+    }
   }
+}
+
+/// What a file-name search found: the best paths and how many matched in all.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct NameMatches {
+  pub paths: Vec<Arc<str>>,
+  pub total: usize,
 }
 
 /// How well `path` answers the lowercase `query`, lower is better; `None` when it does not.

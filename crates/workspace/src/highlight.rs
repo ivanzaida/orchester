@@ -72,6 +72,12 @@ pub fn highlight_lines<S: AsRef<str>>(path: &str, lines: &[S]) -> Option<Vec<Lin
   Some(lines.iter().map(|line| side.tokens(syntaxes, line.as_ref())).collect())
 }
 
+/// The name of the language whose grammar reads the file at `path` ("Rust"); `None` when no bundled
+/// grammar knows it.
+pub fn language(path: &str) -> Option<&'static str> {
+  syntax_for(syntaxes(), path).map(|syntax| syntax.name.as_str())
+}
+
 fn syntaxes() -> &'static SyntaxSet {
   static SYNTAXES: OnceLock<SyntaxSet> = OnceLock::new();
   SYNTAXES.get_or_init(SyntaxSet::load_defaults_nonewlines)

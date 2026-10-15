@@ -611,7 +611,8 @@
       "folder": "{{path}} is a folder; choose a file in the tree.",
       "unreadable": "{{path}} cannot be read.",
       "gitMissing": "git was not found. Install git or add it to the PATH, then try again.",
-      "git": "git could not read this version of the files."
+      "git": "git could not read this version of the files.",
+      "store": "The project's database cannot be read, so the run this page was opened from cannot be named."
     }
   },
   "pullRequests": {

@@ -6,27 +6,28 @@
 //! the file system and git; the UI calls it off the UI thread.
 
 mod list;
+mod open;
 mod path;
 mod read;
 mod source;
 mod text;
 mod version;
+mod versions;
 
 use std::{collections::HashSet, io, path::Path};
 
-use orchester_core::{command::CommandRunner, id::RunId, run::BranchName};
+use orchester_core::command::CommandRunner;
 use thiserror::Error;
 
+use self::source::{Source, git_output, source};
 pub use self::{
-  list::{EntryKind, FileList, TreeRow},
+  list::{EntryKind, FileList, NameMatches, TreeRow},
+  open::{OpenError, open_target, runs_when_opened},
   path::{FilePath, PathError, is_hidden},
   read::{FileView, MAX_VIEW_BYTES, read_file},
   text::{FileText, LineRange, LineRangeError, MAX_MATCHES, TextMatch},
   version::{Version, VersionParseError},
-};
-use self::{
-  read::resolve_in_folder,
-  source::{Source, git_output, git_succeeds, source},
+  versions::{FileFacts, RunFacts, VersionChoice, Versions, versions},
 };
 use crate::messages::Message;
 
@@ -47,6 +48,8 @@ pub enum FilesError {
   GitMissing,
   #[error("git failed: {0}")]
   Git(String),
+  #[error("the project's database cannot be read: {0}")]
+  Store(String),
 }
 
 impl FilesError {
@@ -64,6 +67,7 @@ impl FilesError {
       Self::Unreadable { path, .. } => Message::new("files.failure.unreadable").with("path", path.to_string()),
       Self::GitMissing => Message::new("files.failure.gitMissing"),
       Self::Git(_) => Message::new("files.failure.git"),
+      Self::Store(_) => Message::new("files.failure.store"),
     }
   }
 }
@@ -107,61 +111,5 @@ pub fn list_files(runner: &dyn CommandRunner, repo_root: &Path, version: &Versio
       &repo,
       &["ls-tree", "-r", "-z", "--name-only", &commit],
     )?)),
-  }
-}
-
-/// One version a file can be shown at, and whether the file is there.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VersionChoice {
-  pub version: Version,
-  /// The base branch's name, for [`Version::Base`].
-  pub branch: Option<BranchName>,
-  /// Whether the file is in this version; `None` without a file.
-  pub has_file: Option<bool>,
-}
-
-/// The versions that exist for the page: the checkout, the worktree of `run` while it exists, the base
-/// branch while the checkout has a branch, and `asked` when it is a commit that exists.
-pub fn versions(
-  runner: &dyn CommandRunner,
-  repo_root: &Path,
-  (asked, run): (&Version, Option<RunId>),
-  path: Option<&FilePath>,
-) -> Result<Vec<VersionChoice>, FilesError> {
-  let mut wanted = vec![Version::Checkout];
-  wanted.extend(run.map(Version::Run));
-  wanted.push(Version::Base);
-  if let Version::Revision(_) = asked {
-    wanted.push(asked.clone());
-  }
-  let mut choices = Vec::new();
-  for version in wanted {
-    let found = match source(runner, repo_root, &version) {
-      Ok(found) => found,
-      Err(FilesError::VersionGone(_)) => continue,
-      Err(error) => return Err(error),
-    };
-    let branch = match &found {
-      Source::Commit { branch, .. } => branch.clone(),
-      Source::Folder(_) => None,
-    };
-    let has_file = path.map(|path| has_file(runner, &found, path)).transpose()?;
-    choices.push(VersionChoice {
-      version,
-      branch,
-      has_file,
-    });
-  }
-  Ok(choices)
-}
-
-/// Whether `found` holds the file `path`.
-fn has_file(runner: &dyn CommandRunner, found: &Source, path: &FilePath) -> Result<bool, FilesError> {
-  match found {
-    Source::Folder(folder) => Ok(resolve_in_folder(folder, path).is_ok_and(|resolved| resolved.is_file())),
-    Source::Commit { repo, commit, .. } => {
-      let object = format!("{commit}:{path}");
-      git_succeeds(runner, repo, &["cat-file", "-e", &object])
-    }
   }
 }
