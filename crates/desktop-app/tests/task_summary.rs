@@ -26,7 +26,11 @@ use orchester_app::{
   theme::{self, Mode, TaskSpacing, TaskText},
   ui::icon::Icon,
 };
-use orchester_core::{id::ProjectId, store::TaskStore, time::Timestamp};
+use orchester_core::{
+  id::ProjectId,
+  store::{RunStore, TaskStore},
+  time::Timestamp,
+};
 use orchester_store::ProjectDb;
 use support::{Data, Window};
 use tempfile::TempDir;
@@ -497,7 +501,9 @@ fn summary_run_again_confirms_in_place_and_starts_the_next_run() {
 fn summary_run_again_of_a_task_changed_since_its_confirmation_showed_it_starts_nothing() {
   let mut page = Page::live();
   confirming_run_again(&mut page);
-  // Another window edits the task while the confirmation shows it.
+  // Another window edits the task while the confirmation shows it. The headless window delivers what its futures
+  // read only in `tick_futures`, which nothing calls from here to the press: the confirmation sends the revision
+  // it read before the edit, whatever the runner reports meanwhile.
   let mut db = ProjectDb::open(&page.window.data.dir.path().join("repo-live")).expect("the project");
   let mut task = db
     .tasks()
@@ -517,8 +523,7 @@ fn summary_run_again_of_a_task_changed_since_its_confirmation_showed_it_starts_n
         .any(|text| text.starts_with("The task was changed since you opened it"))
     })
   });
-  page.click("task-tab-summary");
-  assert_eq!(page.text("task-runs-head"), "Runs of this task 1", "nothing started");
+  assert_eq!(db.runs_of_task(task.id()).expect("runs").len(), 1, "nothing started");
   let services = page.window.launch.services().expect("the session started").clone();
   services.runners.terminate();
 }
