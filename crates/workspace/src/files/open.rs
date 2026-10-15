@@ -130,7 +130,11 @@ pub fn open_target(
   };
   let unreadable = |error: std::io::Error| match error.kind() {
     std::io::ErrorKind::NotFound => OpenError::from(FilesError::Missing(path.clone())),
-    kind => FilesError::Unreadable { path: path.clone(), kind }.into(),
+    kind => FilesError::Unreadable {
+      path: path.clone(),
+      kind,
+    }
+    .into(),
   };
   let link = fs::symlink_metadata(folder.join(path.as_str()))
     .map_err(unreadable)?

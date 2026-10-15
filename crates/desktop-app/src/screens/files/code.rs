@@ -179,7 +179,23 @@ impl PartialEq for CodeProps {
 impl DevtoolsInspectable for CodeProps {}
 
 /// What the search found, for the text and query it looked in and for.
-type FoundFor = ((usize, Option<(String, bool)>), Arc<Vec<TextMatch>>);
+struct FoundFor {
+  text: Arc<FileText>,
+  query: Option<(String, bool)>,
+  found: Arc<Vec<TextMatch>>,
+}
+
+/// The current place after the search ran again: the first for a new query, and for the same query in a text
+/// read again the place the current one was at, so following changes does not move the file.
+fn next_place(before: &FoundFor, query: &Option<(String, bool)>, found: &[TextMatch], at: usize) -> usize {
+  if before.query != *query {
+    return 0;
+  }
+  let current = before.found.get(at.min(before.found.len().saturating_sub(1)));
+  current
+    .and_then(|place| TextMatch::same_place(found, *place))
+    .unwrap_or(0)
+}
 /// The lines, for what they were made of.
 type LinesFor = (
   (usize, usize, Option<LineRange>, usize, Option<usize>),
@@ -279,21 +295,28 @@ impl Component for CodePane {
 impl CodePane {
   /// The places the search found, worked out once per text and query; a new query starts at its first.
   fn found(&self, props: &CodeProps) -> Arc<Vec<TextMatch>> {
-    let key = (Arc::as_ptr(&props.text) as usize, props.find.looking_for());
+    let query = props.find.looking_for();
     let mut kept = self.found.lock();
-    if let Some((made_for, found)) = kept.as_ref()
-      && *made_for == key
+    if let Some(before) = kept.as_ref()
+      && Arc::ptr_eq(&before.text, &props.text)
+      && before.query == query
     {
-      return found.clone();
+      return before.found.clone();
     }
-    let found = key
-      .1
+    let found = query
       .as_ref()
       .map_or_else(|| Arc::new(Vec::new()), |query| FindState::found(&props.text, query));
-    if kept.is_some() {
-      props.find.at.set(0);
+    if let Some(before) = kept.as_ref() {
+      props
+        .find
+        .at
+        .set(next_place(before, &query, &found, props.find.at.get_untracked()));
     }
-    *kept = Some((key, found.clone()));
+    *kept = Some(FoundFor {
+      text: props.text.clone(),
+      query,
+      found: found.clone(),
+    });
     found
   }
 

@@ -112,8 +112,17 @@ fn every_link() -> Vec<(Link, Route)> {
 fn file_links(project: ProjectId) -> Vec<(Link, Route)> {
   let commit = Revision::new("4d2b8e0c1f2a3b4c5d6e7f8091a2b3c4d5e6f708").expect("a commit");
   let mut links = Vec::new();
-  for at in [Version::Checkout, Version::Base, Version::Run(id()), Version::Revision(commit)] {
-    for path in ["crates/workspace/src/plan_limits.rs", "docs/a b & c#1.md", "notes/слово.md"] {
+  for at in [
+    Version::Checkout,
+    Version::Base,
+    Version::Run(id()),
+    Version::Revision(commit),
+  ] {
+    for path in [
+      "crates/workspace/src/plan_limits.rs",
+      "docs/a b & c#1.md",
+      "notes/слово.md",
+    ] {
       for line in [None, LineRange::new(441, 442)] {
         let file = FilePath::new(path).expect("a project path");
         let link = Link::File {

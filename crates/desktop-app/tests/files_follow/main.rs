@@ -119,6 +119,17 @@ impl Page {
     self.window.pass();
   }
 
+  /// Types `text` key by key into the focused field, as a person does.
+  fn type_keys(&mut self, text: &str) {
+    for key in text.chars() {
+      self
+        .window
+        .tree
+        .key_down(key.to_string(), String::new(), key.is_uppercase(), false, false);
+      self.window.pass();
+    }
+  }
+
   /// Lets the window deliver what its reads finish for a while.
   fn settle(&mut self) {
     for _ in 0..40 {
@@ -220,4 +231,36 @@ fn files_do_not_follow_a_run_whose_agent_waits_for_the_person() {
   page.run_changed();
   page.settle();
   assert!(page.meta().contains("10 lines"), "not read again while no agent works");
+}
+
+#[test]
+fn files_keep_the_current_place_found_when_the_file_is_read_again() {
+  let mut page = Page::open();
+  let run = page.working_run();
+  let worktree = page.repo.join(WORKTREES_DIR).join(run.to_string());
+  fs::write(worktree.join("follow.md"), lines(120)).expect("a file in the worktree");
+  page.open_file("follow.md", Version::Run(run), None);
+  page.window.until("its lines", |window| {
+    window.text("files-meta-text").contains("120 lines")
+  });
+  page.window.press("files-find-open");
+  page.type_keys("line");
+  page.window.until("the places found", |window| {
+    window.text("files-find-field-box").contains("1 of 120")
+  });
+  for _ in 0..2 {
+    page.window.press("files-find-next");
+  }
+  assert!(page.window.text("files-find-field-box").contains("3 of 120"));
+
+  fs::write(worktree.join("follow.md"), lines(125)).expect("the agent's edit");
+  page.run_changed();
+  page.window.until("the file read again", |window| {
+    window.text("files-find-field-box").contains("of 125")
+  });
+  assert!(
+    page.window.text("files-find-field-box").contains("3 of 125"),
+    "the current place stays: {}",
+    page.window.text("files-find-field-box")
+  );
 }

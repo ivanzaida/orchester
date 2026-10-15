@@ -22,22 +22,55 @@ fn facts(name: &str) -> OpenFacts<'_> {
 #[test]
 fn files_open_with_lets_only_text_and_code_open() {
   for platform in [Platform::Windows, Platform::MacOs] {
-    for name in ["main.rs", "README.md", "Cargo.toml", "config.YAML", "data.json", "notes.txt", "Dockerfile", ".env"] {
-      assert!(open_with(platform, &facts(name)).is_ok(), "{name} opens on {platform:?}");
+    for name in [
+      "main.rs",
+      "README.md",
+      "Cargo.toml",
+      "config.YAML",
+      "data.json",
+      "notes.txt",
+      "Dockerfile",
+      ".env",
+    ] {
+      assert!(
+        open_with(platform, &facts(name)).is_ok(),
+        "{name} opens on {platform:?}"
+      );
     }
-    for name in ["app.exe", "logo.png", "setup.msi", "link.lnk", "page.url", "archive.zip", "tool.jar", "x.hta"] {
-      assert_eq!(open_with(platform, &facts(name)), Err(Refusal::NotText), "{name} on {platform:?}");
+    for name in [
+      "app.exe",
+      "logo.png",
+      "setup.msi",
+      "link.lnk",
+      "page.url",
+      "archive.zip",
+      "tool.jar",
+      "x.hta",
+    ] {
+      assert_eq!(
+        open_with(platform, &facts(name)),
+        Err(Refusal::NotText),
+        "{name} on {platform:?}"
+      );
     }
     let binary = OpenFacts {
       text: false,
       ..facts("blob")
     };
-    assert_eq!(open_with(platform, &binary), Err(Refusal::NotText), "a file without extension that is not text");
+    assert_eq!(
+      open_with(platform, &binary),
+      Err(Refusal::NotText),
+      "a file without extension that is not text"
+    );
     let lying = OpenFacts {
       text: false,
       ..facts("image.rs")
     };
-    assert_eq!(open_with(platform, &lying), Err(Refusal::NotText), "a text extension on binary content");
+    assert_eq!(
+      open_with(platform, &lying),
+      Err(Refusal::NotText),
+      "a text extension on binary content"
+    );
     let link = OpenFacts {
       link: true,
       ..facts("main.rs")
@@ -55,9 +88,24 @@ fn files_open_with_opens_text_in_the_text_editor_on_macos_and_with_the_default_p
     ..facts("build.sh")
   };
   assert_eq!(open_with(Platform::MacOs, &executable), Err(Refusal::Executable));
-  assert_eq!(open_with(Platform::Windows, &facts("main.rs")), Ok(OpenWith::DefaultProgram));
-  for name in ["run.py", "app.js", "build.sh", "make.BAT", "setup.ps1", "tool.pl", "gem.rb"] {
-    assert_eq!(open_with(Platform::Windows, &facts(name)), Err(Refusal::WouldRun), "{name}");
+  assert_eq!(
+    open_with(Platform::Windows, &facts("main.rs")),
+    Ok(OpenWith::DefaultProgram)
+  );
+  for name in [
+    "run.py",
+    "app.js",
+    "build.sh",
+    "make.BAT",
+    "setup.ps1",
+    "tool.pl",
+    "gem.rb",
+  ] {
+    assert_eq!(
+      open_with(Platform::Windows, &facts(name)),
+      Err(Refusal::WouldRun),
+      "{name}"
+    );
   }
   assert_eq!(
     open_with(Platform::Windows, &executable),
@@ -71,7 +119,12 @@ fn files_open_target_opens_a_text_file_on_disk_and_refuses_the_rest() {
   let dir = tempfile::tempdir().expect("a temporary folder");
   let repo = dir.path();
   let git = |args: &[&str]| {
-    let status = process::Command::new("git").arg("-C").arg(repo).args(args).output().expect("git");
+    let status = process::Command::new("git")
+      .arg("-C")
+      .arg(repo)
+      .args(args)
+      .output()
+      .expect("git");
     assert!(status.status.success(), "git {args:?}");
     String::from_utf8_lossy(&status.stdout).trim().to_owned()
   };
@@ -97,10 +150,16 @@ fn files_open_target_opens_a_text_file_on_disk_and_refuses_the_rest() {
     OpenWith::DefaultProgram
   };
   assert_eq!(with, expected);
-  assert!(open("LICENSE", &Version::Checkout).is_ok(), "a file without extension that holds text");
+  assert!(
+    open("LICENSE", &Version::Checkout).is_ok(),
+    "a file without extension that holds text"
+  );
   assert_eq!(
     open("logo.png", &Version::Checkout),
-    Err(OpenError::Refused(FilePath::new("logo.png").expect("a path"), Refusal::NotText))
+    Err(OpenError::Refused(
+      FilePath::new("logo.png").expect("a path"),
+      Refusal::NotText
+    ))
   );
   assert_eq!(open("main.rs", &Version::Revision(head)), Err(OpenError::NotOnDisk));
   #[cfg(unix)]

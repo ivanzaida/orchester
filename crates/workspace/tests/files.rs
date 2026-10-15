@@ -9,7 +9,7 @@ use orchester_exec::programs::Programs;
 use orchester_workspace::{
   files::{
     EntryKind, FileFacts, FileList, FilePath, FileText, FileView, FilesError, LineRange, MAX_VIEW_BYTES, PathError,
-    Version, list_files, read_file, versions,
+    TextMatch, Version, list_files, read_file, versions,
   },
   tasks::changes::run_worktree,
 };
@@ -132,6 +132,24 @@ fn files_text_copies_lines_and_finds_text_without_regard_to_case() {
   // The tab shows as four spaces, so the match starts after them.
   assert_eq!((found[1].line, found[1].start), (1, 11));
   assert!(text.find("", false).is_empty());
+  let place = |line, start| TextMatch {
+    line,
+    start,
+    end: start + 1,
+  };
+  let found = [place(1, 0), place(4, 2), place(9, 0)];
+  assert_eq!(TextMatch::same_place(&found, place(4, 2)), Some(1), "the same place");
+  assert_eq!(
+    TextMatch::same_place(&found, place(5, 0)),
+    Some(2),
+    "the next place after it"
+  );
+  assert_eq!(
+    TextMatch::same_place(&found, place(12, 0)),
+    Some(2),
+    "the last when none is after it"
+  );
+  assert_eq!(TextMatch::same_place(&[], place(1, 0)), None);
   let cased = text.find("Line", true);
   assert_eq!(cased.len(), 1, "only the line that has it in its case");
   assert_eq!((cased[0].line, cased[0].start), (0, 6));

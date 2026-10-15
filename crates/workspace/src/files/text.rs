@@ -107,6 +107,15 @@ pub struct TextMatch {
   pub end: usize,
 }
 
+impl TextMatch {
+  /// Where `place`, found before the text changed, is among `found` now: the first place at or after it, or the
+  /// last one when none is; `None` when nothing is found. The search's current place stays where it was.
+  pub fn same_place(found: &[Self], place: Self) -> Option<usize> {
+    let after = found.partition_point(|candidate| (candidate.line, candidate.start) < (place.line, place.start));
+    (!found.is_empty()).then(|| after.min(found.len() - 1))
+  }
+}
+
 /// Lines `first..=last`, counted from 1, as the route's `line=<a>-<b>` (or `line=<a>`) names them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct LineRange {
