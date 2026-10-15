@@ -124,15 +124,110 @@ const SHAPES = {
     <line key="c" x1="6" x2="6.01" y1="6" y2="6" />,
     <line key="d" x1="6" x2="6.01" y1="18" y2="18" />,
   ],
+  "chevron-down": [<path key="a" d="m6 9 6 6 6-6" />],
+  "chevron-right": [<path key="a" d="m9 18 6-6-6-6" />],
+  clock: [<circle key="a" cx="12" cy="12" r="10" />, <path key="b" d="M12 6v6l4 2" />],
+  cloud: [<path key="a" d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />],
+  "cloud-off": [
+    <path key="a" d="M10.94 5.274A7 7 0 0 1 15.71 10h1.79a4.5 4.5 0 0 1 4.222 6.057" />,
+    <path key="b" d="M18.796 18.81A4.5 4.5 0 0 1 17.5 19H9A7 7 0 0 1 5.79 5.78" />,
+    <path key="c" d="m2 2 20 20" />,
+  ],
+  copy: [
+    <rect key="a" width="14" height="14" x="8" y="8" rx="2" ry="2" />,
+    <path key="b" d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />,
+  ],
+  "folder-plus": [
+    <path key="a" d="M12 10v6" />,
+    <path key="b" d="M9 13h6" />,
+    <path key="c" d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />,
+  ],
+  "git-branch": [
+    <path key="a" d="M15 6a9 9 0 0 0-9 9V3" />,
+    <circle key="b" cx="18" cy="6" r="3" />,
+    <circle key="c" cx="6" cy="18" r="3" />,
+  ],
+  laptop: [
+    <path key="a" d="M18 5a2 2 0 0 1 2 2v8.526a2 2 0 0 0 .212.897l1.068 2.127a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45l1.068-2.127A2 2 0 0 0 4 15.526V7a2 2 0 0 1 2-2z" />,
+    <path key="b" d="M20.054 15.987H3.946" />,
+  ],
+  link: [
+    <path key="a" d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />,
+    <path key="b" d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />,
+  ],
+  menu: [<path key="a" d="M4 5h16" />, <path key="b" d="M4 12h16" />, <path key="c" d="M4 19h16" />],
+  plus: [<path key="a" d="M5 12h14" />, <path key="b" d="M12 5v14" />],
+  search: [<path key="a" d="m21 21-4.34-4.34" />, <circle key="b" cx="11" cy="11" r="8" />],
+  shield: [
+    <path key="a" d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />,
+  ],
+  "shield-alert": [
+    <path key="a" d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />,
+    <path key="b" d="M12 8v4" />,
+    <path key="c" d="M12 16h.01" />,
+  ],
+  "shield-question": [
+    <path key="a" d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />,
+    <path key="b" d="M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3" />,
+    <path key="c" d="M12 17h.01" />,
+  ],
+  "trash-2": [
+    <path key="a" d="M10 11v6" />,
+    <path key="b" d="M14 11v6" />,
+    <path key="c" d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />,
+    <path key="d" d="M3 6h18" />,
+    <path key="e" d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />,
+  ],
+  "triangle-alert": [
+    <path key="a" d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />,
+    <path key="b" d="M12 9v4" />,
+    <path key="c" d="M12 17h.01" />,
+  ],
+  unlink: [
+    <path key="a" d="m18.84 12.25 1.72-1.71h-.02a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71" />,
+    <path key="b" d="m5.17 11.75-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71" />,
+    <line key="c" x1="8" x2="8" y1="2" y2="5" />,
+    <line key="d" x1="2" x2="5" y1="8" y2="8" />,
+    <line key="e" x1="16" x2="16" y1="19" y2="22" />,
+    <line key="f" x1="19" x2="22" y1="16" y2="16" />,
+  ],
+  "user-plus": [
+    <path key="a" d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />,
+    <circle key="b" cx="9" cy="7" r="4" />,
+    <line key="c" x1="19" x2="19" y1="8" y2="14" />,
+    <line key="d" x1="22" x2="16" y1="11" y2="11" />,
+  ],
+  "user-x": [
+    <path key="a" d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />,
+    <circle key="b" cx="9" cy="7" r="4" />,
+    <line key="c" x1="17" x2="22" y1="8" y2="13" />,
+    <line key="d" x1="22" x2="17" y1="8" y2="13" />,
+  ],
+  users: [
+    <path key="a" d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />,
+    <path key="b" d="M16 3.128a4 4 0 0 1 0 7.744" />,
+    <path key="c" d="M22 21v-2a4 4 0 0 0-3-3.87" />,
+    <circle key="d" cx="9" cy="7" r="4" />,
+  ],
+  "wifi-off": [
+    <path key="a" d="M12 20h.01" />,
+    <path key="b" d="M8.5 16.429a5 5 0 0 1 7 0" />,
+    <path key="c" d="M5 12.859a10 10 0 0 1 5.17-2.69" />,
+    <path key="d" d="M19 12.859a10 10 0 0 0-2.007-1.523" />,
+    <path key="e" d="M2 8.82a15 15 0 0 1 4.177-2.643" />,
+    <path key="f" d="M22 8.82a15 15 0 0 0-11.288-3.764" />,
+    <path key="g" d="m2 2 20 20" />,
+  ],
+  x: [<path key="a" d="M18 6 6 18" />, <path key="b" d="m6 6 12 12" />],
 } satisfies Record<string, JSX.Element[]>;
 
 export type IconName = keyof typeof SHAPES;
 
 /**
- * The design's icon sizes: 12 beside small print, 14 in buttons, 15 in a list row's glyph, 16 in fields and notices,
- * 18 in a status tile, 20 in an empty state.
+ * The design's icon sizes: 11 in a done step, 12 beside small print, 13 beside notes and in selects, 14 in buttons,
+ * 15 in a list row's glyph, 16 in fields and notices, 18 in a status tile, 20 in an empty state.
  */
-export type IconSize = "reason" | "button" | "glyph" | "field" | "tile" | "empty";
+export type IconSize = "step" | "reason" | "note" | "button" | "glyph" | "field" | "tile" | "empty";
 
 export function Icon({ name, size, spin = false }: { name: IconName; size: IconSize; spin?: boolean }) {
   const className = `${styles.icon} ${styles[size]}${spin ? ` ${styles.spin}` : ""}`;

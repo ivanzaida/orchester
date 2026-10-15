@@ -42,8 +42,14 @@ a.primary:hover {
   color: var(--color-text-secondary);
 }
 
+.danger {
+  background: var(--color-danger-muted);
+  color: var(--color-danger);
+}
+
 .secondary:hover:enabled,
 a.secondary:hover,
+.danger:hover:enabled,
 .ghost:hover:enabled,
 a.ghost:hover {
   background-image: linear-gradient(var(--color-hover), var(--color-hover));
