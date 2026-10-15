@@ -71,6 +71,11 @@ export function Fields({ children }: { children: ReactNode }) {
   return <div className={styles.fields}>{children}</div>;
 }
 
+/** A field and what is said about it as a whole, 6 apart, like a field's own lines (`CVRpO`). */
+export function Stack({ children }: { children: ReactNode }) {
+  return <div className={styles.stack}>{children}</div>;
+}
+
 /** The buttons and what is said about them, 10 apart (`FeF02`). */
 export function Actions({ children }: { children: ReactNode }) {
   return <div className={styles.actions}>{children}</div>;

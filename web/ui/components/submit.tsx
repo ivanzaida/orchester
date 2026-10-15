@@ -18,6 +18,8 @@ export function Submit(props: {
   small?: boolean;
   row?: boolean;
   describedBy?: string;
+  /** The id of the form it sends when it sits outside it, e.g. two forms' buttons stacked together. */
+  form?: string;
   /** For forms that start their action themselves (after checking the fields), where `useFormStatus` sees nothing. */
   pending?: boolean;
 }) {
@@ -29,6 +31,7 @@ export function Submit(props: {
       className={buttonClass(props.kind, { small: props.small ?? false, row: props.row ?? false, busy: pending })}
       disabled={pending || (props.unavailable ?? false)}
       aria-describedby={props.describedBy}
+      form={props.form}
     >
       <ButtonContent icon={pending ? "loader-circle" : props.icon} spin={pending}>
         {pending ? props.busyLabel : props.label}

@@ -128,3 +128,9 @@
 .form {
   display: contents;
 }
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-inline);
+}

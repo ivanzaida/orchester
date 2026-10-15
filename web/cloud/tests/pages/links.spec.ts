@@ -1,28 +1,70 @@
 import { expect, test } from "@playwright/test";
 
-import { apiRequests, EMAIL } from "./support";
+import { apiRequests, EMAIL, PASSWORD } from "./support";
 
 test.describe("confirmation link", () => {
-  test("opening it confirms nothing; the press does", async ({ page }) => {
+  test("opening it confirms nothing; the sign-up's password does (decision 65, Bdcjx)", async ({ page }) => {
     await page.goto("/confirm/confirm-ok");
     await expect(page.getByRole("heading", { name: "Confirm your email" })).toBeVisible();
     await expect(page.getByText(EMAIL)).toBeVisible();
-    const paths = (await apiRequests()).map((request) => request.path);
-    expect(paths.at(-1)).toBe("/api/v1/auth/links/inspect");
+    await expect(page.getByText("The password you chose when you created this account.")).toBeVisible();
+    expect((await apiRequests()).at(-1)?.path).toBe("/api/v1/auth/links/inspect");
+    await expect(page.getByRole("button", { name: "Send a new link" })).toHaveCount(0);
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
     await page.getByRole("button", { name: "Confirm email" }).click();
     await expect(page.getByRole("heading", { name: "Your email is confirmed" })).toBeVisible();
     await expect(page.getByText(EMAIL)).toBeVisible();
-    expect((await apiRequests()).at(-1)).toMatchObject({ path: "/api/v1/auth/confirm", body: { link_token: "confirm-ok" } });
+    expect((await apiRequests()).at(-1)).toMatchObject({
+      path: "/api/v1/auth/confirm",
+      body: { link_token: "confirm-ok", password: "<redacted>" },
+    });
     await page.getByRole("link", { name: "Sign in on the web" }).click();
     await expect(page).toHaveURL(/\/signin$/);
     // The address comes along in this tab's session storage, never in the URL.
     await expect(page.getByLabel("Email")).toHaveValue(EMAIL);
   });
 
-  test("works on a cloud that cannot say a link's address yet: no address, the press decides", async ({ page }) => {
+  test("a wrong answer never says which part was wrong, empties the field and offers a new link (CVRpO)", async ({ page }) => {
+    await page.goto("/confirm/confirm-ok");
+    const password = page.getByLabel("Password", { exact: true });
+    await password.fill("not the sign-up password");
+    await page.getByRole("button", { name: "Confirm email" }).click();
+    await expect(page.getByText("This link and password don't match. Check the password, or send a new link.")).toBeVisible();
+    await expect(password).toHaveValue("");
+    await expect(password).not.toHaveAttribute("aria-invalid", "true");
+    await expect(page.getByText("The password you chose when you created this account.")).toBeVisible();
+    await page.getByRole("button", { name: "Send a new link" }).click();
+    await expect(page).toHaveURL(/\/signup\/sent$/);
+    expect((await apiRequests()).at(-1)).toMatchObject({ path: "/api/v1/auth/confirm/resend", body: { email: EMAIL } });
+  });
+
+});
+
+test.describe("confirmation link failures", () => {
+  test("the merged cloud's 422 reads as the same one answer", async ({ page }) => {
+    await page.goto("/confirm/confirm-merged");
+    await page.getByLabel("Password", { exact: true }).fill("not the sign-up password");
+    await page.getByRole("button", { name: "Confirm email" }).click();
+    await expect(page.getByText("This link and password don't match. Check the password, or send a new link.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Send a new link" })).toBeVisible();
+  });
+
+  test("a link that saw too many wrong passwords says until when, and offers a new link", async ({ page }) => {
+    await page.goto("/confirm/confirm-limited");
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByRole("button", { name: "Confirm email" }).click();
+    await expect(page.getByText(/Too many wrong passwords for this link\. Try again in 60 min, at \d\d:\d\d, or send a new link\./)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Send a new link" })).toBeVisible();
+  });
+
+  test("works on a cloud that cannot say a link's address yet: no address, the password decides", async ({ page }) => {
     await page.goto("/confirm/confirm-unlisted");
     await expect(page.getByText("Confirm the email of your Orchester account.")).toBeVisible();
     await expect(page.getByText(EMAIL)).toHaveCount(0);
+    await page.getByLabel("Password", { exact: true }).fill("wrong one, twelve");
+    await page.getByRole("button", { name: "Confirm email" }).click();
+    await expect(page.getByRole("link", { name: "Send a new link" })).toHaveAttribute("href", "/signup");
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
     await page.getByRole("button", { name: "Confirm email" }).click();
     await expect(page.getByText("Your Orchester account is ready. Sign in with its email and password.")).toBeVisible();
   });

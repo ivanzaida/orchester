@@ -63,7 +63,9 @@
     "pageTitle": "Confirm your email",
     "title": "Confirm your email",
     "description": "Confirm that this is your address for Orchester:",
-    "notYou": "If you did not create an Orchester account, close this page. Nothing is confirmed until you press the button.",
+    "password": "Password",
+    "passwordHint": "The password you chose when you created this account.",
+    "notYou": "If you did not create an Orchester account, close this page. Without its password, nothing is confirmed.",
     "submit": "Confirm email",
     "submitting": "Confirming…",
     "confirmedTitle": "Your email is confirmed",
@@ -76,7 +78,9 @@
     "sending": "Sending…",
     "signIn": "Sign in",
     "descriptionNoAddress": "Confirm the email of your Orchester account.",
-    "confirmedDescriptionNoAddress": "Your Orchester account is ready. Sign in with its email and password."
+    "confirmedDescriptionNoAddress": "Your Orchester account is ready. Sign in with its email and password.",
+    "failed": "This link and password don't match. Check the password, or send a new link.",
+    "tooMany": "Too many wrong passwords for this link. Try again in {{minutes}} min, at {{time}}, or send a new link."
   },
   "signin": {
     "pageTitle": "Sign in",

@@ -4,8 +4,8 @@ import { useActionState, useEffect, useState } from "react";
 
 import { t } from "@/lib/i18n";
 import { ButtonLink } from "@orchester/ui/components/button";
-import { Actions, Address, Card, CardForm, Head, Small, Text, Top } from "@orchester/ui/components/card";
-import { ErrorLine, TextField } from "@/components/fields";
+import { Actions, Address, Card, CardForm, Head, Small, Stack, Text, Top } from "@orchester/ui/components/card";
+import { ErrorLine, PasswordField, TextField } from "@/components/fields";
 import { CsrfField, Hidden } from "@/components/hidden";
 import { rememberSignInEmail } from "@/components/sign-in-email";
 import { Submit } from "@orchester/ui/components/submit";
@@ -68,18 +68,36 @@ function Confirmed({ email }: { email: string | null }) {
   );
 }
 
-/** The confirmation landing (`/confirm/{token}`, the link the cloud emails): its three views. */
-export function ConfirmViews({ csrf, token, initial }: { csrf: string; token: string; initial: ConfirmState }) {
-  const [state, action] = useActionState(confirmAction, initial);
-  if (state.view === "confirmed") {
-    return <Confirmed email={state.email} />;
-  }
-  if (state.view === "expired") {
+type AskState = Extract<ConfirmState, { view: "confirm" }>;
+
+/**
+ * *Send a new link* after a failed try (`CVRpO`), to the address shown. Without the address (a cloud that cannot
+ * inspect links yet) it leads to sign-up, which sends a new link to an unconfirmed address.
+ */
+function SendNewLink({ email, sending }: { email: string | null; sending: boolean }) {
+  if (email === null) {
     return (
-      <ExpiredLink csrf={csrf} title={t("confirm.expiredTitle")} description={t("confirm.expiredDescription")}
-        send={resendForAction} sendLabel={t("confirm.send")} sendingLabel={t("confirm.sending")} />
+      <ButtonLink kind="secondary" icon="send" href="/signup">
+        {t("confirm.send")}
+      </ButtonLink>
     );
   }
+  return (
+    <Submit kind="secondary" icon="send" form="resend-form" label={t("confirm.send")} busyLabel={t("confirm.sending")}
+      pending={sending} />
+  );
+}
+
+/** The password asked (`Bdcjx`) and the one error state (`CVRpO`): the field is cleared and never marked red. */
+function Ask({ csrf, token, state, action, confirming }: {
+  csrf: string;
+  token: string;
+  state: AskState;
+  action: (form: FormData) => void;
+  confirming: boolean;
+}) {
+  const [resent, resend, sending] = useActionState<ResendState, FormData>(resendForAction, {});
+  const [password, setPassword] = useState("");
   return (
     <Card>
       <Top>
@@ -90,13 +108,44 @@ export function ConfirmViews({ csrf, token, initial }: { csrf: string; token: st
         />
         {state.email !== null && <Address email={state.email} />}
       </Top>
-      <Small>{t("confirm.notYou")}</Small>
-      <CardForm action={action}>
+      <CardForm id="confirm-form" action={action}>
         <CsrfField token={csrf} />
         <Hidden name="token" value={token} />
-        {state.error && <ErrorLine message={state.error} />}
-        <Submit kind="primary" icon="check" label={t("confirm.submit")} busyLabel={t("confirm.submitting")} />
+        <Stack>
+          <PasswordField name="password" label={t("confirm.password")} value={password} onChange={setPassword}
+            hint={t("confirm.passwordHint")} autoComplete="current-password" />
+          {state.error && <ErrorLine message={state.error} />}
+        </Stack>
       </CardForm>
+      {state.email !== null && (
+        <form id="resend-form" action={resend} hidden>
+          <CsrfField token={csrf} />
+          <Hidden name="email" value={state.email} />
+        </form>
+      )}
+      <Small>{t("confirm.notYou")}</Small>
+      <Actions>
+        <Submit kind="primary" icon="check" form="confirm-form" label={t("confirm.submit")}
+          busyLabel={t("confirm.submitting")} pending={confirming} />
+        {state.failed && <SendNewLink email={state.email} sending={sending} />}
+        {resent.error && <ErrorLine message={resent.error} />}
+      </Actions>
     </Card>
   );
+}
+
+/** The confirmation landing (`/confirm/{token}`, the link the cloud emails): its views. */
+export function ConfirmViews({ csrf, token, initial }: { csrf: string; token: string; initial: ConfirmState }) {
+  const [state, action, confirming] = useActionState(confirmAction, initial);
+  if (state.view === "confirmed") {
+    return <Confirmed email={state.email} />;
+  }
+  if (state.view === "expired") {
+    return (
+      <ExpiredLink csrf={csrf} title={t("confirm.expiredTitle")} description={t("confirm.expiredDescription")}
+        send={resendForAction} sendLabel={t("confirm.send")} sendingLabel={t("confirm.sending")} />
+    );
+  }
+  // A new answer remounts the form, which empties the password, as on every other page.
+  return <Ask key={state.answer} csrf={csrf} token={token} state={state} action={action} confirming={confirming} />;
 }

@@ -65,6 +65,11 @@
   outline: none;
 }
 
+/* Edge draws its own reveal button in a password field; the field has the design's eye instead. */
+.input::-ms-reveal {
+  display: none;
+}
+
 .input::placeholder {
   color: var(--color-text-muted);
 }

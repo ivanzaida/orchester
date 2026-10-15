@@ -54,6 +54,7 @@ Open `http://localhost:4100` (not `127.0.0.1`: the address must match `ORCHESTER
 | Any form with an address starting `slow` | Answers after 5 s (the busy buttons) |
 | *Resend* for `resend-limit@example.com` | `429` (the resend limit) |
 | `/confirm/confirm-ok`, `/reset/reset-ok` | A live link for `mira.koval@example.com` |
+| *Confirm email* with `correct horse battery` | Confirmed; any other password `401 confirm_failed` (decision 65) |
 | `/confirm/<anything else>`, `/reset/<anything else>` | Used or expired link |
 | `/confirm/inspect-down` | The cloud fails while the page loads |
 | `/confirm/confirm-unlisted`, `/reset/reset-unlisted` | A live link on a cloud without the inspect endpoint (C1a today): no address shown |

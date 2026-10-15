@@ -16,6 +16,7 @@ export type CloudErrorCode =
   | "not_found"
   | "unauthorized"
   | "invalid_credentials"
+  | "confirm_failed"
   | "email_unconfirmed"
   | "invalid_link"
   | "invalid"
@@ -44,7 +45,7 @@ export interface CallOptions {
 const TIMEOUT_MS = 10_000;
 const CODES = new Set<string>([
   "bad_request", "payload_too_large", "method_not_allowed", "request_timeout", "unsupported_media_type", "not_found",
-  "unauthorized", "invalid_credentials", "email_unconfirmed", "invalid_link", "invalid", "rate_limited",
+  "unauthorized", "invalid_credentials", "confirm_failed", "email_unconfirmed", "invalid_link", "invalid", "rate_limited",
   "keys_unavailable", "busy", "internal",
 ]);
 

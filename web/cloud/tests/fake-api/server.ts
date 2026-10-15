@@ -6,7 +6,9 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 
 import { FULL, routeSignedIn, signInAccount, type Answer } from "./accounts.ts";
 
-export { RIGHT_PASSWORD } from "./accounts.ts";
+import { RIGHT_PASSWORD } from "./accounts.ts";
+
+export { RIGHT_PASSWORD };
 export const ACCOUNT = { email: FULL, display_name: "Mira Koval" };
 
 interface Recorded {
@@ -55,7 +57,12 @@ function signIn(body: Record<string, unknown>): Answer {
   return signInAccount(email, body.password, body.device);
 }
 
-const LINKS: Record<string, string> = { "confirm-ok": "confirm", "reset-ok": "reset" };
+const LINKS: Record<string, string> = {
+  "confirm-ok": "confirm",
+  "confirm-merged": "confirm",
+  "confirm-limited": "confirm",
+  "reset-ok": "reset",
+};
 
 function inspect(body: Record<string, unknown>): Answer {
   const purpose = typeof body.link_token === "string" ? LINKS[body.link_token] : undefined;
@@ -67,6 +74,19 @@ function inspect(body: Record<string, unknown>): Answer {
     return refuse(404, "not_found");
   }
   return purpose === body.purpose ? { status: 200, body: { email: ACCOUNT.email } } : refuse(422, "invalid_link");
+}
+
+// Decision 65: the link and the sign-up's password together, one answer for any failure.
+function confirm(body: Record<string, unknown>): Answer {
+  if (body.link_token === "confirm-limited") {
+    return refuse(429, "rate_limited", 3600);
+  }
+  // The cloud as merged answers its failure as `422 invalid_link`; row 65 says `401 confirm_failed`.
+  if (body.link_token === "confirm-merged" && body.password !== RIGHT_PASSWORD) {
+    return refuse(422, "invalid_link");
+  }
+  const live = ["confirm-ok", "confirm-unlisted", "confirm-merged"].includes(String(body.link_token));
+  return live && body.password === RIGHT_PASSWORD ? { status: 204 } : refuse(401, "confirm_failed");
 }
 
 function finish(body: Record<string, unknown>, purpose: string): Answer {
@@ -94,7 +114,7 @@ function route(request: IncomingMessage, path: string, body: Record<string, unkn
     case "POST /api/v1/auth/links/inspect":
       return inspect(body);
     case "POST /api/v1/auth/confirm":
-      return finish(body, "confirm");
+      return confirm(body);
     case "POST /api/v1/auth/sessions":
       return signIn(body);
     case "POST /api/v1/auth/reset":

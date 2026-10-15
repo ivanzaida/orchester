@@ -19,7 +19,7 @@ export default async function ConfirmPage({ params }: { params: Promise<{ token:
       <ConfirmViews
         csrf={csrf}
         token={token}
-        initial={link.kind === "gone" ? { view: "expired" } : { view: "confirm", email: link.email }}
+        initial={link.kind === "gone" ? { view: "expired" } : { view: "confirm", email: link.email, answer: 0, failed: false }}
       />
     </Shell>
   );

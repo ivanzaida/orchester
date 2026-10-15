@@ -68,8 +68,13 @@ export function inspectLink(token: string, purpose: LinkPurpose, options: CallOp
   return call("POST", "/auth/links/inspect", { body, expected: 200, read: readEmail }, options);
 }
 
-export function confirmEmail(token: string, options: CallOptions): Promise<ApiResult<true>> {
-  return call("POST", "/auth/confirm", { body: { link_token: token }, expected: 204, read: nothing }, options);
+/**
+ * Confirms with the password chosen at sign-up (decision 65). Any failure, a wrong password or a link that is unknown,
+ * used or expired, is one `401 confirm_failed`.
+ */
+export function confirmEmail(token: string, password: string, options: CallOptions): Promise<ApiResult<true>> {
+  const body = { link_token: token, password };
+  return call("POST", "/auth/confirm", { body, expected: 204, read: nothing }, options);
 }
 
 export function signIn(

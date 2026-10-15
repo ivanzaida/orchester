@@ -60,7 +60,8 @@ describe("api client", () => {
       ok: false,
       error: { kind: "refused", status: 429, code: "rate_limited", retryAfter: 900 },
     });
-    expect(await confirmEmail("nope", {})).toEqual({ ok: false, error: { kind: "refused", status: 422, code: "invalid_link" } });
+    expect(await confirmEmail("confirm-ok", "wrong password!", {})).toEqual({ ok: false, error: { kind: "refused", status: 401, code: "confirm_failed" } });
+    expect(await confirmEmail("confirm-ok", RIGHT_PASSWORD, {})).toEqual({ ok: true, value: true });
     expect(await signUp({ email: "down@example.com", password: RIGHT_PASSWORD, displayName: "x" }, {})).toEqual({
       ok: false,
       error: { kind: "refused", status: 500, code: "internal" },
