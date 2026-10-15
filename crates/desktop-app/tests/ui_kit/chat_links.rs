@@ -1,57 +1,12 @@
-//! Links in what an agent writes in a chat (`ui::chat::links`): which ones the chat follows, and what the others
-//! read as once rendered. The words are the shipped English ones, `orchestrator.link.*`.
-
-use std::borrow::Cow;
+//! Links in what an agent writes in a chat (`ui::chat::links`): which ones the chat follows; and which lists of
+//! links a reply draws as labelled links (`ui::chat::labelled`).
 
 use lurq::markdown::{MarkdownBlock, MarkdownInline, parse_markdown};
 use orchester_app::{
   routes::Route,
-  ui::{
-    chat::links::{ChatLink, Shown, present},
-    markdown::plain::plain_text,
-  },
+  ui::chat::{labelled::labelled_links, links::ChatLink},
 };
 use orchester_core::id::ProjectId;
-
-fn words(shown: Shown<'_>) -> String {
-  match shown {
-    Shown::Web { link, host } => format!("{link} ({host})"),
-    Shown::Address { text, address } => format!("{text} ({address})"),
-  }
-}
-
-fn shown(source: &str) -> Cow<'_, str> {
-  present(source, &words)
-}
-
-/// The destinations of the links `markdown` renders.
-fn destinations(markdown: &str) -> Vec<String> {
-  fn inlines(found: &mut Vec<String>, all: &[MarkdownInline]) {
-    for inline in all {
-      match inline {
-        MarkdownInline::Link { destination, .. } => found.push(destination.clone()),
-        MarkdownInline::Emphasis(children) | MarkdownInline::Strong(children) => inlines(found, children),
-        _ => {}
-      }
-    }
-  }
-  fn blocks(found: &mut Vec<String>, all: &[MarkdownBlock]) {
-    for block in all {
-      match block {
-        MarkdownBlock::Paragraph(children) | MarkdownBlock::Heading { children, .. } => inlines(found, children),
-        MarkdownBlock::List { items, .. } => items.iter().for_each(|item| blocks(found, &item.blocks)),
-        MarkdownBlock::Table { rows, .. } => rows
-          .iter()
-          .flat_map(|row| &row.cells)
-          .for_each(|cell| inlines(found, cell)),
-        _ => {}
-      }
-    }
-  }
-  let mut found = Vec::new();
-  blocks(&mut found, &parse_markdown(markdown).blocks);
-  found
-}
 
 #[test]
 fn chat_links_name_a_place_in_the_app_a_web_page_or_nothing() {
@@ -88,160 +43,6 @@ fn chat_links_name_a_place_in_the_app_a_web_page_or_nothing() {
 }
 
 #[test]
-fn chat_links_keep_a_reply_without_links_or_with_places_in_the_app_as_written() {
-  let project = ProjectId::generate();
-  for source in [
-    "No links here.".to_owned(),
-    "A code span stays as written: `[KON-1](mailto:x)`.".to_owned(),
-    format!("See [KON-12](orchester:/project/{project}/tasks/KON-12/summary) and <orchester:/project/{project}>."),
-  ] {
-    assert!(
-      matches!(shown(&source), Cow::Borrowed(kept) if kept == source),
-      "{source} is shown as written"
-    );
-  }
-}
-
-#[test]
-fn chat_links_show_a_web_page_with_its_host() {
-  let source = "Opened [PR 42](https://github.com/acme/kontur/pull/42).";
-  let rendered = shown(source);
-  assert_eq!(plain_text(&rendered), "Opened PR 42 (github.com).");
-  assert_eq!(destinations(&rendered), ["https://github.com/acme/kontur/pull/42"]);
-  let tricked = shown("[github.com](https://github.com@evil.example/acme)");
-  assert_eq!(
-    plain_text(&tricked),
-    "github.com (evil.example)",
-    "the host is the one the browser goes to"
-  );
-}
-
-#[test]
-fn chat_links_show_what_they_do_not_follow_as_text_with_its_address() {
-  let project = ProjectId::generate();
-  let cases = [
-    (
-      format!("Look at [KON-99](orchester:/project/{project}/nowhere) now."),
-      format!("Look at KON-99 (orchester:/project/{project}/nowhere) now."),
-    ),
-    (
-      "[site](http://a.example/*b*_c_)".to_owned(),
-      "site (http://a.example/*b*_c_)".to_owned(),
-    ),
-    (
-      "[**KON-1**](mailto:a@b.example)".to_owned(),
-      "KON-1 (mailto:a@b.example)".to_owned(),
-    ),
-    ("[](javascript:alert(1))".to_owned(), "javascript:alert(1)".to_owned()),
-    ("<http://a.example>".to_owned(), "http://a.example".to_owned()),
-    (
-      "[x][1]\n\n[1]: file:///etc/passwd".to_owned(),
-      "x (file:///etc/passwd)".to_owned(),
-    ),
-  ];
-  for (source, reads) in cases {
-    let rendered = shown(&source);
-    assert_eq!(plain_text(&rendered), reads, "{source}");
-    assert!(
-      destinations(&rendered).is_empty(),
-      "{source} has no link left: {rendered}"
-    );
-  }
-}
-
-#[test]
-fn chat_links_keep_the_reply_around_them_as_it_reads() {
-  let project = ProjectId::generate();
-  let source = format!(
-    "| Task | Pull request |\n|---|---|\n| [KON-1](orchester:/project/{project}/tasks/KON-1/summary) | \
-     [#42](https://github.com/acme/kontur/pull/42) |\n| [KON-2](orchester:/project/{project}/no) | — |\n\n\
-     - *[done](mailto:x@y.example)* first\n"
-  );
-  let rendered = shown(&source);
-  assert_eq!(
-    plain_text(&rendered),
-    format!(
-      "Task Pull request \nKON-1 #42 (github.com) \nKON-2 (orchester:/project/{project}/no) — \ndone (mailto:x@y.example) first"
-    )
-  );
-  assert_eq!(
-    destinations(&rendered),
-    [
-      format!("orchester:/project/{project}/tasks/KON-1/summary"),
-      "https://github.com/acme/kontur/pull/42".to_owned()
-    ]
-  );
-}
-
-#[test]
-fn chat_links_never_leave_a_link_their_text_made_unchecked() {
-  let cases = [
-    // Brackets around a link made text pair into a new one: it is read again, and shows its host.
-    (
-      "[[a](mailto:x)](https://evil.example)",
-      "a (mailto:x) (evil.example)",
-      vec!["https://evil.example"],
-    ),
-    (
-      "[[](mailto:x)](https://evil.example)",
-      "mailto:x (evil.example)",
-      vec!["https://evil.example"],
-    ),
-    // What a link said never becomes a reference definition.
-    (
-      "[[b]: https://evil.example](mailto:x)\n\nsee [b]",
-      "[b]: https://evil.example (mailto:x)\nsee [b]",
-      vec![],
-    ),
-    // A link holding another is text: its words would read as the inner one while a press went to it.
-    (
-      "[<https://github.com>](https://evil.example/p)",
-      "https://github.com (https://evil.example/p)",
-      vec![],
-    ),
-    (
-      "[see <mailto:x@y.example>](https://github.com/acme)",
-      "see mailto:x@y.example (https://github.com/acme)",
-      vec![],
-    ),
-    // What a link said keeps no structure of its own.
-    ("[# head](mailto:x)", "# head (mailto:x)", vec![]),
-  ];
-  for (source, reads, links) in cases {
-    let rendered = shown(source);
-    assert_eq!(plain_text(&rendered), reads, "{source} → {rendered}");
-    assert_eq!(destinations(&rendered), links, "{source} → {rendered}");
-  }
-}
-
-#[test]
-fn chat_links_show_a_reply_as_text_when_its_wording_would_make_links() {
-  let source = "[PR 42](https://github.com/acme/kontur/pull/42) and [mail](mailto:x)";
-  let linking = |shown: Shown<'_>| match shown {
-    Shown::Web { link, host } => format!("{link} ({host}) [more](mailto:y)"),
-    Shown::Address { text, address } => format!("{text} ({address})"),
-  };
-  let rendered = present(source, &linking);
-  assert_eq!(
-    plain_text(&rendered),
-    source,
-    "a wording that adds a link: the source, as text"
-  );
-  assert!(destinations(&rendered).is_empty());
-  let endless = |shown: Shown<'_>| match shown {
-    Shown::Web { link, host } => format!("{link} ({host})"),
-    Shown::Address { text, address } => format!("[{text}](mailto:{address})"),
-  };
-  let rendered = present(source, &endless);
-  assert_eq!(
-    plain_text(&rendered),
-    source,
-    "a reply that never settles: the source, as text"
-  );
-  assert!(destinations(&rendered).is_empty());
-}
-
-#[test]
 fn chat_links_follow_only_places_in_a_project() {
   for path in [
     r"/add-project?folder=\\evil.example\share",
@@ -257,24 +58,85 @@ fn chat_links_follow_only_places_in_a_project() {
       "{path} is outside a project: the chat never opens it"
     );
   }
-  let rendered = shown(r"[open it](orchester:/add-project?folder=\\evil.example\share)");
-  assert_eq!(
-    plain_text(&rendered),
-    r"open it (orchester:/add-project?folder=\evil.example\share)",
-    "a Markdown destination reads `\\` as one backslash"
-  );
-  assert!(destinations(&rendered).is_empty());
+}
+
+/// The labels, link destinations and plain details of the first list in `source`, when it reads as labelled links.
+fn labelled(source: &str) -> Option<Vec<(String, String, String)>> {
+  let document = parse_markdown(source);
+  let items = document.blocks.iter().find_map(|block| match block {
+    MarkdownBlock::List { items, .. } => Some(items),
+    _ => None,
+  })?;
+  let rows = labelled_links(items)?;
+  Some(
+    rows
+      .into_iter()
+      .map(|row| {
+        let MarkdownInline::Link { destination, .. } = row.link else {
+          panic!("a row's link is a link");
+        };
+        let detail = row
+          .detail
+          .iter()
+          .map(|inline| match inline {
+            MarkdownInline::Text(text) => text.clone(),
+            other => format!("{other:?}"),
+          })
+          .collect();
+        (row.label, destination.clone(), detail)
+      })
+      .collect(),
+  )
 }
 
 #[test]
-fn chat_links_show_no_bidirectional_controls() {
-  let source = "[\u{202E}moc.buhtig](https://evil.example) and [\u{2066}KON-1\u{2069}](mailto:x\u{202D}y)";
-  let rendered = shown(source);
-  assert!(
-    !rendered.contains([
-      '\u{202A}', '\u{202B}', '\u{202C}', '\u{202D}', '\u{202E}', '\u{2066}', '\u{2067}', '\u{2068}', '\u{2069}'
-    ]),
-    "{rendered:?}"
+fn chat_links_read_a_list_of_labelled_links_as_one() {
+  let rows = labelled(
+    "- Task: [KON-1 · Delivery log](orchester:/project/p/tasks/KON-1) — ready for review\n\
+     - Run: [Run #3](orchester:/project/p/runs/3) – 7 steps\n\
+     - Pull request: [#42](https://github.com/acme/kontur/pull/42)\n\
+     - Usage:[1–15 Oct](orchester:/project/p/usage) - 6.1M tokens",
   );
-  assert_eq!(plain_text(&rendered), "moc.buhtig (evil.example) and KON-1 (mailto:xy)");
+  assert_eq!(
+    rows,
+    Some(vec![
+      (
+        "Task".to_owned(),
+        "orchester:/project/p/tasks/KON-1".to_owned(),
+        "ready for review".to_owned()
+      ),
+      (
+        "Run".to_owned(),
+        "orchester:/project/p/runs/3".to_owned(),
+        "7 steps".to_owned()
+      ),
+      (
+        "Pull request".to_owned(),
+        "https://github.com/acme/kontur/pull/42".to_owned(),
+        String::new()
+      ),
+      (
+        "Usage".to_owned(),
+        "orchester:/project/p/usage".to_owned(),
+        "6.1M tokens".to_owned()
+      ),
+    ])
+  );
+}
+
+#[test]
+fn chat_links_keep_any_other_list_a_list() {
+  for source in [
+    "- Task: [KON-1](orchester:/a) — ready\n- [KON-2](orchester:/b) waits",
+    "- Task [KON-1](orchester:/a) — no colon",
+    "- Task: [KON-1](orchester:/a) and [KON-2](orchester:/b)",
+    "- Task: [KON-1](orchester:/a) — then [KON-2](orchester:/b)",
+    "- Task: [KON-1](orchester:/a), no dash",
+    "- Task: no link at all",
+    "- : [KON-1](orchester:/a)",
+    "- Task: [KON-1](orchester:/a)\n\n  A second paragraph.",
+    "- Task: **[KON-1](orchester:/a)**",
+  ] {
+    assert_eq!(labelled(source), None, "{source:?} stays a list");
+  }
 }

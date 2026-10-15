@@ -1,43 +1,39 @@
-//! What a link's tooltip says (`Tooltip · link destination` in `agv8r`): the place a link in the app opens and that it
-//! opens in this tab (*ORC-24 › Conversation · opens in this tab*), the project first when it is another than the
-//! conversation's (*Atlas › ATL-9 · …*); for a link to the web, the address it opens in the browser.
+//! What the tooltip of a link to a place in the app says (`Tooltip · link destination` in `agv8r`): the place and
+//! that it opens in this tab (*ORC-24 › Conversation · opens in this tab*), the project first when it is another
+//! than the conversation's (*Atlas › ATL-9 · …*).
 
 use std::sync::Arc;
 
-use lurq::app::ctx::Ctx;
+use lurq::app::i18n::I18n;
 use orchester_core::id::ProjectId;
 
-use super::{super::data::ProjectNames, link::Target};
+use super::super::data::ProjectNames;
 use crate::routes::{ProjectPage, Route, TaskTab};
 
-/// The tooltip of a link to `target`, in a conversation of `project`; `names` are the projects'.
-pub(super) fn tip(ctx: &mut Ctx, target: &Target, (project, names): (ProjectId, &ProjectNames)) -> Arc<str> {
-  match target {
-    Target::App(route) => {
-      let place = place(ctx, route, (project, names));
-      ctx.t_args("orchestrator.link.opensHere", [("place", place.as_str())])
-    }
-    Target::Web(url) => ctx.t_args("orchestrator.link.opensBrowser", [("url", url.as_str())]),
-  }
+/// The tooltip of a link to `route`, in a conversation of `project`; `names` are the projects'.
+pub(super) fn tip(i18n: &I18n, route: &Route, (project, names): (ProjectId, &ProjectNames)) -> Arc<str> {
+  let place = place(i18n, route, (project, names));
+  i18n.t_args("orchestrator.link.opensHere", [("place", place.as_str())])
 }
+
 /// The place `route` names: a task by its key and the tab it opens on, any other page by its screen's name; after
 /// the project's name when the place is in another project.
-fn place(ctx: &mut Ctx, route: &Route, (project, names): (ProjectId, &ProjectNames)) -> String {
+fn place(i18n: &I18n, route: &Route, (project, names): (ProjectId, &ProjectNames)) -> String {
   let page = match route {
     Route::Project(_, ProjectPage::Task(key, view)) => match view.tab() {
       TaskTab::Summary => key.to_string(),
-      tab => ctx
+      tab => i18n
         .t_args(
           "orchestrator.link.taskTab",
-          [("key", key.to_string()), ("tab", ctx.t(tab.title_key()).to_string())],
+          [("key", key.to_string()), ("tab", i18n.t(tab.title_key()).to_string())],
         )
         .to_string(),
     },
-    route => ctx.t(route.screen().title_key()).to_string(),
+    route => i18n.t(route.screen().title_key()).to_string(),
   };
   let other = route.project().filter(|other| *other != project);
   match other.and_then(|other| names.get(other)) {
-    Some(name) => ctx
+    Some(name) => i18n
       .t_args(
         "orchestrator.link.inProject",
         [("project", name), ("page", page.as_str())],

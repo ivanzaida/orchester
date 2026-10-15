@@ -100,10 +100,6 @@ lettre = { version = "0.11", default-features = false, features = ["builder", "h
 # libproc process enumeration and identity on macOS; already transitive through rustix.
 libc = "0.2"
 parking_lot = "0.12"
-# Where each link of an agent's Markdown reply is in its source, so the chat shows a link it cannot follow as text
-# (`orchester-app`'s `ui::chat::links`). lurq's Markdown parses with it and keeps no source positions; already
-# built, without default features, for lurq's `markdown`.
-pulldown-cmark = { version = "0.13.4", default-features = false }
 # Native folder picker for choosing a project repository; lurq already uses it for DevTools.
 rfd = "0.15"
 # The MCP protocol of Orchester's own MCP server: its tools (`orchester_workspace::app_mcp`) and, in

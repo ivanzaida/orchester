@@ -47,20 +47,6 @@ fn orchestrator_link_roles_follow_the_link_states() {
       "{role:?} in `text_muted`"
     );
   }
-  assert_eq!(theme.radius_value(OrchestratorRadius::Link.role()), 3.0);
-  let ring = theme.shadow_style(OrchestratorShadow::LinkFocus.role());
-  assert_eq!(
-    ring
-      .iter()
-      .map(|shadow| (shadow.spread, shadow.inset, shadow.color.clone()))
-      .collect::<Vec<_>>(),
-    [(
-      2.0,
-      false,
-      lurq::node::BackgroundColor::Palette(PaletteColor::BorderFocus)
-    )],
-    "2 of `border_focus` outside the link's edge"
-  );
   let link = theme
     .markdown()
     .link
@@ -70,9 +56,68 @@ fn orchestrator_link_roles_follow_the_link_states() {
     (FontWeight::Medium, Color::from_hex("#EDEDF0")),
     "a link's words in `accent_text` 500"
   );
+  let links = theme.markdown();
+  let ring = links.link_focus_ring.expect("a link's focus ring");
   assert_eq!(
-    (theme.palette().accent_hover, theme.palette().text_muted),
-    (Color::from_hex("#FFFFFF"), Color::from_hex("#8A8A92")),
-    "under the pointer `accent_hover`; the underline `text_muted`"
+    (ring.width, ring.color, ring.radius),
+    (2.0, Color::from_hex("#A3A3AB"), 3.0),
+    "keyboard focus draws 2 of `border_focus` around a link, radius 3"
+  );
+  assert_eq!(
+    (links.link_tooltip_box.background, links.link_tooltip_box.radius),
+    (Some(Color::from_hex("#EDEDF0")), Some(4.0)),
+    "a link's tooltip as the kit's, on `text_primary`"
+  );
+  let looks = ChatLinkLooks::of(theme);
+  let underline = looks.link.text.underline.expect("a reply's link is underlined");
+  assert_eq!(
+    (underline.color, underline.thickness),
+    (Some(Color::from_hex("#8A8A92")), Some(1.0)),
+    "a 1 `text_muted` underline"
+  );
+  assert_eq!(
+    (
+      looks.hovered.color,
+      looks.hovered.underline_color,
+      looks.hovered.background,
+      looks.hovered.trailing_color
+    ),
+    (
+      Some(Color::from_hex("#FFFFFF")),
+      Some(Color::from_hex("#FFFFFF")),
+      Some(Color::from_hex("#FFFFFF0F")),
+      Some(Color::from_hex("#B3B3BA"))
+    ),
+    "under the pointer `accent_hover` on `hover`, the host `text_secondary`"
+  );
+  assert_eq!(
+    looks.radius.to_array(),
+    [3.0, 3.0, 0.0, 0.0],
+    "square at the underline's side"
+  );
+  for (gap, width) in [(&looks.host_gap, 6.0), (&looks.icon_gap, 3.0)] {
+    let size = gap.text.font_size.expect("a gap's size");
+    let spacing = gap.text.letter_spacing.expect("a gap's spacing");
+    assert!(
+      (size * 0.25 + spacing - width).abs() < 0.01,
+      "a space widened to {width}"
+    );
+  }
+}
+
+#[test]
+fn orchestrator_labelled_link_roles_follow_the_grid() {
+  let app = themed(Mode::Dark);
+  let theme = app.theme();
+  let label = theme.typography_style(OrchestratorText::LinkLabel.role());
+  assert_eq!((label.font_size, label.color), (12.0, Color::from_hex("#8A8A92")));
+  let detail = theme.typography_style(OrchestratorText::LinkDetail.role());
+  assert_eq!(
+    (detail.font_size, detail.line_height, detail.color),
+    (12.5, 1.5, Color::from_hex("#B3B3BA"))
+  );
+  assert_eq!(
+    theme.spacing_value(OrchestratorSpacing::LinkColumns.role()),
+    Dimension::Px(12.0)
   );
 }

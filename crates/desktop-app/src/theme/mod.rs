@@ -12,6 +12,7 @@
 mod accounts;
 pub mod agents;
 mod cards;
+mod chat_links;
 mod code;
 mod composer;
 mod connections;
@@ -51,6 +52,7 @@ use lurq::{
 pub use self::{
   accounts::{AccountsSpacing, AccountsText},
   cards::{CardsSpacing, CardsText},
+  chat_links::ChatLinkLooks,
   code::{CodeText, token_color},
   composer::{ComposerColor, ComposerRadius, ComposerText},
   connections::{ConnectionsSpacing, ConnectionsText},
@@ -59,10 +61,9 @@ pub use self::{
   fonts::mono_space,
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
-  markdown::{heading_style as markdown_heading, run as markdown_run},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
-  orchestrator::{LINK_LINE_HEIGHT, OrchestratorRadius, OrchestratorShadow, OrchestratorSpacing, OrchestratorText},
+  orchestrator::{OrchestratorSpacing, OrchestratorText},
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
   projects::{ProjectsSpacing, ProjectsText},

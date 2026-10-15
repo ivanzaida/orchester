@@ -4,9 +4,8 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{PaletteColor, RadiusSize, ShadowStyle, SpacingSize, Theme, ThemePalette, TypographyStyle},
+  app::theme::{SpacingSize, Theme, ThemePalette, TypographyStyle},
   layout::text_style::{FontWeight, TextStyle},
-  node::box_shadow::BoxShadow,
 };
 
 use super::{
@@ -48,10 +47,14 @@ pub enum OrchestratorText {
   /// Geist Mono 11.5 `text_muted`: the address after the words of a link the chat does not follow (`Suuac` in
   /// `agv8r`).
   LinkAddress,
+  /// 12 `text_muted`: what a link in a reply's labelled links is (`p0bb6` in `w262B`).
+  LinkLabel,
+  /// 12.5 `text_secondary`, 1.5: what a labelled link adds after it (`XosQ1` in `w262B`).
+  LinkDetail,
 }
 
 impl OrchestratorText {
-  pub const ALL: [Self; 15] = [
+  pub const ALL: [Self; 17] = [
     Self::PanelTitle,
     Self::Emphasis,
     Self::Eyebrow,
@@ -67,6 +70,8 @@ impl OrchestratorText {
     Self::DiffCode,
     Self::LinkHost,
     Self::LinkAddress,
+    Self::LinkLabel,
+    Self::LinkDetail,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -90,6 +95,8 @@ impl OrchestratorText {
       Self::DiffCode => "orchestrator_diff_code",
       Self::LinkHost => "orchestrator_link_host",
       Self::LinkAddress => "orchestrator_link_address",
+      Self::LinkLabel => "orchestrator_link_label",
+      Self::LinkDetail => "orchestrator_link_detail",
     }
   }
 
@@ -116,6 +123,8 @@ impl OrchestratorText {
       Self::DiffCode => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
       Self::LinkHost => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
       Self::LinkAddress => mono(style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
+      Self::LinkLabel => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::LinkDetail => style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_secondary),
     }
   }
 }
@@ -129,10 +138,12 @@ pub enum OrchestratorSpacing {
   SettingsPage,
   /// 18: over a day's label in History after the first (`kPs8W`: about 30 from the row before).
   HistoryDay,
+  /// 12: a labelled link's label, link and detail apart (`Link row · Task` `z7af5` in `w262B`).
+  LinkColumns,
 }
 
 impl OrchestratorSpacing {
-  pub const ALL: [Self; 3] = [Self::Start, Self::SettingsPage, Self::HistoryDay];
+  pub const ALL: [Self; 4] = [Self::Start, Self::SettingsPage, Self::HistoryDay, Self::LinkColumns];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -143,6 +154,7 @@ impl OrchestratorSpacing {
       Self::Start => "orchestrator_start",
       Self::SettingsPage => "orchestrator_settings_page",
       Self::HistoryDay => "orchestrator_history_day",
+      Self::LinkColumns => "orchestrator_link_columns",
     }
   }
 
@@ -151,67 +163,9 @@ impl OrchestratorSpacing {
       Self::Start => 20.0,
       Self::SettingsPage => 40.0,
       Self::HistoryDay => 18.0,
+      Self::LinkColumns => 12.0,
     }
   }
-}
-
-/// Radii of the Orchestrator.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OrchestratorRadius {
-  /// 3: a link's hover fill (top corners) and focus ring (`K52XFs`, `Mjhop` in `agv8r`).
-  Link,
-}
-
-impl OrchestratorRadius {
-  pub const ALL: [Self; 1] = [Self::Link];
-
-  pub fn role(self) -> RadiusSize {
-    RadiusSize::extra(self.name())
-  }
-
-  const fn name(self) -> &'static str {
-    match self {
-      Self::Link => "orchestrator_link",
-    }
-  }
-
-  pub const fn value(self) -> f32 {
-    match self {
-      Self::Link => 3.0,
-    }
-  }
-}
-
-/// Shadows of the Orchestrator.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OrchestratorShadow {
-  /// A focused link's ring: 2 of `border_focus` outside its edge (`Mjhop` in `agv8r`), where the chrome's focus
-  /// ring sits inside a control's edge.
-  LinkFocus,
-}
-
-impl OrchestratorShadow {
-  pub fn role(self) -> ShadowStyle {
-    ShadowStyle::extra(self.name())
-  }
-
-  const fn name(self) -> &'static str {
-    match self {
-      Self::LinkFocus => "orchestrator_link_focus",
-    }
-  }
-}
-
-/// The line height of a link's words in a reply, so its underline sits 1 under them (`qgLX8` in `agv8r`); the
-/// words keep the size of the text around them.
-pub const LINK_LINE_HEIGHT: f32 = 1.3;
-
-/// The width of a focused link's ring.
-const LINK_FOCUS_WIDTH: f32 = 2.0;
-
-pub(super) fn shadows() -> impl Iterator<Item = (Arc<str>, Arc<[BoxShadow]>)> {
-  let ring = BoxShadow::new(0.0, 0.0, 0.0, PaletteColor::BorderFocus).spread(LINK_FOCUS_WIDTH);
-  std::iter::once((Arc::from(OrchestratorShadow::LinkFocus.name()), Arc::from([ring])))
 }
 
 pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<str>, TextStyle)> {
@@ -223,8 +177,5 @@ pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<st
 pub(super) fn install(theme: &Theme) {
   for spacing in OrchestratorSpacing::ALL {
     theme.set_spacing_value(spacing.role(), spacing.value());
-  }
-  for radius in OrchestratorRadius::ALL {
-    theme.set_radius_value(radius.role(), radius.value());
   }
 }

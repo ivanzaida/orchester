@@ -21,9 +21,9 @@ use lurq::{
   node::{color::Color, dimension::Dimension},
 };
 use orchester_app::theme::{
-  self, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography, IconSize,
-  Mode, OrchestratorRadius, OrchestratorShadow, OrchestratorSpacing, OrchestratorText, SHORTCUT_OPACITY,
-  SettingsSpacing, SettingsText, ShellSpacing, ShellText, StartupSpacing, StartupText,
+  self, ChatLinkLooks, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing,
+  ExtraTypography, IconSize, Mode, OrchestratorSpacing, OrchestratorText, SHORTCUT_OPACITY, SettingsSpacing,
+  SettingsText, ShellSpacing, ShellText, StartupSpacing, StartupText,
 };
 
 fn themed(mode: Mode) -> App {

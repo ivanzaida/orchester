@@ -61,8 +61,6 @@ lurq = { workspace = true, features = [
   "tokio",
 ] }
 parking_lot.workspace = true
-# Where the links of an agent's Markdown reply are in its source (`ui::chat::links`).
-pulldown-cmark.workspace = true
 # The system's folder picker for the project switcher's Open folder…; lurq already builds it for DevTools.
 rfd.workspace = true
 # Arguments and results of the app's MCP tools.

@@ -3,8 +3,10 @@
 //! from who wrote it (12/600) with what it was and when (11 `text_muted`) and under them, 3 apart, what it wrote.
 //! A person's (`Your message` `mr4lC`): at the right, *You* and the time, the message as written in a bubble that
 //! hugs it up to 80 % of the chat (`own_message` in a `border` stroke, radius 10, 8 by 12 inside) and, under it,
-//! where it stands. What a link in an Orchestrator's reply shows and does is [`links`]'.
+//! where it stands. Where a link in an Orchestrator's reply leads is [`links`]'; which of its lists are labelled links,
+//! [`labelled`]'s.
 
+pub mod labelled;
 pub mod links;
 
 use std::sync::{Arc, LazyLock};

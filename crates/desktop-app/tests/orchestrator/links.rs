@@ -1,10 +1,10 @@
 //! Links in the Orchestrator's replies (`docs/design/orchestrator-toolset.md`, "Links"; `w262B`, `agv8r`): an
 //! `orchester:` link goes to its place in the active tab, for a person and for synthetic input alike, and says where
 //! in its tooltip, the project first when it is another; a link to the web shows its host, says what it opens, and
-//! synthetic input never opens it; a route the app does not know, or another scheme, is its words and then its
-//! address as text. A link is a Tab stop that Enter presses. The fake Claude Code answers `Noted: <message>`, so the
-//! message carries the reply's links. A person's press on a link to the web opens the default browser and is not
-//! made here.
+//! synthetic input never opens it; a route outside a project, a route the app does not know, or another scheme is
+//! its words and then its address as text. A link is a Tab stop that Enter presses, with the design's ring. A list
+//! of labelled links is drawn as their grid. The fake Claude Code answers `Noted: <message>`, so the message carries
+//! the reply's links. A person's press on a link to the web opens the default browser and is not made here.
 
 use std::{
   fs,
@@ -12,8 +12,9 @@ use std::{
 };
 
 use lurq::{
-  app::events::{MouseButton, with_synthetic_input},
-  node::element::ElementRef,
+  app::events::{MouseButton, ScrollPhase, with_synthetic_input},
+  layout::quad::{QuadContent, RichTextSpan},
+  node::color::Color,
 };
 use orchester_app::{
   routes::{OrchestratorChat, Route},
@@ -30,19 +31,23 @@ use super::{
 };
 
 const PULL_REQUEST: &str = "https://github.com/acme/kontur/pull/42";
+/// `text_muted`, `text_secondary` and `border_focus` in the dark mode the harness shows.
+const MUTED: &str = "#8A8A92";
+const SECONDARY: &str = "#B3B3BA";
+const FOCUS: &str = "#A3A3AB";
 
-/// The middle of the text `label` in the window, which only a link's words are on their own.
+/// The middle of the first line of the element whose text is `label`: a link's words.
 fn center_of(screen: &mut Orchestrator, label: &str) -> (f32, f32) {
   let bounds = screen
     .window
     .tree
     .find_element(|element| element.text_content() == Some(label))
-    .unwrap_or_else(|| panic!("{label} is shown on its own"))
+    .unwrap_or_else(|| panic!("{label} is a link's words"))
     .bounds();
   (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0)
 }
 
-/// Presses the middle of the text `label`, as a person's pointer does.
+/// Presses the middle of the link `label`, as a person's pointer does.
 fn press_text(screen: &mut Orchestrator, label: &str) {
   let (x, y) = center_of(screen, label);
   let tree = &mut screen.window.tree;
@@ -52,41 +57,56 @@ fn press_text(screen: &mut Orchestrator, label: &str) {
   screen.window.pass();
 }
 
-/// The element id of the link whose words are `label`: its words' id is `<link id>-label`.
-fn link_id(screen: &mut Orchestrator, label: &str) -> String {
-  fn find(element: ElementRef<'_>, label: &str) -> Option<String> {
-    if element.text_content() == Some(label)
-      && let Some(id) = element.id().and_then(|id| id.strip_suffix("-label"))
-    {
-      return Some(id.to_owned());
-    }
-    element.children().iter().find_map(|child| find(child, label))
-  }
+/// Whether an element's text is `text`: a link's words, or a text of their own.
+fn is_shown_on_its_own(screen: &mut Orchestrator, text: &str) -> bool {
   screen
     .window
     .tree
-    .root()
-    .and_then(|root| find(root, label))
-    .unwrap_or_else(|| panic!("{label} is a link's words"))
+    .find_element(|element| element.text_content() == Some(text))
+    .is_some()
 }
 
-/// What the tooltip of the link whose words are `label` says once the pointer rests on it.
-fn tooltip(screen: &mut Orchestrator, label: &str) -> String {
-  let id = link_id(screen, label);
+/// What the tooltip of the link `label` says once the pointer rests on it: the text that shows then.
+fn tooltip_shows(screen: &mut Orchestrator, label: &str, words: &str) -> bool {
   let (x, y) = center_of(screen, label);
   screen.window.tree.mouse_move(x, y);
   screen.window.pass();
-  // The pointer rests on the link past the tooltip's delay.
   screen
     .window
     .tree
     .tick_timers_at(Instant::now() + TOOLTIP_DELAY + Duration::from_millis(50));
   screen.window.pass();
-  let panel = format!("{id}-tooltip");
-  let words = screen.text(&panel);
+  let shown = is_shown_on_its_own(screen, words);
   screen.window.tree.mouse_move(0.0, 0.0);
   screen.window.pass();
-  words
+  shown
+}
+
+/// Every run of text the window draws, a plain text as one span, without the invisible isolate marks around a
+/// link's words and runs.
+fn spans(screen: &mut Orchestrator) -> Vec<RichTextSpan> {
+  screen.window.pass();
+  let tree = &screen.window.tree;
+  let quads = tree.resolve_quads(tree.last_layout().expect("a layout"));
+  quads
+    .into_iter()
+    .filter_map(|quad| match quad.content {
+      QuadContent::RichText { spans, .. } => Some(spans),
+      QuadContent::Text { text, style, .. } => Some(vec![RichTextSpan { text, style }]),
+      _ => None,
+    })
+    .flatten()
+    .filter(|span| !matches!(span.text.as_str(), "\u{2068}" | "\u{2069}"))
+    .collect()
+}
+
+fn span<'a>(spans: &'a [RichTextSpan], text: &str) -> &'a RichTextSpan {
+  spans.iter().find(|span| span.text == text).unwrap_or_else(|| {
+    panic!(
+      "no span {text:?} in {:?}",
+      spans.iter().map(|span| &span.text).collect::<Vec<_>>()
+    )
+  })
 }
 
 /// Back to the conversation, its reply shown.
@@ -97,12 +117,14 @@ fn back_to_the_chat(screen: &mut Orchestrator) {
   });
 }
 
-fn is_shown_on_its_own(screen: &mut Orchestrator, text: &str) -> bool {
-  screen
-    .window
-    .tree
-    .find_element(|element| element.text_content() == Some(text))
-    .is_some()
+/// The `count`th answer once it ended, as the conversation shows it.
+fn answer(screen: &mut Orchestrator, count: usize) -> String {
+  screen.until("the answer", |screen| {
+    !screen.exists("orchestrator-thinking")
+      && screen.text("orchestrator-conversation").matches("Noted:").count() == count
+  });
+  let shown = screen.text("orchestrator-conversation");
+  shown.rsplit("Noted:").next().unwrap_or_default().to_owned()
 }
 
 #[test]
@@ -114,28 +136,33 @@ fn orchestrator_reply_links_go_in_the_app_and_show_the_web_and_unknown_routes_as
   screen.go(OrchestratorChat::New);
   screen.send(&format!(
     "Look at [the tasks](orchester:{tasks}), [its settings](orchester:{settings}), [PR 42]({PULL_REQUEST}), \
-     [KON-99](orchester:/project/{project}/nowhere) and [mail](mailto:team@example.com)."
+     [KON-99](orchester:/project/{project}/nowhere), [add it](orchester:/add-project?folder=x) and \
+     [mail](mailto:team@example.com)."
   ));
-  screen.until("the answer", |screen| {
-    screen.text("orchestrator-conversation").contains("Noted:")
-  });
-  // The harness joins the texts with a space: a link's words and its host are texts of their own.
-  let reply = screen.text("orchestrator-conversation");
-  assert!(
-    reply.contains("PR 42 github.com"),
-    "a link to the web shows its host: {reply}"
+  answer(&mut screen, 1);
+  let drawn = spans(&mut screen);
+  let pull = span(&drawn, "PR 42");
+  assert_eq!(
+    pull.style.underline.and_then(|underline| underline.color),
+    Some(Color::from_hex(MUTED)),
+    "a link's words over a `text_muted` underline"
+  );
+  let host = span(&drawn, "github.com");
+  assert_eq!(
+    (host.style.font_size, host.style.color),
+    (11.5, Color::from_hex(MUTED)),
+    "a link to the web shows its host"
   );
   for address in [
     format!("(orchester:/project/{project}/nowhere)"),
+    "(orchester:/add-project?folder=x)".to_owned(),
     "(mailto:team@example.com)".to_owned(),
   ] {
-    assert!(
-      is_shown_on_its_own(&mut screen, &address),
-      "a link the chat does not follow is its words, then its address: {reply}"
-    );
+    let shown = span(&drawn, &address);
+    assert_eq!(&*shown.style.font_family, "Geist Mono", "{address} in mono");
   }
-  for text in ["KON-99", "mail"] {
-    assert!(!is_shown_on_its_own(&mut screen, text), "{text} is no link of its own");
+  for text in ["KON-99", "add it", "mail"] {
+    assert!(!is_shown_on_its_own(&mut screen, text), "{text} is no link");
   }
 
   press_text(&mut screen, "the tasks");
@@ -163,37 +190,25 @@ fn orchestrator_reply_links_go_in_the_app_and_show_the_web_and_unknown_routes_as
   with_synthetic_input(|| press_text(&mut screen, "PR 42"));
   assert_eq!(screen.route(), chat, "a link to the web leaves the tab where it is");
 
-  // Display math before a link makes lurq read that paragraph as two blocks; it is the reply's only link.
-  screen.send("Last:\n\n$$x$$ [github.com](https://evil.example/login)");
-  let reply = answer(&mut screen, 2);
-  assert!(
-    reply.contains("(evil.example)") || reply.contains("github.com evil.example"),
-    "a link however its reply splits shows the host it opens: {reply}"
-  );
-
-  // A quoted definition spans `>` marks; a label hides behind a bidirectional override.
+  // Display math before a link; a quoted definition over two lines; a label behind a bidirectional override.
   screen.send(&format!(
-    "Then:\n\n> [repo]:\n> https://github.com/acme/kontur\n\n[the repo][repo] beside [\u{202E}sksat](orchester:{tasks})"
+    "Last:\n\n$$x$$ [github.com](https://evil.example/login)\n\n> [repo]:\n> https://github.com/acme/kontur\n\n\
+     [the repo][repo] beside [\u{202E}sksat](orchester:{tasks})"
   ));
-  let reply = answer(&mut screen, 3);
+  answer(&mut screen, 2);
+  // The answer's end, below the fold: only what is on screen is drawn.
+  let list = screen.bounds("orchestrator-conversation");
+  let (x, y) = (list.x + list.width / 2.0, list.y + list.height / 2.0);
+  screen.window.tree.mouse_move(x, y);
+  screen.window.tree.scroll(x, y, 0.0, 5000.0, ScrollPhase::Scroll);
+  screen.window.pass();
+  screen.window.pass();
+  let drawn = spans(&mut screen);
+  span(&drawn, "evil.example");
   assert!(
-    is_shown_on_its_own(&mut screen, "the repo") && reply.contains("the repo github.com"),
-    "a reference link finds a definition written over two quoted lines: {reply}"
+    is_shown_on_its_own(&mut screen, "the repo") && is_shown_on_its_own(&mut screen, "sksat"),
+    "a reference link finds a quoted definition; a link's words lose the override"
   );
-  assert!(
-    is_shown_on_its_own(&mut screen, "sksat"),
-    "a link's words without the override that turned them around: {reply}"
-  );
-}
-
-/// The `count`th answer once it ended, as the conversation shows it.
-fn answer(screen: &mut Orchestrator, count: usize) -> String {
-  screen.until("the answer", |screen| {
-    !screen.exists("orchestrator-thinking")
-      && screen.text("orchestrator-conversation").matches("Noted:").count() == count
-  });
-  let shown = screen.text("orchestrator-conversation");
-  shown.rsplit("Noted:").next().unwrap_or_default().to_owned()
 }
 
 #[test]
@@ -212,26 +227,24 @@ fn orchestrator_reply_links_say_where_they_go_and_take_the_keyboard() {
     "The notes are in [KON-1 notes](orchester:{conversation}); Atlas runs \
      [ATL-9 import](orchester:/project/{atlas}/tasks/ATL-9/summary); see [PR 42]({PULL_REQUEST})."
   ));
-  screen.until("the answer", |screen| {
-    screen.text("orchestrator-conversation").contains("Noted:")
-  });
+  answer(&mut screen, 1);
 
-  assert_eq!(
-    tooltip(&mut screen, "KON-1 notes"),
+  assert!(tooltip_shows(
+    &mut screen,
+    "KON-1 notes",
     "KON-1 › Conversation · opens in this tab"
-  );
-  assert_eq!(
-    tooltip(&mut screen, "ATL-9 import"),
-    "Atlas › ATL-9 · opens in this tab",
+  ));
+  assert!(
+    tooltip_shows(&mut screen, "ATL-9 import", "Atlas › ATL-9 · opens in this tab"),
     "a place in another project names the project first"
   );
-  assert_eq!(
-    tooltip(&mut screen, "PR 42"),
-    format!("Opens {PULL_REQUEST} in your browser")
-  );
+  assert!(tooltip_shows(
+    &mut screen,
+    "PR 42",
+    &format!("Opens {PULL_REQUEST} in your browser")
+  ));
 
-  // From the message field back through the links, last first, as Shift+Tab goes.
-  let links = ["PR 42", "ATL-9 import", "KON-1 notes"].map(|label| link_id(&mut screen, label));
+  // From the message field back through the links, last first, as Shift+Tab goes; the focused one has the ring.
   screen
     .window
     .tree
@@ -239,7 +252,7 @@ fn orchestrator_reply_links_say_where_they_go_and_take_the_keyboard() {
     .expect("the message field")
     .focus();
   screen.window.pass();
-  for id in &links {
+  for words in ["PR 42", "ATL-9 import", "KON-1 notes"] {
     screen
       .window
       .tree
@@ -253,13 +266,67 @@ fn orchestrator_reply_links_say_where_they_go_and_take_the_keyboard() {
       .window
       .tree
       .focused_element()
-      .and_then(|element| element.id().map(str::to_owned));
-    assert_eq!(focused.as_deref(), Some(id.as_str()), "Shift+Tab reaches each link");
+      .and_then(|element| element.text_content().map(str::to_owned));
+    assert_eq!(focused.as_deref(), Some(words), "Shift+Tab reaches each link");
   }
+  let tree = &screen.window.tree;
+  let rings = tree
+    .resolve_quads(tree.last_layout().expect("a layout"))
+    .into_iter()
+    .filter_map(|quad| quad.border.and_then(|border| border.top))
+    .filter(|top| top.color == Color::from_hex(FOCUS) && top.width == 2.0)
+    .count();
+  assert!(rings > 0, "the focused link shows a 2 px `border_focus` ring");
   screen.key(("Enter", "Enter"), false);
   assert_eq!(
     screen.route(),
     Route::parse(&conversation).expect("the task's Conversation route"),
     "Enter on a focused link opens its place"
+  );
+}
+
+#[test]
+fn orchestrator_reply_draws_labelled_links_as_a_grid_and_any_other_list_as_a_list() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  let project = screen.project;
+  screen.go(OrchestratorChat::New);
+  screen.send(&format!(
+    "Status:\n\n- Task: [KON-1 · Delivery log](orchester:/project/{project}/tasks/KON-1) — ready for review\n\
+     - Pull request: [#42 Delivery log]({PULL_REQUEST})\n\nAnd:\n\n\
+     - [KON-2](orchester:/project/{project}/tasks/KON-2) waits\n- Task: no link here"
+  ));
+  answer(&mut screen, 1);
+  let grids = screen
+    .window
+    .tree
+    .get_elements_by_class_name("orchestrator-link-grid")
+    .len();
+  assert_eq!(grids, 1, "only the list of labelled links is a grid");
+  for label in ["Task", "Pull request"] {
+    assert!(is_shown_on_its_own(&mut screen, label), "{label} is a label of its own");
+  }
+  let drawn = spans(&mut screen);
+  let detail = span(&drawn, "ready for review");
+  assert_eq!(
+    (detail.style.font_size, detail.style.color),
+    (12.5, Color::from_hex(SECONDARY)),
+    "a detail in 12.5 `text_secondary`"
+  );
+  let link = screen
+    .window
+    .tree
+    .find_element(|element| element.text_content() == Some("KON-1 · Delivery log"))
+    .expect("the grid's link")
+    .bounds();
+  let after = screen
+    .window
+    .tree
+    .find_element(|element| element.text_content() == Some("ready for review"))
+    .expect("the grid's detail")
+    .bounds();
+  let gap = after.x - (link.x + link.width);
+  assert!(
+    (10.0..=14.0).contains(&gap),
+    "the detail follows the link's words, 12 after them: {gap}"
   );
 }

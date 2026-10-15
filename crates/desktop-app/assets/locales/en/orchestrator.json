@@ -6,8 +6,6 @@
     "date": "{{month}} {{day}}",
     "answerMeta": "{{model}} · {{time}}",
     "link": {
-      "web": "{{link}} ({{host}})",
-      "address": "{{text}} ({{address}})",
       "addressNote": "({{address}})",
       "opensHere": "{{place}} · opens in this tab",
       "opensBrowser": "Opens {{url}} in your browser",
