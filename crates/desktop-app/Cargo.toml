@@ -96,6 +96,10 @@ windows-sys = { workspace = true, features = [
 embed-resource.workspace = true
 
 [dev-dependencies]
+# A real team server on loopback for the tests and the QA backends of Settings › Orchester and Sharing
+# (`tests/orchester`, `examples/n1_backends`), with the cloud's identity keys their stand-in cloud signs with.
+orchester-server.workspace = true
+orchester-api = { workspace = true, features = ["client", "identity"] }
 # Exercises the production MCP tools over an in-process transport without discovery-file ACLs.
 rmcp = { workspace = true, features = ["client"] }
 # The QA seed (`examples/seed`) damages a run's record and sets a project database's schema version the way an

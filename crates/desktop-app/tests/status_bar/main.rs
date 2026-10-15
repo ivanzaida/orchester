@@ -55,6 +55,7 @@ mod items;
 mod kontur;
 mod mcp;
 mod plan_limits;
+mod server;
 #[path = "../support/mod.rs"]
 mod support;
 mod window;

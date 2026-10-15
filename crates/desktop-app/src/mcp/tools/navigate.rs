@@ -9,8 +9,8 @@ use super::{ToolError, WindowLink, object, reply, route_json, string};
 use crate::{
   navigation::Navigation,
   routes::{
-    ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, NewConnection, OrchestratorChat, OverviewTab,
-    ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView,
+    AccountsView, ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, NewConnection, OrchesterView,
+    OrchestratorChat, OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView,
   },
 };
 
@@ -36,7 +36,7 @@ pub fn tool(link: WindowLink) -> McpTool {
 fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
-    "The screen's tab, the one it opens on when left out: overview {}; tasks {}; task {}; connections {}.",
+    "The screen's tab, the one it opens on when left out: settings automation, accounts, orchester, connect;      overview {}; tasks {}; task {}; connections {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
     TaskTab::ALL.map(TaskTab::name).join(", "),
@@ -98,7 +98,7 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
   let page = match screen {
     Screen::AllProjects => return Ok(Route::AllProjects),
     Screen::AddProject => return Ok(Route::AddProject(None)),
-    Screen::Settings => return Ok(Route::Settings),
+    Screen::Settings => return settings(args),
     Screen::Overview => ProjectPage::Overview(tab(
       args,
       OverviewTab::from_name,
@@ -131,7 +131,8 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
 /// The parameters besides `route` that `screen` takes.
 const fn params(screen: Screen) -> &'static [&'static str] {
   match screen {
-    Screen::AllProjects | Screen::AddProject | Screen::Settings => &[],
+    Screen::AllProjects | Screen::AddProject => &[],
+    Screen::Settings => &["tab"],
     Screen::Overview => &["project", "tab"],
     Screen::Tasks => &["project", "tab", "q", "highlight"],
     Screen::EditTask => &["project", "key"],
@@ -206,6 +207,21 @@ fn tab<T: Default>(
     name: given.to_owned(),
     known: known.to_vec(),
   })
+}
+
+/// Settings at its `tab`: automation (the default), accounts, orchester, or connect (*Connect a server*).
+fn settings(args: &Map<String, Value>) -> Result<Route, ToolError> {
+  const TABS: [&str; 4] = ["automation", "accounts", "orchester", "connect"];
+  match string(args, "tab")? {
+    None | Some("automation") => Ok(Route::Settings),
+    Some("accounts") => Ok(Route::Accounts(AccountsView::default())),
+    Some("orchester") => Ok(Route::Orchester(OrchesterView::default())),
+    Some("connect") => Ok(Route::Orchester(OrchesterView::connect())),
+    Some(other) => Err(ToolError::UnknownTab {
+      name: other.to_owned(),
+      known: TABS.to_vec(),
+    }),
+  }
 }
 
 /// The connection id in `param`, which is required.

@@ -167,6 +167,45 @@ impl TestServer {
     serde_json::from_value(created["project"].clone()).expect("project")
   }
 
+  /// The project `name` at `slug`, made empty by the first admin in the server admin, with `remote_hint` when given.
+  pub fn create_named_project(
+    &self,
+    (name, key): (&str, &str),
+    slug: &str,
+    remote_hint: Option<&str>,
+  ) -> SharedProject {
+    let body = json!({"idempotency_key": orchester_core::id::IdempotencyKey::generate(), "name": name,
+      "slug": slug, "key": key, "remote_hint": remote_hint, "tasks": []});
+    let created = self.admin_request("POST", "/projects", &body);
+    serde_json::from_value(created["project"].clone()).expect("project")
+  }
+
+  /// An invite code to `project` as a member, as an owner hands it out in the server admin.
+  pub fn project_code(&self, project: &SharedProject) -> Credential {
+    let invite = self.admin_request(
+      "POST",
+      "/invites",
+      &json!({"kind":"project","delivery":"code","project":project.id,"role":"member"}),
+    );
+    Credential::new(invite["code"].as_str().expect("invite code").into())
+  }
+
+  /// Adds `username` to `project` as a member, as an owner does in the server admin.
+  pub fn add_member(&self, project: &SharedProject, username: &str) {
+    let path = format!("/projects/{}/members", project.id);
+    self.admin_request("POST", &path, &json!({"username": username, "role": "member"}));
+  }
+
+  /// An invite to `project` as a member by email, which the cloud routes; returns its id.
+  pub fn project_email_invite(&self, email: &str, project: &SharedProject) -> String {
+    let invite = self.admin_request(
+      "POST",
+      "/invites",
+      &json!({"kind":"project","delivery":"cloud","email":email,"project":project.id,"role":"member"}),
+    );
+    invite["invite"]["id"].as_str().expect("invite id").to_owned()
+  }
+
   /// Links the server to an Orchester Cloud whose root key is `root_key`, with the key set it signed, as the first
   /// admin does at setup; returns the server's id, the audience of identity tokens for it.
   pub fn link_cloud(&self, root_key: &str, key_set: &str) -> String {

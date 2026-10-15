@@ -118,7 +118,10 @@ impl CloudPanel {
       .get()
       .error
       .map(|reason| crate::ui::field::field_error("orchester-cloud-sign-out-error", &reason.text(ctx)).into());
-    let this_device = ctx.t_args("cloud.account.deviceValue", [("device", account.device_name.as_str())]);
+    let this_device = ctx.t_args(
+      "cloud.account.deviceValue",
+      [("device", orchester_workspace::sharing::device::this_computer())],
+    );
     let display_name = ctx.t_args("cloud.account.nameValue", [("name", account.display_name.as_str())]);
     let facts = Column::new()
       .id("orchester-cloud-facts")

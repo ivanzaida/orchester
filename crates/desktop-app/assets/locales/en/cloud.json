@@ -174,7 +174,10 @@
         "joinedCode": "{{day}}, with a code",
         "joinedOn": "{{day}}",
         "computer": "This computer",
-        "computerValue": "Orchester on {{computer}} · signed in until unused for 90 days"
+        "computerValue": "Orchester on {{computer}} · signed in until unused for 90 days",
+        "computerSignedOut": "Orchester on {{computer}} · not signed in",
+        "system": "Trusted by your system: a public or your team's own authority issued it",
+        "plain": "None: plain HTTP, to this computer or allowed for this server"
       },
       "projects": {
         "title": "Projects on this computer",
@@ -188,7 +191,8 @@
         "member": "Member",
         "notHere": "not on this computer",
         "open": "Open",
-        "explanation": "Each project is linked to one checkout on this computer. A project of yours without a checkout here: clone it yourself, add the folder in All projects, then link it in its Project settings › Sharing."
+        "explanation": "Each project is linked to one checkout on this computer. A project of yours without a checkout here: clone it yourself, add the folder in All projects, then link it in its Project settings › Sharing.",
+        "signedOut": "Join again to read your projects there; the ones linked here are listed below."
       },
       "computers": {
         "title": "Your other computers",
@@ -210,7 +214,8 @@
         "noProjects": "No project on this computer is linked to it.",
         "forgets": "{{server}} forgets this computer; your account and your projects there stay. Join again with Orchester Cloud or a code.",
         "confirm": "Sign out",
-        "keep": "Stay signed in"
+        "keep": "Stay signed in",
+        "project": "{{projects}} stops sending and receiving. Its tasks stay here as they are now, and the changes you make wait on this computer until you connect again."
       },
       "certificate": {
         "title": "{{server}} presents a different certificate",
@@ -228,7 +233,9 @@
         "body": "It went unused for 90 days, or someone revoked it in the server admin. Your waiting changes are kept here.",
         "cloud": "Join again with Orchester Cloud",
         "code": "With a code",
-        "waiting": "Waiting for approval: approve this computer on another computer of yours, or ask an admin."
+        "waiting": "Waiting for approval: approve this computer on another computer of yours, or ask an admin.",
+        "byYouTitle": "Not signed in to {{server}} on this computer",
+        "byYouBody": "You signed out of it here; your account and your projects there stay. Join again to work on them from this computer."
       },
       "tokenNote": {
         "windows": "This computer's token for {{server}} is kept in Windows Credential Manager. Orchester never shows it; Sign out deletes it.",

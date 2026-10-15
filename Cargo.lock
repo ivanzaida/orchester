@@ -3353,6 +3353,7 @@ dependencies = [
  "orchester-core",
  "orchester-exec",
  "orchester-ipc",
+ "orchester-server",
  "orchester-store",
  "orchester-workspace",
  "parking_lot",

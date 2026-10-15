@@ -33,6 +33,8 @@ use crate::{
 
 /// A step's dot (`l5QYK8`), and the check inside a done one.
 const DOT: f32 = 22.0;
+/// The line from a step's dot down to the next step (`BuPRX`).
+const RAIL_LINE: f32 = 1.0;
 /// The address field's width in the first step (`ZJytn`).
 const FIELD_WIDTH: f32 = 420.0;
 
@@ -56,7 +58,8 @@ pub(super) fn steps(ctx: &mut Ctx, page: &ConnectPage, entries: &[ServerEntry]) 
     Stage::Join => Mark::Done,
     Stage::Address => Mark::Later(2),
   };
-  let (join_number, name_number) = if own { (3, 4) } else { (2, 3) };
+  // The check code is a step of its own until the address shows the server needs none.
+  let (join_number, name_number) = if own || found.is_none() { (3, 4) } else { (2, 3) };
   let join_mark = if stage == Stage::Join {
     Mark::Current(join_number)
   } else {
@@ -124,7 +127,6 @@ fn step((id, mark, title): (&str, Mark, &str), content: Element, line: bool) -> 
   let later = matches!(mark, Mark::Later(_));
   let mut rail = Column::new()
     .width(Dimension::Px(DOT))
-    .height(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(dot(mark));
@@ -132,8 +134,8 @@ fn step((id, mark, title): (&str, Mark, &str), content: Element, line: bool) -> 
     rail = rail.child(
       Row::new()
         .flex(1.0)
-        .width(Dimension::Px(0.0))
-        .border_left(Border::inside(BorderSize::Sm, PaletteColor::Border)),
+        .width(Dimension::Px(RAIL_LINE))
+        .background(PaletteColor::Border),
     );
   }
   let title = Text::new(title)
@@ -148,6 +150,7 @@ fn step((id, mark, title): (&str, Mark, &str), content: Element, line: bool) -> 
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .spacing(OrchesterSpacing::FormGap.role())
+    .align_items(Alignment::Stretch)
     .describe(
       "state",
       match mark {

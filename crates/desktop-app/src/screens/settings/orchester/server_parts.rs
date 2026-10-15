@@ -16,7 +16,6 @@ use orchester_workspace::sharing::{Connection, LinkedProject, ServerEntry, devic
 use super::{
   Said,
   code::{Purpose, compared},
-  list::trust_key,
   parts::{hint, paragraph, section, section_title},
   server::{JoinedAgain, Presented, Props, ServerPanel, check_code},
   words::day,
@@ -46,7 +45,7 @@ pub(super) fn problems(
   let mut parts = Vec::new();
   if entry.certificate_changed {
     parts.push(certificate_changed(ctx, panel, (props, presented)));
-  } else if entry.in_use() && entry.connection == Some(Connection::SignedOut) {
+  } else if !entry.in_use() || entry.connection == Some(Connection::SignedOut) {
     parts.push(signed_out(ctx, panel, entry));
   }
   for (id, error) in [
@@ -198,10 +197,21 @@ fn signed_out(ctx: &mut Ctx, panel: &ServerPanel, entry: &ServerEntry) -> Elemen
       Notice::new(
         "orchester-server-signed-out-notice",
         NoticeTone::Warning,
-        ctx.t_args("cloud.server.signedOut.title", [("server", entry.stored.name.as_str())]),
+        ctx.t_args(
+          if entry.in_use() {
+            "cloud.server.signedOut.title"
+          } else {
+            "cloud.server.signedOut.byYouTitle"
+          },
+          [("server", entry.stored.name.as_str())],
+        ),
       )
       .icon(Icon::LogOut)
-      .body(ctx.t("cloud.server.signedOut.body")),
+      .body(ctx.t(if entry.in_use() {
+        "cloud.server.signedOut.body"
+      } else {
+        "cloud.server.signedOut.byYouBody"
+      })),
     )
     .child(Row::new().spacing(SpacingSize::Sm).child(again).child(with_code));
   match state.data.clone().filter(|_| state.is_fulfilled()) {
@@ -232,10 +242,12 @@ pub(super) fn sign_out_question(ctx: &Ctx, panel: &ServerPanel, props: &Props) -
   let affects = if projects.is_empty() {
     ctx.t("cloud.server.signOutQuestion.noProjects")
   } else {
-    ctx.t_args(
-      "cloud.server.signOutQuestion.projects",
-      [("projects", projects.as_str())],
-    )
+    let key = if props.linked.len() == 1 {
+      "cloud.server.signOutQuestion.project"
+    } else {
+      "cloud.server.signOutQuestion.projects"
+    };
+    ctx.t_args(key, [("projects", projects.as_str())])
   };
   let (sign_out, confirming) = (panel.sign_out.clone(), panel.confirming.clone());
   let pending = panel.sign_out.state().get().is_pending();
@@ -289,9 +301,8 @@ pub(super) fn facts(ctx: &Ctx, entry: &ServerEntry) -> Element {
   let stored = &entry.stored;
   let certificate = match stored.certificate_pin.as_deref().and_then(check_code) {
     Some(code) => ctx.t_args("cloud.server.facts.checked", [("code", code)]).to_string(),
-    None => ctx
-      .t_args(trust_key(entry), [("host", entry.address.authority())])
-      .to_string(),
+    None if entry.address.is_https() => ctx.t("cloud.server.facts.system").to_string(),
+    None => ctx.t("cloud.server.facts.plain").to_string(),
   };
   let you = stored.account.as_ref().map_or_else(
     || ctx.t("cloud.server.facts.nobody").to_string(),
@@ -326,7 +337,11 @@ pub(super) fn facts(ctx: &Ctx, entry: &ServerEntry) -> Element {
     None => ctx.t_args("cloud.server.facts.joinedOn", [("day", joined_day)]),
   };
   let computer = ctx.t_args(
-    "cloud.server.facts.computerValue",
+    if entry.in_use() {
+      "cloud.server.facts.computerValue"
+    } else {
+      "cloud.server.facts.computerSignedOut"
+    },
     [("computer", device::this_computer())],
   );
   Column::new()

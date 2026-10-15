@@ -8,6 +8,7 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 mod accounts;
+mod desktop;
 mod hosting;
 mod identity;
 mod limits;
@@ -49,6 +50,7 @@ const TESTS: &[(&str, Test)] = tests![
   hosting::migrations_apply_once_and_a_newer_database_is_refused,
   hosting::smtp_mailer_sends_through_the_relay,
   hosting::requests_follow_the_contract,
+  desktop::desktop_signs_in_and_out_with_a_confirmed_account,
   hosting::unsafe_configuration_is_refused,
 ];
 

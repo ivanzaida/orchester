@@ -1,6 +1,7 @@
 //! Where the app opens web pages (*Create an account*, *Forgot password*, *Open server admin*): the system browser.
-//! A QA copy or a test started with `ORCHESTER_APP_RECORD_LINKS` set only records what it would have opened, so an
-//! unattended run never opens a browser on the person's desktop; the record is what a test checks.
+//! A QA copy started with `ORCHESTER_APP_RECORD_LINKS` set, or a test that asks for it ([`Links::record_instead`]),
+//! only records what it would have opened, so an unattended run never opens a browser on the person's desktop; the
+//! record is what a test checks.
 
 use std::{env, io, sync::Arc};
 
@@ -9,41 +10,40 @@ use parking_lot::Mutex;
 /// The environment variable that makes the app record links instead of opening them.
 pub const RECORD_VARIABLE: &str = "ORCHESTER_APP_RECORD_LINKS";
 
-#[derive(Clone)]
-pub enum Links {
-  /// The default browser, through `orchester_exec::external::open_url` (https only).
-  System,
-  /// Records each address in order, and opens nothing.
-  Recorded(Arc<Mutex<Vec<String>>>),
+/// The session's links. Clones share whether they record and what they recorded.
+#[derive(Clone, Default)]
+pub struct Links {
+  /// `None` while pages open in the browser; the addresses recorded so far otherwise.
+  recorded: Arc<Mutex<Option<Vec<String>>>>,
 }
 
 impl Links {
   /// The system browser, or a record when [`RECORD_VARIABLE`] is set.
   pub fn from_env() -> Self {
+    let links = Self::default();
     if env::var_os(RECORD_VARIABLE).is_some() {
-      Self::Recorded(Arc::default())
-    } else {
-      Self::System
+      links.record_instead();
     }
+    links
   }
 
-  /// Opens `url` in the browser, or records it.
+  /// From now on this session records addresses instead of opening them.
+  pub fn record_instead(&self) {
+    self.recorded.lock().get_or_insert_with(Vec::new);
+  }
+
+  /// Opens `url` in the browser (`orchester_exec::external::open_url`, https only), or records it.
   pub fn open(&self, url: &str) -> io::Result<()> {
-    match self {
-      Self::System => orchester_exec::external::open_url(url),
-      Self::Recorded(opened) => {
-        tracing::info!(url, "a link was recorded instead of opened");
-        opened.lock().push(url.to_owned());
-        Ok(())
-      }
+    if let Some(recorded) = self.recorded.lock().as_mut() {
+      tracing::info!(url, "a link was recorded instead of opened");
+      recorded.push(url.to_owned());
+      return Ok(());
     }
+    orchester_exec::external::open_url(url)
   }
 
-  /// The addresses recorded so far; none for the system browser.
+  /// The addresses recorded so far; none while pages open in the browser.
   pub fn recorded(&self) -> Vec<String> {
-    match self {
-      Self::System => Vec::new(),
-      Self::Recorded(opened) => opened.lock().clone(),
-    }
+    self.recorded.lock().clone().unwrap_or_default()
   }
 }

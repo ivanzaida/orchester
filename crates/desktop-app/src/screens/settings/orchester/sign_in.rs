@@ -9,7 +9,7 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, ScrollVertical, Spacer, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
@@ -143,9 +143,11 @@ pub(super) fn panel(ctx: &mut Ctx, address: &CloudAddress, form: &Form, advanced
     .child(sign_in_form(ctx, form, &address.address.authority()))
     .child(divider())
     .child(without_internet(ctx, &navigation))
-    .child(Spacer::new().flex(1.0))
     .child(advanced::section(ctx, address, advanced));
-  frame("orchester-cloud-details").child(head).child(body).into()
+  frame("orchester-cloud-details")
+    .child(head)
+    .child(ScrollVertical::new(body).id("orchester-sign-in-scroll").flex(1.0))
+    .into()
 }
 
 fn sign_in_form(ctx: &mut Ctx, form: &Form, host: &str) -> Element {

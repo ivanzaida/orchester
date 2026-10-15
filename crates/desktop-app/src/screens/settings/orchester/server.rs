@@ -209,6 +209,9 @@ impl Component for ServerPanel {
 
 /// The person's projects on the server, read while it is connected.
 fn projects(ctx: &mut Ctx, props: &Props) -> Option<Result<Projects, Said>> {
+  if !props.entry.in_use() {
+    return Some(Err(Said::new("cloud.server.projects.signedOut")));
+  }
   let servers = Services::of(ctx).servers;
   let state = ctx
     .future(

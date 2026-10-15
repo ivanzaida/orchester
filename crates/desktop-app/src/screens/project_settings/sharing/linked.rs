@@ -97,26 +97,9 @@ impl Component for Linked {
       Some(MemberRole::Owner) => ctx.t("sharing.linked.owner"),
       Some(MemberRole::Member) => ctx.t("sharing.linked.member"),
       None => ctx.t("sharing.linked.noRole"),
-    };
-    let state = Column::new()
-      .width(Dimension::Px(CONTROL_WIDTH))
-      .spacing(crate::theme::ExtraSpacing::Hair.role())
-      .child(page::icon_note(
-        "sharing-shared",
-        Icon::Cloud,
-        &ctx.t_args("sharing.linked.sharedOn", [("server", server.as_str())]),
-      ))
-      .child(page::note(
-        "sharing-shared-detail",
-        &ctx.t_args(
-          "sharing.linked.detail",
-          [
-            ("key", link.key.as_str().to_owned()),
-            ("day", crate::screens::settings::orchester::day_of(ctx, link.joined_at)),
-            ("role", role.to_string()),
-          ],
-        ),
-      ));
+    }
+    .to_string();
+    let state = shared_state(ctx, link, (&server, &role));
     let task_list = side_row(
       Label::new("sharing-task-list", ctx.t("sharing.link.taskList")).description(ctx.t_args(
         "sharing.linked.taskListDescription",
@@ -133,9 +116,11 @@ impl Component for Linked {
     let address_row = side_row(
       Label::new("sharing-address", ctx.t("sharing.linked.address"))
         .description(ctx.t("sharing.linked.addressDescription")),
-      Column::new()
-        .width(Dimension::Px(CONTROL_WIDTH))
-        .child(page::note("sharing-address-value", &address)),
+      Column::new().width(Dimension::Px(CONTROL_WIDTH)).child(
+        lurq::components::Text::new(&address)
+          .id("sharing-address-value")
+          .variant(crate::theme::OrchesterText::Address.role()),
+      ),
       Place::Last,
       true,
     );
@@ -260,4 +245,27 @@ impl Linked {
     .stacked()
     .into()
   }
+}
+
+/// *Shared on Kontur team* with the key, when it was linked and the person's role there.
+fn shared_state(ctx: &Ctx, link: &orchester_store::SharingLink, (server, role): (&str, &str)) -> Column {
+  Column::new()
+    .width(Dimension::Px(CONTROL_WIDTH))
+    .spacing(crate::theme::ExtraSpacing::Hair.role())
+    .child(page::icon_note(
+      "sharing-shared",
+      Icon::Cloud,
+      &ctx.t_args("sharing.linked.sharedOn", [("server", server)]),
+    ))
+    .child(page::note(
+      "sharing-shared-detail",
+      &ctx.t_args(
+        "sharing.linked.detail",
+        [
+          ("key", link.key.as_str().to_owned()),
+          ("day", crate::screens::settings::orchester::day_of(ctx, link.joined_at)),
+          ("role", role.to_owned()),
+        ],
+      ),
+    ))
 }

@@ -39,8 +39,9 @@ pub(super) struct Advanced {
 impl Advanced {
   pub(super) fn new(ctx: &mut Ctx) -> Self {
     let cloud = Services::of(ctx).cloud;
-    Self {
-      open: ctx.signal(false),
+    let open = ctx.signal(false);
+    let advanced = Self {
+      open: open.clone(),
       address: ctx.signal(String::new()),
       set: ctx.future_action(move |address: Option<String>| {
         let cloud = cloud.clone();
@@ -52,7 +53,13 @@ impl Advanced {
           cloud.set_address(address).await.map_err(|error| cloud_error(&error))
         }
       }),
-    }
+    };
+    ctx.watch(&advanced.set.state(), move |state| {
+      if state.is_fulfilled() {
+        open.set(false);
+      }
+    });
+    advanced
   }
 }
 

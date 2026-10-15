@@ -22,7 +22,10 @@ fn orchester_roles_follow_the_design() {
     );
   }
   assert_eq!(theme.typography_style(OrchesterText::Code.role()).letter_spacing, 3.0);
-  assert_eq!(theme.typography_style(OrchesterText::PageTitle.role()).letter_spacing, -0.3);
+  assert_eq!(
+    theme.typography_style(OrchesterText::PageTitle.role()).letter_spacing,
+    -0.3
+  );
   for (spacing, value) in [
     (OrchesterSpacing::FormSide, 40.0),
     (OrchesterSpacing::FormTop, 22.0),

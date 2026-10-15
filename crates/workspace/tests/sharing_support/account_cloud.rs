@@ -3,6 +3,11 @@
 //! servers, the key set and identity tokens, all signed with `orchester-api`'s identity keys. With `offers` off it
 //! answers the invite and server endpoints `404`, as today's cloud does.
 
+#![allow(
+  dead_code,
+  reason = "shared by test binaries and a QA example, each of which uses a part"
+)]
+
 use std::{
   io::{Read, Write},
   net::{SocketAddr, TcpListener, TcpStream},
