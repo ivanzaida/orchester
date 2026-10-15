@@ -1,0 +1,24 @@
+"use client";
+
+import { useActionState } from "react";
+
+import { t } from "@/lib/i18n";
+import { Actions } from "@/ui/card";
+import { CsrfField } from "@/ui/hidden";
+import { ErrorLine } from "@/ui/status";
+import { Submit } from "@/ui/submit";
+
+import { signOutAction, type SignOutState } from "./actions";
+
+export function SignOut({ csrf }: { csrf: string }) {
+  const [state, action] = useActionState<SignOutState, FormData>(signOutAction, {});
+  return (
+    <form action={action}>
+      <CsrfField token={csrf} />
+      <Actions>
+        {state.error && <ErrorLine message={state.error} />}
+        <Submit kind="secondary" icon="log-out" label={t("home.signOut")} busyLabel={t("home.signingOut")} />
+      </Actions>
+    </form>
+  );
+}

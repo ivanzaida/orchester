@@ -1,0 +1,38 @@
+.icon {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--icon-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.reason {
+  width: var(--icon-reason);
+  height: var(--icon-reason);
+}
+
+.button {
+  width: var(--icon-button);
+  height: var(--icon-button);
+}
+
+.field {
+  width: var(--icon-field);
+  height: var(--icon-field);
+}
+
+.tile {
+  width: var(--icon-tile);
+  height: var(--icon-tile);
+}
+
+.spin {
+  animation: spin var(--duration-spin) linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}

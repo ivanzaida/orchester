@@ -1,0 +1,39 @@
+import { expect, type Page } from "@playwright/test";
+
+export const API = "http://127.0.0.1:4110";
+export const EMAIL = "mira.koval@example.com";
+export const PASSWORD = "correct horse battery";
+
+export interface Recorded {
+  method: string;
+  path: string;
+  forwardedFor: string | null;
+  authorization: string | null;
+  cookie: string | null;
+  body: Record<string, unknown> | null;
+}
+
+/** What the fake API received so far. */
+export async function apiRequests(): Promise<Recorded[]> {
+  const response = await fetch(`${API}/__fake/requests`);
+  return (await response.json()) as Recorded[];
+}
+
+/** Every request the browser made goes to the site itself, never to the API. */
+export function watchBrowserRequests(page: Page): string[] {
+  const seen: string[] = [];
+  page.on("request", (request) => seen.push(request.url()));
+  return seen;
+}
+
+export async function signInAs(page: Page, email = EMAIL, password = PASSWORD): Promise<void> {
+  await page.goto("/signin");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+}
+
+export function expectNoApiAddress(urls: string[]): void {
+  expect(urls.filter((url) => url.startsWith(API))).toEqual([]);
+  expect(urls.every((url) => url.startsWith("http://localhost:4100/"))).toBe(true);
+}

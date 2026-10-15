@@ -1,0 +1,192 @@
+/*
+ * Orchester Cloud's design tokens: the only place with colours, fonts, sizes, spacing, radii, borders and
+ * breakpoints. Values come from `data/orchester2.pen`: the file's variables (`$name`, theme
+ * `{mode, accent: graphite}`) and the Cloud layer `hYBx8` (node ids beside one-off values). Components use
+ * `var(--…)` only; `tests/unit/literals.test.ts` fails on a literal anywhere else.
+ */
+
+/* The design's fonts, served from `public/fonts` (no third-party requests). */
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/Geist-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/Geist-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/Geist-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/GeistMono-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: dark;
+
+  /* Colours, mode dark, accent graphite. */
+  --color-surface-base: #111113; /* $surface_base */
+  --color-surface-panel: #18181a; /* $surface_panel */
+  --color-surface-raised: #202023; /* $surface_raised */
+  --color-surface-input: #1b1b1e; /* $surface_input */
+  --color-border: #2a2a2e; /* $border */
+  --color-border-strong: #3b3b40; /* $border_strong */
+  --color-border-focus: #a3a3ab; /* $border_focus */
+  --color-text-primary: #ededf0; /* $text_primary */
+  --color-text-secondary: #b3b3ba; /* $text_secondary */
+  --color-text-muted: #8a8a92; /* $text_muted */
+  --color-accent: #ededf0; /* $accent */
+  --color-accent-hover: #ffffff; /* $accent_hover */
+  --color-accent-text: #ededf0; /* $accent_text */
+  --color-on-accent: #111113; /* $on_accent */
+  --color-hover: #ffffff0f; /* $hover */
+  --color-success: #3db07a; /* $success */
+  --color-success-muted: #3db07a24; /* $success_muted */
+  --color-warning: #e2a33c; /* $warning */
+  --color-warning-muted: #e2a33c24; /* $warning_muted */
+  --color-danger: #f0605a; /* $danger */
+  /* The brand mark keeps its own colours in both modes (`OLHng` Brand / Orchester, `DXmFx`). */
+  --color-brand-logo: #18191d;
+  --color-brand-bar: #f1f1f4;
+
+  /* Type: $font_sans, $font_mono, served from `public/fonts`. */
+  --font-sans: "Geist", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --text-tag: 11px; /* CLOUD tag `YOV1U` */
+  --text-small: 12px; /* labels, hints, small print, errors */
+  --text-body: 13px; /* values, buttons, descriptions */
+  --text-wordmark: 16px; /* `MGrMj` */
+  --text-title: 20px; /* type/heading, `cApGk` */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --leading-button: 1.2; /* `P8aXN` */
+  --leading-title: 1.25; /* `cApGk` */
+  --leading-error: 1.4; /* Field error `d5xipm` */
+  --leading-small: 1.45; /* hints, small print */
+  --leading-body: 1.5; /* descriptions */
+  --tracking-title: -0.2px; /* `cApGk`, `MGrMj` */
+  --tracking-tag: 0.6px; /* `YOV1U` */
+  --tracking-secret: 1px; /* password value `C6NsE2` */
+
+  /* Spacing: $spacing_* and the Cloud layer's gaps. */
+  --space-hairline: 2px; /* notice title and body `wDfBm` */
+  --space-xs: 4px; /* $spacing_xs: icon tile to title `rlzlk` */
+  --space-inline: 6px; /* icon to label, field label to box */
+  --space-sm: 8px; /* $spacing_sm */
+  --space-tight: 10px; /* actions `FeF02`, brand `V4PyD`, notice `optfF` */
+  --space-md: 12px; /* $spacing_md */
+  --space-notice-x: 14px; /* notice `optfF` */
+  --space-lg: 16px; /* $spacing_lg */
+  --space-footer-links: 20px; /* footer `szTC4` */
+  --space-xl: 24px; /* $spacing_xl */
+  --space-section: 32px; /* $spacing_section */
+  --space-page-y: 40px; /* main `AmM6K` */
+
+  /* Radii and borders. */
+  --radius-bar: 1.75px; /* logo bars `M4DHt` */
+  --radius-logo: 5.4px; /* `DXmFx` */
+  --radius-md: 6px; /* $radius_md */
+  --radius-mark: 8px; /* brand tile `yTI2t` */
+  --radius-lg: 10px; /* $radius_lg; icon tile `bQlNZ`, notice `optfF` */
+  --border-width: 1px; /* $border_size_sm */
+  --focus-width: 2px; /* $border_size_md */
+
+  /* Sizes. */
+  --size-card: 400px; /* `G6OhQc` */
+  --size-control: 36px; /* $control_height_lg */
+  --size-control-small: 28px; /* $control_height_md, `p506N` */
+  --size-mark: 32px; /* `yTI2t` */
+  --size-logo: 24px; /* `DXmFx` */
+  --size-tile: 40px; /* `bQlNZ` */
+  --size-footer: 56px; /* `szTC4` */
+  --size-bar-width: 3.5px;
+  --size-bar-1: 7px;
+  --size-bar-2: 13px;
+  --size-bar-3: 9.5px;
+  --size-bar-gap: 2.5px;
+  --icon-reason: 12px; /* lock, error, note icons */
+  --icon-button: 14px; /* button and address icons */
+  --icon-field: 16px; /* eye, notice icon */
+  --icon-tile: 18px; /* `EQwj3` */
+  --icon-stroke: 2px; /* lucide's stroke */
+
+  /* States. */
+  --opacity-unavailable: 0.5; /* `O1AnhW`, `Rz2FC` */
+  --opacity-busy: 0.6; /* `Sa0WY` */
+  --duration-spin: 1s;
+
+  /* Layout that changes on a phone (`Ahged`, `afqip`). */
+  --page-padding-y: var(--space-page-y);
+  --page-padding-x: 0px;
+  --page-justify: center;
+  --card-width: var(--size-card);
+  --card-padding: var(--space-section);
+  --footer-direction: row;
+  --footer-align: center;
+  --footer-height: var(--size-footer);
+  --footer-padding: 0 var(--space-section);
+  --footer-gap: var(--space-footer-links);
+  --footer-spacer: block;
+  --footer-links-gap: var(--space-footer-links);
+  --footer-leading: normal;
+}
+
+/* The light frame `j7rxg`: the site follows the browser's colour scheme. */
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --color-surface-base: #e4e4e8;
+    --color-surface-panel: #ffffff;
+    --color-surface-raised: #ffffff;
+    --color-surface-input: #ffffff;
+    --color-border: #e2e2e6;
+    --color-border-strong: #c7c7ce;
+    --color-border-focus: #52525a;
+    --color-text-primary: #18181b;
+    --color-text-secondary: #45454d;
+    --color-text-muted: #6b6b74;
+    --color-accent: #18181b;
+    --color-accent-hover: #2e2e33;
+    --color-accent-text: #18181b;
+    --color-on-accent: #ffffff;
+    --color-hover: #0000000a;
+    --color-success: #158354;
+    --color-success-muted: #1583541a;
+    --color-warning: #9e630e;
+    --color-warning-muted: #d9911e24;
+    --color-danger: #d4342f;
+  }
+}
+
+/* Phones: `Ahged` and `afqip` are 390 wide; the card needs its 400 plus 16 at each side. */
+@media (max-width: 431px) {
+  :root {
+    --page-padding-y: var(--space-section);
+    --page-padding-x: var(--space-lg);
+    --page-justify: flex-start;
+    --card-width: 100%;
+    --card-padding: var(--space-xl);
+    --footer-direction: column;
+    --footer-align: flex-start;
+    --footer-height: auto;
+    --footer-padding: var(--space-lg) var(--space-lg) var(--space-xl);
+    --footer-gap: var(--space-sm);
+    --footer-spacer: none;
+    --footer-links-gap: var(--space-lg);
+    --footer-leading: var(--leading-small);
+  }
+}
