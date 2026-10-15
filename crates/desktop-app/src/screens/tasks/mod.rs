@@ -2,7 +2,9 @@
 //! narrowed to a pipeline, in the order chosen, each row saying what the task needs or where its run
 //! stands, and opening the task. The task a Create just added stands out (`Tasks · new task highlighted`
 //! `t3oAOi`). Its other states: a project without tasks (`PMJrB`), the tasks being read (`kA8bx`), read
-//! failing (`oDyZB`) and a search that hides every row (`EHGLs`).
+//! failing (`oDyZB`) and a search that hides every row (`EHGLs`). Needs you lists and counts the tasks
+//! something of waits for; what waits and is no task's (the project's memory records) is named in a notice
+//! over its rows, which opens the Needs you panel.
 //!
 //! The tasks are the project feed's, as they stand with its runner: while no runner serves the project, a
 //! run recorded as running is interrupted. Not built yet (D4): selecting tasks and what is done to a
@@ -170,7 +172,8 @@ impl TasksScreen {
     let page = page
       .child(header::tabs(ctx, id, list, Some(counts)))
       .with_children(held_groups(ctx, project, tasks))
-      .child(query::query(ctx, &self.choices, Some(tasks)));
+      .child(query::query(ctx, &self.choices, Some(tasks)))
+      .with_children(states::outside_tasks(ctx, list.tab(), tasks));
     if rows.is_empty() {
       // Rows that come back are placed afresh, at their top.
       *self.placed.lock() = None;

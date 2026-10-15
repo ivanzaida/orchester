@@ -10,7 +10,11 @@ use std::{
 };
 
 use orchester_core::{
-  id::{ConnectionId, IdempotencyKey, ProjectId, TaskId},
+  id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId, TaskId},
+  memory::{
+    AgentProvenance, AgentWrite, Confidence, Memory, MemoryContent, MemoryKind, MemoryScope, MemorySettings,
+    SecretScreen,
+  },
   name::Name,
   permission::StepPermissions,
   project::{Project, ProjectKey},
@@ -381,4 +385,27 @@ impl Fixture {
   pub fn record(&mut self, run: &Run, events: &[RunEvent]) {
     self.db.append_events(run, events).expect("append");
   }
+}
+
+/// A record `run`'s agent writes to the project's memory at `now`, which waits for approval.
+pub fn proposed(run: &Run, text: &str, now: i64) -> Memory {
+  let write = AgentWrite {
+    provenance: AgentProvenance {
+      profile: ResourceId::generate(),
+      run: run.id(),
+      step: StepKey::new("implement").expect("key"),
+      execution: run.current_attempt().expect("attempt").executions()[0].id(),
+    },
+    confidence: Confidence::Medium,
+    sources: Vec::new(),
+  };
+  let content = MemoryContent::new(MemoryKind::Fact, text).expect("content");
+  let screened = SecretScreen::new(Vec::new()).check(content).expect("no secrets");
+  Memory::by_agent(
+    MemoryScope::Project,
+    write,
+    screened,
+    &MemorySettings::default(),
+    at(now),
+  )
 }
