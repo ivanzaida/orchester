@@ -1,11 +1,13 @@
 //! The Orchestrator chat's turn (`ClaudeChat`): read-only and only inside the project folder, with its own MCP
-//! server's tools allowed and the folders that hold secrets denied by rule.
+//! server's tools allowed and the folders that hold secrets denied by rule; and what its system prompt tells it about
+//! links.
 
 use std::path::{Path, PathBuf};
 
 use orchester_core::{
   connection::invocation::{ClaudeChat, ClaudeSession},
-  orchestrator::MAX_TURNS,
+  id::ProjectId,
+  orchestrator::{MAX_TURNS, instructions::system_prompt},
 };
 
 use super::SESSION;
@@ -87,4 +89,21 @@ fn orchestrator_chat_denies_unix_folders_and_skips_what_it_cannot_name() {
     ["Read(//Users/me/Library/Application Support/claude/**)"]
   );
   assert!(!chat_args(&[]).iter().any(|arg| arg == "--disallowedTools"));
+}
+
+#[test]
+fn orchestrator_links_only_with_the_links_its_tools_returned() {
+  let prompt = system_prompt("Kontur", ProjectId::generate());
+  assert!(
+    prompt.contains("[KON-12](orchester:/project/<id>/tasks/KON-12)"),
+    "it shows how a `link` becomes an `orchester:` link: {prompt}"
+  );
+  assert!(
+    prompt.contains("Never write or change a route yourself"),
+    "it never makes up a route: {prompt}"
+  );
+  assert!(
+    prompt.contains("only with the `url` a tool returned"),
+    "it links a web page only with a returned `url`: {prompt}"
+  );
 }
