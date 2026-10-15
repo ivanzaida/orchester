@@ -129,13 +129,14 @@ fn shown(room: f32, slots: &[Slot], active: usize) -> Vec<usize> {
 /// [`LABEL_MIN_WIDTH`]. Without a labelled tab the cap is the widest.
 fn label_width(room: f32, slots: &[Slot], shown: &[usize]) -> Option<f32> {
   let gaps = gap() * shown.len().saturating_sub(1) as f32;
-  let (labelled, fixed) = shown
-    .iter()
-    .filter_map(|index| slots.get(*index))
-    .fold((0_usize, gaps), |(labelled, fixed), slot| match slot {
-      Slot::Icon => (labelled, fixed + ICON_TAB_WIDTH),
-      Slot::Labelled(_) => (labelled + 1, fixed + slot.width(0.0)),
-    });
+  let (labelled, fixed) =
+    shown
+      .iter()
+      .filter_map(|index| slots.get(*index))
+      .fold((0_usize, gaps), |(labelled, fixed), slot| match slot {
+        Slot::Icon => (labelled, fixed + ICON_TAB_WIDTH),
+        Slot::Labelled(_) => (labelled + 1, fixed + slot.width(0.0)),
+      });
   if labelled == 0 {
     return Some(LABEL_MAX_WIDTH);
   }

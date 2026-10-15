@@ -78,10 +78,7 @@ fn active_id(navigation: &Navigation) -> String {
 
 /// The tabs that show in the strip, in order.
 fn in_strip(window: &mut Window, navigation: &Navigation) -> Vec<String> {
-  tab_ids(navigation)
-    .into_iter()
-    .filter(|id| shown(window, id))
-    .collect()
+  tab_ids(navigation).into_iter().filter(|id| shown(window, id)).collect()
 }
 
 /// Whether the tab `id` shows whole inside the strip.
@@ -99,7 +96,10 @@ fn a_few_tabs_show_without_the_tab_list() {
     navigation.go(super::project(ProjectPage::Secrets));
   }
   settle(&mut window);
-  assert!(!shown(&mut window, "tab-list-button"), "no chevron while every tab fits");
+  assert!(
+    !shown(&mut window, "tab-list-button"),
+    "no chevron while every tab fits"
+  );
   for id in tab_ids(&navigation) {
     assert!(whole(&mut window, &id), "{id} shows whole");
   }
@@ -184,7 +184,10 @@ fn the_list_holds_every_tab_in_order_with_the_active_one_marked() {
     let expected = if *id == active { "active" } else { "inactive" };
     assert_eq!(state, expected, "{id}");
   }
-  let row = bounds(&mut window, &format!("tab-list-{}", navigation.tabs_now().active().id()));
+  let row = bounds(
+    &mut window,
+    &format!("tab-list-{}", navigation.tabs_now().active().id()),
+  );
   let menu = bounds(&mut window, "tab-list-menu");
   assert!(
     row.y >= menu.y && row.y + row.height <= menu.y + menu.height + 0.5,
@@ -241,14 +244,23 @@ fn closing_a_tab_in_the_list_keeps_the_list_open() {
   assert_eq!(tab_ids(&navigation).len(), count - 1, "the tab closed");
   assert_eq!(navigation.tabs_now().active().id(), active, "the active tab stays");
   assert!(shown(&mut window, "tab-list-menu"), "the list stays open");
-  assert!(!shown(&mut window, &format!("tab-list-{hidden}")), "its row left the list");
+  assert!(
+    !shown(&mut window, &format!("tab-list-{hidden}")),
+    "its row left the list"
+  );
   press(&mut window, &format!("tab-list-{active}"), MouseButton::Middle);
   settle(&mut window);
-  assert_eq!(tab_ids(&navigation).len(), count - 2, "a middle click closes a row's tab");
+  assert_eq!(
+    tab_ids(&navigation).len(),
+    count - 2,
+    "a middle click closes a row's tab"
+  );
 }
 
 fn key(window: &mut Window, key: &str) {
-  window.tree.key_down(key.to_owned(), key.to_owned(), false, false, false);
+  window
+    .tree
+    .key_down(key.to_owned(), key.to_owned(), false, false, false);
   window.tree.key_up(key.to_owned(), key.to_owned(), false, false, false);
   settle(window);
 }
@@ -270,12 +282,24 @@ fn the_keyboard_moves_through_the_list_and_chooses() {
   open_list(&mut window);
   assert_eq!(ringed(&mut window, &navigation), None, "no ring before a key");
   key(&mut window, "ArrowDown");
-  assert_eq!(ringed(&mut window, &navigation).as_ref(), Some(&ids[1]), "down from the active tab");
+  assert_eq!(
+    ringed(&mut window, &navigation).as_ref(),
+    Some(&ids[1]),
+    "down from the active tab"
+  );
   key(&mut window, "ArrowUp");
   key(&mut window, "ArrowUp");
-  assert_eq!(ringed(&mut window, &navigation).as_ref(), Some(&ids[0]), "and up, stopping at the first");
+  assert_eq!(
+    ringed(&mut window, &navigation).as_ref(),
+    Some(&ids[0]),
+    "and up, stopping at the first"
+  );
   key(&mut window, "End");
-  assert_eq!(ringed(&mut window, &navigation).as_ref(), ids.last(), "End rings the last");
+  assert_eq!(
+    ringed(&mut window, &navigation).as_ref(),
+    ids.last(),
+    "End rings the last"
+  );
   let last = ids.last().expect("tabs").replacen("tab-", "tab-list-", 1);
   let (row, menu) = (bounds(&mut window, &last), bounds(&mut window, "tab-list-menu"));
   assert!(
@@ -283,7 +307,11 @@ fn the_keyboard_moves_through_the_list_and_chooses() {
     "the list scrolled the ringed row into view: {row:?} {menu:?}"
   );
   key(&mut window, "Enter");
-  assert_eq!(active_id(&navigation), *ids.last().expect("tabs"), "Enter switches to it");
+  assert_eq!(
+    active_id(&navigation),
+    *ids.last().expect("tabs"),
+    "Enter switches to it"
+  );
   assert!(!shown(&mut window, "tab-list-menu"), "and closes the list");
   assert_eq!(focused(&window).as_deref(), Some("tab-list-button"));
   assert!(whole(&mut window, &active_id(&navigation)), "the chosen tab shows");
@@ -300,7 +328,10 @@ fn escape_closes_the_list_and_gives_the_focus_back_to_the_chevron() {
   assert_eq!(active_id(&navigation), active, "without switching");
   assert_eq!(focused(&window).as_deref(), Some("tab-list-button"));
   key(&mut window, "Enter");
-  assert!(shown(&mut window, "tab-list-menu"), "Enter on the chevron opens it again");
+  assert!(
+    shown(&mut window, "tab-list-menu"),
+    "Enter on the chevron opens it again"
+  );
 }
 
 #[test]
@@ -313,6 +344,9 @@ fn resizing_the_window_recomputes_which_tabs_show() {
   assert_eq!(in_strip(&mut window, &navigation), tab_ids(&navigation));
   window.tree.resize(960, 640);
   settle(&mut window);
-  assert!(shown(&mut window, "tab-list-button"), "and leaves again when it narrows");
+  assert!(
+    shown(&mut window, "tab-list-button"),
+    "and leaves again when it narrows"
+  );
   assert!(shown(&mut window, &active_id(&navigation)));
 }

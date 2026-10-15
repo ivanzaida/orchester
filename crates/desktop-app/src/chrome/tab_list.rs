@@ -128,7 +128,10 @@ impl TabList {
   fn panel(&self, ctx: &mut Ctx, navigation: &Navigation) -> Column {
     let projects = Projects::of(ctx);
     let tabs = navigation.tabs();
-    let ringed = self.cursor.get().filter(|id| tabs.tabs().iter().any(|tab| tab.id() == *id));
+    let ringed = self
+      .cursor
+      .get()
+      .filter(|id| tabs.tabs().iter().any(|tab| tab.id() == *id));
     let ringed_any = ringed.is_some();
     let rows = tabs.tabs().iter().fold(
       Column::new()
