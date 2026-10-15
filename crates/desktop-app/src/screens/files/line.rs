@@ -35,6 +35,8 @@ pub const NUMBER_WIDTH: f32 = 44.0;
 pub const GAP_WIDTH: f32 = 24.0;
 /// Advance of one Geist Mono character at 12: 0.6 em.
 pub const CODE_CHAR_WIDTH: f32 = 7.2;
+/// The room kept after a cut line's code for the marker that says so, as the Changes tab keeps it.
+pub const MARKER_WIDTH: f32 = 200.0;
 
 /// A place found in the line: characters `start..end`, and whether it is the current one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

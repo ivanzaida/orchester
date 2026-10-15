@@ -1,12 +1,25 @@
 //! What the page shows of a file and its versions, and what its controls do.
 use std::fs;
 
-use lurq::app::events::with_synthetic_input;
-use orchester_app::routes::{FilesView, ProjectPage, Route};
+use lurq::{app::events::with_synthetic_input, node::element::ElementRef};
+use orchester_app::{
+  routes::{FilesView, ProjectPage, Route},
+  ui::icon::{Icon, glyph},
+};
 use orchester_core::id::RunId;
 use orchester_workspace::files::{LineRange, Version};
 
 use super::harness::Files;
+
+/// The bounds of the element `id`.
+fn bounds(files: &mut Files, id: &str) -> lurq::core::ElementRect {
+  files
+    .window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"))
+}
 
 fn files_view(route: &Route) -> FilesView {
   match route {
@@ -94,6 +107,30 @@ fn files_switches_between_the_checkout_and_the_base_branch() {
   assert_eq!(files_view(&files.route()).at(), &Version::Base);
   assert_eq!(files.window.text("files-version-label"), "Base branch");
   assert!(files.window.text("files-open").contains("Open in editor"));
+  assert!(
+    files
+      .window
+      .text("files-open-reason")
+      .starts_with("A commit's file is not on disk"),
+    "why it is unavailable is on screen"
+  );
+}
+
+#[cfg(windows)]
+#[test]
+fn files_say_why_a_script_does_not_open_in_an_editor() {
+  let mut files = Files::new();
+  fs::write(files.repo.join("deploy.ps1"), "Write-Output 'deploy'\n").expect("a script");
+  files.open(Some("deploy.ps1"), Version::Checkout);
+  files
+    .window
+    .until("the script", |w| w.text("files-meta-text").contains("1 line"));
+  assert_eq!(
+    files.window.text("files-open-reason"),
+    "Orchester does not open a file that your system would run instead of showing."
+  );
+  files.open(Some("src/main.rs"), Version::Checkout);
+  assert!(!files.exists("files-open-reason"), "code opens");
 }
 
 #[test]
@@ -190,4 +227,35 @@ fn files_cut_a_very_long_line_and_say_so() {
     .until("its lines", |w| w.text("files-meta-text").contains("2 lines"));
   assert!(files.exists("files-line-cut"), "the long line says it was cut");
   assert_eq!(files.window.text("files-line-cut"), "Line shortened");
+  let (marker, line) = (bounds(&mut files, "files-line-cut"), bounds(&mut files, "files-line-2"));
+  assert!(
+    marker.x + marker.width <= line.x + line.width + 0.5,
+    "the line has room for the marker, so it scrolls into view: {marker:?} in {line:?}"
+  );
+}
+
+/// Every text inside `element`, icon glyphs among them.
+fn glyphs(element: ElementRef<'_>, into: &mut Vec<String>) {
+  into.extend(element.text_content().map(str::to_owned));
+  for child in element.children() {
+    glyphs(child, into);
+  }
+}
+
+#[test]
+fn files_tab_shows_the_kind_of_its_file() {
+  let mut files = Files::new();
+  for (file, kind) in [
+    ("logo.png", Icon::FileImage),
+    ("README.md", Icon::FileText),
+    ("src/main.rs", Icon::FileCode),
+  ] {
+    files.open(Some(file), Version::Checkout);
+    let mut shown = Vec::new();
+    glyphs(
+      files.window.tree.get_element_by_id("tab-strip").expect("the tabs"),
+      &mut shown,
+    );
+    assert!(shown.contains(&glyph(kind)), "{file}'s tab shows {kind:?}");
+  }
 }

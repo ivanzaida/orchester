@@ -12,7 +12,7 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
-use super::line::{CODE_CHAR_WIDTH, GAP_WIDTH, NUMBER_WIDTH};
+use super::line::{CODE_CHAR_WIDTH, GAP_WIDTH, MARKER_WIDTH, NUMBER_WIDTH};
 
 /// The most characters of a line that are laid out.
 pub const MAX_SHOWN_CHARS: usize = 4_000;
@@ -50,11 +50,15 @@ impl ShownLines {
       return made.clone();
     }
     let (tokens, cut): (Vec<LineTokens>, Vec<bool>) = text.lines().iter().map(|line| plain_line(line)).unzip();
-    let longest = tokens.iter().map(shown_chars).max().unwrap_or(0);
+    let width = tokens
+      .iter()
+      .zip(&cut)
+      .map(|(line, cut)| line_width(shown_chars(line), *cut))
+      .fold(line_width(0, false), f32::max);
     let made = Plain {
       tokens: Arc::new(tokens),
       cut: cut.into(),
-      width: content_width(longest),
+      width,
     };
     *kept = Some((text.clone(), made.clone()));
     made
@@ -133,11 +137,12 @@ fn same_text(a: &LineTokens, b: &LineTokens) -> bool {
     .eq(b.iter().flat_map(|token| token.text.chars()))
 }
 
-/// The width a line of `chars` characters needs.
+/// The width a line of `chars` characters needs, with the room for its marker when it was `cut`.
 #[allow(
   clippy::cast_precision_loss,
   reason = "a line holds far fewer characters than f32 counts exactly"
 )]
-fn content_width(chars: usize) -> f32 {
-  NUMBER_WIDTH + GAP_WIDTH + chars as f32 * CODE_CHAR_WIDTH
+fn line_width(chars: usize, cut: bool) -> f32 {
+  let marker = if cut { MARKER_WIDTH } else { 0.0 };
+  NUMBER_WIDTH + GAP_WIDTH + chars as f32 * CODE_CHAR_WIDTH + marker
 }

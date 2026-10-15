@@ -23,7 +23,13 @@ use orchester_workspace::files::{FileList, NameMatches};
 use super::{Page, keys, version};
 use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, FilesText, IconSize},
-  ui::{command_trigger::CommandTrigger, field::FieldInput, icon::icon, kbd::key_cap, pressable::pressable},
+  ui::{
+    command_trigger::CommandTrigger,
+    field::FieldInput,
+    icon::{file_icon, icon},
+    kbd::key_cap,
+    pressable::pressable,
+  },
 };
 
 /// The trigger's width (`YErsN`), the search's (`Go to file popover` `h6mtSs`), its field's height (`dWexO`)
@@ -196,7 +202,7 @@ fn result(ctx: &Ctx, (path, query): (&str, &str), current: bool, choose: impl Fn
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Sm)
-    .child(icon(super::tree::file_icon(path), IconSize::Md, glyph_color))
+    .child(icon(file_icon(path), IconSize::Md, glyph_color))
     .child(
       Column::new()
         .flex(1.0)

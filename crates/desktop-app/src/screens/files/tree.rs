@@ -18,10 +18,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_workspace::{
-  files::{EntryKind, FileList, FilePath, TreeRow},
-  highlight::language,
-};
+use orchester_workspace::files::{EntryKind, FileList, FilePath, TreeRow};
 use parking_lot::Mutex;
 
 use super::{OpenFolders, Page, reads::Shown};
@@ -30,7 +27,7 @@ use crate::{
   routes::{FilesView, ProjectPage, Route},
   theme::{CodeText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
-    icon::{Icon, icon},
+    icon::{Icon, file_icon, icon},
     icon_button::IconButton,
     message::message_text,
     pressable::pressable,
@@ -44,21 +41,6 @@ const ROW_HEIGHT: f32 = 24.0;
 const LEVEL_INDENT: f32 = 14.0;
 /// The room of a chevron, kept empty beside a file (`No chevron` `i2EHoK`).
 const CHEVRON_ROOM: f32 = 12.0;
-
-/// Extensions of the files shown as images.
-const IMAGES: [&str; 9] = ["png", "jpg", "jpeg", "gif", "ico", "bmp", "webp", "svg", "icns"];
-
-/// The icon of the file at `path`: an image, code a grammar reads, or text.
-pub fn file_icon(path: &str) -> Icon {
-  let extension = path.rsplit_once('.').map_or("", |(_, extension)| extension);
-  if IMAGES.iter().any(|image| image.eq_ignore_ascii_case(extension)) {
-    return Icon::FileImage;
-  }
-  match language(path) {
-    Some("Markdown" | "Plain Text") | None => Icon::FileText,
-    Some(_) => Icon::FileCode,
-  }
-}
 
 /// The tree beside the file: its head and its rows, or that they are being read or cannot be.
 pub fn panel(ctx: &mut Ctx, page: &Page<'_>, list: &Shown<FileList>) -> Element {

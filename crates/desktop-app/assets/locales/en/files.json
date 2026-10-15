@@ -99,7 +99,7 @@
       "showBase": "Show the base branch"
     },
     "binary": {
-      "title": "This file isn't text",
+      "title": "This file isn’t text",
       "detail": "{{name}} is a binary file, so it isn't shown here, and only text and code files open in an editor from here."
     },
     "tooLarge": {

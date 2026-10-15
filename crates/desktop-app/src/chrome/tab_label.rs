@@ -23,7 +23,7 @@ use crate::{
   shell::needs_you::{self, Attention, count_words},
   theme::{ExtraColor, IconSize},
   ui::{
-    icon::{Icon, icon, screen_icon},
+    icon::{Icon, file_icon, icon, screen_icon},
     pressable::in_title_bar,
     tooltip::Tooltip,
   },
@@ -119,10 +119,11 @@ pub fn page(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
   }
 }
 
-/// The icon of a tab at `route`: its screen's, or a file's for a file of the code viewer (`o1Uea4`).
+/// The icon of a tab at `route`: its screen's, or for a file of the code viewer the file's, as the page's title
+/// shows it (`o1Uea4`, `c2jICC`, `ISM2O`).
 pub fn tab_icon(route: &Route) -> Icon {
   match route {
-    Route::Project(_, ProjectPage::Files(view)) if view.file().is_some() => Icon::FileCode,
+    Route::Project(_, ProjectPage::Files(view)) => view.file().map_or(Icon::FolderTree, file_icon),
     route => screen_icon(route.screen()),
   }
 }

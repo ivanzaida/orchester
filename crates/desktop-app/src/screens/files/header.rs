@@ -2,7 +2,8 @@
 //! it): the crumbs (the project, *Files*, the file's folders in Geist Mono), the title row (an 18 icon, the
 //! file's name in 20/600, then *Go to file…*, the version switch, *Copy lines* or *Copy file* and *Open in
 //! editor*) and a line saying where the file was read and what it is ("Run #12 worktree · ORC-24 · Rust ·
-//! 612 lines · 21.4 KB"). A path the page refuses is its title in Geist Mono with a `ban` icon (`S3Py8v`);
+//! 612 lines · 21.4 KB"), with why *Open in editor* is unavailable at its end, under the button (`Actions`
+//! `mQeh3`). A path the page refuses is its title in Geist Mono with a `ban` icon (`S3Py8v`);
 //! with no file the title is *Files* (`o3iVXj`); a version that no longer exists says so in `warning`
 //! (`SyXwU`).
 
@@ -21,7 +22,7 @@ use orchester_workspace::{
   highlight::language,
 };
 
-use super::{Page, actions, goto, reads::Shown, tree, version};
+use super::{Page, actions, goto, reads::Shown, version};
 use crate::{
   navigation::Navigation,
   routes::{OverviewTab, ProjectPage, Route},
@@ -31,7 +32,7 @@ use crate::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     button::{ActionButton, ButtonKind},
     code_box::Copier,
-    icon::{Icon, icon},
+    icon::{Icon, file_icon, icon},
     message::message_text,
   },
 };
@@ -110,7 +111,7 @@ fn crumbs(ctx: &mut Ctx, page: &Page<'_>) -> Row {
 /// The icon and the name: the file's, the path refused, or *Files*.
 fn title(ctx: &Ctx, page: &Page<'_>) -> Row {
   let (glyph, text, mono) = match (&page.path, page.route.file()) {
-    (Some(Ok(file)), _) => (tree::file_icon(file.as_str()), file.name().to_owned(), false),
+    (Some(Ok(file)), _) => (file_icon(file.as_str()), file.name().to_owned(), false),
     (Some(Err(_)), Some(raw)) => (Icon::Ban, raw.to_owned(), true),
     _ => (Icon::FolderTree, ctx.t("files.title").to_string(), false),
   };
@@ -149,8 +150,20 @@ fn meta(ctx: &Ctx, page: &Page<'_>, gone: bool) -> Row {
       .color(PaletteColor::Warning)
       .nowrap()
   });
+  let unavailable = page
+    .file()
+    .filter(|_| shows_open(page, gone))
+    .and_then(|file| open_unavailable(page, file))
+    .map(|key| {
+      Text::new(&ctx.t(key))
+        .id("files-open-reason")
+        .variant(TypographyStyle::Caption)
+        .describe("role", "unavailable-reason")
+        .nowrap()
+    });
   Row::new()
     .id("files-meta")
+    .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(icon(glyph, IconSize::Sm, color.clone()))
@@ -162,6 +175,8 @@ fn meta(ctx: &Ctx, page: &Page<'_>, gone: bool) -> Row {
         .nowrap(),
     )
     .with_children(refusal)
+    .child(Row::new().flex(1.0))
+    .with_children(unavailable)
 }
 
 /// "Run #12 worktree · ORC-24 · Rust · 612 lines · 21.4 KB".
@@ -257,18 +272,30 @@ fn open_refusal(page: &Page<'_>, file: &FilePath) -> Option<&'static str> {
   open_with(platform, &facts).err().map(actions::refusal_key)
 }
 
-/// *Open in editor*, for a file the page opens; unavailable at a commit, whose file is not on disk.
+/// Whether the header has *Open in editor*: for a file read, while its version exists.
+fn shows_open(page: &Page<'_>, gone: bool) -> bool {
+  !gone && !matches!(page.read, Some(Shown::Failed(_)))
+}
+
+/// Why *Open in editor* is unavailable for `file`: at a commit, whose file is not on disk, or what
+/// [`open_refusal`] says.
+fn open_unavailable(page: &Page<'_>, file: &FilePath) -> Option<&'static str> {
+  if matches!(page.at(), Version::Base | Version::Revision(_)) {
+    return Some("files.openAtCommit");
+  }
+  open_refusal(page, file)
+}
+
+/// *Open in editor*, for a file the page opens; unavailable, with the reason at the end of the line under it,
+/// when [`open_unavailable`] says so.
 fn open(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Option<Element> {
   let file = page.file()?.clone();
-  if gone || matches!(page.read, Some(Shown::Failed(_))) {
+  if !shows_open(page, gone) {
     return None;
   }
   let button = ActionButton::new("files-open", ButtonKind::Secondary, ctx.t("files.openInEditor"))
     .icon(Icon::SquareArrowOutUpRight);
-  if matches!(page.at(), Version::Base | Version::Revision(_)) {
-    return Some(button.unavailable(ctx.t("files.openAtCommit")).into());
-  }
-  if let Some(reason) = open_refusal(page, &file) {
+  if let Some(reason) = open_unavailable(page, &file) {
     return Some(button.unavailable(ctx.t(reason)).into());
   }
   let programs = Services::of(ctx).programs;

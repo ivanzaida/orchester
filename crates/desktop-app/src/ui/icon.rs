@@ -4,6 +4,7 @@
 //! component layers), sorted by name.
 
 use lurq::{app::theme::PaletteColor, components::Text};
+use orchester_workspace::highlight::language;
 
 use super::loader;
 use crate::{routes::Screen, theme::IconSize};
@@ -247,6 +248,21 @@ pub fn icon(icon: Icon, size: IconSize, color: impl Into<PaletteColor>) -> Text 
 
 pub fn glyph(icon: Icon) -> String {
   icon.glyph().to_string()
+}
+
+/// Extensions of the files shown as images.
+const IMAGES: [&str; 9] = ["png", "jpg", "jpeg", "gif", "ico", "bmp", "webp", "svg", "icns"];
+
+/// The icon of the file at `path` in the code viewer and its tab: an image, code a grammar reads, or text.
+pub fn file_icon(path: &str) -> Icon {
+  let extension = path.rsplit_once('.').map_or("", |(_, extension)| extension);
+  if IMAGES.iter().any(|image| image.eq_ignore_ascii_case(extension)) {
+    return Icon::FileImage;
+  }
+  match language(path) {
+    Some("Markdown" | "Plain Text") | None => Icon::FileText,
+    Some(_) => Icon::FileCode,
+  }
 }
 
 /// The icon of a screen in the sidebar, the tabs and its placeholder (`Nav · *` in `q9mf0k`; the tabs of
