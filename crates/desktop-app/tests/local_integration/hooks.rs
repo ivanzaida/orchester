@@ -14,9 +14,10 @@ fn local_integration_a_hook_that_moves_head_after_the_commit_is_shown() {
   let root = fixture.root().to_owned();
   fs::write(root.join("local.txt"), "selected staged\n").expect("edit");
   git(&root, &["add", "local.txt"]);
+  // `--no-verify` does not skip post-commit: the hook's own amend would run it again, so it amends once.
   fs::write(
     root.join(".git/hooks/post-commit"),
-    "#!/bin/sh\ngit commit --amend --no-verify --allow-empty -m 'amended by hook' >/dev/null\n",
+    "#!/bin/sh\n[ -n \"$AMENDED\" ] || AMENDED=1 git commit --amend --no-verify --allow-empty -m 'amended by hook' >/dev/null\n",
   )
   .expect("hook");
   let mut page = Page::new(fixture);

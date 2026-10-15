@@ -124,10 +124,11 @@ fn local_hooks_that_fail_stop_the_commit_with_nothing_moved() {
 #[test]
 fn local_hooks_that_move_head_after_the_commit_are_recorded_for_the_person() {
   let (fixture, head, _) = staged();
+  // `--no-verify` does not skip post-commit: the hook's own amend would run it again, so it amends once.
   hook(
     fixture.root(),
     "post-commit",
-    "git commit --amend --no-verify --allow-empty -m 'amended by hook' >/dev/null",
+    "[ -n \"$AMENDED\" ] || AMENDED=1 git commit --amend --no-verify --allow-empty -m 'amended by hook' >/dev/null",
   );
   let (result, change, ..) = commit(&fixture);
   result.expect("the reviewed commit landed");
