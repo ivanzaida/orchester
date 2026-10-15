@@ -149,11 +149,12 @@ impl Component for UsageScreen {
       }
       (None, None) => states::loading(ctx, name.as_deref(), &self.views),
     };
-    if name.is_none() {
-      return embedded(toolbar, content);
-    }
     Column::new()
-      .id("screen-usage")
+      .id(if name.is_some() {
+        "screen-usage"
+      } else {
+        "usage-everywhere"
+      })
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(toolbar)
@@ -179,22 +180,6 @@ impl Component for UsageScreen {
   }
 }
 
-/// Every project's page, in All projects' page column, which scrolls it.
-fn embedded(toolbar: Element, content: Vec<Element>) -> Column {
-  Column::new()
-    .id("usage-everywhere")
-    .width(Dimension::Pct(100.0))
-    .child(toolbar)
-    .child(
-      Column::new()
-        .id("usage-sections")
-        .width(Dimension::Pct(100.0))
-        .padding_top(SpacingSize::Xl)
-        .spacing(SpacingSize::Xl)
-        .with_children(content),
-    )
-}
-
 impl UsageScreen {
   /// The sections, or, when there is nothing to chart, why and the plan limits last reported.
   fn sections(&self, ctx: &mut Ctx, dashboard: &Arc<Dashboard>, requery: &Requery) -> Vec<Element> {
@@ -212,7 +197,7 @@ impl UsageScreen {
       card::card_row("usage-charts", vec![tokens, limits]),
       breakdown::card(ctx, dashboard, &self.views, requery),
       expensive::card(ctx, dashboard, &self.views),
-      efficiency::section(ctx, dashboard, &self.views, requery),
+      efficiency::section(ctx, dashboard, &self.views),
     ]
   }
 }

@@ -10,6 +10,7 @@ use orchester_core::{
   account::AccountCli,
   connection::AgentProvider,
   id::{AgentAccountId, ProjectId, ResourceId, RunId},
+  resource::VersionNumber,
   run::RunNumber,
   usage::{BreakdownKey, UsageFilter},
 };
@@ -85,6 +86,11 @@ pub enum ValueLabel {
     cli: AccountCli,
     name: Option<Arc<str>>,
   },
+  /// A pipeline by its name and the newest version the period's runs pinned: *Quick fix v2*.
+  Pipeline {
+    name: Arc<str>,
+    version: Option<VersionNumber>,
+  },
   /// An id that names nothing the page read, shown as it was given.
   Unknown(Arc<str>),
 }
@@ -127,11 +133,12 @@ impl Dashboard {
         .iter()
         .map(|(id, name)| {
           let chosen = chosen.iter().any(|value| Names::names(value, (*id, name)));
-          option(
-            FilterValue::Text(id.to_string().into()),
-            ValueLabel::Name(name.clone()),
-            chosen,
-          )
+          let label = if facet == Facet::Pipeline {
+            self.pipeline_label(*id, name)
+          } else {
+            ValueLabel::Name(name.clone())
+          };
+          option(FilterValue::Text(id.to_string().into()), label, chosen)
         })
         .collect()
     };
@@ -184,7 +191,12 @@ impl Dashboard {
         .collect()
     };
     let profile = |value: &Arc<str>| resolved(&self.names.profiles, value);
-    let pipeline = |value: &Arc<str>| resolved(&self.names.pipelines, value);
+    let pipeline = |value: &Arc<str>| {
+      self.names.pipeline(value).map_or_else(
+        || ValueLabel::Name(value.clone()),
+        |(id, name)| self.pipeline_label(id, name),
+      )
+    };
     let plain = |value: &Arc<str>| ValueLabel::Name(value.clone());
     match facet {
       Facet::Project => filter
@@ -243,6 +255,14 @@ impl Dashboard {
 }
 
 impl Dashboard {
+  /// How the pipeline `id` called `name` reads: with the newest version the period's runs pinned.
+  fn pipeline_label(&self, id: ResourceId, name: &Arc<str>) -> ValueLabel {
+    ValueLabel::Pipeline {
+      name: name.clone(),
+      version: self.names.pinned_version(id),
+    }
+  }
+
   /// The query with `value` of `facet` chosen, or no longer chosen when it was: a profile or pipeline
   /// chosen by its id or its name is let go either way.
   pub fn toggled(&self, facet: Facet, value: &FilterValue) -> UsageQuery {

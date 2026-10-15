@@ -74,6 +74,7 @@ pub fn value_text(ctx: &Ctx, label: &ValueLabel) -> Arc<str> {
   match label {
     ValueLabel::Cli(cli) => words::cli_name(ctx, *cli),
     ValueLabel::Name(name) | ValueLabel::Unknown(name) => name.clone(),
+    ValueLabel::Pipeline { name, version } => words::pipeline(ctx, name, *version),
     ValueLabel::Run { task, number } => words::run_label(ctx, task, number.get()),
     ValueLabel::Account { name: Some(name), .. } => name.clone(),
     ValueLabel::Account { name: None, .. } => ctx.t("usage.filters.defaultAccount"),

@@ -90,7 +90,8 @@ impl IconButton {
     self
   }
 
-  /// What it opened is open: `pressed` fill and a `text_primary` glyph (`Remove` `rDFim` in `mykcc`).
+  /// What it opened is open: `pressed` fill and a `text_primary` glyph (`Remove` `rDFim` in `mykcc`), and no
+  /// tooltip, which would cover what it opened (`Warning threshold` popover `o4ql9`).
   pub fn active(mut self) -> Self {
     self.active = true;
     self
@@ -134,6 +135,9 @@ impl IconButton {
         }),
       None => inert(button).opacity(DISABLED_OPACITY).describe("state", "disabled"),
     };
+    if self.active {
+      return button.into();
+    }
     Tooltip::new(self.id, self.label).wrap(ctx, button)
   }
 }

@@ -237,7 +237,7 @@ fn answer(project: Option<ProjectId>, query: &UsageQuery, data: &UsageData, now:
     .iter()
     .map(|row| {
       let mut value = key(&row.key, data);
-      let link = page_link(row_project(&row.key, project), narrowed(query, &row.key));
+      let link = page_link(row_project(&row.key, project), &narrowed(query, &row.key));
       let seconds = seconds(active_ms + row.agent_ms) - seconds(active_ms);
       active_ms += row.agent_ms;
       let fields = value.as_object_mut().expect("a row's key is an object");
@@ -261,7 +261,7 @@ fn answer(project: Option<ProjectId>, query: &UsageQuery, data: &UsageData, now:
     "total": total(&summary),
     "rows": rows,
     "unmatched": unmatched(&query.filter, &data.projects, report_query),
-    "link": page_link(project, query.clone()),
+    "link": page_link(project, query),
   })
 }
 
@@ -329,9 +329,9 @@ fn key(key: &GroupKey, data: &UsageData) -> Value {
   }
 }
 
-/// The Usage page of `project`, or every project's, showing `query`.
-fn page_link(project: Option<ProjectId>, query: UsageQuery) -> String {
-  let query = Box::new(query);
+/// The Usage page of `project`, or every project's, showing `query` as the page shows it: grouped by time.
+fn page_link(project: Option<ProjectId>, query: &UsageQuery) -> String {
+  let query = Box::new(query.on_page());
   match project {
     Some(project) => Link::Usage(project, query),
     None => Link::UsageEverywhere(query),

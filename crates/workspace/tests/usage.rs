@@ -133,6 +133,20 @@ fn usage_link_names_the_project_and_encodes_the_query() {
 }
 
 #[test]
+fn usage_query_on_the_page_groups_by_time() {
+  let by_agent = UsageQuery {
+    group: GroupBy::Agent,
+    ..UsageQuery::default()
+  };
+  assert_eq!(by_agent.on_page().group, GroupBy::Day, "the page groups by hour or day");
+  let by_hour = UsageQuery {
+    group: GroupBy::Hour,
+    ..UsageQuery::default()
+  };
+  assert_eq!(by_hour.on_page(), by_hour);
+}
+
+#[test]
 fn usage_query_periods_choose_how_the_chart_groups() {
   let today = day("2026-10-15");
   let by_hour = UsageQuery {
@@ -425,4 +439,24 @@ fn usage_pipeline_versions_are_each_pipelines_own() {
   data.projects = Arc::from([kontur, atlas]);
   let page = dashboard(&UsageQuery::default(), &data, now);
   assert_eq!(page.pipeline_version("Feature delivery"), None);
+}
+
+#[test]
+fn usage_failed_tasks_open_the_one_project_their_runs_belong_to() {
+  let now = Timestamp::now();
+  let (mut data, ..) = data(now);
+  let mut kontur = data.projects[0].clone();
+  kontur.facts.runs[0].outcome = RunOutcome::Failed;
+  data.projects = Arc::from([kontur.clone()]);
+  let page = Dashboard::of(None, &UsageQuery::default(), &data, now);
+  assert_eq!(page.failed_project(), Some(kontur.project));
+  let mut atlas = kontur.clone();
+  atlas.project = ProjectId::generate();
+  data.projects = Arc::from([kontur, atlas]);
+  let page = Dashboard::of(None, &UsageQuery::default(), &data, now);
+  assert_eq!(
+    page.failed_project(),
+    None,
+    "failed runs in two projects have no one list"
+  );
 }

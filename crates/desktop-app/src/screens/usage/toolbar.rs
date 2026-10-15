@@ -28,7 +28,7 @@ use orchester_workspace::{
 
 use super::{Requery, custom_range, filters, words};
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, UsageSpacing},
+  theme::{ExtraSpacing, ExtraTypography, UsageSpacing, UsageText},
   ui::{
     filter::{FilterButton, filter_menu_panel},
     icon::Icon,
@@ -152,10 +152,16 @@ impl Component for UsageToolbar {
           .child(filters)
       }
       // Every project's page: the filters with the period at their end, the period read back under them
-      // (`rHA8G`).
+      // (`Toolbar · pinned` `GeTGg`: 16 over, 14 under, 40 at the sides, 12 between).
       None => toolbar
-        .padding(Padding::new().bottom(ExtraSpacing::Inset.role()))
-        .spacing(SpacingSize::Sm)
+        .padding(
+          Padding::new()
+            .top(SpacingSize::Lg)
+            .bottom(ExtraSpacing::Inset.role())
+            .left(UsageSpacing::Page.role())
+            .right(UsageSpacing::Page.role()),
+        )
+        .spacing(SpacingSize::Md)
         .child(filter_line.child(Spacer::new().flex(1.0)).child(controls))
         .child(readback),
     };
@@ -177,8 +183,7 @@ fn title(ctx: &Ctx, project: &str, controls: Row) -> Row {
     .child(
       Text::new(&ctx.t_args("usage.description", [("project", project)]))
         .id("usage-description")
-        .variant(TypographyStyle::Body)
-        .color(PaletteColor::TextSecondary),
+        .variant(UsageText::Description.role()),
     );
   Row::new()
     .width(Dimension::Pct(100.0))

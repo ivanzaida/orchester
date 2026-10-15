@@ -1,7 +1,10 @@
 //! The page of All projects (`Column` `k4fycz` in `S5HDKf`): the heading with *Open project folder…* and *Add
 //! project*, the *Projects* | *Usage* tabs, the error line of *Open project folder…* (`FV5pQ`), then the list
 //! with what removing means under it, the empty list (`d1oNx8`) or why the list cannot be read (`T46trR`).
-//! *Usage* shows every project's usage under the tabs instead (`rHA8G`).
+//! *Usage* is a page of its own (`rHA8G`): the heading and tabs pinned across the whole content panel, 40 from
+//! its sides, over every project's usage, which pins its toolbar and scrolls its sections.
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -22,7 +25,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::Route,
-  theme::{ExtraSpacing, ExtraTypography, IconSize, ProjectsSpacing, ProjectsText},
+  theme::{ExtraSpacing, ExtraTypography, IconSize, ProjectsSpacing, ProjectsText, UsageSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -52,18 +55,17 @@ pub(super) enum Body<'a> {
 
 pub(super) fn page(ctx: &mut Ctx, open: &OpenAction, body: Body<'_>) -> Element {
   let failure = folder::failure(ctx, open);
-  let usage = matches!(body, Body::Usage(_));
   let (state, content) = match body {
     Body::Failed(error) => ("failed", failed(ctx, error)),
     Body::Empty => ("empty", empty(ctx, open)),
     Body::List { rows, ask } => ("list", list(ctx, rows, ask)),
-    Body::Usage(usage) => ("usage", usage),
+    Body::Usage(usage) => return usage_page(ctx, open, failure, usage),
   };
   let column = Column::new()
     .width(Dimension::Px(COLUMN_WIDTH))
     .spacing(ProjectsSpacing::Page.role())
     .child(heading(ctx, open))
-    .child(tabs(ctx, usage))
+    .child(tabs(ctx, false))
     .with_children(failure.map(|failure| error_line(&failure)))
     .child(content);
   let scrolled = Column::new()
@@ -77,6 +79,38 @@ pub(super) fn page(ctx: &mut Ctx, open: &OpenAction, body: Body<'_>) -> Element 
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
     .child(ScrollVertical::new(scrolled).id("all-projects-scroll").flex(1.0))
+    .into()
+}
+
+/// The *Usage* tab (`yCCBS` in `rHA8G`): the heading and the tabs pinned at the top (`Top · pinned` `anSHC`:
+/// 28 over them, 40 at the sides, 18 between them), then `usage`, which pins its toolbar and scrolls.
+fn usage_page(ctx: &mut Ctx, open: &OpenAction, failure: Option<Arc<str>>, usage: Element) -> Element {
+  let top = Column::new()
+    .id("all-projects-top")
+    .width(Dimension::Pct(100.0))
+    .padding(
+      Padding::new()
+        .top(UsageSpacing::Top.role())
+        .left(UsageSpacing::Page.role())
+        .right(UsageSpacing::Page.role()),
+    )
+    .spacing(ExtraSpacing::SettingsHead.role())
+    .child(heading(ctx, open))
+    .child(tabs(ctx, true))
+    .with_children(failure.map(|failure| error_line(&failure)));
+  Column::new()
+    .id(screen_id())
+    .describe("state", "usage")
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .child(top)
+    .child(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .min_height(Dimension::Px(0.0))
+        .child(usage),
+    )
     .into()
 }
 

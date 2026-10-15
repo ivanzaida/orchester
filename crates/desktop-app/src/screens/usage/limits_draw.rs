@@ -139,7 +139,8 @@ fn draw_line(context: &Context2D, frame: Frame, plot: &LimitPlot, line: &DrawnLi
   context.set_line_dash(&[]);
 }
 
-/// The window's last point, ringed, with the CLI's name beside it.
+/// The window's last point, ringed, with the CLI's name after it, or before it where the room after it up to
+/// the canvas's edge is too narrow (a last reading late in the day).
 fn current(context: &Context2D, frame: Frame, plot: &LimitPlot, line: &DrawnLine) {
   let Some(last) = line.points.last() else {
     return;
@@ -147,10 +148,19 @@ fn current(context: &Context2D, frame: Frame, plot: &LimitPlot, line: &DrawnLine
   let (x, y) = (plot.x(frame, last.at), frame.y(last.percent, 100.0));
   dot(context, (x, y), plot.style.series[line.series], &plot.style);
   context.set_font(plot.style.strong_font.clone());
-  context.set_text_align(TextAlign::Left);
   context.set_text_baseline(TextBaseline::Middle);
   context.set_fill_style(plot.style.strong);
-  plot::text(context, &line.label, x + POINT_RADIUS + LABEL_GAP, y);
+  let after = x + POINT_RADIUS + LABEL_GAP;
+  let fits_after = context
+    .measure_text(&line.label)
+    .map_or(true, |metrics| after + metrics.width <= frame.edge);
+  if fits_after {
+    context.set_text_align(TextAlign::Left);
+    plot::text(context, &line.label, after, y);
+  } else {
+    context.set_text_align(TextAlign::Right);
+    plot::text(context, &line.label, x - POINT_RADIUS - LABEL_GAP, y);
+  }
 }
 
 /// A point in its series' color, ringed in the card's surface.

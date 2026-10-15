@@ -99,6 +99,19 @@ impl UsageQuery {
     }
   }
 
+  /// The query as the page shows it: the page groups *Tokens over time* by hour or by day only (*Group by*,
+  /// `diJNR`), so a grouping by task, pipeline, step, agent, model or account, which `get_usage`'s rows
+  /// have, is by day on the page.
+  pub fn on_page(&self) -> Self {
+    let group = match self.group {
+      GroupBy::Hour | GroupBy::Day => self.group,
+      GroupBy::Task | GroupBy::Pipeline | GroupBy::Step | GroupBy::Agent | GroupBy::Model | GroupBy::Account => {
+        GroupBy::Day
+      }
+    };
+    Self { group, ..self.clone() }
+  }
+
   /// The query with `filter` instead of its own.
   pub fn with_filter(&self, filter: UsageFilter) -> Self {
     Self { filter, ..self.clone() }

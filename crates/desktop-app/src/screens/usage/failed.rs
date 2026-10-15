@@ -1,7 +1,8 @@
 //! The *Failed runs* card of *Efficiency* (`Card · Failed runs` `Kc99a`): how many runs failed of all and
 //! the tokens spent on them, each with its share; their share of the spent tokens as a two-part bar with
-//! its legend; the failed run that spent the most; and *Show failed tasks →*, which opens the project
-//! Overview's *Failed* tab (on a project's page). Its figures are exact already, so it has no table view.
+//! its legend; the failed run that spent the most; and *Show failed tasks →*, which opens the Overview's
+//! *Failed* tab of the project the failed runs belong to (on every project's page, while they belong to one). Its
+//! figures are exact already, so it has no table view.
 
 use lurq::{
   app::{
@@ -16,7 +17,6 @@ use orchester_core::usage::{FailedRuns, percent};
 use orchester_workspace::usage::Dashboard;
 
 use super::{
-  Requery,
   card::{Card, push_down, swatch, text_link},
   words,
 };
@@ -29,14 +29,13 @@ use crate::{
 /// The share of spent tokens' bar (`Bar` `BBtL7`).
 const BAR_HEIGHT: f32 = 8.0;
 
-pub fn card(ctx: &mut Ctx, dashboard: &Dashboard, requery: &Requery) -> Element {
+pub fn card(ctx: &mut Ctx, dashboard: &Dashboard) -> Element {
   let card = Card::new("usage-failed", ctx.t("usage.efficiency.failed"))
     .small()
     .subtitle(ctx.t("usage.efficiency.failedSubtitle"))
     .fill();
   let failed = &dashboard.report.efficiency.failed;
-  // A project's Overview lists its failed tasks; every project's page has no one list to open.
-  let show = requery.project().filter(|_| failed.runs > 0).map(|project| {
+  let show = dashboard.failed_project().map(|project| {
     let (navigation, route) = (
       Navigation::of(ctx),
       Route::Project(project, ProjectPage::Overview(OverviewTab::Failed)),
@@ -48,7 +47,7 @@ pub fn card(ctx: &mut Ctx, dashboard: &Dashboard, requery: &Requery) -> Element 
   card.body(
     [figures(ctx, failed), split(ctx, failed)]
       .into_iter()
-      .chain(most(ctx, failed))
+      .chain(most(ctx, failed, dashboard.project.is_none()))
       .chain([push_down()])
       .chain(show),
   )
@@ -141,14 +140,21 @@ fn split(ctx: &Ctx, failed: &FailedRuns) -> Element {
 }
 
 /// *Most: KON-11 · Run 2 · 2.4M*, the failed run that spent the most.
-fn most(ctx: &Ctx, failed: &FailedRuns) -> Option<Element> {
+/// *Most: KON-11 · Run 2 · 2.4M*; on every project's page with the run's project first.
+fn most(ctx: &Ctx, failed: &FailedRuns, everywhere: bool) -> Option<Element> {
   let largest = failed.largest.as_ref()?;
+  let run = words::run_label(ctx, &largest.key, largest.number.get());
+  let run = if everywhere {
+    ctx.t_args(
+      "usage.efficiency.projectRun",
+      [("project", &*largest.project_name), ("run", &*run)],
+    )
+  } else {
+    run
+  };
   let text = ctx.t_args(
     "usage.efficiency.most",
-    [
-      ("run", &*words::run_label(ctx, &largest.key, largest.number.get())),
-      ("tokens", &*words::tokens(largest.usage.counted())),
-    ],
+    [("run", &*run), ("tokens", &*words::tokens(largest.usage.counted()))],
   );
   Some(
     Text::new(&text)

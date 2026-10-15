@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use chrono::NaiveDate;
 use orchester_core::{
-  id::{RunId, TaskId},
+  id::{ProjectId, RunId, TaskId},
   resource::VersionNumber,
   time::Timestamp,
   usage::{
@@ -127,6 +127,20 @@ impl Dashboard {
   /// The period the changes are measured against.
   pub fn previous(&self) -> DayRange {
     self.range.previous()
+  }
+
+  /// The one project whose Overview lists the period's failed runs (*Show failed tasks →*): the page's, or on
+  /// every project's page the project all of them belong to; `None` without failed runs, or when they
+  /// belong to several projects, whose failed tasks no one page lists.
+  pub fn failed_project(&self) -> Option<ProjectId> {
+    let mut projects = self
+      .report
+      .runs
+      .iter()
+      .filter(|run| run.outcome.failed())
+      .map(|run| run.project);
+    let project = projects.next()?;
+    projects.all(|other| other == project).then_some(project)
   }
 
   /// The newest version of the pipeline called `pipeline` the period's runs pinned: a pipeline reads as

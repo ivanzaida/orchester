@@ -90,6 +90,11 @@ fn all_projects_lists_projects_with_where_they_stand() {
     note.starts_with("Removing a project from this list only makes Orchester forget it."),
     "{note}"
   );
+  usage_tab(&mut window);
+}
+
+/// The *Usage* tab: every project's usage across the whole content panel, its top pinned, and back.
+fn usage_tab(window: &mut Window) {
   window.press("all-projects-tab-usage");
   assert_eq!(window.navigation().route_now(), Route::Usage(Box::default()));
   window.until("every project's usage", |window| {
@@ -105,6 +110,28 @@ fn all_projects_lists_projects_with_where_they_stand() {
   assert!(
     window.tree.get_element_by_id("usage-filter-project").is_some(),
     "a Project filter"
+  );
+  // The whole content panel, 40 from its sides, with the heading, tabs and toolbar pinned over the scroll.
+  let bounds = |window: &mut Window, id: &str| {
+    window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  let (screen, filters) = (bounds(window, SCREEN), bounds(window, "usage-filters"));
+  assert!(
+    (filters.x - screen.x - 40.0).abs() < 1.0 && (screen.width - filters.width - 80.0).abs() < 1.0,
+    "the filters span the panel less 40 at each side: {screen:?} {filters:?}"
+  );
+  assert!(
+    window.tree.get_element_by_id("all-projects-scroll").is_none(),
+    "not the Projects tab's column"
+  );
+  let (top, scroll) = (bounds(window, "all-projects-top"), bounds(window, "usage-scroll"));
+  assert!(
+    top.y + top.height <= scroll.y,
+    "the heading and tabs sit over the scroll, pinned"
   );
   window.press("all-projects-tab-projects");
   assert_eq!(window.navigation().route_now(), Route::AllProjects);

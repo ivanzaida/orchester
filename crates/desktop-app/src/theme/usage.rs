@@ -38,6 +38,8 @@ pub enum UsageText {
   ColumnHeading,
   /// 12 `text_muted`, 1.4: what a card's rows mean under its title (`Subtitle` `Pde5c`, `UBN8h`).
   Subtitle,
+  /// 13 `text_secondary`, 1.3: what the page shows under its title (`Description` `f8ubk`).
+  Description,
   /// 22/600 `text_primary`, tracking -0.3: an efficiency figure (`Value` `UP0UG`).
   Figure,
   /// Mono 12/600 `text_primary`: a figure of a table's *Total* row (`b2wVz` in `fxX9i`).
@@ -51,13 +53,14 @@ pub enum UsageText {
 }
 
 impl UsageText {
-  pub const ALL: [Self; 11] = [
+  pub const ALL: [Self; 12] = [
     Self::Axis,
     Self::AxisDay,
     Self::AxisStrong,
     Self::Footnote,
     Self::ColumnHeading,
     Self::Subtitle,
+    Self::Description,
     Self::Figure,
     Self::TotalFigure,
     Self::SmallTitle,
@@ -77,6 +80,7 @@ impl UsageText {
       Self::Footnote => "usage_footnote",
       Self::ColumnHeading => "usage_column_heading",
       Self::Subtitle => "usage_subtitle",
+      Self::Description => "usage_description",
       Self::Figure => "usage_figure",
       Self::TotalFigure => "usage_total_figure",
       Self::SmallTitle => "usage_small_title",
@@ -93,6 +97,7 @@ impl UsageText {
       Self::Footnote => style(11.0, FontWeight::Normal, 1.5, 0.0, palette.text_muted),
       Self::ColumnHeading => style(11.0, FontWeight::Medium, 1.3, 0.4, palette.text_muted),
       Self::Subtitle => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
+      Self::Description => style(13.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
       Self::Figure => style(22.0, FontWeight::SemiBold, 1.3, -0.3, palette.text_primary),
       Self::TotalFigure => mono(style(12.0, FontWeight::SemiBold, 1.4, 0.0, palette.text_primary)),
       Self::SmallTitle => style(13.0, FontWeight::SemiBold, 1.3, -0.1, palette.text_primary),

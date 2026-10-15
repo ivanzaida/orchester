@@ -102,12 +102,26 @@ impl Names {
     if ids.any(|other| other != id) {
       return None;
     }
+    self.pinned_version(id)
+  }
+
+  /// The newest version of the pipeline `pipeline` a run pinned.
+  pub fn pinned_version(&self, pipeline: ResourceId) -> Option<VersionNumber> {
     self
       .pinned
       .iter()
-      .filter(|pinned| pinned.pipeline == Some(id))
+      .filter(|pinned| pinned.pipeline == Some(pipeline))
       .filter_map(|pinned| pinned.version)
       .max()
+  }
+
+  /// The pipeline `value` (its id or name) names among the known ones, with its id.
+  pub fn pipeline(&self, value: &str) -> Option<(ResourceId, &Arc<str>)> {
+    self
+      .pipelines
+      .iter()
+      .find(|(id, name)| Self::names(value, (*id, name)))
+      .map(|(id, name)| (*id, name))
   }
 
   /// The pipeline version `run` pinned.

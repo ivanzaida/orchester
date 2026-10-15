@@ -56,6 +56,11 @@ fn domain_usage_groups_and_filters_as_asked_and_links_each_row() {
     };
     assert_eq!(project, seeded.project);
     assert_eq!(query.filter.tasks, [key.into()]);
+    assert_eq!(
+      query.group,
+      orchester_core::usage::GroupBy::Day,
+      "the page groups by time"
+    );
     assert_eq!(query.filter.models, ["gpt-5.5".into()]);
   }
   let agents = served.ok("get_usage", &json!({ "project": "Kontur", "group": "agent" }));
@@ -70,7 +75,11 @@ fn domain_usage_groups_and_filters_as_asked_and_links_each_row() {
   let Route::Usage(query) = routed(&everywhere["link"]) else {
     panic!("every project's usage opens All projects' Usage tab: {everywhere}");
   };
-  assert_eq!(query.group, orchester_core::usage::GroupBy::Pipeline);
+  assert_eq!(
+    query.group,
+    orchester_core::usage::GroupBy::Day,
+    "the page groups by time"
+  );
   let pipeline = &everywhere["rows"][0];
   assert!(
     matches!(routed(&pipeline["link"]), Route::Usage(narrowed) if !narrowed.filter.pipelines.is_empty()),

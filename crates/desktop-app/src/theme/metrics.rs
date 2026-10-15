@@ -38,7 +38,8 @@ pub enum ExtraSpacing {
   BrandBars,
   /// 2: the app menu below the button that opens it.
   MenuOffset,
-  /// 18: settings heading to tabs (eDPtp, including trimmed text line boxes).
+  /// 18: a page's heading to its tabs: settings (eDPtp, including trimmed text line boxes), All projects'
+  /// Usage tab (`anSHC`).
   SettingsHead,
   /// 18: the index empty line's top (lNMHR).
   IndexEmpty,

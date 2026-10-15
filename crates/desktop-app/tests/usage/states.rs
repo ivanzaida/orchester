@@ -127,11 +127,16 @@ fn usage_page_names_filters_that_match_nothing() {
   assert!(
     page
       .text("usage-unmatched-detail")
-      .contains("matches Model: claude-opus-5-5, Pipeline: Quick fix. Kontur has 10 runs in this period."),
+      .contains("matches Model: claude-opus-5-5, Pipeline: Quick fix v2. Kontur has 10 runs in this period."),
     "{}",
     page.text("usage-unmatched-detail")
   );
   assert_eq!(page.text("usage-filter-model-chip-0"), "Model claude-opus-5-5");
+  assert_eq!(
+    page.text("usage-filter-pipeline-chip-0"),
+    "Pipeline Quick fix v2",
+    "a pipeline by the version its runs pinned"
+  );
   assert_eq!(page.text("usage-summary-runs-detail"), "no matching runs");
   assert!(
     page
@@ -197,4 +202,22 @@ fn usage_page_without_tags_or_plan_limits_says_so() {
   assert!(page.shows("usage-limits-none"));
   page.click("usage-filter-tag");
   assert_eq!(page.text("usage-filter-tag-menu-empty"), "No tags yet");
+}
+
+#[test]
+fn usage_every_projects_page_names_each_runs_project() {
+  let mut page = Seeded::usage("usage", UsageQuery::default());
+  page
+    .window
+    .navigation()
+    .go(orchester_app::routes::Route::Usage(Box::default()));
+  page.until("every project's usage", |page| {
+    page.shows("usage-everywhere") && page.shows("usage-failed-most")
+  });
+  let most = page.text("usage-failed-most");
+  assert!(most.starts_with("Most: Kontur · KON-"), "the run's project: {most}");
+  assert!(
+    page.shows("usage-show-failed"),
+    "the failed runs are Kontur's, whose Overview lists them"
+  );
 }

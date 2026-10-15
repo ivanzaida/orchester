@@ -20,7 +20,7 @@ use orchester_core::usage::{Change, EditTokens};
 use orchester_workspace::usage::Dashboard;
 
 use super::{
-  Requery, Views,
+  Views,
   card::{Card, footnote, push_down, view_switch},
   failed,
   line_draw::{CacheLine, Day, LineProps},
@@ -34,16 +34,19 @@ use crate::theme::{ExtraSpacing, UsageRadius, UsageText};
 const DAY_LABELS: usize = 7;
 /// A bar of *Tokens before first edit* (`Bar · With code index` `oVuBm`).
 const BAR_HEIGHT: f32 = 8.0;
+/// A bar's label line and the line under it (`Text` `ugsr8`, `Invocations` `muPMD`), 5 from the bar.
+const BAR_LABEL_LINE: f32 = 16.0;
+const BAR_NOTE_LINE: f32 = 14.0;
 /// Table columns (`tW06R`, `oDlsA`).
 const SHARE_COLUMN: f32 = 88.0;
 const MEDIAN_COLUMN: f32 = 64.0;
 const COUNT_COLUMN: f32 = 84.0;
 
-pub fn section(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>, requery: &Requery) -> Element {
+pub fn section(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>) -> Element {
   let cards = vec![
     cache(ctx, dashboard, views),
     edits(ctx, dashboard, views),
-    failed::card(ctx, dashboard, requery),
+    failed::card(ctx, dashboard),
   ];
   Column::new()
     .id("usage-efficiency")
@@ -237,6 +240,7 @@ fn edit_bar(ctx: &Ctx, (id, key): (&str, &str), tokens: EditTokens, largest: u64
     .child(
       Row::new()
         .width(Dimension::Pct(100.0))
+        .height(Dimension::Px(BAR_LABEL_LINE))
         .align_items(Alignment::Center)
         .child(Text::new(&ctx.t(key)).variant(TypographyStyle::Description).nowrap())
         .child(Spacer::new().flex(1.0))
@@ -249,12 +253,17 @@ fn edit_bar(ctx: &Ctx, (id, key): (&str, &str), tokens: EditTokens, largest: u64
     )
     .child(bar(width))
     .child(
-      Text::new(&ctx.t_args(
-        "usage.efficiency.invocations",
-        [("count", tokens.edited.to_string().as_str())],
-      ))
-      .variant(TypographyStyle::Caption)
-      .nowrap(),
+      Row::new()
+        .height(Dimension::Px(BAR_NOTE_LINE))
+        .align_items(Alignment::Center)
+        .child(
+          Text::new(&ctx.t_args(
+            "usage.efficiency.invocations",
+            [("count", tokens.edited.to_string().as_str())],
+          ))
+          .variant(TypographyStyle::Caption)
+          .nowrap(),
+        ),
     )
     .into()
 }

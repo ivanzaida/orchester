@@ -255,6 +255,7 @@
       "failedPart": "Failed runs {{tokens}}",
       "otherPart": "Other runs {{tokens}}",
       "most": "Most: {{run}} · {{tokens}}",
+      "projectRun": "{{project}} · {{run}}",
       "showFailed": "Show failed tasks →"
     },
     "noRuns": {
