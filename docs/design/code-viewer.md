@@ -31,7 +31,12 @@ conversation, a step's result or a diff) opens with one click.
   would run (scripts), and with `open -t` on macOS — and never a link or an executable file, checked again on disk
   when pressed; for any other file it is unavailable with the reason under it (review 1 of the code viewer,
   2026-10-15; the binary state `c2jICC` still draws it available). The person's click only; never from synthetic
-  input.
+  input. A file's kind is what follows the last `.` of the resolved file's name, as Windows dispatches it (trailing
+  dots and spaces dropped; a name that starts with a dot is that kind, so `.hta` is not a file without extension);
+  a file opens without an extension only when its name has no dot at all, and a few dotfiles open by their exact
+  name (`.env`, `.gitignore`, `.editorconfig` and the like, `text_types::TEXT_NAMES`; none is a kind Windows runs)
+  (review 2). On Windows `.html`, `.htm`, `.svg` and `.xml` open in the default browser, inside its sandbox for
+  local files.
 - Virtualized rows, so a long file opens at once. Binary files, files above a size limit and unreadable files show a
   plain explanation instead of contents.
 - Only files inside the project's folder (or the run's worktree): a path with `..`, an absolute path, or a link or
