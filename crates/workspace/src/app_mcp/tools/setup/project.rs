@@ -23,6 +23,7 @@ use crate::{
     error::ToolError,
     services::{Services, blocking},
   },
+  links::Link,
   messages::{self, Message},
   project_setup::{self, Creation, ExpectedAccount, GitHubLink, ProjectDraft, creatable, github_connection_name},
   repository::{self, DetectTarget},
@@ -124,6 +125,7 @@ fn summary(open: &OpenProject) -> Value {
     "key": open.project.key().as_str(),
     "name": open.project.name().as_str(),
     "folder": open.repo_root.display().to_string(),
+    "link": Link::Project(open.project.id()).path(),
   })
 }
 

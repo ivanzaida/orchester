@@ -1,0 +1,142 @@
+# Orchester Cloud API
+
+The JSON API of `orchester-cloud` (`crates/cloud`), as built in C1's first part (accounts, devices, identity tokens).
+The design is in [architecture/server.md](architecture/server.md), "Orchester Cloud" and "Identity tokens and keys";
+running it is in [cloud-hosting.md](cloud-hosting.md). The wire types are in `orchester-api`'s `cloud` module, and
+the token and key set checks team servers use are in its `identity` feature.
+
+Two kinds of client call it:
+
+- **The desktop app.** It signs in with the person's email and password and keeps the device token it gets back in
+  the OS keychain (`orchester-cloud` / `device`).
+- **The web front** (Next.js, built later). It shows sign-up, sign-in, the confirmation landing and forgot/reset
+  password pages. Its **server** calls this API; browsers never call it directly, so the API sends no CORS headers.
+  It signs in with platform `web` and keeps the token in the `__Host-orchester_session` cookie (`HttpOnly`, `Secure`,
+  `SameSite=Lax`), never in script-readable storage. The web front's server must forward the browser's address in `X-Forwarded-For` and be
+  listed in `ORCHESTER_CLOUD_TRUSTED_PROXIES`. Otherwise every browser counts as the web front's one address in the
+  rate limits.
+
+## Conventions
+
+- Base path `<public URL>/api/v1`, for example `https://orchester-cloud.lurq.dev/api/v1`. JSON bodies in UTF-8.
+  Requests are limited to 1 MiB and must arrive within 10 seconds.
+- Unknown request fields are refused (`400 bad_request`).
+- Endpoints marked *device* need `Authorization: Bearer <device token>`. A device token is `orcc_` followed by 64
+  hex characters. It ends when the device signs out or is revoked, and when the password is reset or changed on
+  another device. A desktop's token also ends after 90 days without use; a browser's (platform `web`) ends 12
+  hours after its sign-in.
+- Times are milliseconds since the Unix epoch, UTC, except in identity tokens and key sets, which use JWT seconds.
+- Ids are UUIDv7 strings.
+- Every response carries `Cache-Control: no-store`.
+- A request with a body must say `Content-Type: application/json` (`415 unsupported_media_type` otherwise).
+- Errors have the form `{ "error": "<code>", "message": "<English, for logs>" }`. Clients show their own words by
+  `error`. A `429` and a `503 busy` carry `Retry-After` in seconds.
+
+| Code | Status | Meaning |
+| --- | --- | --- |
+| `bad_request` | 400 | Malformed JSON, a wrong field type or an unknown field |
+| `unauthorized` | 401 | No device token, or one that is unknown, revoked or expired |
+| `invalid_credentials` | 401 | Wrong email or password. One answer for both, and for an email with no account |
+| `email_unconfirmed` | 403 | The password was right, but the email is not confirmed yet |
+| `not_found` | 404 | No such path, or no such device of the account |
+| `method_not_allowed` | 405 | |
+| `request_timeout` | 408 | The body did not arrive within 10 seconds |
+| `payload_too_large` | 413 | The body is over 1 MiB |
+| `unsupported_media_type` | 415 | A body without `Content-Type: application/json` |
+| `invalid` | 422 | An input breaks a rule: an email that cannot be one, a password outside 12–256 characters, an empty or over-long name |
+| `invalid_link` | 422 | A confirmation or reset link that is unknown, used or expired. One answer for all three |
+| `rate_limited` | 429 | Too many attempts; see Rate limits below |
+| `keys_unavailable` | 503 | No published key set lets the cloud sign now: the operator has to publish one |
+| `busy` | 503 | No password hashing slot freed within 10 seconds |
+| `internal` | 500 | |
+
+## Shapes
+
+```text
+DeviceInfo { name: string (1–256), platform: "windows"|"macos"|"linux"|"web" }
+Account    { id, email, display_name, created_at }
+Device     { id, name, platform, created_at, last_used_at, current: bool }
+```
+
+## Endpoints
+
+| Method and path | Auth | Request | Response | Errors |
+| --- | --- | --- | --- | --- |
+| `POST /auth/signup` | none | `{ email, password, display_name }` | `202`, empty | `422 invalid`, `429` |
+| `POST /auth/confirm` | none | `{ link_token, password }` | `204` | `422 invalid_link`, `429` |
+| `POST /auth/sessions` | none | `{ email, password, device: DeviceInfo }` | `201 { token, device: Device, account: Account }` | `401 invalid_credentials`, `403 email_unconfirmed`, `422 invalid` (device), `429` |
+| `POST /auth/reset` | none | `{ email }` | `202`, empty | `422 invalid`, `429` |
+| `POST /auth/reset/finish` | none | `{ link_token, new_password }` | `204` | `422 invalid`, `422 invalid_link`, `429` |
+| `POST /auth/password` | device | `{ current_password, new_password }` | `204` | `401 invalid_credentials`, `422 invalid`, `429` |
+| `DELETE /auth/sessions/current` | device | | `204` | |
+| `GET /me` | device | | `{ account: Account }` | |
+| `PATCH /me` | device | `{ display_name? }` | `{ account: Account }` | `422 invalid` |
+| `GET /devices` | device | | `{ devices: [Device] }`, oldest first | |
+| `DELETE /devices/{id}` | device | | `204` | `404` |
+| `GET /keys` | none | | `{ key_set }`: the newest key set, a compact JWS the root key signed | `503 keys_unavailable` |
+| `POST /identity-tokens` | device | `{ audience }`: the team server's id (a UUID) | `201 { identity_token, expires_at }` (seconds) | `422 invalid`, `429`, `503 keys_unavailable` |
+
+**Sign-up.** `202` means the request was taken. The answer is the same whether or not the email has an account, so
+a sign-up form shows one message: *Check your email*. What goes out, in the background:
+
+- a new email gets a confirmation link, valid for 24 hours;
+- an email whose account is not confirmed yet gets one more link, and the earlier links stay valid. Each link
+  carries the password and display name of the sign-up that sent it. A link is confirmed only with that sign-up's
+  password, and confirming it sets that password and name on the account and ends the account's other links. So an
+  account's password is always one chosen by a person who also reads the email. Someone who signed up with another
+  person's email cannot use the owner's link, and the owner's link cannot be confirmed with their password;
+- a confirmed email gets a *you already have an account* note.
+
+An account that is never confirmed is deleted once its last link has expired.
+
+**Confirmation page** (`<public URL>/confirm/<token>`). The page asks for the password chosen at sign-up, and
+*Confirm my email* posts it. The confirmation happens only on that form's `POST`, from the web front's server
+side, so mail scanners that fetch the link do not use it up. The server side sends
+`POST /auth/confirm { link_token, password }`. An unknown, used or expired link and a wrong password give the same
+`422 invalid_link`, after the same password check. On `204` the page says the email is confirmed and offers
+sign-in. On `invalid_link` it offers to try the password again or to sign up again. After 5 wrong passwords a link
+answers `429` for an hour; signing up again sends a new one. Confirming does not sign anyone in.
+
+**Sign-in.** A wrong password and an unknown email answer alike (`401 invalid_credentials`). `403 email_unconfirmed`
+comes only after the right password. The token in `201` is shown once; the cloud keeps only its SHA-256. `device`
+names the computer (the desktop) or the browser (the web front, platform `web`).
+
+**Forgot password.** `POST /auth/reset { email }` answers `202` for any email, before it touches the database. The
+lookup, the link (valid for 1 hour) and the email happen in the background, and only an account gets one.
+
+**Reset page** (`<public URL>/reset/<token>`). It asks for the new password and sends
+`POST /auth/reset/finish { link_token, new_password }`. A password outside 12–256 characters is refused
+(`invalid`) before the link is used, so the person can try again with the same link. On `204`: the password is
+set, the email counts as confirmed (the link proves it), every device of the account is signed out, and every
+other reset link ends.
+
+**Password change** (signed in). It needs the current password. It signs out the account's other devices and ends
+open reset links; the device that asked stays signed in.
+
+**Identity tokens.** `POST /identity-tokens { audience }` returns a token for one team server, valid for 5 minutes.
+The desktop hands it to that team server, which checks it with `orchester_api::identity::VerifiedKeySet` against
+the key set from `GET /keys`, itself checked with the root key the team server pinned, and accepts each `jti` once.
+Claims: `iss` (the public URL), `aud`, `sub` (the account id), `email`, `name`, `device { name, platform }`,
+`jti`, `iat`, `exp`.
+
+## Rate limits
+
+| What | Limit |
+| --- | --- |
+| Sign-in failures | 5 per email in 15 minutes block that email for 15 minutes; 20 per client address and 100 per IPv6 /48 block that address or network |
+| Failed current passwords (`/auth/password`) | 5 per account in 15 minutes |
+| Emails (sign-up, reset) | 5 an hour per email, 20 an hour per client address, 100 an hour per IPv6 /48 |
+| Failed `confirm` and `reset/finish` | 20 per client address and 100 per IPv6 /48 in 15 minutes; 5 an hour per link, each try counted before its password check |
+| Identity tokens | 60 an hour per device |
+
+The counters are in memory. A restart clears them; the cloud runs as one instance in v1. A client address is its
+IPv4 address or its IPv6 /64. Each counter tracks at most 100,000 keys. A new key beyond that evicts the oldest key that holds no count, block or
+attempt in flight, rather than being refused, so a flood of new emails cannot lock everyone out. When every key
+still counts, the counter grows past 100,000 until those counts expire; it never lifts a block or resets a count
+early. The address and network limits bound how fast a flood can add counts.
+
+## Not built yet
+
+Invites (`/invites`) and the team server registry (`/servers`) answer `404`; account deletion (`DELETE /me`) answers
+`405`, and a new email in `PATCH /me` is refused as an unknown field (`400`). Magic link, Google and GitHub sign-in come later. `audience` is not checked against registered team servers
+until the registry exists.

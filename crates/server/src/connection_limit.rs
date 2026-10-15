@@ -2,7 +2,7 @@ use std::{collections::HashMap, net::IpAddr, sync::Arc};
 
 use parking_lot::Mutex;
 
-use crate::addresses::{TrustedProxy, rate_address};
+use crate::addresses::{TrustedProxy, peer_network};
 
 #[derive(Default)]
 struct Counts {
@@ -37,7 +37,7 @@ impl ConnectionLimit {
   pub fn acquire(&self, peer: IpAddr) -> Option<ConnectionLease> {
     // Match the actual address before /64 grouping; trusting one IPv6 proxy must not exempt its neighbours.
     let trusted = self.0.trusted_proxies.iter().any(|proxy| proxy.contains(peer));
-    let peer = (!trusted).then(|| rate_address(peer));
+    let peer = (!trusted).then(|| peer_network(peer));
     let mut counts = self.0.counts.lock();
     if counts.total >= self.0.total
       || peer.is_some_and(|peer| counts.peers.get(&peer).copied().unwrap_or(0) >= self.0.per_peer)

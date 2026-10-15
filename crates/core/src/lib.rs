@@ -24,6 +24,7 @@ pub mod native;
 pub mod orchester_tools;
 pub mod orchestrator;
 pub mod permission;
+pub mod private_file;
 pub mod project;
 pub mod pull_request;
 pub mod question;

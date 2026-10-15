@@ -19,7 +19,7 @@ pub(super) enum Part {
     at: Timestamp,
   },
   Action {
-    action: ChatAction,
+    action: Box<ChatAction>,
     at: Timestamp,
     /// Its entry in the conversation, which a proposed start is decided by.
     seq: i64,
@@ -78,13 +78,8 @@ impl Turn {
     self.answer.iter().any(|part| {
       matches!(
         part,
-        Part::Action {
-          action: ChatAction {
-            outcome: orchester_core::orchestrator::ActionOutcome::Done,
-            ..
-          },
-          ..
-        }
+        Part::Action { action, .. }
+          if matches!(**action, ChatAction { outcome: orchester_core::orchestrator::ActionOutcome::Done, .. })
       )
     })
   }
@@ -127,7 +122,7 @@ pub(super) fn turns(entries: &[ChatEntry]) -> Vec<Turn> {
       EntryKind::Action(action) => {
         if let Some(turn) = turns.last_mut() {
           turn.answer.push(Part::Action {
-            action: action.clone(),
+            action: Box::new(action.clone()),
             at: entry.at,
             seq: entry.seq,
           });

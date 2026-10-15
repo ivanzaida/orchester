@@ -12,7 +12,7 @@ use orchester_core::{
 use super::harness::{Orchestrator, Setup};
 
 /// The outcomes of the conversation's actions, in order.
-fn outcomes(screen: &Orchestrator) -> Vec<ActionOutcome> {
+pub(super) fn outcomes(screen: &Orchestrator) -> Vec<ActionOutcome> {
   let db = screen.db();
   let Some(listing) = db.chats().expect("chats").pop() else {
     return Vec::new();
@@ -28,7 +28,7 @@ fn outcomes(screen: &Orchestrator) -> Vec<ActionOutcome> {
 }
 
 /// The runs of the task `key`.
-fn runs(screen: &Orchestrator, key: &str) -> usize {
+pub(super) fn runs(screen: &Orchestrator, key: &str) -> usize {
   let db = screen.db();
   let task = db
     .tasks()
@@ -40,7 +40,7 @@ fn runs(screen: &Orchestrator, key: &str) -> usize {
 }
 
 /// The element id of the newest turn's first action.
-fn proposal_card(screen: &Orchestrator) -> String {
+pub(super) fn proposal_card(screen: &Orchestrator) -> String {
   let db = screen.db();
   let chat = db.chats().expect("chats").remove(0).chat.id();
   let turn = db

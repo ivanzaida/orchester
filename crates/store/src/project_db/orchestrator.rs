@@ -7,8 +7,7 @@ use orchester_core::{
   conversation::MessageBody,
   id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId},
   orchestrator::{
-    ActionOutcome, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, OrchestratorSettings, TurnFailure,
-    TurnState,
+    Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, OrchestratorSettings, TurnFailure, TurnState,
   },
   resource::ModelId,
   time::Timestamp,
@@ -279,41 +278,6 @@ impl ProjectDb {
       params![chat.to_string(), at.unix_millis(), text, model.as_str()],
     )?;
     Ok(())
-  }
-
-  /// Settles the proposed action `seq` of conversation `chat` with `outcome`: the action as it was, or `None` when
-  /// there is no such action or it no longer waits for a person.
-  pub fn settle_chat_action(
-    &mut self,
-    (chat, seq): (ChatId, i64),
-    outcome: ActionOutcome,
-  ) -> Result<Option<ChatAction>, StoreError> {
-    let transaction = self.connection.transaction()?;
-    let body: Option<String> = transaction
-      .query_row(
-        "SELECT body FROM orchestrator_entries WHERE seq = ?1 AND chat_id = ?2 AND kind = 'action'",
-        params![seq, chat.to_string()],
-        |row| row.get(0),
-      )
-      .optional()?;
-    let Some(body) = body else {
-      return Ok(None);
-    };
-    let proposed: ChatAction = serde_json::from_str(&body).map_err(|error| corrupt("chat action", error))?;
-    if !proposed.outcome.is_proposed() {
-      return Ok(None);
-    }
-    let settled = ChatAction {
-      outcome,
-      ..proposed.clone()
-    };
-    let body = serde_json::to_string(&settled).map_err(|error| corrupt("chat action", error))?;
-    transaction.execute(
-      "UPDATE orchestrator_entries SET body = ?1 WHERE seq = ?2",
-      params![body, seq],
-    )?;
-    transaction.commit()?;
-    Ok(Some(proposed))
   }
 
   /// Keeps an event of the conversation.

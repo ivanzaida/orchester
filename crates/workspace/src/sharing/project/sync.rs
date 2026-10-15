@@ -33,6 +33,8 @@ impl ProjectServer {
       .call(|client, token, project| async move { client.tasks(&token, project).await })
       .await?;
     let server = self.clone();
+    // A link made before API 3 learns the project's address, its identity since, from the server.
+    let address = self.link.address.is_none().then_some(project.address);
     background::run(move || -> Result<(), SharingError> {
       let tags = tags.iter().map(tag).collect::<Result<Vec<_>, _>>()?;
       let mut store = RemoteTaskStore::new(ProjectDb::open(server.repo_root())?, server)?;
@@ -41,6 +43,9 @@ impl ProjectServer {
       store
         .db
         .record_sharing_state(project.role, Some(Timestamp::now()), None)?;
+      if let Some(address) = address {
+        store.db.record_project_address(&address)?;
+      }
       super::automatic::send(&mut store)
     })
     .await??;

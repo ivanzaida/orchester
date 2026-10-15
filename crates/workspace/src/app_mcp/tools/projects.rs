@@ -5,19 +5,24 @@
 
 use std::path::Path;
 
-use orchester_core::{code_index::CodeIndexSetting, store::SettingsStore};
+use orchester_core::{code_index::CodeIndexSetting, id::ProjectId, store::SettingsStore};
 use orchester_store::{ProjectDb, StoreError};
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{Translate, limits};
+use super::{
+  Translate,
+  across::{InProjects, across},
+  limits,
+};
 use crate::{
   app_mcp::{
     error::ToolError,
     services::{Services, blocking},
   },
   code_index,
+  links::Link,
   tasks::{
     data::{PipelineChoice, published_pipelines},
     outside::Outside,
@@ -78,6 +83,7 @@ pub async fn list_projects(services: &Services, _: ListProjects) -> Result<Value
         "folder_missing": entry.folder_missing,
         "code_index": index.map(CodeIndexSetting::is_on),
         "limits": project_limits.map(limits::limits_json),
+        "link": Link::Project(entry.project.id).path(),
       })
     })
     .collect();
@@ -115,20 +121,19 @@ pub async fn set_code_index(services: &Services, args: SetCodeIndex) -> Result<V
   .await
 }
 
-pub async fn list_pipelines(services: &Services, args: InProject, translate: &Translate) -> Result<Value, ToolError> {
+pub async fn list_pipelines(services: &Services, args: InProjects, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  let choices = blocking(move || {
-    let project = services.project(&args.project)?;
-    let db = orchester_store::ProjectDb::open(&project.repo_root)?;
-    Ok(published_pipelines(&db)?)
-  })
-  .await?;
-  let pipelines: Vec<Value> = choices.iter().map(|choice| pipeline_json(choice, translate)).collect();
-  Ok(json!({ "pipelines": pipelines }))
+  let read = blocking(move || across(&services, args.project.as_deref(), |_, db| Ok(published_pipelines(db)?))).await?;
+  Ok(read.json("pipelines", translate, |open, choices| {
+    choices
+      .iter()
+      .map(|choice| pipeline_json(choice, open.project.id(), translate))
+      .collect()
+  }))
 }
 
-/// A published pipeline as the tools give it: id, name, version and steps.
-pub(super) fn pipeline_json(choice: &PipelineChoice, translate: &Translate) -> Value {
+/// A published pipeline of `project` as the tools give it: id, name, version, steps and its link.
+pub(super) fn pipeline_json(choice: &PipelineChoice, project: ProjectId, translate: &Translate) -> Value {
   let steps: Vec<Value> = choice
     .steps
     .iter()
@@ -145,5 +150,6 @@ pub(super) fn pipeline_json(choice: &PipelineChoice, translate: &Translate) -> V
     "name": &*choice.name,
     "version": choice.version.get(),
     "steps": steps,
+    "link": Link::Pipeline(project, choice.id).path(),
   })
 }

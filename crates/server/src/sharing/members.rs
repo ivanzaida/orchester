@@ -41,19 +41,30 @@ pub fn add(
   now: i64,
 ) -> Result<Member, ServerError> {
   let user = db::find_user(db, &input.username)?
-    .filter(|user| !user.user.disabled)
+    .filter(|user| !user.disabled)
     .ok_or(ErrorCode::NoSuchUser)?
-    .user
     .id;
   if access::role(db, project, user)?.is_some() {
     return Err(ErrorCode::AlreadyMember.into());
   }
+  insert(db, project, user, input.role, actor, now)
+}
+
+/// Makes `user`, not a member yet, a member of `project` with `role`.
+pub fn insert(
+  db: &Connection,
+  project: ProjectId,
+  user: UserId,
+  role: MemberRole,
+  actor: UserId,
+  now: i64,
+) -> Result<Member, ServerError> {
   db.execute(
     "INSERT INTO memberships VALUES (?1,?2,?3,?4,?5,?6)",
     params![
       project.to_string(),
       user.to_string(),
-      access::role_name(input.role),
+      access::role_name(role),
       actor.to_string(),
       now,
       orchester_core::id::IdempotencyKey::generate().to_string()
@@ -62,7 +73,7 @@ pub fn add(
   audit(db, project, user, actor, "member_added", now)?;
   Ok(Member {
     user: access::user_ref(db, user)?,
-    role: input.role,
+    role,
     added_at: now,
   })
 }

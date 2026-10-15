@@ -11,12 +11,13 @@
 //! domain tools (e.g. `Call create_task {"project":"Kontur","title":"Delivery log"}`), anything else is answered
 //! with `Noted: …`. The verifier connects to the window's QA server through the discovery file in
 //! `.tmp/qa/orchestrator/mcp/` (`tools/lurq-mcp-client.py --discovery .tmp/qa/orchestrator/mcp`); the window can be
-//! driven, and `hold_reads` holds its reads to capture a conversation loading. `ORCHESTER_APP_WINDOW_POSITION=<x>,<y>`
-//! opens the window there, as for `tools/qa-app.ps1 -WindowX -WindowY`.
+//! driven, and `hold_reads` holds its reads to capture a conversation loading. `ORCHESTER_APP_WINDOW_POSITION=X,Y`
+//! opens the window there, as for the app (`startup::position`).
 
 #[path = "../seed/kontur/mod.rs"]
 mod kontur;
 
+mod changes;
 mod data;
 mod links;
 mod refused;
@@ -61,6 +62,9 @@ enum State {
   ProposalChanged,
   /// That proposal after a person's *Start* ([`refused`]): its card shows the refusal.
   ProposalRefused,
+  /// Publish, cancel and merge proposals waiting for the person, after earlier ones applied, refused and dismissed
+  /// ([`changes`]).
+  Changes,
   /// `kPs8W`: the latest conversation; press *History* to open the panel.
   History,
   /// `qAq0z` (chat side): nothing chosen for the Orchestrator yet, a new conversation that can't send.
@@ -76,7 +80,7 @@ enum State {
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 13] = [
+  const ALL: [(&'static str, Self); 14] = [
     ("new", Self::New),
     ("conversation", Self::Conversation),
     ("stopped", Self::Stopped),
@@ -84,6 +88,7 @@ impl State {
     ("interrupted", Self::Interrupted),
     ("proposal-changed", Self::ProposalChanged),
     ("proposal-refused", Self::ProposalRefused),
+    ("changes", Self::Changes),
     ("history", Self::History),
     ("not-ready", Self::NotReady),
     ("no-runner", Self::NoRunner),
@@ -121,6 +126,10 @@ fn main() -> Result<(), Box<dyn Error>> {
   let root = tempfile::Builder::new().prefix("app-").tempdir_in(&scratch)?;
   let chosen = !matches!(state, State::NotReady | State::SettingsNoConnection);
   let prepared = data::prepare(root.path(), fakes, (chosen, state != State::SettingsNoConnection))?;
+  if state == State::Changes {
+    // A profile draft that widens is proposed while the person lets the Orchestrator publish drafts: its card says so.
+    orchester_store::AppDb::open(&prepared.database)?.set_orchestrator_publishes_drafts(true)?;
+  }
   let runner = if state == State::NoRunner {
     root.path().join("no-runner").join("orchester-runner")
   } else {
@@ -157,6 +166,7 @@ fn route(prepared: &data::Prepared, state: State) -> Route {
     State::ProposalChanged | State::ProposalRefused => {
       ProjectPage::Orchestrator(OrchestratorChat::Chat(chats.proposal_changed))
     }
+    State::Changes => ProjectPage::Orchestrator(OrchestratorChat::Chat(chats.changes)),
     State::History => ProjectPage::Orchestrator(OrchestratorChat::Latest),
     State::Links => ProjectPage::Orchestrator(OrchestratorChat::Chat(prepared.links)),
     State::Settings | State::SettingsNoConnection => ProjectPage::OrchestratorSettings,
@@ -217,7 +227,7 @@ fn window(prepared: &data::Prepared, (state, runner): (State, PathBuf), scratch:
     .with_start_without_focus(true)
     .with_decorations(false)
     .with_corner_radius(WindowCornerRadius::Rounded);
-  // Where QA asks for it (`ORCHESTER_APP_WINDOW_POSITION`), e.g. off the person's screen.
+  // Where QA asks for it (`ORCHESTER_APP_WINDOW_POSITION`, as the app reads it), e.g. off the person's screen.
   match WindowPosition::from_environment()? {
     Some(WindowPosition { x, y }) => window.with_position(x, y),
     None => window,

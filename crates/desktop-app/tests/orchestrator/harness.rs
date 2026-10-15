@@ -26,8 +26,10 @@ use orchester_core::{
   permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
   project::Project,
   resource::{
-    AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
+    AgentProfile, AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, ModelId, Pipeline, PromptText,
+    ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
   },
+  run::review::AutoModeSettings,
   store::{ConnectionStore, ResourceStore, TaskStore},
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
@@ -391,28 +393,92 @@ the agent logged: {agent}"
   pub fn pipeline(&self, builder: ResourceId, (slug, name): (&str, &str)) -> ResourceId {
     let mut db = self.db();
     let now = Timestamp::now();
-    let step = Step {
-      key: StepKey::new("implement").expect("key"),
-      name: named("Implement"),
-      kind: StepKind::Agent {
-        profile: Some(builder),
-        repository: RepositoryAccess::ReadOnly,
-        model: None,
-        permissions: StepPermissions::default(),
-      },
-      instructions: PromptText::new("Read README.md.").expect("prompt"),
-      depends_on: BTreeSet::new(),
-      approval_gate: false,
-      on_failure: None,
-      budget: None,
-    };
-    let pipeline = Pipeline::new(vec![step]).expect("pipeline");
     let created = db
-      .create_resource(Slug::new(slug).expect("slug"), named(name), &pipeline, now)
+      .create_resource(
+        Slug::new(slug).expect("slug"),
+        named(name),
+        &one_step(builder, "Read README.md."),
+        now,
+      )
       .expect("pipeline")
       .id();
     db.publish_draft::<Pipeline>(created, now).expect("publish pipeline");
     created
+  }
+
+  /// Saves a draft of `pipeline`, its one step by `builder` told `instructions`, over its latest version.
+  pub fn pipeline_draft(&self, (pipeline, builder): (ResourceId, ResourceId), instructions: &str) {
+    let body = one_step(builder, instructions);
+    self
+      .db()
+      .update_draft::<Pipeline>(pipeline, |_, latest| {
+        let based_on = latest.map(|version| version.number());
+        Ok(Draft::new(body, based_on, Timestamp::now()))
+      })
+      .expect("draft saved");
+  }
+
+  /// A published instruction `name` that applies to step *Implement* of `pipeline`, telling `text`.
+  pub fn instruction(&self, pipeline: ResourceId, (name, text): (&str, &str)) -> ResourceId {
+    let mut db = self.db();
+    let now = Timestamp::now();
+    let body = instruction_body(pipeline, text);
+    let slug = Slug::new(&name.to_lowercase().replace(' ', "-")).expect("slug");
+    let created = db
+      .create_resource(slug, named(name), &body, now)
+      .expect("instruction")
+      .id();
+    db.publish_draft::<Instruction>(created, now)
+      .expect("publish instruction");
+    created
+  }
+
+  /// Saves a draft of `instruction` (of `pipeline`'s step) telling `text`, over its latest version.
+  pub fn instruction_draft(&self, (instruction, pipeline): (ResourceId, ResourceId), text: &str) {
+    let body = instruction_body(pipeline, text);
+    self
+      .db()
+      .update_draft::<Instruction>(instruction, |_, latest| {
+        Ok(Draft::new(
+          body,
+          latest.map(|version| version.number()),
+          Timestamp::now(),
+        ))
+      })
+      .expect("draft saved");
+  }
+
+  /// The number of `pipeline`'s latest published version.
+  pub fn pipeline_version(&self, pipeline: ResourceId) -> u32 {
+    self
+      .db()
+      .latest_version::<Pipeline>(pipeline)
+      .expect("versions")
+      .expect("a published version")
+      .number()
+      .get()
+  }
+
+  /// The person's *Let the Orchestrator publish drafts*.
+  pub fn let_orchestrator_publish(&self, allowed: bool) {
+    self
+      .window
+      .launch
+      .workspace()
+      .expect("the session started")
+      .set_orchestrator_publishes_drafts(allowed)
+      .expect("the person's choice is kept");
+  }
+
+  /// The project's *New runs use auto mode*.
+  pub fn auto_mode(&self, on: bool) {
+    self
+      .db()
+      .update_auto_mode_settings(|current| AutoModeSettings {
+        new_runs: on,
+        reviewer: current.reviewer,
+      })
+      .expect("auto mode saved");
   }
 
   /// The person's *Let automation change agent permissions*.
@@ -447,6 +513,40 @@ the agent logged: {agent}"
       .key()
       .to_string()
   }
+}
+
+/// An instruction for every agent of step *Implement* of `pipeline` when it starts, telling `text`.
+fn instruction_body(pipeline: ResourceId, text: &str) -> Instruction {
+  Instruction::new(
+    PromptText::new(text).expect("prompt"),
+    AgentTargets::All,
+    BTreeSet::from([InjectionEvent::Start]),
+    InstructionScope::Step {
+      pipeline,
+      step: StepKey::new("implement").expect("key"),
+    },
+  )
+  .expect("instruction")
+}
+
+/// A pipeline of one step by `builder`, reading, told `instructions`.
+fn one_step(builder: ResourceId, instructions: &str) -> Pipeline {
+  let step = Step {
+    key: StepKey::new("implement").expect("key"),
+    name: named("Implement"),
+    kind: StepKind::Agent {
+      profile: Some(builder),
+      repository: RepositoryAccess::ReadOnly,
+      model: None,
+      permissions: StepPermissions::default(),
+    },
+    instructions: PromptText::new(instructions).expect("prompt"),
+    depends_on: BTreeSet::new(),
+    approval_gate: false,
+    on_failure: None,
+    budget: None,
+  };
+  Pipeline::new(vec![step]).expect("pipeline")
 }
 
 fn named(value: &str) -> Name {

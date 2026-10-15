@@ -12,13 +12,20 @@ workspace = true
 [features]
 # The HTTP client the desktop talks to a server with (`client` module).
 client = ["dep:reqwest", "dep:rustls", "dep:serde_json", "dep:thiserror"]
+# Orchester Cloud's identity tokens and signed key sets (`identity` module): signing for the cloud, verifying for team
+# servers.
+identity = ["dep:base64", "dep:ring", "dep:serde_json", "dep:thiserror"]
 
 [dependencies]
 orchester-core.workspace = true
+base64 = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
+ring = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
 serde.workspace = true
 serde_json = { workspace = true, optional = true }
+# A team server's certificate pin and check code: the SHA-256 of its certificate.
+sha2.workspace = true
 thiserror = { workspace = true, optional = true }
 # Passwords permit whitespace-only values; core's project SecretValue rejects them.
 # Wipe this JSON-boundary credential's memory on drop using the existing workspace dependency.
@@ -33,6 +40,10 @@ tempfile.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[[test]]
+name = "identity"
+required-features = ["identity"]
 
 [[test]]
 name = "client"

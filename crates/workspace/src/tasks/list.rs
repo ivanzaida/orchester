@@ -59,11 +59,12 @@ impl TaskTab {
       Self::Done => "tasks.workflow.done",
     }
   }
-  /// How many the tab holds of `data`'s tasks; Needs you counts what every *Needs you* counts
-  /// ([`ProjectTasks::needs_you`]), each waiting object, as the Overview's tab does.
+  /// How many the tab holds of `data`'s tasks, as [`rows`] lists them: Needs you the tasks something of waits
+  /// for ([`ProjectTasks::waiting_tasks`]). What waits and is no task's is not among them; the tab names it
+  /// over its list instead ([`super::attention::outside_tasks`]).
   pub fn count(self, data: &ProjectTasks) -> usize {
     if self == Self::NeedsYou {
-      return data.needs_you();
+      return data.waiting_tasks().len();
     }
     data.tasks.iter().filter(|task| self.includes(task)).count()
   }

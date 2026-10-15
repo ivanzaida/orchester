@@ -2,24 +2,34 @@ mod support;
 
 #[path = "accounts/admin.rs"]
 mod admin;
+#[path = "accounts/approval.rs"]
+mod approval;
 #[path = "accounts/backup.rs"]
 mod backup;
 #[path = "accounts/backup_writes.rs"]
 mod backup_writes;
-#[path = "accounts/concurrent_limits.rs"]
-mod concurrent_limits;
+#[path = "accounts/certificate.rs"]
+mod certificate;
+#[path = "accounts/cloud.rs"]
+mod cloud;
+#[path = "accounts/cloud_accounts.rs"]
+mod cloud_accounts;
+#[path = "accounts/codes.rs"]
+mod codes;
 #[path = "accounts/configuration.rs"]
 mod configuration;
 #[path = "accounts/connection_limits.rs"]
 mod connection_limits;
+#[path = "accounts/devices.rs"]
+mod devices;
 #[path = "accounts/host_locks.rs"]
 mod host_locks;
 #[path = "accounts/hosting.rs"]
 mod hosting;
-#[path = "accounts/lifecycle.rs"]
-mod lifecycle;
-#[path = "accounts/password_limit.rs"]
-mod password_limit;
+#[path = "accounts/invites.rs"]
+mod invites;
+#[path = "accounts/join_limits.rs"]
+mod join_limits;
 #[path = "accounts/proxies.rs"]
 mod proxies;
 #[path = "accounts/proxy_connections.rs"]

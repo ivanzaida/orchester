@@ -1,7 +1,14 @@
 listen = "127.0.0.1:8080"
 data_dir = "data"
 name = "Orchester"
-trusted_proxies = []
-# For direct TLS, supply both PEM paths:
+# The public base address; projects are at <address>/<slug>. Set it behind a proxy.
+# address = "https://orchester.example.com"
+# self_signed (default): the server's own certificate, generated on the first start; pem: the team's own; off: plain
+# HTTP behind a proxy that holds the certificate.
+tls = "self_signed"
+# Extra names and addresses for the generated certificate.
+# tls_names = ["orchester.internal", "10.0.4.20"]
+# With tls = "pem", both PEM paths:
 # tls_cert = "certificate.pem"
 # tls_key = "private-key.pem"
+trusted_proxies = []

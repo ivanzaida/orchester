@@ -78,6 +78,7 @@ fn link(key: &str) -> SharingLink {
     cursor: 7,
     last_synced_at: at(100),
     removed_at: None,
+    address: Some("https://orchester.kontur.lan/kontur".into()),
   }
 }
 
@@ -176,6 +177,11 @@ fn shared_tasks_the_cache_keeps_the_server_s_tasks_and_refuses_local_writes() {
   .expect("share");
 
   assert_eq!(db.sharing().expect("link"), Some(link));
+  // A link made before API 3 learns the project's address from the server.
+  db.record_project_address("https://orchester.kontur.lan/kontur-2")
+    .expect("address");
+  let address = db.sharing().expect("link").and_then(|link| link.address);
+  assert_eq!(address.as_deref(), Some("https://orchester.kontur.lan/kontur-2"));
   assert_eq!(db.project_tags().expect("tags"), vec![review.clone()]);
   // This computer has the pipeline `delivery`, not `design-review`.
   let delivery = db.resources(ResourceKind::Pipeline).expect("pipelines").remove(0).id();

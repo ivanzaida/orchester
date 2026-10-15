@@ -193,12 +193,13 @@ impl ProjectTasks {
   /// Reads the tasks of the project at `repo_root`; git, through `programs`, tells the runs a person merged
   /// outside Orchester ([`super::delivery`]).
   pub fn load(repo_root: &Path, programs: &Programs) -> Result<Self, StoreError> {
-    Self::read(&ProjectDb::open(repo_root)?, repo_root, programs)
+    Self::read(&ProjectDb::open(repo_root)?, repo_root, Some(programs))
   }
 
   /// [`Self::load`] from `db`, the project database of `repo_root`, opened already: All projects reads a
-  /// project's tasks without migrating its data.
-  pub fn read(db: &ProjectDb, repo_root: &Path, programs: &Programs) -> Result<Self, StoreError> {
+  /// project's tasks without migrating its data. Without `programs` no git runs: a run merged outside Orchester
+  /// reads as its stored phase.
+  pub fn read(db: &ProjectDb, repo_root: &Path, programs: Option<&Programs>) -> Result<Self, StoreError> {
     let tasks = db.tasks()?;
     let (not_shared, kept_tags) = kept(db)?;
     let under_review = db.reviewing_tool_approvals()?;
@@ -219,7 +220,9 @@ impl ProjectTasks {
       (&pending, &asking),
       (&mut group_holds, &mut unmerged),
     )?;
-    unmerged.settle(programs, repo_root, &mut phases);
+    if let Some(programs) = programs {
+      unmerged.settle(programs, repo_root, &mut phases);
+    }
     Ok(Self {
       updated: Arc::new(
         tasks

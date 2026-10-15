@@ -40,7 +40,7 @@ async fn s1b_simultaneous_batch_retries_and_revision_edits_are_atomic() {
 async fn s1b_simultaneous_owner_demotions_leave_one_owner() {
   let server = TestServer::start(|_| {}).await;
   let owner = server.bootstrap().await;
-  let bob = user(&server, "bob", false).await;
+  let bob = server.invited("bob", false).await;
   let project = project(&server, &owner.token, vec![]).await.project.id;
   add_member(&server, &owner.token, project, "bob", "owner").await;
   let own = format!("{}/members/{}", path(project), owner.user.id);
@@ -68,7 +68,7 @@ async fn s1b_waiting_writer_uses_transaction_time_for_takeover() {
   use orchester_server::clock::Clock;
   let server = TestServer::start(|_| {}).await;
   let owner = server.bootstrap().await;
-  let bob = user(&server, "bob", false).await;
+  let bob = server.invited("bob", false).await;
   let project = project(&server, &owner.token, vec![]).await.project.id;
   add_member(&server, &owner.token, project, "bob", "member").await;
   let task = create_tasks(&server, &owner.token, project, 1).await.tasks.remove(0);
@@ -115,7 +115,7 @@ async fn s1b_waiting_writer_rechecks_session_expiry_at_transaction_time() {
     ),
     async {
       tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-      server.clock.advance(orchester_server::clock::SESSION_IDLE_MS);
+      server.clock.advance(orchester_server::clock::DEVICE_IDLE_MS);
       lock.execute_batch("COMMIT").expect("release writer");
     }
   );

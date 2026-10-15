@@ -8,13 +8,13 @@ use orchester_core::{
   id::RunId,
   resource::{AgentProfile, StepKey},
   run::{ListedRun, Run, RunFailure, RunNumber, RunStatus, StepExecutor, StepStatus, TaskPhase},
-  store::{ActivityStore, ResourceStore, WorktreeStore},
+  store::{ActivityStore, ResourceStore, RunStore, WorktreeStore},
   task::Task,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, RunStoreError, StoreError};
 
-use super::{changes::run_worktree, data::latest_run, unreadable::Unreadable};
+use super::{changes::run_worktree, data::latest_run, detail::run_store_error, unreadable::Unreadable};
 use crate::messages::Message;
 
 /// One run of the task, as its row shows it.
@@ -74,6 +74,13 @@ pub(super) fn note_missing_worktrees(
     }
   }
   Ok(())
+}
+
+/// The runs of `task` of project database `db` as its Summary lists them, newest first. Only reads: the worktrees
+/// of interrupted runs found gone are noted when the task's page reads it.
+pub fn runs_of(db: &ProjectDb, task: &Task) -> Result<Vec<RunRecord>, StoreError> {
+  let listed = db.runs_of_task(task.id()).map_err(run_store_error)?;
+  read(db, task, &listed)
 }
 
 /// The runs of `task`, `listed` oldest first as the store lists them, newest first.

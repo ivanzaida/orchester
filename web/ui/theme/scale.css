@@ -1,0 +1,138 @@
+/*
+ * The design values the UI kit uses that are not Pencil variables (those are generated into variables.css): type,
+ * extra spacing, component sizes, states and the layout that changes on a phone. Mapped by hand from the shared
+ * components and the Cloud layer of `data/orchester2.pen` (node ids beside the values). Only the theme files hold
+ * literals; `testing/literals.ts` fails on one anywhere else.
+ */
+
+:root {
+  /* The brand mark keeps its own colours in both modes (`OLHng` Brand / Orchester, `DXmFx`). */
+  --color-brand-logo: #18191d;
+  --color-brand-bar: #f1f1f4;
+
+  /* Type. */
+  --text-tag: 11px; /* CLOUD tag `YOV1U`, chips `j3arUa` */
+  --text-small: 12px; /* labels, hints, small print, errors */
+  --text-body: 13px; /* values, buttons, descriptions */
+  --text-row: 12.5px; /* list rows, section descriptions, nav links (`BJxjS`, `USknD`, `H7oFgo`) */
+  --text-address: 11.5px; /* a server or project address in a row, mono (`M6XUY`) */
+  --text-subtitle: 15px; /* a block's title inside a panel (`G6D1Aa`) */
+  --text-wordmark: 16px; /* `MGrMj`; a section title (`SRc60`) */
+  --text-title: 20px; /* type/heading, `cApGk` */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --leading-button: 1.2; /* `P8aXN` */
+  --leading-title: 1.25; /* `cApGk` */
+  --leading-error: 1.4; /* Field error `d5xipm` */
+  --leading-small: 1.45; /* hints, small print */
+  --leading-body: 1.5; /* descriptions */
+  --tracking-title: -0.2px; /* `cApGk`, `MGrMj` */
+  --tracking-tag: 0.6px; /* `YOV1U` */
+  --tracking-secret: 1px; /* password value `C6NsE2` */
+
+  /* Spacing between the variables' steps. */
+  --space-hairline: 2px; /* notice title and body `wDfBm`; chip padding `r1RbhI` */
+  --space-line: 3px; /* lines of a list row (`tIvsQ`); badge padding (`eWGgO`) */
+  --space-inline: 6px; /* icon to label, field label to box */
+  --space-tight: 10px; /* actions `FeF02`, brand `V4PyD`, notice `optfF` */
+  --space-notice-x: 14px; /* notice `optfF` */
+  --space-row: 14px; /* between a row's glyph, text and actions; section head to its panel (`aVRt4`, `usaZQ`) */
+  --space-row-x: 20px; /* a list row's side padding (`aVRt4`) */
+  --space-empty-y: 28px; /* an empty state's padding (`J9GyKs`) */
+  --space-footer-links: 20px; /* footer `szTC4` */
+  --space-page-y: 40px; /* main `AmM6K` */
+
+  /* Radii. */
+  --radius-bar: 1.75px; /* logo bars `M4DHt` */
+  --radius-logo: 5.4px; /* `DXmFx` */
+  --radius-mark: 8px; /* brand tile `yTI2t`, row glyphs `T0RaoF` */
+
+  /* Sizes. */
+  --size-card: 400px; /* `G6OhQc` */
+  --size-avatar: 30px; /* `d0fuXi` */
+  --size-dot: 6px; /* badge dot `Vydkx` */
+  --size-empty-text: 440px; /* an empty state's text (`c7ic2l`) */
+  --size-setting-label: 150px; /* a setting row's label (`e0NyV4`) */
+  --size-setting-field: 320px; /* a setting row's field (`ku1Rv`) */
+  --size-row-control: 32px; /* buttons and fields in a list row (`J2YICE`, `WAGql`) */
+  --size-mark: 32px; /* `yTI2t` */
+  --size-logo: 24px; /* `DXmFx` */
+  --size-tile: 40px; /* `bQlNZ` */
+  --size-footer: 56px; /* `szTC4` */
+  --size-bar-width: 3.5px;
+  --size-bar-1: 7px;
+  --size-bar-2: 13px;
+  --size-bar-3: 9.5px;
+  --size-bar-gap: 2.5px;
+  --icon-reason: 12px; /* lock, error, note icons */
+  --icon-button: 14px; /* button and address icons */
+  --icon-glyph: 15px; /* list row glyphs `rVKJu` */
+  --icon-field: 16px; /* eye, notice icon */
+  --icon-tile: 18px; /* `EQwj3` */
+  --icon-empty: 20px; /* empty state `XqiEM` */
+  --icon-stroke: 2px; /* lucide's stroke */
+
+  /* States. */
+  --opacity-unavailable: 0.5; /* `O1AnhW`, `Rz2FC` */
+  --opacity-busy: 0.6; /* `Sa0WY` */
+  --duration-spin: 1s;
+
+  /* Layout that changes on a phone (`Ahged`, `afqip`). */
+  --page-padding-y: var(--space-page-y);
+  --page-padding-x: 0px;
+  --page-justify: center;
+  --card-width: var(--size-card);
+  --card-padding: var(--space-section);
+  --footer-direction: row;
+  --footer-align: center;
+  --footer-height: var(--size-footer);
+  --footer-padding: 0 var(--space-section);
+  --footer-gap: var(--space-footer-links);
+  --footer-spacer: block;
+  --footer-links-gap: var(--space-footer-links);
+  --footer-leading: normal;
+
+  /* List rows: glyph, text and actions side by side; on a phone the actions go under the text (`F9QYD`). */
+  --row-columns: auto minmax(0, 1fr) auto;
+  --row-areas: "glyph main side";
+  --row-side-align: end;
+  --row-side-direction: row;
+  --row-glyph-align: center;
+  --row-button-width: auto;
+  --setting-columns: var(--size-setting-label) minmax(0, 1fr);
+  --setting-gap: var(--space-row);
+}
+
+/* Phones: `Ahged` and `afqip` are 390 wide; the card needs its 400 plus 16 at each side. */
+@media (max-width: 431px) {
+  :root {
+    --page-padding-y: var(--space-section);
+    --page-padding-x: var(--space-lg);
+    --page-justify: flex-start;
+    --card-width: 100%;
+    --card-padding: var(--space-xl);
+    --footer-direction: column;
+    --footer-align: flex-start;
+    --footer-height: auto;
+    --footer-padding: var(--space-lg) var(--space-lg) var(--space-xl);
+    --footer-gap: var(--space-sm);
+    --footer-spacer: none;
+    --footer-links-gap: var(--space-lg);
+    --footer-leading: var(--leading-small);
+  }
+}
+
+/* List rows on a phone: `F9QYD` is 390 wide. */
+@media (max-width: 600px) {
+  :root {
+    --row-columns: auto minmax(0, 1fr);
+    --row-areas: "glyph main" "glyph side";
+    --row-side-align: stretch;
+    --row-side-direction: column;
+    --row-glyph-align: start;
+    --row-button-width: 100%;
+    --setting-columns: minmax(0, 1fr);
+    --setting-gap: var(--space-tight);
+  }
+}

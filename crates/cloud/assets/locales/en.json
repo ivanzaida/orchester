@@ -1,0 +1,16 @@
+{
+  "email": {
+    "confirm": {
+      "subject": "Confirm your Orchester account",
+      "body": "Confirm the email of your Orchester account by opening this link within 24 hours:\n\n{link}\n\nIf you did not sign up for Orchester just now, do not open the link; no account is created without it.\n"
+    },
+    "alreadyRegistered": {
+      "subject": "You already have an Orchester account",
+      "body": "Someone tried to sign up for Orchester with this email, which already has an account.\n\nIf it was you, sign in at {url} instead. If you forgot your password, choose Forgot password there.\n\nIf it was not you, you can ignore this email; nothing changed.\n"
+    },
+    "reset": {
+      "subject": "Reset your Orchester password",
+      "body": "Choose a new password for your Orchester account by opening this link within 1 hour:\n\n{link}\n\nSetting a new password signs out every device of the account. If you did not ask for this, ignore this email; your password stays as it is.\n"
+    }
+  }
+}
