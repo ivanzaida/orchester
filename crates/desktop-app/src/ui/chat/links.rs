@@ -55,82 +55,137 @@ pub enum Shown<'a> {
   Address { text: &'a str, address: &'a str },
 }
 
-/// `source` with every link the chat cannot follow made text (its label and its address, or the address alone
-/// when the label is empty or the address itself) and every link to the web followed by its host; a link to a
-/// place in the app stays as written. `words` words both. Borrowed when no link changes.
+/// How many times a reply is read again for links its own text made: each time removes one link's syntax at least,
+/// so a reply settles in as many as it has links.
+const MAX_PASSES: usize = 32;
+
+/// `source` with every link the chat cannot follow made text (what it said and its address, or the address alone
+/// when it said nothing else) and every link to the web followed by its host; a link to a place in the app stays as
+/// written. A link that holds another is text too. Making a link text can make a new one of the brackets around
+/// it, so the reply is read again until no such link is left; a reply that does not settle, or whose links change
+/// once the hosts are in, is shown as its source, as text. `words` words what is shown. Borrowed when no link
+/// changes.
 pub fn present<'a>(source: &'a str, words: &dyn Fn(Shown<'_>) -> String) -> Cow<'a, str> {
   if !source.contains(['[', '<']) {
     return Cow::Borrowed(source);
   }
-  let links = links(source);
+  let mut text = Cow::Borrowed(source);
+  for _ in 0..MAX_PASSES {
+    match unfollowed_as_text(&text, words) {
+      Some(next) => text = Cow::Owned(next),
+      None => return with_hosts(text, words).unwrap_or_else(|| Cow::Owned(escaped(source))),
+    }
+  }
+  Cow::Owned(escaped(source))
+}
+
+/// `source` with each outermost link the chat does not follow made text; `None` when it has none.
+fn unfollowed_as_text(source: &str, words: &dyn Fn(Shown<'_>) -> String) -> Option<String> {
   let mut out = String::new();
   let mut copied = 0;
-  for link in links {
-    let written = &source[link.range.clone()];
-    let shown = match ChatLink::of(&link.destination) {
-      ChatLink::App(_) => continue,
-      ChatLink::Web(url) => {
-        let host = escaped(url.host_str().unwrap_or_default());
-        words(Shown::Web {
-          link: written,
-          host: &host,
-        })
-      }
-      ChatLink::Text => {
-        let text = link.label.map_or("", |label| source[label].trim());
-        let address = escaped(&link.destination);
-        if text.is_empty() || text == link.destination {
-          address
-        } else {
-          words(Shown::Address {
-            text,
-            address: &address,
-          })
-        }
-      }
+  for link in links(source) {
+    // Inside a link made text: it is text with it.
+    if link.range.start < copied || link.followed() {
+      continue;
+    }
+    let address = escaped(&link.destination);
+    let said = link.label.trim();
+    let shown = if said.is_empty() || said == link.destination {
+      address
+    } else {
+      words(Shown::Address {
+        text: &escaped(said),
+        address: &address,
+      })
     };
     out.push_str(&source[copied..link.range.start]);
     out.push_str(&shown);
     copied = link.range.end;
   }
+  (copied > 0).then(|| out + &source[copied..])
+}
+
+/// `source`, whose links the chat all follows, with each link to the web followed by its host; `None` when that
+/// changed its links.
+fn with_hosts<'a>(source: Cow<'a, str>, words: &dyn Fn(Shown<'_>) -> String) -> Option<Cow<'a, str>> {
+  let links = links(&source);
+  let mut out = String::new();
+  let mut copied = 0;
+  for link in &links {
+    let ChatLink::Web(url) = ChatLink::of(&link.destination) else {
+      continue;
+    };
+    let shown = words(Shown::Web {
+      link: &source[link.range.clone()],
+      host: &escaped(url.host_str().unwrap_or_default()),
+    });
+    out.push_str(&source[copied..link.range.start]);
+    out.push_str(&shown);
+    copied = link.range.end;
+  }
   if copied == 0 {
-    return Cow::Borrowed(source);
+    return Some(source);
   }
   out.push_str(&source[copied..]);
-  Cow::Owned(out)
+  let kept = links.iter().map(|link| &link.destination);
+  let now = self::links(&out);
+  (now.iter().all(WrittenLink::followed) && now.iter().map(|link| &link.destination).eq(kept))
+    .then_some(Cow::Owned(out))
 }
 
-/// A link of the source: where it is written, where its label is (none when it is empty), and its destination.
+/// A link of the source: where it is written, what it says as plain text, its destination, and whether it holds
+/// another link.
 struct WrittenLink {
   range: Range<usize>,
-  label: Option<Range<usize>>,
+  label: String,
   destination: String,
+  holds_link: bool,
 }
 
-/// The links of `source` in order, parsed as lurq's Markdown parses it.
+impl WrittenLink {
+  /// Whether the chat follows it: it leads somewhere the chat goes, and holds no other link, whose text would read
+  /// as it while a press went here.
+  fn followed(&self) -> bool {
+    !self.holds_link && ChatLink::of(&self.destination) != ChatLink::Text
+  }
+}
+
+/// The links of `source`, nested ones too, in the order they start, parsed as lurq's Markdown parses it.
 fn links(source: &str) -> Vec<WrittenLink> {
   let mut found = Vec::new();
-  let mut open: Option<WrittenLink> = None;
+  let mut open: Vec<WrittenLink> = Vec::new();
   for (event, range) in Parser::new_ext(source, options()).into_offset_iter() {
-    match event {
+    let said = match event {
       Event::Start(Tag::Link { dest_url, .. }) => {
-        open = Some(WrittenLink {
-          range,
-          label: None,
-          destination: dest_url.into_string(),
-        });
-      }
-      Event::End(TagEnd::Link) => found.extend(open.take()),
-      _ => {
-        if let Some(link) = &mut open {
-          link.label = Some(match link.label.take() {
-            Some(label) => label.start..label.end.max(range.end),
-            None => range,
-          });
+        if let Some(outer) = open.last_mut() {
+          outer.holds_link = true;
         }
+        open.push(WrittenLink {
+          range,
+          label: String::new(),
+          destination: dest_url.into_string(),
+          holds_link: false,
+        });
+        continue;
       }
+      Event::End(TagEnd::Link) => {
+        found.extend(open.pop());
+        continue;
+      }
+      Event::Text(text)
+      | Event::Code(text)
+      | Event::InlineMath(text)
+      | Event::DisplayMath(text)
+      | Event::InlineHtml(text)
+      | Event::Html(text) => text,
+      Event::SoftBreak | Event::HardBreak => " ".into(),
+      _ => continue,
+    };
+    for link in &mut open {
+      link.label.push_str(&said);
     }
   }
+  found.sort_by_key(|link| link.range.start);
   found
 }
 

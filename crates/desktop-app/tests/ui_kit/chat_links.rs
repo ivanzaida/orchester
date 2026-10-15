@@ -172,3 +172,71 @@ fn chat_links_keep_the_reply_around_them_as_it_reads() {
     ]
   );
 }
+
+#[test]
+fn chat_links_never_leave_a_link_their_text_made_unchecked() {
+  let cases = [
+    // Brackets around a link made text pair into a new one: it is read again, and shows its host.
+    (
+      "[[a](mailto:x)](https://evil.example)",
+      "a (mailto:x) (evil.example)",
+      vec!["https://evil.example"],
+    ),
+    (
+      "[[](mailto:x)](https://evil.example)",
+      "mailto:x (evil.example)",
+      vec!["https://evil.example"],
+    ),
+    // What a link said never becomes a reference definition.
+    (
+      "[[b]: https://evil.example](mailto:x)\n\nsee [b]",
+      "[b]: https://evil.example (mailto:x)\nsee [b]",
+      vec![],
+    ),
+    // A link holding another is text: its words would read as the inner one while a press went to it.
+    (
+      "[<https://github.com>](https://evil.example/p)",
+      "https://github.com (https://evil.example/p)",
+      vec![],
+    ),
+    (
+      "[see <mailto:x@y.example>](https://github.com/acme)",
+      "see mailto:x@y.example (https://github.com/acme)",
+      vec![],
+    ),
+    // What a link said keeps no structure of its own.
+    ("[# head](mailto:x)", "# head (mailto:x)", vec![]),
+  ];
+  for (source, reads, links) in cases {
+    let rendered = shown(source);
+    assert_eq!(plain_text(&rendered), reads, "{source} → {rendered}");
+    assert_eq!(destinations(&rendered), links, "{source} → {rendered}");
+  }
+}
+
+#[test]
+fn chat_links_show_a_reply_as_text_when_its_wording_would_make_links() {
+  let source = "[PR 42](https://github.com/acme/kontur/pull/42) and [mail](mailto:x)";
+  let linking = |shown: Shown<'_>| match shown {
+    Shown::Web { link, host } => format!("{link} ({host}) [more](mailto:y)"),
+    Shown::Address { text, address } => format!("{text} ({address})"),
+  };
+  let rendered = present(source, &linking);
+  assert_eq!(
+    plain_text(&rendered),
+    source,
+    "a wording that adds a link: the source, as text"
+  );
+  assert!(destinations(&rendered).is_empty());
+  let endless = |shown: Shown<'_>| match shown {
+    Shown::Web { link, host } => format!("{link} ({host})"),
+    Shown::Address { text, address } => format!("[{text}](mailto:{address})"),
+  };
+  let rendered = present(source, &endless);
+  assert_eq!(
+    plain_text(&rendered),
+    source,
+    "a reply that never settles: the source, as text"
+  );
+  assert!(destinations(&rendered).is_empty());
+}

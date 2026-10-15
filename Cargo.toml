@@ -147,11 +147,11 @@ tree-sitter-go = "0.25"
 tree-sitter-python = "0.25"
 tree-sitter-rust = "0.24"
 tree-sitter-typescript = "0.23"
-# `v4`: the random token that lets only the relay of one Claude Code invocation reach its permission
-# prompt (`orchester_core::connection::claude_approval`); v7 ids carry a timestamp, not only random bits.
 # The host a chat shows beside a link to the web, read as a browser reads it (`https://a.com@b.org/` is b.org).
 # Already built for reqwest and tower-http.
 url = "2"
+# `v4`: the random token that lets only the relay of one Claude Code invocation reach its permission
+# prompt (`orchester_core::connection::claude_approval`); v7 ids carry a timestamp, not only random bits.
 uuid = { version = "1", features = ["v4", "v7", "serde"] }
 win32job = "2"
 # Windows Credential Manager store of the keyring crates, for `orchester-vault`. Without the
