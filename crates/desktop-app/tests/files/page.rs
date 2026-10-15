@@ -178,3 +178,16 @@ fn files_find_counts_the_places_in_the_file() {
   files.window.press("files-find-close");
   assert!(!files.exists("files-find"));
 }
+
+#[test]
+fn files_cut_a_very_long_line_and_say_so() {
+  let mut files = Files::new();
+  let long = format!("short\n{}\n", "x".repeat(10_000));
+  fs::write(files.repo.join("long.txt"), long).expect("a file with a long line");
+  files.open(Some("long.txt"), Version::Checkout);
+  files
+    .window
+    .until("its lines", |w| w.text("files-meta-text").contains("2 lines"));
+  assert!(files.exists("files-line-cut"), "the long line says it was cut");
+  assert_eq!(files.window.text("files-line-cut"), "Line shortened");
+}

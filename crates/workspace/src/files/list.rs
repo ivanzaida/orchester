@@ -4,6 +4,7 @@
 
 use std::{
   collections::{BTreeMap, BTreeSet, HashMap},
+  hash::{DefaultHasher, Hash, Hasher},
   sync::Arc,
 };
 
@@ -62,6 +63,13 @@ impl FileList {
 
   pub fn is_empty(&self) -> bool {
     self.paths.is_empty()
+  }
+
+  /// A hash of the files listed, to tell a read again that found the same without comparing every path.
+  pub fn digest(&self) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    self.paths.hash(&mut hasher);
+    hasher.finish()
   }
 
   /// Whether the list has the file `path`.

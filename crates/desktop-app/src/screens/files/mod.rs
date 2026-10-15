@@ -16,11 +16,16 @@ mod header;
 mod keys;
 mod line;
 mod reads;
+mod search;
+mod shown_lines;
 mod states;
 mod tree;
 mod version;
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::{
+  collections::BTreeSet,
+  sync::{Arc, atomic::AtomicBool},
+};
 
 use lurq::{
   app::{
@@ -115,6 +120,8 @@ pub struct View {
   pub version_open: Signal<bool>,
   pub version_anchor: ElementRef,
   pub refusal: Signal<Option<Refusal>>,
+  /// Whether the highlighting under way is still wanted: a newer text turns the older pass's flag off.
+  pub highlighting: Arc<parking_lot::Mutex<Arc<AtomicBool>>>,
 }
 
 /// The page as one render sees it.
@@ -215,6 +222,7 @@ impl Component for FilesScreen {
         version_open: ctx.signal(false),
         version_anchor: ElementRef::new(),
         refusal: ctx.signal(None),
+        highlighting: Arc::default(),
       },
       following: follow::Following::default(),
     }
@@ -233,7 +241,9 @@ impl Component for FilesScreen {
     }
     self.open_folders_of(path.as_ref().and_then(|path| path.as_ref().ok()));
     let root = props.project.open.repo_root.clone();
-    let wake = self.following.wake(&props.project, props.route.at(), view.retry.get());
+    let wake = self
+      .following
+      .wake(ctx, &props.project, (props.route.at(), view.retry.get()));
     let file = path.as_ref().and_then(|path| path.as_ref().ok());
     let choices = reads::choices(ctx, &root, (props.route.at(), run, file), wake);
     let read = file.map(|file| reads::file(ctx, &root, (props.route.at(), file), (wake, &self.following.file)));

@@ -31,8 +31,10 @@ use super::{
   Page, Refusal, actions,
   find::FindState,
   keys,
-  line::{CODE_CHAR_WIDTH, CodeLine, Found, GAP_WIDTH, LineProps, LineView, NUMBER_WIDTH, Select},
+  line::{CodeLine, Found, LineProps, LineView, Select},
   reads::{self, Shown},
+  search::Search,
+  shown_lines::ShownLines,
   states,
 };
 use crate::{
@@ -112,7 +114,7 @@ fn head_row(file: &FilePath) -> Row {
 }
 
 fn text_pane(ctx: &mut Ctx, page: &Page<'_>, file: &FilePath, text: &Arc<FileText>) -> Element {
-  let tokens = reads::tokens(ctx, file, text);
+  let tokens = reads::tokens(ctx, (file, text), &page.view.highlighting);
   let clipboard = Copier::of(ctx);
   let select = selector(ctx, page);
   ctx.mount_keyed::<CodePane>(
@@ -178,54 +180,22 @@ impl PartialEq for CodeProps {
 
 impl DevtoolsInspectable for CodeProps {}
 
-/// What the search found, for the text and query it looked in and for.
-struct FoundFor {
+/// The lines, and what they were made of.
+struct LinesFor {
   text: Arc<FileText>,
-  query: Option<(String, bool)>,
+  tokens: Arc<Vec<LineTokens>>,
+  range: Option<LineRange>,
   found: Arc<Vec<TextMatch>>,
+  current: Option<usize>,
+  lines: Arc<Vec<CodeLine>>,
 }
-
-/// The current place after the search ran again: the first for a new query, and for the same query in a text
-/// read again the place the current one was at, so following changes does not move the file.
-fn next_place(before: &FoundFor, query: &Option<(String, bool)>, found: &[TextMatch], at: usize) -> usize {
-  if before.query != *query {
-    return 0;
-  }
-  let current = before.found.get(at.min(before.found.len().saturating_sub(1)));
-  current
-    .and_then(|place| TextMatch::same_place(found, *place))
-    .unwrap_or(0)
-}
-/// The lines, for what they were made of.
-type LinesFor = (
-  (usize, usize, Option<LineRange>, usize, Option<usize>),
-  Arc<Vec<CodeLine>>,
-);
 
 struct CodePane {
   view: ElementRef,
   width: Signal<f32>,
-  found: Mutex<Option<FoundFor>>,
+  search: Search,
+  shown: ShownLines,
   lines: Mutex<Option<LinesFor>>,
-  plain: Mutex<Option<(usize, Plain)>>,
-  colors: Mutex<Colors>,
-}
-
-/// The plain lines and the highlighting carried colors were made of.
-type CarriedFor = (usize, usize);
-
-/// The file's last highlighting, and the colors made of it for a text read again before that is highlighted.
-#[derive(Default)]
-struct Colors {
-  highlighted: Option<(FilePath, Arc<Vec<LineTokens>>)>,
-  carried: Option<(CarriedFor, Arc<Vec<LineTokens>>)>,
-}
-
-/// A text's lines as plain tokens, and the width its longest line needs.
-#[derive(Clone)]
-struct Plain {
-  tokens: Arc<Vec<LineTokens>>,
-  width: f32,
 }
 
 impl Component for CodePane {
@@ -235,10 +205,9 @@ impl Component for CodePane {
     Self {
       view: ElementRef::new(),
       width: ctx.signal(0.0),
-      found: Mutex::new(None),
+      search: Search::default(),
+      shown: ShownLines::default(),
       lines: Mutex::new(None),
-      plain: Mutex::new(None),
-      colors: Mutex::default(),
     }
   }
 
@@ -255,14 +224,14 @@ impl Component for CodePane {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<CodeProps>().clone();
-    let found = self.found(&props);
+    let found = self.search.found(ctx, &props.text, &props.find);
     let current = props.find.current(found.len());
     let lines = self.lines(&props, &found, current);
     let reveal = current
       .and_then(|at| found.get(at))
       .map(|place| place.line)
       .or_else(|| props.lines.map(LineRange::first_index));
-    let width = self.plain(&props.text).width.max(self.width.get());
+    let width = self.shown.plain(&props.text).width.max(self.width.get());
     let select = props.select.clone();
     let list: Element = VirtualizedList::new_shared(ctx, lines)
       .list_key(format!("files-lines-{}", props.file))
@@ -293,50 +262,20 @@ impl Component for CodePane {
 }
 
 impl CodePane {
-  /// The places the search found, worked out once per text and query; a new query starts at its first.
-  fn found(&self, props: &CodeProps) -> Arc<Vec<TextMatch>> {
-    let query = props.find.looking_for();
-    let mut kept = self.found.lock();
-    if let Some(before) = kept.as_ref()
-      && Arc::ptr_eq(&before.text, &props.text)
-      && before.query == query
-    {
-      return before.found.clone();
-    }
-    let found = query
-      .as_ref()
-      .map_or_else(|| Arc::new(Vec::new()), |query| FindState::found(&props.text, query));
-    if let Some(before) = kept.as_ref() {
-      props
-        .find
-        .at
-        .set(next_place(before, &query, &found, props.find.at.get_untracked()));
-    }
-    *kept = Some(FoundFor {
-      text: props.text.clone(),
-      query,
-      found: found.clone(),
-    });
-    found
-  }
-
   /// The lines to show, made again only when their text, colors, selection or places found change.
   fn lines(&self, props: &CodeProps, found: &Arc<Vec<TextMatch>>, current: Option<usize>) -> Arc<Vec<CodeLine>> {
-    let text_key = Arc::as_ptr(&props.text) as usize;
-    let tokens = self.colors(props);
-    let key = (
-      text_key,
-      Arc::as_ptr(&tokens) as usize,
-      props.lines,
-      Arc::as_ptr(found) as usize,
-      current,
-    );
+    let tokens = self.shown.colors((&props.file, &props.text), props.tokens.as_ref());
     let mut kept = self.lines.lock();
-    if let Some((made_for, lines)) = kept.as_ref()
-      && *made_for == key
+    if let Some(made) = kept.as_ref()
+      && Arc::ptr_eq(&made.text, &props.text)
+      && Arc::ptr_eq(&made.tokens, &tokens)
+      && Arc::ptr_eq(&made.found, found)
+      && made.range == props.lines
+      && made.current == current
     {
-      return lines.clone();
+      return made.lines.clone();
     }
+    let cut = self.shown.plain(&props.text).cut;
     let mut places: Vec<Vec<Found>> = vec![Vec::new(); props.text.lines().len()];
     for (at, place) in found.iter().enumerate() {
       if let Some(line) = places.get_mut(place.line) {
@@ -356,68 +295,19 @@ impl CodePane {
           tokens: tokens.get(index).cloned().unwrap_or_else(|| plain("")),
           selected: props.lines.is_some_and(|range| range.contains_index(index)),
           found: found.into(),
+          cut: cut.get(index).copied().unwrap_or(false),
         })
         .collect(),
     );
-    *kept = Some((key, lines.clone()));
+    *kept = Some(LinesFor {
+      text: props.text.clone(),
+      tokens,
+      range: props.lines,
+      found: found.clone(),
+      current,
+      lines: lines.clone(),
+    });
     lines
-  }
-
-  /// The colors to draw the lines in: the text's highlighting once it is made; before, while the file was
-  /// highlighted when it was read last, those colors on the lines whose text did not change and plain text on
-  /// the rest, so a file read again keeps its colors; else plain text.
-  fn colors(&self, props: &CodeProps) -> Arc<Vec<LineTokens>> {
-    let mut colors = self.colors.lock();
-    if let Some(tokens) = &props.tokens {
-      colors.highlighted = Some((props.file.clone(), tokens.clone()));
-      return tokens.clone();
-    }
-    let plain_lines = self.plain(&props.text).tokens;
-    let Some((_, before)) = colors.highlighted.as_ref().filter(|(file, _)| *file == props.file) else {
-      return plain_lines;
-    };
-    let key = (Arc::as_ptr(&plain_lines) as usize, Arc::as_ptr(before) as usize);
-    if let Some((made_for, carried)) = &colors.carried
-      && *made_for == key
-    {
-      return carried.clone();
-    }
-    let carried: Arc<Vec<LineTokens>> = Arc::new(
-      plain_lines
-        .iter()
-        .enumerate()
-        .map(|(index, line)| match before.get(index) {
-          Some(colored) if same_text(colored, line) => colored.clone(),
-          _ => line.clone(),
-        })
-        .collect(),
-    );
-    colors.carried = Some((key, carried.clone()));
-    carried
-  }
-
-  /// The lines as plain text, shown before or without highlighting, and their width; worked out once per
-  /// text.
-  fn plain(&self, text: &Arc<FileText>) -> Plain {
-    let key = Arc::as_ptr(text) as usize;
-    let mut kept = self.plain.lock();
-    if let Some((made_for, plain_lines)) = kept.as_ref()
-      && *made_for == key
-    {
-      return plain_lines.clone();
-    }
-    let tokens: Vec<LineTokens> = text.lines().iter().map(|line| plain(line)).collect();
-    let longest = tokens
-      .iter()
-      .map(|line| line.iter().map(|token| token.text.chars().count()).sum::<usize>())
-      .max()
-      .unwrap_or(0);
-    let made = Plain {
-      tokens: Arc::new(tokens),
-      width: content_width(longest),
-    };
-    *kept = Some((key, made.clone()));
-    made
   }
 
   /// The path, and at the head's end the lines selected and *Find*, or the search while it is open.
@@ -454,22 +344,6 @@ impl CodePane {
       .child(key_cap("files-find-keys", &caps))
       .into()
   }
-}
-
-/// Whether two lines' tokens show the same text.
-fn same_text(a: &LineTokens, b: &LineTokens) -> bool {
-  a.iter()
-    .flat_map(|token| token.text.chars())
-    .eq(b.iter().flat_map(|token| token.text.chars()))
-}
-
-/// The width a line of `chars` characters needs.
-#[allow(
-  clippy::cast_precision_loss,
-  reason = "a line holds far fewer characters than f32 counts exactly"
-)]
-fn content_width(chars: usize) -> f32 {
-  NUMBER_WIDTH + GAP_WIDTH + chars as f32 * CODE_CHAR_WIDTH
 }
 
 /// Ctrl+C (Cmd+C) copies the selected lines while no field has the focus.

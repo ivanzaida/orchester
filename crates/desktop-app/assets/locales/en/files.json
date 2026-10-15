@@ -58,6 +58,7 @@
     "copyFile": "Copy file",
     "copyLines": "Copy lines",
     "openInEditor": "Open in editor",
+    "lineCut": "Line shortened",
     "openAtCommit": "A commit's file is not on disk; show the checkout's or the run's worktree's version to open it.",
     "openRuns": "Orchester does not open a file that your system would run instead of showing.",
     "openNotText": "Only text and code files open in an editor from here.",

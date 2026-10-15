@@ -1,11 +1,9 @@
 //! Search within the file (`Files · find in file` `b7RGL`, `File head · find` `RxJ3Z`): a 260 wide field with
 //! where the current place is among those found ("14 of 41"), *Match case*, the previous and next place and
 //! a cross that closes it; Enter goes to the next place, Shift+Enter to the previous one, Esc closes it.
-//! The places are found by the workspace ([`FileText::find`]); the lines show them, the current one apart.
-//! Only a person's typing is searched: what automation types finds nothing, since counting places would let it read
-//! the file a character at a time.
-
-use std::sync::Arc;
+//! The places are found by the workspace ([`orchester_workspace::files::FileText::find`], off the UI thread:
+//! [`super::search`]); the lines show them, the current one apart. Only a person's typing is searched: what automation
+//! types finds nothing, since counting places would let it read the file a character at a time.
 
 use lurq::{
   app::{
@@ -18,7 +16,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::files::{FileText, MAX_MATCHES, TextMatch};
+use orchester_workspace::files::MAX_MATCHES;
 
 use crate::ui::{field::FieldInput, icon::Icon, icon_button::IconButton};
 
@@ -68,11 +66,6 @@ impl FindState {
     let query = self.query.get();
     let typed = self.typed.get() == query;
     (self.open.get() && typed && !query.is_empty()).then(|| (query, self.match_case.get()))
-  }
-
-  /// The places `text` holds `query`.
-  pub fn found(text: &FileText, (query, match_case): &(String, bool)) -> Arc<Vec<TextMatch>> {
-    Arc::new(text.find(query, *match_case))
   }
 
   /// The current place among `count`, kept within them.

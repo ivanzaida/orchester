@@ -14,7 +14,12 @@ mod kontur;
 #[path = "../support/mod.rs"]
 mod support;
 
-use std::{fs, path::PathBuf, thread, time::Duration};
+use std::{
+  fs,
+  path::PathBuf,
+  thread,
+  time::{Duration, Instant},
+};
 
 use kontur::{SeedRequest, scenarios};
 use orchester_app::routes::{FilesView, ProjectPage, Route};
@@ -263,4 +268,110 @@ fn files_keep_the_current_place_found_when_the_file_is_read_again() {
     "the current place stays: {}",
     page.window.text("files-find-field-box")
   );
+}
+
+#[test]
+fn files_keep_the_last_text_while_the_file_cannot_be_read_for_a_moment() {
+  let mut page = Page::open();
+  let run = page.working_run();
+  let worktree = page.repo.join(WORKTREES_DIR).join(run.to_string());
+  let file = worktree.join("follow.md");
+  fs::write(&file, lines(120)).expect("a file in the worktree");
+  page.open_file("follow.md", Version::Run(run), None);
+  page.window.until("its lines", |window| {
+    window.text("files-meta-text").contains("120 lines")
+  });
+
+  let held = hold(&file);
+  page.run_changed();
+  let read_again = Instant::now();
+  // The coalesced wake, the read and its read once more fit in this.
+  while read_again.elapsed() < Duration::from_millis(1_500) {
+    page.window.tree.tick_futures();
+    page.window.pass();
+    thread::sleep(Duration::from_millis(10));
+  }
+  assert!(
+    page.window.tree.get_element_by_id("files-code").is_some(),
+    "the text stays while the file cannot be read"
+  );
+  assert!(page.meta().contains("120 lines"), "{}", page.meta());
+  drop(held);
+
+  fs::write(&file, lines(125)).expect("the agent's edit");
+  page.run_changed();
+  page.window.until("the file read again", |window| {
+    window.text("files-meta-text").contains("125 lines")
+  });
+}
+
+/// Holds `file` so that nothing else reads it until the result is dropped: open without sharing on Windows,
+/// without read permission elsewhere.
+#[cfg(windows)]
+fn hold(file: &std::path::Path) -> fs::File {
+  use std::os::windows::fs::OpenOptionsExt;
+  fs::OpenOptions::new()
+    .read(true)
+    .share_mode(0)
+    .open(file)
+    .expect("the file held")
+}
+
+#[cfg(not(windows))]
+fn hold(file: &std::path::Path) -> impl Drop {
+  use std::os::unix::fs::PermissionsExt;
+  struct Readable(PathBuf);
+  impl Drop for Readable {
+    fn drop(&mut self) {
+      fs::set_permissions(&self.0, fs::Permissions::from_mode(0o644)).expect("the file readable again");
+    }
+  }
+  fs::set_permissions(file, fs::Permissions::from_mode(0o000)).expect("the file unreadable");
+  Readable(file.to_path_buf())
+}
+
+#[test]
+fn files_coalesce_the_runners_changes_and_keep_the_versions_until_integration_changes() {
+  let mut page = Page::open();
+  let run = page.working_run();
+  let worktree = page.repo.join(WORKTREES_DIR).join(run.to_string());
+  fs::write(worktree.join("follow.md"), lines(120)).expect("a file in the worktree");
+  page.open_file("follow.md", Version::Run(run), None);
+  page.window.until("its lines", |window| {
+    window.text("files-meta-text").contains("120 lines")
+  });
+  let item = format!("files-version:{}", Version::Run(run));
+  page.window.press("files-version");
+  page.window.until("the versions read", |window| {
+    window.tree.get_element_by_id(&item).is_some() && window.text(&item).contains("120 lines")
+  });
+
+  fs::write(worktree.join("follow.md"), lines(125)).expect("the agent's edit");
+  let first = Instant::now();
+  page.run_changed();
+  page.window.until("the file read again", |window| {
+    window.text("files-meta-text").contains("125 lines")
+  });
+  fs::write(worktree.join("follow.md"), lines(130)).expect("the agent's next edit");
+  page.run_changed();
+  // The reads woke at `first` at the earliest, so the next change waits until half a second after it.
+  while first.elapsed() < Duration::from_millis(400) {
+    page.window.tree.tick_futures();
+    page.window.pass();
+    assert!(page.meta().contains("125 lines"), "a change right after another waits");
+    thread::sleep(Duration::from_millis(10));
+  }
+  page.window.until("the file read again after the wait", |window| {
+    window.text("files-meta-text").contains("130 lines")
+  });
+
+  assert!(
+    page.window.text(&item).contains("120 lines"),
+    "the open menu's versions are not read again on a run's change: {}",
+    page.window.text(&item)
+  );
+  page.window.projects().feed(page.project).jobs.count_outside_removal();
+  page.window.until("the versions read again", |window| {
+    window.text(&item).contains("130 lines")
+  });
 }

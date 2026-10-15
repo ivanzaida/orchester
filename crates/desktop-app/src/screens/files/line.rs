@@ -16,15 +16,18 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
     events::mouse_event::MouseEvent,
-    theme::{BorderSize, PaletteColor, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Button, Row, Text},
   layout::{Alignment, text_style::TextAlign},
-  node::{CursorIcon, Element, border::Border, dimension::Dimension},
+  node::{CursorIcon, Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::highlight::{LineTokens, Token};
 
-use crate::theme::{ExtraTypography, FilesRadius, token_color};
+use crate::{
+  theme::{ExtraTypography, FilesRadius, IconSize, token_color},
+  ui::icon::{Icon, icon},
+};
 
 /// Heights and widths of a line (`L5WYtA`): its height, its number's column and the room after it.
 pub const LINE_HEIGHT: f32 = 20.0;
@@ -49,6 +52,8 @@ pub struct CodeLine {
   pub tokens: LineTokens,
   pub selected: bool,
   pub found: Arc<[Found]>,
+  /// The line is longer than is laid out: it is cut and says so.
+  pub cut: bool,
 }
 
 /// Selects the line at an index; `true` extends the selection to it.
@@ -111,7 +116,8 @@ impl Component for LineView {
       .align_items(Alignment::Center)
       .child(number)
       .child(Row::new().width(Dimension::Px(GAP_WIDTH)))
-      .with_children(code(&line.tokens, &line.found));
+      .with_children(code(&line.tokens, &line.found))
+      .with_children(line.cut.then(|| cut_marker(ctx)));
     if line.selected {
       row
         .background(PaletteColor::AccentMuted)
@@ -120,6 +126,25 @@ impl Component for LineView {
       row
     }
   }
+}
+
+/// What follows the code of a line too long to lay out whole: that it is shortened, as the Changes tab says
+/// of a line cut short (`changes-line-cut`).
+fn cut_marker(ctx: &Ctx) -> Element {
+  Row::new()
+    .id("files-line-cut")
+    .height(Dimension::Pct(100.0))
+    .padding(Padding::horizontal(SpacingSize::Sm))
+    .spacing(SpacingSize::Xs)
+    .align_items(Alignment::Center)
+    .background(PaletteColor::SurfaceRaised)
+    .child(icon(Icon::Scissors, IconSize::Xs, PaletteColor::TextMuted))
+    .child(
+      Text::new(&ctx.t("files.lineCut"))
+        .variant(TypographyStyle::Caption)
+        .nowrap(),
+    )
+    .into()
 }
 
 /// The line's code as sensitive texts, split where a found place starts and ends.

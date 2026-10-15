@@ -7,12 +7,14 @@ use std::{
   path::Path,
   sync::{
     Arc,
-    atomic::{AtomicU64, Ordering},
+    atomic::{AtomicBool, Ordering},
   },
+  thread,
+  time::Duration,
 };
 
 use lurq::app::{component::DevtoolsInspectable, ctx::Ctx};
-use orchester_core::id::RunId;
+use orchester_core::{command::CommandRunner, id::RunId};
 use orchester_workspace::{
   background,
   files::{FileList, FilePath, FileText, FileView, FilesError, Version, Versions, list_files, read_file, versions},
@@ -21,6 +23,7 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
+use super::shown_lines::cut_lines;
 use crate::services::Services;
 
 /// Why a read failed: the files' own reason, or the background work that did not finish.
@@ -44,24 +47,26 @@ impl Failure {
   pub const fn gone(&self) -> bool {
     matches!(self, Self::Files(FilesError::VersionGone(_)))
   }
+
+  /// A failure that passes: what was there could not be read for a moment (another program holds it, or
+  /// replaces it), so a read again that meets it keeps what it read last.
+  const fn passes(&self) -> bool {
+    matches!(self, Self::Files(FilesError::Unreadable { .. }))
+  }
 }
 
-/// A read's value with what it was read for, and which read it was.
+/// A read's value with what it was read for, and a digest of what it holds.
 #[derive(Clone, PartialEq)]
 pub struct Found<K, T> {
   pub key: K,
   pub value: T,
-  serial: u64,
+  digest: u64,
 }
 
 impl<K, T> Found<K, T> {
-  fn new(key: K, value: T) -> Self {
-    static READS: AtomicU64 = AtomicU64::new(0);
-    Self {
-      key,
-      value,
-      serial: READS.fetch_add(1, Ordering::Relaxed),
-    }
+  /// `value` read for `key`; `digest` tells a read again that found the same, worked out off the UI thread.
+  fn new(key: K, value: T, digest: u64) -> Self {
+    Self { key, value, digest }
   }
 }
 
@@ -74,8 +79,27 @@ pub struct Wake {
   pub jobs: u64,
 }
 
-/// Keeps the value shown when a read again finds what was there: the page renders nothing new for it, and
-/// the file keeps its colors, its selection and where it is scrolled to.
+impl Wake {
+  /// What wakes the version menu: not the runner's changes, which change no version, only what does.
+  const fn versions(self) -> Self {
+    Self { runs: 0, ..self }
+  }
+}
+
+/// An `Arc` compared by which allocation it is: the same text while its `Arc` is, since a read makes a new one.
+#[derive(Clone)]
+pub struct Same<T>(pub Arc<T>);
+
+impl<T> PartialEq for Same<T> {
+  fn eq(&self, other: &Self) -> bool {
+    Arc::ptr_eq(&self.0, &other.0)
+  }
+}
+
+impl<T> DevtoolsInspectable for Same<T> {}
+
+/// Keeps the value shown when a read again finds what was there (the same digest): the page renders nothing new
+/// for it, and the file keeps its colors, its selection and where it is scrolled to.
 pub struct Steady<T>(Mutex<Option<(u64, T)>>);
 
 impl<T> Default for Steady<T> {
@@ -84,23 +108,19 @@ impl<T> Default for Steady<T> {
   }
 }
 
-impl<T: Clone + PartialEq> Steady<T> {
-  /// `read`, or the value kept when it holds the same; each read is compared once.
+impl<T: Clone> Steady<T> {
+  /// `read`, or the value kept when it holds the same.
   fn keep(&self, read: Shown<(u64, T)>) -> Shown<T> {
-    let (serial, value) = match read {
+    let (digest, value) = match read {
       Shown::Read(read) => read,
       Shown::Reading => return Shown::Reading,
       Shown::Failed(failure) => return Shown::Failed(failure),
     };
     let mut kept = self.0.lock();
-    match kept.as_mut() {
-      Some((seen, shown)) if *seen == serial => Shown::Read(shown.clone()),
-      Some((seen, shown)) if *shown == value => {
-        *seen = serial;
-        Shown::Read(shown.clone())
-      }
+    match kept.as_ref() {
+      Some((shown, value)) if *shown == digest => Shown::Read(value.clone()),
       _ => {
-        *kept = Some((serial, value.clone()));
+        *kept = Some((digest, value.clone()));
         Shown::Read(value)
       }
     }
@@ -127,16 +147,17 @@ impl<T> Shown<T> {
 }
 
 /// The result of a future for `key`, with which read it was: its value when it was read for `key` (the last
-/// one while it is read again), else its failure, else that it is being read.
+/// one while it is read again, and when reading it again failed for a moment), else its failure, else that
+/// it is being read.
 fn shown<K: PartialEq, T: Clone>(
   key: &K,
   state: &lurq::app::ctx::FutureState<Found<K, T>, Failure>,
 ) -> Shown<(u64, T)> {
   if let Some(found) = state.data.as_ref()
     && found.key == *key
-    && !state.is_rejected()
+    && (!state.is_rejected() || state.error.as_ref().is_some_and(Failure::passes))
   {
-    return Shown::Read((found.serial, found.value.clone()));
+    return Shown::Read((found.digest, found.value.clone()));
   }
   match (&state.error, state.is_pending()) {
     (Some(error), false) => Shown::Failed(error.clone()),
@@ -161,7 +182,8 @@ pub fn list(ctx: &mut Ctx, root: &Path, at: &Version, (wake, kept): (Wake, &Stea
       async move {
         let read = at.clone();
         let value = run(move || list_files(programs.runner(), &root, &read)).await?;
-        Ok(Found::new(at, value))
+        let digest = value.digest();
+        Ok(Found::new(at, value, digest))
       }
     })
     .state()
@@ -183,8 +205,9 @@ pub fn file(
       let programs = programs.clone();
       async move {
         let (at, path) = key.clone();
-        let value = run(move || read_file(programs.runner(), &root, &at, &path)).await?;
-        Ok(Found::new(key, value))
+        let value = run(move || read_steadily(programs.runner(), &root, (&at, &path))).await?;
+        let digest = digest(&value);
+        Ok(Found::new(key, value, digest))
       }
     })
     .state()
@@ -202,14 +225,17 @@ pub fn choices(
   let programs = Services::of(ctx).programs;
   let key = (at.clone(), run_id, path.cloned());
   let state = ctx
-    .future((root.to_path_buf(), key.clone(), wake), move |(root, key, _)| {
-      let programs = programs.clone();
-      async move {
-        let (at, run_id, path) = key.clone();
-        let value = run(move || versions(programs.runner(), &root, (&at, run_id), path.as_ref())).await?;
-        Ok(Found::new(key, Arc::new(value)))
-      }
-    })
+    .future(
+      (root.to_path_buf(), key.clone(), wake.versions()),
+      move |(root, key, _)| {
+        let programs = programs.clone();
+        async move {
+          let (at, run_id, path) = key.clone();
+          let value = run(move || versions(programs.runner(), &root, (&at, run_id), path.as_ref())).await?;
+          Ok(Found::new(key, Arc::new(value), 0))
+        }
+      },
+    )
     .state()
     .get();
   match shown(&key, &state) {
@@ -220,18 +246,27 @@ pub fn choices(
 }
 
 /// The highlighted lines of `text`, the file at `path`, once a background thread made them; `None` before,
-/// and for a file no grammar reads.
-pub fn tokens(ctx: &mut Ctx, path: &FilePath, text: &Arc<FileText>) -> Option<Arc<Vec<LineTokens>>> {
-  // The text is the same while its `Arc` is: a new read makes a new one.
-  let key = (path.clone(), Arc::as_ptr(text) as usize);
-  let text = text.clone();
+/// and for a file no grammar reads. A pass for an older text stops once a newer one asks: `superseded` holds
+/// the flag of the pass under way.
+pub fn tokens(
+  ctx: &mut Ctx,
+  (path, text): (&FilePath, &Arc<FileText>),
+  superseded: &Arc<Mutex<Arc<AtomicBool>>>,
+) -> Option<Arc<Vec<LineTokens>>> {
+  let key = (path.clone(), Same(text.clone()));
+  let superseded = superseded.clone();
   let state = ctx
     .future(key.clone(), move |key| {
-      let text = text.clone();
+      let wanted = Arc::new(AtomicBool::new(true));
+      let earlier = std::mem::replace(&mut *superseded.lock(), wanted.clone());
+      earlier.store(false, Ordering::Relaxed);
       async move {
-        let path = key.0.clone();
-        let value = run(move || Ok(highlight_lines(path.as_str(), text.lines()).map(Arc::new))).await?;
-        Ok(Found::new(key, value))
+        let (path, text) = (key.0.clone(), key.1.0.clone());
+        let still = move || wanted.load(Ordering::Relaxed);
+        let value =
+          run(move || Ok(highlight_lines(path.as_str(), text.lines(), &still).map(|lines| Arc::new(cut_lines(lines)))))
+            .await?;
+        Ok(Found::new(key, value, 0))
       }
     })
     .state()
@@ -239,5 +274,33 @@ pub fn tokens(ctx: &mut Ctx, path: &FilePath, text: &Arc<FileText>) -> Option<Ar
   match shown(&key, &state) {
     Shown::Read((_, tokens)) => tokens,
     Shown::Reading | Shown::Failed(_) => None,
+  }
+}
+
+/// How long a read waits before it reads once more a file it found missing or unreadable: long enough for an
+/// editor's or an agent's save by rename to finish.
+const SETTLE: Duration = Duration::from_millis(50);
+
+/// The file `path` at `at`, read once more after [`SETTLE`] when it was missing or unreadable, so a save by
+/// rename does not show as a missing file.
+fn read_steadily(
+  runner: &dyn CommandRunner,
+  root: &Path,
+  (at, path): (&Version, &FilePath),
+) -> Result<FileView, FilesError> {
+  match read_file(runner, root, at, path) {
+    Err(FilesError::Missing(_) | FilesError::Unreadable { .. }) => {
+      thread::sleep(SETTLE);
+      read_file(runner, root, at, path)
+    }
+    read => read,
+  }
+}
+
+/// A digest of what `view` shows.
+fn digest(view: &FileView) -> u64 {
+  match view {
+    FileView::Text(text) => text.digest(),
+    FileView::Binary { size } | FileView::TooLarge { size } => *size,
   }
 }

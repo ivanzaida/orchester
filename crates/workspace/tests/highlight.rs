@@ -135,9 +135,13 @@ fn highlight_reads_operators_and_variants_as_text_and_self_async_and_await_as_ke
 #[test]
 fn highlight_lines_reads_a_whole_file_from_its_start() {
   let lines = ["/* a comment", "   that goes on */", "fn main() {}"];
-  let tokens = highlight_lines("src/lib.rs", &lines).expect("Rust has a grammar");
+  let tokens = highlight_lines("src/lib.rs", &lines, &|| true).expect("Rust has a grammar");
   assert_eq!(tokens.len(), 3);
   assert_eq!(kind_of(&tokens[1], "   that goes on */"), Some(TokenKind::Comment));
   assert_eq!(kind_of(&tokens[2], "fn"), Some(TokenKind::Keyword));
-  assert!(highlight_lines("notes.unknownext", &lines).is_none());
+  assert!(highlight_lines("notes.unknownext", &lines, &|| true).is_none());
+  assert!(
+    highlight_lines("src/lib.rs", &lines, &|| false).is_none(),
+    "superseded, it stops"
+  );
 }

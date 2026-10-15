@@ -1,7 +1,12 @@
 //! A text file as the code viewer shows it: its lines, a range of them (the `line` of the route), what
 //! copying lines gives, and where a text is found in it.
 
-use std::{fmt, str::FromStr, sync::Arc};
+use std::{
+  fmt,
+  hash::{DefaultHasher, Hash, Hasher},
+  str::FromStr,
+  sync::Arc,
+};
 
 use thiserror::Error;
 
@@ -46,6 +51,13 @@ impl FileText {
     self.size
   }
 
+  /// A hash of the text, to tell a read again that found the same without comparing every line.
+  pub fn digest(&self) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    self.lines.hash(&mut hasher);
+    hasher.finish()
+  }
+
   /// The text of `range` as copied: its lines joined with `\n`, the part past the file's end left out.
   pub fn copied(&self, range: LineRange) -> String {
     let first = range.first_index();
@@ -67,12 +79,10 @@ impl FileText {
       return Vec::new();
     }
     let mut found = Vec::new();
+    let mut shown = Vec::new();
     for (line, text) in self.lines.iter().enumerate() {
-      let shown: Vec<char> = highlight::plain(text)
-        .iter()
-        .flat_map(|token| token.text.chars())
-        .map(fold)
-        .collect();
+      highlight::shown_chars(text, &mut shown);
+      shown.iter_mut().for_each(|character| *character = fold(*character));
       let mut start = 0;
       while start + query.len() <= shown.len() {
         if shown[start..start + query.len()] == query[..] {
