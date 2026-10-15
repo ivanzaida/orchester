@@ -1,8 +1,8 @@
 //! Joining a server project that has tasks already (`docs/architecture/server.md`, "Two people share
 //! one repository", phase S2c, rows 49–50) against a real `orchester-server` on loopback, with two
 //! people: Alice linked Kontur to the project at `<server>/kontur` as ORC; Bohdan has the same
-//! repository with local tasks KON-1 … KON-3. A person who is not a member learns the project's name
-//! and owners and nothing is uploaded; a first-checkout link that meets tasks leads to Join; a
+//! repository with local tasks KON-1 … KON-3. A person who is not a member learns nothing of the
+//! project and nothing is uploaded; a first-checkout link that meets tasks leads to Join; a
 //! checkout is found by the project's address, with the repository remote only a hint; the review ticks every task,
 //! hints at similar titles and keeps a task with an unfinished run ticked; the join uploads the ticked tasks with new
 //! numbers, ids and former keys (the unfinished one claimed), drops a link to a task that stays here and names it,
@@ -132,17 +132,14 @@ fn join(bohdan: &Person, tasks: &[TaskId; 3]) -> orchester_workspace::sharing::p
 }
 
 #[test]
-fn joined_a_person_who_is_not_a_member_learns_the_owners_and_uploads_nothing() {
+fn joined_a_person_who_is_not_a_member_learns_nothing_of_the_project_and_uploads_nothing() {
   let server = TestServer::start();
   let (alice, oleh) = with_oleh(&server);
   let (bohdan, _) = bohdan(&server);
   let found = bohdan.block_on(bohdan.servers.find_project(&bohdan.entry(), "kontur"));
-  assert!(
-    matches!(&found, Err(SharingError::NoProject { name: Some(name), owners }) if name == "Kontur" && owners == &["Alice Moreau"]),
-    "{found:?}"
-  );
+  assert!(matches!(&found, Err(SharingError::NoProject)), "{found:?}");
   let missing = bohdan.block_on(bohdan.servers.find_project(&bohdan.entry(), "billing"));
-  assert!(matches!(missing, Err(SharingError::NoProject { name: None, .. })));
+  assert!(matches!(missing, Err(SharingError::NoProject)));
   // Neither the first-checkout link nor Join uploads anything of Bohdan's.
   let request = LinkFirst {
     slug: "kontur".into(),
@@ -151,13 +148,10 @@ fn joined_a_person_who_is_not_a_member_learns_the_owners_and_uploads_nothing() {
     write_discovery: false,
   };
   let linked = bohdan.block_on(bohdan.servers.link_first(&bohdan.entry(), bohdan.root(), request));
-  assert!(matches!(
-    linked,
-    Err(ShareError::Sharing(SharingError::NoProject { .. }))
-  ));
+  assert!(matches!(linked, Err(ShareError::Sharing(SharingError::NoProject))));
   assert_eq!(bohdan.db().sharing().expect("link"), None);
   let review = bohdan.block_on(bohdan.servers.join_review_at(&bohdan.entry(), bohdan.root(), "kontur"));
-  assert!(matches!(review, Err(SharingError::NoProject { .. })));
+  assert!(matches!(review, Err(SharingError::NoProject)));
   assert_eq!(
     bohdan
       .block_on(bohdan.servers.lookup(&bohdan.entry(), identity()))

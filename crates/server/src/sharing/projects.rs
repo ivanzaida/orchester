@@ -1,9 +1,7 @@
 //! Server projects by name and slug (`docs/architecture/server.md`, "Servers and project addresses"): a project's
 //! address is the server's address and its slug, fixed once created; the repository remote is only a hint.
 
-use orchester_api::{
-  ErrorCode, NewProject, ProjectChanges, ProjectCreated, ProjectLink, ProjectLinked, SharedProject, SharingErrorDetails,
-};
+use orchester_api::{ErrorCode, NewProject, ProjectChanges, ProjectCreated, ProjectLink, ProjectLinked, SharedProject};
 use orchester_core::{
   id::{ProjectId, UserId},
   name::Name,
@@ -13,7 +11,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, OptionalExtension, params};
 
-use super::{access, batches, conflict, decode, encode, events, members};
+use super::{access, batches, decode, encode, events, members};
 use crate::{db, error::ServerError};
 
 /// Slugs no project can have: the server's own paths (row 62). Core's `Slug` already rules out names starting with
@@ -70,21 +68,16 @@ pub fn list(db: &Connection, user: UserId, base: &str) -> Result<Vec<SharedProje
 /// The project at `slug` when `user` is a member; `403 not_member` with its name and owners when they are not, `404`
 /// when there is none.
 pub fn by_slug(db: &Connection, user: UserId, slug: &str, base: &str) -> Result<SharedProject, ServerError> {
-  let found: Option<(String, String)> = db
-    .query_row("SELECT id,name FROM projects WHERE slug=?1", [slug], |row| {
-      Ok((row.get(0)?, row.get(1)?))
-    })
+  let found: Option<String> = db
+    .query_row("SELECT id FROM projects WHERE slug=?1", [slug], |row| row.get(0))
     .optional()?;
-  let (id, name) = found.ok_or(ErrorCode::NotFound)?;
-  let id = id.parse().map_err(|_| ServerError::StoredData)?;
+  let id = found
+    .ok_or(ErrorCode::NotFound)?
+    .parse()
+    .map_err(|_| ServerError::StoredData)?;
+  // A project the person is not a member of answers like no project: its name and owners are not theirs to read.
   if access::role(db, id, user)?.is_none() {
-    return Err(conflict(
-      ErrorCode::NotMember,
-      SharingErrorDetails::Project {
-        name,
-        owners: access::owners(db, id)?,
-      },
-    ));
+    return Err(ErrorCode::NotFound.into());
   }
   load(db, id, user, base)
 }

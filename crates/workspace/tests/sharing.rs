@@ -23,6 +23,7 @@ use std::{
 use orchester_api::{
   Credential, ErrorCode,
   client::{ClientError, CloudClient, PlainHttp, ServerAddress},
+  cloud::CloudServer,
 };
 use orchester_core::{
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
@@ -344,24 +345,26 @@ fn sharing_a_cloud_identity_joins_through_an_email_invite_with_the_key_set_the_a
   let audience = server.link_cloud(&fake.root_key, &fake.key_set);
   fake.serve_for(audience.clone());
   let desktop = Desktop::new();
-  let address = ServerAddress::parse(&server.url()).expect("address");
   let client = CloudClient::new(ServerAddress::parse(&fake.url()).expect("cloud")).expect("cloud client");
   let device = SecretValue::new("cloud device token".into()).expect("token");
   let identity = CloudIdentity {
     cloud: &client,
     device: &device,
-    audience: audience.parse().expect("server id"),
+  };
+  // The cloud's record of a server with a CA's certificate, or here plain HTTP on loopback: no fingerprint.
+  let record = CloudServer {
+    id: audience.parse().expect("server id"),
+    name: SERVER_NAME.into(),
+    address: server.url(),
+    fingerprint: None,
   };
   let joined = server
-    .block_on(
-      desktop
-        .servers
-        .join_with_cloud(&address, Trust::System(PlainHttp::NotAllowed), identity, None),
-    )
+    .block_on(desktop.servers.join_with_cloud(&record, identity, None))
     .expect("cloud join");
   let CloudJoined::Joined(id) = joined else {
     panic!("join approval is off: {joined:?}");
   };
+  assert_eq!(fake.issued(), 1);
   let entry = desktop.entry();
   assert_eq!(entry.stored.id, id);
   let account = entry.stored.account.clone().expect("the account");

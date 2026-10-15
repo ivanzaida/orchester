@@ -1,6 +1,4 @@
-use orchester_api::{
-  ErrorCode, MemberResponse, ProjectCreated, ProjectLinked, ProjectResponse, SharingError, SharingErrorDetails,
-};
+use orchester_api::{ErrorCode, MemberResponse, ProjectCreated, ProjectLinked, ProjectResponse};
 use serde_json::json;
 
 use crate::{fixture::*, support::TestServer};
@@ -176,14 +174,10 @@ async fn s1b_membership_privacy_roles_self_leave_and_admin_management() {
       None,
     )
     .await;
-  error(&lookup, 403, ErrorCode::NotMember);
-  match lookup.json::<SharingError>().details {
-    SharingErrorDetails::Project { name, owners } => {
-      assert_eq!(name, "Shared project");
-      assert_eq!(owners.iter().map(|owner| owner.id).collect::<Vec<_>>(), [owner.user.id]);
-    }
-    _ => panic!("project details"),
-  }
+  // A project the person is not a member of answers like no project, with nothing of it.
+  error(&lookup, 404, ErrorCode::NotFound);
+  assert!(!lookup.contains("Shared project"));
+  assert!(!lookup.contains(&owner.user.id.to_string()));
   error(
     &server
       .request("GET", "/projects?slug=missing", Some(&bob.token), None)

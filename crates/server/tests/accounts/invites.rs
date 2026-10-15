@@ -171,3 +171,29 @@ async fn s1c_invite_shapes_are_checked() {
   assert_eq!(unknown_field.status, 400);
   server.finish().await;
 }
+
+#[tokio::test]
+async fn s1c_admins_make_account_invites_only_for_accounts_that_are_not_admins() {
+  let server = TestServer::start(|_| {}).await;
+  let admin = server.bootstrap().await;
+  let olena = server.invited("olena", true).await;
+  let bob = server.invited("bob", false).await;
+  for user in [olena.user.id, admin.user.id] {
+    for body in [
+      json!({"kind":"account","delivery":"code","user":user}),
+      json!({"kind":"account","delivery":"cloud","user":user,"email":"someone@example.com"}),
+    ] {
+      let refused = invite(&server, &admin.token, body.clone()).await;
+      assert_eq!(refused.status, 403, "{body}");
+      assert_eq!(refused.json::<ApiError>().error, ErrorCode::Forbidden);
+    }
+  }
+  let created = invite(
+    &server,
+    &olena.token,
+    json!({"kind":"account","delivery":"code","user":bob.user.id}),
+  )
+  .await;
+  assert_eq!(created.status, 201);
+  server.finish().await;
+}

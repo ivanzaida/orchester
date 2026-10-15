@@ -14,7 +14,8 @@ use crate::{
 
 const MINUTE_MS: i64 = 60 * 1000;
 const HOUR_MS: i64 = 60 * MINUTE_MS;
-/// Open codes a server holds at most; with 50, 200 guesses an hour succeed with odds below 1 in 10^7 a week.
+/// Open codes a server holds at most. With 50 open, a guess succeeds with odds of 50 in 2^40; the 200 failures an hour
+/// the server allows succeed with odds of about 1 in 650,000 a week, 1 in 12,500 a year.
 const MAX_OPEN: i64 = 50;
 /// Open pairing codes an account holds at most.
 const MAX_OPEN_PAIRINGS: i64 = 3;
@@ -74,7 +75,7 @@ pub(crate) struct OpenCode {
 }
 
 /// Records a new code and returns it with its expiry. `409 too_many_codes` at the server's maximum of open codes,
-/// `429 rate_limited` at an account's maximum of open pairing codes.
+/// `429 rate_limited` at an account's maximum of open pairing codes, which frees up within 10 minutes.
 pub(crate) fn create(
   db: &Connection,
   keys: &ServerKeys,
@@ -83,17 +84,18 @@ pub(crate) fn create(
 ) -> Result<(Credential, i64), ServerError> {
   prune(db, now)?;
   let open: i64 = db.query_row("SELECT COUNT(*) FROM codes", [], |row| row.get(0))?;
+  if open >= MAX_OPEN {
+    return Err(ErrorCode::TooManyCodes.into());
+  }
   if code.kind == CodeKind::Pairing {
     let pairings: i64 = db.query_row(
       "SELECT COUNT(*) FROM codes WHERE kind='pairing' AND user_id=?1",
       [code.user.map(|user| user.to_string())],
       |row| row.get(0),
     )?;
-    if pairings >= MAX_OPEN_PAIRINGS || open >= MAX_OPEN {
+    if pairings >= MAX_OPEN_PAIRINGS {
       return Err(ServerError::RateLimited(60));
     }
-  } else if open >= MAX_OPEN {
-    return Err(ErrorCode::TooManyCodes.into());
   }
   let text = crockford(&random::<5>()?);
   let expires_at = now + code.kind.lifetime_ms();

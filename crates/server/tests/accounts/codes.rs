@@ -98,7 +98,7 @@ async fn s1c_unknown_used_and_malformed_codes_answer_alike_and_codes_are_stored_
 }
 
 #[tokio::test]
-async fn s1c_failed_redemptions_block_an_address_after_ten_and_pause_the_server_after_two_hundred() {
+async fn s1c_failed_redemptions_block_an_address_after_ten() {
   let server = TestServer::start(|config| config.trusted_proxies = vec!["127.0.0.1".parse().expect("proxy")]).await;
   let admin = server.bootstrap().await;
   let wrong = credential("ZZZZ-ZZZZ");
@@ -146,16 +146,7 @@ async fn s1c_failed_redemptions_block_an_address_after_ten_and_pause_the_server_
       .status,
     201
   );
-  // 200 failures across many addresses within an hour pause redemption everywhere for 15 minutes.
-  for index in 0..190 {
-    let address = format!("203.0.113.{}", index % 19 + 1);
-    let status = redeem(address).await.status;
-    assert_eq!(status, 401, "failure {index}");
-  }
-  let paused = redeem("192.0.2.200".into()).await;
-  assert_eq!(paused.status, 429);
-  server.clock.advance(15 * 60 * 1000);
-  assert_eq!(redeem("192.0.2.200".into()).await.status, 401);
+  assert_eq!(redeem("203.0.113.1".into()).await.status, 401);
   server.finish().await;
 }
 
@@ -176,7 +167,42 @@ async fn s1c_a_server_holds_fifty_open_codes() {
     .await;
   assert_eq!(refused.status, 409);
   assert_eq!(refused.json::<ApiError>().error, ErrorCode::TooManyCodes);
+  // A pairing code is refused the same way: waiting a minute would not help.
+  let pairing = server.request("POST", "/auth/pairings", Some(&admin.token), None).await;
+  assert_eq!(pairing.status, 409);
+  assert_eq!(pairing.json::<ApiError>().error, ErrorCode::TooManyCodes);
   server.clock.advance(72 * HOUR);
   invite_code(&server, &admin.token, json!({"kind":"server","delivery":"code"})).await;
+  server.finish().await;
+}
+
+#[tokio::test]
+async fn s1c_one_code_joins_once_however_many_redeem_it_at_once() {
+  let server = TestServer::start(|_| {}).await;
+  let admin = server.bootstrap().await;
+  let created = invite_code(&server, &admin.token, json!({"kind":"server","delivery":"code"})).await;
+  let code = created.code.as_ref().expect("code");
+  let (a, b, c, d) = tokio::join!(
+    server.redeem(code, Some("bob"), "laptop"),
+    server.redeem(code, Some("carol"), "laptop"),
+    server.redeem(code, Some("dave"), "laptop"),
+    server.redeem(code, Some("erin"), "laptop"),
+  );
+  let statuses = [a.status, b.status, c.status, d.status];
+  assert_eq!(
+    statuses.iter().filter(|status| **status == 201).count(),
+    1,
+    "{statuses:?}"
+  );
+  assert_eq!(
+    statuses.iter().filter(|status| **status == 401).count(),
+    3,
+    "{statuses:?}"
+  );
+  let accounts: i64 = server
+    .database()
+    .query_row("SELECT COUNT(*) FROM users", [], |row| row.get(0))
+    .expect("accounts");
+  assert_eq!(accounts, 2);
   server.finish().await;
 }

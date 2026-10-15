@@ -2,6 +2,8 @@
 //! of an existing account waits until one of that account's joined devices or an admin approves it. The joining app
 //! asks again with the approval's id; a refused approval ends the join.
 
+use std::net::IpAddr;
+
 use orchester_api::{Approval, ApprovalState, ErrorCode, User};
 use orchester_core::id::{ApprovalId, UserId};
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -28,21 +30,60 @@ pub(crate) fn set_enabled(db: &Connection, enabled: bool, actor: UserId, now: i6
   )
 }
 
-/// A new waiting approval for `user`'s cloud join from `device`.
+/// The approval `user`'s cloud join as `subject` waits for: the one already waiting, or a new one for `device` at
+/// `address`; `true` when it is new. An account and cloud identity have one waiting approval at a time.
 pub(crate) fn request(
   db: &Connection,
   user: UserId,
   subject: &str,
   device: &str,
+  address: IpAddr,
   now: i64,
-) -> Result<Approval, ServerError> {
+) -> Result<(Approval, bool), ServerError> {
+  prune(db, now)?;
+  let waiting: Option<String> = db
+    .query_row(
+      "SELECT id FROM approvals WHERE user_id=?1 AND cloud_subject=?2 AND state='waiting'",
+      params![user.to_string(), subject],
+      |row| row.get(0),
+    )
+    .optional()?;
+  if let Some(id) = waiting {
+    let id = id.parse().map_err(|_| ServerError::StoredData)?;
+    return Ok((load(db, id)?.ok_or(ServerError::StoredData)?, false));
+  }
   let id = ApprovalId::generate();
   db.execute(
-    "INSERT INTO approvals(id,user_id,cloud_subject,device,state,requested_at,expires_at) VALUES (?1,?2,?3,?4,'waiting',?5,?6)",
-    params![id.to_string(), user.to_string(), subject, device, now, now + LIFETIME_MS],
+    "INSERT INTO approvals(id,user_id,cloud_subject,device,address,state,requested_at,expires_at)
+      VALUES (?1,?2,?3,?4,?5,'waiting',?6,?7)",
+    params![
+      id.to_string(),
+      user.to_string(),
+      subject,
+      device,
+      address.to_string(),
+      now,
+      now + LIFETIME_MS
+    ],
   )?;
-  db::audit(db, Some(user), "join_approval_requested", &id.to_string(), None, now)?;
-  load(db, id)?.ok_or(ServerError::StoredData)
+  db::audit(
+    db,
+    Some(user),
+    "join_approval_requested",
+    &id.to_string(),
+    Some(address),
+    now,
+  )?;
+  Ok((load(db, id)?.ok_or(ServerError::StoredData)?, true))
+}
+
+/// Removes the approvals that ended: expired, refused or used. A join that names one is refused all the same.
+fn prune(db: &Connection, now: i64) -> Result<(), ServerError> {
+  db.execute(
+    "DELETE FROM approvals WHERE expires_at<=?1 OR state IN ('refused','used')",
+    [now],
+  )?;
+  Ok(())
 }
 
 /// What a join that names approval `id` may do: go on once approved (the approval is used up), wait while it waits.

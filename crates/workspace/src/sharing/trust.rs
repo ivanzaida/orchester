@@ -6,6 +6,7 @@
 use orchester_api::{
   certificate::CertificatePin,
   client::{Client, ClientError, PlainHttp, ServerAddress},
+  cloud::CloudServer,
 };
 use orchester_store::{StoreError, StoredServer};
 
@@ -36,7 +37,8 @@ impl PresentedCertificate {
   }
 }
 
-/// A certificate pin the person confirmed; there is no other way to make one.
+/// A certificate pin the person confirmed, or one Orchester Cloud named with the server (row 39: a cloud invite carries
+/// the fingerprint, so the person compares nothing); there is no other way to make one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ConfirmedPin(CertificatePin);
 
@@ -56,6 +58,17 @@ pub enum Trust {
 }
 
 impl Trust {
+  /// The trust of a server as Orchester Cloud names it: its certificate pinned when the cloud has its fingerprint,
+  /// the operating system's trust store otherwise.
+  pub(super) fn named_by_cloud(server: &CloudServer) -> Result<Self, SharingError> {
+    match &server.fingerprint {
+      Some(hex) => CertificatePin::parse(hex)
+        .map(|pin| Self::Pinned(ConfirmedPin(pin)))
+        .ok_or(SharingError::InvalidAnswer("certificate fingerprint")),
+      None => Ok(Self::System(PlainHttp::NotAllowed)),
+    }
+  }
+
   /// The trust of a server in the list, as stored when it was connected.
   pub(super) fn stored(server: &StoredServer) -> Result<Self, StoreError> {
     match &server.certificate_pin {

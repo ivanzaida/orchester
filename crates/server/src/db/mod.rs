@@ -140,3 +140,27 @@ pub(crate) fn audit(
   )?;
   Ok(())
 }
+
+const HOUR_MS: i64 = 60 * 60 * 1000;
+/// How long the counts of failed joins are kept.
+const FAILED_JOINS_KEPT_MS: i64 = 90 * 24 * HOUR_MS;
+
+/// Counts a failed join of `kind` (`code` or `cloud`) from `address` in its hour. Failures are counted, not audited one
+/// event each: the append-only audit would grow with every guess, and the counts are kept 90 days.
+pub(crate) fn failed_join(
+  connection: &Connection,
+  kind: &str,
+  address: std::net::IpAddr,
+  now: i64,
+) -> Result<(), ServerError> {
+  connection.execute(
+    "DELETE FROM failed_joins WHERE hour<?1",
+    [(now - FAILED_JOINS_KEPT_MS).div_euclid(HOUR_MS)],
+  )?;
+  connection.execute(
+    "INSERT INTO failed_joins(kind,address,hour,count) VALUES (?1,?2,?3,1)
+      ON CONFLICT(kind,address,hour) DO UPDATE SET count=count+1",
+    rusqlite::params![kind, address.to_string(), now.div_euclid(HOUR_MS)],
+  )?;
+  Ok(())
+}

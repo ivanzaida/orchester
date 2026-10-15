@@ -4,7 +4,9 @@
 
 use std::net::IpAddr;
 
-use orchester_api::{Approval, CloudJoin, ErrorCode, InviteDelivery, InviteKind, Joined, JoinedVia, User};
+use orchester_api::{
+  Approval, CloudJoin, ErrorCode, InviteDelivery, InviteKind, Joined, JoinedProject, JoinedVia, User,
+};
 use orchester_core::id::ApprovalId;
 use rusqlite::Connection;
 
@@ -22,8 +24,11 @@ use crate::{
 /// What a cloud join came to.
 pub(crate) enum CloudJoined {
   Joined(Joined),
-  /// Join approval is on: the join waits for the account's devices or an admin.
-  Waiting(Approval),
+  /// Join approval is on: the join waits for the account's devices or an admin; `new` when this join asked first.
+  Waiting {
+    approval: Approval,
+    new: bool,
+  },
   /// The caller's account is now linked to the identity.
   Linked(User),
 }
@@ -58,9 +63,14 @@ impl Server {
       Err(ServerError::Api(code @ (ErrorCode::InvalidIdentity | ErrorCode::NotInvited))) => {
         attempt.failed(self.now());
         self
-          .account_write(move |db, now| db::audit(db, None, "join_failed", "cloud", Some(address), now))
+          .account_write(move |db, now| db::failed_join(db, "cloud", address, now))
           .await?;
         Err(code.into())
+      }
+      // A new approval counts against the address like a failure: asking costs the approvers' attention.
+      Ok(waiting @ CloudJoined::Waiting { new: true, .. }) => {
+        attempt.failed(self.now());
+        Ok(waiting)
       }
       other => {
         attempt.succeeded();
@@ -105,6 +115,7 @@ fn join(
   let invite = claims
     .invite
     .as_deref()
+    // An invite id this server could not have made names none of its invites: the join goes on as without one.
     .and_then(|id| id.parse().ok())
     .map(|id| invites::open(db, id, now))
     .transpose()?
@@ -114,25 +125,20 @@ fn join(
         && invite.email.as_deref() == Some(claims.email.to_ascii_lowercase().as_str())
     });
   let (user, joined) = match db::user_by_subject(db, &claims.sub)? {
-    Some(user) => {
-      if user.disabled {
-        return Err(ErrorCode::Forbidden.into());
-      }
-      if approvals::enabled(db)? {
-        let waiting = match input.approval {
-          None => Some(approvals::request(db, user.id, &claims.sub, &input.device, now)?),
-          Some(id) => approvals::finish(db, id, user.id, &claims.sub, now)?,
-        };
-        if let Some(waiting) = waiting {
-          return Ok(CloudJoined::Waiting(waiting));
-        }
-      }
-      let joined = invite
-        .map(|invite| invites::accept(db, &invite, user.id, now))
-        .transpose()?
-        .flatten();
-      (user, joined)
-    }
+    Some(user) => match known_account(
+      db,
+      &Asked {
+        input,
+        claims,
+        address,
+        now,
+      },
+      invite,
+      user,
+    )? {
+      Known::Joins(user, joined) => (user, joined),
+      Known::Waits(waiting) => return Ok(waiting),
+    },
     None => {
       let invite = invite.ok_or(ErrorCode::NotInvited)?;
       let user = invited_account(db, &invite, claims, now)?;
@@ -156,6 +162,67 @@ fn join(
     user,
     joined,
   }))
+}
+
+/// A cloud join being decided: what the app sent, what its token says, from where and when.
+struct Asked<'a> {
+  input: &'a CloudJoin,
+  claims: &'a Claims,
+  address: IpAddr,
+  now: i64,
+}
+
+enum Known {
+  Joins(User, Option<JoinedProject>),
+  Waits(CloudJoined),
+}
+
+/// What a cloud join of the account linked to the identity comes to: the account, with what an invite of it grants
+/// (an admin invite makes it an admin), or the approval it waits for. An account invite names one account: the
+/// identity of another is refused, and the invite stays open.
+fn known_account(
+  db: &Connection,
+  asked: &Asked<'_>,
+  invite: Option<invites::Stored>,
+  user: User,
+) -> Result<Known, ServerError> {
+  let Asked {
+    input,
+    claims,
+    address,
+    now,
+  } = *asked;
+  if user.disabled {
+    return Err(ErrorCode::Forbidden.into());
+  }
+  if invite
+    .as_ref()
+    .is_some_and(|invite| invite.kind == InviteKind::Account && invite.user != Some(user.id))
+  {
+    return Err(ErrorCode::NotInvited.into());
+  }
+  if approvals::enabled(db)? {
+    let waiting = match input.approval {
+      None => Some(approvals::request(
+        db,
+        user.id,
+        &claims.sub,
+        &input.device,
+        address,
+        now,
+      )?),
+      Some(id) => approvals::finish(db, id, user.id, &claims.sub, now)?.map(|approval| (approval, false)),
+    };
+    if let Some((approval, new)) = waiting {
+      return Ok(Known::Waits(CloudJoined::Waiting { approval, new }));
+    }
+  }
+  let Some(invite) = invite else {
+    return Ok(Known::Joins(user, None));
+  };
+  let joined = invites::accept(db, &invite, user.id, now)?;
+  let user = db::user_by_id(db, user.id)?.ok_or(ServerError::StoredData)?;
+  Ok(Known::Joins(user, joined))
 }
 
 /// The account an invite gives a cloud identity the server does not know yet: the existing account an account invite

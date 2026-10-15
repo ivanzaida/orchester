@@ -91,12 +91,3 @@ impl SigningKey {
     Ok(jws::finish(&input, &signature))
   }
 }
-
-/// The id of the key that signed `token`, from its header, for the team server's audit of a join; the token is not
-/// verified by reading it.
-pub fn token_key_id(token: &str) -> Result<String, IdentityError> {
-  jws::decode(token, IdentityClaims::TYPE)?
-    .header
-    .kid
-    .ok_or(IdentityError::Malformed)
-}

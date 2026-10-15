@@ -1458,8 +1458,7 @@
       "notEditable": "The server didn't take the change: the task can't be edited in its state.",
       "organization": "The server didn't take the status, priority, tags or links: they break a rule of the task list.",
       "shareInProgress": "This project is being shared right now, so nothing was changed. Try again once sharing has finished.",
-      "notMemberOf": "You aren't a member of {{project}} yet. Ask one of its owners for an invite: {{owners}}.",
-      "noProject": "The server has no project at this address."
+      "noProject": "The server has no project at this address that you're a member of. Ask whoever shared it for an invite."
     },
     "members": {
       "noSuchUser": "The server has no user with this username. Usernames are exact; an admin of the server creates accounts.",

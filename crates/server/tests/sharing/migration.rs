@@ -211,8 +211,8 @@ async fn s1c_projects_made_under_row_10_take_slugs_from_their_repository_names()
   let other = server
     .request("GET", "/projects?slug=kontur-2", Some(&alice), None)
     .await;
-  assert_eq!(other.status, 403);
-  assert_eq!(other.json::<orchester_api::ApiError>().error, ErrorCode::NotMember);
+  assert_eq!(other.status, 404);
+  assert_eq!(other.json::<orchester_api::ApiError>().error, ErrorCode::NotFound);
   let projects: Projects = server.request("GET", "/projects", Some(&alice), None).await.json();
   assert_eq!(projects.projects.len(), 1);
   server.finish().await;

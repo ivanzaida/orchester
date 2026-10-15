@@ -39,7 +39,7 @@ async fn s1b_unknown_request_fields_are_rejected_for_every_shared_request_shape(
 }
 
 #[tokio::test]
-async fn s1b_number_and_limits_preserve_core_unsigned_ranges() {
+async fn s1b_number_and_limits_preserve_core_ranges() {
   let server = TestServer::start(|_| {}).await;
   let owner = server.bootstrap().await;
   let created = project(&server, &owner.token, vec![upload(u32::MAX)]).await;
@@ -58,13 +58,27 @@ async fn s1b_number_and_limits_preserve_core_unsigned_ranges() {
     422,
     ErrorCode::Invalid,
   );
+  // A time limit is kept as whole milliseconds in a signed 64-bit integer (core's `LONGEST_TIME_LIMIT`).
+  let longest = i64::MAX.unsigned_abs();
+  error(
+    &patch(
+      &server,
+      &owner.token,
+      project,
+      &created.tasks[0],
+      json!({"limits":{"max_duration_ms":longest + 1}}),
+    )
+    .await,
+    422,
+    ErrorCode::Invalid,
+  );
   let changed = changed(
     &patch(
       &server,
       &owner.token,
       project,
       &created.tasks[0],
-      json!({"limits":{"budget_tokens":u64::MAX,"max_duration_ms":u64::MAX}}),
+      json!({"limits":{"budget_tokens":u64::MAX,"max_duration_ms":longest}}),
     )
     .await,
   );
@@ -77,7 +91,7 @@ async fn s1b_number_and_limits_preserve_core_unsigned_ranges() {
     .await
     .json::<TaskResponse>()
     .task;
-  assert_eq!(read.content.limits.expect("limits").max_duration_ms, Some(u64::MAX));
+  assert_eq!(read.content.limits.expect("limits").max_duration_ms, Some(longest));
   server.finish().await;
 }
 

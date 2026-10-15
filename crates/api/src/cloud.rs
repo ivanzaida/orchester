@@ -1,7 +1,7 @@
 //! Orchester Cloud's JSON contract (`docs/architecture/server.md`, "Orchester Cloud"; `docs/cloud-api.md`): accounts,
 //! devices and identity tokens. Used by the cloud, the desktop and the web front alike.
 
-use orchester_core::id::{CloudAccountId, CloudDeviceId};
+use orchester_core::id::{CloudAccountId, CloudDeviceId, TeamServerId};
 use serde::{Deserialize, Serialize};
 
 use crate::Credential;
@@ -132,6 +132,17 @@ pub struct IdentityTokenIssued {
   pub identity_token: Credential,
   /// Seconds since the Unix epoch, as the token's own `exp`.
   pub expires_at: i64,
+}
+
+/// A team server as Orchester Cloud names it (`GET /servers`, an accepted invite): its id, which identity tokens for
+/// it carry as their audience, its address, and the SHA-256 of its own certificate in hex, or `None` for a server with
+/// a CA's certificate. An app connects to that address trusting exactly that certificate.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CloudServer {
+  pub id: TeamServerId,
+  pub name: String,
+  pub address: String,
+  pub fingerprint: Option<String>,
 }
 
 /// The current key set as a compact JWS signed by the cloud's root key (`identity::KeySet` verifies it).

@@ -76,11 +76,6 @@ pub enum SharingErrorDetails {
     member: bool,
     owners: Vec<crate::UserRef>,
   },
-  /// `not_member` of a lookup by slug: the project exists, and these are whom to ask.
-  Project {
-    name: String,
-    owners: Vec<crate::UserRef>,
-  },
   Owners {
     owners: Vec<crate::UserRef>,
   },

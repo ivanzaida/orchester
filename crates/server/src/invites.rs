@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 use orchester_api::{
   ErrorCode, Invite, InviteCreate, InviteCreated, InviteDelivery, InviteKind, JoinedProject, MemberRole, User,
+  UserChanges,
 };
 use orchester_core::id::{InviteId, ProjectId, UserId};
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -113,13 +114,13 @@ fn check(db: &Connection, actor: &User, input: &InviteCreate) -> Result<(), Serv
   }
   match (input.kind, input.project) {
     (InviteKind::Project, Some(project)) => project_owner(db, actor, project),
-    _ if actor.admin => {
-      let user = input.user.map(|user| db::user_by_id(db, user)).transpose()?;
-      if user.is_some_and(|user| user.is_none()) {
-        return Err(ErrorCode::NoSuchUser.into());
-      }
-      Ok(())
-    }
+    _ if actor.admin => match input.user.map(|user| db::user_by_id(db, user)).transpose()? {
+      Some(None) => Err(ErrorCode::NoSuchUser.into()),
+      // An admin's own next device comes from their own devices (a pairing code) or the host, never from another
+      // admin: an account invite would let one admin sign in as another.
+      Some(Some(user)) if user.admin => Err(ErrorCode::Forbidden.into()),
+      _ => Ok(()),
+    },
     _ => Err(ErrorCode::Forbidden.into()),
   }
 }
@@ -242,6 +243,15 @@ pub(crate) fn accept(
     params![now, user.to_string(), invite.id.to_string()],
   )?;
   db::audit(db, Some(user), "invite_accepted", &invite.id.to_string(), None, now)?;
+  if invite.admin {
+    // An admin invite accepted by an account the server knows makes it an admin, as one made by the invite would be.
+    let changes = UserChanges {
+      display_name: None,
+      admin: Some(true),
+      disabled: None,
+    };
+    db::patch_user(db, user, &changes, invite.made_by, now)?;
+  }
   let (Some(project), Some(role)) = (invite.project, invite.role) else {
     return Ok(None);
   };

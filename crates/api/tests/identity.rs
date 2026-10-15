@@ -67,14 +67,16 @@ fn identity_token_verifies_with_root_signed_key_set() {
   let set = key_set(&root, vec![listed(&key, NOW - DAY)], NOW);
   let claims = set
     .verify_token(&token(&key, SERVER, NOW), SERVER, NOW + 10)
-    .expect("valid token");
+    .expect("valid token")
+    .claims;
   assert_eq!(claims.aud, SERVER);
   assert_eq!(claims.iss, ISSUER);
   assert_eq!(claims.exp - claims.iat, TOKEN_LIFETIME_SECS);
   assert_eq!(claims.device.platform, CloudPlatform::Macos);
   let other = set
     .verify_token(&token(&key, SERVER, NOW), SERVER, NOW)
-    .expect("second token");
+    .expect("second token")
+    .claims;
   assert_ne!(claims.jti, other.jti, "every token has its own id");
 }
 

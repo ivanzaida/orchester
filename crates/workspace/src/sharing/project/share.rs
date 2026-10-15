@@ -173,10 +173,7 @@ impl Servers {
     let project = self
       .project_by_hint(entry, &identity)
       .await?
-      .ok_or(SharingError::NoProject {
-        name: None,
-        owners: Vec::new(),
-      })?;
+      .ok_or(SharingError::NoProject)?;
     self
       .link_upload(entry, repo_root, project, (Some(identity), key), write_discovery)
       .await

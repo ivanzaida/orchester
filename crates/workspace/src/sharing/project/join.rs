@@ -132,10 +132,7 @@ impl Servers {
     let project = self
       .project_by_hint(entry, &identity)
       .await?
-      .ok_or(SharingError::NoProject {
-        name: None,
-        owners: Vec::new(),
-      })?;
+      .ok_or(SharingError::NoProject)?;
     self.review(entry, repo_root, project).await
   }
 

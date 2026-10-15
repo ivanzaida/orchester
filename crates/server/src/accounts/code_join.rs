@@ -47,7 +47,7 @@ impl Server {
         let now = self.now();
         attempt.failed(now);
         self
-          .account_write(move |db, now| db::audit(db, None, "join_failed", "code", Some(address), now))
+          .account_write(move |db, now| db::failed_join(db, "code", address, now))
           .await?;
         Err(ErrorCode::InvalidCode.into())
       }

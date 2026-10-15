@@ -164,3 +164,59 @@ async fn s1c_a_refused_or_foreign_approval_ends_the_join() {
   );
   server.finish().await;
 }
+
+async fn ask(server: &TestServer, cloud: &TestCloud, audience: &str) -> Response {
+  join(server, &cloud.token(&identity(audience, None), server.seconds()), None).await
+}
+
+#[tokio::test]
+async fn s1c_an_identity_waits_on_one_approval_and_each_new_one_counts_against_the_address() {
+  let (server, admin, _bob, cloud, audience) = linked_with_bob().await;
+  server
+    .request(
+      "PATCH",
+      "/server/settings",
+      Some(&admin.token),
+      Some(json!({"join_approval": true})),
+    )
+    .await;
+  let first = ask(&server, &cloud, &audience)
+    .await
+    .json::<ApprovalResponse>()
+    .approval;
+  let again = ask(&server, &cloud, &audience).await;
+  assert_eq!(again.status, 202);
+  assert_eq!(again.json::<ApprovalResponse>().approval.id, first.id);
+  let recorded: Vec<String> = server
+    .database()
+    .prepare("SELECT address FROM approvals")
+    .expect("approvals")
+    .query_map([], |row| row.get(0))
+    .expect("rows")
+    .collect::<Result<_, _>>()
+    .expect("addresses");
+  assert_eq!(recorded, ["127.0.0.1"]);
+  // A refused approval is removed when the identity asks again; each new approval counts against the address.
+  let mut waiting = first.id;
+  for asked in 2..=10 {
+    let decide = format!("/auth/approvals/{waiting}");
+    let refused = server
+      .request("POST", &decide, Some(&admin.token), Some(json!({"approve": false})))
+      .await;
+    assert_eq!(refused.status, 200);
+    let next = ask(&server, &cloud, &audience).await;
+    assert_eq!(next.status, 202, "approval {asked}");
+    waiting = next.json::<ApprovalResponse>().approval.id;
+    let rows: i64 = server
+      .database()
+      .query_row("SELECT COUNT(*) FROM approvals", [], |row| row.get(0))
+      .expect("approval rows");
+    assert_eq!(rows, 1);
+  }
+  let decide = format!("/auth/approvals/{waiting}");
+  server
+    .request("POST", &decide, Some(&admin.token), Some(json!({"approve": false})))
+    .await;
+  assert_eq!(ask(&server, &cloud, &audience).await.status, 429);
+  server.finish().await;
+}

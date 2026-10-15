@@ -146,11 +146,9 @@ async fn s1b_members_project_events_and_admin_relationship_match_contract() {
       Some(&bob.token),
       None,
     )
-    .await
-    .json::<SharingError>();
-  assert!(
-    matches!(lookup.details,SharingErrorDetails::Project {owners, ..} if owners==vec![orchester_api::UserRef {id:owner.user.id,display_name:owner.user.display_name.clone()}])
-  );
+    .await;
+  // Not a member: the same answer as no project there.
+  error(&lookup, 404, ErrorCode::NotFound);
   let mut stream = Stream::open(&server, &owner.token, project, created.cursor).await;
   add_member(&server, &owner.token, project, "bob", "member").await;
   let added = stream.next().await;

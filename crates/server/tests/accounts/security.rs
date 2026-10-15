@@ -215,7 +215,6 @@ fn assert_append_only_audit(server: &TestServer) {
     "code_made",
     "user_created",
     "joined",
-    "join_failed",
     "invite_made",
     "invite_accepted",
     "cloud_linked",

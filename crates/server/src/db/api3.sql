@@ -61,10 +61,20 @@ CREATE TABLE approvals (
   user_id TEXT NOT NULL REFERENCES users(id),
   cloud_subject TEXT NOT NULL,
   device TEXT NOT NULL,
+  address TEXT NOT NULL,
   state TEXT NOT NULL CHECK (state IN ('waiting','approved','refused','used')),
   requested_at INTEGER NOT NULL,
   expires_at INTEGER NOT NULL,
   decided_by TEXT REFERENCES users(id),
   decided_at INTEGER
+);
+CREATE UNIQUE INDEX approvals_waiting ON approvals(user_id, cloud_subject) WHERE state = 'waiting';
+-- Failed joins, counted per kind, client address and hour instead of one audit event each, and kept 90 days.
+CREATE TABLE failed_joins (
+  kind TEXT NOT NULL CHECK (kind IN ('code','cloud')),
+  address TEXT NOT NULL,
+  hour INTEGER NOT NULL,
+  count INTEGER NOT NULL CHECK (count > 0),
+  PRIMARY KEY (kind, address, hour)
 );
 UPDATE meta SET schema_version=3;

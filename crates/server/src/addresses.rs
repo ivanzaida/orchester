@@ -112,10 +112,21 @@ pub(crate) fn client_address(peer: IpAddr, proxies: &[TrustedProxy], headers: &H
   address
 }
 
+/// The network failed joins are counted against: an IPv4 address, or the /48 an IPv6 address is in, the usual
+/// allocation of one site, so a site's many /64s count once.
 pub(crate) fn rate_address(address: IpAddr) -> IpAddr {
+  network(address, 48)
+}
+
+/// The network a peer's connections are capped by: an IPv4 address, or the /64 of an IPv6 address.
+pub(crate) fn peer_network(address: IpAddr) -> IpAddr {
+  network(address, 64)
+}
+
+fn network(address: IpAddr, ipv6_prefix: u8) -> IpAddr {
   let address = address.to_canonical();
   if address.is_ipv6() {
-    masked(address, 64)
+    masked(address, ipv6_prefix)
   } else {
     address
   }

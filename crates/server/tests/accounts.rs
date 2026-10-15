@@ -12,6 +12,8 @@ mod backup_writes;
 mod certificate;
 #[path = "accounts/cloud.rs"]
 mod cloud;
+#[path = "accounts/cloud_accounts.rs"]
+mod cloud_accounts;
 #[path = "accounts/codes.rs"]
 mod codes;
 #[path = "accounts/configuration.rs"]
@@ -26,6 +28,8 @@ mod host_locks;
 mod hosting;
 #[path = "accounts/invites.rs"]
 mod invites;
+#[path = "accounts/join_limits.rs"]
+mod join_limits;
 #[path = "accounts/proxies.rs"]
 mod proxies;
 #[path = "accounts/proxy_connections.rs"]

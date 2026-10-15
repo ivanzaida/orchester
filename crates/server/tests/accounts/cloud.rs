@@ -11,7 +11,7 @@ use crate::support::{
 };
 
 /// A server whose first admin linked it to a test cloud; returns the admin's token and the server's id.
-async fn linked() -> (TestServer, Joined, TestCloud, String) {
+pub(crate) async fn linked() -> (TestServer, Joined, TestCloud, String) {
   let server = TestServer::start(|_| {}).await;
   let admin = server.bootstrap().await;
   let cloud = TestCloud::generate();
@@ -45,7 +45,7 @@ async fn linked() -> (TestServer, Joined, TestCloud, String) {
   (server, admin, cloud, audience)
 }
 
-async fn cloud_join(server: &TestServer, token: &str, key_set: Option<&str>) -> Response {
+pub(crate) async fn cloud_join(server: &TestServer, token: &str, key_set: Option<&str>) -> Response {
   let mut body = json!({"identity_token": token, "device": "Bob's laptop"});
   if let Some(key_set) = key_set {
     body["key_set"] = json!(key_set);
@@ -53,12 +53,12 @@ async fn cloud_join(server: &TestServer, token: &str, key_set: Option<&str>) -> 
   server.request("POST", "/auth/cloud", None, Some(body)).await
 }
 
-fn refused(response: &Response, status: u16, code: ErrorCode) {
+pub(crate) fn refused(response: &Response, status: u16, code: ErrorCode) {
   assert_eq!(response.status, status);
   assert_eq!(response.json::<ApiError>().error, code);
 }
 
-fn bob<'a>(audience: &'a str, invite: Option<&'a str>) -> Identity<'a> {
+pub(crate) fn bob<'a>(audience: &'a str, invite: Option<&'a str>) -> Identity<'a> {
   Identity {
     audience,
     subject: "0191c7c0-0000-7000-8000-00000000b0b0",
@@ -76,7 +76,7 @@ async fn project(server: &TestServer, token: &Credential, slug: &str) -> Project
   response.json()
 }
 
-async fn email_invite(server: &TestServer, token: &Credential, body: Value) -> InviteCreated {
+pub(crate) async fn email_invite(server: &TestServer, token: &Credential, body: Value) -> InviteCreated {
   let response = server.request("POST", "/invites", Some(token), Some(body)).await;
   assert_eq!(response.status, 201);
   response.json()
@@ -246,7 +246,7 @@ async fn s1c_key_sets_rotate_expire_and_arrive_with_a_joining_app() {
 }
 
 /// Bob, invited by email, joined through the cloud.
-async fn bob_joined(server: &TestServer, admin: &Joined, cloud: &TestCloud, audience: &str) -> Joined {
+pub(crate) async fn bob_joined(server: &TestServer, admin: &Joined, cloud: &TestCloud, audience: &str) -> Joined {
   let body = json!({"kind":"server","delivery":"cloud","email":"bob@example.com"});
   let invite = email_invite(server, &admin.token, body).await;
   let invite_id = invite.invite.id.to_string();

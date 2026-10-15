@@ -52,9 +52,9 @@ pub enum SharingError {
   /// A server whose own certificate this computer pinned presents another one; nothing was sent to it.
   #[error("the server presents a different certificate")]
   CertificateChanged,
-  /// The server has no project at the address, or the person is not a member of it; `owners` can add them.
+  /// The server has no project at the address, or the person is not a member of it; it answers both alike.
   #[error("no project the person is a member of at this address")]
-  NoProject { name: Option<String>, owners: Vec<String> },
+  NoProject,
 }
 
 impl From<Message> for SharingError {
@@ -91,13 +91,7 @@ impl SharingError {
       Self::CertificateChanged => {
         Message::new("servers.errors.certificateChanged").with("host", address.host().to_owned())
       }
-      Self::NoProject {
-        name: Some(name),
-        owners,
-      } => Message::new("sharing.errors.notMemberOf")
-        .with("project", name.clone())
-        .with("owners", owners.join(", ")),
-      Self::NoProject { name: None, .. } => Message::new("sharing.errors.noProject"),
+      Self::NoProject => Message::new("sharing.errors.noProject"),
     }
   }
 }

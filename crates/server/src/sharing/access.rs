@@ -80,15 +80,3 @@ pub fn owner(
     None => Err(ErrorCode::NotFound.into()),
   }
 }
-
-pub fn owners(db: &Connection, project: ProjectId) -> Result<Vec<UserRef>, ServerError> {
-  let mut query =
-    db.prepare("SELECT user_id FROM memberships WHERE project=?1 AND role='owner' ORDER BY added_at,user_id")?;
-  let ids = query
-    .query_map([project.to_string()], |row| row.get::<_, String>(0))?
-    .collect::<Result<Vec<_>, _>>()?;
-  ids
-    .into_iter()
-    .map(|id| user_ref(db, id.parse().map_err(|_| ServerError::StoredData)?))
-    .collect()
-}

@@ -2,7 +2,7 @@
 //! slug on a server the person joined, or among the person's projects there by the repository a project was set up
 //! for, which is only a hint. Never asked of an address a repository names before the person confirms it.
 
-use orchester_api::{ErrorCode, SharedProject, SharingErrorDetails};
+use orchester_api::{ErrorCode, SharedProject};
 use orchester_core::repository::RepositoryIdentity;
 
 use crate::sharing::{ServerEntry, Servers, SharingError};
@@ -33,8 +33,8 @@ impl Servers {
     )
   }
 
-  /// The project at `slug` on `entry`. Not a member: [`SharingError::NoProject`] with its name and owners; no
-  /// project there: the same without a name.
+  /// The project at `slug` on `entry`. No project there, or one the person is not a member of:
+  /// [`SharingError::NoProject`]; the server answers both alike.
   pub async fn find_project(&self, entry: &ServerEntry, slug: &str) -> Result<SharedProject, SharingError> {
     let slug = slug.to_owned();
     let answer = self
@@ -43,20 +43,7 @@ impl Servers {
       })
       .await;
     match answer {
-      Err(SharingError::Client(error)) if error.code() == Some(ErrorCode::NotMember) => {
-        let (name, owners) = match error.details() {
-          Some(SharingErrorDetails::Project { name, owners }) => (
-            Some(name.clone()),
-            owners.iter().map(|owner| owner.display_name.clone()).collect(),
-          ),
-          _ => (None, Vec::new()),
-        };
-        Err(SharingError::NoProject { name, owners })
-      }
-      Err(SharingError::Client(error)) if error.code() == Some(ErrorCode::NotFound) => Err(SharingError::NoProject {
-        name: None,
-        owners: Vec::new(),
-      }),
+      Err(SharingError::Client(error)) if error.code() == Some(ErrorCode::NotFound) => Err(SharingError::NoProject),
       answer => answer,
     }
   }

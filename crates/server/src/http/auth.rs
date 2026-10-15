@@ -43,7 +43,7 @@ pub(super) async fn join_with_cloud(
   let address = address(&server, peer, &headers);
   let (id, response) = match server.join_with_cloud(input, caller, address).await? {
     CloudJoined::Joined(joined) => (joined.user.id, (StatusCode::CREATED, Json(joined)).into_response()),
-    CloudJoined::Waiting(approval) => (
+    CloudJoined::Waiting { approval, .. } => (
       approval.user.id,
       (StatusCode::ACCEPTED, Json(ApprovalResponse { approval })).into_response(),
     ),

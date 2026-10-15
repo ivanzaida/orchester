@@ -6,10 +6,11 @@
 
 use orchester_api::{
   Approval, CloudJoin, CloudJoinAnswer, CodeJoin, Credential, Joined, PairingCode,
-  client::{CloudClient, ServerAddress},
+  client::{ClientError, CloudClient, ServerAddress},
+  cloud::CloudServer,
 };
 use orchester_core::{
-  id::{ApprovalId, ServerId, TeamServerId},
+  id::{ApprovalId, ServerId},
   secret::SecretValue,
   time::Timestamp,
 };
@@ -35,12 +36,10 @@ pub enum CloudJoined {
   Waiting(Approval),
 }
 
-/// What a cloud join needs from Orchester Cloud: its address, this computer's cloud device token, and the team
-/// server's id, which the cloud names the server by.
+/// What a cloud join needs from Orchester Cloud: its client and this computer's cloud device token.
 pub struct CloudIdentity<'a> {
   pub cloud: &'a CloudClient,
   pub device: &'a SecretValue,
-  pub audience: TeamServerId,
 }
 
 impl Servers {
@@ -66,24 +65,23 @@ impl Servers {
     self.keep_join(address, trust, name, joined).await
   }
 
-  /// Joins the team server at `address` with an Orchester Cloud identity: the cloud gives an identity token for that
-  /// server and its current key set, which the server may not have, and the server verifies both without the
-  /// internet. `approval` finishes a join that waited for approval.
+  /// Joins `server`, as Orchester Cloud names it, with a cloud identity: at the address the cloud has for it and
+  /// trusting only the certificate the cloud has for it, so an identity token for that server reaches no other. The
+  /// cloud gives the token and its current key set, which the server may not have, and the server verifies both
+  /// without the internet. `approval` finishes a join that waited for approval.
   pub async fn join_with_cloud(
     &self,
-    address: &ServerAddress,
-    trust: Trust,
+    server: &CloudServer,
     identity: CloudIdentity<'_>,
     approval: Option<ApprovalId>,
   ) -> Result<CloudJoined, SharingError> {
+    let address = ServerAddress::parse(&server.address).map_err(ClientError::Address)?;
+    let trust = Trust::named_by_cloud(server)?;
     let client = trust.client(address.clone())?;
     // The certificate is checked by this first request, before anything of the cloud is sent.
     let name = client.server_info().await.map_err(|error| trust.refusal(error))?.name;
     let key_set = identity.cloud.key_set().await?.key_set;
-    let issued = identity
-      .cloud
-      .identity_token(identity.device, identity.audience)
-      .await?;
+    let issued = identity.cloud.identity_token(identity.device, server.id).await?;
     let request = CloudJoin {
       identity_token: issued.identity_token,
       key_set: Some(key_set),
@@ -91,7 +89,9 @@ impl Servers {
       approval,
     };
     match client.join_with_cloud(&request).await? {
-      CloudJoinAnswer::Joined(joined) => Ok(CloudJoined::Joined(self.keep_join(address, trust, name, joined).await?)),
+      CloudJoinAnswer::Joined(joined) => Ok(CloudJoined::Joined(
+        self.keep_join(&address, trust, name, joined).await?,
+      )),
       CloudJoinAnswer::Waiting(approval) => Ok(CloudJoined::Waiting(approval)),
     }
   }

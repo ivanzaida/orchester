@@ -5,7 +5,10 @@
 use std::{
   io::{Read, Write},
   net::{SocketAddr, TcpListener},
-  sync::{Arc, OnceLock},
+  sync::{
+    Arc, OnceLock,
+    atomic::{AtomicUsize, Ordering},
+  },
   thread,
   time::{SystemTime, UNIX_EPOCH},
 };
@@ -34,6 +37,8 @@ pub struct FakeCloud {
   pub key_set: String,
   /// The team server the tokens are for: known once the server is linked to this cloud.
   audience: Arc<OnceLock<String>>,
+  /// The identity tokens issued so far.
+  issued: Arc<AtomicUsize>,
 }
 
 impl FakeCloud {
@@ -60,6 +65,8 @@ impl FakeCloud {
     let served = key_set.clone();
     let audience = Arc::new(OnceLock::<String>::new());
     let serving = audience.clone();
+    let issued = Arc::new(AtomicUsize::new(0));
+    let counting = issued.clone();
     thread::spawn(move || {
       for stream in listener.incoming() {
         let Ok(mut stream) = stream else { return };
@@ -74,6 +81,7 @@ impl FakeCloud {
           ("200 OK", json!({"key_set": served}).to_string())
         } else if line.starts_with("POST /api/v1/identity-tokens") {
           let audience = serving.get().expect("the server is linked");
+          counting.fetch_add(1, Ordering::SeqCst);
           ("201 Created", token(&signing, audience, &person))
         } else {
           (
@@ -94,7 +102,13 @@ impl FakeCloud {
       root_key: root.public_key().encoded(),
       key_set,
       audience,
+      issued,
     }
+  }
+
+  /// How many identity tokens the cloud issued.
+  pub fn issued(&self) -> usize {
+    self.issued.load(Ordering::SeqCst)
   }
 
   /// Issues tokens for the team server `audience` from now on.

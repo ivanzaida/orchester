@@ -4,7 +4,7 @@
 
 use orchester_api::{
   CloudLink, CloudStatus, ErrorCode,
-  identity::{CLOCK_SKEW_SECS, IdentityClaims, IdentityError, PublicKey, VerifiedKeySet, token_key_id},
+  identity::{CLOCK_SKEW_SECS, IdentityError, PublicKey, VerifiedKeySet, VerifiedToken},
 };
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
@@ -26,9 +26,17 @@ pub(crate) struct Claims {
   pub kid: String,
 }
 
+/// The longest name, in characters, a cloud identity may give a new account.
+const MAX_NAME_CHARS: usize = 256;
+
 impl Claims {
-  fn of(claims: IdentityClaims, kid: String) -> Self {
-    Self {
+  /// The claims of a verified token; a blank or overlong name is refused like any token the server cannot use.
+  fn of(verified: VerifiedToken) -> Result<Self, ServerError> {
+    let VerifiedToken { claims, kid } = verified;
+    if claims.name.trim().is_empty() || claims.name.chars().count() > MAX_NAME_CHARS {
+      return Err(ErrorCode::InvalidIdentity.into());
+    }
+    Ok(Self {
       sub: claims.sub.to_string(),
       email: claims.email,
       name: claims.name,
@@ -36,7 +44,7 @@ impl Claims {
       jti: claims.jti,
       exp: claims.exp,
       kid,
-    }
+    })
   }
 }
 
@@ -107,10 +115,7 @@ impl Link {
       self.offer(db, offered, now)?;
     }
     let set = self.cached(now)?;
-    let claims = Claims::of(
-      set.verify_token(token, &keys.id.to_string(), now).map_err(refusal)?,
-      token_key_id(token).map_err(refusal)?,
-    );
+    let claims = Claims::of(set.verify_token(token, &keys.id.to_string(), now).map_err(refusal)?)?;
     db.execute("DELETE FROM used_identity_tokens WHERE expires_at<?1", [now])?;
     let used: bool = db.query_row(
       "SELECT EXISTS(SELECT 1 FROM used_identity_tokens WHERE jti=?1)",
