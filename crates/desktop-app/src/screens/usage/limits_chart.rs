@@ -43,9 +43,15 @@ use crate::{
 const HOUR_LABEL_STEP: usize = 4;
 const DAY_LABELS: usize = 8;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct LimitsProps {
   pub dashboard: Arc<Dashboard>,
+}
+
+impl PartialEq for LimitsProps {
+  fn eq(&self, other: &Self) -> bool {
+    Arc::ptr_eq(&self.dashboard, &other.dashboard)
+  }
 }
 
 impl DevtoolsInspectable for LimitsProps {}

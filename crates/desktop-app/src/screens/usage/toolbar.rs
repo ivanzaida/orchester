@@ -50,7 +50,12 @@ pub struct ToolbarProps {
 
 impl PartialEq for ToolbarProps {
   fn eq(&self, other: &Self) -> bool {
-    self.project == other.project && self.query == other.query && self.dashboard == other.dashboard
+    self.project == other.project
+      && self.query == other.query
+      && match (&self.dashboard, &other.dashboard) {
+        (Some(one), Some(other)) => Arc::ptr_eq(one, other),
+        (one, other) => one.is_none() && other.is_none(),
+      }
   }
 }
 

@@ -121,10 +121,16 @@ pub fn tokens_view_switch(ctx: &Ctx, views: &Signal<Views>) -> Element {
   )
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 struct ChartProps {
   dashboard: Arc<Dashboard>,
   measure: Measure,
+}
+
+impl PartialEq for ChartProps {
+  fn eq(&self, other: &Self) -> bool {
+    Arc::ptr_eq(&self.dashboard, &other.dashboard) && self.measure == other.measure
+  }
 }
 
 impl DevtoolsInspectable for ChartProps {}
