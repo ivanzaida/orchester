@@ -28,6 +28,8 @@ use crate::{
 pub(super) enum Phase<'a> {
   /// It waits for the person.
   Waits,
+  /// A person applied it and it is being carried out.
+  Applying,
   /// The person applied it.
   Applied,
   /// The chat did it itself.
@@ -38,8 +40,9 @@ pub(super) enum Phase<'a> {
 }
 
 impl<'a> Phase<'a> {
-  pub(super) fn of(outcome: &'a ActionOutcome) -> Self {
-    match outcome {
+  pub(super) fn of(action: &'a ChatAction) -> Self {
+    match &action.outcome {
+      ActionOutcome::Waits | ActionOutcome::Proposed(_) if action.applying => Self::Applying,
       ActionOutcome::Waits | ActionOutcome::Proposed(_) => Self::Waits,
       ActionOutcome::Applied => Self::Applied,
       ActionOutcome::Done => Self::Done,
@@ -48,10 +51,16 @@ impl<'a> Phase<'a> {
     }
   }
 
+  /// It waits, or is being carried out: what it would do is still to come.
+  pub(super) const fn waits(self) -> bool {
+    matches!(self, Self::Waits | Self::Applying)
+  }
+
   /// The name tools read of it.
   pub(super) const fn name(self) -> &'static str {
     match self {
       Self::Waits => "proposed",
+      Self::Applying => "applying",
       Self::Applied => "applied",
       Self::Done => "done",
       Self::Dismissed => "dismissed",
@@ -70,7 +79,7 @@ pub(super) struct View<'a> {
 
 impl View<'_> {
   pub(super) fn phase(&self) -> Phase<'_> {
-    Phase::of(&self.action.outcome)
+    Phase::of(self.action)
   }
 
   /// When the action stood as it stands: when a person settled it, else when it was taken.
@@ -146,6 +155,11 @@ fn state(ctx: &Ctx, view: &View, by_you: &str) -> State {
   let time = view.time();
   let (glyph, color, key) = match view.phase() {
     Phase::Waits => return waits(ctx, view.at),
+    Phase::Applying => (
+      Icon::LoaderCircle,
+      PaletteColor::TextSecondary,
+      "orchestrator.change.applying",
+    ),
     Phase::Applied => (Icon::CircleCheck, PaletteColor::Success, by_you),
     Phase::Done => (
       Icon::CircleCheck,
@@ -198,7 +212,7 @@ fn publish(ctx: &Ctx, view: &View, (of, version, name): (Publishing, u32, &str))
   let args = [("name", name), ("version", version_text.as_str())];
   let phase = view.phase();
   let title = match phase {
-    Phase::Waits => "orchestrator.change.publish.waits",
+    Phase::Waits | Phase::Applying => "orchestrator.change.publish.waits",
     Phase::Applied | Phase::Done => "orchestrator.change.publish.done",
     Phase::Dismissed => "orchestrator.change.publish.dismissed",
     Phase::Refused(_) => "orchestrator.change.publish.refused",
@@ -216,8 +230,8 @@ fn publish(ctx: &Ctx, view: &View, (of, version, name): (Publishing, u32, &str))
     )
   };
   let effect = match phase {
-    Phase::Waits if version > 1 => with_before("orchestrator.change.publish.effectWaits"),
-    Phase::Waits => ctx.t_args("orchestrator.change.publish.effectFirst", args),
+    Phase::Waits | Phase::Applying if version > 1 => with_before("orchestrator.change.publish.effectWaits"),
+    Phase::Waits | Phase::Applying => ctx.t_args("orchestrator.change.publish.effectFirst", args),
     Phase::Applied if version > 1 && keeping == 1 => with_before("orchestrator.change.publish.effectAppliedKeepingOne"),
     Phase::Applied if version > 1 && keeping > 1 => with_before("orchestrator.change.publish.effectAppliedKeeping"),
     Phase::Applied => with_before("orchestrator.change.publish.effectApplied"),
@@ -248,14 +262,14 @@ fn cancel(ctx: &Ctx, view: &View, number: u32) -> Words {
   let run = number.to_string();
   let args = [("run", run.as_str()), ("task", view.task())];
   let title = match view.phase() {
-    Phase::Waits => "orchestrator.change.cancel.waits",
+    Phase::Waits | Phase::Applying => "orchestrator.change.cancel.waits",
     Phase::Applied | Phase::Done => "orchestrator.change.cancel.done",
     Phase::Dismissed => "orchestrator.change.cancel.dismissed",
     Phase::Refused(_) => "orchestrator.change.cancel.refused",
   };
   let time = view.time();
   let effect = match (view.phase(), view.run()) {
-    (Phase::Waits, _) => ctx.t("orchestrator.change.cancel.effectWaits"),
+    (Phase::Waits | Phase::Applying, _) => ctx.t("orchestrator.change.cancel.effectWaits"),
     (Phase::Applied | Phase::Done, Some(facts)) => ctx.t_args(
       "orchestrator.change.cancel.effectApplied",
       [
@@ -294,8 +308,8 @@ fn merge(ctx: &Ctx, view: &View, (number, into): (u32, Option<&str>)) -> Words {
     ("into", into.unwrap_or_default()),
   ];
   let title = match (view.phase(), into.is_some()) {
-    (Phase::Waits, true) => "orchestrator.change.merge.waitsInto",
-    (Phase::Waits, false) => "orchestrator.change.merge.waits",
+    (Phase::Waits | Phase::Applying, true) => "orchestrator.change.merge.waitsInto",
+    (Phase::Waits | Phase::Applying, false) => "orchestrator.change.merge.waits",
     (Phase::Applied | Phase::Done, true) => "orchestrator.change.merge.doneInto",
     (Phase::Applied | Phase::Done, false) => "orchestrator.change.merge.done",
     (Phase::Dismissed, _) => "orchestrator.change.merge.dismissed",
@@ -306,8 +320,8 @@ fn merge(ctx: &Ctx, view: &View, (number, into): (u32, Option<&str>)) -> Words {
     _ => None,
   });
   let effect = match (view.phase(), into, merged) {
-    (Phase::Waits, Some(_), _) => ctx.t_args("orchestrator.change.merge.effectWaitsInto", args),
-    (Phase::Waits, None, _) => ctx.t("orchestrator.change.merge.effectWaits"),
+    (Phase::Waits | Phase::Applying, Some(_), _) => ctx.t_args("orchestrator.change.merge.effectWaitsInto", args),
+    (Phase::Waits | Phase::Applying, None, _) => ctx.t("orchestrator.change.merge.effectWaits"),
     (Phase::Applied | Phase::Done, Some(into), Some(revision)) => ctx.t_args(
       "orchestrator.change.merge.effectMerged",
       [("into", into), ("revision", revision)],

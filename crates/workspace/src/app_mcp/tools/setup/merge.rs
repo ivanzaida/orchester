@@ -8,6 +8,7 @@ use orchester_core::{
   diff::{Diff, FileChange},
   id::RunId,
   integration::MergeKind,
+  revision::Revision,
   run::{Run, RunStatus},
   store::{MergeStore, RunStore, TaskStore},
 };
@@ -114,10 +115,29 @@ fn diff_json(diff: &Diff) -> Value {
 }
 
 pub async fn merge_run(services: &Services, args: InRun, translate: &Translate) -> Result<Value, ToolError> {
+  merge_at(services, (args, None), translate).await
+}
+
+/// `merge_run` of run `run` of `project`, only while the run's branch is at `expected`, the commit a person reviewed
+/// in a proposal of the Orchestrator chat: a branch that moved since is refused and nothing is merged.
+pub(crate) async fn merge_proposed(
+  services: &Services,
+  translate: &Translate,
+  (project, run): (String, String),
+  expected: Revision,
+) -> Result<Value, ToolError> {
+  merge_at(services, (InRun { project, run }, Some(expected)), translate).await
+}
+
+async fn merge_at(
+  services: &Services,
+  (args, expected): (InRun, Option<Revision>),
+  translate: &Translate,
+) -> Result<Value, ToolError> {
   let separator: Arc<str> = translate.text(&Message::new("common.listSeparator")).into();
   let started = {
     let services = services.clone();
-    blocking(move || start(&services, &args, separator)).await?
+    blocking(move || start(&services, &args, (separator, expected))).await?
   };
   let (mut updates, run, root) = started;
   let ended = updates
@@ -157,7 +177,11 @@ pub async fn merge_run(services: &Services, args: InRun, translate: &Translate) 
 type Started = (watch::Receiver<ProjectJobState>, RunId, PathBuf);
 
 /// Checks that the Summary would offer *Merge into main* for the run, then starts the merge.
-fn start(services: &Services, args: &InRun, separator: Arc<str>) -> Result<Started, ToolError> {
+fn start(
+  services: &Services,
+  args: &InRun,
+  (separator, expected): (Arc<str>, Option<Revision>),
+) -> Result<Started, ToolError> {
   let open = services.project(&args.project)?;
   let db = ProjectDb::open(&open.repo_root)?;
   let run = find_run(&db, &args.run)?;
@@ -201,21 +225,23 @@ fn start(services: &Services, args: &InRun, separator: Arc<str>) -> Result<Start
     .to_string();
   let updates = jobs.subscribe();
   let (changes, project) = (services.changes.clone(), open.project.id());
-  let started = jobs.of(run.id()).start_legacy_merge(
-    MergeArgs {
-      open: open.clone(),
-      task: task.id(),
-      key: task.key().to_string(),
-      number: run.number().get(),
-      branch,
-      run: run.id(),
-      programs: services.programs.clone(),
-      activity: services.activity.clone(),
-      separator,
-      changed: Arc::new(move || changes.record(project, Outside::Tasks)),
-    },
-    policy,
-  );
+  let merging = MergeArgs {
+    open: open.clone(),
+    task: task.id(),
+    key: task.key().to_string(),
+    number: run.number().get(),
+    branch,
+    run: run.id(),
+    programs: services.programs.clone(),
+    activity: services.activity.clone(),
+    separator,
+    changed: Arc::new(move || changes.record(project, Outside::Tasks)),
+  };
+  let job = jobs.of(run.id());
+  let started = match expected {
+    Some(expected) => job.start_legacy_merge_at(merging, policy, expected),
+    None => job.start_legacy_merge(merging, policy),
+  };
   // Another merge or removal of the run took it between the check above and now.
   if !started {
     return Err(refused("merge_running", "appMcp.errors.integrationRunning"));

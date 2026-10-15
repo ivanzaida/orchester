@@ -30,6 +30,7 @@ use rmcp::{
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
+pub(crate) use self::pipeline_copy::duplicate_pipeline_draft;
 use self::runs::Control;
 pub use self::{
   run_task::{Proposal, propose_run, run_proposed},

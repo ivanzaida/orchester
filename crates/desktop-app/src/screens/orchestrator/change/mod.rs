@@ -119,6 +119,13 @@ impl Component for ChangeCard {
     let facts = facts::rows(ctx, id, &view, props.project.0);
     let diff = facts::diff(ctx, id, &view);
     let notes = self.notes(ctx, (&props, &view, person_only), (read, &loaded.error));
+    // What the person is shown it widens, once its facts were read without an error; until then it cannot be applied,
+    // and the apply refuses anything else than what was shown.
+    let shown = match (&loaded.error, read.and_then(|read| read.facts.as_ref())) {
+      (None, Some(read::Facts::Publication(publication))) => Some(publication.widens.clone()),
+      (None, Some(read::Facts::Run(_))) => Some(Vec::new()),
+      _ => None,
+    };
     card::frame(id, view.phase().name())
       .child(head)
       .with_children(facts)
@@ -131,11 +138,17 @@ impl Component for ChangeCard {
           .width(Dimension::Pct(100.0)),
       )
       .with_children(notes.1)
-      .child(self.actions(ctx, &props, (&view, accept)))
+      .child(self.actions(ctx, &props, (&view, accept), shown))
   }
 }
 
 impl ChangeCard {
+  /// *Dismiss*, which changes nothing and stays open to automation.
+  fn dismiss(&self, dismiss: ActionButton, dismissing: Deciding) -> ActionButton {
+    let decide = self.decide.clone();
+    dismiss.on_click(move || decide.run(dismissing.clone()))
+  }
+
   /// The notes before the effect (a draft that widens while the switch is on) and after it (how the chat published,
   /// what was checked, a refused click of automation, why reading or deciding failed).
   fn notes(
@@ -206,8 +219,15 @@ impl ChangeCard {
     (before, after)
   }
 
-  /// The person's action and *Dismiss* while it waits, then the places it opens.
-  fn actions(&self, ctx: &mut Ctx, props: &ChangeProps, (view, accept): (&View, Option<Accept>)) -> Row {
+  /// The person's action and *Dismiss* while it waits, then the places it opens. The action is taken only once the
+  /// card knows what it widens (`shown`).
+  fn actions(
+    &self,
+    ctx: &mut Ctx,
+    props: &ChangeProps,
+    (view, accept): (&View, Option<Accept>),
+    shown: Option<Vec<Message>>,
+  ) -> Row {
     let id = props.id.as_str();
     let mut row = Row::new()
       .id(format!("{id}-actions"))
@@ -227,20 +247,25 @@ impl ChangeCard {
         ButtonKind::Secondary,
         ctx.t("orchestrator.proposal.dismiss"),
       );
-      let (accept, dismiss) = if pending {
-        (accept.disabled(), dismiss.disabled())
-      } else {
-        let (decide, refused, accepting) = (self.decide.clone(), self.refused.clone(), deciding(Decision::Accept));
-        let accept = accept.on_click(move || {
-          if is_synthetic_input() {
-            tracing::warn!("synthetic input reached a change the Orchestrator proposed; not taken");
-            refused.set(true);
-            return;
-          }
-          decide.run(accepting.clone());
-        });
-        let (decide, dismissing) = (self.decide.clone(), deciding(Decision::Dismiss));
-        (accept, dismiss.on_click(move || decide.run(dismissing.clone())))
+      let (accept, dismiss) = match (pending, shown) {
+        (true, _) => (accept.disabled(), dismiss.disabled()),
+        (false, None) => (accept.disabled(), self.dismiss(dismiss, deciding(Decision::Dismiss))),
+        (false, Some(widens)) => {
+          let (decide, refused, accepting) = (
+            self.decide.clone(),
+            self.refused.clone(),
+            deciding(Decision::Accept { widens }),
+          );
+          let accept = accept.on_click(move || {
+            if is_synthetic_input() {
+              tracing::warn!("synthetic input reached a change the Orchestrator proposed; not taken");
+              refused.set(true);
+              return;
+            }
+            decide.run(accepting.clone());
+          });
+          (accept, self.dismiss(dismiss, deciding(Decision::Dismiss)))
+        }
       };
       row = row.child(accept).child(dismiss);
     }
@@ -277,7 +302,7 @@ fn opens(ctx: &Ctx, props: &ChangeProps, view: &View) -> Vec<(Icon, Arc<str>, Ro
   };
   match view.action.change.as_ref().map(|change| &change.change) {
     Some(Change::Publish { of, resource, .. }) => publish_opens(ctx, (props, view), (*of, *resource)),
-    Some(Change::Merge { .. }) if view.phase() == Phase::Waits => task
+    Some(Change::Merge { .. }) if view.phase().waits() => task
       .and_then(|key| facts::task_route(project, key, TaskTab::Changes))
       .map(|route| {
         (
@@ -288,7 +313,7 @@ fn opens(ctx: &Ctx, props: &ChangeProps, view: &View) -> Vec<(Icon, Arc<str>, Ro
       })
       .into_iter()
       .collect(),
-    Some(Change::Cancel { .. }) if view.phase() == Phase::Waits => Vec::new(),
+    Some(Change::Cancel { .. }) if view.phase().waits() => Vec::new(),
     _ => task_open(TaskTab::Summary).into_iter().collect(),
   }
 }
@@ -329,7 +354,7 @@ fn publish_opens(
       }
       opens
     }
-    Phase::Waits | Phase::Dismissed | Phase::Refused(_) => {
+    Phase::Waits | Phase::Applying | Phase::Dismissed | Phase::Refused(_) => {
       vec![(
         Icon::ArrowUpRight,
         ctx.t("orchestrator.change.publish.openDraft"),
@@ -346,7 +371,7 @@ fn read_facts(ctx: &mut Ctx, props: &ChangeProps) -> lurq::app::ctx::FutureState
     props.scope.as_ref().map(|scope| scope.root.clone()),
     props.action.clone(),
   );
-  let key = (props.seq, Phase::of(&props.action.outcome).name(), props.action.settled);
+  let key = (props.seq, Phase::of(&props.action).name(), props.action.settled);
   ctx
     .future(key, move |_| {
       let (services, root, action) = (services.clone(), root.clone(), action.clone());

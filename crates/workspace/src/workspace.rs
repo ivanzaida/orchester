@@ -119,6 +119,8 @@ pub struct Workspace {
   pub(crate) trash: crate::accounts::trash::SharedTrash,
   permission_consent: Arc<Mutex<Consent>>,
   approval_consent: Arc<Mutex<Consent>>,
+  /// *Let the Orchestrator publish drafts*: a person's revocation holds from their click, before it is saved.
+  publish_consent: Arc<Mutex<Consent>>,
   /// Whether All projects listed a project in this session (`project_list`).
   pub(crate) listed: Arc<AtomicBool>,
 }
@@ -137,6 +139,7 @@ impl Workspace {
       trash: crate::accounts::trash::SharedTrash::default(),
       permission_consent: Arc::default(),
       approval_consent: Arc::default(),
+      publish_consent: Arc::default(),
       listed: Arc::default(),
     }
   }
@@ -320,13 +323,39 @@ impl Workspace {
   }
 
   /// Whether the Orchestrator chat publishes the drafts it saved itself (*Let the Orchestrator publish drafts*);
-  /// off until a person turns it on in the window, and no tool changes it.
+  /// off until a person turns it on in the window, and no tool changes it. Off from the moment a person turns it off
+  /// ([`Self::revoke_orchestrator_publish_consent`]), whether or not that was saved.
   pub fn orchestrator_publishes_drafts(&self) -> Result<bool, StoreError> {
-    self.db.lock().orchestrator_publishes_drafts()
+    self.publish_consent.lock().begin();
+    let db = self.db.lock();
+    let result = db.orchestrator_publishes_drafts();
+    let mut consent = self.publish_consent.lock();
+    consent.finish(matches!(&result, Ok(true)));
+    result.map(|_| consent.allowed)
   }
 
   pub fn set_orchestrator_publishes_drafts(&self, allowed: bool) -> Result<(), StoreError> {
-    self.db.lock().set_orchestrator_publishes_drafts(allowed)
+    let revision = {
+      let mut consent = self.publish_consent.lock();
+      if !allowed {
+        consent.revoke();
+      }
+      consent.begin();
+      consent.revision
+    };
+    let mut db = self.db.lock();
+    let result = db.set_orchestrator_publishes_drafts(allowed);
+    let mut consent = self.publish_consent.lock();
+    if result.is_ok() && consent.revision == revision {
+      consent.revoked = !allowed;
+    }
+    consent.finish(allowed && result.is_ok());
+    result
+  }
+
+  /// A person turned *Let the Orchestrator publish drafts* off: it holds now, before the save runs or if it fails.
+  pub fn revoke_orchestrator_publish_consent(&self) {
+    self.publish_consent.lock().revoke();
   }
 
   /// Where Usage › Plan limits draws its warning line, for every project; 80 % until it is changed.

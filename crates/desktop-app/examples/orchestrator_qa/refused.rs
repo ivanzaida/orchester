@@ -70,7 +70,7 @@ pub fn start(
       (&tools, &translate, &services.runners),
       &scope,
       seq,
-      Decision::Accept,
+      Decision::Accept { widens: Vec::new() },
     ))
     .map_err(|message| format!("the start was not taken: {}", message.key))?;
   let refused = db.chat_entries(chat)?.into_iter().any(|entry| {

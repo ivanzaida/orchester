@@ -147,6 +147,11 @@
         "refused": "Release new starts · not done",
         "effect": "Queued tasks start again as their groups allow."
       },
+      "duplicatePipeline": {
+        "done": "Copied a pipeline as a draft",
+        "refused": "Copy a pipeline · not done",
+        "effect": "The copy is a draft: no task runs it until its first version is published."
+      },
       "other": {
         "done": "Used {{tool}}",
         "refused": "{{tool}} · not done"
@@ -276,6 +281,7 @@
       "saveFailed": "Not saved: {{reason}}"
     },
     "change": {
+      "applying": "Being carried out · {{time}}",
       "personOnly": {
         "publish": "Only a person publishes a draft the Orchestrator proposed: input from automation is refused here.",
         "cancel": "Only a person cancels a run the Orchestrator proposed: input from automation is refused here.",

@@ -29,7 +29,7 @@ use orchester_workspace::{
   orchestrator::facts::{Detail, Facts, LineChange, Place, Publication, RunFacts, Stands, TextDiff, TextLine},
 };
 
-use super::words::{Phase, View};
+use super::words::View;
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskTab, TaskView, ToolTab},
@@ -143,7 +143,7 @@ fn publication_rows(
   publication: &Publication,
   project: ProjectId,
 ) -> Vec<(Arc<str>, Vec<Part>)> {
-  let waits = view.phase() == Phase::Waits;
+  let waits = view.phase().waits();
   let version = publication.version.to_string();
   let before = publication.version.saturating_sub(1).to_string();
   let versions = match (waits, publication.before_published) {
@@ -405,7 +405,7 @@ fn stands(ctx: &Ctx, view: &View, run: &RunFacts) -> Option<Arc<str>> {
 
 /// *What changes* and the draft's diff, while it waits; nothing when the text does not change.
 pub(super) fn diff(ctx: &Ctx, id: &str, view: &View) -> Option<Column> {
-  let (Phase::Waits, Some(Facts::Publication(publication))) = (view.phase(), view.facts) else {
+  let (true, Some(Facts::Publication(publication))) = (view.phase().waits(), view.facts) else {
     return None;
   };
   let diff: &TextDiff = publication.diff.as_ref()?;

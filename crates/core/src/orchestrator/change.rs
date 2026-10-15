@@ -83,6 +83,16 @@ impl Publishing {
     }
   }
 
+  /// Whether publishing a draft of this kind can widen what agents may do, so that its tool refuses it as
+  /// `person_only` while *Let automation change agent permissions* is off. Instructions and skills reach agents'
+  /// prompts only; a kind that gains such a rule must say so here and be judged by the chat's widening rules.
+  pub const fn can_widen(self) -> bool {
+    match self {
+      Self::Pipeline | Self::Profile | Self::Tool => true,
+      Self::Instruction | Self::Skill => false,
+    }
+  }
+
   /// The kind published by tool `name`; `None` for a tool that publishes nothing.
   pub fn of_tool(name: &str) -> Option<Self> {
     Self::ALL.into_iter().find(|kind| kind.tool() == name)

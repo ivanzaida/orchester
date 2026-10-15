@@ -151,6 +151,7 @@ async fn publish_tool(services: &Services, args: InTool) -> Result<Value, ToolEr
       return Err(not_a_command_tool(&entry.name));
     };
     let latest = db.latest_version::<Tool>(id)?;
+    services.draft_decided::<Tool>(&db, id)?;
     let reasons = match latest.as_ref().and_then(|version| command_of(version.body())) {
       Some(before) => widenings(before, after),
       None => vec![Message::new("appMcp.projectTools.widens.firstVersion")],

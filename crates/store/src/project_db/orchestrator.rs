@@ -281,15 +281,61 @@ impl ProjectDb {
     Ok(())
   }
 
-  /// Settles the proposed action `seq` of conversation `chat` with `outcome` at `at`: the action as it was, or `None`
-  /// when there is no such action or it no longer waits for a person.
+  /// Settles the proposed action `seq` of conversation `chat` with `outcome` at `at`, e.g. dismissed: the action as
+  /// it was, or `None` when there is no such action or it no longer waits for a person.
   pub fn settle_chat_action(
     &mut self,
     (chat, seq): (ChatId, i64),
     outcome: ActionOutcome,
     at: Timestamp,
   ) -> Result<Option<ChatAction>, StoreError> {
-    let transaction = self.connection.transaction()?;
+    self.replace_chat_action((chat, seq), ChatAction::waits, |found| ChatAction {
+      outcome,
+      settled: Some(at),
+      ..found
+    })
+  }
+
+  /// Claims the proposed action `seq` of conversation `chat` for a person's decision: it is
+  /// [`ChatAction::applying`] until [`Self::finish_chat_action`]. The action as it was, or `None` when it no longer
+  /// waits for a person, e.g. because another decision claimed it first.
+  pub fn claim_chat_action(&mut self, (chat, seq): (ChatId, i64)) -> Result<Option<ChatAction>, StoreError> {
+    self.replace_chat_action((chat, seq), ChatAction::waits, |found| ChatAction {
+      applying: true,
+      ..found
+    })
+  }
+
+  /// Ends the claimed action `seq` of conversation `chat` with `outcome` at `at`; `None` when it was not claimed.
+  pub fn finish_chat_action(
+    &mut self,
+    (chat, seq): (ChatId, i64),
+    outcome: ActionOutcome,
+    at: Timestamp,
+  ) -> Result<Option<ChatAction>, StoreError> {
+    self.replace_chat_action(
+      (chat, seq),
+      |found| found.applying,
+      |found| ChatAction {
+        outcome,
+        settled: Some(at),
+        applying: false,
+        ..found
+      },
+    )
+  }
+
+  /// Replaces action `seq` of `chat` with what `change` makes of it, while `current` holds for it; in one
+  /// transaction, so two decisions never both take it. The action as it was.
+  fn replace_chat_action(
+    &mut self,
+    (chat, seq): (ChatId, i64),
+    current: impl Fn(&ChatAction) -> bool,
+    change: impl FnOnce(ChatAction) -> ChatAction,
+  ) -> Result<Option<ChatAction>, StoreError> {
+    let transaction = self
+      .connection
+      .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
     let body: Option<String> = transaction
       .query_row(
         "SELECT body FROM orchestrator_entries WHERE seq = ?1 AND chat_id = ?2 AND kind = 'action'",
@@ -300,22 +346,18 @@ impl ProjectDb {
     let Some(body) = body else {
       return Ok(None);
     };
-    let proposed: ChatAction = serde_json::from_str(&body).map_err(|error| corrupt("chat action", error))?;
-    if !proposed.outcome.is_proposed() {
+    let found: ChatAction = serde_json::from_str(&body).map_err(|error| corrupt("chat action", error))?;
+    if !current(&found) {
       return Ok(None);
     }
-    let settled = ChatAction {
-      outcome,
-      settled: Some(at),
-      ..proposed.clone()
-    };
-    let body = serde_json::to_string(&settled).map_err(|error| corrupt("chat action", error))?;
+    let replaced = change(found.clone());
+    let body = serde_json::to_string(&replaced).map_err(|error| corrupt("chat action", error))?;
     transaction.execute(
       "UPDATE orchestrator_entries SET body = ?1 WHERE seq = ?2",
       params![body, seq],
     )?;
     transaction.commit()?;
-    Ok(Some(proposed))
+    Ok(Some(found))
   }
 
   /// Keeps an event of the conversation.

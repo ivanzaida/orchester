@@ -245,3 +245,51 @@ fn a_hold_a_person_set_is_released_only_by_a_person() {
     HoldChange::Changed
   );
 }
+
+#[test]
+fn a_proposal_is_claimed_by_one_decision_and_settled_by_it_alone() {
+  let (_repo, mut db, _run, _execution) = started_run();
+  let (chat, message) = (ChatId::generate(), ChatMessageId::generate());
+  let started = Chat::start(chat, &body("Cancel the stuck run"), at(10));
+  db.keep_chat_message(&started, (message, &body("Cancel the stuck run")), at(10))
+    .expect("kept");
+  db.add_chat_action(chat, &ChatAction::new("cancel_run", None, ActionOutcome::Waits), at(20))
+    .expect("action");
+  let seq = db
+    .chat_entries(chat)
+    .expect("entries")
+    .into_iter()
+    .find_map(|entry| matches!(entry.kind, EntryKind::Action(_)).then_some(entry.seq))
+    .expect("the action");
+
+  assert!(db.claim_chat_action((chat, seq)).expect("claim").is_some());
+  assert!(
+    db.claim_chat_action((chat, seq)).expect("claim again").is_none(),
+    "a second decision does not take a proposal under way"
+  );
+  assert!(
+    db.settle_chat_action((chat, seq), ActionOutcome::Dismissed, at(30))
+      .expect("dismiss")
+      .is_none(),
+    "a dismissal does not overwrite a proposal under way"
+  );
+  assert!(
+    db.finish_chat_action((chat, seq), ActionOutcome::Applied, at(40))
+      .expect("finish")
+      .is_some()
+  );
+  let outcome = db
+    .chat_entries(chat)
+    .expect("entries")
+    .into_iter()
+    .find_map(|entry| match entry.kind {
+      EntryKind::Action(action) if entry.seq == seq => Some((action.outcome, action.settled)),
+      _ => None,
+    });
+  assert_eq!(outcome, Some((ActionOutcome::Applied, Some(at(40)))));
+  assert!(
+    db.finish_chat_action((chat, seq), ActionOutcome::Dismissed, at(50))
+      .expect("finish again")
+      .is_none()
+  );
+}

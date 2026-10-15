@@ -38,6 +38,8 @@ pub(super) fn of_draft(db: &ProjectDb, kind: Publishing, resource: ResourceId) -
         "appMcp.projectTools.widens.firstVersion",
       ))
     }
+    // Nothing they publish widens what agents may do (`Publishing::can_widen`); a tool test fails when one of their
+    // tools gains a `person_only` rule, so this cannot fall behind it unnoticed.
     Publishing::Instruction | Publishing::Skill => Ok(Vec::new()),
   }
 }

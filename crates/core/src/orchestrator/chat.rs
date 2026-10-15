@@ -199,9 +199,18 @@ pub struct ChatAction {
   /// When a person settled the proposal: started, applied or dismissed it, or it was refused then.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub settled: Option<Timestamp>,
+  /// A person started or applied the proposal and it is being carried out: it still shows what it proposes, and no
+  /// other decision is taken on it.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  pub applying: bool,
 }
 
 impl ChatAction {
+  /// Whether it waits for a person's decision: a proposal no decision took yet.
+  pub const fn waits(&self) -> bool {
+    self.outcome.is_proposed() && !self.applying
+  }
+
   /// Tool `tool`'s action on task `task`, gone as `outcome`, about nothing more.
   pub fn new(tool: &str, task: Option<String>, outcome: ActionOutcome) -> Self {
     Self {
@@ -213,6 +222,7 @@ impl ChatAction {
       started: None,
       auto_mode: false,
       settled: None,
+      applying: false,
     }
   }
 }
@@ -249,7 +259,7 @@ pub enum ActionOutcome {
 }
 
 impl ActionOutcome {
-  /// Whether it waits for a person.
+  /// Whether it is a proposal, waiting for a person or being carried out ([`ChatAction::applying`]).
   pub const fn is_proposed(&self) -> bool {
     matches!(self, Self::Proposed(_) | Self::Waits)
   }

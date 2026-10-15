@@ -234,6 +234,7 @@ fn action_card(ctx: &mut Ctx, row: &TurnRow, id: &str, (action, at, seq): (&Chat
         seq,
         task: action.task.clone().unwrap_or_default(),
         start: (**start).clone(),
+        applying: action.applying,
         at,
       },
     ),

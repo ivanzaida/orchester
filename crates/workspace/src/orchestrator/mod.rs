@@ -4,6 +4,7 @@
 
 mod change;
 pub mod chat;
+mod duplicate;
 pub mod facts;
 mod keep;
 pub mod proposal;

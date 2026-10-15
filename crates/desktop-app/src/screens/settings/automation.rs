@@ -250,8 +250,12 @@ impl ConsentRow {
         return;
       }
       blocked.set(false);
-      if !chosen && consent == Consent::ChangePermissions {
-        workspace.revoke_automation_permission_consent();
+      if !chosen {
+        // Off holds from the person's click, before the save runs and if it fails.
+        match consent {
+          Consent::ChangePermissions => workspace.revoke_automation_permission_consent(),
+          Consent::PublishDrafts => workspace.revoke_orchestrator_publish_consent(),
+        }
       }
       saved.set(Some(chosen));
       save.run(chosen);

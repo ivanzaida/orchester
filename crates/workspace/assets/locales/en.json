@@ -456,6 +456,7 @@
         "inProgress": "A merge, cherry-pick or revert is in progress in your checkout. Finish or abort it, then merge again. Nothing was changed.",
         "conflict": "The run’s changes conflict with your branch in {{files}}. The merge was undone, so your checkout is as it was. Merge the run’s branch yourself to resolve the conflicts.",
         "branchMissing": "The run’s branch {{branch}} no longer exists, so there is nothing to merge.",
+        "branchMoved": "The run’s branch {{branch}} is no longer at {{revision}}, the commit you were asked to merge. Nothing was merged; ask the Orchestrator to propose it again.",
         "refused": "Git didn’t merge, and the merge was undone: {{detail}}",
         "noBaseBranch": "This run didn’t record the branch your checkout had when it started.",
         "notSucceeded": "Only a run whose every step passed can be merged.",
@@ -593,6 +594,9 @@
       "notLatestRun": "Messages go to the task’s latest run, #{{run}}.",
       "noSecondWay": "In the run’s state a message is sent one way only.",
       "notReadable": "Its run has ended or is no longer the task’s latest, so no agent reads this message any more.",
+      "draftChangedPlain": "The draft changed after this proposal, or what it widens did. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
+      "taken": "This proposal was already decided, here or in another tab: nothing more was done.",
+      "noCheckpoint": "Run #{{run}} has no checkpoint: none of its work is committed, so there is nothing to merge.",
       "runChanged": "The run changed since you wrote this. Check what sending does now, then send again."
     }
   },

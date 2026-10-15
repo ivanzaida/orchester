@@ -80,6 +80,12 @@ fn words(tool: &str) -> Words {
       "orchestrator.action.holdQueue.refused",
       Some("orchestrator.action.holdQueue.effect"),
     ),
+    "duplicate_pipeline" => (
+      Icon::Copy,
+      "orchestrator.action.duplicatePipeline.done",
+      "orchestrator.action.duplicatePipeline.refused",
+      Some("orchestrator.action.duplicatePipeline.effect"),
+    ),
     "release_queue" => (
       Icon::Play,
       "orchestrator.action.releaseQueue.done",

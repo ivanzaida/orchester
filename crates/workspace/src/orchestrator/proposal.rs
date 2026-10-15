@@ -7,10 +7,7 @@
 //! That only a person takes the start or applies the change is the window's to enforce: synthetic input never
 //! reaches [`decide`].
 
-use orchester_core::{
-  orchestrator::{ActionOutcome, ChatAction, EntryKind},
-  time::Timestamp,
-};
+use orchester_core::{orchestrator::ActionOutcome, time::Timestamp};
 use orchester_store::ProjectDb;
 use rmcp::model::JsonObject;
 use serde_json::{Value, json};
@@ -24,10 +21,13 @@ use crate::{
 };
 
 /// What the person did with a proposal.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Decision {
-  /// Start the proposed run, or apply the proposed change.
-  Accept,
+  /// Start the proposed run, or apply the proposed change, which the person was shown to widen what agents may do
+  /// by `widens`: anything else is refused.
+  Accept {
+    widens: Vec<Message>,
+  },
   Dismiss,
 }
 
@@ -59,54 +59,59 @@ pub(super) async fn propose(
 /// Takes the person's `decision` on the proposal `seq` of `scope`'s conversation. A start runs the task as
 /// Orchester's own `run_task` tool does, and a change goes through the tool that carries it out, refused or carried
 /// out as for any client, but only as it was proposed: a task, draft or run changed since, or a pipeline published
-/// anew, is refused and needs a fresh proposal. The proposal shows how it went; one that no longer waits is left as
-/// it is.
+/// anew, is refused and needs a fresh proposal. A decision first claims the proposal, so a second one (another tab, a
+/// second click) is refused and changes nothing. The proposal shows how it went.
 pub async fn decide(
   (services, translate, runners): (&Services, &Translate, &Runners),
   scope: &ChatScope,
   seq: i64,
   decision: Decision,
 ) -> Result<(), Message> {
-  let outcome = match decision {
-    Decision::Dismiss => ActionOutcome::Dismissed,
-    Decision::Accept => {
-      let Some(action) = waiting(scope, seq).await? else {
-        return Ok(());
-      };
-      // A start reads as done as before; a change as the person's, apart from what the chat did itself.
-      let (carried, applied) = match (action.task, action.outcome, action.change) {
-        (Some(task), ActionOutcome::Proposed(start), _) => (
-          app_mcp::run_proposed(services, (scope.project.to_string(), task), start.basis).await,
-          ActionOutcome::Done,
-        ),
-        (_, ActionOutcome::Waits, Some(proposed)) => (
-          change::apply((services, translate), scope, &proposed).await,
-          ActionOutcome::Applied,
-        ),
-        _ => return Ok(()),
-      };
-      match carried {
-        Ok(_) => applied,
-        Err(error) => refusal(&error, translate),
-      }
-    }
-  };
   let (root, chat) = (scope.root.clone(), scope.chat);
-  background::run(move || ProjectDb::open(&root)?.settle_chat_action((chat, seq), outcome, Timestamp::now()))
+  let Decision::Accept { widens } = decision else {
+    let dismissed = background::run(move || {
+      ProjectDb::open(&root)?.settle_chat_action((chat, seq), ActionOutcome::Dismissed, Timestamp::now())
+    })
+    .await?
+    .map_err(|error| store_error(&error))?;
+    runners.chat_changed(&scope.root);
+    return dismissed.map(drop).ok_or_else(taken);
+  };
+  let claimed = background::run(move || ProjectDb::open(&root)?.claim_chat_action((chat, seq)))
+    .await?
+    .map_err(|error| store_error(&error))?;
+  let Some(action) = claimed else {
+    return Err(taken());
+  };
+  runners.chat_changed(&scope.root);
+  // A start reads as done as before; a change as the person's, apart from what the chat did itself.
+  let (carried, applied) = match (action.task, action.outcome, action.change) {
+    (Some(task), ActionOutcome::Proposed(start), _) => (
+      app_mcp::run_proposed(services, (scope.project.to_string(), task), start.basis).await,
+      ActionOutcome::Done,
+    ),
+    (_, ActionOutcome::Waits, Some(proposed)) => (
+      change::apply((services, translate), scope, &proposed, &widens).await,
+      ActionOutcome::Applied,
+    ),
+    _ => (
+      Err(ToolError::InvalidArguments("nothing to carry out".to_owned())),
+      ActionOutcome::Applied,
+    ),
+  };
+  let outcome = match carried {
+    Ok(_) => applied,
+    Err(error) => refusal(&error, translate),
+  };
+  let root = scope.root.clone();
+  background::run(move || ProjectDb::open(&root)?.finish_chat_action((chat, seq), outcome, Timestamp::now()))
     .await?
     .map_err(|error| store_error(&error))?;
   runners.chat_changed(&scope.root);
   Ok(())
 }
 
-/// The action `seq` of `scope`'s conversation while it waits for a person.
-async fn waiting(scope: &ChatScope, seq: i64) -> Result<Option<ChatAction>, Message> {
-  let (root, chat) = (scope.root.clone(), scope.chat);
-  let entries = background::run(move || ProjectDb::open(&root)?.chat_entries(chat))
-    .await?
-    .map_err(|error| store_error(&error))?;
-  Ok(entries.into_iter().find_map(|entry| match entry.kind {
-    EntryKind::Action(action) if entry.seq == seq && action.outcome.is_proposed() => Some(action),
-    _ => None,
-  }))
+/// The proposal no longer waits: another decision took it, or it was settled.
+fn taken() -> Message {
+  Message::new("orchestrator.proposal.taken")
 }

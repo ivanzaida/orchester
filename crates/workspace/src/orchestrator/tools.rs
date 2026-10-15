@@ -21,7 +21,7 @@ use rmcp::model::{JsonObject, Tool};
 use serde_json::Value;
 
 use super::{
-  change,
+  change, duplicate,
   keep::{self, HOLD_QUEUE, Named},
   proposal,
 };
@@ -36,7 +36,7 @@ use crate::{
 /// run, publishing a draft, canceling and merging a run. Approvals, questions, plans, project setup, connections,
 /// MCP servers, the environment and what removes work are not among them. A name whose tool the app does not have
 /// (yet) is not listed ([`listed`]).
-pub const TOOLS: [&str; 48] = [
+pub const TOOLS: [&str; 49] = [
   "list_projects",
   "get_project",
   "list_tasks",
@@ -56,6 +56,7 @@ pub const TOOLS: [&str; 48] = [
   "get_plan",
   "hold_queue",
   "release_queue",
+  "get_auto_mode",
   "list_pipelines",
   "get_pipeline",
   "save_pipeline_draft",
@@ -92,6 +93,8 @@ pub(super) const RUN_TASK: &str = "run_task";
 /// The tools whose calls always wait for the person.
 pub(super) const CANCEL_RUN: &str = "cancel_run";
 pub(super) const MERGE_RUN: &str = "merge_run";
+/// The tool whose copy the chat saves as a draft before it publishes it by the publication rule.
+pub(super) const DUPLICATE_PIPELINE: &str = "duplicate_pipeline";
 
 /// The chat's tools as `tools/list` answers: those of [`TOOLS`] the app has, each told how it works in the chat.
 pub fn listed() -> Vec<Tool> {
@@ -115,6 +118,9 @@ fn in_chat(tool: &Tool) -> Option<String> {
   if name == RUN_TASK {
     return Some(PROPOSE_RUN.to_owned());
   }
+  if name == DUPLICATE_PIPELINE {
+    return Some(format!("{DUPLICATE_AS_DRAFT} {own}"));
+  }
   if name == CANCEL_RUN || name == MERGE_RUN {
     return Some(format!("{PROPOSE_CHANGE} {own}"));
   }
@@ -126,6 +132,11 @@ const PROPOSE_RUN: &str = "Proposes running a task to the person: checks that th
   queued and started, a queued task starts, an ended one runs again) and starts nothing. The person starts or \
   dismisses it in the conversation. When auto mode is on for the project (get_auto_mode's new_runs), it starts the \
   run instead, through the same checks, and answers with the run. Refusals name why.";
+
+/// What the agent reads first of `duplicate_pipeline`.
+const DUPLICATE_AS_DRAFT: &str = "In this chat it saves the copy as a draft, and its first version is published as \
+  publish_pipeline publishes in this chat: proposed to the person, unless they turned on Let the Orchestrator publish \
+  drafts and what it widens is allowed. The answer names the copy and how its publication went.";
 
 /// What the agent reads first of `cancel_run` and `merge_run`.
 const PROPOSE_CHANGE: &str = "In this chat it changes nothing itself: it checks what the call names and proposes the \
@@ -164,14 +175,28 @@ pub async fn call(
     return app_tool((services, translate), name, arguments).await;
   }
   in_own_project(scope, &mut arguments)?;
-  let acted = act((services, translate), scope, name, &arguments).await;
+  if name == DUPLICATE_PIPELINE {
+    return duplicate::duplicate((services, translate, runners), scope, arguments).await;
+  }
+  act_and_keep((services, translate, runners), scope, name, &arguments).await
+}
+
+/// Carries out or proposes the change `name` with `arguments`, given the chat's project, and keeps its action in the
+/// conversation.
+pub(super) async fn act_and_keep(
+  (services, translate, runners): (&Services, &Translate, &Runners),
+  scope: &ChatScope,
+  name: &str,
+  arguments: &JsonObject,
+) -> Result<Value, ToolError> {
+  let acted = act((services, translate), scope, name, arguments).await;
   let Acted { result, kept } = acted;
   let outcome = match (&result, kept.waits) {
     (Ok(_), Some(waits)) => waits,
     (Ok(_), None) => ActionOutcome::Done,
     (Err(error), _) => keep::refusal(error, translate),
   };
-  let named = kept.task.map(Named::Task).or_else(|| keep::named_task(&arguments));
+  let named = kept.task.map(Named::Task).or_else(|| keep::named_task(arguments));
   let named = named.or_else(|| result.as_ref().ok().and_then(keep::created_task));
   // A hold that held new starts keeps what it held, for its card.
   let held = (name == HOLD_QUEUE && outcome == ActionOutcome::Done).then(|| keep::arguments_task(&named));
@@ -299,7 +324,9 @@ async fn publish(
   if !change::widens(scope, &change).await?.is_empty() && !changes_permissions(services).await? {
     return propose_change(translate, scope, name, arguments).await;
   }
-  let result = app_tool((services, translate), name, arguments.clone()).await;
+  // The tool is given the draft that was checked, by its id: a name could name another one by now.
+  let (tool, arguments) = change::tool_arguments(scope, &change);
+  let result = app_tool((services, translate), tool, arguments).await;
   Ok(Acted {
     result,
     kept: Kept {

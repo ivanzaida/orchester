@@ -105,3 +105,54 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
     }
   }
 }
+
+#[test]
+fn orchestrator_tools_read_auto_mode_which_run_task_names() {
+  let tools = listed();
+  let get = tools
+    .iter()
+    .find(|tool| tool.name == "get_auto_mode")
+    .expect("the chat reads auto mode, which run_task's description names");
+  assert_eq!(
+    get.annotations.as_ref().and_then(|hints| hints.read_only_hint),
+    Some(true)
+  );
+  let run_task = tools.iter().find(|tool| tool.name == "run_task").expect("run_task");
+  assert!(
+    run_task
+      .description
+      .as_deref()
+      .unwrap_or_default()
+      .contains("get_auto_mode")
+  );
+}
+
+#[test]
+fn orchestrator_tools_judge_what_every_person_only_publication_widens() {
+  for kind in Publishing::ALL {
+    let Some(tool) = app_tools_listed().into_iter().find(|tool| tool.name == kind.tool()) else {
+      continue;
+    };
+    let person_only = tool.description.as_deref().unwrap_or_default().contains("person_only");
+    assert!(
+      !person_only || kind.can_widen(),
+      "{} refuses what widens as person_only, so the chat must judge what its drafts widen (Publishing::can_widen \
+       and orchestrator::widening)",
+      kind.tool()
+    );
+  }
+}
+
+#[test]
+fn orchestrator_tools_say_a_duplicate_is_saved_as_a_draft() {
+  let told = listed()
+    .into_iter()
+    .find(|tool| tool.name == "duplicate_pipeline")
+    .and_then(|tool| tool.description.map(|description| description.to_string()))
+    .expect("duplicate_pipeline is listed");
+  assert!(told.contains("saves the copy as a draft"), "{told}");
+}
+
+fn app_tools_listed() -> Vec<rmcp::model::Tool> {
+  app_mcp::listed().into_iter().chain(app_mcp::setup::listed()).collect()
+}

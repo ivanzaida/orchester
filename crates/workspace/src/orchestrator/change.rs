@@ -12,6 +12,7 @@ use orchester_core::{
   id::{ResourceId, RunId},
   orchestrator::change::{Change, ProposedChange, Publishing},
   resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, Tool},
+  revision::Revision,
   run::Run,
   store::{ResourceStore, TaskStore},
   time::Timestamp,
@@ -25,7 +26,7 @@ use super::{
   widening,
 };
 use crate::{
-  app_mcp::{Missing, Services, ToolError, Translate, blocking, find_run},
+  app_mcp::{Missing, PersonDecision, Services, ToolError, Translate, blocking, find_run, setup::merge_proposed},
   messages::Message,
 };
 
@@ -66,42 +67,68 @@ pub(super) async fn widens(scope: &ChatScope, change: &ProposedChange) -> Result
   blocking(move || Ok(widening::of_draft(&ProjectDb::open(&root)?, of, resource)?)).await
 }
 
-/// Applies `change`, proposed in `scope`, through the tool that carries it out, as the person's own decision: refused
-/// as for any client but for what widens what agents may do, which the person decided; refused when what it names
-/// changed since it was proposed.
+/// Applies `change`, proposed in `scope`, through the tool that carries it out, as the person's own decision:
+/// refused as for any client but for what widens what agents may do, which the person decided when it is exactly
+/// what they were shown (`shown`); refused when what it names changed since it was proposed. A merge merges only the
+/// commit that was proposed.
 pub(super) async fn apply(
   (services, translate): (&Services, &Translate),
   scope: &ChatScope,
   change: &ProposedChange,
+  shown: &[Message],
 ) -> Result<Value, ToolError> {
   let root = scope.root.clone();
-  let (tool, argument, named) = match change.change.clone() {
+  let project = scope.project.to_string();
+  match change.change.clone() {
     Change::Publish {
       of,
       resource,
       version,
       saved,
     } => {
-      let subject = change.subject.clone();
-      blocking(move || unchanged_draft(&root, (of, resource), (saved, version), subject)).await?;
-      (of.tool(), of.argument(), resource.to_string())
+      let (subject, widens) = (change.subject.clone(), shown.to_vec());
+      // Told early, by name; the tool checks the draft and what it widens again where it publishes.
+      blocking(move || unchanged_draft(&root, (of, resource), ((saved, version), &widens), subject)).await?;
+      let person = services.clone().decided_by_person(PersonDecision {
+        saved,
+        version,
+        widens: shown.to_vec(),
+      });
+      let (tool, arguments) = tool_arguments(scope, change);
+      app_tool((&person, translate), tool, arguments).await
     }
-    Change::Cancel { run, .. } => (CANCEL_RUN, "run", run.to_string()),
+    Change::Cancel { .. } => {
+      let (tool, arguments) = tool_arguments(scope, change);
+      app_tool((services, translate), tool, arguments).await
+    }
     Change::Merge {
       run,
       number,
       checkpoint,
       ..
     } => {
-      blocking(move || unchanged_run(&root, (run, number), checkpoint.as_deref())).await?;
-      (MERGE_RUN, "run", run.to_string())
+      let Some(checkpoint) = checkpoint else {
+        return Err(no_checkpoint(number));
+      };
+      let expected = Revision::new(&checkpoint).map_err(|error| ToolError::InvalidArguments(error.to_string()))?;
+      blocking(move || unchanged_run(&root, (run, number), Some(&checkpoint))).await?;
+      merge_proposed(services, translate, (project, run.to_string()), expected).await
     }
+  }
+}
+
+/// The tool that carries out `change` in `scope`, and its arguments: the chat's project and what the change acts on,
+/// by its id.
+pub(super) fn tool_arguments(scope: &ChatScope, change: &ProposedChange) -> (&'static str, JsonObject) {
+  let (tool, argument, named) = match &change.change {
+    Change::Publish { of, resource, .. } => (of.tool(), of.argument(), resource.to_string()),
+    Change::Cancel { run, .. } => (CANCEL_RUN, "run", run.to_string()),
+    Change::Merge { run, .. } => (MERGE_RUN, "run", run.to_string()),
   };
   let mut arguments = JsonObject::new();
   arguments.insert("project".to_owned(), Value::String(scope.project.to_string()));
   arguments.insert(argument.to_owned(), Value::String(named));
-  let person = services.clone().decided_by_person();
-  app_tool((&person, translate), tool, arguments).await
+  (tool, arguments)
 }
 
 /// The publication of the draft `named` of kind `kind` in the project at `root`. Blocks on SQLite.
@@ -141,6 +168,10 @@ fn run_change(root: &Path, cancel: bool, named: &str) -> Result<(ProposedChange,
     }
     Change::Cancel { run: id, number }
   } else {
+    // Only committed work is merged, and only the commit the person is shown.
+    if checkpoint(&run).is_none() {
+      return Err(no_checkpoint(number));
+    }
     Change::Merge {
       run: id,
       number,
@@ -154,20 +185,30 @@ fn run_change(root: &Path, cancel: bool, named: &str) -> Result<(ProposedChange,
   ))
 }
 
-/// Refused unless the draft of `resource` is still the one saved at `saved`, to be published as `version`.
+/// Refused unless the draft of `resource` is still the one saved at `saved`, to be published as `version`, and
+/// widens what agents may do by `widens`, what the person was shown.
 fn unchanged_draft(
   root: &Path,
   (kind, resource): (Publishing, ResourceId),
-  proposed: (Timestamp, u32),
+  (proposed, widens): ((Timestamp, u32), &[Message]),
   subject: String,
 ) -> Result<(), ToolError> {
-  if mark(&ProjectDb::open(root)?, kind, resource)? == Some(proposed) {
+  let db = ProjectDb::open(root)?;
+  if mark(&db, kind, resource)? == Some(proposed) && widening::of_draft(&db, kind, resource)? == widens {
     return Ok(());
   }
   Err(ToolError::refused(
     "changed_since_proposed",
     vec![Message::new("orchestrator.proposal.draftChanged").with("name", subject)],
   ))
+}
+
+/// A merge of run `#number`, which has no checkpoint: nothing of its work is committed.
+fn no_checkpoint(number: u32) -> ToolError {
+  ToolError::refused(
+    "no_checkpoint",
+    vec![Message::new("orchestrator.proposal.noCheckpoint").with("run", number.to_string())],
+  )
 }
 
 /// Refused unless run `run` (`#number`) still holds what its last checkpoint `proposed` held.

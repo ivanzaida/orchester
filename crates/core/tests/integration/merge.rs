@@ -3,7 +3,8 @@
 use std::fs;
 
 use orchester_core::{
-  integration::{MergeError, MergeKind, merge_run},
+  integration::{MergeError, MergeKind, merge_run, merge_run_at},
+  revision::Revision,
   run::BranchName,
 };
 
@@ -230,4 +231,39 @@ fn merge_needs_a_run_that_succeeded_on_a_recorded_branch_that_still_exists() {
     merge(run(&base, Some("main"), Ending::Succeeded)),
     Err(MergeError::BranchMissing(BranchName::new(RUN_BRANCH).expect("valid")))
   );
+}
+
+#[test]
+fn merge_at_a_reviewed_commit_refuses_a_branch_that_moved_since() {
+  let (repo, base, reviewed) = repo_with_run_work();
+  let worktree = repo.root.join(".orchester").join("worktrees").join("run");
+  let later = repo.commit(&worktree, "later.txt", "unreviewed\n", "Implement: more work");
+  let expected = Revision::new(&reviewed).expect("a commit");
+  let refused = merge_run_at(
+    &Processes,
+    (&git_program(), &repo.root),
+    (&run(&base, Some("main"), Ending::Succeeded), &task()),
+    Some(&expected),
+    now(),
+  );
+  assert_eq!(
+    refused,
+    Err(MergeError::BranchMoved {
+      branch: BranchName::new(RUN_BRANCH).expect("valid"),
+      expected,
+    }),
+    "the branch moved from the reviewed {reviewed} to {later}"
+  );
+  assert_eq!(repo.head(), base, "nothing was merged");
+
+  let at_head = Revision::new(&later).expect("a commit");
+  let merged = merge_run_at(
+    &Processes,
+    (&git_program(), &repo.root),
+    (&run(&base, Some("main"), Ending::Succeeded), &task()),
+    Some(&at_head),
+    now(),
+  )
+  .expect("merged at the commit asked for");
+  assert_eq!(merged.revision.as_str(), later);
 }

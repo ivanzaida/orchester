@@ -78,6 +78,7 @@ pub async fn publish_profile(services: &Services, args: InProfile) -> Result<Val
     let agents = ProjectAgents::load_in(&open.repo_root)?;
     let entry = profile_named(&agents, &args.profile)?;
     let id = entry.id;
+    services.draft_decided::<orchester_core::resource::AgentProfile>(&ProjectDb::open(&open.repo_root)?, id)?;
     if let Some(connection) = agent_by_id(&agents.connections, entry.profile.connection()) {
       // The editor offers no Publish on a connection that runs no agents.
       if !connection.provider().runs_agents() {
@@ -106,10 +107,15 @@ pub async fn publish_profile(services: &Services, args: InProfile) -> Result<Val
 /// The profile of `agents` named by its id or, ignoring case, its role.
 pub(super) fn profile_named<'a>(agents: &'a ProjectAgents, named: &str) -> Result<&'a ProfileEntry, ToolError> {
   let lowered = named.to_lowercase();
-  agents
-    .profiles
-    .iter()
-    .find(|entry| entry.id.to_string() == named || entry.profile.role().as_str().to_lowercase() == lowered)
+  // An id names one profile for certain; a role could also be another profile's id.
+  let by_id = agents.profiles.iter().find(|entry| entry.id.to_string() == named);
+  by_id
+    .or_else(|| {
+      agents
+        .profiles
+        .iter()
+        .find(|entry| entry.profile.role().as_str().to_lowercase() == lowered)
+    })
     .ok_or_else(|| ToolError::not_found(Missing::Profile, named))
 }
 

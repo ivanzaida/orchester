@@ -11,6 +11,7 @@ mod harness;
 mod history;
 mod proposal;
 mod queue;
+mod review;
 mod settings;
 mod start;
 #[path = "../support/mod.rs"]

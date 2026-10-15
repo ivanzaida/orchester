@@ -41,6 +41,8 @@ pub(super) struct ProposalProps {
   pub(super) task: String,
   /// What the person is asked to start: the task's title and brief's opening, the pipeline.
   pub(super) start: ProposedStart,
+  /// A person started it and the start is being carried out.
+  pub(super) applying: bool,
   pub(super) at: Timestamp,
 }
 
@@ -76,7 +78,12 @@ impl Component for StartProposal {
         ("pipeline", props.start.pipeline.as_str()),
       ],
     );
-    let head = card::head(id, (Icon::Play, &title), None, waits(ctx, props.at));
+    let state_now = if props.applying {
+      applying(ctx, props.at)
+    } else {
+      waits(ctx, props.at)
+    };
+    let head = card::head(id, (Icon::Play, &title), None, state_now);
     let refused = self.refused.get().then(|| {
       card::note(
         id,
@@ -111,7 +118,7 @@ impl Component for StartProposal {
       )
       .with_children(refused)
       .with_children(failed)
-      .child(self.buttons(ctx, &props, state.is_pending()))
+      .child(self.buttons(ctx, &props, state.is_pending() || props.applying))
   }
 }
 
@@ -121,6 +128,15 @@ pub(super) fn waits(ctx: &Ctx, at: Timestamp) -> State {
     glyph: Icon::Hourglass,
     color: PaletteColor::Warning,
     words: ctx.t_args("orchestrator.proposal.waits", [("time", display::clock(at).as_str())]),
+  }
+}
+
+/// That a person's decision on the proposal made at `at` is being carried out.
+pub(super) fn applying(ctx: &Ctx, at: Timestamp) -> State {
+  State {
+    glyph: Icon::LoaderCircle,
+    color: PaletteColor::TextSecondary,
+    words: ctx.t_args("orchestrator.change.applying", [("time", display::clock(at).as_str())]),
   }
 }
 
@@ -150,7 +166,11 @@ impl StartProposal {
     } else {
       let (decide, dismissing) = (self.decide.clone(), deciding(Decision::Dismiss));
       let dismiss = dismiss.on_click(move || decide.run(dismissing.clone()));
-      let (decide, starting, refused) = (self.decide.clone(), deciding(Decision::Accept), self.refused.clone());
+      let (decide, starting, refused) = (
+        self.decide.clone(),
+        deciding(Decision::Accept { widens: Vec::new() }),
+        self.refused.clone(),
+      );
       let start = start.on_click(move || {
         if is_synthetic_input() {
           tracing::warn!("synthetic input reached the start of a run the Orchestrator proposed; not taken");
