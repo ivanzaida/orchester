@@ -3,7 +3,7 @@
 //! of that account is in the OS keychain, never here.
 
 use orchester_core::{
-  id::{ServerId, UserId},
+  id::{ServerId, TeamServerId, UserId},
   time::Timestamp,
 };
 use rusqlite::{Row, params};
@@ -47,9 +47,29 @@ pub struct StoredServer {
   /// server's own certificate; `None` when the operating system's trust store decides.
   pub certificate_pin: Option<String>,
   pub added_at: Timestamp,
+  /// How this computer last joined the server; `None` for a server added before API 3.
+  pub joined_with: Option<JoinedWith>,
   /// Who is signed in there from this computer: kept while the token is valid, and after the
   /// server stopped accepting it until the person signs in again or signs out.
   pub account: Option<ServerAccount>,
+}
+
+/// How this computer joined a team server (`docs/architecture/server.md`, rows 42 and 45).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JoinedWith {
+  /// A setup, invite, account or pairing code.
+  Code,
+  /// The person's Orchester Cloud identity, for the server the cloud knows by this id.
+  Cloud(TeamServerId),
+}
+
+impl JoinedWith {
+  fn columns(self) -> (&'static str, Option<String>) {
+    match self {
+      Self::Code => ("code", None),
+      Self::Cloud(server) => ("cloud", Some(server.to_string())),
+    }
+  }
 }
 
 /// The account signed in to a server from this computer.
@@ -67,7 +87,7 @@ impl AppDb {
   pub fn servers(&self) -> Result<Vec<StoredServer>, StoreError> {
     let mut statement = self.connection.prepare(
       "SELECT id, url, name, plain_http_allowed, added_at, user_id, username, display_name, admin, signed_in_at, \
-       certificate_pin FROM servers ORDER BY added_at, id",
+       certificate_pin, joined_with, team_server FROM servers ORDER BY added_at, id",
     )?;
     let rows = statement
       .query_map([], ServerRow::read)?
@@ -79,9 +99,10 @@ impl AppDb {
   /// the table.
   pub fn add_server(&mut self, server: &StoredServer) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
+    let (joined_with, team_server) = server.joined_with.map(JoinedWith::columns).unzip();
     transaction.execute(
-      "INSERT INTO servers (id, url, name, plain_http_allowed, added_at, certificate_pin) \
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+      "INSERT INTO servers (id, url, name, plain_http_allowed, added_at, certificate_pin, joined_with, team_server) \
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
       params![
         server.id.to_string(),
         server.url,
@@ -89,6 +110,8 @@ impl AppDb {
         server.plain_http_allowed,
         server.added_at.unix_millis(),
         server.certificate_pin,
+        joined_with,
+        team_server.flatten(),
       ],
     )?;
     update_account(&transaction, server.id, server.account.as_ref())?;
@@ -107,6 +130,19 @@ impl AppDb {
     let changed = self.connection.execute(
       "UPDATE servers SET certificate_pin = ?2, plain_http_allowed = ?3 WHERE id = ?1",
       params![server.to_string(), pin, plain_http],
+    )?;
+    if changed == 0 {
+      return Err(StoreError::ServerNotFound(server));
+    }
+    Ok(())
+  }
+
+  /// Records how this computer joined `server` last.
+  pub fn set_server_joined_with(&mut self, server: ServerId, joined_with: JoinedWith) -> Result<(), StoreError> {
+    let (kind, team_server) = joined_with.columns();
+    let changed = self.connection.execute(
+      "UPDATE servers SET joined_with = ?2, team_server = ?3 WHERE id = ?1",
+      params![server.to_string(), kind, team_server],
     )?;
     if changed == 0 {
       return Err(StoreError::ServerNotFound(server));
@@ -161,6 +197,8 @@ struct ServerRow {
   added_at: i64,
   account: Option<AccountColumns>,
   certificate_pin: Option<String>,
+  joined_with: Option<String>,
+  team_server: Option<String>,
 }
 
 impl ServerRow {
@@ -178,6 +216,8 @@ impl ServerRow {
       added_at: row.get(4)?,
       account,
       certificate_pin: row.get(10)?,
+      joined_with: row.get(11)?,
+      team_server: row.get(12)?,
     })
   }
 
@@ -192,6 +232,12 @@ impl ServerRow {
       }),
       None => None,
     };
+    let joined_with = match (self.joined_with.as_deref(), self.team_server) {
+      (None, _) => None,
+      (Some("code"), _) => Some(JoinedWith::Code),
+      (Some("cloud"), Some(server)) => Some(JoinedWith::Cloud(parse("team server id", &server)?)),
+      (Some(other), _) => return Err(crate::rows::corrupt("server join", other)),
+    };
     Ok(StoredServer {
       id: parse("server id", &self.id)?,
       url: self.url,
@@ -199,6 +245,7 @@ impl ServerRow {
       plain_http_allowed: self.plain_http_allowed,
       certificate_pin: self.certificate_pin,
       added_at: Timestamp::from_unix_millis(self.added_at),
+      joined_with,
       account,
     })
   }

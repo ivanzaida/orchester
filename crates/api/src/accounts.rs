@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::Credential;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServerInfo {
   pub name: String,
   pub api_version: u8,

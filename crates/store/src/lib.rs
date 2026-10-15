@@ -9,7 +9,10 @@ mod migrate;
 mod project_db;
 mod rows;
 
-pub use app_db::{AppDb, PreviousSession, RegisteredProject, ServerAccount, SessionEnd, SessionId, StoredServer};
+pub use app_db::{
+  AppDb, JoinedWith, PreviousSession, RegisteredProject, ServerAccount, SessionEnd, SessionId, StoredCloudAccount,
+  StoredServer,
+};
 pub use error::{RunStoreError, StoreError};
 pub use git_exclude::is_repository_root;
 pub use project_db::{

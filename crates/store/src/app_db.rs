@@ -5,6 +5,7 @@
 //! agent CLI accounts ([`accounts`]).
 
 mod accounts;
+mod cloud;
 mod servers;
 mod settings;
 
@@ -13,7 +14,10 @@ use std::path::{Path, PathBuf};
 use orchester_core::{id::ProjectId, name::Name, project::Project, time::Timestamp};
 use rusqlite::{Connection, OptionalExtension, params};
 
-pub use self::servers::{ServerAccount, StoredServer};
+pub use self::{
+  cloud::StoredCloudAccount,
+  servers::{JoinedWith, ServerAccount, StoredServer},
+};
 use crate::{
   StoreError, migrate,
   rows::{corrupt, parse, path_text},
@@ -52,6 +56,7 @@ CREATE TABLE ui_state (
   accounts::MIGRATION,
   servers::PIN_MIGRATION,
   settings::ORCHESTRATOR_PUBLISHES_MIGRATION,
+  cloud::MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

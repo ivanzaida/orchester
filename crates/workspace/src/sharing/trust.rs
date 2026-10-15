@@ -25,6 +25,12 @@ impl PresentedCertificate {
     Client::presented_certificate(address).await.map(|pin| Self { pin })
   }
 
+  /// What the server at `address` says it is (`GET /server`), over a connection to exactly this certificate, before
+  /// the person compared it: nothing but the question is sent.
+  pub async fn server_info(&self, address: &ServerAddress) -> Result<orchester_api::ServerInfo, ClientError> {
+    Client::pinned(address.clone(), self.pin)?.server_info().await
+  }
+
   /// What the person compares: `3F7A-92C1-KD8M-QX4T`.
   pub fn check_code(&self) -> String {
     self.pin.check_code()

@@ -1,10 +1,11 @@
 //! Orchester Cloud's JSON contract (`docs/architecture/server.md`, "Orchester Cloud"; `docs/cloud-api.md`): accounts,
-//! devices and identity tokens. Used by the cloud, the desktop and the web front alike.
+//! devices and identity tokens, and the invites and team servers of an account. Used by the cloud, the desktop and
+//! the web front alike.
 
-use orchester_core::id::{CloudAccountId, CloudDeviceId, TeamServerId};
+use orchester_core::id::{CloudAccountId, CloudDeviceId, InviteId, TeamServerId};
 use serde::{Deserialize, Serialize};
 
-use crate::Credential;
+use crate::{Credential, InviteKind, MemberRole};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -143,6 +144,49 @@ pub struct CloudServer {
   pub name: String,
   pub address: String,
   pub fingerprint: Option<String>,
+}
+
+/// The team servers the account owns or joined (`GET /servers`).
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CloudServers {
+  pub servers: Vec<CloudServer>,
+}
+
+/// The project an invite is to: its address, the project's identity, and its name when the invite was made.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InvitedProject {
+  pub address: String,
+  pub name: String,
+}
+
+/// An invite in flight to the signed-in account (`GET /invites`), as the team server signed it: who invited, to which
+/// server and project, with which role. `project` is `None` for an invite to the server alone.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CloudInvite {
+  pub id: InviteId,
+  pub server: CloudServer,
+  pub kind: InviteKind,
+  pub project: Option<InvitedProject>,
+  pub role: Option<MemberRole>,
+  /// The inviter's display name.
+  pub inviter: String,
+  /// Milliseconds since the Unix epoch.
+  pub created_at: i64,
+  pub expires_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CloudInvites {
+  pub invites: Vec<CloudInvite>,
+}
+
+/// `POST /invites/{id}/accept`: the server to connect to, trusting exactly its certificate, and a one-time identity
+/// token for it bound to the invite. The token is shown once.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InviteAccepted {
+  pub server: CloudServer,
+  pub project: Option<InvitedProject>,
+  pub identity_token: Credential,
 }
 
 /// The current key set as a compact JWS signed by the cloud's root key (`identity::KeySet` verifies it).

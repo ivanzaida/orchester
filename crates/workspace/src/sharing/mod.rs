@@ -10,10 +10,13 @@
 
 mod account;
 pub mod address;
+pub mod cloud;
+mod connect;
 mod connection;
 pub mod device;
 mod error;
 mod joining;
+mod linked;
 mod monitor;
 mod password;
 pub mod project;
@@ -39,9 +42,11 @@ use tokio::sync::watch;
 pub use self::{
   account::{PendingPasswordChange, SignedIn},
   address::{ProjectAddress, ProjectAddressError, RemoteMatch, remote_match},
+  connect::{Reached, Reaching},
   connection::{Connection, Schedule},
   error::{SharingError, client_message},
   joining::{CloudIdentity, CloudJoined, CodeRequest},
+  linked::{LinkedProject, ServerProject},
   monitor::run as monitor,
   password::{PASSWORD_CHARS, PasswordProblem, password_problem},
   trust::{ConfirmedPin, PresentedCertificate, Trust},
@@ -57,6 +62,9 @@ pub struct ServerEntry {
   pub connection: Option<Connection>,
   /// When the server last answered this session.
   pub last_reached: Option<Timestamp>,
+  /// The server presents a certificate this computer does not trust (another one than it pinned): nothing is sent to
+  /// it until the person compares the new check code.
+  pub certificate_changed: bool,
 }
 
 impl ServerEntry {
@@ -98,6 +106,7 @@ struct Watched {
   failures: u32,
   trouble_since: Option<Timestamp>,
   last_reached: Option<Timestamp>,
+  certificate_changed: bool,
 }
 
 impl PartialEq for Servers {
@@ -199,6 +208,7 @@ impl Servers {
             .as_ref()
             .map(|_| state.map_or(Connection::Checking, |state| state.connection)),
           last_reached: state.and_then(|state| state.last_reached),
+          certificate_changed: state.is_some_and(|state| state.certificate_changed),
           address,
           stored,
         })
@@ -229,6 +239,7 @@ impl Servers {
       plain_http_allowed: plain_http == PlainHttp::Allowed,
       certificate_pin: None,
       added_at: Timestamp::now(),
+      joined_with: None,
       account: None,
     };
     let workspace = self.inner.workspace.clone();
@@ -303,6 +314,7 @@ impl Servers {
         ..
       }) => self.refused(server).await,
       Some(error) if error.is_connection() => self.failed(server),
+      Some(ClientError::UntrustedCertificate) => self.untrusted(server),
       // Any other answer came from the server, which is therefore reachable.
       Some(_) => self.reached(server),
     }
@@ -316,6 +328,17 @@ impl Servers {
       failures: 0,
       trouble_since: None,
       last_reached: Some(Timestamp::now()),
+      certificate_changed: false,
+    });
+  }
+
+  /// The server presented a certificate this computer does not trust: it is asked again on the backoff, and stays
+  /// marked until it presents the trusted one or the person confirms the new one.
+  fn untrusted(&self, server: ServerId) {
+    self.failed(server);
+    self.update(server, |watched| Watched {
+      certificate_changed: true,
+      ..watched.copied().expect("`failed` recorded the server")
     });
   }
 
@@ -340,6 +363,7 @@ impl Servers {
         failures,
         trouble_since: Some(trouble_since),
         last_reached: watched.and_then(|watched| watched.last_reached),
+        certificate_changed: watched.is_some_and(|watched| watched.certificate_changed),
       }
     });
   }
@@ -361,6 +385,7 @@ impl Servers {
       failures: 0,
       trouble_since: None,
       last_reached: watched.and_then(|watched| watched.last_reached),
+      certificate_changed: false,
     });
   }
 

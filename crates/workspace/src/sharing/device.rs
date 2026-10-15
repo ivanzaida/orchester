@@ -2,6 +2,8 @@
 //! platform, sent as the sign-in's `device` (`BOHDAN-PC · Windows`) and read back from the session
 //! list. A device another client named some other way is shown as it is.
 
+use orchester_api::cloud::DeviceInfo;
+
 /// Between the computer's name and the platform in a device text.
 const SEPARATOR: &str = " · ";
 
@@ -32,9 +34,20 @@ pub fn this_computer() -> String {
   format!("{}{SEPARATOR}{}", platform::computer_name(), platform::NAME)
 }
 
+/// This computer as Orchester Cloud lists it among the account's devices: its name and platform.
+pub fn cloud_device() -> DeviceInfo {
+  DeviceInfo {
+    name: platform::computer_name(),
+    platform: platform::CLOUD,
+  }
+}
+
 #[cfg(windows)]
 mod platform {
+  use orchester_api::cloud::CloudPlatform;
+
   pub const NAME: &str = "Windows";
+  pub const CLOUD: CloudPlatform = CloudPlatform::Windows;
 
   /// The NetBIOS name Windows gives every process in `COMPUTERNAME`.
   pub fn computer_name() -> String {
@@ -44,7 +57,10 @@ mod platform {
 
 #[cfg(target_os = "macos")]
 mod platform {
+  use orchester_api::cloud::CloudPlatform;
+
   pub const NAME: &str = "macOS";
+  pub const CLOUD: CloudPlatform = CloudPlatform::Macos;
 
   /// The host name without the `.local` of Bonjour, e.g. `bohdan-mbp`.
   pub fn computer_name() -> String {
@@ -56,7 +72,10 @@ mod platform {
 
 #[cfg(not(any(windows, target_os = "macos")))]
 mod platform {
+  use orchester_api::cloud::CloudPlatform;
+
   pub const NAME: &str = "Linux";
+  pub const CLOUD: CloudPlatform = CloudPlatform::Linux;
 
   pub fn computer_name() -> String {
     std::env::var("HOSTNAME").unwrap_or_else(|_| "Linux".to_owned())
