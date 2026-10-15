@@ -10,7 +10,7 @@ use orchester_core::id::RunId;
 use orchester_workspace::{
   background,
   messages::{self, Message},
-  tasks::run_approvals::{RunApprovalChange, apply_in},
+  tasks::run_approvals::stop_auto_approving_in,
 };
 use parking_lot::Mutex;
 
@@ -51,18 +51,14 @@ impl Stopper {
   pub fn action(&self, ctx: &mut Ctx) -> StopAction {
     let action = ctx.future_action(|request: StopRequest| async move {
       let StopRequest { asked, feed } = request;
-      background::run(move || {
-        asked
-          .runs
-          .iter()
-          .try_for_each(|run| apply_in(&asked.repo_root, *run, RunApprovalChange::AutoApprove(false)))
-      })
-      .await?
-      .map_err(|error| {
-        // The runs still auto-approve, so the bar still says so and *Stop* can be pressed again.
-        tracing::error!(%error, "cannot stop runs auto-approving");
-        messages::store_error(&error)
-      })?;
+      // Every run auto-approving when it writes stops, not only the runs the bar showed.
+      background::run(move || stop_auto_approving_in(&asked.repo_root).map(|_stopped| ()))
+        .await?
+        .map_err(|error| {
+          // The runs still auto-approve, so the bar still says so and *Stop* can be pressed again.
+          tracing::error!(%error, "cannot stop runs auto-approving");
+          messages::store_error(&error)
+        })?;
       Ok(feed)
     });
     let mut followed = self.followed.lock();
