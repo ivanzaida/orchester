@@ -25,7 +25,7 @@ impl Server {
     let now = self.now();
     self.inner.db.read(move |db| {
       let auth = db::checked(db, &auth, now, false)?;
-      let mut query = db.prepare("SELECT id,device,created_at,last_used_at,via FROM sessions WHERE user_id=?1 AND revoked_at IS NULL AND last_used_at>?2 ORDER BY created_at,id")?;
+      let mut query = db.prepare("SELECT id,device,created_at,last_used_at,via FROM sessions WHERE user_id=?1 AND kind='app' AND revoked_at IS NULL AND last_used_at>?2 ORDER BY created_at,id")?;
       let rows = query.query_map(params![auth.user.id.to_string(), now - DEVICE_IDLE_MS], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)?, row.get::<_, i64>(3)?, row.get::<_, String>(4)?))
       })?.collect::<Result<Vec<_>, _>>()?;

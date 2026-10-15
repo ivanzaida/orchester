@@ -259,6 +259,15 @@ async fn sa_admins_list_every_computer_and_sign_any_one_out() {
     [("bob", "test computer"), ("alice", "test computer")],
     "newest use first, no browser"
   );
+  let own: orchester_api::SessionsResponse = server
+    .request("GET", "/auth/sessions", Some(&admin.token), None)
+    .await
+    .json();
+  assert_eq!(
+    own.sessions.len(),
+    1,
+    "an account's own computers leave its browser sign-ins out too"
+  );
   let bobs = &listed.sessions[0];
   assert!(!bobs.current);
   assert_eq!(bobs.expires_at, bobs.last_used_at + 90 * 24 * HOUR_MS);
