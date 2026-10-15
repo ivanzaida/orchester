@@ -66,7 +66,7 @@ pub use self::{
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
   projects::{ProjectsSpacing, ProjectsText},
-  pull_requests::PullRequestsSpacing,
+  pull_requests::{PullRequestsSpacing, PullRequestsText},
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
   settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,

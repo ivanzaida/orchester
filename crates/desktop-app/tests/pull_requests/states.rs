@@ -159,3 +159,36 @@ fn pull_requests_without_gh_point_to_connections() {
   assert!(notice.contains("Open Connections"), "{notice}");
   assert_eq!(seeded.rows().len(), 6, "the stored list stays");
 }
+
+#[test]
+fn pull_requests_rate_limit_outlives_the_page() {
+  let mut seeded = Seeded::answering("rate-limited");
+  seeded.open(PullRequestTab::Open);
+  // GitHub would answer now, but the limit has not reset: opening the page again asks it nothing.
+  seeded.mode("ok");
+  seeded.window.navigation().go(orchester_app::routes::Route::Project(
+    seeded.project,
+    orchester_app::routes::ProjectPage::Tasks(Default::default()),
+  ));
+  seeded.window.pass();
+  seeded.open(PullRequestTab::Open);
+  let status = seeded.text("pull-requests-sync-status");
+  assert!(status.starts_with("Rate limited · resets in "), "{status}");
+  assert_eq!(
+    seeded.text("pull-requests-refresh-reason"),
+    "Refresh is available again after the reset."
+  );
+}
+
+#[test]
+fn pull_requests_say_gh_is_signed_out_and_how_to_sign_in() {
+  let mut seeded = Seeded::answering("not-signed-in");
+  seeded.open(PullRequestTab::Open);
+  assert_eq!(seeded.text("pull-requests-sync-status"), "gh not signed in");
+  assert!(
+    seeded
+      .text("pull-requests-notice")
+      .starts_with("gh is not signed in to github.com")
+  );
+  assert_eq!(seeded.command(), "gh auth login --hostname github.com");
+}

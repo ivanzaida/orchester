@@ -276,3 +276,55 @@ fn with_buttons(ctx: &Ctx, notice: Notice, remedy: &Remedy, actions: &NoticeActi
     }
   }
 }
+
+/// Why the latest read of one pull request failed, over what was read before (`Couldn't reach GitHub` in
+/// `c07NAC`); `synced_at` is when that was.
+pub(super) fn detail_notice(ctx: &Ctx, failure: &SyncFailure, synced_at: Option<Timestamp>) -> Element {
+  let id = "pull-request-notice";
+  let failed = |glyph: Icon, title: Arc<str>, body: Arc<str>| {
+    Notice::new(id, NoticeTone::Info, title)
+      .icon(glyph)
+      .mark(lurq::app::theme::PaletteColor::Danger)
+      .body(body)
+  };
+  let notice = match failure {
+    SyncFailure::RateLimited { resets_at } => {
+      Notice::new(id, NoticeTone::Info, ctx.t("pull_requests.notice.rateLimitedTitle"))
+        .icon(Icon::Timer)
+        .body(match resets_at {
+          Some(at) => ctx.t_args(
+            "pull_requests.detail.notice.rateLimited",
+            [("minutes", minutes_until(Timestamp::now(), *at).to_string())],
+          ),
+          None => ctx.t("pull_requests.detail.notice.rateLimitedUnknown"),
+        })
+    }
+    SyncFailure::Account(state) => Notice::new(id, NoticeTone::Warning, account(ctx, state))
+      .icon(Icon::CircleAlert)
+      .body(ctx.t("pull_requests.detail.notice.account")),
+    SyncFailure::Repository(RepositoryError::Network { .. }) => failed(
+      Icon::CloudOff,
+      ctx.t("pull_requests.detail.notice.unreachable"),
+      ctx.t("pull_requests.detail.notice.mayHaveChanged"),
+    ),
+    SyncFailure::Repository(RepositoryError::ServerError { .. }) => failed(
+      Icon::ServerCrash,
+      ctx.t("pull_requests.detail.notice.troubled"),
+      ctx.t("pull_requests.detail.notice.mayHaveChanged"),
+    ),
+    SyncFailure::Repository(RepositoryError::PullRequestNotFound { .. }) => {
+      Notice::new(id, NoticeTone::Warning, ctx.t("pull_requests.detail.notice.notFound"))
+        .icon(Icon::CircleHelp)
+        .body(ctx.t("pull_requests.detail.notice.notFoundDetail"))
+    }
+    SyncFailure::Repository(_) => failed(
+      Icon::CircleAlert,
+      ctx.t("pull_requests.detail.notice.failed"),
+      match synced_at {
+        Some(at) => ctx.t_args("pull_requests.detail.notice.failedFrom", [("time", display::clock(at))]),
+        None => ctx.t("pull_requests.detail.notice.failedNothing"),
+      },
+    ),
+  };
+  notice.into()
+}

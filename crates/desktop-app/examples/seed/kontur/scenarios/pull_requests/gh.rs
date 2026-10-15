@@ -13,6 +13,7 @@ use orchester_core::{
 };
 use serde_json::{Value, json};
 
+use super::diffs;
 use crate::kontur::{Kontur, SeedError};
 
 const VERSION: &str = "gh version 2.97.0 (2026-07-31)\nhttps://github.com/cli/cli/releases/tag/v2.97.0\n";
@@ -56,6 +57,14 @@ pub fn install(kontur: &Kontur, pull_requests: &[PullRequest]) -> Result<PathBuf
   for (name, contents) in files {
     write(&answers.join(name), &contents)?;
   }
+  for pull_request in pull_requests {
+    write(
+      &answers.join(format!("view-{}.json", pull_request.number())),
+      &view(pull_request),
+    )?;
+    let diff = diffs::diff(pull_request.number());
+    write(&answers.join(format!("diff-{}.diff", pull_request.head_sha())), &diff)?;
+  }
   write(&bin.join("gh-mode.txt"), "ok\n")?;
   let first_open = open
     .first()
@@ -73,35 +82,54 @@ fn auth(login: &str, scopes: &str) -> String {
 
 /// `gh pr list --json …` of `pull_requests`.
 fn list(pull_requests: &[&PullRequest]) -> String {
-  let listed: Vec<Value> = pull_requests
-    .iter()
-    .map(|pull_request| {
-      let (state, draft) = match pull_request.state() {
-        PullRequestState::Open => ("OPEN", false),
-        PullRequestState::Draft => ("OPEN", true),
-        PullRequestState::Merged => ("MERGED", false),
-        PullRequestState::Closed => ("CLOSED", false),
-      };
-      let changes = pull_request.changes();
-      json!({
-        "number": pull_request.number(),
-        "title": pull_request.title(),
-        "url": pull_request.url(),
-        "state": state,
-        "isDraft": draft,
-        "headRefName": pull_request.head().as_str(),
-        "baseRefName": pull_request.base().as_str(),
-        "headRefOid": pull_request.head_sha().as_str(),
-        "author": { "login": pull_request.author() },
-        "additions": changes.additions,
-        "deletions": changes.deletions,
-        "changedFiles": changes.files,
-        "updatedAt": utc(pull_request.updated_at()),
-        "reviewDecision": pull_request.review_decision().map_or("", review),
-      })
-    })
+  Value::Array(pull_requests.iter().map(|pull_request| listed(pull_request)).collect()).to_string()
+}
+
+/// A pull request as `gh pr list --json …` writes it.
+fn listed(pull_request: &PullRequest) -> Value {
+  let (state, draft) = match pull_request.state() {
+    PullRequestState::Open => ("OPEN", false),
+    PullRequestState::Draft => ("OPEN", true),
+    PullRequestState::Merged => ("MERGED", false),
+    PullRequestState::Closed => ("CLOSED", false),
+  };
+  let changes = pull_request.changes();
+  json!({
+    "number": pull_request.number(),
+    "title": pull_request.title(),
+    "url": pull_request.url(),
+    "state": state,
+    "isDraft": draft,
+    "headRefName": pull_request.head().as_str(),
+    "baseRefName": pull_request.base().as_str(),
+    "headRefOid": pull_request.head_sha().as_str(),
+    "author": { "login": pull_request.author() },
+    "additions": changes.additions,
+    "deletions": changes.deletions,
+    "changedFiles": changes.files,
+    "updatedAt": utc(pull_request.updated_at()),
+    "reviewDecision": pull_request.review_decision().map_or("", review),
+    "mergedAt": pull_request.merged_at().map(utc),
+    "closedAt": pull_request.closed_at().map(utc),
+    "isCrossRepository": pull_request.is_cross_repository(),
+  })
+}
+
+/// `gh pr view --json …` of `pull_request`: as listed, with its checks one by one and its base revision.
+fn view(pull_request: &PullRequest) -> String {
+  let mut viewed = listed(pull_request);
+  let counts = pull_request.checks();
+  let check = |status: &str, conclusion: Option<&str>| json!({ "__typename": "CheckRun", "status": status, "conclusion": conclusion });
+  let rollup: Vec<Value> = std::iter::repeat_n(check("COMPLETED", Some("SUCCESS")), counts.passed as usize)
+    .chain(std::iter::repeat_n(check("IN_PROGRESS", None), counts.pending as usize))
+    .chain(std::iter::repeat_n(
+      check("COMPLETED", Some("FAILURE")),
+      counts.failed as usize,
+    ))
     .collect();
-  Value::Array(listed).to_string()
+  viewed["statusCheckRollup"] = Value::Array(rollup);
+  viewed["baseRefOid"] = json!(diffs::base(pull_request.number()));
+  viewed.to_string()
 }
 
 const fn review(decision: ReviewDecision) -> &'static str {
@@ -187,8 +215,16 @@ mod program {
       "@echo off\r\nsetlocal\r\nset \"HERE=%~dp0\"\r\nset /p MODE=<\"%HERE%gh-mode.txt\"\r\nset \"A=%HERE%gh\\\"\r\n\
        if \"%~1\"==\"--version\" (type \"%A%version.txt\" & exit /b 0)\r\n\
        if \"%~1\"==\"auth\" goto auth\r\nif \"%~1 %~2\"==\"pr list\" goto list\r\n\
+       if \"%~1 %~2\"==\"pr view\" goto view\r\nif \"%~2\"==\"--allow-escape-sequences\" goto compare\r\n\
        if \"%~1 %~2\"==\"api graphql\" goto checks\r\nif \"%~1\"==\"api\" (type \"%A%rate.json\" & exit /b 0)\r\n\
        exit /b 1\r\n\
+       :view\r\nif \"%MODE%\"==\"unreachable\" (type \"%A%network.err\" 1>&2 & exit /b 1)\r\n\
+       if \"%MODE%\"==\"server-error\" (type \"%A%server.err\" 1>&2 & exit /b 1)\r\n\
+       if \"%MODE%\"==\"rate-limited\" (type \"%A%rate-limited.err\" 1>&2 & exit /b 1)\r\n\
+       if exist \"%A%view-%~3.json\" (type \"%A%view-%~3.json\" & exit /b 0)\r\n\
+       echo GraphQL: Could not resolve to a PullRequest with the number of %~3. (repository.pullRequest) 1>&2\r\n\
+       exit /b 1\r\n\
+       :compare\r\nset \"R=%~7\"\r\nset \"H=%R:*...=%\"\r\ntype \"%A%diff-%H%.diff\" & exit /b 0\r\n\
        :auth\r\nif \"%MODE%\"==\"wrong-account\" (type \"%A%auth-other.json\" & exit /b 0)\r\n\
        if \"%MODE%\"==\"missing-scope\" (type \"%A%auth-no-scope.json\" & exit /b 0)\r\n\
        if \"%MODE%\"==\"not-signed-in\" (type \"%A%auth-none.json\" & type \"%A%auth-none.err\" 1>&2 & exit /b 1)\r\n\
@@ -237,6 +273,15 @@ mod program {
          rate-limited) cat \"$a/rate-limited.err\" >&2; exit 1;;\n\
        esac\n\
        if [ \"$6\" = closed ]; then cat \"$a/closed.json\"; else cat \"$a/open.json\"; fi; exit 0;;\n\
+       \"pr view\") case \"$mode\" in\n\
+         unreachable) cat \"$a/network.err\" >&2; exit 1;;\n\
+         server-error) cat \"$a/server.err\" >&2; exit 1;;\n\
+         rate-limited) cat \"$a/rate-limited.err\" >&2; exit 1;;\n\
+       esac\n\
+       if [ -f \"$a/view-$3.json\" ]; then cat \"$a/view-$3.json\"; exit 0; fi\n\
+       echo \"GraphQL: Could not resolve to a PullRequest with the number of $3. (repository.pullRequest)\" >&2; \
+       exit 1;;\n\
+       \"api --allow-escape-sequences\") h=\"${{7##*...}}\"; cat \"$a/diff-$h.diff\"; exit 0;;\n\
        \"api graphql\") if grep -q \"{first_open}\"; then cat \"$a/checks-open.json\"; \
        else cat \"$a/checks-closed.json\"; fi; exit 0;;\n\
        \"api \"*) cat \"$a/rate.json\"; exit 0;;\n\

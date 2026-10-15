@@ -254,7 +254,7 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
       at(ProjectPage::PullRequests(PullRequestTab::Merged)),
       placeholder("Pull requests"),
     ),
-    (at(ProjectPage::PullRequest(142)), placeholder("Pull request #142")),
+    (at(ProjectPage::PullRequest(142)), Vec::new()),
     (at(ProjectPage::Usage), placeholder("Usage")),
     (at(ProjectPage::Pipelines), placeholder("Pipelines")),
     (at(ProjectPage::Agents), placeholder("Agents")),

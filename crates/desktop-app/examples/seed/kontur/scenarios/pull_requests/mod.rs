@@ -7,13 +7,14 @@
 //! `server-error`, `rate-limited`), so QA reaches a state by writing the word and pressing Refresh; removing
 //! the program reaches *gh not found*.
 
+mod diffs;
 mod gh;
 
 use PullRequestState::{Closed, Draft, Merged, Open};
 use orchester_core::{
   connection::{GitHubHost, GitHubLogin},
   diff::Changes,
-  pull_request::{CheckRollup, PullRequest, PullRequestParts, PullRequestState, ReviewDecision},
+  pull_request::{CheckRollup, PullRequest, PullRequestParts, PullRequestState, ReviewDecision, SyncAttempt},
   repository::{GitHubRepo, RemoteName, RepoPermission, RepositoryLink, RepositoryView},
   revision::Revision,
   run::BranchName,
@@ -122,12 +123,12 @@ const PULL_REQUESTS: [Listed; 10] = [
   ),
   listed(
     125,
-    "Try a GraphQL client for the sync",
-    From::Branch("spike/graphql-client"),
+    "Regenerate the API client",
+    From::Branch("spike/regenerate-api-client"),
     Closed,
     None,
     (1, 0, 1),
-    (9, 320, 12),
+    (412, 38_214, 9_870),
     6 * 24 * 60,
   ),
 ];
@@ -221,6 +222,11 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   );
   kontur.db.save_repository_link(&link)?;
   kontur.db.replace_pull_requests(&repo, &pull_requests, kontur.ago(1))?;
+  let synced = SyncAttempt {
+    at: kontur.ago(1),
+    failure: None,
+  };
+  kontur.db.record_pull_request_sync(&repo, &synced)?;
   Ok(())
 }
 
@@ -251,6 +257,10 @@ fn pull_request(kontur: &Kontur, listed: &Listed, head: BranchName) -> Result<Pu
     },
     review_decision: listed.review,
     updated_at: kontur.ago(listed.updated_minutes_ago),
+    // Merged or closed as it was last updated.
+    merged_at: (listed.state == Merged).then(|| kontur.ago(listed.updated_minutes_ago)),
+    closed_at: matches!(listed.state, Merged | Closed).then(|| kontur.ago(listed.updated_minutes_ago)),
+    cross_repository: false,
   };
   PullRequest::new(&repo()?, parts).map_err(|error| SeedError::Invalid(error.to_string()))
 }

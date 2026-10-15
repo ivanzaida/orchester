@@ -25,6 +25,8 @@ fn domain_pull_requests_are_listed_with_their_task_and_links() {
   let repository = &all["repositories"][0];
   assert_eq!(repository["repository"], "github.com/ivanzaida/kontur");
   assert_eq!(repository["sync"], "synced", "{repository}");
+  assert!(repository["attempted_at"].is_number(), "{repository}");
+  assert_eq!(repository["paused_until"], Value::Null);
   assert_eq!(repository["link"], format!("/project/{project}/pull-requests"));
   let review = served.ok(
     "list_pull_requests",
@@ -57,11 +59,18 @@ fn domain_one_pull_request_is_read_by_number_after_a_sync() {
   );
   assert_eq!(merged["state"], "merged");
   assert_eq!(merged["review"], "approved");
+  assert!(merged["merged_at"].is_number(), "{merged}");
+  assert_eq!(merged["from_fork"], false);
   assert_eq!(merged["repository"]["sync"], "synced");
   let none = served.ok("get_pull_request", &json!({ "project": "Kontur", "number": 127 }));
   assert_eq!(none["task"], Value::Null);
   assert_eq!(none["checks"]["passed"], 0);
-  let missing = served.refused("get_pull_request", &json!({ "project": "Kontur", "number": 9999 }));
+  let unsynced = served.refused("get_pull_request", &json!({ "project": "Kontur", "number": 9999 }));
+  assert_eq!(unsynced["code"], "pull_request_not_synced", "{unsynced}");
+  let missing = served.refused(
+    "get_pull_request",
+    &json!({ "project": "Kontur", "number": 9999, "refresh": true }),
+  );
   assert_eq!(missing["code"], "pull_request_not_found", "{missing}");
   let everywhere = served.refused("list_pull_requests", &json!({ "refresh": true }));
   assert_eq!(everywhere["code"], "invalid_arguments", "{everywhere}");

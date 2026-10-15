@@ -11,9 +11,9 @@
 //! mounts [`tab`], both what was read last, so the count is of the files listed here and nothing is read
 //! twice.
 
-mod diff;
-mod files;
-mod listed;
+pub(crate) mod diff;
+pub(crate) mod files;
+pub(crate) mod listed;
 mod load;
 mod states;
 mod toolbar;
@@ -272,6 +272,7 @@ impl ChangesTab {
         index: selected.index,
         file: format!("{}:{}", selected.source.name(), selected.path).into(),
         source,
+        viewed: None,
       },
     );
     Row::new()
@@ -348,7 +349,11 @@ impl ChangesTab {
 
 /// ArrowDown and ArrowUp choose the next and the previous file of the list, unless a text field has the
 /// keys or a modifier is held.
-fn arrow_keys(listing: &FileListing, position: usize, select: files::SelectFile) -> impl Fn(KeyboardEvent) + use<> {
+pub(crate) fn arrow_keys(
+  listing: &FileListing,
+  position: usize,
+  select: files::SelectFile,
+) -> impl Fn(KeyboardEvent) + use<> {
   let files = listing.files.clone();
   move |event: KeyboardEvent| {
     let plain = !(event.ctrl || event.alt || event.meta || event.shift);

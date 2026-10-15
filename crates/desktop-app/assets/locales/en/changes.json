@@ -48,7 +48,8 @@
       "unchanged": "Moved from {{path}} without changes to its content.",
       "empty": "The file has no lines.",
       "omitted": "{{count}} more changed lines are not shown; the file is too large. Open the run's branch in your editor to see them.",
-      "renamedFrom": "from {{path}}"
+      "renamedFrom": "from {{path}}",
+      "viewed": "Viewed"
     },
     "noRun": {
       "title": "No run yet",

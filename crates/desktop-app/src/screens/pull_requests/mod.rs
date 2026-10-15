@@ -7,9 +7,11 @@
 //! Sync follows `docs/design/orchester-workspace.md`, "GitHub", rule 9: when the page opens, on Refresh, and
 //! every minute while it is shown; the timer lives with the page, so nothing polls once another screen
 //! replaces it. A failed sync keeps the last list under a notice; a rate limit holds syncs back until it
-//! resets. A pull request's own page is not built yet (`pull_request`).
+//! resets. A pull request's own page is `detail`.
 
+mod detail;
 mod header;
+mod labels;
 mod notice;
 mod query;
 mod row;
@@ -44,11 +46,10 @@ use self::{
   table::Rows,
   work::Actions,
 };
-use super::placeholder::titled;
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{ConnectionsView, ProjectPage, Route, Screen},
+  routes::{ConnectionsView, ProjectPage, Route},
   theme::{ExtraSpacing, PullRequestsSpacing},
   ui::{
     message::message_text,
@@ -69,10 +70,9 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, tab: PullRequestTab) -> Ele
   )
 }
 
-/// Pull request `number`'s own page, which is not built yet.
-pub fn pull_request(ctx: &mut Ctx, number: u64) -> Element {
-  let title = ctx.t_args("pull_requests.detail.title", [("number", number.to_string())]);
-  titled(ctx, Screen::PullRequests, &title)
+/// Pull request `number`'s own page.
+pub fn pull_request(ctx: &mut Ctx, project: &ShownProject, number: u64) -> Element {
+  detail::screen(ctx, project, number)
 }
 
 #[derive(Clone, PartialEq)]
@@ -212,10 +212,9 @@ impl PullRequestsScreen {
         .body(message_text(ctx, &reason)),
       )
     });
-    let page = page
-      .with_children(failed)
-      .with_children(notice)
-      .child(query::query(ctx, &self.choices));
+    // A notice goes under the search, over the rows it is about, as on the Tasks page.
+    let query = query::query(ctx, &self.choices);
+    let page = page.child(query).with_children(failed).with_children(notice);
     if !known {
       // Nothing was ever read: the first sync reads it, or its notice says why it did not.
       return match linked.failure {

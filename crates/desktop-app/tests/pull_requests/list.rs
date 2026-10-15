@@ -68,6 +68,11 @@ fn pull_requests_tabs_count_and_hold_their_pull_requests() {
   seeded.settled();
   assert_eq!(seeded.rows(), [131, 128, 127]);
   assert_eq!(seeded.text("pull-request-state-131"), "Merged Approved");
+  assert!(
+    seeded.text("pull-request-changes-131").ends_with("Merged 2 d ago"),
+    "{}",
+    seeded.text("pull-request-changes-131")
+  );
   assert_eq!(
     seeded.text("pull-requests-footer"),
     "3 merged pull requests · From this project’s repository"
@@ -116,8 +121,7 @@ fn pull_requests_row_opens_the_pull_request_and_its_task_key_the_task() {
     seeded.window.navigation().route_now(),
     Route::Project(seeded.project, ProjectPage::PullRequest(137))
   );
-  assert_eq!(
-    seeded.text("screen-pull_requests"),
-    "Pull request #137 This screen isn't built yet."
-  );
+  seeded.window.until("the pull request's page", |window| {
+    window.tree.get_element_by_id("pull-request-header").is_some()
+  });
 }

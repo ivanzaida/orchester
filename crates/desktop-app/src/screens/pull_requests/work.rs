@@ -110,7 +110,7 @@ fn list_action(ctx: &mut Ctx, open: &OpenProject, work: Work) -> ListAction {
         // Replaces an earlier "synced" event, so the status bar never keeps claiming a sync the latest
         // attempt did not repeat; the page's notice says why.
         Ok(PullRequestList::Linked(linked)) if linked.failure.is_some() => {
-          running.finish_as(Message::new("pullRequests.sync.notSynced"));
+          running.finish_as(orchester_workspace::pull_requests::not_synced());
         }
         Ok(PullRequestList::Linked(_)) => running.finish(),
         Err(reason) => running.fail(reason.clone()),
@@ -131,7 +131,7 @@ fn open_action(ctx: &mut Ctx, open: &OpenProject) -> OpenAction {
           .await?
           .map_err(|error| {
             tracing::error!(%error, number, "cannot open the pull request in the browser");
-            Message::new("pullRequests.openFailed")
+            orchester_workspace::pull_requests::open_failed()
           })
       };
       activity.track(operations::pull_request_open(&open, number), work).await

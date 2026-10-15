@@ -15,7 +15,7 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, VirtualizedList},
   core::{ElementRef, Signal},
@@ -36,7 +36,13 @@ use self::{
   rows::DiffRow,
 };
 use super::files::{FileSummary, change_letter};
-use crate::theme::{CodeText, ExtraColor, ExtraSpacing, ExtraTypography};
+use crate::{
+  theme::{CodeText, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
+  ui::{
+    icon::{Icon, icon},
+    tooltip::Tooltip,
+  },
+};
 
 /// A diff, by its key, and a file's position in it.
 type DiffAt = (Arc<str>, usize);
@@ -55,8 +61,11 @@ pub struct DiffViewProps {
   pub index: usize,
   /// Which file of the list it is, whatever its content: its source and path.
   pub file: Arc<str>,
-  /// Where the change was read, at the head's end ("checkpointed at 7c1e9f2").
+  /// Where the change was read, at the head's end ("checkpointed at 7c1e9f2"); empty for none.
   pub source: Arc<str>,
+  /// *Viewed*, which is not built yet: its box faded with a lock at the head's end, and why in the
+  /// tooltip (`Viewed` in `bVPuW`).
+  pub viewed: Option<Arc<str>>,
 }
 
 impl PartialEq for DiffViewProps {
@@ -66,6 +75,7 @@ impl PartialEq for DiffViewProps {
       && self.index == other.index
       && self.file == other.file
       && self.source == other.source
+      && self.viewed == other.viewed
   }
 }
 
@@ -136,7 +146,7 @@ impl Component for DiffView {
       });
     column
       .describe("highlighted", tokens.is_some().to_string())
-      .child(head(ctx, file, &props.source))
+      .child(head(ctx, file, &props))
       .child(list)
   }
 }
@@ -186,7 +196,7 @@ impl DiffView {
 }
 
 /// The file's change, path and counts, and where its change was read (`rIRdw`).
-fn head(ctx: &Ctx, file: &FileDiff, source: &str) -> Element {
+fn head(ctx: &mut Ctx, file: &FileDiff, props: &DiffViewProps) -> Element {
   let (letter, color) = change_letter(ctx, file.change());
   Row::new()
     .id("changes-diff-head")
@@ -211,13 +221,42 @@ fn head(ctx: &Ctx, file: &FileDiff, source: &str) -> Element {
     .with_children(moved_from(ctx, file))
     .with_children(FileSummary::of(file).counts(ctx, ExtraTypography::MonoKey.role()))
     .child(Row::new().flex(1.0))
-    .child(
-      Text::new(source)
+    .with_children((!props.source.is_empty()).then(|| {
+      Text::new(&props.source)
         .id("changes-diff-source")
         .variant(ExtraTypography::Note.role())
+        .nowrap()
+    }))
+    .with_children(props.viewed.as_ref().map(|reason| viewed(ctx, reason)))
+    .into()
+}
+
+/// *Viewed*, not built yet: an empty box, the word and a lock, faded, with why in the tooltip.
+fn viewed(ctx: &mut Ctx, reason: &Arc<str>) -> Element {
+  let box_side = Dimension::Px(IconSize::Base.size());
+  let viewed = Row::new()
+    .id("changes-diff-viewed")
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .opacity(DISABLED_OPACITY)
+    .describe("state", "unavailable")
+    .describe("reason", reason.clone())
+    .child(
+      Row::new()
+        .width(box_side)
+        .height(box_side)
+        .background(PaletteColor::SurfaceInput)
+        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+        .rounded(RadiusSize::Sm),
+    )
+    .child(
+      Text::new(&ctx.t("changes.diff.viewed"))
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextMuted)
         .nowrap(),
     )
-    .into()
+    .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted));
+  Tooltip::new("changes-diff-viewed", reason.clone()).wrap(ctx, viewed)
 }
 
 /// Where a renamed or copied file came from ("from old/path"), after its path.

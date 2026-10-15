@@ -43,11 +43,19 @@
       "noTask": "No linked task",
       "branches": "{{head}} → {{base}}",
       "changes": {
-        "one": "{{files}} file · +{{additions}} / −{{deletions}} · Updated {{updated}}",
-        "other": "{{files}} files · +{{additions}} / −{{deletions}} · Updated {{updated}}"
+        "updated": {
+          "one": "{{files}} file · +{{additions}} / −{{deletions}} · Updated {{ago}}",
+          "other": "{{files}} files · +{{additions}} / −{{deletions}} · Updated {{ago}}"
+        },
+        "merged": {
+          "one": "{{files}} file · +{{additions}} / −{{deletions}} · Merged {{ago}}",
+          "other": "{{files}} files · +{{additions}} / −{{deletions}} · Merged {{ago}}"
+        },
+        "closed": {
+          "one": "{{files}} file · +{{additions}} / −{{deletions}} · Closed {{ago}}",
+          "other": "{{files}} files · +{{additions}} / −{{deletions}} · Closed {{ago}}"
+        }
       },
-      "justNow": "just now",
-      "ago": "{{ago}} ago",
       "openInGitHub": "Open in GitHub"
     },
     "state": {
@@ -74,8 +82,7 @@
       "syncing": "Syncing…",
       "notConnected": "GitHub not connected",
       "notSynced": "Not synced yet",
-      "syncedJustNow": "Synced just now",
-      "synced": "Synced {{ago}} ago",
+      "synced": "Synced {{ago}}",
       "unreachable": "Last synced {{time}} · GitHub unreachable",
       "neverUnreachable": "Not synced · GitHub unreachable",
       "troubled": "Last synced {{time}} · GitHub is having trouble",
@@ -164,7 +171,66 @@
       "clear": "Clear search"
     },
     "detail": {
-      "title": "Pull request #{{number}}"
+      "title": "Pull request #{{number}}",
+      "groupSeparator": ",",
+      "task": "Task",
+      "context": "Head {{revision}} · {{status}}",
+      "loadFailed": "The pull request could not be read",
+      "tabs": {
+        "files": "Files changed",
+        "feedback": "Agent feedback",
+        "checks": "Agent checks",
+        "overview": "Overview",
+        "planned": "Agent feedback, Agent checks and Overview are planned."
+      },
+      "range": "Full PR · {{base}} → {{head}}",
+      "rangeHead": "Full PR · {{head}}",
+      "rangePlanned": "Choosing another revision range is planned.",
+      "total": {
+        "one": "{{files}} file · +{{additions}} / −{{deletions}}",
+        "other": "{{files}} files · +{{additions}} / −{{deletions}}"
+      },
+      "files": {
+        "heading": "FILES",
+        "find": "Find a file",
+        "findPlaceholder": "Find a file…",
+        "clear": "Clear"
+      },
+      "viewedPlanned": "Marking a file viewed is planned.",
+      "reading": {
+        "title": "Reading the pull request",
+        "detail": "Orchester reads the pull request and its diff from GitHub through gh."
+      },
+      "notRead": {
+        "title": "The pull request has not been read",
+        "detail": "The last sync did not list it and GitHub did not give it. The notice above says why; Refresh tries again."
+      },
+      "noChanges": {
+        "title": "No changes",
+        "detail": "The head revision has no changes against the base branch."
+      },
+      "tooLarge": {
+        "title": "Too large to show here",
+        "detail": "This pull request changes {{files}} files, +{{additions}} / −{{deletions}}. Orchester shows diffs of up to 300 files and 20,000 changed lines; review this one in GitHub.",
+        "unknown": "This pull request changes more than Orchester shows: diffs of up to 300 files and 20,000 changed lines. Review it in GitHub."
+      },
+      "unreadable": {
+        "title": "The diff could not be read",
+        "detail": "The diff is not in a format Orchester can read. Open the pull request in GitHub; the log has the details."
+      },
+      "notice": {
+        "unreachable": "Couldn’t reach GitHub",
+        "troubled": "GitHub is having trouble",
+        "mayHaveChanged": "The pull request may have changed since it was last read. Refresh tries again.",
+        "rateLimited": "GitHub accepts requests again in {{minutes}} min; until then this is what was read before.",
+        "rateLimitedUnknown": "GitHub did not say when the limit resets; until then this is what was read before.",
+        "account": "Reading waits until gh acts as the account this project expects; Pull requests shows the command to run.",
+        "notFound": "GitHub has no such pull request",
+        "notFoundDetail": "It was deleted, or the account gh uses cannot see it.",
+        "failed": "The pull request could not be read",
+        "failedFrom": "What shows was read at {{time}}. Refresh tries again; the log has the details.",
+        "failedNothing": "Refresh tries again; the log has the details."
+      }
     }
   }
 }

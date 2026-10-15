@@ -56,14 +56,14 @@ pub(super) fn status_line(ctx: &mut Ctx, shown: &Shown, now: Timestamp) -> Eleme
   match shown {
     Shown::After(SyncStatus::RateLimited { resets_at: Some(at) }) => {
       let hint = ctx.t_args("pull_requests.sync.resetsAt", [("time", display::clock(*at))]);
-      Tooltip::new("pull-requests-sync-status", hint).wrap(ctx, line)
+      Tooltip::new("pull-requests-sync-status", hint).end().wrap(ctx, line)
     }
     _ => line.into(),
   }
 }
 
 /// The icon, its color, the words' color and the words.
-fn parts(ctx: &Ctx, shown: &Shown, now: Timestamp) -> (Icon, PaletteColor, PaletteColor, Arc<str>) {
+pub(super) fn parts(ctx: &Ctx, shown: &Shown, now: Timestamp) -> (Icon, PaletteColor, PaletteColor, Arc<str>) {
   use PaletteColor::{Danger, TextMuted, TextSecondary, Warning};
   let status = match shown {
     Shown::NotConnected => {
@@ -136,11 +136,10 @@ fn parts(ctx: &Ctx, shown: &Shown, now: Timestamp) -> (Icon, PaletteColor, Palet
 
 /// *Synced just now* within a minute of `at`, else how long ago.
 fn synced(ctx: &Ctx, now: Timestamp, at: Timestamp) -> Arc<str> {
-  if now.unix_millis() - at.unix_millis() < MINUTE_MILLIS {
-    return ctx.t("pull_requests.sync.syncedJustNow");
-  }
-  let ago = message_text(ctx, &display::waited(now, at));
-  ctx.t_args("pull_requests.sync.synced", [("ago", ago)])
+  ctx.t_args(
+    "pull_requests.sync.synced",
+    [("ago", message_text(ctx, &display::ago(now, at)))],
+  )
 }
 
 fn rate_limited(ctx: &Ctx, now: Timestamp, resets_at: Option<Timestamp>) -> Arc<str> {

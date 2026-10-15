@@ -13,6 +13,7 @@ mod kontur;
 #[path = "../support/mod.rs"]
 mod support;
 
+mod detail;
 mod harness;
 mod list;
 mod states;
