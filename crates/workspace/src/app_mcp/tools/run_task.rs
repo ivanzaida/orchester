@@ -277,6 +277,7 @@ fn queue_failure(failure: QueueFailure) -> ToolError {
     QueueFailure::Preflight(_) => ToolError::refused("preflight", reasons),
     QueueFailure::Queue(_) => ToolError::refused("task_incomplete", reasons),
     QueueFailure::Changed => ToolError::refused("changed_meanwhile", reasons),
+    QueueFailure::PipelineChanged { .. } => ToolError::refused("pipeline_changed", reasons),
   }
 }
 
