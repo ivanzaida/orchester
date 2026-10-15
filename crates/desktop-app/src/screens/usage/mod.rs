@@ -37,7 +37,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::Ctx,
+    ctx::{Ctx, FutureState},
     theme::SpacingSize,
   },
   components::{Column, ScrollVertical},
@@ -46,7 +46,8 @@ use lurq::{
 };
 use orchester_core::{time::Timestamp, usage::Measure};
 use orchester_workspace::{
-  background, messages,
+  background,
+  messages::{self, Message},
   usage::{Dashboard, Scope, UsageData, UsageQuery},
 };
 
@@ -137,34 +138,7 @@ impl Component for UsageScreen {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let UsageProps { project, query } = ctx.props::<UsageProps>().clone();
     let now = Timestamp::now();
-    let services = Services::of(ctx);
-    let deps = (
-      project.feed.changes.get(),
-      project.feed.revision.get(),
-      self.saved.get(),
-      self.retry.get(),
-    );
-    let since = Dashboard::since(&query, now);
-    let (workspace, hold) = (services.workspace.clone(), services.hold);
-    let loaded = ctx
-      .future(
-        (project.open.repo_root.clone(), since, deps),
-        move |(root, since, _)| {
-          let (workspace, hold) = (workspace.clone(), hold.clone());
-          async move {
-            hold.released().await;
-            background::run(move || UsageData::read(&workspace, Scope::Project(&root), since, Timestamp::now()))
-              .await?
-              .map(Arc::new)
-              .map_err(|error| {
-                tracing::error!(%error, "cannot read the project's usage");
-                messages::store_error(&error)
-              })
-          }
-        },
-      )
-      .state()
-      .get();
+    let loaded = self.read(ctx, &project, Dashboard::since(&query, now));
     let name: Arc<str> = project.open.project.name().as_str().into();
     let dashboard = loaded
       .data
@@ -223,6 +197,37 @@ impl Component for UsageScreen {
 }
 
 impl UsageScreen {
+  /// The usage of `project` from `since` on, read off the UI thread again whenever its runs change, a
+  /// threshold is saved or Retry is pressed.
+  fn read(&self, ctx: &mut Ctx, project: &ShownProject, since: Timestamp) -> FutureState<UsageData, Message> {
+    let services = Services::of(ctx);
+    let deps = (
+      project.feed.changes.get(),
+      project.feed.revision.get(),
+      self.saved.get(),
+      self.retry.get(),
+    );
+    let (workspace, hold) = (services.workspace.clone(), services.hold);
+    ctx
+      .future(
+        (project.open.repo_root.clone(), since, deps),
+        move |(root, since, _)| {
+          let (workspace, hold) = (workspace.clone(), hold.clone());
+          async move {
+            hold.released().await;
+            background::run(move || UsageData::read(&workspace, Scope::Project(&root), since, Timestamp::now()))
+              .await?
+              .map_err(|error| {
+                tracing::error!(%error, "cannot read the project's usage");
+                messages::store_error(&error)
+              })
+          }
+        },
+      )
+      .state()
+      .get()
+  }
+
   /// The sections, or, when there is nothing to chart, why and the plan limits last reported.
   fn sections(&self, ctx: &mut Ctx, dashboard: &Arc<Dashboard>, requery: &Requery) -> Vec<Element> {
     let saved = self.saved.clone();

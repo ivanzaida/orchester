@@ -134,11 +134,8 @@ fn usage_page_names_filters_that_match_nothing() {
 fn usage_page_says_why_it_could_not_read_the_usage() {
   let mut page = Seeded::prepared("usage", false, |repo| {
     let db = rusqlite::Connection::open(repo.join(".orchester").join("orchester.db")).expect("the project database");
-    db.execute(
-      "UPDATE invocation_edit_progress SET body = 'not json'",
-      [],
-    )
-    .expect("damage the turns");
+    db.execute("UPDATE invocation_edit_progress SET body = 'not json'", [])
+      .expect("damage the turns");
   });
   page.go(UsageQuery::default());
   page.until("the failure", |page| page.shows("usage-load-failed"));

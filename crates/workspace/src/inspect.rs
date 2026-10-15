@@ -58,6 +58,7 @@ macro_rules! markers {
     impl $inspect for crate::project_setup::Creation {}
     impl $inspect for crate::pull_requests::Inbox {}
     impl $inspect for crate::pull_requests::detail::Detail {}
+    impl $inspect for crate::usage::UsageData {}
     impl $inspect for crate::recovery::InterruptedRun {}
     impl $inspect for crate::recovery::Recovery {}
     impl $inspect for crate::recovery::RecoveryState {}

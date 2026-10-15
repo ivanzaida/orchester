@@ -43,6 +43,29 @@ struct Fixture {
   first_run: RunId,
 }
 
+fn invocation(
+  run: &RunFacts,
+  (cli, model): (AgentProvider, &str),
+  (profile, name, step): (ResourceId, &str, &str),
+  (from, to): (Timestamp, Timestamp),
+) -> InvocationFacts {
+  InvocationFacts {
+    id: InvocationId::generate(),
+    run: run.id,
+    cli: Some(cli),
+    model: Some(model.into()),
+    profile: Some(name.into()),
+    profile_id: Some(profile),
+    account: None,
+    step: step.into(),
+    started_at: from,
+    ended_at: Some(to),
+    active_ms: u64::try_from(to.unix_millis() - from.unix_millis()).expect("ends after it starts"),
+    edit: None,
+    index: IndexGiven::Unknown,
+  }
+}
+
 /// KON-1 on Feature delivery, run 1: Builder implements on Codex (account `account`), 2 h on Sep 25; KON-2
 /// on Quick fix, run 2: Reviewer reviews on Claude, 1 h on Sep 26, and auto mode's reviewer judged one of
 /// its requests on haiku.
@@ -65,24 +88,6 @@ fn fixture() -> Fixture {
     run(1, "KON-1", (feature, "Feature delivery")),
     run(2, "KON-2", (quick, "Quick fix")),
   );
-  let invocation = |run: &RunFacts,
-                    (cli, model): (AgentProvider, &str),
-                    (profile, name, step): (ResourceId, &str, &str),
-                    (from, to): (Timestamp, Timestamp)| InvocationFacts {
-    id: InvocationId::generate(),
-    run: run.id,
-    cli: Some(cli),
-    model: Some(model.into()),
-    profile: Some(name.into()),
-    profile_id: Some(profile),
-    account: None,
-    step: step.into(),
-    started_at: from,
-    ended_at: Some(to),
-    active_ms: u64::try_from(to.unix_millis() - from.unix_millis()).expect("ends after it starts"),
-    edit: None,
-    index: IndexGiven::Unknown,
-  };
   let mut implement = invocation(
     &one,
     (AgentProvider::CodexCli, "gpt-5.5"),
@@ -149,11 +154,11 @@ fn rows(facts: &ProjectFacts, filter: &UsageFilter, by: GroupBy) -> Vec<orcheste
   grouped(std::slice::from_ref(facts), query, by)
 }
 
-fn spent_of(facts: &ProjectFacts, filter: UsageFilter) -> u64 {
+fn spent_of(facts: &ProjectFacts, filter: &UsageFilter) -> u64 {
   let query = UsageQuery {
     range: week(),
     grouping: Grouping::Day,
-    filter: &filter,
+    filter,
     now: on(30, 12),
   };
   UsageReport::build(std::slice::from_ref(facts), query).summary.spent()
@@ -225,7 +230,7 @@ fn usage_groups_filters_narrow_to_a_task_run_step_account_and_resource() {
   let with = |change: fn(&mut UsageFilter, &Fixture)| {
     let mut filter = UsageFilter::default();
     change(&mut filter, &fixture);
-    spent_of(facts, filter)
+    spent_of(facts, &filter)
   };
   assert_eq!(with(|filter, _| filter.tasks.push("kon-1".into())), 10_000);
   assert_eq!(
