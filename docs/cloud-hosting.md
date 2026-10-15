@@ -107,24 +107,12 @@ servers apply the same limits, so even a stolen root key cannot make a long-live
 
 ## Docker with Caddy
 
-[deploy/cloud](../deploy/cloud) has a `Dockerfile` (built from the repository root) and `compose.yaml` with the
-cloud, PostgreSQL 18 and Caddy. Caddy takes the certificate for the host of `ORCHESTER_CLOUD_PUBLIC_URL` and sends
-`/api/*` to the cloud. It keeps no access log, since the web front's paths carry one-time tokens. Every other path answers that the web front is not deployed yet. When the Next.js web front is deployed, it
-takes those paths. Its server calls `http://cloud:8090/api/v1` with the browser's `X-Forwarded-For`, and its
-address joins `ORCHESTER_CLOUD_TRUSTED_PROXIES`.
-
-Put the values into `deploy/cloud/.env` (never commit it):
-
-```sh
-ORCHESTER_CLOUD_PUBLIC_URL=https://orchester-cloud.lurq.dev
-POSTGRES_PASSWORD=…
-ORCHESTER_CLOUD_SMTP_URL=smtps://…:…@…:465
-ORCHESTER_CLOUD_SMTP_FROM=Orchester <no-reply@lurq.dev>
-ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY=…
-ORCHESTER_CLOUD_ROOT_PUBLIC_KEY=…
-```
-
-Then start it with `docker compose up -d --build` in `deploy/cloud`, and run the key ceremony.
+[deploy/cloud](../deploy/cloud) has a `Dockerfile` (built from the repository root), `compose.yaml` with the cloud,
+PostgreSQL 18 and Caddy, and `compose.web.yaml`, which adds the Next.js web front. Started together, Caddy takes the
+certificate for the host of `ORCHESTER_CLOUD_PUBLIC_URL`, sends `/api/*` to the cloud and every other path to the web
+front, whose server calls `http://cloud:8090/api/v1` with the browser's `X-Forwarded-For`. Caddy keeps no access
+log, since the web front's paths carry one-time tokens. [deploy/cloud/README.md](../deploy/cloud/README.md) has the
+environment, DNS, TLS, the SMTP relay, the first start, backups and upgrades.
 
 ## Running the tests
 
