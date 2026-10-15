@@ -28,6 +28,7 @@ use lurq::mcp::{
   },
 };
 use orchester_core::run::Answerer;
+use orchester_workspace::app_mcp;
 use parking_lot::Mutex;
 
 use super::clients::SessionMark;
@@ -379,11 +380,8 @@ impl ServerHandler for GuardedTools {
     self.tools.get_info()
   }
 
-  /// The revisions up to 2025-11-25, which this server implements. rmcp would also advertise 2026-07-28, whose
-  /// stateless lifecycle (no `initialize`, no sessions, `ttlMs` and `cacheScope` on list results) it does not
-  /// speak: a client asking for it gets the unsupported-version error and falls back to `initialize`.
   fn supported_protocol_versions(&self) -> Cow<'static, [ProtocolVersion]> {
-    Cow::Borrowed(ProtocolVersion::known_up_to(&ProtocolVersion::V_2025_11_25))
+    app_mcp::supported_protocol_versions()
   }
 
   async fn initialize(

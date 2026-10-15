@@ -1,10 +1,15 @@
-//! Which protocol revisions the server speaks. Claude Code opens with a `server/discover` probe for 2026-07-28 and
-//! takes that revision's stateless path when the answer lists it; the server does not implement it, so it declines
-//! with the unsupported-version error (-32022) that sends the client back to `initialize` on 2025-11-25.
+//! Which protocol revisions the servers speak: the app's own and the Orchestrator chat's per-turn one. Claude Code
+//! opens with a `server/discover` probe for 2026-07-28 and takes that revision's stateless path when the answer
+//! lists it; no Orchester server implements it, so each declines with the unsupported-version error (-32022) that
+//! sends the client back to `initialize` on 2025-11-25.
 
+use lurq::app::App;
+use orchester_app::{i18n, mcp::chat::ChatServers};
+use orchester_core::id::{ChatId, ChatMessageId, ProjectId};
+use orchester_workspace::orchestrator::tools::ChatScope;
 use serde_json::{Value, json};
 
-use super::{Served, http::post};
+use super::{Endpoint, Served, http::post, support::Data};
 
 const UNSUPPORTED_PROTOCOL_VERSION: i64 = -32022;
 const NEWER: &str = "2026-07-28";
@@ -21,15 +26,15 @@ fn on_the_newer_revision(id: &str, method: &str) -> Value {
   })
 }
 
-/// Asserts `served` declines `method` on the newer revision, naming only revisions up to 2025-11-25.
-fn assert_declined(served: &Served, method: &str) {
+/// Asserts the server at `endpoint` declines `method` on the newer revision, naming only revisions up to
+/// 2025-11-25.
+fn assert_declined(endpoint: &Endpoint, method: &str) {
   let headers = [
-    ("Authorization", served.bearer()),
-    ("Mcp-Method", method.to_owned()),
-    ("Mcp-Protocol-Version", NEWER.to_owned()),
+    ("Authorization", endpoint.bearer.as_str()),
+    ("Mcp-Method", method),
+    ("Mcp-Protocol-Version", NEWER),
   ];
-  let headers: Vec<(&str, &str)> = headers.iter().map(|(name, value)| (*name, value.as_str())).collect();
-  let response = post(served.port, &headers, &on_the_newer_revision("probe-1", method));
+  let response = post(endpoint.port, &headers, &on_the_newer_revision("probe-1", method));
   let message = response
     .message
     .unwrap_or_else(|| panic!("{method} answers: {}", response.text));
@@ -49,24 +54,61 @@ fn assert_declined(served: &Served, method: &str) {
   assert!(supported.iter().all(|version| *version < NEWER), "{supported:?}");
 }
 
-#[test]
-fn the_newer_stateless_revision_is_declined_so_clients_fall_back_to_initialize() {
-  let served = Served::start(true);
-  assert_declined(&served, "server/discover");
-  assert_declined(&served, "tools/list");
+/// Asserts the server at `endpoint` declines the newer revision and that `initialize` asking for it agrees on
+/// 2025-11-25.
+fn assert_falls_back_to_initialize(endpoint: &Endpoint) {
+  assert_declined(endpoint, "server/discover");
+  assert_declined(endpoint, "tools/list");
   let initialize = json!({
     "jsonrpc": "2.0", "id": 1, "method": "initialize",
     "params": { "protocolVersion": NEWER, "capabilities": {}, "clientInfo": { "name": "test", "version": "1" } },
   });
-  let response = post(served.port, &[("Authorization", &served.bearer())], &initialize);
+  let response = post(endpoint.port, &[("Authorization", &endpoint.bearer)], &initialize);
   let message = response.message.expect("initialize answers");
   assert_eq!(message["result"]["protocolVersion"], "2025-11-25", "{message}");
 }
 
 #[test]
+fn the_newer_stateless_revision_is_declined_so_clients_fall_back_to_initialize() {
+  let served = Served::start(true);
+  assert_falls_back_to_initialize(&served.endpoint());
+}
+
+#[test]
 fn clients_on_2025_11_25_list_the_tools() {
   let served = Served::start(true);
-  let session = served.session_on("2025-11-25");
-  let names = served.tool_names(&session);
+  let endpoint = served.endpoint();
+  let names = endpoint.tool_names(&endpoint.session_on("2025-11-25"));
   assert!(names.iter().any(|name| name == "app_state"), "{names:?}");
+}
+
+#[test]
+fn the_chat_server_declines_the_newer_revision_and_lists_its_tools_on_2025_11_25() {
+  let data = Data::new();
+  let launch = data.launch();
+  let services = launch.services().expect("the session starts");
+  let app = App::new();
+  i18n::install(&app).expect("bundled locales load");
+  let scope = ChatScope {
+    project: ProjectId::generate(),
+    name: "Kontur".to_owned(),
+    root: data.dir.path().to_path_buf(),
+    chat: ChatId::generate(),
+  };
+  let servers = ChatServers::default();
+  let tools = servers
+    .serve_turn(services, app.i18n().clone(), (scope, ChatMessageId::generate()))
+    .expect("the turn's tools are served");
+  let port = tools
+    .url
+    .rsplit_once(':')
+    .and_then(|(_, rest)| rest.trim_end_matches("/mcp").parse().ok())
+    .unwrap_or_else(|| panic!("a loopback address with a port: {}", tools.url));
+  let endpoint = Endpoint {
+    port,
+    bearer: format!("Bearer {}", tools.token.expose()),
+  };
+  assert_falls_back_to_initialize(&endpoint);
+  let names = endpoint.tool_names(&endpoint.session_on("2025-11-25"));
+  assert!(names.iter().any(|name| name == "list_tasks"), "{names:?}");
 }

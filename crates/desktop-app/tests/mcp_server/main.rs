@@ -93,45 +93,16 @@ impl Served {
     format!("Bearer {}", self.token)
   }
 
+  fn endpoint(&self) -> Endpoint {
+    Endpoint {
+      port: self.port,
+      bearer: self.bearer(),
+    }
+  }
+
   /// A new MCP session, initialized.
   fn session(&self) -> String {
-    self.session_on("2025-06-18")
-  }
-
-  /// A new MCP session on protocol `version`, initialized.
-  fn session_on(&self, version: &str) -> String {
-    let initialize = json!({
-      "jsonrpc": "2.0", "id": 1, "method": "initialize",
-      "params": { "protocolVersion": version, "capabilities": {}, "clientInfo": { "name": "test", "version": "1" } },
-    });
-    let response = post(self.port, &[("Authorization", &self.bearer())], &initialize);
-    assert_eq!(response.status, 200, "{}", response.text);
-    let agreed = &response.message.as_ref().expect("initialize answers")["result"]["protocolVersion"];
-    assert_eq!(agreed, version, "the server speaks {version}");
-    let session = response.session.expect("the server opens a session");
-    let initialized = json!({ "jsonrpc": "2.0", "method": "notifications/initialized" });
-    post(
-      self.port,
-      &[("Authorization", &self.bearer()), ("Mcp-Session-Id", &session)],
-      &initialized,
-    );
-    session
-  }
-
-  fn tool_names(&self, session: &str) -> Vec<String> {
-    let list = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {} });
-    let response = post(
-      self.port,
-      &[("Authorization", &self.bearer()), ("Mcp-Session-Id", session)],
-      &list,
-    );
-    let message = response.message.expect("tools/list answers");
-    message["result"]["tools"]
-      .as_array()
-      .expect("a list of tools")
-      .iter()
-      .filter_map(|tool| tool["name"].as_str().map(str::to_owned))
-      .collect()
+    self.endpoint().session_on("2025-06-18")
   }
 
   /// Calls `tool` and runs the event loop's part until the answer arrives.
@@ -146,6 +117,50 @@ impl Served {
       thread::sleep(Duration::from_millis(5));
     }
     request.join().expect("the request thread ends")
+  }
+}
+
+/// Where a server listens and the `Authorization` header it takes.
+struct Endpoint {
+  port: u16,
+  bearer: String,
+}
+
+impl Endpoint {
+  /// A new MCP session on protocol `version`, initialized.
+  fn session_on(&self, version: &str) -> String {
+    let initialize = json!({
+      "jsonrpc": "2.0", "id": 1, "method": "initialize",
+      "params": { "protocolVersion": version, "capabilities": {}, "clientInfo": { "name": "test", "version": "1" } },
+    });
+    let response = post(self.port, &[("Authorization", &self.bearer)], &initialize);
+    assert_eq!(response.status, 200, "{}", response.text);
+    let agreed = &response.message.as_ref().expect("initialize answers")["result"]["protocolVersion"];
+    assert_eq!(agreed, version, "the server speaks {version}");
+    let session = response.session.expect("the server opens a session");
+    let initialized = json!({ "jsonrpc": "2.0", "method": "notifications/initialized" });
+    post(
+      self.port,
+      &[("Authorization", &self.bearer), ("Mcp-Session-Id", &session)],
+      &initialized,
+    );
+    session
+  }
+
+  fn tool_names(&self, session: &str) -> Vec<String> {
+    let list = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {} });
+    let response = post(
+      self.port,
+      &[("Authorization", &self.bearer), ("Mcp-Session-Id", session)],
+      &list,
+    );
+    let message = response.message.expect("tools/list answers");
+    message["result"]["tools"]
+      .as_array()
+      .expect("a list of tools")
+      .iter()
+      .filter_map(|tool| tool["name"].as_str().map(str::to_owned))
+      .collect()
   }
 }
 
@@ -216,7 +231,7 @@ fn requests_without_the_token_or_from_a_web_origin_are_refused() {
 #[test]
 fn one_server_hosts_lurqs_window_tools_and_the_apps_own() {
   let served = Served::start(true);
-  let names = served.tool_names(&served.session());
+  let names = served.endpoint().tool_names(&served.session());
   for tool in [
     "app_state",
     "navigate",
@@ -237,7 +252,7 @@ fn one_server_hosts_lurqs_window_tools_and_the_apps_own() {
 fn every_lurq_tool_is_known_as_looking_or_input() {
   use orchester_app::mcp::input_gate::{INPUT, LOOKING};
   let served = Served::start(true);
-  let names = served.tool_names(&served.session());
+  let names = served.endpoint().tool_names(&served.session());
   for name in names.iter().filter(|name| name.starts_with("lurq_")) {
     assert!(
       LOOKING.contains(&name.as_str()) || INPUT.contains(&name.as_str()),
@@ -250,7 +265,7 @@ fn every_lurq_tool_is_known_as_looking_or_input() {
 fn without_window_control_agents_only_look() {
   let mut served = Served::start(false);
   let session = served.session();
-  let names = served.tool_names(&session);
+  let names = served.endpoint().tool_names(&session);
   assert!(names.iter().any(|name| name == "app_state") && names.iter().any(|name| name == "lurq_screenshot"));
   for tool in ["navigate", "set_theme", "lurq_interact"] {
     assert!(!names.iter().any(|name| name == tool), "{tool} is not listed");

@@ -8,6 +8,7 @@
 //! stop with the session.
 
 use std::{
+  borrow::Cow,
   collections::HashMap,
   path::{Path, PathBuf},
   sync::Arc,
@@ -20,7 +21,7 @@ use lurq::{
     ErrorData as McpError, ServerHandler,
     model::{
       CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation, ListToolsResult,
-      PaginatedRequestParams, ServerCapabilities, ServerConfig,
+      PaginatedRequestParams, ProtocolVersion, ServerCapabilities, ServerConfig,
     },
     service::RequestContext,
   },
@@ -155,6 +156,10 @@ impl ServerHandler for ChatHandler {
     info.server_info = Implementation::new(format!("{APP_NAME}-orchestrator"), env!("CARGO_PKG_VERSION").to_owned());
     info.instructions = Some(INSTRUCTIONS.to_owned());
     info
+  }
+
+  fn supported_protocol_versions(&self) -> Cow<'static, [ProtocolVersion]> {
+    app_mcp::supported_protocol_versions()
   }
 
   async fn list_tools(

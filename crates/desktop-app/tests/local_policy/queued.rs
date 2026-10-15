@@ -66,3 +66,31 @@ fn local_policy_queued_origin_scope_revocation_and_protection_counts_are_preserv
   gate.bind_window_control(false);
   assert!(!fresh.recheck(), "scope revocation");
 }
+
+/// Synthetic input on a Local integration control while another tab asks to confirm a widening: reading the
+/// input's consent and whether the gate protects takes the gate's workspace lock twice, and must not deadlock the
+/// event loop.
+#[test]
+fn local_policy_queued_input_beside_a_widening_question_does_not_deadlock() {
+  let scratch = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-policy-tests");
+  std::fs::create_dir_all(&scratch).expect("scratch");
+  let dir = tempfile::tempdir_in(scratch).expect("private db");
+  let workspace = Workspace::new(AppDb::open(&dir.path().join("app.db")).expect("db"));
+  let gate = InputGate::default();
+  gate.bind_permissions(workspace);
+  gate.bind_window_control(true);
+  let (done, finished) = std::sync::mpsc::channel();
+  std::thread::spawn(move || {
+    for widening in [Guarded::PermissionWidening, Guarded::ApprovalWidening] {
+      let _question = gate.protect(widening);
+      let input = with_synthetic_input(|| gate.local_input(input_source()));
+      done.send(input.allowed()).expect("the test waits");
+    }
+  });
+  for widening in ["permission", "approval"] {
+    let allowed = finished
+      .recv_timeout(std::time::Duration::from_secs(10))
+      .unwrap_or_else(|_| panic!("reading local input beside a {widening} question deadlocked"));
+    assert!(!allowed, "without consent a {widening} question still protects");
+  }
+}

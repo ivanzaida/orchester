@@ -76,6 +76,10 @@
     },
     "emptyNeedsYou": {
       "detail": "A task shows here while its run waits for an answer, an approval or a decision."
+    },
+    "outsideTasks": {
+      "body": "This list shows tasks only. The Needs you panel lists everything that waits for you.",
+      "open": "Open Needs you"
     }
   }
 }
