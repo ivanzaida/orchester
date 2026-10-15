@@ -1,0 +1,36 @@
+.person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-tight);
+  min-width: 0;
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-hairline);
+  min-width: 0;
+}
+
+.nameLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+}
+
+.name {
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-primary);
+}
+
+.you {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.username {
+  font-family: var(--font-mono);
+  font-size: var(--text-address);
+  color: var(--color-text-muted);
+}

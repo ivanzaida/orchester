@@ -6,9 +6,9 @@ import styles from "./table.module.css";
  * A table of people in a panel (`mnZHf` head, `ZXrAd` member row, `CSg3J`/`LmtoQ` people): the app gives each its
  * columns as a class, so a head and its rows line up. On a phone the head hides and the cells wrap under the person.
  */
-export function TableHead({ columns, children }: { columns: string; children: ReactNode }) {
+export function TableHead({ columns, children }: { columns: string | undefined; children: ReactNode }) {
   return (
-    <div className={`${styles.head} ${columns}`} role="row">
+    <div className={`${styles.head} ${columns ?? ""}`} role="row">
       {children}
     </div>
   );
@@ -22,9 +22,9 @@ export function HeadCell({ children, end }: { children?: ReactNode; end?: boolea
   );
 }
 
-export function TableRow({ columns, active, children }: { columns: string; active?: boolean; children: ReactNode }) {
+export function TableRow({ columns, active, children }: { columns: string | undefined; active?: boolean; children: ReactNode }) {
   return (
-    <div className={`${styles.row} ${columns}${active ? ` ${styles.active}` : ""}`} role="row">
+    <div className={`${styles.row} ${columns ?? ""}${active ? ` ${styles.active}` : ""}`} role="row">
       {children}
     </div>
   );

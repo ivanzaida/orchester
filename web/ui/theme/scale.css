@@ -127,6 +127,8 @@
   --footer-spacer: block;
   --footer-links-gap: var(--space-footer-links);
   --footer-leading: normal;
+  /* An app may leave out its promise on a phone (the server admin's `mYBka` footer shows only the version). */
+  --footer-promise: block;
 
   /* List rows: glyph, text and actions side by side; on a phone the actions go under the text (`F9QYD`). */
   --row-columns: auto minmax(0, 1fr) auto;

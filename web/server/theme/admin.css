@@ -1,0 +1,96 @@
+/*
+ * The server admin's layout values (layer *Server admin* `sJK6L` of data/orchester2.pen: `FCQCr` and its pages,
+ * `mYBka` on a phone). The UI kit's theme holds everything shared; this file holds only what the admin's own frames
+ * need, and is the only admin file with literals.
+ */
+
+:root {
+  /* The signed-in pages: header, then the 184 px nav and the 920 px main in a 1160 px wrap (`m5Ftn`, `v4xAp`). */
+  --admin-body-padding: var(--space-page-y) var(--space-section) 72px;
+  --admin-wrap: 1160px;
+  --admin-wrap-gap: 56px;
+  --admin-nav: flex;
+  --admin-nav-width: 184px; /* `EJ8tl` */
+  --admin-tabs: none;
+  --admin-main-gap: var(--space-xl); /* `r2QeJO` */
+  --admin-project-gap: 20px; /* a project's pages `Ej9GL` */
+  --admin-settings-gap: 28px; /* Settings `JzPl5` */
+  --admin-head-direction: row; /* `T7GSXZ` */
+  --admin-head-align: flex-end;
+  --admin-head-action-grow: none;
+
+  /* Rows and tables. */
+  --admin-setting-columns: 170px minmax(0, 1fr); /* `YLPMo` */
+  --admin-member-columns: minmax(0, 1fr) 150px 130px 110px; /* `mnZHf` */
+  --admin-people-columns: minmax(0, 1fr) 150px 80px 100px 230px; /* `CSg3J` */
+  --admin-cell-state: 110px; /* `TzSDa` */
+  --admin-cell-when: 170px; /* `EmAU7`, `jZItk` */
+  --admin-cell-actions: 110px; /* `ducCb` */
+  --admin-cell-display: flex;
+  --admin-form-indent: 46px; /* an invite form under its glyph `FEMJK` */
+  --admin-form-direction: row;
+  --admin-role-select: 150px; /* `sYVXo` */
+  --admin-button-drop: 22px; /* a button beside a labelled field lines up with its box `nkvu5` */
+  --admin-search: 260px; /* `N8wkG` */
+  --admin-facts-align: flex-end; /* a project row's facts `CpmlY` */
+  --admin-created: block;
+  /* The waiting computer's callout: a panel on a wide page (`YMZ6N`), a warning on a phone (`A7hWOC`). */
+  --admin-waiting-fill: var(--color-surface-panel);
+  --admin-waiting-stroke: var(--color-border-strong);
+  --admin-waiting-icon: var(--color-text-secondary);
+  --admin-waiting-direction: row;
+  --admin-waiting-align: center;
+  --admin-field: 360px; /* a setting's field `h8OLW5` */
+  --admin-menu: 280px; /* the phone header's menu */
+
+  /* The pages before sign-in: centred cards (`DJUEA`, `ulIoG`, setup `t9q0y`…`w7qUM`). */
+  --admin-entry-padding: var(--space-section) var(--space-lg);
+  --admin-entry-card: 420px; /* `bWMCt` */
+  --admin-entry-card-wide: 440px; /* `y9I12Q`, the Cloud's `ijKZL` */
+  --admin-entry-card-done: 520px; /* `w7qUM` */
+  --admin-entry-card-padding: var(--space-section);
+  --admin-pair-direction: row; /* the sign-in card beside the certificate check `hxhwb` */
+  --admin-new-card: 640px; /* `gv7xE` */
+  --admin-owner-label: 112px; /* *Owner* beside *You, …* in `gv7xE` */
+}
+
+/* No room for the nav beside the main: the page tabs take its place, as on a phone (`mYBka`). */
+@media (max-width: 960px) {
+  :root {
+    --admin-nav: none;
+    --admin-tabs: flex;
+  }
+}
+
+/* A phone (`mYBka`, 390 wide). */
+@media (max-width: 600px) {
+  :root {
+    --admin-body-padding: var(--space-xl) var(--space-lg) var(--space-page-y);
+    --admin-main-gap: 18px; /* `oZHnD` */
+    --admin-head-direction: column;
+    --admin-head-align: stretch;
+    --admin-head-action-grow: 1;
+    --footer-promise: none;
+    --admin-setting-columns: minmax(0, 1fr);
+    --admin-member-columns: minmax(0, 1fr) auto;
+    --admin-people-columns: minmax(0, 1fr) auto;
+    --admin-cell-state: auto;
+    --admin-cell-when: auto;
+    --admin-cell-actions: auto;
+    --admin-form-indent: 0px;
+    --admin-form-direction: column;
+    --admin-role-select: 100%;
+    --admin-button-drop: 0px;
+    --admin-search: 100%;
+    --admin-field: 100%;
+    --admin-facts-align: flex-start;
+    --admin-created: none;
+    --admin-waiting-fill: var(--color-warning-muted);
+    --admin-waiting-stroke: transparent;
+    --admin-waiting-icon: var(--color-warning);
+    --admin-waiting-direction: column;
+    --admin-waiting-align: flex-start;
+    --admin-entry-card-padding: var(--space-xl);
+    --admin-pair-direction: column;
+  }
+}

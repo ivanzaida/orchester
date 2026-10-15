@@ -33,7 +33,7 @@ export function Mark() {
 export function Footer({ promise, aside }: { promise: string; aside: ReactNode }) {
   return (
     <footer className={styles.footer}>
-      <p>{promise}</p>
+      <p className={styles.promise}>{promise}</p>
       <span className={styles.spacer} />
       <span className={styles.links}>{aside}</span>
     </footer>

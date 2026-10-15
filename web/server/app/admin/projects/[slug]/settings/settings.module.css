@@ -1,0 +1,12 @@
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+.field {
+  width: var(--admin-field);
+  max-width: 100%;
+}

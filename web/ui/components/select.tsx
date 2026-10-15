@@ -16,6 +16,8 @@ export interface Option {
  */
 export function Select(props: {
   name: string;
+  /** When one page has two selects of one name. */
+  id?: string;
   label: string;
   options: readonly Option[];
   value?: string;
@@ -25,7 +27,7 @@ export function Select(props: {
   disabled?: boolean;
   onChange?: (event: ChangeEvent<HTMLSelectElement>) => void;
 }) {
-  const id = `select-${props.name}`;
+  const id = props.id ?? `select-${props.name}`;
   const control = (
     <span className={`${styles.box}${props.size === "row" ? ` ${styles.row}` : ""}`}>
       <select
