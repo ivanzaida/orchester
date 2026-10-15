@@ -97,7 +97,7 @@ pub fn counts(ctx: &Ctx, project: &ProjectFacts, dispatch: &Dispatch) -> Vec<Ele
       .align_items(Alignment::Center),
     Row::child,
   );
-  let usage = go(ProjectPage::Usage);
+  let usage = go(ProjectPage::Usage(Box::default()));
   vec![group.into(), tokens(ctx, project, &unknown, move || usage())]
 }
 

@@ -2,6 +2,7 @@ use orchester_core::{
   id::{ConnectionId, ResourceId},
   project::TaskKey,
 };
+use orchester_workspace::usage::{SEGMENT as USAGE, UsageQuery};
 
 use super::{
   CONNECTIONS, ConnectionsView, EDIT, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, RouteError,
@@ -21,7 +22,8 @@ pub enum ProjectPage {
   Task(TaskKey, TaskView),
   MergeQueue,
   PullRequests,
-  Usage,
+  /// The Usage page with its period, grouping and filters (boxed: a query holds many filters).
+  Usage(Box<UsageQuery>),
   Pipelines,
   NewPipeline,
   NewEmptyPipeline,
@@ -65,7 +67,7 @@ impl ProjectPage {
       Screen::NewTask => Self::NewTask,
       Screen::MergeQueue => Self::MergeQueue,
       Screen::PullRequests => Self::PullRequests,
-      Screen::Usage => Self::Usage,
+      Screen::Usage => Self::Usage(Box::default()),
       Screen::Pipelines => Self::Pipelines,
       Screen::Agents => Self::Agents,
       Screen::Instructions => Self::Instructions,
@@ -90,7 +92,7 @@ impl ProjectPage {
       Self::Task(..) => Screen::Task,
       Self::MergeQueue => Screen::MergeQueue,
       Self::PullRequests => Screen::PullRequests,
-      Self::Usage => Screen::Usage,
+      Self::Usage(_) => Screen::Usage,
       Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(_) => Screen::Pipelines,
       Self::Agents | Self::Agent(_) => Screen::Agents,
       Self::Instructions => Screen::Instructions,
@@ -131,6 +133,7 @@ impl ProjectPage {
       Self::NewEmptyPipeline => format!("{project_root}/pipelines/new?start=empty"),
       Self::Pipeline(id) => format!("{project_root}/pipelines/{id}"),
       Self::Agent(id) => format!("{project_root}/agents/{id}"),
+      Self::Usage(query) => super::usage::path(project_root, query),
       Self::Connections(view) => view.path(connections),
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
@@ -178,6 +181,7 @@ impl ProjectPage {
       },
       ["pipelines", id] => id.parse().map(Self::Pipeline).map_err(|_| RouteError::NoScreen),
       ["agents", id] => id.parse().map(Self::Agent).map_err(|_| RouteError::NoScreen),
+      [USAGE] => super::usage::take(params).map(|query| Self::Usage(Box::new(query))),
       [CONNECTIONS] => ConnectionsView::take(params).map(Self::Connections),
       [CONNECTIONS, NEW] => NewConnection::take(params).map(Self::NewConnection),
       [CONNECTIONS, id, EDIT] => id.parse().map(Self::EditConnection).map_err(|_| RouteError::NoScreen),

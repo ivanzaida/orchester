@@ -72,6 +72,12 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
       }
     }
     ProjectPage::EditTask(key) => insert("key", &key.to_string()),
+    ProjectPage::Usage(query) => {
+      let query = query.query_string();
+      if let Some(query) = query.strip_prefix('?') {
+        insert("query", query);
+      }
+    }
     ProjectPage::Connections(view) => {
       insert("tab", view.tab().name());
       if let Some(connection) = view.selected() {

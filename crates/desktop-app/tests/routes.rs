@@ -2,6 +2,7 @@
 //! resolves to its screen; a path that names nothing reads as a typed error that says why, and falls back
 //! in the table.
 
+use chrono::NaiveDate;
 use orchester_app::routes::{
   ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, NewConnection, OverviewTab, ProjectPage, Route,
   RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
@@ -9,7 +10,9 @@ use orchester_app::routes::{
 use orchester_core::{
   id::{ConnectionId, ProjectId},
   project::TaskKey,
+  usage::{DayRange, GroupBy, Period},
 };
+use orchester_workspace::usage::{UsageQuery, usage_link};
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const CONNECTION: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
@@ -64,6 +67,7 @@ fn every_route() -> Vec<Route> {
     at(ProjectPage::Pipeline(PROJECT.parse().expect("a resource id"))),
     at(ProjectPage::Agent(CONNECTION.parse().expect("an agent resource id"))),
     at(ProjectPage::EditTask(key("KON-7"))),
+    at(ProjectPage::Usage(Box::new(usage_query()))),
     at(ProjectPage::EditConnection(connection())),
     at(ProjectPage::Connections(
       ConnectionsView::new(ConnectionsTab::McpServers).with_selected(connection()),
@@ -432,6 +436,65 @@ fn agents_pages_have_exact_current_resource_paths_and_select_agents() {
   assert_eq!(
     Route::parse(&format!("/project/{PROJECT}/agents/not-an-id")),
     Err(RouteError::NoScreen)
+  );
+}
+
+/// The Usage page over a custom range by agent, filtered to a model with a space and an ampersand.
+fn usage_query() -> UsageQuery {
+  let range = DayRange::new(
+    NaiveDate::from_ymd_opt(2026, 10, 1).expect("a day"),
+    NaiveDate::from_ymd_opt(2026, 10, 15).expect("a day"),
+  )
+  .expect("a range");
+  let mut query = UsageQuery {
+    period: Period::Custom(range),
+    group: GroupBy::Agent,
+    ..UsageQuery::default()
+  };
+  query.filter.models.push(AWKWARD.into());
+  query.filter.tasks.push("KON-12".into());
+  query
+}
+
+#[test]
+fn usage_pages_carry_their_query_as_the_workspace_links_it() {
+  let query = usage_query();
+  let route = at(ProjectPage::Usage(Box::new(query.clone())));
+  assert_eq!(
+    route.path(),
+    usage_link(project(), &query),
+    "the router writes the link the tools return"
+  );
+  assert_eq!(Route::parse(&route.path()), Ok(route.clone()));
+  assert_eq!(route.nav_screen(), Screen::Usage);
+  assert_eq!(
+    at(ProjectPage::Usage(Box::default())).path(),
+    format!("/project/{PROJECT}/usage")
+  );
+  let table = routes();
+  let chain = table.resolve(&route.path());
+  assert_eq!(
+    chain.last().expect("the usage route resolves").pattern_raw(),
+    route.pattern()
+  );
+  for (query, param) in [
+    ("period=week", "period"),
+    ("group=month", "group"),
+    ("from=2026-10-01", "from"),
+  ] {
+    assert!(
+      matches!(
+        Route::parse(&format!("/project/{PROJECT}/usage?{query}")),
+        Err(RouteError::InvalidParam { param: given, .. }) if given == param
+      ),
+      "{query}"
+    );
+  }
+  assert_eq!(
+    Route::parse(&format!("/project/{PROJECT}/usage?tab=table")),
+    Err(RouteError::UnexpectedParam {
+      param: "tab".to_owned()
+    })
   );
 }
 

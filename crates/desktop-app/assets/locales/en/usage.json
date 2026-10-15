@@ -1,0 +1,291 @@
+{
+  "usage": {
+    "title": "Usage",
+    "description": "Tokens {{project}}’s agents used, and how close each CLI is to its plan limits.",
+    "unknown": "—",
+    "percent": "{{value}}%",
+    "runLabel": "{{task}} · Run {{run}}",
+    "listSeparator": ", ",
+    "sentenceSeparator": " ",
+    "groupSeparator": ",",
+    "loadFailed": "Usage could not be read",
+    "retry": "Retry",
+    "loading": {
+      "tokens": "Reading token usage from {{project}}’s runs…",
+      "limits": "Reading plan limit snapshots…"
+    },
+    "period": {
+      "today": "Today",
+      "week": "7 days",
+      "month": "30 days",
+      "custom": "Custom…"
+    },
+    "groupBy": {
+      "hour": "By hour",
+      "day": "By day",
+      "hourUnavailable": "For ranges up to 7 days"
+    },
+    "readback": {
+      "compared": "{{range}} · compared with {{previous}}",
+      "today": "Today, {{day}} until {{time}}"
+    },
+    "custom": {
+      "title": "Custom range",
+      "from": "From",
+      "to": "To",
+      "hint": "Dates as 2026-09-01.",
+      "reversed": "The range ends before it starts.",
+      "unreadable": "Type both dates as 2026-09-01.",
+      "show": "Show {{range}}",
+      "showNothing": "Show range"
+    },
+    "filters": {
+      "cli": "CLI",
+      "model": "Model",
+      "profile": "Agent profile",
+      "pipeline": "Pipeline",
+      "tag": "Tag",
+      "task": "Task",
+      "run": "Run",
+      "step": "Step",
+      "account": "Account",
+      "defaultAccount": "Default",
+      "someOf": "{{filter}} · {{count}} of {{total}}",
+      "search": "Search",
+      "reading": "Reading the period’s values…",
+      "noTags": "No tags yet",
+      "noMatch": "Nothing matches",
+      "nothing": "Nothing in this period",
+      "tagRuns": "{{tag}} · {{count}} runs",
+      "remove": "Remove {{filter}} {{value}}",
+      "clear": "Clear filters",
+      "named": "{{filter}}: {{values}}",
+      "noUsage": "No usage matches these filters",
+      "nothingDetail": "No run in {{range}} matches {{filters}}. {{project}} has {{count}} runs in this period."
+    },
+    "date": {
+      "day": "{{month}} {{day}}",
+      "weekday": "{{weekday}} {{day}}",
+      "longDay": "{{weekday}}, {{day}}",
+      "range": "{{from}} – {{to}}",
+      "rangeInMonth": "{{from}} – {{to}}",
+      "today": "Today",
+      "yesterday": "yesterday",
+      "todayAt": "today {{time}}",
+      "yesterdayAt": "yesterday {{time}}",
+      "dateTime": "{{day}}, {{time}}"
+    },
+    "duration": {
+      "hours": "{{hours}}h {{minutes}}m",
+      "minutes": "{{minutes}}m",
+      "underMinute": "under a minute"
+    },
+    "change": {
+      "percent": {
+        "more": "{{amount}}% more than {{range}}",
+        "less": "{{amount}}% less than {{range}}"
+      },
+      "count": {
+        "more": "{{amount}} more than {{range}}",
+        "less": "{{amount}} fewer than {{range}}"
+      },
+      "points": {
+        "more": "{{amount}} points more than {{range}}",
+        "less": "{{amount}} points less than {{range}}",
+        "oneMore": "{{amount}} point more than {{range}}",
+        "oneLess": "{{amount}} point less than {{range}}"
+      },
+      "same": "same as {{range}}",
+      "noBaseline": "none in {{range}}",
+      "unknown": "no share in {{range}}"
+    },
+    "cli": {
+      "codex": "Codex",
+      "claude": "Claude",
+      "other": "Other CLI",
+      "anthropic": "Anthropic API",
+      "openai": "OpenAI API"
+    },
+    "summary": {
+      "spent": "Spent tokens",
+      "runs": "Runs",
+      "agentTime": "Agent time",
+      "cacheShare": "Cache share",
+      "failedRuns": "Failed runs",
+      "spentDetail": "input − cached + output",
+      "runsDetail": "{{finished}} finished · {{failed}} failed",
+      "agentTimeDetail": "active time only",
+      "cacheDetail": "{{cached}} of {{input}} input tokens cached",
+      "failedDetail": "{{failed}} of {{runs}} runs · {{tokens}} tokens",
+      "before": "{{range}} {{value}}",
+      "idle": {
+        "today": {
+          "runs": "no runs today",
+          "agents": "no agent worked today",
+          "input": "no input tokens yet"
+        },
+        "period": {
+          "runs": "no runs in the period",
+          "agents": "no agent worked in the period",
+          "input": "no input tokens"
+        }
+      },
+      "unmatched": "no matching runs",
+      "noInput": "no input tokens"
+    },
+    "view": {
+      "chart": "Chart",
+      "table": "Table"
+    },
+    "measure": {
+      "spent": "Spent",
+      "cached": "Cached",
+      "output": "Output"
+    },
+    "tokens": {
+      "title": "Tokens over time",
+      "runs": "Runs",
+      "perDay": {
+        "spent": "spent tokens per day",
+        "cached": "cached input per day",
+        "output": "output tokens per day"
+      },
+      "perHour": {
+        "spent": "spent tokens per hour",
+        "cached": "cached input per hour",
+        "output": "output tokens per hour"
+      },
+      "footnote": "Spent = input − cached input + output, as each CLI reported it.",
+      "footnoteToday": "Spent = input − cached input + output, as each CLI reported it. Today counts up to {{time}}.",
+      "tableFootnote": "Exact counts as the CLIs reported them. Chart returns to the bars.",
+      "todayUntil": "Today, until {{time}}"
+    },
+    "limits": {
+      "title": "Plan limits",
+      "note": "shared by all projects · account-wide",
+      "menu": "Warning threshold",
+      "weekly": "weekly",
+      "fiveHour": "5-hour",
+      "minutes": "{{minutes}}-minute",
+      "legendName": "{{cli}} · {{window}}",
+      "resets": "resets {{time}}",
+      "wasReset": "reset {{time}}",
+      "none": "No plan limits recorded yet",
+      "noneDetail": "Orchester keeps a snapshot each time Codex or Claude reports its plan limits during a run, for 90 days. None has been reported so far, so there is no history for this period. The next run that reports its limits adds the first point.",
+      "noneYet": "no plan limits reported yet",
+      "lastReported": "last reported {{time}}",
+      "cliFilterOnly": "follow the CLI filter only · last reported {{time}}",
+      "noData": "No {{cli}} data",
+      "noDataBefore": "no {{cli}} data before {{time}}",
+      "footnote": {
+        "points": "Each point is a snapshot a CLI reported during a run; snapshots are kept 90 days.",
+        "dotted": "Dotted: no run reported limits, so use outside Orchester is unknown.",
+        "hatched": "Hatched: {{gaps}}.",
+        "threshold": "Dashed across: your warning threshold (… menu).",
+        "byDay": "5-hour windows are drawn when grouped by hour.",
+        "byHour": "Grouped by hour, 5-hour windows are drawn (dashed). A drop to a new window starts at its reset marker."
+      },
+      "pointName": "{{window}} at {{time}}",
+      "resetName": "{{cli}} {{window}} window reset · {{time}}",
+      "windowTitle": "{{window}} window",
+      "used": "{{percent}} used",
+      "reported": "Reported {{time}}",
+      "resetsAt": "Resets {{time}}",
+      "from": "From {{project}} · {{run}}",
+      "source": "{{project}} · {{run}}"
+    },
+    "threshold": {
+      "title": "Warning threshold",
+      "unit": "% of a window used",
+      "hint": "Draws the dashed line in Plan limits. Limits belong to your accounts, so it is saved for Orchester and every project shows the same line. 1–100.",
+      "invalid": "Enter a whole number from 1 to 100.",
+      "saved": "Saved for all projects"
+    },
+    "breakdown": {
+      "title": "Where tokens go",
+      "note": "Spent tokens · select a row to filter by it",
+      "reviewerReadOnly": "Auto mode reviewer rows can’t be selected as a filter.",
+      "byProfile": "By agent profile · step",
+      "byModel": "By model",
+      "byPipeline": "By pipeline",
+      "profileStep": "{{profile}} · {{step}}",
+      "reviewer": "auto mode reviewer",
+      "pipelineGone": "Pipeline removed"
+    },
+    "expensive": {
+      "title": "Most expensive",
+      "note": "by spent tokens in the period",
+      "tasks": "Tasks",
+      "runs": "Runs",
+      "tasksShown": "{{shown}} of {{count}} tasks with runs in the period",
+      "runsShown": "{{shown}} of {{count}} runs in the period · a row opens the run",
+      "showAll": "Show all {{count}} →",
+      "showFirst": "Show the first {{count}}"
+    },
+    "efficiency": {
+      "title": "Efficiency",
+      "cache": "Cache share",
+      "cacheSubtitle": "cached input ÷ all input, per day",
+      "cameUp": "in the period · up from {{before}}",
+      "cameDown": "in the period · down from {{before}}",
+      "sameAsBefore": "in the period · same as before",
+      "inPeriod": "in the period",
+      "beforeEdit": "Tokens before first edit",
+      "beforeEditSubtitle": "median per invocation that changed a file",
+      "withIndex": "With code index",
+      "withoutIndex": "Without code index",
+      "invocations": "{{count}} invocations",
+      "beforeEditNote": "Adds up the spent tokens of the turns until the agent first changed a file. {{count}} invocations changed no file and are left out.",
+      "failed": "Failed runs",
+      "failedSubtitle": "runs whose latest attempt failed",
+      "failedOf": "{{count}} of {{runs}}",
+      "runsFailed": "runs failed · {{share}}",
+      "spentOnThem": "tokens spent on them · {{share}}",
+      "failedTokens": "Tokens spent on them",
+      "failedPart": "Failed runs {{tokens}}",
+      "otherPart": "Other runs {{tokens}}",
+      "most": "Most: {{run}} · {{tokens}}",
+      "showFailed": "Show failed tasks →"
+    },
+    "noRuns": {
+      "today": "No runs in {{project}} today",
+      "period": "No runs in {{project}} in this period",
+      "last": "Usage appears here when agents run. {{project}}’s last run reported usage {{time}}.",
+      "never": "Usage appears here when agents run. No run of {{project}} has reported usage yet.",
+      "showWeek": "Show last 7 days"
+    },
+    "table": {
+      "day": "DAY",
+      "hour": "HOUR",
+      "codex": "CODEX",
+      "claude": "CLAUDE",
+      "otherCli": "OTHER CLI",
+      "measure": {
+        "spent": "SPENT",
+        "cached": "CACHED",
+        "output": "OUTPUT"
+      },
+      "spent": "SPENT TOKENS",
+      "cached": "CACHED INPUT",
+      "runs": "RUNS",
+      "total": "Total",
+      "reported": "REPORTED",
+      "window": "WINDOW",
+      "used": "USED",
+      "resets": "RESETS",
+      "reportedBy": "REPORTED BY",
+      "name": "NAME",
+      "share": "SHARE",
+      "task": "TASK",
+      "run": "RUN",
+      "pipeline": "PIPELINE",
+      "started": "STARTED",
+      "agentTime": "AGENT TIME",
+      "outcome": "OUTCOME",
+      "cacheShare": "CACHE SHARE",
+      "median": "MEDIAN",
+      "invocations": "INVOCATIONS",
+      "value": "VALUE"
+    }
+  }
+}

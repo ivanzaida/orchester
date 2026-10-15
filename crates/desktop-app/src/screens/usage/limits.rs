@@ -1,0 +1,161 @@
+//! *Plan limits* (`Card · Plan limits` `CPuK9`): % used per window as lines, account-wide (limits belong to
+//! the CLI account, so the page draws every project's reports), with the windows' legend over the chart,
+//! the warning threshold in the card's menu, a footnote on what is recorded and where nothing is known, and
+//! the same readings as a table (`Table` `CFzvr`). Plan limits follow the CLI filter only. Without any report
+//! the card says *No plan limits recorded yet* (`No plan limits reported yet` in `cK32U`).
+
+use std::sync::Arc;
+
+use lurq::{app::ctx::Ctx, core::Signal, node::Element};
+use orchester_core::usage::Grouping;
+use orchester_workspace::usage::Dashboard;
+
+use super::{
+  Views,
+  card::{Card, footnote, push_down, state, state_room, view_switch},
+  limits_chart::{LimitsChart, LimitsProps, drawn, line_name},
+  limits_legend::legend,
+  table::{Cell, Density, Width, column, row, table},
+  threshold, tokens, words,
+};
+use crate::ui::icon::Icon;
+
+/// Table columns (`CFzvr`): when, which window, % used, its reset.
+const REPORTED_COLUMN: f32 = 92.0;
+const WINDOW_COLUMN: f32 = 100.0;
+const USED_COLUMN: f32 = 40.0;
+const RESETS_COLUMN: f32 = 84.0;
+
+pub fn limits_view_switch(ctx: &Ctx, views: &Signal<Views>) -> Element {
+  let views = views.clone();
+  view_switch(
+    ctx,
+    "usage-limits-view",
+    views.get().limits_table,
+    false,
+    move |table| {
+      views.update(|views| views.limits_table = table);
+    },
+  )
+}
+
+pub fn card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>, saved: &Signal<u64>) -> Element {
+  let menu = threshold::menu(ctx, dashboard, saved);
+  let card = Card::new("usage-limits", ctx.t("usage.limits.title"))
+    .note(ctx.t("usage.limits.note"))
+    .trailing(limits_view_switch(ctx, views))
+    .trailing(menu)
+    .fill();
+  if dashboard.limits.is_empty() {
+    return card.body([state_room(state(
+      "usage-limits-none",
+      (
+        Icon::Gauge,
+        &ctx.t("usage.limits.none"),
+        &ctx.t("usage.limits.noneDetail"),
+      ),
+      None,
+    ))]);
+  }
+  let note = footnote("usage-limits-footnote", &footnote_text(ctx, dashboard));
+  if views.get().limits_table {
+    return card.body([limits_table(ctx, dashboard), push_down(), note]);
+  }
+  let chart = ctx.mount_keyed::<LimitsChart>(
+    "usage-limits-chart",
+    LimitsProps {
+      dashboard: Arc::clone(dashboard),
+    },
+  );
+  card.body([tokens::chart_block(legend(ctx, dashboard), chart), note])
+}
+
+/// What a point is, what the dotted, hatched and dashed marks mean, and when 5-hour windows show.
+fn footnote_text(ctx: &Ctx, dashboard: &Dashboard) -> Arc<str> {
+  let start = dashboard.range.start();
+  let gaps: Vec<Arc<str>> = dashboard
+    .limits
+    .first
+    .iter()
+    .filter(|(_, first)| *first > start)
+    .map(|(provider, first)| {
+      ctx.t_args(
+        "usage.limits.noDataBefore",
+        [
+          ("cli", &*words::cli_name(ctx, *provider)),
+          ("time", &*words::weekday_time(ctx, *first)),
+        ],
+      )
+    })
+    .collect();
+  let mut sentences = vec![
+    ctx.t("usage.limits.footnote.points"),
+    ctx.t("usage.limits.footnote.dotted"),
+  ];
+  if !gaps.is_empty() {
+    sentences.push(ctx.t_args(
+      "usage.limits.footnote.hatched",
+      [("gaps", gaps.join(&ctx.t("usage.listSeparator")).as_str())],
+    ));
+  }
+  sentences.push(ctx.t("usage.limits.footnote.threshold"));
+  sentences.push(ctx.t(match dashboard.grouping {
+    Grouping::Day => "usage.limits.footnote.byDay",
+    Grouping::Hour => "usage.limits.footnote.byHour",
+  }));
+  sentences.join(&ctx.t("usage.sentenceSeparator")).into()
+}
+
+/// The readings as a table, newest first: when, which window, % used, its reset and the run that reported
+/// it.
+fn limits_table(ctx: &Ctx, dashboard: &Dashboard) -> Element {
+  let columns = [
+    column(ctx.t("usage.table.reported"), Width::Px(REPORTED_COLUMN), false),
+    column(ctx.t("usage.table.window"), Width::Px(WINDOW_COLUMN), false),
+    column(ctx.t("usage.table.used"), Width::Px(USED_COLUMN), true),
+    column(ctx.t("usage.table.resets"), Width::Px(RESETS_COLUMN), false),
+    column(ctx.t("usage.table.reportedBy"), Width::Flex(1.0), false),
+  ];
+  let mut readings: Vec<_> = drawn(dashboard)
+    .into_iter()
+    .flat_map(|line| line.points.iter().map(move |point| (line, point)))
+    .collect();
+  readings.sort_by_key(|(_, point)| std::cmp::Reverse(point.at));
+  let rows = readings
+    .into_iter()
+    .enumerate()
+    .map(|(index, (line, point))| {
+      let source = point.source.as_ref().map_or_else(
+        || ctx.t("usage.unknown"),
+        |source| {
+          ctx.t_args(
+            "usage.limits.source",
+            [
+              ("project", &*source.project),
+              ("run", &*words::run_label(ctx, &source.task_key, source.run.get())),
+            ],
+          )
+        },
+      );
+      let cells = vec![
+        Cell::Muted(words::reported(ctx, point.at, dashboard.now)),
+        Cell::Text(line_name(ctx, line.provider, line.minutes)),
+        Cell::Text(words::share(ctx, Some(point.percent.round() as u64))),
+        Cell::Muted(
+          point
+            .resets
+            .map_or_else(|| ctx.t("usage.unknown"), |at| words::date_time(ctx, at)),
+        ),
+        Cell::Muted(source),
+      ];
+      row(
+        &format!("usage-limits-table-row-{index}"),
+        &columns,
+        Density::Data,
+        cells,
+      )
+      .into()
+    })
+    .collect();
+  table("usage-limits-table", &columns, Density::Data, rows)
+}

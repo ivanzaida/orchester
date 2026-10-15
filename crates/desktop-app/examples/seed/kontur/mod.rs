@@ -160,6 +160,33 @@ impl Kontur {
     catalogue::kontur(&mut self.db, connection, published)
   }
 
+  /// The Usage page's catalogue ([`catalogue::usage`]) on a Codex and a Claude Code connection that are
+  /// recorded, never run, published two weeks before now.
+  fn usage_catalogue(&mut self) -> Result<Catalogue, SeedError> {
+    let published = self.ago(14 * 24 * 60);
+    // Programs that are never there: the runs are recorded, not run.
+    let programs = self.repo.join(".orchester").join("recorded");
+    let codex = catalogue::recorded_connection(
+      &mut self.db,
+      (
+        "Codex · Kontur",
+        orchester_core::connection::AgentProvider::CodexCli,
+        &programs.join("codex"),
+      ),
+      published,
+    )?;
+    let claude = catalogue::recorded_connection(
+      &mut self.db,
+      (
+        "Claude Code · Kontur",
+        orchester_core::connection::AgentProvider::ClaudeCodeCli,
+        &programs.join("claude"),
+      ),
+      published,
+    )?;
+    catalogue::usage(&mut self.db, (codex, claude), published)
+  }
+
   /// The catalogue of live runs ([`catalogue::live`]), published an hour before now.
   fn live_catalogue(&mut self) -> Result<Catalogue, SeedError> {
     let published = self.ago(60);

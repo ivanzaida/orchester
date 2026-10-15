@@ -26,6 +26,7 @@ mod skills_window;
 mod tools;
 mod tools_window;
 mod unverified;
+mod usage;
 mod window;
 
 use std::{

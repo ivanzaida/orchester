@@ -158,6 +158,11 @@ fn navigate_takes_the_parameters_each_screen_has_and_answers_them_back() {
       format!("{root}/tasks/KON-12/changes?file=src/a%20b.rs&from=worktree"),
       json!({ "project": PROJECT, "key": "KON-12", "tab": "changes", "file": "src/a b.rs", "from": "worktree" }),
     ),
+    (
+      json!({ "route": "usage", "project": PROJECT, "query": "group=task&model=gpt%205&period=30d" }),
+      format!("{root}/usage?period=30d&group=task&model=gpt%205"),
+      json!({ "project": PROJECT, "query": "period=30d&group=task&model=gpt%205" }),
+    ),
   ];
   for (args, path, params) in cases {
     let answer = navigate(&navigation, &args).expect("a valid route");

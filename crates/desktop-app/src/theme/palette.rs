@@ -68,10 +68,16 @@ pub enum ExtraColor {
   BrandTile,
   /// The Orchester mark's bars, the same in both modes.
   BrandMark,
+  /// `chart_1`, `chart_2`, `chart_3`: a chart's series, by CLI: Codex, Claude Code, any other (Usage `et35n`).
+  Chart1,
+  Chart2,
+  Chart3,
+  /// `chart_hatch`: a chart's stretch where nothing is known (*No Claude data* in `et35n`).
+  ChartHatch,
 }
 
 impl ExtraColor {
-  pub const ALL: [Self; 17] = [
+  pub const ALL: [Self; 21] = [
     Self::AccentText,
     Self::OnAccent,
     Self::PanelBorder,
@@ -89,6 +95,10 @@ impl ExtraColor {
     Self::DiffRemoved,
     Self::BrandTile,
     Self::BrandMark,
+    Self::Chart1,
+    Self::Chart2,
+    Self::Chart3,
+    Self::ChartHatch,
   ];
 
   pub fn role(self) -> PaletteColor {
@@ -115,6 +125,10 @@ impl ExtraColor {
       Self::DiffRemoved => "diff_remove",
       Self::BrandTile => "brand_tile",
       Self::BrandMark => "brand_mark",
+      Self::Chart1 => "chart_1",
+      Self::Chart2 => "chart_2",
+      Self::Chart3 => "chart_3",
+      Self::ChartHatch => "chart_hatch",
     }
   }
 
@@ -137,6 +151,10 @@ impl ExtraColor {
       Self::DiffRemoved => mode.pick("#F0605A1F", "#D4342F14"),
       Self::BrandTile => mode.pick("#18191D", "#18191D"),
       Self::BrandMark => mode.pick("#F1F1F4", "#F1F1F4"),
+      Self::Chart1 => mode.pick("#3987E5", "#2A78D6"),
+      Self::Chart2 => mode.pick("#D95926", "#D95926"),
+      Self::Chart3 => mode.pick("#199E70", "#13976A"),
+      Self::ChartHatch => mode.pick("#FFFFFF0F", "#00000012"),
     }
   }
 }

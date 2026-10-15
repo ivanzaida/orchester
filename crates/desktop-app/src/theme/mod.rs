@@ -40,6 +40,7 @@ mod task;
 mod task_form;
 mod tasks;
 mod typography;
+pub mod usage;
 
 use std::time::Duration;
 
@@ -74,6 +75,7 @@ pub use self::{
   task_form::{TaskFormRadius, TaskFormSpacing, TaskFormText},
   tasks::TasksSpacing,
   typography::{ExtraTypography, IconSize},
+  usage::{UsageRadius, UsageSpacing, UsageText},
 };
 
 /// A control that cannot be used, faded as a whole: a button that is unavailable or disabled (`Create
@@ -114,6 +116,7 @@ pub fn install(app: &mut App, mode: Mode) {
   composer::install(theme);
   orchestrator::install(theme);
   needs_you::install(theme);
+  usage::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

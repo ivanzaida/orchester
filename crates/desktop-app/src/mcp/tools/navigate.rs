@@ -20,7 +20,7 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   reports it). overview also takes `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as after \
   Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; connections `tab` and \
   `selected` (the id of the connection its inspector shows); new_connection `kind`; edit_connection `connection` \
-  (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab; orchestrator takes `chat` (a \n  conversation's id, or new; left out, the latest). A tab or kind left out is the one \
+  (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab; orchestrator takes `chat` (a \n  conversation's id, or new; left out, the latest); usage takes `query`, the page's query as a link carries it. A tab or kind left out is the one \
   the screen opens on. Answers the route the tab shows, whose params navigate takes back. Errors are JSON with \
   a stable `code`: unknown_route (with the known names), missing_param, unexpected_param, invalid_param, \
   unknown_tab (with the screen's tabs), not_a_string, not_an_object, not_ready (the window is starting).";
@@ -63,6 +63,10 @@ fn schema() -> Value {
       "skill": { "type": "string", "description": "skills: the skill id, new, or import; omitted opens the library." },
       "tool": { "type": "string", "description": "tools: the tool’s id, or new for a command draft; omitted opens the library." },
       "chat": { "type": "string", "description": "orchestrator: a conversation's id, or new; omitted opens the latest." },
+      "query": {
+        "type": "string",
+        "description": "usage: the period, grouping and filters as a link's query carries them, e.g. `from=2026-10-01&to=2026-10-15&group=task&model=gpt-5` (get_usage's `link`); omitted, the last 7 days by day.",
+      },
       "from": {
         "type": "string",
         "enum": sources,
@@ -112,7 +116,7 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
     Screen::Task => ProjectPage::Task(key(args, "key")?, task_view(args)?),
     Screen::MergeQueue => ProjectPage::MergeQueue,
     Screen::PullRequests => ProjectPage::PullRequests,
-    Screen::Usage => ProjectPage::Usage,
+    Screen::Usage => usage_page(args)?,
     Screen::Pipelines => ProjectPage::Pipelines,
     Screen::Agents => ProjectPage::Agents,
     Screen::Instructions => ProjectPage::Instructions,
@@ -142,10 +146,10 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Orchestrator => &["project", "chat"],
     Screen::NewConnection => &["project", "kind"],
     Screen::EditConnection => &["project", "connection"],
+    Screen::Usage => &["project", "query"],
     Screen::NewTask
     | Screen::MergeQueue
     | Screen::PullRequests
-    | Screen::Usage
     | Screen::Pipelines
     | Screen::Agents
     | Screen::Instructions
@@ -173,6 +177,22 @@ fn tools_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
     &crate::routes::ToolTab::ALL.map(crate::routes::ToolTab::name),
   )?;
   Ok(ProjectPage::Tool(id, chosen))
+}
+
+/// The Usage page with the query `query` gives, as its path reads it.
+fn usage_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
+  let query = string(args, "query")?.unwrap_or_default();
+  match Route::parse(&format!("/project/{}/usage?{query}", project(args)?)) {
+    Ok(Route::Project(_, page @ ProjectPage::Usage(_))) => Ok(page),
+    Ok(_) => Err(ToolError::InvalidParam {
+      param: "query",
+      reason: format!("`{query}` names another screen"),
+    }),
+    Err(error) => Err(ToolError::InvalidParam {
+      param: "query",
+      reason: error.to_string(),
+    }),
+  }
 }
 
 fn project(args: &Map<String, Value>) -> Result<ProjectId, ToolError> {

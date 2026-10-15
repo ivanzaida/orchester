@@ -18,6 +18,7 @@ mod tasks;
 mod tasks_memory;
 mod tasks_unreadable;
 mod unreadable_db;
+mod usage;
 
 use super::{Kontur, SeedError};
 
@@ -62,7 +63,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 21] = [
+pub const ALL: [Scenario; 23] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-empty", agents::empty),
   Scenario::of("agents-no-connections", agents::no_connections),
@@ -84,6 +85,8 @@ pub const ALL: [Scenario; 21] = [
   Scenario::of("pipelines", pipelines::seed),
   Scenario::of("pipelines-empty", pipelines::empty),
   Scenario::of("accounts", accounts::seed),
+  Scenario::of("usage", usage::seed),
+  Scenario::of("usage-empty", usage::no_runs_today),
 ];
 
 /// The scenario called `name`.

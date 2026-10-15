@@ -35,6 +35,7 @@ mod table;
 mod task;
 mod tasks;
 mod tools;
+mod usage;
 
 use std::path::{Path, PathBuf};
 
