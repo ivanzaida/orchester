@@ -2,6 +2,7 @@
 //! follows the design's rules, the window shows the active tab's route, and the shortcuts ask for the
 //! right moves.
 
+mod list;
 mod strip;
 #[path = "../support/mod.rs"]
 mod support;

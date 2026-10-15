@@ -170,7 +170,7 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
     let entry = agents
       .profile(id)
       .ok_or_else(|| ToolError::not_found(Missing::Profile, id.to_string()))?;
-    Ok(json!({ "profile": profile_json(&agents, entry) }))
+    Ok(json!({ "profile": profile_json(&agents, entry, open.project.id()) }))
   })
   .await
 }

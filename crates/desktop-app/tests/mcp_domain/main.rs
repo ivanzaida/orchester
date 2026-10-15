@@ -22,10 +22,14 @@ mod live;
 mod mcp_servers;
 mod merge;
 mod pipeline_permissions;
+mod reads;
+mod reads_setup;
 mod skills_window;
 mod tools;
 mod tools_window;
 mod unverified;
+#[path = "../mcp_stable/vault.rs"]
+mod vault;
 mod window;
 
 use std::{
@@ -50,9 +54,11 @@ use orchester_app::{
   theme::{self, Mode},
 };
 use orchester_core::{id::ProjectId, time::Timestamp};
+use orchester_workspace::secrets::Vault;
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
+use vault::MemoryVault;
 
 /// How long a test waits for the runner and the fake agent.
 const PATIENCE: Duration = Duration::from_secs(120);
@@ -80,8 +86,23 @@ impl Served {
 
   /// [`Self::start`], with window control as given.
   fn start_with(folder: TempDir, database: &Path, runner: PathBuf, window_control: bool) -> Self {
+    Self::start_on(folder, database, runner, (window_control, None))
+  }
+
+  /// [`Self::start_with`]; with a `vault`, the domain tools keep and read secret values there instead of in the
+  /// keychain, as the session's services hand theirs to them.
+  fn start_on(
+    folder: TempDir,
+    database: &Path,
+    runner: PathBuf,
+    (window_control, vault): (bool, Option<Arc<MemoryVault>>),
+  ) -> Self {
     let runtime = Runtime::new().expect("tokio runtime");
     let launch = Launch::begin_at(database, runner, runtime.handle(), None);
+    let mut services = launch.services().cloned();
+    if let (Some(services), Some(vault)) = (services.as_mut(), vault) {
+      services.vault = Vault::with(vault);
+    }
     let mut app = App::new();
     app.set_tokio_handle(runtime.handle().clone());
     theme::install(&mut app, Mode::Dark);
@@ -91,7 +112,7 @@ impl Served {
     let link = WindowLink::default();
     let appearance = Appearance::new(ThemeSetting::Dark, Arc::default(), None);
     let settings = McpSettings::with_window_control(window_control);
-    let config = mcp::config(settings, &link, &appearance, launch.services(), app.i18n());
+    let config = mcp::config(settings, &link, &appearance, services.as_ref(), app.i18n());
     let discovery = McpMode::Qa(folder.path().join("discovery"));
     let server = AppMcp::start(
       &mut tree,
@@ -139,6 +160,22 @@ impl Served {
   /// Scenario `name` seeded with its Codex connection's program at `codex` (checked and signed in, as
   /// the seed records it), served with a runner program that does not exist.
   fn seeded_with(name: &str, codex: Option<PathBuf>) -> (Self, Seeded) {
+    let (folder, seeded) = Self::seed(name, codex);
+    let runner = folder.path().join("no-runner").join("orchester-runner");
+    let database = seeded.app_database.clone();
+    (Self::start(folder, &database, runner), seeded)
+  }
+
+  /// Scenario `name` served with its domain tools on `vault`.
+  fn seeded_on_vault(name: &str, vault: Arc<MemoryVault>) -> (Self, Seeded) {
+    let (folder, seeded) = Self::seed(name, None);
+    let runner = folder.path().join("no-runner").join("orchester-runner");
+    let database = seeded.app_database.clone();
+    (Self::start_on(folder, &database, runner, (false, Some(vault))), seeded)
+  }
+
+  /// Scenario `name` seeded in a new folder.
+  fn seed(name: &str, codex: Option<PathBuf>) -> (TempDir, Seeded) {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
     std::fs::create_dir_all(&scratch).expect("scratch");
     let folder = tempfile::tempdir_in(scratch).expect("a temporary folder");
@@ -150,9 +187,7 @@ impl Served {
       now: Timestamp::now(),
     };
     let seeded = kontur::seed(&request).expect("the scenario seeds");
-    let runner = folder.path().join("no-runner").join("orchester-runner");
-    let database = seeded.app_database.clone();
-    (Self::start(folder, &database, runner), seeded)
+    (folder, seeded)
   }
 
   fn services(&self) -> &Services {

@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, CheckResult, Connection, ConnectionCheck, ConnectionError},
-  id::ConnectionId,
+  id::{ConnectionId, ProjectId},
   name::Name,
   secret::Secret,
   store::ConnectionStore,
@@ -18,7 +18,11 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
-  super::{projects::InProject, wire},
+  super::{
+    Translate,
+    across::{InProjects, across},
+    wire,
+  },
   widening,
 };
 use crate::{
@@ -30,6 +34,7 @@ use crate::{
     data::{ConnectionDraft, ProjectConnections, SaveError, recheck_in, save_in},
     probe,
   },
+  links::Link,
   messages::{self, Message},
   tasks::outside::Outside,
 };
@@ -75,17 +80,27 @@ pub struct InConnection {
   pub connection: String,
 }
 
-pub async fn list_connections(services: &Services, args: InProject) -> Result<Value, ToolError> {
+pub async fn list_connections(
+  services: &Services,
+  args: InProjects,
+  translate: &Translate,
+) -> Result<Value, ToolError> {
   let services = services.clone();
-  blocking(move || {
-    let open = services.project(&args.project)?;
-    let listed = ProjectConnections::load_in(&open.repo_root)?;
-    let agents: Vec<Value> = listed
+  let read = blocking(move || {
+    across(&services, args.project.as_deref(), |_, db| {
+      Ok(ProjectConnections::load(db)?)
+    })
+  })
+  .await?;
+  let agents = read.items(|open, listed| {
+    listed
       .connections
       .iter()
-      .map(|connection| agent_json(connection, &listed.secrets))
-      .collect();
-    let github: Vec<Value> = listed
+      .map(|connection| agent_json(connection, &listed.secrets, open.project.id()))
+      .collect()
+  });
+  let github = read.items(|open, listed| {
+    listed
       .github
       .iter()
       .map(|connection| {
@@ -94,13 +109,18 @@ pub async fn list_connections(services: &Services, args: InProject) -> Result<Va
           "name": connection.name().as_str(),
           "host": connection.host().to_string(),
           "status": connection.status().as_str(),
+          "link": Link::Connection(open.project.id(), connection.id()).path(),
         })
       })
-      .collect();
-    let mcp = super::mcp_servers::servers_json(&listed);
-    Ok(json!({ "agents": agents, "github": github, "mcp_servers": mcp }))
-  })
-  .await
+      .collect()
+  });
+  let mcp = read.items(|open, listed| super::mcp_servers::servers_json(listed, open.project.id()));
+  Ok(json!({
+    "agents": agents,
+    "github": github,
+    "mcp_servers": mcp,
+    "unreadable_projects": read.unreadable(translate),
+  }))
 }
 
 pub async fn add_cli_connection(services: &Services, args: AddCliConnection) -> Result<Value, ToolError> {
@@ -151,7 +171,10 @@ pub async fn add_cli_connection(services: &Services, args: AddCliConnection) -> 
     let connection = listed
       .connection(id)
       .ok_or_else(|| ToolError::not_found(Missing::Connection, id.to_string()))?;
-    Ok(json!({ "connection": agent_json(connection, &listed.secrets), "check": check_json(&check) }))
+    Ok(json!({
+      "connection": agent_json(connection, &listed.secrets, open.project.id()),
+      "check": check_json(&check),
+    }))
   })
   .await
 }
@@ -168,7 +191,7 @@ pub async fn check_connection(services: &Services, args: InConnection) -> Result
     services.changes.record(open.project.id(), Outside::Connections);
     let listed = ProjectConnections::load_in(&open.repo_root)?;
     let connection = match (listed.connection(id), listed.github_connection(id)) {
-      (Some(agent), _) => agent_json(agent, &listed.secrets),
+      (Some(agent), _) => agent_json(agent, &listed.secrets, open.project.id()),
       (None, Some(github)) => json!({ "id": id.to_string(), "status": github.status().as_str() }),
       (None, None) => return Err(ToolError::not_found(Missing::Connection, &args.connection)),
     };
@@ -192,6 +215,7 @@ pub async fn list_models(services: &Services, args: InConnection) -> Result<Valu
       "checked": connection.last_check().is_some(),
       "source": connection.catalog().map(|catalog| catalog.source()),
       "models": models,
+      "link": Link::Connection(open.project.id(), connection.id()).path(),
     }))
   })
   .await
@@ -221,7 +245,8 @@ pub(super) fn agent_by_id(connections: &[AgentConnection], id: ConnectionId) -> 
   connections.iter().find(|connection| connection.id() == id)
 }
 
-fn agent_json(connection: &AgentConnection, secrets: &[Secret]) -> Value {
+/// An agent connection of `project` as Connections lists it, with its link: its inspector.
+fn agent_json(connection: &AgentConnection, secrets: &[Secret], project: ProjectId) -> Value {
   let check = connection.last_check();
   let version = check.and_then(|check| match &check.result {
     CheckResult::Available { version, .. } => Some(version.clone()),
@@ -237,6 +262,7 @@ fn agent_json(connection: &AgentConnection, secrets: &[Secret]) -> Value {
     "checked_at": check.map(|check| wire::time(check.at)),
     "models": connection.models().len(),
     "account": connection.account().id(connection.provider()).map(|account| account.to_string()),
+    "link": Link::Connection(project, connection.id()).path(),
   })
 }
 
