@@ -1,7 +1,9 @@
 //! The kinds of file *Open in editor* opens: text a person reads in an editor — source, configuration,
-//! markup, documentation and data formats — by extension. A file without an extension opens when what it holds
-//! is text. Windows opens a file with its default program, which for some of these kinds runs the file
-//! (Python, JavaScript under Windows Script Host, shell and batch scripts); those stay closed there.
+//! markup, documentation and data formats — by extension, and a few dotfiles by their exact name ([`TEXT_NAMES`]:
+//! on Windows their whole name is their extension, and none of them is a kind Windows runs). A file whose name
+//! has no dot opens when what it holds is text. Windows opens a file with its default program, which for some of
+//! these kinds runs the file (Python, JavaScript under Windows Script Host, shell and batch scripts); those stay
+//! closed there. HTML, SVG and XML open there in the browser, inside its sandbox for local files.
 
 /// Extensions of text and code files, lowercase.
 const TEXT: &[&str] = &[
@@ -116,6 +118,24 @@ const TEXT: &[&str] = &[
   "zsh",
 ];
 
+/// Dotfiles that are text, by their exact name.
+const TEXT_NAMES: &[&str] = &[
+  ".babelrc",
+  ".bashrc",
+  ".dockerignore",
+  ".editorconfig",
+  ".env",
+  ".eslintrc",
+  ".gitattributes",
+  ".gitignore",
+  ".gitmodules",
+  ".npmrc",
+  ".nvmrc",
+  ".prettierrc",
+  ".profile",
+  ".zshrc",
+];
+
 /// Of [`TEXT`], the kinds Windows' default programs (or the usual installers of Python, Perl, Ruby and Git for
 /// Windows' Bash) run when they are opened.
 const RUN_ON_WINDOWS: &[&str] = &["bash", "bat", "cmd", "js", "pl", "ps1", "psm1", "py", "pyw", "rb", "sh"];
@@ -123,6 +143,11 @@ const RUN_ON_WINDOWS: &[&str] = &["bash", "bat", "cmd", "js", "pl", "ps1", "psm1
 /// Whether `extension` names a text or code file.
 pub fn is_text(extension: &str) -> bool {
   TEXT.iter().any(|text| text.eq_ignore_ascii_case(extension))
+}
+
+/// Whether `name` is one of the dotfiles that are text ([`TEXT_NAMES`]).
+pub fn is_text_name(name: &str) -> bool {
+  TEXT_NAMES.iter().any(|text| text.eq_ignore_ascii_case(name))
 }
 
 /// Whether Windows runs a file with `extension` when it is opened with its default program.

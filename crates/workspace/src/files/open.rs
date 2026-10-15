@@ -1,11 +1,17 @@
 //! What *Open in editor* opens (the coordinator's decision of 2026-10-15): only text — source, configuration,
-//! markup, documentation and data files by their extension ([`super::text_types`]), or a file without one whose
-//! content is text — and only a version on disk (the checkout or a run's worktree), checked as a read is. On
-//! macOS a file opens in the default text editor (`open -t`), never with the program its kind names; on Windows
-//! with its default program, which for some text kinds runs the file, so those stay closed there. Everything
-//! else is refused with its reason. The decision is [`open_with`], a pure function of the platform and what is
-//! known of the file; [`open_target`] gathers that at the moment of opening, from the file's own name (a link is
-//! refused) and its canonical path (on macOS an execute bit is refused), so what opens is what was checked.
+//! markup, documentation and data files by their extension ([`super::text_types`]), a few dotfiles by their exact
+//! name, or a file whose name has no dot at all and whose content is text — and only a version on disk (the
+//! checkout or a run's worktree), checked as a read is. On macOS a file opens in the default text editor
+//! (`open -t`), never with the program its kind names; on Windows with its default program, which for some text
+//! kinds runs the file, so those stay closed there. Everything else is refused with its reason.
+//!
+//! A file's kind is what follows the last `.` of its name, also for a name that starts with one (`.hta` is an
+//! HTML application, not a file without extension), and on Windows the name is taken as Windows dispatches it:
+//! without trailing dots and spaces (`a.bat.` runs as `a.bat`). The decision is [`open_with`], a pure function of
+//! the platform and what is known of the file; [`open_target`] gathers that at the moment of opening, from the
+//! resolved file's own name (not the name asked for, which may differ in case, trailing dots or an 8.3 alias), the
+//! link the path asked for may be (refused) and the canonical path (on macOS an execute bit is refused), so what
+//! opens is what was checked.
 
 use std::{
   fs,
@@ -71,7 +77,7 @@ pub enum Refusal {
 /// What is known of a file when it is decided how it opens.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OpenFacts<'a> {
-  /// The file's name, its last path part.
+  /// The resolved file's name, its last path part.
   pub name: &'a str,
   /// What it holds is text (no NUL in its first bytes).
   pub text: bool,
@@ -85,13 +91,16 @@ pub fn open_with(platform: Platform, file: &OpenFacts<'_>) -> Result<OpenWith, R
   if file.link {
     return Err(Refusal::Link);
   }
-  let extension = Path::new(file.name)
-    .extension()
-    .and_then(|extension| extension.to_str());
-  let text = match extension {
-    Some(extension) => text_types::is_text(extension) && file.text,
-    None => file.text,
+  let name = match platform {
+    Platform::Windows => file.name.trim_end_matches(['.', ' ']),
+    Platform::MacOs => file.name,
   };
+  let extension = name.rsplit_once('.').map(|(_, extension)| extension);
+  let text = file.text
+    && match extension {
+      Some(extension) => text_types::is_text(extension) || text_types::is_text_name(name),
+      None => !name.is_empty(),
+    };
   if !text {
     return Err(Refusal::NotText);
   }
@@ -145,13 +154,18 @@ pub fn open_target(
   if !metadata.is_file() {
     return Err(FilesError::Missing(path.clone()).into());
   }
+  let refused = |refusal| OpenError::Refused(path.clone(), refusal);
+  let name = resolved
+    .file_name()
+    .and_then(|name| name.to_str())
+    .ok_or_else(|| refused(Refusal::NotText))?;
   let facts = OpenFacts {
-    name: path.name(),
+    name,
     text: holds_text(&resolved).map_err(unreadable)?,
     link: link || metadata.file_type().is_symlink(),
     executable: platform::executable(&metadata),
   };
-  let with = open_with(platform, &facts).map_err(|refusal| OpenError::Refused(path.clone(), refusal))?;
+  let with = open_with(platform, &facts).map_err(refused)?;
   Ok((resolved, with))
 }
 

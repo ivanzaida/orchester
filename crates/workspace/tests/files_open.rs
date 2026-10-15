@@ -80,6 +80,56 @@ fn files_open_with_lets_only_text_and_code_open() {
 }
 
 #[test]
+fn files_open_with_takes_a_names_kind_as_windows_dispatches_it() {
+  for platform in [Platform::Windows, Platform::MacOs] {
+    for name in [
+      ".hta",
+      ".url",
+      ".vbs",
+      ".reg",
+      ".theme",
+      ".settingcontent-ms",
+      "X.HTA",
+      "x.hta ",
+    ] {
+      assert_eq!(
+        open_with(platform, &facts(name)),
+        Err(Refusal::NotText),
+        "{name:?} on {platform:?}: its kind is what follows its last dot"
+      );
+    }
+    for name in [".env", ".gitignore", ".EditorConfig", "Makefile"] {
+      assert!(open_with(platform, &facts(name)).is_ok(), "{name:?} on {platform:?}");
+    }
+    assert_eq!(
+      open_with(platform, &facts(".env.local")),
+      Err(Refusal::NotText),
+      "only the dotfiles named"
+    );
+  }
+  for name in [".bat", "a.bat.", "a.bat ", "a.BAT. .", ".ps1", "x.py..."] {
+    assert_eq!(
+      open_with(Platform::Windows, &facts(name)),
+      Err(Refusal::WouldRun),
+      "{name:?} runs on Windows"
+    );
+  }
+  assert_eq!(
+    open_with(Platform::Windows, &facts("X.HTA.")),
+    Err(Refusal::NotText),
+    "trailing dots do not hide the kind"
+  );
+  assert_eq!(open_with(Platform::MacOs, &facts(".bat")), Ok(OpenWith::TextEditor));
+  for name in ["a.bat.", "a.bat "] {
+    assert_eq!(
+      open_with(Platform::MacOs, &facts(name)),
+      Err(Refusal::NotText),
+      "{name:?}: on macOS the name is as it is"
+    );
+  }
+}
+
+#[test]
 fn files_open_with_opens_text_in_the_text_editor_on_macos_and_with_the_default_program_on_windows() {
   assert_eq!(open_with(Platform::MacOs, &facts("main.rs")), Ok(OpenWith::TextEditor));
   assert_eq!(open_with(Platform::MacOs, &facts("run.py")), Ok(OpenWith::TextEditor));
@@ -162,6 +212,29 @@ fn files_open_target_opens_a_text_file_on_disk_and_refuses_the_rest() {
     ))
   );
   assert_eq!(open("main.rs", &Version::Revision(head)), Err(OpenError::NotOnDisk));
+  fs::write(repo.join(".hta"), "<script>alert(1)</script>\n").expect("an HTML application");
+  assert!(
+    matches!(
+      open(".hta", &Version::Checkout),
+      Err(OpenError::Refused(_, Refusal::NotText))
+    ),
+    "a name that is only an extension is that kind"
+  );
+  fs::write(repo.join(".env"), "KEY=value\n").expect(".env");
+  assert!(open(".env", &Version::Checkout).is_ok(), "a dotfile named as text");
+  #[cfg(windows)]
+  {
+    fs::write(repo.join("run.bat"), "echo hi\n").expect("a batch file");
+    for asked in ["run.bat.", "run.bat ", "RUN.BAT"] {
+      assert!(
+        matches!(
+          open(asked, &Version::Checkout),
+          Err(OpenError::Refused(_, Refusal::WouldRun))
+        ),
+        "{asked:?} is decided by the file it resolves to"
+      );
+    }
+  }
   #[cfg(unix)]
   links_and_executables_are_refused(repo, &open);
 }
