@@ -100,7 +100,7 @@
     },
     "binary": {
       "title": "This file isn’t text",
-      "detail": "{{name}} is a binary file, so it isn't shown here, and only text and code files open in an editor from here."
+      "detail": "{{name}} is a binary file, so it isn’t shown here, and only text and code files open in an editor from here."
     },
     "tooLarge": {
       "title": "This file is too large to show",
