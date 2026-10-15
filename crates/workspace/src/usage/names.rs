@@ -26,13 +26,13 @@ pub(super) struct Names {
   pub pinned: Vec<Pinned>,
 }
 
-/// The pipeline a run pinned, by name, and its version.
+/// The pipeline a run pinned, by its resource, and its version.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Pinned {
   run: RunId,
   task: TaskId,
   number: RunNumber,
-  pipeline: Option<Arc<str>>,
+  pipeline: Option<ResourceId>,
   version: Option<VersionNumber>,
 }
 
@@ -57,7 +57,7 @@ impl Names {
           run: run.id,
           task: run.task,
           number: run.number,
-          pipeline: run.pipeline.clone(),
+          pipeline: run.pipeline_id,
           version: run.pipeline_version,
         });
       }
@@ -90,12 +90,22 @@ impl Names {
       .map(|(_, key, number)| (key, *number))
   }
 
-  /// The newest version of the pipeline called `pipeline` a run pinned.
+  /// The newest version a run pinned of the pipeline called `pipeline`; `None` when the name stands for
+  /// more than one pipeline (projects with a pipeline of the same name), whose versions are their own.
   pub fn pipeline_version(&self, pipeline: &str) -> Option<VersionNumber> {
+    let mut ids = self
+      .pipelines
+      .iter()
+      .filter(|(_, name)| &**name == pipeline)
+      .map(|(id, _)| *id);
+    let id = ids.next()?;
+    if ids.any(|other| other != id) {
+      return None;
+    }
     self
       .pinned
       .iter()
-      .filter(|pinned| pinned.pipeline.as_deref() == Some(pipeline))
+      .filter(|pinned| pinned.pipeline == Some(id))
       .filter_map(|pinned| pinned.version)
       .max()
   }

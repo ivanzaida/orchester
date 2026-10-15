@@ -81,6 +81,8 @@ const AGENT_PATTERN: &str = "/project/:project/agents/:agent";
 const PULL_REQUEST_PATTERN: &str = "/project/:project/pull-requests/:number";
 /// A task's path without its tab, which reads as its Summary.
 const TASK_SUMMARY_PATTERN: &str = "/project/:project/tasks/:key";
+/// All projects' *Usage* tab, a path of its own under the home screen.
+const EVERY_PROJECT_USAGE_PATTERN: &str = "/usage";
 
 /// A folder a route names. An address is text, so only a folder whose path is text can be named: the
 /// address then keeps it whole.
@@ -124,6 +126,7 @@ impl Route {
       Self::Project(_, ProjectPage::Pipeline(_)) => PIPELINE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Agent(_)) => AGENT_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::PullRequest(_)) => PULL_REQUEST_PATTERN.to_owned(),
+      Self::Usage(_) => EVERY_PROJECT_USAGE_PATTERN.to_owned(),
       _ => self.screen().pattern(),
     }
   }

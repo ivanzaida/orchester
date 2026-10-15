@@ -12,7 +12,7 @@ use orchester_core::{
   time::Timestamp,
   usage::{
     DayRange, GroupBy, GroupKey, GroupRow, Grouped, HOURLY_DAYS, Named, Period, ProjectFacts, Summary, UsageFilter,
-    UsageQuery as ReportQuery, grouped, local_date,
+    UsageQuery as ReportQuery, UsageReport, grouped, local_date,
   },
 };
 use rmcp::schemars::JsonSchema;
@@ -24,7 +24,8 @@ use crate::{
     error::ToolError,
     services::{Services, blocking},
   },
-  usage::{LONGEST_DAYS, Scope, UsageData, UsageQuery, group_name, group_of, usage_link},
+  links::Link,
+  usage::{LONGEST_DAYS, Scope, UsageData, UsageQuery, group_name, group_of},
 };
 
 /// How many days a range without `from` covers, ending with `to`: the page's default *7 days*.
@@ -169,10 +170,12 @@ fn filter(args: &GetUsage) -> Result<UsageFilter, ToolError> {
 /// One of a filter's lists of names.
 type TextField = fn(&mut UsageFilter) -> &mut Vec<Arc<str>>;
 
-/// The filter values that, each on its own, match nothing in `projects`, with their argument's name.
-fn unmatched(filter: &UsageFilter, projects: &[ProjectFacts]) -> Vec<Value> {
+/// The filter values that, each on its own, match nothing in the range `query` covers, with their argument's
+/// name.
+fn unmatched(filter: &UsageFilter, projects: &[ProjectFacts], query: ReportQuery<'_>) -> Vec<Value> {
   let alone = |name: &str, only: UsageFilter, value: String| {
-    (!only.admits_any(projects)).then(|| json!({ "filter": name, "value": value }))
+    let only_query = ReportQuery { filter: &only, ..query };
+    (!UsageReport::matches_any(projects, only_query)).then(|| json!({ "filter": name, "value": value }))
   };
   let texts: [(&str, &[Arc<str>], TextField); 5] = [
     ("task", &filter.tasks, |only| &mut only.tasks),
@@ -234,7 +237,7 @@ fn answer(project: Option<ProjectId>, query: &UsageQuery, data: &UsageData, now:
     .iter()
     .map(|row| {
       let mut value = key(&row.key, data);
-      let link = row_project(&row.key, project).map(|project| usage_link(project, &narrowed(query, &row.key)));
+      let link = page_link(row_project(&row.key, project), narrowed(query, &row.key));
       let seconds = seconds(active_ms + row.agent_ms) - seconds(active_ms);
       active_ms += row.agent_ms;
       let fields = value.as_object_mut().expect("a row's key is an object");
@@ -257,8 +260,8 @@ fn answer(project: Option<ProjectId>, query: &UsageQuery, data: &UsageData, now:
     "group": group_name(query.group),
     "total": total(&summary),
     "rows": rows,
-    "unmatched": unmatched(&query.filter, &data.projects),
-    "link": project.map(|project| usage_link(project, query)),
+    "unmatched": unmatched(&query.filter, &data.projects, report_query),
+    "link": page_link(project, query.clone()),
   })
 }
 
@@ -326,7 +329,17 @@ fn key(key: &GroupKey, data: &UsageData) -> Value {
   }
 }
 
-/// The project a row's link opens: the one asked for, or a task's own.
+/// The Usage page of `project`, or every project's, showing `query`.
+fn page_link(project: Option<ProjectId>, query: UsageQuery) -> String {
+  let query = Box::new(query);
+  match project {
+    Some(project) => Link::Usage(project, query),
+    None => Link::UsageEverywhere(query),
+  }
+  .path()
+}
+
+/// The project a row's link opens: the one asked for, or a task's own; `None`, every project's page.
 fn row_project(key: &GroupKey, asked: Option<ProjectId>) -> Option<ProjectId> {
   match key {
     GroupKey::Task { project, .. } => Some(*project),

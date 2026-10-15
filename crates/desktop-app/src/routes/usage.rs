@@ -1,18 +1,22 @@
 //! The Usage page's path and query: `/project/<id>/usage`, and every project's `/usage`, with the period,
-//! grouping and filters `orchester_workspace::usage::UsageQuery` reads and writes as its parameters, so a
-//! link `get_usage` returns opens the page as it was asked for. Only every project's page chooses projects.
+//! grouping and filters `orchester_workspace::usage::UsageQuery` reads and writes as its parameters, written
+//! as `orchester_workspace::links` writes the Usage links, so a link `get_usage` returns opens the page as it
+//! was asked for. Only every project's page chooses projects.
 
-pub(super) use orchester_workspace::usage::SEGMENT;
-use orchester_workspace::usage::{ParamsError, QueryError, UsageQuery};
+pub(super) use orchester_workspace::links::USAGE as SEGMENT;
+use orchester_workspace::{
+  links::with_usage_query,
+  usage::{ParamsError, QueryError, UsageQuery},
+};
 
 use super::{RouteError, query::Params};
 
 pub(super) fn path(project_root: &str, query: &UsageQuery) -> String {
-  format!("{project_root}/{SEGMENT}{}", query.query_string())
+  with_usage_query(format!("{project_root}/{SEGMENT}"), query)
 }
 
 pub(super) fn everywhere_path(query: &UsageQuery) -> String {
-  format!("/{SEGMENT}{}", query.query_string())
+  with_usage_query(format!("/{SEGMENT}"), query)
 }
 
 /// A project's page's query; a `project` parameter is refused.

@@ -2,6 +2,7 @@
 //! links the window's router opens as that page with the same query.
 
 use orchester_app::routes::{ProjectPage, Route};
+use orchester_workspace::links::with_usage_query;
 use serde_json::{Value, json};
 
 use super::Served;
@@ -31,7 +32,7 @@ fn domain_usage_answers_the_last_week_by_day_with_the_pages_link() {
     panic!("a day's link opens the Usage page");
   };
   assert_eq!(
-    narrowed.query_string(),
+    with_usage_query(String::new(), &narrowed),
     format!(
       "?from={day}&to={day}&group=hour",
       day = today["day"].as_str().expect("a day")
@@ -66,10 +67,14 @@ fn domain_usage_groups_and_filters_as_asked_and_links_each_row() {
     .collect();
   assert!(names.contains(&"Builder") && names.contains(&"Reviewer"), "{agents}");
   let everywhere = served.ok("get_usage", &json!({ "group": "pipeline" }));
-  assert_eq!(
-    everywhere["link"],
-    Value::Null,
-    "every project's usage has no one page: {everywhere}"
+  let Route::Usage(query) = routed(&everywhere["link"]) else {
+    panic!("every project's usage opens All projects' Usage tab: {everywhere}");
+  };
+  assert_eq!(query.group, orchester_core::usage::GroupBy::Pipeline);
+  let pipeline = &everywhere["rows"][0];
+  assert!(
+    matches!(routed(&pipeline["link"]), Route::Usage(narrowed) if !narrowed.filter.pipelines.is_empty()),
+    "a row of every project's usage opens the tab narrowed to it: {pipeline}"
   );
   assert_eq!(everywhere["projects"][0]["name"], "Kontur", "{everywhere}");
 }

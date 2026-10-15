@@ -243,7 +243,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_usage",
-    description: "Tokens (spent = input - cached input + output, as each CLI reported them) and active agent time of a project's runs, or of every project's, over a range of local days (the last 7 by default, today counted up to now; at most 366, by hour at most 7), as the Usage page reads them: totals, and rows grouped by hour, day, task, pipeline, step, agent (profile; auto mode's reviewer per model), model or account, filtered by task, run, pipeline, step, agent profile, model or account (names in any case); `unmatched` names each filter value nothing in the range matches. `link` opens the Usage page with the same query; each row's `link` opens it narrowed to the row.",
+    description: "Tokens (spent = input - cached input + output, as each CLI reported them) and active agent time of a project's runs, or of every project's, over a range of local days (the last 7 by default, today counted up to now; at most 366, by hour at most 7), as the Usage page reads them: totals, and rows grouped by hour, day, task, pipeline, step, agent (profile; auto mode's reviewer per model), model or account, filtered by task, run, pipeline, step, agent profile, model or account (names in any case); `unmatched` names each filter value nothing in the range matches. `link` opens the Usage page with the same query (without `project`, All projects' Usage tab); each row's `link` opens it narrowed to the row.",
     schema: schema_for_type::<usage::GetUsage>,
     read_only: true,
   },

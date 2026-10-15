@@ -13,7 +13,7 @@ use orchester_workspace::usage::Dashboard;
 use super::{
   Views,
   card::{Card, footnote, push_down, state, state_room, view_switch},
-  limits_chart::{LimitsChart, LimitsProps, drawn, line_name},
+  limits_chart::{LimitsChart, LimitsProps, line_name},
   limits_legend::legend,
   table::{Cell, Density, Width, column, row, table},
   threshold, tokens, words,
@@ -25,8 +25,6 @@ const REPORTED_COLUMN: f32 = 92.0;
 const WINDOW_COLUMN: f32 = 100.0;
 const USED_COLUMN: f32 = 40.0;
 const RESETS_COLUMN: f32 = 84.0;
-/// The readings the table lists (`CFzvr`): it reads beside *Tokens over time*, the chart has them all.
-const TABLE_READINGS: usize = 7;
 
 pub fn limits_view_switch(ctx: &Ctx, views: &Signal<Views>) -> Element {
   let views = views.clone();
@@ -108,9 +106,8 @@ fn footnote_text(ctx: &Ctx, dashboard: &Dashboard) -> Arc<str> {
   sentences.join(&ctx.t("usage.sentenceSeparator")).into()
 }
 
-/// The newest readings as a table, newest first: when, which window, % used, its reset and the run that
-/// reported it. A reading that says what its window's reading before said is left out, so the rows show
-/// where use moved.
+/// The readings `Dashboard::limit_table` picks, as a table: when, which window, % used, its reset and the run
+/// that reported it.
 fn limits_table(ctx: &Ctx, dashboard: &Dashboard) -> Element {
   let columns = [
     column(ctx.t("usage.table.reported"), Width::Px(REPORTED_COLUMN), false),
@@ -119,22 +116,9 @@ fn limits_table(ctx: &Ctx, dashboard: &Dashboard) -> Element {
     column(ctx.t("usage.table.resets"), Width::Px(RESETS_COLUMN), false),
     column(ctx.t("usage.table.reportedBy"), Width::Flex(1.0), false),
   ];
-  let mut readings: Vec<_> = drawn(dashboard)
+  let rows = dashboard
+    .limit_table()
     .into_iter()
-    .flat_map(|line| {
-      let mut before = None;
-      line.points.iter().filter_map(move |point| {
-        let used = point.percent.round();
-        let moved = before != Some(used);
-        before = Some(used);
-        moved.then_some((line, point))
-      })
-    })
-    .collect();
-  readings.sort_by_key(|(_, point)| std::cmp::Reverse(point.at));
-  let rows = readings
-    .into_iter()
-    .take(TABLE_READINGS)
     .enumerate()
     .map(|(index, (line, point))| {
       let source = point.source.as_ref().map_or_else(

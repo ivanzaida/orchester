@@ -91,6 +91,14 @@ impl UsageReport {
     }
   }
 
+  /// Whether anything in the range counts under the query's filter: a turn, a review by auto mode's
+  /// reviewer, or an invocation at work.
+  pub fn matches_any(projects: &[ProjectFacts], query: UsageQuery<'_>) -> bool {
+    Matched::of(projects, query.filter)
+      .within(query.range, query.now)
+      .has_activity()
+  }
+
   /// Whether the range has activity that the filters hide: the filters match nothing.
   pub fn hidden_by(projects: &[ProjectFacts], query: UsageQuery<'_>) -> bool {
     let all = Matched::of(projects, &UsageFilter::default());

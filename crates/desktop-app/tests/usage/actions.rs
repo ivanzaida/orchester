@@ -80,7 +80,7 @@ fn usage_custom_range_refuses_a_reversed_range_and_shows_a_typed_one() {
   });
   page.click("usage-custom-show");
   assert_eq!(
-    page.query().query_string(),
+    orchester_workspace::links::with_usage_query(String::new(), &page.query()),
     "?from=2026-09-01&to=2026-09-30",
     "the range, by day as before"
   );

@@ -12,7 +12,7 @@ use orchester_core::{
   project::TaskKey,
   usage::{DayRange, GroupBy, Period},
 };
-use orchester_workspace::usage::{UsageQuery, usage_link};
+use orchester_workspace::{links::Link, usage::UsageQuery};
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const CONNECTION: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
@@ -460,7 +460,7 @@ fn usage_pages_carry_their_query_as_the_workspace_links_it() {
   let route = at(ProjectPage::Usage(Box::new(query.clone())));
   assert_eq!(
     route.path(),
-    usage_link(project(), &query),
+    Link::Usage(project(), Box::new(query)).path(),
     "the router writes the link the tools return"
   );
   assert_eq!(Route::parse(&route.path()), Ok(route.clone()));

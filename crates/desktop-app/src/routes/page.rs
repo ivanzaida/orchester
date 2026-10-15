@@ -4,7 +4,7 @@ use orchester_core::{
   id::{ConnectionId, ResourceId},
   project::TaskKey,
 };
-use orchester_workspace::usage::{SEGMENT as USAGE, UsageQuery};
+use orchester_workspace::{links::USAGE, usage::UsageQuery};
 
 use super::{
   CONNECTIONS, ConnectionsView, EDIT, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS,

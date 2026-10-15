@@ -324,7 +324,13 @@ fn usage_groups_total_what_the_rows_add_up_to_and_say_whether_a_filter_matches_a
   let only = |change: fn(&mut UsageFilter)| {
     let mut filter = UsageFilter::default();
     change(&mut filter);
-    filter.admits_any(facts)
+    UsageReport::matches_any(
+      facts,
+      UsageQuery {
+        filter: &filter,
+        ..query
+      },
+    )
   };
   assert!(
     only(|filter| filter.models.push("claude-haiku-4-5".into())),
@@ -333,4 +339,25 @@ fn usage_groups_total_what_the_rows_add_up_to_and_say_whether_a_filter_matches_a
   assert!(only(|filter| filter.tasks.push("KON-2".into())));
   assert!(!only(|filter| filter.tasks.push("KON-9".into())));
   assert!(!only(|filter| filter.steps.push("Plan".into())));
+  // KON-1 worked on Sep 25 only: a range after it has nothing of it.
+  let after = UsageQuery {
+    range: DayRange::new(date(26), date(30)).expect("a range"),
+    ..query
+  };
+  let mut kon_1 = UsageFilter::default();
+  kon_1.tasks.push("KON-1".into());
+  assert!(!UsageReport::matches_any(
+    facts,
+    UsageQuery {
+      filter: &kon_1,
+      ..after
+    }
+  ));
+  assert!(UsageReport::matches_any(
+    facts,
+    UsageQuery {
+      filter: &kon_1,
+      ..query
+    }
+  ));
 }

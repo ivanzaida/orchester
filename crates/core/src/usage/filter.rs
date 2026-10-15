@@ -6,15 +6,12 @@
 //! the reviewer's CLI and model and by the step whose request it judged; it has no agent profile and no
 //! account.
 
-use std::{
-  collections::{BTreeMap, HashMap},
-  sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 use super::facts::{InvocationFacts, ProjectFacts, RunFacts};
 use crate::{
   connection::AgentProvider,
-  id::{AgentAccountId, InvocationId, ProjectId, ResourceId, RunId},
+  id::{AgentAccountId, ProjectId, ResourceId, RunId},
 };
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -71,27 +68,6 @@ impl UsageFilter {
       && (self.tags.is_empty() || run.tags.iter().any(|tag| self.tags.contains(tag)))
       && chosen(&self.runs, Some(&run.id))
       && (self.tasks.is_empty() || self.tasks.iter().any(|task| names_task(task, run)))
-  }
-
-  /// Whether anything in `projects` counts: an invocation, or a review by auto mode's reviewer.
-  pub fn admits_any(&self, projects: &[ProjectFacts]) -> bool {
-    projects.iter().any(|project| {
-      let runs: HashMap<RunId, &RunFacts> = project.facts.runs.iter().map(|run| (run.id, run)).collect();
-      let invocations: HashMap<InvocationId, (&RunFacts, &InvocationFacts)> = project
-        .facts
-        .invocations
-        .iter()
-        .filter_map(|invocation| Some((invocation.id, (*runs.get(&invocation.run)?, invocation))))
-        .collect();
-      invocations
-        .values()
-        .any(|(run, invocation)| self.admits(project.project, run, invocation))
-        || project.facts.reviews.iter().any(|review| {
-          invocations.get(&review.invocation).is_some_and(|(run, invocation)| {
-            self.admits_review((project.project, run, invocation), (review.cli, &review.model))
-          })
-        })
-    })
   }
 
   /// Whether the plan limits of `cli` are shown.

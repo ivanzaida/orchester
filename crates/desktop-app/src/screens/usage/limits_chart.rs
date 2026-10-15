@@ -74,16 +74,6 @@ pub struct LimitsChart {
   redraw: Redraw,
 }
 
-/// The lines a range shows: by day, 5-hour windows would be a comb of spikes and are left out.
-pub fn drawn(dashboard: &Dashboard) -> Vec<&LimitLine> {
-  dashboard
-    .limits
-    .lines
-    .iter()
-    .filter(|line| dashboard.grouping == Grouping::Hour || line.kind() != WindowKind::FiveHour)
-    .collect()
-}
-
 /// A window's name: `weekly`, `5-hour`, or its length.
 pub fn window_name(ctx: &Ctx, minutes: u64) -> Arc<str> {
   match WindowKind::of(minutes) {
@@ -216,8 +206,13 @@ fn plot(ctx: &Ctx, dashboard: &Dashboard, hovered: Hovered) -> LimitPlot {
   let (start, end) = (dashboard.range.start(), dashboard.range.end());
   let shown_until = dashboard.now.min(end);
   let percent = |value: u64| words::share(ctx, Some(value));
-  let lines = drawn(dashboard).into_iter().map(|line| drawn_line(ctx, line)).collect();
-  let resets = drawn(dashboard)
+  let lines = dashboard
+    .drawn_limits()
+    .into_iter()
+    .map(|line| drawn_line(ctx, line))
+    .collect();
+  let resets = dashboard
+    .drawn_limits()
     .into_iter()
     .filter(|line| line.kind() == WindowKind::Weekly)
     .flat_map(|line| line.resets.iter().map(move |reset| (line, *reset)))
@@ -338,7 +333,7 @@ fn tip(ctx: &Ctx, dashboard: &Dashboard, plot: &LimitPlot, hovered: Hovered) -> 
       Some((*at, tooltip::title_tip("usage-limits-tooltip", name)))
     }
     Hovered::Point(line, point) => {
-      let line = *drawn(dashboard).get(line)?;
+      let line = *dashboard.drawn_limits().get(line)?;
       let point = line.points.get(point)?;
       let used = ctx.t_args(
         "usage.limits.used",

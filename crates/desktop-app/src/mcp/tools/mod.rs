@@ -10,6 +10,7 @@ mod navigate;
 mod set_theme;
 
 use lurq::mcp::McpTool;
+use orchester_workspace::links::with_usage_query;
 use serde_json::{Map, Value, json};
 
 pub use self::{
@@ -56,7 +57,7 @@ pub fn route_json(route: &Route) -> Value {
     // Every project's usage: navigate takes it back as usage without a project.
     Route::Usage(query) => {
       name = Screen::Usage.name();
-      if let Some(query) = query.query_string().strip_prefix('?') {
+      if let Some(query) = with_usage_query(String::new(), query).strip_prefix('?') {
         params.insert("query".to_owned(), json!(query));
       }
     }
@@ -84,7 +85,7 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
     }
     ProjectPage::EditTask(key) => insert("key", &key.to_string()),
     ProjectPage::Usage(query) => {
-      let query = query.query_string();
+      let query = with_usage_query(String::new(), query);
       if let Some(query) = query.strip_prefix('?') {
         insert("query", query);
       }

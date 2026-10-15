@@ -5,6 +5,7 @@
 //! A place whose page is not built yet still has its link; the router shows the page's placeholder.
 
 mod query;
+mod usage;
 
 use std::num::NonZeroU64;
 
@@ -13,7 +14,11 @@ use orchester_core::{
   project::TaskKey,
 };
 
-pub use self::query::{encode, with_query};
+pub use self::{
+  query::{encode, with_query},
+  usage::{SEGMENT as USAGE, with_usage_query},
+};
+use crate::usage::UsageQuery;
 
 /// A place in the app a tool result points to.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -40,6 +45,10 @@ pub enum Link {
   Account(AgentAccountId),
   /// A pull request of the project's repository, by its number.
   PullRequest(ProjectId, NonZeroU64),
+  /// A project's Usage page showing a query (boxed: a query holds many filters).
+  Usage(ProjectId, Box<UsageQuery>),
+  /// Every project's usage, All projects' *Usage* tab, showing a query.
+  UsageEverywhere(Box<UsageQuery>),
 }
 
 /// The tab of a task's page a link opens.
@@ -91,6 +100,8 @@ impl Link {
         &[("tab", Some("accounts")), ("account", Some(&id.to_string()))],
       ),
       Self::PullRequest(project, number) => format!("{}/pull-requests/{number}", root(*project)),
+      Self::Usage(project, query) => with_usage_query(format!("{}/{USAGE}", root(*project)), query),
+      Self::UsageEverywhere(query) => with_usage_query(format!("/{USAGE}"), query),
     }
   }
 }

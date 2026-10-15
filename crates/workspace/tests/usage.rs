@@ -17,9 +17,12 @@ use orchester_core::{
     TurnUsage, UsageFacts, UsageFilter, limits::WarningThreshold, local_date,
   },
 };
-use orchester_workspace::usage::{
-  CustomRangeError, Dashboard, DashboardState, Facet, FilterValue, ParamsError, QueryError, UsageData, UsageQuery,
-  ValueLabel, custom_range, usage_link,
+use orchester_workspace::{
+  links::Link,
+  usage::{
+    CustomRangeError, Dashboard, DashboardState, Facet, FilterValue, ParamsError, QueryError, TABLE_READINGS,
+    UsageData, UsageQuery, ValueLabel, custom_range,
+  },
 };
 
 /// The parameters of `query` read back through `from_params`, as the router hands them out.
@@ -117,13 +120,15 @@ fn usage_link_names_the_project_and_encodes_the_query() {
     ..UsageQuery::default()
   };
   query.filter.pipelines.push("Fix & ship".into());
+  let link = |query: &UsageQuery| Link::Usage(project, Box::new(query.clone())).path();
+  assert_eq!(link(&UsageQuery::default()), format!("/project/{project}/usage"));
   assert_eq!(
-    usage_link(project, &UsageQuery::default()),
-    format!("/project/{project}/usage")
+    link(&query),
+    format!("/project/{project}/usage?group=agent&pipeline=Fix%20%26%20ship"),
   );
   assert_eq!(
-    usage_link(project, &query),
-    format!("/project/{project}/usage?group=agent&pipeline=Fix%20%26%20ship"),
+    Link::UsageEverywhere(Box::new(query)).path(),
+    "/usage?group=agent&pipeline=Fix%20%26%20ship"
   );
 }
 
@@ -357,4 +362,67 @@ fn usage_every_projects_page_chooses_projects_by_menu_link_and_row() {
       .filter
       .is_empty()
   );
+}
+
+#[test]
+fn usage_limit_table_lists_the_seven_newest_readings_where_use_moved() {
+  use orchester_core::{
+    connection::plan_limits::{LimitState, LimitWindow, PlanLimits},
+    usage::limits::LimitSnapshot,
+  };
+  let now = Timestamp::now();
+  let (mut data, ..) = data(now);
+  // Twenty weekly readings an hour apart: 10%, 10%, 11%, 11%, … so every other one repeats its window's.
+  let snapshots: Vec<LimitSnapshot> = (0..20_i64)
+    .map(|index| {
+      let percent = 10.0 + (index / 2) as f64;
+      let window = LimitWindow::new(10_080, Some(percent), None, LimitState::Normal, false).expect("a window");
+      LimitSnapshot {
+        provider: AgentProvider::CodexCli,
+        account: None,
+        at: Timestamp::from_unix_millis(now.unix_millis() - (20 - index) * 3_600_000),
+        limits: PlanLimits {
+          windows: vec![window],
+          plan: None,
+          credits: None,
+          blocked: None,
+        },
+        source: None,
+      }
+    })
+    .collect();
+  data.snapshots = Arc::from(snapshots);
+  let page = dashboard(&UsageQuery::default(), &data, now);
+  let used: Vec<f64> = page.limit_table().iter().map(|(_, point)| point.percent).collect();
+  assert_eq!(TABLE_READINGS, 7);
+  assert_eq!(
+    used,
+    [19.0, 18.0, 17.0, 16.0, 15.0, 14.0, 13.0],
+    "the newest seven, each % once"
+  );
+}
+
+#[test]
+fn usage_pipeline_versions_are_each_pipelines_own() {
+  let now = Timestamp::now();
+  let (mut data, ..) = data(now);
+  let version = |number: u32| {
+    Some(orchester_core::resource::VersionNumber::new(
+      NonZeroU32::new(number).expect("above zero"),
+    ))
+  };
+  let mut kontur = data.projects[0].clone();
+  kontur.facts.runs[0].pipeline_version = version(3);
+  data.projects = Arc::from([kontur.clone()]);
+  let page = dashboard(&UsageQuery::default(), &data, now);
+  assert_eq!(page.pipeline_version("Feature delivery"), version(3));
+  assert_eq!(page.run_pipeline_version(kontur.facts.runs[0].id), version(3));
+  // Another project's pipeline of the same name has versions of its own: the name alone says no version.
+  let mut atlas = kontur.clone();
+  atlas.project = ProjectId::generate();
+  atlas.facts.runs[0].pipeline_id = Some(ResourceId::generate());
+  atlas.facts.runs[0].pipeline_version = version(1);
+  data.projects = Arc::from([kontur, atlas]);
+  let page = dashboard(&UsageQuery::default(), &data, now);
+  assert_eq!(page.pipeline_version("Feature delivery"), None);
 }
