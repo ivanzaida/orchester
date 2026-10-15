@@ -18,10 +18,10 @@ fn usage_page_charts_the_seeded_week() {
   let legend = page.text("usage-tokens-legend");
   assert!(legend.contains("Codex") && legend.contains("Claude"), "{legend}");
   assert!(page.shows("usage-limits-chart"));
-  assert!(page.text("usage-limits-legend").contains("Claude · weekly"));
+  assert!(page.text("usage-limits-legend").contains("Claude · Work · weekly"));
   let footnote = page.text("usage-limits-footnote");
   assert!(
-    footnote.contains("Hatched: ") && footnote.contains("no Claude data before"),
+    footnote.contains("Hatched: ") && footnote.contains("no data"),
     "{footnote}"
   );
   assert!(page.text("usage-breakdown-profiles").contains("Builder · Implement"));
@@ -141,7 +141,7 @@ fn usage_page_names_filters_that_match_nothing() {
   assert!(
     page
       .text("usage-limits-caption")
-      .starts_with("follow the CLI filter only")
+      .starts_with("follow the Account filter only")
   );
   page.click("usage-clear-filters-empty");
   assert!(page.query().filter.is_empty());
@@ -193,7 +193,7 @@ fn usage_page_shows_the_reviewer_and_both_clis_five_hour_windows() {
     page.text("usage-breakdown-subtitle"),
     "Auto mode reviewer rows can’t be selected as a filter."
   );
-  assert!(page.shows("usage-limits-window-1-300"), "Claude's 5-hour window");
+  assert!(page.shows("usage-limits-window-2-300"), "Claude · Work's 5-hour window");
 }
 
 #[test]

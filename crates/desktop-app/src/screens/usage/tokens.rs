@@ -1,7 +1,6 @@
-//! *Tokens over time* (`Card · Tokens over time` `w1aVOX`): stacked bars by CLI per hour or day with
-//! *Spent* / *Cached* / *Output*, a legend with each CLI's total, a tooltip on the hovered bar (`Chart
-//! tooltip` `G7cuH`: the day, each CLI's exact count with its swatch, spent and runs) and the same data as
-//! a table with exact numbers (`Table` `fxX9i`).
+//! *Tokens over time* (`Card · Tokens over time` `w1aVOX`, `EA7QF`): stacked bars by account per hour or day
+//! with *Spent* / *Cached* / *Output*, a legend with each series' total ([`super::tokens_legend`]), a tooltip
+//! on the hovered bar (`Chart tooltip` `G7cuH`) and the same data as a table ([`super::tokens_table`]).
 
 use std::sync::Arc;
 
@@ -10,24 +9,24 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
     events::MouseEvent,
-    theme::{SpacingSize, TypographyStyle},
   },
   canvas::CanvasHandle,
-  components::{Canvas, Column, Row, Spacer, Stack, Text},
+  components::{Canvas, Column, Stack},
   core::{ElementRef, Signal},
-  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::usage::{CliSeries, Grouping, Measure, SeriesBar};
+use orchester_core::usage::{AccountSeries, Grouping, Measure, SeriesBar};
 use orchester_workspace::{display, usage::Dashboard};
 use parking_lot::Mutex;
 
 use super::{
   Views,
-  card::{Card, footnote, legend_item, push_down, view_switch},
+  card::{Card, footnote, push_down, view_switch},
   plot::{AxisName, AxisText, CHART_HEIGHT, Frame, Redraw, label_every},
-  table::{Cell, Density, TableColumn, Width, column, row, table, total_row},
+  series::{account_text, series_swatch, series_text},
   tokens_draw::{TokenPlot, draw},
+  tokens_legend::legend,
+  tokens_table::tokens_table,
   tooltip, words,
 };
 use crate::{
@@ -38,14 +37,8 @@ use crate::{
   },
 };
 
-/// The legend's room over the chart, as tall as *Plan limits*' two rows of windows beside it, so the two
-/// plots line up (`Legend` `CuobA`).
-pub const LEGEND_HEIGHT: f32 = 72.0;
 /// About how wide an x axis label is, to leave out labels that would crowd.
 const LABEL_ROOM: f32 = 56.0;
-/// Table columns (`fxX9i`): a CLI's, spent, runs.
-const FIGURE_COLUMN: f32 = 96.0;
-const RUNS_COLUMN: f32 = 44.0;
 
 /// The card, its body as `views` say.
 pub fn card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>) -> Element {
@@ -69,7 +62,7 @@ pub fn card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>) ->
     },
   );
   card.body([
-    chart_block(totals(ctx, dashboard, shown.measure), chart),
+    chart_block(legend(ctx, dashboard, shown.measure), chart),
     footnote("usage-tokens-footnote", &chart_footnote(ctx, dashboard)),
   ])
 }
@@ -168,7 +161,7 @@ impl Component for TokensChart {
     let plot = TokenPlot {
       bars: bars
         .iter()
-        .map(|bar| bar.by_cli.map(|usage| measure.of(usage)))
+        .map(|bar| dashboard.split(&bar.by_account).series.map(|usage| measure.of(usage)))
         .collect(),
       labels: labels(ctx, &dashboard, width),
       label_kind: if dashboard.grouping == Grouping::Hour && dashboard.range.days() == 1 {
@@ -224,6 +217,7 @@ impl Component for TokensChart {
         };
         let (slot, slot_width) = frame.slot(index, count);
         tooltip::beside(
+          (self.reference.clone(), CHART_HEIGHT),
           (tokens_tip(ctx, &dashboard, bar, measure), tooltip::WIDTH),
           (slot, slot + slot_width),
           width,
@@ -287,23 +281,30 @@ fn labels(ctx: &Ctx, dashboard: &Dashboard, width: Option<f32>) -> Vec<Option<Ax
     .collect()
 }
 
-/// The hovered bar's tooltip: its day, each CLI's exact count, spent and runs.
+/// The hovered bar's tooltip (`EA7QF`): its day, each series with usage in the range with its exact count,
+/// top to bottom in series order, Other accounts opened to its accounts, then the measure's total and the runs.
 fn tokens_tip(ctx: &Ctx, dashboard: &Dashboard, bar: &SeriesBar, measure: Measure) -> Element {
   let title = match bar.bucket.hour {
     Some(_) => bar_name(ctx, bar),
     None => words::long_day(ctx, bar.bucket.date),
   };
-  let mut rows: Vec<Element> = CliSeries::ALL
-    .into_iter()
-    .filter(|series| shown(dashboard, *series))
-    .map(|series| {
-      tooltip::line(
-        Some(super::card::series_color(series)),
-        &words::series_name(ctx, series),
-        Some(&words::exact(ctx, measure.of(bar.by_cli[series.index()]))),
-      )
-    })
-    .collect();
+  let split = dashboard.split(&bar.by_account);
+  let mut rows: Vec<Element> = Vec::new();
+  for series in dashboard.shown_series() {
+    rows.push(tooltip::line(
+      Some(series_swatch(series)),
+      &series_text(ctx, &dashboard.series_label(series)),
+      Some(&words::exact(ctx, measure.of(split.of(series)))),
+    ));
+    if series == AccountSeries::Other && split.others.len() > 1 {
+      rows.extend(split.others.iter().map(|(account, usage)| {
+        tooltip::detail_line(
+          &account_text(ctx, &dashboard.account_label(*account)),
+          &words::exact(ctx, measure.of(*usage)),
+        )
+      }));
+    }
+  }
   rows.push(tooltip::line(
     None,
     &ctx.t(measure_key(measure)),
@@ -325,15 +326,6 @@ const fn measure_key(measure: Measure) -> &'static str {
   }
 }
 
-/// Whether a CLI's series has anything in the range.
-fn shown(dashboard: &Dashboard, series: CliSeries) -> bool {
-  dashboard
-    .report
-    .series
-    .iter()
-    .any(|bar| bar.by_cli[series.index()] != Default::default())
-}
-
 /// What *Spent* counts, and how far today counts when the range has it.
 fn chart_footnote(ctx: &Ctx, dashboard: &Dashboard) -> Arc<str> {
   if dashboard.has_today() {
@@ -343,134 +335,5 @@ fn chart_footnote(ctx: &Ctx, dashboard: &Dashboard) -> Arc<str> {
     )
   } else {
     ctx.t("usage.tokens.footnote")
-  }
-}
-
-/// What the bars count, per day or per hour.
-fn caption(ctx: &Ctx, dashboard: &Dashboard, measure: Measure) -> Arc<str> {
-  ctx.t(match (measure, dashboard.grouping) {
-    (Measure::Spent, Grouping::Day) => "usage.tokens.perDay.spent",
-    (Measure::Cached, Grouping::Day) => "usage.tokens.perDay.cached",
-    (Measure::Output, Grouping::Day) => "usage.tokens.perDay.output",
-    (Measure::Spent, Grouping::Hour) => "usage.tokens.perHour.spent",
-    (Measure::Cached, Grouping::Hour) => "usage.tokens.perHour.cached",
-    (Measure::Output, Grouping::Hour) => "usage.tokens.perHour.output",
-  })
-}
-
-/// The legend: each CLI with its total for the measure, and what the bars count at the end.
-fn totals(ctx: &Ctx, dashboard: &Dashboard, measure: Measure) -> Element {
-  let items = CliSeries::ALL
-    .into_iter()
-    .filter(|series| shown(dashboard, *series))
-    .map(|series| {
-      let total: u64 = dashboard
-        .report
-        .series
-        .iter()
-        .map(|bar| measure.of(bar.by_cli[series.index()]))
-        .sum();
-      legend_item(
-        super::card::series_color(series),
-        &words::series_name(ctx, series),
-        Some(&words::tokens(total)),
-      )
-    });
-  Column::new()
-    .id("usage-tokens-legend")
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(LEGEND_HEIGHT))
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Lg)
-        .align_items(Alignment::Center)
-        .with_children(items)
-        .child(Spacer::new().flex(1.0))
-        .child(
-          Text::new(&caption(ctx, dashboard, measure))
-            .id("usage-tokens-caption")
-            .variant(TypographyStyle::Caption)
-            .nowrap(),
-        ),
-    )
-    .into()
-}
-
-/// A row's name in the table: `Wed, Sep 24`, `Today, until 14:20`, or an hour.
-fn row_name(ctx: &Ctx, dashboard: &Dashboard, bar: &SeriesBar) -> Arc<str> {
-  if bar.bucket.hour.is_some() {
-    return bar_name(ctx, bar);
-  }
-  if bar.bucket.date == dashboard.today() {
-    return ctx.t_args(
-      "usage.tokens.todayUntil",
-      [("time", display::clock(dashboard.now).as_str())],
-    );
-  }
-  words::long_day(ctx, bar.bucket.date)
-}
-
-/// The bars as a table with exact numbers (`fxX9i`); by hour only the hours that have usage.
-fn tokens_table(ctx: &Ctx, dashboard: &Dashboard, measure: Measure) -> Element {
-  let series: Vec<CliSeries> = CliSeries::ALL
-    .into_iter()
-    .filter(|series| shown(dashboard, *series))
-    .collect();
-  let hourly = dashboard.grouping == Grouping::Hour;
-  let mut columns: Vec<TableColumn> = vec![column(
-    ctx.t(if hourly { "usage.table.hour" } else { "usage.table.day" }),
-    Width::Flex(1.0),
-    false,
-  )];
-  columns.extend(series.iter().map(|series| {
-    column(words::series_heading(ctx, *series), Width::Px(FIGURE_COLUMN), true)
-      .swatch(super::card::series_color(*series))
-  }));
-  columns.push(column(ctx.t(heading_key(measure)), Width::Px(FIGURE_COLUMN), true));
-  columns.push(column(ctx.t("usage.table.runs"), Width::Px(RUNS_COLUMN), true));
-  let bars = &dashboard.report.series;
-  let mut rows: Vec<Element> = bars
-    .iter()
-    .enumerate()
-    .filter(|(_, bar)| !hourly || bar.total() != Default::default())
-    .map(|(index, bar)| {
-      let mut cells = vec![Cell::Text(row_name(ctx, dashboard, bar))];
-      cells.extend(
-        series
-          .iter()
-          .map(|series| Cell::Text(words::exact(ctx, measure.of(bar.by_cli[series.index()])))),
-      );
-      cells.push(Cell::Text(words::exact(ctx, measure.of(bar.total()))));
-      cells.push(Cell::Text(bar.runs.to_string().into()));
-      row(
-        &format!("usage-tokens-table-row-{index}"),
-        &columns,
-        Density::Data,
-        cells,
-      )
-      .into()
-    })
-    .collect();
-  let mut total = vec![Cell::Strong(ctx.t("usage.table.total"))];
-  total.extend(series.iter().map(|series| {
-    let sum = bars.iter().map(|bar| measure.of(bar.by_cli[series.index()])).sum();
-    Cell::Strong(words::exact(ctx, sum))
-  }));
-  total.push(Cell::Strong(words::exact(
-    ctx,
-    bars.iter().map(|bar| measure.of(bar.total())).sum(),
-  )));
-  // A run can report in several hours or days, so the total is the period's, not the rows' sum.
-  total.push(Cell::Strong(dashboard.report.summary.runs.to_string().into()));
-  rows.push(total_row("usage-tokens-table-total", &columns, total).into());
-  table("usage-tokens-table", &columns, Density::Data, rows)
-}
-
-const fn heading_key(measure: Measure) -> &'static str {
-  match measure {
-    Measure::Spent => "usage.table.measure.spent",
-    Measure::Cached => "usage.table.measure.cached",
-    Measure::Output => "usage.table.measure.output",
   }
 }

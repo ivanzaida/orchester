@@ -12,10 +12,10 @@ use orchester_core::{
   id::{AgentAccountId, ProjectId, ResourceId, RunId},
   resource::VersionNumber,
   run::RunNumber,
-  usage::{BreakdownKey, UsageFilter},
+  usage::{AccountSeries, BreakdownKey, UsageFilter},
 };
 
-use super::{Dashboard, UsageQuery, names::Names};
+use super::{Dashboard, UsageQuery, names::Names, series::account_value_label};
 
 /// One filter.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -35,11 +35,11 @@ pub enum Facet {
 
 impl Facet {
   /// The filters the toolbar has a menu for, in its order.
-  pub const MENUS: [Self; 5] = [Self::Cli, Self::Model, Self::Profile, Self::Pipeline, Self::Tag];
+  pub const MENUS: [Self; 5] = [Self::Account, Self::Model, Self::Profile, Self::Pipeline, Self::Tag];
   /// The menus of every project's page: *Project* first (`rHA8G`).
   pub const EVERY_PROJECT_MENUS: [Self; 6] = [
     Self::Project,
-    Self::Cli,
+    Self::Account,
     Self::Model,
     Self::Profile,
     Self::Pipeline,
@@ -69,6 +69,8 @@ pub enum FilterValue {
   Text(Arc<str>),
   Run(RunId),
   Account(AgentAccountId),
+  /// Usage that started on no account.
+  NoAccount,
 }
 
 /// How a value reads.
@@ -91,6 +93,8 @@ pub enum ValueLabel {
     name: Arc<str>,
     version: Option<VersionNumber>,
   },
+  /// *No account*.
+  NoAccount,
   /// An id that names nothing the page read, shown as it was given.
   Unknown(Arc<str>),
 }
@@ -103,6 +107,8 @@ pub struct FilterOption {
   pub chosen: bool,
   /// How many runs carry a tag.
   pub runs: Option<usize>,
+  /// The series an account's usage is drawn in, whose swatch its option wears.
+  pub series: Option<AccountSeries>,
 }
 
 impl Dashboard {
@@ -114,6 +120,7 @@ impl Dashboard {
       label,
       chosen,
       runs: None,
+      series: None,
     };
     let texts = |values: &[Arc<str>], chosen: &[Arc<str>]| -> Vec<FilterOption> {
       values
@@ -177,7 +184,8 @@ impl Dashboard {
           )
         })
         .collect(),
-      Facet::Task | Facet::Run | Facet::Step | Facet::Account => Vec::new(),
+      Facet::Account => self.account_options(),
+      Facet::Task | Facet::Run | Facet::Step => Vec::new(),
     }
   }
 
@@ -240,15 +248,14 @@ impl Dashboard {
         .accounts
         .iter()
         .map(|account| {
-          let label = self.names.account(*account).map_or_else(
-            || ValueLabel::Unknown(account.to_string().into()),
-            |known| ValueLabel::Account {
-              cli: known.cli(),
-              name: known.name().map(|name| name.as_str().into()),
-            },
-          );
+          let label = account_value_label(self.account_label(*account), *account);
           (FilterValue::Account(*account), label)
         })
+        .chain(
+          filter
+            .no_account
+            .then_some((FilterValue::NoAccount, ValueLabel::NoAccount)),
+        )
         .collect(),
     }
   }
@@ -293,7 +300,10 @@ impl Dashboard {
       Facet::Task => filter.tasks.clear(),
       Facet::Run => filter.runs.clear(),
       Facet::Step => filter.steps.clear(),
-      Facet::Account => filter.accounts.clear(),
+      Facet::Account => {
+        filter.accounts.clear();
+        filter.no_account = false;
+      }
     }
     self.query.with_filter(filter)
   }
@@ -334,6 +344,7 @@ impl Dashboard {
       FilterValue::Cli(cli) => filter.clis.retain(|chosen| chosen != cli),
       FilterValue::Run(run) => filter.runs.retain(|chosen| chosen != run),
       FilterValue::Account(account) => filter.accounts.retain(|chosen| chosen != account),
+      FilterValue::NoAccount => filter.no_account = false,
       FilterValue::Text(text) => {
         let list = match facet {
           Facet::Profile => Some(&self.names.profiles),
@@ -375,6 +386,7 @@ fn add_value(filter: &mut UsageFilter, facet: Facet, value: FilterValue) {
     FilterValue::Cli(cli) => filter.clis.push(cli),
     FilterValue::Run(run) => filter.runs.push(run),
     FilterValue::Account(account) => filter.accounts.push(account),
+    FilterValue::NoAccount => filter.no_account = true,
     FilterValue::Text(text) => {
       if let Some(values) = texts_of(filter, facet) {
         values.push(text);

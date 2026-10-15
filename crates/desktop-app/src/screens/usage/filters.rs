@@ -1,8 +1,9 @@
 //! The toolbar's filters (`Filters` `N20RN`, `Usage · interactions` `p732q`): a button per filter
-//! (*CLI*, *Model*, *Agent profile*, *Pipeline*, *Tag*) that says how much it chooses (*Model · 1 of 5*)
-//! and opens its menu of checkboxes, with a search where the list is long; then a chip per chosen value,
-//! from a menu, a *Where tokens go* row or a link (a task, a run, a step or an account a link may add too),
-//! and *Clear filters*. What a menu offers and what a choice does is `orchester_workspace::usage`.
+//! (*Account*, *Model*, *Agent profile*, *Pipeline*, *Tag*) that says how much it chooses (*Account · 2 of 6*)
+//! and opens its menu of checkboxes, with a search where the list is long; *Account*'s groups the connected
+//! accounts by CLI, each with its series' swatch, then *No account* (`EU0ex`). Then a chip per chosen value,
+//! from a menu, a *Where tokens go* row or a link (a CLI, a task, a run or a step a link may add too), and
+//! *Clear filters*. What a menu offers and what a choice does is `orchester_workspace::usage`.
 
 use std::sync::Arc;
 
@@ -16,23 +17,28 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::usage::CliSeries;
-use orchester_workspace::usage::{Dashboard, Facet, FilterOption, FilterValue, ValueLabel};
+use orchester_workspace::usage::{AccountLabel, Dashboard, Facet, FilterOption, ValueLabel};
 
-use super::{Requery, card::series_color, words};
+use super::{
+  Requery,
+  series::{account_name, account_text, cli_heading, series_swatch},
+  words,
+};
 use crate::{
   theme::IconSize,
   ui::{
     button::{ActionButton, ButtonKind},
     field::FieldInput,
-    filter::{FilterChip, filter_menu_panel, filter_option},
+    filter::{FilterChip, filter_group, filter_menu_panel, filter_option, filter_option_explained},
     icon::{Icon, icon},
+    menu::separator,
     state::loading,
   },
 };
 
-/// A menu's width (`CLI menu` `tEymU`), and with a search (`Model menu` `dcY35`).
+/// A menu's width (`CLI menu` `tEymU`), with a search (`Model menu` `dcY35`), and *Account*'s (`JoCR3`).
 const MENU_WIDTH: f32 = 220.0;
+const ACCOUNT_MENU_WIDTH: f32 = 260.0;
 const SEARCH_MENU_WIDTH: f32 = 240.0;
 /// A list longer than this gets a search; *Model* always has one (`Model filter · search in a long list`).
 const SEARCH_FROM: usize = 8;
@@ -76,8 +82,14 @@ pub fn value_text(ctx: &Ctx, label: &ValueLabel) -> Arc<str> {
     ValueLabel::Name(name) | ValueLabel::Unknown(name) => name.clone(),
     ValueLabel::Pipeline { name, version } => words::pipeline(ctx, name, *version),
     ValueLabel::Run { task, number } => words::run_label(ctx, task, number.get()),
-    ValueLabel::Account { name: Some(name), .. } => name.clone(),
-    ValueLabel::Account { name: None, .. } => ctx.t("usage.filters.defaultAccount"),
+    ValueLabel::Account { cli, name } => account_text(
+      ctx,
+      &AccountLabel::Known {
+        cli: *cli,
+        name: name.clone(),
+      },
+    ),
+    ValueLabel::NoAccount => ctx.t("usage.accounts.none"),
   }
 }
 
@@ -117,6 +129,9 @@ pub fn menu(
       .child(loading(&format!("{id}-reading"), &ctx.t("usage.filters.reading")).padding(SpacingSize::Sm))
       .into();
   };
+  if facet == Facet::Account {
+    return account_menu(ctx, dashboard, &id, requery);
+  }
   let options = dashboard.options(facet);
   let searchable = facet == Facet::Model || options.len() > SEARCH_FROM;
   let query = search.get().to_lowercase();
@@ -158,10 +173,7 @@ fn option_row(
     ),
     None => value_text(ctx, &option.label),
   };
-  let swatch = match option.value {
-    FilterValue::Cli(cli) => Some(series_color(CliSeries::of(Some(cli)))),
-    _ => None,
-  };
+  let swatch = option.series.map(series_swatch);
   let (requery, query) = (requery.clone(), dashboard.toggled(facet, &option.value));
   filter_option(
     format!("{}-option-{index}", facet_id(facet)),
@@ -169,6 +181,51 @@ fn option_row(
     swatch,
     move || requery.show(query.clone()),
   )
+}
+
+/// *Account*'s menu (`Account menu` `JoCR3`): each CLI's heading over its accounts, by name as Settings
+/// shows them, each with its series' swatch; then, past a line, *No account* and what it holds.
+fn account_menu(ctx: &mut Ctx, dashboard: &Dashboard, id: &str, requery: &Requery) -> Element {
+  let mut rows: Vec<Element> = Vec::new();
+  let mut heading = None;
+  for (index, option) in dashboard.options(Facet::Account).into_iter().enumerate() {
+    let (requery, query) = (requery.clone(), dashboard.toggled(Facet::Account, &option.value));
+    let choose = move || requery.show(query.clone());
+    let option_id = format!("{}-option-{index}", facet_id(Facet::Account));
+    let swatch = option.series.map(series_swatch);
+    match &option.label {
+      ValueLabel::Account { cli, name } => {
+        if heading != Some(*cli) {
+          heading = Some(*cli);
+          rows.push(filter_group(
+            format!("{id}-group-{}", cli.as_str()),
+            Icon::SquareTerminal,
+            &cli_heading(ctx, *cli),
+          ));
+        }
+        let label = account_name(ctx, name.as_ref());
+        rows.push(filter_option(option_id, (&label, option.chosen, false), swatch, choose));
+      }
+      ValueLabel::NoAccount => {
+        rows.push(separator(ctx));
+        rows.push(filter_option_explained(
+          option_id,
+          (
+            &ctx.t("usage.accounts.none"),
+            &ctx.t("usage.accounts.noneDetail"),
+            option.chosen,
+          ),
+          swatch,
+          choose,
+        ));
+      }
+      label => {
+        let label = value_text(ctx, label);
+        rows.push(filter_option(option_id, (&label, option.chosen, false), swatch, choose));
+      }
+    }
+  }
+  filter_menu_panel(id, ACCOUNT_MENU_WIDTH).with_children(rows).into()
 }
 
 /// What a menu says when it lists nothing: *No tags yet* for a project whose tasks have no tags

@@ -10,16 +10,19 @@ use lurq::{
   app::theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   components::{Column, Row, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
-  node::{Element, Style, border::Border, dimension::Dimension},
+  node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
+use orchester_core::usage::AccountSeries;
 
-use super::card::swatch;
+use super::series::series_swatch;
 use crate::{
   theme::{ExtraColor, ExtraSpacing, UsageText},
   ui::pressable::pressable,
 };
 
 const HEADER_HEIGHT: f32 = 28.0;
+/// A header whose headings have a line over them (`FdC7Y`).
+const TALL_HEADER_HEIGHT: f32 = 44.0;
 const DATA_ROW_HEIGHT: f32 = 30.0;
 const LIST_ROW_HEIGHT: f32 = 44.0;
 
@@ -34,15 +37,18 @@ pub enum Width {
 #[derive(Clone, Debug)]
 pub struct TableColumn {
   pub heading: Arc<str>,
+  /// A line over the heading: the CLI over its account's name (`CODEX` over `CLIENT` in `FdC7Y`).
+  pub over: Option<Arc<str>>,
   pub width: Width,
   pub figures: bool,
-  /// The color of the series its figures are, as a swatch before its heading (`CODEX` `UmSkR`).
-  pub swatch: Option<PaletteColor>,
+  /// The series its figures are, whose swatch goes before its heading (`CLIENT` in `FdC7Y`).
+  pub swatch: Option<AccountSeries>,
 }
 
 pub fn column(heading: Arc<str>, width: Width, figures: bool) -> TableColumn {
   TableColumn {
     heading,
+    over: None,
     width,
     figures,
     swatch: None,
@@ -50,8 +56,13 @@ pub fn column(heading: Arc<str>, width: Width, figures: bool) -> TableColumn {
 }
 
 impl TableColumn {
-  pub fn swatch(mut self, color: PaletteColor) -> Self {
-    self.swatch = Some(color);
+  pub const fn swatch(mut self, series: AccountSeries) -> Self {
+    self.swatch = Some(series);
+    self
+  }
+
+  pub fn over(mut self, over: Option<Arc<str>>) -> Self {
+    self.over = over;
     self
   }
 }
@@ -92,28 +103,58 @@ impl Density {
 
 /// The table `id`: its headings over `rows`.
 pub fn table(id: &str, columns: &[TableColumn], density: Density, rows: Vec<Element>) -> Element {
+  // Headings with a line over them make the header taller; every heading then sits on its bottom.
+  let tall = columns.iter().any(|column| column.over.is_some());
   let headings = Row::new()
     .id(format!("{id}-header"))
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(HEADER_HEIGHT))
+    .height(Dimension::Px(if tall { TALL_HEADER_HEIGHT } else { HEADER_HEIGHT }))
+    .padding(if tall {
+      Padding::new().bottom(ExtraSpacing::Snug.role())
+    } else {
+      Padding::new()
+    })
     .spacing(density.gap())
-    .align_items(Alignment::Center)
+    .align_items(if tall { Alignment::End } else { Alignment::Center })
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .with_children(columns.iter().map(|column| {
-      sized(
-        Row::new()
-          .spacing(ExtraSpacing::Snug.role())
-          .with_children(column.swatch.clone().map(swatch))
-          .child(fit(Text::new(&column.heading).variant(UsageText::ColumnHeading.role()))),
-        column,
-      )
-    }));
+    .with_children(columns.iter().map(heading));
   Column::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .child(headings)
     .with_children(rows)
     .into()
+}
+
+/// A column's heading: its swatch and words, with the line over them where it has one.
+fn heading(column: &TableColumn) -> Element {
+  // A series' heading is shown whole, past its column's room if it must (*2 ACCOUNTS*, *NO ACCOUNT* in
+  // `FdC7Y`); other headings give way with an ellipsis.
+  let text = Text::new(&column.heading).variant(UsageText::ColumnHeading.role());
+  let text = if column.swatch.is_some() {
+    text.nowrap().flex_shrink(0.0).into()
+  } else {
+    fit(text)
+  };
+  let words = Row::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .with_children(column.swatch.map(series_swatch))
+    .child(text);
+  let cell = Column::new()
+    .align_items(if column.figures {
+      Alignment::End
+    } else {
+      Alignment::Start
+    })
+    .with_children(
+      column
+        .over
+        .as_ref()
+        .map(|over| fit(Text::new(over).variant(UsageText::ColumnHeading.role()))),
+    )
+    .child(words);
+  sized_column(cell, column)
 }
 
 /// Row `id` of `cells` under `columns`; its cells are `{id}-cell-{column}`.
@@ -179,6 +220,16 @@ pub fn fit(text: Text) -> Element {
     .flex_shrink(1.0)
     .min_width(Dimension::Px(0.0))
     .into()
+}
+
+/// A heading's cell, as wide as its column.
+fn sized_column(cell: Column, column: &TableColumn) -> Element {
+  let cell = cell.min_width(Dimension::Px(0.0));
+  match column.width {
+    Width::Flex(share) => cell.flex_full(share, 1.0, Some(0.0)),
+    Width::Px(width) => cell.width(Dimension::Px(width)).flex_shrink(0.0),
+  }
+  .into()
 }
 
 fn sized(cell: Row, column: &TableColumn) -> Element {

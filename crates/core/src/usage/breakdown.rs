@@ -5,11 +5,14 @@
 use std::{collections::HashMap, sync::Arc};
 
 use super::{
-  CliSeries,
+  AccountUsage, CliSeries,
   facts::ProjectFacts,
   report::{Spender, Within},
 };
-use crate::id::ProjectId;
+use crate::{
+  id::{AgentAccountId, ProjectId},
+  run::TokenUsage,
+};
 
 /// What a row groups by.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -26,11 +29,12 @@ pub enum BreakdownKey {
   Project(ProjectId, Arc<str>),
 }
 
-/// One row: spent tokens per CLI (indexed by [`CliSeries::index`]).
+/// One row: spent tokens per CLI (indexed by [`CliSeries::index`]), and its usage per account.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BreakdownRow {
   pub key: BreakdownKey,
   pub by_cli: [u64; 3],
+  pub by_account: AccountUsage,
 }
 
 impl BreakdownRow {
@@ -57,7 +61,7 @@ impl Breakdowns {
     let mut by_project = Rows::default();
     for turn in &within.turns {
       let invocation = turn.launch.invocation;
-      let (series, spent) = (CliSeries::of(turn.cli()), turn.usage.counted());
+      let series = (CliSeries::of(turn.cli()), turn.account(), turn.usage);
       let profile = match turn.by {
         Spender::Agent => invocation.profile.as_ref().map(|profile| BreakdownKey::ProfileStep {
           profile: profile.clone(),
@@ -66,18 +70,14 @@ impl Breakdowns {
         Spender::Reviewer { model, .. } => Some(BreakdownKey::Reviewer(model.clone())),
       };
       if let Some(key) = profile {
-        profiles.add(key, series, spent);
+        profiles.add(key, series);
       }
       if let Some(model) = turn.model() {
-        models.add(BreakdownKey::Model(model.clone()), series, spent);
+        models.add(BreakdownKey::Model(model.clone()), series);
       }
-      pipelines.add(BreakdownKey::Pipeline(turn.run().pipeline.clone()), series, spent);
+      pipelines.add(BreakdownKey::Pipeline(turn.run().pipeline.clone()), series);
       let project = turn.launch.project;
-      by_project.add(
-        BreakdownKey::Project(project.project, project.name.clone()),
-        series,
-        spent,
-      );
+      by_project.add(BreakdownKey::Project(project.project, project.name.clone()), series);
     }
     let projects_rows = by_project.sorted();
     let idle_projects = projects
@@ -100,12 +100,14 @@ impl Breakdowns {
 }
 
 #[derive(Default)]
-struct Rows(HashMap<BreakdownKey, [u64; 3]>);
+struct Rows(HashMap<BreakdownKey, ([u64; 3], AccountUsage)>);
 
 impl Rows {
-  fn add(&mut self, key: BreakdownKey, series: CliSeries, spent: u64) {
-    let row = self.0.entry(key).or_default();
-    row[series.index()] = row[series.index()].saturating_add(spent);
+  /// A turn's tokens under `key`, on its CLI and its account.
+  fn add(&mut self, key: BreakdownKey, (cli, account, usage): (CliSeries, Option<AgentAccountId>, TokenUsage)) {
+    let (by_cli, by_account) = self.0.entry(key).or_default();
+    by_cli[cli.index()] = by_cli[cli.index()].saturating_add(usage.counted());
+    by_account.add(account, usage);
   }
 
   /// Rows with tokens, most first; ties by key so the order is stable.
@@ -113,7 +115,11 @@ impl Rows {
     let mut rows: Vec<BreakdownRow> = self
       .0
       .into_iter()
-      .map(|(key, by_cli)| BreakdownRow { key, by_cli })
+      .map(|(key, (by_cli, by_account))| BreakdownRow {
+        key,
+        by_cli,
+        by_account,
+      })
       .filter(|row| row.total() > 0)
       .collect();
     rows.sort_by(|a, b| {

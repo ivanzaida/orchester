@@ -1,9 +1,9 @@
-//! *Tokens over time*: one stacked bar per hour or day, a part per CLI.
+//! *Tokens over time*: one stacked bar per hour or day, a part per account (and, for the old app, per CLI).
 
 use std::collections::HashSet;
 
 use super::{
-  CliSeries, Grouping,
+  AccountUsage, CliSeries, Grouping,
   period::{Bucket, DayRange, bucket_of},
   report::Within,
 };
@@ -28,12 +28,13 @@ impl Measure {
   }
 }
 
-/// One bar: its hour or day, each CLI's usage in it (indexed by [`CliSeries::index`]) and the runs
-/// whose turns completed in it.
+/// One bar: its hour or day, each account's usage in it, each CLI's (indexed by [`CliSeries::index`]) and
+/// the runs whose turns completed in it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SeriesBar {
   pub bucket: Bucket,
   pub by_cli: [TokenUsage; 3],
+  pub by_account: AccountUsage,
   pub runs: usize,
 }
 
@@ -50,6 +51,7 @@ pub(super) fn bars(within: &Within<'_>, range: DayRange, grouping: Grouping) -> 
     .map(|bucket| SeriesBar {
       bucket: *bucket,
       by_cli: [TokenUsage::default(); 3],
+      by_account: AccountUsage::default(),
       runs: 0,
     })
     .collect();
@@ -60,6 +62,7 @@ pub(super) fn bars(within: &Within<'_>, range: DayRange, grouping: Grouping) -> 
     };
     let series = CliSeries::of(turn.cli());
     bars[index].by_cli[series.index()] += turn.usage;
+    bars[index].by_account.add(turn.account(), turn.usage);
     runs[index].insert(turn.run().id);
   }
   for (bar, runs) in bars.iter_mut().zip(runs) {

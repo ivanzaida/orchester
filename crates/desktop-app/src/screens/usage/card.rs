@@ -15,10 +15,9 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::usage::CliSeries;
 
 use crate::{
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, UsageSpacing, UsageText},
+  theme::{ExtraRadius, ExtraSpacing, IconSize, UsageSpacing, UsageText},
   ui::{
     card::{CardSurface, card_frame},
     icon::{Icon, glyph, icon},
@@ -273,32 +272,12 @@ pub fn state_room(body: Element) -> Element {
     .into()
 }
 
-/// The color a CLI's series is drawn in.
-pub fn series_color(series: CliSeries) -> PaletteColor {
-  match series {
-    CliSeries::Codex => ExtraColor::Chart1.role(),
-    CliSeries::Claude => ExtraColor::Chart2.role(),
-    CliSeries::Other => ExtraColor::Chart3.role(),
-  }
-}
-
 pub fn swatch(color: PaletteColor) -> Element {
   Row::new()
     .size(Dimension::Px(SWATCH), Dimension::Px(SWATCH))
     .flex_shrink(0.0)
     .background(color)
     .rounded(ExtraRadius::Swatch.role())
-    .into()
-}
-
-/// A legend entry: the swatch, the name and its value; identity never rests on color alone.
-pub fn legend_item(color: PaletteColor, name: &str, value: Option<&str>) -> Element {
-  Row::new()
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(swatch(color))
-    .child(Text::new(name).variant(TypographyStyle::Description).nowrap())
-    .with_children(value.map(|value| Text::new(value).variant(TypographyStyle::Mono).nowrap()))
     .into()
 }
 

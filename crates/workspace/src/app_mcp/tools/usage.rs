@@ -25,7 +25,7 @@ use crate::{
     services::{Services, blocking},
   },
   links::Link,
-  usage::{LONGEST_DAYS, Scope, UsageData, UsageQuery, group_name, group_of},
+  usage::{LONGEST_DAYS, NO_ACCOUNT, Scope, UsageData, UsageQuery, group_name, group_of},
 };
 
 /// How many days a range without `from` covers, ending with `to`: the page's default *7 days*.
@@ -66,7 +66,8 @@ pub struct GetUsage {
   /// Only this model.
   #[serde(default)]
   pub model: Option<String>,
-  /// Only invocations on this CLI account, by its id.
+  /// Only usage that started on this CLI account, by its id, or `none` for usage on no account (auto mode's
+  /// reviewer, native agents, command tools, runs from before accounts were recorded).
   #[serde(default)]
   pub account: Option<String>,
 }
@@ -152,6 +153,7 @@ fn given<'a>(name: &str, value: Option<&'a String>) -> Result<Option<&'a str>, T
 }
 
 fn filter(args: &GetUsage) -> Result<UsageFilter, ToolError> {
+  let account = given("account", args.account.as_ref())?;
   let text = |name: &str, value: &Option<String>| -> Result<Vec<_>, ToolError> {
     Ok(given(name, value.as_ref())?.map(Into::into).into_iter().collect())
   };
@@ -162,7 +164,8 @@ fn filter(args: &GetUsage) -> Result<UsageFilter, ToolError> {
     steps: text("step", &args.step)?,
     profiles: text("agent", &args.agent)?,
     models: text("model", &args.model)?,
-    accounts: ids("account", given("account", args.account.as_ref())?)?,
+    accounts: ids("account", account.filter(|value| *value != NO_ACCOUNT))?,
+    no_account: account == Some(NO_ACCOUNT),
     ..UsageFilter::default()
   })
 }
@@ -205,6 +208,13 @@ fn unmatched(filter: &UsageFilter, projects: &[ProjectFacts], query: ReportQuery
       ..UsageFilter::default()
     };
     found.extend(alone("account", only, account.to_string()));
+  }
+  if filter.no_account {
+    let only = UsageFilter {
+      no_account: true,
+      ..UsageFilter::default()
+    };
+    found.extend(alone("account", only, NO_ACCOUNT.to_owned()));
   }
   found
 }
@@ -363,11 +373,8 @@ fn narrowed(query: &UsageQuery, key: &GroupKey) -> UsageQuery {
     GroupKey::Agent(Some(profile)) => filter.profiles = vec![profile.id.to_string().into()],
     GroupKey::Model(Some(model)) => filter.models = vec![model.clone()],
     GroupKey::Account(Some(account)) => filter.accounts = vec![*account],
-    GroupKey::Pipeline(None)
-    | GroupKey::Agent(None)
-    | GroupKey::Reviewer(_)
-    | GroupKey::Model(None)
-    | GroupKey::Account(None) => {}
+    GroupKey::Account(None) => filter.no_account = true,
+    GroupKey::Pipeline(None) | GroupKey::Agent(None) | GroupKey::Reviewer(_) | GroupKey::Model(None) => {}
   }
   narrowed
 }

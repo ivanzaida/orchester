@@ -15,7 +15,7 @@ use orchester_core::{
     AgentProvider,
     plan_limits::{LimitReading, LimitState, LimitWindow, PlanLimits},
   },
-  id::RunId,
+  id::{AgentAccountId, RunId},
   resource::{ModelId, StepKey},
   run::{
     DecidedBy, EditProgress, FirstEdit, PendingToolApproval, Run, TokenUsage, ToolApprovalDecision,
@@ -26,6 +26,7 @@ use orchester_core::{
   time::Timestamp,
 };
 
+use super::usage_accounts::SeedAccounts;
 use crate::kontur::{
   Kontur, SeedError,
   catalogue::{Catalogue, Published},
@@ -184,6 +185,7 @@ pub fn bare(kontur: &mut Kontur) -> Result<(), SeedError> {
 
 fn runs(kontur: &mut Kontur, rows: Vec<&Row>, extras: Extras) -> Result<(), SeedError> {
   let catalogue = kontur.usage_catalogue()?;
+  let mut accounts = SeedAccounts::add(kontur)?;
   let mut sources = Vec::new();
   for row in rows {
     let pipeline = pipeline(&catalogue, row.pipe);
@@ -208,6 +210,7 @@ fn runs(kontur: &mut Kontur, rows: Vec<&Row>, extras: Extras) -> Result<(), Seed
     if let Some(Ok(run)) = kontur.db.runs_of_task(task.id())?.last() {
       let feature = matches!(row.pipe, Pipe::Feature);
       first_edits(kontur, run, feature)?;
+      accounts.record(kontur, run)?;
       if feature {
         reviewed(kontur, run)?;
       }
@@ -217,7 +220,7 @@ fn runs(kontur: &mut Kontur, rows: Vec<&Row>, extras: Extras) -> Result<(), Seed
   if extras == Extras::None {
     return Ok(());
   }
-  plan_limits(kontur, &sources)
+  plan_limits(kontur, &sources, accounts.work)
 }
 
 /// What the run's agents used before their first edit: Implement edits, with the code index on Feature
@@ -335,7 +338,9 @@ fn started(kontur: &Kontur, row: &Row) -> Timestamp {
 /// What the CLIs reported while the runs worked: every half hour of the last week's working hours (08:00 to
 /// 20:00) from the run nearest before, so each day's line is solid and the nights are dotted gaps; Codex's
 /// weekly window reset three days ago at 09:00, and Claude was first heard of four days ago.
-fn plan_limits(kontur: &mut Kontur, sources: &[(RunId, Timestamp)]) -> Result<(), SeedError> {
+/// Codex's limits are its Default account's (reports from before accounts were recorded), Claude Code's are
+/// `work`'s.
+fn plan_limits(kontur: &mut Kontur, sources: &[(RunId, Timestamp)], work: AgentAccountId) -> Result<(), SeedError> {
   let reset = kontur.now.local_day_start().unix_millis() - 3 * DAY * 60_000 + 9 * HOUR * 60_000;
   let next_reset = Timestamp::from_unix_millis(reset + 7 * DAY * 60_000);
   let claude_reset = kontur.ago(-2 * DAY - 3 * HOUR);
@@ -356,13 +361,13 @@ fn plan_limits(kontur: &mut Kontur, sources: &[(RunId, Timestamp)]) -> Result<()
     let codex = vec![window(WEEKLY, weekly.min(95.0), codex_resets), five_hours(at, (0, 9.0))];
     kontur
       .db
-      .save_limit_snapshot(run, &reading(AgentProvider::CodexCli, at, codex))?;
+      .save_limit_snapshot(run, &reading((AgentProvider::CodexCli, None), at, codex))?;
     if minutes <= 4 * DAY {
       let claude_used = 20.0 + (4 * DAY - minutes) as f64 / DAY as f64 * 5.0;
       let claude = vec![window(WEEKLY, claude_used, claude_reset), five_hours(at, (4, 7.0))];
       kontur
         .db
-        .save_limit_snapshot(run, &reading(AgentProvider::ClaudeCodeCli, at, claude))?;
+        .save_limit_snapshot(run, &reading((AgentProvider::ClaudeCodeCli, Some(work)), at, claude))?;
     }
   }
   Ok(())
@@ -395,10 +400,14 @@ fn window(minutes: u64, percent: f64, resets: Timestamp) -> LimitWindow {
     .expect("the scenario's windows are valid")
 }
 
-fn reading(provider: AgentProvider, at: Timestamp, windows: Vec<LimitWindow>) -> LimitReading {
+fn reading(
+  (provider, account): (AgentProvider, Option<AgentAccountId>),
+  at: Timestamp,
+  windows: Vec<LimitWindow>,
+) -> LimitReading {
   LimitReading {
     provider,
-    account: None,
+    account,
     at,
     limits: PlanLimits {
       windows,

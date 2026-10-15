@@ -6,6 +6,7 @@
 //! mode's reviewer counts as a turn of its run, in the hour it ended, on the reviewer's CLI and model
 //! and under no agent profile.
 
+mod accounts;
 mod breakdown;
 mod efficiency;
 mod expensive;
@@ -18,6 +19,7 @@ mod report;
 mod series;
 
 pub use self::{
+  accounts::{AccountOrder, AccountSeries, AccountSplit, AccountUsage, OWN_SERIES, SERIES},
   breakdown::{BreakdownKey, BreakdownRow, Breakdowns},
   efficiency::{EditTokens, Efficiency, FailedRuns},
   expensive::{RunCost, TaskCost},
@@ -30,8 +32,9 @@ pub use self::{
 };
 use crate::connection::AgentProvider;
 
-/// The series a CLI's tokens are drawn in. Color follows the CLI, never its rank: Codex, Claude
-/// Code, and a third for any other provider.
+/// The series a CLI's tokens were drawn in before the page drew accounts ([`AccountSeries`]); kept for the
+/// old app (`crates/desktop`). Color follows the CLI, never its rank: Codex, Claude Code, and a third for any
+/// other provider.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CliSeries {
   Codex,

@@ -13,7 +13,7 @@ use orchester_workspace::usage::Dashboard;
 use super::{
   Views,
   card::{Card, footnote, push_down, state, state_room, view_switch},
-  limits_chart::{LimitsChart, LimitsProps, line_name},
+  limits_chart::{LimitsChart, LimitsProps, line_name, window_owner},
   limits_legend::legend,
   table::{Cell, Density, Width, column, row, table},
   threshold, tokens, words,
@@ -47,13 +47,15 @@ pub fn card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>, sa
     .trailing(menu)
     .fill();
   if dashboard.limits.is_empty() {
+    // Reports the filters leave out are not reports that never came.
+    let (title, detail) = if dashboard.limits_reported {
+      ("usage.limits.noneChosen", "usage.limits.noneChosenDetail")
+    } else {
+      ("usage.limits.none", "usage.limits.noneDetail")
+    };
     return card.body([state_room(state(
       "usage-limits-none",
-      (
-        Icon::Gauge,
-        &ctx.t("usage.limits.none"),
-        &ctx.t("usage.limits.noneDetail"),
-      ),
+      (Icon::Gauge, &ctx.t(title), &ctx.t(detail)),
       None,
     ))]);
   }
@@ -73,19 +75,26 @@ pub fn card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>, sa
 /// What a point is, what the dotted, hatched and dashed marks mean, and when 5-hour windows show.
 fn footnote_text(ctx: &Ctx, dashboard: &Dashboard) -> Arc<str> {
   let start = dashboard.range.start();
-  let gaps: Vec<Arc<str>> = dashboard
+  let late: Vec<_> = dashboard
     .limits
-    .first
+    .first_by_account
     .iter()
-    .filter(|(_, first)| *first > start)
-    .map(|(provider, first)| {
-      ctx.t_args(
-        "usage.limits.noDataBefore",
-        [
-          ("cli", &*words::cli_name(ctx, *provider)),
-          ("time", &*words::weekday_time(ctx, *first)),
-        ],
-      )
+    .filter(|(_, _, first)| *first > start)
+    .collect();
+  // One stretch reads as the hatch's label names it; several each name their account.
+  let gaps: Vec<Arc<str>> = late
+    .iter()
+    .map(|(provider, account, first)| {
+      let time = words::weekday_time(ctx, *first);
+      if late.len() == 1 {
+        ctx.t_args("usage.limits.noDataBefore", [("time", &*time)])
+      } else {
+        let owner = window_owner(ctx, dashboard, (*provider, *account));
+        ctx.t_args(
+          "usage.limits.noDataFromBefore",
+          [("account", &*owner), ("time", &*time)],
+        )
+      }
     })
     .collect();
   let mut sentences = vec![
@@ -135,7 +144,7 @@ fn limits_table(ctx: &Ctx, dashboard: &Dashboard) -> Element {
       );
       let cells = vec![
         Cell::Muted(words::reported(ctx, point.at, dashboard.now)),
-        Cell::Text(line_name(ctx, line.provider, line.minutes)),
+        Cell::Text(line_name(ctx, dashboard, (line.provider, line.account, line.minutes))),
         Cell::Text(words::share(ctx, Some(point.percent.round() as u64))),
         Cell::Muted(
           point

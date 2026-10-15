@@ -10,6 +10,7 @@ mod limits;
 mod load;
 mod names;
 mod query;
+mod series;
 
 pub use self::{
   dashboard::{Changes, Dashboard, DashboardState},
@@ -17,7 +18,8 @@ pub use self::{
   limits::TABLE_READINGS,
   load::{Scope, UsageData},
   query::{
-    CustomRangeError, DAY_FORMAT, LONGEST_DAYS, ParamsError, QueryError, UsageQuery, cli_name, cli_of, custom_range,
-    group_name, group_of,
+    CustomRangeError, DAY_FORMAT, LONGEST_DAYS, NO_ACCOUNT, ParamsError, QueryError, UsageQuery, cli_name, cli_of,
+    custom_range, group_name, group_of,
   },
+  series::{AccountLabel, SeriesLabel},
 };

@@ -10,7 +10,8 @@ use orchester_core::{
   resource::VersionNumber,
   time::Timestamp,
   usage::{
-    Change, DayRange, FilterOptions, Grouping, UsageFilter, UsageQuery as ReportQuery, UsageReport,
+    AccountOrder, AccountSplit, AccountUsage, Change, DayRange, FilterOptions, Grouping, UsageFilter,
+    UsageQuery as ReportQuery, UsageReport,
     limits::{LimitHistory, WarningThreshold},
     local_date,
   },
@@ -56,6 +57,12 @@ pub struct Dashboard {
   pub limits: Arc<LimitHistory>,
   pub options: Arc<FilterOptions>,
   pub(super) names: Arc<Names>,
+  /// The connected accounts in series order.
+  pub(super) order: Arc<AccountOrder>,
+  /// The range's usage by series: which series the legend and table show, and what Other holds.
+  pub(super) range_split: Arc<AccountSplit>,
+  /// Some CLI reported its plan limits, whatever the filters choose.
+  pub limits_reported: bool,
   pub threshold: WarningThreshold,
   pub state: DashboardState,
   pub now: Timestamp,
@@ -79,6 +86,14 @@ impl Dashboard {
       now,
     };
     let report = UsageReport::build(&data.projects, report_query);
+    let order = AccountOrder::of(&data.accounts);
+    let mut range_usage = AccountUsage::default();
+    for bar in &report.series {
+      for (account, usage) in bar.by_account.entries() {
+        range_usage.add(*account, *usage);
+      }
+    }
+    let range_split = order.split(&range_usage);
     let limits = LimitHistory::of(&data.snapshots, (range.start(), range.end()), now, &query.filter);
     let state = if report.summary.runs > 0 {
       DashboardState::Charts
@@ -104,6 +119,9 @@ impl Dashboard {
       limits: Arc::new(limits),
       options: Arc::new(FilterOptions::of(&data.projects)),
       names: Arc::new(Names::of(data)),
+      order: Arc::new(order),
+      range_split: Arc::new(range_split),
+      limits_reported: !data.snapshots.is_empty(),
       threshold: data.threshold,
       state,
       now,

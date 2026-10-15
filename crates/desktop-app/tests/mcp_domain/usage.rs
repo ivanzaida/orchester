@@ -128,3 +128,24 @@ fn domain_usage_names_values_that_match_nothing_and_rounds_rows_to_the_total() {
   assert_eq!(json!(seconds), agents["total"]["active_seconds"], "{agents}");
   assert_eq!(agents["unmatched"], json!([]));
 }
+
+#[test]
+fn domain_usage_names_usage_on_no_account_and_filters_to_it() {
+  let (mut served, _) = Served::seeded("usage");
+  let accounts = served.ok("get_usage", &json!({ "project": "Kontur", "group": "account" }));
+  let rows = accounts["rows"].as_array().expect("rows");
+  let none = rows
+    .iter()
+    .find(|row| row["account"].is_null())
+    .unwrap_or_else(|| panic!("a row of usage on no account: {accounts}"));
+  let Route::Project(_, ProjectPage::Usage(query)) = routed(&none["link"]) else {
+    panic!("its link opens the Usage page");
+  };
+  assert!(query.filter.no_account, "the link chooses No account: {}", none["link"]);
+  let alone = served.ok("get_usage", &json!({ "project": "Kontur", "account": "none" }));
+  assert_eq!(
+    alone["total"]["tokens"]["spent"], none["tokens"]["spent"],
+    "account=none totals what the no-account row has"
+  );
+  assert_eq!(alone["unmatched"], json!([]));
+}

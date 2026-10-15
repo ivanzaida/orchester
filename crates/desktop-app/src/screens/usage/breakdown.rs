@@ -18,12 +18,13 @@ use lurq::{
   layout::Alignment,
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
-use orchester_core::usage::{BreakdownKey, BreakdownRow, Breakdowns, CliSeries, percent};
+use orchester_core::usage::{AccountSeries, BreakdownKey, BreakdownRow, Breakdowns, percent};
 use orchester_workspace::usage::Dashboard;
 
 use super::{
   Requery, Views,
-  card::{Card, series_color, view_switch},
+  card::{Card, view_switch},
+  series::series_fill,
   table::{Cell, Density, Width, column, fit, row, table},
   words,
 };
@@ -243,15 +244,20 @@ fn bar_row(
         .text_align(lurq::layout::text_style::TextAlign::Right)
         .nowrap(),
     );
-  let parts = CliSeries::ALL
+  // Split by account in series order and colours (`k9f4PW`); the reviewer's rows are all No account.
+  let split = dashboard.split(&entry.by_account);
+  let parts = AccountSeries::ALL
     .into_iter()
-    .filter(|series| entry.by_cli[series.index()] > 0)
-    .map(|series| {
-      Row::new()
-        .flex(entry.by_cli[series.index()] as f32)
-        .height(Dimension::Px(BAR_HEIGHT))
-        .background(series_color(series))
-        .rounded(UsageRadius::Bar.role())
+    .map(|series| (series, split.of(series).counted()))
+    .filter(|(_, spent)| *spent > 0)
+    .map(|(series, spent)| {
+      series_fill(
+        Row::new()
+          .flex(spent as f32)
+          .height(Dimension::Px(BAR_HEIGHT))
+          .rounded(UsageRadius::Bar.role()),
+        series,
+      )
     });
   let bar = Row::new()
     .width(Dimension::Pct(entry.total() as f32 / largest as f32 * 100.0))

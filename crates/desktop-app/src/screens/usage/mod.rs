@@ -26,12 +26,15 @@ mod line_draw;
 mod place;
 mod plot;
 mod read;
+mod series;
 mod states;
 mod summary;
 mod table;
 mod threshold;
 mod tokens;
 mod tokens_draw;
+mod tokens_legend;
+mod tokens_table;
 mod toolbar;
 mod tooltip;
 mod words;
@@ -192,12 +195,22 @@ impl UsageScreen {
     }
     let tokens = tokens::card(ctx, dashboard, &self.views);
     let limits = limits::card(ctx, dashboard, &self.views, &saved);
-    vec![
-      summary,
-      card::card_row("usage-charts", vec![tokens, limits]),
+    // More than three series' columns do not fit beside Plan limits, which then goes under the table (`FdC7Y`).
+    let charts = if self.views.get().tokens_table && tokens_table::needs_row(dashboard) {
+      vec![
+        card::card_row("usage-charts", vec![tokens]),
+        card::card_row("usage-limits-row", vec![limits]),
+      ]
+    } else {
+      vec![card::card_row("usage-charts", vec![tokens, limits])]
+    };
+    let mut sections = vec![summary];
+    sections.extend(charts);
+    sections.extend([
       breakdown::card(ctx, dashboard, &self.views, requery),
       expensive::card(ctx, dashboard, &self.views),
       efficiency::section(ctx, dashboard, &self.views),
-    ]
+    ]);
+    sections
   }
 }

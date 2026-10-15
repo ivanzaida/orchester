@@ -13,7 +13,8 @@
 //! | `model`, `tag`, `step` | a name |
 //! | `agent`, `pipeline` | a profile's or pipeline's id, or its name |
 //! | `task` | a task's key (`KON-12`) or id |
-//! | `run`, `account` | an id |
+//! | `run` | an id |
+//! | `account` | an account's id, or `none` for usage that started on no account |
 //!
 //! An empty value (`model=`) is refused, as is a range longer than [`LONGEST_DAYS`].
 
@@ -41,6 +42,8 @@ const TASK: &str = "task";
 const RUN: &str = "run";
 const STEP: &str = "step";
 const ACCOUNT: &str = "account";
+/// The `account` value of usage that started on no account.
+pub const NO_ACCOUNT: &str = "none";
 
 /// The period, the grouping and the filters. Only every project's page chooses projects: a project's page
 /// is the project's, and `get_usage` takes its project apart.
@@ -148,6 +151,9 @@ impl UsageQuery {
     params.extend(filter.runs.iter().map(|run| (RUN, run.to_string())));
     params.extend(filter.steps.iter().map(|step| (STEP, step.to_string())));
     params.extend(filter.accounts.iter().map(|account| (ACCOUNT, account.to_string())));
+    if filter.no_account {
+      params.push((ACCOUNT, NO_ACCOUNT.to_owned()));
+    }
     params
   }
 
@@ -179,7 +185,13 @@ impl UsageQuery {
     filter.tasks = parsed(TASK, all(TASK)?, text)?;
     filter.runs = parsed(RUN, all(RUN)?, |value| value.parse().ok())?;
     filter.steps = parsed(STEP, all(STEP)?, text)?;
-    filter.accounts = parsed(ACCOUNT, all(ACCOUNT)?, |value| value.parse().ok())?;
+    let accounts = all(ACCOUNT)?;
+    filter.no_account = accounts.iter().any(|value| value == NO_ACCOUNT);
+    filter.accounts = parsed(
+      ACCOUNT,
+      accounts.into_iter().filter(|value| value != NO_ACCOUNT).collect(),
+      |value| value.parse().ok(),
+    )?;
     let period = period_of(period, from, to)?;
     Ok(Self {
       period,

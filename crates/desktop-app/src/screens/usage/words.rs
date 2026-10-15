@@ -11,7 +11,7 @@ use orchester_core::{
   resource::VersionNumber,
   time::Timestamp,
   tokens::{compact_tokens, grouped},
-  usage::{Change, CliSeries, DayRange, local_date},
+  usage::{Change, DayRange, local_date},
 };
 use orchester_workspace::{
   display::{self, MONTH_KEYS, WEEKDAY_KEYS},
@@ -218,24 +218,6 @@ pub fn change(ctx: &Ctx, change: Option<Change>, range: &str, unit: ChangeUnit) 
     Some(Change::NoBaseline) => (None, ctx.t_args("usage.change.noBaseline", [("range", range)])),
     None => (None, ctx.t_args("usage.change.unknown", [("range", range)])),
   }
-}
-
-/// The CLI a series stands for.
-pub fn series_name(ctx: &Ctx, series: CliSeries) -> Arc<str> {
-  ctx.t(match series {
-    CliSeries::Codex => "usage.cli.codex",
-    CliSeries::Claude => "usage.cli.claude",
-    CliSeries::Other => "usage.cli.other",
-  })
-}
-
-/// The CLI a series stands for as a table's column names it (`CODEX`).
-pub fn series_heading(ctx: &Ctx, series: CliSeries) -> Arc<str> {
-  ctx.t(match series {
-    CliSeries::Codex => "usage.table.codex",
-    CliSeries::Claude => "usage.table.claude",
-    CliSeries::Other => "usage.table.otherCli",
-  })
 }
 
 pub fn cli_name(ctx: &Ctx, cli: AgentProvider) -> Arc<str> {

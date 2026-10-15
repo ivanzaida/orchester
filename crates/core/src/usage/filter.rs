@@ -30,6 +30,8 @@ pub struct UsageFilter {
   /// Steps by name, in whichever pipeline.
   pub steps: Vec<Arc<str>>,
   pub accounts: Vec<AgentAccountId>,
+  /// Usage that started on no account is chosen too (*No account* in the Account filter).
+  pub no_account: bool,
 }
 
 impl UsageFilter {
@@ -44,7 +46,7 @@ impl UsageFilter {
       && chosen(&self.models, invocation.model.as_ref())
       && named(&self.profiles, invocation.profile_id, invocation.profile.as_deref())
       && chosen(&self.steps, Some(&invocation.step))
-      && chosen(&self.accounts, invocation.account.as_ref())
+      && self.admits_account(invocation.account)
   }
 
   /// Whether a review by auto mode's reviewer on `cli` with `model` of a request `invocation` of `run` in
@@ -59,7 +61,19 @@ impl UsageFilter {
       && chosen(&self.models, Some(model))
       && chosen(&self.profiles, None)
       && chosen(&self.steps, Some(&invocation.step))
-      && chosen(&self.accounts, None)
+      && self.admits_account(None)
+  }
+
+  /// Whether usage that started on `account` (`None`: on no account) counts: everything while no account is
+  /// chosen, else the chosen accounts and, when *No account* is chosen, usage on none.
+  pub fn admits_account(&self, account: Option<AgentAccountId>) -> bool {
+    if self.accounts.is_empty() && !self.no_account {
+      return true;
+    }
+    match account {
+      Some(account) => self.accounts.contains(&account),
+      None => self.no_account,
+    }
   }
 
   fn admits_run(&self, project: ProjectId, run: &RunFacts) -> bool {

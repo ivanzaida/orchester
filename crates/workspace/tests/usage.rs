@@ -460,3 +460,25 @@ fn usage_failed_tasks_open_the_one_project_their_runs_belong_to() {
     "failed runs in two projects have no one list"
   );
 }
+
+#[test]
+fn usage_account_filter_reads_none_and_offers_no_account_last() {
+  let no_account = read_back(&[("account", "none".to_owned())]).expect("a query");
+  assert!(no_account.filter.no_account && no_account.filter.accounts.is_empty());
+  assert_eq!(no_account.params(), [("account", "none".to_owned())], "written back");
+  let now = Timestamp::now();
+  let (data, ..) = data(now);
+  let page = dashboard(&UsageQuery::default(), &data, now);
+  let options = page.options(Facet::Account);
+  let last = options.last().expect("No account");
+  assert_eq!(last.value, FilterValue::NoAccount);
+  assert_eq!(last.label, ValueLabel::NoAccount);
+  let chosen = page.toggled(Facet::Account, &FilterValue::NoAccount);
+  assert!(chosen.filter.no_account);
+  assert!(
+    dashboard(&chosen, &data, now)
+      .toggled(Facet::Account, &FilterValue::NoAccount)
+      .filter
+      .is_empty()
+  );
+}

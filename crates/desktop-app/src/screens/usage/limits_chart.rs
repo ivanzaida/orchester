@@ -16,19 +16,21 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
+  connection::AgentProvider,
+  id::AgentAccountId,
   time::Timestamp,
   usage::{
     Grouping,
     limits::{LimitLine, WindowKind},
   },
 };
-use orchester_workspace::usage::Dashboard;
+use orchester_workspace::usage::{AccountLabel, Dashboard};
 use parking_lot::Mutex;
 
 use super::{
-  card::series_color,
   limits_draw::{DrawnLine, DrawnPoint, LimitPlot, RIGHT_ROOM, draw},
   plot::{AXIS_GUTTER, AxisName, AxisText, CHART_HEIGHT, Frame, Redraw},
+  series::{account_name, account_text, cli_short, series_swatch},
   tooltip, words,
 };
 use crate::{
@@ -83,15 +85,43 @@ pub fn window_name(ctx: &Ctx, minutes: u64) -> Arc<str> {
   }
 }
 
-/// *Codex · weekly*.
-pub fn line_name(ctx: &Ctx, cli: orchester_core::connection::AgentProvider, minutes: u64) -> Arc<str> {
+/// Whose limits a window is: its account (*Codex · Default*), or its CLI where it has no accounts.
+pub fn window_owner(
+  ctx: &Ctx,
+  dashboard: &Dashboard,
+  (provider, account): (AgentProvider, Option<AgentAccountId>),
+) -> Arc<str> {
+  account.map_or_else(
+    || words::cli_name(ctx, provider),
+    |account| account_text(ctx, &dashboard.account_label(account)),
+  )
+}
+
+/// *Codex · Default · weekly*.
+pub fn line_name(
+  ctx: &Ctx,
+  dashboard: &Dashboard,
+  (provider, account, minutes): (AgentProvider, Option<AgentAccountId>, u64),
+) -> Arc<str> {
   ctx.t_args(
     "usage.limits.legendName",
     [
-      ("cli", &*words::cli_name(ctx, cli)),
+      ("account", &*window_owner(ctx, dashboard, (provider, account))),
       ("window", &*window_name(ctx, minutes)),
     ],
   )
+}
+
+/// A line's direct label beside its last point, on two lines: the CLI over the account (*Codex* / *Default*).
+fn direct_label(
+  ctx: &Ctx,
+  dashboard: &Dashboard,
+  (provider, account): (AgentProvider, Option<AgentAccountId>),
+) -> (Arc<str>, Option<Arc<str>>) {
+  match account.map(|account| dashboard.account_label(account)) {
+    Some(AccountLabel::Known { cli, name }) => (cli_short(ctx, cli), Some(account_name(ctx, name.as_ref()))),
+    Some(AccountLabel::Removed) | None => (words::cli_name(ctx, provider), None),
+  }
 }
 
 impl Component for LimitsChart {
@@ -128,7 +158,7 @@ impl Component for LimitsChart {
       } else {
         tooltip::WIDTH
       };
-      tooltip::beside((tip, tip_width), (x, x), width)
+      tooltip::beside((self.reference.clone(), CHART_HEIGHT), (tip, tip_width), (x, x), width)
     });
     *self.plot.lock() = Some(plot);
     let (reference, signal, shared) = (self.reference.clone(), self.hovered.clone(), Arc::clone(&self.plot));
@@ -209,7 +239,7 @@ fn plot(ctx: &Ctx, dashboard: &Dashboard, hovered: Hovered) -> LimitPlot {
   let lines = dashboard
     .drawn_limits()
     .into_iter()
-    .map(|line| drawn_line(ctx, line))
+    .map(|line| drawn_line(ctx, dashboard, line))
     .collect();
   let resets = dashboard
     .drawn_limits()
@@ -217,15 +247,16 @@ fn plot(ctx: &Ctx, dashboard: &Dashboard, hovered: Hovered) -> LimitPlot {
     .filter(|line| line.kind() == WindowKind::Weekly)
     .flat_map(|line| line.resets.iter().map(move |reset| (line, *reset)))
     .filter(|(_, reset)| start <= *reset && *reset <= shown_until)
-    .map(|(line, reset)| (reset.unix_millis(), reset_name(ctx, line, reset)))
+    .map(|(line, reset)| (reset.unix_millis(), reset_name(ctx, dashboard, line, reset)))
     .collect();
   let hatches = dashboard
     .limits
-    .first
+    .first_by_account
     .iter()
-    .filter(|(_, first)| *first > start)
-    .map(|(cli, first)| {
-      let label = ctx.t_args("usage.limits.noData", [("cli", &*words::cli_name(ctx, *cli))]);
+    .filter(|(_, _, first)| *first > start)
+    .map(|(provider, account, first)| {
+      let owner = window_owner(ctx, dashboard, (*provider, *account));
+      let label = ctx.t_args("usage.limits.noData", [("account", &*owner)]);
       (start.unix_millis(), first.min(&end).unix_millis(), label)
     })
     .collect();
@@ -257,9 +288,10 @@ fn plot(ctx: &Ctx, dashboard: &Dashboard, hovered: Hovered) -> LimitPlot {
   }
 }
 
-fn drawn_line(ctx: &Ctx, line: &LimitLine) -> DrawnLine {
+fn drawn_line(ctx: &Ctx, dashboard: &Dashboard, line: &LimitLine) -> DrawnLine {
+  let name = line_name(ctx, dashboard, (line.provider, line.account, line.minutes));
   DrawnLine {
-    series: line.series().index(),
+    series: dashboard.account_series(line.account).index(),
     dashed: line.kind() == WindowKind::FiveHour,
     points: line
       .points
@@ -269,24 +301,21 @@ fn drawn_line(ctx: &Ctx, line: &LimitLine) -> DrawnLine {
         percent: point.percent,
         name: ctx.t_args(
           "usage.limits.pointName",
-          [
-            ("window", &*line_name(ctx, line.provider, line.minutes)),
-            ("time", &*words::date_time(ctx, point.at)),
-          ],
+          [("window", &*name), ("time", &*words::date_time(ctx, point.at))],
         ),
         value: words::share(ctx, Some(point.percent.round() as u64)),
       })
       .collect(),
     joins: line.joins.clone(),
-    label: words::cli_name(ctx, line.provider),
+    label: direct_label(ctx, dashboard, (line.provider, line.account)),
   }
 }
 
-fn reset_name(ctx: &Ctx, line: &LimitLine, at: Timestamp) -> Arc<str> {
+fn reset_name(ctx: &Ctx, dashboard: &Dashboard, line: &LimitLine, at: Timestamp) -> Arc<str> {
   ctx.t_args(
     "usage.limits.resetName",
     [
-      ("cli", &*words::cli_name(ctx, line.provider)),
+      ("account", &*window_owner(ctx, dashboard, (line.provider, line.account))),
       ("window", &*window_name(ctx, line.minutes)),
       ("time", &*words::weekday_time(ctx, at)),
     ],
@@ -340,7 +369,7 @@ fn tip(ctx: &Ctx, dashboard: &Dashboard, plot: &LimitPlot, hovered: Hovered) -> 
         [("percent", &*words::share(ctx, Some(point.percent.round() as u64)))],
       );
       let mut rows = vec![
-        tooltip::line(Some(series_color(line.series())), &used, None),
+        tooltip::line(Some(series_swatch(dashboard.account_series(line.account))), &used, None),
         tooltip::line(
           None,
           &ctx.t_args(
@@ -371,7 +400,10 @@ fn tip(ctx: &Ctx, dashboard: &Dashboard, plot: &LimitPlot, hovered: Hovered) -> 
       });
       let title = ctx.t_args(
         "usage.limits.windowTitle",
-        [("window", &*line_name(ctx, line.provider, line.minutes))],
+        [(
+          "window",
+          &*line_name(ctx, dashboard, (line.provider, line.account, line.minutes)),
+        )],
       );
       Some((
         point.at.unix_millis(),

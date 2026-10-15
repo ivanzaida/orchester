@@ -27,6 +27,8 @@ const RING_WIDTH: f32 = 2.0;
 const HIT_SIZE: f32 = 12.0;
 /// Between a point or a line's end and its label, and a marker over the plot (`HeWml`, `mcq7x`).
 const LABEL_GAP: f32 = 6.0;
+/// The line pitch of a two-line direct label (`HeWml`: 10/500).
+const LABEL_LINE: f32 = 12.0;
 const MARKER_TOP: f32 = 2.0;
 const MARKER_SIZE: f32 = 12.0;
 const HATCH_PITCH: f32 = 6.0;
@@ -49,8 +51,8 @@ pub struct DrawnLine {
   pub dashed: bool,
   pub points: Vec<DrawnPoint>,
   pub joins: Vec<Join>,
-  /// The CLI's name beside the last point.
-  pub label: Arc<str>,
+  /// Beside the last point: the CLI over the account's name (*Codex* / *Default*), or the CLI alone.
+  pub label: (Arc<str>, Option<Arc<str>>),
 }
 
 #[derive(Clone)]
@@ -60,7 +62,7 @@ pub struct LimitPlot {
   pub lines: Vec<DrawnLine>,
   /// When a weekly window reset, with its canvas item's name.
   pub resets: Vec<(i64, Arc<str>)>,
-  /// Stretches before a CLI's first report, each with what it says (*No Claude data*).
+  /// Stretches before an account's first report, each with what it says (*No data from Claude · Work*).
   pub hatches: Vec<(i64, i64, Arc<str>)>,
   pub threshold: u8,
   pub threshold_label: Arc<str>,
@@ -102,6 +104,7 @@ pub fn draw(canvas: &CanvasHandle, plot: &LimitPlot) {
   }
   items.extend(resets(&context, frame, plot));
   threshold(&context, frame, plot);
+  let label_ys = label_ys(frame, plot);
   for (line_index, line) in plot.lines.iter().enumerate() {
     draw_line(&context, frame, plot, line);
     for (point_index, point) in line.points.iter().enumerate() {
@@ -115,7 +118,7 @@ pub fn draw(canvas: &CanvasHandle, plot: &LimitPlot) {
           .value(point.value.as_ref()),
       );
     }
-    current(&context, frame, plot, line);
+    current(&context, frame, plot, (line, label_ys[line_index]));
   }
   canvas.set_items(items);
 }
@@ -141,26 +144,63 @@ fn draw_line(context: &Context2D, frame: Frame, plot: &LimitPlot, line: &DrawnLi
 
 /// The window's last point, ringed, with the CLI's name after it, or before it where the room after it up to
 /// the canvas's edge is too narrow (a last reading late in the day).
-fn current(context: &Context2D, frame: Frame, plot: &LimitPlot, line: &DrawnLine) {
+fn current(context: &Context2D, frame: Frame, plot: &LimitPlot, (line, label_y): (&DrawnLine, f32)) {
   let Some(last) = line.points.last() else {
     return;
   };
-  let (x, y) = (plot.x(frame, last.at), frame.y(last.percent, 100.0));
-  dot(context, (x, y), plot.style.series[line.series], &plot.style);
+  let x = plot.x(frame, last.at);
+  dot(
+    context,
+    (x, frame.y(last.percent, 100.0)),
+    plot.style.series[line.series],
+    &plot.style,
+  );
+  let y = label_y;
   context.set_font(plot.style.strong_font.clone());
   context.set_text_baseline(TextBaseline::Middle);
   context.set_fill_style(plot.style.strong);
+  let (over, under) = &line.label;
+  let widest = [Some(over), under.as_ref()]
+    .into_iter()
+    .flatten()
+    .map(|text| context.measure_text(text).map_or(0.0, |metrics| metrics.width))
+    .fold(0.0, f32::max);
   let after = x + POINT_RADIUS + LABEL_GAP;
-  let fits_after = context
-    .measure_text(&line.label)
-    .map_or(true, |metrics| after + metrics.width <= frame.edge);
-  if fits_after {
-    context.set_text_align(TextAlign::Left);
-    plot::text(context, &line.label, after, y);
+  let (left, align) = if after + widest <= frame.edge {
+    (after, TextAlign::Left)
   } else {
-    context.set_text_align(TextAlign::Right);
-    plot::text(context, &line.label, x - POINT_RADIUS - LABEL_GAP, y);
+    (x - POINT_RADIUS - LABEL_GAP, TextAlign::Right)
+  };
+  context.set_text_align(align);
+  match under {
+    Some(under) => {
+      plot::text(context, over, left, y - LABEL_LINE / 2.0);
+      plot::text(context, under, left, y + LABEL_LINE / 2.0);
+    }
+    None => plot::text(context, over, left, y),
   }
+}
+
+/// Where each line's direct label sits: beside its last point, moved down from the one above it where two
+/// would overlap (two lines' last readings close together).
+fn label_ys(frame: Frame, plot: &LimitPlot) -> Vec<f32> {
+  let mut ys: Vec<f32> = plot
+    .lines
+    .iter()
+    .map(|line| line.points.last().map_or(0.0, |last| frame.y(last.percent, 100.0)))
+    .collect();
+  let mut order: Vec<usize> = (0..ys.len())
+    .filter(|index| !plot.lines[*index].points.is_empty())
+    .collect();
+  order.sort_by(|a, b| ys[*a].total_cmp(&ys[*b]));
+  let mut below: Option<f32> = None;
+  for index in order {
+    let height = if plot.lines[index].label.1.is_some() { 2.0 } else { 1.0 } * LABEL_LINE;
+    let top = (ys[index] - height / 2.0).max(below.unwrap_or(f32::MIN));
+    ys[index] = top + height / 2.0;
+    below = Some(top + height);
+  }
+  ys
 }
 
 /// A point in its series' color, ringed in the card's surface.

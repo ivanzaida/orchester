@@ -19,6 +19,7 @@ mod tasks_memory;
 mod tasks_unreadable;
 mod unreadable_db;
 mod usage;
+mod usage_accounts;
 
 use super::{Kontur, SeedError};
 

@@ -10,7 +10,7 @@ use super::{
 };
 use crate::{
   connection::AgentProvider,
-  id::{InvocationId, ProjectId, RunId},
+  id::{AgentAccountId, InvocationId, ProjectId, RunId},
   run::TokenUsage,
   time::Timestamp,
 };
@@ -142,6 +142,14 @@ impl<'a> Turn<'a> {
     match self.by {
       Spender::Agent => self.launch.invocation.cli,
       Spender::Reviewer { cli, .. } => Some(cli),
+    }
+  }
+
+  /// The account the tokens' invocation started on; a review of auto mode's reviewer started on none.
+  pub const fn account(&self) -> Option<AgentAccountId> {
+    match self.by {
+      Spender::Agent => self.launch.invocation.account,
+      Spender::Reviewer { .. } => None,
     }
   }
 

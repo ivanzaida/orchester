@@ -1,7 +1,7 @@
 {
   "usage": {
     "title": "Usage",
-    "description": "Tokens {{project}}’s agents used, and how close each CLI is to its plan limits.",
+    "description": "Tokens {{project}}’s agents used, and how close each account is to its plan limits.",
     "unknown": "—",
     "percent": "{{value}}%",
     "runLabel": "{{task}} · Run {{run}}",
@@ -110,7 +110,6 @@
     "cli": {
       "codex": "Codex",
       "claude": "Claude",
-      "other": "Other CLI",
       "anthropic": "Anthropic API",
       "openai": "OpenAI API"
     },
@@ -168,6 +167,18 @@
       "tableFootnote": "Exact counts as the CLIs reported them. Chart returns to the bars.",
       "todayUntil": "Today, until {{time}}"
     },
+    "accounts": {
+      "label": "{{cli}} · {{account}}",
+      "removed": "Removed account",
+      "other": "Other accounts · {{count}}",
+      "otherHeading": "Other",
+      "count": "{{count}} accounts",
+      "none": "No account",
+      "noneInfo": "Usage that didn't start on a connected account: auto mode's reviewer, native agents, command tools, and runs from before Orchester recorded accounts.",
+      "noneDetail": "Auto mode's reviewer, native agents, command tools, runs from before accounts were recorded",
+      "codex": "Codex",
+      "claudeCode": "Claude Code"
+    },
     "limits": {
       "title": "Plan limits",
       "note": "shared by all projects · account-wide",
@@ -175,16 +186,19 @@
       "weekly": "weekly",
       "fiveHour": "5-hour",
       "minutes": "{{minutes}}-minute",
-      "legendName": "{{cli}} · {{window}}",
+      "legendName": "{{account}} · {{window}}",
       "resets": "resets {{time}}",
       "wasReset": "reset {{time}}",
       "none": "No plan limits recorded yet",
       "noneDetail": "Orchester keeps a snapshot each time Codex or Claude reports its plan limits during a run, for 90 days. None has been reported so far, so there is no history for this period. The next run that reports its limits adds the first point.",
       "noneYet": "no plan limits reported yet",
+      "noneChosen": "No plan limits from the chosen accounts",
+      "noneChosenDetail": "Plan limits follow the Account filter, and none of the chosen accounts reported its limits in this period. Choose another account or clear the filter to see the others.",
       "lastReported": "last reported {{time}}",
-      "cliFilterOnly": "follow the CLI filter only · last reported {{time}}",
-      "noData": "No {{cli}} data",
-      "noDataBefore": "no {{cli}} data before {{time}}",
+      "accountFilterOnly": "follow the Account filter only · last reported {{time}}",
+      "noData": "No data from {{account}}",
+      "noDataBefore": "no data before {{time}}",
+      "noDataFromBefore": "no data from {{account}} before {{time}}",
       "footnote": {
         "points": "Each point is a snapshot a CLI reported during a run; snapshots are kept 90 days.",
         "dotted": "Dotted: no run reported limits, so use outside Orchester is unknown.",
@@ -194,7 +208,7 @@
         "byHour": "Grouped by hour, 5-hour windows are drawn (dashed). A drop to a new window starts at its reset marker."
       },
       "pointName": "{{window}} at {{time}}",
-      "resetName": "{{cli}} {{window}} window reset · {{time}}",
+      "resetName": "{{account}} {{window}} window reset · {{time}}",
       "windowTitle": "{{window}} window",
       "used": "{{percent}} used",
       "reported": "Reported {{time}}",
@@ -272,9 +286,6 @@
     "table": {
       "day": "DAY",
       "hour": "HOUR",
-      "codex": "CODEX",
-      "claude": "CLAUDE",
-      "otherCli": "OTHER CLI",
       "measure": {
         "spent": "SPENT",
         "cached": "CACHED",

@@ -169,50 +169,112 @@ pub fn filter_menu_panel(id: &str, width: f32) -> Column {
     .box_shadow(ShadowStyle::Lg)
 }
 
-/// A filter's option `id` saying `label`, `chosen` or not, with its value's color as a swatch where it has
-/// one; a press runs `toggle`, and the menu stays open. A `mono` label is an identifier, such as a model, in
-/// mono 11 (`claude-opus-5-5` `aQCL8`).
+/// A filter's option `id` saying `label`, `chosen` or not, with its value's swatch where it has one (`u1ZxRL`);
+/// a press runs `toggle`, and the menu stays open. A `mono` label is an identifier, such as a model, in mono 11
+/// (`claude-opus-5-5` `aQCL8`).
 pub fn filter_option(
   id: impl Into<Arc<str>>,
   (label, chosen, mono): (&str, bool, bool),
-  swatch: Option<PaletteColor>,
+  swatch: Option<Element>,
   toggle: impl Fn() + Send + Sync + 'static,
 ) -> Element {
   let id = id.into();
+  let text = Text::new(label)
+    .id(format!("{id}-label"))
+    .variant(if mono {
+      ExtraTypography::MonoNote.role()
+    } else {
+      TypographyStyle::Description
+    })
+    .color(PaletteColor::TextPrimary)
+    .nowrap()
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0));
+  option_frame(&id, (label, chosen), swatch, toggle)
+    .height(Dimension::Px(ControlHeight::Md.value()))
+    .child(text)
+    .into()
+}
+
+/// An option that says under its label what it chooses (*No account* in `EU0ex`), as tall as its words, its
+/// check and swatch beside the label's line.
+pub fn filter_option_explained(
+  id: impl Into<Arc<str>>,
+  (label, detail, chosen): (&str, &str, bool),
+  swatch: Option<Element>,
+  toggle: impl Fn() + Send + Sync + 'static,
+) -> Element {
+  let id = id.into();
+  let words = Column::new()
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .spacing(ExtraSpacing::Tight.role())
+    .child(
+      Text::new(label)
+        .id(format!("{id}-label"))
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextPrimary),
+    )
+    .child(
+      Text::new(detail)
+        .id(format!("{id}-detail"))
+        .width(Dimension::Pct(100.0))
+        .variant(TypographyStyle::Caption),
+    );
+  option_frame(&id, (label, chosen), swatch, toggle)
+    .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()))
+    .align_items(Alignment::Start)
+    .child(words)
+    .into()
+}
+
+/// The heading of a group of options (`Group · Codex` `ezGJl`): its icon and name in 11/500 `text_muted`,
+/// 24 high.
+pub fn filter_group(id: impl Into<Arc<str>>, glyph: Icon, label: &str) -> Element {
+  Row::new()
+    .id(id.into())
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(GROUP_HEIGHT))
+    .padding(Padding::horizontal(SpacingSize::Sm))
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
+    .child(
+      Text::new(label)
+        .variant(TypographyStyle::FieldLabel)
+        .color(PaletteColor::TextMuted)
+        .nowrap(),
+    )
+    .into()
+}
+
+/// An option's pressable row with its check and swatch; its words go after them.
+fn option_frame(
+  id: &Arc<str>,
+  (label, chosen): (&str, bool),
+  swatch: Option<Element>,
+  toggle: impl Fn() + Send + Sync + 'static,
+) -> lurq::components::Button {
   pressable(toggle)
     .id(id.clone())
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(ControlHeight::Md.value()))
     .padding(Padding::horizontal(SpacingSize::Sm))
     .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
     .rounded(RadiusSize::Sm)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .describe("a11y_name", label.to_owned())
     .describe("checked", if chosen { "true" } else { "false" })
     .child(check_mark(chosen))
-    .with_children(swatch.map(|color| {
+    .with_children(swatch.map(|swatch| {
       Row::new()
-        .width(Dimension::Px(SWATCH))
-        .height(Dimension::Px(SWATCH))
+        .height(Dimension::Px(SWATCH_BOX))
         .flex_shrink(0.0)
-        .background(color)
-        .rounded(ExtraRadius::Swatch.role())
+        .align_items(Alignment::Center)
+        .child(swatch)
     }))
-    .child(
-      Text::new(label)
-        .id(format!("{id}-label"))
-        .variant(if mono {
-          ExtraTypography::MonoNote.role()
-        } else {
-          TypographyStyle::Description
-        })
-        .color(PaletteColor::TextPrimary)
-        .nowrap()
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0)),
-    )
-    .into()
 }
 
-/// A value's color swatch in an option (`u1ZxRL`).
-const SWATCH: f32 = 8.0;
+/// A group heading's height (`ezGJl`), and the box an option's swatch sits in (`Swatch box` `eOYES`).
+const GROUP_HEIGHT: f32 = 24.0;
+const SWATCH_BOX: f32 = 16.0;

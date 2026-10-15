@@ -14,6 +14,7 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
   node::color::Color,
 };
+use orchester_core::usage::SERIES;
 
 use super::{
   ExtraColor,
@@ -218,14 +219,15 @@ pub fn canvas_font(style: &TextStyle) -> CanvasFont {
   font
 }
 
-/// The colors and fonts a Usage chart draws with (`Plot` `cgGn2`, `jPHZ9`): a series in its CLI's color,
+/// The colors and fonts a Usage chart draws with (`Plot` `cgGn2`, `jPHZ9`): a series in its account's color,
 /// the grid in `border`, the baseline and reset rules in `border_strong`, axis text `text_muted` (figures
 /// and clock times mono, days proportional, *Today* `text_secondary` 500), the warning threshold dashed in
 /// `text_muted`, a single-series line in `text_muted`; text never takes a series color.
 #[derive(Clone, PartialEq)]
 pub struct ChartStyle {
-  /// Codex, Claude Code, a third CLI.
-  pub series: [Color; 3],
+  /// Accounts 1–3, Other accounts, No account (its stripes and outline, over `hatch`), by
+  /// `AccountSeries::index`.
+  pub series: [Color; SERIES],
   pub grid: Color,
   pub baseline: Color,
   pub axis: Color,
@@ -255,6 +257,8 @@ impl ChartStyle {
         color(ExtraColor::Chart1.role()),
         color(ExtraColor::Chart2.role()),
         color(ExtraColor::Chart3.role()),
+        color(ExtraColor::ChartOther.role()),
+        color(ExtraColor::ChartNone.role()),
       ],
       grid: color(PaletteColor::Border),
       baseline: color(PaletteColor::BorderStrong),

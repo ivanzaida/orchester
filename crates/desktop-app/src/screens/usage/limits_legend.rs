@@ -18,14 +18,15 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::usage::{
-  CliSeries, Grouping,
+  Grouping,
   limits::{CurrentLimit, WindowKind},
 };
 use orchester_workspace::usage::{Dashboard, DashboardState};
 
 use super::{
-  card::{Card, footnote, series_color},
+  card::{Card, footnote},
   limits_chart::line_name,
+  series::series_color,
   words,
 };
 use crate::theme::{ExtraSpacing, UsageRadius, UsageSpacing};
@@ -40,10 +41,10 @@ const ENTRY_HEIGHT: f32 = 32.0;
 /// What the entries of 5-hour windows keep of their strength while the chart does not draw them.
 const UNDRAWN_OPACITY: f32 = 0.5;
 
-/// The windows in legend order: each kind by CLI.
+/// The windows in legend order: by account in series order, then by length.
 fn windows(dashboard: &Dashboard) -> Vec<&CurrentLimit> {
   let mut windows: Vec<&CurrentLimit> = dashboard.limits.current.iter().collect();
-  windows.sort_by_key(|window| (CliSeries::of(Some(window.provider)), window.minutes));
+  windows.sort_by_key(|window| (dashboard.account_place(window.account), window.minutes));
   windows
 }
 
@@ -76,20 +77,24 @@ fn entry(ctx: &Ctx, dashboard: &Dashboard, window: &CurrentLimit, faded: bool) -
   let (value, resets) = reading(ctx, dashboard, window);
   let id = format!(
     "usage-limits-window-{}-{}",
-    CliSeries::of(Some(window.provider)).index(),
+    dashboard.account_place(window.account),
     window.minutes
   );
   let line = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(line_swatch(
-      &series_color(CliSeries::of(Some(window.provider))),
+      &series_color(dashboard.account_series(window.account)),
       WindowKind::of(window.minutes) == WindowKind::FiveHour,
     ))
     .child(
-      Text::new(&line_name(ctx, window.provider, window.minutes))
-        .variant(TypographyStyle::Description)
-        .nowrap(),
+      Text::new(&line_name(
+        ctx,
+        dashboard,
+        (window.provider, window.account, window.minutes),
+      ))
+      .variant(TypographyStyle::Description)
+      .nowrap(),
     )
     .child(
       Text::new(&value)
@@ -171,7 +176,7 @@ pub fn compact(ctx: &Ctx, dashboard: &Dashboard, menu: Element) -> Element {
   let filtered =
     matches!(dashboard.state, DashboardState::FilteredOut { .. }) || !dashboard.query.filter.clis.is_empty();
   let caption = if filtered {
-    ctx.t_args("usage.limits.cliFilterOnly", [("time", &*reported)])
+    ctx.t_args("usage.limits.accountFilterOnly", [("time", &*reported)])
   } else {
     ctx.t_args("usage.limits.lastReported", [("time", &*reported)])
   };
