@@ -76,6 +76,14 @@ define_id!(
   /// One immutable published version of a resource.
   VersionId
 );
+define_id!(
+  /// An account on Orchester Cloud, the identity service (`docs/architecture/server.md`, "Orchester Cloud").
+  CloudAccountId
+);
+define_id!(
+  /// One signed-in device of a cloud account: a desktop app or a web browser.
+  CloudDeviceId
+);
 define_id!(TaskId);
 define_id!(TagId);
 define_id!(
