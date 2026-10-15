@@ -62,15 +62,18 @@ fn limits_optional_daily_migration_preserves_existing_finite_limits() {
     .expect("save finite limits");
   drop(db);
   let database = repo.path().join(".orchester").join("orchester.db");
-  // Before `optional_daily_budget`, which `agent_accounts` follows.
-  let before = schema_version(&database) - 2;
+  // The newest version before `optional_daily_budget` added its column, found by
+  // looking rather than by counting back, so later migrations do not move it.
+  let before = (1..schema_version(&database))
+    .rev()
+    .find(|&version| {
+      ProjectDb::create_at_version(&repo.path().join(format!("old-{version}")), version)
+        .expect("old schema")
+        .prepare("SELECT daily_budget_unlimited FROM project_limits")
+        .is_err()
+    })
+    .expect("a version before optional_daily_budget");
   let old = copied_at_version(&database, before);
-  assert!(
-    ProjectDb::create_at_version(&repo.path().join("empty-old"), before)
-      .expect("old schema")
-      .prepare("SELECT daily_budget_unlimited FROM project_limits")
-      .is_err()
-  );
   let upgraded = ProjectDb::open(old.path()).expect("migrate");
   assert_eq!(
     upgraded.project_limits().expect("limits").daily_budget_limit(),
