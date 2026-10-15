@@ -60,7 +60,8 @@ fn invocation(
     step: step.into(),
     started_at: from,
     ended_at: Some(to),
-    active_ms: u64::try_from(to.unix_millis() - from.unix_millis()).expect("ends after it starts"),
+    // Three quarters of the time active, a quarter waiting for a person.
+    active_ms: u64::try_from(to.unix_millis() - from.unix_millis()).expect("ends after it starts") / 4 * 3,
     edit: None,
     index: IndexGiven::Unknown,
   }
@@ -173,9 +174,9 @@ fn usage_groups_by_day_list_every_day_with_its_tokens_time_and_runs() {
   assert!(matches!(&thursday.key, GroupKey::Bucket(bucket) if bucket.date == date(25)));
   assert_eq!(
     (thursday.spent(), thursday.agent_ms, thursday.runs),
-    (10_000, 2 * 3_600_000, 1)
+    (10_000, 2 * 2_700_000, 1)
   );
-  assert_eq!((days[2].spent(), days[2].agent_ms, days[2].runs), (4_500, 3_600_000, 1));
+  assert_eq!((days[2].spent(), days[2].agent_ms, days[2].runs), (4_500, 2_700_000, 1));
   assert_eq!(days[0].spent() + days[3].spent(), 0);
 }
 
@@ -187,7 +188,11 @@ fn usage_groups_by_hour_split_an_invocation_into_its_hours() {
   let nine = hours
     .iter()
     .find(|row| matches!(&row.key, GroupKey::Bucket(bucket) if bucket.date == date(25) && bucket.hour == Some(9)));
-  assert_eq!(nine.map(|row| row.agent_ms), Some(3_600_000));
+  assert_eq!(
+    nine.map(|row| row.agent_ms),
+    Some(2_700_000),
+    "half of the invocation's active time"
+  );
 }
 
 #[test]
@@ -264,4 +269,25 @@ fn usage_groups_filters_narrow_to_a_task_run_step_account_and_resource() {
     "a task with no runs matches nothing"
   );
   assert_eq!(with(|filter, _| filter.profiles.push(Arc::from("Nobody"))), 0);
+}
+
+#[test]
+fn usage_groups_spread_an_invocations_active_time_over_its_days() {
+  let mut fixture = fixture();
+  // Mon 09:00 to Wed 09:00, of which an hour was active: the days share that hour, as wide as each one's part.
+  let long = &mut fixture.facts.facts.invocations[0];
+  long.started_at = on(28, 9);
+  long.ended_at = Some(on(30, 9));
+  long.active_ms = 3_600_000;
+  let days = rows(&fixture.facts, &UsageFilter::default(), GroupBy::Day);
+  let active: Vec<u64> = days.iter().map(|row| row.agent_ms).collect();
+  assert_eq!(
+    active.iter().sum::<u64>(),
+    3_600_000 + 2_700_000,
+    "the hour, and the review's three quarters of one"
+  );
+  assert_eq!(
+    &active[4..],
+    &[3_600_000 * 15 / 48, 3_600_000 * 24 / 48, 3_600_000 * 9 / 48]
+  );
 }

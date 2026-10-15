@@ -18,6 +18,7 @@ use super::{
 use crate::{
   id::{AgentAccountId, ProjectId, ResourceId, RunId, TaskId},
   run::TokenUsage,
+  time::Timestamp,
 };
 
 /// What rows group by.
@@ -131,13 +132,19 @@ fn by_bucket(within: &Within<'_>, buckets: &[Bucket]) -> Vec<GroupRow> {
       rows[index].1.insert(run_of(turn.launch));
     }
   }
-  for (launch, _) in &within.launches {
-    for (index, bucket) in buckets.iter().enumerate() {
-      let end = buckets.get(index + 1).map_or(within.end, |next| next.start);
-      if let Some(active) = active_between(launch.invocation, (bucket.start, end), within.now) {
-        rows[index].0.agent_ms += active;
-        rows[index].1.insert(run_of(*launch));
-      }
+  for (launch, active) in &within.launches {
+    let spans: Vec<(usize, u64)> = buckets
+      .iter()
+      .enumerate()
+      .filter_map(|(index, bucket)| {
+        let end = buckets.get(index + 1).map_or(within.end, |next| next.start);
+        active_between(launch.invocation, (bucket.start, end), within.now)?;
+        Some((index, wall_overlap(launch.invocation, (bucket.start, end), within.now)))
+      })
+      .collect();
+    for (index, share) in spread(*active, &spans) {
+      rows[index].0.agent_ms += share;
+      rows[index].1.insert(run_of(*launch));
     }
   }
   rows
@@ -147,6 +154,36 @@ fn by_bucket(within: &Within<'_>, buckets: &[Bucket]) -> Vec<GroupRow> {
       row
     })
     .collect()
+}
+
+/// How long `invocation` ran between `start` and `end` by the clock, waits included.
+fn wall_overlap(invocation: &InvocationFacts, (start, end): (Timestamp, Timestamp), now: Timestamp) -> u64 {
+  let stop = invocation.ended_at.unwrap_or(now).min(end);
+  u64::try_from(stop.unix_millis() - invocation.started_at.max(start).unix_millis()).unwrap_or(0)
+}
+
+/// Shares `active` among the buckets an invocation ran in, each as wide as its part of the invocation's
+/// time, so the shares add up to `active`: the remainder of the rounding goes to the last bucket, and an
+/// invocation that took no time by the clock gives it all to the bucket it started in.
+fn spread(active: u64, spans: &[(usize, u64)]) -> Vec<(usize, u64)> {
+  let wall: u128 = spans.iter().map(|(_, overlap)| u128::from(*overlap)).sum();
+  let Some((&(last, _), before)) = spans.split_last() else {
+    return Vec::new();
+  };
+  if wall == 0 {
+    return vec![(spans[0].0, active)];
+  }
+  let mut given = 0;
+  let mut shares: Vec<(usize, u64)> = before
+    .iter()
+    .map(|&(index, overlap)| {
+      let share = u64::try_from(u128::from(active) * u128::from(overlap) / wall).expect("a share is at most `active`");
+      given += share;
+      (index, share)
+    })
+    .collect();
+  shares.push((last, active - given));
+  shares
 }
 
 fn key_of_turn(turn: &Turn<'_>, facet: Facet) -> GroupKey {
