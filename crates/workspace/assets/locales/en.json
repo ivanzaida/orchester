@@ -605,6 +605,11 @@
     },
     "openFailed": "The browser could not open the pull request.",
     "notSynced": "Pull request #{{number}} is not among the pull requests the last sync read. Ask with refresh to read it from GitHub.",
+    "notRead": {
+      "rateLimited": "GitHub's rate limit holds requests back: pull request #{{number}} was not read. Ask again after the limit resets (paused_until).",
+      "unreachable": "GitHub could not be reached: pull request #{{number}} was not read. Ask again once GitHub can be reached.",
+      "failed": "Pull request #{{number}} could not be read from GitHub: check the project's GitHub connection in Connections."
+    },
     "footer": {
       "open": {
         "one": "1 open pull request · From this project’s repository",

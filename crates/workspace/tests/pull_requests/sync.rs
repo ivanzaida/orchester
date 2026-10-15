@@ -1,6 +1,7 @@
 //! Syncing through a fake `gh` that answers as `gh` 2.97 does: how the latest sync went is kept and reported,
 //! a rate limit holds every later sync until it resets, a client's refresh waits 30 s after a sync, and a
-//! sync of the open ones keeps the closed and merged ones a full sync stored.
+//! sync of the open ones keeps the closed and merged ones a full sync stored. A rate limit that refuses the read
+//! of one pull request holds the list's syncs too.
 
 use std::sync::{
   Arc,
@@ -17,6 +18,7 @@ use orchester_core::{
 use orchester_exec::programs::Programs;
 use orchester_workspace::pull_requests::{
   list::{LinkedList, PullRequestList, PullRequestTab, load_list_in, refresh_list_in, sync_list_in},
+  page::{PullRequestPage, refresh_page_in},
   status::SyncStatus,
   sync_in,
 };
@@ -101,6 +103,9 @@ impl CommandRunner for FakeGh {
         },
         "",
       );
+    }
+    if args.starts_with("pr view") && mode == Mode::RateLimited {
+      return answer(1, "", "GraphQL: API rate limit already exceeded for user ID 1.");
     }
     if args.starts_with("api graphql") {
       let asked = command.stdin().unwrap_or_default().matches("object(oid:").count();
@@ -217,4 +222,29 @@ fn pull_requests_sync_of_the_open_ones_keeps_the_stored_closed_ones() {
     (read.count(PullRequestTab::Merged), read.count(PullRequestTab::Closed)),
     (1, 1)
   );
+}
+
+#[test]
+fn pull_requests_rate_limit_on_one_pull_requests_read_holds_the_lists_syncs() {
+  let gh = FakeGh::new(Mode::Ok, &[(142, "work")]);
+  let (fixture, programs) = linked(&gh);
+  let root = fixture.repo.path();
+  listed(sync_list_in(root, &programs).expect("a sync"));
+  *gh.mode.lock() = Mode::RateLimited;
+  let PullRequestPage::Linked(page) = refresh_page_in(root, 142, &programs).expect("a read") else {
+    panic!("the project is linked");
+  };
+  assert!(
+    matches!(page.failure, Some(SyncFailure::RateLimited { resets_at: Some(_) })),
+    "{:?}",
+    page.failure
+  );
+  let read = listed(load_list_in(root).expect("the list"));
+  assert!(read.is_paused(Timestamp::now()), "{:?}", read.failure);
+  assert!(matches!(read.status(), SyncStatus::RateLimited { .. }));
+  *gh.mode.lock() = Mode::Ok;
+  let lists = gh.lists();
+  let later = Timestamp::from_unix_millis(Timestamp::now().unix_millis() + 60_000);
+  listed(refresh_list_in(root, &programs, later).expect("a refresh"));
+  assert_eq!(gh.lists(), lists, "the list waits for the reset too");
 }

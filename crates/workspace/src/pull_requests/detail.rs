@@ -10,7 +10,7 @@ use orchester_core::{
   connection::GitHubLogin,
   diff::{Diff, DiffParseError, RevisionDiff},
   github::GhCli,
-  pull_request::{DiffRead, Fields, PullRequest, SyncFailure, refresh_pull_request},
+  pull_request::{DiffRead, Fields, PullRequest, SyncAttempt, SyncFailure, refresh_pull_request},
   repository::{GitHubRepo, RepositoryLink},
   revision::Revision,
   store::{ConnectionStore, PullRequestDiffStore, PullRequestStore, RepositoryStore},
@@ -200,6 +200,7 @@ pub(super) fn refresh_found_in(
     Ok(read) => read,
     Err(failure) => {
       tracing::info!(repository = %link.repo(), number, ?failure, "the pull request was not refreshed");
+      hold_if_rate_limited(&mut db, link.repo(), &failure, now)?;
       return stored(&db, &link, number, Some(failure)).map(Some);
     }
   };
@@ -208,6 +209,7 @@ pub(super) fn refresh_found_in(
     DiffRead::TooLarge => (FoundDiff::TooLarge, None),
     DiffRead::Failed(failure) => {
       tracing::info!(repository = %link.repo(), number, ?failure, "the diff of the pull request was not read");
+      hold_if_rate_limited(&mut db, link.repo(), &failure, now)?;
       (stored_diff(&db, &link, number)?, Some(failure))
     }
   };
@@ -222,6 +224,24 @@ pub(super) fn refresh_found_in(
     failure: None,
     diff_failure,
   }))
+}
+
+/// Records a rate limit that refused a read of one pull request as the repository's latest sync, so the list's
+/// syncs, its page and every other read wait for the reset too. Any other failure concerns this read alone.
+fn hold_if_rate_limited(
+  db: &mut ProjectDb,
+  repo: &GitHubRepo,
+  failure: &SyncFailure,
+  now: Timestamp,
+) -> Result<(), InboxError> {
+  if matches!(failure, SyncFailure::RateLimited { .. }) {
+    let attempt = SyncAttempt {
+      at: now,
+      failure: Some(failure.clone()),
+    };
+    db.record_pull_request_sync(repo, &attempt)?;
+  }
+  Ok(())
 }
 
 /// What storage knows about pull request `number`, and why the latest refresh failed.

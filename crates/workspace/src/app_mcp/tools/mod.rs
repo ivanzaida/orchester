@@ -12,6 +12,7 @@ mod pipeline_copy;
 mod plan_read;
 mod plans;
 mod projects;
+mod pull_request_reads;
 mod pull_request_wire;
 mod pull_requests;
 mod questions;
@@ -35,6 +36,7 @@ use rmcp::{
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
+pub(super) use self::pull_request_reads::RecentReads;
 pub use self::run_task::{Proposal, propose_run, run_proposed};
 use self::runs::Control;
 use super::{error::ToolError, services::Services};
@@ -250,7 +252,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_pull_request",
-    description: "One pull request of a project's linked GitHub repository, as list_pull_requests gives it, with how the repository's latest sync went. One the last sync did not read (an older closed one) is refused as pull_request_not_synced; with refresh it is read from GitHub on its own, unless a rate limit holds.",
+    description: "One pull request of a project's linked GitHub repository, as list_pull_requests gives it, with how the repository's latest sync went. One the last sync did not read (an older closed one) is refused as pull_request_not_synced; with refresh it is read from GitHub on its own, and a refresh of the same number within 30 s answers what that read found. A read GitHub refuses says why: github_rate_limited (until paused_until), github_unreachable, or pull_request_not_read; pull_request_not_found when GitHub has no such pull request.",
     schema: schema_for_type::<pull_requests::GetPullRequest>,
     read_only: true,
   },

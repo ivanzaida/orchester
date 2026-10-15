@@ -4,7 +4,10 @@
 use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, RegisteredProject};
 
-use super::error::{Missing, ToolError};
+use super::{
+  error::{Missing, ToolError},
+  tools::RecentReads,
+};
 use crate::{
   activity::Activity,
   messages::Message,
@@ -28,6 +31,8 @@ pub struct Services {
   pub(super) activity: Activity,
   /// The projects' merge and removal operations, shared with the task pages.
   pub(super) jobs: ProjectJobs,
+  /// What `get_pull_request` read of pull requests outside the synced lists in the last 30 s.
+  pub(super) pull_request_reads: RecentReads,
 }
 
 impl Services {
@@ -47,6 +52,7 @@ impl Services {
       changes,
       activity,
       jobs,
+      pull_request_reads: RecentReads::default(),
     }
   }
 

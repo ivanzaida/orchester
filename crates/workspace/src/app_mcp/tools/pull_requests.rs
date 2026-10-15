@@ -13,6 +13,7 @@ use serde_json::{Value, json};
 use super::{
   Translate,
   across::{across, needs_project},
+  pull_request_reads::ReadOne,
   pull_request_wire::{item, repository},
 };
 use crate::{
@@ -28,6 +29,7 @@ use crate::{
       refresh_list_in,
     },
     page::{PullRequestPage, PullRequestView, refresh_page_in},
+    status::SyncStatus,
   },
   workspace::OpenProject,
 };
@@ -88,7 +90,7 @@ pub struct GetPullRequest {
   /// The pull request's number.
   pub number: u64,
   /// Syncs with GitHub through `gh` first, as list_pull_requests' refresh does; a pull request the sync does
-  /// not list (an older closed one) is then read on its own.
+  /// not list (an older closed one) is then read on its own, at most once in 30 s.
   #[serde(default)]
   pub refresh: bool,
 }
@@ -149,8 +151,11 @@ pub async fn get_pull_request(services: &Services, args: GetPullRequest) -> Resu
       PullRequestList::Unlinked => return Err(ToolError::not_found(Missing::PullRequest, format!("#{number}"))),
       PullRequestList::Linked(linked) => match linked.find(number) {
         Some(listed) => listed.clone(),
-        None if args.refresh && !linked.is_paused(Timestamp::now()) => read_one(&services, &project, number)?,
-        None => return Err(not_synced(number)),
+        None if !args.refresh => return Err(not_synced(number)),
+        None => match &linked.failure {
+          Some(failure) if failure.is_paused(Timestamp::now()) => return Err(not_read(number, failure)),
+          _ => read_one(&services, &project, number)?,
+        },
       },
     };
     Ok((project, list, listed))
@@ -170,11 +175,31 @@ fn refused(error: &InboxError) -> ToolError {
   ToolError::refused("project_data", vec![error.message()])
 }
 
-/// Pull request `number`, which the sync did not list, read on its own from GitHub.
+/// Pull request `number`, which the sync did not list, read on its own from GitHub, unless it was less than
+/// 30 s ago: then what that read came to answers.
 fn read_one(services: &Services, project: &OpenProject, number: u64) -> Result<ListedPullRequest, ToolError> {
+  let key = (project.project.id(), number);
+  let now = Timestamp::now();
+  let read = match services.pull_request_reads.recent(key, now) {
+    Some(read) => read,
+    None => {
+      let read = read_from_github(services, project, number)?;
+      services.pull_request_reads.keep(key, now, read.clone());
+      read
+    }
+  };
+  match read {
+    ReadOne::Read(listed) => Ok(*listed),
+    ReadOne::NotFound => Err(ToolError::not_found(Missing::PullRequest, format!("#{number}"))),
+    ReadOne::Failed(failure) => Err(not_read(number, &failure)),
+  }
+}
+
+/// What asking GitHub for pull request `number` came to.
+fn read_from_github(services: &Services, project: &OpenProject, number: u64) -> Result<ReadOne, ToolError> {
   let page = refresh_page_in(&project.repo_root, number, &services.programs).map_err(|error| refused(&error))?;
   let PullRequestPage::Linked(view) = page else {
-    return Err(ToolError::not_found(Missing::PullRequest, format!("#{number}")));
+    return Ok(ReadOne::NotFound);
   };
   let PullRequestView {
     pull_request,
@@ -182,13 +207,13 @@ fn read_one(services: &Services, project: &OpenProject, number: u64) -> Result<L
     failure,
     ..
   } = *view;
-  match (pull_request, failure) {
-    (Some(pull_request), _) => Ok(ListedPullRequest { pull_request, task }),
-    (None, Some(SyncFailure::Repository(RepositoryError::PullRequestNotFound { .. }))) => {
-      Err(ToolError::not_found(Missing::PullRequest, format!("#{number}")))
-    }
-    (None, _) => Err(not_synced(number)),
-  }
+  Ok(match (pull_request, failure) {
+    (Some(pull_request), _) => ReadOne::Read(Box::new(ListedPullRequest { pull_request, task })),
+    (None, Some(SyncFailure::Repository(RepositoryError::PullRequestNotFound { .. }))) => ReadOne::NotFound,
+    (None, Some(failure)) => ReadOne::Failed(failure),
+    // A read that gives no pull request says why; without a reason GitHub had none to give.
+    (None, None) => ReadOne::NotFound,
+  })
 }
 
 /// Pull request `number` is not among the ones the last sync read.
@@ -197,6 +222,16 @@ fn not_synced(number: u64) -> ToolError {
     "pull_request_not_synced",
     vec![Message::new("pullRequests.notSynced").with("number", number.to_string())],
   )
+}
+
+/// GitHub did not give pull request `number`, for `failure`.
+fn not_read(number: u64, failure: &SyncFailure) -> ToolError {
+  let (code, key) = match SyncStatus::after(None, Some(failure)) {
+    SyncStatus::RateLimited { .. } => ("github_rate_limited", "pullRequests.notRead.rateLimited"),
+    SyncStatus::Unreachable { .. } => ("github_unreachable", "pullRequests.notRead.unreachable"),
+    _ => ("pull_request_not_read", "pullRequests.notRead.failed"),
+  };
+  ToolError::refused(code, vec![Message::new(key).with("number", number.to_string())])
 }
 
 /// Every pull request of `linked` a search for `query` finds, most recently updated first.
