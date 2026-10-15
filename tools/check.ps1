@@ -26,8 +26,14 @@ try {
         }
     }
 
+    # Orchester Cloud is checked on its own: actix-web turns on tracing's `log` feature, and in one build with the
+    # other crates Cargo would turn it on for them too, which inflates clippy's cognitive complexity of every
+    # tracing event there. Built apart, each side is checked with the features it really has.
     Write-Output "== clippy"
-    cargo clippy --workspace --all-targets --all-features -- -D warnings
+    cargo clippy --workspace --exclude orchester-cloud --all-targets --all-features -- -D warnings
+    if ($LASTEXITCODE -ne 0) { $failed = $true }
+    Write-Output "== clippy orchester-cloud"
+    cargo clippy -p orchester-cloud --all-targets --all-features -- -D warnings
     if ($LASTEXITCODE -ne 0) { $failed = $true }
 
     Write-Output "== file size (max $maxLines lines)"
