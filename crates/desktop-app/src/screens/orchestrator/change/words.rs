@@ -42,7 +42,7 @@ pub(super) enum Phase<'a> {
 impl<'a> Phase<'a> {
   pub(super) fn of(action: &'a ChatAction) -> Self {
     match &action.outcome {
-      ActionOutcome::Waits | ActionOutcome::Proposed(_) if action.applying => Self::Applying,
+      ActionOutcome::Waits | ActionOutcome::Proposed(_) if action.claimed.is_some() => Self::Applying,
       ActionOutcome::Waits | ActionOutcome::Proposed(_) => Self::Waits,
       ActionOutcome::Applied => Self::Applied,
       ActionOutcome::Done => Self::Done,

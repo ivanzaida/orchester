@@ -8,6 +8,7 @@ mod duplicate;
 pub mod facts;
 mod keep;
 pub mod proposal;
+pub mod recover;
 pub mod send;
 pub mod settings;
 pub mod tools;

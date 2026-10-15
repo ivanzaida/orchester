@@ -13,7 +13,10 @@ mod tools;
 pub use self::{
   error::{Missing, ToolError},
   protocol::supported_protocol_versions,
-  services::{PersonDecision, Services},
+  services::Services,
   tools::{Proposal, Translate, call, find_run, listed, propose_run, run_proposed, setup},
 };
-pub(crate) use self::{services::blocking, tools::duplicate_pipeline_draft};
+pub(crate) use self::{
+  services::{PersonDecision, blocking},
+  tools::duplicate_pipeline_draft,
+};

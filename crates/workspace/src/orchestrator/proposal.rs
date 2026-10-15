@@ -77,7 +77,7 @@ pub async fn decide(
     runners.chat_changed(&scope.root);
     return dismissed.map(drop).ok_or_else(taken);
   };
-  let claimed = background::run(move || ProjectDb::open(&root)?.claim_chat_action((chat, seq)))
+  let claimed = background::run(move || ProjectDb::open(&root)?.claim_chat_action((chat, seq), Timestamp::now()))
     .await?
     .map_err(|error| store_error(&error))?;
   let Some(action) = claimed else {

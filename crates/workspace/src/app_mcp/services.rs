@@ -40,7 +40,7 @@ pub struct Services {
 /// What a person decided to publish: the draft saved at `saved`, as version `version`, widening what agents may do
 /// by `widens` (what their card showed).
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PersonDecision {
+pub(crate) struct PersonDecision {
   pub saved: Timestamp,
   pub version: u32,
   pub widens: Vec<Message>,
@@ -70,7 +70,7 @@ impl Services {
   /// These services for a publication a person decided ([`Self::person`]). Only the window may ask for it, for a
   /// click it took from a person and refused from synthetic input.
   #[must_use]
-  pub fn decided_by_person(mut self, decision: PersonDecision) -> Self {
+  pub(crate) fn decided_by_person(mut self, decision: PersonDecision) -> Self {
     self.person = Some(Arc::new(decision));
     self
   }

@@ -262,9 +262,11 @@ fn a_proposal_is_claimed_by_one_decision_and_settled_by_it_alone() {
     .find_map(|entry| matches!(entry.kind, EntryKind::Action(_)).then_some(entry.seq))
     .expect("the action");
 
-  assert!(db.claim_chat_action((chat, seq)).expect("claim").is_some());
+  assert!(db.claim_chat_action((chat, seq), at(25)).expect("claim").is_some());
   assert!(
-    db.claim_chat_action((chat, seq)).expect("claim again").is_none(),
+    db.claim_chat_action((chat, seq), at(26))
+      .expect("claim again")
+      .is_none(),
     "a second decision does not take a proposal under way"
   );
   assert!(

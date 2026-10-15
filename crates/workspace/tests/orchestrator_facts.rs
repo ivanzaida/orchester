@@ -62,7 +62,7 @@ fn drafted(db: &mut ProjectDb, saved: Timestamp) -> ResourceId {
 
 fn proposed(resource: ResourceId, saved: Timestamp) -> ChatAction {
   ChatAction {
-    change: Some(ProposedChange {
+    change: Some(Box::new(ProposedChange {
       subject: "Review checklist".to_owned(),
       change: Change::Publish {
         of: Publishing::Instruction,
@@ -70,7 +70,7 @@ fn proposed(resource: ResourceId, saved: Timestamp) -> ChatAction {
         version: 2,
         saved,
       },
-    }),
+    })),
     ..ChatAction::new("publish_instruction", None, ActionOutcome::Waits)
   }
 }

@@ -117,7 +117,7 @@ fn turn(text: &str, at: Timestamp, actions: Vec<ChatAction>) -> Turn<'_> {
 /// The action of a change: `tool`'s, about `change`, gone as `outcome`.
 fn change((tool, task, change): &(String, Option<String>, ProposedChange), outcome: ActionOutcome) -> ChatAction {
   ChatAction {
-    change: Some(change.clone()),
+    change: Some(Box::new(change.clone())),
     ..ChatAction::new(tool, task.clone(), outcome)
   }
 }

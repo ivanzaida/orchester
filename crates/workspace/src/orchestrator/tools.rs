@@ -201,7 +201,7 @@ pub(super) async fn act_and_keep(
   // A hold that held new starts keeps what it held, for its card.
   let held = (name == HOLD_QUEUE && outcome == ActionOutcome::Done).then(|| keep::arguments_task(&named));
   let action = ChatAction {
-    change: kept.change,
+    change: kept.change.map(Box::new),
     started: kept.started,
     auto_mode: kept.auto_mode,
     ..ChatAction::new(name, None, outcome)

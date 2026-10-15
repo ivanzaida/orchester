@@ -595,6 +595,7 @@
       "noSecondWay": "In the run’s state a message is sent one way only.",
       "notReadable": "Its run has ended or is no longer the task’s latest, so no agent reads this message any more.",
       "draftChangedPlain": "The draft changed after this proposal, or what it widens did. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
+      "interrupted": "The app closed while this was being carried out, and it did not happen. Nothing more is done: ask the Orchestrator to propose it again.",
       "taken": "This proposal was already decided, here or in another tab: nothing more was done.",
       "noCheckpoint": "Run #{{run}} has no checkpoint: none of its work is committed, so there is nothing to merge.",
       "runChanged": "The run changed since you wrote this. Check what sending does now, then send again."

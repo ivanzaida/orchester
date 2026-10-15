@@ -7,6 +7,7 @@
 
 mod changes;
 mod chat;
+mod decisions;
 mod harness;
 mod history;
 mod proposal;

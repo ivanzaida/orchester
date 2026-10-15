@@ -9,6 +9,7 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
+    i18n::I18n,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Spacer, Text},
@@ -16,7 +17,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::{
-  messages::Message,
+  messages::{self, Message},
   orchestrator::{
     proposal::{self, Decision},
     tools::ChatScope,
@@ -109,22 +110,27 @@ impl DevtoolsInspectable for Deciding {}
 
 pub(super) type DecideAction = FutureAction<Deciding, (), Message>;
 
-/// The person's decisions on a card's proposal, carried out through the domain tools of the session.
+/// The person's decisions on a card's proposal, carried out through the domain tools of the session. Each is spawned
+/// on the session's runtime when it is taken, so it is carried out and its outcome kept even when the card goes away
+/// (another tab, another page) before it ends; the card only waits for it.
 pub(super) fn decide_action(ctx: &mut Ctx) -> DecideAction {
   let services = Services::of(ctx);
   let i18n = ctx.i18n().clone();
   ctx.future_action(move |deciding: Deciding| {
-    let (services, i18n) = (services.clone(), i18n.clone());
-    async move {
-      let tools = domain::on(&services);
-      let translate = domain::translate(i18n);
-      proposal::decide(
-        (&tools, &translate, &services.runners),
-        &deciding.scope,
-        deciding.seq,
-        deciding.decision,
-      )
-      .await
-    }
+    let decided = services.runtime.spawn(decide(services.clone(), i18n.clone(), deciding));
+    async move { decided.await.map_err(|_| messages::interrupted())? }
   })
+}
+
+/// Takes `deciding` through the domain tools of `services`, explaining a refusal in the words of `i18n`.
+async fn decide(services: Services, i18n: I18n, deciding: Deciding) -> Result<(), Message> {
+  let tools = domain::on(&services);
+  let translate = domain::translate(i18n);
+  proposal::decide(
+    (&tools, &translate, &services.runners),
+    &deciding.scope,
+    deciding.seq,
+    deciding.decision,
+  )
+  .await
 }

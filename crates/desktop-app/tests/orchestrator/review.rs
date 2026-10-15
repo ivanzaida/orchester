@@ -1,22 +1,23 @@
-//! What the review of the Orchestrator's toolset asked to hold: a person's publication is published only as the
-//! draft and the widenings they were shown, checked where the tool publishes; a merge proposal needs committed work;
-//! a direct publication publishes the draft that was checked, by its id; and a duplicate is saved as a draft whose
-//! first version follows the publication rule.
+//! What the review of the Orchestrator's toolset asked to hold: a person's publication (taken as the card takes it,
+//! through `proposal::decide`) is published only as the draft and the widenings they were shown; a merge proposal needs
+//! committed work; a direct publication publishes the draft that was checked, by its id; and a duplicate is saved as a
+//! draft whose first version follows the publication rule.
 
 use orchester_app::routes::OrchestratorChat;
 use orchester_core::{
-  id::ResourceId,
-  orchestrator::{ActionOutcome, ChatAction, EntryKind, change::Publishing},
+  orchestrator::{ActionOutcome, ChatAction, EntryKind},
   resource::{Pipeline, ResourceKind},
   store::ResourceStore,
-  time::Timestamp,
 };
 use orchester_workspace::{
-  app_mcp::{self, PersonDecision, ToolError, Translate},
+  app_mcp::{self, Translate},
   messages::Message,
-  orchestrator::facts::{Facts, load_in},
+  orchestrator::{
+    facts::{Facts, load_in},
+    proposal::{self, Decision},
+    tools::ChatScope,
+  },
 };
-use serde_json::{Value, json};
 
 use super::{
   harness::{Orchestrator, Setup},
@@ -46,30 +47,9 @@ fn call(screen: &mut Orchestrator, call: &str, count: usize) {
   screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
 }
 
-/// When the draft of pipeline `pipeline` was saved.
-fn saved(screen: &Orchestrator, pipeline: ResourceId) -> Timestamp {
-  screen
-    .db()
-    .draft::<Pipeline>(pipeline)
-    .expect("read")
-    .expect("a draft")
-    .updated_at()
-}
-
-/// What the draft of pipeline `pipeline`, saved at `saved`, widens, as a card reads it.
-fn widens(screen: &Orchestrator, pipeline: ResourceId, saved: Timestamp) -> Vec<Message> {
-  let action = ChatAction {
-    change: Some(orchester_core::orchestrator::change::ProposedChange {
-      subject: String::new(),
-      change: orchester_core::orchestrator::change::Change::Publish {
-        of: Publishing::Pipeline,
-        resource: pipeline,
-        version: 2,
-        saved,
-      },
-    }),
-    ..ChatAction::new("publish_pipeline", None, ActionOutcome::Waits)
-  };
+/// The widenings the card of the conversation's latest action shows: what its draft widens, as the card reads it.
+fn shown(screen: &Orchestrator) -> Vec<Message> {
+  let action = actions(screen).pop().expect("an action");
   let services = screen.window.launch.services().expect("launched services");
   match load_in(&screen.root, &services.programs, &action).expect("read") {
     Some(Facts::Publication(publication)) => publication.widens,
@@ -77,12 +57,23 @@ fn widens(screen: &Orchestrator, pipeline: ResourceId, saved: Timestamp) -> Vec<
   }
 }
 
-/// `publish_pipeline` of `pipeline` as the person decided it: `decision`.
-fn publish_as_person(
-  screen: &Orchestrator,
-  pipeline: ResourceId,
-  decision: PersonDecision,
-) -> Result<Value, ToolError> {
+/// The person's decision on the conversation's latest action, as its card takes it, through `proposal::decide`.
+pub(super) fn decide(screen: &Orchestrator, decision: Decision) -> Result<(), Message> {
+  let db = screen.db();
+  let chat = db.chats().expect("chats").remove(0).chat.id();
+  let seq = db
+    .chat_entries(chat)
+    .expect("entries")
+    .into_iter()
+    .filter_map(|entry| matches!(entry.kind, EntryKind::Action(_)).then_some(entry.seq))
+    .next_back()
+    .expect("an action");
+  let scope = ChatScope {
+    project: screen.project,
+    name: "Kontur".to_owned(),
+    root: screen.root.clone(),
+    chat,
+  };
   let s = screen.window.launch.services().expect("launched services");
   let services = app_mcp::Services::new(
     s.workspace.clone(),
@@ -90,46 +81,41 @@ fn publish_as_person(
     s.servers.clone(),
     s.programs.clone(),
     (s.changes.clone(), s.activity.clone(), s.jobs.clone()),
-  )
-  .decided_by_person(decision);
+  );
   let translate = Translate::new(|message| message.key.to_owned());
-  let arguments = json!({ "project": screen.project.to_string(), "pipeline": pipeline.to_string() })
-    .as_object()
-    .cloned()
-    .expect("an object");
-  screen.window.data.runtime.block_on(async {
-    app_mcp::setup::call(&services, &translate, "publish_pipeline", arguments)
-      .await
-      .expect("publish_pipeline is a setup tool")
-  })
+  screen.window.data.runtime.block_on(proposal::decide(
+    (&services, &translate, &s.runners),
+    &scope,
+    seq,
+    decision,
+  ))
 }
 
-fn refused_as_changed(result: &Result<Value, ToolError>) -> bool {
-  matches!(result, Err(ToolError::Refused { code, .. }) if code == "changed_since_proposed")
+fn refused_as_changed(outcome: &ActionOutcome) -> bool {
+  matches!(outcome, ActionOutcome::Refused { code, .. } if code == "changed_since_proposed")
 }
+
+const PUBLISH_DELIVERY: &str = r#"Call publish_pipeline {"project":"Kontur","pipeline":"Delivery"}"#;
 
 #[test]
 fn orchestrator_person_publishes_only_the_draft_they_decided_on() {
-  let screen = Orchestrator::new(Setup::Ready);
+  let mut screen = Orchestrator::new(Setup::Ready);
   let builder = screen.builder();
   let delivery = screen.pipeline(builder, ("delivery", "Delivery"));
   screen.pipeline_draft((delivery, builder), "Read README.md twice.");
-  let decided = saved(&screen, delivery);
-  let shown = widens(&screen, delivery, decided);
-  assert!(!shown.is_empty(), "the draft widens: only a person publishes it");
-  // The agent saves another draft after the person decided, before the tool publishes.
+  screen.go(OrchestratorChat::New);
+  call(&mut screen, PUBLISH_DELIVERY, 1);
+  let widens = shown(&screen);
+  assert!(!widens.is_empty(), "the draft widens: only a person publishes it");
+  // The agent saves another draft after the person was shown this one, before they decide.
   std::thread::sleep(std::time::Duration::from_millis(5));
   screen.pipeline_draft((delivery, builder), "Delete the repository.");
-  let published = publish_as_person(
-    &screen,
-    delivery,
-    PersonDecision {
-      saved: decided,
-      version: 2,
-      widens: shown,
-    },
+  decide(&screen, Decision::Accept { widens }).expect("decided");
+  assert!(
+    refused_as_changed(&actions(&screen)[0].outcome),
+    "{:?}",
+    actions(&screen)[0]
   );
-  assert!(refused_as_changed(&published), "{published:?}");
   assert_eq!(
     screen.pipeline_version(delivery),
     1,
@@ -139,33 +125,23 @@ fn orchestrator_person_publishes_only_the_draft_they_decided_on() {
 
 #[test]
 fn orchestrator_person_publishes_only_what_they_were_shown_it_widens() {
-  let screen = Orchestrator::new(Setup::Ready);
+  let mut screen = Orchestrator::new(Setup::Ready);
   let builder = screen.builder();
   let delivery = screen.pipeline(builder, ("delivery", "Delivery"));
   screen.pipeline_draft((delivery, builder), "Read README.md twice.");
-  let decided = saved(&screen, delivery);
-  let shown = widens(&screen, delivery, decided);
-  let unshown = publish_as_person(
-    &screen,
-    delivery,
-    PersonDecision {
-      saved: decided,
-      version: 2,
-      widens: Vec::new(),
-    },
+  screen.go(OrchestratorChat::New);
+  call(&mut screen, PUBLISH_DELIVERY, 1);
+  decide(&screen, Decision::Accept { widens: Vec::new() }).expect("decided");
+  assert!(
+    refused_as_changed(&actions(&screen)[0].outcome),
+    "{:?}",
+    actions(&screen)[0]
   );
-  assert!(refused_as_changed(&unshown), "{unshown:?}");
   assert_eq!(screen.pipeline_version(delivery), 1);
-  publish_as_person(
-    &screen,
-    delivery,
-    PersonDecision {
-      saved: decided,
-      version: 2,
-      widens: shown,
-    },
-  )
-  .expect("published as shown");
+  call(&mut screen, PUBLISH_DELIVERY, 2);
+  let widens = shown(&screen);
+  decide(&screen, Decision::Accept { widens }).expect("decided");
+  assert_eq!(actions(&screen)[1].outcome, ActionOutcome::Applied);
   assert_eq!(screen.pipeline_version(delivery), 2);
 }
 
