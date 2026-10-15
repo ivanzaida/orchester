@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { nextAfterSignIn } from "@/lib/authorize";
 import { field } from "@/lib/form";
 import { message, type Message } from "@/lib/i18n";
 import type { ApiFailure } from "@/lib/server/api";
@@ -70,5 +71,5 @@ export async function signInAction(previous: SignInState, form: FormData): Promi
   }
   await endPreviousSession();
   await startSession(result.value.token);
-  redirect("/account");
+  redirect(nextAfterSignIn(field(form, "next")) ?? "/account");
 }
