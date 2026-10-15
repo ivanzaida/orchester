@@ -3,7 +3,7 @@ use orchester_api::{
   PasswordChange,
   cloud::{
     AccountChanges, AccountResponse, CloudErrorCode, CloudSignIn, ConfirmEmail, DevicesResponse, IdentityTokenRequest,
-    KeySetResponse, ResetFinish, ResetRequest, SignUp,
+    KeySetResponse, LinkInspect, ResendConfirmation, ResetFinish, ResetRequest, SignUp,
   },
 };
 use orchester_core::id::CloudDeviceId;
@@ -21,6 +21,24 @@ pub(super) async fn sign_up(cloud: web::Data<Cloud>, address: ClientAddress, inp
 pub(super) async fn confirm(cloud: web::Data<Cloud>, address: ClientAddress, input: SafeJson<ConfirmEmail>) -> Answer {
   cloud.confirm(input.0, address.0).await?;
   Ok(HttpResponse::NoContent().finish())
+}
+
+pub(super) async fn resend_confirmation(
+  cloud: web::Data<Cloud>,
+  address: ClientAddress,
+  input: SafeJson<ResendConfirmation>,
+) -> Answer {
+  cloud.resend_confirmation(input.0, address.0).await?;
+  Ok(HttpResponse::Accepted().finish())
+}
+
+pub(super) async fn inspect_link(
+  cloud: web::Data<Cloud>,
+  address: ClientAddress,
+  input: SafeJson<LinkInspect>,
+) -> Answer {
+  let inspected = cloud.inspect_link(input.0, address.0).await?;
+  Ok(HttpResponse::Ok().json(inspected))
 }
 
 pub(super) async fn sign_in(

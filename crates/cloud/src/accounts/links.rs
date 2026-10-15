@@ -3,6 +3,7 @@
 
 use deadpool_postgres::GenericClient;
 use orchester_api::Credential;
+pub(super) use orchester_api::cloud::LinkPurpose;
 use orchester_core::id::CloudAccountId;
 
 use crate::{
@@ -16,18 +17,11 @@ use crate::{
 const CONFIRM_MS: i64 = DAY_MS;
 const RESET_MS: i64 = HOUR_MS;
 
-#[derive(Clone, Copy)]
-pub(super) enum LinkPurpose {
-  Confirm,
-  Reset,
-}
-
-impl LinkPurpose {
-  const fn as_str(self) -> &'static str {
-    match self {
-      Self::Confirm => "confirm",
-      Self::Reset => "reset",
-    }
+/// The purpose as `email_links` stores it.
+const fn stored(purpose: LinkPurpose) -> &'static str {
+  match purpose {
+    LinkPurpose::Confirm => "confirm",
+    LinkPurpose::Reset => "reset",
   }
 }
 
@@ -73,7 +67,7 @@ pub(super) async fn new_link(
       &[
         &token_hash(&token),
         &account.as_uuid(),
-        &purpose.as_str(),
+        &stored(purpose),
         &time(now),
         &time(now + lifetime),
         &hash,
@@ -99,7 +93,7 @@ pub(super) async fn use_link(
       "UPDATE email_links SET used_at = $1
        WHERE token_hash = $2 AND purpose = $3 AND used_at IS NULL AND expires_at > $1
        RETURNING password_hash, display_name",
-      &[&time(now), &token_hash(token), &purpose.as_str()],
+      &[&time(now), &token_hash(token), &stored(purpose)],
     )
     .await?;
   let Some(row) = row else {
@@ -123,7 +117,7 @@ pub(super) async fn end_links(
     .execute(
       "UPDATE email_links SET used_at = $1
        WHERE account = $2 AND used_at IS NULL AND ($3::text IS NULL OR purpose = $3)",
-      &[&time(now), &account.as_uuid(), &purpose.map(LinkPurpose::as_str)],
+      &[&time(now), &account.as_uuid(), &purpose.map(stored)],
     )
     .await?;
   Ok(())
@@ -144,7 +138,7 @@ pub(super) async fn pending_link(
     .query_opt(
       "SELECT account, password_hash FROM email_links
        WHERE token_hash = $1 AND purpose = $2 AND used_at IS NULL AND expires_at > $3",
-      &[&token_hash(token), &purpose.as_str(), &time(now)],
+      &[&token_hash(token), &stored(purpose), &time(now)],
     )
     .await?;
   let Some(row) = row else {
@@ -166,4 +160,58 @@ pub(super) async fn lock_account(client: &impl GenericClient, account: CloudAcco
       .await?
       .is_some(),
   )
+}
+
+/// A new confirmation link carrying the newest open link's sign-up (its password hash and display name), so
+/// confirming it asks for that sign-up's password, as every confirmation does (decision 65). `None` when the account
+/// has no open confirmation link: then no password was chosen that a link could carry.
+pub(super) async fn renew_confirm_link(
+  client: &impl GenericClient,
+  account: CloudAccountId,
+  now: i64,
+) -> Result<Option<Credential>, CloudError> {
+  let row = client
+    .query_opt(
+      "SELECT password_hash, display_name FROM email_links
+       WHERE account = $1 AND purpose = 'confirm' AND used_at IS NULL AND expires_at > $2
+       ORDER BY created_at DESC LIMIT 1",
+      &[&account.as_uuid(), &time(now)],
+    )
+    .await?;
+  let Some(row) = row else {
+    return Ok(None);
+  };
+  let (Some(hash), Some(display_name)) = (
+    row.try_get::<_, Option<String>>(0)?.map(PasswordHash::stored),
+    row.try_get::<_, Option<String>>(1)?,
+  ) else {
+    return Err(CloudError::StoredData);
+  };
+  let pending = Pending {
+    hash: &hash,
+    display_name: &display_name,
+  };
+  new_link(client, account, NewLink::Confirm(pending), now)
+    .await
+    .map(Some)
+}
+
+/// The email a live link of `purpose` was sent to, without using the link.
+pub(super) async fn link_email(
+  client: &impl GenericClient,
+  token: &Credential,
+  purpose: LinkPurpose,
+  now: i64,
+) -> Result<Option<String>, CloudError> {
+  if !well_formed(token.expose(), "") {
+    return Ok(None);
+  }
+  let row = client
+    .query_opt(
+      "SELECT a.email FROM email_links l JOIN accounts a ON a.id = l.account
+       WHERE l.token_hash = $1 AND l.purpose = $2 AND l.used_at IS NULL AND l.expires_at > $3",
+      &[&token_hash(token), &stored(purpose), &time(now)],
+    )
+    .await?;
+  row.map(|row| row.try_get(0)).transpose().map_err(Into::into)
 }

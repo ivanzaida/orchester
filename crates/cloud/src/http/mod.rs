@@ -58,6 +58,8 @@ fn routes(config: &mut web::ServiceConfig) {
   config
     .service(resource("/auth/signup").route(web::post().to(h::sign_up)))
     .service(resource("/auth/confirm").route(web::post().to(h::confirm)))
+    .service(resource("/auth/confirm/resend").route(web::post().to(h::resend_confirmation)))
+    .service(resource("/auth/links/inspect").route(web::post().to(h::inspect_link)))
     .service(resource("/auth/sessions").route(web::post().to(h::sign_in)))
     .service(resource("/auth/sessions/current").route(web::delete().to(h::sign_out)))
     .service(resource("/auth/reset").route(web::post().to(h::request_reset)))

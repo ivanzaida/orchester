@@ -64,6 +64,8 @@ Device     { id, name, platform, created_at, last_used_at, current: bool }
 | --- | --- | --- | --- | --- |
 | `POST /auth/signup` | none | `{ email, password, display_name }` | `202`, empty | `422 invalid`, `429` |
 | `POST /auth/confirm` | none | `{ link_token, password }` | `204` | `422 invalid_link`, `429` |
+| `POST /auth/confirm/resend` | none | `{ email }` | `202`, empty | `422 invalid`, `429` |
+| `POST /auth/links/inspect` | none | `{ link_token, purpose: "confirm"\|"reset" }` | `200 { email }` | `422 invalid_link`, `429` |
 | `POST /auth/sessions` | none | `{ email, password, device: DeviceInfo }` | `201 { token, device: Device, account: Account }` | `401 invalid_credentials`, `403 email_unconfirmed`, `422 invalid` (device), `429` |
 | `POST /auth/reset` | none | `{ email }` | `202`, empty | `422 invalid`, `429` |
 | `POST /auth/reset/finish` | none | `{ link_token, new_password }` | `204` | `422 invalid`, `422 invalid_link`, `429` |
@@ -97,6 +99,17 @@ side, so mail scanners that fetch the link do not use it up. The server side sen
 sign-in. On `invalid_link` it offers to try the password again or to sign up again. After 5 wrong passwords a link
 answers `429` for an hour; signing up again sends a new one. Confirming does not sign anyone in.
 
+**Resend.** `POST /auth/confirm/resend { email }` answers `202` for any email, before it touches the database, and
+counts against the email limits like a sign-up. In the background an unconfirmed account gets one more confirmation
+link. It carries the password and display name of the account's newest open link, so it is confirmed with that
+sign-up's password, like any link. A confirmed account gets the *you already have an account* note. An unknown email,
+or an account whose links have all expired, gets nothing.
+
+**Inspecting a link.** `POST /auth/links/inspect { link_token, purpose }` gives the email a live link was sent to,
+without using the link, so the confirmation and reset pages can show the address before anything is pressed. An
+unknown, used or expired link, or one for the other purpose, answers `422 invalid_link` and counts as a failed link
+finish against the client's address.
+
 **Sign-in.** A wrong password and an unknown email answer alike (`401 invalid_credentials`). `403 email_unconfirmed`
 comes only after the right password. The token in `201` is shown once; the cloud keeps only its SHA-256. `device`
 names the computer (the desktop) or the browser (the web front, platform `web`).
@@ -125,8 +138,8 @@ Claims: `iss` (the public URL), `aud`, `sub` (the account id), `email`, `name`, 
 | --- | --- |
 | Sign-in failures | 5 per email in 15 minutes block that email for 15 minutes; 20 per client address and 100 per IPv6 /48 block that address or network |
 | Failed current passwords (`/auth/password`) | 5 per account in 15 minutes |
-| Emails (sign-up, reset) | 5 an hour per email, 20 an hour per client address, 100 an hour per IPv6 /48 |
-| Failed `confirm` and `reset/finish` | 20 per client address and 100 per IPv6 /48 in 15 minutes; 5 an hour per link, each try counted before its password check |
+| Emails (sign-up, resend, reset) | 5 an hour per email, 20 an hour per client address, 100 an hour per IPv6 /48 |
+| Failed `confirm`, `reset/finish` and `links/inspect` | 20 per client address and 100 per IPv6 /48 in 15 minutes; for `confirm` and `reset/finish`, 5 an hour per link, each try counted before its password check |
 | Identity tokens | 60 an hour per device |
 
 The counters are in memory. A restart clears them; the cloud runs as one instance in v1. A client address is its

@@ -4,8 +4,10 @@
 mod confirm;
 mod devices;
 mod input;
+mod inspect;
 mod links;
 mod password;
+mod resend;
 mod reset;
 mod rows;
 mod sign_in;
