@@ -12,6 +12,7 @@ mod path;
 mod read;
 mod source;
 mod text;
+mod text_types;
 mod version;
 mod versions;
 
@@ -24,7 +25,7 @@ use self::source::{Source, git_output, source};
 pub use self::{
   follow::{Follow, agent_at_work},
   list::{EntryKind, FileList, NameMatches, TreeRow},
-  open::{OpenError, open_target, runs_when_opened},
+  open::{OpenError, OpenFacts, OpenWith, Platform, Refusal, open_target, open_with},
   path::{FilePath, PathError, is_hidden},
   read::{FileView, MAX_VIEW_BYTES, read_file},
   text::{FileText, LineRange, LineRangeError, MAX_MATCHES, TextMatch},

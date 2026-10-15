@@ -10,6 +10,12 @@ pub fn open_path(path: &Path) -> io::Result<()> {
   launcher::launch(path.as_os_str())
 }
 
+/// Opens the text file `path` in the default text editor (macOS `open -t`), whatever program the file's kind
+/// names. Windows names no default text editor: there it is an error, and callers open text with [`open_path`].
+pub fn open_text(path: &Path) -> io::Result<()> {
+  launcher::launch_text(path.as_os_str())
+}
+
 /// Opens `url` in the default browser. Only `https` addresses are handed on, so the launcher is
 /// never asked to run a file or another scheme.
 pub fn open_url(url: &str) -> io::Result<()> {
@@ -29,6 +35,14 @@ mod launcher {
   pub fn launch(target: &OsStr) -> io::Result<()> {
     Command::new("explorer.exe").arg(target).status().map(drop)
   }
+
+  /// Windows names no default text editor; callers open text with [`launch`], for the kinds they allow.
+  pub fn launch_text(target: &OsStr) -> io::Result<()> {
+    Err(io::Error::new(
+      io::ErrorKind::Unsupported,
+      format!("no default text editor to open {} with on Windows", target.display()),
+    ))
+  }
 }
 
 #[cfg(target_os = "macos")]
@@ -37,6 +51,11 @@ mod launcher {
 
   pub fn launch(target: &OsStr) -> io::Result<()> {
     Command::new("open").arg(target).status().map(drop)
+  }
+
+  /// `open -t`: the default text editor, never the program the file's kind names.
+  pub fn launch_text(target: &OsStr) -> io::Result<()> {
+    Command::new("open").arg("-t").arg(target).status().map(drop)
   }
 }
 
@@ -49,5 +68,9 @@ mod launcher {
       io::ErrorKind::Unsupported,
       format!("no default program launcher for {} on this platform", target.display()),
     ))
+  }
+
+  pub fn launch_text(target: &OsStr) -> io::Result<()> {
+    launch(target)
   }
 }

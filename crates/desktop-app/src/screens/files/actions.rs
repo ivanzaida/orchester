@@ -8,7 +8,7 @@ use std::{path::PathBuf, sync::Arc, thread};
 
 use lurq::{app::events::is_synthetic_input, core::Signal};
 use orchester_exec::{external, programs::Programs};
-use orchester_workspace::files::{FilePath, FileText, LineRange, OpenError, Version, open_target};
+use orchester_workspace::files::{FilePath, FileText, LineRange, OpenError, OpenWith, Version, open_target};
 
 use super::Refusal;
 use crate::ui::code_box::Copier;
@@ -58,15 +58,15 @@ pub fn open_in_editor(
     );
     let opening = thread::Builder::new().name("open-file".to_owned()).spawn(move || {
       let refused = match open_target(programs.runner(), &root, &at, &path) {
-        Ok(file) => external::open_path(&file).err().map(|error| {
+        Ok((file, with)) => launch(&file, with).err().map(|error| {
           tracing::warn!(%error, %path, "the system did not open the file the code viewer shows");
           Refusal::OpenFailed
         }),
         Err(error) => {
           tracing::warn!(%error, %path, "the code viewer does not open the file");
           Some(match error {
-            OpenError::WouldRun(_) => Refusal::WouldRun,
-            OpenError::NotOnDisk | OpenError::Files(_) => Refusal::OpenFailed,
+            OpenError::Refused(_, refusal) => Refusal::NotOpened(refusal),
+            OpenError::NotOnDisk | OpenError::Files(_) | OpenError::Unsupported => Refusal::OpenFailed,
           })
         }
       };
@@ -76,5 +76,24 @@ pub fn open_in_editor(
       tracing::error!(%error, "cannot start opening a file from the code viewer");
       refusal.set(Some(Refusal::OpenFailed));
     }
+  }
+}
+
+/// Opens `file` as the workspace decided it opens.
+fn launch(file: &std::path::Path, with: OpenWith) -> std::io::Result<()> {
+  match with {
+    OpenWith::DefaultProgram => external::open_path(file),
+    OpenWith::TextEditor => external::open_text(file),
+  }
+}
+
+/// Why a file does not open, as the page says it.
+pub const fn refusal_key(refusal: orchester_workspace::files::Refusal) -> &'static str {
+  use orchester_workspace::files::Refusal;
+  match refusal {
+    Refusal::NotText => "files.openNotText",
+    Refusal::WouldRun => "files.openRuns",
+    Refusal::Link => "files.openLink",
+    Refusal::Executable => "files.openExecutable",
   }
 }

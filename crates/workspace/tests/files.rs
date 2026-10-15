@@ -1,7 +1,6 @@
 //! The code viewer's reads (`docs/design/code-viewer.md`): which paths open and which are refused with
 //! their reason, a file and the tree at the checkout, a run's worktree, a commit and the base branch,
-//! the versions a file has, binary and too large files, file-name search, search within a file, and what
-//! *Open in editor* opens.
+//! the versions a file has, binary and too large files, file-name search, search within a file.
 
 use std::{collections::BTreeSet, fs, path::Path, process, sync::Arc};
 
@@ -9,8 +8,8 @@ use orchester_core::{command::CommandRunner, id::RunId, revision::Revision};
 use orchester_exec::programs::Programs;
 use orchester_workspace::{
   files::{
-    EntryKind, FileFacts, FileList, FilePath, FileText, FileView, FilesError, LineRange, MAX_VIEW_BYTES, OpenError,
-    PathError, Version, list_files, open_target, read_file, runs_when_opened, versions,
+    EntryKind, FileFacts, FileList, FilePath, FileText, FileView, FilesError, LineRange, MAX_VIEW_BYTES, PathError,
+    Version, list_files, read_file, versions,
   },
   tasks::changes::run_worktree,
 };
@@ -415,26 +414,4 @@ fn files_a_runs_worktree_is_a_version_while_it_exists() {
     FilesError::VersionGone(in_run).message().key,
     "files.failure.worktreeGone"
   );
-}
-
-#[test]
-fn files_open_in_editor_opens_only_a_file_on_disk_the_system_shows() {
-  let (dir, first) = repository();
-  let repo = dir.path();
-  let programs = runner();
-  let main = path("src/main.rs");
-  let opened = open_target(programs.runner(), repo, &Version::Checkout, &main).expect("main.rs opens");
-  assert!(opened.ends_with(Path::new("src").join("main.rs")));
-  let at_first = Version::Revision(Revision::new(&first).expect("a commit"));
-  assert_eq!(
-    open_target(programs.runner(), repo, &at_first, &main),
-    Err(OpenError::NotOnDisk)
-  );
-  fs::write(repo.join("build.BAT"), "echo hi\r\n").expect("a script");
-  assert_eq!(
-    open_target(programs.runner(), repo, &Version::Checkout, &path("build.BAT")),
-    Err(OpenError::WouldRun(path("build.BAT")))
-  );
-  assert!(runs_when_opened(Path::new("tools/setup.ps1")));
-  assert!(runs_when_opened(Path::new("app.exe")));
 }

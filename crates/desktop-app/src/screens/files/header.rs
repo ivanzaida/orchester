@@ -17,7 +17,7 @@ use lurq::{
 };
 use orchester_workspace::{
   display::byte_size,
-  files::{FileView, Version},
+  files::{FilePath, FileView, OpenFacts, Platform, Version, open_with},
   highlight::language,
 };
 
@@ -241,6 +241,22 @@ fn copy(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Option<Element> {
   )
 }
 
+/// Why *Open in editor* cannot open `file` as the page read it, before it is pressed; the press checks again on
+/// disk ([`orchester_workspace::files::open_target`]). A file too large to show opens by its kind.
+fn open_refusal(page: &Page<'_>, file: &FilePath) -> Option<&'static str> {
+  let Some(platform) = Platform::current() else {
+    return Some("files.openUnsupported");
+  };
+  let text = !matches!(page.read, Some(Shown::Read(FileView::Binary { .. })));
+  let facts = OpenFacts {
+    name: file.name(),
+    text,
+    link: false,
+    executable: false,
+  };
+  open_with(platform, &facts).err().map(actions::refusal_key)
+}
+
 /// *Open in editor*, for a file the page opens; unavailable at a commit, whose file is not on disk.
 fn open(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Option<Element> {
   let file = page.file()?.clone();
@@ -251,6 +267,9 @@ fn open(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Option<Element> {
     .icon(Icon::SquareArrowOutUpRight);
   if matches!(page.at(), Version::Base | Version::Revision(_)) {
     return Some(button.unavailable(ctx.t("files.openAtCommit")).into());
+  }
+  if let Some(reason) = open_refusal(page, &file) {
+    return Some(button.unavailable(ctx.t(reason)).into());
   }
   let programs = Services::of(ctx).programs;
   let press = actions::open_in_editor(
