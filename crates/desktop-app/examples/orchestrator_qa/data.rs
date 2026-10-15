@@ -37,6 +37,8 @@ pub struct Prepared {
   pub repo: PathBuf,
   pub project: ProjectId,
   pub conversations: Conversations,
+  /// Replies with links in the app, to another project, to the web and to addresses the chat does not follow.
+  pub links: ChatId,
   /// What the start prints: the scenario and the task the answered conversation created, with its state.
   pub shown: String,
 }
@@ -82,11 +84,20 @@ pub fn prepare(
     format!("{} · {} {} ({})", scenario.name(), task.key, task.title, task.state)
   });
   let conversations = conversations(&mut db, (&keys, connection.id()))?;
+  let atlas = super::links::register_atlas(&seeded.app_database, root)?;
+  let first = seeded.tasks.first().ok_or("the tasks scenario has tasks")?;
+  let links = super::links::conversation(
+    &mut db,
+    (seeded.project, atlas),
+    (&first.key, &first.title),
+    connection.id(),
+  )?;
   Ok(Prepared {
     database: seeded.app_database,
     repo: seeded.repo,
     project: seeded.project,
     conversations,
+    links,
     shown,
   })
 }
@@ -122,24 +133,24 @@ fn connection(program: PathBuf) -> Result<AgentConnection, Box<dyn Error>> {
 }
 
 /// A minute `n` minutes ago.
-fn ago(minutes: i64) -> Timestamp {
+pub fn ago(minutes: i64) -> Timestamp {
   Timestamp::from_unix_millis(Timestamp::now().unix_millis() - minutes * 60_000)
 }
 
 /// One turn of `chat`: the person's `text` at `at`, the answer's `parts`, and how it ended.
-struct Turn<'a> {
-  text: &'a str,
-  at: Timestamp,
-  parts: Vec<Part<'a>>,
-  end: TurnState,
+pub struct Turn<'a> {
+  pub text: &'a str,
+  pub at: Timestamp,
+  pub parts: Vec<Part<'a>>,
+  pub end: TurnState,
 }
 
-enum Part<'a> {
+pub enum Part<'a> {
   Reply(&'a str),
   Action(ChatAction),
 }
 
-fn keep(
+pub fn keep(
   db: &mut ProjectDb,
   chat: ChatId,
   connection: ConnectionId,

@@ -11,12 +11,14 @@
 //! domain tools (e.g. `Call create_task {"project":"Kontur","title":"Delivery log"}`), anything else is answered
 //! with `Noted: …`. The verifier connects to the window's QA server through the discovery file in
 //! `.tmp/qa/orchestrator/mcp/` (`tools/lurq-mcp-client.py --discovery .tmp/qa/orchestrator/mcp`); the window can be
-//! driven, and `hold_reads` holds its reads to capture a conversation loading.
+//! driven, and `hold_reads` holds its reads to capture a conversation loading. `ORCHESTER_APP_WINDOW_POSITION=<x>,<y>`
+//! opens the window there, as for `tools/qa-app.ps1 -WindowX -WindowY`.
 
 #[path = "../seed/kontur/mod.rs"]
 mod kontur;
 
 mod data;
+mod links;
 mod refused;
 
 use std::{
@@ -34,7 +36,7 @@ use orchester_app::{
   mcp::{self, AppMcp, McpLink, McpMode, McpSettings, WindowLink},
   root::{Root, RootProps, Start},
   routes::{OrchestratorChat, ProjectPage, Route},
-  startup::Launch,
+  startup::{Launch, WindowPosition},
   theme::{self, Mode},
   ui::loader,
 };
@@ -69,10 +71,12 @@ enum State {
   Settings,
   /// `qAq0z` *No connection can run the Orchestrator*: only the seed's Codex connection, which says why it can't.
   SettingsNoConnection,
+  /// `w262B`, `agv8r`: replies with links in Kontur and in Atlas, to the web, and to addresses shown as text.
+  Links,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 12] = [
+  const ALL: [(&'static str, Self); 13] = [
     ("new", Self::New),
     ("conversation", Self::Conversation),
     ("stopped", Self::Stopped),
@@ -85,6 +89,7 @@ impl State {
     ("no-runner", Self::NoRunner),
     ("settings", Self::Settings),
     ("settings-no-connection", Self::SettingsNoConnection),
+    ("links", Self::Links),
   ];
 
   fn named(name: &str) -> Option<Self> {
@@ -153,6 +158,7 @@ fn route(prepared: &data::Prepared, state: State) -> Route {
       ProjectPage::Orchestrator(OrchestratorChat::Chat(chats.proposal_changed))
     }
     State::History => ProjectPage::Orchestrator(OrchestratorChat::Latest),
+    State::Links => ProjectPage::Orchestrator(OrchestratorChat::Chat(prepared.links)),
     State::Settings | State::SettingsNoConnection => ProjectPage::OrchestratorSettings,
   };
   Route::Project(prepared.project, page)
@@ -203,15 +209,20 @@ fn window(prepared: &data::Prepared, (state, runner): (State, PathBuf), scratch:
       start,
     },
   );
-  WinitWindow::new(app, tree)
+  let window = WinitWindow::new(app, tree)
     .with_title("Orchester Orchestrator QA")
     .with_icon(brand::window_icon()?)
     .with_size(1440, 900)
     .with_min_size(960, 640)
     .with_start_without_focus(true)
     .with_decorations(false)
-    .with_corner_radius(WindowCornerRadius::Rounded)
-    .run();
+    .with_corner_radius(WindowCornerRadius::Rounded);
+  // Where QA asks for it (`ORCHESTER_APP_WINDOW_POSITION`), e.g. off the person's screen.
+  match WindowPosition::from_environment()? {
+    Some(WindowPosition { x, y }) => window.with_position(x, y),
+    None => window,
+  }
+  .run();
   server.shutdown();
   launch.end();
   Ok(())
