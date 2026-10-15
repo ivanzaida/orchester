@@ -6,16 +6,20 @@
 use std::num::NonZeroU64;
 
 use orchester_app::routes::{
-  AccountsPanel, AccountsView, ConnectionsView, OverviewTab, ProjectPage, Route, RouteError, TaskView, ToolTab, routes,
+  AccountsPanel, AccountsView, ConnectionsView, FilesView, OverviewTab, ProjectPage, Route, RouteError, TaskView,
+  ToolTab, routes,
 };
-use orchester_core::{id::ProjectId, project::TaskKey};
-use orchester_workspace::links::{Link, TaskPage};
+use orchester_core::{id::ProjectId, project::TaskKey, revision::Revision};
+use orchester_workspace::{
+  files::{FilePath, LineRange, Version},
+  links::{Link, TaskPage},
+};
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const ID: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
 
 /// How many kinds of link there are: one per variant of [`Link`].
-const KINDS: usize = 11;
+const KINDS: usize = 12;
 
 fn project() -> ProjectId {
   PROJECT.parse().expect("a project id")
@@ -52,6 +56,7 @@ const fn kind(link: &Link) -> usize {
     Link::Connection(..) => 8,
     Link::Account(_) => 9,
     Link::PullRequest(..) => 10,
+    Link::File { .. } => 11,
   }
 }
 
@@ -97,6 +102,36 @@ fn every_link() -> Vec<(Link, Route)> {
       at(ProjectPage::PullRequest(number(42))),
     ),
   ]
+  .into_iter()
+  .chain(file_links(project))
+  .collect()
+}
+
+/// A file at every version, with and without lines, its path with characters a route escapes and with `/`s
+/// that would leave empty segments.
+fn file_links(project: ProjectId) -> Vec<(Link, Route)> {
+  let commit = Revision::new("4d2b8e0c1f2a3b4c5d6e7f8091a2b3c4d5e6f708").expect("a commit");
+  let mut links = Vec::new();
+  for at in [Version::Checkout, Version::Base, Version::Run(id()), Version::Revision(commit)] {
+    for path in ["crates/workspace/src/plan_limits.rs", "docs/a b & c#1.md", "notes/слово.md"] {
+      for line in [None, LineRange::new(441, 442)] {
+        let file = FilePath::new(path).expect("a project path");
+        let link = Link::File {
+          project,
+          path: file,
+          at: at.clone(),
+          line,
+        };
+        let view = FilesView::new(Some(path), at.clone()).with_line(line);
+        links.push((link, at_files(view)));
+      }
+    }
+  }
+  links
+}
+
+fn at_files(view: FilesView) -> Route {
+  at(ProjectPage::Files(view))
 }
 
 #[test]
@@ -141,6 +176,15 @@ fn links_have_the_documented_paths() {
       format!("{root}/pull-requests/7"),
     ),
     (Link::Account(id()), format!("/settings?tab=accounts&account={ID}")),
+    (
+      Link::File {
+        project: project(),
+        path: FilePath::new("src/a b.rs").expect("a project path"),
+        at: Version::Base,
+        line: LineRange::new(12, 20),
+      },
+      format!("{root}/files/src/a%20b.rs?at=base&line=12-20"),
+    ),
   ] {
     assert_eq!(link.path(), path);
   }

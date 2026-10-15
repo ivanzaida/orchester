@@ -12,7 +12,7 @@ use orchester_workspace::{
 
 use super::{
   RouteError,
-  query::{Params, decode, with_query},
+  query::{Params, decode},
 };
 
 pub(super) const FILES: &str = "files";
@@ -75,14 +75,9 @@ impl FilesView {
     self.line
   }
 
+  /// The view's path under `files`, as the link builder writes a file's link ([`links::files_path`]).
   pub(super) fn path(&self, files: String) -> String {
-    let path = match &self.file {
-      Some(file) => format!("{files}/{}", encode_path(file)),
-      None => files,
-    };
-    let at = (self.at != Version::Checkout).then(|| self.at.to_string());
-    let line = self.line.map(|line| line.to_string());
-    with_query(path, &[(AT, at.as_deref()), (LINE, line.as_deref())])
+    links::files_path(files, self.file.as_deref(), &self.at, self.line)
   }
 
   /// The view the segments after `files` and the query name.
@@ -111,22 +106,4 @@ impl FilesView {
     };
     Ok(Self::new(Some(&file), at).with_line(line))
   }
-}
-
-/// `file` percent-encoded with its `/` kept, except one that would leave an empty segment.
-fn encode_path(file: &str) -> String {
-  let mut encoded = String::with_capacity(file.len());
-  let parts: Vec<&str> = file.split('/').collect();
-  for (at, part) in parts.iter().enumerate() {
-    if at > 0 {
-      let empty_around = parts[at - 1].is_empty() || part.is_empty();
-      if empty_around {
-        encoded.push_str("%2F");
-      } else {
-        encoded.push('/');
-      }
-    }
-    encoded.push_str(&links::encode(part));
-  }
-  encoded
 }
