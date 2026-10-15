@@ -146,6 +146,14 @@ fn local_layout_review_lists_every_snapshot_and_wraps_long_paths_at_1440() {
     assert!(page.has(&row), "{row} is listed");
   }
   assert_eq!(text(&mut page, "local-files-title"), "Local changes");
+  assert!(
+    !page.has("local-inspect") && !page.has("local-refresh"),
+    "the list's header holds its title alone"
+  );
+  assert!(
+    text(&mut page, "local-file-diff-file-0-path").contains("docs/integration"),
+    "the first working-copy snapshot's diff shows first"
+  );
   assert_eq!(
     text(&mut page, "local-phase-title"),
     "Delivery paused: main has local changes"
@@ -194,6 +202,7 @@ fn local_layout_960_keeps_the_narrow_inspector_beside_wrapped_evidence() {
   assert_eq!(text(&mut page, "local-actions-title"), "Prepare checkout");
   assert_eq!(text(&mut page, "local-phase-title"), "Delivery paused: main is dirty");
   assert_eq!(text(&mut page, "local-review-commit"), "Review selected commit");
+  assert!(!page.has("local-queue"), "the 960 review has no queue card");
   nothing_outside(&mut page, "local-evidence");
   nothing_outside(&mut page, "local-side");
   nothing_outside(&mut page, "local-identities");
@@ -242,6 +251,13 @@ fn local_layout_commit_review_lists_the_selected_snapshots_with_a_labeled_messag
   assert!(
     page.has("local-recovery"),
     "the recorded operation shows its recovery record"
+  );
+  let record = text(&mut page, "local-recovery");
+  assert!(record.contains("No commit created yet") && record.contains("Not required for committed content"));
+  assert!(!record.contains("State"), "the record has the design's rows");
+  assert!(
+    !page.has("local-selected-diff-file-1"),
+    "one selected snapshot's diff at a time"
   );
 }
 
@@ -318,4 +334,74 @@ fn local_layout_acknowledgement_is_the_persons_in_commit_and_preservation_review
   );
   page.click("local-confirm-scope");
   assert!(acknowledged(&mut page));
+}
+
+#[test]
+fn local_layout_960_gives_a_long_route_room_before_the_folder() {
+  let fixture = Fixture::branched(false, "layout-", "orchester/kon-9-run-1");
+  fs::write(fixture.root().join("local.txt"), "edited\n").expect("edit");
+  let mut page = Page::new(fixture);
+  resize(&mut page, 1440, 1080);
+  page.ready("local-identity-route-cell");
+  let thirds = [
+    bounds(&mut page, "local-identity-route-cell").width,
+    bounds(&mut page, "local-identity-path-cell").width,
+    bounds(&mut page, "local-identity-head-cell").width,
+  ];
+  // A third each with the gaps inside the first two.
+  assert!(
+    thirds.iter().all(|width| (width - thirds[1]).abs() < 1.0),
+    "a route that fits keeps the thirds: {thirds:?}"
+  );
+  resize(&mut page, 960, 1400);
+  let route = bounds(&mut page, "local-identity-route-cell");
+  let path = bounds(&mut page, "local-identity-path-cell");
+  // Geist Mono 12 advances 7.2 a glyph.
+  let whole = "orchester/kon-9-run-1 → main".chars().count() as f32 * 7.2;
+  assert!(
+    route.width - 16.0 >= whole - 0.5,
+    "the route is whole beside its 16 gap: {} < {whole}",
+    route.width
+  );
+  assert!(route.width > path.width, "the folder is cut first");
+  nothing_outside(&mut page, "local-identities");
+}
+
+fn checked(page: &mut Page, id: &str) -> bool {
+  let check = orchester_app::ui::icon::Icon::Check.glyph().to_string();
+  super::integration_support::contains(page.window.tree.get_element_by_id(id).expect("checkbox"), &check)
+}
+
+#[test]
+fn local_layout_snapshots_are_selected_alone_and_an_abandoned_commit_review_leaves_a_fresh_preservation() {
+  let mut page = dirty();
+  resize(&mut page, 1440, 1080);
+  review(&mut page);
+  select(
+    &mut page,
+    &["local-select-local_integration.staged-local.txt".to_owned()],
+  );
+  assert!(checked(&mut page, "local-select-local_integration.staged-local.txt"));
+  assert!(
+    !checked(&mut page, "local-select-local_integration.unstaged-local.txt"),
+    "the working-copy snapshot of the same path keeps its own selection"
+  );
+  page.click("local-review-commit");
+  page.ready("local-commit-message-label");
+  page.click("local-cancel-review");
+  page.ready("local-review-preserve");
+  assert!(
+    page.has("local-queue") && !page.has("local-recovery"),
+    "a review that holds nothing looks fresh"
+  );
+  page.click("local-review-preserve");
+  page.ready("local-preservation-name-label");
+  assert!(
+    !page.has("local-recovery") && !page.has("local-queue"),
+    "the preservation review has no second card"
+  );
+  assert!(
+    checked(&mut page, "local-select-local_integration.unstaged-local.txt"),
+    "the preservation lists, and keeps, the whole selected path"
+  );
 }

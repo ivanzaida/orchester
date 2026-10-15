@@ -30,6 +30,10 @@ impl Fixture {
     Self::named(check_fails, "workspace-")
   }
   pub fn named(check_fails: bool, prefix: &str) -> Self {
+    Self::branched(check_fails, prefix, "task")
+  }
+  /// A fixture whose run delivers on `branch`.
+  pub fn branched(check_fails: bool, prefix: &str, branch: &str) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
     fs::create_dir_all(&scratch).expect("scratch");
     let repo = tempfile::Builder::new()
@@ -73,7 +77,7 @@ impl Fixture {
         NewRun {
           task: task.id(),
           snapshot,
-          branch: BranchName::new("task").expect("branch"),
+          branch: BranchName::new(branch).expect("branch"),
           base: Revision::new(&base).expect("revision"),
           base_branch: Some(BranchName::new("main").expect("branch")),
           budget: None,
@@ -93,7 +97,7 @@ impl Fixture {
     fs::create_dir_all(task_root.parent().expect("parent")).expect("parent");
     git(
       repo.path(),
-      &["worktree", "add", "-b", "task", task_root.to_str().expect("path")],
+      &["worktree", "add", "-b", branch, task_root.to_str().expect("path")],
     );
     fs::write(task_root.join("task.txt"), "delivered task\n").expect("task edit");
     git(&task_root, &["commit", "-am", "task work"]);

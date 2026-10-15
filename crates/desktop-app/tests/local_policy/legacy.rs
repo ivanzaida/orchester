@@ -19,7 +19,7 @@ fn arguments(page: &Page) -> serde_json::Value {
 #[test]
 fn local_policy_authenticated_legacy_domain_merge_keeps_original_gates_and_actual_outcome() {
   let mut page = Page::new(Fixture::new(false));
-  page.ready("local-inspect");
+  page.ready("local-review-preserve");
   let before = ProjectDb::open(page.root())
     .expect("db")
     .run(page.run())
@@ -120,7 +120,7 @@ fn local_policy_managed_domain_cannot_mint_review_receipt_or_fall_through_legacy
 #[test]
 fn local_policy_mounted_preparation_review_blocks_legacy_even_before_durable_operation() {
   let mut page = Page::new(Fixture::new(false));
-  page.ready("local-inspect");
+  page.ready("local-review-preserve");
   page
     .window
     .tree
@@ -163,7 +163,7 @@ fn local_policy_legacy_ignored_collision_preserves_original_bytes_and_does_not_m
   git(&fixture.task_root, &["commit", "-m", "task ignored path"]);
   fs::write(fixture.root().join("ignored.txt"), "personal ignored original\n").expect("original");
   let mut page = Page::new(fixture);
-  page.ready("local-inspect");
+  page.ready("local-review-preserve");
   let before = git(page.root(), &["rev-parse", "HEAD"]);
   let client = Client::new(&mut page, false);
   let args = arguments(&page);

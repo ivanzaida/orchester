@@ -63,7 +63,7 @@ pub(super) fn decision(props: &Props, mode: &Mode, phase: LocalPhase) -> Option<
           "local_integration.commit",
         ],
         Action::Commit {
-          paths: props.selected.get().0,
+          paths: props.selected.get().commit_paths(),
           tree: tree.clone(),
           message: props.message.get(),
         },
@@ -81,7 +81,7 @@ pub(super) fn decision(props: &Props, mode: &Mode, phase: LocalPhase) -> Option<
         ],
         Action::Preserve {
           name: props.name.get(),
-          paths: props.selected.get().0,
+          paths: props.selected.get().paths(),
         },
       )
     },
@@ -187,7 +187,8 @@ impl Inspector {
           ctx.t("local_integration.restoreAfterMerge"),
         )
         .label_style(LocalText::Explanation.role())
-        .wrap_label(),
+        .wrap_label()
+        .settled(),
       );
     }
     let checked = self.agree.clone();

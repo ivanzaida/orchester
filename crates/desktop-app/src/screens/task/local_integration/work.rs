@@ -28,7 +28,6 @@ pub enum Action {
   Refused,
   AuthorityRefused,
   BusyRefused,
-  Inspect,
   Refresh,
   ReviewCommit(Vec<LocalPath>),
   Commit {
@@ -116,7 +115,7 @@ impl Request {
 impl Action {
   fn intent(&self) -> LocalIntent {
     match self {
-      Self::Inspect | Self::Refresh | Self::ReviewCommit(_) | Self::SaveDraft { .. } => LocalIntent::Candidate,
+      Self::Refresh | Self::ReviewCommit(_) | Self::SaveDraft { .. } => LocalIntent::Candidate,
       _ => LocalIntent::ReviewedDecision,
     }
   }
@@ -152,11 +151,6 @@ pub fn action(ctx: &mut Ctx) -> Work {
           .local_work(&open, &task.key)
           .ok_or(Problem("local_integration.error.foreign"))?;
         let origin = request.authorize()?;
-        if matches!(request.action, Action::Inspect) {
-          orchester_workspace::tasks::local_integration::read(&open.repo_root, run, None, vault.get())
-            .map_err(problem)?;
-          return Ok(Outcome::Changed);
-        }
         let input = request
           .input
           .clone()
@@ -200,7 +194,7 @@ fn execute(
   vault: &dyn orchester_core::secret::SecretVault,
 ) -> Result<Outcome, IntegrationError> {
   match action {
-    Action::Inspect | Action::Refresh => session.refresh()?,
+    Action::Refresh => session.refresh()?,
     Action::Refused => return Err(LocalError::ApprovalRequired.into()),
     Action::AuthorityRefused => return Err(LocalError::AuthorityChanged.into()),
     Action::BusyRefused => return Err(LocalError::ForeignOperation.into()),

@@ -16,9 +16,18 @@ use orchester_workspace::{display, tasks::local_integration::IntegrationView};
 
 use super::Mode;
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, LocalText},
+  theme::{ExtraSpacing, ExtraTypography, LocalText, mono_space},
   ui::tooltip::Truncated,
 };
+
+/// The strip's thirds, the route's first.
+const CELLS: [&str; 3] = [
+  "local-identity-route-cell",
+  "local-identity-path-cell",
+  "local-identity-head-cell",
+];
+/// The widest the route's third grows to show it whole; a longer route is cut too.
+const ROUTE_MOST: f32 = 360.0;
 
 /// The run's branch into the checkout's, the checkout's folder, and its branch at its commit.
 pub(super) fn identities(ctx: &mut Ctx, source: &str, view: &IntegrationView) -> Element {
@@ -34,7 +43,9 @@ pub(super) fn identities(ctx: &mut Ctx, source: &str, view: &IntegrationView) ->
       ("head", display::short_revision(&checkout.head)),
     ],
   );
-  let cells = [
+  // Geist Mono advances every glyph alike, so the route's width is its length.
+  let route_width = (route.chars().count() as f32 * mono_space(ctx.theme(), TypographyStyle::Mono)).min(ROUTE_MOST);
+  let [route_cell, path, head] = [
     Truncated::new("local-identity-route", route, TypographyStyle::Mono)
       .mono()
       .render(ctx),
@@ -49,19 +60,26 @@ pub(super) fn identities(ctx: &mut Ctx, source: &str, view: &IntegrationView) ->
       .mono()
       .render(ctx),
   ];
+  let gap = ctx.theme().spacing_value(SpacingSize::Lg).to_px();
+  // A third each, the gap after the first two inside them. The route's third widens to show it whole, up to
+  // `ROUTE_MOST`, and the folder and the head share what is left (`s4gj9`).
+  let route_room = Row::new()
+    .id(CELLS[0])
+    .width(Dimension::Pct(100.0 / 3.0))
+    .min_width(Dimension::Px(route_width + gap))
+    .padding_right(SpacingSize::Lg)
+    .child(route_cell);
+  let rest = |id: &str, cell: Element| Row::new().id(id).flex(1.0).min_width(Dimension::Px(0.0)).child(cell);
   Row::new()
     .id("local-identities")
     .width(Dimension::Pct(100.0))
     .padding(ExtraSpacing::Loose.role())
-    .spacing(SpacingSize::Lg)
     .align_items(Alignment::Center)
     .background(PaletteColor::SurfaceRaised)
     .rounded(RadiusSize::Md)
-    .with_children(
-      cells
-        .into_iter()
-        .map(|cell| Row::new().flex(1.0).min_width(Dimension::Px(0.0)).child(cell)),
-    )
+    .child(route_room)
+    .child(rest(CELLS[1], path).padding_right(SpacingSize::Lg))
+    .child(rest(CELLS[2], head))
     .into()
 }
 

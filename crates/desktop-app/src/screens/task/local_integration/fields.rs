@@ -31,7 +31,10 @@ pub(super) fn input(
       },
     );
   }
-  FieldInput::new(id, ctx.t(label), value).line_box(line_box).render(ctx)
+  FieldInput::new(id, ctx.t(label), value)
+    .line_box(line_box)
+    .strong_stroke()
+    .render(ctx)
 }
 
 #[derive(Clone)]

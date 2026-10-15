@@ -66,6 +66,8 @@ pub struct FieldInput {
   area_height: f32,
   /// A single line's box height when the design draws it taller than a control.
   line_box: Option<f32>,
+  /// The `border_strong` stroke at rest, where a design draws the field so.
+  strong: bool,
   locked: bool,
   /// A 14 `text_muted` glyph at the box's end, e.g. the lock of a locked select (`H8GYVZ`).
   trailing: Option<Icon>,
@@ -93,6 +95,7 @@ impl PartialEq for FieldInput {
       && self.width == other.width
       && self.area_height == other.area_height
       && self.line_box == other.line_box
+      && self.strong == other.strong
       && self.locked == other.locked
       && self.trailing == other.trailing
       && self.invalid == other.invalid
@@ -122,6 +125,7 @@ impl FieldInput {
       width: Dimension::Pct(100.0),
       area_height: TEXT_AREA_HEIGHT,
       line_box: None,
+      strong: false,
       locked: false,
       trailing: None,
       invalid: false,
@@ -197,6 +201,13 @@ impl FieldInput {
   /// a value 10 from each edge (`ys8f8` in Local integration).
   pub fn line_box(mut self, height: f32) -> Self {
     self.line_box = Some(height);
+    self
+  }
+
+  /// At rest the box takes the `border_strong` stroke, e.g. a field in an inspector card (`ys8f8` in Local
+  /// integration).
+  pub fn strong_stroke(mut self) -> Self {
+    self.strong = true;
     self
   }
 
@@ -280,6 +291,8 @@ impl Component for FieldBox {
       PaletteColor::Danger
     } else if self.focused.get() {
       PaletteColor::BorderFocus
+    } else if props.strong {
+      PaletteColor::BorderStrong
     } else {
       PaletteColor::Border
     };

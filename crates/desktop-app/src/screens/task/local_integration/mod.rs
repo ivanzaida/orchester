@@ -166,7 +166,7 @@ impl Component for LocalPage {
       resolver,
       acknowledgement: controls::AcknowledgementState::new(ctx),
       managed: Arc::new(parking_lot::Mutex::new(None)),
-      selected: ctx.signal(Selection(Vec::new())),
+      selected: ctx.signal(Selection::default()),
       shown_file: ctx.signal(ShownFile(None)),
       mode,
       message: Signal::new(String::new()),

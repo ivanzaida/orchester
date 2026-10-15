@@ -1,6 +1,7 @@
-use orchester_core::integration::local::{Checkout, LocalOperation, LocalPath};
+use orchester_core::integration::local::{Checkout, LocalOperation};
 
 use super::{Mode, Props};
+use crate::screens::task::local_integration::Selection;
 
 #[derive(Clone, PartialEq, Eq)]
 pub(super) struct ReviewIdentity {
@@ -8,7 +9,7 @@ pub(super) struct ReviewIdentity {
   main: Checkout,
   checked_current: bool,
   operation: Option<LocalOperation>,
-  selection: Vec<LocalPath>,
+  selection: Selection,
   message: String,
   preservation_name: String,
 }
@@ -20,7 +21,7 @@ impl ReviewIdentity {
       main: props.view.checkout.clone(),
       checked_current: props.view.checked_current,
       operation: props.view.operation.clone(),
-      selection: props.selected.get().0,
+      selection: props.selected.get(),
       message: props.message.get(),
       preservation_name: props.name.get(),
     }

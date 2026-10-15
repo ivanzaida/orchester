@@ -9,18 +9,15 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::integration::local::LocalPhase;
-use orchester_workspace::tasks::local_integration::{IntegrationView, Snapshot};
+use orchester_workspace::tasks::local_integration::{IntegrationView, Preview, Snapshot};
 
 use super::{
   LocalPage, Mode, TaskContext,
-  controls::Trigger,
   diff::{self, Source},
   files::{self, List},
   notes, resolver, words,
-  work::Action,
 };
 use crate::ui::{
-  button::ButtonKind,
   notice::{Notice, NoticeTone},
   state::loading,
 };
@@ -60,38 +57,17 @@ pub(super) fn column(
   if matches!(phase, LocalPhase::TaskConflicts | LocalPhase::RestoreConflicts) || page.editor_dirty.get() {
     return column.child(resolver::mount(ctx, page, task, view, busy, narrow));
   }
-  column.with_children(content(ctx, page, task, view, (busy, narrow)))
+  column.with_children(content(ctx, page, view, (busy, narrow)))
 }
 
-fn content(
-  ctx: &mut Ctx,
-  page: &LocalPage,
-  task: &TaskContext,
-  view: &IntegrationView,
-  (busy, narrow): (bool, bool),
-) -> Vec<Element> {
+fn content(ctx: &mut Ctx, page: &LocalPage, view: &IntegrationView, (busy, narrow): (bool, bool)) -> Vec<Element> {
   let signals = (&page.selected, &page.shown_file);
   match page.mode.get() {
-    Mode::Commit { preview, .. } => {
-      let selection = page.selected.get();
-      let count = files::entries(view, &selection, List::Commit).len().to_string();
-      let title = ctx.t_args("local_integration.commitSelection", [("count", count.as_str())]);
-      let mut parts = vec![files::list(
-        ctx,
-        (view, List::Commit),
-        signals,
-        &title,
-        Vec::new(),
-        busy,
-      )];
-      parts.extend(diff::cards(ctx, "local-selected-diff", &preview, Source::Diff, None));
-      parts.push(notes::remaining(ctx, &files::excluded(ctx, view, &selection)));
-      parts
-    }
+    Mode::Commit { preview, .. } => commit_review(ctx, page, view, &preview, busy),
     Mode::Preserve => {
       let title = ctx.t("local_integration.preservationSelection");
       vec![
-        files::list(ctx, (view, List::Preserve), signals, &title, Vec::new(), busy),
+        files::list(ctx, (view, List::Preserve), signals, &title, busy),
         notes::no_discard(ctx),
       ]
     }
@@ -100,17 +76,8 @@ fn content(
     }
     mode => {
       let locked = busy || mode != Mode::Review || view.external.is_some();
-      let preparing = view
-        .operation
-        .as_ref()
-        .is_none_or(|op| op.phase() == LocalPhase::Review);
-      let actions = if locked || !preparing {
-        Vec::new()
-      } else {
-        review_actions(ctx, page, task, view)
-      };
       let title = ctx.t("local_integration.files");
-      let mut parts = vec![files::list(ctx, (view, List::Review), signals, &title, actions, locked)];
+      let mut parts = vec![files::list(ctx, (view, List::Review), signals, &title, locked)];
       if let Some(shown) = page.shown_file.get().0 {
         let source = match shown.snapshot {
           Snapshot::Untracked => Source::NewFile(shown.path.as_str()),
@@ -130,21 +97,37 @@ fn content(
   }
 }
 
-/// Reading the checkout again and recording its current identities, beside the list's title.
-fn review_actions(ctx: &mut Ctx, page: &LocalPage, task: &TaskContext, view: &IntegrationView) -> Vec<Element> {
-  let trigger = Trigger::of(ctx, page, task, view);
-  [
-    ("local-inspect", "local_integration.inspect", Action::Inspect),
-    ("local-refresh", "local_integration.refresh", Action::Refresh),
-  ]
-  .into_iter()
-  .map(|(id, label, action)| {
-    trigger
-      .button(ctx, (id, ButtonKind::Ghost, label), Some(action), false)
-      .small()
-      .into()
-  })
-  .collect()
+/// The commit review (`kexy4`): the selected snapshots, the diff of the one shown (the first until another is
+/// pressed), and what the commit leaves.
+fn commit_review(
+  ctx: &mut Ctx,
+  page: &LocalPage,
+  view: &IntegrationView,
+  preview: &Preview,
+  busy: bool,
+) -> Vec<Element> {
+  let selection = page.selected.get();
+  let listed = files::entries(view, &selection, List::Commit);
+  let count = listed.len().to_string();
+  let title = ctx.t_args("local_integration.commitSelection", [("count", count.as_str())]);
+  let mut parts = vec![files::list(
+    ctx,
+    (view, List::Commit),
+    (&page.selected, &page.shown_file),
+    &title,
+    busy,
+  )];
+  let shown = page
+    .shown_file
+    .get()
+    .0
+    .map(|shown| shown.path)
+    .filter(|path| listed.iter().any(|entry| entry.file.path == *path))
+    .or_else(|| listed.first().map(|entry| entry.file.path.clone()));
+  let source = shown.as_ref().map_or(Source::Diff, |path| Source::File(path.as_str()));
+  parts.extend(diff::cards(ctx, "local-selected-diff", preview, source, None));
+  parts.push(notes::remaining(ctx, &files::excluded(ctx, view, &selection)));
+  parts
 }
 
 fn external_notice(ctx: &Ctx, view: &IntegrationView) -> Option<Element> {

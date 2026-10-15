@@ -7,7 +7,8 @@
 //! - Switch (`Switch/off` `H6LlDD`, `Switch/on` `XC5zU`): a round 28 × 16 track, 2 inside it, a round 12 knob; off,
 //!   `border_strong` with a `text_secondary` knob at the start; on, `accent` with an `on_accent` knob at the end.
 //!
-//! A control whose value is fixed is faded to half and cannot be flipped; the caller says why.
+//! A control whose value is fixed is faded to half and cannot be flipped; the caller says why. One settled by an
+//! earlier step, which a review only lists, keeps its full strength.
 
 use std::sync::Arc;
 
@@ -65,6 +66,8 @@ pub struct Toggle {
   element: Option<ElementRef>,
   /// Room after the label, so the focus ring around the control clears its last letter.
   ring_room: bool,
+  /// A fixed value decided by an earlier step, drawn at full strength.
+  settled: bool,
 }
 
 impl Toggle {
@@ -82,6 +85,7 @@ impl Toggle {
       change: None,
       element: None,
       ring_room: false,
+      settled: false,
     }
   }
 
@@ -96,6 +100,13 @@ impl Toggle {
   /// the control is faded and cannot be flipped.
   pub fn on_change(mut self, handler: impl Fn(bool) + Send + Sync + 'static) -> Self {
     self.change = Some(Arc::new(handler));
+    self
+  }
+
+  /// The fixed value was decided by an earlier step and the control only shows it, at full strength: e.g. the
+  /// selected snapshots a commit review lists (`kexy4`).
+  pub fn settled(mut self) -> Self {
+    self.settled = true;
     self
   }
 
@@ -199,6 +210,7 @@ impl From<Toggle> for Element {
       Some(change) => Focus::Form
         .apply(pressable(move || change(wanted)))
         .describe("state", "enabled"),
+      None if toggle.settled => inert(Button::empty()).describe("state", "fixed"),
       None => inert(Button::empty())
         .opacity(DISABLED_OPACITY)
         .describe("state", "fixed"),

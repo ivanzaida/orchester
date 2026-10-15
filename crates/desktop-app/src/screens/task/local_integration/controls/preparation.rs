@@ -61,8 +61,8 @@ impl Inspector {
         props,
         "local-review-commit",
         commit,
-        Some(Action::ReviewCommit(selection.0.clone())),
-        !props.view.commit_selectable(&selection),
+        Some(Action::ReviewCommit(selection.commit_paths())),
+        !props.view.commit_selectable(&selection.commit_paths()),
       ))
       .child(mode_button(
         ctx,

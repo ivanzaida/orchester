@@ -1,6 +1,8 @@
-//! Under the step: the recovery record once an operation is recorded (`Recovery record` `xBGxu`) — what it keeps
-//! and, each under its label, its operation, its state, how the checkout was prepared, its merge and its
-//! restoration — and before that, that waiting holds no queue (`Queue semantics` `qX5uF`).
+//! Under the step: the recovery record once an operation holds something, and in the commit review (`Recovery
+//! record` `xBGxu` in `kexy4`) — what it keeps and, each under its label in Geist Mono, its operation, how the
+//! checkout was prepared, its merge and its restoration. Before that the review says that waiting holds no queue
+//! (`Queue semantics` `qX5uF` in `YxF6B`; not at 960, `s4gj9`), and the preservation review shows neither (`UgHeC`).
+//! The design's *View recovery journal* is not offered: Orchester has no journal viewer yet.
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
@@ -10,29 +12,40 @@ use lurq::{
 use orchester_core::integration::local::{LocalOperation, LocalPhase};
 use orchester_workspace::{display, tasks::local_integration::IntegrationView};
 
-use super::phase_title;
+use super::{Mode, phase_title};
 use crate::{
   screens::task::local_integration::notes::panel,
   theme::LocalText,
   ui::card::{CardSurface, card_frame},
 };
 
-pub(super) fn card(ctx: &Ctx, view: &IntegrationView) -> Element {
-  let Some(operation) = &view.operation else {
-    return panel(
-      "local-queue",
-      CardSurface::Outline,
-      &ctx.t("local_integration.queue"),
-      &ctx.t("local_integration.queueBody"),
-    )
-    .into();
+pub(super) fn card(ctx: &Ctx, view: &IntegrationView, mode: &Mode, narrow: bool) -> Option<Element> {
+  if *mode == Mode::Preserve {
+    return None;
+  }
+  let reviewing_commit = matches!(mode, Mode::Commit { .. });
+  let recorded = view
+    .operation
+    .as_ref()
+    .filter(|operation| reviewing_commit || operation.phase() != LocalPhase::Review || operation.reserves_checkout());
+  let Some(operation) = recorded else {
+    return (*mode == Mode::Review && !narrow).then(|| {
+      panel(
+        "local-queue",
+        CardSurface::Outline,
+        &ctx.t("local_integration.queue"),
+        &ctx.t("local_integration.queueBody"),
+      )
+      .into()
+    });
   };
+  Some(rows(ctx, operation, reviewing_commit))
+}
+
+/// The record's rows; `reviewing_commit` while the person reviews the commit that would prepare the checkout.
+fn rows(ctx: &Ctx, operation: &LocalOperation, reviewing_commit: bool) -> Element {
   let rows = [
     ("local_integration.operation", operation.run().to_string()),
-    (
-      "local_integration.state",
-      ctx.t(phase_title(operation.phase())).to_string(),
-    ),
     ("local_integration.preparation", preparation(ctx, operation)),
     (
       "local_integration.mergeRecord",
@@ -43,7 +56,7 @@ pub(super) fn card(ctx: &Ctx, view: &IntegrationView) -> Element {
     ),
     (
       "local_integration.restoration",
-      ctx.t(restoration(operation)).to_string(),
+      ctx.t(restoration(operation, reviewing_commit)).to_string(),
     ),
   ];
   record(ctx)
@@ -51,7 +64,7 @@ pub(super) fn card(ctx: &Ctx, view: &IntegrationView) -> Element {
       Column::new()
         .spacing(SpacingSize::Sm)
         .child(Text::new(&ctx.t(label)).variant(LocalText::Note.role()))
-        .child(Text::new(&value).variant(LocalText::Explanation.role()))
+        .child(Text::new(&value).variant(LocalText::Value.role()))
     }))
     .into()
 }
@@ -82,17 +95,28 @@ fn preparation(ctx: &Ctx, operation: &LocalOperation) -> String {
       .to_string();
   }
   ctx
-    .t(match (operation.phase(), operation.commit_tree()) {
-      (LocalPhase::Committing, _) => "local_integration.committing",
-      (_, Some(_)) => "local_integration.committed",
-      (_, None) => "local_integration.noCommit",
-    })
+    .t(
+      match (operation.phase(), operation.commit_tree(), operation.hook_change()) {
+        (LocalPhase::Committing, ..) => "local_integration.committing",
+        (_, Some(_), Some(_)) => "local_integration.commitStopped",
+        (_, Some(_), None) => "local_integration.committed",
+        (LocalPhase::Review, None, _) => "local_integration.noCommit",
+        (_, None, _) => "local_integration.nothingPrepared",
+      },
+    )
     .to_string()
 }
 
-fn restoration(operation: &LocalOperation) -> &'static str {
+fn restoration(operation: &LocalOperation, reviewing_commit: bool) -> &'static str {
   if operation.preservation().is_none() {
-    return "local_integration.notRequired";
+    let committed = reviewing_commit
+      || operation.phase() == LocalPhase::Committing
+      || (operation.commit_tree().is_some() && operation.hook_change().is_none());
+    return if committed {
+      "local_integration.notRequired"
+    } else {
+      "local_integration.nothingPreserved"
+    };
   }
   match operation.phase() {
     LocalPhase::RestorationVerified | LocalPhase::RemovingPreservation | LocalPhase::Complete => {

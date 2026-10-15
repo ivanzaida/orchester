@@ -3,8 +3,9 @@
 //! `CCvnb`). A group's label is 11.5 `text_muted` on `surface_raised`, 6 over and under and 10 at its sides
 //! (`Staged heading` `MJbQq`). A row is 8 over and under and 10 at its sides over a `border` line: its checkbox,
 //! then 8 on its change's letter and its path, which wraps where the row ends, and 2 under them what the
-//! snapshot holds in 11.5 `text_muted` (`juh4k`). In the review a press on the path shows its snapshot's diff;
-//! the commit and preservation reviews list only the selected snapshots, which cannot change there.
+//! snapshot holds in 11.5 `text_muted` (`juh4k`). In the review and the commit review a press on the path shows
+//! its snapshot's diff; the commit and preservation reviews list only the selected snapshots, which cannot change
+//! there.
 
 use std::sync::Arc;
 
@@ -14,12 +15,12 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text, VirtualizedList},
+  components::{Column, Row, Text, VirtualizedList},
   core::Signal,
-  layout::Alignment,
+  layout::{Alignment, text_style::TextAlign},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::integration::local::{LocalFile, LocalPath};
+use orchester_core::integration::local::LocalFile;
 use orchester_workspace::{
   display,
   tasks::local_integration::{IntegrationView, ShownSnapshot, Snapshot, SnapshotSize},
@@ -27,7 +28,7 @@ use orchester_workspace::{
 
 use super::{Selection, ShownFile};
 use crate::{
-  theme::{CodeText, ExtraSpacing, LocalText},
+  theme::{ExtraSpacing, LocalText},
   ui::{
     message::message_text,
     pressable::pressable,
@@ -38,8 +39,8 @@ use crate::{
 /// Rows the list lays out in full; past them its rows scroll in a list `LIST_HEIGHT` high.
 const SHOWN_ROWS: usize = 60;
 const LIST_HEIGHT: f32 = 520.0;
-/// The column of a change's letter (`F1t7T` in `dAwTi`).
-const KIND_WIDTH: f32 = 12.0;
+/// The column of a change's letter, which centers it (`F1t7T` in `dAwTi`).
+const KIND_WIDTH: f32 = 24.0;
 
 /// Which list the page shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -95,11 +96,12 @@ fn untracked(file: &LocalFile) -> bool {
 }
 
 /// The snapshots `list` shows of `view`, in its order.
-pub(super) fn entries(view: &IntegrationView, selection: &[LocalPath], list: List) -> Vec<Entry> {
+pub(super) fn entries(view: &IntegrationView, selection: &Selection, list: List) -> Vec<Entry> {
   let groups: &[Group] = match list {
     List::Review | List::Preserve => &[Group::Staged, Group::Unstaged, Group::Untracked],
     List::Commit => &[Group::CommitIndex, Group::CommitUntracked],
   };
+  let kept = selection.paths();
   let mut entries = Vec::new();
   for &group in groups {
     for file in &view.checkout.files {
@@ -108,7 +110,12 @@ pub(super) fn entries(view: &IntegrationView, selection: &[LocalPath], list: Lis
         Group::Unstaged => file.unstaged,
         Group::Untracked | Group::CommitUntracked => untracked(file),
       };
-      let chosen = list == List::Review || selection.contains(&file.path);
+      let chosen = match list {
+        List::Review => true,
+        List::Commit => selection.has(&file.path, group.snapshot()),
+        // A preservation keeps a selected path whole: every snapshot of it is listed.
+        List::Preserve => kept.contains(&file.path),
+      };
       if listed && chosen {
         entries.push(Entry {
           group,
@@ -121,34 +128,40 @@ pub(super) fn entries(view: &IntegrationView, selection: &[LocalPath], list: Lis
   entries
 }
 
-/// The snapshot the review shows first.
+/// The snapshot the review shows first: the first working-copy one, as the person last edited it (`YxF6B`), or
+/// else the first listed.
 pub(super) fn first(view: &IntegrationView) -> Option<ShownSnapshot> {
-  entries(view, &[], List::Review)
-    .into_iter()
-    .next()
-    .map(|entry| ShownSnapshot {
-      path: entry.file.path,
-      snapshot: entry.group.snapshot(),
-    })
+  let listed = entries(view, &Selection::default(), List::Review);
+  let first = listed
+    .iter()
+    .position(|entry| entry.group == Group::Unstaged)
+    .unwrap_or(0);
+  listed.into_iter().nth(first).map(|entry| ShownSnapshot {
+    path: entry.file.path,
+    snapshot: entry.group.snapshot(),
+  })
 }
 
 /// Whether `shown` is still one of the review's snapshots.
 pub(super) fn listed(view: &IntegrationView, shown: &ShownSnapshot) -> bool {
-  entries(view, &[], List::Review)
+  entries(view, &Selection::default(), List::Review)
     .iter()
     .any(|entry| entry.file.path == shown.path && entry.group.snapshot() == shown.snapshot)
 }
 
-/// The review's snapshots of `selection`.
-pub(super) fn selected_count(view: &IntegrationView, selection: &[LocalPath]) -> usize {
-  entries(view, selection, List::Preserve).len()
+/// The review's snapshots that `selection` holds.
+pub(super) fn selected_count(view: &IntegrationView, selection: &Selection) -> usize {
+  entries(view, selection, List::Review)
+    .iter()
+    .filter(|entry| selection.has(&entry.file.path, entry.group.snapshot()))
+    .count()
 }
 
 /// The snapshots a commit of `selection` leaves in the checkout, as the remaining notice names them.
-pub(super) fn excluded(ctx: &Ctx, view: &IntegrationView, selection: &[LocalPath]) -> Vec<String> {
-  entries(view, &[], List::Review)
+pub(super) fn excluded(ctx: &Ctx, view: &IntegrationView, selection: &Selection) -> Vec<String> {
+  entries(view, &Selection::default(), List::Review)
     .into_iter()
-    .filter(|entry| entry.group == Group::Unstaged || !selection.contains(&entry.file.path))
+    .filter(|entry| entry.group == Group::Unstaged || !selection.has(&entry.file.path, entry.group.snapshot()))
     .map(|entry| {
       ctx
         .t_args(
@@ -163,13 +176,12 @@ pub(super) fn excluded(ctx: &Ctx, view: &IntegrationView, selection: &[LocalPath
     .collect()
 }
 
-/// The list `list` of `view` under `title`, with `actions` beside the title.
+/// The list `list` of `view` under `title`.
 pub(super) fn list(
   ctx: &mut Ctx,
   (view, list): (&IntegrationView, List),
   (selected, shown): (&Signal<Selection>, &Signal<ShownFile>),
   title: &str,
-  actions: Vec<Element>,
   busy: bool,
 ) -> Element {
   let entries = entries(view, &selected.get(), list);
@@ -207,9 +219,7 @@ pub(super) fn list(
   let head = Row::new()
     .width(Dimension::Pct(100.0))
     .align_items(Alignment::Center)
-    .child(Text::new(title).id("local-files-title").variant(TypographyStyle::Body))
-    .child(Spacer::new().flex(1.0))
-    .with_children(actions);
+    .child(Text::new(title).id("local-files-title").variant(TypographyStyle::Body));
   Column::new()
     .id("local-files")
     .width(Dimension::Pct(100.0))
@@ -289,7 +299,9 @@ impl Component for FileRow {
 fn file_row(ctx: &Ctx, props: &Props, entry: &Entry) -> Element {
   let group = entry.group.key();
   let path = entry.file.path.clone();
-  let on = props.selected.get().contains(&path);
+  let snapshot = entry.group.snapshot();
+  // What a commit or preservation review lists, it takes.
+  let on = props.list != List::Review || props.selected.get().has(&path, snapshot);
   let mut choice = Toggle::new(
     format!("local-select-{group}-{path}"),
     ToggleKind::Checkbox,
@@ -297,16 +309,13 @@ fn file_row(ctx: &Ctx, props: &Props, entry: &Entry) -> Element {
     path.to_string(),
   )
   .hide_label();
-  if props.list == List::Review && !props.busy {
+  if props.list != List::Review {
+    choice = choice.settled();
+  } else if !props.busy {
     let select = props.selected.clone();
     let path = path.clone();
     choice = choice.on_change(move |on| {
-      select.update(|paths| {
-        paths.retain(|value| value != &path);
-        if on {
-          paths.push(path.clone());
-        }
-      });
+      select.update(|selection| selection.choose(&path, snapshot, on));
     });
   }
   let name = Row::new()
@@ -315,7 +324,8 @@ fn file_row(ctx: &Ctx, props: &Props, entry: &Entry) -> Element {
     .align_items(Alignment::Start)
     .child(
       Text::new(kind(entry))
-        .variant(CodeText::ChangeType.role())
+        .variant(LocalText::Letter.role())
+        .text_align(TextAlign::Center)
         .width(Dimension::Px(KIND_WIDTH))
         .flex_shrink(0.0),
     )
@@ -326,7 +336,7 @@ fn file_row(ctx: &Ctx, props: &Props, entry: &Entry) -> Element {
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     );
-  let name: Element = if props.list == List::Review {
+  let name: Element = if props.list != List::Preserve {
     let shown = props.shown.clone();
     let snapshot = ShownSnapshot {
       path: path.clone(),

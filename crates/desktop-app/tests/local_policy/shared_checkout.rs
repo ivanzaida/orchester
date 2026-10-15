@@ -86,7 +86,7 @@ fn next_run(fixture: &mut Fixture) -> RunId {
 #[test]
 fn local_policy_other_run_pending_review_blocks_legacy_until_its_owned_guard_drops() {
   let mut page = Page::new(Fixture::new(false));
-  page.ready("local-inspect");
+  page.ready("local-review-preserve");
   let project = ProjectDb::open(page.root()).expect("db").project().id();
   let jobs = page.window.launch.services().expect("services").jobs.of(project);
   let other = RunId::generate();
@@ -136,7 +136,7 @@ fn local_policy_other_run_retained_recovery_blocks_legacy_but_verified_cleanup_r
     git(fixture.root(), &["commit", "-am", "retain personal result"]);
     let historical = next_run(&mut fixture);
     let mut page = Page::new(fixture);
-    page.ready("local-inspect");
+    page.ready("local-review-preserve");
     let before = git(page.root(), &["rev-parse", "HEAD"]);
     let db = ProjectDb::open(page.root()).expect("db");
     let saved = db.local_operation(historical).expect("history").expect("exists");

@@ -137,53 +137,53 @@ fn local_policy_queued_reviewed_save_does_not_become_native_after_synthetic_call
   );
 }
 
+/// A review whose one untracked file the person has selected natively.
+fn selected() -> Page {
+  let fixture = Fixture::new(false);
+  fs::write(fixture.root().join("note.txt"), "personal note\n").expect("untracked");
+  let mut page = Page::new(fixture);
+  page.ready("local-select-local_integration.untracked-note.txt");
+  page.click("local-select-local_integration.untracked-note.txt");
+  page
+}
+
+fn no_operation(page: &Page) -> bool {
+  orchester_core::integration::local::LocalIntegrationStore::local_operation(
+    &orchester_store::ProjectDb::open(page.root()).expect("db"),
+    page.run(),
+  )
+  .expect("journal")
+  .is_none()
+}
+
 #[test]
-fn local_policy_inspect_refresh_scope_off_and_other_tab_questions_have_real_outcomes() {
-  let mut page = Page::new(Fixture::new(false));
-  page.ready("local-inspect");
+fn local_policy_commit_review_scope_off_and_other_tab_questions_have_real_outcomes() {
+  let mut page = selected();
   let client = Client::new(&mut page, true);
-  ok(&client.click(&mut page, "local-inspect"));
-  page.until("inspection completes", |window| {
-    window.tree.get_element_by_id("local-working").is_none()
-  });
-  assert!(
-    orchester_core::integration::local::LocalIntegrationStore::local_operation(
-      &orchester_store::ProjectDb::open(page.root()).expect("db"),
-      page.run()
-    )
-    .expect("no mutation")
-    .is_none()
-  );
-  ok(&client.click(&mut page, "local-refresh"));
-  page.until("refresh writes current review", |window| {
-    window.tree.get_element_by_id("local-working").is_none()
-  });
-  let generation = page.fixture.open().operation().version();
-  assert!(generation > 0, "real fresh journal version");
+  let head = git(page.root(), &["rev-parse", "HEAD"]);
   let secret = page
     .window
     .link
     .input_gate()
     .protect(orchester_app::mcp::input_gate::Guarded::WideningQuestion);
-  let refused = client.click(&mut page, "local-inspect");
+  let refused = client.click(&mut page, "local-review-commit");
   assert_eq!(super::client::value(&refused)["code"], "person_only");
-  assert_eq!(page.fixture.open().operation().version(), generation);
+  assert!(no_operation(&page), "a refused candidate records nothing");
   drop(secret);
-  let mut separate = Page::new(Fixture::new(false));
-  separate.ready("local-inspect");
-  let off = Client::new(&mut separate, false);
-  let before = git(separate.root(), &["rev-parse", "HEAD"]);
-  let refused = off.click(&mut separate, "local-inspect");
-  assert!(refused["isError"].as_bool().unwrap_or(false), "no window control scope");
-  assert_eq!(git(separate.root(), &["rev-parse", "HEAD"]), before);
-  assert!(
-    orchester_core::integration::local::LocalIntegrationStore::local_operation(
-      &orchester_store::ProjectDb::open(separate.root()).expect("db"),
-      separate.run()
-    )
-    .expect("no operation created by refused input")
-    .is_none()
+  ok(&client.click(&mut page, "local-review-commit"));
+  page.ready("local-commit-message-label");
+  assert!(!no_operation(&page), "the candidate records the current review");
+  assert_eq!(
+    git(page.root(), &["rev-parse", "HEAD"]),
+    head,
+    "a candidate commits nothing"
   );
+  let mut separate = selected();
+  let off = Client::new(&mut separate, false);
+  let refused = off.click(&mut separate, "local-review-commit");
+  assert!(refused["isError"].as_bool().unwrap_or(false), "no window control scope");
+  assert!(!separate.has("local-commit-message-label"));
+  assert!(no_operation(&separate), "no operation created by refused input");
 }
 #[test]
 fn local_policy_unscoped_synthetic_candidate_and_keep_are_visibly_refused_without_mutation() {

@@ -212,7 +212,7 @@ impl Component for Inspector {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Lg)
       .child(panel)
-      .child(recovery::card(ctx, &props.view))
+      .with_children(recovery::card(ctx, &props.view, &mode, props.narrow))
   }
 }
 

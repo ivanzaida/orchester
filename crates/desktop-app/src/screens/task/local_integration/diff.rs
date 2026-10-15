@@ -32,6 +32,8 @@ const LIST_HEIGHT: f32 = 480.0;
 pub(super) enum Source<'a> {
   /// A unified diff, of any number of files.
   Diff,
+  /// The file at this path of a unified diff of several; all of them if none is at it.
+  File(&'a str),
   /// The whole content of the new file at this path.
   NewFile(&'a str),
 }
@@ -52,12 +54,19 @@ pub(super) fn cards(ctx: &mut Ctx, id: &str, shown: &Preview, source: Source<'_>
   };
   let files = match source {
     Source::NewFile(path) => vec![(path.to_owned(), new_file(ctx, text))],
-    Source::Diff => match Diff::parse(text) {
-      Ok(diff) => diff
-        .files()
-        .iter()
-        .map(|file| (file.path().to_owned(), file_rows(ctx, file)))
-        .collect(),
+    Source::Diff | Source::File(_) => match Diff::parse(text) {
+      Ok(diff) => {
+        let only = match source {
+          Source::File(only) if diff.files().iter().any(|file| file.path() == only) => Some(only),
+          _ => None,
+        };
+        diff
+          .files()
+          .iter()
+          .filter(|file| only.is_none_or(|only| file.path() == only))
+          .map(|file| (file.path().to_owned(), file_rows(ctx, file)))
+          .collect()
+      }
       Err(_) => vec![(
         path.unwrap_or_default().to_owned(),
         vec![DiffRow::Note(ctx.t("local_integration.unreadableDiff"))],
