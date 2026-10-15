@@ -206,6 +206,7 @@ fn record_active(kontur: &mut Kontur, snapshot: RunSnapshot, key: &StepKey) -> R
       max_duration: task.details().limits.max_duration(),
     },
     kontur.now,
+    None,
   )?;
   let events = run.start(kontur.now)?;
   kontur.db.append_events(&run, &events)?;

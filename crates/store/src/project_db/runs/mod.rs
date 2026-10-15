@@ -8,6 +8,7 @@ use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId, TaskId},
   resource::VersionNumber,
   run::{BranchName, Checkpoint, ListedRun, NewRun, Plan, Run, RunEvent, RunEventKind, RunNumber, StepExecutor},
+  sharing::TaskRevision,
   store::RunStore,
   time::Timestamp,
 };
@@ -20,7 +21,7 @@ use self::{
 use super::{
   ProjectDb, plans,
   resources::version_number,
-  tasks::{is_queued, snapshot_new_run},
+  tasks::{has_revision, is_queued, snapshot_new_run},
 };
 use crate::{
   RunStoreError, StoreError,
@@ -53,22 +54,26 @@ impl ProjectDb {
 
   /// [`RunStore::create_run`] for a task the caller found queued: the task must still be queued
   /// when the run is recorded, in the same transaction. A person may have taken it back to the
-  /// drafts since the caller checked it (a held group's task), and a draft never has a run.
+  /// drafts since the caller checked it (a held group's task), and a draft never has a run. With
+  /// `revision`, the task must also still be at that revision, read in the same transaction: a task
+  /// edited since a person confirmed its run is refused ([`RunStoreError::TaskChangedMeanwhile`]).
   pub fn create_run_of_queued_task(
     &mut self,
     key: IdempotencyKey,
     new: NewRun,
     now: Timestamp,
+    revision: Option<TaskRevision>,
   ) -> Result<Run, RunStoreError> {
-    self.record_run(key, new, now, true)
+    self.record_run(key, new, now, Some(revision))
   }
 
+  /// Records the run; `queued` checks the task is still queued and, with a revision, still at it.
   fn record_run(
     &mut self,
     key: IdempotencyKey,
     new: NewRun,
     now: Timestamp,
-    queued: bool,
+    queued: Option<Option<TaskRevision>>,
   ) -> Result<Run, RunStoreError> {
     let key = key.to_string();
     let project = self.project.key().clone();
@@ -76,8 +81,15 @@ impl ProjectDb {
     if let Some(existing) = load_runs(&transaction, "WHERE idempotency_key = ?1", [&key])?.pop() {
       return existing.map_err(|unreadable| unreadable.error);
     }
-    if queued && !is_queued(&transaction, new.task)? {
-      return Err(RunStoreError::TaskNotQueued(new.task));
+    if let Some(revision) = queued {
+      if !is_queued(&transaction, new.task)? {
+        return Err(RunStoreError::TaskNotQueued(new.task));
+      }
+      if let Some(revision) = revision
+        && !has_revision(&transaction, new.task, revision)?
+      {
+        return Err(RunStoreError::TaskChangedMeanwhile(new.task));
+      }
     }
     if super::shared_tasks::is_not_shared(&transaction, new.task)? {
       return Err(StoreError::NotSharedTask(new.task).into());
@@ -101,7 +113,7 @@ impl RunStore for ProjectDb {
   /// drafts. Production code records runs with [`ProjectDb::create_run_of_queued_task`], which
   /// rechecks that the task is still queued.
   fn create_run(&mut self, key: IdempotencyKey, new: NewRun, now: Timestamp) -> Result<Run, RunStoreError> {
-    self.record_run(key, new, now, false)
+    self.record_run(key, new, now, None)
   }
 
   fn run_with_key(&self, key: IdempotencyKey) -> Result<Option<Run>, RunStoreError> {

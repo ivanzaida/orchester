@@ -193,6 +193,9 @@ pub enum RunStoreError {
   /// Only a queued task gets a run; the task is not (any more). Nothing was recorded.
   #[error("task {0} is not queued")]
   TaskNotQueued(TaskId),
+  /// The task was edited since the revision its run was confirmed on. Nothing was recorded.
+  #[error("task {0} changed since its run was confirmed")]
+  TaskChangedMeanwhile(TaskId),
   /// The stored record of run `run` cannot be read back: it breaks the run's rules or a value in
   /// it cannot be decoded. The record is kept unchanged.
   #[error("run {run} cannot be read: {source}")]

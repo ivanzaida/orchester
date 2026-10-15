@@ -353,7 +353,7 @@ fn task_group_release_returns_held_unstarted_tasks_to_drafts_and_finishes() {
     max_duration: template.max_duration(),
   };
   assert!(matches!(
-    db.create_run_of_queued_task(ids[1].first_run_key(), late, at(20)),
+    db.create_run_of_queued_task(ids[1].first_run_key(), late, at(20), None),
     Err(orchester_store::RunStoreError::TaskNotQueued(task)) if task == ids[1]
   ));
   assert!(db.run_with_key(ids[1].first_run_key()).expect("read").is_none());
