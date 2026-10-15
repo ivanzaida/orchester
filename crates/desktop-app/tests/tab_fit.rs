@@ -158,3 +158,50 @@ fn a_window_too_narrow_for_one_tab_still_shows_the_active_one() {
   assert_eq!(fit.hidden(), &[0, 1, 2, 4]);
   assert_eq!(fit.label_width(), LABEL_MIN_WIDTH);
 }
+
+/// `designed_tabs` with the needs-you hand on every Kontur tab, as the QA seed has them.
+fn marked_tabs() -> Vec<Slot> {
+  designed_tabs()
+    .into_iter()
+    .map(|slot| match slot {
+      Slot::Labelled(_) => Slot::Labelled(MARK_WIDTH),
+      other => other,
+    })
+    .collect()
+}
+
+#[test]
+fn the_active_tab_takes_the_room_it_was_laid_out_at() {
+  let room = designed_room(960.0);
+  let mut drawn = designed_tabs();
+  drawn[11] = Slot::Measured(207.0);
+  assert_eq!(
+    shown(&fit(room, &drawn, 11), 15),
+    [0, 1, 2, 11],
+    "the frame's 207 wide active tab"
+  );
+  let mut short = marked_tabs();
+  let widest = fit(room, &short, 11);
+  short[11] = Slot::Measured(187.0);
+  let measured = fit(room, &short, 11);
+  assert_eq!(
+    shown(&measured, 15),
+    [0, 1, 2, 11],
+    "a 187 wide active tab leaves room for two 137 wide tabs: {measured:?}"
+  );
+  assert!(
+    shown(&widest, 15).len() < shown(&measured, 15).len(),
+    "counted at its widest it would hide one of them: {widest:?}"
+  );
+}
+
+#[test]
+fn the_button_reserves_the_digits_of_the_count_it_shows() {
+  // Ten tabs could hide, a two-digit count; with three beside the active one, seven do.
+  let mut slots = vec![Slot::Measured(ACTIVE_WIDTH)];
+  slots.extend(labelled(10));
+  let room = ACTIVE_WIDTH + 3.0 * (TAB_MIN_WIDTH + gap()) + button_width(7) + gap() + 0.5;
+  let fit = fit(room, &slots, 0);
+  assert_eq!(shown(&fit, 11), [0, 1, 2, 3], "{fit:?}");
+  assert_eq!(fit.hidden().len(), 7);
+}

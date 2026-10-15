@@ -10,7 +10,11 @@
 //! that are not saved ends its label in a 6 `text_secondary` dot (`Dirty` `TfKtF` in `Fd1ai`).
 //!
 //! The strip sits in the title bar's flexible middle and shares its room as `tab_fit` says; the tabs that
-//! do not fit are only in the tab list (`tab_list`), whose chevron follows the last tab that shows.
+//! do not fit are only in the tab list (`tab_list`), whose button follows the last tab that shows. The
+//! active tab takes the room it was laid out at (`tab_measure`). When the list goes away while it held
+//! the focus, *New tab* takes it; *New tab* is a Tab stop for that, its ring only after keyboard use.
+
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use lurq::{
   app::{
@@ -29,6 +33,7 @@ use super::{
   tab_fit::{self, DOT_WIDTH, Fit, ICON_TAB_WIDTH, MARK_WIDTH, MIN_DRAG_WIDTH, Slot},
   tab_label::{attention, close_button, has_attention, label, unsaved},
   tab_list::{TabList, TabListProps},
+  tab_measure::{ActiveKey, ActiveWidth, ListHold},
 };
 use crate::{
   navigation::{
@@ -40,7 +45,7 @@ use crate::{
   theme::{CLOSING_TABS_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon, screen_icon},
-    pressable::{in_title_bar, pressable},
+    pressable::{Focus, in_title_bar, pressable},
   },
 };
 
@@ -50,7 +55,13 @@ pub const TAB_HEIGHT: f32 = 26.0;
 const UNSAVED_DOT: f32 = 6.0;
 const NEW_TAB_WIDTH: f32 = 26.0;
 
-pub struct TabStrip;
+pub struct TabStrip {
+  active_width: ActiveWidth,
+  list: ListHold,
+  new_tab: ElementRef,
+  /// The strip showed the tab list when it was laid out last.
+  overflowed: AtomicBool,
+}
 
 /// The title bar's *N need you* pill, as it was laid out last.
 #[derive(Clone)]
@@ -78,8 +89,13 @@ impl DevtoolsInspectable for TabStripProps {}
 impl Component for TabStrip {
   type Props = TabStripProps;
 
-  fn create(_ctx: &mut Ctx) -> Self {
-    Self
+  fn create(ctx: &mut Ctx) -> Self {
+    Self {
+      active_width: ActiveWidth::new(ctx),
+      list: ListHold::default(),
+      new_tab: ctx.element_ref(),
+      overflowed: AtomicBool::new(false),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -88,8 +104,14 @@ impl Component for TabStrip {
     let tabs = navigation.tabs();
     let window = ctx.window();
     let room = tab_fit::room(window.info().logical_width(), pill_width(ctx, &projects, &tabs));
-    let fit = fit(&projects, &tabs, room);
     let active = label(ctx, &projects, tabs.active().route());
+    let measured = self.active_width.width(&ActiveKey {
+      tab: tabs.active().id(),
+      label: active.clone(),
+      marks: marks(&projects, tabs.active()),
+    });
+    let fit = fit(&projects, &tabs, (room, measured));
+    self.keep_focus(ctx, fit.overflows());
     window.set_title(ctx.t_args("shell.app.windowTitle", [("tab", active)]).to_string());
     let strip = tabs
       .tabs()
@@ -104,7 +126,10 @@ impl Component for TabStrip {
           .clip()
           .spacing(ExtraSpacing::Tight.role())
           .align_items(Alignment::Center),
-        |strip, (_, tab)| strip.child(tab_button(ctx, (&navigation, &projects), &tabs, tab, &fit)),
+        |strip, (_, tab)| {
+          let button = tab_button(ctx, (&navigation, &projects), &tabs, tab, (&fit, &self.active_width));
+          strip.child(button)
+        },
       );
     let hidden: Vec<_> = fit
       .hidden()
@@ -112,9 +137,10 @@ impl Component for TabStrip {
       .filter_map(|index| tabs.tabs().get(*index))
       .map(Tab::id)
       .collect();
-    let list = fit
-      .overflows()
-      .then(|| ctx.mount_keyed::<TabList>("tab-list", TabListProps { hidden }));
+    let list = fit.overflows().then(|| {
+      let list = self.list.clone();
+      ctx.mount_keyed::<TabList>("tab-list", TabListProps { hidden, list })
+    });
     let closing = ctx.props::<TabStripProps>().closing;
     let tabs = Row::new()
       .flex_shrink(1.0)
@@ -129,7 +155,7 @@ impl Component for TabStrip {
       })
       .child(strip)
       .with_children(list)
-      .child(new_tab(ctx, navigation));
+      .child(new_tab(ctx, navigation, self.new_tab.clone()));
     Row::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::new().left(SpacingSize::Sm))
@@ -147,26 +173,43 @@ impl Component for TabStrip {
   }
 }
 
-/// How `tabs` share `room`, each as wide as what it shows.
-fn fit(projects: &Projects, tabs: &TabSet, room: f32) -> Fit {
+impl TabStrip {
+  /// Gives the focus to *New tab* when the tab list goes away while it held it.
+  fn keep_focus(&self, ctx: &Ctx, overflows: bool) {
+    let overflowed = self.overflowed.swap(overflows, Ordering::Relaxed);
+    if overflowed && !overflows && self.list.holds() {
+      self.list.set_open(false);
+      ctx.focus(&self.new_tab);
+    }
+  }
+}
+
+/// The room a tab's unsaved dot and its mark take.
+fn marks(projects: &Projects, tab: &Tab) -> f32 {
+  let dot = if unsaved(projects, tab.route()) { DOT_WIDTH } else { 0.0 };
+  let mark = if has_attention(projects, tab) { MARK_WIDTH } else { 0.0 };
+  dot + mark
+}
+
+/// How `tabs` share `room`, each as wide as what it shows; the active tab as wide as it was `measured`
+/// once it has been laid out.
+fn fit(projects: &Projects, tabs: &TabSet, (room, measured): (f32, Option<f32>)) -> Fit {
+  let active = tabs.active().id();
   let slots: Vec<Slot> = tabs
     .tabs()
     .iter()
-    .map(|tab| {
-      if tab.route().is_home() {
-        return Slot::Icon;
-      }
-      let dot = if unsaved(projects, tab.route()) { DOT_WIDTH } else { 0.0 };
-      let mark = if has_attention(projects, tab) { MARK_WIDTH } else { 0.0 };
-      Slot::Labelled(dot + mark)
+    .map(|tab| match (tab.route().is_home(), measured) {
+      (true, _) => Slot::Icon,
+      (false, Some(width)) if tab.id() == active => Slot::Measured(width),
+      (false, _) => Slot::Labelled(marks(projects, tab)),
     })
     .collect();
-  let active = tabs
+  let index = tabs
     .tabs()
     .iter()
-    .position(|tab| tab.id() == tabs.active().id())
+    .position(|tab| tab.id() == active)
     .expect("the active tab is one of the tabs");
-  tab_fit::fit(room, &slots, active)
+  tab_fit::fit(room, &slots, index)
 }
 
 /// The room the *N need you* pill takes: none while it does not show, what it took when it was laid out
@@ -188,7 +231,7 @@ fn tab_button(
   (navigation, projects): (&Navigation, &Projects),
   tabs: &TabSet,
   tab: &Tab,
-  fit: &Fit,
+  (fit, active_width): (&Fit, &ActiveWidth),
 ) -> Element {
   let active = tab.id() == tabs.active().id();
   let id = tab.id();
@@ -230,6 +273,15 @@ fn tab_button(
   });
   let marks = dirty.as_ref().map_or(0.0, |_| DOT_WIDTH) + attention.as_ref().map_or(0.0, |_| MARK_WIDTH);
   let widest = Slot::Labelled(marks).width(fit.label_width(), active);
+  // The active tab keeps its width, which the strip measures; while tabs hide, the inactive ones are
+  // exactly as wide as `tab_fit` counts them (120 and their marks, `Tab 2 · Kontur · Overview` in `oHEGQ`).
+  let button = if active {
+    button.ref_element(active_width.element()).flex_shrink(0.0)
+  } else if fit.overflows() {
+    button.width(Dimension::Px(widest)).flex_shrink(0.0)
+  } else {
+    button
+  };
   labelled_tab(button, tab, (&label, widest), (dirty, attention, close))
 }
 
@@ -295,9 +347,10 @@ fn labelled_tab(
 }
 
 /// *New tab* (`New tab` `w204x`): a tab at All projects, right of the active one.
-fn new_tab(ctx: &mut Ctx, navigation: Navigation) -> Element {
-  in_title_bar(pressable(move || navigation.open_tab()))
+fn new_tab(ctx: &mut Ctx, navigation: Navigation, element: ElementRef) -> Element {
+  in_title_bar(Focus::Keyboard.apply(pressable(move || navigation.open_tab())))
     .id("new-tab")
+    .ref_element(element)
     .describe("a11y_name", ctx.t("common.newTab"))
     .width(Dimension::Px(NEW_TAB_WIDTH))
     .height(Dimension::Px(TAB_HEIGHT))

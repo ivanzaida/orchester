@@ -213,3 +213,18 @@ fn resizing_the_window_recomputes_which_tabs_show() {
   );
   assert!(shown(&mut window, &active_id(&navigation)));
 }
+
+#[test]
+fn a_short_active_label_leaves_no_room_for_another_tab_unused() {
+  let (mut window, navigation) = crowded_window();
+  settle(&mut window);
+  let shown_tabs = in_strip(&mut window, &navigation);
+  let new_tab = bounds(&mut window, "new-tab");
+  let end = controls_left(&mut window, 960.0);
+  // After New tab: the gap, the 48 of drag area and the title bar's own 4 before the controls.
+  let left = end - (new_tab.x + new_tab.width) - 2.0 - 48.0 - 4.0;
+  assert!(
+    left < 120.0 + 2.0,
+    "the {left} left over would hold another 120 wide tab beside {shown_tabs:?}"
+  );
+}

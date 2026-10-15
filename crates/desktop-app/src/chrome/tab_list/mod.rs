@@ -39,6 +39,7 @@ use self::{
 };
 use super::{
   tab_label::{page, project_name},
+  tab_measure::ListHold,
   tab_strip::TAB_HEIGHT,
 };
 use crate::{
@@ -66,6 +67,8 @@ const SEARCH_ABOVE: usize = 8;
 #[derive(Clone, Debug, PartialEq)]
 pub struct TabListProps {
   pub hidden: Vec<TabId>,
+  /// The strip's view of the list: its button's element and whether it is open.
+  pub list: ListHold,
 }
 
 impl DevtoolsInspectable for TabListProps {}
@@ -82,12 +85,13 @@ pub struct TabList {
   query: Signal<String>,
   ring: Signal<Option<Ring>>,
   button_hovered: Signal<bool>,
-  button: ElementRef,
   search: ElementRef,
   kept_row: ElementRef,
   listing: Arc<Mutex<Listing>>,
   focus: Arc<Mutex<Option<FocusTo>>>,
   first_keys: Option<FirstKeys>,
+  /// The ringed and the current row the list last scrolled to, so it scrolls only when they change.
+  scrolled_to: Mutex<Option<(Option<TabId>, Option<TabId>)>>,
 }
 
 /// A list that goes away while open leaves the window's keys to the window.
@@ -108,18 +112,21 @@ impl Component for TabList {
       query: ctx.signal(String::new()),
       ring: ctx.signal(None),
       button_hovered: ctx.signal(false),
-      button: ctx.element_ref(),
       search: ctx.element_ref(),
       kept_row: ctx.element_ref(),
       listing: Arc::new(Mutex::new(Listing::default())),
       focus: Arc::new(Mutex::new(None)),
       first_keys: ctx.use_context::<FirstKeys>(),
+      scrolled_to: Mutex::new(None),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let navigation = Navigation::of(ctx);
     let open = self.open.get();
+    let list = ctx.props::<TabListProps>().list.clone();
+    list.set_open(open);
+    let button = list.button;
     let keys = ListKeys {
       navigation: navigation.clone(),
       open: self.open.clone(),
@@ -139,20 +146,22 @@ impl Component for TabList {
     let mut root = Row::new()
       .id("tab-list")
       .on_key_down(keys.handler())
-      .child(self.button(ctx, open));
+      .child(self.button(ctx, open, &button));
     if open {
       let panel = self.panel(ctx, &navigation);
-      ctx.scroll_into_view(&self.kept_row);
+      self.keep_in_view(ctx);
       root = root.child(
-        Popup::new(self.button.clone(), panel)
+        Popup::new(button.clone(), panel)
           .open(self.open.clone())
           .placement(Placement::BottomStart)
           // The button is 5 above the title bar's bottom edge; the list is 4 under it.
-          .offset(self.shift(ctx), ExtraSpacing::Inline.value()),
+          .offset(shift(ctx, &button), ExtraSpacing::Inline.value()),
       );
+    } else {
+      *self.scrolled_to.lock() = None;
     }
     match self.focus.lock().take() {
-      Some(FocusTo::Button) => ctx.focus(&self.button),
+      Some(FocusTo::Button) => ctx.focus(&button),
       Some(FocusTo::Search) if open => ctx.focus(&self.search),
       _ => {}
     }
@@ -188,14 +197,14 @@ impl TabList {
   }
 
   /// The button with the count of the hidden tabs (`Dq1Mf`, `D9NzGQ`), and its tooltip.
-  fn button(&self, ctx: &mut Ctx, open: bool) -> Element {
+  fn button(&self, ctx: &mut Ctx, open: bool, element: &ElementRef) -> Element {
     let count = ctx.props::<TabListProps>().hidden.len();
     let hovered = self.button_hovered.get();
     let (enter, leave) = (self.button_hovered.clone(), self.button_hovered.clone());
     let toggle = self.toggle();
     let button = in_title_bar(Focus::Keyboard.apply(pressable(move || toggle())))
       .id("tab-list-button")
-      .ref_element(self.button.clone())
+      .ref_element(element.clone())
       .describe("a11y_name", ctx.t("shell.tabs.list"))
       .describe("state", if open { "open" } else { "closed" })
       .height(Dimension::Px(TAB_HEIGHT))
@@ -238,11 +247,16 @@ impl TabList {
       .wrap(ctx, button)
   }
 
-  /// How far the list moves left of the button's start so it ends 8 inside the window's right edge.
-  fn shift(&self, ctx: &mut Ctx) -> f32 {
-    let window = ctx.window().info().logical_width();
-    let overshoot = self.button.x() + LIST_WIDTH - (window - WINDOW_INSET);
-    -overshoot.max(0.0)
+  /// Scrolls the ringed row, or the current one, into view when either changed since the list last did:
+  /// a list scrolled with the wheel stays where it is otherwise.
+  fn keep_in_view(&self, ctx: &Ctx) {
+    let listing = self.listing.lock().clone();
+    let now = Some((listing.ringed, listing.current));
+    let mut scrolled_to = self.scrolled_to.lock();
+    if *scrolled_to != now {
+      *scrolled_to = now;
+      ctx.scroll_into_view(&self.kept_row);
+    }
   }
 
   /// The list: the search field when it holds more than eight tabs, then the rows that match.
@@ -364,6 +378,13 @@ impl TabList {
       .element(self.search.clone())
       .render(ctx)
   }
+}
+
+/// How far the list moves left of the start of its `button` so it ends 8 inside the window's right edge.
+fn shift(ctx: &Ctx, button: &ElementRef) -> f32 {
+  let window = ctx.window().info().logical_width();
+  let overshoot = button.x() + LIST_WIDTH - (window - WINDOW_INSET);
+  -overshoot.max(0.0)
 }
 
 /// Whether a tab at `page` in `project` matches the search `query`: either contains it, in any case.

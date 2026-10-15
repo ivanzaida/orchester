@@ -39,12 +39,28 @@ pub enum Outcome {
   Ignored,
   Ring(TabId),
   Choose(TabId),
-  Close(TabId),
+  /// Closes the tab, the ring moving to the row after it, or before it at the end.
+  Close {
+    tab: TabId,
+    next: Option<TabId>,
+  },
   ClearSearch,
   /// Closes the list; the focus goes back to its button.
   Dismiss,
   /// Opens or closes the list from the keyboard.
   Toggle,
+  /// Takes the key and does nothing with it.
+  Swallow,
+}
+
+/// The row after `tab` in `listing`, or the one before it when it is the last.
+fn neighbour(listing: &Listing, tab: TabId) -> Option<TabId> {
+  let at = listing.rows.iter().position(|row| *row == tab)?;
+  listing
+    .rows
+    .get(at + 1)
+    .or_else(|| at.checked_sub(1).and_then(|before| listing.rows.get(before)))
+    .copied()
 }
 
 /// What `event` does to a list that is `open`, showing `listing`, searched for `query`.
@@ -57,7 +73,11 @@ pub fn outcome(event: &KeyboardEvent, open: bool, listing: &Listing, query: &str
     return Outcome::Ignored;
   }
   if shortcut(keys) == Some(Shortcut::CloseTab) {
-    return listing.ringed.map_or(Outcome::Ignored, Outcome::Close);
+    // While the list is open, Ctrl+W (Cmd+W) is the ringed row's, or nothing's: never the active tab's.
+    return listing.ringed.map_or(Outcome::Swallow, |tab| Outcome::Close {
+      tab,
+      next: neighbour(listing, tab),
+    });
   }
   if event.ctrl || event.alt || event.meta || event.shift {
     return Outcome::Ignored;
@@ -133,12 +153,18 @@ impl ListKeys {
           self.navigation.select(tab);
           (self.dismiss)();
         }
-        Outcome::Close(tab) => self.navigation.close(tab),
+        Outcome::Close { tab, next } => {
+          self.navigation.close(tab);
+          self.ring.set(next.map(|tab| Ring { tab, query }));
+        }
+        Outcome::Swallow => {}
         Outcome::ClearSearch => self.query.set(String::new()),
         Outcome::Dismiss => (self.dismiss)(),
         Outcome::Toggle => (self.toggle)(),
       }
+      // The list took the key: no handler under it (the page's own keys) sees it.
       event.prevent_default();
+      event.stop_propagation();
     }
   }
 }

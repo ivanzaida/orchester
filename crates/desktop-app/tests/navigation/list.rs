@@ -110,7 +110,8 @@ fn the_list_holds_every_tab_in_order_marking_the_current_and_hidden_ones() {
 
 #[test]
 fn the_list_opens_under_the_button_with_its_rows_in_view() {
-  let (mut window, navigation) = crowded_window();
+  // 1440 wide: the list fits under the button's start.
+  let (mut window, navigation) = window_with(1440, 20);
   open_list(&mut window);
   let (button, menu) = (
     bounds(&mut window, "tab-list-button"),
@@ -249,12 +250,14 @@ fn a_row_shows_its_close_button_under_the_pointer_and_closing_keeps_the_list_ope
 }
 
 #[test]
-fn the_shortcut_opens_the_list_and_ctrl_w_closes_the_ringed_tab() {
+fn the_shortcut_opens_the_list_and_ctrl_w_closes_ringed_tabs_only() {
   let (mut window, navigation) = crowded_window();
   let (count, active) = (tabs(&navigation).len(), navigation.tabs_now().active().id());
   chord(&mut window, "a", (true, true));
   assert!(shown(&mut window, "tab-list-menu"), "Ctrl+Shift+A opened the list");
   assert_eq!(focused(&window).as_deref(), Some("tab-list-search"));
+  chord(&mut window, "w", (true, false));
+  assert_eq!(tabs(&navigation).len(), count, "with no ring, Ctrl+W closes nothing");
   key(&mut window, "ArrowDown");
   assert_eq!(
     ringed(&mut window, &navigation),
@@ -262,14 +265,138 @@ fn the_shortcut_opens_the_list_and_ctrl_w_closes_the_ringed_tab() {
     "the first arrow rings the current row"
   );
   key(&mut window, "ArrowUp");
-  let ringed_tab = ringed(&mut window, &navigation).expect("a row is ringed");
-  assert_ne!(ringed_tab, active);
+  key(&mut window, "ArrowUp");
+  let first = ringed(&mut window, &navigation).expect("a row is ringed");
+  let next = tabs(&navigation)[count - 2];
   chord(&mut window, "w", (true, false));
   assert_eq!(tabs(&navigation).len(), count - 1, "Ctrl+W closed a tab");
-  assert!(!tabs(&navigation).contains(&ringed_tab), "the ringed one");
-  assert_eq!(navigation.tabs_now().active().id(), active, "not the active one");
+  assert!(!tabs(&navigation).contains(&first), "the ringed one");
+  assert_eq!(
+    ringed(&mut window, &navigation),
+    Some(next),
+    "the ring moves to the row after it"
+  );
+  chord(&mut window, "w", (true, false));
+  assert_eq!(tabs(&navigation).len(), count - 2, "a second Ctrl+W closes that one");
+  assert!(!tabs(&navigation).contains(&next));
+  assert_eq!(navigation.tabs_now().active().id(), active, "never the active one");
   chord(&mut window, "a", (true, true));
   assert!(!shown(&mut window, "tab-list-menu"), "the shortcut closes it again");
   assert_eq!(focused(&window).as_deref(), Some("tab-list-button"));
-  assert_eq!(tab_ids(&navigation).len(), count - 1);
+  assert_eq!(tab_ids(&navigation).len(), count - 2);
+}
+
+/// A window 600 wide, `height` high, with five labelled tabs after All projects; the last active.
+fn narrow_window(height: u32) -> (Window, Navigation) {
+  let (mut window, navigation) = window_with(600, 5);
+  window.tree.resize(600, height);
+  settle(&mut window);
+  (window, navigation)
+}
+
+#[test]
+fn keys_the_list_takes_do_not_reach_the_page_under_it() {
+  let (mut window, navigation) = window_with(1440, 5);
+  navigation.select(tabs(&navigation)[0]);
+  assert_eq!(navigation.route_now(), orchester_app::routes::Route::AllProjects);
+  let remove = format!("project-remove-{}", super::support::project_id());
+  window.until("All projects to list Kontur", |window| {
+    window.tree.get_element_by_id(&remove).is_some()
+  });
+  window.press(&remove);
+  assert!(
+    shown(&mut window, "remove-project-question"),
+    "the remove question is open"
+  );
+  // Narrowed until the six tabs overflow, so the list is a short one without search.
+  window.tree.resize(500, 640);
+  settle(&mut window);
+  assert!(shown(&mut window, "remove-project-question"), "and stays open");
+  open_list(&mut window);
+  assert!(
+    !shown(&mut window, "tab-list-search"),
+    "a short list: the keys go to its rows"
+  );
+  key(&mut window, "ArrowDown");
+  key(&mut window, "Enter");
+  assert_eq!(
+    navigation.tabs_now().active().id(),
+    tabs(&navigation)[1],
+    "Enter switched tabs"
+  );
+  for _ in 0..20 {
+    window.tree.tick_futures();
+    settle(&mut window);
+  }
+  let workspace = window.launch.workspace().expect("the session").clone();
+  assert!(
+    !workspace.projects().expect("the list").is_empty(),
+    "and did not also confirm the removal under the list"
+  );
+}
+
+#[test]
+fn the_list_stays_8_inside_the_window_near_its_right_edge() {
+  let (mut window, _navigation) = narrow_window(640);
+  open_list(&mut window);
+  let (button, menu) = (
+    bounds(&mut window, "tab-list-button"),
+    bounds(&mut window, "tab-list-menu"),
+  );
+  assert!(button.x + 320.0 > 592.0, "the button is close to the edge: {button:?}");
+  assert!(
+    (menu.x + menu.width - 592.0).abs() < 0.5,
+    "the list ends 8 inside the window: {menu:?}"
+  );
+}
+
+#[test]
+fn a_list_taller_than_the_window_less_48_scrolls_and_keeps_its_place() {
+  let (mut window, navigation) = crowded_window();
+  window.tree.resize(960, 400);
+  settle(&mut window);
+  open_list(&mut window);
+  let menu = bounds(&mut window, "tab-list-menu");
+  assert!(
+    menu.height <= 400.0 - 48.0 + 0.5,
+    "the list is at most the window less 48: {menu:?}"
+  );
+  let all = tabs(&navigation);
+  let (first, current) = (row(all[0]), row(*all.last().expect("tabs")));
+  let inside = |window: &mut Window, id: &str| {
+    let (row, menu) = (bounds(window, id), bounds(window, "tab-list-menu"));
+    row.y >= menu.y - 0.5 && row.y + row.height <= menu.y + menu.height + 0.5
+  };
+  assert!(
+    inside(&mut window, &current),
+    "the current row, last, is scrolled into view"
+  );
+  assert!(!inside(&mut window, &first), "so the first one is out of it");
+  let at = bounds(&mut window, &current);
+  window
+    .tree
+    .scroll(at.x, at.y, 0.0, 5000.0, lurq::app::events::ScrollPhase::Scroll);
+  settle(&mut window);
+  assert!(inside(&mut window, &first), "the wheel scrolled to the top");
+  let button = bounds(&mut window, "tab-list-button");
+  window
+    .tree
+    .mouse_move(button.x + button.width / 2.0, button.y + button.height / 2.0);
+  settle(&mut window);
+  assert!(
+    inside(&mut window, &first),
+    "and the list stays there as it renders again"
+  );
+}
+
+#[test]
+fn the_focus_goes_to_new_tab_when_the_list_goes_away() {
+  let (mut window, navigation) = narrow_window(640);
+  open_list(&mut window);
+  while shown(&mut window, "tab-list-button") {
+    let hidden = a_hidden_tab(&mut window, &navigation);
+    press(&mut window, &row(hidden), MouseButton::Middle);
+    settle(&mut window);
+  }
+  assert_eq!(focused(&window).as_deref(), Some("new-tab"));
 }

@@ -50,14 +50,17 @@ pub enum Slot {
   /// A label after its icon, with marks this much wider than the bare tab ([`DOT_WIDTH`],
   /// [`MARK_WIDTH`]).
   Labelled(f32),
+  /// A tab this wide as it was laid out: the active tab once lurq measured it, so it takes its real room.
+  Measured(f32),
 }
 
 impl Slot {
-  /// Its width with its label `label` wide; the active tab's label counts at its widest, since it never
-  /// shrinks and lurq measures no text before layout.
+  /// Its width with its label `label` wide; an active tab not measured yet counts at its widest, since it
+  /// never shrinks and lurq measures no text before layout.
   pub fn width(self, label: f32, active: bool) -> f32 {
     match self {
       Self::Icon => ICON_TAB_WIDTH,
+      Self::Measured(width) => width,
       Self::Labelled(marks) if active => LABEL_MAX_WIDTH + ACTIVE_CHROME_WIDTH + marks,
       Self::Labelled(marks) => label + INACTIVE_CHROME_WIDTH + marks,
     }
@@ -113,12 +116,25 @@ pub fn fit(room: f32, slots: &[Slot], active: usize) -> Fit {
       hidden: Vec::new(),
     };
   }
-  // The button counts at most every tab but the active one, which never hides.
-  let room = room - button_width(slots.len().saturating_sub(1)) - gap();
-  let shown = shown(room, slots, active);
+  // The button counts at most every tab but the active one, which never hides; once the count is known,
+  // a narrower count may leave room for another tab.
+  let hidden = |count: usize| {
+    let shown = shown(room - button_width(count) - gap(), slots, active);
+    every
+      .iter()
+      .copied()
+      .filter(|index| !shown.contains(index))
+      .collect::<Vec<_>>()
+  };
+  let most = hidden(slots.len().saturating_sub(1));
+  let hidden = if digits(most.len()) < digits(slots.len().saturating_sub(1)) {
+    hidden(most.len())
+  } else {
+    most
+  };
   Fit {
     label: LABEL_MIN_WIDTH,
-    hidden: every.into_iter().filter(|index| !shown.contains(index)).collect(),
+    hidden,
   }
 }
 
