@@ -29,8 +29,7 @@
     "unavailable": "Orchester Cloud is not answering right now. Try again in a minute.",
     "formExpired": "This form has expired. Reload the page and try again.",
     "tooManyEmails": "Too many emails were sent. Try again in {{minutes}} min, at {{time}}.",
-    "tooManyTries": "Too many tries from your network. Try again in {{minutes}} min, at {{time}}.",
-    "resendNotYet": "Sending a new link is not available yet. Sign up again with the same email to get a new one."
+    "tooManyTries": "Too many tries from your network. Try again in {{minutes}} min, at {{time}}."
   },
   "signup": {
     "pageTitle": "Create an account",
@@ -77,8 +76,6 @@
     "send": "Send a new link",
     "sending": "Sending…",
     "signIn": "Sign in",
-    "descriptionNoAddress": "Confirm the email of your Orchester account.",
-    "confirmedDescriptionNoAddress": "Your Orchester account is ready. Sign in with its email and password.",
     "failed": "This link and password don't match. Check the password, or send a new link.",
     "tooMany": "Too many wrong passwords for this link. Try again in {{minutes}} min, at {{time}}, or send a new link."
   },
@@ -129,8 +126,7 @@
     "expiredTitle": "This reset link no longer works",
     "expiredDescription": "Reset links work once, for 1 hour. Enter your email and we send you a new one.",
     "send": "Send a new link",
-    "sending": "Sending…",
-    "descriptionNoAddress": "For your Orchester account."
+    "sending": "Sending…"
   },
   "failure": {
     "pageTitle": "Orchester Cloud is not answering",

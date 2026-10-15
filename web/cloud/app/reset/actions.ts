@@ -12,7 +12,7 @@ export type ResetState =
   | {
       readonly view: "form";
       /** `null` until the cloud can say which address a link is for (`lib/server/link.ts`). */
-      readonly email: string | null;
+      readonly email: string;
       readonly attempt: number;
       readonly errors: FieldErrors<keyof NewPasswordInput>;
       readonly error?: Message;

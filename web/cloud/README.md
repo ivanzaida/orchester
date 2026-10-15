@@ -57,7 +57,6 @@ Open `http://localhost:4100` (not `127.0.0.1`: the address must match `ORCHESTER
 | *Confirm email* with `correct horse battery` | Confirmed; any other password `401 confirm_failed` (decision 65) |
 | `/confirm/<anything else>`, `/reset/<anything else>` | Used or expired link |
 | `/confirm/inspect-down` | The cloud fails while the page loads |
-| `/confirm/confirm-unlisted`, `/reset/reset-unlisted` | A live link on a cloud without the inspect endpoint (C1a today): no address shown |
 
 The fake keeps its state while it runs (a declined invite or a signed-out device stays gone); restart it for a fresh
 account. Each sign-in signs that account's earlier browser sessions out, so the page shows one browser.
