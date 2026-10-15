@@ -1,7 +1,7 @@
 import { t } from "@/lib/i18n";
-import { ButtonLink } from "@/ui/button";
-import { Card, Head } from "@/ui/card";
-import { Shell } from "@/ui/shell";
+import { ButtonLink } from "@orchester/ui/components/button";
+import { Card, Head } from "@orchester/ui/components/card";
+import { Shell } from "@/components/page";
 
 export default function NotFound() {
   return (

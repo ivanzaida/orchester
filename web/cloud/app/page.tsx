@@ -5,8 +5,8 @@ import { t } from "@/lib/i18n";
 import { me } from "@/lib/server/cloud";
 import { CloudUnavailableError } from "@/lib/server/failures";
 import { formToken, signedIn } from "@/lib/server/visitor";
-import { Address, Card, Head, Text, Top } from "@/ui/card";
-import { Shell } from "@/ui/shell";
+import { Address, Card, Head, Text, Top } from "@orchester/ui/components/card";
+import { Shell } from "@/components/page";
 
 import { SignOut } from "./sign-out";
 

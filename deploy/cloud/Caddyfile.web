@@ -1,6 +1,6 @@
-# Orchester Cloud with its web front (compose.web.yaml). No access log is configured: confirmation and reset links
-# carry their token in the query, and nothing here should keep it.
-{$ORCHESTER_CLOUD_HOST} {
+# Orchester Cloud with its web front (compose.web.yaml); replaces Caddyfile. No access log: the paths of the web
+# front's pages (/confirm/{token}, /reset/{token}) carry one-time tokens.
+{$ORCHESTER_CLOUD_PUBLIC_URL} {
     handle /api/* {
         reverse_proxy cloud:8090
     }

@@ -2,11 +2,14 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { relativePath, sourceFiles } from "./sources";
+import { src } from "./sources";
+
+const relativePath = src.relative;
+const sourceFiles = src.files;
 
 /**
  * The browser never holds an API token or calls the API (`docs/architecture/server.md`, "Who calls the API"): code
- * that runs in the browser (`"use client"` modules and the shared UI kit) never imports the server-side modules, which
+ * that runs in the browser (`"use client"` modules) never imports the server-side modules, which
  * hold the API client, the configuration, the secret and the session.
  */
 function imports(file: string): string[] {
@@ -15,7 +18,7 @@ function imports(file: string): string[] {
 
 function runsInBrowser(file: string): boolean {
   const text = readFileSync(file, "utf8");
-  return /^["']use client["'];/m.test(text) || relativePath(file).startsWith("ui/");
+  return /^["']use client["'];/m.test(text);
 }
 
 describe("browser code", () => {

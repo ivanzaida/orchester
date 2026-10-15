@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { t } from "@/lib/i18n";
 import { formToken } from "@/lib/server/visitor";
-import { Shell, SwitchLine } from "@/ui/shell";
+import { Shell, SwitchLine } from "@/components/page";
 
 import { SignInForm } from "./form";
 

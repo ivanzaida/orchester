@@ -3,12 +3,11 @@
 import { useActionState, useState } from "react";
 
 import { t } from "@/lib/i18n";
-import { ButtonLink } from "@/ui/button";
-import { Actions, Address, Card, CardForm, Head, Small, Text, Top } from "@/ui/card";
-import { TextField } from "@/ui/field";
-import { CsrfField, Hidden } from "@/ui/hidden";
-import { ErrorLine } from "@/ui/status";
-import { Submit } from "@/ui/submit";
+import { ButtonLink } from "@orchester/ui/components/button";
+import { Actions, Address, Card, CardForm, Head, Small, Text, Top } from "@orchester/ui/components/card";
+import { ErrorLine, TextField } from "@/components/fields";
+import { CsrfField, Hidden } from "@/components/hidden";
+import { Submit } from "@orchester/ui/components/submit";
 
 import { resendForAction, type ResendState } from "../signup/sent/actions";
 import { confirmAction, type ConfirmState } from "./actions";

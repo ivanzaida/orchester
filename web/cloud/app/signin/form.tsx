@@ -3,14 +3,14 @@
 import { useActionState, useState } from "react";
 
 import { t } from "@/lib/i18n";
-import { Actions, Card, CardForm, Fields, Head } from "@/ui/card";
-import { useRemaining } from "@/ui/countdown";
-import { AsideLink, PasswordField, TextField } from "@/ui/field";
-import { CsrfField, Hidden } from "@/ui/hidden";
-import { Say } from "@/ui/say";
-import { ErrorLine, Notice, Reason } from "@/ui/status";
-import { Submit } from "@/ui/submit";
-import { useCheckedForm } from "@/ui/use-form";
+import { Actions, Card, CardForm, Fields, Head } from "@orchester/ui/components/card";
+import { useRemaining } from "@orchester/ui/hooks/countdown";
+import { AsideLink, ErrorLine, PasswordField, TextField } from "@/components/fields";
+import { CsrfField, Hidden } from "@/components/hidden";
+import { Say } from "@/components/say";
+import { Notice, Reason } from "@orchester/ui/components/status";
+import { Submit } from "@orchester/ui/components/submit";
+import { useCheckedForm } from "@orchester/ui/hooks/use-form";
 
 import { resendForAction, type ResendState } from "../signup/sent/actions";
 import { signInAction, type SignInState } from "./actions";

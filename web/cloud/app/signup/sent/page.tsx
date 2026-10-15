@@ -4,8 +4,8 @@ import { redirect } from "next/navigation";
 import { t } from "@/lib/i18n";
 import { RESEND_COOLDOWN_MS } from "@/lib/resend";
 import { formToken, signupFlow } from "@/lib/server/visitor";
-import { Address, Body, Card, Head, Small, Text, Top } from "@/ui/card";
-import { Shell, SwitchLine } from "@/ui/shell";
+import { Address, Body, Card, Head, Small, Text, Top } from "@orchester/ui/components/card";
+import { Shell, SwitchLine } from "@/components/page";
 
 import { ResendPanel } from "./resend";
 

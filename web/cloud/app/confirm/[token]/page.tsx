@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { t } from "@/lib/i18n";
 import { linkEmail } from "@/lib/server/link";
 import { formToken } from "@/lib/server/visitor";
-import { Shell } from "@/ui/shell";
+import { Shell } from "@/components/page";
 
 import { ConfirmViews } from "../views";
 

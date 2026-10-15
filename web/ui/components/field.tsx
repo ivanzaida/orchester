@@ -2,10 +2,8 @@
 
 import { useState, type ReactNode } from "react";
 
-import { t, type Message } from "@/lib/i18n";
-
 import { Icon } from "./icon";
-import { useInBrowser } from "./say";
+import { useInBrowser } from "../hooks/browser";
 import { ErrorLine } from "./status";
 import styles from "./field.module.css";
 
@@ -14,7 +12,10 @@ interface FieldProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  error?: Message | undefined;
+  /** The error under the field, in the app's words; it replaces the hint. */
+  error?: ReactNode;
+  /** `row`: the 32 high field of a list row (`WAGql`); otherwise the 36 high form field. */
+  size?: "form" | "row" | undefined;
   hint?: string | undefined;
   /** Beside the label at its right, like *Forgot password?* (`Es2YM`). */
   aside?: ReactNode;
@@ -38,15 +39,19 @@ function Frame(props: FieldProps & { id: string; children: ReactNode }) {
       ) : (
         label
       )}
-      <div className={`${styles.box}${props.error ? ` ${styles.invalid}` : ""}`}>{props.children}</div>
+      <div className={boxClass(props)}>{props.children}</div>
       {/* The hint gives way to its error, as in the app's Choose your password. */}
       {props.error ? (
-        <ErrorLine id={`${props.id}-error`} message={props.error} />
+        <ErrorLine id={`${props.id}-error`}>{props.error}</ErrorLine>
       ) : (
         props.hint && <p id={`${props.id}-hint`} className={styles.hint}>{props.hint}</p>
       )}
     </div>
   );
+}
+
+function boxClass(props: FieldProps): string {
+  return [styles.box, props.size === "row" && styles.row, Boolean(props.error) && styles.invalid].filter(Boolean).join(" ");
 }
 
 function describedBy(props: FieldProps, id: string): string | undefined {
@@ -77,7 +82,7 @@ export function TextField(props: FieldProps & { type: "email" | "text"; placehol
 }
 
 /** A password field with the eye that shows the value; the eye appears only where script runs, since only script can use it. */
-export function PasswordField(props: FieldProps) {
+export function PasswordField(props: FieldProps & { showLabel: string; hideLabel: string }) {
   const id = `field-${props.name}`;
   const [shown, setShown] = useState(false);
   const browser = useInBrowser();
@@ -98,7 +103,7 @@ export function PasswordField(props: FieldProps) {
         <button
           type="button"
           className={styles.reveal}
-          aria-label={t(shown ? "field.hidePassword" : "field.showPassword")}
+          aria-label={shown ? props.hideLabel : props.showLabel}
           aria-pressed={shown}
           aria-controls={id}
           onClick={() => { setShown(!shown); }}

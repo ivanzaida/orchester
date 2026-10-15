@@ -5,12 +5,11 @@ import { useState } from "react";
 import { field } from "@/lib/form";
 import { t } from "@/lib/i18n";
 import { signUpErrors, type FieldErrors, type SignUpInput } from "@/lib/validation";
-import { Actions, Card, CardForm, Fields, Head, Small } from "@/ui/card";
-import { PasswordField, TextField } from "@/ui/field";
-import { CsrfField } from "@/ui/hidden";
-import { ErrorLine } from "@/ui/status";
-import { Submit } from "@/ui/submit";
-import { useCheckedForm } from "@/ui/use-form";
+import { Actions, Card, CardForm, Fields, Head, Small } from "@orchester/ui/components/card";
+import { ErrorLine, PasswordField, TextField } from "@/components/fields";
+import { CsrfField } from "@/components/hidden";
+import { Submit } from "@orchester/ui/components/submit";
+import { useCheckedForm } from "@orchester/ui/hooks/use-form";
 
 import { signUpAction, type SignUpState } from "./actions";
 

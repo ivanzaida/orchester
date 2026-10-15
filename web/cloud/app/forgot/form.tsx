@@ -5,11 +5,11 @@ import { useState } from "react";
 import { field } from "@/lib/form";
 import { t, type Message } from "@/lib/i18n";
 import { emailError } from "@/lib/validation";
-import { Card, CardForm, Head } from "@/ui/card";
-import { TextField } from "@/ui/field";
-import { CsrfField } from "@/ui/hidden";
-import { Submit } from "@/ui/submit";
-import { useCheckedForm } from "@/ui/use-form";
+import { Card, CardForm, Head } from "@orchester/ui/components/card";
+import { TextField } from "@/components/fields";
+import { CsrfField } from "@/components/hidden";
+import { Submit } from "@orchester/ui/components/submit";
+import { useCheckedForm } from "@orchester/ui/hooks/use-form";
 
 import { forgotAction } from "./actions";
 

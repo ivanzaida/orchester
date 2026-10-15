@@ -3,9 +3,9 @@ import { redirect } from "next/navigation";
 
 import { t } from "@/lib/i18n";
 import { forgotFlow } from "@/lib/server/visitor";
-import { ButtonLink } from "@/ui/button";
-import { Address, Body, ButtonRow, Card, Head, Small, Text, Top } from "@/ui/card";
-import { Shell } from "@/ui/shell";
+import { ButtonLink } from "@orchester/ui/components/button";
+import { Address, Body, ButtonRow, Card, Head, Small, Text, Top } from "@orchester/ui/components/card";
+import { Shell } from "@/components/page";
 
 export const metadata: Metadata = { title: t("forgot.sentTitle") };
 

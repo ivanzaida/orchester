@@ -1,5 +1,4 @@
-@import "../theme/tokens.css";
-
+/* The page base every app shares: box sizing, the body in the theme's surface and type. */
 *,
 *::before,
 *::after {

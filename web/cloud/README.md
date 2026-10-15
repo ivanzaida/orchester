@@ -17,9 +17,11 @@ From the environment only:
 
 ## Work on it
 
+From `web/` (the npm workspace, see `web/README.md`):
+
 ```sh
 npm ci --ignore-scripts
-npm run check          # ESLint, TypeScript, unit tests (Vitest)
+npm run check          # every package: ESLint, TypeScript, unit tests (Vitest)
 npm run test:pages     # next build, then the page tests in the installed Edge against the fake API
 ```
 

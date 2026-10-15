@@ -3,10 +3,10 @@
 import { useActionState } from "react";
 
 import { t } from "@/lib/i18n";
-import { Actions } from "@/ui/card";
-import { CsrfField } from "@/ui/hidden";
-import { ErrorLine } from "@/ui/status";
-import { Submit } from "@/ui/submit";
+import { Actions } from "@orchester/ui/components/card";
+import { ErrorLine } from "@/components/fields";
+import { CsrfField } from "@/components/hidden";
+import { Submit } from "@orchester/ui/components/submit";
 
 import { signOutAction, type SignOutState } from "./actions";
 

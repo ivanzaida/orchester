@@ -17,6 +17,11 @@
   height: var(--icon-button);
 }
 
+.glyph {
+  width: var(--icon-glyph);
+  height: var(--icon-glyph);
+}
+
 .field {
   width: var(--icon-field);
   height: var(--icon-field);
@@ -25,6 +30,11 @@
 .tile {
   width: var(--icon-tile);
   height: var(--icon-tile);
+}
+
+.empty {
+  width: var(--icon-empty);
+  height: var(--icon-empty);
 }
 
 .spin {

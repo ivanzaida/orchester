@@ -4,13 +4,14 @@ import { useActionState } from "react";
 
 import { message, t } from "@/lib/i18n";
 import { formatWait } from "@/lib/resend";
-import { ButtonLink } from "@/ui/button";
-import { Actions, ButtonRow } from "@/ui/card";
-import { useRemaining } from "@/ui/countdown";
-import { CsrfField } from "@/ui/hidden";
-import { Say } from "@/ui/say";
-import { DoneLine, ErrorLine, Reason } from "@/ui/status";
-import { Submit } from "@/ui/submit";
+import { ButtonLink } from "@orchester/ui/components/button";
+import { Actions, ButtonRow } from "@orchester/ui/components/card";
+import { useRemaining } from "@orchester/ui/hooks/countdown";
+import { ErrorLine } from "@/components/fields";
+import { CsrfField } from "@/components/hidden";
+import { Say } from "@/components/say";
+import { DoneLine, Reason } from "@orchester/ui/components/status";
+import { Submit } from "@orchester/ui/components/submit";
 
 import { resendAction, type ResendState } from "./actions";
 import styles from "./resend.module.css";

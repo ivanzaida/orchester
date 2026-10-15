@@ -1,19 +1,14 @@
 import type { ReactNode } from "react";
 
-import type { Message } from "@/lib/i18n";
-
 import { Icon } from "./icon";
-import { Say } from "./say";
 import styles from "./status.module.css";
 
 /** The app's `Field error` (`d5xipm`): red icon and words, under a field or for a whole form. */
-export function ErrorLine({ id, message }: { id?: string; message: Message }) {
+export function ErrorLine({ id, children }: { id?: string | undefined; children: ReactNode }) {
   return (
     <p id={id} className={`${styles.line} ${styles.error}`} role="alert">
       <Icon name="circle-alert" size="reason" />
-      <span>
-        <Say message={message} />
-      </span>
+      <span>{children}</span>
     </p>
   );
 }

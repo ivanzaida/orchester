@@ -81,12 +81,58 @@ const SHAPES = {
     />,
     <path key="b" d="m21.854 2.147-10.94 10.939" />,
   ],
+  "app-window": [
+    <rect key="a" x="2" y="4" width="20" height="16" rx="2" />,
+    <path key="b" d="M10 4v4" />,
+    <path key="c" d="M2 8h20" />,
+    <path key="d" d="M6 4v4" />,
+  ],
+  download: [
+    <path key="a" d="M12 15V3" />,
+    <path key="b" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />,
+    <path key="c" d="m7 10 5 5 5-5" />,
+  ],
+  "folder-git-2": [
+    <path key="a" d="M18 19a5 5 0 0 1-5-5v8" />,
+    <path
+      key="b"
+      d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5"
+    />,
+    <circle key="c" cx="13" cy="12" r="2" />,
+    <circle key="d" cx="20" cy="19" r="2" />,
+  ],
+  globe: [
+    <circle key="a" cx="12" cy="12" r="10" />,
+    <path key="b" d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />,
+    <path key="c" d="M2 12h20" />,
+  ],
+  info: [<circle key="a" cx="12" cy="12" r="10" />, <path key="b" d="M12 16v-4" />, <path key="c" d="M12 8h.01" />],
+  "key-round": [
+    <path
+      key="a"
+      d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+    />,
+    <circle key="b" cx="16.5" cy="7.5" r=".5" />,
+  ],
+  "mail-open": [
+    <path key="a" d="M21.2 8.4c.5.38.8.97.8 1.6v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V10a2 2 0 0 1 .8-1.6l8-6a2 2 0 0 1 2.4 0l8 6Z" />,
+    <path key="b" d="m22 10-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 10" />,
+  ],
+  server: [
+    <rect key="a" width="20" height="8" x="2" y="2" rx="2" ry="2" />,
+    <rect key="b" width="20" height="8" x="2" y="14" rx="2" ry="2" />,
+    <line key="c" x1="6" x2="6.01" y1="6" y2="6" />,
+    <line key="d" x1="6" x2="6.01" y1="18" y2="18" />,
+  ],
 } satisfies Record<string, JSX.Element[]>;
 
 export type IconName = keyof typeof SHAPES;
 
-/** The design's icon sizes: 12 beside small print, 14 in buttons, 16 in fields and notices, 18 in a status tile. */
-export type IconSize = "reason" | "button" | "field" | "tile";
+/**
+ * The design's icon sizes: 12 beside small print, 14 in buttons, 15 in a list row's glyph, 16 in fields and notices,
+ * 18 in a status tile, 20 in an empty state.
+ */
+export type IconSize = "reason" | "button" | "glyph" | "field" | "tile" | "empty";
 
 export function Icon({ name, size, spin = false }: { name: IconName; size: IconSize; spin?: boolean }) {
   const className = `${styles.icon} ${styles[size]}${spin ? ` ${styles.spin}` : ""}`;

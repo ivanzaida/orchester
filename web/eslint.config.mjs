@@ -1,29 +1,30 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
-// Orchester's rules for this TypeScript too (AGENTS.md, by the person's decision): files under 600 lines, functions
-// of at most 80 lines and complexity 25, no user-facing text or style values in components.
+// Orchester's rules for all of web/ (AGENTS.md; server.md row 64): files under 600 lines, functions of at most 80
+// lines and complexity 25, no user-facing text or style values in components. @orchester/ui has no words at all: its
+// components take them from the app as props.
 const noLiterals = [
   {
     selector: "JSXText[value=/[A-Za-z0-9]/]",
-    message: "Text a visitor reads goes through i18n: t(\"…\") with a key in locales/en.json.",
+    message: "Text a visitor reads comes from the app's locales (t(\"…\")), or as a prop in @orchester/ui.",
   },
   {
     selector: "JSXAttribute[name.name=/^(aria-label|placeholder|title|alt|aria-description)$/] > Literal",
-    message: "Text a visitor reads goes through i18n: t(\"…\") with a key in locales/en.json.",
+    message: "Text a visitor reads comes from the app's locales (t(\"…\")), or as a prop in @orchester/ui.",
   },
   {
     selector: "JSXAttribute[name.name='style']",
-    message: "Styles come from CSS modules that use theme/tokens.css; no inline styles (the CSP refuses them too).",
+    message: "Styles come from CSS modules that use the theme tokens; no inline styles (the CSP refuses them too).",
   },
   {
     selector: "Literal[value=/^#[0-9a-fA-F]{3,8}$/]",
-    message: "Colours live only in theme/tokens.css.",
+    message: "Colours live only in the theme files.",
   },
 ];
 
 export default tseslint.config(
-  { ignores: [".next/**", "node_modules/**", "next-env.d.ts", "test-results/**", "playwright-report/**"] },
+  { ignores: ["**/.next/**", "**/node_modules/**", "**/next-env.d.ts", "**/test-results/**", "**/playwright-report/**"] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   {

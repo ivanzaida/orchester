@@ -12,6 +12,8 @@ const securityHeaders = [
 const config: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  // The UI kit is TypeScript source in the workspace; Next compiles it with the app.
+  transpilePackages: ["@orchester/ui"],
   reactStrictMode: true,
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

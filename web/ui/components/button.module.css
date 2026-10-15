@@ -4,7 +4,7 @@
   justify-content: center;
   gap: var(--space-inline);
   width: 100%;
-  height: var(--size-control);
+  height: var(--control-lg);
   padding: 0 var(--space-lg);
   border: 0;
   border-radius: var(--radius-md);
@@ -17,8 +17,8 @@
 }
 
 .button:focus-visible {
-  outline: var(--focus-width) solid var(--color-border-focus);
-  outline-offset: var(--focus-width);
+  outline: var(--border-md) solid var(--color-border-focus);
+  outline-offset: var(--border-md);
 }
 
 .primary {
@@ -33,7 +33,7 @@ a.primary:hover {
 
 .secondary {
   background: var(--color-surface-raised);
-  box-shadow: inset 0 0 0 var(--border-width) var(--color-border-strong);
+  box-shadow: inset 0 0 0 var(--border-sm) var(--color-border-strong);
   color: var(--color-text-primary);
 }
 
@@ -51,7 +51,7 @@ a.ghost:hover {
 
 .small {
   width: auto;
-  height: var(--size-control-small);
+  height: var(--control-md);
   padding: 0 var(--space-md);
   font-size: var(--text-small);
 }

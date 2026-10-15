@@ -5,30 +5,11 @@ import { describe, expect, it } from "vitest";
 
 import { LOCALES, t, type MessageKey } from "@/lib/i18n";
 
-import { sourceFiles, ROOT } from "./sources";
+import { flatten, parityProblems } from "@orchester/ui/i18n";
 
-type Tree = { [key: string]: string | Tree };
+import { ROOT, src } from "./sources";
 
-function flatten(tree: Tree, prefix = ""): Map<string, string> {
-  const result = new Map<string, string>();
-  for (const [key, value] of Object.entries(tree)) {
-    const path = `${prefix}${key}`;
-    if (typeof value === "string") {
-      result.set(path, value);
-    } else {
-      for (const [inner, text] of flatten(value, `${path}.`)) {
-        result.set(inner, text);
-      }
-    }
-  }
-  return result;
-}
-
-function placeholders(text: string): string[] {
-  return [...text.matchAll(/\{\{(\w+)\}\}/g)].map((match) => match[1] ?? "").sort();
-}
-
-const english = flatten(JSON.parse(readFileSync(join(ROOT, "locales/en.json"), "utf8")) as Tree);
+const english = flatten(JSON.parse(readFileSync(join(ROOT, "locales/en.json"), "utf8")) as object);
 
 describe("locales", () => {
   const files = readdirSync(join(ROOT, "locales")).filter((name) => name.endsWith(".json"));
@@ -38,11 +19,9 @@ describe("locales", () => {
   });
 
   it.each(files)("%s has every key of en.json with the same placeholders, and no others", (name) => {
-    const locale = flatten(JSON.parse(readFileSync(join(ROOT, "locales", name), "utf8")) as Tree);
-    expect([...locale.keys()].sort()).toEqual([...english.keys()].sort());
-    for (const [key, text] of english) {
-      expect(placeholders(locale.get(key) ?? ""), key).toEqual(placeholders(text));
-    }
+    const reference = JSON.parse(readFileSync(join(ROOT, "locales/en.json"), "utf8")) as object;
+    const locale = JSON.parse(readFileSync(join(ROOT, "locales", name), "utf8")) as object;
+    expect(parityProblems(reference, locale)).toEqual([]);
   });
 });
 
@@ -55,7 +34,7 @@ describe("every key the code names", () => {
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .replace(/^\s*\/\/.*$/gm, "");
   const used = new Set<string>();
-  for (const file of sourceFiles([".ts", ".tsx"])) {
+  for (const file of src.files([".ts", ".tsx"])) {
     for (const match of code(file).matchAll(KEY)) {
       used.add(match[1] ?? "");
     }

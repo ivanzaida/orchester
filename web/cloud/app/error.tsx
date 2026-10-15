@@ -1,9 +1,9 @@
 "use client";
 
 import { t } from "@/lib/i18n";
-import { buttonClass, ButtonContent } from "@/ui/button";
-import { Card, Head } from "@/ui/card";
-import { Shell } from "@/ui/shell";
+import { buttonClass, ButtonContent } from "@orchester/ui/components/button";
+import { Card, Head } from "@orchester/ui/components/card";
+import { Shell } from "@/components/page";
 
 /** A page the cloud could not answer for: said plainly, with a way to try again. Details stay in the server's log. */
 export default function Failure({ retry }: { retry: () => void }) {
