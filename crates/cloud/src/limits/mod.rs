@@ -67,14 +67,21 @@ impl Limits {
     if let Some(network) = rate_network(address) {
       self.link_failures_per_network.check(&network, now)?;
     }
-    self.link_failures_per_link.check(&link.to_vec(), now)
+    // Reserved before the password check, as sign-in reserves its place, so parallel guesses cannot pass a link's 5
+    // (review 3); `link_succeeded` takes the reservation back.
+    self.link_failures_per_link.take(link.to_vec(), now)
   }
 
-  pub fn link_failed(&self, address: IpAddr, link: &[u8], now: i64) {
+  /// A failed finish; the link's own count already holds it from `link_finish`.
+  pub fn link_failed(&self, address: IpAddr, now: i64) {
     self.link_failures.record(rate_address(address), now);
     if let Some(network) = rate_network(address) {
       self.link_failures_per_network.record(network, now);
     }
-    self.link_failures_per_link.record(link.to_vec(), now);
+  }
+
+  /// A finish that succeeded: its reservation, made at `reserved_at`, does not count against the link.
+  pub fn link_succeeded(&self, link: &[u8], reserved_at: i64) {
+    self.link_failures_per_link.forgive(&link.to_vec(), reserved_at);
   }
 }

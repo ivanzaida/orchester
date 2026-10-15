@@ -103,3 +103,32 @@ pub async fn confirm_is_rate_limited_per_link() {
   assert_eq!((blocked.status, blocked.error()), (429, "rate_limited".into()));
   cloud.finish().await;
 }
+
+/// Review 3: guesses sent in parallel cannot exceed a link's 5; each reserves its place before the password check.
+pub async fn parallel_confirm_guesses_stay_within_the_link_limit() {
+  let cloud = TestCloud::start_with(vec!["127.0.0.1".parse().expect("proxy")]).await;
+  let email = "parallel@example.test";
+  assert_eq!(cloud.sign_up(email, PASSWORD).await.status, 202);
+  let token = cloud.mail.nth(email, 1).await.link_token();
+  let body = serde_json::to_vec(&json!({"link_token": token, "password": "a guessed password"})).expect("JSON");
+  let mut running = tokio::task::JoinSet::new();
+  for attempt in 0..10 {
+    let (address, body) = (cloud.address(), body.clone());
+    running.spawn(async move {
+      let forwarded = format!("198.51.100.{attempt}");
+      let headers = [
+        ("Content-Type", "application/json"),
+        ("X-Forwarded-For", forwarded.as_str()),
+      ];
+      crate::support::http::exchange(address, "POST", "/api/v1/auth/confirm", &headers, &body).await
+    });
+  }
+  let mut checked = 0;
+  while let Some(answer) = running.join_next().await {
+    let status = answer.expect("the request task").status;
+    assert!([422, 429].contains(&status), "answered {status}");
+    checked += usize::from(status == 422);
+  }
+  assert!(checked <= 5, "{checked} guesses were checked; the link allows 5");
+  cloud.finish().await;
+}

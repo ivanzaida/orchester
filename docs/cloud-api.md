@@ -126,13 +126,14 @@ Claims: `iss` (the public URL), `aud`, `sub` (the account id), `email`, `name`, 
 | Sign-in failures | 5 per email in 15 minutes block that email for 15 minutes; 20 per client address and 100 per IPv6 /48 block that address or network |
 | Failed current passwords (`/auth/password`) | 5 per account in 15 minutes |
 | Emails (sign-up, reset) | 5 an hour per email, 20 an hour per client address, 100 an hour per IPv6 /48 |
-| Failed `confirm` and `reset/finish` | 20 per client address and 100 per IPv6 /48 in 15 minutes; 5 an hour per link |
+| Failed `confirm` and `reset/finish` | 20 per client address and 100 per IPv6 /48 in 15 minutes; 5 an hour per link, each try counted before its password check |
 | Identity tokens | 60 an hour per device |
 
 The counters are in memory. A restart clears them; the cloud runs as one instance in v1. A client address is its
-IPv4 address or its IPv6 /64. Each counter tracks at most 100,000 keys. A new key beyond that evicts the oldest one
-rather than being refused, so a flood of new emails cannot lock everyone out. It only forgets old emails' counts,
-while the address and network limits keep holding.
+IPv4 address or its IPv6 /64. Each counter tracks at most 100,000 keys. A new key beyond that evicts the oldest key that holds no count, block or
+attempt in flight, rather than being refused, so a flood of new emails cannot lock everyone out. When every key
+still counts, the counter grows past 100,000 until those counts expire; it never lifts a block or resets a count
+early. The address and network limits bound how fast a flood can add counts.
 
 ## Not built yet
 

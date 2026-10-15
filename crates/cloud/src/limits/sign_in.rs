@@ -4,9 +4,10 @@
 //! client holds a whole /48 as easily as a /64). A place is reserved before the hashing pool, so parallel guesses
 //! cannot pass the limit while their hashes run.
 //!
-//! The maps are bounded (`Bounded`): idle keys are pruned once a minute, and a full map evicts its oldest key that
-//! has no attempt in flight. A flood of new emails therefore pushes out old emails' counts (failing open there) while
-//! the address and network limits keep holding.
+//! The maps are bounded (`Bounded`): idle keys are pruned once a minute, and a full map evicts its oldest key with
+//! no state (no attempt in flight, block or failure in the window). A flood of new emails therefore never lifts a
+//! block or resets a count; when every key has state the map grows past its bound until pruning shrinks it, and the
+//! address and network limits keep bounding how fast a flood adds state.
 
 use std::{net::IpAddr, sync::Arc};
 
@@ -60,9 +61,10 @@ impl Failures {
     self.pending > 0 || self.blocked_until > now || self.times.iter().any(|at| *at > now - WINDOW_MS)
   }
 
-  /// An entry with an attempt in flight stays: its attempt completes on it.
-  fn evictable(&self) -> bool {
-    self.pending == 0
+  /// Only an entry with no state may be evicted: no attempt in flight (it completes on the entry), no block and no
+  /// failure inside the window. Evicting any other would lift a block or reset a count early (review 3).
+  fn evictable(&self, now: i64) -> bool {
+    !self.retain(now)
   }
 }
 
@@ -104,12 +106,13 @@ impl Counters {
     }
   }
 
-  fn reserve(&mut self, key: Key) {
+  fn reserve(&mut self, key: Key, now: i64) {
+    let evictable = |failures: &Failures| failures.evictable(now);
     let failures = match key {
-      Key::Email(email) => self.emails.entry(email, Failures::evictable),
-      Key::Address(address) => self.addresses.entry(address, Failures::evictable),
-      Key::Network(network) => self.networks.entry(network, Failures::evictable),
-      Key::Account(account) => self.accounts.entry(account, Failures::evictable),
+      Key::Email(email) => self.emails.entry(email, evictable),
+      Key::Address(address) => self.addresses.entry(address, evictable),
+      Key::Network(network) => self.networks.entry(network, evictable),
+      Key::Account(account) => self.accounts.entry(account, evictable),
     };
     failures.pending += 1;
   }
@@ -172,7 +175,7 @@ impl SignInLimit {
       return Err(CloudError::RateLimited(retry));
     }
     for key in &keys {
-      counters.reserve(key.clone());
+      counters.reserve(key.clone(), now);
     }
     Ok(Attempt {
       counters: self.0.clone(),

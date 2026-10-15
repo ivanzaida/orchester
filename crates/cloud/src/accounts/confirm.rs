@@ -20,14 +20,15 @@ impl Cloud {
   /// address and against the link.
   pub(crate) async fn confirm(&self, input: ConfirmEmail, address: IpAddr) -> Result<(), CloudError> {
     let link_key = token_hash(&input.link_token);
-    self.inner.limits.link_finish(address, &link_key, self.now())?;
+    let reserved_at = self.now();
+    self.inner.limits.link_finish(address, &link_key, reserved_at)?;
     let mut client = self.inner.db.client().await?;
     let pending = pending_link(&client, &input.link_token, LinkPurpose::Confirm, self.now()).await?;
     let (account, hash) = pending.map_or((None, None), |(account, hash)| (Some(account), hash));
     let verified = self.inner.passwords.matches(input.password, hash).await?;
     let now = self.now();
     let refused = || {
-      self.inner.limits.link_failed(address, &link_key, now);
+      self.inner.limits.link_failed(address, now);
       CloudError::from(CloudErrorCode::InvalidLink)
     };
     let Some(account) = account.filter(|_| verified) else {
@@ -65,6 +66,7 @@ impl Cloud {
     )
     .await?;
     transaction.commit().await?;
+    self.inner.limits.link_succeeded(&link_key, reserved_at);
     Ok(())
   }
 }

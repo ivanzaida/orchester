@@ -55,12 +55,14 @@ impl Cloud {
   /// Sets the new password, confirms the email (the link proves it), ends the account's other reset links and signs
   /// out every device.
   pub(crate) async fn finish_reset(&self, input: ResetFinish, address: IpAddr) -> Result<(), CloudError> {
-    let link_key = token_hash(&input.link_token);
-    self.inner.limits.link_finish(address, &link_key, self.now())?;
+    // Checked before the link's limit counts this finish, so a too short password costs no try of the link.
     Passwords::check(&input.new_password)?;
+    let link_key = token_hash(&input.link_token);
+    let reserved_at = self.now();
+    self.inner.limits.link_finish(address, &link_key, reserved_at)?;
     let mut client = self.inner.db.client().await?;
     let refused = |now| {
-      self.inner.limits.link_failed(address, &link_key, now);
+      self.inner.limits.link_failed(address, now);
       CloudError::from(CloudErrorCode::InvalidLink)
     };
     let pending = pending_link(&client, &input.link_token, LinkPurpose::Reset, self.now()).await?;
@@ -99,6 +101,7 @@ impl Cloud {
     )
     .await?;
     transaction.commit().await?;
+    self.inner.limits.link_succeeded(&link_key, reserved_at);
     Ok(())
   }
 }

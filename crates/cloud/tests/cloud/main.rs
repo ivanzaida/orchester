@@ -37,6 +37,7 @@ const TESTS: &[(&str, Test)] = tests![
   limits::sign_in_is_rate_limited_per_email_and_address,
   limits::emails_and_link_finishes_are_rate_limited,
   limits::confirm_is_rate_limited_per_link,
+  limits::parallel_confirm_guesses_stay_within_the_link_limit,
   sessions::reset_signs_out_every_device,
   sessions::password_change_signs_out_the_other_devices,
   sessions::devices_are_listed_and_revoked,

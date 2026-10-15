@@ -15,10 +15,10 @@ fn busy<T>(result: &Result<T, CloudError>) -> bool {
   matches!(result, Err(CloudError::Api(CloudErrorCode::Busy)))
 }
 
-/// Review 2, N2: a full email map evicts its oldest email instead of refusing every new one (which locked everyone
-/// out), and the per-address limit keeps holding while the emails churn.
+/// Review 2, N2: a full email map still admits new emails instead of refusing every new one (which locked everyone
+/// out), and the per-address limit keeps holding.
 #[test]
-fn limits_full_email_map_evicts_and_the_address_limit_holds() {
+fn limits_full_email_map_admits_new_emails_and_the_address_limit_holds() {
   let limit = SignInLimit::new(3);
   let address: IpAddr = "203.0.113.7".parse().expect("address");
   for index in 0..20 {
@@ -53,17 +53,35 @@ fn limits_ipv6_failures_count_per_48_too() {
   assert!(limit.sign_in("someone@example.test".into(), elsewhere, NOW).is_ok());
 }
 
+/// Review 3: a flood of new keys never evicts a key that is still counted, so it cannot reset a count early; the
+/// map grows past its bound instead, and the new keys are still let in.
 #[test]
-fn limits_full_quota_evicts_its_oldest_key() {
+fn limits_full_quota_keeps_counted_keys() {
   let quota = Quota::new(1, 60 * MINUTE, 2);
   quota.take(1, NOW).expect("first key");
   quota.take(2, NOW + 1).expect("second key");
-  assert!(quota.take(2, NOW + 2).is_err(), "a counted key stays limited");
-  assert!(
-    quota.take(3, NOW + 3).is_ok(),
-    "a new key evicts the oldest instead of being refused"
-  );
-  assert!(quota.take(2, NOW + 4).is_err(), "the newer keys are kept");
+  assert!(quota.take(3, NOW + 2).is_ok(), "a new key is not refused");
+  assert!(quota.take(1, NOW + 3).is_err(), "the oldest count was not flushed");
+  assert!(quota.take(2, NOW + 4).is_err());
+}
+
+/// Review 3: a blocked email keeps its 15-minute block through 100,000 new emails.
+#[test]
+fn limits_blocked_email_survives_a_flood_of_new_keys() {
+  let limit = SignInLimit::new(100_000);
+  let victim = "victim@example.test";
+  for index in 0..5 {
+    let address: IpAddr = format!("198.51.100.{index}").parse().expect("address");
+    limit.sign_in(victim.into(), address, NOW).expect("a guess").failed(NOW);
+  }
+  let flood: IpAddr = "203.0.113.7".parse().expect("address");
+  for index in 0..100_000 {
+    let attempt = limit.sign_in(format!("flood{index}@example.test"), flood, NOW + 1);
+    attempt.expect("a new email gets a place").succeeded();
+  }
+  let other: IpAddr = "192.0.2.1".parse().expect("address");
+  let blocked = limit.sign_in(victim.into(), other, NOW + 2);
+  assert!(matches!(blocked, Err(CloudError::RateLimited(_))), "the block holds");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

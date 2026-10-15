@@ -7,7 +7,8 @@ use crate::error::CloudError;
 
 /// At most `limit` events per key in a sliding window of `window_ms`. In memory, as S1a's limiters: the cloud runs as
 /// one instance in v1, and a restart clears the counts (`docs/architecture/server.md`, "Limiters in v1"). At most
-/// `max_keys` keys are tracked; a new key beyond them evicts the oldest (review 2, N2).
+/// `max_keys` keys are tracked; a new key beyond them evicts the oldest key with no event in the window (review 2, N2;
+/// review 3), so a flood of new keys never resets a count, and the map grows past its bound while every key counts.
 pub struct Quota<K> {
   limit: usize,
   window_ms: i64,
@@ -35,7 +36,7 @@ impl<K: Hash + Eq + Clone> Quota<K> {
   pub fn take(&self, key: K, now: i64) -> Result<(), CloudError> {
     let mut state = self.state.lock();
     self.prune(&mut state, now);
-    let events = state.events.entry(key, |_| true);
+    let events = state.events.entry(key, self.stateless(now));
     self.refuse(events, now)?;
     events.push(now);
     Ok(())
@@ -52,7 +53,22 @@ impl<K: Hash + Eq + Clone> Quota<K> {
   }
 
   pub fn record(&self, key: K, now: i64) {
-    self.state.lock().events.entry(key, |_| true).push(now);
+    let stateless = self.stateless(now);
+    self.state.lock().events.entry(key, stateless).push(now);
+  }
+
+  /// Takes back one event counted at `at` by `take`: a reservation that turned out not to count.
+  pub fn forgive(&self, key: &K, at: i64) {
+    if let Some(events) = self.state.lock().events.get_mut(key)
+      && let Some(index) = events.iter().position(|event| *event == at)
+    {
+      events.swap_remove(index);
+    }
+  }
+
+  fn stateless(&self, now: i64) -> impl Fn(&Vec<i64>) -> bool {
+    let window = self.window_ms;
+    move |events| events.iter().all(|at| *at <= now - window)
   }
 
   fn refuse(&self, events: &mut Vec<i64>, now: i64) -> Result<(), CloudError> {
