@@ -183,7 +183,7 @@ fn replaying_a_queued_batch_returns_the_original_pin_after_republish() {
 }
 
 #[test]
-fn create_and_run_on_a_pipeline_published_again_since_it_was_shown_saves_nothing() {
+fn create_and_run_on_a_pipeline_published_again_since_its_version_was_chosen_saves_nothing() {
   let (repo, mut db) = project_db();
   let pipeline = Pipeline::new(vec![research_step()]).expect("pipeline");
   let id = db
@@ -219,11 +219,16 @@ fn create_and_run_on_a_pipeline_published_again_since_it_was_shown_saves_nothing
   assert!(
     matches!(
       refused,
-      Some(QueueFailure::PipelineChanged { shown, latest }) if shown.get() == 1 && latest.get() == 2
+      Some(QueueFailure::PipelineChanged { chosen, latest }) if chosen.get() == 1 && latest.get() == 2
     ),
     "{refused:?}"
   );
   assert_eq!(messages[0].key, "tasks.new.pipelineChanged");
+  // Worded for every caller: the form chose what it showed, the task page and the tools what they read.
+  assert_eq!(
+    messages[0].args,
+    [("chosen", "1".to_owned()), ("latest", "2".to_owned())]
+  );
   let db = ProjectDb::open(repo.path()).expect("open");
   assert!(db.task_by_batch(batch).expect("read").is_none(), "nothing was saved");
 }
