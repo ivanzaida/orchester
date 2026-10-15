@@ -40,6 +40,13 @@ pub struct Following {
 }
 
 impl Following {
+  /// Whether the page follows the runner's changes now: an agent works in the run's worktree shown.
+  pub fn follows_runs(&self) -> bool {
+    self.runs_from.lock().is_some()
+  }
+}
+
+impl Following {
   /// What wakes the reads of `at` in `project` now, with Try again's count `retry`.
   pub fn wake(&self, ctx: &mut Ctx, project: &ShownProject, (at, retry): (&Version, u64)) -> Wake {
     let feed = &project.feed;

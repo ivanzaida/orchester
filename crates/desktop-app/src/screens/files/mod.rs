@@ -248,7 +248,12 @@ impl Component for FilesScreen {
       .wake(ctx, &props.project, (props.route.at(), view.retry.get()));
     let file = path.as_ref().and_then(|path| path.as_ref().ok());
     let choices = reads::choices(ctx, &root, (props.route.at(), run, file), wake);
-    let following = (wake, &self.following.file, &self.following.reads);
+    let following = (
+      wake,
+      &self.following.file,
+      &self.following.reads,
+      self.following.follows_runs(),
+    );
     let (read, stale) = file
       .map(|file| reads::file(ctx, &root, (props.route.at(), file), following))
       .unzip();

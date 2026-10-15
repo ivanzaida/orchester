@@ -67,7 +67,7 @@ impl FileList {
   /// A digest of the files listed, to tell a read again that found the same without comparing every path.
   pub fn digest(&self) -> Digest {
     let count = u64::try_from(self.paths.len()).unwrap_or(u64::MAX);
-    Digest::of(count, self.paths.iter().map(|path| path.as_bytes()))
+    Digest::list(count, self.paths.iter().map(|path| path.as_bytes()))
   }
 
   /// Whether the list has the file `path`.

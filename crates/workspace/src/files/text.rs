@@ -49,7 +49,7 @@ impl FileText {
 
   /// A digest of the text, to tell a read again that found the same without comparing every line.
   pub fn digest(&self) -> Digest {
-    Digest::of(self.size, self.lines.iter().map(|line| line.as_bytes()))
+    Digest::text(self.size, self.lines.iter().map(|line| line.as_bytes()))
   }
 
   /// The text of `range` as copied: its lines joined with `\n`, the part past the file's end left out.

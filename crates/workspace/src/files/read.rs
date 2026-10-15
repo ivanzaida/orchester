@@ -14,7 +14,7 @@ use orchester_core::{
 };
 
 use super::{
-  FilePath, FilesError, PathError, Version,
+  Digest, FilePath, FilesError, PathError, Version,
   source::{LITERAL_PATHS, Source, git_output, source},
   text::FileText,
 };
@@ -32,6 +32,18 @@ pub enum FileView {
   Text(Arc<FileText>),
   Binary { size: u64 },
   TooLarge { size: u64 },
+}
+
+impl FileView {
+  /// A digest of what the view shows, to tell a read again that found the same: a binary or too large file shows
+  /// its size alone.
+  pub fn digest(&self) -> Digest {
+    match self {
+      Self::Text(text) => text.digest(),
+      Self::Binary { size } => Digest::binary(*size),
+      Self::TooLarge { size } => Digest::too_large(*size),
+    }
+  }
 }
 
 /// The file `path` in `version` of the project at `repo_root`. Blocks on the file system and git.

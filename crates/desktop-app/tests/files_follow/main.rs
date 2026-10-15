@@ -117,6 +117,22 @@ impl Page {
     self.window.text("files-meta-text")
   }
 
+  /// The run `run` is cancelled, as when the person stops it: no agent works in its worktree any more. The
+  /// project's tasks are read again, as after a save.
+  fn cancel(&mut self, run: RunId) {
+    let mut db = ProjectDb::open(&self.repo).expect("the project database opens");
+    let mut record = db.run(run).expect("the run reads").expect("the run");
+    let events = record.cancel(Timestamp::now()).expect("the run cancels");
+    db.append_events(&record, &events).expect("the events are kept");
+    self
+      .window
+      .projects()
+      .feed(self.project)
+      .revision
+      .update(|count| *count += 1);
+    self.window.pass();
+  }
+
   /// The runner reports that a run or its transcript changed.
   fn run_changed(&mut self) {
     self
@@ -327,6 +343,40 @@ fn files_keep_the_last_text_while_the_file_cannot_be_read_for_a_moment() {
     page.window.tree.get_element_by_id("files-stale").is_none(),
     "read, the note goes"
   );
+}
+
+#[test]
+fn files_say_the_kept_text_may_be_out_of_date_once_following_ends() {
+  let mut page = Page::open();
+  let run = page.working_run();
+  let worktree = page.repo.join(WORKTREES_DIR).join(run.to_string());
+  let file = worktree.join("follow.md");
+  fs::write(&file, lines(120)).expect("a file in the worktree");
+  page.open_file("follow.md", Version::Run(run), None);
+  page.window.until("its lines", |window| {
+    window.text("files-meta-text").contains("120 lines")
+  });
+  let held = hold(&file);
+  // An integration change reads the file again; ending the follow then changes nothing the reads wake on.
+  page.window.projects().feed(page.project).jobs.count_outside_removal();
+  let read_again = Instant::now();
+  while read_again.elapsed() < Duration::from_millis(1_500) {
+    page.window.tree.tick_futures();
+    page.window.pass();
+    thread::sleep(Duration::from_millis(10));
+  }
+  assert!(
+    page.window.tree.get_element_by_id("files-stale").is_none(),
+    "one failure while following says nothing yet"
+  );
+  page.cancel(run);
+  page
+    .window
+    .until("the note once nothing reads the file again", |window| {
+      window.tree.get_element_by_id("files-stale").is_some()
+    });
+  assert!(page.meta().contains("120 lines"), "the text stays");
+  drop(held);
 }
 
 /// Holds `file` so that nothing else reads it until the result is dropped: open without sharing on Windows,

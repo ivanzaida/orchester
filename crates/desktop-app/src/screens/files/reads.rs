@@ -223,13 +223,18 @@ impl FileReads {
 /// a moment's (a save by rename, another program's lock), two are not.
 const KEPT_OVER: u32 = 2;
 
+/// What the page reads its file with: what wakes the read, the value kept, the reads counted, and whether the
+/// page follows the runner's changes.
+pub type FileFollowing<'a> = (Wake, &'a Steady<FileView>, &'a Arc<FileReads>, bool);
+
 /// The file `path` at `at`, and why the text shown may be out of date: it is the text read before, kept over
-/// [`KEPT_OVER`] reads again in a row that could not read the file.
+/// [`KEPT_OVER`] reads again in a row that could not read the file, or over one while the page no longer follows
+/// the runner's changes, since nothing reads it again soon.
 pub fn file(
   ctx: &mut Ctx,
   root: &Path,
   (at, path): (&Version, &FilePath),
-  (wake, kept, reads): (Wake, &Steady<FileView>, &Arc<FileReads>),
+  (wake, kept, reads, following): FileFollowing<'_>,
 ) -> (Shown<FileView>, Option<Failure>) {
   let programs = Services::of(ctx).programs;
   let key = (at.clone(), path.clone());
@@ -244,15 +249,16 @@ pub fn file(
         let read = run(move || read_steadily(programs.runner(), &root, (&at, &path))).await;
         reads.settled(&read);
         let value = read?;
-        let digest = digest(&value);
+        let digest = value.digest();
         Ok(Found::new(key, value, Some(digest)))
       }
     })
     .state()
     .get();
   let shown = kept.keep(shown(&key, &state));
+  let kept_over = reads.kept_over.load(Ordering::Relaxed);
   let stale = match &shown {
-    Shown::Read(_) if state.is_rejected() && reads.kept_over.load(Ordering::Relaxed) >= KEPT_OVER => state.error,
+    Shown::Read(_) if state.is_rejected() && (kept_over >= KEPT_OVER || (!following && kept_over > 0)) => state.error,
     _ => None,
   };
   (shown, stale)
@@ -337,13 +343,5 @@ fn read_steadily(
       read_file(runner, root, at, path)
     }
     read => read,
-  }
-}
-
-/// A digest of what `view` shows: a binary or too large file shows its size alone.
-fn digest(view: &FileView) -> Digest {
-  match view {
-    FileView::Text(text) => text.digest(),
-    FileView::Binary { size } | FileView::TooLarge { size } => Digest::of(*size, []),
   }
 }

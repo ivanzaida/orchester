@@ -168,6 +168,15 @@ fn files_digests_tell_a_text_and_a_list_apart_by_content_and_size() {
   let list = |paths: &[&str]| FileList::new(paths.iter().map(|path| (*path).to_owned())).digest();
   assert_eq!(list(&["a.rs", "b.rs"]), list(&["b.rs", "a.rs"]));
   assert_ne!(list(&["a.rs", "b.rs"]), list(&["a.rsb.rs"]));
+  assert_ne!(
+    FileView::Binary { size: 0 }.digest(),
+    FileView::Text(Arc::new(FileText::parse(b""))).digest(),
+    "a binary file and an empty text of its size"
+  );
+  assert_ne!(
+    FileView::Binary { size: 9 }.digest(),
+    FileView::TooLarge { size: 9 }.digest()
+  );
 }
 
 #[test]
