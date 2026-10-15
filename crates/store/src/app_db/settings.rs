@@ -4,8 +4,9 @@
 //! line; 80 % until it is changed), and `orchester-app`'s theme (dark until changed) and whether agents
 //! may control its window through its MCP server (the build decides until it is set), whether
 //! automation may widen what agents may do through Orchester's MCP server (off until a person turns it on
-//! in the window), and the installed app's own MCP server: whether it listens, on which port, and the id of
-//! this installation that names its token in the keychain.
+//! in the window), the installed app's own MCP server: whether it listens, on which port, and the id of
+//! this installation that names its token in the keychain, and whether the Orchestrator chat publishes drafts
+//! itself (off until a person turns it on in the window).
 
 use orchester_core::{app_mcp::McpPort, appearance::ThemeSetting, id::InstallationId, usage::limits::WarningThreshold};
 use rusqlite::params;
@@ -48,6 +49,12 @@ pub(super) const APP_MCP_MIGRATION: &str = r"
 ALTER TABLE app_settings ADD COLUMN mcp_server_enabled INTEGER NOT NULL DEFAULT 1 CHECK (mcp_server_enabled IN (0, 1));
 ALTER TABLE app_settings ADD COLUMN mcp_port INTEGER NOT NULL DEFAULT 47821 CHECK (mcp_port BETWEEN 1024 AND 65535);
 ALTER TABLE app_settings ADD COLUMN installation_id TEXT;
+";
+
+pub(super) const ORCHESTRATOR_PUBLISHES_MIGRATION: &str = r"
+-- Let the Orchestrator publish drafts (docs/design/orchestrator-toolset.md): off until a person turns it on.
+ALTER TABLE app_settings ADD COLUMN orchestrator_publishes_drafts INTEGER NOT NULL DEFAULT 0
+  CHECK (orchestrator_publishes_drafts IN (0, 1));
 ";
 
 impl AppDb {
@@ -138,6 +145,25 @@ impl AppDb {
   pub fn set_automation_changes_permissions(&mut self, allowed: bool) -> Result<(), StoreError> {
     self.connection.execute(
       "UPDATE app_settings SET automation_changes_permissions = ?1 WHERE id = 1",
+      params![allowed],
+    )?;
+    Ok(())
+  }
+
+  /// Whether the Orchestrator chat publishes the drafts it saved itself (*Let the Orchestrator publish drafts*)
+  /// instead of proposing each publication to the person. What widens agents' permissions still needs
+  /// [`Self::automation_changes_permissions`].
+  pub fn orchestrator_publishes_drafts(&self) -> Result<bool, StoreError> {
+    Ok(self.connection.query_row(
+      "SELECT orchestrator_publishes_drafts FROM app_settings WHERE id = 1",
+      [],
+      |row| row.get(0),
+    )?)
+  }
+
+  pub fn set_orchestrator_publishes_drafts(&mut self, allowed: bool) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE app_settings SET orchestrator_publishes_drafts = ?1 WHERE id = 1",
       params![allowed],
     )?;
     Ok(())

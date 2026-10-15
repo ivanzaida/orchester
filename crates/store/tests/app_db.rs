@@ -183,6 +183,27 @@ fn automation_changes_permissions_only_once_a_person_turned_it_on() {
 }
 
 #[test]
+fn orchestrator_publishes_drafts_only_once_a_person_turned_it_on() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let mut db = AppDb::open(&path).expect("open");
+  assert!(
+    !db.orchestrator_publishes_drafts().expect("read"),
+    "off until turned on"
+  );
+  db.set_orchestrator_publishes_drafts(true).expect("store");
+  drop(db);
+  let mut db = AppDb::open(&path).expect("reopen");
+  assert!(db.orchestrator_publishes_drafts().expect("read"));
+  assert!(
+    !db.automation_changes_permissions().expect("read"),
+    "publishing drafts lets nothing widen"
+  );
+  db.set_orchestrator_publishes_drafts(false).expect("store");
+  assert!(!db.orchestrator_publishes_drafts().expect("read"));
+}
+
+#[test]
 fn ui_state_removes_a_key_and_lists_keys_by_prefix() {
   let dir = tempfile::tempdir().expect("temporary directory");
   let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");

@@ -319,6 +319,16 @@ impl Workspace {
     self.approval_consent.lock().allowed = false;
   }
 
+  /// Whether the Orchestrator chat publishes the drafts it saved itself (*Let the Orchestrator publish drafts*);
+  /// off until a person turns it on in the window, and no tool changes it.
+  pub fn orchestrator_publishes_drafts(&self) -> Result<bool, StoreError> {
+    self.db.lock().orchestrator_publishes_drafts()
+  }
+
+  pub fn set_orchestrator_publishes_drafts(&self, allowed: bool) -> Result<(), StoreError> {
+    self.db.lock().set_orchestrator_publishes_drafts(allowed)
+  }
+
   /// Where Usage › Plan limits draws its warning line, for every project; 80 % until it is changed.
   pub fn usage_warning_threshold(&self) -> Result<WarningThreshold, StoreError> {
     self.db.lock().usage_warning_threshold()
