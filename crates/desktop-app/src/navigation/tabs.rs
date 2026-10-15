@@ -19,6 +19,9 @@ impl TabId {
   }
 }
 
+/// DevTools shows a signal holding a tab's id by its type alone.
+impl lurq::app::component::DevtoolsInspectable for TabId {}
+
 impl fmt::Display for TabId {
   fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(formatter, "{}", self.0)

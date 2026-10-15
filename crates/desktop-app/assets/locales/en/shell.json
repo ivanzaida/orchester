@@ -16,6 +16,7 @@
     },
     "tabs": {
       "close": "Close tab",
+      "list": "All open tabs",
       "inProject": "{{project}} · {{label}}",
       "attention": "{{project}} · {{waiting}}",
       "runnerOffline": "runner offline",
