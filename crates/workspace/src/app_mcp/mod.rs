@@ -6,11 +6,13 @@
 //! guard and discovery file) is each app's.
 
 mod error;
+mod protocol;
 mod services;
 mod tools;
 
 pub use self::{
   error::ToolError,
+  protocol::supported_protocol_versions,
   services::Services,
   tools::{Proposal, Translate, call, listed, propose_run, run_proposed, setup},
 };

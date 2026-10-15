@@ -7,14 +7,10 @@
 mod support;
 
 use orchester_core::{
-  id::ResourceId,
   integration::{MergeKind, RunMerge},
-  memory::{
-    AgentProvenance, AgentWrite, Confidence, Memory, MemoryContent, MemoryKind, MemoryScope, MemorySettings,
-    MemoryStore, SecretScreen,
-  },
+  memory::MemoryStore,
   question::{Question, QuestionOption, QuestionRequest, QuestionTurn},
-  resource::{ModelId, StepKey},
+  resource::ModelId,
   revision::Revision,
   run::{BranchName, InterruptCause, PendingToolApproval, Run, RunLimit, WaitReason},
   store::{ActivityStore, MergeStore},
@@ -30,7 +26,7 @@ use orchester_workspace::{
     needs_you::{WaitingItem, WaitingKind},
   },
 };
-use support::{Fixture, at};
+use support::{Fixture, at, proposed};
 
 /// The kind of each item, in words, in the order the panel lists them.
 fn kinds(items: &[WaitingItem]) -> Vec<&'static str> {
@@ -357,29 +353,6 @@ fn needs_you_lists_the_plans_and_questions_a_run_stopped_at_its_limit_or_interru
   assert_eq!(tasks.needs_you(), 5);
 }
 
-/// A record `run`'s agent writes to the project's memory at `now`, which waits for approval.
-fn proposed(run: &Run, text: &str, now: i64) -> Memory {
-  let write = AgentWrite {
-    provenance: AgentProvenance {
-      profile: ResourceId::generate(),
-      run: run.id(),
-      step: StepKey::new("implement").expect("key"),
-      execution: run.current_attempt().expect("attempt").executions()[0].id(),
-    },
-    confidence: Confidence::Medium,
-    sources: Vec::new(),
-  };
-  let content = MemoryContent::new(MemoryKind::Fact, text).expect("content");
-  let screened = SecretScreen::new(Vec::new()).check(content).expect("no secrets");
-  Memory::by_agent(
-    MemoryScope::Project,
-    write,
-    screened,
-    &MemorySettings::default(),
-    at(now),
-  )
-}
-
 /// A project where a run stopped at its limit, a run passed every step and waits to be merged, another's merge
 /// was recorded, and two memory records wait for approval.
 fn limit_merge_memory() -> ProjectTasks {
@@ -475,14 +448,13 @@ fn needs_you_items_are_decided_at_the_card_the_panel_and_the_overview_open() {
 }
 
 #[test]
-fn needs_you_counts_the_same_on_every_surface() {
+fn needs_you_counts_the_same_on_every_surface_but_the_task_list_tab() {
   let tasks = limit_merge_memory();
   assert_eq!(tasks.needs_you(), 3, "the limit stop, the work to merge and the memory");
   let counted = [
     ("Overview column", attention::count(&tasks)),
     ("Overview tab", BoardTab::NeedsYou.count(&tasks)),
     ("Need your input", Figures::of(&tasks, at(0)).needs_you),
-    ("task list tab", TaskTab::NeedsYou.count(&tasks)),
     ("All projects", RunCounts::of(&tasks, true).needs_you),
     ("All projects offline", RunCounts::of(&tasks, false).needs_you),
   ];
@@ -494,6 +466,11 @@ fn needs_you_counts_the_same_on_every_surface() {
     titles(list::rows(&tasks.tasks, &tasks, TaskTab::NeedsYou)),
     ["Index the repo", "Write docs"],
     "the task list's tab lists the tasks of what waits; the memory is no task's"
+  );
+  assert_eq!(
+    TaskTab::NeedsYou.count(&tasks),
+    2,
+    "the task list's tab counts what it lists"
   );
 }
 

@@ -200,6 +200,20 @@ pub fn count(tasks: &ProjectTasks) -> usize {
   tasks.needs_you()
 }
 
+/// What waits for the person in `tasks` and is no task's — the project's memory records, a tool request whose
+/// task cannot be read — in one line, for the task list's *Needs you* tab, which lists tasks only: the item's
+/// own words when it is one (*1 memory record waits for approval*), how many when several; `None` when
+/// everything that waits is a task's.
+pub fn outside_tasks(tasks: &ProjectTasks) -> Option<Message> {
+  let waiting = tasks.waiting();
+  let outside: Vec<&WaitingItem> = waiting.iter().filter(|item| item.task.is_none()).collect();
+  match outside.as_slice() {
+    [] => None,
+    [item] => Some(words(tasks, item).1),
+    several => Some(Message::new("tasks.needsYou.outsideTasks").with("count", several.len().to_string())),
+  }
+}
+
 fn words(tasks: &ProjectTasks, item: &WaitingItem) -> (NeedKind, Message) {
   let number = item.run.map(|(_, number)| number);
   let run = |key: &'static str| run_message(key, number);

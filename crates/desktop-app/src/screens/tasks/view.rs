@@ -20,7 +20,7 @@ pub(super) struct TabCounts([usize; TaskTab::ALL.len()]);
 
 impl TabCounts {
   /// Every tab counted as `list::rows` fills it: All holds every task, each workflow tab the tasks of its
-  /// status, and Needs you counts what every *Needs you* counts ([`TaskTab::count`]).
+  /// status, and Needs you the tasks something of waits for ([`TaskTab::count`]).
   fn of(tasks: &ProjectTasks) -> Self {
     Self(TaskTab::ALL.map(|tab| tab.count(tasks)))
   }
