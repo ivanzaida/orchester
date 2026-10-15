@@ -77,3 +77,22 @@ test.describe("browser bundles", () => {
     }
   });
 });
+
+test.describe("icon", () => {
+  test("pages name the brand mark as their icon, and the browser fetches nothing that is missing", async ({ page, request }) => {
+    const errors: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") {
+        errors.push(message.text());
+      }
+    });
+    await page.goto("/signin");
+    await page.waitForLoadState("networkidle");
+    const href = await page.locator('link[rel="icon"]').first().getAttribute("href");
+    expect(href).not.toBeNull();
+    const icon = await request.get(href ?? "");
+    expect(icon.status()).toBe(200);
+    expect(icon.headers()["content-type"]).toContain("image/svg+xml");
+    expect(errors).toEqual([]);
+  });
+});
