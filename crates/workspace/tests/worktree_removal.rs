@@ -44,6 +44,36 @@ fn worktree_removal_is_refused_for_a_run_continued_since_the_page_read_it() {
 }
 
 #[test]
+fn worktree_removal_is_refused_for_a_run_that_worked_again_in_another_worktree_since_the_page_read_it() {
+  let mut fixture = Fixture::new();
+  let task = fixture.task("Add login", at(10));
+  let mut run = fixture.started_run(task, at(20));
+  fixture.succeed(&mut run, at(30));
+  // What the page read; another window then asks the run for a follow-up, which works in a new worktree
+  // and is interrupted: the run has no live work, but more worktrees than the page listed.
+  let read = run.clone();
+  let step = run.snapshot().steps()[0].key().clone();
+  let events = run.follow_up(&step, at(40)).expect("follow up");
+  fixture.record(&run, &events);
+  let events = run.interrupt(InterruptCause::QuitNow, at(50)).expect("interrupt");
+  fixture.record(&run, &events);
+
+  let refused = remove_in(
+    fixture.repo.path(),
+    &Programs::processes(),
+    &read,
+    &Leftovers::default(),
+  );
+  assert_eq!(refused, Err(IntegrationProblem::RunChanged));
+  let db = ProjectDb::open(fixture.repo.path()).expect("open");
+  assert_eq!(
+    db.worktree_removal(run.id()).expect("read"),
+    None,
+    "nothing is recorded"
+  );
+}
+
+#[test]
 fn worktree_removal_is_recorded_once_an_interrupted_run_is_found_without_its_folder() {
   let mut fixture = Fixture::new();
   let task = fixture.task("Add login", at(10));

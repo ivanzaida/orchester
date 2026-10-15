@@ -9,13 +9,13 @@ use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   command::CommandError,
-  id::RunId,
+  id::{RunId, StepExecutionId},
   integration::{
     Cleanup, CleanupError, FolderListing, GitError, KeepReason, LeftWorktree, Leftovers, MergeError,
     RecordedCleanupError, RunMerge, clean_up_recorded, leftovers_of, merge_run_at,
   },
   revision::Revision,
-  run::Run,
+  run::{BranchName, Run},
   store::{MergeStore, RunStore, TaskStore},
   time::Timestamp,
 };
@@ -42,6 +42,9 @@ pub enum IntegrationProblem {
   NewChanges {
     path: String,
   },
+  /// Nothing was removed: the run as stored now has other worktrees than the person saw (it worked again
+  /// since), or is gone.
+  RunChanged,
   /// Git did not remove the worktree at `path`; its message.
   NotRemoved {
     path: String,
@@ -103,6 +106,7 @@ impl IntegrationProblem {
       Self::Store(message) => message.clone(),
       Self::AlreadyMerged => Message::new("runs.merge.failure.alreadyMerged"),
       Self::NewChanges { path } => Message::new("runs.worktree.failure.newChanges").with("path", short_path(path)),
+      Self::RunChanged => Message::new("runs.worktree.failure.runChanged"),
       Self::NotRecorded { merge, .. } => {
         Message::new("runs.merge.failure.notRecorded").with("branch", merge.into.to_string())
       }
@@ -330,7 +334,8 @@ pub fn leftovers_in(
 
 /// Removes what `run` left, discarding uncommitted changes only where `confirmed`, what the person
 /// saw, lists exactly those, and records when its own worktree went. A worktree that stays is a
-/// problem to show: it changed since, or git refused.
+/// problem to show: it changed since, or git refused. The run is read again first: one that has other
+/// worktrees than `run`, the run the person saw, removes nothing ([`IntegrationProblem::RunChanged`]).
 pub fn remove_in(
   repo_root: &Path,
   programs: &Programs,
@@ -338,7 +343,12 @@ pub fn remove_in(
   confirmed: &Leftovers,
 ) -> Result<(), IntegrationProblem> {
   let mut db = ProjectDb::open(repo_root)?;
-  let cleanup = clear(&mut db, programs, repo_root, run, Some(confirmed))?;
+  let stored = db
+    .run(run.id())
+    .map_err(run_store_error)?
+    .filter(|stored| worktree_owners(stored) == worktree_owners(run))
+    .ok_or(IntegrationProblem::RunChanged)?;
+  let cleanup = clear(&mut db, programs, repo_root, &stored, Some(confirmed))?;
   match cleanup.kept_worktrees.into_iter().next() {
     None => Ok(()),
     Some((worktree, KeepReason::Failed(detail))) => Err(IntegrationProblem::NotRemoved {
@@ -347,6 +357,18 @@ pub fn remove_in(
     }),
     Some((worktree, _)) => Err(IntegrationProblem::NewChanges { path: worktree.path }),
   }
+}
+
+/// What finds the worktrees and branches `run` left (`orchester_core::integration`): its branch and the
+/// worktree of each of its step executions, beside its own.
+fn worktree_owners(run: &Run) -> (&BranchName, Vec<StepExecutionId>) {
+  let executions = run
+    .attempts()
+    .iter()
+    .flat_map(|attempt| attempt.executions())
+    .map(|execution| execution.id())
+    .collect();
+  (run.branch(), executions)
 }
 
 /// Removes what `run` left with the removal recorded first, refused once the run has live work as
