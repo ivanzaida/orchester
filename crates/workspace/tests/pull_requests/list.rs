@@ -1,151 +1,21 @@
-//! The Pull requests page's list: the stored pull requests of the linked repository, open and closed, each
-//! with the task whose run made its branch; the page's tabs, search, sort and footer; and the deprecated
-//! desktop's inbox, which keeps only the open ones.
-
-mod support;
+//! The list: links to tasks, tabs, search, sort, footer, status and links.
 
 use orchester_core::{
-  connection::{GitHubCheck, GitHubCheckResult, GitHubHost, GitHubLogin, SignIn},
-  diff::Changes,
-  name::Name,
-  pull_request::{CheckRollup, PullRequest, PullRequestParts, PullRequestState, ReviewDecision},
-  repository::{GitHubRepo, RemoteName, RepoPermission, RepositoryLink, RepositoryView},
-  revision::Revision,
-  run::BranchName,
-  store::{PullRequestStore, RepositoryStore},
+  connection::GitHubHost,
+  pull_request::{PullRequest, PullRequestState},
   time::Timestamp,
 };
-use orchester_workspace::{
-  connections::github::{GitHubDraft, save_github},
-  pull_requests::{
-    Inbox, links,
-    list::{LinkedList, PullRequestList, PullRequestSort, PullRequestTab, load_list_in},
-    load_in,
-    status::{Remedy, SyncStatus},
-  },
+use orchester_workspace::pull_requests::{
+  Inbox, links,
+  list::{Moment, PullRequestList, PullRequestSort, PullRequestTab, load_list_in},
+  load_in,
+  status::{Remedy, SyncStatus},
 };
-use support::{Fixture, at};
 
-fn repo() -> GitHubRepo {
-  GitHubRepo::new(GitHubHost::github_com(), "ivanzaida", "kontur").expect("valid repository")
-}
-
-fn login(value: &str) -> GitHubLogin {
-  GitHubLogin::new(value).expect("valid login")
-}
-
-/// Pull request `number` from branch `head`, in `state`, updated at `updated`.
-fn pull_request(
-  number: u64,
-  head: &str,
-  state: PullRequestState,
-  review: Option<ReviewDecision>,
-  updated: i64,
-) -> PullRequest {
-  let head_sha = Revision::new(&format!("{number:0>40}")).expect("revision");
-  PullRequest::new(
-    &repo(),
-    PullRequestParts {
-      number,
-      title: format!("Pull request {number}"),
-      url: format!("https://github.com/ivanzaida/kontur/pull/{number}"),
-      state,
-      head: BranchName::new(head).expect("branch"),
-      base: BranchName::new("main").expect("branch"),
-      checks: CheckRollup::none(head_sha.clone()),
-      head_sha,
-      author: Some("ivanzaida".to_owned()),
-      changes: Changes {
-        files: 2,
-        additions: 10,
-        deletions: 1,
-      },
-      review_decision: review,
-      updated_at: at(updated),
-    },
-  )
-  .expect("a pull request")
-}
-
-/// Links the fixture's project to `ivanzaida/kontur` through a GitHub connection.
-fn link(fixture: &mut Fixture) {
-  let draft = GitHubDraft {
-    id: None,
-    name: Name::new("GitHub · github.com").expect("valid name"),
-    host: GitHubHost::github_com(),
-    executable: fixture.repo.path().join("gh.exe"),
-    check: GitHubCheck {
-      at: at(1),
-      result: GitHubCheckResult::Available {
-        version: "2.97.0".into(),
-        account: Some(login("ivanzaida")),
-        scopes: vec!["repo".into()],
-        sign_in: SignIn::SignedIn,
-      },
-    },
-  };
-  let connection = save_github(&mut fixture.db, draft, at(1)).expect("the GitHub connection is saved");
-  let view = RepositoryView {
-    repo: repo(),
-    default_branch: BranchName::new("main").expect("branch"),
-    permission: RepoPermission::Write,
-  };
-  let link = RepositoryLink::new(connection, RemoteName::origin(), view, login("ivanzaida"), at(1));
-  fixture.db.save_repository_link(&link).expect("the link is saved");
-}
-
-/// KON-1 runs on `orchester/orc-run-1`, KON-2's run on `orchester/orc-run-2` succeeded; a sync stored an
-/// open pull request of each, a draft and a merged one of no run, and a closed one.
-fn seeded() -> (Fixture, LinkedList) {
-  let mut fixture = Fixture::keyed("KON");
-  let working = fixture.task("Add retry to webhook sender", at(10));
-  fixture.started_run(working, at(20));
-  let done = fixture.task("Typed errors per module", at(11));
-  let mut run = fixture.started_run(done, at(21));
-  fixture.succeed(&mut run, at(30));
-  link(&mut fixture);
-  let stored = [
-    pull_request(
-      142,
-      "orchester/orc-run-1",
-      PullRequestState::Open,
-      Some(ReviewDecision::ReviewRequired),
-      900,
-    ),
-    pull_request(
-      137,
-      "orchester/orc-run-2",
-      PullRequestState::Open,
-      Some(ReviewDecision::ChangesRequested),
-      800,
-    ),
-    pull_request(139, "deps/tokio", PullRequestState::Draft, None, 700),
-    pull_request(
-      131,
-      "readme-badges",
-      PullRequestState::Merged,
-      Some(ReviewDecision::Approved),
-      600,
-    ),
-    pull_request(127, "spike", PullRequestState::Closed, None, 500),
-  ];
-  fixture
-    .db
-    .replace_pull_requests(&repo(), &stored, at(1_000))
-    .expect("the pull requests are stored");
-  let PullRequestList::Linked(list) = load_list_in(fixture.repo.path()).expect("the list") else {
-    panic!("the project is linked");
-  };
-  (fixture, *list)
-}
-
-fn numbers(list: &LinkedList, tab: PullRequestTab, query: &str, sort: PullRequestSort) -> Vec<u64> {
-  list
-    .rows(tab, query, sort)
-    .iter()
-    .map(|listed| listed.pull_request.number())
-    .collect()
-}
+use super::{
+  link, login, numbers, pull_request, seeded,
+  support::{Fixture, at},
+};
 
 #[test]
 fn pull_requests_link_the_task_whose_run_made_their_branch() {
@@ -308,4 +178,46 @@ fn pull_requests_links_name_the_pages_routes() {
     links::task(project, &task.key),
     format!("/project/{project}/tasks/KON-1/summary")
   );
+}
+
+#[test]
+fn pull_requests_say_when_they_were_merged_or_closed_else_updated() {
+  let (_fixture, list) = seeded();
+  let moment = |number| list.find(number).expect("listed").moment();
+  assert_eq!(moment(131), Moment::Merged(at(550)));
+  assert_eq!(moment(127), Moment::Closed(at(450)));
+  assert_eq!(moment(142), Moment::Updated(at(900)));
+}
+
+#[test]
+fn pull_requests_of_a_fork_and_paused_runs_are_not_agents_at_work() {
+  use orchester_core::store::PullRequestStore;
+  let mut fixture = Fixture::keyed("KON");
+  link(&mut fixture);
+  let task = fixture.task("Add retry to webhook sender", at(10));
+  let mut run = fixture.started_run(task, at(20));
+  let events = run.request_pause(at(30)).expect("a pause is asked");
+  fixture.record(&run, &events);
+  let ours = pull_request(142, "orchester/orc-run-1", PullRequestState::Open, None, 900);
+  let mut fork = super::parts(143, "orchester/orc-run-1", PullRequestState::Open, None, 800);
+  fork.cross_repository = true;
+  let fork = PullRequest::new(&super::repo(), fork).expect("a pull request");
+  fixture
+    .db
+    .replace_pull_requests(&super::repo(), &[ours, fork], at(1_000))
+    .expect("stored");
+  let PullRequestList::Linked(list) = load_list_in(fixture.repo.path()).expect("the list") else {
+    panic!("the project is linked");
+  };
+  let linked = list
+    .find(142)
+    .and_then(|listed| listed.task.clone())
+    .expect("#142 is KON-1's run's");
+  assert!(!linked.agent_working, "a pause was asked of the run");
+  assert_eq!(
+    list.find(143).and_then(|listed| listed.task.clone()),
+    None,
+    "a fork's branch is not the run's"
+  );
+  assert_eq!(list.count(PullRequestTab::AgentWorking), 0);
 }

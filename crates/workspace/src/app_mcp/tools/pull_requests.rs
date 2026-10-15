@@ -1,31 +1,31 @@
 //! `list_pull_requests` and `get_pull_request`: the pull requests of a project's linked GitHub repository
 //! as the Pull requests page lists them ([`crate::pull_requests::list`]), with their state, checks, review
-//! state and the task and run whose branch they are of. They read what the last sync stored; `refresh`
-//! syncs first, through `gh`, as the page's Refresh does. Every item carries its app `link` and its
-//! GitHub `url`.
+//! state and the task and run whose branch they are of. They read what the last sync stored and how the
+//! latest sync went; `refresh` syncs first through `gh`, as the page's Refresh does, unless a sync ran in the
+//! last 30 s or a rate limit holds syncs back: then the stored list answers, saying so. Every item carries its
+//! app `link` and its GitHub `url`.
 
-use orchester_core::{
-  id::ProjectId,
-  pull_request::{PullRequest, ReviewDecision},
-};
+use orchester_core::{pull_request::SyncFailure, repository::RepositoryError, time::Timestamp};
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::wire;
+use super::{
+  Translate,
+  pull_request_wire::{item, repository},
+};
 use crate::{
   app_mcp::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
+  messages::Message,
   pull_requests::{
     InboxError,
-    linked::LinkedTask,
-    links,
     list::{
-      LinkedList, ListedPullRequest, PullRequestList, PullRequestSort, PullRequestTab, load_list_in, sync_list_in,
+      LinkedList, ListedPullRequest, PullRequestList, PullRequestSort, PullRequestTab, load_list_in, refresh_list_in,
     },
-    status::SyncStatus,
+    page::{PullRequestPage, PullRequestView, refresh_page_in},
   },
   workspace::OpenProject,
 };
@@ -71,7 +71,8 @@ pub struct ListPullRequests {
   /// A number (`42`, `#42`), words of the title, a branch, or a task's key.
   #[serde(default)]
   pub search: Option<String>,
-  /// Syncs with GitHub through `gh` first, as the page's Refresh does; needs a project.
+  /// Syncs with GitHub through `gh` first, as the page's Refresh does; needs a project. A sync that ran in the
+  /// last 30 s, or a rate limit, answers from what is stored instead.
   #[serde(default)]
   pub refresh: bool,
 }
@@ -84,88 +85,146 @@ pub struct GetPullRequest {
   pub project: String,
   /// The pull request's number.
   pub number: u64,
-  /// Syncs with GitHub through `gh` first, as the page's Refresh does.
+  /// Syncs with GitHub through `gh` first, as list_pull_requests' refresh does; a pull request the sync does
+  /// not list (an older closed one) is then read on its own.
   #[serde(default)]
   pub refresh: bool,
 }
 
-pub async fn list_pull_requests(services: &Services, args: ListPullRequests) -> Result<Value, ToolError> {
+/// A project's list, or the project as the tool names it and why its list could not be read.
+type ProjectRead = Result<Read, (Value, ToolError)>;
+
+/// A project and its list.
+struct Read {
+  project: OpenProject,
+  list: PullRequestList,
+}
+
+pub async fn list_pull_requests(
+  services: &Services,
+  args: ListPullRequests,
+  translate: &Translate,
+) -> Result<Value, ToolError> {
   if args.refresh && args.project.is_none() {
     return Err(ToolError::InvalidArguments(
       "refresh syncs one project: name it".to_owned(),
     ));
   }
   let services = services.clone();
-  let named = args.project.clone();
-  let lists = blocking(move || {
-    let projects = match named {
-      Some(named) => vec![services.project(&named)?],
-      None => every_project(&services)?,
-    };
-    projects
-      .into_iter()
-      .map(|project| {
-        let list = read(&services, &project, args.refresh)?;
-        Ok((project, list))
-      })
-      .collect::<Result<Vec<_>, ToolError>>()
+  let (named, refresh) = (args.project.clone(), args.refresh);
+  let reads = blocking(move || match named {
+    Some(named) => {
+      let project = services.project(&named)?;
+      let list = read(&services, &project, refresh)?;
+      Ok(vec![Ok(Read { project, list })])
+    }
+    None => every_project(&services),
   })
   .await?;
   let query = args.search.as_deref().unwrap_or_default();
   let mut pull_requests = Vec::new();
   let mut repositories = Vec::new();
-  for (project, list) in &lists {
-    let id = project.project.id();
-    repositories.push(repository(project, list));
-    let PullRequestList::Linked(linked) = list else {
+  for read in reads {
+    let Read { project, list } = match read {
+      Ok(read) => read,
+      Err((named, error)) => {
+        repositories
+          .push(json!({ "project": named, "error": error.to_json(|message| translate.text(message))["error"] }));
+        continue;
+      }
+    };
+    repositories.push(repository(&project, &list));
+    let PullRequestList::Linked(linked) = &list else {
       continue;
     };
     let rows = match args.tab {
       Some(tab) => linked.rows(tab.into(), query, PullRequestSort::RecentlyUpdated),
       None => all_rows(linked, query),
     };
-    pull_requests.extend(rows.iter().map(|listed| item(project, id, listed)));
+    pull_requests.extend(rows.iter().map(|listed| item(&project, project.project.id(), listed)));
   }
   Ok(json!({ "pull_requests": pull_requests, "repositories": repositories }))
 }
 
 pub async fn get_pull_request(services: &Services, args: GetPullRequest) -> Result<Value, ToolError> {
   let services = services.clone();
-  let (project, list) = blocking(move || {
+  let number = args.number;
+  let (project, list, listed) = blocking(move || {
     let project = services.project(&args.project)?;
     let list = read(&services, &project, args.refresh)?;
-    Ok((project, list))
+    let listed = match &list {
+      PullRequestList::Unlinked => return Err(ToolError::not_found(Missing::PullRequest, format!("#{number}"))),
+      PullRequestList::Linked(linked) => match linked.find(number) {
+        Some(listed) => listed.clone(),
+        None if args.refresh && !linked.is_paused(Timestamp::now()) => read_one(&services, &project, number)?,
+        None => return Err(not_synced(number)),
+      },
+    };
+    Ok((project, list, listed))
   })
   .await?;
-  let missing = || ToolError::not_found(Missing::PullRequest, format!("#{}", args.number));
-  let PullRequestList::Linked(linked) = &list else {
-    return Err(missing());
-  };
-  let listed = linked.find(args.number).ok_or_else(missing)?;
-  let mut found = item(&project, project.project.id(), listed);
+  let mut found = item(&project, project.project.id(), &listed);
   found["repository"] = repository(&project, &list);
   Ok(found)
 }
 
-/// Every project whose folder is there.
-fn every_project(services: &Services) -> Result<Vec<OpenProject>, ToolError> {
-  services
-    .workspace
-    .entries()?
-    .into_iter()
-    .filter(|entry| !entry.folder_missing)
-    .map(|entry| services.project(&entry.project.id.to_string()))
-    .collect()
+/// Every project the workspace knows, each read or with why it could not be.
+fn every_project(services: &Services) -> Result<Vec<ProjectRead>, ToolError> {
+  Ok(
+    services
+      .workspace
+      .entries()?
+      .into_iter()
+      .map(|entry| {
+        let named = json!({ "id": entry.project.id.to_string(), "name": entry.project.name.as_str() });
+        let read = services.project(&entry.project.id.to_string()).and_then(|project| {
+          let list = read(services, &project, false)?;
+          Ok(Read { project, list })
+        });
+        read.map_err(|error| (named, error))
+      })
+      .collect(),
+  )
 }
 
 fn read(services: &Services, project: &OpenProject, refresh: bool) -> Result<PullRequestList, ToolError> {
   let root = &project.repo_root;
   let list = if refresh {
-    sync_list_in(root, &services.programs)
+    refresh_list_in(root, &services.programs, Timestamp::now())
   } else {
     load_list_in(root)
   };
   list.map_err(|error: InboxError| ToolError::refused("project_data", vec![error.message()]))
+}
+
+/// Pull request `number`, which the sync did not list, read on its own from GitHub.
+fn read_one(services: &Services, project: &OpenProject, number: u64) -> Result<ListedPullRequest, ToolError> {
+  let page = refresh_page_in(&project.repo_root, number, &services.programs)
+    .map_err(|error| ToolError::refused("project_data", vec![error.message()]))?;
+  let PullRequestPage::Linked(view) = page else {
+    return Err(ToolError::not_found(Missing::PullRequest, format!("#{number}")));
+  };
+  let PullRequestView {
+    pull_request,
+    task,
+    failure,
+    ..
+  } = *view;
+  match (pull_request, failure) {
+    (Some(pull_request), _) => Ok(ListedPullRequest { pull_request, task }),
+    (None, Some(SyncFailure::Repository(RepositoryError::PullRequestNotFound { .. }))) => {
+      Err(ToolError::not_found(Missing::PullRequest, format!("#{number}")))
+    }
+    (None, _) => Err(not_synced(number)),
+  }
+}
+
+/// Pull request `number` is not among the ones the last sync read.
+fn not_synced(number: u64) -> ToolError {
+  ToolError::refused(
+    "pull_request_not_synced",
+    vec![Message::new("pullRequests.notSynced").with("number", number.to_string())],
+  )
 }
 
 /// Every pull request of `linked` a search for `query` finds, most recently updated first.
@@ -176,92 +235,4 @@ fn all_rows(linked: &LinkedList, query: &str) -> Vec<ListedPullRequest> {
     .filter(|listed| listed.matches(query))
     .cloned()
     .collect()
-}
-
-/// The repository a project's pull requests come from and how its last sync went.
-fn repository(project: &OpenProject, list: &PullRequestList) -> Value {
-  let named = json!({
-    "id": project.project.id().to_string(),
-    "name": project.project.name().as_str(),
-  });
-  let PullRequestList::Linked(linked) = list else {
-    return json!({ "project": named, "repository": null, "link": null });
-  };
-  let (sync, last) = sync(&linked.status());
-  json!({
-    "project": named,
-    "repository": linked.repo.to_string(),
-    "expected_account": linked.expected.as_str(),
-    "synced_at": linked.synced_at.map(wire::time),
-    "sync": sync,
-    "last_synced_at": last.map(wire::time),
-    "link": links::pull_requests(project.project.id(), PullRequestTab::Open),
-  })
-}
-
-/// How the last sync went, by name, and when the list shown was read.
-fn sync(status: &SyncStatus) -> (&'static str, Option<orchester_core::time::Timestamp>) {
-  match status {
-    SyncStatus::NotSynced => ("not_synced", None),
-    SyncStatus::Synced(at) => ("synced", Some(*at)),
-    SyncStatus::Unreachable { last } => ("github_unreachable", *last),
-    SyncStatus::Troubled { last } => ("github_server_error", *last),
-    SyncStatus::Failed { last } => ("failed", *last),
-    SyncStatus::RateLimited { .. } => ("rate_limited", None),
-    SyncStatus::Paused { .. } => ("paused_other_account", None),
-    SyncStatus::Account(_) => ("gh_unavailable", None),
-  }
-}
-
-fn item(project: &OpenProject, id: ProjectId, listed: &ListedPullRequest) -> Value {
-  let pull_request = &listed.pull_request;
-  json!({
-    "project": { "id": id.to_string(), "name": project.project.name().as_str() },
-    "number": pull_request.number(),
-    "title": pull_request.title(),
-    "state": pull_request.state().as_str(),
-    "review": review(pull_request.review_decision()),
-    "checks": checks(pull_request),
-    "head": pull_request.head().as_str(),
-    "base": pull_request.base().as_str(),
-    "author": pull_request.author(),
-    "changes": {
-      "files": pull_request.changes().files,
-      "additions": pull_request.changes().additions,
-      "deletions": pull_request.changes().deletions,
-    },
-    "updated_at": wire::time(pull_request.updated_at()),
-    "task": listed.task.as_ref().map(|task| linked_task(id, task)),
-    "link": links::pull_request(id, pull_request.number()),
-    "url": pull_request.url(),
-  })
-}
-
-fn checks(pull_request: &PullRequest) -> Value {
-  let checks = pull_request.checks();
-  json!({
-    "passed": checks.passed,
-    "failed": checks.failed,
-    "running": checks.pending,
-    "skipped": checks.skipped,
-    "revision": checks.on.as_str(),
-  })
-}
-
-fn linked_task(project: ProjectId, task: &LinkedTask) -> Value {
-  json!({
-    "key": task.key.to_string(),
-    "title": &*task.title,
-    "link": links::task(project, &task.key),
-    "run": { "id": task.run.to_string(), "number": task.run_number.get() },
-    "agent_working": task.agent_working,
-  })
-}
-
-/// What GitHub's reviews decided; `review_not_required` when the repository asks for none.
-const fn review(decision: Option<ReviewDecision>) -> &'static str {
-  match decision {
-    None => "review_not_required",
-    Some(decision) => decision.as_str(),
-  }
 }

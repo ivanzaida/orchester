@@ -60,6 +60,7 @@ macro_rules! markers {
     impl $inspect for crate::pull_requests::detail::Detail {}
     impl $inspect for crate::pull_requests::list::PullRequestList {}
     impl $inspect for crate::pull_requests::list::PullRequestSort {}
+    impl $inspect for crate::pull_requests::page::PullRequestPage {}
     impl $inspect for crate::recovery::InterruptedRun {}
     impl $inspect for crate::recovery::Recovery {}
     impl $inspect for crate::recovery::RecoveryState {}

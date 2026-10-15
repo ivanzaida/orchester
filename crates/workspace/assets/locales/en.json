@@ -604,6 +604,7 @@
       "notSynced": "Pull requests not synced"
     },
     "openFailed": "The browser could not open the pull request.",
+    "notSynced": "Pull request #{{number}} is not among the pull requests the last sync read. Ask with refresh to read it from GitHub.",
     "footer": {
       "open": {
         "one": "1 open pull request · From this project’s repository",
@@ -793,6 +794,12 @@
     "hours": "{{count}} h",
     "days": "{{count}} d",
     "underMinute": "under a minute",
+    "ago": {
+      "justNow": "just now",
+      "minutes": "{{count}} min ago",
+      "hours": "{{count}} h ago",
+      "days": "{{count}} d ago"
+    },
     "month": {
       "jan": "Jan",
       "feb": "Feb",

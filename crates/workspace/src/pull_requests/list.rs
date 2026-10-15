@@ -4,7 +4,7 @@
 //! searched and counted. Syncing reads the closed and merged ones too, so Merged and Closed have rows.
 //! Every function blocks on SQLite or `gh`; the UI calls them off the UI thread.
 
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use orchester_core::{
   connection::GitHubLogin,
@@ -105,7 +105,27 @@ pub struct ListedPullRequest {
   pub task: Option<LinkedTask>,
 }
 
+/// The latest thing that happened to a pull request, as its row says it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Moment {
+  Updated(Timestamp),
+  Merged(Timestamp),
+  /// Closed without merging.
+  Closed(Timestamp),
+}
+
 impl ListedPullRequest {
+  /// When it was merged or closed, else when it was last updated. One a sync stored before Orchester read
+  /// merge and close times says when it was updated.
+  pub fn moment(&self) -> Moment {
+    let pull_request = &self.pull_request;
+    match (pull_request.state(), pull_request.merged_at(), pull_request.closed_at()) {
+      (PullRequestState::Merged, Some(at), _) => Moment::Merged(at),
+      (PullRequestState::Closed, _, Some(at)) => Moment::Closed(at),
+      _ => Moment::Updated(pull_request.updated_at()),
+    }
+  }
+
   /// Whether a search for `query` finds it: by its number, title or branches
   /// ([`PullRequest::matches`]), or by its task's key, ignoring case.
   pub fn matches(&self, query: &str) -> bool {
@@ -136,6 +156,8 @@ pub struct LinkedList {
   pub synced_at: Option<Timestamp>,
   /// Why the latest sync did not read the list; `None` when it did or before it ran.
   pub failure: Option<SyncFailure>,
+  /// When the latest sync ran; `None` before the first.
+  pub attempted_at: Option<Timestamp>,
   /// Most recently updated first.
   pub pull_requests: Arc<Vec<ListedPullRequest>>,
 }
@@ -230,6 +252,26 @@ pub fn sync_list_in(repo_root: &Path, programs: &Programs) -> Result<PullRequest
   list(repo_root, inbox)
 }
 
+/// How recently a sync must have run for a client's refresh to answer from what it stored instead of asking
+/// GitHub again.
+pub const REFRESH_INTERVAL: Duration = Duration::from_secs(30);
+
+/// A client's refresh: syncs as [`sync_list_in`] does, unless a sync ran less than [`REFRESH_INTERVAL`]
+/// before `now`; then, as while a rate limit holds, the stored list answers, with how its sync went.
+pub fn refresh_list_in(repo_root: &Path, programs: &Programs, now: Timestamp) -> Result<PullRequestList, InboxError> {
+  let stored = load_list_in(repo_root)?;
+  let recent = match &stored {
+    PullRequestList::Unlinked => return Ok(stored),
+    PullRequestList::Linked(linked) => linked.attempted_at.is_some_and(|at| {
+      u128::try_from(now.unix_millis() - at.unix_millis()).is_ok_and(|ago| ago < REFRESH_INTERVAL.as_millis())
+    }),
+  };
+  if recent {
+    return Ok(stored);
+  }
+  sync_list_in(repo_root, programs)
+}
+
 /// *Use this account*: makes the project expect the account `gh` acts as now, then syncs. `gh`
 /// itself is never changed.
 pub fn use_active_account_list_in(repo_root: &Path, programs: &Programs) -> Result<PullRequestList, InboxError> {
@@ -249,6 +291,7 @@ fn list(repo_root: &Path, inbox: Inbox) -> Result<PullRequestList, InboxError> {
     expected,
     synced,
     failure,
+    attempted_at,
   } = *inbox;
   let (synced_at, pull_requests) = match synced {
     Some(synced) => (Some(synced.synced_at), synced.pull_requests),
@@ -269,6 +312,7 @@ fn list(repo_root: &Path, inbox: Inbox) -> Result<PullRequestList, InboxError> {
     expected,
     synced_at,
     failure,
+    attempted_at,
     pull_requests: Arc::new(pull_requests),
   })))
 }

@@ -10,6 +10,7 @@ mod messages;
 mod pipeline_copy;
 mod plans;
 mod projects;
+mod pull_request_wire;
 mod pull_requests;
 mod questions;
 mod queue_hold;
@@ -221,13 +222,13 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_pull_requests",
-    description: "Pull requests of a project's linked GitHub repository as the Pull requests page lists them, or of every project: number, title, state (open, draft, merged, closed), review, GitHub checks on the head, branches, changes, the task and run whose branch it is (agent_working while that run runs), its app link and its GitHub url. They are what the last sync read (open ones and the most recently updated closed ones); refresh syncs one project first through gh. A tab narrows them as the page's tabs do; search finds a number, title words, a branch or a task key. Each repository says how its last sync went.",
+    description: "Pull requests of a project's linked GitHub repository as the Pull requests page lists them, or of every project: number, title, state (open, draft, merged, closed), review, GitHub checks on the head, branches, changes, when it was merged or closed, whether it comes from a fork, the task and run whose branch it is (agent_working while that run runs), its app link and its GitHub url. They are what the last successful sync read (open ones and the 50 most recently updated closed ones). Each repository says how its latest sync went (sync: synced, rate_limited, github_unreachable, paused_other_account, gh_unavailable…), when the list was read (synced_at), when the latest sync ran (attempted_at) and, during a rate limit, until when syncs wait (paused_until); a project that cannot be read says why instead. refresh syncs one project first through gh, unless a sync ran in the last 30 s or a rate limit holds: then the stored list answers. A tab narrows them as the page's tabs do; search finds a number, title words, a branch or a task key.",
     schema: schema_for_type::<pull_requests::ListPullRequests>,
     read_only: true,
   },
   Spec {
     name: "get_pull_request",
-    description: "One pull request of a project's linked GitHub repository, as list_pull_requests gives it, with how the repository's last sync went; refresh syncs first through gh.",
+    description: "One pull request of a project's linked GitHub repository, as list_pull_requests gives it, with how the repository's latest sync went. One the last sync did not read (an older closed one) is refused as pull_request_not_synced; with refresh it is read from GitHub on its own, unless a rate limit holds.",
     schema: schema_for_type::<pull_requests::GetPullRequest>,
     read_only: true,
   },
@@ -290,6 +291,8 @@ async fn dispatch(
     "duplicate_pipeline" => pipeline_copy::duplicate_pipeline(services, parse(arguments)?, translate).await,
     "hold_queue" => queue_hold::set_queue_hold(services, parse(arguments)?, true).await,
     "release_queue" => queue_hold::set_queue_hold(services, parse(arguments)?, false).await,
+    "list_pull_requests" => pull_requests::list_pull_requests(services, parse(arguments)?, translate).await,
+    "get_pull_request" => pull_requests::get_pull_request(services, parse(arguments)?).await,
     other => dispatch_answers(services, other, arguments).await,
   }
 }
@@ -303,8 +306,6 @@ async fn dispatch_answers(services: &Services, name: &str, arguments: Value) -> 
     "decide_plan" => plans::decide_plan(services, parse(arguments)?).await,
     "set_run_auto_mode" => auto_mode::set_run_auto_mode(services, parse(arguments)?).await,
     "get_auto_mode" => auto_mode::get_auto_mode(services, parse(arguments)?).await,
-    "list_pull_requests" => pull_requests::list_pull_requests(services, parse(arguments)?).await,
-    "get_pull_request" => pull_requests::get_pull_request(services, parse(arguments)?).await,
     "set_auto_mode" => auto_mode::set_auto_mode(services, parse(arguments)?).await,
     other => Err(ToolError::InvalidArguments(format!("no tool is named {other}"))),
   }
