@@ -5,17 +5,18 @@
 use std::net::IpAddr;
 
 use orchester_api::{
-  Approval, CloudJoin, ErrorCode, InviteDelivery, InviteKind, Joined, JoinedProject, JoinedVia, User,
+  Approval, CloudJoin, DeviceKind, ErrorCode, InviteDelivery, InviteKind, Joined, JoinedProject, JoinedVia, User,
+  cloud::TokenPurpose,
 };
 use orchester_core::id::ApprovalId;
 use rusqlite::Connection;
 
-use super::Server;
+use super::{Server, admin_sign_in};
 use crate::{
   approvals,
   cloud_link::{self, Claims, Link},
   db::{self, Authenticated, NewUser},
-  devices,
+  devices::{self, Issued},
   error::ServerError,
   invites,
   rate_limit::JoinKind,
@@ -53,6 +54,11 @@ impl Server {
           input.key_set.as_deref(),
           now,
         )?;
+        if input.kind == DeviceKind::AdminWeb {
+          claims.require(Some(TokenPurpose::Admin))?;
+          return admin_sign_in::with_cloud(db, &input, &claims, address, now).map(CloudJoined::Joined);
+        }
+        claims.require(None)?;
         if let Some(caller) = caller {
           return link_caller(db, &caller, &claims, now).map(CloudJoined::Linked);
         }
@@ -147,7 +153,13 @@ fn join(
     }
   };
   cloud_link::consume(db, claims)?;
-  let (token, session) = devices::issue(db, &user, &input.device, JoinedVia::Cloud, Some(&claims.kid), now)?;
+  let issued = Issued {
+    device: &input.device,
+    kind: DeviceKind::App,
+    via: JoinedVia::Cloud,
+    kid: Some(&claims.kid),
+  };
+  let (token, session) = devices::issue(db, &user, &issued, now)?;
   db::audit(
     db,
     Some(user.id),
@@ -256,6 +268,10 @@ fn invited_account(db: &Connection, invite: &invites::Stored, claims: &Claims, n
 /// Links the caller's account, which has no cloud identity yet, to the token's.
 fn link_caller(db: &Connection, caller: &Authenticated, claims: &Claims, now: i64) -> Result<User, ServerError> {
   let current = db::checked(db, caller, now, false)?;
+  // An admin's browser links the account through `PATCH /server/cloud`, with a token issued for that.
+  if current.kind == DeviceKind::AdminWeb {
+    return Err(ErrorCode::Forbidden.into());
+  }
   if current.user.cloud || db::user_by_subject(db, &claims.sub)?.is_some() {
     return Err(ErrorCode::Conflict.into());
   }

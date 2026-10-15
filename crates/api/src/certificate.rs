@@ -44,6 +44,12 @@ impl CertificatePin {
     groups.join("-")
   }
 
+  /// The SHA-256 as browsers show a certificate's fingerprint: upper-case hex bytes joined by colons.
+  pub fn fingerprint(&self) -> String {
+    let bytes: Vec<String> = self.0.iter().map(|byte| format!("{byte:02X}")).collect();
+    bytes.join(":")
+  }
+
   /// The pin as 64 lowercase hex characters, as it is serialized and stored.
   pub fn to_hex(&self) -> String {
     self.0.iter().map(|byte| format!("{byte:02x}")).collect()

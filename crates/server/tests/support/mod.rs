@@ -39,6 +39,7 @@ impl Clock for TestClock {
   }
 }
 
+pub mod admin_app;
 pub mod cloud;
 mod pinned;
 
@@ -125,6 +126,23 @@ impl TestServer {
   ) -> Response {
     let stream = self.connect().await;
     exchange(stream, method, path, token, body, headers).await
+  }
+
+  /// A request outside the API (`path` as sent), as a browser asks for the server admin's pages.
+  pub async fn page(&self, method: &str, path: &str, headers: &[(&str, &str)]) -> Response {
+    exchange_at(self.connect().await, method, path, None, None, headers).await
+  }
+
+  /// Starts the private listener the server admin app calls the API on, and returns its address.
+  pub async fn start_admin_api(&self) -> SocketAddr {
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("listen");
+    let address = listener.local_addr().expect("address");
+    tokio::spawn(orchester_server::serve_admin_api(
+      self.server.clone(),
+      listener,
+      std::future::pending(),
+    ));
+    address
   }
 
   pub async fn connect(&self) -> TcpStream {
@@ -280,6 +298,19 @@ impl Drop for TestServer {
   }
 }
 
+/// An API request to the private listener at `address`, as the admin app sends it.
+pub async fn admin_api(
+  address: SocketAddr,
+  method: &str,
+  path: &str,
+  token: Option<&Credential>,
+  body: Option<serde_json::Value>,
+  headers: &[(&str, &str)],
+) -> Response {
+  let stream = TcpStream::connect(address).await.expect("connect");
+  exchange(stream, method, path, token, body, headers).await
+}
+
 pub fn credential(value: &str) -> Credential {
   Credential::new(value.into())
 }
@@ -295,12 +326,27 @@ impl Response {
     serde_json::from_slice(&self.body).unwrap_or_else(|_| panic!("response did not match JSON contract"))
   }
 
+  pub fn text(&self) -> String {
+    String::from_utf8_lossy(&self.body).into_owned()
+  }
+
   pub fn contains(&self, value: &str) -> bool {
     String::from_utf8_lossy(&self.body).contains(value)
   }
 }
 
 async fn exchange(
+  stream: impl AsyncRead + AsyncWrite + Unpin,
+  method: &str,
+  path: &str,
+  token: Option<&Credential>,
+  body: Option<serde_json::Value>,
+  headers: &[(&str, &str)],
+) -> Response {
+  exchange_at(stream, method, &format!("/api/v1{path}"), token, body, headers).await
+}
+
+async fn exchange_at(
   mut stream: impl AsyncRead + AsyncWrite + Unpin,
   method: &str,
   path: &str,
@@ -310,7 +356,7 @@ async fn exchange(
 ) -> Response {
   let body = body.map_or_else(Vec::new, |body| serde_json::to_vec(&body).expect("JSON request"));
   let mut request = format!(
-    "{method} /api/v1{path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {}\r\n",
+    "{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {}\r\n",
     body.len()
   );
   if let Some(token) = token {

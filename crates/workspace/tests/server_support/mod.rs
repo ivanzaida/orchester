@@ -126,6 +126,7 @@ impl TestServer {
         device: "test computer".into(),
         username: Some(username.into()),
         display_name: Some(display_name.into()),
+        kind: orchester_api::DeviceKind::App,
       }))
       .expect("join with a code");
     joined.token
@@ -143,6 +144,7 @@ impl TestServer {
         device: "BUILD-02 · Windows".into(),
         username: None,
         display_name: None,
+        kind: orchester_api::DeviceKind::App,
       }))
       .expect("join with an account code");
     SecretValue::new(joined.token.expose().to_owned()).expect("a token")

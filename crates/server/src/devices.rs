@@ -1,7 +1,7 @@
 //! Device tokens (`docs/architecture/server.md`, "Device tokens"): 32 random bytes sent as `orc_` and 64 hex
 //! characters, stored only as their SHA-256, one per device, never shown to anyone but the device it is issued to.
 
-use orchester_api::{Credential, ErrorCode, JoinedVia, Session, User};
+use orchester_api::{Credential, DeviceKind, ErrorCode, JoinedVia, Session, User};
 use orchester_core::id::SessionId;
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
@@ -12,15 +12,23 @@ use crate::{
   server_keys::random,
 };
 
-/// A new device token for `user` on the device named `device`, recorded in the caller's transaction.
+/// How a new device token came to be: the joining device's name and kind, how it joined, and the cloud signing key of
+/// the identity token it was issued for.
+pub(crate) struct Issued<'a> {
+  pub device: &'a str,
+  pub kind: DeviceKind,
+  pub via: JoinedVia,
+  pub kid: Option<&'a str>,
+}
+
+/// A new device token for `user`, recorded in the caller's transaction.
 pub(crate) fn issue(
   db: &Connection,
   user: &User,
-  device: &str,
-  via: JoinedVia,
-  kid: Option<&str>,
+  issued: &Issued<'_>,
   now: i64,
 ) -> Result<(Credential, Session), ServerError> {
+  let Issued { device, kind, via, kid } = *issued;
   let token = new_token()?;
   let session = Session {
     id: SessionId::generate(),
@@ -39,6 +47,7 @@ pub(crate) fn issue(
       device,
       via,
       kid,
+      kind,
     },
     now,
   )?;

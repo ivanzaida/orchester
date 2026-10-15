@@ -134,6 +134,7 @@ fn token(signing: &SigningKey, audience: &str, person: &Person) -> String {
       platform: CloudPlatform::Windows,
     },
     invite: person.invite.clone(),
+    purpose: None,
     jti: IdempotencyKey::generate().to_string(),
     iat,
     exp: iat + 300,

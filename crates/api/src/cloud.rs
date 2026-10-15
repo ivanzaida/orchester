@@ -1,10 +1,10 @@
 //! Orchester Cloud's JSON contract (`docs/architecture/server.md`, "Orchester Cloud"; `docs/cloud-api.md`): accounts,
 //! devices and identity tokens. Used by the cloud, the desktop and the web front alike.
 
-use orchester_core::id::{CloudAccountId, CloudDeviceId, TeamServerId};
+use orchester_core::id::{CloudAccountId, CloudDeviceId, InviteId, TeamServerId};
 use serde::{Deserialize, Serialize};
 
-use crate::Credential;
+use crate::{Credential, InviteKind, MemberRole, statements::InvitedProject};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -125,6 +125,20 @@ pub struct DevicesResponse {
 #[serde(deny_unknown_fields)]
 pub struct IdentityTokenRequest {
   pub audience: String,
+  /// `admin` for a sign-in to that server's admin, which must be linked to the cloud; `None` to join with a device.
+  #[serde(default)]
+  pub purpose: Option<TokenPurpose>,
+}
+
+/// What an identity token is for besides joining a team server with a device (`docs/architecture/server.md`, "The
+/// server admin"): the cloud names it in the token, and the team server accepts the token only for that.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TokenPurpose {
+  /// A sign-in to the team server's admin in the browser.
+  Admin,
+  /// Linking the team server to the cloud account of the admin who set it up.
+  Link,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -143,6 +157,92 @@ pub struct CloudServer {
   pub name: String,
   pub address: String,
   pub fingerprint: Option<String>,
+}
+
+/// A linked team server with its check code, for a page that asks the person to compare it.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RegisteredServer {
+  #[serde(flatten)]
+  pub server: CloudServer,
+  pub check_code: Option<String>,
+}
+
+/// `GET /servers/{id}`.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ServerResponse {
+  pub server: RegisteredServer,
+}
+
+/// `POST /servers`: the link statement the team server signed (`statements::LinkStatement`).
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ServerLink {
+  pub link: String,
+}
+
+/// `201` of `POST /servers`: the server as registered, and what the server pins: the cloud's root key, the newest key
+/// set it signed, and an identity token (purpose `link`) that links the admin's account there.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ServerLinked {
+  pub server: RegisteredServer,
+  pub root_key: String,
+  pub key_set: String,
+  pub identity_token: Credential,
+  pub expires_at: i64,
+}
+
+/// A team server the account owns or joined (`GET /servers`).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AccountServer {
+  #[serde(flatten)]
+  pub server: CloudServer,
+  pub owner: bool,
+  /// Milliseconds since the Unix epoch: when the account linked or first joined it.
+  pub joined_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ServersResponse {
+  pub servers: Vec<AccountServer>,
+}
+
+/// `POST /invites`: an invite the team server signed (`statements::SignedInvite`).
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InviteDelivered {
+  pub invite: String,
+}
+
+/// `DELETE /invites/{id}`: the team server's signed revocation (`statements::InviteRevocation`).
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InviteWithdrawn {
+  pub revocation: String,
+}
+
+/// The team server an invite in flight is from.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct InvitingServer {
+  pub id: TeamServerId,
+  pub name: String,
+  pub address: String,
+}
+
+/// An open invite to the account's email (`GET /invites`). Times in milliseconds since the Unix epoch.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CloudInvite {
+  pub id: InviteId,
+  pub kind: InviteKind,
+  pub role: Option<MemberRole>,
+  pub server: InvitingServer,
+  pub project: Option<InvitedProject>,
+  pub inviter_display_name: String,
+  pub expires_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CloudInvites {
+  pub invites: Vec<CloudInvite>,
 }
 
 /// The current key set as a compact JWS signed by the cloud's root key (`identity::KeySet` verifies it).
@@ -170,6 +270,8 @@ pub enum CloudErrorCode {
   RateLimited,
   /// No published key set lists a signing key the cloud may use now.
   KeysUnavailable,
+  /// The team server is linked to another account.
+  Conflict,
   /// The cloud is at a capacity limit (its limiters' memory, its password hashing); try again shortly.
   Busy,
   Internal,

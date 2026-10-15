@@ -2,7 +2,7 @@
 //! tokens, over explicit times, with no network.
 
 use orchester_api::{
-  cloud::{CloudPlatform, DeviceInfo},
+  cloud::{CloudPlatform, DeviceInfo, TokenPurpose},
   identity::{IdentityClaims, KeySetStatement, ListedKey, PrivateKey, RootKey, SigningKey},
 };
 use orchester_core::id::IdempotencyKey;
@@ -87,6 +87,15 @@ impl TestCloud {
 
   /// An identity token signed by `key`, issued at `iat` (seconds), valid five minutes.
   pub fn token_by(key: &Key, identity: &Identity<'_>, iat: i64) -> String {
+    Self::token_with(key, identity, None, iat)
+  }
+
+  /// An identity token for one use besides joining: the server admin, or linking.
+  pub fn purposed_token(&self, identity: &Identity<'_>, purpose: TokenPurpose, iat: i64) -> String {
+    Self::token_with(&self.signing, identity, Some(purpose), iat)
+  }
+
+  fn token_with(key: &Key, identity: &Identity<'_>, purpose: Option<TokenPurpose>, iat: i64) -> String {
     let claims = IdentityClaims {
       iss: ISSUER.into(),
       aud: identity.audience.into(),
@@ -98,6 +107,7 @@ impl TestCloud {
         platform: CloudPlatform::Windows,
       },
       invite: identity.invite.map(Into::into),
+      purpose,
       jti: IdempotencyKey::generate().to_string(),
       iat,
       exp: iat + 300,

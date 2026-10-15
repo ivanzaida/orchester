@@ -2,6 +2,12 @@ mod support;
 
 #[path = "accounts/admin.rs"]
 mod admin;
+#[path = "accounts/admin_pages.rs"]
+mod admin_pages;
+#[path = "accounts/admin_proxy.rs"]
+mod admin_proxy;
+#[path = "accounts/admin_web.rs"]
+mod admin_web;
 #[path = "accounts/approval.rs"]
 mod approval;
 #[path = "accounts/backup.rs"]

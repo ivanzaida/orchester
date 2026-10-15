@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::Credential;
+use crate::{CertificateInfo, Credential, UserRef};
 
 /// The server's link to Orchester Cloud.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -15,7 +15,13 @@ pub struct CloudLink {
   pub accepting: bool,
   /// When the cached key set expires; cloud joins stop then until a newer one arrives.
   pub key_set_expires_at: Option<i64>,
+  /// When the cached key set was issued: the last time the server got a newer one.
+  #[serde(default)]
+  pub key_set_issued_at: Option<i64>,
   pub linked_at: Option<i64>,
+  /// The admin who linked it.
+  #[serde(default)]
+  pub linked_by: Option<UserRef>,
 }
 
 /// What finishing a link brings back from the cloud: its root key (pinned now) and a key set the root signed. With an
@@ -65,12 +71,16 @@ pub struct CloudLinkResponse {
 pub struct ServerSettings {
   /// A cloud join of an existing account waits for that account's devices or an admin (row 57).
   pub join_approval: bool,
+  /// The server's name, shown to everyone it invites; `name` in `server.toml` until an admin changes it.
+  #[serde(default)]
+  pub name: String,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SettingsChanges {
   pub join_approval: Option<bool>,
+  pub name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -78,4 +88,6 @@ pub struct SettingsResponse {
   pub settings: ServerSettings,
   /// The certificate's check code, `null` when the server serves plain HTTP behind a proxy.
   pub check_code: Option<String>,
+  #[serde(default)]
+  pub certificate: Option<CertificateInfo>,
 }
