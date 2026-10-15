@@ -356,17 +356,29 @@ included. The tooltip names the reason: *Personal website · 1 needs you* or *Pe
 Could not create worktree for PW-14*. It clears when the count is 0 and the failure is opened or
 dismissed. All projects tabs never show it.
 
-**Overflow.** Tabs shrink together from 224 to 120; the active tab keeps at least 160. Below 140
-an inactive tab drops its close button (middle-click still closes it). When 120-wide tabs do not
-fit, the strip stops shrinking and scrolls horizontally (wheel or trackpad over the strip, and
-switching tabs scrolls the active one into view), with a 24px fade to `$canvas` on each clipped
-edge. A tab list button appears after the strip: the tab count (Geist Mono 11) and
-`chevron-down` 12, 24 high, radius 6, `$hover` fill and `chevron-up` while open. The list uses
-the select menu's style (`u0ByM`: `$raised`, `$border`, radius 11, padding 4, elevation shadow),
-320 wide, right-aligned under the button, 4px below the title bar, rows 32 high with the avatar,
-the full location and the check on the active tab; at most 8 rows, then it scrolls with the
-overlay thumb. A click switches, middle-click closes, Escape or a click outside closes the list.
-The + and 48px of drag area always stay visible.
+**Overflow** (decided 2026-10-15; the new app's frames are `oHEGQ`, `qWCBQ`, `a1i6Ws` and `YAOSy` in
+`orchester2.pen`). While every tab fits, a labelled tab keeps its natural width with its label capped at
+160. As tabs open, the inactive labelled tabs shrink together down to 120 (`Kontur · Ove…`); the active tab
+never shrinks, and All projects stays 28. When 120-wide tabs no longer fit, the strip does not scroll:
+it shows the longest run of tabs from the left that fits beside the active tab, those tabs at 120, and
+the rest are hidden. An active tab outside that run takes the last slot after it, so the tabs on the left
+never move under the pointer. The + and 48px of drag area always stay visible.
+
+The tab list button sits after the last visible tab, before +, only while a tab is hidden: the count of
+hidden tabs (Geist Mono 11 `$text_secondary`) and `chevron-down` 12, 26 high, radius 6. Hovered it takes
+`$hover` and says *N more tabs · Ctrl Shift A*; open it takes `$pressed` and `chevron-up`. Ctrl/Cmd+Shift+A
+opens and closes the list. The list is the menu surface (`$surface_raised`, radius 10, `$border_strong`,
+padding 6), 320 wide, its start under the button's, 4 under the title bar, and 8 inside the window's right
+edge where it would cross it; it grows up to the window height less 48, then its rows scroll. It holds
+every open tab in strip order: the tab's icon, its page, its project, `eye-off` while the tab is hidden,
+the needs-you mark, a check on the current tab (filled `$accent_muted`), and a close button in a reserved
+slot while the row is hovered. With more than eight tabs a search field leads the list, focused, matching
+page and project; with no match it says *No open tab matches “…”*. Up/Down move a focus ring over the rows
+(a list without search opens with the current row ringed), Enter switches, Ctrl/Cmd+W closes the ringed
+tab, Escape clears the search and then closes the list; a click switches and closes the list, a
+middle-click closes that tab. A tab chosen from the list becomes active, so it takes the last slot. A
+choice or Escape gives the focus back to the button (a Tab stop whose ring shows only after keyboard use);
+when the list goes away because every tab fits again, *New tab* takes the focus.
 
 **Order.** Press on a tab and move 4px to drag it along the strip (horizontal only; it does not
 activate the tab). The other tabs slide aside to show where it will land; release drops it there,

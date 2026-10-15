@@ -1,0 +1,116 @@
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: var(--page-justify);
+  gap: var(--space-xl);
+  padding: var(--page-padding-y) var(--page-padding-x);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-tight);
+}
+
+.mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-mark);
+  height: var(--size-mark);
+  background: var(--color-surface-raised);
+  box-shadow: inset 0 0 0 var(--border-sm) var(--color-border);
+  border-radius: var(--radius-mark);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-bar-gap);
+  width: var(--size-logo);
+  height: var(--size-logo);
+  background: var(--color-brand-logo);
+  border-radius: var(--radius-logo);
+}
+
+.bar1,
+.bar2,
+.bar3 {
+  width: var(--size-bar-width);
+  background: var(--color-brand-bar);
+  border-radius: var(--radius-bar);
+}
+
+.bar1 {
+  height: var(--size-bar-1);
+}
+
+.bar2 {
+  height: var(--size-bar-2);
+}
+
+.bar3 {
+  height: var(--size-bar-3);
+}
+
+.wordmark {
+  font-size: var(--text-wordmark);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-title);
+  color: var(--color-text-primary);
+}
+
+.tag {
+  font-family: var(--font-mono);
+  font-size: var(--text-tag);
+  letter-spacing: var(--tracking-tag);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+  font-size: var(--text-body);
+  color: var(--color-text-secondary);
+}
+
+.link {
+  font-weight: var(--weight-medium);
+  color: var(--color-accent-text);
+  text-decoration: underline;
+  text-underline-offset: var(--space-hairline);
+}
+
+.link:focus-visible {
+  outline: var(--border-md) solid var(--color-border-focus);
+  outline-offset: var(--space-hairline);
+  border-radius: var(--radius-md);
+}
+
+.footer {
+  display: flex;
+  flex-direction: var(--footer-direction);
+  align-items: var(--footer-align);
+  gap: var(--footer-gap);
+  min-height: var(--footer-height);
+  padding: var(--footer-padding);
+  border-top: var(--border-sm) solid var(--color-border);
+  font-size: var(--text-small);
+  line-height: var(--footer-leading);
+  color: var(--color-text-muted);
+}
+
+.spacer {
+  display: var(--footer-spacer);
+  flex: 1;
+}
+
+.links {
+  display: flex;
+  gap: var(--footer-links-gap);
+}
