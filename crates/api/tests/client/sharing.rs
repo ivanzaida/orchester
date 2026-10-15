@@ -1,10 +1,9 @@
 use orchester_api::{
-  ClaimTake, Credential, ErrorCode, Heartbeat, MemberChanges, MemberCreate, MemberRole, PasswordChange, ProjectCreate,
-  SharedLimits, SharingErrorDetails, TagMerge, TagName, TaskChanges, TaskPatch, UploadTask,
+  ClaimTake, ErrorCode, Heartbeat, MemberChanges, MemberCreate, MemberRole, ProjectCreated, SharedLimits,
+  SharingErrorDetails, TagMerge, TagName, TaskChanges, TaskPatch, UploadTask,
 };
 use orchester_core::{
-  id::{IdempotencyKey, TaskId, UserId},
-  repository::RepositoryIdentity,
+  id::{IdempotencyKey, TaskId},
   secret::SecretValue,
   sharing::ClaimKind,
   task::{
@@ -12,32 +11,11 @@ use orchester_core::{
     organization::{Priority, WorkflowStatus},
   },
 };
+use serde_json::json;
 
-use crate::support::{TestServer, sign_in, token};
+use crate::support::TestServer;
 
 const REMOTE: &str = "https://github.com/ivanzaida/kontur.git";
-
-/// `username`, created on the host and signed in with a password of their own: their id and token.
-async fn person(server: &TestServer, username: &str) -> (UserId, SecretValue) {
-  let first = server.create_user(username, false).await;
-  let client = server.client();
-  let signed = client
-    .sign_in(&sign_in(username, first.expose()))
-    .await
-    .expect("first sign-in");
-  let token = token(&signed.token);
-  client
-    .change_password(
-      &token,
-      &PasswordChange {
-        current_password: Credential::new(first.expose().into()),
-        new_password: Credential::new(format!("{username}'s own long password")),
-      },
-    )
-    .await
-    .expect("choose a password");
-  (signed.user.id, token)
-}
 
 fn upload(number: u32, title: &str, claim: bool) -> UploadTask {
   UploadTask {
@@ -71,67 +49,59 @@ fn member(username: &str) -> MemberCreate {
   }
 }
 
-fn create(tasks: Vec<UploadTask>) -> ProjectCreate {
-  ProjectCreate {
-    idempotency_key: IdempotencyKey::generate(),
-    name: "Kontur".into(),
-    key: "ORC".into(),
-    remote: REMOTE.into(),
-    tasks,
-  }
+/// The project `kontur`, created by the admin `admin` in the server admin with `tasks` uploaded.
+async fn create(server: &TestServer, admin: &SecretValue, tasks: Vec<UploadTask>) -> ProjectCreated {
+  let body = json!({"idempotency_key": IdempotencyKey::generate(), "name": "Kontur", "slug": "kontur", "key": "ORC",
+    "remote_hint": REMOTE, "tasks": tasks});
+  serde_json::from_value(server.post(admin, "/projects", body).await).expect("created project")
 }
 
 #[tokio::test]
-async fn client_sharing_creates_a_project_keeping_numbers_and_finds_it_by_its_repository() {
+async fn client_sharing_reads_a_project_with_its_address_and_hides_it_from_others() {
   let server = TestServer::start(|_| {}).await;
   let alice = server.admin().await;
-  let (_, bohdan) = person(&server, "bohdan").await;
+  let (_, bohdan) = server.person(&alice, "bohdan").await;
   let client = server.client();
-  let created = client
-    .create_project(
-      &alice,
-      &create(vec![
-        upload(38, "Repository switcher", true),
-        upload(40, "Merge queue", false),
-      ]),
-    )
-    .await
-    .expect("share");
-  assert_eq!(created.project.role, Some(MemberRole::Owner));
-  assert_eq!(created.project.next_number, 41);
+  let created = create(
+    &server,
+    &alice,
+    vec![
+      upload(38, "Repository switcher", true),
+      upload(40, "Merge queue", false),
+    ],
+  )
+  .await;
+  let project = client.project(&alice, created.project.id).await.expect("project");
+  assert_eq!(project.role, Some(MemberRole::Owner));
+  assert_eq!(project.next_number, 41);
+  assert_eq!(project.slug, "kontur");
+  assert_eq!(project.address, format!("{}/kontur", server.url()));
+  assert_eq!(
+    project.remote_hint.expect("hint").as_str(),
+    "github.com/ivanzaida/kontur"
+  );
   let numbers: Vec<u32> = created.tasks.iter().map(|task| task.number).collect();
   assert_eq!(numbers, [38, 40]);
   assert_eq!(
     created.tasks[0].claim.as_ref().map(|claim| claim.kind),
     Some(ClaimKind::Run)
   );
-  assert_eq!(created.tasks[0].content.pipeline.as_deref(), Some("delivery"));
-
-  let identity = RepositoryIdentity::from_remote_url("git@github.com:ivanzaida/kontur.git").expect("identity");
-  let found = client.projects(&alice, Some(&identity)).await.expect("lookup");
+  let listed = client.projects(&alice).await.expect("projects");
   assert_eq!(
-    found.iter().map(|project| project.id).collect::<Vec<_>>(),
+    listed.iter().map(|project| project.id).collect::<Vec<_>>(),
     [created.project.id]
   );
+  assert!(client.projects(&bohdan).await.expect("projects").is_empty());
   let refused = client
-    .projects(&bohdan, Some(&identity))
+    .project(&bohdan, created.project.id)
     .await
     .expect_err("not a member");
-  assert_eq!(refused.code(), Some(ErrorCode::NotMember));
-  let Some(SharingErrorDetails::Owners { owners }) = refused.details() else {
-    panic!("the refusal names the owners: {refused:?}");
-  };
-  assert_eq!(owners.len(), 1);
+  assert_eq!(refused.code(), Some(ErrorCode::NotFound));
   let tags = client.tags(&alice, created.project.id).await.expect("tags");
   assert_eq!(
     tags.iter().map(|tag| tag.name.as_str()).collect::<Vec<_>>(),
     ["Desktop"]
   );
-  let again = client
-    .create_project(&bohdan, &create(Vec::new()))
-    .await
-    .expect_err("taken");
-  assert_eq!(again.code(), Some(ErrorCode::RemoteTaken));
   server.finish().await;
 }
 
@@ -139,14 +109,9 @@ async fn client_sharing_creates_a_project_keeping_numbers_and_finds_it_by_its_re
 async fn client_sharing_members_roles_and_the_last_owner() {
   let server = TestServer::start(|_| {}).await;
   let alice = server.admin().await;
-  let (bohdan_id, bohdan) = person(&server, "bohdan").await;
+  let (bohdan_id, bohdan) = server.person(&alice, "bohdan").await;
   let client = server.client();
-  let project = client
-    .create_project(&alice, &create(Vec::new()))
-    .await
-    .expect("share")
-    .project
-    .id;
+  let project = create(&server, &alice, Vec::new()).await.project.id;
   let missing = client
     .add_member(&alice, project, &member("maria.l"))
     .await
@@ -199,12 +164,9 @@ async fn client_sharing_members_roles_and_the_last_owner() {
 async fn client_sharing_tasks_change_under_their_revision_and_claims_name_the_holder() {
   let server = TestServer::start(|_| {}).await;
   let alice = server.admin().await;
-  let (_, bohdan) = person(&server, "bohdan").await;
+  let (_, bohdan) = server.person(&alice, "bohdan").await;
   let client = server.client();
-  let created = client
-    .create_project(&alice, &create(vec![upload(1, "Fix reconnect", false)]))
-    .await
-    .expect("share");
+  let created = create(&server, &alice, vec![upload(1, "Fix reconnect", false)]).await;
   let project = created.project.id;
   client
     .add_member(&alice, project, &member("bohdan"))
@@ -279,10 +241,7 @@ async fn client_sharing_tags_are_the_project_s() {
   let server = TestServer::start(|_| {}).await;
   let alice = server.admin().await;
   let client = server.client();
-  let created = client
-    .create_project(&alice, &create(vec![upload(1, "Fix reconnect", false)]))
-    .await
-    .expect("share");
+  let created = create(&server, &alice, vec![upload(1, "Fix reconnect", false)]).await;
   let project = created.project.id;
   let desktop = client.tags(&alice, project).await.expect("tags").remove(0);
   let runner = client

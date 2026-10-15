@@ -1,0 +1,11 @@
+{$ORCHESTER_CLOUD_PUBLIC_URL} {
+    # The JSON API. The web front (sign-up, sign-in, /confirm/{token}, /reset/{token}) is not deployed yet; when it
+    # is, its container takes the other paths and calls the API itself. No access log: the paths of the web front's
+    # pages carry one-time tokens.
+    handle /api/* {
+        reverse_proxy cloud:8090
+    }
+    handle {
+        respond "The Orchester Cloud web front is not deployed yet." 503
+    }
+}

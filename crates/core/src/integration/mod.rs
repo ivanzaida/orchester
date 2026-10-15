@@ -24,7 +24,7 @@ pub use self::{
     leftovers, leftovers_of,
   },
   forgotten::{FOLDER_ENTRIES_READ, FolderListing},
-  merge::{MergeError, MergeKind, RunMerge, merge_run},
+  merge::{MergeError, MergeKind, RunMerge, merge_run, merge_run_at},
   merged::{Branches, Delivered, RunWork},
   recorded::{RecordedCleanupError, RemovalStart, clean_up_recorded},
 };

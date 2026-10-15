@@ -120,6 +120,7 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 62 | The server admin | Each team server has a web app of its own at its address, server-rendered Next.js, admin only: first setup (the setup code, then linking to the owner's cloud account), projects (create by name and slug, rename, the remote hint), members and roles per project, invites (by email through the cloud, by code without the internet), devices (revoke), and settings (join approval, the cloud link and key, the certificate check code). Sign-in through the cloud identity, or a code for an offline server. It talks to the team server's own API from its server side only ([The server admin](#the-server-admin)) | user (2026-10-15) |
 | 63 | What the desktop keeps | Settings › Orchester (cloud sign-in, connected servers, connecting with the check code), Project settings › Sharing (the link to a server project, the remote mismatch warning, members read-only, *Make local*, and *Manage members and invites*, which opens the server admin in the browser), joining, and the status bar item. Owner setup and member and invite management move to the server admin. **Clarified by the person:** "the desktop app stays the same, all admin actions are done in selfhosted-web". The desktop has no admin action at all (no project creation on a server, no member or role management, no invites, no revoking others' devices, no server settings, no owner setup); where one would be, it shows at most a link that opens the server admin. **Changes 9, 25, 43** | user (2026-10-15) |
 | 64 | Shared web components | The cloud's web front and the server admin share one UI package: a `web/` workspace with `web/ui` (components, design tokens from the Pencil variables, i18n helpers), `web/cloud` and `web/server`; each app has its own locale files and shared components take their words from the app. AGENTS.md's code-quality, i18n and design-token rules apply to all of `web/` ([The web workspace](#the-web-workspace)) | user (2026-10-15) |
+| 65 | Confirming asks for the password | Confirming an email asks for the password chosen at sign-up (`POST /auth/confirm { link_token, password }`), checked against the hash stored on that link, with the same work whether the link exists or not, rate-limited, and one answer for any failure. A repeated unconfirmed sign-up no longer ends earlier links: each link carries its own pending password hash and display name, and confirming one ends the rest. Reason: someone who signs up first with another person's email must not get their own password set when that person clicks a link ([Orchester Cloud](#orchester-cloud)) | user (2026-10-15, after a security review) |
 
 ## Processes and crates
 
@@ -731,22 +732,22 @@ changes; the rest is built (S1a, S1b).
 | --- | --- | --- | --- | --- | --- |
 | `GET /server` | none | | `{ name, api_version: 3, needs_setup, cloud: { root_fingerprint, accepting }\|null }` | | changed in 3 |
 | ~~`POST /auth/sessions`~~ | | | | | removed in 3 (row 46) |
-| `POST /auth/cloud` | none, or user (to link an account) | `{ identity_token, key_set?, device }` | `201 { token, session, user, joined: { project, role }\|null }` | `401 invalid_identity`, `403 not_invited`, `403 cloud_off`, `409 key_set_stale`, `429 rate_limited` | new in 3 (row 42) |
+| `POST /auth/cloud` | none, or user (to link an account) | `{ identity_token, key_set?, device }` | `201 { token, session, user, joined: { project, role }\|null }` | `401 invalid_identity` (also a token whose `name` is blank or over 256 characters), `403 not_invited`, `403 cloud_off`, `409 key_set_stale`, `429 rate_limited` | new in 3 (row 42) |
 | `POST /auth/code` | none | `{ code, device, username?, display_name? }` | `201 { token, session, user, joined }` | `401 invalid_code` (one answer for unknown, used and expired), `409 username_taken`, `422 invalid`, `429 rate_limited` | new in 3 (row 45) |
-| `POST /auth/pairings` | user | | `201 { code, expires_at }` | `429 rate_limited` (3 open per account) | new in 3 (row 44) |
+| `POST /auth/pairings` | user | | `201 { code, expires_at }` | `409 too_many_codes` (the server's 50 open codes), `429 rate_limited` (3 open per account) | new in 3 (row 44) |
 | `GET /auth/me` | user | | `{ user }` | `401` | |
 | `GET /auth/sessions` | user | | `{ sessions: [Session] }` | | |
 | `DELETE /auth/sessions/current` | user | | `204` | | |
 | `DELETE /auth/sessions/{id}` | user (own sessions) | | `204` | `404` | |
 | ~~`POST /auth/password`~~ | | | | | removed in 3 (row 46) |
-| `POST /invites` | admin (server, account), owner (project) | `{ kind, email?, project?, role?, user?, delivery }` | `201 { invite, code? }` (a code only for `delivery: code`, shown once), `signed?` (the signed invite for the server admin's page to carry through the browser when the server cannot reach the cloud) | `403`, `409 already_member`, `409 too_many_codes`, `422 invalid` | new in 3 (row 43) |
+| `POST /invites` | admin (server, account), owner (project) | `{ kind, email?, project?, role?, user?, delivery }` | `201 { invite, code? }` (a code only for `delivery: code`, shown once), `signed?` (the signed invite for the server admin's page to carry through the browser when the server cannot reach the cloud) | `403` (also an account invite naming an admin), `409 already_member`, `409 too_many_codes`, `422 invalid` | new in 3 (row 43) |
 | `GET /invites` | admin (all), owner (their projects') | | `{ invites: [Invite] }`, open only, never a code | | new in 3 |
 | `DELETE /invites/{id}` | the inviter, owner, admin | | `204`; the cloud is told | `404` | new in 3 |
 | `GET /server/cloud`, `PATCH /server/cloud` | admin | `{ accepting?, link?, unlink?, pin? }` | `{ cloud }` | `422 invalid` | new in 3 (rows 47, 62) |
 | `GET /server/settings`, `PATCH /server/settings` | admin | `{ join_approval? }` | `{ settings, check_code }` | `422 invalid` | new in 3 (rows 57, 62) |
 | `GET /admin/sessions`, `DELETE /admin/sessions/{id}` | admin | | `{ sessions: [Session with user] }`; `204` | `404` | new in 3 (row 62) |
 | `GET /projects` | user | | `{ projects: [Project] }` the user is a member of | | `?remote=` removed in 3 (row 49) |
-| `GET /projects?slug=<slug>` | user | | `{ project }` when the user is a member | `403 not_member { name, owners: [UserRef] }` when it exists, `404` when it does not | new in 3 (row 49) |
+| `GET /projects?slug=<slug>` | user | | `{ project }` when the user is a member | `404` when there is no such project or the user is not a member of it: one answer for both, so a lookup tells a non-member nothing of the project (its name and owners included) | new in 3 (row 49) |
 | `POST /projects` | admin | `{ idempotency_key, name, slug, key, remote_hint?, tasks: [UploadTask] }` | `201 { project, tasks: [Task], cursor }`; the caller is the project's owner; `tasks` may be empty | `409 slug_taken`, `409 conflict`, `422 invalid` | changed in 3: admins only, by slug; `remote_taken` removed |
 | `POST /projects/{id}/link` | member | `{ idempotency_key, tasks: [UploadTask], remote? }` | `201 { tasks: [Task], dropped_links, cursor }`: the first checkout linked to a project with no tasks keeps its numbers (row 12); later ones are imports with new numbers; sets `remote_hint` when empty | `409 id_taken`, `422 invalid` | new in 3 (row 49) |
 | `GET /projects/{id}` | member | | `{ project }` | `404` | |
@@ -866,7 +867,8 @@ Row 39. The team server needs no internet, no public DNS and no public certifica
   (`3F7A-92C1-KD8M-QX4T`, Crockford alphabet). The server prints it to its console at every start and `orchester-server
   tls show` prints it again. A cloud invite carries the full fingerprint, so the person compares nothing; with a code
   the desktop shows the check code it received and continues only after the person confirms it matches the console or
-  the inviter's screen.
+  the inviter's screen. The confirmation (N1) makes the person compare all four groups: it shows the whole code, never
+  a shortened one, and does not let a match of the first group stand for the rest.
 - **Pinning** is a rustls verifier in `orchester-api`'s client that compares the presented leaf certificate with the
   pinned hash; nothing else is accepted, and there is no "ignore certificate errors" switch.
 - **A new certificate** (`orchester-server tls regenerate`, e.g. after a key leak) breaks every pin on purpose. The
@@ -946,8 +948,8 @@ URL above) and from Settings › Orchester's advanced field, for a test cloud.
 
 | Method and path | Who | Does |
 | --- | --- | --- |
-| `POST /auth/signup` | none | `{ email, password, display_name }`: sends the confirmation link; the same answer whether or not the email is registered (a registered one gets a *you already have an account* email) |
-| `POST /auth/confirm` | none | `{ link_token }`: confirms the email |
+| `POST /auth/signup` | none | `{ email, password, display_name }`: records a pending sign-up on a new confirmation link (its own password hash and display name; earlier unconfirmed links of the email stay valid) and sends it; the same answer whether or not the email is registered (a registered one gets a *you already have an account* email) |
+| `POST /auth/confirm` | none | `{ link_token, password }` (row 65): checks the password against the hash stored on that link; on success creates the account with that link's password and display name and ends every other link of the email. Always one argon2 verification (against a fixed dummy hash when the link is unknown, used or expired), so the work is the same either way; one answer for any failure, `401 confirm_failed`, saying neither which part was wrong; rate-limited |
 | `POST /auth/sessions` | none | `{ email, password, device }`: `201 { token, account }`; `401 invalid_credentials`, `403 email_unconfirmed` |
 | `POST /auth/reset` | none | `{ email }`: sends a reset link; the same answer for any email |
 | `POST /auth/reset/finish` | none | `{ link_token, new_password }`: `204` |
@@ -966,8 +968,9 @@ URL above) and from Settings › Orchester's advanced field, for a test cloud.
 | `DELETE /invites/{id}` | the team server's key | Revoked by the team server |
 
 **Data** (PostgreSQL, row 54; ids `uuid`, times `timestamptz` written from the cloud's clock, payloads `jsonb`):
-`accounts` (id, email stored lowercased with a unique index, confirmed at, display name, password hash, created), `email_links` (hash, account, purpose: confirm or reset,
-expires, used), `devices` (account, name, platform, token hash, created / last used / revoked), `servers` (id, owner,
+`accounts` (id, email stored lowercased with a unique index, confirmed at, display name, password hash, created; a
+row exists only once an email is confirmed), `email_links` (hash, email, purpose: confirm or reset, account for a
+reset, pending password hash and display name for a confirmation, expires, used), `devices` (account, name, platform, token hash, created / last used / revoked), `servers` (id, owner,
 name, address, fingerprint, public key, linked / unlinked), `server_accounts` (server, account, first joined),
 `invites` (id, server, project address, kind, email, inviter display name, project name, role, expires),
 `used_tokens` (identity token id until its expiry), `signing_keys` (kid, public key, private key encrypted with a key
@@ -989,7 +992,7 @@ only browser face; the desktop keeps using the JSON API.
 | --- | --- | --- |
 | Sign up | `/signup` | Email, display name, password; then *Check your email* |
 | Sign in | `/signin` | Email and password |
-| Email confirmed | `/confirm/{token}` | The landing of the confirmation link: confirms (a `POST` from the page's server side, never on a bare `GET`, so mail scanners that fetch links do not use it up: the page shows *Confirm my email*), then *Open Orchester to continue* |
+| Email confirmed | `/confirm/{token}` | The landing of the confirmation link: a **Password** field (the one chosen at sign-up, row 65) and *Confirm email*, sent as a `POST` from the page's server side, never on a bare `GET`, so mail scanners that fetch links do not use it up; a failure says only *This link and password don't match. Check the password, or send a new link.* (the approved design `CVRpO`), with the field emptied and not marked, and *Send a new link*; then *Your email is confirmed* and *Sign in on the web*. *Open Orchester* waits for an `orchester://` URL scheme the desktop registers; until then the page does not show it |
 | Forgot password | `/forgot` | Email; the same answer for any address |
 | Reset password | `/reset/{token}` | New password; then *Signed out of your other devices* |
 | Later: account, devices | `/account`, `/devices` | Display name and email, password change, the devices with *Sign out* |
@@ -1009,8 +1012,11 @@ address links to `/signup?invite=…`).
   short-lived pre-session cookie carries it). `SameSite=Lax` stops cross-site `POST`s too; the two checks do not rely
   on each other.
 - **Links and tokens in URLs.** Confirmation and reset tokens are one-time, short-lived and only in the email's link.
-  The pages send `Referrer-Policy: no-referrer`, load no third-party resources, and Caddy's access log drops query
-  strings and the token segment of `/confirm/` and `/reset/`; the web app logs paths without them.
+  The pages send `Referrer-Policy: strict-origin`, load no third-party resources, and Caddy's access log drops query
+  strings and the token segment of `/confirm/` and `/reset/`; the web app logs paths without them. `strict-origin`, not
+  `no-referrer` (coordinator's decision): a `Referer` never carries a path or a query, so never a link's token, while
+  forms keep sending their `Origin`; under `no-referrer` browsers send `Origin: null` with a form `POST`, which defeats
+  the `Origin` check above.
 - **Headers.** A strict Content Security Policy (self only, no inline scripts beyond Next.js' nonce), `X-Frame-Options:
   DENY`, HSTS from Caddy.
 - **Design and words.** The screens are drawn in Pencil first (`data/orchester2.pen`, a *Cloud web* layer using the
@@ -1067,7 +1073,8 @@ A project owner who is not an admin sees only Projects (their own, rename and hi
 **Sessions and CSRF**, the cloud web front's model: the admin web token (kind `admin_web`, 12 hours, revocable like a
 device) lives only in the `__Host-orchester_admin` cookie, `Secure`, `HttpOnly`, `SameSite=Lax`, no `Domain`; every
 call to the team server is made from the admin's server side; every form is a server-side `POST` checked for `Origin`
-and a signed per-session CSRF token; `Referrer-Policy: no-referrer`, a strict CSP, `X-Frame-Options: DENY`. Codes are
+and a signed per-session CSRF token; `Referrer-Policy: strict-origin` (not `no-referrer`, which makes form `POST`s send
+`Origin: null` and defeats the `Origin` check), a strict CSP, `X-Frame-Options: DENY`. Codes are
 shown once and never logged.
 
 **How it is served.** The Rust team server stays the front door, so a server has one address, one port and one
@@ -1141,7 +1148,10 @@ Row 42; the rules here are the architect's.
   device token as S1a issued session tokens. The email is not stored; only `sub` and the display name. With join
   approval on (row 57), a cloud join of an existing account answers `202 { approval }` instead, the account's
   joined devices and the admins see *Approve this computer?* (person-only), and the joining app finishes with the same
-  request once it is approved, or learns it was refused.
+  request once it is approved, or learns it was refused. An account and cloud identity have one waiting approval at a
+  time: asking again returns it. Each new approval counts against the client address like a failed join (asking
+  costs the approvers' attention), the approval records that address, and approvals that ended (expired, refused,
+  used) are removed.
 - **Owner control.** `PATCH /server/cloud` (admin) or `orchester-server cloud off|on|pin <fingerprint>|unlink` on the
   host: *off* stops accepting identity tokens at once (joined devices keep working); *pin* replaces the pinned root
   (after a root compromise); *unlink* forgets the cloud and tells it when it can.
@@ -1149,7 +1159,8 @@ Row 42; the rules here are the architect's.
 **Linking a team server at setup.** The server starts with an empty data directory and prints its check code and a
 one-time **setup code** to its console (row 45). The owner opens the server admin (row 62), enters the setup code and
 chooses a username; the server makes that account its first admin. *Link to Orchester Cloud* then carries the
-server's signed link statement (server id, public key, address, fingerprint) through the browser to the cloud's
+server's signed link statement (server id, public key, address, `fingerprint`: the certificate's SHA-256 in hex, the
+value apps pin, never the shorter check code) through the browser to the cloud's
 `/authorize`, where the owner is signed in; the cloud registers the server for that account (`POST /servers`) and the
 browser brings back the cloud's key set, whose root the server pins ([The server admin](#the-server-admin)). Without
 the internet the setup stops after the first step: the server is simply not linked, and can be linked later. The owner
@@ -1169,9 +1180,15 @@ Row 43.
   either way (an unregistered address is asked to register first, and the invite waits for it until expiry).
 - **Accepting.** The invitee's app lists the invite (Settings › Orchester, and a notice in All projects). Accept
   returns the team server's address, its fingerprint and a one-time identity token bound to the invite. The app pins
-  the fingerprint, connects to the team server directly, joins (`POST /auth/cloud`), and for a project invite opens
+  the fingerprint, connects to the team server directly (the server's id, address and fingerprint go together: the
+  app asks the cloud for a token only after the server at that address presented that certificate, so a token for one
+  server reaches no other), joins (`POST /auth/cloud`), and for a project invite opens
   that project's join review: in the local project whose repository identity matches, or after the person adds the
-  checkout. A project invite for someone already on the server only adds the membership.
+  checkout. A project invite for someone already on the server only adds the membership; a server invite with
+  *admin* makes the account that accepts it an admin. An account invite names one account: an identity already linked
+  to another account is refused (`403 not_invited`) and the invite stays open. Acceptance checks again what making
+  the invite checked: an account invite or code for an account that has become an admin, and an admin invite whose
+  inviter is no longer an enabled admin, are refused (`403 forbidden`) and stay open.
 - **Revoking.** The inviter or an admin revokes an open invite; the team server tells the cloud, which deletes it.
 
 ### New computers
@@ -1191,7 +1208,7 @@ Row 45: address plus an 8-character code, for networks without the internet.
 | --- | --- | --- | --- |
 | Setup | The server, on first start and at each start until it has an admin; printed to its console (stdout), never to the log | 24 hours | The first admin account and a device token |
 | Invite | A project owner or an admin, in the server admin (*Invite with a code*) | 72 hours | A server account, or a project membership with a role, and a device token; a project invite opens the join review |
-| Account | An admin, for an existing account that lost every device (in the server admin, or `orchester-server account-code <username>` on the host) | 24 hours | A device token for that account |
+| Account | An admin, for an existing account that lost every device and is not an admin (in the server admin), or anyone with the host for any account (`orchester-server account-code <username>`). An admin's own next device comes from their own devices (a pairing code) or the host, never from another admin | 24 hours | A device token for that account |
 | Pairing | A joined device, for the same account (Settings › Orchester, the server's entry) | 10 minutes | A device token for that account, or a sign-in to the server admin |
 
 - **Shape.** 8 characters of the Crockford base32 alphabet (40 bits), shown `ABCD-EFGH`, read without regard to case
@@ -1201,9 +1218,17 @@ Row 45: address plus an 8-character code, for networks without the internet.
   to the person who made them, and never logged, returned again or put in a URL.
 - **Redeeming.** `POST /auth/code { code, device, username?, display_name? }` (username and display name only when
   the code creates an account). After the TLS check-code confirmation described above.
-- **Rate limits.** 10 failed redemptions per client address in 15 minutes block that address for 15 minutes; 200
-  failures on the whole server in an hour pause redemption for 15 minutes; at most 3 open pairing codes per account and
-  50 open codes per server. With 50 open codes, 200 guesses an hour succeed with odds below 1 in 10^7 a week.
+- **Rate limits.** 10 failed redemptions or cloud joins per client network (an IPv4 address, an IPv6 /48) in 15
+  minutes block that network for 15 minutes. 200 failed redemptions on the whole server in any hour (a sliding hour)
+  pause redemption until fewer than 200 remain in the last hour, at least 15 minutes; failed cloud joins have a
+  server-wide budget of their own of the same size, so neither pauses the other. Redemptions and cloud joins from the
+  host itself (loopback) are exempt from the server-wide budgets, so the person at the host can always redeem the
+  setup code; their own address limit still holds. The pause is per server, not per person: over IPv4 about 5
+  addresses (10 failures each per 15 minutes) can keep code redemption paused for everyone but loopback, which stops
+  invite and pairing codes from other computers while it lasts; the loopback exemption only keeps the setup code
+  usable on the host. At most 3 open pairing codes per account and 50 open codes per server. A guess succeeds with odds of 50 in 2^40 with 50 codes open, so the 200 failures an hour the server allows
+  succeed with odds of about 1 in 650,000 a week and 1 in 12,500 a year (every hour spent guessing, 50 codes open
+  all the time).
 - **Linking later.** A code account links to a cloud identity from Settings › Orchester, the server's entry (*Link to
   Orchester Cloud*):
   the app joins with an identity token while signed in with the device token, and the server records `sub`.
@@ -1242,12 +1267,15 @@ Row 46. One forward migration of `orchester-server.db`:
   proxy listed in `trusted_proxies`; otherwise the header is ignored. Entries accept exact IPs or CIDRs. All header
   lines form an ordered comma list; malformed lists fall back to the connection peer. Walk from the right, skipping
   trusted proxies, to the first untrusted hop. IPv4-mapped IPv6 is canonicalized; hops may include ports or IPv6
-  brackets. IPv6 address counters group clients by /64. A restart clears the counters, which is acceptable for v1.
+  brackets. Failed-join counters group IPv6 clients by /48, the usual allocation of one site. A restart clears the
+  counters, which is acceptable for v1.
   The redemption and cloud sign-in limits use this address.
-- **Audit.** The server records joins and failed joins (by code kind or cloud `kid` and `sub`, and address, never the
-  code or the token), device revocations, invites made, redeemed and revoked, cloud link changes, user and membership
+- **Audit.** The server records joins (by code kind or cloud `kid` and `sub`, and address, never the code or the
+  token), device revocations, invites made, redeemed and revoked, cloud link changes, user and membership
   changes, and claim takeovers, in the append-only `audit_events` table. User changes that leave every stored value
-  unchanged create no audit event.
+  unchanged create no audit event. Failed joins are counted, not audited one by one, so guessing cannot grow the
+  append-only table without bound: `failed_joins` keeps a count per kind (code, cloud), client address and hour, for
+  90 days.
 - **HTTP deadlines.** Request headers and keep-alive idle connections have a 10-second deadline, as do body reads.
   Connections must send their first byte within 2 seconds (also the first HTTP byte after TLS). At most 256 HTTP
   connections (64 per untrusted peer) and 64 concurrent direct-TLS handshakes (32 per untrusted peer) are served;
@@ -1288,10 +1316,17 @@ against a forged join turns on *Join approval* (row 57, off by default): a cloud
 waits for one of that account's devices or an admin.
 
 **Rate limits of the cloud.** Sign-in: S1a's limiters, moved (5 failures for an email in 15 minutes block it for 15
-minutes, 20 failures from one address block that address, reserved before the hashing pool). Confirmation and reset
-emails: 5 an hour per email, 20 an hour per client address. Identity tokens: 60 an hour per device. Invites: 100 a day
+minutes, 20 failures from one address block that address, reserved before the hashing pool). Confirming (row 65):
+5 failures for one link in 15 minutes end that link, and 20 failures from one address in 15 minutes block that
+address, reserved before the hashing pool like sign-in. Confirmation and reset emails: 5 an hour per email, 20 an
+hour per client address. Identity tokens: 60 an hour per device. Invites: 100 a day
 per team server, 30 a day per inviter, 10 a day per invitee email. Failed link finishes: 20 per address in 15
 minutes. All answer `429 rate_limited` with `Retry-After`.
+
+**Confirming an email** (row 65). Whoever signs up first with someone else's email cannot take that account: a
+link confirms only with the password that link was created with, so the email's owner who clicks the attacker's link
+cannot complete it, and their own sign-up's link sets their own password. Every confirmation attempt costs the same
+(one argon2 verification), and the answer never says whether the link or the password was wrong.
 
 **Email and personal data.** The cloud keeps a confirmed email, a display name and a password hash per account,
 and nothing else about the person (later, a provider's id when one is linked). An invitee's email is kept only while the invite is open; an
@@ -1433,7 +1468,8 @@ of [Servers and project addresses](#servers-and-project-addresses)). A person ca
 Sharing; `orchester.toml` prefills it.
 
 **Membership.** Joining needs membership (row 17), per project (row 50). A connected person who is not a member of the
-address they entered sees the project's owners and *Ask for an invite*. Nothing is uploaded.
+address they entered learns nothing of the project (the server answers as if there were none) and sees *Ask for an
+invite* from whoever shared it. Nothing is uploaded.
 
 **Review before joining: tasks.** If the joiner's local project has tasks, Join opens a review list of them, all
 ticked, each with the server's similar titles as a hint (`sharing::similar_titles`). The person unticks duplicates. A

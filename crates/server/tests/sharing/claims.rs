@@ -7,7 +7,7 @@ use crate::{fixture::*, support::TestServer};
 async fn s1b_concurrent_claim_staleness_takeover_and_lost_heartbeat() {
   let server = TestServer::start(|_| {}).await;
   let owner = server.bootstrap().await;
-  let bob = user(&server, "bob", false).await;
+  let bob = server.invited("bob", false).await;
   let project = project(&server, &owner.token, vec![]).await.project.id;
   add_member(&server, &owner.token, project, "bob", "member").await;
   let task = create_tasks(&server, &owner.token, project, 1).await.tasks.remove(0);
@@ -174,7 +174,7 @@ async fn s1b_claim_upgrade_release_and_merged_task_refusal() {
 async fn s1b_member_removal_and_user_disabling_release_claims_atomically() {
   let server = TestServer::start(|_| {}).await;
   let owner = server.bootstrap().await;
-  let bob = user(&server, "bob", false).await;
+  let bob = server.invited("bob", false).await;
   let project = project(&server, &owner.token, vec![]).await.project.id;
   add_member(&server, &owner.token, project, "bob", "member").await;
   let tasks = create_tasks(&server, &owner.token, project, 2).await.tasks;

@@ -1,7 +1,7 @@
 # Shared server in the new app — plan
 
 Date: 2026-10-15. Status: **proposed**, for the person's review. The design is
-[server.md](server.md) (decisions 1–64); this document only orders the work and names its files, frames and tests.
+[server.md](server.md) (decisions 1–65); this document only orders the work and names its files, frames and tests.
 When a phase starts, its entry goes into `docs/plan.md` (*S · Shared server*) as usual.
 
 ## Starting point
@@ -108,7 +108,9 @@ N8: one slice per phase from N4 on
 - **Frames.** None.
 - **Tests.** `crates/cloud/tests`, against a PostgreSQL named by `ORCHESTER_CLOUD_TEST_DATABASE_URL` (a local Docker
   `postgres`; each test makes and drops its own database; without the variable the database tests fail with that
-  message): migrations applied once by two instances, a newer database refused, sign-up, confirmation and reset links
+  message): migrations applied once by two instances, a newer database refused, sign-up, confirmation (with the
+  sign-up password, row 65: a wrong password or unknown link gives one answer at equal cost, a repeated sign-up keeps
+  earlier links valid, confirming one ends the rest) and reset links
   through a test SMTP relay, a link or identity token used once under concurrent requests, sign-in limits,
   an unknown email answering like a wrong password, key rotation and key set expiry with the settable clock, identity token audience, replay and expiry, invite routing
   to a registered and an unregistered email, deletion after an invite ends, each rate limit, and a log test that finds
@@ -138,7 +140,7 @@ N8: one slice per phase from N4 on
   done), at desktop and narrow widths. The web app is built only after approval; C1a does not wait for it.
 - **Tests.** `web/ui`: components render with the app's words only, token file in step with the Pencil variables,
   locale parity helpers; `web/cloud`: locale parity, unit tests of the session and CSRF checks; end-to-end against a local C1a and a test SMTP relay
-  (sign up, confirm from the email's link, sign in, forgot and reset); no token in logs or referrers; design
+  (sign up, confirm from the email's link with the sign-up password, sign in, forgot and reset); no token in logs or referrers; design
   verification of each page against its frame at the same size, in a browser.
 - **Depends on.** C1a, and the person's approval of the frames.
 
@@ -244,8 +246,9 @@ N8: one slice per phase from N4 on
 
 - **Scope.** Accepting a project invite (B: download, sign up on the web or sign in, accept) connects to the server
   when needed and opens the join review in the local project whose `origin` matches the project's hint, or asks which
-  local project or checkout to link; linking by address without an invite (member, or not a member: the owners' names
-  and *Ask for an invite*, which says whom to ask; the app sends nothing); the review page with similar titles and
+  local project or checkout to link; linking by address without an invite (member, or not a member: *No project you're a
+  member of here* and *Ask for an invite* from whoever shared it, since the server answers a non-member like no
+  project; the app sends nothing); the review page with similar titles and
   locked rows; *Join and upload N*; a failed join keeping the ticks; *Keys before joining*; the *Not shared* filter
   and rows; a Not shared task with *Share task*; *was KON-12*; search by former key.
 - **Files.** `screens/project_settings/sharing/join/` (new page and rows), `screens/tasks/` (filter, rows),

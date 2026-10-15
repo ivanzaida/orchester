@@ -457,6 +457,7 @@
         "inProgress": "A merge, cherry-pick or revert is in progress in your checkout. Finish or abort it, then merge again. Nothing was changed.",
         "conflict": "The run’s changes conflict with your branch in {{files}}. The merge was undone, so your checkout is as it was. Merge the run’s branch yourself to resolve the conflicts.",
         "branchMissing": "The run’s branch {{branch}} no longer exists, so there is nothing to merge.",
+        "branchMoved": "The run’s branch {{branch}} is no longer at {{revision}}, the commit you were asked to merge. Nothing was merged; ask the Orchestrator to propose it again.",
         "refused": "Git didn’t merge, and the merge was undone: {{detail}}",
         "noBaseBranch": "This run didn’t record the branch your checkout had when it started.",
         "notSucceeded": "Only a run whose every step passed can be merged.",
@@ -594,6 +595,10 @@
       "notLatestRun": "Messages go to the task’s latest run, #{{run}}.",
       "noSecondWay": "In the run’s state a message is sent one way only.",
       "notReadable": "Its run has ended or is no longer the task’s latest, so no agent reads this message any more.",
+      "draftChangedPlain": "The draft changed after this proposal, or what it widens did. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
+      "interrupted": "The app closed while this was being carried out, and it did not happen. Nothing more is done: ask the Orchestrator to propose it again.",
+      "taken": "This proposal was already decided, here or in another tab: nothing more was done.",
+      "noCheckpoint": "Run #{{run}} has no checkpoint: none of its work is committed, so there is nothing to merge.",
       "runChanged": "The run changed since you wrote this. Check what sending does now, then send again."
     }
   },
@@ -746,18 +751,25 @@
         "macos": "macOS doesn't trust the certificate of {{host}}. Add your team's certificate authority to the macOS keychain, then check again. Orchester has no switch to skip this check."
       }
     },
-    "signIn": {
-      "wrong": "The username or password is not right. Check both, or ask an admin of {{name}} to reset your password."
-    },
     "errors": {
-      "signedOut": "This computer is signed out of the server. Sign in again with your password.",
+      "signedOut": "This computer is signed out of the server. Join it again with a code, or through Orchester Cloud.",
       "plainHttp": "Plain HTTP to {{host}} is not allowed for this server.",
-      "passwordChangeRequired": "Choose your own password first.",
       "forbidden": "Only an admin of the server can do this.",
       "notFound": "The server no longer knows this.",
       "rateLimited": "The server asks to wait before trying again.",
       "refused": "The server refused this.",
-      "setup": "Orchester cannot set up its connection to servers on this computer."
+      "setup": "Orchester cannot set up its connection to servers on this computer.",
+      "noPasswords": "Team servers no longer have passwords. Join with a code from the server's admin, or through Orchester Cloud.",
+      "certificateChanged": "{{host}} presents a different certificate than the one this computer trusts, so nothing was sent. Compare its new check code with the server's console, or join again through an invite.",
+      "cloudRefused": "Orchester Cloud refused this. Sign in to it again, then try once more."
+    },
+    "join": {
+      "invalidCode": "This code doesn't work: it is wrong, used already or expired. Ask for a new one.",
+      "invalidIdentity": "The server didn't accept the sign-in from Orchester Cloud. Try again.",
+      "notInvited": "The server has no account or invite for you. Ask its admin for an invite.",
+      "cloudOff": "This server doesn't accept Orchester Cloud sign-ins now. Join with a code instead.",
+      "keySetStale": "The server's copy of Orchester Cloud's keys is out of date. Try again; Orchester brings the current keys.",
+      "approvalRefused": "Joining this computer was not approved."
     }
   },
   "time": {
@@ -1060,6 +1072,8 @@
       "questionAmbiguous": "Several questions wait in this run; name one by its id, as get_run lists them.",
       "noWaitingQuestion": "No question waits for an answer in this run.",
       "noPlanWaiting": "No plan waits for a decision in run #{{run}}.",
+      "noPlan": "Run #{{run}} has no plan: none of its steps proposed one.",
+      "projectNotOpenedYet": "This version of Orchester has not opened {{project}} yet, so its data waits for an update. Open the project once in the app, then read it again.",
       "planApproved": "Plan v{{version}} of {{step}} was approved already; no plan waits for a decision.",
       "planChangesRequested": "Changes to plan v{{version}} of {{step}} were requested already; its agent revises it, and the revised plan waits for a decision of its own.",
       "planRunPaused": "Run #{{run}} is paused; plan v{{version}} of {{step}} takes a decision once the run is resumed (resume_run).",
@@ -1449,8 +1463,8 @@
       "unavailable": "The server of this shared project can't be asked now.",
       "notEditable": "The server didn't take the change: the task can't be edited in its state.",
       "organization": "The server didn't take the status, priority, tags or links: they break a rule of the task list.",
-      "remoteTaken": "This repository is shared on the server already.",
-      "shareInProgress": "This project is being shared right now, so nothing was changed. Try again once sharing has finished."
+      "shareInProgress": "This project is being shared right now, so nothing was changed. Try again once sharing has finished.",
+      "noProject": "The server has no project at this address that you're a member of. Ask whoever shared it for an invite."
     },
     "members": {
       "noSuchUser": "The server has no user with this username. Usernames are exact; an admin of the server creates accounts.",
@@ -1513,11 +1527,20 @@
       "failed": "The answer couldn't be stopped: the runner didn't answer."
     },
     "proposal": {
-      "changed": "{{task}} changed after it was proposed: its details, its pipeline or the pipeline's version are not what you were asked to start. Nothing started; ask the Orchestrator to propose it again."
+      "changed": "{{task}} changed after it was proposed: its details, its pipeline or the pipeline's version are not what you were asked to start. Nothing started; ask the Orchestrator to propose it again.",
+      "draftChanged": "The draft of {{name}} changed after this proposal. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
+      "draftChangedAt": "The draft changed at {{time}}, after this proposal. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
+      "runChanged": "Run #{{run}} has newer work than when its merge was proposed: it is not what you were asked to merge. Nothing was merged; ask the Orchestrator to propose it again."
+    },
+    "start": {
+      "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started."
     },
     "tools": {
       "otherProject": "The Orchestrator acts only in its own project.",
-      "startWaits": "Nothing started yet: starting {{task}} on {{pipeline}} waits for the person, who starts or dismisses it in the conversation. Tell them it is ready to start."
+      "startWaits": "Nothing started yet: starting {{task}} on {{pipeline}} waits for the person, who starts or dismisses it in the conversation. Tell them it is ready to start.",
+      "publishWaits": "Nothing is published yet: publishing {{name}} as v{{version}} waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to publish.",
+      "cancelWaits": "Run #{{run}} goes on: canceling it waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to cancel.",
+      "mergeWaits": "Nothing is merged yet: merging run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to merge."
     }
   }
 }

@@ -8,6 +8,8 @@
 
 mod action;
 mod body;
+mod card;
+mod change;
 mod composer;
 mod data;
 mod header;
@@ -253,7 +255,7 @@ impl View {
 }
 
 /// The local date of `at` as History and the header say it (*Oct 8*).
-fn date(ctx: &Ctx, at: Timestamp) -> Arc<str> {
+pub(super) fn date(ctx: &Ctx, at: Timestamp) -> Arc<str> {
   let (month, day) = display::month_day(at);
   let month = ctx.t_ns(orchester_workspace::i18n::NAMESPACE, display::MONTH_KEYS[month]);
   ctx.t_args(

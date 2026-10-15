@@ -83,6 +83,7 @@ fn link() -> SharingLink {
     cursor: 7,
     last_synced_at: at(100),
     removed_at: None,
+    address: Some("https://orchester.kontur.lan/kontur".into()),
   }
 }
 

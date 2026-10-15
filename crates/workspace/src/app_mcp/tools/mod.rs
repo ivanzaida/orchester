@@ -2,17 +2,20 @@
 //! unknown or mistyped argument is refused) and how a call reaches them. Every tool goes through the
 //! services the screens use; none of them holds a rule of its own.
 
+mod across;
 mod approvals;
 mod auto_mode;
 mod continue_run;
 mod limits;
 mod messages;
 mod pipeline_copy;
+mod plan_read;
 mod plans;
 mod projects;
 mod questions;
 mod queue_hold;
 mod return_to_draft;
+mod run_list;
 mod run_task;
 mod runs;
 pub mod setup;
@@ -30,8 +33,12 @@ use rmcp::{
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-pub use self::run_task::{Proposal, propose_run, run_proposed};
+pub(crate) use self::pipeline_copy::duplicate_pipeline_draft;
 use self::runs::Control;
+pub use self::{
+  run_task::{Proposal, propose_run, run_proposed},
+  runs::find_run,
+};
 use super::{error::ToolError, services::Services};
 use crate::messages::Message;
 
@@ -61,19 +68,19 @@ struct Spec {
 const SPECS: &[Spec] = &[
   Spec {
     name: "list_projects",
-    description: "The projects of the workspace, most recently opened first: id, name, folder, whether each uses the code index, and its limits (token budgets, default time limit, agents working at once).",
+    description: "The projects of the workspace, most recently opened first: id, name, folder, whether each uses the code index, its limits (token budgets, default time limit, agents working at once), and its link in the app (its Overview). Links are the app's route paths; the person opens one with a click.",
     schema: schema_for_type::<projects::ListProjects>,
     read_only: true,
   },
   Spec {
     name: "list_tasks",
-    description: "A project's tasks, as its task list finds them: key, title, workflow status, priority, tags, pipeline and where the task stands.",
+    description: "A project's tasks, as its task list finds them: key, title, workflow status, priority, tags, pipeline, where the task stands, and its link in the app (its page). Without `project`, every project's, each naming its project, as stored: git is asked which runs were merged outside Orchester only for a project named; unreadable_projects lists the projects that could not be read, with why (project_not_opened_yet for one this version has not opened: list tools only read, and never update a project's data).",
     schema: schema_for_type::<tasks::ListTasks>,
     read_only: true,
   },
   Spec {
     name: "get_task",
-    description: "One task: title, brief, criteria, whether it is a draft or submitted, workflow status, priority, tags, pipeline, limits, where it stands and runs.",
+    description: "One task: title, brief, criteria, whether it is a draft or submitted, workflow status, priority, tags, pipeline, limits, where it stands, its runs, and its link in the app (its page, whose Summary lists the runs).",
     schema: schema_for_type::<tasks::GetTask>,
     read_only: true,
   },
@@ -100,8 +107,27 @@ const SPECS: &[Spec] = &[
     description: "A run: its steps, state, tokens (auto mode's reviewer included, and its part apart), active time and \
                   what it waits for, its agents' waiting questions with their options and the plan waiting for a decision \
                   (version, step, its whole text and an excerpt) among it; and its decided plans, each with its decision, \
-                  note, when and decided_by (person, or automation through this server).",
+                  note, when and decided_by (person, or automation through this server). The run's link is its task's \
+                  page; the waiting approvals, questions and plans link to their cards on the task's Conversation.",
     schema: schema_for_type::<runs::InRun>,
+    read_only: true,
+  },
+  Spec {
+    name: "list_runs",
+    description: "Runs, newest first, as each task's Summary lists them: id, number, task (key and title), where it stands (phase), its state and why, what happened, tokens used and its budget, when it started and last changed, and its link in the app (its task's page). At most `limit` runs, the newest: 50 when left out, 200 at most; `more` says whether older ones were left out. With `task`, that task's runs (needs `project`). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. A run that cannot be read has no phase, state, tokens or start time; its detail says why.",
+    schema: schema_for_type::<run_list::ListRuns>,
+    read_only: true,
+  },
+  Spec {
+    name: "list_questions",
+    description: "Agents' questions waiting for an answer, oldest first: id, agent, when it was asked, whether the agent waits in its turn, the questions with their suggested answers, the run (id and number), the task, and the link to its card on the task's Conversation in the app. With `run`, that run's (needs `project`). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. Reading only: answering is a person's, or answer_question's.",
+    schema: schema_for_type::<questions::ListQuestions>,
+    read_only: true,
+  },
+  Spec {
+    name: "get_plan",
+    description: "A plan a gated step of a run proposed, as its card shows it: version, step, agent, when it was proposed, its whole text, whether the run waits on it for a decision, its decision if it was decided (approved, or changes_requested with the note; decided_by and when), the step's versions oldest first (without their text), the run, and the link to its card on the task's Conversation in the app. Left out, `step` is the step whose plan the run waits on (the one decide_plan decides), else the step of the run's latest plan, and `version` the step's latest. Refused as no_plan for a run whose steps proposed none, and as plan_not_found for a step or version without a plan. Reading only: deciding is a person's, or decide_plan's.",
+    schema: schema_for_type::<plan_read::GetPlan>,
     read_only: true,
   },
   Spec {
@@ -178,7 +204,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_approvals",
-    description: "Tool requests of a project's agents waiting for a decision, oldest first: kind, command or tool, arguments, agent, run, task and since when; and the plans its runs wait on for a decision (decide_plan), with their version, step and an excerpt of their text (get_run gives a plan's whole text), and the decisions on their earlier versions with decided_by (person, or automation through this server).",
+    description: "Tool requests of a project's agents waiting for a decision, oldest first: kind, command or tool, arguments, agent, run, task and since when; and the plans its runs wait on for a decision (decide_plan), with their version, step and an excerpt of their text (get_plan gives a plan's whole text), and the decisions on their earlier versions with decided_by (person, or automation through this server). Each links to its card on its task's Conversation in the app. Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. `run` needs `project`.",
     schema: schema_for_type::<approvals::ListApprovals>,
     read_only: true,
   },
@@ -220,8 +246,8 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_pipelines",
-    description: "A project's pipelines that have a published version, which tasks run with: name, version, steps.",
-    schema: schema_for_type::<projects::InProject>,
+    description: "A project's pipelines that have a published version, which tasks run with: name, version, steps, and its link in the app (its editor). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why.",
+    schema: schema_for_type::<across::InProjects>,
     read_only: true,
   },
 ];
@@ -264,6 +290,7 @@ async fn dispatch(
     "update_task" => task_write::update_task(services, parse(arguments)?).await,
     "run_task" => run_task::run_task(services, parse(arguments)?).await,
     "get_run" => runs::get_run(services, parse(arguments)?).await,
+    "list_runs" => run_list::list_runs(services, parse(arguments)?, translate).await,
     "pause_run" => runs::control_run(services, parse(arguments)?, Control::Pause).await,
     "resume_run" => runs::control_run(services, parse(arguments)?, Control::Resume).await,
     "cancel_run" => runs::control_run(services, parse(arguments)?, Control::Cancel).await,
@@ -277,14 +304,21 @@ async fn dispatch(
     "duplicate_pipeline" => pipeline_copy::duplicate_pipeline(services, parse(arguments)?, translate).await,
     "hold_queue" => queue_hold::set_queue_hold(services, parse(arguments)?, true).await,
     "release_queue" => queue_hold::set_queue_hold(services, parse(arguments)?, false).await,
-    other => dispatch_answers(services, other, arguments).await,
+    other => dispatch_answers(services, translate, other, arguments).await,
   }
 }
 
 /// The tools that answer what agents wait for, and auto mode's settings.
-async fn dispatch_answers(services: &Services, name: &str, arguments: Value) -> Result<Value, ToolError> {
+async fn dispatch_answers(
+  services: &Services,
+  translate: &Translate,
+  name: &str,
+  arguments: Value,
+) -> Result<Value, ToolError> {
   match name {
-    "list_approvals" => approvals::list_approvals(services, parse(arguments)?).await,
+    "list_approvals" => approvals::list_approvals(services, parse(arguments)?, translate).await,
+    "list_questions" => questions::list_questions(services, parse(arguments)?, translate).await,
+    "get_plan" => plan_read::get_plan(services, parse(arguments)?).await,
     "decide_approval" => approvals::decide_approval(services, parse(arguments)?).await,
     "answer_question" => questions::answer_question(services, parse(arguments)?).await,
     "decide_plan" => plans::decide_plan(services, parse(arguments)?).await,

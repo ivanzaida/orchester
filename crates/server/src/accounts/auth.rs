@@ -1,93 +1,16 @@
-use std::net::IpAddr;
-
-use orchester_api::{Credential, ErrorCode, Session, SignIn, SignedIn};
+use orchester_api::{Credential, Session};
 use orchester_core::id::SessionId;
 use rusqlite::params;
 
 use super::Server;
 use crate::{
-  clock::SESSION_IDLE_MS,
+  clock::DEVICE_IDLE_MS,
   db::{self, Authenticated},
+  devices::token_hash,
   error::ServerError,
-  passwords::{PasswordHash, random_credential, token_hash},
 };
 
 impl Server {
-  pub(crate) async fn sign_in(&self, input: SignIn, address: IpAddr) -> Result<SignedIn, ServerError> {
-    let username = input.username.to_ascii_lowercase();
-    if username.is_empty()
-      || username.len() > 64
-      || !username
-        .bytes()
-        .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
-    {
-      return Err(ErrorCode::InvalidCredentials.into());
-    }
-    if input.device.trim().is_empty() || input.device.chars().count() > 256 {
-      return Err(ErrorCode::Invalid.into());
-    }
-    let attempt = self.inner.limits.sign_in(username.clone(), address, self.now())?;
-    let lookup = username.clone();
-    let stored = self.inner.db.read(move |db| db::find_user(db, &lookup)).await?;
-    let hash = stored
-      .as_ref()
-      .map_or_else(PasswordHash::dummy, |user| user.hash.clone());
-    let (verified, attempt) = self
-      .inner
-      .passwords
-      .verify(input.password, hash.clone(), attempt, self.inner.clock.as_ref())
-      .await?;
-    let now = self.now();
-    if !verified || stored.as_ref().is_none_or(|user| user.user.disabled) {
-      attempt.failed(now);
-      self.record_sign_in_failure(username, address, now).await?;
-      return Err(ErrorCode::InvalidCredentials.into());
-    }
-    let token = random_credential("orc_", 32)?;
-    let digest = token_hash(&token);
-    let session = Session {
-      id: SessionId::generate(),
-      device: input.device,
-      created_at: now,
-      last_used_at: now,
-      current: true,
-    };
-    let failure_name = username.clone();
-    let result = self.inner.db.write(move |tx| {
-      let current = db::find_user(tx, &username)?.ok_or(ErrorCode::InvalidCredentials)?;
-      if current.user.disabled || current.hash.expose() != hash.expose() { return Err(ErrorCode::InvalidCredentials.into()); }
-      tx.execute("INSERT INTO sessions(id,user_id,token_hash,device,created_at,last_used_at,initial_password) VALUES (?1,?2,?3,?4,?5,?5,?6)",
-        params![session.id.to_string(), current.user.id.to_string(), digest, session.device, now, current.must_change])?;
-      db::audit(tx, Some(current.user.id), "signed_in", &session.id.to_string(), Some(address), now)?;
-      Ok((current.user, current.must_change, session))
-    }).await;
-    let (user, must_change, session) = match result {
-      Err(ServerError::Api(ErrorCode::InvalidCredentials)) => {
-        attempt.failed(now);
-        self.record_sign_in_failure(failure_name, address, now).await?;
-        return Err(ErrorCode::InvalidCredentials.into());
-      }
-      other => {
-        attempt.succeeded();
-        other?
-      }
-    };
-    Ok(SignedIn {
-      token,
-      session,
-      user,
-      password_change_required: must_change,
-    })
-  }
-
-  async fn record_sign_in_failure(&self, username: String, address: IpAddr, now: i64) -> Result<(), ServerError> {
-    self
-      .inner
-      .db
-      .write(move |tx| db::audit(tx, None, "sign_in_failed", &username, Some(address), now))
-      .await
-  }
-
   pub(crate) async fn authenticate(&self, token: Credential) -> Result<Authenticated, ServerError> {
     let hash = token_hash(&token);
     let now = self.now();
@@ -101,14 +24,14 @@ impl Server {
   pub(crate) async fn sessions(&self, auth: Authenticated) -> Result<Vec<Session>, ServerError> {
     let now = self.now();
     self.inner.db.read(move |db| {
-      let auth = db::checked(db, &auth, now, false, false)?;
-      let mut query = db.prepare("SELECT id,device,created_at,last_used_at FROM sessions WHERE user_id=?1 AND revoked_at IS NULL AND last_used_at>?2 ORDER BY created_at,id")?;
-      let rows = query.query_map(params![auth.user.id.to_string(), now - SESSION_IDLE_MS], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)?, row.get::<_, i64>(3)?))
+      let auth = db::checked(db, &auth, now, false)?;
+      let mut query = db.prepare("SELECT id,device,created_at,last_used_at,via FROM sessions WHERE user_id=?1 AND revoked_at IS NULL AND last_used_at>?2 ORDER BY created_at,id")?;
+      let rows = query.query_map(params![auth.user.id.to_string(), now - DEVICE_IDLE_MS], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)?, row.get::<_, i64>(3)?, row.get::<_, String>(4)?))
       })?.collect::<Result<Vec<_>, _>>()?;
-      rows.into_iter().map(|(id, device, created_at, last_used_at)| {
+      rows.into_iter().map(|(id, device, created_at, last_used_at, via)| {
         let id = id.parse().map_err(|_| ServerError::StoredData)?;
-        Ok(Session { id, device, created_at, last_used_at, current: id == auth.session })
+        Ok(Session { id, device, created_at, last_used_at, current: id == auth.session, via: db::parse_via(&via)? })
       }).collect()
     }).await
   }
@@ -119,7 +42,7 @@ impl Server {
       .inner
       .db
       .write(move |tx| {
-        let current = db::checked(tx, &auth, now, session.is_none(), false)?;
+        let current = db::checked(tx, &auth, now, false)?;
         db::revoke_session(
           tx,
           current.user.id,
@@ -136,7 +59,7 @@ impl Server {
     self
       .inner
       .db
-      .read(move |db| Ok(db::checked(db, &auth, now, false, false)?.user))
+      .read(move |db| Ok(db::checked(db, &auth, now, false)?.user))
       .await
   }
 }

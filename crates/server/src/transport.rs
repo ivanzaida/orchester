@@ -25,7 +25,7 @@ pub async fn serve(
   listener: TcpListener,
   shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<(), ServerError> {
-  let tls = crate::tls::acceptor(&server.inner.config)?;
+  let tls = server.inner.tls.as_ref().map(|tls| tls.acceptor.clone());
   let proxies = server.inner.config.trusted_proxies.clone();
   let limits = ConnectionLimit::new(256, 64, proxies.clone());
   let app = crate::http::router(server);

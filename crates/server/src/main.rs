@@ -5,21 +5,25 @@ use std::{
   sync::Arc,
 };
 
-use orchester_api::CreateUser;
-use orchester_server::{Server, clock::SystemClock, config::Config, error::ServerError};
+use orchester_server::{
+  Server,
+  clock::{Clock, SystemClock},
+  config::Config,
+  error::ServerError,
+  host::{self, CloudCommand},
+};
 use tokio::net::TcpListener;
 
 mod shutdown;
 
 enum Command {
   Serve,
-  User(UserCommand),
   Backup { path: PathBuf },
-}
-
-enum UserCommand {
-  Create { username: String, admin: bool },
-  Reset { username: String },
+  TlsShow,
+  TlsRegenerate,
+  SetupCode,
+  AccountCode { username: String },
+  Cloud(CloudCommand),
 }
 
 #[tokio::main]
@@ -42,41 +46,69 @@ async fn main() -> ExitCode {
 async fn run() -> Result<(), ServerError> {
   let (command, path) = arguments()?;
   let config = Config::load(path.as_deref())?;
+  let now = SystemClock.now_ms();
   match command {
-    Command::Serve => {
-      let listen = config.listen;
-      let server = Server::open(config, Arc::new(SystemClock)).await?;
-      let shutdown = shutdown::Shutdown::install()?;
-      let listener = TcpListener::bind(listen).await?;
-      tracing::info!(address = %listener.local_addr()?, "server listening");
-      orchester_server::serve(server, listener, shutdown.wait()).await
-    }
-    Command::User(command) => run_user(config, command).await,
+    Command::Serve => serve(config).await,
     Command::Backup { path } => orchester_server::backup_existing(config.data_dir, path).await,
+    Command::TlsShow => match host::tls_check_code(&config, now)? {
+      Some(code) => console(&format!("Certificate check code: {code}")),
+      None => console("This server serves plain HTTP (tls = \"off\"); its proxy holds the certificate."),
+    },
+    Command::TlsRegenerate => {
+      let code = host::tls_regenerate(&config, now)?;
+      console(&format!(
+        "New certificate check code: {code}\nRestart the server to present it; every desktop must confirm it again."
+      ))
+    }
+    Command::SetupCode => {
+      let server = Server::open(config, Arc::new(SystemClock)).await?;
+      match server.host_setup_code().await? {
+        Some(code) => console(&format!("Setup code: {}", code.expose())),
+        None => console("This server has an admin already; it has no setup code."),
+      }
+    }
+    Command::AccountCode { username } => {
+      let server = Server::open(config, Arc::new(SystemClock)).await?;
+      let code = server.host_account_code(username).await?;
+      console(&format!("Account code: {}", code.expose()))
+    }
+    Command::Cloud(command) => {
+      let server = Server::open(config, Arc::new(SystemClock)).await?;
+      let link = server.host_cloud(command).await?;
+      let state = match (&link.root_fingerprint, link.accepting) {
+        (None, _) => "not linked".to_owned(),
+        (Some(root), true) => format!("linked, accepting, root key {root}"),
+        (Some(root), false) => format!("linked, off, root key {root}"),
+      };
+      console(&format!("Server {}: Orchester Cloud {state}", link.server))
+    }
   }
 }
 
-async fn run_user(config: Config, command: UserCommand) -> Result<(), ServerError> {
+/// Serves until a shutdown signal, after printing the certificate's check code and, while the server has no admin, a
+/// setup code: to the console only, never to the log.
+async fn serve(config: Config) -> Result<(), ServerError> {
+  let listen = config.listen;
   let server = Server::open(config, Arc::new(SystemClock)).await?;
-  match command {
-    UserCommand::Create { username, admin } => {
-      let created = server
-        .host_create_user(CreateUser {
-          display_name: username.clone(),
-          username,
-          admin,
-        })
-        .await?;
-      // The specification permits this one-time host-command output, never a log record.
-      writeln!(io::stdout().lock(), "{}", created.initial_password.expose())?;
-      Ok(())
-    }
-    UserCommand::Reset { username } => {
-      let initial = server.host_reset_password(username).await?;
-      writeln!(io::stdout().lock(), "{}", initial.expose())?;
-      Ok(())
-    }
+  if let Some(code) = server.check_code() {
+    console(&format!("Certificate check code: {code}"))?;
   }
+  if let Some(code) = server.host_setup_code().await? {
+    console(&format!(
+      "Setup code: {} (valid 24 hours; open the server admin and enter it to make the first admin)",
+      code.expose()
+    ))?;
+  }
+  let shutdown = shutdown::Shutdown::install()?;
+  let listener = TcpListener::bind(listen).await?;
+  tracing::info!(address = %listener.local_addr()?, "server listening");
+  orchester_server::serve(server, listener, shutdown.wait()).await
+}
+
+/// One line for the person at the console. Codes go here and nowhere else.
+fn console(line: &str) -> Result<(), ServerError> {
+  writeln!(io::stdout().lock(), "{line}")?;
+  Ok(())
 }
 
 fn arguments() -> Result<(Command, Option<PathBuf>), ServerError> {
@@ -95,23 +127,21 @@ fn arguments() -> Result<(Command, Option<PathBuf>), ServerError> {
     .into_iter()
     .map(|arg| arg.into_string().map_err(|_| usage()))
     .collect::<Result<Vec<_>, _>>()?;
+  let args: Vec<&str> = args.iter().map(String::as_str).collect();
   let command = match args.as_slice() {
-    [] => Command::Serve,
-    [serve] if serve == "serve" => Command::Serve,
-    [backup, path] if backup == "backup" => Command::Backup { path: path.into() },
-    [user, create, flag, username] if user == "user" && create == "create" && flag == "--admin" => {
-      Command::User(UserCommand::Create {
-        username: username.clone(),
-        admin: true,
-      })
-    }
-    [user, create, username] if user == "user" && create == "create" => Command::User(UserCommand::Create {
-      username: username.clone(),
-      admin: false,
-    }),
-    [user, reset, username] if user == "user" && reset == "reset-password" => Command::User(UserCommand::Reset {
-      username: username.clone(),
-    }),
+    [] | ["serve"] => Command::Serve,
+    ["backup", path] => Command::Backup { path: path.into() },
+    ["tls", "show"] => Command::TlsShow,
+    ["tls", "regenerate"] => Command::TlsRegenerate,
+    ["setup-code"] => Command::SetupCode,
+    ["account-code", username] => Command::AccountCode {
+      username: (*username).to_owned(),
+    },
+    ["cloud", "show"] => Command::Cloud(CloudCommand::Show),
+    ["cloud", "on"] => Command::Cloud(CloudCommand::On),
+    ["cloud", "off"] => Command::Cloud(CloudCommand::Off),
+    ["cloud", "pin", root] => Command::Cloud(CloudCommand::Pin((*root).to_owned())),
+    ["cloud", "unlink"] => Command::Cloud(CloudCommand::Unlink),
     _ => return Err(usage()),
   };
   Ok((command, path))
@@ -119,6 +149,6 @@ fn arguments() -> Result<(Command, Option<PathBuf>), ServerError> {
 
 fn usage() -> ServerError {
   ServerError::Configuration(
-    "usage: orchester-server [--config server.toml] [serve | user create [--admin] <username> | user reset-password <username> | backup <path>]",
+    "usage: orchester-server [--config server.toml] [serve | backup <path> | tls show | tls regenerate | setup-code | account-code <username> | cloud show|on|off|unlink | cloud pin <root public key>]",
   )
 }

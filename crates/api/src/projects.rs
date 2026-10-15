@@ -17,9 +17,14 @@ pub use orchester_core::sharing::MemberRole;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SharedProject {
   pub id: ProjectId,
+  /// Unique on the server and fixed once created; the last segment of the project's address.
+  pub slug: String,
+  /// The project's address, its identity: the server's address and the slug.
+  pub address: String,
   pub key: String,
   pub name: String,
-  pub remote: RepositoryIdentity,
+  /// The repository its creator or first linked checkout had; compared with a checkout's `origin` when it is linked.
+  pub remote_hint: Option<RepositoryIdentity>,
   pub role: Option<MemberRole>,
   pub next_number: u64,
 }
@@ -31,6 +36,8 @@ pub struct Member {
   pub added_at: i64,
 }
 
+/// API 2's project creation by repository, replaced in API 3 by [`NewProject`]: the server refuses it. Kept while the
+/// workspace's Share, which the frozen `crates/desktop` calls, still sends it.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectCreate {
@@ -42,11 +49,44 @@ pub struct ProjectCreate {
   pub tasks: Vec<UploadTask>,
 }
 
+/// `POST /projects` (admins): a project by name and slug; the caller becomes its owner.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NewProject {
+  pub idempotency_key: IdempotencyKey,
+  pub name: String,
+  pub slug: String,
+  pub key: String,
+  /// Untrusted identity or fetch URL; may contain credentials. This request has no Debug.
+  pub remote_hint: Option<String>,
+  pub tasks: Vec<UploadTask>,
+}
+
 #[derive(Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectChanges {
   pub name: Option<String>,
   pub key: Option<String>,
+  /// Untrusted identity or fetch URL; may contain credentials.
+  pub remote_hint: Option<String>,
+}
+
+/// `POST /projects/{id}/link`: a checkout linked to the project uploads its tasks. Into a project with no tasks they
+/// keep their numbers; otherwise they are imported with new ones.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectLink {
+  pub idempotency_key: IdempotencyKey,
+  pub tasks: Vec<UploadTask>,
+  /// The checkout's `origin`, the project's `remote_hint` while it has none. Untrusted; may contain credentials.
+  pub remote: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProjectLinked {
+  pub tasks: Vec<SharedTask>,
+  pub dropped_links: Vec<DroppedLink>,
+  pub cursor: u64,
 }
 
 #[derive(Serialize, Deserialize)]
