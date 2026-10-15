@@ -21,7 +21,7 @@ use rmcp::model::{JsonObject, Tool};
 use serde_json::Value;
 
 use super::{
-  change, duplicate,
+  blocked, change, duplicate,
   keep::{self, HOLD_QUEUE, Named},
   proposal,
 };
@@ -274,6 +274,10 @@ async fn start(
     });
   }
   let result = app_tool((services, translate), RUN_TASK, arguments.clone()).await;
+  let result = match result {
+    Err(error) => Err(blocked::named(scope, arguments.get("key").and_then(Value::as_str), error).await),
+    told => told,
+  };
   let started = result
     .as_ref()
     .ok()

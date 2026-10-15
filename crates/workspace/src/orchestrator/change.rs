@@ -27,6 +27,7 @@ use super::{
 };
 use crate::{
   app_mcp::{Missing, PersonDecision, Services, ToolError, Translate, blocking, find_run, setup::merge_proposed},
+  display,
   messages::Message,
 };
 
@@ -194,13 +195,18 @@ fn unchanged_draft(
   subject: String,
 ) -> Result<(), ToolError> {
   let db = ProjectDb::open(root)?;
-  if mark(&db, kind, resource)? == Some(proposed) && widening::of_draft(&db, kind, resource)? == widens {
+  let now = mark(&db, kind, resource)?;
+  if now == Some(proposed) && widening::of_draft(&db, kind, resource)? == widens {
     return Ok(());
   }
-  Err(ToolError::refused(
-    "changed_since_proposed",
-    vec![Message::new("orchestrator.proposal.draftChanged").with("name", subject)],
-  ))
+  // Saved again: when it was. Otherwise it is gone, or what it widens changed with the version it is compared with.
+  let reason = match now {
+    Some((saved, _)) if saved != proposed.0 => {
+      Message::new("orchestrator.proposal.draftChangedAt").with("time", display::clock(saved))
+    }
+    _ => Message::new("orchestrator.proposal.draftChanged").with("name", subject),
+  };
+  Err(ToolError::refused("changed_since_proposed", vec![reason]))
 }
 
 /// A merge of run `#number`, which has no checkpoint: nothing of its work is committed.

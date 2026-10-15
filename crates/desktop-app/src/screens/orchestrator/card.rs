@@ -12,7 +12,7 @@ use lurq::{
     i18n::I18n,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Spacer, Text, TextOverflow},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -59,10 +59,14 @@ pub(super) fn head(id: &str, (glyph, title): (Icon, &str), chip: Option<Element>
     .align_items(Alignment::Center)
     .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary))
     .child(
+      // One line, as every card's head: a title too long for it ends in an ellipsis.
       Text::new(title)
         .id(format!("{id}-title"))
         .variant(ConversationText::ResultTitle.role())
-        .flex_shrink(1.0),
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .flex_shrink(1.0)
+        .min_width(Dimension::Px(0.0)),
     )
     .with_children(chip)
     .child(Spacer::new().flex(1.0))

@@ -1521,7 +1521,11 @@
     "proposal": {
       "changed": "{{task}} changed after it was proposed: its details, its pipeline or the pipeline's version are not what you were asked to start. Nothing started; ask the Orchestrator to propose it again.",
       "draftChanged": "The draft of {{name}} changed after this proposal. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
+      "draftChangedAt": "The draft changed at {{time}}, after this proposal. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
       "runChanged": "Run #{{run}} has newer work than when its merge was proposed: it is not what you were asked to merge. Nothing was merged; ask the Orchestrator to propose it again."
+    },
+    "start": {
+      "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started."
     },
     "tools": {
       "otherProject": "The Orchestrator acts only in its own project.",

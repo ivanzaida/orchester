@@ -294,6 +294,7 @@
         "refused": "Publish {{name}} v{{version}} · not done",
         "byYou": "Published by you · {{time}}",
         "effectWaits": "Nothing is published yet. Agents read v{{before}} until you publish v{{version}}; a run already under way keeps the version it started with.",
+        "effectWaitsProfile": "Nothing is published yet. {{name}} keeps v{{before}} until you publish v{{version}}.",
         "effectFirst": "Nothing is published yet. No agent gets {{name}} until you publish v{{version}}.",
         "effectApplied": "Agents read v{{version}} from their next step.",
         "effectAppliedKeeping": "Agents read v{{version}} from their next step. The {{count}} runs under way keep v{{before}} until they finish.",
@@ -394,6 +395,26 @@
         "diffCut": "More of the text changes: open the draft to read all of it.",
         "unreadable": "What this card acts on can't be read: {{reason}}",
         "separator": " · "
+      },
+      "widens": {
+        "repository": "repository: write",
+        "writableFolder": "a writable folder outside the worktree",
+        "commands": "new commands",
+        "network": "network: on",
+        "toolCallsUnasked": "tool calls not asked about",
+        "autoApprove": "approves automatically",
+        "account": "another account",
+        "mcpServers": "new MCP servers",
+        "variable": "variable {{name}}",
+        "firstVersion": "first version",
+        "pipelineSteps": "steps added or removed",
+        "pipelineSources": "other sources",
+        "pipelineStep": "step {{step}} less strict",
+        "approvalGate": "step {{step}} without approval",
+        "stepToolCalls": "step {{step}} tool calls not asked about",
+        "program": "program {{program}} in place of {{before}}",
+        "arguments": "other arguments",
+        "exitCodes": "exit codes {{codes}} pass"
       }
     }
   }

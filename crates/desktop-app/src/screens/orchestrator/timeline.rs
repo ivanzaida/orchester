@@ -176,7 +176,7 @@ fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
     None => time,
   };
   let key = row.turn.key();
-  let body = row
+  let parts: Vec<Element> = row
     .turn
     .answer
     .iter()
@@ -201,11 +201,17 @@ fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
       }
     })
     .collect();
+  // The answer's parts, 10 apart: replies, cards and events (`b55NqO`'s *Answer*).
+  let body = Column::new()
+    .id(format!("orchestrator-answer-{key}-parts"))
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Loose.role())
+    .with_children(parts);
   Some(chat_row(
     format!("orchestrator-answer-{key}"),
     Avatar::Orchestrator,
     (&ctx.t("orchestrator.title"), &meta),
-    body,
+    vec![body.into()],
   ))
 }
 

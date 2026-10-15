@@ -230,6 +230,10 @@ fn publish(ctx: &Ctx, view: &View, (of, version, name): (Publishing, u32, &str))
     )
   };
   let effect = match phase {
+    Phase::Waits | Phase::Applying if version > 1 && matches!(of, Publishing::Profile) => ctx.t_args(
+      "orchestrator.change.publish.effectWaitsProfile",
+      [("name", name), ("before", &before), ("version", &version_text)],
+    ),
     Phase::Waits | Phase::Applying if version > 1 => with_before("orchestrator.change.publish.effectWaits"),
     Phase::Waits | Phase::Applying => ctx.t_args("orchestrator.change.publish.effectFirst", args),
     Phase::Applied if version > 1 && keeping == 1 => with_before("orchestrator.change.publish.effectAppliedKeepingOne"),

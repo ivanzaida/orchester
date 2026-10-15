@@ -7,6 +7,7 @@
 //! facts are read when the card shows ([`orchester_workspace::orchestrator::facts`]).
 
 mod facts;
+mod widens;
 mod words;
 
 use std::sync::Arc;

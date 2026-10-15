@@ -26,6 +26,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
+use orchester_workspace::display;
 
 use super::data::{Part, Turn, ago, keep};
 
@@ -37,10 +38,16 @@ pub fn conversation(db: &mut ProjectDb, connection: ConnectionId) -> Result<Chat
   let published = published(db)?;
   let refused = ActionOutcome::Refused {
     code: "changed_since_proposed".to_owned(),
-    reason: "The draft of Review checklist changed after this proposal. Nothing was published: ask the Orchestrator \
-             again to see the changes you would publish."
-      .to_owned(),
+    reason: format!(
+      "The draft changed at {}, after this proposal. Nothing was published: ask the Orchestrator again to see the \
+       changes you would publish.",
+      display::clock(ago(55))
+    ),
   };
+  let blocked = format!(
+    "{} waits for {} to finish. A start from the chat follows the queue's rules, so nothing started.",
+    runs.going.1, runs.ready.1
+  );
   let turns = vec![
     turn(
       "Publish the delivery pipeline.",
@@ -76,14 +83,7 @@ pub fn conversation(db: &mut ProjectDb, connection: ConnectionId) -> Result<Chat
     ),
     turn("Merge it.", ago(38), vec![runs.merge(ActionOutcome::Dismissed, false)]),
     turn("Start the next task.", ago(34), vec![runs.started(None)]),
-    turn(
-      "Start the blocked task.",
-      ago(30),
-      vec![runs.started(Some(
-        "The task waits for another task to be merged. A start from the chat follows the queue's rules, so nothing \
-       started.",
-      ))],
-    ),
+    turn("Start the blocked task.", ago(30), vec![runs.started(Some(&blocked))]),
   ];
   let waiting = vec![
     Part::Reply("I saved the change as a draft. Publishing it changes what agents read, so it waits for your click."),

@@ -9,9 +9,14 @@
 use lurq::app::events::with_synthetic_input;
 use orchester_app::routes::OrchestratorChat;
 use orchester_core::{
+  id::ResourceId,
   orchestrator::{ActionOutcome, ChatAction, EntryKind, change::Change},
+  permission::{AgentPermissions, CommandPermission, NetworkAccess},
+  resource::{AgentProfile, Draft, RepositoryAccess},
   run::RunStatus,
-  store::{RunStore, TaskStore},
+  store::{ResourceStore, RunStore, TaskStore},
+  task::organization::{BlockingTask, ChangeActor, DependencyGate, Priority, TaskOrganization, WorkflowStatus},
+  time::Timestamp,
 };
 use orchester_store::ProjectDb;
 
@@ -222,9 +227,20 @@ fn orchestrator_publication_refuses_a_draft_saved_after_it_was_proposed() {
   });
   assert_eq!(screen.pipeline_version(delivery), 1, "nothing was published");
   screen.until("the refused card", |screen| {
-    screen.text(&card).contains("changed after this proposal")
-      && screen.text(&format!("{card}-title")).contains("· not done")
+    screen.text(&format!("{card}-title")).contains("· not done")
   });
+  // When the draft changed, as the person reads the time on its card.
+  let saved = screen
+    .db()
+    .draft::<orchester_core::resource::Pipeline>(delivery)
+    .expect("read")
+    .expect("the draft")
+    .updated_at();
+  let changed = format!(
+    "The draft changed at {}, after this proposal.",
+    orchester_workspace::display::clock(saved)
+  );
+  assert!(screen.text(&card).contains(&changed), "{}", screen.text(&card));
 }
 
 #[test]
@@ -272,6 +288,50 @@ fn orchestrator_proposes_what_widens_even_when_it_may_publish() {
     screen
       .text(&format!("{card}-widens"))
       .contains("even though Let the Orchestrator publish drafts is on")
+  );
+}
+
+/// A draft of profile `builder` that turns its network on: it widens what its agents may do.
+fn network_draft(screen: &Orchestrator, builder: ResourceId) {
+  let mut db = screen.db();
+  let latest = db
+    .latest_version::<AgentProfile>(builder)
+    .expect("read")
+    .expect("published");
+  let body = latest.body().clone().with_permissions(AgentPermissions::new(
+    RepositoryAccess::ReadOnly,
+    CommandPermission::AskBefore,
+    NetworkAccess::On,
+  ));
+  db.update_draft::<AgentProfile>(builder, |_, _| {
+    Ok(Draft::new(body.clone(), Some(latest.number()), Timestamp::now()))
+  })
+  .expect("draft");
+}
+
+#[test]
+fn orchestrator_profile_publication_says_what_the_profile_keeps_and_widens() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  let builder = screen.builder();
+  network_draft(&screen, builder);
+  screen.go(OrchestratorChat::New);
+  call(
+    &mut screen,
+    r#"Call publish_profile {"project":"Kontur","profile":"Builder"}"#,
+    1,
+  );
+  let card = proposal_card(&screen);
+  screen.until("the card's facts", |screen| {
+    screen.text(&format!("{card}-facts")).contains("Widens")
+  });
+  let facts = screen.text(&format!("{card}-facts"));
+  assert!(facts.contains("network: on"), "the short form of what widens: {facts}");
+  assert!(
+    screen
+      .text(&card)
+      .contains("Nothing is published yet. Builder keeps v1 until you publish v2."),
+    "{}",
+    screen.text(&card)
   );
 }
 
@@ -329,6 +389,56 @@ fn orchestrator_starts_in_auto_mode_and_cancel_waits_for_the_person() {
   screen.until("the cancelled card", |screen| {
     screen.text(&format!("{card}-state")).contains("Cancelled by you")
   });
+}
+
+/// Task `key` waits for task `blocker` to be merged.
+fn block(screen: &Orchestrator, key: &str, blocker: &str) {
+  let mut db = screen.db();
+  let id = |key: &str| {
+    db.tasks()
+      .expect("tasks")
+      .into_iter()
+      .find(|task| task.key().to_string() == key)
+      .expect("the task")
+      .id()
+  };
+  let (task, blocker) = (id(key), id(blocker));
+  let linked = TaskOrganization::new(
+    WorkflowStatus::Todo,
+    Priority::High,
+    None,
+    vec![BlockingTask {
+      task: blocker,
+      gate: DependencyGate::Merge,
+    }],
+    vec![],
+  )
+  .expect("linked");
+  db.set_task_organization(task, &linked, ChangeActor::Person, Timestamp::now())
+    .expect("link");
+}
+
+#[test]
+fn orchestrator_auto_mode_names_the_task_a_start_waits_for() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  let delivery = screen.delivery();
+  let first = screen.draft_with(delivery, "Lay the ground", ("Lay it.", &["It is laid."]));
+  let second = screen.draft_with(delivery, "Build on it", ("Build.", &["It is built."]));
+  block(&screen, &second, &first);
+  screen.auto_mode(true);
+  screen.go(OrchestratorChat::New);
+  call(
+    &mut screen,
+    &format!(r#"Call run_task {{"project":"Kontur","key":"{second}"}}"#),
+    1,
+  );
+  let refused = actions(&screen).remove(0);
+  let named = format!("{second} waits for {first} to finish.");
+  assert!(
+    matches!(&refused.outcome, ActionOutcome::Refused { reason, .. } if reason.contains(&named)),
+    "{refused:?}"
+  );
+  assert_eq!(runs(&screen, &second), 0, "nothing started");
 }
 
 /// The latest run of task `key`.

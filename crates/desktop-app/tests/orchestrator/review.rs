@@ -21,7 +21,7 @@ use orchester_workspace::{
 
 use super::{
   harness::{Orchestrator, Setup},
-  proposal::outcomes,
+  proposal::{outcomes, proposal_card},
 };
 
 /// The conversation's actions, in order.
@@ -211,6 +211,13 @@ fn orchestrator_saves_a_duplicate_as_a_draft_and_proposes_its_first_version() {
     (kept[1].tool.as_str(), &kept[1].outcome),
     ("publish_pipeline", &ActionOutcome::Waits)
   );
+  // The cards of one answer stand 10 apart, as every part of it (`b55NqO`).
+  let first = proposal_card(&screen);
+  let second = format!("{}1", first.trim_end_matches('0'));
+  screen.until("both cards", |screen| screen.exists(&first) && screen.exists(&second));
+  let (above, below) = (screen.bounds(&first), screen.bounds(&second));
+  let gap = below.y - (above.y + above.height);
+  assert!((gap - 10.0).abs() < 1.0, "the answer's cards are 10 apart: {gap}");
   let db = screen.db();
   let hotfix = db
     .resources(ResourceKind::Pipeline)
@@ -225,5 +232,36 @@ fn orchestrator_saves_a_duplicate_as_a_draft_and_proposes_its_first_version() {
   assert!(
     db.draft::<Pipeline>(hotfix.id()).expect("read").is_some(),
     "the copy is a draft"
+  );
+}
+
+#[test]
+fn orchestrator_card_head_is_one_line_at_a_fractional_scale() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  // The verifier's window: 1440 wide at 1.5, where a title that fits was laid out on two lines.
+  screen.window.tree.set_scale_factor(1.5);
+  screen.window.tree.resize(2160, 1650);
+  let builder = screen.builder();
+  let delivery = screen.pipeline(builder, ("feature-delivery", "Feature delivery"));
+  screen.pipeline_draft((delivery, builder), "Read README.md twice.");
+  screen.let_orchestrator_publish(true);
+  screen.let_automation_widen(true);
+  screen.go(OrchestratorChat::New);
+  call(
+    &mut screen,
+    &format!(r#"Call publish_pipeline {{"project":"Kontur","pipeline":"{delivery}"}}"#),
+    1,
+  );
+  let card = proposal_card(&screen);
+  screen.until("the published card with its facts", |screen| {
+    screen.text(&format!("{card}-state")).contains("Confirmed") && screen.exists(&format!("{card}-facts"))
+  });
+  let (title, state) = (
+    screen.bounds(&format!("{card}-title")),
+    screen.bounds(&format!("{card}-state")),
+  );
+  assert!(
+    title.height < state.height * 1.5,
+    "the head is one line: {title:?} against {state:?}"
   );
 }

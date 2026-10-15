@@ -29,12 +29,12 @@ use orchester_workspace::{
   orchestrator::facts::{Detail, Facts, LineChange, Place, Publication, RunFacts, Stands, TextDiff, TextLine},
 };
 
-use super::words::View;
+use super::{widens, words::View};
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskTab, TaskView, ToolTab},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, OrchestratorText},
-  ui::{message::message_text, pressable::pressable},
+  ui::pressable::pressable,
 };
 
 /// A fact's key column (`u5vGv`).
@@ -179,20 +179,16 @@ fn publication_rows(
   )];
   rows.extend(detail_rows(ctx, publication, project));
   if waits && publication.keeping > 0 && publication.version > 1 {
-    let keeping = keeping(ctx, publication.keeping, &before);
-    // On the row of where it applies, or what its kind tells, after its first.
-    let detailed = rows.len() > 1;
-    match rows.last_mut() {
-      Some((_, parts)) if detailed => parts.push(Part::Aside(keeping)),
-      _ => rows.push((ctx.t("orchestrator.change.facts.run"), vec![Part::Aside(keeping)])),
-    }
+    // On the row of where it applies, which follows the first; else on the first, which names the draft.
+    let at = usize::from(!publication.places.is_empty());
+    rows[at].1.push(Part::Aside(keeping(ctx, publication.keeping, &before)));
   }
   if waits && !publication.widens.is_empty() {
     let separator = ctx.t("orchestrator.change.facts.separator");
     let widens: Vec<String> = publication
       .widens
       .iter()
-      .map(|reason| message_text(ctx, reason).to_string())
+      .map(|reason| widens::compact(ctx, reason).to_string())
       .collect();
     rows.push((
       ctx.t("orchestrator.change.facts.widens"),
