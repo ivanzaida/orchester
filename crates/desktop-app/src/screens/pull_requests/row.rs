@@ -3,7 +3,7 @@
 //! GitHub checks over the revision they ran on; Open in GitHub; and the chevron. A press on the row opens the
 //! pull request in the app.
 
-use std::sync::Arc;
+use std::{num::NonZeroU64, sync::Arc};
 
 use lurq::{
   app::{
@@ -76,7 +76,8 @@ impl Component for PullRequestRow {
     let pull_request = &props.listed.pull_request;
     let number = pull_request.number();
     let navigation = Navigation::of(ctx);
-    let opened = Route::Project(props.project, ProjectPage::PullRequest(number));
+    let page = NonZeroU64::new(number).expect("a pull request's constructor refuses number 0");
+    let opened = Route::Project(props.project, ProjectPage::PullRequest(page));
     let url: Arc<str> = Arc::from(pull_request.url());
     let open = props.open.clone();
     let github = ActionButton::new(

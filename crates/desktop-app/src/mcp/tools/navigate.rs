@@ -1,3 +1,5 @@
+use std::num::NonZeroU64;
+
 use lurq::mcp::{McpTool, Scope};
 use orchester_core::{
   id::{ConnectionId, ProjectId},
@@ -234,13 +236,14 @@ fn pull_requests_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolErro
       reason: "a pull request is shown without the list's tab".to_owned(),
     });
   }
-  match number.trim_start_matches('#').parse::<u64>() {
-    Ok(number) if number > 0 => Ok(ProjectPage::PullRequest(number)),
-    _ => Err(ToolError::InvalidParam {
+  number
+    .trim_start_matches('#')
+    .parse::<NonZeroU64>()
+    .map(ProjectPage::PullRequest)
+    .map_err(|_| ToolError::InvalidParam {
       param: "number",
       reason: format!("`{number}` is not a pull request number"),
-    }),
-  }
+    })
 }
 
 fn connections_view(args: &Map<String, Value>) -> Result<ConnectionsView, ToolError> {

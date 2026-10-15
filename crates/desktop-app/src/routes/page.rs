@@ -1,3 +1,5 @@
+use std::num::NonZeroU64;
+
 use orchester_core::{
   id::{ConnectionId, ResourceId},
   project::TaskKey,
@@ -24,7 +26,7 @@ pub enum ProjectPage {
   /// The Pull requests page on its tab.
   PullRequests(PullRequestTab),
   /// A pull request of the project's repository, by its number.
-  PullRequest(u64),
+  PullRequest(NonZeroU64),
   Usage,
   Pipelines,
   NewPipeline,
@@ -190,10 +192,10 @@ impl ProjectPage {
       [PULL_REQUESTS] => Ok(Self::PullRequests(
         params.take_or_default(TAB, PullRequestTab::from_name)?,
       )),
-      [PULL_REQUESTS, number] => match number.parse::<u64>() {
-        Ok(number) if number > 0 => Ok(Self::PullRequest(number)),
-        _ => Err(RouteError::NoScreen),
-      },
+      [PULL_REQUESTS, number] => number
+        .parse::<NonZeroU64>()
+        .map(Self::PullRequest)
+        .map_err(|_| RouteError::NoScreen),
       [CONNECTIONS] => ConnectionsView::take(params).map(Self::Connections),
       [CONNECTIONS, NEW] => NewConnection::take(params).map(Self::NewConnection),
       [CONNECTIONS, id, EDIT] => id.parse().map(Self::EditConnection).map_err(|_| RouteError::NoScreen),

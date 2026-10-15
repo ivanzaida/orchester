@@ -4,7 +4,7 @@
 
 use orchester_app::routes::{ProjectPage, Route};
 
-use crate::harness::Seeded;
+use crate::harness::{Seeded, nonzero};
 
 impl Seeded {
   /// Pull request `number`'s page, once its read ended.
@@ -12,7 +12,7 @@ impl Seeded {
     self
       .window
       .navigation()
-      .go(Route::Project(self.project, ProjectPage::PullRequest(number)));
+      .go(Route::Project(self.project, ProjectPage::PullRequest(nonzero(number))));
     self.read_ended();
   }
 

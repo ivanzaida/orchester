@@ -11,7 +11,7 @@
 pub mod app_log;
 pub mod appearance;
 pub mod brand;
-mod chrome;
+pub mod chrome;
 pub mod clipboard;
 pub mod i18n;
 pub mod lifecycle;

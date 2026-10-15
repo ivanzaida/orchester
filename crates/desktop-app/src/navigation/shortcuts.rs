@@ -72,9 +72,20 @@ pub fn shortcut(keys: Keys<'_>) -> Option<Shortcut> {
   platform::shortcut(keys)
 }
 
+/// Whether `keys` open the title bar's tab list: Ctrl+Shift+A, Cmd+Shift+A on macOS (`YAOSy`). The list
+/// takes them while it is offered; they are no window shortcut otherwise.
+pub fn opens_tab_list(keys: Keys<'_>) -> bool {
+  keys.shift && platform::command_only(keys) && keys.is("a", "KeyA")
+}
+
 #[cfg(not(target_os = "macos"))]
 mod platform {
   use super::{Keys, Shortcut};
+
+  /// Ctrl and no other modifier but Shift.
+  pub(super) const fn command_only(keys: Keys<'_>) -> bool {
+    keys.only_ctrl()
+  }
 
   pub(super) fn shortcut(keys: Keys<'_>) -> Option<Shortcut> {
     if keys.only_ctrl() && !keys.shift {
@@ -100,6 +111,11 @@ mod platform {
 #[cfg(target_os = "macos")]
 mod platform {
   use super::{Keys, Shortcut};
+
+  /// Cmd and no other modifier but Shift.
+  pub(super) const fn command_only(keys: Keys<'_>) -> bool {
+    keys.meta && !keys.ctrl && !keys.alt
+  }
 
   pub(super) fn shortcut(keys: Keys<'_>) -> Option<Shortcut> {
     if !keys.meta || keys.ctrl || keys.alt || keys.shift {

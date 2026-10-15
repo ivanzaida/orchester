@@ -20,7 +20,7 @@ use super::{
   Inbox, InboxError, LinkedInbox, expect_active_account_in,
   linked::{LinkedTask, linked_tasks},
   status::SyncStatus,
-  stored_in, sync_scope_in,
+  stored, sync_scope_in,
 };
 use crate::messages::Message;
 
@@ -243,13 +243,18 @@ impl LinkedList {
 
 /// The pull requests as stored, without asking GitHub.
 pub fn load_list_in(repo_root: &Path) -> Result<PullRequestList, InboxError> {
-  list(repo_root, stored_in(repo_root)?)
+  read_list(&ProjectDb::open(repo_root)?)
+}
+
+/// The pull requests `db` stores, without asking GitHub: a project's database opened only to read it will do.
+pub fn read_list(db: &ProjectDb) -> Result<PullRequestList, InboxError> {
+  list(db, stored(db)?)
 }
 
 /// Syncs the open and the closed pull requests with `programs`, stores what it read and lists it.
 pub fn sync_list_in(repo_root: &Path, programs: &Programs) -> Result<PullRequestList, InboxError> {
   let inbox = sync_scope_in(repo_root, programs, SyncScope::OpenAndClosed)?;
-  list(repo_root, inbox)
+  list(&ProjectDb::open(repo_root)?, inbox)
 }
 
 /// How recently a sync must have run for a client's refresh to answer from what it stored instead of asking
@@ -262,14 +267,17 @@ pub fn refresh_list_in(repo_root: &Path, programs: &Programs, now: Timestamp) ->
   let stored = load_list_in(repo_root)?;
   let recent = match &stored {
     PullRequestList::Unlinked => return Ok(stored),
-    PullRequestList::Linked(linked) => linked.attempted_at.is_some_and(|at| {
-      u128::try_from(now.unix_millis() - at.unix_millis()).is_ok_and(|ago| ago < REFRESH_INTERVAL.as_millis())
-    }),
+    PullRequestList::Linked(linked) => linked.attempted_at.is_some_and(|at| is_recent(at, now)),
   };
   if recent {
     return Ok(stored);
   }
   sync_list_in(repo_root, programs)
+}
+
+/// Whether GitHub, asked at `at`, was asked less than [`REFRESH_INTERVAL`] before `now`.
+pub fn is_recent(at: Timestamp, now: Timestamp) -> bool {
+  u128::try_from(now.unix_millis() - at.unix_millis()).is_ok_and(|ago| ago < REFRESH_INTERVAL.as_millis())
 }
 
 /// *Use this account*: makes the project expect the account `gh` acts as now, then syncs. `gh`
@@ -281,7 +289,7 @@ pub fn use_active_account_list_in(repo_root: &Path, programs: &Programs) -> Resu
   sync_list_in(repo_root, programs)
 }
 
-fn list(repo_root: &Path, inbox: Inbox) -> Result<PullRequestList, InboxError> {
+fn list(db: &ProjectDb, inbox: Inbox) -> Result<PullRequestList, InboxError> {
   let Inbox::Linked(inbox) = inbox else {
     return Ok(PullRequestList::Unlinked);
   };
@@ -297,8 +305,7 @@ fn list(repo_root: &Path, inbox: Inbox) -> Result<PullRequestList, InboxError> {
     Some(synced) => (Some(synced.synced_at), synced.pull_requests),
     None => (None, Vec::new()),
   };
-  let db = ProjectDb::open(repo_root)?;
-  let mut tasks = linked_tasks(&db, &pull_requests)?;
+  let mut tasks = linked_tasks(db, &pull_requests)?;
   let pull_requests = pull_requests
     .into_iter()
     .map(|pull_request| ListedPullRequest {

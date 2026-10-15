@@ -1,6 +1,6 @@
 //! A window on a seeded Kontur, its fake `gh` answering as its mode file says, driven by element id.
 
-use std::{fs, path::PathBuf};
+use std::{fs, num::NonZeroU64, path::PathBuf};
 
 use orchester_app::routes::{ProjectPage, Route};
 use orchester_core::{id::ProjectId, time::Timestamp};
@@ -123,4 +123,9 @@ impl Seeded {
       .key()
       .to_string()
   }
+}
+
+/// Pull request `number` as a route names it.
+pub fn nonzero(number: u64) -> NonZeroU64 {
+  NonZeroU64::new(number).expect("a pull request number")
 }

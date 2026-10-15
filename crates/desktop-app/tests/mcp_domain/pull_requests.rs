@@ -28,6 +28,8 @@ fn domain_pull_requests_are_listed_with_their_task_and_links() {
   assert!(repository["attempted_at"].is_number(), "{repository}");
   assert_eq!(repository["paused_until"], Value::Null);
   assert_eq!(repository["link"], format!("/project/{project}/pull-requests"));
+  assert_eq!(repository["project"]["name"], "Kontur");
+  assert_eq!(all["unreadable_projects"], json!([]));
   let review = served.ok(
     "list_pull_requests",
     &json!({ "project": "Kontur", "tab": "needs_review" }),

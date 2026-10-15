@@ -20,7 +20,7 @@ mod status;
 mod table;
 mod work;
 
-use std::{sync::Arc, time::Duration};
+use std::{num::NonZeroU64, sync::Arc, time::Duration};
 
 use lurq::{
   app::{
@@ -71,8 +71,8 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, tab: PullRequestTab) -> Ele
 }
 
 /// Pull request `number`'s own page.
-pub fn pull_request(ctx: &mut Ctx, project: &ShownProject, number: u64) -> Element {
-  detail::screen(ctx, project, number)
+pub fn pull_request(ctx: &mut Ctx, project: &ShownProject, number: NonZeroU64) -> Element {
+  detail::screen(ctx, project, number.get())
 }
 
 #[derive(Clone, PartialEq)]

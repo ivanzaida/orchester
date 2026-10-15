@@ -6,7 +6,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_workspace::pull_requests::{
-  Inbox, links,
+  Inbox,
   list::{Moment, PullRequestList, PullRequestSort, PullRequestTab, load_list_in},
   load_in,
   status::{Remedy, SyncStatus},
@@ -155,28 +155,6 @@ fn pull_requests_failed_syncs_offer_what_fixes_them() {
   assert_eq!(
     SyncStatus::after(Some(at(5)), Some(&unreachable)),
     SyncStatus::Unreachable { last: Some(at(5)) }
-  );
-}
-
-#[test]
-fn pull_requests_links_name_the_pages_routes() {
-  let (fixture, list) = seeded();
-  let project = orchester_store::ProjectDb::open(fixture.repo.path())
-    .expect("project database")
-    .project()
-    .id();
-  assert_eq!(
-    links::pull_request(project, 142),
-    format!("/project/{project}/pull-requests/142")
-  );
-  assert_eq!(
-    links::pull_requests(project, PullRequestTab::Merged),
-    format!("/project/{project}/pull-requests?tab=merged")
-  );
-  let task = list.find(142).and_then(|listed| listed.task.clone()).expect("a task");
-  assert_eq!(
-    links::task(project, &task.key),
-    format!("/project/{project}/tasks/KON-1/summary")
   );
 }
 

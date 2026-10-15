@@ -4,7 +4,7 @@
 use orchester_app::routes::{ProjectPage, Route, TaskTab, TaskView};
 use orchester_workspace::pull_requests::list::PullRequestTab;
 
-use crate::harness::Seeded;
+use crate::harness::{Seeded, nonzero};
 
 #[test]
 fn pull_requests_list_open_ones_with_state_review_checks_and_task() {
@@ -119,7 +119,7 @@ fn pull_requests_row_opens_the_pull_request_and_its_task_key_the_task() {
   seeded.window.press("pull-request-row-137");
   assert_eq!(
     seeded.window.navigation().route_now(),
-    Route::Project(seeded.project, ProjectPage::PullRequest(137))
+    Route::Project(seeded.project, ProjectPage::PullRequest(nonzero(137)))
   );
   seeded.window.until("the pull request's page", |window| {
     window.tree.get_element_by_id("pull-request-header").is_some()

@@ -12,6 +12,7 @@ use serde_json::{Value, json};
 
 use super::{
   Translate,
+  across::{across, needs_project},
   pull_request_wire::{item, repository},
 };
 use crate::{
@@ -23,7 +24,8 @@ use crate::{
   pull_requests::{
     InboxError,
     list::{
-      LinkedList, ListedPullRequest, PullRequestList, PullRequestSort, PullRequestTab, load_list_in, refresh_list_in,
+      LinkedList, ListedPullRequest, PullRequestList, PullRequestSort, PullRequestTab, load_list_in, read_list,
+      refresh_list_in,
     },
     page::{PullRequestPage, PullRequestView, refresh_page_in},
   },
@@ -91,59 +93,46 @@ pub struct GetPullRequest {
   pub refresh: bool,
 }
 
-/// A project's list, or the project as the tool names it and why its list could not be read.
-type ProjectRead = Result<Read, (Value, ToolError)>;
-
-/// A project and its list.
-struct Read {
-  project: OpenProject,
-  list: PullRequestList,
-}
-
 pub async fn list_pull_requests(
   services: &Services,
   args: ListPullRequests,
   translate: &Translate,
 ) -> Result<Value, ToolError> {
   if args.refresh && args.project.is_none() {
-    return Err(ToolError::InvalidArguments(
-      "refresh syncs one project: name it".to_owned(),
-    ));
+    return Err(needs_project("refresh"));
   }
   let services = services.clone();
   let (named, refresh) = (args.project.clone(), args.refresh);
-  let reads = blocking(move || match named {
-    Some(named) => {
-      let project = services.project(&named)?;
-      let list = read(&services, &project, refresh)?;
-      Ok(vec![Ok(Read { project, list })])
-    }
-    None => every_project(&services),
+  let read = blocking(move || {
+    across(&services, named.as_deref(), |open, db| {
+      if refresh {
+        refreshed(&services, open)
+      } else {
+        read_list(db).map_err(|error| refused(&error))
+      }
+    })
   })
   .await?;
   let query = args.search.as_deref().unwrap_or_default();
-  let mut pull_requests = Vec::new();
-  let mut repositories = Vec::new();
-  for read in reads {
-    let Read { project, list } = match read {
-      Ok(read) => read,
-      Err((named, error)) => {
-        repositories
-          .push(json!({ "project": named, "error": error.to_json(|message| translate.text(message))["error"] }));
-        continue;
-      }
-    };
-    repositories.push(repository(&project, &list));
-    let PullRequestList::Linked(linked) = &list else {
-      continue;
+  let pull_requests = read.items(|open, list| {
+    let PullRequestList::Linked(linked) = list else {
+      return Vec::new();
     };
     let rows = match args.tab {
       Some(tab) => linked.rows(tab.into(), query, PullRequestSort::RecentlyUpdated),
       None => all_rows(linked, query),
     };
-    pull_requests.extend(rows.iter().map(|listed| item(&project, project.project.id(), listed)));
-  }
-  Ok(json!({ "pull_requests": pull_requests, "repositories": repositories }))
+    rows
+      .iter()
+      .map(|listed| item(open, open.project.id(), listed))
+      .collect()
+  });
+  let repositories = read.items(|open, list| vec![repository(open, list)]);
+  Ok(json!({
+    "pull_requests": pull_requests,
+    "repositories": repositories,
+    "unreadable_projects": read.unreadable(translate),
+  }))
 }
 
 pub async fn get_pull_request(services: &Services, args: GetPullRequest) -> Result<Value, ToolError> {
@@ -151,7 +140,11 @@ pub async fn get_pull_request(services: &Services, args: GetPullRequest) -> Resu
   let number = args.number;
   let (project, list, listed) = blocking(move || {
     let project = services.project(&args.project)?;
-    let list = read(&services, &project, args.refresh)?;
+    let list = if args.refresh {
+      refreshed(&services, &project)?
+    } else {
+      load_list_in(&project.repo_root).map_err(|error| refused(&error))?
+    };
     let listed = match &list {
       PullRequestList::Unlinked => return Err(ToolError::not_found(Missing::PullRequest, format!("#{number}"))),
       PullRequestList::Linked(linked) => match linked.find(number) {
@@ -168,39 +161,18 @@ pub async fn get_pull_request(services: &Services, args: GetPullRequest) -> Resu
   Ok(found)
 }
 
-/// Every project the workspace knows, each read or with why it could not be.
-fn every_project(services: &Services) -> Result<Vec<ProjectRead>, ToolError> {
-  Ok(
-    services
-      .workspace
-      .entries()?
-      .into_iter()
-      .map(|entry| {
-        let named = json!({ "id": entry.project.id.to_string(), "name": entry.project.name.as_str() });
-        let read = services.project(&entry.project.id.to_string()).and_then(|project| {
-          let list = read(services, &project, false)?;
-          Ok(Read { project, list })
-        });
-        read.map_err(|error| (named, error))
-      })
-      .collect(),
-  )
+/// The list of `project` after a client's refresh.
+fn refreshed(services: &Services, project: &OpenProject) -> Result<PullRequestList, ToolError> {
+  refresh_list_in(&project.repo_root, &services.programs, Timestamp::now()).map_err(|error| refused(&error))
 }
 
-fn read(services: &Services, project: &OpenProject, refresh: bool) -> Result<PullRequestList, ToolError> {
-  let root = &project.repo_root;
-  let list = if refresh {
-    refresh_list_in(root, &services.programs, Timestamp::now())
-  } else {
-    load_list_in(root)
-  };
-  list.map_err(|error: InboxError| ToolError::refused("project_data", vec![error.message()]))
+fn refused(error: &InboxError) -> ToolError {
+  ToolError::refused("project_data", vec![error.message()])
 }
 
 /// Pull request `number`, which the sync did not list, read on its own from GitHub.
 fn read_one(services: &Services, project: &OpenProject, number: u64) -> Result<ListedPullRequest, ToolError> {
-  let page = refresh_page_in(&project.repo_root, number, &services.programs)
-    .map_err(|error| ToolError::refused("project_data", vec![error.message()]))?;
+  let page = refresh_page_in(&project.repo_root, number, &services.programs).map_err(|error| refused(&error))?;
   let PullRequestPage::Linked(view) = page else {
     return Err(ToolError::not_found(Missing::PullRequest, format!("#{number}")));
   };

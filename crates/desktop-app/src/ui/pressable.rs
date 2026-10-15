@@ -45,6 +45,9 @@ pub enum Focus {
   /// focused. lurq 0.42 has no
   /// keyboard-only focus state, so a pointer press that focuses the control shows the ring too.
   Form,
+  /// A control outside forms the keyboard reaches too: a Tab stop that Enter or Space presses, with the
+  /// focus ring only while the keyboard moved the focus there, never after a press.
+  Keyboard,
 }
 
 impl Focus {
@@ -57,6 +60,11 @@ impl Focus {
         .focusable(true)
         .tab_index(TAB_STOP)
         .focused_style(Style::new().box_shadow(ExtraShadow::FocusRing.role())),
+      Self::Keyboard => button
+        .button()
+        .focusable(true)
+        .tab_index(TAB_STOP)
+        .focus_visible_style(Style::new().box_shadow(ExtraShadow::FocusRing.role())),
     }
   }
 }

@@ -1,5 +1,7 @@
 //! How `list_pull_requests` and `get_pull_request` write a pull request, its task and its repository's sync.
 
+use std::num::NonZeroU64;
+
 use orchester_core::{
   id::ProjectId,
   pull_request::{PullRequest, ReviewDecision},
@@ -8,9 +10,9 @@ use serde_json::{Value, json};
 
 use super::wire;
 use crate::{
+  links::{Link, TaskPage},
   pull_requests::{
     linked::LinkedTask,
-    links,
     list::{ListedPullRequest, PullRequestList, PullRequestTab},
     status::SyncStatus,
   },
@@ -40,7 +42,7 @@ pub(super) fn repository(project: &OpenProject, list: &PullRequestList) -> Value
       .as_ref()
       .and_then(orchester_core::pull_request::SyncFailure::paused_until)
       .map(wire::time),
-    "link": links::pull_requests(project.project.id(), PullRequestTab::Open),
+    "link": Link::PullRequests(project.project.id(), PullRequestTab::Open).path(),
   })
 }
 
@@ -80,9 +82,14 @@ pub(super) fn item(project: &OpenProject, id: ProjectId, listed: &ListedPullRequ
     "closed_at": pull_request.closed_at().map(wire::time),
     "from_fork": pull_request.is_cross_repository(),
     "task": listed.task.as_ref().map(|task| linked_task(id, task)),
-    "link": links::pull_request(id, pull_request.number()),
+    "link": Link::PullRequest(id, number(pull_request)).path(),
     "url": pull_request.url(),
   })
+}
+
+/// `pull_request`'s number, which is never 0.
+fn number(pull_request: &PullRequest) -> NonZeroU64 {
+  NonZeroU64::new(pull_request.number()).expect("a pull request's constructor refuses number 0")
 }
 
 fn checks(pull_request: &PullRequest) -> Value {
@@ -100,7 +107,7 @@ fn linked_task(project: ProjectId, task: &LinkedTask) -> Value {
   json!({
     "key": task.key.to_string(),
     "title": &*task.title,
-    "link": links::task(project, &task.key),
+    "link": Link::Task(project, task.key.clone(), TaskPage::Summary).path(),
     "run": { "id": task.run.to_string(), "number": task.run_number.get() },
     "agent_working": task.agent_working,
   })

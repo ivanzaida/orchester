@@ -2,6 +2,8 @@
 //! resolves to its screen; a path that names nothing reads as a typed error that says why, and falls back
 //! in the table.
 
+use std::num::NonZeroU64;
+
 use orchester_app::routes::{
   ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, NewConnection, OverviewTab, ProjectPage, Route,
   RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
@@ -10,7 +12,7 @@ use orchester_core::{
   id::{ConnectionId, ProjectId},
   project::TaskKey,
 };
-use orchester_workspace::pull_requests::{links, list::PullRequestTab};
+use orchester_workspace::pull_requests::list::PullRequestTab;
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const CONNECTION: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
@@ -23,6 +25,10 @@ fn project() -> ProjectId {
 
 fn connection() -> ConnectionId {
   CONNECTION.parse().expect("a connection id")
+}
+
+fn pull_request() -> NonZeroU64 {
+  NonZeroU64::new(142).expect("a pull request number")
 }
 
 fn key(key: &str) -> TaskKey {
@@ -74,7 +80,7 @@ fn every_route() -> Vec<Route> {
   all.extend(NewConnection::ALL.map(|kind| at(ProjectPage::NewConnection(kind))));
   all.extend(TaskTab::ALL.map(|tab| at(ProjectPage::Task(key("KON-12"), TaskView::of(tab)))));
   all.extend(PullRequestTab::ALL.map(|tab| at(ProjectPage::PullRequests(tab))));
-  all.push(at(ProjectPage::PullRequest(142)));
+  all.push(at(ProjectPage::PullRequest(pull_request())));
   for source in ChangeSource::ALL {
     for path in ["src/webhooks/sender.rs", AWKWARD] {
       let view = TaskView::Changes(Some(file(path, source)));
@@ -163,7 +169,10 @@ fn paths_are_the_documented_ones() {
       at(ProjectPage::PullRequests(PullRequestTab::NeedsReview)),
       format!("{root}/pull-requests?tab=needs_review"),
     ),
-    (at(ProjectPage::PullRequest(142)), format!("{root}/pull-requests/142")),
+    (
+      at(ProjectPage::PullRequest(pull_request())),
+      format!("{root}/pull-requests/142"),
+    ),
     (at(ProjectPage::Settings), format!("{root}/settings")),
   ];
   for (route, path) in paths {
@@ -217,7 +226,6 @@ fn paths_that_name_no_screen_are_no_screen_and_fall_back_in_the_router() {
     "/settings/general",
     "/project",
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/nope",
-    "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12",
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12/nope",
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12/summary/more",
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12/edit/more",
@@ -233,7 +241,6 @@ fn paths_that_name_no_screen_are_no_screen_and_fall_back_in_the_router() {
   let table = routes();
   let screens: Vec<String> = Screen::ALL.into_iter().map(Screen::pattern).collect();
   for path in [
-    "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12",
     "/nope",
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/nope?tab=all",
     "/settings/general",
@@ -466,24 +473,4 @@ fn route_folder_keeps_a_folder_whole_or_names_none() {
     None,
     "a path that is not text is never cut short"
   );
-}
-
-#[test]
-fn pull_request_links_of_the_workspace_are_routes_of_the_pull_requests_screen() {
-  for tab in PullRequestTab::ALL {
-    let route = Route::parse(&links::pull_requests(project(), tab)).expect("a pull requests link");
-    assert_eq!(route, at(ProjectPage::PullRequests(tab)));
-  }
-  let route = Route::parse(&links::pull_request(project(), 142)).expect("a pull request link");
-  assert_eq!(route, at(ProjectPage::PullRequest(142)));
-  assert_eq!(route.nav_screen(), Screen::PullRequests);
-  let route = Route::parse(&links::task(project(), &key("KON-12"))).expect("a task link");
-  assert_eq!(
-    route,
-    at(ProjectPage::Task(key("KON-12"), TaskView::of(TaskTab::Summary)))
-  );
-  for number in ["0", "-1", "abc", "142x"] {
-    let path = format!("/project/{PROJECT}/pull-requests/{number}");
-    assert_eq!(Route::parse(&path), Err(RouteError::NoScreen), "{path}");
-  }
 }

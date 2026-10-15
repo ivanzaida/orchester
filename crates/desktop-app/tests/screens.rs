@@ -8,7 +8,7 @@
 
 mod support;
 
-use std::{path::PathBuf, sync::Arc};
+use std::{num::NonZeroU64, path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -254,7 +254,12 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
       at(ProjectPage::PullRequests(PullRequestTab::Merged)),
       placeholder("Pull requests"),
     ),
-    (at(ProjectPage::PullRequest(142)), Vec::new()),
+    (
+      at(ProjectPage::PullRequest(
+        NonZeroU64::new(142).expect("a pull request number"),
+      )),
+      Vec::new(),
+    ),
     (at(ProjectPage::Usage), placeholder("Usage")),
     (at(ProjectPage::Pipelines), placeholder("Pipelines")),
     (at(ProjectPage::Agents), placeholder("Agents")),

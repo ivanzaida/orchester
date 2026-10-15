@@ -8,7 +8,6 @@
 
 pub mod detail;
 pub mod linked;
-pub mod links;
 pub mod list;
 pub mod page;
 pub mod status;
@@ -116,12 +115,16 @@ pub fn load_in(repo_root: &Path) -> Result<Inbox, InboxError> {
 }
 
 /// Every pull request as stored, without asking GitHub.
-pub(crate) fn stored_in(repo_root: &Path) -> Result<Inbox, InboxError> {
-  let db = ProjectDb::open(repo_root)?;
+fn stored_in(repo_root: &Path) -> Result<Inbox, InboxError> {
+  stored(&ProjectDb::open(repo_root)?)
+}
+
+/// Every pull request `db` stores.
+pub(crate) fn stored(db: &ProjectDb) -> Result<Inbox, InboxError> {
   let Some(link) = db.repository_link()? else {
     return Ok(Inbox::Unlinked);
   };
-  linked(&db, &link)
+  linked(db, &link)
 }
 
 /// The stored list of `link`'s repository with how its latest sync went.
