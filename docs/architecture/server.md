@@ -38,7 +38,7 @@ the person who owns them.
 | S2a · Servers and sign-in | Merged; **screens only in the deprecated app**; its password sign-in and Settings › Servers are superseded by rows 39–46 | service: `crates/workspace/src/sharing/`; screens: `crates/desktop/src/screens/project/servers/` |
 | S2b · Share, members, Make local, read-only offline, conflict | Merged; **screens only in the deprecated app** | service: `crates/workspace/src/sharing/project/`; screens: `crates/desktop/src/screens/project/settings/sharing/`, `tasks/shared.rs` |
 | S2c · Join | Merged 2026-10-05; **screens only in the deprecated app** | service: `sharing/project/join.rs`; screens: `crates/desktop/src/screens/project/join/`, `tasks/not_shared.rs` |
-| S1c · Certificate, codes, devices, invites, cloud link, projects by slug | Merged 2026-10-16 | `crates/server`, `crates/api`, `crates/workspace/src/sharing/` |
+| S1c · Certificate, codes, devices, invites, cloud link, projects by slug | Merged | `crates/server`, `crates/api`, `crates/workspace/src/sharing/` |
 | C1a, C1b · Orchester Cloud backend and web front | Merged | `crates/cloud`, `web/cloud`, `web/ui` |
 | SA · Server admin | On branch `claude/server-admin`, not merged | `web/server`, `crates/server/src/http/{admin_proxy,internal,settings,managed}.rs`, `crates/cloud/src/{servers,invites}.rs`, `web/cloud/app/authorize/`, `deploy/server/` |
 | S2d, S3, S4, S5 | Not built | this document; [server-new-app-plan.md](server-new-app-plan.md) |
