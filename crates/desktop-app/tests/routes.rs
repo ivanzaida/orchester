@@ -10,6 +10,7 @@ use orchester_core::{
   id::{ConnectionId, ProjectId},
   project::TaskKey,
 };
+use orchester_workspace::pull_requests::{links, list::PullRequestTab};
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const CONNECTION: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
@@ -72,6 +73,8 @@ fn every_route() -> Vec<Route> {
   all.extend(ConnectionsTab::ALL.map(|tab| at(ProjectPage::Connections(ConnectionsView::new(tab)))));
   all.extend(NewConnection::ALL.map(|kind| at(ProjectPage::NewConnection(kind))));
   all.extend(TaskTab::ALL.map(|tab| at(ProjectPage::Task(key("KON-12"), TaskView::of(tab)))));
+  all.extend(PullRequestTab::ALL.map(|tab| at(ProjectPage::PullRequests(tab))));
+  all.push(at(ProjectPage::PullRequest(142)));
   for source in ChangeSource::ALL {
     for path in ["src/webhooks/sender.rs", AWKWARD] {
       let view = TaskView::Changes(Some(file(path, source)));
@@ -152,7 +155,15 @@ fn paths_are_the_documented_ones() {
       )),
       format!("{root}/tasks/KON-12/changes?file=src/a%26b.rs&from=worktree"),
     ),
-    (at(ProjectPage::PullRequests), format!("{root}/pull-requests")),
+    (
+      at(ProjectPage::PullRequests(PullRequestTab::Open)),
+      format!("{root}/pull-requests"),
+    ),
+    (
+      at(ProjectPage::PullRequests(PullRequestTab::NeedsReview)),
+      format!("{root}/pull-requests?tab=needs_review"),
+    ),
+    (at(ProjectPage::PullRequest(142)), format!("{root}/pull-requests/142")),
     (at(ProjectPage::Settings), format!("{root}/settings")),
   ];
   for (route, path) in paths {
@@ -455,4 +466,24 @@ fn route_folder_keeps_a_folder_whole_or_names_none() {
     None,
     "a path that is not text is never cut short"
   );
+}
+
+#[test]
+fn pull_request_links_of_the_workspace_are_routes_of_the_pull_requests_screen() {
+  for tab in PullRequestTab::ALL {
+    let route = Route::parse(&links::pull_requests(project(), tab)).expect("a pull requests link");
+    assert_eq!(route, at(ProjectPage::PullRequests(tab)));
+  }
+  let route = Route::parse(&links::pull_request(project(), 142)).expect("a pull request link");
+  assert_eq!(route, at(ProjectPage::PullRequest(142)));
+  assert_eq!(route.nav_screen(), Screen::PullRequests);
+  let route = Route::parse(&links::task(project(), &key("KON-12"))).expect("a task link");
+  assert_eq!(
+    route,
+    at(ProjectPage::Task(key("KON-12"), TaskView::of(TaskTab::Summary)))
+  );
+  for number in ["0", "-1", "abc", "142x"] {
+    let path = format!("/project/{PROJECT}/pull-requests/{number}");
+    assert_eq!(Route::parse(&path), Err(RouteError::NoScreen), "{path}");
+  }
 }

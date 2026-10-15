@@ -3,6 +3,7 @@ use orchester_core::{
   id::{ConnectionId, ProjectId},
   project::{TaskKey, TaskKeyError},
 };
+use orchester_workspace::pull_requests::list::PullRequestTab;
 use serde_json::{Map, Value, json};
 
 use super::{ToolError, WindowLink, object, reply, route_json, string};
@@ -20,7 +21,8 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   reports it). overview also takes `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as after \
   Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; connections `tab` and \
   `selected` (the id of the connection its inspector shows); new_connection `kind`; edit_connection `connection` \
-  (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab; orchestrator takes `chat` (a \n  conversation's id, or new; left out, the latest). A tab or kind left out is the one \
+  (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab; orchestrator takes `chat` (a \n  conversation's id, or new; left out, the latest); pull_requests takes `tab`, or `number` for one pull request. A \
+  tab or kind left out is the one \
   the screen opens on. Answers the route the tab shows, whose params navigate takes back. Errors are JSON with \
   a stable `code`: unknown_route (with the known names), missing_param, unexpected_param, invalid_param, \
   unknown_tab (with the screen's tabs), not_a_string, not_an_object, not_ready (the window is starting).";
@@ -36,11 +38,13 @@ pub fn tool(link: WindowLink) -> McpTool {
 fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
-    "The screen's tab, the one it opens on when left out: overview {}; tasks {}; task {}; connections {}.",
+    "The screen's tab, the one it opens on when left out: overview {}; tasks {}; task {}; connections {}; \
+     pull_requests {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
     TaskTab::ALL.map(TaskTab::name).join(", "),
     ConnectionsTab::ALL.map(ConnectionsTab::name).join(", "),
+    PullRequestTab::ALL.map(PullRequestTab::name).join(", "),
   );
   let kinds: Vec<&str> = NewConnection::ALL.into_iter().map(NewConnection::name).collect();
   let sources: Vec<&str> = ChangeSource::ALL.into_iter().map(ChangeSource::name).collect();
@@ -63,6 +67,7 @@ fn schema() -> Value {
       "skill": { "type": "string", "description": "skills: the skill id, new, or import; omitted opens the library." },
       "tool": { "type": "string", "description": "tools: the tool’s id, or new for a command draft; omitted opens the library." },
       "chat": { "type": "string", "description": "orchestrator: a conversation's id, or new; omitted opens the latest." },
+      "number": { "type": "string", "description": "pull_requests: the number of the pull request to open, e.g. 142." },
       "from": {
         "type": "string",
         "enum": sources,
@@ -111,7 +116,7 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
     Screen::EditTask => ProjectPage::EditTask(key(args, "key")?),
     Screen::Task => ProjectPage::Task(key(args, "key")?, task_view(args)?),
     Screen::MergeQueue => ProjectPage::MergeQueue,
-    Screen::PullRequests => ProjectPage::PullRequests,
+    Screen::PullRequests => pull_requests_page(args)?,
     Screen::Usage => ProjectPage::Usage,
     Screen::Pipelines => ProjectPage::Pipelines,
     Screen::Agents => ProjectPage::Agents,
@@ -140,11 +145,11 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Tools => &["project", "tool", "tab"],
     Screen::Skills => &["project", "skill"],
     Screen::Orchestrator => &["project", "chat"],
+    Screen::PullRequests => &["project", "tab", "number"],
     Screen::NewConnection => &["project", "kind"],
     Screen::EditConnection => &["project", "connection"],
     Screen::NewTask
     | Screen::MergeQueue
-    | Screen::PullRequests
     | Screen::Usage
     | Screen::Pipelines
     | Screen::Agents
@@ -215,6 +220,27 @@ fn connection(args: &Map<String, Value>, param: &'static str) -> Result<Connecti
     param,
     reason: format!("`{value}` is not a connection id ({error})"),
   })
+}
+
+/// Pull request `number`, or the page on `tab`; not both.
+fn pull_requests_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
+  let Some(number) = string(args, "number")? else {
+    let known = PullRequestTab::ALL.map(PullRequestTab::name);
+    return Ok(ProjectPage::PullRequests(tab(args, PullRequestTab::from_name, &known)?));
+  };
+  if args.contains_key("tab") {
+    return Err(ToolError::InvalidParam {
+      param: "number",
+      reason: "a pull request is shown without the list's tab".to_owned(),
+    });
+  }
+  match number.trim_start_matches('#').parse::<u64>() {
+    Ok(number) if number > 0 => Ok(ProjectPage::PullRequest(number)),
+    _ => Err(ToolError::InvalidParam {
+      param: "number",
+      reason: format!("`{number}` is not a pull request number"),
+    }),
+  }
 }
 
 fn connections_view(args: &Map<String, Value>) -> Result<ConnectionsView, ToolError> {

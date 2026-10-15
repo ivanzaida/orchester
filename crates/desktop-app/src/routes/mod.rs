@@ -11,7 +11,9 @@
 //! its tab, and `/project/<id>/tasks/<key>/edit` is Edit task. Connections is `/project/<id>/connections`
 //! (`?tab=`, `?selected=` the connection its inspector shows), Add connection `/project/<id>/connections/new`
 //! (`?kind=mcp_server` adds an MCP server) and `/project/<id>/connections/<connection id>/edit` edits an MCP
-//! server. A tab, source or kind left out of the query is the one the screen opens on.
+//! server. Pull requests is `/project/<id>/pull-requests` (`?tab=`) and a pull request
+//! `/project/<id>/pull-requests/<number>`. A tab, source or kind left out of the query is the one the screen
+//! opens on.
 //!
 //! Another screen or another tab (`tab`, a task's `<tab>`) is a new entry of the tab's history
 //! (`Navigation::go`); what a screen refines on its tab, `q`, `highlight` and `file` with `from`, takes the
@@ -62,6 +64,7 @@ const ADD_PROJECT: &str = "add-project";
 const FOLDER: &str = "folder";
 const TASKS: &str = "tasks";
 const CONNECTIONS: &str = "connections";
+const PULL_REQUESTS: &str = "pull-requests";
 const ORCHESTRATOR: &str = "orchestrator";
 const NEW: &str = "new";
 const EDIT: &str = "edit";
@@ -74,6 +77,7 @@ const PROJECT_PATTERN: &str = "/project/:project";
 const NEW_PIPELINE_PATTERN: &str = "/project/:project/pipelines/new";
 const PIPELINE_PATTERN: &str = "/project/:project/pipelines/:pipeline";
 const AGENT_PATTERN: &str = "/project/:project/agents/:agent";
+const PULL_REQUEST_PATTERN: &str = "/project/:project/pull-requests/:number";
 
 /// A folder a route names. An address is text, so only a folder whose path is text can be named: the
 /// address then keeps it whole.
@@ -114,6 +118,7 @@ impl Route {
       Self::Project(_, ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline) => NEW_PIPELINE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Pipeline(_)) => PIPELINE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Agent(_)) => AGENT_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::PullRequest(_)) => PULL_REQUEST_PATTERN.to_owned(),
       _ => self.screen().pattern(),
     }
   }

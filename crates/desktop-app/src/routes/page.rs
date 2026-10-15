@@ -2,10 +2,11 @@ use orchester_core::{
   id::{ConnectionId, ResourceId},
   project::TaskKey,
 };
+use orchester_workspace::pull_requests::list::PullRequestTab;
 
 use super::{
-  CONNECTIONS, ConnectionsView, EDIT, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, RouteError,
-  SETTINGS, Screen, TAB, TASKS, TaskList, TaskView, ToolTab, project_screen_path,
+  CONNECTIONS, ConnectionsView, EDIT, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS,
+  RouteError, SETTINGS, Screen, TAB, TASKS, TaskList, TaskView, ToolTab, project_screen_path,
   query::{Params, with_query},
 };
 
@@ -20,7 +21,10 @@ pub enum ProjectPage {
   EditTask(TaskKey),
   Task(TaskKey, TaskView),
   MergeQueue,
-  PullRequests,
+  /// The Pull requests page on its tab.
+  PullRequests(PullRequestTab),
+  /// A pull request of the project's repository, by its number.
+  PullRequest(u64),
   Usage,
   Pipelines,
   NewPipeline,
@@ -64,7 +68,7 @@ impl ProjectPage {
       Screen::Tasks => Self::Tasks(TaskList::default()),
       Screen::NewTask => Self::NewTask,
       Screen::MergeQueue => Self::MergeQueue,
-      Screen::PullRequests => Self::PullRequests,
+      Screen::PullRequests => Self::PullRequests(PullRequestTab::default()),
       Screen::Usage => Self::Usage,
       Screen::Pipelines => Self::Pipelines,
       Screen::Agents => Self::Agents,
@@ -89,7 +93,7 @@ impl ProjectPage {
       Self::EditTask(_) => Screen::EditTask,
       Self::Task(..) => Screen::Task,
       Self::MergeQueue => Screen::MergeQueue,
-      Self::PullRequests => Screen::PullRequests,
+      Self::PullRequests(_) | Self::PullRequest(_) => Screen::PullRequests,
       Self::Usage => Screen::Usage,
       Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(_) => Screen::Pipelines,
       Self::Agents | Self::Agent(_) => Screen::Agents,
@@ -131,6 +135,11 @@ impl ProjectPage {
       Self::NewEmptyPipeline => format!("{project_root}/pipelines/new?start=empty"),
       Self::Pipeline(id) => format!("{project_root}/pipelines/{id}"),
       Self::Agent(id) => format!("{project_root}/agents/{id}"),
+      Self::PullRequests(tab) => {
+        let tab = (*tab != PullRequestTab::default()).then(|| tab.name());
+        with_query(format!("{project_root}/{PULL_REQUESTS}"), &[(TAB, tab)])
+      }
+      Self::PullRequest(number) => format!("{project_root}/{PULL_REQUESTS}/{number}"),
       Self::Connections(view) => view.path(connections),
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
@@ -178,6 +187,13 @@ impl ProjectPage {
       },
       ["pipelines", id] => id.parse().map(Self::Pipeline).map_err(|_| RouteError::NoScreen),
       ["agents", id] => id.parse().map(Self::Agent).map_err(|_| RouteError::NoScreen),
+      [PULL_REQUESTS] => Ok(Self::PullRequests(
+        params.take_or_default(TAB, PullRequestTab::from_name)?,
+      )),
+      [PULL_REQUESTS, number] => match number.parse::<u64>() {
+        Ok(number) if number > 0 => Ok(Self::PullRequest(number)),
+        _ => Err(RouteError::NoScreen),
+      },
       [CONNECTIONS] => ConnectionsView::take(params).map(Self::Connections),
       [CONNECTIONS, NEW] => NewConnection::take(params).map(Self::NewConnection),
       [CONNECTIONS, id, EDIT] => id.parse().map(Self::EditConnection).map_err(|_| RouteError::NoScreen),

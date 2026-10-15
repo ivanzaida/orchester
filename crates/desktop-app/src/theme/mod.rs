@@ -30,6 +30,7 @@ mod overview;
 mod palette;
 pub mod pipelines;
 mod projects;
+mod pull_requests;
 mod secrets;
 mod settings;
 mod shadow;
@@ -65,6 +66,7 @@ pub use self::{
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
   projects::{ProjectsSpacing, ProjectsText},
+  pull_requests::PullRequestsSpacing,
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
   settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,
@@ -106,6 +108,7 @@ pub fn install(app: &mut App, mode: Mode) {
   connections::install(theme);
   secrets::install(theme);
   projects::install(theme);
+  pull_requests::install(theme);
   shell::install(theme);
   skills::install(theme);
   lifecycle::install(theme);

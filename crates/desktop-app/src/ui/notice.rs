@@ -80,6 +80,8 @@ pub struct Notice {
   mark: Option<PaletteColor>,
   title: Arc<str>,
   body: Option<Arc<str>>,
+  /// What follows the explanation, e.g. a command to run.
+  parts: Vec<Element>,
   actions: Vec<Element>,
   layout: NoticeLayout,
 }
@@ -93,6 +95,7 @@ impl Notice {
       mark: None,
       title: title.into(),
       body: None,
+      parts: Vec::new(),
       actions: Vec::new(),
       layout: NoticeLayout::Inline,
     }
@@ -126,6 +129,13 @@ impl Notice {
   /// Actions below the explanation, aligned with its text (SSbRV in GxmNs).
   pub fn stacked(mut self) -> Self {
     self.layout = NoticeLayout::Stacked;
+    self
+  }
+
+  /// `part` under the explanation, after the ones added before it: a command to run in a terminal
+  /// (`Command` in `Account notice` `CWJuh`). Stacked actions follow the parts.
+  pub fn part(mut self, part: impl Into<Element>) -> Self {
+    self.parts.push(part.into());
     self
   }
 
@@ -172,11 +182,12 @@ impl From<Notice> for Element {
           .flex(1.0)
           .spacing(ExtraSpacing::Loose.role())
           .child(text)
+          .with_children(notice.parts)
           .with_children(actions),
         None,
       )
     } else {
-      (text.flex(1.0), actions)
+      (text.flex(1.0).with_children(notice.parts), actions)
     };
     Row::new()
       .id(notice.id.clone())
@@ -225,6 +236,7 @@ fn inspector_notice(notice: Notice) -> Element {
         .color(PaletteColor::TextSecondary)
         .width(Dimension::Pct(100.0))
     }))
+    .with_children(notice.parts)
     .with_children(
       (!notice.actions.is_empty()).then(|| Row::new().wrap().spacing(SpacingSize::Sm).with_children(notice.actions)),
     )
