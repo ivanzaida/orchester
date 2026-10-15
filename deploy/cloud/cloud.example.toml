@@ -1,0 +1,10 @@
+# Orchester Cloud configuration. Every key can also come from ORCHESTER_CLOUD_<KEY> in the environment, which wins.
+# Keep the secrets (database_url, smtp_url, key_encryption_key) in the environment rather than in this file.
+listen = "127.0.0.1:8090"
+public_url = "https://cloud.example.com"
+# database_url = "postgres://orchester_cloud:<password>@db.example.com:5432/orchester_cloud?sslmode=require"
+# smtp_url = "smtps://<user>:<password>@smtp.example.com:465"
+smtp_from = "Orchester <no-reply@example.com>"
+# key_encryption_key = "<64 hex characters>"
+root_public_key = "<printed by `orchester-cloud root generate`>"
+trusted_proxies = ["127.0.0.1"]
