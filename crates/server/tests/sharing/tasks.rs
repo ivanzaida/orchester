@@ -9,21 +9,11 @@ async fn s1b_five_clients_allocate_250_numbers_without_gaps() {
   let owner = server.bootstrap().await;
   let project = project(&server, &owner.token, vec![]).await.project.id;
   let clients = [
-    server
-      .login("alice", &crate::support::credential("a secure admin password"))
-      .await,
-    server
-      .login("alice", &crate::support::credential("a secure admin password"))
-      .await,
-    server
-      .login("alice", &crate::support::credential("a secure admin password"))
-      .await,
-    server
-      .login("alice", &crate::support::credential("a secure admin password"))
-      .await,
-    server
-      .login("alice", &crate::support::credential("a secure admin password"))
-      .await,
+    server.another_device(&owner.token).await,
+    server.another_device(&owner.token).await,
+    server.another_device(&owner.token).await,
+    server.another_device(&owner.token).await,
+    server.another_device(&owner.token).await,
   ];
   let (a, b, c, d, e) = tokio::join!(
     create_tasks(&server, &clients[0].token, project, 50),

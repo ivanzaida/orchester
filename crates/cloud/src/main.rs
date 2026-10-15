@@ -8,7 +8,6 @@ use std::{
 use orchester_cloud::{Cloud, clock::SystemClock, config::Config, error::CloudError, mail::SmtpMailer};
 
 mod ceremony;
-mod private_file;
 mod shutdown;
 
 /// Commands that run where the root key is: no configuration, database or network.

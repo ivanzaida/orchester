@@ -14,7 +14,7 @@ mod token;
 pub use error::IdentityError;
 pub use key_set::{
   KEY_LISTED_AFTER_SECS, KEY_SET_LIFETIME_SECS, KEY_SIGNS_SECS, KeySetStatement, ListedKey, STATEMENT_FRESH_SECS,
-  VerifiedKeySet,
+  VerifiedKeySet, VerifiedToken,
 };
 pub use keys::{PrivateKey, PublicKey, RootKey, SigningKey};
 pub use token::{IdentityClaims, TOKEN_LIFETIME_SECS, TokenSubject};

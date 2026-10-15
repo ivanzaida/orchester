@@ -1,10 +1,13 @@
 //! Shared servers on the desktop (`sharing`): the reconnect backoff, how sessions name a device, the
-//! new password's rule, and the service against a real `orchester-server` on loopback: signing in
-//! with a first password, the token in the keychain, a token the server refuses, signing out, the
-//! plain HTTP rule, and no token or password in logs or `Debug` output.
+//! new password's rule (Orchester Cloud's), and the service against a real `orchester-server` on
+//! loopback: joining with a code, pairing another computer, a pinned certificate and another server's
+//! refused before anything is sent, the token in the keychain, a token the server refuses, signing
+//! out, the plain HTTP rule, no password sign-in, and no token or code in logs or `Debug` output.
 //!
 //! `cargo test -p orchester-desktop --test sharing sharing_`
 
+#[path = "sharing_support/cloud.rs"]
+mod cloud;
 #[path = "sharing_support/forwarder.rs"]
 mod forwarder;
 #[path = "server_support/mod.rs"]
@@ -18,8 +21,9 @@ use std::{
 };
 
 use orchester_api::{
-  Credential,
-  client::{ClientError, PlainHttp, ServerAddress},
+  Credential, ErrorCode,
+  client::{ClientError, CloudClient, PlainHttp, ServerAddress},
+  cloud::CloudServer,
 };
 use orchester_core::{
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
@@ -29,8 +33,8 @@ use orchester_store::AppDb;
 use orchester_workspace::{
   secrets::Vault,
   sharing::{
-    Connection, PasswordProblem, Schedule, ServerEntry, Servers, SharingError, SignedIn, device::Device,
-    password_problem,
+    CloudIdentity, CloudJoined, CodeRequest, Connection, PasswordProblem, PresentedCertificate, Schedule, ServerEntry,
+    Servers, SharingError, Trust, device::Device, password_problem,
   },
   workspace::Workspace,
 };
@@ -137,37 +141,34 @@ impl Desktop {
   }
 }
 
-/// Adds `server` and signs `username` in with the first password, choosing `own`.
-fn signed_in(desktop: &Desktop, server: &TestServer, (username, first, own): (&str, &Credential, &str)) {
-  signed_in_at(desktop, server, &server.url(), (username, first, own));
+/// Joins `server` from `desktop` with `code` as `username`.
+fn joined(desktop: &Desktop, server: &TestServer, (username, code): (&str, &Credential)) {
+  joined_at(desktop, server, &server.url(), (username, code));
 }
 
-/// [`signed_in`] through `url`, e.g. a forwarder in front of the server.
-fn signed_in_at(desktop: &Desktop, server: &TestServer, url: &str, (username, first, own): (&str, &Credential, &str)) {
+/// [`joined`] through `url`, e.g. a forwarder in front of the server.
+fn joined_at(desktop: &Desktop, server: &TestServer, url: &str, (username, code): (&str, &Credential)) {
   let address = ServerAddress::parse(url).expect("address");
   server
-    .block_on(desktop.servers.add(&address, SERVER_NAME.into(), PlainHttp::NotAllowed))
-    .expect("add the server");
-  let entry = desktop.entry();
-  let signed = server
     .block_on(
       desktop
         .servers
-        .sign_in(&entry, username.into(), Credential::new(first.expose().into())),
+        .join_with_code(&address, Trust::System(PlainHttp::NotAllowed), request(username, code)),
     )
-    .expect("sign in");
-  let SignedIn::PasswordChangeRequired(pending) = signed else {
-    panic!("a first password asks for the person's own");
-  };
-  assert!(desktop.tokens().is_empty(), "the first-password session is not kept");
-  server
-    .block_on(desktop.servers.choose_password(
-      &entry,
-      &pending,
-      Credential::new(first.expose().into()),
-      Credential::new(own.into()),
-    ))
-    .expect("choose a password");
+    .expect("join with a code");
+}
+
+fn request(username: &str, code: &Credential) -> CodeRequest {
+  CodeRequest {
+    code: Credential::new(code.expose().into()),
+    username: Some(username.into()),
+    display_name: Some(username.into()),
+  }
+}
+
+/// A device token as the keychain holds it.
+fn secret(token: &Credential) -> SecretValue {
+  SecretValue::new(token.expose().to_owned()).expect("a token")
 }
 
 #[test]
@@ -221,13 +222,15 @@ fn sharing_new_passwords_have_12_to_256_characters_and_are_repeated() {
 }
 
 #[test]
-fn sharing_keeps_the_token_in_the_keychain_once_the_person_chose_a_password() {
+fn sharing_a_code_join_keeps_the_device_token_in_the_keychain_and_the_code_works_once() {
   let server = TestServer::start();
-  let first = server.create_user("alice", "Alice Moreau", true);
+  let code = server.code_for("alice", true);
   let desktop = Desktop::new();
-  signed_in(&desktop, &server, ("alice", &first, "alice's own long password"));
+  joined(&desktop, &server, ("alice", &code));
 
   let entry = desktop.entry();
+  assert_eq!(entry.stored.name, SERVER_NAME);
+  assert_eq!(entry.stored.certificate_pin, None);
   let account = entry.stored.account.clone().expect("the account is recorded");
   assert_eq!((account.username.as_str(), account.admin), ("alice", true));
   assert_eq!(entry.connection, Some(Connection::Connected));
@@ -239,16 +242,159 @@ fn sharing_keeps_the_token_in_the_keychain_once_the_person_chose_a_password() {
   assert_eq!(sessions.len(), 1);
   assert!(sessions[0].current);
   assert!(matches!(Device::parse(&sessions[0].device), Device::Orchester { .. }));
+
+  let other = Desktop::new();
+  let address = ServerAddress::parse(&server.url()).expect("address");
+  let again = server.block_on(other.servers.join_with_code(
+    &address,
+    Trust::System(PlainHttp::NotAllowed),
+    request("mallory", &code),
+  ));
+  assert!(matches!(again, Err(SharingError::Client(error)) if error.code() == Some(ErrorCode::InvalidCode)));
+  assert!(
+    other.servers.entries().expect("entries").is_empty(),
+    "a refused join adds no server"
+  );
+}
+
+#[test]
+fn sharing_a_pairing_code_joins_the_same_person_on_another_computer() {
+  let server = TestServer::start();
+  let laptop = Desktop::new();
+  joined(&laptop, &server, ("alice", &server.code_for("alice", true)));
+  let pairing = server
+    .block_on(laptop.servers.pairing_code(&laptop.entry()))
+    .expect("pairing code");
+  assert_eq!(pairing.code.expose().len(), 9);
+
+  let desk = Desktop::new();
+  let address = ServerAddress::parse(&server.url()).expect("address");
+  let paired = CodeRequest {
+    code: pairing.code,
+    username: None,
+    display_name: None,
+  };
+  server
+    .block_on(
+      desk
+        .servers
+        .join_with_code(&address, Trust::System(PlainHttp::NotAllowed), paired),
+    )
+    .expect("join with the pairing code");
+  let (one, two) = (laptop.entry(), desk.entry());
+  assert_eq!(
+    one.stored.account.as_ref().map(|account| account.user),
+    two.stored.account.as_ref().map(|account| account.user)
+  );
+  let sessions = server.block_on(desk.servers.sessions(&two)).expect("sessions");
+  assert_eq!(sessions.len(), 2, "one device token per computer");
+  assert_ne!(laptop.tokens(), desk.tokens());
+}
+
+#[test]
+fn sharing_a_pinned_certificate_is_trusted_and_another_server_s_is_refused_before_anything_is_sent() {
+  let server = TestServer::start_tls();
+  let address = ServerAddress::parse(&server.url()).expect("address");
+  let presented = server
+    .block_on(PresentedCertificate::read(&address))
+    .expect("the presented certificate");
+  assert_eq!(Some(presented.check_code()), server.server.check_code());
+  let trust = presented.confirm();
+  let desktop = Desktop::new();
+  let code = server.code_for("alice", true);
+  server
+    .block_on(desktop.servers.join_with_code(&address, trust, request("alice", &code)))
+    .expect("join the pinned server");
+  let entry = desktop.entry();
+  assert!(entry.stored.certificate_pin.is_some());
+  assert_eq!(
+    server
+      .block_on(desktop.servers.sessions(&entry))
+      .expect("sessions over the pin")
+      .len(),
+    1
+  );
+
+  // Another server at another address presents another certificate: the confirmed pin refuses it, and its setup
+  // code never left this computer.
+  let impostor = TestServer::start_tls();
+  let elsewhere = ServerAddress::parse(&impostor.url()).expect("address");
+  let setup = impostor.code_for("eve", true);
+  let refused = impostor.block_on(
+    desktop
+      .servers
+      .join_with_code(&elsewhere, trust, request("eve", &setup)),
+  );
+  assert!(matches!(refused, Err(SharingError::CertificateChanged)), "{refused:?}");
+  let own = impostor
+    .block_on(PresentedCertificate::read(&elsewhere))
+    .expect("its own certificate")
+    .confirm();
+  impostor
+    .block_on(desktop.servers.join_with_code(&elsewhere, own, request("eve", &setup)))
+    .expect("the setup code was never sent before");
+}
+
+#[test]
+fn sharing_a_cloud_identity_joins_through_an_email_invite_with_the_key_set_the_app_carries() {
+  let server = TestServer::start();
+  server.create_user("alice", "Alice Moreau", true);
+  let invite = server.email_invite("bohdan@example.com");
+  let fake = cloud::FakeCloud::start(bohdan_identity(invite));
+  // The cloud names the server by its id, which linking it reveals.
+  let audience = server.link_cloud(&fake.root_key, &fake.key_set);
+  fake.serve_for(audience.clone());
+  let desktop = Desktop::new();
+  let client = CloudClient::new(ServerAddress::parse(&fake.url()).expect("cloud")).expect("cloud client");
+  let device = SecretValue::new("cloud device token".into()).expect("token");
+  let identity = CloudIdentity {
+    cloud: &client,
+    device: &device,
+  };
+  // The cloud's record of a server with a CA's certificate, or here plain HTTP on loopback: no fingerprint.
+  let record = CloudServer {
+    id: audience.parse().expect("server id"),
+    name: SERVER_NAME.into(),
+    address: server.url(),
+    fingerprint: None,
+  };
+  let joined = server
+    .block_on(desktop.servers.join_with_cloud(&record, identity, None))
+    .expect("cloud join");
+  let CloudJoined::Joined(id) = joined else {
+    panic!("join approval is off: {joined:?}");
+  };
+  assert_eq!(fake.issued(), 1);
+  let entry = desktop.entry();
+  assert_eq!(entry.stored.id, id);
+  let account = entry.stored.account.clone().expect("the account");
+  assert_eq!(account.display_name, "Bohdan Koval");
+  let sessions = server.block_on(desktop.servers.sessions(&entry)).expect("sessions");
+  assert_eq!(sessions[0].via, orchester_api::JoinedVia::Cloud);
+  assert!(!logs_contain(&device), "the cloud device token is never logged");
+}
+
+fn bohdan_identity(invite: String) -> cloud::Person {
+  cloud::Person {
+    account: "0191c7c0-0000-7000-8000-000000000b0b".into(),
+    email: "bohdan@example.com".into(),
+    name: "Bohdan Koval".into(),
+    invite: Some(invite),
+  }
+}
+
+fn logs_contain(secret: &SecretValue) -> bool {
+  String::from_utf8(logs().0.lock().clone())
+    .expect("UTF-8 logs")
+    .contains(secret.expose())
 }
 
 #[test]
 fn sharing_a_token_the_server_refuses_signs_this_computer_out() {
   let server = TestServer::start();
-  let first = server.create_user("alice", "Alice Moreau", true);
-  let admin = server.sign_in_elsewhere("alice", first.expose(), "alice's own long password");
-  let bohdan = server.create_user("bohdan", "Bohdan Koval", false);
+  let admin = secret(&server.create_user("alice", "Alice Moreau", true));
   let desktop = Desktop::new();
-  signed_in(&desktop, &server, ("bohdan", &bohdan, "bohdan's own long password"));
+  joined(&desktop, &server, ("bohdan", &server.code_for("bohdan", false)));
   assert_eq!(desktop.tokens().len(), 1);
 
   server.reset_password(&admin, "bohdan");
@@ -257,16 +403,18 @@ fn sharing_a_token_the_server_refuses_signs_this_computer_out() {
   assert!(matches!(refused, Err(SharingError::SignedOut)));
   let entry = desktop.entry();
   assert_eq!(entry.connection, Some(Connection::SignedOut));
-  assert!(entry.in_use(), "the account stays until the person signs in or out");
+  assert!(
+    entry.in_use(),
+    "the account stays until the person joins again or signs out"
+  );
   assert!(desktop.tokens().is_empty(), "a refused token leaves the keychain");
 }
 
 #[test]
 fn sharing_sign_out_ends_the_session_and_forgets_the_token_and_the_account() {
   let server = TestServer::start();
-  let first = server.create_user("alice", "Alice Moreau", true);
   let desktop = Desktop::new();
-  signed_in(&desktop, &server, ("alice", &first, "alice's own long password"));
+  joined(&desktop, &server, ("alice", &server.code_for("alice", true)));
   let token = desktop
     .vault
     .read(&VaultKey::server_token(desktop.entry().stored.id))
@@ -282,59 +430,66 @@ fn sharing_sign_out_ends_the_session_and_forgets_the_token_and_the_account() {
 }
 
 #[test]
-fn sharing_refuses_plain_http_to_another_computer_without_the_opt_in() {
+fn sharing_refuses_plain_http_to_another_computer_and_has_no_password_sign_in() {
   let desktop = Desktop::new();
   let lab = ServerAddress::parse("http://10.0.4.20:8740").expect("address");
   let runtime = tokio::runtime::Runtime::new().expect("runtime");
-  runtime
-    .block_on(desktop.servers.add(&lab, "Lab".into(), PlainHttp::NotAllowed))
-    .expect("add");
-  let refused = runtime.block_on(desktop.servers.sign_in(
-    &desktop.entry(),
-    "bohdan".into(),
-    Credential::new("a password that is never sent".into()),
+  let code = Credential::new("ABCD-EFGH".into());
+  let refused = runtime.block_on(desktop.servers.join_with_code(
+    &lab,
+    Trust::System(PlainHttp::NotAllowed),
+    request("bohdan", &code),
   ));
   assert!(matches!(
     refused,
     Err(SharingError::Client(ClientError::PlainHttpRefused))
   ));
+  runtime
+    .block_on(desktop.servers.add(&lab, "Lab".into(), PlainHttp::NotAllowed))
+    .expect("add");
+  let password = runtime.block_on(desktop.servers.sign_in(
+    &desktop.entry(),
+    "bohdan".into(),
+    Credential::new("a password that is never sent".into()),
+  ));
+  assert!(matches!(password, Err(SharingError::NoPasswords)));
 }
 
 #[test]
-fn sharing_logs_and_debug_output_show_no_token_or_password() {
+fn sharing_logs_and_debug_output_show_no_token_or_code() {
   let server = TestServer::start();
-  let first = server.create_user("alice", "Alice Moreau", true);
+  let code = server.code_for("alice", true);
   let desktop = Desktop::new();
-  let own = "alice's own long password";
-  signed_in(&desktop, &server, ("alice", &first, own));
+  joined(&desktop, &server, ("alice", &code));
   let entry = desktop.entry();
-  let wrong = server.block_on(desktop.servers.sign_in(
-    &entry,
-    "alice".into(),
-    Credential::new("a wrong password here".into()),
+  let address = ServerAddress::parse(&server.url()).expect("address");
+  let wrong = Credential::new("WXYZ-2345".into());
+  let refused = server.block_on(desktop.servers.join_with_code(
+    &address,
+    Trust::System(PlainHttp::NotAllowed),
+    request("alice", &wrong),
   ));
+  let pairing = server.block_on(desktop.servers.pairing_code(&entry)).expect("pairing");
   let token = desktop
     .vault
     .read(&VaultKey::server_token(entry.stored.id))
     .expect("token");
   server.block_on(desktop.servers.sign_out(&entry)).expect("sign out");
 
-  let debug = format!("{entry:?} {wrong:?} {:?}", desktop.servers.entries());
+  let debug = format!("{entry:?} {refused:?} {pairing:?} {:?}", desktop.servers.entries());
   let logs = String::from_utf8(logs().0.lock().clone()).expect("UTF-8 logs");
-  for secret in [token.expose(), first.expose(), own, "a wrong password here"] {
-    assert!(!debug.contains(secret), "Debug output shows a secret");
-    assert!(!logs.contains(secret), "the log shows a secret");
+  for value in [token.expose(), code.expose(), wrong.expose(), pairing.code.expose()] {
+    assert!(!debug.contains(value), "Debug output shows a secret");
+    assert!(!logs.contains(value), "the log shows a secret");
   }
 }
 
 #[test]
-fn sharing_the_monitor_asks_a_signed_in_server_after_a_restart() {
+fn sharing_the_monitor_asks_a_joined_server_after_a_restart() {
   let server = TestServer::start();
-  let first = server.create_user("alice", "Alice Moreau", true);
-  let admin = server.sign_in_elsewhere("alice", first.expose(), "alice's own long password");
-  let bohdan = server.create_user("bohdan", "Bohdan Koval", false);
+  let admin = secret(&server.create_user("alice", "Alice Moreau", true));
   let desktop = Desktop::new();
-  signed_in(&desktop, &server, ("bohdan", &bohdan, "bohdan's own long password"));
+  joined(&desktop, &server, ("bohdan", &server.code_for("bohdan", false)));
 
   let restarted = desktop.restarted();
   let connection = || restarted.entries().expect("entries").remove(0).connection;
@@ -370,18 +525,13 @@ fn wait_for(done: impl Fn() -> bool) {
 fn sharing_the_monitor_retries_on_its_own_reads_offline_and_reconnects() {
   let server = TestServer::start();
   let forwarder = forwarder::Forwarder::start(server.address);
-  let first = server.create_user("alice", "Alice Moreau", true);
+  let first = server.code_for("alice", true);
   let desktop = Desktop::on(Schedule {
     first_delay: Duration::from_millis(50),
     longest_delay: Duration::from_millis(400),
     connected_check: Duration::from_millis(100),
   });
-  signed_in_at(
-    &desktop,
-    &server,
-    &forwarder.url(),
-    ("alice", &first, "alice's own long password"),
-  );
+  joined_at(&desktop, &server, &forwarder.url(), ("alice", &first));
   let runtime = tokio::runtime::Runtime::new().expect("the desktop's runtime");
   let monitor = runtime.spawn(orchester_workspace::sharing::monitor(desktop.servers.clone()));
   let connection = || desktop.entry().connection;

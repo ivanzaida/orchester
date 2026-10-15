@@ -33,7 +33,7 @@ pub use self::{
   claims::{WorkClaim, WorkRefusal},
   join::{JoinFailed, JoinReview, Joined, ReviewTask, SimilarTask},
   members::MemberChange,
-  share::{IdentityProblem, ShareError, SharePlan, Shared, plan, repository_identity},
+  share::{IdentityProblem, LinkFirst, ShareError, SharePlan, Shared, plan, repository_identity},
 };
 use super::{Connection, ServerEntry, Servers, SharingError};
 

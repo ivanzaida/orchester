@@ -80,8 +80,14 @@ impl IdentityClaims {
 
 impl SigningKey {
   pub fn sign_token(&self, claims: &IdentityClaims) -> Result<Credential, IdentityError> {
-    let input = jws::signing_input(&jws::Header::new(IdentityClaims::TYPE, Some(self.kid())), claims)?;
+    self.sign_statement(IdentityClaims::TYPE, claims).map(Credential::new)
+  }
+
+  /// `statement` as a compact JWS of the type `typ` whose header names this key: what a team server signs for the
+  /// cloud with its own key (its link statement and invites).
+  pub fn sign_statement(&self, typ: &str, statement: &impl Serialize) -> Result<String, IdentityError> {
+    let input = jws::signing_input(&jws::Header::new(typ, Some(self.kid())), statement)?;
     let signature = self.sign(input.as_bytes());
-    Ok(Credential::new(jws::finish(&input, &signature)))
+    Ok(jws::finish(&input, &signature))
   }
 }

@@ -71,7 +71,7 @@ async fn heartbeat(
   server.inner.sharing_limits.heartbeat(auth.session, server.now())?;
   let lost = server
     .write(move |db, now| {
-      let current = db::checked(db, &auth, now, false, false)?;
+      let current = db::checked(db, &auth, now, false)?;
       claims::heartbeat(db, current.user.id, input.tasks, now)
     })
     .await?;

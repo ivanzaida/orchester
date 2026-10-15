@@ -6,7 +6,9 @@
 //! error or `Debug` output.
 
 mod address;
+mod cloud;
 mod error;
+mod pinned;
 mod sharing;
 
 use std::time::Duration;
@@ -25,11 +27,12 @@ use zeroize::Zeroize;
 
 pub use self::{
   address::{AddressError, PlainHttp, ServerAddress},
+  cloud::CloudClient,
   error::ClientError,
 };
 use crate::{
-  ApiError, CreateUser, PasswordChange, PasswordReset, ServerInfo, Session, SessionsResponse, SharingErrorDetails,
-  SignIn, SignedIn, User, UserChanges, UserCreated, UserResponse, UsersResponse,
+  ApiError, ApprovalResponse, CloudJoin, CloudJoinAnswer, CodeJoin, Joined, PairingCode, ServerInfo, Session,
+  SessionsResponse, SharingErrorDetails, User, UserChanges, UserResponse, UsersResponse, certificate::CertificatePin,
 };
 
 /// How long making the connection may take (10.03 E: "the connection timed out after 10 s").
@@ -60,17 +63,46 @@ impl Client {
     // reqwest's rustls takes the process's crypto provider; ring is the one the workspace builds.
     // Installing fails only when a provider is installed already, which then serves as well.
     let _ = rustls::crypto::ring::default_provider().install_default();
-    // No proxy, from the environment (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`) or the system: a
-    // plain HTTP proxy would see the token, and a server on this computer would be reached through
-    // another one.
-    let http = reqwest::Client::builder()
-      .no_proxy()
-      .redirect(Policy::none())
-      .connect_timeout(CONNECT_TIMEOUT)
-      .timeout(REQUEST_TIMEOUT)
+    let http = builder().build().map_err(|error| ClientError::transport(&error))?;
+    Ok(Self { http, address })
+  }
+
+  /// A client of the team server at the `https` `address` that accepts exactly the certificate `pin` names: the
+  /// server's own certificate, pinned from a cloud invite or after the person confirmed its check code.
+  pub fn pinned(address: ServerAddress, pin: CertificatePin) -> Result<Self, ClientError> {
+    if !address.is_https() {
+      return Err(ClientError::Setup);
+    }
+    let tls = pinned::PinnedVerifier::config(pin).map_err(|_| ClientError::Setup)?;
+    let http = builder()
+      .tls_backend_preconfigured(tls)
       .build()
       .map_err(|error| ClientError::transport(&error))?;
     Ok(Self { http, address })
+  }
+
+  /// The certificate the team server at the `https` `address` presents, read without trusting it, for the person to
+  /// compare its check code before anything is sent there: the handshake ends at the certificate, so no request,
+  /// token or code reaches the server.
+  pub async fn presented_certificate(address: &ServerAddress) -> Result<CertificatePin, ClientError> {
+    if !address.is_https() {
+      return Err(ClientError::Setup);
+    }
+    let presented = std::sync::Arc::new(std::sync::OnceLock::new());
+    let tls = pinned::Recorder::config(presented.clone()).map_err(|_| ClientError::Setup)?;
+    let http = builder()
+      .tls_backend_preconfigured(tls)
+      .build()
+      .map_err(|error| ClientError::transport(&error))?;
+    let answer = http.get(address.endpoint("/server")?).send().await;
+    match (presented.get(), answer) {
+      (Some(pin), _) => Ok(*pin),
+      (None, Err(error)) => Err(ClientError::transport(&error)),
+      // A handshake always shows the certificate first; an answer without one came over another protocol.
+      (None, Ok(response)) => Err(ClientError::NotOrchester {
+        status: response.status().as_u16(),
+      }),
+    }
   }
 
   pub fn address(&self) -> &ServerAddress {
@@ -82,9 +114,32 @@ impl Client {
     self.call(self.request(Method::GET, "/server")?).await
   }
 
-  /// `POST /auth/sessions`: signs in and returns the new session's token.
-  pub async fn sign_in(&self, request: &SignIn) -> Result<SignedIn, ClientError> {
-    self.call(self.json(Method::POST, "/auth/sessions", request)?).await
+  /// `POST /auth/code`: joins with a setup, invite, account or pairing code and returns this device's token.
+  pub async fn join_with_code(&self, request: &CodeJoin) -> Result<Joined, ClientError> {
+    self.call(self.json(Method::POST, "/auth/code", request)?).await
+  }
+
+  /// `POST /auth/cloud`: joins with an Orchester Cloud identity token. `Waiting` while join approval holds the join;
+  /// asking again with the approval's id finishes it once approved.
+  pub async fn join_with_cloud(&self, request: &CloudJoin) -> Result<CloudJoinAnswer, ClientError> {
+    let response = answered(self.json(Method::POST, "/auth/cloud", request)?).await?;
+    let status = response.status().as_u16();
+    let bytes = response.bytes().await.map_err(|error| ClientError::transport(&error))?;
+    let answer = match status {
+      201 => serde_json::from_slice::<Joined>(&bytes).map(CloudJoinAnswer::Joined),
+      202 => {
+        serde_json::from_slice::<ApprovalResponse>(&bytes).map(|waiting| CloudJoinAnswer::Waiting(waiting.approval))
+      }
+      _ => return Err(ClientError::NotOrchester { status }),
+    };
+    answer.map_err(|_| ClientError::NotOrchester { status })
+  }
+
+  /// `POST /auth/pairings`: a code for this person's next computer, valid 10 minutes.
+  pub async fn pairing_code(&self, token: &SecretValue) -> Result<PairingCode, ClientError> {
+    self
+      .call(bearer(self.request(Method::POST, "/auth/pairings")?, token))
+      .await
   }
 
   /// `GET /auth/me`: the signed-in user; `401` once the token expired or was revoked.
@@ -113,24 +168,11 @@ impl Client {
     self.send(bearer(self.request(Method::DELETE, &path)?, token)).await
   }
 
-  /// `POST /auth/password`: the person's other sessions are revoked.
-  pub async fn change_password(&self, token: &SecretValue, change: &PasswordChange) -> Result<(), ClientError> {
-    self
-      .send(bearer(self.json(Method::POST, "/auth/password", change)?, token))
-      .await
-  }
-
   pub async fn users(&self, token: &SecretValue) -> Result<Vec<User>, ClientError> {
     let response: UsersResponse = self
       .call(bearer(self.request(Method::GET, "/admin/users")?, token))
       .await?;
     Ok(response.users)
-  }
-
-  pub async fn create_user(&self, token: &SecretValue, user: &CreateUser) -> Result<UserCreated, ClientError> {
-    self
-      .call(bearer(self.json(Method::POST, "/admin/users", user)?, token))
-      .await
   }
 
   pub async fn update_user(
@@ -144,12 +186,6 @@ impl Client {
       .call(bearer(self.json(Method::PATCH, &path, changes)?, token))
       .await?;
     Ok(response.user)
-  }
-
-  /// `POST /admin/users/{id}/password`: a new first password; the user's sessions are revoked.
-  pub async fn reset_password(&self, token: &SecretValue, user: UserId) -> Result<PasswordReset, ClientError> {
-    let path = format!("/admin/users/{user}/password");
-    self.call(bearer(self.request(Method::POST, &path)?, token)).await
   }
 
   fn request(&self, method: Method, path: &str) -> Result<RequestBuilder, ClientError> {
@@ -180,6 +216,16 @@ impl Client {
   async fn send(&self, request: RequestBuilder) -> Result<(), ClientError> {
     answered(request).await.map(drop)
   }
+}
+
+/// No proxy, from the environment (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`) or the system: a plain HTTP proxy would
+/// see the token, and a server on this computer would be reached through another one.
+fn builder() -> reqwest::ClientBuilder {
+  reqwest::Client::builder()
+    .no_proxy()
+    .redirect(Policy::none())
+    .connect_timeout(CONNECT_TIMEOUT)
+    .timeout(REQUEST_TIMEOUT)
 }
 
 /// `request` with the bearer token, as a header value marked sensitive so it is never shown.

@@ -46,6 +46,15 @@ pub enum SharingError {
   /// The project is being shared now; its tasks take changes again once it is.
   #[error("the project is being shared")]
   ShareInProgress,
+  /// API 3 team servers have no passwords: devices join with a code or a cloud identity. Nothing was sent.
+  #[error("the server has no passwords")]
+  NoPasswords,
+  /// A server whose own certificate this computer pinned presents another one; nothing was sent to it.
+  #[error("the server presents a different certificate")]
+  CertificateChanged,
+  /// The server has no project at the address, or the person is not a member of it; it answers both alike.
+  #[error("no project the person is a member of at this address")]
+  NoProject,
 }
 
 impl From<Message> for SharingError {
@@ -78,6 +87,11 @@ impl SharingError {
       Self::InvalidAnswer(_) => Message::new("sharing.errors.invalidAnswer"),
       Self::KeptChanging => Message::new("sharing.errors.keptChanging"),
       Self::ShareInProgress => Message::new("sharing.errors.shareInProgress"),
+      Self::NoPasswords => Message::new("servers.errors.noPasswords"),
+      Self::CertificateChanged => {
+        Message::new("servers.errors.certificateChanged").with("host", address.host().to_owned())
+      }
+      Self::NoProject => Message::new("sharing.errors.noProject"),
     }
   }
 }
@@ -100,6 +114,7 @@ pub fn client_message(error: &ClientError, address: &ServerAddress) -> Message {
       .with("address", address.as_str().to_owned())
       .with("status", status.to_string()),
     ClientError::Api { code, .. } => api_message(*code),
+    ClientError::Cloud { .. } => Message::new("servers.errors.cloudRefused"),
     ClientError::Setup => Message::new("servers.errors.setup"),
   }
 }
@@ -107,8 +122,12 @@ pub fn client_message(error: &ClientError, address: &ServerAddress) -> Message {
 fn api_message(code: ErrorCode) -> Message {
   Message::new(match code {
     ErrorCode::Unauthorized => "servers.errors.signedOut",
-    ErrorCode::InvalidCredentials => "servers.signIn.wrong",
-    ErrorCode::PasswordChangeRequired => "servers.errors.passwordChangeRequired",
+    ErrorCode::InvalidCode => "servers.join.invalidCode",
+    ErrorCode::InvalidIdentity => "servers.join.invalidIdentity",
+    ErrorCode::NotInvited => "servers.join.notInvited",
+    ErrorCode::CloudOff => "servers.join.cloudOff",
+    ErrorCode::KeySetStale => "servers.join.keySetStale",
+    ErrorCode::ApprovalRefused => "servers.join.approvalRefused",
     ErrorCode::Forbidden => "servers.errors.forbidden",
     ErrorCode::NotFound => "servers.errors.notFound",
     ErrorCode::RateLimited => "servers.errors.rateLimited",
@@ -120,7 +139,6 @@ fn api_message(code: ErrorCode) -> Message {
     ErrorCode::NoSuchUser => "sharing.members.noSuchUser",
     ErrorCode::AlreadyMember => "sharing.members.alreadyMember",
     ErrorCode::LastOwner => "sharing.members.lastOwner",
-    ErrorCode::RemoteTaken => "sharing.errors.remoteTaken",
     ErrorCode::TagExists => "tasks.tags.duplicate",
     ErrorCode::SameTag => "tasks.tags.sameTarget",
     ErrorCode::ClaimHeld => "claims.refused.heldUnknown",

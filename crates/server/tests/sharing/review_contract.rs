@@ -135,22 +135,20 @@ async fn s1b_duplicate_links_have_identical_history_and_task_organization() {
 async fn s1b_members_project_events_and_admin_relationship_match_contract() {
   let server = TestServer::start(|_| {}).await;
   let owner = server.bootstrap().await;
-  let bob = user(&server, "bob", false).await;
-  let admin = user(&server, "admin", true).await;
+  let bob = server.invited("bob", false).await;
+  let admin = server.invited("admin", true).await;
   let created = project(&server, &owner.token, vec![]).await;
   let project = created.project.id;
   let lookup = server
     .request(
       "GET",
-      "/projects?remote=host.example/owner/repo",
+      &format!("/projects?slug={}", created.project.slug),
       Some(&bob.token),
       None,
     )
-    .await
-    .json::<SharingError>();
-  assert!(
-    matches!(lookup.details,SharingErrorDetails::Owners {owners} if owners==vec![orchester_api::UserRef {id:owner.user.id,display_name:owner.user.display_name.clone()}])
-  );
+    .await;
+  // Not a member: the same answer as no project there.
+  error(&lookup, 404, ErrorCode::NotFound);
   let mut stream = Stream::open(&server, &owner.token, project, created.cursor).await;
   add_member(&server, &owner.token, project, "bob", "member").await;
   let added = stream.next().await;
@@ -203,13 +201,13 @@ async fn s1b_import_cross_project_collision_returns_generic_conflict() {
   let server = TestServer::start(|_| {}).await;
   let owner = server.bootstrap().await;
   let created = project(&server, &owner.token, vec![upload(1)]).await;
-  let bob = user(&server, "bob", false).await;
+  let bob = server.invited("bob", true).await;
   let other = server
     .request(
       "POST",
       "/projects",
       Some(&bob.token),
-      Some(json!({"idempotency_key":key(),"key":"BOB","name":"Other","remote":"host.example/other/repo","tasks":[]})),
+      Some(json!({"idempotency_key":key(),"key":"BOB","name":"Other","slug":"other","tasks":[]})),
     )
     .await
     .json::<orchester_api::ProjectCreated>();

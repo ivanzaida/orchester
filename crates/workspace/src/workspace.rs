@@ -414,6 +414,17 @@ impl Workspace {
     self.db.lock().add_server(server)
   }
 
+  /// Records how this computer trusts `server`: its pinned certificate, or the system's trust store and whether plain
+  /// HTTP is allowed there.
+  pub fn set_server_trust(&self, server: ServerId, pin: Option<&str>, plain_http: bool) -> Result<(), StoreError> {
+    self.db.lock().set_server_trust(server, pin, plain_http)
+  }
+
+  /// Records the name the server gives itself now.
+  pub fn set_server_name(&self, server: ServerId, name: &str) -> Result<(), StoreError> {
+    self.db.lock().set_server_name(server, name)
+  }
+
   /// Records who is signed in to `server` from this computer; `None` after signing out.
   pub fn set_server_account(&self, server: ServerId, account: Option<&ServerAccount>) -> Result<(), StoreError> {
     self.db.lock().set_server_account(server, account)
