@@ -43,6 +43,10 @@ export async function memberAction(_: MemberState, form: FormData): Promise<Memb
   if (remove && field(form, "self") === "yes") {
     redirect("/admin");
   }
+  if (remove) {
+    // The row stays, replaced by what happened to it (`KagFB`); the list is read again on the next visit.
+    return { removed: true };
+  }
   revalidatePath("/admin", "layout");
-  return remove ? { removed: true } : {};
+  return {};
 }

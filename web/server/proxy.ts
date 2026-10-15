@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { config as adminConfig } from "@/lib/server/config";
 import { PRESESSION_COOKIE, PRESESSION_SECONDS, cookieOptions } from "@/lib/server/cookie-options";
-import { needsHttps, placeOf } from "@/lib/server/place";
+import { needsHttps, originOf, placeOf } from "@/lib/server/place";
 import { newPresession, presessionLive } from "@/lib/server/presession";
 
 /**
@@ -38,13 +38,20 @@ function randomValue(): string {
 
 const HTTPS_PAGE = "/admin/https";
 
+/**
+ * The HTTPS page for an admin path reached over plain HTTP. It names the address the browser used: a rewrite renders
+ * with Next's own forwarded headers, so the place travels in the internal address, which the browser never sees.
+ */
 function target(request: NextRequest): URL | null {
   const { pathname } = request.nextUrl;
   const admin = pathname === "/admin" || pathname.startsWith("/admin/");
-  if (!admin || pathname === HTTPS_PAGE || !needsHttps(placeOf(request.headers))) {
+  const place = placeOf(request.headers);
+  if (!admin || pathname === HTTPS_PAGE || !needsHttps(place)) {
     return null;
   }
-  return new URL(HTTPS_PAGE, request.url);
+  const url = new URL(HTTPS_PAGE, request.url);
+  url.searchParams.set("origin", originOf(place));
+  return url;
 }
 
 export function proxy(request: NextRequest): NextResponse {

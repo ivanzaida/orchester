@@ -1,7 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-
 import { field } from "@/lib/form";
 import type { Message } from "@/lib/i18n";
 import { actor, failed, isMessage } from "@/lib/server/act";
@@ -24,7 +22,7 @@ export async function approvalAction(_: ApprovalState, form: FormData): Promise<
   if (!result.ok) {
     return { error: await failed(result.error) };
   }
-  revalidatePath("/admin", "layout");
+  // The row stays and says what was decided (`WV4AT`); the lists are read again on the next visit.
   return { decided: approve ? "approved" : "refused" };
 }
 
@@ -44,6 +42,6 @@ export async function revokeDeviceAction(_: RevokeDeviceState, form: FormData): 
   if (!result.ok && !(result.error.kind === "refused" && result.error.code === "not_found")) {
     return { error: await failed(result.error) };
   }
-  revalidatePath("/admin", "layout");
+  // The row stays, replaced by what happened to it; the list is read again on the next visit.
   return { revoked: true };
 }

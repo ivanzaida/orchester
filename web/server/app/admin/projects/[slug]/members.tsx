@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useState, type SubmitEvent } from "react";
 
 import { ActionButton } from "@orchester/ui/components/button";
 import { Callout } from "@orchester/ui/components/callout";
@@ -32,16 +32,26 @@ interface RowProps {
 /** The role select sends its form as soon as it changes; without script its *Change* button does. */
 function RoleForm({ props, action }: { props: RowProps; action: (form: FormData) => void }) {
   const { member } = props;
+  const [role, setRole] = useState<string>(member.role);
+  // Sent in a transition, not as a form action, so React does not reset the form and show the old role after the answer.
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    startTransition(() => { action(data); });
+  };
   return (
-    <form action={action} className={styles.roleForm}>
+    <form action={action} onSubmit={submit} className={styles.roleForm}>
       <CsrfField token={props.csrf} />
       <Hidden name="op" value="role" />
       <Hidden name="project" value={props.project.id} />
       <Hidden name="user" value={member.user.id} />
       <Select name="role" size="row" hideLabel label={t("members.roleOf", { name: member.user.displayName })}
-        defaultValue={member.role}
+        value={role}
         options={[{ value: "owner", label: t("common.owner") }, { value: "member", label: t("common.member") }]}
-        onChange={(event) => { event.currentTarget.form?.requestSubmit(); }} />
+        onChange={(event) => {
+          setRole(event.currentTarget.value);
+          event.currentTarget.form?.requestSubmit();
+        }} />
       <noscript>
         <Submit kind="ghost" row label={t("members.change")} busyLabel={t("members.changing")} />
       </noscript>

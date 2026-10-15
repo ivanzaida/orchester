@@ -14,8 +14,13 @@ import { anonymous, endSession, formIsGenuine, ownOrigin, session, startTrip } f
  * Orchester Cloud* (`purpose=admin`) or *Link to Orchester Cloud* (`purpose=link`). A plain form `POST` with the CSRF
  * token; the answer sends the browser to the cloud (303) with a fresh `state` kept in a cookie.
  */
-function to(request: Request, path: string): NextResponse {
-  return NextResponse.redirect(new URL(path, request.url), 303);
+/**
+ * A 303 to one of the admin's own pages, as a path: behind the team server the request's own URL has the private
+ * listener's scheme (`http`), not the browser's, and a form post's redirect to another scheme is refused by the
+ * cloud page's CSP (`form-action`).
+ */
+function to(_request: Request, path: string): NextResponse {
+  return new NextResponse(null, { status: 303, headers: { location: path } });
 }
 
 async function signInTrip(request: Request, cloud: string): Promise<NextResponse> {
