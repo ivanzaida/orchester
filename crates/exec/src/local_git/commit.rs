@@ -13,7 +13,7 @@ impl LocalGit {
   pub fn selected_tree(&self, reviewed: &Checkout, paths: &[LocalPath]) -> Result<String, LocalGitError> {
     let tree = self.build_selected(reviewed, paths)?;
     // One check after building covers the whole step: any change before or during it shows here.
-    reviewed.ensure_current(&self.snapshot()?)?;
+    reviewed.ensure_current(&self.verified_snapshot()?)?;
     Ok(tree)
   }
 
@@ -132,7 +132,7 @@ impl LocalGit {
       }
       self.set_index(path, entries.get(path), None)?;
     }
-    let current = self.snapshot()?;
+    let current = self.verified_snapshot()?;
     let index = self.index_entries()?;
     for file in &reviewed.files {
       if super::file_hash(&self.root, &file.path)? != file.working
@@ -226,7 +226,7 @@ impl LocalGit {
         self.set_index(&file.path, None, None)?;
       }
     }
-    let clean = self.snapshot()?;
+    let clean = self.verified_snapshot()?;
     let excluded = reviewed
       .files
       .iter()

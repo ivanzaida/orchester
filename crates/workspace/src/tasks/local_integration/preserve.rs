@@ -9,7 +9,7 @@ impl LocalIntegration {
   }
 
   pub fn commit(&mut self, paths: &[LocalPath], tree: &str, message: &str) -> Result<(), IntegrationError> {
-    let current = self.main.snapshot()?;
+    let current = self.main.verified_snapshot()?;
     self.operation.begin_commit(&current, message)?;
     self.operation.commit_intent(paths.to_vec(), tree.to_owned())?;
     self.save()?;
@@ -32,7 +32,7 @@ impl LocalIntegration {
         Err(LocalError::HookChanged.into())
       }
       Err(error) => {
-        if self.main.snapshot()? == current {
+        if self.main.verified_snapshot()? == current {
           self.operation.commit_finished(current)?;
         } else {
           self.operation.needs_reconciliation();
@@ -55,7 +55,7 @@ impl LocalIntegration {
   }
 
   pub fn preserve_selected(&mut self, name: &str, paths: &[LocalPath]) -> Result<(), IntegrationError> {
-    let current = self.main.snapshot()?;
+    let current = self.main.verified_snapshot()?;
     self.operation.begin_preserve_selected(&current, name, paths.to_vec())?;
     self.save()?;
     self.complete_preservation(&current)
@@ -118,7 +118,7 @@ impl LocalIntegration {
   }
 
   pub fn prepare_clean(&mut self) -> Result<(), IntegrationError> {
-    let current = self.main.snapshot()?;
+    let current = self.main.verified_snapshot()?;
     self.main.ensure(self.operation.reviewed())?;
     self.operation.prepared(current)?;
     self.save()

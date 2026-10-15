@@ -5,7 +5,7 @@ use super::{IntegrationError, LocalIntegration};
 impl LocalIntegration {
   /// Restore preserved originals, or release completed preparation without changing either checkout.
   pub fn cancel_preservation(&mut self) -> Result<(), IntegrationError> {
-    let actual = self.main.snapshot()?;
+    let actual = self.main.verified_snapshot()?;
     if self.operation.preservation().is_none() {
       if self.operation.owned_task().is_some() {
         let task = self.task_git()?.snapshot()?;

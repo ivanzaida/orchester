@@ -14,7 +14,7 @@ impl LocalIntegration {
   /// Syncs base into the owned task worktree; the main checkout does not receive the task yet.
   pub fn sync(&mut self) -> Result<(), IntegrationError> {
     self.ensure_latest_run()?;
-    let base = self.main.snapshot()?;
+    let base = self.main.verified_snapshot()?;
     let task = self.task_git()?.snapshot()?;
     if self.operation.owned_task().is_some() {
       self.operation.ensure_task_owned(&task)?;
@@ -60,7 +60,9 @@ impl LocalIntegration {
     let actual = self.task_git()?.snapshot()?;
     let merged = match merged {
       Err(error) if actual == original => {
-        self.operation.sync_not_started(&self.main.snapshot()?, &actual)?;
+        self
+          .operation
+          .sync_not_started(&self.main.verified_snapshot()?, &actual)?;
         self.save()?;
         return Err(error.into());
       }
@@ -155,7 +157,7 @@ impl LocalIntegration {
     }
     self.ensure_latest_run()?;
     let actual = CheckedResult {
-      base: self.main.snapshot()?,
+      base: self.main.verified_snapshot()?,
       result: self.task_git()?.snapshot()?,
     };
     if &actual != reviewed {
@@ -168,7 +170,7 @@ impl LocalIntegration {
     self.main.ensure(&actual.base)?;
     let action = self.operation.merge_action().ok_or(LocalError::Reconcile)?.to_owned();
     let merge = self.main.merge_result(&actual, &action);
-    let current = self.main.snapshot()?;
+    let current = self.main.verified_snapshot()?;
     // A failed post-merge hook must not cause a completed merge to be repeated.
     if current.head != actual.result.head {
       merge?;

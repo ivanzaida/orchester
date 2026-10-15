@@ -64,7 +64,7 @@ impl LocalIntegration {
     file: &LocalConflict,
     expected: Option<&ContentHash>,
   ) -> Result<DraftIdentity, IntegrationError> {
-    let main = self.main.snapshot()?;
+    let main = self.main.verified_snapshot()?;
     let (kind, task, current) = match self.operation.phase() {
       LocalPhase::TaskConflicts => {
         let task = self.task_git()?.snapshot()?;

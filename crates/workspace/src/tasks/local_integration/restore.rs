@@ -266,7 +266,7 @@ impl LocalIntegration {
   }
 
   fn ensure_merged_checkout(&self) -> Result<(), IntegrationError> {
-    let actual = self.main.snapshot()?;
+    let actual = self.main.verified_snapshot()?;
     if Some(actual.head.as_str()) != self.operation.merged() || actual.operation.is_some() {
       return Err(LocalError::Stale.into());
     }
@@ -283,7 +283,7 @@ impl LocalIntegration {
     if self.operation.merged().is_some() {
       self.ensure_merged_checkout()?;
     } else {
-      let actual = self.main.snapshot()?;
+      let actual = self.main.verified_snapshot()?;
       if actual.head != self.operation.reviewed().head || actual.operation.is_some() {
         return Err(LocalError::Stale.into());
       }

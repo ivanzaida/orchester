@@ -10,7 +10,7 @@ impl LocalIntegration {
   /// Reconcile facts first. Completed merge identities are never retried.
   pub fn reconcile(&mut self) -> Result<(), IntegrationError> {
     self.operation.resume_saved_phase();
-    let actual = self.main.snapshot()?;
+    let actual = self.main.verified_snapshot()?;
     if actual.operation.is_some() {
       return Err(LocalError::ForeignOperation.into());
     }
@@ -118,7 +118,7 @@ impl LocalIntegration {
     for path in selected {
       self.main.set_index(&path, committed.get(&path), None)?;
     }
-    self.operation.commit_finished(self.main.snapshot()?)?;
+    self.operation.commit_finished(self.main.verified_snapshot()?)?;
     self.save()
   }
 
@@ -183,7 +183,9 @@ impl LocalIntegration {
     if task == original && task != expected {
       // An absent merge cannot distinguish an unexecuted intent from a refused Git command.
       // Return to preparation; a new person action may sync again or cancel retained work.
-      self.operation.sync_not_started(&self.main.snapshot()?, &task)?;
+      self
+        .operation
+        .sync_not_started(&self.main.verified_snapshot()?, &task)?;
       return self.save();
     }
     if task == expected && task.operation.is_some() {

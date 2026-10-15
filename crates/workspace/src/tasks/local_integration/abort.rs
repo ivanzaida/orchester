@@ -40,7 +40,9 @@ impl LocalIntegration {
       self.task_git()?.abort_task_merge(&before)?;
     }
     let task = self.task_git()?.snapshot()?;
-    self.operation.task_abort_finished(self.main.snapshot()?, task)?;
+    self
+      .operation
+      .task_abort_finished(self.main.verified_snapshot()?, task)?;
     self.save()
   }
 }

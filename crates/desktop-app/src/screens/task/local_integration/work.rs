@@ -199,6 +199,7 @@ fn execute(
     Action::AuthorityRefused => return Err(LocalError::AuthorityChanged.into()),
     Action::BusyRefused => return Err(LocalError::ForeignOperation.into()),
     Action::ReviewCommit(paths) => {
+      session.review_current()?;
       let tree = session.selected_commit_tree(&paths)?;
       let preview = session.selected_commit_preview(&tree, vault)?;
       return Ok(Outcome::CommitReview { tree, preview });

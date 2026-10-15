@@ -156,7 +156,8 @@ impl LocalIntegration {
         }
         saved
       }
-      None => LocalOperation::new(run_id, checkout)?,
+      // A new review is of the checkout every later operation verifies against: hashed.
+      None => LocalOperation::new(run_id, main.verified_snapshot()?)?,
     };
     if task.is_none()
       && operation.merged().is_none()
@@ -234,9 +235,20 @@ impl LocalIntegration {
     Ok(())
   }
 
-  /// Reviews the checkout again, every tracked file hashed: an edit Git's stat cache hid shows from then on.
+  /// Reviews the checkout again while the operation holds nothing yet, so a new candidate starts from the checkout
+  /// as it is now, hashed: an edit made since the last review, even one Git's stat cache hides, is part of it.
+  pub fn review_current(&mut self) -> Result<(), IntegrationError> {
+    if self.operation.phase() == orchester_core::integration::local::LocalPhase::Review
+      && !self.operation.reserves_checkout()
+    {
+      self.refresh()?;
+    }
+    Ok(())
+  }
+
+  /// Reviews the checkout again, every tracked file hashed, as the operation that follows will verify it.
   pub fn refresh(&mut self) -> Result<(), IntegrationError> {
-    self.operation.refresh(self.main.reread()?)?;
+    self.operation.refresh(self.main.verified_snapshot()?)?;
     self.save()
   }
 }

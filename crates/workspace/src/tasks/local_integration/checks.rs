@@ -11,7 +11,7 @@ use super::{IntegrationError, LocalIntegration};
 impl LocalIntegration {
   pub(super) fn run_check(&mut self) -> Result<(), IntegrationError> {
     let before = CheckedResult {
-      base: self.main.snapshot()?,
+      base: self.main.verified_snapshot()?,
       result: self.task_git()?.snapshot()?,
     };
     if !before.base.clean() || !before.result.clean() {
@@ -50,7 +50,7 @@ impl LocalIntegration {
       }
     }
     let after = CheckedResult {
-      base: self.main.snapshot()?,
+      base: self.main.verified_snapshot()?,
       result: self.task_git()?.snapshot()?,
     };
     let mut checked_input = before;
@@ -100,7 +100,7 @@ impl LocalIntegration {
       return Err(LocalError::WrongPhase.into());
     }
     if self.operation.phase() != LocalPhase::Checking {
-      self.operation.prepared(self.main.snapshot()?)?;
+      self.operation.prepared(self.main.verified_snapshot()?)?;
       self.operation.begin_check()?;
       self.save()?;
     }
