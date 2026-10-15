@@ -18,6 +18,7 @@ use crate::{
     services::{Services, blocking},
   },
   connections::data::set_account_in,
+  links::Link,
   messages::Message,
   tasks::outside::Outside,
 };
@@ -87,7 +88,8 @@ fn names(account: &AgentAccount, named: &str) -> bool {
     || (account.is_default() && lowered == "default")
 }
 
-/// The account by name, CLI and state: no email and no folder leave the window.
+/// The account by name, CLI and state, with its link in Settings › Accounts: no email and no folder leave the
+/// window.
 fn account_json(account: &AgentAccount, accounts: &[AgentAccount]) -> Value {
   let folder = match account.folder() {
     AccountFolder::Own => "cli_own",
@@ -102,5 +104,6 @@ fn account_json(account: &AgentAccount, accounts: &[AgentAccount]) -> Value {
     "state": account.state(Platform::current()).as_str(),
     "folder": folder,
     "same_sign_in_as": same_sign_in(account, accounts).map(|other| other.id().to_string()),
+    "link": Link::Account(account.id()).path(),
   })
 }

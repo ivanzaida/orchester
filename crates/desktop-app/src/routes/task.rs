@@ -93,11 +93,13 @@ impl TaskView {
     }
   }
 
-  /// The view the segment after a task's path names, its tab (a task's path always names one), with its
-  /// file from the query on Changes.
+  /// The view the segment after a task's path names, its tab, with its file from the query on Changes. A path
+  /// without the tab, as links are written by hand (`/tasks/ORC-24`), is the Summary; the app writes the tab.
   pub(super) fn parse(segments: &[&str], params: &mut Params) -> Result<Self, RouteError> {
-    let [name] = segments else {
-      return Err(RouteError::NoScreen);
+    let name = match segments {
+      [] => return Ok(Self::Summary),
+      [name] => name,
+      _ => return Err(RouteError::NoScreen),
     };
     let tab = TaskTab::from_name(name).ok_or(RouteError::NoScreen)?;
     if tab != TaskTab::Changes {

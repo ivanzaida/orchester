@@ -1,6 +1,8 @@
 //! How the tools name Orchester's states: snake_case words, the same in arguments and results.
 
 use orchester_core::{
+  id::ProjectId,
+  project::TaskKey,
   run::{RunStatus, StepStatus, TaskPhase},
   task::{
     TaskStatus,
@@ -11,6 +13,8 @@ use orchester_core::{
 use rmcp::schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
+
+use crate::links::{Link, TaskPage};
 
 /// A task's workflow status (Backlog to Canceled), which a person sets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -140,6 +144,15 @@ pub fn step_status(status: StepStatus) -> Value {
     StepStatus::Skipped => ("skipped", Value::Null),
   };
   json!({ "state": state, "waits_for": waits_for })
+}
+
+/// The link to the page of task `key` of `project`, on `page`. A key the app stored always reads as one; one
+/// that does not gives no link rather than a wrong one, and the item still names its task.
+pub fn task_link(project: ProjectId, key: &str, page: TaskPage) -> Option<String> {
+  key
+    .parse::<TaskKey>()
+    .ok()
+    .map(|key| Link::Task(project, key, page).path())
 }
 
 /// Milliseconds since the Unix epoch.

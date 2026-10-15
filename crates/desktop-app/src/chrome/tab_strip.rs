@@ -9,64 +9,58 @@
 //! The OS window title is the active tab's label and the app's name. A tab whose task form holds edits
 //! that are not saved ends its label in a 6 `text_secondary` dot (`Dirty` `TfKtF` in `Fd1ai`).
 //!
-//! The strip sits in the title bar's flexible middle and shares its room as `tab_fit` says; once it
-//! scrolls, the active tab is brought into view whenever it changes, the mouse wheel scrolls it
-//! sideways, and it shows no scrollbar.
+//! The strip sits in the title bar's flexible middle and shares its room as `tab_fit` says; the tabs that
+//! do not fit are only in the tab list (`tab_list`), whose button follows the last tab that shows. The
+//! active tab takes the room it was laid out at (`tab_measure`). When the list goes away while it held
+//! the focus, *New tab* takes it; *New tab* is a Tab stop for that, its ring only after keyboard use.
+
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::{MouseButton, MouseEvent, ScrollEvent},
+    events::{MouseButton, MouseEvent},
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Row, ScrollHorizontal, Text, TextOverflow},
+  components::{Button, Row, Text, TextOverflow},
   core::ElementRef,
-  layout::{
-    Alignment,
-    layout_kind::{Justify, ScrollState},
-    scrollbar::ScrollBarStyle,
-  },
-  node::{CursorIcon, Element, HitTestBehavior, Style, dimension::Dimension, padding::Padding},
+  layout::{Alignment, layout_kind::Justify},
+  node::{Element, HitTestBehavior, Style, dimension::Dimension, padding::Padding},
 };
-use parking_lot::Mutex;
 
-use super::tab_fit::{self, Fit, ICON_TAB_WIDTH, MIN_DRAG_WIDTH, TAB_MIN_WIDTH};
+use super::{
+  tab_fit::{self, DOT_WIDTH, Fit, ICON_TAB_WIDTH, MARK_WIDTH, MIN_DRAG_WIDTH, Slot},
+  tab_label::{attention, close_button, has_attention, label, unsaved},
+  tab_list::{TabList, TabListProps},
+  tab_measure::{ActiveKey, ActiveWidth, ListHold},
+};
 use crate::{
   navigation::{
     Navigation,
-    tabs::{Tab, TabId, TabSet},
+    tabs::{Tab, TabSet},
   },
   project::Projects,
-  routes::{ProjectPage, Route},
-  shell::needs_you::{self, Attention, count_words},
+  shell::needs_you,
   theme::{CLOSING_TABS_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon, screen_icon},
-    pressable::{in_title_bar, pressable},
-    tooltip::Tooltip,
+    pressable::{Focus, in_title_bar, pressable},
   },
 };
 
-/// Tabs and the new tab button (`Tab/*`, `New tab` `w204x`).
-const TAB_HEIGHT: f32 = 26.0;
+/// Tabs, the tab list's chevron and the new tab button (`Tab/*`, `New tab` `w204x`).
+pub const TAB_HEIGHT: f32 = 26.0;
 /// The dot of a tab whose task form holds unsaved edits (`Dirty` `TfKtF` in `Fd1ai`).
 const UNSAVED_DOT: f32 = 6.0;
 const NEW_TAB_WIDTH: f32 = 26.0;
 
 pub struct TabStrip {
-  scroll: ScrollState,
-  /// What the strip last brought into view.
-  revealed: Mutex<Option<Revealed>>,
-}
-
-/// The active tab as the strip last brought it into view: which tab, at which route (which decides its
-/// width), and whether the strip scrolled.
-#[derive(PartialEq)]
-struct Revealed {
-  tab: TabId,
-  route: Route,
-  scrolling: bool,
+  active_width: ActiveWidth,
+  list: ListHold,
+  new_tab: ElementRef,
+  /// The strip showed the tab list when it was laid out last.
+  overflowed: AtomicBool,
 }
 
 /// The title bar's *N need you* pill, as it was laid out last.
@@ -95,10 +89,12 @@ impl DevtoolsInspectable for TabStripProps {}
 impl Component for TabStrip {
   type Props = TabStripProps;
 
-  fn create(_ctx: &mut Ctx) -> Self {
+  fn create(ctx: &mut Ctx) -> Self {
     Self {
-      scroll: ScrollState::new(),
-      revealed: Mutex::new(None),
+      active_width: ActiveWidth::new(ctx),
+      list: ListHold::default(),
+      new_tab: ctx.element_ref(),
+      overflowed: AtomicBool::new(false),
     }
   }
 
@@ -107,18 +103,44 @@ impl Component for TabStrip {
     let projects = Projects::of(ctx);
     let tabs = navigation.tabs();
     let window = ctx.window();
-    let fit = tab_fit::fit(window.info().logical_width(), pill_width(ctx, &projects, &tabs), &tabs);
+    let room = tab_fit::room(window.info().logical_width(), pill_width(ctx, &projects, &tabs));
     let active = label(ctx, &projects, tabs.active().route());
+    let measured = self.active_width.width(&ActiveKey {
+      tab: tabs.active().id(),
+      label: active.clone(),
+      marks: marks(&projects, tabs.active()),
+    });
+    let fit = fit(&projects, &tabs, (room, measured));
+    self.keep_focus(ctx, fit.overflows());
     window.set_title(ctx.t_args("shell.app.windowTitle", [("tab", active)]).to_string());
-    self.reveal(&tabs, fit);
-    let strip = tabs.tabs().iter().fold(
-      Row::new()
-        .id("tab-strip")
-        .spacing(ExtraSpacing::Tight.role())
-        .align_items(Alignment::Center),
-      |strip, tab| strip.child(tab_button(ctx, &navigation, &projects, &tabs, tab, fit)),
-    );
-    let wheel = self.scroll.clone();
+    let strip = tabs
+      .tabs()
+      .iter()
+      .enumerate()
+      .filter(|(index, _)| fit.shows(*index))
+      .fold(
+        Row::new()
+          .id("tab-strip")
+          .flex_shrink(1.0)
+          .min_width(Dimension::Px(0.0))
+          .clip()
+          .spacing(ExtraSpacing::Tight.role())
+          .align_items(Alignment::Center),
+        |strip, (_, tab)| {
+          let button = tab_button(ctx, (&navigation, &projects), &tabs, tab, (&fit, &self.active_width));
+          strip.child(button)
+        },
+      );
+    let hidden: Vec<_> = fit
+      .hidden()
+      .iter()
+      .filter_map(|index| tabs.tabs().get(*index))
+      .map(Tab::id)
+      .collect();
+    let list = fit.overflows().then(|| {
+      let list = self.list.clone();
+      ctx.mount_keyed::<TabList>("tab-list", TabListProps { hidden, list })
+    });
     let closing = ctx.props::<TabStripProps>().closing;
     let tabs = Row::new()
       .flex_shrink(1.0)
@@ -131,21 +153,9 @@ impl Component for TabStrip {
       } else {
         HitTestBehavior::Auto
       })
-      .child(
-        ScrollHorizontal::new(strip)
-          .id("tab-scroll")
-          .with_scroll_state(self.scroll.clone())
-          .scrollbar(ScrollBarStyle::hidden())
-          .flex_shrink(1.0)
-          .min_width(Dimension::Px(0.0))
-          .on_scroll(move |event: ScrollEvent| {
-            if event.delta_x == 0.0 && event.delta_y != 0.0 {
-              wheel.scroll_by(-event.delta_y, 0.0);
-              event.prevent_default();
-            }
-          }),
-      )
-      .child(new_tab(ctx, navigation));
+      .child(strip)
+      .with_children(list)
+      .child(new_tab(ctx, navigation, self.new_tab.clone()));
     Row::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::new().left(SpacingSize::Sm))
@@ -163,6 +173,45 @@ impl Component for TabStrip {
   }
 }
 
+impl TabStrip {
+  /// Gives the focus to *New tab* when the tab list goes away while it held it.
+  fn keep_focus(&self, ctx: &Ctx, overflows: bool) {
+    let overflowed = self.overflowed.swap(overflows, Ordering::Relaxed);
+    if overflowed && !overflows && self.list.holds() {
+      self.list.set_open(false);
+      ctx.focus(&self.new_tab);
+    }
+  }
+}
+
+/// The room a tab's unsaved dot and its mark take.
+fn marks(projects: &Projects, tab: &Tab) -> f32 {
+  let dot = if unsaved(projects, tab.route()) { DOT_WIDTH } else { 0.0 };
+  let mark = if has_attention(projects, tab) { MARK_WIDTH } else { 0.0 };
+  dot + mark
+}
+
+/// How `tabs` share `room`, each as wide as what it shows; the active tab as wide as it was `measured`
+/// once it has been laid out.
+fn fit(projects: &Projects, tabs: &TabSet, (room, measured): (f32, Option<f32>)) -> Fit {
+  let active = tabs.active().id();
+  let slots: Vec<Slot> = tabs
+    .tabs()
+    .iter()
+    .map(|tab| match (tab.route().is_home(), measured) {
+      (true, _) => Slot::Icon,
+      (false, Some(width)) if tab.id() == active => Slot::Measured(width),
+      (false, _) => Slot::Labelled(marks(projects, tab)),
+    })
+    .collect();
+  let index = tabs
+    .tabs()
+    .iter()
+    .position(|tab| tab.id() == active)
+    .expect("the active tab is one of the tabs");
+  tab_fit::fit(room, &slots, index)
+}
+
 /// The room the *N need you* pill takes: none while it does not show, what it took when it was laid out
 /// last, or the design's until it has been.
 fn pill_width(ctx: &mut Ctx, projects: &Projects, tabs: &TabSet) -> f32 {
@@ -177,46 +226,12 @@ fn pill_width(ctx: &mut Ctx, projects: &Projects, tabs: &TabSet) -> f32 {
   }
 }
 
-impl TabStrip {
-  /// Brings the active tab into view when it, its route or the strip's fit changed since last time:
-  /// a new tab, another place in the same tab (its width may change), or a strip that starts to scroll.
-  /// The offset is queued even when it is the current one, so it holds against lurq keeping a strip
-  /// that was scrolled to its end at the end while a tab is inserted.
-  fn reveal(&self, tabs: &TabSet, fit: Fit) {
-    let active = tabs.active();
-    let now = Revealed {
-      tab: active.id(),
-      route: active.route().clone(),
-      scrolling: matches!(fit, Fit::Scrolling(_)),
-    };
-    let mut revealed = self.revealed.lock();
-    if revealed.as_ref() == Some(&now) {
-      return;
-    }
-    *revealed = Some(now);
-    let active = active.id();
-    let Fit::Scrolling(room) = fit else {
-      self.scroll.scroll_to_left_pending();
-      return;
-    };
-    let Some(index) = tabs.tabs().iter().position(|tab| tab.id() == active) else {
-      return;
-    };
-    let viewport = Some(self.scroll.viewport_width())
-      .filter(|width| *width > 0.0)
-      .unwrap_or(room);
-    let target = tab_fit::reveal(self.scroll.scroll_x(), viewport, tab_fit::span(tabs, index));
-    self.scroll.set_scroll_pending(target, 0.0);
-  }
-}
-
 fn tab_button(
   ctx: &mut Ctx,
-  navigation: &Navigation,
-  projects: &Projects,
+  (navigation, projects): (&Navigation, &Projects),
   tabs: &TabSet,
   tab: &Tab,
-  fit: Fit,
+  (fit, active_width): (&Fit, &ActiveWidth),
 ) -> Element {
   let active = tab.id() == tabs.active().id();
   let id = tab.id();
@@ -241,11 +256,11 @@ fn tab_button(
   } else {
     button.hovered_style(Style::new().background(ExtraColor::Hover.role()))
   };
-  if tab_fit::is_icon(tab) {
+  if tab.route().is_home() {
     return all_projects_tab(button, active);
   }
-  let attention = attention(ctx, projects, tab);
-  let close = active.then(|| close_button(ctx, navigation.clone(), tab));
+  let attention = attention(ctx, projects, tab, format!("tab-{id}-attention"));
+  let close = active.then(|| close_button(ctx, navigation.clone(), id, format!("tab-{id}-close")));
   let dirty = unsaved(projects, tab.route()).then(|| {
     Row::new()
       .id(format!("tab-{id}-unsaved"))
@@ -256,37 +271,18 @@ fn tab_button(
       .background(PaletteColor::TextSecondary)
       .into()
   });
-  labelled_tab(button, tab, (&label, fit), (dirty, attention, close))
-}
-
-/// The mark of a tab whose project needs the person (an amber hand, *Kontur · 2 need you*) or has an
-/// unresolved failure (a red alert, *Kontur · runner offline*), with what it means in its tooltip.
-fn attention(ctx: &mut Ctx, projects: &Projects, tab: &Tab) -> Option<Element> {
-  let project = tab.route().project()?;
-  let mark = needs_you::attention(projects, project)?;
-  let name = projects.name(project)?;
-  let (glyph, color, what, state) = match mark {
-    Attention::Waiting(count) => (Icon::Hand, PaletteColor::Warning, count_words(ctx, count), "needs-you"),
-    Attention::RunnerOffline => (
-      Icon::CircleAlert,
-      PaletteColor::Danger,
-      ctx.t("shell.tabs.runnerOffline").to_string(),
-      "runner-offline",
-    ),
-    Attention::TasksUnread => (
-      Icon::CircleAlert,
-      PaletteColor::Danger,
-      ctx.t("shell.tabs.tasksUnread").to_string(),
-      "tasks-unread",
-    ),
+  let marks = dirty.as_ref().map_or(0.0, |_| DOT_WIDTH) + attention.as_ref().map_or(0.0, |_| MARK_WIDTH);
+  let widest = Slot::Labelled(marks).width(fit.label_width(), active);
+  // The active tab keeps its width, which the strip measures; while tabs hide, the inactive ones are
+  // exactly as wide as `tab_fit` counts them (120 and their marks, `Tab 2 · Kontur · Overview` in `oHEGQ`).
+  let button = if active {
+    button.ref_element(active_width.element()).flex_shrink(0.0)
+  } else if fit.overflows() {
+    button.width(Dimension::Px(widest)).flex_shrink(0.0)
+  } else {
+    button
   };
-  let text = ctx.t_args(
-    "shell.tabs.attention",
-    [("project", name.as_str()), ("waiting", what.as_str())],
-  );
-  let id = format!("tab-{}-attention", tab.id());
-  let marker = icon(glyph, IconSize::Xs, color).id(id.clone()).describe("state", state);
-  Some(Tooltip::new(id, text).wrap(ctx, marker))
+  labelled_tab(button, tab, (&label, widest), (dirty, attention, close))
 }
 
 /// A tab at All projects: the folders icon.
@@ -298,27 +294,16 @@ fn all_projects_tab(button: Button, active: bool) -> Element {
   };
   button
     .width(Dimension::Px(ICON_TAB_WIDTH))
+    .flex_shrink(0.0)
     .justify(Justify::Center)
     .child(icon(Icon::Folders, IconSize::Md, color))
     .into()
 }
 
-/// Whether the task form `route` shows holds edits that are not saved.
-fn unsaved(projects: &Projects, route: &Route) -> bool {
-  let (project, task) = match route {
-    Route::Project(project, ProjectPage::NewTask) => (*project, None),
-    Route::Project(project, ProjectPage::EditTask(key)) => (*project, Some(key.to_string())),
-    _ => return false,
-  };
-  projects
-    .feed_now(project)
-    .is_some_and(|feed| feed.unsaved.get().contains(task.as_deref()))
-}
-
 fn labelled_tab(
   button: Button,
   tab: &Tab,
-  (label, fit): (&str, Fit),
+  (label, widest): (&str, f32),
   (dirty, attention, close): (Option<Element>, Option<Element>, Option<Element>),
 ) -> Element {
   let (glyph, text, style) = if close.is_some() {
@@ -340,86 +325,36 @@ fn labelled_tab(
   } else {
     padding
   };
-  let text = Text::new(label)
-    .variant(style)
-    .color(text)
-    .nowrap()
-    .text_overflow(TextOverflow::Elipsis);
-  let (button, text) = match fit {
-    Fit::Shrunk(label_width) => (button, text.max_width(Dimension::Px(label_width))),
-    Fit::Scrolling(_) => (
-      button.width(Dimension::Px(TAB_MIN_WIDTH)),
-      text.flex(1.0).min_width(Dimension::Px(0.0)),
-    ),
-  };
+  // The tab is at most as wide as `tab_fit` counts it, and its label gives way.
   button
+    .max_width(Dimension::Px(widest))
     .padding(padding)
     .spacing(ExtraSpacing::Snug.role())
     .child(icon(screen_icon(tab.route().screen()), IconSize::Base, glyph))
-    .child(text)
+    .child(
+      Text::new(label)
+        .variant(style)
+        .color(text)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .flex_shrink(1.0)
+        .min_width(Dimension::Px(0.0)),
+    )
     .with_children(dirty)
     .with_children(attention)
     .with_children(close)
     .into()
 }
 
-/// The active tab's close button (`Close` `hfcCG`). A tab with a label is never the only tab at All
-/// projects, so it can always be closed.
-fn close_button(ctx: &mut Ctx, navigation: Navigation, tab: &Tab) -> Element {
-  let id = tab.id();
-  in_title_bar(Button::empty())
-    .id(format!("tab-{id}-close"))
-    .describe("a11y_name", ctx.t("shell.tabs.close"))
-    .focusable(false)
-    .cursor(CursorIcon::Pointer)
-    .align_items(Alignment::Center)
-    .on_click(move |event: MouseEvent| {
-      event.stop_propagation();
-      navigation.close(id);
-    })
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .rounded(RadiusSize::Sm)
-    .child(icon(Icon::X, IconSize::Sm, PaletteColor::TextMuted))
-    .into()
-}
-
-/// The tab's label: its screen's name, a task by its key and its Edit task as `Edit <key>` (`Qp1B0`),
-/// after the project's name once it is known (`Kontur · KON-12`).
-fn label(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
-  let screen = match route {
-    Route::Project(_, ProjectPage::Task(key, _)) => key.to_string(),
-    Route::Project(_, ProjectPage::NewPipeline) => ctx.t("pipelines.new").to_string(),
-    Route::Project(project, ProjectPage::Pipeline(id)) => projects
-      .feed(*project)
-      .pipeline_names
-      .get()
-      .0
-      .get(id)
-      .cloned()
-      .unwrap_or_else(|| ctx.t(route.screen().title_key()).to_string()),
-    Route::Project(_, ProjectPage::EditTask(key)) => ctx
-      .t_args("shell.screens.editTaskOf", [("key", key.to_string())])
-      .to_string(),
-    route => ctx.t(route.screen().title_key()).to_string(),
-  };
-  match route.project().and_then(|project| projects.name(project)) {
-    Some(name) => ctx
-      .t_args(
-        "shell.tabs.inProject",
-        [("project", name.as_str()), ("label", screen.as_str())],
-      )
-      .to_string(),
-    None => screen,
-  }
-}
-
 /// *New tab* (`New tab` `w204x`): a tab at All projects, right of the active one.
-fn new_tab(ctx: &mut Ctx, navigation: Navigation) -> Element {
-  in_title_bar(pressable(move || navigation.open_tab()))
+fn new_tab(ctx: &mut Ctx, navigation: Navigation, element: ElementRef) -> Element {
+  in_title_bar(Focus::Keyboard.apply(pressable(move || navigation.open_tab())))
     .id("new-tab")
+    .ref_element(element)
     .describe("a11y_name", ctx.t("common.newTab"))
     .width(Dimension::Px(NEW_TAB_WIDTH))
     .height(Dimension::Px(TAB_HEIGHT))
+    .flex_shrink(0.0)
     .justify(Justify::Center)
     .rounded(RadiusSize::Md)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))

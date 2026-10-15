@@ -87,7 +87,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::NewTask => task_form::new_task(ctx, project),
     ProjectPage::EditTask(key) => task_form::edit_task(ctx, project, key),
     ProjectPage::Task(key, view) => task::screen(ctx, project, key, view),
-    ProjectPage::PullRequests => pull_requests::screen(ctx, project),
+    ProjectPage::PullRequests | ProjectPage::PullRequest(_) => pull_requests::screen(ctx, project),
     ProjectPage::Usage(query) => usage::screen(ctx, project, query),
     ProjectPage::Pipelines => pipelines::screen(ctx, project),
     ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline => pipelines::new_pipeline(ctx, project),

@@ -25,6 +25,7 @@ pub mod import;
 #[cfg(any(feature = "devtools-inspect", feature = "devtools-inspect-legacy"))]
 mod inspect;
 pub mod instructions;
+pub mod links;
 pub mod messages;
 pub mod orchestrator;
 pub mod pipelines;

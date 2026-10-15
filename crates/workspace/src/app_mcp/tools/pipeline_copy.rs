@@ -59,7 +59,7 @@ pub async fn duplicate_pipeline(
 ) -> Result<Value, ToolError> {
   let services = services.clone();
   let then = translate.text(&Message::new("pipelines.flow.then"));
-  let copy = blocking(move || {
+  let (project, copy) = blocking(move || {
     let open = services.project(&args.project)?;
     let root = open.repo_root;
     let mut db = ProjectDb::open(&root)?;
@@ -75,11 +75,12 @@ pub async fn duplicate_pipeline(
     let (version, _) = published.map_err(|error| ToolError::refused("not_published", vec![publish_error(&error)]))?;
     // The task form offers the published version.
     services.changes.record(open.project.id(), Outside::Tasks);
-    pinned_pipeline(&ProjectDb::open(&root)?, id, version)?
-      .ok_or_else(|| ToolError::not_found(Missing::Pipeline, id.to_string()))
+    let copy = pinned_pipeline(&ProjectDb::open(&root)?, id, version)?
+      .ok_or_else(|| ToolError::not_found(Missing::Pipeline, id.to_string()))?;
+    Ok((open.project.id(), copy))
   })
   .await?;
-  Ok(json!({ "pipeline": pipeline_json(&copy, translate) }))
+  Ok(json!({ "pipeline": pipeline_json(&copy, project, translate) }))
 }
 
 /// The steps of the copy: the source's latest published version with the profiles given, refused

@@ -1,0 +1,31 @@
+# Adds the web front to deploy/cloud/compose.yaml (the backend's file):
+#   docker compose -f compose.yaml -f compose.web.yaml up -d
+# Caddy then sends /api/* to the cloud and every other path to the web front, whose server calls the API over the
+# compose network; the browser never reaches the API through the web front. Only Caddy is published.
+services:
+  web:
+    build:
+      context: ../../web
+      dockerfile: Dockerfile.cloud
+    restart: unless-stopped
+    depends_on:
+      - cloud
+    environment:
+      # The same public address the cloud puts in its emails and Caddy serves.
+      ORCHESTER_CLOUD_PUBLIC_URL: ${ORCHESTER_CLOUD_PUBLIC_URL:?Set ORCHESTER_CLOUD_PUBLIC_URL}
+      ORCHESTER_CLOUD_API_URL: http://cloud:8090
+      # Signs the CSRF tokens and seals the session cookie: 32 random bytes in base64, e.g. `openssl rand -base64 32`.
+      ORCHESTER_CLOUD_WEB_SECRET: ${ORCHESTER_CLOUD_WEB_SECRET:?Set ORCHESTER_CLOUD_WEB_SECRET}
+    networks:
+      backend:
+        ipv4_address: 172.30.0.5
+  cloud:
+    environment:
+      # Caddy, and the web front's server, which forwards the browser's address it got from Caddy.
+      ORCHESTER_CLOUD_TRUSTED_PROXIES: 172.30.0.2,172.30.0.5
+  caddy:
+    volumes:
+      - ./Caddyfile.web:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - cloud
+      - web
