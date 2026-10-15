@@ -6,7 +6,7 @@ use std::path::Path;
 
 use crate::{
   native::command::CommandSyntax,
-  orchester_tools::{OrchesterTool, ProjectTool, SERVER},
+  orchester_tools::{OrchesterTool, ProjectTool, QaApproval, SERVER},
   permission::category::{ClassifiedCommand, CommandScope},
   resource::ApprovalMode,
   run::{CommandShell, NativeCommandAsk, PendingToolApproval},
@@ -35,6 +35,9 @@ pub enum ToolReach {
   /// A call of `run_check` running the check `name`, as the request's target names it; `every_call` when its access
   /// rules ask before every call, or the check is not known: no rule is made for it.
   Check { name: String, every_call: bool },
+  /// A call of `start_qa_app`, which runs the worktree's QA script at git blob `blob` (`QaApproval`); empty when the
+  /// request names none: no rule is made for it.
+  Script { blob: String },
 }
 
 impl ApprovalSubject {
@@ -61,6 +64,13 @@ impl ApprovalSubject {
         (Some(OrchesterTool::RunCheck), name) => ToolReach::Check {
           name: name.unwrap_or_default(),
           every_call: true,
+        },
+        (Some(OrchesterTool::StartQaApp), target) => ToolReach::Script {
+          blob: target
+            .as_deref()
+            .and_then(QaApproval::script_of)
+            .unwrap_or_default()
+            .to_owned(),
         },
         _ => ToolReach::Any,
       };

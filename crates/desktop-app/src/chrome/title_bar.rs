@@ -55,6 +55,12 @@ pub fn content(
   let line = ctx.theme().border_size_value(BorderSize::Sm);
   // The tabs leave the pill the room it took when it was laid out last.
   let pill = ctx.element_ref();
+  // The bar's 4 between the pill's room and the window controls (`DL8Xp` in `VnLOT`): the macOS lights are
+  // ours, the Windows controls the bar's own, after its trailing part.
+  let trailing = match lights {
+    Some(_) => Row::new().spacing(SpacingSize::Xs),
+    None => Row::new().padding(Padding::new().right(SpacingSize::Xs)),
+  };
   bar
     .leading(
       menu.child(
@@ -72,7 +78,7 @@ pub fn content(
       },
     ))
     .trailing(
-      Row::new()
+      trailing
         .align_items(Alignment::Center)
         .child(
           Row::new()

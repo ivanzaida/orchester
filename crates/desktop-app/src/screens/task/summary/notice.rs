@@ -17,6 +17,7 @@ use orchester_workspace::{
   runner::state::RunnerState,
   tasks::{
     approvals::ShownApproval,
+    delivery::Delivery,
     detail::{RunView, StepView, TaskDetail},
   },
 };
@@ -331,6 +332,16 @@ fn lost(ctx: &Ctx, run: &RunView, runner: &RunnerState) -> Said {
 }
 
 /// A run that does not go on by itself: queued, ended, or waiting for the person's decision.
+/// The icon and title of a run that waits for the person's decision for `stuck`.
+const fn waiting_words(stuck: &Stuck) -> (Icon, &'static str) {
+  match stuck {
+    Stuck::BrokeAgain(_) => (Icon::Hand, "summary.notice.brokeAgainTitle"),
+    Stuck::Unverified(_) => (Icon::CircleDashed, "summary.notice.unverifiedTitle"),
+    Stuck::Unchanged(_) => (Icon::Hand, "summary.notice.unchangedTitle"),
+    Stuck::RetriesExhausted(_) => (Icon::Hand, "summary.notice.retriesTitle"),
+  }
+}
+
 fn settled(ctx: &Ctx, detail: &TaskDetail, run: &RunView) -> Said {
   let (step, agent) = step_words(ctx, run.current_step());
   let branch = run.run.branch().as_str();
@@ -347,21 +358,36 @@ fn settled(ctx: &Ctx, detail: &TaskDetail, run: &RunView) -> Said {
       Icon::GitMerge,
       text("summary.notice.mergedTitle", "summary.notice.mergedBody"),
     ),
-    RunStatus::Succeeded => Said::new(
-      NoticeTone::Success,
-      Icon::CircleCheck,
-      text("summary.notice.succeededTitle", "summary.notice.succeededBody"),
-    ),
-    RunStatus::WaitingForPerson(Stuck::BrokeAgain(_)) => Said::new(
-      NoticeTone::Warning,
-      Icon::Hand,
-      text("summary.notice.brokeAgainTitle", "summary.notice.stuckBody"),
-    ),
-    RunStatus::WaitingForPerson(_) => Said::new(
-      NoticeTone::Warning,
-      Icon::Hand,
-      text("summary.notice.retriesTitle", "summary.notice.stuckBody"),
-    ),
+    RunStatus::Succeeded => match &detail.delivery {
+      Delivery::MergedOutside(into) => Said::new(
+        NoticeTone::Success,
+        Icon::GitMerge,
+        (
+          ctx.t("summary.notice.mergedTitle"),
+          ctx.t_args(
+            "summary.notice.mergedOutsideBody",
+            [("branch", branch), ("into", into.as_ref())],
+          ),
+        ),
+      ),
+      Delivery::NothingToMerge => Said::new(
+        NoticeTone::Success,
+        Icon::CircleCheck,
+        text(
+          "summary.notice.nothingToMergeTitle",
+          "summary.notice.nothingToMergeBody",
+        ),
+      ),
+      Delivery::Waiting => Said::new(
+        NoticeTone::Success,
+        Icon::CircleCheck,
+        text("summary.notice.succeededTitle", "summary.notice.succeededBody"),
+      ),
+    },
+    RunStatus::WaitingForPerson(stuck) => {
+      let (icon, title) = waiting_words(stuck);
+      Said::new(NoticeTone::Warning, icon, text(title, "summary.notice.stuckBody"))
+    }
     RunStatus::Failed(_) if run.current_step().is_some_and(|step| step.tool_step) => Said::new(
       NoticeTone::Danger,
       Icon::CircleX,

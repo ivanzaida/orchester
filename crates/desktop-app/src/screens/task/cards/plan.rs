@@ -198,17 +198,18 @@ impl PlanView {
       None => button.disabled(),
       Some(open) => {
         let (decisions, run, key) = (decisions.clone(), place.run(), place.key.clone());
-        let command = Command::DecidePlan {
-          run: card.plan.run,
-          execution: card.plan.execution,
-          version: card.plan.version,
+        let plan = (card.plan.run, card.plan.execution, card.plan.version);
+        let command = move |by| Command::DecidePlan {
+          run: plan.0,
+          execution: plan.1,
+          version: plan.2,
           decision: PlanDecision::Approved,
-          by: Answerer::Person,
+          by,
         };
         if focus {
           ctx.focus(&self.approve);
         }
-        button.on_click(move || decisions.answer((run, &key), Given::ApprovePlan, (&open, command.clone())))
+        button.on_click(move || decisions.answer((run, &key), Given::ApprovePlan, (&open, command)))
       }
     };
     let composer = Place::composer(ctx);
@@ -251,10 +252,18 @@ fn stands(ctx: &Ctx, card: &PlanCard, (waiting, lost, outcome): (bool, bool, Opt
   match (&card.plan.review, waiting) {
     (_, true) => Stands::waiting(ctx.t("cards.state.waitingApproval")),
     (None, false) if lost => Stands::interrupted(ctx.t("cards.state.interrupted")),
-    (None, false) if outcome.is_some_and(|outcome| matches!(outcome.stage, Stage::Taken(_))) => {
-      decided(Icon::CircleCheck, "cards.state.approved", PaletteColor::Success)
-    }
-    (None, false) => decided(Icon::History, "cards.state.earlier", PaletteColor::TextMuted),
+    (None, false) => match outcome.filter(|outcome| matches!(outcome.stage, Stage::Taken(_))) {
+      Some(Outcome {
+        by: Answerer::Automation,
+        ..
+      }) => decided(
+        Icon::CircleCheck,
+        "cards.state.approvedByAutomation",
+        PaletteColor::Success,
+      ),
+      Some(_) => decided(Icon::CircleCheck, "cards.state.approved", PaletteColor::Success),
+      None => decided(Icon::History, "cards.state.earlier", PaletteColor::TextMuted),
+    },
     (Some(review), false) => match (&review.decision, review.by) {
       (PlanDecision::Approved, Answerer::Person) => {
         decided(Icon::CircleCheck, "cards.state.approved", PaletteColor::Success)

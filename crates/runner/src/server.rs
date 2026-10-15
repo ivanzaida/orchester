@@ -14,13 +14,15 @@ use std::{
 
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint},
-  id::{RunId, StepExecutionId},
+  id::{ChatId, ChatMessageId, IdempotencyKey, RunId, StepExecutionId, TaskId},
+  integration::Leftovers,
   question::GivenAnswer,
   run::{Answerer, ApprovalAnswer, InterruptCause, PlanDecision, PlanVersion, RaisedLimits, StuckDecision},
+  sharing::TaskRevision,
   tokens::TokenBudget,
 };
 use orchester_ipc::{
-  AttachSession, Command, Endpoint, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
+  AttachSession, ChatTools, Command, Endpoint, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
   frame::{FrameReader, FrameWriter},
   handshake,
 };
@@ -28,7 +30,7 @@ use orchester_vault::KeychainVault;
 use tokio::sync::mpsc;
 
 use crate::{
-  execution::{Notifier, Scheduler},
+  execution::{Notifier, QaSlots, Scheduler},
   notify::coalesce,
   shutdown_signal::ShutdownSignal,
 };
@@ -56,7 +58,7 @@ pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal) -> Result<
     project_root,
     Notifier::new(notifications),
     Arc::new(KeychainVault),
-    relay,
+    (relay, QaSlots::machine()),
   );
   let endpoint = Endpoint::for_project(project_root)?;
   tracing::info!("listening on {}", endpoint.name());
@@ -288,7 +290,8 @@ async fn answer(
       task,
       after,
       ref remove_worktrees,
-    } => started(scheduler.run_again(key, task, after, remove_worktrees.clone()).await),
+      revision,
+    } => run_again(scheduler, (key, task, after), (remove_worktrees, revision)).await,
     Command::PauseRun { run } => return later.answer(run, async move { handle.pause_run(run).await }),
     Command::CancelRun { run } => return later.answer(run, async move { handle.cancel_run(run).await }),
     Command::ResumeRun { run } => return later.answer(run, async move { handle.resume_run(run).await }),
@@ -343,8 +346,40 @@ async fn answer(
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
     Command::CheckConnection { provider, ref api } => return answer_check(&later, handle, provider, api.clone()),
+    Command::AnswerInChat { message, ref tools } => chat_answering(scheduler, message, tools.clone()).await,
+    Command::StopChat { chat } => chat_stopped(scheduler, chat),
   };
   Answer::Reply(Event::Reply { id, reply })
+}
+
+/// The reply to [`Command::AnswerInChat`].
+async fn chat_answering(scheduler: &Scheduler, message: ChatMessageId, tools: ChatTools) -> Reply {
+  match scheduler.answer_in_chat(message, tools).await {
+    Ok(()) => Reply::ChatAnswering { message },
+    Err(rejection) => Reply::Rejected(rejection),
+  }
+}
+
+/// The reply to [`Command::StopChat`].
+/// Starts the next run of `task` after `after` (Run again), removing `remove_worktrees` first, only for the task at
+/// `revision` when it names one.
+async fn run_again(
+  scheduler: &Scheduler,
+  (key, task, after): (IdempotencyKey, TaskId, RunId),
+  (remove_worktrees, revision): (&Option<Leftovers>, Option<TaskRevision>),
+) -> Reply {
+  started(
+    scheduler
+      .run_again_as(key, (task, after), remove_worktrees.clone(), revision)
+      .await,
+  )
+}
+
+fn chat_stopped(scheduler: &Scheduler, chat: ChatId) -> Reply {
+  match scheduler.stop_chat(chat) {
+    Ok(()) => Reply::ChatStopped { chat },
+    Err(rejection) => Reply::Rejected(rejection),
+  }
 }
 
 /// Continues `run`, stopped at its account's plan limit: on `connection`, another account's

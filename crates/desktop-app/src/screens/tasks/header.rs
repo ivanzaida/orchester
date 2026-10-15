@@ -14,7 +14,10 @@ use lurq::{
 use orchester_core::id::ProjectId;
 use orchester_workspace::tasks::list;
 
-use super::view::TabCounts;
+use super::{
+  queue::{QueueControls, QueueProps},
+  view::TabCounts,
+};
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskList, TaskListTab},
@@ -27,8 +30,10 @@ use crate::{
   },
 };
 
-/// The title and what the list shows, with New task and Create multiple at the end.
-pub(super) fn header(ctx: &mut Ctx, project: ProjectId) -> Row {
+/// The title and what the list shows, with the holds on new starts once the tasks are read (`queue`), and New task
+/// and Create multiple at the end.
+pub(super) fn header(ctx: &mut Ctx, project: ProjectId, queue: Option<QueueProps>) -> Row {
+  let queue = queue.map(|queue| ctx.mount_keyed::<QueueControls>(&format!("tasks-queue-{project}"), queue));
   let navigation = Navigation::of(ctx);
   let reason = ctx.t("tasks.createMultipleReason");
   let create_multiple = ActionButton::new(
@@ -41,6 +46,7 @@ pub(super) fn header(ctx: &mut Ctx, project: ProjectId) -> Row {
   let actions = Row::new()
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
+    .with_children(queue)
     .child(create_multiple)
     .child(new_task(ctx, "tasks-new-task", project, navigation));
   Row::new()

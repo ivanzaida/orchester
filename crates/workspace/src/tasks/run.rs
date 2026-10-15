@@ -10,7 +10,7 @@ use orchester_core::{
   connection::AccountStartProblem,
   id::ResourceId,
   resource::{AgentProfile, Pipeline, ResourceBody, ResourceKind, Tool, ToolKind, Version, VersionNumber},
-  run::{AutoAsk, PreflightInput, PreflightProblem, RunLimit, preflight},
+  run::{AcceptRefusal, AutoAsk, PreflightInput, PreflightProblem, RunLimit, preflight},
   store::{ConnectionStore, ResourceStore, TaskStore},
   task::{QueueError, Task, TaskDetails, TaskStatus, TaskUpdate},
   time::Timestamp,
@@ -314,6 +314,7 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
     RunRequestError::Rejected(Rejection::Preflight { problems }) => problems.iter().map(preflight_message).collect(),
     RunRequestError::Rejected(Rejection::TaskNotFound) => vec![Message::new("runs.start.taskMissing")],
     RunRequestError::Rejected(Rejection::TaskNotQueued) => vec![Message::new("runs.start.notQueued")],
+    RunRequestError::Rejected(Rejection::TaskChangedMeanwhile) => vec![crate::messages::task_changed_meanwhile()],
     RunRequestError::Rejected(Rejection::TaskGroupWaiting { hold }) => super::group::hold_messages(hold),
     RunRequestError::Rejected(Rejection::RunUnreadable { .. }) => vec![Message::new("runs.unreadable.rejected")],
     RunRequestError::Rejected(
@@ -342,12 +343,16 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::ToolApprovalAnswered
       | Rejection::AutomationWider
       | Rejection::PersonOnly { .. }
+      | Rejection::ChatMessageNotFound
+      | Rejection::ChatBusy
+      | Rejection::NoOrchestrator
       | Rejection::QuestionNotAwaited
       | Rejection::QuestionAnswered
       | Rejection::InvalidAnswer { .. }
       | Rejection::RunAgainBlocked { .. }
       | Rejection::WorktreeChanged { .. }
       | Rejection::WorktreeNotRemoved { .. }
+      | Rejection::NotAcceptable { .. }
       | Rejection::Busy,
     ) => vec![Message::new("runs.start.failed")],
   }
@@ -443,6 +448,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
       Message::new("runs.conversation.question.errors.answered")
     }
     RunRequestError::Rejected(Rejection::InvalidAnswer { error }) => super::question::answer_error(error),
+    RunRequestError::Rejected(Rejection::NotAcceptable { why }) => not_acceptable(why),
     // Unfinished blocking tasks keep the run from going on; the task page names them.
     RunRequestError::Rejected(Rejection::RunAgainBlocked {
       block: orchester_core::run::RunAgainBlock::TaskBlocked,
@@ -453,8 +459,12 @@ pub fn control_message(error: &RunRequestError) -> Message {
       | Rejection::LimitNotAboveUsed {
         limit: RunLimit::DailyBudget | RunLimit::GroupBudget,
       }
+      | Rejection::ChatMessageNotFound
+      | Rejection::ChatBusy
+      | Rejection::NoOrchestrator
       | Rejection::TaskNotFound
       | Rejection::TaskNotQueued
+      | Rejection::TaskChangedMeanwhile
       | Rejection::Preflight { .. }
       | Rejection::Failed { .. }
       | Rejection::RunAgainBlocked { .. }
@@ -462,6 +472,20 @@ pub fn control_message(error: &RunRequestError) -> Message {
       | Rejection::WorktreeNotRemoved { .. }
       | Rejection::Busy,
     ) => Message::new("runs.control.failed"),
+  }
+}
+
+/// Why the waiting step cannot be accepted as it is.
+fn not_acceptable(why: &AcceptRefusal) -> Message {
+  match why {
+    AcceptRefusal::NotJudged => Message::new("runs.control.notAcceptable.notJudged"),
+    AcceptRefusal::NotBuiltOn { revision } => {
+      Message::new("runs.control.notAcceptable.notBuiltOn").with("revision", revision.clone())
+    }
+    AcceptRefusal::Uncommitted => Message::new("runs.control.notAcceptable.uncommitted"),
+    AcceptRefusal::WorktreeRemoved { branch } => {
+      Message::new("runs.control.notAcceptable.worktreeRemoved").with("branch", branch.clone())
+    }
   }
 }
 

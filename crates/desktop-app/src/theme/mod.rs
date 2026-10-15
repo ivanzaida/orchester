@@ -19,10 +19,14 @@ mod conversation;
 mod decisions;
 mod fonts;
 mod form;
+pub mod instructions;
 mod lifecycle;
 mod local_integration;
 mod markdown;
 mod metrics;
+mod needs_you;
+mod orchestrator;
+mod overview;
 mod palette;
 pub mod pipelines;
 mod projects;
@@ -56,6 +60,9 @@ pub use self::{
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
+  needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
+  orchestrator::{OrchestratorSpacing, OrchestratorText},
+  overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
   projects::{ProjectsSpacing, ProjectsText},
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
@@ -87,6 +94,7 @@ pub fn install(app: &mut App, mode: Mode) {
   metrics::install(theme);
   pipelines::install(theme);
   agents::install(theme);
+  instructions::install(theme);
   startup::install(theme);
   settings::install(theme);
   accounts::install(theme);
@@ -94,6 +102,7 @@ pub fn install(app: &mut App, mode: Mode) {
   decisions::install(theme);
   task_form::install(theme);
   tasks::install(theme);
+  overview::install(theme);
   connections::install(theme);
   secrets::install(theme);
   projects::install(theme);
@@ -103,6 +112,8 @@ pub fn install(app: &mut App, mode: Mode) {
   conversation::install(theme);
   cards::install(theme);
   composer::install(theme);
+  orchestrator::install(theme);
+  needs_you::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

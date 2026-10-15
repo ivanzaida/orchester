@@ -107,7 +107,11 @@ fn latest_attempt(ctx: &mut Ctx, run: &RunView, now: Timestamp) -> Element {
 /// *What Review reported* and the report, when the failing step left one.
 fn report(ctx: &Ctx, run: &RunView, failed: &StepKey) -> Option<[Element; 2]> {
   let step = run.steps.iter().find(|step| step.key == *failed)?;
-  let output = run.output(step.execution?)?;
+  // A step not run again on an unchanged revision left no output: its earlier result is what it reported.
+  let output = step
+    .execution
+    .and_then(|execution| run.output(execution))
+    .or_else(|| run.latest_output(failed))?;
   if output.text.trim().is_empty() {
     return None;
   }

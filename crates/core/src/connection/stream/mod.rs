@@ -288,6 +288,9 @@ pub enum RunnerProblem {
   /// The agent asked `question` in a way Orchester does not put to the person, for `reason`: the request
   /// was answered with why, and the agent went on.
   QuestionRefused { question: String, reason: QuestionRefusal },
+  /// The agent's `start_qa_app` waits for the computer's QA slot, which another run's QA app holds; it goes on
+  /// once that app stops.
+  WaitingForQaSlot,
 }
 
 /// Why Orchester did not put an agent's question to the person.

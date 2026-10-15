@@ -97,7 +97,7 @@ fn outcome_prompt_schema_describes_attention_without_changing_the_wire_format() 
   let schema: serde_json::Value = serde_json::from_str(STEP_RESULT_SCHEMA).expect("valid schema");
   assert_eq!(
     schema["properties"]["outcome"]["enum"],
-    serde_json::json!(["done", "failed", "question"])
+    serde_json::json!(["done", "failed", "unverified", "question"])
   );
   // The handoff lists are required but nullable: Codex's structured output requires every property.
   assert_eq!(
@@ -105,6 +105,7 @@ fn outcome_prompt_schema_describes_attention_without_changing_the_wire_format() 
     serde_json::json!([
       "outcome",
       "summary",
+      "unverified",
       "completed",
       "decisions",
       "open_questions",

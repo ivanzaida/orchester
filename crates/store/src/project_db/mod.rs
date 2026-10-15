@@ -21,14 +21,16 @@ mod memory;
 mod merges;
 mod messages;
 mod native;
+mod orchestrator;
+mod orchestrator_usage;
 mod organization;
 mod organized_drafts;
-mod phases;
 mod plan_limits;
 mod plans;
 mod pull_request_diffs;
 mod pull_requests;
 mod questions;
+mod queue_holds;
 mod read_only;
 mod repository;
 mod repository_import;
@@ -68,6 +70,7 @@ pub use self::{
   auto_mode::AutoModeSave,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
   joining::{JoinedKey, ReturnedTask},
+  orchestrator::{ChatListing, ChatTurn},
   read_only::ReadOnlyProjectDb,
   resources::ResourceUpdate,
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},

@@ -1,6 +1,6 @@
 //! Putting a prompt together from its sections, in assembly order, and writing its text.
 
-use std::fmt::Write as _;
+use std::{fmt::Write as _, ops::Range};
 
 use super::{
   CONTINUE_PROMPT, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt,
@@ -34,8 +34,13 @@ const RESULT_INSTRUCTIONS: &str = "Use `done` when your current step is complete
                                    failures are context, not a verdict on changed work: reproduce relevant \
                                    findings against the current candidate. Reuse a check only when its inputs \
                                    are unchanged, and state that limit. Preserve earlier evidence without \
-                                   relabeling it as evidence for a new build. If fresh verification needs a \
-                                   capability or action from the person, request it with `question`.\n\
+                                   relabeling it as evidence for a new build. If fresh verification needs an \
+                                   action from the person that lets you go on now, request it with `question`.\n\
+                                   Use `unverified` when you checked what you could but some checks cannot be \
+                                   done with what this step has (a state no fixture reaches, an app, tool or \
+                                   fixture you cannot use): list each in `unverified` with what it is and why. \
+                                   It goes to the person and sends nothing back to an earlier step. Mismatches \
+                                   you did find still require `failed`.\n\
                                    Use `question` when progress needs the person's decision, permission, access, \
                                    or clarification. This includes a proposed command outside the sandbox, an \
                                    unavailable capability, or conflicting requirements that the person can \
@@ -52,7 +57,8 @@ const RESULT_INSTRUCTIONS: &str = "Use `done` when your current step is complete
                                    because work is incomplete or needs permission. \
                                    If the person already answered the relevant question, apply their answer \
                                    within the effective permissions instead of asking again.\n\
-                                   With `done` or `failed`, hand off to the agents after you in the same object: \
+                                   With `done`, `failed` or `unverified`, hand off to the agents after you in the \
+                                   same object: \
                                    `completed` (what you completed), `decisions` (decisions later steps must \
                                    follow), `open_questions` and `next_agent_should_know`, each a list of short \
                                    strings, or null when you have nothing for it. Orchester keeps the handoff as \
@@ -79,6 +85,8 @@ pub struct PromptSection {
   pub variables: Vec<Variable>,
   /// Those of [`Self::variables`] without a value.
   pub unavailable: Vec<Variable>,
+  /// Where each value put in for a variable is in [`Self::text`], in order.
+  pub values: Vec<Range<usize>>,
 }
 
 /// An instruction the prompt leaves out, and why.
@@ -125,7 +133,7 @@ impl Composition {
       match source.body.applies(target, event) {
         Ok(()) => {
           let part = PromptPart::of(source.body.scope());
-          included.push((part, instruction_section(input, source, part)));
+          included.push((part, instruction_section(input, source, (part, event))));
         }
         Err(reason) => excluded.push(ExcludedInstruction {
           resource: source.resource,
@@ -206,8 +214,8 @@ const fn is_base(source: &PromptSource) -> bool {
   !matches!(source, PromptSource::Instruction { .. })
 }
 
-fn render(input: &PromptInput<'_>, text: &PromptText) -> Rendered {
-  text.render_marked(|variable| input.value(variable))
+fn render(input: &PromptInput<'_>, text: &PromptText, event: InjectionEvent) -> Rendered {
+  text.render_marked(|variable| input.value_at(variable, event))
 }
 
 fn section(source: PromptSource, name: String, text: &PromptText, rendered: Rendered) -> PromptSection {
@@ -217,28 +225,34 @@ fn section(source: PromptSource, name: String, text: &PromptText, rendered: Rend
     text: rendered.text,
     variables: text.variables().to_vec(),
     unavailable: rendered.unavailable,
+    values: rendered.values,
   }
 }
 
-fn instruction_section(input: &PromptInput<'_>, source: &InstructionSource<'_>, part: PromptPart) -> PromptSection {
+fn instruction_section(
+  input: &PromptInput<'_>,
+  source: &InstructionSource<'_>,
+  (part, event): (PromptPart, InjectionEvent),
+) -> PromptSection {
   let text = source.body.text();
   let prompt_source = PromptSource::Instruction {
     resource: source.resource,
     part,
     version: source.version,
   };
-  section(prompt_source, source.name.to_owned(), text, render(input, text))
+  section(prompt_source, source.name.to_owned(), text, render(input, text, event))
 }
 
 /// Responsibilities, then role instructions.
 fn profile_section(input: &PromptInput<'_>) -> PromptSection {
   let profile = input.profile.body;
-  let rendered = render(input, profile.instructions());
-  let text = [profile.responsibilities().trim(), rendered.text.trim()]
-    .into_iter()
-    .filter(|block| !block.is_empty())
-    .collect::<Vec<_>>()
-    .join("\n\n");
+  let rendered = render(input, profile.instructions(), InjectionEvent::Start).trimmed();
+  let responsibilities = profile.responsibilities().trim();
+  let rendered = match (responsibilities.is_empty(), rendered.text.is_empty()) {
+    (true, _) => rendered,
+    (false, true) => rendered.after(responsibilities),
+    (false, false) => rendered.after(&format!("{responsibilities}\n\n")),
+  };
   let source = PromptSource::AgentProfile {
     resource: input.profile.id,
     version: input.profile.version,
@@ -247,7 +261,7 @@ fn profile_section(input: &PromptInput<'_>) -> PromptSection {
     source,
     profile.role().as_str().to_owned(),
     profile.instructions(),
-    Rendered { text, ..rendered },
+    rendered,
   )
 }
 
@@ -262,7 +276,7 @@ fn step_section(input: &PromptInput<'_>) -> PromptSection {
     source,
     step.name.as_str().to_owned(),
     &step.instructions,
-    render(input, &step.instructions),
+    render(input, &step.instructions, InjectionEvent::Start),
   )
 }
 
@@ -302,6 +316,7 @@ fn task_section(input: &PromptInput<'_>, delivery: ResultDelivery) -> PromptSect
     text,
     variables: Vec::new(),
     unavailable: Vec::new(),
+    values: Vec::new(),
   }
 }
 

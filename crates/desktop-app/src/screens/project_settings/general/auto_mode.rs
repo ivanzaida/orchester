@@ -253,7 +253,7 @@ impl AutoMode {
     ctx.mount_keyed::<WidenConfirm>(
       "settings-auto-confirm",
       WidenProps {
-        id: "settings-auto-question",
+        id: "settings-auto-question".into(),
         card: false,
         automation: crate::mcp::input_gate::Guarded::ApprovalWidening,
         title: ctx.t("project_settings.confirmAuto"),

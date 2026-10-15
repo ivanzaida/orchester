@@ -11,7 +11,7 @@ use orchester_app::{
   brand, clipboard, i18n,
   mcp::{self, AppMcp, McpKind, McpLink, McpMode, McpSettings, McpStatus, WindowLink},
   root::{Root, RootProps},
-  startup::{Launch, WindowPosition, WindowPositionError},
+  startup::{Launch, WindowPosition},
   system_icon, theme,
   ui::loader,
 };
@@ -23,9 +23,14 @@ use tokio::runtime::Runtime;
 /// window without taking the focus.
 const START_WITHOUT_FOCUS_VARIABLE: &str = "ORCHESTER_APP_MCP_START_WITHOUT_FOCUS";
 
-fn main() -> Result<(), WindowPositionError> {
-  let position = WindowPosition::from_environment()?;
+fn main() {
   let log = app_log::install();
+  // Refused before anything opens in a QA copy or a debug build: a run that asked for a place must not get
+  // a window elsewhere. The installed app ignores the variable (`WindowPosition::requested`).
+  let position = WindowPosition::from_environment().unwrap_or_else(|error| {
+    tracing::error!(%error, "the requested window position is refused; not starting");
+    std::process::exit(2);
+  });
 
   let runtime = Runtime::new().expect("the OS provides threads for the background runtime");
   // Started before the window exists: the data folder's lock, the session, the runners' client and
@@ -102,13 +107,15 @@ fn main() -> Result<(), WindowPositionError> {
     // The app draws its own title bar and frame (`chrome`); the OS keeps the rounded corners.
     .with_decorations(false)
     .with_corner_radius(WindowCornerRadius::Rounded);
-  let window = if let Some(position) = position {
-    let (x, y) = position.coordinates();
-    window.with_position(x, y)
-  } else {
-    window
-  };
-  window.run();
+  // Part of the window's attributes, so it opens there rather than moving after it shows.
+  match position {
+    Some(WindowPosition { x, y }) => {
+      tracing::info!(x, y, "the window opens at the requested physical position");
+      window.with_position(x, y)
+    }
+    None => window,
+  }
+  .run();
 
   // `run` returns once the window has closed: the server stops and its discovery file goes, then the
   // runners stop and the session records its end.
@@ -117,7 +124,6 @@ fn main() -> Result<(), WindowPositionError> {
   }
   clipboard::clear_at_exit();
   launch.end();
-  Ok(())
 }
 
 /// The stored theme. The operating system's appearance is read on the runtime's blocking pool, never

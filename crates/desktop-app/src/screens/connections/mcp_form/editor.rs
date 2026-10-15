@@ -194,7 +194,7 @@ impl McpEditor {
     let question = WidenProps {
       card: false,
       automation: crate::mcp::input_gate::Guarded::PermissionWidening,
-      id: "connection-confirm-save",
+      id: "connection-confirm-save".into(),
       title: ctx.t("connections.mcp.dialog.widenTitle"),
       reasons,
       confirm: ctx.t("connections.dialog.save"),

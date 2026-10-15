@@ -38,7 +38,7 @@ use super::{
   prepare::Prepared,
   record::{RecordError, announce_ready, record},
   step::{
-    Active,
+    Active, QaApps,
     worker::{Stop, StopCause, WorkerEvent},
   },
 };
@@ -71,6 +71,7 @@ pub(super) struct TaskContext {
   pub(super) vault: Arc<dyn SecretVault>,
   pub(super) relay: Option<PathBuf>,
   pub(super) board: Arc<Board>,
+  pub(super) qa: Arc<QaApps>,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
   pub(super) settled: Arc<AtomicBool>,
 }
@@ -99,6 +100,8 @@ pub(super) struct RunTask {
   /// The program Claude Code starts as its permission prompt ([`crate::approval_relay`]).
   pub(super) relay: Option<PathBuf>,
   pub(super) board: Arc<Board>,
+  /// The QA apps the run's agents started ([`QaApps`]), shared with the runner's other runs for the QA slot.
+  pub(super) qa: Arc<QaApps>,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
   listening: bool,
   /// Set before the change that settles the run is recorded, or once the task stops executing
@@ -135,6 +138,7 @@ impl RunTask {
       vault: context.vault,
       relay: context.relay,
       board: context.board,
+      qa: context.qa,
       controls: context.controls,
       listening: true,
       settled: context.settled,
@@ -316,10 +320,12 @@ impl RunTask {
 
   /// An end event is sent only once, even when recording it failed. Retire its worker before
   /// propagating that error so cleanup never waits for a second event from the same worker.
+  /// Its invocation is over, whatever ended it: its QA app stops and frees the QA slot.
   pub(super) fn retire_worker(&mut self, execution: StepExecutionId) -> Option<Active> {
     let active = self.agents.remove(&execution)?;
     self.board.release(execution);
     self.release_steered(execution);
+    self.qa.end(active.invocation.id);
     Some(active)
   }
 

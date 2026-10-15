@@ -114,6 +114,7 @@ fn schedule_step_result_reads_the_structured_final_message() {
     Some(StepResult {
       outcome: StepOutcome::Failed,
       summary: "Tests fail.".into(),
+      unverified: Vec::new(),
       completed: Vec::new(),
       decisions: Vec::new(),
       open_questions: Vec::new(),

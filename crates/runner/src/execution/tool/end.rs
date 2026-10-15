@@ -43,7 +43,11 @@ impl RunTask {
           }
           None => {
             let output = finished.output.as_ref().map(|output| output.text.clone());
-            self.pass(execution, &active, output.unwrap_or_default())
+            self.pass(
+              execution,
+              (&active.workspace, &active.invocation),
+              output.unwrap_or_default(),
+            )
           }
         }
       }

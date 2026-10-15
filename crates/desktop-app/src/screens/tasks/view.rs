@@ -5,11 +5,10 @@
 
 use std::sync::Arc;
 
-use orchester_core::run::TaskPhase;
 use orchester_workspace::tasks::{
   browse::{PipelineFilter, TaskSort},
   data::ProjectTasks,
-  list::{Latest, TaskRow, TaskTab},
+  list::{TaskRow, TaskTab},
 };
 use parking_lot::Mutex;
 
@@ -20,23 +19,10 @@ use crate::routes::TaskListTab;
 pub(super) struct TabCounts([usize; TaskTab::ALL.len()]);
 
 impl TabCounts {
-  /// Every tab counted in one pass over the tasks, as `list::rows` would fill it: All holds every task,
-  /// Needs you the ones waiting for a person, each workflow tab the tasks of its status.
+  /// Every tab counted as `list::rows` fills it: All holds every task, each workflow tab the tasks of its
+  /// status, and Needs you counts what every *Needs you* counts ([`TaskTab::count`]).
   fn of(tasks: &ProjectTasks) -> Self {
-    let mut counts = [0; TaskTab::ALL.len()];
-    for task in tasks.tasks.iter() {
-      let phase = tasks
-        .phases
-        .get(&task.id())
-        .map_or_else(|| Some(TaskPhase::of(task, None, None)), Latest::phase);
-      let needs_you = phase.is_some_and(TaskPhase::needs_you);
-      for (count, tab) in counts.iter_mut().zip(TaskTab::ALL) {
-        if tab.includes(task) && (tab != TaskTab::NeedsYou || needs_you) {
-          *count += 1;
-        }
-      }
-    }
-    Self(counts)
+    Self(TaskTab::ALL.map(|tab| tab.count(tasks)))
   }
 
   pub(super) fn get(self, tab: TaskListTab) -> usize {

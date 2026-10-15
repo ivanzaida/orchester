@@ -25,6 +25,8 @@
     "status": {
       "step": "{{number}} {{step}}",
       "retriesUsed": "retries used",
+      "unverified": "could not check everything",
+      "unchanged": "not run again",
       "conflict": "conflict"
     },
     "runLine": {

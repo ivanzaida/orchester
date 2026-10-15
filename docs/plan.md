@@ -44,6 +44,21 @@ Environment variables, project MCP servers, tabs, and the installed stable build
 7. *Merge into main* merges into the user's checkout, which must be on `master` with no uncommitted changes. Do not
    merge from Orchester while another agent is merging branches into `master` by hand.
 
+### D2 · Verify that could not verify, and the QA slot · branch `claude/verify-flow` (implemented 2026-10-14, waiting for review and design verification)
+
+From `.tmp/analysis/agent-dev-blockers.md` §6, blockers 1 and 2. A step result may be `unverified` with what it could
+not check and why: the run waits for the person (reason `unverified`) without the failure route or a retry, and the
+person accepts the step, runs it again, or returns the work with a note (`continue_run` `accept`, `allow_retry`,
+`return_to`; `get_run` lists the checks). A step whose latest failed or unverified result was for the revision it would
+run on now is not run again unless a person asked: the run waits with reason `unchanged`. `start_qa_app(scenario)`
+runs the worktree's `tools/qa-app.ps1` for the agent, behind one QA slot per computer (an OS file lock every runner
+takes; a second start waits, noted in the transcript), keeps the app for the invocation (`call_run_app` without a pid
+reaches it) and stops it when the turn ends. The task page's Summary shows *Unverified: …* with the list, *Accept … as
+it is*, *Run … again*, the return with a note and *Stop* (the `decisions` seed scenario holds one).
+**Open:** design verification of the waits-unverified Summary (no Pencil frame of its own yet: it reuses `DVuXu`'s
+parts); the deprecated desktop shows the state but offers no *Accept*; the runner's macOS side is not cross-checked
+(its C dependencies need a macOS toolchain); the QA slot count is fixed at one.
+
 ## A · New app (`crates/desktop-app`) — the path to developing Orchester in it
 
 Merged on 2026-10-09/10 (see *Done*): F1, T1, F2, P1, N1, P2, C1, C2, C3, D1, I1, M1, LIM, M12 and its follow-ups. Still
@@ -805,6 +820,23 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+Command classifier: compound lines and dependency sources · branch `claude/command-classifier` (2026-10-14).
+From the analysis of 16 runs (106 of the person's 134 approvals were Claude Code's compound lines read as Unknown).
+`echo` of `$?` / `${PIPESTATUS[N]}` (PowerShell `$?` / `$LASTEXITCODE`) is read, and a status anywhere else stays
+Unknown. `echo` prints any argument. `tee` without a file is a filter. A literal variable may hold a backslash, read
+only where it is used quoted. Reads of Cargo's registry sources and git checkouts and of the toolchains' rust-src
+(also under `CARGO_HOME` / `RUSTUP_HOME`) are read like the worktree, as are `read_external_file` and
+`search_external_file` there; the rest of a Cargo or rustup home stays a credential location. Auto mode already
+reviewed Unknown lines (2026-10-06), and its hard rules are unchanged. Tests:
+`cargo test -p orchester-core --test command_compound command_compound`, plus `command_sequences`,
+`approval_fixtures` and `native known_safe`. Still Unknown by design: `$( )`, subshells, functions, `for … set --`,
+`**` globs, a loop that is not the whole line.
+Security review fix (same day): only plain readers (`cat`, `rg`, `grep -r`, `sed -n`, …) read the dependency
+sources like the worktree; a `cd` there, any other program, and a `.git` there do not. Programs that load settings
+or code from their folder (git, Cargo, package managers, build tools, Python, Node) are Unknown outside the worktree
+and its writable folders, which also closes `cd /any && git status` on master. `diff -r`, `tree -l` and `du -L` are
+Unknown. Tests: `cargo test -p orchester-core --test command_review_bypasses command_review`.
 
 ORC-3 · Pipelines page and editor · branch `codex/orc3-integration` (accepted 2026-10-12, merged `39f945d2`).
 Independent source review accepted final union `7668c94a` / tree `f7e145f2`; eight named-filter groups /

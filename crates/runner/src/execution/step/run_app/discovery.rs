@@ -48,22 +48,23 @@ pub(super) fn find(worktree: &Path, pid: NonZeroU32, app: &str, tool: &str) -> R
   }
 }
 
+/// The user's data folder, which holds the apps' discovery folders and the QA slots.
 #[cfg(windows)]
-fn user_data() -> Option<PathBuf> {
+pub(in crate::execution::step) fn user_data() -> Option<PathBuf> {
   std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
 }
 
 #[cfg(target_os = "macos")]
-fn user_data() -> Option<PathBuf> {
+pub(in crate::execution::step) fn user_data() -> Option<PathBuf> {
   std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Application Support"))
 }
 
 #[cfg(not(any(windows, target_os = "macos")))]
-fn user_data() -> Option<PathBuf> {
+pub(in crate::execution::step) fn user_data() -> Option<PathBuf> {
   None
 }
 
-fn read(path: &Path, pid: NonZeroU32, app: &str) -> Result<AppDiscovery, AppError> {
+pub(super) fn read(path: &Path, pid: NonZeroU32, app: &str) -> Result<AppDiscovery, AppError> {
   let file = fs::File::open(path).map_err(|_| AppError::ReadDiscovery)?;
   let mut bytes = Vec::new();
   file
@@ -106,7 +107,7 @@ fn qa_files(root: &Path, layouts: &[PathBuf]) -> Result<Vec<PathBuf>, AppError> 
 }
 
 /// `path` when it is a regular file reached without any link on the way from its task folder.
-fn qa_file(path: &Path) -> Result<Option<PathBuf>, AppError> {
+pub(super) fn qa_file(path: &Path) -> Result<Option<PathBuf>, AppError> {
   match fs::symlink_metadata(path) {
     Ok(metadata) if metadata.is_file() => {}
     Ok(_) => return Ok(None),

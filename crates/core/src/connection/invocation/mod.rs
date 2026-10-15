@@ -2,6 +2,7 @@
 //! [`ClaudeInvocation`]), the worktree as working directory, the prompt on standard input and a
 //! cleaned environment ([`agent_environment`]) with the variables the project adds.
 
+mod chat;
 mod claude;
 mod codex;
 pub mod mcp;
@@ -13,6 +14,7 @@ use std::{
 };
 
 pub use self::{
+  chat::ClaudeChat,
   claude::{ClaudeInvocation, ClaudeMcp, ClaudeSession, input_line, result_schema},
   codex::{CodexAgentFiles, CodexInvocation, ISOLATION as CODEX_ISOLATION},
   mcp::{ClaudeMcpConfig, CodexMcp, LaunchValue, LeftOut, McpLaunch},

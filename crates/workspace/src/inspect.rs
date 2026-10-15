@@ -36,6 +36,12 @@ macro_rules! markers {
     impl $inspect for crate::instructions::preview::PreviewCatalog {}
     impl $inspect for crate::instructions::preview::PreviewChoice {}
     impl $inspect for crate::messages::Message {}
+    impl $inspect for crate::orchestrator::chat::ChatView {}
+    impl $inspect for crate::orchestrator::chat::History {}
+    impl $inspect for crate::orchestrator::send::Outgoing {}
+    impl $inspect for crate::orchestrator::send::SendError {}
+    impl $inspect for crate::orchestrator::settings::OrchestratorSetup {}
+    impl $inspect for crate::orchestrator::settings::Saving {}
     impl $inspect for crate::pipelines::data::OpenedPipeline {}
     impl $inspect for crate::pipelines::fields::AccessChoice {}
     impl $inspect for crate::pipelines::fields::Executor {}
@@ -103,6 +109,7 @@ macro_rules! markers {
     impl $inspect for crate::tasks::outside::OutsideCounts {}
     impl $inspect for crate::tasks::overview::OverviewTab {}
     impl $inspect for crate::tasks::plan::PlanReview {}
+    impl $inspect for crate::tasks::ready_to_run::ProjectReadiness {}
     impl $inspect for crate::tasks::question::Answering {}
     impl $inspect for crate::tasks::question::Draft {}
     impl $inspect for crate::tasks::run_again::RunAgainCheck {}

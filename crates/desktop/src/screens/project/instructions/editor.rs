@@ -35,11 +35,12 @@ use crate::{
   background,
   drafts::{DraftQueue, SaveAction, SaveJob, save_action},
   instructions::{
-    data::{InstructionEntry, publish_in},
+    data::{InstructionEntry, entry_in},
+    editor::{WriteError, publish_in},
     form::{Events, FormErrors, InstructionForm, Picked, ScopeChoice, Target},
     preview::{EditedInstruction, PreviewChoice},
   },
-  messages::{self, Message},
+  messages::Message,
   screens::project::page::TOPBAR_BUTTON_HEIGHT,
   ui::{button::ActionButton, command_row::Copied, icon::Icon, message_text},
 };
@@ -365,11 +366,16 @@ fn publish_action(ctx: &mut Ctx) -> PublishAction {
     let activity = activity.clone();
     async move {
       let publish = async move {
-        let published = background::run(move || publish_in(&repo_root, id)).await?;
-        published.map(|(number, _)| u64::from(number.get())).map_err(|error| {
-          tracing::error!(%error, "cannot publish the instruction");
-          messages::store_error(&error)
-        })
+        let published = background::run(move || publish_in(&repo_root, &entry_in(&repo_root, id)?)).await?;
+        published
+          .map(|entry| {
+            let number = entry.state.published().expect("a published instruction has a version");
+            u64::from(number.get())
+          })
+          .map_err(|error: WriteError| {
+            tracing::error!(%error, "cannot publish the instruction");
+            error.message()
+          })
       };
       activity.track(spec, publish).await
     }

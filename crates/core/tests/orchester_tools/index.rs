@@ -140,8 +140,8 @@ fn orchester_tools_file_tools_follow_the_step() {
        MCP server: in the run's sources they run at once, elsewhere a person is asked first. The server also has \
        mcp__Orchester__find_symbol, mcp__Orchester__find_references, mcp__Orchester__list_run_processes, \
        mcp__Orchester__stop_run_process, mcp__Orchester__call_run_app, mcp__Orchester__get_task, \
-       mcp__Orchester__save_memory, mcp__Orchester__report_progress. Find apps you started with \
-       mcp__Orchester__list_run_processes and stop them with mcp__Orchester__stop_run_process(pid), instead of \
+       mcp__Orchester__save_memory, mcp__Orchester__report_progress. Find apps you started \
+       with mcp__Orchester__list_run_processes and stop them with mcp__Orchester__stop_run_process(pid), instead of \
        Stop-Process or kill. They run without asking; executables outside this run\'s worktree, the runner and the \
        agent CLI are refused. Stop only apps you started. Drive that app with mcp__Orchester__call_run_app(pid, tool, arguments) instead of running tools/lurq-mcp-client.py. The relay finds discovery itself, keeps its token private and returns PNG paths under .tmp/."
     )

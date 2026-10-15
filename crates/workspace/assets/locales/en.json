@@ -31,6 +31,12 @@
     }
   },
   "overview": {
+    "eyebrow": {
+      "key": "PROJECT KEY {{key}}",
+      "repository": "PROJECT KEY {{key}} · {{repository}}",
+      "branch": "PROJECT KEY {{key}} · {{branch}}",
+      "repositoryBranch": "PROJECT KEY {{key}} · {{repository}} · {{branch}}"
+    },
     "metrics": {
       "agentsWorking": {
         "one": "{{count}} of {{slots}} agent working",
@@ -53,7 +59,7 @@
       "other": "{{active}} active tasks · {{completed}} completed"
     },
     "activity": {
-      "empty": "No runs yet. Runs appear here as they start and finish.",
+      "empty": "No activity yet.",
       "unreadable": {
         "one": "No run to show: the latest run of a task could not be read. The task list marks it.",
         "other": "No run to show: the latest runs of {{count}} tasks could not be read. The task list marks them."
@@ -68,9 +74,103 @@
       "merged": "Run #{{run}} merged",
       "failed": "Run #{{run}} failed",
       "cancelled": "Run #{{run}} was canceled"
+    },
+    "board": {
+      "noRuns": "No runs yet",
+      "usageUnread": "Usage not read yet",
+      "ofBudget": "of {{budget}} daily project budget",
+      "noBudget": "No daily budget for {{project}}",
+      "memoryRow": "Not a task: {{project}} memory",
+      "blocked": {
+        "title": "Blocked · {{task}}"
+      },
+      "unreadable": {
+        "title": "No run to show for {{task}}",
+        "body": "The latest run of {{task}} could not be read. The task list marks it; its worktree is untouched."
+      }
+    },
+    "ready": {
+      "agents": {
+        "label": "Agents",
+        "published": "{{agents}}",
+        "none": "No agent is published yet"
+      },
+      "pipeline": {
+        "label": "Pipeline",
+        "one": "{{pipeline}} v{{version}} published",
+        "several": "{{count}} pipelines published",
+        "none": "No pipeline is published yet"
+      },
+      "connection": {
+        "label": "Connection",
+        "signedIn": "{{connections}} signed in",
+        "none": "No agent connection yet",
+        "notChecked": "{{connection}} has not been checked yet",
+        "signInRequired": "{{connection}} is not signed in",
+        "signInUnknown": "{{connection}} answers, but its sign-in could not be confirmed",
+        "executableMissing": "{{connection}}: its program file does not exist",
+        "notRecognized": "{{connection}}: its program is not the expected CLI",
+        "couldNotRun": "{{connection}} could not run",
+        "keyMissing": "{{connection}}: its key is missing",
+        "keyRejected": "{{connection}}: its key was rejected",
+        "billingProblem": "{{connection}}: the provider refuses it for billing",
+        "endpointUnreachable": "{{connection}}: its endpoint cannot be reached"
+      }
+    },
+    "needs": {
+      "kind": {
+        "approval": "Approval",
+        "question": "Question",
+        "planReview": "Plan review",
+        "decision": "Decision",
+        "input": "Needs input",
+        "stoppedAtLimit": "Stopped at limit",
+        "interrupted": "Interrupted",
+        "readyToMerge": "Ready to merge",
+        "memory": "Memory"
+      },
+      "context": "{{task}} · {{title}}",
+      "contextMemory": "Project memory",
+      "contextUnread": "Its run cannot be read, so its task is not known",
+      "title": {
+        "command": "{{agent}} asks to run {{command}}",
+        "commandMore": "{{agent}} asks to run {{command}} …",
+        "tool": "{{agent}} asks to use {{tool}} on {{server}}",
+        "plan": "Plan v{{version}} from {{agent}} waits for your decision",
+        "question": "{{agent}} asks: {{question}}",
+        "questions": "{{agent}} asks {{count}} questions",
+        "input": "Run #{{run}} needs your input",
+        "stoppedAtLimit": "Run #{{run}} stopped at its limit",
+        "tokenLimit": "Run #{{run}} stopped at its {{limit}}-token limit",
+        "dailyBudget": "Run #{{run}} stopped at the project's daily budget",
+        "interrupted": "Run #{{run}} was interrupted",
+        "readyToMerge": "{{task}} is ready to merge: every step passed",
+        "memoryOne": "1 memory record waits for approval",
+        "memoryOther": "{{count}} memory records wait for approval"
+      },
+      "waiting": "waiting {{time}}",
+      "since": "since {{time}}",
+      "action": {
+        "review": "Review",
+        "answer": "Answer",
+        "reviewPlan": "Review plan",
+        "decide": "Decide",
+        "raiseLimit": "Raise the limit",
+        "reviewMerge": "Review & merge",
+        "openTask": "Open task",
+        "reviewRecords": "Review records"
+      },
+      "unavailable": {
+        "memory": "Reviewing memory records isn't built in this app yet.",
+        "task": "Its task can't be read, so there is nothing to open."
+      }
     }
   },
   "tasks": {
+    "queue": {
+      "notInGroup": "{{task}} is in no reviewed group: hold new starts in the whole project instead.",
+      "personHeld": "A person held these new starts in Tasks: only a person releases them there."
+    },
     "bulk": {
       "reviewChanged": "A selected task’s pipeline changed. Close this review and review the selection again.",
       "hold": {
@@ -82,7 +182,9 @@
         "failure": "Held after a task failed or was canceled. Select the waiting tasks and choose Return to drafts to schedule them again.",
         "startFailed": "Start failed. Check the runner log and retry after resolving the problem.",
         "blocked": "Waiting for blocking tasks to finish. The group goes on with its other tasks.",
-        "canceled": "This task is Canceled, so its group does not start it. The group goes on with its other tasks."
+        "canceled": "This task is Canceled, so its group does not start it. The group goes on with its other tasks.",
+        "queueHeld": "New starts are held in this project. Release them in Tasks to start it; running runs go on.",
+        "paused": "New starts are held in this task's group. Release the group in Tasks to start it; running runs go on."
       },
       "heldLine": {
         "sessionEnded": {
@@ -128,6 +230,14 @@
         "canceled": {
           "one": "{{task}} is Canceled: its group does not start it",
           "other": "{{count}} tasks are Canceled: their group does not start them"
+        },
+        "queueHeld": {
+          "one": "{{task}} waits: new starts are held · Release in Tasks",
+          "other": "{{count}} tasks wait: new starts are held · Release in Tasks"
+        },
+        "paused": {
+          "one": "{{task}} waits: its group's new starts are held · Release in Tasks",
+          "other": "{{count}} tasks wait: their group's new starts are held · Release in Tasks"
         }
       },
       "held": {
@@ -141,7 +251,9 @@
         "preflight": "Held · cannot start yet",
         "startFailed": "Held · start failed",
         "blocked": "Waiting for blocking tasks",
-        "canceled": "Canceled · not started by its group"
+        "canceled": "Canceled · not started by its group",
+        "queueHeld": "Held · new starts held",
+        "paused": "Held · group's new starts held"
       },
       "notDraft": "This task is already queued.",
       "hasRun": "This task already has a run.",
@@ -175,6 +287,7 @@
       "interrupted": "Last checkpoint {{checkpoint}}",
       "interruptedNoCheckpoint": "No checkpoint yet",
       "succeeded": "Every step passed",
+      "nothingToMerge": "Nothing to merge: the run committed nothing",
       "merged": "Merged into {{branch}}",
       "failed": "Run failed",
       "cancelled": "Run canceled"
@@ -284,7 +397,9 @@
         "one": "{{step}} still fails after {{retries}} retry",
         "other": "{{step}} still fails after {{retries}} retries"
       },
-      "brokeTitle": "{{step}} stopped again without a result"
+      "brokeTitle": "{{step}} stopped again without a result",
+      "unverifiedTitle": "{{step}} could not check everything",
+      "unchangedTitle": "{{step}} was not run again: nothing changed"
     },
     "activity": {
       "exit": "exit {{code}}",
@@ -425,7 +540,13 @@
       "notInterrupted": "The run is not interrupted.",
       "notWaiting": "The run does not wait for your decision any more.",
       "failed": "The runner could not do this; its log has the details.",
-      "notAnotherAccount": "Choose a connection of the same CLI that runs on another account and can start now."
+      "notAnotherAccount": "Choose a connection of the same CLI that runs on another account and can start now.",
+      "notAcceptable": {
+        "notJudged": "The revision this result was for is not recorded, so Orchester cannot tell what work accepting would pass. Run the step again instead.",
+        "notBuiltOn": "The step’s work no longer builds on {{revision}}, the revision its result was for. Run the step again instead.",
+        "uncommitted": "Uncommitted changes lie beside the step’s work, and accepting would pass them as the step’s. Run the step again instead.",
+        "worktreeRemoved": "The step’s own worktree was removed while its branch {{branch}} remains, so its work cannot be merged. Run the step again instead."
+      }
     },
     "conversation": {
       "group": {
@@ -642,6 +763,9 @@
     "daysAgo": "{{count}}d ago",
     "seconds": "{{count}} s",
     "minutes": "{{count}} min",
+    "hours": "{{count}} h",
+    "days": "{{count}} d",
+    "underMinute": "under a minute",
     "month": {
       "jan": "Jan",
       "feb": "Feb",
@@ -889,7 +1013,9 @@
       "pipelineRequired": "Choose the pipeline the rule applies in.",
       "stepRequired": "Choose the step the rule applies to.",
       "targetsRequired": "Choose the agents the rule applies to.",
-      "settingsInvalid": "These settings cannot be saved together."
+      "settingsInvalid": "These settings cannot be saved together.",
+      "variableUnavailableAtStart": "{{variable}} has no value when an agent starts, so the rule cannot be published for Agent start. Choose another event or another variable.",
+      "variableUnavailableAtResume": "{{variable}} has no value when an agent resumes, so the rule cannot be published for Agent resume. Choose another event or another variable."
     }
   },
   "skills": {
@@ -973,6 +1099,7 @@
       "alreadyMerged": "The run was merged already.",
       "notLatestRun": "Only the task’s latest run can be merged.",
       "mergeNotRecorded": "The merge ended without a record of it; the task page says where the run stands.",
+      "acceptPersonOnly": "Accepting a step that could not check everything passes it in a person’s place, which a person decides on the task page, or lets automation decide by turning on Let automation answer approvals.",
       "personOnly": "This widens what agents may do, which a person decides in Orchester, or lets automation decide by turning on Let automation change agent permissions in Settings › What automation may do.",
       "autoApproveNeedsAnswers": "Approving automatically answers requests in a person's place, so it also needs Let automation answer approvals, which a person turns on in the window.",
       "mcpProgramAndUrl": "A server is either a program (program) or a remote server (url), not both.",
@@ -1359,6 +1486,34 @@
       "cliMissing": "The CLI isn't on the PATH. Install it, then check again.",
       "folderMissing": "The account's folder {{folder}} no longer exists.",
       "terminal": "The terminal could not be opened. Run the command in a terminal of your own."
+    }
+  },
+  "orchestrator": {
+    "settings": {
+      "connectionGone": "The Orchestrator's connection was removed. Choose another one.",
+      "cliOnly": "The Orchestrator runs on Claude Code connections.",
+      "codexHeldBack": "Not for the Orchestrator yet: Codex's sandbox can't be shown to keep the agent's reads in the project folder, away from your sign-in and other projects' tokens."
+    },
+    "send": {
+      "blank": "Write a message first.",
+      "notReady": "Choose a connection and model in Orchestrator settings and publish them before you send.",
+      "runnerUnavailable": "Not sent · the runner didn't answer",
+      "lost": "The runner's answer was lost · your message is kept",
+      "busy": "The Orchestrator is still answering your last message.",
+      "shuttingDown": "Not sent · the runner is stopping",
+      "failed": "Not sent · the runner refused the message",
+      "toolsUnavailable": "Not sent · the Orchestrator's tools couldn't be served on this computer",
+      "dailyBudgetUsed": "Not sent · today's token budget is used. The Orchestrator's tokens count toward it: wait until tomorrow or raise it in Project settings › Limits."
+    },
+    "stop": {
+      "failed": "The answer couldn't be stopped: the runner didn't answer."
+    },
+    "proposal": {
+      "changed": "{{task}} changed after it was proposed: its details, its pipeline or the pipeline's version are not what you were asked to start. Nothing started; ask the Orchestrator to propose it again."
+    },
+    "tools": {
+      "otherProject": "The Orchestrator acts only in its own project.",
+      "startWaits": "Nothing started yet: starting {{task}} on {{pipeline}} waits for the person, who starts or dismisses it in the conversation. Tell them it is ready to start."
     }
   }
 }

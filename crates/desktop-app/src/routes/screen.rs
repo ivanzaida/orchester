@@ -1,4 +1,4 @@
-use super::{ADD_PROJECT, CONNECTIONS, EDIT, NEW, PROJECT_PATTERN, SETTINGS, TASKS, project_screen_path};
+use super::{ADD_PROJECT, CONNECTIONS, EDIT, NEW, ORCHESTRATOR, PROJECT_PATTERN, SETTINGS, TASKS, project_screen_path};
 
 /// A screen of the window, as the sidebar, the tabs and the app's MCP tools name it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -7,15 +7,19 @@ pub enum Screen {
   AddProject,
   Settings,
   Overview,
+  Orchestrator,
+  OrchestratorSettings,
   Tasks,
   NewTask,
   EditTask,
   Task,
+  MergeQueue,
   PullRequests,
   Usage,
   Pipelines,
   Agents,
   Instructions,
+  Memory,
   Skills,
   Tools,
   Secrets,
@@ -26,20 +30,24 @@ pub enum Screen {
 }
 
 impl Screen {
-  pub const ALL: [Self; 20] = [
+  pub const ALL: [Self; 24] = [
     Self::AllProjects,
     Self::AddProject,
     Self::Settings,
     Self::Overview,
+    Self::Orchestrator,
+    Self::OrchestratorSettings,
     Self::Tasks,
     Self::NewTask,
     Self::EditTask,
     Self::Task,
+    Self::MergeQueue,
     Self::PullRequests,
     Self::Usage,
     Self::Pipelines,
     Self::Agents,
     Self::Instructions,
+    Self::Memory,
     Self::Skills,
     Self::Tools,
     Self::Secrets,
@@ -49,12 +57,20 @@ impl Screen {
     Self::ProjectSettings,
   ];
   /// The project's screens the sidebar lists first (`Nav · Overview` … `Nav · Usage` in `q9mf0k`).
-  pub const PROJECT_MAIN: [Self; 4] = [Self::Overview, Self::Tasks, Self::PullRequests, Self::Usage];
+  pub const PROJECT_MAIN: [Self; 6] = [
+    Self::Overview,
+    Self::Orchestrator,
+    Self::Tasks,
+    Self::MergeQueue,
+    Self::PullRequests,
+    Self::Usage,
+  ];
   /// The sidebar's Configure section (`Section · Configure`).
-  pub const CONFIGURE: [Self; 7] = [
+  pub const CONFIGURE: [Self; 8] = [
     Self::Pipelines,
     Self::Agents,
     Self::Instructions,
+    Self::Memory,
     Self::Skills,
     Self::Tools,
     Self::Secrets,
@@ -68,15 +84,19 @@ impl Screen {
       Self::AddProject => "add_project",
       Self::Settings => "settings",
       Self::Overview => "overview",
+      Self::Orchestrator => "orchestrator",
+      Self::OrchestratorSettings => "orchestrator_settings",
       Self::Tasks => "tasks",
       Self::NewTask => "new_task",
       Self::EditTask => "edit_task",
       Self::Task => "task",
+      Self::MergeQueue => "merge_queue",
       Self::PullRequests => "pull_requests",
       Self::Usage => "usage",
       Self::Pipelines => "pipelines",
       Self::Agents => "agents",
       Self::Instructions => "instructions",
+      Self::Memory => "memory",
       Self::Skills => "skills",
       Self::Tools => "tools",
       Self::Secrets => "secrets",
@@ -98,15 +118,19 @@ impl Screen {
       Self::AddProject => "shell.screens.addProject",
       Self::Settings => "shell.screens.settings",
       Self::Overview => "shell.screens.overview",
+      Self::Orchestrator => "shell.screens.orchestrator",
+      Self::OrchestratorSettings => "shell.screens.orchestratorSettings",
       Self::Tasks => "shell.screens.tasks",
       Self::NewTask => "shell.screens.newTask",
       Self::EditTask => "shell.screens.editTask",
       Self::Task => "shell.screens.task",
+      Self::MergeQueue => "shell.screens.mergeQueue",
       Self::PullRequests => "shell.screens.pullRequests",
       Self::Usage => "shell.screens.usage",
       Self::Pipelines => "shell.screens.pipelines",
       Self::Agents => "shell.screens.agents",
       Self::Instructions => "shell.screens.instructions",
+      Self::Memory => "shell.screens.memory",
       Self::Skills => "shell.screens.skills",
       Self::Tools => "shell.screens.tools",
       Self::Secrets => "shell.screens.secrets",
@@ -129,13 +153,17 @@ impl Screen {
       | Self::EditTask
       | Self::Task
       | Self::NewConnection
-      | Self::EditConnection => None,
+      | Self::EditConnection
+      | Self::OrchestratorSettings => None,
+      Self::Orchestrator => Some(ORCHESTRATOR),
       Self::Tasks => Some(TASKS),
+      Self::MergeQueue => Some("merge-queue"),
       Self::PullRequests => Some("pull-requests"),
       Self::Usage => Some("usage"),
       Self::Pipelines => Some("pipelines"),
       Self::Agents => Some("agents"),
       Self::Instructions => Some("instructions"),
+      Self::Memory => Some("memory"),
       Self::Skills => Some("skills"),
       Self::Tools => Some("tools"),
       Self::Secrets => Some("secrets"),
@@ -158,6 +186,7 @@ impl Screen {
       Self::Task => format!("{tasks}/:key/:tab"),
       Self::NewConnection => format!("{PROJECT_PATTERN}/{CONNECTIONS}/{NEW}"),
       Self::EditConnection => format!("{PROJECT_PATTERN}/{CONNECTIONS}/:connection/{EDIT}"),
+      Self::OrchestratorSettings => format!("{PROJECT_PATTERN}/{ORCHESTRATOR}/{SETTINGS}"),
       screen => project_screen_path(PROJECT_PATTERN, screen),
     }
   }

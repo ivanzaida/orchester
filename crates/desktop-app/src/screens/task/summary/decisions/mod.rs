@@ -10,6 +10,7 @@ mod action;
 mod limit;
 mod plan;
 mod plan_limit;
+mod pointing;
 mod ready;
 mod retries;
 mod stages;
@@ -22,7 +23,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::run::{PauseReason, RunLimit, RunStatus};
-use orchester_workspace::tasks::{detail::StepView, plan::PlanReview};
+use orchester_workspace::tasks::{delivery::Delivery, detail::StepView, plan::PlanReview};
 
 use super::{
   column, layout,
@@ -69,7 +70,9 @@ pub fn decisions(ctx: &mut Ctx, props: &TaskContext) -> Option<Element> {
       let key = format!("decision-retries-{id}-{}", run.run.last_sequence().get());
       Some(ctx.mount_keyed::<retries::RetryDecision>(&key, props.clone()))
     }
-    RunStatus::Succeeded => {
+    // Work git finds merged without Orchester, or a run that committed nothing, waits for no merge: the notice
+    // says which.
+    RunStatus::Succeeded if props.detail.delivery == Delivery::Waiting => {
       Some(ctx.mount_keyed::<ready::ReadyForReview>(&format!("decision-ready-{id}"), props.clone()))
     }
     _ => None,

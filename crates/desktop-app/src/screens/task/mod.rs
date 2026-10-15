@@ -10,7 +10,7 @@
 //! again keeps the task as last read on the page and says why. What the task's ended runs left in the
 //! repository is read beside it, for *Remove worktree* and Run again.
 
-mod cards;
+pub(crate) mod cards;
 mod changes;
 mod context;
 mod conversation;
@@ -33,6 +33,7 @@ use orchester_core::{
 use orchester_workspace::{messages::Message, runner::state::RunnerState};
 
 pub use self::context::TaskContext;
+pub(crate) use self::conversation::{links, step_label};
 use self::{
   changes::{ChangesReads, FileCount, Follow},
   header::{HeaderProps, TaskHeader},

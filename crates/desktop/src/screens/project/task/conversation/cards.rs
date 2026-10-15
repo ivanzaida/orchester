@@ -347,6 +347,7 @@ fn result_meta(ctx: &Ctx, card: &ResultCard) -> Arc<str> {
   let reported = match card.outcome {
     Some(StepOutcome::Done) => "runs.conversation.result.reportedPassed",
     Some(StepOutcome::Failed) => "runs.conversation.result.reportedFailed",
+    Some(StepOutcome::Unverified) => "runs.conversation.result.reportedUnverified",
     Some(StepOutcome::Question) | None => return meta,
   };
   let reported = ctx.t_args(reported, [("agent", &**agent)]);

@@ -868,6 +868,8 @@
         "workingParallel": "Run {{run}} · Attempt {{attempt}} · {{steps}} working",
         "retriesExhausted": "Run {{run}} · Attempt {{attempt}} · Automatic retries exhausted",
         "brokeAgain": "Run {{run}} · Attempt {{attempt}} · {{step}} stopped again without a result",
+        "unverified": "Run {{run}} · Attempt {{attempt}} · {{step}} could not check everything",
+        "unchanged": "Run {{run}} · Attempt {{attempt}} · {{step}} was not run again: nothing changed",
         "unreadable": "Run {{run}} · could not be read",
         "unreadableUnnumbered": "Its latest run could not be read",
         "waitsForAnswer": "Run {{run}} · {{pipeline}} {{version}} · {{step}} · {{agent}} waits for your answer, {{time}}"
@@ -1128,7 +1130,9 @@
         "stepBudget": "Step budget reached",
         "mergeConflict": "Merge conflict",
         "checkpointFailed": "Commit failed",
-        "commandFailed": "Command failed"
+        "commandFailed": "Command failed",
+        "unverified": "Unverified",
+        "unchanged": "Not run again"
       }
     },
     "retryLimit": {
@@ -1150,6 +1154,7 @@
       "resumeValue": "{{step}} · latest checkpoint",
       "retryMeaning": "{{step}} receives what {{failed}} reported. The steps after it run again on the new work.",
       "restartMeaning": "{{step}} starts again as a fresh session from the latest checkpoint.",
+      "runAgainMeaning": "{{step}} runs again on the same revision, as you ask.",
       "allow": "Allow 1 retry & continue",
       "returnTo": "Return the work to",
       "notePlaceholder": "What should change before the next attempt",
@@ -1268,6 +1273,8 @@
         "modelRetrying": "The model request failed; Orchester sends it again in {{seconds}} s (attempt {{attempt}})",
         "thinkingStripped": "The model API refused the agent’s earlier reasoning",
         "thinkingStrippedDetail": "The conversation goes on without it; the agent keeps its messages, tool calls and results.",
+        "waitingForQaSlot": "Waiting for the QA slot",
+        "waitingForQaSlotDetail": "Another run’s QA app is open. This one starts once that app stops.",
         "secretQuestion": "Asked for a secret: {{question}}",
         "secretQuestionDetail": "Orchester never passes secret values through questions, so the question was declined and the agent was told why. Store the value in Secrets and grant it to this run; the agent can then use it without seeing it in the chat.",
         "questionWithoutOptions": "Asked a question without options: {{question}}",
@@ -2050,6 +2057,7 @@
         "meta": "{{took}} · {{tokens}} tokens",
         "reportedPassed": "{{agent}} reported passed",
         "reportedFailed": "{{agent}} reported failed",
+        "reportedUnverified": "{{agent}} reported unverified",
         "withReport": "{{reported}} · {{meta}}",
         "changes": "Changes ↗",
         "summary": "Summary ↗",

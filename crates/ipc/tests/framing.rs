@@ -407,6 +407,7 @@ async fn frames_round_trip_a_forgotten_worktree() {
         worktrees: vec![worktree.clone()],
         branches: Vec::new(),
       }),
+      revision: None,
     },
   };
   writer.write(&request).await.expect("write request");
@@ -449,6 +450,7 @@ async fn frames_round_trip_an_unreadable_forgotten_worktree() {
         worktrees: vec![worktree],
         branches: Vec::new(),
       }),
+      revision: None,
     },
   };
   writer.write(&request).await.expect("write request");

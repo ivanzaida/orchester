@@ -141,9 +141,10 @@ pub(super) fn text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<
       "conversation.problem.stderrLeftOutDetail",
     ),
     RunnerProblem::QuestionRefused { question, reason } => question_refused(ctx, question, *reason),
-    RunnerProblem::ContextCompacted { .. } | RunnerProblem::ModelRetrying { .. } | RunnerProblem::ThinkingStripped => {
-      native_problem(ctx, problem)
-    }
+    RunnerProblem::ContextCompacted { .. }
+    | RunnerProblem::ModelRetrying { .. }
+    | RunnerProblem::ThinkingStripped
+    | RunnerProblem::WaitingForQaSlot => note(ctx, problem),
   }
 }
 
@@ -180,10 +181,14 @@ fn counted(ctx: &Ctx, count: u64, (one, other): (&str, &str), detail: &str) -> (
   (title, Some(ctx.t(detail)))
 }
 
-/// What happened to a native agent's conversation with its model: a compaction, a retried request, its
-/// earlier reasoning dropped.
-fn native_problem(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str>>) {
+/// What happened around the agent that is no failure: a native conversation with its model compacted, a request
+/// retried, its earlier reasoning dropped; or a start that waits for the QA slot.
+fn note(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str>>) {
   match problem {
+    RunnerProblem::WaitingForQaSlot => (
+      ctx.t("conversation.problem.waitingForQaSlot"),
+      Some(ctx.t("conversation.problem.waitingForQaSlotDetail")),
+    ),
     RunnerProblem::ContextCompacted { before, after } => (
       ctx.t("conversation.problem.contextCompacted"),
       Some(ctx.t_args(

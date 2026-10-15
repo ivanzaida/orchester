@@ -305,6 +305,8 @@ impl Worker {
     self.reviewing = self.start_review(watch, &approval, escalation)?;
     if self.reviewing.is_none() {
       watch.invocation.timing.wait_for_person(approval.requested_at);
+      // A person's wait never holds the computer's QA slot.
+      self.qa.release(watch.invocation.id);
       watch.db.save_invocation(&watch.invocation)?;
     }
     self.notifier.send(Event::ToolApprovalChanged {
@@ -404,8 +406,9 @@ impl Worker {
   pub(super) fn end_approval_wait(&self, watch: &mut Watch) -> Result<(), StoreError> {
     let waited = watch.invocation.timing.waiting_since().is_some();
     watch.invocation.timing.resume(Timestamp::now());
-    watch.db.save_invocation(&watch.invocation)?;
     watch.approval = None;
+    self.resume_qa(watch, None);
+    watch.db.save_invocation(&watch.invocation)?;
     if waited {
       self.notifier.send(Event::ToolApprovalChanged {
         run: watch.invocation.run,
@@ -413,6 +416,21 @@ impl Worker {
       });
     }
     Ok(())
+  }
+
+  /// A person's wait ended, or the answer to request `settled` is being given: QA starts keep their apps again
+  /// ([`QaApps::resume`](super::qa_app::QaApps::resume)) once no person wait of the invocation remains — no question
+  /// held in its turn and no tool request other than `settled` that a person, not auto mode's reviewer, decides. So a
+  /// start the answer approves runs as soon as it is delivered.
+  pub(super) fn resume_qa(&self, watch: &Watch, settled: Option<&str>) {
+    let other_request = watch
+      .approval
+      .as_ref()
+      .is_some_and(|(approval, _)| Some(approval.id.as_str()) != settled);
+    let person_waits = watch.question.is_some() || (other_request && self.reviewing.is_none());
+    if !person_waits {
+      self.qa.resume(watch.invocation.id);
+    }
   }
 }
 

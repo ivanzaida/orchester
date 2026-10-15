@@ -202,6 +202,18 @@ pub struct Resolved<'a> {
 }
 
 impl Resolved<'_> {
+  /// Position in the published pipeline, including its non-agent steps.
+  pub fn step_ordinal(&self) -> usize {
+    self
+      .pipeline
+      .2
+      .body()
+      .steps()
+      .iter()
+      .position(|step| step.key == self.step.key)
+      .expect("resolved step belongs to the published pipeline")
+      + 1
+  }
   pub fn pipeline_name(&self) -> &str {
     self.pipeline.1
   }
@@ -251,6 +263,8 @@ impl Resolved<'_> {
     let (profile_id, profile) = self.profile;
     let run = self.run.map(|run| RunContext {
       run,
+      // A preview has no agent's worktree: a resumed agent's run.revision is its latest checkpoint.
+      checked_out: None,
       attempt: run.latest_execution(&self.step.key).and_then(|execution| {
         run
           .attempts()

@@ -1,6 +1,7 @@
 //! Answering on the cards that wait (the seed holds their steps waiting for the person, so they wait without a
 //! runner): a command's card with the request whole and every answer, one answer at a time, and why it did
-//! not go through; a question's options and own answer, *Send answer* and why it waits; the focus, once.
+//! not go through; a question's options and own answer, *Send answer* and why it waits; the focus, once; an MCP
+//! client's answer, refused until the person lets automation answer.
 
 use lurq::app::events::MouseButton;
 use orchester_app::{
@@ -8,7 +9,7 @@ use orchester_app::{
   ui::icon::Icon,
 };
 
-use super::{card_of, click, glyphs, locked, opened, text};
+use super::{card_of, click, glyphs, laid_out, locked, opened, text};
 use crate::support::Window;
 
 /// Types `keys` into the element that has the focus, one key at a time.
@@ -106,14 +107,11 @@ fn card_approval_takes_one_answer_at_a_time_and_says_why_it_did_not_go() {
   assert!(window.tree.get_element_by_id(&deny).is_some());
 }
 
-/// Presses each of `ids` in turn with no frame between them, as a quick double click or Enter held does.
+/// Presses each of `ids` in turn with no frame between them, as a quick double click or Enter held does; the
+/// frames before the first press only wait for every one to be laid out.
 fn press_together(window: &mut Window, ids: &[&str]) {
-  for id in ids {
-    let bounds = window
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|element| element.bounds())
-      .unwrap_or_else(|| panic!("{id} is laid out"));
+  let places: Vec<_> = ids.iter().map(|id| laid_out(window, id)).collect();
+  for bounds in places {
     let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
     window.tree.mouse_move(x, y);
     window.tree.mouse_down(x, y, MouseButton::Left);
@@ -307,4 +305,33 @@ fn card_question_own_answer_set_by_a_tool_counts_and_is_kept() {
     "Under the search box",
     "the own answer is kept"
   );
+}
+
+/// What the card says when input from an MCP client gives an answer while automation may not answer.
+const PERSON_ONLY: &str = "Only a person answers this here: input from an MCP client answers only while you let \
+                           automation answer approvals and change agent permissions.";
+
+#[test]
+fn card_approval_takes_an_mcp_clients_answer_only_as_automation_under_consent() {
+  let (mut window, card) = card_of("Add serde to the webhook payloads", "cards-approval-");
+  let (approve, refused) = (format!("{card}-approve"), format!("{card}-refused"));
+  lurq::app::events::with_synthetic_input(|| click(&mut window, &approve));
+  window.until("why the client's answer was not taken", |window| {
+    window.texts(&refused).is_some()
+  });
+  assert_eq!(text(&mut window, &refused), PERSON_ONLY);
+  let workspace = window.launch.workspace().expect("the session started");
+  workspace
+    .set_automation_answers_approvals(true)
+    .expect("the approvals opt-in");
+  workspace
+    .set_automation_changes_permissions(true)
+    .expect("the permissions opt-in");
+  lurq::app::events::with_synthetic_input(|| click(&mut window, &approve));
+  // No runner here: automation's answer reaches none, and the card says so instead.
+  window.until("the client's answer sent", |window| {
+    window
+      .texts(&refused)
+      .is_some_and(|texts| texts.join(" ") != PERSON_ONLY)
+  });
 }

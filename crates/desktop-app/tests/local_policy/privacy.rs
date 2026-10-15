@@ -110,3 +110,27 @@ fn local_policy_sensitive_recorded_base_branch_is_refused_before_legacy_job_meta
     original.snapshot()
   );
 }
+
+#[test]
+fn local_policy_merge_run_checks_metadata_with_the_sessions_vault() {
+  let fixture = Fixture::new(false);
+  let mut db = ProjectDb::open(fixture.root()).expect("db");
+  db.create_secret(&Secret::new(
+    SecretId::generate(),
+    NewSecret {
+      name: SecretName::new("PRIVATE_FIXTURE").expect("name"),
+      kind: SecretKind::ApiKey,
+      environment: Environment::Development,
+    },
+    Timestamp::now(),
+  ))
+  .expect("private metadata");
+  let mut page = Page::new(fixture);
+  page.ready("local-review-preserve");
+  let client = Client::new(&mut page, false);
+  let args = serde_json::json!({"project":db.project().id().to_string(),"run":page.run().to_string()});
+  // The session's vault knows the secret's value and nothing names it; the system keychain knows no such
+  // secret, so a merge checked against it would be refused as unverifiable.
+  let result = client.call(&mut page, "merge_run", &args);
+  assert_eq!(value(&result)["merge"]["kind"], "fast_forward", "{result}");
+}

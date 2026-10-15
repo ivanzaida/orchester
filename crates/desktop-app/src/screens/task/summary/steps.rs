@@ -28,7 +28,11 @@ use orchester_workspace::{
 use super::{live::Ticker, section_head};
 use crate::{
   theme::{ExtraSpacing, ExtraTypography, IconSize, TaskText},
-  ui::{icon::icon, message::message_text, status::Status},
+  ui::{
+    icon::{Icon, icon},
+    message::message_text,
+    status::Status,
+  },
 };
 
 /// A progress row's height (`AfpbP`).
@@ -132,10 +136,10 @@ impl Component for LiveSteps {
 
 pub(super) fn step_row(ctx: &Ctx, row: &StepRow, divided: bool, now: Timestamp) -> Element {
   let progress = &row.progress;
-  let status = if row.waits_since.is_some() {
-    Status::NeedsInput
-  } else {
-    status(progress.state)
+  let (glyph, color) = match (row.waits_since, unjudged(progress.state)) {
+    (None, Some(glyph)) => (glyph, PaletteColor::Warning),
+    (Some(_), _) => (Status::NeedsInput.icon(), Status::NeedsInput.color()),
+    (None, None) => (status(progress.state).icon(), status(progress.state).color()),
   };
   let line = Row::new()
     .id(format!("task-step-{}", progress.id))
@@ -146,7 +150,7 @@ pub(super) fn step_row(ctx: &Ctx, row: &StepRow, divided: bool, now: Timestamp) 
     .align_items(Alignment::Center)
     .describe("step", progress.id.to_string())
     .describe("state", format!("{:?}", progress.state))
-    .child(icon(status.icon(), IconSize::Md, status.color()))
+    .child(icon(glyph, IconSize::Md, color))
     .child(Text::new(&format!("{:02}", row.number)).variant(ExtraTypography::MonoKey.role()))
     .child(Text::new(&progress.step).variant(TaskText::StepName.role()).nowrap())
     .with_children(progress.agent.as_deref().map(|agent| {
@@ -198,12 +202,23 @@ const fn status(state: ProgressState) -> Status {
   }
 }
 
+/// The icon of a step that ended without a verdict on its work, for the person to decide: it could not check
+/// everything (`circle-dashed`) or was not run again on an unchanged revision (`hand`), as the notice says it.
+const fn unjudged(state: ProgressState) -> Option<Icon> {
+  match state {
+    ProgressState::Failed(Some(StepFailure::Unverified)) => Some(Icon::CircleDashed),
+    ProgressState::Failed(Some(StepFailure::Unchanged)) => Some(Icon::Hand),
+    _ => None,
+  }
+}
+
 /// A step at work reads in `text_primary`, one that has not started in `text_muted`, a failed one in
-/// `danger`.
+/// `danger`, one that ended without a verdict ([`unjudged`]) in `warning`.
 const fn detail_color(state: ProgressState) -> PaletteColor {
   match state {
     ProgressState::Working => PaletteColor::TextPrimary,
     ProgressState::Waiting => PaletteColor::TextMuted,
+    ProgressState::Failed(Some(StepFailure::Unverified | StepFailure::Unchanged)) => PaletteColor::Warning,
     ProgressState::Failed(_) => PaletteColor::Danger,
     _ => PaletteColor::TextSecondary,
   }
@@ -268,5 +283,7 @@ const fn failure_key(failure: Option<StepFailure>) -> &'static str {
     Some(StepFailure::MergeConflict) => "summary.steps.failure.mergeConflict",
     Some(StepFailure::CheckpointFailed) => "summary.steps.failure.checkpointFailed",
     Some(StepFailure::CommandFailed) => "summary.steps.failure.commandFailed",
+    Some(StepFailure::Unverified) => "summary.steps.failure.unverified",
+    Some(StepFailure::Unchanged) => "summary.steps.failure.unchanged",
   }
 }

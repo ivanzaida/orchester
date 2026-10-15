@@ -20,7 +20,7 @@ pub(super) fn input(
   (id, label): (&str, &str),
   value: Signal<String>,
   policy: &EditorPolicy,
-  line_box: f32,
+  box_height: f32,
 ) -> Element {
   if policy.sensitive(&value.get()) {
     return ctx.mount_keyed::<SensitiveField>(
@@ -32,7 +32,7 @@ pub(super) fn input(
     );
   }
   FieldInput::new(id, ctx.t(label), value)
-    .line_box(line_box)
+    .box_height(box_height)
     .strong_stroke()
     .render(ctx)
 }

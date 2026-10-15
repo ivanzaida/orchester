@@ -256,6 +256,8 @@ impl Worker {
       self.notifier.send(Event::ToolApprovalChanged { run, task: self.task });
     }
     let item = awaiting.item().to_owned();
+    // The answer settled: a QA start it lets run keeps its app, unless another wait for a person remains.
+    self.resume_qa(watch, Some(&approval.id));
     if let Err(error) = self.deliver(watch, awaiting, &settled).await {
       watch.db.interrupt_tool_approvals(run, watch.invocation.id)?;
       self.end_approval_wait(watch)?;

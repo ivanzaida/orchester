@@ -13,6 +13,7 @@
 //! address and where the token is kept, never the token; only a person's click in Settings shows or copies it.
 
 mod bind;
+pub mod chat;
 mod clients;
 pub mod connect;
 mod control;

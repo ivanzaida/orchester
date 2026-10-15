@@ -1,0 +1,279 @@
+{
+  "orchestrator": {
+    "title": "Orchestrator",
+    "dot": "·",
+    "dash": "—",
+    "date": "{{month}} {{day}}",
+    "answerMeta": "{{model}} · {{time}}",
+    "newTitle": "New conversation",
+    "history": "History",
+    "manageContext": "Manage context",
+    "manageContextUnavailable": "Choosing what each reply gets isn't built yet: each reply gets the Orchestrator's rules and this conversation.",
+    "newConversation": "New conversation",
+    "newConversationHere": "This is a new conversation.",
+    "coordinator": {
+      "model": "{{connection}} / {{model}}",
+      "notSet": "Not set up",
+      "settings": "Settings"
+    },
+    "meta": {
+      "unsaved": "Not saved until you send",
+      "startedToday": "Project conversation · started {{time}}",
+      "started": "Project conversation · started {{date}}"
+    },
+    "start": {
+      "title": "What should we plan?",
+      "description": "Discuss an idea, break work into tasks, check on the queue or ask how things are going. A task the Orchestrator creates stays a draft until a run starts."
+    },
+    "composer": {
+      "placeholderNew": "Describe what you want to build, or ask about this project…",
+      "placeholder": "Message Orchestrator…",
+      "loading": "Loading…",
+      "recipient": "To: Orchestrator",
+      "permissions": "Acts with your project permissions",
+      "permissionsHint": "Every action it takes is checked like the same action in the app, with your permissions in this project.",
+      "attach": "Attaching files isn't built yet.",
+      "send": "Send",
+      "sendEmpty": "Write a message first.",
+      "notReady": "Choose and publish what the Orchestrator runs on in its settings first.",
+      "thinking": "The Orchestrator answers one message at a time.",
+      "lines": "Enter adds a line ·",
+      "sends": "sends"
+    },
+    "keys": {
+      "ctrlEnter": "Ctrl Enter",
+      "cmdEnter": "⌘ Enter",
+      "esc": "Esc"
+    },
+    "context": {
+      "line": "Each reply gets the Orchestrator's rules and this conversation"
+    },
+    "suggestions": {
+      "eyebrow": "SUGGESTIONS",
+      "plan": "Plan work from a scope file: tasks with briefs and acceptance criteria.",
+      "running": "What's running, what's waiting and what's blocked right now?",
+      "order": "Suggest an order for the Todo tasks and which can run in parallel.",
+      "idea": "Talk through an idea before it becomes a task.",
+      "note": "A suggestion fills the prompt so you can edit it. Nothing is sent until you press Send."
+    },
+    "footer": "Conversations stay in History for {{project}} · each task keeps its own Conversation",
+    "delivery": {
+      "sending": "Sending…",
+      "delivered": "Delivered · {{time}}"
+    },
+    "thinking": "Orchestrator is thinking",
+    "stop": "Stop response",
+    "stopNote": "Stop response ends this answer only. Tasks, runs and the queue are not touched.",
+    "stopFailed": "The answer couldn't be stopped: {{reason}}",
+    "stopped": {
+      "nothing": "Response stopped by you · {{time}} · nothing was created or changed",
+      "acted": "Response stopped by you · {{time}} · what it did before stays"
+    },
+    "interrupted": "The answer was cut short when Orchester or its runner closed",
+    "askAgain": "Ask again",
+    "askAgainNote": "Sends your last message once more.",
+    "failure": {
+      "unreachable": "Orchestrator can't reach {{connection}}",
+      "unreachableUnknown": "The Orchestrator couldn't start",
+      "notSignedIn": "The connection's CLI isn't signed in on this computer. Your message and this conversation are kept; nothing else changed.",
+      "cannotStart": "The connection's CLI couldn't be started; the runner's log says why. Your message and this conversation are kept; nothing else changed.",
+      "connectionGone": "The Orchestrator's connection is gone or can't run it. Choose another in Orchestrator settings; this conversation is kept.",
+      "accountNone": "The connection has no account to sign in with; choose one in Connections. Your message and this conversation are kept.",
+      "accountFolderMissing": "The account's folder {{folder}} is gone; choose another account in Connections. Your message and this conversation are kept.",
+      "accountUnsupported": "This connection's account can't be used on this computer yet; choose Default in Connections. Your message and this conversation are kept.",
+      "failed": "The answer failed",
+      "failedBody": "{{reason}} · Your message and this conversation are kept.",
+      "retry": "Retry",
+      "openConnections": "Open Connections",
+      "earlier": "This answer failed: {{reason}}",
+      "earlierNotSignedIn": "This answer failed: the CLI wasn't signed in",
+      "earlierUnreachable": "This answer failed: the Orchestrator couldn't start",
+      "timeLimit": "It ran longer than {{minutes}} minutes, the most one answer may take, and was ended. What it did until then stays; ask again in smaller parts.",
+      "earlierTimeLimit": "This answer was ended after {{minutes}} minutes"
+    },
+    "sendProblem": {
+      "body": "Your draft is kept. Retry sends it once; it is never stored twice.",
+      "retry": "Retry"
+    },
+    "setupFailed": "What the Orchestrator runs on couldn't be read",
+    "notReady": {
+      "title": "Choose what the Orchestrator runs on",
+      "body": "Pick a Claude Code connection and a model in Orchestrator settings and publish them. Conversations stay readable; new messages can't be sent until then.",
+      "openSettings": "Open settings"
+    },
+    "loading": {
+      "title": "Loading conversation…",
+      "note": "Messages load together. Suggestions don't show while loading.",
+      "meta": "Opening from History"
+    },
+    "loadFailed": "Couldn't read the conversation",
+    "notFound": {
+      "title": "This conversation isn't in {{project}}",
+      "body": "It may have been removed with its project data. Start a new conversation or open one from History."
+    },
+    "action": {
+      "createTask": {
+        "done": "Created {{task}} as a draft",
+        "refused": "Create task · not done",
+        "effect": "It is in Tasks as a draft. Nothing is queued and no agent has started."
+      },
+      "updateTask": {
+        "done": "Changed {{task}}",
+        "refused": "Change {{task}} · not done",
+        "effect": "Its details changed as Edit task changes them."
+      },
+      "runTask": {
+        "done": "Started {{task}}",
+        "refused": "Start {{task}} · not done",
+        "effect": "It runs as Start in Tasks runs it, after the queue's checks."
+      },
+      "pauseRun": {
+        "done": "Paused a run",
+        "refused": "Pause a run · not done",
+        "effect": "The run pauses at its agents' next checkpoint."
+      },
+      "resumeRun": {
+        "done": "Resumed a run",
+        "refused": "Resume a run · not done",
+        "effect": "The run goes on from where it stopped."
+      },
+      "holdQueue": {
+        "done": "New starts held",
+        "refused": "Hold new starts · not done",
+        "effect": "Running runs go on; queued tasks wait until you release them in Tasks."
+      },
+      "releaseQueue": {
+        "done": "New starts released",
+        "refused": "Release new starts · not done",
+        "effect": "Queued tasks start again as their groups allow."
+      },
+      "other": {
+        "done": "Used {{tool}}",
+        "refused": "{{tool}} · not done"
+      },
+      "confirmed": "Confirmed · {{time}}",
+      "refusedState": "Refused · {{time}}",
+      "checked": "Checked like the same action in the app, with your permissions in {{project}}.",
+      "openTask": "Open {{task}}"
+    },
+    "newSession": {
+      "connection": "The Orchestrator runs on another connection now: this answer starts a new session and doesn't remember the earlier messages.",
+      "account": "The Orchestrator's connection is on another account now: this answer starts a new session and doesn't remember the earlier messages."
+    },
+    "held": {
+      "projectTitle": "New starts held in {{project}}",
+      "projectEffect": "No waiting task in {{project}} starts until you resume. Running tasks keep running.",
+      "groupTitle": "New starts held · the group of {{task}}",
+      "groupEffect": "No waiting task in this group starts until you resume. Running tasks keep running.",
+      "waiting": {
+        "one": "1 waiting task held",
+        "other": "{{count}} waiting tasks held"
+      },
+      "checked": "Same action as Pause scheduling in the queue, checked against your permissions in {{project}}.",
+      "resume": "Resume new starts",
+      "openQueue": "Open queue"
+    },
+    "proposal": {
+      "title": "Start {{task}} on {{pipeline}}?",
+      "waits": "Waits for you · {{time}}",
+      "effect": "Nothing has started. The Orchestrator asked to start this run; it starts only when you choose Start, after the queue's checks.",
+      "start": "Start",
+      "dismiss": "Dismiss",
+      "briefCut": "This is only the opening of the brief: open {{task}} to read all of it before you start.",
+      "showCriteria": "Show {{count}} acceptance criteria",
+      "hideCriteria": "Hide {{count}} acceptance criteria",
+      "criterion": "• {{criterion}}",
+      "personOnly": "Only a person starts a run the Orchestrator proposed: input from automation is refused here.",
+      "dismissedTitle": "Start {{task}} · dismissed",
+      "dismissedState": "Dismissed · {{time}}",
+      "dismissedEffect": "You dismissed it. Nothing started."
+    },
+    "historyPanel": {
+      "title": "History",
+      "close": "Close History",
+      "search": "Search conversations in {{project}}",
+      "today": "TODAY",
+      "yesterday": "YESTERDAY",
+      "earlier": "EARLIER",
+      "messages": {
+        "one": "1 message",
+        "other": "{{count}} messages"
+      },
+      "current": {
+        "one": "This conversation · 1 message",
+        "other": "This conversation · {{count}} messages"
+      },
+      "empty": "No conversation yet. Your first message starts one.",
+      "noMatch": "No conversation's title has these words.",
+      "note": "Only conversations in {{project}}. Opening one keeps your draft; Esc closes History."
+    },
+    "settings": {
+      "description": "Plans work with you, drafts tasks and coordinates {{project}}'s queue.",
+      "publish": {
+        "published": "Published v{{version}}",
+        "notPublished": "Not published",
+        "unsaved": "Unsaved changes · {{published}}",
+        "drafted": "Draft saved · {{published}}",
+        "publishAs": "Publish v{{version}}",
+        "saveDraft": "Save draft",
+        "noChanges": "No changes since v{{version}}.",
+        "saveFirst": "Save the draft before publishing.",
+        "firstNote": "The project chat can send once v1 is published.",
+        "needsConnection": "Publishing needs a connection that can run the Orchestrator.",
+        "needsModel": "Publishing needs a model: choose one, or type an id the connection accepts."
+      },
+      "loading": "Reading the Orchestrator's settings…",
+      "summary": {
+        "runsOn": "{{connection}} · {{model}}",
+        "noConnection": "No connection",
+        "actions": "Drafts tasks · starts runs",
+        "reads": "Reads the repository",
+        "checked": "Checked like the UI"
+      },
+      "tabs": {
+        "profile": "Profile",
+        "actions": "Actions",
+        "context": "Context",
+        "conversations": "Conversations",
+        "notBuilt": "These settings aren't built yet: the Orchestrator acts with the project's permissions, reads the repository and keeps every conversation."
+      },
+      "section": "Connection & model",
+      "connection": {
+        "label": "Project connection",
+        "description": "The agent CLI and sign-in the Orchestrator runs on.",
+        "none": "No usable connection",
+        "why": "{{connection}}: {{reason}}"
+      },
+      "model": {
+        "label": "Model",
+        "description": "From the connection's list, or Other model id… for one that isn't listed.",
+        "other": "Other model id…",
+        "otherHint": "Enter an id the connection accepts",
+        "customLabel": "Model id",
+        "invalid": "A model id has no spaces and is at most {{max}} characters long.",
+        "notListed": "Not in {{connection}}'s model list"
+      },
+      "effort": {
+        "label": "Reasoning effort",
+        "description": "CLI default leaves it to the connection's own setting.",
+        "default": "CLI default",
+        "unchecked": "Not checked for this model: the connection lists no efforts for it, so these are its other models'.",
+        "minimal": "Minimal",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "xhigh": "Extra high",
+        "max": "Max"
+      },
+      "chooseConnectionFirst": "Choose a connection first.",
+      "note": "A reply already under way finishes on the version it started with; a published change applies from the next reply.",
+      "limits": "Its tokens count toward {{project}}'s daily budget; it takes no agent slot. One answer ends after {{turns}} steps or {{minutes}} minutes.",
+      "noConnection": {
+        "title": "No connection in {{project}} can run the Orchestrator",
+        "body": "It needs an agent connection that answers and is signed in. Conversations stay readable; new messages can't be sent until one works.",
+        "open": "Open connections"
+      },
+      "saveFailed": "Not saved: {{reason}}"
+    }
+  }
+}

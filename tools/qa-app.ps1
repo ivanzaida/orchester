@@ -1,7 +1,8 @@
 # Starts orchester-app on a seeded QA project, isolated from the user's data, for QA and design
 # verification (.claude/skills/design-verification/SKILL.md):
 #
-#   powershell -File tools/qa-app.ps1 -Name <task> -Scenario <scenario> [-FakeAgents] [-NoRunner] [-WindowX <signed> -WindowY <signed>]
+#   powershell -File tools/qa-app.ps1 -Name <task> -Scenario <scenario> [-FakeAgents] [-NoRunner]
+#       [-WindowX <x> -WindowY <y>]
 #
 # 1. Builds orchester-app, the seed example and orchester-runner (-FakeAgents: the runner with its
 #    `test-agent` binaries, orchester-fake-codex among them; -NoRunner: no runner).
@@ -13,6 +14,10 @@
 #    to <pid>.json there; never the installed app's fixed address or stored token), and prints its pid,
 #    that folder and its MCP discovery file. Stop it by that pid when done.
 #
+# -WindowX and -WindowY, always together, open the window with its top-left corner there, in physical
+# pixels of the virtual desktop (negative for a display left of or above the main one), instead of where
+# the system puts it: ORCHESTER_APP_WINDOW_POSITION=<x>,<y> for the QA app only, nothing stored.
+#
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
 # only cargo's target folder: never the user's install (E:\projects\orchester), the user's discovery
@@ -22,7 +27,7 @@ param(
     # The seed's scenarios (crates/desktop-app/examples/seed/kontur/scenarios/mod.rs), checked before
     # anything under .tmp/qa/<task>/ is replaced.
     [Parameter(Mandatory = $true)]
-    [ValidateSet("empty", "tasks", "task-states", "conversation", "changes", "cards", "decisions", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts")]
+    [ValidateSet("empty", "tasks", "tasks-memory", "task-states", "conversation", "changes", "cards", "decisions", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts")]
     [string]$Scenario,
     [switch]$FakeAgents,
     [switch]$NoRunner,
@@ -31,15 +36,18 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
-# Signed physical coordinates are passed before window creation; neither means normal OS placement.
-if ($PSBoundParameters.ContainsKey('WindowX') -ne $PSBoundParameters.ContainsKey('WindowY')) {
-    throw "-WindowX and -WindowY must be supplied together"
-}
 if ($FakeAgents -and $NoRunner) {
     throw "-FakeAgents runs agents through the runner; it cannot go with -NoRunner"
 }
 if ($Name -notmatch '^[a-z0-9][a-z0-9-]*$') {
     throw "-Name is a short kebab-case task name (a-z, 0-9, -), not '$Name'"
+}
+if ($PSBoundParameters.ContainsKey("WindowX") -ne $PSBoundParameters.ContainsKey("WindowY")) {
+    throw "-WindowX and -WindowY go together: the window's top-left corner needs both"
+}
+# The app's ORCHESTER_APP_WINDOW_POSITION; $null lets the system place the window.
+$windowPosition = if ($PSBoundParameters.ContainsKey("WindowX")) {
+    [string]::Format([System.Globalization.CultureInfo]::InvariantCulture, "{0},{1}", $WindowX, $WindowY)
 }
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
@@ -119,18 +127,12 @@ if ($FakeAgents) { $seedArgs += @("--fake-codex", (Join-Path $bin "orchester-fak
 & (Join-Path $built "examples/seed$exe") @seedArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+# This script's own environment, which only the app (and its launcher) started below inherit; nothing is
+# stored. A position the caller's environment holds is dropped unless -WindowX/-WindowY ask for one.
 $env:ORCHESTER_APP_MCP_START_WITHOUT_FOCUS = "1"
 $env:ORCHESTER_APP_MCP_WINDOW_CONTROL = "on"
 $env:ORCHESTER_APP_MCP_DISCOVERY = $mcp
-if ($PSBoundParameters.ContainsKey('WindowX')) {
-    $env:ORCHESTER_APP_MCP_WINDOW_X = $WindowX.ToString([System.Globalization.CultureInfo]::InvariantCulture)
-    $env:ORCHESTER_APP_MCP_WINDOW_Y = $WindowY.ToString([System.Globalization.CultureInfo]::InvariantCulture)
-}
-else {
-    # Do not inherit stale coordinates from an earlier QA invocation.
-    $env:ORCHESTER_APP_MCP_WINDOW_X = $null
-    $env:ORCHESTER_APP_MCP_WINDOW_Y = $null
-}
+$env:ORCHESTER_APP_WINDOW_POSITION = $windowPosition
 $appProgram = Join-Path $bin "orchester-app$exe"
 $appLog = Join-Path $qa "app.log"
 $appErrors = Join-Path $qa "app.err.log"

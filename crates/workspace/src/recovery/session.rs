@@ -4,7 +4,10 @@
 //! its own; a project's runs not continued stay interrupted and each is continued later from its task
 //! page. After "Wait for agents to save" nothing is offered: those runs are paused.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+  collections::{BTreeMap, BTreeSet},
+  sync::Arc,
+};
 
 use orchester_core::{
   id::{ProjectId, RunId},
@@ -65,13 +68,14 @@ pub struct NotContinued {
   pub reason: Message,
 }
 
-/// The recovery's state: what was read, and each project's decision.
+/// The recovery's state: what was read, each project's decision, and the projects whose runs' list is open.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RecoveryState {
   pub reading: Reading,
   /// When the previous session ended this way, as the notice says.
   pub previous: SessionEnd,
   decisions: Arc<BTreeMap<ProjectId, Decision>>,
+  reviewing: Arc<BTreeSet<ProjectId>>,
 }
 
 impl RecoveryState {
@@ -97,6 +101,21 @@ impl RecoveryState {
 
   pub fn decision(&self, project: ProjectId) -> Decision {
     self.decisions.get(&project).cloned().unwrap_or(Decision::Undecided)
+  }
+
+  /// How many of `project`'s interrupted runs wait for the person to continue them or not; the status bar
+  /// keeps saying so (`Activity · pinned` `uZTnL`) wherever the Overview is scrolled.
+  pub fn undecided(&self, project: ProjectId) -> usize {
+    if self.decision(project) == Decision::Undecided {
+      self.runs_of(project).len()
+    } else {
+      0
+    }
+  }
+
+  /// Whether `project`'s runs' list is open on its Overview (*Review runs*), rather than the compact notice.
+  pub fn reviewing(&self, project: ProjectId) -> bool {
+    self.reviewing.contains(&project)
   }
 }
 
@@ -134,6 +153,7 @@ impl Recovery {
         reading: if reads { Reading::Reading } else { Reading::Nothing },
         previous,
         decisions: Arc::default(),
+        reviewing: Arc::default(),
       }),
       runtime: runtime.clone(),
       workspace: workspace.clone(),
@@ -189,6 +209,19 @@ impl Recovery {
       );
       pending::decide(&recovery.workspace, project, Timestamp::now());
       recovery.decide(project, |_| Some(Decision::Continued(continuation)));
+    });
+  }
+
+  /// *Review runs*, from the notice or the status bar, opens `project`'s runs' list (`open`) or *Hide* closes
+  /// it again.
+  pub fn review(&self, project: ProjectId, open: bool) {
+    self.state.send_if_modified(|state| {
+      let reviewing = Arc::make_mut(&mut state.reviewing);
+      if open {
+        reviewing.insert(project)
+      } else {
+        reviewing.remove(&project)
+      }
     });
   }
 

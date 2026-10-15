@@ -337,6 +337,8 @@
       "thinkingStripped": "The model API refused the agent’s earlier reasoning",
       "thinkingStrippedDetail": "The conversation goes on without it; the agent keeps its messages, tool calls and results.",
       "told": "{{agent}} was told: “{{message}}”",
+      "waitingForQaSlot": "Waiting for the QA slot",
+      "waitingForQaSlotDetail": "Another run’s QA app is open. This one starts once that app stops.",
       "unavailableVariable": "The prompt uses {{variable}}, which has no value in this run"
     },
     "provider": {
@@ -354,10 +356,12 @@
       "passed": "{{step}} passed",
       "reportedFailed": "{{agent}} reported failed",
       "reportedPassed": "{{agent}} reported passed",
+      "reportedUnverified": "{{agent}} reported unverified",
       "step": "{{step}} · {{agent}}",
       "summary": "Summary ↗",
       "toolMeta": "{{took}} · tool step, no tokens",
       "toolStep": "{{step}} · Tool",
+      "unverified": "{{step}} could not check everything",
       "withReport": "{{reported}} · {{meta}}"
     },
     "separator": " · ",

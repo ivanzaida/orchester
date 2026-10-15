@@ -25,7 +25,8 @@ use orchester_desktop::{
   agents::data::VersionState,
   drafts::save_draft_in,
   instructions::{
-    data::{NewInstruction, ProjectInstructions, create_in, publish_in},
+    data::{NewInstruction, ProjectInstructions, create_in, entry_in},
+    editor::publish_in,
     form::{Events, InstructionForm, ScopeChoice, Target},
     preview::{EditedInstruction, PreviewCatalog, PreviewChoice, PreviewProblem},
   },
@@ -170,7 +171,7 @@ fn instructions_are_created_as_empty_drafts_saved_and_published() {
   assert!(entry.body.text().is_blank());
   assert_eq!(&*entry.slug, "git-conventions");
   // A blank rule is not published.
-  assert!(publish_in(root, id).is_err());
+  assert!(publish_in(root, &entry_in(root, id).expect("read")).is_err());
 
   let body = InstructionForm {
     text: "Name commits after {{task.id}}.",
@@ -182,7 +183,8 @@ fn instructions_are_created_as_empty_drafts_saved_and_published() {
   .expect("valid form");
   let draft = orchester_core::resource::Draft::new(body.clone(), None, at(10));
   save_draft_in(root, id, &draft).expect("save");
-  let (version, _) = publish_in(root, id).expect("publish");
+  let published = publish_in(root, &entry_in(root, id).expect("read")).expect("publish");
+  let version = published.state.published().expect("published");
   assert_eq!(version.get(), 1);
   let loaded = ProjectInstructions::load_in(root).expect("load");
   let entry = loaded.entry(id).expect("listed");

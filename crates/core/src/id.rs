@@ -134,3 +134,11 @@ define_id!(
   /// One native agent conversation: the items of one step execution, shared by its invocations.
   ConversationId
 );
+define_id!(
+  /// One conversation of a project's Orchestrator chat (`crate::orchestrator`).
+  ChatId
+);
+define_id!(
+  /// One message a person wrote in the Orchestrator chat, given when it is first sent so a retry stores it once.
+  ChatMessageId
+);

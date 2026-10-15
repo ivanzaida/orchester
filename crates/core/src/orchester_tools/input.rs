@@ -7,7 +7,8 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::{
-  AppCall, FileCall, FindSymbol, OrchesterTool, ProcessCall, SkillCall, StepTools, ToolCallError, files::term,
+  AppCall, FileCall, FindSymbol, OrchesterTool, ProcessCall, QaAppStart, SkillCall, StepTools, ToolCallError,
+  files::term,
 };
 use crate::{
   memory::{Importance, MemoryContent, MemoryKey, MemoryKind, MemoryNote, NoteScope, Tags},
@@ -74,6 +75,7 @@ pub enum ToolCall {
   Skill(SkillCall),
   Processes(ProcessCall),
   App(AppCall),
+  StartQaApp(QaAppStart),
   GetTask,
   SaveMemory(Box<MemoryNote>),
   ReportProgress(StepProgress),
@@ -181,6 +183,7 @@ impl ToolCall {
       Self::Processes(ProcessCall::List) => OrchesterTool::ListRunProcesses,
       Self::Processes(ProcessCall::Stop { .. }) => OrchesterTool::StopRunProcess,
       Self::App(_) => OrchesterTool::CallRunApp,
+      Self::StartQaApp(_) => OrchesterTool::StartQaApp,
       Self::SaveMemory(_) => OrchesterTool::SaveMemory,
       Self::ReportProgress(_) => OrchesterTool::ReportProgress,
     }
@@ -200,6 +203,7 @@ fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
       ToolCall::Processes(ProcessCall::Stop { pid: input.pid })
     }
     OrchesterTool::CallRunApp => ToolCall::App(AppCall::parse(arguments)?),
+    OrchesterTool::StartQaApp => ToolCall::StartQaApp(QaAppStart::parse(arguments)?),
     OrchesterTool::FindSymbol => {
       let query: FindSymbol = serde_json::from_value(arguments).map_err(invalid)?;
       if query.name().trim().is_empty() {

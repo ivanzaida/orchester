@@ -16,10 +16,16 @@
 
 use std::path::{Path, PathBuf};
 
-use orchester_core::{id::StepExecutionId, run::Run};
+use orchester_core::{
+  id::StepExecutionId,
+  run::{AcceptRefusal, Run, StepExecution},
+};
 
 use super::checkpoint;
-use crate::worktree::{WorktreeError, Worktrees};
+use crate::{
+  git::Git,
+  worktree::{WorktreeError, Worktrees},
+};
 
 /// How an execution starts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -93,6 +99,63 @@ impl Workspace {
       branch,
       owner: execution,
     })
+  }
+
+  /// Where the work of `accepted`, an execution a person accepted, is — its own worktree if it had one, which is
+  /// merged when the step passes, else the run's, where its work was committed already — when that work is what its
+  /// result was for: it builds on the revision the execution was judged on (later commits on top of it pass with it),
+  /// and nothing uncommitted lies beside it that passing would commit as the step's. Why not, otherwise; the outer
+  /// error when git or the worktrees cannot be read.
+  pub(super) fn accepted_work(
+    root: &Path,
+    (run, run_worktree): (&Run, &Path),
+    accepted: &StepExecution,
+  ) -> Result<Result<Self, AcceptRefusal>, WorktreeError> {
+    let Some(judged) = accepted.judged() else {
+      return Ok(Err(AcceptRefusal::NotJudged));
+    };
+    let workspace = match Self::of_accepted(root, run, run_worktree, accepted.id())? {
+      Ok(workspace) => workspace,
+      Err(refusal) => return Ok(Err(refusal)),
+    };
+    let git = Git::new(workspace.path());
+    if !git.answer(&["merge-base", "--is-ancestor", judged.as_str(), "HEAD"])? {
+      return Ok(Err(AcceptRefusal::NotBuiltOn {
+        revision: judged.as_str().chars().take(12).collect(),
+      }));
+    }
+    if !git
+      .stdout(&["status", "--porcelain", "--untracked-files=all"])?
+      .trim()
+      .is_empty()
+    {
+      return Ok(Err(AcceptRefusal::Uncommitted));
+    }
+    Ok(Ok(workspace))
+  }
+
+  /// Where the work of `accepted`, an execution a person accepted, is: its own worktree if it had one, which is
+  /// merged when the step passes; else the run's, where its work was committed already. Refused when it had one that
+  /// was removed while its branch remains: the run's worktree does not hold that work.
+  fn of_accepted(
+    root: &Path,
+    run: &Run,
+    run_worktree: &Path,
+    accepted: StepExecutionId,
+  ) -> Result<Result<Self, AcceptRefusal>, WorktreeError> {
+    let path = Worktrees::new(root)?.step_path(accepted);
+    let branch = branch(run, accepted);
+    if path.is_dir() {
+      return Ok(Ok(Self::Own {
+        path,
+        branch,
+        owner: accepted,
+      }));
+    }
+    if Git::new(root).answer(&["show-ref", "--verify", "--quiet", &format!("refs/heads/{branch}")])? {
+      return Ok(Err(AcceptRefusal::WorktreeRemoved { branch }));
+    }
+    Ok(Ok(Self::Run(run_worktree.to_path_buf())))
   }
 }
 

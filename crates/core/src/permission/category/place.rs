@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::{CommandCategory, CommandScope, part::CommandPart, paths::Place};
+use super::{CommandCategory, CommandScope, part::CommandPart, paths::Place, toolchains};
 
 /// The folders a part may run in; `None` when one cannot be told.
 pub(super) type Folders = Option<Vec<PathBuf>>;
@@ -75,7 +75,8 @@ impl<'a> Placing<'a> {
   }
 
   /// `word`, a file the part reads or a word that may name one: a credential location is noted, a
-  /// folder outside the worktree kept.
+  /// folder outside the worktree kept. A plain reader reads the dependency sources of a toolchain as it reads
+  /// the worktree ([`toolchains::reads_sources`]); any other part there reaches outside.
   pub(super) fn read(&self, part: &mut CommandPart, word: &str) {
     if word.is_empty() || word == "-" {
       return;
@@ -88,7 +89,9 @@ impl<'a> Placing<'a> {
       if place == Place::Secret && part.secret_word.is_none() {
         part.secret_word = Some(word.to_owned());
       }
-      note(part, &path, place);
+      if !(place == Place::Sources && toolchains::reads_sources(part)) {
+        note(part, &path, place);
+      }
     }
   }
 
@@ -108,8 +111,8 @@ impl<'a> Placing<'a> {
         Place::Granted if self.scope.write_refused(&path, delete) => CommandCategory::Unknown,
         Place::Granted => CommandCategory::Worktree,
         Place::Temp => CommandCategory::OutsideWrite,
-        Place::Outside | Place::Secret if delete => CommandCategory::HistoryDestructive,
-        Place::Outside | Place::Secret => CommandCategory::OutsideWrite,
+        Place::Outside | Place::Sources | Place::Secret if delete => CommandCategory::HistoryDestructive,
+        Place::Outside | Place::Sources | Place::Secret => CommandCategory::OutsideWrite,
       };
       let written = Some(target.to_owned());
       match category {

@@ -259,7 +259,12 @@ enum Count {
 /// A count of the project's runs: a dash while it is not read and for a project that cannot be opened;
 /// runs that need the person, when there are any, with the hand in `warning` (`Needs you cell` `S4mu9e`).
 fn count(ctx: &Ctx, listed: &ListedProject, which: Count) -> Row {
+  let name = match which {
+    Count::Active => "active",
+    Count::NeedsYou => "needs-you",
+  };
   let cell = Row::new()
+    .id(format!("project-row-{name}-{}", listed.project.id))
     .width(Dimension::Px(COUNT_WIDTH))
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center);

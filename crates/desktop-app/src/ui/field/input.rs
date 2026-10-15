@@ -19,7 +19,7 @@ use lurq::{
     theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Button, Column, Row, Text, TextInput},
-  core::Signal,
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::{CursorIcon, Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -64,8 +64,8 @@ pub struct FieldInput {
   clear: Option<Arc<str>>,
   width: Dimension,
   area_height: f32,
-  /// A single line's box height when the design draws it taller than a control.
-  line_box: Option<f32>,
+  /// A single-line box's height.
+  box_height: f32,
   /// The `border_strong` stroke at rest, where a design draws the field so.
   strong: bool,
   locked: bool,
@@ -75,9 +75,12 @@ pub struct FieldInput {
   invalid: bool,
   masked: bool,
   on_leave: Option<Arc<dyn Fn() + Send + Sync>>,
+  /// The input, for its owner to focus.
+  element: Option<ElementRef>,
 }
 
-/// Compared by what it shows; the value by its signal.
+/// Compared by what it shows; the value by its signal. The input's element ref is its owner's, kept for
+/// the owner's life.
 impl PartialEq for FieldInput {
   fn eq(&self, other: &Self) -> bool {
     self.id == other.id
@@ -94,7 +97,7 @@ impl PartialEq for FieldInput {
       && self.clear == other.clear
       && self.width == other.width
       && self.area_height == other.area_height
-      && self.line_box == other.line_box
+      && self.box_height == other.box_height
       && self.strong == other.strong
       && self.locked == other.locked
       && self.trailing == other.trailing
@@ -124,13 +127,14 @@ impl FieldInput {
       clear: None,
       width: Dimension::Pct(100.0),
       area_height: TEXT_AREA_HEIGHT,
-      line_box: None,
+      box_height: ControlHeight::Md.value(),
       strong: false,
       locked: false,
       trailing: None,
       invalid: false,
       masked: false,
       on_leave: None,
+      element: None,
     }
   }
 
@@ -196,11 +200,9 @@ impl FieldInput {
     self
   }
 
-  /// The value in Geist Mono, as identifiers and figures are (handover §5.2); the placeholder stays.
-  /// A single line in a box `height` high, where a design draws the field taller than a control, e.g. 38 for
-  /// a value 10 from each edge (`ys8f8` in Local integration).
-  pub fn line_box(mut self, height: f32) -> Self {
-    self.line_box = Some(height);
+  /// A single-line box `height` high, where the design draws it taller than a control.
+  pub fn box_height(mut self, height: f32) -> Self {
+    self.box_height = height;
     self
   }
 
@@ -211,6 +213,7 @@ impl FieldInput {
     self
   }
 
+  /// The value in Geist Mono, as identifiers and figures are (handover §5.2); the placeholder stays.
   pub fn mono(mut self) -> Self {
     self.mono = true;
     self
@@ -264,6 +267,12 @@ impl FieldInput {
     self
   }
 
+  /// `element` finds the input, e.g. to focus it with `Ctx::focus`.
+  pub fn element(mut self, element: ElementRef) -> Self {
+    self.element = Some(element);
+    self
+  }
+
   pub fn render(self, ctx: &mut Ctx) -> Element {
     let key = format!("field-{}", self.id);
     ctx.mount_keyed::<FieldBox>(&key, self)
@@ -314,7 +323,7 @@ impl Component for FieldBox {
       Lines::One => dress(
         Row::new()
           .id(format!("{}-box", props.id))
-          .height(Dimension::Px(props.line_box.unwrap_or(ControlHeight::Md.value())))
+          .height(Dimension::Px(props.box_height))
           .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
           .spacing(SpacingSize::Sm)
           .align_items(Alignment::Center),
@@ -390,6 +399,9 @@ impl FieldBox {
       });
     if props.masked {
       input = input.mask();
+    }
+    if let Some(element) = &props.element {
+      input = input.ref_element(element.clone());
     }
     if let Some(placeholder) = &props.placeholder {
       input = input.placeholder(placeholder);

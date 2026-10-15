@@ -42,6 +42,7 @@ use orchester_workspace::{
 };
 
 pub use self::composer::ComposerState;
+pub(crate) use self::timeline::{links, step_label};
 use self::{
   read::{Transcript, TranscriptRead, Waiting, with_requests},
   timeline::{Follow, Timeline, Toggles},

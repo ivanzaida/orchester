@@ -29,30 +29,38 @@ pub const DATA_SCOPE: &str = "data";
 
 /// Every domain tool on the session's `services`, explaining refusals in the words of `i18n`.
 pub fn tools(services: &Services, i18n: I18n) -> Vec<McpTool> {
-  let domain = Arc::new(
-    app_mcp::Services::new(
-      services.workspace.clone(),
-      services.runners.clone(),
-      services.servers.clone(),
-      services.programs.clone(),
-      (
-        services.changes.clone(),
-        services.activity.clone(),
-        services.jobs.clone(),
-      ),
-    )
-    .with_vault(services.vault.clone()),
-  );
-  let translate = Arc::new(Translate::new(move |message| {
-    let args = message.args.iter().map(|(name, value)| (*name, value.as_str()));
-    i18n.t_ns_args(NAMESPACE, message.key, args).to_string()
-  }));
+  let domain = Arc::new(on(services));
+  let translate = Arc::new(translate(i18n));
   let work = app_mcp::listed().into_iter().map(|tool| (Set::Work, tool));
   let setup = app_mcp::setup::listed().into_iter().map(|tool| (Set::Setup, tool));
   work
     .chain(setup)
     .map(|(set, tool)| served(set, &tool, &domain, &translate))
     .collect()
+}
+
+/// What the domain tools work with: the session's `services`.
+pub(crate) fn on(services: &Services) -> app_mcp::Services {
+  app_mcp::Services::new(
+    services.workspace.clone(),
+    services.runners.clone(),
+    services.servers.clone(),
+    services.programs.clone(),
+    (
+      services.changes.clone(),
+      services.activity.clone(),
+      services.jobs.clone(),
+    ),
+  )
+  .with_vault(services.vault.clone())
+}
+
+/// How the domain tools explain a refusal: in the words of `i18n`.
+pub(crate) fn translate(i18n: I18n) -> Translate {
+  Translate::new(move |message| {
+    let args = message.args.iter().map(|(name, value)| (*name, value.as_str()));
+    i18n.t_ns_args(NAMESPACE, message.key, args).to_string()
+  })
 }
 
 /// Which of `orchester-workspace`'s lists a tool is in: the tools that drive work, which the deprecated

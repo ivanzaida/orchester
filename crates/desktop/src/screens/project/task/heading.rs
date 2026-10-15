@@ -230,6 +230,8 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
       _,
     ) => "runs.page.describe.retriesExhausted",
     (RunStatus::WaitingForPerson(Stuck::BrokeAgain(_)), _) => "runs.page.describe.brokeAgain",
+    (RunStatus::WaitingForPerson(Stuck::Unverified(_)), _) => "runs.page.describe.unverified",
+    (RunStatus::WaitingForPerson(Stuck::Unchanged(_)), _) => "runs.page.describe.unchanged",
     (RunStatus::Failed(_), _) => "runs.page.describe.failed",
     (RunStatus::Cancelled, _) if run.run.current_attempt().is_none() => "runs.page.describe.cancelledBeforeStart",
     (RunStatus::Cancelled, _) => "runs.page.describe.cancelled",

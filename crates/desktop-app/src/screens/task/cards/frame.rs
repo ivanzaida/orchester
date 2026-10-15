@@ -6,9 +6,10 @@ use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   components::{Column, Row, Spacer, Text, TextOverflow},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
+use super::Place;
 use crate::{
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::icon::{Icon, icon},
@@ -30,6 +31,18 @@ pub(super) fn frame(id: String, waiting: bool) -> Column {
       },
     ))
     .rounded(RadiusSize::Lg)
+}
+
+/// A waiting card's frame at `place`: in the chat [`frame`] with `padding` and `head` first; in the Needs you
+/// panel bare, without its head, as the panel's item frames it and says what it is.
+pub(super) fn waiting_frame(place: &Place, id: String, padding: Padding, head: impl FnOnce() -> Element) -> Column {
+  if place.in_panel {
+    return Column::new()
+      .id(id)
+      .describe("waiting", "true")
+      .width(Dimension::Pct(100.0));
+  }
+  frame(id, true).padding(padding).child(head())
 }
 
 /// Where a card stands, at the end of its head: its glyph and words in `color`.

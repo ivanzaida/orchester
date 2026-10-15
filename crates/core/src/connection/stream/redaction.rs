@@ -111,7 +111,8 @@ impl RunnerProblem {
       | Self::CliTooOld { .. }
       | Self::PermissionPromptUnreachable
       | Self::ContextCompacted { .. }
-      | Self::ThinkingStripped => {}
+      | Self::ThinkingStripped
+      | Self::WaitingForQaSlot => {}
     }
   }
 }

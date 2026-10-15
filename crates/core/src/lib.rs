@@ -22,6 +22,7 @@ pub mod memory;
 pub mod name;
 pub mod native;
 pub mod orchester_tools;
+pub mod orchestrator;
 pub mod permission;
 pub mod project;
 pub mod pull_request;

@@ -88,10 +88,12 @@ pub enum DecisionSpacing {
   ReadySide,
   /// 20: between *What changed* and *Verification* (`Columns` `fwsep`).
   Columns,
+  /// 20: why a check could not be done, under its name, past the 12 mark and the 8 after it.
+  CheckIndent,
 }
 
 impl DecisionSpacing {
-  pub const ALL: [Self; 2] = [Self::ReadySide, Self::Columns];
+  pub const ALL: [Self; 3] = [Self::ReadySide, Self::Columns, Self::CheckIndent];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -101,13 +103,14 @@ impl DecisionSpacing {
     match self {
       Self::ReadySide => "decision_ready_side",
       Self::Columns => "decision_columns",
+      Self::CheckIndent => "decision_check_indent",
     }
   }
 
   pub const fn value(self) -> f32 {
     match self {
       Self::ReadySide => 18.0,
-      Self::Columns => 20.0,
+      Self::Columns | Self::CheckIndent => 20.0,
     }
   }
 }

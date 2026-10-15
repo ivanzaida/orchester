@@ -4,9 +4,10 @@
 //!
 //! What they may reach is the whole disk but a deny list, not an allow list of dependency folders: the
 //! folders where toolchains keep sources (`~/.cargo/registry/src`, `~/go/pkg/mod`, `~/.m2`, a toolchain's
-//! library sources, …) differ by toolchain and machine, and Orchester names no toolchain's folders (the
-//! user's decision of 2026-10-02, "Cargo-specific build folder handling removed"). Every call asks a person
-//! unless a rule of the run or auto-approval answers it, and refused are:
+//! library sources, …) differ by toolchain and machine. Every call asks a person unless it stays in the run's
+//! sources or in Rust's dependency sources (Cargo's unpacked crates and git checkouts, the toolchains' library
+//! sources: [`CommandScope::in_dependency_sources`], the user's decision of 2026-10-14), or a rule of the run or
+//! auto-approval answers it, and refused are:
 //!
 //! - the credential locations the command classifier knows ([`CommandScope::holds_credentials`]: the home folder's dot
 //!   files and folders, the applications' data in `AppData` and `Library`);
@@ -83,6 +84,12 @@ impl OutsideReads {
       .map(|folder| existing(folder).map_or_else(|_| folder.clone(), |found| found.path))
       .collect();
     Self { scope, refused }
+  }
+
+  /// Whether `path` (resolved) lies in the dependency sources of a toolchain, which these reads reach without asking
+  /// ([`CommandScope::in_dependency_sources`]).
+  pub fn in_dependency_sources(&self, path: &Path) -> bool {
+    self.scope.in_dependency_sources(path)
   }
 
   /// The file `path` names, resolved, or why it may not be read.

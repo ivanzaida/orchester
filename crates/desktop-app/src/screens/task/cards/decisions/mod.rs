@@ -13,13 +13,14 @@ use std::{
 };
 
 use lurq::{app::ctx::Ctx, core::Signal};
-use orchester_core::{id::RunId, question::Question};
+use orchester_core::{id::RunId, question::Question, run::Answerer};
 use orchester_ipc::Command;
 use orchester_workspace::{tasks::question::Draft, workspace::OpenProject};
 use parking_lot::Mutex;
 
 pub(super) use self::answers::{Given, Outcome, Refused, Stage, refusal};
 use self::answers::{SendAnswer, Sending};
+use crate::mcp::input_gate::{self, Guarded, InputGate};
 
 /// How long after the chat first shows its rows the card it reveals may still take the focus: the frames
 /// it takes the chat to scroll to it and lay it out. A card that has not shown by then (the person scrolled
@@ -50,6 +51,8 @@ pub struct Decisions {
   kept: Signal<u64>,
   lost: Signal<bool>,
   focus: Arc<Mutex<Focus>>,
+  /// Tells a person's input from an MCP client's, and whether the person lets automation answer.
+  gate: Option<InputGate>,
 }
 
 impl PartialEq for Decisions {
@@ -78,6 +81,7 @@ impl Decisions {
       kept,
       lost: ctx.signal(false),
       focus: Arc::default(),
+      gate: ctx.use_context::<InputGate>(),
     }
   }
 
@@ -147,26 +151,43 @@ impl Decisions {
     kept::outcome(card)
   }
 
-  /// Sends `given` as `command` for `card` to the runner of `project`, unless an answer is on its way (a
-  /// second press, or Enter held, must not cancel the first).
-  pub(super) fn answer(&self, (run, key): Card<'_>, given: Given, (project, command): (&OpenProject, Command)) {
+  /// Sends `given` for `card` to the runner of `project`, as the command `command` makes of it for who gives it,
+  /// unless an answer is on its way (a second press, or Enter held, must not cancel the first). The person
+  /// gives what their own input gives. An MCP client's input answers only where automation may through
+  /// Orchester's MCP server, under the person's consent ([`input_gate::answerer`]), and never more widely than
+  /// once: the answer is then automation's, else the card says that only a person gives it here.
+  pub(super) fn answer(
+    &self,
+    (run, key): Card<'_>,
+    given: Given,
+    (project, command): (&OpenProject, impl FnOnce(Answerer) -> Command),
+  ) {
     if self.send.state().get_untracked().is_pending() {
       return;
     }
-    kept::set_outcome(
-      (run, key),
-      Outcome {
-        given,
-        stage: Stage::Sending,
-      },
-    );
+    let wider = matches!(given, Given::ApproveSimilar | Given::ApproveEverything);
+    let by = input_gate::answerer(self.gate.as_ref(), Guarded::ApprovalWidening);
+    let (by, stage) = match by {
+      Some(Answerer::Automation) if wider => (Answerer::Automation, Stage::Refused(Refused::WiderPersonOnly)),
+      Some(by) => (by, Stage::Sending),
+      None => (Answerer::Automation, Stage::Refused(Refused::PersonOnly)),
+    };
+    let refused = stage != Stage::Sending;
+    if refused {
+      tracing::warn!("synthetic input gave an answer only a person gives here; not taken");
+    }
+    kept::set_outcome((run, key), Outcome { given, by, stage });
     self.kept.update(|kept| *kept += 1);
+    if refused {
+      return;
+    }
     self.send.run(Sending {
       run,
       key: key.clone(),
       given,
+      by,
       project: project.clone(),
-      command,
+      command: command(by),
     });
   }
 

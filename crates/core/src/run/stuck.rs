@@ -31,8 +31,12 @@ use crate::{
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum StuckDecision {
-  /// One more attempt: the step's failure route again, or for a step that broke, the step again.
+  /// One more attempt: the step's failure route again, or for a step that broke, waited unverified or was
+  /// not run again on unchanged work, the step again.
   Retry,
+  /// For a step that waited unverified or unchanged: it passes as it is, and the steps after it and those that
+  /// have not passed run ([`AttemptReason::Accepted`]). `by`: a person, or automation a person let answer approvals.
+  Accept { by: super::answer::Answerer },
   /// A new attempt from agent step `step` (one of [`Run::return_targets`]), whose prompt carries
   /// `note` as the person's instruction.
   ReturnTo { step: StepKey, note: ReviewNote },
@@ -58,6 +62,19 @@ pub const MAX_AUTOMATIC_ATTEMPTS: usize = 10;
 impl Run {
   /// What follows the failure of `step` for `reason` in an attempt that is not a follow-up.
   pub(super) fn after_failure(&self, step: &StepKey, reason: StepFailure) -> RunEventKind {
+    match reason {
+      StepFailure::Unverified => {
+        return RunEventKind::WaitingForPerson {
+          reason: Stuck::Unverified(step.clone()),
+        };
+      }
+      StepFailure::Unchanged => {
+        return RunEventKind::WaitingForPerson {
+          reason: Stuck::Unchanged(step.clone()),
+        };
+      }
+      _ => {}
+    }
     if !reason.is_verdict() {
       // The failure just recorded counts: a second breakage since the step last passed waits.
       return if self.breakages_since_passed(step) >= 2 || self.automatic_attempts() >= MAX_AUTOMATIC_ATTEMPTS {
@@ -108,7 +125,7 @@ impl Run {
       .filter(|execution| execution.step() == step)
       .fold(0, |broken, execution| match execution.status() {
         StepStatus::Passed => 0,
-        StepStatus::Failed if !execution.failure().is_some_and(StepFailure::is_verdict) => broken + 1,
+        StepStatus::Failed if execution.failure().is_none_or(StepFailure::is_breakage) => broken + 1,
         _ => broken,
       })
   }
@@ -154,7 +171,7 @@ impl Run {
         .step(step)
         .and_then(|pinned| pinned.on_failure.as_ref())
         .map_or(step, |route| &route.return_to),
-      Stuck::BrokeAgain(step) => step,
+      Stuck::BrokeAgain(step) | Stuck::Unverified(step) | Stuck::Unchanged(step) => step,
     })
   }
 
@@ -187,6 +204,43 @@ impl Run {
       .collect()
   }
 
+  /// The return target ([`Run::return_targets`]) a person's choice starts at. After used-up retries, the failure
+  /// route's target; after a breakage, the step itself. A step that waited unverified or was not run again is run
+  /// again by *Retry* already, so the choice starts elsewhere: at the step this attempt returned the work to (after
+  /// a review sent it back and nothing changed), else the step's failure route target, else the nearest agent step
+  /// before it; at the step itself only when no other is left. `None` for a run that does not wait or has no target.
+  pub fn return_default(&self) -> Option<StepKey> {
+    let RunStatus::WaitingForPerson(stuck) = self.status() else {
+      return None;
+    };
+    let targets = self.return_targets();
+    let step = stuck.step();
+    let preferred = match stuck {
+      Stuck::RetriesExhausted(_) | Stuck::BrokeAgain(_) => self.retry_from(),
+      Stuck::Unverified(_) | Stuck::Unchanged(_) => {
+        let returned = self.current_attempt().and_then(|attempt| match attempt.reason() {
+          AttemptReason::Retry { return_to, .. } | AttemptReason::Returned { return_to, .. } => Some(return_to),
+          _ => None,
+        });
+        let route = self
+          .snapshot()
+          .body()
+          .step(step)
+          .and_then(|pinned| pinned.on_failure.as_ref())
+          .map(|route| &route.return_to);
+        [returned, route]
+          .into_iter()
+          .flatten()
+          .find(|key| *key != step && targets.contains(key))
+          .or_else(|| targets.iter().rev().find(|key| *key != step))
+      }
+    };
+    preferred
+      .filter(|key| targets.contains(key))
+      .or_else(|| targets.first())
+      .cloned()
+  }
+
   /// Carries out a person's `decision` on a run that waits for them.
   pub fn decide_stuck(&mut self, decision: &StuckDecision, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
     let RunStatus::WaitingForPerson(stuck) = self.status().clone() else {
@@ -204,8 +258,11 @@ impl Run {
           })
         });
       }
+      StuckDecision::Accept { by } => return self.accept_stuck(&stuck, *by, now),
       StuckDecision::Retry => match &stuck {
-        Stuck::BrokeAgain(_) => (AttemptReason::Restart { step: step.clone() }, step),
+        Stuck::BrokeAgain(_) | Stuck::Unverified(_) | Stuck::Unchanged(_) => {
+          (AttemptReason::Restart { step: step.clone() }, step)
+        }
         Stuck::RetriesExhausted(_) => {
           let return_to = self
             .snapshot()
@@ -257,6 +314,7 @@ impl Run {
     let broke = self.latest_execution(step).is_some_and(|execution| {
       execution.status() == StepStatus::Failed && !execution.failure().is_some_and(StepFailure::is_verdict)
     });
+    // `Restart` also runs a step again that waited unverified or unchanged, when a person asks for it.
     if !broke {
       return Err(RunError::InvalidAttempt("a restart executes a step that broke"));
     }

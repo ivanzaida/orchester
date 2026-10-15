@@ -43,6 +43,8 @@ const fn held(hold: &GroupHold) -> (Icon, PaletteColor) {
     | GroupHold::Blocked { .. } => (Icon::Hourglass, PaletteColor::TextMuted),
     GroupHold::Canceled => (Icon::CircleSlash, PaletteColor::TextMuted),
     GroupHold::SessionEnded
+    | GroupHold::QueueHeld
+    | GroupHold::Paused
     | GroupHold::GroupCap
     | GroupHold::FailedTask
     | GroupHold::Preflight(_)

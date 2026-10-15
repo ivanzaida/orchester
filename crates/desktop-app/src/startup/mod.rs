@@ -21,7 +21,7 @@ use orchester_workspace::session::StartupError;
 
 pub use self::{
   launch::Launch,
-  position::{WindowPosition, WindowPositionError},
+  position::{POSITION_VARIABLE, PositionError, WindowPosition},
   screen::{StartupScreen, window},
 };
 

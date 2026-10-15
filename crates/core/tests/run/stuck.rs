@@ -5,8 +5,8 @@
 use orchester_core::{
   id::{RunId, StepExecutionId},
   run::{
-    AttemptReason, AttemptStatus, Run, RunCounts, RunError, RunFailure, RunStatus, StepFailure, StepOutcome,
-    StepOutput, StepStatus, Stuck, StuckDecision, TaskPhase, attempt_starts,
+    AttemptReason, AttemptStatus, Run, RunError, RunFailure, RunStatus, StepFailure, StepOutcome, StepOutput,
+    StepStatus, Stuck, StuckDecision, TaskPhase, attempt_starts,
   },
 };
 
@@ -104,7 +104,6 @@ fn stuck_exhausted_retries_wait_and_count_as_needing_you() {
   assert_eq!(phase, TaskPhase::Stuck);
   assert!(phase.needs_you() && !phase.is_active());
   assert_eq!(phase.without_runner(), TaskPhase::Stuck);
-  assert_eq!(RunCounts::of([phase], false).needs_you, 1);
   assert_eq!(Run::replay(&logged.log), Ok(logged.run.clone()));
   assert_eq!(Run::restore(stored(&logged.run)), Ok(logged.run));
 }
@@ -274,6 +273,7 @@ fn stuck_a_failed_result_wins_over_a_failed_turn() {
     step: key("review"),
     outcome,
     text: "Two blocking findings.".into(),
+    unverified: Vec::new(),
     created_at: at(1),
   };
   // Run 19: Review returned `failed`, then its turn failed when the permission prompt closed.

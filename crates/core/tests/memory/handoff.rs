@@ -39,6 +39,7 @@ fn handoff_lists_are_optional_and_may_be_null() {
     [
       "outcome",
       "summary",
+      "unverified",
       "completed",
       "decisions",
       "open_questions",
