@@ -48,7 +48,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let session = AppSession::start_at(&data.path().join("orchester.db"))?;
   let workspace = session.workspace().clone();
   let Installation { port, taken, vault } = installation(&state, &workspace)?;
-  let services = Services::start(&session, data.path().join("no-runner"), runtime.handle().clone());
+  let services = Services::start(
+    &session,
+    data.path().join("no-runner"),
+    runtime.handle().clone(),
+    orchester_workspace::secrets::Vault::keychain(),
+  );
   let appearance = Appearance::new(ThemeSetting::Dark, Arc::new(OnceLock::new()), None);
   let mut app = App::new();
   app.set_tokio_handle(runtime.handle().clone());

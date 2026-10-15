@@ -1,11 +1,13 @@
-//! The app's settings: a header with its tabs (`General · Automation · Accounts · Servers`, `t098v` and `lye6f`) over
-//! the open tab. *Automation* (`lye6f`) holds *Orchester MCP server* (`server`) and *What automation may do*: the
+//! The app's settings: a header with its tabs (`General · Automation · Accounts · Orchester`, `t098v`, `lye6f` and
+//! `Cu20b`) over the open tab. *Automation* (`lye6f`) holds *Orchester MCP server* (`server`) and *What automation may do*: the
 //! person's own switches for what automation may widen through the MCP server and whether the Orchestrator chat
 //! publishes its drafts itself, which no tool can change. *Accounts* (`accounts`, layer `hgOl2`) holds the person's
-//! agent CLI accounts. *General* and *Servers* are not built in this app yet and say so.
+//! agent CLI accounts. *Orchester* (`orchester`) holds the Orchester Cloud account and the team servers, and *Connect a
+//! server* replaces the whole page. *General* is not built in this app yet and says so.
 
 mod accounts;
 mod automation;
+pub mod orchester;
 mod page;
 mod server;
 
@@ -28,7 +30,7 @@ use orchester_workspace::{
 };
 
 use crate::{
-  routes::{AccountsView, Screen},
+  routes::{AccountsView, OrchesterPanel, OrchesterView, Screen},
   services::Services,
   theme::SettingsSpacing,
   ui::{
@@ -51,6 +53,8 @@ const FORM_WIDTH: f32 = 720.0;
 pub enum SettingsTab {
   Automation,
   Accounts(AccountsView),
+  /// Settings › Orchester (`Cu20b`), or *Connect a server* (`zxe2P`).
+  Orchester(OrchesterView),
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -80,6 +84,19 @@ impl Component for SettingsScreen {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let tab = ctx.props::<Props>().tab;
+    if let SettingsTab::Orchester(view) = tab
+      && view.panel == OrchesterPanel::Connect
+    {
+      // *Connect a server* is a page of its own, without Settings' header and tabs (`zxe2P`).
+      return Column::new()
+        .id(format!("screen-{}", Screen::Settings.name()))
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Pct(100.0))
+        .child(ctx.mount_keyed::<orchester::connect::ConnectPage>(
+          "settings-orchester-connect",
+          orchester::connect::Props { server: view.server },
+        ));
+    }
     let workspace = Services::of(ctx).workspace;
     let loaded = ctx
       .future(self.revision.get(), move |_| {
@@ -96,6 +113,9 @@ impl Component for SettingsScreen {
     let count = loaded.data.as_ref().map(|accounts| accounts.0.len());
     let body = match tab {
       SettingsTab::Automation => automation(ctx),
+      SettingsTab::Orchester(view) => {
+        ctx.mount_keyed::<orchester::OrchesterTab>("settings-orchester", orchester::Props { view })
+      }
       SettingsTab::Accounts(view) => match (&loaded.data, &loaded.error) {
         (_, Some(error)) if !loaded.is_pending() => self.failed(ctx, error),
         (Some(accounts), _) => ctx.mount_keyed::<accounts::AccountsTab>(

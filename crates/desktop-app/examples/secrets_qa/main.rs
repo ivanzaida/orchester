@@ -39,8 +39,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let session = AppSession::start_at(&data.path().join("orchester.db"))?;
   let vault = Arc::new(vault::QaVault::default());
   let open = fixtures::seed(session.workspace(), &data.path().join("repo"), &vault, &scenario)?;
-  let mut services = Services::start(&session, data.path().join("no-runner"), runtime.handle().clone());
-  services.vault = Vault::with(vault.clone());
+  let services = Services::start(
+    &session,
+    data.path().join("no-runner"),
+    runtime.handle().clone(),
+    Vault::with(vault.clone()),
+  );
   let appearance = Appearance::new(ThemeSetting::Dark, Arc::new(OnceLock::new()), None);
   let mut app = App::new();
   app.set_tokio_handle(runtime.handle().clone());

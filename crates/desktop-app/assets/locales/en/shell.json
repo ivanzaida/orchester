@@ -188,6 +188,20 @@
         "today": "today, {{time}}",
         "day": "{{month}} {{day}}, {{time}}",
         "note": "Limits are per account and shared by every project that uses it. Claude windows are as of the last run on the account."
+      },
+      "server": {
+        "connected": "{{server}}",
+        "connecting": "{{server}} · connecting",
+        "offline": "{{server}} offline",
+        "signedOut": "{{server}} · signed out",
+        "certificateChanged": "{{server}} · certificate changed",
+        "several": {
+          "connected": "{{count}} servers",
+          "connecting": "{{count}} servers · connecting",
+          "offline": "{{count}} servers · one offline",
+          "signedOut": "{{count}} servers · one signed out",
+          "certificateChanged": "{{count}} servers · a certificate changed"
+        }
       }
     },
     "needsYou": {

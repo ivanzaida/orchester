@@ -11,6 +11,7 @@
     "limitsDescription": "Defaults and limits for {{project}}. They apply to new tasks and runs in this project.",
     "environmentDescription": "Variables {{project}} adds for its agents and command tools.",
     "codeIndexDescription": "How agents find their way around {{project}}'s code.",
+    "sharingDescription": "Where {{project}}'s task list lives, and who works on it with you.",
     "outOfScope": "This section is not built in this app yet.",
     "reading": "Reading project settings…",
     "loadFailed": "Project settings couldn't be read",

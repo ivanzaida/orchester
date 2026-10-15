@@ -5,7 +5,10 @@
 use std::path::PathBuf;
 
 use orchester_api::SharedProject;
-use orchester_core::{id::ServerId, name::Name};
+use orchester_core::{
+  id::{ProjectId, ServerId},
+  name::Name,
+};
 use orchester_store::{ProjectDb, SharingLink};
 
 use super::{ServerEntry, Servers, SharingError, trust::Trust};
@@ -14,6 +17,8 @@ use crate::background;
 /// A local project linked to a project on a team server.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LinkedProject {
+  /// The local project's id, as this computer's routes name it.
+  pub id: ProjectId,
   pub name: Name,
   pub repo_root: PathBuf,
   pub link: SharingLink,
@@ -42,6 +47,7 @@ impl Servers {
       };
       if let Some(link) = link.filter(|link| link.server == server) {
         linked.push(LinkedProject {
+          id: project.id,
           name: project.name,
           repo_root: project.repo_root,
           link,

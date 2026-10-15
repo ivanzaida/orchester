@@ -142,11 +142,12 @@
       }
     },
     "sub": "Orchester on this computer, in every project. Each change is saved as you make it.",
+    "connectServer": "Connect a server",
     "tabs": {
       "general": "General",
       "automation": "Automation",
       "accounts": "Accounts",
-      "servers": "Servers",
+      "orchester": "Orchester",
       "notBuilt": "Not in this version of the app yet"
     }
   }

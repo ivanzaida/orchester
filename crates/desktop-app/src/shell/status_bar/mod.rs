@@ -1,7 +1,7 @@
 //! The status bar (`Status bar` `sMpGe` of `q9mf0k`; handover §3.3), for the active tab's project: on the
 //! left the project, its folder in the name's tooltip, the runner and the activity slot; on the right the project's
 //! counts and tokens, the waiting requests with *Review* and the runs that auto-approve with *Stop* (`xommZ`),
-//! the app's MCP server and the version.
+//! the team server's item (`X39PHh`), the app's MCP server and the version.
 //! Every item shows only measured data. A screen outside a project shows the activity and the app's items
 //! only, its events named by their project. A startup screen's bar has the version only.
 //!
@@ -19,6 +19,7 @@ mod operations;
 mod plan_limits;
 mod recovery;
 mod runner;
+mod server;
 
 use lurq::{
   app::{
@@ -48,6 +49,7 @@ pub use self::{
   facts::{AccountLimits, BarAction, BarFacts, Dispatch, ProjectFacts, ReadFailure, RunnerFacts, Stopping},
   item::dot,
   mcp::from_scratch,
+  server::{ServerFacts, ServerState},
 };
 use crate::{
   lifecycle,
@@ -110,6 +112,11 @@ impl Component for StatusBar {
     let readings = readings::readings(ctx);
     let listed = accounts::listed(ctx);
     let used = used_accounts(ctx, shown.as_ref().map(|(facts, _)| facts.repo_root.clone()));
+    let servers = server::server_facts(
+      ctx,
+      &services.servers,
+      shown.as_ref().map(|(facts, _)| facts.repo_root.clone()),
+    );
     let facts = BarFacts {
       project: shown.map(|(mut facts, _)| {
         facts.limits = limits(&listed, &readings, &used);
@@ -118,6 +125,7 @@ impl Component for StatusBar {
       log,
       mcp,
       stopping,
+      servers,
     };
     ctx.mount_keyed::<StatusBarView>("status-bar-view", BarProps { facts, dispatch })
   }
@@ -306,6 +314,7 @@ impl Component for StatusBarView {
     if let Some(project) = project {
       right.extend(plan_limits::item(ctx, &project.limits, &self.bar));
     }
+    right.extend(server::item(ctx, &facts.servers, &dispatch));
     right.extend(counts::app(ctx, (&facts.mcp, &self.bar), &dispatch));
     Row::new()
       .id("status-bar")

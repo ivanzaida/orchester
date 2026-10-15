@@ -48,6 +48,7 @@ pub fn screen(ctx: &mut Ctx) -> Element {
     Ok(Route::AddProject(folder)) => add_project::screen(ctx, folder.map(|folder| folder.path())),
     Ok(Route::Settings) => settings::screen(ctx, settings::SettingsTab::Automation),
     Ok(Route::Accounts(view)) => settings::screen(ctx, settings::SettingsTab::Accounts(view)),
+    Ok(Route::Orchester(view)) => settings::screen(ctx, settings::SettingsTab::Orchester(view)),
     Ok(Route::Project(project, page)) => project_screen(ctx, project, &page),
     Err(error) => not_found::screen(ctx, &path, &error),
   }

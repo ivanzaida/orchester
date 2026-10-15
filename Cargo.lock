@@ -3349,6 +3349,7 @@ dependencies = [
  "hyper-util",
  "image",
  "lurq 0.44.1",
+ "orchester-api",
  "orchester-core",
  "orchester-exec",
  "orchester-ipc",

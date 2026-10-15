@@ -18,7 +18,9 @@ use orchester_app::{
   i18n,
   mcp::{McpKind, McpSettings, McpStatus, ServerState},
   routes::{OverviewTab, ProjectPage, Route, TaskView},
-  shell::status_bar::{BarAction, BarFacts, BarProps, ProjectFacts, ReadFailure, RunnerFacts, StatusBarView, Stopping},
+  shell::status_bar::{
+    BarAction, BarFacts, BarProps, ProjectFacts, ReadFailure, RunnerFacts, ServerFacts, StatusBarView, Stopping,
+  },
   theme::{self, Mode},
   ui::tooltip::TOOLTIP_DELAY,
 };
@@ -189,6 +191,7 @@ fn facts(project: Option<ProjectFacts>) -> BarFacts {
     log: ActivityLog::default(),
     mcp: listening(),
     stopping: Stopping::Idle,
+    servers: ServerFacts::None,
   }
 }
 
