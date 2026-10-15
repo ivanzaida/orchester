@@ -24,7 +24,7 @@ use super::View;
 use crate::{
   theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
-    composer::recipient_pill,
+    composer::{message_scrollbar, recipient_pill},
     icon::{Icon, icon},
     kbd::key_cap,
     pressable::{inert, pressable},
@@ -151,6 +151,7 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>) -> Element {
     .describe("a11y_name", composer.placeholder.clone())
     .textarea()
     .rows(first, MAX_LINES)
+    .scrollbar(message_scrollbar(ctx))
     .width(Dimension::Pct(100.0))
     .placeholder(&composer.placeholder)
     .ref_element(view.input.clone())
