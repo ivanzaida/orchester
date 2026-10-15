@@ -138,21 +138,18 @@ fn local_integration_hard_link_is_visibly_unsupported_before_read_write_or_remov
 
 #[cfg(windows)]
 #[test]
-fn local_integration_sqlite_parent_database_and_sidecars_are_pinned_before_the_vfs_opens() {
+fn local_integration_sqlite_parent_and_database_are_pinned_while_sidecars_stay_deletable() {
   let dir = directory();
   let metadata = dir.path().join(".orchester");
   fs::create_dir(&metadata).expect("private metadata");
   fs::write(metadata.join("orchester.db"), b"private database fixture").expect("private fixture");
   let guard = orchester_exec::local_git::owned::StoreOwnership::acquire(dir.path()).expect("pin opened objects");
   assert!(fs::rename(&metadata, dir.path().join("substituted")).is_err());
-  for name in [
-    "orchester.db",
-    "orchester.db-wal",
-    "orchester.db-shm",
-    "orchester.db-journal",
-  ] {
-    assert!(fs::rename(metadata.join(name), metadata.join(format!("{name}.old"))).is_err());
-    assert!(fs::remove_file(metadata.join(name)).is_err());
+  assert!(fs::rename(metadata.join("orchester.db"), metadata.join("orchester.db.old")).is_err());
+  assert!(fs::remove_file(metadata.join("orchester.db")).is_err());
+  // SQLite in another process deletes its WAL and shared memory when its last connection closes.
+  for name in ["orchester.db-wal", "orchester.db-shm", "orchester.db-journal"] {
+    fs::remove_file(metadata.join(name)).expect("a pinned sidecar stays deletable");
   }
   assert_eq!(
     fs::read(metadata.join("orchester.db")).expect("actual held regular file"),

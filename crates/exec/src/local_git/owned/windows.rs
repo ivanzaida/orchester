@@ -18,8 +18,8 @@ use windows_sys::Win32::{
   Foundation::{GENERIC_READ, GENERIC_WRITE},
   Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, DELETE, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
-    FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_READ, FILE_SHARE_WRITE, FileDispositionInfo, GetFileInformationByHandle,
-    GetFinalPathNameByHandleW, SetFileInformationByHandle,
+    FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, FileDispositionInfo,
+    GetFileInformationByHandle, GetFinalPathNameByHandleW, SetFileInformationByHandle,
   },
 };
 
@@ -240,24 +240,32 @@ pub(super) fn remove(file: &File) -> Result<(), LocalGitError> {
   Ok(())
 }
 
-pub(super) fn pin_store_entry(directory: &Arc<Directory>, name: &OsStr, create: bool) -> Result<File, LocalGitError> {
+/// Pins the store entry `name`. A `sidecar` (SQLite's `-wal`, `-shm`, `-journal`) is created when missing so it is a
+/// validated regular file before SQLite opens it, and is shared for deletion: SQLite in another process (the runner,
+/// another app) deletes its WAL when its last connection closes and must not stall on our pin.
+pub(super) fn pin_store_entry(directory: &Arc<Directory>, name: &OsStr, sidecar: bool) -> Result<File, LocalGitError> {
   let _freeze = directory.freeze()?;
   let path = directory.path.join(name);
+  let share = if sidecar {
+    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE
+  } else {
+    FILE_SHARE_READ | FILE_SHARE_WRITE
+  };
   let open = || {
     OpenOptions::new()
       .access_mode(GENERIC_READ)
-      .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+      .share_mode(share)
       .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
       .open(&path)
   };
   let file = match open() {
     Ok(file) => file,
-    Err(error) if error.kind() == io::ErrorKind::NotFound && create => {
+    Err(error) if error.kind() == io::ErrorKind::NotFound && sidecar => {
       match OpenOptions::new()
         .write(true)
         .create_new(true)
         .access_mode(GENERIC_READ)
-        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+        .share_mode(share)
         .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
         .open(&path)
       {
