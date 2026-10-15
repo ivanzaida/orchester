@@ -87,11 +87,12 @@ hyper-util = { version = "0.1", default-features = false, features = ["tokio", "
 # and macOS. Applications that pick their stores link it with the stores they need instead of
 # the `keyring` facade (keyring-rs wiki, "Keyring").
 keyring-core = "1"
-# 0.44: retained `TextInputController`, `InputTokens`, CRLF paragraph endings; 0.44.1: a queued scroll wins over the
+# 0.45: the idle loop waits (`WaitUntil`) and coalesces off-thread `Signal` wakes; a multiline input scrolls in a
+# scrollbar lane and moves by wrapped row; 0.44: retained `TextInputController`, `InputTokens`, CRLF paragraph endings; 0.44.1: a queued scroll wins over the
 # `VirtualizedList` scroll anchor when row keys change (the chat's Jump to latest);
 # 0.43: execution-bound input origin and canceled queued-call rejection; an app's own MCP server hosts lurq's window tools (`McpConfig::hosted`, `McpHandle::service`); see
 # `orchester-app`'s `mcp` module.
-lurq = { version = "0.44.1", default-features = false }
+lurq = { version = "0.45.0", default-features = false }
 # The deprecated app retains its existing create/render hook contract until it is replaced.
 lurq_legacy = { package = "lurq", version = "0.42.0", default-features = false }
 # Orchester Cloud's confirmation and reset emails through the person's SMTP relay, with TLS through the workspace's
