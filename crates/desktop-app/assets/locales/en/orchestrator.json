@@ -5,6 +5,10 @@
     "dash": "—",
     "date": "{{month}} {{day}}",
     "answerMeta": "{{model}} · {{time}}",
+    "link": {
+      "web": "{{link}} ({{host}})",
+      "address": "{{text}} ({{address}})"
+    },
     "newTitle": "New conversation",
     "history": "History",
     "manageContext": "Manage context",

@@ -61,6 +61,8 @@ lurq = { workspace = true, features = [
   "tokio",
 ] }
 parking_lot.workspace = true
+# Where the links of an agent's Markdown reply are in its source (`ui::chat::links`).
+pulldown-cmark.workspace = true
 # The system's folder picker for the project switcher's Open folder…; lurq already builds it for DevTools.
 rfd.workspace = true
 # Arguments and results of the app's MCP tools.
@@ -70,6 +72,8 @@ thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+# The host a chat shows beside a link to the web (`ui::chat::links`).
+url.workspace = true
 # The bearer token of the app's MCP server, from the OS random source.
 uuid.workspace = true
 # Wipes unsaved credential input when its inspector closes.

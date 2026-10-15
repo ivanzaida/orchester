@@ -88,6 +88,10 @@ lurq_legacy = { package = "lurq", version = "0.42.0", default-features = false }
 # libproc process enumeration and identity on macOS; already transitive through rustix.
 libc = "0.2"
 parking_lot = "0.12"
+# Where each link of an agent's Markdown reply is in its source, so the chat shows a link it cannot follow as text
+# (`orchester-app`'s `ui::chat::links`). lurq's Markdown parses with it and keeps no source positions; already
+# built, without default features, for lurq's `markdown`.
+pulldown-cmark = { version = "0.13.4", default-features = false }
 # Native folder picker for choosing a project repository; lurq already uses it for DevTools.
 rfd = "0.15"
 # The MCP protocol of Orchester's own MCP server: its tools (`orchester_workspace::app_mcp`) and, in
@@ -145,6 +149,9 @@ tree-sitter-rust = "0.24"
 tree-sitter-typescript = "0.23"
 # `v4`: the random token that lets only the relay of one Claude Code invocation reach its permission
 # prompt (`orchester_core::connection::claude_approval`); v7 ids carry a timestamp, not only random bits.
+# The host a chat shows beside a link to the web, read as a browser reads it (`https://a.com@b.org/` is b.org).
+# Already built for reqwest and tower-http.
+url = "2"
 uuid = { version = "1", features = ["v4", "v7", "serde"] }
 win32job = "2"
 # Windows Credential Manager store of the keyring crates, for `orchester-vault`. Without the

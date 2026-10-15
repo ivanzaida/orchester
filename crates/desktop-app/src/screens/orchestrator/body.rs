@@ -285,6 +285,7 @@ fn env(view: &View, project: &ShownProject, (chat, connection): (Option<ChatId>,
       }
     }),
     ask_again,
+    links: view.links.clone(),
   }
 }
 
