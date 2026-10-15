@@ -50,6 +50,8 @@ pub struct Conversations {
   pub interrupted: ChatId,
   /// A start the agent proposed, of a task edited since: *Start* is refused as changed since proposed.
   pub proposal_changed: ChatId,
+  /// Publish, cancel and merge proposals, waiting and settled ([`super::changes`]).
+  pub changes: ChatId,
 }
 
 /// What the QA folder `root` is seeded with: `claude` the fake CLI the Claude connection runs, `codex` the one the
@@ -122,24 +124,24 @@ fn connection(program: PathBuf) -> Result<AgentConnection, Box<dyn Error>> {
 }
 
 /// A minute `n` minutes ago.
-fn ago(minutes: i64) -> Timestamp {
+pub(super) fn ago(minutes: i64) -> Timestamp {
   Timestamp::from_unix_millis(Timestamp::now().unix_millis() - minutes * 60_000)
 }
 
 /// One turn of `chat`: the person's `text` at `at`, the answer's `parts`, and how it ended.
-struct Turn<'a> {
-  text: &'a str,
-  at: Timestamp,
-  parts: Vec<Part<'a>>,
-  end: TurnState,
+pub(super) struct Turn<'a> {
+  pub(super) text: &'a str,
+  pub(super) at: Timestamp,
+  pub(super) parts: Vec<Part<'a>>,
+  pub(super) end: TurnState,
 }
 
-enum Part<'a> {
+pub(super) enum Part<'a> {
   Reply(&'a str),
   Action(ChatAction),
 }
 
-fn keep(
+pub(super) fn keep(
   db: &mut ProjectDb,
   chat: ChatId,
   connection: ConnectionId,
@@ -243,6 +245,7 @@ fn conversations(
     }],
   )?;
   let proposal_changed = changed_proposal(db, connection)?;
+  let changes = super::changes::conversation(db, connection)?;
   let interrupted = keep(
     db,
     ChatId::generate(),
@@ -260,6 +263,7 @@ fn conversations(
     failed,
     interrupted,
     proposal_changed,
+    changes,
   })
 }
 
