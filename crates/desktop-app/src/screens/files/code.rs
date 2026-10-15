@@ -36,7 +36,8 @@ use super::{
   states,
 };
 use crate::{
-  navigation::shortcuts::Keys,
+  navigation::{Navigation, shortcuts::Keys},
+  routes::{ProjectPage, Route},
   theme::{CodeText, ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -133,8 +134,13 @@ fn text_pane(ctx: &mut Ctx, page: &Page<'_>, file: &FilePath, text: &Arc<FileTex
 /// selected clears the selection.
 fn selector(ctx: &mut Ctx, page: &Page<'_>) -> Select {
   let select = page.select_lines(ctx);
-  let current = page.route.line();
+  let navigation = Navigation::of(ctx);
   Arc::new(move |index: usize, extend: bool| {
+    // Rows keep the closure they were mounted with, so the selection is the route's as the press lands.
+    let current = match navigation.route_now() {
+      Route::Project(_, ProjectPage::Files(view)) => view.line(),
+      _ => None,
+    };
     let number = u32::try_from(index + 1).unwrap_or(u32::MAX);
     let lines = match current {
       Some(range) if extend => LineRange::new(range.first(), number),

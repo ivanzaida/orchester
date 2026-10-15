@@ -100,6 +100,18 @@ impl Files {
     self.window.tree.get_element_by_id(id).is_some()
   }
 
+  /// Types `text` key by key into the focused field, as a person does.
+  pub fn type_keys(&mut self, text: &str) {
+    for key in text.chars() {
+      let shift = key.is_uppercase();
+      self
+        .window
+        .tree
+        .key_down(key.to_string(), String::new(), shift, false, false);
+      self.window.pass();
+    }
+  }
+
   /// The route the window's active tab shows.
   pub fn route(&self) -> Route {
     self.window.navigation().route_now()

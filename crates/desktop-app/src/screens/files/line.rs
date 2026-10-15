@@ -106,7 +106,6 @@ impl Component for LineView {
     let row = Row::new()
       .id(format!("files-line-{}", index + 1))
       .describe("selected", line.selected.to_string())
-      .describe("found", line.found.len().to_string())
       .width(Dimension::Px(width))
       .height(Dimension::Px(LINE_HEIGHT))
       .align_items(Alignment::Center)

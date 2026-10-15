@@ -1,8 +1,8 @@
 //! Picker (`Picker` `ZQd2D`): a compact control that opens a menu of choices and shows the chosen one: a
 //! 13 `text_secondary` icon, the choice in 12 `text_primary` and a 12 `text_muted` chevron, 6 apart and 8
 //! from its sides, 26 high on `surface_input` in a `border` stroke, radius 6; the chevron points up while
-//! its menu is open, its stroke `border_focus` (`LrZ5C` in `kadDh`). The caller places the menu at the picker through the same `anchor`. A choice that
-//! needs attention takes a `warning` icon (`U34ugO` in `SyXwU`).
+//! its menu is open, its stroke `border_focus` (`LrZ5C` in `kadDh`). The caller places the menu at the picker through
+//! the same `anchor`. A choice that needs attention takes a `warning` icon (`U34ugO` in `SyXwU`).
 
 use std::sync::Arc;
 

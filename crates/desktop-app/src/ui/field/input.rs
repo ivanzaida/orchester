@@ -45,6 +45,9 @@ enum Lines {
   Compact,
 }
 
+/// Told of an edit as it is typed ([`FieldInput::on_typed`]).
+type OnTyped = Arc<dyn Fn(&TextInputEvent) + Send + Sync>;
+
 #[derive(Clone)]
 pub struct FieldInput {
   id: Arc<str>,
@@ -75,6 +78,8 @@ pub struct FieldInput {
   invalid: bool,
   masked: bool,
   on_leave: Option<Arc<dyn Fn() + Send + Sync>>,
+  /// Told of each edit as it is typed, before it lands, e.g. to tell a person's typing from automation's.
+  on_typed: Option<OnTyped>,
   /// The input, for its owner to focus.
   element: Option<ElementRef>,
 }
@@ -134,6 +139,7 @@ impl FieldInput {
       invalid: false,
       masked: false,
       on_leave: None,
+      on_typed: None,
       element: None,
     }
   }
@@ -268,6 +274,12 @@ impl FieldInput {
   }
 
   /// `element` finds the input, e.g. to focus it with `Ctx::focus`.
+  /// `typed` is told of each edit as it is typed, before it lands in the value.
+  pub fn on_typed(mut self, typed: impl Fn(&TextInputEvent) + Send + Sync + 'static) -> Self {
+    self.on_typed = Some(Arc::new(typed));
+    self
+  }
+
   pub fn element(mut self, element: ElementRef) -> Self {
     self.element = Some(element);
     self
@@ -412,6 +424,8 @@ impl FieldBox {
         .focusable(false);
     } else if let Some(separator) = props.group_separator.clone() {
       input = input.on_input(group_while_typing(props.value.clone(), separator));
+    } else if let Some(typed) = props.on_typed.clone() {
+      input = input.on_input(move |event: TextInputEvent| typed(&event));
     }
     match props.lines {
       Lines::One => input.single_line(),

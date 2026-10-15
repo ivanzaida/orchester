@@ -107,3 +107,33 @@ fn files_mcp_tree_shows_names_and_never_a_files_text() {
     );
   }
 }
+
+#[test]
+fn files_find_counts_nothing_that_automation_types() {
+  let mut files = Files::new();
+  files.go(FilesView::new(Some("src/main.rs"), Version::Checkout));
+  files.window.press("files-find-open");
+  let client = Client::new(&mut files);
+  let field = client.call(&mut files, "lurq_find_by_id", &json!({"id": "files-find-field"}));
+  let field: Value = serde_json::from_str(&field).expect("a tool result");
+  let reference = field["content"][0]["text"]
+    .as_str()
+    .and_then(|text| text.split_whitespace().next())
+    .expect("a ref")
+    .to_owned();
+  client.call(
+    &mut files,
+    "lurq_set_value",
+    &json!({"ref": reference, "value": "limit"}),
+  );
+  files.window.pass();
+  let shown = files.window.text("files-find-field-box");
+  assert!(
+    !shown.contains(" of ") && !shown.contains("No results"),
+    "automation's text is not counted: {shown}"
+  );
+  files.type_keys("x");
+  files.window.until("a person's typing counted", |w| {
+    w.text("files-find-field-box").contains("No results")
+  });
+}

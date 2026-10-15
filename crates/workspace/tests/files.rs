@@ -133,6 +133,10 @@ fn files_text_copies_lines_and_finds_text_without_regard_to_case() {
   // The tab shows as four spaces, so the match starts after them.
   assert_eq!((found[1].line, found[1].start), (1, 11));
   assert!(text.find("", false).is_empty());
+  let cased = text.find("Line", true);
+  assert_eq!(cased.len(), 1, "only the line that has it in its case");
+  assert_eq!((cased[0].line, cased[0].start), (0, 6));
+  assert!(text.find("LINE", true).is_empty());
   assert!(FileText::parse(b"").lines().is_empty());
 }
 

@@ -71,7 +71,7 @@ impl FileText {
       let shown: Vec<char> = highlight::plain(text)
         .iter()
         .flat_map(|token| token.text.chars())
-        .map(folded)
+        .map(fold)
         .collect();
       let mut start = 0;
       while start + query.len() <= shown.len() {

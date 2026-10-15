@@ -2,11 +2,17 @@
 //! where the current place is among those found ("14 of 41"), *Match case*, the previous and next place and
 //! a cross that closes it; Enter goes to the next place, Shift+Enter to the previous one, Esc closes it.
 //! The places are found by the workspace ([`FileText::find`]); the lines show them, the current one apart.
+//! Only a person's typing is searched: what automation types finds nothing, since counting places would let it read
+//! the file a character at a time.
 
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, events::KeyboardEvent, theme::SpacingSize},
+  app::{
+    ctx::Ctx,
+    events::{KeyboardEvent, is_synthetic_input},
+    theme::SpacingSize,
+  },
   components::Row,
   core::{ElementRef, Signal},
   layout::Alignment,
@@ -27,6 +33,9 @@ pub struct FindState {
   pub match_case: Signal<bool>,
   /// The current place, an index into what the search found.
   pub at: Signal<usize>,
+  /// What a person last typed. Only that is searched: text automation sets or types finds nothing, so that
+  /// counting what it finds cannot read the file.
+  typed: Signal<String>,
   focus: Signal<bool>,
   input: ElementRef,
 }
@@ -38,6 +47,7 @@ impl FindState {
       query: ctx.signal(String::new()),
       match_case: ctx.signal(false),
       at: ctx.signal(0),
+      typed: ctx.signal(String::new()),
       focus: ctx.signal(false),
       input: ElementRef::new(),
     }
@@ -56,7 +66,8 @@ impl FindState {
   /// What the search looks for: its text and whether case counts; `None` while it is closed or empty.
   pub fn looking_for(&self) -> Option<(String, bool)> {
     let query = self.query.get();
-    (self.open.get() && !query.is_empty()).then(|| (query, self.match_case.get()))
+    let typed = self.typed.get() == query;
+    (self.open.get() && typed && !query.is_empty()).then(|| (query, self.match_case.get()))
   }
 
   /// The places `text` holds `query`.
@@ -94,7 +105,15 @@ impl FindState {
       .search()
       .placeholder(ctx.t("files.find.placeholder"))
       .width(Dimension::Px(FIELD_WIDTH))
-      .element(self.input.clone());
+      .element(self.input.clone())
+      .on_typed({
+        let typed = self.typed.clone();
+        move |event| {
+          if !is_synthetic_input() {
+            typed.set(event.new_value().to_owned());
+          }
+        }
+      });
     let field = match self.count_text(ctx, count) {
       Some(text) => field.unit(text),
       None => field,
@@ -151,7 +170,8 @@ impl FindState {
 
   /// "14 of 41", "No results", or nothing before anything is typed.
   fn count_text(&self, ctx: &Ctx, count: usize) -> Option<String> {
-    if self.query.get().is_empty() {
+    let query = self.query.get();
+    if query.is_empty() || self.typed.get() != query {
       return None;
     }
     let Some(current) = self.current(count) else {

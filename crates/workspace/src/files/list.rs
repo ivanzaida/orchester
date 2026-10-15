@@ -41,11 +41,12 @@ pub struct FileList {
 }
 
 impl FileList {
-  /// The list of `paths` (`/`-separated, relative), hidden ones left out.
+  /// The list of `paths` (`/`-separated, relative), hidden ones left out, and folders git names as `sub/` (a
+  /// repository inside the folder) too, since they hold no file of this one.
   pub fn new(paths: impl IntoIterator<Item = String>) -> Self {
     let paths: BTreeSet<Arc<str>> = paths
       .into_iter()
-      .filter(|path| !path.is_empty() && !is_hidden(path))
+      .filter(|path| !path.is_empty() && !path.ends_with('/') && !is_hidden(path))
       .map(Arc::from)
       .collect();
     let folders = folders(&paths);

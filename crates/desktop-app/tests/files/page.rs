@@ -165,7 +165,7 @@ fn files_find_counts_the_places_in_the_file() {
   files.open(Some("src/main.rs"), Version::Checkout);
   files.window.press("files-find-open");
   assert!(files.exists("files-find"));
-  files.window.set("files-find-field", "LIMIT");
+  files.type_keys("LIMIT");
   files.window.until("the places found", |w| {
     w.text("files-find-field-box").contains("1 of 117")
   });

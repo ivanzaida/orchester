@@ -167,8 +167,8 @@ struct Item {
 
 impl DevtoolsInspectable for Item {}
 
-/// What rows are laid out for: the folders open and the file shown.
-type RowsFor = (OpenFolders, Option<Arc<str>>);
+/// What rows are laid out for: the list, the folders open and the file shown.
+type RowsFor = (FileList, OpenFolders, Option<Arc<str>>);
 
 struct Tree {
   /// The rows, for the folders open and the file shown they were laid out for.
@@ -203,7 +203,7 @@ impl Component for Tree {
 
 impl Tree {
   fn items(&self, props: &TreeProps, open: OpenFolders) -> Arc<Vec<Item>> {
-    let key = (open, props.shown.clone());
+    let key = (props.list.clone(), open, props.shown.clone());
     let mut kept = self.rows.lock();
     if let Some((made_for, items)) = kept.as_ref()
       && *made_for == key
@@ -213,10 +213,10 @@ impl Tree {
     let items: Arc<Vec<Item>> = Arc::new(
       props
         .list
-        .rows(key.0.set())
+        .rows(key.1.set())
         .into_iter()
         .map(|row| Item {
-          shown: Some(&row.path) == key.1.as_ref(),
+          shown: Some(&row.path) == key.2.as_ref(),
           row,
         })
         .collect(),

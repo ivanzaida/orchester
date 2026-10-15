@@ -15,11 +15,13 @@ use super::{
   source::{Source, source},
 };
 
-/// Extensions of files that Windows or macOS run, or hand to a program that runs them, when opened.
+/// Extensions of files that Windows or macOS run, or hand to a program that runs them, when opened: the system's
+/// own, and those the usual installers of Python, Perl, Ruby and Git for Windows' Bash register to run.
 const RUN_WHEN_OPENED: &[&str] = &[
   "app",
-  "appref-ms",
   "application",
+  "appref-ms",
+  "bash",
   "bat",
   "cmd",
   "com",
@@ -41,13 +43,19 @@ const RUN_WHEN_OPENED: &[&str] = &[
   "mst",
   "pif",
   "pkg",
+  "pl",
   "ps1",
   "ps2",
   "psc1",
+  "py",
+  "pyw",
+  "rb",
   "reg",
   "scf",
   "scr",
   "sct",
+  "settingcontent-ms",
+  "sh",
   "shb",
   "terminal",
   "tool",
@@ -57,6 +65,7 @@ const RUN_WHEN_OPENED: &[&str] = &[
   "vbs",
   "ws",
   "wsf",
+  "wsh",
 ];
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
