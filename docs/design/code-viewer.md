@@ -36,7 +36,8 @@ conversation, a step's result or a diff) opens with one click.
   a file opens without an extension only when its name has no dot at all, and a few dotfiles open by their exact
   name (`.env`, `.gitignore`, `.editorconfig` and the like, `text_types::TEXT_NAMES`; none is a kind Windows runs)
   (review 2). On Windows `.html`, `.htm`, `.svg` and `.xml` open in the default browser, inside its sandbox for
-  local files.
+  local files. On Windows a path with a comma is refused with its reason, since Explorer splits its command line at
+  commas, and every path is handed to Explorer in double quotes (review 3).
 - Virtualized rows, so a long file opens at once. Binary files, files above a size limit and unreadable files show a
   plain explanation instead of contents.
 - Only files inside the project's folder (or the run's worktree): a path with `..`, an absolute path, or a link or
