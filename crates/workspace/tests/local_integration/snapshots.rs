@@ -61,3 +61,38 @@ fn local_snapshots_show_one_diff_each_and_report_their_sizes() {
   let untracked = read(root, fixture.run, Some(&shown(&notes, Snapshot::Untracked)), &vault).expect("read");
   assert_eq!(untracked.diff, Preview::Text("new\n".to_owned()));
 }
+
+#[test]
+fn local_snapshots_read_a_large_ignored_folder_as_one_bounded_entry() {
+  let fixture = Fixture::new(false);
+  let root = fixture.root();
+  fs::write(root.join(".git/info/exclude"), "build/\n").expect("exclude rule");
+  fs::create_dir_all(root.join("build")).expect("ignored folder");
+  fs::write(root.join("build/first.o"), b"object").expect("first ignored file");
+  let scratch = orchester_exec::local_git::prepare_scratch(root, &[".orchester", "snapshot-test"]).expect("scratch");
+  let main = orchester_exec::local_git::LocalGit::new(root, &scratch).expect("main");
+  let before = main.snapshot().expect("snapshot");
+  for folder in 0..40 {
+    let folder = root.join(format!("build/deps/{folder}"));
+    fs::create_dir_all(&folder).expect("nested ignored folder");
+    for file in 0..100 {
+      fs::write(folder.join(format!("artifact-{file}.rlib")), b"build output").expect("ignored file");
+    }
+  }
+  let started = std::time::Instant::now();
+  let after = main.snapshot().expect("snapshot with thousands of ignored files");
+  let elapsed = started.elapsed();
+  assert_eq!(
+    after, before,
+    "files inside an ignored folder are not part of the checkout's identity"
+  );
+  assert!(
+    elapsed < std::time::Duration::from_secs(20),
+    "bounded read: {elapsed:?}"
+  );
+  let view = read(root, fixture.run, None, &Vault(None)).expect("the review reads the checkout");
+  assert!(
+    view.checkout.files.is_empty(),
+    "ignored content is never listed for commit or preservation"
+  );
+}

@@ -4,7 +4,7 @@ use orchester_core::integration::local::{
 };
 use orchester_exec::local_git::{digest, file_hash, set_executable, write_regular};
 
-use super::{IntegrationError, LocalIntegration};
+use super::{IntegrationError, LocalIntegration, preserve::result_key};
 
 impl LocalIntegration {
   pub(super) fn plan_task_resolution(
@@ -72,9 +72,13 @@ impl LocalIntegration {
   ) -> Result<ResolutionWrite, IntegrationError> {
     let working = bytes.map(digest);
     if let Some((bytes, hash)) = bytes.zip(working.as_ref()) {
-      self
-        .db
-        .retain_local_content(self.run.id(), &result_key(hash)?, RecoveryLayer::Result, hash, bytes)?;
+      self.db.retain_local_content(
+        self.run.id(),
+        &result_key(path, hash)?,
+        RecoveryLayer::Result,
+        hash,
+        bytes,
+      )?;
     }
     Ok(ResolutionWrite {
       path: path.clone(),
@@ -139,7 +143,7 @@ impl LocalIntegration {
       .map(|hash| {
         self
           .db
-          .local_content(self.run.id(), &result_key(hash)?, RecoveryLayer::Result)
+          .local_content(self.run.id(), &result_key(&write.path, hash)?, RecoveryLayer::Result)
           .map_err(IntegrationError::from)?
           .ok_or(IntegrationError::State(LocalError::Reconcile))
       })
@@ -158,8 +162,4 @@ impl LocalIntegration {
     git.set_index(&write.path, write.entry.as_ref(), None)?;
     Ok(())
   }
-}
-
-fn result_key(hash: &orchester_core::blob::ContentHash) -> Result<LocalPath, LocalError> {
-  LocalPath::new(&format!("retained-results/{}", hash.as_str()))
 }

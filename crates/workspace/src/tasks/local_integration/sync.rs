@@ -44,8 +44,10 @@ impl LocalIntegration {
 
   pub(super) fn execute_sync(&mut self) -> Result<(), IntegrationError> {
     let base = self.operation.reviewed().head.clone();
-    let original = self.task_git()?.snapshot()?;
+    // Git merge trusts the index's stat cache; hash every tracked file before it may overwrite one.
+    let original = self.task_git()?.verified_snapshot()?;
     self.operation.ensure_task_owned(&original)?;
+    self.task_git()?.refresh_index()?;
     let merged = self.task_git()?.text(&[
       "-c",
       "merge.conflictStyle=merge",

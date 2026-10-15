@@ -2,10 +2,14 @@
 mod abort;
 #[path = "local_integration/authority.rs"]
 mod authority;
+#[path = "local_integration/cleanup_edits.rs"]
+mod cleanup_edits;
 #[path = "local_integration/drafts.rs"]
 mod drafts;
 #[path = "local_integration/external.rs"]
 mod external;
+#[path = "local_integration/hooks.rs"]
+mod hooks;
 #[path = "local_integration/ignore_transitions.rs"]
 mod ignore_transitions;
 #[path = "local_integration/metadata.rs"]
@@ -339,7 +343,7 @@ fn local_integration_restart_completes_partially_written_task_resolution() {
   let mut db = ProjectDb::open(fixture.root()).expect("db");
   db.retain_local_content(
     fixture.run,
-    &LocalPath::new(&format!("retained-results/{}", hash.as_str())).expect("key"),
+    &LocalPath::new(&format!("retained-results/{}/{}", hash.as_str(), conflict.path)).expect("key"),
     RecoveryLayer::Result,
     &hash,
     bytes,
@@ -384,6 +388,7 @@ fn local_integration_restart_completes_custom_restore_intent_without_task_worktr
     orchester_exec::local_git::LocalGit::new(fixture.root(), &fixture.root().join(".orchester/local-integration"))
       .expect("main");
   let staged = main.tree_entries("HEAD").expect("head").get(&file.path).cloned();
+  let restored = file.path.clone();
   let mut operation = session.operation().clone();
   operation
     .restored_file(RestoredFile {
@@ -398,7 +403,7 @@ fn local_integration_restart_completes_custom_restore_intent_without_task_worktr
   let mut db = ProjectDb::open(fixture.root()).expect("db");
   db.retain_local_content(
     fixture.run,
-    &LocalPath::new(&format!("retained-results/{}", hash.as_str())).expect("key"),
+    &LocalPath::new(&format!("retained-results/{}/{}", hash.as_str(), restored)).expect("key"),
     RecoveryLayer::Result,
     &hash,
     bytes,

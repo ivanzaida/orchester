@@ -18,7 +18,7 @@ impl LocalIntegration {
     let result = self.task_git()?.preview_task_abort(&actual)?;
     for file in &actual.files {
       if let Some(bytes) = self.task_git()?.file(&file.path)? {
-        self.retain_result_bytes(&bytes)?;
+        self.retain_result_bytes(&file.path, &bytes)?;
       }
     }
     self.operation.ensure_task_owned(&self.task_git()?.snapshot()?)?;

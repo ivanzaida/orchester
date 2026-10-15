@@ -1,4 +1,4 @@
-use orchester_core::integration::local::{LocalError, LocalPath, LocalRecoveryStore, RecoveryLayer};
+use orchester_core::integration::local::{LocalError, LocalRecoveryStore, RecoveryLayer};
 use orchester_exec::local_git::{file_hash, set_executable, write_regular};
 
 use super::{IntegrationError, LocalIntegration};
@@ -21,7 +21,7 @@ impl LocalIntegration {
           .working
           .as_ref()
           .map(|hash| {
-            let key = LocalPath::new(&format!("retained-results/{}", hash.as_str()))?;
+            let key = super::preserve::result_key(&saved.path, hash)?;
             self
               .db
               .local_content(self.run.id(), &key, RecoveryLayer::Result)?

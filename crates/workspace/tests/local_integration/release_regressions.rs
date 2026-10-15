@@ -74,7 +74,7 @@ fn release_completed_commit(partial: bool) {
     b"ignored original\n"
   );
   let hash = digest(b"selected staged\n");
-  let retained = LocalPath::new(&format!("retained-results/{}", hash.as_str())).expect("recovery path");
+  let retained = LocalPath::new(&format!("retained-results/{}/local.txt", hash.as_str())).expect("recovery path");
   let db = ProjectDb::open(fixture.root()).expect("db");
   assert_eq!(
     db.local_content(fixture.run, &retained, RecoveryLayer::Result)

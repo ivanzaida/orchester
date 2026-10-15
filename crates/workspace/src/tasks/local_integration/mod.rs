@@ -8,6 +8,7 @@ mod drafts;
 mod external;
 mod legacy;
 mod metadata;
+mod poll;
 mod preserve;
 mod process;
 mod recover;
@@ -23,7 +24,7 @@ mod view;
 use std::path::Path;
 
 pub use authority::{LocalAuthorization, LocalIntent, LocalOrigin};
-pub use external::external_integration;
+pub use external::{EvidenceInputs, external_integration};
 pub use legacy::LegacyPolicy;
 pub(crate) use legacy::managed_checkout;
 pub use metadata::metadata_allowed;
@@ -35,10 +36,11 @@ use orchester_core::{
 };
 use orchester_exec::local_git::{IntegrationLease, LocalGit, LocalGitError};
 use orchester_store::{ProjectDb, StoreError};
+pub use poll::fingerprint;
 pub use stats::{ShownSnapshot, Snapshot, SnapshotSize, SnapshotStats};
 pub use target::recovery_run;
 use thiserror::Error;
-pub use view::{ConflictView, EditorPolicy, IntegrationView, Preview, pending_restoration, read};
+pub use view::{ConflictView, EditorPolicy, IntegrationView, Preview, pending_restoration, read, read_after};
 
 #[derive(Error)]
 pub enum IntegrationError {
@@ -249,8 +251,9 @@ fn ensure_checkout_available(db: &ProjectDb, run: RunId) -> Result<(), Integrati
 }
 
 pub(super) fn ensure_project_git(git: &LocalGit) -> Result<(), IntegrationError> {
-  let common = git.text(&["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
-  let directory = Path::new(&common).canonicalize().map_err(|_| LocalGitError::Io)?;
+  let directory = Path::new(git.common_dir())
+    .canonicalize()
+    .map_err(|_| LocalGitError::Io)?;
   for name in ["objects", "refs", "logs"] {
     let path = directory.join(name);
     if path.exists()

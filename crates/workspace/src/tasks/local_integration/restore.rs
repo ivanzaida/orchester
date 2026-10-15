@@ -203,7 +203,7 @@ impl LocalIntegration {
     }
     let executable = cfg!(unix) && executable;
     if let Some(bytes) = working {
-      self.retain_result_bytes(bytes)?;
+      self.retain_result_bytes(path, bytes)?;
     }
     let heads = self.main.tree_entries("HEAD")?;
     if self.main.index_entries()?.get(path) != heads.get(path) {
@@ -250,14 +250,17 @@ impl LocalIntegration {
   }
 
   pub(super) fn verify_restored(&self) -> Result<(), IntegrationError> {
-    let index = self.main.index_entries()?;
-    for restored in self.operation.restored() {
-      if file_hash(self.main.root(), &restored.path)? != restored.working
-        || index.get(&restored.path) != restored.staged.as_ref()
-        || (restored.working.is_some() && executable(self.main.root(), &restored.path)? != restored.executable)
-      {
-        return Err(LocalError::Reconcile.into());
-      }
+    if !changed_since_restoration(&self.main, &self.operation)?.is_empty() {
+      return Err(LocalError::Reconcile.into());
+    }
+    Ok(())
+  }
+
+  /// An interrupted cleanup goes on only while the restored files differ exactly where the person accepted; any
+  /// other change keeps the originals.
+  pub(super) fn verify_accepted_edits(&self) -> Result<(), IntegrationError> {
+    if changed_since_restoration(&self.main, &self.operation)? != self.operation.accepted_edits() {
+      return Err(LocalError::Reconcile.into());
     }
     Ok(())
   }
@@ -271,6 +274,12 @@ impl LocalIntegration {
   }
 
   pub fn remove_preservation(&mut self) -> Result<(), IntegrationError> {
+    self.remove_preservation_accepting(&[])
+  }
+
+  /// Removes the retained originals after a verified restoration or cancellation. `accepted` are the restored files
+  /// the person changed since and saw listed: they stay as they are. Any other difference keeps the originals.
+  pub fn remove_preservation_accepting(&mut self, accepted: &[LocalPath]) -> Result<(), IntegrationError> {
     if self.operation.merged().is_some() {
       self.ensure_merged_checkout()?;
     } else {
@@ -279,8 +288,10 @@ impl LocalIntegration {
         return Err(LocalError::Stale.into());
       }
     }
-    self.verify_restored()?;
-    self.operation.begin_cleanup()?;
+    if changed_since_restoration(&self.main, &self.operation)? != accepted {
+      return Err(LocalError::Stale.into());
+    }
+    self.operation.begin_cleanup_accepting(accepted.to_vec())?;
     self.save()?;
     self.db.remove_local_content(self.run.id())?;
     self.operation.cleanup_finished()?;
@@ -322,4 +333,22 @@ pub(super) fn restoration_files(
       })
     })
     .collect()
+}
+
+/// The restored paths whose working content, staging or executable bit changed since restoration verified them.
+pub(super) fn changed_since_restoration(
+  main: &orchester_exec::local_git::LocalGit,
+  operation: &orchester_core::integration::local::LocalOperation,
+) -> Result<Vec<orchester_core::integration::local::LocalPath>, IntegrationError> {
+  let index = main.index_entries()?;
+  let mut changed = Vec::new();
+  for restored in operation.restored() {
+    if file_hash(main.root(), &restored.path)? != restored.working
+      || index.get(&restored.path) != restored.staged.as_ref()
+      || (restored.working.is_some() && executable(main.root(), &restored.path)? != restored.executable)
+    {
+      changed.push(restored.path.clone());
+    }
+  }
+  Ok(changed)
 }

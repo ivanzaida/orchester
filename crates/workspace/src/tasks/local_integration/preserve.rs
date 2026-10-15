@@ -20,6 +20,12 @@ impl LocalIntegration {
         self.operation.commit_finished(current)?;
         self.save()
       }
+      Err(orchester_exec::local_git::LocalGitError::HookChanged(change)) => {
+        // The hooks ran on a copy and the branch never moved; the checkout is as reviewed, with what they changed.
+        self.operation.commit_hook_changed(current, change)?;
+        self.save()?;
+        Err(LocalError::HookChanged.into())
+      }
       Err(error) => {
         if self.main.snapshot()? == current {
           self.operation.commit_finished(current)?;
@@ -123,23 +129,32 @@ impl LocalIntegration {
         if Some(digest(&bytes)) != file.working {
           return Err(LocalError::Stale.into());
         }
-        self.retain_result_bytes(&bytes)?;
+        self.retain_result_bytes(&file.path, &bytes)?;
       }
       for entry in [&file.head, &file.staged].into_iter().flatten() {
         let bytes = self.main.blob(&entry.object)?;
-        self.retain_result_bytes(&bytes)?;
+        self.retain_result_bytes(&file.path, &bytes)?;
       }
     }
     self.main.ensure(reviewed)?;
     Ok(())
   }
 
-  pub(super) fn retain_result_bytes(&mut self, bytes: &[u8]) -> Result<(), IntegrationError> {
+  /// Retains `bytes` that `path` held, under a key naming both, so the record says what each blob was.
+  pub(super) fn retain_result_bytes(&mut self, path: &LocalPath, bytes: &[u8]) -> Result<(), IntegrationError> {
     let hash = digest(bytes);
-    let path = LocalPath::new(&format!("retained-results/{}", hash.as_str()))?;
-    self
-      .db
-      .retain_local_content(self.run.id(), &path, RecoveryLayer::Result, &hash, bytes)?;
+    self.db.retain_local_content(
+      self.run.id(),
+      &result_key(path, &hash)?,
+      RecoveryLayer::Result,
+      &hash,
+      bytes,
+    )?;
     Ok(())
   }
+}
+
+/// Where retained content of `path` with digest `hash` is kept: `retained-results/<digest>/<path>`.
+pub(super) fn result_key(path: &LocalPath, hash: &orchester_core::blob::ContentHash) -> Result<LocalPath, LocalError> {
+  LocalPath::new(&format!("retained-results/{}/{}", hash.as_str(), path.as_str()))
 }

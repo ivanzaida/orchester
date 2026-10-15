@@ -24,7 +24,7 @@ impl LocalIntegration {
       LocalPhase::Canceling => self.cancel_preservation(),
       LocalPhase::Canceled => self.save(),
       LocalPhase::RemovingPreservation => {
-        self.verify_restored()?;
+        self.verify_accepted_edits()?;
         self.db.remove_local_content(self.run.id())?;
         self.operation.cleanup_finished()?;
         self.save()
@@ -62,7 +62,7 @@ impl LocalIntegration {
     self.record_known_merge(commit)?;
     match self.operation.phase() {
       LocalPhase::RemovingPreservation => {
-        self.verify_restored()?;
+        self.verify_accepted_edits()?;
         self.db.remove_local_content(self.run.id())?;
         self.operation.cleanup_finished()?;
         self.save()

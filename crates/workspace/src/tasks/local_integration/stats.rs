@@ -9,7 +9,7 @@ use orchester_exec::local_git::LocalGit;
 use super::IntegrationError;
 
 /// Where Git looks for a NUL byte to call content binary (`buffer_is_binary`).
-const BINARY_PROBE: usize = 8000;
+const BINARY_PROBE: u64 = 8000;
 
 /// One reviewed snapshot of a changed path: HEAD → index, index → working copy, or an untracked file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -62,8 +62,8 @@ impl SnapshotStats {
       .iter()
       .filter(|file| file.head.is_none() && file.staged.is_none())
     {
-      if let Some(bytes) = main.file(&file.path)? {
-        stats.insert((file.path.clone(), Snapshot::Untracked), new_file(&bytes));
+      if let Some((size, head)) = orchester_exec::local_git::file_probe(main.root(), &file.path, BINARY_PROBE)? {
+        stats.insert((file.path.clone(), Snapshot::Untracked), new_file(size, &head));
       }
     }
     Ok(Self(stats))
@@ -101,10 +101,9 @@ fn numstat_entry(entry: &str) -> Option<(LocalPath, SnapshotSize)> {
   Some((path, size))
 }
 
-fn new_file(bytes: &[u8]) -> SnapshotSize {
-  if bytes[..bytes.len().min(BINARY_PROBE)].contains(&0) {
-    // A length beyond u64 cannot be held in memory; the size is then simply not shown.
-    SnapshotSize::Binary(u64::try_from(bytes.len()).ok())
+fn new_file(size: u64, head: &[u8]) -> SnapshotSize {
+  if head.contains(&0) {
+    SnapshotSize::Binary(Some(size))
   } else {
     SnapshotSize::NewText
   }

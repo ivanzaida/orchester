@@ -46,6 +46,26 @@ pub struct IntegrationView {
   pub editor_policy: EditorPolicy,
   pub external: Option<orchester_core::integration::local::ContainedResult>,
   pub stats: SnapshotStats,
+  /// What the external evidence was read from, so a later read can keep it while these are unchanged.
+  pub evidence_inputs: super::external::EvidenceInputs,
+  /// Restored paths changed since their restoration was verified: the person's own edits, which cleanup leaves.
+  pub changed_since_restoration: Vec<LocalPath>,
+}
+
+impl IntegrationView {
+  /// Whether `selection` can be reviewed as a commit: every path is listed and has staged or new content. A path
+  /// changed only in the working copy has nothing in the index for a commit to take.
+  pub fn commit_selectable(&self, selection: &[LocalPath]) -> bool {
+    !selection.is_empty()
+      && selection.iter().all(|path| {
+        self
+          .checkout
+          .files
+          .iter()
+          .find(|file| file.path == *path)
+          .is_some_and(|file| !file.only_unstaged())
+      })
+  }
 }
 
 /// Reads actual checkout and retained journal independently of any worker lease, so progress stays observable.
@@ -54,6 +74,16 @@ pub fn read(
   run: RunId,
   selected: Option<&ShownSnapshot>,
   vault: &dyn SecretVault,
+) -> Result<IntegrationView, IntegrationError> {
+  read_after(root, run, (selected, vault), None)
+}
+
+/// [`read`], keeping the external evidence of `previous` while what it was read from is unchanged.
+pub fn read_after(
+  root: &Path,
+  run: RunId,
+  (selected, vault): (Option<&ShownSnapshot>, &dyn SecretVault),
+  previous: Option<&IntegrationView>,
 ) -> Result<IntegrationView, IntegrationError> {
   let scratch =
     orchester_exec::local_git::prepare_scratch(root, &[".orchester", "local-integration", &run.to_string()])?;
@@ -68,7 +98,11 @@ pub fn read(
     .run(run)
     .map_err(|_| IntegrationError::Run)?
     .ok_or(IntegrationError::Run)?;
-  let external = super::external::contained_result(&db, &main, &checkout, &saved_run, operation.as_ref())?;
+  let evidence_inputs = super::external::EvidenceInputs::read(&db, &main, &checkout, &saved_run, operation.as_ref())?;
+  let external = match previous {
+    Some(previous) if previous.evidence_inputs == evidence_inputs => previous.external.clone(),
+    _ => super::external::evidence(&main, &evidence_inputs)?,
+  };
   let redact = Redaction::load(&db, vault)?;
   redact.ensure_metadata(&checkout)?;
   redact.ensure_metadata(&operation)?;
@@ -87,7 +121,15 @@ pub fn read(
     SnapshotStats::default()
   };
   let checked_current = checked_current(root, &checkout, operation.as_ref(), task_root.as_deref())?;
+  let changed_since_restoration = match &operation {
+    Some(saved) if matches!(saved.phase(), LocalPhase::RestorationVerified | LocalPhase::Canceled) => {
+      super::restore::changed_since_restoration(&main, saved)?
+    }
+    _ => Vec::new(),
+  };
   Ok(IntegrationView {
+    evidence_inputs,
+    changed_since_restoration,
     editor_policy: EditorPolicy(std::sync::Arc::new(redact)),
     checked_current,
     external,
