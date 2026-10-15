@@ -16,10 +16,14 @@ use super::typography::{mono, style};
 pub enum FilesText {
   /// Geist Mono 17/600 `text_primary`: a path the page refuses, as its title (`smYzv` in `S3Py8v`).
   RefusedPath,
+  /// 12.5 `text_secondary`: a file's name *Go to file* found (`pZvb2` in `y29f1V`).
+  Name,
+  /// 12.5/600 `text_primary`: the part of that name that answers the search (`wgY4q`).
+  NameMatch,
 }
 
 impl FilesText {
-  pub const ALL: [Self; 1] = [Self::RefusedPath];
+  pub const ALL: [Self; 3] = [Self::RefusedPath, Self::Name, Self::NameMatch];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -28,12 +32,16 @@ impl FilesText {
   const fn name(self) -> &'static str {
     match self {
       Self::RefusedPath => "files_refused_path",
+      Self::Name => "files_name",
+      Self::NameMatch => "files_name_match",
     }
   }
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
       Self::RefusedPath => mono(style(17.0, FontWeight::SemiBold, 1.25, 0.0, palette.text_primary)),
+      Self::Name => style(12.5, FontWeight::Normal, 1.25, 0.0, palette.text_secondary),
+      Self::NameMatch => style(12.5, FontWeight::SemiBold, 1.25, 0.0, palette.text_primary),
     }
   }
 }

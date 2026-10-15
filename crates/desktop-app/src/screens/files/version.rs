@@ -14,7 +14,7 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::{
-  display::short_revision,
+  display::{short_revision, shorten_path},
   files::{FileFacts, RunFacts, Version, VersionChoice},
 };
 
@@ -23,13 +23,14 @@ use crate::{
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     icon::Icon,
-    menu::{MenuItem, menu, menu_panel, separator},
+    menu::{MenuItem, menu_at_end, menu_panel, separator},
     picker::Picker,
   },
 };
 
-/// The menu's width (`DqtY6`).
+/// The menu's width (`DqtY6`), and the characters of the checkout's folder its detail keeps on one line.
 const MENU_WIDTH: f32 = 340.0;
+const FOLDER_CHARS: usize = 36;
 
 /// The icon of a version: a folder for the checkout, a branch for a run's worktree, a commit otherwise.
 pub const fn glyph(version: &Version) -> Icon {
@@ -100,7 +101,7 @@ pub fn switch(ctx: &mut Ctx, page: &Page<'_>) -> (Element, Option<Popup>) {
       panel = panel.child(item.render(ctx, &view.version_open));
     }
     panel = panel.child(separator(ctx)).child(note(ctx, page));
-    menu(view.version_anchor.clone(), view.version_open.clone(), panel)
+    menu_at_end(view.version_anchor.clone(), view.version_open.clone(), panel)
   });
   (picker.into(), menu)
 }
@@ -112,7 +113,7 @@ fn option(ctx: &mut Ctx, page: &Page<'_>, choice: &VersionChoice) -> MenuItem {
   let mut parts = Vec::new();
   match &choice.version {
     Version::Checkout => {
-      parts.push(page.project.open.repo_root.display().to_string());
+      parts.push(shorten_path(&page.project.open.repo_root, FOLDER_CHARS));
       parts.extend(choice.branch.as_ref().map(ToString::to_string));
     }
     Version::Run(_) => parts.extend(page.run_facts().map(|run| run.task.to_string())),

@@ -303,6 +303,14 @@ fn all_projects_tab(button: Button, active: bool) -> Element {
     .into()
 }
 
+/// The icon of a tab at `route`: its screen's, or a file's for a file of the code viewer (`o1Uea4`).
+fn tab_icon(route: &Route) -> Icon {
+  match route {
+    Route::Project(_, ProjectPage::Files(view)) if view.file().is_some() => Icon::FileCode,
+    route => screen_icon(route.screen()),
+  }
+}
+
 /// Whether the task form `route` shows holds edits that are not saved.
 fn unsaved(projects: &Projects, route: &Route) -> bool {
   let (project, task) = match route {
@@ -355,7 +363,7 @@ fn labelled_tab(
   button
     .padding(padding)
     .spacing(ExtraSpacing::Snug.role())
-    .child(icon(screen_icon(tab.route().screen()), IconSize::Base, glyph))
+    .child(icon(tab_icon(tab.route()), IconSize::Base, glyph))
     .child(text)
     .with_children(dirty)
     .with_children(attention)

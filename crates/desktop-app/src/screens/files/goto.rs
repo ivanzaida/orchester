@@ -11,9 +11,9 @@ use lurq::{
   app::{
     ctx::Ctx,
     events::KeyboardEvent,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
   },
-  components::{Column, Popup, Row, Text},
+  components::{Column, Placement, Popup, Row, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
@@ -22,20 +22,21 @@ use orchester_workspace::files::{FileList, NameMatches};
 
 use super::{Page, keys, version};
 use crate::{
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, FilesText, IconSize},
   ui::{
     command_trigger::CommandTrigger,
     field::FieldInput,
     icon::icon,
     kbd::key_cap,
-    popover::{PopoverSide, popover, popover_panel},
     pressable::pressable,
   },
 };
 
-/// The trigger's width (`YErsN`), the search's (`Go to file · open` in `y29f1V`) and how many files it lists.
+/// The trigger's width (`YErsN`), the search's (`Go to file popover` `h6mtSs`), its field's height (`dWexO`)
+/// and how many files it lists.
 const TRIGGER_WIDTH: f32 = 200.0;
 const PANEL_WIDTH: f32 = 560.0;
+const QUERY_HEIGHT: f32 = 32.0;
 const SHOWN: usize = 7;
 
 /// The search's state: whether it is open, what is typed and which file is current.
@@ -105,13 +106,14 @@ pub fn search(ctx: &mut Ctx, page: &Page<'_>, list: Option<&FileList>) -> Option
       go();
     }
   };
+  let query = state.query.get();
   let rows: Vec<Element> = found
     .paths
     .iter()
     .enumerate()
     .map(|(at, path)| {
       let choose = open(ctx, path);
-      result(ctx, path, at == current, choose)
+      result(ctx, (path, &query), at == current, choose)
     })
     .collect();
   let chosen = found.paths.get(current).map(|path| open(ctx, path));
@@ -125,23 +127,33 @@ pub fn search(ctx: &mut Ctx, page: &Page<'_>, list: Option<&FileList>) -> Option
   .search()
   .placeholder(ctx.t("files.goTo.placeholder"))
   .unit(ctx.t_args("files.goTo.in", [("version", version.as_str())]))
+  .box_height(QUERY_HEIGHT)
   .element(state.input.clone());
-  let panel = popover_panel("files-go-to-search", PANEL_WIDTH)
+  let panel = Column::new()
+    .id("files-go-to-search")
+    .width(Dimension::Px(PANEL_WIDTH))
+    .padding(ExtraSpacing::Snug.role())
+    .spacing(ExtraSpacing::Tight.role())
+    .rounded(ExtraRadius::Tile.role())
+    .background(PaletteColor::SurfaceRaised)
+    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    .box_shadow(ShadowStyle::Lg)
     .on_key_down(keys)
     .child(field.render(ctx))
     .child(
       Column::new()
         .id("files-go-to-results")
         .width(Dimension::Pct(100.0))
+        .padding(Padding::vertical(SpacingSize::Xs))
         .with_children(rows),
     )
     .child(footer(ctx, &found));
-  Some(popover(
-    state.anchor.clone(),
-    state.open.clone(),
-    PopoverSide::Below,
-    panel,
-  ))
+  Some(
+    Popup::new(state.anchor.clone(), panel)
+      .open(state.open.clone())
+      .placement(Placement::BottomStart)
+      .offset(0.0, ExtraSpacing::Snug.value()),
+  )
 }
 
 /// ↑ and ↓ move among `count` files, Enter opens the current one.
@@ -170,8 +182,9 @@ fn move_keys<F: Fn() + Send + Sync + 'static>(
   }
 }
 
-/// A file the search found: its icon, name and folder; the current one with the *Enter* cap.
-fn result(ctx: &Ctx, path: &str, current: bool, choose: impl Fn() + Send + Sync + 'static) -> Element {
+/// A file the search found: its icon, its name with the part that answers `query` in 600, and its folder; the
+/// current one with the *Enter* cap.
+fn result(ctx: &Ctx, (path, query): (&str, &str), current: bool, choose: impl Fn() + Send + Sync + 'static) -> Element {
   let (folder, name) = path.rsplit_once('/').unwrap_or(("", path));
   let glyph_color = if current {
     PaletteColor::TextPrimary
@@ -193,12 +206,7 @@ fn result(ctx: &Ctx, path: &str, current: bool, choose: impl Fn() + Send + Sync 
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .spacing(ExtraSpacing::Tight.role())
-        .child(
-          Text::new(name)
-            .variant(TypographyStyle::Description)
-            .color(PaletteColor::TextPrimary)
-            .nowrap(),
-        )
+        .child(name_parts(name, query))
         .with_children(
           (!folder.is_empty()).then(|| Text::new(folder).variant(ExtraTypography::MonoNote.role()).nowrap()),
         ),
@@ -210,6 +218,37 @@ fn result(ctx: &Ctx, path: &str, current: bool, choose: impl Fn() + Send + Sync 
     row
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
       .into()
+  }
+}
+
+/// `name` with the part that holds `query`, ignoring case, in 600 `text_primary` and the rest in `text_secondary`
+/// (`wgY4q`, `pZvb2`); without such a part, all of it in `text_secondary`.
+fn name_parts(name: &str, query: &str) -> Row {
+  let chars: Vec<char> = name.chars().collect();
+  let wanted: Vec<char> = query.trim().chars().flat_map(char::to_lowercase).collect();
+  let lower: Vec<char> = chars.iter().map(|character| character.to_lowercase().next().unwrap_or(*character)).collect();
+  let start = (!wanted.is_empty() && wanted.len() == query.trim().chars().count())
+    .then(|| lower.windows(wanted.len()).position(|window| window == wanted.as_slice()))
+    .flatten();
+  let part = |range: std::ops::Range<usize>, matched: bool| {
+    let text: String = chars[range].iter().collect();
+    let role = if matched {
+      FilesText::NameMatch.role()
+    } else {
+      FilesText::Name.role()
+    };
+    Text::new(&text).variant(role).nowrap()
+  };
+  let row = Row::new().align_items(Alignment::Center);
+  match start {
+    Some(start) => {
+      let end = start + wanted.len();
+      row
+        .with_children((start > 0).then(|| part(0..start, false)))
+        .child(part(start..end, true))
+        .with_children((end < chars.len()).then(|| part(end..chars.len(), false)))
+    }
+    None => row.child(part(0..chars.len(), false)),
   }
 }
 
@@ -235,8 +274,14 @@ fn footer(ctx: &Ctx, found: &NameMatches) -> Element {
   Row::new()
     .id("files-go-to-footer")
     .width(Dimension::Pct(100.0))
-    .padding(Padding::new().top(SpacingSize::Sm))
-    .spacing(SpacingSize::Md)
+    .padding(
+      Padding::new()
+        .top(SpacingSize::Sm)
+        .left(SpacingSize::Sm)
+        .right(SpacingSize::Sm)
+        .bottom(SpacingSize::Xs),
+    )
+    .spacing(SpacingSize::Lg)
     .align_items(Alignment::Center)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(

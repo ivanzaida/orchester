@@ -49,6 +49,15 @@ pub fn menu(anchor: ElementRef, open: Signal<bool>, panel: impl Into<Element>) -
     .offset(0.0, ExtraSpacing::Snug.value())
 }
 
+/// `panel` opened 6 under `anchor` at its end while `open` holds, for a control at the end of a row (`Version
+/// menu` `DqtY6` under its picker in `kadDh`); it closes as [`menu`] does.
+pub fn menu_at_end(anchor: ElementRef, open: Signal<bool>, panel: impl Into<Element>) -> Popup {
+  Popup::new(anchor, panel)
+    .open(open)
+    .placement(Placement::BottomEnd)
+    .offset(0.0, ExtraSpacing::Snug.value())
+}
+
 /// The line between groups of rows.
 pub fn separator(ctx: &Ctx) -> Element {
   let line = ctx.theme().border_size_value(BorderSize::Sm);

@@ -104,7 +104,7 @@
     "refused": {
       "title": "This path is outside the project",
       "hiddenTitle": "This path is not shown",
-      "detail": "{{reason}} Files open here only from inside the project's folder or a run's worktree: a path with “..”, an absolute path, or a link or junction that leads out is refused."
+      "detail": "“{{path}}” leads out of {{folder}}. Files open here only from inside the project's folder or a run's worktree: a path with “..”, an absolute path, or a link or junction that leads out is refused."
     },
     "missing": {
       "title": "This file is not in this version"

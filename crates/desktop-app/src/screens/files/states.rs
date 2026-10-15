@@ -72,14 +72,24 @@ pub fn no_file(ctx: &mut Ctx, page: &Page<'_>) -> Element {
 }
 
 /// The route names a path the page does not open, and why.
-pub fn refused(ctx: &Ctx, error: &PathError) -> Element {
-  let title = match error {
-    PathError::Hidden(_) => "files.refused.hiddenTitle",
-    _ => "files.refused.title",
+pub fn refused(ctx: &Ctx, page: &Page<'_>, error: &PathError) -> Element {
+  let (title, detail) = match error {
+    PathError::Absolute(path) | PathError::Parent(path) | PathError::Invalid(path) | PathError::Outside(path) => (
+      ctx.t("files.refused.title"),
+      ctx.t_args(
+        "files.refused.detail",
+        [
+          ("path", path.as_str()),
+          ("folder", &page.project.open.repo_root.display().to_string()),
+        ],
+      ),
+    ),
+    PathError::Hidden(_) | PathError::Empty => (
+      ctx.t("files.refused.hiddenTitle"),
+      message_text(ctx, &FilesError::Path(error.clone()).message()),
+    ),
   };
-  let reason = message_text(ctx, &FilesError::Path(error.clone()).message());
-  let detail = ctx.t_args("files.refused.detail", [("reason", reason.as_ref())]);
-  area(EmptyState::new("files-refused", Icon::ShieldX, ctx.t(title), detail))
+  area(EmptyState::new("files-refused", Icon::ShieldX, title, detail))
 }
 
 /// The file is not in the version, is a folder, or cannot be read.

@@ -55,7 +55,7 @@ const WIDTH_EPSILON: f32 = 0.5;
 pub fn pane(ctx: &mut Ctx, page: &Page<'_>) -> Element {
   let content = match (&page.path, &page.read) {
     (None, _) => states::no_file(ctx, page),
-    (Some(Err(error)), _) => states::refused(ctx, error),
+    (Some(Err(error)), _) => states::refused(ctx, page, error),
     (Some(Ok(_)), None | Some(Shown::Reading)) => loading("files-file-loading", &ctx.t("files.readingFile")).into(),
     (Some(Ok(_)), Some(Shown::Failed(failure))) => states::unreadable(ctx, failure),
     (Some(Ok(file)), Some(Shown::Read(read))) => match read {

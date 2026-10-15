@@ -72,7 +72,8 @@ pub fn header(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Element {
     .into()
 }
 
-/// The project, *Files* and the file's folders; a folder opens in the tree.
+/// The project, *Files* and the file's folders, a folder opening in the tree; with no file, the project alone
+/// (`o3iVXj`).
 fn crumbs(ctx: &mut Ctx, page: &Page<'_>) -> Row {
   let navigation = Navigation::of(ctx);
   let project = page.project.open.project.id();
@@ -83,8 +84,10 @@ fn crumbs(ctx: &mut Ctx, page: &Page<'_>) -> Row {
       overview.go(Route::Project(project, ProjectPage::Overview(OverviewTab::default())));
     },
   )];
-  let root = page.route_to(None, page.at().clone());
-  crumbs.push(Crumb::link(ctx.t("files.title"), move || navigation.go(root.clone())));
+  if page.route.file().is_some() {
+    let root = page.route_to(None, page.at().clone());
+    crumbs.push(Crumb::link(ctx.t("files.title"), move || navigation.go(root.clone())));
+  }
   if let Some(file) = page.file() {
     for folder in file.folders() {
       let name = folder.rsplit('/').next().unwrap_or(folder).to_owned();
