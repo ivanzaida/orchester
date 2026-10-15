@@ -17,8 +17,18 @@ pub fn read_regular(root: &Path, path: &LocalPath) -> Result<Option<Vec<u8>>, Lo
     .transpose()
 }
 
+/// The digest of the regular file at `path`, of any size.
 pub fn file_hash(root: &Path, path: &LocalPath) -> Result<Option<ContentHash>, LocalGitError> {
-  read_regular(root, path).map(|bytes| bytes.as_deref().map(digest))
+  OwnedFile::open(root, path, false)?
+    .map(|mut file| file.digest())
+    .transpose()
+}
+
+/// The size of the regular file at `path` and its first `limit` bytes, e.g. to tell binary content apart.
+pub fn file_probe(root: &Path, path: &LocalPath, limit: u64) -> Result<Option<(u64, Vec<u8>)>, LocalGitError> {
+  OwnedFile::open(root, path, false)?
+    .map(|mut file| file.probe(limit))
+    .transpose()
 }
 
 /// Comparison and mutation use the same opened regular object; source receipts retain interrupted writes.

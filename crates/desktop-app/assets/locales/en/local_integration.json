@@ -138,7 +138,8 @@
       "checkFailed": "Fresh Check failed. The result remains unapproved.",
       "containment": "Local integration cannot prove ownership of child processes on this platform. No command was started.",
       "storageOwnership": "Local integration cannot bind recovery storage to owned objects on this platform. The checkout and retained recovery have not been changed.",
-      "processUncertain": "Child processes or pipes have an uncertain outcome. Retained recovery has not been removed. Inspect the recorded operation before continuing."
+      "processUncertain": "Child processes or pipes have an uncertain outcome. Retained recovery has not been removed. Inspect the recorded operation before continuing.",
+      "hookChanged": "A commit hook changed the selected files or the message. Nothing was committed; the checkout, its index and the branch are unchanged."
     },
     "hiddenMetadata": "Sensitive metadata hidden",
     "now": {
@@ -230,6 +231,11 @@
     "dirty": "Delivery paused: main has local changes",
     "dirtyBody": "Review each snapshot. Commit selected changes or save a named temporary preservation.",
     "dirtyNarrow": "Delivery paused: main is dirty",
-    "dirtyNarrowBody": "Review exact staged and working-copy snapshots."
+    "dirtyNarrowBody": "Review exact staged and working-copy snapshots.",
+    "hookTitle": "Commit stopped: a hook changed it",
+    "hookPaths": "The repository's commit hook changed {{paths}}. Nothing was committed; the checkout, its index and the branch are as you reviewed them. Apply or undo the hook's change yourself, then review the commit again.",
+    "hookMessage": "The repository's commit hook rewrote the commit message. Nothing was committed; the checkout, its index and the branch are as you reviewed them. Adjust the message or the hook, then review the commit again.",
+    "hookBoth": "The repository's commit hook changed {{paths}} and rewrote the commit message. Nothing was committed; the checkout, its index and the branch are as you reviewed them. Apply or undo the hook's change yourself, then review the commit again.",
+    "cleanupEdited": "Changed since restoration: {{paths}}. These files stay as they are; removing the preservation removes only the retained originals."
   }
 }

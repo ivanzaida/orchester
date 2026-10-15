@@ -77,6 +77,10 @@ pub struct LocalOperation {
   preservation_selection: Vec<super::LocalPath>,
   #[serde(default)]
   editor_drafts: Vec<super::DraftRecord>,
+  #[serde(default)]
+  hook_change: Option<super::HookChange>,
+  #[serde(default)]
+  accepted_edits: Vec<super::LocalPath>,
 }
 
 impl LocalOperation {
@@ -106,6 +110,8 @@ impl LocalOperation {
       pending_resolution: None,
       preservation_selection: Vec::new(),
       editor_drafts: Vec::new(),
+      hook_change: None,
+      accepted_edits: Vec::new(),
     })
   }
 
@@ -279,8 +285,21 @@ impl LocalOperation {
     if message.trim().is_empty() {
       return Err(LocalError::Blank);
     }
+    self.hook_change = None;
     self.phase = LocalPhase::Committing;
     Ok(())
+  }
+
+  /// The commit stopped because a hook changed it; the checkout is still `current`, as reviewed.
+  pub fn commit_hook_changed(&mut self, current: Checkout, change: super::HookChange) -> Result<(), LocalError> {
+    self.commit_finished(current)?;
+    self.hook_change = Some(change);
+    Ok(())
+  }
+
+  /// What a hook changed when the last commit stopped, until the next commit starts.
+  pub const fn hook_change(&self) -> Option<&super::HookChange> {
+    self.hook_change.as_ref()
   }
 
   pub fn commit_finished(&mut self, current: Checkout) -> Result<(), LocalError> {
@@ -487,11 +506,20 @@ impl LocalOperation {
   }
 
   pub fn begin_cleanup(&mut self) -> Result<(), LocalError> {
+    self.begin_cleanup_accepting(Vec::new())
+  }
+
+  /// Cleanup that leaves `edited`, restored files the person changed since, as they are; nothing else may differ.
+  pub fn begin_cleanup_accepting(&mut self, edited: Vec<super::LocalPath>) -> Result<(), LocalError> {
     if !matches!(self.phase, LocalPhase::RestorationVerified | LocalPhase::Canceled) {
       return Err(LocalError::NotVerified);
     }
+    self.accepted_edits = edited;
     self.phase = LocalPhase::RemovingPreservation;
     Ok(())
+  }
+  pub fn accepted_edits(&self) -> &[super::LocalPath] {
+    &self.accepted_edits
   }
 
   pub fn cleanup_finished(&mut self) -> Result<(), LocalError> {

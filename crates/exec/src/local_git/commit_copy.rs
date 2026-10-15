@@ -57,34 +57,34 @@ impl LocalGit {
     Ok(directory)
   }
 
-  pub(super) fn add_untracked_in_copy(
+  /// A copy holding only `paths` of `index`, for reads that need a few of its files, such as its ignore rules.
+  pub(super) fn partial_copy(
     &self,
     index: &Path,
-    path: &super::LocalPath,
-    executable: bool,
-  ) -> Result<(), LocalGitError> {
-    let directory = self.commit_copy(index)?;
-    let hash = super::copy_untracked_file(&self.root, directory.path(), path, executable)?;
-    let output = self.scoped_raw(&["add", "--", path.as_str()], None, Some(index), Some(directory.path()))?;
-    if output.code != Some(0) {
+    paths: &[super::LocalPath],
+  ) -> Result<tempfile::TempDir, LocalGitError> {
+    let directory = tempfile::Builder::new()
+      .prefix("commit-")
+      .tempdir_in(&self.scratch)
+      .map_err(|_| LocalGitError::Io)?;
+    if paths.is_empty() {
+      return Ok(directory);
+    }
+    let mut input = Vec::new();
+    for path in paths {
+      input.extend_from_slice(path.as_str().as_bytes());
+      input.push(0);
+    }
+    let copied = self.scoped_raw(
+      &["checkout-index", "--force", "-z", "--stdin"],
+      Some(&input),
+      Some(index),
+      Some(directory.path()),
+    )?;
+    if copied.code != Some(0) {
       return Err(LocalGitError::Refused);
     }
-    let chmod = if cfg!(unix) && executable {
-      "--chmod=+x"
-    } else {
-      "--chmod=-x"
-    };
-    self.index_command(&["update-index", chmod, "--", path.as_str()], None, index)?;
-    let tree = self.index_command(&["write-tree"], None, index)?;
-    let copied = self.tree_entries(&tree)?;
-    let mode = if cfg!(unix) && executable { 0o100755 } else { 0o100644 };
-    if copied.get(path).is_none_or(|entry| entry.mode != mode)
-      || super::file_hash(directory.path(), path)?.as_ref() != Some(&hash)
-      || super::executable(directory.path(), path)? != (cfg!(unix) && executable)
-    {
-      return Err(LocalError::Reconcile.into());
-    }
-    Ok(())
+    Ok(directory)
   }
 
   pub(super) fn in_commit_copy(&self, command: &Command, worktree: &Path) -> Result<Command, LocalGitError> {
@@ -92,7 +92,7 @@ impl LocalGit {
     if !worktree.starts_with(&self.scratch) {
       return Err(LocalError::Unsupported.into());
     }
-    let git_dir = self.text(&["rev-parse", "--absolute-git-dir"])?;
+    let git_dir = &self.git_dir_text;
     let hooks = self.hook_directory()?;
     let configuration = format!("core.hooksPath={}", git_name(&hooks)?);
     let args = [
@@ -116,7 +116,7 @@ impl LocalGit {
         .with_env("GIT_TERMINAL_PROMPT", "0")
         .with_env("GIT_LITERAL_PATHSPECS", "1")
         .with_env("GIT_OPTIONAL_LOCKS", "0")
-        .with_env("GIT_DIR", &git_name(Path::new(&git_dir))?)
+        .with_env("GIT_DIR", &git_name(Path::new(git_dir))?)
         .with_env("GIT_WORK_TREE", &git_name(&worktree)?)
         .with_env("GIT_INDEX_FILE", index)
         .without_env("GIT_COMMON_DIR")
@@ -127,7 +127,16 @@ impl LocalGit {
     )
   }
 
+  /// The repository's hook directory, resolved once.
   fn hook_directory(&self) -> Result<PathBuf, LocalGitError> {
+    if let Some(hooks) = self.hooks.get() {
+      return Ok(hooks.clone());
+    }
+    let hooks = self.find_hook_directory()?;
+    Ok(self.hooks.get_or_init(|| hooks).clone())
+  }
+
+  fn find_hook_directory(&self) -> Result<PathBuf, LocalGitError> {
     let output = self.raw(&["config", "--path", "--get", "core.hooksPath"], None, None)?;
     match output.code {
       Some(1) => Ok(PathBuf::from(self.text(&[

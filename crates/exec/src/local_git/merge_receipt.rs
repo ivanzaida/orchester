@@ -9,6 +9,7 @@ impl LocalGit {
     if exact.base.head == exact.result.head {
       return Err(LocalError::Stale.into());
     }
+    self.refresh_index()?;
     let mut owned = self.clone();
     owned.ref_action = Some(action.to_owned());
     owned.text(&[

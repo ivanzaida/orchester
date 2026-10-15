@@ -1,19 +1,28 @@
 use std::path::Path;
 
-use orchester_core::integration::local::{Checkout, IndexEntry, LocalError, LocalPath};
+use orchester_core::integration::local::{Checkout, IndexEntry, LocalError, LocalFile, LocalPath};
 
 use super::{LocalGit, LocalGitError};
 
+/// The scratch index the selected commit is built in.
+const SELECTED_INDEX: &str = "selected.index";
+
 impl LocalGit {
   /// Builds HEAD → selected index in a separate index. No excluded staged or working bytes are changed.
+  /// Changes nothing: the commit itself verifies every file again before the branch moves.
   pub fn selected_tree(&self, reviewed: &Checkout, paths: &[LocalPath]) -> Result<String, LocalGitError> {
-    self.ensure(reviewed)?;
+    let tree = self.build_selected(reviewed, paths)?;
+    // One check after building covers the whole step: any change before or during it shows here.
+    reviewed.ensure_current(&self.snapshot()?)?;
+    Ok(tree)
+  }
+
+  fn build_selected(&self, reviewed: &Checkout, paths: &[LocalPath]) -> Result<String, LocalGitError> {
     if paths.is_empty() {
       return Err(LocalError::Blank.into());
     }
-    let index = self.scratch.join("selected.index");
-    let path = LocalPath::new("selected.index")?;
-    if let Some(mut old) = super::owned::OwnedFile::open(&self.scratch, &path, true)? {
+    let index = self.scratch.join(SELECTED_INDEX);
+    if let Some(mut old) = super::owned::OwnedFile::open(&self.scratch, &LocalPath::new(SELECTED_INDEX)?, true)? {
       let expected = super::digest(&old.read()?);
       old.remove(&expected)?;
     }
@@ -24,7 +33,7 @@ impl LocalGit {
         .iter()
         .find(|file| &file.path == path)
         .ok_or(LocalError::Stale)?;
-      if file.head == file.staged && file.staged.is_some() {
+      if file.only_unstaged() {
         return Err(LocalError::WrongPhase.into());
       }
       if let Some(staged) = &file.staged {
@@ -32,15 +41,33 @@ impl LocalGit {
       } else if file.head.is_some() {
         self.set_index(path, None, Some(&index))?;
       } else {
-        self.add_untracked_in_copy(&index, path, file.executable)?;
+        self.add_untracked(&index, path, file)?;
       }
     }
     let tree = self.index_command(&["write-tree"], None, &index)?;
     super::validate_object(&tree)?;
-    self.ensure(reviewed)?;
     Ok(tree)
   }
 
+  /// Adds the reviewed bytes of the untracked `file` to `index` as `git add` would: hashed through the checkout's
+  /// attributes for `path`, with its reviewed executable bit.
+  fn add_untracked(&self, index: &Path, path: &LocalPath, file: &LocalFile) -> Result<(), LocalGitError> {
+    let bytes = self.file(path)?.ok_or(LocalError::Stale)?;
+    if Some(super::digest(&bytes)) != file.working {
+      return Err(LocalError::Stale.into());
+    }
+    let object = self.put_path_blob(path, &bytes)?;
+    let mode = if cfg!(unix) && file.executable {
+      0o100755
+    } else {
+      0o100644
+    };
+    self.set_index(path, Some(&IndexEntry { mode, object }), Some(index))
+  }
+
+  /// Commits the reviewed `tree` of `paths` with `message`. The repository's hooks run first on a copy; if they
+  /// fail or change the tree or the message, nothing moves. The branch then moves from the reviewed HEAD to a
+  /// commit of exactly `tree`, and only the committed paths of the checkout's index are updated.
   pub fn commit_selected(
     &self,
     reviewed: &Checkout,
@@ -51,34 +78,41 @@ impl LocalGit {
     if message.trim().is_empty() {
       return Err(LocalError::Blank.into());
     }
-    if self.selected_tree(reviewed, paths)? != tree {
+    self.ensure(reviewed)?;
+    if self.build_selected(reviewed, paths)? != tree {
       return Err(LocalError::Stale.into());
     }
-    self.ensure(reviewed)?;
-    let index = self.scratch.join("selected.index");
+    let index = self.scratch.join(SELECTED_INDEX);
     let directory = self.commit_copy(&index)?;
+    let hooked = self.run_commit_hooks((&index, directory.path()), tree, message)?;
     self.ensure(reviewed)?;
-    let output = self.scoped_raw(&["commit", "-m", message], None, Some(&index), Some(directory.path()))?;
-    let head = self.text(&["rev-parse", "HEAD"])?;
-    if head == reviewed.head {
-      return Err(if output.code == Some(0) {
-        LocalGitError::Data
-      } else {
-        LocalGitError::Refused
-      });
+    let commit = self.text(&["commit-tree", tree, "-p", &reviewed.head, "-F", &hooked.file])?;
+    super::validate_object(&commit)?;
+    let branch = format!("refs/heads/{}", reviewed.branch);
+    let subject = message.lines().next().unwrap_or_default();
+    let moved = self.raw(
+      &[
+        "update-ref",
+        "-m",
+        &format!("commit: {subject}"),
+        &branch,
+        &commit,
+        &reviewed.head,
+      ],
+      None,
+      None,
+    )?;
+    if moved.code != Some(0) {
+      return Err(LocalError::Stale.into());
     }
-    let actual = self.text(&["rev-parse", "HEAD^{tree}"])?;
-    if actual != tree
-      || self.text(&["rev-parse", "HEAD^"])? != reviewed.head
-      || self.text(&["symbolic-ref", "--short", "HEAD"])? != reviewed.branch
-    {
-      return Err(LocalError::Reconcile.into());
-    }
-    if output.code != Some(0) {
-      return Err(LocalGitError::Refused);
-    }
-    let entries = self.tree_entries(&head)?;
-    // The original index is still byte-for-byte intact. Replace only the committed paths.
+    self.post_commit_hook(&index, directory.path())?;
+    self.index_committed(reviewed, paths, &commit)
+  }
+
+  /// After the branch moved to `commit`: the original index is still byte-for-byte intact, so replace only the
+  /// committed paths, and confirm every reviewed file kept its working content and its excluded staging.
+  fn index_committed(&self, reviewed: &Checkout, paths: &[LocalPath], commit: &str) -> Result<Checkout, LocalGitError> {
+    let entries = self.tree_entries(commit)?;
     let original_index = self.index_entries()?;
     for path in paths {
       let original = reviewed
@@ -93,12 +127,11 @@ impl LocalGit {
       self.set_index(path, entries.get(path), None)?;
     }
     let current = self.snapshot()?;
+    let index = self.index_entries()?;
     for file in &reviewed.files {
-      let working = super::file_hash(&self.root, &file.path)?;
-      if working != file.working {
-        return Err(LocalError::Reconcile.into());
-      }
-      if !paths.contains(&file.path) && self.index_entries()?.get(&file.path) != file.staged.as_ref() {
+      if super::file_hash(&self.root, &file.path)? != file.working
+        || (!paths.contains(&file.path) && index.get(&file.path) != file.staged.as_ref())
+      {
         return Err(LocalError::Reconcile.into());
       }
     }
@@ -122,12 +155,16 @@ impl LocalGit {
       None => format!("0 {}\t{}\0", "0".repeat(self.text(&["rev-parse", "HEAD"])?.len()), path),
     };
     let args = ["update-index", "-z", "--index-info"];
-    let output = if let Some(index) = index {
-      self.quiet_index(&args, Some(data.as_bytes()), index)?
-    } else {
-      self.quiet_plumbing(&args, Some(data.as_bytes()), None)?
+    let Some(index) = index else {
+      let output = self.quiet_plumbing(&args, Some(data.as_bytes()), None)?;
+      if output.code != Some(0) {
+        return Err(LocalGitError::Refused);
+      }
+      // An entry written without stat data reads as "not uptodate" to Git's own merge and abort, in the app and in
+      // the person's terminal alike.
+      return self.refresh_index();
     };
-    if output.code != Some(0) {
+    if self.quiet_index(&args, Some(data.as_bytes()), index)?.code != Some(0) {
       return Err(LocalGitError::Refused);
     }
     Ok(())

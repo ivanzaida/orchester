@@ -84,10 +84,12 @@ impl LocalGit {
     if let Some(worktree) = worktree {
       command = self.in_commit_copy(&command, worktree)?;
     }
-    let mutation = args
-      .iter()
-      .any(|arg| matches!(*arg, "commit" | "merge" | "restore" | "checkout-index"))
-      || (index.is_none() && args.contains(&"update-index"));
+    let mutation = args.iter().any(|arg| {
+      matches!(
+        *arg,
+        "commit" | "merge" | "restore" | "checkout-index" | "hook" | "update-ref"
+      )
+    }) || (index.is_none() && args.contains(&"update-index"));
     super::execute::invoke(
       &command,
       input,

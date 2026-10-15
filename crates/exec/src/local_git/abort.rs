@@ -30,6 +30,7 @@ impl LocalGit {
 
   pub fn abort_task_merge(&self, before: &Checkout) -> Result<(), LocalGitError> {
     self.ensure_task_abort(before)?;
+    self.refresh_index()?;
     self.text(&["merge", "--abort"])?;
     Ok(())
   }
@@ -39,7 +40,7 @@ impl LocalGit {
       .operation
       .as_ref()
       .is_some_and(|marker| marker.starts_with("MERGE_HEAD:"))
-      || self.snapshot()? != *before
+      || self.verified_snapshot()? != *before
     {
       return Err(LocalError::ForeignOperation.into());
     }

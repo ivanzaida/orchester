@@ -1,6 +1,7 @@
 //! Durable local checkout integration. Editing a result and approving its checked identity are separate decisions.
 
 mod draft;
+mod hook;
 mod path;
 mod process;
 mod record;
@@ -8,6 +9,7 @@ mod recovery;
 mod resolution;
 
 pub use draft::{ConflictKind, DraftChoice, DraftIdentity, DraftRecord, EditorCandidate};
+pub use hook::HookChange;
 pub use path::LocalPath;
 pub use process::{ExecutorIdentity, LocalProcess, LocalProcessStore, ProcessIdentity, ProcessJournal};
 pub use record::{CheckedResult, LocalOperation, LocalPhase, Preservation};
@@ -52,6 +54,8 @@ pub enum LocalError {
   Unresolved,
   #[error("a commit message or preservation name is required")]
   Blank,
+  #[error("a commit hook changed the reviewed commit; nothing was committed")]
+  HookChanged,
 }
 
 /// Read-only Git evidence, not a historical Orchester merge record or approval.
@@ -88,6 +92,14 @@ pub struct LocalFile {
   pub executable: bool,
   #[serde(default)]
   pub unstaged: bool,
+}
+
+impl LocalFile {
+  /// The path changed only in the working copy: HEAD and the index agree, so a commit of the index has nothing of
+  /// it to take.
+  pub fn only_unstaged(&self) -> bool {
+    self.head.is_some() && self.head == self.staged
+  }
 }
 
 /// Every relevant identity is compared before a mutation, including Git operation markers.

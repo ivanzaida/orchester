@@ -97,6 +97,29 @@ impl OwnedFile {
     Ok(bytes)
   }
 
+  /// The content's digest, read in chunks so a file of any size can be identified without holding it.
+  pub fn digest(&mut self) -> Result<ContentHash, LocalGitError> {
+    self.ensure_current()?;
+    self.file.seek(SeekFrom::Start(0)).map_err(|_| LocalGitError::Io)?;
+    let hash = super::digest_reader(&mut self.file).map_err(|_| LocalGitError::Io)?;
+    self.ensure_current()?;
+    Ok(hash)
+  }
+
+  /// The content's size and its first `limit` bytes.
+  pub fn probe(&mut self, limit: u64) -> Result<(u64, Vec<u8>), LocalGitError> {
+    self.ensure_current()?;
+    let size = self.file.metadata().map_err(|_| LocalGitError::Io)?.len();
+    self.file.seek(SeekFrom::Start(0)).map_err(|_| LocalGitError::Io)?;
+    let mut head = Vec::new();
+    Read::by_ref(&mut self.file)
+      .take(limit)
+      .read_to_end(&mut head)
+      .map_err(|_| LocalGitError::Io)?;
+    self.ensure_current()?;
+    Ok((size, head))
+  }
+
   pub fn executable(&self) -> Result<bool, LocalGitError> {
     self.ensure_current()?;
     platform::executable(&self.file)
