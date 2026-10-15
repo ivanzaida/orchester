@@ -1,7 +1,7 @@
 //! The *Failed runs* card of *Efficiency* (`Card · Failed runs` `Kc99a`): how many runs failed of all and
 //! the tokens spent on them, each with its share; their share of the spent tokens as a two-part bar with
-//! its legend; the failed run that spent the most; and *Show failed tasks →*, which opens the Overview's
-//! *Failed* tab. Its figures are exact already, so it has no table view.
+//! its legend; the failed run that spent the most; and *Show failed tasks →*, which opens the project
+//! Overview's *Failed* tab (on a project's page). Its figures are exact already, so it has no table view.
 
 use lurq::{
   app::{
@@ -35,10 +35,11 @@ pub fn card(ctx: &mut Ctx, dashboard: &Dashboard, requery: &Requery) -> Element 
     .subtitle(ctx.t("usage.efficiency.failedSubtitle"))
     .fill();
   let failed = &dashboard.report.efficiency.failed;
-  let show = (failed.runs > 0).then(|| {
+  // A project's Overview lists its failed tasks; every project's page has no one list to open.
+  let show = requery.project().filter(|_| failed.runs > 0).map(|project| {
     let (navigation, route) = (
       Navigation::of(ctx),
-      Route::Project(requery.project(), ProjectPage::Overview(OverviewTab::Failed)),
+      Route::Project(project, ProjectPage::Overview(OverviewTab::Failed)),
     );
     text_link("usage-show-failed", &ctx.t("usage.efficiency.showFailed"), move || {
       navigation.go(route.clone());

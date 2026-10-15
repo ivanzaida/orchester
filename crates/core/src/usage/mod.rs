@@ -21,9 +21,7 @@ pub use self::{
   breakdown::{BreakdownKey, BreakdownRow, Breakdowns},
   efficiency::{EditTokens, Efficiency, FailedRuns},
   expensive::{RunCost, TaskCost},
-  facts::{
-    IndexGiven, InvocationFacts, PipelineLabel, ProjectFacts, ReviewUsage, RunFacts, RunOutcome, TurnUsage, UsageFacts,
-  },
+  facts::{IndexGiven, InvocationFacts, ProjectFacts, ReviewUsage, RunFacts, RunOutcome, TurnUsage, UsageFacts},
   filter::{FilterOptions, UsageFilter, toggle},
   grouped::{GroupBy, GroupKey, GroupRow, Grouped, Named, grouped},
   period::{Bucket, DayRange, DayRangeError, Grouping, HOURLY_DAYS, Period, bucket_of, day_start, local_date},

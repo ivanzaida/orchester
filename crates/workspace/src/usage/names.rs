@@ -1,12 +1,14 @@
 //! What the ids a filter or a link holds stand for: an agent profile's or a pipeline's name, a run's task
-//! and number, an account. A filter chooses a profile or a pipeline by its id or its name, so a value is
-//! resolved through what the read usage names; a value that names nothing known stays as it was given.
+//! and number, an account; and the pipeline version each run pinned, which the page names pipelines by. A filter
+//! chooses a profile or a pipeline by its id or its name, so a value is resolved through what the read usage names; a
+//! value that names nothing known stays as it was given.
 
 use std::sync::Arc;
 
 use orchester_core::{
   account::AgentAccount,
-  id::{AgentAccountId, ResourceId, RunId},
+  id::{AgentAccountId, ResourceId, RunId, TaskId},
+  resource::VersionNumber,
   run::RunNumber,
 };
 
@@ -20,6 +22,18 @@ pub(super) struct Names {
   /// Each run with its task's key and its number.
   pub runs: Vec<(RunId, Arc<str>, RunNumber)>,
   pub accounts: Vec<AgentAccount>,
+  /// Each run's pinned pipeline.
+  pub pinned: Vec<Pinned>,
+}
+
+/// The pipeline a run pinned, by name, and its version.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct Pinned {
+  run: RunId,
+  task: TaskId,
+  number: RunNumber,
+  pipeline: Option<Arc<str>>,
+  version: Option<VersionNumber>,
 }
 
 impl Names {
@@ -39,6 +53,13 @@ impl Names {
           names.pipelines.push((id, name.clone()));
         }
         names.runs.push((run.id, run.task_key.clone(), run.number));
+        names.pinned.push(Pinned {
+          run: run.id,
+          task: run.task,
+          number: run.number,
+          pipeline: run.pipeline.clone(),
+          version: run.pipeline_version,
+        });
       }
     }
     for list in [&mut names.profiles, &mut names.pipelines] {
@@ -48,9 +69,9 @@ impl Names {
     names
   }
 
-  /// Whether `value`, a resource's id or name, names `(id, name)`.
+  /// Whether `value`, a resource's id or its name in any case, names `(id, name)`.
   pub fn names(value: &str, (id, name): (ResourceId, &str)) -> bool {
-    value == name || value == id.to_string()
+    value.to_lowercase() == name.to_lowercase() || value == id.to_string()
   }
 
   /// The name of the resource `value` names among `list`, or `None` when it names none of them.
@@ -67,6 +88,31 @@ impl Names {
       .iter()
       .find(|(id, ..)| *id == run)
       .map(|(_, key, number)| (key, *number))
+  }
+
+  /// The newest version of the pipeline called `pipeline` a run pinned.
+  pub fn pipeline_version(&self, pipeline: &str) -> Option<VersionNumber> {
+    self
+      .pinned
+      .iter()
+      .filter(|pinned| pinned.pipeline.as_deref() == Some(pipeline))
+      .filter_map(|pinned| pinned.version)
+      .max()
+  }
+
+  /// The pipeline version `run` pinned.
+  pub fn run_pipeline_version(&self, run: RunId) -> Option<VersionNumber> {
+    self.pinned.iter().find(|pinned| pinned.run == run)?.version
+  }
+
+  /// The pipeline version the latest run of `task` pinned.
+  pub fn task_pipeline_version(&self, task: TaskId) -> Option<VersionNumber> {
+    self
+      .pinned
+      .iter()
+      .filter(|pinned| pinned.task == task)
+      .max_by_key(|pinned| pinned.number)?
+      .version
   }
 
   pub fn account(&self, account: AgentAccountId) -> Option<&AgentAccount> {

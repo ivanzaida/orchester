@@ -20,7 +20,7 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   reports it). overview also takes `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as after \
   Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; connections `tab` and \
   `selected` (the id of the connection its inspector shows); new_connection `kind`; edit_connection `connection` \
-  (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab; orchestrator takes `chat` (a \n  conversation's id, or new; left out, the latest); usage takes `query`, the page's query as a link carries it. A tab or kind left out is the one \
+  (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab; orchestrator takes `chat` (a \n  conversation's id, or new; left out, the latest); usage takes `query`, the page's query as a link carries it, and without `project` shows every project's usage. A tab or kind left out is the one \
   the screen opens on. Answers the route the tab shows, whose params navigate takes back. Errors are JSON with \
   a stable `code`: unknown_route (with the known names), missing_param, unexpected_param, invalid_param, \
   unknown_tab (with the screen's tabs), not_a_string, not_an_object, not_ready (the window is starting).";
@@ -116,7 +116,10 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
     Screen::Task => ProjectPage::Task(key(args, "key")?, task_view(args)?),
     Screen::MergeQueue => ProjectPage::MergeQueue,
     Screen::PullRequests => ProjectPage::PullRequests,
-    Screen::Usage => usage_page(args)?,
+    Screen::Usage => match string(args, "project")? {
+      Some(_) => usage_page(args)?,
+      None => return usage_everywhere(args),
+    },
     Screen::Pipelines => ProjectPage::Pipelines,
     Screen::Agents => ProjectPage::Agents,
     Screen::Instructions => ProjectPage::Instructions,
@@ -184,6 +187,22 @@ fn usage_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
   let query = string(args, "query")?.unwrap_or_default();
   match Route::parse(&format!("/project/{}/usage?{query}", project(args)?)) {
     Ok(Route::Project(_, page @ ProjectPage::Usage(_))) => Ok(page),
+    Ok(_) => Err(ToolError::InvalidParam {
+      param: "query",
+      reason: format!("`{query}` names another screen"),
+    }),
+    Err(error) => Err(ToolError::InvalidParam {
+      param: "query",
+      reason: error.to_string(),
+    }),
+  }
+}
+
+/// Every project's usage with the query `query` gives (All projects' *Usage* tab).
+fn usage_everywhere(args: &Map<String, Value>) -> Result<Route, ToolError> {
+  let query = string(args, "query")?.unwrap_or_default();
+  match Route::parse(&format!("/usage?{query}")) {
+    Ok(route @ Route::Usage(_)) => Ok(route),
     Ok(_) => Err(ToolError::InvalidParam {
       param: "query",
       reason: format!("`{query}` names another screen"),

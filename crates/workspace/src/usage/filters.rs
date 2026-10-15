@@ -9,7 +9,7 @@ use std::sync::Arc;
 use orchester_core::{
   account::AccountCli,
   connection::AgentProvider,
-  id::{AgentAccountId, ResourceId, RunId},
+  id::{AgentAccountId, ProjectId, ResourceId, RunId},
   run::RunNumber,
   usage::{BreakdownKey, UsageFilter},
 };
@@ -19,6 +19,8 @@ use super::{Dashboard, UsageQuery, names::Names};
 /// One filter.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Facet {
+  /// Every project's page only.
+  Project,
   Cli,
   Model,
   Profile,
@@ -33,8 +35,18 @@ pub enum Facet {
 impl Facet {
   /// The filters the toolbar has a menu for, in its order.
   pub const MENUS: [Self; 5] = [Self::Cli, Self::Model, Self::Profile, Self::Pipeline, Self::Tag];
+  /// The menus of every project's page: *Project* first (`rHA8G`).
+  pub const EVERY_PROJECT_MENUS: [Self; 6] = [
+    Self::Project,
+    Self::Cli,
+    Self::Model,
+    Self::Profile,
+    Self::Pipeline,
+    Self::Tag,
+  ];
   /// Every filter, in the order their chips read.
-  pub const ALL: [Self; 9] = [
+  pub const ALL: [Self; 10] = [
+    Self::Project,
     Self::Cli,
     Self::Model,
     Self::Profile,
@@ -50,6 +62,7 @@ impl Facet {
 /// One value of a filter.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum FilterValue {
+  Project(ProjectId),
   Cli(AgentProvider),
   /// A model, profile, pipeline, tag, task or step, by id or name.
   Text(Arc<str>),
@@ -123,6 +136,18 @@ impl Dashboard {
         .collect()
     };
     match facet {
+      Facet::Project => self
+        .options
+        .projects
+        .iter()
+        .map(|(project, name)| {
+          option(
+            FilterValue::Project(*project),
+            ValueLabel::Name(name.clone()),
+            filter.projects.contains(project),
+          )
+        })
+        .collect(),
       Facet::Cli => self
         .options
         .clis
@@ -162,6 +187,18 @@ impl Dashboard {
     let pipeline = |value: &Arc<str>| resolved(&self.names.pipelines, value);
     let plain = |value: &Arc<str>| ValueLabel::Name(value.clone());
     match facet {
+      Facet::Project => filter
+        .projects
+        .iter()
+        .map(|project| {
+          let name = self.options.projects.iter().find(|(id, _)| id == project);
+          let label = name.map_or_else(
+            || ValueLabel::Unknown(project.to_string().into()),
+            |(_, name)| ValueLabel::Name(name.clone()),
+          );
+          (FilterValue::Project(*project), label)
+        })
+        .collect(),
       Facet::Cli => filter
         .clis
         .iter()
@@ -227,6 +264,7 @@ impl Dashboard {
   pub fn cleared(&self, facet: Facet) -> UsageQuery {
     let mut filter = self.query.filter.clone();
     match facet {
+      Facet::Project => filter.projects.clear(),
       Facet::Cli => filter.clis.clear(),
       Facet::Model => filter.models.clear(),
       Facet::Profile => filter.profiles.clear(),
@@ -245,15 +283,21 @@ impl Dashboard {
     self.query.with_filter(UsageFilter::default())
   }
 
-  /// The query with a *Where tokens go* row's profile, model or pipeline chosen (the row of a profile ·
-  /// step chooses its profile); `None` for a row that names nothing to choose: auto mode's reviewer, or
-  /// runs whose pipeline is gone.
+  /// The query with a *Where tokens go* row's project, profile, model or pipeline chosen (the row of a
+  /// profile · step chooses its profile); `None` for a row that names nothing to choose: auto mode's
+  /// reviewer, or runs whose pipeline is gone.
   pub fn with_row(&self, key: &BreakdownKey) -> Option<UsageQuery> {
     let mut filter = self.query.filter.clone();
+    if let BreakdownKey::Project(project, _) = key {
+      if !filter.projects.contains(project) {
+        filter.projects.push(*project);
+      }
+      return Some(self.query.with_filter(filter));
+    }
     let (values, value) = match key {
       BreakdownKey::ProfileStep { profile, .. } => (&mut filter.profiles, profile),
       BreakdownKey::Model(model) => (&mut filter.models, model),
-      BreakdownKey::Pipeline(Some(pipeline)) => (&mut filter.pipelines, &pipeline.name),
+      BreakdownKey::Pipeline(Some(pipeline)) => (&mut filter.pipelines, pipeline),
       BreakdownKey::Pipeline(None) | BreakdownKey::Reviewer(_) | BreakdownKey::Project(..) => return None,
     };
     if !values.contains(value) {
@@ -266,6 +310,7 @@ impl Dashboard {
   fn remove_value(&self, filter: &mut UsageFilter, facet: Facet, value: &FilterValue) -> bool {
     let before = filter.clone();
     match value {
+      FilterValue::Project(project) => filter.projects.retain(|chosen| chosen != project),
       FilterValue::Cli(cli) => filter.clis.retain(|chosen| chosen != cli),
       FilterValue::Run(run) => filter.runs.retain(|chosen| chosen != run),
       FilterValue::Account(account) => filter.accounts.retain(|chosen| chosen != account),
@@ -300,12 +345,13 @@ fn texts_of(filter: &mut UsageFilter, facet: Facet) -> Option<&mut Vec<Arc<str>>
     Facet::Tag => Some(&mut filter.tags),
     Facet::Task => Some(&mut filter.tasks),
     Facet::Step => Some(&mut filter.steps),
-    Facet::Cli | Facet::Run | Facet::Account => None,
+    Facet::Project | Facet::Cli | Facet::Run | Facet::Account => None,
   }
 }
 
 fn add_value(filter: &mut UsageFilter, facet: Facet, value: FilterValue) {
   match value {
+    FilterValue::Project(project) => filter.projects.push(project),
     FilterValue::Cli(cli) => filter.clis.push(cli),
     FilterValue::Run(run) => filter.runs.push(run),
     FilterValue::Account(account) => filter.accounts.push(account),

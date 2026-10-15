@@ -45,6 +45,7 @@ pub fn screen(ctx: &mut Ctx) -> Element {
   let path = ctx.route_path();
   match Route::parse(&path) {
     Ok(Route::AllProjects) => all_projects::screen(ctx),
+    Ok(Route::Usage(query)) => all_projects::usage_screen(ctx, *query),
     Ok(Route::AddProject(folder)) => add_project::screen(ctx, folder.map(|folder| folder.path())),
     Ok(Route::Settings) => settings::screen(ctx, settings::SettingsTab::Automation),
     Ok(Route::Accounts(view)) => settings::screen(ctx, settings::SettingsTab::Accounts(view)),

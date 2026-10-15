@@ -8,9 +8,10 @@ use chrono::{Datelike, NaiveDate};
 use lurq::app::ctx::Ctx;
 use orchester_core::{
   connection::AgentProvider,
+  resource::VersionNumber,
   time::Timestamp,
   tokens::{compact_tokens, grouped},
-  usage::{Change, CliSeries, DayRange, PipelineLabel, local_date},
+  usage::{Change, CliSeries, DayRange, local_date},
 };
 use orchester_workspace::{
   display::{self, MONTH_KEYS, WEEKDAY_KEYS},
@@ -72,16 +73,13 @@ pub fn long_day(ctx: &Ctx, date: NaiveDate) -> Arc<str> {
 
 /// A pipeline at the version a run pinned, *Feature delivery v3*; its name alone when the version is not
 /// known.
-pub fn pipeline(ctx: &Ctx, pipeline: &PipelineLabel) -> Arc<str> {
-  match pipeline.version {
+pub fn pipeline(ctx: &Ctx, name: &Arc<str>, version: Option<VersionNumber>) -> Arc<str> {
+  match version {
     Some(version) => ctx.t_args(
       "usage.breakdown.pipelineVersion",
-      [
-        ("name", &*pipeline.name),
-        ("version", version.get().to_string().as_str()),
-      ],
+      [("name", &**name), ("version", version.get().to_string().as_str())],
     ),
-    None => pipeline.name.clone(),
+    None => name.clone(),
   }
 }
 

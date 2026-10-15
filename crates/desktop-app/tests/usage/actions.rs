@@ -21,7 +21,11 @@ fn usage_filter_menus_choose_and_chips_let_go() {
   page.click("usage-filter-model-option-0");
   assert_eq!(page.query().filter.models, [model.as_str().into()]);
   page.until("the chip", |page| page.shows("usage-filter-model-chip-0"));
-  assert_eq!(page.text("usage-filter-model-label"), "Model · 1 of 2");
+  assert_eq!(
+    page.text("usage-filter-model-label"),
+    "Model · 1 of 3",
+    "the agents' two and the reviewer's"
+  );
   // A choice keeps the menu open for the next; a press outside closes it first.
   page.click("usage-filter-model");
   page.click("usage-filter-model-chip-0-remove");

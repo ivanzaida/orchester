@@ -44,16 +44,19 @@ const TABLE_SHARE_COLUMN: f32 = 40.0;
 /// One of the card's columns.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Breakdown {
+  /// Every project's page only.
+  Projects,
   Profiles,
   Models,
   Pipelines,
 }
 
 impl Breakdown {
-  const ALL: [Self; 3] = [Self::Profiles, Self::Models, Self::Pipelines];
+  const ALL: [Self; 4] = [Self::Projects, Self::Profiles, Self::Models, Self::Pipelines];
 
   const fn title_key(self) -> &'static str {
     match self {
+      Self::Projects => "usage.breakdown.byProject",
       Self::Profiles => "usage.breakdown.byProfile",
       Self::Models => "usage.breakdown.byModel",
       Self::Pipelines => "usage.breakdown.byPipeline",
@@ -62,6 +65,7 @@ impl Breakdown {
 
   const fn id(self) -> &'static str {
     match self {
+      Self::Projects => "usage-breakdown-projects",
       Self::Profiles => "usage-breakdown-profiles",
       Self::Models => "usage-breakdown-models",
       Self::Pipelines => "usage-breakdown-pipelines",
@@ -70,6 +74,7 @@ impl Breakdown {
 
   fn rows(self, breakdowns: &Breakdowns) -> &[BreakdownRow] {
     match self {
+      Self::Projects => &breakdowns.projects,
       Self::Profiles => &breakdowns.profiles,
       Self::Models => &breakdowns.models,
       Self::Pipelines => &breakdowns.pipelines,
@@ -87,7 +92,11 @@ pub fn card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>, re
   };
   let breakdowns = &dashboard.report.breakdowns;
   let spent = dashboard.report.summary.spent();
-  let columns = Breakdown::ALL.map(|shown| {
+  let everywhere = dashboard.project.is_none();
+  let shown_columns = Breakdown::ALL
+    .into_iter()
+    .filter(|shown| everywhere || *shown != Breakdown::Projects);
+  let columns = shown_columns.map(|shown| {
     let rows = shown.rows(breakdowns);
     // Over bars it lines up with their names, inset as far; over a table with its NAME column.
     let padding = Padding::new().bottom(SpacingSize::Xs);
@@ -103,7 +112,7 @@ pub fn card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>, re
         .nowrap(),
     );
     let body: Vec<Element> = if table_shown {
-      vec![breakdown_table(ctx, shown, rows, spent)]
+      vec![breakdown_table(ctx, dashboard, shown, (rows, spent))]
     } else {
       rows
         .iter()
@@ -112,6 +121,13 @@ pub fn card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>, re
         .map(|(index, entry)| bar_row(ctx, dashboard, (shown, index), (entry, rows), requery))
         .collect()
     };
+    let idle = (shown == Breakdown::Projects && !breakdowns.idle_projects.is_empty()).then(|| {
+      let names = breakdowns.idle_projects.join(&ctx.t("usage.listSeparator"));
+      Text::new(&ctx.t_args("usage.breakdown.idle", [("projects", names.as_str())]))
+        .id("usage-breakdown-idle")
+        .variant(TypographyStyle::Caption)
+        .padding(Padding::new().top(SpacingSize::Sm).left(SpacingSize::Sm))
+    });
     Column::new()
       .id(shown.id())
       .flex(1.0)
@@ -119,6 +135,7 @@ pub fn card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>, re
       .spacing(ExtraSpacing::Tight.role())
       .child(head)
       .with_children(body)
+      .with_children(idle)
   });
   let reviewed = breakdowns
     .profiles
@@ -142,7 +159,7 @@ pub fn card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>, re
 }
 
 /// A row's name: *Builder · Implement*, a model in mono, a pipeline, or that the pipeline is gone.
-fn label(ctx: &Ctx, key: &BreakdownKey) -> (Arc<str>, bool) {
+fn label(ctx: &Ctx, dashboard: &Dashboard, key: &BreakdownKey) -> (Arc<str>, bool) {
   match key {
     BreakdownKey::ProfileStep { profile, step } => (
       ctx.t_args(
@@ -152,15 +169,18 @@ fn label(ctx: &Ctx, key: &BreakdownKey) -> (Arc<str>, bool) {
       false,
     ),
     BreakdownKey::Reviewer(model) | BreakdownKey::Model(model) => (model.clone(), true),
-    BreakdownKey::Pipeline(Some(pipeline)) => (words::pipeline(ctx, pipeline), false),
+    BreakdownKey::Pipeline(Some(pipeline)) => (
+      words::pipeline(ctx, pipeline, dashboard.pipeline_version(pipeline)),
+      false,
+    ),
     BreakdownKey::Pipeline(None) => (ctx.t("usage.breakdown.pipelineGone"), false),
     BreakdownKey::Project(_, name) => (name.clone(), false),
   }
 }
 
 /// A row's name as it reads: a model in mono 11; the reviewer's model, then *auto mode reviewer* muted.
-fn name(ctx: &Ctx, key: &BreakdownKey, id: String) -> Element {
-  let (text, mono) = label(ctx, key);
+fn name(ctx: &Ctx, dashboard: &Dashboard, key: &BreakdownKey, id: String) -> Element {
+  let (text, mono) = label(ctx, dashboard, key);
   let text = Text::new(&text).id(id);
   let text = if mono {
     text
@@ -208,7 +228,7 @@ fn bar_row(
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(name(ctx, &entry.key, format!("{id}-name")))
+    .child(name(ctx, dashboard, &entry.key, format!("{id}-name")))
     .child(
       Text::new(&words::tokens(entry.total()))
         .id(format!("{id}-spent"))
@@ -270,7 +290,12 @@ fn bar_row(
 }
 
 /// A column's rows with exact numbers: name, spent tokens, share.
-fn breakdown_table(ctx: &Ctx, shown: Breakdown, rows: &[BreakdownRow], spent: u64) -> Element {
+fn breakdown_table(
+  ctx: &Ctx,
+  dashboard: &Dashboard,
+  shown: Breakdown,
+  (rows, spent): (&[BreakdownRow], u64),
+) -> Element {
   let columns = [
     column(ctx.t("usage.table.name"), Width::Flex(1.0), false),
     column(ctx.t("usage.table.spent"), Width::Px(SPENT_COLUMN), true),
@@ -283,7 +308,7 @@ fn breakdown_table(ctx: &Ctx, shown: Breakdown, rows: &[BreakdownRow], spent: u6
     .map(|(index, entry)| {
       let row_id = format!("{id}-row-{index}");
       let cells = vec![
-        Cell::Element(name(ctx, &entry.key, format!("{row_id}-name"))),
+        Cell::Element(name(ctx, dashboard, &entry.key, format!("{row_id}-name"))),
         Cell::Text(words::exact(ctx, entry.total())),
         Cell::Text(words::share(ctx, percent(entry.total(), spent))),
       ];

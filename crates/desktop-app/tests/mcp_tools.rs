@@ -182,6 +182,16 @@ fn navigate_takes_the_parameters_each_screen_has_and_answers_them_back() {
 }
 
 #[test]
+fn navigate_opens_every_projects_usage_without_a_project() {
+  let window = Window::open();
+  let navigation = window.navigation();
+  let answer = navigate(&navigation, &json!({ "route": "usage", "query": "group=agent" })).expect("a valid route");
+  assert_eq!(answer["route"]["path"], json!("/usage?group=agent"));
+  assert_eq!(answer["route"]["name"], json!("usage"));
+  assert_eq!(answer["route"]["params"], json!({ "query": "group=agent" }));
+}
+
+#[test]
 fn navigate_refuses_what_names_no_route_with_a_stable_code() {
   let window = Window::open();
   let navigation = window.navigation();

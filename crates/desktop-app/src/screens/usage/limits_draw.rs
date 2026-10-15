@@ -222,7 +222,9 @@ fn threshold(context: &Context2D, frame: Frame, plot: &LimitPlot) {
   plot::text(context, &plot.threshold_label, frame.right + MARKER_TOP * 2.0, y);
 }
 
-/// 45° lines over each stretch before a CLI's first report, and what it says at its bottom left.
+/// 45° lines over each stretch before a CLI's first report, and what it says at its bottom left where it
+/// fits: hatches all start with the range, so a narrower one's label would run over a wider one's (the
+/// footnote names every stretch).
 fn hatch(context: &Context2D, frame: Frame, plot: &LimitPlot) {
   context.set_stroke_style(plot.style.hatch);
   context.set_line_width(RULE_WIDTH);
@@ -252,11 +254,16 @@ fn hatch(context: &Context2D, frame: Frame, plot: &LimitPlot) {
     context.set_text_align(TextAlign::Left);
     context.set_text_baseline(TextBaseline::Bottom);
     context.set_fill_style(plot.style.axis);
-    plot::text(
-      context,
-      label,
-      left + HATCH_LABEL_INSET,
-      frame.bottom - HATCH_LABEL_INSET,
-    );
+    let fits = context
+      .measure_text(label)
+      .is_ok_and(|metrics| metrics.width + 2.0 * HATCH_LABEL_INSET <= right - left);
+    if fits {
+      plot::text(
+        context,
+        label,
+        left + HATCH_LABEL_INSET,
+        frame.bottom - HATCH_LABEL_INSET,
+      );
+    }
   }
 }

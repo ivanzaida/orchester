@@ -6,6 +6,8 @@ use std::sync::Arc;
 
 use chrono::NaiveDate;
 use orchester_core::{
+  id::{RunId, TaskId},
+  resource::VersionNumber,
   time::Timestamp,
   usage::{
     Change, DayRange, FilterOptions, Grouping, UsageFilter, UsageQuery as ReportQuery, UsageReport,
@@ -41,8 +43,12 @@ pub struct Changes {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Dashboard {
-  /// The project's name.
-  pub project: Arc<str>,
+  /// The project's name; `None` on every project's page.
+  pub project: Option<Arc<str>>,
+  /// How many projects' usage was read.
+  pub projects: usize,
+  /// The listed projects that could not be read, by name.
+  pub unread: Arc<[Arc<str>]>,
   pub query: UsageQuery,
   pub range: DayRange,
   pub grouping: Grouping,
@@ -62,7 +68,8 @@ impl Dashboard {
     query.range(local_date(now)).previous().start()
   }
 
-  pub fn of(project: Arc<str>, query: &UsageQuery, data: &UsageData, now: Timestamp) -> Self {
+  /// The dashboard of the project named `project`, or of every project, for `query` over `data`.
+  pub fn of(project: Option<Arc<str>>, query: &UsageQuery, data: &UsageData, now: Timestamp) -> Self {
     let range = query.range(local_date(now));
     let grouping = query.grouping(range);
     let report_query = ReportQuery {
@@ -88,6 +95,8 @@ impl Dashboard {
     };
     Self {
       project,
+      projects: data.projects.len(),
+      unread: data.unread.clone(),
       query: query.clone(),
       range,
       grouping,
@@ -118,6 +127,22 @@ impl Dashboard {
   /// The period the changes are measured against.
   pub fn previous(&self) -> DayRange {
     self.range.previous()
+  }
+
+  /// The newest version of the pipeline called `pipeline` the period's runs pinned: a pipeline reads as
+  /// *Feature delivery v3*.
+  pub fn pipeline_version(&self, pipeline: &str) -> Option<VersionNumber> {
+    self.names.pipeline_version(pipeline)
+  }
+
+  /// The pipeline version `run` pinned.
+  pub fn run_pipeline_version(&self, run: RunId) -> Option<VersionNumber> {
+    self.names.run_pipeline_version(run)
+  }
+
+  /// The pipeline version the latest run of `task` pinned.
+  pub fn task_pipeline_version(&self, task: TaskId) -> Option<VersionNumber> {
+    self.names.task_pipeline_version(task)
   }
 
   pub fn changes(&self) -> Changes {

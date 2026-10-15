@@ -129,23 +129,6 @@ pub struct RunFacts {
   pub outcome: RunOutcome,
 }
 
-impl RunFacts {
-  /// The pinned pipeline as a row names it; `None` when its resource is gone.
-  pub fn pipeline_label(&self) -> Option<PipelineLabel> {
-    self.pipeline.as_ref().map(|name| PipelineLabel {
-      name: name.clone(),
-      version: self.pipeline_version,
-    })
-  }
-}
-
-/// A pipeline by its name and the version a run pinned: *Feature delivery v3*.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct PipelineLabel {
-  pub name: Arc<str>,
-  pub version: Option<VersionNumber>,
-}
-
 /// One project's facts with what names it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProjectFacts {

@@ -1,7 +1,7 @@
 //! The page of All projects (`Column` `k4fycz` in `S5HDKf`): the heading with *Open project folder…* and *Add
 //! project*, the *Projects* | *Usage* tabs, the error line of *Open project folder…* (`FV5pQ`), then the list
 //! with what removing means under it, the empty list (`d1oNx8`) or why the list cannot be read (`T46trR`).
-//! Usage across projects is not in this app yet, so its tab is locked and says so.
+//! *Usage* shows every project's usage under the tabs instead (`rHA8G`).
 
 use lurq::{
   app::{
@@ -37,7 +37,6 @@ use crate::{
 const COLUMN_WIDTH: f32 = 1120.0;
 
 /// What the page shows under its tabs.
-#[derive(Clone, Copy)]
 pub(super) enum Body<'a> {
   /// The list cannot be read, and why.
   Failed(&'a Message),
@@ -47,20 +46,24 @@ pub(super) enum Body<'a> {
     rows: &'a [ListedProject],
     ask: &'a Ask,
   },
+  /// The *Usage* tab's page.
+  Usage(Element),
 }
 
 pub(super) fn page(ctx: &mut Ctx, open: &OpenAction, body: Body<'_>) -> Element {
   let failure = folder::failure(ctx, open);
+  let usage = matches!(body, Body::Usage(_));
   let (state, content) = match body {
     Body::Failed(error) => ("failed", failed(ctx, error)),
     Body::Empty => ("empty", empty(ctx, open)),
     Body::List { rows, ask } => ("list", list(ctx, rows, ask)),
+    Body::Usage(usage) => ("usage", usage),
   };
   let column = Column::new()
     .width(Dimension::Px(COLUMN_WIDTH))
     .spacing(ProjectsSpacing::Page.role())
     .child(heading(ctx, open))
-    .child(tabs(ctx))
+    .child(tabs(ctx, usage))
     .with_children(failure.map(|failure| error_line(&failure)))
     .child(content);
   let scrolled = Column::new()
@@ -107,19 +110,21 @@ fn heading(ctx: &mut Ctx, open: &OpenAction) -> Row {
     )
 }
 
-/// *Projects* | *Usage* (`Tabs` `Uecqx`).
-fn tabs(ctx: &mut Ctx) -> Element {
+/// *Projects* | *Usage* (`Tabs` `Uecqx`), `usage` the current one or not.
+fn tabs(ctx: &mut Ctx, usage: bool) -> Element {
   let navigation = Navigation::of(ctx);
+  let to_usage = navigation.clone();
   let projects = PageTab::new(
     "all-projects-tab-projects",
     ctx.t("projects.tabs.projects"),
-    true,
+    !usage,
     move || navigation.replace(Route::AllProjects),
   );
-  let usage = PageTab::unavailable(
+  let usage = PageTab::new(
     "all-projects-tab-usage",
     ctx.t("projects.tabs.usage"),
-    ctx.t("projects.tabs.usageUnavailable"),
+    usage,
+    move || to_usage.replace(Route::Usage(Box::default())),
   );
   page_tabs(ctx, "all-projects-tabs", [projects, usage]).into()
 }

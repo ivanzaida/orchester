@@ -17,8 +17,8 @@ use orchester_core::{
   time::Timestamp,
   usage::{
     BreakdownKey, Change, CliSeries, DayRange, FilterOptions, Grouping, IndexGiven, InvocationFacts, Period,
-    PipelineLabel, ProjectFacts, ReviewUsage, RunFacts, RunOutcome, Summary, TurnUsage, UsageFacts, UsageFilter,
-    UsageQuery, UsageReport, day_start,
+    ProjectFacts, ReviewUsage, RunFacts, RunOutcome, Summary, TurnUsage, UsageFacts, UsageFilter, UsageQuery,
+    UsageReport, day_start,
     limits::{Join, LimitHistory, LimitSnapshot, WarningThreshold},
   },
 };
@@ -260,20 +260,8 @@ fn usage_breakdowns_split_spent_tokens_by_profile_step_model_pipeline_and_projec
   assert_eq!(
     pipelines,
     [
-      (
-        BreakdownKey::Pipeline(Some(PipelineLabel {
-          name: "Feature delivery".into(),
-          version: None,
-        })),
-        16_000
-      ),
-      (
-        BreakdownKey::Pipeline(Some(PipelineLabel {
-          name: "Bug fix".into(),
-          version: None,
-        })),
-        7_000
-      ),
+      (BreakdownKey::Pipeline(Some("Feature delivery".into())), 16_000),
+      (BreakdownKey::Pipeline(Some("Bug fix".into())), 7_000),
     ]
   );
   assert_eq!(breakdowns.projects.len(), 1);

@@ -12,6 +12,7 @@
     "retry": "Retry",
     "loading": {
       "tokens": "Reading token usage from {{project}}’s runs…",
+      "tokensEverywhere": "Reading token usage from every project’s runs…",
       "limits": "Reading plan limit snapshots…"
     },
     "period": {
@@ -27,7 +28,10 @@
     },
     "readback": {
       "compared": "{{range}} · compared with {{previous}}",
-      "today": "Today, {{day}} until {{time}}"
+      "today": "Today, {{day}} until {{time}}",
+      "projects": "{{readback}} · {{count}} projects",
+      "projectsOne": "{{readback}} · 1 project",
+      "unread": "{{readback}} · {{projects}} could not be read"
     },
     "custom": {
       "title": "Custom range",
@@ -41,6 +45,7 @@
       "showNothing": "Show range"
     },
     "filters": {
+      "project": "Project",
       "cli": "CLI",
       "model": "Model",
       "profile": "Agent profile",
@@ -62,7 +67,8 @@
       "clear": "Clear filters",
       "named": "{{filter}}: {{values}}",
       "noUsage": "No usage matches these filters",
-      "nothingDetail": "No run in {{range}} matches {{filters}}. {{project}} has {{count}} runs in this period."
+      "nothingDetail": "No run in {{range}} matches {{filters}}. {{project}} has {{count}} runs in this period.",
+      "nothingDetailEverywhere": "No run in {{range}} matches {{filters}}. The projects have {{count}} runs in this period."
     },
     "date": {
       "day": "{{month}} {{day}}",
@@ -207,6 +213,8 @@
       "title": "Where tokens go",
       "note": "Spent tokens · select a row to filter by it",
       "reviewerReadOnly": "Auto mode reviewer rows can’t be selected as a filter.",
+      "byProject": "By project",
+      "idle": "{{projects}} had no runs in the period.",
       "byProfile": "By agent profile · step",
       "byModel": "By model",
       "byPipeline": "By pipeline",
@@ -254,7 +262,11 @@
       "period": "No runs in {{project}} in this period",
       "last": "Usage appears here when agents run. {{project}}’s last run reported usage {{time}}.",
       "never": "Usage appears here when agents run. No run of {{project}} has reported usage yet.",
-      "showWeek": "Show last 7 days"
+      "showWeek": "Show last 7 days",
+      "todayEverywhere": "No runs in any project today",
+      "periodEverywhere": "No runs in any project in this period",
+      "lastEverywhere": "Usage appears here when agents run. The last run reported usage {{time}}.",
+      "neverEverywhere": "Usage appears here when agents run. No run has reported usage yet."
     },
     "table": {
       "day": "DAY",
@@ -278,6 +290,7 @@
       "reportedBy": "REPORTED BY",
       "name": "NAME",
       "share": "SHARE",
+      "project": "PROJECT",
       "task": "TASK",
       "run": "RUN",
       "pipeline": "PIPELINE",

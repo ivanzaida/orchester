@@ -502,6 +502,29 @@ fn usage_pages_carry_their_query_as_the_workspace_links_it() {
     GroupBy::Hour,
     "today reads by hour, as pressing Today shows it"
   );
+  let everywhere = Route::Usage(Box::new(UsageQuery {
+    filter: orchester_core::usage::UsageFilter {
+      projects: vec![project()],
+      ..Default::default()
+    },
+    ..usage_query()
+  }));
+  assert_eq!(
+    Route::parse(&everywhere.path()),
+    Ok(everywhere.clone()),
+    "every project's usage"
+  );
+  assert!(everywhere.path().starts_with(&format!(
+    "/usage?from=2026-10-01&to=2026-10-15&group=agent&project={PROJECT}"
+  )));
+  assert_eq!(everywhere.nav_screen(), Screen::AllProjects);
+  assert!(
+    matches!(
+      Route::parse(&format!("/project/{PROJECT}/usage?project={PROJECT}")),
+      Err(RouteError::InvalidParam { param, .. }) if param == "project"
+    ),
+    "a project's page is the project's"
+  );
   assert_eq!(
     Route::parse(&format!("/project/{PROJECT}/usage?tab=table")),
     Err(RouteError::UnexpectedParam {

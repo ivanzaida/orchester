@@ -19,7 +19,8 @@ use lurq::{
 use orchester_core::{
   id::ProjectId,
   project::TaskKey,
-  usage::{PipelineLabel, RunCost, RunOutcome, TaskCost},
+  resource::VersionNumber,
+  usage::{RunCost, RunOutcome, TaskCost},
 };
 use orchester_workspace::usage::Dashboard;
 
@@ -45,6 +46,7 @@ use crate::{
 /// Rows before *Show all*.
 const FIRST_ROWS: usize = 5;
 /// Column widths (`Expensive header/task` `C931v9`, `Expensive header/run` `eTjme`).
+const PROJECT_COLUMN: f32 = 116.0;
 const PIPELINE_COLUMN: f32 = 150.0;
 const RUNS_COLUMN: f32 = 48.0;
 const STARTED_COLUMN: f32 = 100.0;
@@ -151,10 +153,10 @@ fn chevron() -> Cell {
   Cell::Element(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted).into())
 }
 
-fn pipeline(ctx: &Ctx, pipeline: Option<&PipelineLabel>) -> Cell {
+fn pipeline(ctx: &Ctx, pipeline: Option<&Arc<str>>, version: Option<VersionNumber>) -> Cell {
   Cell::Muted(pipeline.map_or_else(
     || ctx.t("usage.breakdown.pipelineGone"),
-    |pipeline| words::pipeline(ctx, pipeline),
+    |pipeline| words::pipeline(ctx, pipeline, version),
   ))
 }
 
@@ -162,8 +164,22 @@ fn first<T>(rows: &[T], all: bool) -> &[T] {
   &rows[..rows.len().min(if all { usize::MAX } else { FIRST_ROWS })]
 }
 
-fn task_columns(ctx: &Ctx) -> Vec<TableColumn> {
-  vec![
+/// *PROJECT* before the rest on every project's page (`rHA8G`).
+fn project_column(ctx: &Ctx, dashboard: &Dashboard) -> Option<TableColumn> {
+  dashboard
+    .project
+    .is_none()
+    .then(|| column(ctx.t("usage.table.project"), Width::Px(PROJECT_COLUMN), false))
+}
+
+/// A row's project's cell on every project's page.
+fn project_cell(dashboard: &Dashboard, name: &Arc<str>) -> Option<Cell> {
+  dashboard.project.is_none().then(|| Cell::Text(name.clone()))
+}
+
+fn task_columns(ctx: &Ctx, dashboard: &Dashboard) -> Vec<TableColumn> {
+  let mut columns: Vec<TableColumn> = project_column(ctx, dashboard).into_iter().collect();
+  columns.extend([
     column(ctx.t("usage.table.task"), Width::Flex(1.0), false),
     column(ctx.t("usage.table.pipeline"), Width::Px(PIPELINE_COLUMN), false),
     column(ctx.t("usage.table.runs"), Width::Px(RUNS_COLUMN), true),
@@ -171,30 +187,41 @@ fn task_columns(ctx: &Ctx) -> Vec<TableColumn> {
     column(ctx.t("usage.table.cached"), Width::Px(TOKENS_COLUMN), true),
     column(ctx.t("usage.table.outcome"), Width::Px(OUTCOME_COLUMN), false),
     column(Arc::from(""), Width::Px(OPEN_COLUMN), false),
-  ]
+  ]);
+  columns
 }
 
 fn tasks(ctx: &mut Ctx, dashboard: &Dashboard, opener: &Opener, all: bool) -> Element {
-  let columns = task_columns(ctx);
+  let columns = task_columns(ctx, dashboard);
   let rows = first(&dashboard.report.tasks, all)
     .iter()
     .enumerate()
-    .map(|(index, task)| task_row(ctx, (&columns, index), task, opener))
+    .map(|(index, task)| {
+      let project = project_cell(dashboard, &task.project_name);
+      let pipeline = pipeline(ctx, task.pipeline.as_ref(), dashboard.task_pipeline_version(task.task));
+      task_row(ctx, (&columns, index), (project, pipeline, task), opener)
+    })
     .collect();
   table("usage-expensive-tasks", &columns, Density::List, rows)
 }
 
-fn task_row(ctx: &mut Ctx, (columns, index): (&[TableColumn], usize), task: &TaskCost, opener: &Opener) -> Element {
+fn task_row(
+  ctx: &mut Ctx,
+  (columns, index): (&[TableColumn], usize),
+  (project, pipeline, task): (Option<Cell>, Cell, &TaskCost),
+  opener: &Opener,
+) -> Element {
   let id = format!("usage-expensive-tasks-row-{index}");
-  let cells = vec![
+  let mut cells: Vec<Cell> = project.into_iter().collect();
+  cells.extend([
     Cell::Element(named(format!("{id}-title"), &task.key, &task.title)),
-    pipeline(ctx, task.pipeline.as_ref()),
+    pipeline,
     Cell::Text(task.runs.to_string().into()),
     Cell::Text(words::tokens(task.usage.counted())),
     Cell::Muted(words::tokens(task.usage.cached_input)),
     Cell::Element(StatusChip::new(format!("{id}-outcome"), status(task.outcome)).render(ctx)),
     chevron(),
-  ];
+  ]);
   let line = row(&id, columns, Density::List, cells);
   match opener.open(task.project, &task.key) {
     Some(open) => opening(line, open),
@@ -202,8 +229,9 @@ fn task_row(ctx: &mut Ctx, (columns, index): (&[TableColumn], usize), task: &Tas
   }
 }
 
-fn run_columns(ctx: &Ctx) -> Vec<TableColumn> {
-  vec![
+fn run_columns(ctx: &Ctx, dashboard: &Dashboard) -> Vec<TableColumn> {
+  let mut columns: Vec<TableColumn> = project_column(ctx, dashboard).into_iter().collect();
+  columns.extend([
     column(ctx.t("usage.table.run"), Width::Flex(1.0), false),
     column(ctx.t("usage.table.pipeline"), Width::Px(PIPELINE_COLUMN), false),
     column(ctx.t("usage.table.started"), Width::Px(STARTED_COLUMN), false),
@@ -212,32 +240,43 @@ fn run_columns(ctx: &Ctx) -> Vec<TableColumn> {
     column(ctx.t("usage.table.cached"), Width::Px(TOKENS_COLUMN), true),
     column(ctx.t("usage.table.outcome"), Width::Px(OUTCOME_COLUMN), false),
     column(Arc::from(""), Width::Px(OPEN_COLUMN), false),
-  ]
+  ]);
+  columns
 }
 
 fn runs(ctx: &mut Ctx, dashboard: &Dashboard, opener: &Opener, all: bool) -> Element {
-  let columns = run_columns(ctx);
+  let columns = run_columns(ctx, dashboard);
   let rows = first(&dashboard.report.runs, all)
     .iter()
     .enumerate()
-    .map(|(index, run)| run_row(ctx, (&columns, index), run, opener))
+    .map(|(index, run)| {
+      let project = project_cell(dashboard, &run.project_name);
+      let pipeline = pipeline(ctx, run.pipeline.as_ref(), dashboard.run_pipeline_version(run.run));
+      run_row(ctx, (&columns, index), (project, pipeline, run), opener)
+    })
     .collect();
   table("usage-expensive-runs", &columns, Density::List, rows)
 }
 
-fn run_row(ctx: &mut Ctx, (columns, index): (&[TableColumn], usize), run: &RunCost, opener: &Opener) -> Element {
+fn run_row(
+  ctx: &mut Ctx,
+  (columns, index): (&[TableColumn], usize),
+  (project, pipeline, run): (Option<Cell>, Cell, &RunCost),
+  opener: &Opener,
+) -> Element {
   let id = format!("usage-expensive-runs-row-{index}");
   let label = words::run_label(ctx, &run.key, run.number.get());
-  let cells = vec![
+  let mut cells: Vec<Cell> = project.into_iter().collect();
+  cells.extend([
     Cell::Element(named(format!("{id}-title"), &label, &run.title)),
-    pipeline(ctx, run.pipeline.as_ref()),
+    pipeline,
     Cell::Muted(words::weekday_time(ctx, run.started)),
     Cell::Text(words::duration(ctx, run.agent_ms)),
     Cell::Text(words::tokens(run.usage.counted())),
     Cell::Muted(words::tokens(run.usage.cached_input)),
     Cell::Element(StatusChip::new(format!("{id}-outcome"), status(run.outcome)).render(ctx)),
     chevron(),
-  ];
+  ]);
   let line = row(&id, columns, Density::List, cells);
   match opener.open(run.project, &run.key) {
     Some(open) => opening(line, open),

@@ -19,7 +19,7 @@ use super::{McpSettings, WindowLink};
 use crate::{
   appearance::Appearance,
   project::hold::ReadHold,
-  routes::{OrchestratorChat, ProjectPage, Route},
+  routes::{OrchestratorChat, ProjectPage, Route, Screen},
 };
 
 /// Every app tool, for lurq's MCP configuration; `hold_reads` only in debug builds of a started session,
@@ -47,11 +47,22 @@ fn reply(result: Result<Value, ToolError>) -> Result<Value, String> {
 /// always and the others when the route has them.
 pub fn route_json(route: &Route) -> Value {
   let mut params = Map::new();
-  if let Route::Project(project, page) = route {
-    params.insert("project".to_owned(), json!(project.to_string()));
-    page_params(page, &mut params);
+  let mut name = route.screen().name();
+  match route {
+    Route::Project(project, page) => {
+      params.insert("project".to_owned(), json!(project.to_string()));
+      page_params(page, &mut params);
+    }
+    // Every project's usage: navigate takes it back as usage without a project.
+    Route::Usage(query) => {
+      name = Screen::Usage.name();
+      if let Some(query) = query.query_string().strip_prefix('?') {
+        params.insert("query".to_owned(), json!(query));
+      }
+    }
+    Route::AllProjects | Route::AddProject(_) | Route::Settings | Route::Accounts(_) => {}
   }
-  json!({ "name": route.screen().name(), "path": route.path(), "params": params })
+  json!({ "name": name, "path": route.path(), "params": params })
 }
 
 fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {

@@ -7,6 +7,7 @@
 //! |---|---|
 //! | `period` | `today`, `7d`, `30d` (not with `from`/`to`) |
 //! | `from`, `to` | a custom range of local days, `2026-10-01`, both given, at most 366 days |
+//! | `project` | a project's id, on every project's page |
 //! | `group` | `hour`, `day`, `task`, `pipeline`, `step`, `agent`, `model`, `account`; left out, `hour` for today |
 //! | `cli` | `codex_cli`, `claude_code_cli`, `anthropic_api`, `openai_api` |
 //! | `model`, `tag`, `step` | a name |
@@ -30,6 +31,7 @@ const PERIOD: &str = "period";
 const FROM: &str = "from";
 const TO: &str = "to";
 const GROUP: &str = "group";
+const PROJECT: &str = "project";
 const CLI: &str = "cli";
 const MODEL: &str = "model";
 const AGENT: &str = "agent";
@@ -40,8 +42,8 @@ const RUN: &str = "run";
 const STEP: &str = "step";
 const ACCOUNT: &str = "account";
 
-/// The period, the grouping and the filters. The filter names no project: a project's page is the
-/// project's, and `get_usage` takes its project apart.
+/// The period, the grouping and the filters. Only every project's page chooses projects: a project's page
+/// is the project's, and `get_usage` takes its project apart.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct UsageQuery {
   pub period: Period,
@@ -118,6 +120,7 @@ impl UsageQuery {
       params.push((GROUP, group_name(self.group).to_owned()));
     }
     let filter = &self.filter;
+    params.extend(filter.projects.iter().map(|project| (PROJECT, project.to_string())));
     params.extend(filter.clis.iter().map(|cli| (CLI, cli_name(*cli).to_owned())));
     let texts = [
       (MODEL, &filter.models),
@@ -151,6 +154,7 @@ impl UsageQuery {
     let (from, to) = (one(FROM, all(FROM)?)?, one(TO, all(TO)?)?);
     let group = one(GROUP, all(GROUP)?)?;
     let mut filter = UsageFilter {
+      projects: parsed(PROJECT, all(PROJECT)?, |value| value.parse().ok())?,
       clis: parsed(CLI, all(CLI)?, cli_of)?,
       ..UsageFilter::default()
     };

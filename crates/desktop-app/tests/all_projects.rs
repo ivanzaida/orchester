@@ -1,6 +1,6 @@
 //! All projects and the welcome of a first launch: what the list says of each project, opening one, removing one
-//! in place, the empty list, and *Open project folder…* with a stand-in picker. Projects live in repositories of
-//! the test's own data folder.
+//! in place, the empty list, *Open project folder…* with a stand-in picker, and the *Usage* tab. Projects live in
+//! repositories of the test's own data folder.
 
 mod support;
 
@@ -90,8 +90,24 @@ fn all_projects_lists_projects_with_where_they_stand() {
     note.starts_with("Removing a project from this list only makes Orchester forget it."),
     "{note}"
   );
-  let usage = window.text("all-projects-tab-usage");
-  assert_eq!(usage, "Usage", "Usage across projects is locked");
+  window.press("all-projects-tab-usage");
+  assert_eq!(window.navigation().route_now(), Route::Usage(Box::default()));
+  window.until("every project's usage", |window| {
+    window.tree.get_element_by_id("usage-summary-runs-value").is_some()
+      && window.text("usage-readback").contains(" project")
+  });
+  let readback = window.text("usage-readback");
+  assert!(readback.contains("· 1 project ·"), "Kontur is read: {readback}");
+  assert!(
+    readback.contains("Gone") && readback.contains("Legacy CRM") && readback.ends_with("could not be read"),
+    "the projects that could not be read are named: {readback}"
+  );
+  assert!(
+    window.tree.get_element_by_id("usage-filter-project").is_some(),
+    "a Project filter"
+  );
+  window.press("all-projects-tab-projects");
+  assert_eq!(window.navigation().route_now(), Route::AllProjects);
 }
 
 #[test]

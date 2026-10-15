@@ -40,6 +40,7 @@ const SEARCH_FROM: usize = 8;
 /// The words of a filter's name.
 pub fn facet_name(ctx: &Ctx, facet: Facet) -> Arc<str> {
   ctx.t(match facet {
+    Facet::Project => "usage.filters.project",
     Facet::Cli => "usage.filters.cli",
     Facet::Model => "usage.filters.model",
     Facet::Profile => "usage.filters.profile",
@@ -55,6 +56,7 @@ pub fn facet_name(ctx: &Ctx, facet: Facet) -> Arc<str> {
 /// A filter's element id: `usage-filter-model`.
 pub const fn facet_id(facet: Facet) -> &'static str {
   match facet {
+    Facet::Project => "usage-filter-project",
     Facet::Cli => "usage-filter-cli",
     Facet::Model => "usage-filter-model",
     Facet::Profile => "usage-filter-profile",

@@ -1,6 +1,7 @@
-//! The project's Usage page (ORC-15, layer `Usage` `et35n`: `Usage · project · dark` `CFRdj`, its table view
-//! `d3lc3`, states `cK32U`, interactions `p732q`): the tokens and the active agent time of the project's
-//! runs over a period, against as many days before. A pinned toolbar with the period, *Group by*, the
+//! The Usage page (ORC-15, layer `Usage` `et35n`: `Usage · project · dark` `CFRdj`, its table view
+//! `d3lc3`, states `cK32U`, interactions `p732q`, every project's `All projects · Usage` `rHA8G`): the
+//! tokens and the active agent time of a project's runs, or of every project's ([`place`]), over a period,
+//! against as many days before. A pinned toolbar with the period, *Group by*, the
 //! filters and the period read back; then *Summary*, *Tokens over time* beside *Plan limits*, *Where
 //! tokens go*, *Most expensive* and *Efficiency*, which scroll. Every chart reads as a table too.
 //!
@@ -22,6 +23,7 @@ mod limits_chart;
 mod limits_draw;
 mod limits_legend;
 mod line_draw;
+mod place;
 mod plot;
 mod read;
 mod states;
@@ -49,20 +51,28 @@ use lurq::{
 use orchester_core::{time::Timestamp, usage::Measure};
 use orchester_workspace::usage::{Dashboard, UsageQuery};
 
+pub use self::place::{Place, Requery};
 use self::toolbar::{ToolbarProps, UsageToolbar};
-use crate::{
-  navigation::Navigation,
-  project::ShownProject,
-  routes::{ProjectPage, Route},
-  theme::UsageSpacing,
-};
+use crate::{project::ShownProject, theme::UsageSpacing};
 
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, query: &UsageQuery) -> Element {
   let key = format!("usage-{}", project.open.project.id());
   ctx.mount_keyed::<UsageScreen>(
     &key,
     UsageProps {
-      project: project.clone(),
+      place: Place::Project(project.clone()),
+      query: query.clone(),
+    },
+  )
+}
+
+/// Every project's usage, in All projects' *Usage* tab, read again whenever a runner's work changes
+/// (`work`, the runners' work revision).
+pub fn everywhere(ctx: &mut Ctx, query: &UsageQuery, work: u64) -> Element {
+  ctx.mount_keyed::<UsageScreen>(
+    "usage-everywhere",
+    UsageProps {
+      place: Place::Everywhere(work),
       query: query.clone(),
     },
   )
@@ -70,7 +80,7 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, query: &UsageQuery) -> Elem
 
 #[derive(Clone, PartialEq)]
 pub struct UsageProps {
-  project: ShownProject,
+  place: Place,
   query: UsageQuery,
 }
 
@@ -93,26 +103,6 @@ pub struct Views {
 
 impl DevtoolsInspectable for Views {}
 
-/// Goes to the page showing another query, in the tab's current entry.
-#[derive(Clone)]
-pub struct Requery {
-  navigation: Navigation,
-  project: orchester_core::id::ProjectId,
-}
-
-impl Requery {
-  /// The project whose page this is.
-  pub const fn project(&self) -> orchester_core::id::ProjectId {
-    self.project
-  }
-
-  pub fn show(&self, query: UsageQuery) {
-    self
-      .navigation
-      .replace(Route::Project(self.project, ProjectPage::Usage(Box::new(query))));
-  }
-}
-
 pub struct UsageScreen {
   views: Signal<Views>,
   /// Counts saved warning thresholds, so the page reads the saved one.
@@ -132,23 +122,15 @@ impl Component for UsageScreen {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let UsageProps { project, query } = ctx.props::<UsageProps>().clone();
-    // Again whenever the project's runs change, a threshold is saved or Retry is pressed.
-    let deps = (
-      project.feed.changes.get(),
-      project.feed.revision.get(),
-      self.saved.get(),
-      self.retry.get(),
-    );
+    let UsageProps { place, query } = ctx.props::<UsageProps>().clone();
+    // Again whenever the runs change, a threshold is saved or Retry is pressed.
+    let deps = (place.changes(), self.saved.get(), self.retry.get());
     let since = Dashboard::since(&query, Timestamp::now());
-    let loaded = read::read(ctx, Some(project.open.repo_root.clone()), since, deps);
-    let name: Arc<str> = project.open.project.name().as_str().into();
+    let loaded = read::read(ctx, place.root(), since, deps);
+    let name = place.name();
     let built = read::build(ctx, (name.clone(), query.clone()), loaded.data.clone());
     let dashboard = built.data.clone().flatten().map(|built| built.0);
-    let requery = Requery {
-      navigation: Navigation::of(ctx),
-      project: project.open.project.id(),
-    };
+    let requery = place.requery(ctx);
     let toolbar = ctx.mount_keyed::<UsageToolbar>(
       "usage-toolbar",
       ToolbarProps {
@@ -165,8 +147,11 @@ impl Component for UsageScreen {
         let retry = self.retry.clone();
         states::load_failed(ctx, &error, move || retry.update(|count| *count += 1))
       }
-      (None, None) => states::loading(ctx, &name, &self.views),
+      (None, None) => states::loading(ctx, name.as_deref(), &self.views),
     };
+    if name.is_none() {
+      return embedded(toolbar, content);
+    }
     Column::new()
       .id("screen-usage")
       .width(Dimension::Pct(100.0))
@@ -192,6 +177,22 @@ impl Component for UsageScreen {
         .flex(1.0),
       )
   }
+}
+
+/// Every project's page, in All projects' page column, which scrolls it.
+fn embedded(toolbar: Element, content: Vec<Element>) -> Column {
+  Column::new()
+    .id("usage-everywhere")
+    .width(Dimension::Pct(100.0))
+    .child(toolbar)
+    .child(
+      Column::new()
+        .id("usage-sections")
+        .width(Dimension::Pct(100.0))
+        .padding_top(SpacingSize::Xl)
+        .spacing(SpacingSize::Xl)
+        .with_children(content),
+    )
 }
 
 impl UsageScreen {

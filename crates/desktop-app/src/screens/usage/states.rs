@@ -35,15 +35,16 @@ const FAILED_HEIGHT: f32 = 350.0;
 
 /// While reading (`Mock · loading` `PLqiN`): the summary's dashes, and the two charts' cards each saying
 /// what it reads.
-pub fn loading(ctx: &mut Ctx, project: &str, views: &Signal<Views>) -> Vec<Element> {
+pub fn loading(ctx: &mut Ctx, project: Option<&str>, views: &Signal<Views>) -> Vec<Element> {
+  let reads = match project {
+    Some(project) => ctx.t_args("usage.loading.tokens", [("project", project)]),
+    None => ctx.t("usage.loading.tokensEverywhere"),
+  };
   let tokens = Card::new("usage-tokens", ctx.t("usage.tokens.title"))
     .trailing(tokens::measure_switch(ctx, views))
     .trailing(tokens::tokens_view_switch(ctx, views))
     .fill()
-    .body([state_room(reading(
-      "usage-tokens-reading",
-      &ctx.t_args("usage.loading.tokens", [("project", project)]),
-    ))]);
+    .body([state_room(reading("usage-tokens-reading", &reads))]);
   let menu = IconButton::new("usage-limits-menu", Icon::Ellipsis, ctx.t("usage.limits.menu")).render(ctx);
   let limits = Card::new("usage-limits", ctx.t("usage.limits.title"))
     .note(ctx.t("usage.limits.note"))
@@ -114,21 +115,22 @@ pub fn beside(empty: Element, limits: Element) -> Element {
 
 /// *No runs in Kontur today*, when the last run reported usage, and *Show last 7 days* (`AU0uR`).
 fn no_runs(ctx: &mut Ctx, dashboard: &Dashboard, requery: &Requery) -> Element {
-  let project = &*dashboard.project;
-  let title = if dashboard.is_today() {
-    ctx.t_args("usage.noRuns.today", [("project", project)])
-  } else {
-    ctx.t_args("usage.noRuns.period", [("project", project)])
+  let project = dashboard.project.as_deref();
+  let title = match (project, dashboard.is_today()) {
+    (Some(project), true) => ctx.t_args("usage.noRuns.today", [("project", project)]),
+    (Some(project), false) => ctx.t_args("usage.noRuns.period", [("project", project)]),
+    (None, true) => ctx.t("usage.noRuns.todayEverywhere"),
+    (None, false) => ctx.t("usage.noRuns.periodEverywhere"),
   };
-  let detail = match dashboard.report.last_turn {
-    Some(at) => ctx.t_args(
-      "usage.noRuns.last",
-      [
-        ("project", project),
-        ("time", &*words::reported(ctx, at, dashboard.now)),
-      ],
-    ),
-    None => ctx.t_args("usage.noRuns.never", [("project", project)]),
+  let reported = dashboard
+    .report
+    .last_turn
+    .map(|at| words::reported(ctx, at, dashboard.now));
+  let detail = match (project, reported) {
+    (Some(project), Some(time)) => ctx.t_args("usage.noRuns.last", [("project", project), ("time", &*time)]),
+    (Some(project), None) => ctx.t_args("usage.noRuns.never", [("project", project)]),
+    (None, Some(time)) => ctx.t_args("usage.noRuns.lastEverywhere", [("time", &*time)]),
+    (None, None) => ctx.t("usage.noRuns.neverEverywhere"),
   };
   let week = (dashboard.range.days() < 7).then(|| {
     let (requery, query) = (
@@ -153,15 +155,30 @@ fn unmatched(ctx: &mut Ctx, dashboard: &Dashboard, requery: &Requery, runs: usiz
   )
   .icon(Icon::X)
   .on_click(move || requery.show(query.clone()));
-  let detail = ctx.t_args(
-    "usage.filters.nothingDetail",
-    [
-      ("range", &*words::range(ctx, dashboard.range)),
-      ("filters", filters::described(ctx, dashboard).as_str()),
-      ("project", &*dashboard.project),
-      ("count", runs.to_string().as_str()),
-    ],
+  let (range, filters, count) = (
+    words::range(ctx, dashboard.range),
+    filters::described(ctx, dashboard),
+    runs.to_string(),
   );
+  let detail = match dashboard.project.as_deref() {
+    Some(project) => ctx.t_args(
+      "usage.filters.nothingDetail",
+      [
+        ("range", &*range),
+        ("filters", filters.as_str()),
+        ("project", project),
+        ("count", count.as_str()),
+      ],
+    ),
+    None => ctx.t_args(
+      "usage.filters.nothingDetailEverywhere",
+      [
+        ("range", &*range),
+        ("filters", filters.as_str()),
+        ("count", count.as_str()),
+      ],
+    ),
+  };
   state(
     "usage-unmatched",
     (Icon::SearchX, &ctx.t("usage.filters.noUsage"), &detail),

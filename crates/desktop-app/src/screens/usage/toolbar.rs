@@ -1,7 +1,8 @@
 //! The pinned toolbar (`Toolbar · pinned` `W7V5GX`): the title *Usage* and what the page shows; the period
 //! (*Today* · *7 days* · *30 days* · *Custom…*, `Period control` `xHbPG`) and *Group by* (*By hour* offered
 //! for ranges up to 7 days); under them the filters and the period read back with the one it is compared
-//! with, which takes a line of its own while filters are chosen (`YxAed`).
+//! with, which takes a line of its own while filters are chosen (`YxAed`). Every project's page has no title:
+//! its filters, *Project* first, have the period at their end and the read back under them (`rHA8G`).
 
 use std::sync::Arc;
 
@@ -42,7 +43,8 @@ const GROUP_MENU_WIDTH: f32 = 240.0;
 
 #[derive(Clone)]
 pub struct ToolbarProps {
-  pub project: Arc<str>,
+  /// The project's name; `None` on every project's page.
+  pub project: Option<Arc<str>>,
   pub query: UsageQuery,
   pub dashboard: Option<Arc<Dashboard>>,
   pub requery: Requery,
@@ -62,8 +64,8 @@ impl PartialEq for ToolbarProps {
 impl DevtoolsInspectable for ToolbarProps {}
 
 pub struct UsageToolbar {
-  /// Each menu filter's menu, in [`Facet::MENUS`] order, and its button.
-  filters: [(Signal<bool>, ElementRef); 5],
+  /// Each menu filter's menu, in [`Facet::EVERY_PROJECT_MENUS`] order, and its button.
+  filters: [(Signal<bool>, ElementRef); 6],
   group: (Signal<bool>, ElementRef),
   custom: (Signal<bool>, ElementRef),
   /// What a filter's menu searches for.
@@ -76,7 +78,7 @@ impl Component for UsageToolbar {
   fn create(ctx: &mut Ctx) -> Self {
     let mut pair = || (ctx.signal(false), ElementRef::default());
     let toolbar = Self {
-      filters: [pair(), pair(), pair(), pair(), pair()],
+      filters: [pair(), pair(), pair(), pair(), pair(), pair()],
       group: pair(),
       custom: pair(),
       search: ctx.signal(String::new()),
@@ -96,45 +98,24 @@ impl Component for UsageToolbar {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<ToolbarProps>().clone();
     let dashboard = props.dashboard.as_deref();
-    let heading = Column::new()
-      .flex(1.0)
-      .min_width(Dimension::Px(0.0))
-      .spacing(ExtraSpacing::Snug.role())
-      .child(
-        Text::new(&ctx.t("usage.title"))
-          .variant(ExtraTypography::Display.role())
-          .nowrap(),
-      )
-      .child(
-        Text::new(&ctx.t_args("usage.description", [("project", &*props.project)]))
-          .id("usage-description")
-          .variant(TypographyStyle::Body)
-          .color(PaletteColor::TextSecondary),
-      );
     let controls = Row::new()
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
       .child(self.period(ctx, &props))
       .child(self.group_by(ctx, &props));
-    let title = Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Lg)
-      .align_items(Alignment::End)
-      .child(heading)
-      .child(controls);
     let chips = dashboard.map_or_else(Vec::new, |dashboard| filters::chips(ctx, dashboard, &props.requery));
     let readback = Text::new(&readback(ctx, &props))
       .id("usage-readback")
       .variant(TypographyStyle::Description)
       .color(PaletteColor::TextMuted)
       .nowrap();
-    let buttons = Facet::MENUS
-      .into_iter()
-      .zip(&self.filters)
+    let buttons: Vec<FilterButton> = self
+      .menus(&props)
       .map(|(facet, (open, anchor))| {
         let (label, active) = filters::button_label(ctx, dashboard, facet);
         FilterButton::new(filters::facet_id(facet), label, open.clone(), anchor.clone()).active(active)
-      });
+      })
+      .collect();
     let filter_line = Row::new()
       .id("usage-filters")
       .width(Dimension::Pct(100.0))
@@ -142,35 +123,82 @@ impl Component for UsageToolbar {
       .align_items(Alignment::Center)
       .with_children(buttons)
       .with_children(chips.iter().cloned());
-    // Beside the filters, or 8 under them and their chips (`Filters` `N20RN`).
-    let filters = if chips.is_empty() {
-      Column::new().child(filter_line.child(Spacer::new().flex(1.0)).child(readback))
-    } else {
-      Column::new()
-        .spacing(SpacingSize::Sm)
-        .child(filter_line)
-        .child(readback)
-    }
-    .width(Dimension::Pct(100.0));
-    Column::new()
+    let toolbar = Column::new()
       .id("usage-toolbar")
       .width(Dimension::Pct(100.0))
-      .padding(
-        Padding::new()
-          .top(UsageSpacing::Top.role())
-          .bottom(ExtraSpacing::Inset.role())
-          .left(UsageSpacing::Page.role())
-          .right(UsageSpacing::Page.role()),
-      )
-      .spacing(SpacingSize::Lg)
-      .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(title)
-      .child(filters)
-      .with_children(self.popups(ctx, &props))
+      .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border));
+    let toolbar = match &props.project {
+      Some(project) => {
+        // Beside the filters, or 8 under them and their chips (`Filters` `N20RN`).
+        let filters = if chips.is_empty() {
+          Column::new().child(filter_line.child(Spacer::new().flex(1.0)).child(readback))
+        } else {
+          Column::new()
+            .spacing(SpacingSize::Sm)
+            .child(filter_line)
+            .child(readback)
+        }
+        .width(Dimension::Pct(100.0));
+        toolbar
+          .padding(
+            Padding::new()
+              .top(UsageSpacing::Top.role())
+              .bottom(ExtraSpacing::Inset.role())
+              .left(UsageSpacing::Page.role())
+              .right(UsageSpacing::Page.role()),
+          )
+          .spacing(SpacingSize::Lg)
+          .child(title(ctx, project, controls))
+          .child(filters)
+      }
+      // Every project's page: the filters with the period at their end, the period read back under them
+      // (`rHA8G`).
+      None => toolbar
+        .padding(Padding::new().bottom(ExtraSpacing::Inset.role()))
+        .spacing(SpacingSize::Sm)
+        .child(filter_line.child(Spacer::new().flex(1.0)).child(controls))
+        .child(readback),
+    };
+    toolbar.with_children(self.popups(ctx, &props))
   }
 }
 
+/// *Usage*, what the page shows of `project`, and the period's `controls` at the end.
+fn title(ctx: &Ctx, project: &str, controls: Row) -> Row {
+  let heading = Column::new()
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .spacing(ExtraSpacing::Snug.role())
+    .child(
+      Text::new(&ctx.t("usage.title"))
+        .variant(ExtraTypography::Display.role())
+        .nowrap(),
+    )
+    .child(
+      Text::new(&ctx.t_args("usage.description", [("project", project)]))
+        .id("usage-description")
+        .variant(TypographyStyle::Body)
+        .color(PaletteColor::TextSecondary),
+    );
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Lg)
+    .align_items(Alignment::End)
+    .child(heading)
+    .child(controls)
+}
+
 impl UsageToolbar {
+  /// The filters this page has a menu for, each with its menu's state and button: *Project* only on every
+  /// project's page.
+  fn menus<'a>(&'a self, props: &ToolbarProps) -> impl Iterator<Item = (Facet, &'a (Signal<bool>, ElementRef))> {
+    let everywhere = props.project.is_none();
+    Facet::EVERY_PROJECT_MENUS
+      .into_iter()
+      .zip(&self.filters)
+      .filter(move |(facet, _)| everywhere || *facet != Facet::Project)
+  }
+
   /// *Today* · *7 days* · *30 days* · *Custom…*; *Custom…* opens the range's fields under the control,
   /// and reads as chosen while they are open.
   fn period(&self, ctx: &Ctx, props: &ToolbarProps) -> Element {
@@ -217,7 +245,7 @@ impl UsageToolbar {
   /// The open menus and popovers: a filter's menu, *Group by*'s, and the custom range.
   fn popups(&self, ctx: &mut Ctx, props: &ToolbarProps) -> Vec<Element> {
     let mut popups = Vec::new();
-    for (facet, (open, anchor)) in Facet::MENUS.into_iter().zip(&self.filters) {
+    for (facet, (open, anchor)) in self.menus(props) {
       if open.get() {
         let panel = filters::menu(ctx, props.dashboard.as_deref(), facet, &self.search, &props.requery);
         popups.push(menu(anchor.clone(), open.clone(), panel).into());
@@ -276,8 +304,36 @@ impl UsageToolbar {
   }
 }
 
-/// *Sep 24 – Sep 30 · compared with Sep 17 – Sep 23*, or *Today, Sep 30 until 14:20*.
+/// *Sep 24 – Sep 30 · compared with Sep 17 – Sep 23*, or *Today, Sep 30 until 14:20*; on every project's
+/// page with how many projects were read (*· 4 projects*) and which could not be.
 fn readback(ctx: &Ctx, props: &ToolbarProps) -> Arc<str> {
+  let period = period_readback(ctx, props);
+  let (None, Some(dashboard)) = (&props.project, &props.dashboard) else {
+    return period;
+  };
+  let read = if dashboard.projects == 1 {
+    ctx.t_args("usage.readback.projectsOne", [("readback", &*period)])
+  } else {
+    ctx.t_args(
+      "usage.readback.projects",
+      [
+        ("readback", &*period),
+        ("count", dashboard.projects.to_string().as_str()),
+      ],
+    )
+  };
+  if dashboard.unread.is_empty() {
+    return read;
+  }
+  // A project that could not be read is named, never left out unsaid.
+  let names = dashboard.unread.join(&ctx.t("usage.listSeparator"));
+  ctx.t_args(
+    "usage.readback.unread",
+    [("readback", &*read), ("projects", names.as_str())],
+  )
+}
+
+fn period_readback(ctx: &Ctx, props: &ToolbarProps) -> Arc<str> {
   let now = Timestamp::now();
   let today = local_date(now);
   let range = props.query.range(today);

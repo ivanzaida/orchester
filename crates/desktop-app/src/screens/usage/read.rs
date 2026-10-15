@@ -93,10 +93,11 @@ where
     .get()
 }
 
-/// The dashboard named `name` for `query` over the usage `read`; none before the usage is read.
+/// The dashboard of the project named `name`, or of every project, for `query` over the usage `read`; none
+/// before the usage is read.
 pub fn build(
   ctx: &mut Ctx,
-  (name, query): (Arc<str>, UsageQuery),
+  (name, query): (Option<Arc<str>>, UsageQuery),
   read: Option<Read>,
 ) -> FutureState<Option<Built>, ReadFailure> {
   ctx
