@@ -192,6 +192,17 @@ struct CodePane {
   found: Mutex<Option<FoundFor>>,
   lines: Mutex<Option<LinesFor>>,
   plain: Mutex<Option<(usize, Plain)>>,
+  colors: Mutex<Colors>,
+}
+
+/// The plain lines and the highlighting carried colors were made of.
+type CarriedFor = (usize, usize);
+
+/// The file's last highlighting, and the colors made of it for a text read again before that is highlighted.
+#[derive(Default)]
+struct Colors {
+  highlighted: Option<(FilePath, Arc<Vec<LineTokens>>)>,
+  carried: Option<(CarriedFor, Arc<Vec<LineTokens>>)>,
 }
 
 /// A text's lines as plain tokens, and the width its longest line needs.
@@ -211,6 +222,7 @@ impl Component for CodePane {
       found: Mutex::new(None),
       lines: Mutex::new(None),
       plain: Mutex::new(None),
+      colors: Mutex::default(),
     }
   }
 
@@ -288,18 +300,20 @@ impl CodePane {
   /// The lines to show, made again only when their text, colors, selection or places found change.
   fn lines(&self, props: &CodeProps, found: &Arc<Vec<TextMatch>>, current: Option<usize>) -> Arc<Vec<CodeLine>> {
     let text_key = Arc::as_ptr(&props.text) as usize;
-    let tokens_key = props.tokens.as_ref().map_or(0, |tokens| Arc::as_ptr(tokens) as usize);
-    let key = (text_key, tokens_key, props.lines, Arc::as_ptr(found) as usize, current);
+    let tokens = self.colors(props);
+    let key = (
+      text_key,
+      Arc::as_ptr(&tokens) as usize,
+      props.lines,
+      Arc::as_ptr(found) as usize,
+      current,
+    );
     let mut kept = self.lines.lock();
     if let Some((made_for, lines)) = kept.as_ref()
       && *made_for == key
     {
       return lines.clone();
     }
-    let tokens = match &props.tokens {
-      Some(tokens) => tokens.clone(),
-      None => self.plain(&props.text).tokens,
-    };
     let mut places: Vec<Vec<Found>> = vec![Vec::new(); props.text.lines().len()];
     for (at, place) in found.iter().enumerate() {
       if let Some(line) = places.get_mut(place.line) {
@@ -324,6 +338,39 @@ impl CodePane {
     );
     *kept = Some((key, lines.clone()));
     lines
+  }
+
+  /// The colors to draw the lines in: the text's highlighting once it is made; before, while the file was
+  /// highlighted when it was read last, those colors on the lines whose text did not change and plain text on
+  /// the rest, so a file read again keeps its colors; else plain text.
+  fn colors(&self, props: &CodeProps) -> Arc<Vec<LineTokens>> {
+    let mut colors = self.colors.lock();
+    if let Some(tokens) = &props.tokens {
+      colors.highlighted = Some((props.file.clone(), tokens.clone()));
+      return tokens.clone();
+    }
+    let plain_lines = self.plain(&props.text).tokens;
+    let Some((_, before)) = colors.highlighted.as_ref().filter(|(file, _)| *file == props.file) else {
+      return plain_lines;
+    };
+    let key = (Arc::as_ptr(&plain_lines) as usize, Arc::as_ptr(before) as usize);
+    if let Some((made_for, carried)) = &colors.carried
+      && *made_for == key
+    {
+      return carried.clone();
+    }
+    let carried: Arc<Vec<LineTokens>> = Arc::new(
+      plain_lines
+        .iter()
+        .enumerate()
+        .map(|(index, line)| match before.get(index) {
+          Some(colored) if same_text(colored, line) => colored.clone(),
+          _ => line.clone(),
+        })
+        .collect(),
+    );
+    colors.carried = Some((key, carried.clone()));
+    carried
   }
 
   /// The lines as plain text, shown before or without highlighting, and their width; worked out once per
@@ -384,6 +431,13 @@ impl CodePane {
       .child(key_cap("files-find-keys", &caps))
       .into()
   }
+}
+
+/// Whether two lines' tokens show the same text.
+fn same_text(a: &LineTokens, b: &LineTokens) -> bool {
+  a.iter()
+    .flat_map(|token| token.text.chars())
+    .eq(b.iter().flat_map(|token| token.text.chars()))
 }
 
 /// The width a line of `chars` characters needs.

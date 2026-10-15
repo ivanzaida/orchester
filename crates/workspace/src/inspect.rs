@@ -26,6 +26,7 @@ macro_rules! markers {
     impl $inspect for crate::connections::mcp::TransportChoice {}
     impl $inspect for crate::connections::native::NativeDraft {}
     impl $inspect for crate::files::FileFacts {}
+    impl $inspect for crate::files::Follow {}
     impl $inspect for crate::files::FileList {}
     impl $inspect for crate::files::FilePath {}
     impl $inspect for crate::files::FileText {}

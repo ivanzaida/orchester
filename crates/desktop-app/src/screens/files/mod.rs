@@ -10,6 +10,7 @@
 mod actions;
 mod code;
 mod find;
+mod follow;
 mod goto;
 mod header;
 mod keys;
@@ -196,6 +197,7 @@ impl DevtoolsInspectable for Props {}
 
 struct FilesScreen {
   view: View,
+  following: follow::Following,
 }
 
 impl Component for FilesScreen {
@@ -214,6 +216,7 @@ impl Component for FilesScreen {
         version_anchor: ElementRef::new(),
         refusal: ctx.signal(None),
       },
+      following: follow::Following::default(),
     }
   }
 
@@ -230,10 +233,10 @@ impl Component for FilesScreen {
     }
     self.open_folders_of(path.as_ref().and_then(|path| path.as_ref().ok()));
     let root = props.project.open.repo_root.clone();
-    let retry = view.retry.get();
+    let wake = self.following.wake(&props.project, props.route.at(), view.retry.get());
     let file = path.as_ref().and_then(|path| path.as_ref().ok());
-    let choices = reads::choices(ctx, &root, (props.route.at(), run, file), retry);
-    let read = file.map(|file| reads::file(ctx, &root, (props.route.at(), file), retry));
+    let choices = reads::choices(ctx, &root, (props.route.at(), run, file), wake);
+    let read = file.map(|file| reads::file(ctx, &root, (props.route.at(), file), (wake, &self.following.file)));
     let page = Page {
       project: &props.project,
       route: &props.route,
@@ -242,7 +245,7 @@ impl Component for FilesScreen {
       read,
       view,
     };
-    let list = reads::list(ctx, &root, page.at(), retry);
+    let list = reads::list(ctx, &root, page.at(), (wake, &self.following.list));
     let gone = matches!(&list, Shown::Failed(failure) if failure.gone());
     let header = header::header(ctx, &page, gone);
     let body = if gone {
