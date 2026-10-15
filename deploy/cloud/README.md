@@ -21,7 +21,7 @@ docker compose -f compose.yaml -f compose.web.yaml up -d --build
 
 Below, `dc` stands for `docker compose -f compose.yaml -f compose.web.yaml`, run in `deploy/cloud`.
 
-Only Caddy is published, on ports 80 and 443. The services talk on a compose network with the fixed subnet
+Only Caddy is published, on ports 80 and 443 (TCP) and 443 (UDP, HTTP/3). The services talk on a compose network with the fixed subnet
 `172.30.0.0/24`: Caddy `.2`, cloud `.3`, PostgreSQL `.4`, web `.5`. The backend believes the forwarded client
 address only from Caddy and the web front. If another Docker network on the host already uses that subnet, compose
 refuses to start; free it.
@@ -30,14 +30,13 @@ The backend runs as one instance. Its rate-limit counters are in memory, so do n
 
 ## The host, DNS and TLS
 
-- A Linux host with Docker Engine and the compose plugin, reachable from the internet on TCP 80 and 443.
+- A Linux host with Docker Engine and the compose plugin, reachable from the internet on TCP 80 and 443, and UDP 443 for HTTP/3.
 - DNS: an `A` record `orchester-cloud.lurq.dev` → the host's IPv4 address, and an `AAAA` record if the host has
   public IPv6. Set them before the first start.
 - TLS: Caddy takes the site address from `ORCHESTER_CLOUD_PUBLIC_URL` and gets a public certificate for that host
   by ACME on its first start, and renews it. It needs ports 80 and 443 for that. It redirects plain HTTP to HTTPS,
   and `Caddyfile.web` sends `Strict-Transport-Security: max-age=31536000`. The certificates and Caddy's ACME account
   live in the `caddy_data` volume. Caddy keeps no access log, because the web pages' paths carry one-time tokens.
-- Caddy advertises HTTP/3, but compose publishes only TCP 443. Browsers fall back to HTTP/2.
 
 ## The environment
 
@@ -66,10 +65,10 @@ ORCHESTER_CLOUD_WEB_SECRET=<openssl rand -base64 32>
 Compose sets the rest: the backend's `ORCHESTER_CLOUD_DATABASE_URL` (PostgreSQL on the compose network,
 `sslmode=disable`), `ORCHESTER_CLOUD_LISTEN`, `ORCHESTER_CLOUD_TRUSTED_PROXIES`, and the web front's
 `ORCHESTER_CLOUD_API_URL`. If one of the variables above is unset, `docker compose` refuses to start and names it.
-If the backend's configuration is wrong, it exits at once and logs which key, for example
-`detail="ORCHESTER_CLOUD_SMTP_URL is required"`. If `ORCHESTER_CLOUD_WEB_SECRET` is not valid base64, the web container keeps
-running, answers 500 on every page and logs `ORCHESTER_CLOUD_WEB_SECRET: …`; check `docker compose logs web`
-after a start.
+If a value is wrong, the backend or the web front exits at once and logs the variable, for example
+`detail="ORCHESTER_CLOUD_SMTP_URL is required"` or `Orchester Cloud web cannot start: ORCHESTER_CLOUD_WEB_SECRET: …`.
+Compose restarts it in a loop, which `dc ps` shows as *Restarting*; Caddy starts only once the web front's health
+check (its sign-in page answers) passes.
 
 ## The SMTP relay
 
