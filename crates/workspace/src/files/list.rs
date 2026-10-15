@@ -4,11 +4,10 @@
 
 use std::{
   collections::{BTreeMap, BTreeSet, HashMap},
-  hash::{DefaultHasher, Hash, Hasher},
   sync::Arc,
 };
 
-use super::path::is_hidden;
+use super::{Digest, path::is_hidden};
 
 /// How a tree row shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -65,11 +64,10 @@ impl FileList {
     self.paths.is_empty()
   }
 
-  /// A hash of the files listed, to tell a read again that found the same without comparing every path.
-  pub fn digest(&self) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    self.paths.hash(&mut hasher);
-    hasher.finish()
+  /// A digest of the files listed, to tell a read again that found the same without comparing every path.
+  pub fn digest(&self) -> Digest {
+    let count = u64::try_from(self.paths.len()).unwrap_or(u64::MAX);
+    Digest::of(count, self.paths.iter().map(|path| path.as_bytes()))
   }
 
   /// Whether the list has the file `path`.

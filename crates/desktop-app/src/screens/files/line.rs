@@ -24,6 +24,7 @@ use lurq::{
 };
 use orchester_workspace::highlight::{LineTokens, Token};
 
+use super::shown_lines::MAX_SHOWN_CHARS;
 use crate::{
   theme::{ExtraTypography, FilesRadius, IconSize, token_color},
   ui::icon::{Icon, icon},
@@ -35,8 +36,9 @@ pub const NUMBER_WIDTH: f32 = 44.0;
 pub const GAP_WIDTH: f32 = 24.0;
 /// Advance of one Geist Mono character at 12: 0.6 em.
 pub const CODE_CHAR_WIDTH: f32 = 7.2;
-/// The room kept after a cut line's code for the marker that says so, as the Changes tab keeps it.
-pub const MARKER_WIDTH: f32 = 200.0;
+/// The room kept after a cut line's code for the marker that says so, as the Changes tab keeps it, and for its
+/// longer words when a place found is past the cut.
+pub const MARKER_WIDTH: f32 = 260.0;
 
 /// A place found in the line: characters `start..end`, and whether it is the current one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -119,7 +121,7 @@ impl Component for LineView {
       .child(number)
       .child(Row::new().width(Dimension::Px(GAP_WIDTH)))
       .with_children(code(&line.tokens, &line.found))
-      .with_children(line.cut.then(|| cut_marker(ctx)));
+      .with_children(line.cut.then(|| cut_marker(ctx, &line.found)));
     if line.selected {
       row
         .background(PaletteColor::AccentMuted)
@@ -131,21 +133,39 @@ impl Component for LineView {
 }
 
 /// What follows the code of a line too long to lay out whole: that it is shortened, as the Changes tab says
-/// of a line cut short (`changes-line-cut`).
-fn cut_marker(ctx: &Ctx) -> Element {
+/// of a line cut short (`changes-line-cut`). A place `found` past the cut is not drawn: the marker says the line
+/// has one there, marked as a place found is (the current one apart).
+fn cut_marker(ctx: &Ctx, found: &[Found]) -> Element {
+  let beyond: Vec<&Found> = found.iter().filter(|place| place.start >= MAX_SHOWN_CHARS).collect();
+  let current = beyond.iter().any(|place| place.current);
+  let (key, background, color, kind) = match (beyond.is_empty(), current) {
+    (true, _) => ("files.lineCut", PaletteColor::SurfaceRaised, None, "cut"),
+    (false, false) => ("files.lineCutFound", PaletteColor::WarningMuted, None, "found"),
+    (false, true) => (
+      "files.lineCutFound",
+      PaletteColor::Warning,
+      Some(PaletteColor::TextInverse),
+      "current",
+    ),
+  };
+  let words = Text::new(&ctx.t(key)).variant(TypographyStyle::Caption).nowrap();
   Row::new()
     .id("files-line-cut")
+    .describe("found", kind)
     .height(Dimension::Pct(100.0))
     .padding(Padding::horizontal(SpacingSize::Sm))
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .child(icon(Icon::Scissors, IconSize::Xs, PaletteColor::TextMuted))
-    .child(
-      Text::new(&ctx.t("files.lineCut"))
-        .variant(TypographyStyle::Caption)
-        .nowrap(),
-    )
+    .background(background)
+    .child(icon(
+      Icon::Scissors,
+      IconSize::Xs,
+      color.clone().unwrap_or(PaletteColor::TextMuted),
+    ))
+    .child(match color {
+      Some(color) => words.color(color),
+      None => words,
+    })
     .into()
 }
 

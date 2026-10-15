@@ -133,6 +133,8 @@ pub struct Page<'a> {
   pub versions: Option<Arc<Versions>>,
   /// The file's read, when the route names a file the page opens.
   pub read: Option<Shown<FileView>>,
+  /// Why the text shown may be out of date: reading it again failed more than for a moment.
+  pub stale: Option<reads::Failure>,
   pub view: &'a View,
 }
 
@@ -246,13 +248,17 @@ impl Component for FilesScreen {
       .wake(ctx, &props.project, (props.route.at(), view.retry.get()));
     let file = path.as_ref().and_then(|path| path.as_ref().ok());
     let choices = reads::choices(ctx, &root, (props.route.at(), run, file), wake);
-    let read = file.map(|file| reads::file(ctx, &root, (props.route.at(), file), (wake, &self.following.file)));
+    let following = (wake, &self.following.file, &self.following.reads);
+    let (read, stale) = file
+      .map(|file| reads::file(ctx, &root, (props.route.at(), file), following))
+      .unzip();
     let page = Page {
       project: &props.project,
       route: &props.route,
       path: path.clone(),
       versions: choices.value().cloned(),
       read,
+      stale: stale.flatten(),
       view,
     };
     let list = reads::list(ctx, &root, page.at(), (wake, &self.following.list));
@@ -268,6 +274,7 @@ impl Component for FilesScreen {
     Column::new()
       .id("screen-files")
       .describe("at", page.at().to_string())
+      .describe("reads", self.following.reads.started().to_string())
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .on_key_down(keys)

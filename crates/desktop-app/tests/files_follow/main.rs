@@ -11,6 +11,8 @@
   reason = "the seed is shared with its own tests, which read what this binary does not"
 )]
 mod kontur;
+#[path = "../files/mcp_client.rs"]
+mod mcp_client;
 #[path = "../support/mod.rs"]
 mod support;
 
@@ -22,6 +24,7 @@ use std::{
 };
 
 use kontur::{SeedRequest, scenarios};
+use mcp_client::Client;
 use orchester_app::routes::{FilesView, ProjectPage, Route};
 use orchester_core::{
   id::{ProjectId, RunId},
@@ -31,6 +34,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 use orchester_workspace::files::{LineRange, Version};
+use serde_json::json;
 use support::{Data, Window};
 
 /// The window on the `changes` scenario, and where it was seeded.
@@ -296,6 +300,22 @@ fn files_keep_the_last_text_while_the_file_cannot_be_read_for_a_moment() {
     "the text stays while the file cannot be read"
   );
   assert!(page.meta().contains("120 lines"), "{}", page.meta());
+  assert!(
+    page.window.tree.get_element_by_id("files-stale").is_none(),
+    "a moment's failure says nothing"
+  );
+  page.run_changed();
+  page
+    .window
+    .until("the note that the text may be out of date", |window| {
+      window.tree.get_element_by_id("files-stale").is_some()
+    });
+  assert!(
+    page.window.text("files-stale").starts_with("May be out of date: "),
+    "{}",
+    page.window.text("files-stale")
+  );
+  assert!(page.meta().contains("120 lines"), "the text stays");
   drop(held);
 
   fs::write(&file, lines(125)).expect("the agent's edit");
@@ -303,6 +323,10 @@ fn files_keep_the_last_text_while_the_file_cannot_be_read_for_a_moment() {
   page.window.until("the file read again", |window| {
     window.text("files-meta-text").contains("125 lines")
   });
+  assert!(
+    page.window.tree.get_element_by_id("files-stale").is_none(),
+    "read, the note goes"
+  );
 }
 
 /// Holds `file` so that nothing else reads it until the result is dropped: open without sharing on Windows,
@@ -374,4 +398,37 @@ fn files_coalesce_the_runners_changes_and_keep_the_versions_until_integration_ch
   page.window.until("the versions read again", |window| {
     window.text(&item).contains("130 lines")
   });
+}
+
+#[test]
+fn files_read_a_working_runs_file_once_when_the_page_switches_to_it_and_once_per_change() {
+  let mut page = Page::open();
+  let run = page.working_run();
+  let worktree = page.repo.join(WORKTREES_DIR).join(run.to_string());
+  fs::write(page.repo.join("follow.md"), lines(10)).expect("a file in the checkout");
+  fs::write(worktree.join("follow.md"), lines(120)).expect("a file in the worktree");
+  page.open_file("follow.md", Version::Checkout, None);
+  page.window.until("the checkout's lines", |window| {
+    window.text("files-meta-text").contains("10 lines")
+  });
+  page.open_file("follow.md", Version::Run(run), None);
+  page.window.until("the run's lines", |window| {
+    window.text("files-meta-text").contains("120 lines")
+  });
+  page.settle();
+  let client = Client::new(&mut page.window);
+  let reads = |page: &mut Page| client.call(&mut page.window, "lurq_find_by_id", &json!({"id": "screen-files"}));
+  let screen = reads(&mut page);
+  assert!(
+    screen.contains("{reads=2}"),
+    "the checkout's read and the run's: {screen}"
+  );
+
+  fs::write(worktree.join("follow.md"), lines(125)).expect("the agent's edit");
+  page.run_changed();
+  page.window.until("the file read again", |window| {
+    window.text("files-meta-text").contains("125 lines")
+  });
+  let screen = reads(&mut page);
+  assert!(screen.contains("{reads=3}"), "one more on a change: {screen}");
 }

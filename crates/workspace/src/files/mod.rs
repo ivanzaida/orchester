@@ -5,6 +5,7 @@
 //! `.git` and `.orchester` are never shown. Only read-only git commands run. Everything here blocks on
 //! the file system and git; the UI calls it off the UI thread.
 
+mod digest;
 mod follow;
 mod list;
 mod open;
@@ -23,6 +24,7 @@ use thiserror::Error;
 
 use self::source::{Source, git_output, source};
 pub use self::{
+  digest::Digest,
   follow::{Follow, agent_at_work},
   list::{EntryKind, FileList, NameMatches, TreeRow},
   open::{OpenError, OpenFacts, OpenWith, Platform, Refusal, open_target, open_with},

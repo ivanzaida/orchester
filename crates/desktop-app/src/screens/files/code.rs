@@ -224,7 +224,8 @@ impl Component for CodePane {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<CodeProps>().clone();
-    let found = self.search.found(ctx, &props.text, &props.find);
+    let places = self.search.found(ctx, &props.text, &props.find);
+    let found = places.found;
     let current = props.find.current(found.len());
     let lines = self.lines(&props, &found, current);
     let reveal = current
@@ -247,7 +248,7 @@ impl Component for CodePane {
           select: select.clone(),
         },
       );
-    let head = self.head(ctx, &props, found.len());
+    let head = self.head(ctx, &props, (found.len(), places.searching));
     Column::new()
       .id("files-code")
       .ref_element(self.view.clone())
@@ -311,7 +312,7 @@ impl CodePane {
   }
 
   /// The path, and at the head's end the lines selected and *Find*, or the search while it is open.
-  fn head(&self, ctx: &mut Ctx, props: &CodeProps, found: usize) -> Element {
+  fn head(&self, ctx: &mut Ctx, props: &CodeProps, found: (usize, bool)) -> Element {
     let head = head_row(&props.file).child(Row::new().flex(1.0));
     if props.find.open.get() {
       return head.child(props.find.bar(ctx, found)).into();

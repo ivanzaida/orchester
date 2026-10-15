@@ -19,7 +19,7 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
-use super::reads::{Steady, Wake};
+use super::reads::{FileReads, Steady, Wake};
 use crate::project::ShownProject;
 
 /// The runner reports many changes in a row while an agent works: they wake the reads at most once per this,
@@ -32,8 +32,11 @@ const COALESCE: Duration = Duration::from_millis(500);
 pub struct Following {
   pub list: Steady<FileList>,
   pub file: Steady<FileView>,
+  pub reads: Arc<FileReads>,
   jobs: Mutex<(Option<ProjectJobState>, u64)>,
   runs_woke: Arc<Mutex<Option<Instant>>>,
+  /// The runner's count of changes when the page started following them: what it reads then is up to it.
+  runs_from: Mutex<Option<u64>>,
 }
 
 impl Following {
@@ -46,12 +49,26 @@ impl Following {
       Follow::RunChanges => feed.changes.get(),
       Follow::Integration | Follow::Never => 0,
     };
-    let runs = self.coalesced(ctx, changes);
+    let runs = self.coalesced(ctx, changes).max(self.runs_from(follow, changes));
     let jobs = match follow {
       Follow::RunChanges | Follow::Integration => self.jobs(feed.job_state.get()),
       Follow::Never => 0,
     };
     Wake { retry, runs, jobs }
+  }
+
+  /// The runner's count of changes when the page started following them (opened on, or switched to, a run an
+  /// agent works in), while it follows them; the count then is no change, so the page reads once, not again when
+  /// [`Self::coalesced`] catches up with it.
+  fn runs_from(&self, follow: Follow, changes: u64) -> u64 {
+    let mut from = self.runs_from.lock();
+    match follow {
+      Follow::RunChanges => *from.get_or_insert(changes),
+      Follow::Integration | Follow::Never => {
+        *from = None;
+        0
+      }
+    }
   }
 
   /// The runner's count of changes `changes` as it wakes the reads: at once when they have not woken for

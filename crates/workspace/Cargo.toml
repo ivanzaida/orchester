@@ -40,6 +40,8 @@ parking_lot.workspace = true
 rmcp.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# The code viewer's digest of a read (`files::Digest`), to tell a read again that found the same.
+sha2.workspace = true
 syntect.workspace = true
 thiserror.workspace = true
 # Reads the repository's discovery file `orchester.toml` (docs/architecture/server.md, decision 11).

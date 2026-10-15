@@ -259,3 +259,42 @@ fn files_tab_shows_the_kind_of_its_file() {
     assert!(shown.contains(&glyph(kind)), "{file}'s tab shows {kind:?}");
   }
 }
+
+#[test]
+fn files_find_says_it_is_searching_until_a_new_query_is_searched() {
+  let mut files = Files::new();
+  files.open(Some("src/main.rs"), Version::Checkout);
+  files.window.press("files-find-open");
+  files.type_keys("LIMIT");
+  assert!(
+    files.window.text("files-find-field-box").contains("Searching…"),
+    "not \"No results\" before the search ran: {}",
+    files.window.text("files-find-field-box")
+  );
+  files.window.until("the places found", |w| {
+    w.text("files-find-field-box").contains("1 of 117")
+  });
+}
+
+#[test]
+fn files_find_marks_a_cut_line_whose_match_is_past_the_cut() {
+  let mut files = Files::new();
+  let long = format!("short\n{}needle\n", "x".repeat(5_000));
+  fs::write(files.repo.join("long.txt"), long).expect("a file with a long line");
+  files.open(Some("long.txt"), Version::Checkout);
+  files
+    .window
+    .until("its lines", |w| w.text("files-meta-text").contains("2 lines"));
+  assert_eq!(files.window.text("files-line-cut"), "Line shortened");
+  files.window.press("files-find-open");
+  files.type_keys("needle");
+  files
+    .window
+    .until("the place found", |w| w.text("files-find-field-box").contains("1 of 1"));
+  assert_eq!(files.window.text("files-line-cut"), "Match beyond the shortened part");
+  let (marker, line) = (bounds(&mut files, "files-line-cut"), bounds(&mut files, "files-line-2"));
+  assert!(
+    marker.x + marker.width <= line.x + line.width + 0.5,
+    "the longer words fit too: {marker:?} in {line:?}"
+  );
+}

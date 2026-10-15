@@ -150,6 +150,14 @@ fn meta(ctx: &Ctx, page: &Page<'_>, gone: bool) -> Row {
       .color(PaletteColor::Warning)
       .nowrap()
   });
+  let stale = page.stale.as_ref().map(|failure| {
+    let reason = message_text(ctx, &failure.message());
+    Text::new(&ctx.t_args("files.stale", [("reason", &*reason)]))
+      .id("files-stale")
+      .variant(ExtraTypography::Note.role())
+      .color(PaletteColor::Warning)
+      .nowrap()
+  });
   let unavailable = page
     .file()
     .filter(|_| shows_open(page, gone))
@@ -175,6 +183,7 @@ fn meta(ctx: &Ctx, page: &Page<'_>, gone: bool) -> Row {
         .nowrap(),
     )
     .with_children(refusal)
+    .with_children(stale)
     .child(Row::new().flex(1.0))
     .with_children(unavailable)
 }

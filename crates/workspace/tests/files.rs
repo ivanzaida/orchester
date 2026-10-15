@@ -126,12 +126,13 @@ fn files_text_copies_lines_and_finds_text_without_regard_to_case() {
   assert_eq!(&*text.lines()[0], "first Line");
   let range = LineRange::new(2, 9).expect("a range");
   assert_eq!(text.copied(range), "\tsecond line\nthird");
-  let found = text.find("LINE", false);
+  let find = |query: &str, match_case| text.find(query, match_case, &|| true).expect("wanted");
+  let found = find("LINE", false);
   assert_eq!(found.len(), 2);
   assert_eq!((found[0].line, found[0].start, found[0].end), (0, 6, 10));
   // The tab shows as four spaces, so the match starts after them.
   assert_eq!((found[1].line, found[1].start), (1, 11));
-  assert!(text.find("", false).is_empty());
+  assert!(find("", false).is_empty());
   let place = |line, start| TextMatch {
     line,
     start,
@@ -150,11 +151,23 @@ fn files_text_copies_lines_and_finds_text_without_regard_to_case() {
     "the last when none is after it"
   );
   assert_eq!(TextMatch::same_place(&[], place(1, 0)), None);
-  let cased = text.find("Line", true);
+  let cased = find("Line", true);
   assert_eq!(cased.len(), 1, "only the line that has it in its case");
   assert_eq!((cased[0].line, cased[0].start), (0, 6));
-  assert!(text.find("LINE", true).is_empty());
+  assert!(find("LINE", true).is_empty());
   assert!(FileText::parse(b"").lines().is_empty());
+  assert_eq!(text.find("line", false, &|| false), None, "superseded, it stops");
+}
+
+#[test]
+fn files_digests_tell_a_text_and_a_list_apart_by_content_and_size() {
+  let digest = |bytes: &[u8]| FileText::parse(bytes).digest();
+  assert_eq!(digest(b"a\nb\n"), digest(b"a\nb\n"));
+  assert_ne!(digest(b"a\nb\n"), digest(b"ab\n"), "lines do not run into each other");
+  assert_ne!(digest(b"a\nb\n"), digest(b"a\r\nb\n"), "the same lines in more bytes");
+  let list = |paths: &[&str]| FileList::new(paths.iter().map(|path| (*path).to_owned())).digest();
+  assert_eq!(list(&["a.rs", "b.rs"]), list(&["b.rs", "a.rs"]));
+  assert_ne!(list(&["a.rs", "b.rs"]), list(&["a.rsb.rs"]));
 }
 
 #[test]

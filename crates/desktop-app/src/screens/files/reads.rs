@@ -7,7 +7,7 @@ use std::{
   path::Path,
   sync::{
     Arc,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
   },
   thread,
   time::Duration,
@@ -17,7 +17,9 @@ use lurq::app::{component::DevtoolsInspectable, ctx::Ctx};
 use orchester_core::{command::CommandRunner, id::RunId};
 use orchester_workspace::{
   background,
-  files::{FileList, FilePath, FileText, FileView, FilesError, Version, Versions, list_files, read_file, versions},
+  files::{
+    Digest, FileList, FilePath, FileText, FileView, FilesError, Version, Versions, list_files, read_file, versions,
+  },
   highlight::{LineTokens, highlight_lines},
   messages::Message,
 };
@@ -50,7 +52,7 @@ impl Failure {
 
   /// A failure that passes: what was there could not be read for a moment (another program holds it, or
   /// replaces it), so a read again that meets it keeps what it read last.
-  const fn passes(&self) -> bool {
+  pub const fn passes(&self) -> bool {
     matches!(self, Self::Files(FilesError::Unreadable { .. }))
   }
 }
@@ -60,12 +62,13 @@ impl Failure {
 pub struct Found<K, T> {
   pub key: K,
   pub value: T,
-  digest: u64,
+  digest: Option<Digest>,
 }
 
 impl<K, T> Found<K, T> {
-  /// `value` read for `key`; `digest` tells a read again that found the same, worked out off the UI thread.
-  fn new(key: K, value: T, digest: u64) -> Self {
+  /// `value` read for `key`; `digest`, where the page keeps what it shows ([`Steady`]), tells a read again that
+  /// found the same, worked out off the UI thread.
+  fn new(key: K, value: T, digest: Option<Digest>) -> Self {
     Self { key, value, digest }
   }
 }
@@ -100,7 +103,7 @@ impl<T> DevtoolsInspectable for Same<T> {}
 
 /// Keeps the value shown when a read again finds what was there (the same digest): the page renders nothing new
 /// for it, and the file keeps its colors, its selection and where it is scrolled to.
-pub struct Steady<T>(Mutex<Option<(u64, T)>>);
+pub struct Steady<T>(Mutex<Option<(Option<Digest>, T)>>);
 
 impl<T> Default for Steady<T> {
   fn default() -> Self {
@@ -110,7 +113,7 @@ impl<T> Default for Steady<T> {
 
 impl<T: Clone> Steady<T> {
   /// `read`, or the value kept when it holds the same.
-  fn keep(&self, read: Shown<(u64, T)>) -> Shown<T> {
+  fn keep(&self, read: Shown<(Option<Digest>, T)>) -> Shown<T> {
     let (digest, value) = match read {
       Shown::Read(read) => read,
       Shown::Reading => return Shown::Reading,
@@ -152,7 +155,7 @@ impl<T> Shown<T> {
 fn shown<K: PartialEq, T: Clone>(
   key: &K,
   state: &lurq::app::ctx::FutureState<Found<K, T>, Failure>,
-) -> Shown<(u64, T)> {
+) -> Shown<(Option<Digest>, T)> {
   if let Some(found) = state.data.as_ref()
     && found.key == *key
     && (!state.is_rejected() || state.error.as_ref().is_some_and(Failure::passes))
@@ -183,7 +186,7 @@ pub fn list(ctx: &mut Ctx, root: &Path, at: &Version, (wake, kept): (Wake, &Stea
         let read = at.clone();
         let value = run(move || list_files(programs.runner(), &root, &read)).await?;
         let digest = value.digest();
-        Ok(Found::new(at, value, digest))
+        Ok(Found::new(at, value, Some(digest)))
       }
     })
     .state()
@@ -191,28 +194,68 @@ pub fn list(ctx: &mut Ctx, root: &Path, at: &Version, (wake, kept): (Wake, &Stea
   kept.keep(shown(&key, &state))
 }
 
-/// The file `path` at `at`.
+/// How often the page read its file, and how many reads again in a row met a file that could not be read for a
+/// moment and kept the text read before.
+#[derive(Default)]
+pub struct FileReads {
+  started: AtomicU64,
+  kept_over: AtomicU32,
+}
+
+impl FileReads {
+  /// The reads of the file the page started.
+  pub fn started(&self) -> u64 {
+    self.started.load(Ordering::Relaxed)
+  }
+
+  fn settled<T>(&self, read: &Result<T, Failure>) {
+    match read {
+      Ok(_) => self.kept_over.store(0, Ordering::Relaxed),
+      Err(failure) if failure.passes() => {
+        self.kept_over.fetch_add(1, Ordering::Relaxed);
+      }
+      Err(_) => {}
+    }
+  }
+}
+
+/// Reads again in a row that met a file that could not be read before the text kept may be out of date: one is
+/// a moment's (a save by rename, another program's lock), two are not.
+const KEPT_OVER: u32 = 2;
+
+/// The file `path` at `at`, and why the text shown may be out of date: it is the text read before, kept over
+/// [`KEPT_OVER`] reads again in a row that could not read the file.
 pub fn file(
   ctx: &mut Ctx,
   root: &Path,
   (at, path): (&Version, &FilePath),
-  (wake, kept): (Wake, &Steady<FileView>),
-) -> Shown<FileView> {
+  (wake, kept, reads): (Wake, &Steady<FileView>, &Arc<FileReads>),
+) -> (Shown<FileView>, Option<Failure>) {
   let programs = Services::of(ctx).programs;
   let key = (at.clone(), path.clone());
+  let counted = reads.clone();
   let state = ctx
     .future((root.to_path_buf(), key.clone(), wake), move |(root, key, _)| {
       let programs = programs.clone();
+      let reads = counted.clone();
+      reads.started.fetch_add(1, Ordering::Relaxed);
       async move {
         let (at, path) = key.clone();
-        let value = run(move || read_steadily(programs.runner(), &root, (&at, &path))).await?;
+        let read = run(move || read_steadily(programs.runner(), &root, (&at, &path))).await;
+        reads.settled(&read);
+        let value = read?;
         let digest = digest(&value);
-        Ok(Found::new(key, value, digest))
+        Ok(Found::new(key, value, Some(digest)))
       }
     })
     .state()
     .get();
-  kept.keep(shown(&key, &state))
+  let shown = kept.keep(shown(&key, &state));
+  let stale = match &shown {
+    Shown::Read(_) if state.is_rejected() && reads.kept_over.load(Ordering::Relaxed) >= KEPT_OVER => state.error,
+    _ => None,
+  };
+  (shown, stale)
 }
 
 /// The versions the page offers for `path` at `at`, opened from `run`.
@@ -232,7 +275,7 @@ pub fn choices(
         async move {
           let (at, run_id, path) = key.clone();
           let value = run(move || versions(programs.runner(), &root, (&at, run_id), path.as_ref())).await?;
-          Ok(Found::new(key, Arc::new(value), 0))
+          Ok(Found::new(key, Arc::new(value), None))
         }
       },
     )
@@ -266,7 +309,7 @@ pub fn tokens(
         let value =
           run(move || Ok(highlight_lines(path.as_str(), text.lines(), &still).map(|lines| Arc::new(cut_lines(lines)))))
             .await?;
-        Ok(Found::new(key, value, 0))
+        Ok(Found::new(key, value, None))
       }
     })
     .state()
@@ -297,10 +340,10 @@ fn read_steadily(
   }
 }
 
-/// A digest of what `view` shows.
-fn digest(view: &FileView) -> u64 {
+/// A digest of what `view` shows: a binary or too large file shows its size alone.
+fn digest(view: &FileView) -> Digest {
   match view {
     FileView::Text(text) => text.digest(),
-    FileView::Binary { size } | FileView::TooLarge { size } => *size,
+    FileView::Binary { size } | FileView::TooLarge { size } => Digest::of(*size, []),
   }
 }

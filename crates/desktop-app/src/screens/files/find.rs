@@ -88,8 +88,8 @@ impl FindState {
     });
   }
 
-  /// The search's controls for `count` places found.
-  pub fn bar(&self, ctx: &mut Ctx, count: usize) -> Element {
+  /// The search's controls for `count` places found, or while a new query is `searching` for.
+  pub fn bar(&self, ctx: &mut Ctx, (count, searching): (usize, bool)) -> Element {
     if self.focus.get() {
       ctx.focus(&self.input);
       self.focus.set(false);
@@ -107,7 +107,7 @@ impl FindState {
           }
         }
       });
-    let field = match self.count_text(ctx, count) {
+    let field = match self.count_text(ctx, count, searching) {
       Some(text) => field.unit(text),
       None => field,
     };
@@ -161,11 +161,15 @@ impl FindState {
       .into()
   }
 
-  /// "14 of 41", "No results", or nothing before anything is typed.
-  fn count_text(&self, ctx: &Ctx, count: usize) -> Option<String> {
+  /// "14 of 41", "No results", "Searching…" while a new query is searched for, or nothing before anything is
+  /// typed.
+  fn count_text(&self, ctx: &Ctx, count: usize, searching: bool) -> Option<String> {
     let query = self.query.get();
     if query.is_empty() || self.typed.get() != query {
       return None;
+    }
+    if searching {
+      return Some(ctx.t("files.find.searching").to_string());
     }
     let Some(current) = self.current(count) else {
       return Some(ctx.t("files.find.none").to_string());

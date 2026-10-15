@@ -1,15 +1,11 @@
 //! A text file as the code viewer shows it: its lines, a range of them (the `line` of the route), what
 //! copying lines gives, and where a text is found in it.
 
-use std::{
-  fmt,
-  hash::{DefaultHasher, Hash, Hasher},
-  str::FromStr,
-  sync::Arc,
-};
+use std::{fmt, str::FromStr, sync::Arc};
 
 use thiserror::Error;
 
+use super::Digest;
 use crate::highlight;
 
 /// At most this many places are found in one file; a search that finds more says so.
@@ -51,11 +47,9 @@ impl FileText {
     self.size
   }
 
-  /// A hash of the text, to tell a read again that found the same without comparing every line.
-  pub fn digest(&self) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    self.lines.hash(&mut hasher);
-    hasher.finish()
+  /// A digest of the text, to tell a read again that found the same without comparing every line.
+  pub fn digest(&self) -> Digest {
+    Digest::of(self.size, self.lines.iter().map(|line| line.as_bytes()))
   }
 
   /// The text of `range` as copied: its lines joined with `\n`, the part past the file's end left out.
@@ -71,16 +65,20 @@ impl FileText {
 
   /// Where `query` is found in the lines as they are shown (tabs as spaces), line by line, at most
   /// [`MAX_MATCHES`]; with `match_case` only in the query's case. Positions count characters of the shown
-  /// line.
-  pub fn find(&self, query: &str, match_case: bool) -> Vec<TextMatch> {
+  /// line. `wanted` is asked as it goes: once it says no (a newer search superseded this one), the search stops
+  /// and finds nothing.
+  pub fn find(&self, query: &str, match_case: bool, wanted: &dyn Fn() -> bool) -> Option<Vec<TextMatch>> {
     let fold = |character: char| if match_case { character } else { folded(character) };
     let query: Vec<char> = query.chars().map(fold).collect();
     if query.is_empty() {
-      return Vec::new();
+      return Some(Vec::new());
     }
     let mut found = Vec::new();
     let mut shown = Vec::new();
     for (line, text) in self.lines.iter().enumerate() {
+      if line % WANTED_EVERY == 0 && !wanted() {
+        return None;
+      }
       highlight::shown_chars(text, &mut shown);
       shown.iter_mut().for_each(|character| *character = fold(*character));
       let mut start = 0;
@@ -92,7 +90,7 @@ impl FileText {
             end: start + query.len(),
           });
           if found.len() == MAX_MATCHES {
-            return found;
+            return Some(found);
           }
           start += query.len();
         } else {
@@ -100,9 +98,12 @@ impl FileText {
         }
       }
     }
-    found
+    Some(found)
   }
 }
+
+/// How many lines [`FileText::find`] searches between asking whether it is still wanted.
+const WANTED_EVERY: usize = 256;
 
 /// `character` compared without regard to case.
 fn folded(character: char) -> char {
