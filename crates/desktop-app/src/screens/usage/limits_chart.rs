@@ -133,7 +133,12 @@ impl Component for LimitsChart {
         edge: width,
       };
       let x = plot.x(frame, at);
-      tooltip::beside(tip, (x, x), width)
+      let tip_width = if matches!(hovered, Hovered::Reset(_)) {
+        tooltip::TITLE_WIDTH
+      } else {
+        tooltip::WIDTH
+      };
+      tooltip::beside((tip, tip_width), (x, x), width)
     });
     *self.plot.lock() = Some(plot);
     let (reference, signal, shared) = (self.reference.clone(), self.hovered.clone(), Arc::clone(&self.plot));
@@ -330,7 +335,7 @@ fn tip(ctx: &Ctx, dashboard: &Dashboard, plot: &LimitPlot, hovered: Hovered) -> 
     Hovered::Nothing => None,
     Hovered::Reset(index) => {
       let (at, name) = plot.resets.get(index)?;
-      Some((*at, tooltip::tip("usage-limits-tooltip", name, Vec::new(), None)))
+      Some((*at, tooltip::title_tip("usage-limits-tooltip", name)))
     }
     Hovered::Point(line, point) => {
       let line = *drawn(dashboard).get(line)?;

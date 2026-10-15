@@ -118,13 +118,21 @@ pub fn table(id: &str, columns: &[TableColumn], density: Density, rows: Vec<Elem
 
 /// Row `id` of `cells` under `columns`; its cells are `{id}-cell-{column}`.
 pub fn row(id: &str, columns: &[TableColumn], density: Density, cells: Vec<Cell>) -> Row {
+  bare_row(id, columns, density, cells).border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+}
+
+/// The *Total* row that ends a table, with no line under it (`Total` `YHSve`).
+pub fn total_row(id: &str, columns: &[TableColumn], cells: Vec<Cell>) -> Row {
+  bare_row(id, columns, Density::Data, cells)
+}
+
+fn bare_row(id: &str, columns: &[TableColumn], density: Density, cells: Vec<Cell>) -> Row {
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(density.height()))
     .spacing(density.gap())
     .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .with_children(columns.iter().zip(cells).enumerate().map(|(index, (column, cell))| {
       sized(
         Row::new().id(format!("{id}-cell-{index}")).child(content(column, cell)),
@@ -157,7 +165,7 @@ fn content(column: &TableColumn, cell: Cell) -> Element {
         .color(PaletteColor::TextSecondary),
     ),
     Cell::Muted(words) => fit(text(&words).variant(TypographyStyle::Description)),
-    Cell::Strong(words) if column.figures => fit(text(&words).variant(TypographyStyle::Mono)),
+    Cell::Strong(words) if column.figures => fit(text(&words).variant(UsageText::TotalFigure.role())),
     Cell::Strong(words) => fit(text(&words).variant(TypographyStyle::Label)),
     Cell::Element(element) => element,
   }

@@ -10,7 +10,7 @@ use orchester_core::{
   connection::AgentProvider,
   time::Timestamp,
   tokens::{compact_tokens, grouped},
-  usage::{Change, CliSeries, DayRange, local_date},
+  usage::{Change, CliSeries, DayRange, PipelineLabel, local_date},
 };
 use orchester_workspace::{
   display::{self, MONTH_KEYS, WEEKDAY_KEYS},
@@ -68,6 +68,21 @@ pub fn long_day(ctx: &Ctx, date: NaiveDate) -> Arc<str> {
     "usage.date.longDay",
     [("weekday", &*weekday_name(ctx, date)), ("day", &*day(ctx, date))],
   )
+}
+
+/// A pipeline at the version a run pinned, *Feature delivery v3*; its name alone when the version is not
+/// known.
+pub fn pipeline(ctx: &Ctx, pipeline: &PipelineLabel) -> Arc<str> {
+  match pipeline.version {
+    Some(version) => ctx.t_args(
+      "usage.breakdown.pipelineVersion",
+      [
+        ("name", &*pipeline.name),
+        ("version", version.get().to_string().as_str()),
+      ],
+    ),
+    None => pipeline.name.clone(),
+  }
 }
 
 /// `Sep 24 – Sep 30`, or one day; `Dec 28, 2026 – Jan 3, 2027` across a year.

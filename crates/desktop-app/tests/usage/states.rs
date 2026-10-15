@@ -26,7 +26,11 @@ fn usage_page_charts_the_seeded_week() {
   );
   assert!(page.text("usage-breakdown-profiles").contains("Builder · Implement"));
   assert!(page.text("usage-breakdown-models").contains("claude-sonnet-5-5"));
-  assert!(page.text("usage-breakdown-pipelines").contains("Feature delivery"));
+  let pipelines = page.text("usage-breakdown-pipelines");
+  assert!(
+    pipelines.contains("Feature delivery v"),
+    "a pipeline at its version: {pipelines}"
+  );
   for row in 0..5 {
     assert!(page.shows(&format!("usage-expensive-tasks-row-{row}")), "row {row}");
   }
@@ -57,7 +61,6 @@ fn usage_page_reads_every_chart_as_a_table() {
     ("usage-breakdown-view", "usage-breakdown-profiles-table"),
     ("usage-cache-view", "usage-cache-table"),
     ("usage-edits-view", "usage-edits-table"),
-    ("usage-failed-view", "usage-failed-table"),
     ("usage-limits-view", "usage-limits-table"),
   ] {
     page.click(&format!("{view}-table"));
@@ -67,6 +70,9 @@ fn usage_page_reads_every_chart_as_a_table() {
       assert!(!page.shows(table), "{view} returns to its chart");
     }
   }
+  assert!(page.shows("usage-limits-table-row-6"));
+  assert!(!page.shows("usage-limits-table-row-7"), "the seven newest readings, the chart has them all");
+  assert!(!page.shows("usage-failed-view"), "Failed runs' figures are exact: no table view");
 }
 
 #[test]
@@ -140,6 +146,11 @@ fn usage_page_says_why_it_could_not_read_the_usage() {
   page.go(UsageQuery::default());
   page.until("the failure", |page| page.shows("usage-load-failed"));
   assert_eq!(page.text("usage-load-failed-title"), "Usage could not be read");
+  let detail = page.text("usage-load-failed-detail");
+  assert!(
+    !detail.contains("The log has the details"),
+    "the error as reported: {detail}"
+  );
   assert!(page.shows("usage-retry"));
 }
 

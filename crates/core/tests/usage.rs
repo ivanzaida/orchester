@@ -17,8 +17,8 @@ use orchester_core::{
   time::Timestamp,
   usage::{
     BreakdownKey, Change, CliSeries, DayRange, FilterOptions, Grouping, IndexGiven, InvocationFacts, Period,
-    ProjectFacts, ReviewUsage, RunFacts, RunOutcome, Summary, TurnUsage, UsageFacts, UsageFilter, UsageQuery,
-    UsageReport, day_start,
+    PipelineLabel, ProjectFacts, ReviewUsage, RunFacts, RunOutcome, Summary, TurnUsage, UsageFacts, UsageFilter,
+    UsageQuery, UsageReport, day_start,
     limits::{Join, LimitHistory, LimitSnapshot, WarningThreshold},
   },
 };
@@ -55,6 +55,7 @@ fn run(number: u32, task: TaskId, key: &str, pipeline: &str, tags: &[&str], outc
     task_title: format!("Task {key}").into(),
     pipeline: Some(pipeline.into()),
     pipeline_id: None,
+    pipeline_version: None,
     tags: tags.iter().map(|tag| Arc::from(*tag)).collect(),
     outcome,
   }
@@ -259,8 +260,20 @@ fn usage_breakdowns_split_spent_tokens_by_profile_step_model_pipeline_and_projec
   assert_eq!(
     pipelines,
     [
-      (BreakdownKey::Pipeline(Some("Feature delivery".into())), 16_000),
-      (BreakdownKey::Pipeline(Some("Bug fix".into())), 7_000),
+      (
+        BreakdownKey::Pipeline(Some(PipelineLabel {
+          name: "Feature delivery".into(),
+          version: None,
+        })),
+        16_000
+      ),
+      (
+        BreakdownKey::Pipeline(Some(PipelineLabel {
+          name: "Bug fix".into(),
+          version: None,
+        })),
+        7_000
+      ),
     ]
   );
   assert_eq!(breakdowns.projects.len(), 1);

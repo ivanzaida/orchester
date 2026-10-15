@@ -1,7 +1,7 @@
 //! *Plan limits* (`Card · Plan limits` `CPuK9`): % used per window as lines, account-wide (limits belong to
 //! the CLI account, so the page draws every project's reports), with the windows' legend over the chart,
 //! the warning threshold in the card's menu, a footnote on what is recorded and where nothing is known, and
-//! the same readings as a table (`Table` `CFzvr`). Plan limits follow the CLI filter only. Without any report
+//! the newest readings as a table (`Table` `CFzvr`). Plan limits follow the CLI filter only. Without any report
 //! the card says *No plan limits recorded yet* (`No plan limits reported yet` in `cK32U`).
 
 use std::sync::Arc;
@@ -25,6 +25,8 @@ const REPORTED_COLUMN: f32 = 92.0;
 const WINDOW_COLUMN: f32 = 100.0;
 const USED_COLUMN: f32 = 40.0;
 const RESETS_COLUMN: f32 = 84.0;
+/// The readings the table lists (`CFzvr`): it reads beside *Tokens over time*, the chart has them all.
+const TABLE_READINGS: usize = 7;
 
 pub fn limits_view_switch(ctx: &Ctx, views: &Signal<Views>) -> Element {
   let views = views.clone();
@@ -106,8 +108,9 @@ fn footnote_text(ctx: &Ctx, dashboard: &Dashboard) -> Arc<str> {
   sentences.join(&ctx.t("usage.sentenceSeparator")).into()
 }
 
-/// The readings as a table, newest first: when, which window, % used, its reset and the run that reported
-/// it.
+/// The newest readings as a table, newest first: when, which window, % used, its reset and the run that
+/// reported it. A reading that says what its window's reading before said is left out, so the rows show
+/// where use moved.
 fn limits_table(ctx: &Ctx, dashboard: &Dashboard) -> Element {
   let columns = [
     column(ctx.t("usage.table.reported"), Width::Px(REPORTED_COLUMN), false),
@@ -118,11 +121,20 @@ fn limits_table(ctx: &Ctx, dashboard: &Dashboard) -> Element {
   ];
   let mut readings: Vec<_> = drawn(dashboard)
     .into_iter()
-    .flat_map(|line| line.points.iter().map(move |point| (line, point)))
+    .flat_map(|line| {
+      let mut before = None;
+      line.points.iter().filter_map(move |point| {
+        let used = point.percent.round();
+        let moved = before != Some(used);
+        before = Some(used);
+        moved.then_some((line, point))
+      })
+    })
     .collect();
   readings.sort_by_key(|(_, point)| std::cmp::Reverse(point.at));
   let rows = readings
     .into_iter()
+    .take(TABLE_READINGS)
     .enumerate()
     .map(|(index, (line, point))| {
       let source = point.source.as_ref().map_or_else(

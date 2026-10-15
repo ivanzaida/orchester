@@ -170,10 +170,11 @@ pub fn filter_menu_panel(id: &str, width: f32) -> Column {
 }
 
 /// A filter's option `id` saying `label`, `chosen` or not, with its value's color as a swatch where it has
-/// one; a press runs `toggle`, and the menu stays open.
+/// one; a press runs `toggle`, and the menu stays open. A `mono` label is an identifier, such as a model, in
+/// mono 11 (`claude-opus-5-5` `aQCL8`).
 pub fn filter_option(
   id: impl Into<Arc<str>>,
-  (label, chosen): (&str, bool),
+  (label, chosen, mono): (&str, bool, bool),
   swatch: Option<PaletteColor>,
   toggle: impl Fn() + Send + Sync + 'static,
 ) -> Element {
@@ -200,7 +201,11 @@ pub fn filter_option(
     .child(
       Text::new(label)
         .id(format!("{id}-label"))
-        .variant(TypographyStyle::Description)
+        .variant(if mono {
+          ExtraTypography::MonoNote.role()
+        } else {
+          TypographyStyle::Description
+        })
         .color(PaletteColor::TextPrimary)
         .nowrap()
         .flex(1.0)

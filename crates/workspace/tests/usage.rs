@@ -13,8 +13,8 @@ use orchester_core::{
   run::{RunNumber, TokenUsage},
   time::Timestamp,
   usage::{
-    BreakdownKey, DayRange, GroupBy, Grouping, IndexGiven, InvocationFacts, Period, ProjectFacts, RunFacts, RunOutcome,
-    TurnUsage, UsageFacts, UsageFilter, limits::WarningThreshold, local_date,
+    BreakdownKey, DayRange, GroupBy, Grouping, IndexGiven, InvocationFacts, Period, PipelineLabel, ProjectFacts,
+    RunFacts, RunOutcome, TurnUsage, UsageFacts, UsageFilter, limits::WarningThreshold, local_date,
   },
 };
 use orchester_workspace::usage::{
@@ -185,6 +185,7 @@ fn data(now: Timestamp) -> (UsageData, ResourceId, ResourceId) {
     task_title: "Add retry".into(),
     pipeline: Some("Feature delivery".into()),
     pipeline_id: Some(pipeline),
+    pipeline_version: None,
     tags: vec!["webhooks".into()],
     outcome: RunOutcome::Succeeded,
   };
@@ -293,7 +294,10 @@ fn usage_filters_offer_what_the_period_has_and_choose_profiles_by_id() {
   );
   assert!(page.toggled(Facet::Profile, &profiles[0].value).filter.is_empty());
   let pipeline_row = page
-    .with_row(&BreakdownKey::Pipeline(Some("Feature delivery".into())))
+    .with_row(&BreakdownKey::Pipeline(Some(PipelineLabel {
+      name: "Feature delivery".into(),
+      version: None,
+    })))
     .expect("a pipeline row filters");
   assert_eq!(pipeline_row.filter.pipelines, ["Feature delivery".into()]);
   let page = dashboard(&pipeline_row, &data, now);

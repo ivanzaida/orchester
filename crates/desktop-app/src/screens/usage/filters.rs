@@ -162,7 +162,7 @@ fn option_row(
   let (requery, query) = (requery.clone(), dashboard.toggled(facet, &option.value));
   filter_option(
     format!("{}-option-{index}", facet_id(facet)),
-    (&label, option.chosen),
+    (&label, option.chosen, facet == Facet::Model),
     swatch,
     move || requery.show(query.clone()),
   )

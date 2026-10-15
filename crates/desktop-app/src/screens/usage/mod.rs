@@ -23,6 +23,7 @@ mod limits_draw;
 mod limits_legend;
 mod line_draw;
 mod plot;
+mod read;
 mod states;
 mod summary;
 mod table;
@@ -38,7 +39,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, FutureState},
+    ctx::Ctx,
     theme::SpacingSize,
   },
   components::{Column, ScrollVertical},
@@ -46,18 +47,13 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{time::Timestamp, usage::Measure};
-use orchester_workspace::{
-  background,
-  messages::{self, Message},
-  usage::{Dashboard, Scope, UsageData, UsageQuery},
-};
+use orchester_workspace::usage::{Dashboard, UsageQuery};
 
 use self::toolbar::{ToolbarProps, UsageToolbar};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{ProjectPage, Route},
-  services::Services,
   theme::UsageSpacing,
 };
 
@@ -89,7 +85,6 @@ pub struct Views {
   pub breakdown_table: bool,
   pub cache_table: bool,
   pub edits_table: bool,
-  pub failed_table: bool,
   /// *Most expensive* lists runs instead of tasks.
   pub runs: bool,
   /// *Most expensive* lists every row instead of the first five.
@@ -138,9 +133,17 @@ impl Component for UsageScreen {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let UsageProps { project, query } = ctx.props::<UsageProps>().clone();
-    let loaded = self.read(ctx, &project, Dashboard::since(&query, Timestamp::now()));
+    // Again whenever the project's runs change, a threshold is saved or Retry is pressed.
+    let deps = (
+      project.feed.changes.get(),
+      project.feed.revision.get(),
+      self.saved.get(),
+      self.retry.get(),
+    );
+    let since = Dashboard::since(&query, Timestamp::now());
+    let loaded = read::read(ctx, Some(project.open.repo_root.clone()), since, deps);
     let name: Arc<str> = project.open.project.name().as_str().into();
-    let built = build(ctx, (name.clone(), query.clone()), loaded.data.clone());
+    let built = read::build(ctx, (name.clone(), query.clone()), loaded.data.clone());
     let dashboard = built.data.clone().flatten().map(|built| built.0);
     let requery = Requery {
       navigation: Navigation::of(ctx),
@@ -155,11 +158,7 @@ impl Component for UsageScreen {
         requery: requery.clone(),
       },
     );
-    let failed = loaded
-      .error
-      .clone()
-      .filter(|_| loaded.is_rejected() && dashboard.is_none())
-      .or_else(|| built.error.clone().filter(|_| built.is_rejected()));
+    let failed = read::failure(&loaded, &built, dashboard.is_some());
     let content = match (dashboard, failed) {
       (Some(dashboard), _) => self.sections(ctx, &dashboard, &requery),
       (None, Some(error)) => {
@@ -196,38 +195,6 @@ impl Component for UsageScreen {
 }
 
 impl UsageScreen {
-  /// The usage of `project` from `since` on, read off the UI thread again whenever its runs change, a
-  /// threshold is saved or Retry is pressed.
-  fn read(&self, ctx: &mut Ctx, project: &ShownProject, since: Timestamp) -> FutureState<Read, Message> {
-    let services = Services::of(ctx);
-    let deps = (
-      project.feed.changes.get(),
-      project.feed.revision.get(),
-      self.saved.get(),
-      self.retry.get(),
-    );
-    let (workspace, hold) = (services.workspace.clone(), services.hold);
-    ctx
-      .future(
-        (project.open.repo_root.clone(), since, deps),
-        move |(root, since, _)| {
-          let (workspace, hold) = (workspace.clone(), hold.clone());
-          async move {
-            hold.released().await;
-            background::run(move || UsageData::read(&workspace, Scope::Project(&root), since, Timestamp::now()))
-              .await?
-              .map(|data| Read(Arc::new(data)))
-              .map_err(|error| {
-                tracing::error!(%error, "cannot read the project's usage");
-                messages::store_error(&error)
-              })
-          }
-        },
-      )
-      .state()
-      .get()
-  }
-
   /// The sections, or, when there is nothing to chart, why and the plan limits last reported.
   fn sections(&self, ctx: &mut Ctx, dashboard: &Arc<Dashboard>, requery: &Requery) -> Vec<Element> {
     let saved = self.saved.clone();
@@ -247,47 +214,4 @@ impl UsageScreen {
       efficiency::section(ctx, dashboard, &self.views, requery),
     ]
   }
-}
-
-/// The usage read, told apart by identity: each read is a new one.
-#[derive(Clone)]
-pub struct Read(Arc<UsageData>);
-
-impl PartialEq for Read {
-  fn eq(&self, other: &Self) -> bool {
-    Arc::ptr_eq(&self.0, &other.0)
-  }
-}
-
-impl DevtoolsInspectable for Read {}
-
-/// A dashboard built off the UI thread, told apart by identity, so the time it was built at never makes a
-/// section draw again.
-#[derive(Clone)]
-pub struct Built(Arc<Dashboard>);
-
-impl PartialEq for Built {
-  fn eq(&self, other: &Self) -> bool {
-    Arc::ptr_eq(&self.0, &other.0)
-  }
-}
-
-impl DevtoolsInspectable for Built {}
-
-/// The dashboard of the project named `name` for `query` over the usage `read`, built off the UI thread
-/// again whenever either changes; none before the usage is read.
-fn build(
-  ctx: &mut Ctx,
-  (name, query): (Arc<str>, UsageQuery),
-  read: Option<Read>,
-) -> FutureState<Option<Built>, Message> {
-  ctx
-    .future((name, query, read), |(name, query, read)| async move {
-      let Some(Read(data)) = read else {
-        return Ok(None);
-      };
-      background::run(move || Some(Built(Arc::new(Dashboard::of(name, &query, &data, Timestamp::now()))))).await
-    })
-    .state()
-    .get()
 }

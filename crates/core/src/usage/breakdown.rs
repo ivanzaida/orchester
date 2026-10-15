@@ -6,7 +6,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use super::{
   CliSeries,
-  facts::ProjectFacts,
+  facts::{PipelineLabel, ProjectFacts},
   report::{Spender, Within},
 };
 use crate::id::ProjectId;
@@ -21,8 +21,8 @@ pub enum BreakdownKey {
   /// Auto mode's reviewer with this model, in the profiles' column.
   Reviewer(Arc<str>),
   Model(Arc<str>),
-  /// `None` for runs whose pipeline is gone.
-  Pipeline(Option<Arc<str>>),
+  /// A pipeline at the version runs pinned; `None` for runs whose pipeline is gone.
+  Pipeline(Option<PipelineLabel>),
   Project(ProjectId, Arc<str>),
 }
 
@@ -71,7 +71,7 @@ impl Breakdowns {
       if let Some(model) = turn.model() {
         models.add(BreakdownKey::Model(model.clone()), series, spent);
       }
-      pipelines.add(BreakdownKey::Pipeline(turn.run().pipeline.clone()), series, spent);
+      pipelines.add(BreakdownKey::Pipeline(turn.run().pipeline_label()), series, spent);
       let project = turn.launch.project;
       by_project.add(
         BreakdownKey::Project(project.project, project.name.clone()),
@@ -130,6 +130,6 @@ fn label(key: &BreakdownKey) -> (&str, &str) {
     BreakdownKey::ProfileStep { profile, step } => (profile, step),
     BreakdownKey::Reviewer(model) => ("", model),
     BreakdownKey::Model(name) | BreakdownKey::Project(_, name) => (name, ""),
-    BreakdownKey::Pipeline(name) => (name.as_deref().unwrap_or(""), ""),
+    BreakdownKey::Pipeline(pipeline) => (pipeline.as_ref().map_or("", |pipeline| &pipeline.name), ""),
   }
 }

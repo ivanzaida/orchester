@@ -14,15 +14,14 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::usage::Period;
-use orchester_workspace::{
-  messages::Message,
-  usage::{Dashboard, DashboardState},
-};
+use orchester_workspace::usage::{Dashboard, DashboardState};
 
 use super::{
   Requery, Views,
   card::{Card, card_row, reading, state, state_room},
-  filters, limits, summary, tokens, words,
+  filters, limits,
+  read::ReadFailure,
+  summary, tokens, words,
 };
 use crate::ui::{
   button::{ActionButton, ButtonKind},
@@ -32,7 +31,7 @@ use crate::ui::{
 };
 
 /// The least height of the page's body when the usage could not be read (`Load failed` in `cK32U`).
-const FAILED_HEIGHT: f32 = 400.0;
+const FAILED_HEIGHT: f32 = 350.0;
 
 /// While reading (`Mock · loading` `PLqiN`): the summary's dashes, and the two charts' cards each saying
 /// what it reads.
@@ -62,13 +61,13 @@ pub fn loading(ctx: &mut Ctx, project: &str, views: &Signal<Views>) -> Vec<Eleme
 }
 
 /// The usage could not be read (`Load failed` in `cK32U`): why, as reported, and *Retry*.
-pub fn load_failed(ctx: &mut Ctx, error: &Message, retry: impl Fn() + Send + Sync + 'static) -> Vec<Element> {
+pub fn load_failed(ctx: &mut Ctx, error: &ReadFailure, retry: impl Fn() + Send + Sync + 'static) -> Vec<Element> {
   let again = ActionButton::new("usage-retry", ButtonKind::Secondary, ctx.t("usage.retry"))
     .icon(Icon::RotateCcw)
     .on_click(retry);
   let body = state(
     "usage-load-failed",
-    (Icon::CircleAlert, &ctx.t("usage.loadFailed"), &message_text(ctx, error)),
+    (Icon::CircleAlert, &ctx.t("usage.loadFailed"), &reported(ctx, error)),
     Some(again.into()),
   );
   vec![
@@ -80,6 +79,14 @@ pub fn load_failed(ctx: &mut Ctx, error: &Message, retry: impl Fn() + Send + Syn
       .child(body)
       .into(),
   ]
+}
+
+/// The error as the store reported it, or in words where nothing was reported.
+fn reported(ctx: &Ctx, error: &ReadFailure) -> Arc<str> {
+  error
+    .reported
+    .clone()
+    .unwrap_or_else(|| message_text(ctx, &error.message))
 }
 
 /// What stands in the charts' place when there is nothing to chart: no runs in the period, or filters that

@@ -89,20 +89,19 @@ pub fn card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>, re
   let spent = dashboard.report.summary.spent();
   let columns = Breakdown::ALL.map(|shown| {
     let rows = shown.rows(breakdowns);
-    let head = Row::new()
-      .width(Dimension::Pct(100.0))
-      .padding(
-        Padding::new()
-          .left(SpacingSize::Sm)
-          .right(SpacingSize::Sm)
-          .bottom(SpacingSize::Xs),
-      )
-      .child(
-        Text::new(&ctx.t(shown.title_key()))
-          .variant(TypographyStyle::FieldLabel)
-          .color(PaletteColor::TextMuted)
-          .nowrap(),
-      );
+    // Over bars it lines up with their names, inset as far; over a table with its NAME column.
+    let padding = Padding::new().bottom(SpacingSize::Xs);
+    let padding = if table_shown {
+      padding
+    } else {
+      padding.left(SpacingSize::Sm).right(SpacingSize::Sm)
+    };
+    let head = Row::new().width(Dimension::Pct(100.0)).padding(padding).child(
+      Text::new(&ctx.t(shown.title_key()))
+        .variant(TypographyStyle::FieldLabel)
+        .color(PaletteColor::TextMuted)
+        .nowrap(),
+    );
     let body: Vec<Element> = if table_shown {
       vec![breakdown_table(ctx, shown, rows, spent)]
     } else {
@@ -153,7 +152,7 @@ fn label(ctx: &Ctx, key: &BreakdownKey) -> (Arc<str>, bool) {
       false,
     ),
     BreakdownKey::Reviewer(model) | BreakdownKey::Model(model) => (model.clone(), true),
-    BreakdownKey::Pipeline(Some(pipeline)) => (pipeline.clone(), false),
+    BreakdownKey::Pipeline(Some(pipeline)) => (words::pipeline(ctx, pipeline), false),
     BreakdownKey::Pipeline(None) => (ctx.t("usage.breakdown.pipelineGone"), false),
     BreakdownKey::Project(_, name) => (name.clone(), false),
   }
@@ -191,6 +190,9 @@ fn name(ctx: &Ctx, key: &BreakdownKey, id: String) -> Element {
     ))
     .into()
 }
+
+/// A bar row, 2 above the next (`Row · Builder · Implement` in `Where tokens go`).
+const ROW_HEIGHT: f32 = 40.0;
 
 fn bar_row(
   ctx: &Ctx,
@@ -239,6 +241,7 @@ fn bar_row(
   let content = |frame: lurq::components::Button| {
     frame
       .width(Dimension::Pct(100.0))
+      .height(Dimension::Px(ROW_HEIGHT))
       .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()))
       .spacing(ExtraSpacing::Snug.role())
       .rounded(lurq::app::theme::RadiusSize::Md)

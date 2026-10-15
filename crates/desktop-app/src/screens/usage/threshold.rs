@@ -140,7 +140,7 @@ impl Component for ThresholdMenu {
       row = row.child(popover(
         self.anchor.clone(),
         self.open.clone(),
-        PopoverSide::Below,
+        PopoverSide::BelowEnd,
         panel,
       ));
     }

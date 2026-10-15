@@ -142,11 +142,16 @@ impl Component for UsageToolbar {
       .align_items(Alignment::Center)
       .with_children(buttons)
       .with_children(chips.iter().cloned());
-    let (filter_line, own_line) = if chips.is_empty() {
-      (filter_line.child(Spacer::new().flex(1.0)).child(readback), None)
+    // Beside the filters, or 8 under them and their chips (`Filters` `N20RN`).
+    let filters = if chips.is_empty() {
+      Column::new().child(filter_line.child(Spacer::new().flex(1.0)).child(readback))
     } else {
-      (filter_line, Some(readback))
-    };
+      Column::new()
+        .spacing(SpacingSize::Sm)
+        .child(filter_line)
+        .child(readback)
+    }
+    .width(Dimension::Pct(100.0));
     Column::new()
       .id("usage-toolbar")
       .width(Dimension::Pct(100.0))
@@ -160,23 +165,24 @@ impl Component for UsageToolbar {
       .spacing(SpacingSize::Lg)
       .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .child(title)
-      .child(filter_line)
-      .with_children(own_line)
+      .child(filters)
       .with_children(self.popups(ctx, &props))
   }
 }
 
 impl UsageToolbar {
-  /// *Today* · *7 days* · *30 days* · *Custom…*; *Custom…* opens the range's fields under the control.
+  /// *Today* · *7 days* · *30 days* · *Custom…*; *Custom…* opens the range's fields under the control,
+  /// and reads as chosen while they are open.
   fn period(&self, ctx: &Ctx, props: &ToolbarProps) -> Element {
     let today = local_date(Timestamp::now());
+    let picking = self.custom.0.get();
     let chosen = props.query.period;
     let preset = |id: &str, key: &str, period: Period| {
       let (requery, query) = (props.requery.clone(), props.query.with_period(period, today));
       Segment::new(
         format!("usage-period-{id}"),
         SegmentFace::Text(ctx.t(key)),
-        chosen == period,
+        !picking && chosen == period,
         move || requery.show(query.clone()),
       )
     };
@@ -188,7 +194,7 @@ impl UsageToolbar {
       Segment::new(
         "usage-period-custom",
         SegmentFace::Text(ctx.t("usage.period.custom")),
-        matches!(chosen, Period::Custom(_)),
+        picking || matches!(chosen, Period::Custom(_)),
         move || custom.update(|open| *open = !*open),
       ),
     ];
@@ -249,6 +255,7 @@ impl UsageToolbar {
         ctx.t("usage.groupBy.hour"),
         ctx.t("usage.groupBy.hourUnavailable"),
       )
+      .without_lock()
     };
     let day = MenuItem::new("usage-group-day", ctx.t("usage.groupBy.day"), choose(GroupBy::Day));
     let open = self.group.0.clone();

@@ -35,6 +35,8 @@ const LINE_WIDTH: f32 = 16.0;
 const LINE_ROOM: f32 = 8.0;
 const LINE_HEIGHT: f32 = 2.0;
 const DASHES: usize = 3;
+/// A window's entry, 8 above the next (`Legend · Codex · 5-hour` `wcxye`).
+const ENTRY_HEIGHT: f32 = 32.0;
 /// What the entries of 5-hour windows keep of their strength while the chart does not draw them.
 const UNDRAWN_OPACITY: f32 = 0.5;
 
@@ -98,6 +100,7 @@ fn entry(ctx: &Ctx, dashboard: &Dashboard, window: &CurrentLimit, faded: bool) -
   let entry = Column::new()
     .id(id.clone())
     .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(ENTRY_HEIGHT))
     .spacing(ExtraSpacing::Tight.role())
     .child(line)
     .with_children(resets.map(|resets| {

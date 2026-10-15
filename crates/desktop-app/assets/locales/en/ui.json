@@ -15,6 +15,7 @@
       "waitingForPlanReset": "Waiting for plan reset",
       "interrupted": "Interrupted",
       "completed": "Completed",
+      "succeeded": "Succeeded",
       "readyForReview": "Ready for review",
       "readyToMerge": "Ready to merge",
       "notMerged": "Not merged",

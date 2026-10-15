@@ -212,7 +212,8 @@
       "byPipeline": "By pipeline",
       "profileStep": "{{profile}} · {{step}}",
       "reviewer": "auto mode reviewer",
-      "pipelineGone": "Pipeline removed"
+      "pipelineGone": "Pipeline removed",
+      "pipelineVersion": "{{name}} v{{version}}"
     },
     "expensive": {
       "title": "Most expensive",
@@ -243,7 +244,6 @@
       "failedOf": "{{count}} of {{runs}}",
       "runsFailed": "runs failed · {{share}}",
       "spentOnThem": "tokens spent on them · {{share}}",
-      "failedTokens": "Tokens spent on them",
       "failedPart": "Failed runs {{tokens}}",
       "otherPart": "Other runs {{tokens}}",
       "most": "Most: {{run}} · {{tokens}}",
@@ -286,8 +286,7 @@
       "outcome": "OUTCOME",
       "cacheShare": "CACHE SHARE",
       "median": "MEDIAN",
-      "invocations": "INVOCATIONS",
-      "value": "VALUE"
+      "invocations": "INVOCATIONS"
     }
   }
 }

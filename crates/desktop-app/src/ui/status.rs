@@ -5,8 +5,8 @@
 //!
 //! The vocabulary and its icons come from the boards: Draft `circle-dashed`, Queued `clock`, Running and
 //! Working `loader-circle` (turning), Needs input `hand`, Stopped at limit `gauge`, Interrupted and
-//! Interrupted · can't continue `circle-pause`, Completed, Complete and Ready for review `circle-check`, Merged
-//! `git-merge`, Ready to merge `git-merge` in `warning` (`mEvfK`), Not merged `triangle-alert` (`kxMAN`), Failed
+//! Interrupted · can't continue `circle-pause`, Completed, Complete, Succeeded and Ready for review `circle-check`,
+//! Merged `git-merge`, Ready to merge `git-merge` in `warning` (`mEvfK`), Not merged `triangle-alert` (`kxMAN`), Failed
 //! `circle-x`, Unreadable `circle-help`, Waiting `clock`,
 //! Not started `circle-dashed`, Blocked `ban`, Paused `circle-pause` in `warning` (Usage `Q1gYMm`); Backlog
 //! `circle-dashed`, Todo `circle` (`AiCwO`), In progress `circle-dot-dashed`, In review `eye`, Done
@@ -51,6 +51,8 @@ pub enum Status {
   WaitingForPlanReset,
   Interrupted,
   Completed,
+  /// A run that succeeded, as the Usage page's *Most expensive* names its outcome (`CFRdj`).
+  Succeeded,
   /// A run whose every step passed, as its own page and its row in *Runs of this task* name it
   /// (`F2LtFn`); task lists say Completed.
   ReadyForReview,
@@ -95,7 +97,7 @@ impl Tone {
 }
 
 impl Status {
-  pub const ALL: [Self; 24] = [
+  pub const ALL: [Self; 25] = [
     Self::Draft,
     Self::Queued,
     Self::Running,
@@ -106,6 +108,7 @@ impl Status {
     Self::WaitingForPlanReset,
     Self::Interrupted,
     Self::Completed,
+    Self::Succeeded,
     Self::ReadyForReview,
     Self::ReadyToMerge,
     Self::NotMerged,
@@ -167,7 +170,7 @@ impl Status {
       Self::NeedsInput => Icon::Hand,
       Self::Paused | Self::Interrupted | Self::CantContinue => Icon::CirclePause,
       Self::StoppedAtLimit | Self::StoppedAtPlanLimit => Icon::Gauge,
-      Self::Completed | Self::Complete | Self::ReadyForReview => Icon::CircleCheck,
+      Self::Completed | Self::Complete | Self::Succeeded | Self::ReadyForReview => Icon::CircleCheck,
       Self::Merged | Self::ReadyToMerge => Icon::GitMerge,
       Self::NotMerged => Icon::TriangleAlert,
       Self::Failed => Icon::CircleX,
@@ -193,7 +196,7 @@ impl Status {
       | Self::CantContinue
       | Self::ReadyToMerge
       | Self::NotMerged => Tone::Warning,
-      Self::Completed | Self::Complete | Self::ReadyForReview => Tone::Success,
+      Self::Completed | Self::Complete | Self::Succeeded | Self::ReadyForReview => Tone::Success,
       Self::Failed | Self::Unreadable => Tone::Danger,
     }
   }
@@ -216,6 +219,7 @@ impl Status {
       Self::WaitingForPlanReset => "ui.status.waitingForPlanReset",
       Self::Interrupted => "ui.status.interrupted",
       Self::Completed => "ui.status.completed",
+      Self::Succeeded => "ui.status.succeeded",
       Self::ReadyForReview => "ui.status.readyForReview",
       Self::ReadyToMerge => "ui.status.readyToMerge",
       Self::NotMerged => "ui.status.notMerged",

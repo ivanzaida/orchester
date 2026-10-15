@@ -19,7 +19,7 @@ use lurq::{
 use orchester_core::{
   id::ProjectId,
   project::TaskKey,
-  usage::{RunCost, RunOutcome, TaskCost},
+  usage::{PipelineLabel, RunCost, RunOutcome, TaskCost},
 };
 use orchester_workspace::usage::Dashboard;
 
@@ -94,6 +94,7 @@ pub fn card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>) ->
   Card::new("usage-expensive", ctx.t("usage.expensive.title"))
     .note(ctx.t("usage.expensive.note"))
     .trailing(switch)
+    .close()
     .body([body, footer(ctx, views, shown, count)])
 }
 
@@ -122,7 +123,7 @@ const fn status(outcome: RunOutcome) -> Status {
     RunOutcome::Paused => Status::Paused,
     RunOutcome::Waiting => Status::NeedsInput,
     RunOutcome::Interrupted => Status::Interrupted,
-    RunOutcome::Succeeded => Status::Completed,
+    RunOutcome::Succeeded => Status::Succeeded,
     RunOutcome::Failed => Status::Failed,
     RunOutcome::Cancelled => Status::Canceled,
   }
@@ -150,12 +151,11 @@ fn chevron() -> Cell {
   Cell::Element(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted).into())
 }
 
-fn pipeline(ctx: &Ctx, pipeline: Option<&Arc<str>>) -> Cell {
-  Cell::Muted(
-    pipeline
-      .cloned()
-      .unwrap_or_else(|| ctx.t("usage.breakdown.pipelineGone")),
-  )
+fn pipeline(ctx: &Ctx, pipeline: Option<&PipelineLabel>) -> Cell {
+  Cell::Muted(pipeline.map_or_else(
+    || ctx.t("usage.breakdown.pipelineGone"),
+    |pipeline| words::pipeline(ctx, pipeline),
+  ))
 }
 
 fn first<T>(rows: &[T], all: bool) -> &[T] {

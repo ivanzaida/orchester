@@ -29,8 +29,9 @@ use crate::{
 
 /// A card's header line (`Title row` `WliPs`).
 const HEADER_HEIGHT: f32 = 28.0;
-/// A chart card's least height beside another (`Card · Tokens over time` while reading, `ES85q`).
-const STATE_HEIGHT: f32 = 300.0;
+/// The room a chart card's body keeps while it reads or shows nothing: the card is then 300 high
+/// (`Card · Tokens over time` while reading, `ES85q`) with 16 over and under, the header and 14 under it.
+const STATE_ROOM: f32 = 300.0 - 16.0 - HEADER_HEIGHT - 14.0 - 16.0;
 /// The widest a state's explanation runs (`voO9U`).
 const STATE_MEASURE: f32 = 440.0;
 /// A legend's color swatch (`p4TazJ`).
@@ -45,6 +46,7 @@ pub struct Card {
   subtitle: Option<Arc<str>>,
   trailing: Vec<Element>,
   fill: bool,
+  close: bool,
 }
 
 impl Card {
@@ -57,6 +59,7 @@ impl Card {
       subtitle: None,
       trailing: Vec::new(),
       fill: false,
+      close: false,
     }
   }
 
@@ -87,6 +90,12 @@ impl Card {
   /// Shares a row with other cards: as tall as the tallest, its body filling what the header leaves.
   pub fn fill(mut self) -> Self {
     self.fill = true;
+    self
+  }
+
+  /// Its parts 10 apart instead of 14, as a table under its header (`Card · Most expensive` `H5SBl`).
+  pub fn close(mut self) -> Self {
+    self.close = true;
     self
   }
 
@@ -130,7 +139,14 @@ impl Card {
           .id(format!("{}-subtitle", self.id))
           .variant(UsageText::Subtitle.role())
       }));
-    let card = frame(self.id).child(header).with_children(body);
+    let card = frame(self.id);
+    let card = if self.close {
+      card.spacing(ExtraSpacing::Loose.role())
+    } else {
+      card
+    }
+    .child(header)
+    .with_children(body);
     if self.fill { card.flex(1.0) } else { card }.into()
   }
 }
@@ -245,12 +261,14 @@ pub fn state(id: &str, (mark, title, detail): (Icon, &str, &str), action: Option
     .into()
 }
 
-/// A chart card's body that keeps the page's shape while it reads or says why it shows nothing.
+/// A chart card's body that keeps the page's shape while it reads or says why it shows nothing, with
+/// `body` in its middle.
 pub fn state_room(body: Element) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .flex(1.0)
-    .min_height(Dimension::Px(STATE_HEIGHT - HEADER_HEIGHT))
+    .min_height(Dimension::Px(STATE_ROOM))
+    .justify(Justify::Center)
     .child(body)
     .into()
 }

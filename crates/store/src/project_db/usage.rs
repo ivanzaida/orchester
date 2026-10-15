@@ -105,7 +105,8 @@ impl ProjectDb {
   fn runs_since(&self, since: Timestamp) -> Result<Vec<RunFacts>, StoreError> {
     let tags = self.task_tag_names()?;
     let mut statement = self.connection.prepare(&format!(
-      "SELECT runs.id, runs.number, runs.task_id, runs.status, tasks.number, tasks.title, pipelines.name, pipelines.id \
+      "SELECT runs.id, runs.number, runs.task_id, runs.status, tasks.number, tasks.title, pipelines.name, pipelines.id, \
+       json_extract(runs.snapshot, '$.body.pipeline.number') \
        FROM runs JOIN tasks ON tasks.id = runs.task_id \
        LEFT JOIN resources AS pipelines ON pipelines.id = json_extract(runs.snapshot, '$.body.pipeline.resource') \
        WHERE runs.id IN (SELECT run_id FROM invocations WHERE {RAN_SINCE}) ORDER BY runs.number"
@@ -121,6 +122,7 @@ impl ProjectDb {
           row.get::<_, String>(5)?,
           row.get::<_, Option<String>>(6)?,
           row.get::<_, Option<String>>(7)?,
+          row.get::<_, Option<i64>>(8)?,
         ))
       })?
       .collect::<Result<Vec<_>, _>>()?;
@@ -128,7 +130,7 @@ impl ProjectDb {
     rows
       .into_iter()
       .map(
-        |(id, number, task, status, task_number, title, pipeline, pipeline_id)| {
+        |(id, number, task, status, task_number, title, pipeline, pipeline_id, version)| {
           Ok(RunFacts {
             id: parse("run id", &id)?,
             number: run_number(number)?,
@@ -138,6 +140,7 @@ impl ProjectDb {
             task_title: title.into(),
             pipeline: pipeline.map(Arc::from),
             pipeline_id: pipeline_id.as_deref().map(|id| parse("pipeline id", id)).transpose()?,
+            pipeline_version: version.map(super::resources::version_number).transpose()?,
             outcome: outcome(&status)?,
           })
         },

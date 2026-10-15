@@ -25,7 +25,7 @@ use super::{
   failed,
   line_draw::{CacheLine, Day, LineProps},
   plot::{AxisName, label_every},
-  table::{Cell, Density, Width, column, row, table},
+  table::{Cell, Density, Width, column, row, table, total_row},
   words,
 };
 use crate::theme::{ExtraSpacing, UsageRadius, UsageText};
@@ -43,7 +43,7 @@ pub fn section(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>,
   let cards = vec![
     cache(ctx, dashboard, views),
     edits(ctx, dashboard, views),
-    failed::card(ctx, dashboard, views, requery),
+    failed::card(ctx, dashboard, requery),
   ];
   Column::new()
     .id("usage-efficiency")
@@ -76,7 +76,8 @@ fn cache(ctx: &mut Ctx, dashboard: &Dashboard, views: &Signal<Views>) -> Element
   if views.get().cache_table {
     return card.body([cache_table(ctx, dashboard)]);
   }
-  card.body([cache_figure(ctx, dashboard), cache_line(ctx, dashboard)])
+  let line = cache_line(ctx, dashboard);
+  card.body([super::tokens::chart_block(cache_figure(ctx, dashboard), line)])
 }
 
 /// *71%* and *in the period · up from 68%* (`Figure` `gImvs`).
@@ -178,7 +179,7 @@ fn cache_table(ctx: &Ctx, dashboard: &Dashboard) -> Element {
     Cell::Strong(ctx.t("usage.table.total")),
     Cell::Strong(words::share(ctx, dashboard.report.summary.cache_share())),
   ];
-  rows.push(row("usage-cache-table-total", &columns, Density::Data, total).into());
+  rows.push(total_row("usage-cache-table-total", &columns, total).into());
   table("usage-cache-table", &columns, Density::Data, rows)
 }
 

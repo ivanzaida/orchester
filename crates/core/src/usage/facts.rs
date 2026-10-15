@@ -7,6 +7,7 @@ use std::sync::Arc;
 use crate::{
   connection::AgentProvider,
   id::{AgentAccountId, InvocationId, ProjectId, ResourceId, RunId, TaskId},
+  resource::VersionNumber,
   run::{EditProgress, RunNumber, TokenUsage},
   time::Timestamp,
 };
@@ -121,9 +122,28 @@ pub struct RunFacts {
   pub pipeline: Option<Arc<str>>,
   /// The pinned pipeline's resource; `None` when it is gone.
   pub pipeline_id: Option<ResourceId>,
+  /// The pinned pipeline's version.
+  pub pipeline_version: Option<VersionNumber>,
   /// The task's tags by name.
   pub tags: Vec<Arc<str>>,
   pub outcome: RunOutcome,
+}
+
+impl RunFacts {
+  /// The pinned pipeline as a row names it; `None` when its resource is gone.
+  pub fn pipeline_label(&self) -> Option<PipelineLabel> {
+    self.pipeline.as_ref().map(|name| PipelineLabel {
+      name: name.clone(),
+      version: self.pipeline_version,
+    })
+  }
+}
+
+/// A pipeline by its name and the version a run pinned: *Feature delivery v3*.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct PipelineLabel {
+  pub name: Arc<str>,
+  pub version: Option<VersionNumber>,
 }
 
 /// One project's facts with what names it.

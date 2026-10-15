@@ -82,6 +82,7 @@ fn fixture() -> Fixture {
     task_title: format!("Task {key}").into(),
     pipeline: Some(pipeline.1.into()),
     pipeline_id: Some(pipeline.0),
+    pipeline_version: None,
     tags: Vec::new(),
     outcome: RunOutcome::Succeeded,
   };

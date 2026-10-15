@@ -3,7 +3,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use super::{
-  facts::{RunFacts, RunOutcome},
+  facts::{PipelineLabel, RunFacts, RunOutcome},
   report::Within,
 };
 use crate::{
@@ -21,7 +21,7 @@ pub struct TaskCost {
   pub key: Arc<str>,
   pub title: Arc<str>,
   /// The pipeline of its latest run in the range.
-  pub pipeline: Option<Arc<str>>,
+  pub pipeline: Option<PipelineLabel>,
   pub runs: usize,
   pub usage: TokenUsage,
   /// How its latest run in the range stands.
@@ -38,7 +38,7 @@ pub struct RunCost {
   pub task: TaskId,
   pub key: Arc<str>,
   pub title: Arc<str>,
-  pub pipeline: Option<Arc<str>>,
+  pub pipeline: Option<PipelineLabel>,
   /// When its first invocation in the range started.
   pub started: Timestamp,
   pub agent_ms: u64,
@@ -91,7 +91,7 @@ fn empty_run(project: ProjectId, project_name: &Arc<str>, run: &RunFacts, starte
     task: run.task,
     key: run.task_key.clone(),
     title: run.task_title.clone(),
-    pipeline: run.pipeline.clone(),
+    pipeline: run.pipeline_label(),
     started,
     agent_ms: 0,
     usage: TokenUsage::default(),

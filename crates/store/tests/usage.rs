@@ -125,6 +125,11 @@ fn usage_facts_give_each_turn_with_its_invocation_and_run() {
   assert_eq!(&*run_facts.task_title, "Say hello");
   assert_eq!(run_facts.pipeline.as_deref(), Some("Delivery"));
   assert!(run_facts.pipeline_id.is_some(), "the pipeline's resource");
+  assert_eq!(
+    run_facts.pipeline_version.map(|version| version.get()),
+    Some(1),
+    "the version the run pinned"
+  );
   assert_eq!(run_facts.tags, ["auth".into()]);
   assert_eq!(run_facts.outcome, RunOutcome::Running);
 }

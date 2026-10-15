@@ -178,6 +178,9 @@ fn reading(ctx: &Ctx) -> Figures {
   )
 }
 
+/// A figure's card (`Summary figure` `R22iW`).
+const FIGURE_HEIGHT: f32 = 118.0;
+
 fn figure(ctx: &Ctx, (id, label): (&str, &str), value: &str, change: ChangeLine, detail: Option<Arc<str>>) -> Element {
   let change = change.map(|(glyph, text)| {
     Row::new()
@@ -202,6 +205,7 @@ fn figure(ctx: &Ctx, (id, label): (&str, &str), value: &str, change: ChangeLine,
   });
   card(id, CardSurface::Raised)
     .width(Dimension::Px(0.0))
+    .height(Dimension::Px(FIGURE_HEIGHT))
     .flex(1.0)
     .padding(SpacingSize::Lg)
     .spacing(SpacingSize::Xs)

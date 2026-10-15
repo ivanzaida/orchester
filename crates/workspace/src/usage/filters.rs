@@ -253,7 +253,7 @@ impl Dashboard {
     let (values, value) = match key {
       BreakdownKey::ProfileStep { profile, .. } => (&mut filter.profiles, profile),
       BreakdownKey::Model(model) => (&mut filter.models, model),
-      BreakdownKey::Pipeline(Some(pipeline)) => (&mut filter.pipelines, pipeline),
+      BreakdownKey::Pipeline(Some(pipeline)) => (&mut filter.pipelines, &pipeline.name),
       BreakdownKey::Pipeline(None) | BreakdownKey::Reviewer(_) | BreakdownKey::Project(..) => return None,
     };
     if !values.contains(value) {

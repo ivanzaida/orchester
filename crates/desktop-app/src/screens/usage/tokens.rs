@@ -26,7 +26,7 @@ use super::{
   Views,
   card::{Card, footnote, legend_item, push_down, view_switch},
   plot::{AxisName, AxisText, CHART_HEIGHT, Frame, Redraw, label_every},
-  table::{Cell, Density, TableColumn, Width, column, row, table},
+  table::{Cell, Density, TableColumn, Width, column, row, table, total_row},
   tokens_draw::{TokenPlot, draw},
   tooltip, words,
 };
@@ -224,7 +224,7 @@ impl Component for TokensChart {
         };
         let (slot, slot_width) = frame.slot(index, count);
         tooltip::beside(
-          tokens_tip(ctx, &dashboard, bar, measure),
+          (tokens_tip(ctx, &dashboard, bar, measure), tooltip::WIDTH),
           (slot, slot + slot_width),
           width,
         )
@@ -463,7 +463,7 @@ fn tokens_table(ctx: &Ctx, dashboard: &Dashboard, measure: Measure) -> Element {
   )));
   // A run can report in several hours or days, so the total is the period's, not the rows' sum.
   total.push(Cell::Strong(dashboard.report.summary.runs.to_string().into()));
-  rows.push(row("usage-tokens-table-total", &columns, Density::Data, total).into());
+  rows.push(total_row("usage-tokens-table-total", &columns, total).into());
   table("usage-tokens-table", &columns, Density::Data, rows)
 }
 
