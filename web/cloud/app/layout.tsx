@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { DEFAULT_LOCALE, t } from "@/lib/i18n";
 
 import "@orchester/ui/theme/index.css";
+import "../theme/account.css";
 
 export const metadata: Metadata = {
   title: { template: t("brand.pageTitle"), default: t("brand.home") },

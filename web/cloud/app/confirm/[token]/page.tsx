@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { t } from "@/lib/i18n";
-import { linkEmail } from "@/lib/server/link";
+import { inspect } from "@/lib/server/link";
 import { formToken } from "@/lib/server/visitor";
 import { Shell } from "@/components/page";
 
@@ -12,14 +12,14 @@ export const metadata: Metadata = { title: t("confirm.pageTitle") };
 /** Where the confirmation email's link lands. Opening it confirms nothing; the visitor presses *Confirm email*. */
 export default async function ConfirmPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const email = await linkEmail(token, "confirm");
+  const link = await inspect(token, "confirm");
   const csrf = await formToken();
   return (
     <Shell>
       <ConfirmViews
         csrf={csrf}
         token={token}
-        initial={email === null ? { view: "expired" } : { view: "confirm", email }}
+        initial={link.kind === "gone" ? { view: "expired" } : { view: "confirm", email: link.email }}
       />
     </Shell>
   );

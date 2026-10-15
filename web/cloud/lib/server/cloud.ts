@@ -23,11 +23,11 @@ export interface DeviceInfo {
   readonly platform: "web";
 }
 
-function record(json: unknown): Record<string, unknown> | null {
+export function record(json: unknown): Record<string, unknown> | null {
   return typeof json === "object" && json !== null ? (json as Record<string, unknown>) : null;
 }
 
-function readAccount(json: unknown): Account | null {
+export function readAccount(json: unknown): Account | null {
   const account = record(json);
   const email = account?.email;
   const displayName = account?.display_name;

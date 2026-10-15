@@ -56,6 +56,17 @@ a.ghost:hover {
   font-size: var(--text-small);
 }
 
+.row {
+  width: auto;
+  height: var(--size-row-control);
+  padding: 0 var(--space-md);
+}
+
+.inline {
+  width: auto;
+  padding: 0 var(--space-md);
+}
+
 .button:disabled {
   cursor: default;
   opacity: var(--opacity-unavailable);

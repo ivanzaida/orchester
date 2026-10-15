@@ -3,6 +3,7 @@ import type { Server } from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { readConfig, ConfigError } from "@/lib/server/config";
+import { devices, invites, servers } from "@/lib/server/account";
 import { confirmEmail, inspectLink, me, signIn, signUp } from "@/lib/server/cloud";
 import { webDevice } from "@/lib/server/device";
 import { failureMessage, waitMessage } from "@/lib/server/failures";
@@ -69,6 +70,33 @@ describe("api client", () => {
   it("reads the assumed link inspection", async () => {
     expect(await inspectLink("confirm-ok", "confirm", {})).toEqual({ ok: true, value: ACCOUNT.email });
     expect(await inspectLink("confirm-ok", "reset", {})).toMatchObject({ ok: false, error: { code: "invalid_link" } });
+  });
+});
+
+describe("account api", () => {
+  async function token(email: string): Promise<string> {
+    const result = await signIn({ email, password: RIGHT_PASSWORD, device }, {});
+    if (!result.ok) {
+      throw new Error("sign-in failed");
+    }
+    return result.value.token;
+  }
+
+  it("reads devices, invites and servers in the page's shapes", async () => {
+    const options = { token: await token(ACCOUNT.email) };
+    const list = await devices(options);
+    expect(list.ok && list.value.map((d) => [d.platform, d.current])).toEqual([["web", true], ["windows", false], ["macos", false]]);
+    const open = await invites(options);
+    expect(open.kind === "list" && open.items[1]?.project).toBeNull();
+    expect(open.kind === "list" && open.items[0]?.project?.name).toBe("mobile-app");
+    const joined = await servers(options);
+    expect(joined.kind === "list" && joined.items.map((s) => s.owner)).toEqual([false, true]);
+  });
+
+  it("names a section the cloud does not serve yet as not yet, not as empty", async () => {
+    const options = { token: await token("early.cloud@example.com") };
+    expect(await invites(options)).toEqual({ kind: "notYet" });
+    expect(await servers(options)).toEqual({ kind: "notYet" });
   });
 });
 

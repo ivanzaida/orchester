@@ -14,7 +14,10 @@
   --text-tag: 11px; /* CLOUD tag `YOV1U`, chips `j3arUa` */
   --text-small: 12px; /* labels, hints, small print, errors */
   --text-body: 13px; /* values, buttons, descriptions */
-  --text-wordmark: 16px; /* `MGrMj` */
+  --text-row: 12.5px; /* list rows, section descriptions, nav links (`BJxjS`, `USknD`, `H7oFgo`) */
+  --text-address: 11.5px; /* a server or project address in a row, mono (`M6XUY`) */
+  --text-subtitle: 15px; /* a block's title inside a panel (`G6D1Aa`) */
+  --text-wordmark: 16px; /* `MGrMj`; a section title (`SRc60`) */
   --text-title: 20px; /* type/heading, `cApGk` */
   --weight-regular: 400;
   --weight-medium: 500;
@@ -29,10 +32,14 @@
   --tracking-secret: 1px; /* password value `C6NsE2` */
 
   /* Spacing between the variables' steps. */
-  --space-hairline: 2px; /* notice title and body `wDfBm` */
+  --space-hairline: 2px; /* notice title and body `wDfBm`; chip padding `r1RbhI` */
+  --space-line: 3px; /* lines of a list row (`tIvsQ`); badge padding (`eWGgO`) */
   --space-inline: 6px; /* icon to label, field label to box */
   --space-tight: 10px; /* actions `FeF02`, brand `V4PyD`, notice `optfF` */
   --space-notice-x: 14px; /* notice `optfF` */
+  --space-row: 14px; /* between a row's glyph, text and actions; section head to its panel (`aVRt4`, `usaZQ`) */
+  --space-row-x: 20px; /* a list row's side padding (`aVRt4`) */
+  --space-empty-y: 28px; /* an empty state's padding (`J9GyKs`) */
   --space-footer-links: 20px; /* footer `szTC4` */
   --space-page-y: 40px; /* main `AmM6K` */
 
@@ -43,6 +50,11 @@
 
   /* Sizes. */
   --size-card: 400px; /* `G6OhQc` */
+  --size-avatar: 30px; /* `d0fuXi` */
+  --size-dot: 6px; /* badge dot `Vydkx` */
+  --size-empty-text: 440px; /* an empty state's text (`c7ic2l`) */
+  --size-setting-label: 150px; /* a setting row's label (`e0NyV4`) */
+  --size-setting-field: 320px; /* a setting row's field (`ku1Rv`) */
   --size-row-control: 32px; /* buttons and fields in a list row (`J2YICE`, `WAGql`) */
   --size-mark: 32px; /* `yTI2t` */
   --size-logo: 24px; /* `DXmFx` */
@@ -80,6 +92,16 @@
   --footer-spacer: block;
   --footer-links-gap: var(--space-footer-links);
   --footer-leading: normal;
+
+  /* List rows: glyph, text and actions side by side; on a phone the actions go under the text (`F9QYD`). */
+  --row-columns: auto minmax(0, 1fr) auto;
+  --row-areas: "glyph main side";
+  --row-side-align: end;
+  --row-side-direction: row;
+  --row-glyph-align: center;
+  --row-button-width: auto;
+  --setting-columns: var(--size-setting-label) minmax(0, 1fr);
+  --setting-gap: var(--space-row);
 }
 
 /* Phones: `Ahged` and `afqip` are 390 wide; the card needs its 400 plus 16 at each side. */
@@ -98,5 +120,19 @@
     --footer-spacer: none;
     --footer-links-gap: var(--space-lg);
     --footer-leading: var(--leading-small);
+  }
+}
+
+/* List rows on a phone: `F9QYD` is 390 wide. */
+@media (max-width: 600px) {
+  :root {
+    --row-columns: auto minmax(0, 1fr);
+    --row-areas: "glyph main" "glyph side";
+    --row-side-align: stretch;
+    --row-side-direction: column;
+    --row-glyph-align: start;
+    --row-button-width: 100%;
+    --setting-columns: minmax(0, 1fr);
+    --setting-gap: var(--space-tight);
   }
 }

@@ -11,7 +11,8 @@ import { newPasswordErrors, type FieldErrors, type NewPasswordInput } from "@/li
 export type ResetState =
   | {
       readonly view: "form";
-      readonly email: string;
+      /** `null` until the cloud can say which address a link is for (`lib/server/link.ts`). */
+      readonly email: string | null;
       readonly attempt: number;
       readonly errors: FieldErrors<keyof NewPasswordInput>;
       readonly error?: Message;

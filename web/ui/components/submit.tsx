@@ -16,6 +16,7 @@ export function Submit(props: {
   busyLabel: string;
   unavailable?: boolean;
   small?: boolean;
+  row?: boolean;
   describedBy?: string;
   /** For forms that start their action themselves (after checking the fields), where `useFormStatus` sees nothing. */
   pending?: boolean;
@@ -25,7 +26,7 @@ export function Submit(props: {
   return (
     <button
       type="submit"
-      className={buttonClass(props.kind, { small: props.small ?? false, busy: pending })}
+      className={buttonClass(props.kind, { small: props.small ?? false, row: props.row ?? false, busy: pending })}
       disabled={pending || (props.unavailable ?? false)}
       aria-describedby={props.describedBy}
     >

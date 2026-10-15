@@ -43,7 +43,10 @@ Open `http://localhost:4100` (not `127.0.0.1`: the address must match `ORCHESTER
 
 | Input | Answer |
 | --- | --- |
-| Sign in `mira.koval@example.com` / `correct horse battery` | Signed in (Mira Koval) |
+| Sign in `mira.koval@example.com` / `correct horse battery` | Signed in: the full Account page (2 invites, 2 servers, 3 devices) |
+| Sign in `new.account@example.com` / `correct horse battery` | A new account: no invites, no servers, one browser |
+| Sign in `early.cloud@example.com` / `correct horse battery` | A cloud like C1a's: invites and servers answer `404` |
+| *Current password* other than `correct horse battery` | `401`: the current password is not right |
 | Sign in with any other password or address | `401 invalid_credentials` |
 | Sign in `unconfirmed@example.com` | `403 email_unconfirmed` |
 | Any form with an address starting `limited` | `429`, 900 s for sign-in, 2280 s for emails |
@@ -53,3 +56,7 @@ Open `http://localhost:4100` (not `127.0.0.1`: the address must match `ORCHESTER
 | `/confirm/confirm-ok`, `/reset/reset-ok` | A live link for `mira.koval@example.com` |
 | `/confirm/<anything else>`, `/reset/<anything else>` | Used or expired link |
 | `/confirm/inspect-down` | The cloud fails while the page loads |
+| `/confirm/confirm-unlisted`, `/reset/reset-unlisted` | A live link on a cloud without the inspect endpoint (C1a today): no address shown |
+
+The fake keeps its state while it runs (a declined invite or a signed-out device stays gone); restart it for a fresh
+account. Each sign-in signs that account's earlier browser sessions out, so the page shows one browser.

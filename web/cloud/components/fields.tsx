@@ -20,13 +20,13 @@ export function TextField(props: WithMessage<ComponentProps<typeof kit.TextField
   return <kit.TextField {...props} error={said(props.error)} />;
 }
 
-export function PasswordField(props: WithMessage<Omit<ComponentProps<typeof kit.PasswordField>, "showLabel" | "hideLabel">>) {
+export function PasswordField(props: WithMessage<Omit<ComponentProps<typeof kit.PasswordField>, "revealLabel" | "concealLabel">>) {
   return (
     <kit.PasswordField
       {...props}
       error={said(props.error)}
-      showLabel={t("field.showPassword")}
-      hideLabel={t("field.hidePassword")}
+      revealLabel={t("field.showPassword")}
+      concealLabel={t("field.hidePassword")}
     />
   );
 }

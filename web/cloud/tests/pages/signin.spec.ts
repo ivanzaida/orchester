@@ -33,8 +33,9 @@ test.describe("sign in", () => {
   test("signs in without the browser ever holding the token or calling the API", async ({ page, context }) => {
     const urls = watchBrowserRequests(page);
     await signInAs(page);
-    await expect(page.getByRole("heading", { name: "You are signed in" })).toBeVisible();
-    await expect(page.getByText(EMAIL)).toBeVisible();
+    await expect(page).toHaveURL(/\/account$/);
+    await expect(page.getByRole("heading", { name: "Get started" })).toBeVisible();
+    await expect(page.getByText(EMAIL).first()).toBeVisible();
 
     const signIn = (await apiRequests()).filter((request) => request.path === "/api/v1/auth/sessions").at(-1);
     expect(signIn?.body?.device).toEqual({ name: "Edge on Windows", platform: "web" });
@@ -54,7 +55,7 @@ test.describe("sign in", () => {
     expect(await page.evaluate(() => document.cookie)).toBe("");
     expectNoApiAddress(urls);
 
-    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.getByRole("banner").getByRole("button", { name: "Sign out" }).click();
     await expect(page).toHaveURL(/\/signin$/);
     expect((await context.cookies()).some((cookie) => cookie.name === "__Host-orchester_session")).toBe(false);
     expect((await apiRequests()).at(-1)).toMatchObject({ method: "DELETE", path: "/api/v1/auth/sessions/current" });

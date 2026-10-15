@@ -19,12 +19,14 @@ interface FieldProps {
   hint?: string | undefined;
   /** Beside the label at its right, like *Forgot password?* (`Es2YM`). */
   aside?: ReactNode;
+  /** The label is not shown, because the row around the field names it (`WAGql`); it stays the input's name. */
+  hideLabel?: boolean;
   autoComplete: string;
 }
 
 /** The file's `Field/text` (`JFXZg`) at the large size: label, 36 high box, then the error or the hint. */
 function Frame(props: FieldProps & { id: string; children: ReactNode }) {
-  const label = (
+  const label = props.hideLabel ? null : (
     <label className={styles.label} htmlFor={props.id}>
       {props.label}
     </label>
@@ -73,6 +75,7 @@ export function TextField(props: FieldProps & { type: "email" | "text"; placehol
         value={props.value}
         placeholder={props.placeholder}
         autoComplete={props.autoComplete}
+        aria-label={props.hideLabel ? props.label : undefined}
         aria-invalid={props.error ? true : undefined}
         aria-describedby={describedBy(props, id)}
         onChange={(event) => { props.onChange(event.target.value); }}
@@ -82,7 +85,7 @@ export function TextField(props: FieldProps & { type: "email" | "text"; placehol
 }
 
 /** A password field with the eye that shows the value; the eye appears only where script runs, since only script can use it. */
-export function PasswordField(props: FieldProps & { showLabel: string; hideLabel: string }) {
+export function PasswordField(props: FieldProps & { revealLabel: string; concealLabel: string }) {
   const id = `field-${props.name}`;
   const [shown, setShown] = useState(false);
   const browser = useInBrowser();
@@ -95,6 +98,7 @@ export function PasswordField(props: FieldProps & { showLabel: string; hideLabel
         type={shown ? "text" : "password"}
         value={props.value}
         autoComplete={props.autoComplete}
+        aria-label={props.hideLabel ? props.label : undefined}
         aria-invalid={props.error ? true : undefined}
         aria-describedby={describedBy(props, id)}
         onChange={(event) => { props.onChange(event.target.value); }}
@@ -103,7 +107,7 @@ export function PasswordField(props: FieldProps & { showLabel: string; hideLabel
         <button
           type="button"
           className={styles.reveal}
-          aria-label={shown ? props.hideLabel : props.showLabel}
+          aria-label={shown ? props.concealLabel : props.revealLabel}
           aria-pressed={shown}
           aria-controls={id}
           onClick={() => { setShown(!shown); }}

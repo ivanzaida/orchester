@@ -49,7 +49,7 @@ export function ResetViews({ csrf, token, initial }: { csrf: string; token: stri
   const errors = checked !== null && Object.keys(checked).length > 0 ? checked : state.errors;
   return (
     <Card>
-      <Head title={t("reset.title")} description={t("reset.description", { email: state.email })} />
+      <Head title={t("reset.title")} description={state.email === null ? t("reset.descriptionNoAddress") : t("reset.description", { email: state.email })} />
       <CardForm {...form}>
         <CsrfField token={csrf} />
         <Hidden name="token" value={token} />

@@ -1,12 +1,13 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 
 import { t } from "@/lib/i18n";
 import { ButtonLink } from "@orchester/ui/components/button";
 import { Actions, Address, Card, CardForm, Head, Small, Text, Top } from "@orchester/ui/components/card";
 import { ErrorLine, TextField } from "@/components/fields";
 import { CsrfField, Hidden } from "@/components/hidden";
+import { rememberSignInEmail } from "@/components/sign-in-email";
 import { Submit } from "@orchester/ui/components/submit";
 
 import { resendForAction, type ResendState } from "../signup/sent/actions";
@@ -44,13 +45,18 @@ export function ExpiredLink(props: {
   );
 }
 
-function Confirmed({ email }: { email: string }) {
+function Confirmed({ email }: { email: string | null }) {
+  useEffect(() => {
+    if (email !== null) {
+      rememberSignInEmail(email);
+    }
+  }, [email]);
+  const description = email === null ? t("confirm.confirmedDescriptionNoAddress") : t("confirm.confirmedDescription");
   return (
     <Card>
       <Top>
-        <Head title={t("confirm.confirmedTitle")} description={t("confirm.confirmedDescription")}
-          tile={{ icon: "circle-check", tone: "success" }} />
-        <Address email={email} />
+        <Head title={t("confirm.confirmedTitle")} description={description} tile={{ icon: "circle-check", tone: "success" }} />
+        {email !== null && <Address email={email} />}
       </Top>
       <Text>{t("confirm.confirmedNext")}</Text>
       <Actions>
@@ -77,8 +83,12 @@ export function ConfirmViews({ csrf, token, initial }: { csrf: string; token: st
   return (
     <Card>
       <Top>
-        <Head title={t("confirm.title")} description={t("confirm.description")} tile={{ icon: "mail-check", tone: "neutral" }} />
-        <Address email={state.email} />
+        <Head
+          title={t("confirm.title")}
+          description={state.email === null ? t("confirm.descriptionNoAddress") : t("confirm.description")}
+          tile={{ icon: "mail-check", tone: "neutral" }}
+        />
+        {state.email !== null && <Address email={state.email} />}
       </Top>
       <Small>{t("confirm.notYou")}</Small>
       <CardForm action={action}>

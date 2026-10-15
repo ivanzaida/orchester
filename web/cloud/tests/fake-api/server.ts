@@ -4,8 +4,10 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
-export const ACCOUNT = { email: "mira.koval@example.com", display_name: "Mira Koval" };
-export const RIGHT_PASSWORD = "correct horse battery";
+import { FULL, routeSignedIn, signInAccount, type Answer } from "./accounts.ts";
+
+export { RIGHT_PASSWORD } from "./accounts.ts";
+export const ACCOUNT = { email: FULL, display_name: "Mira Koval" };
 
 interface Recorded {
   method: string;
@@ -16,16 +18,8 @@ interface Recorded {
   body: Record<string, unknown> | null;
 }
 
-interface Answer {
-  status: number;
-  body?: unknown;
-  retryAfter?: number;
-}
-
 const SLOW_MS = 5000;
 const requests: Recorded[] = [];
-const sessions = new Set<string>();
-let issued = 0;
 
 const refuse = (status: number, error: string, retryAfter?: number): Answer => ({
   status,
@@ -58,14 +52,7 @@ function signIn(body: Record<string, unknown>): Answer {
   if (down(email)) {
     return refuse(503, "keys_unavailable");
   }
-  if (email !== ACCOUNT.email || body.password !== RIGHT_PASSWORD) {
-    return refuse(401, "invalid_credentials");
-  }
-  issued += 1;
-  const token = `ocd_fake_web_token_${issued}`;
-  sessions.add(token);
-  const device = { id: `device-${issued}`, name: "fake", platform: "web", created_at: 0, last_used_at: 0, current: true };
-  return { status: 201, body: { token, device, account: { id: "account-1", ...ACCOUNT, created_at: 0 } } };
+  return signInAccount(email, body.password, body.device);
 }
 
 const LINKS: Record<string, string> = { "confirm-ok": "confirm", "reset-ok": "reset" };
@@ -75,11 +62,15 @@ function inspect(body: Record<string, unknown>): Answer {
   if (body.link_token === "inspect-down") {
     return refuse(500, "internal");
   }
+  // `*-unlisted` links behave like C1a's cloud, which has no inspect endpoint yet; the press still works.
+  if (typeof body.link_token === "string" && body.link_token.endsWith("-unlisted")) {
+    return refuse(404, "not_found");
+  }
   return purpose === body.purpose ? { status: 200, body: { email: ACCOUNT.email } } : refuse(422, "invalid_link");
 }
 
 function finish(body: Record<string, unknown>, purpose: string): Answer {
-  if (body.link_token === `${purpose}-ok`) {
+  if (body.link_token === `${purpose}-ok` || body.link_token === `${purpose}-unlisted`) {
     return { status: 204 };
   }
   return refuse(422, "invalid_link");
@@ -87,11 +78,14 @@ function finish(body: Record<string, unknown>, purpose: string): Answer {
 
 function bearer(request: IncomingMessage): string | null {
   const header = request.headers.authorization ?? "";
-  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-  return token !== null && sessions.has(token) ? token : null;
+  return header.startsWith("Bearer ") ? header.slice(7) : null;
 }
 
 function route(request: IncomingMessage, path: string, body: Record<string, unknown>): Answer {
+  const signedIn = routeSignedIn(request.method ?? "", path, body, bearer(request));
+  if (signedIn !== undefined) {
+    return signedIn;
+  }
   switch (`${request.method} ${path}`) {
     case "POST /api/v1/auth/signup":
       return emailing(body.email);
@@ -107,12 +101,6 @@ function route(request: IncomingMessage, path: string, body: Record<string, unkn
       return emailing(body.email);
     case "POST /api/v1/auth/reset/finish":
       return finish(body, "reset");
-    case "GET /api/v1/me":
-      return bearer(request) === null ? refuse(401, "unauthorized") : { status: 200, body: { account: { id: "account-1", ...ACCOUNT, created_at: 0 } } };
-    case "DELETE /api/v1/auth/sessions/current": {
-      const token = bearer(request);
-      return token !== null && sessions.delete(token) ? { status: 204 } : refuse(401, "unauthorized");
-    }
     default:
       return refuse(404, "not_found");
   }

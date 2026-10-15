@@ -1,12 +1,13 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 
 import { t } from "@/lib/i18n";
 import { Actions, Card, CardForm, Fields, Head } from "@orchester/ui/components/card";
 import { useRemaining } from "@orchester/ui/hooks/countdown";
 import { AsideLink, ErrorLine, PasswordField, TextField } from "@/components/fields";
 import { CsrfField, Hidden } from "@/components/hidden";
+import { takeSignInEmail } from "@/components/sign-in-email";
 import { Say } from "@/components/say";
 import { Notice, Reason } from "@orchester/ui/components/status";
 import { Submit } from "@orchester/ui/components/submit";
@@ -39,6 +40,12 @@ function Unconfirmed({ csrf, email }: { csrf: string; email: string }) {
 export function SignInForm({ csrf }: { csrf: string }) {
   const { state, pending, form } = useCheckedForm(signInAction, START);
   const [email, setEmail] = useState(state.email);
+  useEffect(() => {
+    const remembered = takeSignInEmail();
+    if (remembered !== null) {
+      setEmail(remembered);
+    }
+  }, []);
   const [password, setPassword] = useState("");
   const [seen, setSeen] = useState(state.attempt);
   if (seen !== state.attempt) {

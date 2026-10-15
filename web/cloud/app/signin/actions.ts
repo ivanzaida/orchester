@@ -56,5 +56,5 @@ export async function signInAction(previous: SignInState, form: FormData): Promi
     return { email, attempt, outcome: refusal(result.error, email, now) };
   }
   await startSession(result.value.token);
-  redirect("/");
+  redirect("/account");
 }

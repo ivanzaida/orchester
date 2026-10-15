@@ -29,7 +29,8 @@
     "unavailable": "Orchester Cloud is not answering right now. Try again in a minute.",
     "formExpired": "This form has expired. Reload the page and try again.",
     "tooManyEmails": "Too many emails were sent. Try again in {{minutes}} min, at {{time}}.",
-    "tooManyTries": "Too many tries from your network. Try again in {{minutes}} min, at {{time}}."
+    "tooManyTries": "Too many tries from your network. Try again in {{minutes}} min, at {{time}}.",
+    "resendNotYet": "Sending a new link is not available yet. Sign up again with the same email: we send a new link, and the password you chose first stays."
   },
   "signup": {
     "pageTitle": "Create an account",
@@ -67,13 +68,15 @@
     "submitting": "Confirming…",
     "confirmedTitle": "Your email is confirmed",
     "confirmedDescription": "Your Orchester account is ready. Sign in with this email:",
-    "confirmedNext": "Sign in in the desktop app to see your servers and invites, or sign in here to manage your account.",
+    "confirmedNext": "Sign in here to download Orchester and see your invites, or open the desktop app if you already have it.",
     "signInWeb": "Sign in on the web",
     "expiredTitle": "This link no longer works",
     "expiredDescription": "Confirmation links work once, for 24 hours. If you already confirmed your email, sign in. If not, we send you a new link.",
     "send": "Send a new link",
     "sending": "Sending…",
-    "signIn": "Sign in"
+    "signIn": "Sign in",
+    "descriptionNoAddress": "Confirm the email of your Orchester account.",
+    "confirmedDescriptionNoAddress": "Your Orchester account is ready. Sign in with its email and password."
   },
   "signin": {
     "pageTitle": "Sign in",
@@ -122,15 +125,8 @@
     "expiredTitle": "This reset link no longer works",
     "expiredDescription": "Reset links work once, for 1 hour. Enter your email and we send you a new one.",
     "send": "Send a new link",
-    "sending": "Sending…"
-  },
-  "home": {
-    "pageTitle": "Signed in",
-    "title": "You are signed in",
-    "description": "Signed in to Orchester Cloud as {{name}}:",
-    "next": "The account page is not on the web yet. Change your account in the Orchester desktop app.",
-    "signOut": "Sign out",
-    "signingOut": "Signing out…"
+    "sending": "Sending…",
+    "descriptionNoAddress": "For your Orchester account."
   },
   "failure": {
     "pageTitle": "Orchester Cloud is not answering",
@@ -140,5 +136,117 @@
     "missingTitle": "This page does not exist",
     "missingDescription": "Check the address, or start from the sign-in page.",
     "signIn": "Sign in"
+  },
+  "account": {
+    "pageTitle": "Your account",
+    "signOut": "Sign out",
+    "signingOut": "Signing out…",
+    "navTitle": "On this page",
+    "nav": {
+      "getStarted": "Get started",
+      "invites": "Invites",
+      "invitesCount": "Invites · {{count}}",
+      "servers": "Your servers",
+      "devices": "Devices",
+      "account": "Account"
+    },
+    "getStarted": {
+      "title": "Get started",
+      "signedIn": "Orchester is signed in on {{count}} of your computers",
+      "getTitle": "Get Orchester",
+      "getText": "Orchester runs on your computer. Sign in there with this account to join your team's servers.",
+      "downloadWindows": "Download for Windows",
+      "downloadMac": "Download for macOS",
+      "downloadsNotYet": "Downloads are not published yet.",
+      "howTitle": "How to start",
+      "step1Title": "Sign in in the app",
+      "step1Text": "Settings › Orchester, with {{email}}.",
+      "step2Title": "Accept an invite",
+      "step2Text": "Invites show here and in Orchester.",
+      "step3Title": "Or connect your server",
+      "step3Text": "Settings › Orchester › Connect a server, with its setup code."
+    },
+    "invites": {
+      "title": "Invites",
+      "waiting": "{{count}} waiting",
+      "description": "Projects and servers you were invited to. Accepting opens Orchester, which connects to the server and shows the project's join review.",
+      "kindProject": "Project · {{role}}",
+      "kindServer": "Server · {{role}}",
+      "fromProject": "{{inviter}} invited you to a project on {{server}}.",
+      "fromServer": "{{inviter}} invited you to the server, with no project yet.",
+      "when": "{{sent}} · expires {{expires}}",
+      "decline": "Decline",
+      "declining": "Declining…",
+      "declineNotYet": "Declining is not available yet. The invite stays until it expires.",
+      "emptyTitle": "No invites yet",
+      "emptyText": "When someone invites {{email}} to a project or a server, it shows here and in Orchester.",
+      "notYetTitle": "Invites are not available yet",
+      "notYetText": "Orchester Cloud does not list invites yet. When it does, invites to {{email}} show here.",
+      "failedTitle": "Invites could not be loaded",
+      "failedText": "Orchester Cloud did not answer. Reload the page to try again."
+    },
+    "servers": {
+      "title": "Your servers",
+      "count": "{{count}} servers",
+      "countOne": "1 server",
+      "description": "Team servers you own or joined.",
+      "owned": "You own it",
+      "joined": "Joined {{date}}",
+      "connected": "Connected {{date}}",
+      "projects": "Projects and your role: in Orchester",
+      "note": "Orchester Cloud knows which servers you own or joined, not your projects or roles on them. Orchester asks each server for those.",
+      "emptyTitle": "No servers yet",
+      "emptyText": "Servers you join through an invite, and servers you connect in Orchester, are listed here.",
+      "notYetTitle": "Servers are not available yet",
+      "notYetText": "Orchester Cloud does not keep its list of team servers yet. When it does, the servers you own or joined show here.",
+      "failedTitle": "Servers could not be loaded",
+      "failedText": "Orchester Cloud did not answer. Reload the page to try again."
+    },
+    "devices": {
+      "title": "Devices",
+      "count": "{{count}} signed in",
+      "description": "Computers and browsers signed in to your account. Signing one out does not touch its connections to team servers.",
+      "thisDevice": "This device",
+      "browser": "Browser",
+      "app": "Orchester app · {{platform}}",
+      "appName": "Orchester on {{name}}",
+      "windows": "Windows",
+      "macos": "macOS",
+      "linux": "Linux",
+      "activeNow": "Active now",
+      "lastActiveToday": "Last active today, {{time}}",
+      "lastActive": "Last active {{date}}",
+      "signOut": "Sign out",
+      "signingOut": "Signing out…",
+      "signedOutTitle": "{{name}} is signed out",
+      "signedOutText": "Its projects on team servers keep working. It asks for your password the next time it needs your account."
+    },
+    "settings": {
+      "title": "Account",
+      "displayName": "Display name",
+      "displayNameHint": "Shown on your invites and to teammates on team servers.",
+      "save": "Save",
+      "saving": "Saving…",
+      "email": "Email",
+      "confirmed": "Confirmed",
+      "emailHint": "Changing your email is not available yet.",
+      "password": "Password",
+      "changePassword": "Change password",
+      "changingPassword": "Changing password…",
+      "passwordHint": "Changing it signs out your other devices.",
+      "currentPassword": "Current password",
+      "newPassword": "New password",
+      "repeatPassword": "Repeat new password",
+      "newPasswordRule": "New password: 12 to 256 characters. A long phrase is fine; there are no rules about symbols.",
+      "passwordNote": "Your other devices are signed out when it changes. Their projects on team servers keep working.",
+      "cancel": "Cancel",
+      "currentWrong": "The current password is not right.",
+      "currentEmpty": "Enter your current password.",
+      "passwordChanged": "Your password is changed. Your other devices are signed out; their projects on team servers keep working.",
+      "signOut": "Sign out",
+      "signOutBrowser": "Sign out of this browser",
+      "signOutHint": "Orchester on your computers stays signed in."
+    },
+    "today": "Today, {{time}}"
   }
 }

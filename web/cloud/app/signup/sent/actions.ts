@@ -23,6 +23,10 @@ async function resend(email: string, resent: boolean): Promise<ResendState> {
   const result = await resendConfirmation(email, await anonymous());
   if (!result.ok) {
     const failure = result.error;
+    if (failure.kind === "refused" && failure.code === "not_found") {
+      // The cloud does not have `POST /auth/confirm/resend` yet; signing up again sends a new link meanwhile.
+      return { error: message("error.resendNotYet") };
+    }
     if (failure.kind !== "refused" || failure.code !== "rate_limited") {
       return { error: failureMessage(failure, "error.tooManyEmails", now) };
     }

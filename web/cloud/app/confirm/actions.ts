@@ -8,13 +8,13 @@ import { anonymous, formIsGenuine } from "@/lib/server/visitor";
 
 /** The confirmation landing's views: press to confirm (`Bdcjx`), confirmed (`oFMIA`), link gone (`X2Cij0`). */
 export type ConfirmState =
-  | { readonly view: "confirm"; readonly email: string; readonly error?: Message }
-  | { readonly view: "confirmed"; readonly email: string }
+  | { readonly view: "confirm"; readonly email: string | null; readonly error?: Message }
+  | { readonly view: "confirmed"; readonly email: string | null }
   | { readonly view: "expired" };
 
 /** *Confirm email*: confirming takes this press, never the page's load (mail scanners open every link). */
 export async function confirmAction(previous: ConfirmState, form: FormData): Promise<ConfirmState> {
-  const email = previous.view === "expired" ? "" : previous.email;
+  const email = previous.view === "expired" ? null : previous.email;
   if (!(await formIsGenuine(form))) {
     return { view: "confirm", email, error: message("error.formExpired") };
   }
