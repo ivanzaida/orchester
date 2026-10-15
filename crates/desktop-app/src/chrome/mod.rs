@@ -3,7 +3,10 @@
 //! not shown; the empty parts of the title bar drag the window and maximize it on a double-click.
 
 mod app_menu;
-mod tab_fit;
+pub mod tab_fit;
+mod tab_label;
+mod tab_list;
+mod tab_measure;
 mod tab_strip;
 mod title_bar;
 mod traffic_lights;
