@@ -3,6 +3,7 @@ resolver = "3"
 members = [
   "crates/agent",
   "crates/api",
+  "crates/cloud",
   "crates/core",
   "crates/desktop",
   "crates/desktop-app",
@@ -44,6 +45,7 @@ redundant_clone = "warn"
 # Without its default `http` feature: the file tools only, without the model clients' TLS stack.
 orchester-agent = { path = "crates/agent", default-features = false }
 orchester-api = { path = "crates/api" }
+orchester-cloud = { path = "crates/cloud" }
 orchester-core = { path = "crates/core" }
 orchester-exec = { path = "crates/exec" }
 orchester-index = { path = "crates/index" }
@@ -57,8 +59,15 @@ orchester-workspace = { path = "crates/workspace" }
 apple-native-keyring-store = { version = "1", features = ["keychain"] }
 # HTTP routing, JSON extraction and SSE on tokio for the shared server.
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "matched-path", "query", "tokio"] }
+# Orchester Cloud's HTTP server (`crates/cloud`), the person's choice for the cloud (2026-10-15); team servers stay on
+# axum. Without default features: no compression, cookies, HTTP/2, websockets or macros, only routing, extractors and
+# the bounded HTTP/1 server on tokio.
+actix-web = { version = "4.11", default-features = false }
 # Argon2id password hashing; its OS random source also supplies salts, initial passwords and tokens.
 argon2 = { version = "0.5", features = ["std"] }
+# A small pool of `tokio-postgres` connections with connect and wait timeouts for Orchester Cloud; a correct async
+# pool is not a few lines of code.
+deadpool-postgres = { version = "0.14", default-features = false, features = ["rt_tokio_1"] }
 # Local wall-clock time of status bar events and the local day of the daily project budget (the OS
 # time zone); std has no local time.
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
@@ -85,6 +94,9 @@ keyring-core = "1"
 lurq = { version = "0.44.1", default-features = false }
 # The deprecated app retains its existing create/render hook contract until it is replaced.
 lurq_legacy = { package = "lurq", version = "0.42.0", default-features = false }
+# Orchester Cloud's confirmation and reset emails through the person's SMTP relay, with TLS through the workspace's
+# rustls and ring; SMTP with TLS and authentication is not a few lines of code.
+lettre = { version = "0.11", default-features = false, features = ["builder", "hostname", "ring", "rustls-platform-verifier", "smtp-transport", "tokio1-rustls"] }
 # libproc process enumeration and identity on macOS; already transitive through rustix.
 libc = "0.2"
 parking_lot = "0.12"
@@ -105,15 +117,20 @@ reqwest = { version = "0.13", default-features = false, features = ["rustls-no-p
 # ECDSA P-256 key and a self-signed X.509 certificate through ring, the provider rustls already uses here. A
 # certificate is not something to write by hand. Without `aws_lc_rs`, so no second crypto library.
 rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem", "ring"] }
-# The team server's Ed25519 key (signed invites and the cloud link statement), verifying Orchester Cloud's identity
-# tokens and key sets, HMAC-SHA-256 of codes with a constant-time check, and the OS random source for tokens and
-# codes. Already built as rustls' crypto provider, so it adds no crate.
-ring = "0.17"
 rusqlite = { version = "0.40", features = ["bundled"] }
 # The ring crypto provider for the client's rustls, the provider the server's own TLS already uses, and
 # rustls' certificate errors, to tell an untrusted certificate from a server that cannot be reached.
 # Already built through tokio-rustls.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+# Ed25519 signing and verifying of Orchester Cloud's identity tokens and key sets (`orchester-api`'s `identity`
+# feature), AES-GCM for the cloud's stored signing keys, the team server's Ed25519 key (signed invites and the cloud
+# link statement) and HMAC-SHA-256 of its codes with a constant-time check, and the OS random source for tokens and
+# codes. Already built as rustls' crypto provider, so it adds no crate; there is no JWT crate: a token is a few lines
+# of base64url JSON.
+ring = "0.17"
+# The operating system's trust store for Orchester Cloud's TLS connection to PostgreSQL, the verifier reqwest and lettre
+# already use here; already in the lock file.
+rustls-platform-verifier = "0.7"
 # Safe `kill(2)` for signalling processes and process groups on macOS (ending the runner and each
 # agent's process tree; std can only SIGKILL a single child), and `uname(2)` for the computer's
 # name a shared server lists a session under (`system`). Already built for macOS through
@@ -131,6 +148,12 @@ socket2 = "0.6"
 # `default-syntaxes` bundles the grammars, and no themes or HTML output are compiled in.
 syntect = { version = "5.3", default-features = false, features = ["default-syntaxes", "regex-fancy"] }
 tempfile = "3"
+# Orchester Cloud's PostgreSQL client: async on the workspace's tokio, plain SQL with typed parameters, no ORM, macros
+# or compile-time database (sqlx needs a live database or an offline cache at build time; diesel brings an ORM and a
+# DSL). The default `runtime` feature connects over TCP; `with-uuid-1` maps ids.
+tokio-postgres = { version = "0.7", features = ["with-uuid-1"] }
+# TLS from Orchester Cloud to PostgreSQL through the workspace's rustls with ring, so no OpenSSL on any platform.
+tokio-postgres-rustls = { version = "0.14", default-features = false, features = ["ring"] }
 thiserror = "2"
 # The desktop also runs blocking work (database, native dialogs) off the UI thread through lurq futures.
 # `signal`: the macOS runner ends its agents on SIGTERM/SIGINT; it builds on the signal handling
