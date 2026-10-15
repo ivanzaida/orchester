@@ -281,12 +281,13 @@ impl ProjectDb {
     Ok(())
   }
 
-  /// Settles the proposed action `seq` of conversation `chat` with `outcome`: the action as it was, or `None` when
-  /// there is no such action or it no longer waits for a person.
+  /// Settles the proposed action `seq` of conversation `chat` with `outcome` at `at`: the action as it was, or `None`
+  /// when there is no such action or it no longer waits for a person.
   pub fn settle_chat_action(
     &mut self,
     (chat, seq): (ChatId, i64),
     outcome: ActionOutcome,
+    at: Timestamp,
   ) -> Result<Option<ChatAction>, StoreError> {
     let transaction = self.connection.transaction()?;
     let body: Option<String> = transaction
@@ -305,6 +306,7 @@ impl ProjectDb {
     }
     let settled = ChatAction {
       outcome,
+      settled: Some(at),
       ..proposed.clone()
     };
     let body = serde_json::to_string(&settled).map_err(|error| corrupt("chat action", error))?;

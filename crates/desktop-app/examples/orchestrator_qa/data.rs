@@ -138,7 +138,7 @@ pub(super) struct Turn<'a> {
 
 pub(super) enum Part<'a> {
   Reply(&'a str),
-  Action(ChatAction),
+  Action(Box<ChatAction>),
 }
 
 pub(super) fn keep(
@@ -171,21 +171,15 @@ pub(super) fn keep(
 
 /// The agent created `first`, and could not start `second`.
 fn actions(first: &str, second: &str) -> (ChatAction, ChatAction) {
-  let created = ChatAction {
-    tool: "create_task".to_owned(),
-    task: Some(first.to_owned()),
-    outcome: ActionOutcome::Done,
-    held: None,
-  };
-  let refused = ChatAction {
-    tool: "run_task".to_owned(),
-    task: Some(second.to_owned()),
-    outcome: ActionOutcome::Refused {
+  let created = ChatAction::new("create_task", Some(first.to_owned()), ActionOutcome::Done);
+  let refused = ChatAction::new(
+    "run_task",
+    Some(second.to_owned()),
+    ActionOutcome::Refused {
       code: "task_not_ready".to_owned(),
       reason: "Needs a pipeline".to_owned(),
     },
-    held: None,
-  };
+  );
   (created, refused)
 }
 
@@ -209,13 +203,13 @@ fn conversations(
       Turn {
         text: "Draft a task for the delivery log on the endpoint page.",
         at: ago(30),
-        parts: vec![Part::Reply(&reply), Part::Action(created)],
+        parts: vec![Part::Reply(&reply), Part::Action(Box::new(created))],
         end: TurnState::Answered,
       },
       Turn {
         text: &format!("Start {second} now."),
         at: ago(24),
-        parts: vec![Part::Reply(&refusal), Part::Action(refused)],
+        parts: vec![Part::Reply(&refusal), Part::Action(Box::new(refused))],
         end: TurnState::Answered,
       },
     ],
@@ -284,12 +278,7 @@ fn changed_proposal(db: &mut ProjectDb, connection: ConnectionId) -> Result<Chat
     "**{key}** can run now on {}. Start it below when you're ready.",
     start.pipeline
   );
-  let action = ChatAction {
-    tool: "run_task".to_owned(),
-    task: Some(key.clone()),
-    outcome: ActionOutcome::Proposed(Box::new(start)),
-    held: None,
-  };
+  let action = ChatAction::new("run_task", Some(key.clone()), ActionOutcome::Proposed(Box::new(start)));
   let chat = keep(
     db,
     ChatId::generate(),
@@ -297,7 +286,7 @@ fn changed_proposal(db: &mut ProjectDb, connection: ConnectionId) -> Result<Chat
     vec![Turn {
       text: &format!("Start {key}."),
       at: ago(12),
-      parts: vec![Part::Reply(&reply), Part::Action(action)],
+      parts: vec![Part::Reply(&reply), Part::Action(Box::new(action))],
       end: TurnState::Answered,
     }],
   )?;

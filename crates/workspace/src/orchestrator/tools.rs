@@ -10,8 +10,11 @@
 use std::path::PathBuf;
 
 use orchester_core::{
-  id::{ChatId, ProjectId},
-  orchestrator::{ActionOutcome, change::Publishing},
+  id::{ChatId, ProjectId, RunId},
+  orchestrator::{
+    ActionOutcome, ChatAction,
+    change::{ProposedChange, Publishing},
+  },
 };
 use orchester_store::ProjectDb;
 use rmcp::model::{JsonObject, Tool};
@@ -161,35 +164,53 @@ pub async fn call(
     return app_tool((services, translate), name, arguments).await;
   }
   in_own_project(scope, &mut arguments)?;
-  let mut named = keep::named_task(&arguments);
-  let (result, outcome) = match act((services, translate), scope, name, &arguments).await {
-    Ok(Acted::Done(result)) => (Ok(result), ActionOutcome::Done),
-    Ok(Acted::Proposed { told, outcome, task }) => {
-      named = task.map(Named::Task).or(named);
-      (Ok(told), outcome)
-    }
-    Err(error) => {
-      let refused = keep::refusal(&error, translate);
-      (Err(error), refused)
-    }
+  let acted = act((services, translate), scope, name, &arguments).await;
+  let Acted { result, kept } = acted;
+  let outcome = match (&result, kept.waits) {
+    (Ok(_), Some(waits)) => waits,
+    (Ok(_), None) => ActionOutcome::Done,
+    (Err(error), _) => keep::refusal(error, translate),
   };
+  let named = kept.task.map(Named::Task).or_else(|| keep::named_task(&arguments));
   let named = named.or_else(|| result.as_ref().ok().and_then(keep::created_task));
   // A hold that held new starts keeps what it held, for its card.
   let held = (name == HOLD_QUEUE && outcome == ActionOutcome::Done).then(|| keep::arguments_task(&named));
-  keep::keep(scope, (name, named, held), outcome).await;
+  let action = ChatAction {
+    change: kept.change,
+    started: kept.started,
+    auto_mode: kept.auto_mode,
+    ..ChatAction::new(name, None, outcome)
+  };
+  keep::keep(scope, (named, held), action).await;
   runners.chat_changed(&scope.root);
   result
 }
 
-/// How a change went: done as for any client, or proposed to the person.
-enum Acted {
-  Done(Value),
-  /// What the agent is told, the proposal kept, and the key of the task it names.
-  Proposed {
-    told: Value,
-    outcome: ActionOutcome,
-    task: Option<String>,
-  },
+/// What a change did: what the agent is told, and what its action keeps.
+struct Acted {
+  result: Result<Value, ToolError>,
+  kept: Kept,
+}
+
+impl Acted {
+  fn done(result: Result<Value, ToolError>) -> Self {
+    Self {
+      result,
+      kept: Kept::default(),
+    }
+  }
+}
+
+/// What an action keeps beyond the call: how it waits for the person when it does, the key of the task it names,
+/// what it publishes, cancels or merges, the run it started, and whether it was done without asking because auto
+/// mode is on.
+#[derive(Default)]
+struct Kept {
+  waits: Option<ActionOutcome>,
+  task: Option<String>,
+  change: Option<ProposedChange>,
+  started: Option<RunId>,
+  auto_mode: bool,
 }
 
 /// Carries out the change `name` with `arguments` in `scope`, or proposes it to the person.
@@ -198,30 +219,94 @@ async fn act(
   scope: &ChatScope,
   name: &str,
   arguments: &JsonObject,
-) -> Result<Acted, ToolError> {
-  if name == RUN_TASK && !auto_mode(scope).await? {
-    let (told, proposal) = proposal::propose((services, translate), scope, arguments).await?;
-    return Ok(Acted::Proposed {
-      told,
-      outcome: ActionOutcome::Proposed(Box::new(proposal.start)),
-      task: Some(proposal.key),
-    });
-  }
-  let proposes = match name {
-    CANCEL_RUN | MERGE_RUN => true,
-    _ => Publishing::of_tool(name).is_some() && !publishes_drafts(services).await?,
+) -> Acted {
+  let acted = match name {
+    RUN_TASK => start((services, translate), scope, arguments).await,
+    CANCEL_RUN | MERGE_RUN => propose_change(translate, scope, name, arguments).await,
+    _ if Publishing::of_tool(name).is_some() => publish((services, translate), scope, name, arguments).await,
+    _ => Ok(Acted::done(
+      app_tool((services, translate), name, arguments.clone()).await,
+    )),
   };
-  if proposes {
-    let (told, change, task) = change::propose(translate, scope, name, arguments).await?;
-    return Ok(Acted::Proposed {
-      told,
-      outcome: ActionOutcome::ProposedChange(Box::new(change)),
-      task,
+  acted.unwrap_or_else(|error| Acted::done(Err(error)))
+}
+
+/// `run_task`: a start proposed to the person, or, while auto mode is on for the project, the run started.
+async fn start(
+  (services, translate): (&Services, &Translate),
+  scope: &ChatScope,
+  arguments: &JsonObject,
+) -> Result<Acted, ToolError> {
+  if !auto_mode(scope).await? {
+    let (told, proposal) = proposal::propose((services, translate), scope, arguments).await?;
+    return Ok(Acted {
+      result: Ok(told),
+      kept: Kept {
+        waits: Some(ActionOutcome::Proposed(Box::new(proposal.start))),
+        task: Some(proposal.key),
+        ..Kept::default()
+      },
     });
   }
-  app_tool((services, translate), name, arguments.clone())
-    .await
-    .map(Acted::Done)
+  let result = app_tool((services, translate), RUN_TASK, arguments.clone()).await;
+  let started = result
+    .as_ref()
+    .ok()
+    .and_then(|told| told.pointer("/run/id"))
+    .and_then(Value::as_str)
+    .and_then(|id| id.parse::<RunId>().ok());
+  Ok(Acted {
+    result,
+    kept: Kept {
+      started,
+      auto_mode: true,
+      ..Kept::default()
+    },
+  })
+}
+
+/// A cancel, merge or publication the person applies.
+async fn propose_change(
+  translate: &Translate,
+  scope: &ChatScope,
+  name: &str,
+  arguments: &JsonObject,
+) -> Result<Acted, ToolError> {
+  let (change, task) = change::subject(scope, name, arguments).await?;
+  Ok(Acted {
+    result: Ok(change::told(translate, &change)),
+    kept: Kept {
+      waits: Some(ActionOutcome::Waits),
+      task,
+      change: Some(change),
+      ..Kept::default()
+    },
+  })
+}
+
+/// A publication: proposed to the person, unless they let the Orchestrator publish drafts; then published, unless
+/// it widens what agents may do while *Let automation change agent permissions* is off.
+async fn publish(
+  (services, translate): (&Services, &Translate),
+  scope: &ChatScope,
+  name: &str,
+  arguments: &JsonObject,
+) -> Result<Acted, ToolError> {
+  if !publishes_drafts(services).await? {
+    return propose_change(translate, scope, name, arguments).await;
+  }
+  let (change, _) = change::subject(scope, name, arguments).await?;
+  if !change::widens(scope, &change).await?.is_empty() && !changes_permissions(services).await? {
+    return propose_change(translate, scope, name, arguments).await;
+  }
+  let result = app_tool((services, translate), name, arguments.clone()).await;
+  Ok(Acted {
+    result,
+    kept: Kept {
+      change: Some(change),
+      ..Kept::default()
+    },
+  })
 }
 
 /// Whether auto mode is on for `scope`'s project: its new runs use it.
@@ -234,6 +319,12 @@ async fn auto_mode(scope: &ChatScope) -> Result<bool, ToolError> {
 async fn publishes_drafts(services: &Services) -> Result<bool, ToolError> {
   let workspace = services.workspace().clone();
   blocking(move || Ok(workspace.orchestrator_publishes_drafts()?)).await
+}
+
+/// Whether the person lets automation widen what agents may do.
+async fn changes_permissions(services: &Services) -> Result<bool, ToolError> {
+  let workspace = services.workspace().clone();
+  blocking(move || Ok(workspace.automation_changes_permissions()?)).await
 }
 
 /// Calls the app's tool `name`, of either of its lists, with `arguments`.

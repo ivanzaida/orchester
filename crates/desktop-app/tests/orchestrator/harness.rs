@@ -26,8 +26,8 @@ use orchester_core::{
   permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
   project::Project,
   resource::{
-    AgentProfile, Draft, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey,
-    StepKind,
+    AgentProfile, AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, ModelId, Pipeline, PromptText,
+    ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
   },
   run::review::AutoModeSettings,
   store::{ConnectionStore, ResourceStore, TaskStore},
@@ -418,6 +418,36 @@ the agent logged: {agent}"
       .expect("draft saved");
   }
 
+  /// A published instruction `name` that applies to step *Implement* of `pipeline`, telling `text`.
+  pub fn instruction(&self, pipeline: ResourceId, (name, text): (&str, &str)) -> ResourceId {
+    let mut db = self.db();
+    let now = Timestamp::now();
+    let body = instruction_body(pipeline, text);
+    let slug = Slug::new(&name.to_lowercase().replace(' ', "-")).expect("slug");
+    let created = db
+      .create_resource(slug, named(name), &body, now)
+      .expect("instruction")
+      .id();
+    db.publish_draft::<Instruction>(created, now)
+      .expect("publish instruction");
+    created
+  }
+
+  /// Saves a draft of `instruction` (of `pipeline`'s step) telling `text`, over its latest version.
+  pub fn instruction_draft(&self, (instruction, pipeline): (ResourceId, ResourceId), text: &str) {
+    let body = instruction_body(pipeline, text);
+    self
+      .db()
+      .update_draft::<Instruction>(instruction, |_, latest| {
+        Ok(Draft::new(
+          body,
+          latest.map(|version| version.number()),
+          Timestamp::now(),
+        ))
+      })
+      .expect("draft saved");
+  }
+
   /// The number of `pipeline`'s latest published version.
   pub fn pipeline_version(&self, pipeline: ResourceId) -> u32 {
     self
@@ -483,6 +513,20 @@ the agent logged: {agent}"
       .key()
       .to_string()
   }
+}
+
+/// An instruction for every agent of step *Implement* of `pipeline` when it starts, telling `text`.
+fn instruction_body(pipeline: ResourceId, text: &str) -> Instruction {
+  Instruction::new(
+    PromptText::new(text).expect("prompt"),
+    AgentTargets::All,
+    BTreeSet::from([InjectionEvent::Start]),
+    InstructionScope::Step {
+      pipeline,
+      step: StepKey::new("implement").expect("key"),
+    },
+  )
+  .expect("instruction")
 }
 
 /// A pipeline of one step by `builder`, reading, told `instructions`.

@@ -99,15 +99,14 @@ fn a_turn_ends_once_and_its_chat_keeps_replies_actions_and_session_in_order() {
   db.set_chat_session(chat, "session-1", (connection, account))
     .expect("session");
   db.add_chat_reply(chat, ("Two runs.", &model()), at(20)).expect("reply");
-  let action = ChatAction {
-    tool: "run_task".to_owned(),
-    task: Some("ORC-2".to_owned()),
-    outcome: ActionOutcome::Refused {
+  let action = ChatAction::new(
+    "run_task",
+    Some("ORC-2".to_owned()),
+    ActionOutcome::Refused {
       code: "task_blocked".to_owned(),
       reason: "ORC-1 must be merged first.".to_owned(),
     },
-    held: None,
-  };
+  );
   db.add_chat_action(chat, &action, at(30)).expect("action");
   assert!(db.end_chat_turn(message, &TurnState::Answered, at(35)).expect("ended"));
   assert!(

@@ -18,7 +18,7 @@ use lurq::{
 };
 use orchester_core::{
   id::ProjectId,
-  orchestrator::{ActionOutcome, ChatAction, change::Publishing},
+  orchestrator::{ActionOutcome, ChatAction},
   project::TaskKey,
   time::Timestamp,
 };
@@ -86,62 +86,7 @@ fn words(tool: &str) -> Words {
       "orchestrator.action.releaseQueue.refused",
       Some("orchestrator.action.releaseQueue.effect"),
     ),
-    "cancel_run" => (
-      Icon::CircleStop,
-      "orchestrator.action.cancelRun.done",
-      "orchestrator.action.cancelRun.refused",
-      Some("orchestrator.action.cancelRun.effect"),
-    ),
-    "merge_run" => (
-      Icon::GitMerge,
-      "orchestrator.action.mergeRun.done",
-      "orchestrator.action.mergeRun.refused",
-      Some("orchestrator.action.mergeRun.effect"),
-    ),
-    other => return publish_words(other),
-  };
-  Words {
-    glyph,
-    done,
-    refused,
-    effect,
-  }
-}
-
-/// The words of a tool that publishes a draft, or of any other tool.
-fn publish_words(tool: &str) -> Words {
-  let (glyph, done, refused, effect) = match Publishing::of_tool(tool) {
-    Some(Publishing::Pipeline) => (
-      Icon::Upload,
-      "orchestrator.action.publishPipeline.done",
-      "orchestrator.action.publishPipeline.refused",
-      Some("orchestrator.action.publishPipeline.effect"),
-    ),
-    Some(Publishing::Profile) => (
-      Icon::Upload,
-      "orchestrator.action.publishProfile.done",
-      "orchestrator.action.publishProfile.refused",
-      Some("orchestrator.action.publishProfile.effect"),
-    ),
-    Some(Publishing::Instruction) => (
-      Icon::Upload,
-      "orchestrator.action.publishInstruction.done",
-      "orchestrator.action.publishInstruction.refused",
-      Some("orchestrator.action.publishInstruction.effect"),
-    ),
-    Some(Publishing::Skill) => (
-      Icon::Upload,
-      "orchestrator.action.publishSkill.done",
-      "orchestrator.action.publishSkill.refused",
-      Some("orchestrator.action.publishSkill.effect"),
-    ),
-    Some(Publishing::Tool) => (
-      Icon::Upload,
-      "orchestrator.action.publishTool.done",
-      "orchestrator.action.publishTool.refused",
-      Some("orchestrator.action.publishTool.effect"),
-    ),
-    None => (
+    _ => (
       Icon::Wrench,
       "orchestrator.action.other.done",
       "orchestrator.action.other.refused",
@@ -199,7 +144,7 @@ pub(super) fn card(
   // A proposal waiting or dismissed did nothing yet: no check to tell of.
   let ran = !matches!(
     action.outcome,
-    ActionOutcome::Proposed(_) | ActionOutcome::ProposedChange(_) | ActionOutcome::Dismissed
+    ActionOutcome::Proposed(_) | ActionOutcome::Waits | ActionOutcome::Dismissed
   );
   let checked = ran.then(|| {
     Row::new()
@@ -251,7 +196,7 @@ fn shown(ctx: &Ctx, action: &ChatAction, at: Timestamp) -> Shown {
   let args = [("task", task), ("tool", action.tool.as_str())];
   let time = display::clock(at);
   let (title, glyph, state, state_glyph, state_color, effect) = match &action.outcome {
-    ActionOutcome::Done => (
+    ActionOutcome::Done | ActionOutcome::Applied => (
       ctx.t_args(words.done, args),
       words.glyph,
       ctx.t_args("orchestrator.action.confirmed", [("time", time.as_str())]),
@@ -279,16 +224,17 @@ fn shown(ctx: &Ctx, action: &ChatAction, at: Timestamp) -> Shown {
       PaletteColor::Warning,
       Some(ctx.t("orchestrator.proposal.effect")),
     ),
-    ActionOutcome::ProposedChange(change) => (
-      super::proposal::change_title(ctx, change, task),
-      super::proposal::change_glyph(change),
+    // A change waits with its own card (`super::change`); this is a waiting action without it.
+    ActionOutcome::Waits => (
+      ctx.t_args(words.done, args),
+      words.glyph,
       ctx.t_args("orchestrator.proposal.waits", [("time", time.as_str())]),
       Icon::Hourglass,
       PaletteColor::Warning,
-      Some(ctx.t("orchestrator.proposal.changeEffect")),
+      None,
     ),
     ActionOutcome::Dismissed => (
-      ctx.t_args(dismissed_title(&action.tool), args),
+      ctx.t_args("orchestrator.proposal.dismissedTitle", args),
       words.glyph,
       ctx.t_args("orchestrator.proposal.dismissedState", [("time", time.as_str())]),
       Icon::CircleX,
@@ -303,16 +249,6 @@ fn shown(ctx: &Ctx, action: &ChatAction, at: Timestamp) -> Shown {
     state_glyph,
     state_color,
     effect,
-  }
-}
-
-/// What the card of a dismissed proposal of `tool` is titled.
-fn dismissed_title(tool: &str) -> &'static str {
-  match tool {
-    "cancel_run" => "orchestrator.proposal.cancel.dismissed",
-    "merge_run" => "orchestrator.proposal.merge.dismissed",
-    other if Publishing::of_tool(other).is_some() => "orchestrator.proposal.publish.dismissed",
-    _ => "orchestrator.proposal.dismissedTitle",
   }
 }
 
@@ -336,8 +272,9 @@ pub(super) fn open_task(ctx: &mut Ctx, id: &str, project: ProjectId, task: Optio
 const fn outcome_name(outcome: &ActionOutcome) -> &'static str {
   match outcome {
     ActionOutcome::Done => "done",
+    ActionOutcome::Applied => "applied",
     ActionOutcome::Refused { .. } => "refused",
-    ActionOutcome::Proposed(_) | ActionOutcome::ProposedChange(_) => "proposed",
+    ActionOutcome::Proposed(_) | ActionOutcome::Waits => "proposed",
     ActionOutcome::Dismissed => "dismissed",
   }
 }

@@ -122,6 +122,10 @@ fn main() -> Result<(), Box<dyn Error>> {
   let root = tempfile::Builder::new().prefix("app-").tempdir_in(&scratch)?;
   let chosen = !matches!(state, State::NotReady | State::SettingsNoConnection);
   let prepared = data::prepare(root.path(), fakes, (chosen, state != State::SettingsNoConnection))?;
+  if state == State::Changes {
+    // A profile draft that widens is proposed while the person lets the Orchestrator publish drafts: its card says so.
+    orchester_store::AppDb::open(&prepared.database)?.set_orchestrator_publishes_drafts(true)?;
+  }
   let runner = if state == State::NoRunner {
     root.path().join("no-runner").join("orchester-runner")
   } else {

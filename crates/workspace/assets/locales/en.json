@@ -1513,7 +1513,7 @@
     },
     "proposal": {
       "changed": "{{task}} changed after it was proposed: its details, its pipeline or the pipeline's version are not what you were asked to start. Nothing started; ask the Orchestrator to propose it again.",
-      "draftChanged": "The draft of {{name}} was saved again or published after it was proposed: it is not what you were asked to publish. Nothing was published; ask the Orchestrator to propose it again.",
+      "draftChanged": "The draft of {{name}} changed after this proposal. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
       "runChanged": "Run #{{run}} has newer work than when its merge was proposed: it is not what you were asked to merge. Nothing was merged; ask the Orchestrator to propose it again."
     },
     "tools": {

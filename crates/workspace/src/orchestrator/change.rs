@@ -2,8 +2,9 @@
 //! them (`docs/design/orchestrator-toolset.md`, "Decisions" 3 and 4; publishing only while the person has not turned
 //! on *Let the Orchestrator publish drafts*). The agent's call checks what it names and changes nothing: the
 //! conversation keeps the proposed change and the agent is told it waits. The person applies it through the same
-//! tool any client of the app calls, or dismisses it ([`super::proposal::decide`]); a draft saved again or published
-//! meanwhile, or a run with a newer checkpoint, is refused and needs a fresh proposal.
+//! tool any client of the app calls, as their own decision (what it widens is theirs to decide, as in the window), or
+//! dismisses it ([`super::proposal::decide`]); a draft saved again or published meanwhile, or a run with a newer
+//! checkpoint, is refused and needs a fresh proposal.
 
 use std::path::Path;
 
@@ -19,20 +20,22 @@ use orchester_store::{ProjectDb, StoreError};
 use rmcp::model::JsonObject;
 use serde_json::{Value, json};
 
-use super::tools::{CANCEL_RUN, ChatScope, MERGE_RUN, app_tool};
+use super::{
+  tools::{CANCEL_RUN, ChatScope, MERGE_RUN, app_tool},
+  widening,
+};
 use crate::{
   app_mcp::{Missing, Services, ToolError, Translate, blocking, find_run},
   messages::Message,
 };
 
-/// The agent's call of tool `name` with `arguments` in `scope`: the change it proposes, what the agent is told, and
-/// the key of the task it names; a refusal when there is nothing to change.
-pub(super) async fn propose(
-  translate: &Translate,
+/// What the agent's call of tool `name` with `arguments` in `scope` publishes, cancels or merges, and the key of the
+/// task it names; a refusal when there is nothing to change.
+pub(super) async fn subject(
   scope: &ChatScope,
   name: &str,
   arguments: &JsonObject,
-) -> Result<(Value, ProposedChange, Option<String>), ToolError> {
+) -> Result<(ProposedChange, Option<String>), ToolError> {
   let text = |argument: &str| {
     arguments
       .get(argument)
@@ -51,11 +54,21 @@ pub(super) async fn propose(
       blocking(move || run_change(&root, cancel, &named)).await?
     }
   };
-  Ok((told(translate, &change), change, task))
+  Ok((change, task))
 }
 
-/// Applies `change`, proposed in `scope`, through the tool that carries it out, refused as for any client; refused
-/// when what it names changed since it was proposed.
+/// What publishing `change`'s draft in `scope` would widen in what agents may do; nothing for a cancel or merge.
+pub(super) async fn widens(scope: &ChatScope, change: &ProposedChange) -> Result<Vec<Message>, ToolError> {
+  let Change::Publish { of, resource, .. } = change.change else {
+    return Ok(Vec::new());
+  };
+  let root = scope.root.clone();
+  blocking(move || Ok(widening::of_draft(&ProjectDb::open(&root)?, of, resource)?)).await
+}
+
+/// Applies `change`, proposed in `scope`, through the tool that carries it out, as the person's own decision: refused
+/// as for any client but for what widens what agents may do, which the person decided; refused when what it names
+/// changed since it was proposed.
 pub(super) async fn apply(
   (services, translate): (&Services, &Translate),
   scope: &ChatScope,
@@ -78,6 +91,7 @@ pub(super) async fn apply(
       run,
       number,
       checkpoint,
+      ..
     } => {
       blocking(move || unchanged_run(&root, (run, number), checkpoint.as_deref())).await?;
       (MERGE_RUN, "run", run.to_string())
@@ -86,7 +100,8 @@ pub(super) async fn apply(
   let mut arguments = JsonObject::new();
   arguments.insert("project".to_owned(), Value::String(scope.project.to_string()));
   arguments.insert(argument.to_owned(), Value::String(named));
-  app_tool((services, translate), tool, arguments).await
+  let person = services.clone().decided_by_person();
+  app_tool((&person, translate), tool, arguments).await
 }
 
 /// The publication of the draft `named` of kind `kind` in the project at `root`. Blocks on SQLite.
@@ -130,6 +145,7 @@ fn run_change(root: &Path, cancel: bool, named: &str) -> Result<(ProposedChange,
       run: id,
       number,
       checkpoint: checkpoint(&run),
+      into: run.base_branch().map(|branch| branch.as_str().to_owned()),
     }
   };
   Ok((
@@ -174,7 +190,7 @@ fn checkpoint(run: &Run) -> Option<String> {
 }
 
 /// What the agent is told of the proposed `change`.
-fn told(translate: &Translate, change: &ProposedChange) -> Value {
+pub(super) fn told(translate: &Translate, change: &ProposedChange) -> Value {
   let subject = change.subject.clone();
   let (message, proposed) = match &change.change {
     Change::Publish { of, version, .. } => (

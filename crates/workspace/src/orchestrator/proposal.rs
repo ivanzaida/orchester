@@ -7,7 +7,10 @@
 //! That only a person takes the start or applies the change is the window's to enforce: synthetic input never
 //! reaches [`decide`].
 
-use orchester_core::orchestrator::{ActionOutcome, ChatAction, EntryKind};
+use orchester_core::{
+  orchestrator::{ActionOutcome, ChatAction, EntryKind},
+  time::Timestamp,
+};
 use orchester_store::ProjectDb;
 use rmcp::model::JsonObject;
 use serde_json::{Value, json};
@@ -70,21 +73,26 @@ pub async fn decide(
       let Some(action) = waiting(scope, seq).await? else {
         return Ok(());
       };
-      let carried = match (action.task, action.outcome) {
-        (Some(task), ActionOutcome::Proposed(start)) => {
-          app_mcp::run_proposed(services, (scope.project.to_string(), task), start.basis).await
-        }
-        (_, ActionOutcome::ProposedChange(proposed)) => change::apply((services, translate), scope, &proposed).await,
+      // A start reads as done as before; a change as the person's, apart from what the chat did itself.
+      let (carried, applied) = match (action.task, action.outcome, action.change) {
+        (Some(task), ActionOutcome::Proposed(start), _) => (
+          app_mcp::run_proposed(services, (scope.project.to_string(), task), start.basis).await,
+          ActionOutcome::Done,
+        ),
+        (_, ActionOutcome::Waits, Some(proposed)) => (
+          change::apply((services, translate), scope, &proposed).await,
+          ActionOutcome::Applied,
+        ),
         _ => return Ok(()),
       };
       match carried {
-        Ok(_) => ActionOutcome::Done,
+        Ok(_) => applied,
         Err(error) => refusal(&error, translate),
       }
     }
   };
   let (root, chat) = (scope.root.clone(), scope.chat);
-  background::run(move || ProjectDb::open(&root)?.settle_chat_action((chat, seq), outcome))
+  background::run(move || ProjectDb::open(&root)?.settle_chat_action((chat, seq), outcome, Timestamp::now()))
     .await?
     .map_err(|error| store_error(&error))?;
   runners.chat_changed(&scope.root);

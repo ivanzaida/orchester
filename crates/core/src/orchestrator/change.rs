@@ -30,11 +30,14 @@ pub enum Change {
   },
   /// Cancel run `run`, `#number`.
   Cancel { run: RunId, number: u32 },
-  /// Merge run `run`, `#number`, holding what its last checkpoint `checkpoint` (a commit) holds.
+  /// Merge run `run`, `#number`, holding what its last checkpoint `checkpoint` (a commit) holds, into the branch
+  /// `into` it started from, when it names one.
   Merge {
     run: RunId,
     number: u32,
     checkpoint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    into: Option<String>,
   },
 }
 

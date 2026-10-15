@@ -1,7 +1,8 @@
 //! The person's decision the setup tools respect: automation may narrow what agents may do, but widening
 //! it (broader profile permissions or MCP servers, a CLI program of its own choice, environment variables
 //! that change what programs load) is refused as `person_only` unless a person turned on *Let automation
-//! change agent permissions* in the window. No tool changes that switch.
+//! change agent permissions* in the window, or the person decided the call themselves (they applied a proposal of
+//! the Orchestrator chat, `Services::decided_by_person`). No tool changes that switch.
 
 use orchester_core::{
   connection::AgentProvider,
@@ -18,7 +19,7 @@ use crate::{
 
 /// Refused unless nothing widens or a person lets automation widen; `reasons` say what would widen.
 pub(in crate::app_mcp::tools) fn allowed(services: &Services, mut reasons: Vec<Message>) -> Result<(), ToolError> {
-  if reasons.is_empty() || services.workspace.automation_changes_permissions()? {
+  if reasons.is_empty() || services.by_person || services.workspace.automation_changes_permissions()? {
     return Ok(());
   }
   reasons.insert(0, Message::new("appMcp.errors.personOnly"));
@@ -38,7 +39,7 @@ pub(super) fn check_profile(
   let reasons = crate::agents::widening::reasons(db, id, profile, provider)?;
   let auto = reasons.contains(&crate::agents::widening::message(Widening::AutoApprove));
   allowed(services, reasons)?;
-  if auto && !services.workspace.automation_answers_approvals()? {
+  if auto && !services.by_person && !services.workspace.automation_answers_approvals()? {
     return Err(ToolError::refused(
       "automation_not_allowed",
       vec![Message::new("appMcp.errors.autoApproveNeedsAnswers")],

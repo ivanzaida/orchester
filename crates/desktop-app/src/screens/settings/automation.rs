@@ -32,6 +32,8 @@ use crate::{
   theme::{ExtraSpacing, ExtraTypography, SettingsSpacing, SettingsText},
   ui::{
     field::field_error,
+    icon::Icon,
+    inspector::note,
     message::message_text,
     toggle::{Toggle, ToggleKind},
   },
@@ -181,28 +183,56 @@ impl Component for ConsentRow {
       .blocked
       .get()
       .then(|| field_error(&format!("{id}-blocked"), &ctx.t(words.blocked)));
-    Row::new()
-      .id(format!("{id}-row"))
+    // What a switch that is on says beside it (`Hint · publishes directly` `Bj5aS` in `IJOOq`).
+    let on = (consent == Consent::PublishDrafts && shown == Some(true)).then(|| {
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding_bottom(ExtraSpacing::Snug.role())
+        .child(note(
+          &format!("{id}-on"),
+          Icon::MessagesSquare,
+          &ctx.t("settings.automation.publishDrafts.on"),
+        ))
+    });
+    // Why it cannot be read, was not saved or did not take a change, under the row (`Error · not taken` `WYp6D`).
+    let errors = (problem.is_some() || blocked.is_some()).then(|| {
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding_bottom(SpacingSize::Sm)
+        .spacing(ExtraSpacing::Snug.role())
+        .with_children(problem)
+        .with_children(blocked)
+    });
+    let description = ctx.t(words.description);
+    Column::new()
       .width(Dimension::Pct(100.0))
-      .padding(Padding::vertical(SpacingSize::Md))
-      .spacing(SpacingSize::Xl)
-      .align_items(Alignment::Center)
-      .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(
-        Column::new()
-          .flex(1.0)
-          .spacing(ExtraSpacing::Fine.role())
-          .child(Text::new(&title).variant(ExtraTypography::Strong.role()))
-          .child(
-            Text::new(&ctx.t(words.description))
-              .variant(ExtraTypography::Prose.role())
-              .width(Dimension::Pct(100.0)),
-          )
-          .with_children(problem)
-          .with_children(blocked),
-      )
-      .child(switch)
+      .child(row(id, (&title, &description), switch))
+      .with_children(on)
+      .with_children(errors)
   }
+}
+
+/// The row of switch `id`: its title and description, and the switch at its end, over its line (`Form row` `XaNIz`).
+fn row(id: &str, (title, description): (&str, &str), switch: Toggle) -> Row {
+  Row::new()
+    .id(format!("{id}-row"))
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::vertical(SpacingSize::Md))
+    .spacing(SpacingSize::Xl)
+    .align_items(Alignment::Center)
+    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(
+      Column::new()
+        .flex(1.0)
+        .spacing(ExtraSpacing::Fine.role())
+        .child(Text::new(title).variant(ExtraTypography::Strong.role()))
+        .child(
+          Text::new(description)
+            .variant(ExtraTypography::Prose.role())
+            .width(Dimension::Pct(100.0)),
+        ),
+    )
+    .child(switch)
 }
 
 impl ConsentRow {

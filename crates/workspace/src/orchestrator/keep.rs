@@ -66,18 +66,18 @@ pub(super) fn arguments_task(named: &Option<Named>) -> Option<String> {
   }
 }
 
-/// Keeps the action of tool `tool`, with the key of the task it names and, for a hold of new starts (`held`: the task
-/// that names its group, if any), what it held, in the conversation; one that cannot be kept is logged.
+/// Keeps `action` in the conversation, with the key of the task `named` names and, for a hold of new starts (`held`:
+/// the task that names its group, if any), what it held; one that cannot be kept is logged.
 pub(super) async fn keep(
   scope: &ChatScope,
-  (tool, named, held): (&str, Option<Named>, Option<Option<String>>),
-  outcome: ActionOutcome,
+  (named, held): (Option<Named>, Option<Option<String>>),
+  mut action: ChatAction,
 ) {
-  let (root, chat, tool) = (scope.root.clone(), scope.chat, tool.to_owned());
+  let (root, chat) = (scope.root.clone(), scope.chat);
   let kept = tokio::task::spawn_blocking(move || {
     let mut db = ProjectDb::open(&root)?;
-    let task = named.and_then(|named| task_key(&db, named));
-    let held = match held {
+    action.task = named.and_then(|named| task_key(&db, named));
+    action.held = match held {
       Some(named) => {
         let group = match named {
           Some(named) => hold::group_of_named(&db, &named)?,
@@ -86,12 +86,6 @@ pub(super) async fn keep(
         Some(hold::held_work(&db, group)?)
       }
       None => None,
-    };
-    let action = ChatAction {
-      tool,
-      task,
-      outcome,
-      held,
     };
     db.add_chat_action(chat, &action, Timestamp::now())
   })

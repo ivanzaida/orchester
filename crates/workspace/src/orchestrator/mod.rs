@@ -4,8 +4,10 @@
 
 mod change;
 pub mod chat;
+pub mod facts;
 mod keep;
 pub mod proposal;
 pub mod send;
 pub mod settings;
 pub mod tools;
+mod widening;

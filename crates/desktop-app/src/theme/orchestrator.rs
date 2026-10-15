@@ -7,7 +7,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::ExtraColor,
+  typography::{mono, style},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OrchestratorText {
@@ -22,15 +25,39 @@ pub enum OrchestratorText {
   Suggestion,
   /// 11/500 `text_primary`: *Manage context* after the context line (`q7W1f`).
   ContextLink,
+  /// 11.5 `text_muted`, 1.3: what a fact of a proposal card is (`Key` `u5vGv` in `b55NqO`).
+  FactKey,
+  /// 12.5 `text_secondary`, 1.3: a fact's value (`PX8jm` in `b55NqO`).
+  FactValue,
+  /// 12.5/500 `accent_text`, 1.3: a fact that opens its place, over a 1 `text_muted` line (`d0wPU8` in `keqvu`).
+  FactLink,
+  /// 12 `text_muted`, 1.3: what a fact adds after its links (*2 runs under way keep v3*, `KmSjB`).
+  FactAside,
+  /// Geist Mono 11.5 `text_secondary`, 1.3: a branch or command as a fact (`O4epE` in `Ee2JE`).
+  FactMono,
+  /// 11 `text_muted`, 1.3: *What changes* over a draft's diff (`BlMyH`).
+  DiffLabel,
+  /// Geist Mono 11 `text_muted`: a line's numbers in a draft's diff (`ey7iM` in `kzMBc`).
+  DiffNumber,
+  /// Geist Mono 12 `text_primary`: a line of a draft's diff, and its sign (`VX2mn`, `OtSVu` in `kzMBc`).
+  DiffCode,
 }
 
 impl OrchestratorText {
-  pub const ALL: [Self; 5] = [
+  pub const ALL: [Self; 13] = [
     Self::PanelTitle,
     Self::Emphasis,
     Self::Eyebrow,
     Self::Suggestion,
     Self::ContextLink,
+    Self::FactKey,
+    Self::FactValue,
+    Self::FactLink,
+    Self::FactAside,
+    Self::FactMono,
+    Self::DiffLabel,
+    Self::DiffNumber,
+    Self::DiffCode,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -44,6 +71,14 @@ impl OrchestratorText {
       Self::Eyebrow => "orchestrator_eyebrow",
       Self::Suggestion => "orchestrator_suggestion",
       Self::ContextLink => "orchestrator_context_link",
+      Self::FactKey => "orchestrator_fact_key",
+      Self::FactValue => "orchestrator_fact_value",
+      Self::FactLink => "orchestrator_fact_link",
+      Self::FactAside => "orchestrator_fact_aside",
+      Self::FactMono => "orchestrator_fact_mono",
+      Self::DiffLabel => "orchestrator_diff_label",
+      Self::DiffNumber => "orchestrator_diff_number",
+      Self::DiffCode => "orchestrator_diff_code",
     }
   }
 
@@ -54,6 +89,20 @@ impl OrchestratorText {
       Self::Eyebrow => mono(style(11.0, FontWeight::Normal, 1.3, 0.6, palette.text_muted)),
       Self::Suggestion => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
       Self::ContextLink => style(11.0, FontWeight::Medium, 1.4, 0.0, palette.text_primary),
+      Self::FactKey => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::FactValue => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::FactLink => style(
+        12.5,
+        FontWeight::Medium,
+        1.3,
+        0.0,
+        palette.get(ExtraColor::AccentText.role()),
+      ),
+      Self::FactAside => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::FactMono => mono(style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
+      Self::DiffLabel => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::DiffNumber => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
+      Self::DiffCode => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
     }
   }
 }

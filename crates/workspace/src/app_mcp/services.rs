@@ -28,6 +28,9 @@ pub struct Services {
   pub(super) activity: Activity,
   /// The projects' merge and removal operations, shared with the task pages.
   pub(super) jobs: ProjectJobs,
+  /// A person decided what the tools are called for (they applied a proposal of the Orchestrator chat), so what it
+  /// widens is the person's to decide, as in the window, not *Let automation change agent permissions*.
+  pub(super) by_person: bool,
 }
 
 impl Services {
@@ -47,7 +50,15 @@ impl Services {
       changes,
       activity,
       jobs,
+      by_person: false,
     }
+  }
+
+  /// These services for a call a person decided ([`Self::by_person`]). Only the window may ask for it, for a click
+  /// it took from a person and refused from synthetic input.
+  pub(crate) fn decided_by_person(mut self) -> Self {
+    self.by_person = true;
+    self
   }
 
   pub fn with_vault(mut self, vault: Vault) -> Self {

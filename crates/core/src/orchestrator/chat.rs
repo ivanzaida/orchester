@@ -7,7 +7,7 @@ use super::{change::ProposedChange, proposal::ProposedStart};
 use crate::{
   connection::AccountStartProblem,
   conversation::MessageBody,
-  id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId, IdempotencyKey},
+  id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId, IdempotencyKey, RunId},
   resource::ModelId,
   time::Timestamp,
 };
@@ -186,6 +186,35 @@ pub struct ChatAction {
   /// What a hold on new starts held, when the action held them.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub held: Option<HeldWork>,
+  /// What a publication, cancel or merge acts on, whether it waits for a person, was settled or was done by the
+  /// chat itself: its card reads its facts from it.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub change: Option<ProposedChange>,
+  /// The run a start the chat took itself started.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub started: Option<RunId>,
+  /// The chat acted without asking because auto mode is on for the project.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  pub auto_mode: bool,
+  /// When a person settled the proposal: started, applied or dismissed it, or it was refused then.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub settled: Option<Timestamp>,
+}
+
+impl ChatAction {
+  /// Tool `tool`'s action on task `task`, gone as `outcome`, about nothing more.
+  pub fn new(tool: &str, task: Option<String>, outcome: ActionOutcome) -> Self {
+    Self {
+      tool: tool.to_owned(),
+      task,
+      outcome,
+      held: None,
+      change: None,
+      started: None,
+      auto_mode: false,
+      settled: None,
+    }
+  }
 }
 
 /// The new starts a hold held: in one reviewed group (its key), or in the whole project; and the keys of the tasks
@@ -209,9 +238,12 @@ pub enum ActionOutcome {
   /// A start the agent proposed: nothing ran. It waits for a person to start it, as it was proposed, or to dismiss
   /// it; once started it is [`Self::Done`] or [`Self::Refused`].
   Proposed(Box<ProposedStart>),
-  /// A publication, cancel or merge the agent proposed: nothing changed. It waits for a person to apply it, as it
-  /// was proposed, or to dismiss it; once applied it is [`Self::Done`] or [`Self::Refused`].
-  ProposedChange(Box<ProposedChange>),
+  /// A publication, cancel or merge the agent proposed ([`ChatAction::change`]): nothing changed. It waits for a
+  /// person to apply it, as it was proposed, or to dismiss it; once applied it is [`Self::Applied`] or
+  /// [`Self::Refused`].
+  Waits,
+  /// A person applied the proposed change.
+  Applied,
   /// A person dismissed the proposal: nothing ran or changed.
   Dismissed,
 }
@@ -219,7 +251,7 @@ pub enum ActionOutcome {
 impl ActionOutcome {
   /// Whether it waits for a person.
   pub const fn is_proposed(&self) -> bool {
-    matches!(self, Self::Proposed(_) | Self::ProposedChange(_))
+    matches!(self, Self::Proposed(_) | Self::Waits)
   }
 }
 
