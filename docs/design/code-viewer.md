@@ -26,8 +26,12 @@ conversation, a step's result or a diff) opens with one click.
 - Route: `/project/<id>/files/<path>?at=<checkout|run:<run-id>|rev:<sha>|base>&line=<a>-<b>`. The path is
   percent-encoded like every route value. Opening `/project/<id>/files` shows the tree with no file.
 - Syntax highlighting with the highlighting the task's Changes tab uses; line numbers; the `line` range highlighted
-  and scrolled into view; select and copy lines; *Open in editor* opens the file with the system's default program
-  (the person's click only; never from synthetic input).
+  and scrolled into view; select and copy lines; *Open in editor* opens a text or code file (by extension, or an
+  extension-less file whose content is text) — with the system's default program on Windows, except kinds Windows
+  would run (scripts), and with `open -t` on macOS — and never a link or an executable file, checked again on disk
+  when pressed; for any other file it is unavailable with the reason under it (review 1 of the code viewer,
+  2026-10-15; the binary state `c2jICC` still draws it available). The person's click only; never from synthetic
+  input.
 - Virtualized rows, so a long file opens at once. Binary files, files above a size limit and unreadable files show a
   plain explanation instead of contents.
 - Only files inside the project's folder (or the run's worktree): a path with `..`, an absolute path, or a link or
