@@ -596,6 +596,30 @@
   "pullRequests": {
     "detail": {
       "diffUnreadable": "The diff is not in a format Orchester can read. Open the pull request in GitHub; the log has the details."
+    },
+    "sync": {
+      "notSynced": "Pull requests not synced"
+    },
+    "openFailed": "The browser could not open the pull request.",
+    "footer": {
+      "open": {
+        "one": "1 open pull request · From this project’s repository",
+        "other": "{{count}} open pull requests · From this project’s repository",
+        "part": "{{shown}} of {{count}} open pull requests · From this project’s repository",
+        "limited": "The {{count}} most recently updated open pull requests · From this project’s repository"
+      },
+      "merged": {
+        "one": "1 merged pull request · From this project’s repository",
+        "other": "{{count}} merged pull requests · From this project’s repository",
+        "part": "{{shown}} of {{count}} merged pull requests · From this project’s repository",
+        "limited": "{{count}} merged among the {{limit}} most recently updated closed pull requests · From this project’s repository"
+      },
+      "closed": {
+        "one": "1 closed pull request · From this project’s repository",
+        "other": "{{count}} closed pull requests · From this project’s repository",
+        "part": "{{shown}} of {{count}} closed pull requests · From this project’s repository",
+        "limited": "{{count}} closed among the {{limit}} most recently updated closed pull requests · From this project’s repository"
+      }
     }
   },
   "agents": {

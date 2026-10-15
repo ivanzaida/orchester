@@ -2,8 +2,15 @@
 //! "Pull requests" and "GitHub", rule 9): the list stored by the last sync, and syncing it
 //! through the linked GitHub connection. Every function blocks on SQLite or `gh`; the UI calls
 //! them off the UI thread. Only read-only `gh` commands run.
+//!
+//! The deprecated desktop's inbox ([`load_in`], [`sync_in`]) holds the open pull requests; the new
+//! app's page ([`list`]) syncs the closed and merged ones too, into the same stored list.
 
 pub mod detail;
+pub mod linked;
+pub mod links;
+pub mod list;
+pub mod status;
 
 use std::path::Path;
 
@@ -11,7 +18,7 @@ use orchester_core::{
   connection::{ConnectionError, GitHubConnection, GitHubLogin, check_github},
   github::GhCli,
   id::ConnectionId,
-  pull_request::{SyncFailure, SyncedPullRequests, sync_pull_requests},
+  pull_request::{PullRequestState, SyncFailure, SyncScope, SyncedPullRequests, sync_pull_requests},
   repository::GitHubRepo,
   store::{ConnectionStore, PullRequestStore, RepositoryStore},
   time::Timestamp,
@@ -67,8 +74,28 @@ impl InboxError {
   }
 }
 
-/// The inbox as stored, without asking GitHub.
+impl Inbox {
+  /// The inbox with only its open pull requests, drafts included.
+  #[must_use]
+  pub fn open_only(mut self) -> Self {
+    if let Self::Linked(linked) = &mut self
+      && let Some(synced) = &mut linked.synced
+    {
+      synced
+        .pull_requests
+        .retain(|pull_request| matches!(pull_request.state(), PullRequestState::Open | PullRequestState::Draft));
+    }
+    self
+  }
+}
+
+/// The open pull requests as stored, without asking GitHub.
 pub fn load_in(repo_root: &Path) -> Result<Inbox, InboxError> {
+  Ok(stored_in(repo_root)?.open_only())
+}
+
+/// Every pull request as stored, without asking GitHub.
+pub(crate) fn stored_in(repo_root: &Path) -> Result<Inbox, InboxError> {
   let db = ProjectDb::open(repo_root)?;
   let Some(link) = db.repository_link()? else {
     return Ok(Inbox::Unlinked);
@@ -85,13 +112,19 @@ pub fn load_in(repo_root: &Path) -> Result<Inbox, InboxError> {
 /// Syncs the open pull requests of the linked repository with `programs` and stores what it
 /// read, together with the check of `gh` it made on the link's connection.
 pub fn sync_in(repo_root: &Path, programs: &Programs) -> Result<Inbox, InboxError> {
+  Ok(sync_scope_in(repo_root, programs, SyncScope::Open)?.open_only())
+}
+
+/// Syncs the pull requests of `scope` with `programs` and stores what it read, in place of every
+/// stored one, together with the check of `gh` it made on the link's connection.
+pub(crate) fn sync_scope_in(repo_root: &Path, programs: &Programs, scope: SyncScope) -> Result<Inbox, InboxError> {
   let mut db = ProjectDb::open(repo_root)?;
   let Some(link) = db.repository_link()? else {
     return Ok(Inbox::Unlinked);
   };
   let mut connection = github_connection(&db, link.connection())?;
   let now = Timestamp::now();
-  let result = sync_pull_requests(&GhCli::new(programs.runner(), &connection), &link, now);
+  let result = sync_pull_requests(&GhCli::new(programs.runner(), &connection), &link, scope, now);
   connection.record_check(result.check);
   db.save_connection(&connection)?;
   let failure = match result.outcome {
@@ -116,21 +149,28 @@ pub fn sync_in(repo_root: &Path, programs: &Programs) -> Result<Inbox, InboxErro
 /// *Use this account* (08.G): checks `gh` of the link's connection with `programs`, makes the
 /// project expect the account it acts as now, then syncs. `gh` itself is never changed.
 pub fn use_active_account_in(repo_root: &Path, programs: &Programs) -> Result<Inbox, InboxError> {
-  {
-    let mut db = ProjectDb::open(repo_root)?;
-    let Some(link) = db.repository_link()? else {
-      return Ok(Inbox::Unlinked);
-    };
-    let connection = github_connection(&db, link.connection())?;
-    let check = check_github(
-      connection.executable(),
-      connection.host(),
-      &programs.runner(),
-      Timestamp::now(),
-    );
-    expect_active_account(&mut db, link.connection(), check)?;
+  if !expect_active_account_in(repo_root, programs)? {
+    return Ok(Inbox::Unlinked);
   }
   sync_in(repo_root, programs)
+}
+
+/// Makes the project expect the account `gh` of the link's connection acts as now; `false` when the
+/// project has no link.
+pub(crate) fn expect_active_account_in(repo_root: &Path, programs: &Programs) -> Result<bool, InboxError> {
+  let mut db = ProjectDb::open(repo_root)?;
+  let Some(link) = db.repository_link()? else {
+    return Ok(false);
+  };
+  let connection = github_connection(&db, link.connection())?;
+  let check = check_github(
+    connection.executable(),
+    connection.host(),
+    &programs.runner(),
+    Timestamp::now(),
+  );
+  expect_active_account(&mut db, link.connection(), check)?;
+  Ok(true)
 }
 
 pub(crate) fn github_connection(db: &ProjectDb, id: ConnectionId) -> Result<GitHubConnection, InboxError> {
