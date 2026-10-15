@@ -30,7 +30,7 @@
     "formExpired": "This form has expired. Reload the page and try again.",
     "tooManyEmails": "Too many emails were sent. Try again in {{minutes}} min, at {{time}}.",
     "tooManyTries": "Too many tries from your network. Try again in {{minutes}} min, at {{time}}.",
-    "resendNotYet": "Sending a new link is not available yet. Sign up again with the same email: we send a new link, and the password you chose first stays."
+    "resendNotYet": "Sending a new link is not available yet. Sign up again with the same email to get a new one."
   },
   "signup": {
     "pageTitle": "Create an account",
