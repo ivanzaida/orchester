@@ -120,6 +120,7 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 62 | The server admin | Each team server has a web app of its own at its address, server-rendered Next.js, admin only: first setup (the setup code, then linking to the owner's cloud account), projects (create by name and slug, rename, the remote hint), members and roles per project, invites (by email through the cloud, by code without the internet), devices (revoke), and settings (join approval, the cloud link and key, the certificate check code). Sign-in through the cloud identity, or a code for an offline server. It talks to the team server's own API from its server side only ([The server admin](#the-server-admin)) | user (2026-10-15) |
 | 63 | What the desktop keeps | Settings › Orchester (cloud sign-in, connected servers, connecting with the check code), Project settings › Sharing (the link to a server project, the remote mismatch warning, members read-only, *Make local*, and *Manage members and invites*, which opens the server admin in the browser), joining, and the status bar item. Owner setup and member and invite management move to the server admin. **Clarified by the person:** "the desktop app stays the same, all admin actions are done in selfhosted-web". The desktop has no admin action at all (no project creation on a server, no member or role management, no invites, no revoking others' devices, no server settings, no owner setup); where one would be, it shows at most a link that opens the server admin. **Changes 9, 25, 43** | user (2026-10-15) |
 | 64 | Shared web components | The cloud's web front and the server admin share one UI package: a `web/` workspace with `web/ui` (components, design tokens from the Pencil variables, i18n helpers), `web/cloud` and `web/server`; each app has its own locale files and shared components take their words from the app. AGENTS.md's code-quality, i18n and design-token rules apply to all of `web/` ([The web workspace](#the-web-workspace)) | user (2026-10-15) |
+| 65 | Confirming asks for the password | Confirming an email asks for the password chosen at sign-up (`POST /auth/confirm { link_token, password }`), checked against the hash stored on that link, with the same work whether the link exists or not, rate-limited, and one answer for any failure. A repeated unconfirmed sign-up no longer ends earlier links: each link carries its own pending password hash and display name, and confirming one ends the rest. Reason: someone who signs up first with another person's email must not get their own password set when that person clicks a link ([Orchester Cloud](#orchester-cloud)) | user (2026-10-15, after a security review) |
 
 ## Processes and crates
 
@@ -946,8 +947,8 @@ URL above) and from Settings › Orchester's advanced field, for a test cloud.
 
 | Method and path | Who | Does |
 | --- | --- | --- |
-| `POST /auth/signup` | none | `{ email, password, display_name }`: sends the confirmation link; the same answer whether or not the email is registered (a registered one gets a *you already have an account* email) |
-| `POST /auth/confirm` | none | `{ link_token }`: confirms the email |
+| `POST /auth/signup` | none | `{ email, password, display_name }`: records a pending sign-up on a new confirmation link (its own password hash and display name; earlier unconfirmed links of the email stay valid) and sends it; the same answer whether or not the email is registered (a registered one gets a *you already have an account* email) |
+| `POST /auth/confirm` | none | `{ link_token, password }` (row 65): checks the password against the hash stored on that link; on success creates the account with that link's password and display name and ends every other link of the email. Always one argon2 verification (against a fixed dummy hash when the link is unknown, used or expired), so the work is the same either way; one answer for any failure, `401 confirm_failed`, saying neither which part was wrong; rate-limited |
 | `POST /auth/sessions` | none | `{ email, password, device }`: `201 { token, account }`; `401 invalid_credentials`, `403 email_unconfirmed` |
 | `POST /auth/reset` | none | `{ email }`: sends a reset link; the same answer for any email |
 | `POST /auth/reset/finish` | none | `{ link_token, new_password }`: `204` |
@@ -966,8 +967,9 @@ URL above) and from Settings › Orchester's advanced field, for a test cloud.
 | `DELETE /invites/{id}` | the team server's key | Revoked by the team server |
 
 **Data** (PostgreSQL, row 54; ids `uuid`, times `timestamptz` written from the cloud's clock, payloads `jsonb`):
-`accounts` (id, email stored lowercased with a unique index, confirmed at, display name, password hash, created), `email_links` (hash, account, purpose: confirm or reset,
-expires, used), `devices` (account, name, platform, token hash, created / last used / revoked), `servers` (id, owner,
+`accounts` (id, email stored lowercased with a unique index, confirmed at, display name, password hash, created; a
+row exists only once an email is confirmed), `email_links` (hash, email, purpose: confirm or reset, account for a
+reset, pending password hash and display name for a confirmation, expires, used), `devices` (account, name, platform, token hash, created / last used / revoked), `servers` (id, owner,
 name, address, fingerprint, public key, linked / unlinked), `server_accounts` (server, account, first joined),
 `invites` (id, server, project address, kind, email, inviter display name, project name, role, expires),
 `used_tokens` (identity token id until its expiry), `signing_keys` (kid, public key, private key encrypted with a key
@@ -989,7 +991,7 @@ only browser face; the desktop keeps using the JSON API.
 | --- | --- | --- |
 | Sign up | `/signup` | Email, display name, password; then *Check your email* |
 | Sign in | `/signin` | Email and password |
-| Email confirmed | `/confirm/{token}` | The landing of the confirmation link: confirms (a `POST` from the page's server side, never on a bare `GET`, so mail scanners that fetch links do not use it up: the page shows *Confirm my email*), then *Open Orchester to continue* |
+| Email confirmed | `/confirm/{token}` | The landing of the confirmation link: a **Password** field (the one chosen at sign-up, row 65) and *Confirm my email*, sent as a `POST` from the page's server side, never on a bare `GET`, so mail scanners that fetch links do not use it up; a failure says only *That didn't work. Check the password you chose when you signed up, or sign up again*; then *Open Orchester to continue* |
 | Forgot password | `/forgot` | Email; the same answer for any address |
 | Reset password | `/reset/{token}` | New password; then *Signed out of your other devices* |
 | Later: account, devices | `/account`, `/devices` | Display name and email, password change, the devices with *Sign out* |
@@ -1288,10 +1290,17 @@ against a forged join turns on *Join approval* (row 57, off by default): a cloud
 waits for one of that account's devices or an admin.
 
 **Rate limits of the cloud.** Sign-in: S1a's limiters, moved (5 failures for an email in 15 minutes block it for 15
-minutes, 20 failures from one address block that address, reserved before the hashing pool). Confirmation and reset
-emails: 5 an hour per email, 20 an hour per client address. Identity tokens: 60 an hour per device. Invites: 100 a day
+minutes, 20 failures from one address block that address, reserved before the hashing pool). Confirming (row 65):
+5 failures for one link in 15 minutes end that link, and 20 failures from one address in 15 minutes block that
+address, reserved before the hashing pool like sign-in. Confirmation and reset emails: 5 an hour per email, 20 an
+hour per client address. Identity tokens: 60 an hour per device. Invites: 100 a day
 per team server, 30 a day per inviter, 10 a day per invitee email. Failed link finishes: 20 per address in 15
 minutes. All answer `429 rate_limited` with `Retry-After`.
+
+**Confirming an email** (row 65). Whoever signs up first with someone else's email cannot take that account: a
+link confirms only with the password that link was created with, so the email's owner who clicks the attacker's link
+cannot complete it, and their own sign-up's link sets their own password. Every confirmation attempt costs the same
+(one argon2 verification), and the answer never says whether the link or the password was wrong.
 
 **Email and personal data.** The cloud keeps a confirmed email, a display name and a password hash per account,
 and nothing else about the person (later, a provider's id when one is linked). An invitee's email is kept only while the invite is open; an

@@ -730167,9 +730167,9 @@
           "id": "zjn1H",
           "x": 0,
           "y": 2200,
-          "name": "Label · Cloud · Confirm email · /confirm?token=… · press to confirm · dark",
+          "name": "Label · Cloud · Confirm email · /confirm?token=… · password asked · dark",
           "fill": "#8A8A92",
-          "content": "Cloud · Confirm email · /confirm?token=… · press to confirm · dark",
+          "content": "Cloud · Confirm email · /confirm?token=… · password asked · dark",
           "fontFamily": "$font_sans",
           "fontSize": 16,
           "fontWeight": "500"
@@ -730179,7 +730179,7 @@
           "id": "Bdcjx",
           "x": 0,
           "y": 2232,
-          "name": "Cloud · Confirm email · /confirm?token=… · press to confirm · dark",
+          "name": "Cloud · Confirm email · /confirm?token=… · password asked · dark",
           "theme": {
             "mode": "dark",
             "accent": "graphite"
@@ -730260,7 +730260,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "PAwmI",
+                  "id": "N0r3k",
                   "name": "Card",
                   "width": 400,
                   "fill": "$surface_panel",
@@ -730274,7 +730274,7 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "VGSNt",
+                      "id": "wAwI9",
                       "name": "Top",
                       "width": "fill_container",
                       "layout": "vertical",
@@ -730282,7 +730282,7 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "l3jBu8",
+                          "id": "mV5a6",
                           "name": "Head",
                           "width": "fill_container",
                           "layout": "vertical",
@@ -730290,7 +730290,7 @@
                           "children": [
                             {
                               "type": "frame",
-                              "id": "q7zmh",
+                              "id": "LCJP3",
                               "name": "Icon tile",
                               "width": 40,
                               "height": 40,
@@ -730304,7 +730304,7 @@
                               "children": [
                                 {
                                   "type": "icon",
-                                  "id": "S1wpTa",
+                                  "id": "dXtml",
                                   "name": "Icon",
                                   "width": 18,
                                   "height": 18,
@@ -730316,14 +730316,14 @@
                             },
                             {
                               "type": "frame",
-                              "id": "TeBd4",
+                              "id": "IqtNE",
                               "name": "Gap",
                               "width": 1,
                               "height": 4
                             },
                             {
                               "type": "text",
-                              "id": "y9bUIM",
+                              "id": "NAR1v",
                               "name": "Title",
                               "fill": "$text_primary",
                               "content": "Confirm your email",
@@ -730335,7 +730335,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "vrDsw",
+                              "id": "DtLRY",
                               "name": "Description",
                               "fill": "$text_secondary",
                               "textGrowth": "fixed-width",
@@ -730350,7 +730350,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "n1dw2z",
+                          "id": "lRisT",
                           "name": "Address",
                           "width": "fill_container",
                           "fill": "$surface_raised",
@@ -730367,7 +730367,7 @@
                           "children": [
                             {
                               "type": "icon",
-                              "id": "I5U9cX",
+                              "id": "YQip5",
                               "name": "Icon",
                               "width": 14,
                               "height": 14,
@@ -730377,7 +730377,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "zo42N",
+                              "id": "eVH4e",
                               "name": "Email",
                               "fill": "$text_primary",
                               "content": "mira.koval@example.com",
@@ -730390,38 +730390,122 @@
                       ]
                     },
                     {
+                      "type": "frame",
+                      "id": "ghBB4",
+                      "name": "Field · Password",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "id": "jEQux",
+                          "type": "ref",
+                          "ref": "JFXZg",
+                          "name": "Password",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "descendants": {
+                            "lSC1y": {
+                              "content": "Password",
+                              "fontSize": 12
+                            },
+                            "QWfRV": {
+                              "type": "frame",
+                              "id": "zYLDF",
+                              "name": "Box",
+                              "width": "fill_container",
+                              "height": 36,
+                              "fill": "$surface_input",
+                              "cornerRadius": "$radius_md",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "strokeAlignment": "inner",
+                              "gap": 8,
+                              "padding": [
+                                0,
+                                12
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "EmqH4",
+                                  "name": "Value",
+                                  "fill": "$text_secondary",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "••••••••••••••••",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal",
+                                  "letterSpacing": 1
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "SdYha",
+                                  "name": "Show password",
+                                  "width": 16,
+                                  "height": 16,
+                                  "icon": "eye",
+                                  "library": "lucide",
+                                  "fill": "$text_muted"
+                                }
+                              ]
+                            },
+                            "T0NZ5": {
+                              "content": "The password you chose when you created this account.",
+                              "fontSize": 12,
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "lineHeight": 1.45
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
                       "type": "text",
-                      "id": "HiHzJ",
+                      "id": "r2lNyC",
                       "name": "Not you",
                       "fill": "$text_muted",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "If you did not create an Orchester account, close this page. Nothing is confirmed until you press the button.",
+                      "content": "If you did not create an Orchester account, close this page. Without its password, nothing is confirmed.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font_sans",
                       "fontSize": 12,
                       "fontWeight": "normal"
                     },
                     {
-                      "id": "yUpX0",
-                      "type": "ref",
-                      "ref": "yJ2jo",
-                      "name": "Confirm email",
-                      "height": 36,
-                      "padding": [
-                        0,
-                        16
-                      ],
+                      "type": "frame",
+                      "id": "RZUus",
+                      "name": "Actions",
                       "width": "fill_container",
-                      "descendants": {
-                        "SUTVv": {
-                          "icon": "check"
-                        },
-                        "P8aXN": {
-                          "content": "Confirm email",
-                          "fontSize": 13
+                      "layout": "vertical",
+                      "gap": 10,
+                      "children": [
+                        {
+                          "id": "PCdxv",
+                          "type": "ref",
+                          "ref": "yJ2jo",
+                          "name": "Confirm email",
+                          "height": 36,
+                          "padding": [
+                            0,
+                            16
+                          ],
+                          "width": "fill_container",
+                          "descendants": {
+                            "SUTVv": {
+                              "icon": "check"
+                            },
+                            "P8aXN": {
+                              "content": "Confirm email",
+                              "fontSize": 13
+                            }
+                          }
                         }
-                      }
+                      ]
                     }
                   ]
                 }
@@ -746385,6 +746469,450 @@
               ]
             }
           ]
+        },
+        {
+          "type": "frame",
+          "id": "CVRpO",
+          "x": 4680,
+          "y": 2232,
+          "name": "Cloud · Confirm email · /confirm?token=… · link and password don't match · dark",
+          "theme": {
+            "mode": "dark",
+            "accent": "graphite"
+          },
+          "clip": true,
+          "width": 1440,
+          "height": 900,
+          "fill": "$surface_base",
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "frame",
+              "id": "LXXxg",
+              "name": "Main",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "vertical",
+              "gap": 24,
+              "padding": [
+                40,
+                0
+              ],
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "aql31",
+                  "name": "Brand",
+                  "gap": 10,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "F4xrXf",
+                      "name": "Mark",
+                      "width": 32,
+                      "height": 32,
+                      "fill": "$surface_raised",
+                      "cornerRadius": 8,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "id": "BpH2T",
+                          "type": "ref",
+                          "ref": "OLHng",
+                          "name": "Logo"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "NIN1c",
+                      "name": "Wordmark",
+                      "fill": "$text_primary",
+                      "content": "Orchester",
+                      "fontFamily": "$font_sans",
+                      "fontSize": 16,
+                      "fontWeight": "600",
+                      "letterSpacing": -0.2
+                    },
+                    {
+                      "type": "text",
+                      "id": "c96U3I",
+                      "name": "Product",
+                      "fill": "$text_muted",
+                      "content": "CLOUD",
+                      "fontFamily": "$font_mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal",
+                      "letterSpacing": 0.6
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "CUFeI",
+                  "name": "Card",
+                  "width": 400,
+                  "fill": "$surface_panel",
+                  "cornerRadius": "$radius_lg",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "layout": "vertical",
+                  "gap": 24,
+                  "padding": 32,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "S5RdY",
+                      "name": "Top",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 12,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Pv9Yf",
+                          "name": "Head",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "TXVci",
+                              "name": "Icon tile",
+                              "width": 40,
+                              "height": 40,
+                              "fill": "$surface_raised",
+                              "cornerRadius": 10,
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "strokeAlignment": "inner",
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "RmxYp",
+                                  "name": "Icon",
+                                  "width": 18,
+                                  "height": 18,
+                                  "icon": "mail-check",
+                                  "library": "lucide",
+                                  "fill": "$text_secondary"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "RKNPg",
+                              "name": "Gap",
+                              "width": 1,
+                              "height": 4
+                            },
+                            {
+                              "type": "text",
+                              "id": "d312tU",
+                              "name": "Title",
+                              "fill": "$text_primary",
+                              "content": "Confirm your email",
+                              "lineHeight": 1.25,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 20,
+                              "fontWeight": "600",
+                              "letterSpacing": -0.2
+                            },
+                            {
+                              "type": "text",
+                              "id": "N26gs9",
+                              "name": "Description",
+                              "fill": "$text_secondary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Confirm that this is your address for Orchester:",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "nPe1R",
+                          "name": "Address",
+                          "width": "fill_container",
+                          "fill": "$surface_raised",
+                          "cornerRadius": "$radius_md",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "gap": 8,
+                          "padding": [
+                            10,
+                            12
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "ceijg",
+                              "name": "Icon",
+                              "width": 14,
+                              "height": 14,
+                              "icon": "at-sign",
+                              "library": "lucide",
+                              "fill": "$text_muted"
+                            },
+                            {
+                              "type": "text",
+                              "id": "jr5W1",
+                              "name": "Email",
+                              "fill": "$text_primary",
+                              "content": "mira.koval@example.com",
+                              "fontFamily": "$font_sans",
+                              "fontSize": 13,
+                              "fontWeight": "500"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "cPI5G",
+                      "name": "Field · Password",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "id": "FAqgW",
+                          "type": "ref",
+                          "ref": "JFXZg",
+                          "name": "Password",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "descendants": {
+                            "lSC1y": {
+                              "content": "Password",
+                              "fontSize": 12
+                            },
+                            "QWfRV": {
+                              "type": "frame",
+                              "id": "SHIfX",
+                              "name": "Box",
+                              "width": "fill_container",
+                              "height": 36,
+                              "fill": "$surface_input",
+                              "cornerRadius": "$radius_md",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "strokeAlignment": "inner",
+                              "gap": 8,
+                              "padding": [
+                                0,
+                                12
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "yHSMb",
+                                  "name": "Value",
+                                  "fill": "$text_secondary",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal",
+                                  "letterSpacing": 1
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "odXwO",
+                                  "name": "Show password",
+                                  "width": 16,
+                                  "height": 16,
+                                  "icon": "eye",
+                                  "library": "lucide",
+                                  "fill": "$text_muted"
+                                }
+                              ]
+                            },
+                            "T0NZ5": {
+                              "content": "The password you chose when you created this account.",
+                              "fontSize": 12,
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "lineHeight": 1.45
+                            }
+                          }
+                        },
+                        {
+                          "id": "qrJzF",
+                          "type": "ref",
+                          "ref": "d5xipm",
+                          "name": "Error",
+                          "width": "fill_container",
+                          "descendants": {
+                            "rCoJS": {
+                              "content": "This link and password don't match. Check the password, or send a new link.",
+                              "fontSize": 12,
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "lineHeight": 1.4
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "CmRFP",
+                      "name": "Not you",
+                      "fill": "$text_muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "If you did not create an Orchester account, close this page. Without its password, nothing is confirmed.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font_sans",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "mw8Mu",
+                      "name": "Actions",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 10,
+                      "children": [
+                        {
+                          "id": "w5orH",
+                          "type": "ref",
+                          "ref": "yJ2jo",
+                          "name": "Confirm email",
+                          "height": 36,
+                          "padding": [
+                            0,
+                            16
+                          ],
+                          "width": "fill_container",
+                          "descendants": {
+                            "SUTVv": {
+                              "icon": "check"
+                            },
+                            "P8aXN": {
+                              "content": "Confirm email",
+                              "fontSize": 13
+                            }
+                          }
+                        },
+                        {
+                          "id": "JGXNn",
+                          "type": "ref",
+                          "ref": "Dswcx",
+                          "name": "Send a new link",
+                          "height": 36,
+                          "padding": [
+                            0,
+                            16
+                          ],
+                          "width": "fill_container",
+                          "descendants": {
+                            "umW23": {
+                              "icon": "send"
+                            },
+                            "Y6DIM": {
+                              "content": "Send a new link",
+                              "fontSize": 13
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "i2jKR",
+              "name": "Footer",
+              "width": "fill_container",
+              "height": 56,
+              "stroke": "$border",
+              "strokeWidth": {
+                "top": 1
+              },
+              "strokeAlignment": "inner",
+              "gap": 20,
+              "padding": [
+                0,
+                32
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "K6nf5",
+                  "name": "Promise",
+                  "fill": "$text_muted",
+                  "content": "Orchester Cloud keeps your account and invites. Your projects never pass through it.",
+                  "fontFamily": "$font_sans",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "oEqYK",
+                  "name": "Spacer",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "text",
+                  "id": "Z6qMZN",
+                  "name": "Terms",
+                  "fill": "$text_muted",
+                  "content": "Terms (placeholder)",
+                  "fontFamily": "$font_sans",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "Uitqx",
+                  "name": "Privacy",
+                  "fill": "$text_muted",
+                  "content": "Privacy (placeholder)",
+                  "fontFamily": "$font_sans",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "d0GasJ",
+          "x": 4680,
+          "y": 2200,
+          "name": "Label · Cloud · Confirm email · /confirm?token=… · link and password don't match · dark",
+          "fill": "#8A8A92",
+          "content": "Cloud · Confirm email · /confirm?token=… · link and password don't match · dark",
+          "fontFamily": "$font_sans",
+          "fontSize": 16,
+          "fontWeight": "500"
         }
       ]
     },
