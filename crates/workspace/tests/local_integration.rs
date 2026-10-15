@@ -26,6 +26,8 @@ mod schema;
 mod selection;
 #[path = "local_integration/snapshots.rs"]
 mod snapshots;
+#[path = "local_integration/store_contention.rs"]
+mod store_contention;
 #[path = "local_integration/support.rs"]
 mod support;
 #[path = "local_integration/sync_refusal.rs"]

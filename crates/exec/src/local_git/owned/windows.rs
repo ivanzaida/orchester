@@ -203,12 +203,7 @@ fn map(_error: io::Error) -> LocalGitError {
 }
 
 pub(super) fn validate_regular(file: &File) -> Result<(), LocalGitError> {
-  // SAFETY: the C record accepts zero initialization and the live handle fills the entire record.
-  let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { mem::zeroed() };
-  // SAFETY: file owns a valid live handle and info is a writable correctly-sized C record.
-  if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &raw mut info) } == 0 {
-    return Err(LocalGitError::Io);
-  }
+  let info = information(file)?;
   if info.dwFileAttributes & (0x400 | 0x10) != 0 || info.nNumberOfLinks != 1 {
     return Err(LocalError::Unsupported.into());
   }
@@ -254,10 +249,39 @@ pub(super) enum Pin {
   Anchor,
 }
 
+/// How long a sidecar SQLite deletes while it is being pinned is pinned again before pinning fails (as long as
+/// SQLite itself waits for a busy database), and the pause before trying again while its deletion is pending.
+const SIDECAR_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+const SIDECAR_PAUSE: std::time::Duration = std::time::Duration::from_millis(5);
+
 /// Pins the entry `name` of `directory` as `pin` says.
 pub(super) fn pin_store_entry(directory: &Arc<Directory>, name: &OsStr, pin: Pin) -> Result<File, LocalGitError> {
   let _freeze = directory.freeze()?;
   let path = directory.path.join(name);
+  let deadline = std::time::Instant::now() + SIDECAR_WAIT;
+  while std::time::Instant::now() < deadline {
+    let file = match open_store_entry(&path, pin) {
+      // SQLite is deleting the sidecar while one of its handles is still open: the name is free once it closes.
+      Err(error) if pin == Pin::Sidecar && error.kind() == io::ErrorKind::PermissionDenied => {
+        std::thread::sleep(SIDECAR_PAUSE);
+        continue;
+      }
+      opened => opened.map_err(map)?,
+    };
+    match validate_regular(&file).and_then(|()| ensure_location(&file, &path)) {
+      // SQLite's last connection deleted the sidecar since it was opened here: its name is free again and the
+      // next connection creates it anew. Pin that one.
+      Err(_) if pin == Pin::Sidecar && information(&file)?.nNumberOfLinks == 0 => continue,
+      checked => checked?,
+    }
+    directory.ensure_current()?;
+    return Ok(file);
+  }
+  Err(LocalGitError::Io)
+}
+
+/// Opens the entry at `path`, creating it first if `pin` allows that.
+fn open_store_entry(path: &Path, pin: Pin) -> io::Result<File> {
   let share = if pin == Pin::Sidecar {
     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE
   } else {
@@ -268,10 +292,9 @@ pub(super) fn pin_store_entry(directory: &Arc<Directory>, name: &OsStr, pin: Pin
       .access_mode(GENERIC_READ)
       .share_mode(share)
       .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
-      .open(&path)
+      .open(path)
   };
-  let file = match open() {
-    Ok(file) => file,
+  match open() {
     Err(error) if error.kind() == io::ErrorKind::NotFound && pin != Pin::Existing => {
       match OpenOptions::new()
         .write(true)
@@ -279,19 +302,14 @@ pub(super) fn pin_store_entry(directory: &Arc<Directory>, name: &OsStr, pin: Pin
         .access_mode(GENERIC_READ)
         .share_mode(share)
         .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
-        .open(&path)
+        .open(path)
       {
-        Ok(file) => file,
-        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => open().map_err(map)?,
-        Err(error) => return Err(map(error)),
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => open(),
+        created => created,
       }
     }
-    Err(error) => return Err(map(error)),
-  };
-  validate_regular(&file)?;
-  ensure_location(&file, &path)?;
-  directory.ensure_current()?;
-  Ok(file)
+    opened => opened,
+  }
 }
 // Verify the opened object came from our pinned chain, including any transient ancestor reparse.
 fn ensure_location(file: &File, expected: &Path) -> Result<(), LocalGitError> {
@@ -314,11 +332,16 @@ fn ensure_location(file: &File, expected: &Path) -> Result<(), LocalGitError> {
   Ok(())
 }
 fn object_identity(file: &File) -> Result<(u32, u32, u32), LocalGitError> {
+  let info = information(file)?;
+  Ok((info.dwVolumeSerialNumber, info.nFileIndexHigh, info.nFileIndexLow))
+}
+/// What Windows records of the object `file` holds: its attributes, links and identity.
+fn information(file: &File) -> Result<BY_HANDLE_FILE_INFORMATION, LocalGitError> {
   // SAFETY: this C record accepts zero initialization; the live handle fills it on success.
   let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { mem::zeroed() };
   // SAFETY: file owns a live handle and info is a correctly-sized writable C record.
   if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &raw mut info) } == 0 {
     return Err(LocalGitError::Io);
   }
-  Ok((info.dwVolumeSerialNumber, info.nFileIndexHigh, info.nFileIndexLow))
+  Ok(info)
 }
