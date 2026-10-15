@@ -6,27 +6,27 @@ use super::{access, claims, events};
 use crate::{db, error::ServerError};
 
 pub fn list(db: &Connection, project: ProjectId) -> Result<Vec<Member>, ServerError> {
-  let mut query =
-    db.prepare("SELECT user_id,role,added_at FROM memberships WHERE project=?1 ORDER BY added_at,user_id")?;
+  let mut query = db.prepare(
+    "SELECT m.user_id,m.role,m.added_at,u.username FROM memberships m JOIN users u ON u.id=m.user_id
+      WHERE m.project=?1 ORDER BY m.added_at,m.user_id",
+  )?;
   let rows = query
     .query_map([project.to_string()], |row| {
       Ok((
         row.get::<_, String>(0)?,
         row.get::<_, String>(1)?,
         row.get::<_, i64>(2)?,
+        row.get::<_, String>(3)?,
       ))
     })?
     .collect::<Result<Vec<_>, _>>()?;
   rows
     .into_iter()
-    .map(|(id, role, added_at)| {
+    .map(|(id, role, added_at, username)| {
       Ok(Member {
         user: access::user_ref(db, id.parse().map_err(|_| ServerError::StoredData)?)?,
-        role: match role.as_str() {
-          "owner" => MemberRole::Owner,
-          "member" => MemberRole::Member,
-          _ => return Err(ServerError::StoredData),
-        },
+        username,
+        role: access::parse_role(&role).ok_or(ServerError::StoredData)?,
         added_at,
       })
     })
@@ -73,6 +73,9 @@ pub fn insert(
   audit(db, project, user, actor, "member_added", now)?;
   Ok(Member {
     user: access::user_ref(db, user)?,
+    username: db.query_row("SELECT username FROM users WHERE id=?1", [user.to_string()], |row| {
+      row.get(0)
+    })?,
     role,
     added_at: now,
   })

@@ -1,0 +1,23 @@
+# The team server on a Linux host without Docker (docs/server-hosting.md, "Without Docker").
+# Install the binary as /usr/local/bin/orchester-server, its configuration as /etc/orchester/server.toml (from
+# deploy/server/server.example.toml), then: systemctl enable --now orchester-server
+# The setup code is in its console output: journalctl -u orchester-server (stdout, not a log record).
+[Unit]
+Description=Orchester team server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=orchester
+Group=orchester
+WorkingDirectory=/var/lib/orchester
+ExecStart=/usr/local/bin/orchester-server --config /etc/orchester/server.toml serve
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/orchester
+
+[Install]
+WantedBy=multi-user.target

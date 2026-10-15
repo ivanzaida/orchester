@@ -19,16 +19,22 @@ use crate::{
   sharing::{access, members, projects, tags},
 };
 
+/// What the server admin also calls: projects, their settings and members.
 pub fn routes() -> Router<Server> {
   Router::new()
     .route("/projects", get(list).post(create))
     .route("/projects/{project}", get(show).patch(patch))
-    .route("/projects/{project}/link", axum::routing::post(link))
     .route("/projects/{project}/members", get(list_members).post(add_member))
     .route(
       "/projects/{project}/members/{user}",
       axum::routing::patch(change_member).delete(remove_member),
     )
+}
+
+/// What only the app does: linking a checkout, and the project's tags.
+pub fn app_routes() -> Router<Server> {
+  Router::new()
+    .route("/projects/{project}/link", axum::routing::post(link))
     .route("/projects/{project}/tags", get(list_tags).post(add_tag))
     .route(
       "/projects/{project}/tags/{tag}",
@@ -147,7 +153,7 @@ async fn list_members(
 ) -> Result<Json<Members>, ServerError> {
   let members = server
     .snapshot(move |db, now| {
-      access::member(db, &auth, project, now)?;
+      access::viewer(db, &auth, project, now)?;
       members::list(db, project)
     })
     .await?;

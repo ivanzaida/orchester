@@ -49,6 +49,8 @@ pub enum ErrorCode {
   SlugTaken,
   /// API 3: the join waited for approval and was refused.
   ApprovalRefused,
+  /// API 3: a sign-in to the server admin by an account that is not an admin and owns no project.
+  NothingToManage,
   RateLimited,
   Internal,
 }

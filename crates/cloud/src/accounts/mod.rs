@@ -4,7 +4,7 @@
 mod confirm;
 mod delete;
 mod devices;
-pub(crate) mod input;
+mod input;
 mod inspect;
 mod links;
 mod password;

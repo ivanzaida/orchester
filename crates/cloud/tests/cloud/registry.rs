@@ -1,335 +1,286 @@
+//! The team server registry and invites in flight: a server is linked from the statement it signed, its admin gets
+//! tokens for its admin, and invites it signed reach the invitee until it revokes them.
+
 use orchester_api::{
   InviteKind, MemberRole,
   cloud::{
-    AccountServer, CloudInvite, InviteAccepted, InviteStatement, InvitesResponse, KeySetResponse, LinkStatement,
-    ServerResponse, ServersResponse,
+    CloudInvites, IdentityTokenIssued, KeySetResponse, ServerLinked, ServerResponse, ServersResponse, TokenPurpose,
   },
-  identity::VerifiedKeySet,
+  identity::{PrivateKey, PublicKey, SigningKey, VerifiedKeySet},
+  statements::{
+    INVITE_REVOCATION_TYPE, InviteRevocation, InvitedProject, LINK_STATEMENT_TYPE, LinkStatement, SIGNED_INVITE_TYPE,
+    SignedInvite,
+  },
 };
 use orchester_cloud::{clock::Clock, mail::EmailPurpose};
-use orchester_core::id::InviteId;
+use orchester_core::id::{InviteId, TeamServerId};
 use serde_json::json;
 
-use crate::support::{BASE_URL, DAY, PASSWORD, Response, TeamServer, TestCloud, postgres, remember, team::FINGERPRINT};
+use crate::support::{DAY, MINUTE, PASSWORD, TestCloud, remember};
 
-async fn owner(cloud: &TestCloud, email: &str) -> String {
+/// A team server's own key and id, as it signs for the cloud.
+pub(crate) struct TeamServer {
+  id: TeamServerId,
+  key: SigningKey,
+}
+
+impl TeamServer {
+  pub(crate) fn generate() -> Self {
+    Self {
+      id: TeamServerId::generate(),
+      key: SigningKey::new(&PrivateKey::generate().expect("server key")).expect("signing key"),
+    }
+  }
+
+  fn statement(&self, signer: &SigningKey, issued_at_ms: i64) -> String {
+    let statement = LinkStatement {
+      server: self.id,
+      name: "Kontur team".into(),
+      address: "https://orchester.kontur.test".into(),
+      public_key: self.key.public_key().encoded(),
+      fingerprint: Some("ab".repeat(32)),
+      issued_at: issued_at_ms / 1000,
+    };
+    signer
+      .sign_statement(LINK_STATEMENT_TYPE, &statement)
+      .expect("statement")
+  }
+
+  pub(crate) fn invite(&self, id: InviteId, email: &str, now: i64) -> String {
+    let invite = SignedInvite {
+      id,
+      server: self.id,
+      kind: InviteKind::Project,
+      email: email.into(),
+      project: Some(InvitedProject {
+        address: "https://orchester.kontur.test/kontur".into(),
+        name: "Kontur".into(),
+      }),
+      role: Some(MemberRole::Member),
+      inviter: "Ivan Zaida".into(),
+      expires_at: now + 7 * DAY,
+      issued_at: now,
+    };
+    self.key.sign_statement(SIGNED_INVITE_TYPE, &invite).expect("invite")
+  }
+
+  fn revocation(&self, signer: &SigningKey, id: InviteId, now: i64) -> String {
+    let revocation = InviteRevocation {
+      id,
+      server: self.id,
+      issued_at: now,
+    };
+    signer
+      .sign_statement(INVITE_REVOCATION_TYPE, &revocation)
+      .expect("revocation")
+  }
+}
+
+pub(crate) async fn signed_in(cloud: &TestCloud, email: &str) -> String {
   cloud.register(email).await;
-  cloud
-    .sign_in(email, PASSWORD, "Owner's laptop")
-    .await
-    .token
-    .expose()
-    .to_owned()
+  cloud.sign_in(email, PASSWORD, "Edge").await.token.expose().to_owned()
 }
 
-async fn post_invite(cloud: &TestCloud, signed: &str) -> Response {
-  cloud
-    .request("POST", "/invites", None, Some(json!({"invite": signed})))
-    .await
+pub(crate) async fn link(cloud: &TestCloud, device: &str, server: &TeamServer) -> ServerLinked {
+  let body = json!({"link": server.statement(&server.key, cloud.clock.now_ms())});
+  let response = cloud.request("POST", "/servers", Some(device), Some(body)).await;
+  assert_eq!(response.status, 201, "{}", response.error());
+  let linked: ServerLinked = response.json();
+  remember(linked.identity_token.expose());
+  linked
 }
 
-async fn invites(cloud: &TestCloud, token: &str) -> InvitesResponse {
-  let response = cloud.request("GET", "/invites", Some(token), None).await;
-  assert_eq!(response.status, 200);
-  response.json()
-}
-
-async fn servers(cloud: &TestCloud, token: &str) -> Vec<AccountServer> {
-  let response = cloud.request("GET", "/servers", Some(token), None).await;
-  assert_eq!(response.status, 200);
-  response.json::<ServersResponse>().servers
-}
-
-/// The owner links a server with its signed statement; the server id then stays with that owner and that key.
-pub async fn a_server_is_linked_from_its_signed_statement() {
+pub async fn servers_link_from_the_statement_they_signed() {
   let cloud = TestCloud::start().await;
-  let token = owner(&cloud, "owner@example.test").await;
-  let team = TeamServer::generate();
-  let linked = cloud.link_server(&token, &team).await;
-  assert_eq!(linked.status, 201);
-  let server = linked.json::<ServerResponse>().server;
-  assert_eq!((server.server.id, server.owner), (team.id, true));
-  assert_eq!(server.server.address, team.address);
-  assert_eq!(server.server.fingerprint.as_deref(), Some(FINGERPRINT));
-  assert_eq!(servers(&cloud, &token).await, vec![server]);
-  assert_eq!(
-    cloud.link_server(&token, &team).await.status,
-    201,
-    "linking again updates"
-  );
-  let other = owner(&cloud, "other@example.test").await;
-  let taken = cloud.link_server(&other, &team).await;
-  assert_eq!((taken.status, taken.error()), (409, "conflict".into()));
-  let impostor = TeamServer::with_id(team.id);
-  let rekeyed = cloud.link_server(&token, &impostor).await;
-  assert_eq!((rekeyed.status, rekeyed.error()), (409, "conflict".into()));
-  assert!(servers(&cloud, &other).await.is_empty());
-  refused_links(&cloud, &token, &team).await;
-  let anonymous = cloud
-    .request("POST", "/servers", None, Some(json!({"link": team.link("Kontur", 0)})))
-    .await;
-  assert_eq!(anonymous.status, 401);
-  cloud.finish().await;
-}
-
-/// A stale statement, a forged signature, another statement type and malformed fields answer `422 invalid`.
-async fn refused_links(cloud: &TestCloud, token: &str, team: &TeamServer) {
-  let now = cloud.clock.now_ms();
-  let stale = team.link("Kontur team", now - 2 * DAY);
-  let fresh = team.link("Kontur team", now);
-  let (body, signature) = fresh.rsplit_once('.').expect("a JWS");
-  let flipped = if signature.starts_with('A') { 'B' } else { 'A' };
-  let forged = format!("{body}.{flipped}{}", &signature[1..]);
-  let statement = |address: &str, fingerprint: &str| LinkStatement {
-    server: team.id,
-    name: "Kontur team".into(),
-    address: address.into(),
-    public_key: team.public_key(),
-    fingerprint: Some(fingerprint.into()),
-    issued_at: now / 1000,
-  };
-  let bad_address = team.sign_link(&statement("ftp://team.example.test", FINGERPRINT));
-  let trailing_slash = team.sign_link(&statement("https://team.example.test/", FINGERPRINT));
-  let bad_fingerprint = team.sign_link(&statement("https://team.example.test", "AB"));
-  let an_invite = team.sign_invite(&team.project_invite("x@example.test", now));
-  for link in [
-    stale,
-    forged,
-    bad_address,
-    trailing_slash,
-    bad_fingerprint,
-    an_invite,
-    "not a statement".into(),
-  ] {
-    let answer = cloud
-      .request("POST", "/servers", Some(token), Some(json!({"link": link})))
-      .await;
-    assert_eq!((answer.status, answer.error()), (422, "invalid".into()));
-  }
-}
-
-/// An invite its registered server signed reaches the invitee's account, with one email either way; carrying it
-/// twice changes nothing.
-pub async fn invites_are_routed_to_registered_and_new_emails() {
-  let cloud = TestCloud::start().await;
-  let token = owner(&cloud, "owner@example.test").await;
-  let team = TeamServer::generate();
-  assert_eq!(cloud.link_server(&token, &team).await.status, 201);
-  let invitee = "bob@example.test";
-  cloud.register(invitee).await;
-  let bob = cloud.sign_in(invitee, PASSWORD, "Bob's laptop").await;
-  let invite = team.project_invite(invitee, cloud.clock.now_ms());
-  let signed = team.sign_invite(&invite);
-  assert_eq!(post_invite(&cloud, &signed).await.status, 202);
-  assert_eq!(post_invite(&cloud, &signed).await.status, 202, "the same invite again");
-  let mail = cloud.mail.nth(invitee, 2).await;
-  assert_eq!(mail.purpose, EmailPurpose::Invite);
-  assert!(
-    mail
-      .body
-      .contains("Tomas Berg invited you to the project Kontur on Kontur team")
-  );
-  assert!(mail.body.contains(&format!("{BASE_URL}/account")));
-  let listed = invites(&cloud, bob.token.expose()).await.invites;
-  assert_eq!(listed.len(), 1);
-  the_listed_invite_is_the_signed_one(&listed[0], &invite, &team);
-  assert!(
-    invites(&cloud, &token).await.invites.is_empty(),
-    "only the invitee sees it"
-  );
-  tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-  assert_eq!(cloud.mail.count(invitee), 2, "one email for the invite");
-
-  an_invite_waits_for_a_new_account(&cloud, &team).await;
-  cloud.finish().await;
-}
-
-fn the_listed_invite_is_the_signed_one(open: &CloudInvite, invite: &InviteStatement, team: &TeamServer) {
-  assert_eq!(
-    (open.id, open.kind, open.role, open.admin),
-    (invite.id, InviteKind::Project, Some(MemberRole::Member), false)
-  );
-  assert_eq!((open.server.id, open.server.name.as_str()), (team.id, "Kontur team"));
-  assert_eq!(
-    open.project.as_ref().map(|project| project.name.as_str()),
-    Some("Kontur")
-  );
-  assert_eq!(open.inviter_display_name, "Tomas Berg");
-  assert_eq!(open.expires_at, invite.expires_at);
-}
-
-/// An email with no account is asked to sign up, and the invite waits for its account.
-async fn an_invite_waits_for_a_new_account(cloud: &TestCloud, team: &TeamServer) {
-  let newcomer = "carol@example.test";
-  let mut later = team.project_invite(newcomer, cloud.clock.now_ms());
-  later.kind = InviteKind::Server;
-  (later.project, later.role, later.admin) = (None, None, true);
-  assert_eq!(post_invite(cloud, &team.sign_invite(&later)).await.status, 202);
-  let mail = cloud.mail.nth(newcomer, 1).await;
-  assert!(
-    mail
-      .body
-      .contains("Tomas Berg invited you to the team server Kontur team")
-  );
-  assert!(mail.body.contains(&format!("{BASE_URL}/signup")));
-  cloud.register(newcomer).await;
-  let carol = cloud.sign_in(newcomer, PASSWORD, "Carol's laptop").await;
-  let waiting = invites(cloud, carol.token.expose()).await.invites;
-  assert_eq!(
-    (waiting.len(), waiting[0].kind, waiting[0].admin),
-    (1, InviteKind::Server, true)
-  );
-}
-
-/// Only an invite the registered server signed, within its times and in its shape, is taken.
-pub async fn forged_or_malformed_invites_are_refused() {
-  let cloud = TestCloud::start().await;
-  let token = owner(&cloud, "owner@example.test").await;
-  let team = TeamServer::generate();
-  assert_eq!(cloud.link_server(&token, &team).await.status, 201);
-  let now = cloud.clock.now_ms();
-  let email = "dave@example.test";
-  let unregistered = TeamServer::generate();
-  let impostor = TeamServer::with_id(team.id);
-  let mut expired = team.project_invite(email, now - 8 * DAY);
-  expired.expires_at = now - 1;
-  let mut too_long = team.project_invite(email, now);
-  too_long.expires_at = now + 30 * DAY;
-  let mut no_role = team.project_invite(email, now);
-  no_role.role = None;
-  let mut admin_project = team.project_invite(email, now);
-  admin_project.admin = true;
-  let mut bad_email = team.project_invite("not an email", now);
-  bad_email.email = "not an email".into();
-  let refused = [
-    unregistered.sign_invite(&unregistered.project_invite(email, now)),
-    impostor.sign_invite(&team.project_invite(email, now)),
-    team.sign_invite(&expired),
-    team.sign_invite(&too_long),
-    team.sign_invite(&no_role),
-    team.sign_invite(&admin_project),
-    team.sign_invite(&bad_email),
-    team.link("not an invite", now),
-  ];
-  for signed in refused {
-    let answer = post_invite(&cloud, &signed).await;
-    assert_eq!((answer.status, answer.error()), (422, "invalid".into()));
-  }
-  assert_eq!(cloud.mail.count(email), 0);
-  cloud.finish().await;
-}
-
-/// Declining deletes the invite; accepting gives the server and a token for it that names the invite, and lists the
-/// server among the account's. Without keys nothing changes.
-pub async fn invites_are_declined_and_accepted() {
-  let cloud = TestCloud::start().await;
-  let token = owner(&cloud, "owner@example.test").await;
-  let team = TeamServer::generate();
-  assert_eq!(cloud.link_server(&token, &team).await.status, 201);
-  let invitee = "erin@example.test";
-  cloud.register(invitee).await;
-  let erin = cloud.sign_in(invitee, PASSWORD, "Erin's laptop").await;
-  let erin = erin.token.expose();
-  let first = team.project_invite(invitee, cloud.clock.now_ms());
-  let second = team.project_invite(invitee, cloud.clock.now_ms());
-  for invite in [&first, &second] {
-    assert_eq!(post_invite(&cloud, &team.sign_invite(invite)).await.status, 202);
-  }
-  only_the_invitee_declines(&cloud, &token, erin, first.id).await;
-  accept_once_keys_are_published(&cloud, erin, &team, &second).await;
-  let joined = servers(&cloud, erin).await;
-  assert_eq!(
-    (joined.len(), joined[0].server.id, joined[0].owner),
-    (1, team.id, false)
-  );
-  cloud.finish().await;
-}
-
-/// Without a published key set accepting changes nothing; with one it ends the invite and gives a token naming it.
-async fn accept_once_keys_are_published(cloud: &TestCloud, invitee: &str, team: &TeamServer, invite: &InviteStatement) {
-  let accept = format!("/invites/{}/accept", invite.id);
-  let no_keys = cloud.request("POST", &accept, Some(invitee), None).await;
-  assert_eq!((no_keys.status, no_keys.error()), (503, "keys_unavailable".into()));
-  assert_eq!(invites(cloud, invitee).await.invites.len(), 1, "the invite waits");
   cloud.publish_keys().await;
-  let accepted = cloud.request("POST", &accept, Some(invitee), None).await;
-  assert_eq!(accepted.status, 201);
-  let accepted: InviteAccepted = accepted.json();
-  remember(accepted.identity_token.expose());
-  assert_eq!(
-    (accepted.server.id, accepted.server.address.as_str()),
-    (team.id, team.address.as_str())
-  );
-  the_token_names_the_invite(cloud, &accepted, team, invite).await;
-  assert!(invites(cloud, invitee).await.invites.is_empty());
-  assert_eq!(post(cloud, invitee, &accept).await, 404);
-}
-
-async fn only_the_invitee_declines(cloud: &TestCloud, owner: &str, invitee: &str, id: InviteId) {
-  let decline = format!("/invites/{id}/decline");
-  assert_eq!(post(cloud, owner, &decline).await, 404, "only the invitee declines");
-  assert_eq!(post(cloud, invitee, &decline).await, 204);
-  assert_eq!(post(cloud, invitee, &decline).await, 404);
-  assert_eq!(post(cloud, invitee, "/invites/not-an-id/decline").await, 404);
-}
-
-async fn post(cloud: &TestCloud, token: &str, path: &str) -> u16 {
-  cloud.request("POST", path, Some(token), None).await.status
-}
-
-/// The accepted invite's token verifies with the published key set for that server, and names the invite.
-async fn the_token_names_the_invite(
-  cloud: &TestCloud,
-  accepted: &InviteAccepted,
-  team: &TeamServer,
-  invite: &InviteStatement,
-) {
-  let compact = cloud
-    .request("GET", "/keys", None, None)
-    .await
-    .json::<KeySetResponse>()
-    .key_set;
-  let now = cloud.clock.now_ms() / 1000;
-  let set = VerifiedKeySet::verify(&compact, &cloud.root.public_key(), now).expect("the key set");
+  let owner = signed_in(&cloud, "ivan@example.test").await;
+  let server = TeamServer::generate();
+  let forged = json!({"link": server.statement(&TeamServer::generate().key, cloud.clock.now_ms())});
+  let refused = cloud.request("POST", "/servers", Some(&owner), Some(forged)).await;
+  assert_eq!((refused.status, refused.error()), (422, "invalid".into()));
+  let stale = json!({"link": server.statement(&server.key, cloud.clock.now_ms() - 11 * MINUTE)});
+  let refused = cloud.request("POST", "/servers", Some(&owner), Some(stale)).await;
+  assert_eq!((refused.status, refused.error()), (422, "invalid".into()));
+  let linked = link(&cloud, &owner, &server).await;
+  assert_eq!(linked.server.server.id, server.id);
+  assert_eq!(linked.server.check_code.as_deref(), Some("NENT-QAXB-NENT-QAXB"));
+  let root = PublicKey::parse(&linked.root_key).expect("root key");
+  assert_eq!(root, cloud.root.public_key());
+  let set = VerifiedKeySet::verify(&linked.key_set, &root, cloud.clock.now_ms() / 1000).expect("key set");
   let claims = set
-    .verify_token(accepted.identity_token.expose(), &team.id.to_string(), now)
+    .verify_token(
+      linked.identity_token.expose(),
+      &server.id.to_string(),
+      cloud.clock.now_ms() / 1000,
+    )
     .expect("a token for the server")
     .claims;
-  assert_eq!(claims.invite, Some(invite.id.to_string()));
-  assert_eq!(claims.email, invite.email);
+  assert_eq!(claims.purpose, Some(TokenPurpose::Link));
+  let listed: ServersResponse = cloud.request("GET", "/servers", Some(&owner), None).await.json();
+  assert_eq!(listed.servers.len(), 1);
+  assert!(listed.servers[0].owner);
+  let other = signed_in(&cloud, "mallory@example.test").await;
+  let path = format!("/servers/{}", server.id);
+  let shown: ServerResponse = cloud.request("GET", &path, Some(&other), None).await.json();
+  assert_eq!(shown.server.server.name, "Kontur team");
+  let taken = json!({"link": server.statement(&server.key, cloud.clock.now_ms())});
+  let refused = cloud.request("POST", "/servers", Some(&other), Some(taken)).await;
+  assert_eq!((refused.status, refused.error()), (409, "conflict".into()));
+  let again = link(&cloud, &owner, &server).await;
+  assert_eq!(again.server.server.id, server.id, "its owner links it again");
+  cloud.finish().await;
 }
 
-/// 10 invites a day per invitee email; an expired invite is no longer listed and the sweep deletes it.
-pub async fn invites_are_limited_and_expire() {
+pub async fn admin_tokens_are_issued_only_for_linked_servers() {
   let cloud = TestCloud::start().await;
-  let token = owner(&cloud, "owner@example.test").await;
-  let team = TeamServer::generate();
-  assert_eq!(cloud.link_server(&token, &team).await.status, 201);
-  let email = "flooded@example.test";
-  for _ in 0..10 {
-    let invite = team.project_invite(email, cloud.clock.now_ms());
-    assert_eq!(post_invite(&cloud, &team.sign_invite(&invite)).await.status, 202);
-  }
-  let eleventh = team.project_invite(email, cloud.clock.now_ms());
-  let limited = post_invite(&cloud, &team.sign_invite(&eleventh)).await;
-  assert_eq!((limited.status, limited.error()), (429, "rate_limited".into()));
-  for index in 1..=10 {
-    cloud.mail.nth(email, index).await;
-  }
-  cloud.register(email).await;
-  let flooded = cloud.sign_in(email, PASSWORD, "Laptop").await;
-  assert_eq!(invites(&cloud, flooded.token.expose()).await.invites.len(), 10);
-  cloud.clock.advance(7 * DAY + 1000);
-  let token = cloud.sign_in(email, PASSWORD, "Laptop").await;
-  assert!(invites(&cloud, token.token.expose()).await.invites.is_empty());
+  cloud.publish_keys().await;
+  let owner = signed_in(&cloud, "ivan@example.test").await;
+  let server = TeamServer::generate();
+  let admin = json!({"audience": server.id, "purpose": "admin"});
+  let unknown = cloud
+    .request("POST", "/identity-tokens", Some(&owner), Some(admin.clone()))
+    .await;
+  assert_eq!((unknown.status, unknown.error()), (404, "not_found".into()));
+  link(&cloud, &owner, &server).await;
+  let issued = cloud
+    .request("POST", "/identity-tokens", Some(&owner), Some(admin))
+    .await;
+  assert_eq!(issued.status, 201);
+  let issued: IdentityTokenIssued = issued.json();
+  remember(issued.identity_token.expose());
+  let keys: KeySetResponse = cloud.request("GET", "/keys", None, None).await.json();
+  let set = VerifiedKeySet::verify(&keys.key_set, &cloud.root.public_key(), cloud.clock.now_ms() / 1000).expect("keys");
+  let claims = set
+    .verify_token(
+      issued.identity_token.expose(),
+      &server.id.to_string(),
+      cloud.clock.now_ms() / 1000,
+    )
+    .expect("verifies")
+    .claims;
+  assert_eq!(claims.purpose, Some(TokenPurpose::Admin));
+  let link_purpose = json!({"audience": server.id, "purpose": "link"});
+  let refused = cloud
+    .request("POST", "/identity-tokens", Some(&owner), Some(link_purpose))
+    .await;
+  assert_eq!((refused.status, refused.error()), (422, "invalid".into()));
+  cloud.finish().await;
+}
+
+pub async fn invites_reach_the_invitee_once_and_end_when_revoked() {
+  let cloud = TestCloud::start().await;
+  cloud.publish_keys().await;
+  let owner = signed_in(&cloud, "ivan@example.test").await;
+  let dana = signed_in(&cloud, "dana@example.test").await;
+  let server = TeamServer::generate();
+  let now = cloud.clock.now_ms();
+  let id = InviteId::generate();
+  let unlinked = cloud
+    .request(
+      "POST",
+      "/invites",
+      None,
+      Some(json!({"invite": server.invite(id, "dana@example.test", now)})),
+    )
+    .await;
+  assert_eq!((unlinked.status, unlinked.error()), (422, "invalid".into()));
+  link(&cloud, &owner, &server).await;
+  deliver_twice(&cloud, &server, id, now).await;
+  listed_to_the_invitee_only(&cloud, &dana, &owner).await;
+  newcomers_are_asked_to_sign_up(&cloud, &server, now).await;
+  revoke(&cloud, &server, id, now).await;
+  let listed: CloudInvites = cloud.request("GET", "/invites", Some(&dana), None).await.json();
+  assert!(listed.invites.is_empty());
+  cloud.clock.advance(8 * DAY);
   cloud.cloud.sweep().await.expect("sweep");
-  let admin = postgres().database(&cloud.database).await;
-  let left: i64 = admin
+  let left: i64 = crate::support::postgres()
+    .database(&cloud.database)
+    .await
     .query_one("SELECT count(*) FROM invites", &[])
     .await
     .expect("count")
     .get(0);
-  assert_eq!(left, 0);
-  drop(admin);
+  assert_eq!(left, 0, "expired invites are deleted");
+  cloud.finish().await;
+}
+
+/// The server and the inviter's browser both deliver it: one invite, one email, in the cloud's own words.
+async fn deliver_twice(cloud: &TestCloud, server: &TeamServer, id: InviteId, now: i64) {
+  let body = json!({"invite": server.invite(id, "Dana@Example.test", now)});
+  assert_eq!(
+    cloud.request("POST", "/invites", None, Some(body.clone())).await.status,
+    202
+  );
+  assert_eq!(cloud.request("POST", "/invites", None, Some(body)).await.status, 202);
+  let email = cloud.mail.nth("dana@example.test", 2).await;
+  assert_eq!(email.purpose, EmailPurpose::Invite);
+  assert!(
+    !email.body.contains("Kontur") && !email.body.contains("Ivan"),
+    "no server-chosen words"
+  );
+  assert_eq!(
+    cloud.mail.count("dana@example.test"),
+    2,
+    "the confirmation and one invite"
+  );
+}
+
+async fn listed_to_the_invitee_only(cloud: &TestCloud, invitee: &str, other: &str) {
+  let listed: CloudInvites = cloud.request("GET", "/invites", Some(invitee), None).await.json();
+  assert_eq!(listed.invites.len(), 1);
+  let invite = &listed.invites[0];
+  assert_eq!(
+    (invite.server.name.as_str(), invite.inviter_display_name.as_str()),
+    ("Kontur team", "Ivan Zaida")
+  );
+  assert_eq!(
+    invite.project.as_ref().map(|project| project.name.as_str()),
+    Some("Kontur")
+  );
+  let theirs: CloudInvites = cloud.request("GET", "/invites", Some(other), None).await.json();
+  assert!(theirs.invites.is_empty());
+}
+
+async fn newcomers_are_asked_to_sign_up(cloud: &TestCloud, server: &TeamServer, now: i64) {
+  let id = InviteId::generate();
+  let body = json!({"invite": server.invite(id, "new@example.test", now)});
+  assert_eq!(cloud.request("POST", "/invites", None, Some(body)).await.status, 202);
+  let email = cloud.mail.nth("new@example.test", 1).await;
+  assert!(email.body.contains(&format!("/signup?invite={id}")));
+}
+
+async fn revoke(cloud: &TestCloud, server: &TeamServer, id: InviteId, now: i64) {
+  let path = format!("/invites/{id}");
+  let forged = json!({"revocation": server.revocation(&TeamServer::generate().key, id, now)});
+  let refused = cloud.request("DELETE", &path, None, Some(forged)).await;
+  assert_eq!((refused.status, refused.error()), (422, "invalid".into()));
+  let revoked = json!({"revocation": server.revocation(&server.key, id, now)});
+  assert_eq!(cloud.request("DELETE", &path, None, Some(revoked)).await.status, 204);
+}
+
+/// The invitee declines an invite: it is gone from their list, declining it again or someone else's is `404`.
+pub async fn invites_are_declined_by_the_invitee() {
+  let cloud = TestCloud::start().await;
+  cloud.publish_keys().await;
+  let owner = signed_in(&cloud, "ivan@example.test").await;
+  let dana = signed_in(&cloud, "dana@example.test").await;
+  let server = TeamServer::generate();
+  link(&cloud, &owner, &server).await;
+  let id = InviteId::generate();
+  let body = json!({"invite": server.invite(id, "dana@example.test", cloud.clock.now_ms())});
+  assert_eq!(cloud.request("POST", "/invites", None, Some(body)).await.status, 202);
+  let decline = format!("/invites/{id}/decline");
+  let stranger = cloud.request("POST", &decline, Some(&owner), None).await;
+  assert_eq!(stranger.status, 404, "only the invitee declines");
+  assert_eq!(cloud.request("POST", &decline, Some(&dana), None).await.status, 204);
+  let listed: CloudInvites = cloud.request("GET", "/invites", Some(&dana), None).await.json();
+  assert!(listed.invites.is_empty());
+  assert_eq!(cloud.request("POST", &decline, Some(&dana), None).await.status, 404);
+  let malformed = cloud
+    .request("POST", "/invites/not-an-id/decline", Some(&dana), None)
+    .await;
+  assert_eq!(malformed.status, 404);
+  let anonymous = cloud.request("POST", &decline, None, None).await;
+  assert_eq!(anonymous.status, 401);
   cloud.finish().await;
 }

@@ -1,4 +1,5 @@
 mod admin;
+mod admin_sign_in;
 mod auth;
 mod cloud_join;
 mod code_join;
@@ -6,9 +7,15 @@ mod code_join;
 use std::sync::{Arc, atomic::AtomicI64};
 
 pub(crate) use cloud_join::CloudJoined;
+use orchester_api::{CertificateInfo, CertificateMode};
 
 use crate::{
-  clock::Clock, config::Config, db::Database, error::ServerError, rate_limit::JoinLimits, server_keys::ServerKeys,
+  clock::Clock,
+  config::{Config, TlsMode},
+  db::Database,
+  error::ServerError,
+  rate_limit::JoinLimits,
+  server_keys::ServerKeys,
   tls::Tls,
 };
 
@@ -74,5 +81,22 @@ impl Server {
   /// The check code of the certificate the server presents; `None` when it serves plain HTTP.
   pub fn check_code(&self) -> Option<String> {
     self.inner.tls.as_ref().map(|tls| tls.pin.check_code())
+  }
+
+  /// Where the private listener for the server admin app's API calls is bound, when it is on.
+  pub fn admin_api_listen(&self) -> Option<std::net::SocketAddr> {
+    self.inner.config.admin_api_listen
+  }
+
+  /// The certificate the server presents, as a browser compares it; `None` when it serves plain HTTP.
+  pub fn certificate(&self) -> Option<CertificateInfo> {
+    self.inner.tls.as_ref().map(|tls| CertificateInfo {
+      check_code: tls.pin.check_code(),
+      sha256: tls.pin.to_hex(),
+      mode: match self.inner.config.tls {
+        TlsMode::Pem => CertificateMode::Pem,
+        TlsMode::SelfSigned | TlsMode::Off => CertificateMode::SelfSigned,
+      },
+    })
   }
 }

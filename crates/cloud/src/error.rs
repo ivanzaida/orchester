@@ -140,10 +140,10 @@ fn status_message(code: CloudErrorCode) -> (StatusCode, &'static str) {
     CloudErrorCode::EmailUnconfirmed => (StatusCode::FORBIDDEN, "Email not confirmed"),
     CloudErrorCode::InvalidLink => (StatusCode::UNPROCESSABLE_ENTITY, "Invalid or expired link"),
     CloudErrorCode::Invalid => (StatusCode::UNPROCESSABLE_ENTITY, "Invalid input"),
-    CloudErrorCode::Conflict => (StatusCode::CONFLICT, "Registered by another account or key"),
     CloudErrorCode::RateLimited => (StatusCode::TOO_MANY_REQUESTS, "Try again later"),
     CloudErrorCode::KeysUnavailable => (StatusCode::SERVICE_UNAVAILABLE, "Signing keys unavailable"),
     CloudErrorCode::Busy => (StatusCode::SERVICE_UNAVAILABLE, "Busy, try again shortly"),
+    CloudErrorCode::Conflict => (StatusCode::CONFLICT, "The server is linked to another account"),
     CloudErrorCode::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "Cloud operation failed"),
   }
 }

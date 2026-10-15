@@ -4,7 +4,7 @@ use crate::error::CloudError;
 
 /// An email as the cloud keeps it: trimmed and lowercased, one `@`, a dotted domain, no spaces or control characters.
 /// Deliverability is proven by the confirmation link, not by parsing.
-pub(crate) fn email(value: &str) -> Result<String, CloudError> {
+pub(super) fn email(value: &str) -> Result<String, CloudError> {
   let email = value.trim().to_lowercase();
   let Some((local, domain)) = email.split_once('@') else {
     return Err(CloudErrorCode::Invalid.into());
@@ -33,8 +33,7 @@ pub(super) fn device(device: &DeviceInfo) -> Result<DeviceInfo, CloudError> {
   })
 }
 
-/// One line of at most `max` characters, trimmed, with no control characters.
-pub(crate) fn text(value: &str, max: usize) -> Result<String, CloudError> {
+fn text(value: &str, max: usize) -> Result<String, CloudError> {
   let value = value.trim();
   let length = value.chars().count();
   if length == 0 || length > max || value.chars().any(char::is_control) {

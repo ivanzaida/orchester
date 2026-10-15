@@ -54,24 +54,24 @@ function readProject(json: unknown): Invite["project"] | undefined {
   return text(name) && text(address) ? { name, address } : undefined;
 }
 
-/** A project invite's role, or for a server invite whether it makes an admin. */
-function readRole(kind: "project" | "server", role: unknown, admin: unknown): InviteRole | null {
+/** A project invite's role (`owner` or `member`); a server invite carries none. `undefined` when it is not one. */
+function readRole(kind: "project" | "server", role: unknown): InviteRole | null | undefined {
   if (kind === "server") {
-    return typeof admin === "boolean" && role === null ? (admin ? "admin" : "member") : null;
+    return role === null ? null : undefined;
   }
-  return role === "owner" || role === "member" ? role : null;
+  return role === "owner" || role === "member" ? role : undefined;
 }
 
 function readInvite(json: unknown): Invite | null {
-  const { id, kind, role: wireRole, admin, inviter_display_name: inviterName, expires_at: expiresAt, server, project } =
+  const { id, kind, role: wireRole, inviter_display_name: inviterName, expires_at: expiresAt, server, project } =
     record(json) ?? {};
   const { name: serverName, address: serverAddress } = record(server) ?? {};
   const invitedTo = readProject(project);
   if (!text(id) || (kind !== "project" && kind !== "server") || !text(inviterName)) {
     return null;
   }
-  const role = readRole(kind, wireRole, admin);
-  if (role === null) {
+  const role = readRole(kind, wireRole);
+  if (role === undefined) {
     return null;
   }
   if (!text(serverName) || !text(serverAddress) || invitedTo === undefined || typeof expiresAt !== "number") {

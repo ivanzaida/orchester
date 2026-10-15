@@ -37,7 +37,7 @@ function Unconfirmed({ csrf, email }: { csrf: string; email: string }) {
 }
 
 /** Sign in (`Otw5d`; wrong `xzr0I`, unconfirmed `I6ffG`, too many `o4khR`, light `j7rxg`, phone `afqip`). */
-export function SignInForm({ csrf }: { csrf: string }) {
+export function SignInForm({ csrf, next }: { csrf: string; next?: string | undefined }) {
   const { state, pending, form } = useCheckedForm(signInAction, START);
   const [email, setEmail] = useState(state.email);
   useEffect(() => {
@@ -55,6 +55,11 @@ export function SignInForm({ csrf }: { csrf: string }) {
     }
   }
   const outcome = state.outcome;
+  useEffect(() => {
+    if (outcome.kind === "next") {
+      window.location.assign(outcome.href);
+    }
+  }, [outcome]);
   const wait = useRemaining(outcome.kind === "limited" ? outcome.ms : 0);
   const limited = outcome.kind === "limited" && wait > 0;
   const forgot = <AsideLink href="/forgot">{t("signin.forgot")}</AsideLink>;
@@ -64,6 +69,7 @@ export function SignInForm({ csrf }: { csrf: string }) {
       {outcome.kind === "unconfirmed" && <Unconfirmed csrf={csrf} email={outcome.email} />}
       <CardForm {...form}>
         <CsrfField token={csrf} />
+        {next !== undefined && <Hidden name="next" value={next} />}
         <Fields>
           <TextField name="email" type="email" label={t("field.email")} value={email} onChange={setEmail} autoComplete="email" />
           <PasswordField name="password" label={t("field.password")} value={password} onChange={setPassword}

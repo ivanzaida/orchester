@@ -14,13 +14,13 @@ export interface Device {
   readonly current: boolean;
 }
 
-/** A project's role, or what a server invite makes the new account (`admin` or `member`). */
-export type InviteRole = "owner" | "member" | "admin";
+/** A project invite's role; a server invite has none (the cloud is not told what the server makes the account). */
+export type InviteRole = "owner" | "member";
 
 export interface Invite {
   readonly id: string;
   readonly kind: "project" | "server";
-  readonly role: InviteRole;
+  readonly role: InviteRole | null;
   readonly serverName: string;
   readonly serverAddress: string;
   /** `null` for an invite to the server with no project yet. */

@@ -42,10 +42,15 @@ export function Row(props: {
   side?: ReactNode;
   /** The actions fill the row's width on a phone. */
   fill?: boolean;
+  /** 14 above and below instead of 16, like the server admin's invite and device rows (`IF2QM`, `U7KMnL`). */
+  compact?: boolean;
+  /** A row being worked on, e.g. above its in-place confirmation (`kfxK0`). */
+  active?: boolean;
   children: ReactNode;
 }) {
+  const classes = [styles.row, styles[props.align], props.compact && styles.compact, props.active && styles.active];
   return (
-    <div className={`${styles.row} ${styles[props.align]}`}>
+    <div className={classes.filter(Boolean).join(" ")}>
       <span className={styles.glyph} aria-hidden="true">
         <Icon name={props.glyph} size="glyph" />
       </span>
@@ -95,10 +100,13 @@ export function Chip({ children }: { children: string }) {
   return <span className={styles.chip}>{children}</span>;
 }
 
-/** A success badge with its dot, like *Confirmed* (`eWGgO`). */
-export function Badge({ children }: { children: string }) {
+/** A state's tone: success (*Confirmed*, *Accepted*), warning (*Pending*), danger, info (*Admin*), neutral. */
+export type Tone = "success" | "warning" | "danger" | "info" | "neutral";
+
+/** A badge with its dot, like *Confirmed* (`eWGgO`, `Fm7lc`), in the tone of what it says. */
+export function Badge({ children, tone = "success" }: { children: string; tone?: Tone }) {
   return (
-    <span className={styles.badge}>
+    <span className={`${styles.badge} ${styles[`badge-${tone}`]}`}>
       <span className={styles.dot} aria-hidden="true" />
       {children}
     </span>

@@ -3,6 +3,7 @@
 
 mod extract;
 mod handlers;
+mod registry;
 
 use std::{
   future::Future,
@@ -77,16 +78,17 @@ fn routes(config: &mut web::ServiceConfig) {
     .service(resource("/identity-tokens").route(web::post().to(h::identity_token)))
     .service(
       resource("/servers")
-        .route(web::get().to(h::servers))
-        .route(web::post().to(h::link_server)),
+        .route(web::get().to(registry::servers))
+        .route(web::post().to(registry::link)),
     )
+    .service(resource("/servers/{id}").route(web::get().to(registry::server)))
     .service(
       resource("/invites")
-        .route(web::get().to(h::invites))
-        .route(web::post().to(h::receive_invite)),
+        .route(web::get().to(registry::invites))
+        .route(web::post().to(registry::receive_invite)),
     )
-    .service(resource("/invites/{id}/decline").route(web::post().to(h::decline_invite)))
-    .service(resource("/invites/{id}/accept").route(web::post().to(h::accept_invite)));
+    .service(resource("/invites/{id}").route(web::delete().to(registry::withdraw_invite)))
+    .service(resource("/invites/{id}/decline").route(web::post().to(registry::decline_invite)));
 }
 
 fn resource(path: &str) -> Resource {

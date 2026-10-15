@@ -18,7 +18,7 @@ pub use key_set::{
   VerifiedKeySet, VerifiedToken,
 };
 pub use keys::{PrivateKey, PublicKey, RootKey, SigningKey};
-pub use statement::{unverified_statement, verify_statement};
+pub use statement::{read_statement, verify_statement};
 pub use token::{IdentityClaims, TOKEN_LIFETIME_SECS, TokenSubject};
 
 /// The clock difference between the cloud and a team server that verification tolerates.

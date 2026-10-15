@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { callbackUrl } from "@/lib/authorize";
 import { PRESESSION_COOKIE, PRESESSION_SECONDS, cookieOptions } from "@/lib/server/cookie-options";
 import { newPresession, presessionLive } from "@/lib/server/presession";
 
@@ -7,7 +8,7 @@ import { newPresession, presessionLive } from "@/lib/server/presession";
  * Runs before every page: a fresh CSP nonce (Next.js puts it on its own scripts), the security headers, and a
  * pre-session cookie for the CSRF token of visitors who are not signed in yet.
  */
-function contentSecurityPolicy(nonce: string, development: boolean): string {
+function contentSecurityPolicy(nonce: string, development: boolean, formTarget: string | null): string {
   // Development needs `eval` for React's error overlay and inline styles for Next's dev indicator; production neither.
   const script = `'self' 'nonce-${nonce}' 'strict-dynamic'${development ? " 'unsafe-eval'" : ""}`;
   const style = development ? "'self' 'unsafe-inline'" : `'self' 'nonce-${nonce}'`;
@@ -20,7 +21,8 @@ function contentSecurityPolicy(nonce: string, development: boolean): string {
     "connect-src 'self'",
     "object-src 'none'",
     "base-uri 'none'",
-    "form-action 'self'",
+    // `/authorize` posts its answer to the team server admin's callback, and nowhere else.
+    formTarget === null ? "form-action 'self'" : `form-action 'self' ${formTarget}`,
     "frame-ancestors 'none'",
   ].join("; ");
 }
@@ -32,7 +34,8 @@ function randomValue(): string {
 
 export function proxy(request: NextRequest): NextResponse {
   const nonce = randomValue();
-  const policy = contentSecurityPolicy(nonce, process.env.NODE_ENV === "development");
+  const callback = request.nextUrl.pathname === "/authorize" ? callbackUrl(request.nextUrl.searchParams.get("return") ?? undefined) : null;
+  const policy = contentSecurityPolicy(nonce, process.env.NODE_ENV === "development", callback?.origin ?? null);
   const now = Date.now();
   const sent = request.cookies.get(PRESESSION_COOKIE)?.value;
   // A pre-session past the expiry it carries is replaced, like a missing one.

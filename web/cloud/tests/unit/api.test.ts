@@ -91,7 +91,7 @@ describe("account api", () => {
     const open = await invites(options);
     expect(open.kind === "list" && open.items.map((invite) => [invite.kind, invite.role])).toEqual([
       ["project", "member"],
-      ["server", "admin"],
+      ["server", null],
     ]);
     expect(open.kind === "list" && open.items[1]?.project).toBeNull();
     expect(open.kind === "list" && open.items[0]?.project?.name).toBe("mobile-app");

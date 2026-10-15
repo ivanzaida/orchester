@@ -7,7 +7,8 @@ import tseslint from "typescript-eslint";
 // The props of @orchester/ui components that are shown as text (`ui/components/*.tsx`).
 const KIT_TEXT_PROPS = [
   "label", "busyLabel", "title", "description", "meta", "text", "hint", "question", "link", "promise", "product",
-  "revealLabel", "concealLabel", "body",
+  "revealLabel", "concealLabel", "body", "state", "badge", "copyLabel", "copiedLabel", "warning", "footnote", "here",
+  "line",
 ].join("|");
 
 const noLiterals = [

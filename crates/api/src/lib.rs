@@ -15,6 +15,7 @@ mod invites;
 mod joins;
 mod projects;
 mod server_admin;
+pub mod statements;
 mod tasks;
 pub mod wire;
 

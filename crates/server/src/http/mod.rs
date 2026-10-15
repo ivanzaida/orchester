@@ -1,11 +1,15 @@
 mod admin;
+mod admin_proxy;
 mod auth;
 mod claims;
 mod cloud;
 mod events;
 mod extract;
+mod internal;
 mod invites;
+mod managed;
 mod projects;
+mod settings;
 mod tasks;
 
 use std::{future::poll_fn, pin::Pin, time::Duration};
@@ -20,43 +24,83 @@ use axum::{
   routing::{delete, get, post},
 };
 use hyper::body::Body as HttpBody;
-use orchester_api::{ErrorCode, ServerInfo};
+use orchester_api::{DeviceKind, ErrorCode, ServerInfo};
 use orchester_core::id::UserId;
 
 use crate::{Server, cloud_link::Link, db, error::ServerError, tls::PeerAddr};
 
+/// The public listener: the API, and every other path proxied to the server admin (`admin_proxy`).
 pub(crate) fn router(server: Server) -> Router {
-  let protected = Router::new()
-    .route("/auth/me", get(auth::me))
+  Router::new()
+    .nest("/api/v1", api(&server))
+    .fallback(admin_proxy::forward)
+    .method_not_allowed_fallback(|| async { ServerError::from(ErrorCode::MethodNotAllowed) })
+    .layer(middleware::from_fn(body_limit))
+    .layer(middleware::from_fn_with_state(server.clone(), request_log))
+    .with_state(server)
+}
+
+/// The private listener the server admin's own server side calls: the API only, with the client's address and host
+/// as the admin forwards them (`internal`).
+pub(crate) fn internal_router(server: Server) -> Router {
+  Router::new()
+    .nest("/api/v1", api(&server))
+    .fallback(|| async { ServerError::from(ErrorCode::NotFound) })
+    .method_not_allowed_fallback(|| async { ServerError::from(ErrorCode::MethodNotAllowed) })
+    .layer(middleware::from_fn(body_limit))
+    .layer(middleware::from_fn_with_state(server.clone(), request_log))
+    .layer(middleware::from_fn(internal::forwarded))
+    .with_state(server)
+}
+
+fn api(server: &Server) -> Router<Server> {
+  // What only the app does: work on tasks, claims and events, link checkouts, pair its next device. A browser signed
+  // in to the server admin reaches none of it.
+  let app = Router::new()
     .route("/auth/sessions", get(auth::sessions))
-    .route("/auth/sessions/current", delete(auth::sign_out))
     .route("/auth/sessions/{id}", delete(auth::revoke))
     .route("/auth/pairings", post(auth::pairing))
+    .merge(projects::app_routes())
+    .merge(tasks::routes())
+    .merge(claims::routes())
+    .route("/projects/{project}/events", get(events::subscribe))
+    .route_layer(middleware::from_fn(app_only));
+  let protected = Router::new()
+    .route("/auth/me", get(auth::me))
+    .route("/auth/sessions/current", delete(auth::sign_out))
     .route("/auth/approvals", get(auth::approvals))
     .route("/auth/approvals/{id}", post(auth::decide))
     .route("/admin/users", get(admin::users))
     .route("/admin/users/{id}", axum::routing::patch(admin::update))
     .route("/admin/users/{id}/sessions", delete(admin::revoke))
+    .route("/admin/sessions", get(admin::sessions))
+    .route("/admin/sessions/{id}", delete(admin::revoke_session))
+    .route("/admin/projects", get(managed::list))
+    .route("/admin/projects/{project}", get(managed::show))
     .route("/invites", get(invites::list).post(invites::create))
     .route("/invites/{id}", delete(invites::revoke))
     .route("/server/cloud", get(cloud::show_cloud).patch(cloud::change_cloud))
-    .route("/server/settings", get(cloud::settings).patch(cloud::change_settings))
+    .route("/server/settings", get(settings::show).patch(settings::change))
     .merge(projects::routes())
-    .merge(tasks::routes())
-    .merge(claims::routes())
-    .route("/projects/{project}/events", get(events::subscribe))
+    .merge(app)
     .route_layer(middleware::from_fn_with_state(server.clone(), authenticated));
-  let api = protected
+  protected
     .route("/server", get(info))
+    .route("/auth/setup", post(auth::check_setup))
     .route("/auth/code", post(auth::join_with_code))
-    .route("/auth/cloud", post(auth::join_with_cloud));
-  Router::new()
-    .nest("/api/v1", api)
-    .fallback(|| async { ServerError::from(ErrorCode::NotFound) })
-    .method_not_allowed_fallback(|| async { ServerError::from(ErrorCode::MethodNotAllowed) })
-    .layer(middleware::from_fn(body_limit))
-    .layer(middleware::from_fn_with_state(server.clone(), request_log))
-    .with_state(server)
+    .route("/auth/cloud", post(auth::join_with_cloud))
+}
+
+/// Refuses a browser's admin sign-in on what only the app does.
+async fn app_only(request: Request, next: Next) -> Response {
+  let admin_web = request
+    .extensions()
+    .get::<db::Authenticated>()
+    .is_some_and(|auth| auth.kind == DeviceKind::AdminWeb);
+  if admin_web {
+    return ServerError::from(ErrorCode::Forbidden).into_response();
+  }
+  next.run(request).await
 }
 
 async fn body_limit(request: Request, next: Next) -> Response {
@@ -90,17 +134,26 @@ async fn read_body(mut body: Body) -> Result<Vec<u8>, ErrorCode> {
 }
 
 async fn info(State(server): State<Server>) -> Result<Json<ServerInfo>, ServerError> {
-  let (needs_setup, cloud) = server
+  let state = server.inner.clone();
+  let (name, needs_setup, cloud) = server
     .inner
     .db
-    .read(|db| Ok((!db::has_admin(db)?, Link::load(db)?.map(|link| link.status()))))
+    .read(move |db| {
+      Ok((
+        crate::settings::name(db, &state.config.name)?,
+        !db::has_admin(db)?,
+        Link::load(db)?.map(|link| link.status(&state.keys)),
+      ))
+    })
     .await?;
   Ok(Json(ServerInfo {
-    name: server.inner.config.name.clone(),
+    name,
     // 3: device tokens from cloud identities and codes, no passwords; projects by slug and address.
     api_version: 3,
     needs_bootstrap: needs_setup,
     cloud,
+    certificate: server.certificate(),
+    version: env!("CARGO_PKG_VERSION").to_owned(),
   }))
 }
 

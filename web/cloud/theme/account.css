@@ -29,6 +29,15 @@
   --account-steps-width: 330px; /* `ppC4A` */
   --account-steps-padding: 28px;
   --account-steps-border: var(--border-sm);
+  --authorize-card-width: 440px; /* `ijKZL` */
+  --authorize-check-label: 90px; /* `GNP7K` */
+}
+
+/* `/authorize`'s 440 px card and 16 at each side: below that it takes the width, as the other cards do. */
+@media (max-width: 471px) {
+  :root {
+    --authorize-card-width: 100%;
+  }
 }
 
 /* No room for the nav beside the 760 px sections. */

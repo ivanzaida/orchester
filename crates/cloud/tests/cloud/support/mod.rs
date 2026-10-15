@@ -4,7 +4,6 @@ pub mod log;
 pub mod mailer;
 pub mod postgres;
 pub mod relay;
-pub mod team;
 
 use std::{
   net::SocketAddr,
@@ -25,7 +24,7 @@ use parking_lot::Mutex;
 use serde_json::{Value, json};
 use tokio::{sync::oneshot, task::JoinHandle};
 
-pub use self::{http::Response, mailer::RecordingMailer, postgres::Postgres, team::TeamServer};
+pub use self::{http::Response, mailer::RecordingMailer, postgres::Postgres};
 
 pub const PASSWORD: &str = "correct horse battery staple";
 pub const BASE_URL: &str = "https://cloud.example.test";
@@ -243,15 +242,6 @@ impl TestCloud {
     let signed: CloudSignedIn = response.json();
     remember(signed.token.expose());
     signed
-  }
-
-  /// Links `team` for the account of the device `token`, as its owner carries the link statement.
-  pub async fn link_server(&self, token: &str, team: &TeamServer) -> Response {
-    use orchester_cloud::clock::Clock;
-    let link = team.link("Kontur team", self.clock.now_ms());
-    self
-      .request("POST", "/servers", Some(token), Some(json!({"link": link})))
-      .await
   }
 
   /// The whole key ceremony: a new signing key, its statement signed by the root, published. Returns what was

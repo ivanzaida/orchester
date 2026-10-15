@@ -109,7 +109,7 @@ async fn s1c_invites_are_listed_without_codes_and_a_revoked_invite_stops_working
   let revoke = format!("/invites/{}", by_code.invite.id);
   assert_eq!(
     server.request("DELETE", &revoke, Some(&admin.token), None).await.status,
-    204
+    200
   );
   assert_eq!(
     server.request("DELETE", &revoke, Some(&admin.token), None).await.status,
@@ -125,7 +125,7 @@ async fn s1c_invites_are_listed_without_codes_and_a_revoked_invite_stops_working
       .request("DELETE", &revoke_email, Some(&admin.token), None)
       .await
       .status,
-    204
+    200
   );
   let email: Option<String> = server
     .database()

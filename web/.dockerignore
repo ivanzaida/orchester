@@ -3,4 +3,5 @@
 **/test-results
 **/playwright-report
 Dockerfile.cloud
+Dockerfile.server
 **/.env*

@@ -6,9 +6,9 @@ use super::{Authenticated, Cloud, links::lock_account, rows::account};
 use crate::{db::audit, error::CloudError};
 
 impl Cloud {
-  /// Deletes the account with its password: its devices, links and joins go with it, and the open invites to its
-  /// email; servers it linked stay listed for those who joined them, with no owner. Failed passwords count against the
-  /// account as a password change's do. The audit keeps the account's id, as for every other action.
+  /// Deletes the account with its password: its devices, links and joins go with it, the servers it linked (and so
+  /// their invites and others' joins), and the open invites to its email. Failed passwords count against the account
+  /// as a password change's do. The audit keeps the account's id, as for every other action.
   pub(crate) async fn delete_account(
     &self,
     auth: Authenticated,

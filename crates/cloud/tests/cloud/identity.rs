@@ -4,7 +4,7 @@ use orchester_api::{
 };
 use serde_json::json;
 
-use crate::support::{DAY, PASSWORD, TeamServer, TestCloud, postgres, remember};
+use crate::support::{DAY, PASSWORD, TestCloud, postgres, remember};
 
 const SERVER: &str = "0199f0a0-0000-7000-8000-00000000c10d";
 
@@ -19,12 +19,6 @@ async fn key_set(cloud: &TestCloud) -> VerifiedKeySet {
   let compact = response.json::<KeySetResponse>().key_set;
   VerifiedKeySet::verify(&compact, &cloud.root.public_key(), seconds(cloud))
     .expect("the key set verifies with the root")
-}
-
-/// Links the team server `SERVER` for the device's account: tokens are only for registered servers.
-async fn link_server(cloud: &TestCloud, device: &str) {
-  let team = TeamServer::with_id(SERVER.parse().expect("a server id"));
-  assert_eq!(cloud.link_server(device, &team).await.status, 201);
 }
 
 async fn identity_token(cloud: &TestCloud, device: &str) -> String {
@@ -48,12 +42,6 @@ pub async fn identity_token_verifies_with_the_published_key_set() {
   cloud.register(email).await;
   let signed = cloud.sign_in(email, PASSWORD, "Workstation").await;
   let device = signed.token.expose();
-  let unregistered = json!({"audience": "0199f0a0-0000-7000-8000-00000000beef"});
-  let refused = cloud
-    .request("POST", "/identity-tokens", Some(device), Some(unregistered))
-    .await;
-  assert_eq!((refused.status, refused.error()), (422, "invalid".into()));
-  link_server(&cloud, device).await;
   publish_for_the_first_time(&cloud, device).await;
   let set = key_set(&cloud).await;
   let token = identity_token(&cloud, device).await;
@@ -105,7 +93,6 @@ pub async fn identity_key_rotation_keeps_the_previous_key_then_drops_it() {
   cloud.register(email).await;
   let signed = cloud.sign_in(email, PASSWORD, "Workstation").await;
   let device = signed.token.expose();
-  link_server(&cloud, device).await;
   cloud.publish_keys().await;
   let first = identity_token(&cloud, device).await;
   let issued_at = seconds(&cloud);
@@ -181,7 +168,6 @@ pub async fn many_concurrent_identity_tokens_do_not_starve_the_pool() {
   let email = "busy@example.test";
   cloud.register(email).await;
   let signed = cloud.sign_in(email, PASSWORD, "Workstation").await;
-  link_server(&cloud, signed.token.expose()).await;
   cloud.publish_keys().await;
   let bearer = format!("Bearer {}", signed.token.expose());
   let body = serde_json::to_vec(&json!({"audience": SERVER})).expect("JSON");

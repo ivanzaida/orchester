@@ -2,7 +2,7 @@
 //! server's console, the certificate, and the owner's control of the cloud link. Codes are returned to the command,
 //! which prints them only to its own output.
 
-use orchester_api::{CloudLink, Credential, ErrorCode};
+use orchester_api::{CloudLink, Credential, ErrorCode, certificate::CertificatePin};
 
 use crate::{
   Server,
@@ -94,10 +94,10 @@ impl Server {
   }
 }
 
-/// The check code of the certificate the server presents, generating its own first if it has none yet; `None` for
-/// plain HTTP (`orchester-server tls show`).
-pub fn tls_check_code(config: &Config, now_ms: i64) -> Result<Option<String>, ServerError> {
-  Ok(certificate::load(config, now_ms)?.map(|material| material.pin.check_code()))
+/// The pin of the certificate the server presents, generating its own first if it has none yet; `None` for plain
+/// HTTP (`orchester-server tls show` prints its check code and SHA-256 fingerprint).
+pub fn tls_pin(config: &Config, now_ms: i64) -> Result<Option<CertificatePin>, ServerError> {
+  Ok(certificate::load(config, now_ms)?.map(|material| material.pin))
 }
 
 /// Replaces the server's own certificate and returns the new check code (`orchester-server tls regenerate`). A running

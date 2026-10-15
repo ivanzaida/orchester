@@ -32,7 +32,10 @@ function Decline({ csrf, id }: { csrf: string; id: string }) {
 }
 
 function InviteRow({ invite, csrf, now }: { invite: Invite; csrf: string; now: number }) {
-  const chip = invite.kind === "project" ? "account.invites.kindProject" : "account.invites.kindServer";
+  const chip =
+    invite.role === null
+      ? t("account.invites.kindServer")
+      : t("account.invites.kindProject", { role: t(`account.invites.roles.${invite.role}`) });
   const from =
     invite.project === null
       ? t("account.invites.fromServer", { inviter: invite.inviterName })
@@ -40,7 +43,7 @@ function InviteRow({ invite, csrf, now }: { invite: Invite; csrf: string; now: n
   return (
     <Row glyph={invite.project === null ? "server" : "folder-git-2"} align="start" fill side={<Decline csrf={csrf} id={invite.id} />}>
       <TopLine name={invite.project?.name ?? invite.serverName} weight="semibold">
-        <Chip>{t(chip, { role: t(`account.invites.roles.${invite.role}`) })}</Chip>
+        <Chip>{chip}</Chip>
       </TopLine>
       <RowLine tone="secondary" wide>
         {from}

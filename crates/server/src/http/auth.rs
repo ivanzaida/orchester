@@ -5,7 +5,8 @@ use axum::{
   response::{IntoResponse, Response},
 };
 use orchester_api::{
-  ApprovalDecision, ApprovalResponse, Approvals, CloudJoin, CodeJoin, PairingCode, SessionsResponse, UserResponse,
+  ApprovalDecision, ApprovalResponse, Approvals, CloudJoin, CodeJoin, PairingCode, SessionsResponse, SetupCheck,
+  UserResponse,
 };
 use orchester_core::id::{ApprovalId, SessionId};
 
@@ -14,6 +15,17 @@ use super::{
   extract::{Auth, Id, SafeJson, bearer},
 };
 use crate::{Server, accounts::CloudJoined, error::ServerError, tls::PeerAddr};
+
+/// `POST /auth/setup`: `204` when the code is the open setup code; nothing is used up.
+pub(super) async fn check_setup(
+  State(server): State<Server>,
+  peer: ConnectInfo<PeerAddr>,
+  headers: HeaderMap,
+  SafeJson(input): SafeJson<SetupCheck>,
+) -> Result<StatusCode, ServerError> {
+  server.check_setup_code(input, address(&server, peer, &headers)).await?;
+  Ok(StatusCode::NO_CONTENT)
+}
 
 pub(super) async fn join_with_code(
   State(server): State<Server>,

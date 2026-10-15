@@ -4,8 +4,8 @@ import { Icon, type IconName } from "./icon";
 import styles from "./button.module.css";
 
 /**
- * The file's buttons in their large size: `yJ2jo` primary, `Dswcx` secondary, `cnlv1` ghost, `O3M8iH` danger; `small`
- * is 28 high.
+ * The file's buttons in their large size: `yJ2jo` primary, `Dswcx` secondary, `cnlv1` ghost, `O3M8iH` danger (what an
+ * in-place confirmation does that cannot be undone); `small` is 28 high.
  */
 export type ButtonKind = "primary" | "secondary" | "ghost" | "danger";
 
@@ -37,9 +37,16 @@ export function ButtonContent({ icon, spin, children }: { icon?: IconName | unde
 }
 
 /** A link that looks like a button: it only navigates. */
-export function ButtonLink(props: { href: string; kind: ButtonKind; icon?: IconName; row?: boolean; children: ReactNode }) {
+export function ButtonLink(props: {
+  href: string;
+  kind: ButtonKind;
+  icon?: IconName;
+  row?: boolean;
+  inline?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <a className={buttonClass(props.kind, { row: props.row ?? false })} href={props.href}>
+    <a className={buttonClass(props.kind, { row: props.row ?? false, inline: props.inline ?? false })} href={props.href}>
       <ButtonContent icon={props.icon}>{props.children}</ButtonContent>
     </a>
   );

@@ -5,7 +5,7 @@
 use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 
 use orchester_api::{
-  CodeJoin, Credential, Joined,
+  CodeJoin, Credential, DeviceKind, Joined,
   client::{Client, PlainHttp, ServerAddress},
 };
 use orchester_core::{id::UserId, secret::SecretValue};
@@ -85,6 +85,7 @@ impl TestServer {
         device: "test computer · Windows".into(),
         username: username.map(Into::into),
         display_name: username.map(Into::into),
+        kind: DeviceKind::App,
       })
       .await
       .expect("join with a code")

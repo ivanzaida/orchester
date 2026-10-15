@@ -74,6 +74,19 @@
   color: var(--color-text-muted);
 }
 
+.prefix {
+  flex: none;
+  margin-right: calc(-1 * var(--space-sm));
+  font-family: var(--font-mono);
+  font-size: var(--text-body);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
 .secret {
   color: var(--color-text-secondary);
   letter-spacing: var(--tracking-secret);

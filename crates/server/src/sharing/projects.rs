@@ -104,7 +104,10 @@ pub fn create(
   }
   let slug = Slug::new(&input.slug).map_err(|_| ErrorCode::Invalid)?;
   let name = Name::new(&input.name).map_err(|_| ErrorCode::Invalid)?;
-  let key = ProjectKey::new(&input.key).map_err(|_| ErrorCode::Invalid)?;
+  let key = match &input.key {
+    Some(key) => ProjectKey::new(key).map_err(|_| ErrorCode::Invalid)?,
+    None => ProjectKey::suggest(&name),
+  };
   let remote_hint = hint(input.remote_hint.as_deref())?;
   let taken: bool = db.query_row(
     "SELECT EXISTS(SELECT 1 FROM projects WHERE slug=?1)",
@@ -208,7 +211,11 @@ pub fn patch(
     value.key = ProjectKey::new(&key).map_err(|_| ErrorCode::Invalid)?.as_str().into();
   }
   if let Some(remote) = input.remote_hint {
-    value.remote_hint = hint(Some(&remote))?;
+    value.remote_hint = if remote.trim().is_empty() {
+      None
+    } else {
+      hint(Some(&remote))?
+    };
   }
   if original == (value.name.clone(), value.key.clone(), value.remote_hint.clone()) {
     return Ok(value);

@@ -12,3 +12,7 @@ tls = "self_signed"
 # tls_cert = "certificate.pem"
 # tls_key = "private-key.pem"
 trusted_proxies = []
+# The server admin app on a private address: every path outside /api is forwarded to it.
+admin_url = "http://127.0.0.1:3100"
+# The private plain-HTTP listener only the admin app's own server side calls the API on. Never publish it.
+admin_api_listen = "127.0.0.1:8741"

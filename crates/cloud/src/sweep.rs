@@ -18,7 +18,8 @@ pub(crate) fn spawn(cloud: Cloud) -> JoinHandle<()> {
 
 impl Cloud {
   /// Deletes what the cloud no longer needs: expired links and invites, and accounts never confirmed whose links all
-  /// expired. Runs every minute while the cloud serves.
+  /// expired.
+  /// Runs every minute while the cloud serves.
   pub async fn sweep(&self) -> Result<(), CloudError> {
     let now = self.now();
     let client = self.inner.db.client().await?;

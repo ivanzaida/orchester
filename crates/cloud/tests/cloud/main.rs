@@ -46,11 +46,6 @@ const TESTS: &[(&str, Test)] = tests![
   limits::emails_and_link_finishes_are_rate_limited,
   limits::confirm_is_rate_limited_per_link,
   limits::parallel_confirm_guesses_stay_within_the_link_limit,
-  registry::a_server_is_linked_from_its_signed_statement,
-  registry::invites_are_routed_to_registered_and_new_emails,
-  registry::forged_or_malformed_invites_are_refused,
-  registry::invites_are_declined_and_accepted,
-  registry::invites_are_limited_and_expire,
   deletion::deleting_the_account_removes_what_the_cloud_holds,
   deletion::deleting_with_wrong_passwords_is_limited,
   sessions::reset_signs_out_every_device,
@@ -65,6 +60,10 @@ const TESTS: &[(&str, Test)] = tests![
   hosting::smtp_mailer_sends_through_the_relay,
   hosting::requests_follow_the_contract,
   hosting::unsafe_configuration_is_refused,
+  registry::servers_link_from_the_statement_they_signed,
+  registry::admin_tokens_are_issued_only_for_linked_servers,
+  registry::invites_reach_the_invitee_once_and_end_when_revoked,
+  registry::invites_are_declined_by_the_invitee,
 ];
 
 /// Runs after the tests: what they logged holds none of their passwords, tokens, links, keys or emails.

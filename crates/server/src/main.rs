@@ -50,8 +50,13 @@ async fn run() -> Result<(), ServerError> {
   match command {
     Command::Serve => serve(config).await,
     Command::Backup { path } => orchester_server::backup_existing(config.data_dir, path).await,
-    Command::TlsShow => match host::tls_check_code(&config, now)? {
-      Some(code) => console(&format!("Certificate check code: {code}")),
+    Command::TlsShow => match host::tls_pin(&config, now)? {
+      Some(pin) => console(&format!(
+        "Certificate check code: {}
+SHA-256 fingerprint: {}",
+        pin.check_code(),
+        pin.fingerprint()
+      )),
       None => console("This server serves plain HTTP (tls = \"off\"); its proxy holds the certificate."),
     },
     Command::TlsRegenerate => {
@@ -102,7 +107,32 @@ async fn serve(config: Config) -> Result<(), ServerError> {
   let shutdown = shutdown::Shutdown::install()?;
   let listener = TcpListener::bind(listen).await?;
   tracing::info!(address = %listener.local_addr()?, "server listening");
-  orchester_server::serve(server, listener, shutdown.wait()).await
+  let Some(admin_api) = server.admin_api_listen() else {
+    return orchester_server::serve(server, listener, shutdown.wait()).await;
+  };
+  let internal = TcpListener::bind(admin_api).await?;
+  tracing::info!(address = %internal.local_addr()?, "admin API listening");
+  let stopping = shutdown.wait();
+  let (stop, stopped) = tokio::sync::watch::channel(false);
+  let mut internal_stopped = stopped.clone();
+  let internal = tokio::spawn(orchester_server::serve_admin_api(
+    server.clone(),
+    internal,
+    async move {
+      // Ends with the public listener: a dropped sender means it is gone too.
+      if internal_stopped.wait_for(|stop| *stop).await.is_err() {
+        tracing::info!("admin API stopping with the server");
+      }
+    },
+  ));
+  let public = orchester_server::serve(server, listener, async move {
+    stopping.await;
+    stop.send_replace(true);
+  })
+  .await;
+  drop(stopped);
+  internal.await.map_err(|_| ServerError::Worker)??;
+  public
 }
 
 /// One line for the person at the console. Codes go here and nowhere else.

@@ -5,8 +5,7 @@ use orchester_api::{
   PasswordChange,
   cloud::{
     AccountChanges, AccountDeletion, AccountResponse, CloudErrorCode, CloudSignIn, ConfirmEmail, DevicesResponse,
-    IdentityTokenRequest, InvitesResponse, KeySetResponse, LinkInspect, ResendConfirmation, ResetFinish, ResetRequest,
-    ServerLink, ServerResponse, ServersResponse, SignUp, SignedInvite,
+    IdentityTokenRequest, KeySetResponse, LinkInspect, ResendConfirmation, ResetFinish, ResetRequest, SignUp,
   },
 };
 
@@ -115,37 +114,6 @@ pub(super) async fn delete_me(
 pub(super) async fn revoke_device(cloud: web::Data<Cloud>, device: Device, request: HttpRequest) -> Answer {
   cloud.revoke_device(device.0, Some(path_id(&request)?)).await?;
   Ok(HttpResponse::NoContent().finish())
-}
-
-pub(super) async fn servers(cloud: web::Data<Cloud>, device: Device) -> Answer {
-  let servers = cloud.servers(device.0).await?;
-  Ok(HttpResponse::Ok().json(ServersResponse { servers }))
-}
-
-pub(super) async fn link_server(cloud: web::Data<Cloud>, device: Device, input: SafeJson<ServerLink>) -> Answer {
-  let server = cloud.link_server(device.0, input.0).await?;
-  Ok(HttpResponse::Created().json(ServerResponse { server }))
-}
-
-pub(super) async fn invites(cloud: web::Data<Cloud>, device: Device) -> Answer {
-  let invites = cloud.invites(device.0).await?;
-  Ok(HttpResponse::Ok().json(InvitesResponse { invites }))
-}
-
-/// Signed by a registered team server; whoever carries it needs no token.
-pub(super) async fn receive_invite(cloud: web::Data<Cloud>, input: SafeJson<SignedInvite>) -> Answer {
-  cloud.receive_invite(input.0).await?;
-  Ok(HttpResponse::Accepted().finish())
-}
-
-pub(super) async fn decline_invite(cloud: web::Data<Cloud>, device: Device, request: HttpRequest) -> Answer {
-  cloud.decline_invite(device.0, path_id(&request)?).await?;
-  Ok(HttpResponse::NoContent().finish())
-}
-
-pub(super) async fn accept_invite(cloud: web::Data<Cloud>, device: Device, request: HttpRequest) -> Answer {
-  let accepted = cloud.accept_invite(device.0, path_id(&request)?).await?;
-  Ok(HttpResponse::Created().json(accepted))
 }
 
 /// The path's `{id}`; one that cannot be an id names nothing there (`404`).

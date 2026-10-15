@@ -46,3 +46,13 @@
     transform: rotate(1turn);
   }
 }
+
+.step {
+  width: var(--size-step-icon);
+  height: var(--size-step-icon);
+}
+
+.note {
+  width: var(--icon-note);
+  height: var(--icon-note);
+}
