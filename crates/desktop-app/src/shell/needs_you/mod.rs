@@ -4,7 +4,7 @@
 //! waits after its retries, a run recorded interrupted. The pill counts every project the tabs show and its
 //! tooltip splits the count by project; with nothing waiting it stays in place, quiet, at 0. A press opens the
 //! Needs you panel under it ([`panel`]), and a press again, Esc or a press outside closes it; while it is
-//! open the pill wears a `warning` stroke.
+//! open the pill wears a `warning` stroke. A page can open the panel too ([`PanelOpen`]).
 
 mod in_place;
 mod item;
@@ -121,6 +121,28 @@ pub fn count_words(ctx: &Ctx, count: usize) -> String {
   ctx.t_args(key, [("count", count.to_string())]).to_string()
 }
 
+/// Whether the Needs you panel is open: the pill opens and closes it, and a page opens it for what it cannot
+/// show itself (the task list's notice of what waits outside its tasks). The session window provides it.
+#[derive(Clone)]
+pub struct PanelOpen(Signal<bool>);
+
+impl PanelOpen {
+  pub const fn new(open: Signal<bool>) -> Self {
+    Self(open)
+  }
+
+  /// The one the session window provides to everything it mounts.
+  pub fn of(ctx: &mut Ctx) -> Self {
+    ctx
+      .use_context::<Self>()
+      .expect("the session window provides the panel's state before mounting the chrome and the shell")
+  }
+
+  pub fn open(&self) {
+    self.0.set(true);
+  }
+}
+
 /// The title bar's pill and the panel it opens. Nothing while no project the tabs show has its tasks read.
 pub struct NeedsYouPill {
   open: Signal<bool>,
@@ -133,7 +155,7 @@ impl Component for NeedsYouPill {
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
-      open: ctx.signal(false),
+      open: PanelOpen::of(ctx).0,
       anchor: ElementRef::new(),
     }
   }
