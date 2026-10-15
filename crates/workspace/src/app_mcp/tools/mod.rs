@@ -10,6 +10,7 @@ mod messages;
 mod pipeline_copy;
 mod plans;
 mod projects;
+mod pull_requests;
 mod questions;
 mod queue_hold;
 mod return_to_draft;
@@ -219,6 +220,18 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
+    name: "list_pull_requests",
+    description: "Pull requests of a project's linked GitHub repository as the Pull requests page lists them, or of every project: number, title, state (open, draft, merged, closed), review, GitHub checks on the head, branches, changes, the task and run whose branch it is (agent_working while that run runs), its app link and its GitHub url. They are what the last sync read (open ones and the most recently updated closed ones); refresh syncs one project first through gh. A tab narrows them as the page's tabs do; search finds a number, title words, a branch or a task key. Each repository says how its last sync went.",
+    schema: schema_for_type::<pull_requests::ListPullRequests>,
+    read_only: true,
+  },
+  Spec {
+    name: "get_pull_request",
+    description: "One pull request of a project's linked GitHub repository, as list_pull_requests gives it, with how the repository's last sync went; refresh syncs first through gh.",
+    schema: schema_for_type::<pull_requests::GetPullRequest>,
+    read_only: true,
+  },
+  Spec {
     name: "list_pipelines",
     description: "A project's pipelines that have a published version, which tasks run with: name, version, steps.",
     schema: schema_for_type::<projects::InProject>,
@@ -290,6 +303,8 @@ async fn dispatch_answers(services: &Services, name: &str, arguments: Value) -> 
     "decide_plan" => plans::decide_plan(services, parse(arguments)?).await,
     "set_run_auto_mode" => auto_mode::set_run_auto_mode(services, parse(arguments)?).await,
     "get_auto_mode" => auto_mode::get_auto_mode(services, parse(arguments)?).await,
+    "list_pull_requests" => pull_requests::list_pull_requests(services, parse(arguments)?).await,
+    "get_pull_request" => pull_requests::get_pull_request(services, parse(arguments)?).await,
     "set_auto_mode" => auto_mode::set_auto_mode(services, parse(arguments)?).await,
     other => Err(ToolError::InvalidArguments(format!("no tool is named {other}"))),
   }
