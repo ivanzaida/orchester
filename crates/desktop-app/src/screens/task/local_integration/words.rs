@@ -43,3 +43,21 @@ pub(crate) fn evidence_body(kind: orchester_core::integration::local::ResultEvid
     ResultEvidenceKind::UnknownSource => "local_integration.unknownSource",
   }
 }
+
+/// Whether `evidence` is the run's whole work merged into the checkout outside Orchester: what the Summary calls
+/// merged without Orchester, not an integration that needs reconciliation.
+pub(crate) fn merged_outside(evidence: &orchester_core::integration::local::ContainedResult) -> bool {
+  evidence.kind == orchester_core::integration::local::ResultEvidenceKind::CompleteAncestry
+}
+
+/// The Summary's own words for work merged without Orchester: the run's `branch` is in `into`.
+pub(crate) fn merged_outside_words(
+  ctx: &lurq::app::ctx::Ctx,
+  branch: &str,
+  into: &str,
+) -> (std::sync::Arc<str>, std::sync::Arc<str>) {
+  (
+    ctx.t("summary.notice.mergedTitle"),
+    ctx.t_args("summary.notice.mergedOutsideBody", [("branch", branch), ("into", into)]),
+  )
+}

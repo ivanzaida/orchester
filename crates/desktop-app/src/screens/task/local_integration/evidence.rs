@@ -41,7 +41,7 @@ pub(super) fn column(
     .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Lg)
     .child(notes::phase(ctx, phase, &mode, narrow))
-    .with_children(external_notice(ctx, view))
+    .with_children(external_notice(ctx, task, view))
     .with_children(hook_notice(ctx, view, phase));
   if let Some(problem) = page.work.state().get().error {
     column = column.child(Notice::new("local-work-error", NoticeTone::Danger, ctx.t(problem.0)));
@@ -134,8 +134,24 @@ fn commit_review(
   parts
 }
 
-fn external_notice(ctx: &Ctx, view: &IntegrationView) -> Option<Element> {
+/// An integration made outside Orchester: merged without Orchester, as the Summary says, or what needs
+/// reconciliation.
+fn external_notice(ctx: &Ctx, task: &TaskContext, view: &IntegrationView) -> Option<Element> {
   let evidence = view.external.as_ref()?;
+  if words::merged_outside(evidence) {
+    let branch = task
+      .detail
+      .run
+      .as_ref()
+      .map(|run| run.run.branch().as_str())
+      .unwrap_or_default();
+    let (title, body) = words::merged_outside_words(ctx, branch, &view.checkout.branch);
+    return Some(
+      Notice::new("local-external-integration", NoticeTone::Success, title)
+        .body(body)
+        .into(),
+    );
+  }
   Some(
     Notice::new(
       "local-external-integration",

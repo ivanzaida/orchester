@@ -93,8 +93,12 @@ pub(super) fn trail(ctx: &Ctx, view: &IntegrationView, mode: &Mode) -> Element {
 }
 
 fn current(view: &IntegrationView, mode: &Mode) -> &'static str {
-  if view.external.is_some() {
-    return "local_integration.now.blocked";
+  if let Some(evidence) = &view.external {
+    return if super::words::merged_outside(evidence) {
+      "summary.notice.mergedTitle"
+    } else {
+      "local_integration.now.blocked"
+    };
   }
   match mode {
     Mode::Commit { .. } => return "local_integration.now.commit",

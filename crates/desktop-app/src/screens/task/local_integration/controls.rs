@@ -221,13 +221,8 @@ impl Component for Inspector {
 
 impl Inspector {
   fn actions(&self, ctx: &mut Ctx, props: &Props, mode: &Mode, phase: LocalPhase) -> Element {
-    if props.view.external.is_some() {
-      return action_panel(
-        ctx,
-        "local_integration.externalTitle",
-        Some("local_integration.externalBody"),
-      )
-      .into();
+    if let Some(evidence) = &props.view.external {
+      return external_panel(ctx, props, evidence);
     }
     if props.busy {
       let stop = props.trigger.stop.clone();
@@ -331,6 +326,41 @@ impl Inspector {
       panel
     }
   }
+}
+
+/// The step's card for an integration made outside Orchester: merged without Orchester, as the Summary says, or
+/// blocked until it is reconciled.
+fn external_panel(ctx: &Ctx, props: &Props, evidence: &orchester_core::integration::local::ContainedResult) -> Element {
+  if !super::words::merged_outside(evidence) {
+    return action_panel(
+      ctx,
+      "local_integration.externalTitle",
+      Some("local_integration.externalBody"),
+    )
+    .into();
+  }
+  let task = &props.trigger.task;
+  let branch = task
+    .detail
+    .run
+    .as_ref()
+    .map(|run| run.run.branch().as_str())
+    .unwrap_or_default();
+  let (title, body) = super::words::merged_outside_words(ctx, branch, &props.view.checkout.branch);
+  card_frame("local-actions", CardSurface::Pending)
+    .padding(SpacingSize::Lg)
+    .spacing(SpacingSize::Sm)
+    .child(
+      Text::new(&title)
+        .id("local-actions-title")
+        .variant(LocalText::Heading.role()),
+    )
+    .child(
+      Text::new(&body)
+        .id("local-actions-body")
+        .variant(LocalText::Explanation.role()),
+    )
+    .into()
 }
 
 /// The step's card: `title` and what `body` explains; add its actions and note.
