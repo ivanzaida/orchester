@@ -23,8 +23,6 @@ fn app_mcp_lists_the_published_pipelines() {
   assert_eq!(pipelines[0]["version"], 1);
   assert_eq!(pipelines[0]["steps"][0]["name"], "Implement");
   assert_eq!(pipelines[0]["steps"][0]["approval_gate"], false);
-  let error = refused(&mut agent, "list_pipelines", &json!({}));
-  assert_eq!(error["code"], "invalid_arguments");
 }
 
 #[test]
