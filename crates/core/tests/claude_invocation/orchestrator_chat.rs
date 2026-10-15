@@ -106,4 +106,8 @@ fn orchestrator_links_only_with_the_links_its_tools_returned() {
     prompt.contains("only with the `url` a tool returned"),
     "it links a web page only with a returned `url`: {prompt}"
   );
+  assert!(
+    prompt.contains("`- Label: [words](orchester:<link>) — detail`"),
+    "it writes how several things stand as labelled links: {prompt}"
+  );
 }

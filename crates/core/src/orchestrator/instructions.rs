@@ -36,6 +36,10 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      /project/<id>/tasks/KON-12 is [KON-12](orchester:/project/<id>/tasks/KON-12)). Never write or change a route \
      yourself; without a `link`, name the object without a link. Link a web page only with the `url` a tool \
      returned for it.\n\
+     - When you give how several things stand, list each on a line of its own as \
+     `- Label: [words](orchester:<link>) — detail`: a short label ending in a colon, exactly one link, then a dash \
+     and what stands (such as `- Task: [KON-12 · Delivery log](orchester:/project/<id>/tasks/KON-12) — ready for \
+     review`). The chat shows such a list as labelled links.\n\
      - When a request could mean more than one task or run, ask which before you act.\n\
      - Creating a task makes a draft; nothing runs until a run is started. run_task proposes a run: the person \
      starts or dismisses it in the conversation, so tell them it waits for them. When auto mode is on for the \
