@@ -23,6 +23,8 @@ mod metadata;
 mod store;
 #[cfg(windows)]
 pub use execution::ExecutionOwnership;
+#[cfg(windows)]
+pub use metadata::MetadataOwnership;
 pub use platform::Directory;
 pub use store::StoreOwnership;
 #[cfg(unix)]

@@ -61,6 +61,48 @@ fn entries(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
   result.sort();
   result
 }
+/// While an operation holds the metadata: no folder can be renamed, and outside `objects` none can become a junction.
+fn held_during_operation(owned: &Path, outside_objects: &Path) {
+  for relative in [
+    "objects",
+    "refs",
+    "refs/heads",
+    "logs",
+    "logs/refs",
+    "logs/refs/heads",
+    "objects/pack",
+    "objects/info",
+  ] {
+    let child = owned.join(".git").join(relative);
+    assert!(
+      fs::rename(&child, owned.join("scratch").join(relative.replace('/', "-"))).is_err(),
+      "child rename must be denied: {relative}"
+    );
+  }
+  // Outside `objects`, which gets no anchor, an empty folder is kept nonempty and cannot become a junction.
+  for relative in ["refs", "refs/heads", "logs", "logs/refs", "logs/refs/heads"] {
+    assert!(
+      local_reparse::set_junction(&owned.join(".git").join(relative), outside_objects).is_err(),
+      "in-place child reparse must be denied: {relative}"
+    );
+  }
+  for (path, _) in entries(&owned.join(".git/objects")) {
+    assert_ne!(
+      path.file_name().and_then(|name| name.to_str()),
+      Some(".orchester-local-owner"),
+      "nothing of Orchester's in objects"
+    );
+  }
+}
+
+/// Orchester's anchors left under `owned`'s `.git`.
+fn anchors(owned: &Path) -> Vec<PathBuf> {
+  entries(&owned.join(".git"))
+    .into_iter()
+    .map(|(path, _)| path)
+    .filter(|path| path.file_name().and_then(|name| name.to_str()) == Some(".orchester-local-owner"))
+    .collect()
+}
 #[test]
 fn local_integration_git_child_chains_remain_owned_before_later_real_git_io() {
   let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
@@ -89,32 +131,20 @@ fn local_integration_git_child_chains_remain_owned_before_later_real_git_io() {
   );
   fs::remove_dir(&control_objects).expect("remove only private junction entry");
   let before = entries(&outside.join(".git"));
+  let owned_before = entries(&owned.join(".git"));
   fs::create_dir(owned.join("scratch")).expect("owned scratch");
-  let session = LocalGit::new(&owned, &owned.join("scratch")).expect("verified owned preflight");
+  let mut session = LocalGit::new(&owned, &owned.join("scratch")).expect("verified owned preflight");
+  session.snapshot().expect("a read");
+  assert_eq!(
+    entries(&owned.join(".git")),
+    owned_before,
+    "opening and reading write nothing into .git"
+  );
+  session.own_metadata().expect("an operation holds the metadata");
   let original = session
     .text(&["rev-parse", "HEAD:file.txt"])
     .expect("owned original blob");
-  for relative in [
-    "objects",
-    "refs",
-    "refs/heads",
-    "logs",
-    "logs/refs",
-    "logs/refs/heads",
-    "objects/00",
-    "objects/pack",
-    "objects/info",
-  ] {
-    let child = owned.join(".git").join(relative);
-    assert!(
-      fs::rename(&child, owned.join("scratch").join(relative.replace('/', "-"))).is_err(),
-      "child rename must be denied: {relative}"
-    );
-    assert!(
-      local_reparse::set_junction(&child, &outside_objects).is_err(),
-      "in-place child reparse must be denied: {relative}"
-    );
-  }
+  held_during_operation(&owned, &outside_objects);
   let object = session
     .put_blob(b"later owned object write")
     .expect("real later Git write");
@@ -134,6 +164,8 @@ fn local_integration_git_child_chains_remain_owned_before_later_real_git_io() {
     before,
     "outside bytes and object entries unchanged after guarded operations"
   );
+  drop(session);
+  assert!(anchors(&owned).is_empty(), "the operation removes its anchors");
 }
 #[test]
 fn local_integration_canonical_linked_metadata_and_nested_branch_parents_are_held() {
@@ -151,7 +183,8 @@ fn local_integration_canonical_linked_metadata_and_nested_branch_parents_are_hel
   );
   fs::create_dir(task.join("scratch")).expect("scratch");
   let canonical = task.canonicalize().expect("canonical Windows path");
-  let session = LocalGit::new(&canonical, &canonical.join("scratch")).expect("owned linked project metadata");
+  let mut session = LocalGit::new(&canonical, &canonical.join("scratch")).expect("owned linked project metadata");
+  session.own_metadata().expect("an operation holds the metadata");
   for relative in [
     "objects",
     "refs/heads/orc",

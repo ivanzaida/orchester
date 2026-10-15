@@ -22,11 +22,12 @@ impl StoreOwnership {
         "orchester.db-shm",
         "orchester.db-journal",
       ] {
-        files.push(super::windows::pin_store_entry(
-          &directory,
-          name.as_ref(),
-          name != "orchester.db",
-        )?);
+        let pin = if name == "orchester.db" {
+          super::windows::Pin::Existing
+        } else {
+          super::windows::Pin::Sidecar
+        };
+        files.push(super::windows::pin_store_entry(&directory, name.as_ref(), pin)?);
       }
       Ok(Arc::new(Self {
         _directory: directory,

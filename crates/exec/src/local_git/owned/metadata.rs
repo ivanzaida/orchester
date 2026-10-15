@@ -1,5 +1,8 @@
-//! Git uses pathnames internally. Hold its complete existing metadata directory chains,
-//! plus every loose-object bucket, before the first Git process can access them.
+//! Git uses pathnames internally. While an operation changes the repository, hold its existing metadata directory
+//! chains, every existing loose-object bucket among them, against rename and deletion before Git uses them.
+//! Nothing is created in `.git`: missing folders are Git's to make. Folders outside `objects` are kept nonempty by
+//! an anchor so they cannot be turned into junctions; the anchors are removed when the ownership ends. `objects` is
+//! Git's alone and gets no anchor: an empty loose-object bucket is held against rename only.
 use std::{
   ffi::OsStr,
   fs::File,
@@ -8,17 +11,29 @@ use std::{
   sync::Arc,
 };
 
-use super::{Directory, LocalError, LocalGitError, windows};
+use super::{
+  Directory, LocalError, LocalGitError,
+  windows::{self, Pin},
+};
 
-pub(super) struct MetadataOwnership {
+/// The anchor's name, the same in every folder it keeps nonempty.
+const ANCHOR: &str = ".orchester-local-owner";
+
+pub struct MetadataOwnership {
   directories: Vec<Arc<Directory>>,
   files: Vec<File>,
+  /// The anchors this ownership placed, removed when it ends.
+  anchors: Vec<PathBuf>,
+  /// The `objects` folder, whose subfolders get no anchor.
+  objects: Option<PathBuf>,
 }
 impl MetadataOwnership {
-  pub(super) fn acquire(root: &Arc<Directory>) -> Result<Self, LocalGitError> {
+  pub fn acquire(root: &Arc<Directory>) -> Result<Self, LocalGitError> {
     let mut held = Self {
       directories: Vec::new(),
       files: Vec::new(),
+      anchors: Vec::new(),
+      objects: None,
     };
     let git = match root.child(OsStr::new(".git"), false) {
       Ok(Some(git)) => git,
@@ -48,58 +63,31 @@ impl MetadataOwnership {
     held.pin(&common)?;
     held.objects(&common)?;
     held.refs(&common)?;
-    // Current branch updates need corresponding log parents even when reflogs were disabled.
-    let refs = common.path().join("refs");
-    let logs = common.child(OsStr::new("logs"), false)?.ok_or(LocalGitError::Io)?;
-    let ref_paths: Vec<PathBuf> = held
-      .directories
-      .iter()
-      .filter_map(|directory| directory.path().strip_prefix(&refs).ok().map(Path::to_path_buf))
-      .collect();
-    for path in ref_paths {
-      let mut parent = logs.clone();
-      for part in path.components() {
-        parent = parent.child(part.as_os_str(), true)?.ok_or(LocalGitError::Io)?;
-        held.pin(&parent)?;
-      }
-    }
     held.ensure_current()?;
     Ok(held)
   }
 
   fn objects(&mut self, common: &Arc<Directory>) -> Result<(), LocalGitError> {
-    let objects = common.child(OsStr::new("objects"), true)?.ok_or(LocalGitError::Io)?;
-    self.pin(&objects)?;
-    for bucket in 0..=255 {
-      let name = format!("{bucket:02x}");
-      self.tree(&objects.child(OsStr::new(&name), true)?.ok_or(LocalGitError::Io)?)?;
+    let objects = common.child(OsStr::new("objects"), false)?.ok_or(LocalGitError::Io)?;
+    self.objects = Some(objects.path().to_owned());
+    // Every existing bucket, pack and info folder, held as Git left them.
+    self.tree(&objects)?;
+    // An alternates file would make objects outside this repository readable: refuse one with content.
+    if let Some(info) = objects.child(OsStr::new("info"), false)?
+      && let Some(alternates) = info.open_regular(OsStr::new("alternates"), false, false)?
+    {
+      if alternates.metadata().map_err(|_| LocalGitError::Io)?.len() != 0 {
+        return Err(LocalError::Unsupported.into());
+      }
+      self.files.push(alternates);
     }
-    for name in ["pack", "info"] {
-      self.tree(&objects.child(OsStr::new(name), true)?.ok_or(LocalGitError::Io)?)?;
-    }
-    // Prevent an absent alternates file becoming an outside object source between commands.
-    let info = objects.child(OsStr::new("info"), false)?.ok_or(LocalGitError::Io)?;
-    let alternates = windows::pin_store_entry(&info, OsStr::new("alternates"), true)?;
-    if alternates.metadata().map_err(|_| LocalGitError::Io)?.len() != 0 {
-      return Err(LocalError::Unsupported.into());
-    }
-    let read_only = info
-      .open_regular(OsStr::new("alternates"), false, false)?
-      .ok_or(LocalGitError::Io)?;
-    if read_only.metadata().map_err(|_| LocalGitError::Io)?.len() != 0 {
-      return Err(LocalError::Unsupported.into());
-    }
-    self.files.push(read_only);
-    drop(alternates);
     Ok(())
   }
   fn refs(&mut self, common: &Arc<Directory>) -> Result<(), LocalGitError> {
     for name in ["refs", "logs"] {
-      let directory = common.child(OsStr::new(name), true)?.ok_or(LocalGitError::Io)?;
-      for child in ["heads", "tags", "remotes", "replace"] {
-        self.tree(&directory.child(OsStr::new(child), true)?.ok_or(LocalGitError::Io)?)?;
+      if let Some(directory) = common.child(OsStr::new(name), false)? {
+        self.tree(&directory)?;
       }
-      self.tree(&directory)?;
     }
     Ok(())
   }
@@ -149,11 +137,16 @@ impl MetadataOwnership {
     if self.directories.iter().any(|held| held.path() == directory.path()) {
       return Ok(());
     }
-    self.files.push(windows::pin_store_entry(
-      directory,
-      OsStr::new(".orchester-local-owner"),
-      true,
-    )?);
+    let in_objects = self
+      .objects
+      .as_ref()
+      .is_some_and(|objects| directory.path().starts_with(objects));
+    if !in_objects {
+      self
+        .files
+        .push(windows::pin_store_entry(directory, OsStr::new(ANCHOR), Pin::Anchor)?);
+      self.anchors.push(directory.path().join(ANCHOR));
+    }
     self.directories.push(directory.clone());
     Ok(())
   }
@@ -167,11 +160,14 @@ impl MetadataOwnership {
       }
       if metadata.is_dir() {
         self.tree(&directory.child(&entry.file_name(), false)?.ok_or(LocalError::Stale)?)?;
+      } else if entry.file_name() == ANCHOR {
+        // Left by an ownership that could not remove it; this one removes it when it ends.
+        self.anchors.push(entry.path());
       }
     }
     Ok(())
   }
-  pub(super) fn ensure_current(&self) -> Result<(), LocalGitError> {
+  pub fn ensure_current(&self) -> Result<(), LocalGitError> {
     for directory in &self.directories {
       directory.ensure_pinned()?;
     }
@@ -179,6 +175,21 @@ impl MetadataOwnership {
       windows::validate_regular(file)?;
     }
     Ok(())
+  }
+}
+
+impl Drop for MetadataOwnership {
+  fn drop(&mut self) {
+    // The anchors' handles deny deletion: close them before removing the files.
+    self.files.clear();
+    for anchor in &self.anchors {
+      match std::fs::remove_file(anchor) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        // A drop cannot return the failure; the next ownership of this repository finds and removes the anchor.
+        Err(error) => tracing::warn!(%error, "cannot remove a local integration anchor"),
+      }
+    }
   }
 }
 fn within(path: &Path, parent: &Path) -> Result<bool, LocalGitError> {

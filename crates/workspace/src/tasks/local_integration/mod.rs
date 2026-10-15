@@ -118,14 +118,17 @@ impl LocalIntegration {
     ensure_checkout_available(&db, run_id)?;
     let scratch =
       orchester_exec::local_git::prepare_scratch(root, &[".orchester", "local-integration", &run_id.to_string()])?;
-    let main = LocalGit::new(root, &scratch)?;
+    let mut main = LocalGit::new(root, &scratch)?;
     ensure_project_git(&main)?;
+    main.own_metadata()?;
     let owned_task =
       orchester_exec::local_git::owned_directory(root, &[".orchester", "worktrees", &run_id.to_string()])?;
     // The project already excludes .orchester in its linked worktrees.
     let task = if let Some(task_root) = owned_task {
       let task_scratch = orchester_exec::local_git::prepare_scratch(&task_root, &[".orchester", "local-integration"])?;
-      Some(LocalGit::new(&task_root, &task_scratch)?)
+      let mut task = LocalGit::new(&task_root, &task_scratch)?;
+      task.own_metadata()?;
+      Some(task)
     } else {
       None
     };

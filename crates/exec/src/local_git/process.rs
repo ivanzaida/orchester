@@ -31,6 +31,10 @@ impl LocalGit {
     #[cfg(windows)]
     self._execution_owner.ensure_current()?;
     #[cfg(windows)]
+    if let Some(metadata) = &self.metadata_owner {
+      metadata.ensure_current()?;
+    }
+    #[cfg(windows)]
     let _private_owner = worktree
       .map(|root| super::owned::ExecutionOwnership::private_copy(root, &self.scratch))
       .transpose()?;

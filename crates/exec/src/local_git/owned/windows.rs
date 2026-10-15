@@ -240,13 +240,25 @@ pub(super) fn remove(file: &File) -> Result<(), LocalGitError> {
   Ok(())
 }
 
-/// Pins the store entry `name`. A `sidecar` (SQLite's `-wal`, `-shm`, `-journal`) is created when missing so it is a
-/// validated regular file before SQLite opens it, and is shared for deletion: SQLite in another process (the runner,
-/// another app) deletes its WAL when its last connection closes and must not stall on our pin.
-pub(super) fn pin_store_entry(directory: &Arc<Directory>, name: &OsStr, sidecar: bool) -> Result<File, LocalGitError> {
+/// How an entry is pinned.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Pin {
+  /// An existing file, held against deletion and rename.
+  Existing,
+  /// SQLite's `-wal`, `-shm`, `-journal`: created when missing so it is a validated regular file before SQLite opens
+  /// it, and shared for deletion: SQLite in another process (the runner, another app) deletes its WAL when its last
+  /// connection closes and must not stall on our pin.
+  Sidecar,
+  /// An empty file created and held against deletion, which keeps its directory nonempty: NTFS refuses to turn a
+  /// nonempty directory into a junction.
+  Anchor,
+}
+
+/// Pins the entry `name` of `directory` as `pin` says.
+pub(super) fn pin_store_entry(directory: &Arc<Directory>, name: &OsStr, pin: Pin) -> Result<File, LocalGitError> {
   let _freeze = directory.freeze()?;
   let path = directory.path.join(name);
-  let share = if sidecar {
+  let share = if pin == Pin::Sidecar {
     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE
   } else {
     FILE_SHARE_READ | FILE_SHARE_WRITE
@@ -260,7 +272,7 @@ pub(super) fn pin_store_entry(directory: &Arc<Directory>, name: &OsStr, sidecar:
   };
   let file = match open() {
     Ok(file) => file,
-    Err(error) if error.kind() == io::ErrorKind::NotFound && sidecar => {
+    Err(error) if error.kind() == io::ErrorKind::NotFound && pin != Pin::Existing => {
       match OpenOptions::new()
         .write(true)
         .create_new(true)

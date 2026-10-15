@@ -230,7 +230,10 @@ pub fn merge_in(repo_root: &Path, programs: &Programs, run: RunId) -> Result<Mer
     .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
   let scratch = orchester_exec::local_git::prepare_scratch(repo_root, &[".orchester", "local-integration", "legacy"])
     .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
-  let _git_owner = orchester_exec::local_git::LocalGit::new(repo_root, &scratch)
+  let mut git_owner = orchester_exec::local_git::LocalGit::new(repo_root, &scratch)
+    .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
+  git_owner
+    .own_metadata()
     .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
   let mut db = ProjectDb::open(repo_root)?;
   // Runs are never deleted: a run the task page read is there.

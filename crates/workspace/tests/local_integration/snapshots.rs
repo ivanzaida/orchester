@@ -96,3 +96,53 @@ fn local_snapshots_read_a_large_ignored_folder_as_one_bounded_entry() {
     "ignored content is never listed for commit or preservation"
   );
 }
+
+/// Every entry under `root` with its size, folders as size 0.
+fn entries(root: &std::path::Path) -> Vec<(std::path::PathBuf, u64)> {
+  let mut result = Vec::new();
+  let mut pending = vec![root.to_owned()];
+  while let Some(directory) = pending.pop() {
+    for entry in fs::read_dir(directory).expect("entries") {
+      let entry = entry.expect("entry");
+      let metadata = entry.metadata().expect("metadata");
+      let relative = entry.path().strip_prefix(root).expect("relative").to_owned();
+      if metadata.is_dir() {
+        pending.push(entry.path());
+        result.push((relative, 0));
+      } else {
+        result.push((relative, metadata.len()));
+      }
+    }
+  }
+  result.sort();
+  result
+}
+
+#[test]
+fn local_snapshots_and_review_reads_leave_git_unchanged() {
+  let fixture = Fixture::new(false);
+  let root = fixture.root();
+  fs::write(root.join("local.txt"), "base\nstaged\n").expect("staged");
+  git(root, &["add", "local.txt"]);
+  fs::write(root.join("local.txt"), "base\nstaged\nworking\n").expect("working");
+  fs::write(root.join("notes.md"), "new\n").expect("untracked");
+  let before = entries(&root.join(".git"));
+  let scratch = orchester_exec::local_git::prepare_scratch(root, &[".orchester", "snapshot-test"]).expect("scratch");
+  let main = orchester_exec::local_git::LocalGit::new(root, &scratch).expect("main");
+  main.snapshot().expect("snapshot");
+  drop(main);
+  let local = LocalPath::new("local.txt").expect("path");
+  read(
+    root,
+    fixture.run,
+    Some(&shown(&local, Snapshot::Unstaged)),
+    &Vault(None),
+  )
+  .expect("review read");
+  orchester_workspace::tasks::local_integration::fingerprint(root, fixture.run).expect("poll");
+  assert_eq!(
+    entries(&root.join(".git")),
+    before,
+    "reading local changes writes nothing into .git"
+  );
+}

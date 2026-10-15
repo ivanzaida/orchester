@@ -64,6 +64,9 @@ pub struct LocalGit {
   ref_action: Option<String>,
   #[cfg(windows)]
   _execution_owner: std::sync::Arc<owned::ExecutionOwnership>,
+  /// The repository's Git metadata, held while an operation changes it ([`Self::own_metadata`]).
+  #[cfg(windows)]
+  metadata_owner: Option<std::sync::Arc<owned::MetadataOwnership>>,
   _root_owner: std::sync::Arc<owned::Directory>,
   _scratch_owner: std::sync::Arc<owned::Directory>,
   journal: Option<std::sync::Arc<dyn orchester_core::integration::local::ProcessJournal>>,
@@ -91,6 +94,8 @@ impl LocalGit {
       ref_action: None,
       #[cfg(windows)]
       _execution_owner: execution_owner,
+      #[cfg(windows)]
+      metadata_owner: None,
       journal: None,
       _root_owner: root_owner,
       _scratch_owner: scratch_owner,
@@ -116,6 +121,18 @@ impl LocalGit {
     git.git_dir_text = named;
     git.common_dir_text = common;
     Ok(git)
+  }
+
+  /// Holds the repository's Git metadata against substitution for an operation that changes it, until this
+  /// checkout is dropped. Reading needs none of it and writes nothing into `.git`.
+  pub fn own_metadata(&mut self) -> Result<(), LocalGitError> {
+    #[cfg(windows)]
+    if self.metadata_owner.is_none() {
+      self.metadata_owner = Some(std::sync::Arc::new(owned::MetadataOwnership::acquire(
+        &self._root_owner,
+      )?));
+    }
+    Ok(())
   }
 
   pub fn bind_journal(&mut self, journal: std::sync::Arc<dyn orchester_core::integration::local::ProcessJournal>) {
