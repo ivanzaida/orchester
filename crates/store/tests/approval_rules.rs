@@ -263,3 +263,27 @@ fn approval_rules_migration_keeps_runs_and_waiting_requests() {
   assert!(db.approval_rules(run.id()).expect("rules").is_empty());
   assert_eq!(db.decision_counts(run.id()).expect("counts").waiting, 1);
 }
+
+#[test]
+fn approval_rules_stop_auto_approving_chooses_and_writes_under_one_write_lock() {
+  let (repo, mut db, run, _) = started_run();
+  db.set_run_auto_approve(run.id(), Some(true)).expect("auto-approve");
+  let path = repo.path().join(".orchester/orchester.db");
+  let stopped = db
+    .stop_auto_approving(&|_| {
+      // Another writer cannot turn a run's auto-approval on between the choice and the write.
+      let other = rusqlite::Connection::open(&path).expect("a second connection");
+      other.busy_timeout(std::time::Duration::ZERO).expect("no waiting");
+      let blocked = other.execute("UPDATE runs SET auto_approve = 1", []);
+      assert!(blocked.is_err(), "the write lock is held while the runs are chosen");
+      Ok(vec![run.id()])
+    })
+    .expect("stopped");
+  assert_eq!(stopped, [run.id()]);
+  assert_eq!(db.run_auto_approve(run.id()).expect("read"), Some(false));
+  // A choice that fails changes nothing.
+  db.set_run_auto_approve(run.id(), Some(true)).expect("auto-approve");
+  let failed = db.stop_auto_approving(&|_| Err(StoreError::RunNotFound(run.id())));
+  assert!(failed.is_err());
+  assert_eq!(db.run_auto_approve(run.id()).expect("read"), Some(true));
+}

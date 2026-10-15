@@ -164,6 +164,34 @@ impl ProjectDb {
     Ok(())
   }
 
+  /// Turns auto-approval off for every run `pick` chooses, read under an immediate write lock: no run starts
+  /// auto-approving between the choice and the write. The runs turned off; on an error nothing changed.
+  pub fn stop_auto_approving(
+    &mut self,
+    pick: &dyn Fn(&Self) -> Result<Vec<RunId>, StoreError>,
+  ) -> Result<Vec<RunId>, StoreError> {
+    self.connection.execute_batch("BEGIN IMMEDIATE")?;
+    let outcome = pick(self).and_then(|runs| {
+      for run in &runs {
+        self
+          .connection
+          .execute("UPDATE runs SET auto_approve = 0 WHERE id = ?1", [run.to_string()])?;
+      }
+      Ok(runs)
+    });
+    let end = if outcome.is_ok() { "COMMIT" } else { "ROLLBACK" };
+    if let Err(error) = self.connection.execute_batch(end) {
+      // A COMMIT that failed (the database busy or full) leaves the transaction open: it is rolled back, so the
+      // connection is not left inside it. Losing the rollback's own error is correct: the first error is the one
+      // returned, and SQLite rolls back a transaction still open when the connection closes.
+      if !self.connection.is_autocommit() {
+        let _ = self.connection.execute_batch("ROLLBACK");
+      }
+      return Err(error.into());
+    }
+    outcome
+  }
+
   /// How `run`'s requests were answered, by who answered them, and how many wait.
   pub fn decision_counts(&self, run: RunId) -> Result<DecisionCounts, StoreError> {
     let mut query = self.connection.prepare(

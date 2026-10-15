@@ -34,23 +34,25 @@ pub fn counts_as_auto_approving(db: &ProjectDb, task: &Task, latest: &Run) -> Re
 }
 
 /// Stops every run of the project at `repo_root` that auto-approves now ([`counts_as_auto_approving`]), read
-/// when it writes: a run that began auto-approving after the status bar was read stops too. The runs it stopped.
+/// when it writes, in the transaction that writes: a run that began auto-approving after the status bar was read
+/// stops too, and none begins between the reading and the write. The runs it stopped.
 pub fn stop_auto_approving_in(repo_root: &Path) -> Result<Vec<RunId>, StoreError> {
-  let mut db = ProjectDb::open(repo_root)?;
-  let mut stopping = Vec::new();
+  ProjectDb::open(repo_root)?.stop_auto_approving(&auto_approving_runs)
+}
+
+/// The latest run of each task of `db` that counts as auto-approving ([`counts_as_auto_approving`]).
+fn auto_approving_runs(db: &ProjectDb) -> Result<Vec<RunId>, StoreError> {
+  let mut runs = Vec::new();
   for task in db.tasks()? {
-    let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
+    let listed = db.runs_of_task(task.id()).map_err(run_store_error)?;
     // An unreadable latest run cannot be read as auto-approving; the bar does not count it either.
-    if let Some(Ok(latest)) = runs.last()
-      && counts_as_auto_approving(&db, &task, latest)?
+    if let Some(Ok(latest)) = listed.last()
+      && counts_as_auto_approving(db, &task, latest)?
     {
-      stopping.push(latest.id());
+      runs.push(latest.id());
     }
   }
-  for run in &stopping {
-    db.set_run_auto_approve(*run, Some(false))?;
-  }
-  Ok(stopping)
+  Ok(runs)
 }
 
 /// Whether a profile version one of `run`'s steps pinned approves automatically. A version that can no
