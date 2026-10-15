@@ -3,7 +3,7 @@
 //! presented leaf certificate must hash to the pin; names, dates and issuers do not matter, and nothing else is
 //! accepted. There is no switch that skips the check.
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use rustls::{
   CertificateError, DigitallySignedStruct, Error, SignatureScheme,
@@ -13,6 +13,70 @@ use rustls::{
 };
 
 use crate::certificate::CertificatePin;
+
+/// What the server presents, read without trusting it: it records the leaf certificate's pin and refuses it, so the
+/// handshake ends before any request is sent.
+#[derive(Debug)]
+pub(super) struct Recorder {
+  presented: Arc<OnceLock<CertificatePin>>,
+  provider: Arc<CryptoProvider>,
+}
+
+impl Recorder {
+  /// A TLS client configuration that records the presented certificate in `presented` and refuses it.
+  pub fn config(presented: Arc<OnceLock<CertificatePin>>) -> Result<rustls::ClientConfig, Error> {
+    let recorder = Arc::new(Self {
+      presented,
+      provider: Arc::new(rustls::crypto::ring::default_provider()),
+    });
+    Ok(
+      rustls::ClientConfig::builder_with_provider(recorder.provider.clone())
+        .with_safe_default_protocol_versions()?
+        .dangerous()
+        .with_custom_certificate_verifier(recorder)
+        .with_no_client_auth(),
+    )
+  }
+}
+
+impl ServerCertVerifier for Recorder {
+  fn verify_server_cert(
+    &self,
+    end_entity: &CertificateDer<'_>,
+    _intermediates: &[CertificateDer<'_>],
+    _server_name: &ServerName<'_>,
+    _ocsp_response: &[u8],
+    _now: UnixTime,
+  ) -> Result<ServerCertVerified, Error> {
+    // A second handshake of the same probe would present the same certificate; the first one is kept.
+    let _ = self.presented.set(CertificatePin::of(end_entity));
+    Err(Error::InvalidCertificate(
+      CertificateError::ApplicationVerificationFailure,
+    ))
+  }
+
+  fn verify_tls12_signature(
+    &self,
+    _message: &[u8],
+    _certificate: &CertificateDer<'_>,
+    _signature: &DigitallySignedStruct,
+  ) -> Result<HandshakeSignatureValid, Error> {
+    Err(Error::InvalidCertificate(CertificateError::ApplicationVerificationFailure))
+  }
+
+  fn verify_tls13_signature(
+    &self,
+    _message: &[u8],
+    _certificate: &CertificateDer<'_>,
+    _signature: &DigitallySignedStruct,
+  ) -> Result<HandshakeSignatureValid, Error> {
+    Err(Error::InvalidCertificate(CertificateError::ApplicationVerificationFailure))
+  }
+
+  fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+    self.provider.signature_verification_algorithms.supported_schemes()
+  }
+}
 
 #[derive(Debug)]
 pub(super) struct PinnedVerifier {

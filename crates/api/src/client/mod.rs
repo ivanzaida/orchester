@@ -29,9 +29,8 @@ pub use self::{
   error::ClientError,
 };
 use crate::{
-  ApiError, CodeJoin, CreateUser, Joined, PasswordChange, PasswordReset, ServerInfo, Session, SessionsResponse,
-  SharingErrorDetails, SignIn, SignedIn, User, UserChanges, UserCreated, UserResponse, UsersResponse,
-  certificate::CertificatePin,
+  ApiError, ApprovalResponse, CloudJoin, CloudJoinAnswer, CodeJoin, Joined, PairingCode, ServerInfo, Session,
+  SessionsResponse, SharingErrorDetails, User, UserChanges, UserResponse, UsersResponse, certificate::CertificatePin,
 };
 
 /// How long making the connection may take (10.03 E: "the connection timed out after 10 s").
@@ -80,6 +79,30 @@ impl Client {
     Ok(Self { http, address })
   }
 
+  /// The certificate the team server at the `https` `address` presents, read without trusting it, for the person to
+  /// compare its check code before anything is sent there: the handshake ends at the certificate, so no request,
+  /// token or code reaches the server.
+  pub async fn presented_certificate(address: &ServerAddress) -> Result<CertificatePin, ClientError> {
+    if !address.is_https() {
+      return Err(ClientError::Setup);
+    }
+    let presented = std::sync::Arc::new(std::sync::OnceLock::new());
+    let tls = pinned::Recorder::config(presented.clone()).map_err(|_| ClientError::Setup)?;
+    let http = builder()
+      .tls_backend_preconfigured(tls)
+      .build()
+      .map_err(|error| ClientError::transport(&error))?;
+    let answer = http.get(address.endpoint("/server")?).send().await;
+    match (presented.get(), answer) {
+      (Some(pin), _) => Ok(*pin),
+      (None, Err(error)) => Err(ClientError::transport(&error)),
+      // A handshake always shows the certificate first; an answer without one came over another protocol.
+      (None, Ok(response)) => Err(ClientError::NotOrchester {
+        status: response.status().as_u16(),
+      }),
+    }
+  }
+
   pub fn address(&self) -> &ServerAddress {
     &self.address
   }
@@ -94,9 +117,23 @@ impl Client {
     self.call(self.json(Method::POST, "/auth/code", request)?).await
   }
 
-  /// API 2's `POST /auth/sessions`, which an API 3 server answers with `404` (see [`SignIn`]).
-  pub async fn sign_in(&self, request: &SignIn) -> Result<SignedIn, ClientError> {
-    self.call(self.json(Method::POST, "/auth/sessions", request)?).await
+  /// `POST /auth/cloud`: joins with an Orchester Cloud identity token. `Waiting` while join approval holds the join;
+  /// asking again with the approval's id finishes it once approved.
+  pub async fn join_with_cloud(&self, request: &CloudJoin) -> Result<CloudJoinAnswer, ClientError> {
+    let response = answered(self.json(Method::POST, "/auth/cloud", request)?).await?;
+    let status = response.status().as_u16();
+    let bytes = response.bytes().await.map_err(|error| ClientError::transport(&error))?;
+    let answer = match status {
+      201 => serde_json::from_slice::<Joined>(&bytes).map(CloudJoinAnswer::Joined),
+      202 => serde_json::from_slice::<ApprovalResponse>(&bytes).map(|waiting| CloudJoinAnswer::Waiting(waiting.approval)),
+      _ => return Err(ClientError::NotOrchester { status }),
+    };
+    answer.map_err(|_| ClientError::NotOrchester { status })
+  }
+
+  /// `POST /auth/pairings`: a code for this person's next computer, valid 10 minutes.
+  pub async fn pairing_code(&self, token: &SecretValue) -> Result<PairingCode, ClientError> {
+    self.call(bearer(self.request(Method::POST, "/auth/pairings")?, token)).await
   }
 
   /// `GET /auth/me`: the signed-in user; `401` once the token expired or was revoked.
@@ -125,25 +162,11 @@ impl Client {
     self.send(bearer(self.request(Method::DELETE, &path)?, token)).await
   }
 
-  /// API 2's `POST /auth/password`, which an API 3 server answers with `404`.
-  pub async fn change_password(&self, token: &SecretValue, change: &PasswordChange) -> Result<(), ClientError> {
-    self
-      .send(bearer(self.json(Method::POST, "/auth/password", change)?, token))
-      .await
-  }
-
   pub async fn users(&self, token: &SecretValue) -> Result<Vec<User>, ClientError> {
     let response: UsersResponse = self
       .call(bearer(self.request(Method::GET, "/admin/users")?, token))
       .await?;
     Ok(response.users)
-  }
-
-  /// API 2's `POST /admin/users`, which an API 3 server answers with `405`.
-  pub async fn create_user(&self, token: &SecretValue, user: &CreateUser) -> Result<UserCreated, ClientError> {
-    self
-      .call(bearer(self.json(Method::POST, "/admin/users", user)?, token))
-      .await
   }
 
   pub async fn update_user(
@@ -157,12 +180,6 @@ impl Client {
       .call(bearer(self.json(Method::PATCH, &path, changes)?, token))
       .await?;
     Ok(response.user)
-  }
-
-  /// API 2's `POST /admin/users/{id}/password`, which an API 3 server answers with `404`.
-  pub async fn reset_password(&self, token: &SecretValue, user: UserId) -> Result<PasswordReset, ClientError> {
-    let path = format!("/admin/users/{user}/password");
-    self.call(bearer(self.request(Method::POST, &path)?, token)).await
   }
 
   fn request(&self, method: Method, path: &str) -> Result<RequestBuilder, ClientError> {

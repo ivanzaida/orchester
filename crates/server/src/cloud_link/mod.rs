@@ -9,12 +9,12 @@ use orchester_api::{CloudLink, CloudStatus, ErrorCode};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 
-use self::identity::{Claims, IdentityError, KeySet};
+use self::identity::{Claims, IdentityError, KeySet, RootKey};
 use crate::{error::ServerError, server_keys::ServerKeys};
 
 /// The link as stored.
 pub(crate) struct Link {
-  root_key: [u8; 32],
+  root_key: RootKey,
   key_set: Option<String>,
   key_set_issued_at: Option<i64>,
   key_set_expires_at: Option<i64>,
@@ -43,7 +43,7 @@ impl Link {
     row
       .map(|(root, key_set, issued, expires, accepting, linked_at)| {
         Ok(Self {
-          root_key: jws::public_key(&root).ok_or(ServerError::StoredData)?,
+          root_key: RootKey::parse(&root).ok_or(ServerError::StoredData)?,
           key_set,
           key_set_issued_at: issued,
           key_set_expires_at: expires,
@@ -56,7 +56,7 @@ impl Link {
 
   pub fn status(&self) -> CloudStatus {
     CloudStatus {
-      root_fingerprint: jws::fingerprint(&self.root_key),
+      root_fingerprint: self.root_key.fingerprint(),
       accepting: self.accepting,
     }
   }
@@ -125,7 +125,7 @@ impl Link {
   pub fn describe(link: Option<&Self>, keys: &ServerKeys) -> CloudLink {
     CloudLink {
       server: keys.id.to_string(),
-      root_fingerprint: link.map(|link| jws::fingerprint(&link.root_key)),
+      root_fingerprint: link.map(|link| link.root_key.fingerprint()),
       accepting: link.is_some_and(|link| link.accepting),
       key_set_expires_at: link
         .and_then(|link| link.key_set_expires_at)
@@ -137,13 +137,13 @@ impl Link {
 
 /// Pins `root_key` (base64url) and caches `key_set`, which that root must have signed: the end of linking.
 pub(crate) fn link(db: &Connection, root_key: &str, key_set: &str, now_ms: i64) -> Result<Link, ServerError> {
-  let root = jws::public_key(root_key).ok_or(ErrorCode::Invalid)?;
+  let root = RootKey::parse(root_key).ok_or(ErrorCode::Invalid)?;
   let set = identity::verify_key_set(key_set, &root, now_ms.div_euclid(1000)).map_err(|_| ErrorCode::Invalid)?;
   db.execute(
     "INSERT INTO cloud_link(id,root_key,key_set,key_set_issued_at,key_set_expires_at,accepting,linked_at)
       VALUES (1,?1,?2,?3,?4,1,?5)
       ON CONFLICT(id) DO UPDATE SET root_key=?1,key_set=?2,key_set_issued_at=?3,key_set_expires_at=?4,accepting=1",
-    params![jws::encode(&root), key_set, set.issued_at, set.expires_at, now_ms],
+    params![root.encoded(), key_set, set.issued_at, set.expires_at, now_ms],
   )?;
   Link::load(db)?.ok_or(ServerError::StoredData)
 }
@@ -151,11 +151,11 @@ pub(crate) fn link(db: &Connection, root_key: &str, key_set: &str, now_ms: i64) 
 /// Replaces the pinned root (after a root compromise). The cached key set, signed by the old root, goes with it;
 /// cloud joins wait for a key set the new root signed.
 pub(crate) fn pin(db: &Connection, root_key: &str, now_ms: i64) -> Result<(), ServerError> {
-  let root = jws::public_key(root_key).ok_or(ErrorCode::Invalid)?;
+  let root = RootKey::parse(root_key).ok_or(ErrorCode::Invalid)?;
   db.execute(
     "INSERT INTO cloud_link(id,root_key,accepting,linked_at) VALUES (1,?1,1,?2)
       ON CONFLICT(id) DO UPDATE SET root_key=?1,key_set=NULL,key_set_issued_at=NULL,key_set_expires_at=NULL",
-    params![jws::encode(&root), now_ms],
+    params![root.encoded(), now_ms],
   )?;
   Ok(())
 }

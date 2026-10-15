@@ -65,6 +65,14 @@ pub struct Approval {
   pub expires_at: i64,
 }
 
+/// How a cloud join was answered.
+#[derive(Debug)]
+pub enum CloudJoinAnswer {
+  Joined(Joined),
+  /// Join approval holds the join until one of the account's devices or an admin approves it.
+  Waiting(Approval),
+}
+
 /// `202` of `POST /auth/cloud` while the join waits for approval.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ApprovalResponse {
