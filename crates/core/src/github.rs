@@ -7,7 +7,7 @@ use crate::{
   command::{Command, CommandOutput, CommandRunner},
   connection::{GitHubCheck, GitHubConnection, GitHubHost, check_github},
   pull_request::{
-    PullRequest, PullRequestHead, gh_check_rollups_command, gh_compare_diff_command, gh_pr_list_command,
+    ListedStates, PullRequest, PullRequestHead, gh_check_rollups_command, gh_compare_diff_command, gh_pr_list_command,
     gh_pr_view_command, gh_rate_limit_command, parse_gh_check_rollups, parse_gh_compare_diff, parse_gh_pr_list,
     parse_gh_pr_view, parse_gh_rate_limit,
   },
@@ -24,9 +24,14 @@ pub trait GitHub {
   /// `repo` as the account sees it. `repo` must be on the provider's host.
   fn repository(&self, repo: &GitHubRepo) -> Result<RepositoryView, RepositoryError>;
 
-  /// At most `limit` open pull requests of `repo`, which must be on the provider's host, with the
-  /// checks of their heads.
-  fn list_pull_requests(&self, repo: &GitHubRepo, limit: u32) -> Result<Vec<PullRequest>, RepositoryError>;
+  /// At most `limit` pull requests of `repo` in `states`; `repo` must be on the provider's host. Each
+  /// comes with the checks of its head.
+  fn list_pull_requests(
+    &self,
+    repo: &GitHubRepo,
+    states: ListedStates,
+    limit: u32,
+  ) -> Result<Vec<PullRequest>, RepositoryError>;
 
   /// When the rate limit that stopped a request about `repo` resets.
   fn rate_limit_reset(&self, repo: &GitHubRepo) -> Result<Timestamp, RepositoryError>;
@@ -70,8 +75,13 @@ impl<R: CommandRunner> GitHub for GhCli<R> {
     parse_gh_repo_view(repo, &output)
   }
 
-  fn list_pull_requests(&self, repo: &GitHubRepo, limit: u32) -> Result<Vec<PullRequest>, RepositoryError> {
-    let output = self.run_for(repo, &gh_pr_list_command(&self.executable, repo, limit))?;
+  fn list_pull_requests(
+    &self,
+    repo: &GitHubRepo,
+    states: ListedStates,
+    limit: u32,
+  ) -> Result<Vec<PullRequest>, RepositoryError> {
+    let output = self.run_for(repo, &gh_pr_list_command(&self.executable, repo, states, limit))?;
     let listed = parse_gh_pr_list(repo, &output)?;
     if listed.is_empty() {
       return Ok(listed);

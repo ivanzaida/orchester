@@ -15,8 +15,10 @@ pub use self::{
     DetailRefresh, DiffRead, PullRequestHead, RefreshedDetail, gh_compare_diff_command, gh_pr_view_command,
     parse_gh_compare_diff, parse_gh_pr_view, refresh_pull_request,
   },
-  gh::{PR_LIST_FIELDS, gh_pr_list_command, gh_rate_limit_command, parse_gh_pr_list, parse_gh_rate_limit},
-  sync::{SYNC_LIMIT, SyncFailure, SyncResult, sync_pull_requests},
+  gh::{
+    ListedStates, PR_LIST_FIELDS, gh_pr_list_command, gh_rate_limit_command, parse_gh_pr_list, parse_gh_rate_limit,
+  },
+  sync::{SYNC_LIMIT, SyncFailure, SyncResult, SyncScope, sync_pull_requests},
 };
 use crate::{diff::Changes, repository::GitHubRepo, revision::Revision, run::BranchName, time::Timestamp};
 

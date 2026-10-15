@@ -1,5 +1,5 @@
 //! The read-only `gh` commands behind the pull request list: `gh pr list -R <host/owner/name>
-//! --state open --limit <n> --json …` and, after a rate limit, `gh api --hostname <host>
+//! --state <open|closed> --limit <n> --json …` and, after a rate limit, `gh api --hostname <host>
 //! rate_limit` (reading the limit does not count against it).
 
 use std::path::Path;
@@ -23,15 +23,33 @@ use crate::{
 pub const PR_LIST_FIELDS: &str = "number,title,url,state,isDraft,headRefName,baseRefName,headRefOid,author,\
                                   additions,deletions,changedFiles,updatedAt,reviewDecision";
 
-/// Lists at most `limit` open pull requests of `repo`.
-pub fn gh_pr_list_command(executable: &Path, repo: &GitHubRepo, limit: u32) -> Command {
+/// Which pull requests one `gh pr list` asks for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ListedStates {
+  /// Open ones, drafts included.
+  Open,
+  /// Closed and merged ones: `gh` counts a merged pull request as closed.
+  Closed,
+}
+
+impl ListedStates {
+  const fn as_str(self) -> &'static str {
+    match self {
+      Self::Open => "open",
+      Self::Closed => "closed",
+    }
+  }
+}
+
+/// Lists at most `limit` pull requests of `repo` in `states`.
+pub fn gh_pr_list_command(executable: &Path, repo: &GitHubRepo, states: ListedStates, limit: u32) -> Command {
   let args = [
     "pr".to_owned(),
     "list".to_owned(),
     "-R".to_owned(),
     repo.to_string(),
     "--state".to_owned(),
-    "open".to_owned(),
+    states.as_str().to_owned(),
     "--limit".to_owned(),
     limit.to_string(),
     "--json".to_owned(),

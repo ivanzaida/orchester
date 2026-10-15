@@ -14,9 +14,9 @@ use orchester_core::{
   github::GhCli,
   id::ConnectionId,
   pull_request::{
-    CheckRollup, PullRequest, PullRequestError, PullRequestParts, PullRequestState, ReviewDecision, SYNC_LIMIT,
-    SyncFailure, gh_check_rollups_command, gh_pr_list_command, parse_gh_check_rollups, parse_gh_pr_list,
-    parse_gh_rate_limit, sort_by_update, sync_pull_requests,
+    CheckRollup, ListedStates, PullRequest, PullRequestError, PullRequestParts, PullRequestState, ReviewDecision,
+    SYNC_LIMIT, SyncFailure, SyncScope, gh_check_rollups_command, gh_pr_list_command, parse_gh_check_rollups,
+    parse_gh_pr_list, parse_gh_rate_limit, sort_by_update, sync_pull_requests,
   },
   repository::{GitHubRepo, RemoteName, RepoPermission, RepositoryError, RepositoryLink, RepositoryView},
   revision::Revision,
@@ -34,6 +34,10 @@ const AUTH_STATUS: &str = "auth status --hostname github.com --json hosts";
 const LIST_KONTUR: &str = "pr list -R github.com/ivanzaida/kontur --state open --limit 50 --json \
                            number,title,url,state,isDraft,headRefName,baseRefName,headRefOid,author,additions,\
                            deletions,changedFiles,updatedAt,reviewDecision";
+const CLOSED_KONTUR: &str = "pr list -R github.com/ivanzaida/kontur --state closed --limit 50 --json \
+                             number,title,url,state,isDraft,headRefName,baseRefName,headRefOid,author,additions,\
+                             deletions,changedFiles,updatedAt,reviewDecision";
+const CHECKS: &str = "api graphql --hostname github.com --input -";
 const RATE_LIMIT: &str = "api --hostname github.com rate_limit";
 
 fn repo(owner: &str, name: &str) -> GitHubRepo {
@@ -69,8 +73,10 @@ fn synthetic() -> Vec<PullRequest> {
 
 #[test]
 fn pr_list_asks_for_open_pull_requests_of_one_repository() {
-  let command = gh_pr_list_command(&gh(), &repo("ivanzaida", "kontur"), SYNC_LIMIT);
+  let command = gh_pr_list_command(&gh(), &repo("ivanzaida", "kontur"), ListedStates::Open, SYNC_LIMIT);
   assert_eq!(command.args().join(" "), LIST_KONTUR);
+  let closed = gh_pr_list_command(&gh(), &repo("ivanzaida", "kontur"), ListedStates::Closed, SYNC_LIMIT);
+  assert_eq!(closed.args().join(" "), CLOSED_KONTUR);
   assert!(
     command
       .env()
@@ -272,9 +278,20 @@ fn sync_with(
   )>,
   expected: &str,
 ) -> (Replay, orchester_core::pull_request::SyncResult) {
+  sync_scope(answers, expected, SyncScope::Open)
+}
+
+fn sync_scope(
+  answers: Vec<(
+    &'static str,
+    Result<orchester_core::command::CommandOutput, CommandError>,
+  )>,
+  expected: &str,
+  scope: SyncScope,
+) -> (Replay, orchester_core::pull_request::SyncResult) {
   let runner = Replay::new(answers);
   let connection = github_connection();
-  let result = sync_pull_requests(&GhCli::new(&runner, &connection), &link(expected), now());
+  let result = sync_pull_requests(&GhCli::new(&runner, &connection), &link(expected), scope, now());
   (runner, result)
 }
 
@@ -341,6 +358,42 @@ fn sync_reads_the_list_as_the_expected_account() {
     4,
     "gh --version, auth status, the list and the checks"
   );
+}
+
+#[test]
+fn sync_with_closed_reads_closed_and_merged_pull_requests_too() {
+  let closed = parse_gh_pr_list(
+    &repo("ivanzaida", "kontur"),
+    &ok(fixture!("gh_pr_list_lurq_all.stdout")),
+  )
+  .expect("a readable list");
+  // GitHub knows none of the heads' checks.
+  let commits: Vec<String> = (0..closed.len()).map(|index| format!(r#""c{index}":null"#)).collect();
+  let no_checks = format!(r#"{{"data":{{"repository":{{{}}}}}}}"#, commits.join(","));
+  let mut answers = signed_in();
+  answers.push((LIST_KONTUR, Ok(ok(fixture!("gh_pr_list_orchester_open.stdout")))));
+  answers.push((CLOSED_KONTUR, Ok(ok(fixture!("gh_pr_list_lurq_all.stdout")))));
+  answers.push((CHECKS, Ok(ok(&no_checks))));
+  let (runner, result) = sync_scope(answers, "ivanzaida", SyncScope::OpenAndClosed);
+  let listed = result.outcome.expect("the list");
+  assert_eq!(listed.len(), closed.len());
+  assert!(
+    listed
+      .iter()
+      .any(|pull_request| pull_request.state() == PullRequestState::Merged)
+  );
+  assert!(
+    listed
+      .windows(2)
+      .all(|pair| pair[0].updated_at() >= pair[1].updated_at())
+  );
+  let lists: Vec<String> = runner
+    .ran()
+    .iter()
+    .map(|command| command.args().join(" "))
+    .filter(|args| args.starts_with("pr list"))
+    .collect();
+  assert_eq!(lists, [LIST_KONTUR, CLOSED_KONTUR]);
 }
 
 #[test]
