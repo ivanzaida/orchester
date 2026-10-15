@@ -287,13 +287,14 @@ impl FieldInput {
     self
   }
 
-  /// `element` finds the input, e.g. to focus it with `Ctx::focus`.
-  /// `typed` is told of each edit as it is typed, before it lands in the value.
+  /// `typed` is told of each edit as it is typed, before it lands in the value, and before a field that
+  /// groups digits regroups it. A locked field takes no input, so it is never told.
   pub fn on_typed(mut self, typed: impl Fn(&TextInputEvent) + Send + Sync + 'static) -> Self {
     self.on_typed = Some(Arc::new(typed));
     self
   }
 
+  /// `element` finds the input, e.g. to focus it with `Ctx::focus`.
   pub fn element(mut self, element: ElementRef) -> Self {
     self.element = Some(element);
     self
@@ -443,10 +444,20 @@ impl FieldBox {
       input = input
         .on_input(|event: TextInputEvent| event.prevent_default())
         .focusable(false);
-    } else if let Some(separator) = props.group_separator.clone() {
-      input = input.on_input(group_while_typing(props.value.clone(), separator));
-    } else if let Some(typed) = props.on_typed.clone() {
-      input = input.on_input(move |event: TextInputEvent| typed(&event));
+    } else if props.group_separator.is_some() || props.on_typed.is_some() {
+      let group = props
+        .group_separator
+        .clone()
+        .map(|separator| group_while_typing(props.value.clone(), separator));
+      let typed = props.on_typed.clone();
+      input = input.on_input(move |event: TextInputEvent| {
+        if let Some(typed) = &typed {
+          typed(&event);
+        }
+        if let Some(group) = &group {
+          group(event);
+        }
+      });
     }
     match props.lines {
       Lines::One => input.single_line(),
