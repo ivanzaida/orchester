@@ -9,9 +9,9 @@ use crate::{db::audit, error::CloudError};
 
 impl Cloud {
   /// Answers before touching the database, the same for any email, as a reset request does (review 1, M5). In the
-  /// background an unconfirmed account gets one more confirmation link, carrying its newest sign-up's password (decision
-  /// 65); a confirmed one gets the *you already have an account* note; an unknown email gets nothing. Counts against
-  /// the email limits like a sign-up.
+  /// background an unconfirmed account gets one more confirmation link, carrying its newest sign-up's password
+  /// (decision 65); a confirmed one gets the *you already have an account* note; an unknown email gets nothing.
+  /// Counts against the email limits like a sign-up.
   pub(crate) async fn resend_confirmation(&self, input: ResendConfirmation, address: IpAddr) -> Result<(), CloudError> {
     let email = input::email(&input.email)?;
     self.inner.limits.email(&email, address, self.now())?;

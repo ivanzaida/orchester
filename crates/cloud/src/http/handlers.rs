@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, web};
 use orchester_api::{
   PasswordChange,
@@ -7,7 +9,6 @@ use orchester_api::{
     ServerLink, ServerResponse, ServersResponse, SignUp, SignedInvite,
   },
 };
-use std::str::FromStr;
 
 use super::extract::{ClientAddress, Device, SafeJson};
 use crate::{Cloud, error::CloudError};
