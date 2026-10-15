@@ -1,57 +1,45 @@
-//! A test Orchester Cloud: its root key, signing keys, key sets and identity tokens in the format the cloud signs
-//! (`docs/architecture/server.md`, "Identity tokens and keys"), over explicit times, with no network.
+//! A test Orchester Cloud on `orchester-api`'s `identity` keys: its root key, signing keys, key sets and identity
+//! tokens, over explicit times, with no network.
 
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use ring::{
-  digest::{SHA256, digest},
-  rand::SystemRandom,
-  signature::{Ed25519KeyPair, KeyPair},
+use orchester_api::{
+  cloud::{CloudPlatform, DeviceInfo},
+  identity::{IdentityClaims, KeySetStatement, ListedKey, PrivateKey, RootKey, SigningKey},
 };
-use serde_json::{Value, json};
+use orchester_core::id::IdempotencyKey;
 
 pub const ISSUER: &str = "https://cloud.test";
 pub const DAY: i64 = 24 * 60 * 60;
 
+/// An Ed25519 key, used as the cloud's root or as one of its signing keys.
 pub struct Key {
-  pair: Ed25519KeyPair,
+  private: PrivateKey,
 }
 
 impl Key {
   pub fn generate() -> Self {
-    let document = Ed25519KeyPair::generate_pkcs8(&SystemRandom::new()).expect("test key");
     Self {
-      pair: Ed25519KeyPair::from_pkcs8(document.as_ref()).expect("test key pair"),
+      private: PrivateKey::generate().expect("test key"),
     }
+  }
+
+  fn signing(&self) -> SigningKey {
+    SigningKey::new(&self.private).expect("signing key")
   }
 
   pub fn public(&self) -> String {
-    URL_SAFE_NO_PAD.encode(self.pair.public_key().as_ref())
+    self.signing().public_key().encoded()
   }
 
   pub fn kid(&self) -> String {
-    URL_SAFE_NO_PAD.encode(&digest(&SHA256, self.pair.public_key().as_ref()).as_ref()[..16])
+    self.signing().kid().to_owned()
   }
 
   pub fn fingerprint(&self) -> String {
-    URL_SAFE_NO_PAD.encode(digest(&SHA256, self.pair.public_key().as_ref()).as_ref())
-  }
-
-  fn sign(&self, typ: &str, kid: Option<String>, payload: &Value) -> String {
-    let mut header = json!({"alg":"EdDSA","typ":typ});
-    if let Some(kid) = kid {
-      header["kid"] = json!(kid);
-    }
-    let input = format!(
-      "{}.{}",
-      URL_SAFE_NO_PAD.encode(header.to_string()),
-      URL_SAFE_NO_PAD.encode(payload.to_string())
-    );
-    let signature = self.pair.sign(input.as_bytes());
-    format!("{input}.{}", URL_SAFE_NO_PAD.encode(signature.as_ref()))
+    self.signing().public_key().fingerprint()
   }
 }
 
-/// What a token says; `TestCloud::token` fills the rest.
+/// What a token says; `TestCloud::token` fills the rest. `subject` is a cloud account id.
 pub struct Identity<'a> {
   pub audience: &'a str,
   pub subject: &'a str,
@@ -76,20 +64,21 @@ impl TestCloud {
   /// A key set issued at `issued_at` (seconds) that lists `keys`, each signing for 30 days from the day before
   /// `issued_at` and listed 60 more, signed by `root`.
   pub fn key_set_by(root: &Key, keys: &[&Key], issued_at: i64) -> String {
-    let listed: Vec<Value> = keys
+    let listed = keys
       .iter()
-      .map(|key| {
-        json!({"kid": key.kid(), "public_key": key.public(), "not_before": issued_at - DAY,
-          "signs_until": issued_at + 29 * DAY, "listed_until": issued_at + 89 * DAY})
+      .map(|key| ListedKey {
+        kid: key.kid(),
+        public_key: key.public(),
+        not_before: issued_at - DAY,
+        signs_until: issued_at + 29 * DAY,
+        listed_until: issued_at + 89 * DAY,
       })
       .collect();
-    let statement = json!({"iss": ISSUER, "issued_at": issued_at, "expires_at": issued_at + 30 * DAY, "keys": listed});
-    Self::statement_by(root, &statement)
-  }
-
-  /// Any key set statement, signed by `root`: for statements the cloud would never sign.
-  pub fn statement_by(root: &Key, statement: &Value) -> String {
-    root.sign("orchester-key-set+jws", None, statement)
+    let statement = KeySetStatement::new(ISSUER.into(), listed, issued_at);
+    RootKey::new(&root.private)
+      .expect("root key")
+      .sign_key_set(&statement, issued_at)
+      .expect("key set")
   }
 
   pub fn key_set(&self, issued_at: i64) -> String {
@@ -98,26 +87,25 @@ impl TestCloud {
 
   /// An identity token signed by `key`, issued at `iat` (seconds), valid five minutes.
   pub fn token_by(key: &Key, identity: &Identity<'_>, iat: i64) -> String {
-    let jti = URL_SAFE_NO_PAD.encode(digest(
-      &SHA256,
-      format!("{}{iat}{}", identity.subject, rand_suffix()).as_bytes(),
-    ));
-    let mut claims = json!({"iss": ISSUER, "aud": identity.audience, "sub": identity.subject, "email": identity.email,
-      "name": identity.name, "device": {"name": "Test computer", "platform": "windows"}, "jti": jti,
-      "iat": iat, "exp": iat + 300});
-    if let Some(invite) = identity.invite {
-      claims["invite"] = json!(invite);
-    }
-    key.sign("JWT", Some(key.kid()), &claims)
+    let claims = IdentityClaims {
+      iss: ISSUER.into(),
+      aud: identity.audience.into(),
+      sub: identity.subject.parse().expect("a cloud account id"),
+      email: identity.email.into(),
+      name: identity.name.into(),
+      device: DeviceInfo {
+        name: "Test computer".into(),
+        platform: CloudPlatform::Windows,
+      },
+      invite: identity.invite.map(Into::into),
+      jti: IdempotencyKey::generate().to_string(),
+      iat,
+      exp: iat + 300,
+    };
+    key.signing().sign_token(&claims).expect("token").expose().to_owned()
   }
 
   pub fn token(&self, identity: &Identity<'_>, iat: i64) -> String {
     Self::token_by(&self.signing, identity, iat)
   }
-}
-
-fn rand_suffix() -> String {
-  let mut bytes = [0_u8; 8];
-  ring::rand::SecureRandom::fill(&SystemRandom::new(), &mut bytes).expect("random");
-  URL_SAFE_NO_PAD.encode(bytes)
 }

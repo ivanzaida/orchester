@@ -125,7 +125,9 @@ impl Client {
     let bytes = response.bytes().await.map_err(|error| ClientError::transport(&error))?;
     let answer = match status {
       201 => serde_json::from_slice::<Joined>(&bytes).map(CloudJoinAnswer::Joined),
-      202 => serde_json::from_slice::<ApprovalResponse>(&bytes).map(|waiting| CloudJoinAnswer::Waiting(waiting.approval)),
+      202 => {
+        serde_json::from_slice::<ApprovalResponse>(&bytes).map(|waiting| CloudJoinAnswer::Waiting(waiting.approval))
+      }
       _ => return Err(ClientError::NotOrchester { status }),
     };
     answer.map_err(|_| ClientError::NotOrchester { status })
@@ -133,7 +135,9 @@ impl Client {
 
   /// `POST /auth/pairings`: a code for this person's next computer, valid 10 minutes.
   pub async fn pairing_code(&self, token: &SecretValue) -> Result<PairingCode, ClientError> {
-    self.call(bearer(self.request(Method::POST, "/auth/pairings")?, token)).await
+    self
+      .call(bearer(self.request(Method::POST, "/auth/pairings")?, token))
+      .await
   }
 
   /// `GET /auth/me`: the signed-in user; `401` once the token expired or was revoked.

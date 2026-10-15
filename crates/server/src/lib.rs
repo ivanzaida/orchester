@@ -15,7 +15,6 @@ pub mod host;
 mod http;
 mod initial_read;
 mod invites;
-mod private_file;
 mod rate_limit;
 mod server_keys;
 mod sharing;

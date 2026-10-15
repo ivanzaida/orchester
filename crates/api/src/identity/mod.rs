@@ -17,7 +17,7 @@ pub use key_set::{
   VerifiedKeySet,
 };
 pub use keys::{PrivateKey, PublicKey, RootKey, SigningKey};
-pub use token::{IdentityClaims, TOKEN_LIFETIME_SECS, TokenSubject};
+pub use token::{IdentityClaims, TOKEN_LIFETIME_SECS, TokenSubject, token_key_id};
 
 /// The clock difference between the cloud and a team server that verification tolerates.
 pub const CLOCK_SKEW_SECS: i64 = 2 * 60;

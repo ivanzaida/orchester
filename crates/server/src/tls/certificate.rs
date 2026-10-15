@@ -13,7 +13,6 @@ use tokio_rustls::rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObj
 use crate::{
   config::{Config, TlsMode},
   error::ServerError,
-  private_file,
 };
 
 const VALID_YEARS: i32 = 20;
@@ -94,7 +93,7 @@ fn generate(config: &Config, now_ms: i64) -> Result<Material, ServerError> {
   let certificate = params.self_signed(&key).map_err(|_| ServerError::Tls)?;
   let (cert_path, key_path) = paths(&config.data_dir);
   std::fs::create_dir_all(cert_path.parent().expect("the tls folder has a parent"))?;
-  private_file::create(&key_path)?.write_all(key.serialize_pem().as_bytes())?;
+  orchester_core::private_file::create(&key_path)?.write_all(key.serialize_pem().as_bytes())?;
   std::fs::write(&cert_path, certificate.pem())?;
   read(&cert_path, &key_path)
 }

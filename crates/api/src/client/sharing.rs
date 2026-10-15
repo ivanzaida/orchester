@@ -11,14 +11,17 @@ use reqwest::Method;
 use super::{Client, ClientError, bearer};
 use crate::{
   ClaimTake, Heartbeat, HeartbeatResponse, Member, MemberChanges, MemberCreate, MemberResponse, Members, ProjectCreate,
-  ProjectCreated, ProjectLink, ProjectLinked, ProjectResponse, Projects, SharedProject, SharedTag, SharedTask, TagMerge, TagName, TagResponse,
-  Tags, TagsChanged, TaskPatch, TaskResponse, Tasks, TasksCreate, TasksCreated, TasksImport,
+  ProjectCreated, ProjectLink, ProjectLinked, ProjectResponse, Projects, SharedProject, SharedTag, SharedTask,
+  TagMerge, TagName, TagResponse, Tags, TagsChanged, TaskPatch, TaskResponse, Tasks, TasksCreate, TasksCreated,
+  TasksImport,
 };
 
 impl Client {
   /// `GET /projects`: the projects the person is a member of.
   pub async fn projects(&self, token: &SecretValue) -> Result<Vec<SharedProject>, ClientError> {
-    let response: Projects = self.call(bearer(self.request(Method::GET, "/projects")?, token)).await?;
+    let response: Projects = self
+      .call(bearer(self.request(Method::GET, "/projects")?, token))
+      .await?;
     Ok(response.projects)
   }
 

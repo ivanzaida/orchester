@@ -13,13 +13,11 @@ use orchester_cloud::{
   error::CloudError,
 };
 
-use crate::private_file;
-
 /// Writes a new root key to `path` (refusing to overwrite) and prints its public half and fingerprint.
 pub(crate) fn generate_root(path: &Path) -> Result<(), CloudError> {
   let private = PrivateKey::generate()?;
   let root = RootKey::new(&private)?;
-  private_file::create(path)?.write_all(private.pkcs8())?;
+  orchester_core::private_file::create(path)?.write_all(private.pkcs8())?;
   let public = root.public_key();
   let mut out = io::stdout().lock();
   writeln!(out, "Root key written to {}. Keep it offline.", path.display())?;

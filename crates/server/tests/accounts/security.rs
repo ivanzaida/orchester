@@ -105,7 +105,7 @@ async fn joins(server: &TestServer) -> Vec<String> {
   let invite_id = email.invite.id.to_string();
   let identity = Identity {
     audience: &audience,
-    subject: "ca401",
+    subject: "0191c7c0-0000-7000-8000-00000000ca40",
     email: "carol@example.com",
     name: "Carol",
     invite: Some(&invite_id),

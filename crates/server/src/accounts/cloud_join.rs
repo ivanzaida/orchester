@@ -11,7 +11,7 @@ use rusqlite::Connection;
 use super::Server;
 use crate::{
   approvals,
-  cloud_link::{self, Link, identity::Claims},
+  cloud_link::{self, Claims, Link},
   db::{self, Authenticated, NewUser},
   devices,
   error::ServerError,

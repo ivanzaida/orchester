@@ -10,10 +10,9 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-orchester-api.workspace = true
+orchester-api = { workspace = true, features = ["identity"] }
 orchester-core.workspace = true
 axum.workspace = true
-base64.workspace = true
 hyper.workspace = true
 hyper-util.workspace = true
 parking_lot.workspace = true

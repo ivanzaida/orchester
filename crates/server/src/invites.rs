@@ -177,7 +177,7 @@ fn sign(
     expires_at: invite.expires_at,
     issued_at: now,
   };
-  Ok(keys.sign("orchester-invite+jws", &statement))
+  keys.sign("orchester-invite+jws", &statement)
 }
 
 /// The open invites `viewer` manages: every one for an admin, their projects' for an owner. Never a code.

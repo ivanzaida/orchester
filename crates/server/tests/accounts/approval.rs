@@ -38,7 +38,7 @@ async fn linked_with_bob() -> (TestServer, Joined, Joined, TestCloud, String) {
 fn identity<'a>(audience: &'a str, invite: Option<&'a str>) -> Identity<'a> {
   Identity {
     audience,
-    subject: "b0b",
+    subject: "0191c7c0-0000-7000-8000-000000000b0b",
     email: "bob@example.com",
     name: "Bob",
     invite,

@@ -1,33 +1,33 @@
 //! The server's own identity and keys, made once by the API 3 migration and kept in its database: its id (the
 //! audience of identity tokens for it), its Ed25519 key for what it signs for the cloud, and the HMAC key of its codes.
 
+use orchester_api::identity::{PrivateKey, SigningKey};
 use orchester_core::id::TeamServerId;
 use ring::{
   hmac,
   rand::{SecureRandom, SystemRandom},
-  signature::{Ed25519KeyPair, KeyPair},
 };
 use rusqlite::{Connection, params};
 use serde::Serialize;
 
-use crate::{cloud_link::jws, error::ServerError};
+use crate::error::ServerError;
 
 pub(crate) struct ServerKeys {
   pub id: TeamServerId,
-  signing: Ed25519KeyPair,
+  signing: SigningKey,
   code_key: hmac::Key,
 }
 
 impl ServerKeys {
   /// Makes the server's id and keys; run once, by the migration that adds the table.
   pub fn create(db: &Connection) -> Result<(), ServerError> {
-    let signing = Ed25519KeyPair::generate_pkcs8(&SystemRandom::new()).map_err(|_| ServerError::Random)?;
+    let signing = PrivateKey::generate().map_err(|_| ServerError::Random)?;
     let code_key = random::<32>()?;
     db.execute(
       "INSERT INTO server_keys(id,server_id,signing_key,code_key) VALUES (1,?1,?2,?3)",
       params![
         TeamServerId::generate().to_string(),
-        signing.as_ref(),
+        signing.pkcs8(),
         code_key.as_slice()
       ],
     )?;
@@ -42,19 +42,22 @@ impl ServerKeys {
     )?;
     Ok(Self {
       id: id.parse().map_err(|_| ServerError::StoredData)?,
-      signing: Ed25519KeyPair::from_pkcs8(&signing).map_err(|_| ServerError::StoredData)?,
+      signing: SigningKey::new(&PrivateKey::from_pkcs8(signing)).map_err(|_| ServerError::StoredData)?,
       code_key: hmac::Key::new(hmac::HMAC_SHA256, &code_key),
     })
   }
 
   /// The server's public key in base64url, as the cloud records it.
   pub fn public_key(&self) -> String {
-    jws::encode(self.signing.public_key().as_ref())
+    self.signing.public_key().encoded()
   }
 
   /// `payload` as a compact JWS of the type `typ` signed with the server's key.
-  pub fn sign(&self, typ: &str, payload: &impl Serialize) -> String {
-    jws::sign(&self.signing, typ, payload)
+  pub fn sign(&self, typ: &str, payload: &impl Serialize) -> Result<String, ServerError> {
+    self
+      .signing
+      .sign_statement(typ, payload)
+      .map_err(|_| ServerError::StoredData)
   }
 
   /// The HMAC of a code as stored; the code itself is never stored.

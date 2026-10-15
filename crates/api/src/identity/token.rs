@@ -80,8 +80,23 @@ impl IdentityClaims {
 
 impl SigningKey {
   pub fn sign_token(&self, claims: &IdentityClaims) -> Result<Credential, IdentityError> {
-    let input = jws::signing_input(&jws::Header::new(IdentityClaims::TYPE, Some(self.kid())), claims)?;
-    let signature = self.sign(input.as_bytes());
-    Ok(Credential::new(jws::finish(&input, &signature)))
+    self.sign_statement(IdentityClaims::TYPE, claims).map(Credential::new)
   }
+
+  /// `statement` as a compact JWS of the type `typ` whose header names this key: what a team server signs for the
+  /// cloud with its own key (its link statement and invites).
+  pub fn sign_statement(&self, typ: &str, statement: &impl Serialize) -> Result<String, IdentityError> {
+    let input = jws::signing_input(&jws::Header::new(typ, Some(self.kid())), statement)?;
+    let signature = self.sign(input.as_bytes());
+    Ok(jws::finish(&input, &signature))
+  }
+}
+
+/// The id of the key that signed `token`, from its header, for the team server's audit of a join; the token is not
+/// verified by reading it.
+pub fn token_key_id(token: &str) -> Result<String, IdentityError> {
+  jws::decode(token, IdentityClaims::TYPE)?
+    .header
+    .kid
+    .ok_or(IdentityError::Malformed)
 }

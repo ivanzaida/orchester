@@ -58,7 +58,7 @@ pub(super) async fn change_cloud(
           &base,
           check_code,
           now,
-        )),
+        )?),
         other => {
           change(db, &state.keys, &current, other, now)?;
           None

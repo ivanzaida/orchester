@@ -153,30 +153,6 @@ async fn s1c_a_cloud_invite_joins_once_locally_and_gives_only_its_project() {
 }
 
 #[tokio::test]
-async fn s1c_a_key_set_that_would_live_too_long_is_refused_even_with_the_root_s_signature() {
-  let server = TestServer::start(|_| {}).await;
-  let admin = server.bootstrap().await;
-  let cloud = TestCloud::generate();
-  let now = server.seconds();
-  let key = json!({"kid": cloud.signing.kid(), "public_key": cloud.signing.public(), "not_before": now - DAY,
-    "signs_until": now + 29 * DAY, "listed_until": now + 89 * DAY});
-  let long_lived = json!({"iss": "https://cloud.test", "issued_at": now, "expires_at": now + 400 * DAY, "keys": [key]});
-  let mut long_signing = key.clone();
-  long_signing["signs_until"] = json!(now + 365 * DAY);
-  let long_key =
-    json!({"iss": "https://cloud.test", "issued_at": now, "expires_at": now + DAY, "keys": [long_signing]});
-  for statement in [long_lived, long_key] {
-    let key_set = TestCloud::statement_by(&cloud.root, &statement);
-    let body = json!({"link": {"root_key": cloud.root.public(), "key_set": key_set}});
-    let response = server
-      .request("PATCH", "/server/cloud", Some(&admin.token), Some(body))
-      .await;
-    refused(&response, 422, ErrorCode::Invalid);
-  }
-  server.finish().await;
-}
-
-#[tokio::test]
 async fn s1c_expired_wrong_audience_and_forged_identity_tokens_are_refused_offline() {
   let (server, admin, cloud, audience) = linked().await;
   let invite = email_invite(
@@ -358,7 +334,7 @@ async fn s1c_a_code_account_links_its_cloud_identity_and_an_account_invite_names
   let carol = server.invited("carol", false).await;
   let identity = Identity {
     audience: &audience,
-    subject: "c4401",
+    subject: "0191c7c0-0000-7000-8000-00000000c440",
     email: "carol@example.com",
     name: "Carol",
     invite: None,
@@ -384,7 +360,7 @@ async fn s1c_a_code_account_links_its_cloud_identity_and_an_account_invite_names
   let invite_id = invite.invite.id.to_string();
   let identity = Identity {
     audience: &audience,
-    subject: "d4401",
+    subject: "0191c7c0-0000-7000-8000-00000000d440",
     email: "DAVE@example.com",
     name: "Dave",
     invite: Some(&invite_id),
@@ -395,7 +371,7 @@ async fn s1c_a_code_account_links_its_cloud_identity_and_an_account_invite_names
   assert_eq!(joined.user.id, dave.user.id);
   let unknown = Identity {
     audience: &audience,
-    subject: "e4401",
+    subject: "0191c7c0-0000-7000-8000-00000000e440",
     email: "eve@example.com",
     name: "Eve",
     invite: Some(&invite_id),

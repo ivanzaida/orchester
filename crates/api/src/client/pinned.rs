@@ -61,7 +61,9 @@ impl ServerCertVerifier for Recorder {
     _certificate: &CertificateDer<'_>,
     _signature: &DigitallySignedStruct,
   ) -> Result<HandshakeSignatureValid, Error> {
-    Err(Error::InvalidCertificate(CertificateError::ApplicationVerificationFailure))
+    Err(Error::InvalidCertificate(
+      CertificateError::ApplicationVerificationFailure,
+    ))
   }
 
   fn verify_tls13_signature(
@@ -70,7 +72,9 @@ impl ServerCertVerifier for Recorder {
     _certificate: &CertificateDer<'_>,
     _signature: &DigitallySignedStruct,
   ) -> Result<HandshakeSignatureValid, Error> {
-    Err(Error::InvalidCertificate(CertificateError::ApplicationVerificationFailure))
+    Err(Error::InvalidCertificate(
+      CertificateError::ApplicationVerificationFailure,
+    ))
   }
 
   fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {

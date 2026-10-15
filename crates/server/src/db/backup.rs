@@ -23,7 +23,7 @@ pub async fn backup_existing(directory: PathBuf, path: PathBuf) -> Result<(), Se
 
 pub(crate) fn backup(source: &Connection, path: &Path) -> Result<(), ServerError> {
   // A snapshot holds the same sensitive data as the database.
-  drop(crate::private_file::create(path)?);
+  drop(orchester_core::private_file::create(path)?);
   match snapshot(source, path) {
     Ok(()) => Ok(()),
     Err(error) => {

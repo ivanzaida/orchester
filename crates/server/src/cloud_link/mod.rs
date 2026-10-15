@@ -2,19 +2,47 @@
 //! key the server pinned, the newest key set that root signed, and whether cloud identities are accepted. Tokens are
 //! verified here, without the internet; the owner can turn the cloud off, re-pin its root or unlink it at once.
 
-pub(crate) mod identity;
-pub(crate) mod jws;
-
-use orchester_api::{CloudLink, CloudStatus, ErrorCode};
+use orchester_api::{
+  CloudLink, CloudStatus, ErrorCode,
+  identity::{CLOCK_SKEW_SECS, IdentityClaims, IdentityError, PublicKey, VerifiedKeySet, token_key_id},
+};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 
-use self::identity::{Claims, IdentityError, KeySet, RootKey};
 use crate::{error::ServerError, server_keys::ServerKeys};
+
+/// What a verified identity token says that the server uses, with the id of the cloud key that signed it (for the
+/// audit and the device token's record).
+pub(crate) struct Claims {
+  /// The cloud account.
+  pub sub: String,
+  /// The account's confirmed email.
+  pub email: String,
+  pub name: String,
+  /// The invite the token was issued for, when it came from accepting one.
+  pub invite: Option<String>,
+  pub jti: String,
+  pub exp: i64,
+  pub kid: String,
+}
+
+impl Claims {
+  fn of(claims: IdentityClaims, kid: String) -> Self {
+    Self {
+      sub: claims.sub.to_string(),
+      email: claims.email,
+      name: claims.name,
+      invite: claims.invite,
+      jti: claims.jti,
+      exp: claims.exp,
+      kid,
+    }
+  }
+}
 
 /// The link as stored.
 pub(crate) struct Link {
-  root_key: RootKey,
+  root_key: PublicKey,
   key_set: Option<String>,
   key_set_issued_at: Option<i64>,
   key_set_expires_at: Option<i64>,
@@ -43,7 +71,7 @@ impl Link {
     row
       .map(|(root, key_set, issued, expires, accepting, linked_at)| {
         Ok(Self {
-          root_key: RootKey::parse(&root).ok_or(ServerError::StoredData)?,
+          root_key: PublicKey::parse(&root).map_err(|_| ServerError::StoredData)?,
           key_set,
           key_set_issued_at: issued,
           key_set_expires_at: expires,
@@ -79,7 +107,10 @@ impl Link {
       self.offer(db, offered, now)?;
     }
     let set = self.cached(now)?;
-    let claims = identity::verify_token(&set, token, &keys.id.to_string(), now).map_err(refusal)?;
+    let claims = Claims::of(
+      set.verify_token(token, &keys.id.to_string(), now).map_err(refusal)?,
+      token_key_id(token).map_err(refusal)?,
+    );
     db.execute("DELETE FROM used_identity_tokens WHERE expires_at<?1", [now])?;
     let used: bool = db.query_row(
       "SELECT EXISTS(SELECT 1 FROM used_identity_tokens WHERE jti=?1)",
@@ -93,30 +124,34 @@ impl Link {
   }
 
   fn offer(&mut self, db: &Connection, offered: &str, now: i64) -> Result<(), ServerError> {
-    let Ok(set) = identity::verify_key_set(offered, &self.root_key, now) else {
+    let Ok(set) = VerifiedKeySet::verify(offered, &self.root_key, now) else {
       return Ok(());
     };
-    if self.key_set_issued_at.is_some_and(|issued| issued >= set.issued_at) {
+    if self
+      .key_set_issued_at
+      .is_some_and(|issued| issued >= set.statement().issued_at)
+    {
       return Ok(());
     }
     self.cache(db, offered, &set)
   }
 
-  fn cache(&mut self, db: &Connection, text: &str, set: &KeySet) -> Result<(), ServerError> {
+  fn cache(&mut self, db: &Connection, text: &str, set: &VerifiedKeySet) -> Result<(), ServerError> {
+    let (issued_at, expires_at) = (set.statement().issued_at, set.statement().expires_at);
     db.execute(
       "UPDATE cloud_link SET key_set=?1,key_set_issued_at=?2,key_set_expires_at=?3 WHERE id=1",
-      params![text, set.issued_at, set.expires_at],
+      params![text, issued_at, expires_at],
     )?;
     self.key_set = Some(text.to_owned());
-    self.key_set_issued_at = Some(set.issued_at);
-    self.key_set_expires_at = Some(set.expires_at);
+    self.key_set_issued_at = Some(issued_at);
+    self.key_set_expires_at = Some(expires_at);
     Ok(())
   }
 
   /// The cached key set while it has not expired; `409 key_set_stale` otherwise.
-  fn cached(&self, now: i64) -> Result<KeySet, ServerError> {
+  fn cached(&self, now: i64) -> Result<VerifiedKeySet, ServerError> {
     let text = self.key_set.as_deref().ok_or(ErrorCode::KeySetStale)?;
-    identity::verify_key_set(text, &self.root_key, now).map_err(|error| match error {
+    VerifiedKeySet::verify(text, &self.root_key, now).map_err(|error| match error {
       IdentityError::KeySetExpired | IdentityError::NotYetValid => ErrorCode::KeySetStale.into(),
       _ => ServerError::StoredData,
     })
@@ -137,13 +172,14 @@ impl Link {
 
 /// Pins `root_key` (base64url) and caches `key_set`, which that root must have signed: the end of linking.
 pub(crate) fn link(db: &Connection, root_key: &str, key_set: &str, now_ms: i64) -> Result<Link, ServerError> {
-  let root = RootKey::parse(root_key).ok_or(ErrorCode::Invalid)?;
-  let set = identity::verify_key_set(key_set, &root, now_ms.div_euclid(1000)).map_err(|_| ErrorCode::Invalid)?;
+  let root = PublicKey::parse(root_key).map_err(|_| ErrorCode::Invalid)?;
+  let set = VerifiedKeySet::verify(key_set, &root, now_ms.div_euclid(1000)).map_err(|_| ErrorCode::Invalid)?;
+  let (issued_at, expires_at) = (set.statement().issued_at, set.statement().expires_at);
   db.execute(
     "INSERT INTO cloud_link(id,root_key,key_set,key_set_issued_at,key_set_expires_at,accepting,linked_at)
       VALUES (1,?1,?2,?3,?4,1,?5)
       ON CONFLICT(id) DO UPDATE SET root_key=?1,key_set=?2,key_set_issued_at=?3,key_set_expires_at=?4,accepting=1",
-    params![root.encoded(), key_set, set.issued_at, set.expires_at, now_ms],
+    params![root.encoded(), key_set, issued_at, expires_at, now_ms],
   )?;
   Link::load(db)?.ok_or(ServerError::StoredData)
 }
@@ -151,7 +187,7 @@ pub(crate) fn link(db: &Connection, root_key: &str, key_set: &str, now_ms: i64) 
 /// Replaces the pinned root (after a root compromise). The cached key set, signed by the old root, goes with it;
 /// cloud joins wait for a key set the new root signed.
 pub(crate) fn pin(db: &Connection, root_key: &str, now_ms: i64) -> Result<(), ServerError> {
-  let root = RootKey::parse(root_key).ok_or(ErrorCode::Invalid)?;
+  let root = PublicKey::parse(root_key).map_err(|_| ErrorCode::Invalid)?;
   db.execute(
     "INSERT INTO cloud_link(id,root_key,accepting,linked_at) VALUES (1,?1,1,?2)
       ON CONFLICT(id) DO UPDATE SET root_key=?1,key_set=NULL,key_set_issued_at=NULL,key_set_expires_at=NULL",
@@ -192,7 +228,7 @@ pub(crate) fn statement(
   address: &str,
   certificate: Option<String>,
   now_ms: i64,
-) -> String {
+) -> Result<String, ServerError> {
   keys.sign(
     "orchester-link+jws",
     &LinkStatement {
@@ -211,7 +247,7 @@ pub(crate) fn statement(
 pub(crate) fn consume(db: &Connection, claims: &Claims) -> Result<(), ServerError> {
   db.execute(
     "INSERT INTO used_identity_tokens(jti,expires_at) VALUES (?1,?2)",
-    params![claims.jti, claims.exp + identity::CLOCK_SKEW_SECS],
+    params![claims.jti, claims.exp + CLOCK_SKEW_SECS],
   )?;
   Ok(())
 }
