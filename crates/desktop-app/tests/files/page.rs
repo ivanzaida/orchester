@@ -298,3 +298,19 @@ fn files_find_marks_a_cut_line_whose_match_is_past_the_cut() {
     "the longer words fit too: {marker:?} in {line:?}"
   );
 }
+
+#[cfg(windows)]
+#[test]
+fn files_say_why_a_path_with_a_comma_does_not_open_in_an_editor() {
+  let mut files = Files::new();
+  fs::create_dir_all(files.repo.join("evil.hta,z")).expect("a folder with a comma");
+  fs::write(files.repo.join("evil.hta,z/notes.txt"), "notes\n").expect("notes");
+  files.open(Some("evil.hta,z/notes.txt"), Version::Checkout);
+  files
+    .window
+    .until("the notes", |w| w.text("files-meta-text").contains("1 line"));
+  assert_eq!(
+    files.window.text("files-open-reason"),
+    "A file whose path has a comma does not open from here: Windows Explorer could read it as two."
+  );
+}

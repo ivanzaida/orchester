@@ -95,5 +95,6 @@ pub const fn refusal_key(refusal: orchester_workspace::files::Refusal) -> &'stat
     Refusal::WouldRun => "files.openRuns",
     Refusal::Link => "files.openLink",
     Refusal::Executable => "files.openExecutable",
+    Refusal::Comma => "files.openComma",
   }
 }

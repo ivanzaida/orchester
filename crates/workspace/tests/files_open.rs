@@ -10,8 +10,12 @@ use orchester_workspace::files::{
   FilePath, OpenError, OpenFacts, OpenWith, Platform, Refusal, Version, open_target, open_with,
 };
 
+/// Opens a file of the test repository at a version.
+type Open<'a> = dyn Fn(&str, &Version) -> Result<(std::path::PathBuf, OpenWith), OpenError> + 'a;
+
 fn facts(name: &str) -> OpenFacts<'_> {
   OpenFacts {
+    path: name,
     name,
     text: true,
     link: false,
@@ -130,6 +134,32 @@ fn files_open_with_takes_a_names_kind_as_windows_dispatches_it() {
 }
 
 #[test]
+fn files_open_with_refuses_a_path_explorer_may_split_on_windows() {
+  let at = |path| OpenFacts {
+    path,
+    ..facts("notes.txt")
+  };
+  assert_eq!(
+    open_with(Platform::Windows, &at(r"C:\repo\evil.hta,z\notes.txt")),
+    Err(Refusal::Comma)
+  );
+  assert_eq!(
+    open_with(Platform::Windows, &at(r"C:\Users\Smith, J\repo\notes.txt")),
+    Err(Refusal::Comma),
+    "a comma anywhere in the path"
+  );
+  assert_eq!(
+    open_with(Platform::MacOs, &at("/repo/evil.hta,z/notes.txt")),
+    Ok(OpenWith::TextEditor),
+    "`open` takes the path as one argument"
+  );
+  assert_eq!(
+    open_with(Platform::Windows, &at(r"C:\repo\a b\notes.txt")),
+    Ok(OpenWith::DefaultProgram)
+  );
+}
+
+#[test]
 fn files_open_with_opens_text_in_the_text_editor_on_macos_and_with_the_default_program_on_windows() {
   assert_eq!(open_with(Platform::MacOs, &facts("main.rs")), Ok(OpenWith::TextEditor));
   assert_eq!(open_with(Platform::MacOs, &facts("run.py")), Ok(OpenWith::TextEditor));
@@ -212,38 +242,13 @@ fn files_open_target_opens_a_text_file_on_disk_and_refuses_the_rest() {
     ))
   );
   assert_eq!(open("main.rs", &Version::Revision(head)), Err(OpenError::NotOnDisk));
-  fs::write(repo.join(".hta"), "<script>alert(1)</script>\n").expect("an HTML application");
-  assert!(
-    matches!(
-      open(".hta", &Version::Checkout),
-      Err(OpenError::Refused(_, Refusal::NotText))
-    ),
-    "a name that is only an extension is that kind"
-  );
-  fs::write(repo.join(".env"), "KEY=value\n").expect(".env");
-  assert!(open(".env", &Version::Checkout).is_ok(), "a dotfile named as text");
-  #[cfg(windows)]
-  {
-    fs::write(repo.join("run.bat"), "echo hi\n").expect("a batch file");
-    for asked in ["run.bat.", "run.bat ", "RUN.BAT"] {
-      assert!(
-        matches!(
-          open(asked, &Version::Checkout),
-          Err(OpenError::Refused(_, Refusal::WouldRun))
-        ),
-        "{asked:?} is decided by the file it resolves to"
-      );
-    }
-  }
+  names_and_paths_are_weighed_as_resolved(repo, &open);
   #[cfg(unix)]
   links_and_executables_are_refused(repo, &open);
 }
 
 #[cfg(unix)]
-fn links_and_executables_are_refused(
-  repo: &std::path::Path,
-  open: &dyn Fn(&str, &Version) -> Result<(std::path::PathBuf, OpenWith), OpenError>,
-) {
+fn links_and_executables_are_refused(repo: &std::path::Path, open: &Open<'_>) {
   use std::os::unix::fs::{PermissionsExt, symlink};
   fs::write(repo.join("build.sh"), "echo hi\n").expect("a script");
   fs::set_permissions(repo.join("build.sh"), fs::Permissions::from_mode(0o755)).expect("executable");
@@ -258,4 +263,43 @@ fn links_and_executables_are_refused(
     open("alias.rs", &Version::Checkout),
     Err(OpenError::Refused(_, Refusal::Link))
   ));
+}
+
+/// A name that is only an extension, a dotfile named as text, a path Explorer may split, and on Windows names that
+/// resolve to a batch file.
+fn names_and_paths_are_weighed_as_resolved(repo: &std::path::Path, open: &Open<'_>) {
+  fs::write(repo.join(".hta"), "<script>alert(1)</script>\n").expect("an HTML application");
+  assert!(
+    matches!(
+      open(".hta", &Version::Checkout),
+      Err(OpenError::Refused(_, Refusal::NotText))
+    ),
+    "a name that is only an extension is that kind"
+  );
+  fs::write(repo.join(".env"), "KEY=value\n").expect(".env");
+  fs::create_dir_all(repo.join("evil.hta,z")).expect("a folder with a comma");
+  fs::write(repo.join("evil.hta,z/notes.txt"), "notes\n").expect("notes");
+  let split = open("evil.hta,z/notes.txt", &Version::Checkout);
+  if cfg!(windows) {
+    assert!(
+      matches!(split, Err(OpenError::Refused(_, Refusal::Comma))),
+      "Explorer could split it: {split:?}"
+    );
+  } else {
+    assert!(split.is_ok(), "`open` takes it whole: {split:?}");
+  }
+  assert!(open(".env", &Version::Checkout).is_ok(), "a dotfile named as text");
+  #[cfg(windows)]
+  {
+    fs::write(repo.join("run.bat"), "echo hi\n").expect("a batch file");
+    for asked in ["run.bat.", "run.bat ", "RUN.BAT"] {
+      assert!(
+        matches!(
+          open(asked, &Version::Checkout),
+          Err(OpenError::Refused(_, Refusal::WouldRun))
+        ),
+        "{asked:?} is decided by the file it resolves to"
+      );
+    }
+  }
 }

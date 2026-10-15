@@ -11,7 +11,14 @@
 //! the platform and what is known of the file; [`open_target`] gathers that at the moment of opening, from the
 //! resolved file's own name (not the name asked for, which may differ in case, trailing dots or an 8.3 alias), the
 //! link the path asked for may be (refused) and the canonical path (on macOS an execute bit is refused), so what
-//! opens is what was checked.
+//! opens is what was checked. The path is resolved, and refused when it leads out or names a device, before
+//! anything else touches it.
+//!
+//! On Windows the file is handed to Explorer, whose command line is options separated by commas (`/select,<path>`,
+//! `/root,<path>`): a path with a comma could be read as an option and a second path, so it is refused
+//! ([`EXPLORER_SPLITS`]), and the launcher quotes every path as well (`orchester_exec::external::explorer_argument`).
+//! No other character a Windows path may hold is special there: `"` cannot be in a name, and the quotes cover
+//! spaces.
 
 use std::{
   fs,
@@ -28,6 +35,9 @@ use super::{
   source::{Source, source},
   text_types,
 };
+
+/// The characters of a path Explorer may split it at, refused on Windows.
+pub const EXPLORER_SPLITS: &[char] = &[','];
 
 /// Bytes looked at for a NUL to tell text, as reads do.
 const TEXT_PROBE: usize = 8 * 1024;
@@ -72,11 +82,15 @@ pub enum Refusal {
   Link,
   /// It may be executed (an execute bit, on macOS).
   Executable,
+  /// Its path has a character Explorer may split it at ([`EXPLORER_SPLITS`], Windows).
+  Comma,
 }
 
 /// What is known of a file when it is decided how it opens.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OpenFacts<'a> {
+  /// The resolved file's whole path, as it is handed to the platform.
+  pub path: &'a str,
   /// The resolved file's name, its last path part.
   pub name: &'a str,
   /// What it holds is text (no NUL in its first bytes).
@@ -90,6 +104,9 @@ pub struct OpenFacts<'a> {
 pub fn open_with(platform: Platform, file: &OpenFacts<'_>) -> Result<OpenWith, Refusal> {
   if file.link {
     return Err(Refusal::Link);
+  }
+  if platform == Platform::Windows && file.path.contains(EXPLORER_SPLITS) {
+    return Err(Refusal::Comma);
   }
   let name = match platform {
     Platform::Windows => file.name.trim_end_matches(['.', ' ']),
@@ -145,25 +162,34 @@ pub fn open_target(
     }
     .into(),
   };
+  let resolved = resolve_in_folder(&folder, path)?;
   let link = fs::symlink_metadata(folder.join(path.as_str()))
     .map_err(unreadable)?
     .file_type()
     .is_symlink();
-  let resolved = resolve_in_folder(&folder, path)?;
   let metadata = fs::symlink_metadata(&resolved).map_err(unreadable)?;
   if !metadata.is_file() {
     return Err(FilesError::Missing(path.clone()).into());
   }
   let refused = |refusal| OpenError::Refused(path.clone(), refusal);
+  let shown = resolved.to_str().ok_or_else(|| refused(Refusal::NotText))?;
   let name = resolved
     .file_name()
     .and_then(|name| name.to_str())
     .ok_or_else(|| refused(Refusal::NotText))?;
+  let link = link || metadata.file_type().is_symlink();
   let facts = OpenFacts {
+    path: shown,
     name,
-    text: holds_text(&resolved).map_err(unreadable)?,
-    link: link || metadata.file_type().is_symlink(),
+    text: true,
+    link,
     executable: platform::executable(&metadata),
+  };
+  // What needs no look inside the file is decided first.
+  open_with(platform, &facts).map_err(refused)?;
+  let facts = OpenFacts {
+    text: holds_text(&resolved).map_err(unreadable)?,
+    ..facts
   };
   let with = open_with(platform, &facts).map_err(refused)?;
   Ok((resolved, with))

@@ -266,13 +266,16 @@ fn copy(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Option<Element> {
 }
 
 /// Why *Open in editor* cannot open `file` as the page read it, before it is pressed; the press checks again on
-/// disk ([`orchester_workspace::files::open_target`]). A file too large to show opens by its kind.
+/// disk ([`orchester_workspace::files::open_target`]). A file too large to show opens by its kind. The path weighed
+/// is the file's in the project's folder, which holds the runs' worktrees too.
 fn open_refusal(page: &Page<'_>, file: &FilePath) -> Option<&'static str> {
   let Some(platform) = Platform::current() else {
     return Some("files.openUnsupported");
   };
   let text = !matches!(page.read, Some(Shown::Read(FileView::Binary { .. })));
+  let path = page.project.open.repo_root.join(file.as_str());
   let facts = OpenFacts {
+    path: &path.to_string_lossy(),
     name: file.name(),
     text,
     link: false,
