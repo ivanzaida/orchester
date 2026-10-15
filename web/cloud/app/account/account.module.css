@@ -278,3 +278,27 @@
   gap: var(--space-sm);
   width: 100%;
 }
+
+/* A destructive action confirmed in place (Server admin `QEHMk`). */
+.confirmation {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-row) var(--space-row-x);
+  background: var(--color-surface-raised);
+  box-shadow: inset 0 0 0 var(--border-sm) var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+
+.confirmationTitle {
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-primary);
+}
+
+.confirmationText {
+  font-size: var(--text-body);
+  color: var(--color-text-secondary);
+}

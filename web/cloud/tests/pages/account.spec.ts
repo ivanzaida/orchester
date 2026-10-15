@@ -6,7 +6,6 @@ import { apiRequests, PASSWORD, resetFake, signInAs } from "./support";
 
 const FULL = "mira.koval@example.com";
 const NEW = "new.account@example.com";
-const EARLY = "early.cloud@example.com";
 
 async function openAccount(page: Page, email: string): Promise<void> {
   await signInAs(page, email, PASSWORD);
@@ -48,13 +47,6 @@ test.describe("account", () => {
     await expect(page.getByText("No servers yet")).toBeVisible();
     await expect(section(page, "Devices").getByText("1 signed in")).toBeVisible();
   });
-
-  test("a cloud without invites and a server registry says so instead of showing rows", async ({ page }) => {
-    await openAccount(page, EARLY);
-    await expect(page.getByText("Invites are not available yet")).toBeVisible();
-    await expect(page.getByText("Servers are not available yet")).toBeVisible();
-  });
-
 });
 
 test.describe("account actions", () => {
@@ -106,6 +98,28 @@ test.describe("account actions", () => {
     await page.getByRole("button", { name: "Change password" }).click();
     await expect(page.getByText("Your password is changed.", { exact: false })).toBeVisible();
     await expect(devices.getByText("1 signed in")).toBeVisible();
+  });
+
+  test("deleting the account asks for its password in place, then leaves for sign-in", async ({ page }) => {
+    await resetFake();
+    await openAccount(page, NEW);
+    await page.getByRole("button", { name: "Delete account" }).click();
+    await expect(page.getByText("Delete your Orchester account?")).toBeVisible();
+    await expect(page.getByText(`the invites to ${NEW} are deleted at once`, { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "Keep" }).click();
+    await expect(page.getByText("Delete your Orchester account?")).toHaveCount(0);
+    await page.getByRole("button", { name: "Delete account" }).click();
+    await page.getByLabel("Password", { exact: true }).fill("not the password");
+    await page.getByRole("button", { name: "Delete account" }).click();
+    await expect(page.getByText("The password is not right.")).toBeVisible();
+    await expect(page.getByLabel("Password", { exact: true })).toHaveValue("");
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByRole("button", { name: "Delete account" }).click();
+    await expect(page).toHaveURL(/\/signin$/);
+    expect((await apiRequests()).at(-1)).toMatchObject({ method: "DELETE", path: "/api/v1/me", body: { password: "<redacted>" } });
+    await signInAs(page, NEW, PASSWORD);
+    await expect(page.getByText("The email or password is not right.", { exact: false })).toBeVisible();
+    await resetFake();
   });
 });
 

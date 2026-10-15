@@ -14,10 +14,13 @@ export interface Device {
   readonly current: boolean;
 }
 
+/** A project's role, or what a server invite makes the new account (`admin` or `member`). */
+export type InviteRole = "owner" | "member" | "admin";
+
 export interface Invite {
   readonly id: string;
   readonly kind: "project" | "server";
-  readonly role: string;
+  readonly role: InviteRole;
   readonly serverName: string;
   readonly serverAddress: string;
   /** `null` for an invite to the server with no project yet. */
@@ -35,14 +38,8 @@ export interface Server {
   readonly since: number;
 }
 
-/**
- * A section the cloud may not serve yet: its rows, `notYet` while the cloud answers `404` for the endpoint (invites
- * and the server registry are not built in C1a), or `failed` when the cloud did not answer.
- */
-export type Listing<T> =
-  | { readonly kind: "list"; readonly items: readonly T[] }
-  | { readonly kind: "notYet" }
-  | { readonly kind: "failed" };
+/** A section read on its own: its rows, or `failed` when the cloud did not answer, which only that section says. */
+export type Listing<T> = { readonly kind: "list"; readonly items: readonly T[] } | { readonly kind: "failed" };
 
 /** Invites are sent for 7 days, so an invite was sent 7 days before it expires (the designer's Account notes). */
 export const INVITE_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;

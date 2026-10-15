@@ -177,13 +177,15 @@
       "when": "{{sent}} · expires {{expires}}",
       "decline": "Decline",
       "declining": "Declining…",
-      "declineNotYet": "Declining is not available yet. The invite stays until it expires.",
       "emptyTitle": "No invites yet",
       "emptyText": "When someone invites {{email}} to a project or a server, it shows here and in Orchester.",
-      "notYetTitle": "Invites are not available yet",
-      "notYetText": "Orchester Cloud does not list invites yet. When it does, invites to {{email}} show here.",
       "failedTitle": "Invites could not be loaded",
-      "failedText": "Orchester Cloud did not answer. Reload the page to try again."
+      "failedText": "Orchester Cloud did not answer. Reload the page to try again.",
+      "roles": {
+        "owner": "Owner",
+        "member": "Member",
+        "admin": "Admin"
+      }
     },
     "servers": {
       "title": "Your servers",
@@ -197,8 +199,6 @@
       "note": "Orchester Cloud knows which servers you own or joined, not your projects or roles on them. Orchester asks each server for those.",
       "emptyTitle": "No servers yet",
       "emptyText": "Servers you join through an invite, and servers you connect in Orchester, are listed here.",
-      "notYetTitle": "Servers are not available yet",
-      "notYetText": "Orchester Cloud does not keep its list of team servers yet. When it does, the servers you own or joined show here.",
       "failedTitle": "Servers could not be loaded",
       "failedText": "Orchester Cloud did not answer. Reload the page to try again."
     },
@@ -245,7 +245,17 @@
       "passwordChanged": "Your password is changed. Your other devices are signed out; their projects on team servers keep working.",
       "signOut": "Sign out",
       "signOutBrowser": "Sign out of this browser",
-      "signOutHint": "Orchester on your computers stays signed in."
+      "signOutHint": "Orchester on your computers stays signed in.",
+      "deleteAccount": "Delete account",
+      "deleteHint": "Deletes your account from Orchester Cloud. Your accounts on team servers stay.",
+      "deleteTitle": "Delete your Orchester account?",
+      "deleteText": "Your account, its devices and the invites to {{email}} are deleted at once, and every computer and browser is signed out of it. Your accounts on team servers and their projects keep working.",
+      "deletePassword": "Password",
+      "deletePasswordHint": "Your account's password, to confirm it is you.",
+      "deleteEmpty": "Enter your password.",
+      "deleteWrong": "The password is not right.",
+      "keep": "Keep",
+      "deleting": "Deleting…"
     },
     "today": "Today, {{time}}"
   },

@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { field } from "@/lib/form";
 import { message, type Message } from "@/lib/i18n";
 import type { CallOptions } from "@/lib/server/api";
-import { changePassword, declineInvite, rename, revokeDevice } from "@/lib/server/account";
+import { changePassword, declineInvite, deleteAccount, rename, revokeDevice } from "@/lib/server/account";
 import { signOut } from "@/lib/server/cloud";
 import { failureMessage } from "@/lib/server/failures";
 import { endSession, formIsGenuine, leaveIfEnded, sessionEnded, signedIn } from "@/lib/server/visitor";
@@ -112,6 +112,35 @@ export async function passwordAction(previous: PasswordState, form: FormData): P
   return { view: "open", answer, errors: {}, error: failureMessage(result.error, "error.tooManyTries", Date.now()) };
 }
 
+export type DeleteState =
+  | { readonly view: "closed" }
+  | { readonly view: "open"; readonly errors: FieldErrors<"password">; readonly error?: Message };
+
+/**
+ * Deletes the account with its password (`DELETE /me`). A wrong password is said at its field; a deletion ends this
+ * browser's session, as every other device's, and leaves for sign-in.
+ */
+export async function deleteAccountAction(_: DeleteState, form: FormData): Promise<DeleteState> {
+  const options = await session(form);
+  if (isMessage(options)) {
+    return { view: "open", errors: {}, error: options };
+  }
+  const password = field(form, "password");
+  if (password === "") {
+    return { view: "open", errors: { password: message("account.settings.deleteEmpty") } };
+  }
+  const result = await deleteAccount(password, options);
+  if (result.ok) {
+    await endSession();
+    redirect("/signin");
+  }
+  await leaveIfEnded(result.error);
+  if (result.error.kind === "refused" && result.error.code === "invalid_credentials") {
+    return { view: "open", errors: { password: message("account.settings.deleteWrong") } };
+  }
+  return { view: "open", errors: {}, error: failureMessage(result.error, "error.tooManyTries", Date.now()) };
+}
+
 export interface DeviceState {
   readonly signedOut?: string;
   readonly error?: Message;
@@ -142,12 +171,11 @@ export async function declineAction(_: FormState, form: FormData): Promise<FormS
   if (!result.ok) {
     await leaveIfEnded(result.error);
   }
-  if (result.ok) {
+  // `404`: the invite already ended (declined elsewhere, accepted or expired), which is what was asked for.
+  const gone = result.ok || (result.error.kind === "refused" && result.error.code === "not_found");
+  if (gone) {
     revalidatePath("/account");
     return {};
-  }
-  if (result.error.kind === "refused" && result.error.code === "not_found") {
-    return { error: message("account.invites.declineNotYet") };
   }
   return { error: failureMessage(result.error, "error.tooManyTries", Date.now()) };
 }

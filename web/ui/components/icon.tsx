@@ -118,6 +118,13 @@ const SHAPES = {
     <path key="a" d="M21.2 8.4c.5.38.8.97.8 1.6v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V10a2 2 0 0 1 .8-1.6l8-6a2 2 0 0 1 2.4 0l8 6Z" />,
     <path key="b" d="m22 10-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 10" />,
   ],
+  "trash-2": [
+    <path key="a" d="M10 11v6" />,
+    <path key="b" d="M14 11v6" />,
+    <path key="c" d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />,
+    <path key="d" d="M3 6h18" />,
+    <path key="e" d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />,
+  ],
   server: [
     <rect key="a" width="20" height="8" x="2" y="2" rx="2" ry="2" />,
     <rect key="b" width="20" height="8" x="2" y="14" rx="2" ry="2" />,
