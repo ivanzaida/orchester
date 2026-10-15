@@ -22,7 +22,10 @@
   /* Rows and tables. */
   --admin-setting-columns: 170px minmax(0, 1fr); /* `YLPMo` */
   --admin-member-columns: minmax(0, 1fr) 150px 130px 110px; /* `mnZHf` */
-  --admin-people-columns: minmax(0, 1fr) 150px 80px 100px 230px; /* `CSg3J` */
+  --admin-member-areas: "person role joined actions";
+  /* The actions get room for three ghost buttons on one line; the design's 230 holds two (`TtlB9`). */
+  --admin-people-columns: minmax(0, 1fr) 150px 80px 100px 290px; /* `CSg3J` */
+  --admin-people-areas: "person via count role actions";
   --admin-cell-state: 110px; /* `TzSDa` */
   --admin-cell-when: 170px; /* `EmAU7`, `jZItk` */
   --admin-cell-actions: 110px; /* `ducCb` */
@@ -38,8 +41,9 @@
   --admin-waiting-fill: var(--color-surface-panel);
   --admin-waiting-stroke: var(--color-border-strong);
   --admin-waiting-icon: var(--color-text-secondary);
-  --admin-waiting-direction: row;
-  --admin-waiting-align: center;
+  --admin-waiting-columns: auto minmax(0, 1fr) auto;
+  --admin-waiting-areas: "glyph text action";
+  --admin-waiting-glyph-align: center;
   --admin-field: 360px; /* a setting's field `h8OLW5` */
   --admin-menu: 280px; /* the phone header's menu */
 
@@ -73,7 +77,9 @@
     --footer-promise: none;
     --admin-setting-columns: minmax(0, 1fr);
     --admin-member-columns: minmax(0, 1fr) auto;
+    --admin-member-areas: "person role" "joined actions";
     --admin-people-columns: minmax(0, 1fr) auto;
+    --admin-people-areas: "person role" "via count" "actions actions";
     --admin-cell-state: auto;
     --admin-cell-when: auto;
     --admin-cell-actions: auto;
@@ -88,8 +94,9 @@
     --admin-waiting-fill: var(--color-warning-muted);
     --admin-waiting-stroke: transparent;
     --admin-waiting-icon: var(--color-warning);
-    --admin-waiting-direction: column;
-    --admin-waiting-align: flex-start;
+    --admin-waiting-columns: auto minmax(0, 1fr);
+    --admin-waiting-areas: "glyph text" "glyph action";
+    --admin-waiting-glyph-align: start;
     --admin-entry-card-padding: var(--space-xl);
     --admin-pair-direction: column;
   }

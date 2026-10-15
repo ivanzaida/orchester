@@ -20,16 +20,19 @@
 
 .name {
   font-size: var(--text-body);
+  line-height: var(--leading-tight);
   font-weight: var(--weight-medium);
   color: var(--color-text-primary);
 }
 
 .you {
+  line-height: var(--leading-tight);
   font-size: var(--text-small);
   color: var(--color-text-muted);
 }
 
 .username {
+  line-height: var(--leading-tight);
   font-family: var(--font-mono);
   font-size: var(--text-address);
   color: var(--color-text-muted);

@@ -8,6 +8,27 @@
 
 .columns {
   grid-template-columns: var(--admin-people-columns);
+  grid-template-areas: var(--admin-people-areas);
+}
+
+.person {
+  grid-area: person;
+}
+
+.via {
+  grid-area: via;
+}
+
+.count {
+  grid-area: count;
+}
+
+.role {
+  grid-area: role;
+}
+
+.actions {
+  grid-area: actions;
 }
 
 .under {

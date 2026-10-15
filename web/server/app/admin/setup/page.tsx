@@ -35,7 +35,7 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
       <div className={styles.column}>
         <SetupSteps at={1} />
         <Pair>
-          <EntryCard>
+          <EntryCard size="wide">
             <CardHead title={t("setup.title")} description={t("setup.description")} />
             <SetupCodeForm csrf={await formToken()} notice={expired === undefined ? null : message("setup.codeGone")} />
           </EntryCard>

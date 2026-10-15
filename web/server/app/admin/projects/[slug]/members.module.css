@@ -8,6 +8,23 @@
 
 .columns {
   grid-template-columns: var(--admin-member-columns);
+  grid-template-areas: var(--admin-member-areas);
+}
+
+.person {
+  grid-area: person;
+}
+
+.role {
+  grid-area: role;
+}
+
+.joined {
+  grid-area: joined;
+}
+
+.actions {
+  grid-area: actions;
 }
 
 .roleForm {

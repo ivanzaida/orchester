@@ -149,15 +149,15 @@ function PersonRow(props: RowProps) {
   return (
     <>
       <TableRow columns={styles.columns} active={asking !== "none"}>
-        <Cell>
+        <Cell area={styles.person}>
           <Person name={person.displayName} username={person.username} self={person.id === props.me} />
         </Cell>
-        <Cell>{person.cloud ? t("people.viaCloud") : t("people.viaCode")}</Cell>
-        <Cell>{person.projects}</Cell>
-        <Cell>
+        <Cell area={styles.via}>{person.cloud ? t("people.viaCloud") : t("people.viaCode")}</Cell>
+        <Cell area={styles.count}>{person.projects}</Cell>
+        <Cell area={styles.role}>
           <RoleBadge person={person} />
         </Cell>
-        <Cell end>
+        <Cell end area={styles.actions}>
           <Actions props={props} ask={setAsking} action={action} />
         </Cell>
       </TableRow>
@@ -172,11 +172,11 @@ export function PeopleTable(props: { people: readonly Account[] } & Omit<RowProp
   return (
     <div className={styles.table} role="table" aria-label={t("people.accounts")}>
       <TableHead columns={styles.columns}>
-        <HeadCell>{t("people.person")}</HeadCell>
-        <HeadCell>{t("people.signsIn")}</HeadCell>
-        <HeadCell>{t("people.projects")}</HeadCell>
-        <HeadCell>{t("people.role")}</HeadCell>
-        <HeadCell />
+        <HeadCell area={styles.person}>{t("people.person")}</HeadCell>
+        <HeadCell area={styles.via}>{t("people.signsIn")}</HeadCell>
+        <HeadCell area={styles.count}>{t("people.projects")}</HeadCell>
+        <HeadCell area={styles.role}>{t("people.role")}</HeadCell>
+        <HeadCell area={styles.actions} />
       </TableHead>
       {people.map((person) => (
         <PersonRow key={person.id} person={person} {...row} />

@@ -44,6 +44,9 @@ test.describe("invites", () => {
     await expect(page.getByRole("button", { name: "Send invite" })).toBeDisabled();
   });
 
+});
+
+test.describe("invite codes and the list", () => {
   test("a code is shown once, in the page that made it only", async ({ page, context }) => {
     await signIn(page);
     await page.goto("/admin/projects/kontur/invites");

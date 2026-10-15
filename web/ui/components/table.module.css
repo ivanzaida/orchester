@@ -46,5 +46,6 @@
 }
 
 .end {
-  justify-content: flex-end;
+  flex-wrap: var(--table-end-wrap);
+  justify-content: var(--table-end-justify);
 }

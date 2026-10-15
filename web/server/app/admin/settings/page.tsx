@@ -163,7 +163,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const csrf = await formToken();
   const { link: outcome } = await searchParams;
   return (
-    <AdminShell context={context} area="settings">
+    <AdminShell context={context} area="settings" spaced>
       <PageHead title={t("settings.title")} description={t("settings.description", { server: server.name })} />
       <LinkOutcome outcome={outcome} server={server.name} />
       <Joining current={current} csrf={csrf} />

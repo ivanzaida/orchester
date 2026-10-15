@@ -87,6 +87,7 @@
   --tracking-code: 3px; /* `GHjuZ` */
   --leading-callout: 1.4; /* callout titles `yQ5PT` */
   --leading-row: 1.45; /* table cells `JeBPl` */
+  --leading-tight: 1.3; /* a name over its username, 17 and 15 px lines (`fnCdL`, `gu33w`) */
   --space-callout-y: 14px; /* callouts `u7p3uL` */
   --space-tab: 2px; /* page tab side padding `loUWZ` */
   --space-tabs: 20px; /* between page tabs `h6bI9O` */
@@ -147,6 +148,8 @@
   --header-wide: flex;
   --header-compact: none;
   --table-head: grid;
+  --table-end-justify: flex-end;
+  --table-end-wrap: nowrap;
 }
 
 /* Phones: `Ahged` and `afqip` are 390 wide; the card needs its 400 plus 16 at each side. */
@@ -185,5 +188,7 @@
     --header-wide: none;
     --header-compact: flex;
     --table-head: none;
+    --table-end-justify: flex-start;
+    --table-end-wrap: wrap;
   }
 }

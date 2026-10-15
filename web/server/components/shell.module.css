@@ -28,6 +28,11 @@
   min-width: 0;
 }
 
+/* Settings' sections sit further apart (`JzPl5`). */
+.spaced {
+  gap: var(--admin-settings-gap);
+}
+
 .tabs {
   display: var(--admin-tabs);
   flex-direction: column;

@@ -109,16 +109,16 @@ function MemberRow(props: RowProps) {
   return (
     <>
       <TableRow columns={styles.columns} active={asking}>
-        <Cell>
+        <Cell area={styles.person}>
           <Person name={member.user.displayName} username={member.username} self={self} />
         </Cell>
-        <Cell>
+        <Cell area={styles.role}>
           <RoleForm props={props} action={action} />
         </Cell>
-        <Cell>
+        <Cell area={styles.joined}>
           <Phrase k="members.joinedOn" dates={{ date: { at: member.addedAt, format: "date" } }} now={props.now} />
         </Cell>
-        <Cell end>
+        <Cell end area={styles.actions}>
           <ActionButton kind="ghost" row onClick={() => { setAsking(true); }}>
             {self ? t("members.leave") : t("members.remove")}
           </ActionButton>
@@ -136,10 +136,10 @@ export function MembersTable(props: { members: readonly Member[] } & Omit<RowPro
   return (
     <div className={styles.table} role="table" aria-label={t("members.person")}>
       <TableHead columns={styles.columns}>
-        <HeadCell>{t("members.person")}</HeadCell>
-        <HeadCell>{t("members.role")}</HeadCell>
-        <HeadCell>{t("members.joined")}</HeadCell>
-        <HeadCell />
+        <HeadCell area={styles.person}>{t("members.person")}</HeadCell>
+        <HeadCell area={styles.role}>{t("members.role")}</HeadCell>
+        <HeadCell area={styles.joined}>{t("members.joined")}</HeadCell>
+        <HeadCell area={styles.actions} />
       </TableHead>
       {members.map((member) => (
         <MemberRow key={member.user.id} member={member} {...row} />

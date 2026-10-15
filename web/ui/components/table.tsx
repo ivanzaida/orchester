@@ -14,9 +14,9 @@ export function TableHead({ columns, children }: { columns: string | undefined; 
   );
 }
 
-export function HeadCell({ children, end }: { children?: ReactNode; end?: boolean }) {
+export function HeadCell({ children, end, area }: { children?: ReactNode; end?: boolean; area?: string | undefined }) {
   return (
-    <span className={`${styles.headCell}${end ? ` ${styles.end}` : ""}`} role="columnheader">
+    <span className={[styles.headCell, end && styles.end, area].filter(Boolean).join(" ")} role="columnheader">
       {children}
     </span>
   );
@@ -30,9 +30,11 @@ export function TableRow({ columns, active, children }: { columns: string | unde
   );
 }
 
-export function Cell({ children, end }: { children?: ReactNode; end?: boolean }) {
+/** `area`: the app's class naming the cell's grid area, so a phone can lay the row out in two lines. */
+export function Cell({ children, end, area }: { children?: ReactNode; end?: boolean; area?: string | undefined }) {
+  const classes = [styles.cell, end && styles.end, area].filter(Boolean).join(" ");
   return (
-    <div className={`${styles.cell}${end ? ` ${styles.end}` : ""}`} role="cell">
+    <div className={classes} role="cell">
       {children}
     </div>
   );

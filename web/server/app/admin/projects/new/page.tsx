@@ -12,6 +12,7 @@ import { originOf } from "@/lib/server/place";
 import { formToken } from "@/lib/server/visitor";
 
 import { NewProjectForm } from "./form";
+import styles from "./new.module.css";
 
 export const metadata: Metadata = { title: t("newProject.pageTitle") };
 
@@ -28,7 +29,9 @@ export default async function NewProjectPage() {
       ) : (
         <Callout tone="neutral" icon="lock" title={t("newProject.adminsOnly", { server: server.name })} />
       )}
-      <Note>{t("newProject.note")}</Note>
+      <div className={styles.note}>
+        <Note>{t("newProject.note")}</Note>
+      </div>
     </AdminShell>
   );
 }

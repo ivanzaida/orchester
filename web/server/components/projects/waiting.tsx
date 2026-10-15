@@ -26,9 +26,11 @@ export function WaitingCallout({ approvals }: { approvals: readonly Approval[] }
           {one ? t("projects.waitingText", { device: first.device, name: first.user.displayName }) : t("projects.waitingTextMany")}
         </p>
       </div>
-      <ButtonLink kind="secondary" row href="/admin/devices">
-        {t("projects.review")}
-      </ButtonLink>
+      <span className={styles.action}>
+        <ButtonLink kind="secondary" row href="/admin/devices">
+          {t("projects.review")}
+        </ButtonLink>
+      </span>
     </div>
   );
 }

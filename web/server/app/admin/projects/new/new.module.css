@@ -45,3 +45,7 @@
   flex-wrap: wrap;
   gap: var(--space-sm);
 }
+
+.note {
+  max-width: var(--admin-new-card);
+}

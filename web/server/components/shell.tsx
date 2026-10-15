@@ -66,7 +66,8 @@ function Menu({ name, line, csrf }: { name: string; line: string; csrf: string }
  * The signed-in pages (`FCQCr`): the header (`NNrob`), the server's links at the left (`EJ8tl`) or as tabs on a
  * narrow window (`mYBka`), the page, the footer.
  */
-export async function AdminShell({ context, area, children }: { context: AdminContext; area: Area; children: ReactNode }) {
+export async function AdminShell(props: { context: AdminContext; area: Area; spaced?: boolean; children: ReactNode }) {
+  const { context, area, children } = props;
   const csrf = await formToken();
   const { server, me } = context;
   const line = roleLine(context);
@@ -88,7 +89,7 @@ export async function AdminShell({ context, area, children }: { context: AdminCo
           <div className={styles.nav}>
             <SideNav title={server.name} items={links.map((item) => ({ href: item.href, label: item.nav, current: item.area === area }))} />
           </div>
-          <main className={styles.main}>
+          <main className={`${styles.main}${props.spaced ? ` ${styles.spaced}` : ""}`}>
             {links.length > 1 && (
               <div className={styles.tabs}>
                 <Tabs label={t("nav.label")} items={links.map((item) => ({ href: item.href, label: item.tab, current: item.area === area }))} />
