@@ -732,22 +732,22 @@ changes; the rest is built (S1a, S1b).
 | --- | --- | --- | --- | --- | --- |
 | `GET /server` | none | | `{ name, api_version: 3, needs_setup, cloud: { root_fingerprint, accepting }\|null }` | | changed in 3 |
 | ~~`POST /auth/sessions`~~ | | | | | removed in 3 (row 46) |
-| `POST /auth/cloud` | none, or user (to link an account) | `{ identity_token, key_set?, device }` | `201 { token, session, user, joined: { project, role }\|null }` | `401 invalid_identity`, `403 not_invited`, `403 cloud_off`, `409 key_set_stale`, `429 rate_limited` | new in 3 (row 42) |
+| `POST /auth/cloud` | none, or user (to link an account) | `{ identity_token, key_set?, device }` | `201 { token, session, user, joined: { project, role }\|null }` | `401 invalid_identity` (also a token whose `name` is blank or over 256 characters), `403 not_invited`, `403 cloud_off`, `409 key_set_stale`, `429 rate_limited` | new in 3 (row 42) |
 | `POST /auth/code` | none | `{ code, device, username?, display_name? }` | `201 { token, session, user, joined }` | `401 invalid_code` (one answer for unknown, used and expired), `409 username_taken`, `422 invalid`, `429 rate_limited` | new in 3 (row 45) |
-| `POST /auth/pairings` | user | | `201 { code, expires_at }` | `429 rate_limited` (3 open per account) | new in 3 (row 44) |
+| `POST /auth/pairings` | user | | `201 { code, expires_at }` | `409 too_many_codes` (the server's 50 open codes), `429 rate_limited` (3 open per account) | new in 3 (row 44) |
 | `GET /auth/me` | user | | `{ user }` | `401` | |
 | `GET /auth/sessions` | user | | `{ sessions: [Session] }` | | |
 | `DELETE /auth/sessions/current` | user | | `204` | | |
 | `DELETE /auth/sessions/{id}` | user (own sessions) | | `204` | `404` | |
 | ~~`POST /auth/password`~~ | | | | | removed in 3 (row 46) |
-| `POST /invites` | admin (server, account), owner (project) | `{ kind, email?, project?, role?, user?, delivery }` | `201 { invite, code? }` (a code only for `delivery: code`, shown once), `signed?` (the signed invite for the server admin's page to carry through the browser when the server cannot reach the cloud) | `403`, `409 already_member`, `409 too_many_codes`, `422 invalid` | new in 3 (row 43) |
+| `POST /invites` | admin (server, account), owner (project) | `{ kind, email?, project?, role?, user?, delivery }` | `201 { invite, code? }` (a code only for `delivery: code`, shown once), `signed?` (the signed invite for the server admin's page to carry through the browser when the server cannot reach the cloud) | `403` (also an account invite naming an admin), `409 already_member`, `409 too_many_codes`, `422 invalid` | new in 3 (row 43) |
 | `GET /invites` | admin (all), owner (their projects') | | `{ invites: [Invite] }`, open only, never a code | | new in 3 |
 | `DELETE /invites/{id}` | the inviter, owner, admin | | `204`; the cloud is told | `404` | new in 3 |
 | `GET /server/cloud`, `PATCH /server/cloud` | admin | `{ accepting?, link?, unlink?, pin? }` | `{ cloud }` | `422 invalid` | new in 3 (rows 47, 62) |
 | `GET /server/settings`, `PATCH /server/settings` | admin | `{ join_approval? }` | `{ settings, check_code }` | `422 invalid` | new in 3 (rows 57, 62) |
 | `GET /admin/sessions`, `DELETE /admin/sessions/{id}` | admin | | `{ sessions: [Session with user] }`; `204` | `404` | new in 3 (row 62) |
 | `GET /projects` | user | | `{ projects: [Project] }` the user is a member of | | `?remote=` removed in 3 (row 49) |
-| `GET /projects?slug=<slug>` | user | | `{ project }` when the user is a member | `403 not_member { name, owners: [UserRef] }` when it exists, `404` when it does not | new in 3 (row 49) |
+| `GET /projects?slug=<slug>` | user | | `{ project }` when the user is a member | `404` when there is no such project or the user is not a member of it: one answer for both, so a lookup tells a non-member nothing of the project (its name and owners included) | new in 3 (row 49) |
 | `POST /projects` | admin | `{ idempotency_key, name, slug, key, remote_hint?, tasks: [UploadTask] }` | `201 { project, tasks: [Task], cursor }`; the caller is the project's owner; `tasks` may be empty | `409 slug_taken`, `409 conflict`, `422 invalid` | changed in 3: admins only, by slug; `remote_taken` removed |
 | `POST /projects/{id}/link` | member | `{ idempotency_key, tasks: [UploadTask], remote? }` | `201 { tasks: [Task], dropped_links, cursor }`: the first checkout linked to a project with no tasks keeps its numbers (row 12); later ones are imports with new numbers; sets `remote_hint` when empty | `409 id_taken`, `422 invalid` | new in 3 (row 49) |
 | `GET /projects/{id}` | member | | `{ project }` | `404` | |
@@ -867,7 +867,8 @@ Row 39. The team server needs no internet, no public DNS and no public certifica
   (`3F7A-92C1-KD8M-QX4T`, Crockford alphabet). The server prints it to its console at every start and `orchester-server
   tls show` prints it again. A cloud invite carries the full fingerprint, so the person compares nothing; with a code
   the desktop shows the check code it received and continues only after the person confirms it matches the console or
-  the inviter's screen.
+  the inviter's screen. The confirmation (N1) makes the person compare all four groups: it shows the whole code, never
+  a shortened one, and does not let a match of the first group stand for the rest.
 - **Pinning** is a rustls verifier in `orchester-api`'s client that compares the presented leaf certificate with the
   pinned hash; nothing else is accepted, and there is no "ignore certificate errors" switch.
 - **A new certificate** (`orchester-server tls regenerate`, e.g. after a key leak) breaks every pin on purpose. The
@@ -1147,7 +1148,10 @@ Row 42; the rules here are the architect's.
   device token as S1a issued session tokens. The email is not stored; only `sub` and the display name. With join
   approval on (row 57), a cloud join of an existing account answers `202 { approval }` instead, the account's
   joined devices and the admins see *Approve this computer?* (person-only), and the joining app finishes with the same
-  request once it is approved, or learns it was refused.
+  request once it is approved, or learns it was refused. An account and cloud identity have one waiting approval at a
+  time: asking again returns it. Each new approval counts against the client address like a failed join (asking
+  costs the approvers' attention), the approval records that address, and approvals that ended (expired, refused,
+  used) are removed.
 - **Owner control.** `PATCH /server/cloud` (admin) or `orchester-server cloud off|on|pin <fingerprint>|unlink` on the
   host: *off* stops accepting identity tokens at once (joined devices keep working); *pin* replaces the pinned root
   (after a root compromise); *unlink* forgets the cloud and tells it when it can.
@@ -1175,9 +1179,13 @@ Row 43.
   either way (an unregistered address is asked to register first, and the invite waits for it until expiry).
 - **Accepting.** The invitee's app lists the invite (Settings › Orchester, and a notice in All projects). Accept
   returns the team server's address, its fingerprint and a one-time identity token bound to the invite. The app pins
-  the fingerprint, connects to the team server directly, joins (`POST /auth/cloud`), and for a project invite opens
+  the fingerprint, connects to the team server directly (the server's id, address and fingerprint go together: the
+  app asks the cloud for a token only after the server at that address presented that certificate, so a token for one
+  server reaches no other), joins (`POST /auth/cloud`), and for a project invite opens
   that project's join review: in the local project whose repository identity matches, or after the person adds the
-  checkout. A project invite for someone already on the server only adds the membership.
+  checkout. A project invite for someone already on the server only adds the membership; a server invite with
+  *admin* makes the account that accepts it an admin. An account invite names one account: an identity already linked
+  to another account is refused (`403 not_invited`) and the invite stays open.
 - **Revoking.** The inviter or an admin revokes an open invite; the team server tells the cloud, which deletes it.
 
 ### New computers
@@ -1197,7 +1205,7 @@ Row 45: address plus an 8-character code, for networks without the internet.
 | --- | --- | --- | --- |
 | Setup | The server, on first start and at each start until it has an admin; printed to its console (stdout), never to the log | 24 hours | The first admin account and a device token |
 | Invite | A project owner or an admin, in the server admin (*Invite with a code*) | 72 hours | A server account, or a project membership with a role, and a device token; a project invite opens the join review |
-| Account | An admin, for an existing account that lost every device (in the server admin, or `orchester-server account-code <username>` on the host) | 24 hours | A device token for that account |
+| Account | An admin, for an existing account that lost every device and is not an admin (in the server admin), or anyone with the host for any account (`orchester-server account-code <username>`). An admin's own next device comes from their own devices (a pairing code) or the host, never from another admin | 24 hours | A device token for that account |
 | Pairing | A joined device, for the same account (Settings › Orchester, the server's entry) | 10 minutes | A device token for that account, or a sign-in to the server admin |
 
 - **Shape.** 8 characters of the Crockford base32 alphabet (40 bits), shown `ABCD-EFGH`, read without regard to case
@@ -1207,9 +1215,15 @@ Row 45: address plus an 8-character code, for networks without the internet.
   to the person who made them, and never logged, returned again or put in a URL.
 - **Redeeming.** `POST /auth/code { code, device, username?, display_name? }` (username and display name only when
   the code creates an account). After the TLS check-code confirmation described above.
-- **Rate limits.** 10 failed redemptions per client address in 15 minutes block that address for 15 minutes; 200
-  failures on the whole server in an hour pause redemption for 15 minutes; at most 3 open pairing codes per account and
-  50 open codes per server. With 50 open codes, 200 guesses an hour succeed with odds below 1 in 10^7 a week.
+- **Rate limits.** 10 failed redemptions or cloud joins per client network (an IPv4 address, an IPv6 /48) in 15
+  minutes block that network for 15 minutes. 200 failed redemptions on the whole server in any hour (a sliding hour)
+  pause redemption until fewer than 200 remain in the last hour, at least 15 minutes; failed cloud joins have a
+  server-wide budget of their own of the same size, so neither pauses the other. Redemptions and cloud joins from the
+  host itself (loopback) are exempt from the server-wide budgets, so the person at the host can always redeem the
+  setup code; their own address limit still holds. At most 3 open pairing codes per account and 50 open codes per
+  server. A guess succeeds with odds of 50 in 2^40 with 50 codes open, so the 200 failures an hour the server allows
+  succeed with odds of about 1 in 650,000 a week and 1 in 12,500 a year (every hour spent guessing, 50 codes open
+  all the time).
 - **Linking later.** A code account links to a cloud identity from Settings › Orchester, the server's entry (*Link to
   Orchester Cloud*):
   the app joins with an identity token while signed in with the device token, and the server records `sub`.
@@ -1248,12 +1262,15 @@ Row 46. One forward migration of `orchester-server.db`:
   proxy listed in `trusted_proxies`; otherwise the header is ignored. Entries accept exact IPs or CIDRs. All header
   lines form an ordered comma list; malformed lists fall back to the connection peer. Walk from the right, skipping
   trusted proxies, to the first untrusted hop. IPv4-mapped IPv6 is canonicalized; hops may include ports or IPv6
-  brackets. IPv6 address counters group clients by /64. A restart clears the counters, which is acceptable for v1.
+  brackets. Failed-join counters group IPv6 clients by /48, the usual allocation of one site. A restart clears the
+  counters, which is acceptable for v1.
   The redemption and cloud sign-in limits use this address.
-- **Audit.** The server records joins and failed joins (by code kind or cloud `kid` and `sub`, and address, never the
-  code or the token), device revocations, invites made, redeemed and revoked, cloud link changes, user and membership
+- **Audit.** The server records joins (by code kind or cloud `kid` and `sub`, and address, never the code or the
+  token), device revocations, invites made, redeemed and revoked, cloud link changes, user and membership
   changes, and claim takeovers, in the append-only `audit_events` table. User changes that leave every stored value
-  unchanged create no audit event.
+  unchanged create no audit event. Failed joins are counted, not audited one by one, so guessing cannot grow the
+  append-only table without bound: `failed_joins` keeps a count per kind (code, cloud), client address and hour, for
+  90 days.
 - **HTTP deadlines.** Request headers and keep-alive idle connections have a 10-second deadline, as do body reads.
   Connections must send their first byte within 2 seconds (also the first HTTP byte after TLS). At most 256 HTTP
   connections (64 per untrusted peer) and 64 concurrent direct-TLS handshakes (32 per untrusted peer) are served;
@@ -1446,7 +1463,8 @@ of [Servers and project addresses](#servers-and-project-addresses)). A person ca
 Sharing; `orchester.toml` prefills it.
 
 **Membership.** Joining needs membership (row 17), per project (row 50). A connected person who is not a member of the
-address they entered sees the project's owners and *Ask for an invite*. Nothing is uploaded.
+address they entered learns nothing of the project (the server answers as if there were none) and sees *Ask for an
+invite* from whoever shared it. Nothing is uploaded.
 
 **Review before joining: tasks.** If the joiner's local project has tasks, Join opens a review list of them, all
 ticked, each with the server's similar titles as a hint (`sharing::similar_titles`). The person unticks duplicates. A

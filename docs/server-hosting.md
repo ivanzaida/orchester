@@ -46,14 +46,17 @@ code or rejoins through an invite. Names in `tls_names` are read only when the c
 | --- | --- | --- | --- |
 | Setup | the server, while it has no admin | 24 hours | the first admin account and a device token |
 | Invite | an admin, or a project's owner: `POST /invites { kind, delivery: "code", … }` | 72 hours | a new account (`server`), or a new account that is a member of one project with a role (`project`) |
-| Account | an admin (`POST /invites { kind: "account", user, delivery: "code" }`) or `orchester-server account-code <username>` on the host | 24 hours | a device token for an account that lost every device |
+| Account | an admin, for an account that is not an admin (`POST /invites { kind: "account", user, delivery: "code" }`), or `orchester-server account-code <username>` on the host for any account | 24 hours | a device token for an account that lost every device |
 | Pairing | a joined device: `POST /auth/pairings` | 10 minutes | another device of the same account (at most 3 open per account) |
 
 Codes are 8 characters shown `ABCD-EFGH`, read without regard to case or the hyphen. They work once. The server keeps
 only their HMAC and compares each in constant time; one answer (`401 invalid_code`) covers unknown, used and expired
-codes. 10 failed redemptions from one client address in 15 minutes block that address for 15 minutes; 200 failures
-on the whole server in an hour pause redemption for 15 minutes (`429` with `Retry-After`). A server holds at most 50
-open codes (`409 too_many_codes`).
+codes. 10 failed redemptions or cloud joins from one client network (an IPv4 address, an IPv6 /48) in 15 minutes
+block that network for 15 minutes. 200 failed redemptions on the whole server in any hour pause redemption until fewer
+than 200 remain in the last hour, at least 15 minutes (`429` with `Retry-After`); failed cloud joins have a budget of
+their own. Redemptions from the host itself (loopback) are exempt from the server-wide pause, so the owner can always
+redeem the setup code there. A server holds at most 50 open codes (`409 too_many_codes`, also for a pairing code).
+Failed joins are counted per address and hour in `failed_joins`, kept 90 days.
 
 Invites by email (`delivery: "cloud"`, open 7 days) answer with `signed`: the invite signed with the server's key, for
 the server admin's page to carry to Orchester Cloud. Invites list without their codes (`GET /invites`) and are revoked
@@ -125,6 +128,20 @@ who has no signed-in device left gets an account code: `orchester-server account
 
 The old desktop app's password sign-in no longer works against this server, by design.
 
+What else changes for an existing installation:
+
+- **TLS is on by default.** `tls` defaults to `self_signed`: a server that served plain HTTP before now generates a
+  certificate on its first start and serves HTTPS. Behind a proxy that holds the certificate (the Docker example),
+  set `tls = "off"` (`ORCHESTER_SERVER_TLS=off`) explicitly.
+- **Your own certificate needs `tls = "pem"`.** `tls_cert` and `tls_key` are refused unless `tls = "pem"` is set
+  with them; add it to a configuration that names them.
+- **The setup code is in the console output.** In Docker that is `docker logs` / `docker compose logs server`: anyone
+  who can read the container's logs can redeem it until the server has an admin. Redeem it promptly; a new one
+  (`orchester-server setup-code`) ends the one before.
+- **The generated key on Windows** inherits the access list of its folder (`<data_dir>/tls/`): unlike Unix, where it
+  gets mode 0600, it gets no restricted access list of its own. Keep the data directory readable only by the server's
+  account.
+
 ## Configuration
 
 For a standalone binary, run `cargo build --locked --release -p orchester-server`, then
@@ -144,7 +161,7 @@ Environment overrides TOML: `ORCHESTER_SERVER_LISTEN`, `ORCHESTER_SERVER_DATA_DI
 `ORCHESTER_SERVER_TRUSTED_PROXIES` (comma-separated exact IPs or CIDR ranges, for example `172.29.0.2,10.20.0.0/16`).
 Only list proxy connection addresses or networks you control: forwarded addresses are ignored from other peers. The
 server combines all forwarding-header lines and walks the chain from the connection backwards; malformed lists use the
-peer. Mapped IPv4 addresses are normalized, and IPv6 rate limits group clients by /64.
+peer. Mapped IPv4 addresses are normalized; failed-join limits group IPv6 clients by /48, connection caps by /64.
 Never include a client address or a CIDR range containing clients in `trusted_proxies`: clients inside a trusted range
 can forge forwarding hops and evade the address limit. Trust the proxy's connection address as narrowly as possible.
 
@@ -155,7 +172,7 @@ The handshake cap is fixed at 32 so several desktops behind a NAT can connect to
 Peers matching `trusted_proxies` are exempt from both per-peer caps so all Caddy clients do not share a single
 64-connection budget. They still count toward both global caps and obey the same deadlines. Per-client fairness for
 joins comes from the redemption limits using the validated forwarded client address. Failures and attempts in flight
-share one budget, so concurrent guesses cannot overrun it. A server restart clears the in-memory limits.
+count against the same budgets, so concurrent guesses cannot overrun them. A server restart clears the in-memory limits.
 
 ## Backups
 
