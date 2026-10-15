@@ -11,6 +11,14 @@
     "reset": {
       "subject": "Reset your Orchester password",
       "body": "Choose a new password for your Orchester account by opening this link within 1 hour:\n\n{link}\n\nSetting a new password signs out every device of the account. If you did not ask for this, ignore this email; your password stays as it is.\n"
+    },
+    "invite": {
+      "subject": "You have an Orchester invite",
+      "body": "Someone invited this email to a team server in Orchester. Open Orchester on your computer and sign in with this email (Settings › Orchester): the invite is there, with who sent it and what it is for.\n\nIt is open for 7 days. If you don't know anyone who uses Orchester, ignore this email; nothing happens without you.\n\n{url}\n"
+    },
+    "inviteSignUp": {
+      "subject": "You have an Orchester invite",
+      "body": "Someone invited this email to a team server in Orchester. To accept, create an Orchester account with this email first:\n\n{url}\n\nThen sign in to Orchester on your computer (Settings › Orchester): the invite is there, with who sent it and what it is for. It is open for 7 days. If you don't know anyone who uses Orchester, ignore this email; nothing happens without you.\n"
     }
   }
 }

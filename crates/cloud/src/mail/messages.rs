@@ -4,6 +4,7 @@
 //! with the token from their server side.
 
 use orchester_api::Credential;
+use orchester_core::id::InviteId;
 use serde::Deserialize;
 
 use super::{Email, EmailPurpose};
@@ -23,6 +24,8 @@ struct Emails {
   confirm: Template,
   already_registered: Template,
   reset: Template,
+  invite: Template,
+  invite_sign_up: Template,
 }
 
 #[derive(Deserialize)]
@@ -47,6 +50,8 @@ impl Messages {
       (&emails.confirm, "{link}"),
       (&emails.already_registered, "{url}"),
       (&emails.reset, "{link}"),
+      (&emails.invite, "{url}"),
+      (&emails.invite_sign_up, "{url}"),
     ];
     if placeholders
       .iter()
@@ -70,6 +75,18 @@ impl Messages {
       "{url}",
       &self.base_url,
     )
+  }
+
+  /// An invite to an email with an account: open Orchester. The words are the cloud's own; nothing the team server
+  /// chose (its name, the inviter's, the project's) goes into an email, so a server cannot write to anyone through it.
+  pub fn invite(&self, to: String) -> Email {
+    email(EmailPurpose::Invite, to, &self.emails.invite, "{url}", &self.base_url)
+  }
+
+  /// An invite to an email with no account: create one first, on the sign-up page that names the invite.
+  pub fn invite_sign_up(&self, to: String, invite: InviteId) -> Email {
+    let url = format!("{}/signup?invite={invite}", self.base_url);
+    email(EmailPurpose::Invite, to, &self.emails.invite_sign_up, "{url}", &url)
   }
 
   pub fn reset(&self, to: String, token: &Credential) -> Email {

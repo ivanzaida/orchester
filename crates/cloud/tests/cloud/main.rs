@@ -11,6 +11,7 @@ mod accounts;
 mod hosting;
 mod identity;
 mod limits;
+mod registry;
 mod sessions;
 mod support;
 
@@ -50,6 +51,9 @@ const TESTS: &[(&str, Test)] = tests![
   hosting::smtp_mailer_sends_through_the_relay,
   hosting::requests_follow_the_contract,
   hosting::unsafe_configuration_is_refused,
+  registry::servers_link_from_the_statement_they_signed,
+  registry::admin_tokens_are_issued_only_for_linked_servers,
+  registry::invites_reach_the_invitee_once_and_end_when_revoked,
 ];
 
 /// Runs after the tests: what they logged holds none of their passwords, tokens, links, keys or emails.

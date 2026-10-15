@@ -1,6 +1,6 @@
 use deadpool_postgres::GenericClient;
 use orchester_api::{
-  cloud::{CloudErrorCode, CloudPlatform, DeviceInfo, IdentityTokenIssued, IdentityTokenRequest},
+  cloud::{CloudErrorCode, CloudPlatform, DeviceInfo, IdentityTokenIssued, IdentityTokenRequest, TokenPurpose},
   identity::{IdentityClaims, IdentityError, SigningKey, TokenSubject, VerifiedKeySet},
 };
 use orchester_core::id::CloudAccountId;
@@ -28,19 +28,40 @@ impl Cloud {
     Ok(row.try_get(0)?)
   }
 
-  /// A five-minute token for one team server, about the device's account, signed with the newest key the published
-  /// key set lets sign now.
+  /// `POST /identity-tokens`: a token to join a team server, or with purpose `admin` to sign in to the admin of a
+  /// server linked here. A token for linking comes only with `POST /servers`.
   pub(crate) async fn issue_identity_token(
     &self,
     auth: Authenticated,
     request: IdentityTokenRequest,
   ) -> Result<IdentityTokenIssued, CloudError> {
-    // A team server's id; the registry that knows them comes with linking (C1, not built yet).
     let audience = Uuid::parse_str(request.audience.trim()).map_err(|_| CloudErrorCode::Invalid)?;
+    let client = self.client().await?;
+    let linked = crate::servers::linked(&client, audience).await?.is_some();
+    match request.purpose {
+      Some(TokenPurpose::Link) => return Err(CloudErrorCode::Invalid.into()),
+      Some(TokenPurpose::Admin) if !linked => return Err(CloudErrorCode::NotFound.into()),
+      // A server not linked here may still be one an app joins with a token (row 42); linked, the account is
+      // listed among the server's people on the account's next computer.
+      None if linked => crate::servers::joined(&client, audience, auth, self.now()).await?,
+      _ => {}
+    }
+    drop(client);
+    self.issue_for(auth, audience.to_string(), request.purpose).await
+  }
+
+  /// A five-minute token for one team server, about the device's account, for `purpose`, signed with the newest key
+  /// the published key set lets sign now.
+  pub(crate) async fn issue_for(
+    &self,
+    auth: Authenticated,
+    audience: String,
+    purpose: Option<TokenPurpose>,
+  ) -> Result<IdentityTokenIssued, CloudError> {
     self.inner.limits.identity_token(auth.device, self.now())?;
     let now = self.now();
     let client = self.inner.db.client().await?;
-    let subject = self.subject(&client, auth, audience.to_string()).await?;
+    let subject = self.subject(&client, auth, audience, purpose).await?;
     let key = self.signing_key(&client, now).await?;
     let claims = IdentityClaims::new(subject, seconds(now))?;
     let token = key.sign_token(&claims)?;
@@ -64,6 +85,7 @@ impl Cloud {
     client: &impl GenericClient,
     auth: Authenticated,
     audience: String,
+    purpose: Option<TokenPurpose>,
   ) -> Result<TokenSubject, CloudError> {
     let row = client
       .query_opt(
@@ -83,8 +105,9 @@ impl Cloud {
         name: row.try_get(3)?,
         platform: CloudPlatform::parse(row.try_get(4)?).ok_or(CloudError::StoredData)?,
       },
-      // Invites in flight come with the invites part of C1a; until then no token names one.
+      // A token bound to an invite comes with accepting one in the app (N1); no endpoint here issues one yet.
       invite: None,
+      purpose,
     })
   }
 

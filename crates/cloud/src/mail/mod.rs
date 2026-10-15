@@ -25,6 +25,8 @@ pub enum EmailPurpose {
   AlreadyRegistered,
   /// A password reset link.
   Reset,
+  /// An invite to a team server or one of its projects.
+  Invite,
 }
 
 impl EmailPurpose {
@@ -33,6 +35,7 @@ impl EmailPurpose {
       Self::Confirm => "confirm",
       Self::AlreadyRegistered => "already_registered",
       Self::Reset => "reset",
+      Self::Invite => "invite",
     }
   }
 }

@@ -55,6 +55,12 @@ impl Limits {
     self.email_per_email.take(email.to_owned(), now)
   }
 
+  /// An invite's email: 5 an hour per email, the same count as confirmation and reset emails, wherever the team
+  /// server or the inviter's browser delivers it from.
+  pub fn invite_email(&self, email: &str, now: i64) -> Result<(), CloudError> {
+    self.email_per_email.take(email.to_owned(), now)
+  }
+
   /// 60 identity tokens an hour per device.
   pub fn identity_token(&self, device: CloudDeviceId, now: i64) -> Result<(), CloudError> {
     self.identity_tokens.take(device, now)
