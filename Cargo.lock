@@ -2555,7 +2555,7 @@ dependencies = [
  "hyper-util",
  "image",
  "libc",
- "lurq_macros",
+ "lurq_macros 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lyon",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
@@ -2587,9 +2587,8 @@ dependencies = [
 
 [[package]]
 name = "lurq"
-version = "0.44.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31dac3f89784fbb11b55de8a9070377f4c052ae45e98287b0d4e1c02460b3804"
+version = "0.45.0"
+source = "git+https://github.com/ivanzaida/lurq?rev=cceb53f46c0df97f563e7c56f5c18af7a74a56ec#cceb53f46c0df97f563e7c56f5c18af7a74a56ec"
 dependencies = [
  "arboard",
  "base64 0.22.1",
@@ -2602,7 +2601,7 @@ dependencies = [
  "hyper-util",
  "image",
  "libc",
- "lurq_macros",
+ "lurq_macros 0.1.2 (git+https://github.com/ivanzaida/lurq?rev=cceb53f46c0df97f563e7c56f5c18af7a74a56ec)",
  "lyon",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
@@ -2636,6 +2635,16 @@ name = "lurq_macros"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39123587b1909e4bb5534f0df7b43228c2d3699a8cd2c299afc14da6dd4bf048"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "lurq_macros"
+version = "0.1.2"
+source = "git+https://github.com/ivanzaida/lurq?rev=cceb53f46c0df97f563e7c56f5c18af7a74a56ec#cceb53f46c0df97f563e7c56f5c18af7a74a56ec"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3348,7 +3357,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "image",
- "lurq 0.44.1",
+ "lurq 0.45.0",
  "orchester-core",
  "orchester-exec",
  "orchester-ipc",
@@ -3588,7 +3597,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "lurq 0.42.0",
- "lurq 0.44.1",
+ "lurq 0.45.0",
  "orchester-api",
  "orchester-core",
  "orchester-exec",
