@@ -1,7 +1,7 @@
 //! Every kind of link `orchester_workspace::links` makes, the links the domain tools return
 //! (`docs/design/orchestrator-toolset.md`, "Links"), reads as the route of its place, writes back as the same
 //! path and resolves in the router's table to that route's screen, so a link a tool returns opens its place.
-//! Pages that are not built yet (Usage, a pull request) have their routes too.
+//! A page that is not built yet (a pull request) has its route too.
 
 use std::num::NonZeroU64;
 
@@ -9,13 +9,13 @@ use orchester_app::routes::{
   AccountsPanel, AccountsView, ConnectionsView, OverviewTab, ProjectPage, Route, RouteError, TaskView, ToolTab, routes,
 };
 use orchester_core::{id::ProjectId, project::TaskKey};
-use orchester_workspace::links::{Link, TaskPage, UsageGroup, UsageLink, UsageParam};
+use orchester_workspace::links::{Link, TaskPage};
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const ID: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
 
 /// How many kinds of link there are: one per variant of [`Link`].
-const KINDS: usize = 12;
+const KINDS: usize = 11;
 
 fn project() -> ProjectId {
   PROJECT.parse().expect("a project id")
@@ -37,29 +37,6 @@ fn at(page: ProjectPage) -> Route {
   Route::Project(project(), page)
 }
 
-/// Usage with every filter set.
-fn every_filter() -> UsageLink {
-  let mut filters = UsageLink::default();
-  for (param, value) in [
-    (UsageParam::From, "2026-10-01"),
-    (UsageParam::To, "2026-10-15"),
-    (UsageParam::Group, "task"),
-    (UsageParam::Task, "ORC-24"),
-    (UsageParam::Run, ID),
-    (UsageParam::Pipeline, ID),
-    (UsageParam::Step, "implement"),
-    (UsageParam::Agent, ID),
-    // A model id is any text without spaces: every character a query must escape reads back.
-    (UsageParam::Model, "gpt-5.1&codex#2?x=100%+y"),
-    (UsageParam::Account, ID),
-  ] {
-    filters
-      .set(param, value)
-      .unwrap_or_else(|_| panic!("{value} is a {param:?}"));
-  }
-  filters
-}
-
 /// Which kind `link` is. A new kind fails to compile here until it is given a number and a case in
 /// [`every_link`].
 const fn kind(link: &Link) -> usize {
@@ -74,12 +51,11 @@ const fn kind(link: &Link) -> usize {
     Link::Secrets(_) => 7,
     Link::Connection(..) => 8,
     Link::Account(_) => 9,
-    Link::Usage(..) => 10,
-    Link::PullRequest(..) => 11,
+    Link::PullRequest(..) => 10,
   }
 }
 
-/// Every kind of link, each tab of a task and Usage with and without its filters, with the route each names.
+/// Every kind of link and each tab of a task, with the route each names.
 fn every_link() -> Vec<(Link, Route)> {
   let project = project();
   vec![
@@ -115,14 +91,6 @@ fn every_link() -> Vec<(Link, Route)> {
     (
       Link::Account(id()),
       Route::Accounts(AccountsView::of(id(), AccountsPanel::Account)),
-    ),
-    (
-      Link::Usage(project, UsageLink::default()),
-      at(ProjectPage::Usage(UsageLink::default())),
-    ),
-    (
-      Link::Usage(project, every_filter()),
-      at(ProjectPage::Usage(every_filter())),
     ),
     (
       Link::PullRequest(project, number(42)),
@@ -163,19 +131,10 @@ fn links_resolve_to_their_screen_in_the_router_table() {
 #[test]
 fn links_have_the_documented_paths() {
   let root = format!("/project/{PROJECT}");
-  let mut usage = UsageLink::default();
-  usage.set(UsageParam::From, "2026-10-01").expect("a day");
-  usage.set(UsageParam::To, "2026-10-15").expect("a day");
-  usage.set(UsageParam::Group, "task").expect("a grouping");
-  usage.set(UsageParam::Agent, ID).expect("a profile id");
   for (link, path) in [
     (
       Link::Task(project(), key(), TaskPage::Conversation),
       format!("{root}/tasks/ORC-24/conversation"),
-    ),
-    (
-      Link::Usage(project(), usage),
-      format!("{root}/usage?from=2026-10-01&to=2026-10-15&group=task&agent={ID}"),
     ),
     (
       Link::PullRequest(project(), number(7)),
@@ -188,28 +147,7 @@ fn links_have_the_documented_paths() {
 }
 
 #[test]
-fn links_usage_groupings_read_back_and_bad_filters_say_which() {
-  for group in UsageGroup::ALL {
-    let mut filters = UsageLink::default();
-    filters.set(UsageParam::Group, group.name()).expect("a grouping");
-    let link = Link::Usage(project(), filters.clone());
-    assert_eq!(Route::parse(&link.path()), Ok(at(ProjectPage::Usage(filters))));
-  }
-  for (query, param, value) in [
-    ("from=2026-13-01", "from", "2026-13-01"),
-    ("group=week", "group", "week"),
-    ("run=7", "run", "7"),
-  ] {
-    let path = format!("/project/{PROJECT}/usage?{query}");
-    assert_eq!(
-      Route::parse(&path),
-      Err(RouteError::InvalidParam {
-        param: param.to_owned(),
-        value: value.to_owned(),
-      }),
-      "{path}"
-    );
-  }
+fn links_pull_requests_are_numbered_from_one() {
   for number in ["seven", "0"] {
     assert_eq!(
       Route::parse(&format!("/project/{PROJECT}/pull-requests/{number}")),

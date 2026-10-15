@@ -4,7 +4,6 @@
 
 use orchester_app::routes::{ConnectionsTab, ConnectionsView, ProjectPage};
 use orchester_core::store::ConnectionStore;
-use orchester_workspace::links::UsageLink;
 
 use super::harness::Seeded;
 
@@ -135,7 +134,7 @@ fn connections_say_they_are_read_and_why_reading_failed() {
     rusqlite::Connection::open(seeded.repo.join(".orchester").join("orchester.db")).expect("the database opens");
   sqlite.execute("DROP TABLE mcp_servers", []).expect("the table goes");
   // Coming back reads them again.
-  seeded.go(ProjectPage::Usage(UsageLink::default()));
+  seeded.go(ProjectPage::Usage);
   seeded.go(ProjectPage::Connections(ConnectionsView::new(ConnectionsTab::GitHub)));
   seeded.until("the failure", |seeded| seeded.exists("connections-load-error"));
   assert!(

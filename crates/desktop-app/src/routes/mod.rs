@@ -65,7 +65,6 @@ const TASKS: &str = "tasks";
 const CONNECTIONS: &str = "connections";
 const ORCHESTRATOR: &str = "orchestrator";
 const PULL_REQUESTS: &str = "pull-requests";
-const USAGE: &str = "usage";
 const NEW: &str = "new";
 const EDIT: &str = "edit";
 /// The query parameter of a screen's tab.

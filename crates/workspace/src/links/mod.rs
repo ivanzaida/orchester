@@ -5,7 +5,6 @@
 //! A place whose page is not built yet still has its link; the router shows the page's placeholder.
 
 mod query;
-mod usage;
 
 use std::num::NonZeroU64;
 
@@ -14,10 +13,7 @@ use orchester_core::{
   project::TaskKey,
 };
 
-pub use self::{
-  query::{encode, with_query},
-  usage::{InvalidUsageValue, UsageGroup, UsageLink, UsageParam},
-};
+pub use self::query::{encode, with_query};
 
 /// A place in the app a tool result points to.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -42,8 +38,6 @@ pub enum Link {
   Connection(ProjectId, ConnectionId),
   /// Settings › Accounts showing an account; accounts belong to the person, not to a project.
   Account(AgentAccountId),
-  /// A project's Usage with its filters.
-  Usage(ProjectId, UsageLink),
   /// A pull request of the project's repository, by its number.
   PullRequest(ProjectId, NonZeroU64),
 }
@@ -96,7 +90,6 @@ impl Link {
         "/settings".to_owned(),
         &[("tab", Some("accounts")), ("account", Some(&id.to_string()))],
       ),
-      Self::Usage(project, filters) => filters.path(format!("{}/usage", root(*project))),
       Self::PullRequest(project, number) => format!("{}/pull-requests/{number}", root(*project)),
     }
   }
