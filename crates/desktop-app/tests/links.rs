@@ -3,6 +3,8 @@
 //! path and resolves in the router's table to that route's screen, so a link a tool returns opens its place.
 //! Pages that are not built yet (Usage, a pull request) have their routes too.
 
+use std::num::NonZeroU64;
+
 use orchester_app::routes::{
   AccountsPanel, AccountsView, ConnectionsView, OverviewTab, ProjectPage, Route, RouteError, TaskView, ToolTab, routes,
 };
@@ -17,6 +19,10 @@ const KINDS: usize = 12;
 
 fn project() -> ProjectId {
   PROJECT.parse().expect("a project id")
+}
+
+fn number(number: u64) -> NonZeroU64 {
+  NonZeroU64::new(number).expect("a pull request number")
 }
 
 fn key() -> TaskKey {
@@ -43,7 +49,8 @@ fn every_filter() -> UsageLink {
     (UsageParam::Pipeline, ID),
     (UsageParam::Step, "implement"),
     (UsageParam::Agent, ID),
-    (UsageParam::Model, "gpt-5.1-codex"),
+    // A model id is any text without spaces: every character a query must escape reads back.
+    (UsageParam::Model, "gpt-5.1&codex#2?x=100%+y"),
     (UsageParam::Account, ID),
   ] {
     filters
@@ -117,7 +124,10 @@ fn every_link() -> Vec<(Link, Route)> {
       Link::Usage(project, every_filter()),
       at(ProjectPage::Usage(every_filter())),
     ),
-    (Link::PullRequest(project, 42), at(ProjectPage::PullRequest(42))),
+    (
+      Link::PullRequest(project, number(42)),
+      at(ProjectPage::PullRequest(number(42))),
+    ),
   ]
 }
 
@@ -167,7 +177,10 @@ fn links_have_the_documented_paths() {
       Link::Usage(project(), usage),
       format!("{root}/usage?from=2026-10-01&to=2026-10-15&group=task&agent={ID}"),
     ),
-    (Link::PullRequest(project(), 7), format!("{root}/pull-requests/7")),
+    (
+      Link::PullRequest(project(), number(7)),
+      format!("{root}/pull-requests/7"),
+    ),
     (Link::Account(id()), format!("/settings?tab=accounts&account={ID}")),
   ] {
     assert_eq!(link.path(), path);
@@ -197,8 +210,27 @@ fn links_usage_groupings_read_back_and_bad_filters_say_which() {
       "{path}"
     );
   }
+  for number in ["seven", "0"] {
+    assert_eq!(
+      Route::parse(&format!("/project/{PROJECT}/pull-requests/{number}")),
+      Err(RouteError::NoScreen),
+      "pull request {number}"
+    );
+  }
+}
+
+#[test]
+fn links_written_without_a_tasks_tab_open_its_summary() {
+  let path = format!("/project/{PROJECT}/tasks/ORC-24");
+  let route = Route::parse(&path).expect("a task's page");
+  assert_eq!(route, at(ProjectPage::Task(key(), TaskView::Summary)));
+  assert_eq!(route.path(), Link::Task(project(), key(), TaskPage::Summary).path());
+  let chain = routes().resolve(&path);
+  let leaf = chain.last().unwrap_or_else(|| panic!("{path} resolves"));
   assert_eq!(
-    Route::parse(&format!("/project/{PROJECT}/pull-requests/seven")),
-    Err(RouteError::NoScreen)
+    leaf.pattern_raw(),
+    "/project/:project/tasks/:key",
+    "a route of its own, not the fallback"
   );
+  assert_eq!(Route::parse(&format!("{path}/summary/more")), Err(RouteError::NoScreen));
 }

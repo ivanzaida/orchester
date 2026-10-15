@@ -1,3 +1,5 @@
+use std::num::NonZeroU64;
+
 use orchester_core::{
   id::{ConnectionId, ResourceId},
   project::TaskKey,
@@ -23,7 +25,7 @@ pub enum ProjectPage {
   MergeQueue,
   PullRequests,
   /// A pull request of the project's repository, by its number.
-  PullRequest(u64),
+  PullRequest(NonZeroU64),
   /// Usage with its filters.
   Usage(UsageLink),
   Pipelines,
@@ -184,7 +186,10 @@ impl ProjectPage {
       },
       ["pipelines", id] => id.parse().map(Self::Pipeline).map_err(|_| RouteError::NoScreen),
       ["agents", id] => id.parse().map(Self::Agent).map_err(|_| RouteError::NoScreen),
-      [PULL_REQUESTS, number] => number.parse().map(Self::PullRequest).map_err(|_| RouteError::NoScreen),
+      [PULL_REQUESTS, number] => number
+        .parse::<NonZeroU64>()
+        .map(Self::PullRequest)
+        .map_err(|_| RouteError::NoScreen),
       [USAGE] => usage(params).map(Self::Usage),
       [CONNECTIONS] => ConnectionsView::take(params).map(Self::Connections),
       [CONNECTIONS, NEW] => NewConnection::take(params).map(Self::NewConnection),

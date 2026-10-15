@@ -7,6 +7,8 @@
 mod query;
 mod usage;
 
+use std::num::NonZeroU64;
+
 use orchester_core::{
   id::{AgentAccountId, ConnectionId, ProjectId, ResourceId},
   project::TaskKey,
@@ -43,7 +45,7 @@ pub enum Link {
   /// A project's Usage with its filters.
   Usage(ProjectId, UsageLink),
   /// A pull request of the project's repository, by its number.
-  PullRequest(ProjectId, u64),
+  PullRequest(ProjectId, NonZeroU64),
 }
 
 /// The tab of a task's page a link opens.
