@@ -16,8 +16,6 @@ pub enum ServerError {
   Configuration(&'static str),
   #[error("cannot generate credentials")]
   Random,
-  #[error("cannot hash or verify passwords")]
-  PasswordHash,
   #[error("server worker failed")]
   Worker,
   #[error("invalid stored server data")]
@@ -30,7 +28,7 @@ pub enum ServerError {
   Api(ErrorCode),
   #[error("shared project operation refused")]
   Sharing(Box<orchester_api::SharingError>),
-  #[error("sign-in is rate limited")]
+  #[error("joining is rate limited")]
   RateLimited(u64),
 }
 
@@ -54,7 +52,6 @@ impl ServerError {
       Self::Io(_) => "Io",
       Self::Configuration(_) => "Configuration",
       Self::Random => "Random",
-      Self::PasswordHash => "PasswordHash",
       Self::Worker => "Worker",
       Self::StoredData => "StoredData",
       Self::BackupIncomplete => "BackupIncomplete",
@@ -187,6 +184,20 @@ pub(crate) fn status_message(code: ErrorCode) -> (StatusCode, &'static str) {
     ErrorCode::NotEditable | ErrorCode::NotQueueable | ErrorCode::Organization => {
       (StatusCode::UNPROCESSABLE_ENTITY, "Task change refused")
     }
+    ErrorCode::InvalidIdentity => (StatusCode::UNAUTHORIZED, "Invalid identity token"),
+    ErrorCode::InvalidCode => (StatusCode::UNAUTHORIZED, "Invalid code"),
+    ErrorCode::NotInvited => (StatusCode::FORBIDDEN, "No account or invite for this identity"),
+    ErrorCode::CloudOff => (
+      StatusCode::FORBIDDEN,
+      "This server does not accept Orchester Cloud identities",
+    ),
+    ErrorCode::ApprovalRefused => (StatusCode::FORBIDDEN, "The join was not approved"),
+    ErrorCode::KeySetStale => (
+      StatusCode::CONFLICT,
+      "The server's copy of Orchester Cloud's keys is out of date",
+    ),
+    ErrorCode::TooManyCodes => (StatusCode::CONFLICT, "Too many open codes"),
+    ErrorCode::SlugTaken => (StatusCode::CONFLICT, "The slug is taken"),
     ErrorCode::RateLimited => (StatusCode::TOO_MANY_REQUESTS, "Try again later"),
     ErrorCode::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "Server operation failed"),
   }

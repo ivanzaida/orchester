@@ -1,17 +1,18 @@
 use axum::{
   Json, Router,
   extract::{Query, State},
-  http::StatusCode,
+  http::{HeaderMap, StatusCode},
+  response::{IntoResponse, Response},
   routing::get,
 };
 use orchester_api::*;
-use orchester_core::{
-  id::{ProjectId, TagId, UserId},
-  repository::RepositoryIdentity,
-};
+use orchester_core::id::{ProjectId, TagId, UserId};
 use serde::Deserialize;
 
-use super::extract::{Auth, Id, SafeJson};
+use super::{
+  base_address,
+  extract::{Auth, Id, SafeJson},
+};
 use crate::{
   Server, db,
   error::ServerError,
@@ -22,6 +23,7 @@ pub fn routes() -> Router<Server> {
   Router::new()
     .route("/projects", get(list).post(create))
     .route("/projects/{project}", get(show).patch(patch))
+    .route("/projects/{project}/link", axum::routing::post(link))
     .route("/projects/{project}/members", get(list_members).post(add_member))
     .route(
       "/projects/{project}/members/{user}",
@@ -38,33 +40,68 @@ pub fn routes() -> Router<Server> {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Lookup {
-  remote: Option<RepositoryIdentity>,
+  slug: Option<String>,
 }
 
+/// `GET /projects`: the caller's projects, or with `?slug=` the one project at that address.
 async fn list(
   State(server): State<Server>,
   Auth(auth): Auth,
+  headers: HeaderMap,
   query: Result<Query<Lookup>, axum::extract::rejection::QueryRejection>,
-) -> Result<Json<Projects>, ServerError> {
+) -> Result<Response, ServerError> {
   let Query(query) = query.map_err(|_| ErrorCode::BadRequest)?;
-  let projects = server
-    .snapshot(move |db, now| {
-      let current = db::checked(db, &auth, now, false, false)?;
-      projects::lookup(db, current.user.id, query.remote)
-    })
-    .await?;
-  Ok(Json(Projects { projects }))
+  let base = base_address(&server, &headers);
+  let response = match query.slug {
+    Some(slug) => {
+      let project = server
+        .snapshot(move |db, now| {
+          let current = db::checked(db, &auth, now, false)?;
+          projects::by_slug(db, current.user.id, &slug, &base)
+        })
+        .await?;
+      Json(ProjectResponse { project }).into_response()
+    }
+    None => {
+      let projects = server
+        .snapshot(move |db, now| {
+          let current = db::checked(db, &auth, now, false)?;
+          projects::list(db, current.user.id, &base)
+        })
+        .await?;
+      Json(Projects { projects }).into_response()
+    }
+  };
+  Ok(response)
 }
 
+/// `POST /projects`: admins create projects by name and slug.
 async fn create(
   State(server): State<Server>,
   Auth(auth): Auth,
-  SafeJson(input): SafeJson<ProjectCreate>,
+  headers: HeaderMap,
+  SafeJson(input): SafeJson<NewProject>,
 ) -> Result<(StatusCode, Json<ProjectCreated>), ServerError> {
+  let base = base_address(&server, &headers);
   let response = server
     .write(move |db, now| {
-      let current = db::checked(db, &auth, now, false, false)?;
-      projects::create(db, current.user.id, input, now)
+      let current = db::checked(db, &auth, now, true)?;
+      projects::create(db, current.user.id, input, &base, now)
+    })
+    .await?;
+  Ok((StatusCode::CREATED, Json(response)))
+}
+
+async fn link(
+  State(server): State<Server>,
+  Auth(auth): Auth,
+  Id(project): Id<ProjectId>,
+  SafeJson(input): SafeJson<ProjectLink>,
+) -> Result<(StatusCode, Json<ProjectLinked>), ServerError> {
+  let response = server
+    .write(move |db, now| {
+      let current = access::member(db, &auth, project, now)?;
+      projects::link(db, project, current.user.id, input, now)
     })
     .await?;
   Ok((StatusCode::CREATED, Json(response)))
@@ -73,12 +110,14 @@ async fn create(
 async fn show(
   State(server): State<Server>,
   Auth(auth): Auth,
+  headers: HeaderMap,
   Id(project): Id<ProjectId>,
 ) -> Result<Json<ProjectResponse>, ServerError> {
+  let base = base_address(&server, &headers);
   let project = server
     .snapshot(move |db, now| {
       let current = access::member(db, &auth, project, now)?;
-      projects::load(db, project, current.user.id)
+      projects::load(db, project, current.user.id, &base)
     })
     .await?;
   Ok(Json(ProjectResponse { project }))
@@ -87,13 +126,15 @@ async fn show(
 async fn patch(
   State(server): State<Server>,
   Auth(auth): Auth,
+  headers: HeaderMap,
   Id(project): Id<ProjectId>,
   SafeJson(input): SafeJson<ProjectChanges>,
 ) -> Result<Json<ProjectResponse>, ServerError> {
+  let base = base_address(&server, &headers);
   let project = server
     .write(move |db, now| {
       let current = access::owner(db, &auth, project, now)?;
-      projects::patch(db, project, current.user.id, input, now)
+      projects::patch(db, project, current.user.id, input, &base, now)
     })
     .await?;
   Ok(Json(ProjectResponse { project }))

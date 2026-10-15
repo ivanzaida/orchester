@@ -1,6 +1,11 @@
 use std::{net::SocketAddr, path::PathBuf};
 
-use orchester_api::client::{AddressError, Client, ClientError, PlainHttp, ServerAddress};
+use orchester_api::{
+  certificate::CertificatePin,
+  client::{AddressError, Client, ClientError, PlainHttp, ServerAddress},
+};
+use orchester_server::config::TlsMode;
+use rustls::pki_types::{CertificateDer, pem::PemObject};
 use tokio::{
   io::{AsyncReadExt, AsyncWriteExt},
   net::TcpListener,
@@ -112,6 +117,7 @@ async fn client_tells_what_is_not_an_orchester_server_and_what_cannot_be_reached
 async fn client_refuses_a_certificate_the_system_does_not_trust() {
   let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../server/tests/fixtures");
   let server = TestServer::start(|config| {
+    config.tls = TlsMode::Pem;
     config.tls_cert = Some(fixtures.join("server.pem"));
     config.tls_key = Some(fixtures.join("server-key.pem"));
   })
@@ -127,6 +133,58 @@ async fn client_refuses_a_certificate_the_system_does_not_trust() {
     ClientError::UntrustedCertificate
   );
   server.finish().await;
+}
+
+/// The pin of the certificate the server generated in its data directory.
+fn generated_pin(server: &TestServer) -> CertificatePin {
+  let path = server.directory.path().join("tls").join("cert.pem");
+  CertificatePin::of(&CertificateDer::from_pem_file(path).expect("generated certificate"))
+}
+
+#[tokio::test]
+async fn client_pinned_to_the_server_s_own_certificate_trusts_it_and_nothing_else() {
+  let server = TestServer::start(|config| config.tls = TlsMode::SelfSigned).await;
+  let https = address(&format!("https://localhost:{}", server.address.port()));
+  let pin = generated_pin(&server);
+  assert_eq!(Some(pin.check_code()), server.server.check_code());
+  // Read without trusting it, before anything is sent: what the person compares.
+  let presented = Client::presented_certificate(&https)
+    .await
+    .expect("presented certificate");
+  assert_eq!(presented, pin);
+  let pinned = Client::pinned(https.clone(), pin).expect("pinned client");
+  assert_eq!(pinned.server_info().await.expect("pinned").api_version, 3);
+  let other = CertificatePin::of(b"another certificate");
+  let refused = Client::pinned(https.clone(), other).expect("pinned client");
+  assert_eq!(
+    refused.server_info().await.expect_err("another certificate"),
+    ClientError::UntrustedCertificate
+  );
+  let system = Client::new(https, PlainHttp::NotAllowed).expect("client");
+  assert_eq!(
+    system.server_info().await.expect_err("not in the system store"),
+    ClientError::UntrustedCertificate
+  );
+  let plain = address(&server.url());
+  assert_eq!(Client::pinned(plain, pin).expect_err("http"), ClientError::Setup);
+  server.finish().await;
+}
+
+#[test]
+fn client_certificate_pins_round_trip_and_read_as_check_codes() {
+  let pin = CertificatePin::of(b"certificate");
+  let text = serde_json::to_string(&pin).expect("pin JSON");
+  assert_eq!(text.len(), 66);
+  assert_eq!(serde_json::from_str::<CertificatePin>(&text).expect("parse"), pin);
+  assert!(serde_json::from_str::<CertificatePin>("\"+0\"").is_err());
+  let code = pin.check_code();
+  assert_eq!(code.len(), 19);
+  assert!(
+    code
+      .bytes()
+      .all(|byte| byte == b'-' || orchester_api::certificate::CROCKFORD.contains(&byte))
+  );
+  assert!(!format!("{pin:?}").contains(&text[1..65]));
 }
 
 /// Something at a loopback port that answers every request with `response`, then closes.

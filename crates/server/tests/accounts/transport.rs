@@ -55,6 +55,7 @@ async fn s1a_slow_headers_and_idle_keepalive_connections_close() {
 async fn s1a_direct_tls_enforces_the_same_header_deadline() {
   let server = TestServer::start(|config| {
     let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    config.tls = orchester_server::config::TlsMode::Pem;
     config.tls_cert = Some(fixtures.join("server.pem"));
     config.tls_key = Some(fixtures.join("server-key.pem"));
   })

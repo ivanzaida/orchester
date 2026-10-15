@@ -271,17 +271,21 @@ fn server(url: &str, added_at: i64) -> StoredServer {
     url: url.to_owned(),
     name: "Kontur team".to_owned(),
     plain_http_allowed: false,
+    certificate_pin: None,
     added_at: at(added_at),
     account: None,
   }
 }
 
 #[test]
-fn servers_keep_their_address_name_opt_in_and_account() {
+fn servers_keep_their_address_name_opt_in_pin_and_account() {
   let dir = tempfile::tempdir().expect("temporary directory");
   let path = dir.path().join("orchester.db");
   let mut db = AppDb::open(&path).expect("open");
-  let kontur = server("https://orchester.kontur.lan", 1);
+  let kontur = StoredServer {
+    certificate_pin: Some("4b".repeat(32)),
+    ..server("https://orchester.kontur.lan", 1)
+  };
   let lab = StoredServer {
     plain_http_allowed: true,
     ..server("http://10.0.4.20:8740", 2)
@@ -305,11 +309,21 @@ fn servers_keep_their_address_name_opt_in_and_account() {
   assert_eq!(servers[0].url, "https://orchester.kontur.lan");
   assert_eq!(servers[0].name, "Kontur");
   assert_eq!(servers[0].account.as_ref(), Some(&account));
+  assert_eq!(servers[0].certificate_pin, Some("4b".repeat(32)));
   assert!(servers[1].plain_http_allowed);
+  assert_eq!(servers[1].certificate_pin, None);
   assert_eq!(servers[1].account, None);
 
   db.set_server_account(kontur.id, None).expect("sign out");
   assert_eq!(db.servers().expect("list")[0].account, None);
+  // A server that presents a certificate the person confirmed again is trusted by its new pin.
+  db.set_server_trust(lab.id, Some(&"c0".repeat(32)), false)
+    .expect("pin the lab");
+  let lab = db.servers().expect("list").remove(1);
+  assert_eq!(
+    (lab.certificate_pin, lab.plain_http_allowed),
+    (Some("c0".repeat(32)), false)
+  );
 }
 
 #[test]

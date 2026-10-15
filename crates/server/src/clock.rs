@@ -16,4 +16,5 @@ impl Clock for SystemClock {
   }
 }
 
-pub const SESSION_IDLE_MS: i64 = 30 * 24 * 60 * 60 * 1000;
+/// A device token expires after 90 days without use (row 56).
+pub const DEVICE_IDLE_MS: i64 = 90 * 24 * 60 * 60 * 1000;

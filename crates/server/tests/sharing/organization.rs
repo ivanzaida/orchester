@@ -288,7 +288,7 @@ async fn s1b_upload_cycle_rolls_back_project_tags_and_history() {
       "POST",
       "/projects",
       Some(&owner.token),
-      Some(json!({"idempotency_key":key(),"name":"bad","key":"BAD","remote":"host.example/owner/bad","tasks":[a,b]})),
+      Some(json!({"idempotency_key":key(),"name":"bad","slug":"bad","key":"BAD","tasks":[a,b]})),
     )
     .await;
   error(&response, 422, ErrorCode::Organization);

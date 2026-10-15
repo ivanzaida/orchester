@@ -7,7 +7,7 @@ use crate::{fixture::*, support::TestServer};
 async fn s1b_claim_transitions_preserve_revision_and_holder_take_refreshes_staleness() {
   let server = TestServer::start(|_| {}).await;
   let owner = server.bootstrap().await;
-  let bob = user(&server, "bob", false).await;
+  let bob = server.invited("bob", false).await;
   let project = project(&server, &owner.token, vec![]).await.project.id;
   add_member(&server, &owner.token, project, "bob", "member").await;
   let task = create_tasks(&server, &owner.token, project, 1).await.tasks.remove(0);

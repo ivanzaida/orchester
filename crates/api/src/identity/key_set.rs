@@ -113,7 +113,7 @@ impl VerifiedKeySet {
   }
 
   /// Verifies an identity token for the team server `audience` at `now` (seconds since the Unix epoch).
-  pub fn verify_token(&self, token: &str, audience: &str, now: i64) -> Result<IdentityClaims, IdentityError> {
+  pub fn verify_token(&self, token: &str, audience: &str, now: i64) -> Result<VerifiedToken, IdentityError> {
     if now >= self.statement.expires_at {
       return Err(IdentityError::KeySetExpired);
     }
@@ -133,6 +133,16 @@ impl VerifiedKeySet {
       return Err(IdentityError::WrongAudience);
     }
     claims.check_times(listed, now)?;
-    Ok(claims)
+    Ok(VerifiedToken {
+      claims,
+      kid: listed.kid.clone(),
+    })
   }
+}
+
+/// A verified identity token: what it says, and the listed key that signed it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VerifiedToken {
+  pub claims: IdentityClaims,
+  pub kid: String,
 }

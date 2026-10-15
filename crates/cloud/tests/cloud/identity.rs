@@ -46,7 +46,10 @@ pub async fn identity_token_verifies_with_the_published_key_set() {
   let set = key_set(&cloud).await;
   let token = identity_token(&cloud, device).await;
   let now = seconds(&cloud);
-  let claims = set.verify_token(&token, SERVER, now).expect("the token verifies");
+  let claims = set
+    .verify_token(&token, SERVER, now)
+    .expect("the token verifies")
+    .claims;
   assert_eq!(claims.sub, signed.account.id);
   assert_eq!(claims.email, email);
   assert_eq!(claims.name, "Ada Lovelace");

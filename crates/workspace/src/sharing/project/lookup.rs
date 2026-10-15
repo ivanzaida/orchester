@@ -1,8 +1,8 @@
-//! Whether a server has a project for a repository (`docs/architecture/server.md`, "Finding the
-//! project"): asked of the servers the person signed in to, never of an address a repository names,
-//! with the repository's identity only.
+//! Finding a server project (`docs/architecture/server.md`, rows 49–50, "Finding the project"): by its address, the
+//! slug on a server the person joined, or among the person's projects there by the repository a project was set up
+//! for, which is only a hint. Never asked of an address a repository names before the person confirms it.
 
-use orchester_api::{ErrorCode, SharingErrorDetails};
+use orchester_api::{ErrorCode, SharedProject};
 use orchester_core::repository::RepositoryIdentity;
 
 use crate::sharing::{ServerEntry, Servers, SharingError};
@@ -11,41 +11,56 @@ use crate::sharing::{ServerEntry, Servers, SharingError};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Lookup {
   NotShared,
-  /// Shared there as the project with `key`, and the person is a member.
+  /// A project of the person's there was set up for the repository; it has `key`.
   Shared {
     key: String,
   },
-  /// Shared there, and the person is not a member; `owners` can add them.
+  /// Shared there, and the person is not a member; `owners` can add them. A lookup by repository cannot tell this:
+  /// only a lookup by address can ([`Servers::find_project`]).
   NotMember {
     owners: Vec<String>,
   },
 }
 
 impl Servers {
-  /// Asks `entry` whether it has a project for `identity`.
+  /// Whether one of the person's projects on `entry` was set up for `identity` (its remote hint).
   pub async fn lookup(&self, entry: &ServerEntry, identity: RepositoryIdentity) -> Result<Lookup, SharingError> {
+    Ok(
+      self
+        .project_by_hint(entry, &identity)
+        .await?
+        .map_or(Lookup::NotShared, |project| Lookup::Shared { key: project.key }),
+    )
+  }
+
+  /// The project at `slug` on `entry`. No project there, or one the person is not a member of:
+  /// [`SharingError::NoProject`]; the server answers both alike.
+  pub async fn find_project(&self, entry: &ServerEntry, slug: &str) -> Result<SharedProject, SharingError> {
+    let slug = slug.to_owned();
     let answer = self
       .with_token(entry, |client, token| async move {
-        client.projects(&token, Some(&identity)).await
+        client.project_by_slug(&token, &slug).await
       })
       .await;
     match answer {
-      Ok(projects) => Ok(
-        projects
-          .into_iter()
-          .next()
-          .map_or(Lookup::NotShared, |project| Lookup::Shared { key: project.key }),
-      ),
-      Err(SharingError::Client(error)) if error.code() == Some(ErrorCode::NotMember) => {
-        let owners = match error.details() {
-          Some(SharingErrorDetails::Owners { owners }) => {
-            owners.iter().map(|owner| owner.display_name.clone()).collect()
-          }
-          _ => Vec::new(),
-        };
-        Ok(Lookup::NotMember { owners })
-      }
-      Err(error) => Err(error),
+      Err(SharingError::Client(error)) if error.code() == Some(ErrorCode::NotFound) => Err(SharingError::NoProject),
+      answer => answer,
     }
+  }
+
+  /// The person's project on `entry` that was set up for `identity`, if there is one.
+  pub(super) async fn project_by_hint(
+    &self,
+    entry: &ServerEntry,
+    identity: &RepositoryIdentity,
+  ) -> Result<Option<SharedProject>, SharingError> {
+    let projects = self
+      .with_token(entry, |client, token| async move { client.projects(&token).await })
+      .await?;
+    Ok(
+      projects
+        .into_iter()
+        .find(|project| project.remote_hint.as_ref() == Some(identity)),
+    )
   }
 }
