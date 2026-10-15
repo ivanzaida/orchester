@@ -1,4 +1,5 @@
-//! Syntax highlighting of a changed file's diff lines with syntect's bundled Sublime grammars. A
+//! Syntax highlighting of a changed file's diff lines, and of a whole file in the code viewer, with
+//! syntect's bundled Sublime grammars. A
 //! grammar's scopes are reduced to the few kinds of token the design colors (Pencil `code-*`,
 //! mapped like GitHub Dark maps them), so the UI draws tokens through theme roles only.
 //!
@@ -60,6 +61,15 @@ pub fn highlight(file: &FileDiff) -> Option<FileTokens> {
       .map(|hunk| highlight_hunk(syntaxes, syntax, hunk))
       .collect(),
   )
+}
+
+/// Highlights the lines of the file at `path`, read from its start, with the grammar its path names;
+/// `None` when no bundled grammar knows it.
+pub fn highlight_lines<S: AsRef<str>>(path: &str, lines: &[S]) -> Option<Vec<LineTokens>> {
+  let syntaxes = syntaxes();
+  let syntax = syntax_for(syntaxes, path)?;
+  let mut side = Side::new(syntax);
+  Some(lines.iter().map(|line| side.tokens(syntaxes, line.as_ref())).collect())
 }
 
 fn syntaxes() -> &'static SyntaxSet {

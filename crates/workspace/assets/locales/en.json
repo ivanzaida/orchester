@@ -593,6 +593,27 @@
       "runChanged": "The run changed since you wrote this. Check what sending does now, then send again."
     }
   },
+  "files": {
+    "refused": {
+      "empty": "No file is named.",
+      "absolute": "{{path}} is not opened: only a path inside the project's folder opens, not an absolute one.",
+      "parent": "{{path}} is not opened: a path that steps out of its folder with “..” does not open.",
+      "invalid": "{{path}} is not opened: it is not written as a path inside the project's folder.",
+      "hidden": "{{path}} is not opened: what lies in .git and .orchester is not shown.",
+      "outside": "{{path}} is not opened: a link or junction on its way leads out of the folder."
+    },
+    "failure": {
+      "checkoutGone": "The project's folder cannot be read.",
+      "worktreeGone": "The run's worktree no longer exists; it was removed after the run ended.",
+      "revisionGone": "That commit is no longer in the repository.",
+      "noBranch": "The checkout has no branch checked out, so there is no base branch to show.",
+      "missing": "{{path}} is not in this version.",
+      "folder": "{{path}} is a folder; choose a file in the tree.",
+      "unreadable": "{{path}} cannot be read.",
+      "gitMissing": "git was not found. Install git or add it to the PATH, then try again.",
+      "git": "git could not read this version of the files."
+    }
+  },
   "pullRequests": {
     "detail": {
       "diffUnreadable": "The diff is not in a format Orchester can read. Open the pull request in GitHub; the log has the details."
