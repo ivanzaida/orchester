@@ -4,9 +4,9 @@
 
 use orchester_core::{
   connection::{AgentConnection, mcp::McpServer},
-  id::ProjectId,
+  id::{ProjectId, ResourceId},
   permission::{AgentPermissions, CommandPermission},
-  resource::PublishError,
+  resource::{AgentProfile, PublishError},
 };
 use orchester_store::{ProjectDb, StoreError};
 use rmcp::schemars::JsonSchema;
@@ -30,8 +30,10 @@ use crate::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
+  drafts::revision_of,
   links::Link,
   messages::{self, Message},
+  workspace::OpenProject,
 };
 
 #[derive(Deserialize, JsonSchema)]
@@ -71,11 +73,24 @@ pub async fn get_profile(services: &Services, args: InProfile) -> Result<Value, 
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
-    let agents = ProjectAgents::load_in(&open.repo_root)?;
-    let entry = profile_named(&agents, &args.profile)?;
-    Ok(json!({ "profile": profile_json(&agents, entry, open.project.id()) }))
+    let id = profile_named(&ProjectAgents::load_in(&open.repo_root)?, &args.profile)?.id;
+    Ok(json!({ "profile": profile_with_revision(&open, id)? }))
   })
   .await
+}
+
+/// Profile `id` of `open` as get_profile shows it, with its revision ([`crate::drafts::draft_revision`]) read
+/// before the profile: a save made meanwhile shows in the profile, so a save on that revision is refused rather
+/// than going over what was not shown.
+pub(super) fn profile_with_revision(open: &OpenProject, id: ResourceId) -> Result<Value, ToolError> {
+  let revision = revision_of::<AgentProfile, _>(&ProjectDb::open(&open.repo_root)?, id)?;
+  let agents = ProjectAgents::load_in(&open.repo_root)?;
+  let entry = agents
+    .profile(id)
+    .ok_or_else(|| ToolError::not_found(Missing::Profile, id.to_string()))?;
+  let mut value = profile_json(&agents, entry, open.project.id());
+  value["revision"] = json!(revision);
+  Ok(value)
 }
 
 pub async fn publish_profile(services: &Services, args: InProfile) -> Result<Value, ToolError> {

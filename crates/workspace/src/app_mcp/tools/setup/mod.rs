@@ -201,7 +201,8 @@ const SPECS: &[Spec] = &[
     description: "One agent profile as its editor shows it (its draft if it has one, otherwise its latest version): \
                   role, responsibilities, role instructions, connection, model, effort, permissions (repository \
                   access, extra writable folders, commands, network, approvals) and MCP servers, where it stands, \
-                  which published pipeline steps run it, and its link in the app.",
+                  which published pipeline steps run it, its revision, which save_profile_draft's \
+                  expected_revision takes, and its link in the app.",
     schema: schema_for_type::<profiles::InProfile>,
     read_only: true,
   },
@@ -218,7 +219,10 @@ const SPECS: &[Spec] = &[
                   person turned on Let automation change agent permissions in Settings › What automation may do: write \
                   access, writable folders, broader commands, network on, MCP servers, no longer asking before \
                   tool calls, approving automatically (which also needs Let automation answer approvals). Left \
-                  out, a new profile gets the most restrictive permissions. Publish it with publish_profile.",
+                  out, a new profile gets the most restrictive permissions. With expected_revision, the revision \
+                  get_profile or the last save returned, the draft is saved only while it is unchanged, else \
+                  refused as draft_changed; without it the save goes over a change a person or another agent \
+                  saved meanwhile. Publish it with publish_profile.",
     schema: schema_for_type::<profile_input::SaveProfileDraft>,
     read_only: false,
   },
