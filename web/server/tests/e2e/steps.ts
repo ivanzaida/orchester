@@ -8,6 +8,8 @@ import { BINARY, SERVER, type Stack } from "./stack";
 
 export async function signInAtCloud(page: Page, email: string): Promise<void> {
   await expect(page).toHaveURL(/localhost:4400\/signin\?next=/);
+  // The form's fields are React's once the page has hydrated; typing before that is lost.
+  await page.waitForLoadState("networkidle");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
