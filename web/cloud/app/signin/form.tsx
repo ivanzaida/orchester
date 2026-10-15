@@ -55,6 +55,11 @@ export function SignInForm({ csrf, next }: { csrf: string; next?: string | undef
     }
   }
   const outcome = state.outcome;
+  useEffect(() => {
+    if (outcome.kind === "next") {
+      window.location.assign(outcome.href);
+    }
+  }, [outcome]);
   const wait = useRemaining(outcome.kind === "limited" ? outcome.ms : 0);
   const limited = outcome.kind === "limited" && wait > 0;
   const forgot = <AsideLink href="/forgot">{t("signin.forgot")}</AsideLink>;

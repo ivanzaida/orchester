@@ -18,7 +18,9 @@ export type SignInOutcome =
   | { readonly kind: "wrong" }
   | { readonly kind: "unconfirmed"; readonly email: string }
   | { readonly kind: "limited"; readonly error: Message; readonly reason: Message; readonly ms: number }
-  | { readonly kind: "failed"; readonly error: Message };
+  | { readonly kind: "failed"; readonly error: Message }
+  /** Signed in, and back to `/authorize` with a whole page load: its own CSP lets it post to the server admin. */
+  | { readonly kind: "next"; readonly href: string };
 
 export interface SignInState {
   readonly email: string;
@@ -71,5 +73,9 @@ export async function signInAction(previous: SignInState, form: FormData): Promi
   }
   await endPreviousSession();
   await startSession(result.value.token);
-  redirect(nextAfterSignIn(field(form, "next")) ?? "/account");
+  const next = nextAfterSignIn(field(form, "next"));
+  if (next !== null) {
+    return { email, attempt, outcome: { kind: "next", href: next } };
+  }
+  redirect("/account");
 }

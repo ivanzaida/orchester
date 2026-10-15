@@ -5,6 +5,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
 import { FULL, routeSignedIn, signInAccount, type Answer } from "./accounts.ts";
+import { routeRegistry } from "./registry.ts";
 
 import { RIGHT_PASSWORD } from "./accounts.ts";
 
@@ -106,6 +107,10 @@ function route(request: IncomingMessage, path: string, body: Record<string, unkn
   if (signedIn !== undefined) {
     return signedIn;
   }
+  const registry = routeRegistry(request.method ?? "", path, body);
+  if (registry !== undefined) {
+    return registry;
+  }
   switch (`${request.method} ${path}`) {
     case "POST /api/v1/auth/signup":
       return emailing(body.email);
@@ -141,6 +146,10 @@ async function readBody(request: IncomingMessage): Promise<Record<string, unknow
     chunks.push(chunk as Buffer);
   }
   const text = Buffer.concat(chunks).toString();
+  if (request.headers["content-type"]?.startsWith("application/x-www-form-urlencoded") === true) {
+    // The answer `/authorize` posts to a team server admin's callback, which this fake also stands in for.
+    return Object.fromEntries(new URLSearchParams(text));
+  }
   return text === "" ? {} : (JSON.parse(text) as Record<string, unknown>);
 }
 
