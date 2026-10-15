@@ -1,13 +1,13 @@
 //! The conversation (`Chat` in `ZJzV0`): one row per turn, newest last, in a list that keeps the rows out of view
 //! unbuilt and opens on the newest turn. A turn is the person's message (`Your message` `mr4lC`) with where it stands
 //! (*Sending…*, then *Delivered* and when, `check-check` in `success`), the Orchestrator's answer
-//! (`Agent message` `dcd0m` with `waypoints`: its replies as Markdown, their links as `ui::chat::links` shows and
-//! follows them, and its actions as cards, `action`), and how the
+//! (`Agent message` `dcd0m` with `waypoints`: its replies as Markdown with their links, `reply`, and its actions as
+//! cards, `action`), and how the
 //! turn ended: while it thinks, the working line with *Stop response* (`Thinking` `PR7nz`); stopped or cut short, an
 //! event line (`Event divider` `YKpmi`) and *Ask again*; failed, a danger notice with *Retry* (and *Open
 //! Connections* or *Open settings* when the connection is why), or for an earlier turn an event line.
 
-use std::{borrow::Cow, sync::Arc};
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -30,6 +30,7 @@ use orchester_core::{
 use orchester_workspace::{display, orchestrator::tools::ChatScope};
 
 use super::{
+  data::ProjectNames,
   held::{HeldCard, HeldProps},
   proposal::{ProposalProps, StartProposal},
   turns::{Part, Turn},
@@ -40,13 +41,9 @@ use crate::{
   theme::{ConversationText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
-    chat::{
-      Avatar, chat_row, delivery_line,
-      links::{Shown, present},
-      person_message,
-    },
+    chat::{Avatar, chat_row, delivery_line, person_message},
     icon::{Icon, icon},
-    markdown::{LinkHandler, MarkdownView},
+    markdown::LinkHandler,
     notice::{Notice, NoticeTone},
   },
 };
@@ -67,6 +64,8 @@ pub(super) struct TurnEnv {
   pub(super) ask_again: Arc<dyn Fn(Arc<str>) + Send + Sync>,
   /// What a press on a link in a reply does.
   pub(super) links: LinkHandler,
+  /// The projects' names, for what a link to another project's place says.
+  pub(super) names: ProjectNames,
 }
 
 /// One row of the list.
@@ -93,6 +92,7 @@ impl PartialEq for TurnRow {
       && self.env.name == other.env.name
       && self.env.connection == other.env.connection
       && self.env.scope == other.env.scope
+      && self.env.names == other.env.names
   }
 }
 
@@ -188,7 +188,13 @@ fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
     .iter()
     .enumerate()
     .map(|(index, part)| match part {
-      Part::Reply { text: said, .. } => reply(ctx, &format!("orchestrator-reply-{key}-{index}"), said, &row.env.links),
+      Part::Reply { text: said, .. } => super::reply::reply(
+        ctx,
+        &format!("orchestrator-reply-{key}-{index}"),
+        said,
+        (row.env.project, &row.env.names),
+        &row.env.links,
+      ),
       Part::Action { action, at, seq } => {
         let id = format!("orchestrator-action-{key}-{index}");
         match (&action.outcome, &row.env.scope) {
@@ -238,24 +244,6 @@ fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
     (&ctx.t("orchestrator.title"), &meta),
     body,
   ))
-}
-
-/// A reply as Markdown, its links shown as the chat follows them (`links`); `id` names it.
-fn reply(ctx: &mut Ctx, id: &str, said: &Arc<str>, links: &LinkHandler) -> Element {
-  let shown = match present(said, &|shown| link_words(ctx, shown)) {
-    Cow::Borrowed(_) => said.clone(),
-    Cow::Owned(shown) => Arc::from(shown),
-  };
-  MarkdownView::new(id, shown, links.clone()).render(ctx)
-}
-
-/// How a link to the web is shown with its host, and a link the chat cannot follow as text.
-fn link_words(ctx: &Ctx, shown: Shown<'_>) -> String {
-  match shown {
-    Shown::Web { link, host } => ctx.t_args("orchestrator.link.web", [("link", link), ("host", host)]),
-    Shown::Address { text, address } => ctx.t_args("orchestrator.link.address", [("text", text), ("address", address)]),
-  }
-  .to_string()
 }
 
 /// How the turn ended, with what the person can do about the newest one.

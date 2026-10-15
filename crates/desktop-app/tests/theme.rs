@@ -22,8 +22,8 @@ use lurq::{
 };
 use orchester_app::theme::{
   self, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography, IconSize,
-  Mode, OrchestratorSpacing, OrchestratorText, SHORTCUT_OPACITY, SettingsSpacing, SettingsText, ShellSpacing,
-  ShellText, StartupSpacing, StartupText,
+  Mode, OrchestratorRadius, OrchestratorShadow, OrchestratorSpacing, OrchestratorText, SHORTCUT_OPACITY,
+  SettingsSpacing, SettingsText, ShellSpacing, ShellText, StartupSpacing, StartupText,
 };
 
 fn themed(mode: Mode) -> App {

@@ -70,7 +70,7 @@ fn build_programs() -> (PathBuf, PathBuf, PathBuf) {
   )
 }
 
-fn git(repo: &Path, args: &[&str]) {
+pub fn git(repo: &Path, args: &[&str]) {
   let output = Command::new("git")
     .arg("-C")
     .arg(repo)

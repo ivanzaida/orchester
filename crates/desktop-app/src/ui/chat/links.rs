@@ -190,7 +190,7 @@ fn links(source: &str) -> Vec<WrittenLink> {
 }
 
 /// The extensions lurq's Markdown reads (`lurq::markdown::parse_markdown`), so both find the same links.
-fn options() -> Options {
+pub(crate) fn options() -> Options {
   Options::ENABLE_TABLES
     | Options::ENABLE_STRIKETHROUGH
     | Options::ENABLE_TASKLISTS

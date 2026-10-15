@@ -1,10 +1,12 @@
-//! Values of the Orchestrator chat (`TrG83`) and its settings (`Xir64`) that no other screen uses.
+//! Values of the Orchestrator chat (`TrG83`) and its settings (`Xir64`) that no other screen uses; its replies'
+//! links (`Orchestrator · links · states` `agv8r`).
 
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{SpacingSize, Theme, ThemePalette, TypographyStyle},
+  app::theme::{PaletteColor, RadiusSize, ShadowStyle, SpacingSize, Theme, ThemePalette, TypographyStyle},
   layout::text_style::{FontWeight, TextStyle},
+  node::box_shadow::BoxShadow,
 };
 
 use super::typography::{mono, style};
@@ -22,15 +24,22 @@ pub enum OrchestratorText {
   Suggestion,
   /// 11/500 `text_primary`: *Manage context* after the context line (`q7W1f`).
   ContextLink,
+  /// 11.5 `text_muted`: the host after a link to the web (`zKxtr` in `agv8r`).
+  LinkHost,
+  /// Geist Mono 11.5 `text_muted`: the address after the words of a link the chat does not follow (`Suuac` in
+  /// `agv8r`).
+  LinkAddress,
 }
 
 impl OrchestratorText {
-  pub const ALL: [Self; 5] = [
+  pub const ALL: [Self; 7] = [
     Self::PanelTitle,
     Self::Emphasis,
     Self::Eyebrow,
     Self::Suggestion,
     Self::ContextLink,
+    Self::LinkHost,
+    Self::LinkAddress,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -44,6 +53,8 @@ impl OrchestratorText {
       Self::Eyebrow => "orchestrator_eyebrow",
       Self::Suggestion => "orchestrator_suggestion",
       Self::ContextLink => "orchestrator_context_link",
+      Self::LinkHost => "orchestrator_link_host",
+      Self::LinkAddress => "orchestrator_link_address",
     }
   }
 
@@ -54,6 +65,8 @@ impl OrchestratorText {
       Self::Eyebrow => mono(style(11.0, FontWeight::Normal, 1.3, 0.6, palette.text_muted)),
       Self::Suggestion => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
       Self::ContextLink => style(11.0, FontWeight::Medium, 1.4, 0.0, palette.text_primary),
+      Self::LinkHost => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::LinkAddress => mono(style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
     }
   }
 }
@@ -93,6 +106,65 @@ impl OrchestratorSpacing {
   }
 }
 
+/// Radii of the Orchestrator.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OrchestratorRadius {
+  /// 3: a link's hover fill (top corners) and focus ring (`K52XFs`, `Mjhop` in `agv8r`).
+  Link,
+}
+
+impl OrchestratorRadius {
+  pub const ALL: [Self; 1] = [Self::Link];
+
+  pub fn role(self) -> RadiusSize {
+    RadiusSize::extra(self.name())
+  }
+
+  const fn name(self) -> &'static str {
+    match self {
+      Self::Link => "orchestrator_link",
+    }
+  }
+
+  pub const fn value(self) -> f32 {
+    match self {
+      Self::Link => 3.0,
+    }
+  }
+}
+
+/// Shadows of the Orchestrator.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OrchestratorShadow {
+  /// A focused link's ring: 2 of `border_focus` outside its edge (`Mjhop` in `agv8r`), where the chrome's focus
+  /// ring sits inside a control's edge.
+  LinkFocus,
+}
+
+impl OrchestratorShadow {
+  pub fn role(self) -> ShadowStyle {
+    ShadowStyle::extra(self.name())
+  }
+
+  const fn name(self) -> &'static str {
+    match self {
+      Self::LinkFocus => "orchestrator_link_focus",
+    }
+  }
+}
+
+/// The line height of a link's words in a reply, so its underline sits 1 under them (`qgLX8` in `agv8r`); the
+/// words keep the size of the text around them.
+pub const LINK_LINE_HEIGHT: f32 = 1.3;
+
+/// The width of a focused link's ring.
+const LINK_FOCUS_WIDTH: f32 = 2.0;
+
+pub(super) fn shadows() -> impl Iterator<Item = (Arc<str>, Arc<[BoxShadow]>)> {
+  let ring = BoxShadow::new(0.0, 0.0, 0.0, PaletteColor::BorderFocus).spread(LINK_FOCUS_WIDTH);
+  std::iter::once((Arc::from(OrchestratorShadow::LinkFocus.name()), Arc::from([ring])))
+}
+
 pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<str>, TextStyle)> {
   OrchestratorText::ALL
     .into_iter()
@@ -102,5 +174,8 @@ pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<st
 pub(super) fn install(theme: &Theme) {
   for spacing in OrchestratorSpacing::ALL {
     theme.set_spacing_value(spacing.role(), spacing.value());
+  }
+  for radius in OrchestratorRadius::ALL {
+    theme.set_radius_value(radius.role(), radius.value());
   }
 }

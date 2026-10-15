@@ -10,7 +10,9 @@ use std::sync::Arc;
 
 use lurq::{
   app::theme::{MarkdownBlockStyle, MarkdownInlineStyle, ThemeMarkdown, ThemePalette},
-  layout::text_style::{FontFeature, FontFeatures, FontWeight},
+  components::Text,
+  layout::text_style::{FontFeature, FontFeatures, FontWeight, TextStyle},
+  markdown::MarkdownHeadingLevel,
   node::color::Color,
 };
 
@@ -121,5 +123,25 @@ pub fn markdown(palette: &ThemePalette) -> ThemeMarkdown {
     // A table's columns share the text's width, however narrow: it never runs past its text.
     table_cell_min_width: 0.0,
     ..ThemeMarkdown::default()
+  }
+}
+
+/// A run of Markdown text in `style`, which a caller resolved from this theme's Markdown roles over a text role:
+/// for a reply the chat draws itself where lurq's Markdown draws every link alike (`screens::orchestrator::reply`).
+pub fn run(text: &str, style: TextStyle) -> Text {
+  Text::styled(text, style)
+}
+
+/// A heading's text style over `base`, the body's, as lurq's Markdown sets it: for a reply the chat draws itself
+/// (`screens::orchestrator::reply`).
+pub fn heading_style(theme: &ThemeMarkdown, level: MarkdownHeadingLevel, base: &TextStyle) -> TextStyle {
+  let shared = theme.heading.apply(base);
+  match level {
+    MarkdownHeadingLevel::H1 => theme.heading_1.apply(&shared),
+    MarkdownHeadingLevel::H2 => theme.heading_2.apply(&shared),
+    MarkdownHeadingLevel::H3 => theme.heading_3.apply(&shared),
+    MarkdownHeadingLevel::H4 => theme.heading_4.apply(&shared),
+    MarkdownHeadingLevel::H5 => theme.heading_5.apply(&shared),
+    MarkdownHeadingLevel::H6 => theme.heading_6.apply(&shared),
   }
 }

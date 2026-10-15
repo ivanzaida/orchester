@@ -7,7 +7,12 @@
     "answerMeta": "{{model}} · {{time}}",
     "link": {
       "web": "{{link}} ({{host}})",
-      "address": "{{text}} ({{address}})"
+      "address": "{{text}} ({{address}})",
+      "addressNote": "({{address}})",
+      "opensHere": "{{place}} · opens in this tab",
+      "opensBrowser": "Opens {{url}} in your browser",
+      "inProject": "{{project}} › {{page}}",
+      "taskTab": "{{key}} › {{tab}}"
     },
     "newTitle": "New conversation",
     "history": "History",
