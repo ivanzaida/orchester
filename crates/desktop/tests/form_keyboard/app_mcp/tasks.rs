@@ -23,14 +23,7 @@ fn app_mcp_lists_the_published_pipelines() {
   assert_eq!(pipelines[0]["version"], 1);
   assert_eq!(pipelines[0]["steps"][0]["name"], "Implement");
   assert_eq!(pipelines[0]["steps"][0]["approval_gate"], false);
-  // Without a project, every project the app knows, each pipeline naming its project.
-  let everywhere = ok(&mut agent, "list_pipelines", &json!({}));
-  assert_eq!(everywhere["pipelines"][0]["project"]["name"], "Kontur");
-  let error = refused(
-    &mut agent,
-    "list_pipelines",
-    &json!({"project": "Kontur", "status": "draft"}),
-  );
+  let error = refused(&mut agent, "list_pipelines", &json!({}));
   assert_eq!(error["code"], "invalid_arguments");
 }
 
