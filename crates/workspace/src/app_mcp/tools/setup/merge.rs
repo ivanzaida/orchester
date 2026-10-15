@@ -26,6 +26,7 @@ use crate::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
+  links::{Link, TaskPage},
   messages::Message,
   tasks::{
     changes::{ChangesError, Checkpointed, NotCheckpointed, RunStage, checkpointed_in, not_checkpointed_in},
@@ -41,7 +42,14 @@ pub async fn get_changes(services: &Services, args: InRun) -> Result<Value, Tool
   let unreadable = |error: ChangesError| ToolError::refused("cannot_read_changes", vec![error.message()]);
   blocking(move || {
     let open = services.project(&args.project)?;
-    let run = find_run(&ProjectDb::open(&open.repo_root)?, &args.run)?;
+    let db = ProjectDb::open(&open.repo_root)?;
+    let run = find_run(&db, &args.run)?;
+    // The changes are read without their task; only the link needs it, so a task that cannot be read costs the
+    // link alone.
+    let link = match db.task(run.task()) {
+      Ok(task) => task.map(|task| Link::Task(open.project.id(), task.key().clone(), TaskPage::Changes).path()),
+      Err(_) => None,
+    };
     let head = run.last_checkpoint().map(|checkpoint| checkpoint.revision().clone());
     let checkpointed =
       checkpointed_in(&open.repo_root, &services.programs, run.base(), head.as_ref()).map_err(unreadable)?;
@@ -51,6 +59,7 @@ pub async fn get_changes(services: &Services, args: InRun) -> Result<Value, Tool
       "run": { "id": run.id().to_string(), "number": run.number().get() },
       "checkpointed": checkpointed_json(&checkpointed),
       "not_checkpointed": not_checkpointed_json(&worktree),
+      "link": link,
     }))
   })
   .await

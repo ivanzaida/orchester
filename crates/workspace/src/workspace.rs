@@ -78,7 +78,7 @@ impl ProjectData {
         return Self::Unreadable(messages::store_error(&error));
       }
     };
-    match ProjectTasks::read(&db, &project.repo_root, programs) {
+    match ProjectTasks::read(&db, &project.repo_root, Some(programs)) {
       Ok(tasks) => Self::Readable(Some(Arc::new(tasks))),
       // The project still opens; only its counts are unknown, and the log says why.
       Err(error) => {

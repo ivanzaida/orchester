@@ -116,7 +116,7 @@ pub async fn save_pipeline_draft(
 ) -> Result<Value, ToolError> {
   let services = services.clone();
   let then = translate.text(&Message::new("pipelines.flow.then"));
-  let (opened, saved) = blocking(move || {
+  let (project, opened, saved) = blocking(move || {
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
     let id = pipeline_named(&db, &args.pipeline)?;
@@ -155,10 +155,14 @@ pub async fn save_pipeline_draft(
         _ => error.into(),
       })?;
     services.changes.record(open.project.id(), Outside::Pipelines);
-    Ok((opened(&ProjectDb::open(&open.repo_root)?, id, &args.pipeline)?, saved))
+    Ok((
+      open.project.id(),
+      opened(&ProjectDb::open(&open.repo_root)?, id, &args.pipeline)?,
+      saved,
+    ))
   })
   .await?;
-  let mut value = pipeline_json(&opened, translate);
+  let mut value = pipeline_json(&opened, project, translate);
   value["draft_kept"] = json!(saved == DraftSaved::Stored);
   Ok(json!({ "pipeline": value }))
 }

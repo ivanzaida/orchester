@@ -3,7 +3,7 @@
 //! draft published as Publish does. The task form offers a pipeline once it is published.
 
 use orchester_core::{
-  id::ResourceId,
+  id::{ProjectId, ResourceId},
   name::Name,
   permission::{StepCommands, StepNetwork},
   resource::{Pipeline, PipelineEdit, PromptText, PublishError, StarterStep, StarterStepText, Step, StepKind, Version},
@@ -24,6 +24,7 @@ use crate::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
+  links::Link,
   messages::{self, Message},
   pipelines::{
     data::{Assignables, OpenError, OpenedPipeline},
@@ -68,14 +69,14 @@ pub struct CreatePipeline {
 
 pub async fn get_pipeline(services: &Services, args: InPipeline, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  let opened = blocking(move || {
+  let (project, opened) = blocking(move || {
     let open = services.project(&args.project)?;
     let db = ProjectDb::open(&open.repo_root)?;
     let id = pipeline_named(&db, &args.pipeline)?;
-    opened(&db, id, &args.pipeline)
+    Ok((open.project.id(), opened(&db, id, &args.pipeline)?))
   })
   .await?;
-  Ok(json!({ "pipeline": pipeline_json(&opened, translate) }))
+  Ok(json!({ "pipeline": pipeline_json(&opened, project, translate) }))
 }
 
 pub async fn create_pipeline(
@@ -85,7 +86,7 @@ pub async fn create_pipeline(
 ) -> Result<Value, ToolError> {
   let services = services.clone();
   let starter = starter_text(translate);
-  let opened = blocking(move || {
+  let (project, opened) = blocking(move || {
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
     let name = Name::new(&args.name).map_err(|error| refused("invalid_name", messages::name_error(&error)))?;
@@ -118,10 +119,10 @@ pub async fn create_pipeline(
     }
     .map_err(|error| create_error(&error))?;
     services.changes.record(open.project.id(), Outside::Pipelines);
-    opened(&db, id, &args.name)
+    Ok((open.project.id(), opened(&db, id, &args.name)?))
   })
   .await?;
-  Ok(json!({ "pipeline": pipeline_json(&opened, translate) }))
+  Ok(json!({ "pipeline": pipeline_json(&opened, project, translate) }))
 }
 
 pub async fn publish_pipeline(
@@ -130,7 +131,7 @@ pub async fn publish_pipeline(
   translate: &Translate,
 ) -> Result<Value, ToolError> {
   let services = services.clone();
-  let opened = blocking(move || {
+  let (project, opened) = blocking(move || {
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
     let id = pipeline_named(&db, &args.pipeline)?;
@@ -145,10 +146,13 @@ pub async fn publish_pipeline(
     // The library lists the version, and the task form offers it.
     services.changes.record(open.project.id(), Outside::Pipelines);
     services.changes.record(open.project.id(), Outside::Tasks);
-    opened(&ProjectDb::open(&open.repo_root)?, id, &args.pipeline)
+    Ok((
+      open.project.id(),
+      opened(&ProjectDb::open(&open.repo_root)?, id, &args.pipeline)?,
+    ))
   })
   .await?;
-  Ok(json!({ "pipeline": pipeline_json(&opened, translate) }))
+  Ok(json!({ "pipeline": pipeline_json(&opened, project, translate) }))
 }
 
 /// The project's pipeline named by its id or, ignoring case, its name, whether published or not.
@@ -219,8 +223,8 @@ const fn starter_keys(step: StarterStep) -> [&'static str; 3] {
   }
 }
 
-/// A pipeline as `get_pipeline` shows it.
-pub(super) fn pipeline_json(opened: &OpenedPipeline, translate: &Translate) -> Value {
+/// A pipeline of `project` as `get_pipeline` shows it, with its link.
+pub(super) fn pipeline_json(opened: &OpenedPipeline, project: ProjectId, translate: &Translate) -> Value {
   let edit = PipelineEdit::new(opened.body.clone());
   let then = translate.text(&Message::new("pipelines.flow.then"));
   let problems: Vec<String> = edit
@@ -248,6 +252,7 @@ pub(super) fn pipeline_json(opened: &OpenedPipeline, translate: &Translate) -> V
     "steps": steps,
     "problems": problems,
     "assignable": assignable_json(&opened.assignables),
+    "link": Link::Pipeline(project, opened.id).path(),
   })
 }
 

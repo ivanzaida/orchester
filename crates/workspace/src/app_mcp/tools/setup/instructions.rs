@@ -8,15 +8,24 @@
 use std::collections::BTreeSet;
 
 use orchester_core::{
+  id::{ProjectId, ResourceId},
   name::Name,
   resource::{AgentTargets, InjectionEvent, Instruction, InstructionScope, PublishError},
+  store::ResourceStore,
 };
-use orchester_store::StoreError;
+use orchester_store::{ProjectDb, StoreError};
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{super::projects::InProject, profiles::no_draft};
+use super::{
+  super::{
+    Translate,
+    across::{InProjects, across},
+    wire,
+  },
+  profiles::no_draft,
+};
 use crate::{
   agents::data::VersionState,
   app_mcp::{
@@ -28,6 +37,7 @@ use crate::{
     editor::{self, WriteError},
     form::{Events, InstructionForm, ScopeChoice, SettingsError, Target},
   },
+  links::Link,
   messages::{self, Message},
 };
 
@@ -101,13 +111,49 @@ pub struct SaveInstructionDraft {
   pub text: String,
 }
 
-pub async fn list_instructions(services: &Services, args: InProject) -> Result<Value, ToolError> {
+pub async fn list_instructions(
+  services: &Services,
+  args: InProjects,
+  translate: &Translate,
+) -> Result<Value, ToolError> {
+  let services = services.clone();
+  let read = blocking(move || {
+    across(&services, args.project.as_deref(), |_, db| {
+      Ok(ProjectInstructions::load(db)?)
+    })
+  })
+  .await?;
+  Ok(read.json("instructions", translate, |open, data| {
+    let project = open.project.id();
+    data
+      .entries
+      .iter()
+      .map(|entry| entry_json(data, entry, project))
+      .collect()
+  }))
+}
+
+pub async fn get_instruction(services: &Services, args: InInstruction) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
-    let data = ProjectInstructions::load_in(&open.repo_root)?;
-    let listed: Vec<Value> = data.entries.iter().map(|entry| entry_json(&data, entry)).collect();
-    Ok(json!({ "instructions": listed }))
+    let db = ProjectDb::open(&open.repo_root)?;
+    let data = ProjectInstructions::load(&db)?;
+    let entry = entry_named(&data, &args.instruction)?;
+    let versions: Vec<Value> = db
+      .versions::<Instruction>(entry.id)?
+      .iter()
+      .map(|version| {
+        json!({
+          "version": version.number().get(),
+          "published_at": wire::time(version.published_at()),
+          "text": version.body().text().as_str(),
+        })
+      })
+      .collect();
+    let mut instruction = entry_json(&data, entry, open.project.id());
+    instruction["versions"] = json!(versions);
+    Ok(json!({ "instruction": instruction }))
   })
   .await
 }
@@ -146,7 +192,7 @@ pub async fn save_instruction_draft(services: &Services, args: SaveInstructionDr
     let entry = data
       .entry(id)
       .ok_or_else(|| ToolError::not_found(Missing::Instruction, id.to_string()))?;
-    Ok(json!({ "instruction": entry_json(&data, entry) }))
+    Ok(json!({ "instruction": entry_json(&data, entry, open.project.id()) }))
   })
   .await
 }
@@ -171,7 +217,7 @@ pub async fn publish_instruction(services: &Services, args: InInstruction) -> Re
     let entry = data
       .entry(id)
       .ok_or_else(|| ToolError::not_found(Missing::Instruction, id.to_string()))?;
-    Ok(json!({ "instruction": entry_json(&data, entry) }))
+    Ok(json!({ "instruction": entry_json(&data, entry, open.project.id()) }))
   })
   .await
 }
@@ -294,21 +340,10 @@ fn pipeline_named<'a>(data: &'a ProjectInstructions, named: &str) -> Result<&'a 
     .ok_or_else(|| ToolError::not_found(Missing::Pipeline, named))
 }
 
-fn entry_json(data: &ProjectInstructions, entry: &InstructionEntry) -> Value {
+/// An instruction of `project` as Instructions lists it, with its link: the page, which opens on its library.
+fn entry_json(data: &ProjectInstructions, entry: &InstructionEntry, project: ProjectId) -> Value {
   let body = &entry.body;
-  let pipeline_name = |id| data.pipeline(id).map(|pipeline| &*pipeline.name);
-  let applies_in = match body.scope() {
-    InstructionScope::Project => json!({ "kind": "project" }),
-    InstructionScope::AgentRole { role } => json!({ "kind": "agent_role", "role": role.as_str() }),
-    InstructionScope::Pipeline { pipeline } => {
-      json!({ "kind": "pipeline", "pipeline": { "id": pipeline.to_string(), "name": pipeline_name(*pipeline) } })
-    }
-    InstructionScope::Step { pipeline, step } => json!({
-      "kind": "step",
-      "pipeline": { "id": pipeline.to_string(), "name": pipeline_name(*pipeline) },
-      "step": step.as_str(),
-    }),
-  };
+  let applies_in = scope_json(body.scope(), |id| data.pipeline(id).map(|pipeline| &*pipeline.name));
   let agents = match body.targets() {
     AgentTargets::All => json!({ "kind": "all" }),
     AgentTargets::Roles(roles) => {
@@ -340,7 +375,25 @@ fn entry_json(data: &ProjectInstructions, entry: &InstructionEntry) -> Value {
     "text": body.text().as_str(),
     "state": state,
     "published_version": entry.state.published().map(|version| version.get()),
+    "link": Link::Instructions(project).path(),
   })
+}
+
+/// Where an instruction or a skill applies: the project, an agent role, a pipeline (with `pipeline_name`'s
+/// name of it) or one of its steps.
+pub(super) fn scope_json<'a>(scope: &InstructionScope, pipeline_name: impl Fn(ResourceId) -> Option<&'a str>) -> Value {
+  match scope {
+    InstructionScope::Project => json!({ "kind": "project" }),
+    InstructionScope::AgentRole { role } => json!({ "kind": "agent_role", "role": role.as_str() }),
+    InstructionScope::Pipeline { pipeline } => {
+      json!({ "kind": "pipeline", "pipeline": { "id": pipeline.to_string(), "name": pipeline_name(*pipeline) } })
+    }
+    InstructionScope::Step { pipeline, step } => json!({
+      "kind": "step",
+      "pipeline": { "id": pipeline.to_string(), "name": pipeline_name(*pipeline) },
+      "step": step.as_str(),
+    }),
+  }
 }
 
 fn write_error(error: &WriteError) -> ToolError {

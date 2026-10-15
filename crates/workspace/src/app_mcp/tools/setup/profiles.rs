@@ -4,6 +4,7 @@
 
 use orchester_core::{
   connection::{AgentConnection, mcp::McpServer},
+  id::ProjectId,
   permission::{AgentPermissions, CommandPermission},
   resource::PublishError,
 };
@@ -12,7 +13,14 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{super::projects::InProject, connections::agent_by_id, widening};
+use super::{
+  super::{
+    Translate,
+    across::{InProjects, across},
+  },
+  connections::agent_by_id,
+  widening,
+};
 use crate::{
   agents::{
     data::{ProfileEntry, ProjectAgents, VersionState, publish_checked_in},
@@ -22,6 +30,7 @@ use crate::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
+  links::Link,
   messages::{self, Message},
 };
 
@@ -35,12 +44,11 @@ pub struct InProfile {
   pub profile: String,
 }
 
-pub async fn list_profiles(services: &Services, args: InProject) -> Result<Value, ToolError> {
+pub async fn list_profiles(services: &Services, args: InProjects, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  blocking(move || {
-    let open = services.project(&args.project)?;
-    let agents = ProjectAgents::load_in(&open.repo_root)?;
-    let profiles: Vec<Value> = agents
+  let read = blocking(move || across(&services, args.project.as_deref(), |_, db| Ok(ProjectAgents::load(db)?))).await?;
+  Ok(read.json("profiles", translate, |open, agents| {
+    agents
       .profiles
       .iter()
       .map(|entry| {
@@ -52,12 +60,11 @@ pub async fn list_profiles(services: &Services, args: InProject) -> Result<Value
           "model": entry.profile.model().as_str(),
           "effort": stored_effort(&entry.profile),
           "state": state_json(entry.state),
+          "link": Link::Profile(open.project.id(), entry.id).path(),
         })
       })
-      .collect();
-    Ok(json!({ "profiles": profiles }))
-  })
-  .await
+      .collect()
+  }))
 }
 
 pub async fn get_profile(services: &Services, args: InProfile) -> Result<Value, ToolError> {
@@ -66,7 +73,7 @@ pub async fn get_profile(services: &Services, args: InProfile) -> Result<Value, 
     let open = services.project(&args.project)?;
     let agents = ProjectAgents::load_in(&open.repo_root)?;
     let entry = profile_named(&agents, &args.profile)?;
-    Ok(json!({ "profile": profile_json(&agents, entry) }))
+    Ok(json!({ "profile": profile_json(&agents, entry, open.project.id()) }))
   })
   .await
 }
@@ -99,7 +106,7 @@ pub async fn publish_profile(services: &Services, args: InProfile) -> Result<Val
     let entry = agents
       .profile(id)
       .ok_or_else(|| ToolError::not_found(Missing::Profile, id.to_string()))?;
-    Ok(json!({ "profile": profile_json(&agents, entry) }))
+    Ok(json!({ "profile": profile_json(&agents, entry, open.project.id()) }))
   })
   .await
 }
@@ -119,8 +126,8 @@ pub(super) fn profile_named<'a>(agents: &'a ProjectAgents, named: &str) -> Resul
     .ok_or_else(|| ToolError::not_found(Missing::Profile, named))
 }
 
-/// A profile as `get_profile` shows it.
-pub(super) fn profile_json(agents: &ProjectAgents, entry: &ProfileEntry) -> Value {
+/// A profile of `project` as `get_profile` shows it, with its link.
+pub(super) fn profile_json(agents: &ProjectAgents, entry: &ProfileEntry, project: ProjectId) -> Value {
   let profile = &entry.profile;
   let connection: Option<&AgentConnection> = agent_by_id(&agents.connections, profile.connection());
   let servers: Vec<Value> = profile
@@ -154,6 +161,7 @@ pub(super) fn profile_json(agents: &ProjectAgents, entry: &ProfileEntry) -> Valu
     "mcp_servers": servers,
     "state": state_json(entry.state),
     "used_by_steps": steps,
+    "link": Link::Profile(project, entry.id).path(),
   })
 }
 

@@ -104,7 +104,7 @@ pub async fn save_tool_draft(services: &Services, args: SaveToolDraft) -> Result
     services
       .changes
       .record(open.project.id(), crate::tasks::outside::Outside::Tools);
-    let mut value = tool_json(&tools, entry);
+    let mut value = tool_json(&tools, entry, open.project.id());
     value["draft_kept"] = json!(saved == DraftSaved::Stored);
     Ok(json!({ "tool": value }))
   })

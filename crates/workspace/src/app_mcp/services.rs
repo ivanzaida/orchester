@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use orchester_core::{id::ResourceId, resource::ResourceBody, store::ResourceStore, time::Timestamp};
 use orchester_exec::programs::Programs;
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, RegisteredProject};
 
 use super::error::{Missing, ToolError};
 use crate::{
@@ -116,24 +116,8 @@ impl Services {
   /// SQLite. It is not recorded as the most recently used project: only a person opening it is.
   pub(super) fn project(&self, named: &str) -> Result<OpenProject, ToolError> {
     let projects = self.workspace.projects()?;
-    let by_id = projects.iter().find(|project| project.id.to_string() == named);
-    let lowered = named.to_lowercase();
-    let by_name: Vec<_> = projects
-      .iter()
-      .filter(|project| project.name.as_str().to_lowercase() == lowered)
-      .collect();
-    let registered = match (by_id, by_name.as_slice()) {
-      (Some(project), _) => project,
-      (None, [project]) => *project,
-      (None, []) => return Err(ToolError::not_found(Missing::Project, named)),
-      (None, _) => return Err(ToolError::AmbiguousProject(named.to_owned())),
-    };
-    if registered.folder_missing() {
-      return Err(ToolError::refused(
-        "project_folder_missing",
-        vec![Message::new("errors.projectMissing")],
-      ));
-    }
+    let registered = registered(&projects, named)?;
+    there(registered)?;
     let db = ProjectDb::open(&registered.repo_root)?;
     Ok(OpenProject {
       project: db.project().clone(),
@@ -148,6 +132,36 @@ fn changed_since_decided() -> ToolError {
     "changed_since_proposed",
     vec![Message::new("orchestrator.proposal.draftChangedPlain")],
   )
+}
+
+/// The project of `projects` (the app's registry) named by its id or, ignoring case, its name.
+pub(super) fn registered<'a>(
+  projects: &'a [RegisteredProject],
+  named: &str,
+) -> Result<&'a RegisteredProject, ToolError> {
+  let by_id = projects.iter().find(|project| project.id.to_string() == named);
+  let lowered = named.to_lowercase();
+  let by_name: Vec<_> = projects
+    .iter()
+    .filter(|project| project.name.as_str().to_lowercase() == lowered)
+    .collect();
+  match (by_id, by_name.as_slice()) {
+    (Some(project), _) => Ok(project),
+    (None, [project]) => Ok(*project),
+    (None, []) => Err(ToolError::not_found(Missing::Project, named)),
+    (None, _) => Err(ToolError::AmbiguousProject(named.to_owned())),
+  }
+}
+
+/// Refused when the folder of `project` is gone.
+pub(super) fn there(project: &RegisteredProject) -> Result<(), ToolError> {
+  if project.folder_missing() {
+    return Err(ToolError::refused(
+      "project_folder_missing",
+      vec![Message::new("errors.projectMissing")],
+    ));
+  }
+  Ok(())
 }
 
 /// Runs `work`, which blocks on SQLite or git, on the blocking pool.

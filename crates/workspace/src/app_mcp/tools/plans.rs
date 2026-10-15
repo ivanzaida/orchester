@@ -8,7 +8,7 @@
 //! decided it.
 
 use orchester_core::{
-  id::RunId,
+  id::{ProjectId, RunId},
   run::{Answerer, Plan, PlanDecision, ReviewNote, RunStatus},
   store::{RunStore, TaskStore},
 };
@@ -27,6 +27,7 @@ use crate::{
     error::ToolError,
     services::{Services, blocking},
   },
+  links::TaskPage,
   messages::Message,
   runner::RunRequestError,
   tasks::{
@@ -243,10 +244,10 @@ pub fn decided(plan: &Plan) -> Option<Value> {
   }))
 }
 
-/// The plans the running runs of project database `db` wait on, in run order; only `run`'s when
-/// one is named. Each with its excerpt only: plans can be long, and `get_run` gives a plan's whole
-/// text.
-pub fn waiting_plans(db: &ProjectDb, run: Option<RunId>) -> Result<Vec<Value>, ToolError> {
+/// The plans the running runs of project database `db` of `project` wait on, in run order; only `run`'s when
+/// one is named. Each with its excerpt only (plans can be long, and `get_run` gives a plan's whole text) and
+/// the link to its card, on its task's Conversation.
+pub fn waiting_plans(db: &ProjectDb, project: ProjectId, run: Option<RunId>) -> Result<Vec<Value>, ToolError> {
   let mut plans = Vec::new();
   for listed in db.running_runs().map_err(run_store_error)? {
     // An unreadable run takes no decision; `get_run` names why it cannot be read.
@@ -259,6 +260,11 @@ pub fn waiting_plans(db: &ProjectDb, run: Option<RunId>) -> Result<Vec<Value>, T
     if let Some(review) = PlanReview::of(&view) {
       let mut shown = waiting(&review, false);
       shown["run"] = json!({ "id": view.id().to_string(), "number": view.run.number().get() });
+      shown["link"] = json!(
+        task
+          .as_deref()
+          .and_then(|key| wire::task_link(project, key, TaskPage::Conversation))
+      );
       shown["task"] = json!(task);
       plans.push(shown);
     }
@@ -267,7 +273,7 @@ pub fn waiting_plans(db: &ProjectDb, run: Option<RunId>) -> Result<Vec<Value>, T
 }
 
 /// The first characters of `text`, trimmed, with an ellipsis when there is more.
-fn excerpt(text: &str) -> String {
+pub(super) fn excerpt(text: &str) -> String {
   let text = text.trim();
   match text.char_indices().nth(EXCERPT_CHARS) {
     Some((end, _)) => format!("{}…", text[..end].trim_end()),
