@@ -1,39 +1,25 @@
 //! Git uses pathnames internally. While an operation changes the repository, hold its existing metadata directory
-//! chains, every existing loose-object bucket among them, against rename and deletion before Git uses them.
-//! Nothing is created in `.git`: missing folders are Git's to make. Folders outside `objects` are kept nonempty by
-//! an anchor so they cannot be turned into junctions; the anchors are removed when the ownership ends. `objects` is
-//! Git's alone and gets no anchor: an empty loose-object bucket is held against rename only.
-use std::{
-  ffi::OsStr,
-  fs::File,
-  io::Read,
-  path::{Path, PathBuf},
-  sync::Arc,
-};
+//! chains, every existing loose-object bucket among them, against rename and deletion before Git uses them: each
+//! folder by an open handle that does not share deletion. Orchester creates nothing in the person's `.git`, so an
+//! empty folder Git would remove stays until the operation ends, and an empty folder is held against rename only:
+//! one turned into a junction is found before the next Git process starts ([`MetadataOwnership::ensure_current`]),
+//! not while one runs. Markers an earlier build left are removed.
+use std::{ffi::OsStr, fs::File, io::Read, path::Path, sync::Arc};
 
-use super::{
-  Directory, LocalError, LocalGitError,
-  windows::{self, Pin},
-};
+use super::{Directory, LocalError, LocalGitError, windows};
 
-/// The anchor's name, the same in every folder it keeps nonempty.
-const ANCHOR: &str = ".orchester-local-owner";
+/// The marker earlier builds left in every folder they held; removed wherever an operation finds it.
+const LEFTOVER_MARKER: &str = ".orchester-local-owner";
 
 pub struct MetadataOwnership {
   directories: Vec<Arc<Directory>>,
   files: Vec<File>,
-  /// The anchors this ownership placed, removed when it ends.
-  anchors: Vec<PathBuf>,
-  /// The `objects` folder, whose subfolders get no anchor.
-  objects: Option<PathBuf>,
 }
 impl MetadataOwnership {
   pub fn acquire(root: &Arc<Directory>) -> Result<Self, LocalGitError> {
     let mut held = Self {
       directories: Vec::new(),
       files: Vec::new(),
-      anchors: Vec::new(),
-      objects: None,
     };
     let git = match root.child(OsStr::new(".git"), false) {
       Ok(Some(git)) => git,
@@ -63,13 +49,13 @@ impl MetadataOwnership {
     held.pin(&common)?;
     held.objects(&common)?;
     held.refs(&common)?;
+    held.linked_metadata(&common)?;
     held.ensure_current()?;
     Ok(held)
   }
 
   fn objects(&mut self, common: &Arc<Directory>) -> Result<(), LocalGitError> {
     let objects = common.child(OsStr::new("objects"), false)?.ok_or(LocalGitError::Io)?;
-    self.objects = Some(objects.path().to_owned());
     // Every existing bucket, pack and info folder, held as Git left them.
     self.tree(&objects)?;
     // An alternates file would make objects outside this repository readable: refuse one with content.
@@ -87,6 +73,20 @@ impl MetadataOwnership {
     for name in ["refs", "logs"] {
       if let Some(directory) = common.child(OsStr::new(name), false)? {
         self.tree(&directory)?;
+      }
+    }
+    Ok(())
+  }
+
+  /// Removes the markers earlier builds left in the metadata folders of the linked worktrees.
+  fn linked_metadata(&mut self, common: &Arc<Directory>) -> Result<(), LocalGitError> {
+    let Some(worktrees) = common.child(OsStr::new("worktrees"), false)? else {
+      return Ok(());
+    };
+    for entry in std::fs::read_dir(worktrees.path()).map_err(|_| LocalGitError::Io)? {
+      let entry = entry.map_err(|_| LocalGitError::Io)?;
+      if entry.file_type().map_err(|_| LocalGitError::Io)?.is_dir() {
+        remove_leftover(&entry.path());
       }
     }
     Ok(())
@@ -137,16 +137,7 @@ impl MetadataOwnership {
     if self.directories.iter().any(|held| held.path() == directory.path()) {
       return Ok(());
     }
-    let in_objects = self
-      .objects
-      .as_ref()
-      .is_some_and(|objects| directory.path().starts_with(objects));
-    if !in_objects {
-      self
-        .files
-        .push(windows::pin_store_entry(directory, OsStr::new(ANCHOR), Pin::Anchor)?);
-      self.anchors.push(directory.path().join(ANCHOR));
-    }
+    remove_leftover(directory.path());
     self.directories.push(directory.clone());
     Ok(())
   }
@@ -160,9 +151,6 @@ impl MetadataOwnership {
       }
       if metadata.is_dir() {
         self.tree(&directory.child(&entry.file_name(), false)?.ok_or(LocalError::Stale)?)?;
-      } else if entry.file_name() == ANCHOR {
-        // Left by an ownership that could not remove it; this one removes it when it ends.
-        self.anchors.push(entry.path());
       }
     }
     Ok(())
@@ -178,20 +166,16 @@ impl MetadataOwnership {
   }
 }
 
-impl Drop for MetadataOwnership {
-  fn drop(&mut self) {
-    // The anchors' handles deny deletion: close them before removing the files.
-    self.files.clear();
-    for anchor in &self.anchors {
-      match std::fs::remove_file(anchor) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        // A drop cannot return the failure; the next ownership of this repository finds and removes the anchor.
-        Err(error) => tracing::warn!(%error, "cannot remove a local integration anchor"),
-      }
-    }
+/// Removes the marker an earlier build left in `directory`, by its exact name only.
+fn remove_leftover(directory: &Path) {
+  match std::fs::remove_file(directory.join(LEFTOVER_MARKER)) {
+    Ok(()) => {}
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+    // Losing this only leaves an empty file of an earlier build; the next operation tries again.
+    Err(error) => tracing::warn!(%error, "cannot remove a marker an earlier build left in .git"),
   }
 }
+
 fn within(path: &Path, parent: &Path) -> Result<bool, LocalGitError> {
   // Git writes normal DOS paths while canonical Windows paths may have a verbatim prefix.
   // This compares names only; opened no-reparse chains supply the ownership proof.

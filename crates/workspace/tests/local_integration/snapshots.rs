@@ -98,7 +98,7 @@ fn local_snapshots_read_a_large_ignored_folder_as_one_bounded_entry() {
 }
 
 /// Every entry under `root` with its size, folders as size 0.
-fn entries(root: &std::path::Path) -> Vec<(std::path::PathBuf, u64)> {
+pub(super) fn entries(root: &std::path::Path) -> Vec<(std::path::PathBuf, u64)> {
   let mut result = Vec::new();
   let mut pending = vec![root.to_owned()];
   while let Some(directory) = pending.pop() {

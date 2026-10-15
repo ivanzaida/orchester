@@ -61,8 +61,8 @@ fn entries(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
   result.sort();
   result
 }
-/// While an operation holds the metadata: no folder can be renamed, and outside `objects` none can become a junction.
-fn held_during_operation(owned: &Path, outside_objects: &Path) {
+/// While an operation holds the metadata no folder of `.git` can be renamed.
+fn held_during_operation(owned: &Path) {
   for relative in [
     "objects",
     "refs",
@@ -79,30 +79,11 @@ fn held_during_operation(owned: &Path, outside_objects: &Path) {
       "child rename must be denied: {relative}"
     );
   }
-  // Outside `objects`, which gets no anchor, an empty folder is kept nonempty and cannot become a junction.
-  for relative in ["refs", "refs/heads", "logs", "logs/refs", "logs/refs/heads"] {
-    assert!(
-      local_reparse::set_junction(&owned.join(".git").join(relative), outside_objects).is_err(),
-      "in-place child reparse must be denied: {relative}"
-    );
-  }
-  for (path, _) in entries(&owned.join(".git/objects")) {
-    assert_ne!(
-      path.file_name().and_then(|name| name.to_str()),
-      Some(".orchester-local-owner"),
-      "nothing of Orchester's in objects"
-    );
-  }
 }
 
-/// Orchester's anchors left under `owned`'s `.git`.
-fn anchors(owned: &Path) -> Vec<PathBuf> {
-  entries(&owned.join(".git"))
-    .into_iter()
-    .map(|(path, _)| path)
-    .filter(|path| path.file_name().and_then(|name| name.to_str()) == Some(".orchester-local-owner"))
-    .collect()
-}
+/// The marker earlier builds left in the folders they held.
+const LEFTOVER: &str = ".orchester-local-owner";
+
 #[test]
 fn local_integration_git_child_chains_remain_owned_before_later_real_git_io() {
   let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
@@ -141,10 +122,15 @@ fn local_integration_git_child_chains_remain_owned_before_later_real_git_io() {
     "opening and reading write nothing into .git"
   );
   session.own_metadata().expect("an operation holds the metadata");
+  assert_eq!(
+    entries(&owned.join(".git")),
+    owned_before,
+    "holding the metadata creates nothing in .git"
+  );
   let original = session
     .text(&["rev-parse", "HEAD:file.txt"])
     .expect("owned original blob");
-  held_during_operation(&owned, &outside_objects);
+  held_during_operation(&owned);
   let object = session
     .put_blob(b"later owned object write")
     .expect("real later Git write");
@@ -165,7 +151,58 @@ fn local_integration_git_child_chains_remain_owned_before_later_real_git_io() {
     "outside bytes and object entries unchanged after guarded operations"
   );
   drop(session);
-  assert!(anchors(&owned).is_empty(), "the operation removes its anchors");
+  assert!(
+    !entries(&owned.join(".git"))
+      .iter()
+      .any(|(path, _)| path.file_name().and_then(|name| name.to_str()) == Some(LEFTOVER)),
+    "nothing of Orchester's in .git after the operation"
+  );
+}
+
+#[test]
+fn local_integration_operation_removes_markers_earlier_builds_left_in_git() {
+  let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
+  fs::create_dir_all(&scratch).expect("scratch");
+  let dir = tempfile::tempdir_in(&scratch).expect("private fixture");
+  let owned = dir.path().join("owned");
+  init(&owned);
+  let task = owned.join(".orchester/worktrees/task");
+  fs::create_dir_all(task.parent().expect("parent")).expect("task parent");
+  git(
+    &owned,
+    &["worktree", "add", "-b", "task", task.to_str().expect("path")],
+    None,
+  );
+  let bucket = fs::read_dir(owned.join(".git/objects"))
+    .expect("objects")
+    .map(|entry| entry.expect("entry").path())
+    .find(|path| {
+      path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.len() == 2)
+    })
+    .expect("a loose-object bucket");
+  let left = [
+    owned.join(".git"),
+    bucket,
+    owned.join(".git/refs/heads"),
+    owned.join(".git/logs"),
+    owned.join(".git/worktrees/task"),
+  ]
+  .map(|folder| folder.join(LEFTOVER));
+  for marker in &left {
+    fs::write(marker, b"").expect("an earlier build's marker");
+  }
+  // Another name is never Orchester's to remove.
+  fs::write(owned.join(".git/refs/heads/.orchester-local-owner-not"), b"").expect("a person's file");
+  fs::create_dir(owned.join("scratch")).expect("owned scratch");
+  let mut session = LocalGit::new(&owned, &owned.join("scratch")).expect("verified owned preflight");
+  session.own_metadata().expect("an operation holds the metadata");
+  for marker in &left {
+    assert!(!marker.exists(), "{} is removed", marker.display());
+  }
+  assert!(owned.join(".git/refs/heads/.orchester-local-owner-not").exists());
 }
 #[test]
 fn local_integration_canonical_linked_metadata_and_nested_branch_parents_are_held() {

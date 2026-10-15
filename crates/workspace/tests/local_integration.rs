@@ -8,6 +8,8 @@ mod cleanup_edits;
 mod drafts;
 #[path = "local_integration/external.rs"]
 mod external;
+#[path = "local_integration/git_untouched.rs"]
+mod git_untouched;
 #[path = "local_integration/hooks.rs"]
 mod hooks;
 #[path = "local_integration/ignore_transitions.rs"]
