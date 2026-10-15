@@ -19,6 +19,11 @@ export async function apiRequests(): Promise<Recorded[]> {
   return (await response.json()) as Recorded[];
 }
 
+/** Puts the fake's accounts back as drawn, for a test that changes them. */
+export async function resetFake(): Promise<void> {
+  await fetch(`${API}/__fake/reset`, { method: "POST" });
+}
+
 /** Every request the browser made goes to the site itself, never to the API. */
 export function watchBrowserRequests(page: Page): string[] {
   const seen: string[] = [];

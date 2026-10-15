@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { MBP } from "../fake-api/accounts";
 
-import { apiRequests, PASSWORD, signInAs } from "./support";
+import { apiRequests, PASSWORD, resetFake, signInAs } from "./support";
 
 const FULL = "mira.koval@example.com";
 const NEW = "new.account@example.com";
@@ -92,6 +92,21 @@ test.describe("account actions", () => {
     await expect(section(page, "Devices").getByText("1 signed in")).toBeVisible();
   });
 
+
+  test("the count stays right when the list reloads after a device was signed out", async ({ page }) => {
+    await resetFake();
+    await openAccount(page, FULL);
+    const devices = section(page, "Devices");
+    await devices.locator("form", { has: page.locator(`input[value="${MBP}"]`) }).getByRole("button").click();
+    await expect(devices.getByText("2 signed in")).toBeVisible();
+    await page.getByRole("button", { name: "Change password" }).click();
+    await page.getByLabel("Current password").fill(PASSWORD);
+    await page.getByLabel("New password", { exact: true }).fill(PASSWORD);
+    await page.getByLabel("Repeat new password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Change password" }).click();
+    await expect(page.getByText("Your password is changed.", { exact: false })).toBeVisible();
+    await expect(devices.getByText("1 signed in")).toBeVisible();
+  });
 });
 
 test.describe("account settings", () => {

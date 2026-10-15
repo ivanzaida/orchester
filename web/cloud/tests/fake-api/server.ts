@@ -4,7 +4,7 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
-import { FULL, routeSignedIn, signInAccount, type Answer } from "./accounts.ts";
+import { FULL, resetAccounts, routeSignedIn, signInAccount, type Answer } from "./accounts.ts";
 
 import { RIGHT_PASSWORD } from "./accounts.ts";
 
@@ -160,6 +160,11 @@ export function startFakeApi(port: number) {
     const path = new URL(request.url ?? "/", "http://fake").pathname;
     if (path === "/__fake/requests") {
       send(response, { status: 200, body: requests });
+      return;
+    }
+    if (path === "/__fake/reset") {
+      resetAccounts();
+      send(response, { status: 204 });
       return;
     }
     void readBody(request).then((body) => {

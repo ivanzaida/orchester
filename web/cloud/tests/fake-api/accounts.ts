@@ -86,6 +86,12 @@ const accounts = new Map<string, FakeAccount>();
 const sessions = new Map<string, { email: string; device: string }>();
 let issued = 0;
 
+/** Forgets every change and session, for a test that needs the accounts as drawn. */
+export function resetAccounts(): void {
+  accounts.clear();
+  sessions.clear();
+}
+
 function account(email: string): FakeAccount | undefined {
   if (!accounts.has(email)) {
     const now = Date.now();
