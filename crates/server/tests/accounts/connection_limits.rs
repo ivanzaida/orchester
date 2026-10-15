@@ -49,6 +49,7 @@ async fn s1a_idle_tcp_peer_cannot_fill_global_capacity_and_first_byte_expires_ea
 async fn s1a_silent_tls_peer_cannot_fill_handshakes_and_first_byte_expires_early() {
   let server = TestServer::start(|config| {
     let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    config.tls = orchester_server::config::TlsMode::Pem;
     config.tls_cert = Some(fixtures.join("server.pem"));
     config.tls_key = Some(fixtures.join("server-key.pem"));
   })

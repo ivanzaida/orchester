@@ -40,8 +40,8 @@ async fn s1b_signin_and_shared_work_logs_never_include_credentials() {
       "/projects",
       Some(&owner.token),
       Some(json!({
-        "idempotency_key":key(), "key":"ORC", "name":"Shared project",
-        "remote":"https://user:remote-credential-canary@host.example/owner/repo.git", "tasks":[upload(1)]
+        "idempotency_key":key(), "key":"ORC", "name":"Shared project", "slug":"shared",
+        "remote_hint":"https://user:remote-credential-canary@host.example/owner/repo.git", "tasks":[upload(1)]
       })),
     )
     .await;
@@ -75,8 +75,8 @@ async fn s1b_signin_and_shared_work_logs_never_include_credentials() {
       "/projects",
       Some(&owner.token),
       Some(json!({
-        "idempotency_key":key(), "key":"ORC", "name":"Invalid", "tasks":[],
-        "remote":format!("https://host.example/owner/repo?{}",owner.token.expose())
+        "idempotency_key":key(), "key":"ORC", "name":"Invalid", "slug":"invalid", "tasks":[],
+        "remote_hint":format!("https://host.example/owner/repo?{}",owner.token.expose())
       })),
     )
     .await;
@@ -86,6 +86,5 @@ async fn s1b_signin_and_shared_work_logs_never_include_credentials() {
   let log = String::from_utf8(capture.0.lock().clone()).expect("UTF-8 logs");
   assert!(log.contains("request") && log.contains("status=201") && log.contains("status=422"));
   assert!(!log.contains(owner.token.expose()));
-  assert!(!log.contains("a secure admin password"));
   assert!(!log.contains("remote-credential-canary"));
 }

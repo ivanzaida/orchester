@@ -1,82 +1,101 @@
-use orchester_api::{ErrorCode, ProjectChanges, ProjectCreate, ProjectCreated, SharedProject, SharingErrorDetails};
+//! Server projects by name and slug (`docs/architecture/server.md`, "Servers and project addresses"): a project's
+//! address is the server's address and its slug, fixed once created; the repository remote is only a hint.
+
+use orchester_api::{
+  ErrorCode, NewProject, ProjectChanges, ProjectCreated, ProjectLink, ProjectLinked, SharedProject, SharingErrorDetails,
+};
 use orchester_core::{
   id::{ProjectId, UserId},
   name::Name,
   project::ProjectKey,
   repository::RepositoryIdentity,
+  resource::Slug,
 };
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{access, batches, conflict, decode, encode, events, members};
 use crate::{db, error::ServerError};
 
-pub fn load(db: &Connection, project: ProjectId, user: UserId) -> Result<SharedProject, ServerError> {
+/// Slugs no project can have: the server's own paths (row 62). Core's `Slug` already rules out names starting with
+/// `_` or `.`.
+pub(crate) const RESERVED_SLUGS: [&str; 3] = ["admin", "api", "auth"];
+
+const COLUMNS: &str = "slug,key,name,remote_hint,next_task_number";
+
+pub fn load(db: &Connection, project: ProjectId, user: UserId, base: &str) -> Result<SharedProject, ServerError> {
   let role = access::role(db, project, user)?;
-  Ok(
-    db.query_row(
-      "SELECT key,name,remote,next_task_number FROM projects WHERE id=?1",
+  let row = db
+    .query_row(
+      &format!("SELECT {COLUMNS} FROM projects WHERE id=?1"),
       [project.to_string()],
       |row| {
         Ok((
           row.get::<_, String>(0)?,
           row.get::<_, String>(1)?,
           row.get::<_, String>(2)?,
-          row.get::<_, i64>(3)?,
+          row.get::<_, Option<String>>(3)?,
+          row.get::<_, i64>(4)?,
         ))
       },
     )
-    .optional()?
-    .map(|(key, name, remote, next_number)| {
-      Ok::<_, ServerError>(SharedProject {
-        id: project,
-        key,
-        name,
-        remote: RepositoryIdentity::parse(&remote).map_err(|_| ServerError::StoredData)?,
-        role,
-        next_number: super::unsigned(next_number)?,
-      })
-    })
-    .transpose()?
-    .ok_or(ErrorCode::NotFound)?,
-  )
+    .optional()?;
+  let (slug, key, name, remote_hint, next_number) = row.ok_or(ErrorCode::NotFound)?;
+  Ok(SharedProject {
+    id: project,
+    address: format!("{base}/{slug}"),
+    slug,
+    key,
+    name,
+    remote_hint: remote_hint
+      .map(|remote| RepositoryIdentity::parse(&remote))
+      .transpose()
+      .map_err(|_| ServerError::StoredData)?,
+    role,
+    next_number: super::unsigned(next_number)?,
+  })
 }
 
-pub fn lookup(
-  db: &Connection,
-  user: UserId,
-  remote: Option<RepositoryIdentity>,
-) -> Result<Vec<SharedProject>, ServerError> {
-  if let Some(remote) = remote {
-    let id: Option<String> = db
-      .query_row("SELECT id FROM projects WHERE remote=?1", [remote.as_str()], |row| {
-        row.get(0)
-      })
-      .optional()?;
-    let Some(id) = id else {
-      return Ok(Vec::new());
-    };
-    let id = id.parse().map_err(|_| ServerError::StoredData)?;
-    if access::role(db, id, user)?.is_none() {
-      return Err(conflict(
-        ErrorCode::NotMember,
-        SharingErrorDetails::Owners {
-          owners: access::owners(db, id)?,
-        },
-      ));
-    }
-    return Ok(vec![load(db, id, user)?]);
-  }
+/// The projects `user` is a member of.
+pub fn list(db: &Connection, user: UserId, base: &str) -> Result<Vec<SharedProject>, ServerError> {
   let mut query = db.prepare("SELECT project FROM memberships WHERE user_id=?1 ORDER BY added_at,project")?;
   let ids = query
     .query_map([user.to_string()], |row| row.get::<_, String>(0))?
     .collect::<Result<Vec<_>, _>>()?;
   ids
     .into_iter()
-    .map(|id| load(db, id.parse().map_err(|_| ServerError::StoredData)?, user))
+    .map(|id| load(db, id.parse().map_err(|_| ServerError::StoredData)?, user, base))
     .collect()
 }
 
-pub fn create(db: &Connection, user: UserId, input: ProjectCreate, now: i64) -> Result<ProjectCreated, ServerError> {
+/// The project at `slug` when `user` is a member; `403 not_member` with its name and owners when they are not, `404`
+/// when there is none.
+pub fn by_slug(db: &Connection, user: UserId, slug: &str, base: &str) -> Result<SharedProject, ServerError> {
+  let found: Option<(String, String)> = db
+    .query_row("SELECT id,name FROM projects WHERE slug=?1", [slug], |row| {
+      Ok((row.get(0)?, row.get(1)?))
+    })
+    .optional()?;
+  let (id, name) = found.ok_or(ErrorCode::NotFound)?;
+  let id = id.parse().map_err(|_| ServerError::StoredData)?;
+  if access::role(db, id, user)?.is_none() {
+    return Err(conflict(
+      ErrorCode::NotMember,
+      SharingErrorDetails::Project {
+        name,
+        owners: access::owners(db, id)?,
+      },
+    ));
+  }
+  load(db, id, user, base)
+}
+
+pub fn create(
+  db: &Connection,
+  user: UserId,
+  input: NewProject,
+  base: &str,
+  now: i64,
+) -> Result<ProjectCreated, ServerError> {
   let repeated: Option<String> = db
     .query_row(
       "SELECT response FROM project_batches WHERE user_id=?1 AND key=?2",
@@ -91,51 +110,36 @@ pub fn create(db: &Connection, user: UserId, input: ProjectCreate, now: i64) -> 
     }
     return Ok(response);
   }
-  let remote = RepositoryIdentity::parse(&input.remote).map_err(|_| ErrorCode::Invalid)?;
-  let existing: Option<String> = db
-    .query_row("SELECT id FROM projects WHERE remote=?1", [remote.as_str()], |row| {
-      row.get(0)
-    })
-    .optional()?;
-  if let Some(id) = existing {
-    let project = id.parse().map_err(|_| ServerError::StoredData)?;
-    return Err(conflict(
-      ErrorCode::RemoteTaken,
-      SharingErrorDetails::Remote {
-        project,
-        member: access::role(db, project, user)?.is_some(),
-        owners: access::owners(db, project)?,
-      },
-    ));
-  }
+  let slug = Slug::new(&input.slug).map_err(|_| ErrorCode::Invalid)?;
   let name = Name::new(&input.name).map_err(|_| ErrorCode::Invalid)?;
   let key = ProjectKey::new(&input.key).map_err(|_| ErrorCode::Invalid)?;
+  let remote_hint = hint(input.remote_hint.as_deref())?;
+  let taken: bool = db.query_row(
+    "SELECT EXISTS(SELECT 1 FROM projects WHERE slug=?1)",
+    [slug.as_str()],
+    |row| row.get(0),
+  )?;
+  if taken || RESERVED_SLUGS.contains(&slug.as_str()) {
+    return Err(ErrorCode::SlugTaken.into());
+  }
   let project = ProjectId::generate();
   db.execute(
-    "INSERT INTO projects(id,key,name,remote,next_task_number,created_by,created_at) VALUES (?1,?2,?3,?4,1,?5,?6)",
+    "INSERT INTO projects(id,key,name,slug,remote_hint,next_task_number,created_by,created_at) VALUES (?1,?2,?3,?4,?5,1,?6,?7)",
     params![
       project.to_string(),
       key.as_str(),
       name.as_str(),
-      remote.as_str(),
+      slug.as_str(),
+      remote_hint.as_ref().map(RepositoryIdentity::as_str),
       user.to_string(),
       now
     ],
   )?;
-  db.execute(
-    "INSERT INTO memberships VALUES (?1,?2,'owner',?2,?3,?4)",
-    params![
-      project.to_string(),
-      user.to_string(),
-      now,
-      orchester_core::id::IdempotencyKey::generate().to_string()
-    ],
-  )?;
-  db::audit(db, Some(user), "member_added", &format!("{project}/{user}"), None, now)?;
-  members::event(db, project, now)?;
+  db::audit(db, Some(user), "project_created", &project.to_string(), None, now)?;
+  members::insert(db, project, user, orchester_api::MemberRole::Owner, user, now)?;
   let tasks = batches::upload(db, project, user, input.tasks, true, now)?;
   let response = ProjectCreated {
-    project: load(db, project, user)?,
+    project: load(db, project, user, base)?,
     tasks: tasks.tasks,
     cursor: events::cursor(db, project)?,
     dropped_links: tasks.dropped_links,
@@ -147,27 +151,84 @@ pub fn create(db: &Connection, user: UserId, input: ProjectCreate, now: i64) -> 
   Ok(response)
 }
 
+/// A checkout linked to `project` uploads its tasks: the first into a project with no tasks keeps their numbers, later
+/// ones are imported with new numbers. The checkout's remote becomes the hint while the project has none.
+pub fn link(
+  db: &Connection,
+  project: ProjectId,
+  user: UserId,
+  input: ProjectLink,
+  now: i64,
+) -> Result<ProjectLinked, ServerError> {
+  if let Some(response) = batches::repeated(db, project, input.idempotency_key)? {
+    return linked(db, project, response);
+  }
+  let remote = hint(input.remote.as_deref())?;
+  let empty: bool = db.query_row(
+    "SELECT NOT EXISTS(SELECT 1 FROM tasks WHERE project=?1)",
+    [project.to_string()],
+    |row| row.get(0),
+  )?;
+  let response = batches::upload(db, project, user, input.tasks, empty, now)?;
+  batches::remember(db, project, input.idempotency_key, user, &response)?;
+  if let Some(remote) = remote {
+    db.execute(
+      "UPDATE projects SET remote_hint=?1 WHERE id=?2 AND remote_hint IS NULL",
+      params![remote.as_str(), project.to_string()],
+    )?;
+  }
+  linked(db, project, response)
+}
+
+fn linked(
+  db: &Connection,
+  project: ProjectId,
+  response: orchester_api::TasksCreated,
+) -> Result<ProjectLinked, ServerError> {
+  Ok(ProjectLinked {
+    tasks: response.tasks,
+    dropped_links: response.dropped_links,
+    cursor: events::cursor(db, project)?,
+  })
+}
+
+/// A repository identity from an untrusted remote or fetch URL, credentials dropped.
+fn hint(remote: Option<&str>) -> Result<Option<RepositoryIdentity>, ServerError> {
+  remote
+    .map(|remote| RepositoryIdentity::parse(remote).map_err(|_| ErrorCode::Invalid.into()))
+    .transpose()
+}
+
 pub fn patch(
   db: &Connection,
   project: ProjectId,
   user: UserId,
   input: ProjectChanges,
+  base: &str,
   now: i64,
 ) -> Result<SharedProject, ServerError> {
-  let mut value = load(db, project, user)?;
-  let original = (value.name.clone(), value.key.clone());
+  let mut value = load(db, project, user, base)?;
+  let original = (value.name.clone(), value.key.clone(), value.remote_hint.clone());
   if let Some(name) = input.name {
     value.name = Name::new(&name).map_err(|_| ErrorCode::Invalid)?.as_str().into();
   }
   if let Some(key) = input.key {
     value.key = ProjectKey::new(&key).map_err(|_| ErrorCode::Invalid)?.as_str().into();
   }
-  if original == (value.name.clone(), value.key.clone()) {
+  if let Some(remote) = input.remote_hint {
+    value.remote_hint = hint(Some(&remote))?;
+  }
+  if original == (value.name.clone(), value.key.clone(), value.remote_hint.clone()) {
     return Ok(value);
   }
   db.execute(
-    "UPDATE projects SET name=?1,key=?2 WHERE id=?3",
-    params![value.name, value.key, project.to_string()],
+    "UPDATE projects SET name=?1,key=?2,remote_hint=?3 WHERE id=?4",
+    params![
+      value.name,
+      value.key,
+      value.remote_hint.as_ref().map(RepositoryIdentity::as_str),
+      project.to_string()
+    ],
   )?;
   events::append(
     db,

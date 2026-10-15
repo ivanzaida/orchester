@@ -1,8 +1,10 @@
 mod admin;
 mod auth;
 mod claims;
+mod cloud;
 mod events;
 mod extract;
+mod invites;
 mod projects;
 mod tasks;
 
@@ -21,7 +23,7 @@ use hyper::body::Body as HttpBody;
 use orchester_api::{ErrorCode, ServerInfo};
 use orchester_core::id::UserId;
 
-use crate::{Server, error::ServerError, tls::PeerAddr};
+use crate::{Server, cloud_link::Link, db, error::ServerError, tls::PeerAddr};
 
 pub(crate) fn router(server: Server) -> Router {
   let protected = Router::new()
@@ -29,11 +31,16 @@ pub(crate) fn router(server: Server) -> Router {
     .route("/auth/sessions", get(auth::sessions))
     .route("/auth/sessions/current", delete(auth::sign_out))
     .route("/auth/sessions/{id}", delete(auth::revoke))
-    .route("/auth/password", post(auth::password))
-    .route("/admin/users", get(admin::users).post(admin::create))
+    .route("/auth/pairings", post(auth::pairing))
+    .route("/auth/approvals", get(auth::approvals))
+    .route("/auth/approvals/{id}", post(auth::decide))
+    .route("/admin/users", get(admin::users))
     .route("/admin/users/{id}", axum::routing::patch(admin::update))
-    .route("/admin/users/{id}/password", post(admin::reset))
     .route("/admin/users/{id}/sessions", delete(admin::revoke))
+    .route("/invites", get(invites::list).post(invites::create))
+    .route("/invites/{id}", delete(invites::revoke))
+    .route("/server/cloud", get(cloud::show_cloud).patch(cloud::change_cloud))
+    .route("/server/settings", get(cloud::settings).patch(cloud::change_settings))
     .merge(projects::routes())
     .merge(tasks::routes())
     .merge(claims::routes())
@@ -41,7 +48,8 @@ pub(crate) fn router(server: Server) -> Router {
     .route_layer(middleware::from_fn_with_state(server.clone(), authenticated));
   let api = protected
     .route("/server", get(info))
-    .route("/auth/sessions", post(auth::sign_in));
+    .route("/auth/code", post(auth::join_with_code))
+    .route("/auth/cloud", post(auth::join_with_cloud));
   Router::new()
     .nest("/api/v1", api)
     .fallback(|| async { ServerError::from(ErrorCode::NotFound) })
@@ -82,23 +90,33 @@ async fn read_body(mut body: Body) -> Result<Vec<u8>, ErrorCode> {
 }
 
 async fn info(State(server): State<Server>) -> Result<Json<ServerInfo>, ServerError> {
-  let needs_bootstrap = server
+  let (needs_setup, cloud) = server
     .inner
     .db
-    .read(|db| {
-      Ok(db.query_row(
-        "SELECT NOT EXISTS(SELECT 1 FROM users WHERE admin=1 AND disabled_at IS NULL)",
-        [],
-        |row| row.get(0),
-      )?)
-    })
+    .read(|db| Ok((!db::has_admin(db)?, Link::load(db)?.map(|link| link.status()))))
     .await?;
   Ok(Json(ServerInfo {
     name: server.inner.config.name.clone(),
-    // 2: a task's limits are each optional (`SharedLimits`).
-    api_version: 2,
-    needs_bootstrap,
+    // 3: device tokens from cloud identities and codes, no passwords; projects by slug and address.
+    api_version: 3,
+    needs_bootstrap: needs_setup,
+    cloud,
   }))
+}
+
+/// The server's base address: the configured `address`, or the scheme this server serves and the `Host` the request
+/// was sent to. A project's address is this and its slug.
+pub(super) fn base_address(server: &Server, headers: &axum::http::HeaderMap) -> String {
+  if let Some(address) = &server.inner.config.address {
+    return address.clone();
+  }
+  let scheme = if server.inner.tls.is_some() { "https" } else { "http" };
+  let host = headers
+    .get(axum::http::header::HOST)
+    .and_then(|value| value.to_str().ok())
+    .filter(|host| !host.is_empty() && !host.contains(['/', '?', '#', '@']) && !host.contains(char::is_whitespace))
+    .unwrap_or("localhost");
+  format!("{scheme}://{host}")
 }
 
 async fn authenticated(State(server): State<Server>, mut request: Request, next: Next) -> Response {

@@ -28,7 +28,7 @@ async fn s1a_backup_cli_reads_committed_data_while_an_immediate_writer_is_held()
   let version: i64 = snapshot
     .query_row("SELECT schema_version FROM meta", [], |row| row.get(0))
     .expect("committed schema");
-  assert_eq!(version, 2);
+  assert_eq!(version, 3);
   let integrity: String = snapshot
     .query_row("PRAGMA integrity_check", [], |row| row.get(0))
     .expect("snapshot integrity");
@@ -70,20 +70,20 @@ async fn s1a_backup_cli_never_creates_or_migrates_its_source_database() {
 }
 
 #[tokio::test]
-async fn s1a_host_user_commands_report_writer_lock_and_print_no_credentials() {
+async fn s1c_host_code_commands_report_writer_lock_and_print_no_codes() {
   let server = TestServer::start(|_| {}).await;
   let db = server.database();
   db.execute_batch("BEGIN IMMEDIATE").expect("held writer");
-  let mut create = host_command(server.directory.path());
-  create.args(["user", "create", "--admin", "waiting_admin"]);
-  let mut reset = host_command(server.directory.path());
-  reset.args(["user", "reset-password", "alice"]);
-  let (create, reset) = tokio::time::timeout(Duration::from_secs(8), async {
-    tokio::join!(create.output(), reset.output())
+  let mut setup = host_command(server.directory.path());
+  setup.arg("setup-code");
+  let mut account = host_command(server.directory.path());
+  account.args(["account-code", "alice"]);
+  let (setup, account) = tokio::time::timeout(Duration::from_secs(8), async {
+    tokio::join!(setup.output(), account.output())
   })
   .await
   .expect("bounded busy timeout");
-  for output in [create.expect("create command"), reset.expect("reset command")] {
+  for output in [setup.expect("setup command"), account.expect("account command")] {
     assert!(!output.status.success());
     assert!(output.stdout.is_empty());
     let logs = String::from_utf8(output.stderr).expect("operator error");

@@ -93,12 +93,12 @@ fn unknown_requests(
     (
       "POST",
       "/projects".into(),
-      json!({"idempotency_key":key(),"name":"extra","key":"EX","remote":"host.example/o/extra","tasks":[],"extra":1}),
+      json!({"idempotency_key":key(),"name":"extra","slug":"extra","key":"EX","tasks":[],"extra":1}),
     ),
     (
       "POST",
       "/projects".into(),
-      json!({"idempotency_key":key(),"name":"extra","key":"EX","remote":"host.example/o/extra","tasks":[upload]}),
+      json!({"idempotency_key":key(),"name":"extra","slug":"extra","key":"EX","tasks":[upload]}),
     ),
     ("PATCH", base.to_owned(), json!({"name":"extra","extra":1})),
     (

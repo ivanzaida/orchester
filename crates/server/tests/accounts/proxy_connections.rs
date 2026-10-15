@@ -10,6 +10,7 @@ use crate::support::TestServer;
 
 fn direct_tls(config: &mut Config) {
   let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+  config.tls = orchester_server::config::TlsMode::Pem;
   config.tls_cert = Some(fixtures.join("server.pem"));
   config.tls_key = Some(fixtures.join("server-key.pem"));
 }

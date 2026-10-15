@@ -51,6 +51,18 @@ define_id!(
   SessionId
 );
 define_id!(
+  /// An invite a team server made: to the server, to one of its projects, or for an existing account.
+  InviteId
+);
+define_id!(
+  /// A cloud join of an existing account that waits for that account's devices or an admin (join approval).
+  ApprovalId
+);
+define_id!(
+  /// A team server's own id, made on its first start: the audience of Orchester Cloud's identity tokens for it.
+  TeamServerId
+);
+define_id!(
   /// One installation of the app, i.e. one application database (`orchester.db`): what keeps the secrets of two
   /// installations on one computer, e.g. a development build's and the installed app's, apart.
   InstallationId

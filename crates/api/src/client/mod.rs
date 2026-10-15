@@ -7,6 +7,7 @@
 
 mod address;
 mod error;
+mod pinned;
 mod sharing;
 
 use std::time::Duration;
@@ -28,8 +29,9 @@ pub use self::{
   error::ClientError,
 };
 use crate::{
-  ApiError, CreateUser, PasswordChange, PasswordReset, ServerInfo, Session, SessionsResponse, SharingErrorDetails,
-  SignIn, SignedIn, User, UserChanges, UserCreated, UserResponse, UsersResponse,
+  ApiError, CodeJoin, CreateUser, Joined, PasswordChange, PasswordReset, ServerInfo, Session, SessionsResponse,
+  SharingErrorDetails, SignIn, SignedIn, User, UserChanges, UserCreated, UserResponse, UsersResponse,
+  certificate::CertificatePin,
 };
 
 /// How long making the connection may take (10.03 E: "the connection timed out after 10 s").
@@ -60,14 +62,19 @@ impl Client {
     // reqwest's rustls takes the process's crypto provider; ring is the one the workspace builds.
     // Installing fails only when a provider is installed already, which then serves as well.
     let _ = rustls::crypto::ring::default_provider().install_default();
-    // No proxy, from the environment (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`) or the system: a
-    // plain HTTP proxy would see the token, and a server on this computer would be reached through
-    // another one.
-    let http = reqwest::Client::builder()
-      .no_proxy()
-      .redirect(Policy::none())
-      .connect_timeout(CONNECT_TIMEOUT)
-      .timeout(REQUEST_TIMEOUT)
+    let http = builder().build().map_err(|error| ClientError::transport(&error))?;
+    Ok(Self { http, address })
+  }
+
+  /// A client of the team server at the `https` `address` that accepts exactly the certificate `pin` names: the
+  /// server's own certificate, pinned from a cloud invite or after the person confirmed its check code.
+  pub fn pinned(address: ServerAddress, pin: CertificatePin) -> Result<Self, ClientError> {
+    if !address.is_https() {
+      return Err(ClientError::Setup);
+    }
+    let tls = pinned::PinnedVerifier::config(pin).map_err(|_| ClientError::Setup)?;
+    let http = builder()
+      .tls_backend_preconfigured(tls)
       .build()
       .map_err(|error| ClientError::transport(&error))?;
     Ok(Self { http, address })
@@ -82,7 +89,12 @@ impl Client {
     self.call(self.request(Method::GET, "/server")?).await
   }
 
-  /// `POST /auth/sessions`: signs in and returns the new session's token.
+  /// `POST /auth/code`: joins with a setup, invite, account or pairing code and returns this device's token.
+  pub async fn join_with_code(&self, request: &CodeJoin) -> Result<Joined, ClientError> {
+    self.call(self.json(Method::POST, "/auth/code", request)?).await
+  }
+
+  /// API 2's `POST /auth/sessions`, which an API 3 server answers with `404` (see [`SignIn`]).
   pub async fn sign_in(&self, request: &SignIn) -> Result<SignedIn, ClientError> {
     self.call(self.json(Method::POST, "/auth/sessions", request)?).await
   }
@@ -113,7 +125,7 @@ impl Client {
     self.send(bearer(self.request(Method::DELETE, &path)?, token)).await
   }
 
-  /// `POST /auth/password`: the person's other sessions are revoked.
+  /// API 2's `POST /auth/password`, which an API 3 server answers with `404`.
   pub async fn change_password(&self, token: &SecretValue, change: &PasswordChange) -> Result<(), ClientError> {
     self
       .send(bearer(self.json(Method::POST, "/auth/password", change)?, token))
@@ -127,6 +139,7 @@ impl Client {
     Ok(response.users)
   }
 
+  /// API 2's `POST /admin/users`, which an API 3 server answers with `405`.
   pub async fn create_user(&self, token: &SecretValue, user: &CreateUser) -> Result<UserCreated, ClientError> {
     self
       .call(bearer(self.json(Method::POST, "/admin/users", user)?, token))
@@ -146,7 +159,7 @@ impl Client {
     Ok(response.user)
   }
 
-  /// `POST /admin/users/{id}/password`: a new first password; the user's sessions are revoked.
+  /// API 2's `POST /admin/users/{id}/password`, which an API 3 server answers with `404`.
   pub async fn reset_password(&self, token: &SecretValue, user: UserId) -> Result<PasswordReset, ClientError> {
     let path = format!("/admin/users/{user}/password");
     self.call(bearer(self.request(Method::POST, &path)?, token)).await
@@ -180,6 +193,16 @@ impl Client {
   async fn send(&self, request: RequestBuilder) -> Result<(), ClientError> {
     answered(request).await.map(drop)
   }
+}
+
+/// No proxy, from the environment (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`) or the system: a plain HTTP proxy would
+/// see the token, and a server on this computer would be reached through another one.
+fn builder() -> reqwest::ClientBuilder {
+  reqwest::Client::builder()
+    .no_proxy()
+    .redirect(Policy::none())
+    .connect_timeout(CONNECT_TIMEOUT)
+    .timeout(REQUEST_TIMEOUT)
 }
 
 /// `request` with the bearer token, as a header value marked sensitive so it is never shown.

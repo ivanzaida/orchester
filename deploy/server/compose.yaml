@@ -6,6 +6,9 @@ services:
     restart: unless-stopped
     environment:
       ORCHESTER_SERVER_NAME: ${ORCHESTER_SERVER_NAME:-Orchester}
+      # Caddy holds the public certificate; the server speaks plain HTTP on this network only.
+      ORCHESTER_SERVER_TLS: "off"
+      ORCHESTER_SERVER_ADDRESS: https://${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server DNS name}
       ORCHESTER_SERVER_TRUSTED_PROXIES: 172.29.0.2
     volumes:
       - server_data:/data

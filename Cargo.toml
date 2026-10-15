@@ -101,6 +101,14 @@ rmcp = { version = "3.4", default-features = false, features = ["server"] }
 # through lurq. Without default features: no system proxy lookup, no HTTP/2, and the crypto provider is
 # chosen by the caller (ring, below).
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
+# The team server's own certificate, generated on its first start (`docs/architecture/server.md`, row 39): an
+# ECDSA P-256 key and a self-signed X.509 certificate through ring, the provider rustls already uses here. A
+# certificate is not something to write by hand. Without `aws_lc_rs`, so no second crypto library.
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem", "ring"] }
+# The team server's Ed25519 key (signed invites and the cloud link statement), verifying Orchester Cloud's identity
+# tokens and key sets, HMAC-SHA-256 of codes with a constant-time check, and the OS random source for tokens and
+# codes. Already built as rustls' crypto provider, so it adds no crate.
+ring = "0.17"
 rusqlite = { version = "0.40", features = ["bundled"] }
 # The ring crypto provider for the client's rustls, the provider the server's own TLS already uses, and
 # rustls' certificate errors, to tell an untrusted certificate from a server that cannot be reached.

@@ -6,13 +6,23 @@
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use orchester_api::{
-  CreateUser, Credential, PasswordChange, SignIn, UserChanges,
+  CodeJoin, Credential, PasswordChange, SignIn, UserChanges,
   client::{Client, PlainHttp, ServerAddress},
 };
 use orchester_core::secret::SecretValue;
-use orchester_server::{Server, clock::SystemClock, config::Config};
+use orchester_server::{
+  Server,
+  clock::SystemClock,
+  config::{Config, TlsMode},
+};
+use parking_lot::Mutex;
 use tempfile::TempDir;
-use tokio::{net::TcpListener, runtime::Runtime, sync::oneshot};
+use tokio::{
+  io::{AsyncReadExt, AsyncWriteExt},
+  net::{TcpListener, TcpStream},
+  runtime::Runtime,
+  sync::oneshot,
+};
 
 /// The name the test server gives itself.
 pub const SERVER_NAME: &str = "Kontur team";
@@ -22,6 +32,8 @@ pub struct TestServer {
   pub address: SocketAddr,
   runtime: Runtime,
   stop: Option<oneshot::Sender<()>>,
+  /// The first account's device token, which invites the later ones.
+  admin: Mutex<Option<String>>,
   _directory: TempDir,
 }
 
@@ -38,6 +50,7 @@ impl TestServer {
       data_dir: directory.path().into(),
       listen: "127.0.0.1:0".parse().expect("loopback"),
       name: SERVER_NAME.into(),
+      tls: TlsMode::Off,
       ..Config::default()
     };
     let (server, listener) = runtime.block_on(async {
@@ -58,6 +71,7 @@ impl TestServer {
       address,
       runtime,
       stop: Some(stop),
+      admin: Mutex::new(None),
       _directory: directory,
     }
   }
@@ -72,17 +86,36 @@ impl TestServer {
     self.runtime.block_on(work)
   }
 
-  /// A user created on the host, as `orchester-server user create` does; returns the first
-  /// password.
+  /// An account joined with a code: the first with the setup code (an admin), later ones with an invite code the
+  /// first account makes. Returns the account's device token. API 3 has no passwords, so the tests that sign in
+  /// with a password fail until the workspace joins with codes and cloud identities (S1c's workspace part).
   pub fn create_user(&self, username: &str, display_name: &str, admin: bool) -> Credential {
-    self
-      .block_on(self.server.host_create_user(CreateUser {
-        username: username.into(),
-        display_name: display_name.into(),
-        admin,
+    let first = self.admin.lock().clone();
+    let code = match first {
+      None => self
+        .block_on(self.server.host_setup_code())
+        .expect("setup code")
+        .expect("no admin yet"),
+      Some(token) => {
+        let body = format!(r#"{{"kind":"server","delivery":"code","admin":{admin}}}"#);
+        let invite = self.block_on(post(self.address, &token, "/invites", &body));
+        Credential::new(invite["code"].as_str().expect("invite code").into())
+      }
+    };
+    let client = self.client();
+    let joined = self
+      .block_on(client.join_with_code(&CodeJoin {
+        code,
+        device: "test computer".into(),
+        username: Some(username.into()),
+        display_name: Some(display_name.into()),
       }))
-      .expect("create a user on the host")
-      .initial_password
+      .expect("join with a code");
+    self
+      .admin
+      .lock()
+      .get_or_insert_with(|| joined.token.expose().to_owned());
+    joined.token
   }
 
   fn client(&self) -> Client {
@@ -168,4 +201,34 @@ impl Drop for TestServer {
       let _ = stop.send(());
     }
   }
+}
+
+/// A request the desktop never makes (an admin action of the server admin), sent to set a test up.
+async fn post(address: SocketAddr, token: &str, path: &str, body: &str) -> serde_json::Value {
+  let mut stream = TcpStream::connect(address).await.expect("connect");
+  let request = format!(
+    "POST /api/v1{path} HTTP/1.1
+Host: localhost
+Connection: close
+Authorization: Bearer {token}
+Content-Type: application/json
+Content-Length: {}
+
+{body}",
+    body.len()
+  );
+  stream.write_all(request.as_bytes()).await.expect("send");
+  let mut response = Vec::new();
+  stream.read_to_end(&mut response).await.expect("read");
+  let start = response
+    .windows(4)
+    .position(|part| {
+      part
+        == b"
+
+"
+    })
+    .expect("HTTP response")
+    + 4;
+  serde_json::from_slice(&response[start..]).expect("JSON answer")
 }

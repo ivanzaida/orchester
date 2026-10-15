@@ -1,4 +1,5 @@
 mod backup;
+mod migrate;
 mod rows;
 mod sessions;
 mod users;
@@ -15,10 +16,15 @@ use std::{
 pub(crate) use backup::backup;
 pub use backup::backup_existing;
 use parking_lot::Mutex;
-pub(crate) use rows::user_row;
+pub(crate) use rows::{USER_COLUMNS, user_row};
 use rusqlite::{Connection, TransactionBehavior};
-pub(crate) use sessions::{Authenticated, authenticate, checked, revoke_session, revoke_sessions, touch_session};
-pub(crate) use users::{create_user, find_user, patch_user, reset_password, validate_user};
+pub(crate) use sessions::{
+  Authenticated, NewSession, authenticate, checked, insert_session, parse_via, revoke_session, revoke_sessions,
+  touch_session,
+};
+pub(crate) use users::{
+  NewUser, create_user, find_user, has_admin, link_subject, patch_user, user_by_id, user_by_subject,
+};
 
 use crate::error::ServerError;
 
@@ -30,12 +36,13 @@ pub(crate) struct Database {
 }
 
 impl Database {
-  pub fn open(directory: &Path) -> Result<Self, ServerError> {
+  /// Opens the database in `directory`, created or migrated at `now`.
+  pub fn open(directory: &Path, now: i64) -> Result<Self, ServerError> {
     std::fs::create_dir_all(directory)?;
     let path = directory.join("orchester-server.db");
     let mut writer = connection(&path)?;
     writer.pragma_update(None, "journal_mode", "WAL")?;
-    migrate(&mut writer)?;
+    migrate::migrate(&mut writer, now)?;
     let readers = (0..3)
       .map(|_| {
         let reader = connection(&path)?;
@@ -49,6 +56,11 @@ impl Database {
       next_reader: AtomicUsize::new(0),
       changes: tokio::sync::watch::channel(0).0,
     })
+  }
+
+  /// Runs `operation` on a reader on the calling thread, while the server is being opened.
+  pub fn read_now<T>(&self, operation: impl FnOnce(&Connection) -> Result<T, ServerError>) -> Result<T, ServerError> {
+    operation(&self.readers[0].lock())
   }
 
   pub async fn read<T: Send + 'static>(
@@ -106,32 +118,6 @@ fn connection(path: &Path) -> Result<Connection, ServerError> {
   connection.busy_timeout(Duration::from_secs(5))?;
   connection.pragma_update(None, "foreign_keys", true)?;
   Ok(connection)
-}
-
-fn migrate(connection: &mut Connection) -> Result<(), ServerError> {
-  // The immediate transaction also serializes migrations with a host CLI command.
-  let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-  let exists: bool = transaction.query_row(
-    "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='meta')",
-    [],
-    |row| row.get(0),
-  )?;
-  if exists {
-    let version: i64 = transaction.query_row("SELECT schema_version FROM meta", [], |row| row.get(0))?;
-    if version != 1 && version != 2 {
-      return Err(ServerError::Configuration("unsupported server database schema"));
-    }
-    if version == 1 {
-      transaction.execute_batch(include_str!("sharing.sql"))?;
-    }
-  } else {
-    transaction.execute_batch(include_str!("schema.sql"))?;
-    transaction.execute_batch(include_str!("sharing.sql"))?;
-  }
-  // Review builds of schema 2 predate this retention index; opening them must also install it.
-  transaction.execute_batch("CREATE INDEX IF NOT EXISTS events_project_retention ON events(project,at)")?;
-  transaction.commit()?;
-  Ok(())
 }
 
 pub(crate) fn audit(

@@ -25,12 +25,16 @@ pub fn role(db: &Connection, project: ProjectId, user: UserId) -> Result<Option<
     )
     .optional()?;
   role
-    .map(|role| match role.as_str() {
-      "owner" => Ok(MemberRole::Owner),
-      "member" => Ok(MemberRole::Member),
-      _ => Err(ServerError::StoredData),
-    })
+    .map(|role| parse_role(&role).ok_or(ServerError::StoredData))
     .transpose()
+}
+
+pub fn parse_role(role: &str) -> Option<MemberRole> {
+  match role {
+    "owner" => Some(MemberRole::Owner),
+    "member" => Some(MemberRole::Member),
+    _ => None,
+  }
 }
 pub const fn role_name(role: MemberRole) -> &'static str {
   match role {
@@ -45,7 +49,7 @@ pub fn member(
   project: ProjectId,
   now: i64,
 ) -> Result<Authenticated, ServerError> {
-  let current = db::checked(db, auth, now, false, false)?;
+  let current = db::checked(db, auth, now, false)?;
   if role(db, project, current.user.id)?.is_none() {
     return Err(ErrorCode::NotFound.into());
   }
@@ -58,7 +62,7 @@ pub fn owner(
   project: ProjectId,
   now: i64,
 ) -> Result<Authenticated, ServerError> {
-  let current = db::checked(db, auth, now, false, false)?;
+  let current = db::checked(db, auth, now, false)?;
   if current.user.admin {
     let exists: bool = db.query_row(
       "SELECT EXISTS(SELECT 1 FROM projects WHERE id=?1)",

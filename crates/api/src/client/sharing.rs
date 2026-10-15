@@ -17,9 +17,8 @@ use crate::{
 };
 
 impl Client {
-  /// `GET /projects?remote=`: the project of the repository `remote` on the server, if there is one
-  /// and the person is a member; `403 not_member` names its owners otherwise. Without `remote`, the
-  /// projects the person is a member of.
+  /// `GET /projects`: the projects the person is a member of. With `remote`, API 2's lookup by repository, which an
+  /// API 3 server refuses with `400`.
   pub async fn projects(
     &self,
     token: &SecretValue,
@@ -33,7 +32,7 @@ impl Client {
     Ok(response.projects)
   }
 
-  /// `POST /projects`: creates the project from the local one and uploads its tasks, numbers kept.
+  /// API 2's `POST /projects` by repository, which an API 3 server refuses with `400` (see [`ProjectCreate`]).
   pub async fn create_project(
     &self,
     token: &SecretValue,

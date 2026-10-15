@@ -18,19 +18,24 @@ async fn s1a_request_types_reject_unknown_fields_and_user_noops_are_not_audited(
   let before = audit_count(&server);
   for (path, method, body) in [
     (
-      "/auth/sessions",
+      "/auth/code",
       "POST",
-      json!({"username":"alice", "password":"a secure admin password", "device":"test", "extra":signed.token.expose()}),
+      json!({"code":"ABCD-EFGH", "device":"test", "extra":signed.token.expose()}),
     ),
     (
-      "/auth/password",
+      "/auth/cloud",
       "POST",
-      json!({"current_password":"a secure admin password", "new_password":"new admin password", "extra":signed.token.expose()}),
+      json!({"identity_token":"x", "device":"test", "extra":signed.token.expose()}),
     ),
     (
-      "/admin/users",
+      "/invites",
       "POST",
-      json!({"username":"bob", "display_name":"Bob", "admin":false, "extra":signed.token.expose()}),
+      json!({"kind":"server", "delivery":"code", "extra":signed.token.expose()}),
+    ),
+    (
+      "/server/settings",
+      "PATCH",
+      json!({"join_approval":true, "extra":signed.token.expose()}),
     ),
     (
       user_path.as_str(),
