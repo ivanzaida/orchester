@@ -9,6 +9,7 @@ use lurq::{app::events::keyboard_event::KeyboardEvent, core::Signal};
 use orchester_core::{
   conversation::Recipient,
   id::{RunId, TaskId},
+  sharing::TaskRevision,
 };
 use orchester_workspace::{
   tasks::conversation::{
@@ -30,6 +31,8 @@ pub(super) struct Target {
   pub(super) project: OpenProject,
   pub(super) task: TaskId,
   pub(super) written_for: Option<RunId>,
+  /// The task as the person reads it; Run again with the message runs only that revision.
+  pub(super) revision: TaskRevision,
   pub(super) lost: bool,
   pub(super) left: Option<Context>,
 }
@@ -56,10 +59,11 @@ pub(super) fn presses(state: &ComposerState, target: &Target, (mode, to): (&Comp
 /// does nothing while a send is under way: a second run of the action would replace the first mid-way.
 fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action)) -> Press {
   let state = state.clone();
-  let (project, task, written_for, reading) = (
+  let (project, task, written_for, revision, reading) = (
     target.project.clone(),
     target.task,
     target.written_for,
+    target.revision,
     (target.lost, target.left),
   );
   Arc::new(move || {
@@ -71,6 +75,7 @@ fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action))
       project: project.clone(),
       task,
       written_for,
+      revision,
       reading,
       way,
       expected,

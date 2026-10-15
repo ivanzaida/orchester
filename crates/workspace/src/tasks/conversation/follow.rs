@@ -10,6 +10,7 @@ use std::{future::Future, path::Path};
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
   run::RunAgainBlock,
+  sharing::TaskRevision,
 };
 use orchester_ipc::{Command, Rejection};
 
@@ -49,6 +50,9 @@ pub struct Stored<'a> {
   pub key: IdempotencyKey,
   /// The latest run's pipeline, which a refusal to run the task again names.
   pub pipeline: &'a str,
+  /// The task as the person saw it when they wrote: running it again is refused once it changed since. `None`
+  /// where the sender saw no revision (automation), which runs the task as it is now.
+  pub revision: Option<TaskRevision>,
 }
 
 impl RunnerOf<'_> {
@@ -68,10 +72,14 @@ impl RunnerOf<'_> {
 
   async fn run_again(self, runners: &Runners, stored: &Stored<'_>) -> Result<(), RunRequestError> {
     let started = match self {
-      Self::Displayed => runners.run_again(stored.key, stored.task, stored.run, None).await,
+      Self::Displayed => {
+        runners
+          .run_again(stored.key, (stored.task, stored.run, stored.revision), None)
+          .await
+      }
       Self::Project(project) => {
         runners
-          .run_again_in(project, stored.key, (stored.task, stored.run, None))
+          .run_again_in(project, stored.key, (stored.task, stored.run, stored.revision))
           .await
       }
     };

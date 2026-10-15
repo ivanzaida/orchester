@@ -19,6 +19,7 @@ use orchester_core::{
   id::{IdempotencyKey, MessageId, RunId, TaskId},
   project::TaskKey,
   run::Answerer,
+  sharing::TaskRevision,
 };
 use orchester_workspace::{
   background,
@@ -48,6 +49,7 @@ pub(super) struct Request {
   pub(super) project: OpenProject,
   pub(super) task: TaskId,
   pub(super) written_for: Option<RunId>,
+  pub(super) revision: TaskRevision,
   pub(super) reading: (bool, Option<Context>),
   pub(super) way: Way,
   pub(super) expected: Action,
@@ -354,6 +356,7 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
     run,
     key,
     pipeline: &pipeline,
+    revision: Some(request.revision),
   };
   let runner = (
     &services.runners,

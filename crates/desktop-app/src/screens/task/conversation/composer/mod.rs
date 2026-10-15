@@ -242,6 +242,7 @@ impl Composer {
       project: composing.project.open.clone(),
       task: composing.detail.task.id(),
       written_for: composing.detail.run.as_ref().map(RunView::id),
+      revision: composing.detail.task.revision(),
       lost: composing.lost,
       left,
     };
