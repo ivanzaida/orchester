@@ -69,10 +69,11 @@ fn content(ctx: &mut Ctx, page: &LocalPage, view: &IntegrationView, (busy, narro
     Mode::Commit { preview, .. } => commit_review(ctx, page, view, &preview, busy),
     Mode::Preserve => {
       let title = ctx.t("local_integration.preservationSelection");
-      vec![
-        files::list(ctx, (view, List::Preserve), signals, &title, busy),
-        notes::no_discard(ctx),
-      ]
+      let kept = files::kept_whole(ctx, view, &page.selected.get());
+      let mut parts = vec![files::list(ctx, (view, List::Preserve), signals, &title, busy)];
+      parts.extend(notes::kept_whole(ctx, &kept));
+      parts.push(notes::no_discard(ctx));
+      parts
     }
     _ if view.operation.as_ref().is_some_and(|op| op.checked().is_some()) => {
       diff::cards(ctx, "local-checked-diff", &view.diff, Source::Diff, None)

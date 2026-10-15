@@ -409,4 +409,38 @@ fn local_layout_snapshots_are_selected_alone_and_an_abandoned_commit_review_leav
     checked(&mut page, "local-select-local_integration.unstaged-local.txt"),
     "the preservation lists, and keeps, the whole selected path"
   );
+  assert!(
+    text(&mut page, "local-kept-whole").contains("Unstaged local.txt"),
+    "and says which snapshot it keeps beyond the selection, and why"
+  );
+}
+
+#[test]
+fn local_layout_960_wraps_a_long_hunk_header_inside_its_card() {
+  let fixture = Fixture::named(false, "layout-");
+  let root = fixture.root().to_owned();
+  // Git keeps 80 bytes of a section; this one fits that, not the card.
+  let section = "fn is_retryable_after_a_failed_delivery(status: StatusCode) -> bool {";
+  let body = |value: &str| {
+    format!(
+      "{section}\n  let a = 1;\n  let b = 2;\n  let d = 4;\n  let e = 6;\n  let f = 7;\n  let g = 8;\n  let c = {value};\n  a + b + c > 0\n}}\n"
+    )
+  };
+  fs::write(root.join("retry.rs"), body("3")).expect("file");
+  git(&root, &["add", "retry.rs"]);
+  git(&root, &["commit", "-m", "retry"]);
+  fs::write(root.join("retry.rs"), body("5")).expect("edit");
+  let mut page = Page::new(fixture);
+  resize(&mut page, 960, 1400);
+  page.until("the shown diff", |window| {
+    window
+      .texts("local-file-diff-file-0-row-0")
+      .is_some_and(|words| words.join(" ").contains("is_retryable"))
+  });
+  let card = bounds(&mut page, "local-file-diff-file-0");
+  let hunk = bounds(&mut page, "local-file-diff-file-0-row-0");
+  let range = text(&mut page, "local-file-diff-file-0-row-0");
+  assert!(range.contains("-> bool {"), "{range}");
+  assert!(card.holds(&hunk), "the hunk header stays inside its card");
+  assert!(hunk.height > 26.0, "and wraps onto another line");
 }

@@ -98,6 +98,20 @@ pub(super) fn ignored(ctx: &Ctx, narrow: bool) -> Element {
     .into()
 }
 
+/// Under the preservation's selection: the snapshots it keeps because it keeps whole paths, none when it keeps
+/// only the selected ones.
+pub(super) fn kept_whole(ctx: &Ctx, kept: &[String]) -> Option<Element> {
+  (!kept.is_empty()).then(|| {
+    Text::new(&ctx.t_args(
+      "local_integration.keptWhole",
+      [("snapshots", &*kept.join(&ctx.t("local_integration.separator")))],
+    ))
+    .id("local-kept-whole")
+    .variant(LocalText::Note.role())
+    .into()
+  })
+}
+
 /// What the selected commit leaves in the checkout (`Remaining blocker` `pshey`): the snapshots it excludes, or
 /// that nothing remains.
 pub(super) fn remaining(ctx: &Ctx, excluded: &[String]) -> Element {

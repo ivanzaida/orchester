@@ -1,8 +1,9 @@
 //! A reviewed diff, one card per file (`src/webhooks/sender.rs diff` `QSaSz`): on `code_bg` in a radius 6
-//! `border` stroke, the path in Geist Mono 12, 10 inside; each hunk's range on `hover`, 26 high, 12 from the side
-//! (`Diff hunk` `sphVU`); each line in Geist Mono 12, 2 over and under and 12 at its sides, a context line in
-//! `text_secondary`, a removed one in `danger` on `diff_remove` and an added one in `success` on `diff_add`. Long
-//! lines wrap. A card with more rows than fit a page shows them in a scrolling list of its own.
+//! `border` stroke, the path in Geist Mono 12, 10 inside; each hunk's range on `hover`, 26 high, 12 from the side,
+//! wrapping where it is longer than the card (`Diff hunk` `sphVU`); each line in Geist Mono 12, 2 over and under and 12
+//! at its sides, a context line in `text_secondary`, a removed one in `danger` on `diff_remove` and an added one in
+//! `success` on `diff_add`. Long lines wrap. A card with more rows than fit a page shows them in a scrolling list of
+//! its own.
 
 use std::sync::Arc;
 
@@ -21,7 +22,7 @@ use orchester_workspace::tasks::local_integration::Preview;
 
 use crate::theme::{ExtraColor, ExtraTypography, LocalText};
 
-/// A hunk's range row (`sphVU`).
+/// A hunk's range row, at least (`sphVU`).
 const HUNK_HEIGHT: f32 = 26.0;
 /// Rows a card lays out in full; past them its rows scroll in a list `LIST_HEIGHT` high.
 const SHOWN_ROWS: usize = 160;
@@ -144,14 +145,27 @@ fn card(ctx: &mut Ctx, id: &str, path: &str, rows: Vec<DiffRow>) -> Element {
   let body: Element = if rows.len() <= SHOWN_ROWS {
     Column::new()
       .width(Dimension::Pct(100.0))
-      .with_children(rows.into_iter().map(Element::from))
+      .with_children(
+        rows
+          .into_iter()
+          .enumerate()
+          .map(|(index, row)| row.element(format!("{id}-row-{index}"))),
+      )
       .into()
   } else {
-    VirtualizedList::new_shared(ctx, Arc::new(rows.into_iter().enumerate().collect::<Vec<_>>()))
+    let rows = rows
+      .into_iter()
+      .enumerate()
+      .map(|(index, row)| RowProps {
+        id: format!("{id}-row-{index}"),
+        row,
+      })
+      .collect::<Vec<_>>();
+    VirtualizedList::new_shared(ctx, Arc::new(rows))
       .list_key(format!("{id}-rows"))
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(LIST_HEIGHT))
-      .mount_keyed::<RowView, _, _, _>(|(index, _)| *index, |(_, row)| row.clone())
+      .mount_keyed::<RowView, _, _, _>(|props| props.id.clone(), RowProps::clone)
   };
   Column::new()
     .id(id.to_owned())
@@ -174,18 +188,34 @@ enum DiffRow {
   Note(Arc<str>),
 }
 
-impl DevtoolsInspectable for DiffRow {}
+/// A row as a card lays it out, under its element id.
+#[derive(Clone, Debug, PartialEq)]
+struct RowProps {
+  id: String,
+  row: DiffRow,
+}
 
-impl From<DiffRow> for Element {
-  fn from(row: DiffRow) -> Self {
-    match row {
+impl DevtoolsInspectable for RowProps {}
+
+impl DiffRow {
+  fn element(self, id: String) -> Element {
+    let row: Element = match self {
+      // A range with a long section wraps inside the card, as code lines do (`s4gj9` at 960).
       DiffRow::Hunk(range) => Row::new()
         .width(Dimension::Pct(100.0))
-        .height(Dimension::Px(HUNK_HEIGHT))
-        .padding(Padding::horizontal(SpacingSize::Md))
+        .min_height(Dimension::Px(HUNK_HEIGHT))
+        .padding(Padding::symmetric(
+          SpacingSize::Md,
+          crate::theme::ExtraSpacing::Tight.role(),
+        ))
         .align_items(Alignment::Center)
         .background(ExtraColor::Hover.role())
-        .child(Text::new(&range).variant(ExtraTypography::MonoKey.role()).nowrap())
+        .child(
+          Text::new(&range)
+            .variant(ExtraTypography::MonoKey.role())
+            .flex(1.0)
+            .min_width(Dimension::Px(0.0)),
+        )
         .into(),
       DiffRow::Line(kind, text) => {
         let (background, color, name) = match kind {
@@ -221,20 +251,22 @@ impl From<DiffRow> for Element {
             .min_width(Dimension::Px(0.0)),
         )
         .into(),
-    }
+    };
+    row.id(id)
   }
 }
 
 struct RowView;
 
 impl Component for RowView {
-  type Props = DiffRow;
+  type Props = RowProps;
 
   fn create(_: &mut Ctx) -> Self {
     Self
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    ctx.props::<DiffRow>().clone()
+    let props = ctx.props::<RowProps>().clone();
+    props.row.element(props.id)
   }
 }

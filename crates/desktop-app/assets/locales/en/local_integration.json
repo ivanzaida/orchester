@@ -172,6 +172,7 @@
     "remainingBody": "{{paths}} are excluded. Delivery stays paused until they are handled.",
     "remainingNone": "No other local change remains after this commit.",
     "excludedEntry": "{{group}} {{path}}",
+    "keptWhole": "Also kept: {{snapshots}}. A preservation keeps each selected path whole, with all its snapshots.",
     "separator": ", ",
     "noDiscard": "No silent discard",
     "noDiscardBody": "Ignored files are excluded. Collision blocks delivery. Unselected changes remain in place; cleaning starts only after durable snapshot verification.",

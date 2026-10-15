@@ -159,9 +159,23 @@ pub(super) fn selected_count(view: &IntegrationView, selection: &Selection) -> u
 
 /// The snapshots a commit of `selection` leaves in the checkout, as the remaining notice names them.
 pub(super) fn excluded(ctx: &Ctx, view: &IntegrationView, selection: &Selection) -> Vec<String> {
-  entries(view, &Selection::default(), List::Review)
+  let excluded = entries(view, &Selection::default(), List::Review)
     .into_iter()
-    .filter(|entry| entry.group == Group::Unstaged || !selection.has(&entry.file.path, entry.group.snapshot()))
+    .filter(|entry| entry.group == Group::Unstaged || !selection.has(&entry.file.path, entry.group.snapshot()));
+  named(ctx, excluded)
+}
+
+/// The snapshots a preservation of `selection` keeps though they were not selected: it keeps a selected path whole.
+pub(super) fn kept_whole(ctx: &Ctx, view: &IntegrationView, selection: &Selection) -> Vec<String> {
+  let kept = entries(view, selection, List::Preserve)
+    .into_iter()
+    .filter(|entry| !selection.has(&entry.file.path, entry.group.snapshot()));
+  named(ctx, kept)
+}
+
+/// Each of `listed` by its group and path.
+fn named(ctx: &Ctx, listed: impl Iterator<Item = Entry>) -> Vec<String> {
+  listed
     .map(|entry| {
       ctx
         .t_args(
