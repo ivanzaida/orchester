@@ -27,6 +27,7 @@ pub struct CommandTrigger {
   width: f32,
   anchor: ElementRef,
   press: Arc<dyn Fn() + Send + Sync>,
+  open: bool,
 }
 
 impl CommandTrigger {
@@ -45,7 +46,14 @@ impl CommandTrigger {
       width,
       anchor,
       press: Arc::new(press),
+      open: false,
     }
+  }
+
+  /// What it opened is open: its stroke is `border_focus` (`YErsN` in `y29f1V`).
+  pub fn open(mut self, open: bool) -> Self {
+    self.open = open;
+    self
   }
 }
 
@@ -61,7 +69,14 @@ impl From<CommandTrigger> for Element {
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
       .background(PaletteColor::SurfaceInput)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+      .border(Border::inside(
+        BorderSize::Sm,
+        if trigger.open {
+          PaletteColor::BorderFocus
+        } else {
+          PaletteColor::Border
+        },
+      ))
       .rounded(RadiusSize::Md)
       .describe("a11y_name", trigger.label.clone())
       .child(icon(Icon::Search, IconSize::Base, PaletteColor::TextMuted))

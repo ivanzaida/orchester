@@ -1,7 +1,7 @@
 //! One line of the file, mounted by the virtualised list: a diff's context line without its old number and
 //! sign (`Diff line/context` `L5WYtA` as `Line 440` uses it): 20 high, the number right-aligned in 44 in
 //! Geist Mono 11 `text_muted`, 24 of room, then the code in Geist Mono 12, its tokens in the Changes tab's
-//! colors. A selected line is on `accent_muted` with a 2 `text_primary` line at its start and its number in
+//! colors. A selected line is on `accent_muted` with a 2 `accent` line at its start and its number in
 //! `text_primary` (`Line 441` `dSRWm`). A place the search found is on `warning_muted`, the current one on
 //! `warning` in `text_inverse`, radius 2 (`Match`, `Current match` in `b7RGL`).
 //!
@@ -116,7 +116,7 @@ impl Component for LineView {
     if line.selected {
       row
         .background(PaletteColor::AccentMuted)
-        .border_left(Border::inside(BorderSize::Md, PaletteColor::TextPrimary))
+        .border_left(Border::inside(BorderSize::Md, PaletteColor::Accent))
     } else {
       row
     }

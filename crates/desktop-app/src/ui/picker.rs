@@ -73,7 +73,11 @@ impl From<Picker> for Element {
       .background(PaletteColor::SurfaceInput)
       .border(Border::inside(
         BorderSize::Sm,
-        if is_open { PaletteColor::BorderFocus } else { PaletteColor::Border },
+        if is_open {
+          PaletteColor::BorderFocus
+        } else {
+          PaletteColor::Border
+        },
       ))
       .rounded(RadiusSize::Md)
       .describe("a11y_name", picker.label.clone())

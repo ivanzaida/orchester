@@ -23,13 +23,7 @@ use orchester_workspace::files::{FileList, NameMatches};
 use super::{Page, keys, version};
 use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, FilesText, IconSize},
-  ui::{
-    command_trigger::CommandTrigger,
-    field::FieldInput,
-    icon::icon,
-    kbd::key_cap,
-    pressable::pressable,
-  },
+  ui::{command_trigger::CommandTrigger, field::FieldInput, icon::icon, kbd::key_cap, pressable::pressable},
 };
 
 /// The trigger's width (`YErsN`), the search's (`Go to file popover` `h6mtSs`), its field's height (`dWexO`)
@@ -73,6 +67,7 @@ impl GotoState {
 /// The trigger in the header.
 pub fn trigger(ctx: &mut Ctx, page: &Page<'_>) -> Element {
   let state = page.view.goto.clone();
+  let open = state.open.get();
   let (caps, _) = keys::caps(ctx);
   CommandTrigger::new(
     "files-go-to",
@@ -81,6 +76,7 @@ pub fn trigger(ctx: &mut Ctx, page: &Page<'_>) -> Element {
     state.anchor.clone(),
     move || state.show(),
   )
+  .open(open)
   .into()
 }
 
@@ -226,9 +222,16 @@ fn result(ctx: &Ctx, (path, query): (&str, &str), current: bool, choose: impl Fn
 fn name_parts(name: &str, query: &str) -> Row {
   let chars: Vec<char> = name.chars().collect();
   let wanted: Vec<char> = query.trim().chars().flat_map(char::to_lowercase).collect();
-  let lower: Vec<char> = chars.iter().map(|character| character.to_lowercase().next().unwrap_or(*character)).collect();
+  let lower: Vec<char> = chars
+    .iter()
+    .map(|character| character.to_lowercase().next().unwrap_or(*character))
+    .collect();
   let start = (!wanted.is_empty() && wanted.len() == query.trim().chars().count())
-    .then(|| lower.windows(wanted.len()).position(|window| window == wanted.as_slice()))
+    .then(|| {
+      lower
+        .windows(wanted.len())
+        .position(|window| window == wanted.as_slice())
+    })
     .flatten();
   let part = |range: std::ops::Range<usize>, matched: bool| {
     let text: String = chars[range].iter().collect();
