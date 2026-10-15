@@ -42,4 +42,5 @@ pub mod sharing;
 pub mod skills;
 pub mod tasks;
 pub mod tools;
+pub mod usage;
 pub mod workspace;

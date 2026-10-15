@@ -18,6 +18,7 @@ mod runs;
 pub mod setup;
 mod task_write;
 mod tasks;
+mod usage;
 mod wire;
 mod worktree;
 
@@ -219,6 +220,12 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
+    name: "get_usage",
+    description: "Tokens (spent = input - cached input + output, as each CLI reported them) and active agent time of a project's runs, or of every project's, over a range of local days (the last 7 by default, today counted up to now), as the Usage page reads them: totals, and rows grouped by hour, day, task, pipeline, step, agent (profile; auto mode's reviewer per model), model or account, filtered by task, run, pipeline, step, agent profile, model or account. `link` opens the Usage page with the same query; each row's `link` opens it narrowed to the row.",
+    schema: schema_for_type::<usage::GetUsage>,
+    read_only: true,
+  },
+  Spec {
     name: "list_pipelines",
     description: "A project's pipelines that have a published version, which tasks run with: name, version, steps.",
     schema: schema_for_type::<projects::InProject>,
@@ -272,6 +279,7 @@ async fn dispatch(
     "send_message" => messages::send_message(services, parse(arguments)?, translate).await,
     "remove_worktree" => worktree::remove_worktree(services, parse(arguments)?, translate).await,
     "list_pipelines" => projects::list_pipelines(services, parse(arguments)?, translate).await,
+    "get_usage" => usage::get_usage(services, parse(arguments)?).await,
     "set_code_index" => projects::set_code_index(services, parse(arguments)?).await,
     "update_project_limits" => limits::update_project_limits(services, parse(arguments)?).await,
     "duplicate_pipeline" => pipeline_copy::duplicate_pipeline(services, parse(arguments)?, translate).await,
