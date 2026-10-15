@@ -13,9 +13,8 @@ use orchester_core::{
   project::TaskKey,
 };
 
-use crate::files::{FilePath, LineRange, Version};
-
 pub use self::query::{encode, encode_path, with_query};
+use crate::files::{FilePath, LineRange, Version};
 
 /// A place in the app a tool result points to.
 #[derive(Clone, Debug, PartialEq, Eq)]
