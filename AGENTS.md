@@ -30,9 +30,10 @@ Workspace layout:
   projects, the runners' client side, project data as screens and automation read and change it, the domain MCP
   tools, and the words of its `Message`s (`assets/locales/`, loaded under the namespace `workspace`). No UI: lurq is
   only an optional dependency for empty DevTools markers (feature `devtools-inspect`, `src/inspect.rs`).
-- `crates/desktop` (`orchester-desktop`, binary `orchester`): lurq UI, deprecated — replaced by `crates/desktop-app`
-  and kept building and shipping until that app takes over its screens. Screens call into core; business rules do not
-  live in components. Theme tokens live in `crates/desktop/src/theme/`.
+- `crates/desktop` (`orchester-desktop`, binary `orchester`): the old lurq UI, deprecated and frozen since
+  2026-10-15. It is never updated again: no fixes, no features, no ports of new logic, no QA, no tests for new work.
+  Read it only to look up code and behaviour. New work never changes `crates/desktop`; if a change elsewhere would
+  stop it from compiling, report that to the person instead of updating it.
 - `crates/desktop-app` (`orchester-app`, binary `orchester-app`): the new lurq app in the `orchester2.pen` design.
   Theme roles live in `crates/desktop-app/src/theme/`, strings in `crates/desktop-app/assets/locales/`. It keeps its
   settings in the application database (`orchester.db`, located by `orchester_store::location`) and runs one MCP
