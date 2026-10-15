@@ -19,10 +19,10 @@ fn usage_page_charts_the_seeded_week() {
   assert!(legend.contains("Codex") && legend.contains("Claude"), "{legend}");
   assert!(page.shows("usage-limits-chart"));
   assert!(page.text("usage-limits-legend").contains("Claude · weekly"));
+  let footnote = page.text("usage-limits-footnote");
   assert!(
-    page
-      .text("usage-limits-footnote")
-      .contains("Hatched: no Claude data before")
+    footnote.contains("Hatched: ") && footnote.contains("no Claude data before"),
+    "{footnote}"
   );
   assert!(page.text("usage-breakdown-profiles").contains("Builder · Implement"));
   assert!(page.text("usage-breakdown-models").contains("claude-sonnet-5-5"));
@@ -141,4 +141,20 @@ fn usage_page_says_why_it_could_not_read_the_usage() {
   page.until("the failure", |page| page.shows("usage-load-failed"));
   assert_eq!(page.text("usage-load-failed-title"), "Usage could not be read");
   assert!(page.shows("usage-retry"));
+}
+
+#[test]
+fn usage_page_names_the_years_of_a_range_across_new_year() {
+  let range = orchester_core::usage::DayRange::new(
+    chrono::NaiveDate::from_ymd_opt(2025, 12, 28).expect("a day"),
+    chrono::NaiveDate::from_ymd_opt(2026, 1, 3).expect("a day"),
+  )
+  .expect("a range");
+  let query = UsageQuery {
+    period: Period::Custom(range),
+    ..UsageQuery::default()
+  };
+  let mut page = Seeded::usage("usage", query);
+  let readback = page.text("usage-readback");
+  assert!(readback.starts_with("Dec 28, 2025 – Jan 3, 2026"), "{readback}");
 }

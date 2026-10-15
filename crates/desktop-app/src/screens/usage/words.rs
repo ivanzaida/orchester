@@ -70,14 +70,28 @@ pub fn long_day(ctx: &Ctx, date: NaiveDate) -> Arc<str> {
   )
 }
 
-/// `Sep 24 – Sep 30`, or one day.
+/// `Sep 24 – Sep 30`, or one day; `Dec 28, 2026 – Jan 3, 2027` across a year.
 pub fn range(ctx: &Ctx, range: DayRange) -> Arc<str> {
-  if range.first() == range.last() {
-    return day(ctx, range.first());
+  let (first, last) = (range.first(), range.last());
+  if first == last {
+    return day(ctx, first);
   }
+  let named = if first.year() == last.year() { day } else { day_in_year };
   ctx.t_args(
     "usage.date.range",
-    [("from", &*day(ctx, range.first())), ("to", &*day(ctx, range.last()))],
+    [("from", &*named(ctx, first)), ("to", &*named(ctx, last))],
+  )
+}
+
+/// `Dec 28, 2026`.
+fn day_in_year(ctx: &Ctx, date: NaiveDate) -> Arc<str> {
+  ctx.t_args(
+    "usage.date.dayInYear",
+    [
+      ("month", &*month(ctx, date)),
+      ("day", date.day().to_string().as_str()),
+      ("year", date.year().to_string().as_str()),
+    ],
   )
 }
 

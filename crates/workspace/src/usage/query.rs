@@ -7,7 +7,7 @@
 //! |---|---|
 //! | `period` | `today`, `7d`, `30d` (not with `from`/`to`) |
 //! | `from`, `to` | a custom range of local days, `2026-10-01`, both given, at most 366 days |
-//! | `group` | `hour`, `day`, `task`, `pipeline`, `step`, `agent`, `model`, `account` |
+//! | `group` | `hour`, `day`, `task`, `pipeline`, `step`, `agent`, `model`, `account`; left out, `hour` for today |
 //! | `cli` | `codex_cli`, `claude_code_cli`, `anthropic_api`, `openai_api` |
 //! | `model`, `tag`, `step` | a name |
 //! | `agent`, `pipeline` | a profile's or pipeline's id, or its name |
@@ -114,7 +114,7 @@ impl UsageQuery {
         params.push((TO, range.last().to_string()));
       }
     }
-    if self.group != GroupBy::Day {
+    if self.group != default_group(self.period) {
       params.push((GROUP, group_name(self.group).to_owned()));
     }
     let filter = &self.filter;
@@ -163,11 +163,12 @@ impl UsageQuery {
     filter.runs = parsed(RUN, all(RUN)?, |value| value.parse().ok())?;
     filter.steps = parsed(STEP, all(STEP)?, text)?;
     filter.accounts = parsed(ACCOUNT, all(ACCOUNT)?, |value| value.parse().ok())?;
+    let period = period_of(period, from, to)?;
     Ok(Self {
-      period: period_of(period, from, to)?,
+      period,
       group: match group {
         Some(value) => group_of(&value).ok_or_else(|| invalid(GROUP, value))?,
-        None => GroupBy::Day,
+        None => default_group(period),
       },
       filter,
     })
@@ -181,6 +182,15 @@ pub enum ParamsError<E> {
   Query(#[from] QueryError),
   #[error("the query could not be read")]
   Source(E),
+}
+
+/// The grouping of a link that names none: *Today* by hour, as pressing it shows, any other period by day.
+fn default_group(period: Period) -> GroupBy {
+  if period == Period::Today {
+    GroupBy::Hour
+  } else {
+    GroupBy::Day
+  }
 }
 
 fn invalid(param: &'static str, value: String) -> QueryError {

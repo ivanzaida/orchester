@@ -481,6 +481,8 @@ fn usage_pages_carry_their_query_as_the_workspace_links_it() {
     ("period=week", "period"),
     ("group=month", "group"),
     ("from=2026-10-01", "from"),
+    ("from=2025-01-01&to=2026-01-02", "to"),
+    ("model=", "model"),
   ] {
     assert!(
       matches!(
@@ -490,6 +492,16 @@ fn usage_pages_carry_their_query_as_the_workspace_links_it() {
       "{query}"
     );
   }
+  let Ok(Route::Project(_, ProjectPage::Usage(today))) =
+    Route::parse(&format!("/project/{PROJECT}/usage?period=today"))
+  else {
+    panic!("today's usage is a route");
+  };
+  assert_eq!(
+    today.group,
+    GroupBy::Hour,
+    "today reads by hour, as pressing Today shows it"
+  );
   assert_eq!(
     Route::parse(&format!("/project/{PROJECT}/usage?tab=table")),
     Err(RouteError::UnexpectedParam {

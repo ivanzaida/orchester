@@ -62,9 +62,19 @@ fn usage_query_parameters_read_back_and_leave_the_defaults_out() {
   };
   assert_eq!(
     today.params(),
-    [("period", "today".to_owned()), ("group", "hour".to_owned())]
+    [("period", "today".to_owned())],
+    "today reads by hour unless the link says otherwise"
   );
-  assert_eq!(read_back(&today.params()), Ok(today));
+  assert_eq!(read_back(&today.params()), Ok(today.clone()));
+  let today_by_day = UsageQuery {
+    group: GroupBy::Day,
+    ..today
+  };
+  assert_eq!(
+    today_by_day.params(),
+    [("period", "today".to_owned()), ("group", "day".to_owned())]
+  );
+  assert_eq!(read_back(&today_by_day.params()), Ok(today_by_day));
 }
 
 #[test]

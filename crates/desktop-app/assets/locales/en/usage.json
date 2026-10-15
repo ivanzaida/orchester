@@ -66,6 +66,7 @@
     },
     "date": {
       "day": "{{month}} {{day}}",
+      "dayInYear": "{{month}} {{day}}, {{year}}",
       "weekday": "{{weekday}} {{day}}",
       "longDay": "{{weekday}}, {{day}}",
       "range": "{{from}} – {{to}}",
