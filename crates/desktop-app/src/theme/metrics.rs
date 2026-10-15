@@ -186,6 +186,8 @@ pub enum ControlHeight {
   Inspector,
   /// 36: a large button, as the welcome's actions (`rDzhV`, `fZDtO`).
   Lg,
+  /// 26: a picker and a command trigger in a page's header (`ZQd2D`, `qXoBR`).
+  Picker,
 }
 
 impl ControlHeight {
@@ -196,6 +198,7 @@ impl ControlHeight {
       Self::Md => 28.0,
       Self::Inspector => 26.0,
       Self::Lg => 36.0,
+      Self::Picker => 26.0,
     }
   }
 }

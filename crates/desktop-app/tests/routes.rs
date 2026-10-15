@@ -3,13 +3,15 @@
 //! in the table.
 
 use orchester_app::routes::{
-  ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, NewConnection, OverviewTab, ProjectPage, Route,
-  RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
+  ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, NewConnection, OverviewTab, ProjectPage,
+  Route, RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
 };
 use orchester_core::{
-  id::{ConnectionId, ProjectId},
+  id::{ConnectionId, ProjectId, RunId},
   project::TaskKey,
+  revision::Revision,
 };
+use orchester_workspace::files::{LineRange, Version};
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const CONNECTION: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
@@ -72,6 +74,7 @@ fn every_route() -> Vec<Route> {
   all.extend(ConnectionsTab::ALL.map(|tab| at(ProjectPage::Connections(ConnectionsView::new(tab)))));
   all.extend(NewConnection::ALL.map(|kind| at(ProjectPage::NewConnection(kind))));
   all.extend(TaskTab::ALL.map(|tab| at(ProjectPage::Task(key("KON-12"), TaskView::of(tab)))));
+  all.extend(files_routes());
   for source in ChangeSource::ALL {
     for path in ["src/webhooks/sender.rs", AWKWARD] {
       let view = TaskView::Changes(Some(file(path, source)));
@@ -79,6 +82,76 @@ fn every_route() -> Vec<Route> {
     }
   }
   all
+}
+
+/// The code viewer at every version, with lines, and with paths it refuses but still reads back.
+fn files_routes() -> Vec<Route> {
+  let run: RunId = CONNECTION.parse().expect("a run id");
+  let revision = Revision::new("4d2b8e0c1f2a3b4c5d6e7f8091a2b3c4d5e6f708").expect("a commit");
+  let lines = LineRange::new(441, 442);
+  let mut all = vec![at(ProjectPage::Files(FilesView::default()))];
+  for version in [
+    Version::Checkout,
+    Version::Base,
+    Version::Run(run),
+    Version::Revision(revision),
+  ] {
+    for path in [
+      "crates/workspace/src/plan_limits.rs",
+      AWKWARD,
+      "../kontur/.env",
+      "/etc/passwd",
+      "a//b/",
+      "%2F",
+    ] {
+      all.push(at(ProjectPage::Files(FilesView::new(Some(path), version.clone()))));
+      all.push(at(ProjectPage::Files(
+        FilesView::new(Some(path), version.clone()).with_line(lines),
+      )));
+    }
+  }
+  all
+}
+
+#[test]
+fn files_paths_name_the_file_its_version_and_lines() {
+  let root = format!("/project/{PROJECT}/files");
+  let run: RunId = CONNECTION.parse().expect("a run id");
+  let paths = [
+    (FilesView::default(), root.clone()),
+    (
+      FilesView::new(Some("crates/workspace/src/plan_limits.rs"), Version::Checkout)
+        .with_line(LineRange::new(441, 442)),
+      format!("{root}/crates/workspace/src/plan_limits.rs?line=441-442"),
+    ),
+    (
+      FilesView::new(Some("src/a b.rs"), Version::Run(run)).with_line(LineRange::new(7, 7)),
+      format!("{root}/src/a%20b.rs?at=run%3A{CONNECTION}&line=7"),
+    ),
+    (
+      FilesView::new(Some("README.md"), Version::Base),
+      format!("{root}/README.md?at=base"),
+    ),
+    (
+      FilesView::new(Some("/etc/passwd"), Version::Checkout),
+      format!("{root}/%2Fetc/passwd"),
+    ),
+  ];
+  for (view, path) in paths {
+    assert_eq!(at(ProjectPage::Files(view)).path(), path);
+  }
+  assert!(matches!(
+    Route::parse(&format!("{root}/README.md?at=worktree")),
+    Err(RouteError::InvalidParam { .. })
+  ));
+  assert!(matches!(
+    Route::parse(&format!("{root}/README.md?line=0")),
+    Err(RouteError::InvalidParam { .. })
+  ));
+  assert!(matches!(
+    Route::parse(&format!("{root}/README.md?file=x")),
+    Err(RouteError::UnexpectedParam { .. })
+  ));
 }
 
 #[test]

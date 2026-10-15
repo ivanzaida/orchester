@@ -383,8 +383,9 @@ fn close_button(ctx: &mut Ctx, navigation: Navigation, tab: &Tab) -> Element {
     .into()
 }
 
-/// The tab's label: its screen's name, a task by its key and its Edit task as `Edit <key>` (`Qp1B0`),
-/// after the project's name once it is known (`Kontur · KON-12`).
+/// The tab's label: its screen's name, a task by its key, its Edit task as `Edit <key>` (`Qp1B0`) and a
+/// file by its name (`Orchester · plan_limits.rs` in `o1Uea4`), after the project's name once it is known
+/// (`Kontur · KON-12`).
 fn label(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
   let screen = match route {
     Route::Project(_, ProjectPage::Task(key, _)) => key.to_string(),
@@ -400,6 +401,10 @@ fn label(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
     Route::Project(_, ProjectPage::EditTask(key)) => ctx
       .t_args("shell.screens.editTaskOf", [("key", key.to_string())])
       .to_string(),
+    Route::Project(_, ProjectPage::Files(view)) => view.file().map_or_else(
+      || ctx.t(route.screen().title_key()).to_string(),
+      |file| file.rsplit('/').next().unwrap_or(file).to_owned(),
+    ),
     route => ctx.t(route.screen().title_key()).to_string(),
   };
   match route.project().and_then(|project| projects.name(project)) {

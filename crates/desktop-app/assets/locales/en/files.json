@@ -1,0 +1,116 @@
+{
+  "files": {
+    "title": "Files",
+    "reading": "Reading the files",
+    "readingFile": "Reading the file",
+    "tree": {
+      "heading": "FILES",
+      "collapse": "Collapse all",
+      "empty": "This version holds no files."
+    },
+    "meta": {
+      "lines": {
+        "one": "{{count}} line",
+        "other": "{{count}} lines"
+      },
+      "binary": "Binary",
+      "text": "Text",
+      "separator": " · "
+    },
+    "version": {
+      "heading": "SHOW THE FILE FROM",
+      "checkout": "Project checkout",
+      "run": "Run #{{number}} worktree",
+      "runUnnamed": "Run worktree",
+      "base": "Base branch",
+      "revision": "Commit {{revision}}",
+      "removed": "{{version}} · removed",
+      "branchAt": "{{branch}} at {{revision}}",
+      "notHere": "Not in this version",
+      "binary": "Binary",
+      "tooLarge": "Too large to show",
+      "unreadable": "Cannot be read",
+      "note": "Only versions that exist are listed.",
+      "noteFrom": "Opened from {{task}}. Only versions that exist are listed."
+    },
+    "goTo": {
+      "trigger": "Go to file…",
+      "placeholder": "Go to file…",
+      "in": "in {{version}}",
+      "count": {
+        "one": "{{count}} file matches",
+        "other": "{{count}} files match"
+      },
+      "none": "No file's name holds what you typed.",
+      "move": "to move",
+      "open": "to open",
+      "close": "to close"
+    },
+    "keys": {
+      "goToCtrl": "Ctrl P",
+      "goToCmd": "⌘ P",
+      "findCtrl": "Ctrl F",
+      "findCmd": "⌘ F",
+      "arrows": "↑ ↓",
+      "enter": "Enter",
+      "escape": "Esc"
+    },
+    "copyFile": "Copy file",
+    "copyLines": "Copy lines",
+    "openInEditor": "Open in editor",
+    "openAtCommit": "A commit's file is not on disk; show the checkout's or the run's worktree's version to open it.",
+    "openRuns": "Orchester does not open a file that your system would run instead of showing.",
+    "personOnly": "Only a person's click does this; automation cannot.",
+    "openFailed": "The file could not be opened; the app's log says why.",
+    "selection": {
+      "one": "Line {{first}} selected",
+      "range": "Lines {{first}}–{{last}} selected"
+    },
+    "find": {
+      "button": "Find",
+      "placeholder": "Find in file",
+      "count": "{{at}} of {{count}}",
+      "many": "{{at}} of {{count}}+",
+      "none": "No results",
+      "matchCase": "Match case",
+      "previous": "Previous match",
+      "next": "Next match",
+      "close": "Close find"
+    },
+    "noFile": {
+      "title": "Choose a file",
+      "detail": "Pick a file in the tree, or find one by name."
+    },
+    "gone": {
+      "worktree": "Run #{{number}}'s worktree no longer exists",
+      "worktreeUnnamed": "The run's worktree no longer exists",
+      "worktreeDetail": "It was removed after the run ended, so this file can't be shown as the run left it. The project's checkout has the version that is there now.",
+      "revision": "Commit {{revision}} no longer exists",
+      "revisionDetail": "The repository no longer holds this commit, so the file can't be shown as it was there.",
+      "base": "The checkout has no branch",
+      "baseDetail": "The project's checkout is not on a branch, so there is no base branch to show.",
+      "meta": "This version no longer exists",
+      "showCheckout": "Show the checkout's version",
+      "showBase": "Show the base branch"
+    },
+    "binary": {
+      "title": "This file isn't text",
+      "detail": "{{name}} is a binary file, so it isn't shown here. Open in editor opens it with the program your system uses for it."
+    },
+    "tooLarge": {
+      "title": "This file is too large to show",
+      "detail": "{{name}} is {{size}}. Files up to {{limit}} are shown here so the page opens at once; open this one in your editor."
+    },
+    "refused": {
+      "title": "This path is outside the project",
+      "hiddenTitle": "This path is not shown",
+      "detail": "{{reason}} Files open here only from inside the project's folder or a run's worktree: a path with “..”, an absolute path, or a link or junction that leads out is refused."
+    },
+    "missing": {
+      "title": "This file is not in this version"
+    },
+    "unreadable": {
+      "title": "This file can't be shown"
+    }
+  }
+}

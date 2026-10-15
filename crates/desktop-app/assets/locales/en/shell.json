@@ -55,7 +55,8 @@
       "connections": "Connections",
       "newConnection": "Add connection",
       "editConnection": "Edit connection",
-      "projectSettings": "Project settings"
+      "projectSettings": "Project settings",
+      "files": "Files"
     },
     "placeholder": {
       "notBuilt": "This screen isn't built yet."

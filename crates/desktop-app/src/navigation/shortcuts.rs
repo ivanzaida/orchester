@@ -50,13 +50,18 @@ impl<'a> Keys<'a> {
 
   /// Whether this is the key `key` as typed; or, when the layout types no ASCII character here, the key
   /// at `code`.
-  fn is(self, key: &str, code: &str) -> bool {
+  pub fn is(self, key: &str, code: &str) -> bool {
     self.key.eq_ignore_ascii_case(key) || (!self.key.is_ascii() && self.code == code)
   }
 
   /// Only `ctrl` of the modifiers other than Shift.
   const fn only_ctrl(self) -> bool {
     self.ctrl && !self.alt && !self.meta
+  }
+
+  /// Only the platform's command modifier, Ctrl (Cmd on macOS), and no Shift: Ctrl+F, Cmd+F.
+  pub const fn only_command(self) -> bool {
+    !self.shift && platform::only_command(self)
   }
 }
 
@@ -75,6 +80,10 @@ pub fn shortcut(keys: Keys<'_>) -> Option<Shortcut> {
 #[cfg(not(target_os = "macos"))]
 mod platform {
   use super::{Keys, Shortcut};
+
+  pub(super) const fn only_command(keys: Keys<'_>) -> bool {
+    keys.only_ctrl()
+  }
 
   pub(super) fn shortcut(keys: Keys<'_>) -> Option<Shortcut> {
     if keys.only_ctrl() && !keys.shift {
@@ -100,6 +109,10 @@ mod platform {
 #[cfg(target_os = "macos")]
 mod platform {
   use super::{Keys, Shortcut};
+
+  pub(super) const fn only_command(keys: Keys<'_>) -> bool {
+    keys.meta && !keys.ctrl && !keys.alt
+  }
 
   pub(super) fn shortcut(keys: Keys<'_>) -> Option<Shortcut> {
     if !keys.meta || keys.ctrl || keys.alt || keys.shift {

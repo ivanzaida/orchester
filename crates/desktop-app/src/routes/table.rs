@@ -17,6 +17,7 @@ pub fn routes() -> Routes {
       .route(super::NEW_PIPELINE_PATTERN, screens::screen)
       .route(super::PIPELINE_PATTERN, screens::screen)
       .route(super::AGENT_PATTERN, screens::screen)
+      .route(super::FILE_PATTERN, screens::screen)
       .fallback(screens::screen)
   })
 }

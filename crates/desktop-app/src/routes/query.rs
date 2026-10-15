@@ -74,7 +74,7 @@ pub(super) fn with_query(mut path: String, params: &[(&str, Option<&str>)]) -> S
 }
 
 /// `value` with every byte outside the unreserved characters and `/` percent-encoded.
-fn encode(value: &str) -> String {
+pub(super) fn encode(value: &str) -> String {
   let mut encoded = String::with_capacity(value.len());
   for byte in value.bytes() {
     if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~' | b'/') {
@@ -87,7 +87,7 @@ fn encode(value: &str) -> String {
 }
 
 /// [`encode`] undone; `None` for a malformed escape or bytes that are not UTF-8.
-fn decode(value: &str) -> Option<String> {
+pub(super) fn decode(value: &str) -> Option<String> {
   let mut bytes = Vec::with_capacity(value.len());
   let mut rest = value.bytes();
   while let Some(byte) = rest.next() {

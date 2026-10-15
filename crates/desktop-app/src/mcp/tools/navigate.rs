@@ -3,14 +3,15 @@ use orchester_core::{
   id::{ConnectionId, ProjectId},
   project::{TaskKey, TaskKeyError},
 };
+use orchester_workspace::files::{LineRangeError, Version, VersionParseError};
 use serde_json::{Map, Value, json};
 
 use super::{ToolError, WindowLink, object, reply, route_json, string};
 use crate::{
   navigation::Navigation,
   routes::{
-    ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, NewConnection, OrchestratorChat, OverviewTab,
-    ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView,
+    ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, NewConnection, OrchestratorChat,
+    OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView,
   },
 };
 
@@ -20,8 +21,9 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   reports it). overview also takes `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as after \
   Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; connections `tab` and \
   `selected` (the id of the connection its inspector shows); new_connection `kind`; edit_connection `connection` \
-  (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab; orchestrator takes `chat` (a \n  conversation's id, or new; left out, the latest). A tab or kind left out is the one \
-  the screen opens on. Answers the route the tab shows, whose params navigate takes back. Errors are JSON with \
+  (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab; orchestrator takes `chat` (a \n  conversation's id, or new; left out, the latest); files takes `file` (a path in the project; the tree alone when \
+  left out), `at` (checkout, the default, base, run:<run id> or rev:<commit>) and `line` (12 or 12-20). A tab or \
+  kind left out is the one the screen opens on. Answers the route the tab shows, whose params navigate takes back. Errors are JSON with \
   a stable `code`: unknown_route (with the known names), missing_param, unexpected_param, invalid_param, \
   unknown_tab (with the screen's tabs), not_a_string, not_an_object, not_ready (the window is starting).";
 
@@ -55,7 +57,7 @@ fn schema() -> Value {
       "highlight": { "type": "string", "description": "tasks: the key of the task to highlight, as after Create." },
       "file": {
         "type": "string",
-        "description": "task: the repository path of a changed file to show on the changes tab (the tab when left out).",
+        "description": "task: the repository path of a changed file to show on the changes tab (the tab when left out). files: the path of the file to show (the tree alone when left out).",
       },
       "selected": { "type": "string", "description": "connections: the id of the connection its inspector shows." },
       "kind": { "type": "string", "enum": kinds, "description": "new_connection: what it adds." },
@@ -63,6 +65,8 @@ fn schema() -> Value {
       "skill": { "type": "string", "description": "skills: the skill id, new, or import; omitted opens the library." },
       "tool": { "type": "string", "description": "tools: the tool’s id, or new for a command draft; omitted opens the library." },
       "chat": { "type": "string", "description": "orchestrator: a conversation's id, or new; omitted opens the latest." },
+      "at": { "type": "string", "description": "files: the version, checkout (the default), base, run:<run id> or rev:<commit>." },
+      "line": { "type": "string", "description": "files: the line or lines to show, 12 or 12-20." },
       "from": {
         "type": "string",
         "enum": sources,
@@ -124,6 +128,7 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
     Screen::NewConnection => ProjectPage::NewConnection(new_connection(args)?),
     Screen::EditConnection => ProjectPage::EditConnection(connection(args, "connection")?),
     Screen::ProjectSettings => ProjectPage::Settings,
+    Screen::Files => ProjectPage::Files(files_view(args)?),
   };
   Ok(Route::Project(project(args)?, page))
 }
@@ -140,6 +145,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Tools => &["project", "tool", "tab"],
     Screen::Skills => &["project", "skill"],
     Screen::Orchestrator => &["project", "chat"],
+    Screen::Files => &["project", "file", "at", "line"],
     Screen::NewConnection => &["project", "kind"],
     Screen::EditConnection => &["project", "connection"],
     Screen::NewTask
@@ -154,6 +160,25 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     | Screen::OrchestratorSettings
     | Screen::ProjectSettings => &["project"],
   }
+}
+
+fn files_view(args: &Map<String, Value>) -> Result<FilesView, ToolError> {
+  let at = match string(args, "at")? {
+    Some(at) => at.parse().map_err(|error: VersionParseError| ToolError::InvalidParam {
+      param: "at",
+      reason: error.to_string(),
+    })?,
+    None => Version::Checkout,
+  };
+  let line = string(args, "line")?
+    .map(|line| {
+      line.parse().map_err(|error: LineRangeError| ToolError::InvalidParam {
+        param: "line",
+        reason: error.to_string(),
+      })
+    })
+    .transpose()?;
+  Ok(FilesView::new(string(args, "file")?, at).with_line(line))
 }
 
 fn tools_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
