@@ -230,8 +230,19 @@ changed by hand
   assert_eq!(
     git(&repo, &["show", "main:README.md"]),
     "hi\n",
-    "MCP leaves main unchanged"
+    "a refused merge leaves main unchanged"
   );
+  git(&repo, &["checkout", "--", "README.md"]);
+  let merged = served.ok("merge_run", &run_one);
+  assert_eq!(merged["merge"]["into"], "main", "{merged}");
+  assert_eq!(merged["merge"]["kind"], "fast_forward");
+  assert_eq!(
+    git(&repo, &["show", "main:README.md"]),
+    "hi\nescalated\nhello\n",
+    "main holds the agent's work, the approved command's included"
+  );
+  let again = served.refused("merge_run", &json!({ "project": "Kontur", "run": "1" }));
+  assert_eq!(again["code"], "already_merged");
 }
 
 #[test]

@@ -313,9 +313,11 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "merge_run",
-    description: "Checks whether a run is ready for local integration. Checkout preparation, conflict choices and \
-                  exact-result merge approval require a person in the app's Local integration page; this tool \
-                  cannot approve or perform the merge.",
+    description: "Merges a run, its task's latest that succeeded, into its base branch and waits for the merge, \
+                  when the main checkout needs no local integration: nothing local in the way and no local \
+                  integration of the run under way. Otherwise it refuses (needs_decision, merge_failed): preparing \
+                  the checkout, conflict choices and approving the exact merged result are a person's, in the \
+                  app's Local integration page.",
     schema: schema_for_type::<super::runs::InRun>,
     read_only: false,
   },
