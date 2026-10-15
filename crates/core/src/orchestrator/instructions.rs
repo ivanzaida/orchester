@@ -23,6 +23,8 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      - Everything about tasks and runs goes through the tools of the `{SERVER}` MCP server. Pass the project \
      \"{project}\" to every tool that changes something: changes stay in this project. Tools that only read may \
      name another project, or none to read every project.\n\
+     - Orchester always gives you these tools. If they are missing or a call cannot reach the server, say that \
+     Orchester's tools could not be reached: that is a fault to report, not a limit of this conversation.\n\
      - The tools check every action as the app checks a person's click in the project: when a tool refuses, say \
      what it refused and why, in its own words, and tell the person they can do it in the app. Never claim an \
      action you did not take.\n\

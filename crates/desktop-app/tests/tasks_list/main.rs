@@ -1,7 +1,8 @@
 //! The Tasks list on the QA seed's projects (`examples/seed`), in the app's real window: its workflow tabs
 //! and their counts, the search, the pipeline filter and the sorts (`query`), what each row says and where
-//! it leads (`rows`), and what the list shows instead of rows (`states`). No runner serves the project, so
-//! a run recorded as running reads as interrupted. Needs `git`, as the seed does.
+//! it leads (`rows`), what the list shows instead of rows (`states`), and what waits outside the tasks on
+//! Needs you (`needs_you`). No runner serves the project, so a run recorded as running reads as
+//! interrupted. Needs `git`, as the seed does.
 
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(
@@ -13,6 +14,7 @@ mod kontur;
 mod support;
 
 mod harness;
+mod needs_you;
 mod query;
 mod rows;
 mod states;

@@ -6,12 +6,14 @@
 //! guard and discovery file) is each app's.
 
 mod error;
+mod protocol;
 mod services;
 mod tools;
 
 pub(crate) use self::services::blocking;
 pub use self::{
   error::{Missing, ToolError},
+  protocol::supported_protocol_versions,
   services::Services,
   tools::{Proposal, Translate, call, find_run, listed, propose_run, run_proposed, setup},
 };

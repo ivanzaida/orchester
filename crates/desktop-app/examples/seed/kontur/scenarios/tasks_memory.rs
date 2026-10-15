@@ -1,6 +1,9 @@
 //! `tasks-memory`: the `tasks` project with two records its agents wrote to Kontur's memory, which wait
 //! for a person's approval (`Needs you · Memory` in `q9mf0k`): one by KON-12's Builder at Implement, one by
 //! KON-16's Planner at Plan, as the design's "from the KON-12 and KON-16 handoffs".
+//!
+//! `memory-only`: one task, KON-1, whose run was merged, and the record its Builder wrote at Implement, which
+//! waits for approval: only the memory waits, so the task list's Needs you tab has no task to list.
 
 use orchester_core::{
   memory::{
@@ -12,7 +15,10 @@ use orchester_core::{
 };
 
 use super::tasks;
-use crate::kontur::{Kontur, SeedError};
+use crate::kontur::{
+  Kontur, SeedError,
+  shapes::{self, Shape},
+};
 
 /// One record: the task whose latest run wrote it, at which step, what it says and how many minutes ago.
 struct Record {
@@ -37,12 +43,41 @@ const RECORDS: [Record; 2] = [
   },
 ];
 
+const ALONE: Record = Record {
+  task: "KON-1",
+  step: "implement",
+  text: "Sign-out clears the session cookie and the refresh token together.",
+  minutes: 30,
+};
+
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   tasks::project(kontur)?;
   let records = RECORDS
     .iter()
     .map(|record| memory(kontur, record))
     .collect::<Result<Vec<_>, _>>()?;
+  kontur.db.add_memories(&records)?;
+  Ok(())
+}
+
+pub fn alone(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let catalogue = kontur.catalogue()?;
+  let feature = &catalogue.feature_delivery;
+  let (created, started) = (kontur.ago(240), kontur.ago(180));
+  let mut task = kontur.task(
+    (
+      "Add sign-out to the account menu",
+      "Let a person sign out from the account menu on every page.",
+      &[
+        "Signing out ends the session on this device.",
+        "The change is covered by tests.",
+      ],
+    ),
+    Some(feature),
+    created,
+  )?;
+  shapes::apply(kontur, &mut task, Some(feature), Shape::Merged, started)?;
+  let records = [memory(kontur, &ALONE)?];
   kontur.db.add_memories(&records)?;
   Ok(())
 }

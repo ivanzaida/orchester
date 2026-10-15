@@ -1,14 +1,14 @@
 //! The MCP side of the server: what it announces, its tool list, and each call answered with the
 //! tool's result or its typed error, as a tool error rather than a protocol error.
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
-use orchester_workspace::app_mcp::{Services, Translate, call, listed};
+use orchester_workspace::app_mcp::{self, Services, Translate, call, listed};
 use rmcp::{
   ErrorData as McpError, RoleServer, ServerHandler,
   model::{
     CallToolRequestParams, CallToolResponse, CallToolResult, Implementation, ListToolsResult, PaginatedRequestParams,
-    ServerCapabilities, ServerConfig,
+    ProtocolVersion, ServerCapabilities, ServerConfig,
   },
   service::RequestContext,
 };
@@ -43,6 +43,10 @@ impl ServerHandler for Handler {
     info.server_info = Implementation::new("orchester", env!("CARGO_PKG_VERSION").to_owned());
     info.instructions = Some(INSTRUCTIONS.to_owned());
     info
+  }
+
+  fn supported_protocol_versions(&self) -> Cow<'static, [ProtocolVersion]> {
+    app_mcp::supported_protocol_versions()
   }
 
   async fn list_tools(
