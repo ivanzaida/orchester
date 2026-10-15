@@ -191,7 +191,7 @@ impl Inspector {
         .settled(),
       );
     }
-    let checked = self.agree.clone();
+    let (checked, refused) = (self.agree.clone(), self.refused.clone());
     let gate = self.gate.clone().unwrap_or_default();
     panel = panel.child(
       Toggle::new(
@@ -203,13 +203,22 @@ impl Inspector {
       .label_style(LocalText::Explanation.role())
       .wrap_label()
       .on_change(move |on| {
-        // The acknowledgement is the person's in every decision: window automation never ticks it.
+        // The acknowledgement is the person's in every decision: window automation never ticks it, and is told so.
         let input = gate.local_input(input_source());
-        if input.origin() == LocalOrigin::Native && input.allowed() {
+        let native = input.origin() == LocalOrigin::Native && input.allowed();
+        if native {
           checked.set(on);
         }
+        refused.set(!native);
       }),
     );
+    if self.refused.get() {
+      panel = panel.child(
+        Text::new(&ctx.t("local_integration.error.acknowledgement"))
+          .id("local-confirm-scope-refused")
+          .variant(LocalText::Explanation.role()),
+      );
+    }
     let stale = matches!(decision.action, Action::Merge { .. }) && !props.view.checked_current;
     let unresolved =
       matches!(decision.action, Action::Continue | Action::FinishRestore) && !props.view.conflicts.is_empty();

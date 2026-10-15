@@ -160,6 +160,7 @@ struct Inspector {
   gate: Option<InputGate>,
   protected: parking_lot::Mutex<Option<Protected>>,
   agree: Signal<bool>,
+  refused: Signal<bool>,
   identity: Arc<parking_lot::Mutex<Option<ReviewIdentity>>>,
 }
 impl Component for Inspector {
@@ -169,6 +170,7 @@ impl Component for Inspector {
       gate: ctx.use_context(),
       protected: parking_lot::Mutex::new(None),
       agree: ctx.props::<Props>().acknowledgement.agree.clone(),
+      refused: ctx.props::<Props>().acknowledgement.refused.clone(),
       identity: ctx.props::<Props>().acknowledgement.identity.clone(),
     }
   }
@@ -203,6 +205,7 @@ impl Component for Inspector {
     let mut prior = self.identity.lock();
     if prior.as_ref() != Some(&identity) {
       self.agree.set(false);
+      self.refused.set(false);
       *prior = Some(identity);
     }
     drop(prior);

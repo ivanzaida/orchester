@@ -117,6 +117,7 @@
       "draftStale": "The saved candidate belongs to an earlier file/source identity. It remains retained; it cannot resolve a different file or newer checkout.",
       "metadata": "Sensitive checkout metadata cannot be displayed. File names, branches, paths and original content remain unchanged.",
       "stale": "Checkout or result changed after review. No stale approval can authorize it.",
+      "acknowledgement": "Only you can tick this acknowledgement; window automation cannot. Nothing was acknowledged.",
       "foreign": "Another Git operation or client owns this checkout. Orchester cannot abort or take ownership of it.",
       "phase": "Reconcile the operation before continuing.",
       "unchecked": "Run a real fresh Check before requesting approval.",
