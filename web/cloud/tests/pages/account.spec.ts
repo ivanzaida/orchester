@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { MBP } from "../fake-api/accounts";
+
 import { apiRequests, PASSWORD, signInAs } from "./support";
 
 const FULL = "mira.koval@example.com";
@@ -59,11 +61,11 @@ test.describe("account actions", () => {
   test("another device signs out at once and its row says so (wcFhu)", async ({ page }) => {
     await openAccount(page, FULL);
     const devices = section(page, "Devices");
-    await devices.locator("form", { has: page.locator('input[value="device-mbp"]') }).getByRole("button").click();
+    await devices.locator("form", { has: page.locator(`input[value="${MBP}"]`) }).getByRole("button").click();
     await expect(devices.getByText("Orchester on mira-mbp is signed out")).toBeVisible();
     await expect(devices.getByText("2 signed in")).toBeVisible();
     await expect(page.getByRole("navigation").getByRole("link", { name: "Devices" })).toHaveAttribute("aria-current", "location");
-    expect((await apiRequests()).at(-1)).toMatchObject({ method: "DELETE", path: "/api/v1/devices/device-mbp" });
+    expect((await apiRequests()).at(-1)).toMatchObject({ method: "DELETE", path: `/api/v1/devices/${MBP}` });
   });
 
   test("a wrong current password is said at its field, and the fields come back empty (ZyAsL)", async ({ page }) => {

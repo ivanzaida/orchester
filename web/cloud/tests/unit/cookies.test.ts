@@ -55,17 +55,26 @@ describe("session cookie", () => {
 });
 
 describe("flow cookies", () => {
-  it("read back what was signed", () => {
+  const DAY = 24 * 60 * 60;
+
+  it("read back what was signed, while they live", () => {
     const flow = { email: "a@example.com", sentAt: NOW, resent: true, limitedUntil: NOW + 5 };
-    expect(readSignupFlow(flowKey, signFlow(flowKey, flow))).toEqual(flow);
-    expect(readForgotFlow(flowKey, signFlow(flowKey, { email: "a@example.com" }))).toEqual({ email: "a@example.com" });
+    expect(readSignupFlow(flowKey, signFlow(flowKey, flow, NOW, DAY), NOW + 1000)).toEqual(flow);
+    const forgot = signFlow(flowKey, { email: "a@example.com" }, NOW, 3600);
+    expect(readForgotFlow(flowKey, forgot, NOW + 1000)).toEqual({ email: "a@example.com" });
+  });
+
+  it("are refused after the expiry they carry, even if the browser still sends them", () => {
+    const flow = { email: "a@example.com", sentAt: NOW, resent: false };
+    expect(readSignupFlow(flowKey, signFlow(flowKey, flow, NOW, DAY), NOW + DAY * 1000)).toBeNull();
+    expect(readForgotFlow(flowKey, signFlow(flowKey, { email: "a@example.com" }, NOW, 3600), NOW + 3_600_000)).toBeNull();
   });
 
   it("refuse a changed address or another key", () => {
-    const value = signFlow(flowKey, { email: "a@example.com" });
+    const value = signFlow(flowKey, { email: "a@example.com" }, NOW, 3600);
     const [, signature] = value.split(".");
-    const forged = `${Buffer.from(JSON.stringify({ email: "b@example.com" })).toString("base64url")}.${signature ?? ""}`;
-    expect(readForgotFlow(flowKey, forged)).toBeNull();
-    expect(readForgotFlow(sessionKey, value)).toBeNull();
+    const forged = `${Buffer.from(JSON.stringify({ email: "b@example.com", expires: NOW + 3_600_000 })).toString("base64url")}.${signature ?? ""}`;
+    expect(readForgotFlow(flowKey, forged, NOW)).toBeNull();
+    expect(readForgotFlow(sessionKey, value, NOW)).toBeNull();
   });
 });

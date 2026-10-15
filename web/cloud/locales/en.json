@@ -252,5 +252,9 @@
       "signOutHint": "Orchester on your computers stays signed in."
     },
     "today": "Today, {{time}}"
+  },
+  "device": {
+    "webName": "{{browser}} on {{system}}",
+    "unknownBrowser": "Web browser"
   }
 }

@@ -11,6 +11,13 @@ import { readAccount, record, type Account } from "@/lib/server/cloud";
 
 const PLATFORMS = new Set<string>(["windows", "macos", "linux", "web"]);
 
+/**
+ * Ids come from a posted form, so they are checked before they go into an API path: the cloud's ids are UUIDs. Anything
+ * else is refused here as the cloud would refuse a malformed request, and no request is made.
+ */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const NOT_AN_ID: ApiResult<never> = { ok: false, error: { kind: "refused", status: 400, code: "bad_request" } };
+
 function text(value: unknown): value is string {
   return typeof value === "string";
 }
@@ -69,6 +76,9 @@ export function devices(options: CallOptions): Promise<ApiResult<Device[]>> {
 }
 
 export function revokeDevice(id: string, options: CallOptions): Promise<ApiResult<true>> {
+  if (!UUID.test(id)) {
+    return Promise.resolve(NOT_AN_ID);
+  }
   return call("DELETE", `/devices/${encodeURIComponent(id)}`, { expected: 204, read: nothing }, options);
 }
 
@@ -103,5 +113,8 @@ export function servers(options: CallOptions): Promise<Listing<Server>> {
 
 /** Assumed: `POST /invites/{id}/decline` → `204`; the cloud tells the team server. */
 export function declineInvite(id: string, options: CallOptions): Promise<ApiResult<true>> {
+  if (!UUID.test(id)) {
+    return Promise.resolve(NOT_AN_ID);
+  }
   return call("POST", `/invites/${encodeURIComponent(id)}/decline`, { expected: 204, read: nothing }, options);
 }

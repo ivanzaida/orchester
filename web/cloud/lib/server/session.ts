@@ -35,17 +35,26 @@ export interface ForgotFlow {
   readonly email: string;
 }
 
-export function signFlow(key: Buffer, flow: SignupFlow | ForgotFlow): string {
-  return sign(key, JSON.stringify(flow));
+/**
+ * Flow cookies carry their own expiry inside the signed value, so one kept or replayed past it is refused even if a
+ * browser still sends it. Within its life a replayed older value still reads (no state is kept here); the cloud's own
+ * limit of 5 emails an hour per address is what bounds resends, the 60 s cooldown only paces the page.
+ */
+export function signFlow(key: Buffer, flow: SignupFlow | ForgotFlow, now: number, lifetimeSeconds: number): string {
+  return sign(key, JSON.stringify({ ...flow, expires: now + lifetimeSeconds * 1000 }));
 }
 
-function readJson(key: Buffer, value: string | undefined): Record<string, unknown> | null {
+function readJson(key: Buffer, value: string | undefined, now: number): Record<string, unknown> | null {
   const payload = value === undefined ? null : verify(key, value);
-  return payload === null ? null : (JSON.parse(payload) as Record<string, unknown>);
+  if (payload === null) {
+    return null;
+  }
+  const flow = JSON.parse(payload) as Record<string, unknown>;
+  return typeof flow.expires === "number" && flow.expires > now ? flow : null;
 }
 
-export function readSignupFlow(key: Buffer, value: string | undefined): SignupFlow | null {
-  const flow = readJson(key, value);
+export function readSignupFlow(key: Buffer, value: string | undefined, now: number): SignupFlow | null {
+  const flow = readJson(key, value, now);
   if (typeof flow?.email !== "string" || typeof flow.sentAt !== "number" || typeof flow.resent !== "boolean") {
     return null;
   }
@@ -53,7 +62,7 @@ export function readSignupFlow(key: Buffer, value: string | undefined): SignupFl
   return { email: flow.email, sentAt: flow.sentAt, resent: flow.resent, ...limited };
 }
 
-export function readForgotFlow(key: Buffer, value: string | undefined): ForgotFlow | null {
-  const flow = readJson(key, value);
+export function readForgotFlow(key: Buffer, value: string | undefined, now: number): ForgotFlow | null {
+  const flow = readJson(key, value, now);
   return typeof flow?.email === "string" ? { email: flow.email } : null;
 }

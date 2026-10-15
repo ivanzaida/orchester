@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import { presessionLive } from "@/lib/server/presession";
 import { mac, sameText } from "@/lib/server/seal";
 
 /**
@@ -13,21 +14,25 @@ export interface CsrfCookies {
   readonly presession?: string | undefined;
 }
 
-function binding(cookies: CsrfCookies): string | null {
+function binding(cookies: CsrfCookies, now: number): string | null {
   if (cookies.session !== undefined) {
     return `session:${createHash("sha256").update(cookies.session).digest("base64url")}`;
   }
-  return cookies.presession === undefined ? null : `pre:${cookies.presession}`;
+  const { presession } = cookies;
+  return presession !== undefined && presessionLive(presession, now) ? `pre:${presession}` : null;
 }
 
-/** The token a form rendered for these cookies carries, or `null` when the visitor has neither cookie yet. */
-export function csrfToken(key: Buffer, cookies: CsrfCookies): string | null {
-  const bound = binding(cookies);
+/**
+ * The token a form rendered for these cookies carries, or `null` when the visitor has neither cookie yet, or only a
+ * pre-session past its expiry.
+ */
+export function csrfToken(key: Buffer, cookies: CsrfCookies, now: number = Date.now()): string | null {
+  const bound = binding(cookies, now);
   return bound === null ? null : mac(key, bound);
 }
 
-export function tokenMatches(key: Buffer, cookies: CsrfCookies, submitted: unknown): boolean {
-  const expected = csrfToken(key, cookies);
+export function tokenMatches(key: Buffer, cookies: CsrfCookies, submitted: unknown, now: number = Date.now()): boolean {
+  const expected = csrfToken(key, cookies, now);
   return expected !== null && typeof submitted === "string" && sameText(expected, submitted);
 }
 

@@ -6,10 +6,10 @@ import { redirect } from "next/navigation";
 import { field } from "@/lib/form";
 import { message, type Message } from "@/lib/i18n";
 import type { ApiFailure } from "@/lib/server/api";
-import { signIn } from "@/lib/server/cloud";
+import { signIn, signOut } from "@/lib/server/cloud";
 import { webDevice } from "@/lib/server/device";
 import { failureMessage, waitMessage } from "@/lib/server/failures";
-import { anonymous, formIsGenuine, startSession } from "@/lib/server/visitor";
+import { anonymous, formIsGenuine, signedIn, startSession } from "@/lib/server/visitor";
 
 /** How the last sign-in ended; `limited` carries both texts and how long the wait is from now. */
 export type SignInOutcome =
@@ -42,6 +42,19 @@ function refusal(failure: ApiFailure, email: string, now: number): SignInOutcome
   return { kind: "failed", error: failureMessage(failure, "signin.tooMany", now) };
 }
 
+/**
+ * Signing in again replaces this browser's session; the old one is ended at the cloud first, so its token does not
+ * stay valid unseen until its 12 hours are over. If the cloud cannot be told, the new sign-in still goes ahead: the
+ * visitor asked for it, and the old token ends on its own within 12 hours.
+ */
+async function endPreviousSession(): Promise<void> {
+  const previous = await signedIn();
+  if (previous !== null) {
+    // Losing this answer is the trade-off above; the new session does not depend on it.
+    await signOut(previous);
+  }
+}
+
 /** Signs in as a `web` device; the session token goes only into the sealed session cookie. */
 export async function signInAction(previous: SignInState, form: FormData): Promise<SignInState> {
   const email = field(form, "email").trim();
@@ -55,6 +68,7 @@ export async function signInAction(previous: SignInState, form: FormData): Promi
   if (!result.ok) {
     return { email, attempt, outcome: refusal(result.error, email, now) };
   }
+  await endPreviousSession();
   await startSession(result.value.token);
   redirect("/account");
 }

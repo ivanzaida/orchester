@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { PRESESSION_COOKIE, PRESESSION_SECONDS, cookieOptions } from "@/lib/server/cookie-options";
+import { newPresession, presessionLive } from "@/lib/server/presession";
 
 /**
  * Runs before every page: a fresh CSP nonce (Next.js puts it on its own scripts), the security headers, and a
@@ -32,8 +33,11 @@ function randomValue(): string {
 export function proxy(request: NextRequest): NextResponse {
   const nonce = randomValue();
   const policy = contentSecurityPolicy(nonce, process.env.NODE_ENV === "development");
-  const existing = request.cookies.get(PRESESSION_COOKIE)?.value;
-  const presession = existing ?? randomValue();
+  const now = Date.now();
+  const sent = request.cookies.get(PRESESSION_COOKIE)?.value;
+  // A pre-session past the expiry it carries is replaced, like a missing one.
+  const existing = sent !== undefined && presessionLive(sent, now) ? sent : undefined;
+  const presession = existing ?? newPresession(now);
   // The page rendered for this request reads the cookie from the request, so it gets it even on the first visit.
   request.cookies.set(PRESESSION_COOKIE, presession);
   const requestHeaders = new Headers(request.headers);

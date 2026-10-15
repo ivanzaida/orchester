@@ -12,7 +12,7 @@ import { TEST_ENV } from "../../playwright.config";
  */
 async function sentAMinuteAgo(context: BrowserContext, email: string): Promise<void> {
   const key = deriveKey(new Uint8Array(Buffer.from(TEST_ENV.ORCHESTER_CLOUD_WEB_SECRET, "base64")), "flow");
-  const value = signFlow(key, { email, sentAt: Date.now() - 61_000, resent: false });
+  const value = signFlow(key, { email, sentAt: Date.now() - 61_000, resent: false }, Date.now(), 3600);
   await context.addCookies([
     { name: SIGNUP_FLOW_COOKIE, value, domain: "localhost", path: "/", secure: true, httpOnly: true, sameSite: "Lax" },
   ]);

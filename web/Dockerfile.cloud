@@ -3,7 +3,8 @@
 #   docker build -f web/Dockerfile.cloud -t orchester-cloud-web web
 # Configuration comes only from the environment at run time: ORCHESTER_CLOUD_PUBLIC_URL, ORCHESTER_CLOUD_API_URL
 # and ORCHESTER_CLOUD_WEB_SECRET (32 random bytes in base64).
-FROM node:24-alpine AS build
+# Pinned by digest (the multi-platform index of node:24-alpine, 2026-10-15); update the digest on purpose.
+FROM node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f AS build
 WORKDIR /web
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY package.json package-lock.json tsconfig.base.json ./
@@ -14,7 +15,7 @@ COPY ui ui
 COPY cloud cloud
 RUN npm run build --workspace cloud
 
-FROM node:24-alpine
+FROM node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
 # Next's standalone output keeps the workspace layout: the server is cloud/server.js.

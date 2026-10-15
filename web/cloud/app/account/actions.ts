@@ -9,7 +9,7 @@ import type { CallOptions } from "@/lib/server/api";
 import { changePassword, declineInvite, rename, revokeDevice } from "@/lib/server/account";
 import { signOut } from "@/lib/server/cloud";
 import { failureMessage } from "@/lib/server/failures";
-import { endSession, formIsGenuine, signedIn } from "@/lib/server/visitor";
+import { endSession, formIsGenuine, leaveIfEnded, sessionEnded, signedIn } from "@/lib/server/visitor";
 import { collect, displayNameError, newPasswordErrors, type FieldErrors } from "@/lib/validation";
 
 export interface FormState {
@@ -23,6 +23,8 @@ async function session(form: FormData): Promise<CallOptions | Message> {
   }
   const options = await signedIn();
   if (options === null) {
+    // A cookie past its own 12 hours, or one this site cannot open: nothing to keep.
+    await endSession();
     redirect("/signin");
   }
   return options;
@@ -42,7 +44,7 @@ export async function signOutAction(_: FormState, form: FormData): Promise<FormS
     return { error: options };
   }
   const result = await signOut(options);
-  const ended = result.ok || (result.error.kind === "refused" && result.error.code === "unauthorized");
+  const ended = result.ok || sessionEnded(result.error);
   if (!ended) {
     return { error: failureMessage(result.error, "error.tooManyTries", Date.now()) };
   }
@@ -62,6 +64,7 @@ export async function renameAction(_: FormState, form: FormData): Promise<FormSt
   }
   const result = await rename(name.trim(), options);
   if (!result.ok) {
+    await leaveIfEnded(result.error);
     return { error: failureMessage(result.error, "error.tooManyTries", Date.now()) };
   }
   revalidatePath("/account");
@@ -95,6 +98,9 @@ export async function passwordAction(previous: PasswordState, form: FormData): P
     return { view: "open", answer, errors };
   }
   const result = await changePassword(field(form, "current"), field(form, "password"), options);
+  if (!result.ok) {
+    await leaveIfEnded(result.error);
+  }
   if (result.ok) {
     // Other devices were signed out; the page reads the list again.
     revalidatePath("/account");
@@ -119,6 +125,9 @@ export async function signOutDeviceAction(_: DeviceState, form: FormData): Promi
   }
   const id = field(form, "device");
   const result = await revokeDevice(id, options);
+  if (!result.ok) {
+    await leaveIfEnded(result.error);
+  }
   // `404`: the device was already signed out, which is what was asked for.
   const gone = result.ok || (result.error.kind === "refused" && result.error.code === "not_found");
   return gone ? { signedOut: id } : { error: failureMessage(result.error, "error.tooManyTries", Date.now()) };
@@ -130,6 +139,9 @@ export async function declineAction(_: FormState, form: FormData): Promise<FormS
     return { error: options };
   }
   const result = await declineInvite(field(form, "invite"), options);
+  if (!result.ok) {
+    await leaveIfEnded(result.error);
+  }
   if (result.ok) {
     revalidatePath("/account");
     return {};

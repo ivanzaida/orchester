@@ -2,11 +2,10 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import type { Device, Invite, Listing, Server } from "@/lib/account";
-import type { ApiFailure } from "@/lib/server/api";
 import { devices, invites, servers } from "@/lib/server/account";
 import { me, type Account } from "@/lib/server/cloud";
 import { CloudUnavailableError } from "@/lib/server/failures";
-import { signedIn } from "@/lib/server/visitor";
+import { sessionEnded, signedIn } from "@/lib/server/visitor";
 
 export interface AccountData {
   readonly account: Account;
@@ -17,10 +16,6 @@ export interface AccountData {
   readonly system: "windows" | "macos";
 }
 
-function expired(failure: ApiFailure): boolean {
-  return failure.kind === "refused" && failure.code === "unauthorized";
-}
-
 /**
  * Everything the page shows, read with the visitor's session. Without a live session it is the sign-in page; the
  * account or its devices failing is the error page; invites and servers fail on their own section only.
@@ -28,7 +23,7 @@ function expired(failure: ApiFailure): boolean {
 export async function loadAccount(): Promise<AccountData> {
   const session = await signedIn();
   if (session === null) {
-    redirect("/signin");
+    redirect("/session-ended");
   }
   const [account, deviceList, inviteList, serverList] = await Promise.all([
     me(session),
@@ -37,8 +32,9 @@ export async function loadAccount(): Promise<AccountData> {
     servers(session),
   ]);
   for (const result of [account, deviceList]) {
-    if (!result.ok && expired(result.error)) {
-      redirect("/signin");
+    if (!result.ok && sessionEnded(result.error)) {
+      // A page cannot change cookies; this route forgets the session the cloud ended.
+      redirect("/session-ended");
     }
   }
   if (!account.ok) {

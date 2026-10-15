@@ -1,7 +1,9 @@
 import { cookies, headers } from "next/headers";
 
 import { CSRF_FIELD } from "@/lib/form";
-import type { CallOptions } from "@/lib/server/api";
+import { redirect } from "next/navigation";
+
+import type { ApiFailure, CallOptions } from "@/lib/server/api";
 import { config } from "@/lib/server/config";
 import {
   FORGOT_FLOW_COOKIE,
@@ -87,17 +89,33 @@ export async function endSession(): Promise<void> {
 }
 
 export async function signupFlow(): Promise<SignupFlow | null> {
-  return readSignupFlow(key("flow"), (await cookies()).get(SIGNUP_FLOW_COOKIE)?.value);
+  return readSignupFlow(key("flow"), (await cookies()).get(SIGNUP_FLOW_COOKIE)?.value, Date.now());
 }
 
 export async function setSignupFlow(flow: SignupFlow): Promise<void> {
-  (await cookies()).set(SIGNUP_FLOW_COOKIE, signFlow(key("flow"), flow), cookieOptions(SIGNUP_FLOW_SECONDS));
+  (await cookies()).set(SIGNUP_FLOW_COOKIE, signFlow(key("flow"), flow, Date.now(), SIGNUP_FLOW_SECONDS), cookieOptions(SIGNUP_FLOW_SECONDS));
 }
 
 export async function forgotFlow(): Promise<ForgotFlow | null> {
-  return readForgotFlow(key("flow"), (await cookies()).get(FORGOT_FLOW_COOKIE)?.value);
+  return readForgotFlow(key("flow"), (await cookies()).get(FORGOT_FLOW_COOKIE)?.value, Date.now());
 }
 
 export async function setForgotFlow(flow: ForgotFlow): Promise<void> {
-  (await cookies()).set(FORGOT_FLOW_COOKIE, signFlow(key("flow"), flow), cookieOptions(FORGOT_FLOW_SECONDS));
+  (await cookies()).set(FORGOT_FLOW_COOKIE, signFlow(key("flow"), flow, Date.now(), FORGOT_FLOW_SECONDS), cookieOptions(FORGOT_FLOW_SECONDS));
+}
+
+/** Whether the cloud no longer knows the session (signed out elsewhere, a password reset, its 12 hours over). */
+export function sessionEnded(failure: ApiFailure): boolean {
+  return failure.kind === "refused" && failure.code === "unauthorized";
+}
+
+/**
+ * Forgets a session the cloud ended (`401 unauthorized`) and sends the visitor to sign in, instead of reading it as
+ * the cloud not answering. For server actions and route handlers, which may change cookies.
+ */
+export async function leaveIfEnded(failure: ApiFailure): Promise<void> {
+  if (sessionEnded(failure)) {
+    await endSession();
+    redirect("/signin");
+  }
 }

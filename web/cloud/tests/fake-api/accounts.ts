@@ -15,6 +15,12 @@ export interface Answer {
   retryAfter?: number;
 }
 
+// The cloud's ids are UUIDs (the site refuses anything else in an API path).
+const DESKTOP = "0199f0a0-0000-7000-8000-000000000001";
+export const MBP = "0199f0a0-0000-7000-8000-000000000002";
+const INVITE_PROJECT = "0199f0a0-0000-7000-8000-000000000011";
+const INVITE_SERVER = "0199f0a0-0000-7000-8000-000000000012";
+
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 
@@ -42,12 +48,12 @@ function fullAccount(now: number): FakeAccount {
     display_name: "Mira Koval",
     password: RIGHT_PASSWORD,
     devices: [
-      { id: "device-desktop", name: "mira-desktop", platform: "windows", last_used_at: now - 2 * HOUR },
-      { id: "device-mbp", name: "mira-mbp", platform: "macos", last_used_at: now - 3 * DAY },
+      { id: DESKTOP, name: "mira-desktop", platform: "windows", last_used_at: now - 2 * HOUR },
+      { id: MBP, name: "mira-mbp", platform: "macos", last_used_at: now - 3 * DAY },
     ],
     invites: [
       {
-        id: "invite-project",
+        id: INVITE_PROJECT,
         kind: "project",
         role: "Member",
         server: { id: "server-northwind", name: "Northwind studio", address: "orchester.northwind.example" },
@@ -56,7 +62,7 @@ function fullAccount(now: number): FakeAccount {
         expires_at: now + 5 * DAY,
       },
       {
-        id: "invite-server",
+        id: INVITE_SERVER,
         kind: "server",
         role: "Admin",
         server: { id: "server-atlas", name: "Atlas research", address: "orchester.atlas.example" },
@@ -110,7 +116,7 @@ export function signInAccount(email: unknown, password: unknown, device: unknown
   issued += 1;
   const token = `ocd_fake_web_token_${issued}`;
   const name = (device as { name?: unknown } | null)?.name;
-  const signedIn = { id: `device-web-${issued}`, name: typeof name === "string" ? name : "Web browser", platform: "web", last_used_at: Date.now() };
+  const signedIn = { id: `0199f0a0-0000-7000-9000-${String(issued).padStart(12, "0")}`, name: typeof name === "string" ? name : "Web browser", platform: "web", last_used_at: Date.now() };
   // One browser per account, so the page shows the designed three devices however often the tests sign in.
   for (const old of found.devices.filter((d) => d.platform === "web")) {
     revoke(found, old.id);

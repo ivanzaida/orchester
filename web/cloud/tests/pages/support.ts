@@ -37,3 +37,12 @@ export function expectNoApiAddress(urls: string[]): void {
   expect(urls.filter((url) => url.startsWith(API))).toEqual([]);
   expect(urls.every((url) => url.startsWith("http://localhost:4100/"))).toBe(true);
 }
+
+/** Ends the browser's session at the cloud behind its back, as a password reset or a sign-out elsewhere does. */
+export async function revokeAtCloud(): Promise<void> {
+  const bearer = (await apiRequests()).filter((r) => r.path === "/api/v1/me" && r.authorization !== null).at(-1)?.authorization;
+  if (bearer === undefined || bearer === null) {
+    throw new Error("no session seen at the fake API");
+  }
+  await fetch(`${API}/api/v1/auth/sessions/current`, { method: "DELETE", headers: { authorization: bearer } });
+}

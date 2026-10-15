@@ -21,6 +21,7 @@ export class ConfigError extends Error {
 type Environment = Readonly<Record<string, string | undefined>>;
 
 const SECRET_MIN_BYTES = 32;
+const STRICT_BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 function required(env: Environment, variable: string): string {
@@ -55,7 +56,12 @@ function publicOrigin(env: Environment): string {
 
 function secret(env: Environment): Uint8Array {
   const variable = "ORCHESTER_CLOUD_WEB_SECRET";
-  const bytes = Buffer.from(required(env, variable), "base64");
+  const text = required(env, variable);
+  // Node's decoder skips characters it does not know; a strict check stops a mistyped secret from becoming a shorter one.
+  if (!STRICT_BASE64.test(text) || text.length % 4 !== 0) {
+    throw new ConfigError(variable, "must be standard base64 with its padding");
+  }
+  const bytes = Buffer.from(text, "base64");
   if (bytes.length < SECRET_MIN_BYTES) {
     throw new ConfigError(variable, `must be at least ${SECRET_MIN_BYTES} bytes in base64`);
   }
