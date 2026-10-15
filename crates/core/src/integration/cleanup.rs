@@ -132,6 +132,9 @@ pub enum CleanupError {
   /// cancelled) or was interrupted no longer does.
   #[error("the run still works in its worktrees")]
   LiveWork,
+  /// Local integration still owns the run's worktree or needs it for recovery.
+  #[error("local integration must be released before removing its worktrees")]
+  LocalIntegration,
   #[error(transparent)]
   Git(#[from] GitError),
 }

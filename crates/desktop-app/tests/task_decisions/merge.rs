@@ -1,5 +1,6 @@
-//! Ready for review with Merge into main: merging, refused at a conflict, unavailable without a branch to merge
-//! into, merged; and what git tells of the work without Orchester: merged by a person, or nothing to merge.
+//! Ready for review with Merge into main: opening the local checkout review (also for a task that will conflict),
+//! unavailable without a branch to merge into, merged; and what git tells of the work without Orchester: merged by
+//! a person, or nothing to merge, and current external Git evidence in place of Ready.
 
 use std::process;
 
@@ -44,7 +45,7 @@ fn git(page: &Page, args: &[&str]) {
 }
 
 #[test]
-fn decision_ready_for_review_merges_into_main() {
+fn decision_ready_for_review_opens_local_integration_before_any_merge() {
   let mut page = Page::seeded("decisions");
   page.open("ready for review, merges cleanly", "task-merge");
   assert_eq!(page.text("task-notice-title"), "Ready for your review");
@@ -58,26 +59,40 @@ fn decision_ready_for_review_merges_into_main() {
   assert!(page.has("task-ready-check-review"), "Review verified the work");
   assert!(page.has("task-run-details"));
   page.click("task-merge");
-  page.until_says("task-notice-title", "Merged into main");
-  let body = page.text("task-notice");
-  assert!(body.contains("main got merge commit"), "{body}");
-  assert!(!page.has("task-merge"), "a merged run has nothing to merge");
+  page.window.until("local checkout review", |window| {
+    window.tree.get_element_by_id("task-local-integration").is_some()
+  });
+  assert!(
+    page
+      .window
+      .navigation()
+      .route_now()
+      .path()
+      .ends_with("/local-integration")
+  );
+  assert!(!page.has("local-confirm"), "no merge approval before a fresh Check");
 }
 
 #[test]
-fn decision_merge_stops_at_a_conflict_and_says_why() {
+fn decision_merge_opens_local_review_for_a_task_that_will_conflict() {
   let mut page = Page::seeded("decisions");
   page.open("ready for review, conflicts with main", "task-merge");
   page.click("task-merge");
-  page.until_says("task-notice-title", "Not merged into main");
-  let body = page.text("task-notice");
-  assert!(body.contains("conflict with your branch"), "{body}");
-  assert_eq!(
-    page.text("task-merge-conflicts"),
-    "src/webhooks/sender.rs src/webhooks/settings.rs"
+  page.window.until("local checkout review", |window| {
+    window.tree.get_element_by_id("task-local-integration").is_some()
+  });
+  assert!(
+    page
+      .window
+      .navigation()
+      .route_now()
+      .path()
+      .ends_with("/local-integration")
   );
-  assert_eq!(page.text("task-merge-conflicts-head"), "Conflicting files 2");
-  assert!(!page.locked("task-merge"), "it can be merged again");
+  assert!(
+    !page.has("local-result-editor"),
+    "sync has not begun from an entry click"
+  );
 }
 
 #[test]
@@ -127,4 +142,50 @@ fn decision_a_run_that_committed_nothing_has_nothing_to_merge() {
   page.open("ready for review, merges cleanly", "task-notice");
   assert_eq!(page.text("task-notice-title"), "Nothing to merge");
   assert!(!page.has("task-merge"), "there is no work to merge");
+}
+
+#[test]
+fn decision_squashed_external_integration_replaces_ready_without_a_historical_merge_record() {
+  use orchester_core::{
+    integration::local::LocalIntegrationStore,
+    store::{MergeStore, RunStore, TaskStore},
+  };
+  use orchester_store::ProjectDb;
+
+  let mut page = Page::seeded("decisions");
+  let db = ProjectDb::open(&page.repo).expect("project");
+  let key = key_of(&page, "ready for review, merges cleanly");
+  let task = db
+    .tasks()
+    .expect("tasks")
+    .into_iter()
+    .find(|task| task.key().to_string() == key)
+    .expect("task");
+  let run = db
+    .runs_of_task(task.id())
+    .expect("runs")
+    .into_iter()
+    .filter_map(Result::ok)
+    .max_by_key(|run| run.number().get())
+    .expect("run");
+  // A squash merge: the work is in main without its history, which only the local integration's evidence finds;
+  // a complete merge reads as merged without Orchester instead.
+  git(&page, &["merge", "--squash", run.branch().as_str()]);
+  git(&page, &["commit", "-m", "External QA integration"]);
+  page.open("ready for review, merges cleanly", "task-external-integration");
+  assert!(!page.has("task-merge"));
+  assert!(!page.has("task-notice-title"));
+  assert!(
+    page
+      .text("task-external-integration")
+      .contains("Integration result needs reconciliation")
+  );
+  assert!(db.run_merge(run.id()).expect("record").is_none());
+  assert!(db.local_operation(run.id()).expect("operation").is_none());
+  page.click("task-inspect-external-integration");
+  page.window.until("current external Git evidence", |window| {
+    window.tree.get_element_by_id("local-external-integration").is_some()
+  });
+  assert!(!page.has("local-sync"));
+  assert!(!page.has("local-confirm"));
 }

@@ -139,7 +139,9 @@ impl Served {
   /// Scenario `name` seeded with its Codex connection's program at `codex` (checked and signed in, as
   /// the seed records it), served with a runner program that does not exist.
   fn seeded_with(name: &str, codex: Option<PathBuf>) -> (Self, Seeded) {
-    let folder = tempfile::tempdir().expect("a temporary folder");
+    let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
+    std::fs::create_dir_all(&scratch).expect("scratch");
+    let folder = tempfile::tempdir_in(scratch).expect("a temporary folder");
     let request = SeedRequest {
       data_dir: folder.path().join("bin"),
       repo: folder.path().join(format!("repo-{name}")),

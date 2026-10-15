@@ -1,0 +1,149 @@
+use std::path::Path;
+
+use orchester_core::{
+  id::RunId,
+  integration::local::{Checkout, ContainedResult, LocalError, LocalIntegrationStore, ResultEvidenceKind},
+  revision::Revision,
+  run::Run,
+  store::{MergeStore, RunStore},
+};
+use orchester_exec::local_git::{LocalGit, LocalGitError};
+use orchester_store::ProjectDb;
+
+use super::IntegrationError;
+
+/// Positive ancestry evidence can block duplicate integration without inventing a merge event.
+pub fn external_integration(root: &Path, run: RunId) -> Result<Option<ContainedResult>, IntegrationError> {
+  let scratch =
+    orchester_exec::local_git::prepare_scratch(root, &[".orchester", "local-integration", &run.to_string()])?;
+  let _store_owner = orchester_exec::local_git::owned::StoreOwnership::acquire(root)?;
+  let db = ProjectDb::open(root)?;
+  let main = LocalGit::new(root, &scratch)?;
+  super::ensure_project_git(&main)?;
+  let checkout = main.snapshot()?;
+  let run = db
+    .run(run)
+    .map_err(|_| IntegrationError::Run)?
+    .ok_or(IntegrationError::Run)?;
+  let operation = db.local_operation(run.id())?;
+  let evidence = contained_result(&db, &main, &checkout, &run, operation.as_ref())?;
+  main.ensure(&checkout)?;
+  Ok(evidence)
+}
+
+/// Everything external evidence depends on besides Git ancestry, which never changes for the same commits: while
+/// these are unchanged, an earlier answer still holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EvidenceInputs {
+  target: String,
+  branch: String,
+  marker: bool,
+  base_branch: Option<String>,
+  merged: bool,
+  owned: Option<String>,
+  recorded: Option<String>,
+  branch_tip: Option<String>,
+  base: String,
+}
+
+impl EvidenceInputs {
+  pub(super) fn read(
+    db: &ProjectDb,
+    main: &LocalGit,
+    checkout: &Checkout,
+    run: &Run,
+    operation: Option<&orchester_core::integration::local::LocalOperation>,
+  ) -> Result<Self, IntegrationError> {
+    Ok(Self {
+      target: checkout.head.clone(),
+      branch: checkout.branch.clone(),
+      marker: checkout.operation.is_some(),
+      base_branch: run.base_branch().map(|branch| branch.as_str().to_owned()),
+      merged: db.run_merge(run.id())?.is_some()
+        || operation.is_some_and(|saved| saved.merged().is_some() || saved.merge_pending()),
+      owned: operation
+        .and_then(|saved| saved.owned_task())
+        .map(|saved| saved.head.clone()),
+      recorded: run.last_checkpoint().map(|saved| saved.revision().as_str().to_owned()),
+      branch_tip: main.branch_tip(run.branch())?,
+      base: run.base().as_str().to_owned(),
+    })
+  }
+}
+
+pub(super) fn contained_result(
+  db: &ProjectDb,
+  main: &LocalGit,
+  checkout: &Checkout,
+  run: &Run,
+  operation: Option<&orchester_core::integration::local::LocalOperation>,
+) -> Result<Option<ContainedResult>, IntegrationError> {
+  let inputs = EvidenceInputs::read(db, main, checkout, run, operation)?;
+  evidence(main, &inputs)
+}
+
+/// The evidence `inputs` call for.
+pub(super) fn evidence(main: &LocalGit, inputs: &EvidenceInputs) -> Result<Option<ContainedResult>, IntegrationError> {
+  if inputs.merged || inputs.base_branch.as_deref() != Some(inputs.branch.as_str()) || inputs.marker {
+    return Ok(None);
+  }
+  let inconsistent = inputs.owned.is_none()
+    && inputs
+      .recorded
+      .as_ref()
+      .zip(inputs.branch_tip.as_ref())
+      .is_some_and(|(recorded, branch)| recorded != branch);
+  let source = inputs
+    .owned
+    .clone()
+    .or_else(|| inputs.recorded.clone())
+    .or_else(|| inputs.branch_tip.clone());
+  let unknown = source.is_none();
+  let source = source.unwrap_or_else(|| inputs.base.clone());
+  let kind = if unknown || inconsistent {
+    ResultEvidenceKind::UnknownSource
+  } else if main.is_ancestor(&source, &inputs.target)? {
+    ResultEvidenceKind::CompleteAncestry
+  } else if inputs.owned.is_some() {
+    return Ok(None);
+  } else {
+    match scoped_evidence(main, &inputs.base, &source, &inputs.target)? {
+      Some(kind) => kind,
+      None => return Ok(None),
+    }
+  };
+  Ok(Some(ContainedResult {
+    kind,
+    source: Revision::new(&source).map_err(|_| LocalError::Reconcile)?,
+    target: Revision::new(&inputs.target).map_err(|_| LocalError::Reconcile)?,
+  }))
+}
+
+fn scoped_evidence(
+  main: &LocalGit,
+  base: &str,
+  source: &str,
+  target: &str,
+) -> Result<Option<ResultEvidenceKind>, IntegrationError> {
+  if !main.is_ancestor(base, source)? {
+    return Ok(Some(ResultEvidenceKind::UnknownSource));
+  }
+  for commit in main.commits_after(base, source)? {
+    if main.is_ancestor(&commit, target)? {
+      return Ok(Some(ResultEvidenceKind::PartialAncestry));
+    }
+  }
+  if main.has_equivalent_patch(base, source, target)? {
+    return Ok(Some(ResultEvidenceKind::EquivalentPatches));
+  }
+  let trees = main.text(&[
+    "rev-parse",
+    &format!("{source}^{{tree}}"),
+    &format!("{target}^{{tree}}"),
+  ])?;
+  let mut trees = trees.lines();
+  if trees.next().ok_or(LocalGitError::Data)? == trees.next().ok_or(LocalGitError::Data)? {
+    return Ok(Some(ResultEvidenceKind::EquivalentTree));
+  }
+  Ok(None)
+}

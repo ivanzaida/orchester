@@ -27,7 +27,7 @@ const LEVEL: i32 = 3;
 pub(super) struct BlobHash(String);
 
 impl BlobHash {
-  fn of(content: &[u8]) -> Self {
+  pub(super) fn of(content: &[u8]) -> Self {
     let digest = Sha256::digest(content);
     let mut hex = String::with_capacity(digest.len() * 2);
     for byte in digest.iter() {

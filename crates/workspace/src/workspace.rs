@@ -247,7 +247,13 @@ impl Workspace {
   }
 
   pub fn set_automation_answers_approvals(&self, allowed: bool) -> Result<(), StoreError> {
-    self.approval_consent.lock().begin();
+    {
+      let mut consent = self.approval_consent.lock();
+      if !allowed {
+        consent.revision += 1;
+      }
+      consent.begin();
+    }
     let mut db = self.db.lock();
     let result = db.set_automation_answers_approvals(allowed);
     self.approval_consent.lock().finish(allowed && result.is_ok());
@@ -292,6 +298,14 @@ impl Workspace {
   /// The approvals opt-in remains separate from permission changes.
   pub fn automation_approval_consent(&self) -> bool {
     self.approval_consent.lock().allowed
+  }
+
+  /// Queued input can bind to revocation without treating these revisions as a grant.
+  pub fn automation_consent_revision(&self) -> (u64, u64) {
+    (
+      self.permission_consent.lock().revision,
+      self.approval_consent.lock().revision,
+    )
   }
 
   /// A human revocation stops window widening before its asynchronous save is polled.

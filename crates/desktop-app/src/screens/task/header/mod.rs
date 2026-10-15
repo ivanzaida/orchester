@@ -230,7 +230,7 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
     move || {
       let view = match tab {
         TaskTab::Changes => TaskView::Changes(changes_reads.shown_file()),
-        TaskTab::Summary | TaskTab::Conversation => TaskView::of(tab),
+        TaskTab::Summary | TaskTab::Conversation | TaskTab::LocalIntegration => TaskView::of(tab),
       };
       navigation.go(Route::Project(project, ProjectPage::Task(key.clone(), view)));
     }
@@ -241,10 +241,11 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
   let changes = ctx.t(TaskTab::Changes.title_key());
   let count = super::changes_count(ctx, &props.task);
   let changes = super::changes::tab_label(ctx, &changes, count);
-  let tabs = [
+  let tabs = vec![
     tab(TaskTab::Summary, ctx.t(TaskTab::Summary.title_key())),
     tab(TaskTab::Conversation, ctx.t(TaskTab::Conversation.title_key())),
     tab(TaskTab::Changes, changes),
+    tab(TaskTab::LocalIntegration, ctx.t(TaskTab::LocalIntegration.title_key())),
     PageTab::unavailable(
       "task-tab-artifacts",
       ctx.t("task.tabs.artifacts"),
@@ -256,5 +257,10 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
       ctx.t("task.tabs.memoryReason"),
     ),
   ];
+  let tabs = if props.tab == TaskTab::LocalIntegration {
+    tabs.into_iter().take(4).collect()
+  } else {
+    tabs
+  };
   page_tabs(ctx, "task-tabs", tabs).into()
 }

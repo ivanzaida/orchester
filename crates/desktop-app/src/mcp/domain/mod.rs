@@ -52,6 +52,7 @@ pub(crate) fn on(services: &Services) -> app_mcp::Services {
       services.jobs.clone(),
     ),
   )
+  .with_vault(services.vault.clone())
 }
 
 /// How the domain tools explain a refusal: in the words of `i18n`.

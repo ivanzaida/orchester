@@ -148,8 +148,8 @@ pub trait WorktreeStore {
   fn save_worktree_removal(&mut self, run: RunId, at: Timestamp) -> Result<(), Self::Error>;
 
   /// Records, before git removes anything, that the worktrees of `run` are removed at `at`, unless
-  /// the run has live work as stored now. It is read and written in one write transaction, as a
-  /// continuation of the run is, so a removal and a continuation never both go ahead.
+  /// the run has live work, a reserved local integration or an unfinished local Git process.
+  /// Removal and continuation or local reservation acquisition share one write transaction gate.
   fn begin_worktree_removal(&mut self, run: RunId, at: Timestamp) -> Result<RemovalStart, Self::Error>;
 
   /// Takes back the removal [`WorktreeStore::begin_worktree_removal`] recorded at `at`, once git

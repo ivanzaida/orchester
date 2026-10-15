@@ -30,6 +30,7 @@ use crate::{
     changes::{ChangesError, Checkpointed, NotCheckpointed, RunStage, checkpointed_in, not_checkpointed_in},
     detail::run_store_error,
     integration_jobs::{JobState, MergeArgs, ProjectJobState},
+    local_integration::{LegacyPolicy, LocalIntent, LocalOrigin, managed_checkout},
     outside::Outside,
   },
 };
@@ -162,6 +163,27 @@ fn start(services: &Services, args: &InRun, separator: Arc<str>) -> Result<Start
   let run = find_run(&db, &args.run)?;
   ready(&db, &run)?;
   let jobs = services.jobs.of(open.project.id());
+  if managed_checkout(&db, run.id())? || jobs.state().local_decision_pending() {
+    LocalOrigin::AuthenticatedDomain
+      .authorize(LocalIntent::ReviewedDecision)
+      .map_err(|_| refused("needs_decision", "localIntegration.personRequired"))?;
+    return Err(refused("needs_decision", "localIntegration.personRequired"));
+  }
+  let policy = LegacyPolicy::new(&open.repo_root, run.id(), services.vault.clone())
+    .map_err(|_| refused("integration_preflight_failed", "localIntegration.preflightFailed"))?;
+  if let Some(evidence) = policy
+    .preflight()
+    .map_err(|_| refused("integration_preflight_failed", "localIntegration.preflightFailed"))?
+  {
+    return Err(refused(
+      if evidence.kind == orchester_core::integration::local::ResultEvidenceKind::CompleteAncestry {
+        "already_integrated"
+      } else {
+        "scoped_integration_required"
+      },
+      "localIntegration.externalResult",
+    ));
+  }
   let task_runs = db.runs_of_task(run.task()).map_err(run_store_error)?;
   let busy = task_runs.iter().any(|listed| {
     let id = listed.as_ref().map_or_else(|unreadable| unreadable.id, Run::id);
@@ -179,18 +201,21 @@ fn start(services: &Services, args: &InRun, separator: Arc<str>) -> Result<Start
     .to_string();
   let updates = jobs.subscribe();
   let (changes, project) = (services.changes.clone(), open.project.id());
-  let started = jobs.of(run.id()).start_merge(MergeArgs {
-    open: open.clone(),
-    task: task.id(),
-    key: task.key().to_string(),
-    number: run.number().get(),
-    branch,
-    run: run.id(),
-    programs: services.programs.clone(),
-    activity: services.activity.clone(),
-    separator,
-    changed: Arc::new(move || changes.record(project, Outside::Tasks)),
-  });
+  let started = jobs.of(run.id()).start_legacy_merge(
+    MergeArgs {
+      open: open.clone(),
+      task: task.id(),
+      key: task.key().to_string(),
+      number: run.number().get(),
+      branch,
+      run: run.id(),
+      programs: services.programs.clone(),
+      activity: services.activity.clone(),
+      separator,
+      changed: Arc::new(move || changes.record(project, Outside::Tasks)),
+    },
+    policy,
+  );
   // Another merge or removal of the run took it between the check above and now.
   if !started {
     return Err(refused("merge_running", "appMcp.errors.integrationRunning"));
@@ -200,9 +225,6 @@ fn start(services: &Services, args: &InRun, separator: Arc<str>) -> Result<Start
 
 /// Refused unless the run is its task's latest, succeeded, and was not merged yet.
 fn ready(db: &ProjectDb, run: &Run) -> Result<(), ToolError> {
-  if db.run_merge(run.id())?.is_some() {
-    return Err(refused("already_merged", "appMcp.errors.alreadyMerged"));
-  }
   if !matches!(run.status(), RunStatus::Succeeded) {
     return Err(refused("run_not_ready", "appMcp.errors.runNotReady"));
   }
@@ -218,6 +240,9 @@ fn ready(db: &ProjectDb, run: &Run) -> Result<(), ToolError> {
     .max();
   if latest != Some(run.number().get()) {
     return Err(refused("not_latest_run", "appMcp.errors.notLatestRun"));
+  }
+  if db.run_merge(run.id())?.is_some() {
+    return Err(refused("already_merged", "appMcp.errors.alreadyMerged"));
   }
   Ok(())
 }

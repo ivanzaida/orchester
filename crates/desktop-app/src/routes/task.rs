@@ -14,10 +14,11 @@ pub enum TaskTab {
   Summary,
   Conversation,
   Changes,
+  LocalIntegration,
 }
 
 impl TaskTab {
-  pub const ALL: [Self; 3] = [Self::Summary, Self::Conversation, Self::Changes];
+  pub const ALL: [Self; 4] = [Self::Summary, Self::Conversation, Self::Changes, Self::LocalIntegration];
 
   /// The tab's name: the last segment of its path, and its name in the app's MCP tools.
   pub const fn name(self) -> &'static str {
@@ -25,6 +26,7 @@ impl TaskTab {
       Self::Summary => "summary",
       Self::Conversation => "conversation",
       Self::Changes => "changes",
+      Self::LocalIntegration => "local-integration",
     }
   }
 
@@ -38,6 +40,7 @@ impl TaskTab {
       Self::Summary => "task.tabs.summary",
       Self::Conversation => "task.tabs.conversation",
       Self::Changes => "task.tabs.changes",
+      Self::LocalIntegration => "local_integration.title",
     }
   }
 }
@@ -49,6 +52,7 @@ pub enum TaskView {
   Summary,
   Conversation,
   Changes(Option<ChangedFile>),
+  LocalIntegration,
 }
 
 impl TaskView {
@@ -58,6 +62,7 @@ impl TaskView {
       TaskTab::Summary => Self::Summary,
       TaskTab::Conversation => Self::Conversation,
       TaskTab::Changes => Self::Changes(None),
+      TaskTab::LocalIntegration => Self::LocalIntegration,
     }
   }
 
@@ -66,13 +71,14 @@ impl TaskView {
       Self::Summary => TaskTab::Summary,
       Self::Conversation => TaskTab::Conversation,
       Self::Changes(_) => TaskTab::Changes,
+      Self::LocalIntegration => TaskTab::LocalIntegration,
     }
   }
 
   pub const fn file(&self) -> Option<&ChangedFile> {
     match self {
       Self::Changes(file) => file.as_ref(),
-      Self::Summary | Self::Conversation => None,
+      Self::Summary | Self::Conversation | Self::LocalIntegration => None,
     }
   }
 

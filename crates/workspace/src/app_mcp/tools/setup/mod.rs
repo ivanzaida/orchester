@@ -313,11 +313,11 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "merge_run",
-    description: "Merges a run that is ready for review into the branch it started from, as the task Summary's Merge \
-                  into main does, then removes its worktrees and merged branches that hold nothing more. Waits for \
-                  the merge and answers how it went (fast_forward, merge_commit or already_merged). Refused unless \
-                  the run succeeded and was not merged, while a merge or worktree removal of its task runs, or with \
-                  git's reason (conflicts, uncommitted changes on the base branch, another branch checked out).",
+    description: "Merges a run, its task's latest that succeeded, into its base branch and waits for the merge, \
+                  when the main checkout needs no local integration: nothing local in the way and no local \
+                  integration of the run under way. Otherwise it refuses (needs_decision, merge_failed): preparing \
+                  the checkout, conflict choices and approving the exact merged result are a person's, in the \
+                  app's Local integration page.",
     schema: schema_for_type::<super::runs::InRun>,
     read_only: false,
   },

@@ -21,6 +21,7 @@ mod fonts;
 mod form;
 pub mod instructions;
 mod lifecycle;
+mod local_integration;
 mod markdown;
 mod metrics;
 mod needs_you;
@@ -57,6 +58,7 @@ pub use self::{
   decisions::{DecisionSpacing, DecisionText},
   fonts::mono_space,
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
+  local_integration::LocalText,
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
   orchestrator::{OrchestratorSpacing, OrchestratorText},

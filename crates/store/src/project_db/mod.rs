@@ -15,6 +15,7 @@ mod invocation_accounts;
 mod invocation_prompts;
 mod joining;
 mod limits;
+mod local_integration;
 mod mcp_servers;
 mod memory;
 mod merges;

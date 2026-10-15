@@ -9,6 +9,7 @@ mod console;
 
 pub mod external;
 pub mod launch;
+pub mod local_git;
 #[cfg(unix)]
 pub mod process_group;
 pub mod programs;

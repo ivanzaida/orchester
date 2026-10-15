@@ -29,6 +29,9 @@ impl WorktreeStore for ProjectDb {
     if status.has_live_work() {
       return Ok(RemovalStart::LiveWork);
     }
+    if super::local_integration::reserves_worktree(&transaction, run)? {
+      return Ok(RemovalStart::LocalIntegration);
+    }
     let start = if removal(&transaction, run)?.is_some() {
       RemovalStart::AlreadyRecorded
     } else {

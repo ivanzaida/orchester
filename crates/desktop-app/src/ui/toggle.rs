@@ -7,7 +7,8 @@
 //! - Switch (`Switch/off` `H6LlDD`, `Switch/on` `XC5zU`): a round 28 × 16 track, 2 inside it, a round 12 knob; off,
 //!   `border_strong` with a `text_secondary` knob at the start; on, `accent` with an `on_accent` knob at the end.
 //!
-//! A control whose value is fixed is faded to half and cannot be flipped; the caller says why.
+//! A control whose value is fixed is faded to half and cannot be flipped; the caller says why. One settled by an
+//! earlier step, which a review only lists, keeps its full strength.
 
 use std::sync::Arc;
 
@@ -59,10 +60,14 @@ pub struct Toggle {
   label: Arc<str>,
   label_shown: bool,
   wrap_label: bool,
+  /// The label's text style in its own color, where a design sets it apart from a form's label.
+  label_style: Option<TypographyStyle>,
   change: Option<Arc<dyn Fn(bool) + Send + Sync>>,
   element: Option<ElementRef>,
   /// Room after the label, so the focus ring around the control clears its last letter.
   ring_room: bool,
+  /// A fixed value decided by an earlier step, drawn at full strength.
+  settled: bool,
 }
 
 impl Toggle {
@@ -76,9 +81,11 @@ impl Toggle {
       label: label.into(),
       label_shown: true,
       wrap_label: false,
+      label_style: None,
       change: None,
       element: None,
       ring_room: false,
+      settled: false,
     }
   }
 
@@ -96,6 +103,13 @@ impl Toggle {
     self
   }
 
+  /// The fixed value was decided by an earlier step and the control only shows it, at full strength: e.g. the
+  /// selected snapshots a commit review lists (`kexy4`).
+  pub fn settled(mut self) -> Self {
+    self.settled = true;
+    self
+  }
+
   /// `element` refers to the control, e.g. so a screen can move the focus to it.
   pub fn element_ref(mut self, element: ElementRef) -> Self {
     self.element = Some(element);
@@ -106,6 +120,13 @@ impl Toggle {
   /// long, such as one that names a folder.
   pub fn wrap_label(mut self) -> Self {
     self.wrap_label = true;
+    self
+  }
+
+  /// The label in `style` and its color, e.g. an acknowledgement in an inspector's 11.5 `text_secondary`
+  /// (`sVbfo` in Local integration).
+  pub fn label_style(mut self, style: TypographyStyle) -> Self {
+    self.label_style = Some(style);
     self
   }
 
@@ -170,10 +191,13 @@ impl From<Toggle> for Element {
   fn from(toggle: Toggle) -> Self {
     let mark = toggle.mark().id(format!("{}-mark", toggle.id));
     let label = toggle.label_shown.then(|| {
-      let label = Text::new(&toggle.label)
-        .id(format!("{}-label", toggle.id))
-        .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextPrimary);
+      let label = Text::new(&toggle.label).id(format!("{}-label", toggle.id));
+      let label = match toggle.label_style {
+        Some(style) => label.variant(style),
+        None => label
+          .variant(TypographyStyle::Description)
+          .color(PaletteColor::TextPrimary),
+      };
       if toggle.wrap_label {
         label.flex(1.0).min_width(Dimension::Px(0.0))
       } else {
@@ -186,6 +210,7 @@ impl From<Toggle> for Element {
       Some(change) => Focus::Form
         .apply(pressable(move || change(wanted)))
         .describe("state", "enabled"),
+      None if toggle.settled => inert(Button::empty()).describe("state", "fixed"),
       None => inert(Button::empty())
         .opacity(DISABLED_OPACITY)
         .describe("state", "fixed"),

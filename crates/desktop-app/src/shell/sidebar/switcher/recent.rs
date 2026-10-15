@@ -65,10 +65,15 @@ pub fn rows(ctx: &mut Ctx, opening: u64, shown: Option<ProjectId>, open: &Signal
 }
 
 /// The projects of the workspace, most recently used first.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 struct Recent(Vec<RegisteredProject>);
 
 impl DevtoolsInspectable for Recent {}
+impl std::fmt::Debug for Recent {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str("Recent(<private>)")
+  }
+}
 
 #[derive(Clone)]
 struct RecentProps {
@@ -101,6 +106,21 @@ impl Component for RecentRow {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let RecentProps { project, current, open } = ctx.props::<RecentProps>().clone();
+    let revision = crate::project::Projects::of(ctx).feed(project.id).revision.get();
+    let allowed = crate::ui::local_metadata::allowed(
+      ctx,
+      Some(project.repo_root.clone()),
+      vec![
+        project.name.as_str().to_owned(),
+        project.repo_root.display().to_string(),
+      ],
+      revision,
+    );
+    if !allowed {
+      return Element::from(
+        Text::new(&ctx.t("local_integration.hiddenMetadata")).variant(ShellText::SwitcherPath.role()),
+      );
+    }
     let navigation = Navigation::of(ctx);
     let route = Route::Project(project.id, ProjectPage::Overview(OverviewTab::default()));
     let id = format!("recent-{}", project.id);
@@ -148,6 +168,7 @@ impl Component for RecentRow {
     .child(tile)
     .child(text)
     .with_children(trailing)
+    .into()
   }
 }
 

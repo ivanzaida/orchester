@@ -6,14 +6,16 @@
 //! text are refused too, so no client reads it. Neither consent nor this gate grants window-control scopes or
 //! provider permissions.
 
+mod local;
 use std::{
   borrow::Cow,
   sync::{
     Arc,
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
   },
 };
 
+pub use local::LocalInput;
 use lurq::mcp::{
   McpHandle, McpService,
   rmcp::{
@@ -52,7 +54,7 @@ pub const LOOKING: &[&str] = &[
 const SETTING_REFUSAL: &str = "A person changes this setting in the window: while Settings shows Let automation \
   change agent permissions, window input from MCP clients (clicks, keys, values, resizing, menus) is refused.";
 /// What a refused client reads while a Connections page asks a person to confirm what a change widens.
-const QUESTION_REFUSAL: &str = "A person answers this in the window: while a Connections page, Agents page, Tools page, Secrets page, Skills page, Project settings or Pipelines page asks to \
+const QUESTION_REFUSAL: &str = "A person answers this in the window: while Local integration, a Connections page, Agents page, Tools page, Secrets page, Skills page, Project settings or Pipelines page asks to \
   confirm what a change lets agents do (in any tab, until it is answered or the page is left), \
   window input from MCP clients (clicks, keys, values, resizing, menus) is refused.";
 const STILL_AVAILABLE: &str = "Looking at the window and the app's own tools stay available.";
@@ -79,6 +81,8 @@ pub enum Guarded {
   PermissionsSetting,
   /// A Connections page's question that confirms what saving or turning on a server widens.
   WideningQuestion,
+  /// A currently mounted reviewed integration decision requiring a native answer.
+  LocalIntegrationQuestion,
   /// A domain setup widening covered by the human permission opt-in.
   PermissionWidening,
   /// Automatic approvals additionally require the separate approvals opt-in.
@@ -129,6 +133,8 @@ pub fn sends_input(tool: &str) -> bool {
 
 #[derive(Default)]
 struct Counts {
+  window_control: AtomicBool,
+  local_epoch: AtomicUsize,
   controls: Mutex<Controls>,
   workspace: Mutex<Option<orchester_workspace::workspace::Workspace>>,
   /// Window-input calls the server forwarded that have not answered.
@@ -171,6 +177,7 @@ impl InputGate {
   /// Marks the protected control `what` as mounted until the returned guard is dropped; the first one makes lurq
   /// deny its input tools. Called on the event loop, which runs lurq's tool calls.
   pub fn protect(&self, what: Guarded) -> Protected {
+    self.0.local_epoch.fetch_add(1, Ordering::AcqRel);
     self.count(what, true);
     self.refresh_tools();
     Protected(self.clone(), what)
@@ -192,7 +199,11 @@ impl InputGate {
       Guarded::PermissionWidening => workspace.automation_permission_consent(),
       Guarded::ApprovalWidening => workspace.automation_permission_consent() && workspace.automation_approval_consent(),
       Guarded::StepAccept => workspace.automation_approval_consent(),
-      Guarded::PermissionsSetting | Guarded::WideningQuestion | Guarded::McpServer | Guarded::Accounts => false,
+      Guarded::PermissionsSetting
+      | Guarded::WideningQuestion
+      | Guarded::LocalIntegrationQuestion
+      | Guarded::McpServer
+      | Guarded::Accounts => false,
     }
   }
 
@@ -200,7 +211,7 @@ impl InputGate {
     let mut controls = self.0.controls.lock();
     let count = match what {
       Guarded::PermissionsSetting | Guarded::Accounts => &mut controls.settings,
-      Guarded::WideningQuestion => &mut controls.questions,
+      Guarded::WideningQuestion | Guarded::LocalIntegrationQuestion => &mut controls.questions,
       Guarded::PermissionWidening => &mut controls.permissions,
       Guarded::ApprovalWidening => &mut controls.approvals,
       Guarded::McpServer => &mut controls.server,

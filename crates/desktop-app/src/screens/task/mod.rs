@@ -15,6 +15,7 @@ mod changes;
 mod context;
 mod conversation;
 mod header;
+mod local_integration;
 mod read;
 mod summary;
 
@@ -313,6 +314,7 @@ impl Component for TaskFrame {
       TaskTab::Summary => ctx.mount_keyed::<TaskSummary>("task-summary", SummaryProps { task }),
       TaskTab::Conversation => conversation_tab(ctx, &task),
       TaskTab::Changes => changes_tab(ctx, &task),
+      TaskTab::LocalIntegration => local_integration::tab(ctx, &task),
     };
     Column::new()
       .id("task-frame")

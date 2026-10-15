@@ -54,8 +54,10 @@ pub struct Data {
 
 impl Data {
   pub fn new() -> Self {
+    let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-app-tests");
+    fs::create_dir_all(&scratch).expect("worktree scratch");
     Self {
-      dir: TempDir::new().expect("temporary directory"),
+      dir: tempfile::tempdir_in(scratch).expect("private worktree directory"),
       runtime: Runtime::new().expect("tokio runtime"),
     }
   }
@@ -117,6 +119,10 @@ impl Window {
 
   /// The window `launch` opens on `data`.
   pub fn of(data: Data, launch: Launch) -> Self {
+    let start = launch.start();
+    Self::of_start(data, launch, start)
+  }
+  pub fn of_start(data: Data, launch: Launch, start: orchester_app::root::Start) -> Self {
     let mut app = App::new();
     app.set_tokio_handle(data.runtime.handle().clone());
     theme::install(&mut app, Mode::Dark);
@@ -129,7 +135,7 @@ impl Window {
       RootProps {
         link: link.clone(),
         mcp: McpLink::without_server(McpStatus::unavailable(McpKind::Installation, McpSettings::of_build())),
-        start: launch.start(),
+        start,
       },
     );
     tree.pass_headless(&mut app);
