@@ -15,7 +15,8 @@ use serde_json::{Value, json};
 
 use super::{
   Translate,
-  wire::{self, Rank, Workflow},
+  across::across,
+  wire::{self, Rank, Workflow, task_link},
   worktree::worktree_state,
 };
 use crate::{
@@ -24,6 +25,7 @@ use crate::{
     services::{Services, blocking},
   },
   budget::whole_minutes,
+  links::{Link, TaskPage},
   tasks::{
     browse::{self, PipelineFilter, Query, TaskSort},
     data::ProjectTasks,
@@ -37,8 +39,9 @@ use crate::{
 #[serde(deny_unknown_fields)]
 #[schemars(crate = "rmcp::schemars")]
 pub struct ListTasks {
-  /// The project's id, or its name.
-  pub project: String,
+  /// The project's id, or its name; left out, every project the app knows.
+  #[serde(default)]
+  pub project: Option<String>,
   /// Only tasks with this workflow status.
   #[serde(default)]
   pub status: Option<Workflow>,
@@ -63,11 +66,10 @@ const SEPARATOR: &str = ", ";
 pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
   let project = args.project.clone();
-  let data = blocking(move || {
-    Ok(ProjectTasks::load(
-      &services.project(&project)?.repo_root,
-      &services.programs,
-    )?)
+  let read = blocking(move || {
+    across(&services, project.as_deref(), |open| {
+      Ok(ProjectTasks::load(&open.repo_root, &services.programs)?)
+    })
   })
   .await?;
   let filter = TaskFilter {
@@ -80,30 +82,34 @@ pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Transl
     organization: &filter,
     separator: SEPARATOR,
   };
-  let tasks: Vec<Value> = browse::rows(&data, TaskTab::All, query, TaskSort::Manual)
-    .iter()
-    .map(|row| {
-      json!({
-        "key": &*row.key,
-        "id": row.id.to_string(),
-        "title": &*row.title,
-        "workflow_status": Workflow::from(row.organization.status()),
-        "priority": Rank::from(row.organization.priority()),
-        "tags": row.tags.iter().map(|tag| &**tag).collect::<Vec<_>>(),
-        "pipeline": translate.text(&row.pipeline.message()),
-        "phase": row.phase.map(wire::phase),
-        "detail": translate.text(&row.detail),
-        "created_at": wire::time(row.created_at),
+  Ok(read.json("tasks", translate, |open, data| {
+    let project = open.project.id();
+    browse::rows(data, TaskTab::All, query, TaskSort::Manual)
+      .iter()
+      .map(|row| {
+        json!({
+          "key": &*row.key,
+          "id": row.id.to_string(),
+          "title": &*row.title,
+          "workflow_status": Workflow::from(row.organization.status()),
+          "priority": Rank::from(row.organization.priority()),
+          "tags": row.tags.iter().map(|tag| &**tag).collect::<Vec<_>>(),
+          "pipeline": translate.text(&row.pipeline.message()),
+          "phase": row.phase.map(wire::phase),
+          "detail": translate.text(&row.detail),
+          "created_at": wire::time(row.created_at),
+          "link": task_link(project, &row.key, TaskPage::Summary),
+        })
       })
-    })
-    .collect();
-  Ok(json!({ "tasks": tasks }))
+      .collect()
+  }))
 }
 
 pub async fn get_task(services: &Services, args: GetTask, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  let (detail, tags, pipeline, worktrees) = blocking(move || {
-    let root = services.project(&args.project)?.repo_root;
+  let (project, detail, tags, pipeline, worktrees) = blocking(move || {
+    let open = services.project(&args.project)?;
+    let root = open.repo_root;
     let db = ProjectDb::open(&root)?;
     let task = find_task(&db, &args.key)?;
     let tags = db.project_tags()?;
@@ -115,10 +121,11 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
       .iter()
       .map(|record| Ok((record.id, worktree_state(&db, &root, record.id)?)))
       .collect::<Result<HashMap<_, _>, ToolError>>()?;
-    Ok((detail, tags, pipeline, worktrees))
+    Ok((open.project.id(), detail, tags, pipeline, worktrees))
   })
   .await?;
   let task = &detail.task;
+  let link = Link::Task(project, task.key().clone(), TaskPage::Summary).path();
   let tag_names: Vec<&str> = tags
     .iter()
     .filter(|tag| task.organization().tags().contains(&tag.id()))
@@ -127,7 +134,7 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
   let runs: Vec<Value> = detail
     .history
     .iter()
-    .map(|record| run_record(record, worktrees.get(&record.id).copied(), translate))
+    .map(|record| run_record(record, worktrees.get(&record.id).copied(), translate, &link))
     .collect();
   Ok(json!({
     "key": task.key().to_string(),
@@ -152,6 +159,7 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
     },
     "phase": wire::phase(detail.phase()),
     "runs": runs,
+    "link": link,
   }))
 }
 
@@ -164,7 +172,8 @@ pub fn find_task(db: &ProjectDb, named: &str) -> Result<Task, ToolError> {
     .ok_or_else(|| ToolError::not_found(Missing::Task, named))
 }
 
-fn run_record(record: &RunRecord, worktree: Option<&str>, translate: &Translate) -> Value {
+/// A run of the task as its Summary lists it; `link` is the task's Summary, where its runs are.
+fn run_record(record: &RunRecord, worktree: Option<&str>, translate: &Translate, link: &str) -> Value {
   json!({
     "id": record.id.to_string(),
     "worktree": worktree,
@@ -172,5 +181,6 @@ fn run_record(record: &RunRecord, worktree: Option<&str>, translate: &Translate)
     "phase": record.phase.map(wire::phase),
     "detail": translate.text(&record.detail),
     "changed_at": record.at.map(wire::time),
+    "link": link,
   })
 }

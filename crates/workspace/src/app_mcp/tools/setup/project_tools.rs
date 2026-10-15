@@ -6,6 +6,7 @@
 //! keeps every resource.
 
 use orchester_core::{
+  id::ProjectId,
   resource::{CommandAction, CommandArg, PublishError, Tool, ToolAction},
   store::ResourceStore,
   time::Timestamp,
@@ -16,7 +17,11 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
-  super::{Spec, parse, projects::InProject},
+  super::{
+    Spec, Translate,
+    across::{InProjects, across},
+    parse,
+  },
   profiles::{no_draft, state_json},
   project::environment_json,
   tool_input::{self, not_a_command_tool, widenings},
@@ -27,6 +32,7 @@ use crate::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
+  links::Link,
   messages::{self, Message},
   tasks::outside::Outside,
   tools::data::{ProjectTools, ToolEntry},
@@ -37,16 +43,19 @@ pub(super) const SPECS: &[Spec] = &[
     name: "list_tools",
     description: "A project's tools, which pipeline steps call: id, name, kind (command, http or database), \
                   description, where each stands (draft, stale_draft or published, with its published version), \
-                  whether a step can run it, and a command tool's command line. Nothing of the secrets an HTTP \
-                  or database tool uses is listed.",
-    schema: schema_for_type::<InProject>,
+                  whether a step can run it, a command tool's command line, and its link in the app (its \
+                  editor). Nothing of the secrets an HTTP or database tool uses is listed. Without `project`, \
+                  every project's, each naming its project (unreadable_projects lists the projects that could \
+                  not be read, with why).",
+    schema: schema_for_type::<InProjects>,
     read_only: true,
   },
   Spec {
     name: "get_tool",
     description: "One tool as its editor shows it (its draft if it has one, otherwise its latest version): a \
                   command tool's program, arguments, timeout, exit codes that pass, environment variables and \
-                  output limit; where it stands; and which published pipeline steps call it. A command tool runs \
+                  output limit; where it stands; which published pipeline steps call it; and its link in the \
+                  app. A command tool runs \
                   in the worktree of the step that calls it, without a shell, with the person's rights, network \
                   access and no sandbox.",
     schema: schema_for_type::<InTool>,
@@ -98,9 +107,14 @@ pub struct InTool {
 }
 
 /// Calls tool `name` of [`SPECS`] with `arguments`.
-pub(super) async fn call(services: &Services, name: &str, arguments: Value) -> Result<Value, ToolError> {
+pub(super) async fn call(
+  services: &Services,
+  translate: &Translate,
+  name: &str,
+  arguments: Value,
+) -> Result<Value, ToolError> {
   match name {
-    "list_tools" => list_tools(services, parse(arguments)?).await,
+    "list_tools" => list_tools(services, parse(arguments)?, translate).await,
     "get_tool" => get_tool(services, parse(arguments)?).await,
     "save_tool_draft" => tool_input::save_tool_draft(services, parse(arguments)?).await,
     "publish_tool" => publish_tool(services, parse(arguments)?).await,
@@ -108,23 +122,25 @@ pub(super) async fn call(services: &Services, name: &str, arguments: Value) -> R
   }
 }
 
-async fn list_tools(services: &Services, args: InProject) -> Result<Value, ToolError> {
+async fn list_tools(services: &Services, args: InProjects, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  blocking(move || {
-    let open = services.project(&args.project)?;
-    let tools = ProjectTools::load_in(&open.repo_root)?;
-    let listed: Vec<Value> = tools
+  let read = blocking(move || {
+    across(&services, args.project.as_deref(), |open| {
+      Ok(ProjectTools::load_in(&open.repo_root)?)
+    })
+  })
+  .await?;
+  Ok(read.json("tools", translate, |open, tools| {
+    tools
       .tools
       .iter()
       .map(|entry| {
-        let mut value = summary_json(entry);
+        let mut value = summary_json(entry, open.project.id());
         value["command_line"] = json!(command_of(&entry.tool).map(|command| command.command_line()));
         value
       })
-      .collect();
-    Ok(json!({ "tools": listed }))
-  })
-  .await
+      .collect()
+  }))
 }
 
 async fn get_tool(services: &Services, args: InTool) -> Result<Value, ToolError> {
@@ -133,7 +149,7 @@ async fn get_tool(services: &Services, args: InTool) -> Result<Value, ToolError>
     let open = services.project(&args.project)?;
     let tools = ProjectTools::load_in(&open.repo_root)?;
     let entry = tool_named(&tools, &args.tool)?;
-    Ok(json!({ "tool": tool_json(&tools, entry) }))
+    Ok(json!({ "tool": tool_json(&tools, entry, open.project.id()) }))
   })
   .await
 }
@@ -164,7 +180,7 @@ async fn publish_tool(services: &Services, args: InTool) -> Result<Value, ToolEr
     let entry = tools
       .tool(id)
       .ok_or_else(|| ToolError::not_found(Missing::Tool, id.to_string()))?;
-    Ok(json!({ "tool": tool_json(&tools, entry) }))
+    Ok(json!({ "tool": tool_json(&tools, entry, open.project.id()) }))
   })
   .await
 }
@@ -179,9 +195,9 @@ pub(super) fn tool_named<'a>(tools: &'a ProjectTools, named: &str) -> Result<&'a
     .ok_or_else(|| ToolError::not_found(Missing::Tool, named))
 }
 
-/// A tool as `get_tool` shows it.
-pub(super) fn tool_json(tools: &ProjectTools, entry: &ToolEntry) -> Value {
-  let mut value = summary_json(entry);
+/// A tool of `project` as `get_tool` shows it.
+pub(super) fn tool_json(tools: &ProjectTools, entry: &ToolEntry, project: ProjectId) -> Value {
+  let mut value = summary_json(entry, project);
   value["command"] = json!(command_of(&entry.tool).map(|command| json!({
     "program": command.program().as_str(),
     "arguments": command.args().iter().map(CommandArg::as_str).collect::<Vec<_>>(),
@@ -198,7 +214,8 @@ pub(super) fn tool_json(tools: &ProjectTools, entry: &ToolEntry) -> Value {
   value
 }
 
-fn summary_json(entry: &ToolEntry) -> Value {
+/// A tool of `project` as `list_tools` lists it, with its link: its editor.
+fn summary_json(entry: &ToolEntry, project: ProjectId) -> Value {
   json!({
     "id": entry.id.to_string(),
     "name": &*entry.name,
@@ -206,6 +223,7 @@ fn summary_json(entry: &ToolEntry) -> Value {
     "description": entry.tool.description(),
     "state": state_json(entry.state),
     "runnable": entry.runnable(),
+    "link": Link::Tool(project, entry.id).path(),
   })
 }
 

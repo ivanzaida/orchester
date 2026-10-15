@@ -3,19 +3,29 @@
 //! automation answer approvals*, off until turned on); it approves once or denies, and the runner
 //! records the answer as automation's.
 
-use orchester_core::run::{Answerer, ApprovalAnswer};
+use orchester_core::{
+  id::ProjectId,
+  run::{Answerer, ApprovalAnswer, Run},
+};
 use orchester_ipc::Command;
 use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{plans::waiting_plans, runs::find_run, wire};
+use super::{
+  Translate,
+  across::{across, needs_project, oldest_first},
+  plans::waiting_plans,
+  runs::find_run,
+  wire,
+};
 use crate::{
   app_mcp::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
+  links::TaskPage,
   messages::Message,
   tasks::{
     approvals::{ShownApproval, pending},
@@ -27,9 +37,10 @@ use crate::{
 #[serde(deny_unknown_fields)]
 #[schemars(crate = "rmcp::schemars")]
 pub struct ListApprovals {
-  /// The project's id, or its name.
-  pub project: String,
-  /// Only the requests of this run: its id, or its number.
+  /// The project's id, or its name; left out, every project the app knows.
+  #[serde(default)]
+  pub project: Option<String>,
+  /// Only the requests of this run: its id, or its number. Needs `project`.
   #[serde(default)]
   pub run: Option<String>,
 }
@@ -56,23 +67,39 @@ pub struct DecideApproval {
   pub decision: Decision,
 }
 
-pub async fn list_approvals(services: &Services, args: ListApprovals) -> Result<Value, ToolError> {
+pub async fn list_approvals(
+  services: &Services,
+  args: ListApprovals,
+  translate: &Translate,
+) -> Result<Value, ToolError> {
+  if args.run.is_some() && args.project.is_none() {
+    return Err(needs_project("run"));
+  }
   let services = services.clone();
-  let (shown, plans) = blocking(move || {
-    let root = services.project(&args.project)?.repo_root;
-    let db = ProjectDb::open(&root)?;
-    let run = args.run.as_deref().map(|named| find_run(&db, named)).transpose()?;
-    let waiting = pending(&db, &root)?;
-    let plans = waiting_plans(&db, run.as_ref().map(orchester_core::run::Run::id))?;
-    let shown = waiting
-      .into_iter()
-      .filter(|shown| run.as_ref().is_none_or(|run| shown.approval.run == run.id()))
-      .collect::<Vec<_>>();
-    Ok((shown, plans))
+  let read = blocking(move || {
+    across(&services, args.project.as_deref(), |open| {
+      let db = ProjectDb::open(&open.repo_root)?;
+      let run = args.run.as_deref().map(|named| find_run(&db, named)).transpose()?;
+      let waiting = pending(&db, &open.repo_root)?;
+      let plans = waiting_plans(&db, open.project.id(), run.as_ref().map(Run::id))?;
+      let shown = waiting
+        .into_iter()
+        .filter(|shown| run.as_ref().is_none_or(|run| shown.approval.run == run.id()))
+        .collect::<Vec<_>>();
+      Ok((shown, plans))
+    })
   })
   .await?;
-  let approvals: Vec<Value> = shown.iter().map(approval).collect();
-  Ok(json!({ "approvals": approvals, "plans": plans }))
+  let mut approvals =
+    read.items(|open, (shown, _)| shown.iter().map(|shown| approval(shown, open.project.id())).collect());
+  oldest_first(&mut approvals, "waiting_since");
+  let mut plans = read.items(|_, (_, plans)| plans.clone());
+  oldest_first(&mut plans, "proposed_at");
+  Ok(json!({
+    "approvals": approvals,
+    "plans": plans,
+    "unreadable_projects": read.unreadable(translate),
+  }))
 }
 
 pub async fn decide_approval(services: &Services, args: DecideApproval) -> Result<Value, ToolError> {
@@ -119,9 +146,10 @@ const fn decision_name(decision: Decision) -> &'static str {
   }
 }
 
-/// A waiting request as the approval card shows it: what asks, from which run, task, step and
-/// agent, since when, and what auto mode did with it. Recorded arguments have secret values removed already.
-pub fn approval(shown: &ShownApproval) -> Value {
+/// A waiting request of `project` as the approval card shows it: what asks, from which run, task, step and
+/// agent, since when, and what auto mode did with it, with the link to its card, on its task's Conversation.
+/// Recorded arguments have secret values removed already.
+pub fn approval(shown: &ShownApproval, project: ProjectId) -> Value {
   let request = &shown.approval;
   let (kind, arguments, reason) = if request.command {
     ("command", None, request.scope.as_deref())
@@ -145,5 +173,6 @@ pub fn approval(shown: &ShownApproval) -> Value {
     "waiting_since": wire::time(request.requested_at),
     // What auto mode did with it, and which model reviewed; absent when auto mode did not look at it.
     "auto_mode": shown.review.as_ref(),
+    "link": shown.task.as_deref().and_then(|key| wire::task_link(project, key, TaskPage::Conversation)),
   })
 }

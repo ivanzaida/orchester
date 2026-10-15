@@ -22,10 +22,14 @@ mod live;
 mod mcp_servers;
 mod merge;
 mod pipeline_permissions;
+mod reads;
+mod reads_setup;
 mod skills_window;
 mod tools;
 mod tools_window;
 mod unverified;
+#[path = "../mcp_stable/vault.rs"]
+mod vault;
 mod window;
 
 use std::{
