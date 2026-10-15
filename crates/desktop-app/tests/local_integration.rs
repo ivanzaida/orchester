@@ -7,6 +7,8 @@ mod acknowledgement;
 mod candidates;
 #[path = "../../workspace/tests/local_integration/support.rs"]
 mod domain_support;
+#[path = "local_integration/hooks.rs"]
+mod hooks;
 #[path = "local_integration/support.rs"]
 mod integration_support;
 #[path = "local_integration/layout.rs"]

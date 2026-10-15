@@ -8,8 +8,11 @@ use lurq::{
   components::Column,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::integration::local::LocalPhase;
-use orchester_workspace::tasks::local_integration::{IntegrationView, Preview, Snapshot};
+use orchester_core::integration::local::{HookChange, LocalPhase};
+use orchester_workspace::{
+  display,
+  tasks::local_integration::{IntegrationView, Preview, Snapshot},
+};
 
 use super::{
   LocalPage, Mode, TaskContext,
@@ -149,30 +152,41 @@ fn external_notice(ctx: &Ctx, view: &IntegrationView) -> Option<Element> {
   )
 }
 
-/// What the repository's commit hooks changed when the last commit stopped before the branch moved.
+/// What the repository's commit hooks did that the person did not review: changed the last commit, which stopped
+/// before the branch moved, or moved HEAD after it landed.
 fn hook_notice(ctx: &Ctx, view: &IntegrationView, phase: LocalPhase) -> Option<Element> {
   let change = view.operation.as_ref()?.hook_change()?;
-  if phase != LocalPhase::Review {
+  if !matches!(phase, LocalPhase::Review | LocalPhase::Prepared) {
     return None;
   }
-  let paths = change
-    .paths
-    .iter()
-    .map(|path| path.as_str())
-    .collect::<Vec<_>>()
-    .join(&ctx.t("local_integration.separator"));
-  let body = match (change.paths.is_empty(), change.message) {
-    (false, true) => ctx.t_args("local_integration.hookBoth", [("paths", paths.as_str())]),
-    (false, false) => ctx.t_args("local_integration.hookPaths", [("paths", paths.as_str())]),
-    (true, _) => ctx.t("local_integration.hookMessage"),
+  let (title, body) = match change {
+    HookChange::Stopped { paths, message } => {
+      let paths = paths
+        .iter()
+        .map(|path| path.as_str())
+        .collect::<Vec<_>>()
+        .join(&ctx.t("local_integration.separator"));
+      let body = match (paths.is_empty(), message) {
+        (false, true) => ctx.t_args("local_integration.hookBoth", [("paths", paths.as_str())]),
+        (false, false) => ctx.t_args("local_integration.hookPaths", [("paths", paths.as_str())]),
+        (true, _) => ctx.t("local_integration.hookMessage"),
+      };
+      ("local_integration.hookTitle", body)
+    }
+    HookChange::MovedHead { commit, head } => (
+      "local_integration.hookMovedTitle",
+      ctx.t_args(
+        "local_integration.hookMoved",
+        [
+          ("commit", display::short_revision(commit)),
+          ("head", display::short_revision(head)),
+        ],
+      ),
+    ),
   };
   Some(
-    Notice::new(
-      "local-hook-change",
-      NoticeTone::Warning,
-      ctx.t("local_integration.hookTitle"),
-    )
-    .body(body)
-    .into(),
+    Notice::new("local-hook-change", NoticeTone::Warning, ctx.t(title))
+      .body(body)
+      .into(),
   )
 }

@@ -9,7 +9,7 @@ use lurq::{
   components::{Column, Text},
   node::Element,
 };
-use orchester_core::integration::local::{LocalOperation, LocalPhase};
+use orchester_core::integration::local::{HookChange, LocalOperation, LocalPhase};
 use orchester_workspace::{display, tasks::local_integration::IntegrationView};
 
 use super::{Mode, phase_title};
@@ -98,7 +98,8 @@ fn preparation(ctx: &Ctx, operation: &LocalOperation) -> String {
     .t(
       match (operation.phase(), operation.commit_tree(), operation.hook_change()) {
         (LocalPhase::Committing, ..) => "local_integration.committing",
-        (_, Some(_), Some(_)) => "local_integration.commitStopped",
+        (_, Some(_), Some(HookChange::Stopped { .. })) => "local_integration.commitStopped",
+        (_, Some(_), Some(HookChange::MovedHead { .. })) => "local_integration.committedMoved",
         (_, Some(_), None) => "local_integration.committed",
         (LocalPhase::Review, None, _) => "local_integration.noCommit",
         (_, None, _) => "local_integration.nothingPrepared",
@@ -111,7 +112,7 @@ fn restoration(operation: &LocalOperation, reviewing_commit: bool) -> &'static s
   if operation.preservation().is_none() {
     let committed = reviewing_commit
       || operation.phase() == LocalPhase::Committing
-      || (operation.commit_tree().is_some() && operation.hook_change().is_none());
+      || (operation.commit_tree().is_some() && !matches!(operation.hook_change(), Some(HookChange::Stopped { .. })));
     return if committed {
       "local_integration.notRequired"
     } else {

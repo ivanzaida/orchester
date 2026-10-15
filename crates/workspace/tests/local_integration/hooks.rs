@@ -1,5 +1,6 @@
 //! Commit hooks run before the branch moves: a hook that rewrites the staged content or the reviewed message stops
-//! the commit with what it changed, and the branch, the checkout's index and its files stay as reviewed.
+//! the commit with what it changed, and the branch, the checkout's index and its files stay as reviewed. A
+//! post-commit hook that moves HEAD after the reviewed commit landed is recorded for the person.
 use std::{fs, path::Path};
 
 use orchester_core::integration::local::{HookChange, LocalError, LocalPath, LocalPhase};
@@ -51,7 +52,7 @@ fn local_hooks_rewriting_the_index_stop_the_commit_before_the_branch_moves() {
   );
   assert_eq!(
     change,
-    Some(HookChange {
+    Some(HookChange::Stopped {
       paths: vec![LocalPath::new("local.txt").expect("path")],
       message: false,
     })
@@ -85,7 +86,7 @@ fn local_hooks_rewriting_the_message_stop_the_commit_before_the_branch_moves() {
   );
   assert_eq!(
     change,
-    Some(HookChange {
+    Some(HookChange::Stopped {
       paths: Vec::new(),
       message: true,
     })
@@ -118,4 +119,24 @@ fn local_hooks_that_fail_stop_the_commit_with_nothing_moved() {
   assert_eq!(phase, LocalPhase::Review);
   assert_eq!(git(fixture.root(), &["rev-parse", "HEAD"]), head);
   assert_eq!(git(fixture.root(), &["ls-files", "--stage"]), index);
+}
+
+#[test]
+fn local_hooks_that_move_head_after_the_commit_are_recorded_for_the_person() {
+  let (fixture, head, _) = staged();
+  hook(
+    fixture.root(),
+    "post-commit",
+    "git commit --amend --no-verify --allow-empty -m 'amended by hook' >/dev/null",
+  );
+  let (result, change, ..) = commit(&fixture);
+  result.expect("the reviewed commit landed");
+  let moved = git(fixture.root(), &["rev-parse", "HEAD"]);
+  let Some(HookChange::MovedHead { commit, head: recorded }) = change else {
+    panic!("the moved HEAD is recorded: {change:?}");
+  };
+  assert_eq!(recorded, moved, "the record names where the hook moved HEAD");
+  assert_ne!(commit, moved, "and the reviewed commit it moved from");
+  assert_eq!(git(fixture.root(), &["rev-parse", &format!("{commit}^")]), head);
+  assert_eq!(git(fixture.root(), &["log", "-1", "--format=%s"]), "amended by hook");
 }

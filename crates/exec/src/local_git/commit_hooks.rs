@@ -76,6 +76,6 @@ impl LocalGit {
       .split('\0')
       .filter_map(|path| LocalPath::new(path).ok())
       .collect();
-    Err(LocalGitError::HookChanged(HookChange { paths, message }))
+    Err(LocalGitError::HookChanged(HookChange::Stopped { paths, message }))
   }
 }

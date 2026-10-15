@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use orchester_core::integration::local::{Checkout, IndexEntry, LocalError, LocalFile, LocalPath};
+use orchester_core::integration::local::{Checkout, HookChange, IndexEntry, LocalError, LocalFile, LocalPath};
 
 use super::{LocalGit, LocalGitError};
 
@@ -67,14 +67,15 @@ impl LocalGit {
 
   /// Commits the reviewed `tree` of `paths` with `message`. The repository's hooks run first on a copy; if they
   /// fail or change the tree or the message, nothing moves. The branch then moves from the reviewed HEAD to a
-  /// commit of exactly `tree`, and only the committed paths of the checkout's index are updated.
+  /// commit of exactly `tree`, and only the committed paths of the checkout's index are updated. The checkout
+  /// after it comes back, with where a post-commit hook moved HEAD if it did.
   pub fn commit_selected(
     &self,
     reviewed: &Checkout,
     paths: &[LocalPath],
     tree: &str,
     message: &str,
-  ) -> Result<Checkout, LocalGitError> {
+  ) -> Result<(Checkout, Option<HookChange>), LocalGitError> {
     if message.trim().is_empty() {
       return Err(LocalError::Blank.into());
     }
@@ -106,7 +107,12 @@ impl LocalGit {
       return Err(LocalError::Stale.into());
     }
     self.post_commit_hook(&index, directory.path())?;
-    self.index_committed(reviewed, paths, &commit)
+    let current = self.index_committed(reviewed, paths, &commit)?;
+    let moved = (current.head != commit).then(|| HookChange::MovedHead {
+      commit,
+      head: current.head.clone(),
+    });
+    Ok((current, moved))
   }
 
   /// After the branch moved to `commit`: the original index is still byte-for-byte intact, so replace only the

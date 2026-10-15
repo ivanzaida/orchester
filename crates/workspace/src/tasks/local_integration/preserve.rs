@@ -16,8 +16,13 @@ impl LocalIntegration {
     self.retain_commit_originals(&current)?;
     let result = self.main.commit_selected(&current, paths, tree, message);
     match result {
-      Ok(current) => {
+      Ok((current, None)) => {
         self.operation.commit_finished(current)?;
+        self.save()
+      }
+      Ok((current, Some(moved))) => {
+        // The commit landed; the record says where a post-commit hook moved HEAD, which the page shows.
+        self.operation.commit_hook_changed(current, moved)?;
         self.save()
       }
       Err(orchester_exec::local_git::LocalGitError::HookChanged(change)) => {
