@@ -27,7 +27,7 @@ use crate::{
     markdown_run,
   },
   ui::{
-    chat::links::ChatLink,
+    chat::links::{ChatLink, without_bidi_controls},
     icon::{Icon, icon},
     markdown::LinkHandler,
     pressable::pressable,
@@ -68,7 +68,7 @@ pub(super) struct Look<'a> {
 pub(super) fn link(ctx: &mut Ctx, env: &Env<'_>, look: Look<'_>) -> Element {
   let tip = place::tip(ctx, &look.target, (env.project, env.names));
   let host = match &look.target {
-    Target::Web(url) => url.host_str().map(Arc::from),
+    Target::Web(url) => url.host_str().map(|host| Arc::from(without_bidi_controls(host))),
     Target::App(_) => None,
   };
   let key = format!("chat-link-{}", look.id);

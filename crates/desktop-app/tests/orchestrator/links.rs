@@ -162,6 +162,38 @@ fn orchestrator_reply_links_go_in_the_app_and_show_the_web_and_unknown_routes_as
   );
   with_synthetic_input(|| press_text(&mut screen, "PR 42"));
   assert_eq!(screen.route(), chat, "a link to the web leaves the tab where it is");
+
+  // Display math before a link makes lurq read that paragraph as two blocks; it is the reply's only link.
+  screen.send("Last:\n\n$$x$$ [github.com](https://evil.example/login)");
+  let reply = answer(&mut screen, 2);
+  assert!(
+    reply.contains("(evil.example)") || reply.contains("github.com evil.example"),
+    "a link however its reply splits shows the host it opens: {reply}"
+  );
+
+  // A quoted definition spans `>` marks; a label hides behind a bidirectional override.
+  screen.send(&format!(
+    "Then:\n\n> [repo]:\n> https://github.com/acme/kontur\n\n[the repo][repo] beside [\u{202E}sksat](orchester:{tasks})"
+  ));
+  let reply = answer(&mut screen, 3);
+  assert!(
+    is_shown_on_its_own(&mut screen, "the repo") && reply.contains("the repo github.com"),
+    "a reference link finds a definition written over two quoted lines: {reply}"
+  );
+  assert!(
+    is_shown_on_its_own(&mut screen, "sksat"),
+    "a link's words without the override that turned them around: {reply}"
+  );
+}
+
+/// The `count`th answer once it ended, as the conversation shows it.
+fn answer(screen: &mut Orchestrator, count: usize) -> String {
+  screen.until("the answer", |screen| {
+    !screen.exists("orchestrator-thinking")
+      && screen.text("orchestrator-conversation").matches("Noted:").count() == count
+  });
+  let shown = screen.text("orchestrator-conversation");
+  shown.rsplit("Noted:").next().unwrap_or_default().to_owned()
 }
 
 #[test]

@@ -87,8 +87,8 @@ impl Component for Reply {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<ReplyProps>().clone();
     let blocks = blocks(&props.text);
-    if !blocks.iter().any(|block| holds_link_block(&block.parsed)) {
-      return MarkdownView::new(props.id.clone(), props.text.clone(), props.links.clone()).render(ctx);
+    if !blocks.iter().any(Block::holds_link) {
+      return lurq_markdown(ctx, &props.id, &props.text, &props.links);
     }
     let (theme, base) = {
       let theme = ctx.theme();
@@ -105,22 +105,21 @@ impl Component for Reply {
       .width(Dimension::Pct(100.0))
       .spacing(theme.document_spacing);
     for (index, block) in blocks.iter().enumerate() {
-      let drawn = holds_link_block(&block.parsed)
-        .then(|| Drawn::of(&block.parsed))
-        .flatten();
-      column = column.child(match drawn {
+      column = column.child(match block.drawn() {
         Some(drawn) => inline::draw(ctx, &mut env, &drawn, &base),
-        None => lurq_block(ctx, (&props.id, index), &block.source, &props.links),
+        None => lurq_markdown(ctx, &format!("{}-{index}", props.id), &block.source, &props.links),
       });
     }
     column.into()
   }
 }
 
-/// A top-level block drawn by lurq's Markdown, its links made safe when it has any.
-fn lurq_block(ctx: &mut Ctx, (id, index): (&str, usize), source: &str, links: &LinkHandler) -> Element {
+/// Markdown `source` drawn by lurq, named `id`, always through `present`: a link lurq draws is one the chat follows,
+/// a link to the web shows its host, and any other is text. However a reply splits into blocks, none of it reaches
+/// lurq as written.
+fn lurq_markdown(ctx: &mut Ctx, id: &str, source: &str, links: &LinkHandler) -> Element {
   let shown = present(source, &|shown| link_words(ctx, shown)).into_owned();
-  MarkdownView::new(format!("{id}-{index}"), shown, links.clone()).render(ctx)
+  MarkdownView::new(id, shown, links.clone()).render(ctx)
 }
 
 /// How a link to the web is shown with its host, and a link the chat cannot follow as text, in a block lurq draws.
@@ -133,10 +132,25 @@ fn link_words(ctx: &Ctx, shown: Shown<'_>) -> String {
 }
 
 /// A top-level block of a reply: its source with the reply's link definitions after it, so a reference link in it
-/// still finds its destination, and the block as lurq's Markdown reads that source.
+/// still finds its destination, and the blocks lurq's Markdown reads that source as: usually one, but lurq reads some
+/// of what pulldown-cmark keeps in one paragraph as more (display math before text).
 struct Block {
   source: String,
-  parsed: MarkdownBlock,
+  parsed: Vec<MarkdownBlock>,
+}
+
+impl Block {
+  fn holds_link(&self) -> bool {
+    self.parsed.iter().any(holds_link_block)
+  }
+
+  /// The block as drawn here: only when lurq reads it as one block that holds a link and is drawn here.
+  fn drawn(&self) -> Option<Drawn<'_>> {
+    match self.parsed.as_slice() {
+      [block] if holds_link_block(block) => Drawn::of(block),
+      _ => None,
+    }
+  }
 }
 
 /// The top-level blocks of `source`, in order.
@@ -157,19 +171,38 @@ fn blocks(source: &str) -> Vec<Block> {
       _ => {}
     }
   }
+  // Written again from what was read, not copied from the source: a definition inside a quote spans its `>` marks.
   let definitions: String = parser
     .reference_definitions()
     .iter()
-    .map(|(_, definition)| format!("\n{}", &source[definition.span.clone()]))
+    .map(|(label, definition)| {
+      format!(
+        "\n[{}]: <{}>",
+        escaped_in(label, &['[', ']', '\\']),
+        escaped_in(&definition.dest, &['<', '>', '\\'])
+      )
+    })
     .collect();
   ranges
     .into_iter()
-    .filter_map(|range| {
+    .map(|range| {
       let source = format!("{}\n{definitions}", &source[range]);
-      let parsed = parse_markdown(&source).blocks.into_iter().next()?;
-      Some(Block { source, parsed })
+      let parsed = parse_markdown(&source).blocks;
+      Block { source, parsed }
     })
     .collect()
+}
+
+/// `text` with each of `marks` escaped by a backslash.
+fn escaped_in(text: &str, marks: &[char]) -> String {
+  let mut out = String::with_capacity(text.len());
+  for glyph in text.chars() {
+    if marks.contains(&glyph) {
+      out.push('\\');
+    }
+    out.push(glyph);
+  }
+  out
 }
 
 /// Whether `block` holds a link anywhere.

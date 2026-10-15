@@ -19,7 +19,7 @@ use super::{
 };
 use crate::{
   theme::{OrchestratorText, markdown_heading, markdown_run},
-  ui::markdown::LinkHandler,
+  ui::{chat::links::without_bidi_controls, markdown::LinkHandler},
 };
 
 /// A block drawn here: a paragraph or heading's text, or a list whose items hold only those and lists.
@@ -229,7 +229,7 @@ impl Runs {
     (destination, children): (&str, &[MarkdownInline]),
     style: &TextStyle,
   ) {
-    let label = plain(children);
+    let label = without_bidi_controls(&plain(children));
     // A link holding another is text: its words would read as the inner one while a press went here.
     let target = if holds_link(children) {
       None
@@ -252,13 +252,14 @@ impl Runs {
       ));
       return;
     }
+    let shown = without_bidi_controls(destination);
     if label.trim().is_empty() || label == destination {
-      self.element(address(destination));
+      self.element(address(&shown));
       return;
     }
-    self.walk(ctx, env, children, style);
+    self.push(&label, style);
     self.push(" ", style);
-    let note = ctx.t_args("orchestrator.link.addressNote", [("address", destination)]);
+    let note = ctx.t_args("orchestrator.link.addressNote", [("address", shown.as_str())]);
     self.element(address(&note));
   }
 }

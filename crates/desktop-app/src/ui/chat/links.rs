@@ -1,8 +1,10 @@
 //! Links in what an agent writes in a chat (`docs/design/orchestrator-toolset.md`, "Links"). An `orchester:` link
 //! names a place in the app by its route path and a press goes there in the active tab; an `https:` link shows its
 //! host after it and a person's press opens it in the default browser; synthetic input (an MCP client driving the
-//! window) may follow a link in the app but never opens the browser. A link to anything else, or to a route the app
-//! does not know, is shown as text with its address and cannot be pressed.
+//! window) may follow a link in the app but never opens the browser. A link to anything else, to a route the app
+//! does not know, or to a place outside a project (Add project, Settings: what an agent may never open for the
+//! person) is shown as text with its address and cannot be pressed. What a link says, its host and its address are
+//! shown without bidirectional controls, which could make them read as something else.
 
 use std::{borrow::Cow, ops::Range, sync::Arc};
 
@@ -19,18 +21,22 @@ const APP_SCHEME: &str = "orchester:";
 /// Where a link leads, by its destination.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ChatLink {
-  /// A place in the app.
+  /// A place in a project of the app: every link the tools return is one.
   App(Route),
   /// A page on the web, opened in the default browser.
   Web(Url),
-  /// Nothing the chat follows: another scheme, or a route the app does not know.
+  /// Nothing the chat follows: another scheme, a route the app does not know, or one outside a project, such as
+  /// Add project with a folder, which would read that folder.
   Text,
 }
 
 impl ChatLink {
   pub fn of(destination: &str) -> Self {
     if let Some(path) = strip_scheme(destination, APP_SCHEME) {
-      return Route::parse(path).map_or(Self::Text, Self::App);
+      return match Route::parse(path) {
+        Ok(route @ Route::Project(..)) => Self::App(route),
+        Ok(_) | Err(_) => Self::Text,
+      };
     }
     match Url::parse(destination) {
       Ok(url) if url.scheme() == "https" && url.host_str().is_some() => Self::Web(url),
@@ -43,6 +49,15 @@ impl ChatLink {
 fn strip_scheme<'a>(destination: &'a str, scheme: &str) -> Option<&'a str> {
   let head = destination.get(..scheme.len())?;
   head.eq_ignore_ascii_case(scheme).then(|| &destination[scheme.len()..])
+}
+
+/// `text` without bidirectional embedding, override and isolate controls (U+202A to U+202E, U+2066 to U+2069):
+/// what a link says, its host and its address read in the order they are written.
+pub fn without_bidi_controls(text: &str) -> String {
+  text
+    .chars()
+    .filter(|glyph| !matches!(glyph, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}'))
+    .collect()
 }
 
 /// What a link the chat cannot follow is shown as, or what a link to the web is shown with; the caller words it.
@@ -69,7 +84,7 @@ pub fn present<'a>(source: &'a str, words: &dyn Fn(Shown<'_>) -> String) -> Cow<
   if !source.contains(['[', '<']) {
     return Cow::Borrowed(source);
   }
-  let mut text = Cow::Borrowed(source);
+  let mut text = links_without_bidi_controls(source);
   for _ in 0..MAX_PASSES {
     match unfollowed_as_text(&text, words) {
       Some(next) => text = Cow::Owned(next),
@@ -77,6 +92,27 @@ pub fn present<'a>(source: &'a str, words: &dyn Fn(Shown<'_>) -> String) -> Cow<
     }
   }
   Cow::Owned(escaped(source))
+}
+
+/// `source` with the bidirectional controls inside its links removed: a link lurq draws reads as it is written.
+/// They are no Markdown syntax, so removing them leaves every link where it was.
+fn links_without_bidi_controls(source: &str) -> Cow<'_, str> {
+  if without_bidi_controls(source).len() == source.len() {
+    return Cow::Borrowed(source);
+  }
+  let mut out = String::with_capacity(source.len());
+  let mut copied = 0;
+  for link in links(source) {
+    // A link inside one already cleared is cleared with it.
+    if link.range.start < copied {
+      continue;
+    }
+    out.push_str(&source[copied..link.range.start]);
+    out.push_str(&without_bidi_controls(&source[link.range.clone()]));
+    copied = link.range.end;
+  }
+  out.push_str(&source[copied..]);
+  Cow::Owned(out)
 }
 
 /// `source` with each outermost link the chat does not follow made text; `None` when it has none.
@@ -88,8 +124,9 @@ fn unfollowed_as_text(source: &str, words: &dyn Fn(Shown<'_>) -> String) -> Opti
     if link.range.start < copied || link.followed() {
       continue;
     }
-    let address = escaped(&link.destination);
-    let said = link.label.trim();
+    let address = escaped(&without_bidi_controls(&link.destination));
+    let label = without_bidi_controls(&link.label);
+    let said = label.trim();
     let shown = if said.is_empty() || said == link.destination {
       address
     } else {
@@ -117,7 +154,7 @@ fn with_hosts<'a>(source: Cow<'a, str>, words: &dyn Fn(Shown<'_>) -> String) -> 
     };
     let shown = words(Shown::Web {
       link: &source[link.range.clone()],
-      host: &escaped(url.host_str().unwrap_or_default()),
+      host: &escaped(&without_bidi_controls(url.host_str().unwrap_or_default())),
     });
     out.push_str(&source[copied..link.range.start]);
     out.push_str(&shown);

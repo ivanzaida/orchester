@@ -240,3 +240,41 @@ fn chat_links_show_a_reply_as_text_when_its_wording_would_make_links() {
   );
   assert!(destinations(&rendered).is_empty());
 }
+
+#[test]
+fn chat_links_follow_only_places_in_a_project() {
+  for path in [
+    r"/add-project?folder=\\evil.example\share",
+    "/add-project",
+    "/settings",
+    "/settings?tab=accounts",
+    "/",
+  ] {
+    assert!(Route::parse(path).is_ok(), "{path} is a route of the app");
+    assert_eq!(
+      ChatLink::of(&format!("orchester:{path}")),
+      ChatLink::Text,
+      "{path} is outside a project: the chat never opens it"
+    );
+  }
+  let rendered = shown(r"[open it](orchester:/add-project?folder=\\evil.example\share)");
+  assert_eq!(
+    plain_text(&rendered),
+    r"open it (orchester:/add-project?folder=\evil.example\share)",
+    "a Markdown destination reads `\\` as one backslash"
+  );
+  assert!(destinations(&rendered).is_empty());
+}
+
+#[test]
+fn chat_links_show_no_bidirectional_controls() {
+  let source = "[\u{202E}moc.buhtig](https://evil.example) and [\u{2066}KON-1\u{2069}](mailto:x\u{202D}y)";
+  let rendered = shown(source);
+  assert!(
+    !rendered.contains([
+      '\u{202A}', '\u{202B}', '\u{202C}', '\u{202D}', '\u{202E}', '\u{2066}', '\u{2067}', '\u{2068}', '\u{2069}'
+    ]),
+    "{rendered:?}"
+  );
+  assert_eq!(plain_text(&rendered), "moc.buhtig (evil.example) and KON-1 (mailto:xy)");
+}
