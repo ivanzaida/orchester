@@ -91,9 +91,8 @@ pub fn parse_gh_auth_status(host: &GitHubHost, output: &CommandOutput) -> Option
     #[serde(default)]
     scopes: Option<String>,
   }
-  if !output.success() {
-    return None;
-  }
+  // Signed out of every host, `gh` writes the empty status and exits with 1: the status, not its exit code,
+  // says how it stands. A failure without a status leaves the sign-in unknown.
   let status: Status = serde_json::from_str(output.stdout.trim()).ok()?;
   let Some(entry) = status
     .hosts

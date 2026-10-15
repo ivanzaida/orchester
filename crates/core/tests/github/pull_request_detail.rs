@@ -11,8 +11,8 @@ use orchester_core::{
   github::GhCli,
   id::ConnectionId,
   pull_request::{
-    DiffRead, PullRequestState, SyncFailure, gh_compare_diff_command, gh_pr_view_command, parse_gh_compare_diff,
-    parse_gh_pr_view, refresh_pull_request,
+    DiffRead, Fields, PullRequestState, SyncFailure, gh_compare_diff_command, gh_pr_view_command,
+    parse_gh_compare_diff, parse_gh_pr_view, refresh_pull_request,
   },
   repository::{GitHubRepo, RemoteName, RepoPermission, RepositoryError, RepositoryLink, RepositoryView},
   revision::Revision,
@@ -62,7 +62,7 @@ fn anyhow_link(expected: &str) -> RepositoryLink {
 
 #[test]
 fn view_asks_for_one_pull_request_with_its_base_revision() {
-  let command = gh_pr_view_command(&gh(), &repo("dtolnay", "anyhow"), 463);
+  let command = gh_pr_view_command(&gh(), &repo("dtolnay", "anyhow"), 463, Fields::Inbox);
   assert_eq!(command.args().join(" "), VIEW_463);
 }
 
@@ -208,8 +208,14 @@ fn refresh_fetches_and_stores_the_diff_of_a_new_head() {
   let mut store = Diffs::default();
   let connection = github_connection();
   let github = GhCli::new(&runner, &connection);
-  let refresh =
-    refresh_pull_request(&github, &mut store, &anyhow_link("ivanzaida"), 463, now()).expect("infallible store");
+  let refresh = refresh_pull_request(
+    &github,
+    &mut store,
+    &anyhow_link("ivanzaida"),
+    (463, Fields::Inbox),
+    now(),
+  )
+  .expect("infallible store");
   let detail = refresh.outcome.expect("the pull request");
   let DiffRead::Read(diff) = detail.diff else {
     panic!("the diff was read");
@@ -240,7 +246,7 @@ fn refresh_reuses_the_stored_diff_of_an_unchanged_head() {
     &GhCli::new(&runner, &connection),
     &mut store,
     &anyhow_link("ivanzaida"),
-    463,
+    (463, Fields::Inbox),
     now(),
   )
   .expect("infallible store");
@@ -265,7 +271,7 @@ fn refresh_as_another_account_reads_nothing() {
     &GhCli::new(&runner, &connection),
     &mut Diffs::default(),
     &anyhow_link("ivan-work"),
-    463,
+    (463, Fields::Inbox),
     now(),
   )
   .expect("infallible store");
@@ -289,7 +295,7 @@ fn refresh_of_a_missing_pull_request_says_so() {
     &GhCli::new(&runner, &connection),
     &mut Diffs::default(),
     &anyhow_link("ivanzaida"),
-    463,
+    (463, Fields::Inbox),
     now(),
   )
   .expect("infallible store");
@@ -315,7 +321,7 @@ fn refresh_keeps_the_pull_request_when_github_has_no_diff_of_its_head() {
     &GhCli::new(&runner, &connection),
     &mut store,
     &anyhow_link("ivanzaida"),
-    463,
+    (463, Fields::Inbox),
     now(),
   )
   .expect("infallible store");

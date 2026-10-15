@@ -7,7 +7,7 @@
 mod gh;
 
 pub use self::gh::{gh_compare_diff_command, gh_pr_view_command, parse_gh_compare_diff, parse_gh_pr_view};
-use super::{PullRequest, SyncFailure, sync::sync_failure};
+use super::{Fields, PullRequest, SyncFailure, sync::sync_failure};
 use crate::{
   connection::{GitHubCheck, GitHubState},
   diff::RevisionDiff,
@@ -61,7 +61,7 @@ pub fn refresh_pull_request<S: PullRequestDiffStore>(
   github: &impl GitHub,
   store: &mut S,
   link: &RepositoryLink,
-  number: u64,
+  (number, fields): (u64, Fields),
   now: Timestamp,
 ) -> Result<DetailRefresh, S::Error> {
   let check = github.check(now);
@@ -73,7 +73,7 @@ pub fn refresh_pull_request<S: PullRequestDiffStore>(
     });
   }
   let repo = link.repo();
-  let head = match github.pull_request(repo, number) {
+  let head = match github.pull_request(repo, number, fields) {
     Ok(head) => head,
     Err(error) => {
       return Ok(DetailRefresh {

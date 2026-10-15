@@ -3,7 +3,7 @@
 //! requests are read, and with them, for the Pull requests page's Merged and Closed tabs, the most
 //! recently updated closed ones. A rate limit is reported with the time it resets.
 
-use super::{ListedStates, PullRequest};
+use super::{Fields, ListedStates, PullRequest};
 use crate::{
   connection::{GitHubCheck, GitHubState},
   github::GitHub,
@@ -23,6 +23,16 @@ pub enum SyncScope {
   Open,
   /// The open ones and the most recently updated closed or merged ones.
   OpenAndClosed,
+}
+
+impl SyncScope {
+  /// What the deprecated desktop's inbox asks for, or the page's fields.
+  pub const fn fields(self) -> Fields {
+    match self {
+      Self::Open => Fields::Inbox,
+      Self::OpenAndClosed => Fields::Page,
+    }
+  }
 }
 
 /// Why a sync did not read the list.
@@ -82,12 +92,31 @@ pub fn sync_pull_requests(github: &impl GitHub, link: &RepositoryLink, scope: Sy
   SyncResult { check, outcome }
 }
 
+/// The open pull requests, then the closed ones. One closed between the two requests is in both lists;
+/// the closed list, read later, says how it stands.
 fn read(github: &impl GitHub, repo: &GitHubRepo, scope: SyncScope) -> Result<Vec<PullRequest>, RepositoryError> {
-  let mut pull_requests = github.list_pull_requests(repo, ListedStates::Open, SYNC_LIMIT)?;
+  let fields = scope.fields();
+  let mut pull_requests = github.list_pull_requests(repo, (ListedStates::Open, fields), SYNC_LIMIT)?;
   if scope == SyncScope::OpenAndClosed {
-    pull_requests.extend(github.list_pull_requests(repo, ListedStates::Closed, SYNC_LIMIT)?);
+    let closed = github.list_pull_requests(repo, (ListedStates::Closed, fields), SYNC_LIMIT)?;
+    pull_requests.retain(|open| closed.iter().all(|closed| closed.number() != open.number()));
+    pull_requests.extend(closed);
   }
   Ok(pull_requests)
+}
+
+/// How the latest sync of a repository went: when it ran, and why it did not read the list, if it did not.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SyncAttempt {
+  pub at: Timestamp,
+  pub failure: Option<SyncFailure>,
+}
+
+impl SyncAttempt {
+  /// Whether a sync at `now` waits: a rate limit has not reset yet.
+  pub fn is_paused(&self, now: Timestamp) -> bool {
+    self.failure.as_ref().is_some_and(|failure| failure.is_paused(now))
+  }
 }
 
 /// What `error`, from a request about `repo`, means for syncing; a rate limit asks `github` when
