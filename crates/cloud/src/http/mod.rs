@@ -68,12 +68,25 @@ fn routes(config: &mut web::ServiceConfig) {
     .service(
       resource("/me")
         .route(web::get().to(h::me))
-        .route(web::patch().to(h::change_me)),
+        .route(web::patch().to(h::change_me))
+        .route(web::delete().to(h::delete_me)),
     )
     .service(resource("/devices").route(web::get().to(h::devices)))
     .service(resource("/devices/{id}").route(web::delete().to(h::revoke_device)))
     .service(resource("/keys").route(web::get().to(h::keys)))
-    .service(resource("/identity-tokens").route(web::post().to(h::identity_token)));
+    .service(resource("/identity-tokens").route(web::post().to(h::identity_token)))
+    .service(
+      resource("/servers")
+        .route(web::get().to(h::servers))
+        .route(web::post().to(h::link_server)),
+    )
+    .service(
+      resource("/invites")
+        .route(web::get().to(h::invites))
+        .route(web::post().to(h::receive_invite)),
+    )
+    .service(resource("/invites/{id}/decline").route(web::post().to(h::decline_invite)))
+    .service(resource("/invites/{id}/accept").route(web::post().to(h::accept_invite)));
 }
 
 fn resource(path: &str) -> Resource {

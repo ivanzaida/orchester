@@ -11,6 +11,19 @@
     "reset": {
       "subject": "Reset your Orchester password",
       "body": "Choose a new password for your Orchester account by opening this link within 1 hour:\n\n{link}\n\nSetting a new password signs out every device of the account. If you did not ask for this, ignore this email; your password stays as it is.\n"
+    },
+    "invite": {
+      "subject": "You have an invite on Orchester",
+      "body": "{inviter} invited you to {target} on Orchester.\n\nYou find the invite in your Orchester account at {url}, and in the Orchester app under Settings › Orchester. It waits there until it expires.\n"
+    },
+    "inviteToSignUp": {
+      "subject": "You have an invite on Orchester",
+      "body": "{inviter} invited you to {target} on Orchester.\n\nTo accept it, create an Orchester account with this email at {url}. The invite waits for your account until it expires.\n\nIf you do not know {inviter}, you can ignore this email; nothing was created.\n"
+    },
+    "inviteTarget": {
+      "project": "the project {project} on {server}",
+      "server": "the team server {server}",
+      "account": "your account on {server}"
     }
   }
 }

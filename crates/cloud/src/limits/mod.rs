@@ -7,13 +7,13 @@ mod sign_in;
 
 use std::net::IpAddr;
 
-use orchester_core::id::CloudDeviceId;
+use orchester_core::id::{CloudDeviceId, TeamServerId};
 pub use quota::Quota;
 pub use sign_in::{Attempt, SignInLimit};
 
 use crate::{
   addresses::{rate_address, rate_network},
-  clock::{HOUR_MS, MINUTE_MS},
+  clock::{DAY_MS, HOUR_MS, MINUTE_MS},
   error::CloudError,
 };
 
@@ -29,6 +29,9 @@ pub(crate) struct Limits {
   link_failures: Quota<IpAddr>,
   link_failures_per_network: Quota<IpAddr>,
   link_failures_per_link: Quota<Vec<u8>>,
+  invites_per_server: Quota<TeamServerId>,
+  invites_per_inviter: Quota<(TeamServerId, String)>,
+  invites_per_email: Quota<String>,
 }
 
 impl Limits {
@@ -42,6 +45,9 @@ impl Limits {
       link_failures: Quota::new(20, 15 * MINUTE_MS, MAX_KEYS),
       link_failures_per_network: Quota::new(100, 15 * MINUTE_MS, MAX_KEYS),
       link_failures_per_link: Quota::new(5, HOUR_MS, MAX_KEYS),
+      invites_per_server: Quota::new(100, DAY_MS, MAX_KEYS),
+      invites_per_inviter: Quota::new(30, DAY_MS, MAX_KEYS),
+      invites_per_email: Quota::new(10, DAY_MS, MAX_KEYS),
     }
   }
 
@@ -53,6 +59,13 @@ impl Limits {
       self.email_per_network.take(network, now)?;
     }
     self.email_per_email.take(email.to_owned(), now)
+  }
+
+  /// A new invite to route: 100 a day per team server, 30 a day per inviter on it, 10 a day per invitee email.
+  pub fn invite(&self, server: TeamServerId, inviter: &str, email: &str, now: i64) -> Result<(), CloudError> {
+    self.invites_per_server.take(server, now)?;
+    self.invites_per_inviter.take((server, inviter.to_owned()), now)?;
+    self.invites_per_email.take(email.to_owned(), now)
   }
 
   /// 60 identity tokens an hour per device.

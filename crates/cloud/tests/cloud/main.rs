@@ -8,10 +8,12 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 mod accounts;
+mod deletion;
 mod hosting;
 mod identity;
 mod limits;
 mod links;
+mod registry;
 mod sessions;
 mod support;
 
@@ -44,6 +46,13 @@ const TESTS: &[(&str, Test)] = tests![
   limits::emails_and_link_finishes_are_rate_limited,
   limits::confirm_is_rate_limited_per_link,
   limits::parallel_confirm_guesses_stay_within_the_link_limit,
+  registry::a_server_is_linked_from_its_signed_statement,
+  registry::invites_are_routed_to_registered_and_new_emails,
+  registry::forged_or_malformed_invites_are_refused,
+  registry::invites_are_declined_and_accepted,
+  registry::invites_are_limited_and_expire,
+  deletion::deleting_the_account_removes_what_the_cloud_holds,
+  deletion::deleting_with_wrong_passwords_is_limited,
   sessions::reset_signs_out_every_device,
   sessions::password_change_signs_out_the_other_devices,
   sessions::devices_are_listed_and_revoked,

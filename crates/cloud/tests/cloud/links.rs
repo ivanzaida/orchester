@@ -67,15 +67,19 @@ pub async fn resend_answers_alike_for_any_email() {
   assert_eq!(cloud.mail.count(unknown), 0);
   let malformed = resend(&cloud, "not an email").await;
   assert_eq!((malformed.status, malformed.error()), (422, "invalid".into()));
-  // Once every link has expired, no password is left to carry: nothing is sent.
+  nothing_is_sent_once_every_link_expired(&cloud).await;
+  cloud.finish().await;
+}
+
+/// Once every link of an unconfirmed account has expired, no sign-up's password is left to carry: nothing is sent.
+async fn nothing_is_sent_once_every_link_expired(cloud: &TestCloud) {
   let late = "late@example.test";
   assert_eq!(cloud.sign_up(late, PASSWORD).await.status, 202);
   cloud.mail.nth(late, 1).await.link_token();
   cloud.clock.advance(DAY + 1000);
-  assert_eq!(resend(&cloud, late).await.status, 202);
+  assert_eq!(resend(cloud, late).await.status, 202);
   tokio::time::sleep(Duration::from_millis(500)).await;
   assert_eq!(cloud.mail.count(late), 1);
-  cloud.finish().await;
 }
 
 /// Resend answers before it touches the database (review 1, M5), and counts against the email limits: a sign-up and
@@ -135,18 +139,24 @@ pub async fn inspect_names_the_email_without_using_the_link() {
     assert_eq!((refused.status, &refused.body), (422, &unknown.body));
   }
   assert_eq!(unknown.json::<Value>()["error"], "invalid_link");
+  let token = a_reset_link_names_its_email(&cloud, email).await;
+  let bad_purpose = inspect(&cloud, &token, "delete").await;
+  assert_eq!((bad_purpose.status, bad_purpose.error()), (400, "bad_request".into()));
+  cloud.finish().await;
+}
+
+/// A reset link names its email too; returns its token.
+async fn a_reset_link_names_its_email(cloud: &TestCloud, email: &str) -> String {
   let reset = cloud
     .request("POST", "/auth/reset", None, Some(json!({"email": email})))
     .await;
   assert_eq!(reset.status, 202);
   let token = cloud.mail.nth(email, 2).await.link_token();
   assert_eq!(
-    inspect(&cloud, &token, "reset").await.json::<LinkInspected>().email,
+    inspect(cloud, &token, "reset").await.json::<LinkInspected>().email,
     email
   );
-  let bad_purpose = inspect(&cloud, &token, "delete").await;
-  assert_eq!((bad_purpose.status, bad_purpose.error()), (400, "bad_request".into()));
-  cloud.finish().await;
+  token
 }
 
 /// Guessing links through inspect counts against the address like failed finishes: 20 in 15 minutes block it.

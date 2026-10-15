@@ -6,7 +6,7 @@ mod smtp;
 
 use std::{fmt, future::Future, pin::Pin};
 
-pub(crate) use messages::Messages;
+pub(crate) use messages::{InviteMail, Messages};
 pub use smtp::SmtpMailer;
 
 use crate::error::CloudError;
@@ -25,6 +25,8 @@ pub enum EmailPurpose {
   AlreadyRegistered,
   /// A password reset link.
   Reset,
+  /// An invite from a team server.
+  Invite,
 }
 
 impl EmailPurpose {
@@ -33,6 +35,7 @@ impl EmailPurpose {
       Self::Confirm => "confirm",
       Self::AlreadyRegistered => "already_registered",
       Self::Reset => "reset",
+      Self::Invite => "invite",
     }
   }
 }

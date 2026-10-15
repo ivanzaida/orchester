@@ -2,8 +2,9 @@
 //! reset (`docs/architecture/server.md`, "Orchester Cloud"; the endpoints in `docs/cloud-api.md`).
 
 mod confirm;
+mod delete;
 mod devices;
-mod input;
+pub(crate) mod input;
 mod inspect;
 mod links;
 mod password;
@@ -76,7 +77,7 @@ impl Cloud {
 
   /// Sends in the background, so an answer takes as long whether an email went out or not, and does not depend on
   /// the relay. A failure is logged with the email's purpose only.
-  fn send_later(&self, email: Email) {
+  pub(crate) fn send_later(&self, email: Email) {
     let mailer = Arc::clone(&self.inner.mailer);
     tokio::spawn(async move {
       let purpose = email.purpose().as_str();

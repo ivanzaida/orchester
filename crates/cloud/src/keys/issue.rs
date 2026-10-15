@@ -28,24 +28,41 @@ impl Cloud {
     Ok(row.try_get(0)?)
   }
 
-  /// A five-minute token for one team server, about the device's account, signed with the newest key the published
-  /// key set lets sign now.
+  /// A five-minute token for one registered team server, about the device's account, signed with the newest key the
+  /// published key set lets sign now.
   pub(crate) async fn issue_identity_token(
     &self,
     auth: Authenticated,
     request: IdentityTokenRequest,
   ) -> Result<IdentityTokenIssued, CloudError> {
-    // A team server's id; the registry that knows them comes with linking (C1, not built yet).
     let audience = Uuid::parse_str(request.audience.trim()).map_err(|_| CloudErrorCode::Invalid)?;
     self.inner.limits.identity_token(auth.device, self.now())?;
-    let now = self.now();
     let client = self.inner.db.client().await?;
-    let subject = self.subject(&client, auth, audience.to_string()).await?;
-    let key = self.signing_key(&client, now).await?;
+    let registered = client
+      .query_opt("SELECT 1 FROM servers WHERE id = $1", &[&audience])
+      .await?
+      .is_some();
+    if !registered {
+      return Err(CloudErrorCode::Invalid.into());
+    }
+    self.identity_token_for(&client, auth, audience.to_string(), None).await
+  }
+
+  /// Signs a token for `audience`, naming `invite` when it accepts one. The caller took the device's token limit.
+  pub(crate) async fn identity_token_for(
+    &self,
+    client: &impl GenericClient,
+    auth: Authenticated,
+    audience: String,
+    invite: Option<String>,
+  ) -> Result<IdentityTokenIssued, CloudError> {
+    let now = self.now();
+    let subject = self.subject(client, auth, audience, invite).await?;
+    let key = self.signing_key(client, now).await?;
     let claims = IdentityClaims::new(subject, seconds(now))?;
     let token = key.sign_token(&claims)?;
     audit(
-      &client,
+      client,
       Some(auth.account),
       "identity_token_issued",
       &claims.aud,
@@ -64,6 +81,7 @@ impl Cloud {
     client: &impl GenericClient,
     auth: Authenticated,
     audience: String,
+    invite: Option<String>,
   ) -> Result<TokenSubject, CloudError> {
     let row = client
       .query_opt(
@@ -83,8 +101,7 @@ impl Cloud {
         name: row.try_get(3)?,
         platform: CloudPlatform::parse(row.try_get(4)?).ok_or(CloudError::StoredData)?,
       },
-      // Invites in flight come with the invites part of C1a; until then no token names one.
-      invite: None,
+      invite,
     })
   }
 

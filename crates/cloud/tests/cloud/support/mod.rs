@@ -4,6 +4,7 @@ pub mod log;
 pub mod mailer;
 pub mod postgres;
 pub mod relay;
+pub mod team;
 
 use std::{
   net::SocketAddr,
@@ -24,7 +25,7 @@ use parking_lot::Mutex;
 use serde_json::{Value, json};
 use tokio::{sync::oneshot, task::JoinHandle};
 
-pub use self::{http::Response, mailer::RecordingMailer, postgres::Postgres};
+pub use self::{http::Response, mailer::RecordingMailer, postgres::Postgres, team::TeamServer};
 
 pub const PASSWORD: &str = "correct horse battery staple";
 pub const BASE_URL: &str = "https://cloud.example.test";
@@ -208,10 +209,11 @@ impl TestCloud {
       .await
   }
 
-  /// Signs up and confirms through the emailed link, as the web front's confirmation page does.
+  /// Signs up and confirms through the link this sign-up emailed, as the web front's confirmation page does.
   pub async fn register(&self, email: &str) {
+    let before = self.mail.count(email);
     assert_eq!(self.sign_up(email, PASSWORD).await.status, 202);
-    let token = self.mail.nth(email, 1).await.link_token();
+    let token = self.mail.nth(email, before + 1).await.link_token();
     assert_eq!(self.confirm(&token, PASSWORD).await.status, 204);
   }
 
@@ -241,6 +243,15 @@ impl TestCloud {
     let signed: CloudSignedIn = response.json();
     remember(signed.token.expose());
     signed
+  }
+
+  /// Links `team` for the account of the device `token`, as its owner carries the link statement.
+  pub async fn link_server(&self, token: &str, team: &TeamServer) -> Response {
+    use orchester_cloud::clock::Clock;
+    let link = team.link("Kontur team", self.clock.now_ms());
+    self
+      .request("POST", "/servers", Some(token), Some(json!({"link": link})))
+      .await
   }
 
   /// The whole key ceremony: a new signing key, its statement signed by the root, published. Returns what was

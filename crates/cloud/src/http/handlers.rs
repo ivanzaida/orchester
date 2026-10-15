@@ -2,11 +2,12 @@ use actix_web::{HttpMessage, HttpRequest, HttpResponse, web};
 use orchester_api::{
   PasswordChange,
   cloud::{
-    AccountChanges, AccountResponse, CloudErrorCode, CloudSignIn, ConfirmEmail, DevicesResponse, IdentityTokenRequest,
-    KeySetResponse, LinkInspect, ResendConfirmation, ResetFinish, ResetRequest, SignUp,
+    AccountChanges, AccountDeletion, AccountResponse, CloudErrorCode, CloudSignIn, ConfirmEmail, DevicesResponse,
+    IdentityTokenRequest, InvitesResponse, KeySetResponse, LinkInspect, ResendConfirmation, ResetFinish, ResetRequest,
+    ServerLink, ServerResponse, ServersResponse, SignUp, SignedInvite,
   },
 };
-use orchester_core::id::CloudDeviceId;
+use std::str::FromStr;
 
 use super::extract::{ClientAddress, Device, SafeJson};
 use crate::{Cloud, error::CloudError};
@@ -100,14 +101,59 @@ pub(super) async fn devices(cloud: web::Data<Cloud>, device: Device) -> Answer {
   Ok(HttpResponse::Ok().json(DevicesResponse { devices }))
 }
 
+pub(super) async fn delete_me(
+  cloud: web::Data<Cloud>,
+  device: Device,
+  address: ClientAddress,
+  input: SafeJson<AccountDeletion>,
+) -> Answer {
+  cloud.delete_account(device.0, input.0, address.0).await?;
+  Ok(HttpResponse::NoContent().finish())
+}
+
 pub(super) async fn revoke_device(cloud: web::Data<Cloud>, device: Device, request: HttpRequest) -> Answer {
-  let id = request
+  cloud.revoke_device(device.0, Some(path_id(&request)?)).await?;
+  Ok(HttpResponse::NoContent().finish())
+}
+
+pub(super) async fn servers(cloud: web::Data<Cloud>, device: Device) -> Answer {
+  let servers = cloud.servers(device.0).await?;
+  Ok(HttpResponse::Ok().json(ServersResponse { servers }))
+}
+
+pub(super) async fn link_server(cloud: web::Data<Cloud>, device: Device, input: SafeJson<ServerLink>) -> Answer {
+  let server = cloud.link_server(device.0, input.0).await?;
+  Ok(HttpResponse::Created().json(ServerResponse { server }))
+}
+
+pub(super) async fn invites(cloud: web::Data<Cloud>, device: Device) -> Answer {
+  let invites = cloud.invites(device.0).await?;
+  Ok(HttpResponse::Ok().json(InvitesResponse { invites }))
+}
+
+/// Signed by a registered team server; whoever carries it needs no token.
+pub(super) async fn receive_invite(cloud: web::Data<Cloud>, input: SafeJson<SignedInvite>) -> Answer {
+  cloud.receive_invite(input.0).await?;
+  Ok(HttpResponse::Accepted().finish())
+}
+
+pub(super) async fn decline_invite(cloud: web::Data<Cloud>, device: Device, request: HttpRequest) -> Answer {
+  cloud.decline_invite(device.0, path_id(&request)?).await?;
+  Ok(HttpResponse::NoContent().finish())
+}
+
+pub(super) async fn accept_invite(cloud: web::Data<Cloud>, device: Device, request: HttpRequest) -> Answer {
+  let accepted = cloud.accept_invite(device.0, path_id(&request)?).await?;
+  Ok(HttpResponse::Created().json(accepted))
+}
+
+/// The path's `{id}`; one that cannot be an id names nothing there (`404`).
+fn path_id<T: FromStr>(request: &HttpRequest) -> Result<T, CloudError> {
+  request
     .match_info()
     .get("id")
-    .and_then(|id| id.parse::<CloudDeviceId>().ok())
-    .ok_or(CloudErrorCode::NotFound)?;
-  cloud.revoke_device(device.0, Some(id)).await?;
-  Ok(HttpResponse::NoContent().finish())
+    .and_then(|id| id.parse().ok())
+    .ok_or_else(|| CloudErrorCode::NotFound.into())
 }
 
 pub(super) async fn keys(cloud: web::Data<Cloud>) -> Answer {

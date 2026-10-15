@@ -47,9 +47,9 @@ the newer binary or restore a backup. Backups, replication and point-in-time rec
 job. Back up the key-encryption key separately from the database: the database alone does not open the signing
 keys.
 
-Tables: `accounts`, `email_links`, `devices`, `signing_keys`, `key_sets`, `audit_events` (append-only) and
-`schema_migrations`. A sweep every minute deletes expired links, and accounts that were never confirmed once their
-last link has expired.
+Tables: `accounts`, `email_links`, `devices`, `signing_keys`, `key_sets`, `servers`, `server_accounts`, `invites`,
+`audit_events` (append-only) and `schema_migrations`. A sweep every minute deletes expired links and invites, and
+accounts that were never confirmed once their last link has expired.
 
 ## The key ceremony
 
