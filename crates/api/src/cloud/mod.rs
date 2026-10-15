@@ -1,7 +1,11 @@
 //! Orchester Cloud's JSON contract (`docs/architecture/server.md`, "Orchester Cloud"; `docs/cloud-api.md`): accounts,
-//! devices and identity tokens. Used by the cloud, the desktop and the web front alike.
+//! devices and identity tokens; the team servers and invites in `registry`. Used by the cloud, the desktop and the web
+//! front alike.
+
+mod registry;
 
 use orchester_core::id::{CloudAccountId, CloudDeviceId, TeamServerId};
+pub use registry::*;
 use serde::{Deserialize, Serialize};
 
 use crate::Credential;
@@ -196,6 +200,8 @@ pub enum CloudErrorCode {
   /// A confirmation or reset link that is unknown, used or expired: one answer for all three.
   InvalidLink,
   Invalid,
+  /// A team server id another account or another key already registered.
+  Conflict,
   RateLimited,
   /// No published key set lists a signing key the cloud may use now.
   KeysUnavailable,

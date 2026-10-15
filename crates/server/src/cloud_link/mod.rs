@@ -4,10 +4,10 @@
 
 use orchester_api::{
   CloudLink, CloudStatus, ErrorCode,
+  cloud::{LINK_STATEMENT_TYPE, LinkStatement},
   identity::{CLOCK_SKEW_SECS, IdentityError, PublicKey, VerifiedKeySet, VerifiedToken},
 };
 use rusqlite::{Connection, OptionalExtension, params};
-use serde::Serialize;
 
 use crate::{error::ServerError, server_keys::ServerKeys};
 
@@ -216,18 +216,9 @@ pub(crate) fn unlink(db: &Connection) -> Result<(), ServerError> {
   Ok(())
 }
 
-/// What the server signs at setup for the cloud to register it: its id, name, address, key, and the fingerprint of
-/// its own certificate (the SHA-256 of its DER in hex, which apps pin; `None` without one).
-#[derive(Serialize)]
-struct LinkStatement<'a> {
-  server: String,
-  name: &'a str,
-  address: &'a str,
-  public_key: String,
-  fingerprint: Option<String>,
-  issued_at: i64,
-}
-
+/// The statement the server signs at setup for the cloud to register it (`orchester_api::cloud::LinkStatement`): its
+/// id, name, address, key, and the fingerprint of its own certificate (the SHA-256 of its DER in hex, which apps pin;
+/// `None` without one).
 pub(crate) fn statement(
   keys: &ServerKeys,
   name: &str,
@@ -236,11 +227,11 @@ pub(crate) fn statement(
   now_ms: i64,
 ) -> Result<String, ServerError> {
   keys.sign(
-    "orchester-link+jws",
+    LINK_STATEMENT_TYPE,
     &LinkStatement {
-      server: keys.id.to_string(),
-      name,
-      address,
+      server: keys.id,
+      name: name.to_owned(),
+      address: address.to_owned(),
       public_key: keys.public_key(),
       fingerprint,
       issued_at: now_ms.div_euclid(1000),

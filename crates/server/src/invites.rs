@@ -6,10 +6,10 @@ use std::str::FromStr;
 use orchester_api::{
   ErrorCode, Invite, InviteCreate, InviteCreated, InviteDelivery, InviteKind, JoinedProject, MemberRole, User,
   UserChanges,
+  cloud::{INVITE_STATEMENT_TYPE, InviteStatement, InvitedProject},
 };
 use orchester_core::id::{InviteId, ProjectId, UserId};
 use rusqlite::{Connection, OptionalExtension, Row, params};
-use serde::Serialize;
 
 use crate::{
   codes::{self, CodeKind, NewCode},
@@ -22,27 +22,6 @@ use crate::{
 /// An invite by email is open for 7 days.
 const CLOUD_LIFETIME_MS: i64 = 7 * 24 * 60 * 60 * 1000;
 const COLUMNS: &str = "id,kind,delivery,email,project,role,user_id,admin,made_by,expires_at";
-
-/// What the server signs for the cloud to route an invite; the server admin's page carries it when the server cannot
-/// reach the cloud.
-#[derive(Serialize)]
-struct SignedInvite<'a> {
-  id: InviteId,
-  server: String,
-  kind: InviteKind,
-  email: &'a str,
-  project: Option<SignedProject>,
-  role: Option<MemberRole>,
-  inviter: &'a str,
-  expires_at: i64,
-  issued_at: i64,
-}
-
-#[derive(Serialize)]
-struct SignedProject {
-  address: String,
-  name: String,
-}
 
 pub(crate) fn create(
   db: &Connection,
@@ -145,6 +124,8 @@ fn project_owner(db: &Connection, actor: &User, project: ProjectId) -> Result<()
   }
 }
 
+/// What the server signs for the cloud to route an invite (`orchester_api::cloud::InviteStatement`); the server
+/// admin's page carries it when the server cannot reach the cloud.
 fn sign(
   db: &Connection,
   keys: &ServerKeys,
@@ -159,7 +140,7 @@ fn sign(
         "SELECT slug,name FROM projects WHERE id=?1",
         [project.to_string()],
         |row| {
-          Ok(SignedProject {
+          Ok(InvitedProject {
             address: format!("{base_address}/{}", row.get::<_, String>(0)?),
             name: row.get(1)?,
           })
@@ -167,18 +148,19 @@ fn sign(
       )
     })
     .transpose()?;
-  let statement = SignedInvite {
+  let statement = InviteStatement {
     id: invite.id,
-    server: keys.id.to_string(),
+    server: keys.id,
     kind: invite.kind,
-    email: invite.email.as_deref().ok_or(ServerError::StoredData)?,
+    email: invite.email.clone().ok_or(ServerError::StoredData)?,
     project,
     role: invite.role,
-    inviter: &invite.by.display_name,
+    admin: invite.admin,
+    inviter: invite.by.display_name.clone(),
     expires_at: invite.expires_at,
     issued_at: now,
   };
-  keys.sign("orchester-invite+jws", &statement)
+  keys.sign(INVITE_STATEMENT_TYPE, &statement)
 }
 
 /// The open invites `viewer` manages: every one for an admin, their projects' for an owner. Never a code.
