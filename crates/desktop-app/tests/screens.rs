@@ -39,7 +39,7 @@ use orchester_core::{
   name::Name,
   project::{Project, ProjectKey},
 };
-use orchester_workspace::{tasks::integration_jobs::ProjectJobs, workspace::OpenProject};
+use orchester_workspace::{links::UsageLink, tasks::integration_jobs::ProjectJobs, workspace::OpenProject};
 use parking_lot::Mutex;
 use support::Data;
 
@@ -244,7 +244,7 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
     (at(ProjectPage::Task(key("KON-12"), changes)), vec![READING_TASK]),
     (at(ProjectPage::MergeQueue), placeholder("Merge queue")),
     (at(ProjectPage::PullRequests), placeholder("Pull requests")),
-    (at(ProjectPage::Usage), placeholder("Usage")),
+    (at(ProjectPage::Usage(UsageLink::default())), placeholder("Usage")),
     (at(ProjectPage::Pipelines), placeholder("Pipelines")),
     (at(ProjectPage::Agents), placeholder("Agents")),
     (at(ProjectPage::Instructions), placeholder("Instructions")),

@@ -63,6 +63,8 @@ const FOLDER: &str = "folder";
 const TASKS: &str = "tasks";
 const CONNECTIONS: &str = "connections";
 const ORCHESTRATOR: &str = "orchestrator";
+const PULL_REQUESTS: &str = "pull-requests";
+const USAGE: &str = "usage";
 const NEW: &str = "new";
 const EDIT: &str = "edit";
 /// The query parameter of a screen's tab.
@@ -74,6 +76,7 @@ const PROJECT_PATTERN: &str = "/project/:project";
 const NEW_PIPELINE_PATTERN: &str = "/project/:project/pipelines/new";
 const PIPELINE_PATTERN: &str = "/project/:project/pipelines/:pipeline";
 const AGENT_PATTERN: &str = "/project/:project/agents/:agent";
+const PULL_REQUEST_PATTERN: &str = "/project/:project/pull-requests/:number";
 
 /// A folder a route names. An address is text, so only a folder whose path is text can be named: the
 /// address then keeps it whole.
@@ -114,6 +117,7 @@ impl Route {
       Self::Project(_, ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline) => NEW_PIPELINE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Pipeline(_)) => PIPELINE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Agent(_)) => AGENT_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::PullRequest(_)) => PULL_REQUEST_PATTERN.to_owned(),
       _ => self.screen().pattern(),
     }
   }

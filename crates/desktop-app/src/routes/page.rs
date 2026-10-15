@@ -2,10 +2,11 @@ use orchester_core::{
   id::{ConnectionId, ResourceId},
   project::TaskKey,
 };
+use orchester_workspace::links::{UsageLink, UsageParam};
 
 use super::{
-  CONNECTIONS, ConnectionsView, EDIT, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, RouteError,
-  SETTINGS, Screen, TAB, TASKS, TaskList, TaskView, ToolTab, project_screen_path,
+  CONNECTIONS, ConnectionsView, EDIT, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS,
+  RouteError, SETTINGS, Screen, TAB, TASKS, TaskList, TaskView, ToolTab, USAGE, project_screen_path,
   query::{Params, with_query},
 };
 
@@ -21,7 +22,10 @@ pub enum ProjectPage {
   Task(TaskKey, TaskView),
   MergeQueue,
   PullRequests,
-  Usage,
+  /// A pull request of the project's repository, by its number.
+  PullRequest(u64),
+  /// Usage with its filters.
+  Usage(UsageLink),
   Pipelines,
   NewPipeline,
   NewEmptyPipeline,
@@ -65,7 +69,7 @@ impl ProjectPage {
       Screen::NewTask => Self::NewTask,
       Screen::MergeQueue => Self::MergeQueue,
       Screen::PullRequests => Self::PullRequests,
-      Screen::Usage => Self::Usage,
+      Screen::Usage => Self::Usage(UsageLink::default()),
       Screen::Pipelines => Self::Pipelines,
       Screen::Agents => Self::Agents,
       Screen::Instructions => Self::Instructions,
@@ -89,8 +93,8 @@ impl ProjectPage {
       Self::EditTask(_) => Screen::EditTask,
       Self::Task(..) => Screen::Task,
       Self::MergeQueue => Screen::MergeQueue,
-      Self::PullRequests => Screen::PullRequests,
-      Self::Usage => Screen::Usage,
+      Self::PullRequests | Self::PullRequest(_) => Screen::PullRequests,
+      Self::Usage(_) => Screen::Usage,
       Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(_) => Screen::Pipelines,
       Self::Agents | Self::Agent(_) => Screen::Agents,
       Self::Instructions => Screen::Instructions,
@@ -130,6 +134,8 @@ impl ProjectPage {
       Self::NewPipeline => format!("{project_root}/pipelines/new"),
       Self::NewEmptyPipeline => format!("{project_root}/pipelines/new?start=empty"),
       Self::Pipeline(id) => format!("{project_root}/pipelines/{id}"),
+      Self::PullRequest(number) => format!("{project_root}/{PULL_REQUESTS}/{number}"),
+      Self::Usage(filters) => filters.path(format!("{project_root}/{USAGE}")),
       Self::Agent(id) => format!("{project_root}/agents/{id}"),
       Self::Connections(view) => view.path(connections),
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
@@ -178,6 +184,8 @@ impl ProjectPage {
       },
       ["pipelines", id] => id.parse().map(Self::Pipeline).map_err(|_| RouteError::NoScreen),
       ["agents", id] => id.parse().map(Self::Agent).map_err(|_| RouteError::NoScreen),
+      [PULL_REQUESTS, number] => number.parse().map(Self::PullRequest).map_err(|_| RouteError::NoScreen),
+      [USAGE] => usage(params).map(Self::Usage),
       [CONNECTIONS] => ConnectionsView::take(params).map(Self::Connections),
       [CONNECTIONS, NEW] => NewConnection::take(params).map(Self::NewConnection),
       [CONNECTIONS, id, EDIT] => id.parse().map(Self::EditConnection).map_err(|_| RouteError::NoScreen),
@@ -189,6 +197,20 @@ impl ProjectPage {
       _ => Err(RouteError::NoScreen),
     }
   }
+}
+
+/// Usage's filters from the query, each read as the links that name them write it.
+fn usage(params: &mut Params) -> Result<UsageLink, RouteError> {
+  let mut filters = UsageLink::default();
+  for param in UsageParam::ALL {
+    if let Some(value) = params.take(param.name())? {
+      filters.set(param, &value).map_err(|_| RouteError::InvalidParam {
+        param: param.name().to_owned(),
+        value,
+      })?;
+    }
+  }
+  Ok(filters)
 }
 
 fn task_key(value: &str) -> Result<TaskKey, RouteError> {

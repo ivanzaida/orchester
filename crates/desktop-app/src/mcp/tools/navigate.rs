@@ -3,6 +3,7 @@ use orchester_core::{
   id::{ConnectionId, ProjectId},
   project::{TaskKey, TaskKeyError},
 };
+use orchester_workspace::links::UsageLink;
 use serde_json::{Map, Value, json};
 
 use super::{ToolError, WindowLink, object, reply, route_json, string};
@@ -112,7 +113,7 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
     Screen::Task => ProjectPage::Task(key(args, "key")?, task_view(args)?),
     Screen::MergeQueue => ProjectPage::MergeQueue,
     Screen::PullRequests => ProjectPage::PullRequests,
-    Screen::Usage => ProjectPage::Usage,
+    Screen::Usage => ProjectPage::Usage(UsageLink::default()),
     Screen::Pipelines => ProjectPage::Pipelines,
     Screen::Agents => ProjectPage::Agents,
     Screen::Instructions => ProjectPage::Instructions,

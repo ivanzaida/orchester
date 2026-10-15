@@ -19,7 +19,10 @@ use orchester_core::{
   name::Name,
   task::{TaskDetails, TaskLimits},
 };
-use orchester_workspace::tasks::data::{SaveTarget, save_draft_in};
+use orchester_workspace::{
+  links::UsageLink,
+  tasks::data::{SaveTarget, save_draft_in},
+};
 use support::Window;
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
@@ -90,14 +93,17 @@ fn replacing_takes_the_current_place_without_a_history_entry_and_keeps_the_place
   let mut tabs = TabSet::default();
   tabs.go(project(ProjectPage::Overview(OverviewTab::Running)));
   tabs.go(searched("r"));
-  tabs.go(project(ProjectPage::Usage));
+  tabs.go(project(ProjectPage::Usage(UsageLink::default())));
   assert!(tabs.back());
   assert!(tabs.replace(searched("re")));
   assert!(tabs.replace(searched("retry")));
   assert!(!tabs.replace(searched("retry")), "the tab is there already");
   assert_eq!(*tabs.active().route(), searched("retry"));
   assert!(tabs.forward(), "the places ahead stay");
-  assert_eq!(*tabs.active().route(), project(ProjectPage::Usage));
+  assert_eq!(
+    *tabs.active().route(),
+    project(ProjectPage::Usage(UsageLink::default()))
+  );
   assert!(tabs.back());
   assert!(tabs.back());
   assert_eq!(
@@ -171,7 +177,7 @@ fn closing_follows_the_design() {
   let d = tabs.open();
   assert!(tabs.close(a));
   assert_eq!(tabs.active().id(), d, "closing an inactive tab keeps the active one");
-  tabs.go(project(ProjectPage::Usage));
+  tabs.go(project(ProjectPage::Usage(UsageLink::default())));
   assert!(tabs.can_close(d));
   assert!(tabs.close(d), "the only tab closes when it is not at All projects");
   assert_eq!(tabs.tabs().len(), 1);
@@ -388,14 +394,14 @@ fn task_number(number: usize) -> Route {
 fn side_buttons_and_keys_move_through_history_and_tabs() {
   let mut window = Window::open();
   let navigation = window.navigation();
-  navigation.go(project(ProjectPage::Usage));
+  navigation.go(project(ProjectPage::Usage(UsageLink::default())));
   window.pass();
   window.tree.mouse_up(700.0, 400.0, MouseButton::Other(4));
   assert_eq!(navigation.route_now(), Route::AllProjects, "the back button goes back");
   window.tree.mouse_up(700.0, 400.0, MouseButton::Other(5));
   assert_eq!(
     navigation.route_now(),
-    project(ProjectPage::Usage),
+    project(ProjectPage::Usage(UsageLink::default())),
     "the forward button goes forward"
   );
   key(&mut window, "ArrowLeft", "ArrowLeft", &Modifier::Alt);

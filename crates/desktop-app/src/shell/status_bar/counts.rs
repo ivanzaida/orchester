@@ -18,7 +18,7 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::tokens::compact_tokens;
-use orchester_workspace::{runner::state::RunnerState, tasks::data::ProjectTasks};
+use orchester_workspace::{links::UsageLink, runner::state::RunnerState, tasks::data::ProjectTasks};
 
 use super::{
   facts::{BarAction, Dispatch, ProjectFacts},
@@ -97,7 +97,7 @@ pub fn counts(ctx: &Ctx, project: &ProjectFacts, dispatch: &Dispatch) -> Vec<Ele
       .align_items(Alignment::Center),
     Row::child,
   );
-  let usage = go(ProjectPage::Usage);
+  let usage = go(ProjectPage::Usage(UsageLink::default()));
   vec![group.into(), tokens(ctx, project, &unknown, move || usage())]
 }
 

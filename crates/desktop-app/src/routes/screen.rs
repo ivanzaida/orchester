@@ -1,4 +1,7 @@
-use super::{ADD_PROJECT, CONNECTIONS, EDIT, NEW, ORCHESTRATOR, PROJECT_PATTERN, SETTINGS, TASKS, project_screen_path};
+use super::{
+  ADD_PROJECT, CONNECTIONS, EDIT, NEW, ORCHESTRATOR, PROJECT_PATTERN, PULL_REQUESTS, SETTINGS, TASKS, USAGE,
+  project_screen_path,
+};
 
 /// A screen of the window, as the sidebar, the tabs and the app's MCP tools name it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -158,8 +161,8 @@ impl Screen {
       Self::Orchestrator => Some(ORCHESTRATOR),
       Self::Tasks => Some(TASKS),
       Self::MergeQueue => Some("merge-queue"),
-      Self::PullRequests => Some("pull-requests"),
-      Self::Usage => Some("usage"),
+      Self::PullRequests => Some(PULL_REQUESTS),
+      Self::Usage => Some(USAGE),
       Self::Pipelines => Some("pipelines"),
       Self::Agents => Some("agents"),
       Self::Instructions => Some("instructions"),
