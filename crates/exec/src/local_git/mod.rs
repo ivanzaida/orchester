@@ -236,8 +236,38 @@ impl LocalGit {
     Ok(())
   }
 
+  /// Whether the checkout is still exactly `reviewed`, every tracked file hashed. When it is not, Git's own index
+  /// is made to show what changed ([`Self::reread`]), so the person sees it on the next read.
   pub fn ensure(&self, reviewed: &Checkout) -> Result<(), LocalGitError> {
-    reviewed.ensure_current(&self.verified_snapshot()?)?;
+    let verified = self.verified_snapshot()?;
+    let current = reviewed.ensure_current(&verified);
+    // Never during another operation: the index is Git's or the person's then.
+    if current == Err(LocalError::Stale) {
+      self.reveal(&verified)?;
+    }
+    Ok(current?)
+  }
+
+  /// The checkout with every tracked file hashed, and Git's index made to show it: an edit that kept a file's size
+  /// and modification time is hidden from Git's stat cache, and from [`Self::snapshot`], until its index entry is
+  /// written again without stat data. The staged content does not change.
+  pub fn reread(&self) -> Result<Checkout, LocalGitError> {
+    let verified = self.verified_snapshot()?;
+    self.reveal(&verified)?;
+    Ok(verified)
+  }
+
+  fn reveal(&self, verified: &Checkout) -> Result<(), LocalGitError> {
+    let cached = self.snapshot()?;
+    if cached == *verified || verified.operation.is_some() {
+      return Ok(());
+    }
+    let index = self.index_entries()?;
+    for file in verified.files.iter().filter(|file| !cached.files.contains(file)) {
+      if let Some(entry) = index.get(&file.path) {
+        self.set_index(&file.path, Some(entry), None)?;
+      }
+    }
     Ok(())
   }
 }

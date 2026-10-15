@@ -234,8 +234,9 @@ impl LocalIntegration {
     Ok(())
   }
 
+  /// Reviews the checkout again, every tracked file hashed: an edit Git's stat cache hid shows from then on.
   pub fn refresh(&mut self) -> Result<(), IntegrationError> {
-    self.operation.refresh(self.main.snapshot()?)?;
+    self.operation.refresh(self.main.reread()?)?;
     self.save()
   }
 }

@@ -28,6 +28,8 @@ mod schema;
 mod selection;
 #[path = "local_integration/snapshots.rs"]
 mod snapshots;
+#[path = "local_integration/stat_cache.rs"]
+mod stat_cache;
 #[path = "local_integration/store_contention.rs"]
 mod store_contention;
 #[path = "local_integration/support.rs"]
