@@ -2,8 +2,9 @@
 //! `LeIOm`); while the tasks are read, the table's header stands over the loader (`Reading` `O8pgq`); when
 //! they cannot be read, why, with Try again (`Notice · Tasks cannot be read` `kXWCj`); and a tab whose
 //! rows the search or the pipeline filter hide says so, with Clear (`No matches` `WaehI`). Loading and a
-//! failure never look like an empty list. Over the Needs you tab's rows, or where they would be, a notice names
-//! what waits and is no task's, which the list cannot show, and opens the Needs you panel that lists it.
+//! failure never look like an empty list. Under the search and over the Needs you tab's rows, or where they would
+//! be, a notice names what waits and is no task's, which the list cannot show, and opens the Needs you panel that
+//! lists it (where `Epiq5` and `oDyZB` put a notice).
 
 use lurq::{
   app::{

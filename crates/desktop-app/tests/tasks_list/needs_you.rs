@@ -46,7 +46,12 @@ fn tasks_needs_you_lists_and_counts_the_waiting_tasks_and_names_the_memory_over_
     Some(vec!["7 need you".to_owned()]),
     "the pill counts the tasks' waits and the records"
   );
-  let (notice, table) = (seeded.bounds("tasks-outside-tasks"), seeded.bounds("tasks-table"));
+  let (query, notice, table) = (
+    seeded.bounds("tasks-query"),
+    seeded.bounds("tasks-outside-tasks"),
+    seeded.bounds("tasks-table"),
+  );
+  assert!(query.y + query.height <= notice.y, "the notice is under the search");
   assert!(notice.y + notice.height <= table.y, "the notice is over the rows");
   seeded.go(TaskList::new(TaskListTab::All));
   assert!(!seeded.shows("tasks-outside-tasks"), "only Needs you names it");

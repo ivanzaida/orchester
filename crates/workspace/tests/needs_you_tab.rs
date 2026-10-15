@@ -1,6 +1,7 @@
 //! The task list's *Needs you* tab: it counts the tasks it lists, and what waits and is no task's — the
 //! project's memory records, a tool request whose run cannot be read — is named in one line over its list
-//! (`attention::outside_tasks`). Every other *Needs you* counts it ([`ProjectTasks::needs_you`]).
+//! (`attention::outside_tasks`). Every other *Needs you* counts it ([`ProjectTasks::needs_you`]), and counts each
+//! thing a task waits on, where the tab counts the task once.
 
 mod support;
 
@@ -9,7 +10,7 @@ use orchester_core::{
   memory::MemoryStore,
   resource::ModelId,
   revision::Revision,
-  run::{BranchName, PendingToolApproval, Run},
+  run::{BranchName, PendingToolApproval, Run, WaitReason},
   store::{ActivityStore, MergeStore},
 };
 use orchester_exec::programs::Programs;
@@ -151,4 +152,33 @@ fn needs_you_tab_counts_what_waits_outside_the_tasks_when_several_do() {
   let named = attention::outside_tasks(&tasks).expect("both are named over the list");
   assert_eq!(named.key, "tasks.needsYou.outsideTasks");
   assert_eq!(named.args, [("count", "2".to_owned())]);
+}
+
+#[test]
+fn needs_you_tab_counts_a_task_waiting_on_a_plan_and_a_question_once() {
+  let mut fixture = Fixture::parallel();
+  let task = fixture.task("Plan zoom", at(10));
+  let mut run = fixture.started_run(task, at(10));
+  let research = run
+    .current_attempt()
+    .expect("attempt")
+    .executions()
+    .iter()
+    .find(|execution| execution.step().as_str() == "research")
+    .expect("Research runs")
+    .id();
+  let events = run
+    .start_step(research, at(10))
+    .expect("Research starts beside Implement");
+  fixture.record(&run, &events);
+  fixture.propose(&mut run, "1. Zoom.", at(20));
+  let events = run
+    .wait_step(research, WaitReason::Message, at(30))
+    .expect("Research waits for an answer");
+  fixture.record(&run, &events);
+  let tasks = load(&fixture);
+  assert_eq!(tasks.needs_you(), 2, "the pill counts the plan and the question");
+  assert_eq!(titles(&tasks), ["Plan zoom"]);
+  assert_eq!(TaskTab::NeedsYou.count(&tasks), 1, "the tab counts the task once");
+  assert_eq!(attention::outside_tasks(&tasks), None);
 }

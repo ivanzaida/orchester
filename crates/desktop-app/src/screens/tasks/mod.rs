@@ -172,8 +172,8 @@ impl TasksScreen {
     let page = page
       .child(header::tabs(ctx, id, list, Some(counts)))
       .with_children(held_groups(ctx, project, tasks))
-      .with_children(states::outside_tasks(ctx, list.tab(), tasks))
-      .child(query::query(ctx, &self.choices, Some(tasks)));
+      .child(query::query(ctx, &self.choices, Some(tasks)))
+      .with_children(states::outside_tasks(ctx, list.tab(), tasks));
     if rows.is_empty() {
       // Rows that come back are placed afresh, at their top.
       *self.placed.lock() = None;
