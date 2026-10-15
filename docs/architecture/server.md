@@ -1159,7 +1159,8 @@ Row 42; the rules here are the architect's.
 **Linking a team server at setup.** The server starts with an empty data directory and prints its check code and a
 one-time **setup code** to its console (row 45). The owner opens the server admin (row 62), enters the setup code and
 chooses a username; the server makes that account its first admin. *Link to Orchester Cloud* then carries the
-server's signed link statement (server id, public key, address, fingerprint) through the browser to the cloud's
+server's signed link statement (server id, public key, address, `fingerprint`: the certificate's SHA-256 in hex, the
+value apps pin, never the shorter check code) through the browser to the cloud's
 `/authorize`, where the owner is signed in; the cloud registers the server for that account (`POST /servers`) and the
 browser brings back the cloud's key set, whose root the server pins ([The server admin](#the-server-admin)). Without
 the internet the setup stops after the first step: the server is simply not linked, and can be linked later. The owner
@@ -1185,7 +1186,9 @@ Row 43.
   that project's join review: in the local project whose repository identity matches, or after the person adds the
   checkout. A project invite for someone already on the server only adds the membership; a server invite with
   *admin* makes the account that accepts it an admin. An account invite names one account: an identity already linked
-  to another account is refused (`403 not_invited`) and the invite stays open.
+  to another account is refused (`403 not_invited`) and the invite stays open. Acceptance checks again what making
+  the invite checked: an account invite or code for an account that has become an admin, and an admin invite whose
+  inviter is no longer an enabled admin, are refused (`403 forbidden`) and stay open.
 - **Revoking.** The inviter or an admin revokes an open invite; the team server tells the cloud, which deletes it.
 
 ### New computers
@@ -1220,8 +1223,10 @@ Row 45: address plus an 8-character code, for networks without the internet.
   pause redemption until fewer than 200 remain in the last hour, at least 15 minutes; failed cloud joins have a
   server-wide budget of their own of the same size, so neither pauses the other. Redemptions and cloud joins from the
   host itself (loopback) are exempt from the server-wide budgets, so the person at the host can always redeem the
-  setup code; their own address limit still holds. At most 3 open pairing codes per account and 50 open codes per
-  server. A guess succeeds with odds of 50 in 2^40 with 50 codes open, so the 200 failures an hour the server allows
+  setup code; their own address limit still holds. The pause is per server, not per person: over IPv4 about 5
+  addresses (10 failures each per 15 minutes) can keep code redemption paused for everyone but loopback, which stops
+  invite and pairing codes from other computers while it lasts; the loopback exemption only keeps the setup code
+  usable on the host. At most 3 open pairing codes per account and 50 open codes per server. A guess succeeds with odds of 50 in 2^40 with 50 codes open, so the 200 failures an hour the server allows
   succeed with odds of about 1 in 650,000 a week and 1 in 12,500 a year (every hour spent guessing, 50 codes open
   all the time).
 - **Linking later.** A code account links to a cloud identity from Settings › Orchester, the server's entry (*Link to

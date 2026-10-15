@@ -69,7 +69,8 @@ itself out with `DELETE /auth/sessions/current`; an admin signs all of a person'
 ## Orchester Cloud
 
 A server is linked to its owner's Orchester Cloud account with `PATCH /server/cloud` (admins): `{ "link": "start" }`
-returns the server's signed link statement (server id, name, address, key, certificate check code) for the cloud, and
+returns the server's signed link statement (server id, name, address, key, and `fingerprint`: the SHA-256 of its own
+certificate in hex, which apps pin, or none without one) for the cloud, and
 `{ "link": { "root_key", "key_set", "identity_token"? } }` pins the cloud's root key and caches the key set it signed.
 From then on `POST /auth/cloud { identity_token, key_set?, device }` joins a device with an identity token verified on
 the server, without the internet: the account linked to the token's cloud account, or an open email invite for its
