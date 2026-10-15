@@ -30,7 +30,7 @@ pub(crate) struct KeySealing(LessSafeKey);
 impl KeySealing {
   /// The key-encryption key is 64 hex characters (32 bytes).
   pub fn new(key: &Credential) -> Result<Self, CloudError> {
-    let invalid = || CloudError::Configuration("KEY_ENCRYPTION_KEY must be 64 hex characters");
+    let invalid = || CloudError::Configuration("ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY must be 64 hex characters");
     let text = key.expose().trim();
     // Strict hex: `from_str_radix` alone would also take a sign (`+f`).
     if text.len() != 64 || !text.bytes().all(|byte| byte.is_ascii_hexdigit()) {

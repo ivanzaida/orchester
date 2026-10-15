@@ -67,7 +67,7 @@ Compose sets the rest: the backend's `ORCHESTER_CLOUD_DATABASE_URL` (PostgreSQL 
 `sslmode=disable`), `ORCHESTER_CLOUD_LISTEN`, `ORCHESTER_CLOUD_TRUSTED_PROXIES`, and the web front's
 `ORCHESTER_CLOUD_API_URL`. If one of the variables above is unset, `docker compose` refuses to start and names it.
 If the backend's configuration is wrong, it exits at once and logs which key, for example
-`detail="SMTP_URL is required"`. If `ORCHESTER_CLOUD_WEB_SECRET` is not valid base64, the web container keeps
+`detail="ORCHESTER_CLOUD_SMTP_URL is required"`. If `ORCHESTER_CLOUD_WEB_SECRET` is not valid base64, the web container keeps
 running, answers 500 on every page and logs `ORCHESTER_CLOUD_WEB_SECRET: …`; check `docker compose logs web`
 after a start.
 
