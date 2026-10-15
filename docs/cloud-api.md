@@ -47,7 +47,7 @@ Two kinds of client call it:
 | `invalid_link` | 422 | A confirmation or reset link that is unknown, used or expired. One answer for all three |
 | `rate_limited` | 429 | Too many attempts; see Rate limits below |
 | `keys_unavailable` | 503 | No published key set lets the cloud sign now: the operator has to publish one |
-| `busy` | 503 | The cloud is at a capacity limit: its limiters track 100,000 keys each, or no password hashing slot freed within 10 seconds |
+| `busy` | 503 | No password hashing slot freed within 10 seconds |
 | `internal` | 500 | |
 
 ## Shapes
@@ -63,7 +63,7 @@ Device     { id, name, platform, created_at, last_used_at, current: bool }
 | Method and path | Auth | Request | Response | Errors |
 | --- | --- | --- | --- | --- |
 | `POST /auth/signup` | none | `{ email, password, display_name }` | `202`, empty | `422 invalid`, `429` |
-| `POST /auth/confirm` | none | `{ link_token }` | `204` | `422 invalid_link`, `429` |
+| `POST /auth/confirm` | none | `{ link_token, password }` | `204` | `422 invalid_link`, `429` |
 | `POST /auth/sessions` | none | `{ email, password, device: DeviceInfo }` | `201 { token, device: Device, account: Account }` | `401 invalid_credentials`, `403 email_unconfirmed`, `422 invalid` (device), `429` |
 | `POST /auth/reset` | none | `{ email }` | `202`, empty | `422 invalid`, `429` |
 | `POST /auth/reset/finish` | none | `{ link_token, new_password }` | `204` | `422 invalid`, `422 invalid_link`, `429` |
@@ -80,19 +80,22 @@ Device     { id, name, platform, created_at, last_used_at, current: bool }
 a sign-up form shows one message: *Check your email*. What goes out, in the background:
 
 - a new email gets a confirmation link, valid for 24 hours;
-- an email whose account is not confirmed yet gets a new link, and every earlier confirmation link ends. Each link
-  carries the password and display name of the sign-up that sent it, and confirming it sets them on the account.
-  So the person who can read the email chooses the password, not whoever signed up first with that email. Someone
-  who opens a link from a sign-up they did not make gives the account that sign-up's password; the email says not
-  to open a link from a sign-up you did not make just now;
+- an email whose account is not confirmed yet gets one more link, and the earlier links stay valid. Each link
+  carries the password and display name of the sign-up that sent it. A link is confirmed only with that sign-up's
+  password, and confirming it sets that password and name on the account and ends the account's other links. So an
+  account's password is always one chosen by a person who also reads the email. Someone who signed up with another
+  person's email cannot use the owner's link, and the owner's link cannot be confirmed with their password;
 - a confirmed email gets a *you already have an account* note.
 
 An account that is never confirmed is deleted once its last link has expired.
 
-**Confirmation page** (`<public URL>/confirm/<token>`). The page shows *Confirm my email*. The confirmation happens
-only on that form's `POST`, from the web front's server side, so mail scanners that fetch the link do not use it
-up. The server side sends `POST /auth/confirm { link_token }`. On `204` it says the email is confirmed and offers sign-in; on `invalid_link`
-it offers to sign up again. Confirming does not sign anyone in.
+**Confirmation page** (`<public URL>/confirm/<token>`). The page asks for the password chosen at sign-up, and
+*Confirm my email* posts it. The confirmation happens only on that form's `POST`, from the web front's server
+side, so mail scanners that fetch the link do not use it up. The server side sends
+`POST /auth/confirm { link_token, password }`. An unknown, used or expired link and a wrong password give the same
+`422 invalid_link`, after the same password check. On `204` the page says the email is confirmed and offers
+sign-in. On `invalid_link` it offers to try the password again or to sign up again. After 5 wrong passwords a link
+answers `429` for an hour; signing up again sends a new one. Confirming does not sign anyone in.
 
 **Sign-in.** A wrong password and an unknown email answer alike (`401 invalid_credentials`). `403 email_unconfirmed`
 comes only after the right password. The token in `201` is shown once; the cloud keeps only its SHA-256. `device`
@@ -120,13 +123,16 @@ Claims: `iss` (the public URL), `aud`, `sub` (the account id), `email`, `name`, 
 
 | What | Limit |
 | --- | --- |
-| Sign-in failures | 5 per email in 15 minutes block that email for 15 minutes; 20 per client address block that address |
+| Sign-in failures | 5 per email in 15 minutes block that email for 15 minutes; 20 per client address and 100 per IPv6 /48 block that address or network |
 | Failed current passwords (`/auth/password`) | 5 per account in 15 minutes |
-| Emails (sign-up, reset) | 5 an hour per email, 20 an hour per client address |
-| Failed `confirm` and `reset/finish` | 20 per client address in 15 minutes |
+| Emails (sign-up, reset) | 5 an hour per email, 20 an hour per client address, 100 an hour per IPv6 /48 |
+| Failed `confirm` and `reset/finish` | 20 per client address and 100 per IPv6 /48 in 15 minutes; 5 an hour per link |
 | Identity tokens | 60 an hour per device |
 
-The counters are in memory. A restart clears them; the cloud runs as one instance in v1.
+The counters are in memory. A restart clears them; the cloud runs as one instance in v1. A client address is its
+IPv4 address or its IPv6 /64. Each counter tracks at most 100,000 keys. A new key beyond that evicts the oldest one
+rather than being refused, so a flood of new emails cannot lock everyone out. It only forgets old emails' counts,
+while the address and network limits keep holding.
 
 ## Not built yet
 

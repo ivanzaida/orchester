@@ -1,33 +1,31 @@
-use std::{collections::HashMap, hash::Hash};
+use std::hash::Hash;
 
-use orchester_api::cloud::CloudErrorCode;
 use parking_lot::Mutex;
 
+use super::bounded::Bounded;
 use crate::error::CloudError;
 
 /// At most `limit` events per key in a sliding window of `window_ms`. In memory, as S1a's limiters: the cloud runs as
 /// one instance in v1, and a restart clears the counts (`docs/architecture/server.md`, "Limiters in v1"). At most
-/// `max_keys` keys are tracked; a new key beyond them is refused with `503 busy` (review 1, M6).
+/// `max_keys` keys are tracked; a new key beyond them evicts the oldest (review 2, N2).
 pub struct Quota<K> {
   limit: usize,
   window_ms: i64,
-  max_keys: usize,
   state: Mutex<State<K>>,
 }
 
 struct State<K> {
-  events: HashMap<K, Vec<i64>>,
+  events: Bounded<K, Vec<i64>>,
   pruned_at: i64,
 }
 
-impl<K: Hash + Eq> Quota<K> {
+impl<K: Hash + Eq + Clone> Quota<K> {
   pub fn new(limit: usize, window_ms: i64, max_keys: usize) -> Self {
     Self {
       limit,
       window_ms,
-      max_keys,
       state: Mutex::new(State {
-        events: HashMap::new(),
+        events: Bounded::new(max_keys),
         pruned_at: i64::MIN,
       }),
     }
@@ -37,8 +35,7 @@ impl<K: Hash + Eq> Quota<K> {
   pub fn take(&self, key: K, now: i64) -> Result<(), CloudError> {
     let mut state = self.state.lock();
     self.prune(&mut state, now);
-    self.room(&state, &key)?;
-    let events = state.events.entry(key).or_default();
+    let events = state.events.entry(key, |_| true);
     self.refuse(events, now)?;
     events.push(now);
     Ok(())
@@ -50,20 +47,12 @@ impl<K: Hash + Eq> Quota<K> {
     self.prune(&mut state, now);
     match state.events.get_mut(key) {
       Some(events) => self.refuse(events, now),
-      None => self.room(&state, key),
-    }
-  }
-
-  fn room(&self, state: &State<K>, key: &K) -> Result<(), CloudError> {
-    if state.events.contains_key(key) || state.events.len() < self.max_keys {
-      Ok(())
-    } else {
-      Err(CloudErrorCode::Busy.into())
+      None => Ok(()),
     }
   }
 
   pub fn record(&self, key: K, now: i64) {
-    self.state.lock().events.entry(key).or_default().push(now);
+    self.state.lock().events.entry(key, |_| true).push(now);
   }
 
   fn refuse(&self, events: &mut Vec<i64>, now: i64) -> Result<(), CloudError> {
@@ -83,8 +72,6 @@ impl<K: Hash + Eq> Quota<K> {
     }
     state.pruned_at = now;
     let window = self.window_ms;
-    state
-      .events
-      .retain(|_, events| events.iter().any(|at| *at > now - window));
+    state.events.retain(|events| events.iter().any(|at| *at > now - window));
   }
 }

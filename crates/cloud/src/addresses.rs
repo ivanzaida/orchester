@@ -123,3 +123,10 @@ pub(crate) fn rate_address(address: IpAddr) -> IpAddr {
     address
   }
 }
+
+/// The IPv6 /48 an address belongs to, the coarser bucket beside /64 (review 2, N2): a client gets a whole /48 as
+/// easily as a /64. None for IPv4.
+pub(crate) fn rate_network(address: IpAddr) -> Option<IpAddr> {
+  let address = address.to_canonical();
+  address.is_ipv6().then(|| masked(address, 48))
+}

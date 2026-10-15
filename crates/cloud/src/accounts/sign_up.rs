@@ -1,29 +1,26 @@
 use std::net::IpAddr;
 
 use deadpool_postgres::GenericClient;
-use orchester_api::{
-  Credential,
-  cloud::{CloudErrorCode, SignUp},
-};
+use orchester_api::cloud::SignUp;
 use orchester_core::id::CloudAccountId;
 use uuid::Uuid;
 
 use super::{
   Cloud, input,
-  links::{LinkPurpose, NewLink, Pending, end_links, new_link, use_link},
+  links::{NewLink, Pending, new_link},
 };
 use crate::{
   db::{audit, time},
   error::CloudError,
   mail::Email,
-  passwords::{PasswordHash, Passwords},
+  passwords::Passwords,
 };
 
 impl Cloud {
   /// Answers alike whether or not the email has an account. A new email gets an unconfirmed account and a
-  /// confirmation link; an unconfirmed one gets a new link that replaces the earlier ones; a confirmed one gets a
-  /// note that it exists. The password and display name travel with the link, so the account takes those of the
-  /// sign-up whose link is confirmed (review 1, H1).
+  /// confirmation link; an unconfirmed one gets one more link; a confirmed one gets a note that it exists. Each link
+  /// carries its sign-up's password and display name, and confirming it asks for that password (review 2, N1), so
+  /// only the person who chose a password and reads the email can give the account that password.
   pub(crate) async fn sign_up(&self, input: SignUp, address: IpAddr) -> Result<(), CloudError> {
     let email = input::email(&input.email)?;
     let display_name = input::display_name(&input.display_name)?;
@@ -89,47 +86,8 @@ impl Cloud {
     if row.try_get(1)? {
       return Ok(self.inner.messages.already_registered(email));
     }
-    end_links(client, id, Some(LinkPurpose::Confirm), now).await?;
+    // Earlier links stay: each carries its own sign-up's password, which confirming it asks for (review 2, N1).
     let token = new_link(client, id, NewLink::Confirm(pending), now).await?;
     Ok(self.inner.messages.confirm(email, &token))
-  }
-
-  /// Confirms the email and gives the account the password and display name of the sign-up the link was sent for.
-  /// A link of an account that is confirmed already (by a reset meanwhile) changes nothing.
-  pub(crate) async fn confirm(&self, token: Credential, address: IpAddr) -> Result<(), CloudError> {
-    self.inner.limits.link_finish(address, self.now())?;
-    let now = self.now();
-    let mut client = self.inner.db.client().await?;
-    let transaction = client.transaction().await?;
-    let Some(link) = use_link(&transaction, &token, LinkPurpose::Confirm, now).await? else {
-      self.inner.limits.link_failed(address, now);
-      return Err(CloudErrorCode::InvalidLink.into());
-    };
-    let account = link.account;
-    transaction
-      .execute(
-        "UPDATE accounts SET confirmed_at = $1, password_changed_at = $1,
-           password_hash = coalesce($3, password_hash), display_name = coalesce($4, display_name)
-         WHERE id = $2 AND confirmed_at IS NULL",
-        &[
-          &time(now),
-          &account.as_uuid(),
-          &link.hash.as_ref().map(PasswordHash::expose),
-          &link.display_name,
-        ],
-      )
-      .await?;
-    end_links(&transaction, account, Some(LinkPurpose::Confirm), now).await?;
-    audit(
-      &transaction,
-      Some(account),
-      "email_confirmed",
-      &account.to_string(),
-      Some(address),
-      now,
-    )
-    .await?;
-    transaction.commit().await?;
-    Ok(())
   }
 }

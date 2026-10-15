@@ -68,12 +68,38 @@ pub async fn emails_and_link_finishes_are_rate_limited() {
     .await;
   assert_eq!(later.status, 202);
 
-  let bogus = json!({"link_token": "0".repeat(64)});
-  for _ in 0..20 {
-    let response = cloud.request("POST", "/auth/confirm", None, Some(bogus.clone())).await;
+  // A different made-up link each time, so only the per-address limit counts them.
+  let bogus = |index: u32| json!({"link_token": format!("{index:064x}"), "password": PASSWORD});
+  for index in 0..20 {
+    let response = cloud.request("POST", "/auth/confirm", None, Some(bogus(index))).await;
     assert_eq!(response.status, 422);
   }
-  let blocked = cloud.request("POST", "/auth/confirm", None, Some(bogus)).await;
+  let blocked = cloud.request("POST", "/auth/confirm", None, Some(bogus(20))).await;
   assert_eq!(blocked.status, 429);
+  cloud.finish().await;
+}
+
+/// Review 2, N1: wrong passwords on one confirmation link are limited per link, whatever address they come from.
+pub async fn confirm_is_rate_limited_per_link() {
+  let cloud = TestCloud::start_with(vec!["127.0.0.1".parse().expect("proxy")]).await;
+  let email = "guarded@example.test";
+  assert_eq!(cloud.sign_up(email, PASSWORD).await.status, 202);
+  let token = cloud.mail.nth(email, 1).await.link_token();
+  for attempt in 0..5 {
+    let address = format!("198.51.100.{attempt}");
+    let body = json!({"link_token": token, "password": "a guessed password"});
+    let response = cloud
+      .request_headers(
+        "POST",
+        "/auth/confirm",
+        None,
+        Some(body),
+        &[("X-Forwarded-For", address.as_str())],
+      )
+      .await;
+    assert_eq!(response.status, 422);
+  }
+  let blocked = cloud.confirm(&token, PASSWORD).await;
+  assert_eq!((blocked.status, blocked.error()), (429, "rate_limited".into()));
   cloud.finish().await;
 }

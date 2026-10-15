@@ -35,8 +35,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
-      # As tools/check.ps1: actix-web (orchester-cloud) turns on tracing's `log` feature, which in one build with
-      # the other crates raises clippy's cognitive complexity of their tracing calls; each side is checked apart.
+      # As tools/check.ps1, on purpose: actix-web (orchester-cloud) turns on tracing's `log` feature, which in one
+      # build with the other crates raises clippy's cognitive complexity of their tracing calls; each side is checked
+      # apart. A combined run stays red and the 19 functions it names are not to be refactored for it
+      # (docs/cloud-hosting.md, "Clippy runs in two parts, on purpose").
       - name: Clippy
         run: cargo clippy --workspace --exclude orchester-cloud --all-targets --all-features -- -D warnings
       - name: Clippy (orchester-cloud)
@@ -65,7 +67,7 @@ jobs:
       - name: Clippy (orchester-cloud)
         run: cargo clippy -p orchester-cloud --all-targets --all-features -- -D warnings
       - name: Cloud tests
-        run: cargo test -p orchester-cloud --test cloud ::
+        run: cargo test -p orchester-cloud --test cloud
       - name: Identity and limiter tests
         run: |
           cargo test -p orchester-api --features identity --test identity identity

@@ -14,11 +14,13 @@ pub struct SignUp {
   pub display_name: String,
 }
 
-/// The token of a confirmation or reset link, as the web front read it from the link's `token` parameter.
+/// The token of a confirmation link, as the web front read it from the link (`/confirm/{token}`), and the password
+/// the person chose when signing up: a link is confirmed only with its own sign-up's password.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConfirmEmail {
   pub link_token: Credential,
+  pub password: Credential,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

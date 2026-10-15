@@ -5,8 +5,7 @@ use std::{net::IpAddr, time::Duration};
 use orchester_api::{Credential, cloud::CloudErrorCode};
 use orchester_cloud::{
   error::CloudError,
-  limits::{Quota, SignInLimit},
-  passwords::Passwords,
+  for_tests::{Passwords, Quota, SignInLimit},
 };
 
 const NOW: i64 = 1_791_000_000_000;
@@ -16,39 +15,55 @@ fn busy<T>(result: &Result<T, CloudError>) -> bool {
   matches!(result, Err(CloudError::Api(CloudErrorCode::Busy)))
 }
 
+/// Review 2, N2: a full email map evicts its oldest email instead of refusing every new one (which locked everyone
+/// out), and the per-address limit keeps holding while the emails churn.
 #[test]
-fn limits_sign_in_map_is_bounded_and_pruned() {
-  let limit = SignInLimit::new(2);
+fn limits_full_email_map_evicts_and_the_address_limit_holds() {
+  let limit = SignInLimit::new(3);
   let address: IpAddr = "203.0.113.7".parse().expect("address");
-  limit
-    .sign_in("a@example.test".into(), address, NOW)
-    .expect("first")
-    .failed(NOW);
-  limit
-    .sign_in("b@example.test".into(), address, NOW)
-    .expect("second")
-    .failed(NOW);
+  for index in 0..20 {
+    let attempt = limit.sign_in(format!("guess{index}@example.test"), address, NOW);
+    attempt.expect("a new email gets a place").failed(NOW);
+  }
+  let blocked = limit.sign_in("someone@example.test".into(), address, NOW);
   assert!(
-    busy(&limit.sign_in("c@example.test".into(), address, NOW)),
-    "a third email does not grow the map"
+    matches!(blocked, Err(CloudError::RateLimited(_))),
+    "the address is blocked"
   );
-  let known = limit.sign_in("a@example.test".into(), address, NOW + 1);
-  assert!(known.is_ok(), "an email counted already goes on");
-  drop(known);
-  // Once their failures are 15 minutes old, the next minute's pruning makes room.
-  let later = NOW + 16 * MINUTE;
-  assert!(limit.sign_in("c@example.test".into(), address, later).is_ok());
+  let other: IpAddr = "198.51.100.9".parse().expect("address");
+  assert!(
+    limit.sign_in("someone@example.test".into(), other, NOW).is_ok(),
+    "nobody else is locked out"
+  );
+}
+
+/// Review 2, N2: an IPv6 client owns its whole /48 in practice, so failures from many of its /64s count together.
+#[test]
+fn limits_ipv6_failures_count_per_48_too() {
+  let limit = SignInLimit::new(100_000);
+  for index in 0..100u16 {
+    let address: IpAddr = format!("2001:db8:7:{index:x}::1").parse().expect("address");
+    let attempt = limit.sign_in(format!("guess{index}@example.test"), address, NOW);
+    attempt.expect("one failure per /64").failed(NOW);
+  }
+  let neighbour: IpAddr = "2001:db8:7:ffff::1".parse().expect("address");
+  let blocked = limit.sign_in("someone@example.test".into(), neighbour, NOW);
+  assert!(matches!(blocked, Err(CloudError::RateLimited(_))), "the /48 is blocked");
+  let elsewhere: IpAddr = "2001:db8:8::1".parse().expect("address");
+  assert!(limit.sign_in("someone@example.test".into(), elsewhere, NOW).is_ok());
 }
 
 #[test]
-fn limits_quota_is_bounded() {
-  let quota = Quota::new(5, 60 * MINUTE, 2);
+fn limits_full_quota_evicts_its_oldest_key() {
+  let quota = Quota::new(1, 60 * MINUTE, 2);
   quota.take(1, NOW).expect("first key");
-  quota.take(2, NOW).expect("second key");
-  assert!(busy(&quota.take(3, NOW)), "a third key does not grow the map");
-  assert!(quota.take(1, NOW).is_ok(), "a key counted already goes on");
-  assert!(busy(&quota.check(&3, NOW)));
-  assert!(quota.take(3, NOW + 61 * MINUTE).is_ok(), "pruned after its window");
+  quota.take(2, NOW + 1).expect("second key");
+  assert!(quota.take(2, NOW + 2).is_err(), "a counted key stays limited");
+  assert!(
+    quota.take(3, NOW + 3).is_ok(),
+    "a new key evicts the oldest instead of being refused"
+  );
+  assert!(quota.take(2, NOW + 4).is_err(), "the newer keys are kept");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

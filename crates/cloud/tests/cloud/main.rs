@@ -1,9 +1,9 @@
 //! Orchester Cloud against a real PostgreSQL, on loopback. This binary runs its own tests so that one PostgreSQL
 //! container serves the whole run and is removed at its end, whatever the tests did; each test still creates and
 //! drops its own database. `cargo test -p orchester-cloud --test cloud <filter>` runs the tests whose names contain a
-//! filter (`::` runs them all). Without a filter it runs nothing and says so: the tests need PostgreSQL, which a
-//! plain `cargo test --workspace` (CI's Windows and macOS jobs) does not have; CI's Linux job runs them with a
-//! PostgreSQL service. At the end the run checks its whole log for every secret the tests saw.
+//! filter (`::` runs them all). Without a filter it runs them all when `ORCHESTER_CLOUD_TEST_DATABASE_URL` names a
+//! PostgreSQL (CI's Linux job), and otherwise nothing, saying so: a plain `cargo test --workspace` (CI's Windows and
+//! macOS jobs) has no database. At the end the run checks its whole log for every secret the tests saw.
 // A test runner reports on the console.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
@@ -31,9 +31,12 @@ const TESTS: &[(&str, Test)] = tests![
   accounts::unconfirmed_sign_in_is_refused,
   accounts::wrong_password_and_unknown_email_answer_alike,
   accounts::an_earlier_sign_up_cannot_take_the_account,
+  accounts::concurrent_confirm_sign_up_and_reset_never_fail,
+  accounts::confirm_locks_the_account_before_its_links,
   accounts::a_reset_request_answers_before_any_database_work,
   limits::sign_in_is_rate_limited_per_email_and_address,
   limits::emails_and_link_finishes_are_rate_limited,
+  limits::confirm_is_rate_limited_per_link,
   sessions::reset_signs_out_every_device,
   sessions::password_change_signs_out_the_other_devices,
   sessions::devices_are_listed_and_revoked,
@@ -60,7 +63,10 @@ fn main() -> ExitCode {
     names.for_each(|name| println!("{name}: test"));
     return ExitCode::SUCCESS;
   }
-  if selection.unfiltered() {
+  // A plain `cargo test --workspace` has no PostgreSQL; with the database variable set, or a filter, it runs (review
+  // 2, N4).
+  let database = std::env::var_os("ORCHESTER_CLOUD_TEST_DATABASE_URL").is_some();
+  if selection.unfiltered() && !database {
     println!("running 0 tests: the cloud's tests need PostgreSQL and run only when named, e.g. {RUN_ALL}");
     return ExitCode::SUCCESS;
   }

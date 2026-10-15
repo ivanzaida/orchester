@@ -133,6 +133,11 @@ pub async fn unsafe_configuration_is_refused() {
     })
     .await,
     open(&|config| config.key_encryption_key = Credential::new("+f".repeat(32))).await,
+    open(&|config| {
+      // Review 2: `hostaddr` decides where the connection goes, whatever `host` says.
+      config.database_url = Credential::new("postgres://u:p@localhost/d?sslmode=disable&hostaddr=203.0.113.5".into());
+    })
+    .await,
   ];
   for (index, result) in refused.into_iter().enumerate() {
     assert!(

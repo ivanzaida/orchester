@@ -1,5 +1,11 @@
 # Repository quality gate: formatting, clippy with warnings denied, and the 600-line file limit.
 # Run from anywhere: powershell -File tools/check.ps1
+#
+# Clippy runs in two parts on purpose: the workspace without orchester-cloud, then orchester-cloud. A single
+# `cargo clippy --workspace --all-features` stays red. actix-web (the cloud's HTTP server) turns on tracing's `log`
+# feature, which Cargo then turns on for every crate in the same build. The larger expansion of each tracing macro
+# pushes 19 existing functions over clippy's cognitive-complexity limit. Do not "fix" those functions for it; they
+# pass in every build that ships them (docs/cloud-hosting.md, "Clippy runs in two parts, on purpose").
 $ErrorActionPreference = "Stop"
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot

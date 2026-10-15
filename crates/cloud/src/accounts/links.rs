@@ -43,9 +43,8 @@ pub(super) enum NewLink<'a> {
   Reset,
 }
 
-/// A link just used: its account, and for a confirmation link the sign-up it was sent for.
+/// A link just used: for a confirmation link, the sign-up it was sent for.
 pub(super) struct UsedLink {
-  pub account: CloudAccountId,
   pub hash: Option<PasswordHash>,
   pub display_name: Option<String>,
 }
@@ -99,7 +98,7 @@ pub(super) async fn use_link(
     .query_opt(
       "UPDATE email_links SET used_at = $1
        WHERE token_hash = $2 AND purpose = $3 AND used_at IS NULL AND expires_at > $1
-       RETURNING account, password_hash, display_name",
+       RETURNING password_hash, display_name",
       &[&time(now), &token_hash(token), &purpose.as_str()],
     )
     .await?;
@@ -107,9 +106,8 @@ pub(super) async fn use_link(
     return Ok(None);
   };
   Ok(Some(UsedLink {
-    account: CloudAccountId::from_uuid(row.try_get(0)?),
-    hash: row.try_get::<_, Option<String>>(1)?.map(PasswordHash::stored),
-    display_name: row.try_get(2)?,
+    hash: row.try_get::<_, Option<String>>(0)?.map(PasswordHash::stored),
+    display_name: row.try_get(1)?,
   }))
 }
 
@@ -131,22 +129,40 @@ pub(super) async fn end_links(
   Ok(())
 }
 
-/// Whether a link could be used now, without using it: lets a reset refuse a bad link before hashing a password.
-pub(super) async fn link_usable(
+/// The account of an unused, unexpired link, and for a confirmation link its sign-up's password hash, without using
+/// the link.
+pub(super) async fn pending_link(
   client: &impl GenericClient,
   token: &Credential,
   purpose: LinkPurpose,
   now: i64,
-) -> Result<bool, CloudError> {
+) -> Result<Option<(CloudAccountId, Option<PasswordHash>)>, CloudError> {
   if !well_formed(token.expose(), "") {
-    return Ok(false);
+    return Ok(None);
   }
+  let row = client
+    .query_opt(
+      "SELECT account, password_hash FROM email_links
+       WHERE token_hash = $1 AND purpose = $2 AND used_at IS NULL AND expires_at > $3",
+      &[&token_hash(token), &purpose.as_str(), &time(now)],
+    )
+    .await?;
+  let Some(row) = row else {
+    return Ok(None);
+  };
+  Ok(Some((
+    CloudAccountId::from_uuid(row.try_get(0)?),
+    row.try_get::<_, Option<String>>(1)?.map(PasswordHash::stored),
+  )))
+}
+
+/// Locks the account row for the rest of the transaction; every change of an account and its links takes the
+/// account row first, so two of them never wait on each other in opposite orders (review 2, N3). False when the
+/// account is gone.
+pub(super) async fn lock_account(client: &impl GenericClient, account: CloudAccountId) -> Result<bool, CloudError> {
   Ok(
     client
-      .query_opt(
-        "SELECT 1 FROM email_links WHERE token_hash = $1 AND purpose = $2 AND used_at IS NULL AND expires_at > $3",
-        &[&token_hash(token), &purpose.as_str(), &time(now)],
-      )
+      .query_opt("SELECT 1 FROM accounts WHERE id = $1 FOR UPDATE", &[&account.as_uuid()])
       .await?
       .is_some(),
   )

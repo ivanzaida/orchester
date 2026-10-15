@@ -21,11 +21,12 @@ pub(super) fn connector() -> Result<MakeRustlsConnect, CloudError> {
 /// The connection string must say how it is protected (review 1, L3): `sslmode=require`, or `sslmode=disable` for a
 /// database on the local network only, never `prefer` (the default), which falls back to plain text when an attacker
 /// in between refuses TLS. Local means a Unix socket, a loopback or private address, or a single-label host name
-/// such as a compose service (`postgres`), which public DNS does not answer.
+/// such as a compose service (`postgres`), which public DNS does not answer; a `hostaddr`, which decides where the
+/// connection goes, must be a loopback or private address too.
 pub(super) fn check_transport(config: &Config) -> Result<(), CloudError> {
   match config.get_ssl_mode() {
     SslMode::Require => Ok(()),
-    SslMode::Disable if config.get_hosts().iter().all(local) => Ok(()),
+    SslMode::Disable if config.get_hosts().iter().all(local) && config.get_hostaddrs().iter().all(local_ip) => Ok(()),
     SslMode::Disable => Err(CloudError::Configuration(
       "DATABASE_URL has sslmode=disable for a host outside the local network; use sslmode=require",
     )),
@@ -38,11 +39,17 @@ pub(super) fn check_transport(config: &Config) -> Result<(), CloudError> {
 fn local(host: &Host) -> bool {
   match host {
     Host::Tcp(name) => match name.trim_matches(['[', ']']).parse::<IpAddr>() {
-      Ok(IpAddr::V4(ip)) => ip.is_loopback() || ip.is_private(),
-      Ok(IpAddr::V6(ip)) => ip.is_loopback() || ip.is_unique_local(),
+      Ok(ip) => local_ip(&ip),
       Err(_) => name.eq_ignore_ascii_case("localhost") || !name.contains('.'),
     },
     #[cfg(unix)]
     Host::Unix(_) => true,
+  }
+}
+
+fn local_ip(ip: &IpAddr) -> bool {
+  match ip {
+    IpAddr::V4(ip) => ip.is_loopback() || ip.is_private(),
+    IpAddr::V6(ip) => ip.is_loopback() || ip.is_unique_local(),
   }
 }

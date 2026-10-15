@@ -77,7 +77,7 @@ On Windows, keep `root.key` in a folder of your user profile: a new file gets th
 
 ```sh
 # on the cloud host
-orchester-cloud keys rotate                         # only every 30 days, and before the very first key set
+orchester-cloud keys rotate                         # before the very first key set, then every 28 days at most
 orchester-cloud keys prepare statement.json         # the statement to sign: every key still listed
 
 # on the offline machine
@@ -100,7 +100,7 @@ docker compose exec cloud orchester-cloud keys publish /tmp/signed.jws
 `keys rotate` makes a key the cloud uses only once a published key set lists it. While another key signs, the new
 one starts signing two days after the rotation, so team servers (which refresh the key set daily) have it before
 any token signed with it arrives. The previous key signs until then. So rotate at least two days before the current
-key's 30 days end; `keys sign` prints every key's dates. The very first key signs at once.
+key's 30 days end, which is every 28 days at most; `keys sign` prints every key's dates. The very first key signs at once.
 
 `keys sign` refuses a statement prepared more than a day ago, and one whose lifetimes exceed the rules. Team
 servers apply the same limits, so even a stolen root key cannot make a long-lived key set.
@@ -129,8 +129,9 @@ Then start it with `docker compose up -d --build` in `deploy/cloud`, and run the
 ## Running the tests
 
 `cargo test -p orchester-cloud --test cloud <filter>` runs the cloud against a real PostgreSQL (`::` runs every
-test). Without a filter it runs nothing and says so, so a plain `cargo test --workspace` needs no database; CI runs
-them in a Linux job with a PostgreSQL service. With
+test). Without a filter it runs every test when `ORCHESTER_CLOUD_TEST_DATABASE_URL` is set. Otherwise it runs
+nothing and says so, so a plain `cargo test --workspace` needs no database. CI runs the tests in a Linux job with a
+PostgreSQL service. With
 `ORCHESTER_CLOUD_TEST_DATABASE_URL` set (a server URL whose user may create databases, e.g.
 `postgres://postgres:pw@127.0.0.1:5432`), it uses that server. Otherwise it starts a throwaway `postgres:18-alpine`
 container on 127.0.0.1 (`orchester-cloud-test-…`) and removes it when the run ends. Each test creates and drops
@@ -139,3 +140,18 @@ the run checks its whole log for every password, token, link, key and email the 
 `cargo test -p orchester-api --features identity --test identity identity` checks tokens and key sets over explicit
 keys and times, and `cargo test -p orchester-cloud --test limits limits` the bounded limiters and hashing pool,
 both with no database.
+
+## Clippy runs in two parts, on purpose
+
+`tools/check.ps1` and CI run clippy twice: `cargo clippy --workspace --exclude orchester-cloud …`, then
+`cargo clippy -p orchester-cloud …`. A single `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+stays red.
+
+The reason: actix-web's crates (actix-codec, actix-http, actix-router) depend on `tracing` with its `log` feature,
+and nothing can turn that off. In one build with the cloud, Cargo turns that feature on for every crate. Every
+`tracing::…!` macro then expands into more branches, and clippy's `cognitive_complexity` counts them. That pushes
+19 existing functions in the server, runner, workspace, app and the frozen desktop over the limit. `cargo clippy -p
+orchester-server --features tracing/log` reproduces it without the cloud.
+
+The split is deliberate. Do not refactor those functions to make the combined run pass: they are within the limit
+in every build that ships them.

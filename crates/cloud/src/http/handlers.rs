@@ -19,7 +19,7 @@ pub(super) async fn sign_up(cloud: web::Data<Cloud>, address: ClientAddress, inp
 }
 
 pub(super) async fn confirm(cloud: web::Data<Cloud>, address: ClientAddress, input: SafeJson<ConfirmEmail>) -> Answer {
-  cloud.confirm(input.0.link_token, address.0).await?;
+  cloud.confirm(input.0, address.0).await?;
   Ok(HttpResponse::NoContent().finish())
 }
 

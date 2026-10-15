@@ -45,11 +45,12 @@ impl Selection {
     selection
   }
 
-  /// No name filter: the database tests run only when asked for by name (review 1, H2).
+  /// No name filter: without a database named in the environment, nothing runs (review 1, H2; review 2, N4).
   pub fn unfiltered(&self) -> bool {
     self.filters.is_empty()
   }
 
+  /// With no name filter every test is selected, less the skipped ones.
   pub fn selects(&self, name: &str) -> bool {
     let matches = |filter: &String| {
       if self.exact {
@@ -58,6 +59,7 @@ impl Selection {
         name.contains(filter.as_str())
       }
     };
-    self.filters.iter().any(matches) && !self.skips.iter().any(|skip| name.contains(skip.as_str()))
+    let named = self.filters.is_empty() || self.filters.iter().any(matches);
+    named && !self.skips.iter().any(|skip| name.contains(skip.as_str()))
   }
 }

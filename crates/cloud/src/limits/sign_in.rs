@@ -1,20 +1,30 @@
 //! S1a's sign-in and password limiters, moved to the cloud (`docs/architecture/server.md`, "Rate limits of the
 //! cloud"): 5 failures for an email (or an account's password change) in 15 minutes block it for 15 minutes, 20
-//! failures from one address block that address. A place is reserved before the hashing pool, so parallel guesses
+//! failures from one address block that address, and 100 from one IPv6 /48 block that network (review 2, N2: a
+//! client holds a whole /48 as easily as a /64). A place is reserved before the hashing pool, so parallel guesses
 //! cannot pass the limit while their hashes run.
 //!
-//! The maps are bounded (review 1, M6): idle keys are pruned once a minute, not on every sign-in, and while a map
-//! holds `max_keys` keys a new key is refused with `503 busy` rather than grow it; keys already counted go on.
+//! The maps are bounded (`Bounded`): idle keys are pruned once a minute, and a full map evicts its oldest key that
+//! has no attempt in flight. A flood of new emails therefore pushes out old emails' counts (failing open there) while
+//! the address and network limits keep holding.
 
-use std::{collections::HashMap, net::IpAddr, sync::Arc};
+use std::{net::IpAddr, sync::Arc};
 
-use orchester_api::cloud::CloudErrorCode;
 use orchester_core::id::CloudAccountId;
 use parking_lot::Mutex;
 
-use crate::{addresses::rate_address, error::CloudError};
+use super::bounded::Bounded;
+use crate::{
+  addresses::{rate_address, rate_network},
+  error::CloudError,
+};
 
 const WINDOW_MS: i64 = 15 * 60 * 1000;
+const PRUNE_MS: i64 = 60 * 1000;
+const EMAIL_LIMIT: usize = 5;
+const ADDRESS_LIMIT: usize = 20;
+const NETWORK_LIMIT: usize = 100;
+const ACCOUNT_LIMIT: usize = 5;
 
 #[derive(Default)]
 struct Failures {
@@ -25,7 +35,7 @@ struct Failures {
 
 impl Failures {
   fn retry(&self, now: i64) -> Option<u64> {
-    (self.blocked_until > now).then(|| ((self.blocked_until - now + 999) / 1000) as u64)
+    (self.blocked_until > now).then(|| (self.blocked_until - now + 999).unsigned_abs() / 1000)
   }
 
   fn capacity(&self, now: i64, limit: usize) -> Option<u64> {
@@ -49,13 +59,27 @@ impl Failures {
   fn retain(&self, now: i64) -> bool {
     self.pending > 0 || self.blocked_until > now || self.times.iter().any(|at| *at > now - WINDOW_MS)
   }
+
+  /// An entry with an attempt in flight stays: its attempt completes on it.
+  fn evictable(&self) -> bool {
+    self.pending == 0
+  }
+}
+
+/// What one attempt counts against.
+#[derive(Clone)]
+enum Key {
+  Email(String),
+  Address(IpAddr),
+  Network(IpAddr),
+  Account(CloudAccountId),
 }
 
 struct Counters {
-  emails: HashMap<String, Failures>,
-  addresses: HashMap<IpAddr, Failures>,
-  password_accounts: HashMap<CloudAccountId, Failures>,
-  max_keys: usize,
+  emails: Bounded<String, Failures>,
+  addresses: Bounded<IpAddr, Failures>,
+  networks: Bounded<IpAddr, Failures>,
+  accounts: Bounded<CloudAccountId, Failures>,
   pruned_at: i64,
 }
 
@@ -65,87 +89,94 @@ impl Counters {
       return;
     }
     self.pruned_at = now;
-    self.emails.retain(|_, failures| failures.retain(now));
-    self.addresses.retain(|_, failures| failures.retain(now));
-    self.password_accounts.retain(|_, failures| failures.retain(now));
+    self.emails.retain(|failures| failures.retain(now));
+    self.addresses.retain(|failures| failures.retain(now));
+    self.networks.retain(|failures| failures.retain(now));
+    self.accounts.retain(|failures| failures.retain(now));
   }
-}
 
-const PRUNE_MS: i64 = 60 * 1000;
+  fn get(&self, key: &Key) -> (Option<&Failures>, usize) {
+    match key {
+      Key::Email(email) => (self.emails.get(email), EMAIL_LIMIT),
+      Key::Address(address) => (self.addresses.get(address), ADDRESS_LIMIT),
+      Key::Network(network) => (self.networks.get(network), NETWORK_LIMIT),
+      Key::Account(account) => (self.accounts.get(account), ACCOUNT_LIMIT),
+    }
+  }
 
-/// Whether `key` is counted already or the map has room for it.
-fn room<K: std::hash::Hash + Eq, V>(map: &HashMap<K, V>, key: &K, max_keys: usize) -> Result<(), CloudError> {
-  if map.contains_key(key) || map.len() < max_keys {
-    Ok(())
-  } else {
-    Err(CloudErrorCode::Busy.into())
+  fn reserve(&mut self, key: Key) {
+    let failures = match key {
+      Key::Email(email) => self.emails.entry(email, Failures::evictable),
+      Key::Address(address) => self.addresses.entry(address, Failures::evictable),
+      Key::Network(network) => self.networks.entry(network, Failures::evictable),
+      Key::Account(account) => self.accounts.entry(account, Failures::evictable),
+    };
+    failures.pending += 1;
+  }
+
+  fn complete(&mut self, key: &Key, failed: Option<i64>) {
+    let (failures, limit) = match key {
+      Key::Email(email) => (self.emails.get_mut(email), EMAIL_LIMIT),
+      Key::Address(address) => (self.addresses.get_mut(address), ADDRESS_LIMIT),
+      Key::Network(network) => (self.networks.get_mut(network), NETWORK_LIMIT),
+      Key::Account(account) => (self.accounts.get_mut(account), ACCOUNT_LIMIT),
+    };
+    failures
+      .expect("an entry with a pending reservation is neither pruned nor evicted")
+      .complete(failed, limit);
   }
 }
 
 pub struct SignInLimit(Arc<Mutex<Counters>>);
 
-enum AttemptKeys {
-  SignIn { email: String, address: IpAddr },
-  PasswordChange(CloudAccountId),
-}
-
 /// A place reserved for one sign-in or password check; it ends as `succeeded` or `failed`.
 pub struct Attempt {
   counters: Arc<Mutex<Counters>>,
-  keys: Option<AttemptKeys>,
+  keys: Vec<Key>,
   started_at: Option<i64>,
 }
 
 impl SignInLimit {
-  /// Each of its maps holds at most `max_keys` emails, addresses or accounts.
+  /// Each of its maps holds at most `max_keys` emails, addresses, networks or accounts.
   pub fn new(max_keys: usize) -> Self {
     Self(Arc::new(Mutex::new(Counters {
-      emails: HashMap::new(),
-      addresses: HashMap::new(),
-      password_accounts: HashMap::new(),
-      max_keys,
+      emails: Bounded::new(max_keys),
+      addresses: Bounded::new(max_keys),
+      networks: Bounded::new(max_keys),
+      accounts: Bounded::new(max_keys),
       pruned_at: i64::MIN,
     })))
   }
 
   pub fn sign_in(&self, email: String, address: IpAddr, now: i64) -> Result<Attempt, CloudError> {
-    let address = rate_address(address);
-    let mut counters = self.0.lock();
-    counters.prune(now);
-    room(&counters.emails, &email, counters.max_keys)?;
-    room(&counters.addresses, &address, counters.max_keys)?;
-    let email_retry = counters
-      .emails
-      .get(&email)
-      .and_then(|failures| failures.capacity(now, 5));
-    let address_retry = counters
-      .addresses
-      .get(&address)
-      .and_then(|failures| failures.capacity(now, 20));
-    if let Some(retry) = email_retry.into_iter().chain(address_retry).max() {
-      return Err(CloudError::RateLimited(retry));
-    }
-    counters.emails.entry(email.clone()).or_default().pending += 1;
-    counters.addresses.entry(address).or_default().pending += 1;
-    Ok(Attempt {
-      counters: self.0.clone(),
-      keys: Some(AttemptKeys::SignIn { email, address }),
-      started_at: None,
-    })
+    let mut keys = vec![Key::Email(email), Key::Address(rate_address(address))];
+    keys.extend(rate_network(address).map(Key::Network));
+    self.reserve(keys, now)
   }
 
   pub fn password(&self, account: CloudAccountId, now: i64) -> Result<Attempt, CloudError> {
+    self.reserve(vec![Key::Account(account)], now)
+  }
+
+  fn reserve(&self, keys: Vec<Key>, now: i64) -> Result<Attempt, CloudError> {
     let mut counters = self.0.lock();
     counters.prune(now);
-    room(&counters.password_accounts, &account, counters.max_keys)?;
-    let failures = counters.password_accounts.entry(account).or_default();
-    if let Some(retry) = failures.capacity(now, 5) {
+    let retry = keys
+      .iter()
+      .filter_map(|key| match counters.get(key) {
+        (Some(failures), limit) => failures.capacity(now, limit),
+        (None, _) => None,
+      })
+      .max();
+    if let Some(retry) = retry {
       return Err(CloudError::RateLimited(retry));
     }
-    failures.pending += 1;
+    for key in &keys {
+      counters.reserve(key.clone());
+    }
     Ok(Attempt {
       counters: self.0.clone(),
-      keys: Some(AttemptKeys::PasswordChange(account)),
+      keys,
       started_at: None,
     })
   }
@@ -154,17 +185,11 @@ impl SignInLimit {
 impl Attempt {
   pub fn start(&mut self, now: i64) -> Result<(), CloudError> {
     let counters = self.counters.lock();
-    let retry = match self.keys.as_ref().expect("active reservation starts once") {
-      AttemptKeys::SignIn { email, address } => {
-        let email = counters.emails.get(email).and_then(|failures| failures.retry(now));
-        let address = counters.addresses.get(address).and_then(|failures| failures.retry(now));
-        email.into_iter().chain(address).max()
-      }
-      AttemptKeys::PasswordChange(account) => counters
-        .password_accounts
-        .get(account)
-        .and_then(|failures| failures.retry(now)),
-    };
+    let retry = self
+      .keys
+      .iter()
+      .filter_map(|key| counters.get(key).0.and_then(|failures| failures.retry(now)))
+      .max();
     if let Some(retry) = retry {
       return Err(CloudError::RateLimited(retry));
     }
@@ -181,30 +206,10 @@ impl Attempt {
   }
 
   fn complete(&mut self, failed: Option<i64>) {
-    let Some(keys) = self.keys.take() else {
-      return;
-    };
+    let keys = std::mem::take(&mut self.keys);
     let mut counters = self.counters.lock();
-    match keys {
-      AttemptKeys::SignIn { email, address } => {
-        counters
-          .emails
-          .get_mut(&email)
-          .expect("pending email reservations are retained")
-          .complete(failed, 5);
-        counters
-          .addresses
-          .get_mut(&address)
-          .expect("pending address reservations are retained")
-          .complete(failed, 20);
-      }
-      AttemptKeys::PasswordChange(account) => {
-        counters
-          .password_accounts
-          .get_mut(&account)
-          .expect("pending password reservations are retained")
-          .complete(failed, 5);
-      }
+    for key in &keys {
+      counters.complete(key, failed);
     }
   }
 }

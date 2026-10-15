@@ -10,9 +10,9 @@ mod db;
 pub mod error;
 mod http;
 mod keys;
-pub mod limits;
+mod limits;
 pub mod mail;
-pub mod passwords;
+mod passwords;
 mod sweep;
 mod tokens;
 
@@ -21,5 +21,15 @@ mod tokens;
 pub const LOG_FILTER: &str = "orchester_cloud=info";
 
 pub use accounts::Cloud;
+
+/// The limiters and the password hashing pool, for the crate's own tests only (`tests/limits.rs`); not part of the
+/// cloud's API (review 2, N5).
+#[doc(hidden)]
+pub mod for_tests {
+  pub use crate::{
+    limits::{Quota, SignInLimit},
+    passwords::Passwords,
+  };
+}
 pub use db::LATEST_SCHEMA;
 pub use http::serve;

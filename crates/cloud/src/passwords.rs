@@ -97,17 +97,37 @@ impl Passwords {
   ) -> Result<(bool, Attempt), CloudError> {
     let permit = self.slot().await?;
     attempt.start(clock.now_ms())?;
-    tokio::task::spawn_blocking(move || {
+    let verified = tokio::task::spawn_blocking(move || {
       let _permit = permit;
-      let hash = ParsedHash::new(hash.expose()).map_err(|_| CloudError::StoredData)?;
-      match hasher().verify_password(password.expose().as_bytes(), &hash) {
-        Ok(()) => Ok((true, attempt)),
-        Err(argon2::password_hash::Error::Password) => Ok((false, attempt)),
-        Err(_) => Err(CloudError::PasswordHash),
-      }
+      matches(&password, &hash)
     })
     .await
-    .map_err(|_| CloudError::Worker)?
+    .map_err(|_| CloudError::Worker)??;
+    Ok((verified, attempt))
+  }
+
+  /// Whether `password` is the one `hash` was made from; `None` is checked against the dummy hash, so a missing
+  /// hash takes as long as a wrong password.
+  pub(crate) async fn matches(&self, password: Credential, hash: Option<PasswordHash>) -> Result<bool, CloudError> {
+    let permit = self.slot().await?;
+    let known = hash.is_some();
+    let hash = hash.unwrap_or_else(PasswordHash::dummy);
+    let verified = tokio::task::spawn_blocking(move || {
+      let _permit = permit;
+      matches(&password, &hash)
+    })
+    .await
+    .map_err(|_| CloudError::Worker)??;
+    Ok(verified && known)
+  }
+}
+
+fn matches(password: &Credential, hash: &PasswordHash) -> Result<bool, CloudError> {
+  let hash = ParsedHash::new(hash.expose()).map_err(|_| CloudError::StoredData)?;
+  match hasher().verify_password(password.expose().as_bytes(), &hash) {
+    Ok(()) => Ok(true),
+    Err(argon2::password_hash::Error::Password) => Ok(false),
+    Err(_) => Err(CloudError::PasswordHash),
   }
 }
 

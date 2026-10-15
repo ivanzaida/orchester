@@ -274,3 +274,21 @@ fn signed_by_hand(root: &PrivateKey, statement: &KeySetStatement) -> String {
   let signature = URL_SAFE_NO_PAD.encode(pair.sign(input.as_bytes()).as_ref());
   format!("{input}.{signature}")
 }
+
+/// Review 2: a hand-signed key set with times at the ends of the range is refused, not a panic or a wrapped window.
+#[test]
+fn identity_key_set_with_extreme_times_is_refused() {
+  let private = PrivateKey::generate().expect("root key");
+  let root = RootKey::new(&private).expect("root");
+  let key = signing_key();
+  let mut wide = KeySetStatement::new(ISSUER.into(), vec![listed(&key, NOW)], NOW);
+  wide.issued_at = i64::MIN;
+  wide.expires_at = i64::MAX;
+  let mut key_window = KeySetStatement::new(ISSUER.into(), vec![listed(&key, NOW)], NOW);
+  key_window.keys[0].not_before = i64::MIN;
+  key_window.keys[0].signs_until = i64::MAX;
+  for statement in [wide, key_window] {
+    let compact = signed_by_hand(&private, &statement);
+    assert!(VerifiedKeySet::verify(&compact, &root.public_key(), NOW).is_err());
+  }
+}

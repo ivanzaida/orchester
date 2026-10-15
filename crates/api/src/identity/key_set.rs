@@ -49,8 +49,9 @@ impl KeySetStatement {
   /// derives, and has ordered times within the 30 and 60 days of the rules. Both the signer and every verifier
   /// check this, so even a careless or stolen signer cannot make a long-lived key set that team servers believe.
   fn checked_keys(&self) -> Result<Vec<(ListedKey, PublicKey)>, IdentityError> {
-    let lifetime = self.expires_at - self.issued_at;
-    if self.keys.is_empty() || lifetime <= 0 || lifetime > KEY_SET_LIFETIME_SECS {
+    // Checked: the times come from a signed but untrusted statement, and a wrapped difference would pass.
+    let lifetime = self.expires_at.checked_sub(self.issued_at);
+    if self.keys.is_empty() || !lifetime.is_some_and(|lifetime| (1..=KEY_SET_LIFETIME_SECS).contains(&lifetime)) {
       return Err(IdentityError::InvalidStatement);
     }
     self
@@ -58,9 +59,10 @@ impl KeySetStatement {
       .iter()
       .map(|listed| {
         let key = PublicKey::parse(&listed.public_key)?;
-        let signs = listed.signs_until - listed.not_before;
-        let listed_after = listed.listed_until - listed.signs_until;
-        let within = (1..=KEY_SIGNS_SECS).contains(&signs) && (0..=KEY_LISTED_AFTER_SECS).contains(&listed_after);
+        let signs = listed.signs_until.checked_sub(listed.not_before);
+        let listed_after = listed.listed_until.checked_sub(listed.signs_until);
+        let within = signs.is_some_and(|signs| (1..=KEY_SIGNS_SECS).contains(&signs))
+          && listed_after.is_some_and(|after| (0..=KEY_LISTED_AFTER_SECS).contains(&after));
         if key.kid() != listed.kid || !within {
           return Err(IdentityError::InvalidStatement);
         }
@@ -74,7 +76,8 @@ impl RootKey {
   /// Signs a statement prepared at most a day before `now` (seconds since the Unix epoch, the signer's clock).
   pub fn sign_key_set(&self, statement: &KeySetStatement, now: i64) -> Result<String, IdentityError> {
     statement.checked_keys()?;
-    if statement.issued_at > now + CLOCK_SKEW_SECS || statement.issued_at < now - STATEMENT_FRESH_SECS {
+    let fresh = now.saturating_sub(STATEMENT_FRESH_SECS)..=now.saturating_add(CLOCK_SKEW_SECS);
+    if !fresh.contains(&statement.issued_at) {
       return Err(IdentityError::StaleStatement);
     }
     let input = jws::signing_input(&jws::Header::new(TYPE, None), statement)?;
@@ -96,7 +99,7 @@ impl VerifiedKeySet {
     root.verify(&compact.signing_input, &compact.signature)?;
     let statement: KeySetStatement = jws::parse(&compact.payload)?;
     let keys = statement.checked_keys()?;
-    if statement.issued_at > now + CLOCK_SKEW_SECS {
+    if statement.issued_at > now.saturating_add(CLOCK_SKEW_SECS) {
       return Err(IdentityError::NotYetValid);
     }
     if now >= statement.expires_at {

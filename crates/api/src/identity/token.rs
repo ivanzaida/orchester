@@ -61,16 +61,17 @@ impl IdentityClaims {
   }
 
   pub(super) fn check_times(&self, key: &ListedKey, now: i64) -> Result<(), IdentityError> {
-    if self.exp <= self.iat || self.exp - self.iat > TOKEN_LIFETIME_SECS {
+    let lifetime = self.exp.checked_sub(self.iat);
+    if !lifetime.is_some_and(|lifetime| (1..=TOKEN_LIFETIME_SECS).contains(&lifetime)) {
       return Err(IdentityError::Malformed);
     }
     if self.iat < key.not_before || self.iat >= key.signs_until {
       return Err(IdentityError::KeyNotValidAtTime);
     }
-    if self.iat > now + CLOCK_SKEW_SECS {
+    if self.iat > now.saturating_add(CLOCK_SKEW_SECS) {
       return Err(IdentityError::NotYetValid);
     }
-    if now >= self.exp + CLOCK_SKEW_SECS {
+    if now >= self.exp.saturating_add(CLOCK_SKEW_SECS) {
       return Err(IdentityError::Expired);
     }
     Ok(())

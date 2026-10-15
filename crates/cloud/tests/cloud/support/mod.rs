@@ -212,10 +212,14 @@ impl TestCloud {
   pub async fn register(&self, email: &str) {
     assert_eq!(self.sign_up(email, PASSWORD).await.status, 202);
     let token = self.mail.nth(email, 1).await.link_token();
-    let confirmed = self
-      .request("POST", "/auth/confirm", None, Some(json!({"link_token": token})))
-      .await;
-    assert_eq!(confirmed.status, 204);
+    assert_eq!(self.confirm(&token, PASSWORD).await.status, 204);
+  }
+
+  /// The web front's confirmation page: the link's token and the password of the sign-up it was sent for.
+  pub async fn confirm(&self, token: &str, password: &str) -> Response {
+    remember(password);
+    let body = json!({"link_token": token, "password": password});
+    self.request("POST", "/auth/confirm", None, Some(body)).await
   }
 
   pub async fn try_sign_in(&self, email: &str, password: &str, device: &str) -> Response {

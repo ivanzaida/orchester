@@ -1,6 +1,7 @@
 //! Accounts on Orchester Cloud: sign-up with email confirmation, sign-in from a device, devices, password change and
 //! reset (`docs/architecture/server.md`, "Orchester Cloud"; the endpoints in `docs/cloud-api.md`).
 
+mod confirm;
 mod devices;
 mod input;
 mod links;
