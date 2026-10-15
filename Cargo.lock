@@ -2775,10 +2775,12 @@ dependencies = [
 name = "orchester-api"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "orchester-core",
  "orchester-server",
  "parking_lot",
  "reqwest",
+ "ring",
  "rustls",
  "serde",
  "serde_json",

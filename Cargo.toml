@@ -106,6 +106,10 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 # rustls' certificate errors, to tell an untrusted certificate from a server that cannot be reached.
 # Already built through tokio-rustls.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+# Ed25519 signing and verifying of Orchester Cloud's identity tokens and key sets (`orchester-api`'s `identity`
+# feature), AES-GCM for the cloud's stored signing keys, and the OS random source for its tokens. Already built as
+# rustls' crypto provider, so it adds no crate; there is no JWT crate: a token is a few lines of base64url JSON.
+ring = "0.17"
 # Safe `kill(2)` for signalling processes and process groups on macOS (ending the runner and each
 # agent's process tree; std can only SIGKILL a single child), and `uname(2)` for the computer's
 # name a shared server lists a session under (`system`). Already built for macOS through
