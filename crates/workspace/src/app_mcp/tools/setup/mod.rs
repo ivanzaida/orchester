@@ -15,6 +15,8 @@ mod profile_input;
 mod profiles;
 mod project;
 mod project_tools;
+mod secrets;
+mod skills;
 mod tool_input;
 mod tool_program;
 pub(super) mod widening;
@@ -25,7 +27,7 @@ use rmcp::{
 };
 use serde_json::Value;
 
-use super::{Spec, Translate, parse, tool};
+use super::{Spec, Translate, across::InProjects, parse, tool};
 use crate::app_mcp::{error::ToolError, services::Services};
 
 const SPECS: &[Spec] = &[
@@ -44,8 +46,8 @@ const SPECS: &[Spec] = &[
     name: "get_project",
     description: "A project's setup: id, key, name, folder, limits, code index, the environment variables its agents \
                   and command tools get (plain text by design: they hold no secrets), whether agents load the \
-                  repository's own agent files (AGENTS.md, CLAUDE.md), its GitHub link, and how many connections, \
-                  profiles, pipelines and instructions it has.",
+                  repository's own agent files (AGENTS.md, CLAUDE.md), its GitHub link, how many connections, \
+                  profiles, pipelines and instructions it has, and its link in the app (its Overview).",
     schema: schema_for_type::<super::projects::InProject>,
     read_only: true,
   },
@@ -79,8 +81,10 @@ const SPECS: &[Spec] = &[
                   with url and bearer_secret; the values of the url's query left out), environment (each \
                   variable's name and whether it is plain text or a secret, NAME@environment; a plain value is not \
                   listed, nor any secret's value), the tools that run without asking and the roles of the profiles \
-                  whose draft or latest published version chooses it.",
-    schema: schema_for_type::<super::projects::InProject>,
+                  whose draft or latest published version chooses it. Each connection and server has its link in \
+                  the app (its inspector in Connections). Without `project`, every project's, each naming its \
+                  project (unreadable_projects lists the projects that could not be read, with why).",
+    schema: schema_for_type::<InProjects>,
     read_only: true,
   },
   Spec {
@@ -106,7 +110,8 @@ const SPECS: &[Spec] = &[
     name: "list_models",
     description: "The models an agent connection's last check listed, each with the reasoning efforts it takes, as \
                   the profile editor offers them. A model it does not list can still be given to save_profile_draft \
-                  (it runs as not verified); an effort is kept only where the model lists it.",
+                  (it runs as not verified); an effort is kept only where the model lists it. `link` is the \
+                  connection's in the app.",
     schema: schema_for_type::<connections::InConnection>,
     read_only: true,
   },
@@ -117,7 +122,8 @@ const SPECS: &[Spec] = &[
                   whether it is the CLI's Default (its own folder), state (signed_in, not_signed_in, \
                   sign_in_expired, sign_in_unknown, cli_not_found, folder_missing, not_supported, not_checked), \
                   whether Orchester created its folder or the person brought it, and the account it shares a \
-                  sign-in with, if any. No email and no folder are listed. Adding, renaming and removing accounts \
+                  sign-in with, if any, and its link in Settings › Accounts. No email and no folder are listed. \
+                  Adding, renaming and removing accounts \
                   and signing them in are done by a person in the window.",
     schema: schema_for_type::<accounts::NoArguments>,
     read_only: true,
@@ -183,8 +189,10 @@ const SPECS: &[Spec] = &[
   Spec {
     name: "list_profiles",
     description: "A project's agent profiles: id, role, connection, model, effort, and where each stands (draft, \
-                  stale_draft or published, with its published version). Pipeline steps run published profiles.",
-    schema: schema_for_type::<super::projects::InProject>,
+                  stale_draft or published, with its published version), and its link in the app. Pipeline steps \
+                  run published profiles. Without `project`, every project's, each naming its project \
+                  (unreadable_projects lists the projects that could not be read, with why).",
+    schema: schema_for_type::<InProjects>,
     read_only: true,
   },
   Spec {
@@ -192,7 +200,7 @@ const SPECS: &[Spec] = &[
     description: "One agent profile as its editor shows it (its draft if it has one, otherwise its latest version): \
                   role, responsibilities, role instructions, connection, model, effort, permissions (repository \
                   access, extra writable folders, commands, network, approvals) and MCP servers, where it stands, \
-                  and which published pipeline steps run it.",
+                  which published pipeline steps run it, and its link in the app.",
     schema: schema_for_type::<profiles::InProfile>,
     read_only: true,
   },
@@ -229,7 +237,7 @@ const SPECS: &[Spec] = &[
                   description and steps (key, name, agent profile or tool, runs after, approval gate, failure route \
                   with retries, step budget, repository access, model override and narrowed permissions, \
                   instructions), where it stands, the problems that keep it from being published, and the published \
-                  profiles and tools its steps can use.",
+                  profiles and tools its steps can use, and its link in the app (its editor).",
     schema: schema_for_type::<pipelines::InPipeline>,
     read_only: true,
   },
@@ -282,8 +290,19 @@ const SPECS: &[Spec] = &[
     name: "list_instructions",
     description: "A project's instructions, which Orchester adds to agents' prompts: id, name, where each applies \
                   (project, agent_role, pipeline or step), which agents it reaches (all, roles or profiles), when \
-                  (start, resume), its text, and where it stands (draft, stale_draft or published).",
-    schema: schema_for_type::<super::projects::InProject>,
+                  (start, resume), its text, where it stands (draft, stale_draft or published), and its link in \
+                  the app (Instructions, which opens on its library). Without `project`, every project's, each \
+                  naming its project (unreadable_projects lists the projects that could not be read, with why).",
+    schema: schema_for_type::<InProjects>,
+    read_only: true,
+  },
+  Spec {
+    name: "get_instruction",
+    description: "One instruction as its editor shows it (its draft if it has one, otherwise its latest version): \
+                  its text, where it applies (project, agent_role, pipeline or step), which agents it reaches and \
+                  when, where it stands, every published version with when it was published and its text, and its \
+                  link in the app.",
+    schema: schema_for_type::<instructions::InInstruction>,
     read_only: true,
   },
   Spec {
@@ -307,7 +326,8 @@ const SPECS: &[Spec] = &[
     name: "get_changes",
     description: "What a run changed, as the task's Changes tab reads it: the files of its last checkpoint against \
                   the base it started from (path, change, additions, deletions), and what its worktree holds that \
-                  no checkpoint has yet. Diffs too large to read give their size only.",
+                  no checkpoint has yet. Diffs too large to read give their size only. `link` is its task's \
+                  Changes tab in the app, which shows the task's latest run.",
     schema: schema_for_type::<super::runs::InRun>,
     read_only: true,
   },
@@ -325,7 +345,13 @@ const SPECS: &[Spec] = &[
 
 /// Every setup tool, as `tools/list` answers.
 pub fn listed() -> Vec<Tool> {
-  SPECS.iter().chain(project_tools::SPECS).map(tool).collect()
+  SPECS
+    .iter()
+    .chain(project_tools::SPECS)
+    .chain(skills::SPECS)
+    .chain(secrets::SPECS)
+    .map(tool)
+    .collect()
 }
 
 /// Calls setup tool `name` with `arguments`; `None` when there is no such tool.
@@ -335,8 +361,15 @@ pub async fn call(
   name: &str,
   arguments: JsonObject,
 ) -> Option<Result<Value, ToolError>> {
-  if project_tools::SPECS.iter().any(|spec| spec.name == name) {
-    return Some(project_tools::call(services, name, Value::Object(arguments)).await);
+  let named = |specs: &[Spec]| specs.iter().any(|spec| spec.name == name);
+  if named(project_tools::SPECS) {
+    return Some(project_tools::call(services, translate, name, Value::Object(arguments)).await);
+  }
+  if named(skills::SPECS) {
+    return Some(skills::call(services, translate, name, Value::Object(arguments)).await);
+  }
+  if named(secrets::SPECS) {
+    return Some(secrets::call(services, translate, name, Value::Object(arguments)).await);
   }
   if !SPECS.iter().any(|spec| spec.name == name) {
     return None;
@@ -355,7 +388,7 @@ async fn dispatch(
     "get_project" => project::get_project(services, parse(arguments)?).await,
     "set_project_environment" => project::set_environment(services, parse(arguments)?).await,
     "set_repository_agent_files" => project::set_agent_files(services, parse(arguments)?).await,
-    "list_connections" => connections::list_connections(services, parse(arguments)?).await,
+    "list_connections" => connections::list_connections(services, parse(arguments)?, translate).await,
     "add_cli_connection" => connections::add_cli_connection(services, parse(arguments)?).await,
     "check_connection" => connections::check_connection(services, parse(arguments)?).await,
     "list_models" => connections::list_models(services, parse(arguments)?).await,
@@ -377,7 +410,7 @@ async fn configure(
   arguments: Value,
 ) -> Result<Value, ToolError> {
   match name {
-    "list_profiles" => profiles::list_profiles(services, parse(arguments)?).await,
+    "list_profiles" => profiles::list_profiles(services, parse(arguments)?, translate).await,
     "get_profile" => profiles::get_profile(services, parse(arguments)?).await,
     "save_profile_draft" => profile_input::save_profile_draft(services, parse(arguments)?).await,
     "publish_profile" => profiles::publish_profile(services, parse(arguments)?).await,
@@ -385,7 +418,8 @@ async fn configure(
     "create_pipeline" => pipelines::create_pipeline(services, parse(arguments)?, translate).await,
     "save_pipeline_draft" => pipeline_steps::save_pipeline_draft(services, parse(arguments)?, translate).await,
     "publish_pipeline" => pipelines::publish_pipeline(services, parse(arguments)?, translate).await,
-    "list_instructions" => instructions::list_instructions(services, parse(arguments)?).await,
+    "list_instructions" => instructions::list_instructions(services, parse(arguments)?, translate).await,
+    "get_instruction" => instructions::get_instruction(services, parse(arguments)?).await,
     "save_instruction_draft" => instructions::save_instruction_draft(services, parse(arguments)?).await,
     "publish_instruction" => instructions::publish_instruction(services, parse(arguments)?).await,
     "get_changes" => merge::get_changes(services, parse(arguments)?).await,

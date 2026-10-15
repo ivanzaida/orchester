@@ -12,7 +12,7 @@ use std::path::Path;
 
 use orchester_core::{
   connection::mcp::{McpEnvValue, McpServer, McpServerName, McpTransport},
-  id::ConnectionId,
+  id::{ConnectionId, ProjectId},
   secret::Secret,
   store::{McpServerStore, SecretStore},
 };
@@ -31,6 +31,7 @@ use crate::{
     data::ProjectConnections,
     mcp::{self, Allowed, McpSaveError, McpServerText, NAME_TAKEN, TransportChoice, enabling, widenings},
   },
+  links::Link,
   messages::Message,
   tasks::outside::Outside,
   tools::program::ProgramProblem,
@@ -175,9 +176,18 @@ pub async fn set_mcp_server_enabled(services: &Services, args: SetMcpServerEnabl
   .await
 }
 
-/// The project's MCP servers, as `list_connections` lists them.
-pub(super) fn servers_json(listed: &ProjectConnections) -> Vec<Value> {
-  listed.mcp.iter().map(|server| server_json(listed, server)).collect()
+/// The MCP servers of `project`, as `list_connections` lists them, each with its link: its inspector in
+/// Connections.
+pub(super) fn servers_json(listed: &ProjectConnections, project: ProjectId) -> Vec<Value> {
+  listed
+    .mcp
+    .iter()
+    .map(|server| {
+      let mut value = server_json(listed, server);
+      value["link"] = json!(Link::Connection(project, server.id()).path());
+      value
+    })
+    .collect()
 }
 
 /// `server` with the fields Edit MCP server shows, and the roles of the profiles that choose it. A secret is named
