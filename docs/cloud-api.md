@@ -45,6 +45,7 @@ Two kinds of client call it:
 | `unsupported_media_type` | 415 | A body without `Content-Type: application/json` |
 | `invalid` | 422 | An input breaks a rule: an email that cannot be one, a password outside 12–256 characters, an empty or over-long name |
 | `invalid_link` | 422 | A confirmation or reset link that is unknown, used or expired. One answer for all three |
+| `conflict` | 409 | The team server is linked to another account |
 | `rate_limited` | 429 | Too many attempts; see Rate limits below |
 | `keys_unavailable` | 503 | No published key set lets the cloud sign now: the operator has to publish one |
 | `busy` | 503 | No password hashing slot freed within 10 seconds |
@@ -74,7 +75,13 @@ Device     { id, name, platform, created_at, last_used_at, current: bool }
 | `GET /devices` | device | | `{ devices: [Device] }`, oldest first | |
 | `DELETE /devices/{id}` | device | | `204` | `404` |
 | `GET /keys` | none | | `{ key_set }`: the newest key set, a compact JWS the root key signed | `503 keys_unavailable` |
-| `POST /identity-tokens` | device | `{ audience }`: the team server's id (a UUID) | `201 { identity_token, expires_at }` (seconds) | `422 invalid`, `429`, `503 keys_unavailable` |
+| `POST /identity-tokens` | device | `{ audience, purpose? }`: the team server's id (a UUID); `purpose: "admin"` for a sign-in to that server's admin | `201 { identity_token, expires_at }` (seconds) | `404 not_found` (purpose `admin` for a server not linked here), `422 invalid` (also purpose `link`), `429`, `503 keys_unavailable` |
+| `POST /servers` | device | `{ link }`: the link statement the team server signed | `201 { server, root_key, key_set, identity_token, expires_at }` | `409 conflict`, `422 invalid`, `429`, `503 keys_unavailable` |
+| `GET /servers` | device | | `{ servers: [{ id, name, address, fingerprint, owner, joined_at }] }` | |
+| `GET /servers/{id}` | device | | `{ server: { id, name, address, fingerprint, check_code } }` | `404` (unknown or not linked) |
+| `POST /invites` | the server's signature | `{ invite }`: an invite the team server signed | `202`, empty | `422 invalid`, `429` |
+| `GET /invites` | device | | `{ invites: [{ id, kind, role, server: { id, name, address }, project: { address, name } \| null, inviter_display_name, expires_at }] }` | |
+| `DELETE /invites/{id}` | the server's signature | `{ revocation }`: the team server's signed revocation | `204` | `422 invalid` |
 
 **Sign-up.** `202` means the request was taken. The answer is the same whether or not the email has an account, so
 a sign-up form shows one message: *Check your email*. What goes out, in the background:
@@ -113,11 +120,31 @@ other reset link ends.
 **Password change** (signed in). It needs the current password. It signs out the account's other devices and ends
 open reset links; the device that asked stays signed in.
 
-**Identity tokens.** `POST /identity-tokens { audience }` returns a token for one team server, valid for 5 minutes.
+**Identity tokens.** `POST /identity-tokens { audience, purpose? }` returns a token for one team server, valid for 5
+minutes.
 The desktop hands it to that team server, which checks it with `orchester_api::identity::VerifiedKeySet` against
 the key set from `GET /keys`, itself checked with the root key the team server pinned, and accepts each `jti` once.
 Claims: `iss` (the public URL), `aud`, `sub` (the account id), `email`, `name`, `device { name, platform }`,
-`jti`, `iat`, `exp`.
+`purpose` (absent to join with a device; `admin` for a sign-in to the server admin; `link` for linking the server),
+`jti`, `iat`, `exp`. A team server accepts a token only for the use it was issued for.
+
+**Linking a team server** (`POST /servers { link }`, from the cloud's `/authorize` page, purpose `link`). The link
+statement is a compact JWS of type `orchester-link+jws` that the server signed with its own Ed25519 key:
+`{ server, name, address, public_key, fingerprint, issued_at }` (`orchester_api::statements::LinkStatement`). The cloud
+verifies it with the `public_key` inside, refuses one issued more than 10 minutes ago, and links the server to the
+signed-in account; a server linked to another account answers `409 conflict`, and its own owner may link it again
+(a new name or address) as long as the key is the same. The answer carries what the server pins: the cloud's root key
+(`root_key`, base64url) and the newest key set it signed, and an identity token with purpose `link` that links the
+admin's account on the server. A token with purpose `admin` is issued only for a linked server.
+
+**Invites in flight.** A team server signs each invite by email (`orchester-invite+jws`:
+`{ id, server, kind, email, project?, role?, inviter, expires_at, issued_at }`, times in milliseconds) and its server
+admin delivers it, from the host or from the inviter's browser through the web front's `/invites/deliver`. The cloud
+checks the signature with the key the server linked with, keeps the invite once (a second delivery changes nothing),
+and emails the invitee in its own words only (nothing the server chose: an account gets *open Orchester*, an address
+with no account `/signup?invite=<id>`). At most 200 invites a day per server and 5 emails an hour per address.
+`GET /invites` lists them to the account with that email; a revocation (`orchester-invite-revocation+jws`,
+`{ id, server, issued_at }`) deletes one; expired invites are deleted by the minute's sweep.
 
 ## Rate limits
 
@@ -137,6 +164,7 @@ early. The address and network limits bound how fast a flood can add counts.
 
 ## Not built yet
 
-Invites (`/invites`) and the team server registry (`/servers`) answer `404`; account deletion (`DELETE /me`) answers
-`405`, and a new email in `PATCH /me` is refused as an unknown field (`400`). Magic link, Google and GitHub sign-in come later. `audience` is not checked against registered team servers
-until the registry exists.
+Accepting and declining invites (`POST /invites/{id}/accept`, `/decline`), unlinking from the cloud's side, and
+account deletion (`DELETE /me`, `405`) are not built; a new email in `PATCH /me` is refused as an unknown field
+(`400`). Magic link, Google and GitHub sign-in come later. `audience` is not checked against registered team servers
+for joins; a server not linked here may still be joined with a token.

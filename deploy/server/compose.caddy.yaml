@@ -1,0 +1,62 @@
+# The team server and its admin behind Caddy, for a public DNS name: Caddy holds the public certificate and sends
+# every request to the server, which serves plain HTTP on the compose network (tls = "off") and forwards every path
+# outside /api to the admin. Only Caddy is published.
+#   ORCHESTER_HOST=orchester.example.com ORCHESTER_ADMIN_SECRET=$(openssl rand -base64 32) \
+#     docker compose -f compose.caddy.yaml up -d --build
+services:
+  server:
+    build:
+      context: ../..
+      dockerfile: deploy/server/Dockerfile
+    restart: unless-stopped
+    environment:
+      ORCHESTER_SERVER_NAME: ${ORCHESTER_SERVER_NAME:-Orchester}
+      # Caddy holds the public certificate; the server speaks plain HTTP on this network only.
+      ORCHESTER_SERVER_TLS: "off"
+      ORCHESTER_SERVER_ADDRESS: https://${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server DNS name}
+      ORCHESTER_SERVER_TRUSTED_PROXIES: 172.29.0.2
+      ORCHESTER_SERVER_ADMIN_URL: http://172.29.0.4:3100
+      ORCHESTER_SERVER_ADMIN_API_LISTEN: 0.0.0.0:8741
+    volumes:
+      - server_data:/data
+    networks:
+      backend:
+        ipv4_address: 172.29.0.3
+  admin:
+    build:
+      context: ../../web
+      dockerfile: Dockerfile.server
+    restart: unless-stopped
+    environment:
+      ORCHESTER_ADMIN_SERVER_URL: http://172.29.0.3:8741
+      ORCHESTER_ADMIN_SECRET: ${ORCHESTER_ADMIN_SECRET:?Set ORCHESTER_ADMIN_SECRET}
+      ORCHESTER_ADMIN_CLOUD_URL: ${ORCHESTER_ADMIN_CLOUD_URL-https://orchester-cloud.lurq.dev}
+    networks:
+      backend:
+        ipv4_address: 172.29.0.4
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      ORCHESTER_HOST: ${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server DNS name}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      backend:
+        ipv4_address: 172.29.0.2
+    depends_on:
+      - server
+networks:
+  backend:
+    ipam:
+      config:
+        - subnet: 172.29.0.0/24
+volumes:
+  server_data:
+  caddy_data:
+  caddy_config:

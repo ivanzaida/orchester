@@ -1,3 +1,6 @@
+# Everything goes to the team server, which answers /api itself and forwards every other path to its admin.
+# No access log is turned on.
 {$ORCHESTER_HOST} {
     reverse_proxy server:8080
+    header Strict-Transport-Security "max-age=31536000"
 }
